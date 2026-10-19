@@ -134,6 +134,9 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 				return Result{}, Unavailable("%s: %v", o.name, err).WithHint("some panes may have moved; rota layout shows where each is")
 			}
 			o.after, o.moves = r.After, r.Moves
+			for _, slot := range r.Unlinked {
+				c.Warn("herdr cannot link workspaces; slot %s stays a tab", slot)
+			}
 			if err := worker.Update(root, func(d *worker.Doc) {
 				d.SetLayout(mode)
 				if mode == layout.Split && st.CLI != nil {

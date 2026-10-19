@@ -23,6 +23,8 @@ type layoutRig struct {
 	grid  map[string]host.Rect
 	// failIn is a slot whose move into its linked workspace fails.
 	failIn string
+	// cannotLink is a slot whose `worktree open` herdr does not support.
+	cannotLink string
 }
 
 func (r *layoutRig) PaneOf(_ context.Context, slot, _ string) string { return r.agent[slot] }
@@ -346,6 +348,9 @@ func (r *linkedRig) ToNewTab(ctx context.Context, pane, label string) error {
 
 func (r *linkedRig) OpenLinked(_ context.Context, primary, slot, path string) (string, string, error) {
 	r.log = append(r.log, fmt.Sprintf("open %s %s %s", primary, slot, filepath.Base(path)))
+	if slot == r.cannotLink {
+		return "", "", fmt.Errorf("%w: unknown_method", host.ErrUnsupported)
+	}
 	if r.inWorkspace("ws-" + slot) {
 		return "ws-" + slot, "", nil
 	}
@@ -507,3 +512,21 @@ type closerOnlyRig struct{ *layoutRig }
 
 func (r *closerOnlyRig) Capabilities() host.Capabilities              { return host.CapabilitiesOf(r) }
 func (r *closerOnlyRig) CloseWorkspace(context.Context, string) error { return nil }
+
+// A herdr that cannot link: tabs warns once, keeps that slot a plain tab with
+// no workspaceId, and still returns the others to their workspaces.
+func TestLayoutGroupedTabsWarnsWhenHerdrCannotLink(t *testing.T) {
+	root, rig, deps := groupedProject(t, "ben", "kit")
+	rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+	rig.cannotLink = "kit"
+	code, _, errs := rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errs)
+	}
+	if !strings.Contains(errs, "herdr cannot link workspaces; slot kit stays a tab") || strings.Contains(errs, "slot ben") {
+		t.Errorf("stderr = %q", errs)
+	}
+	if got := workspaceIDs(root, "ben", "kit"); got != "ben=ws-ben,kit=" {
+		t.Errorf("workspaceIds = %s", got)
+	}
+}

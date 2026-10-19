@@ -585,6 +585,8 @@ type moveFake struct {
 	ws   map[string]string // live pane -> workspace
 	slot map[string]string // slot -> live pane
 	fail string            // slot whose ToNewTabIn fails
+	// unsupported is a slot whose OpenLinked herdr does not support.
+	unsupported string
 }
 
 func newMoveFake(st State) *moveFake {
@@ -627,6 +629,14 @@ func (f *moveFake) SplitInto(ctx context.Context, pane, tab, target, dir string,
 	}
 	_, err := f.land(pane, f.ws[target])
 	return err
+}
+
+func (f *moveFake) OpenLinked(ctx context.Context, primary, slot, path string) (string, string, error) {
+	ws, root, err := f.linkFake.OpenLinked(ctx, primary, slot, path)
+	if slot == f.unsupported {
+		return "", "", fmt.Errorf("%w: unknown_method", host.ErrUnsupported)
+	}
+	return ws, root, err
 }
 
 func (f *moveFake) ToNewTabIn(ctx context.Context, pane, ws, label string) error {
@@ -684,5 +694,31 @@ func TestToTabsGroupedClosesTheRootTabWhenTheMoveFails(t *testing.T) {
 	}
 	if !reflect.DeepEqual(f.log, want) {
 		t.Errorf("log = %v", f.log)
+	}
+}
+
+// A herdr that cannot link leaves the slot a plain tab, noted once, and the
+// rest of the slots still go home.
+func TestToTabsGroupedFallsBackWhenHerdrCannotLink(t *testing.T) {
+	st := grouped(2)
+	f := newMoveFake(st)
+	f.unsupported = "s1"
+	res, err := ToTabs(bg, f, st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"worktree open --workspace W --path /p/.worktrees/s1 --label s1 --no-focus",
+		"pane move p1 --new-tab --label s1 --no-focus",
+		"worktree open --workspace W --path /p/.worktrees/s2 --label s2 --no-focus",
+		"pane move p2 --new-tab --workspace ws-s2 --label s2 --no-focus",
+		"tab close root-s2",
+		"rename tab T orchestrator",
+	}
+	if !reflect.DeepEqual(f.log, want) {
+		t.Errorf("log =\n%s", strings.Join(f.log, "\n"))
+	}
+	if !reflect.DeepEqual(res.Unlinked, []string{"s1"}) || res.Moves != 2 {
+		t.Errorf("result = %+v", res)
 	}
 }
