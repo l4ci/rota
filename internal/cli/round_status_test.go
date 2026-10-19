@@ -238,3 +238,24 @@ func TestRoundStatusShowsEventEvidence(t *testing.T) {
 		t.Fatal("no dana row")
 	}
 }
+
+// A bad round.* key reaches the user: status fails like round assign and start
+// do, and names the key, instead of running with zero values.
+func TestRoundStatusReportsInvalidRoundConfig(t *testing.T) {
+	root := gitRepo(t)
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"round":{"stallMinutes":"soon"}}`)
+	code, out, errOut := rotaInWith(t, testDeps(), root, "round", "status")
+	if code != ExitInternal || !strings.Contains(out+errOut, "round.stallMinutes") {
+		t.Errorf("exit %d, out %q, err %q; want exit %d naming round.stallMinutes", code, out, errOut, ExitInternal)
+	}
+}
+
+// defaultRoundEnv carries the loaded round settings, not a copied subset.
+func TestDefaultRoundEnvCarriesRoundSettings(t *testing.T) {
+	root := gitRepo(t)
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"round":{"stallMinutes":7,"adoptPattern":"codex/*"}}`)
+	e := testDeps().RoundEnvLocal(context.Background(), root)
+	if e.RoundErr != nil || e.Round.StallMinutes != 7 || e.Round.AdoptPattern != "codex/*" {
+		t.Errorf("Round = %+v, err %v", e.Round, e.RoundErr)
+	}
+}

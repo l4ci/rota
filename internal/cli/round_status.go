@@ -55,11 +55,7 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) 
 	}
 	e.NeedsHuman = config.Label(cfg, "needsHuman")
 	e.Label = config.Label(cfg, "inProgress")
-	if set, err := roundcfg.Load(root); err == nil {
-		e.StallMinutes = set.StallMinutes
-		e.AdoptPattern, e.SharedPaths = set.AdoptPattern, set.SharedPaths
-		e.ItemTimeoutMinutes = set.ItemTimeoutMinutes
-	}
+	e.Round, e.RoundErr = roundcfg.FromConfig(cfg)
 	if !withForge {
 		return e
 	}
@@ -114,6 +110,10 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		}
 		ctx := c.Context()
 		renv := withBoard(c, root, c.deps().RoundEnv(ctx, root))
+		// Like round assign and start: a bad round.* key stops the verb.
+		if renv.RoundErr != nil {
+			return Result{}, &Error{Exit: ExitInternal, Message: renv.RoundErr.Error()}
+		}
 		rep, err := renv.Status(ctx, root)
 		if err != nil {
 			return Result{}, err

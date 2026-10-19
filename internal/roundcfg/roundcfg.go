@@ -137,7 +137,12 @@ func ValidScope(s string) bool {
 
 // Load reads and validates the round.* keys from the project config.
 func Load(root string) (Settings, error) {
-	cfg := config.Load(rotatree.Config(root))
+	return FromConfig(config.Load(rotatree.Config(root)))
+}
+
+// FromConfig reads and validates the round.* keys from an already loaded
+// config, for a caller that holds one.
+func FromConfig(cfg any) (Settings, error) {
 	var s Settings
 	v, err := config.Value(cfg, "round.scope")
 	if err != nil {

@@ -120,7 +120,7 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 		if e.Board == nil {
 			return fmt.Errorf("no backlog to park %s on", f.Issue)
 		}
-		note := fmt.Sprintf("%s has run past work.itemTimeoutMinutes (%d min): %s. Parked for a human; the PR, if any, stays open.", f.Issue, e.ItemTimeoutMinutes, f.Detail)
+		note := fmt.Sprintf("%s has run past work.itemTimeoutMinutes (%d min): %s. Parked for a human; the PR, if any, stays open.", f.Issue, e.Round.ItemTimeoutMinutes, f.Detail)
 		_, err := e.Transfer(ctx, root, e.Board, TransferOpts{Issue: f.Issue, To: HumanTarget, Note: note, HolderPID: e.HolderPID})
 		return err
 	case ClaimMismatch:

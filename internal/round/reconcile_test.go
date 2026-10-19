@@ -262,7 +262,7 @@ func TestReconcileSkipsExternal(t *testing.T) {
 	if err := worker.RecordItemStart(root, "12", time.Now().Add(-48*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	e.ItemTimeoutMinutes, e.StallMinutes = 1, 1
+	e.Round.ItemTimeoutMinutes, e.Round.StallMinutes = 1, 1
 	e.Snapshot = func(context.Context) ([]host.Agent, error) {
 		return []host.Agent{{Tab: "w9:t9", Name: "ext-1", Cwd: filepath.Join(root, ".worktrees", "ext-1"), Status: "idle"}}, nil
 	}

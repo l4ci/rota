@@ -397,7 +397,7 @@ func (e Env) Health(ctx context.Context, root string, s *worker.Slot, now time.T
 	}
 	h.Stall = e.Stalled(ctx, StallInput{
 		Worktree: wt, Base: strutil.FirstNonEmpty(s.Base(), e.Base), Holds: true,
-		Alive: h.Alive || !h.Known, Escalated: waiting, ActiveAt: s.LastAlive(), Minutes: e.StallMinutes,
+		Alive: h.Alive || !h.Known, Escalated: waiting, ActiveAt: s.LastAlive(), Minutes: e.Round.StallMinutes,
 	}, now)
 	h.Health = HealthHealthy
 	if h.Stall.Stalled {
