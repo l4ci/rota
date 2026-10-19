@@ -132,7 +132,7 @@ done
   # --- status aggregation
   LSTAT() { hvj milestone list | python3 -c 'import json,sys; print([m["status"] for m in json.load(sys.stdin)["data"]["milestones"] if m["id"] == "M05"][0])'; }
   eq "status planned" "planned" "$(LSTAT)"
-  RC hvj milestone status M05 --to shipped
+  RC hvj milestone status M05 --to shipped --force
   eq "status shipped exit" "0" "$RCV"
   eq "shipped closes every repo" "M05 — Alpha:closed,M06 — Beta:open|M04 — Legacy:open,M05 — Alpha:closed" "$(NATIVE ghrepo)|$(NATIVE glrepo)"
   eq "list shipped" "shipped" "$(LSTAT)"

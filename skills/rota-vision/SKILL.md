@@ -88,7 +88,7 @@ MID=$(rota milestone add --json --title "<title>" --summary "<one line>" [--depe
 
 Issue mode: creates the native milestone and tracking issue (status `planned`). Draft the full plan (frontmatter `id: <MNN>` required) in a scratch file and publish with `rota milestone put <MNN> --body-file <file>|-`. File mode: mints `MNN`, a stub `.rota/milestones/MNN.md` and an overview block; edit the stub's sections (keep the frontmatter).
 
-- **Status:** `rota milestone status <MNN> --to <planned|active|shipped|archived>` per changed milestone. Several can be active when independent. `archived` retires one without deleting it, but an archived dependency does not unblock dependents; `shipped` does.
+- **Status:** `rota milestone status <MNN> --to <planned|active|shipped|archived>` per changed milestone. Several can be active when independent. `archived` retires one without deleting it, but an archived dependency does not unblock dependents; `shipped` does. `--to shipped` exits 4 while the milestone has open items or unticked criteria (`data.open`, `data.unticked`); tick or close them, or pass `--force`.
 - **Vision paragraph** (Create only): `rota milestone overview --body-file <file>|-` (file mode: replace the placeholder under `# Milestones`), 2-4 sentences on the why. In Edit mode leave it unless the framing changed.
 - **Index:** `rota milestone index` regenerates the Active list and the managed instructions block. Never hand-edit the Active list.
 

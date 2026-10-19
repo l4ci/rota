@@ -95,7 +95,7 @@ func TestIssueModeMilestones(t *testing.T) {
 	if ddata(t, env)["changed"] != false {
 		t.Errorf("repeat status: %v", env)
 	}
-	issueRunWith(t, deps, root, "milestone", "status", "M02", "--to", "shipped")
+	issueRunWith(t, deps, root, "milestone", "status", "M02", "--to", "shipped", "--force")
 	if is := issueByNumber(fake, 3); is.State != "closed" || is.StateReason != "completed" || fake.Native[1].State != "closed" {
 		t.Errorf("shipped: state %s/%s, native %s", is.State, is.StateReason, fake.Native[1].State)
 	}

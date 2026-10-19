@@ -52,12 +52,13 @@ old: none (new in T4)
 note: replaces only the overview text of MILESTONES.md: everything between the optional `# ` title line and the first `## ` heading. The title, the `## Active milestones` list and the milestone entries are untouched, and `milestone index` keeps the new text. The file is tracked in file and issue mode alike, so the verb needs no tracker and does not branch on mode. `changed` is false when the text is already in place. Surrounding blank lines in the body are trimmed.
 
 ### rota milestone status
-rota milestone status <id> --to <planned|active|shipped|archived>
+rota milestone status <id> --to <planned|active|shipped|archived> [--force]
 repo: none
-data: {"id": string, "status": string, "changed": bool}
-exit: 2 when <id> is malformed or --to is missing or not one of the four; 3 when the milestone doesn't exist; tracker
+data: {"id": string, "status": string, "changed": bool}; on exit 4 `{"blockedBy": "unfinished milestone", "changed": false, "open": []string, "unticked": []string}`
+exit: 2 when <id> is malformed or --to is missing or not one of the four; 3 when the milestone doesn't exist; 4 when `--to shipped` and the milestone still has an open child item (the set `milestone check` reads) or an unticked `- [ ]` criterion in its own body, with a hint naming `rota milestone check <id>` and `--force`; tracker
 old: hv-vision-status <id> <to>    (--to was positional 2)
 shim: `changed` compares the `status:` line (`hv-vision-show`) before and after. The old helper also runs hv-vision-index on every call, and the new verb keeps that side effect, with `changed: false` too.
+note: `--force` skips the ship audit. `planned`, `active` and `archived` never run it. The audit does not look at proof rows per item.
 note: the status value moves from a second positional (the tree's `status <id> <s>`) to `--to`, per rule 1.
 
 ### rota milestone active

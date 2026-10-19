@@ -239,6 +239,7 @@ func blocked(err error, by string) any {
 
 func milestoneStatus(fs *flag.FlagSet) RunFunc {
 	to := fs.String("to", "", "planned, active, shipped or archived")
+	force := fs.Bool("force", false, "ship without checking open items and unticked criteria")
 	return func(c *Ctx, args []string) (Result, error) {
 		id, err := oneArg(args, "milestone ID")
 		if err != nil {
@@ -254,6 +255,12 @@ func milestoneStatus(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		if *to == "shipped" && !*force {
+			res, err := milestoneShipAudit(c, st, id)
+			if err != nil {
+				return res, err
+			}
+		}
 		changed, err := st.SetStatus(id, *to)
 		if err != nil {
 			return milestoneFail(err, "")
@@ -267,6 +274,35 @@ func milestoneStatus(fs *flag.FlagSet) RunFunc {
 		d.Set("changed", changed)
 		return Result{Data: d, Text: id + " " + *to}, nil
 	}
+}
+
+// milestoneShipAudit refuses (exit 4, nothing changed) to ship a milestone
+// that still has open child items, the set `milestone check` reads, or
+// unticked criteria in its own body.
+func milestoneShipAudit(c *Ctx, st ms.Store, id string) (Result, error) {
+	body, err := st.Show(id)
+	if err != nil {
+		return milestoneFail(err, "")
+	}
+	kids, err := milestoneChildren(c, id)
+	if err != nil {
+		return backlogFail(err)
+	}
+	ids := make([]string, len(kids))
+	for i, k := range kids {
+		ids[i] = k.ID
+	}
+	f := ms.Audit(body, ids)
+	if f.Clean() {
+		return Result{}, nil
+	}
+	d := jsonx.NewObject()
+	d.Set("blockedBy", "unfinished milestone")
+	d.Set("changed", false)
+	d.Set("open", strs(f.Open))
+	d.Set("unticked", strs(f.Unticked))
+	msg := fmt.Sprintf("%s is not done: %d open item(s), %d unticked criteria", id, len(f.Open), len(f.Unticked))
+	return Result{Data: d}, Refused("%s", msg).WithHint(fmt.Sprintf("run `rota milestone check %s` to see the breakdown, or pass --force to ship anyway", id))
 }
 
 func runMilestoneActive(c *Ctx, args []string) (Result, error) {
