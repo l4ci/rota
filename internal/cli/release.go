@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	ms "github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/rotatree"
 	"io"
@@ -426,11 +427,39 @@ func releaseMilestoneCheck(c *Ctx, args []string) (Result, error) {
 		still = append(still, issueRow(is))
 		lines = append(lines, "warning: "+is.Key.Ref()+" "+is.Title+" (still open)")
 	}
-	res := Result{Data: jsonObj("clear", len(blocked) == 0, "blocked", bl, "stillOpen", still), Text: strings.Join(lines, "\n")}
+	check, line := releaseCheckLine(c, args[0])
+	lines = append(lines, line)
+	res := Result{Data: jsonObj("clear", len(blocked) == 0, "blocked", bl, "stillOpen", still, "check", check), Text: strings.Join(lines, "\n")}
 	if len(blocked) > 0 {
 		return res, Failed("%s is blocked by %d open issue(s)", args[0], len(blocked))
 	}
 	return res, nil
+}
+
+// releaseCheckLine is the informational `check:` line: the fault and
+// uncovered counts of `rota milestone check`, or "unavailable" (data nil)
+// when the milestone or its items cannot be read. It never fails the verb.
+func releaseCheckLine(c *Ctx, id string) (any, string) {
+	st, err := openStore(c)
+	if err != nil {
+		return nil, "check: unavailable"
+	}
+	body, err := st.Show(id)
+	if err != nil {
+		return nil, "check: unavailable"
+	}
+	kids, err := milestoneChildren(c, id)
+	if err != nil {
+		return nil, "check: unavailable"
+	}
+	r := ms.Check(body, kids, false)
+	faults := len(r.NoChange) + len(r.Unknown) + len(r.NoMigration) + len(r.BadTouches) + len(r.BadCapability)
+	uncovered := len(r.Uncovered)
+	data := jsonObj("faults", faults, "uncovered", uncovered, "ok", faults+uncovered == 0)
+	if faults+uncovered == 0 {
+		return data, "check: clean"
+	}
+	return data, fmt.Sprintf("check: %d fault(s), %d uncovered", faults, uncovered)
 }
 
 func releaseCloseMilestone(fs *flag.FlagSet) RunFunc {

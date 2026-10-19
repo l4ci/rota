@@ -4,7 +4,7 @@
 
 **Issue mode** (`issues.source` is `github` or `gitlab`; `references/issue-mode.md`): pick the milestone. `--milestone MNN` wins; else the single one from `rota milestone active`. Several active: ask the user. Then `rota release milestone-check <MNN> --json`.
 
-Exit 1 means blocked: show each `data.blocked` entry (open issues labelled `in-progress`, `needs-review` or `changes-requested`) and stop. `data.stillOpen` entries do not block; show them and continue. Other exits (2, 3, 4, 5, 6): stop and report the verb's message.
+Exit 1 means blocked: show each `data.blocked` entry (open issues labelled `in-progress`, `needs-review` or `changes-requested`) and stop. `data.stillOpen` entries do not block; show them and continue. The last text line, `check:` (`data.check`), is the `rota milestone check` summary (`clean`, fault and uncovered counts, or `unavailable`); show it, it never blocks. Other exits (2, 3, 4, 5, 6): stop and report the verb's message.
 
 **Umbrella** (`rota repo umbrella` exits 0): releases run per sub-repo. Pass `--repo <name>` to `release milestone-check`, `release notes --from issues` and `release close-milestone`; without it they exit 2. The milestone reads `shipped` only once every sub-repo's milestone MNN is closed.
 

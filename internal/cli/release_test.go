@@ -775,12 +775,13 @@ func TestReleaseMilestoneCheck(t *testing.T) {
 	code, data, msg := a8RunWith(t, deps, root, "release", "milestone-check", "M01")
 	want := map[string]any{"clear": false,
 		"blocked":   []any{map[string]any{"number": float64(1), "title": "One", "label": "needs-review"}, map[string]any{"number": float64(2), "title": "Two", "label": "needs-review"}, map[string]any{"number": float64(5), "title": "Wip", "label": "in-progress"}},
-		"stillOpen": []any{map[string]any{"number": float64(6), "title": "Plain"}}}
+		"stillOpen": []any{map[string]any{"number": float64(6), "title": "Plain"}},
+		"check":     map[string]any{"faults": float64(0), "uncovered": float64(0), "ok": true}}
 	if code != 1 || !reflect.DeepEqual(data, want) || !strings.Contains(msg, "M01 is blocked by 3 open issue(s)") {
 		t.Fatalf("blocked: exit %d data %v (%s)", code, data, msg)
 	}
 	o := trRunWith(t, deps, root, "", "release", "milestone-check", "M01")
-	if o.code != 1 || o.stdout != "blocked: #1 One [needs-review]\nblocked: #2 Two [needs-review]\nblocked: #5 Wip [in-progress]\nwarning: #6 Plain (still open)\n" {
+	if o.code != 1 || o.stdout != "blocked: #1 One [needs-review]\nblocked: #2 Two [needs-review]\nblocked: #5 Wip [in-progress]\nwarning: #6 Plain (still open)\ncheck: clean\n" {
 		t.Fatalf("text %+v", o)
 	}
 	// Open issues alone exit 0.
@@ -793,6 +794,40 @@ func TestReleaseMilestoneCheck(t *testing.T) {
 	o = trRunIn(t, a8Fixture(), "", "--json", "release", "milestone-check", "M01")
 	if !strings.Contains(o.stdout, `"data": {"clear": false, "blocked": [{"number": 1, "title": "One", "label": "needs-review"}`) {
 		t.Fatalf("key order: %s", o.stdout)
+	}
+}
+
+// A milestone with one uncovered criterion and one feature without a
+// ## Change section reports both in the check line and data.check, and the
+// exit code stays 0.
+func TestReleaseMilestoneCheckLine(t *testing.T) {
+	f := a8Fixture()
+	f.Fake.Issues[2].Body = "---\nid: M01\ntitle: One\nstatus: active\n---\n\n# M01\n\n## Capabilities\n\n- round.maxBounces (new)\n\n## Acceptance\n\n- [ ] AC-1: one\n- [ ] AC-2: two\n"
+	change := "## Change\n\nADDED round.maxBounces\nServes: AC-1\n"
+	f.Fake.Issues[0].Body, f.Fake.Issues[4].Body, f.Fake.Issues[7].Body = change, change, "no change section"
+	f.Fake.Issues[1].Labels = []string{"type:bug"}
+	for _, i := range []int{0, 4, 7} { // open, unlabelled: no blockers, still backlog rows
+		f.Fake.Issues[i].Labels, f.Fake.Issues[i].State, f.Fake.Issues[i].StateReason = []string{"type:feature"}, "open", ""
+	}
+	root, deps := a8Project(t, f)
+	code, data, msg := a8RunWith(t, deps, root, "release", "milestone-check", "M01")
+	want := map[string]any{"faults": float64(1), "uncovered": float64(1), "ok": false}
+	if code != 0 || !reflect.DeepEqual(data["check"], want) {
+		t.Fatalf("exit %d data %v (%s)", code, data, msg)
+	}
+	o := trRunWith(t, deps, root, "", "release", "milestone-check", "M01")
+	if !strings.Contains(o.stdout, "check: 1 fault(s), 1 uncovered\n") {
+		t.Fatalf("text %q", o.stdout)
+	}
+}
+
+func TestReleaseMilestoneCheckUnavailable(t *testing.T) {
+	f := a8Fixture()
+	f.Fake.Fail = map[string]error{"get": &tracker.Error{Kind: tracker.KindUnavailable, Code: 3, Message: "no gh"}} // the item bodies cannot be read
+	root, deps := a8Project(t, f)
+	o := trRunWith(t, deps, root, "", "release", "milestone-check", "M01")
+	if !strings.Contains(o.stdout, "check: unavailable\n") || o.code != 1 {
+		t.Fatalf("exit %d text %q", o.code, o.stdout)
 	}
 }
 
