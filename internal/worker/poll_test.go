@@ -388,15 +388,15 @@ func TestClassifyOpenCode(t *testing.T) {
 
 func TestLimitRegexIsTheAlternationOfTheClassifierPhrases(t *testing.T) {
 	re := regexp.MustCompile(LimitRegex())
-	if len(LimitPatterns()) != len(LimitPhrases) {
-		t.Fatalf("%d patterns for %d phrases", len(LimitPatterns()), len(LimitPhrases))
+	if len(limitPatterns) != len(limitPhrases) {
+		t.Fatalf("%d patterns for %d phrases", len(limitPatterns), len(limitPhrases))
 	}
 	for _, msg := range []string{"You've reached your usage limit", "Claude USAGE LIMIT REACHED", "Youve hit your usage limit", "Your limit will reset at 3pm", "Approaching your usage limit"} {
 		if !re.MatchString(msg) {
 			t.Errorf("%q not matched", msg)
 		}
-		if _, ev := Classify(msg, false, 40, ""); ev == "" {
-			t.Errorf("%q not classified", msg)
+		if _, _, ok := FindLimit("", msg); ok == strings.HasPrefix(msg, "Approaching") {
+			t.Errorf("%q: FindLimit ok=%v", msg, ok)
 		}
 	}
 	if re.MatchString("the limit of the buffer") {
@@ -643,5 +643,29 @@ func TestPollNotifiesABlockedEventOnce(t *testing.T) {
 	}
 	if n := rings(); n != 2 {
 		t.Errorf("notifications = %d, want 2 after a second event", n)
+	}
+}
+
+// FindLimit is the one definition of a hit limit: Classify and the limits
+// watcher (limits.findLimit) both ask it.
+func TestFindLimitIsTheOneDefinitionOfAHitLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name, pane string
+		limited    bool
+		evidence   string
+	}{
+		{"approaching", "Approaching usage limit\n", false, ""},
+		{"approaching your, with reset", "Approaching your usage limit · resets at 5pm\n", false, ""},
+		{"hit limit", "You've reached your usage limit\n", true, "reached your usage limit"},
+		{"add funds", "You've reached your usage limit\nAdd funds to continue\n", true, "Add funds"},
+	} {
+		_, _, found := FindLimit("", tc.pane)
+		state, ev := Classify(tc.pane, false, 40, "")
+		if found != tc.limited || (state == StateLimited) != tc.limited {
+			t.Errorf("%s: FindLimit=%v Classify=%s, want limited=%v", tc.name, found, state, tc.limited)
+		}
+		if tc.limited && !strings.Contains(ev, tc.evidence) {
+			t.Errorf("%s: evidence %q lacks %q", tc.name, ev, tc.evidence)
+		}
 	}
 }
