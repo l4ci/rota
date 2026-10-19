@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"regexp"
@@ -464,38 +465,71 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Failed("%v; run rota config check", err)
 		}
-		changed, err := git.Repo{Dir: t.Dir}.ChangedLines(c.Context(), t.Base+"..."+t.Branch)
-		if err != nil {
-			return Result{}, diffErr(err)
-		}
-		var labels []string
+		src := worker.ReviewSources{Policy: policy, Git: git.Exec, Dir: t.Dir, Span: t.Base + "..." + t.Branch}
 		for _, l := range strings.Split(*labelsFlag, ",") {
 			if l = strings.TrimSpace(l); l != "" {
-				labels = append(labels, l)
+				src.Labels = append(src.Labels, l)
 			}
 		}
-		// The issue behind a `<agent>/<issue>-<slug>` branch is read for its labels
-		// only when the policy has a label to match, as the worker gate does, so a
-		// caller that omits --labels still gets a risk:high override.
-		if n, ok := worker.BranchIssue(t.Branch); ok && len(policy.Labels) > 0 {
+		// The issue behind a `<agent>/<issue>-<slug>` branch is read, as the worker
+		// gate does, when the policy can use it: a label to match or a file set to
+		// drift from.
+		if n, ok := worker.BranchIssue(t.Branch); ok && policy.NeedsIssue() {
 			it, err := c.deps().issuesOrNone(c.Context(), cfg, root)
 			if err != nil {
 				return Result{}, trackerErr(err)
 			}
-			if _, none := it.(tracker.NoIssues); !none { // the file source has no issue labels to read
-				is, err := it.Get(c.Context(), n, false)
-				if err != nil {
-					return Result{}, Failed("could not read %s for its labels to pick the review depth: %v", n.Ref(), err)
-				}
-				for _, l := range is.Labels {
-					if !slices.Contains(labels, l) {
-						labels = append(labels, l)
-					}
-				}
+			if _, none := it.(tracker.NoIssues); !none { // the file source has no issues to read
+				src.Issue, src.Issues = n, it
 			}
 		}
-		depth, why := policy.Resolve(changed, labels)
-		data := gitObj("branch", t.Branch, "base", t.Base, "depth", string(depth), "why", why, "changedLines", changed, "labels", labels)
+		// The branch's open PR carries the Door line. Like the gate, an unreadable
+		// forge fails the verb: skipping would print a depth that ignores the line.
+		// A local forge or a missing forge CLI has no PR to read.
+		prFound, noForge := false, false
+		if policy.MayBeBelowFull() {
+			f, err := c.deps().forge(c.Context(), cfg, "", root)
+			switch {
+			case err == nil:
+				src.PRBody = func() (string, error) {
+					prs, err := f.OpenPRs(c.Context())
+					if err != nil {
+						return "", err
+					}
+					for _, pr := range prs {
+						if pr.Branch == t.Branch {
+							prFound = true
+							return pr.Body, nil
+						}
+					}
+					return "", nil
+				}
+			case errors.Is(err, tracker.ErrLocalForge) || tracker.IsCLIMissing(err):
+				noForge = true
+			default:
+				return Result{}, Failed("could not reach the forge to read the PR body for its Door line to pick the review depth: %v", err)
+			}
+		}
+		res, err := worker.ResolveReviewDepth(c.Context(), src)
+		if err != nil {
+			var de *worker.ReviewDepthError
+			if errors.As(err, &de) && de.Stage == "diff" {
+				return Result{}, diffErr(de.Err)
+			}
+			return Result{}, Failed("%v", err)
+		}
+		depth, why := res.Depth, res.Why
+		// Door is read from a PR; a result below full has not seen it when there is
+		// no PR to read, or no forge to read one from. A label mapped to none is
+		// final, so the Door line cannot change it.
+		if labelNone := res.Signal == config.SignalLabel && depth == config.DepthNone; !prFound && depth != config.DepthFull && !labelNone && policy.MayBeBelowFull() {
+			if noForge {
+				why += "; no forge to read, so no Door line was read"
+			} else {
+				why += "; no PR yet, so no Door line was read"
+			}
+		}
+		data := gitObj("branch", t.Branch, "base", t.Base, "depth", string(depth), "signal", res.Signal, "why", why, "changedLines", res.Changed, "labels", res.Labels)
 		return Result{Data: data, Text: fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", t.Branch, depth, why)}, nil
 	}
 }

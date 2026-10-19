@@ -329,14 +329,19 @@ Controls how deep a review `/rota-ship` runs before integrating.
 | object | Picks the depth per branch, see below. |
 
 ```json
-{"ship": {"review": {"default": "full", "lightBelow": 50, "labels": {"risk:high": "full", "best-of:2": "light", "partial-slice": "none"}}}}
+{"ship": {"review": {"default": "full", "lightBelow": 50, "labels": {"risk:high": "full", "best-of:2": "light", "partial-slice": "none"}, "paths": {"migrations/**": "full"}}}}
 ```
 
 - `default`: `full`, `light` or `none`; `full` when omitted.
 - `lightBelow`: a diff of fewer changed lines (added plus deleted, against the base) than this gets `light`. It only lowers a `default` of `full`. `0` or omitted turns it off.
-- `labels`: a label on the item's issue or PR maps to a depth and beats the size rule, so `risk:high` forces `full` on a small diff. `best-of:2` and `partial-slice` are ordinary labels here. When several labels match, the strictest depth wins.
+- `labels`: a label on the item's issue or PR maps to a depth and beats the size rule, so `risk:high` forces `full` on a small diff. `best-of:2` and `partial-slice` are ordinary labels here. When several labels match, the strictest depth wins. A label that maps to `none` is final: the rules below never lift it.
+- `paths`: a glob maps (`*` within a segment, or a trailing `/**` for a whole directory; other `**` is rejected) to the least depth a changed path matching it gets; the strictest match wins and it never lowers a depth.
+- `scopeDrift`: `true` when omitted. A diff that touches files the issue never named (its `## Files` entries and the path entries of its `## Touches`) resolves `full`, and the reason lists them. An issue that declares neither section has no set to drift from. `false` turns the rule off.
+- A PR body line `Door: one-way` (the line every worker PR ends with) resolves `full` whatever the size.
 
-`rota review depth [branch] [--labels a,b]` prints the depth and why. It reads the labels of the issue behind a `<agent>/<issue>-<slug>` branch itself when the policy has a `labels` map; `--labels` adds to them. `/rota-ship` prints it, and `rota worker gate` applies it: the branch must have the verdicts the depth needs on record at its current head (`full` both, `light` the Standards one, `none` none; a verdict from an older commit is stale and does not count, as in `/rota-review`) or the gate refuses with `blockedBy: review-missing`. `rota config check` fails on a malformed policy.
+Door and scope drift only lift a `light` review; a `default` of `none` is the review switched off and they leave it. `rota review depth --json` names the deciding signal in `signal`: `label`, `door`, `scope-drift`, `path`, `size` or `default`.
+
+`rota review depth [branch] [--labels a,b]` prints the depth and why. It reads the issue behind a `<agent>/<issue>-<slug>` branch itself (its labels, and its files for scope drift) and the branch's open PR for the Door line, when the depth could be light; `--labels` adds to the labels. A branch with no PR yet has no Door line to read. `/rota-ship` prints it, and `rota worker gate` applies it: the branch must have the verdicts the depth needs on record at its current head (`full` both, `light` the Standards one, `none` none; a verdict from an older commit is stale and does not count, as in `/rota-review`) or the gate refuses with `blockedBy: review-missing`. `rota config check` fails on a malformed policy.
 
 See [review and ship](review-and-ship.md) for the full `/rota-ship` workflow.
 

@@ -1171,6 +1171,81 @@ func TestGateAppliesTheReviewDepth(t *testing.T) {
 	}
 }
 
+// The gate lifts a light review on the PR's Door line and on a diff outside the
+// issue's declared files, and a label mapped to none beats both. Deleting the
+// PR-body or issue wiring in stepReviewDepth fails these.
+func TestGateReviewDepthSignals(t *testing.T) {
+	light := `{"ship":{"review":{"default":"full","lightBelow":1000,"labels":{"partial-slice":"none"}}},"test":{"full":["true"]}}`
+	spec, quality := verdict.ReviewSpec, verdict.ReviewQuality
+	const door = "Closes #5\n\nDoor: one-way. Blast radius: the schema.\n"
+	for _, c := range []struct {
+		name, cfg, body, labels, issueBody, note string
+		refused                                  string // "" passes
+	}{
+		{"light with no signal passes", light, "Closes #5\n", "in-progress", "", "light", ""},
+		{"one-way door lifts light to full", light, door, "in-progress", "", "REVIEW-DEPTH w1 — full (PR body says Door: one-way)", spec},
+		{"two-way door stays light", light, "Closes #5\n\nDoor: two-way.\n", "in-progress", "", "light", ""},
+		{"door lifts a default of none", `{"ship":{"review":"none"},"test":{"full":["true"]}}`, door, "in-progress", "", "full", spec},
+		{"label none beats the door", light, door, "in-progress," + PartialSliceLabel, "", "none", ""},
+		{"diff outside the issue's files lifts to full", light, "Closes #5\n", "in-progress", "## Files\n\n- other.txt\n", "files the issue never named: work.txt", spec},
+		{"declared file stays light", light, "Closes #5\n", "in-progress", "## Files\n\n- work.txt\n", "light", ""},
+		{"scopeDrift false stays light", `{"ship":{"review":{"default":"full","lightBelow":1000,"scopeDrift":false}},"test":{"full":["true"]}}`, "Closes #5\n", "in-progress", "## Files\n\n- other.txt\n", "light", ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.setConfig(c.cfg)
+			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
+			w.forge("body", c.body)
+			w.forge("issueLabels", c.labels)
+			w.forge("issueBody", c.issueBody)
+			res, err := w.gate(false, GateOpts{CheckOnly: true, Recorded: func(string, string) []string { return []string{quality} }})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.refused == "" {
+				if res.Verdict != GateFresh {
+					t.Fatalf("%+v", res)
+				}
+			} else if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "needs a recorded "+c.refused+" verdict") {
+				t.Fatalf("verdict %s (%s), want review-missing naming %s", res.Verdict, res.Err, c.refused)
+			}
+			if got := strings.Join(res.Notes, "\n"); !strings.Contains(got, c.note) {
+				t.Errorf("notes %q lack %q", got, c.note)
+			}
+		})
+	}
+}
+
+// An external PR no slot owns takes its issue from the head branch the forge
+// reports (#795); the depth step must read that recomputed target, for the
+// issue's files and for the PR body's Door line.
+func TestGateReviewDepthOnAnExternalPR(t *testing.T) {
+	spec, quality := verdict.ReviewSpec, verdict.ReviewQuality
+	for _, c := range []struct{ name, body, issueBody, note string }{
+		{"door", "Closes #5\n\nDoor: one-way. Blast radius: x.\n", "", "PR body says Door: one-way"},
+		{"scope drift", "Closes #5\n", "## Files\n\n- other.txt\n", "files the issue never named"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, "")
+			w.setConfig(`{"ship":{"review":{"default":"full","lightBelow":1000}},"test":{"full":["true"]}}`)
+			gitq(t, w.worker, "push", "-q", "origin", "w1:dana/5-x")
+			w.forge("head", "dana/5-x")
+			w.forge("body", c.body)
+			w.forge("issueLabels", "in-progress")
+			w.forge("issueBody", c.issueBody)
+			res, _ := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true,
+				Recorded: func(string, string) []string { return []string{quality} }})
+			if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "needs a recorded "+spec+" verdict") {
+				t.Fatalf("verdict %s (%s), want review-missing naming %s: %+v", res.Verdict, res.Err, spec, res)
+			}
+			if got := strings.Join(res.Notes, "\n"); !strings.Contains(got, c.note) {
+				t.Errorf("notes %q lack %q", got, c.note)
+			}
+		})
+	}
+}
+
 // Without the Recorded port the gate only reports the depth, as the file
 // backend and the tests that never wire it expect; a failed label read or a
 // malformed policy is a check-broke, never a guessed depth.
