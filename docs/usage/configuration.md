@@ -429,6 +429,8 @@ A custom `work.workerCommand` receives the tier's model only through a `{model}`
 | `roles.reasoner.tier` | `"heavy"` | The same for the reasoner. |
 | `roles.<role>.effort` | unset | Reasoning effort for the role. Claude accepts `low`, `medium`, `high`, `xhigh` or `max`. A Codex file takes `low`, `medium`, `high` or `xhigh` (`max` and `ultra` exist on some Codex models only), so a role with a bigger effort is refused (exit 4) once Codex is configured. Unset leaves the harness default. |
 
+Each role prompt bounds the report the subagent hands back, because the worker re-reads it on every later turn. The explorer answers in at most 15 lines (`path:line: what`) and ends with a `Not found:` line. The implementer answers in at most 15 lines (one `path: what changed` per file, the check it ran and its result) and ends with a `Not done:` line. The reasoner answers in at most 20 lines (assumptions, alternatives, one recommendation) and ends with a `Not checked:` line. Every role quotes code, paths and errors verbatim. The line is `none` when nothing is missing.
+
 ```bash
 rota agents write            # write or refresh the files
 rota agents write --check    # report drift, write nothing, exit 1 on drift
