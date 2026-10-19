@@ -29,15 +29,15 @@ const (
 	ReviewLoopAuto   = "auto"
 )
 
-// Tiers, light to heavy: the strengths a tier maps a model for, per harness kind.
+// The tiers are owned by harness, which roundcfg already imports.
 const (
-	TierLight    = "light"
-	TierStandard = "standard"
-	TierHeavy    = "heavy"
+	TierLight    = harness.TierLight
+	TierStandard = harness.TierStandard
+	TierHeavy    = harness.TierHeavy
 )
 
 // Tiers lists the tiers in order.
-var Tiers = []string{TierLight, TierStandard, TierHeavy}
+var Tiers = harness.Tiers
 
 // Roles are the built-in agent roles, each with the default tier it runs on.
 // `rota agents write` emits one subagent definition per role.
@@ -299,7 +299,7 @@ func loadTiers(cfg any, s *Settings) error {
 		rule := h.Tiers()
 		m := map[string]string{}
 		for _, tier := range Tiers {
-			key := "round.tiers." + kind + "." + tier
+			key := harness.TierKey(kind, tier)
 			v, err := config.Value(cfg, key)
 			if err != nil {
 				return err

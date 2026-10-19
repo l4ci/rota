@@ -174,10 +174,8 @@ func (o opencode) Configured(cfg any) bool {
 	if config.StringIfSet(cfg, "round.workerKind") == OpenCode {
 		return true
 	}
-	for _, tier := range []string{"light", "standard", "heavy"} {
-		if strings.TrimSpace(config.StringIfSet(cfg, "round.tiers.opencode."+tier)) != "" {
-			return true
-		}
+	if TierMapSet(cfg, OpenCode) {
+		return true
 	}
 	if len(o.Accounts(cfg).Entries) > 0 {
 		return true
