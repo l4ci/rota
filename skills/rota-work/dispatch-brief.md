@@ -37,6 +37,8 @@ You are implementing Task N of [total].
 
 **Suggested commit message:** [exact message; the main session uses it in Step 7.5]
 
+**Return:** a headline of at most 25 words first (done or blocked, and the one thing the caller must know), then details. The caller reads the headline and opens the rest only to act on it.
+
 **On completion:** report the RED command and failing line (or the no-test-seam note), the files you modified, plus any tool-generated siblings the toolchain produced, and confirm you did not stage or commit. Name any brief claim that turned out false, even if you worked around it.
 ```
 
