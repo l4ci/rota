@@ -11,6 +11,8 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/status"
 	"github.com/l4ci/rota/internal/update"
 )
@@ -87,6 +89,7 @@ func configShow(fs *flag.FlagSet) RunFunc {
 			return Result{}, Resolution("unknown config key '%s'", key)
 		}
 		rows, lines := showRows(entries)
+		annotateTierModels(roundcfgOf(root), entries, rows, lines)
 		return Result{Data: jsonObj("entries", rows), Text: strings.Join(lines, "\n")}, nil
 	}
 }
@@ -110,6 +113,39 @@ func showRows(entries []config.Entry) (rows []any, lines []string) {
 		lines = append(lines, e.Line())
 	}
 	return rows, lines
+}
+
+// roundcfgOf is the merged project config, for resolving tier models.
+func roundcfgOf(root string) any { return config.Load(rotatree.Config(root)) }
+
+// annotateTierModels adds the effective model and its source to every
+// round.tiers.<kind>.<tier> row: after the profile and the models.worker
+// fallback, so an empty raw value no longer hides what a worker launches with.
+func annotateTierModels(cfg any, entries []config.Entry, rows []any, lines []string) {
+	for i, e := range entries {
+		kind, tier, ok := tierKeyParts(e.Key)
+		if !ok {
+			continue
+		}
+		model, source := roundcfg.Effective(cfg, kind, tier)
+		rows[i].(*jsonx.Object).Set("effective", model)
+		rows[i].(*jsonx.Object).Set("effectiveSource", source)
+		shown := model
+		if shown == "" {
+			shown = "-"
+		}
+		lines[i] += fmt.Sprintf("  effective %s (%s)", shown, source)
+	}
+}
+
+// tierKeyParts splits round.tiers.<kind>.<tier>.
+func tierKeyParts(key string) (kind, tier string, ok bool) {
+	rest, found := strings.CutPrefix(key, "round.tiers.")
+	if !found {
+		return "", "", false
+	}
+	kind, tier, found = strings.Cut(rest, ".")
+	return kind, tier, found && roundcfg.ValidTier(tier)
 }
 
 // configSaveGlobal copies the project's config.json keys (not config.local.json)

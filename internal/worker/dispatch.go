@@ -25,8 +25,8 @@ type DispatchOpts struct {
 	Relay       bool
 	Round       *int
 	BootTimeout int // seconds; 0 means 60
-	// Model is the model this worker starts with ("" keeps models.worker); see
-	// workerCommand.
+	// Model is the model this worker starts with ("" keeps models.worker, or
+	// launches without --model under round.profile=inherit); see workerCommand.
 	Model string
 	// Branch is the per-task branch the reset guard cuts; "" means
 	// rota-worker/<slot>-<task>. A round slot works on <agent>/<issue>-<slug>.

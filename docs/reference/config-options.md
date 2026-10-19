@@ -266,6 +266,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `round.adoptPattern` | string | unset |  | Glob over branch names (codex/*, claude/*). rota round reconcile reports a matching branch that no slot holds and that is not merged as unregistered-branch; --apply adopts those whose name carries an issue number. Empty turns the check off. |
 | `round.tier` | enum | `"standard"` | `light`, `standard`, `heavy` | Default worker tier for rota round assign: light for reading, standard for code and tests, heavy for hard reasoning. |
 | `round.workerKind` | enum | unset | `claude`, `codex`, `opencode` | Project default worker harness. Empty: the slot's recorded kind, else claude. --kind and an issue's harness: label beat it. |
+| `round.profile` | enum | unset | `quality`, `balanced`, `budget`, `inherit` | Named model profile that fills round.tiers.claude.* (light/standard/heavy). quality: sonnet/opus/opus. balanced: haiku/sonnet/opus. budget: haiku/haiku/sonnet. inherit: no model, workers launch without --model. Empty keeps the tier defaults. An explicit round.tiers.claude.<tier> beats the profile; Codex and OpenCode tiers are not touched. |
 | `round.tiers.claude.light` | string | `"haiku"` |  | Model a light-tier Claude worker starts with. |
 | `round.tiers.claude.standard` | string | unset |  | Model a standard-tier Claude worker starts with. Empty follows models.worker. |
 | `round.tiers.claude.heavy` | string | `"opus"` |  | Model a heavy-tier Claude worker starts with. |
