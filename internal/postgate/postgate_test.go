@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -100,5 +101,32 @@ func TestTrainBouncesTheCulpritAndEndsLandedItems(t *testing.T) {
 	Train(worker.Env{}, nil, root, issues, r, (&parked{}).park)
 	if bounces(root, "2") != 1 {
 		t.Errorf("a repeat on the same head counted again: %d", bounces(root, "2"))
+	}
+}
+
+// `rota worker gate 847` after the slot moved on sets the result's slot to the
+// PR number. The stale refusal's bounce must fold into the issue's own row: no
+// slot or account total named by the PR number.
+func TestStaleGateByPRNumberAfterTheSlotMovedOnMakesNoPseudoSlot(t *testing.T) {
+	root := t.TempDir()
+	at := time.Date(2026, 10, 17, 21, 0, 0, 0, time.UTC)
+	if err := ledger.Append(root, ledger.Entry{TS: at, Kind: ledger.KindAssign, Issue: "12", Slot: "nia", Account: "work", Harness: "claude", PR: "847"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Gate(worker.Env{Now: func() time.Time { return at }}, root, "12", worker.GateResult{Verdict: worker.GateStale, Slot: "847", PR: "847", SHA: "h1"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	es, err := ledger.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := ledger.Fold(es, nil, 0)
+	if len(s.Issues) != 1 || s.Issues[0].Slot != "nia" || s.Issues[0].Bounces != 1 {
+		t.Fatalf("issue rows %+v, want one row for nia carrying the bounce", s.Issues)
+	}
+	for _, tot := range append(append([]ledger.Total{}, s.Slots...), s.Accounts...) {
+		if tot.Name == "847" || tot.Name == "-" {
+			t.Errorf("total named %q: slots %+v accounts %+v", tot.Name, s.Slots, s.Accounts)
+		}
 	}
 }
