@@ -440,9 +440,13 @@ whose worker is busy, blocked or has uncommitted files is never taken.
 - **Bounce it**: `rota round transfer <issue> --to <free slot> --body-file <gap>` checks the
   branch out in that slot, moves the PR back onto it and dispatches the follow-up. Count it first with
   `rota round bounce <issue> --head <sha>`: it exits 4 once the item is at `round.maxBounces`, and
-  `rota round status` shows each slot's count. At the cap hand the issue to a stronger worker
-  (`rota round transfer <issue> --to <slot> --tier heavy --tier-reason <why>`) or to the human, never
-  bounce it again. Re-review the fix with `/rota-review --since <sha of the last review>`.
+  `rota round status` shows each slot's count. At the cap, never bounce it again: audit the issue's acceptance criteria first (is each one
+  checkable as written, with one reading; three lines per criterion at most). If any is not, hand the
+  issue to the human with the audit as the note
+  (`rota round transfer <issue> --to human --cap-reason ambiguous-criteria --note-file <audit>`). Only when
+  every criterion passes does it go to a stronger worker
+  (`rota round transfer <issue> --to <slot> --tier heavy --tier-reason <why> --cap-reason tier`).
+  `rota round summary` counts the two `--cap-reason` values. Re-review the fix with `/rota-review --since <sha of the last review>`.
   A reviewer's comments on the PR take the same path without you retyping them: see [Review loop](#review-loop).
 - A PR in review still counts as in flight: its issue is not a candidate, and its changes take part
   in the overlap check.
@@ -612,6 +616,7 @@ assigns best-of issues but never picks: the pick is yours.
 rota round return ben --reason "wrong premise" --note-file next.md   # the worker's own verb
 rota round transfer 59 --to dana --note-file next.md                 # orchestrator: to a slot
 rota round transfer 59 --to human                                    # orchestrator: to the human
+rota round transfer 59 --to human --cap-reason ambiguous-criteria --note-file audit.md  # at the bounce cap, after the criteria audit
 rota round transfer 59 --to kit --tier heavy --tier-reason "bounced 3x"  # orchestrator: to a stronger worker
 rota round reclaim ben                                               # orchestrator: dead or stalled slot
 ```
