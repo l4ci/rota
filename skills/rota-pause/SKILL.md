@@ -5,6 +5,8 @@ description: Use when the session is approaching a context limit, the work must 
 
 # rota-pause — Graceful Session Pause
 
+`/rota-pause --report` also writes a session report for the human (Step 4, *Session report*). Without the flag no report is written.
+
 `/rota-work` with no argument reads the handoff note next session; it goes away when the stream is resumed or abandoned (`rota status rm` deletes it).
 
 ## When NOT to Use
@@ -66,6 +68,19 @@ Debugging? Run `rota debug session list`. Name the open session for this work (s
 
 Gotchas and dead ends go to `/rota-learn` (Step 6), not the note.
 
+### Session report (`--report` only)
+
+Skip this unless the user passed `--report`. Not for an orchestrator pause (Step 1 sends that to `rota round summary`).
+
+For each entry, write the report next to its note: the note path from `rota status handoff ... --canonical` with `.md` replaced by `.report.md` (`<branch>.report.md`, or `<branch>@<repo>.report.md` in a wave). Always overwrite. Sections, in order, from [`references/handoff-template.md`](references/handoff-template.md) *Session report*:
+
+- **Commits:** `git log --format='%h %s' "$(rota git base)"..HEAD`.
+- **Files changed:** `git diff --stat "$(rota git base)"...HEAD`.
+- **Tasks:** the finished `Task:` markers from the task ledger, one per line.
+- **Proof:** `rota proof show <ID>` for each paused item.
+
+The report is never read on resume and never committed.
+
 ## Step 5 — Pin Status
 
 For each entry run `rota status add <branch> --items <ids> [--worktree <path>] [--repo <repo>] --if-absent` so resume finds it. `--if-absent` keeps the original `startedAt`; the note carries the pause time.
@@ -91,17 +106,17 @@ Show the `(web)` suffix only when `repo` is non-null.
 ## Rules
 
 - **Write what you know.** The note is a state snapshot, not a task spec.
-- **Redact secrets.** The note is injected into a new session and quotes probe output (Current hypothesis). Replace credentials and PII (tokens, auth and cookie headers, passwords, private keys, secret env vars, emails) with `[REDACTED]`; quote the line that matters, not the capture.
+- **Redact secrets.** The note (and the `--report` file, which passes the same redaction) is injected into a new session and quotes probe output (Current hypothesis). Replace credentials and PII (tokens, auth and cookie headers, passwords, private keys, secret env vars, emails) with `[REDACTED]`; quote the line that matters, not the capture.
 - **One handoff note per `(branch, repo)`.** Overwrite on re-pause.
 - **A multi-repo wave is one logical pause.** `cd` into a sub-repo to scope to it.
 - **Never commit `.rota/handoff/` or `.rota/debug/`** (gitignored per-developer scratch).
 - **Do not delete the handoff note here.** Resume or abandon removes it; the next session archives the orchestrator note with `rota round start --consume-handoff`.
 - **A paused round is not a finished round.** Never wind down, merge or reclaim from a pause.
-- **No mutation beyond the handoff note, status pin and the chosen wip commit or stash.**
+- **No mutation beyond the handoff note, the `--report` file, status pin and the chosen wip commit or stash.**
 
 ## References
 
 - [`orchestrator-pause.md`](orchestrator-pause.md): pausing an orchestrator mid-round; read from Step 1 when a round is in flight.
 - [`umbrella-wave.md`](umbrella-wave.md): multi-repo wave pauses; read from Steps 2 and 4.
 - [`references/task-ledger.md`](references/task-ledger.md): `Task:` commit trailer; read for the handoff note's Stage and Next planned step.
-- [`references/handoff-template.md`](references/handoff-template.md): handoff note template, written by `/rota-pause`, read by `/rota-work`.
+- [`references/handoff-template.md`](references/handoff-template.md): handoff note template, written by `/rota-pause`, read by `/rota-work`; also the `--report` layout.

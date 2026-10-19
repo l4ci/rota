@@ -128,6 +128,8 @@ See [../usage/vision-and-plans.md](../usage/vision-and-plans.md) for the full pl
 
 When you run `/rota-pause`, the current state of the session (active hypothesis, next planned step, files mid-edit, gotchas just discovered, uncommitted-work strategy) is written to `handoff/<branch>.md`. `/rota-work` (no argument) reads any matching note for an active branch and uses it to restore intent that pure git state can't carry across `/clear` or a fresh session.
 
+`/rota-pause --report` adds `handoff/<branch>.report.md`, a human-readable session summary that `/rota-work` never reads or deletes.
+
 Notes are scoped per branch and overwritten by subsequent `/rota-pause` runs on the same branch. `rota status rm <branch>` deletes the note when the stream ends.
 
 See [../usage/pausing-and-resuming.md](../usage/pausing-and-resuming.md) for the pause/resume flow.

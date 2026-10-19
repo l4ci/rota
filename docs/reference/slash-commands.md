@@ -50,7 +50,7 @@ Runs a parallel round: you are the orchestrator, and standing workers (`work.wor
 
 ## /rota-pause
 
-Stops mid-session (or an orchestrator mid-round, without winding the round down) by writing a handoff note to `.rota/handoff/<branch>.md` that captures current hypothesis, next planned step, files mid-edit, and gotchas discovered. Use it when the context window is filling or you need to step away mid-`/rota-work`. See [pausing and resuming](../usage/pausing-and-resuming.md) for the full flow.
+Stops mid-session (or an orchestrator mid-round, without winding the round down) by writing a handoff note to `.rota/handoff/<branch>.md` that captures current hypothesis, next planned step, files mid-edit, and gotchas discovered. Use it when the context window is filling or you need to step away mid-`/rota-work`. With `--report` it also writes `.rota/handoff/<branch>.report.md` (commits, files changed, tasks, proof) for you to read; `/rota-work` ignores it. See [pausing and resuming](../usage/pausing-and-resuming.md) for the full flow.
 
 ## /rota-plan
 

@@ -25,7 +25,11 @@ The note's shape:
 
 Sections that don't apply are omitted. `Working on` holds the items, milestone and stage. Gotchas and dead ends belong in [`/rota-learn`](learning.md), not the note.
 
-You don't need to manage this file directly. `/rota-work` (no argument) reads and deletes it on resolve.
+### Session report
+
+`/rota-pause --report` also writes `.rota/handoff/<branch>.report.md`: commits since the base, files changed, finished tasks and proof rows. It is a summary for you to read when you come back. `/rota-work` never reads or deletes it, and it goes through the same secret redaction as the note. Without the flag no report is written. Nothing commits it.
+
+You don't need to manage the note directly. `/rota-work` (no argument) reads and deletes it on resolve.
 
 ```mermaid
 stateDiagram-v2
