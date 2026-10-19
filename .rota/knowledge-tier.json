@@ -333,18 +333,18 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Embedding host fakes must redeclare Capabilities": {
       "tier": "confirmed",
-      "hits": 3,
+      "hits": 4,
       "lastSeen": "2026-10-19"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Palette entries name the verb that registers the View": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-08"
+      "hits": 1,
+      "lastSeen": "2026-10-19"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::A per-invocation cache must reset per pass in long-running verbs": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-08"
+      "hits": 1,
+      "lastSeen": "2026-10-19"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Wrappers read stdin only when an argument takes it": {
       "tier": "deprecated",
@@ -402,14 +402,14 @@
       "lastSeen": "2026-05-18"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate target fields change mid-run": {
-      "tier": "provisional",
-      "hits": 1,
+      "tier": "confirmed",
+      "hits": 3,
       "lastSeen": "2026-10-19"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate steps read the forge only after stepRemote": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-15"
+      "hits": 2,
+      "lastSeen": "2026-10-19"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::The tracker REST layer never resends a POST after a 5xx": {
       "tier": "provisional",
