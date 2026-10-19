@@ -331,33 +331,44 @@ func milestoneCheck(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return milestoneFail(err, "")
 		}
-		root, err := backlogScope(c)
-		if err != nil {
-			return Result{}, err
-		}
-		be, err := openBacklog(c, root, false, "")
+		kids, err := milestoneChildren(c, id)
 		if err != nil {
 			return backlogFail(err)
-		}
-		rows, _, _, err := backlog.OpenRows(be)
-		if err != nil {
-			return backlogFail(err)
-		}
-		types := map[string]string{}
-		for _, r := range rows {
-			types[r.ID] = r.Type
-		}
-		var kids []ms.Child
-		for _, cid := range backlog.IDsByMilestone(rows, id) {
-			text, _, err := be.Detail(cid)
-			if err != nil {
-				return backlogFail(err)
-			}
-			kids = append(kids, ms.Child{ID: cid, Type: types[cid], Body: text})
 		}
 		r := ms.Check(body, kids, *strict)
 		return milestoneCheckResult(id, r)
 	}
+}
+
+// milestoneChildren is the milestone's backlog items as ms.Check reads them:
+// id, type letter and detail body. Both `milestone check` and the release
+// gate's check line build their report from it.
+func milestoneChildren(c *Ctx, id string) ([]ms.Child, error) {
+	root, err := backlogScope(c)
+	if err != nil {
+		return nil, err
+	}
+	be, err := openBacklog(c, root, false, "")
+	if err != nil {
+		return nil, err
+	}
+	rows, _, _, err := backlog.OpenRows(be)
+	if err != nil {
+		return nil, err
+	}
+	types := map[string]string{}
+	for _, r := range rows {
+		types[r.ID] = r.Type
+	}
+	var kids []ms.Child
+	for _, cid := range backlog.IDsByMilestone(rows, id) {
+		text, _, err := be.Detail(cid)
+		if err != nil {
+			return nil, err
+		}
+		kids = append(kids, ms.Child{ID: cid, Type: types[cid], Body: text})
+	}
+	return kids, nil
 }
 
 func milestoneCheckResult(id string, r ms.Report) (Result, error) {
