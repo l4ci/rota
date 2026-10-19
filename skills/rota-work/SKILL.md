@@ -44,7 +44,7 @@ Copy this checklist and track your progress:
 
 ## No-Argument Mode (reconcile, suggest, then work)
 
-With no item, ID or brief, read [`no-argument-mode.md`](no-argument-mode.md) and follow it: it reconciles active streams, suggests one item and continues into Step 1.
+With no item, ID or brief, read [`no-argument-mode.md`](no-argument-mode.md) and follow it: it reconciles active streams, prints a Round line when a round is in flight or an item failed its gate, suggests one item and continues into Step 1.
 
 ## Preview Mode (`--preview <target>`)
 
