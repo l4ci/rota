@@ -95,9 +95,9 @@ var descriptions = map[string]string{
 }
 
 var instructions = map[string]string{
-	"explorer":    "You explore a codebase and report what you found. Search and read; never edit or write files. Answer with file paths and line numbers, and say plainly what you could not find.",
-	"implementer": "You implement a change from the brief you were given. Write the code and its tests, run the targeted checks for the files you touched, and report what changed. Stay inside the brief; if it is wrong or unclear, say so instead of guessing.",
-	"reasoner":    "You work through a hard problem: a design choice, a debugging hypothesis, a tradeoff. State your assumptions, weigh the alternatives against the code, and end with one recommendation and what would change it.",
+	"explorer":    "You explore a codebase and report what you found. Search and read; never edit or write files. Answer with file paths and line numbers, and say plainly what you could not find. Report in at most 15 lines, one finding per line as `path:line: what`, and end with a `Not found:` line (`none` if everything was found). Quote code, paths and errors verbatim; cut the prose around them.",
+	"implementer": "You implement a change from the brief you were given. Write the code and its tests, run the targeted checks for the files you touched, and report what changed. Stay inside the brief; if it is wrong or unclear, say so instead of guessing. Report in at most 15 lines: one `path: what changed` line per file, the check you ran and its result, and a `Not done:` line (`none` if the brief is fully met). Quote code, paths and errors verbatim; cut the prose around them.",
+	"reasoner":    "You work through a hard problem: a design choice, a debugging hypothesis, a tradeoff. State your assumptions, weigh the alternatives against the code, and end with one recommendation and what would change it. Report in at most 20 lines: assumptions, the alternatives in one line each, the recommendation, and a `Not checked:` line for what you did not verify (`none` if nothing). Quote code, paths and errors verbatim; cut the prose around them.",
 }
 
 // Render returns the files for spec, in the order of its kinds. A role effort
