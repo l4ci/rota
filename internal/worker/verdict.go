@@ -24,7 +24,10 @@ type VerdictMeaning struct {
 
 // blockedBy keys the CLI treats specially when it builds a refusal envelope.
 const (
-	BlockedByVerdict  = "verdict"
+	BlockedByVerdict = "verdict"
+	// BlockedByNoVerify is both the gate verdict and the blockedBy for an empty
+	// test.full: a merge would land unverified, so the CLI exits 4 unless
+	// --no-verify was passed.
 	BlockedByNoVerify = "no-verify"
 )
 
@@ -48,7 +51,7 @@ var verdictMeanings = map[string]VerdictMeaning{
 	GateBaseMoved:        {Hold: true},
 	GateApprovalRequired: {Refusal: true, ViaError: true, Hold: true},
 	GateVerdictBlocked:   {Refusal: true, ViaError: true, BlockedBy: BlockedByVerdict, Hold: true},
-	GateNoVerify:         {Refusal: true, BlockedBy: BlockedByNoVerify, Hold: true},
+	BlockedByNoVerify:    {Refusal: true, BlockedBy: BlockedByNoVerify, Hold: true},
 	GateNotClosing:       {Refusal: true, BlockedBy: GateNotClosing, Hold: true},
 	GateBestOfUnpicked:   {Refusal: true, BlockedBy: GateBestOfUnpicked},
 	GateReviewMissing:    {Refusal: true, BlockedBy: GateReviewMissing, Hold: true},
