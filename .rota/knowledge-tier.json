@@ -785,6 +785,11 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Workers & relays::Worker context is mostly fixed preamble": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
     }
   }
 }
