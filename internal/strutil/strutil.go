@@ -1,6 +1,6 @@
 // Package strutil holds the small text helpers several packages used to carry
 // their own copies of: the first meaningful line of command output, a
-// rune-safe clip and a short commit SHA.
+// rune-safe clip, a short commit SHA and the first non-empty string.
 package strutil
 
 import "github.com/l4ci/rota/internal/pystr"
@@ -36,4 +36,15 @@ func ShortSHA(sha string) string {
 		return sha[:shaLen]
 	}
 	return sha
+}
+
+// FirstNonEmpty returns the first of vs that is not "", or "" when there is
+// none. A whitespace-only value counts as non-empty.
+func FirstNonEmpty(vs ...string) string {
+	for _, v := range vs {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

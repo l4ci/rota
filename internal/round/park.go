@@ -6,6 +6,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/stamp"
+	"github.com/l4ci/rota/internal/strutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -87,13 +88,13 @@ func (e Env) Park(ctx context.Context, root, name, verb string) (Parked, error) 
 	if fi, err := os.Stat(wt); wt == "" || err != nil || !fi.IsDir() {
 		return p, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s worktree missing: %s", name, wt)}
 	}
-	base := firstNonEmpty(s.Base(), e.Base)
+	base := strutil.FirstNonEmpty(s.Base(), e.Base)
 	parkBr := worker.ParkBranch(name)
 	cur, curErr, curCode := e.gitOut(ctx, wt, "symbolic-ref", "--short", "-q", "HEAD")
 	if curCode > 1 { // 1 is a detached HEAD; anything else is a read that failed, so the slot is not freed on a guess
 		return p, unavailable("could not read HEAD of slot %s (git exit %d): %s", name, curCode, curErr)
 	}
-	branch := firstNonEmpty(s.Branch(), cur)
+	branch := strutil.FirstNonEmpty(s.Branch(), cur)
 	p.Branch = branch
 	headOf := func(ref string) string {
 		out, _, code := e.gitOut(ctx, wt, "log", "-1", "--abbrev=7", "--format=%h %s", ref, "--")

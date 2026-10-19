@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"strings"
 
@@ -228,10 +229,10 @@ func roundReconcile(fs *flag.FlagSet) RunFunc {
 		d.Set("limits", lim)
 		var lines []string
 		for _, f := range out.Drift {
-			lines = append(lines, fmt.Sprintf("drift\t%s\t%s\t%s", f.Kind, dash(firstOf(f.Slot, tracker.RefOf(f.Issue))), f.Detail))
+			lines = append(lines, fmt.Sprintf("drift\t%s\t%s\t%s", f.Kind, dash(strutil.FirstNonEmpty(f.Slot, tracker.RefOf(f.Issue))), f.Detail))
 		}
 		for _, f := range out.Repaired {
-			lines = append(lines, fmt.Sprintf("repaired\t%s\t%s\t%s", f.Kind, dash(firstOf(f.Slot, tracker.RefOf(f.Issue))), f.Repair))
+			lines = append(lines, fmt.Sprintf("repaired\t%s\t%s\t%s", f.Kind, dash(strutil.FirstNonEmpty(f.Slot, tracker.RefOf(f.Issue))), f.Repair))
 		}
 		for _, l := range escLines {
 			lines = append(lines, "escalation\t"+l)
@@ -315,13 +316,6 @@ func dash(s string) string {
 		return "-"
 	}
 	return s
-}
-
-func firstOf(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }
 
 // hostStateText is the row's host state, with an unverifiable slot's reason

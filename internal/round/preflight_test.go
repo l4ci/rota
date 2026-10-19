@@ -2,6 +2,7 @@ package round
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/strutil"
 	"time"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -52,7 +53,7 @@ func TestPreflight(t *testing.T) {
 				f.meters(t, c.meters)
 			}
 			f.be.add("20", "Elsewhere", "M09", false, "## Acceptance\n- [ ] x")
-			id := firstNonEmpty(c.id, "12")
+			id := strutil.FirstNonEmpty(c.id, "12")
 			f.labelled(id, c.labels...)
 			in := preflightIn{Item: f.be.items[id], Settings: f.set, Tier: "standard"}
 			if c.in != nil {

@@ -13,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/strutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -386,7 +387,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			if claimed[i] || !strings.HasPrefix(filepath.Clean(a.Cwd)+string(os.PathSeparator), wtDir) || inExternal(rows, rep.views, a.Cwd) {
 				continue
 			}
-			name := firstNonEmpty(a.Name, a.Tab)
+			name := strutil.FirstNonEmpty(a.Name, a.Tab)
 			rows = append(rows, &Row{Name: name, Agent: a.Name, Tab: a.Tab, HostState: a.Status})
 			rep.add(Finding{Kind: UnclaimedTab, Slot: name, Detail: fmt.Sprintf("live agent in %s matches no slot", a.Cwd)})
 		}
@@ -595,7 +596,7 @@ func (e Env) readRows(wts []worktree, reg worker.Registry, rep *Report) ([]*Row,
 		}
 		if ev := s.Event(); ev != nil && ev.Kind != worker.EventHeartbeat {
 			r.Event = ev
-			r.Evidence = firstNonEmpty(ev.Body, r.Evidence)
+			r.Evidence = strutil.FirstNonEmpty(ev.Body, r.Evidence)
 		}
 		r.Kind, r.KindSource, r.Tier, r.Model, r.TierReason = s.HarnessKind(), s.KindSource(), s.Tier(), s.Model(), s.TierReason()
 		if r.Issue != "" {
@@ -606,7 +607,7 @@ func (e Env) readRows(wts []worktree, reg worker.Registry, rep *Report) ([]*Row,
 				}
 			}
 		}
-		add(r, &view{worktree: wt, base: firstNonEmpty(s.Base(), e.Base)})
+		add(r, &view{worktree: wt, base: strutil.FirstNonEmpty(s.Base(), e.Base)})
 	}
 	sort.Slice(wts, func(i, j int) bool { return wts[i].name < wts[j].name })
 	for _, w := range wts {
@@ -628,7 +629,7 @@ func (e Env) readHost(ctx context.Context, rep *Report) (agents []host.Agent, ok
 		// kinds (dead-tab, unclaimed-tab, stalled) have nothing to read.
 		rep.Host = host.Solo
 	} else if e.Snapshot == nil {
-		rep.unavailable(SourceHost, firstNonEmpty(e.HostErr, "no host available"))
+		rep.unavailable(SourceHost, strutil.FirstNonEmpty(e.HostErr, "no host available"))
 	} else if a, err := e.Snapshot(ctx); err != nil {
 		rep.unavailable(SourceHost, err.Error())
 	} else {
@@ -653,7 +654,7 @@ type forgeState struct {
 func (e Env) readForge(ctx context.Context, rep *Report) forgeState {
 	fs := forgeState{prs: map[string]*tracker.PR{}, labelled: map[tracker.IssueKey]bool{}, ok: e.Forge != nil}
 	if !fs.ok {
-		rep.unavailable(SourceForge, firstNonEmpty(e.ForgeErr, "no forge available"))
+		rep.unavailable(SourceForge, strutil.FirstNonEmpty(e.ForgeErr, "no forge available"))
 	} else if list, err := e.Forge.OpenPRs(ctx); err != nil {
 		fs.ok = false
 		rep.unavailable(SourceForge, err.Error())
@@ -728,13 +729,6 @@ func matchAgent(agents []host.Agent, slot, tab, wt string) int {
 		}
 	}
 	return -1
-}
-
-func firstNonEmpty(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }
 
 // worktrees lists the checkouts directly under <root>/.worktrees/.

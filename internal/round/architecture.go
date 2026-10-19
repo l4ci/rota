@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/l4ci/rota/internal/strutil"
 	"slices"
 	"strings"
 	"time"
@@ -153,7 +154,7 @@ func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Back
 		return numOf(feats) + numOf(bugs), ""
 	}
 	if e.Forge == nil {
-		return -1, firstNonEmpty(e.ForgeErr, "no forge")
+		return -1, strutil.FirstNonEmpty(e.ForgeErr, "no forge")
 	}
 	if *since == "" {
 		at := e.now().UTC().Format(time.RFC3339)
