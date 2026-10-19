@@ -157,8 +157,9 @@ type AccountList struct {
 	Entries []AccountEntry
 }
 
-// PaneVocab is a kind's own pane texts, as case-insensitive regex sources
-// (Gutter excepted). The zero value is a kind that reads like Claude Code.
+// PaneVocab is a kind's own pane texts, as regex sources. Every field is read
+// case-insensitively except BadModel (a dialog whose model id is captured as
+// written) and Gutter (not a regex). The zero value is a kind that reads like Claude Code.
 type PaneVocab struct {
 	// Retry marks a retry in flight (busy, checked before limits); Busy marks a
 	// turn running (busy, checked after limits and dialogs).
@@ -372,6 +373,22 @@ func AllLimitPhrases() []string {
 	seen := map[string]bool{}
 	for _, k := range kinds {
 		for _, p := range Resolve(k).LimitPhrases() {
+			if !seen[p] {
+				seen[p] = true
+				out = append(out, p)
+			}
+		}
+	}
+	return out
+}
+
+// AllPaneLimits is the union of every kind's PaneVocab.Limits, without repeats:
+// a prefilter for a pane watcher that cannot know a pane's kind.
+func AllPaneLimits() []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, k := range kinds {
+		for _, p := range Resolve(k).PaneVocab().Limits {
 			if !seen[p] {
 				seen[p] = true
 				out = append(out, p)

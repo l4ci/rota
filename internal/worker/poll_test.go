@@ -699,3 +699,44 @@ func TestFindLimitIsTheOneDefinitionOfAHitLimit(t *testing.T) {
 		}
 	}
 }
+
+// The wiring from the registry to the classifier: slotTarget hands a slot's
+// harness kind to ClassifyFor, so an opencode slot reads OpenCode's expired-key
+// pane as limited and a claude slot showing the same text stays idle.
+func TestPollReadsEachSlotsPaneByItsHarnessKind(t *testing.T) {
+	dir, f := pollRegistry(t, "tmux")
+	if err := Update(dir, func(d *Doc) { d.Slot("w1").Raw().Set("kind", harness.OpenCode) }); err != nil {
+		t.Fatal(err)
+	}
+	pane := opencodePane(t, "expired-key")
+	f.panes["w1"] = []string{pane, pane}
+	f.panes["w2"] = []string{pane, pane}
+	res, err := envWith(f).Poll(bg, dir, PollOpts{Lines: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Slots) != 2 || res.Slots[0].State != StateLimited || res.Slots[1].State != StateIdle {
+		t.Errorf("opencode slot w1, claude slot w2: %+v", res.Slots)
+	}
+}
+
+// FindLimit reads a kind's own phrases on top of the shared ones, for that kind only.
+func TestFindLimitReadsTheKindsOwnPhrases(t *testing.T) {
+	const quota = "Error: insufficient quota\n"
+	if _, _, ok := FindLimit(harness.OpenCode, quota); !ok {
+		t.Error("opencode quota text is not a limit for an opencode slot")
+	}
+	for _, kind := range []string{"", harness.Claude, harness.Codex} {
+		if _, _, ok := FindLimit(kind, quota); ok {
+			t.Errorf("opencode quota text is a limit for kind %q", kind)
+		}
+	}
+}
+
+// The herdr prefilter must let a kind's own limit text through, or the
+// watcher's per-kind reading never sees it.
+func TestLimitRegexIncludesKindPhrases(t *testing.T) {
+	if !regexp.MustCompile(LimitRegex()).MatchString("Error: insufficient quota") {
+		t.Error("LimitRegex drops opencode quota text")
+	}
+}
