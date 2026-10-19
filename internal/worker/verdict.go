@@ -22,11 +22,9 @@ type VerdictMeaning struct {
 	Hold bool
 }
 
-// blockedBy keys the CLI treats specially when it builds a refusal envelope.
-const (
-	BlockedByVerdict  = "verdict"
-	BlockedByNoVerify = "no-verify"
-)
+// BlockedByVerdict is the blockedBy key the CLI treats specially when it builds a
+// refusal envelope; the other special key, no-verify, is the GateNoVerify verdict.
+const BlockedByVerdict = "verdict"
 
 // verdictMeanings classifies every gate and train verdict. A verdict missing
 // here fails TestVerdictsAreClassified.
@@ -48,7 +46,7 @@ var verdictMeanings = map[string]VerdictMeaning{
 	GateBaseMoved:        {Hold: true},
 	GateApprovalRequired: {Refusal: true, ViaError: true, Hold: true},
 	GateVerdictBlocked:   {Refusal: true, ViaError: true, BlockedBy: BlockedByVerdict, Hold: true},
-	GateNoVerify:         {Refusal: true, BlockedBy: BlockedByNoVerify, Hold: true},
+	GateNoVerify:         {Refusal: true, BlockedBy: GateNoVerify, Hold: true},
 	GateNotClosing:       {Refusal: true, BlockedBy: GateNotClosing, Hold: true},
 	GateBestOfUnpicked:   {Refusal: true, BlockedBy: GateBestOfUnpicked},
 	GateReviewMissing:    {Refusal: true, BlockedBy: GateReviewMissing, Hold: true},

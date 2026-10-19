@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -673,10 +674,10 @@ func verdictRefusal(verdict string, err error, msg, hint string, d *jsonx.Object
 		res, rerr = recordedFailRefusal(err, d)
 	case m.ViaError:
 		res, rerr = gateRefusal(err, d)
-	case m.BlockedBy == worker.BlockedByNoVerify:
+	case m.BlockedBy == worker.GateNoVerify:
 		res, rerr = noVerifyRefusal(msg, hint, d)
 	default:
-		res, rerr = blockedRefusal(m.BlockedBy, msg, hint, d)
+		res, rerr = blockedRefusal(d, m.BlockedBy, msg, hint)
 	}
 	return res, true, rerr
 }
@@ -688,21 +689,13 @@ func recordedFailRefusal(err error, d *jsonx.Object) (Result, error) {
 	if !errors.As(err, &vb) {
 		return Result{}, err
 	}
-	d.Set("blockedBy", "verdict")
-	d.Set("kind", vb.Record.Kind)
-	d.Set("sha", vb.Record.Sha)
-	d.Set("stale", vb.Stale)
-	d.Set("changed", false)
-	return Result{Data: d}, Refused("%s", vb.Error()).WithHint("see: rota verdict show " + vb.Branch)
+	return verdictBlocked(vb, d, false)
 }
 
 // noVerifyRefusal is the exit-4 envelope for an empty test.full: d plus
 // blockedBy no-verify, nothing landed.
 func noVerifyRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
-	d.Set("blockedBy", "no-verify")
-	d.Set("key", "test.full")
-	d.Set("changed", false)
-	return Result{Data: d}, Refused("%s", msg).WithHint(hint)
+	return blockedRefusal(d, worker.GateNoVerify, msg, hint, "key", config.TestFullKey)
 }
 
 // recordedReviews lists the review kinds with a verdict recorded for a branch
@@ -720,12 +713,6 @@ func recordedReviews(root string) func(branch, head string) []string {
 		}
 		return kinds
 	}
-}
-
-func blockedRefusal(blockedBy, msg, hint string, d *jsonx.Object) (Result, error) {
-	d.Set("blockedBy", blockedBy)
-	d.Set("changed", false)
-	return Result{Data: d}, Refused("%s", msg).WithHint(hint)
 }
 
 // isRefusal reports whether a gate or train verdict, with the error it came
