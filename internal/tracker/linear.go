@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/l4ci/rota/internal/strutil"
 	"net/http"
 	"slices"
 	"strings"
@@ -252,7 +253,7 @@ func (u *linearUser) label() string {
 	if u == nil {
 		return ""
 	}
-	return firstOf(u.DisplayName, u.Name, u.ID)
+	return strutil.FirstNonEmpty(u.DisplayName, u.Name, u.ID)
 }
 
 // viewer is the authenticated user, read once; a failure is retried next call.

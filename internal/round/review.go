@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/strutil"
 	"os"
 	"strings"
 	"unicode"
@@ -219,7 +220,7 @@ func ReviewRelayText(b worker.ReviewBatch) string {
 		if r := []rune(text); len(r) > itemLimit {
 			text = string(r[:itemLimit]) + " [cut: read the rest on the PR]"
 		}
-		items = append(items, item{authorToken(firstOf(it.Author, "reviewer")), text})
+		items = append(items, item{authorToken(strutil.FirstNonEmpty(it.Author, "reviewer")), text})
 	}
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "REVIEW %s (%d items)\n", b.PR, len(items))
@@ -238,13 +239,6 @@ func ReviewRelayText(b worker.ReviewBatch) string {
 		fmt.Fprintf(&sb, "\nVerdict: %s\n", b.Verdict)
 	}
 	return sb.String()
-}
-
-func firstOf(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }
 
 // authorToken keeps a forge login to one harmless token for the item header.

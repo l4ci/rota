@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/strutil"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -332,7 +333,7 @@ func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog
 	if !e.forgeOn(be) {
 		return nil, nil
 	}
-	issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{firstNonEmpty(e.Label, DefaultLabel)}})
+	issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{strutil.FirstNonEmpty(e.Label, DefaultLabel)}})
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +360,7 @@ func (e Env) handedToHuman(ctx context.Context, be backlog.Backend) (map[tracker
 	if !e.forgeOn(be) {
 		return nil, nil
 	}
-	issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{firstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}})
+	issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{strutil.FirstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}})
 	if err != nil {
 		return nil, err
 	}

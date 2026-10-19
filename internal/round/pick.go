@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/strutil"
 	"strings"
 
 	"github.com/l4ci/rota/internal/ledger"
@@ -125,7 +126,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 	if winner < 0 {
 		var have []string
 		for _, v := range views {
-			have = append(have, fmt.Sprintf("%s: %s", v.Slot, firstNonEmpty(v.PR, v.State)))
+			have = append(have, fmt.Sprintf("%s: %s", v.Slot, strutil.FirstNonEmpty(v.PR, v.State)))
 		}
 		return res, blocked(BlockNotAttempt, "#%d is not an attempt of %s (attempts: %s)", want, tracker.RefOf(id), strings.Join(have, ", "))
 	}
@@ -164,7 +165,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 		if toClose {
 			c, isCloser := e.Forge.(prCloser)
 			if !isCloser {
-				return res, unavailable("closing #%d needs a forge that can close a PR; %s", loserN, firstNonEmpty(e.ForgeErr, "this one cannot"))
+				return res, unavailable("closing #%d needs a forge that can close a PR; %s", loserN, strutil.FirstNonEmpty(e.ForgeErr, "this one cannot"))
 			}
 			closer = c
 		}
@@ -207,7 +208,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 		Detail: ledger.Detail("loser", lv.Slot)})
 	note := fmt.Sprintf("Best-of pick: #%d (%s)", want, res.Winner.Slot)
 	if loser >= 0 {
-		note += fmt.Sprintf(" over %s (%s)", firstNonEmpty(lv.PR, "the other attempt"), lv.Slot)
+		note += fmt.Sprintf(" over %s (%s)", strutil.FirstNonEmpty(lv.PR, "the other attempt"), lv.Slot)
 		if !hasPR {
 			note += ", which had no PR"
 		}
@@ -228,7 +229,7 @@ func (e Env) resolveAttempt(root string, reg worker.Registry, id string, a worke
 	v := pickView{PickAttempt: PickAttempt{Slot: a.Slot, Branch: a.Branch}, claimID: a.ClaimID}
 	if s := reg.Slot(a.Slot); s != nil && s.HeldID() == worker.NormID(id) && s.Branch() == a.Branch {
 		v.slot = s
-		v.claimID = firstNonEmpty(a.ClaimID, s.ClaimID())
+		v.claimID = strutil.FirstNonEmpty(a.ClaimID, s.ClaimID())
 		if n, ok := worker.PRRefNumber(s.PR()); ok {
 			v.PR, v.State = fmt.Sprintf("#%d", n), AttemptOpenPR
 			return v, nil
@@ -240,7 +241,7 @@ func (e Env) resolveAttempt(root string, reg worker.Registry, id string, a worke
 		}
 		if n, ok := worker.PRRefNumber(q.PR); ok {
 			v.PR, v.State = fmt.Sprintf("#%d", n), AttemptOpenPR
-			v.claimID = firstNonEmpty(v.claimID, q.ClaimID)
+			v.claimID = strutil.FirstNonEmpty(v.claimID, q.ClaimID)
 			return v, nil
 		}
 	}
@@ -278,6 +279,6 @@ func (e Env) retireSlot(ctx context.Context, root string, v pickView, id string,
 		}
 		st = "uncommitted changes"
 	}
-	*warnings = append(*warnings, fmt.Sprintf("slot %s still holds %s (%s): free it with rota round reclaim %s", v.Slot, tracker.RefOf(id), firstNonEmpty(st, "busy"), v.Slot))
+	*warnings = append(*warnings, fmt.Sprintf("slot %s still holds %s (%s): free it with rota round reclaim %s", v.Slot, tracker.RefOf(id), strutil.FirstNonEmpty(st, "busy"), v.Slot))
 	return nil
 }

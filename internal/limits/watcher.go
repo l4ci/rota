@@ -3,6 +3,7 @@ package limits
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"regexp"
 	"strings"
@@ -520,7 +521,7 @@ func (w *Watcher) fail(e *Entry, now time.Time, why string) {
 	title := fmt.Sprintf("Usage limit not resolved: %s", e.Session)
 	body := fmt.Sprintf("The usage-limit watcher gave up on %s (%s): %s.\n\n- Window: %s\n- Detected: %s\n- Reset: %s\n- Resume prompts typed: %d\n- Log: %s (limits %s)\n\n"+
 		"Look at the pane, then restart the session or run rota limit watch again.\n",
-		e.Session, e.ID, why, e.Window, e.DetectedAt, firstNonEmpty(e.ResetsAt, "unknown"), e.Cycles, worker.RegistryPath(w.Root), e.ID)
+		e.Session, e.ID, why, e.Window, e.DetectedAt, strutil.FirstNonEmpty(e.ResetsAt, "unknown"), e.Cycles, worker.RegistryPath(w.Root), e.ID)
 	switch {
 	case w.Settings.EscalateIssue == "":
 		if w.Notify != nil {
@@ -541,13 +542,6 @@ func (w *Watcher) fail(e *Entry, now time.Time, why string) {
 	if err := Save(w.Root, *e); err != nil {
 		w.warn("limits not recorded: %v", err)
 	}
-}
-
-func firstNonEmpty(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }
 
 // ReadingOf maps an account meter to a Reading: a window at or past 100% is
