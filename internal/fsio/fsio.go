@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -53,13 +54,18 @@ func ReadText(path string) (string, error) {
 	return strings.ReplaceAll(t, "\r", "\n"), nil
 }
 
-// WriteFileAtomic writes data to "<path>.tmp" in the same directory and
-// renames it over path, so readers see the old or the new file, never half.
-// Unlike hvlib_io it also fsyncs the file before the rename and the
+// tmpSeq numbers temp files within one process; the pid separates processes.
+var tmpSeq atomic.Uint64
+
+// WriteFileAtomic writes data to a unique "<path>.<pid>.<n>.tmp" in the same
+// directory and renames it over path, so readers see the old or the new file,
+// never half. Unlike hvlib_io it also fsyncs the file before the rename and the
 // directory after it, so a crash cannot leave an empty or missing file.
 func WriteFileAtomic(path string, data []byte) error {
-	tmp := path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o666)
+	// A per-call temp name keeps two writers to one path from renaming each
+	// other's file; the last rename wins with its own complete content.
+	tmp := fmt.Sprintf("%s.%d.%d.tmp", path, os.Getpid(), tmpSeq.Add(1))
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
 	if err != nil {
 		return err
 	}

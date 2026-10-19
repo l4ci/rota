@@ -23,6 +23,20 @@ var (
 	ErrMultiMatch = errors.New("matches several bullets")
 )
 
+// lockFiles runs fn holding the sidecar lock of every path, taken in the
+// order given (callers pass a fixed order: umbrella before sub-repo). A verb
+// reads, edits and rewrites KNOWLEDGE.md, so without the lock N concurrent
+// verbs each write back their own stale read and the last one wins. The tier
+// sidecar's own lock is always taken inside this one, never the reverse.
+func lockFiles(paths []string, fn func() error) error {
+	if len(paths) == 0 {
+		return fn()
+	}
+	return fsio.Locked(paths[0], fsio.LockTimeout, func() error {
+		return lockFiles(paths[1:], fn)
+	})
+}
+
 func fileExists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil
@@ -45,6 +59,15 @@ func (s Store) Add(scope, topic, title, body, date string) (AddResult, error) {
 	if err != nil {
 		return AddResult{}, err
 	}
+	var res AddResult
+	err = lockFiles([]string{target}, func() (err error) {
+		res, err = s.addLocked(scope, target, topic, title, body, date)
+		return err
+	})
+	return res, err
+}
+
+func (s Store) addLocked(scope, target, topic, title, body, date string) (AddResult, error) {
 	if date == "" {
 		date = s.today()
 	}
@@ -119,6 +142,18 @@ func (s Store) Amend(scope string, explicit bool, topic, fragment, text string) 
 		}
 	}
 
+	var (
+		file    string
+		changed bool
+	)
+	err := lockFiles(candidates, func() (err error) {
+		file, changed, err = s.amendLocked(candidates, explicit, topic, fragment, text)
+		return err
+	})
+	return file, changed, err
+}
+
+func (s Store) amendLocked(candidates []string, explicit bool, topic, fragment, text string) (string, bool, error) {
 	type hit struct{ file, content, line string }
 	var hits []hit
 	for _, f := range candidates {
@@ -197,6 +232,15 @@ func (s Store) RenameTopic(scope, from, to, title string) (RenameResult, error) 
 	if err != nil {
 		return RenameResult{}, err
 	}
+	var res RenameResult
+	err = lockFiles([]string{km}, func() (err error) {
+		res, err = s.renameLocked(km, sidecar, from, to, title, mode)
+		return err
+	})
+	return res, err
+}
+
+func (s Store) renameLocked(km, sidecar, from, to, title, mode string) (RenameResult, error) {
 	content, err := ReadFile(km)
 	if err != nil {
 		return RenameResult{}, err
@@ -302,6 +346,15 @@ func (s Store) Replace(scope, topic, old, new string) (ReplaceResult, error) {
 	if err != nil {
 		return ReplaceResult{}, err
 	}
+	var res ReplaceResult
+	err = lockFiles([]string{km}, func() (err error) {
+		res, err = s.replaceLocked(scope, km, topic, old, new)
+		return err
+	})
+	return res, err
+}
+
+func (s Store) replaceLocked(scope, km, topic, old, new string) (ReplaceResult, error) {
 	content, err := ReadFile(km)
 	if err != nil {
 		return ReplaceResult{}, err
