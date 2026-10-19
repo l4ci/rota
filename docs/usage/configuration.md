@@ -335,7 +335,7 @@ Controls how deep a review `/rota-ship` runs before integrating.
 - `default`: `full`, `light` or `none`; `full` when omitted.
 - `lightBelow`: a diff of fewer changed lines (added plus deleted, against the base) than this gets `light`. It only lowers a `default` of `full`. `0` or omitted turns it off.
 - `labels`: a label on the item's issue or PR maps to a depth and beats the size rule, so `risk:high` forces `full` on a small diff. `best-of:2` and `partial-slice` are ordinary labels here. When several labels match, the strictest depth wins. A label that maps to `none` is final: the rules below never lift it.
-- `paths`: a glob (or directory) maps to the least depth a changed path matching it gets; the strictest match wins and it never lowers a depth.
+- `paths`: a glob maps (`*` within a segment, or a trailing `/**` for a whole directory; other `**` is rejected) to the least depth a changed path matching it gets; the strictest match wins and it never lowers a depth.
 - `scopeDrift`: `true` when omitted. A diff that touches files the issue never named (its `## Files` entries and the path entries of its `## Touches`) resolves `full`, and the reason lists them. An issue that declares neither section has no set to drift from. `false` turns the rule off.
 - A PR body line `Door: one-way` (the line every worker PR ends with) resolves `full` whatever the size.
 

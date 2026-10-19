@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"path"
 	"regexp"
 	"slices"
 	"strconv"
@@ -116,6 +117,11 @@ func ParseReviewPolicy(v any) (ReviewPolicy, error) {
 					s, _ := dv.(string)
 					if strings.TrimSpace(glob) == "" || !ReviewDepth(s).valid() {
 						return bad(`"paths" entry %q must map a glob to full, light or none`, glob)
+					}
+					// path.Match has no "**": only a trailing /** (a directory) is
+					// supported, and any other use would silently match less.
+					if _, err := path.Match(dirGlob(glob), ""); err != nil || strings.Contains(dirGlob(glob), "**") {
+						return bad(`"paths" glob %q is not supported: use * within a segment, or a trailing /** for a directory`, glob)
 					}
 					p.Paths[glob] = ReviewDepth(s)
 				}
@@ -233,7 +239,7 @@ func (p ReviewPolicy) Decide(in ReviewInput) ReviewDecision {
 	slices.Sort(globs)
 	for _, g := range globs {
 		for _, f := range in.Files {
-			if overlap.MatchPath(g, f) {
+			if overlap.MatchPath(dirGlob(g), f) {
 				raise(p.Paths[g], SignalPath, fmt.Sprintf("%s matches paths %s (%s)", f, g, p.Paths[g]))
 				break
 			}
@@ -241,6 +247,9 @@ func (p ReviewPolicy) Decide(in ReviewInput) ReviewDecision {
 	}
 	return best
 }
+
+// dirGlob turns a trailing /** into the directory prefix MatchPath understands.
+func dirGlob(g string) string { return strings.TrimSuffix(g, "/**") }
 
 // base is the depth from labels, then the size rule, then the default.
 func (p ReviewPolicy) base(changed int, labels []string) ReviewDecision {

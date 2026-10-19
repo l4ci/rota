@@ -76,3 +76,33 @@ func TestResolveReviewDepthSignals(t *testing.T) {
 		t.Fatalf("unreadable issue must fail, not guess: %v", err)
 	}
 }
+
+// A file moved out of a protected directory still counts as touching it.
+func TestResolveReviewDepthSeesBothSidesOfARename(t *testing.T) {
+	dir := depthRepo(t)
+	run := func(args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=a@b", "-c", "user.name=a"}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	run("checkout", "-q", "main")
+	run("checkout", "-q", "-b", "mv")
+	os.MkdirAll(filepath.Join(dir, "migrations"), 0o755)
+	os.WriteFile(filepath.Join(dir, "migrations", "001.sql"), []byte("create table t (id int);\n"), 0o644)
+	run("add", "migrations")
+	run("commit", "-q", "-m", "add")
+	run("checkout", "-q", "-b", "mv2")
+	run("mv", "migrations/001.sql", "moved.sql")
+	run("commit", "-q", "-m", "move")
+	pol, err := config.ParseReviewPolicy(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pol.LightBelow = 1000
+	pol.Paths = map[string]config.ReviewDepth{"migrations/**": config.DepthFull}
+	got, err := ResolveReviewDepth(context.Background(), ReviewSources{Policy: pol, Git: git.Exec, Dir: dir, Span: "mv...mv2"})
+	if err != nil || got.Signal != config.SignalPath {
+		t.Fatalf("rename out of migrations/: %+v %v", got, err)
+	}
+}
