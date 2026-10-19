@@ -118,3 +118,50 @@ func TestHerdrOpenLinkedRefusesARelativePath(t *testing.T) {
 		t.Errorf("err = %v, calls = %v", err, f.calls)
 	}
 }
+
+// AC-3: a slot is found by its agent name, which derives from slot and the
+// recorded handle, so every pane move that renumbers the pane (split, tabs,
+// split) leaves Status and PaneOf, what round status, watch and poll read,
+// resolving each slot with the handle it was dispatched with.
+func TestHerdrFindsEverySlotAfterPanesChangeWorkspace(t *testing.T) {
+	pane := map[string]string{AgentName("ben", "w9N:t2"): "w9N:p1", AgentName("kit", "w9P:t2"): "w9P:p1"}
+	f := &fake{handler: func(_ string, a []string) Result {
+		switch {
+		case a[0] == "agent" && a[1] == "get":
+			p, ok := pane[a[2]]
+			if !ok {
+				return Result{ExitCode: 1, Stderr: herdrErr("agent_not_found")}
+			}
+			return Result{Stdout: `{"result":{"agent":{"pane_id":"` + p + `","agent_status":"working"}}}`}
+		case a[0] == "pane" && a[1] == "move":
+			// A move across workspaces gives the pane a new id.
+			for name, p := range pane {
+				if p == a[2] {
+					pane[name] = p + "x"
+				}
+			}
+		}
+		return Result{Stdout: `{"result":{}}`}
+	}}
+	h := New("herdr", deps(f, herdrEnv, &clock{}))
+	l := h.(Layouter)
+	handles := map[string]string{"ben": "w9N:t2", "kit": "w9P:t2"}
+	check := func(step string) {
+		t.Helper()
+		for slot, handle := range handles {
+			if got := l.PaneOf(bg, slot, handle); got != pane[AgentName(slot, handle)] || got == "" {
+				t.Errorf("%s: PaneOf(%s) = %q", step, slot, got)
+			}
+			if got := h.Status(bg, slot, handle); got != "working" {
+				t.Errorf("%s: Status(%s) = %q", step, slot, got)
+			}
+		}
+	}
+	check("start")
+	for _, step := range []string{"split", "tabs", "split"} {
+		for _, slot := range []string{"ben", "kit"} {
+			l.ToNewTab(bg, l.PaneOf(bg, slot, handles[slot]), slot)
+		}
+		check(step)
+	}
+}

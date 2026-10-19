@@ -21,6 +21,8 @@ type layoutRig struct {
 	agent map[string]string // slot -> pane
 	log   []string
 	grid  map[string]host.Rect
+	// failIn is a slot whose move into its linked workspace fails.
+	failIn string
 }
 
 func (r *layoutRig) PaneOf(_ context.Context, slot, _ string) string { return r.agent[slot] }
@@ -305,14 +307,41 @@ func (r *linkedRig) inWorkspace(ws string) bool {
 	return false
 }
 
+// land moves pane into workspace ws. Like herdr, a pane that changes workspace
+// gets a new id (p-ben becomes p-ben'), and the old id is gone.
+func (r *linkedRig) land(pane, ws string) (string, error) {
+	for i := range r.panes {
+		if r.panes[i].ID != pane {
+			continue
+		}
+		if r.panes[i].Workspace == ws {
+			return pane, nil
+		}
+		r.panes[i].Workspace, r.panes[i].ID = ws, pane+"'"
+		for slot, p := range r.agent {
+			if p == pane {
+				r.agent[slot] = pane + "'"
+			}
+		}
+		return pane + "'", nil
+	}
+	return "", fmt.Errorf("pane %s not found", pane)
+}
+
 func (r *linkedRig) SplitInto(ctx context.Context, pane, tab, target, dir string, keep float64) error {
-	r.setWorkspace(pane, "W")
-	return r.layoutRig.SplitInto(ctx, pane, tab, target, dir, keep)
+	if err := r.layoutRig.SplitInto(ctx, pane, tab, target, dir, keep); err != nil {
+		return err
+	}
+	_, err := r.land(pane, "W")
+	return err
 }
 
 func (r *linkedRig) ToNewTab(ctx context.Context, pane, label string) error {
-	r.setWorkspace(pane, "W")
-	return r.layoutRig.ToNewTab(ctx, pane, label)
+	if err := r.layoutRig.ToNewTab(ctx, pane, label); err != nil {
+		return err
+	}
+	_, err := r.land(pane, "W")
+	return err
 }
 
 func (r *linkedRig) OpenLinked(_ context.Context, primary, slot, path string) (string, string, error) {
@@ -325,10 +354,15 @@ func (r *linkedRig) OpenLinked(_ context.Context, primary, slot, path string) (s
 
 func (r *linkedRig) ToNewTabIn(_ context.Context, pane, ws, label string) error {
 	r.log = append(r.log, fmt.Sprintf("tab-in %s %s %s", pane, ws, label))
-	r.setWorkspace(pane, ws)
-	r.setTab(pane, "t-"+label)
-	return nil
+	if label == r.failIn {
+		return fmt.Errorf("herdr pane move %s failed", pane)
+	}
+	id, err := r.land(pane, ws)
+	r.setTab(id, "t-"+label)
+	return err
 }
+
+func (r *linkedRig) CloseWorkspace(context.Context, string) error { return nil }
 
 func (r *linkedRig) CloseTab(_ context.Context, tab string) error {
 	r.log = append(r.log, "close "+tab)
@@ -378,12 +412,26 @@ func TestLayoutGroupedSplitTabsSplit(t *testing.T) {
 	if got := workspaceIDs(root, "ben", "kit"); got != "ben=,kit=" {
 		t.Errorf("after split: %s", got)
 	}
+	// The report names the panes as they are now, none of them foreign.
+	row := layoutRows(env)[0]
+	var ids []string
+	ws, _ := row.Get("workers")
+	for _, w := range ws.([]any) {
+		ids = append(ids, jsonx.Str(w.(*jsonx.Object), "pane"))
+	}
+	if got := strings.Join(ids, ","); got != "p-ben',p-kit'" {
+		t.Errorf("split report panes = %s", got)
+	}
+	if fo, _ := row.Get("foreign"); len(fo.([]any)) != 0 || strings.Contains(errs, "not rota's") {
+		t.Errorf("split reported foreign panes: %v / %s", fo, errs)
+	}
 
 	rig.log = nil
 	if code, _, errs := rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root); code != 0 {
 		t.Fatalf("tabs: exit %d: %s", code, errs)
 	}
-	want := "open W ben ben|tab-in p-ben ws-ben ben|close root-ben|open W kit kit|tab-in p-kit ws-kit kit|close root-kit|rename tab T orchestrator"
+	// The split renumbered both panes: tabs finds them again by agent.
+	want := "open W ben ben|tab-in p-ben' ws-ben ben|close root-ben|open W kit kit|tab-in p-kit' ws-kit kit|close root-kit|rename tab T orchestrator"
 	if got := strings.Join(rig.log, "|"); got != want {
 		t.Errorf("tabs calls:\n%s\nwant\n%s", got, want)
 	}
@@ -411,10 +459,51 @@ func TestLayoutUngroupedTabsKeepsPlainTabs(t *testing.T) {
 	rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
 	rig.log = nil
 	rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root)
-	if got := strings.Join(rig.log, "|"); got != "tab p-ben ben|rename tab T orchestrator" {
+	if got := strings.Join(rig.log, "|"); got != "tab p-ben' ben|rename tab T orchestrator" {
 		t.Errorf("calls = %s", got)
 	}
 	if got := workspaceIDs(root, "ben"); got != "ben=ws-ben" {
 		t.Errorf("workspaceId touched: %s", got)
 	}
 }
+
+// A move that fails after others succeeded still records where the slots are:
+// ben is back in ws-ben, kit never left the orchestrator's workspace, and the
+// root tab the open made for kit is closed.
+func TestLayoutGroupedTabsFailurePartway(t *testing.T) {
+	root, rig, deps := groupedProject(t, "ben", "kit")
+	rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+	rig.log, rig.failIn = nil, "kit"
+	code, _, errs := rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root)
+	if code == 0 {
+		t.Fatalf("want a failure: %s", errs)
+	}
+	if got := workspaceIDs(root, "ben", "kit"); got != "ben=ws-ben,kit=" {
+		t.Errorf("workspaceIds = %s", got)
+	}
+	if got := strings.Join(rig.log, "|"); !strings.HasSuffix(got, "open W kit kit|tab-in p-kit' ws-kit kit|close root-kit") {
+		t.Errorf("calls = %s", got)
+	}
+}
+
+// Layout and dispatch group on the same condition: a herdr that can close
+// workspaces but not link panes is not grouped, so tabs stays plain.
+func TestLayoutGroupedNeedsALinkingHost(t *testing.T) {
+	root, rig, deps := groupedProject(t, "ben")
+	deps.Host = func(host.Kind) host.Host { return &closerOnlyRig{rig.layoutRig} }
+	rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+	rig.log = nil
+	rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root)
+	if got := strings.Join(rig.log, "|"); got != "tab p-ben ben|rename tab T orchestrator" {
+		t.Errorf("calls = %s", got)
+	}
+	if got := workspaceIDs(root, "ben"); got != "ben=ws-ben" {
+		t.Errorf("an ungrouped round's workspaceId was rewritten: %s", got)
+	}
+}
+
+// closerOnlyRig closes workspaces but cannot link panes.
+type closerOnlyRig struct{ *layoutRig }
+
+func (r *closerOnlyRig) Capabilities() host.Capabilities              { return host.CapabilitiesOf(r) }
+func (r *closerOnlyRig) CloseWorkspace(context.Context, string) error { return nil }
