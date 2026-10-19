@@ -161,12 +161,21 @@ var (
 // reReplyMarker starts a line of the worker's own output (see reBlocked).
 var reReplyMarker = regexp.MustCompile(`^\s*[●⏺•]`)
 
+// staleDoneEvidence is the evidence of a static pane whose only ROTA-DONE
+// predates the last relay sent to the slot.
+const staleDoneEvidence = "static pane, ROTA-DONE predates the last relay"
+
 // lastSentinel returns the state of the last ROTA-BLOCKED/ROTA-DONE line the
 // worker itself printed. Text from a `--- ORCHESTRATOR (round N) ---` header up
 // to the worker's next reply marker is a relay: sentinel text quoted there is
 // the orchestrator's, so only a marker-prefixed line counts inside it. A relay
 // echoed under OpenCode's "┃" gutter ends where the gutter does.
-func lastSentinel(lines []string, gutter bool) (state, evidence string, ok bool) {
+//
+// A ROTA-DONE followed by a relay header is superseded: the relay (a bounce, a
+// review) reopened the work, so the old line is no longer the worker's state
+// (#873). stale reports that such a line was dropped and no later sentinel
+// replaced it.
+func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stale bool) {
 	relayHead, blockedRe, doneRe := reRelayHead, reBlocked, reDone
 	if gutter {
 		relayHead, blockedRe, doneRe = reRelayHeadG, reBlockedG, reDoneG
@@ -182,6 +191,9 @@ func lastSentinel(lines []string, gutter bool) (state, evidence string, ok bool)
 		switch {
 		case relayHead.MatchString(l):
 			inRelay, gutterRelay = true, gutter && reGutter.MatchString(l)
+			if ok && state == StateDone {
+				state, evidence, ok, stale = "", "", false, true
+			}
 			continue
 		case marked:
 			inRelay, gutterRelay = false, false
@@ -194,11 +206,11 @@ func lastSentinel(lines []string, gutter bool) (state, evidence string, ok bool)
 		gut := gutter && reGutter.MatchString(l)
 		if m := blockedRe.FindStringSubmatchIndex(rest); m != nil && m[0] == 0 {
 			if ev := strings.TrimSpace(rest[m[4]:m[5]]); !gut || !rePlaceholder.MatchString(ev) {
-				state, evidence, ok = StateBlocked, ev, true
+				state, evidence, ok, stale = StateBlocked, ev, true, false
 			}
 		} else if m := doneRe.FindStringSubmatchIndex(rest); m != nil && m[0] == 0 {
 			if ev := strings.TrimSpace(rest[m[4]:m[5]]); !gut || !rePlaceholder.MatchString(ev) {
-				state, evidence, ok = StateDone, ev, true
+				state, evidence, ok, stale = StateDone, ev, true, false
 			}
 		}
 	}
@@ -283,7 +295,8 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	// ROTA-DONE and is still rendering its own output is finished, not busy.
 	// The LAST sentinel decides: a ROTA-DONE printed after an answered
 	// ROTA-BLOCKED means the worker moved on.
-	if st, ev, ok := lastSentinel(all, rules.gutter); ok {
+	st, ev, ok, staleDone := lastSentinel(all, rules.gutter)
+	if ok {
 		return st, ev
 	}
 	// `Retrying in` is the only positive proof a retry is in flight. Check it
@@ -348,6 +361,9 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	if native == "unknown" {
 		return StateUnknown, "herdr cannot classify the agent — inspect the tab; not proof it finished"
 	}
+	if staleDone {
+		return StateIdle, staleDoneEvidence
+	}
 	return StateIdle, "static pane, no sentinel"
 }
 
@@ -368,7 +384,7 @@ func (e Env) promoteIdleWithPR(ctx context.Context, root string, rows []PollRow)
 	for _, r := range rows {
 		// A done event is recorded before the PR is opened: its row has no PR
 		// yet, the same hole as an idle pane that printed no sentinel.
-		if r.State == StateIdle || (r.State == StateDone && r.Evidence == noPREvidence) {
+		if (r.State == StateIdle && r.Evidence != staleDoneEvidence) || (r.State == StateDone && r.Evidence == noPREvidence) {
 			idle[r.Name] = r
 		}
 	}
