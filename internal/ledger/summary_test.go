@@ -241,3 +241,19 @@ func TestSummaryOwnerlessBounceMakesNoDashTotal(t *testing.T) {
 		t.Errorf("unexpected total %+v", tot)
 	}
 }
+
+func TestSummaryCountsCapReasons(t *testing.T) {
+	es := []Entry{
+		{TS: at(0), Kind: KindTransfer, Round: 2, Issue: "12", Slot: "human", Detail: Detail("from", "ben", "capReason", CapAmbiguousCriteria)},
+		{TS: at(1), Kind: KindTransfer, Round: 2, Issue: "13", Slot: "dana", Detail: Detail("from", "ben", "capReason", CapTier)},
+		{TS: at(2), Kind: KindTransfer, Round: 2, Issue: "14", Slot: "kit", Detail: Detail("from", "ben")},
+		{TS: at(3), Kind: KindTransfer, Round: 1, Issue: "15", Slot: "kit", Detail: Detail("capReason", CapTier)},
+	}
+	s := Fold(es, nil, 2)
+	if s.CapReasons != (CapReasons{AmbiguousCriteria: 1, Tier: 1}) {
+		t.Errorf("cap reasons = %+v", s.CapReasons)
+	}
+	if !strings.Contains(s.Text(), "Bounce cap: 1 ambiguous-criteria, 1 tier") {
+		t.Errorf("text lacks the count:\n%s", s.Text())
+	}
+}
