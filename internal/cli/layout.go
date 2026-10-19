@@ -127,7 +127,9 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 			if err != nil {
 				if group {
 					// Slots that moved before the failure must not keep stale ids.
-					worker.RecordWorkspaces(ctx, h, root, cli)
+					if rerr := worker.RecordWorkspaces(ctx, h, root, cli); rerr != nil {
+						c.Warn("%s: could not remember the slot workspaces: %v", o.name, rerr)
+					}
 				}
 				return Result{}, Unavailable("%s: %v", o.name, err).WithHint("some panes may have moved; rota layout shows where each is")
 			}
