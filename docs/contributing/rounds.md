@@ -21,12 +21,16 @@ Workers do not run it. The same goes for `test.e2e`: the gate and the merge trai
 
 An item may carry a `## Try it` section: `- <command>` bullets, each optionally followed by `expect: <substring>` lines. After
 `test.full` and `test.e2e` pass, the gate runs the commands on the merged scratch tree, in order. Each runs with a scrubbed
-environment: `PATH`, `HOME` and the slot's `ROTA_PORT_BASE`, `ROTA_PORT_BLOCK` and `ROTA_DB_SUFFIX`, nothing else, so no
-forge token reaches a step; a step that needs `GOPATH` or another variable sets it itself. The commands come from an issue
+environment: `PATH`, an empty temp `HOME` (with the XDG and `GH_CONFIG_DIR` dirs inside it, removed when the run ends),
+the gate host's `GOCACHE`, `GOMODCACHE` and `GOPATH`, and the slot's `ROTA_PORT_BASE`, `ROTA_PORT_BLOCK` and `ROTA_DB_SUFFIX`.
+The environment carries no credentials and the step finds none under its `HOME`; it still runs as the gate's OS user, so a
+file that user can read stays readable by its absolute path. Output is capped at 4 MiB. The commands come from an issue
 body, so on a forge tracker they run only when the issue's author and its last editor are collaborators with write access
-or higher; otherwise the gate says why in a `BEHAVIOUR-SKIP` note and goes on (a skip is not a failure). GitHub is the only
-tracker that can answer that; GitLab, Jira and Linear issues skip. A file-mode item body is read from the base checkout, so a
-commit someone with push access landed put it there, and it runs unchecked. A non-zero exit or a missing substring bounces the slot; the transcript is
+or higher, judged on the same body that is then run; otherwise the gate says why in a `BEHAVIOUR-SKIP` note and goes on (a skip is not a failure). GitHub is the only
+tracker that can answer that; GitLab, Jira and Linear issues skip. A gate with no PR reads no origin refs and so no forge: a
+forge item skips there too. A file-mode item body is read from the base checkout, so a
+commit someone with push access landed put it there, and it runs unchecked. `round assign` makes the same decision for the worker's
+brief: trusted steps are quoted in it, and when they would be skipped the brief says they are withheld and why, and not to run them. A non-zero exit or a missing substring bounces the slot; the transcript is
 posted on the PR and saved under `.rota/qa-runs/behaviour/`. Commands run as written, so a repo that tests its own binary
 writes `go run ./cmd/<x> ...`. No section, no run.
 
