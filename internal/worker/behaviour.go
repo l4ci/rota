@@ -73,7 +73,7 @@ func (g *gate) behaviourRun(dir string) (bool, error) {
 		return g.broke(fmt.Sprintf("cannot read %s to look for its ## Try it steps: %v", ref, err))
 	}
 	if !found {
-		return skip(ref + " has no ## Try it section; no behaviour run")
+		return skip(ref + " is not in the backlog, so no Try it steps ran")
 	}
 	steps, ok, err := itembody.ParseTryIt(body)
 	switch {
