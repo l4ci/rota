@@ -72,19 +72,32 @@ const (
 	StateUnverifiable = "UNVERIFIABLE"
 )
 
-// LimitPhrases are the usage-limit messages a session prints about itself, as
-// case-insensitive regex sources (no flag prefix). `worker poll` classifies
-// LIMITED with them, and the usage-limit watcher (D3) matches the same list,
-// so there is one source.
-var LimitPhrases = harness.AllLimitPhrases()
+// limitPhrases are the usage-limit messages a session prints about itself, as
+// case-insensitive regex sources (no flag prefix). FindLimit is the one reader
+// of them: `worker poll` and the usage-limit watcher (D3) both ask it.
+var limitPhrases = harness.AllLimitPhrases()
 
-// LimitRegex is the alternation of LimitPhrases with the case-insensitive
+// LimitRegex is the alternation of the limit phrases with the case-insensitive
 // flag written in the regex itself, for engines that take one pattern string
-// (herdr's pane.output_matched).
-func LimitRegex() string { return "(?i)(?:" + strings.Join(LimitPhrases, "|") + ")" }
+// (herdr's pane.output_matched). It is a prefilter: it also matches an
+// "Approaching" warning, which FindLimit then rejects.
+func LimitRegex() string { return "(?i)(?:" + strings.Join(limitPhrases, "|") + ")" }
 
-// LimitPatterns are the compiled LimitPhrases.
-func LimitPatterns() []*regexp.Regexp { return limitPatterns }
+// FindLimit is the one answer to "does this pane text show a hit limit, and
+// where": the byte span of the first match of the shared phrases and the
+// kind's own (PaneVocab.Limits; "" has none). An "Approaching" warning matches
+// the phrases but is not a limit, so it is skipped here and nowhere else.
+func FindLimit(kind, text string) (start, end int, ok bool) {
+	for _, re := range append(append([]*regexp.Regexp(nil), limitPatterns...), paneRulesFor(kind).limits...) {
+		for _, loc := range re.FindAllStringIndex(text, -1) {
+			if strings.Contains(strings.ToLower(text[loc[0]:loc[1]]), "approaching") {
+				continue
+			}
+			return loc[0], loc[1], true
+		}
+	}
+	return 0, 0, false
+}
 
 var (
 	// A sentinel may follow a reply marker: Claude Code v2.1.288 starts the
@@ -104,7 +117,7 @@ var (
 	// Heuristic, like DEAD: a limited session cannot print a sentinel. The
 	// patterns are anchored to phrasing a session emits about ITSELF, not bare
 	// words like "limit" that a worker reading source code would echo.
-	limitPatterns = compileAll(`(?i)`, LimitPhrases)
+	limitPatterns = compileAll(`(?i)`, limitPhrases)
 	// A worker stopped at a permission prompt is STALLED, but looks exactly
 	// like an idle one. Distinct from BLOCKED: the worker is not asking a
 	// design question, it needs an approval.
@@ -294,18 +307,16 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	// LIMITED is checked BEFORE movement: a session that hit its usage limit may
 	// still animate a prompt, and reading that as BUSY strands the orchestrator
 	// waiting for work that cannot resume until the window resets.
-	for _, re := range append(append([]*regexp.Regexp(nil), limitPatterns...), rules.limits...) {
-		if m := re.FindString(tail); m != "" {
-			// The "Add funds" prompt spends real money and is NEVER the
-			// orchestrator's to answer: flag it so the caller escalates.
-			if reFunds.MatchString(tail) {
-				return StateLimited, "usage limit reached; pane offers 'Add funds' — needs a human, do NOT answer"
-			}
-			if rules.authDead != nil && rules.authDead.MatchString(tail) {
-				return StateLimited, "API key expired — needs a human to renew it; no reset clock"
-			}
-			return StateLimited, strutil.Clip(strings.TrimSpace(m), 120)
+	if s, e, ok := FindLimit(kind, tail); ok {
+		// The "Add funds" prompt spends real money and is NEVER the
+		// orchestrator's to answer: flag it so the caller escalates.
+		if reFunds.MatchString(tail) {
+			return StateLimited, "usage limit reached; pane offers 'Add funds' — needs a human, do NOT answer"
 		}
+		if rules.authDead != nil && rules.authDead.MatchString(tail) {
+			return StateLimited, "API key expired — needs a human to renew it; no reset clock"
+		}
+		return StateLimited, strutil.Clip(strings.TrimSpace(tail[s:e]), 120)
 	}
 	if reason, ok := strings.CutPrefix(native, host.UnverifiablePrefix); ok {
 		return StateUnverifiable, reason
