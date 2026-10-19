@@ -43,9 +43,10 @@ func (claude) Launch(cfg any, chosen string) (string, error) {
 	}
 	if s := config.StringIfSet(cfg, "work.workerCommand"); s != "" {
 		if model == "" {
-			s = modelFlag.ReplaceAllString(s, "")
+			// Stripping the flag leaves a gap; collapse it on this path only.
+			s = strings.Join(strings.Fields(modelFlag.ReplaceAllString(s, "")), " ")
 		}
-		return strings.Join(strings.Fields(strings.ReplaceAll(s, ModelPlaceholder, model)), " "), nil
+		return strings.ReplaceAll(s, ModelPlaceholder, model), nil
 	}
 	if model == "" {
 		return "claude --dangerously-skip-permissions", nil
