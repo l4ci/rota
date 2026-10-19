@@ -5,8 +5,9 @@
 package rotatree
 
 import (
-	"os"
 	"path/filepath"
+
+	"github.com/l4ci/rota/internal/fsio"
 )
 
 // DirName is the state directory at a project root.
@@ -89,9 +90,4 @@ func IssueMap(root string) string { return File(root, IssueMapFile) }
 func Doc(root, dir, name string) string { return File(root, dir, name+".md") }
 
 // Exists reports whether root has a .rota directory.
-func Exists(root string) bool { return isDir(Dir(root)) }
-
-func isDir(p string) bool {
-	fi, err := os.Stat(p)
-	return err == nil && fi.IsDir()
-}
+func Exists(root string) bool { return fsio.IsDir(Dir(root)) }

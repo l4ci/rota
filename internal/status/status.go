@@ -297,22 +297,3 @@ func RemoveHandoff(root, branch, repo string) (removed bool, err error) {
 }
 
 // ---- loop stamp ---------------------------------------------------------------
-
-func truthy(v any) bool {
-	switch t := v.(type) {
-	case nil:
-		return false
-	case bool:
-		return t
-	case string:
-		return t != ""
-	case []any:
-		return len(t) > 0
-	case *jsonx.Object:
-		return t.Len() > 0
-	default: // json.Number
-		b, _ := jsonx.MarshalCompact(t)
-		s := string(b)
-		return s != "0" && s != "0.0" && s != "-0" && s != "-0.0"
-	}
-}

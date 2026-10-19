@@ -16,12 +16,14 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/stalebin"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -400,7 +402,7 @@ func (d *runner) tracker() Check {
 			shown = "unknown"
 		}
 		return fail("tracker", "issues.source is "+src+" but the forge is "+shown+": "+line,
-			"set issues.source "+orDefault(f, "file")+", or forge.provider "+src+" if detection is wrong")
+			"set issues.source "+strutil.OrDefault(f, "file")+", or forge.provider "+src+" if detection is wrong")
 	}
 	switch f {
 	case "local":
@@ -424,13 +426,6 @@ func (d *runner) tracker() Check {
 	return pass("tracker", cli+" authenticated ("+line+")")
 }
 
-func orDefault(s, def string) string {
-	if s == "" {
-		return def
-	}
-	return s
-}
-
 func (d *runner) expand(dir string) string { return worker.ExpandConfigDirIn(dir, d.in.Home) }
 
 func (d *runner) accounts() Check {
@@ -446,7 +441,7 @@ func (d *runner) accounts() Check {
 			if hint == "" {
 				hint = "set configDir for account " + a.Name + " in work.accounts"
 			}
-		} else if dir = worker.ExpandConfigDirIn(a.ConfigDir, d.in.Home); !isDir(dir) {
+		} else if dir = worker.ExpandConfigDirIn(a.ConfigDir, d.in.Home); !fsio.IsDir(dir) {
 			why = "configDir " + dir + " does not exist"
 		} else if p := worker.CredentialsProblem(dir); p != "" {
 			why = p + " in " + dir
@@ -462,11 +457,6 @@ func (d *runner) accounts() Check {
 		return fail("accounts", strings.Join(bad, "; "), hint)
 	}
 	return pass("accounts", fmt.Sprintf("%d accounts with credentials", len(d.in.Accounts)))
-}
-
-func isDir(p string) bool {
-	fi, err := os.Stat(p)
-	return err == nil && fi.IsDir()
 }
 
 const hookHint = "herdr integration install claude"

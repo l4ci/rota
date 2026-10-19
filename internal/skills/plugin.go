@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/l4ci/rota/internal/fsio"
 )
 
 // PluginName is the Claude Code plugin rota ships as.
@@ -71,7 +73,7 @@ func PluginRoots(pluginDirs []string, top string) ([]Root, []error) {
 				switch e.Scope {
 				case "user", "":
 				case "project", "local":
-					if top == "" || e.ProjectPath == "" || !sameDir(e.ProjectPath, top) {
+					if top == "" || e.ProjectPath == "" || !fsio.SameDir(e.ProjectPath, top) {
 						continue
 					}
 					scope = Project
@@ -91,16 +93,6 @@ func PluginRoots(pluginDirs []string, top string) ([]Root, []error) {
 		}
 	}
 	return out, errs
-}
-
-func sameDir(a, b string) bool {
-	if r, err := filepath.EvalSymlinks(a); err == nil {
-		a = r
-	}
-	if r, err := filepath.EvalSymlinks(b); err == nil {
-		b = r
-	}
-	return filepath.Clean(a) == filepath.Clean(b)
 }
 
 // pluginStatus reads a plugin root: no manifest, so it is current when the

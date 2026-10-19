@@ -243,3 +243,24 @@ func updateJSON(path string, def any, timeout time.Duration, mutate func(any) (a
 		return writeJSONVerified(path, v)
 	})
 }
+
+// IsDir reports whether p names an existing directory.
+func IsDir(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && fi.IsDir()
+}
+
+// SameDir reports whether a and b name the same directory once symlinks are
+// resolved on both sides. An empty path matches nothing.
+func SameDir(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	norm := func(p string) string {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			p = r
+		}
+		return filepath.Clean(p)
+	}
+	return norm(a) == norm(b)
+}

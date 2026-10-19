@@ -231,13 +231,6 @@ type Entry struct {
 // List is the stored plans, optionally only one milestone's.
 func List(s Store, milestone string) ([]Entry, error) { return s.List(milestone) }
 
-func orDefault(v, d string) string {
-	if v == "" {
-		return d
-	}
-	return v
-}
-
 // Show is the stored plan.
 func Show(s Store, key string) (string, error) {
 	if err := CheckKey(s, key); err != nil {

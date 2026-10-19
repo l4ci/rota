@@ -3,7 +3,7 @@ package worker
 import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"os"
+	"github.com/l4ci/rota/internal/fsio"
 	"strings"
 )
 
@@ -80,7 +80,7 @@ func (e Env) ResetTo(root, slot, task, newBranch string, checkOnly bool) (ResetR
 		return res, ExternalRefusal(slot, "reset")
 	}
 	worktree, base, oldBranch, oldTask := s.Worktree(), s.Base(), s.Branch(), s.Task()
-	if !isDir(worktree) {
+	if !fsio.IsDir(worktree) {
 		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' worktree missing: %s", slot, worktree))
 	}
 	if _, code := e.git(root, "rev-parse", "--verify", "--quiet", base+"^{commit}"); base == "" || code != 0 {
@@ -162,9 +162,4 @@ func (e Env) ResetTo(root, slot, task, newBranch string, checkOnly bool) (ResetR
 
 func indent(lines []string) string {
 	return "  " + strings.Join(lines, "\n  ")
-}
-
-func isDir(p string) bool {
-	fi, err := os.Stat(p)
-	return p != "" && err == nil && fi.IsDir()
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // Query returns the body (without frontmatter) of each named file under dir
@@ -81,13 +82,6 @@ func mapEntries(dir string) []entry {
 	return out
 }
 
-func orDefault(s, def string) string {
-	if s = strings.TrimSpace(s); s != "" {
-		return s
-	}
-	return def
-}
-
 // MapIndexBlock is the body of the rota-map managed block.
 func MapIndexBlock(root string) string {
 	entries := mapEntries(rotatree.File(root, rotatree.MapDir))
@@ -95,7 +89,7 @@ func MapIndexBlock(root string) string {
 	if len(entries) > 0 {
 		lines := make([]string, len(entries))
 		for i, e := range entries {
-			lines[i] = fmt.Sprintf("- **%s** — %s", e.name, orDefault(frontmatter.Str(e.fm, "summary"), "(no summary)"))
+			lines[i] = fmt.Sprintf("- **%s** — %s", e.name, strutil.OrDefault(frontmatter.Str(e.fm, "summary"), "(no summary)"))
 		}
 		bullets = strings.Join(lines, "\n")
 	}
@@ -116,7 +110,7 @@ func QAIndexBlock(root string) string {
 			}
 			fm, _, _ := frontmatter.Parse(string(raw))
 			name := strings.TrimSuffix(filepath.Base(f), ".md")
-			lines = append(lines, fmt.Sprintf("- **%s** (%s) — %s", name, orDefault(frontmatter.Str(fm, "surface"), "?"), orDefault(frontmatter.Str(fm, "summary"), "(no summary)")))
+			lines = append(lines, fmt.Sprintf("- **%s** (%s) — %s", name, strutil.OrDefault(frontmatter.Str(fm, "surface"), "?"), strutil.OrDefault(frontmatter.Str(fm, "summary"), "(no summary)")))
 		}
 		bullets = strings.Join(lines, "\n")
 	}

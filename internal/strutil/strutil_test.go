@@ -66,3 +66,16 @@ func TestFirstNonEmpty(t *testing.T) {
 		}
 	}
 }
+
+func TestOrDefault(t *testing.T) {
+	for _, tc := range []struct{ v, d, want string }{
+		{"", "d", "d"},
+		{"v", "d", "v"},
+		{" ", "d", " "},
+		{"", "", ""},
+	} {
+		if got := OrDefault(tc.v, tc.d); got != tc.want {
+			t.Errorf("OrDefault(%q, %q) = %q, want %q", tc.v, tc.d, got, tc.want)
+		}
+	}
+}
