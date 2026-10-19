@@ -223,6 +223,17 @@ func (d *Deps) workerEnv() worker.Env {
 			return it, nil
 		}
 	}
+	if e.Forge == nil {
+		// and so does its forge: the executor swap and the read cache that
+		// Deps.forge applies, so freshReads covers the gate's reads too.
+		ctx := e.Ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		e.Forge = func(provider, dir string, s tracker.Settings) (worker.Forge, error) {
+			return tracker.NewForge(ctx, s, provider, dir, d.trackerOptions()...)
+		}
+	}
 	return e
 }
 
@@ -255,7 +266,8 @@ func (d *Deps) orchestrateEnv() orchestrate.Env {
 }
 
 // forge is the one place a verb builds its forge (pull requests, checks,
-// releases): settings from cfg, forge.provider resolution (a local forge is
+// releases; workerEnv wires the worker verbs' factory to the same options):
+// settings from cfg, forge.provider resolution (a local forge is
 // tracker.ErrLocalForge) and the TrackerOptions a test swaps the executor
 // through.
 func (d *Deps) forge(ctx context.Context, cfg any, provider, dir string) (tracker.Forge, error) {
