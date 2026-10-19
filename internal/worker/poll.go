@@ -177,6 +177,10 @@ var (
 // reReplyMarker starts a line of the worker's own output (see reBlocked).
 var reReplyMarker = regexp.MustCompile(`^\s*[●⏺•]`)
 
+// reSigLine is the signature trailer `rota worker dispatch` ends a brief or
+// relay with (codex and opencode slots; a claude payload carries none).
+var reSigLine = regexp.MustCompile(`^\s*(?:┃\s*)?--- ROTA-SIG [0-9a-f]+ ---\s*$`)
+
 // staleDoneEvidence is the evidence of a static pane whose only ROTA-DONE
 // predates the last relay sent to the slot.
 const staleDoneEvidence = "static pane, ROTA-DONE predates the last relay"
@@ -196,7 +200,7 @@ func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stal
 	if gutter {
 		relayHead, blockedRe, doneRe = reRelayHeadG, reBlockedG, reDoneG
 	}
-	inRelay := relayMask(lines, gutter)
+	inRelay := relayMask(lines, gutter, false)
 	for i, l := range lines {
 		if relayHead.MatchString(l) {
 			if ok && state == StateDone {
@@ -227,8 +231,11 @@ func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stal
 // relayMask marks the lines of echoed orchestrator text: each
 // `--- ORCHESTRATOR (round N) ---` header and what follows up to the worker's
 // next reply marker. A relay echoed under OpenCode's "┃" gutter ends where the
-// gutter does, since OpenCode marks the worker's reply with nothing.
-func relayMask(lines []string, gutter bool) []bool {
+// gutter does, since OpenCode marks the worker's reply with nothing. With
+// sigEnds, a `--- ROTA-SIG <hex> ---` line (the trailer of a signed brief) also
+// closes the span, inclusive: what the harness prints after it, a limit banner
+// carrying no reply marker, is the session's own.
+func relayMask(lines []string, gutter, sigEnds bool) []bool {
 	relayHead := reRelayHead
 	if gutter {
 		relayHead = reRelayHeadG
@@ -246,6 +253,9 @@ func relayMask(lines []string, gutter bool) []bool {
 			inRelay, gutterRelay = false, false
 		}
 		mask[i] = inRelay
+		if sigEnds && inRelay && reSigLine.MatchString(l) {
+			inRelay, gutterRelay = false, false
+		}
 	}
 	return mask
 }
@@ -255,7 +265,7 @@ func relayMask(lines []string, gutter bool) []bool {
 // orchestrator's, not the session's. kind picks the gutter reading.
 func StripRelays(kind, text string) string {
 	lines := splitLines(text)
-	mask := relayMask(lines, paneRulesFor(kind).gutter)
+	mask := relayMask(lines, paneRulesFor(kind).gutter, true)
 	kept := lines[:0:0]
 	for i, l := range lines {
 		if !mask[i] {
@@ -364,7 +374,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 		if reFunds.MatchString(tail) { // fail closed: a real limit plus any "Add funds" escalates
 			return StateLimited, "usage limit reached; pane offers 'Add funds' — needs a human, do NOT answer"
 		}
-		if rules.authDead != nil && rules.authDead.MatchString(tail) {
+		if rules.authDead != nil && rules.authDead.MatchString(own) {
 			return StateLimited, "API key expired — needs a human to renew it; no reset clock"
 		}
 		return StateLimited, strutil.Clip(strings.TrimSpace(own[s:e]), 120)
