@@ -5,9 +5,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -65,7 +65,7 @@ func orchestratorData(commonDir, root string, maxAge time.Duration) func(now tim
 		var best hook.State
 		var bestAt time.Time
 		for _, st := range hook.Sessions(commonDir) {
-			if !sameDir(st.Cwd, root) {
+			if !fsio.SameDir(st.Cwd, root) {
 				continue
 			}
 			at, err := time.Parse(time.RFC3339, st.UpdatedAt)
@@ -100,13 +100,6 @@ func gapped(gap *atomic.Bool, f func(time.Time) limits.Data) func(time.Time) lim
 		}
 		return f(now)
 	}
-}
-
-func sameDir(a, b string) bool {
-	if a == "" || b == "" {
-		return false
-	}
-	return filepath.Clean(a) == filepath.Clean(b)
 }
 
 // limitRig is a watcher with what it needs to run.

@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // files keeps each plan in .rota/plans/<key>.md under root.
@@ -146,9 +147,9 @@ func (s files) List(milestone string) ([]Entry, error) {
 // entryOf reads a plan's frontmatter into a List row; stem, milestone, unit
 // and kind are the defaults for the fields it lacks.
 func entryOf(fm map[string]any, stem, milestone, unit, kind string) Entry {
-	e := Entry{Key: orDefault(frontmatter.Str(fm, "key"), stem), Milestone: milestone, Unit: unit,
-		UnitKind: orDefault(frontmatter.Str(fm, "unitKind"), kind),
-		Title:    frontmatter.Str(fm, "title"), Status: orDefault(frontmatter.Str(fm, "status"), "planned"),
+	e := Entry{Key: strutil.OrDefault(frontmatter.Str(fm, "key"), stem), Milestone: milestone, Unit: unit,
+		UnitKind: strutil.OrDefault(frontmatter.Str(fm, "unitKind"), kind),
+		Title:    frontmatter.Str(fm, "title"), Status: strutil.OrDefault(frontmatter.Str(fm, "status"), "planned"),
 		Created: frontmatter.Str(fm, "created"), Repos: []string{}}
 	switch r := fm["repo"].(type) {
 	case string:

@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/frontmatter"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // SliceStore is the slice-plan half of backlog.Issues: a `plan:S<NN>` note on
@@ -230,8 +231,8 @@ func (s notes) List(milestone string) ([]Entry, error) {
 	out := []Entry{}
 	for _, p := range plans {
 		fm, _, _ := frontmatter.Parse(p.Text)
-		e := entryOf(fm, p.Milestone+"-"+p.Unit, orDefault(frontmatter.Str(fm, "milestone"), p.Milestone), "", "slice")
-		e.Unit = orDefault(frontmatter.Str(fm, "unit"), p.Unit)
+		e := entryOf(fm, p.Milestone+"-"+p.Unit, strutil.OrDefault(frontmatter.Str(fm, "milestone"), p.Milestone), "", "slice")
+		e.Unit = strutil.OrDefault(frontmatter.Str(fm, "unit"), p.Unit)
 		out = append(out, e)
 	}
 	return out, nil

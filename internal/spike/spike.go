@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	gitx "github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/strutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -235,21 +236,14 @@ func List(root, dir string) ([]Entry, error) {
 		}
 		stem := strings.TrimSuffix(filepath.Base(f), ".md")
 		e := Entry{
-			Name:    orDefault(frontmatter.Str(fm, "name"), stem),
-			Branch:  orDefault(frontmatter.Str(fm, "branch"), "spike/"+stem),
+			Name:    strutil.OrDefault(frontmatter.Str(fm, "name"), stem),
+			Branch:  strutil.OrDefault(frontmatter.Str(fm, "branch"), "spike/"+stem),
 			Repo:    frontmatter.Str(fm, "repo"),
-			Status:  orDefault(frontmatter.Str(fm, "status"), "open"),
+			Status:  strutil.OrDefault(frontmatter.Str(fm, "status"), "open"),
 			Created: frontmatter.Str(fm, "created"),
 		}
 		e.BranchExists = existing(e.Repo)[e.Branch]
 		out = append(out, e)
 	}
 	return out, nil
-}
-
-func orDefault(v, d string) string {
-	if v == "" {
-		return d
-	}
-	return v
 }

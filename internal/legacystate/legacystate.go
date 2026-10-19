@@ -6,9 +6,9 @@
 package legacystate
 
 import (
-	"os"
 	"path/filepath"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
@@ -24,7 +24,7 @@ func LegacyState(start string) (dir string, legacy bool) {
 		if rotatree.Exists(d) {
 			return true
 		}
-		if isDir(filepath.Join(d, legacyDir)) {
+		if fsio.IsDir(filepath.Join(d, legacyDir)) {
 			dir, legacy = d, true
 			return true
 		}
@@ -36,15 +36,10 @@ func LegacyState(start string) (dir string, legacy bool) {
 // FindState is the nearest directory holding .hv/ or .rota/.
 func FindState(start string) (dir string, ok bool) {
 	rotatree.Ascend(start, func(d string) bool {
-		if rotatree.Exists(d) || isDir(filepath.Join(d, legacyDir)) {
+		if rotatree.Exists(d) || fsio.IsDir(filepath.Join(d, legacyDir)) {
 			dir, ok = d, true
 		}
 		return ok
 	})
 	return dir, ok
-}
-
-func isDir(p string) bool {
-	fi, err := os.Stat(p)
-	return err == nil && fi.IsDir()
 }

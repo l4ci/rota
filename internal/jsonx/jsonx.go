@@ -386,3 +386,24 @@ func Int(v any) (int, bool) {
 	}
 	return 0, false
 }
+
+// Truthy is Python's truth value of a decoded JSON value: null, false, "", a
+// zero number, an empty array and an empty object are false; all else is true.
+func Truthy(v any) bool {
+	switch x := v.(type) {
+	case nil:
+		return false
+	case bool:
+		return x
+	case string:
+		return x != ""
+	case json.Number:
+		f, err := x.Float64()
+		return err != nil || f != 0
+	case []any:
+		return len(x) > 0
+	case *Object:
+		return x.Len() > 0
+	}
+	return true
+}

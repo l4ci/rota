@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -280,7 +281,7 @@ func usageMarker(commonDir, root string) func(since time.Time) (hook.UsageHandof
 		var best hook.UsageHandoff
 		var bestAt time.Time
 		for _, st := range hook.Sessions(commonDir) {
-			if st.UsageHandoff == nil || !sameDir(st.Cwd, root) {
+			if st.UsageHandoff == nil || !fsio.SameDir(st.Cwd, root) {
 				continue
 			}
 			at, err := time.Parse(time.RFC3339, st.UsageHandoff.At)
