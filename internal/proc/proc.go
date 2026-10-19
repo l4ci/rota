@@ -30,6 +30,8 @@ type Result struct {
 	Stdout   string
 	Stderr   string
 	ExitCode int
+	// Truncated says Cmd.MaxOutput cut stdout or stderr short.
+	Truncated bool
 }
 
 // Cmd is one call. Only Name is required.
@@ -50,6 +52,11 @@ type Cmd struct {
 	// Group runs the command in its own process group and kills the whole
 	// group on cancel, for a shell whose child would otherwise hold the pipes.
 	Group bool
+	// MaxOutput, when > 0, keeps at most that many bytes of stdout and of
+	// stderr (of the shared buffer when Combined); the rest is read and
+	// discarded so the child never blocks on a full pipe, and Result.Truncated
+	// is set.
+	MaxOutput int
 }
 
 // Runner runs one command. A command that ran and exited non-zero is a Result
@@ -85,22 +92,44 @@ func Run(ctx context.Context, c Cmd) (Result, error) {
 		cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	}
 	cmd.WaitDelay = WaitDelay
-	var out, errb bytes.Buffer
-	cmd.Stdout = &out
+	out, errb := &capBuf{max: c.MaxOutput}, &capBuf{max: c.MaxOutput}
+	cmd.Stdout = out
 	if c.Combined {
-		cmd.Stderr = &out
+		cmd.Stderr = out
 	} else {
-		cmd.Stderr = &errb
+		cmd.Stderr = errb
 	}
 	err := cmd.Run()
 	if ctx.Err() != nil {
 		return Result{}, ctx.Err()
 	}
-	r := Result{Stdout: out.String(), Stderr: errb.String()}
+	r := Result{Stdout: out.String(), Stderr: errb.String(), Truncated: out.cut || errb.cut}
 	var ee *exec.ExitError
 	if errors.As(err, &ee) {
 		r.ExitCode = ee.ExitCode()
 		return r, nil
 	}
 	return r, err
+}
+
+// capBuf is a buffer that keeps at most max bytes (no limit when max <= 0) and
+// swallows the rest, so the pipe behind it keeps draining.
+type capBuf struct {
+	buf bytes.Buffer // not embedded: its ReadFrom would let io.Copy bypass Write
+	max int
+	cut bool
+}
+
+func (b *capBuf) String() string { return b.buf.String() }
+
+func (b *capBuf) Write(p []byte) (int, error) {
+	n := len(p)
+	if b.max > 0 {
+		room := b.max - b.buf.Len()
+		if len(p) > room {
+			p, b.cut = p[:room], true
+		}
+	}
+	b.buf.Write(p)
+	return n, nil
 }
