@@ -705,6 +705,26 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Review & merge gate::Fast-forward the local ref after an orchestrator push before verdict add": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Review & merge gate::Train the waiting PRs once two or more are reviewed": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Review & merge gate::Commit knowledge-hit bookkeeping before wind-down": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Workers & relays::A limited wake can be the brief quoting limit phrases": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
     }
   }
 }
