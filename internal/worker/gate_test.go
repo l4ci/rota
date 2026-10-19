@@ -298,7 +298,7 @@ func TestGate(t *testing.T) {
 			setup: func(w *world) { w.forge("state", "MERGED") }},
 		{name: "d: github merge, verified on the merged tree", pr: ghURL, verdict: GatePass, changed: true, files: []string{"work.txt"},
 			setup: func(w *world) { w.setConfig(`{"test":{"full":["test -f work.txt"]}}`) }},
-		{name: "d: no verify commands", pr: ghURL, verdict: BlockedByNoVerify, noFiles: []string{"work.txt"},
+		{name: "d: no verify commands", pr: ghURL, verdict: GateNoVerify, noFiles: []string{"work.txt"},
 			setup: func(w *world) { w.setConfig(`{"test":{"full":[]}}`) }},
 		{name: "d: no verify commands with --no-verify", pr: ghURL, opts: GateOpts{NoVerify: true}, verdict: GatePass, changed: true, files: []string{"work.txt"},
 			setup: func(w *world) { w.setConfig(`{"test":{"full":[]}}`) }},
@@ -953,7 +953,7 @@ func TestGateRefusesEmptyTestFull(t *testing.T) {
 	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	w.setConfig(`{"test":{"full":[]}}`)
 	res, err := w.gate(false, GateOpts{})
-	if err != nil || res.Verdict != BlockedByNoVerify || res.Changed || w.onMain("work.txt") {
+	if err != nil || res.Verdict != GateNoVerify || res.Changed || w.onMain("work.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !strings.Contains(res.Err, "test.full") || !strings.Contains(res.Hint, "rota config set test.full") || !strings.Contains(res.Hint, "--no-verify") {

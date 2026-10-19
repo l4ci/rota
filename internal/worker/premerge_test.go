@@ -13,7 +13,7 @@ func TestGateAndTrainRefuseTheSameInput(t *testing.T) {
 		name, config, ledger, want string
 		approve                    bool
 	}{
-		{name: "no-verify", config: `{"test":{"full":[]}}`, want: BlockedByNoVerify},
+		{name: "no-verify", config: `{"test":{"full":[]}}`, want: GateNoVerify},
 		{name: "expired ledger", config: `{"test":{"full":["true"]}}`, ledger: ledgerEntry("TestFlaky", pastDay), want: GateVerifyFailed},
 		// Both rules fire: the ledger is checked first by both.
 		{name: "expired ledger before no-verify", config: `{"test":{"full":[]}}`, ledger: ledgerEntry("TestFlaky", pastDay), want: GateVerifyFailed},

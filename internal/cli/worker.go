@@ -674,7 +674,7 @@ func verdictRefusal(verdict string, err error, msg, hint string, d *jsonx.Object
 		res, rerr = recordedFailRefusal(err, d)
 	case m.ViaError:
 		res, rerr = gateRefusal(err, d)
-	case m.BlockedBy == worker.BlockedByNoVerify:
+	case m.BlockedBy == worker.GateNoVerify:
 		res, rerr = noVerifyRefusal(msg, hint, d)
 	default:
 		res, rerr = blockedRefusal(d, m.BlockedBy, msg, hint)
@@ -695,7 +695,7 @@ func recordedFailRefusal(err error, d *jsonx.Object) (Result, error) {
 // noVerifyRefusal is the exit-4 envelope for an empty test.full: d plus
 // blockedBy no-verify, nothing landed.
 func noVerifyRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
-	return blockedRefusal(d, worker.BlockedByNoVerify, msg, hint, "key", config.TestFullKey)
+	return blockedRefusal(d, worker.GateNoVerify, msg, hint, "key", config.TestFullKey)
 }
 
 // recordedReviews lists the review kinds with a verdict recorded for a branch
