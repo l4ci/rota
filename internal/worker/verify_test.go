@@ -2,12 +2,10 @@ package worker
 
 import (
 	"context"
-	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -107,29 +105,13 @@ func TestTierCommandsReadsTestTier(t *testing.T) {
 
 func TestVerifyCommandsFallsBackToLegacyKey(t *testing.T) {
 	root := tierRoot(t, `{"refactor":{"verifyCommands":["old"]}}`)
-	if got := LoadGateConfig(root).FullCommands(); !reflect.DeepEqual(got, []string{"old"}) {
+	if got := LoadGateConfig(root).Full; !reflect.DeepEqual(got, []string{"old"}) {
 		t.Errorf("legacy: %v", got)
 	}
 	root = tierRoot(t, `{"test":{"full":["new"]},"refactor":{"verifyCommands":["old"]}}`)
-	if got := LoadGateConfig(root).FullCommands(); !reflect.DeepEqual(got, []string{"new"}) {
+	if got := LoadGateConfig(root).Full; !reflect.DeepEqual(got, []string{"new"}) {
 		t.Errorf("test.full wins: %v", got)
 	}
-}
-
-// captureStderr returns what fn wrote to os.Stderr.
-func captureStderr(t *testing.T, fn func()) string {
-	t.Helper()
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	old := os.Stderr
-	os.Stderr = w
-	defer func() { os.Stderr = old }()
-	fn()
-	w.Close()
-	b, _ := io.ReadAll(r)
-	return string(b)
 }
 
 func TestVerifyCommandsAtWarnsOnceForLegacyKey(t *testing.T) {
@@ -142,12 +124,12 @@ func TestVerifyCommandsAtWarnsOnceForLegacyKey(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(legacy, ".rota", "config.json"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	legacyWarn = sync.Once{}
-	var got []string
-	out := captureStderr(t, func() {
-		LoadGateConfig(legacy).FullCommands()
-		got = LoadGateConfig(legacy).FullCommands()
-	})
+	var buf strings.Builder
+	gc := LoadGateConfig(legacy)
+	gc.WarnLegacy(&buf)
+	got := gc.Tier("full")
+	gc.WarnLegacy(&buf)
+	out := buf.String()
 	if !reflect.DeepEqual(got, []string{"echo old"}) {
 		t.Errorf("legacy commands = %v", got)
 	}
@@ -160,9 +142,28 @@ func TestVerifyCommandsAtWarnsOnceForLegacyKey(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(legacy, ".rota", "config.json"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	legacyWarn = sync.Once{}
-	out = captureStderr(t, func() { got = LoadGateConfig(legacy).FullCommands() })
+	buf.Reset()
+	gc = LoadGateConfig(legacy)
+	gc.WarnLegacy(&buf)
+	got, out = gc.Tier("full"), buf.String()
 	if !reflect.DeepEqual(got, []string{"echo new"}) || out != "" {
 		t.Errorf("test.full set: commands %v, stderr %q", got, out)
+	}
+}
+
+// Env.Verify writes the legacy-key warning to Env.Stderr, once however often
+// the same loaded config verifies.
+func TestVerifyWarnsThroughEnvStderr(t *testing.T) {
+	root := tierRoot(t, `{"refactor":{"verifyCommands":["echo old"]}}`)
+	var buf strings.Builder
+	e := Env{Stderr: &buf, Shell: func(context.Context, string, string) (string, int) { return "", 0 }}
+	cfg := LoadGateConfig(root)
+	for i := 0; i < 2; i++ {
+		if _, err := e.Verify(context.Background(), cfg, root, root); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := strings.Count(buf.String(), "refactor.verifyCommands is deprecated"); n != 1 {
+		t.Errorf("warning printed %d times, want once: %q", n, buf.String())
 	}
 }
