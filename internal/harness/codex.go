@@ -121,6 +121,8 @@ func (codex) SoloRefusal() string {
 
 func (codex) WorkAccounts() bool { return false }
 
+func (codex) RawPaste() bool { return false }
+
 // AccountEnv is the slot's CODEX_HOME, set only for a configured account: the
 // default home is Codex's own. The claude config dir is not its business, and
 // work.accounts is Anthropic's.

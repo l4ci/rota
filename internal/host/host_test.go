@@ -284,6 +284,45 @@ func TestTmuxSend(t *testing.T) {
 	}
 }
 
+// OpenCode's TUI drops the CRs tmux pastes in place of line breaks, which
+// flattens a brief to one line; paste-buffer -r keeps them. The pane's own
+// foreground process says which TUI is there.
+func TestTmuxSendPastesRawIntoOpenCode(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("a\nb"), 0o644)
+	for _, c := range []struct{ cmd, paste string }{
+		{"opencode", "tmux paste-buffer -r -b rota-w1 -t rota:w1"},
+		{"claude", "tmux paste-buffer -b rota-w1 -t rota:w1"},
+		{"codex", "tmux paste-buffer -b rota-w1 -t rota:w1"},
+		{"", "tmux paste-buffer -b rota-w1 -t rota:w1"},
+	} {
+		changed := false
+		f := &fake{handler: func(_ string, a []string) Result {
+			switch a[0] {
+			case "display-message":
+				return Result{Stdout: c.cmd + "\n"}
+			case "send-keys":
+				changed = true
+			case "capture-pane":
+				if changed {
+					return Result{Stdout: "after"}
+				}
+				return Result{Stdout: "before"}
+			}
+			return Result{}
+		}}
+		if err := New("tmux", deps(f, nil, &clock{})).Send(bg, "w1", "rota:w1", file); err != nil {
+			t.Fatalf("%q: Send = %v", c.cmd, err)
+		}
+		if !strings.Contains(f.log(), c.paste+"\n") && !strings.HasSuffix(f.log(), c.paste) {
+			t.Errorf("%q: want %q in\n%s", c.cmd, c.paste, f.log())
+		}
+		if c.cmd != "opencode" && strings.Contains(f.log(), "paste-buffer -r") {
+			t.Errorf("%q: pasted raw:\n%s", c.cmd, f.log())
+		}
+	}
+}
+
 func TestTmuxSendNeverSubmitted(t *testing.T) {
 	f := &fake{handler: func(_ string, a []string) Result { return Result{Stdout: "static"} }}
 	err := New("tmux", deps(f, nil, &clock{})).Send(bg, "w1", "rota:w1", "/f")

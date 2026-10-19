@@ -104,6 +104,8 @@ func (claude) SoloRefusal() string { return "" }
 
 func (claude) WorkAccounts() bool { return true }
 
+func (claude) RawPaste() bool { return false }
+
 // AccountEnv is the pane's CLAUDE_CONFIG_DIR.
 func (claude) AccountEnv(a Account) []string {
 	if a.ConfigDir == "" {

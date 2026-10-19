@@ -277,6 +277,10 @@ type Harness interface {
 	// WorkAccounts reports whether work.accounts (Anthropic's) rotates the
 	// slot's account; a harness with its own account model says no.
 	WorkAccounts() bool
+	// RawPaste reports whether a brief pasted into the kind's pane must keep
+	// its line feeds as they are: tmux pastes a CR for each, which the TUI
+	// drops and the brief arrives as one line.
+	RawPaste() bool
 	// AccountEnv is the environment that selects the slot's account.
 	AccountEnv(a Account) []string
 	// Accounts is the kind's configured accounts and the config key they come
