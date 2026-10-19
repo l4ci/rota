@@ -260,7 +260,9 @@ the slot and its state as JSON, so the orchestrator never polls in its own conte
 classifies with the same rules as `rota worker poll` (sentinels, `limited`, `dead`, then the
 host's status). It records the slot it returns as `rota worker poll` would (its state, and the PR
 from `ROTA-DONE`) and marks it seen: the next `wait` skips that slot until its state changes, so a
-done slot whose PR you are holding does not come back on every call. A dispatch or relay re-arms it.
+done slot whose PR you are holding does not come back on every call. A dispatch or relay re-arms it,
+and a `ROTA-DONE` the worker printed before that relay no longer reads as done: only a new sentinel
+or a `worker done` event after the relay does.
 With no slot named it watches every slot that has a session and whose recorded state is not `idle`;
 `rota worker dispatch` arms a slot.
 
