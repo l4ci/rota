@@ -403,7 +403,7 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate target fields change mid-run": {
       "tier": "confirmed",
-      "hits": 3,
+      "hits": 4,
       "lastSeen": "2026-10-19"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate steps read the forge only after stepRemote": {
@@ -418,8 +418,8 @@
     },
     "Rounds: Orchestration: Review & merge gate::Train PRs with disjoint paths; a new config key reds the frozen config record": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-16"
+      "hits": 1,
+      "lastSeen": "2026-10-19"
     },
     "Rounds: Orchestration: Review & merge gate::Verdicts record the sha of the slot's worktree, not origin": {
       "tier": "provisional",
@@ -433,18 +433,18 @@
     },
     "Rounds: Orchestration: Review & merge gate::Mutation-check source-grep guard tests": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-11"
+      "hits": 1,
+      "lastSeen": "2026-10-19"
     },
     "Rounds: Orchestration: Review & merge gate::Refactor reviews need an old-vs-new input table": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-11"
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-10-19"
     },
     "Rounds: Orchestration: Review & merge gate::Renamed Go tests can silently stop running": {
-      "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-16"
+      "tier": "confirmed",
+      "hits": 5,
+      "lastSeen": "2026-10-19"
     },
     "Rounds: Orchestration: Review & merge gate::Re-reviews are one reviewer, majors only, fix range only": {
       "tier": "provisional",
@@ -568,8 +568,8 @@
     },
     "Rounds: Orchestration: Workers & relays::Brief implementers to leave .rota/knowledge-tier.json alone": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-18"
+      "hits": 1,
+      "lastSeen": "2026-10-19"
     },
     "Build & Tooling: Helpers & migrations::This repo's milestone store is the tracker; .rota/milestones/ files are stale": {
       "tier": "provisional",
@@ -677,8 +677,8 @@
       "lastSeen": "2026-10-19"
     },
     "Rounds: Orchestration: Review & merge gate::Light reviews still carry the acceptance criteria": {
-      "tier": "provisional",
-      "hits": 0,
+      "tier": "confirmed",
+      "hits": 4,
       "lastSeen": "2026-10-19"
     },
     "Rounds: Orchestration: Review & merge gate::Learn and docs bookkeeping commits go straight to main": {
@@ -723,7 +723,7 @@
     },
     "Rounds: Orchestration: Workers & relays::A limited wake can be the brief quoting limit phrases": {
       "tier": "provisional",
-      "hits": 0,
+      "hits": 1,
       "lastSeen": "2026-10-19"
     }
   }
