@@ -608,6 +608,11 @@ func RecordBounceIn(env Env, m *RoundMemo, root, issue, slot, head string) (int,
 func recordBounce(env Env, m *RoundMemo, root, issue, slot, head string) (n int, counted bool, err error) {
 	defer func() {
 		if err == nil && counted {
+			// A gate addressed by PR number reports that number as the slot once the
+			// slot has moved on; only a slot in the pool names a ledger row.
+			if slot != "" && LoadRegistryTolerant(root).Slot(slot) == nil {
+				slot = ""
+			}
 			LedgerNoteIn(env, m, root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Slot: slot, Detail: ledger.Detail("count", n)})
 		}
 	}()

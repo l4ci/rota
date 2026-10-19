@@ -194,6 +194,28 @@ func TestBounceEntryNamesTheSlotHoldingThePR(t *testing.T) {
 	}
 }
 
+// A PR gated by number after its slot moved on bounces under the PR number as
+// "slot". That is not a slot: the ledger row names none, and the summary folds
+// the bounce into the issue's own row instead of listing a pseudo-slot.
+func TestBounceByPRNumberAfterTheSlotMovedOnMakesNoPseudoSlot(t *testing.T) {
+	dir := ledgerProject(t, `{"name":"ben","task":"13","kind":"claude"}`)
+	env := Env{Now: func() time.Time { return ledgerNow }}
+	ledgerAppend(env, dir, ledger.Entry{Kind: ledger.KindAssign, Issue: "12", Slot: "ben", PR: "847", Round: 0})
+	if _, err := RecordBounce(env, dir, "12", "847", "h1"); err != nil {
+		t.Fatal(err)
+	}
+	es, _ := ledger.Load(dir)
+	s := ledger.Fold(es, nil, 0)
+	if len(s.Issues) != 1 || s.Issues[0].Slot != "ben" || s.Issues[0].Bounces != 1 {
+		t.Fatalf("issue rows %+v, want one row for ben with the bounce", s.Issues)
+	}
+	for _, tot := range s.Slots {
+		if tot.Name == "847" {
+			t.Fatalf("pseudo-slot 847 in slot totals %+v", s.Slots)
+		}
+	}
+}
+
 func TestTrainLedgerStampsTheVerdictOnTheCulpritOnly(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"b1","branch":"b1","pr":"https://github.com/o/r/pull/1"},{"name":"b2","branch":"b2","pr":"https://github.com/o/r/pull/2"},{"name":"b3","branch":"b3","pr":"https://github.com/o/r/pull/3"}`)
 	res := TrainResult{Verdict: GateVerifyFailed, Culprit: "b2", Landed: []string{"b1"},
