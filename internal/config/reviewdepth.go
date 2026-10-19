@@ -45,13 +45,26 @@ func (d ReviewDepth) rank() int {
 // to light for a diff of fewer changed lines. Labels override both. Paths maps
 // a glob to the least depth a changed path matching it gets. NoScopeDrift turns
 // off the rule that a diff outside the issue's declared files resolves full.
+// SupportPaths lists the globs of files that never count as drift; nil means
+// DefaultSupportPaths, an empty list means every undeclared file counts.
 type ReviewPolicy struct {
 	Default      ReviewDepth
 	LightBelow   int
 	Labels       map[string]ReviewDepth
 	Paths        map[string]ReviewDepth
 	NoScopeDrift bool
+	SupportPaths []string
 	legacy       string // "true" or "false" when the value was the old boolean
+}
+
+// DefaultSupportPaths are the files a change updates beside the code an issue
+// names (docs, frozen records, golden files, the generated option reference),
+// so scope drift ignores them unless ship.review.supportPaths replaces the list.
+var DefaultSupportPaths = []string{
+	"docs/**",
+	"docs/reference/config-options.md",
+	"cmd/rota/testdata/frozen/**",
+	"internal/*/testdata/golden/**",
 }
 
 // ParseReviewPolicy reads a ship.review value: the legacy booleans (true is
@@ -131,8 +144,24 @@ func ParseReviewPolicy(v any) (ReviewPolicy, error) {
 					return bad(`"scopeDrift" must be true or false`)
 				}
 				p.NoScopeDrift = !b
+			case "supportPaths":
+				arr, ok := val.([]any)
+				if !ok {
+					return bad(`"supportPaths" must be an array of globs`)
+				}
+				p.SupportPaths = []string{}
+				for _, e := range arr {
+					glob, _ := e.(string)
+					if strings.TrimSpace(glob) == "" {
+						return bad(`"supportPaths" entries must be non-empty glob strings`)
+					}
+					if _, err := path.Match(dirGlob(glob), ""); err != nil || strings.Contains(dirGlob(glob), "**") {
+						return bad(`"supportPaths" glob %q is not supported: use * within a segment, or a trailing /** for a directory`, glob)
+					}
+					p.SupportPaths = append(p.SupportPaths, glob)
+				}
 			default:
-				return bad("unknown field %q (want default, lightBelow, labels, paths, scopeDrift)", key)
+				return bad("unknown field %q (want default, lightBelow, labels, paths, scopeDrift, supportPaths)", key)
 			}
 		}
 		return p, nil
@@ -225,7 +254,7 @@ func (p ReviewPolicy) Decide(in ReviewInput) ReviewDecision {
 		raise(DepthFull, SignalDoor, "PR body says Door: one-way")
 	}
 	if !p.NoScopeDrift {
-		if drift := scopeDrift(in.IssueBody, in.Files); len(drift) > 0 {
+		if drift := scopeDrift(in.IssueBody, in.Files, p.supportPaths()); len(drift) > 0 {
 			raise(DepthFull, SignalScopeDrift, "diff touches files the issue never named: "+strings.Join(drift, ", "))
 		}
 	}
@@ -278,11 +307,47 @@ func (p ReviewPolicy) base(changed int, labels []string) ReviewDecision {
 // pointersHeadRe matches a "Pointers" heading: the files an issue points at.
 var pointersHeadRe = regexp.MustCompile(`(?mi)^#{1,6}[ \t]+pointers[ \t]*$`)
 
+// supportPaths is the globs scope drift ignores.
+func (p ReviewPolicy) supportPaths() []string {
+	if p.SupportPaths == nil {
+		return DefaultSupportPaths
+	}
+	return p.SupportPaths
+}
+
+// matchSupport reports whether file sits at or under a path the glob matches,
+// so internal/*/testdata/golden/** covers internal/x/testdata/golden/a/b.txt.
+func matchSupport(glob, file string) bool {
+	glob = dirGlob(glob)
+	segs := strings.Split(file, "/")
+	for i := 1; i <= len(segs); i++ {
+		if ok, err := path.Match(glob, strings.Join(segs[:i], "/")); err == nil && ok {
+			return true
+		}
+	}
+	return false
+}
+
+// sitsBesideDeclared reports whether a _test.go file lives in the directory of
+// a declared file: its tests belong to the declared code.
+func sitsBesideDeclared(file string, allowed []string) bool {
+	if !strings.HasSuffix(file, "_test.go") {
+		return false
+	}
+	dir := path.Dir(file)
+	return slices.ContainsFunc(allowed, func(a string) bool {
+		a = dirGlob(a)
+		return !strings.ContainsAny(a, "*?[") && path.Dir(a) == dir
+	})
+}
+
 // scopeDrift lists the changed files the issue body never named. The declared
 // set is its "## Files" entries plus the path-like (slash or glob) entries of
 // "## Touches" and "## Pointers". A trailing /** names a directory, as in the
-// paths map. An issue that declares none has no set to drift from.
-func scopeDrift(issueBody string, files []string) []string {
+// paths map, and so does a bare directory. A support file (a support glob
+// match, or a _test.go file beside a declared file) is not drift. An issue
+// that declares none has no set to drift from.
+func scopeDrift(issueBody string, files, support []string) []string {
 	var allowed []string
 	if sec, ok := itembody.Section(issueBody, itembody.FilesHeadRe); ok {
 		allowed = append(allowed, bulletPaths(sec, false)...)
@@ -298,9 +363,12 @@ func scopeDrift(issueBody string, files []string) []string {
 	}
 	var out []string
 	for _, f := range files {
-		if !slices.ContainsFunc(allowed, func(a string) bool { return overlap.MatchPath(dirGlob(a), f) }) {
-			out = append(out, f)
+		if slices.ContainsFunc(allowed, func(a string) bool { return overlap.MatchPath(dirGlob(a), f) }) ||
+			slices.ContainsFunc(support, func(g string) bool { return matchSupport(g, f) }) ||
+			sitsBesideDeclared(f, allowed) {
+			continue
 		}
+		out = append(out, f)
 	}
 	return out
 }

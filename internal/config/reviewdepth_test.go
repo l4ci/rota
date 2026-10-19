@@ -122,3 +122,53 @@ func TestReviewPolicyPathsAndDriftShape(t *testing.T) {
 		}
 	}
 }
+
+func TestScopeDriftSupportFiles(t *testing.T) {
+	const cfg = `{"ship":{"review":{"default":"full","lightBelow":50}}}`
+	issue := "## Files\n\n- `internal/config/reviewdepth.go`\n- `internal/gate`\n"
+	for _, c := range []struct {
+		name  string
+		cfg   string
+		files []string
+		drift string // "" means no drift
+	}{
+		{"test beside a declared file", cfg, []string{"internal/config/reviewdepth.go", "internal/config/other_test.go"}, ""},
+		{"test in another package drifts", cfg, []string{"internal/config/reviewdepth.go", "internal/cli/x_test.go"}, "internal/cli/x_test.go"},
+		{"non-test file beside a declared file drifts", cfg, []string{"internal/config/other.go"}, "internal/config/other.go"},
+		{"test under a declared directory", cfg, []string{"internal/gate/sub/x_test.go"}, ""},
+		{"declared bare directory covers its files", cfg, []string{"internal/gate/gate.go"}, ""},
+		{"docs are support", cfg, []string{"docs/usage/a.md", "docs/reference/config-options.md"}, ""},
+		{"frozen records are support", cfg, []string{"cmd/rota/testdata/frozen/a.json"}, ""},
+		{"golden files are support", cfg, []string{"internal/cli/testdata/golden/a.txt"}, ""},
+		{"other testdata drifts", cfg, []string{"internal/cli/testdata/other/a.txt"}, "internal/cli/testdata/other/a.txt"},
+		{"supportPaths replaces the list", `{"ship":{"review":{"lightBelow":50,"supportPaths":["fixtures/**"]}}}`, []string{"docs/a.md", "fixtures/a.json"}, "docs/a.md"},
+		{"empty supportPaths counts everything", `{"ship":{"review":{"lightBelow":50,"supportPaths":[]}}}`, []string{"docs/a.md"}, "docs/a.md"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			p, err := ReviewPolicyOf(decode(t, c.cfg))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := p.Decide(ReviewInput{Changed: 3, IssueBody: issue, Files: c.files})
+			if c.drift == "" && got.Signal != SignalSize || c.drift != "" && (got.Signal != SignalScopeDrift || got.Why != "diff touches files the issue never named: "+c.drift) {
+				t.Errorf("Decide = %+v, want drift %q", got, c.drift)
+			}
+		})
+	}
+}
+
+func TestSupportPathsShape(t *testing.T) {
+	for cfg, ok := range map[string]bool{
+		`{"ship":{"review":{"supportPaths":["docs/**","a/*/b/**"]}}}`: true,
+		`{"ship":{"review":{"supportPaths":[]}}}`:                     true,
+		`{"ship":{"review":{"supportPaths":"docs"}}}`:                 false,
+		`{"ship":{"review":{"supportPaths":[1]}}}`:                    false,
+		`{"ship":{"review":{"supportPaths":[""]}}}`:                   false,
+		`{"ship":{"review":{"supportPaths":["a/**/b"]}}}`:             false,
+		`{"ship":{"review":{"supportPaths":["a/["]}}}`:                false,
+	} {
+		if _, err := ReviewPolicyOf(decode(t, cfg)); (err == nil) != ok {
+			t.Errorf("%s: err = %v, want ok=%v", cfg, err, ok)
+		}
+	}
+}
