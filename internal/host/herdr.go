@@ -267,7 +267,7 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	// account is the harness's own business: a codex slot's CODEX_HOME, a
 	// claude slot's config dir.
 	hz := harness.Resolve(kind)
-	for _, e := range hz.AccountEnv(harness.Account{ConfigDir: o.ConfigDir, CodexHome: o.CodexHome}) {
+	for _, e := range hz.AccountEnv(harness.Account{ConfigDir: o.ConfigDir, Home: o.CodexHome}) {
 		args = append(args, "--env", e)
 	}
 	for _, e := range o.Env {

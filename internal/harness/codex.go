@@ -125,10 +125,10 @@ func (codex) WorkAccounts() bool { return false }
 // default home is Codex's own. The claude config dir is not its business, and
 // work.accounts is Anthropic's.
 func (codex) AccountEnv(a Account) []string {
-	if a.CodexHome == "" {
+	if a.Home == "" {
 		return nil
 	}
-	return []string{"CODEX_HOME=" + a.CodexHome}
+	return []string{"CODEX_HOME=" + a.Home}
 }
 
 func (codex) Accounts(cfg any) AccountList {

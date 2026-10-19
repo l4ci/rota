@@ -314,7 +314,7 @@ func TestDispatchCodexRefusalsTouchNothing(t *testing.T) {
 		"claude kind, codex binary": {cfg: `{"work":{"dispatch":"herdr","workerCommand":"codex --x"}}`, rig: codexRig{loggedIn: true}, kind: "claude", exit: exitcode.ExitUnavailable, msg: "does not run claude"},
 		"flag":                      {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{noFlag: "--no-daemon", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex flags", msg: "--no-daemon"},
 		"login":                     {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{}, exit: exitcode.ExitUnavailable, msg: "not logged in"},
-		"bad kind":                  {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{loggedIn: true}, kind: "gemini", exit: exitcode.ExitUsage, msg: "claude or codex"},
+		"bad kind":                  {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{loggedIn: true}, kind: "gemini", exit: exitcode.ExitUsage, msg: "claude, codex or opencode"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

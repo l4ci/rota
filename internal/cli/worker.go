@@ -407,7 +407,7 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 	relay := fs.Bool("relay", false, "inject into the running session as an orchestrator relay")
 	round := fs.String("round", "", "orchestrator round for the signature")
 	boot := fs.Int("boot-timeout", 60, "seconds to wait for the session to boot")
-	kind := fs.String("kind", "", "harness kind: claude or codex (default the slot's, else claude)")
+	kind := fs.String("kind", "", "harness kind: "+harness.KindList()+" (default the slot's, else claude)")
 	acceptCodex := fs.Bool("accept-codex-version", false, "deprecated and ignored: rota no longer checks the Codex version")
 	return func(c *Ctx, args []string) (Result, error) {
 		slot, err := oneArg(args, "slot")
