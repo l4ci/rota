@@ -6,6 +6,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -152,7 +153,7 @@ func TestCodexPreflightAccounts(t *testing.T) {
 			t.Fatal(err)
 		}
 		// dispatch records the account; do the same here.
-		UpdateSlot(dir, slot, func(s *Slot) { s.Raw().Set("kind", "codex"); s.SetCodexAccount(set.Account) })
+		UpdateSlot(dir, slot, func(s *Slot) { s.Raw().Set("kind", "codex"); s.SetHomeAccount(set.Account) })
 		return set
 	}
 	if got := pick("w1"); got.Account != "a" || got.Home != "/h/a" {
@@ -171,7 +172,7 @@ func TestCodexPreflightAccounts(t *testing.T) {
 		t.Errorf("login is checked per configured home: %v", rig.calls)
 	}
 	// An account that left the config is replaced.
-	UpdateSlot(dir, "w1", func(s *Slot) { s.SetCodexAccount("gone") })
+	UpdateSlot(dir, "w1", func(s *Slot) { s.SetHomeAccount("gone") })
 	if got := pick("w1"); got.Account == "gone" || got.Account == "" {
 		t.Errorf("a stale account is re-picked: %+v", got)
 	}
@@ -253,6 +254,17 @@ func TestCodexPreflightNeedsHerdr(t *testing.T) {
 
 // ── dispatch ────────────────────────────────────────────────────────────────
 
+// accountEnv is the account variable a spawn carries, "" for none: the slot's
+// account reaches either host only through SpawnOpts.Env.
+func accountEnv(o host.SpawnOpts) string {
+	for _, e := range o.Env {
+		if strings.HasPrefix(e, "CODEX_HOME=") || strings.HasPrefix(e, "CLAUDE_CONFIG_DIR=") || strings.HasPrefix(e, "OPENCODE_CONFIG_DIR=") {
+			return e
+		}
+	}
+	return ""
+}
+
 func herdrFake() *fakeHost {
 	return &fakeHost{name: "herdr", inSession: true, where: "herdr workspace w9"}
 }
@@ -272,7 +284,7 @@ func TestDispatchCodexSpawnsOnTheDefaultHome(t *testing.T) {
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	trust := []string{"-c", "projects.\"" + wt + "\".trust_level=\"trusted\"", "-c", "check_for_update_on_startup=false"}
 	want := append(append(trust, harness.CodexHookArgs("/opt/rota", keyPath)...), "--model", "gpt-x", "--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust", "--no-daemon", "--no-alt-screen")
-	if f.spawnOpts.CodexHome != "" || f.spawnOpts.ConfigDir != "" || lerr != nil || strings.Join(largs, "\x00") != strings.Join(want, "\x00") {
+	if accountEnv(f.spawnOpts) != "" || lerr != nil || strings.Join(largs, "\x00") != strings.Join(want, "\x00") {
 		t.Errorf("spawn opts = %+v (args %q, want %q)", f.spawnOpts, largs, want)
 	}
 	if !strings.Contains(largs[7], "/opt/rota worker prompt-check --key "+keyPath) {
@@ -286,13 +298,13 @@ func TestDispatchKindDefaultsToTheSlotsRecordedKind(t *testing.T) {
 	rig := &codexRig{loggedIn: true}
 	f := herdrFake()
 	res, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1"})
-	if err != nil || res.Kind != harness.Codex || f.spawnOpts.CodexHome != "" || strings.Contains(f.spawnOpts.Launch, "--model") {
+	if err != nil || res.Kind != harness.Codex || accountEnv(f.spawnOpts) != "" || strings.Contains(f.spawnOpts.Launch, "--model") {
 		t.Fatalf("%+v %v %+v", res, err, f.spawnOpts)
 	}
 	// An explicit kind beats the recorded one.
 	f = herdrFake()
 	res, err = rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T2", Kind: "claude"})
-	if err != nil || res.Kind != harness.Claude || f.spawnOpts.CodexHome != "" || !strings.HasPrefix(f.spawnOpts.Launch, "claude ") {
+	if err != nil || res.Kind != harness.Claude || accountEnv(f.spawnOpts) != "" || !strings.HasPrefix(f.spawnOpts.Launch, "claude ") {
 		t.Fatalf("%+v %v %+v", res, err, f.spawnOpts)
 	}
 }
@@ -314,7 +326,7 @@ func TestDispatchCodexRefusalsTouchNothing(t *testing.T) {
 		"claude kind, codex binary": {cfg: `{"work":{"dispatch":"herdr","workerCommand":"codex --x"}}`, rig: codexRig{loggedIn: true}, kind: "claude", exit: exitcode.ExitUnavailable, msg: "does not run claude"},
 		"flag":                      {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{noFlag: "--no-daemon", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex flags", msg: "--no-daemon"},
 		"login":                     {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{}, exit: exitcode.ExitUnavailable, msg: "not logged in"},
-		"bad kind":                  {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{loggedIn: true}, kind: "gemini", exit: exitcode.ExitUsage, msg: "claude or codex"},
+		"bad kind":                  {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{loggedIn: true}, kind: "gemini", exit: exitcode.ExitUsage, msg: "claude, codex or opencode"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -509,8 +521,8 @@ func TestDispatchCodexAccountSpawnsWithItsHome(t *testing.T) {
 	if _, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1", Kind: "codex"}); err != nil {
 		t.Fatal(err)
 	}
-	if f.spawnOpts.CodexHome != "/h/a" || LoadRegistryTolerant(dir).Slot("w1").CodexAccount() != "a" {
-		t.Errorf("spawn %+v, account %q", f.spawnOpts, LoadRegistryTolerant(dir).Slot("w1").CodexAccount())
+	if !slices.Contains(f.spawnOpts.Env, "CODEX_HOME=/h/a") || LoadRegistryTolerant(dir).Slot("w1").HomeAccount() != "a" {
+		t.Errorf("spawn %+v, account %q", f.spawnOpts, LoadRegistryTolerant(dir).Slot("w1").HomeAccount())
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".git", "rota", "codex", "w1", harness.PromptKeyFile)); err != nil {
 		t.Errorf("the prompt key lives in the slot state dir: %v", err)

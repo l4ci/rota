@@ -65,9 +65,11 @@ type Deps struct {
 	// reports. DoctorPath replaces PATH for doctor's tool lookup when set.
 	// DoctorDisk reads the free space of the volume holding a directory.
 	PollFixture string
-	PollStatus  string
-	DoctorPath  string
-	DoctorDisk  func(dir string) *doctor.Disk
+	// PollKind is the harness kind the fixture is read as (ROTA_TEST_POLL_KIND).
+	PollKind   string
+	PollStatus string
+	DoctorPath string
+	DoctorDisk func(dir string) *doctor.Disk
 
 	// TrackerOptions apply to every forge CLI the verbs build; a test swaps
 	// in a fake executor here.
@@ -144,6 +146,7 @@ func defaultDeps() *Deps {
 	d.ConnTesters = map[string]connections.Tester{connections.KindJira: tracker.JiraTester{}, connections.KindLinear: tracker.LinearTester{}}
 	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(d.Getenv)
 	d.PollFixture, d.PollStatus = d.Getenv("ROTA_TEST_POLL_FIXTURE"), d.Getenv("ROTA_TEST_POLL_STATUS")
+	d.PollKind = d.Getenv("ROTA_TEST_POLL_KIND")
 	d.DoctorPath = d.Getenv("ROTA_TEST_DOCTOR_PATH")
 	d.DoctorDisk = doctorDisk(d.Getenv("ROTA_TEST_DOCTOR_DISK"))
 	d.UpdateEnv = func() update.Env { return update.DefaultEnv(version.Get().Version, d.Getenv) }

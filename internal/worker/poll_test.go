@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/harness"
 	"time"
 
 	"github.com/l4ci/rota/internal/golden"
@@ -83,14 +85,14 @@ func TestClassifyMovementAndTailWindow(t *testing.T) {
 func TestPollFixtureMode(t *testing.T) {
 	fx := filepath.Join(t.TempDir(), "p.txt")
 	os.WriteFile(fx, []byte("ROTA-BLOCKED w1: ?\n"), 0o644)
-	res, err := PollFixture(fx, "", "", 0)
+	res, err := PollFixture(fx, "", "", "", 0)
 	if err != nil || len(res.Slots) != 1 || res.Slots[0].Name != "fixture" || res.Slots[0].State != StateBlocked || res.Changed {
 		t.Errorf("%+v %v", res, err)
 	}
-	if res, _ = PollFixture(fx, "w3", "", 0); res.Slots[0].Name != "w3" {
+	if res, _ = PollFixture(fx, "w3", "", "", 0); res.Slots[0].Name != "w3" {
 		t.Errorf("name = %s", res.Slots[0].Name)
 	}
-	if _, err = PollFixture("/no/such/file", "", "", 0); exitOf(err) != exitcode.ExitUsage {
+	if _, err = PollFixture("/no/such/file", "", "", "", 0); exitOf(err) != exitcode.ExitUsage {
 		t.Errorf("missing fixture: %v", err)
 	}
 }
@@ -292,6 +294,95 @@ func TestClassifySentinelAfterCodexBullet(t *testing.T) {
 	plain := strings.Replace(done, "• ROTA-DONE ben ben/t01-add-hello-txt", "• All done.", 1)
 	if state, _ := Classify(plain, false, 60, "idle"); state == "DONE" {
 		t.Errorf("a codex bullet without a sentinel is not done")
+	}
+}
+
+// opencode-retry is a live capture of OpenCode 1.17.9 against an unreachable
+// provider. The other OpenCode fixtures are built from the spike's description
+// of the TUI (.rota/spikes/opencode-worker.md): the alternate-screen viewport,
+// the user message echoed under a "┃" gutter, "esc interrupt" while a turn
+// runs and the dialog and error texts it printed. They are not live captures:
+// the provider keys were expired when this was written.
+func opencodePane(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile("testdata/panes/opencode-" + name + "-1.17.9.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// OpenCode's wording is read on opencode slots only: a Claude or Codex worker
+// that echoes it (cat of this repo's source, a fixture) keeps the state it had.
+func TestClassifyOpenCodeVocabularyIsScopedToItsKind(t *testing.T) {
+	for _, kind := range []string{"", harness.Claude, harness.Codex} {
+		for _, name := range []string{"busy", "retry", "expired-key", "invalid-model"} {
+			st, ev := ClassifyFor(kind, opencodePane(t, name), false, 60, "")
+			if st != "IDLE" {
+				t.Errorf("kind %q on opencode-%s: %s %q, want IDLE", kind, name, st, ev)
+			}
+		}
+	}
+	for name, want := range map[string]string{"expired-key": "LIMITED", "invalid-model": "BLOCKED", "busy": "BUSY", "retry": "BUSY"} {
+		if st, ev := ClassifyFor(harness.OpenCode, opencodePane(t, name), false, 60, ""); st != want {
+			t.Errorf("opencode on opencode-%s: %s %q, want %s", name, st, ev, want)
+		}
+	}
+	// The gutter is an opencode reading too.
+	if st, _ := ClassifyFor(harness.Claude, "  ┃  ROTA-DONE ben https://example.test/pr/1\n", false, 60, ""); st == "DONE" {
+		t.Error("a guttered sentinel is not done on a claude pane")
+	}
+}
+
+// The echoed brief names ROTA-DONE ben <pr-url>. On a line that starts with the
+// gutter it is the user's text, not the worker's; a real URL after the gutter is.
+func TestClassifyOpenCodeGutteredPlaceholderIsNotDone(t *testing.T) {
+	for _, c := range []struct{ line, want string }{
+		{"  ┃ ROTA-DONE ben <pr-url>", "IDLE"},
+		{"  ┃  ROTA-DONE ben <pr-url> and stop.", "IDLE"},
+		{"  ┃ ROTA-BLOCKED ben: <one question in plain language>", "IDLE"},
+		{"  ┃ ROTA-DONE ben https://example.test/pr/1", "DONE"},
+		{"  ┃ ROTA-BLOCKED ben: which file?", "BLOCKED"},
+	} {
+		if st, ev := ClassifyFor(harness.OpenCode, "  Working.\n"+c.line+"\n\n  tab agents  ctrl+p commands\n", false, 60, ""); st != c.want {
+			t.Errorf("%q: %s %q, want %s", c.line, st, ev, c.want)
+		}
+	}
+}
+
+func TestClassifyOpenCode(t *testing.T) {
+	// The echoed brief names ROTA-DONE ben <pr-url> and ROTA-BLOCKED ben:
+	// <one question ...> as placeholders; neither is a sentinel.
+	if state, ev := ClassifyFor(harness.OpenCode, opencodePane(t, "busy"), false, 60, ""); state != "BUSY" || !strings.Contains(ev, "esc interrupt") {
+		t.Errorf("busy pane: %s %q", state, ev)
+	}
+	// A real capture: a provider that cannot be reached, OpenCode retrying.
+	if state, ev := ClassifyFor(harness.OpenCode, opencodePane(t, "retry"), false, 60, ""); state != "BUSY" || !strings.Contains(ev, "retry") {
+		t.Errorf("retry pane: %s %q", state, ev)
+	}
+	if state, ev := ClassifyFor(harness.OpenCode, opencodePane(t, "expired-key"), false, 60, ""); state != "LIMITED" || !strings.Contains(ev, "needs a human") {
+		t.Errorf("expired key: %s %q", state, ev)
+	}
+	if state, ev := ClassifyFor(harness.OpenCode, opencodePane(t, "invalid-model"), false, 60, ""); state != "BLOCKED" || !strings.Contains(ev, "opencode-go/qwen3.6-plus") {
+		t.Errorf("invalid model: %s %q", state, ev)
+	}
+	done := opencodePane(t, "done")
+	if state, ev := ClassifyFor(harness.OpenCode, done, false, 60, ""); state != "DONE" || ev != "https://github.com/l4ci/rota/pull/600" {
+		t.Errorf("done: %s %q", state, ev)
+	}
+	// The worker's reply may carry the gutter too.
+	guttered := strings.Replace(done, "  ROTA-DONE ben https", "  ┃  ROTA-DONE ben https", 1)
+	if state, ev := ClassifyFor(harness.OpenCode, guttered, false, 60, ""); state != "DONE" || ev != "https://github.com/l4ci/rota/pull/600" {
+		t.Errorf("guttered done: %s %q", state, ev)
+	}
+	// The echo alone is not done, with or without its header in the viewport.
+	echo := strings.Replace(done, "  ROTA-DONE ben https://github.com/l4ci/rota/pull/600\n", "  All finished.\n", 1)
+	if state, _ := ClassifyFor(harness.OpenCode, echo, false, 60, ""); state == "DONE" || state == "BLOCKED" {
+		t.Errorf("an echoed brief is not a sentinel: %s", state)
+	}
+	scrolled := echo[strings.Index(echo, "  ┃  You are a worker"):]
+	if state, _ := ClassifyFor(harness.OpenCode, scrolled, false, 60, ""); state == "DONE" || state == "BLOCKED" {
+		t.Errorf("an echo scrolled past its header is not a sentinel: %s", state)
 	}
 }
 

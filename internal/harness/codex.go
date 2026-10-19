@@ -121,14 +121,16 @@ func (codex) SoloRefusal() string {
 
 func (codex) WorkAccounts() bool { return false }
 
+func (codex) RawPaste() bool { return false }
+
 // AccountEnv is the slot's CODEX_HOME, set only for a configured account: the
 // default home is Codex's own. The claude config dir is not its business, and
 // work.accounts is Anthropic's.
 func (codex) AccountEnv(a Account) []string {
-	if a.CodexHome == "" {
+	if a.Home == "" {
 		return nil
 	}
-	return []string{"CODEX_HOME=" + a.CodexHome}
+	return []string{"CODEX_HOME=" + a.Home}
 }
 
 func (codex) Accounts(cfg any) AccountList {
@@ -144,6 +146,8 @@ func (codex) Accounts(cfg any) AccountList {
 func (codex) UsageMeter() bool { return false }
 
 func (codex) LimitPhrases() []string { return SharedLimitPhrases() }
+
+func (codex) PaneVocab() PaneVocab { return PaneVocab{} }
 
 // Tiers: the tier map is optional (#68), unset a worker runs on Codex's own
 // default model, but a configured one names every tier.

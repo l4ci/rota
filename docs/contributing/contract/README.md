@@ -110,6 +110,7 @@ The entries live one file per verb group, so a change to one group does not conf
 | [verdict-refusals.md](verdict-refusals.md) | B3 | verdict refusals, the Iron Law, loop-only flags |
 | [rounds.md](rounds.md) | C | `round`, `doctor`, `reap` |
 | [codex-workers.md](codex-workers.md) | D1, D2, E | Codex workers, `statusline`, `hook`, `keepalive` |
+| [opencode-workers.md](opencode-workers.md) | F | OpenCode workers |
 | [agent-skills-spec.md](agent-skills-spec.md) | D3, E2 | Agent Skills spec and Codex discovery, `limit` |
 | [embedded-skills.md](embedded-skills.md) | F6a | `skills` |
 

@@ -225,8 +225,8 @@ func TestDispatchPassesTheAccountConfigDir(t *testing.T) {
 	(&Accounts{Env: Env{Getenv: func(string) string { return t.TempDir() }}}).Assign(bg, dir, "w1", "a")
 	f := tmuxFake()
 	envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "x"), Task: "T1"})
-	if f.spawnOpts.ConfigDir != "/acct/a" {
-		t.Errorf("config dir = %q", f.spawnOpts.ConfigDir)
+	if got := accountEnv(f.spawnOpts); got != "CLAUDE_CONFIG_DIR=/acct/a" {
+		t.Errorf("account env = %q", got)
 	}
 }
 

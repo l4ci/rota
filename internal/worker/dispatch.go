@@ -210,8 +210,9 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		timeout = 60
 	}
 
-	var signKey []byte           // the key that signs the session's payloads; nil signs nothing
-	recKind, codexHome := "", "" // the harness a task dispatch records; the slot's account home
+	var signKey []byte      // the key that signs the session's payloads; nil signs nothing
+	var accountEnv []string // the variable that selects the slot's account
+	recKind := ""           // the harness a task dispatch records
 	var hz harness.Harness
 	if !o.Relay {
 		kind := o.Kind
@@ -254,14 +255,14 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			return res, err
 		}
 		res.Warnings = setup.Warnings
-		codexHome = setup.Home
 		if !hz.WorkAccounts() {
 			configDir = "" // a codex slot's account is its home, not a claude config dir
 			account := setup.Account
-			if _, err := UpdateSlot(root, o.Slot, func(sl *Slot) { sl.SetCodexAccount(account) }); err != nil {
+			if _, err := UpdateSlot(root, o.Slot, func(sl *Slot) { sl.SetHomeAccount(account) }); err != nil {
 				return res, err
 			}
 		}
+		accountEnv = hz.AccountEnv(harness.Account{ConfigDir: configDir, Home: setup.Home})
 		if launch, signKey, err = hz.Prepare(launch, e.Executable, setup); err != nil {
 			return res, asError(err)
 		}
@@ -298,7 +299,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
 		handle, err = h.Spawn(ctx, host.SpawnOpts{Slot: o.Slot, Session: session, Cwd: worktree, LinkWorkspace: group,
-			ConfigDir: configDir, CodexHome: codexHome, Env: SlotEnv(o.Slot, portBase, width), Launch: launch, BootTimeout: timeout})
+			Env: append(accountEnv, SlotEnv(o.Slot, portBase, width)...), Launch: launch, BootTimeout: timeout})
 		if err != nil {
 			clearHandle(root, o.Slot)
 			return res, fail(exitcode.ExitUnavailable, err.Error())

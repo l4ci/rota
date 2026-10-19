@@ -23,6 +23,7 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 - [Unattended rounds](usage/unattended-rounds.md): hooks, statusline, keepalive, usage limits, the orchestrator switch
 - [Doctor and reap](usage/doctor-and-reap.md): check the machine before a round, clear leftovers after
 - [Codex workers](usage/codex-workers.md): run Codex as a worker in a round
+- [OpenCode workers](usage/opencode-workers.md): run OpenCode, and any model it can reach, as a worker in a round
 - [Orchestrator harnesses](usage/orchestrator-harnesses.md): run the orchestrator in Claude Code, Codex, Hermes or opencode
 - [Skills in Codex](usage/codex-skills.md): install and call the skills from Codex
 

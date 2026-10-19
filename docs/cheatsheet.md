@@ -48,8 +48,8 @@ What each `/rota-*` skill does, one line each. For details: [`reference/slash-co
 - **`rota round pick`**: for a `best-of:2` issue, name the attempt whose PR may merge; the other is closed with the reason.
 - **`rota worker`**: slot registry, worktrees, dispatch, polling and the merge gate (`rota worker gate`).
 - **`rota worker gate <PR>`**: gate any open PR by number, even one no slot owns. It refuses an empty `test.full` (unless `--no-verify`), a body without `Closes #N` (unless `partial-slice`), a recorded FAIL verdict and an unpicked best-of attempt.
-- **`rota agents write`**: write `.claude/agents/rota-*.md` (and `.codex/agents/rota-*.toml` when Codex is configured) from the role config. `rota init` runs it.
-- **`rota doctor`**: preflight for git, jq, host, forge, accounts, hooks, skills and Codex.
+- **`rota agents write`**: write `.claude/agents/rota-*.md` (and `.codex/agents/rota-*.toml` or `.opencode/agents/rota-*.md` when Codex or OpenCode is configured) from the role config. `rota init` runs it.
+- **`rota doctor`**: preflight for git, jq, host, forge, accounts, hooks, skills, Codex and OpenCode.
 - **`rota reap`**: preview leftovers a round left behind; `--apply` removes those holding no work.
 - **`rota layout split` / `tabs`**: fold a round's herdr panes into one split view for a wide screen, or back into tabs for a narrow one; bare `rota layout` shows which.
 - **`rota keepalive run`**: restart the orchestrator in its pane when it exits with a fresh handoff.

@@ -14,7 +14,7 @@ rota test run e2e               # the same, through the configured tier
 
 ## How it works
 
-- `test/fakes/stub_worker` plays one worker's side of a round on the fake tmux host (`test/fakes/tmux`). Cues: `done`, `blocked`, `limit`, `slow`, `silent`, `exit` and `commit`. Each prints what an agent would print on its pane and updates the fake host's state to match. The pane never ends in a prompt line, so a host `Send` sees no human draft.
+- `test/fakes/stub_worker` plays one worker's side of a round on the fake tmux host (`test/fakes/tmux`). Cues: `done`, `done-gutter` (the same sentinel under OpenCode's `┃` reply gutter), `blocked`, `limit`, `slow`, `silent`, `exit` and `commit`. Each prints what an agent would print on its pane and updates the fake host's state to match. The pane never ends in a prompt line, so a host `Send` sees no human draft.
 - The fake tmux keeps one pane per window when `pane.<window>` exists, so several stubs can show different text.
 - `test/e2e/lib.sh` builds the fixture (a git repo, a worktree and a tmux window per slot, `.rota/workers.json`) and gives scenarios `rota_j`, `stub`, `slot_field`, `jget` and `expect`.
 - `test/e2e/run.sh` builds `rota` once (or uses `ROTA_BIN`), puts poison stand-ins for real `tmux`, `herdr`, `gh` and `glab` on the path, and runs each scenario in its own bash and sandbox.

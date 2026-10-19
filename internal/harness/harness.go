@@ -6,8 +6,8 @@
 // doctor, the orchestrator launcher) pick an adapter once and call it; none of
 // them branches on a kind string.
 //
-// Two harnesses run workers (Claude and Codex). The orchestrator can also run
-// in Hermes and opencode, which only have the orchestrator facet: the worker
+// Three harnesses run workers (Claude, Codex and OpenCode). The orchestrator
+// can also run in Hermes, which only has the orchestrator facet: the worker
 // and orchestrator sets differ (#33), and both are views over this package.
 //
 // The package imports no other rota package but config and shlex, so doctor,
@@ -24,12 +24,15 @@ import (
 const (
 	Claude = "claude"
 	Codex  = "codex"
+	// OpenCode has no lower-case sibling: the binary and the kind are both
+	// "opencode".
+	OpenCode = "opencode"
 	// Default is the kind of a slot that records none.
 	Default = Claude
 )
 
 // kinds is the worker harness kinds, in the order messages list them.
-var kinds = []string{Claude, Codex}
+var kinds = []string{Claude, Codex, OpenCode}
 
 // Kinds lists the worker harness kinds. Every list of kinds outside this
 // package (the round.workerKind enum, the harness: label check, herdr's
@@ -49,8 +52,13 @@ func Valid(s string) bool {
 	return false
 }
 
-// KindList is Kinds as prose for a usage error: "claude or codex".
-func KindList() string { return strings.Join(kinds, " or ") }
+// KindList is Kinds as prose for a usage error: "claude, codex or opencode".
+func KindList() string {
+	if len(kinds) < 2 {
+		return strings.Join(kinds, "")
+	}
+	return strings.Join(kinds[:len(kinds)-1], ", ") + " or " + kinds[len(kinds)-1]
+}
 
 // Lookup returns the worker adapter for kind; "" is Default.
 func Lookup(kind string) (Harness, bool) {
@@ -62,6 +70,8 @@ func Lookup(kind string) (Harness, bool) {
 		return claude{}, true
 	case Codex:
 		return codex{}, true
+	case OpenCode:
+		return opencode{}, true
 	}
 	return nil, false
 }
@@ -147,6 +157,24 @@ type AccountList struct {
 	Entries []AccountEntry
 }
 
+// PaneVocab is a kind's own pane texts, as case-insensitive regex sources
+// (Gutter excepted). The zero value is a kind that reads like Claude Code.
+type PaneVocab struct {
+	// Retry marks a retry in flight (busy, checked before limits); Busy marks a
+	// turn running (busy, checked after limits and dialogs).
+	Retry, Busy []string
+	// Limits are usage-limit messages beyond the shared ones. AuthDead is the
+	// one of them that a human must fix (a dead key): no reset clock exists.
+	Limits   []string
+	AuthDead string
+	// BadModel is the dialog for a tier model the provider refuses; group 1 is
+	// the model id. The pane is BLOCKED.
+	BadModel string
+	// Gutter: the TUI echoes user text under a "┃" gutter and may gutter its own
+	// reply, so a sentinel may follow it.
+	Gutter bool
+}
+
 // TierRule is how a kind's round.tiers.<kind> map is read.
 type TierRule struct {
 	// Required: the tier map must be configured (a kind that has no model of
@@ -195,8 +223,10 @@ type Doctor struct {
 	Unguarded bool
 }
 
-// Account is the per-slot account a launch can carry.
-type Account struct{ ConfigDir, CodexHome string }
+// Account is the per-slot account a launch can carry: a Claude config dir, or
+// the home of a kind with its own account model (CODEX_HOME,
+// OPENCODE_CONFIG_DIR).
+type Account struct{ ConfigDir, Home string }
 
 // ResumeHit is a token of a launch command that reopens an earlier session.
 // Noun prefixes it in a message ("the subcommand ").
@@ -216,15 +246,16 @@ type PreflightOpts struct {
 	// CommonDir is the git common dir, asked for only by a harness that keeps
 	// per-slot state beside it.
 	CommonDir func() (string, error)
-	// Accounts are the configured Codex homes (work.codexAccounts); none
-	// means the default Codex home. Account is the one the slot ran under
-	// last, Load how many other codex slots hold each account.
+	// Accounts are the kind's configured homes (work.codexAccounts,
+	// work.opencodeAccounts); none means the default home. Account is the one
+	// the slot ran under last, Load how many other slots of the kind hold each.
 	Accounts []HomeAccount
 	Account  string
 	Load     map[string]int
 }
 
-// HomeAccount is one named CODEX_HOME of work.codexAccounts.
+// HomeAccount is one named account home of a kind: a CODEX_HOME of
+// work.codexAccounts, an OPENCODE_CONFIG_DIR of work.opencodeAccounts.
 type HomeAccount struct{ Name, Home string }
 
 // Setup is what a passed preflight leaves for the dispatch. A non-empty Home
@@ -264,6 +295,10 @@ type Harness interface {
 	// WorkAccounts reports whether work.accounts (Anthropic's) rotates the
 	// slot's account; a harness with its own account model says no.
 	WorkAccounts() bool
+	// RawPaste reports whether a brief pasted into the kind's pane must keep
+	// its line feeds as they are: tmux pastes a CR for each, which the TUI
+	// drops and the brief arrives as one line.
+	RawPaste() bool
 	// AccountEnv is the environment that selects the slot's account.
 	AccountEnv(a Account) []string
 	// Accounts is the kind's configured accounts and the config key they come
@@ -275,6 +310,10 @@ type Harness interface {
 	// LimitPhrases are the usage-limit messages the kind's session prints
 	// about itself, as case-insensitive regex sources.
 	LimitPhrases() []string
+	// PaneVocab is what the kind's pane says that no other kind's does. The
+	// classifier applies it to that kind's slots only: a worker of another kind
+	// that echoes the text (reading this repo's source) must not read as limited.
+	PaneVocab() PaneVocab
 	// Tiers is how the kind's round.tiers map is read.
 	Tiers() TierRule
 	// Configured is whether the project uses the kind at all.

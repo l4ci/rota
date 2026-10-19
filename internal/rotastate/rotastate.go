@@ -49,6 +49,10 @@ func SessionDir(commonDir string) string { return filepath.Join(Dir(commonDir), 
 // CodexDir holds the per-slot Codex state directories (the prompt key).
 func CodexDir(commonDir string) string { return filepath.Join(Dir(commonDir), "codex") }
 
+// OpencodeDir holds the per-slot OpenCode state directories (the prompt key
+// and the guard plugin).
+func OpencodeDir(commonDir string) string { return filepath.Join(Dir(commonDir), "opencode") }
+
 // MainCheckout is the main work tree of the repository a common dir belongs
 // to: its parent when the common dir is a .git directory. ok is false for a
 // bare repository or any other layout.

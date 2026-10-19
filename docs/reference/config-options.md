@@ -127,6 +127,8 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `work.operatorCommand` | string | unset |  | Command that starts the orchestrator. Empty builds claude --model <models.orchestrator> --permission-mode auto (with --continue for rota worker session ensure). |
 | `work.codexAccounts` | list | `[]` |  | Codex homes for Codex workers, as {name, codexHome} objects, the counterpart of work.accounts. Empty: the default Codex home. Machine-specific, so set it in config.local.json. |
 | `work.codexCommand` | string | unset |  | Command that starts a Codex worker session. Empty builds the default codex command, with --model from the tier when one is chosen; {model} receives it. |
+| `work.opencodeAccounts` | list | `[]` |  | OpenCode config dirs for OpenCode workers, as {name, configDir} objects, the counterpart of work.codexAccounts. Each becomes the slot's OPENCODE_CONFIG_DIR; the login stays shared. Empty: OpenCode's default config. Machine-specific, so set it in config.local.json. |
+| `work.opencodeCommand` | string | unset |  | Command that starts an OpenCode worker session. Empty builds the default opencode command, with --model from the tier when one is chosen; {model} receives it. |
 | `work.envSetup` | string | unset |  | Shell command rota worker pool init runs in each new slot worktree, for example npm ci. Empty: no setup. |
 | `work.portBase` | int | `20000` |  | First port of the range rota hands out to worker slots. A new slot takes the lowest range of portBlock ports from here that no other slot holds, exported as ROTA_PORT_BASE; a slot keeps its range until it is reaped or reclaimed. |
 | `work.portBlock` | int | `100` |  | Ports reserved per worker slot, so servers started by two slots never collide. A slot's block is exported as ROTA_PORT_BASE. |
@@ -263,13 +265,16 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `round.scopeOverlap` | enum | `"warn"` | `warn`, `block` | What a clash on declared scopes (the ## Touches section, else Subsystem) does to the overlap check. warn: reported, the item stays ready. block: fails the check like a shared path; --accept-overlap skips it. |
 | `round.adoptPattern` | string | unset |  | Glob over branch names (codex/*, claude/*). rota round reconcile reports a matching branch that no slot holds and that is not merged as unregistered-branch; --apply adopts those whose name carries an issue number. Empty turns the check off. |
 | `round.tier` | enum | `"standard"` | `light`, `standard`, `heavy` | Default worker tier for rota round assign: light for reading, standard for code and tests, heavy for hard reasoning. |
-| `round.workerKind` | enum | unset | `claude`, `codex` | Project default worker harness. Empty: the slot's recorded kind, else claude. --kind and an issue's harness: label beat it. |
+| `round.workerKind` | enum | unset | `claude`, `codex`, `opencode` | Project default worker harness. Empty: the slot's recorded kind, else claude. --kind and an issue's harness: label beat it. |
 | `round.tiers.claude.light` | string | `"haiku"` |  | Model a light-tier Claude worker starts with. |
 | `round.tiers.claude.standard` | string | unset |  | Model a standard-tier Claude worker starts with. Empty follows models.worker. |
 | `round.tiers.claude.heavy` | string | `"opus"` |  | Model a heavy-tier Claude worker starts with. |
 | `round.tiers.codex.light` | string | unset |  | Model a light-tier Codex worker starts with. Empty: Codex's own default; a configured kind must set all three tiers. |
 | `round.tiers.codex.standard` | string | unset |  | Model a standard-tier Codex worker starts with. Empty: Codex's own default; a configured kind must set all three tiers. |
 | `round.tiers.codex.heavy` | string | unset |  | Model a heavy-tier Codex worker starts with. Empty: Codex's own default; a configured kind must set all three tiers. |
+| `round.tiers.opencode.light` | string | unset |  | Model a light-tier OpenCode worker starts with, as a provider/model id from opencode models. Empty: OpenCode's own default; a configured kind must set all three tiers. |
+| `round.tiers.opencode.standard` | string | unset |  | Model a standard-tier OpenCode worker starts with, as a provider/model id from opencode models. Empty: OpenCode's own default; a configured kind must set all three tiers. |
+| `round.tiers.opencode.heavy` | string | unset |  | Model a heavy-tier OpenCode worker starts with, as a provider/model id from opencode models. Empty: OpenCode's own default; a configured kind must set all three tiers. |
 | `round.stallMinutes` | int | `30` |  | Minutes a slot with a live agent may show no commit, edit or state change before rota round reconcile reports it stalled. 0 turns the check off. |
 | `round.maxBounces` | int | `3` |  | How often rota worker gate may send one item's PR back before it parks the item as needs-human. 0 turns the cap off. |
 | `round.ledgerKeep` | int | `0` |  | Rounds of the round ledger (.rota/ledger.jsonl) to keep. A new round trims the entries of older rounds. 0 keeps everything. |
