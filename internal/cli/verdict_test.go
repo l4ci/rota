@@ -101,6 +101,21 @@ func TestVerdictReviewFlow(t *testing.T) {
 	}
 }
 
+// A light review records review-spec alone: that record is the branch's
+// combined verdict, in `verdict add` and in `verdict show`.
+func TestVerdictSpecOnlyIsCombined(t *testing.T) {
+	dir := verdictRepo(t)
+	_, out, _ := rotaIn(t, dir, "verdict", "add", "--kind", "review-spec", "--verdict", "CONCERNS", "--json")
+	if d := data(t, out); d["combined"] != "CONCERNS" {
+		t.Errorf("add: %v", d)
+	}
+	_, out, _ = rotaIn(t, dir, "verdict", "show", "--json")
+	recs := data(t, out)["records"].([]any)
+	if len(recs) != 1 || recs[0].(map[string]any)["combined"] != "CONCERNS" {
+		t.Errorf("show: %v", recs)
+	}
+}
+
 func TestVerdictRouteMissingAndUsage(t *testing.T) {
 	dir := verdictRepo(t)
 	if code, _, _ := rotaIn(t, dir, "verdict", "route", "--for", "ship-qa"); code != 3 {

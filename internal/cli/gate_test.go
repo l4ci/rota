@@ -542,7 +542,7 @@ func TestWorkerGateAndTrainRefuseFailVerdict(t *testing.T) {
 
 // ship.review is applied by the gate through the CLI: a default (full) policy
 // refuses a branch without the Spec and Standards verdicts, light needs the
-// Standards one, and the merge lands once they are recorded.
+// Spec one, and the merge lands once they are recorded.
 func TestWorkerGateAppliesReviewDepth(t *testing.T) {
 	dir := workerProject(t, `{"test":{"full":["test -f feature.txt"]}}`)
 	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")

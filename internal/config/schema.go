@@ -312,7 +312,7 @@ var Prompts = []Prompt{
 	}},
 	{Key: "ship.review", Title: "How deep a review before shipping?", Help: map[string]string{
 		"full":  "run /rota-review",
-		"light": "Standards reviewer only",
+		"light": "Spec reviewer only",
 		"none":  "skip the review",
 	}},
 	{Key: "ship.qa", Title: "Run QA before shipping?", Help: map[string]string{

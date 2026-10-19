@@ -353,10 +353,15 @@ func appendCapped(list []Record, r Record) []Record {
 
 // AddBranch appends r to a branch's list. A review-quality record gets its
 // combined verdict first: the worst of r and the branch's previous record
-// when that is a review-spec at the same sha, else r's own verdict.
+// when that is a review-spec at the same sha, else r's own verdict. A
+// review-spec record is its own combined verdict, the branch's review verdict
+// when the Standards axis was not run (light depth).
 func AddBranch(root, key string, r Record) (Record, error) {
 	err := update(root, func(s *Store) {
 		list := s.Branches[key]
+		if r.Kind == ReviewSpec {
+			r.Combined = r.Verdict
+		}
 		if r.Kind == ReviewQuality {
 			r.Combined = r.Verdict
 			if n := len(list); n > 0 && list[n-1].Kind == ReviewSpec && list[n-1].Sha == r.Sha {
