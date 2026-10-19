@@ -121,11 +121,10 @@ var (
 
 // SpawnOpts describes a slot session to create.
 type SpawnOpts struct {
-	Slot, Session, Cwd, ConfigDir, Launch string
-	// CodexHome is a codex launch's CODEX_HOME (herdr passes it to the tab).
-	CodexHome string
+	Slot, Session, Cwd, Launch string
 	// Env is KEY=VALUE pairs the agent starts with (herdr: tab create --env;
-	// tmux: a prefix on the launch line).
+	// tmux: a prefix on the launch line). It carries the slot's account
+	// variable too, which the kind's harness names (AccountEnv).
 	Env         []string
 	BootTimeout int // seconds
 	// LinkWorkspace (herdr only): open the worktree as a workspace linked to the

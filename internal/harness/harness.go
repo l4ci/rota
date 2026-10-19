@@ -228,15 +228,16 @@ type PreflightOpts struct {
 	// CommonDir is the git common dir, asked for only by a harness that keeps
 	// per-slot state beside it.
 	CommonDir func() (string, error)
-	// Accounts are the configured Codex homes (work.codexAccounts); none
-	// means the default Codex home. Account is the one the slot ran under
-	// last, Load how many other codex slots hold each account.
+	// Accounts are the kind's configured homes (work.codexAccounts,
+	// work.opencodeAccounts); none means the default home. Account is the one
+	// the slot ran under last, Load how many other slots of the kind hold each.
 	Accounts []HomeAccount
 	Account  string
 	Load     map[string]int
 }
 
-// HomeAccount is one named CODEX_HOME of work.codexAccounts.
+// HomeAccount is one named account home of a kind: a CODEX_HOME of
+// work.codexAccounts, an OPENCODE_CONFIG_DIR of work.opencodeAccounts.
 type HomeAccount struct{ Name, Home string }
 
 // Setup is what a passed preflight leaves for the dispatch. A non-empty Home

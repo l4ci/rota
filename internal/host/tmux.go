@@ -98,9 +98,6 @@ func looksBooted(p string) bool {
 func (t *tmux) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	handle := o.Session + ":" + o.Slot
 	launch := o.Launch
-	if o.ConfigDir != "" {
-		launch = "CLAUDE_CONFIG_DIR=" + o.ConfigDir + " " + launch
-	}
 	if len(o.Env) > 0 {
 		var pre []string
 		for _, e := range o.Env {
