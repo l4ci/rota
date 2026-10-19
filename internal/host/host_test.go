@@ -217,14 +217,14 @@ func TestTmuxSpawn(t *testing.T) {
 	}}
 	c := &clock{}
 	h := New("tmux", deps(f, nil, c))
-	got, err := h.Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", ConfigDir: "/acct", Launch: "claude --model sonnet", BootTimeout: 10})
+	got, err := h.Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Env: []string{"CLAUDE_CONFIG_DIR=/acct"}, Launch: "claude --model sonnet", BootTimeout: 10})
 	if err != nil || got != "rota:w1" {
 		t.Fatalf("Spawn = %q, %v", got, err)
 	}
 	for _, want := range []string{
 		"tmux new-session -d -s rota -c /wt",
 		"tmux new-window -d -t rota -n w1 -c /wt",
-		"tmux send-keys -t rota:w1 CLAUDE_CONFIG_DIR=/acct claude --model sonnet C-m",
+		"tmux send-keys -t rota:w1 CLAUDE_CONFIG_DIR='/acct' claude --model sonnet C-m",
 	} {
 		if !strings.Contains(f.log(), want) {
 			t.Errorf("missing call %q in\n%s", want, f.log())
@@ -437,7 +437,7 @@ func TestHerdrSpawn(t *testing.T) {
 		return Result{Stdout: agentJSON("idle")}
 	}}
 	h := New("herdr", deps(f, herdrEnv, &clock{}))
-	got, err := h.Spawn(bg, SpawnOpts{Slot: "w1", Cwd: "/wt", ConfigDir: "/acct/one", Launch: "FOO=1 claude --model sonnet --dangerously-skip-permissions", BootTimeout: 60})
+	got, err := h.Spawn(bg, SpawnOpts{Slot: "w1", Cwd: "/wt", Env: []string{"CLAUDE_CONFIG_DIR=/acct/one"}, Launch: "FOO=1 claude --model sonnet --dangerously-skip-permissions", BootTimeout: 60})
 	if err != nil || got != "w9:t7" {
 		t.Fatalf("Spawn = %q, %v", got, err)
 	}
@@ -468,7 +468,7 @@ func TestHerdrSpawnCodex(t *testing.T) {
 		return Result{Stdout: agentJSON("idle")}
 	}}
 	h := New("herdr", deps(f, herdrEnv, &clock{}))
-	got, err := h.Spawn(bg, SpawnOpts{Slot: "w1", Cwd: "/wt", ConfigDir: "/acct/one", CodexHome: "/cd/rota/codex/w1",
+	got, err := h.Spawn(bg, SpawnOpts{Slot: "w1", Cwd: "/wt", Env: []string{"CODEX_HOME=/cd/rota/codex/w1"},
 		Launch: "codex --model gpt-x --dangerously-bypass-approvals-and-sandbox --no-daemon", BootTimeout: 60})
 	if err != nil || got != "w9:t7" {
 		t.Fatalf("Spawn = %q, %v", got, err)
@@ -482,17 +482,27 @@ func TestHerdrSpawnCodex(t *testing.T) {
 	}
 }
 
-// A claude launch ignores CodexHome, so the claude path is unchanged.
-func TestHerdrSpawnClaudeIgnoresCodexHome(t *testing.T) {
-	f := &fake{handler: func(_ string, a []string) Result {
-		if a[0] == "tab" {
-			return Result{Stdout: tabCreated}
+// The slot's account variable is whatever the dispatch put in Env: a tmux
+// spawn prefixes the launch line with it, whichever kind's it is.
+func TestTmuxSpawnCarriesAccountEnv(t *testing.T) {
+	for _, env := range []string{"OPENCODE_CONFIG_DIR", "CODEX_HOME", "CLAUDE_CONFIG_DIR"} {
+		f := &fake{handler: func(_ string, a []string) Result {
+			if a[0] == "capture-pane" {
+				return Result{Stdout: "$ "}
+			}
+			return Result{}
+		}}
+		h := New("tmux", deps(f, nil, &clock{}))
+		_, _ = h.Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Env: []string{env + "=/acct", "ROTA_SLOT=w1"}, Launch: "opencode", BootTimeout: 1})
+		want := "tmux send-keys -t rota:w1 " + env + "='/acct' ROTA_SLOT='w1' opencode C-m"
+		if !strings.Contains(f.log(), want) {
+			t.Errorf("%s: missing %q in\n%s", env, want, f.log())
 		}
-		return Result{Stdout: agentJSON("idle")}
-	}}
-	_, err := New("herdr", deps(f, herdrEnv, &clock{})).Spawn(bg, SpawnOpts{Slot: "w1", Cwd: "/wt", ConfigDir: "/acct", CodexHome: "/h", Launch: "claude", BootTimeout: 5})
-	if err != nil || strings.Contains(f.log(), "CODEX_HOME") || !strings.Contains(f.calls[0], "--env CLAUDE_CONFIG_DIR=/acct") {
-		t.Errorf("%v\n%s", err, f.log())
+		for _, other := range []string{"OPENCODE_CONFIG_DIR", "CODEX_HOME", "CLAUDE_CONFIG_DIR"} {
+			if other != env && strings.Contains(f.log(), other) {
+				t.Errorf("%s spawn carries %s:\n%s", env, other, f.log())
+			}
+		}
 	}
 }
 

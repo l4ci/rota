@@ -7,6 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -28,9 +29,9 @@ type hostFake struct {
 	sent    string
 	sents   []string // every brief sent, in order
 	// name is the host's name; "" is tmux.
-	name                 host.Kind
-	codexHome, configDir string
-	swept                []string // worktrees whose shell panes were swept
+	name  host.Kind
+	env   []string // the Env of the last spawn
+	swept []string // worktrees whose shell panes were swept
 }
 
 func (h *hostFake) Kind() host.Kind {
@@ -47,7 +48,7 @@ func (h *hostFake) Where() string                   { return "main" }
 func (h *hostFake) Spawn(_ context.Context, o host.SpawnOpts) (string, error) {
 	h.spawned = append(h.spawned, o.Slot+" "+o.Cwd)
 	h.launch = o.Launch
-	h.codexHome, h.configDir = o.CodexHome, o.ConfigDir
+	h.env = o.Env
 	return "w1:t1", nil
 }
 func (h *hostFake) Send(_ context.Context, slot, handle, file string) error {
@@ -533,8 +534,10 @@ func TestAssignCodexResolvesAndStarts(t *testing.T) {
 	if !strings.HasPrefix(f.host.launch, "codex -c 'projects.") || !strings.Contains(f.host.launch, "check_for_update_on_startup=false -c features.hooks=true ") || !strings.Contains(f.host.launch, " --model c-s ") || strings.Contains(f.host.launch, "{model}") {
 		t.Errorf("launch = %q", f.host.launch)
 	}
-	if f.host.codexHome != "" || f.host.configDir != "" {
-		t.Errorf("the default home sets no CODEX_HOME: home %q configDir %q", f.host.codexHome, f.host.configDir)
+	for _, e := range f.host.env {
+		if strings.HasPrefix(e, "CODEX_HOME=") || strings.HasPrefix(e, "CLAUDE_CONFIG_DIR=") {
+			t.Errorf("the default home sets no account env: %q", e)
+		}
 	}
 	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.Kind() != harness.Codex {
 		t.Errorf("the kind is recorded: %v", s)
@@ -665,8 +668,8 @@ func TestAssignCodexSkipsAccounts(t *testing.T) {
 		return nil, "fake: no network in tests"
 	}})
 	res, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex" })
-	if err != nil || !res.Dispatched || res.Account != "" || f.host.configDir != "" || fetched != 0 {
-		t.Fatalf("%v %+v configDir=%q meter calls=%d", err, res, f.host.configDir, fetched)
+	if err != nil || !res.Dispatched || res.Account != "" || slices.ContainsFunc(f.host.env, func(e string) bool { return strings.HasPrefix(e, "CLAUDE_CONFIG_DIR=") }) || fetched != 0 {
+		t.Fatalf("%v %+v env=%q meter calls=%d", err, res, f.host.env, fetched)
 	}
 }
 

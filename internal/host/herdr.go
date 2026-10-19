@@ -263,13 +263,8 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 		args = append(args, "--env", e)
 	}
 	// Account selection must happen at tab creation: agent start runs the
-	// binary directly and ignores shell aliases or wrappers. What selects the
-	// account is the harness's own business: a codex slot's CODEX_HOME, a
-	// claude slot's config dir.
-	hz := harness.Resolve(kind)
-	for _, e := range hz.AccountEnv(harness.Account{ConfigDir: o.ConfigDir, Home: o.CodexHome}) {
-		args = append(args, "--env", e)
-	}
+	// binary directly and ignores shell aliases or wrappers. The account's
+	// variable is already in o.Env (the dispatch asked the kind's harness).
 	for _, e := range o.Env {
 		args = append(args, "--env", e)
 	}
