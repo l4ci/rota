@@ -64,5 +64,3 @@ func umbrellaFlag(rota string) any {
 	v, _ := config.Lookup(config.Load(filepath.Join(rota, "config.json")), "umbrella.enabled")
 	return v
 }
-
-// truthy is Python's truth value, which is what the old helper tested.

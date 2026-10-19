@@ -295,5 +295,3 @@ func RemoveHandoff(root, branch, repo string) (removed bool, err error) {
 	}
 	return true, nil
 }
-
-// ---- loop stamp ---------------------------------------------------------------
