@@ -2,7 +2,7 @@
 
 Loaded by `SKILL.md` Step 3 when the verdict does not route `continue`, or when the review depth is `none`.
 
-Depth `none` (`ship.review: none`, legacy `false`, or a policy label mapped to `none`) skips Step 3 and `REVIEW_CHOICE` stays unset. A `light` review records only the Standards verdict; route it the same way.
+Depth `none` (`ship.review: none`, legacy `false`, or a policy label mapped to `none`) skips Step 3 and `REVIEW_CHOICE` stays unset. A `light` review records only the Spec verdict (only the Standards verdict when the branch references no issue); route it the same way.
 
 The rubric `rota-review` carries is `references/silent-failure-hunter.md`; `SILENT-FAIL` flags arrive as CONCERNS. The gate is a loop: review, fix via `/rota-work` on a stop, rerun, and go on only once the verdict routes `continue`, `surface` or an accepted `ask`. Act on `data.next`:
 
