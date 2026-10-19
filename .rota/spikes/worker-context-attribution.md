@@ -22,13 +22,13 @@ Which source fills a Claude worker's context most (brief, KNOWLEDGE, subagent re
 1. Per assistant turn (deduplicated by `message.id`), `usage` gives the exact context: `input + cache_creation + cache_read`; `output_tokens` is exact too.
 2. The first turn's context is the preamble. It is split by the logged first-turn attachments (`skill_listing`, `instructions` = CLAUDE.md + AGENTS.md, `deferred_tools_delta`, `agent_listing_delta`, `hook_additional_context`) at 3.6 chars/token. The remainder is the Claude Code system prompt and tool schemas, which are not in the log. The first user message is the brief.
 3. Everything after turn 1 is split by source from the log entries: `tool_result` classified by the originating `tool_use` (Agent/Task = subagent report; Skill or a Read/cat/sed of `skills/`, `references/`, `SKILL.md` = skill or reference text; any command touching `rota knowledge|decisions|glossary` or KNOWLEDGE.md = KNOWLEDGE; otherwise the tool name), assistant text, thinking and tool_use input = model prose. Characters are scaled so that the shares sum to the session's measured growth (last context + last output − first context).
-4. Two views. **Entered**: tokens that enter the context once. **Cache-read**: each turn's `cache_read` split across sources by their share of that turn's context. This is the view that matches the 95.6% cache-read share and is the one that prices re-reading.
+4. Two views. **Entered**: tokens that enter the context once. **Cache-read**: each turn's `cache_read` split across sources by their share of that turn's context. In the 7 worker sessions the logged usage totals are 11.28M cache-read, 0.43M uncached input plus cache write, 0.07M output: 95.7% / 3.7% / 0.6%, so the cache-read view is the one that matches where tokens go. (The 95.6% / 3.8% / 0.6% in the issue body is the same split over 14 days and 894 sessions.)
 
 Limits: chars/3.6 is an estimate (error is spread across sources, preamble parts are the least exact); the remainder bucket depends on that estimate; one round, three slots, 145 turns. The script was a scratch file, not committed; the method above reproduces it.
 
 ## Findings
 
-Share of cache-read tokens (11.28M across the 7 worker sessions); entered-token share in brackets:
+Share of cache-read tokens (11.28M across the 7 worker sessions). The `entered` column is tokens that enter context once (first-turn context plus everything added later plus output); in the 7 sessions it is 638k, of which the preamble is 380k (60%):
 
 | session | turns | entered | cache-read | built-in prompt+tools | skill, deferred-tool, agent listings | CLAUDE+AGENTS+hook | brief | KNOWLEDGE | subagent | skill/ref text | Bash | Read/Grep | prose |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -41,13 +41,13 @@ Share of cache-read tokens (11.28M across the 7 worker sessions); entered-token 
 | kit 8a7c6735 | 16 | 81k | 1099k | 45% | 20% | 6% | 1% | 0 | 0 | 12% | 12% | 0 | 3% |
 | **7 sessions** | 145 | 638k | 11280k | **43%** | **18%** | 6% | 1% | 1% | 0 | **12%** | **13%** | 1% | 5% |
 
-(Rows do not sum to 100: tool results other than Bash/Read/Grep and later user text, about 1 to 8%, are left out. The 14 short sessions add 225k entered and 486k cache-read, 52% built-in, and are not in the totals.)
+(Listings = skill listing 10.3% + deferred-tool list 6.4% + agent list 1.3% = 17.97% of reads; the per-part figures round to 17. Rows do not sum to 100: tool results other than Bash/Read/Grep and later user text, about 1 to 8%, are left out. The 14 short sessions add 225k entered and 486k cache-read, 52% built-in, and are not in the totals.)
 
-- **Largest source: the fixed preamble.** 76% of the tokens that ever enter a worker's context are the first turn (about 52 to 58k tokens), and 66% of cache-read is re-reading it. Sessions are short (13 to 40 turns) and growth after turn 1 is only 20 to 30k tokens, so the preamble is re-read on every turn.
-- **Inside the preamble, ~30k tokens (43% of reads) is Claude Code's own system prompt and tool schemas; rota cannot trim it.** The part a worker launch can influence is the user-global skill listing (10% of reads, 30 kB of text), deferred-tool names (6%), agent list (1%): 18% of reads in total. CLAUDE.md + AGENTS.md + the SessionStart hook is another 6%.
+- **Largest source: the fixed preamble.** The preamble is 60% of the tokens that enter a worker's context (380k of 638k entered across 7 sessions, about 52 to 58k per session; an earlier draft said 76%, which came from a growth miscalculation) and 66% of cache-read is re-reading it. Sessions are short (13 to 40 turns) and growth after turn 1 is only 20 to 30k tokens, so the preamble is re-read on every turn.
+- **Inside the preamble, ~30k tokens (43% of reads) is Claude Code's own system prompt and tool schemas; rota cannot trim it.** The part a worker launch could influence, if the harness can scope them per worker (unverified), is the user-global skill listing (10% of reads, 30 kB of text), deferred-tool names (6%), agent list (1%): 18% of reads in total. CLAUDE.md + AGENTS.md + the SessionStart hook is another 6%.
 - **Largest source rota's own text and tools control: Bash output (13%) and skill/reference text (12%).** Bash output is source reading (`sed -n`, `grep`, `gh issue view`), which is the work. Skill/reference text is the contract and `/rota-*` skill reads, 9 to 15% in every session.
 - **The suspected trims are small.** Brief 0.7%, KNOWLEDGE and DECISIONS query output 1.3% (one worker pulled 13.8k chars once), subagent reports 0.04% (none were used, despite the contract's delegation rule), model prose 4.9% of reads. A caveman-style output rule can only touch the last number, so its token saving is under 5% of reads even if prose halves.
-- Output tokens are 0.6% by count but the model's prose is also what the cost-weighted 18% output share pays for. This spike did not measure price, so the cost ranking of prose versus the 18% listings is unmeasured.
+- Output is 0.6% of tokens by count. This spike did not measure price, so the cost ranking of model prose versus the listings is unmeasured.
 
 ## Decision
 
