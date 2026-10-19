@@ -48,11 +48,16 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 }
 
 // recordBounce counts one bounce unless the item is already at max (0 = no
-// cap). capped reports the refusal; n is then the unchanged count.
+// cap). capped reports the refusal; n is then the unchanged count. A slot that
+// is not in the pool is refused before anything is written.
 func recordBounce(env worker.Env, root, issue, slot, head string, max int) (n int, capped bool, err error) {
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
 		return 0, false, err
+	}
+	if slot != "" && reg.Slot(slot) == nil {
+		return 0, false, &Error{Exit: ExitRefused, Message: fmt.Sprintf("unknown slot %q: not in the worker pool", slot),
+			Hint: "see `rota worker pool list` for the slot names"}
 	}
 	if n = reg.Bounces(issue); max > 0 && n >= max {
 		return n, true, nil
