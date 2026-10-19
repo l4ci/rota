@@ -95,7 +95,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.ForgeProvider, in.IssueSource, in.SourceProblem = doctorSourceInput(cfg)
 	in.JiraProject, in.IssuesConnection = strings.TrimSpace(str("issues.jira.project")), strings.TrimSpace(str("issues.connection"))
 	in.LinearTeam = strings.TrimSpace(str("issues.linear.team"))
-	in.Kinds = doctorKinds(cfg, str)
+	in.Kinds = doctorKinds(cfg)
 	for _, a := range config.Accounts(cfg) {
 		if a.Name != "" {
 			in.Accounts = append(in.Accounts, a)
@@ -183,7 +183,7 @@ func doctorExec(run proc.Runner) doctor.Exec {
 
 // doctorKinds is what each worker harness with a doctor check has configured:
 // its accounts as homes (else the default home) and whether a tier map is set.
-func doctorKinds(cfg any, str func(string) string) map[string]doctor.KindInput {
+func doctorKinds(cfg any) map[string]doctor.KindInput {
 	out := map[string]doctor.KindInput{}
 	for _, k := range harness.Kinds() {
 		h := harness.Resolve(k)
@@ -200,11 +200,7 @@ func doctorKinds(cfg any, str func(string) string) map[string]doctor.KindInput {
 		if len(in.Homes) == 0 {
 			in.Homes = []doctor.Home{{}}
 		}
-		for _, t := range []string{"light", "standard", "heavy"} {
-			if strings.TrimSpace(str("round.tiers."+k+"."+t)) != "" {
-				in.Tiers = true
-			}
-		}
+		in.Tiers = harness.TierMapSet(cfg, k)
 		out[k] = in
 	}
 	return out
