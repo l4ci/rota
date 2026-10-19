@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -125,7 +126,7 @@ func TestReviewPolicyPathsAndDriftShape(t *testing.T) {
 
 func TestScopeDriftSupportFiles(t *testing.T) {
 	const cfg = `{"ship":{"review":{"default":"full","lightBelow":50}}}`
-	issue := "## Files\n\n- `internal/config/reviewdepth.go`\n- `internal/gate`\n"
+	issue := "## Files\n\n- `internal/config/reviewdepth.go`\n- `internal/gate`\n- `skills`\n"
 	for _, c := range []struct {
 		name  string
 		cfg   string
@@ -137,6 +138,9 @@ func TestScopeDriftSupportFiles(t *testing.T) {
 		{"non-test file beside a declared file drifts", cfg, []string{"internal/config/other.go"}, "internal/config/other.go"},
 		{"test under a declared directory", cfg, []string{"internal/gate/sub/x_test.go"}, ""},
 		{"declared bare directory covers its files", cfg, []string{"internal/gate/gate.go"}, ""},
+		{"bare declared directory excuses no sibling test", cfg, []string{"internal/foo_test.go"}, "internal/foo_test.go"},
+		{"top-level declared directory excuses no root test", "{\"ship\":{\"review\":{\"lightBelow\":50}}}", []string{"plugin_test.go"}, "plugin_test.go"},
+		{"test sections are support", cfg, []string{"test/sections/146_gate_review_missing.sh"}, ""},
 		{"docs are support", cfg, []string{"docs/usage/a.md", "docs/reference/config-options.md"}, ""},
 		{"frozen records are support", cfg, []string{"cmd/rota/testdata/frozen/a.json"}, ""},
 		{"golden files are support", cfg, []string{"internal/cli/testdata/golden/a.txt"}, ""},
@@ -170,5 +174,30 @@ func TestSupportPathsShape(t *testing.T) {
 		if _, err := ReviewPolicyOf(decode(t, cfg)); (err == nil) != ok {
 			t.Errorf("%s: err = %v, want ok=%v", cfg, err, ok)
 		}
+	}
+}
+
+// TestScopeDriftIssue898 applies the rule to the final diff of #916 (issue
+// #898, git diff 230f07cd...f94ad675) and pins what drifts.
+func TestScopeDriftIssue898(t *testing.T) {
+	issue := "## Touches\n\n- `ship.review`\n- `rota worker gate`\n- `/rota-review` Step 7\n\n## Pointers\n\n- skills/rota-review/SKILL.md (Step 7, Step 8)\n- internal/gate (review-missing)\n- internal/verdict (combined)\n"
+	files := []string{
+		"cmd/rota/testdata/frozen/config.jsonl", "docs/contributing/contract/verdicts.md",
+		"docs/reference/config-options.md", "docs/usage/configuration.md", "docs/usage/parallel-rounds.md",
+		"docs/usage/review-and-ship.md", "internal/cli/gate_test.go", "internal/cli/verdict_test.go",
+		"internal/config/keys.go", "internal/config/reviewdepth.go", "internal/config/schema.go",
+		"internal/verdict/verdict.go", "internal/verdict/verdict_test.go", "internal/worker/gate.go",
+		"internal/worker/gate_test.go", "skills/rota-orchestrate/SKILL.md", "skills/rota-review/SKILL.md",
+		"skills/rota-ship/SKILL.md", "skills/rota-ship/review-gate.md", "test/sections/146_gate_review_missing.sh",
+	}
+	want := []string{
+		"internal/cli/gate_test.go", "internal/cli/verdict_test.go", "internal/config/keys.go",
+		"internal/config/reviewdepth.go", "internal/config/schema.go", "internal/worker/gate.go",
+		"internal/worker/gate_test.go", "skills/rota-orchestrate/SKILL.md", "skills/rota-ship/SKILL.md",
+		"skills/rota-ship/review-gate.md",
+	}
+	got := scopeDrift(issue, files, DefaultSupportPaths)
+	if !slices.Equal(got, want) {
+		t.Errorf("drift = %v, want %v", got, want)
 	}
 }

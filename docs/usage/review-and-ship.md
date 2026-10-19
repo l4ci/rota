@@ -91,7 +91,7 @@ See [configuration](configuration.md) for the full `work` block.
 | `light` | Only the Standards reviewer runs. |
 | `none` | Skips the review pass. Integration runs immediately. Use when you have already reviewed manually and want to skip the second pass. |
 
-`true` and `false` still work as `full` and `none`. An object picks the depth by diff size, label and path (for example `risk:high` forces `full`), and lifts a `light` review to `full` on a `Door: one-way` PR, a diff outside the issue's declared files or a risky path. Support files do not count as outside: tests beside a declared file, docs, frozen and golden records and the generated option reference (`ship.review.supportPaths` sets the list); see [configuration](configuration.md#shipreview). `/rota-ship` prints the chosen depth and why.
+`true` and `false` still work as `full` and `none`. An object picks the depth by diff size, label and path (for example `risk:high` forces `full`), and lifts a `light` review to `full` on a `Door: one-way` PR, a diff outside the issue's declared files or a risky path. Support files do not count as outside: tests beside a declared file, docs (the generated option reference included), frozen and golden records and smoke sections (`ship.review.supportPaths` sets the list); see [configuration](configuration.md#shipreview). `/rota-ship` prints the chosen depth and why.
 
 The review gate is independent of the autonomy level. A `FAIL` verdict still halts the chain until you fix the branch.
 
