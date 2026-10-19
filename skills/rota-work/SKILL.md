@@ -108,7 +108,7 @@ The main session stays at the repo root; subagents `cd` into their assigned dire
 
 ## Step 6 — Dispatch Subagents
 
-Dispatch one `standard`-tier subagent per independent task, all in one message; don't announce. Subagents write files and never stage or commit (no `.git/index` races). Fill the brief from [`dispatch-brief.md`](dispatch-brief.md). Umbrella: read *Step 6* in `umbrella-and-issue-mode.md`.
+Dispatch one `standard`-tier subagent per independent task, all in one message; don't announce. In a plan with two or more tasks, T1 (the tracer) is its own first wave: dispatch and verify it alone (Step 7) before any other task starts. Subagents write files and never stage or commit (no `.git/index` races). Fill the brief from [`dispatch-brief.md`](dispatch-brief.md). Umbrella: read *Step 6* in `umbrella-and-issue-mode.md`.
 
 ## Step 7 — Verify Each Completion
 
@@ -122,6 +122,8 @@ Verify silently. Trust the diff, not the subagent's narrative.
 6. When `test.fast` is set, run `rota test run fast`; a FAIL is a FAIL. Use it as the PASS proof `--check`.
 
 **PASS** → move on. **FAIL** → dispatch a fix agent and re-verify; repeat until PASS, and surface only persistent failures. Commit (Step 7.5) only on PASS.
+
+**Tracer stop.** When the plan's T1 (the tracer) fails its Verify, or its RED run does not turn green, dispatch no later task and report the failure to the user. Do not build on it. One-task plans have no tracer.
 
 **Record proof** (facts about what ran, not acceptance). Per task:
 
