@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"regexp"
@@ -464,38 +465,49 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Failed("%v; run rota config check", err)
 		}
-		changed, err := git.Repo{Dir: t.Dir}.ChangedLines(c.Context(), t.Base+"..."+t.Branch)
-		if err != nil {
-			return Result{}, diffErr(err)
-		}
-		var labels []string
+		src := worker.ReviewSources{Policy: policy, Git: git.Exec, Dir: t.Dir, Span: t.Base + "..." + t.Branch}
 		for _, l := range strings.Split(*labelsFlag, ",") {
 			if l = strings.TrimSpace(l); l != "" {
-				labels = append(labels, l)
+				src.Labels = append(src.Labels, l)
 			}
 		}
-		// The issue behind a `<agent>/<issue>-<slug>` branch is read for its labels
-		// only when the policy has a label to match, as the worker gate does, so a
-		// caller that omits --labels still gets a risk:high override.
-		if n, ok := worker.BranchIssue(t.Branch); ok && len(policy.Labels) > 0 {
+		// The issue behind a `<agent>/<issue>-<slug>` branch is read, as the worker
+		// gate does, so a caller that omits --labels still gets a risk:high override
+		// and a diff outside the issue's files is seen.
+		if n, ok := worker.BranchIssue(t.Branch); ok {
 			it, err := c.deps().issuesOrNone(c.Context(), cfg, root)
 			if err != nil {
 				return Result{}, trackerErr(err)
 			}
-			if _, none := it.(tracker.NoIssues); !none { // the file source has no issue labels to read
-				is, err := it.Get(c.Context(), n, false)
-				if err != nil {
-					return Result{}, Failed("could not read %s for its labels to pick the review depth: %v", n.Ref(), err)
-				}
-				for _, l := range is.Labels {
-					if !slices.Contains(labels, l) {
-						labels = append(labels, l)
-					}
-				}
+			if _, none := it.(tracker.NoIssues); !none { // the file source has no issues to read
+				src.Issue, src.Issues = n, it
 			}
 		}
-		depth, why := policy.Resolve(changed, labels)
-		data := gitObj("branch", t.Branch, "base", t.Base, "depth", string(depth), "why", why, "changedLines", changed, "labels", labels)
+		// The branch's open PR, when the forge has one, carries the Door line.
+		if f, err := c.deps().forge(c.Context(), cfg, "", root); err == nil {
+			src.PRBody = func() (string, error) {
+				prs, err := f.OpenPRs(c.Context())
+				if err != nil {
+					return "", err
+				}
+				for _, pr := range prs {
+					if pr.Branch == t.Branch {
+						return pr.Body, nil
+					}
+				}
+				return "", nil
+			}
+		}
+		res, err := worker.ResolveReviewDepth(c.Context(), src)
+		if err != nil {
+			var de *worker.ReviewDepthError
+			if errors.As(err, &de) && de.Stage == "diff" {
+				return Result{}, diffErr(de.Err)
+			}
+			return Result{}, Failed("%v", err)
+		}
+		depth, why := res.Depth, res.Why
+		data := gitObj("branch", t.Branch, "base", t.Base, "depth", string(depth), "signal", res.Signal, "why", why, "changedLines", res.Changed, "labels", res.Labels)
 		return Result{Data: data, Text: fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", t.Branch, depth, why)}, nil
 	}
 }

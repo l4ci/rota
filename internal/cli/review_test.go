@@ -682,10 +682,40 @@ func TestReviewDepthReadsTheIssueLabels(t *testing.T) {
 	if o.code == 0 || !strings.Contains(o.stdout+o.stderr, "could not read #6 for its labels") {
 		t.Errorf("label read failure: %d %s %s", o.code, o.stdout, o.stderr)
 	}
-	policy("")
+	policy(`,"scopeDrift":false`)
 	reads = 0
-	if _, d := run(); d["depth"] != "light" || reads != 0 {
-		t.Errorf("no labels map: the issue is not read: %v (%d reads)", d, reads)
+	if _, d := run(); d["depth"] != "light" || d["signal"] != "size" || reads != 0 {
+		t.Errorf("no labels map, scope drift off: the issue is not read: %v (%d reads)", d, reads)
+	}
+}
+
+// AC-3/AC-4: a diff outside the issue's ## Files resolves full, the verb names
+// the signal and the files, and scopeDrift:false turns the rule off.
+func TestReviewDepthScopeDrift(t *testing.T) {
+	root := newRepo(t, t.TempDir(), "proj", "main")
+	gitT(t, root, "checkout", "-q", "-b", "nia/6-small")
+	write(t, filepath.Join(root, "x.txt"), "x\n")
+	gitT(t, root, "add", "x.txt")
+	gitT(t, root, "commit", "-q", "-m", "small change")
+	deps := testDeps()
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
+		if len(args) > 2 && args[0] == "issue" && args[1] == "view" && args[2] == "6" {
+			return []byte(`{"number":6,"title":"t","state":"OPEN","body":"## Files\n\n- y.txt\n"}`), nil, 0, nil
+		}
+		return []byte("[]"), nil, 0, nil
+	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	run := func(policy string) map[string]any {
+		write(t, filepath.Join(root, ".rota", "config.json"),
+			`{"forge": {"provider": "github"}, "issues": {"source": "github"},"ship":{"review":{"default":"full","lightBelow":100000`+policy+`}}}`)
+		o := trRunWith(t, deps, root, "", "review", "depth", "nia/6-small", "--json")
+		d, _ := envelope(t, o.stdout)["data"].(map[string]any)
+		return d
+	}
+	if d := run(""); d["depth"] != "full" || d["signal"] != "scope-drift" || !strings.Contains(d["why"].(string), "x.txt") {
+		t.Errorf("drift: %v", d)
+	}
+	if d := run(`,"scopeDrift":false`); d["depth"] != "light" || d["signal"] != "size" {
+		t.Errorf("scopeDrift false: %v", d)
 	}
 }
 

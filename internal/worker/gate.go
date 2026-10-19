@@ -806,21 +806,18 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	if err != nil {
 		return g.broke(fmt.Sprintf("%v; run rota config check", err))
 	}
-	changed, err := git.ChangedLines(g.ctx, g.e.Git, g.root, g.baseRef+"..."+g.headRef)
+	src := ReviewSources{Policy: policy, Git: g.e.Git, Dir: g.root, Span: g.baseRef + "..." + g.headRef}
+	if key, ok := tracker.ParseKey(g.target.Issue); ok && g.issues != nil {
+		src.Issue, src.Issues = key, g.issues
+	}
+	if g.pr != "" {
+		src.PRBody = g.prBody
+	}
+	res, err := ResolveReviewDepth(g.ctx, src)
 	if err != nil {
-		return g.broke(fmt.Sprintf("could not diff %s against %s to pick the review depth", g.headRef, g.baseRef))
+		return g.broke(err.Error())
 	}
-	var labels []string
-	issue := g.target.Issue
-	// the issue is read only when the policy has a label to match it against
-	if key, ok := tracker.ParseKey(issue); ok && len(policy.Labels) > 0 && g.issues != nil {
-		is, err := g.issues.Get(g.ctx, key, false)
-		if err != nil {
-			return g.broke(fmt.Sprintf("could not read %s for its labels to pick the review depth: %v", key.Ref(), err))
-		}
-		labels = is.Labels
-	}
-	depth, why := policy.Resolve(changed, labels)
+	depth, why := res.Depth, res.Why
 	g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", g.o.Slot, depth, why))
 	if g.o.Recorded == nil {
 		return false, nil
