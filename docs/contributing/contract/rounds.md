@@ -170,10 +170,18 @@ note: `--slots` only grows the pool: roster slots already registered stay, as wi
 ### rota round candidates
 rota round candidates [--scope <slate|milestone|next|open>]
 repo: none
-data: {"scope": string, "candidates": []candidate}
+data: {"scope": string, "candidates": []candidate}  (a candidate carries `scopeSource`: "touches"|"subsystem"|"inferred"|"none")
 exit: 2 when `--scope` is not a scope; 3 when there is no project root
 old: none (new in C3)
 note: read-only, writes nothing, no `changed`. Same `candidate` shape (plus `harness`, `model` and `pickError`, #347) and the same readiness checks as `start`, with no lease needed, so the orchestrator re-reads the board as slots free up and a test can pin each scope's set. `--scope` overrides the round's recorded scope for the call, defaulting to it, then to `round.scope`. An item already held by a slot (`task`, or the number leading its `<agent>/<issue>-<slug>` branch) is not a candidate. A claim by another holder is not read here (the backend has no claim listing); it surfaces at `assign` as `claimed`. Order is backlog order; for `next`, active-milestone items come before the next milestone's. When the project has no unfinished milestone (none written, or all shipped or archived), `milestone` and `next` offer every open item as `open` does, and `data.fellBack` is true; a project with a planned milestone keeps the strict scope. An empty list carries `data.empty` `{reason, next}`: the backlog is empty, the scope selects nothing, or everything it selects is held, in review, taken or handed to a human; `next` is the command to run. `assign --body-file` text that states acceptance criteria (an `## Acceptance` heading or a checkbox line) satisfies the `criteria` check, so a round needs no design or plan note committed first.
+
+### rota round scope
+rota round scope <ID> --body-file <path|->
+repo: none
+data: {"id": string, "scopes": []string, "source": "touches"|"subsystem"|"inferred", "changed": true}
+exit: 2 when `--body-file` is missing, the text has no bullets or more than 10; 3 when there is no project root or the item is not found; 5 when the tracker fails
+old: none (new in #900)
+note: records the scope a `light` explorer inferred for a candidate whose `scopeSource` is `none`, as a comment of kind `scope` on the item (the newest wins). Bullets are normalised like `## Touches` entries (trimmed, lower-cased, deduplicated, sorted). The declared `## Touches` is never edited, and a declared `## Touches` or Subsystem wins over a recorded scope: `source` says which one is now in force. `candidates`, `assign`, `transfer` and `adopt` compare inferred entries too, but a clash that involves one is reported `warn` even under `round.scopeOverlap: block`: the overlap carries `inferred: true` and its detail reads `inferred scopes <entries>`. A shared file path still blocks. No lease needed; appends a comment each call.
 
 ### rota round architecture
 rota round architecture [--check] [--holder-pid <n>]
