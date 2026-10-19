@@ -21,6 +21,9 @@ func TestRoundBounceCountsAndRefusesAtTheCap(t *testing.T) {
 	if d := data(t, out); code != 4 || d["bounces"] != float64(2) || d["changed"] != false {
 		t.Fatalf("at the cap: %d %v %s", code, d, errOut)
 	}
+	if !strings.Contains(errOut, "acceptance criteria") || !strings.Contains(errOut, "--cap-reason ambiguous-criteria") {
+		t.Errorf("hint must name the audit step:\n%s", errOut)
+	}
 	if n := worker.LoadRegistryTolerant(dir).Bounces("31"); n != 2 {
 		t.Errorf("a refused bounce must not count, registry says %d", n)
 	}

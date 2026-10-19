@@ -543,7 +543,11 @@ type TransferOpts struct {
 	// Tier and TierReason are the receiver's tier ("" is round.tier); one above
 	// the default needs a reason, as in assign. Unused when To is the human.
 	Tier, TierReason string
-	Settings         roundcfg.Settings
+	// CapReason says why an item at the bounce cap moves: ledger.CapAmbiguousCriteria
+	// (to the human, after the criteria audit) or ledger.CapTier (to a stronger
+	// worker). "" is a transfer that is not a cap decision.
+	CapReason string
+	Settings  roundcfg.Settings
 }
 
 // Transferred is what Transfer did.
@@ -569,7 +573,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	defer func() {
 		if err == nil && res.Changed {
 			if lerr := worker.LedgerAppendErr(e.Worker, root, ledger.Entry{Kind: ledger.KindTransfer, Issue: res.Issue, Slot: res.To,
-				Detail: ledger.Detail("from", res.From)}); lerr != nil {
+				Detail: ledger.Detail("from", res.From, "capReason", o.CapReason)}); lerr != nil {
 				err = fmt.Errorf("%s is transferred to %s, but the round ledger row was not written: %w", res.Issue, res.To, lerr)
 			}
 		}
@@ -578,6 +582,15 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	toHuman := o.To == HumanTarget
 	if o.To == "" || (!toHuman && !slices.Contains(set.Roster, o.To)) {
 		return res, usage("--to must be %s or a roster slot (%s)", HumanTarget, strings.Join(set.Roster, ", "))
+	}
+	switch {
+	case o.CapReason == "":
+	case o.CapReason == ledger.CapAmbiguousCriteria && !toHuman:
+		return res, usage("--cap-reason %s means the criteria need the human: use --to %s", o.CapReason, HumanTarget)
+	case o.CapReason == ledger.CapTier && toHuman:
+		return res, usage("--cap-reason %s moves the item to a stronger worker: use --to <slot>", o.CapReason)
+	case o.CapReason != ledger.CapAmbiguousCriteria && o.CapReason != ledger.CapTier:
+		return res, usage("--cap-reason must be %s or %s", ledger.CapAmbiguousCriteria, ledger.CapTier)
 	}
 	if o.Tier != "" && !roundcfg.ValidTier(o.Tier) {
 		return res, usage("--tier must be one of %s", strings.Join(roundcfg.Tiers, ", "))

@@ -241,3 +241,47 @@ func TestSummaryOwnerlessBounceMakesNoDashTotal(t *testing.T) {
 		t.Errorf("unexpected total %+v", tot)
 	}
 }
+
+func TestSummaryCountsCapReasons(t *testing.T) {
+	es := []Entry{
+		{TS: at(0), Kind: KindTransfer, Round: 2, Issue: "12", Slot: "human", Detail: Detail("from", "ben", "capReason", CapAmbiguousCriteria)},
+		{TS: at(1), Kind: KindTransfer, Round: 2, Issue: "13", Slot: "dana", Detail: Detail("from", "ben", "capReason", CapTier)},
+		{TS: at(2), Kind: KindTransfer, Round: 2, Issue: "14", Slot: "kit", Detail: Detail("from", "ben")},
+		{TS: at(3), Kind: KindTransfer, Round: 1, Issue: "15", Slot: "kit", Detail: Detail("capReason", CapTier)},
+	}
+	s := Fold(es, nil, 2)
+	if s.CapReasons != (CapReasons{AmbiguousCriteria: 1, Tier: 1}) {
+		t.Errorf("cap reasons = %+v", s.CapReasons)
+	}
+	if !strings.Contains(s.Text(), "Bounce cap: 1 ambiguous-criteria, 1 tier") {
+		t.Errorf("text lacks the count:\n%s", s.Text())
+	}
+	if c := capCounts(t, s); c != [2]int{1, 1} {
+		t.Errorf("capReasons = %v, want [1 1]", c)
+	}
+	plain := Fold(es[2:3], nil, 2)
+	if strings.Contains(plain.Text(), "Bounce cap") {
+		t.Errorf("a round with no cap transfer must not print the line:\n%s", plain.Text())
+	}
+	if c := capCounts(t, plain); c != [2]int{0, 0} {
+		t.Errorf("zero capReasons must still be present: %v", c)
+	}
+}
+
+// capCounts reads the capReasons object of the --json shape: ambiguous-criteria, tier.
+func capCounts(t *testing.T, s Summary) [2]int {
+	t.Helper()
+	v, _ := s.Object().Get("capReasons")
+	cr, ok := v.(*jsonx.Object)
+	if !ok {
+		t.Fatalf("capReasons = %#v", v)
+	}
+	a, _ := cr.Get("ambiguous-criteria")
+	b, _ := cr.Get("tier")
+	x, okx := jsonx.Int(a)
+	y, oky := jsonx.Int(b)
+	if !okx || !oky {
+		t.Fatalf("capReasons values = %v %v", a, b)
+	}
+	return [2]int{x, y}
+}

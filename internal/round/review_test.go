@@ -126,6 +126,13 @@ func TestReviewRelayAtCapEscalates(t *testing.T) {
 	if !strings.Contains(posts[0], "please rename x") || !strings.Contains(posts[0], "12") {
 		t.Errorf("escalation %q", posts[0])
 	}
+	if !strings.Contains(posts[0], "--cap-reason ambiguous-criteria") {
+		t.Errorf("escalation lacks the criteria audit step: %q", posts[0])
+	}
+	var xe *exitcode.Error
+	if !errors.As(err, &xe) || !strings.Contains(xe.Hint, "acceptance criteria") {
+		t.Errorf("hint = %v", err)
+	}
 	s := worker.LoadRegistryTolerant(f.root).Slot("ben")
 	if s.State() != "done" || s.ReviewSeen() != "" || worker.LoadRegistryTolerant(f.root).Bounces("12") != 3 {
 		t.Fatalf("state %s seen %q bounces %d", s.State(), s.ReviewSeen(), worker.LoadRegistryTolerant(f.root).Bounces("12"))

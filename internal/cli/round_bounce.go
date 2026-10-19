@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -41,7 +42,7 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 		d.Set("changed", !capped)
 		if capped {
 			return Result{Data: d}, &Error{Exit: ExitRefused, Message: fmt.Sprintf("%s was already sent back %d time(s) (round.maxBounces is %d)", issue, n, set.MaxBounces),
-				Hint: "no further bounce: `rota round transfer " + issue + " --to <slot> --tier heavy --tier-reason <why>`, or `--to human`"}
+				Hint: round.CapHint(issue)}
 		}
 		return Result{Data: d, Text: fmt.Sprintf("bounce %d of %s for %s", n, maxText(set.MaxBounces), issue)}, nil
 	}
