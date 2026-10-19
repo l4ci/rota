@@ -123,6 +123,8 @@ Verify silently. Trust the diff, not the subagent's narrative.
 
 **PASS** → move on. **FAIL** → dispatch a fix agent and re-verify; repeat until PASS, and surface only persistent failures. Commit (Step 7.5) only on PASS.
 
+**Tracer stop.** When the plan's T1 (the tracer) fails its Verify, or its RED run does not turn green, dispatch no later task and report the failure to the user. Do not build on it. One-task plans have no tracer.
+
 **Record proof** (facts about what ran, not acceptance). Per task:
 
 - **PASS:** one row per item the task resolves, run through the verb so the row is measured: `rota proof record <ID> -- <verify command or grep>` (exit 0 writes PASS, non-zero writes FAIL and exits 1). Never type a PASS you did not run.

@@ -40,6 +40,9 @@ Work only this task, then stop.
   When those files are absent, use the tier table: if your brief names your tier and
   a tier table, use it for the model names; if it names none, use your harness's own
   defaults. Say which tier you ran on in your PR body when the brief asks for it.
+- Tracer stop. When the plan's first task (T1, the tracer) fails its Verify, or its RED run
+  does not turn green, build no later task: print `ROTA-BLOCKED <slot>: <the failure>` and
+  stop. A one-task plan has no tracer.
 - Smoke section number: if the brief names one ("Your smoke section ... is number N"),
   `rota round assign` reserved it for you across every worker; name your
   `test/sections/N_*.sh` file with exactly that number. If it names none, do not

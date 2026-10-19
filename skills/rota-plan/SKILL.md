@@ -59,6 +59,7 @@ Rules:
 - **Review Focus** entries are each pinned by a test in the owning task's Verify. An edge with no test goes in Open questions instead.
 - Tasks fit one execution window; too big means two tasks.
 - Vertical slivers, not horizontal layers: each task crosses every layer it needs to be observable.
+- **Tracer first.** In a plan with two or more tasks, T1 is the tracer: the thinnest end-to-end path through every layer the change touches, with its own Verify. Later tasks widen it. A one-task plan needs no tracer.
 - No stubs: real runnable code.
 - When the work is a rename, a wide refactor, or ships docs, read [`plan-edge-cases.md`](plan-edge-cases.md) for the task-shaping rules.
 
