@@ -253,8 +253,8 @@
     },
     "Build & Tooling: Helpers & migrations::New bin/ helpers need the exec bit before commit": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-01"
+      "hits": 1,
+      "lastSeen": "2026-10-19"
     },
     "Architecture: Module extraction & migration safety::Golden harness proves byte-identical helper moves": {
       "tier": "deprecated",
@@ -288,8 +288,8 @@
     },
     "Build & Tooling: Helpers & migrations::update-golden writes compact JSON": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-05"
+      "hits": 1,
+      "lastSeen": "2026-10-19"
     },
     "Architecture: Skill authoring::Shorten skills structurally, not by rewording": {
       "tier": "confirmed",
@@ -332,9 +332,9 @@
       "lastSeen": "2026-10-09"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Embedding host fakes must redeclare Capabilities": {
-      "tier": "provisional",
-      "hits": 2,
-      "lastSeen": "2026-10-16"
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-10-19"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Palette entries name the verb that registers the View": {
       "tier": "provisional",
@@ -548,8 +548,8 @@
     },
     "Rounds: Orchestration: Review & merge gate::Name the smoke section in the brief when a change touches host or dispatch": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-17"
+      "hits": 1,
+      "lastSeen": "2026-10-19"
     },
     "Rounds: Orchestration: Workers & relays::A worker's own PR reply shows up as a review change": {
       "tier": "provisional",
@@ -578,13 +578,13 @@
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::A verb captured in $(...) aborts the section silently when it exits non-zero": {
       "tier": "confirmed",
-      "hits": 8,
+      "hits": 9,
       "lastSeen": "2026-10-19"
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::Inverted grep assertion (grep && fail) aborts the section under set -e": {
       "tier": "confirmed",
-      "hits": 4,
-      "lastSeen": "2026-10-18"
+      "hits": 5,
+      "lastSeen": "2026-10-19"
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::Smoke sections run only inside the runner; standalone needs an env-prep wrapper": {
       "tier": "deprecated",
@@ -603,7 +603,7 @@
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::Fixtures that expect issue or forge reads must pin the source and forge": {
       "tier": "provisional",
-      "hits": 1,
+      "hits": 2,
       "lastSeen": "2026-10-19"
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::Failing-verify tests must own their TMPDIR": {
@@ -617,14 +617,14 @@
       "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Smoke testing: Gate & frozen records::Pin ROTA_FROZEN_DAY when regenerating frozen records": {
-      "tier": "provisional",
-      "hits": 2,
-      "lastSeen": "2026-10-18"
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-10-19"
     },
     "Build & Tooling: Smoke testing: Gate & frozen records::A config key change regenerates the frozen config record": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-15"
+      "hits": 1,
+      "lastSeen": "2026-10-19"
     },
     "Build & Tooling: Smoke testing: Gate & frozen records::A gate that crosses UTC midnight fails the frozen tests": {
       "tier": "provisional",
@@ -682,6 +682,26 @@
       "lastSeen": "2026-10-19"
     },
     "Rounds: Orchestration: Review & merge gate::Learn and docs bookkeeping commits go straight to main": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Workers & relays::A watch wake of done after a bounce relay can be the old sentinel": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Review & merge gate::A string ship.review fixes the depth for every branch, labels included": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Review & merge gate::rota verdict add takes no extra top-level fields": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Slate & issues::The queue-empty architecture trigger fires in a one-item round": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
