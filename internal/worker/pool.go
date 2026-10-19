@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
@@ -127,7 +128,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 			}
 		}
 
-		if _, code := e.git(rel, "rev-parse", "--git-dir"); isDir(rel) && code == 0 {
+		if _, code := e.git(rel, "rev-parse", "--git-dir"); fsio.IsDir(rel) && code == 0 {
 			// healthy slot — leave it alone
 		} else {
 			// A leftover directory with no working git dir is debris from an

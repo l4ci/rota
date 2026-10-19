@@ -22,9 +22,9 @@ package layout
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"sort"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/repos"
 )
@@ -126,7 +126,7 @@ func Find(panes []host.LayoutPane, root, label, cli string, workers []Worker) (s
 	root = repos.Realpath(root)
 	best, top := -1, -1
 	for i, p := range panes {
-		if owned[p.ID] || !(sameDir(p.Cwd, root) || sameDir(p.FgCwd, root)) {
+		if owned[p.ID] || !(fsio.SameDir(p.Cwd, root) || fsio.SameDir(p.FgCwd, root)) {
 			continue
 		}
 		if score := scoreOf(p, label); score > top {
@@ -162,10 +162,6 @@ func scoreOf(p host.LayoutPane, label string) int {
 		s++
 	}
 	return s
-}
-
-func sameDir(p, root string) bool {
-	return p != "" && repos.Realpath(filepath.Clean(p)) == root
 }
 
 // Grid is the target arrangement: the columns left to right, each a list of

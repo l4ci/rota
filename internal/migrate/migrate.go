@@ -237,7 +237,7 @@ func (m *migrator) remapRegistry() error {
 		if e == nil || !migItemKey.MatchString(old) {
 			return "", false
 		}
-		if n, ok := e.Get("number"); ok && truthy(n) {
+		if n, ok := e.Get("number"); ok && jsonx.Truthy(n) {
 			return fmt.Sprint(n), true
 		}
 		return "", false
@@ -280,25 +280,13 @@ func (m *migrator) finish() *Result {
 		}
 		if e, ok := disk.Get(k); ok {
 			if eo, ok := e.(*jsonx.Object); ok {
-				if id, _ := eo.Get("id"); truthy(id) {
+				if id, _ := eo.Get("id"); jsonx.Truthy(id) {
 					m.res.Migrated++
 				}
 			}
 		}
 	}
 	return m.res
-}
-
-func truthy(v any) bool {
-	switch t := v.(type) {
-	case nil:
-		return false
-	case string:
-		return t != ""
-	case bool:
-		return t
-	}
-	return true
 }
 
 // state is the map file and BACKLOG.md as bytes, to tell whether a run wrote.

@@ -90,3 +90,32 @@ func TestInt(t *testing.T) {
 		}
 	}
 }
+
+func TestTruthy(t *testing.T) {
+	full := NewObject()
+	full.Set("k", true)
+	for name, tc := range map[string]struct {
+		v    any
+		want bool
+	}{
+		"nil":          {nil, false},
+		"false":        {false, false},
+		"true":         {true, true},
+		"empty string": {"", false},
+		"string":       {"x", true},
+		"zero":         {json.Number("0"), false},
+		"zero float":   {json.Number("0.0"), false},
+		"neg zero":     {json.Number("-0"), false},
+		"exp zero":     {json.Number("0e0"), false},
+		"one":          {json.Number("1"), true},
+		"fraction":     {json.Number("0.5"), true},
+		"empty array":  {[]any{}, false},
+		"array":        {[]any{1}, true},
+		"empty object": {NewObject(), false},
+		"object":       {full, true},
+	} {
+		if got := Truthy(tc.v); got != tc.want {
+			t.Errorf("%s: Truthy(%#v) = %v, want %v", name, tc.v, got, tc.want)
+		}
+	}
+}

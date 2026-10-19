@@ -103,11 +103,6 @@ type HvReport struct {
 	VersionStamp   string
 }
 
-func isDir(p string) bool {
-	fi, err := os.Stat(p)
-	return err == nil && fi.IsDir()
-}
-
 // ---- pure rewriting --------------------------------------------------------
 
 var (
@@ -574,7 +569,7 @@ func accountDirs(raw string) []string {
 
 // checkProject is the refusal set of one project, before any write.
 func checkProject(dir, state string, hasRepos bool) error {
-	if isDir(filepath.Join(dir, legacyDir)) && isDir(filepath.Join(dir, stateDir)) {
+	if fsio.IsDir(filepath.Join(dir, legacyDir)) && fsio.IsDir(filepath.Join(dir, stateDir)) {
 		return refuse("both-dirs", "%s holds both .hv/ and .rota/: that is ambiguous and rota does not merge them.\nKeep the one that is current and remove the other (or move it away), then re-run rota migrate hv.", dir)
 	}
 	if err := gitClean(dir, hasRepos); err != nil {
@@ -691,9 +686,9 @@ func RunHv(o HvOptions) (*HvReport, error) {
 	var projs []*hvProj
 	stateOf := func(dir string) string {
 		switch {
-		case isDir(filepath.Join(dir, legacyDir)):
+		case fsio.IsDir(filepath.Join(dir, legacyDir)):
 			return legacyDir
-		case isDir(filepath.Join(dir, stateDir)):
+		case fsio.IsDir(filepath.Join(dir, stateDir)):
 			return stateDir
 		}
 		return ""

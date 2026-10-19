@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/l4ci/rota/internal/fsio"
 )
 
 // GuardEnv is what the guard needs from the outside world. Every git question
@@ -397,20 +399,10 @@ func (g *guard) reset(c gitCall) error {
 	if err != nil {
 		return guardErr("could not resolve the repo for git reset --hard: " + err.Error())
 	}
-	if !sameDir(top, g.env.Worktree) {
+	if !fsio.SameDir(top, g.env.Worktree) {
 		g.deny("git reset --hard outside this worktree (%s): it would discard work elsewhere", g.env.Worktree)
 	}
 	return nil
-}
-
-func sameDir(a, b string) bool {
-	norm := func(p string) string {
-		if r, err := filepath.EvalSymlinks(p); err == nil {
-			p = r
-		}
-		return filepath.Clean(p)
-	}
-	return norm(a) == norm(b)
 }
 
 func (g *guard) push(c gitCall) error {

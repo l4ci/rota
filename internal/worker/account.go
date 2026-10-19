@@ -118,7 +118,7 @@ func (a *Accounts) classify(ac acct, payload *jsonx.Object) Meter {
 	if eo != nil {
 		en, _ := eo.Get("is_enabled")
 		lim, _ := eo.Get("spend_limit_reached")
-		extraLive = truthy(en) && !truthy(lim)
+		extraLive = jsonx.Truthy(en) && !jsonx.Truthy(lim)
 	}
 	m := Meter{Name: ac.name, ConfigDir: ac.configDir, Verdict: VerdictFree, FiveHour: five, SevenDay: seven}
 	var binding []float64
@@ -167,21 +167,6 @@ func (a *Accounts) classify(ac acct, payload *jsonx.Object) Meter {
 func roundTenth(x float64) float64 {
 	r, _ := strconv.ParseFloat(strconv.FormatFloat(x, 'f', 1, 64), 64)
 	return r
-}
-
-func truthy(v any) bool {
-	switch x := v.(type) {
-	case bool:
-		return x
-	case nil:
-		return false
-	case string:
-		return x != ""
-	case json.Number:
-		f, _ := x.Float64()
-		return f != 0
-	}
-	return true
 }
 
 func window(p *jsonx.Object, key string) (*float64, *time.Time) {
@@ -307,7 +292,7 @@ func (a *Accounts) token(configDir string) (string, string) {
 	if why != "" {
 		return "", why
 	}
-	if exp, ok := oauth.Get("expiresAt"); ok && truthy(exp) {
+	if exp, ok := oauth.Get("expiresAt"); ok && jsonx.Truthy(exp) {
 		if n, ok := exp.(json.Number); ok {
 			if ms, err := n.Int64(); err == nil && !time.UnixMilli(ms).After(a.now()) {
 				return "", "token expired"
