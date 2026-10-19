@@ -1,5 +1,5 @@
 ---
-verified-sha: 41a20d1f3536b4b0b394a6113dedce633d22b0fa
+verified-sha: d0b3447205103e4211d248a90e736db78961337d
 refs:
   - internal/harness/codex.go
   - internal/harness
@@ -195,3 +195,4 @@ The departure from #66, stated for the PR and for the C7 skill's restart note: t
 My own calls, unratified: defaults 10 restarts, breaker 3 and backoff 5 s (unmeasured; a restart costs a handoff-sized context reload, so the maximum is a budget as much as a fault bound); progress by handoff SHA (a restarted orchestrator that makes real progress but leaves an identical handoff counts as stuck, which I judge rare and cheap); the shape of the state file.
 
 Not in D2: usage-limit sleep or account switch (D3, which keeps its log in `limits` in `.rota/workers.json` and runs its loop inside `run`), a watcher for orchestrators not started under `run`, restarting workers, and any change to what D1's hooks decide.
+- **Account env and a third kind (#584).** \`harness.Account\` is \`{ConfigDir, Home}\`: \`Home\` is whichever home the kind has (\`CODEX_HOME\`, \`OPENCODE_CONFIG_DIR\`). The dispatch asks \`AccountEnv\` once and hands the result to the host in \`SpawnOpts.Env\`; the herdr and tmux hosts no longer add \`CLAUDE_CONFIG_DIR\` or \`CODEX_HOME\` themselves, and a tmux account prefix is single-quoted like the rest of \`Env\`. \`RawPaste()\` says whether a kind's TUI needs its brief pasted with line feeds intact. The third kind is [opencode-workers.md](opencode-workers.md).
