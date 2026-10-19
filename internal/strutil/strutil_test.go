@@ -47,3 +47,22 @@ func TestShortSHA(t *testing.T) {
 		}
 	}
 }
+
+func TestFirstNonEmpty(t *testing.T) {
+	for name, tc := range map[string]struct {
+		in   []string
+		want string
+	}{
+		"no input":       {nil, ""},
+		"single empty":   {[]string{""}, ""},
+		"single value":   {[]string{"a"}, "a"},
+		"first wins":     {[]string{"a", "b"}, "a"},
+		"skips empty":    {[]string{"", "", "c", "d"}, "c"},
+		"all empty":      {[]string{"", ""}, ""},
+		"whitespace set": {[]string{" ", "b"}, " "},
+	} {
+		if got := FirstNonEmpty(tc.in...); got != tc.want {
+			t.Errorf("%s: FirstNonEmpty(%q) = %q, want %q", name, tc.in, got, tc.want)
+		}
+	}
+}

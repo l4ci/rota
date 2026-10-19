@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"strings"
 	"sync"
@@ -310,12 +311,12 @@ func slotEntry(r round.Row) entry {
 	}
 	line := fmt.Sprintf("%-8s %-7s %-10s %-14s %-18s %-7s %s", r.Name, issue, dash(hostLabel(r)), prLabel(r.PR, r.PRState), tierModel(r), bounceLabel(r.Bounces), burnLabel(r))
 	var b []string
-	b = append(b, "PR: "+firstOf(r.PRTitle, "no title known"))
+	b = append(b, "PR: "+strutil.FirstNonEmpty(r.PRTitle, "no title known"))
 	b = append(b, "branch: "+dash(r.Branch))
 	if r.PR != "" {
 		b = append(b, "url: "+r.PR)
 	}
-	b = append(b, "evidence: "+firstOf(r.Evidence, "none recorded"))
+	b = append(b, "evidence: "+strutil.FirstNonEmpty(r.Evidence, "none recorded"))
 	if r.TierReason != "" {
 		b = append(b, "tier: "+r.TierReason)
 	}

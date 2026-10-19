@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/stamp"
+	"github.com/l4ci/rota/internal/strutil"
 	"regexp"
 	"slices"
 	"strings"
@@ -158,7 +159,7 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 		}
 	}
 	if kind != "" && moved {
-		held.Kind, held.PR = kind, firstNonEmpty(pr, held.PR)
+		held.Kind, held.PR = kind, strutil.FirstNonEmpty(pr, held.PR)
 		if kind == ledger.KindDone {
 			held.Detail = ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts, root, held.Harness, held.Account))
 		}

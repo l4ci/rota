@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/exitmap"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"path/filepath"
 	"regexp"
@@ -332,7 +333,7 @@ func (e Env) Return(ctx context.Context, root string, be Board, o ReturnOpts) (r
 	err = runSteps(e.releaseSteps(ctx, slotRelease{
 		root: root, be: be, slot: o.Slot, id: id, verb: "return", round: rnd,
 		reason: o.Reason, note: o.Note,
-		claimID:  firstNonEmpty(s.ClaimID(), o.Slot+"@"+strconv.Itoa(rnd)),
+		claimID:  strutil.FirstNonEmpty(s.ClaimID(), o.Slot+"@"+strconv.Itoa(rnd)),
 		tolerate: tolerate,
 	}, &out))
 	res.Branch, res.Head, res.Salvaged = out.Park.Branch, out.Park.Head, out.Park.Salvaged
@@ -395,7 +396,7 @@ func (e Env) Health(ctx context.Context, root string, s *worker.Slot, now time.T
 		}
 	}
 	h.Stall = e.Stalled(ctx, StallInput{
-		Worktree: wt, Base: firstNonEmpty(s.Base(), e.Base), Holds: true,
+		Worktree: wt, Base: strutil.FirstNonEmpty(s.Base(), e.Base), Holds: true,
 		Alive: h.Alive || !h.Known, Escalated: waiting, ActiveAt: s.LastAlive(), Minutes: e.StallMinutes,
 	}, now)
 	h.Health = HealthHealthy
@@ -689,7 +690,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 			}
 		}
 	} else if !e.forgeOn(be) {
-		return res, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, firstNonEmpty(e.NeedsHuman, DefaultNeedsHuman))
+		return res, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, strutil.FirstNonEmpty(e.NeedsHuman, DefaultNeedsHuman))
 	}
 
 	// A transferred worker starts on the default tier unless --tier says higher.
@@ -697,7 +698,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	// from the item's label, else round.workerKind, else the receiver's
 	// recorded kind, else claude; the model from the item's label, else the
 	// tier map. Headroom and scope are not asked of a receiver that resumes.
-	kind, kindSource, tier := harness.Default, "", firstNonEmpty(o.Tier, o.Settings.Tier)
+	kind, kindSource, tier := harness.Default, "", strutil.FirstNonEmpty(o.Tier, o.Settings.Tier)
 	var model, appliedModel string
 	if !toHuman {
 		pf, err := e.preflight(ctx, root, be, preflightIn{Item: it, Settings: set, Tier: tier,
@@ -772,11 +773,11 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 				if p, err = e.Park(ctx, root, from, "transfer"); err != nil {
 					return wrap(err)
 				}
-				oldClaim = firstNonEmpty(sender.ClaimID(), oldClaim)
+				oldClaim = strutil.FirstNonEmpty(sender.ClaimID(), oldClaim)
 			} else { // a queued PR: already pushed, nothing to park
 				p.Branch = rec.Branch
 				p.Head = e.queuedHead(ctx, root, p.Branch)
-				oldClaim = firstNonEmpty(rec.ClaimID, oldClaim)
+				oldClaim = strutil.FirstNonEmpty(rec.ClaimID, oldClaim)
 			}
 			res.Branch, res.Head, res.Salvaged = p.Branch, p.Head, p.Salvaged
 			branch = p.Branch
@@ -800,7 +801,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 				return wrap(tolerate("state reset", err))
 			}},
 			step{name: "needs-human label", do: func() error {
-				return wrap(e.Forge.AddLabels(ctx, it.IssueKey(), []string{firstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}, true))
+				return wrap(e.Forge.AddLabels(ctx, it.IssueKey(), []string{strutil.FirstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}, true))
 			}},
 			step{name: "free the sender", do: func() error {
 				if sender != nil {

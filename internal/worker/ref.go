@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/strutil"
 	"regexp"
 	"strconv"
 	"strings"
@@ -100,14 +101,7 @@ func IssueFromBranch(name string) string {
 		return m[1]
 	}
 	if m := reIssueToken.FindStringSubmatch(name); m != nil {
-		return firstNonEmptyStr(m[1], m[2])
+		return strutil.FirstNonEmpty(m[1], m[2])
 	}
 	return ""
-}
-
-func firstNonEmptyStr(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }

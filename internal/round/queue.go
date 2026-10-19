@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/strutil"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -31,7 +32,7 @@ func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string)
 		return false, "no PR recorded"
 	}
 	if st := s.State(); st != "done" && st != "idle" {
-		return false, firstNonEmpty(st, "busy")
+		return false, strutil.FirstNonEmpty(st, "busy")
 	}
 	dirty, err := e.dirtyPaths(ctx, s.Worktree())
 	if err != nil {
@@ -87,8 +88,8 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 		}
 	}
 	rec := worker.QueuedPR{
-		Issue: s.HeldID(), Branch: firstNonEmpty(p.Branch, s.Branch()), PR: pr,
-		Base: firstNonEmpty(s.Base(), e.Base), From: name, ClaimID: s.ClaimID(),
+		Issue: s.HeldID(), Branch: strutil.FirstNonEmpty(p.Branch, s.Branch()), PR: pr,
+		Base: strutil.FirstNonEmpty(s.Base(), e.Base), From: name, ClaimID: s.ClaimID(),
 		Round: registryRound(root), Relays: s.Relays(),
 	}
 	return worker.Update(root, func(doc *worker.Doc) {

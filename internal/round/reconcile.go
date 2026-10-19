@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/strutil"
 
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -48,12 +49,12 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 		if src := unreadSource(rep, f.Kind); src != "" {
 			// A finding computed without its source is a guess, and repairing
 			// on a guess releases or parks a slot that may be fine (#579).
-			rep.Warnings = append(rep.Warnings, fmt.Sprintf("repair %s %s skipped: %s was unreadable this run", f.Kind, firstNonEmpty(f.Slot, f.branch), src))
+			rep.Warnings = append(rep.Warnings, fmt.Sprintf("repair %s %s skipped: %s was unreadable this run", f.Kind, strutil.FirstNonEmpty(f.Slot, f.branch), src))
 			out.Drift = append(out.Drift, f)
 			continue
 		}
 		if err := e.repair(ctx, root, rep, f); err != nil {
-			rep.Warnings = append(rep.Warnings, fmt.Sprintf("repair %s %s: %v", f.Kind, firstNonEmpty(f.Slot, f.branch), err))
+			rep.Warnings = append(rep.Warnings, fmt.Sprintf("repair %s %s: %v", f.Kind, strutil.FirstNonEmpty(f.Slot, f.branch), err))
 			out.Drift = append(out.Drift, f)
 			continue
 		}
@@ -156,7 +157,7 @@ func (e Env) parkMerged(ctx context.Context, root, name string) error {
 		return fmt.Errorf("slot %s is not in the registry", name)
 	}
 	if st := s.State(); st != "done" && st != "idle" && st != "dead" {
-		return fmt.Errorf("slot %s is %s, not done, idle or dead", name, firstNonEmpty(st, "busy"))
+		return fmt.Errorf("slot %s is %s, not done, idle or dead", name, strutil.FirstNonEmpty(st, "busy"))
 	}
 	dirty, err := e.dirtyPaths(ctx, s.Worktree())
 	if err != nil {
@@ -165,7 +166,7 @@ func (e Env) parkMerged(ctx context.Context, root, name string) error {
 	if len(dirty) > 0 {
 		return fmt.Errorf("slot %s has uncommitted changes", name)
 	}
-	base := firstNonEmpty(s.Base(), e.Base)
+	base := strutil.FirstNonEmpty(s.Base(), e.Base)
 	if _, errOut, code := e.gitOut(ctx, s.Worktree(), "switch", "-q", "-C", worker.ParkBranch(name), base); code != 0 {
 		return fmt.Errorf("could not switch %s to park/%s: %s", name, name, errOut)
 	}
