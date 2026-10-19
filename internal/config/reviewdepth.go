@@ -15,7 +15,8 @@ import (
 )
 
 // ReviewDepth is how much review a branch gets before it ships: full runs
-// /rota-review as is, light runs only its Standards reviewer, none skips it.
+// /rota-review as is, light runs only its Spec reviewer (its Standards reviewer when the
+// branch has no spec), none skips it.
 type ReviewDepth string
 
 const (
