@@ -106,3 +106,22 @@ func TestResolveReviewDepthSeesBothSidesOfARename(t *testing.T) {
 		t.Fatalf("rename out of migrations/: %+v %v", got, err)
 	}
 }
+
+// Git quotes a non-ASCII name in newline output; the -z list must match as is.
+func TestResolveReviewDepthUnquotedPaths(t *testing.T) {
+	dir := depthRepo(t)
+	os.MkdirAll(filepath.Join(dir, "migrations"), 0o755)
+	os.WriteFile(filepath.Join(dir, "migrations", "ä\"x.sql"), []byte("x\n"), 0o644)
+	for _, args := range [][]string{{"add", "migrations"}, {"commit", "-q", "-m", "q"}} {
+		if out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=a@b", "-c", "user.name=a"}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	pol, _ := config.ParseReviewPolicy(nil)
+	pol.LightBelow = 1000
+	pol.Paths = map[string]config.ReviewDepth{"migrations/**": config.DepthFull}
+	got, err := ResolveReviewDepth(context.Background(), ReviewSources{Policy: pol, Git: git.Exec, Dir: dir, Span: "main...feat"})
+	if err != nil || got.Signal != config.SignalPath || !strings.Contains(got.Why, "ä\"x.sql") {
+		t.Fatalf("quoted name: %+v %v", got, err)
+	}
+}
