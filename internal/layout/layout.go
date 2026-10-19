@@ -261,7 +261,8 @@ func ToSplit(ctx context.Context, h host.Layouter, st State) (Result, error) {
 			return res, err
 		}
 		res.Moves++
-	} // A pane moved in from another workspace gets a new id. Later splits
+	}
+	// A pane moved in from another workspace gets a new id. Later splits
 	// target it by the id the slot's agent has now.
 	placed := map[string]Placed{}
 	for _, w := range st.Workers {
