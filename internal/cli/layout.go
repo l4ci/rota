@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/layout"
@@ -112,7 +113,7 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 			if mode == "" {
 				break
 			}
-			group, gerr := worker.GroupSlots(root, caps)
+			group, gerr := worker.GroupSlots(config.Load(rotatree.Config(root)), caps)
 			if gerr != nil {
 				return Result{}, Resolution("%s: %v", o.name, gerr)
 			}

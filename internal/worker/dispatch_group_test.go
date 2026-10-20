@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/jsonx"
 )
 
 // groupHost spawns into a linked workspace and records the workspace closes.
@@ -50,6 +51,23 @@ func groupProject(t *testing.T, cfg string, handles map[string]string) string {
 	return dir
 }
 
+// dispatchOnceWith dispatches with raw as the project config, in memory ("" is
+// an empty one).
+func dispatchOnceWith(t *testing.T, dir string, h host.Host, raw string) error {
+	t.Helper()
+	if raw == "" {
+		raw = "{}"
+	}
+	v, err := jsonx.Decode([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := envWith(h)
+	e.Config = func(string) any { return v }
+	_, err = e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "T1"})
+	return err
+}
+
 func dispatchOnce(t *testing.T, dir string, h host.Host) error {
 	t.Helper()
 	_, err := envWith(h).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "T1"})
@@ -61,9 +79,10 @@ func TestDispatchLinksWorkspaceOnlyWhenTheKeyIsOn(t *testing.T) {
 	for cfg, want := range map[string]bool{
 		``: true, `{"work":{"herdrGroupSlots":false}}`: false, `{"work":{"herdrGroupSlots":true}}`: true,
 	} {
-		dir := groupProject(t, cfg, nil)
+		dir := groupProject(t, "", nil)
+		os.Remove(filepath.Join(dir, ".rota", "config.json")) // the seam, not the file, carries the settings
 		h := &groupHost{fakeHost: tmuxFake()}
-		if err := dispatchOnce(t, dir, h); err != nil {
+		if err := dispatchOnceWith(t, dir, h, cfg); err != nil {
 			t.Fatalf("%q: %v", cfg, err)
 		}
 		if h.spawnOpts.LinkWorkspace != want {
@@ -80,9 +99,9 @@ func TestDispatchLinksWorkspaceOnlyWhenTheKeyIsOn(t *testing.T) {
 }
 
 func TestDispatchRefusesANonBooleanGroupKey(t *testing.T) {
-	dir := groupProject(t, `{"work":{"herdrGroupSlots":"yes"}}`, nil)
+	dir := groupProject(t, "", nil)
 	h := &groupHost{fakeHost: tmuxFake()}
-	err := dispatchOnce(t, dir, h)
+	err := dispatchOnceWith(t, dir, h, `{"work":{"herdrGroupSlots":"yes"}}`)
 	if err == nil || !strings.Contains(err.Error(), "work.herdrGroupSlots") {
 		t.Fatalf("err = %v, want it to name the key", err)
 	}
@@ -178,4 +197,14 @@ func TestDispatchRecordsNoWorkspaceWhenHerdrFellBackToATab(t *testing.T) {
 	if got := LoadRegistryTolerant(dir).Slot("w1").WorkspaceID(); got != "" {
 		t.Errorf("workspaceId = %q, want none", got)
 	}
+}
+
+// memConfig is an in-memory project config for Env.Config.
+func memConfig(t *testing.T, raw string) func(string) any {
+	t.Helper()
+	v, err := jsonx.Decode([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return func(string) any { return v }
 }

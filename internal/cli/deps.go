@@ -23,6 +23,7 @@ import (
 	"github.com/l4ci/rota/internal/palette"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/reap"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/stale"
@@ -185,7 +186,7 @@ func (c *Ctx) deps() *Deps {
 // resolveHost is worker.ResolveHost over Deps' own getenv and lookPath, so the
 // decision and the handle from Host come from the same injected sources.
 func (d *Deps) resolveHost(root string) host.Kind {
-	return worker.ResolveHost(root, d.Getenv, d.LookPath)
+	return worker.ResolveHost(root, config.Load(rotatree.Config(root)), d.Getenv, d.LookPath)
 }
 
 // workerEnv is the WorkerEnv hook with its host filled from Host.
