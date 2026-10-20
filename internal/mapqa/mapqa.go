@@ -129,6 +129,9 @@ type Subsystem struct {
 	Touched     string
 	EntryPoints int
 	BrokenRefs  int
+	// CommitsBehind is how many commits HEAD is past the file's
+	// last_mapped_commit; nil when the file has none or git cannot count.
+	CommitsBehind *int
 }
 
 var entryRe = regexp.MustCompile(`(?m)^- ([^:\s]+):(\d+)\b`)
@@ -153,9 +156,24 @@ func Stats(root string) []Subsystem {
 				broken++
 			}
 		}
-		out = append(out, Subsystem{e.name, fi.Size(), touched, len(refs), broken})
+		out = append(out, Subsystem{e.name, fi.Size(), touched, len(refs), broken, commitsBehind(root, frontmatter.Str(e.fm, "last_mapped_commit"))})
 	}
 	return out
+}
+
+var shaRe = regexp.MustCompile(`^[0-9a-f]{4,64}$`)
+
+// commitsBehind counts the commits past sha; nil when sha is empty, not a hash
+// or not in this history (a rewritten branch), so the subsystem is skipped.
+func commitsBehind(root, sha string) *int {
+	if !shaRe.MatchString(sha) {
+		return nil
+	}
+	n, ok, _ := git.Repo{Dir: root}.CommitsSince(context.Background(), sha)
+	if !ok {
+		return nil
+	}
+	return &n
 }
 
 func refBroken(root, file, line string) bool {
@@ -200,6 +218,26 @@ func SoftCap(root string) int {
 		}
 	}
 	return DefaultCap
+}
+
+// DefaultStaleCommits is the map.staleCommits default.
+const DefaultStaleCommits = 50
+
+// StaleCommits reads map.staleCommits from the project config: 0 disables the
+// staleness warning; a missing, negative or non-integer value gives the default.
+func StaleCommits(root string) int {
+	cfg := config.Load(rotatree.Config(root))
+	if v, ok := config.Lookup(cfg, "map.staleCommits"); ok {
+		if n, err := strconv.Atoi(fmt.Sprint(v)); err == nil && n >= 0 {
+			return n
+		}
+	}
+	return DefaultStaleCommits
+}
+
+// StaleNote is the warning for a subsystem whose map is behind HEAD by n commits.
+func StaleNote(name string, n, limit int) string {
+	return fmt.Sprintf("map %s is %d commits behind HEAD (map.staleCommits %d); re-run /rota-refactor --map", name, n, limit)
 }
 
 // CapNote is the nudge printed when count reaches cap.
