@@ -861,3 +861,16 @@ func TestClassifyClaudeEchoedBrief(t *testing.T) {
 		t.Errorf("Add funds only in the echo: %q", ev)
 	}
 }
+
+func TestParseFindingDone(t *testing.T) {
+	for in, want := range map[string]string{"finding:42": "42", "finding: 7": "7", "finding:IC_kwDO-9": "IC_kwDO-9"} {
+		if got, ok := ParseFindingDone(in); !ok || got != want {
+			t.Errorf("%q: %q %v", in, got, ok)
+		}
+	}
+	for _, in := range []string{"", "finding:", "finding:<comment-id>", "issues:#1", "https://github.com/o/r/pull/12", "finding:1 2"} {
+		if got, ok := ParseFindingDone(in); ok {
+			t.Errorf("%q parsed as %q", in, got)
+		}
+	}
+}

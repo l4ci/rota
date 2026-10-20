@@ -77,7 +77,7 @@ shim: `state` echoes the argument (`none` becomes null); `changed` is false for 
 note: the state moves from a second positional to `--to`, the one spelling for setting a state (`milestone status --to`, rule 1).
 
 ### rota item comment add
-rota item comment add <ID> --kind <question|answer|decision|feedback|scope> --body-file <path|->
+rota item comment add <ID> --kind <question|answer|decision|feedback|scope|finding> --body-file <path|->
 repo: scoped
 data: {"id": string, "type": "B"|"F"|"T", "kind": string, "commentId"?: string, "changed": bool}
 exit: 2 for an empty body or an invalid kind; 3 item unknown; tracker
@@ -86,7 +86,7 @@ shim: `commentId` is the printed id (issue mode only), `changed` true.
 note: split from the old `--list` mode, because read and write have different data.
 
 ### rota item comment list
-rota item comment list <ID> [--kind <question|answer|decision|feedback|scope>]
+rota item comment list <ID> [--kind <question|answer|decision|feedback|scope|finding>]
 repo: scoped
 data: {"id": string, "type": "B"|"F"|"T", "comments": [{"who": string, "kind": string, "text": string}]}
 exit: 2 for an invalid kind; 3 item unknown; tracker

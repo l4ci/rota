@@ -197,6 +197,9 @@ func blockedWhy(c round.Candidate) []string {
 	if c.PickErr != "" {
 		why = append(why, c.PickErr)
 	}
+	if c.BlockedBy != "" {
+		why = append(why, c.BlockedBy)
+	}
 	return why
 }
 

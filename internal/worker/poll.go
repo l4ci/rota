@@ -37,6 +37,7 @@ import (
 //
 //	ROTA-DONE <slot> <pr-url-or-branch>
 //	ROTA-DONE <slot> issues:#a,#b      (a review item: filed issues, no PR)
+//	ROTA-DONE <slot> finding:<id>      (a research item: the finding comment, no PR)
 //	ROTA-BLOCKED <slot>: <one question in plain language>
 //
 // LIMITED means the session hit its usage window; it routes to reassigning
@@ -152,6 +153,20 @@ func ParseIssuesDone(evidence string) (refs []string, ok bool) {
 		}
 	}
 	return refs, true
+}
+
+// reFindingDone is a research item's done line: the id of the finding comment
+// the worker posted, in place of a PR.
+var reFindingDone = regexp.MustCompile(`^finding:\s*([A-Za-z0-9_-]+)$`)
+
+// ParseFindingDone reads the evidence of `ROTA-DONE <slot> finding:<id>` into
+// the comment id. ok is false for any other evidence.
+func ParseFindingDone(evidence string) (id string, ok bool) {
+	m := reFindingDone.FindStringSubmatch(strings.TrimSpace(evidence))
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
 }
 
 func compileAll(prefix string, pats []string) []*regexp.Regexp {
@@ -904,6 +919,9 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 	if r.State == StateDone {
 		if refs, ok := ParseIssuesDone(r.Evidence); ok {
 			s.SetIssues(refs)
+		}
+		if id, ok := ParseFindingDone(r.Evidence); ok {
+			s.SetFinding(id)
 		}
 	}
 	return false, nil

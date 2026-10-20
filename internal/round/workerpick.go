@@ -12,6 +12,15 @@ import (
 const (
 	BlockHarnessLabel = "harness label"
 	BlockModelLabel   = "model label"
+	// BlockDecisionLabel: a bad decision: label.
+	BlockDecisionLabel = "decision label"
+)
+
+// Decision types of a decision item (a `decision:<type>` label, a `Decision:`
+// field on a file bullet).
+const (
+	DecisionResearch = "research"
+	DecisionGrilling = "grilling"
 )
 
 // Pick is the harness and model an item asks for; "" is no request.
@@ -28,8 +37,9 @@ func ValidModel(v string) bool { return modelID.MatchString(v) }
 // fileField reads a trailing `Harness:`/`Model:` field off a file-backend
 // bullet; the value is one token.
 var fileField = map[string]*regexp.Regexp{
-	"Harness": regexp.MustCompile(`\bHarness:\s*(\S+)`),
-	"Model":   regexp.MustCompile(`\bModel:\s*(\S+)`),
+	"Harness":  regexp.MustCompile(`\bHarness:\s*(\S+)`),
+	"Model":    regexp.MustCompile(`\bModel:\s*(\S+)`),
+	"Decision": regexp.MustCompile(`\bDecision:\s*(\S+)`),
 }
 
 // PickOf reads what an item asks for: the harness:<kind> and model:<id>
@@ -75,6 +85,34 @@ func PickOf(caps backlog.Capabilities, it backlog.Item) (Pick, error) {
 		p.Model = v
 	}
 	return p, nil
+}
+
+// DecisionOf reads an item's decision type: DecisionResearch, DecisionGrilling
+// or "" for an ordinary item. An unknown type, or two decision: labels on one
+// issue, is a refusal naming the label.
+func DecisionOf(caps backlog.Capabilities, it backlog.Item) (string, error) {
+	var v string
+	if !caps.IssueIDs {
+		m := fileField["Decision"].FindStringSubmatch(it.Line)
+		if m == nil {
+			return "", nil
+		}
+		v = m[1]
+	} else {
+		ds := labelsWith(it.Labels, "decision:")
+		switch len(ds) {
+		case 0:
+			return "", nil
+		case 1:
+			v = strings.TrimPrefix(ds[0], "decision:")
+		default:
+			return "", blocked(BlockDecisionLabel, "%s has more than one decision: label (%s): keep one", it.ID, strings.Join(ds, ", "))
+		}
+	}
+	if v != DecisionResearch && v != DecisionGrilling {
+		return "", blocked(BlockDecisionLabel, "%s has decision %s: must be %s or %s", it.ID, v, DecisionResearch, DecisionGrilling)
+	}
+	return v, nil
 }
 
 func labelsWith(labels []string, prefix string) []string {

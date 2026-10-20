@@ -33,6 +33,7 @@ type preflightIn struct {
 // a refusal leaves the earlier ones set for the caller's result.
 type preflightOut struct {
 	Pick             Pick
+	Decision         string // the item's decision type, "" for an ordinary item
 	Kind, KindSource string
 	Model            string // resolved: what the delivery refusals check
 	AppliedModel     string // Model, or "" when the launch command has no {model}
@@ -48,6 +49,12 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 	out.Pick, err = PickOf(be.Capabilities(), *in.Item)
 	if err != nil {
 		return out, err
+	}
+	if out.Decision, err = DecisionOf(be.Capabilities(), *in.Item); err != nil {
+		return out, err
+	}
+	if out.Decision == DecisionGrilling {
+		return out, blocked(BlockHumanDecision, "%s is a grilling decision: the human resolves it, one per session; run /rota-brainstorm %s", id, id)
 	}
 	kind, kindSource := resolveKind(in.FlagKind, out.Pick.Harness, set.WorkerKind, in.SlotKind)
 	if in.Fixed != nil {

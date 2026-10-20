@@ -189,6 +189,11 @@ Work only this task, then stop.
 
 After `ROTA-DONE <slot> issues:#a,#b`, the orchestrator reads the filed issues and runs `rota round accept <ID>` (add `--issues #a,#b` when the slot recorded none). It closes the item and frees the slot with no PR; assign or transfer onto the slot still closes it as a fallback.
 
+A research item (a `decision:research` label) delivers a finding, not code: post it with
+`rota --json item comment add <ID> --kind finding --body-file <f>`, commit nothing, open no PR and print
+`ROTA-DONE <slot> finding:<commentId>` as the last line. `rota worker poll` records the id on the slot;
+the orchestrator reads the finding and closes the item with `rota round accept <ID> --gist <line>`.
+
 The two sentinels are the contract's load-bearing half. We own the worker's instructions, so state is declared, not inferred from prose, and `rota worker poll` is reliable where pattern-matching a TUI is not.
 
 ## Handling review feedback

@@ -29,6 +29,8 @@ func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string)
 	switch {
 	case s.HeldID() == "":
 		return false, "holds nothing"
+	case s.PR() == "" && len(s.Issues()) == 0 && s.Finding() != "":
+		return false, "its finding awaits `rota round accept`"
 	case s.PR() == "" && len(s.Issues()) == 0:
 		return false, fmt.Sprintf("no PR recorded for branch %s; check the forge and run `rota round reconcile`", strutil.FirstNonEmpty(s.Branch(), "(none)"))
 	}
@@ -177,20 +179,21 @@ func (e Env) closeReview(ctx context.Context, root string, be Board, s *worker.S
 	if err != nil {
 		return err
 	}
-	return e.closeNoPR(ctx, root, be, s, it, "filed "+strings.Join(s.Issues(), ", "))
+	return e.closeNoPR(ctx, root, be, s, it, "Review done: ", "filed "+strings.Join(s.Issues(), ", "))
 }
 
 // closeNoPR completes an item that delivers no PR: the slot parks, the note is
 // commented on the item and closes it without proof, the claim and in-progress
-// state go and the slot is freed. Assign, transfer and accept all close here.
-func (e Env) closeNoPR(ctx context.Context, root string, be Board, s *worker.Slot, it *backlog.Item, note string) error {
+// state go and the slot is freed. Assign, transfer and accept all close here;
+// did opens the comment ("Review done: ", "Finding accepted: ").
+func (e Env) closeNoPR(ctx context.Context, root string, be Board, s *worker.Slot, it *backlog.Item, did, note string) error {
 	name := s.Name()
 	if _, err := e.Park(ctx, root, name, "assign"); err != nil {
 		return err
 	}
 	now := e.Worker.Clock()
 	// The close note is dropped by the file backend, so it also goes in a comment.
-	if _, err := be.AddComment(it.ID, "feedback", "Review done: "+note+"."); err != nil {
+	if _, err := be.AddComment(it.ID, "feedback", did+note+"."); err != nil {
 		return wrap(err)
 	}
 	if _, err := be.Complete(it.ID, backlog.CompleteInput{Date: now().Format("2006-01-02"), Reason: "done", Note: note, NoProof: true}); err != nil {
