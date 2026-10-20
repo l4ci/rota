@@ -421,16 +421,17 @@ func withPS(t *testing.T, rows map[string][2]string) {
 // TestPSSourceReadsAncestryWithoutProc pins #1167: where /proc is missing
 // (macOS) ppid, comm and start time come from ps, so the walk reaches the agent.
 func TestPSSourceReadsAncestryWithoutProc(t *testing.T) {
+	const agentPath = "/Applications/Claude Code/claude"
 	withPS(t, map[string][2]string{
 		"900000001": {"900000002 Mon Oct 20 12:00:00 2026", "/bin/zsh"},
-		"900000002": {"900000003 Mon Oct 20 11:00:00 2026", "/Applications/Claude Code/claude"},
+		"900000002": {"900000003 Mon Oct 20 11:00:00 2026", agentPath},
 	})
 	pp, comm, ok := realProc(900000001)
 	if !ok || pp != 900000002 || comm != "zsh" {
 		t.Fatalf("zsh: %d %q %v", pp, comm, ok)
 	}
 	_, comm, _ = realProc(900000002)
-	if comm != "claude" {
+	if comm != filepath.Base(agentPath) {
 		t.Fatalf("comm must be the base name: %q", comm)
 	}
 	want := time.Date(2026, 10, 20, 11, 0, 0, 0, time.Local).Unix()
