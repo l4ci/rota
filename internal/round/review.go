@@ -225,18 +225,6 @@ func (e Env) reviewFresh(ctx context.Context, root string, o ReviewOpts, reg wor
 	if to == "" {
 		return skip("no free slot to transfer to")
 	}
-	body, err := os.CreateTemp("", "rota-review-fresh-*")
-	if err != nil {
-		return false, err
-	}
-	defer os.Remove(body.Name())
-	_, werr := body.WriteString(freshBrief(out.PR, o.OpenFindings))
-	if cerr := body.Close(); werr == nil {
-		werr = cerr
-	}
-	if werr != nil {
-		return false, werr
-	}
 	prev := out.Bounces
 	bounces, counted, err := worker.RecordBounceCounted(e.Worker, root, issue, o.Slot, head)
 	if err != nil {
@@ -244,7 +232,7 @@ func (e Env) reviewFresh(ctx context.Context, root string, o ReviewOpts, reg wor
 	}
 	out.Bounces = bounces
 	res, terr := e.Transfer(ctx, root, o.Board, TransferOpts{
-		Issue: issue, To: to, BodyFile: body.Name(), Settings: o.Settings,
+		Issue: issue, To: to, Decisions: freshBrief(out.PR, o.OpenFindings), Settings: o.Settings,
 		Note:       fmt.Sprintf("bounce %d of round.freshAt %d: review input on %s moves to a fresh context", bounces, o.FreshAt, prLabel(out.PR)),
 		Tier:       s.Tier(),
 		TierReason: strutil.FirstNonEmpty(s.TierReason(), "kept from "+o.Slot),

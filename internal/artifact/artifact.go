@@ -5,11 +5,7 @@
 package artifact
 
 import (
-	"errors"
-	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/repos"
-	"io"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -18,31 +14,6 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/section"
 )
-
-// ReadBody reads a --body-file ("-" is stdin) the way the old put helpers
-// did: raw bytes, each invalid UTF-8 byte replaced by U+FFFD, no newline
-// normalisation. An unreadable file is a usage error.
-func ReadBody(stdin io.Reader, path string) (string, error) {
-	var b []byte
-	var err error
-	if path == "-" {
-		b, err = io.ReadAll(stdin)
-	} else {
-		b, err = os.ReadFile(path)
-	}
-	if err != nil {
-		return "", exitcode.Errf(exitcode.ExitUsage, "cannot read --body-file %s: %v", path, unwrap(err))
-	}
-	return string([]rune(string(b))), nil
-}
-
-func unwrap(err error) error {
-	var pe *os.PathError
-	if errors.As(err, &pe) {
-		return pe.Err
-	}
-	return err
-}
 
 // Doc is one markdown file with parseable frontmatter.
 type Doc struct {

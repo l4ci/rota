@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"io"
 	"os"
 	"os/signal"
 	"strconv"
@@ -390,16 +389,22 @@ func bodyPath(c *Ctx, path string) (string, func(), error) {
 	if path != "-" {
 		return path, func() {}, nil
 	}
+	b, err := readBodyInput(c, "body-file", path, ExitUsage)
+	if err != nil {
+		return "", nil, err
+	}
 	f, err := os.CreateTemp("", "rota-body-*")
 	if err != nil {
 		return "", nil, err
 	}
-	if _, err := io.Copy(f, c.Stdin); err != nil {
-		f.Close()
+	_, err = f.Write(b)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
 		os.Remove(f.Name())
 		return "", nil, err
 	}
-	f.Close()
 	return f.Name(), func() { os.Remove(f.Name()) }, nil
 }
 
