@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"strings"
 
 	"github.com/l4ci/rota/internal/gate"
@@ -73,7 +74,7 @@ func runTrain(c *Ctx, root string, o trainRunOpts) trainRun {
 	if err != nil {
 		return trainRun{Err: err}
 	}
-	approve := func(files func() ([]string, error)) error {
+	approve := func(files func() ([]string, error)) (*exitcode.Refusal, error) {
 		req := o.Approval
 		req.Thread = func() (approvalThread, error) { return slotApprovalThread(root, o.Targets[0]) }
 		return clearMerge(c, policy, "train "+strings.Join(o.Targets, ", ")+" into "+o.Base, o.Confirm, req, files, nil)
@@ -89,7 +90,7 @@ func runTrain(c *Ctx, root string, o trainRunOpts) trainRun {
 	}
 	round := &worker.RoundMemo{}
 	r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: o.Targets, Base: o.Base, Order: o.Order, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, NoVerify: o.NoVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block, CheckReviews: true, Round: round, ItemBody: lazyItemBody(c, root)})
-	run := trainRun{Result: r, Err: err, Refused: isRefusal(worker.ClassifyVerdict(r.Verdict), err)}
+	run := trainRun{Result: r, Err: err, Refused: r.Refused(err)}
 	if run.Refused || err != nil {
 		return run
 	}
@@ -133,7 +134,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		run := runTrain(c, root, trainRunOpts{Targets: args, Base: *base, Order: override, LandGreen: *landGreen, NoVerify: *noVerify, Confirm: conf, Approval: req})
 		r, err := run.Result, run.Err
 		if run.Refused {
-			res, _, rerr := verdictRefusal(r.Verdict, err, r.Err, r.Hint, trainData(r))
+			res, rerr := verdictRefusal(r.Verdict, r.Refusal, err, r.Err, r.Hint, trainData(r))
 			return res, rerr
 		}
 		if err != nil {

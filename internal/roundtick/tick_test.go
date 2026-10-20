@@ -84,6 +84,36 @@ func TestAssignsReadyToIdleSlots(t *testing.T) {
 	}
 }
 
+func TestTickNeverAssignsDrainingSlot(t *testing.T) {
+	// ben is the round's only active slot and is busy; dana (draining) and
+	// kit (parked outside the round) are idle but take nothing new.
+	f := &fake{
+		slots: []Slot{{Name: "ben", State: "working", Issue: "#3"}, {Name: "dana", State: "idle"}, {Name: "kit", State: "idle"}},
+		cands: []Candidate{{"#1", true}, {"#2", true}},
+	}
+	e := f.env()
+	e.Active = func() []string { return []string{"ben"} }
+	if _, err := Run(context.Background(), e); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.assigned) != 0 {
+		t.Fatalf("assigned %v, want none: no active slot is idle", f.assigned)
+	}
+	// An idle active slot is the whole budget, whatever idles outside.
+	f = &fake{
+		slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "idle"}, {Name: "kit", State: "idle"}},
+		cands: []Candidate{{"#1", true}, {"#2", true}},
+	}
+	e = f.env()
+	e.Active = func() []string { return []string{"ben"} }
+	if _, err := Run(context.Background(), e); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"#1"}; !reflect.DeepEqual(f.assigned, want) {
+		t.Fatalf("assigned %v, want %v", f.assigned, want)
+	}
+}
+
 func TestCapLimitsAssignsAndMerges(t *testing.T) {
 	f := &fake{
 		slots: []Slot{{Name: "a", State: "idle"}, {Name: "b", State: "idle"}, {Name: "c", State: "done", PR: "#1"}, {Name: "d", State: "done", PR: "#2"}},

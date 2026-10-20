@@ -68,6 +68,8 @@ For a round PR, also lift the PR body's `## Assumptions` lines (`gh pr view <pr>
 
 Take each criterion's coverage from `rota item show <ID> --json` → `data.acceptance` (`id`, `text`, `met`, `proof`, `flag`). A criterion is met only with a proof reference (`sha:check`); `flag` `changed` (text edited after the mark), `unproven` (proof row gone or not PASS) or `missing` counts as unmet. Pass the list to the Spec reviewer and report it per item.
 
+When `rota config show test.fast` is empty (and `test.full` is set), a round worker could not record proof rows: `unproven` criteria are expected, so tell the Spec reviewer to report them at most as `minor`, never as a defect or blocker. Judge the criteria against the diff and the worker's `test.full` run instead.
+
 When `issues.source` is `file`, read [`file-mode-spec.md`](file-mode-spec.md) instead.
 
 An item with no body and no plan contributes only its title; the reviewer says so when a spec is too thin to check against.

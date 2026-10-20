@@ -90,7 +90,7 @@ func planPass(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return failAny(err)
 		}
-		row, ok := acceptance.FindProof(acceptRows(rows), sha, check)
+		row, ok := proof.Latest(rows, sha, check)
 		if !ok || row.Result != "PASS" {
 			why := "no proof row for that sha and check"
 			if ok {
@@ -129,14 +129,6 @@ func planPass(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-func acceptRows(rows []proof.Row) []acceptance.Row {
-	out := make([]acceptance.Row, len(rows))
-	for i, r := range rows {
-		out[i] = acceptance.Row{Check: r.Check, Result: r.Result, Sha: r.Sha}
-	}
-	return out
-}
-
 // acceptanceCoverage is the coverage of the item's criteria: its body against
 // the marks in the acceptance note and the proof rows they rest on. The proof
 // rows are read only when there are marks to check.
@@ -146,7 +138,7 @@ func acceptanceCoverage(c *Ctx, wf backlog.Workflow, ref string, st *backlog.Sta
 		return nil, err
 	}
 	marks := acceptance.ParseMarks(note)
-	var rows []acceptance.Row
+	var rows []proof.Row
 	if len(marks) > 0 {
 		_, store, _, err := openProof(c, ref)
 		if err != nil {
@@ -156,9 +148,12 @@ func acceptanceCoverage(c *Ctx, wf backlog.Workflow, ref string, st *backlog.Sta
 		if err != nil {
 			return nil, err
 		}
-		rows = acceptRows(pr)
+		rows = pr
 	}
-	return acceptance.Coverage(st.Body, marks, rows), nil
+	return acceptance.Coverage(st.Body, marks, func(sha, check string) (string, bool) {
+		r, ok := proof.Latest(rows, sha, check)
+		return r.Result, ok
+	}), nil
 }
 
 // acceptanceData is data.acceptance of item show: [] when there are no criteria.

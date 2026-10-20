@@ -166,9 +166,9 @@ func TestTrainApprovalFailsBeforeVerify(t *testing.T) {
 	w := trainWorld(t, "touch ran-verify", "b1", "b2")
 	want := fmt.Errorf("needs a human")
 	var files []string
-	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Approve: func(f func() ([]string, error)) error {
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Approve: func(f func() ([]string, error)) (*exitcode.Refusal, error) {
 		files, _ = f()
-		return want
+		return nil, want
 	}})
 	if err != want || res.Verdict != GateApprovalRequired || strings.Join(files, ",") != "b1.txt,b2.txt" {
 		t.Fatalf("%+v %v files=%v", res, err, files)
@@ -346,15 +346,15 @@ func TestTrainLocalVerifyErrorIsError(t *testing.T) {
 	}
 }
 
-func TestTrainApprovalRefusalCarriesData(t *testing.T) {
+func TestTrainApprovalRefusalIsTyped(t *testing.T) {
 	w := trainWorld(t, "true", "b1", "b2")
-	want := &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate", Data: BlockData{BlockedBy: "manual gate"}}
-	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Approve: func(func() ([]string, error)) error { return want }})
+	want := &exitcode.Refusal{Err: &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate"}, Data: BlockData{BlockedBy: "manual gate"}}
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Approve: func(func() ([]string, error)) (*exitcode.Refusal, error) { return want, nil }})
 	if res.Verdict != GateApprovalRequired {
 		t.Fatalf("verdict %q", res.Verdict)
 	}
-	if bd, ok := exitcode.DataOf[BlockData](err); !ok || bd.BlockedBy != "manual gate" {
-		t.Errorf("refusal data = %+v, %v (err %v)", bd, ok, err)
+	if res.Refusal != want || err != want.Err || !res.Refused(err) {
+		t.Errorf("refusal = %+v, err %v, refused %v", res.Refusal, err, res.Refused(err))
 	}
 }
 
