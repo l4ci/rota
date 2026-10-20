@@ -2,12 +2,14 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
@@ -92,6 +94,53 @@ func TestItemStateClaimReleaseShow(t *testing.T) {
 	}
 	if d = runOKWith(t, deps, root, 0, "item", "release", "F7", "--as", "alice"); get(d, "changed") != true || get(d, "id") != "7" {
 		t.Fatalf("release: %v", d)
+	}
+}
+
+// item show carries the body's Try it steps and any parse error.
+func TestItemShowTryIt(t *testing.T) {
+	root := trackerProject(t, issuesConfig)
+	fake := flowFixture()
+	fake.Issues = append(fake.Issues,
+		backlog.Issue{Key: tracker.NumKey(11), Title: "With steps", State: "open", Labels: []string{"type:feature"},
+			Body: "Goal.\n\n## Try it\n- `rota item show 11`\n  expect: tryIt\n- rota b\n"},
+		backlog.Issue{Key: tracker.NumKey(12), Title: "Bad steps", State: "open", Labels: []string{"type:feature"},
+			Body: "## Try it\n  expect: orphan\n"})
+	deps := withTracker(t, fake)
+
+	d := runOKWith(t, deps, root, 0, "item", "show", "11")
+	steps := list(d, "tryIt")
+	if len(steps) != 2 || get(d, "tryItError") != nil ||
+		get(steps[0], "run") != "rota item show 11" || fmt.Sprint(get(steps[0], "line")) != "4" ||
+		len(get(steps[0], "expect").([]any)) != 1 || len(get(steps[1], "expect").([]any)) != 0 {
+		t.Fatalf("steps: %v", d)
+	}
+	d = runOKWith(t, deps, root, 0, "item", "show", "7")
+	if v, ok := d.Get("tryIt"); !ok || len(v.([]any)) != 0 || get(d, "tryItError") != nil {
+		t.Fatalf("no section: %v", d)
+	}
+	d = runOKWith(t, deps, root, 0, "item", "show", "12")
+	if e, _ := get(d, "tryItError").(string); !strings.Contains(e, "line 2") || len(list(d, "tryIt")) != 0 {
+		t.Fatalf("malformed: %v", d)
+	}
+
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	text := func(id string) string {
+		var out, errb bytes.Buffer
+		if code := mainWith(deps, []string{"-C", root, "item", "show", id}, strings.NewReader(""), &out, &errb); code != 0 {
+			t.Fatalf("text show %s: exit %d %s", id, code, errb.String())
+		}
+		return out.String()
+	}
+	if got := text("11"); !strings.Contains(got, "\ntry it: 2 step(s)\n") {
+		t.Errorf("text 11:\n%s", got)
+	}
+	if got := text("12"); !strings.Contains(got, "\ntry it: malformed: ") {
+		t.Errorf("text 12:\n%s", got)
+	}
+	if got := text("7"); strings.Contains(got, "try it") {
+		t.Errorf("text 7 mentions try it:\n%s", got)
 	}
 }
 

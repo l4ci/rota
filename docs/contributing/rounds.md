@@ -19,6 +19,22 @@ any entry is left in it afterwards, so a run that leaks shows up as a red gate, 
 The gate builds with `-trimpath` (it adds it to `GOFLAGS`), so each fresh scratch worktree reuses the Go build cache instead of adding a copy per path (#709).
 Workers do not run it. The same goes for `test.e2e`: the gate and the merge train run it on the merged tree after `test.full`, and round PRs skip per-branch ship-time QA. Here `test.e2e` is the scripted stub-worker scenarios; see [E2E scenarios](e2e-scenarios.md).
 
+An item may carry a `## Try it` section: `- <command>` bullets, each optionally followed by `expect: <substring>` lines. After
+`test.full` and `test.e2e` pass, the gate runs the commands on the merged scratch tree, in order. Each runs with a scrubbed
+environment: `PATH`, an empty temp `HOME` (with the XDG and `GH_CONFIG_DIR` dirs inside it, removed when the run ends),
+the gate host's `GOCACHE`, `GOMODCACHE` and `GOPATH`, the slot's `ROTA_PORT_BASE`, `ROTA_PORT_BLOCK` and `ROTA_DB_SUFFIX`,
+and git hardening: `GIT_SSH_COMMAND` set to an ssh that offers no identity, `GIT_CONFIG_NOSYSTEM=1`, `GIT_TERMINAL_PROMPT=0`,
+and no `SSH_AUTH_SOCK`. No variable of the gate's own environment is passed on. This is not a sandbox, and the collaborator trust check below is the boundary. Two known gaps: ssh resolves `~` through passwd, not `$HOME`, so the gate user's `~/.ssh` stays readable; and `/proc/$PPID/environ` exposes the gate's own environment, tokens included. A step still runs as the gate's OS user, so any file that user can read is readable by its absolute path. Output is capped at 4 MiB;
+a step that times out keeps the output it wrote, ending in a `[timed out: ...]` line. The commands come from an issue
+body, so on a forge tracker they run only when the issue's author and its last editor are collaborators with write access
+or higher, judged on the same body that is then run; otherwise the gate says why in a `BEHAVIOUR-SKIP` note and goes on (a skip is not a failure). GitHub is the only
+tracker that can answer that; GitLab, Jira and Linear issues skip. A gate with no PR reads no origin refs and so no forge: a
+forge item skips there too. A file-mode item body is read from the base checkout, so a
+commit someone with push access landed put it there, and it runs unchecked. `round assign` makes the same decision for the worker's
+brief: trusted steps are quoted in it, and when they would be skipped the brief says they are withheld and why, and not to run them. A non-zero exit or a missing substring bounces the slot; the transcript is
+posted on the PR and saved under `.rota/qa-runs/behaviour/`. Commands run as written, so a repo that tests its own binary
+writes `go run ./cmd/<x> ...`. No section, no run.
+
 GitHub CI (`.github/workflows/ci.yml`: gofmt, `go vet`, `go test`, validate-skills, doclint) is a backstop, not
 the merge gate. It runs on pushes to `main`, on PRs once they are ready for review (opened non-draft,
 reopened, or marked ready; drafts are skipped) and on manual dispatch, not on every push to an open PR. A

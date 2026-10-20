@@ -462,6 +462,9 @@ type Env struct {
 	// Shell runs one verification command through `sh -c` in dir and returns
 	// its combined output and exit code.
 	Shell func(ctx context.Context, dir, command string) (output string, code int)
+	// ShellEnv is Shell with the whole environment replaced by environ: the
+	// behaviour run's steps see nothing of the gate's own environment.
+	ShellEnv func(ctx context.Context, dir, command string, environ []string) (output string, code int)
 	// Run runs one tool with extra environment (CODEX_HOME) and returns what
 	// it left behind; a command that ran and failed is a Result with ExitCode
 	// set, an error means it could not run at all. Every codex and herdr call
@@ -545,6 +548,9 @@ func (e Env) withDefaults() Env {
 	if e.Shell == nil {
 		e.Shell = execShell
 	}
+	if e.ShellEnv == nil {
+		e.ShellEnv = execShellEnv
+	}
 	if e.Run == nil {
 		e.Run = execRun
 	}
@@ -577,6 +583,41 @@ func execShell(ctx context.Context, dir, command string) (string, int) {
 	}
 	return res.Stdout, res.ExitCode
 }
+
+// execShellEnv is the production Env.ShellEnv: execShell under exactly
+// environ. An empty environ means an empty environment, not the caller's. The
+// output is capped at behaviourMaxOutput bytes; a capped run ends in
+// outputTruncatedMarker.
+func execShellEnv(ctx context.Context, dir, command string, environ []string) (string, int) {
+	if environ == nil {
+		environ = []string{}
+	}
+	res, err := proc.Run(ctx, proc.Cmd{
+		Name: "sh", Args: []string{"-c", command}, Dir: dir, Environ: environ,
+		Timeout: proc.NoTimeout, Combined: true, Group: true, MaxOutput: behaviourMaxOutput,
+	})
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		// keep what the step wrote before it was stopped: it shows where it hung
+		out := res.Stdout
+		if out != "" && !strings.HasSuffix(out, "\n") {
+			out += "\n"
+		}
+		return out + "[timed out: " + err.Error() + "]\n", 124
+	}
+	if err != nil {
+		return err.Error(), 127
+	}
+	if res.Truncated {
+		return strings.TrimSuffix(res.Stdout, "\n") + "\n" + outputTruncatedMarker + "\n", res.ExitCode
+	}
+	return res.Stdout, res.ExitCode
+}
+
+// behaviourMaxOutput caps the output a Try it step keeps.
+const behaviourMaxOutput = 4 << 20
+
+// outputTruncatedMarker is the last line of a step's output that hit the cap.
+const outputTruncatedMarker = "[output truncated at 4 MiB]"
 
 // RecordBounce counts one gate bounce against an item (`bounces` in the
 // registry maps the issue to how often the gate sent its PR back) and returns
