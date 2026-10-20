@@ -1,9 +1,10 @@
-# Opt-in ship gates (Steps 3.5 and 3.75)
+# Opt-in ship gates (Steps 3.5, 3.75 and 3.8)
 
 Config these steps read (`rota config show`):
 
 - `ship.secondOpinion`: `false` (default); `true` runs a no-prior-context adversarial review after `/rota-review` (Step 3.5), except for round PRs, which never get one.
 - `ship.qa`: `false` (default); `true` runs `/rota-qa run` after the reviews (Step 3.75).
+- `ship.uat`: `false` (default); `true` runs `/rota-qa uat` after the QA gate (Step 3.8).
 
 ## Step 3.5 — Second-Opinion Gate
 
@@ -35,3 +36,9 @@ rota verdict route <branch> --for ship-qa --json
 ```
 
 Exit 3: `/rota-qa` recorded nothing; stop and rerun it. Route per the Step 3 table (`qa.gate` decides advisory versus blocking inside the verb).
+
+## Step 3.8 — UAT Gate
+
+Skipped for a round worker's PR (`round-worker-and-issue-mode.md`): round PRs stay unattended, and `rota worker gate` and the round merge path never run it. Also skipped when `ship.uat` is `false` or `REVIEW_CHOICE == ship-anyway`.
+
+For each item the branch references (`rota review scope --json` `data.referencedIds`), invoke `/rota-qa uat <ID>` and follow `skills/rota-qa/uat.md`. It asks the user about the criteria no test proves, one at a time. A failed criterion is captured as a new item linked to the original; it does not block the merge or PR. Carry any failures into the PR body Notes and tell the user which items were captured.

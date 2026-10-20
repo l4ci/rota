@@ -12,7 +12,7 @@ description: Use on "/rota-qa", "run QA", "test the feature", "validate the buil
 Read `.rota/config.json`:
 
 - `models.orchestrator` — model dispatching the runners (default `opus`).
-- `qa.gate`, `qa.afterWork`, `ship.qa` — gate and hook flags, all off or advisory by default. When a caller or flag decides whether QA runs, read [`gates-and-modes.md`](gates-and-modes.md).
+- `qa.gate`, `qa.afterWork`, `ship.qa`, `ship.uat` — gate and hook flags, all off or advisory by default. When a caller or flag decides whether QA runs, read [`gates-and-modes.md`](gates-and-modes.md).
 
 ## When NOT to Use
 
@@ -22,7 +22,7 @@ Read `.rota/config.json`:
 
 ## Modes
 
-Three modes (first-run, run, restructure) share a skeleton with `/rota-ship`'s Docs Mode. When picking a mode or checking commit ownership, read [`gates-and-modes.md`](gates-and-modes.md).
+Four modes (first-run, run, restructure, uat) share a skeleton with `/rota-ship`'s Docs Mode. When picking a mode or checking commit ownership, read [`gates-and-modes.md`](gates-and-modes.md).
 
 ### Mode: first-run
 
@@ -147,6 +147,10 @@ Same PASS/CONCERNS/FAIL contract as `references/review-verdict-routing.md`.
 
 When strategy files drifted, read [`restructure.md`](restructure.md) and follow it.
 
+### Mode: uat
+
+`/rota-qa uat <ID>`: walk an item's acceptance criteria, auto-passing those a test proof row covers and asking the user only about the rest, including every `(human)` criterion. Read [`uat.md`](uat.md) and follow it. It needs no QA strategy file and records no verdict.
+
 ## Rules
 
 - **Strategy is data.** Never hardcode a runner; every command comes from `.rota/qa/<target>.md`.
@@ -175,3 +179,4 @@ When strategy files drifted, read [`restructure.md`](restructure.md) and follow 
 - [`umbrella-scope.md`](umbrella-scope.md) — Steps 1 and 6 in umbrella repos.
 - [`proof-reuse.md`](proof-reuse.md) — Step 4 reuse of PASS proof at the current sha.
 - [`rerun-failed-check.md`](rerun-failed-check.md) — Step 4 lone re-run before recording a failure.
+- [`uat.md`](uat.md) — `uat` mode: human walk-through of an item's acceptance.
