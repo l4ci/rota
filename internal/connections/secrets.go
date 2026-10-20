@@ -131,15 +131,77 @@ func (s *Secrets) Delete(ctx context.Context, name string) error {
 	return s.File.Delete(ctx, name)
 }
 
-// FileStore keeps secrets in secrets.json under dir, mode 0600: the fallback
-// where there is no keychain (headless Linux).
-func FileStore(dir string) Store { return fileStore{path: filepath.Join(dir, "secrets.json")} }
+// SecretsFile is the path of the file store under dir.
+func SecretsFile(dir string) string { return filepath.Join(dir, "secrets.json") }
 
-type fileStore struct{ path string }
+// FileStore keeps secrets in secrets.json under dir, mode 0600: the fallback
+// where there is no keychain (headless Linux). dir is the data dir, not the
+// config dir, which users sync into dotfiles repos. A secrets.json left in
+// legacyDir (the old location; "" for none) is moved into dir on first use.
+func FileStore(dir, legacyDir string) Store {
+	f := fileStore{path: SecretsFile(dir)}
+	if legacyDir != "" {
+		f.legacy = SecretsFile(legacyDir)
+	}
+	return f
+}
+
+type fileStore struct{ path, legacy string }
+
+// migrate moves the legacy file to path when path does not exist yet. The
+// rename keeps its mode; across devices it is copied at that mode, then removed.
+func (f fileStore) migrate() error {
+	if f.legacy == "" || f.legacy == f.path {
+		return nil
+	}
+	if _, err := os.Stat(f.path); err == nil {
+		return nil
+	}
+	fi, err := os.Stat(f.legacy)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(f.path), 0o700); err != nil {
+		return err
+	}
+	if os.Rename(f.legacy, f.path) == nil {
+		return nil
+	}
+	raw, err := os.ReadFile(f.legacy)
+	if err != nil {
+		return err
+	}
+	tf, err := os.CreateTemp(filepath.Dir(f.path), "secrets-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmp := tf.Name()
+	_, err = tf.Write(raw)
+	if cerr := tf.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Chmod(tmp, fi.Mode().Perm())
+	}
+	if err == nil {
+		err = os.Rename(tmp, f.path)
+	}
+	if err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Remove(f.legacy)
+}
 
 func (fileStore) Name() string { return StoreFile }
 
 func (f fileStore) Get(_ context.Context, name string) (string, bool, error) {
+	if err := f.migrate(); err != nil {
+		return "", false, err
+	}
 	raw, err := os.ReadFile(f.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return "", false, nil
@@ -161,6 +223,9 @@ func (f fileStore) Set(_ context.Context, name, secret string) error {
 }
 
 func (f fileStore) Delete(_ context.Context, name string) error {
+	if err := f.migrate(); err != nil {
+		return err
+	}
 	if _, err := os.Stat(f.path); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -169,6 +234,9 @@ func (f fileStore) Delete(_ context.Context, name string) error {
 
 // update is a locked read-modify-write that writes a 0600 file atomically.
 func (f fileStore) update(mutate func(*jsonx.Object)) error {
+	if err := f.migrate(); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(f.path), 0o700); err != nil {
 		return err
 	}

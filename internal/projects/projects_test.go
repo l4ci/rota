@@ -131,3 +131,15 @@ func TestRemoveFindsAGoneDirectoryAndSkipsAnAbsentRegistry(t *testing.T) {
 		t.Fatalf("gone dir: %+v %v", got, err)
 	}
 }
+
+func TestDataDir(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", "/x/data")
+	if d, _ := DataDir(); d != "/x/data/rota" {
+		t.Errorf("%q", d)
+	}
+	t.Setenv("XDG_DATA_HOME", "relative")
+	t.Setenv("HOME", "/h")
+	if d, _ := DataDir(); d != "/h/.local/share/rota" {
+		t.Errorf("%q", d)
+	}
+}

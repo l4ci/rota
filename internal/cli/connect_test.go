@@ -120,6 +120,31 @@ func TestConnectAddListNeverPrintsSecret(t *testing.T) {
 	}
 }
 
+func TestConnectListReportsFileStorePathAndMigratesLegacy(t *testing.T) {
+	e := newConnectEnv(t)
+	e.kc.fail = connections.ErrUnavailable
+	e.addWork()
+	legacy := filepath.Join(e.xdg, "rota", "secrets.json")
+	want := filepath.Join(os.Getenv("XDG_DATA_HOME"), "rota", "secrets.json")
+	// an old install: move the secret back to the config dir
+	if err := os.Rename(want, legacy); err != nil {
+		t.Fatal(err)
+	}
+	_, env, _ := e.run("", "connect", "list")
+	if got := jsonx.Str(connData(env), "secretsFile"); got != want {
+		t.Errorf("secretsFile %q, want %q", got, want)
+	}
+	if _, err := os.Stat(legacy); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("legacy file left behind: %v", err)
+	}
+	if fi, err := os.Stat(want); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Errorf("%v %v", fi, err)
+	}
+	if code, _, _ := e.run("", "connect", "test", "work"); code != 0 || e.tester.seen != "s3cret-token" {
+		t.Errorf("secret lost in the move: %d %q", code, e.tester.seen)
+	}
+}
+
 func TestConnectAddFallsBackToFile0600AndListSaysSo(t *testing.T) {
 	e := newConnectEnv(t)
 	e.kc.fail = connections.ErrUnavailable
@@ -129,7 +154,7 @@ func TestConnectAddFallsBackToFile0600AndListSaysSo(t *testing.T) {
 	if got := jsonx.Str(rows.([]any)[0].(*jsonx.Object), "store"); got != "file" {
 		t.Errorf("store %q", got)
 	}
-	fi, err := os.Stat(filepath.Join(e.xdg, "rota", "secrets.json"))
+	fi, err := os.Stat(filepath.Join(os.Getenv("XDG_DATA_HOME"), "rota", "secrets.json"))
 	if err != nil || fi.Mode().Perm() != 0o600 {
 		t.Fatalf("%v %v", fi, err)
 	}
@@ -336,7 +361,7 @@ func TestConnectRemoveClearsFileStore(t *testing.T) {
 	e.kc.fail = connections.ErrUnavailable
 	e.addWork()
 	e.run("", "connect", "remove", "work")
-	raw, _ := os.ReadFile(filepath.Join(e.xdg, "rota", "secrets.json"))
+	raw, _ := os.ReadFile(filepath.Join(os.Getenv("XDG_DATA_HOME"), "rota", "secrets.json"))
 	if strings.Contains(string(raw), "s3cret-token") {
 		t.Errorf("secret left in secrets.json: %s", raw)
 	}
