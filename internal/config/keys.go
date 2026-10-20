@@ -67,7 +67,7 @@ var Keys = []Key{
 	k("qa.gate", "advisory", true, TypeEnum, "How /rota-ship treats a /rota-qa verdict. advisory surfaces findings and never blocks; blocking halts the ship on FAIL.", "advisory", "blocking"),
 	k("qa.afterWork", false, true, TypeBool, "Whether /rota-work runs /rota-qa after a cycle when touched files match a QA target's watch globs."),
 	k("autonomy.level", "off", true, TypeEnum, "How much rota chains on its own. off: skills suggest the next step. auto: chain one hop, then stop. The old loop value was removed.", "off", "auto"),
-	k("docs.path", "docs", true, TypePath, "Project-relative documentation folder that /rota-ship --docs reads and writes."),
+	k("docs.path", "docs", true, TypePath, "Project-relative documentation folder that /rota-docs reads and writes."),
 	k("docs.autoCreate", false, true, TypeBool, "Whether the after-work docs flow writes proposed updates without waiting for approval."),
 	k("docs.afterWork", false, true, TypeBool, "Whether /rota-work, /rota-ship and /rota-release run the docs after-work flow when their primary action finishes."),
 	k("git.baseBranch", "", true, TypeString, "Base branch the skills merge into and diff against. Empty auto-detects it."),

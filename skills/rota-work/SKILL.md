@@ -184,7 +184,7 @@ When `rota config show qa.afterWork` is `true`, read [`after-work-qa.md`](after-
 
 ## Step 13 — After the Cycle
 
-One line, only when `references/post-cycle-trigger-gate.md` fires: *"Run `/rota-learn` to save what this cycle taught; `/rota-decide`, `/rota-ship --docs` and `/rota-refactor` are there when you want them."* Never auto-invoke any of them. If the cycle touched files in a `.rota/map/<name>.md` entry's `Key files / dirs`, bump its `touched:` and run `rota map index`.
+One line, only when `references/post-cycle-trigger-gate.md` fires: *"Run `/rota-learn` to save what this cycle taught; `/rota-decide`, `/rota-docs` and `/rota-refactor` are there when you want them."* Never auto-invoke any of them. If the cycle touched files in a `.rota/map/<name>.md` entry's `Key files / dirs`, bump its `touched:` and run `rota map index`.
 
 ## Gates: Thought → Reality
 
