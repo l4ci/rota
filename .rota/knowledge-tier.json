@@ -820,6 +820,36 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-20"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Grep open PR heads for callers before landing a symbol removal": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-20"
+    },
+    "Rounds: Orchestration: Slate & issues::Keep deferred findings out of the round that filed them": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-20"
+    },
+    "Rounds: Orchestration: Workers & relays::A bounce relay goes under Notes, not Approvals": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-20"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Never queue two gates for one PR": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-20"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::Reviewers record verdicts under the bare branch key": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-20"
+    },
+    "Rounds: Orchestration: Workers & relays::Rounds ignore work.isolation and run as many slots as were ever provisioned": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-20"
     }
   }
 }
