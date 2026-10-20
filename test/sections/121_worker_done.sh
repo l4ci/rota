@@ -55,7 +55,7 @@ pass "worker done refuses while the inbox holds unread mail"
 RC=0; OUT=$(wdrun worker inbox ben) || RC=$?
 [ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.unread)" = "1" ] && grep -q 'please rename x' <<<"$OUT" \
   || fail "worker inbox should list the unread relay: rc=$RC $OUT"
-RC=0; OUT=$(wdrun worker inbox ben --ack) || RC=$?
+RC=0; OUT=$(wdrun worker inbox ben --ack --upto 1) || RC=$?
 [ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.acked)" = "1" ] || fail "worker inbox --ack should mark the relay read: rc=$RC $OUT"
 OUT=$(wdrun worker inbox ben) || vfail
 [ "$(echo "$OUT" | jget data.unread)" = "0" ] || fail "an acknowledged relay should not list again: $OUT"

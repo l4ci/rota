@@ -126,7 +126,8 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		}
 
 		changed := false
-		var fenced error
+		var fenced, mailErr error
+		lateUnread := 0
 		if err := worker.Update(poolRoot, func(doc *worker.Doc) {
 			s := doc.Slot(slotName)
 			if s == nil {
@@ -138,7 +139,8 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 				return
 			}
 			// Mail posted since the snapshot above must not be marked done over.
-			if fenced = unreadMailRefusal(s); fenced != nil {
+			if mailErr = unreadMailRefusal(s); mailErr != nil {
+				lateUnread = len(s.Unread())
 				return
 			}
 			now := stamp.Format(c.deps().Now())
@@ -168,6 +170,10 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		}
 		if fenced != nil {
 			return Result{}, fenced
+		}
+		if mailErr != nil {
+			d.Set("unread", lateUnread)
+			return Result{Data: d}, mailErr
 		}
 		if changed {
 			worker.LedgerDone(c.deps().workerEnv(), c.Context(), c.deps().WorkerAccounts(), poolRoot, ledger.Entry{Issue: id, Slot: slotName, Account: sl.Account(), Harness: sl.Kind(), PR: sl.PR()})

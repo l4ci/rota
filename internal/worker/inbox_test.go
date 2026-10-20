@@ -38,7 +38,7 @@ func TestMailPostsUnreadAndAcksOnce(t *testing.T) {
 		t.Fatalf("unread %+v", got)
 	}
 	var acked []Mail
-	if _, err := UpdateSlot(root, "ben", func(s *Slot) { acked = s.AckUnread() }); err != nil {
+	if _, err := UpdateSlot(root, "ben", func(s *Slot) { acked = s.AckUnread(0) }); err != nil {
 		t.Fatal(err)
 	}
 	s = LoadRegistryTolerant(root).Slot("ben")

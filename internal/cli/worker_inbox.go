@@ -16,7 +16,14 @@ import (
 // read, in the same registry update, so mail that arrives meanwhile stays.
 func workerInbox(fs *flag.FlagSet) RunFunc {
 	ack := fs.Bool("ack", false, "mark the listed mail read")
+	upto := fs.Int("upto", 0, "with --ack: mark only mail up to this sequence number (the highest one listed)")
 	return func(c *Ctx, args []string) (Result, error) {
+		if *upto != 0 && !*ack {
+			return Result{}, Usage("--upto needs --ack")
+		}
+		if *upto < 0 {
+			return Result{}, Usage("--upto must be a sequence number, got %d", *upto)
+		}
 		slotName, err := oneArg(args, "slot")
 		if err != nil {
 			return Result{}, err
@@ -26,12 +33,14 @@ func workerInbox(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		var mail []worker.Mail
+		unreadAfter := 0
 		found, err := worker.UpdateSlot(poolRoot, slotName, func(s *worker.Slot) {
 			if *ack {
-				mail = s.AckUnread()
-				return
+				mail = s.AckUnread(*upto)
+			} else {
+				mail = s.Unread()
 			}
-			mail = s.Unread()
+			unreadAfter = len(s.Unread())
 		})
 		if err != nil {
 			return Result{}, err
@@ -46,7 +55,7 @@ func workerInbox(fs *flag.FlagSet) RunFunc {
 		d := jsonx.NewObject()
 		d.Set("slot", slotName)
 		d.Set("mail", items)
-		d.Set("unread", len(mail)-ackedCount(*ack, len(mail)))
+		d.Set("unread", unreadAfter)
 		d.Set("acked", ackedCount(*ack, len(mail)))
 		d.Set("changed", *ack && len(mail) > 0)
 		if len(mail) == 0 {
@@ -62,7 +71,7 @@ func workerInbox(fs *flag.FlagSet) RunFunc {
 		if *ack {
 			fmt.Fprintf(&sb, "\nacknowledged %d mail(s)\n", len(mail))
 		} else {
-			fmt.Fprintf(&sb, "\n%d unread: run `rota worker inbox %s --ack` once you have acted on it\n", len(mail), slotName)
+			fmt.Fprintf(&sb, "\n%d unread: once you have acted on it, run `rota worker inbox %s --ack --upto %d`\n", len(mail), slotName, mail[len(mail)-1].Seq)
 		}
 		return Result{Data: d, Text: strings.TrimRight(sb.String(), "\n")}, nil
 	}
