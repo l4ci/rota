@@ -13,6 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
@@ -52,9 +53,13 @@ func roundEscalateSend(fs *flag.FlagSet) RunFunc {
 	title := fs.String("title", "", "one-line question")
 	bodyFile := fs.String("body-file", "", "question body: a path, or - for stdin")
 	timeout := fs.Float64("timeout", 0, "seconds until the escalation counts as timed out; 0 means no deadline")
+	var options stringList
+	fs.Var(&options, "options", "an answer the human can pick, at least two (repeatable)")
+	recommend := fs.Int("recommend", 0, "number of the recommended option, counted from 1")
+	cost := fs.String("cost-if-wrong", "", "what taking the recommendation costs if it is wrong")
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) != 1 {
-			return Result{}, Usage("usage: rota round escalate send <number|key> [--pr] --title <text> --body-file <path|->")
+			return Result{}, Usage("usage: rota round escalate send <number|key> [--pr] --title <text> --body-file <path|-> --options <text>... --recommend <n>")
 		}
 		var n int
 		var key tracker.IssueKey
@@ -93,6 +98,11 @@ func roundEscalateSend(fs *flag.FlagSet) RunFunc {
 		if strings.TrimSpace(string(raw)) == "" {
 			return Result{}, Usage("the body is empty")
 		}
+		if msg := checkChoice(options, *recommend); msg != "" {
+			d := jsonx.NewObject()
+			d.Set("changed", false)
+			return Result{Data: d}, &Error{Exit: exitcode.ExitRefused, Message: msg}
+		}
 		root, err := c.Root()
 		if err != nil {
 			return Result{}, err
@@ -104,6 +114,7 @@ func roundEscalateSend(fs *flag.FlagSet) RunFunc {
 		res, err := escalation.Send(c.Context(), env, root, escalation.SendOpts{
 			Number: n, Key: key, PR: *pr, Slot: *slot, Title: strings.TrimSpace(*title), Body: string(raw),
 			Timeout: time.Duration(*timeout * float64(time.Second)),
+			Choice:  escalation.Choice{Options: trimmed(options), Recommend: *recommend, Cost: strings.TrimSpace(*cost)},
 		})
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)
@@ -185,11 +196,55 @@ func escalationRows(reports []escalation.Report) ([]any, []string) {
 		if e.Deadline != "" {
 			o.Set("deadline", e.Deadline)
 		}
+		if len(e.Options) > 0 {
+			opts := make([]any, len(e.Options))
+			for i, x := range e.Options {
+				opts[i] = x
+			}
+			o.Set("options", opts)
+			o.Set("recommend", e.Recommend)
+			if e.Cost != "" {
+				o.Set("cost", e.Cost)
+			}
+		}
 		if e.Answer != nil {
 			o.Set("answer", e.Answer.Object())
+			if n := e.Answer.Option; n >= 1 && n <= len(e.Options) {
+				o.Set("resolved", e.Options[n-1])
+			}
 		}
 		rows = append(rows, o)
 		lines = append(lines, fmt.Sprintf("%s\t%s\t%s %s\t%s", e.ID, r.Status, e.Kind, e.Ref(), e.Title))
 	}
 	return rows, lines
+}
+
+// stringList is a repeatable string flag.
+type stringList []string
+
+func (l *stringList) String() string     { return strings.Join(*l, ",") }
+func (l *stringList) Set(v string) error { *l = append(*l, v); return nil }
+
+func trimmed(l []string) []string {
+	out := make([]string, len(l))
+	for i, s := range l {
+		out[i] = strings.TrimSpace(s)
+	}
+	return out
+}
+
+// checkChoice is the refusal for a question that is not decision ready, or "".
+func checkChoice(options []string, recommend int) string {
+	if len(options) < 2 {
+		return "--options is required, at least twice: an escalation lists the answers the human can pick"
+	}
+	for _, o := range options {
+		if strings.TrimSpace(o) == "" {
+			return "--options must not be blank"
+		}
+	}
+	if recommend < 1 || recommend > len(options) {
+		return fmt.Sprintf("--recommend is required: the number of the recommended option, 1 to %d", len(options))
+	}
+	return ""
 }

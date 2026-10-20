@@ -159,7 +159,7 @@ func TestEscalateSendRecordsAndPosts(t *testing.T) {
 	clock := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	useEscalation(deps, h, "1", &clock)
 
-	code, out, errOut := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "Pick one", "--body-file", "body.md", "--timeout", "3600", "--json")
+	code, out, errOut := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "Pick one", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", "body.md", "--timeout", "3600", "--json")
 	d := data(t, out)
 	if code != 0 {
 		t.Fatalf("send: %d %s %s", code, out, errOut)
@@ -199,11 +199,11 @@ func TestEscalateSendOnePerThread(t *testing.T) {
 	h := &escHost{cliHost: cliHost{herdr: true}}
 	clock := time.Now().UTC()
 	useEscalation(deps, h, "1", &clock)
-	if code, out, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "A", "--body-file", "body.md"); code != 0 {
+	if code, out, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "A", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", "body.md"); code != 0 {
 		t.Fatalf("first send: %d %s", code, out)
 	}
 	posted := len(f.comments)
-	code, out, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "B", "--body-file", "body.md", "--json")
+	code, out, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "B", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", "body.md", "--json")
 	d := data(t, out)
 	if code != 4 || d["pending"] != "e1" || d["changed"] != false {
 		t.Fatalf("second send: %d %v", code, d)
@@ -212,7 +212,7 @@ func TestEscalateSendOnePerThread(t *testing.T) {
 		t.Error("a refused send must not post")
 	}
 	// The same number as a PR is another thread; the id keeps counting.
-	code, out, _ = rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--pr", "--title", "C", "--body-file", "body.md", "--json")
+	code, out, _ = rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--pr", "--title", "C", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", "body.md", "--json")
 	if e := data(t, out)["escalation"].(map[string]any); code != 0 || e["id"] != "e2" || e["kind"] != "pr" {
 		t.Fatalf("pr send: %d %s", code, out)
 	}
@@ -246,18 +246,18 @@ func TestEscalateSendUsageAndResolution(t *testing.T) {
 	if len(f.calls) != 0 {
 		t.Errorf("usage errors must not reach the forge: %v", f.calls)
 	}
-	if code, _, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--slot", "ghost", "--title", "t", "--body-file", "body.md"); code != 3 {
+	if code, _, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--slot", "ghost", "--title", "t", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", "body.md"); code != 3 {
 		t.Errorf("unknown slot: %d, want 3", code)
 	}
 	if len(f.calls) != 0 {
 		t.Errorf("slot resolution comes before the forge: %v", f.calls)
 	}
 	bare := t.TempDir()
-	if code, _, _ := rotaInWith(t, deps, bare, "round", "escalate", "send", "7", "--title", "t", "--body-file", filepath.Join(dir, "body.md")); code != 3 {
+	if code, _, _ := rotaInWith(t, deps, bare, "round", "escalate", "send", "7", "--title", "t", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", filepath.Join(dir, "body.md")); code != 3 {
 		t.Errorf("no project root: %d, want 3", code)
 	}
 	f.notFound = true
-	if code, _, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "t", "--body-file", "body.md"); code != 3 {
+	if code, _, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "t", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", "body.md"); code != 3 {
 		t.Errorf("forge has no such issue: %d, want 3", code)
 	}
 	if doc := registryDoc(t, dir); doc["escalations"] != nil {
@@ -271,7 +271,7 @@ func TestEscalateSendForgeMissing(t *testing.T) {
 	deps.TrackerOptions = []tracker.Option{tracker.WithExec(nil, func(string) (string, error) { return "", exec.ErrNotFound })}
 	clock := time.Now().UTC()
 	useEscalation(deps, &escHost{}, "", &clock)
-	if code, _, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "t", "--body-file", "body.md"); code != 5 {
+	if code, _, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "t", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", "body.md"); code != 5 {
 		t.Errorf("forge CLI missing: %d, want 5", code)
 	}
 	if code, _, _ := rotaInWith(t, deps, dir, "round", "escalate", "check"); code != 0 {
@@ -296,7 +296,7 @@ func TestEscalateSendNotifyRules(t *testing.T) {
 		h := &escHost{require: c.require}
 		clock := time.Now().UTC()
 		useEscalation(deps, h, c.env, &clock)
-		code, out, errOut := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "t", "--body-file", "body.md", "--json")
+		code, out, errOut := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "t", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", "body.md", "--json")
 		d := data(t, out)
 		if code != 0 || d["notified"] != c.notified || d["escalation"].(map[string]any)["notified"] != c.notified {
 			t.Errorf("%s: %d %v", c.name, code, d)
@@ -320,7 +320,7 @@ func TestEscalateSendSlotAndGitLabPR(t *testing.T) {
 	deps := useThread(t, f)
 	clock := time.Now().UTC()
 	useEscalation(deps, &escHost{}, "", &clock)
-	code, out, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--pr", "--slot", "w1", "--title", "t", "--body-file", "body.md", "--json")
+	code, out, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--pr", "--slot", "w1", "--title", "t", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", "body.md", "--json")
 	d := data(t, out)
 	e, _ := d["escalation"].(map[string]any)
 	if code != 0 || e["slot"] != "w1" || d["url"] != "https://gitlab.com/o/r/-/merge_requests/7#note_1" {
@@ -343,7 +343,7 @@ func TestEscalateCheckLifecycle(t *testing.T) {
 	h := &escHost{}
 	clock := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	useEscalation(deps, h, "", &clock)
-	rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "A", "--body-file", "body.md", "--timeout", "60")
+	rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "A", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", "body.md", "--timeout", "60")
 	f.add("<!-- rota:claim dana -->\nClaimed by dana")
 	f.add("<!-- rota:escalation e9 -->\nnot an answer either")
 
@@ -408,8 +408,8 @@ func TestEscalateCheckForgeFailureAndDeletedComment(t *testing.T) {
 	deps := useThread(t, f)
 	clock := time.Now().UTC()
 	useEscalation(deps, &escHost{}, "", &clock)
-	rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "A", "--body-file", "body.md")
-	rotaInWith(t, deps, dir, "round", "escalate", "send", "8", "--title", "B", "--body-file", "body.md")
+	rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "A", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", "body.md")
+	rotaInWith(t, deps, dir, "round", "escalate", "send", "8", "--title", "B", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", "body.md")
 
 	f.failRead = errors.New("HTTP 500: boom")
 	code, out, errOut := rotaInWith(t, deps, dir, "round", "escalate", "check", "--json")
