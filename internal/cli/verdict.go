@@ -3,12 +3,14 @@ package cli
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/debugctr"
 	"github.com/l4ci/rota/internal/gate"
@@ -98,6 +100,8 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", "review-spec, review-quality, second-opinion, qa or behaviour")
 	v := fs.String("verdict", "", "PASS, CONCERNS or FAIL (qa also INFRA-FAIL; behaviour takes PASS or FAIL)")
 	transcript := fs.String("transcript", "", "path of the run's transcript (behaviour only)")
+	fileDeferred := fs.Bool("file-deferred", false, "file each deferred (non-blocking, non-info) finding as a task item related to --pr")
+	pr := fs.String("pr", "", "the PR the deferred items cite in --related (with --file-deferred)")
 	body := bodyFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if *kind == "" {
@@ -112,12 +116,24 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		if *transcript != "" && *kind != verdict.Behaviour {
 			return Result{}, Usage("--transcript is only for --kind %s", verdict.Behaviour)
 		}
+		if *pr != "" && !*fileDeferred {
+			return Result{}, Usage("--pr is only for --file-deferred")
+		}
+		if *fileDeferred && strings.TrimSpace(*pr) == "" {
+			return Result{}, Usage("--file-deferred needs --pr, the PR the items cite")
+		}
 		b, err := verdictBody(c, *body)
 		if err != nil {
 			return Result{}, err
 		}
 		if err := sameVerdict(b, *v); err != nil {
 			return Result{}, err
+		}
+		var deferred []backlog.CreateInput
+		if *fileDeferred {
+			if deferred, err = deferredItems(b.Findings, strings.TrimSpace(*pr)); err != nil {
+				return Result{}, err
+			}
 		}
 		t, err := resolveVerdictBranch(c, args)
 		if err != nil {
@@ -137,8 +153,59 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		if r.Combined != "" {
 			text = r.Combined
 		}
+		if len(deferred) > 0 {
+			// The record is already written, so a failure here reports what was
+			// filed and leaves the rest to a by-hand `item create`.
+			root, err := backlogScope(c)
+			if err != nil {
+				return Result{}, err
+			}
+			res, err := withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) { return fileBatch(be, deferred) })
+			if err != nil {
+				return Result{}, err
+			}
+			items, _ := res.Data.(*jsonx.Object).Get("items")
+			var ids []any
+			for _, it := range items.([]any) {
+				id, _ := it.(*jsonx.Object).Get("id")
+				ids = append(ids, id)
+			}
+			d.Set("filed", ids)
+			text += " (filed " + strings.Replace(res.Text, "\n", " ", -1) + ")"
+		}
 		return Result{Data: d, Text: text + " -> " + next}, nil
 	}
+}
+
+// deferredItems is one task per deferred finding, related to the PR it was
+// found on. The title is the finding's; the body carries its location and detail.
+func deferredItems(findings []verdict.Finding, pr string) ([]backlog.CreateInput, error) {
+	var ins []backlog.CreateInput
+	for _, f := range findings {
+		if !f.IsDeferred() {
+			continue
+		}
+		var body strings.Builder
+		fmt.Fprintf(&body, "Deferred %s review finding on %s.\n", f.Severity, pr)
+		if f.File != "" {
+			loc := f.File
+			if f.Line > 0 {
+				loc += ":" + strconv.Itoa(f.Line)
+			}
+			fmt.Fprintf(&body, "\nWhere: `%s`\n", loc)
+		}
+		if f.Detail != "" {
+			body.WriteString("\n" + f.Detail + "\n")
+		}
+		in, err := backlog.BuildCreateInput(backlog.CaptureRequest{Kind: "tasks", Title: f.Title, Desc: f.Title,
+			Fields: map[string]string{"related": pr}, Given: map[string]bool{"related": true},
+			Body: []byte(body.String()), HasBody: true})
+		if err != nil {
+			return nil, Usage("cannot file finding %q: %v", f.Title, err)
+		}
+		ins = append(ins, in)
+	}
+	return ins, nil
 }
 
 func verdictShow(c *Ctx, args []string) (Result, error) {
