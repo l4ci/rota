@@ -40,22 +40,15 @@ func refusalWithData() *exitcode.Refusal {
 	return &exitcode.Refusal{Err: &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate"}, Data: jsonx.NewObject()}
 }
 
-// A refusal under a `paths` policy sends the request on the PR's thread, naming
-// the files that put the merge under the policy, and puts the entry on the
-// refusal's data.
-func TestGateRefusalEscalatesOnPathsPolicy(t *testing.T) {
-	w := newWorld(t, ghURL)
+// Attach sends the request on the thread, naming the files the refusal was
+// judged on, and puts the entry on the refusal's data. It lists no files itself.
+func TestAttachSendsOnPathsPolicy(t *testing.T) {
 	esc := &fakeEscalator{}
 	var warned []string
 	ref := refusalWithData()
-	res, err := w.gate(false, GateOpts{
-		Approve: func(GateTarget, func() ([]string, error)) (*exitcode.Refusal, error) { return ref, nil },
-		Escalate: &ApprovalEscalation{Esc: esc, Policy: gatepolicy.MergePolicy{Mode: gatepolicy.MergePaths, Paths: []string{"work.txt"}},
-			Warn: func(f string, a ...any) { warned = append(warned, f) }},
-	})
-	if res.Verdict != GateApprovalRequired || err != ref.Err {
-		t.Fatalf("verdict %q err %v", res.Verdict, err)
-	}
+	a := ApprovalEscalation{Esc: esc, Policy: gatepolicy.MergePolicy{Mode: gatepolicy.MergePaths, Paths: []string{"work.txt"}},
+		Warn: func(f string, a ...any) { warned = append(warned, f) }}
+	a.Attach(ref, []string{"work.txt"}, ApprovalThread{Kind: "pr", Number: 7})
 	if len(esc.sent) != 1 || esc.sent[0].Kind != "pr" || esc.sent[0].Number != 7 {
 		t.Fatalf("sent %+v", esc.sent)
 	}
@@ -70,8 +63,8 @@ func TestGateRefusalEscalatesOnPathsPolicy(t *testing.T) {
 	}
 }
 
-// Without Escalate the refusal stands and nothing is sent.
-func TestGateRefusalWithoutEscalateSendsNothing(t *testing.T) {
+// A gate refusal carries no escalation: the gate itself sends nothing.
+func TestGateRefusalSendsNothing(t *testing.T) {
 	w := newWorld(t, ghURL)
 	ref := refusalWithData()
 	res, _ := w.gate(false, GateOpts{Approve: func(GateTarget, func() ([]string, error)) (*exitcode.Refusal, error) { return ref, nil }})
@@ -79,7 +72,7 @@ func TestGateRefusalWithoutEscalateSendsNothing(t *testing.T) {
 		t.Fatalf("verdict %q", res.Verdict)
 	}
 	if _, ok := ref.Data.(*jsonx.Object).Get("escalation"); ok {
-		t.Error("escalation set without Escalate")
+		t.Error("escalation set by the gate")
 	}
 }
 

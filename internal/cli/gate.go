@@ -113,10 +113,7 @@ func mergePolicy(c *Ctx) (gate.MergePolicy, error) {
 type approvalReq struct {
 	ID       string
 	Escalate bool
-	// GateSends says the worker gate sends the request itself on a refusal
-	// (worker.GateOpts.Escalate), so clearMerge only resolves the thread.
-	GateSends bool
-	Thread    func() (worker.ApprovalThread, error)
+	Thread   func() (worker.ApprovalThread, error)
 }
 
 // approvalFlags defines --approval and --escalate next to --confirm and
@@ -282,14 +279,11 @@ func clearMerge(c *Ctx, p gate.MergePolicy, target string, conf gate.Confirm, re
 		}
 	}
 	res, err := clearGate(c, gate.MergeApproval, target, conf, hit, extra)
-	if err != nil && req.Escalate && !req.GateSends {
-		if d, ok := res.Data.(*jsonx.Object); ok {
-			if e := approvalEscalation(c, p).EscalateApproval(hit, th); e != nil {
-				d.Set("escalation", e)
-			}
-		}
+	ref, err := refusalOf(res, err)
+	if ref != nil && req.Escalate {
+		approvalEscalation(c, p).Attach(ref, hit, th)
 	}
-	return refusalOf(res, err)
+	return ref, err
 }
 
 // refusalOf is the result of a gate step as a value: an exit-coded err is the
