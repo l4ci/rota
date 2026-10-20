@@ -753,7 +753,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 			// A receiver about to be queued holds unmerged work the guard would
 			// refuse; parking it clears that.
 			if !queueTo {
-				if _, err := e.workerEnv().ResetTo(root, o.To, id, BranchName(o.To, id, it.Title), true); err != nil {
+				if _, err := e.workerEnv().ResetTo(root, o.To, id, worker.BranchName(o.To, id, it.Title), true); err != nil {
 					var we *exitcode.Error
 					if errors.As(err, &we) && we.Data != nil { // the reset guard's refusal
 						return res, blocked(BlockSlotBusy, "%s", we.Message)
@@ -990,7 +990,7 @@ func (e Env) headLine(ctx context.Context, wt, ref string) string {
 func (e Env) checkout(ctx context.Context, root string, to *worker.Slot, id, title string, branch *string) error {
 	name, wt := to.Name(), to.Worktree()
 	if *branch == "" || worker.IsPark(*branch) || *branch == to.Base() {
-		*branch = BranchName(name, id, title)
+		*branch = worker.BranchName(name, id, title)
 		_, err := e.workerEnv().ResetTo(root, name, id, *branch, false)
 		return err
 	}
