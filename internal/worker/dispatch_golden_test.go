@@ -23,13 +23,16 @@ var (
 	// activeAt is the stall clock `rota round reconcile` reads (C10); the retired
 	// helper never wrote it, so the golden compares the registry without it.
 	activeRe = regexp.MustCompile(`,\n\s*"activeAt": "[^"]*"`)
-	bufRe    = regexp.MustCompile(`(load-buffer -b \S+) \S+`)
+	// relaySentAt is the wall-clock time a relay went out.
+	relaySentRe = regexp.MustCompile(`,\n\s*"relaySentAt": "[^"]*"`)
+	bufRe       = regexp.MustCompile(`(load-buffer -b \S+) \S+`)
 )
 
 func normalise(s, root string) string {
 	s = strings.ReplaceAll(s, root, "ROOT")
 	s = tsRe.ReplaceAllString(s, `"ts": "TS"`)
 	s = activeRe.ReplaceAllString(s, "")
+	s = relaySentRe.ReplaceAllString(s, "")
 	return bufRe.ReplaceAllString(s, "$1 TMPFILE")
 }
 

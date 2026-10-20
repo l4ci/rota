@@ -217,6 +217,7 @@ wait:
 		if ctx.Err() != nil {
 			return stop()
 		}
+		noteRelayEcho(root, targets, e.Now())
 		rows, notes := e.promoteIdleWithPR(ctx, root, rows)
 		last = rows
 		for _, r := range rows {
@@ -225,7 +226,7 @@ wait:
 				// The pane moved after the worker's event: it was answered, and
 				// an idle pane later must not read it as news again.
 				for i := range targets {
-					if ev := targets[i].ev; targets[i].name == r.Name && ev != nil {
+					if ev := targets[i].ev; targets[i].name == r.Name && ev != nil && r.Evidence != relayEchoEvidence {
 						targets[i].ev, targets[i].evSeq = nil, 0
 						if _, err := UpdateSlot(root, r.Name, func(s *Slot) {
 							if cur := s.Event(); cur != nil && cur.Seq == ev.Seq && s.PaneHandle() == targets[i].handle {

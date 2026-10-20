@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/stamp"
 	"sync"
 
@@ -451,15 +452,90 @@ const relayEchoEvidence = "relay sent, its echo is not in the pane yet; the ROTA
 // reRelaySeq is the `[relay K]` line every relay carries under its header.
 var reRelaySeq = regexp.MustCompile(`^\s*(?:[┃❯]\s*)?\[relay (\d+)\]\s*$`)
 
-// gateRelayEcho holds a done row busy until the pane shows the echo of the
-// relay the slot is waiting on and a done line after it: before that, the done
-// line is an earlier turn's (#1017). A done decided by the slot's own event is
-// not read from the pane and passes.
+// gateRelayEcho holds a done row busy while the pane cannot show it answers
+// the pending relay (#1017). Before the relay's `[relay K]` line has ever been
+// seen, a done in the capture is an earlier turn's. Once it has been seen, a
+// capture without it means it scrolled out, so a done in the capture came
+// after it. A done event the worker sent after the relay passes: the event, not
+// the pane, decides that row.
 func gateRelayEcho(t pollTarget, st, ev, text string, lines int) (string, string) {
-	if t.relayPending == 0 || st != StateDone || t.evSeq > 0 || doneAfterRelay(t.kind, text, lines, t.relayPending) {
+	if t.relayPending == 0 || st != StateDone || doneEventAfterRelay(t) {
+		return st, ev
+	}
+	if t.relayMarker {
+		if doneAfterRelay(t.kind, text, lines, t.relayPending) {
+			return st, ev
+		}
+	} else if t.relaySeen {
 		return st, ev
 	}
 	return StateBusy, relayEchoEvidence
+}
+
+// doneEventAfterRelay: the slot's standing event is a `worker done` stamped
+// after the pending relay went out.
+func doneEventAfterRelay(t pollTarget) bool {
+	if t.ev == nil || t.ev.Kind != EventDone {
+		return false
+	}
+	ts, err := stamp.Parse(t.ev.TS)
+	return err == nil && !ts.Before(t.relaySentAt)
+}
+
+// relayMarkerVisible: the pane capture holds pending relay k's `[relay k]` line.
+func relayMarkerVisible(text string, lines, k int) bool {
+	all := splitLines(text)
+	if lines > 0 && len(all) > lines {
+		all = all[len(all)-lines:]
+	}
+	for _, l := range all {
+		if m := reRelaySeq.FindStringSubmatch(l); m != nil && m[1] == strconv.Itoa(k) {
+			return true
+		}
+	}
+	return false
+}
+
+// noteRelayEcho records what the captures showed about each pending relay:
+// its `[relay K]` line seen, which is what tells a scrolled-out marker from an
+// unrendered one, or the relay given up on after round.stallMinutes without
+// the line (a collapsed paste shows none), which would hold the slot busy for
+// good. It updates the targets it was given, which a wait keeps across passes.
+func noteRelayEcho(root string, targets []pollTarget, now time.Time) {
+	var stall time.Duration
+	loaded := false
+	for i, t := range targets {
+		if t.relayPending == 0 {
+			continue
+		}
+		k := t.relayPending
+		switch {
+		case t.relayMarker && !t.relaySeen:
+			if _, err := UpdateSlot(root, t.name, func(s *Slot) {
+				if s.RelayPending() == k {
+					s.SetRelayMarkerSeen()
+				}
+			}); err == nil {
+				targets[i].relaySeen = true
+			}
+		case !t.relaySeen:
+			if !loaded {
+				loaded = true
+				if set, err := roundcfg.Load(root); err == nil {
+					stall = time.Duration(set.StallMinutes) * time.Minute
+				}
+			}
+			if stall > 0 && !t.relaySentAt.IsZero() && now.Sub(t.relaySentAt) >= stall {
+				if _, err := UpdateSlot(root, t.name, func(s *Slot) {
+					if s.RelayPending() == k {
+						s.ClearRelayPending()
+					}
+				}); err == nil {
+					targets[i].relayPending = 0
+				}
+			}
+		}
+	}
 }
 
 // doneAfterRelay reports a done line printed after relay k's echo. The relay is
@@ -606,6 +682,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	before, _ := os.ReadFile(RegistryPath(root))
 
 	rows, _, _ := e.classify(ctx, h, targets, o.Settle, o.Lines)
+	noteRelayEcho(root, targets, e.Now())
 	rows, notes := e.promoteIdleWithPR(ctx, root, rows)
 	notified := map[string]int{} // slot -> seq of the event whose notification went out
 	for i, r := range rows {
@@ -825,6 +902,9 @@ type pollTarget struct {
 	// done line has followed yet (0 for none). relays is the length of the
 	// slot's relay log.
 	relayPending int
+	relaySeen    bool      // its `[relay K]` line has been seen in a capture
+	relaySentAt  time.Time // when it went out
+	relayMarker  bool      // set by classify: the last capture shows the line
 	relays       int
 	turnSeq      int
 	// ev is the slot's standing worker event with the stamps Decide weighs it
@@ -837,7 +917,7 @@ type pollTarget struct {
 
 func slotTarget(s *Slot) pollTarget {
 	return pollTarget{name: s.Name(), kind: s.HarnessKind(), handle: s.PaneHandle(), prev: s.State(), seen: s.Seen(), turnSeq: s.TurnSeq(),
-		relayPending: s.RelayPending(), relays: len(s.Relays()),
+		relayPending: s.RelayPending(), relaySeen: s.RelayMarkerSeen(), relaySentAt: s.RelaySentAt(), relays: len(s.Relays()),
 		ev: s.Event(), lastChange: parseStamp(s.ActiveAt())}
 }
 
@@ -922,6 +1002,8 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		}
 		if native, ok := finished[t.name]; ok {
 			st, ev := ClassifyFor(t.kind, first[t.name], false, lines, native)
+			t.relayMarker = t.relayPending > 0 && relayMarkerVisible(first[t.name], lines, t.relayPending)
+			targets[i].relayMarker = t.relayMarker
 			st, ev = gateRelayEcho(t, st, ev, first[t.name], lines)
 			push(PollRow{t.name, st, ev})
 			continue
@@ -934,6 +1016,8 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		native = withReadFailure(native, err)
 		moved := first[t.name] != second
 		st, ev := ClassifyFor(t.kind, second, moved, lines, native)
+		t.relayMarker = t.relayPending > 0 && relayMarkerVisible(second, lines, t.relayPending)
+		targets[i].relayMarker = t.relayMarker
 		st, ev = gateRelayEcho(t, st, ev, second, lines)
 		if st == StateUnknown {
 			// herdr says why it could not classify the agent; a failing or

@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/stamp"
 	"strconv"
 	"strings"
 	"testing"
@@ -60,7 +61,7 @@ func relayRaceSlot(t *testing.T, dir string, k int) {
 		for i := 0; i < k; i++ {
 			s.AppendRelay(newRelayEntry(27, time.Now(), "REVIEW"))
 		}
-		s.SetRelayPending(k)
+		s.SetRelayPending(k, stamp.Format(time.Now()))
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -160,5 +161,82 @@ func TestClassifyOpenCodeBusyPhraseInEchoedRelayIsNotBusy(t *testing.T) {
 	live := pane + "\nesc interrupt\n"
 	if st, _ := ClassifyFor("opencode", live, false, 60, ""); st != StateBusy {
 		t.Errorf("a running opencode turn read as %s", st)
+	}
+}
+
+// The relay's echo was seen, then scrolled out of the capture behind a long
+// fix: the done in the capture came after it and counts, once.
+func TestWaitDoneAfterScrolledOutRelayEchoWakesOnce(t *testing.T) {
+	for _, withEvent := range []bool{false, true} {
+		dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+		h := newWaitHost("herdr")
+		const done = "ROTA-DONE w1 https://github.com/o/r/pull/994\n"
+		relayRaceSlot(t, dir, 1)
+		// First capture: the echo is in, the worker is at work.
+		h.set("w1", relayEcho(1)+"● working\n", "working")
+		if res := waitOnce(t, dir, h, 300*time.Millisecond); !res.TimedOut {
+			t.Fatalf("a working slot woke the watch: %+v", res)
+		}
+		if !LoadRegistryTolerant(dir).Slot("w1").RelayMarkerSeen() {
+			t.Fatal("the visible echo was not recorded")
+		}
+		if withEvent {
+			if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetEvent(EventDone, "https://github.com/o/r/pull/994", stamp.Format(time.Now())) }); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// Later: 80 lines of work pushed the echo out; only the done shows.
+		h.set("w1", strings.Repeat("● work\n", 80)+done, "idle")
+		res := waitOnce(t, dir, h, 5*time.Second)
+		if res.Slot != "w1" || res.State != StateDone {
+			t.Fatalf("event=%v: done after a scrolled-out echo: %+v", withEvent, res)
+		}
+		if got := LoadRegistryTolerant(dir).Slot("w1").RelayPending(); got != 0 {
+			t.Errorf("event=%v: relayPending = %d after the done", withEvent, got)
+		}
+		if res := waitOnce(t, dir, h, 300*time.Millisecond); !res.TimedOut {
+			t.Errorf("event=%v: the same done woke twice: %+v", withEvent, res)
+		}
+	}
+}
+
+// A worker's done event after the relay is not held by an echo that never
+// rendered, and the gated pane read does not clear it.
+func TestWaitDoneEventPassesTheRelayGate(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	h := newWaitHost("herdr")
+	relayRaceSlot(t, dir, 1)
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetEvent(EventDone, "", stamp.Format(time.Now().Add(time.Second))) }); err != nil {
+		t.Fatal(err)
+	}
+	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/994\n", "idle")
+	if res := waitOnce(t, dir, h, 5*time.Second); res.Slot != "w1" || res.State != StateDone {
+		t.Fatalf("done event after the relay: %+v", res)
+	}
+}
+
+// A relay whose marker never shows (a collapsed paste) is given up on after
+// round.stallMinutes instead of holding the slot busy for good.
+func TestNoteRelayEchoGivesUpAfterStallMinutes(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	relayRaceSlot(t, dir, 1)
+	targets := []pollTarget{slotTarget(LoadRegistryTolerant(dir).Slot("w1"))}
+	noteRelayEcho(dir, targets, time.Now().Add(time.Minute))
+	if LoadRegistryTolerant(dir).Slot("w1").RelayPending() != 1 {
+		t.Fatal("a young relay was given up on")
+	}
+	noteRelayEcho(dir, targets, time.Now().Add(31*time.Minute))
+	if got := LoadRegistryTolerant(dir).Slot("w1").RelayPending(); got != 0 || targets[0].relayPending != 0 {
+		t.Errorf("relayPending = %d (target %d) after the stall window", got, targets[0].relayPending)
+	}
+}
+
+func TestClassifyCodexBusyPhraseInEchoedRelayIsNotBusy(t *testing.T) {
+	pane := "❯ --- ORCHESTRATOR (round 27) ---\n  the footer says (esc to interrupt) while a turn runs\n"
+	if st, ev := ClassifyFor("codex", pane, false, 60, ""); st == StateBusy {
+		t.Errorf("echoed relay read as busy: %q", ev)
+	}
+	if st, _ := ClassifyFor("claude", "✻ Working… (12s · esc to interrupt · ctrl+t to hide)\n", false, 60, ""); st != StateBusy {
+		t.Errorf("a claude status line with trailing hints read as %s", st)
 	}
 }
