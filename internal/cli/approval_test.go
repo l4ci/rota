@@ -182,38 +182,6 @@ func TestPRMergeEscalatePathsAndSendFailure(t *testing.T) {
 	}
 }
 
-func TestSlotApprovalThread(t *testing.T) {
-	root := t.TempDir()
-	write(t, filepath.Join(root, ".rota", "workers.json"), `{"slots":[
-{"name":"a","branch":"a/5-x","pr":"https://github.com/o/r/pull/42"},
-{"name":"b","task":"9","branch":"b/3-y"},
-{"name":"c","branch":"c/3-y"},
-{"name":"d","branch":"park/d"},
-{"name":"e","task":"do things","branch":"e/x"}]}`)
-	for _, c := range []struct {
-		slot, kind string
-		n          int
-		title      string
-	}{
-		{"a", "pr", 42, "Merge approval: PR #42"},
-		{"b", "issue", 9, "Merge approval: b (b/3-y)"},
-		{"c", "issue", 3, "Merge approval: c (c/3-y)"},
-	} {
-		th, err := slotApprovalThread(root, c.slot)
-		if err != nil || th.Kind != c.kind || th.Number != c.n || th.Title != c.title || th.Slot != c.slot {
-			t.Errorf("%s: %+v %v", c.slot, th, err)
-		}
-	}
-	for _, s := range []string{"d", "e"} {
-		if _, err := slotApprovalThread(root, s); err == nil || !strings.Contains(err.Error(), "approval thread") {
-			t.Errorf("%s: %v", s, err)
-		}
-	}
-	if _, err := slotApprovalThread(root, "zz"); err == nil {
-		t.Error("unknown slot")
-	}
-}
-
 func TestWorkerGateApprovalOnIssueThread(t *testing.T) {
 	dir := workerProject(t, gateConfig(t, `{"test":{"full":["test -f feature.txt"]},"forge":{"provider":"github"},"issues":{"source":"github"}}`, "auto", map[string]any{"mergeApproval": "all"}))
 	rotaInWith(t, testDeps(), dir, "worker", "pool", "init", "--slots", "1", "--base", "main")

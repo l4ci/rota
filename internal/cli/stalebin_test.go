@@ -51,13 +51,13 @@ func TestStaleBinaryWatchWarnsOncePerRound(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chdir(wd) })
 	cd := dir + "/.git"
 	c := &Ctx{}
-	if _, ok := staleBinaryOncePerRound(c, cd, 7); !ok {
-		t.Fatal("first heartbeat of a round must warn")
+	if _, ok, err := staleBinaryOncePerRound(c, cd, 7); !ok || err != nil {
+		t.Fatalf("first heartbeat of a round must warn: ok=%v err=%v", ok, err)
 	}
-	if _, ok := staleBinaryOncePerRound(c, cd, 7); ok {
+	if _, ok, _ := staleBinaryOncePerRound(c, cd, 7); ok {
 		t.Error("the same round must not warn twice")
 	}
-	if _, ok := staleBinaryOncePerRound(c, cd, 8); !ok {
+	if _, ok, _ := staleBinaryOncePerRound(c, cd, 8); !ok {
 		t.Error("a new round warns again")
 	}
 }

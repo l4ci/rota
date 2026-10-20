@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/proc"
 )
 
@@ -222,6 +224,84 @@ func TestFileStoreMigrationTightensLegacyMode(t *testing.T) {
 	fi, err := os.Stat(SecretsFile(dir))
 	if err != nil || fi.Mode().Perm() != 0o600 {
 		t.Fatalf("%v %v", fi, err)
+	}
+}
+
+func TestFileStoreTightensExistingDataDir(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "rota")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := FileStore(dir, "").Set(context.Background(), "work", "tok"); err != nil {
+		t.Fatal(err)
+	}
+	if di, _ := os.Stat(dir); di.Mode().Perm() != 0o700 {
+		t.Errorf("dir mode %v, want 0700", di.Mode().Perm())
+	}
+}
+
+func TestFileStoreMigratesUnderLock(t *testing.T) {
+	root := t.TempDir()
+	legacy, dir := filepath.Join(root, "config"), filepath.Join(root, "data")
+	if err := FileStore(legacy, "").Set(context.Background(), "work", "tok"); err != nil {
+		t.Fatal(err)
+	}
+	fs := FileStore(dir, legacy)
+	started := make(chan struct{})
+	done := make(chan error, 1)
+	err := fsio.Locked(SecretsFile(dir), fsio.LockTimeout, func() error {
+		go func() {
+			close(started)
+			_, _, err := fs.Get(context.Background(), "work")
+			done <- err
+		}()
+		<-started
+		time.Sleep(300 * time.Millisecond)
+		if _, err := os.Stat(SecretsFile(legacy)); err != nil {
+			t.Errorf("migration ran while the lock was held: %v", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(SecretsFile(legacy)); !os.IsNotExist(err) {
+		t.Errorf("legacy file left: %v", err)
+	}
+}
+
+func TestFileStoreMigrationCopiesSymlinkTarget(t *testing.T) {
+	root := t.TempDir()
+	legacy, dir := filepath.Join(root, "config"), filepath.Join(root, "data")
+	synced := filepath.Join(root, "dotfiles")
+	if err := FileStore(synced, "").Set(context.Background(), "work", "tok"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(legacy, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(SecretsFile(synced), SecretsFile(legacy)); err != nil {
+		t.Fatal(err)
+	}
+	v, _, err := FileStore(dir, legacy).Get(context.Background(), "work")
+	if err != nil || v != "tok" {
+		t.Fatalf("%q %v", v, err)
+	}
+	fi, err := os.Lstat(SecretsFile(dir))
+	if err != nil || fi.Mode()&os.ModeSymlink != 0 || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("data file is not a plain 0600 file: %v %v", fi, err)
+	}
+	if _, err := os.Lstat(SecretsFile(legacy)); !os.IsNotExist(err) {
+		t.Errorf("legacy link left: %v", err)
+	}
+	if _, err := os.Stat(SecretsFile(synced)); err != nil {
+		t.Errorf("link target removed: %v", err)
 	}
 }
 
