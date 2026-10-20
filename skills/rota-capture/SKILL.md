@@ -1,11 +1,11 @@
 ---
 name: rota-capture
-description: Use when the user brain-dumps work, says "capture", "add to backlog", "note this bug", "/rota-capture", or describes a problem without asking for an immediate fix. Also use on "remove [B07]", "delete this entry", "drop this item" to delete captured items.
+description: Use when the user brain-dumps work, says "capture", "add to backlog", "note this bug", "/rota-capture", or describes a problem without asking for an immediate fix. Also use on "remove [B07]", "delete this entry", "drop this item" to delete captured items. Use `--triage <N>` on a tracker issue filed by someone else.
 ---
 
 # rota-capture — Capture & Manage Work Items
 
-Quick-capture bugs, features and tasks with just enough context to act on later. Items are created with `rota item create` on the configured issue source (`issues.source`): a tracker issue (`#N`) or a `.rota/BACKLOG.md` entry (`[B07]`). Handles several items and mixed types in one pass. `--remove <ID>` deletes an item.
+Quick-capture bugs, features and tasks with just enough context to act on later. Items are created with `rota item create` on the configured issue source (`issues.source`): a tracker issue (`#N`) or a `.rota/BACKLOG.md` entry (`[B07]`). Handles several items and mixed types in one pass. `--remove <ID>` deletes an item. `--triage <N>` vets an issue others filed.
 
 Copy this checklist and track your progress:
 ```
@@ -26,9 +26,10 @@ Copy this checklist and track your progress:
 | First arg | Mode |
 |-----------|------|
 | `--remove <ID>[,<ID>...]` | [Remove Mode](#remove-mode) |
+| `--triage <N>[,<N>...]` | [Triage Mode](#triage-mode) |
 | anything else / nothing | Step 2 onward |
 
-Skip Steps 2 to 7 in Remove Mode.
+Skip Steps 2 to 7 in Remove and Triage Mode.
 
 ## Step 2 — Parse & Classify
 
@@ -128,10 +129,15 @@ Print every new ID with its title, then stop. Capture ends here; do not offer to
 
 Read [`remove-mode.md`](remove-mode.md) when the first arg is `--remove` and follow it (Steps R1 to R5: resolve, dry-run, de-tag upstream, confirm, apply).
 
+## Triage Mode
+
+Read [`triage-mode.md`](triage-mode.md) when the first arg is `--triage` and follow it (Steps T1 to T5: read, redundancy search, prior decision, reproduce a bug, outcome ready / needs-info / closed). It creates no item and never grills the reporter.
+
 ## Rules
 
 - Capture only creates items: never remove or reorder existing ones, never investigate now. A duplicate, shipped or decided hit creates nothing without the user's answer.
 - Print every new ID with its title.
+- Triage: findings first, then one question per issue; comment, label and close always ask.
 - Remove: preview is the default; the de-tag gate (Step R3) and apply gate (Step R4) always ask.
 
 ## References
@@ -144,6 +150,7 @@ Read [`remove-mode.md`](remove-mode.md) when the first arg is `--remove` and fol
 | [`umbrella-tagging.md`](umbrella-tagging.md) | Step 4.6: pick sub-repos for `--repos`. |
 | [`glossary-terms.md`](glossary-terms.md) | Step 6: write canonical glossary terms. |
 | [`remove-mode.md`](remove-mode.md) | `--remove` flow, Steps R1 to R5. |
+| [`triage-mode.md`](triage-mode.md) | `--triage` flow, Steps T1 to T5. |
 | [`authoring-conventions.md`](references/authoring-conventions.md) | Destructive and manual gates. |
 | [`dependent-items.md`](references/dependent-items.md) | When to declare `--depends-on` and in what order to create. |
 | [`detail-files.md`](references/detail-files.md) | Detail-file template for bulky input. |

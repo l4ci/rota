@@ -399,6 +399,9 @@ def prose_rules():
                  "calls rota item complete without a rota proof add path"),
           lacks(sk("capture"), "Import Mode", "Import Mode was removed"),
           has("skills/rota-capture/remove-mode.md", "Step R3", "missing Step R3 (Remove Mode de-tag gate)"),
+          has("skills/rota-capture/triage-mode.md", "Step T5", "missing Step T5 (Triage Mode outcome)"),
+          has("skills/rota-capture/triage-mode.md", "rota decisions query", "Triage Mode must check prior decisions"),
+          has(sk("capture"), "triage-mode.md", "SKILL.md does not route --triage to triage-mode.md"),
           has(sk("ship"), "Step 6c", "missing Step 6c (direct-push close gate)"),
           has(sk("ship"), CALLOUT, "missing the manual-gate callout (Step 6c)"),
           has("skills/references/manual-gates.md", r"Step 6c|direct-push close", "missing the rota-ship Step 6c row", True)]
