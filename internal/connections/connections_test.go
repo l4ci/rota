@@ -305,6 +305,42 @@ func TestFileStoreMigrationCopiesSymlinkTarget(t *testing.T) {
 	}
 }
 
+func TestFileStoreIgnoresNonFileLegacy(t *testing.T) {
+	for name, mk := range map[string]func(legacyPath, target string) error{
+		"symlink to dir": func(l, target string) error { return os.Symlink(target, l) },
+		"plain dir":      func(l, _ string) error { return os.Mkdir(l, 0o700) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			legacy, dir := filepath.Join(root, "config"), filepath.Join(root, "data")
+			target := filepath.Join(root, "somedir")
+			if err := os.MkdirAll(target, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(legacy, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := mk(SecretsFile(legacy), target); err != nil {
+				t.Fatal(err)
+			}
+			fs := FileStore(dir, legacy)
+			ctx := context.Background()
+			if _, ok, err := fs.Get(ctx, "work"); err != nil || ok {
+				t.Fatalf("Get: ok=%v err=%v", ok, err)
+			}
+			if err := fs.Set(ctx, "work", "tok"); err != nil {
+				t.Fatalf("Set: %v", err)
+			}
+			if v, _, err := fs.Get(ctx, "work"); err != nil || v != "tok" {
+				t.Fatalf("%q %v", v, err)
+			}
+			if fi, err := os.Stat(SecretsFile(legacy)); err != nil || !fi.IsDir() {
+				t.Errorf("legacy dir was touched: %v %v", fi, err)
+			}
+		})
+	}
+}
+
 func TestCheckStates(t *testing.T) {
 	dir := t.TempDir()
 	ctx := context.Background()

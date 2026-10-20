@@ -182,8 +182,19 @@ func (f fileStore) needsMigration() bool {
 	if _, err := os.Stat(f.path); err == nil {
 		return false
 	}
-	_, err := os.Stat(f.legacy)
-	return !errors.Is(err, os.ErrNotExist)
+	return f.legacyIsFile()
+}
+
+// legacyIsFile reports whether the legacy path is, through any symlink, a
+// regular file. A directory there (or a link to one) is no secrets file, so it
+// is left alone rather than moved into path, where every later read would fail.
+// Other stat errors report true so moveLegacy surfaces them.
+func (f fileStore) legacyIsFile() bool {
+	fi, err := os.Stat(f.legacy)
+	if err != nil {
+		return !errors.Is(err, os.ErrNotExist)
+	}
+	return fi.Mode().IsRegular()
 }
 
 // moveLegacy is the migration proper; the caller holds the store's lock.
@@ -191,12 +202,15 @@ func (f fileStore) moveLegacy() error {
 	if _, err := os.Stat(f.path); err == nil {
 		return nil
 	}
-	_, err := os.Stat(f.legacy)
+	fi, err := os.Stat(f.legacy)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 	if err != nil {
 		return err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil
 	}
 	li, err := os.Lstat(f.legacy)
 	if err != nil {
