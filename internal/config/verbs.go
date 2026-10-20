@@ -282,8 +282,9 @@ func isNonNegInt(n json.Number) bool {
 	return err == nil && i >= 0
 }
 
-// validateValue rejects a value its key cannot hold. A non-negative int key takes an integer of 0 or more. A project path key takes
-// a relative path that stays inside the project, or "" to clear it.
+// validateValue rejects a value its key cannot hold. A non-negative int key
+// takes an integer of 0 or more. A project path key takes a relative path that
+// stays inside the project, or "" to clear it.
 func validateValue(key string, value any) error {
 	if nonNegativeIntKeys[key] {
 		if n, ok := value.(json.Number); !ok || !isNonNegInt(n) {
