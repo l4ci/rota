@@ -1,6 +1,6 @@
 ---
 name: rota-answer
-description: Use only when the maintainer types "/rota-answer" or asks the orchestrator to put the open decisions to them one by one during a round.
+description: Use only when the maintainer types "/rota-answer" during a round. The orchestrator points the maintainer to it when two or more decisions wait; it never starts it.
 disable-model-invocation: true
 ---
 
@@ -32,9 +32,9 @@ Keep `rota round watch` armed in the background for the whole run. A wake that a
 Gather from these sources, in this order (blocking work first):
 
 1. Open escalations: `rota round status --json`, field `escalations`.
-2. Slots `blocked` on a question.
-3. PRs whose review or bounce cap needs a maintainer call: a Spec finding that needs a waiver, a bounce at `round.maxBounces`.
-4. Candidates you are holding for a wrong premise or an open design question.
+2. Slots `blocked` on a question: `rota round status --json`, slots in state `blocked`.
+3. PRs whose review or bounce cap needs a maintainer call: a Spec finding that needs a waiver (`rota verdict show <branch>`), a bounce count at `round.maxBounces` (`rota round status`).
+4. Candidates you are holding for a wrong premise or an open design question (`rota round candidates`, your own held list).
 5. Items with an open `question` comment (`rota item comment list <ID>`).
 
 Each becomes one question: the item or PR number, the facts needed to decide, 2 to 4 options, the recommended option first. Drop what the code or the issue already answers ([`references/authoring-conventions.md`](references/authoring-conventions.md), *Don't ask what the code can answer*).
@@ -54,7 +54,7 @@ Map a free-text reply to an option only when the intent is clear; otherwise ask 
 
 Write the answer as a `decision` comment on the item or PR's issue: `rota item comment add <ID> --kind decision --body-file <path>`. Word the channel truthfully: "maintainer, answering the orchestrator in its session". Never present it as a relay or as a comment the maintainer typed on the tracker.
 
-When the question was an open escalation, also run `rota round escalate check` so the round reads the thread as answered.
+When the question was an open escalation, also post the answer as a plain comment, with no rota marker, on the escalation's own thread (the issue, or the PR for a `--pr` escalation): `gh issue comment` / `gh pr comment` (`glab issue note` / `glab mr note`). `rota round escalate check` counts only an unmarked comment after the escalation comment as the answer, and `rota item comment add` writes a marked one. Keep the decision comment too. Then run `rota round escalate check` and confirm it reports the answer.
 
 ## Step 4 — Apply
 
