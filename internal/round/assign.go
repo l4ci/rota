@@ -51,6 +51,8 @@ const (
 	BlockOverlap    = "overlap"
 	BlockClaimed    = "claimed"
 	BlockOpenPR     = "open PR"
+	// BlockBatch: round.batch items are already assigned and not landed or parked.
+	BlockBatch      = "batch"
 	BlockSlotBusy   = "slot busy"
 	BlockNoFreeSlot = "no free slot"
 	// BlockQuota: every account the worker kind could run under is cooling down.
@@ -66,6 +68,8 @@ type BlockedError struct {
 	By        string
 	Msg       string
 	Readiness *Readiness
+	// Batch and Open are set for BlockBatch: round.batch and the items open.
+	Batch, Open int
 }
 
 func (e *BlockedError) Error() string { return e.Msg }
@@ -80,8 +84,10 @@ type AssignOpts struct {
 	AcceptOverlap bool
 	// AcceptOpenPR lets a deliberate redo through an issue an open PR resolves.
 	AcceptOpenPR bool
-	HolderPID    int
-	Settings     roundcfg.Settings
+	// AcceptBatch lets one assignment through a full round.batch.
+	AcceptBatch bool
+	HolderPID   int
+	Settings    roundcfg.Settings
 	// Tier, TierReason and Kind are C9: "" means round.tier, no reason, and
 	// the slot's recorded kind, else claude.
 	Tier, TierReason, Kind string
@@ -408,6 +414,39 @@ func (t tierBrief) text() string {
 	return b.String()
 }
 
+// OpenItems is openItems over the registry on disk, for a caller that holds no
+// assignment of its own (the autopilot tick).
+func OpenItems(root string, be Board) int {
+	return openItems(be, worker.LoadRegistryTolerant(root), "")
+}
+
+// openItems counts the items other than except that the roster still holds:
+// each is assigned, or queued as a PR, and neither closed (merged) nor handed
+// away (parking and a hand-off to the human release the slot). A best-of:2
+// issue counts once.
+func openItems(be Board, reg worker.Registry, except string) int {
+	seen := map[string]bool{worker.NormID(except): true}
+	n := 0
+	count := func(id string) {
+		id = worker.NormID(id)
+		if id == "" || seen[id] {
+			return
+		}
+		seen[id] = true
+		if it, err := be.Get(id); err == nil && it.Closed {
+			return
+		}
+		n++
+	}
+	for _, s := range reg.Slots() {
+		count(s.HeldID())
+	}
+	for _, q := range reg.PRs() {
+		count(queuedIssue(q))
+	}
+	return n
+}
+
 func blocked(by, format string, a ...any) *BlockedError {
 	return &BlockedError{By: by, Msg: fmt.Sprintf(format, a...)}
 }
@@ -600,6 +639,15 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 		blk := blocked(by, "%s is not ready: %s", id, failedChecks(r))
 		blk.Readiness = &r
 		return res, blk
+	}
+
+	// round.batch: a slot resuming its own issue adds nothing to the open count.
+	if n := set.Batch; n > 0 && !o.AcceptBatch && !resuming {
+		if open := openItems(be, reg, id); open >= n {
+			blk := blocked(BlockBatch, "%d items are open and round.batch is %d", open, n)
+			blk.Batch, blk.Open = n, open
+			return res, blk
+		}
 	}
 
 	// A worker that cannot start is refused before anything is marked.
