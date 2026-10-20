@@ -467,22 +467,44 @@ func TestDecideGuardStop(t *testing.T) {
 	fresh := "2026-10-03T11:59:30Z"
 	st := guardState(80, fresh)
 	for i := 1; i <= 2; i++ {
-		d := DecideGuardStop(st, set, now)
+		d := DecideGuardStop(st, set, Handoff{}, now)
 		if !d.Block || !strings.Contains(d.Reason, "/rota-pause") || d.State.HandoffBlocks != i {
 			t.Fatalf("block %d: %+v", i, d)
 		}
 		st = d.State
 	}
-	d := DecideGuardStop(st, set, now)
+	d := DecideGuardStop(st, set, Handoff{}, now)
 	if d.Block || !d.State.HandoffFailed {
 		t.Fatalf("past the cap: %+v", d)
 	}
 	st = d.State
 	st.ContextPct = func() *float64 { p := 10.0; return &p }()
-	if r := DecideGuardStop(st, set, now); r.Block || r.State.HandoffFailed || r.State.HandoffBlocks != 0 {
+	if r := DecideGuardStop(st, set, Handoff{}, now); r.Block || r.State.HandoffFailed || r.State.HandoffBlocks != 0 {
 		t.Errorf("reset below the threshold: %+v", r)
 	}
-	if s := DecideGuardStop(guardState(99, "2026-10-03T11:50:00Z"), set, now); s.Block {
+	if s := DecideGuardStop(guardState(99, "2026-10-03T11:50:00Z"), set, Handoff{}, now); s.Block {
 		t.Errorf("stale: %+v", s)
 	}
 }
+
+func TestDecideGuardStopFreshHandoff(t *testing.T) {
+	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
+	set := Settings{Threshold: 75, StateMaxAge: 120, HandoffMaxAge: 900, HandoffMaxBlks: 2}
+	st := guardState(80, "2026-10-03T11:59:30Z")
+	d := DecideGuardStop(st, set, Handoff{}, now)
+	if !d.Block {
+		t.Fatalf("no note: %+v", d)
+	}
+	st = d.State
+	blocked, _ := time.Parse(time.RFC3339, st.BlockedAt)
+	if r := DecideGuardStop(st, set, Handoff{Exists: true, ModTime: blocked.Add(10 * time.Second)}, now); r.Block {
+		t.Errorf("a fresh note written after the block must pass: %+v", r)
+	}
+	if r := DecideGuardStop(st, set, Handoff{Exists: true, ModTime: blocked.Add(-time.Minute)}, now); !r.Block {
+		t.Errorf("a note older than the block must not pass: %+v", r)
+	}
+	if r := DecideGuardStop(st, set, Handoff{Exists: true, ModTime: now.Add(-time.Hour)}, now); !r.Block {
+		t.Errorf("a stale note must not pass: %+v", r)
+	}
+}
+

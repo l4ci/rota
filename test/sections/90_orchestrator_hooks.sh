@@ -240,6 +240,14 @@ for a in false true; do
 done
 [ -z "$(guard_stop true)" ] || fail "guard: auto blocked past handoffMaxBlocks"
 pass "guard: auto blocks handoffMaxBlocks times, then passes"
+# a session that obeyed the first block and wrote its note is not blocked again
+rm -rf "$CD/rota/session"; dump_pct 80; guard_prompt >/dev/null
+OUT="$(guard_stop false)"; grep -q '"decision": *"block"' <<<"$OUT" || fail "guard: auto did not block before the note"
+mkdir -p "$P/.rota/handoff"; printf 'paused\n' > "$HANDOFF"
+python3 -c 'import os,sys; os.utime(sys.argv[1], (int(sys.argv[2])+5,)*2)' "$HANDOFF" "$NOW_EPOCH"
+[ -z "$(guard_stop true)" ] || fail "guard: auto re-blocked after a fresh /rota-pause note"
+rm -f "$HANDOFF"
+pass "guard: auto stops blocking once a fresh handoff note exists"
 
 for mode in off bogus; do
   rm -rf "$CD/rota/session"; guard_cfg "$mode"; dump_pct 95
