@@ -84,6 +84,7 @@ type Server struct {
 	// lock, with "METHOD path". A test uses it to make a second writer act
 	// between two of the tracker's calls.
 	After func(req string)
+	fail  map[string]int
 }
 
 type obj = map[string]any
@@ -180,6 +181,10 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.reqs = append(s.reqs, r.Method+" "+r.URL.Path)
+	if status, ok := s.fail[r.Method+" "+r.URL.Path]; ok {
+		reply(w, status, obj{"error": "refused by the fake"})
+		return
+	}
 	authed := r.Header.Get("x-api-key") == s.o.Key
 	if r.URL.Path == "/me" && r.Method == http.MethodGet {
 		if !authed {

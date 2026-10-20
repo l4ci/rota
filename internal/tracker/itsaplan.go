@@ -31,7 +31,7 @@ import (
 //
 // Reads use GET /projects/:key/issues/board (active issues) and
 // /issues/archived: both return every issue with no limit, unlike the capped
-// list route. Claims, the gate close and migrate (T3, T4 of #1100) follow.
+// list route. Migrate (T4 of #1100) follows.
 type Itsaplan struct {
 	rest    *REST
 	site    string
@@ -43,7 +43,11 @@ type Itsaplan struct {
 	ids  map[IssueKey]int // key -> issue id, which the feed route takes
 }
 
-var _ IssueTracker = (*Itsaplan)(nil)
+var (
+	_ IssueTracker = (*Itsaplan)(nil)
+	_ ClaimStore   = (*Itsaplan)(nil)
+	_ MergeCloser  = (*Itsaplan)(nil)
+)
 
 // itsaplanFieldName is the project custom field that holds rota's fields block.
 const itsaplanFieldName = "rota"
@@ -491,18 +495,14 @@ func hasAllLabels(have, want []string) bool {
 // ---- not built yet --------------------------------------------------------------
 
 // errItsaplanSlice refuses a call whose slice of the It's a Plan source has not
-// landed; the plan on #1100 builds claims and the gate close (T3) and migrate
-// (T4) after the connection, read and write slices.
+// landed; the plan on #1100 builds migrate (T4) after the connection, read,
+// write and round slices.
 func errItsaplanSlice(what string) error {
 	return failed("issues.source itsaplan does not support %s yet (not implemented)", what)
 }
 
 func errItsaplanNoMilestones() error {
 	return failed("issues.source itsaplan has no milestones")
-}
-
-func (t *Itsaplan) AssignSelf(context.Context, IssueKey) error {
-	return errItsaplanSlice("assigning issues")
 }
 
 // ClosesIssue: a key-based tracker, so the key in the branch or the PR title.

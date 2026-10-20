@@ -17,6 +17,20 @@ const itsaplanCfg = `{"forge":{"provider":"github"},"issues":{"source":"itsaplan
 
 // itsaplanProject is a rota project on issues.source itsaplan, whose
 // connection points at the fake.
+func itsaplanFake(t *testing.T) *itsaplantest.Server {
+	t.Helper()
+	return itsaplantest.New(t, itsaplantest.Options{})
+}
+
+func mustJSONCfg(t *testing.T, s string) any {
+	t.Helper()
+	cfg, err := jsonx.Decode([]byte(s))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}
+
 func itsaplanProject(t *testing.T, s *itsaplantest.Server) (*Deps, string) {
 	t.Helper()
 	dir := gitRepo(t)
