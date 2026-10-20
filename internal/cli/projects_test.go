@@ -15,6 +15,7 @@ func projectsXDG(t *testing.T) string {
 	t.Helper()
 	x := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", x)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	t.Setenv("XDG_STATE_HOME", filepath.Join(x, "state"))
 	return x
 }

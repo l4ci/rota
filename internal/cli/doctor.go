@@ -72,6 +72,9 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in := doctor.Input{Exec: doctorExec(d.Proc), Getenv: d.Getenv, Look: doctorLook(d.LookPath, d.DoctorPath)}
 	in.Dir, _ = os.Getwd()
 	in.Home, _ = os.UserHomeDir()
+	if dir, src, warn, err := projects.Resolve(); err == nil {
+		in.ConfigDir, in.ConfigDirSource, in.ConfigDirWarning = dir, src, warn
+	}
 	in.StateDir, _ = projects.StateDir()
 	if f, ok := staleBinary(ctx, d.Git, in.Dir); ok {
 		in.StaleBinary = &f

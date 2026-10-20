@@ -37,7 +37,11 @@ func (d *Deps) connectEnv() (string, *connections.Secrets, error) {
 	if err != nil {
 		return "", nil, &Error{Exit: ExitInternal, Message: err.Error()}
 	}
-	sec := &connections.Secrets{Getenv: d.Getenv, File: connections.FileStore(dir)}
+	data, err := projects.DataDir()
+	if err != nil {
+		return "", nil, &Error{Exit: ExitInternal, Message: err.Error()}
+	}
+	sec := &connections.Secrets{Getenv: d.Getenv, File: connections.FileStore(data, dir)}
 	if d.Keychain != nil {
 		if kc := d.Keychain(); kc != nil {
 			sec.Keychain = kc
@@ -179,8 +183,15 @@ func runConnectList(c *Ctx, args []string) (Result, error) {
 	if len(cs) == 0 {
 		lines = append(lines, "no connections: run rota connect add <name> --kind jira|linear|itsaplan --site <url> --token-stdin")
 	}
+	secretsDir, err := projects.DataDir()
+	if err != nil {
+		return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
+	}
+	secretsFile := connections.SecretsFile(secretsDir)
+	lines = append(lines, "file store: "+secretsFile)
 	data := jsonx.NewObject()
 	data.Set("dir", dir)
+	data.Set("secretsFile", secretsFile)
 	data.Set("connections", rows)
 	return Result{Data: data, Text: strings.Join(lines, "\n")}, nil
 }

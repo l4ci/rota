@@ -30,6 +30,29 @@ func TestDirHonoursXDGAndFallsBackToHome(t *testing.T) {
 	}
 }
 
+func TestResolveOverrideBeatsXDGAndIgnoresRelative(t *testing.T) {
+	x := isolate(t)
+	o := t.TempDir()
+	t.Setenv("ROTA_CONFIG_DIR", o)
+	if d, src, w, _ := Resolve(); d != o || src != SourceOverride || w != "" {
+		t.Errorf("override: %s %s %q", d, src, w)
+	}
+	t.Setenv("ROTA_CONFIG_DIR", "rel/dir")
+	d, src, w, _ := Resolve()
+	if d != filepath.Join(x, "config", "rota") || src != SourceXDG || w == "" {
+		t.Errorf("relative: %s %s %q", d, src, w)
+	}
+	t.Setenv("ROTA_CONFIG_DIR", "")
+	if _, src, w, _ := Resolve(); src != SourceXDG || w != "" {
+		t.Errorf("unset: %s %q", src, w)
+	}
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("HOME", t.TempDir())
+	if _, src, _, _ := Resolve(); src != SourceDefault {
+		t.Errorf("default: %s", src)
+	}
+}
+
 func TestRegisterIsIdempotentAndRefreshesLastSeen(t *testing.T) {
 	isolate(t)
 	proj := t.TempDir()
@@ -130,6 +153,18 @@ func TestRemoveFindsAGoneDirectoryAndSkipsAnAbsentRegistry(t *testing.T) {
 	got, err := Remove(gone)
 	if err != nil || len(got) != 1 || !got[0].Missing {
 		t.Fatalf("gone dir: %+v %v", got, err)
+	}
+}
+
+func TestDataDir(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", "/x/data")
+	if d, _ := DataDir(); d != "/x/data/rota" {
+		t.Errorf("%q", d)
+	}
+	t.Setenv("XDG_DATA_HOME", "relative")
+	t.Setenv("HOME", "/h")
+	if d, _ := DataDir(); d != "/h/.local/share/rota" {
+		t.Errorf("%q", d)
 	}
 }
 
