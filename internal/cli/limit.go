@@ -114,7 +114,7 @@ type limitRig struct {
 // failed herdr subscription is not: the watcher captures the panes instead,
 // and the rig says so in warn.
 func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.Settings, holderPID int, tick time.Duration, gap *atomic.Bool, warn func(string, ...any)) (*limitRig, error) {
-	kind := worker.ResolvePaneHost(root, nil, nil)
+	kind := worker.ResolvePaneHost(root, cfg, nil, nil)
 	if kind == host.Solo {
 		kind = host.Tmux // New maps solo to tmux; say so for the error text
 	}
