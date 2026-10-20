@@ -1,8 +1,10 @@
 package skills
 
 import (
+	"errors"
 	"fmt"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -65,5 +67,49 @@ func stub(skill string, full []byte) ([]byte, error) {
 		return nil, fmt.Errorf("skills: %s/SKILL.md has no frontmatter to keep in a stub", skill)
 	}
 	head := "---\n" + fm + "\n---\n\n"
-	return []byte(head + fmt.Sprintf("# %[1]s\n\nThis skill's text is served by the installed `rota` binary, so it always matches the verbs and flags that binary accepts. Run:\n\n```\nrota skills get %[1]s\n```\n\nand follow what it prints. Reference files it cites: `rota skills get %[1]s --references` lists them, `rota skills get %[1]s --reference <file>` prints one.\n", skill)), nil
+	return []byte(head + fmt.Sprintf("# %[1]s\n\nThis skill's text is served by the installed `rota` binary, so it always matches the verbs and flags that binary accepts. Run:\n\n```\nrota skills get %[1]s\n```\n\nand follow what it prints. Its first line names the base directory that holds the skill's files; relative links in the text resolve against it, and the footer lists their absolute paths. Reference files it cites: `rota skills get %[1]s --references` lists them, `rota skills get %[1]s --reference <file>` prints one.\n", skill)), nil
+}
+
+// Serve is the text `rota skills get` prints for a skill (file "") or one of
+// its references: the file itself, for SKILL.md a base-directory header, and a
+// footer naming the absolute path of every file its relative links reach. The
+// tree the paths point into is extracted under cacheBase for this binary. When
+// it cannot be, the file is still printed, with a warning and no header or footer.
+func (s *Set) Serve(name, file, cacheBase, version string) (text, warning string, err error) {
+	var b []byte
+	var ok bool
+	rel := name + "/SKILL.md"
+	if file == "" {
+		b, ok = s.Skill(name)
+	} else {
+		rel = "references/" + file // the shared copy, see Extract
+		b, ok = s.Reference(name, file)
+	}
+	if !ok {
+		return "", "", fmt.Errorf("skills: no %s %q", name, file)
+	}
+	var tree string
+	if cacheBase == "" {
+		err = errors.New("no user cache directory")
+	} else {
+		tree, err = Extract(s, version, cacheBase)
+	}
+	if err != nil {
+		return string(b), fmt.Sprintf("cannot extract the skill files, relative links will not resolve: %v", err), nil
+	}
+	var out strings.Builder
+	if file == "" {
+		fmt.Fprintf(&out, "Base directory for this skill: %s\n\n", filepath.Join(tree, name))
+	}
+	out.Write(b)
+	if links := Links(b); len(links) > 0 {
+		if !strings.HasSuffix(string(b), "\n") {
+			out.WriteString("\n")
+		}
+		out.WriteString("\nFiles this skill links to:\n")
+		for _, l := range links {
+			fmt.Fprintf(&out, "- %s\n", filepath.Join(tree, filepath.FromSlash(path.Join(path.Dir(rel), l))))
+		}
+	}
+	return out.String(), "", nil
 }

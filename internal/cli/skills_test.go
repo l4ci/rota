@@ -343,6 +343,7 @@ func TestSkillsProjectScopeIgnoresAccounts(t *testing.T) {
 
 func TestSkillsListAndGet(t *testing.T) {
 	home, work := t.TempDir(), t.TempDir()
+	t.Setenv("ROTA_CACHE_DIR", t.TempDir())
 	code, env, errOut := skillsRun(t, home, work, "skills", "list")
 	if code != 0 {
 		t.Fatalf("list %d %s", code, errOut)
@@ -360,8 +361,9 @@ func TestSkillsListAndGet(t *testing.T) {
 	}
 	code, env, _ = skillsRun(t, home, work, "skills", "get", "rota-pause")
 	text, _ := skData(env)["text"].(string)
-	if code != 0 || !strings.HasPrefix(text, "---\nname: rota-pause\n") {
-		t.Fatalf("get %d %q", code, text)
+	_, body, _ := strings.Cut(text, "\n\n")
+	if code != 0 || !strings.HasPrefix(text, "Base directory for this skill: ") || !strings.HasPrefix(body, "---\nname: rota-pause\n") {
+		t.Fatalf("get %d %q", code, text[:min(len(text), 200)])
 	}
 	code, env, _ = skillsRun(t, home, work, "skills", "get", "rota-pause", "--references")
 	refs, _ := skData(env)["references"].([]any)
@@ -416,8 +418,9 @@ func TestSkillsInstallStub(t *testing.T) {
 
 func TestSkillsGetTextMode(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROTA_CACHE_DIR", t.TempDir())
 	code, out, errOut := runMain("skills", "get", "rota-pause")
-	if code != 0 || !strings.HasPrefix(out, "---\nname: rota-pause\n") || !strings.HasSuffix(out, "\n") || strings.HasSuffix(out, "\n\n") {
+	if code != 0 || !strings.HasPrefix(out, "Base directory for this skill: ") || !strings.Contains(out, "\n\n---\nname: rota-pause\n") || !strings.HasSuffix(out, "\n") || strings.HasSuffix(out, "\n\n") {
 		t.Fatalf("%d %q %s", code, out[:min(len(out), 80)], errOut)
 	}
 }

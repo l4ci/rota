@@ -453,21 +453,32 @@ func skillsGet(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		body, ok := set.Skill(name)
-		if !ok {
+		if _, ok := set.Skill(name); !ok {
 			return Result{}, Usage("unknown skill %q", name).WithHint("known skills: " + strings.Join(set.Skills(), ", "))
 		}
-		switch {
-		case *refs:
+		if *refs {
 			l := set.References(name)
 			return Result{Data: knObj("name", name, "references", strs(l)), Text: strings.Join(l, "\n")}, nil
-		case *ref != "":
-			b, ok := set.Reference(name, *ref)
-			if !ok {
-				return Result{}, Usage("%s has no reference %q", name, *ref).WithHint("known references: " + strings.Join(set.References(name), ", "))
-			}
-			return Result{Data: knObj("name", name, "reference", *ref, "text", string(b)), Text: strings.TrimSuffix(string(b), "\n")}, nil
 		}
-		return Result{Data: knObj("name", name, "text", string(body)), Text: strings.TrimSuffix(string(body), "\n")}, nil
+		file := *ref
+		if file != "" {
+			if _, ok := set.Reference(name, file); !ok {
+				return Result{}, Usage("%s has no reference %q", name, file).WithHint("known references: " + strings.Join(set.References(name), ", "))
+			}
+		}
+		text, warn, err := set.Serve(name, file, skills.CacheDir(c.deps().Getenv), version.Get().Version)
+		if err != nil {
+			return Result{}, err
+		}
+		data := knObj("name", name)
+		if file != "" {
+			data.Set("reference", file)
+		}
+		data.Set("text", text)
+		res := Result{Data: data, Text: strings.TrimSuffix(text, "\n")}
+		if warn != "" {
+			res = withWarnings(res, []string{warn})
+		}
+		return res, nil
 	}
 }
