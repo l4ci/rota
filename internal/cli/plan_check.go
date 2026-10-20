@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/l4ci/rota/internal/acceptance"
 	"github.com/l4ci/rota/internal/config"
@@ -60,6 +61,12 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 		id := fmt.Sprintf("D%d", i+1)
 		decs = append(decs, id)
 		first, _, _ := strings.Cut(strings.TrimSpace(row.Text), "\n")
+		first = strings.Map(func(r rune) rune {
+			if unicode.IsControl(r) {
+				return -1
+			}
+			return r
+		}, first)
 		if rs := []rune(first); len(rs) > 60 {
 			first = string(rs[:60])
 		}
