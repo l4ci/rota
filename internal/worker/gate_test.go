@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -711,6 +713,44 @@ func TestBounceCount(t *testing.T) {
 	}
 	if n, _ := RecordBounce(Env{}, root, "31", "", ""); n != 1 {
 		t.Errorf("cleared count restarts, got %d", n)
+	}
+}
+
+// The cap and the increment share one lock: concurrent bounces never take the
+// count past max, and exactly max of them count.
+func TestRecordBounceCappedConcurrentNeverExceedsMax(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, ".rota"), 0o755)
+	const max, callers = 3, 12
+	var wg sync.WaitGroup
+	var counted, capped atomic.Int32
+	for i := 0; i < callers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			n, _, c, err := RecordBounceCapped(Env{}, nil, root, "31", "", fmt.Sprintf("head%d", i), max)
+			if err != nil || n > max {
+				t.Errorf("caller %d: n=%d err=%v", i, n, err)
+			}
+			if c {
+				capped.Add(1)
+			} else {
+				counted.Add(1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	if counted.Load() != max || capped.Load() != callers-max {
+		t.Errorf("counted %d capped %d, want %d and %d", counted.Load(), capped.Load(), max, callers-max)
+	}
+	if n := LoadRegistryTolerant(root).Bounces("31"); n != max {
+		t.Errorf("registry holds %d bounces, want %d", n, max)
+	}
+	if n, _, c, _ := RecordBounceCapped(Env{}, nil, root, "31", "", "late", max); !c || n != max {
+		t.Errorf("at the cap: n=%d capped=%v", n, c)
+	}
+	if n, _, c, _ := RecordBounceCapped(Env{}, nil, root, "31", "", "late", 0); c || n != max+1 {
+		t.Errorf("cap 0 is off: n=%d capped=%v", n, c)
 	}
 }
 

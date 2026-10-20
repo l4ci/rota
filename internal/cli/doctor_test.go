@@ -53,7 +53,7 @@ func doctorData(t *testing.T, out string) (bool, map[string]map[string]any) {
 	order = strings.Replace(order, "agents,", "", 1)
 	// The verify line appears only in a project with no test.full or test.e2e.
 	order = strings.Replace(order, "verify,", "", 1)
-	if order != "git,jq,host,tracker,accounts,hook,statusline,stop-hook,guard-hook,switch,skills,codex,opencode,state dir," {
+	if order != "git,jq,host,tracker,accounts,hook,statusline,stop-hook,guard-hook,switch,skills,codex,opencode,config dir,state dir," {
 		t.Errorf("check order %s", order)
 	}
 	return env.Data.OK, byName
