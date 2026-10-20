@@ -9,6 +9,11 @@ var (
 	// ServesRe matches one `Serves:` line, as a bullet (`- Serves: ...`, with
 	// optional bold) or bare. Group 1 is the text after the colon.
 	ServesRe = regexp.MustCompile(`(?i)^\s*(?:[-*]\s+)?\*{0,2}Serves\*{0,2}:\*{0,2}\s*(.*)$`)
+	// HonorsRe matches one `Honors:` line, shaped like ServesRe. Group 1 is
+	// the text after the colon.
+	HonorsRe = regexp.MustCompile(`(?i)^\s*(?:[-*]\s+)?\*{0,2}Honors\*{0,2}:\*{0,2}\s*(.*)$`)
+	// DecisionIDRe matches one decision id (D1, D2, ...).
+	DecisionIDRe = regexp.MustCompile(`\bD\d+\b`)
 	// ACIDRe matches one acceptance criterion id.
 	ACIDRe = regexp.MustCompile(`\bAC-\d+\b`)
 	// ChangeHeadRe matches a "Change" heading: the delta an item makes to a

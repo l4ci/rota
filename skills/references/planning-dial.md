@@ -11,6 +11,8 @@ Used by `/rota-plan` (Step 2) and `/rota-work` (Step 4). It picks how much plann
 | 3. Research round | Open technical questions answered by trying, before the plan commits to an answer. | A finding (`/rota-spike`), or a `light` subagent sweep for read-only questions. |
 | 4. Adversarial pass | Someone argues against the finished plan: failure modes, rollback, what the tests would not catch. | A grilling pass (`references/grilling.md`), plus the `/rota-plan` critic (`references/plan-critic.md`), before the plan is confirmed. |
 
+The critic (`references/plan-critic.md`) also runs at level 3 when the item has at least one `decision` comment: decisions are binding, so a plan that weakens one needs an adversarial read even when nothing else rates high.
+
 Levels stack: 4 includes 2, and includes 3 when a question is open. Level 1 is the default and changes nothing for items that rate lowest.
 
 ## Rubric
