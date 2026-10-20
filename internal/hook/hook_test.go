@@ -507,4 +507,3 @@ func TestDecideGuardStopFreshHandoff(t *testing.T) {
 		t.Errorf("a stale note must not pass: %+v", r)
 	}
 }
-
