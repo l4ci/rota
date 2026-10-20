@@ -476,7 +476,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 	if !ok {
 		return res, blocked(BlockNoRound, "this process holds no round lease: run rota round start first")
 	}
-	now := e.Worker.Clock()
+	now := e.Worker.WithDefaults().Now
 	h := e.Health(ctx, root, s, now())
 	res.Health, res.Issue = h.Health, h.Issue
 	if h.Health == HealthIdle {

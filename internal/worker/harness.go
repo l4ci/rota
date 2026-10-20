@@ -89,7 +89,7 @@ func CommonDir(ctx context.Context, run git.Runner, root string) (string, error)
 // killed, shared by `worker dispatch` and `round assign`. A harness with
 // nothing to check passes.
 func (e Env) Preflight(ctx context.Context, root, kind, slot, model string) (harness.Setup, error) {
-	e = e.withDefaults()
+	e = e.WithDefaults()
 	h, err := Harness(kind)
 	if err != nil {
 		return harness.Setup{}, err

@@ -12,7 +12,7 @@ import (
 // a train's landing step.
 func TestGateTakesLandLockUnlessCallerHoldsIt(t *testing.T) {
 	w := newWorld(t, ghURL)
-	env := w.env(false).withDefaults()
+	env := w.env(false).WithDefaults()
 	done := make(chan error, 1)
 	early := false
 	err := env.withLandLock(bg, w.dir, func(bool) error {
@@ -49,7 +49,7 @@ func TestGateTakesLandLockUnlessCallerHoldsIt(t *testing.T) {
 
 func TestGateHoldsLandLockSkipsTheLock(t *testing.T) {
 	w := newWorld(t, ghURL)
-	env := w.env(false).withDefaults()
+	env := w.env(false).WithDefaults()
 	done := make(chan error, 1)
 	err := env.withLandLock(bg, w.dir, func(bool) error {
 		go func() {

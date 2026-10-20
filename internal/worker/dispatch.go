@@ -81,16 +81,7 @@ func ResolvePaneHost(root string, cfg any, getenv func(string) string, lookPath 
 // hostKind is the host a pane verb drives. Never pass "solo" on to host.New:
 // callers refuse it first (SoloRefusal), and New maps it to tmux anyway.
 func (e Env) hostKind(root string) host.Kind {
-	return ResolveHost(root, e.config(root), e.Getenv, e.LookPath)
-}
-
-// config is the project config through Env.Config; an Env built by hand, with
-// no Config, reads it from disk.
-func (e Env) config(root string) any {
-	if e.Config == nil {
-		return loadConfig(root)
-	}
-	return e.Config(root)
+	return ResolveHost(root, e.Config(root), e.Getenv, e.LookPath)
 }
 
 // SoloRefusal is the exit 2 a pane verb gives when the round's recorded host
@@ -164,7 +155,7 @@ func roundOf(root string) int {
 // a conversation; 5 host unavailable, old session will not close, or a dialog
 // refused input; 6 the brief was never submitted (safe to resend).
 func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (DispatchResult, error) {
-	e = e.withDefaults()
+	e = e.WithDefaults()
 	res := DispatchResult{Slot: o.Slot, Task: o.Task, Round: o.Round, Relay: o.Relay}
 	if err := SoloRefusal(root, "rota round assign hands a slot its brief and rota round report records the result"); err != nil {
 		return res, err
@@ -182,7 +173,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	if err != nil {
 		return res, fail(exitcode.ExitResolution, "body file not found: "+o.BodyFile)
 	}
-	cfg := e.config(root)
+	cfg := e.Config(root)
 	h := e.NewHost(ResolveHost(root, cfg, e.Getenv, e.LookPath))
 	if err := h.Require(); err != nil {
 		return res, fail(exitcode.ExitUnavailable, err.Error())
@@ -273,7 +264,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		}
 		acct := harness.Account{ConfigDir: configDir, Home: setup.Home}
 		// No account configured for the slot: it runs under the orchestrator's.
-		amb := hz.AmbientAccount(e.Environ())
+		amb := hz.AmbientAccount(e.Getenv)
 		if acct.ConfigDir == "" {
 			acct.ConfigDir = amb.ConfigDir
 		}
@@ -502,7 +493,7 @@ func branchOr(o DispatchOpts) string {
 // gone. It is what a reclaim does to a stalled worker before its worktree is
 // parked: the host failing to close it is exit 5.
 func (e Env) KillSlot(ctx context.Context, root, slot string) error {
-	e = e.withDefaults()
+	e = e.WithDefaults()
 	reg, err := LoadRegistry(root)
 	if err != nil {
 		return err
@@ -548,7 +539,7 @@ func closeSlotWorkspace(ctx context.Context, h host.Host, root, slot string) {
 // gone (a dead slot), wherever a layout split moved them. Best effort: a pane
 // that stays is a stray window, not a reason to refuse a reclaim.
 func (e Env) SweepSlot(ctx context.Context, root, slot string) {
-	e = e.withDefaults()
+	e = e.WithDefaults()
 	s := LoadRegistryTolerant(root).Slot(slot) // best effort: a corrupt registry leaves the stray panes
 	if s == nil || RegistryHost(root) == host.Solo {
 		return

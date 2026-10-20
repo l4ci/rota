@@ -19,7 +19,7 @@ import (
 // that has landed.
 func TestGateWaitedOnLockFindsPRMerged(t *testing.T) {
 	w := newWorld(t, ghURL)
-	env := w.env(false).withDefaults()
+	env := w.env(false).WithDefaults()
 	type out struct {
 		res GateResult
 		err error
@@ -54,7 +54,7 @@ func TestGateWaitedOnLockFindsPRMerged(t *testing.T) {
 // refuses before the lock, naming that process.
 func TestGateRefusesWhileAnotherGateRunsTheSamePR(t *testing.T) {
 	w := newWorld(t, ghURL)
-	env := w.env(false).withDefaults()
+	env := w.env(false).WithDefaults()
 	common, key, ok := env.gateRunKey(bg, w.dir, "w1")
 	if !ok {
 		t.Fatal("no gate run key")
@@ -133,7 +133,7 @@ func TestGateRunMarkerOfReusedPidIsReplaced(t *testing.T) {
 // that, never as a missing remote.
 func TestGateRemoteProbeFailureIsNotAMissingOrigin(t *testing.T) {
 	w := newWorld(t, ghURL)
-	env := w.env(false).withDefaults()
+	env := w.env(false).WithDefaults()
 	env.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
 		if len(args) > 0 && args[0] == "remote" {
 			return git.Result{}, errors.New("chdir: no such file or directory")
@@ -160,7 +160,7 @@ func TestGateRemoteProbeFailureIsNotAMissingOrigin(t *testing.T) {
 // the registry read, so that state cannot reach stepRemote.)
 func TestGateGoneRootInsideLockIsNotAMissingOrigin(t *testing.T) {
 	w := newWorld(t, ghURL)
-	env := w.env(false).withDefaults()
+	env := w.env(false).WithDefaults()
 	env.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
 		if len(args) > 0 && args[0] == "remote" {
 			if err := os.RemoveAll(w.dir); err != nil {
