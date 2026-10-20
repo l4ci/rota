@@ -24,6 +24,8 @@ var rePRNumberArg = regexp.MustCompile(`^#?\d+$`)
 // ReportOpts are the flags of `rota round report`.
 type ReportOpts struct {
 	Slot, State, Evidence, PR string
+	// Attempt is the attempt id the worker was briefed with, "" for none.
+	Attempt string
 	// Issues is a review item's done evidence in place of a PR: `#139,#140`.
 	Issues string
 	// Event is the worker event kind this report records (worker.EventBlocked
@@ -87,6 +89,7 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 			Hint: "rota worker poll records a pane's state; round report would race it"}
 	}
 	found, moved := false, false
+	var fenced error
 	seq := 0
 	var stateErr error
 	var held ledger.Entry
@@ -96,6 +99,9 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 			return
 		}
 		found = true
+		if fenced = worker.FenceAttempt(s, o.Attempt); fenced != nil {
+			return
+		}
 		res.Previous = s.State()
 		held = ledger.Entry{Issue: worker.HeldID(s.Task(), s.Branch(), s.Name()), Slot: s.Name(), Account: s.Account(), Harness: s.Kind(), PR: s.PR()}
 		stamped := ""
@@ -141,6 +147,9 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 	}
 	if stateErr != nil {
 		return res, stateErr
+	}
+	if fenced != nil {
+		return res, fenced
 	}
 	if !found {
 		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot '%s' is not in the pool", o.Slot)}
