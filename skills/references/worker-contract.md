@@ -76,7 +76,10 @@ Work only this task, then stop.
   (the `test.fast` proof is not required) you cannot deliver what the ticket asks and stop (a PR may hold what you learned). Never
   encode partial or failed only in prose or in the PR title. `partial` and `failed` need the
   file; the gate refuses the PR (`blockedBy: outcome-open`) until the orchestrator relays or
-  transfers the slot, so say so rather than hoping it merges. Put the `prBlock` the verb prints
+  transfers the slot, so say so rather than hoping it merges. A slice PR on an issue labelled
+  `partial-slice` reports `done`: the criteria are those of this PR's slice, and the third
+  line names the slices still to come. Use `partial` there only when the PR misses part of
+  its own slice. Put the `prBlock` the verb prints
   first in the PR body, above the other sections.
 - Attempt id. If your brief names an attempt id, pass `--attempt <id>` to `rota worker done` and
   `rota round report`. A refusal that calls the attempt stale (exit 4) means the orchestrator
@@ -128,10 +131,11 @@ Work only this task, then stop.
      issue. `rota worker gate` and `rota worker train` refuse a body without it (exit 4,
      `blockedBy: closes`), since the merge would leave the issue open and claimed. A PR
      that lands only part of the issue says `Refs #<issue>` instead, and the issue
-     carries the `partial-slice` label (ask the orchestrator to set it).
+     carries the `partial-slice` label (ask the orchestrator to set it). Its outcome is `done`
+     (see *Outcome*), so it lands without a relay.
 - Second PR of a split issue. When the issue lands as stacked PRs, open the second from
   a new branch named `<agent>/<issue>-<slug>` (same agent and issue number as the first),
-  with `Closes #<issue>`; the first says `Refs #<issue>`. Print `ROTA-DONE <slot> <pr-url>`
+  with `Closes #<issue>`; the first says `Refs #<issue>`. Each reports `done` for its own slice. Print `ROTA-DONE <slot> <pr-url>`
   for the second as usual. `rota worker gate` follows the PR to its head branch when that
   branch leads with the slot's issue, records it on the slot and judges the PR with the
   slot's relay log, so cite relays in its `## Approvals` as in the first.
