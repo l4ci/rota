@@ -63,6 +63,10 @@ const DefaultLabel = "in-progress"
 // DefaultNeedsHuman is the label of an issue handed to the human (C10).
 const DefaultNeedsHuman = "needs-human"
 
+// NeedsInfoLabel is the label `/rota-capture --triage` puts on an issue it
+// found too unclear to build. A constant: triage writes it literally.
+const NeedsInfoLabel = "needs-info"
+
 // Forge is the part of the tracker adapter a round reads and, for the
 // label repair, writes. tracker.Adapter satisfies it.
 type Forge interface {

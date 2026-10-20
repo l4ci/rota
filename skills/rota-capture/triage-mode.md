@@ -1,6 +1,6 @@
 # Triage Mode (`--triage`)
 
-For tracker issues filed by others: the first read of a raw issue, before a round picks it up. Triage leaves a label and a comment; `rota round candidates` is unchanged and does not read `needs-info`. Capture's duplicate check only covers items the maintainer types in; this runs the same checks on an existing issue. It creates no item. Never grill the reporter: one question template, posted as a comment, is the whole conversation.
+For tracker issues filed by others: the first read of a raw issue, before a round picks it up. Triage leaves a label and a comment; `rota round candidates` lists a `needs-info` issue as not ready, so a round does not offer it until the label is removed. Capture's duplicate check only covers items the maintainer types in; this runs the same checks on an existing issue. It creates no item. Never grill the reporter: one question template, posted as a comment, is the whole conversation.
 
 Copy this checklist and track your progress:
 ```
