@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/host"
 )
 
@@ -108,3 +109,15 @@ func TestSessionEnsureFailures(t *testing.T) {
 }
 
 func (o *operatorHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(o) }
+
+func TestOperatorCommandModelFollowsKeyDefault(t *testing.T) {
+	for i := range config.Keys {
+		if config.Keys[i].Name == "models.orchestrator" {
+			defer func(d any) { config.Keys[i].Default = d }(config.Keys[i].Default)
+			config.Keys[i].Default = "orch-default"
+		}
+	}
+	if got := operatorCommand(newProject(t, `{}`)); got != "claude --continue --model orch-default --permission-mode auto" {
+		t.Errorf("operatorCommand = %q", got)
+	}
+}

@@ -98,3 +98,13 @@ func UsageThreshold(cfg any) (int, error) {
 func FallbackSleepSeconds(cfg any) (int, error) {
 	return Int(cfg, "limits.fallbackSleepSeconds", 1, MaxInt)
 }
+
+// StringOrDefault returns a string key as written, or its schema default when
+// it is absent, null or empty. For keys whose empty string means "use the
+// default", such as models.worker.
+func StringOrDefault(cfg any, key string) string {
+	if s := StringIfSet(cfg, key); s != "" {
+		return s
+	}
+	return String(nil, key)
+}

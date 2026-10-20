@@ -32,10 +32,7 @@ func (claude) CommandKey() string { return "work.workerCommand" }
 // in the default command and fills the {model} placeholder of a custom one; a
 // custom command without the placeholder runs as written (ModelApplies).
 func (claude) Launch(cfg any, chosen string) (string, error) {
-	model := "sonnet"
-	if s := config.StringIfSet(cfg, "models.worker"); s != "" {
-		model = s
-	}
+	model := config.StringOrDefault(cfg, "models.worker")
 	if chosen != "" {
 		model = chosen
 	} else if inheritsModel(cfg) {
@@ -214,10 +211,7 @@ func (claude) Command(cfg any) ([]string, error) {
 		}
 		return argv, nil
 	}
-	model := config.StringIfSet(cfg, "models.orchestrator")
-	if model == "" {
-		model = "opus"
-	}
+	model := config.StringOrDefault(cfg, "models.orchestrator")
 	return []string{"claude", "--model", model, "--permission-mode", "auto"}, nil
 }
 

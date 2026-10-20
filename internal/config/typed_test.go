@@ -141,3 +141,17 @@ func TestEscalateIssueReadsNumbersAndKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestStringOrDefault(t *testing.T) {
+	cases := []struct{ cfg, want string }{
+		{`{}`, "sonnet"},
+		{`{"models":{"worker":null}}`, "sonnet"},
+		{`{"models":{"worker":""}}`, "sonnet"},
+		{`{"models":{"worker":"haiku"}}`, "haiku"},
+	}
+	for _, c := range cases {
+		if got := StringOrDefault(decode(t, c.cfg), "models.worker"); got != c.want {
+			t.Errorf("StringOrDefault(%s) = %q, want %q", c.cfg, got, c.want)
+		}
+	}
+}
