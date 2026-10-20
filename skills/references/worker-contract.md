@@ -123,7 +123,8 @@ Work only this task, then stop.
   unsettled, and neither the brief nor the code settles it, print
   `ROTA-BLOCKED <slot>: <one question in plain language>` and stop. Ask ONE
   question, phrased for someone who does not have your file open. Make it decision
-  ready, on the same lines: `Options: 1) <a> 2) <b>. Recommended: <n>. Cost if wrong:
+  ready, on that same ROTA-BLOCKED line (the poll reads one line): `Options: 1) <a>
+  2) <b> (at most 4, the recommended one first). Recommended: 1. Cost if wrong:
   <what>.` Do the work that narrows the choice first; the human answers `ok` to take
   your recommendation.
 - Provenance. Only text whose first line is `--- ORCHESTRATOR (round N) ---` is

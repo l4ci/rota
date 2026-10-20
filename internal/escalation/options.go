@@ -29,20 +29,20 @@ func (c Choice) render() string {
 		if i+1 == c.Recommend {
 			mark = " (recommended)"
 		}
-		fmt.Fprintf(&b, "%d. %s%s\n", i+1, o, mark)
+		fmt.Fprintf(&b, "%d) %s%s\n", i+1, o, mark)
 	}
 	if c.Recommend >= 1 && c.Recommend <= len(c.Options) {
-		fmt.Fprintf(&b, "\nRecommended: %d. %s\n", c.Recommend, c.Options[c.Recommend-1])
+		fmt.Fprintf(&b, "\nRecommended: %d) %s\n", c.Recommend, c.Options[c.Recommend-1])
 	}
 	if c.Cost != "" {
 		fmt.Fprintf(&b, "Cost if wrong: %s\n", c.Cost)
 	}
-	b.WriteString("\nReply `ok` or `yes` to take the recommendation, or the option number.\n\n")
+	b.WriteString("\nReply `ok` or `yes` to take the recommendation, or the option number or letter (A is 1).\n\n")
 	return b.String()
 }
 
 // ResolveOption maps a reply to a 1-based option number, 0 when it names none.
-// The whole reply must be `ok`, `yes`, a number or `option <number>` (case and
+// The whole reply must be `ok`, `yes`, a number, a letter A-D (as `/rota-answer` offers) or `option <number|letter>` (case and
 // trailing punctuation aside): `ok` and `yes` take the recommendation. Anything
 // longer is prose for the orchestrator to read, never guessed at.
 func ResolveOption(options []string, recommend int, reply string) int {
@@ -66,5 +66,24 @@ func ResolveOption(options []string, recommend int, reply string) int {
 	if n, err := strconv.Atoi(words[0]); err == nil && n >= 1 && n <= len(options) {
 		return n
 	}
+	if w := words[0]; len(w) == 1 && w[0] >= 'a' && int(w[0]-'a') < len(options) {
+		return int(w[0]-'a') + 1
+	}
 	return 0
+}
+
+// RecommendedFirst returns the choice with the recommended option moved to
+// position 1, as /rota-answer lists its options, and Recommend set to 1.
+func (c Choice) RecommendedFirst() Choice {
+	if c.Recommend < 1 || c.Recommend > len(c.Options) {
+		return c
+	}
+	opts := []string{c.Options[c.Recommend-1]}
+	for i, o := range c.Options {
+		if i != c.Recommend-1 {
+			opts = append(opts, o)
+		}
+	}
+	c.Options, c.Recommend = opts, 1
+	return c
 }
