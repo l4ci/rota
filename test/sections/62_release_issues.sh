@@ -88,7 +88,7 @@ print(",".join(m["state"] for m in db["milestones"] if m["title"].startswith(sys
     eq "notes other" "### Other
 
 - chore: untagged cleanup" "$(printf '%s\n' "$MD" | sed -n '/^### Other/,$p')"
-    eq "notes since keeps buckets" "### New" "$(printf '%s\n' "$MD" | head -1)"
+    eq "notes since keeps buckets" "### New" "${MD%%$'\n'*}"
     RC hvj release notes --from issues M01 --since nope
     eq "notes bad ref" "3" "$RCV"
     RC hvj release notes --from issues M99
