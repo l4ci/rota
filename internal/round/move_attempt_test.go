@@ -89,6 +89,7 @@ func TestTransferRecordsTheInheritedTipAndTheGateKeepsTheReceiversPR(t *testing.
 // of its own commits.
 func TestAssignRecordsTheTipOfWorkAlreadyOnTheBranch(t *testing.T) {
 	f := newMoveFx(t)
+	benBranch := f.slot("ben").Branch()
 	if _, err := f.ret("ben", "handing back", nil); err != nil {
 		t.Fatal(err)
 	}
@@ -96,8 +97,71 @@ func TestAssignRecordsTheTipOfWorkAlreadyOnTheBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	dana := f.slot("dana")
-	tip := gitIn(t, f.wt("dana"), "rev-parse", "HEAD")
+	tip := gitIn(t, f.root, "rev-parse", "origin/"+benBranch)
 	if dana.Attempt() == "" || dana.AttemptBase() != tip {
-		t.Fatalf("attempt %q base %q, want base %s", dana.Attempt(), dana.AttemptBase(), tip)
+		t.Fatalf("attempt %q base %q, want the handed-back tip %s", dana.Attempt(), dana.AttemptBase(), tip)
+	}
+}
+
+// A fresh assign cuts the branch itself: no commit on it is inherited.
+func TestFreshAssignRecordsNoInheritedTip(t *testing.T) {
+	f := newMoveFx(t)
+	if _, err := f.assign("13", "dana"); err != nil {
+		t.Fatal(err)
+	}
+	if s := f.slot("dana"); s.Attempt() == "" || s.AttemptBase() != "" {
+		t.Fatalf("attempt %q base %q, want an attempt and no base", s.Attempt(), s.AttemptBase())
+	}
+}
+
+// The sender pushed after root's last fetch: the receiver's base is that push,
+// not the stale remote-tracking ref.
+func TestTransferBaseIncludesAPushRootHasNotFetched(t *testing.T) {
+	f := newMoveFx(t)
+	branch := f.slot("ben").Branch()
+	benAttempt := f.slot("ben").Attempt()
+	f.queueBensPR(t)
+	clone := filepath.Join(t.TempDir(), "other")
+	sh(t, filepath.Dir(clone), "clone", "-q", f.origin, clone)
+	sh(t, clone, "config", "user.email", "t@t")
+	sh(t, clone, "config", "user.name", "t")
+	sh(t, clone, "checkout", "-q", branch)
+	os.WriteFile(filepath.Join(clone, "late.txt"), []byte("late"), 0o644)
+	sh(t, clone, "add", "late.txt")
+	sh(t, clone, "commit", "-q", "-m", "late push\n\n"+worker.AttemptTrailer+": "+benAttempt)
+	sh(t, clone, "push", "-q", "origin", "HEAD")
+	tip := gitIn(t, clone, "rev-parse", "HEAD")
+	if _, err := f.transfer("12", "dana", nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.slot("dana").AttemptBase(); got != tip {
+		t.Fatalf("base %s, want the pushed tip %s", got, tip)
+	}
+}
+
+// A fresh-slot relay (round.freshAt) is a transfer: the new holder's PR is
+// not refused for the sender's commits, but a later sender push is.
+func TestFreshRelayKeepsTheReceiversPR(t *testing.T) {
+	f, o := freshFx(t)
+	benAttempt := f.slot("ben").Attempt()
+	f.stamped(t, "ben", "stamped.txt", benAttempt)
+	if got, err := f.env.ReviewRelay(bg, f.root, o); err != nil || got.Fresh != "dana" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	worker.UpdateSlot(f.root, "dana", func(s *worker.Slot) { s.SetPR("https://github.com/o/r/pull/9") })
+	dana := f.slot("dana")
+	if dana.AttemptBase() == "" || dana.Attempt() == benAttempt {
+		t.Fatalf("attempt %q base %q", dana.Attempt(), dana.AttemptBase())
+	}
+	gate := func() worker.GateResult {
+		res, _ := f.env.Worker.Gate(bg, f.root, worker.GateOpts{Slot: "dana", Base: "main", CheckOnly: true})
+		return res
+	}
+	if res := gate(); res.Verdict == worker.GateStaleAttempt {
+		t.Fatalf("the fresh holder's PR is refused: %+v", res)
+	}
+	f.stamped(t, "dana", "late.txt", benAttempt)
+	if res := gate(); res.Verdict != worker.GateStaleAttempt {
+		t.Fatalf("a later sender push must be refused: %+v", res)
 	}
 }

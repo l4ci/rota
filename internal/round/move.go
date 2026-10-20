@@ -941,16 +941,30 @@ func overlapCheck(r Readiness) *Check {
 	return nil
 }
 
-// branchTip is the full sha of a work branch's tip (origin's, else the local
-// one), "" when neither exists. A new attempt records it as the commits it
-// inherited, which keep their earlier attempts' trailers.
+// branchTip is the full sha of a work branch's tip, "" when it exists nowhere.
+// A new attempt records it as the commits it inherited, which keep their
+// earlier attempts' trailers. The branch is fetched first (the sender may have
+// pushed since root's last fetch); of origin's and the local tip it takes the
+// one that contains the other, origin's when they diverged.
 func (e Env) branchTip(ctx context.Context, root, branch string) string {
-	for _, ref := range []string{"origin/" + branch, branch} {
-		if out, _, code := e.gitOut(ctx, root, "rev-parse", "--verify", "--quiet", ref+"^{commit}"); code == 0 && out != "" {
-			return strings.TrimSpace(out)
+	e.gitOut(ctx, root, "fetch", "-q", "origin", branch)
+	rev := func(ref string) string {
+		out, _, code := e.gitOut(ctx, root, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+		if code != 0 {
+			return ""
+		}
+		return strings.TrimSpace(out)
+	}
+	remote, local := rev("origin/"+branch), rev(branch)
+	if remote == "" {
+		return local
+	}
+	if local != "" {
+		if _, _, code := e.gitOut(ctx, root, "merge-base", "--is-ancestor", remote, local); code == 0 {
+			return local
 		}
 	}
-	return ""
+	return remote
 }
 
 func (e Env) headLine(ctx context.Context, wt, ref string) string {

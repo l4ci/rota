@@ -656,14 +656,18 @@ func (g *gate) stepAttempt() (bool, error) {
 	if t.Queued || t.External || t.Attempt == "" {
 		return false, nil
 	}
-	from := g.baseRef
+	// The base's own commits (a merge of main into the branch brings other
+	// workers' stamped commits) are nobody's attempt here: exclude them too.
+	rng := []string{g.headRef, "^" + g.baseRef}
 	if t.AttemptBase != "" {
 		if _, code := g.git(g.root, "merge-base", "--is-ancestor", t.AttemptBase, g.headRef); code != 0 {
+			// A rebase rewrote the inherited tip: the inherited trailers cannot be
+			// told from the stale ones, so judge nothing.
 			return false, nil
 		}
-		from = t.AttemptBase
+		rng = append(rng, "^"+t.AttemptBase)
 	}
-	out, code := g.git(g.root, "log", "--format=%h %(trailers:key="+AttemptTrailer+",valueonly,separator=%x20)", from+".."+g.headRef)
+	out, code := g.git(g.root, append([]string{"log", "--format=%h %(trailers:key=" + AttemptTrailer + ",valueonly,separator=%x20)"}, rng...)...)
 	if code != 0 {
 		return false, nil
 	}
