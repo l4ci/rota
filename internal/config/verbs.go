@@ -60,14 +60,19 @@ func IsSchemaKey(name string) bool {
 // Show lists the effective value of every schema key in schema order, or of
 // the one key given. Values resolve from the merged runtime config; a missing
 // or null key uses its default, including when a local override replaced its
-// parent. The source names the supplying layer, or "default" on fallback. A key
+// parent. The source names the supplying layer (local, project or global), or "default" on fallback. A key
 // outside the schema is accepted when the merged config holds it, so a
 // hand-edited key stays readable; the old helper rejected it.
 func Show(root string, key string, one bool) ([]Entry, error) {
-	merged, local := loadLayers(configPath(root))
+	merged, l := loadLayers(configPath(root))
 	source := func(key string) string {
-		if _, ok := walk(local, key); ok {
+		if _, ok := walk(l.local, key); ok {
 			return "local"
+		}
+		if _, ok := walk(l.project, key); !ok {
+			if _, ok := walk(l.global, key); ok {
+				return "global"
+			}
 		}
 		return "project"
 	}
@@ -372,7 +377,7 @@ const (
 // Check is hv-config-schema-check: the state of .rota/config.json against the
 // required schema keys. Missing lists, in schema order, the required keys that
 // are absent or null, then LegacyVerifyKey when it still holds commands that
-// test.full does not; it is non-empty only for Stale.
+// test.full does not; it is non-empty only for Stale. A key the global config supplies is not missing.
 func Check(root string) (status string, missing []string) {
 	missing = []string{}
 	raw, err := os.ReadFile(configPath(root))
@@ -386,8 +391,9 @@ func Check(root string) (status string, missing []string) {
 	if !ok {
 		return Corrupt, missing
 	}
+	global := globalLayer()
 	for _, k := range Keys {
-		if _, ok := walk(doc, k.Name); k.Required && !ok {
+		if _, ok := walk(doc, k.Name); k.Required && !ok && !globalSupplies(global, k.Name) {
 			missing = append(missing, k.Name)
 		}
 	}

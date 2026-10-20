@@ -27,7 +27,7 @@ func writeFile(t *testing.T, path, body string) {
 	}
 }
 
-func TestConfigSaveGlobalThenInitSeeds(t *testing.T) {
+func TestConfigSaveGlobalThenInitInherits(t *testing.T) {
 	gdir := isolateGlobal(t)
 	src := t.TempDir()
 	if code, _, e := initRun(t, src, "init"); code != 0 {
@@ -62,27 +62,43 @@ func TestConfigSaveGlobalThenInitSeeds(t *testing.T) {
 		t.Fatalf("init dst: %d %s", code, e)
 	}
 	if v := cfgValue(t, dst, "work.isolation"); v != "worktree" {
-		t.Errorf("work.isolation = %v, want seeded worktree", v)
+		t.Errorf("work.isolation = %v, want inherited worktree", v)
 	}
 	if v := cfgValue(t, dst, "ship.review"); v != false {
-		t.Errorf("ship.review = %v, want seeded false", v)
+		t.Errorf("ship.review = %v, want inherited false", v)
 	}
 	if v := cfgValue(t, dst, "work.mergeStrategy"); v != "direct" {
 		t.Errorf("work.mergeStrategy = %v, want schema default", v)
 	}
 }
 
-func TestInitDoesNotReseedExistingProjectNorLayerGlobal(t *testing.T) {
+func TestInitInheritsGlobalWithoutCopyingIt(t *testing.T) {
+	gdir := isolateGlobal(t)
+	writeFile(t, config.GlobalPath(gdir), `{"work":{"isolation":"worktree"}}`)
+	dir := t.TempDir()
+	if code, _, e := initRun(t, dir, "init"); code != 0 {
+		t.Fatalf("init: %d %s", code, e)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, ".rota", "config.json"))
+	if err != nil || strings.Contains(string(raw), "isolation") {
+		t.Errorf("init copied the global key into config.json (%v):\n%s", err, raw)
+	}
+	rows, err := config.Show(dir, "work.isolation", true)
+	if err != nil || len(rows) != 1 || rows[0].Source != "global" || rows[0].Value != "worktree" {
+		t.Errorf("show = %v, %v", rows, err)
+	}
+}
+
+func TestProjectKeyBeatsGlobalAfterInit(t *testing.T) {
 	gdir := isolateGlobal(t)
 	dir := t.TempDir()
 	if code, _, e := initRun(t, dir, "init"); code != 0 {
 		t.Fatalf("init: %d %s", code, e)
 	}
-	writeFile(t, config.GlobalPath(gdir), `{"work":{"isolation":"worktree"}}`)
-	// Re-init leaves the project alone, and config resolution ignores the global.
-	if code, _, e := initRun(t, dir, "init"); code != 0 {
-		t.Fatalf("re-init: %d %s", code, e)
+	if _, err := config.Set(dir, "work.isolation", "branch"); err != nil {
+		t.Fatal(err)
 	}
+	writeFile(t, config.GlobalPath(gdir), `{"work":{"isolation":"worktree"}}`)
 	if v := cfgValue(t, dir, "work.isolation"); v != "branch" {
 		t.Errorf("work.isolation = %v, want project value branch", v)
 	}
@@ -117,8 +133,8 @@ func TestInitWarnsOnCorruptGlobal(t *testing.T) {
 	writeFile(t, config.GlobalPath(gdir), `{not json`)
 	dir := t.TempDir()
 	code, _, errOut := initRun(t, dir, "init")
-	if code != 0 || !strings.Contains(errOut, "global config") {
-		t.Errorf("want success with warning, got %d %q", code, errOut)
+	if code != 0 {
+		t.Errorf("want success, got %d %q", code, errOut)
 	}
 	if v := cfgValue(t, dir, "work.isolation"); v != "branch" {
 		t.Errorf("work.isolation = %v", v)
