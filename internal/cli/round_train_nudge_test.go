@@ -189,3 +189,27 @@ func TestRoundWaitCarriesTheTrainNudge(t *testing.T) {
 		t.Fatalf("one unreviewed PR: %d %v, want no trainNudge", code, d)
 	}
 }
+
+func TestTrainBlockedOnFailNotConcerns(t *testing.T) {
+	rec := func(kind, v string) verdict.Record { return verdict.Record{Kind: kind, Verdict: v, Sha: "bbbbbbb"} }
+	for name, tc := range map[string]struct {
+		recs []verdict.Record
+		want bool
+	}{
+		"pass":                 {[]verdict.Record{rec(verdict.ReviewSpec, verdict.Pass)}, false},
+		"concerns":             {[]verdict.Record{rec(verdict.ReviewQuality, verdict.Concerns)}, false},
+		"fail":                 {[]verdict.Record{rec(verdict.ReviewSpec, verdict.Fail)}, true},
+		"spec fail after pass": {[]verdict.Record{rec(verdict.ReviewQuality, verdict.Pass), rec(verdict.ReviewSpec, verdict.Fail)}, true},
+		"none":                 {nil, false},
+	} {
+		root := t.TempDir()
+		for _, r := range tc.recs {
+			if _, err := verdict.AddBranch(root, "w1", r); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if got := trainBlocked(verdict.Load(root), "w1", verdict.Settings{}); got != tc.want {
+			t.Errorf("%s: blocked %v want %v", name, got, tc.want)
+		}
+	}
+}
