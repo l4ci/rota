@@ -108,6 +108,9 @@ type Env struct {
 	// its review queue.
 	Slots  func() []Slot
 	Queued func() []string
+	// Active names the round's active slots (round.Members). Only they count
+	// toward the idle budget; nil counts every registered slot.
+	Active func() []string
 	// Reconcile applies the safe repairs and returns what it repaired and the
 	// drift it leaves.
 	Reconcile func(ctx context.Context) (repaired, drift []string, err error)
@@ -417,6 +420,9 @@ func (e Env) review(ctx context.Context, r *Result) ([]string, error) {
 func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 	idle := 0
 	for _, s := range e.Slots() {
+		if e.Active != nil && !slices.Contains(e.Active(), s.Name) {
+			continue
+		}
 		if s.State == "idle" || s.State == "" {
 			if s.Issue == "" {
 				idle++
