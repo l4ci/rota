@@ -266,6 +266,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `round.adoptPattern` | string | unset |  | Glob over branch names (codex/*, claude/*). rota round reconcile reports a matching branch that no slot holds and that is not merged as unregistered-branch; --apply adopts those whose name carries an issue number. Empty turns the check off. |
 | `round.tier` | enum | `"standard"` | `light`, `standard`, `heavy` | Default worker tier for rota round assign: light for reading, standard for code and tests, heavy for hard reasoning. |
 | `round.workerKind` | enum | unset | `claude`, `codex`, `opencode` | Project default worker harness. Empty: the slot's recorded kind, else claude. --kind and an issue's harness: label beat it. |
+| `round.profile` | enum | unset | `quality`, `balanced`, `budget`, `inherit` | Named model profile that fills round.tiers.claude.* (light/standard/heavy). quality: sonnet/opus/opus. balanced: haiku/sonnet/opus. budget: haiku/haiku/sonnet. inherit: no model, workers launch without --model. Empty keeps the tier defaults. An explicit round.tiers.claude.<tier> beats the profile; Codex and OpenCode tiers are not touched. |
 | `round.tiers.claude.light` | string | `"haiku"` |  | Model a light-tier Claude worker starts with. |
 | `round.tiers.claude.standard` | string | unset |  | Model a standard-tier Claude worker starts with. Empty follows models.worker. |
 | `round.tiers.claude.heavy` | string | `"opus"` |  | Model a heavy-tier Claude worker starts with. |
@@ -277,6 +278,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `round.tiers.opencode.heavy` | string | unset |  | Model a heavy-tier OpenCode worker starts with, as a provider/model id from opencode models. Empty: OpenCode's own default; a configured kind must set all three tiers. |
 | `round.stallMinutes` | int | `30` |  | Minutes a slot with a live agent may show no commit, edit or state change before rota round reconcile reports it stalled. 0 turns the check off. |
 | `round.maxBounces` | int | `3` |  | How often rota worker gate may send one item's PR back before it parks the item as needs-human. 0 turns the cap off. |
+| `round.freshAt` | int | `2` |  | Bounce count at which rota round review-relay stops resuming the worker and transfers the branch to a free slot at the same tier, with a brief of the open findings only. Must stay below round.maxBounces to act. 0 turns it off. |
 | `round.ledgerKeep` | int | `0` |  | Rounds of the round ledger (.rota/ledger.jsonl) to keep. A new round trims the entries of older rounds. 0 keeps everything. |
 | `round.architectureEvery` | int | `20` |  | Closed non-refactor items between automatic architecture reviews. 0 turns them off. |
 | `round.architectureAreas` | list | `[]` |  | Areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review. |

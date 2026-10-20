@@ -61,8 +61,10 @@ type Settings struct {
 	ScopeOverlap string
 	// Tier is the default tier; Models maps kind -> tier -> model name for
 	// every configured kind (a kind with no tier set is absent).
-	Tier   string
-	Models map[string]map[string]string
+	Tier string
+	// Profile is round.profile: "" or a name in Profiles; it fills the Claude tiers.
+	Profile string
+	Models  map[string]map[string]string
 	// WorkerKind is round.workerKind: the project's default worker harness,
 	// "" when unset (the slot's recorded kind, else claude, decides).
 	WorkerKind string
@@ -73,6 +75,10 @@ type Settings struct {
 	// item's PR back to its worker before parking the item as needs-human; 0
 	// turns the cap off.
 	MaxBounces int
+	// FreshAt is round.freshAt: the bounce at which `round review-relay`
+	// transfers the branch to a fresh slot instead of resuming the worker; 0
+	// turns it off.
+	FreshAt int
 	// LedgerKeep is round.ledgerKeep: how many rounds of the round ledger a
 	// new round keeps; 0 keeps everything.
 	LedgerKeep int
@@ -190,6 +196,9 @@ func FromConfig(cfg any) (Settings, error) {
 	if s.MaxBounces, err = config.Int(cfg, "round.maxBounces", 0, config.MaxInt); err != nil {
 		return s, err
 	}
+	if s.FreshAt, err = config.Int(cfg, "round.freshAt", 0, config.MaxInt); err != nil {
+		return s, err
+	}
 	if s.LedgerKeep, err = config.Int(cfg, "round.ledgerKeep", 0, config.MaxInt); err != nil {
 		return s, err
 	}
@@ -298,28 +307,18 @@ func loadTiers(cfg any, s *Settings) error {
 	if !ValidTier(s.Tier) {
 		return fmt.Errorf("round.tier must be %s (got %v)", strings.Join(Tiers, ", "), v)
 	}
+	if s.Profile, err = profileOf(cfg); err != nil {
+		return err
+	}
 	s.Models = map[string]map[string]string{}
 	for _, kind := range harness.Kinds() {
-		h := harness.Resolve(kind)
-		rule := h.Tiers()
+		rule := harness.Resolve(kind).Tiers()
 		m := map[string]string{}
 		for _, tier := range Tiers {
-			key := harness.TierKey(kind, tier)
-			v, err := config.Value(cfg, key)
-			if err != nil {
+			if _, err := config.Value(cfg, harness.TierKey(kind, tier)); err != nil {
 				return err
 			}
-			name, _ := v.(string)
-			name = strings.TrimSpace(name)
-			if name == "" && rule.StandardFallback != "" && tier == TierStandard {
-				w, err := config.Value(cfg, rule.StandardFallback)
-				if err != nil {
-					return err
-				}
-				name, _ = w.(string)
-				name = strings.TrimSpace(name)
-			}
-			m[tier] = name
+			m[tier], _ = Effective(cfg, kind, tier)
 		}
 		set := 0
 		for _, n := range m {
@@ -328,6 +327,8 @@ func loadTiers(cfg any, s *Settings) error {
 			}
 		}
 		switch {
+		case rule.Profile && s.Profile == ProfileInherit:
+			// inherit: an empty tier is deliberate, its workers launch without --model.
 		case set == 0 && rule.Required:
 			return fmt.Errorf("round.tiers.%s is not configured: set light, standard and heavy", kind)
 		case set == 0:
@@ -373,4 +374,81 @@ func list(cfg any, key string) ([]string, error) {
 func SharedPaths(cfg any) []string {
 	paths, _ := list(cfg, "round.sharedPaths")
 	return paths
+}
+
+// Sources of an effective tier model.
+const (
+	SourceExplicit       = "explicit"
+	SourceProfile        = "profile"
+	SourceModelsWorker   = "models.worker"
+	SourceDefault        = "default"
+	SourceHarnessDefault = "harness default"
+)
+
+// ProfileInherit is the round.profile value that names no model.
+const ProfileInherit = harness.ProfileInherit
+
+// Profiles maps each round.profile name to its Claude models, light to heavy.
+// inherit names no model: workers launch without --model.
+var Profiles = map[string][3]string{
+	"quality":      {"sonnet", "opus", "opus"},
+	"balanced":     {"haiku", "sonnet", "opus"},
+	"budget":       {"haiku", "haiku", "sonnet"},
+	ProfileInherit: {"", "", ""},
+}
+
+// ProfileNames lists the valid round.profile values.
+var ProfileNames = []string{"quality", "balanced", "budget", ProfileInherit}
+
+// profileOf reads round.profile: "" when unset, an error for an unknown name.
+func profileOf(cfg any) (string, error) {
+	v, err := config.Value(cfg, "round.profile")
+	if err != nil {
+		return "", err
+	}
+	p, _ := v.(string)
+	p = strings.TrimSpace(p)
+	if _, ok := Profiles[p]; p != "" && !ok {
+		return "", fmt.Errorf("round.profile must be %s, or unset (got %q)", strings.Join(ProfileNames, ", "), p)
+	}
+	return p, nil
+}
+
+// Effective is the model a kind's tier launches with, and where it came from:
+// explicit (the tier key is set), profile (Claude only), models.worker (the
+// standard fallback), default (the key's schema default) or harness default
+// (no model, so the harness picks).
+func Effective(cfg any, kind, tier string) (model, source string) {
+	key := harness.TierKey(kind, tier)
+	if v, ok := config.Lookup(cfg, key); ok {
+		if s, _ := v.(string); strings.TrimSpace(s) != "" {
+			return strings.TrimSpace(s), SourceExplicit
+		}
+	}
+	if harness.Resolve(kind).Tiers().Profile {
+		if p, _ := profileOf(cfg); p != "" {
+			if m := Profiles[p][indexOf(Tiers, tier)]; m != "" {
+				return m, SourceProfile
+			}
+			return "", SourceHarnessDefault
+		}
+	}
+	if fb := harness.Resolve(kind).Tiers().StandardFallback; fb != "" && tier == TierStandard {
+		if v, err := config.Value(cfg, fb); err == nil {
+			if m, _ := v.(string); strings.TrimSpace(m) != "" {
+				return strings.TrimSpace(m), SourceModelsWorker
+			}
+		}
+	}
+	if _, set := config.Lookup(cfg, key); set {
+		// Set but empty (and no profile, no fallback): the harness picks, and
+		// loadTiers refuses it for a claude tier.
+		return "", SourceHarnessDefault
+	}
+	if v, err := config.Value(cfg, key); err == nil {
+		if m, _ := v.(string); strings.TrimSpace(m) != "" {
+			return strings.TrimSpace(m), SourceDefault
+		}
+	}
+	return "", SourceHarnessDefault
 }

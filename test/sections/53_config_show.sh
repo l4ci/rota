@@ -67,5 +67,20 @@ case "$( cd "$CS" && "$ROTA_BIN" config show )" in *"$(printf '\033')"*) fail "p
 [ "$(cat "$CS/.rota/config.json")" = "{}" ] || fail "a refused screen wrote config.json"
 pass "config edit and config --ui refuse off a terminal and write nothing; plain show carries no ANSI"
 
+# Tier rows carry the effective model and its source (profile, explicit, models.worker, default, harness default).
+printf '{"models":{"worker":"opus"},"round":{"profile":"budget","tiers":{"claude":{"heavy":"fable"}}}}\n' > "$CS/.rota/config.json"
+rm -f "$CS/.rota/config.local.json"
+OUT=$(show round.tiers.claude.light)
+[ "$(echo "$OUT" | jget 'data.entries[0].effective')" = "haiku" ] && [ "$(echo "$OUT" | jget 'data.entries[0].effectiveSource')" = "profile" ] \
+  || fail "T118: budget light should be haiku from the profile: $OUT"
+OUT=$(show round.tiers.claude.heavy)
+[ "$(echo "$OUT" | jget 'data.entries[0].effective')" = "fable" ] && [ "$(echo "$OUT" | jget 'data.entries[0].effectiveSource')" = "explicit" ] \
+  || fail "T118: an explicit heavy should beat the profile: $OUT"
+OUT=$(show round.tiers.opencode.light)
+[ "$(echo "$OUT" | jget 'data.entries[0].effectiveSource')" = "harness default" ] \
+  || fail "T118: an unset opencode tier should report harness default: $OUT"
+case "$( cd "$CS" && "$ROTA_BIN" config show round.tiers.claude.standard )" in *"effective haiku (profile)"*) ;; *) fail "T118: text line lacks the effective model" ;; esac
+pass "T118: config show reports each tier's effective model and source"
+
 trap 'rm -rf "$TMP"' EXIT
 rm -rf "$CS"

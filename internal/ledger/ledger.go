@@ -40,11 +40,14 @@ const (
 	KindAdopt = "adopt"
 )
 
-// Cap reasons: why an item at round.maxBounces left its slot. They are the
+// Cap reasons: why an item at round.maxBounces (or round.freshAt) left its slot. They are the
 // capReason of a transfer row and `rota round summary` counts them.
 const (
 	CapAmbiguousCriteria = "ambiguous-criteria"
 	CapTier              = "tier"
+	// CapFresh is a review-relay transfer to a fresh slot at round.freshAt,
+	// below the cap.
+	CapFresh = "fresh"
 )
 
 // Entry is one ledger line. Round is 0 when no round was running (solo mode

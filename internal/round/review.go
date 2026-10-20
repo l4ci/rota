@@ -11,6 +11,8 @@ import (
 
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -30,6 +32,16 @@ type ReviewOpts struct {
 	Verdict *worker.ReviewVerdict
 	// MaxBounces is round.maxBounces; 0 turns the cap off.
 	MaxBounces int
+	// FreshAt is round.freshAt; 0 turns the fresh transfer off.
+	FreshAt int
+	// Board, Settings and OpenFindings feed the fresh transfer: the backlog it
+	// moves the claim on, the round settings, and the last review's findings
+	// still open (NOT ADDRESSED), one line each.
+	Board        Board
+	Settings     roundcfg.Settings
+	OpenFindings []string
+	// HolderPID is the orchestrator pid for the fresh transfer's lease check.
+	HolderPID int
 	// Escalate posts the cap escalation on PR number.
 	Escalate func(ctx context.Context, number int, slot, title, body string) error
 }
@@ -49,6 +61,9 @@ type Relayed struct {
 	// Escalated is true when the cap was reached and the escalation was posted
 	// now; an escalation that was already open is not posted twice.
 	Escalated bool
+	// Fresh is the slot the branch was transferred to at round.freshAt; "" for
+	// a plain relay. FreshSkipped says why a due fresh transfer fell back.
+	Fresh, FreshSkipped string
 }
 
 // itemLimit truncates one relayed item; the rest is on the PR.
@@ -102,6 +117,12 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 	if o.MaxBounces > 0 && out.Bounces >= o.MaxBounces {
 		return e.reviewCap(ctx, root, o, batch, number, issue, out)
 	}
+	if o.FreshAt > 0 && out.Bounces+1 == o.FreshAt {
+		moved, err := e.reviewFresh(ctx, root, o, reg, s, batch, pr.HeadSHA, issue, &out)
+		if moved || err != nil {
+			return out, err
+		}
+	}
 	if s.PaneHandle() == "" {
 		return out, &exitcode.Error{Exit: exitcode.ExitRefused, Message: fmt.Sprintf("slot '%s' has no session to relay into", o.Slot),
 			Hint: "the pane is gone: re-dispatch the task or transfer the item", Data: worker.BlockData{BlockedBy: "handle"}}
@@ -154,6 +175,89 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr))
 	}
 	return out, nil
+}
+
+// freshBrief is the transfer's decisions file: the last review's findings still
+// open and the review link, not the relay history.
+func freshBrief(pr string, findings []string) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "You start with a fresh context. Earlier rounds of review on %s left these findings NOT ADDRESSED; fix them and nothing else:\n", prLabel(pr))
+	for _, f := range findings {
+		sb.WriteString("- " + f + "\n")
+	}
+	fmt.Fprintf(&sb, "\nReview: %s\n", prLabel(pr))
+	return sb.String()
+}
+
+// reviewFresh is the relay that lands on round.freshAt: instead of resuming a
+// context that already holds the wrong model of the problem, the branch moves
+// to a free slot at the same tier with a brief of the open findings. It counts
+// as the bounce. moved is false when the transfer was skipped (no free slot,
+// nothing open to carry, the transfer refused) and the caller relays in place;
+// out.FreshSkipped says why.
+func (e Env) reviewFresh(ctx context.Context, root string, o ReviewOpts, reg worker.Registry, s *worker.Slot, batch worker.ReviewBatch, head, issue string, out *Relayed) (moved bool, err error) {
+	skip := func(format string, a ...any) (bool, error) {
+		out.FreshSkipped = fmt.Sprintf(format, a...)
+		return false, nil
+	}
+	if len(o.OpenFindings) == 0 {
+		return skip("no open findings in the last review to carry")
+	}
+	if o.Board == nil {
+		return skip("no backlog to move the claim on")
+	}
+	to := ""
+	for _, name := range o.Settings.Roster {
+		if t := reg.Slot(name); name != o.Slot && SlotIdle(t) {
+			to = name
+			break
+		}
+	}
+	if to == "" {
+		return skip("no free slot to transfer to")
+	}
+	body, err := os.CreateTemp("", "rota-review-fresh-*")
+	if err != nil {
+		return false, err
+	}
+	defer os.Remove(body.Name())
+	_, werr := body.WriteString(freshBrief(out.PR, o.OpenFindings))
+	if cerr := body.Close(); werr == nil {
+		werr = cerr
+	}
+	if werr != nil {
+		return false, werr
+	}
+	prev := out.Bounces
+	bounces, counted, err := worker.RecordBounceCounted(e.Worker, root, issue, o.Slot, head)
+	if err != nil {
+		return false, err
+	}
+	out.Bounces = bounces
+	res, terr := e.Transfer(ctx, root, o.Board, TransferOpts{
+		Issue: issue, To: to, BodyFile: body.Name(), Settings: o.Settings,
+		Note:       fmt.Sprintf("bounce %d of round.freshAt %d: review input on %s moves to a fresh context", bounces, o.FreshAt, prLabel(out.PR)),
+		Tier:       s.Tier(),
+		TierReason: strutil.FirstNonEmpty(s.TierReason(), "kept from "+o.Slot),
+		CapReason:  ledger.CapFresh, HolderPID: o.HolderPID,
+	})
+	if terr != nil && !res.Changed {
+		var blk *BlockedError
+		var rerr error
+		if counted {
+			rerr = worker.UnrecordBounce(root, issue, head, reg)
+		}
+		out.Bounces = prev
+		if errors.As(terr, &blk) {
+			return skip("transfer to %s refused: %s", to, blk.Error())
+		}
+		return false, errors.Join(terr, rollbackErr(rerr))
+	}
+	if _, serr := worker.UpdateSlot(root, to, func(t *worker.Slot) { t.SetReviewSeen(batch.Cursor) }); serr != nil {
+		terr = errors.Join(terr, serr)
+	}
+	out.Fresh = to
+	return true, terr
 }
 
 // rollbackErr labels a failed rollback write; nil stays nil.
