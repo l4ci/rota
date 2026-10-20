@@ -315,9 +315,9 @@ func StripRelays(kind, text string) string {
 
 // paneRules are a kind's PaneVocab compiled.
 type paneRules struct {
-	retry, busy, limits []*regexp.Regexp
-	authDead, badModel  *regexp.Regexp
-	gutter              bool
+	retry, busy, background, limits []*regexp.Regexp
+	authDead, badModel              *regexp.Regexp
+	gutter                          bool
 }
 
 var (
@@ -337,6 +337,7 @@ func paneRulesFor(kind string) *paneRules {
 	if h, ok := harness.Lookup(kind); ok && kind != "" {
 		v := h.PaneVocab()
 		r.retry, r.busy = compileAll(`(?i)`, v.Retry), compileAll(`(?i)`, v.Busy)
+		r.background = compileAll(`(?i)`, v.Background)
 		r.limits = compileAll(`(?i)`, v.Limits)
 		if v.AuthDead != "" {
 			r.authDead = regexp.MustCompile(`(?i)` + v.AuthDead)
@@ -457,6 +458,12 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	}
 	if native == "unknown" {
 		return StateUnknown, "herdr cannot classify the agent — inspect the tab; not proof it finished"
+	}
+	// The footer outlives a dialog or a crash, so it only turns the final idle
+	// outcome into busy. The count moves as tasks start and end; a fixed
+	// evidence keeps `round wait` from reporting the slot as changed.
+	if anyMatch(rules.background, own) {
+		return StateBusy, "pane shows background shells or monitors running"
 	}
 	if staleDone {
 		return StateIdle, staleDoneEvidence
