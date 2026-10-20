@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // setOutcomeSlot writes slot w1 holding PR with a recorded done outcome ("" for none).
@@ -64,5 +66,34 @@ func TestDispatchClearsTheOutcome(t *testing.T) {
 		if k, _ := s.Outcome(); k != "" {
 			t.Errorf("task %q: outcome %q survived a dispatch", task, k)
 		}
+	}
+}
+
+// A slice PR on a partial-slice issue reports `done` (this PR's slice is
+// complete), says `Refs #N`, and lands without a relay. Reporting `partial`
+// there stays refused: that outcome is for unmet criteria in the PR itself.
+func TestGateLandsADoneSlicePROnAPartialSliceIssue(t *testing.T) {
+	for _, c := range []struct {
+		outcome string
+		verdict string
+	}{
+		{"done", GatePass},
+		{"partial", GateOutcomeOpen},
+	} {
+		t.Run(c.outcome, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.pushStamped("a.txt", "")
+			w.setConfig(`{"issues":{"source":"gitlab"},"test":{"full":["true"]}}`)
+			w.setOutcomeSlot(c.outcome)
+			w.forge("body", "Refs #5\n")
+			e := w.env(false)
+			e.Issues = func(string, tracker.Settings) (Issues, error) {
+				return &issueStub{labels: []string{PartialSliceLabel}}, nil
+			}
+			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+			if err != nil || res.Verdict != c.verdict {
+				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.verdict, res)
+			}
+		})
 	}
 }

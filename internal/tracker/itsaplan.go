@@ -31,7 +31,7 @@ import (
 //
 // Reads use GET /projects/:key/issues/board (active issues) and
 // /issues/archived: both return every issue with no limit, unlike the capped
-// list route. This is slice T1: reads and the connection check; writes follow.
+// list route. Claims, the gate close and migrate (T3, T4 of #1100) follow.
 type Itsaplan struct {
 	rest    *REST
 	site    string
@@ -491,8 +491,8 @@ func hasAllLabels(have, want []string) bool {
 // ---- not built yet --------------------------------------------------------------
 
 // errItsaplanSlice refuses a call whose slice of the It's a Plan source has not
-// landed; the plan on #1100 builds writes, claims, the gate close and migrate
-// after the connection and read tracer.
+// landed; the plan on #1100 builds claims and the gate close (T3) and migrate
+// (T4) after the connection, read and write slices.
 func errItsaplanSlice(what string) error {
 	return failed("issues.source itsaplan does not support %s yet (not implemented)", what)
 }
@@ -501,41 +501,8 @@ func errItsaplanNoMilestones() error {
 	return failed("issues.source itsaplan has no milestones")
 }
 
-func (t *Itsaplan) Create(context.Context, string, string, []string, string) (IssueKey, error) {
-	return "", errItsaplanSlice("creating issues")
-}
-func (t *Itsaplan) Edit(context.Context, IssueKey, IssueEdit) error {
-	return errItsaplanSlice("editing issues")
-}
-func (t *Itsaplan) EnsureLabels(context.Context, []string, bool) error {
-	return errItsaplanSlice("labels")
-}
-func (t *Itsaplan) AddLabels(context.Context, IssueKey, []string, bool) error {
-	return errItsaplanSlice("labels")
-}
-func (t *Itsaplan) RemoveLabels(context.Context, IssueKey, []string) error {
-	return errItsaplanSlice("labels")
-}
-func (t *Itsaplan) Close(context.Context, IssueKey, string, string) error {
-	return errItsaplanSlice("closing issues")
-}
-func (t *Itsaplan) Reopen(context.Context, IssueKey) error {
-	return errItsaplanSlice("reopening issues")
-}
 func (t *Itsaplan) AssignSelf(context.Context, IssueKey) error {
 	return errItsaplanSlice("assigning issues")
-}
-func (t *Itsaplan) AddComment(context.Context, IssueKey, string) (string, error) {
-	return "", errItsaplanSlice("comments")
-}
-func (t *Itsaplan) EditComment(context.Context, IssueKey, string, string) error {
-	return errItsaplanSlice("comments")
-}
-func (t *Itsaplan) DeleteComment(context.Context, IssueKey, string) error {
-	return errItsaplanSlice("comments")
-}
-func (t *Itsaplan) CommentURL(context.Context, IssueKey, string) (string, error) {
-	return "", errItsaplanSlice("comments")
 }
 
 // ClosesIssue: a key-based tracker, so the key in the branch or the PR title.

@@ -7,6 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/strutil"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -242,12 +243,6 @@ func Overlaps(a, b []string) []string {
 	return out
 }
 
-// itemText is an item's body and the text of its comments.
-func itemText(be backlog.Backend, id string) string {
-	body, comments := itemParts(be, id)
-	return body + comments
-}
-
 // itemParts is an item's body and, separately, the text of its comments, each
 // comment on its own line.
 func itemParts(be backlog.Backend, id string) (body, comments string) {
@@ -301,9 +296,12 @@ func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFli
 	}
 	r.Checks = append(r.Checks, Check{CheckCriteria, len(reasons) == 0, nonNil(reasons)})
 
-	text := itemText(be, id)
+	// Dependencies come from the body alone: a comment cannot extend the last
+	// section, and an item is never its own dependency.
+	body, _ := itemParts(be, id)
 	project := self.IssueKey().Project()
-	refs, unverifiable := dependencies(text, project)
+	refs, unverifiable := dependencies(body, project)
+	refs = slices.DeleteFunc(refs, func(ref string) bool { return worker.NormID(ref) == worker.NormID(id) })
 	dep := Check{Name: CheckDependencies, OK: true, Detail: []string{}}
 	for _, ref := range unverifiable {
 		dep.OK = false
