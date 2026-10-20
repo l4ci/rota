@@ -3,6 +3,8 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/roundtick"
 )
 
 func TestTrainNudgeNamesTwoReviewedPRsOnOneBase(t *testing.T) {
@@ -32,6 +34,24 @@ func TestTrainNudgeAbsentWithOneReviewedPR(t *testing.T) {
 	} {
 		if ns := trainNudges(w); len(ns) != 0 {
 			t.Errorf("%s: nudges = %+v, want none", name, ns)
+		}
+	}
+}
+
+func TestTickNeedsMergeOnlyForMergeItems(t *testing.T) {
+	cases := []struct {
+		name string
+		r    roundtick.Result
+		want bool
+	}{
+		{"empty tick", roundtick.Result{}, false},
+		{"autopilot merged", roundtick.Result{Did: []roundtick.Action{{Action: "merge", Target: "#9"}}}, false},
+		{"gate failed only", roundtick.Result{NeedsYou: []roundtick.Item{{Kind: "gate-failed", Target: "#9"}}}, false},
+		{"merge item", roundtick.Result{NeedsYou: []roundtick.Item{{Kind: "drift"}, {Kind: "merge", Target: "#9"}}}, true},
+	}
+	for _, c := range cases {
+		if got := tickNeedsMerge(c.r); got != c.want {
+			t.Errorf("%s: tickNeedsMerge = %v, want %v", c.name, got, c.want)
 		}
 	}
 }
