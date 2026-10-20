@@ -102,7 +102,29 @@ func waitingPRs(c *Ctx, root string) []waitingPR {
 			out = append(out, waitingPR{PR: q.PR, Base: q.Base, Reviewed: reviewed(q.Branch)})
 		}
 	}
-	return out
+	return fillDefaultBase(out, defaultBase(c, root))
+}
+
+// defaultBase is the base a PR with no recorded base merges into, "" when it
+// cannot be resolved. Tolerant like the rest of the nudge.
+func defaultBase(c *Ctx, root string) string {
+	base, ok, err := resolveBase(c.Context(), root)
+	if err != nil || !ok {
+		return ""
+	}
+	return base
+}
+
+// fillDefaultBase names the default base on PRs that recorded none, so a done
+// slot (empty base) and a queued PR (explicit base) on the same branch group
+// together.
+func fillDefaultBase(waiting []waitingPR, def string) []waitingPR {
+	for i := range waiting {
+		if waiting[i].Base == "" {
+			waiting[i].Base = def
+		}
+	}
+	return waiting
 }
 
 // trainNudgeData is the nudges as the `trainNudge` JSON array, nil when none.
