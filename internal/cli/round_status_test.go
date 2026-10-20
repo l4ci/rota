@@ -238,3 +238,26 @@ func TestRoundStatusShowsEventEvidence(t *testing.T) {
 		t.Fatal("no dana row")
 	}
 }
+
+// A bad round.* key reaches the user: status and reconcile fail with a usage
+// error (exit 2) naming the key, instead of running with zero values.
+func TestRoundStatusAndReconcileReportInvalidRoundConfig(t *testing.T) {
+	root := gitRepo(t)
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"round":{"stallMinutes":"soon"}}`)
+	for _, verb := range []string{"status", "reconcile"} {
+		code, out, errOut := rotaInWith(t, testDeps(), root, "round", verb)
+		if code != ExitUsage || !strings.Contains(out+errOut, "round.stallMinutes") {
+			t.Errorf("%s: exit %d, out %q, err %q; want exit %d naming round.stallMinutes", verb, code, out, errOut, ExitUsage)
+		}
+	}
+}
+
+// defaultRoundEnv carries the loaded round settings, not a copied subset.
+func TestDefaultRoundEnvCarriesRoundSettings(t *testing.T) {
+	root := gitRepo(t)
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"round":{"stallMinutes":7,"adoptPattern":"codex/*"}}`)
+	e := testDeps().RoundEnvLocal(context.Background(), root)
+	if e.RoundErr != nil || e.Round.StallMinutes != 7 || e.Round.AdoptPattern != "codex/*" {
+		t.Errorf("Round = %+v, err %v", e.Round, e.RoundErr)
+	}
+}

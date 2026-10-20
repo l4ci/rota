@@ -84,7 +84,7 @@ func newMoveFx(t *testing.T) *moveFx {
 	sh(t, f.root, "push", "-q", "origin", "main")
 	milestoneDoc(t, f.root, "M01", "active")
 
-	f.env = Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100), StallMinutes: 30, Forge: f.forge.asForge()}
+	f.env = Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100), Round: roundcfg.Settings{StallMinutes: 30}, Forge: f.forge.asForge()}
 	f.env.Worker = worker.Env{Git: git.Exec, Getenv: noEnv, Now: func() time.Time { return f.now }, Sleep: func(time.Duration) {},
 		NewHost: func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }}
 
@@ -413,7 +413,7 @@ func TestReconcileEscalationPendingIsNotStalled(t *testing.T) {
 	if rep, _ := f.env.Status(bg, f.root); !hasKind(kinds(rep.Findings)["ben"], StalledSlot) {
 		t.Fatalf("control: stalled once the escalation is gone: %+v", rep.Findings)
 	}
-	f.env.StallMinutes = 0
+	f.env.Round.StallMinutes = 0
 	if rep, _ := f.env.Status(bg, f.root); hasKind(kinds(rep.Findings)["ben"], StalledSlot) {
 		t.Errorf("stallMinutes 0 is off: %v", rep.Findings)
 	}

@@ -73,7 +73,7 @@ rtrc round assign F01 --check-only --kind codex --holder-pid "$HOLDER"
 rt config set work.codexCommand '' >/dev/null
 rt config set round.tiers.codex.light c-light >/dev/null
 rtrc round assign F01 --check-only --kind codex --holder-pid "$HOLDER"
-[ "$RC" = "70" ] || fail "a partial codex map is a config error (70), got $RC: $OUT"
+[ "$RC" = "2" ] || fail "a partial codex map is a config error (2), got $RC: $OUT"
 rt config set round.tiers.codex.standard c-std >/dev/null
 rt config set round.tiers.codex.heavy c-heavy >/dev/null
 OUT=$(rt round assign F01 --check-only --kind codex --holder-pid "$HOLDER")

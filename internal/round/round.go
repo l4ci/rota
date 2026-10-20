@@ -25,6 +25,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/limits"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -107,18 +108,17 @@ type Env struct {
 	// Board is the backlog's claim side; claim-mismatch drift needs it, and
 	// without it (file mode) that kind is skipped.
 	Board Board
-	// StallMinutes is round.stallMinutes; 0 turns the stalled check off.
-	StallMinutes int
-	// ItemTimeoutMinutes is work.itemTimeoutMinutes; 0 turns the item-timeout check off.
-	ItemTimeoutMinutes int
+	// Round is the round.* settings (and work.itemTimeoutMinutes) loaded with
+	// the env: StallMinutes 0 turns the stalled check off, ItemTimeoutMinutes 0
+	// the item-timeout check, an empty AdoptPattern the unregistered-branch
+	// check; SharedPaths feeds the overlap pass of an adoption. RoundErr is why
+	// they failed to load; Status refuses to run on it, so bad keys never
+	// become zero values.
+	Round    roundcfg.Settings
+	RoundErr error
 	// HolderPID names the lease holder for the item-timeout park; 0 discovers
 	// it from the process, as the other verbs do.
 	HolderPID int
-	// AdoptPattern is round.adoptPattern: a glob over branch names that no slot
-	// holds and that are not merged; "" turns the unregistered-branch check off.
-	// SharedPaths is round.sharedPaths, for the overlap pass of an adoption.
-	AdoptPattern string
-	SharedPaths  []string
 	// NeedsHuman is issues.labels.needsHuman; "" means DefaultNeedsHuman.
 	NeedsHuman string
 }
@@ -333,9 +333,22 @@ var ()
 
 type worktree struct{ path, name, branch string }
 
-// Status assembles the round. It fails only when git does; an unavailable
-// host or forge is reported in the result.
+// roundCfgErr is RoundErr as a usage error, so a bad round.* key is the user's
+// to fix and never reads as a rota bug; nil when the settings loaded.
+func (e Env) roundCfgErr() error {
+	if e.RoundErr == nil {
+		return nil
+	}
+	return &exitcode.Error{Exit: exitcode.ExitUsage, Message: e.RoundErr.Error()}
+}
+
+// Status assembles the round. It fails when git does, and with a usage error
+// (exit 2) when the round.* keys did not load; an unavailable host or forge is
+// reported in the result.
 func (e Env) Status(ctx context.Context, root string) (*Report, error) {
+	if err := e.roundCfgErr(); err != nil {
+		return nil, err
+	}
 	if e.Label == "" {
 		e.Label = DefaultLabel
 	}
@@ -502,7 +515,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			v := rep.views[r.Name]
 			st := e.Stalled(ctx, StallInput{
 				Worktree: v.worktree, Base: v.base, Holds: true, Alive: true,
-				Escalated: waiting[r.Name], ActiveAt: s.LastAlive(), Minutes: e.StallMinutes,
+				Escalated: waiting[r.Name], ActiveAt: s.LastAlive(), Minutes: e.Round.StallMinutes,
 			}, now())
 			if st.Stalled {
 				rep.add(Finding{Kind: StalledSlot, Slot: r.Name, Issue: r.Issue,
@@ -510,15 +523,15 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			}
 		}
 	}
-	if e.ItemTimeoutMinutes > 0 {
-		limit := time.Duration(e.ItemTimeoutMinutes) * time.Minute
+	if e.Round.ItemTimeoutMinutes > 0 {
+		limit := time.Duration(e.Round.ItemTimeoutMinutes) * time.Minute
 		for _, r := range rows {
 			if r.Issue == "" || !r.Registered || r.HostState == ExternalHost {
 				continue
 			}
 			if at, ok := reg.ItemStart(r.Issue); ok && now().Sub(at) >= limit {
 				rep.add(Finding{Kind: ItemTimeout, Slot: r.Name, Issue: r.Issue,
-					Detail: fmt.Sprintf("running %d min since first assignment (work.itemTimeoutMinutes is %d)", int(now().Sub(at).Minutes()), e.ItemTimeoutMinutes),
+					Detail: fmt.Sprintf("running %d min since first assignment (work.itemTimeoutMinutes is %d)", int(now().Sub(at).Minutes()), e.Round.ItemTimeoutMinutes),
 					Repair: "park as needs-human"})
 			}
 		}
