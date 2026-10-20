@@ -170,6 +170,13 @@ func (t *Itsaplan) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 		var text string
 		text, fields = splitBody(*e.Body)
 		in["description"] = text
+		if fields.Block != "" {
+			// fail before any write when the field cannot be had, so a refused
+			// key never leaves the new text behind without its block
+			if _, err := t.fieldID(ctx); err != nil {
+				return err
+			}
+		}
 	}
 	if len(in) > 0 {
 		if err := t.patch(ctx, id, in); err != nil {

@@ -334,3 +334,21 @@ func (s *Server) Issues() int {
 	}
 	return n
 }
+
+// Fail makes every later request "METHOD path" answer status, before any
+// handler runs, so nothing it asks for happens.
+func (s *Server) Fail(req string, status int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.fail == nil {
+		s.fail = map[string]int{}
+	}
+	s.fail[req] = status
+}
+
+// Assigned reports whether key is assigned to the key's user.
+func (s *Server) Assigned(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.byKey(key).AssigneeMe
+}
