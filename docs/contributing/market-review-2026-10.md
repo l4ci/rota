@@ -19,7 +19,7 @@ The gaps are in what rota does not show and does not catch. It records no cost, 
 | `.rota/` knowledge, decisions, handoff | beads #5877 "Memory Beads"; paperclip #1858 company-level knowledge layer; a wave of memory MCP launches | 3 projects |
 | GitLab and self-hosted trackers | vibe-kanban [#1697](https://github.com/BloopAI/vibe-kanban/issues/1697), its most upvoted open issue | +26 |
 | Umbrella mode | orca #1099 multi-repo diff (+42), #7568 multi-repo groups (+21); claude-squad #56 | +63 combined |
-| Stall detection, reclaim, reap, `work.envSetup` | buildwork #15 stranded branches; vibe-kanban #765 auto cleanup (+8); claude-squad [#260](https://github.com/smtg-ai/claude-squad/issues/260) setup hook (+8) | covered, partly |
+| Stall detection, reclaim, reap, `round.envSetup` | buildwork #15 stranded branches; vibe-kanban #765 auto cleanup (+8); claude-squad [#260](https://github.com/smtg-ai/claude-squad/issues/260) setup hook (+8) | covered, partly |
 
 ## Where rota falls short
 
@@ -27,7 +27,7 @@ Verified against the v0.14.0 tree, not only the research reports.
 
 - No metrics at all. No verb records tokens, cost, wall time or pass rate per issue, worker, account or round. `round status` shows live slots only. The gate writes `.rota/gate-audit.jsonl` but nothing reads it.
 - Overlap is file-path only. `round candidates` compares a `## Files` section and issue paths. Two issues that touch the same API contract or schema with different files pass the check.
-- Slot isolation stops at the filesystem. `work.envSetup` runs a command per worktree, but there is no per-slot port range, database name or env template.
+- Slot isolation stops at the filesystem. `round.envSetup` runs a command per worktree, but there is no per-slot port range, database name or env template.
 - Review comments are orchestrator-driven. A PR with reviewer comments waits for a bounce or transfer; the worker does not pick them up itself.
 - Two harnesses. Claude Code and Codex only, while competitors add Kiro, Copilot CLI, OpenCode and goose.
 - Knowledge lookup is strict. `knowledge query` needs the exact topic name, and no verb lists topics.
@@ -116,7 +116,7 @@ Not taken: the Task DAG (rota's unit is the issue), federation and remote placem
 Three subagent claims did not survive a check against the tree.
 
 - The audit reported 16 untested packages including merge-critical ones. The real count is 6, all utilities.
-- The competitor sweep listed a worktree setup hook, overlap checks, stall detection, multi-repo and merge approval as missing. rota has `work.envSetup`, the candidates overlap pass, `round.stallMinutes`, umbrella mode and `ship.mergeApproval`.
+- The competitor sweep listed a worktree setup hook, overlap checks, stall detection, multi-repo and merge approval as missing. rota has `round.envSetup`, the candidates overlap pass, `round.stallMinutes`, umbrella mode and `ship.mergeApproval`.
 - The audit referred to legacy `hv-` helper names that no longer exist.
 
 Coverage caveats: X, YouTube and most Reddit threads were not reachable, so social claims rest on titles and Hacker News. Conductor and herdr have no public trackers. Competitor requests come from issue titles and reaction counts, not issue bodies. The "441% review time" and "3% AGENTS.md" figures are each from one secondary source.

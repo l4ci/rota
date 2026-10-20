@@ -40,7 +40,7 @@ rota init
 Commit `.rota/`, `.claude/agents/`, `AGENTS.md`, `CLAUDE.md` and `.gitignore`. `rota init` also writes three small subagent definitions, `.claude/agents/rota-{explorer,implementer,reasoner}.md`, which workers use to pick a cheaper or stronger model per job (`rota init --no-blocks` skips them). It sets three worker slots. For a small first round, use two:
 
 ```bash
-rota config set work.workerSlots 2
+rota config set round.slots 2
 ```
 
 Then tell the gate how to check a merge. `test.full` is the command that runs your whole test suite. The gate runs it on a scratch merge of the PR before the PR lands:
@@ -70,7 +70,7 @@ Account paths are machine-specific, so they go in `.rota/config.local.json` (git
 
 ```json
 {
-  "work": {
+  "round": {
     "accounts": [
       { "name": "main", "configDir": "/home/you/.claude" },
       { "name": "b", "configDir": "/home/you/.claude-b" }
@@ -122,7 +122,7 @@ The orchestrator runs many `rota`, git and forge commands. Allow them in `.claud
 }
 ```
 
-`gh` covers GitHub and `glab` GitLab; a rule for a CLI you don't use never matches. `Bash(rota *)` allows `rota` with any arguments; the older `Bash(rota:*)` form means the same. See Claude Code's [permission rules](https://code.claude.com/docs/en/permissions#wildcard-patterns). Running with `--dangerously-skip-permissions` is your call; rota doesn't do it for you. Workers are different: they launch with permissions skipped by default (`work.workerCommand`), because nobody is in their pane to answer a prompt. See [configuration](usage/configuration.md#workdispatch-subagent-tmux-or-herdr).
+`gh` covers GitHub and `glab` GitLab; a rule for a CLI you don't use never matches. `Bash(rota *)` allows `rota` with any arguments; the older `Bash(rota:*)` form means the same. See Claude Code's [permission rules](https://code.claude.com/docs/en/permissions#wildcard-patterns). Running with `--dangerously-skip-permissions` is your call; rota doesn't do it for you. Workers are different: they launch with permissions skipped by default (`round.workerCommand`), because nobody is in their pane to answer a prompt. See [configuration](usage/configuration.md#rounddispatch-subagent-tmux-or-herdr).
 
 ## 10. Unattended hooks (skip for now)
 
@@ -146,7 +146,7 @@ In the pane, at the project root:
 rota orchestrate
 ```
 
-It runs `rota doctor`, then opens a focused orchestrator tab that runs the agent under `rota keepalive run` and has already started `/rota-orchestrate`. `rota` alone, in a terminal, opens a small palette (banner, version, the project and round state, and the common actions) with Orchestrate preselected, so `rota` then Enter does the same. In a directory without `.rota/`, Enter runs `rota setup` instead. Tell the orchestrator what you want, for example "run a round on issues 12 and 13". `orchestrator.harness` picks the agent (`claude`, `codex`, `hermes` or `opencode`). A `claude` orchestrator starts under your `CLAUDE_CONFIG_DIR` if set, else under the `work.accounts` entry with the most headroom. See [your first round](usage/parallel-rounds.md#-your-first-round) for what happens outside herdr or tmux.
+It runs `rota doctor`, then opens a focused orchestrator tab that runs the agent under `rota keepalive run` and has already started `/rota-orchestrate`. `rota` alone, in a terminal, opens a small palette (banner, version, the project and round state, and the common actions) with Orchestrate preselected, so `rota` then Enter does the same. In a directory without `.rota/`, Enter runs `rota setup` instead. Tell the orchestrator what you want, for example "run a round on issues 12 and 13". `orchestrator.harness` picks the agent (`claude`, `codex`, `hermes` or `opencode`). A `claude` orchestrator starts under your `CLAUDE_CONFIG_DIR` if set, else under the `round.accounts` entry with the most headroom. See [your first round](usage/parallel-rounds.md#-your-first-round) for what happens outside herdr or tmux.
 
 The skill runs `rota doctor` again, then `rota round start`. That takes the orchestrator lease, creates the worker slots and lists the ready issues, and it detects herdr or tmux from the pane it runs in. It starts no worker yet. The orchestrator then picks the slate and assigns each issue with `rota round assign`, which cuts a branch and starts a worker in a new tab.
 

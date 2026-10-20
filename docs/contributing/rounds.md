@@ -163,7 +163,7 @@ Slots are provisioned once and reused: `.worktrees/<agent>`, parked on `park/<ag
 on `<agent>/<issue>-<slug>`. `round.roster` sets the names; the default is `ben`, `dana`, `nia`,
 `kit`. A longer round adds names with `rota config set round.roster '[...]'`.
 
-Each slot's account (`CLAUDE_CONFIG_DIR`) comes from `work.accounts`. Those are paths on one
+Each slot's account (`CLAUDE_CONFIG_DIR`) comes from `round.accounts`. Those are paths on one
 machine, so they live in the developer's gitignored `.rota/config.local.json`, not in tracked files.
 `rota worker account list` shows what each slot would use.
 
@@ -177,7 +177,7 @@ workspace** of the project's primary workspace. A workspace made with plain
 `herdr workspace create`, or a worktree moved with `git worktree move`, is not linked and
 shows up as a separate project. `rota round start` makes the worktree with git and calls no
 herdr, and `rota worker dispatch` opens its tabs in the orchestrator's own workspace, so
-neither is affected while `work.herdrGroupSlots` is off: with it on (the default) dispatch
+neither is affected while `round.herdrGroupSlots` is off: with it on (the default) dispatch
 opens each slot as a linked workspace itself (see below). The manual recipe matters for a standing agent you
 run in its own herdr workspace.
 
@@ -198,7 +198,7 @@ herdr worktree open --workspace <primary id> --path "$PWD/.worktrees/<agent>"
 herdr workspace rename <id> <agent>
 ```
 
-With `work.herdrGroupSlots` on (the default), `rota worker dispatch` does this for every
+With `round.herdrGroupSlots` on (the default), `rota worker dispatch` does this for every
 slot, and `rota layout tabs` returns a split's panes to their workspaces (`rota layout split`
 moves them into the orchestrator's tab, so they leave until then):
 [`herdr-dispatch.md`](../../skills/rota-orchestrate/references/herdr-dispatch.md#linked-workspaces-per-slot)
