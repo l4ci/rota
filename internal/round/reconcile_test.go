@@ -436,3 +436,26 @@ func TestReconcileApplyParksABlockedSlotWhoseMergedPR(t *testing.T) {
 		t.Errorf("finn not parked: branch %q state %q", f.Branch(), f.State())
 	}
 }
+
+// A blocked slot whose PR is open or closed unmerged is not freed: the park
+// repair is offered for a merged PR only.
+func TestReconcileApplyKeepsABlockedSlotWhoseUnmergedPR(t *testing.T) {
+	for _, state := range []string{"open", "closed"} {
+		t.Run(state, func(t *testing.T) {
+			root, e := finnDead(t, state)
+			if _, err := worker.UpdateSlot(root, "finn", func(s *worker.Slot) { s.SetHandle(""); _ = s.MarkState("blocked", "") }); err != nil {
+				t.Fatal(err)
+			}
+			out, err := e.Reconcile(bg, root, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if slices.Contains(kinds(out.Repaired)["finn"], PRStale) {
+				t.Errorf("pr-stale repaired for a %s PR: %v", state, out.Repaired)
+			}
+			if f := worker.LoadRegistryTolerant(root).Slot("finn"); f.Branch() != "finn/57-baz" || f.State() != "blocked" {
+				t.Errorf("finn freed: branch %q state %q", f.Branch(), f.State())
+			}
+		})
+	}
+}
