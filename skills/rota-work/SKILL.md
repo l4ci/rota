@@ -144,6 +144,7 @@ git add <task-N-files>
 git commit -m "<suggested-message-from-task-N-brief>" -m "Task: <key>/<N>"
 ```
 
+- **Context guard.** When a prompt carries a line recommending `/rota-pause` (`work.contextGuard`, the context is at the handoff threshold), run `/rota-pause` once this commit is done, between tasks, never mid-task. A Stop block asking for the same (`auto`) means the same.
 - Every task commit ends with the `Task: <key>/<N>` trailer ([`references/task-ledger.md`](references/task-ledger.md)); a resumed session skips finished tasks by it.
 - Stage exactly the files named in the task's brief. Never `git add -A` or `git add .`.
 - Use the brief's suggested message verbatim, unless a FAIL→re-dispatch loop changed what landed.

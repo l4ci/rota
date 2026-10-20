@@ -36,6 +36,13 @@ type State struct {
 	BlockedAt     string `json:"blockedAt,omitempty"`
 	HandoffFailed bool   `json:"handoffFailed,omitempty"`
 
+	// The context guard for a non-orchestrator session reuses HandoffBlocks,
+	// BlockedAt and HandoffFailed above as its block counters.
+	//
+	// GuardWarned is set once the context guard has warned a non-orchestrator
+	// session, and cleared when the reading falls below the threshold.
+	GuardWarned bool `json:"guardWarned,omitempty"`
+
 	// UsageHandoff is set when the last Stop block was for usage (D4).
 	UsageHandoff *UsageHandoff `json:"usageHandoff,omitempty"`
 }

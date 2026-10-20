@@ -145,6 +145,13 @@ type hookContext struct {
 // needLeaseFree additionally accepts a session with no live lease (the
 // SessionStart fallback), using the project root found from its cwd.
 func hookSetup(c *Ctx, needLeaseFree bool) (hc hookContext, ok bool) {
+	return hookSetupFor(c, needLeaseFree, false)
+}
+
+// hookSetupFor is hookSetup; anySession additionally accepts a session that is
+// not the orchestrator (the context guard), using the project root found from
+// its cwd. The caller tells the two apart by hc.who.Orchestrator.
+func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bool) {
 	if json.Unmarshal(readInput(c), &hc.payload) != nil || hc.payload == nil {
 		return hc, false
 	}
@@ -160,7 +167,7 @@ func hookSetup(c *Ctx, needLeaseFree bool) (hc hookContext, ok bool) {
 	switch {
 	case hc.who.Orchestrator:
 		hc.root = hc.who.Lease.Root
-	case needLeaseFree && hc.who.LeaseFree:
+	case anySession || (needLeaseFree && hc.who.LeaseFree):
 		hc.root, _ = rotatree.Find(cwd)
 	}
 	if hc.root == "" {
@@ -170,8 +177,30 @@ func hookSetup(c *Ctx, needLeaseFree bool) (hc hookContext, ok bool) {
 	if hc.set, err = hook.LoadSettings(hc.cfg); err != nil {
 		return hc, false // a bad value is a pass, never a block
 	}
-	hc.handoff = handoffFile(hc.root, hc.cfg)
+	switch {
+	case hc.who.Orchestrator || !anySession:
+		hc.handoff = handoffFile(hc.root, hc.cfg)
+	case config.ContextGuard(hc.cfg) == hook.GuardAuto:
+		// A work session pauses to .rota/handoff/<its branch>.md, where
+		// /rota-pause writes it; only the auto guard reads it.
+		hc.handoff = branchHandoffFile(hc.root, cwd)
+	}
 	return hc, true
+}
+
+// branchHandoffFile is the absolute `.rota/handoff/<branch>.md` of the branch
+// checked out in cwd, the path `rota status handoff <branch> --canonical`
+// returns from there. "" on a detached HEAD, so no note counts.
+func branchHandoffFile(root, cwd string) string {
+	branch, err := git.Repo{Dir: cwd}.CurrentBranch(context.Background())
+	if err != nil || branch == "" {
+		return ""
+	}
+	rel, err := status.HandoffPath(branch, "")
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(root, filepath.FromSlash(rel))
 }
 
 // handoffFile is the absolute `.rota/handoff/<base>.md`, the path
@@ -202,12 +231,18 @@ func hookStop(c *Ctx, args []string) (res Result, _ error) {
 			res = Result{}
 		}
 	}()
-	hc, ok := hookSetup(c, false)
+	hc, ok := hookSetupFor(c, false, true)
 	if !ok {
 		return Result{}, nil
 	}
 	sid, _ := hc.payload["session_id"].(string)
 	active, _ := hc.payload["stop_hook_active"].(bool)
+	if !hc.who.Orchestrator {
+		if d, ok := guardStop(hc, sid); ok && d.Block {
+			return hookPrint(hook.StopOutput(d.Reason)), nil
+		}
+		return Result{}, nil
+	}
 	if d, ok := stopHandoff(hc, sid, active); ok && d.Block {
 		return hookPrint(hook.StopOutput(d.Reason)), nil
 	}
@@ -251,6 +286,61 @@ func stopHandoff(hc hookContext, sid string, active bool) (d hook.StopDecision, 
 	return d, true
 }
 
+// guardStop is the work.contextGuard=auto decision for a session that is not
+// the orchestrator. ok is false when the guard is not on auto or the session
+// has no readable state.
+func guardStop(hc hookContext, sid string) (d hook.StopDecision, ok bool) {
+	if config.ContextGuard(hc.cfg) != hook.GuardAuto {
+		return d, false
+	}
+	path, err := hook.StatePath(hc.commonDir, sid)
+	if err != nil {
+		return d, false
+	}
+	st, found, err := hook.ReadState(path)
+	if err != nil || !found {
+		return d, false
+	}
+	d = hook.DecideGuardStop(st, hc.set, hook.StatHandoff(hc.handoff), hc.now())
+	if d.Persist {
+		_ = hook.UpdateState(path, func(cur hook.State, found bool) hook.State {
+			if !found {
+				cur = st
+			}
+			cur.HandoffBlocks, cur.BlockedAt, cur.HandoffFailed = d.State.HandoffBlocks, d.State.BlockedAt, d.State.HandoffFailed
+			return cur
+		})
+	}
+	return d, true
+}
+
+// guardPrompt is the work.contextGuard=warn line for a session that is not the
+// orchestrator, "" when there is nothing to say.
+func guardPrompt(hc hookContext, sid string) string {
+	if config.ContextGuard(hc.cfg) != hook.GuardWarn {
+		return ""
+	}
+	path, err := hook.StatePath(hc.commonDir, sid)
+	if err != nil {
+		return ""
+	}
+	st, found, err := hook.ReadState(path)
+	if err != nil || !found {
+		return ""
+	}
+	d := hook.DecideGuardPrompt(st, hc.set, hc.now())
+	if d.Persist {
+		_ = hook.UpdateState(path, func(cur hook.State, found bool) hook.State {
+			if !found {
+				cur = st
+			}
+			cur.GuardWarned = d.State.GuardWarned
+			return cur
+		})
+	}
+	return d.Line
+}
+
 // watchBlock is the #81 rule: an orchestrator that holds the lease, has
 // workers to wait for and no `rota round watch` running must not go idle,
 // because nothing would wake it when a worker finishes. A solo round has no
@@ -276,8 +366,9 @@ func watchBlock(hc hookContext) (reason string, block bool) {
 
 // hookPrompt is the UserPromptSubmit hook: a one-line round digest on every
 // maintainer message, so an answer always comes with the slot state and a
-// reminder when no watch is armed. Silent for anyone but the orchestrator and
-// when nothing is active.
+// reminder when no watch is armed. Any other session gets only the context
+// guard line (work.contextGuard=warn); the orchestrator is silent when nothing
+// is active.
 func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 	c.JSON = false
 	defer func() {
@@ -285,9 +376,20 @@ func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 			res = Result{}
 		}
 	}()
-	hc, ok := hookSetup(c, false)
+	hc, ok := hookSetupFor(c, false, true)
 	if !ok {
 		return Result{}, nil
+	}
+	if !hc.who.Orchestrator {
+		sid, _ := hc.payload["session_id"].(string)
+		line := guardPrompt(hc, sid)
+		if line == "" {
+			return Result{}, nil
+		}
+		return hookPrint(map[string]any{"hookSpecificOutput": map[string]any{
+			"hookEventName":     "UserPromptSubmit",
+			"additionalContext": line,
+		}}), nil
 	}
 	if worker.RegistryHost(hc.root) == host.Solo {
 		return Result{}, nil

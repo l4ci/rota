@@ -213,6 +213,58 @@ OUT="$(dd_run || true)"
 oh 0 -C "$P" hook uninstall >/dev/null
 pass "D1: doctor skips until opted in, fails a partial install and passes a wrapped one"
 
+# --- context guard: work.contextGuard for a session that is not the orchestrator (#921) ---
+rm -f "$CD/rota/round-lease.json"; rm -rf "$CD/rota/session"
+guard_cfg() { printf '{"git":{"baseBranch":"main"}%s}\n' "${1:+,\"work\":{\"contextGuard\":\"$1\"}}" > "$P/.rota/config.json"; }
+prompt_in() { printf '{"session_id":"s1","cwd":"%s"}' "$P"; }
+guard_prompt() { prompt_in | oh 0 hook prompt; }
+guard_stop() { stop_in "$1" | oh 0 hook stop; }
+
+guard_cfg ""
+dump_pct 74
+[ -z "$(guard_prompt)" ] || fail "guard: warn printed below the threshold"
+dump_pct 80
+OUT="$(guard_prompt)"
+grep -q '/rota-pause' <<<"$OUT" || fail "guard: warn did not recommend /rota-pause at 80: $OUT"
+[ -z "$(guard_prompt)" ] || fail "guard: warn repeated within one crossing"
+[ -z "$(guard_stop false)" ] || fail "guard: warn blocked the Stop hook"
+dump_pct 10; [ -z "$(guard_prompt)" ] || fail "guard: warn printed after falling below"
+dump_pct 90
+OUT="$(guard_prompt)"; grep -q '/rota-pause' <<<"$OUT" || fail "guard: warn did not fire on a new crossing"
+pass "guard: warn adds one /rota-pause line per crossing and never blocks"
+
+rm -rf "$CD/rota/session"; guard_cfg auto; dump_pct 80
+guard_prompt >/dev/null
+for a in false true; do
+  OUT="$(guard_stop "$a")"; grep -q '"decision": *"block"' <<<"$OUT" || fail "guard: auto did not block (active=$a)"
+done
+[ -z "$(guard_stop true)" ] || fail "guard: auto blocked past handoffMaxBlocks"
+pass "guard: auto blocks handoffMaxBlocks times, then passes"
+# a work session on a feature branch in a worktree: /rota-pause writes
+# .rota/handoff/<branch>.md under the worktree, and a fresh note ends the blocks
+W="$OH/wt"; git -C "$P" worktree add -q -b feat/guard "$W" >/dev/null 2>&1 || fail "guard: worktree setup failed"
+mkdir -p "$W/.rota"; cp "$P/.rota/config.json" "$W/.rota/config.json"
+rm -rf "$CD/rota/session"; guard_cfg auto; cp "$P/.rota/config.json" "$W/.rota/config.json"
+printf '{"session_id":"s1","cwd":"%s","context_window":{"used_percentage":80}}' "$W" | env ROTA_TEST_NOW="$NOW" "$ROTA_BIN" statusline dump || fail "guard: dump in worktree failed"
+wstop() { printf '{"session_id":"s1","cwd":"%s","stop_hook_active":%s}' "$W" "$1" | oh 0 hook stop; }
+OUT="$(wstop false)"; grep -q '"decision": *"block"' <<<"$OUT" || fail "guard: auto did not block before the note"
+WNOTE="$W/.rota/handoff/feat/guard.md"; mkdir -p "$(dirname "$WNOTE")"; printf 'paused\n' > "$WNOTE"
+python3 -c 'import os,sys; os.utime(sys.argv[1], (int(sys.argv[2])+5,)*2)' "$WNOTE" "$NOW_EPOCH"
+[ -z "$(wstop true)" ] || fail "guard: auto re-blocked after a fresh /rota-pause note on the branch path"
+git -C "$P" worktree remove --force "$W"; git -C "$P" branch -q -D feat/guard
+pass "guard: auto stops blocking once a fresh handoff note exists at the branch path"
+
+for mode in off bogus; do
+  rm -rf "$CD/rota/session"; guard_cfg "$mode"; dump_pct 95
+  [ -z "$(guard_prompt)" ] && [ -z "$(guard_stop false)" ] || fail "guard: $mode printed something"
+done
+rm -rf "$CD/rota/session"; guard_cfg ""; dump_pct 95
+[ -z "$(printf '{"session_id":"s1","cwd":"%s"}' "$P" | env CLAUDE_CONFIG_DIR="$CC" ROTA_TEST_NOW="2026-10-03T12:30:00Z" ROTA_TEST_HOLDER_PID=0 "$ROTA_BIN" hook prompt)" ] || fail "guard: warn acted on a stale reading"
+RC=0; OUT="$("$ROTA_BIN" -C "$P" config set work.contextGuard bogus 2>&1)" || RC=$?
+[ "$RC" -ne 0 ] && grep -q 'warn' <<<"$OUT" && grep -q 'auto' <<<"$OUT" || fail "guard: bad value not rejected with the allowed values: rc=$RC $OUT"
+guard_cfg ""
+pass "guard: off, a bad value and a stale reading stay silent; config set rejects a bad value"
+
 kill "$ORCH" "$WORKER" 2>/dev/null || true
 wait "$ORCH" "$WORKER" 2>/dev/null || true
 trap 'rm -rf "$TMP"' EXIT

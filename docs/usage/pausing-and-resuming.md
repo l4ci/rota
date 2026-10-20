@@ -74,6 +74,20 @@ Handoff note found:
 
 A clean commit is enough when the work sits at a natural stopping point: a passing test, a completed subtask, a checkpoint that git state alone can describe. `/rota-pause` is for the messy middle. The live hypothesis, the half-written test, the "I was about to try X": none of that survives a `/clear` from git state alone. If you'd have to re-read diffs and reconstruct your reasoning to figure out what to do next, pause first.
 
+## Context guard
+
+Where `rota hook install` has run, a session that is not an orchestrator gets a nudge when its context reaches `orchestrator.handoffThreshold` (default 75). `work.contextGuard` picks what happens:
+
+- `warn` (default): the next prompt carries one line recommending `/rota-pause`. It appears once per crossing and never blocks. `/rota-work` runs `/rota-pause` between tasks when it sees it.
+- `auto`: the Stop hook also blocks, at most `orchestrator.handoffMaxBlocks` times, asking the session to run `/rota-pause` at the next task boundary.
+- `off`: nothing.
+
+Only a fresh statusline reading counts (younger than `orchestrator.stateMaxAgeSeconds`), and only in Claude Code: Codex and OpenCode have no reading.
+
+```bash
+rota config set work.contextGuard auto
+```
+
 ## Orchestrator handoff
 
 `/rota-pause` also works for an orchestrator mid-round. It records the round (slots, PRs awaiting review) in `.rota/handoff/<base>.md` and leaves the round running; it never winds it down.

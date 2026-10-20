@@ -157,6 +157,7 @@ var Keys = []Key{
 	k("work.tdd", true, false, TypeBool, "Whether /rota-work and workers require a recorded red-first run before a behavior change. Off skips the RED requirement."),
 	k("brainstorm.edgeProbe", false, false, TypeBool, "Opt-in edge and prohibition probe in /rota-brainstorm Step 3: walks eight edge categories, records each as covered or dismissed, asks what the change must never do and writes each answer as a negative acceptance criterion. Off leaves /rota-brainstorm unchanged."),
 	k("research.packageCheck", false, false, TypeBool, "Opt-in registry check in /rota-spike Step 2 and /rota-plan Step 2: each new package they would recommend is looked up on its registry (npm, PyPI, crates.io, Go proxy); missing ones are dropped, suspect ones need a user answer. Makes network calls. Off makes no registry call."),
+	k("work.contextGuard", "warn", false, TypeEnum, "What a session that is not an orchestrator does at orchestrator.handoffThreshold, where rota hooks are installed. warn adds one line to the next prompt recommending /rota-pause; auto also has the Stop hook ask for /rota-pause at the next task boundary, up to orchestrator.handoffMaxBlocks times; off does nothing.", "warn", "off", "auto"),
 
 	k("orchestrator.handoffThreshold", num("75"), false, TypeInt, "Context percentage, 1 to 100, at which the Stop hook blocks until the orchestrator writes a handoff."),
 	k("orchestrator.stateMaxAgeSeconds", num("120"), false, TypeInt, "How old the statusline reading may be before the hooks ignore it."),
