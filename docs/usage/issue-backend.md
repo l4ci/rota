@@ -1,6 +1,6 @@
 # Issue backend
 
-With `issues.source` set to `github`, `gitlab`, `jira` or `linear` the tracker is the backlog. `.rota/BACKLOG.md` and the `.rota/<kind>/` detail files are not used; items, milestones and design/plan artifacts live on the tracker. `issues.source: file` is the default and is unchanged. Skills keep their file-mode steps and branch on the source; the issue-mode differences are listed in `references/issue-mode.md`.
+With `issues.source` set to `github`, `gitlab`, `jira`, `linear` or `itsaplan` the tracker is the backlog. `.rota/BACKLOG.md` and the `.rota/<kind>/` detail files are not used; items, milestones and design/plan artifacts live on the tracker. `issues.source: file` is the default and is unchanged. Skills keep their file-mode steps and branch on the source; the issue-mode differences are listed in `references/issue-mode.md`.
 
 ## Issue source and forge
 
@@ -8,12 +8,12 @@ Two settings, two questions:
 
 | Key | Question | Values |
 |-----|----------|--------|
-| `issues.source` | Where do the issues live? | `file` (default), `github`, `gitlab`, `forge`, `jira`, `linear` |
+| `issues.source` | Where do the issues live? | `file` (default), `github`, `gitlab`, `forge`, `jira`, `linear`, `itsaplan` |
 | `forge.provider` | Where does code land? | `auto` (default), `github`, `gitlab`, `local` |
 
 `forge.provider: auto` reads the forge from the `origin` remote; with no remote at all it resolves to `local`. `local` means direct merge: no PR is opened and the merge gate never looks for one, and `rota ship strategy` (which `/rota-ship` and `/rota-work` read to choose between `rota ship merge` and `rota ship pr`) answers `direct` whatever `work.mergeStrategy` says. Issues on a tracker still need a PR to close them, so `issues.source: github` or `gitlab` with a local forge is an error (`rota doctor` fails it, `rota ship strategy` exits 3). The two are independent: a file backlog with PRs on a GitHub or GitLab forge works as before (`issues.source: file`, forge from `origin`), and a repo with no remote can keep a file backlog and merge directly.
 
-`issues.source: github` or `gitlab` must name the forge the repo resolves to. When it does not (say `issues.source: gitlab` with a GitHub `origin`), `rota doctor` fails the `tracker` check with the hint to change `issues.source` or set `forge.provider`. Verbs that need a tracker with no resolvable provider exit 5 with `cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)`. `issues.source: forge` is for an umbrella whose sub-repos sit on different hosts (one on GitHub, one on GitLab): each sub-repo's issues live on that sub-repo's own forge, resolved from its `origin` (or `forge.provider`). `rota migrate source` picks it for such an umbrella; a single repo never gets it. `rota doctor` does not compare it with the forge. `jira` and `linear` use a machine-wide connection instead; see [Tracker connections](configuration.md#tracker-connections).
+`issues.source: github` or `gitlab` must name the forge the repo resolves to. When it does not (say `issues.source: gitlab` with a GitHub `origin`), `rota doctor` fails the `tracker` check with the hint to change `issues.source` or set `forge.provider`. Verbs that need a tracker with no resolvable provider exit 5 with `cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)`. `issues.source: forge` is for an umbrella whose sub-repos sit on different hosts (one on GitHub, one on GitLab): each sub-repo's issues live on that sub-repo's own forge, resolved from its `origin` (or `forge.provider`). `rota migrate source` picks it for such an umbrella; a single repo never gets it. `rota doctor` does not compare it with the forge. `jira`, `linear` and `itsaplan` use a machine-wide connection instead; see [Tracker connections](configuration.md#tracker-connections).
 
 Verbs that exist for one source only refuse the other with `not available when issues.source is a tracker` (file-only verbs) or `not available when issues.source is file` (tracker-only verbs).
 
@@ -92,6 +92,36 @@ How rota uses Linear:
 
 Out of scope: Linear projects and cycles as milestones, and OAuth (personal API keys only).
 
+## It's a Plan
+
+`issues.source: itsaplan` keeps the issues in one project of a self-hosted [It's a Plan](https://github.com/croffasia/itsaplan) instance and the code on your forge (GitHub or GitLab). rota polls the instance's REST API; it does not use It's a Plan's agent runner, MCP server or webhooks. The upstream project warns of breaking changes before its first stable release and rota pins no API version: `rota doctor` checks the endpoints rota uses, and the instance's own version is for information only.
+
+1. Create a personal API key under Account settings → API keys in It's a Plan. The key carries its owner's permissions and **expires**: a new key is valid for a limited time, and a key that has expired is rejected like a wrong one (`rota doctor` and `rota connect test` fail with `did not accept the API key`). Replace it with `rota connect add <name> --replace`.
+2. Add a connection. It lives on your machine, never in the repo (see [Tracker connections](configuration.md#tracker-connections)). `--site` is required: the URL of the instance's **api**, not of the web app. There is no hosted default:
+
+   ```sh
+   echo "$ITSAPLAN_API_KEY" | rota connect add plan --kind itsaplan --site https://api.plan.example.com --token-stdin
+   rota connect test plan
+   ```
+
+3. Point the project at it: `rota config set issues.source itsaplan`, `rota config set issues.connection plan`, `rota config set issues.itsaplan.project MKT` (the project's key, the prefix of its issue keys). `rota doctor` checks the connection, that the key can see the project, and the `rota` custom field.
+
+How rota uses It's a Plan:
+
+- **Keys.** An issue is named by its key, `MKT-42`.
+- **States.** rota picks a column by its state type (backlog, unstarted, started, completed, canceled), never by its name, so a renamed or added column changes nothing. Open means backlog, unstarted or started; closed means completed or canceled. Closing moves the issue to the first completed column (a canceled one for not-planned), reopening to the first unstarted column. In progress is the `issues.labels.inProgress` label plus self-assignment.
+- **Hidden state.** rota's fields block (`Related`, `Milestone`, ...) lives in a project custom field named `rota` (type text), not in the description: a person editing the description in the web editor may drop an HTML comment, and a custom field is left alone. rota creates the field the first time it needs it; where the key may not create custom fields, `rota doctor` fails and names the field, and a project admin adds it. Do not rename or delete it. A marker comment (proof, notes, feedback, handoff) is stored as written; the API keeps an HTML comment in a comment body.
+- **Claims.** A claim is a plain comment, `Claimed by <claim id>`, read from the issue's comment feed (every page). The earliest one wins, and a release deletes that claimer's comment.
+- **Labels.** Labels are project labels, created on first use. Adding labels uses the API's bulk route, which only adds, so two writers adding at once keep both. Removing a label has to send the issue's whole label set (the API offers no compare-and-swap): rota reads the issue, writes the reduced set, re-reads, and writes once more if another writer overwrote it. A label another writer adds in the moment between rota's read and its write can still be lost.
+- **Reading.** `backlog list` reads the project board and the archive, which have no limit, so a project with more than 500 issues is read whole. The board includes descriptions and is read once per command.
+- **Milestones.** None: It's a Plan initiatives are not rota milestones, and the milestone verbs fail on this source. `rota migrate issues` reports each milestone it skips.
+- **Closing PRs.** A PR counts as closing an issue when its head branch or title names the key. rota does not rely on It's a Plan's own forge webhook, which is optional: `rota worker gate` moves the issue to a completed column after the merge and comments with the PR, unless the issue is labelled `partial-slice` or is already closed. A PR merged any other way leaves the issue open (unless the webhook closes it): run `rota issues close MKT-42 --commit <sha>`.
+- **Rate limits.** A 429 waits its `Retry-After` and retries; a 5xx is retried for reads and other idempotent calls only, never for creating an issue or a comment.
+
+To move an existing file backlog onto It's a Plan, set `issues.source`, the connection and the project first, then run `rota migrate issues --apply` (see [Migrating a file backlog](#migrating-a-file-backlog)): It's a Plan is no forge, so the run cannot find the project from the `origin` remote. Going back is `rota config set issues.source file`; issues already created stay in It's a Plan and the files keep the history.
+
+Out of scope: It's a Plan's agent runner, MCP server and webhooks, initiatives as milestones, and pinning an API version.
+
 ## How items map to issues
 
 An ID is the type letter plus the issue number: `#42` is `F42`, `B42` or `T42`. The letter must match the issue's type label.
@@ -138,5 +168,7 @@ rota config set issues.source github   # or gitlab
 Open items, their detail files, proof rows, design and plan artifacts, and planned/active milestones with their slice plans move to the tracker. Completed items, `ARCHIVE.md` and shipped/archived milestones stay in the files as history, so after the flip `rota milestone list` shows only the planned and active milestones. `Related:` fields and old IDs in migrated text are rewritten to the new IDs after every item exists; `Related:` IDs that are not migrated (completed items) are dropped from the field and listed in the issue body as `Related before migration (not migrated): F79, F80`. A bullet's `Since:` anchor is kept in the issue's fields block.
 
 The run is resumable: `.rota/issue-map.json` records each old ID, its new ID and URL. Commit it. A rate limit (exit 6) stops the run with the map saved; wait and re-run. `--limit N` creates at most N items per run. Writes are paced by `issues.bulkPaceMs`.
+
+On a tracker with no milestones (It's a Plan) a milestone is reported as skipped and its items migrate without a `Milestone` field. A forge is found from `origin`; It's a Plan is not one, so set `issues.source itsaplan`, `issues.connection` and `issues.itsaplan.project` before the run.
 
 `--apply` never changes `issues.source`. When everything is migrated it adds a "Frozen" banner to `.rota/BACKLOG.md` and prints `Next: rota config set issues.source github` (or `gitlab`). Old IDs are not resolved through the map after the flip; an old `F82` and a new issue `F82` can both exist. Umbrella projects migrate each sub-repo separately.
