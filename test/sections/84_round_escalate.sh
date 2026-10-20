@@ -70,7 +70,7 @@ RC=0; OUT="$(es "$ROTA_BIN" --json round escalate send 2 --title "No options" --
 RC=0; es "$ROTA_BIN" --json round escalate send 2 --title "No recommend" --body-file "$TMP_ES/body.md" --options a --options b >/dev/null 2>&1 || RC=$?
 [ "$RC" = "4" ] || fail "send without --recommend must exit 4, got $RC"
 [ "$(python3 -c 'import json,sys; print(len(json.load(sys.stdin)))' <<<"$(es gh api --paginate repos/o/r/issues/2/comments)")" = "0" ] || fail "a refused send must not post"
-case "$COMMENTS" in *"1. option one"*"2. option two (recommended)"*"Recommended: 2. option two"*"Cost if wrong: a revert"*) ;; *) fail "send: the comment must list the options, mark the recommendation and state its cost: $COMMENTS" ;; esac
+case "$COMMENTS" in *"1) option two (recommended)"*"2) option one"*"Recommended: 1) option two"*"Cost if wrong: a revert"*) ;; *) fail "send: the comment must list the options, mark the recommendation and state its cost: $COMMENTS" ;; esac
 pass "send without --options and --recommend exits 4 and posts nothing; the comment lists options, recommendation and cost"
 
 # ── one per thread ──────────────────────────────────────────────────────────
@@ -96,11 +96,12 @@ RC=0; OUT="$(es "$ROTA_BIN" --json round escalate check 2>/dev/null)" || RC=$?
 [ "$(jget 'data.escalations[0].answer.commentId' <<<"$OUT")" = "4" ] || fail "the answer is the first unmarked comment after the question (comment 4): $OUT"
 case "$(jget 'data.escalations[0].answer.body' <<<"$OUT")" in "take option two") ;; *) fail "answer body: $OUT" ;; esac
 [ "$(reg 'd["escalations"][0]["status"]')" = '"answered"' ] || fail "the answer must be stored: $(cat "$PROJ/.rota/workers.json")"
-OUT="$(es "$ROTA_BIN" --json round escalate check e1 2>/dev/null)"
+RC=0; OUT="$(es "$ROTA_BIN" --json round escalate check e1 2>/dev/null)" || RC=$?
+[ "$RC" = "0" ] && [ -n "$(jget 'data.escalations[0].answer.body' <<<"$OUT")" ] || fail "check must exit 0 and carry the answer body: rc=$RC $OUT"
+[ "$(jget 'data.escalations[0].answer.option' <<<"$OUT" 2>/dev/null || true)" = "" ] || fail "prose such as 'take option two' must not resolve to an option"
 [ "$(jget data.changed <<<"$OUT")" = "false" ] && [ "$(jget 'data.escalations[0].status' <<<"$OUT")" = "answered" ] || fail "a named answered entry reads from the registry: $OUT"
 RC=0; es "$ROTA_BIN" --json round escalate check e7 >/dev/null 2>&1 || RC=$?
 [ "$RC" = "3" ] || fail "an unknown id must exit 3, got $RC"
-[ "$(jget 'data.escalations[0].answer.option' <<<"$(es "$ROTA_BIN" --json round escalate check e1 2>/dev/null)" 2>/dev/null || true)" = "" ] || fail "prose such as 'take option two' must not resolve to an option"
 pass "check ignores rota-marked comments, stores the first unmarked one as the answer, and exits 3 for an unknown id"
 
 # ── no herdr: comment only, notified false ──────────────────────────────────
@@ -139,7 +140,7 @@ RC=0; OUT="$(es_noherdr "$ROTA_BIN" --json round reconcile 2>/dev/null)" || RC=$
 es gh api -X POST repos/o/r/issues/2/comments -f body="ok" >/dev/null
 OUT="$(es "$ROTA_BIN" --json round escalate check 2>/dev/null)"
 [ "$(jget 'data.escalations[0].status' <<<"$OUT")" = "answered" ] || fail "a late answer must still land: $OUT"
-[ "$(jget 'data.escalations[0].answer.option' <<<"$OUT")" = "2" ] && [ "$(jget 'data.escalations[0].resolved' <<<"$OUT")" = "option two" ] || fail "a bare ok must resolve to the recommended option (2): $OUT"
+[ "$(jget 'data.escalations[0].answer.option' <<<"$OUT")" = "1" ] && [ "$(jget 'data.escalations[0].resolved' <<<"$OUT")" = "option two" ] || fail "a bare ok must resolve to the recommended option (1, listed first): $OUT"
 pass "timed-out is derived on read, round status and reconcile list it, and a late bare ok lands as the recommendation"
 
 trap 'rm -rf "$TMP"' EXIT

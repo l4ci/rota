@@ -14,6 +14,8 @@ func TestEscalateSendRequiresOptionsAndRecommend(t *testing.T) {
 		"recommend too big": {"--options", "a", "--options", "b", "--recommend", "3"},
 		"recommend zero":    {"--options", "a", "--options", "b", "--recommend", "0"},
 		"one option":        {"--options", "a", "--recommend", "1"},
+		"five options":      {"--options", "a", "--options", "b", "--options", "c", "--options", "d", "--options", "e", "--recommend", "1"},
+		"duplicate option":  {"--options", "a", "--options", " A ", "--recommend", "1"},
 		"blank option":      {"--options", "a", "--options", " ", "--recommend", "1"},
 	} {
 		dir := escProject(t, ghCfg)
@@ -47,13 +49,13 @@ func TestEscalateOptionsPostedAndBareOkResolves(t *testing.T) {
 		t.Fatalf("send: %d %s %s", code, out, errOut)
 	}
 	body := f.comments[0]["body"].(string)
-	for _, want := range []string{"1. keep it\n", "2. drop it (recommended)\n", "Recommended: 2. drop it\n", "Cost if wrong: one more release\n"} {
+	for _, want := range []string{"1) drop it (recommended)\n", "2) keep it\n", "Recommended: 1) drop it\n", "Cost if wrong: one more release\n"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("comment lacks %q:\n%s", want, body)
 		}
 	}
 	e := data(t, out)["escalation"].(map[string]any)
-	if e["recommend"] != 2.0 || e["cost"] != "one more release" || len(e["options"].([]any)) != 2 {
+	if e["recommend"] != 1.0 || e["cost"] != "one more release" || len(e["options"].([]any)) != 2 {
 		t.Errorf("entry: %v", e)
 	}
 
@@ -64,7 +66,7 @@ func TestEscalateOptionsPostedAndBareOkResolves(t *testing.T) {
 	}
 	row := data(t, out)["escalations"].([]any)[0].(map[string]any)
 	ans := row["answer"].(map[string]any)
-	if row["status"] != "answered" || ans["option"] != 2.0 || ans["body"] != "ok" || row["resolved"] != "drop it" {
+	if row["status"] != "answered" || ans["option"] != 1.0 || ans["body"] != "ok" || row["resolved"] != "drop it" {
 		t.Errorf("a bare ok must resolve to option 2: %v", row)
 	}
 }

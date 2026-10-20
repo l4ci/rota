@@ -114,7 +114,7 @@ func roundEscalateSend(fs *flag.FlagSet) RunFunc {
 		res, err := escalation.Send(c.Context(), env, root, escalation.SendOpts{
 			Number: n, Key: key, PR: *pr, Slot: *slot, Title: strings.TrimSpace(*title), Body: string(raw),
 			Timeout: time.Duration(*timeout * float64(time.Second)),
-			Choice:  escalation.Choice{Options: trimmed(options), Recommend: *recommend, Cost: strings.TrimSpace(*cost)},
+			Choice:  escalation.Choice{Options: trimmed(options), Recommend: *recommend, Cost: strings.TrimSpace(*cost)}.RecommendedFirst(),
 		})
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)
@@ -179,6 +179,7 @@ func escalationRows(reports []escalation.Report) ([]any, []string) {
 	var lines []string
 	for _, r := range reports {
 		e := r.Entry
+		resolved := ""
 		o := jsonx.NewObject()
 		o.Set("id", e.ID)
 		o.Set("kind", e.Kind)
@@ -211,10 +212,11 @@ func escalationRows(reports []escalation.Report) ([]any, []string) {
 			o.Set("answer", e.Answer.Object())
 			if n := e.Answer.Option; n >= 1 && n <= len(e.Options) {
 				o.Set("resolved", e.Options[n-1])
+				resolved = fmt.Sprintf("\t%s -> %s", strings.TrimSpace(e.Answer.Body), e.Options[n-1])
 			}
 		}
 		rows = append(rows, o)
-		lines = append(lines, fmt.Sprintf("%s\t%s\t%s %s\t%s", e.ID, r.Status, e.Kind, e.Ref(), e.Title))
+		lines = append(lines, fmt.Sprintf("%s\t%s\t%s %s\t%s%s", e.ID, r.Status, e.Kind, e.Ref(), e.Title, resolved))
 	}
 	return rows, lines
 }
@@ -238,10 +240,19 @@ func checkChoice(options []string, recommend int) string {
 	if len(options) < 2 {
 		return "--options is required, at least twice: an escalation lists the answers the human can pick"
 	}
+	if len(options) > 4 {
+		return "--options takes at most 4 answers, as /rota-answer offers"
+	}
+	seen := map[string]bool{}
 	for _, o := range options {
-		if strings.TrimSpace(o) == "" {
+		k := strings.ToLower(strings.TrimSpace(o))
+		if k == "" {
 			return "--options must not be blank"
 		}
+		if seen[k] {
+			return fmt.Sprintf("--options lists %q twice", strings.TrimSpace(o))
+		}
+		seen[k] = true
 	}
 	if recommend < 1 || recommend > len(options) {
 		return fmt.Sprintf("--recommend is required: the number of the recommended option, 1 to %d", len(options))
