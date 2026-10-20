@@ -335,3 +335,21 @@ func TestIssuesListOrderAndCalls(t *testing.T) {
 		t.Fatal("nil tracker must be an error")
 	}
 }
+
+// A repeated claim by the id that already holds the issue wins and writes no
+// second claim, so an assign retry after a dispatch failure resumes.
+func TestIssuesClaimByTheHolderResumes(t *testing.T) {
+	tr := &fakeTracker{Issues: []Issue{{Key: tracker.NumKey(1), Title: "Real", State: "open", Labels: []string{"type:bug"}}}}
+	b := &Issues{Cfg: mustDecode(t, `{}`), Tracker: tr}
+	if won, _, err := b.Claim("1", "ben@3"); err != nil || !won {
+		t.Fatalf("first claim: %v %v", won, err)
+	}
+	won, holder, err := b.Claim("1", "ben@3")
+	if err != nil || !won || holder != "ben@3" {
+		t.Fatalf("repeat claim by the holder: won=%v holder=%q err=%v", won, holder, err)
+	}
+	held, err := b.heldClaims(tr.Issues[0].Key)
+	if err != nil || len(held) != 1 {
+		t.Fatalf("held claims %v %v, want one", held, err)
+	}
+}

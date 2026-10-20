@@ -724,6 +724,10 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 	id, agent, slot, bo := run.id, run.agent, run.slot, run.bo
 	resuming := run.resuming
 	claimID := agent + "@" + strconv.Itoa(rnd)
+	if c := slot.ClaimID(); resuming && c != "" {
+		// The claim the earlier attempt wrote, whatever round it was in.
+		claimID = c
+	}
 	// The holder resuming its own issue keeps its attempt: the brief already in
 	// its pane names it. Any other assignment is a new attempt.
 	attempt, attemptBase := "", ""
