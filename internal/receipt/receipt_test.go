@@ -167,3 +167,27 @@ func TestRecordKeepsTheNewestPerVerb(t *testing.T) {
 		t.Error("gate ticks must not push out another verb's receipt")
 	}
 }
+
+func TestShowFindsAnEntryByIDAlone(t *testing.T) {
+	s := testStore(t)
+	s.Do(call("r1"), ran(Entry{Status: Done, Text: "ok"}))
+	s.Do(Call{ID: "r2", Verb: "worker gate", Fingerprint: "other"}, ran(Entry{Status: Failed, FailedStage: "merge"}))
+	for id, want := range map[string]string{"r1": Done, "r2": Failed} {
+		e, found, err := s.Show(id)
+		if err != nil || !found || e.ID != id || e.Status != want {
+			t.Errorf("%s: %+v found=%v err=%v", id, e, found, err)
+		}
+	}
+	if e, found, err := s.Show("nope"); err != nil || found {
+		t.Errorf("an unused id is absent: %+v found=%v err=%v", e, found, err)
+	}
+}
+
+func TestShowRefusesACorruptFile(t *testing.T) {
+	s := testStore(t)
+	os.MkdirAll(filepath.Dir(path(s.Root)), 0o777)
+	os.WriteFile(path(s.Root), []byte("{not json"), 0o666)
+	if _, _, err := s.Show("r1"); err == nil {
+		t.Error("a corrupt receipts file must be an error, not absent")
+	}
+}
