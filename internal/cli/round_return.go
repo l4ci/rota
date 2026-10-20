@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,21 +20,11 @@ import (
 // roundNote reads a --note-file ("-" is stdin); "" is no note. An unreadable
 // file is a usage error, before anything is moved.
 func roundNote(c *Ctx, flagName, path string) (string, error) {
-	switch path {
-	case "":
+	if path == "" {
 		return "", nil
-	case "-":
-		b, err := io.ReadAll(c.Stdin)
-		if err != nil {
-			return "", Usage("--%s: %v", flagName, err)
-		}
-		return string(b), nil
 	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return "", Usage("--%s: %v", flagName, err)
-	}
-	return string(b), nil
+	b, err := readBodyInput(c, flagName, path, ExitUsage)
+	return string(b), err
 }
 
 // sha7 is the sha of a `<sha7> <subject>` head line.
