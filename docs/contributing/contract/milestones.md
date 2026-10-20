@@ -8,12 +8,13 @@ refs:
 ## A6: milestones, plans, designs, spikes, proof, debug
 
 ### rota milestone add
-rota milestone add --title <text> --summary <text> [--depends M01,M02]
+rota milestone add --title <text> --summary <text> [--depends M01,M02] [--kind <delivery|decision>]
 repo: none
 data: {"id": string, "changed": true}
-exit: 2 when --title or --summary is missing; tracker
+exit: 1 when `--kind` is not `delivery` or `decision`; 2 when --title or --summary is missing; tracker
 old: hv-vision-add "<--title>" "<--summary>" ["<--depends>"]    (title, summary, depends-csv were positionals 1, 2, 3)
 shim: wraps the printed ID (`M01`) as `id`; old rc 2 and 3 both become 5, rc 4 becomes 6.
+note: `--kind decision` marks a milestone of decision items (`decision:research`, `decision:grilling`): the plan gets `kind: decision` in its frontmatter plus `## Decisions` (one line per closed decision, written by `rota item complete --gist` and `rota round accept --gist`) and `## Not yet specified` (the fog). `--kind delivery` (the default) leaves the plan byte-identical to before. A decision milestone ships under the usual rule.
 note: the key is minted, so `add` takes no positional and never exits 4 for an existing key; `--depends` IDs are not validated, as old.
 note: at an umbrella root in issue mode the milestone lives on the home sub-repo (`issues.homeRepo`, else the first registered): its tracking issue, plan text and slice plans. `add` mints the ID over the native milestones of every sub-repo and creates the native milestone on the home repo only (other sub-repos get theirs on first use of the ID). `list` and `active` report `shipped` only while every sub-repo's native milestone of it is closed, else `active`, and `ready` follows the adjusted status. `status` moves the home tracking issue, then opens or closes the native milestone in every other sub-repo that has one. `show` and `put` act on the home plan. No `--repo` is needed for any of these.
 
@@ -28,7 +29,7 @@ shim: wraps the printed JSON array as `milestones`, keys unchanged. `status` is 
 ### rota milestone show
 rota milestone show <id>
 repo: none
-data: {"id": string, "body": string}
+data: {"id": string, "kind": "delivery"|"decision", "body": string}
 exit: 2 when <id> is not `M\d{2,}`; 3 when the milestone doesn't exist; tracker
 old: hv-vision-show <id>
 shim: stdout (the markdown) becomes `body`. Text mode prints the body verbatim. Frontmatter line 4 stays `status:` (smoke 61 reads it).
