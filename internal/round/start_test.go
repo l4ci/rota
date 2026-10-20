@@ -1,6 +1,7 @@
 package round
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
@@ -606,5 +607,22 @@ func TestStartWarnsWhenAncestryUnreadable(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("want the holder warning: %v", st.Warnings)
+	}
+}
+
+// A Git set on Env.Worker owns the pool init start runs, not a fresh env.
+func TestStartPoolInitUsesConfiguredWorkerEnv(t *testing.T) {
+	root := newRepo(t, nil)
+	var calls int
+	spy := func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		calls++
+		return git.Exec(ctx, dir, args...)
+	}
+	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Git: spy, Getenv: noEnv}, Lease: fakeLease("h", 100)}
+	if _, err := e.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
+		t.Fatal(err)
+	}
+	if calls == 0 {
+		t.Fatal("start's PoolInit ignored the Git configured on Env.Worker")
 	}
 }

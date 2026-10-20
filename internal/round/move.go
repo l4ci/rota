@@ -595,7 +595,7 @@ type transferRun struct {
 func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts) (res Transferred, err error) {
 	defer func() {
 		if err == nil && res.Changed {
-			if lerr := worker.LedgerAppendErr(e.Worker, root, ledger.Entry{Kind: ledger.KindTransfer, Issue: res.Issue, Slot: res.To,
+			if lerr := worker.LedgerAppendErr(e.workerEnv(), root, ledger.Entry{Kind: ledger.KindTransfer, Issue: res.Issue, Slot: res.To,
 				Detail: ledger.Detail("from", res.From, "capReason", o.CapReason)}); lerr != nil {
 				err = fmt.Errorf("%s is transferred to %s, but the round ledger row was not written: %w", res.Issue, res.To, lerr)
 			}
