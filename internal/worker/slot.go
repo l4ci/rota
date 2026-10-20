@@ -446,7 +446,25 @@ func (s *Slot) RelayPending() int {
 func (s *Slot) SetRelayPending(k int, at string) {
 	s.o.Set("relayPending", k)
 	s.o.Set("relaySentAt", at)
+	s.o.Set("relayEventSeq", s.eventSeq())
 	s.o.Delete("relayMarkerSeen")
+}
+
+// RelayEventSeq is the slot's event id when the pending relay went out: an
+// event with a higher Seq was sent after it. -1 when the relay predates the
+// field.
+func (s *Slot) RelayEventSeq() int {
+	v, ok := s.o.Get("relayEventSeq")
+	if !ok {
+		return -1
+	}
+	n, _ := jsonx.Int(v)
+	return n
+}
+
+func (s *Slot) eventSeq() int {
+	n, _ := jsonx.Int(mustGet(s.o, "eventSeq"))
+	return n
 }
 
 // RelaySentAt is when the pending relay went out; the zero time for none.
@@ -466,6 +484,7 @@ func (s *Slot) SetRelayMarkerSeen() { s.o.Set("relayMarkerSeen", true) }
 func (s *Slot) ClearRelayPending() {
 	s.o.Delete("relayPending")
 	s.o.Delete("relaySentAt")
+	s.o.Delete("relayEventSeq")
 	s.o.Delete("relayMarkerSeen")
 }
 
@@ -503,8 +522,7 @@ func mustGet(o *jsonx.Object, k string) any { v, _ := o.Get(k); return v }
 // does not touch state; the writer decides which kinds move it. A heartbeat is
 // not an event: it replaces nothing (see Heartbeat).
 func (s *Slot) SetEvent(kind, body, now string) {
-	seq, _ := jsonx.Int(mustGet(s.o, "eventSeq"))
-	seq++
+	seq := s.eventSeq() + 1
 	s.o.Set("eventSeq", seq)
 	e := jsonx.NewObject()
 	e.Set("seq", seq)

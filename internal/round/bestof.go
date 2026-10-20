@@ -148,7 +148,7 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 	var runs [2]*bestOfRun
 	var branches [2]string
 	for i, s := range slots {
-		branches[i] = BranchName(s.Name(), id, it.Title)
+		branches[i] = worker.BranchName(s.Name(), id, it.Title)
 	}
 	for i := range runs {
 		runs[i] = &bestOfRun{sibling: slots[1-i].Name(), siblingBranch: branches[1-i], kind: kinds[i], kindSource: sources[i], preflight: true}
