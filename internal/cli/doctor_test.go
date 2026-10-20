@@ -86,7 +86,7 @@ func TestDoctorFailsWithSameData(t *testing.T) {
 	doctorFakes(t, map[string]string{"herdr": `echo "herdr 0.8.2"`})
 	dir, _ := filepath.EvalSymlinks(t.TempDir())
 	os.MkdirAll(filepath.Join(dir, ".rota"), 0o755)
-	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"work":{"dispatch":"herdr"}}`), 0o644)
+	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"round":{"dispatch":"herdr"}}`), 0o644)
 	code, out, _ := rotaIn(t, dir, "doctor", "--json")
 	if code != 1 {
 		t.Fatalf("exit %d, want 1: %s", code, out)

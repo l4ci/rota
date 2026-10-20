@@ -31,11 +31,11 @@ func TestConfigUpdateIsPinned(t *testing.T) {
 
 func TestConfigRoundTrip(t *testing.T) {
 	root := trackerProject(t, "{}\n")
-	code, env, _ := rotaRun(t, "--json", "-C", root, "config", "set", "work.workerSlots", "5")
+	code, env, _ := rotaRun(t, "--json", "-C", root, "config", "set", "round.slots", "5")
 	if code != 0 || get(dataOf(env), "changed") != true {
 		t.Fatalf("set: %d %v", code, env)
 	}
-	code, env, _ = rotaRun(t, "--json", "-C", root, "config", "show", "work.workerSlots")
+	code, env, _ = rotaRun(t, "--json", "-C", root, "config", "show", "round.slots")
 	d := dataOf(env)
 	rows, _ := get(d, "entries").([]any)
 	if code != 0 || len(rows) != 1 || get(rows[0], "source") != "project" {
@@ -169,7 +169,7 @@ func TestConfigShowJSONMetadata(t *testing.T) {
 	if c, _ := get(rows[0], "choices").([]any); len(c) != 2 || c[0] != "direct" || c[1] != "pr" {
 		t.Errorf("choices = %v", get(rows[0], "choices"))
 	}
-	_, env, _ = rotaRun(t, "--json", "-C", root, "config", "show", "work.workerSlots")
+	_, env, _ = rotaRun(t, "--json", "-C", root, "config", "show", "round.slots")
 	rows, _ = get(dataOf(env), "entries").([]any)
 	if has := get(rows[0], "choices"); has != nil {
 		t.Errorf("a non-enum key lists choices: %v", rows[0])

@@ -15,10 +15,10 @@ func TestWorkerCommandModel(t *testing.T) {
 		{``, "", "claude --model sonnet --dangerously-skip-permissions", true},
 		{`{"models":{"worker":"opus"}}`, "", "claude --model opus --dangerously-skip-permissions", true},
 		{`{"models":{"worker":"opus"}}`, "haiku", "claude --model haiku --dangerously-skip-permissions", true},
-		{`{"work":{"workerCommand":"wrap -x"}}`, "haiku", "wrap -x", false},
-		{`{"work":{"workerCommand":"wrap -m {model}"}}`, "haiku", "wrap -m haiku", true},
-		{`{"work":{"workerCommand":"wrap -m {model}"},"models":{"worker":"opus"}}`, "", "wrap -m opus", true},
-		{`{"work":{"workerCommand":"sh -c \"a  b\" -m {model}"}}`, "haiku", `sh -c "a  b" -m haiku`, true},
+		{`{"round":{"workerCommand":"wrap -x"}}`, "haiku", "wrap -x", false},
+		{`{"round":{"workerCommand":"wrap -m {model}"}}`, "haiku", "wrap -m haiku", true},
+		{`{"round":{"workerCommand":"wrap -m {model}"},"models":{"worker":"opus"}}`, "", "wrap -m opus", true},
+		{`{"round":{"workerCommand":"sh -c \"a  b\" -m {model}"}}`, "haiku", `sh -c "a  b" -m haiku`, true},
 	}
 	for _, c := range cases {
 		cfg := cfgOf(t, c.cfg)
@@ -35,7 +35,7 @@ func TestInheritProfileLaunchesWithoutModel(t *testing.T) {
 	cases := []struct{ cfg, chosen, want string }{
 		{`{"round":{"profile":"inherit"}}`, "", "claude --dangerously-skip-permissions"},
 		{`{"round":{"profile":"inherit"}}`, "haiku", "claude --model haiku --dangerously-skip-permissions"},
-		{`{"round":{"profile":"inherit"},"work":{"workerCommand":"wrap --model {model} -x"}}`, "", "wrap -x"},
+		{`{"round":{"profile":"inherit","workerCommand":"wrap --model {model} -x"}}`, "", "wrap -x"},
 		{`{"round":{"profile":"budget"}}`, "", "claude --model sonnet --dangerously-skip-permissions"},
 	}
 	for _, c := range cases {

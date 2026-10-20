@@ -62,7 +62,7 @@ func opencodeProject(t *testing.T, cfg string) string {
 // carries the plugin as inline config, the key sits in the slot's state dir
 // and the brief is signed with it.
 func TestDispatchOpenCodeGuardsTheSession(t *testing.T) {
-	dir := opencodeProject(t, `{"work":{"dispatch":"herdr","opencodeAccounts":[{"name":"a","configDir":"/cfg/a"}]}}`)
+	dir := opencodeProject(t, `{"round":{"dispatch":"herdr","opencodeAccounts":[{"name":"a","configDir":"/cfg/a"}]}}`)
 	rig := &opencodeRig{}
 	f := herdrFake()
 	res, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1", Kind: "opencode", Model: "p/m"})
@@ -101,9 +101,9 @@ func TestDispatchOpenCodeRefusals(t *testing.T) {
 		blocked string
 		exit    int
 	}{
-		"binary missing": {`{"work":{"dispatch":"tmux"}}`, opencodeRig{missing: map[string]bool{"opencode": true}}, harness.BlockOpencodeBinary, exitcode.ExitRefused},
-		"flag missing":   {`{"work":{"dispatch":"tmux"}}`, opencodeRig{help: "  --prompt\n"}, harness.BlockOpencodeFlags, exitcode.ExitRefused},
-		"pure launch":    {`{"work":{"dispatch":"tmux","opencodeCommand":"opencode --pure"}}`, opencodeRig{}, "", exitcode.ExitUnavailable},
+		"binary missing": {`{"round":{"dispatch":"tmux"}}`, opencodeRig{missing: map[string]bool{"opencode": true}}, harness.BlockOpencodeBinary, exitcode.ExitRefused},
+		"flag missing":   {`{"round":{"dispatch":"tmux"}}`, opencodeRig{help: "  --prompt\n"}, harness.BlockOpencodeFlags, exitcode.ExitRefused},
+		"pure launch":    {`{"round":{"dispatch":"tmux","opencodeCommand":"opencode --pure"}}`, opencodeRig{}, "", exitcode.ExitUnavailable},
 	} {
 		dir := opencodeProject(t, c.cfg)
 		rig := c.rig

@@ -17,15 +17,15 @@ import (
 type claude struct{}
 
 func (claude) Kind() string       { return Claude }
-func (claude) CommandKey() string { return "work.workerCommand" }
+func (claude) CommandKey() string { return "round.workerCommand" }
 
-// Launch is work.workerCommand, else the default launch line. Workers run with
+// Launch is round.workerCommand, else the default launch line. Workers run with
 // permissions skipped: the contract asks them to git add, git commit, gh pr
 // create and run tests, every one of which prompts under a narrower mode with
 // nobody in the pane to answer. Scope, not gating, bounds a worker: it owns a
 // throwaway branch in its own worktree, and the gate re-verifies the merged
 // tree before anything reaches the cycle branch. Override via
-// work.workerCommand to narrow it; NEEDS-PERMISSION stays in the classifier
+// round.workerCommand to narrow it; NEEDS-PERMISSION stays in the classifier
 // for exactly that case, so a narrowed mode stalls loudly.
 //
 // A model chosen for the dispatch (a round's tier, C9) replaces models.worker
@@ -38,7 +38,7 @@ func (claude) Launch(cfg any, chosen string) (string, error) {
 	} else if inheritsModel(cfg) {
 		model = ""
 	}
-	if s := config.StringIfSet(cfg, "work.workerCommand"); s != "" {
+	if s := config.StringIfSet(cfg, "round.workerCommand"); s != "" {
 		if model == "" {
 			// Stripping the flag leaves a gap; collapse it on this path only.
 			s = strings.Join(strings.Fields(modelFlag.ReplaceAllString(s, "")), " ")
@@ -65,7 +65,7 @@ func inheritsModel(cfg any) bool {
 func (claude) NeedsModel(cfg any) bool { return !inheritsModel(cfg) }
 
 // ModelApplies: the default command always takes the model, a custom
-// work.workerCommand only through the {model} placeholder.
+// round.workerCommand only through the {model} placeholder.
 func (c claude) ModelApplies(cfg any) bool { return placeholderApplies(cfg, c.CommandKey()) }
 
 func placeholderApplies(cfg any, key string) bool {
@@ -131,7 +131,7 @@ func (claude) AccountEnv(a Account) []string {
 }
 
 func (claude) Accounts(cfg any) AccountList {
-	l := AccountList{Key: "work.accounts"}
+	l := AccountList{Key: "round.accounts"}
 	for _, a := range config.Accounts(cfg) {
 		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.ConfigDir})
 	}
@@ -204,14 +204,14 @@ func (claude) Sign(_ []byte, payload string) string { return payload }
 
 // The orchestrator facet: a fresh session on models.orchestrator in `auto`
 // mode (the orchestrator merges and talks to the user, so it keeps a gate the
-// workers do not), or work.operatorCommand when set.
+// workers do not), or round.operatorCommand when set.
 func (claude) Name() string   { return Claude }
 func (claude) Prompt() string { return "/rota-orchestrate" }
 func (claude) Command(cfg any) ([]string, error) {
-	if s := config.StringIfSet(cfg, "work.operatorCommand"); s != "" {
+	if s := config.StringIfSet(cfg, "round.operatorCommand"); s != "" {
 		argv, err := shlex.Split(s)
 		if err != nil || len(argv) == 0 {
-			return nil, fmt.Errorf("work.operatorCommand is not a command line: %q", s)
+			return nil, fmt.Errorf("round.operatorCommand is not a command line: %q", s)
 		}
 		return argv, nil
 	}
@@ -227,7 +227,7 @@ type hermes struct{}
 
 func (hermes) Name() string { return "hermes" }
 
-// WorkAccounts: work.accounts is Anthropic's.
+// WorkAccounts: round.accounts is Anthropic's.
 func (hermes) WorkAccounts() bool { return false }
 func (hermes) Prompt() string {
 	return "You are the orchestrator: run the rota-orchestrate skill."

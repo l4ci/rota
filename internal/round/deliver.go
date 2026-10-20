@@ -95,7 +95,7 @@ func (d *delivery) steps(ctx context.Context, e Env, root string) ([]step, error
 	steps := []step{
 		// The account is the pane's CLAUDE_CONFIG_DIR: keep the slot's own while
 		// it has headroom, else pick; none usable is a refusal to start.
-		// work.accounts is Anthropic's: a codex slot's CODEX_HOME is its account.
+		// round.accounts is Anthropic's: a codex slot's CODEX_HOME is its account.
 		// Under solo every subagent runs on the orchestrator's own account.
 		{name: "account", skip: func() bool {
 			return solo || !hz.WorkAccounts() || !e.AccountPicking || len(worker.Configured(root)) == 0

@@ -53,7 +53,7 @@ func TestResolve(t *testing.T) {
 }
 
 // TestResolveAndResolveLaunchOnOneTable runs both modes over the same
-// no-pane, TMUX, HERDR_ENV and work.dispatch combinations, so where they part
+// no-pane, TMUX, HERDR_ENV and round.dispatch combinations, so where they part
 // is written down: the registry-less in-session rule (Resolve) answers solo
 // outside a pane where the launcher (ResolveLaunch) opens a session.
 func TestResolveAndResolveLaunchOnOneTable(t *testing.T) {

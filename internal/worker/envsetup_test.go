@@ -32,7 +32,7 @@ func setupInit(t *testing.T, r *setupRecorder, dir string, slots int) error {
 }
 
 func TestEnvSetupRunsOncePerNewSlotInItsWorktree(t *testing.T) {
-	b := newProject(t, `{"work":{"envSetup":"npm ci"}}`)
+	b := newProject(t, `{"round":{"envSetup":"npm ci"}}`)
 	r := &setupRecorder{}
 	if err := setupInit(t, r, b, 2); err != nil {
 		t.Fatal(err)
@@ -67,7 +67,7 @@ func TestEnvSetupEmptyIsNoop(t *testing.T) {
 }
 
 func TestEnvSetupRerunsWhenALockfileChanges(t *testing.T) {
-	b := newProject(t, `{"work":{"envSetup":"npm ci"}}`)
+	b := newProject(t, `{"round":{"envSetup":"npm ci"}}`)
 	r := &setupRecorder{}
 	if err := setupInit(t, r, b, 1); err != nil {
 		t.Fatal(err)
@@ -96,7 +96,7 @@ func TestEnvSetupRerunsWhenALockfileChanges(t *testing.T) {
 }
 
 func TestEnvSetupFailsFastAndStoresNoHash(t *testing.T) {
-	b := newProject(t, `{"work":{"envSetup":"npm ci"}}`)
+	b := newProject(t, `{"round":{"envSetup":"npm ci"}}`)
 	r := &setupRecorder{code: 3}
 	err := setupInit(t, r, b, 2)
 	ee, ok := err.(*exitcode.Error)
@@ -126,7 +126,7 @@ func TestEnvSetupFailsFastAndStoresNoHash(t *testing.T) {
 }
 
 func TestEnvSetupRedRerunDropsTheOldHash(t *testing.T) {
-	b := newProject(t, `{"work":{"envSetup":"npm ci"}}`)
+	b := newProject(t, `{"round":{"envSetup":"npm ci"}}`)
 	r := &setupRecorder{}
 	setupInit(t, r, b, 1)
 	wt := filepath.Join(b, ".worktrees", "w1")

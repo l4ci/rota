@@ -130,10 +130,10 @@ Workers can be Claude Code, Codex or [OpenCode](docs/usage/opencode-workers.md),
 
 Long rounds run into usage limits. List your accounts and rota spreads the work and routes around limits:
 
-- **Load balancing.** With several Claude accounts in `work.accounts`, `rota round assign` puts new work on the account with the most headroom and skips one that is cooling down.
+- **Load balancing.** With several Claude accounts in `round.accounts`, `rota round assign` puts new work on the account with the most headroom and skips one that is cooling down.
 - **Limits.** When a worker hits a limit, `rota limit watch` moves its issue to a free slot on another account, continuing from the pushed branch, or waits for the reset if none is free.
 - **The orchestrator** can hand off and restart under another account before it hits its own limit (`orchestrator.switchOnUsage`), and `rota keepalive` restarts it if it stops.
-- **Codex.** `work.codexAccounts` spreads Codex workers over several logins (rota can't read Codex usage, so these aren't balanced by headroom). `work.opencodeAccounts` does the same for OpenCode.
+- **Codex.** `round.codexAccounts` spreads Codex workers over several logins (rota can't read Codex usage, so these aren't balanced by headroom). `round.opencodeAccounts` does the same for OpenCode.
 
 Setup: [parallel rounds](docs/usage/parallel-rounds.md#-setup) and [unattended rounds](docs/usage/unattended-rounds.md).
 

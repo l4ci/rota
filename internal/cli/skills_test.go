@@ -213,7 +213,7 @@ func TestSkillsNoHome(t *testing.T) {
 	}
 }
 
-// accountProject is a rota project whose work.accounts name two existing
+// accountProject is a rota project whose round.accounts name two existing
 // config dirs and one that does not exist.
 func accountProject(t *testing.T, home string) (proj, a, b, gone string) {
 	t.Helper()
@@ -224,7 +224,7 @@ func accountProject(t *testing.T, home string) (proj, a, b, gone string) {
 			t.Fatal(err)
 		}
 	}
-	cfg := `{"work":{"accounts":[{"name":"a","configDir":"` + a + `"},{"name":"b","configDir":"` + b + `"},{"name":"gone","configDir":"` + gone + `"},{"name":"dup","configDir":"` + filepath.Join(home, ".claude") + `/"}]}}`
+	cfg := `{"round":{"accounts":[{"name":"a","configDir":"` + a + `"},{"name":"b","configDir":"` + b + `"},{"name":"gone","configDir":"` + gone + `"},{"name":"dup","configDir":"` + filepath.Join(home, ".claude") + `/"}]}}`
 	if err := os.WriteFile(filepath.Join(proj, ".rota", "config.json"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}

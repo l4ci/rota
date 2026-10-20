@@ -12,7 +12,7 @@ WATCH_PID=""
 trap 'kill "$ORCH_RWT" "$WATCH_PID" 2>/dev/null || true; rm -rf "${TMP_RWT:?}"' EXIT
 (
   cd "$RWP" && git init -q -b main . && git -c user.email=a@b -c user.name=n commit -q --allow-empty -m init \
-    && printf '{"git":{"baseBranch":"main"},"work":{"dispatch":"tmux"}}\n' > .rota/config.json
+    && printf '{"git":{"baseBranch":"main"},"round":{"dispatch":"tmux"}}\n' > .rota/config.json
 ) || fail "round-watch fixture setup failed"
 CDW="$(git -C "$RWP" rev-parse --path-format=absolute --git-common-dir)"
 mkdir -p "$CDW/rota"

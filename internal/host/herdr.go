@@ -253,7 +253,7 @@ const paneBusyPolls = 2
 func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	kind, env, agentArgs, err := LaunchArgs(o.Launch)
 	if err != nil {
-		return "", fmt.Errorf("work.dispatch=herdr launches %s itself; the launch command must run one of them, got: %s", harness.KindList(), o.Launch)
+		return "", fmt.Errorf("round.dispatch=herdr launches %s itself; the launch command must run one of them, got: %s", harness.KindList(), o.Launch)
 	}
 	ws := h.d.Getenv("HERDR_WORKSPACE_ID")
 	var opened openedWorkspace
@@ -355,7 +355,7 @@ type openedWorkspace struct{ id, rootTab string }
 // slot's tab with `tab create --env`.
 func (h *herdr) openLinked(ctx context.Context, primary, slot, path string) (openedWorkspace, error) {
 	if !strings.HasPrefix(path, "/") {
-		return openedWorkspace{}, fmt.Errorf("work.herdrGroupSlots needs an absolute worktree path for slot '%s', got: %s", slot, path)
+		return openedWorkspace{}, fmt.Errorf("round.herdrGroupSlots needs an absolute worktree path for slot '%s', got: %s", slot, path)
 	}
 	r := h.herdr(ctx, "worktree", "open", "--workspace", primary,
 		"--path", path, "--label", slot, "--no-focus")

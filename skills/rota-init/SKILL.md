@@ -27,16 +27,18 @@ Copy this checklist and track your progress:
 
 Read the repo; do not ask what it can answer ([`references/authoring-conventions.md`](references/authoring-conventions.md), *Don't ask what the code can answer*). For each key below, note the value and the evidence (file, line or command output). A key with no signal is not proposed: it keeps the schema default, and the report says so.
 
-| Key | Signals |
-|---|---|
-| `test.fast` | The narrowest test command that takes changed files: `go test`, `package.json` scripts (`test`, `lint`), `pyproject.toml` pytest or ruff config, `cargo test`, Makefile targets (`test`, `check`, `lint`) |
-| `test.full` | The whole-suite command from the same files, plus what CI runs (`.github/workflows/*`, `.gitlab-ci.yml`) |
-| `git.baseBranch` | `git symbolic-ref --short refs/remotes/origin/HEAD`, else the branch `git branch --list main master trunk` finds |
-| `forge.provider` | The `origin` host from `git remote get-url origin`: github.com → `github`, a GitLab host → `gitlab`, no remote → `local` |
-| `issues.source` | The forge above (`github` or `gitlab`) when `gh` or `glab` is installed and authenticated; `file` otherwise. A `.jira` or `.linear` config is a hint, not a proof: say so |
-| `round.workerKind` | Harness CLIs on `PATH` (`command -v claude codex opencode`). Several installed: list them, recommend the one running this session |
-| `work.isolation` | `worktree` when the repo already has linked worktrees (`git worktree list`) or `.worktrees/`; `branch` otherwise |
-| `work.dispatch` | `herdr` when it is on `PATH`, else `tmux` when it is and `$TMUX` is set, else `subagent` |
+| Key | Affects | Signals |
+|---|---|---|
+| `test.fast` | /rota-work and rounds | The narrowest test command that takes changed files: `go test`, `package.json` scripts (`test`, `lint`), `pyproject.toml` pytest or ruff config, `cargo test`, Makefile targets (`test`, `check`, `lint`) |
+| `test.full` | /rota-work and rounds | The whole-suite command from the same files, plus what CI runs (`.github/workflows/*`, `.gitlab-ci.yml`) |
+| `git.baseBranch` | both | `git symbolic-ref --short refs/remotes/origin/HEAD`, else the branch `git branch --list main master trunk` finds |
+| `forge.provider` | both | The `origin` host from `git remote get-url origin`: github.com → `github`, a GitLab host → `gitlab`, no remote → `local` |
+| `issues.source` | both | The forge above (`github` or `gitlab`) when `gh` or `glab` is installed and authenticated; `file` otherwise. A `.jira` or `.linear` config is a hint, not a proof: say so |
+| `round.workerKind` | rounds | Harness CLIs on `PATH` (`command -v claude codex opencode`). Several installed: list them, recommend the one running this session |
+| `work.isolation` | /rota-work (solo) | `worktree` when the repo already has linked worktrees (`git worktree list`) or `.worktrees/`; `branch` otherwise |
+| `round.dispatch` | rounds | `herdr` when it is on `PATH`, else `tmux` when it is and `$TMUX` is set, else `subagent` |
+
+`work.*` keys affect `/rota-work` and other solo cycles. `round.*` keys affect parallel rounds (`rota round`, `rota worker`). Say which one each proposal affects when you ask.
 
 Never run a test command to prove it works: the evidence is where you read it.
 
@@ -58,7 +60,7 @@ Silence, an unavailable picker or an unclear reply is never a yes. Ask once more
 
 Only confirmed values, only through rota verbs; never edit `.rota/config.json`.
 
-- **No `.rota/` yet:** one `rota setup --set key=value` per answer to a key `rota setup --list` offers (`issues.source`, `work.isolation`, `work.dispatch`, `round.workerKind`, ...). If no answer is one of those, `rota init` first.
+- **No `.rota/` yet:** one `rota setup --set key=value` per answer to a key `rota setup --list` offers (`issues.source`, `work.isolation`, `round.dispatch`, `round.workerKind`, ...). If no answer is one of those, `rota init` first.
 - **Everything else, and every key on an initialized project:** `rota config set <key> <value>`. List values are JSON (`rota config set test.fast '["go test ./..."]'`).
 
 Run `rota config check` after the writes. Fix what it flags, re-run, and continue only when it is clean.

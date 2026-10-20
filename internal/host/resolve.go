@@ -45,7 +45,7 @@ func (k Kind) Binary() string {
 // Resolve is the rule for which host a round runs on (C8), the in-session one:
 // it never opens a session (see ResolveLaunch for the launcher that may). The round's
 // recorded host (registry, "" when no round is in flight) wins. Without one it
-// picks from work.dispatch and the environment. An explicit herdr or tmux is taken as it is, even when it is
+// picks from round.dispatch and the environment. An explicit herdr or tmux is taken as it is, even when it is
 // not installed: that fails later as unavailable (exit 5), and solo is never a
 // silent fallback from a host the config named. Unset or "subagent" detects:
 // herdr inside a herdr pane with the binary on PATH, else tmux inside tmux,
@@ -91,7 +91,7 @@ type Launch struct {
 // deliberate:
 //
 //   - Being in a pane (herdr: HERDR_ENV=1 and HERDR_WORKSPACE_ID, with the binary
-//     on PATH; tmux: TMUX) beats work.dispatch, which Resolve checks first: you
+//     on PATH; tmux: TMUX) beats round.dispatch, which Resolve checks first: you
 //     cannot start a tab in a host you are not in.
 //   - A herdr pane needs HERDR_WORKSPACE_ID too (herdr.InSession); Resolve takes
 //     HERDR_ENV=1 with the binary on PATH as a herdr pane.
@@ -110,9 +110,9 @@ func ResolveLaunch(dispatch Kind, getenv func(string) string, lookPath func(stri
 	case tmux.InSession():
 		return Launch{Kind: Tmux}, nil
 	case dispatch == Herdr && herdr.Require() != nil:
-		return Launch{}, fmt.Errorf("work.dispatch=herdr but herdr is not installed")
+		return Launch{}, fmt.Errorf("round.dispatch=herdr but herdr is not installed")
 	case dispatch == Tmux && tmux.Require() != nil:
-		return Launch{}, fmt.Errorf("work.dispatch=tmux but tmux is not installed")
+		return Launch{}, fmt.Errorf("round.dispatch=tmux but tmux is not installed")
 	case dispatch != Tmux && herdr.Require() == nil:
 		return Launch{Kind: Herdr, NewSession: true}, nil
 	case tmux.Require() == nil:

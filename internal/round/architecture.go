@@ -119,7 +119,8 @@ func (e Env) ArchitectureFacts(ctx context.Context, root string, be backlog.Back
 	if err != nil {
 		return a, false, err
 	}
-	a.Idle = CountIdle(reg, set.Roster)
+	active, _ := Members(reg, set)
+	a.Idle = CountIdle(reg, active)
 	a.Areas = reviewAreas(root, set)
 
 	a.Count, a.Unavailable = e.closedSinceReview(ctx, root, be, &a.Since)

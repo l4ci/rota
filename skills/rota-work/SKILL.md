@@ -7,7 +7,7 @@ description: Use when backlog items already exist and need implementation ("impl
 
 Main-session-driven implementation with per-task verification and commits. Subagents use the current harness's dispatch interface to write files (`references/subagent-dispatch.md`); the main session commits.
 
-**Rounds are not this skill** (standing workers, merge gate, relays: `/rota-orchestrate` and the `rota round` verbs). If `work.dispatch` is `"tmux"` or `"herdr"`, this skill still dispatches subagents; say so once and continue, or point the user at `/rota-orchestrate` for a multi-issue round.
+**Rounds are not this skill** (standing workers, merge gate, relays: `/rota-orchestrate` and the `rota round` verbs). If `round.dispatch` is `"tmux"` or `"herdr"`, this skill still dispatches subagents; say so once and continue, or point the user at `/rota-orchestrate` for a multi-issue round.
 
 ## Configuration
 

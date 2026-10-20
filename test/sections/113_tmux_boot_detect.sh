@@ -21,7 +21,7 @@ chmod +x "$BF/bin/tmux"
   git add seed.txt
   git commit -q -m seed
 ) || fail "boot-detect fixture repo setup failed"
-printf '{"work":{"dispatch":"tmux"}}\n' > "$TMP_BD/repo/.rota/config.json"
+printf '{"round":{"dispatch":"tmux"}}\n' > "$TMP_BD/repo/.rota/config.json"
 echo brief > "$TMP_BD/brief.md"
 
 bd() { ( cd "$TMP_BD/repo" && env -u TMUX -u HERDR_ENV PATH="$BF/bin:$PATH" FAKE_TMUX="$BF/state" ROTA_HOST_KILL_WAIT=1 "$@" ); }

@@ -265,6 +265,6 @@ rm -f "$UMB/.rota/status.json"
 # still resolves from its own .rota/.
 rc=0; OUT=$(cd "$TMP" && hvj repo umbrella 2>/dev/null) || rc=$?
 [ "$rc" = 1 ] || fail "single-repo cwd must not be an umbrella, got exit $rc: $OUT"
-(cd "$TMP" && hvj config show work.dispatch >/dev/null) || fail "single-repo cwd still resolves to its own .rota/"
+(cd "$TMP" && hvj config show round.dispatch >/dev/null) || fail "single-repo cwd still resolves to its own .rota/"
 pass "single-repo backward compat: the project resolves with no umbrella in scope"
 

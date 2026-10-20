@@ -15,7 +15,7 @@ import (
 
 var quotaNow = time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
 
-const twoAccounts = `{"work":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"},{"name":"b","configDir":"/nowhere"}]}}`
+const twoAccounts = `{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"},{"name":"b","configDir":"/nowhere"}]}}`
 
 // meters fakes the usage endpoint: each account's five-hour window, spent (100)
 // with a reset an hour ahead, or free.
@@ -41,7 +41,8 @@ func TestQuotaCapIsTheRosterWhileAnAccountHasHeadroom(t *testing.T) {
 	f.config(t, twoAccounts)
 	f.meters(t, map[string]bool{"a": true})
 	c := f.env.QuotaCap(bg, f.root, f.set)
-	if c.Reduced() || c.Effective != len(f.set.Roster) || c.Reason != "" {
+	// The cap is over the round's slots (the fixture starts two), not the roster.
+	if active, _ := Members(worker.LoadRegistryTolerant(f.root), f.set); c.Reduced() || c.Effective != len(active) || c.Reason != "" {
 		t.Fatalf("one account free, cap %+v", c)
 	}
 	if why := c.Closed("claude"); why != "" {
@@ -57,10 +58,10 @@ func TestQuotaCapStopsFillingWhenEveryAccountIsCooling(t *testing.T) {
 	}
 	f.meters(t, map[string]bool{"a": true, "b": true})
 	c := f.env.QuotaCap(bg, f.root, f.set)
-	if !c.Reduced() || c.Effective != 1 || c.Roster != len(f.set.Roster) {
+	if active, _ := Members(worker.LoadRegistryTolerant(f.root), f.set); !c.Reduced() || c.Effective != 1 || c.Roster != len(active) {
 		t.Fatalf("every account cooling, cap %+v", c)
 	}
-	if !strings.Contains(c.Reason, "work.accounts") || !strings.Contains(c.Reason, "cooling down") || !strings.Contains(c.Reason, "13:00") || !c.ResumesAt.Equal(quotaNow.Add(time.Hour)) {
+	if !strings.Contains(c.Reason, "round.accounts") || !strings.Contains(c.Reason, "cooling down") || !strings.Contains(c.Reason, "13:00") || !c.ResumesAt.Equal(quotaNow.Add(time.Hour)) {
 		t.Fatalf("reason %q resumes %v", c.Reason, c.ResumesAt)
 	}
 	_, err := f.assign("13", "", nil)
@@ -88,7 +89,7 @@ func TestAssignResumesAtTheReset(t *testing.T) {
 
 func TestQuotaCapCodexLoginsCoolByTheirLimitLog(t *testing.T) {
 	f := newAssignFixture(t)
-	f.config(t, `{"work":{"dispatch":"herdr","codexAccounts":[{"name":"c1","codexHome":"/h1"},{"name":"c2","codexHome":"/h2"}]},"round":{"workerKind":"codex"}}`)
+	f.config(t, `{"round":{"dispatch":"herdr","codexAccounts":[{"name":"c1","codexHome":"/h1"},{"name":"c2","codexHome":"/h2"}],"workerKind":"codex"}}`)
 	f.env.Worker.Now = func() time.Time { return quotaNow }
 	spent := func(session, login string) {
 		t.Helper()
@@ -103,15 +104,15 @@ func TestQuotaCapCodexLoginsCoolByTheirLimitLog(t *testing.T) {
 	}
 	spent("dana", "c2")
 	c := f.env.QuotaCap(bg, f.root, f.set)
-	if !c.Reduced() || !strings.Contains(c.Reason, "work.codexAccounts") || c.Closed("codex") == "" {
+	if !c.Reduced() || !strings.Contains(c.Reason, "round.codexAccounts") || c.Closed("codex") == "" {
 		t.Fatalf("every login spent, cap %+v", c)
 	}
 }
 
-// A cooling Claude pool does not stop Codex work: work.accounts is Anthropic's.
+// A cooling Claude pool does not stop Codex work: round.accounts is Anthropic's.
 func TestQuotaCapClaudePoolDoesNotCloseCodex(t *testing.T) {
 	f := newAssignFixture(t)
-	f.config(t, `{"work":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}],"codexAccounts":[{"name":"c1","codexHome":"/h1"}]}}`)
+	f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}],"codexAccounts":[{"name":"c1","codexHome":"/h1"}]}}`)
 	f.meters(t, map[string]bool{"a": true})
 	c := f.env.QuotaCap(bg, f.root, f.set)
 	if c.Reduced() || c.Closed("claude") == "" || c.Closed("codex") != "" {
@@ -123,13 +124,13 @@ func TestQuotaCapClaudePoolDoesNotCloseCodex(t *testing.T) {
 // meets the cooling pool as a quota refusal: the tick reports that one.
 func TestMixedConfigClaudeAssignIsRefusedByQuota(t *testing.T) {
 	f := newAssignFixture(t)
-	f.config(t, `{"work":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}],"codexAccounts":[{"name":"c1","codexHome":"/h1"}]},"round":{"workerKind":"claude"}}`)
+	f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}],"codexAccounts":[{"name":"c1","codexHome":"/h1"}],"workerKind":"claude"}}`)
 	f.meters(t, map[string]bool{"a": true})
 	if c := f.env.QuotaCap(bg, f.root, f.set); c.Reduced() {
 		t.Fatalf("cap %+v", c)
 	}
 	_, err := f.assign("12", "ben", nil)
-	if by := blockedBy(t, err); by != BlockQuota || !strings.Contains(err.Error(), "work.accounts") {
+	if by := blockedBy(t, err); by != BlockQuota || !strings.Contains(err.Error(), "round.accounts") {
 		t.Fatalf("assign: %v", err)
 	}
 }

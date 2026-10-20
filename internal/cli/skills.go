@@ -56,7 +56,7 @@ func skillsVerb(run func(*Ctx, skillsArgs) (Result, error), defScope string, ove
 			fs.BoolVar(&a.stub, "stub", false, "write a SKILL.md that runs `rota skills get <name>` instead of the full text (the install default; update keeps each root's recorded mode unless a flag is given)")
 			fs.BoolVar(&a.full, "full", false, "write the full skill text, for harnesses that cannot run a command when a skill loads")
 		}
-		fs.BoolVar(&a.currentAccount, "current-account", false, "user scope: only the current Claude config dir, not every work.accounts dir")
+		fs.BoolVar(&a.currentAccount, "current-account", false, "user scope: only the current Claude config dir, not every round.accounts dir")
 		return func(c *Ctx, args []string) (Result, error) {
 			if err := noArgs(args); err != nil {
 				return Result{}, err
@@ -89,7 +89,7 @@ func (a skillsArgs) mode() string {
 // skillsEnv resolves the roots a verb works on.
 //
 // At user scope the Claude roots cover the current config dir plus every
-// work.accounts configDir (skipped lists the configured dirs that do not
+// round.accounts configDir (skipped lists the configured dirs that do not
 // exist), since each dir holds its own copy of the skills.
 func skillsEnv(c *Ctx, a skillsArgs) (set *skills.Set, roots []skills.Root, skipped []string, err error) {
 	set, err = skills.Embedded()
@@ -146,7 +146,7 @@ func skillsPluginRoots(getenv func(string) string, claudeDirs []string, scope, a
 }
 
 // skillsClaudeDirs is the Claude config dirs user-scope skills go to: the
-// current one (CLAUDE_CONFIG_DIR, else ~/.claude), then each work.accounts
+// current one (CLAUDE_CONFIG_DIR, else ~/.claude), then each round.accounts
 // configDir of the project at root ("" for none), de-duplicated with
 // worker.SameConfigDir. An account dir that does not exist is returned in
 // skipped, never created.

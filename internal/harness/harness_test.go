@@ -50,7 +50,7 @@ func TestAccountEnv(t *testing.T) {
 		}
 	}
 	if !(claude{}).WorkAccounts() || (codex{}).WorkAccounts() {
-		t.Error("work.accounts rotates claude slots, never codex ones")
+		t.Error("round.accounts rotates claude slots, never codex ones")
 	}
 }
 
@@ -257,14 +257,14 @@ func TestClaudeOrchestratorCommand(t *testing.T) {
 	for doc, want := range map[string]string{
 		``:                                     "claude --model opus --permission-mode auto",
 		`{"models":{"orchestrator":"sonnet"}}`: "claude --model sonnet --permission-mode auto",
-		`{"work":{"operatorCommand":"wrap claude -x"}}`: "wrap claude -x",
+		`{"round":{"operatorCommand":"wrap claude -x"}}`: "wrap claude -x",
 	} {
 		argv, err := (claude{}).Command(cfgOf(t, doc))
 		if err != nil || strings.Join(argv, " ") != want {
 			t.Errorf("%s: %q, %v want %q", doc, argv, err, want)
 		}
 	}
-	if _, err := (claude{}).Command(cfgOf(t, `{"work":{"operatorCommand":"wrap \"oops"}}`)); err == nil {
+	if _, err := (claude{}).Command(cfgOf(t, `{"round":{"operatorCommand":"wrap \"oops"}}`)); err == nil {
 		t.Error("an unbalanced operatorCommand must be an error")
 	}
 }

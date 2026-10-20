@@ -103,7 +103,7 @@ type Options struct {
 
 	// D4: the switch and the account the child starts under. ConfigDir is the
 	// child's CLAUDE_CONFIG_DIR as inherited and Account its name in
-	// work.accounts, empty when it has none. HoldFallback is how long a hold
+	// round.accounts, empty when it has none. HoldFallback is how long a hold
 	// lasts when the marker has no reset time.
 	SwitchOnUsage  bool
 	UsageThreshold int

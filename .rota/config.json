@@ -5,12 +5,7 @@
   },
   "work": {
     "isolation": "branch",
-    "mergeStrategy": "direct",
-    "dispatch": "subagent",
-    "workerSlots": 3,
-    "workerCommand": "",
-    "accounts": [],
-    "operatorCommand": ""
+    "mergeStrategy": "direct"
   },
   "refactor": {
     "confirmBeforeExecute": true
@@ -71,6 +66,11 @@
     ]
   },
   "round": {
+    "dispatch": "subagent",
+    "slots": 3,
+    "workerCommand": "",
+    "accounts": [],
+    "operatorCommand": "",
     "sharedPaths": [
       "docs/contributing/market-review-2026-10.md"
     ],

@@ -67,7 +67,7 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 	kind = hz.Kind()
 	out.Kind, out.KindSource = kind, kindSource
 	// An unset codex tier map is allowed: the default codex command drops
-	// --model and Codex picks its own. A custom work.codexCommand holding
+	// --model and Codex picks its own. A custom round.codexCommand holding
 	// {model} would fail at dispatch, after the claim, so it is refused here.
 	model := resolveModel(in.FlagModel, out.Pick.Model, set.Model(kind, in.Tier))
 	if model == "" && worker.NeedsModel(root, kind) {

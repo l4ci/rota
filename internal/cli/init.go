@@ -188,16 +188,17 @@ func initConfig(c *Ctx, root string, freshConfig bool) (initConfigResult, error)
 			r.warnings = append(r.warnings, "could not seed from the global config: "+err.Error())
 		}
 	}
-	filled, sm, err := config.FillDetect(root, c.deps().originProvider(c.Context(), root))
-	if errors.Is(err, config.ErrCorrupt) {
-		return r, &Error{Exit: ExitInternal, Message: err.Error()}
-	}
+	filled, sm, rm, err := config.FillDetect(root, c.deps().originProvider(c.Context(), root))
 	if err != nil {
+		_, err = roundMigrationFail(err)
 		return r, err
 	}
 	r.filled = filled
 	if sm.Changed {
 		r.warnings = append(r.warnings, "migrated backlog.backend and issues.provider to issues.source "+sm.Source)
+	}
+	if rm.Changed() {
+		r.warnings = append(r.warnings, "moved the round-only work.* keys to round.* (rota migrate config)")
 	}
 	if err := initIssueSource(c, root); err != nil {
 		return r, err

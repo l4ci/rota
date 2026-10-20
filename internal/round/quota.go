@@ -107,7 +107,9 @@ func (e Env) Headroom(ctx context.Context, root, kind string) string {
 // else the default); a kind without a usage meter counts too once it has
 // configured accounts.
 func (e Env) QuotaCap(ctx context.Context, root string, set roundcfg.Settings) Cap {
-	c := Cap{Roster: len(set.Roster), Effective: len(set.Roster), why: map[string]string{}}
+	reg := worker.LoadRegistryTolerant(root) // no error return: a cap is advisory, the assign verb reads the registry strictly
+	active, _ := Members(reg, set)
+	c := Cap{Roster: len(active), Effective: len(active), why: map[string]string{}}
 	wk := set.WorkerKind
 	if wk == "" {
 		wk = harness.Default
@@ -136,8 +138,7 @@ func (e Env) QuotaCap(ctx context.Context, root string, set roundcfg.Settings) C
 	c.ResumesAt = earliest(resets)
 	c.Reason = coolingWhy(strings.Join(pools, " and "), c.ResumesAt)
 	held := 0
-	reg := worker.LoadRegistryTolerant(root) // no error return: a cap is advisory, the assign verb reads the registry strictly
-	for _, name := range set.Roster {
+	for _, name := range active {
 		if s := reg.Slot(name); s != nil && !SlotIdle(s) {
 			held++
 		}

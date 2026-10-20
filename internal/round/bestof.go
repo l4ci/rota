@@ -112,7 +112,7 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 			}
 		}
 	}
-	slots := e.pickSlots(ctx, reg, set.Roster, want, 2, pre...)
+	slots := e.pickSlots(ctx, reg, set, want, 2, pre...)
 	if len(slots) < 2 {
 		return res, blocked(BlockBestOfSlots, "%s is best-of:2 and needs two free slots; %d free", id, len(slots))
 	}

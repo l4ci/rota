@@ -21,7 +21,7 @@ func goInit(t *testing.T, dir string, o InitOpts) (InitResult, error) {
 }
 
 func TestPoolInit(t *testing.T) {
-	for name, cfg := range map[string]string{"tmux": `{}`, "herdr": `{"work":{"dispatch":"herdr"}}`} {
+	for name, cfg := range map[string]string{"tmux": `{}`, "herdr": `{"round":{"dispatch":"herdr"}}`} {
 		t.Run(name, func(t *testing.T) {
 			b := newProject(t, cfg)
 			got := map[string]string{}
@@ -71,7 +71,7 @@ func TestPoolInitErrors(t *testing.T) {
 }
 
 func TestPoolInitMigratesWindowToHandleAndKeepsLiveTab(t *testing.T) {
-	cfg := `{"work":{"dispatch":"herdr"}}`
+	cfg := `{"round":{"dispatch":"herdr"}}`
 	b := newProject(t, cfg)
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
 	// slot 1 had a live tab recorded; slot 2 is an unmigrated pre-herdr registry

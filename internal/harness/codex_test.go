@@ -12,11 +12,11 @@ func TestCodexCommand(t *testing.T) {
 	}{
 		{``, "gpt-x", "codex --model gpt-x --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen", 0},
 		{``, "", "codex --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen", 0},
-		{`{"work":{"codexCommand":"wrap codex -m {model}"}}`, "gpt-x", "wrap codex -m gpt-x", 0},
-		{`{"work":{"codexCommand":"wrap codex -m {model}"}}`, "", "", 1},
-		{`{"work":{"codexCommand":"codex --yolo"}}`, "gpt-x", "codex --yolo", 0},
-		{`{"work":{"codexCommand":"codex --yolo"}}`, "", "codex --yolo", 0},
-		{`{"work":{"workerCommand":"claude -x"}}`, "gpt-x", "codex --model gpt-x --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen", 0},
+		{`{"round":{"codexCommand":"wrap codex -m {model}"}}`, "gpt-x", "wrap codex -m gpt-x", 0},
+		{`{"round":{"codexCommand":"wrap codex -m {model}"}}`, "", "", 1},
+		{`{"round":{"codexCommand":"codex --yolo"}}`, "gpt-x", "codex --yolo", 0},
+		{`{"round":{"codexCommand":"codex --yolo"}}`, "", "codex --yolo", 0},
+		{`{"round":{"workerCommand":"claude -x"}}`, "gpt-x", "codex --model gpt-x --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen", 0},
 	}
 	for _, c := range cases {
 		got, err := (codex{}).Launch(cfgOf(t, c.cfg), c.model)
@@ -36,7 +36,7 @@ func TestCodexCommand(t *testing.T) {
 }
 
 func TestModelAppliesToCodex(t *testing.T) {
-	for cfg, want := range map[string]bool{``: true, `{"work":{"codexCommand":"codex -x"}}`: false, `{"work":{"codexCommand":"codex -m {model}"}}`: true, `{"work":{"workerCommand":"claude -x"}}`: true} {
+	for cfg, want := range map[string]bool{``: true, `{"round":{"codexCommand":"codex -x"}}`: false, `{"round":{"codexCommand":"codex -m {model}"}}`: true, `{"round":{"workerCommand":"claude -x"}}`: true} {
 		if got := (codex{}).ModelApplies(cfgOf(t, cfg)); got != want {
 			t.Errorf("%s: %v want %v", cfg, got, want)
 		}

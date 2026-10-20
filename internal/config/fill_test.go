@@ -64,7 +64,8 @@ func TestFillKeepsPresentAndUnknownKeys(t *testing.T) {
 	doc, _ := jsonx.Decode([]byte(read(t, root)))
 	o := doc.(*jsonx.Object)
 	// present keys keep their order; added ones go before the first later sibling
-	want := []string{"zzz", "work", "models", "refactor", "learn", "ship", "qa", "autonomy", "docs", "git", "umbrella", "hvSkills", "rota", "test"}
+	// work.dispatch is migrated to round.dispatch first (#1097).
+	want := []string{"zzz", "work", "models", "round", "refactor", "learn", "ship", "qa", "autonomy", "docs", "git", "umbrella", "hvSkills", "rota", "test"}
 	if got := o.Keys(); !reflect.DeepEqual(got, want) {
 		t.Errorf("top keys %v", got)
 	}
@@ -79,10 +80,10 @@ func TestFillKeepsPresentAndUnknownKeys(t *testing.T) {
 		t.Errorf("local layer leaked into config.json: %v", v)
 	}
 	work, _ := getObject(o, "work")
-	if k := work.Keys(); !reflect.DeepEqual(k, []string{"custom", "isolation", "mergeStrategy", "dispatch", "workerSlots", "workerCommand", "accounts", "operatorCommand"}) {
+	if k := work.Keys(); !reflect.DeepEqual(k, []string{"custom", "isolation", "mergeStrategy"}) {
 		t.Errorf("work keys %v", k)
 	}
-	if v, _ := Value(o, "work.dispatch"); v != "herdr" {
+	if v, _ := Value(o, "round.dispatch"); v != "herdr" {
 		t.Errorf("dispatch %v", v)
 	}
 	// null and a scalar in the way are replaced in place
@@ -324,20 +325,20 @@ func TestFillMigratesSourceKeys(t *testing.T) {
 		t.Fatalf("Legacy before fill: %v", got)
 	}
 	// No origin: the legacy keys stay and keep deciding.
-	if _, sm, err := FillDetect(root, func() string { return "" }); err != nil || !sm.Unresolved {
+	if _, sm, _, err := FillDetect(root, func() string { return "" }); err != nil || !sm.Unresolved {
 		t.Fatalf("no origin: %+v %v", sm, err)
 	}
 	if got, _ := IssueSource(Load(configPath(root))); got != SourceIssues {
 		t.Errorf("unmigrated source = %q, want %q", got, SourceIssues)
 	}
-	if _, sm, err := FillDetect(root, func() string { return "gitlab" }); err != nil || !sm.Changed || sm.Source != "gitlab" {
+	if _, sm, _, err := FillDetect(root, func() string { return "gitlab" }); err != nil || !sm.Changed || sm.Source != "gitlab" {
 		t.Fatalf("with origin: %+v %v", sm, err)
 	}
 	if got := Legacy(root); len(got) != 0 {
 		t.Errorf("Legacy after fill: %v", got)
 	}
 	before := read(t, root)
-	if _, sm, err := FillDetect(root, func() string { return "gitlab" }); err != nil || sm.Changed {
+	if _, sm, _, err := FillDetect(root, func() string { return "gitlab" }); err != nil || sm.Changed {
 		t.Fatalf("second run: %+v %v", sm, err)
 	}
 	if read(t, root) != before {

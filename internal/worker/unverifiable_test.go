@@ -68,7 +68,7 @@ func TestPollReadsAFailedPaneRead(t *testing.T) {
 	}{
 		"idle agent, unreadable pane":      {"idle", errors.New("read failed"), PollRow{"w1", "UNVERIFIABLE", "pane-unreadable"}},
 		"no status, unreadable pane":       {"", errors.New("read failed"), PollRow{"w1", "UNVERIFIABLE", "pane-unreadable"}},
-		"a dialog the host reports":        {"blocked", errors.New("read failed"), PollRow{"w1", "NEEDS-PERMISSION", "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen work.workerCommand"}},
+		"a dialog the host reports":        {"blocked", errors.New("read failed"), PollRow{"w1", "NEEDS-PERMISSION", "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen round.workerCommand"}},
 		"a working agent the host reports": {"working", errors.New("read failed"), PollRow{"w1", "BUSY", "herdr: agent working"}},
 		"a window the host says is gone":   {"", fmt.Errorf("window: %w", host.ErrPaneGone), PollRow{"w1", "DEAD", "herdr: no agent in the slot's tab — the session exited"}},
 	} {

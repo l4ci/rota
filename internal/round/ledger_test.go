@@ -175,7 +175,7 @@ func TestReportHeadroomUsesInjectedAccountsAndContext(t *testing.T) {
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatal(err)
 	}
-	f.config(t, `{"work":{"accounts":[{"name":"work","configDir":"/w"}]}}`)
+	f.config(t, `{"round":{"accounts":[{"name":"work","configDir":"/w"}]}}`)
 	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccount("work", "/w") }); err != nil {
 		t.Fatal(err)
 	}

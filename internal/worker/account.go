@@ -78,7 +78,7 @@ func (a *Accounts) getenv(k string) string { return a.Env.Environ()(k) }
 
 type acct struct{ name, configDir string }
 
-// Configured returns work.accounts of the project config.
+// Configured returns round.accounts of the project config.
 func Configured(root string) []acct {
 	cfg := config.Load(rotatree.Config(root))
 	var out []acct
@@ -356,7 +356,7 @@ func ExpandConfigDirIn(d, home string) string {
 	return filepath.Clean(d)
 }
 
-// AccountOf names the work.accounts entry whose configDir is dir, "" when
+// AccountOf names the round.accounts entry whose configDir is dir, "" when
 // none is.
 func AccountOf(root, dir string) string {
 	for _, ac := range Configured(root) {
@@ -432,7 +432,7 @@ func (a *Accounts) Assign(ctx context.Context, root, slot, account string) (name
 		}
 	}
 	if match == nil {
-		return "", false, fail(exitcode.ExitResolution, fmt.Sprintf("account '%s' is not in work.accounts", account))
+		return "", false, fail(exitcode.ExitResolution, fmt.Sprintf("account '%s' is not in round.accounts", account))
 	}
 	found, err := UpdateSlot(root, slot, func(s *Slot) {
 		if s.Account() != account || s.ConfigDir() != match.configDir {

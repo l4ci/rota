@@ -1,7 +1,7 @@
 # A worker whose output is slow but alive is not reported as stalled. The
 # control: the same slot with nothing moving for longer than the window is.
 e2e_fixture w1
-printf '{"git":{"baseBranch":"main"},"work":{"dispatch":"tmux"},"round":{"stallMinutes":10}}\n' >"$E2E_ROOT/.rota/config.json"
+printf '{"git":{"baseBranch":"main"},"round":{"dispatch":"tmux","stallMinutes":10}}\n' >"$E2E_ROOT/.rota/config.json"
 python3 - "$E2E_ROOT/.rota/workers.json" <<'PY'
 import json, sys
 p = sys.argv[1]; d = json.load(open(p))

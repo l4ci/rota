@@ -48,19 +48,28 @@ func decodeObject(raw []byte) (*jsonx.Object, bool) {
 // issues.provider become issues.source, and forge.provider where the origin
 // would miss it. detect names the provider of the origin remote ("" when it
 // cannot tell); FillDetect reports what the migration did.
+//
+// Before any of that it moves the round-only work.* keys to round.* in both
+// config.json and config.local.json (MigrateRoundKeysFiles), so a required
+// round key is never filled beside its old name. A conflict between an old
+// and a new name is a *ConflictError and nothing is written.
 func Fill(root string) ([]string, error) {
-	filled, _, err := FillDetect(root, nil)
+	filled, _, _, err := FillDetect(root, nil)
 	return filled, err
 }
 
 // FillDetect is Fill with the origin detection MigrateSource needs for an
-// issues.provider of auto, and a report of the source migration. A nil detect
-// leaves such a config on its legacy keys.
-func FillDetect(root string, detect func() string) ([]string, SourceMigration, error) {
+// issues.provider of auto, and a report of the source and round-key
+// migrations. A nil detect leaves such a config on its legacy keys.
+func FillDetect(root string, detect func() string) ([]string, SourceMigration, RoundMigration, error) {
 	filled := []string{}
 	var sm SourceMigration
+	rm, err := MigrateRoundKeysFiles(root, true)
+	if err != nil {
+		return nil, sm, rm, err
+	}
 	path := configPath(root)
-	err := fsio.Locked(path, fsio.LockTimeout, func() error {
+	err = fsio.Locked(path, fsio.LockTimeout, func() error {
 		cfg := jsonx.NewObject()
 		raw, err := os.ReadFile(path)
 		switch {
@@ -95,9 +104,9 @@ func FillDetect(root string, detect func() string) ([]string, SourceMigration, e
 		return fsio.WriteJSONAtomic(path, cfg)
 	})
 	if err != nil {
-		return nil, sm, err
+		return nil, sm, rm, err
 	}
-	return filled, sm, nil
+	return filled, sm, rm, nil
 }
 
 // migrateLegacyVersion moves the LegacyVersionKeys stamps to rota.version in

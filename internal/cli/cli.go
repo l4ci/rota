@@ -352,6 +352,9 @@ func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stde
 	if err := legacyStateStop(c.Path); err != nil {
 		return fail(c, stdout, err)
 	}
+	if res, err := roundKeysStop(c); err != nil {
+		return failWith(c, stdout, err, res)
+	}
 	// An unregistered --repo is exit 3 on every repo-scoped verb, ahead of
 	// the verb's own checks (contract rule 9).
 	if c.Repo != "" {

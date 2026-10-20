@@ -54,6 +54,9 @@ const (
 	BlockBatch      = "batch"
 	BlockSlotBusy   = "slot busy"
 	BlockNoFreeSlot = "no free slot"
+	// BlockDraining: the slot is past the round's slot count (round.slots,
+	// --slots); it finishes the work it holds and takes nothing new.
+	BlockDraining = "draining"
 	// BlockQuota: every account the worker kind could run under is cooling down.
 	BlockQuota        = "quota"
 	BlockBriefMissing = "brief missing"
@@ -109,7 +112,7 @@ type Assigned struct {
 	Brief, Worktree string
 	Changed         bool
 	// Kind, Tier and Model are what the worker starts with; Model is "" when a
-	// custom work.workerCommand has no {model} placeholder.
+	// custom round.workerCommand has no {model} placeholder.
 	Kind, Tier, Model, TierReason string
 	// KindSource is where Kind came from: --kind, harness label,
 	// round.workerKind, slot or default.
@@ -603,8 +606,11 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		if slot == nil {
 			return run, false, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.Agent)}
 		}
+		if err := checkActive(reg, set, o.Agent, slot.HeldID() == worker.NormID(id)); err != nil {
+			return run, false, err
+		}
 	} else {
-		picked := e.pickSlots(ctx, reg, set.Roster, worker.NormID(id), 1)
+		picked := e.pickSlots(ctx, reg, set, worker.NormID(id), 1)
 		if len(picked) == 0 {
 			return run, false, blocked(BlockNoFreeSlot, "every roster slot is busy")
 		}
@@ -903,7 +909,7 @@ func (e Env) pickAccount(ctx context.Context, root, agent string) (string, error
 	}
 	name, ok := e.Worker.Accounts.Pick(ctx, root, nil)
 	if !ok {
-		return "", &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "no work.accounts account has headroom: every configured account is cooling down"}
+		return "", &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "no round.accounts account has headroom: every configured account is cooling down"}
 	}
 	if _, _, err := e.Worker.Accounts.Assign(ctx, root, agent, name); err != nil {
 		return "", err

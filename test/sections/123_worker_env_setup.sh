@@ -1,11 +1,11 @@
-echo "worker pool init: work.envSetup runs per slot, skips on unchanged lockfiles, fails fast (#398)"
+echo "worker pool init: round.envSetup runs per slot, skips on unchanged lockfiles, fails fast (#398)"
 
 TMP_ES="$(mktemp -d "$TMP/envsetup.XXXXXX")"
 ESP="$TMP_ES/proj"
 mkdir -p "$ESP/.rota"
 printf '.worktrees/\n' > "$ESP/.gitignore"
 # The command appends one line per run to a log outside the repo and records its cwd.
-printf '{"work":{"envSetup":"echo \\"$PWD\\" >> %s/runs.log"}}\n' "$TMP_ES" > "$ESP/.rota/config.json"
+printf '{"round":{"envSetup":"echo \\"$PWD\\" >> %s/runs.log"}}\n' "$TMP_ES" > "$ESP/.rota/config.json"
 (
   cd "$ESP" && git init -q -b main . && git config user.email t@t && git config user.name t \
     && echo seed > seed.txt && git add .gitignore seed.txt .rota/config.json && git commit -q -m seed
@@ -27,7 +27,7 @@ esrun worker pool init --slots 2 --base main > /dev/null
 [ "$(esruns)" = "3" ] || fail "a changed lockfile should rerun setup for that slot only: runs=$(esruns)"
 pass "a changed lockfile reruns setup for that slot"
 
-printf '{"work":{"envSetup":"echo broken; exit 7"}}\n' > "$ESP/.rota/config.json"
+printf '{"round":{"envSetup":"echo broken; exit 7"}}\n' > "$ESP/.rota/config.json"
 RC=0; OUT=$(esrun worker pool init --slots 3 --base main) || RC=$?
 [ "$RC" = "1" ] || fail "a red setup should fail pool init with exit 1: rc=$RC $OUT"
 case "$OUT" in *"slot w1"*"exit 7"*) ;; *) fail "the failure should name the slot and exit code: $OUT" ;; esac

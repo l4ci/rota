@@ -11,7 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/shlex"
 )
 
-// Default work.portBase and work.portBlock: a slot owns portBlock ports from
+// Default round.portBase and round.portBlock: a slot owns portBlock ports from
 // its first port; new slots take the lowest free range from portBase up.
 const (
 	DefaultPortBase  = 20000
@@ -26,7 +26,7 @@ func (s *Slot) PortBase() int {
 	return n
 }
 
-// PortBlock is the width of the slot's reserved block, the work.portBlock in
+// PortBlock is the width of the slot's reserved block, the round.portBlock in
 // force when it was allocated, so a later config change cannot shrink or grow
 // a live slot's claim. 0 when the slot holds none.
 func (s *Slot) PortBlock() int {
@@ -46,13 +46,13 @@ func (s *Slot) ReleasePort() {
 	s.o.Set("portBlock", nil)
 }
 
-// PortRange reads work.portBase and work.portBlock from cfg.
+// PortRange reads round.portBase and round.portBlock from cfg.
 func PortRange(cfg any) (base, block int) {
 	base, block = DefaultPortBase, DefaultPortBlock
-	if n, err := config.Int(cfg, "work.portBase", 1, 65535); err == nil && n > 0 {
+	if n, err := config.Int(cfg, "round.portBase", 1, 65535); err == nil && n > 0 {
 		base = n
 	}
-	if n, err := config.Int(cfg, "work.portBlock", 1, 65535); err == nil && n > 0 {
+	if n, err := config.Int(cfg, "round.portBlock", 1, 65535); err == nil && n > 0 {
 		block = n
 	}
 	return base, block
@@ -62,7 +62,7 @@ func PortRange(cfg any) (base, block int) {
 // its first port. The block belongs to the slot until it leaves the registry
 // (reap) or is reclaimed: the lowest range of block ports no other slot's
 // range overlaps, picked under the registry lock, so two live slots never
-// share a port even after work.portBase or work.portBlock change (each slot
+// share a port even after round.portBase or round.portBlock change (each slot
 // keeps the width it was allocated with). A slot that already has a block
 // keeps it. The range must end at or below 65535. It returns the slot's first
 // port and the width it holds, which is the stored one for a slot that already
@@ -92,7 +92,7 @@ func EnsurePortBase(root, name string, base, block int) (int, int, error) {
 			}
 		}
 		if got+block-1 > maxPort {
-			ferr = fmt.Errorf("no free port block for slot %s: %d ports from %d would pass %d; lower work.portBase or work.portBlock", name, block, got, maxPort)
+			ferr = fmt.Errorf("no free port block for slot %s: %d ports from %d would pass %d; lower round.portBase or round.portBlock", name, block, got, maxPort)
 			got = 0
 			return
 		}
@@ -108,7 +108,7 @@ func EnsurePortBase(root, name string, base, block int) (int, int, error) {
 
 var notIdent = regexp.MustCompile(`[^A-Za-z0-9]`)
 
-// SlotEnv is the environment a slot's agent and work.envSetup see:
+// SlotEnv is the environment a slot's agent and round.envSetup see:
 // the slot name, the first port of its block, that block's width, and a
 // database-name suffix.
 func SlotEnv(name string, portBase, portBlock int) []string {
