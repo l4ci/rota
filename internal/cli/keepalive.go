@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -215,9 +214,9 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 				opts.ConfigDir = *configDir
 			}
 			opts.Account = worker.AccountOf(root, opts.ConfigDir)
-			env.UsageMarker = usageMarker(cd, root)
+			env.UsageMarker = keepalive.UsageMarker(cd, root)
 			env.Choose = usageChoose(ctx, c, root)
-			env.Record = usageRecord(root, c.deps().Now)
+			env.Record = keepalive.UsageRecorder(root, c.deps().Now)
 		}
 		if !*noLimits {
 			lset, err := limits.LoadSettings(cfg)
@@ -274,28 +273,6 @@ func keepaliveGap(switchOnUsage bool) *atomic.Bool {
 	return new(atomic.Bool)
 }
 
-// usageMarker finds the newest usage handoff written at or after since in the
-// session files whose cwd is the project root (D4).
-func usageMarker(commonDir, root string) func(since time.Time) (hook.UsageHandoff, bool) {
-	return func(since time.Time) (hook.UsageHandoff, bool) {
-		var best hook.UsageHandoff
-		var bestAt time.Time
-		for _, st := range hook.Sessions(commonDir) {
-			if st.UsageHandoff == nil || !fsio.SameDir(st.Cwd, root) {
-				continue
-			}
-			at, err := time.Parse(time.RFC3339, st.UsageHandoff.At)
-			if err != nil || at.Before(since.Truncate(time.Second)) {
-				continue
-			}
-			if bestAt.IsZero() || at.After(bestAt) {
-				best, bestAt = *st.UsageHandoff, at
-			}
-		}
-		return best, !bestAt.IsZero()
-	}
-}
-
 // usageChoose asks the account meters where an orchestrator at its threshold
 // can go (D4).
 func usageChoose(ctx context.Context, c *Ctx, root string) func(string, int) keepalive.Choice {
@@ -308,23 +285,6 @@ func usageChoose(ctx context.Context, c *Ctx, root string) func(string, int) kee
 			To:     &keepalive.Target{Name: m.Name, ConfigDir: worker.ExpandConfigDir(m.ConfigDir), Headroom: *m.Headroom},
 			Others: others,
 		}
-	}
-}
-
-// usageRecord writes a usage decision to the limits log in .rota/workers.json.
-func usageRecord(root string, now func() time.Time) func(keepalive.Decision) error {
-	return func(d keepalive.Decision) error {
-		status := limits.StatusSwitched
-		if d.Action == keepalive.ActionRestart {
-			status = limits.StatusResumed
-		}
-		t := limits.Time(now())
-		_, err := limits.Append(root, limits.Entry{
-			Session: limits.Orchestrator, Window: d.Marker.Window, Source: limits.SourceData,
-			DetectedAt: d.Marker.At, ResetsAt: d.Marker.ResetsAt, Action: d.Action,
-			Account: d.From, Status: status, ResolvedAt: t, Note: d.Note,
-		})
-		return err
 	}
 }
 
