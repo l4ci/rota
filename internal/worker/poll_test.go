@@ -895,3 +895,27 @@ func TestParseFindingDone(t *testing.T) {
 		}
 	}
 }
+
+// A busy session whose scrollback quotes the limit or "Add funds" phrases in a
+// diff, a numbered code listing or tool output is working, not limited (#1212).
+func TestClassifyQuotedLimitTextIsNotLimited(t *testing.T) {
+	spinner := "\n✻ Running tests… (12s · esc to interrupt)\n\n❯ \n  ⏵⏵ bypass permissions on\n"
+	for name, quoted := range map[string]string{
+		"diff added":   "+\tif reFunds.MatchString(tail) { // You've hit your usage limit: Add funds\n",
+		"diff removed": "-\t\treturn StateLimited, \"usage limit reached; pane offers 'Add funds'\"\n",
+		"numbered":     "  417  +\t\t\treturn StateLimited, \"usage limit reached; pane offers 'Add funds'\"\n",
+		"tool output":  "  ⎿  internal/worker/poll.go:417: usage limit reached; pane offers 'Add funds'\n",
+	} {
+		for _, native := range []string{"idle", "working"} {
+			pane := "● Update(internal/worker/poll.go)\n" + quoted + spinner
+			if st, ev := ClassifyFor("claude", pane, false, 60, native); st != StateBusy {
+				t.Errorf("%s/%s: want BUSY, got %s %q", name, native, st, ev)
+			}
+		}
+	}
+	// The harness's own dialog still reads as limited, even after a diff.
+	pane := "+\tx := \"usage limit reached\"\n\nYou've hit your usage limit · resets 5pm\nAdd funds to continue\n"
+	if st, ev := ClassifyFor("claude", pane, false, 60, "idle"); st != StateLimited || !strings.Contains(ev, "Add funds") {
+		t.Errorf("real dialog after a diff: %s %q", st, ev)
+	}
+}
