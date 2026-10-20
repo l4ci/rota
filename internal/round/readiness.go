@@ -422,9 +422,13 @@ type openPRFiles struct {
 
 func (e Env) openPRFiles(ctx context.Context) *openPRFiles {
 	o := &openPRFiles{ctx: ctx, byHead: map[string]int{}}
+	if e.Forge == nil {
+		return o // no forge to ask: every item keeps the footprint comparison
+	}
 	l, ok := e.Forge.(prFileLister)
 	if !ok {
-		return o // no forge to ask: every item keeps the footprint comparison
+		o.err = "forge cannot list PR files"
+		return o
 	}
 	o.lister = l
 	prs, err := e.Forge.OpenPRs(ctx)
@@ -443,11 +447,14 @@ func (e Env) openPRFiles(ctx context.Context) *openPRFiles {
 // has outgrown). A branch with no open PR is returned unchanged; one whose files
 // cannot be read is returned unchanged with PRFilesErr set.
 func (o *openPRFiles) apply(be backlog.Backend, x InFlight, branch string, shared []string) InFlight {
-	if o.lister == nil || branch == "" {
+	if branch == "" {
 		return x
 	}
 	if o.err != "" {
 		x.PRFilesErr = o.err
+		return x
+	}
+	if o.lister == nil {
 		return x
 	}
 	n, open := o.byHead[branch]
