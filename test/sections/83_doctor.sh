@@ -41,33 +41,48 @@ dr_run() { # dr_run <dir>: doctor in <dir> against the fakes; prints the envelop
   env -u HERDR_ENV -u TMUX ${DR_HERDR:+HERDR_ENV=1} ${DR_TMUX:+TMUX=$DR_TMUX} HOME="$TMP_DR/home" CLAUDE_CONFIG_DIR="$TMP_DR/claude" ROTA_TEST_DOCTOR_PATH="$DR_BIN" "$ROTA_BIN" --json -C "$1" doctor 2>/dev/null
 }
 
-# (a) a herdr project with one account and the hook installed: all pass or skip
-mkdir -p "$TMP_DR/acct" "$TMP_DR/proj/.rota"
-echo '{"claudeAiOauth":{"accessToken":"t"}}' >"$TMP_DR/acct/.credentials.json"
-: >"$TMP_DR/acct/installed"
+# (a) a herdr project with one account and the hook installed: all pass or skip. The account is the
+# orchestrator's own login ($TMP_DR/claude = CLAUDE_CONFIG_DIR), or accounts would warn (#1171).
+mkdir -p "$TMP_DR/proj/.rota"
+echo '{"claudeAiOauth":{"accessToken":"t"}}' >"$TMP_DR/claude/.credentials.json"
+: >"$TMP_DR/claude/installed"
 printf '.worktrees/\n' >"$TMP_DR/proj/.gitignore"
-printf '{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]}}\n' "$TMP_DR/acct" >"$TMP_DR/proj/.rota/config.json"
+printf '{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]}}\n' "$TMP_DR/claude" >"$TMP_DR/proj/.rota/config.json"
 # D1 (#65): the orchestrator hooks are opt-in, so a project that has not installed them skips both checks
 git -C "$TMP_DR/proj" init -q
 rc=0; OUT="$(dr_run "$TMP_DR/proj")" || rc=$?
 [ "$rc" -eq 0 ] || fail "C6[a]: healthy project exited $rc: $OUT"
 [ "$(printf '%s' "$OUT" | dr_ok)" = "True" ] || fail "C6[a]: ok is not true: $OUT"
 NAMES="$(printf '%s' "$OUT" | python3 -c 'import json,sys; print(",".join(c["name"] for c in json.load(sys.stdin)["data"]["checks"]))')"
-[ "$NAMES" = "git,jq,host,tracker,accounts,hook,statusline,stop-hook,guard-hook,switch,skills,codex,opencode,config dir,agents,verify" ] || fail "C6[a]: checks were: $NAMES"
+[ "$NAMES" = "git,jq,host,tracker,accounts,hook,statusline,stop-hook,guard-hook,switch,skills,codex,opencode,config dir,agents,verify,state dir" ] || fail "C6[a]: checks were: $NAMES"
 for pair in git:pass host:pass tracker:skip accounts:pass hook:pass statusline:skip stop-hook:skip guard-hook:skip skills:skip codex:skip; do
   [ "$(printf '%s' "$OUT" | dr_field "${pair%%:*}" status)" = "${pair##*:}" ] || fail "C6[a]: ${pair%%:*} was not ${pair##*:}: $OUT"
 done
+[ "$(printf '%s' "$OUT" | dr_field "state dir" status)" = "pass" ] || fail "C6[a]: state dir was not pass: $OUT"
 case "$OUT" in *'"changed"'*) fail "C6[a]: doctor reports changed: $OUT" ;; esac
 pass "C6[a]: a healthy herdr project passes in contract order, with no changed"
 
+# (a2) #1171: an orchestrator login that is not in round.accounts warns, so slots silently using other logins show up
+mkdir -p "$TMP_DR/other"
+echo '{"claudeAiOauth":{"accessToken":"t"}}' >"$TMP_DR/other/.credentials.json"
+: >"$TMP_DR/other/installed"
+cp "$TMP_DR/proj/.rota/config.json" "$TMP_DR/config.listed"
+printf '{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]}}\n' "$TMP_DR/other" >"$TMP_DR/proj/.rota/config.json"
+rc=0; OUT="$(dr_run "$TMP_DR/proj")" || rc=$?
+[ "$rc" -eq 0 ] || fail "C6[a2]: a config-dir mismatch must warn, not fail; exited $rc: $OUT"
+[ "$(printf '%s' "$OUT" | dr_field accounts status)" = "warn" ] || fail "C6[a2]: accounts was not warn: $OUT"
+case "$(printf '%s' "$OUT" | dr_field accounts detail)" in *"CLAUDE_CONFIG_DIR=$TMP_DR/claude, which is not in round.accounts"*) ;; *) fail "C6[a2]: mismatch detail missing: $OUT" ;; esac
+cp "$TMP_DR/config.listed" "$TMP_DR/proj/.rota/config.json"
+pass "C6[a2]: an orchestrator config dir outside round.accounts warns"
+
 # (b) hook not installed for the account: fail with the install hint, same data on exit 1
-rm "$TMP_DR/acct/installed"
+rm "$TMP_DR/claude/installed"
 rc=0; OUT="$(dr_run "$TMP_DR/proj")" || rc=$?
 [ "$rc" -eq 1 ] || fail "C6[b]: missing hook exited $rc, not 1"
 [ "$(printf '%s' "$OUT" | dr_ok)" = "False" ] || fail "C6[b]: ok is not false: $OUT"
 [ "$(printf '%s' "$OUT" | dr_field hook status)" = "fail" ] || fail "C6[b]: hook did not fail: $OUT"
 [ "$(printf '%s' "$OUT" | dr_field hook hint)" = "herdr integration install claude" ] || fail "C6[b]: wrong hook hint: $OUT"
-: >"$TMP_DR/acct/installed"
+: >"$TMP_DR/claude/installed"
 pass "C6[b]: an uninstalled hook fails with the install hint"
 
 # (c) wrong herdr minor: host fails and names what it found
@@ -88,14 +103,14 @@ mv "$TMP_DR/herdr.away" "$DR_BIN/herdr"
 pass "C6[d]: a missing herdr is a failed check, not an unavailable dependency"
 
 # (e) account without credentials fails and says where
-rm "$TMP_DR/acct/.credentials.json"
+rm "$TMP_DR/claude/.credentials.json"
 rc=0; OUT="$(dr_run "$TMP_DR/proj")" || rc=$?
 [ "$rc" -eq 1 ] || fail "C6[e]: missing credentials exited $rc, not 1"
 [ "$(printf '%s' "$OUT" | dr_field accounts status)" = "fail" ] || fail "C6[e]: accounts did not fail: $OUT"
 pass "C6[e]: an account with no credentials file fails"
 
 # (e2) credentials without an access token fail too: dispatch would reject them
-echo '{}' >"$TMP_DR/acct/.credentials.json"
+echo '{}' >"$TMP_DR/claude/.credentials.json"
 rc=0; OUT="$(dr_run "$TMP_DR/proj")" || rc=$?
 [ "$rc" -eq 1 ] || fail "C6[e2]: tokenless credentials exited $rc, not 1"
 [ "$(printf '%s' "$OUT" | dr_field accounts status)" = "fail" ] || fail "C6[e2]: accounts did not fail: $OUT"
@@ -119,8 +134,8 @@ rc=0; HOME="$TMP_DR/home" CLAUDE_CONFIG_DIR="$TMP_DR/claude" ROTA_TEST_DOCTOR_PA
 pass "C6[g]: doctor rejects --repo"
 
 # (h) host detection (#236): init's default round.dispatch=subagent still gets the herdr checks inside a herdr pane
-printf '{"round":{"dispatch":"subagent","accounts":[{"name":"a","configDir":"%s"}]}}\n' "$TMP_DR/acct" >"$TMP_DR/proj/.rota/config.json"
-echo '{"claudeAiOauth":{"accessToken":"t"}}' >"$TMP_DR/acct/.credentials.json"
+printf '{"round":{"dispatch":"subagent","accounts":[{"name":"a","configDir":"%s"}]}}\n' "$TMP_DR/claude" >"$TMP_DR/proj/.rota/config.json"
+echo '{"claudeAiOauth":{"accessToken":"t"}}' >"$TMP_DR/claude/.credentials.json"
 rc=0; OUT="$(dr_run "$TMP_DR/proj")" || rc=$?
 [ "$(printf '%s' "$OUT" | dr_field host status)" = "skip" ] || fail "C6[h]: subagent outside a pane did not skip host: $OUT"
 [ "$(printf '%s' "$OUT" | dr_field hook status)" = "skip" ] || fail "C6[h]: subagent outside a pane did not skip hook: $OUT"
@@ -128,11 +143,11 @@ rc=0; OUT="$(DR_HERDR=1 dr_run "$TMP_DR/proj")" || rc=$?
 [ "$(printf '%s' "$OUT" | dr_field host status)" = "pass" ] || fail "C6[h]: herdr pane did not pass host: $OUT"
 [ "$(printf '%s' "$OUT" | dr_field host detail)" = "herdr 0.9.3" ] || fail "C6[h]: wrong host detail in a herdr pane: $OUT"
 [ "$(printf '%s' "$OUT" | dr_field hook status)" = "pass" ] || fail "C6[h]: herdr pane did not run hook: $OUT"
-rm "$TMP_DR/acct/installed"
+rm "$TMP_DR/claude/installed"
 rc=0; OUT="$(DR_HERDR=1 dr_run "$TMP_DR/proj")" || rc=$?
 [ "$rc" -eq 1 ] || fail "C6[h]: uninstalled hook in a herdr pane exited $rc, not 1"
 [ "$(printf '%s' "$OUT" | dr_field hook status)" = "fail" ] || fail "C6[h]: uninstalled hook in a herdr pane did not fail: $OUT"
-: >"$TMP_DR/acct/installed"
+: >"$TMP_DR/claude/installed"
 printf '#!/bin/sh\nexit 0\n' >"$DR_BIN/tmux"; chmod +x "$DR_BIN/tmux"
 rc=0; OUT="$(DR_TMUX=/tmp/tmux-1/default,1,0 dr_run "$TMP_DR/proj")" || rc=$?
 [ "$(printf '%s' "$OUT" | dr_field host detail)" = "tmux on PATH" ] || fail "C6[h]: tmux session not detected: $OUT"

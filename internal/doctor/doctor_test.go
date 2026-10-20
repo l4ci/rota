@@ -232,6 +232,19 @@ func TestHookRunsPerAccountWithItsConfigDir(t *testing.T) {
 	}
 }
 
+func TestAccountsWarnsWhenTheOrchestratorDirIsNotListed(t *testing.T) {
+	f := &fake{}
+	in := Input{Home: t.TempDir(), OrchestratorConfigDir: "/orch", Accounts: []config.Account{{Name: "a", ConfigDir: "/two"}}, Exec: f.exec, Look: f.look}
+	c := statusOf(Run(context.Background(), in), "accounts")
+	if c.Status != Warn || !strings.Contains(c.Detail, "/orch") {
+		t.Fatalf("%+v", c)
+	}
+	in.Accounts = nil
+	if c := statusOf(Run(context.Background(), in), "accounts"); c.Status != Skip {
+		t.Fatalf("%+v", c)
+	}
+}
+
 func TestOrderAndOK(t *testing.T) {
 	f := &fake{have: map[string]bool{}, reply: map[string]Result{}}
 	r := Run(context.Background(), Input{Exec: f.exec, Look: f.look})

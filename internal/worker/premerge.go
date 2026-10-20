@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/testledger"
 )
@@ -98,39 +99,41 @@ type premergeRun struct {
 	// skips the check: the merge is not verified on CI.
 	CIChanged func() ([]string, error)
 	// Approve is the merge-approval gate (B1), asked with Files. Nil skips it.
-	Approve func(files func() ([]string, error)) error
+	// It returns the refusal as a value; the error is a check that could not run.
+	Approve func(files func() ([]string, error)) (*exitcode.Refusal, error)
 	Files   func() ([]string, error)
 }
 
 // run walks the sequence and stops at the first refusal. A refusal is returned
-// as such; an error is a check that could not run (CIChanged) or the approval
-// gate's own refusal, with approval true.
-func (p premergeRun) run() (r *premergeRefusal, approval bool, err error) {
+// as such; an error is a check that could not run (CIChanged or the approval
+// gate). approval is true when the approval gate stopped the run, with its
+// refusal in ref (nil when the gate itself could not run).
+func (p premergeRun) run() (r *premergeRefusal, approval bool, ref *exitcode.Refusal, err error) {
 	if !p.SkipLedger {
 		if r := ledgerRefusal(p.Subject, p.In.ledger, p.Now); r != nil {
-			return r, false, nil
+			return r, false, nil, nil
 		}
 	}
 	if !p.SkipNoVerify {
 		if r := noVerifyRefusalFor(p.Subject, p.In); r != nil {
-			return r, false, nil
+			return r, false, nil, nil
 		}
 	}
 	if p.CIChanged != nil {
 		changed, err := p.CIChanged()
 		if err != nil {
-			return nil, false, err
+			return nil, false, nil, err
 		}
 		if r := ciConfigCheck(p.Subject, changed); r != nil {
-			return r, false, nil
+			return r, false, nil, nil
 		}
 	}
 	if p.Approve != nil {
-		if err := p.Approve(p.Files); err != nil {
-			return nil, true, err
+		if ref, err := p.Approve(p.Files); ref != nil || err != nil {
+			return nil, true, ref, err
 		}
 	}
-	return nil, false, nil
+	return nil, false, nil, nil
 }
 
 // mergeWords is how a caller words a failed merge.

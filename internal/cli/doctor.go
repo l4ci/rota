@@ -75,6 +75,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	if dir, src, warn, err := projects.Resolve(); err == nil {
 		in.ConfigDir, in.ConfigDirSource, in.ConfigDirWarning = dir, src, warn
 	}
+	in.StateDir, _ = projects.StateDir()
 	if f, ok := staleBinary(ctx, d.Git, in.Dir); ok {
 		in.StaleBinary = &f
 	}
@@ -106,6 +107,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 			in.Accounts = append(in.Accounts, a)
 		}
 	}
+	in.OrchestratorConfigDir = d.Getenv("CLAUDE_CONFIG_DIR")
 	in.ProjectRoot = root
 	if name := strings.TrimSpace(str("issues.connection")); name != "" {
 		in.Connection = doctorConnection(ctx, d, name)

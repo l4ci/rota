@@ -1,7 +1,7 @@
 // Package projects is the machine-wide registry of rota projects: one
-// projects.json under the global rota config dir, $ROTA_CONFIG_DIR or
-// $XDG_CONFIG_HOME/rota (default ~/.config/rota). `rota init` registers the project it seeds and
-// `rota projects` lists them. It is not .rota/repos.json, the per-project
+// projects.json under the rota state dir, $XDG_STATE_HOME/rota (default
+// ~/.local/state/rota); it was under the config dir until #1184. `rota init`
+// registers the project it seeds and `rota projects` lists them. It is not .rota/repos.json, the per-project
 // umbrella sub-repo registry (internal/repos).
 //
 // A path that no longer exists is kept and flagged on read, never pruned by
@@ -71,12 +71,60 @@ func Dir() (string, error) {
 	return dir, err
 }
 
+// StateDir is the rota state dir, where machine-rewritten files live (the
+// project registry and its lock): $XDG_STATE_HOME/rota when that is an
+// absolute path, else ~/.local/state/rota.
+func StateDir() (string, error) {
+	if x := os.Getenv("XDG_STATE_HOME"); filepath.IsAbs(x) {
+		return filepath.Join(x, "rota"), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", errors.New("no state dir: neither XDG_STATE_HOME nor HOME is set")
+	}
+	return filepath.Join(home, ".local", "state", "rota"), nil
+}
+
+const registryName = "projects.json"
+
+// file is the registry path. The first call after an upgrade moves a registry
+// left in the config dir (migrate).
 func file() (string, error) {
-	d, err := Dir()
+	d, err := StateDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(d, "projects.json"), nil
+	path := filepath.Join(d, registryName)
+	if old, err := Dir(); err == nil {
+		migrate(filepath.Join(old, registryName), path)
+	}
+	return path, nil
+}
+
+// migrate moves the pre-#1184 registry old to path, with its lock. A registry
+// already in the state dir wins: the old copy is just removed. A failure
+// leaves the old file in place and the move is retried on the next call.
+func migrate(old, path string) {
+	if _, err := os.Stat(old); err != nil {
+		return
+	}
+	if _, err := os.Stat(path); err == nil {
+		os.Remove(old)
+		os.Remove(old + ".lock")
+		return
+	}
+	if os.MkdirAll(filepath.Dir(path), 0o755) != nil {
+		return
+	}
+	if os.Rename(old, path) != nil {
+		// A different filesystem: copy, then drop the old file.
+		b, err := os.ReadFile(old)
+		if err != nil || fsio.WriteFileAtomic(path, b) != nil {
+			return
+		}
+		os.Remove(old)
+	}
+	os.Remove(old + ".lock")
 }
 
 // Register adds root to the registry, or refreshes its lastSeen when it is

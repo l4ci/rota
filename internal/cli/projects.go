@@ -95,7 +95,7 @@ func runProjects(c *Ctx, args []string) (Result, error) {
 	if len(ps) == 0 {
 		lines = append(lines, "no projects registered: run rota init in a project")
 	}
-	dir, _ := projects.Dir()
+	dir, _ := projects.StateDir()
 	data := jsonx.NewObject()
 	data.Set("dir", dir)
 	data.Set("projects", rows)
