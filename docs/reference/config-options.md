@@ -179,7 +179,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 
 | Key | Type | Default | Values | Description |
 |-----|------|---------|--------|-------------|
-| `docs.path` | path | `"docs"` |  | Project-relative documentation folder that /rota-ship --docs reads and writes. |
+| `docs.path` | path | `"docs"` |  | Project-relative documentation folder that /rota-docs reads and writes. |
 | `docs.autoCreate` | bool | `false` |  | Whether the after-work docs flow writes proposed updates without waiting for approval. |
 | `docs.afterWork` | bool | `false` |  | Whether /rota-work, /rota-ship and /rota-release run the docs after-work flow when their primary action finishes. |
 
