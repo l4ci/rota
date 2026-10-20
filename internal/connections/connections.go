@@ -1,6 +1,6 @@
 // Package connections is the machine-wide registry of tracker connections
 // (Jira site, Linear workspace) and the secrets behind them. Connections live
-// in connections.json under the global rota config dir, beside projects.json;
+// in connections.json under the global rota config dir, beside config.json;
 // a project only names one (issues.connection). The file holds no secret:
 // tokens go to the OS keychain, else to a 0600 file in the same dir, and
 // ROTA_<NAME>_TOKEN overrides both.

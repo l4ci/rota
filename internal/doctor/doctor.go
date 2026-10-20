@@ -121,6 +121,10 @@ type Input struct {
 	// nil when nothing was read.
 	Skills *skills.Report
 
+	// StateDir is the rota state dir (the project registry lives there); ""
+	// adds no line.
+	StateDir string
+
 	// LegacyDir is the directory that still holds the old state folder with no .rota/ (a
 	// project `rota migrate hv` has not moved); "" otherwise.
 	LegacyDir string
@@ -198,6 +202,9 @@ func Run(ctx context.Context, in Input) Report {
 	if in.NothingToVerify {
 		// Only an unconfigured project adds a line; it warns, never fails.
 		checks = append(checks, Check{Name: "verify", Status: Warn, Detail: "test.full and test.e2e are both empty: the merge gate will refuse until test.full is set", Hint: "run: rota config set test.full '[...]'"})
+	}
+	if in.StateDir != "" {
+		checks = append(checks, pass("state dir", in.StateDir))
 	}
 	if in.LegacyDir != "" {
 		// Only a project that still holds the old state folder gets this line.
