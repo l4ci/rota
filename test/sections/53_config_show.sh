@@ -77,8 +77,8 @@ OUT=$(show round.tiers.claude.heavy)
 [ "$(echo "$OUT" | jget 'data.entries[0].effective')" = "fable" ] && [ "$(echo "$OUT" | jget 'data.entries[0].effectiveSource')" = "explicit" ] \
   || fail "T118: an explicit heavy should beat the profile: $OUT"
 OUT=$(show round.tiers.opencode.light)
-[ "$(echo "$OUT" | jget 'data.entries[0].effectiveSource')" = "harness default" ] \
-  || fail "T118: an unset opencode tier should report harness default: $OUT"
+[ "$(echo "$OUT" | jget 'data.entries[0].effective')" = "opencode/claude-haiku-5-5" ] && [ "$(echo "$OUT" | jget 'data.entries[0].effectiveSource')" = "default" ] \
+  || fail "T118: an unset opencode tier should report its shipped default: $OUT"
 case "$( cd "$CS" && "$ROTA_BIN" config show round.tiers.claude.standard )" in *"effective haiku (profile)"*) ;; *) fail "T118: text line lacks the effective model" ;; esac
 pass "T118: config show reports each tier's effective model and source"
 
