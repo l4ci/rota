@@ -120,7 +120,7 @@ func TestMergesDoneSlotsAndQueuedAsOneTrain(t *testing.T) {
 func TestHumanMergePolicyMergesNothing(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "done", PR: "#10"}}, queued: []string{"#11"}}
 	e := f.env()
-	e.HumanMerge = true
+	e.MergeApproval = "all"
 	r, err := Run(context.Background(), e)
 	if err != nil {
 		t.Fatal(err)
@@ -248,6 +248,7 @@ func TestReviewMintsAreAuditedAndAssignedFirst(t *testing.T) {
 			}
 			e := f.env()
 			e.Cap = 2
+			e.ReviewDue = func(context.Context) (bool, error) { return true, nil }
 			e.Review = func(context.Context) ([]string, error) { return []string{"#9", "#10", "#11"}, nil }
 			r, err := Run(context.Background(), e)
 			if err != nil {
@@ -271,6 +272,7 @@ func TestNoReviewHookOrNothingDueMintsNothing(t *testing.T) {
 		t.Fatalf("no hook: %v %v", f.audit, err)
 	}
 	f.audit, f.assigned = nil, nil
+	e.ReviewDue = func(context.Context) (bool, error) { return true, nil }
 	e.Review = func(context.Context) ([]string, error) { return nil, nil }
 	if _, err := Run(context.Background(), e); err != nil || !reflect.DeepEqual(f.audit, []string{"assign #1"}) {
 		t.Fatalf("nothing due: %v %v", f.audit, err)
@@ -280,6 +282,7 @@ func TestNoReviewHookOrNothingDueMintsNothing(t *testing.T) {
 func TestReviewFailureIsEscalatedAndTickGoesOn(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}}}
 	e := f.env()
+	e.ReviewDue = func(context.Context) (bool, error) { return true, nil }
 	e.Review = func(context.Context) ([]string, error) { return nil, errors.New("tracker down\nmore") }
 	r, err := Run(context.Background(), e)
 	if err != nil || !reflect.DeepEqual(f.assigned, []string{"#1"}) {
@@ -294,6 +297,7 @@ func TestReviewMintRefusedStaysForLaterTick(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}}
 	f.assignFn = func(id string) ([]string, error) { return nil, &round.BlockedError{By: round.BlockNotReady, Msg: "no"} }
 	e := f.env()
+	e.ReviewDue = func(context.Context) (bool, error) { return true, nil }
 	e.Review = func(context.Context) ([]string, error) { return []string{"#9"}, nil }
 	r, err := Run(context.Background(), e)
 	if err != nil || len(r.Did) != 1 || r.Did[0].Action != "mint" {
@@ -407,6 +411,7 @@ func TestCappedTickFillsNoSlotAndSaysWhy(t *testing.T) {
 	e := f.env()
 	e.Capped = func(context.Context) string { return why }
 	minted := 0
+	e.ReviewDue = func(context.Context) (bool, error) { return true, nil }
 	e.Review = func(context.Context) ([]string, error) { minted++; return []string{"#9"}, nil }
 	r, err := Run(context.Background(), e)
 	if err != nil {
@@ -429,15 +434,17 @@ func TestBatchFullTickAssignsNothingAndSaysSo(t *testing.T) {
 		cands: []Candidate{{"#1", true}, {"#2", true}},
 	}
 	e := f.env()
-	full := true
-	e.BatchFull = func(context.Context) bool { return full }
+	open := 2
+	e.Batch = 2
+	e.OpenItems = func(context.Context) int { return open }
 	minted := 0
+	e.ReviewDue = func(context.Context) (bool, error) { return true, nil }
 	e.Review = func(context.Context) ([]string, error) { minted++; return []string{"#9"}, nil }
 	r, err := Run(context.Background(), e)
 	if err != nil || !r.BatchFull || len(f.assigned) != 0 || minted != 0 {
 		t.Fatalf("err %v batchFull %v assigned %v minted %d", err, r.BatchFull, f.assigned, minted)
 	}
-	full = false
+	open = 1
 	if r, err = Run(context.Background(), e); err != nil || r.BatchFull || len(f.assigned) != 2 {
 		t.Fatalf("below the cap: err %v batchFull %v assigned %v", err, r.BatchFull, f.assigned)
 	}
@@ -480,5 +487,37 @@ func TestQuotaRefusalIsReportedAsCapped(t *testing.T) {
 	}
 	if r, err = Run(context.Background(), f.env()); err != nil || r.Capped != "" {
 		t.Fatalf("err %v capped %q", err, r.Capped)
+	}
+}
+
+func TestReviewNotDueMintsNothing(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}}}
+	e := f.env()
+	minted := 0
+	e.ReviewDue = func(context.Context) (bool, error) { return false, nil }
+	e.Review = func(context.Context) ([]string, error) { minted++; return []string{"#9"}, nil }
+	r, err := Run(context.Background(), e)
+	if err != nil || minted != 0 || len(f.assigned) != 1 || len(r.NeedsYou) != 0 {
+		t.Fatalf("err %v minted %d assigned %v needsYou %v", err, minted, f.assigned, r.NeedsYou)
+	}
+}
+
+func TestReviewDueErrorIsNeedsYou(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}}}
+	e := f.env()
+	e.ReviewDue = func(context.Context) (bool, error) { return false, errors.New("tracker down\nmore") }
+	e.Review = func(context.Context) ([]string, error) { t.Fatal("minted"); return nil, nil }
+	r, err := Run(context.Background(), e)
+	if err != nil || len(r.NeedsYou) != 1 || r.NeedsYou[0].Why != "tracker down" {
+		t.Fatalf("err %v needsYou %v", err, r.NeedsYou)
+	}
+}
+
+func TestZeroCapIsTheDefault(t *testing.T) {
+	if got := (Env{}).cap(); got != DefaultCap {
+		t.Fatalf("cap %d, want %d", got, DefaultCap)
+	}
+	if got := (Env{Cap: 1}).cap(); got != 1 {
+		t.Fatalf("cap %d, want 1", got)
 	}
 }
