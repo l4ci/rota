@@ -68,7 +68,7 @@ func runDoctor(c *Ctx, args []string) (Result, error) {
 // doctorInput gathers the real environment: Deps.DoctorPath replaces PATH for
 // tool lookup (a test hook, not part of the CLI).
 func doctorInput(ctx context.Context, d *Deps) doctor.Input {
-	in := doctor.Input{Exec: doctorExec(d.Proc), Getenv: d.Getenv, Look: doctorLook(d.DoctorPath)}
+	in := doctor.Input{Exec: doctorExec(d.Proc), Getenv: d.Getenv, Look: doctorLook(d.LookPath, d.DoctorPath)}
 	in.Dir, _ = os.Getwd()
 	in.Home, _ = os.UserHomeDir()
 	if f, ok := staleBinary(ctx, d.Git, in.Dir); ok {
@@ -157,16 +157,23 @@ func doctorSkills(getenv func(string) string, home, root string) *skills.Report 
 	return &rep
 }
 
-// doctorLook finds a tool on pathOverride when set, else on PATH.
-func doctorLook(pathOverride string) func(string) (string, bool) {
+// doctorLook finds a tool through lookPath: on pathOverride when set, else on
+// PATH. A name with a slash is a path and skips the search. lookPath owns the
+// executable-file rule.
+func doctorLook(lookPath func(string) (string, error), pathOverride string) func(string) (string, bool) {
+	if lookPath == nil {
+		lookPath = exec.LookPath
+	}
 	return func(name string) (string, bool) {
-		if pathOverride == "" {
-			p, err := exec.LookPath(name)
+		if pathOverride == "" || strings.Contains(name, "/") {
+			p, err := lookPath(name)
 			return p, err == nil
 		}
 		for _, dir := range filepath.SplitList(pathOverride) {
-			p := filepath.Join(dir, name)
-			if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() && fi.Mode().Perm()&0o111 != 0 {
+			if dir == "" {
+				continue
+			}
+			if p, err := lookPath(filepath.Join(dir, name)); err == nil {
 				return p, true
 			}
 		}
