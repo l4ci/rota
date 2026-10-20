@@ -597,6 +597,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	res.Agent = agent
 	if h := worker.HeldID(slot.Task(), slot.Branch(), agent); h != "" {
 		if h != worker.NormID(id) {
+			e.adoptBranchPR(ctx, root, slot, !o.CheckOnly)
 			ok, why := e.parkable(ctx, slot)
 			if !ok {
 				return run, false, blocked(BlockSlotBusy, "%s", busyMsg(agent, h, why))
