@@ -59,6 +59,8 @@ With a statusline already set, plain `install` refuses (exit 4). `--wrap-statusl
 
 ### What happens at the threshold
 
+This path is the orchestrator's. Every other session gets the lighter `work.contextGuard`: a one-line `/rota-pause` recommendation (`warn`, the default) or a capped Stop block asking for it (`auto`), at the same threshold. See [pausing and resuming](pausing-and-resuming.md#context-guard).
+
 1. Every statusline refresh writes the session's state (context percentage, rate limits) under the git
    common dir, as `rota/session/<session_id>.json`.
 2. When the orchestrator tries to stop and the state shows `orchestrator.handoffThreshold` percent

@@ -213,6 +213,45 @@ OUT="$(dd_run || true)"
 oh 0 -C "$P" hook uninstall >/dev/null
 pass "D1: doctor skips until opted in, fails a partial install and passes a wrapped one"
 
+# --- context guard: work.contextGuard for a session that is not the orchestrator (#921) ---
+rm -f "$CD/rota/round-lease.json"; rm -rf "$CD/rota/session"
+guard_cfg() { printf '{"git":{"baseBranch":"main"}%s}\n' "${1:+,\"work\":{\"contextGuard\":\"$1\"}}" > "$P/.rota/config.json"; }
+prompt_in() { printf '{"session_id":"s1","cwd":"%s"}' "$P"; }
+guard_prompt() { prompt_in | oh 0 hook prompt; }
+guard_stop() { stop_in "$1" | oh 0 hook stop; }
+
+guard_cfg ""
+dump_pct 74
+[ -z "$(guard_prompt)" ] || fail "guard: warn printed below the threshold"
+dump_pct 80
+OUT="$(guard_prompt)"
+echo "$OUT" | grep -q '/rota-pause' || fail "guard: warn did not recommend /rota-pause at 80: $OUT"
+[ -z "$(guard_prompt)" ] || fail "guard: warn repeated within one crossing"
+[ -z "$(guard_stop false)" ] || fail "guard: warn blocked the Stop hook"
+dump_pct 10; [ -z "$(guard_prompt)" ] || fail "guard: warn printed after falling below"
+dump_pct 90
+guard_prompt | grep -q '/rota-pause' || fail "guard: warn did not fire on a new crossing"
+pass "guard: warn adds one /rota-pause line per crossing and never blocks"
+
+rm -rf "$CD/rota/session"; guard_cfg auto; dump_pct 80
+guard_prompt >/dev/null
+for a in false true; do
+  guard_stop "$a" | grep -q '"decision": *"block"' || fail "guard: auto did not block (active=$a)"
+done
+[ -z "$(guard_stop true)" ] || fail "guard: auto blocked past handoffMaxBlocks"
+pass "guard: auto blocks handoffMaxBlocks times, then passes"
+
+for mode in off bogus; do
+  rm -rf "$CD/rota/session"; guard_cfg "$mode"; dump_pct 95
+  [ -z "$(guard_prompt)" ] && [ -z "$(guard_stop false)" ] || fail "guard: $mode printed something"
+done
+rm -rf "$CD/rota/session"; guard_cfg ""; dump_pct 95
+[ -z "$(printf '{"session_id":"s1","cwd":"%s"}' "$P" | env CLAUDE_CONFIG_DIR="$CC" ROTA_TEST_NOW="2026-10-03T12:30:00Z" ROTA_TEST_HOLDER_PID=0 "$ROTA_BIN" hook prompt)" ] || fail "guard: warn acted on a stale reading"
+RC=0; OUT="$("$ROTA_BIN" -C "$P" config set work.contextGuard bogus 2>&1)" || RC=$?
+[ "$RC" -ne 0 ] && echo "$OUT" | grep -q 'warn' && echo "$OUT" | grep -q 'auto' || fail "guard: bad value not rejected with the allowed values: rc=$RC $OUT"
+guard_cfg ""
+pass "guard: off, a bad value and a stale reading stay silent; config set rejects a bad value"
+
 kill "$ORCH" "$WORKER" 2>/dev/null || true
 wait "$ORCH" "$WORKER" 2>/dev/null || true
 trap 'rm -rf "$TMP"' EXIT

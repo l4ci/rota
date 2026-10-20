@@ -421,3 +421,113 @@ func TestHookInstallWarnsWhenGuardOnlyProjectLocal(t *testing.T) {
 		t.Fatalf("project scope warned: %d %s", code, errOut)
 	}
 }
+
+// guardProject is a project with no round lease (the session is not an
+// orchestrator) and work.contextGuard set to mode ("" leaves the default).
+func guardProject(t *testing.T, mode string) string {
+	t.Helper()
+	dir := orchProject(t, false)
+	if mode != "" {
+		os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"work":{"contextGuard":"`+mode+`"}}`), 0o644)
+	}
+	return dir
+}
+
+func promptOut(t *testing.T, dir string) string {
+	t.Helper()
+	code, out, errOut := rotaStdin(t, dir, `{"session_id":"s1","cwd":"`+dir+`"}`, "hook", "prompt")
+	if code != 0 {
+		t.Fatalf("hook prompt: %d %s", code, errOut)
+	}
+	return out
+}
+
+func TestHookPromptContextGuardWarnsOncePerCrossing(t *testing.T) {
+	dir := guardProject(t, "") // warn is the default
+	dumpAt(t, dir, 74)
+	if out := promptOut(t, dir); out != "" {
+		t.Fatalf("below the threshold: %q", out)
+	}
+	dumpAt(t, dir, 80)
+	out := promptOut(t, dir)
+	if !strings.Contains(out, "/rota-pause") || strings.Count(out, "\n") > 0 && !strings.Contains(out, "additionalContext") {
+		t.Fatalf("first prompt above threshold: %q", out)
+	}
+	if again := promptOut(t, dir); again != "" {
+		t.Errorf("second prompt must be silent: %q", again)
+	}
+	dumpAt(t, dir, 10)
+	if out := promptOut(t, dir); out != "" {
+		t.Errorf("below the threshold again: %q", out)
+	}
+	dumpAt(t, dir, 90)
+	if out := promptOut(t, dir); !strings.Contains(out, "/rota-pause") {
+		t.Errorf("a new crossing warns again: %q", out)
+	}
+}
+
+func TestHookContextGuardSilentCases(t *testing.T) {
+	for _, mode := range []string{"off", "auto"} {
+		dir := guardProject(t, mode)
+		dumpAt(t, dir, 95)
+		if out := promptOut(t, dir); out != "" {
+			t.Errorf("%s: prompt printed %q", mode, out)
+		}
+	}
+	dir := guardProject(t, "warn")
+	dumpAt(t, dir, 95)
+	t.Setenv("ROTA_TEST_NOW", "2026-10-03T12:10:00Z") // reading is 10 minutes old
+	if out := promptOut(t, dir); out != "" {
+		t.Errorf("stale reading: %q", out)
+	}
+	if code, out, _ := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop"); code != 0 || out != "" {
+		t.Errorf("warn never blocks: %d %q", code, out)
+	}
+	off := guardProject(t, "off")
+	dumpAt(t, off, 95)
+	if code, out, _ := rotaStdin(t, off, stopPayload(off, false), "hook", "stop"); code != 0 || out != "" {
+		t.Errorf("off never blocks: %d %q", code, out)
+	}
+	bad := guardProject(t, "bogus")
+	dumpAt(t, bad, 95)
+	if out := promptOut(t, bad); out != "" {
+		t.Errorf("bad value is a pass: %q", out)
+	}
+}
+
+func TestHookContextGuardOrchestratorUnchanged(t *testing.T) {
+	dir := orchProject(t, true)
+	dumpAt(t, dir, 95)
+	if out := promptOut(t, dir); out != "" {
+		t.Errorf("an orchestrator gets no guard line: %q", out)
+	}
+}
+
+func TestHookStopContextGuardAutoBlocksUpToMax(t *testing.T) {
+	dir := guardProject(t, "auto")
+	dumpAt(t, dir, 60)
+	if code, out, _ := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop"); code != 0 || out != "" {
+		t.Fatalf("below the threshold: %d %q", code, out)
+	}
+	dumpAt(t, dir, 80)
+	for i := 0; i < 2; i++ { // orchestrator.handoffMaxBlocks defaults to 2
+		_, out, _ := rotaStdin(t, dir, stopPayload(dir, i > 0), "hook", "stop")
+		var m map[string]string
+		if err := json.Unmarshal([]byte(out), &m); err != nil || m["decision"] != "block" || !strings.Contains(m["reason"], "/rota-pause") || !strings.Contains(m["reason"], "task boundary") {
+			t.Fatalf("block %d: %q %v", i, out, err)
+		}
+	}
+	if _, out, _ := rotaStdin(t, dir, stopPayload(dir, true), "hook", "stop"); out != "" {
+		t.Errorf("past the cap must pass: %q", out)
+	}
+	if _, out, _ := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop"); out != "" {
+		t.Errorf("past the cap must stay passed: %q", out)
+	}
+	// Falling below the threshold and crossing again is a new cycle.
+	dumpAt(t, dir, 10)
+	rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop")
+	dumpAt(t, dir, 85)
+	if _, out, _ := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop"); !strings.Contains(out, "block") {
+		t.Errorf("a new crossing blocks again: %q", out)
+	}
+}

@@ -16,6 +16,18 @@ func Dispatch(cfg any) string {
 	return s
 }
 
+// ContextGuard returns work.contextGuard: "off", "warn" or "auto". A missing or
+// null key gives the schema default; anything else gives "off", so a bad value
+// leaves the hooks silent.
+func ContextGuard(cfg any) string {
+	v, _ := Value(cfg, "work.contextGuard")
+	switch s, _ := v.(string); s {
+	case "warn", "auto":
+		return s
+	}
+	return "off"
+}
+
 // Accounts returns the object entries of work.accounts in order, name and
 // configDir as written ("" when absent or not a string). Entries that are not
 // objects are skipped; callers drop nameless ones where a name is required.

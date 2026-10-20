@@ -213,6 +213,14 @@ Both warnings are advisory: the check still exits 0. Both keys take an integer o
 rota config set plan.maxTasks 5
 ```
 
+## work.contextGuard: warn or pause a long session
+
+`warn` (default), `auto` or `off`. Acts only where `rota hook install` has run, on a session that is not the orchestrator, when its fresh statusline reading is at or above `orchestrator.handoffThreshold`. `warn` adds one line to the next prompt recommending `/rota-pause`, once per crossing. `auto` also lets the Stop hook block up to `orchestrator.handoffMaxBlocks` times, asking for `/rota-pause` at the next task boundary. See [pausing and resuming](pausing-and-resuming.md#context-guard).
+
+```bash
+rota config set work.contextGuard auto
+```
+
 ## test.fast, test.full, test.e2e
 
 Three tiers of shell commands, each an array defaulting to `[]`:

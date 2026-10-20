@@ -134,6 +134,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `work.portBlock` | int | `100` |  | Ports reserved per worker slot, so servers started by two slots never collide. A slot's block is exported as ROTA_PORT_BASE. |
 | `work.herdrGroupSlots` | bool | `true` |  | herdr only, on by default: open each worker slot's worktree as a workspace linked to the orchestrator's, so herdr groups the slots under their project; false keeps each slot as a tab in the orchestrator's workspace. `rota layout tabs` puts the slots back in their workspaces. |
 | `work.tdd` | bool | `true` |  | Whether /rota-work and workers require a recorded red-first run before a behavior change. Off skips the RED requirement. |
+| `work.contextGuard` | enum | `"warn"` | `warn`, `off`, `auto` | What a session that is not an orchestrator does at orchestrator.handoffThreshold, where rota hooks are installed. warn adds one line to the next prompt recommending /rota-pause; auto also has the Stop hook ask for /rota-pause at the next task boundary, up to orchestrator.handoffMaxBlocks times; off does nothing. |
 | `work.itemTimeoutMinutes` | int | `0` |  | Minutes one item may run from its first assignment before rota round reconcile reports it as timed out and --apply parks it as needs-human. 0 means no cap. |
 
 ### refactor
