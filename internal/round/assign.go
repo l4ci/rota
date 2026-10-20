@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -120,40 +119,6 @@ type Assigned struct {
 	// BestOf holds both attempts of a best-of:2 issue; the other fields are
 	// the first attempt's.
 	BestOf []Assigned
-}
-
-var (
-	slugNonWord = regexp.MustCompile(`[^a-z0-9]+`)
-)
-
-// BranchName is `<agent>/<issue>-<slug>`: the issue number or tracker key
-// (PROJ-123, kept upper case; file mode: the lowercased ID), then the title lowercased with non-alphanumerics collapsed
-// to `-`, cut to five words and 40 characters.
-func BranchName(agent, id, title string) string {
-	slug := strings.Trim(slugNonWord.ReplaceAllString(strings.ToLower(title), "-"), "-")
-	if words := strings.Split(slug, "-"); len(words) > 5 {
-		slug = strings.Join(words[:5], "-")
-	}
-	if len(slug) > 40 {
-		slug = strings.TrimRight(slug[:40], "-")
-	}
-	name := agent + "/" + branchID(id)
-	if slug != "" {
-		name += "-" + slug
-	}
-	return name
-}
-
-// branchID is the issue part of a branch name: a tracker key keeps its case so
-// the key reads in the branch as the tracker spells it, anything else is
-// lowercased.
-func branchID(id string) string {
-	if k, ok := tracker.ParseKey(id); ok {
-		if _, numbered := k.Number(); !numbered {
-			return string(k)
-		}
-	}
-	return strings.ToLower(id)
 }
 
 // briefPath is the standing worker contract the pointer names: round.brief,
@@ -585,7 +550,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 			resuming = true
 		}
 	}
-	res.Branch = BranchName(agent, id, it.Title)
+	res.Branch = worker.BranchName(agent, id, it.Title)
 
 	// Kind, tier, model, headroom and scope (C9): the shared preflight.
 	pf, err := e.preflight(ctx, root, be, preflightIn{Item: it, Settings: set, Tier: tier,
