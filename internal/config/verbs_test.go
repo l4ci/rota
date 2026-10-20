@@ -488,6 +488,8 @@ func TestSetRejectsNegativePlanLimits(t *testing.T) {
 				t.Errorf("%s=%s: %v", key, ok, err)
 			}
 		}
+	}
+}
 
 func TestShipUATDefaultsOffAndIsBool(t *testing.T) {
 	root := project(t, `{}`, `{}`)
