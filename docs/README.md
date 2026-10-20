@@ -13,12 +13,14 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 
 ### Walkthroughs
 
+- [A round cycle: shape the slate, run the round, release](walkthroughs/round-cycle.md). The loop between releases: `/rota-brainstorm` and `/rota-plan`, an orchestrated round, wind-down, `/rota-learn`, `/rota-release`.
 - [Greenfield: from a brief to a shipped milestone](walkthroughs/greenfield-from-brief.md). Empty repo plus a one-page brief, taken end-to-end through `/rota-vision`, `/rota-plan`, `/rota-work`, `/rota-debug`, `/rota-ship`, `/rota-learn`.
 - [Brownfield: dropping rota into an existing project](walkthroughs/brownfield-existing-project.md). Established codebase with open issues and a mental bug list, walked through `rota init`, `/rota-capture`, then a P0 cycle plus a debug cycle.
 
 ### 🔄 Rounds
 
 - [Your first round](first-round.md): install, skills, herdr or tmux, launching the orchestrator, a first round and wind-down, step by step
+- [A round cycle](walkthroughs/round-cycle.md): shape the slate, run a round, wind down, release
 - [Parallel rounds](usage/parallel-rounds.md): an orchestrator, standing workers in worktrees, the merge gate, solo mode
 - [Unattended rounds](usage/unattended-rounds.md): hooks, statusline, keepalive, usage limits, the orchestrator switch
 - [Doctor and reap](usage/doctor-and-reap.md): check the machine before a round, clear leftovers after
