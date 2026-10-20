@@ -37,14 +37,14 @@ assert d['learn']['verify'] is True, d
 " || { echo "FAIL: preservation"; exit 1; }
 
   # --- JSON value types: number, false, array, string ---
-  hvj config set work.workerSlots 42 >/dev/null || { echo "FAIL: number"; exit 1; }
+  hvj config set round.slots 42 >/dev/null || { echo "FAIL: number"; exit 1; }
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['work']['workerSlots'] == 42 and isinstance(d['work']['workerSlots'], int)" || { echo "FAIL: int parsing"; exit 1; }
 
   OUT=$(hvj config set ship.review false) || { echo "FAIL: false"; exit 1; }
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['ship']['review'] is False" || { echo "FAIL: false parsing"; exit 1; }
   [ "$(echo "$OUT" | jget data.previous)" = "true" ] || { echo "FAIL: false should report previous true: $OUT"; exit 1; }
 
-  hvj config set work.accounts '["a","b"]' >/dev/null || { echo "FAIL: array"; exit 1; }
+  hvj config set round.accounts '["a","b"]' >/dev/null || { echo "FAIL: array"; exit 1; }
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['work']['accounts'] == ['a','b'], d" || { echo "FAIL: array parsing"; exit 1; }
 
   # --- Bare identifier falls back to string ---
@@ -52,11 +52,11 @@ assert d['learn']['verify'] is True, d
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['autonomy']['level'] == 'auto'" || { echo "FAIL: string-auto"; exit 1; }
 
   # --- A string that looks like JSON needs shell quoting to stay a string ---
-  hvj config set work.workerCommand '"true"' >/dev/null || { echo "FAIL: quoted string"; exit 1; }
+  hvj config set round.workerCommand '"true"' >/dev/null || { echo "FAIL: quoted string"; exit 1; }
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['work']['workerCommand'] == 'true', d" || { echo "FAIL: quoted string value"; exit 1; }
 
   # --- Empty string is a valid value ---
-  hvj config set work.workerCommand '' >/dev/null || { echo "FAIL: empty value"; exit 1; }
+  hvj config set round.workerCommand '' >/dev/null || { echo "FAIL: empty value"; exit 1; }
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['work']['workerCommand'] == '', d" || { echo "FAIL: empty value stored"; exit 1; }
 
   # --- Bad inputs exit 2 and leave the file alone ---
@@ -122,9 +122,9 @@ rc=0; VERDICT=$( cd "$CFG_F78" && hvj config check 2>/dev/null ) || rc=$?
 echo "$VERDICT" | python3 -c '
 import json, sys
 missing = json.load(sys.stdin)["data"]["missing"]
-for want in ("work.dispatch", "work.workerSlots"):
+for want in ("round.dispatch", "round.slots"):
     assert want in missing, (want, missing)
-' || fail "F78: stale verdict omits work.dispatch or work.workerSlots: '$VERDICT'"
+' || fail "F78: stale verdict omits round.dispatch or round.slots: '$VERDICT'"
 # A fully populated config is up to date and exits 0.
 python3 - "$CFG_F78/.rota/config.json" <<'PYEOF'
 import json, sys

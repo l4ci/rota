@@ -42,7 +42,7 @@ func TestDepsClockAndGetenvReachWorkerAndAccounts(t *testing.T) {
 func TestRoundEnvClockAndGetenvDriveAccountMeters(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, ".rota", "config.json"),
-		`{"work":{"accounts":[{"name":"a","configDir":"/nowhere"}]}}`)
+		`{"round":{"accounts":[{"name":"a","configDir":"/nowhere"}]}}`)
 	usage := t.TempDir()
 	write(t, filepath.Join(usage, "a.json"),
 		`{"five_hour":{"utilization":100,"resets_at":"2026-10-09T09:00:00+00:00"},"seven_day":{"utilization":5,"resets_at":null}}`)

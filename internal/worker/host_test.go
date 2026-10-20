@@ -122,7 +122,7 @@ func exitOf(err error) int {
 // ── dispatch ────────────────────────────────────────────────────────────────
 
 func TestDispatchTaskSpawnsWithSlotEnv(t *testing.T) {
-	dir := newProject(t, `{"work":{"workerCommand":"claude --model haiku","portBase":31000}}`)
+	dir := newProject(t, `{"round":{"workerCommand":"claude --model haiku","portBase":31000}}`)
 	goInit(t, dir, InitOpts{Slots: 2, Base: "main"})
 	f := tmuxFake()
 	round := 3
@@ -136,10 +136,10 @@ func TestDispatchTaskSpawnsWithSlotEnv(t *testing.T) {
 }
 
 func TestDispatchTaskExportsTheStoredBlockWidth(t *testing.T) {
-	dir := newProject(t, `{"work":{"workerCommand":"claude --model haiku","portBase":31000,"portBlock":200}}`)
+	dir := newProject(t, `{"round":{"workerCommand":"claude --model haiku","portBase":31000,"portBlock":200}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	// The config shrinks after w1 was allocated: the env keeps the width w1 holds.
-	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"work":{"workerCommand":"claude --model haiku","portBase":31000,"portBlock":100}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"round":{"workerCommand":"claude --model haiku","portBase":31000,"portBlock":100}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	f := tmuxFake()
@@ -154,7 +154,7 @@ func TestDispatchTaskExportsTheStoredBlockWidth(t *testing.T) {
 }
 
 func TestDispatchTaskRecreatesTheSession(t *testing.T) {
-	dir := newProject(t, `{"work":{"workerCommand":"claude --model haiku"}}`)
+	dir := newProject(t, `{"round":{"workerCommand":"claude --model haiku"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
 	round := 3
@@ -219,7 +219,7 @@ func TestDispatchDoesNotSignTwiceAndDefaultsRound(t *testing.T) {
 }
 
 func TestDispatchPassesTheAccountConfigDir(t *testing.T) {
-	cfg := `{"work":{"accounts":[{"name":"a","configDir":"/acct/a"}]}}`
+	cfg := `{"round":{"accounts":[{"name":"a","configDir":"/acct/a"}]}}`
 	dir := newProject(t, cfg)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	(&Accounts{Env: Env{Getenv: func(string) string { return t.TempDir() }}}).Assign(bg, dir, "w1", "a")
@@ -330,7 +330,7 @@ func TestDispatchTaskSendFailureExits(t *testing.T) {
 }
 
 func TestDispatchRelayWithoutASessionIsAResolutionError(t *testing.T) {
-	dir := newProject(t, `{"work":{"dispatch":"herdr"}}`)
+	dir := newProject(t, `{"round":{"dispatch":"herdr"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := &fakeHost{name: "herdr", inSession: true}
 	_, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "q"), Relay: true})
@@ -343,7 +343,7 @@ func TestDispatchRelayWithoutASessionIsAResolutionError(t *testing.T) {
 }
 
 func TestDispatchHerdrOutsideAPaneIsUnavailable(t *testing.T) {
-	dir := newProject(t, `{"work":{"dispatch":"herdr"}}`)
+	dir := newProject(t, `{"round":{"dispatch":"herdr"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := &fakeHost{name: "herdr", inSession: false}
 	_, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1"})
@@ -397,9 +397,9 @@ func TestDispatchRejectsResumeAndUnparseableWorkerCommands(t *testing.T) {
 		exit int
 		msg  string
 	}{
-		`{"work":{"workerCommand":"claude -c"}}`:         {exitcode.ExitRefused, "contains '-c', which reopens the previous conversation"},
-		`{"work":{"workerCommand":"claude --resume=x"}}`: {exitcode.ExitRefused, "contains '--resume=x'"},
-		`{"work":{"workerCommand":"claude \"oops"}}`:     {exitcode.ExitUsage, "cannot be parsed (unbalanced quote?)"},
+		`{"round":{"workerCommand":"claude -c"}}`:         {exitcode.ExitRefused, "contains '-c', which reopens the previous conversation"},
+		`{"round":{"workerCommand":"claude --resume=x"}}`: {exitcode.ExitRefused, "contains '--resume=x'"},
+		`{"round":{"workerCommand":"claude \"oops"}}`:     {exitcode.ExitUsage, "cannot be parsed (unbalanced quote?)"},
 	} {
 		dir := newProject(t, cfg)
 		goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
@@ -413,7 +413,7 @@ func TestDispatchRejectsResumeAndUnparseableWorkerCommands(t *testing.T) {
 		}
 	}
 	// a relay does not launch anything, so the command is not judged
-	dir := newProject(t, `{"work":{"workerCommand":"claude -c"}}`)
+	dir := newProject(t, `{"round":{"workerCommand":"claude -c"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
 	e := envWith(f)
@@ -555,7 +555,7 @@ func TestDispatchRefusalsCarryFailureData(t *testing.T) {
 		bd, _ := we.Data.(BlockData)
 		return bd
 	}
-	dir := newProject(t, `{"work":{"workerCommand":"claude -c"}}`)
+	dir := newProject(t, `{"round":{"workerCommand":"claude -c"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	_, err := envWith(tmuxFake()).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1"})
 	if bd := data(err); bd != (BlockData{BlockedBy: "resume flag"}) {

@@ -44,7 +44,7 @@ func TestSessionEnsureInsideNeedsNoHandoff(t *testing.T) {
 }
 
 func TestSessionEnsureHerdrOutsideIsRefusedNotHandedOff(t *testing.T) {
-	dir := newProject(t, `{"work":{"dispatch":"herdr"}}`)
+	dir := newProject(t, `{"round":{"dispatch":"herdr"}}`)
 	f := &fakeHost{name: "herdr"}
 	_, err := envWith(f).SessionEnsure(bg, dir, SessionOpts{})
 	we, ok := err.(*exitcode.Error)
@@ -70,7 +70,7 @@ func TestSessionEnsureOpensTheOperatorWindow(t *testing.T) {
 	}
 	// default session and command
 	oh2 := &operatorHost{fakeHost: &fakeHost{name: "tmux"}}
-	dir2 := newProject(t, `{"work":{"operatorCommand":"my-claude"}}`)
+	dir2 := newProject(t, `{"round":{"operatorCommand":"my-claude"}}`)
 	(Env{NewHost: func(host.Kind) host.Host { return oh2 }}).SessionEnsure(bg, dir2, SessionOpts{})
 	if oh2.opts.Session != "rota" || oh2.opts.Command != "my-claude" || oh2.opts.BootTimeout != 60 {
 		t.Errorf("opts = %+v", oh2.opts)

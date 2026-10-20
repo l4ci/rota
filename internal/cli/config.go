@@ -228,6 +228,14 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		if len(removed) > 0 {
 			res.Text += "\nREMOVED: " + strings.Join(removed, ", ") + " (nothing reads them; run: rota config fill)"
 		}
+		if old := config.LegacyRoundKeys(config.Load(rotatree.Config(root))); len(old) > 0 {
+			data.Set("unknown", anySlice(old))
+			var names []string
+			for _, k := range old {
+				names = append(names, k+" (now "+config.RenamedRoundKey(k)+")")
+			}
+			res.Text += "\nUNKNOWN: " + strings.Join(names, ", ") + " (nothing reads the old names; run: rota migrate config --apply, or rota config fill)"
+		}
 		if legacy := config.Legacy(root); len(legacy) > 0 {
 			data.Set("legacy", anySlice(legacy))
 			res.Text += "\nLEGACY: " + strings.Join(legacy, ", ") + " (replaced by issues.source and forge.provider; run: rota migrate source --apply, or rota config fill)"
@@ -263,12 +271,9 @@ func configFill(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		removed := config.Removed(root)
-		filled, sm, err := config.FillDetect(root, c.deps().originProvider(c.Context(), root))
-		if errors.Is(err, config.ErrCorrupt) {
-			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
-		}
+		filled, sm, rm, err := config.FillDetect(root, c.deps().originProvider(c.Context(), root))
 		if err != nil {
-			return Result{}, err
+			return roundMigrationFail(err)
 		}
 		text := "config up to date; nothing to fill"
 		if len(filled) > 0 {
@@ -282,7 +287,20 @@ func configFill(fs *flag.FlagSet) RunFunc {
 			}
 			text += "removed: " + strings.Join(removed, ", ")
 		}
-		data := jsonObj("filled", anySlice(filled), "removed", anySlice(removed), "changed", len(filled) > 0 || len(removed) > 0 || sm.Changed)
+		data := jsonObj("filled", anySlice(filled), "removed", anySlice(removed), "changed", len(filled) > 0 || len(removed) > 0 || sm.Changed || rm.Changed())
+		if rm.Changed() {
+			data.Set("renamed", jsonObj("config", renameList(rm.Config), "local", renameList(rm.Local)))
+			if text == "config up to date; nothing to fill" {
+				text = ""
+			} else {
+				text += "\n"
+			}
+			var moved []string
+			for _, r := range append(append([]config.Rename{}, rm.Config...), rm.Local...) {
+				moved = append(moved, r.Old+" -> "+r.New)
+			}
+			text += "renamed: " + strings.Join(moved, ", ")
+		}
 		if sm.Changed {
 			data.Set("migrated", jsonObj("source", sm.Source, "forge", sm.Forge, "removed", anySlice(sm.Removed)))
 			if text == "config up to date; nothing to fill" {

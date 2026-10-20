@@ -154,7 +154,7 @@ func TestWorkerResetVerb(t *testing.T) {
 }
 
 func TestWorkerAccountVerbs(t *testing.T) {
-	cfg := `{"work":{"accounts":[{"name":"alpha","configDir":"/a"},{"name":"beta","configDir":"/b"}]}}`
+	cfg := `{"round":{"accounts":[{"name":"alpha","configDir":"/a"},{"name":"beta","configDir":"/b"}]}}`
 	dir := workerProject(t, cfg)
 	usage := t.TempDir()
 	os.WriteFile(filepath.Join(usage, "alpha.json"), []byte(`{"five_hour":{"utilization":90,"resets_at":null},"seven_day":{"utilization":10,"resets_at":null}}`), 0o644)
@@ -406,7 +406,7 @@ func TestWorkerGateVerb(t *testing.T) {
 
 func TestWorkerDispatchRefusalEnvelopeCarriesData(t *testing.T) {
 	deps := testDeps()
-	dir := workerProject(t, `{"work":{"workerCommand":"claude --resume"}}`)
+	dir := workerProject(t, `{"round":{"workerCommand":"claude --resume"}}`)
 	rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	useHost(deps, &cliHost{inSession: true})
 	brief := filepath.Join(t.TempDir(), "b.md")
@@ -420,7 +420,7 @@ func TestWorkerDispatchRefusalEnvelopeCarriesData(t *testing.T) {
 
 func TestWorkerSessionEnsureHerdrOutsideCarriesBlockedBy(t *testing.T) {
 	deps := testDeps()
-	dir := workerProject(t, `{"work":{"dispatch":"herdr"}}`)
+	dir := workerProject(t, `{"round":{"dispatch":"herdr"}}`)
 	useHost(deps, &cliHost{herdr: true})
 	code, out, _ := rotaInWith(t, deps, dir, "worker", "session", "ensure", "--json")
 	d := data(t, out)
@@ -476,7 +476,7 @@ func useCodexLacking(d *Deps, h host.Host, version string, loggedIn bool, lacks 
 
 func TestWorkerDispatchKindFlag(t *testing.T) {
 	deps := testDeps()
-	dir := workerProject(t, `{"work":{"dispatch":"herdr"}}`)
+	dir := workerProject(t, `{"round":{"dispatch":"herdr"}}`)
 	rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	brief := filepath.Join(t.TempDir(), "b.md")
 	os.WriteFile(brief, []byte("hello\n"), 0o644)

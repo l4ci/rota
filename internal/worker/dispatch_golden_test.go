@@ -50,9 +50,9 @@ type hostRig struct {
 func newRig(t *testing.T, kind string) *hostRig {
 	t.Helper()
 	// The goldens are the tab-per-slot traffic; grouping has its own tests.
-	cfg := `{"work":{"herdrGroupSlots":false}}`
+	cfg := `{"round":{"herdrGroupSlots":false}}`
 	if kind == "herdr" {
-		cfg = `{"work":{"dispatch":"herdr","herdrGroupSlots":false}}`
+		cfg = `{"round":{"dispatch":"herdr","herdrGroupSlots":false}}`
 	}
 	r := &hostRig{kind: kind, herdrDir: t.TempDir(), tmuxDir: t.TempDir(), root: newProject(t, cfg)}
 	os.WriteFile(filepath.Join(r.tmuxDir, "pane"), []byte("? for shortcuts\n"), 0o644)

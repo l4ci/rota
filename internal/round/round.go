@@ -105,14 +105,14 @@ type Env struct {
 	// and the ledger read; picking an account is AccountPicking's job.
 	Worker worker.Env
 	// AccountPicking turns the delivery's account step on: keep the slot's own
-	// work.accounts account while it has headroom, else pick. Off is the zero
+	// round.accounts account while it has headroom, else pick. Off is the zero
 	// value; WithAccounts is the one way to turn it on, so a verb opts in by
 	// name and Worker.Accounts alone (the meter read) never picks.
 	AccountPicking bool
 	// Board is the backlog's claim side; claim-mismatch drift needs it, and
 	// without it (file mode) that kind is skipped.
 	Board Board
-	// Round is the round.* settings (and work.itemTimeoutMinutes) loaded with
+	// Round is the round.* settings (and round.itemTimeoutMinutes) loaded with
 	// the env: StallMinutes 0 turns the stalled check off, ItemTimeoutMinutes 0
 	// the item-timeout check, an empty AdoptPattern the unregistered-branch
 	// check; SharedPaths feeds the overlap pass of an adoption. RoundErr is why
@@ -538,7 +538,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			}
 			if at, ok := reg.ItemStart(r.Issue); ok && now().Sub(at) >= limit {
 				rep.add(Finding{Kind: ItemTimeout, Slot: r.Name, Issue: r.Issue,
-					Detail: fmt.Sprintf("running %d min since first assignment (work.itemTimeoutMinutes is %d)", int(now().Sub(at).Minutes()), e.Round.ItemTimeoutMinutes),
+					Detail: fmt.Sprintf("running %d min since first assignment (round.itemTimeoutMinutes is %d)", int(now().Sub(at).Minutes()), e.Round.ItemTimeoutMinutes),
 					Repair: "park as needs-human"})
 			}
 		}

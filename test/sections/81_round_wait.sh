@@ -89,7 +89,7 @@ mkdir -p "$TMP_RW/repo/.rota"
   git commit -q -m seed
 ) || fail "round-wait fixture repo setup failed"
 
-cfg() { printf '{"work":{"dispatch":"%s"}}\n' "$1" > "$TMP_RW/repo/.rota/config.json"; }
+cfg() { printf '{"round":{"dispatch":"%s"}}\n' "$1" > "$TMP_RW/repo/.rota/config.json"; }
 slots() { # slots <handle> <state>: a registry with w1 running, w2 parked
   printf '{"session":"rota","round":1,"slots":[{"name":"w1","branch":"b1","worktree":"%s/w1","base":"main","handle":"%s","state":"%s","task":"T1","relays":[]},{"name":"w2","branch":"b2","worktree":"%s/w2","base":"main","handle":"rota:w2","state":"idle","task":null,"relays":[]}]}\n' \
     "$TMP_RW" "$1" "$2" "$TMP_RW" > "$TMP_RW/repo/.rota/workers.json"

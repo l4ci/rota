@@ -15,7 +15,7 @@ mkdir -p "$APROJ/.rota"
     && git remote add origin "$TMP_AP/origin.git" && git push -q origin main
 ) || fail "autopilot fixture repo setup failed"
 printf 'stub worker contract\n' > "$TMP_AP/contract.md"
-printf '{"issues":{"source":"github","retryWaitSeconds":0},"work":{"dispatch":"tmux"},"round":{"brief":"%s"}}\n' "$TMP_AP/contract.md" > "$APROJ/.rota/config.json"
+printf '{"issues":{"source":"github","retryWaitSeconds":0},"round":{"dispatch":"tmux","brief":"%s"}}\n' "$TMP_AP/contract.md" > "$APROJ/.rota/config.json"
 printf 'Welcome to Claude Code\n' > "$FKA/tmux/pane"
 : > "$FKA/tmux/log"
 

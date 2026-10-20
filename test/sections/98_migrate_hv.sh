@@ -41,7 +41,7 @@ old
 <!-- hv-skills-end -->
 My own note stays.
 MD
-  echo '{"hvSkills":{"version":"4.9.0"},"work":{"accounts":[]}}' > "$d/.hv/config.json"
+  echo '{"hvSkills":{"version":"4.9.0"},"round":{"accounts":[]}}' > "$d/.hv/config.json"
   printf '# TODO\n- row Detail: `.hv/features/F1.md`\n' > "$d/.hv/BACKLOG.md"
   printf '<!-- hv:fields 1/2 -->\nbody\n' > "$d/.hv/features/F1.md"
   printf '<!-- hv-handoff: orchestrator -->\nx\n' > "$d/.hv/handoff/main.md"

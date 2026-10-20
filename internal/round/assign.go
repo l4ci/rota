@@ -106,7 +106,7 @@ type Assigned struct {
 	Brief, Worktree string
 	Changed         bool
 	// Kind, Tier and Model are what the worker starts with; Model is "" when a
-	// custom work.workerCommand has no {model} placeholder.
+	// custom round.workerCommand has no {model} placeholder.
 	Kind, Tier, Model, TierReason string
 	// KindSource is where Kind came from: --kind, harness label,
 	// round.workerKind, slot or default.
@@ -886,7 +886,7 @@ func (e Env) pickAccount(ctx context.Context, root, agent string) (string, error
 	}
 	name, ok := e.Worker.Accounts.Pick(ctx, root, nil)
 	if !ok {
-		return "", &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "no work.accounts account has headroom: every configured account is cooling down"}
+		return "", &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "no round.accounts account has headroom: every configured account is cooling down"}
 	}
 	if _, _, err := e.Worker.Accounts.Assign(ctx, root, agent, name); err != nil {
 		return "", err

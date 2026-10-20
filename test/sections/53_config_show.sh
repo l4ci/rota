@@ -3,13 +3,13 @@ echo "T118: config show reports value + source layer from one defaults table"
 CS="$(mktemp -d)"
 trap 'rm -rf "$CS"' EXIT
 mkdir -p "$CS/.rota"
-printf '{"work":{"dispatch":"tmux"},"autonomy":{"level":"auto"}}\n' > "$CS/.rota/config.json"
+printf '{"round":{"dispatch":"tmux"},"autonomy":{"level":"auto"}}\n' > "$CS/.rota/config.json"
 printf '{"autonomy":{"level":"off"}}\n' > "$CS/.rota/config.local.json"
 
 # show [<key>…]: run in the fixture project and print the envelope.
 show() { ( cd "$CS" && hvj config show "$@" ); }
 
-OUT=$(show work.dispatch)
+OUT=$(show round.dispatch)
 [ "$(echo "$OUT" | jget 'data.entries[0].value')" = "tmux" ] \
   || fail "T118: project value not reported: $OUT"
 [ "$(echo "$OUT" | jget 'data.entries[0].source')" = "project" ] \
@@ -24,12 +24,12 @@ OUT=$(show ship.secondOpinionRunner)
   || fail "T118: unset key should report the default: $OUT"
 [ "$(echo "$OUT" | jget 'data.entries[0].source')" = "default" ] \
   || fail "T118: unset key should report source default: $OUT"
-OUT=$(show work.accounts)
+OUT=$(show round.accounts)
 [ "$(echo "$OUT" | jget 'data.entries[0].value')" = "[]" ] \
   || fail "T118: array default not returned as a JSON array: $OUT"
 [ "$(echo "$OUT" | jget 'data.entries[0].source')" = "default" ] \
   || fail "T118: array default should report source default: $OUT"
-[ "$(echo "$OUT" | jget 'data.entries[0].key')" = "work.accounts" ] \
+[ "$(echo "$OUT" | jget 'data.entries[0].key')" = "round.accounts" ] \
   || fail "T118: entry should name its key: $OUT"
 pass "T118: config show resolves local > project > default"
 
@@ -42,7 +42,7 @@ RC=0; V=$( cd "$CS" && hvj config check 2>/dev/null ) || RC=$?
 echo "$V" | python3 -c '
 import json, sys
 missing = json.load(sys.stdin)["data"]["missing"]
-for want in ("work.dispatch", "ship.secondOpinionRunner"):
+for want in ("round.dispatch", "ship.secondOpinionRunner"):
     assert want in missing, (want, missing)
 for k in missing:
     assert not k.startswith("release.") and k != "issues.label", ("non-required key leaked", k)

@@ -73,7 +73,7 @@ func Train(env worker.Env, round *worker.RoundMemo, root string, issues map[stri
 	return fails
 }
 
-// landed ends an item whose PR landed: its wall-clock (work.itemTimeoutMinutes),
+// landed ends an item whose PR landed: its wall-clock (round.itemTimeoutMinutes),
 // its best-of record and its bounce count.
 func landed(root, issue string) error {
 	if err := worker.ClearItemStart(root, issue); err != nil {

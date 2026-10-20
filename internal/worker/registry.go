@@ -462,8 +462,8 @@ type Env struct {
 	Executable func() (string, error)
 	// LookPath reports whether a binary is installed; nil means exec.LookPath.
 	LookPath func(string) (string, error)
-	// Config returns the merged project config Dispatch reads work.dispatch,
-	// work.herdrGroupSlots and the port range from; nil loads .rota/config.json.
+	// Config returns the merged project config Dispatch reads round.dispatch,
+	// round.herdrGroupSlots and the port range from; nil loads .rota/config.json.
 	// Tests hand it an in-memory config.
 	Config func(root string) any
 	// Accounts reads the usage meters; poll and wait use it to record the

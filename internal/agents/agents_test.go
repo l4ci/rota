@@ -62,7 +62,7 @@ func TestRenderWithCodexAndEffort(t *testing.T) {
 }
 
 func TestCodexWithoutTierMapOmitsModel(t *testing.T) {
-	got := render(t, `{"work":{"codexCommand":"codex"},"round":{"tiers":{"codex":{"light":"","standard":"","heavy":""}}}}`)
+	got := render(t, `{"round":{"codexCommand":"codex","tiers":{"codex":{"light":"","standard":"","heavy":""}}}}`)
 	c := got[".codex/agents/rota-implementer.toml"]
 	if c == "" || strings.Contains(c, "\nmodel = ") {
 		t.Fatalf("want a codex file without model:\n%s", c)
@@ -70,7 +70,7 @@ func TestCodexWithoutTierMapOmitsModel(t *testing.T) {
 }
 
 func TestCodexRefusesEffortItCannotExpress(t *testing.T) {
-	sp, err := Load(project(t, `{"work":{"codexCommand":"codex"},"roles":{"reasoner":{"effort":"max"}}}`))
+	sp, err := Load(project(t, `{"round":{"codexCommand":"codex"},"roles":{"reasoner":{"effort":"max"}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -47,7 +47,7 @@ type DispatchResult struct {
 	Warnings []string
 }
 
-// dispatchSetting is work.dispatch from cfg, "" when unset.
+// dispatchSetting is round.dispatch from cfg, "" when unset.
 func dispatchSetting(cfg any) host.Kind { return host.KindOf(config.Dispatch(cfg)) }
 
 // RegistryHost is the round host `round start` recorded (C8), "" when no
@@ -58,7 +58,7 @@ func dispatchSetting(cfg any) host.Kind { return host.KindOf(config.Dispatch(cfg
 func RegistryHost(root string) host.Kind { return LoadRegistryTolerant(root).Host() }
 
 // ResolveHost is the host the project's round runs on: host.Resolve over the
-// round's recorded host, work.dispatch and the environment. Every verb that
+// round's recorded host, round.dispatch and the environment. Every verb that
 // needs the host asks here. getenv and lookPath default to the process's own;
 // a caller that holds injected ones (cli's Deps, worker.Env) passes them, so
 // the decision reads the same sources as the handle it then drives. cfg is the
@@ -133,7 +133,7 @@ func roundOf(root string) int {
 }
 
 // Dispatch sends a brief into a worker slot's Claude Code session, on the host
-// that work.dispatch selects.
+// that round.dispatch selects.
 //
 // A task brief recreates the slot's session first: /clear does not reliably
 // reset a Claude Code session (it can land as a literal chat message), so a
@@ -144,7 +144,7 @@ func roundOf(root string) int {
 // A task dispatch also guards the slot (the reset guard: refuse when the
 // worktree holds uncommitted or unmerged work, else cut a fresh per-task branch
 // from the cycle branch) and refuses to spawn unless the old session is
-// provably gone. A work.workerCommand that resumes a previous conversation is
+// provably gone. A round.workerCommand that resumes a previous conversation is
 // rejected.
 //
 // Provenance: every payload, brief or relay, is signed with a first line
@@ -155,7 +155,7 @@ func roundOf(root string) int {
 // (rotated on every task dispatch), and the codex launch carries a
 // UserPromptSubmit hook (`rota worker prompt-check`) that blocks any input
 // without a valid trailer, bar a maintainer's `m:` answer. A codex task
-// dispatch is refused (5) when work.codexCommand lacks
+// dispatch is refused (5) when round.codexCommand lacks
 // --dangerously-bypass-hook-trust, without which Codex skips the hook; a
 // codex relay is refused (5) when the key is gone.
 //
@@ -191,7 +191,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	// is none, and driving the server anyway lands tabs wherever a human is
 	// focused.
 	if h.Kind() == host.Herdr && !h.InSession() {
-		return res, fail(exitcode.ExitUnavailable, "work.dispatch=herdr must run from inside a herdr pane (HERDR_ENV=1)")
+		return res, fail(exitcode.ExitUnavailable, "round.dispatch=herdr must run from inside a herdr pane (HERDR_ENV=1)")
 	}
 	reg, err := LoadRegistry(root)
 	if err != nil {
@@ -249,7 +249,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		// must be the kind's own: refuse before anything is killed.
 		if h.Kind() == host.Herdr {
 			if lk, _, _, lerr := host.LaunchArgs(launch); lerr != nil || lk != kind {
-				return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("work.dispatch=herdr starts a %s worker, but %s does not run %s: %s", kind, key, kind, launch))
+				return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("round.dispatch=herdr starts a %s worker, but %s does not run %s: %s", kind, key, kind, launch))
 			}
 		}
 		// A launch the harness cannot run safely is refused before anything is
@@ -598,11 +598,11 @@ func LiveWorkers(ctx context.Context, h host.Layouter, reg Registry) []layout.Wo
 	return out
 }
 
-// GroupSlots reads work.herdrGroupSlots: whether a slot lives in a linked
+// GroupSlots reads round.herdrGroupSlots: whether a slot lives in a linked
 // workspace of its own. It is on only for a host that can group (herdr); on
 // any other host the default being true must not record workspaces.
 func GroupSlots(cfg any, caps host.Capabilities) (bool, error) {
-	on, err := config.Bool(cfg, "work.herdrGroupSlots")
+	on, err := config.Bool(cfg, "round.herdrGroupSlots")
 	return on && caps.CanGroup(), err
 }
 

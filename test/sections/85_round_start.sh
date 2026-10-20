@@ -30,8 +30,8 @@ OUT=$(rn round candidates)
 pass "candidates reports criteria and dependency checks per item"
 
 # start: lease, roster slots on park branches, candidates. Tab mode, explicitly:
-# with no work.dispatch a round with no host would be solo (C8).
-rn config set work.dispatch tmux >/dev/null
+# with no round.dispatch a round with no host would be solo (C8).
+rn config set round.dispatch tmux >/dev/null
 HOLDER=$$
 OUT=$(rn round start --holder-pid "$HOLDER" --slots 2)
 [ "$(echo "$OUT" | jget data.round)" = "1" ] || fail "first start should be round 1: $OUT"

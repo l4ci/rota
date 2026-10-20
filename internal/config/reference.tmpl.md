@@ -21,7 +21,7 @@ The "(Recommended)" tag on each option marks the default `rota init` writes.
 | `rota config show <key>` | Prints one key. |
 | `rota config set <key> <value>` | Writes `.rota/config.json` (never `.rota/config.local.json`) and prints `key = value`. |
 
-Values for list and object keys are JSON (`rota config set work.accounts '[...]'`). A key outside the schema exits 2 and nothing is written. The value is not checked against the allowed values on write; `rota config check` only flags a missing key, retired values such as `autonomy.level: "loop"`, and a legacy `refactor.verifyCommands` that still holds commands while `test.full` is empty.
+Values for list and object keys are JSON (`rota config set round.accounts '[...]'`). A key outside the schema exits 2 and nothing is written. The value is not checked against the allowed values on write; `rota config check` only flags a missing key, retired values such as `autonomy.level: "loop"`, and a legacy `refactor.verifyCommands` that still holds commands while `test.full` is empty.
 
 ## Q1: Models
 

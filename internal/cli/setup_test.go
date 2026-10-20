@@ -46,7 +46,7 @@ func TestSetupInteractiveAppliesAnswers(t *testing.T) {
 	}
 	for k, want := range map[string]any{
 		"issues.source": "file", "work.isolation": "worktree", "work.mergeStrategy": "pr",
-		"work.dispatch": "subagent", "autonomy.level": "off", "ship.review": "none", "ship.qa": true,
+		"round.dispatch": "subagent", "autonomy.level": "off", "ship.review": "none", "ship.qa": true,
 	} {
 		if got := cfgValue(t, dir, k); got != want {
 			t.Errorf("%s = %v, want %v", k, got, want)

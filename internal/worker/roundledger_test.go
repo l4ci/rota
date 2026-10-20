@@ -114,7 +114,7 @@ func TestLedgerNoteReportsAWriteFailure(t *testing.T) {
 func TestPaneDoneRecordsHeadroomOnce(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"ben","task":"12","kind":"claude","account":"work","state":"busy"}`)
 	t.Setenv("ROTA_ACCOUNT_USAGE_DIR", "")
-	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"work":{"accounts":[{"name":"work","configDir":"/w"}]}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"round":{"accounts":[{"name":"work","configDir":"/w"}]}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	acc := &Accounts{Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
@@ -154,7 +154,7 @@ func TestPaneDoneRecordsHeadroomOnce(t *testing.T) {
 // poll of the same pane records nothing again.
 func TestPollDoneOnAPaneHostRecordsHeadroom(t *testing.T) {
 	dir, f := pollRegistry(t, "tmux")
-	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"work":{"accounts":[{"name":"work","configDir":"/w"}]}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"round":{"accounts":[{"name":"work","configDir":"/w"}]}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetAccount("work", "/w") }); err != nil {

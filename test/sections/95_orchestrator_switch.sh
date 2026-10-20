@@ -19,7 +19,7 @@ SWHANDOFF="$SWP/.rota/handoff/main.md"
 sw_cfg() { # sw_cfg <true|false|unset>
   local on=""
   [ "$1" != unset ] && on=",\"switchOnUsage\":$1"
-  printf '{"git":{"baseBranch":"main"},"work":{"accounts":[{"name":"a","configDir":"%s/cfg-a"},{"name":"b","configDir":"%s/cfg-b"}]},"orchestrator":{"keepaliveBackoffSeconds":0%s}}\n' \
+  printf '{"git":{"baseBranch":"main"},"round":{"accounts":[{"name":"a","configDir":"%s/cfg-a"},{"name":"b","configDir":"%s/cfg-b"}]},"orchestrator":{"keepaliveBackoffSeconds":0%s}}\n' \
     "$TMP_SW" "$TMP_SW" "$on" > "$SWP/.rota/config.json"
 }
 sw_usage() { # sw_usage <b's five_hour utilization>

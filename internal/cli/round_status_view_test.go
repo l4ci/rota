@@ -234,7 +234,7 @@ func TestRoundScreenBurnColumn(t *testing.T) {
 }
 
 func TestFillBurnFromLedger(t *testing.T) {
-	dir := workerProject(t, `{"work":{"accounts":[{"name":"work","configDir":"/w"}]}}`)
+	dir := workerProject(t, `{"round":{"accounts":[{"name":"work","configDir":"/w"}]}}`)
 	now := time.Now()
 	for _, e := range []ledger.Entry{
 		{TS: now, Kind: ledger.KindAssign, Issue: "12", Slot: "ben", Account: "work", Harness: "claude", Detail: ledger.Detail("headroom", 80.0)},

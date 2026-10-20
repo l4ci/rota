@@ -154,5 +154,5 @@ func (d *runner) ports() (Check, bool) {
 		return Check{}, false
 	}
 	return Check{Name: "ports", Status: Warn, Detail: strings.Join(found, "; "),
-		Hint: "stop that process, or move the range: rota config set work.portBase <port>"}, true
+		Hint: "stop that process, or move the range: rota config set round.portBase <port>"}, true
 }
