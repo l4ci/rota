@@ -24,7 +24,6 @@ type Criterion struct {
 // check) and the criterion text at the time of marking.
 type Mark struct{ ID, Date, Sha, Check, Text string }
 
-// Row is the part of a proof row coverage reads.
 // Status is one criterion's coverage. Flag is "", "changed" (text edited
 // since the mark), "unproven" (the proof row is gone or not PASS) or
 // "missing" (a mark whose id left the body).
