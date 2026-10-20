@@ -77,7 +77,7 @@ shim: `state` echoes the argument (`none` becomes null); `changed` is false for 
 note: the state moves from a second positional to `--to`, the one spelling for setting a state (`milestone status --to`, rule 1).
 
 ### rota item comment add
-rota item comment add <ID> --kind <question|answer|decision|feedback|scope> --body-file <path|->
+rota item comment add <ID> --kind <question|answer|decision|feedback|scope|finding> --body-file <path|->
 repo: scoped
 data: {"id": string, "type": "B"|"F"|"T", "kind": string, "commentId"?: string, "changed": bool}
 exit: 2 for an empty body or an invalid kind; 3 item unknown; tracker
@@ -86,7 +86,7 @@ shim: `commentId` is the printed id (issue mode only), `changed` true.
 note: split from the old `--list` mode, because read and write have different data.
 
 ### rota item comment list
-rota item comment list <ID> [--kind <question|answer|decision|feedback|scope>]
+rota item comment list <ID> [--kind <question|answer|decision|feedback|scope|finding>]
 repo: scoped
 data: {"id": string, "type": "B"|"F"|"T", "comments": [{"who": string, "kind": string, "text": string}]}
 exit: 2 for an invalid kind; 3 item unknown; tracker
@@ -148,13 +148,14 @@ shim: parse the one-line JSON (keys already camel-safe).
 note: the old `--dump` flag becomes the sub-verb `list`.
 
 ### rota item complete
-rota item complete <ID> [--commit <hash>] [--reason <done|handed-off|blocked|dropped>] [--note <text>] [--no-proof]
+rota item complete <ID> [--commit <hash>] [--reason <done|handed-off|blocked|dropped>] [--note <text>] [--no-proof] [--gist <text>]
 repo: scoped
-data: {"id": string, "type": "B"|"F"|"T", "reason": string, "commit": string, "changed": bool}
-exit: 3 unknown ID or type-letter mismatch; 4 when a `done` close has no `## Proof` row (old rc 3, bypass with `--no-proof`); 5 when git has no HEAD to default `--commit`; tracker
+data: {"id": string, "type": "B"|"F"|"T", "reason": string, "commit": string, "changed": bool, "decisionLog"?: string}
+exit: 1 when the item is a decision item (`decision:` label, file `Decision:` field) and `--gist` is missing (the message names the flag), when `--gist` is given for any other item, or when the item has a bad `decision:` label; 3 unknown ID or type-letter mismatch; 4 when a `done` close has no `## Proof` row (old rc 3, bypass with `--no-proof`); 5 when git has no HEAD to default `--commit`; tracker
 old: hv-complete <ID> [<hash>] [--reason R] [--note N] [--no-proof]
 shim: stdout is empty, so `commit` is `--commit` or `git log -1 --format=%h`, `reason` defaults to `done`, `changed` is false when already completed (stderr says no-op), else true. The shim tells proof-missing from tracker-unavailable (both old rc 3) by the stderr text.
 note: `--note` newlines are flattened to spaces and `--reason` defaults to `done`, as old.
+note: `--gist` is the one-line summary of a decision item. After the close, `- <ID>: <gist>` is appended under `## Decisions` in the item's milestone plan (the section is created when missing), and `decisionLog` is that milestone's ID. A repeat adds no second line, so a retry after a lost response is safe. An item with no milestone logs nothing (`decisionLog` is `""`, the text says so). The checks run before the close, so a refusal leaves the item open.
 
 ### rota item reopen
 rota item reopen <ID>

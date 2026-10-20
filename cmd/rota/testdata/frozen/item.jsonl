@@ -1,6 +1,6 @@
 {"utc":"2026-10-03","local":"2026-10-03"}
 {"name":"commentadd/archived-item","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B05","kind":"feedback","type":"B"},"ok":true},"tree":{".rota/bugs/B05.md":"9d18462e08063d78"}}]}
-{"name":"commentadd/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be question|answer|decision|feedback|scope"},"ok":false}}]}
+{"name":"commentadd/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be question|answer|decision|feedback|scope|finding"},"ok":false}}]}
 {"name":"commentadd/creates-detail-file","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B03","kind":"question","type":"B"},"ok":true},"tree":{".rota/bugs/B03.md":"c738e428c9224a7b"}}]}
 {"name":"commentadd/creates-task-detail","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"T01","kind":"decision","type":"T"},"ok":true},"tree":{".rota/tasks/T01.md":"fab419da5c31a8c1"}}]}
 {"name":"commentadd/crlf-body","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B01","kind":"feedback","type":"B"},"ok":true},"tree":{".rota/bugs/B01.md":"f7f2e4c3f583ce7a"}}]}
@@ -18,7 +18,7 @@
 {"name":"commentlist/all/archive-plain","steps":[{"exit":0,"env":{"data":{"comments":[{"kind":"question","text":"Why?\nmore detail","who":"2026-09-01"},{"kind":"answer","text":"Because.","who":"2026-09-02"}],"id":"B01","type":"B"},"ok":true}}]}
 {"name":"commentlist/all/archive-sectioned","steps":[{"exit":0,"env":{"data":{"comments":[{"kind":"question","text":"Why?\nmore detail","who":"2026-09-01"},{"kind":"answer","text":"Because.","who":"2026-09-02"}],"id":"B01","type":"B"},"ok":true}}]}
 {"name":"commentlist/all/noarchive","steps":[{"exit":0,"env":{"data":{"comments":[{"kind":"question","text":"Why?\nmore detail","who":"2026-09-01"},{"kind":"answer","text":"Because.","who":"2026-09-02"}],"id":"B01","type":"B"},"ok":true}}]}
-{"name":"commentlist/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be question|answer|decision|feedback|scope"},"ok":false}}]}
+{"name":"commentlist/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be question|answer|decision|feedback|scope|finding"},"ok":false}}]}
 {"name":"commentlist/done-item-no-detail","steps":[{"exit":0,"env":{"data":{"comments":[],"id":"B08","type":"B"},"ok":true}}]}
 {"name":"commentlist/filter-none","steps":[{"exit":0,"env":{"data":{"comments":[],"id":"B01","type":"B"},"ok":true}}]}
 {"name":"commentlist/filter-question","steps":[{"exit":0,"env":{"data":{"comments":[{"kind":"question","text":"Why?\nmore detail","who":"2026-09-01"}],"id":"B01","type":"B"},"ok":true}}]}

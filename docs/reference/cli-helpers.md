@@ -102,7 +102,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota item field get <ID> --name <title\|detail\|related\|milestone\|repos\|subsystem\|since\|reason\|note>` | print one field of an item |
 | `rota item field set <ID> --name <milestone\|related\|repos\|subsystem\|detail> --value <text>` | set, replace or clear a field of an open item |
 | `rota item field list <ID>` | every field of an item |
-| `rota item complete <ID> [--commit <hash>] [--reason <done\|handed-off\|blocked\|dropped>] [--note <text>] [--no-proof]` | close an item |
+| `rota item complete <ID> [--commit <hash>] [--reason <done\|handed-off\|blocked\|dropped>] [--note <text>] [--no-proof] [--gist <text>]` | close an item; a decision item needs `--gist`, its line in the milestone's `## Decisions` |
 | `rota item reopen <ID>` | restore a completed item |
 | `rota item rm <ID>... [--scrub-archive] [--apply]` | remove items with their cross-references and files |
 | `rota item shipped <title>...` | look for evidence that titles already shipped |
@@ -227,7 +227,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 
 | Usage | What it does |
 |---|---|
-| `rota milestone add --title <text> --summary <text> [--depends M01,M02]` | mint a milestone |
+| `rota milestone add --title <text> --summary <text> [--depends M01,M02] [--kind <delivery\|decision>]` | mint a milestone; `--kind decision` adds `kind: decision` and empty `## Decisions` and `## Not yet specified` sections |
 | `rota milestone list` | list milestones |
 | `rota milestone show <id>` | print a milestone |
 | `rota milestone put <id> --body-file <path\|->` | replace a milestone's text |
@@ -363,7 +363,7 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 | `rota round reclaim <slot> [--force] [--note-file <path\|->] [--holder-pid <n>]` | free a dead or stalled slot and make its issue assignable; an `unverifiable` slot (host unreachable, pane unreadable, stale handle) exits 4 with the reason unless `--force`, and `--force` still refuses when the host cannot be asked at all |
 | `rota round review-relay <slot>` | relay new review input on a done slot's PR to its worker as a counted bounce (`REVIEW` relay); at `round.freshAt` transfer to a free slot instead, with the open findings only; at `round.maxBounces` escalate on the PR instead, exit 4; never gates or merges |
 | `rota round bounce <ID> [--head <sha>] [--slot <slot>]` | count one by-hand review bounce of an item; the same `--head` twice counts once; `--slot` names the slot holding the bounced PR so a best-of attempt gets its own ledger row; exit 4 when `--slot` names a slot outside the pool (nothing written), or once the item is at `round.maxBounces`, then transfer it to a higher tier or `--to human` |
-| `rota round accept <ID> [--issues <#a,#b>] [--gist <text>]` | close a finished round-minted architecture-review item with no PR: comments the filed issues, completes it without proof, releases its claim and frees the slot; `--issues` supplies them when the slot recorded none; a repeat on a closed item is `changed: false` |
+| `rota round accept <ID> [--issues <#a,#b>] [--gist <text>]` | close a finished round-minted architecture-review item, or a `decision:research` item with a finding comment, with no PR: comments the filed issues (or the gist), completes it without proof, releases its claim and frees the slot; `--issues` supplies them when the slot recorded none; a research item needs `--gist`, the line for the milestone's decision log; a repeat on a closed item is `changed: false` |
 | `rota round pick <ID> --pr <N> --reason-file <path\|-> [--holder-pid <n>]` | `best-of:2` issue: name the winning PR; close the other attempt's PR with the reason, keep its branch |
 | `rota round wind-down [--no-verify] [--holder-pid <n>]` | re-verify the base, park every slot, release the lease |
 | `rota receipt show <request-id>` | after a lost response: report whether the call under that id applied, as `completed` (with the stored `result`), `pending` or `absent`; `absent` is not proof nothing happened |

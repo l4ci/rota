@@ -341,7 +341,7 @@ func smokeStr(n int) string {
 func (s *Slot) Unbind() {
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
-	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "issues", "reviewSeen", "event", "heartbeatAt", "outcome", "inbox"} {
+	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "issues", "reviewSeen", "event", "heartbeatAt", "outcome", "inbox", "finding"} {
 		s.o.Delete(k)
 	}
 }
@@ -405,6 +405,23 @@ func (s *Slot) Issues() []string {
 		}
 	}
 	return out
+}
+
+// Finding is the comment id a research item's worker reported
+// (`ROTA-DONE <slot> finding:<id>`), the slot's done evidence in place of a PR.
+func (s *Slot) Finding() string {
+	v, _ := s.o.Get("finding")
+	id, _ := v.(string)
+	return id
+}
+
+// SetFinding records the reported finding comment; "" clears it.
+func (s *Slot) SetFinding(id string) {
+	if id == "" {
+		s.o.Delete("finding")
+		return
+	}
+	s.o.Set("finding", id)
 }
 
 // SetIssues records the reported issues; none clears them.

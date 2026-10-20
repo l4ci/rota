@@ -95,3 +95,26 @@ func TestMilestoneStatusShippedAudit(t *testing.T) {
 		t.Errorf("clean milestone: %d %s", code, out)
 	}
 }
+
+func TestMilestoneAddKindDecision(t *testing.T) {
+	dir := gitRepo(t)
+	if code, _, stderr := rotaIn(t, dir, "milestone", "add", "--title", "T", "--summary", "S", "--kind", "bogus"); code != 1 || !strings.Contains(stderr, "kind") {
+		t.Errorf("unknown kind: exit %d %s", code, stderr)
+	}
+	if code, out, _ := rotaIn(t, dir, "milestone", "add", "--title", "Plain", "--summary", "S", "--json"); code != 0 {
+		t.Fatalf("delivery add: %d %s", code, out)
+	}
+	_, out, _ := rotaIn(t, dir, "milestone", "show", "M01", "--json")
+	if d := data(t, out); d["kind"] != "delivery" || strings.Contains(d["body"].(string), "## Decisions") {
+		t.Errorf("a delivery milestone is unchanged: %s", out)
+	}
+	if code, out, _ := rotaIn(t, dir, "milestone", "add", "--title", "Fog", "--summary", "S", "--kind", "decision", "--json"); code != 0 || data(t, out)["id"] != "M02" {
+		t.Fatalf("decision add: %d %s", code, out)
+	}
+	_, out, _ = rotaIn(t, dir, "milestone", "show", "M02", "--json")
+	d := data(t, out)
+	body, _ := d["body"].(string)
+	if d["kind"] != "decision" || !strings.Contains(body, "kind: decision\n") || !strings.Contains(body, "## Decisions\n") || !strings.Contains(body, "## Not yet specified\n") {
+		t.Errorf("decision milestone: %s", out)
+	}
+}
