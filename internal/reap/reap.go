@@ -180,7 +180,7 @@ func (s *state) skillTree(name string) bool {
 
 // findSkillCache lists the extracted skill trees of other rota versions. The
 // running version's tree is never listed, and neither is a dot directory (an
-// extraction in flight).
+// extraction still running).
 func findSkillCache(_ context.Context, s *state) ([]Candidate, error) {
 	if s.in.SkillCache == "" {
 		return nil, nil
