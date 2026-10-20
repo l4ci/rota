@@ -42,7 +42,7 @@ func TestNextID(t *testing.T) {
 }
 
 func TestComposeEndsWithMarker(t *testing.T) {
-	got := Compose("e4", "Pick", "\nbody line\n\n")
+	got := Compose("e4", "Pick", "\nbody line\n\n", Choice{})
 	want := "**rota escalation e4**: Pick\n\nbody line\n\nAnswer in a new comment on this thread.\n\n<!-- rota:escalation e4 -->\n"
 	if got != want {
 		t.Errorf("got:\n%q\nwant:\n%q", got, want)
