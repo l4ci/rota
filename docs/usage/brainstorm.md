@@ -43,6 +43,10 @@ Then the skill drafts the whole design in one pass, including three approaches:
 
 The draft covers Goal, Design, Approaches considered, Acceptance, Open questions and Assumptions, with your pick marked. You approve it once (or ask for revisions). It is then stored, here at `.rota/designs/F12.md`.
 
+## Edge probe (opt-in)
+
+Set `brainstorm.edgeProbe` to `true` (default `false`, see [configuration](configuration.md#brainstormedgeprobe)) and Step 3 also probes for gaps inside the same draft. It lists eight edge categories (boundary, empty, ordering, idempotency, concurrency, encoding, precision, adjacency) and records each as `covered: <how>` or `dismissed: <reason>`. It then asks once, "What must this never do?", and writes each answer as a negative acceptance criterion, a `- [ ] AC-n:` line that states a prohibition. There is no extra approval step, and the probe is skipped when the issue body already has `## Acceptance`. `--grill` and `/rota-plan` are unchanged.
+
 ## The artifact
 
 `.rota/designs/F12.md` is a small markdown file with frontmatter and these sections (Acceptance is skipped when the issue body already has one):

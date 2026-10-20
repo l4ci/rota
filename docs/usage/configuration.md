@@ -126,6 +126,14 @@ Related keys: `work.workerSlots` (pool size, default `3`), `work.workerCommand` 
 
 **Workers run with permissions skipped; the operator does not.** A worker is briefed to commit, open a PR and run tests with nobody in its pane to answer a prompt, so a narrower mode just stalls it. What bounds a worker is scope rather than gating — a throwaway branch in its own worktree, with `rota worker gate` verifying a scratch merge before anything reaches the cycle branch. The operator keeps `auto` because it performs the merges and it is the window a human is actually watching. Narrow either via its config key; a worker that then stops on a prompt reports `NEEDS-PERMISSION` rather than hanging.
 
+## brainstorm.edgeProbe
+
+Opt-in, `false` by default. With `false`, [`/rota-brainstorm`](brainstorm.md) is unchanged. With `true`, Step 3 adds an edge and prohibition probe to the one draft: it lists boundary, empty, ordering, idempotency, concurrency, encoding, precision and adjacency, records each as `covered: <how>` or `dismissed: <reason>`, asks once "What must this never do?" and writes each answer as a `- [ ] AC-n:` line that states a prohibition. It adds no approval step, and it is skipped when the issue body already has `## Acceptance`. `/rota-plan` and `--grill` are unaffected.
+
+```bash
+rota config set brainstorm.edgeProbe true
+```
+
 ## refactor.confirmBeforeExecute
 
 Applies to `/rota-refactor --fix` only; the default findings run files issues and writes no code. When `true` (default), `--fix` confirms the list of candidates before implementing them. Set to `false` to fix without that pause.
