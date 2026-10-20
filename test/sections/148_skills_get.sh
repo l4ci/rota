@@ -10,7 +10,12 @@ case $OUT in *rota-pause*) ;; *) fail "skills list lacks rota-pause: $OUT" ;; es
 rc=0
 OUT=$(cd "$TMP_SG" && "$ROTA_BIN" skills get rota-pause 2>/dev/null) || rc=$?
 [ "$rc" -eq 0 ] || fail "skills get exited $rc"
-case $OUT in "---"*"name: rota-pause"*) ;; *) fail "skills get text is not the SKILL.md: ${OUT:0:120}" ;; esac
+# #1099: the first line names the extracted base directory, then the SKILL.md follows.
+FIRST=$(printf '%s\n' "$OUT" | head -1)
+BODY=$(printf '%s\n' "$OUT" | tail -n +2 | sed '/./,$!d')
+case $FIRST in "Base directory for this skill: "*) ;; *) fail "skills get lacks the base-directory line: ${OUT:0:120}" ;; esac
+[ -f "${FIRST#Base directory for this skill: }/SKILL.md" ] || fail "skills get base directory has no SKILL.md: $FIRST"
+case $BODY in "---"*"name: rota-pause"*) ;; *) fail "skills get text is not the SKILL.md: ${BODY:0:120}" ;; esac
 
 rc=0
 OUT=$(cd "$TMP_SG" && "$ROTA_BIN" --json skills get rota-pause 2>/dev/null) || rc=$?
