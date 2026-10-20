@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -164,13 +163,16 @@ func trainNudgeLines(ns []trainNudge) []string {
 	return out
 }
 
-// tickNeedsMerge is true when the tick left PRs for a person to merge
-// (ship.mergeApproval is not none), so the train is the orchestrator's to run.
-func tickNeedsMerge(r roundtick.Result) bool {
-	for _, it := range r.NeedsYou {
-		if it.Kind == "merge" {
-			return true
-		}
+// addTrainNudge sets the `trainNudge` array on d and returns text with the
+// nudge lines appended, when two or more reviewed PRs wait on one base. Shared
+// by `round watch` and `round tick` (`round wait` builds its own): a tick that merged nothing
+// still leaves the nudge, since PRs the autopilot held or has not reached wait.
+func addTrainNudge(c *Ctx, root string, d *jsonx.Object, text []string) []string {
+	nudges := trainNudges(waitingPRs(c, root))
+	rows := trainNudgeData(nudges)
+	if rows == nil {
+		return text
 	}
-	return false
+	d.Set("trainNudge", rows)
+	return append(text, trainNudgeLines(nudges)...)
 }
