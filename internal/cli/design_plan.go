@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/design"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/plan"
@@ -76,8 +75,12 @@ func readBody(c *Ctx, file string) (string, error) {
 	if file == "" {
 		return "", Usage("--body-file is required")
 	}
-	s, err := artifact.ReadBody(c.Stdin, file)
-	return s, err
+	b, err := readBodyInput(c, "body-file", file, ExitUsage)
+	if err != nil {
+		return "", err
+	}
+	// Raw bytes, no newline normalisation; each invalid UTF-8 byte becomes U+FFFD.
+	return string([]rune(string(b))), nil
 }
 
 func idData(id string, changed any) *jsonx.Object {

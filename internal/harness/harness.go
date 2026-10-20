@@ -171,6 +171,9 @@ type PaneVocab struct {
 	// one of them that a human must fix (a dead key): no reset clock exists.
 	Limits   []string
 	AuthDead string
+	// LoggedOut is the pane text of a session that is not logged in: the slot
+	// can do nothing until a human fixes its account. The pane is BLOCKED.
+	LoggedOut string
 	// BadModel is the dialog for a tier model the provider refuses; group 1 is
 	// the model id. The pane is BLOCKED.
 	BadModel string
@@ -307,6 +310,11 @@ type Harness interface {
 	RawPaste() bool
 	// AccountEnv is the environment that selects the slot's account.
 	AccountEnv(a Account) []string
+	// AmbientAccount is the account the orchestrator's own environment
+	// selects (its CLAUDE_CONFIG_DIR, CODEX_HOME, OPENCODE_CONFIG_DIR). A slot
+	// with no account of its own inherits it: a herdr pane starts from the
+	// herdr server's environment, not the orchestrator's.
+	AmbientAccount(getenv func(string) string) Account
 	// Accounts is the kind's configured accounts and the config key they come
 	// from (round.accounts, round.codexAccounts).
 	Accounts(cfg any) AccountList
