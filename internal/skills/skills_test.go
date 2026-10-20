@@ -744,6 +744,9 @@ func TestStubRootStaleNamesSkillOnFrontmatterChange(t *testing.T) {
 	if st.Current || len(st.Changed) != 1 || !strings.HasPrefix(st.Changed[0], "rota-a") {
 		t.Errorf("frontmatter change: %+v", st)
 	}
+	if !strings.Contains(st.Changed[0], "stub changed") {
+		t.Errorf("label %q should say stub changed, not guess frontmatter", st.Changed[0])
+	}
 	added := stubSet(t, "# a\n", "# b\n", map[string]string{"rota-c/SKILL.md": fmt.Sprintf(fm, "rota-c", "C.") + "# c\n"})
 	st = stubRootStatus(t, old, added)
 	if st.Current || len(st.Changed) != 1 || !strings.HasPrefix(st.Changed[0], "rota-c") || !strings.Contains(st.Changed[0], "added") {
@@ -753,4 +756,32 @@ func TestStubRootStaleNamesSkillOnFrontmatterChange(t *testing.T) {
 	if st.Current || len(st.Changed) != 1 || !strings.HasPrefix(st.Changed[0], "rota-c") || !strings.Contains(st.Changed[0], "removed") {
 		t.Errorf("removed skill: %+v", st)
 	}
+}
+
+func TestStubChangesPolicyAndTemplateLabels(t *testing.T) {
+	now := stubSet(t, "# a\n", "# b\n", map[string]string{"rota-a/agents/openai.yaml": "v2\n"})
+	rec := map[string]string{}
+	for _, p := range []string{"rota-a/SKILL.md", "rota-b/SKILL.md"} {
+		rec[p] = hashBytes([]byte("old stub template"))
+	}
+	rec["rota-a/agents/openai.yaml"] = hashBytes([]byte("v1\n"))
+	got := stubChanges(rec, mustStub(t, now))
+	want := []string{"rota-a (stub changed)", "rota-b (stub changed)"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	rec["rota-a/SKILL.md"] = hashBytes(mustStub(t, now).files["rota-a/SKILL.md"])
+	got = stubChanges(rec, mustStub(t, now))
+	if len(got) != 2 || got[0] != "rota-a (agent policy changed)" {
+		t.Errorf("policy-only change: %v", got)
+	}
+}
+
+func mustStub(t *testing.T, s *Set) *Set {
+	t.Helper()
+	st, err := s.Stubbed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st
 }
