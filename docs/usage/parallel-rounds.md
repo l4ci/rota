@@ -560,6 +560,8 @@ they match, that is the pass. When the base moved between the last check and the
 with `data.changed` true, and you fix forward with a new PR. With `test.fullWhere` set to `ci`, CI
 checks the merge result first and nothing lands when it fails.
 
+After `test.full` and `test.e2e` pass, the gate runs the `## Try it` steps of the slot's issue on the merged tree, in order, stopping at the first failure. A step fails on a non-zero exit or a missing `expect:` substring (`verify-failed`, nothing lands). The steps run only when the issue's author and last editor have write access on the forge (a file issue source runs unchecked); otherwise the gate notes `BEHAVIOUR-SKIP` and continues. The transcript goes to `.rota/qa-runs/behaviour/` and a `behaviour` verdict is recorded. `--check-only` and `--no-verify` skip the run.
+
 A branch that is only behind the base is merged as is when the merge is clean, even when both sides
 changed a file: the `STALE-MERGE` note names the shared files (`round.sharedPaths` aside) and the gate
 verifies the merged tree. Only a conflict sends it back as `stale`. Each `stale` or `provenance-fail` bounce is counted per item; at `round.maxBounces` (default
@@ -578,6 +580,8 @@ pays for the verify once instead of once per PR. It checks each member the way `
 merges them onto the base in a scratch worktree in the order it picks, runs `test.full` on that
 tree, then `test.e2e` when set (the most expensive tier runs once per train, not once per PR), and on a pass lands every member through the gate in order. If the base or a member's head moved
 while it verified, nothing lands (`base-moved`); the same verdict stops the train mid-way if the base changes between landings. Members must be all PRs or all slots without one.
+
+After the tree verifies and before anything lands, the train also runs each member's `## Try it` steps in the scratch tree, member by member in merge order. A member whose steps fail is the `culprit`. `--no-verify` does not skip this.
 
 The train orders the members to cut conflicts: PRs that share no path with another candidate go first (lowest PR number first), then the PRs that share paths, smallest diff first. It prints one line per PR with the reason (`no shared paths`, or `shares 2 paths with #12, #15`) before it pushes anything. `--order 12,15,9` replaces that order and must name every PR exactly once. If a shared-path member conflicts with the ones before it, the train names the pair, exits 4 with `blockedBy: order` and pushes nothing; a conflict under `--order` is `merge-failed`. It never rebases a PR for you.
 

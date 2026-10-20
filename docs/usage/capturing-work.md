@@ -93,6 +93,10 @@ If the text names a harness ("do this one with codex") or a model, `/rota-captur
 
 `rota item create --depends-on <refs>` writes a `## Depends on` section naming the items that must close first. When one item clearly needs another, `/rota-capture` creates the prerequisite first and passes its new ID. Items that are only related use `Related:`. See the [helper reference](../reference/cli-helpers.md).
 
+## Triaging an issue someone else filed
+
+`/rota-capture --triage <N>[,<N>...]` is the first read of a tracker issue you did not write. It reads the whole thread, searches for duplicates and already-shipped work, queries `DECISIONS.md` for a prior decision and, for a bug, tries the reporter's steps against the current tree. It creates no item. For each issue it asks you once, then acts: close with the reason, comment and label `needs-info`, or mark it ready (no label change). Commenting, labelling and closing always ask, whatever `autonomy.level` says. `rota round candidates` does not read `needs-info`.
+
 ## What /rota-capture is not
 
 `/rota-capture` is a pure recording tool. It classifies and files. It does not act, validate the item, or deduplicate against existing entries. It prints the new IDs and stops; it never starts work. To implement an item, run [/rota-work](running-work.md) on its ID. To remove a captured item that turned out to be a duplicate or wrong-premise, use [`/rota-capture --remove`](removing-work.md).
