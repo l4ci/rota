@@ -261,3 +261,35 @@ func TestDefaultRoundEnvCarriesRoundSettings(t *testing.T) {
 		t.Errorf("Round = %+v, err %v", e.Round, e.RoundErr)
 	}
 }
+
+// A slot whose worker reported partial or failed shows the outcome beside its
+// state, in the JSON row and in the text line.
+func TestRoundStatusShowsTheReportedOutcome(t *testing.T) {
+	root, deps := roundFixture(t, nil)
+	if code, out, _ := rotaInWith(t, deps, root, "--json", "round", "reconcile", "--apply"); code != 0 {
+		t.Fatalf("reconcile exit %d: %s", code, out)
+	}
+	if err := worker.Update(root, func(d *worker.Doc) {
+		s := d.Slot("dana")
+		s.SetOutcome(worker.OutcomePartial, []string{"changed a", "found b", "left c"}, "2026-10-16T12:00:00Z")
+		s.SetEvent(worker.EventDone, "partial: changed a | found b | left c", "2026-10-16T12:00:00Z")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, out, _ := rotaInWith(t, deps, root, "--json", "round", "status")
+	for _, r := range data(t, out)["slots"].([]any) {
+		row := r.(map[string]any)
+		want := ""
+		if row["name"] == "dana" {
+			want = "partial"
+		}
+		got, _ := row["outcome"].(string)
+		if got != want {
+			t.Errorf("%v: outcome = %q, want %q", row["name"], got, want)
+		}
+	}
+	_, text, _ := rotaInWith(t, deps, root, "round", "status")
+	if !strings.Contains(text, "/partial") {
+		t.Errorf("text lacks the outcome beside the state: %q", text)
+	}
+}

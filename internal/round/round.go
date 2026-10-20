@@ -171,6 +171,9 @@ type Row struct {
 	// nil when none stands. Its body is the row's Evidence: the worker's own
 	// word reads ahead of what `round wait` last returned.
 	Event *worker.Event
+	// Outcome is the outcome the slot's worker reported through
+	// `worker done --outcome` ("" when it reported none).
+	Outcome string
 	// Burn is the quota the slot has consumed, in percentage points of its
 	// account's headroom since its assign; nil when unknown (codex, no meter). Only the --ui screen fills it; Data never carries it.
 	Burn *float64
@@ -611,6 +614,7 @@ func (e Env) readRows(wts []worktree, reg worker.Registry, rep *Report) ([]*Row,
 			r.Event = ev
 			r.Evidence = strutil.FirstNonEmpty(ev.Body, r.Evidence)
 		}
+		r.Outcome, _ = s.Outcome()
 		r.Kind, r.KindSource, r.Tier, r.Model, r.TierReason = s.HarnessKind(), s.KindSource(), s.Tier(), s.Model(), s.TierReason()
 		if r.Issue != "" {
 			r.Bounces = reg.Bounces(r.Issue)

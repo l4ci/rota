@@ -66,7 +66,16 @@ Work only this task, then stop.
   commands (`gh pr merge`, force-push to another branch, `git reset --hard` outside your worktree,
   `git branch -D`, `git clean -f`) when `ROTA_SLOT` is set. It is a guardrail, not a boundary: do not
   route around a refusal, and Codex workers are not guarded.
-- Commit your own work, run `rota worker done <slot>` (add `--attempt <id>` only when your brief names an attempt id; from your worktree or the main checkout; it finds the pool through the git common dir and expands `{files}` in the slot's worktree), then open a PR against `<base-branch>`. Never merge.
+- Commit your own work, run `rota worker done <slot>` (add `--outcome`/`--summary-file` as in *Outcome*, and `--attempt <id>` only when your brief names an attempt id; from your worktree or the main checkout; it finds the pool through the git common dir and expands `{files}` in the slot's worktree), then open a PR against `<base-branch>`. Never merge.
+- Outcome. Say how the work ended: `rota worker done <slot> --outcome done|partial|failed
+  --summary-file <f>`. The file is exactly three lines: what changed, what was found, what
+  remains. `done`: every acceptance criterion is met and verified. `partial`: you opened a
+  PR with some criteria met and others not; name the unmet ones on the third line. `failed`:
+  you cannot deliver what the ticket asks and stop (a PR may hold what you learned). Never
+  encode partial or failed only in prose or in the PR title. `partial` and `failed` need the
+  file; the gate refuses the PR (`blockedBy: outcome-open`) until the orchestrator relays or
+  transfers the slot, so say so rather than hoping it merges. Put the `prBlock` the verb prints
+  first in the PR body, above the other sections.
 - Attempt id. If your brief names an attempt id, pass `--attempt <id>` to `rota worker done` and
   `rota round report`. A refusal that calls the attempt stale (exit 4) means the orchestrator
   reclaimed or transferred your assignment: you are fenced. Stop at once, do not retry, do not

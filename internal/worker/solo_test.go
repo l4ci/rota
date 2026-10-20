@@ -141,3 +141,21 @@ func TestWaitUnderSoloNeverBlocks(t *testing.T) {
 		t.Errorf("%+v", res)
 	}
 }
+
+// A registry wake carries the done event's body, so `round watch` shows the
+// outcome and its summary beside the slot state.
+func TestWaitCarriesTheOutcomeEvidence(t *testing.T) {
+	dir := soloProject(t)
+	e := soloEnv(t)
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
+		s.SetOutcome(OutcomePartial, []string{"a", "b", "c"}, "2026-10-20T00:00:00Z")
+		s.SetEvent(EventDone, "partial: a | b | c", "2026-10-20T00:00:00Z")
+		s.MarkState("done", "2026-10-20T00:00:00Z")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := e.Wait(bg, dir, WaitOpts{})
+	if err != nil || res.Slot != "w1" || res.Evidence != "partial: a | b | c" {
+		t.Fatalf("wait = %+v (%v), want the outcome as evidence", res, err)
+	}
+}

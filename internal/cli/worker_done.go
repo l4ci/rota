@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/stamp"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/git"
@@ -26,8 +27,14 @@ const fastTierCheck = "rota test run fast"
 func workerDone(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "ref {files} is diffed against (default: the base branch)")
 	attempt := fs.String("attempt", "", "the attempt id from your brief; a stale one exits 4")
+	outcome := fs.String("outcome", "", "how the work ended: "+strings.Join(worker.Outcomes, "|")+" (default: done, no summary)")
+	summaryFile := fs.String("summary-file", "", "three lines: what changed, what was found, what remains (required for partial and failed)")
 	return func(c *Ctx, args []string) (Result, error) {
 		slotName, err := oneArg(args, "slot")
+		if err != nil {
+			return Result{}, err
+		}
+		kind, summary, err := readOutcome(*outcome, *summaryFile)
 		if err != nil {
 			return Result{}, err
 		}
@@ -124,7 +131,8 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			now := stamp.Format(c.deps().Now())
 			// The worker's own word, read ahead of the pane: a static pane with
 			// no sentinel must not turn this slot back into idle.
-			s.SetEvent(worker.EventDone, s.PR(), now)
+			s.SetEvent(worker.EventDone, outcomeEvidence(kind, summary, s.PR()), now)
+			s.SetOutcome(kind, summary, now)
 			if s.State() == "done" {
 				return
 			}
@@ -144,7 +152,14 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			worker.LedgerDone(c.deps().workerEnv(), c.Context(), c.deps().WorkerAccounts(), poolRoot, ledger.Entry{Issue: id, Slot: slotName, Account: sl.Account(), Harness: sl.Kind(), PR: sl.PR()})
 		}
 		d.Set("changed", changed)
-		return Result{Data: d, Text: fmt.Sprintf("%s\tdone", slotName)}, nil
+		text := fmt.Sprintf("%s\tdone", slotName)
+		if kind != "" {
+			d.Set("outcome", kind)
+			block := outcomeBlock(kind, summary)
+			d.Set("prBlock", block)
+			text += "\t" + kind + "\n" + block
+		}
+		return Result{Data: d, Text: text}, nil
 	}
 }
 
@@ -197,4 +212,60 @@ func branchHead(c *Ctx, root, branch string) (string, error) {
 		return "", Resolution("branch %s of the slot does not exist", branch)
 	}
 	return head, nil
+}
+
+// readOutcome validates --outcome and --summary-file. No outcome and no file is
+// a plain done, as before. partial and failed must say why, so they require
+// the file; a file names three lines: what changed, what was found, what
+// remains. kind is "" for a plain done with no summary.
+func readOutcome(outcome, file string) (kind string, summary []string, err error) {
+	if outcome != "" && !slices.Contains(worker.Outcomes, outcome) {
+		return "", nil, Usage("--outcome must be one of %s, got %q", strings.Join(worker.Outcomes, ", "), outcome)
+	}
+	if file == "" {
+		if outcome == worker.OutcomePartial || outcome == worker.OutcomeFailed {
+			return "", nil, Usage("--outcome %s needs --summary-file: three lines naming what changed, what was found and what remains", outcome)
+		}
+		return outcome, nil, nil
+	}
+	if outcome == "" {
+		outcome = worker.OutcomeDone
+	}
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return "", nil, Resolution("cannot read --summary-file: %v", err)
+	}
+	for _, l := range strings.Split(string(b), "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			summary = append(summary, l)
+		}
+	}
+	if len(summary) != 3 {
+		return "", nil, Usage("--summary-file must hold exactly three lines (what changed, what was found, what remains), got %d", len(summary))
+	}
+	return outcome, summary, nil
+}
+
+// outcomeEvidence is the done event's body: the PR, as before, or for a typed
+// outcome "<outcome>: <line> | <line> | <line>", which `round wait` and
+// `round status` show beside the slot state.
+func outcomeEvidence(kind string, summary []string, pr string) string {
+	if kind == "" {
+		return pr
+	}
+	if len(summary) == 0 {
+		return kind
+	}
+	return kind + ": " + strings.Join(summary, " | ")
+}
+
+// outcomeBlock is the first block of the PR body: the outcome and its three
+// lines.
+func outcomeBlock(kind string, summary []string) string {
+	var b strings.Builder
+	b.WriteString("Outcome: " + kind + "\n")
+	for _, l := range summary {
+		b.WriteString("- " + l + "\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
