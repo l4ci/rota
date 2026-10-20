@@ -400,6 +400,8 @@ def prose_rules():
           lacks(sk("capture"), "Import Mode", "Import Mode was removed"),
           has("skills/rota-capture/remove-mode.md", "Step R3", "missing Step R3 (Remove Mode de-tag gate)"),
           has("skills/rota-capture/triage-mode.md", "Step T5", "missing Step T5 (Triage Mode outcome)"),
+          has("skills/rota-capture/triage-mode.md", CALLOUT, "missing the manual-gate callout (Step T5)"),
+          has("skills/references/manual-gates.md", r"/rota-capture.*Step T5", "missing the rota-capture Step T5 row", True),
           has("skills/rota-capture/triage-mode.md", "rota decisions query", "Triage Mode must check prior decisions"),
           has(sk("capture"), "triage-mode.md", "SKILL.md does not route --triage to triage-mode.md"),
           has(sk("ship"), "Step 6c", "missing Step 6c (direct-push close gate)"),
