@@ -391,3 +391,19 @@ func TestProfileNamesMatchConfigChoices(t *testing.T) {
 	}
 	t.Fatal("round.profile key missing")
 }
+
+func TestFullOnly(t *testing.T) {
+	for cfg, want := range map[string]bool{
+		`{"test":{"full":["go test ./..."]}}`:                            true,
+		`{"test":{"fast":["go test {files}"],"full":["go test ./..."]}}`: false,
+		``: false,
+	} {
+		s, err := Load(project(t, cfg))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s.FullOnly != want {
+			t.Errorf("%s: FullOnly = %v, want %v", cfg, s.FullOnly, want)
+		}
+	}
+}
