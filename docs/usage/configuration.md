@@ -421,6 +421,17 @@ Controls whether `/rota-ship` invokes [`/rota-qa run`](qa.md) between `/rota-rev
 
 The gate is opt-in because product QA needs strategy files (`/rota-qa first-run` bootstraps them) and often binds to infra (dev server, sandbox creds, runners installed). Most cycles don't need it. Enable for repos that have a QA strategy wired up and where regressions cost more than the runner time.
 
+## ship.uat
+
+Controls whether `/rota-ship` runs [`/rota-qa uat`](qa.md#uat-human-acceptance) for each item on the branch, after review and before the merge/PR step.
+
+| Value | Behavior |
+|-------|----------|
+| `false` (default) | `/rota-ship` skips the walk-through. `/rota-qa uat <ID>` still works when you call it. |
+| `true` | `/rota-ship` walks each item's acceptance with you: criteria with a PASS test proof row auto-pass, the rest (and every `(human)` criterion) are asked one at a time. A failure is captured as a linked item and does not block the ship. |
+
+It is never part of the round merge gate: `rota worker gate` and the round merge path behave the same with the key on, so round PRs stay unattended.
+
 ## ship.mergeApproval and ship.mergeApprovalPaths
 
 Whether a merge needs a human. The merge verbs (`rota ship merge`, `rota ship pr-merge`, `rota worker gate`) read it, so it binds `/rota-ship`, `/rota-review --queue` and the `/rota-work` gate step at every `autonomy.level`. In a round, `rota worker gate` enforces it; see [parallel rounds](parallel-rounds.md).

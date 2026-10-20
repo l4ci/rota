@@ -506,3 +506,17 @@ func TestSetContextGuardValidatesEnum(t *testing.T) {
 		}
 	}
 }
+
+func TestShipUATDefaultsOffAndIsBool(t *testing.T) {
+	root := project(t, `{}`, `{}`)
+	rows, err := Show(root, "ship.uat", true)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("ship.uat: %v, %v", rows, err)
+	}
+	if rows[0].Value != false || rows[0].Source != "default" {
+		t.Errorf("ship.uat = %v (%s), want false from default", rows[0].Value, rows[0].Source)
+	}
+	if _, err := Set(root, "ship.uat", "true"); err != nil {
+		t.Errorf("Set ship.uat true: %v", err)
+	}
+}

@@ -53,7 +53,7 @@ This project uses rota for backlog tracking, planning, and skill orchestration. 
 
 **Capture & pick** — `/rota-capture` (with `--remove <ID>` to delete items; offers to hand off to `/rota-work`), `/rota-pause`
 **Plan & build** — `/rota-brainstorm`, `/rota-plan`, `/rota-spike`, `/rota-work` (no argument reconciles active work and suggests the next item; `--preview` for read-only peek), `/rota-debug`
-**Rounds** — `/rota-orchestrate` (run a parallel round as the orchestrator)
+**Rounds** — `/rota-orchestrate` (run a parallel round as the orchestrator), `/rota-answer` (put pending decisions to the maintainer one by one)
 **Review & ship** — `/rota-review`, `/rota-qa` (opt-in gate via `ship.qa`), `/rota-ship` (`--undo` to roll back the last cycle, `--docs` to maintain public docs)
 **Persist** — `/rota-learn` (durable knowledge; `--term <name>` for glossary), `/rota-decide` (hard boundaries — manual only)
 **Vision & maps** — `/rota-vision`, `/rota-refactor`
