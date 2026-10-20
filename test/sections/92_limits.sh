@@ -345,9 +345,10 @@ SCD="$(git -C "$SP" rev-parse --path-format=absolute --git-common-dir)"
 slm() { ( cd "$SP" && exec env -u HERDR_ENV PATH="$FAKES" FAKE_TMUX="$FK/tmux" TMUX_PANE=%7 TZ=UTC "$@" ); }
 ( cd "$SP" && exec env -u HERDR_ENV PATH="$FAKES" FAKE_TMUX="$FK/tmux" TMUX_PANE=%7 TZ=UTC "$ROTA_BIN" keepalive run -- sleep 60 ) >"$TMP_LM/sup.out" 2>&1 &
 LMSUP=$!
-for _ in $(seq 100); do [ "$(sent)" != "0" ] && break; sleep 0.1; done
-[ "$(sent)" = "1" ] && grep -q -F -- "send-keys -t %7 -l -- $PROMPT" "$FK/tmux/log" || fail "D3: the supervisor's own loop must resume the due entry in its pane: $(cat "$FK/tmux/log") $(cat "$TMP_LM/sup.out")"
 LMREG="$SREG"
+# wait on the recorded resume, not the typed prompt: the loop types first and writes the entry after (#989)
+for _ in $(seq 100); do [ "$(lim l1 status)" = "resumed" ] && break; sleep 0.1; done
+[ "$(sent)" = "1" ] && grep -q -F -- "send-keys -t %7 -l -- $PROMPT" "$FK/tmux/log" || fail "D3: the supervisor's own loop must resume the due entry in its pane: $(cat "$FK/tmux/log") $(cat "$TMP_LM/sup.out")"
 [ "$(lim l1 status)" = "resumed" ] || fail "D3: the supervisor's loop must record the resume: $(cat "$SREG")"
 [ "$(jget mode < "$SCD/rota/limit-watch.json")" = "supervisor" ] && [ "$(jget pid < "$SCD/rota/limit-watch.json")" = "$LMSUP" ] || fail "D3: the loop must record itself: $(cat "$SCD/rota/limit-watch.json")"
 OUT="$(slm "$ROTA_BIN" --json limit status 2>/dev/null)"

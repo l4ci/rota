@@ -34,6 +34,10 @@ func (w *fakeWatch) Next(ctx context.Context) (host.OutputMatch, error) {
 
 func (w *fakeWatch) Close() { w.once.Do(func() { close(w.closed) }) }
 
+// errNoWatch is what fakeOW returns once its queue is spent: a subscription
+// the test did not expect, which the pane-set count then reports.
+var errNoWatch = errors.New("fakeOW: no queued watch")
+
 // fakeOW hands out queued watches (or errors) and records the pane sets asked for.
 type fakeOW struct {
 	mu    sync.Mutex
@@ -45,6 +49,9 @@ func (o *fakeOW) WatchOutput(_ context.Context, panes []string, _ string) (host.
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.asked = append(o.asked, panes)
+	if len(o.queue) == 0 {
+		return nil, errNoWatch
+	}
 	next := o.queue[0]
 	o.queue = o.queue[1:]
 	if err, ok := next.(error); ok {
@@ -173,5 +180,48 @@ func TestNewFeedFirstSubscribeError(t *testing.T) {
 	_, err := NewFeed(context.Background(), ow, func(context.Context) []Target { return nil }, "x", time.Hour)
 	if !errors.Is(err, boom) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// A stream that ends because Stop cancelled the feed is not a dead stream:
+// the feed must neither open a new subscription nor degrade. The tick blocks
+// in targets while the stream's error is read and the feed is cancelled, so
+// the loop then finds both ready at once, the order a loaded machine
+// produces. The short sleep only lets the reader hand the error over; the
+// fixed feed passes however the two are ordered.
+func TestFeedStopIsNotADeadStream(t *testing.T) {
+	for i := 0; i < 200; i++ {
+		w := newFakeWatch()
+		ow := &fakeOW{queue: []any{w}}
+		entered, release := make(chan struct{}, 1), make(chan struct{})
+		var calls int
+		targets := func(context.Context) []Target {
+			if calls++; calls == 2 {
+				entered <- struct{}{}
+				<-release
+			}
+			return []Target{{Session: "ben", Pane: "p1"}}
+		}
+		f, err := NewFeed(context.Background(), ow, targets, "x", time.Millisecond)
+		if err != nil {
+			t.Fatal(err)
+		}
+		degraded := make(chan error, 1)
+		f.OnDegrade = func(err error) { degraded <- err }
+		f.Start()
+		<-entered
+		w.err <- errors.New("closed")
+		time.Sleep(time.Millisecond)
+		f.cancel()
+		close(release)
+		f.Stop()
+		if n := ow.calls(); n != 1 {
+			t.Fatalf("run %d: subscriptions = %d after Stop, want 1", i, n)
+		}
+		select {
+		case err := <-degraded:
+			t.Fatalf("run %d: degraded on Stop: %v", i, err)
+		default:
+		}
 	}
 }
