@@ -95,7 +95,7 @@ If the text names a harness ("do this one with codex") or a model, `/rota-captur
 
 ## Triaging an issue someone else filed
 
-`/rota-capture --triage <N>[,<N>...]` is the first read of a tracker issue you did not write. It reads the whole thread, searches for duplicates and already-shipped work, queries `DECISIONS.md` for a prior decision and, for a bug, tries the reporter's steps against the current tree. It creates no item. For each issue it asks you once, then acts: close with the reason, comment and label `needs-info`, or mark it ready (no label change). Commenting, labelling and closing always ask, whatever `autonomy.level` says. `rota round candidates` does not read `needs-info`.
+`/rota-capture --triage <N>[,<N>...]` is the first read of a tracker issue you did not write. It reads the whole thread, searches for duplicates and already-shipped work, queries `DECISIONS.md` for a prior decision and, for a bug, tries the reporter's steps against the current tree. It creates no item. For each issue it asks you once, then acts: close with the reason, comment and label `needs-info`, or mark it ready (no label change). Commenting, labelling and closing always ask, whatever `autonomy.level` says. `rota round candidates` lists a `needs-info` issue as not ready, so rounds skip it until you remove the label.
 
 ## What /rota-capture is not
 
