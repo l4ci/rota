@@ -121,9 +121,7 @@ func TestAssignMarksResetsAndDispatches(t *testing.T) {
 	f := newAssignFixture(t)
 	res, err := f.assign("12", "", func(o *AssignOpts) {
 		o.Siblings = []string{"13"}
-		bf := filepath.Join(t.TempDir(), "d.md")
-		os.WriteFile(bf, []byte("m: use the lease"), 0o644)
-		o.BodyFile = bf
+		o.Decisions = "m: use the lease"
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -393,18 +391,6 @@ func TestAssignDispatchFailureMarksTheSlotIdle(t *testing.T) {
 	}
 	if st := worker.LoadRegistryTolerant(f.root).Slot("ben").State(); st != "idle" {
 		t.Errorf("slot state after a failed dispatch: %q", st)
-	}
-}
-
-func TestAssignUnreadableBodyFileIsRefused(t *testing.T) {
-	f := newAssignFixture(t)
-	_, err := f.assign("12", "ben", func(o *AssignOpts) { o.BodyFile = filepath.Join(f.root, "missing.md") })
-	var we *exitcode.Error
-	if !errors.As(err, &we) || we.Exit != exitcode.ExitUsage {
-		t.Fatalf("want a usage error, got %v", err)
-	}
-	if len(f.be.claims) != 0 {
-		t.Errorf("nothing is claimed: %v", f.be.claims)
 	}
 }
 

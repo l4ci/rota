@@ -83,7 +83,7 @@ func (e *BlockedError) Error() string { return e.Msg }
 type AssignOpts struct {
 	ID            string
 	Agent         string
-	BodyFile      string // answered decisions, verbatim; "" for none
+	Decisions     string // answered decisions, verbatim; "" for none
 	Siblings      []string
 	CheckOnly     bool
 	AcceptOverlap bool
@@ -571,11 +571,6 @@ func (o AssignOpts) checkFlags(set roundcfg.Settings) (tier, reason string, err 
 	if roundcfg.TierRank(tier) > roundcfg.TierRank(set.Tier) && reason == "" {
 		return "", "", usage("--tier %s is above the default tier %s: say why with --tier-reason", tier, set.Tier)
 	}
-	if o.BodyFile != "" {
-		if _, err := os.Stat(o.BodyFile); err != nil {
-			return "", "", usage("--body-file %s: %v", o.BodyFile, err)
-		}
-	}
 	return tier, reason, nil
 }
 
@@ -661,10 +656,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	}
 
 	// 4. Readiness.
-	decisions, err := readBody(o.BodyFile)
-	if err != nil {
-		return run, false, err
-	}
+	decisions := o.Decisions
 	tracked := e.trackedFiles(ctx, root)
 	inFlight := e.InFlightItems(ctx, root, be, tracked, set.SharedPaths)
 	r, err := AssessScoped(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap, decisions, set.ScopeOverlap == "block")

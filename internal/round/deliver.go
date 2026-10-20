@@ -17,18 +17,6 @@ import (
 // decided once. It owns no lease, registry binding or claim: those stay with
 // the caller's saga.
 
-// readBody reads --body-file once: "" is no file, a read error is a usage error.
-func readBody(path string) (string, error) {
-	if path == "" {
-		return "", nil
-	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return "", usage("--body-file %s: %v", path, err)
-	}
-	return string(b), nil
-}
-
 // deliveryRefusals is what refuses a worker before anything is marked: solo
 // runs Claude subagents only (E3, #70), and a worker that cannot start (launch
 // flags, host, login) is refused here. dispatch runs the same preflight again.
