@@ -123,7 +123,7 @@ func (r TrainResult) OK() bool { return r.Verdict == GatePass }
 
 // Train runs a merge train (see above). The base must be checked out in root.
 func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, error) {
-	e = e.withDefaults()
+	e = e.WithDefaults()
 	if o.Round == nil {
 		o.Round = &RoundMemo{}
 	}
@@ -225,7 +225,7 @@ func (t *trainRun) plan() (bool, error) {
 	if err != nil {
 		return true, err
 	}
-	in.cfg.WarnLegacy(e.errWriter())
+	in.cfg.WarnLegacy(e.Stderr)
 	t.in = in
 	seen := map[string]bool{}
 	withPR := 0
@@ -765,11 +765,11 @@ func (e Env) trainFootprints(root, baseRef string, ms []TrainMember, headRef fun
 	foots := make([]trainFoot, len(ms))
 	for i, m := range ms {
 		span := baseRef + "..." + headRef(m)
-		paths, err := git.ChangedPaths(e.context(), e.Git, root, span)
+		paths, err := git.ChangedPaths(e.Ctx, e.Git, root, span)
 		if err != nil {
 			return nil, err
 		}
-		lines, err := git.ChangedLines(e.context(), e.Git, root, span)
+		lines, err := git.ChangedLines(e.Ctx, e.Git, root, span)
 		if err != nil {
 			return nil, err
 		}

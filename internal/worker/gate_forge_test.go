@@ -92,7 +92,7 @@ func TestGateFileSourceStillGatesPRsOnTheConfiguredForge(t *testing.T) {
 
 func TestDetectProvider(t *testing.T) {
 	w := newWorld(t, "")
-	e := w.env(false).withDefaults()
+	e := w.env(false).WithDefaults()
 	ctx := context.Background()
 	set := func(url string) {
 		if url == "" {

@@ -295,9 +295,6 @@ func (g *gate) behaviourEnviron(home string) []string {
 // goEnv is GOCACHE, GOMODCACHE and GOPATH as the gate host's go reports them;
 // a variable it cannot report is left out.
 func (g *gate) goEnv() []string {
-	if g.e.Run == nil {
-		return nil
-	}
 	res, err := g.e.Run(g.ctx, "go", []string{"env", "GOCACHE", "GOMODCACHE", "GOPATH"}, nil)
 	if err != nil || res.ExitCode != 0 {
 		return nil

@@ -68,7 +68,7 @@ type Meter struct {
 type Fetcher func(ctx context.Context, name, configDir string) (payload *jsonx.Object, reason string)
 
 // Accounts reads and assigns accounts. Its clock and environment come from Env
-// (Env.Clock, Env.Environ), the same source as the worker env that holds it.
+// (Env.WithDefaults), the same source as the worker env that holds it.
 type Accounts struct {
 	Env Env
 	// Fetch defaults to the fixture dir or the OAuth endpoint.
@@ -77,9 +77,9 @@ type Accounts struct {
 	HTTP *http.Client
 }
 
-func (a *Accounts) now() time.Time { return a.Env.Clock()().UTC() }
+func (a *Accounts) now() time.Time { return a.Env.WithDefaults().Now().UTC() }
 
-func (a *Accounts) getenv(k string) string { return a.Env.Environ()(k) }
+func (a *Accounts) getenv(k string) string { return a.Env.WithDefaults().Getenv(k) }
 
 type acct struct{ name, configDir string }
 

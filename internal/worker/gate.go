@@ -360,7 +360,7 @@ type Issues interface {
 // passing gate of a queued PR drops its record. The environment defaults are
 // applied here, once; everything below takes Env as given.
 func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, error) {
-	e = e.withDefaults()
+	e = e.WithDefaults()
 	if o.Round == nil {
 		o.Round = &RoundMemo{}
 	}
@@ -428,7 +428,7 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	if err != nil {
 		return res, err
 	}
-	in.cfg.WarnLegacy(e.errWriter())
+	in.cfg.WarnLegacy(e.Stderr)
 	g := &gate{e: e, ctx: ctx, root: root, res: &res, o: o, in: in, target: t, resolved: t, branch: t.Branch, pr: t.PR}
 	err = g.run()
 	return res, err
@@ -1509,7 +1509,7 @@ func (e Env) detectProvider(ctx context.Context, root, pr, configured string) st
 // issues.source: none for a file source; the forge adapter itself when the
 // source is that forge's own tracker (github or gitlab matching the forge's
 // provider, forge, or an unmigrated legacy config); else the tracker the source
-// names (Env.Issues, or tracker.NewIssueTracker).
+// names (Env.Issues).
 func (e Env) issueSide(forge Forge, forgeProvider, dir string, s tracker.Settings) (Issues, error) {
 	switch s.Source {
 	case config.SourceFile, "":
@@ -1519,17 +1519,7 @@ func (e Env) issueSide(forge Forge, forgeProvider, dir string, s tracker.Setting
 			return is, nil
 		}
 	}
-	if e.Issues != nil {
-		return e.Issues(dir, s)
-	}
-	it, err := tracker.NewIssueTracker(e.context(), s, "", dir)
-	if errors.Is(err, tracker.ErrNoIssueTracker) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return it, nil
+	return e.Issues(dir, s)
 }
 
 type gate struct {

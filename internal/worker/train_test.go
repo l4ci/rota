@@ -564,7 +564,7 @@ func TestTrainRefusesEmptyTestFull(t *testing.T) {
 func TestTrainCancelledLeavesNoScratchTree(t *testing.T) {
 	w := trainWorld(t, "true", "b1", "b2")
 	env := w.env(false)
-	real := env.withDefaults().Git
+	real := env.WithDefaults().Git
 	ctx, cancel := context.WithCancel(bg)
 	defer cancel()
 	env.Ctx = ctx // production wires the signal context here; the old cleanup ran on it

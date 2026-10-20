@@ -61,7 +61,7 @@ type InitResult struct {
 // are created. Re-running with a larger Slots grows the pool and never shrinks
 // one (use reap).
 func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Accounts) (InitResult, error) {
-	e = e.withDefaults()
+	e = e.WithDefaults()
 	res := InitResult{}
 	base := o.Base
 	if base == "" {
@@ -278,7 +278,7 @@ func PoolList(root string) (session any, round any, slots []*jsonx.Object, err e
 // and branch stay.
 func (e Env) Reap(root string, names []string, all bool) (reaped []string, err error) {
 	var failed []string
-	e = e.withDefaults()
+	e = e.WithDefaults()
 	reg, err := LoadRegistry(root)
 	if err != nil {
 		return nil, fail(exitcode.ExitUnavailable, "reap refused: "+err.Error())

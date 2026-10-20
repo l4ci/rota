@@ -46,7 +46,7 @@ type SessionState struct {
 // whether WE are in it, and conflating them produces detached panes nobody
 // reads.
 func (e Env) SessionCheck(ctx context.Context, root string) SessionState {
-	e = e.withDefaults()
+	e = e.WithDefaults()
 	h := e.NewHost(e.hostKind(root))
 	if h.InSession() {
 		return SessionState{Inside: true, Where: h.Where()}
@@ -80,7 +80,7 @@ func operatorCommand(root string) string {
 // body file; 4 round.dispatch=herdr outside herdr; 5 host failure or the
 // operator window never came up.
 func (e Env) SessionEnsure(ctx context.Context, root string, o SessionOpts) (SessionState, error) {
-	e = e.withDefaults()
+	e = e.WithDefaults()
 	if o.Session == "" {
 		o.Session = "rota"
 	}
