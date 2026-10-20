@@ -102,7 +102,9 @@ type Input struct {
 	IssuesConnection string
 	TeamProblem      string
 	Accounts         []config.Account
-	SwitchOnUsage    bool // orchestrator.switchOnUsage (D4)
+	// OrchestratorConfigDir is the orchestrator's CLAUDE_CONFIG_DIR, "" when unset.
+	OrchestratorConfigDir string
+	SwitchOnUsage         bool // orchestrator.switchOnUsage (D4)
 	// Kinds is what each worker harness with a check of its own (Doctor) has
 	// configured, by kind.
 	Kinds map[string]KindInput
@@ -441,6 +443,9 @@ func (d *runner) tracker() Check {
 func (d *runner) expand(dir string) string { return worker.ExpandConfigDirIn(dir, d.in.Home) }
 
 func (d *runner) accounts() Check {
+	if w := worker.ConfigDirMismatch(d.in.OrchestratorConfigDir, d.in.Accounts); w != "" {
+		return Check{Name: "accounts", Status: Warn, Detail: w, Hint: "add that configDir to round.accounts in .rota/config.local.json, or start the orchestrator under a listed one"}
+	}
 	if len(d.in.Accounts) == 0 {
 		return skip("accounts", "no accounts in round.accounts")
 	}
