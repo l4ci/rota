@@ -788,6 +788,17 @@ func TestLimitRegexIncludesKindPhrases(t *testing.T) {
 // A limit or Add-funds phrase quoted by an echoed brief or relay is the
 // orchestrator's text, not the session's: only what the worker prints after its
 // reply marker counts (#883).
+func TestClassifyLoginExpiredIsBlockedOnTheAccount(t *testing.T) {
+	st, ev := ClassifyFor("claude", "  ⎿  Login expired · Please run /login\n", false, 0, "")
+	if st != StateBlocked || !strings.Contains(ev, "round.accounts") || !strings.Contains(ev, "config.local.json") {
+		t.Errorf("state %q evidence %q", st, ev)
+	}
+	// Another kind's pane that echoes the phrase is not logged out.
+	if st, _ := ClassifyFor("codex", "Login expired\n", false, 0, ""); st == StateBlocked {
+		t.Errorf("codex pane read as %q", st)
+	}
+}
+
 func TestClassifyLimitPhraseInEchoedBriefIsNotLimited(t *testing.T) {
 	brief := "--- ORCHESTRATOR (round 24) ---\nYou are nia.\nOut of scope: The Add funds escalation behaviour.\nThe session says: You've reached your usage limit\n\n"
 	st, ev := Classify(brief, false, 60, "idle")
