@@ -20,27 +20,6 @@ type ResetResult struct {
 	Changed  bool
 }
 
-// BranchFor is the per-task branch name: rota-worker/<slot>-<task> with the task
-// lowercased and every byte outside [a-z0-9._-] turned into '-' (tr, so a
-// multi-byte character becomes several), or rota-worker/<slot> without a task.
-// (Not rota-worker/<slot>/<task>: git cannot hold both refs.)
-func BranchFor(slot, task string) string {
-	if task == "" {
-		return "rota-worker/" + slot
-	}
-	b := []byte(task)
-	for i, c := range b {
-		switch {
-		case c >= 'A' && c <= 'Z':
-			b[i] = c + 32
-		case c >= 'a' && c <= 'z', c >= '0' && c <= '9', c == '.', c == '_', c == '-':
-		default:
-			b[i] = '-'
-		}
-	}
-	return "rota-worker/" + slot + "-" + string(b)
-}
-
 // Reset is the slot reset guard of bin/hv-worker-reset (#38): refuse to reuse
 // a slot that still holds work, otherwise cut a fresh per-task branch from
 // the slot's base. checkOnly stops after the guard.
