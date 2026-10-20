@@ -13,7 +13,7 @@ import (
 
 // waitingPR is a PR that waits for a merge: a done slot's PR or one parked in
 // the review queue. Reviewed is true when a review verdict is recorded at its
-// head, the state the train needs from every member.
+// head and none blocks the gate, the state the train needs from every member.
 type waitingPR struct {
 	PR, Base string
 	Reviewed bool
@@ -81,6 +81,7 @@ func trainNudges(waiting []waitingPR) []trainNudge {
 // nudge is advice, so an unreadable registry or branch reads as nothing waiting.
 func waitingPRs(c *Ctx, root string) []waitingPR {
 	reg := worker.LoadRegistryTolerant(root)
+	vc := shipVerdict(c, root, root)
 	reviewed := func(branch string) bool {
 		if branch == "" {
 			return false
@@ -89,7 +90,7 @@ func waitingPRs(c *Ctx, root string) []waitingPR {
 		if err != nil || r.ExitCode != 0 {
 			return false
 		}
-		return len(verdict.Recorded(root, branch, strings.TrimSpace(r.Stdout))) > 0
+		return len(verdict.Recorded(root, branch, strings.TrimSpace(r.Stdout))) > 0 && !trainBlocked(vc.Store, branch, vc.Settings)
 	}
 	var out []waitingPR
 	for _, s := range reg.Slots() {
@@ -125,6 +126,14 @@ func fillDefaultBase(waiting []waitingPR, def string) []waitingPR {
 		}
 	}
 	return waiting
+}
+
+// trainBlocked is true when the branch's recorded verdicts would block the
+// gate: a FAIL (review or second opinion) keeps the PR out of a nudged train,
+// CONCERNS and PASS let it in.
+func trainBlocked(store verdict.Store, branch string, s verdict.Settings) bool {
+	_, blocked := verdict.Blocking(store.Branches[verdict.BranchKey("", branch)], s)
+	return blocked
 }
 
 // trainNudgeData is the nudges as the `trainNudge` JSON array, nil when none.
