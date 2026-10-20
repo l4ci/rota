@@ -43,6 +43,11 @@ func (f *fakeForge) PRView(_ context.Context, pr int) (tracker.PRInfo, error) {
 	if w.mode == "ff" {
 		info.MergeSHA = "" // a fast-forward merge has no merge commit
 	}
+	// A forge that lags a push: "staleHeadFor" reads still name the old head.
+	if n, _ := strconv.Atoi(w.forgeWord("staleHeadFor")); n > 0 {
+		w.forge("staleHeadFor", strconv.Itoa(n-1))
+		info.HeadSHA = strings.Repeat("0", 40)
+	}
 	return info, nil
 }
 
