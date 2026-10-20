@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -302,43 +303,82 @@ func relayMask(lines []string, gutter, sigEnds bool) []bool {
 // prompt, a box border, the permission-mode footer or the shortcut hint.
 var reChrome = regexp.MustCompile(`^\s*(?:[❯>]|[╭╰│─┌└├]|⏵|\? for shortcuts)`)
 
-// DialogRegion is the part of a pane the harness itself wrote: the blocks
-// directly above its input box or footer, up to the nearest reply block. The
-// worker's prose, diffs, code and tool output sit indented inside a reply
-// block, so a limit phrase quoted there is not a hit limit (#1212). From the
-// reply block that ends the walk only its unindented lines count (a banner the
-// harness prints straight after a reply) and, while no spinner or working
-// footer shows, its "⎿" lines (the way Claude Code renders a dialog). busy are
-// the kind's working-footer patterns; a spinner or status line is frame, not
-// dialog. A pane without frame is read the same way from its last line up.
+// reFrameEdge is the input box's bottom edge, in column 0 where reply text
+// never starts; reFooter is the permission-mode footer or shortcut hint. Below
+// the lowest of them sits the status area: a custom statusline, the footer.
+var (
+	reFrameEdge = regexp.MustCompile(`^[╰─]`)
+	reFooter    = regexp.MustCompile(`^\s*(?:⏵|\? for shortcuts)`)
+)
+
+// statusDepth is how many lines up from the bottom the frame edge is looked
+// for: a statusline is a few lines, and a deeper match would be the reply's own.
+const statusDepth = 8
+
+// DialogRegion is the part of a pane the harness itself wrote: the status area
+// under its input box and the blocks directly above the box, below the last
+// reply. The worker's prose, diffs, code and tool output sit inside a reply, so
+// a limit phrase quoted there is not a hit limit (#1212). The walk goes up
+// blank-separated blocks to the last block that opens with a reply marker. The
+// run of blocks straight below it that open indented, other than with "⎿", is
+// that reply's later paragraphs, lists and code; the blocks under that run are
+// dialog. From the marker block, when no such run follows it, its unindented
+// lines count (a banner the harness prints straight after a reply) and, while
+// no spinner or working footer shows, its "⎿" lines (the way Claude Code
+// renders a dialog, and why idle tool output quoting the phrase reads as
+// limited). busy are the kind's working-footer patterns; a spinner is frame,
+// not dialog. A pane without a reply marker is dialog throughout.
 func DialogRegion(text string, busy []*regexp.Regexp) string {
 	lines := splitLines(text)
-	working := false
+	isWork := func(l string) bool { return anyMatch(busy, l) || reSpinner.MatchString(l) }
 	end := len(lines)
+	status := end
+	for _, re := range []*regexp.Regexp{reFrameEdge, reFooter} {
+		for k := end - 1; k >= 0 && k >= end-statusDepth && status == end; k-- {
+			if re.MatchString(lines[k]) {
+				status = k
+			}
+		}
+	}
+	working := slices.ContainsFunc(lines[status:], isWork)
+	end = status
 	for end > 0 {
 		l := lines[end-1]
-		isWork := anyMatch(busy, l) || reSpinner.MatchString(l)
-		if !(strings.TrimSpace(l) == "" || reChrome.MatchString(l) || isWork) {
+		w := isWork(l)
+		if !(strings.TrimSpace(l) == "" || reChrome.MatchString(l) || w) {
 			break
 		}
-		working = working || isWork
+		working = working || w
 		end--
 	}
-	// Walk up block by block (blank-line separated) until a reply block.
-	start, from := end, end
+	// Walk up block by block (blank-line separated) to the last reply marker.
+	// cont is the top of the indented run above start, -1 for none.
+	start, from, cont := end, end, -1
+walk:
 	for i := end; i > 0; {
 		j := i
 		for j > 0 && strings.TrimSpace(lines[j-1]) != "" {
 			j--
 		}
 		if j < i {
-			if reReplyMarker.MatchString(lines[j]) {
+			head := lines[j]
+			switch {
+			case reReplyMarker.MatchString(head):
 				from = j + 1
-				break
+				if cont >= 0 {
+					from = start
+				}
+				break walk
+			case reIndent.MatchString(head) && !reGutterLine.MatchString(head):
+				cont = j
+			default:
+				start, cont = j, -1
 			}
-			start = j
 		}
 		if j == 0 {
+			if cont >= 0 { // no reply above: the indented run is dialog too
+				start = cont
+			}
 			break
 		}
 		i = j - 1
@@ -351,7 +391,8 @@ func DialogRegion(text string, busy []*regexp.Regexp) string {
 			}
 		}
 	}
-	return strings.Join(append(kept, lines[start:end]...), "\n")
+	kept = append(kept, lines[start:end]...)
+	return strings.Join(append(kept, lines[status:]...), "\n")
 }
 
 // reIndent starts an indented line; reGutterLine is tool output under "⎿".
