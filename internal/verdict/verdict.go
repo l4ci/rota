@@ -470,6 +470,20 @@ func AtHead(rec Record, head string) bool {
 		(strings.HasPrefix(head, rec.Sha) || strings.HasPrefix(rec.Sha, head))
 }
 
+// Recorded lists the review kinds (ReviewSpec, ReviewQuality) with a verdict
+// recorded for branch at head. A record on another commit is stale and does
+// not count, as /rota-review treats it.
+func Recorded(root, branch, head string) []string {
+	list := Load(root).Branches[BranchKey("", branch)]
+	var kinds []string
+	for _, k := range []string{ReviewSpec, ReviewQuality} {
+		if r, ok := Latest(list, k); ok && AtHead(r, head) {
+			kinds = append(kinds, k)
+		}
+	}
+	return kinds
+}
+
 // EffectiveReview is a branch's review verdict: the latest review-quality
 // record's combined verdict, unless a review-spec record is newer (a
 // spec-only review, or a spec FAIL that skipped Stage 2). The record

@@ -1172,7 +1172,8 @@ func TestGateAppliesTheReviewDepth(t *testing.T) {
 				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
 			w.forge("body", "Closes #5\n")
 			w.forge("issueLabels", c.labels)
-			res, err := w.gate(false, GateOpts{CheckOnly: true, Recorded: func(string, string) []string { return c.recorded }})
+			w.record("w1", "", c.recorded...)
+			res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1218,7 +1219,8 @@ func TestGateReviewDepthSignals(t *testing.T) {
 			w.forge("body", c.body)
 			w.forge("issueLabels", c.labels)
 			w.forge("issueBody", c.issueBody)
-			res, err := w.gate(false, GateOpts{CheckOnly: true, Recorded: func(string, string) []string { return []string{spec} }})
+			w.record("w1", "", spec)
+			res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1253,8 +1255,8 @@ func TestGateReviewDepthOnAnExternalPR(t *testing.T) {
 			w.forge("body", c.body)
 			w.forge("issueLabels", "in-progress")
 			w.forge("issueBody", c.issueBody)
-			res, _ := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true,
-				Recorded: func(string, string) []string { return []string{spec} }})
+			w.record("dana/5-x", "", spec)
+			res, _ := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true, CheckReviews: true})
 			if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "needs a recorded "+quality+" verdict") {
 				t.Fatalf("verdict %s (%s), want review-missing naming %s: %+v", res.Verdict, res.Err, quality, res)
 			}
@@ -1281,7 +1283,8 @@ func TestGateLightWithoutAnIssueNeedsStandards(t *testing.T) {
 			w := newWorld(t, ghURL)
 			w.setConfig(`{"ship":{"review":"light"},"test":{"full":["true"]}}`)
 			w.forge("body", "no issue here\n")
-			res, err := w.gate(false, GateOpts{CheckOnly: true, Recorded: func(string, string) []string { return c.recorded }})
+			w.record("w1", "", c.recorded...)
+			res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1296,8 +1299,8 @@ func TestGateLightWithoutAnIssueNeedsStandards(t *testing.T) {
 	}
 }
 
-// Without the Recorded port the gate only reports the depth, as the file
-// backend and the tests that never wire it expect; a failed label read or a
+// Without CheckReviews the gate only reports the depth, as the file
+// backend and the tests that never set it expect; a failed label read or a
 // malformed policy is a check-broke, never a guessed depth.
 func TestGateReviewDepthUnresolvable(t *testing.T) {
 	w := newWorld(t, ghURL)
@@ -1324,8 +1327,8 @@ func TestGateReviewDepthLabelReadFailureIsCheckBroke(t *testing.T) {
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
 	w.forge("body", "Closes #5\n")
 	w.forge("issueErr", "HTTP 500: server error")
-	all := func(string, string) []string { return []string{verdict.ReviewSpec, verdict.ReviewQuality} }
-	res, err := w.gate(false, GateOpts{CheckOnly: true, Recorded: all})
+	w.record("w1", "", verdict.ReviewSpec, verdict.ReviewQuality)
+	res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1352,8 +1355,8 @@ func TestGateReviewDepthDiffReadFailureIsCheckBroke(t *testing.T) {
 		}
 		return realGit(ctx, dir, args...)
 	}
-	all := func(string, string) []string { return []string{verdict.ReviewSpec, verdict.ReviewQuality} }
-	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true, Recorded: all})
+	w.record("w1", "", verdict.ReviewSpec, verdict.ReviewQuality)
+	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true, CheckReviews: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1363,30 +1366,35 @@ func TestGateReviewDepthDiffReadFailureIsCheckBroke(t *testing.T) {
 }
 
 // A verdict recorded on an older commit does not satisfy the depth check: the
-// Recorded port is asked about the checked tip, and a port that answers only
-// for another sha leaves the branch review-missing.
+// gate asks about the checked tip, so a record on another sha leaves the
+// branch review-missing.
 func TestGateReviewDepthAsksForTheCheckedHead(t *testing.T) {
 	w := newWorld(t, ghURL)
 	w.setConfig(`{"ship":{"review":{"default":"light"}},"test":{"full":["true"]}}`)
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
 	w.forge("body", "Closes #5\n")
-	var asked string
-	res, err := w.gate(false, GateOpts{CheckOnly: true, Recorded: func(_, head string) []string {
-		asked = head
-		if head == "oldsha" {
-			return []string{verdict.ReviewSpec}
-		}
-		return nil
-	}})
+	w.record("w1", "oldsha", verdict.ReviewSpec)
+	res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := gitq(t, w.worker, "rev-parse", "HEAD"); asked != want {
-		t.Errorf("asked about %q, want the tip %q", asked, want)
-	}
 	if res.Verdict != GateReviewMissing {
 		t.Errorf("a stale verdict must not pass: %+v", res)
+	}
+}
+
+// record stores passing verdicts of kinds for branch at sha, or at the
+// worker's tip when sha is empty, in the world's verdict store.
+func (w *world) record(branch, sha string, kinds ...string) {
+	w.t.Helper()
+	if sha == "" {
+		sha = gitq(w.t, w.worker, "rev-parse", "HEAD")
+	}
+	for _, k := range kinds {
+		if _, err := verdict.AddBranch(w.dir, branch, verdict.Record{Kind: k, Verdict: verdict.Pass, Sha: sha}); err != nil {
+			w.t.Fatal(err)
+		}
 	}
 }
 
