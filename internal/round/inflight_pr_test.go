@@ -123,3 +123,20 @@ func TestInFlightForgeWithoutPRFilesWarns(t *testing.T) {
 		t.Errorf("missing capability must be reported: %+v", x)
 	}
 }
+
+// A queue:<slot> item (its slot moved on, its PR waits) is compared by the PR's
+// files too: the second apply call in InFlightItems covers reg.PRs().
+func TestInFlightQueuedPRComparesPRFiles(t *testing.T) {
+	f := newMoveFx(t)
+	f.queueBensPR(t)
+	q := f.queued()
+	if len(q) != 1 {
+		t.Fatalf("one queued PR: %+v", q)
+	}
+	f.forge.prs = []tracker.PR{{Number: 7, Branch: q[0].Branch}}
+	f.env.Forge = prFilesForge{Forge: f.forge.asForge(), files: map[int][]string{7: {"internal/cli/nudge.go"}}}
+	x := f.inFlightFor(t, "12")
+	if x.Slot != "queue:ben" || !x.FromPR || strings.Join(x.Paths, ",") != "internal/cli/nudge.go" {
+		t.Errorf("queued item takes its paths from the PR: %+v", x)
+	}
+}
