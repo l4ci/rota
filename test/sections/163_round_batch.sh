@@ -46,9 +46,15 @@ pass "round assign refuses at round.batch with batch and open in the data"
 # ── the override covers one call ────────────────────────────────────────────
 RC=0; OUT=$(rb round assign 2 --accept-batch) || RC=$?
 [ "$RC" = "0" ] || fail "--accept-batch should assign past the cap: rc=$RC $OUT"
+SLOT2=$(echo "$OUT" | jget data.agent)
 RC=0; OUT=$(rb round assign 3) || RC=$?
 [ "$RC" = "4" ] || fail "the override is for one call only, got $RC: $OUT"
 pass "--accept-batch overrides the refusal for one call"
+
+# ── repeating an assignment the slot holds is a resume, not a refusal ───────
+RC=0; OUT=$(rb round assign 2 --agent "$SLOT2") || RC=$?
+[ "$RC" = "0" ] || fail "a resumed assignment must pass at the cap: rc=$RC $OUT"
+pass "round assign resumes a held item at the cap"
 
 # ── the tick skips assigning and says batch-full ────────────────────────────
 rb config set round.autopilot true >/dev/null

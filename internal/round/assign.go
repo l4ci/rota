@@ -558,13 +558,6 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	if err != nil {
 		return res, err
 	}
-	if n := set.Batch; n > 0 && !o.AcceptBatch {
-		if open := openItems(be, reg, id); open >= n {
-			blk := blocked(BlockBatch, "%d items are open and round.batch is %d", open, n)
-			blk.Batch, blk.Open = n, open
-			return res, blk
-		}
-	}
 	var slot *worker.Slot
 	resuming, queue := false, false
 	if o.Agent != "" {
@@ -646,6 +639,15 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 		blk := blocked(by, "%s is not ready: %s", id, failedChecks(r))
 		blk.Readiness = &r
 		return res, blk
+	}
+
+	// round.batch: a slot resuming its own issue adds nothing to the open count.
+	if n := set.Batch; n > 0 && !o.AcceptBatch && !resuming {
+		if open := openItems(be, reg, id); open >= n {
+			blk := blocked(BlockBatch, "%d items are open and round.batch is %d", open, n)
+			blk.Batch, blk.Open = n, open
+			return res, blk
+		}
 	}
 
 	// A worker that cannot start is refused before anything is marked.
