@@ -14,15 +14,14 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/doctor"
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/legacystate"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/projects"
-	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/stalebin"
 	"github.com/l4ci/rota/internal/version"
@@ -226,25 +225,19 @@ func staleData(f stalebin.Finding) *jsonx.Object {
 }
 
 // staleBinaryOncePerRound is the round heartbeat's copy of doctor's binary
-// warning: it reports the finding the first time it is asked in a round and
-// stays quiet after, so a watch that wakes every ten minutes does not repeat it.
-// The round it last spoke in lives in a state file next to the lease.
-func staleBinaryOncePerRound(c *Ctx, cd string, round int) (stalebin.Finding, bool) {
+// warning. The once-per-round rule and its marker belong to round
+// (round.ClaimStaleWarning); a marker error comes back as err beside the finding.
+func staleBinaryOncePerRound(c *Ctx, cd string, n int) (f stalebin.Finding, ok bool, err error) {
 	dir, err := os.Getwd()
 	if err != nil {
-		return stalebin.Finding{}, false
+		return stalebin.Finding{}, false, err
 	}
-	f, ok := staleBinary(c.Context(), c.deps().Git, dir)
+	f, ok = staleBinary(c.Context(), c.deps().Git, dir)
 	if !ok {
-		return stalebin.Finding{}, false
+		return stalebin.Finding{}, false, nil
 	}
-	path := rotastate.File(cd, "stale-binary-round")
-	if b, err := os.ReadFile(path); err == nil && strings.TrimSpace(string(b)) == strconv.Itoa(round) {
-		return stalebin.Finding{}, false
-	}
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
-	_ = fsio.WriteFileAtomic(path, []byte(strconv.Itoa(round)+"\n"))
-	return f, true
+	first, err := round.ClaimStaleWarning(cd, n)
+	return f, first, err
 }
 
 // doctorSlotBlocks lists the live slots (a session or a task) that hold a
