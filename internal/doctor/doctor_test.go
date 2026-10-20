@@ -817,3 +817,38 @@ func TestHookCommandWithSlashResolvesThroughLook(t *testing.T) {
 		t.Fatalf("missing: %+v", c)
 	}
 }
+
+func TestConfigDirCheck(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		in     Input
+		status string
+		detail string
+	}{
+		{"override", Input{ConfigDir: "/p/rota", ConfigDirSource: "override"}, Pass, "/p/rota (ROTA_CONFIG_DIR override)"},
+		{"xdg", Input{ConfigDir: "/x/rota", ConfigDirSource: "xdg"}, Pass, "from XDG_CONFIG_HOME"},
+		{"default", Input{ConfigDir: "/h/.config/rota", ConfigDirSource: "default"}, Pass, "default ~/.config/rota"},
+		{"relative override warns", Input{ConfigDir: "/x/rota", ConfigDirSource: "xdg", ConfigDirWarning: "ROTA_CONFIG_DIR=r is not an absolute path, ignored"}, Warn, "not an absolute path"},
+		{"unresolved adds no line", Input{}, "", ""},
+	} {
+		in := tc.in
+		f := &fake{have: map[string]bool{}, reply: map[string]Result{}}
+		in.Exec, in.Look = f.exec, f.look
+		var got *Check
+		rep := Run(context.Background(), in)
+		for i := range rep.Checks {
+			if rep.Checks[i].Name == "config dir" {
+				got = &rep.Checks[i]
+			}
+		}
+		if tc.status == "" {
+			if got != nil {
+				t.Errorf("%s: unexpected line %+v", tc.name, got)
+			}
+			continue
+		}
+		if got == nil || got.Status != tc.status || !strings.Contains(got.Detail, tc.detail) {
+			t.Errorf("%s: got %+v", tc.name, got)
+		}
+	}
+}

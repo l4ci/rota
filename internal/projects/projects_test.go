@@ -29,6 +29,29 @@ func TestDirHonoursXDGAndFallsBackToHome(t *testing.T) {
 	}
 }
 
+func TestResolveOverrideBeatsXDGAndIgnoresRelative(t *testing.T) {
+	x := isolate(t)
+	o := t.TempDir()
+	t.Setenv("ROTA_CONFIG_DIR", o)
+	if d, src, w, _ := Resolve(); d != o || src != SourceOverride || w != "" {
+		t.Errorf("override: %s %s %q", d, src, w)
+	}
+	t.Setenv("ROTA_CONFIG_DIR", "rel/dir")
+	d, src, w, _ := Resolve()
+	if d != filepath.Join(x, "rota") || src != SourceXDG || w == "" {
+		t.Errorf("relative: %s %s %q", d, src, w)
+	}
+	t.Setenv("ROTA_CONFIG_DIR", "")
+	if _, src, w, _ := Resolve(); src != SourceXDG || w != "" {
+		t.Errorf("unset: %s %q", src, w)
+	}
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("HOME", t.TempDir())
+	if _, src, _, _ := Resolve(); src != SourceDefault {
+		t.Errorf("default: %s", src)
+	}
+}
+
 func TestRegisterIsIdempotentAndRefreshesLastSeen(t *testing.T) {
 	isolate(t)
 	proj := t.TempDir()
