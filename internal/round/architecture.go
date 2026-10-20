@@ -90,13 +90,24 @@ func (a Architecture) Line() string {
 // are the round's current candidates: with none ready and a slot idle, the
 // queue is dry.
 func (e Env) Architecture(ctx context.Context, root string, be backlog.Backend, set roundcfg.Settings, cands []Candidate) (Architecture, error) {
-	a := Architecture{Every: set.ArchitectureEvery, Since: ReviewSince(root)}
+	a, ready, err := e.ArchitectureFacts(ctx, root, be, set, cands)
+	if err != nil {
+		return a, err
+	}
+	return DecideReview(a, ready), nil
+}
+
+// ArchitectureFacts reads what the review decision rests on and decides
+// nothing: the counter, the pending items, the idle slots, and whether any
+// candidate is ready. DecideReview turns them into Due.
+func (e Env) ArchitectureFacts(ctx context.Context, root string, be backlog.Backend, set roundcfg.Settings, cands []Candidate) (a Architecture, ready bool, err error) {
+	a = Architecture{Every: set.ArchitectureEvery, Since: ReviewSince(root)}
 	if a.Every == 0 {
-		return a, nil
+		return a, false, nil
 	}
 	items, err := be.List(false)
 	if err != nil {
-		return a, err
+		return a, false, err
 	}
 	minted := MintedReviews(root)
 	for _, it := range items {
@@ -106,24 +117,30 @@ func (e Env) Architecture(ctx context.Context, root string, be backlog.Backend, 
 	}
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
-		return a, err
+		return a, false, err
 	}
 	a.Idle = CountIdle(reg, set.Roster)
 	a.Areas = reviewAreas(root, set)
 
 	a.Count, a.Unavailable = e.closedSinceReview(ctx, root, be, &a.Since)
-	if a.Count < 0 || len(a.Pending) > 0 {
-		return a, nil
-	}
-	if a.Count < a.Every {
-		a.Until = a.Every - a.Count
-	}
-	ready := false
 	for _, c := range cands {
 		if c.Ready() {
 			ready = true
 			break
 		}
+	}
+	return a, ready, nil
+}
+
+// DecideReview is the one rule for when a review is due, shared by the tick,
+// `round architecture` and `round status`. It sets Until, Due and Trigger on
+// the facts and is pure. ready says some candidate can be assigned.
+func DecideReview(a Architecture, ready bool) Architecture {
+	if a.Every == 0 || a.Count < 0 || len(a.Pending) > 0 {
+		return a
+	}
+	if a.Count < a.Every {
+		a.Until = a.Every - a.Count
 	}
 	switch {
 	case a.Count >= a.Every:
@@ -133,7 +150,7 @@ func (e Env) Architecture(ctx context.Context, root string, be backlog.Backend, 
 		// can be given to it: spend the slot on a review.
 		a.Due, a.Trigger = true, TriggerQueueEmpty
 	}
-	return a, nil
+	return a
 }
 
 // closedSinceReview counts the closed non-refactor items since the last
