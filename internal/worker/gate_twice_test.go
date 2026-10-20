@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -111,5 +112,24 @@ func TestGateRemoteProbeFailureIsNotAMissingOrigin(t *testing.T) {
 	}
 	if strings.Contains(res.Err, "no 'origin' remote") || !strings.Contains(res.Err, "could not run git") {
 		t.Errorf("want the real cause, got %q", res.Err)
+	}
+}
+
+// #1125: "gone cwd after the first gate merged" was the guess for the false
+// "no origin" message of #1118. With the real git runner a gone repo directory
+// fails the gate at the git-common-dir lookup, before stepRemote runs, so it
+// cannot produce that message. The cause must be a git that started and then
+// failed at the remote probe (a cancelled context or a non-2 exit).
+func TestGateGoneRootFailsBeforeTheRemoteProbe(t *testing.T) {
+	w := newWorld(t, ghURL)
+	env := w.env(false).withDefaults()
+	env.Git = git.Exec
+	gone := filepath.Join(t.TempDir(), "gone")
+	res, err := env.Gate(bg, gone, GateOpts{Slot: "w1", Base: "main"})
+	if err == nil || !strings.Contains(err.Error(), "git-common-dir") {
+		t.Fatalf("want the common-dir lookup to fail, got err %v verdict %q", err, res.Verdict)
+	}
+	if strings.Contains(res.Err, "no 'origin' remote") {
+		t.Errorf("a gone directory was reported as a missing origin: %q", res.Err)
 	}
 }
