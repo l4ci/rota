@@ -399,3 +399,65 @@ func TestDefaultEnvTreatsZombieHolderAsStale(t *testing.T) {
 		t.Error("live holder must stay live")
 	}
 }
+
+// withPS replaces ps with a recorded table keyed by pid: "ppid lstart" and comm.
+func withPS(t *testing.T, rows map[string][2]string) {
+	t.Helper()
+	old := psRun
+	t.Cleanup(func() { psRun = old })
+	psRun = func(args ...string) (string, error) {
+		col, pid := args[1], args[3]
+		r, ok := rows[pid]
+		if !ok {
+			return "", errors.New("no such pid")
+		}
+		if col == "comm=" {
+			return r[1], nil
+		}
+		return r[0], nil
+	}
+}
+
+// TestPSSourceReadsAncestryWithoutProc pins #1167: where /proc is missing
+// (macOS) ppid, comm and start time come from ps, so the walk reaches the agent.
+func TestPSSourceReadsAncestryWithoutProc(t *testing.T) {
+	const agentPath = "/Applications/Claude Code/claude"
+	withPS(t, map[string][2]string{
+		"900000001": {"900000002 Mon Oct 20 12:00:00 2026", "/bin/zsh"},
+		"900000002": {"900000003 Mon Oct 20 11:00:00 2026", agentPath},
+	})
+	pp, comm, ok := realProc(900000001)
+	if !ok || pp != 900000002 || comm != "zsh" {
+		t.Fatalf("zsh: %d %q %v", pp, comm, ok)
+	}
+	_, comm, _ = realProc(900000002)
+	if comm != filepath.Base(agentPath) {
+		t.Fatalf("comm must be the base name: %q", comm)
+	}
+	want := time.Date(2026, 10, 20, 11, 0, 0, 0, time.Local).Unix()
+	if st, ok := procStart(900000002); !ok || int64(st) != want {
+		t.Fatalf("start %d %v, want %d", st, ok, want)
+	}
+	e := DefaultEnv()
+	e.Parent = func() int { return 900000001 }
+	h := e.Discover(0, func(string) string { return "" })
+	if h.PID != 900000002 || h.Start == 0 || h.Unverified {
+		t.Fatalf("walk must skip the zsh and bind the agent: %+v", h)
+	}
+}
+
+func TestDiscoverFlagsUnreadableAncestry(t *testing.T) {
+	e := fakeEnv("h1", procs{})
+	e.Parent = func() int { return 4242 }
+	e.Proc = func(int) (int, string, bool) { return 0, "", false }
+	none := func(string) string { return "" }
+	if h := e.Discover(0, none); h.PID != 4242 || !h.Unverified {
+		t.Fatalf("unreadable ancestry must be flagged: %+v", h)
+	}
+	if h := e.Discover(77, none); h.Unverified {
+		t.Fatalf("--holder-pid is a named holder: %+v", h)
+	}
+	if h := e.Discover(0, func(string) string { return "55" }); h.Unverified {
+		t.Fatalf("a named holder is not unverified: %+v", h)
+	}
+}

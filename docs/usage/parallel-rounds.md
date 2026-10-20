@@ -216,6 +216,8 @@ The overlap check cannot see files an issue will create, paths nobody wrote down
 the same function, generated files every issue touches (list those in `round.sharedPaths`), renames,
 or another machine's round. Read two issues' bodies before you run them side by side.
 
+A directory in an issue's `## Pointers` (`src/app/ui/`) matches every file below it, so it overlaps almost any other issue. The overlap detail then says `from directory src/app/ui/: name exact files in the pointers`, and the JSON overlap lists the directories under `dirs`. Name the files in the issue, or add a file every issue mentions in a footer to `round.sharedPaths`.
+
 ## Assigning an issue
 
 ```sh
@@ -530,7 +532,7 @@ only channel, because there is no host to notify.
 Before a worker opens its PR it runs `rota worker done <slot>`. When `test.fast` is set, the verb
 refuses (exit 4) unless the slot's item has a PASS proof row for it at the branch's current HEAD,
 recorded with `rota proof record <ID> -- rota test run fast`. A later commit makes the row stale, so
-the worker records again. With `test.fast` unset it warns and skips that check. On success the slot is
+the worker records again. With `test.fast` unset it warns and skips that check. The worker brief then tells the worker to run `rota test run full` and have it green first, and `rota round start` warns once that the proof rows will be missing (reviewers treat that as minor at most). On success the slot is
 marked `done`.
 
 `rota worker gate <slot> --base <branch>` is the one merge path in a round. It checks the branch is

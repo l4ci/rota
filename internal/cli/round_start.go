@@ -235,6 +235,10 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		if noVerify {
 			c.Warn("%s", noVerifyWarning)
 		}
+		if gc := worker.LoadGateConfig(root); len(gc.Fast) == 0 && len(gc.Full) > 0 {
+			d.Set("noFast", true)
+			c.Warn("%s", noFastWarning)
+		}
 		d.Set("lease", leaseData(st.Lease, st.LeaseState))
 		d.Set("reclaimed", st.Outcome == roundlease.Reclaimed)
 		d.Set("changed", st.Changed)
@@ -299,6 +303,9 @@ func roundCandidates(fs *flag.FlagSet) RunFunc {
 		return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
 	}
 }
+
+// noFastWarning tells the orchestrator what an empty test.fast costs a round.
+const noFastWarning = "test.fast is empty: workers run test.full before `rota worker done` and record no proof rows, so acceptance shows unproven; reviewers treat that as minor at most"
 
 // noVerifyWarning is the early form of the gate's no-verify refusal, shared by
 // `rota init` and `rota round start`.

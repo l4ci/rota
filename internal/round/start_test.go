@@ -94,6 +94,24 @@ func TestOverlaps(t *testing.T) {
 	}
 }
 
+func TestOverlapDirs(t *testing.T) {
+	cases := []struct {
+		a, b []string
+		want []string
+	}{
+		{[]string{"a/"}, []string{"a/b.go"}, []string{"a/"}},
+		{[]string{"a/b.go"}, []string{"a/"}, []string{"a/"}},
+		{[]string{"a/"}, []string{"a/"}, nil},
+		{[]string{"a/b.go"}, []string{"a/b.go"}, nil},
+		{[]string{"a/"}, []string{"ab/c.go"}, nil},
+	}
+	for _, c := range cases {
+		if got := OverlapDirs(c.a, c.b); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%v vs %v: %v want %v", c.a, c.b, got, c.want)
+		}
+	}
+}
+
 func TestAssessChecks(t *testing.T) {
 	be := &fakeRemote{ready: map[string][]string{"3": {"no acceptance criteria in the issue body", "no design or plan note"}}}
 	be.add("1", "done dep", "", true, "")
@@ -126,6 +144,15 @@ func TestAssessChecks(t *testing.T) {
 	r, _ = Assess(be, "8", tracked, nil, flight, false)
 	if r.Ready() || len(r.Overlaps) != 1 || r.Overlaps[0].With != "7" || r.Overlaps[0].Slot != "ben" {
 		t.Errorf("8 overlaps 7: %+v", r)
+	}
+	dirFlight := []InFlight{{Slot: "dana", Issue: "9", Paths: []string{"internal/worker/"}}}
+	r, _ = Assess(be, "8", tracked, nil, dirFlight, false)
+	if r.Ready() || len(r.Overlaps) != 1 || !reflect.DeepEqual(r.Overlaps[0].Dirs, []string{"internal/worker/"}) ||
+		!strings.Contains(strings.Join(r.Checks[len(r.Checks)-1].Detail, ";"), "from directory internal/worker/") {
+		t.Errorf("directory pointer must be named as the cause: %+v", r)
+	}
+	if r, _ = Assess(be, "8", tracked, nil, flight, false); len(r.Overlaps[0].Dirs) != 0 {
+		t.Errorf("a file clash is not a directory clash: %+v", r.Overlaps)
 	}
 	r, _ = Assess(be, "8", tracked, nil, flight, true)
 	if !r.Ready() || len(r.Overlaps) != 1 {
@@ -558,5 +585,26 @@ func TestStartTrimsTheLedgerToLedgerKeep(t *testing.T) {
 	es, _ = ledger.Load(root)
 	if len(es) != 1 || es[0].Round != 3 {
 		t.Fatalf("entries %+v, want only round 3 kept: the last 2 rounds are 3 and 4", es)
+	}
+}
+
+// TestStartWarnsWhenAncestryUnreadable pins #1167: with no readable process
+// table and no named holder, start binds the parent and says how to name one.
+func TestStartWarnsWhenAncestryUnreadable(t *testing.T) {
+	root := newRepo(t, nil)
+	le := fakeLease("h", 300)
+	le.Parent = func() int { return 300 }
+	le.Proc = func(int) (int, string, bool) { return 0, "", false }
+	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: le}
+	st, err := e.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, w := range st.Warnings {
+		found = found || (strings.Contains(w, roundlease.HolderPIDEnv) && strings.Contains(w, "--holder-pid"))
+	}
+	if !found {
+		t.Fatalf("want the holder warning: %v", st.Warnings)
 	}
 }

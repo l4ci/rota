@@ -65,3 +65,17 @@ func TestRoundStartReportsSlotSet(t *testing.T) {
 		t.Error("round status wrote the registry")
 	}
 }
+
+// An empty test.fast with test.full set warns once at round start (#1169).
+func TestRoundStartWarnsEmptyFast(t *testing.T) {
+	dir := orchProject(t, false)
+	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"git":{"baseBranch":"feat/x"},"test":{"fast":[],"full":["true"]}}`), 0o644)
+	os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n"), 0o644)
+	code, out, errOut := rotaStdin(t, dir, "", "round", "start", "--holder-pid", strconv.Itoa(os.Getpid()), "--base", "feat/x")
+	if code != 0 {
+		t.Fatalf("round start: %d %s %s", code, out, errOut)
+	}
+	if n := strings.Count(errOut, "test.fast is empty"); n != 1 {
+		t.Errorf("warning count = %d, want 1:\n%s", n, errOut)
+	}
+}

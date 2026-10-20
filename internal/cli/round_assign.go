@@ -23,6 +23,9 @@ func overlapList(os []round.Overlap) []any {
 		d.Set("with", o.With)
 		d.Set("slot", o.Slot)
 		d.Set("paths", strs(o.Paths))
+		if len(o.Dirs) > 0 {
+			d.Set("dirs", strs(o.Dirs))
+		}
 		d.Set("scopes", strs(o.Scopes))
 		if o.Inferred {
 			d.Set("inferred", true)

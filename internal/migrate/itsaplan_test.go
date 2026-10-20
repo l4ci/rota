@@ -61,6 +61,9 @@ func TestMigrateFileToItsaplan(t *testing.T) {
 	if strings.Contains(byTitle["First bug"].Body, "Milestone:") {
 		t.Errorf("a Milestone field points at a milestone that is not there: %q", byTitle["First bug"].Body)
 	}
+	if slices.ContainsFunc(res.Lines, func(l string) bool { return strings.Contains(l, "config set issues.source") }) {
+		t.Errorf("itsaplan already has issues.source set; the Done banner must not ask for it again: %v", res.Lines)
+	}
 	before := s.Issues()
 	if res, _ = run(); s.Issues() != before || !res.Done {
 		t.Errorf("a second run changed the project: %d issues, was %d", s.Issues(), before)

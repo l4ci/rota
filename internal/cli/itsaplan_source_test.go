@@ -15,13 +15,13 @@ import (
 
 const itsaplanCfg = `{"forge":{"provider":"github"},"issues":{"source":"itsaplan","connection":"plan","itsaplan":{"project":"MKT"}}}`
 
-// itsaplanProject is a rota project on issues.source itsaplan, whose
-// connection points at the fake.
+// itsaplanFake starts an in-process itsaplan server with default options.
 func itsaplanFake(t *testing.T) *itsaplantest.Server {
 	t.Helper()
 	return itsaplantest.New(t, itsaplantest.Options{})
 }
 
+// mustJSONCfg decodes s as JSON config, failing the test on error.
 func mustJSONCfg(t *testing.T, s string) any {
 	t.Helper()
 	cfg, err := jsonx.Decode([]byte(s))
@@ -31,6 +31,8 @@ func mustJSONCfg(t *testing.T, s string) any {
 	return cfg
 }
 
+// itsaplanProject is a rota project on issues.source itsaplan, whose
+// connection points at the fake.
 func itsaplanProject(t *testing.T, s *itsaplantest.Server) (*Deps, string) {
 	t.Helper()
 	dir := gitRepo(t)
