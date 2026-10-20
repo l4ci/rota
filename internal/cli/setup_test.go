@@ -339,3 +339,25 @@ func TestSetupSaveGlobalNonInteractive(t *testing.T) {
 		t.Errorf("--save-global did not save:\n%s", g)
 	}
 }
+
+// A corrupt global config warns and skips the save offer: no all-answers
+// list, no failing save after the project config is written.
+func TestSetupCorruptGlobalSkipsOffer(t *testing.T) {
+	gdir := isolateGlobal(t)
+	writeFile(t, config.GlobalPath(gdir), `not json`)
+	in := "1\nworktree\n2\n\n\nnone\n2\n\n\ny\n"
+	code, _, errOut := setupRun(t, t.TempDir(), in, true)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if strings.Contains(errOut, "Save as global defaults?") {
+		t.Errorf("offer shown for a corrupt global config:\n%s", errOut)
+	}
+	if !strings.Contains(errOut, "warning") {
+		t.Errorf("no warning:\n%s", errOut)
+	}
+	code, _, errOut = setupRun(t, t.TempDir(), "", false, "--set", "work.isolation=worktree", "--save-global")
+	if code != 0 {
+		t.Fatalf("--save-global exit %d: %s", code, errOut)
+	}
+}
