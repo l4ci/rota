@@ -748,6 +748,7 @@ Credentials and sites belong to you, not the repo, so they never go in `.rota/`.
 
 ```sh
 echo "$JIRA_TOKEN" | rota connect add work --kind jira --site https://acme.atlassian.net --user me@acme.com --token-stdin
+echo "$ITSAPLAN_API_KEY" | rota connect add plan --kind itsaplan --site https://api.plan.example.com --token-stdin   # It's a Plan: --site is the api URL
 rota connect list          # name, kind, site, user and which store holds the secret; never the secret
 rota connect test work     # one authenticated read
 rota connect remove work   # drops the connection and its secret

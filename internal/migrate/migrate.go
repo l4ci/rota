@@ -90,6 +90,9 @@ type migrator struct {
 	pending int
 	created int
 	msCache map[string]bool
+	// noMS holds the milestones the tracker has no place for (issues.source
+	// itsaplan): reported and skipped, not a failure.
+	noMS map[string]bool
 }
 
 var (
@@ -125,7 +128,7 @@ func Run(o Options) (*Result, error) {
 	if repos.Umbrella(o.Root) {
 		return nil, ErrUmbrellaMigrate
 	}
-	m := &migrator{o: o, ctx: migrateCtx(o.Ctx), apply: o.Apply, msCache: map[string]bool{},
+	m := &migrator{o: o, ctx: migrateCtx(o.Ctx), apply: o.Apply, msCache: map[string]bool{}, noMS: map[string]bool{},
 		mapRel: filepath.Join(rota, "issue-map.json"), res: &Result{}}
 	m.items = planItems(o.Root, text, o.Warn)
 	m.ms = planMilestones(o.Root)
@@ -500,6 +503,9 @@ func (m *migrator) labelNames(it *migItem) []string {
 }
 
 func (m *migrator) milestoneAvailable(mid string) (bool, error) {
+	if m.noMS[mid] {
+		return false, nil
+	}
 	if _, ok := m.imap.Get(mid); ok || m.msIDs[mid] {
 		return true, nil
 	}
@@ -532,6 +538,11 @@ func (m *migrator) run() (bool, error) {
 			ms := ms
 			err := m.op(fmt.Sprintf("create milestone %s (%s)", mid, ms.status), func() error {
 				if err := m.milestoneAdd(mid, ms); err != nil {
+					if tracker.IsNoMilestones(err) {
+						m.noMS[mid] = true
+						m.o.Warn(fmt.Sprintf("milestone %s skipped, its items migrate without a Milestone field: %v", mid, err))
+						return nil
+					}
 					return err
 				}
 				is, err := m.trackerIssue(mid)
@@ -543,7 +554,7 @@ func (m *migrator) run() (bool, error) {
 			if err != nil {
 				return false, err
 			}
-			if !m.apply {
+			if !m.apply && !m.noMS[mid] {
 				e := jsonx.NewObject()
 				e.Set("id", mid)
 				e.Set("number", "?")
@@ -551,6 +562,9 @@ func (m *migrator) run() (bool, error) {
 				e.Set("done", []any{})
 				m.imap.Set(mid, e)
 			}
+		}
+		if m.noMS[mid] {
+			continue
 		}
 		if ms.status != "planned" && !m.hasStep(mid, "status") {
 			ms := ms
@@ -600,7 +614,7 @@ func (m *migrator) run() (bool, error) {
 			if ok {
 				fields = append(fields, backlog.Field{Name: "Milestone", Value: it.milestone})
 				note = " milestone " + it.milestone
-			} else {
+			} else if !m.noMS[it.milestone] {
 				m.o.Warn(fmt.Sprintf("%s: milestone %s is not on the tracker (shipped/archived milestones are not migrated); Milestone field dropped", old, it.milestone))
 			}
 		}
@@ -725,6 +739,9 @@ func (m *migrator) run() (bool, error) {
 	}
 	for _, ms := range m.ms {
 		mid, ms := ms.id, ms
+		if m.noMS[mid] {
+			continue
+		}
 		if !m.hasStep(mid, "body") {
 			err := m.op(fmt.Sprintf("set plan body of milestone %s", mid), func() error {
 				if err := m.putMilestone(mid, ms); err != nil {
@@ -877,7 +894,7 @@ func migrateCtx(ctx context.Context) context.Context {
 // moved to: the adapter's provider, else a pointer to the choices.
 func (m *migrator) sourceName() string {
 	if p, ok := m.tr.(interface{ Provider() string }); ok {
-		if name := p.Provider(); name == "github" || name == "gitlab" {
+		if name := p.Provider(); name == "github" || name == "gitlab" || name == "itsaplan" {
 			return name
 		}
 	}
