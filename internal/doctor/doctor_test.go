@@ -789,3 +789,23 @@ func TestPortsUsesEachSlotsOwnBlockWidth(t *testing.T) {
 func codexIn(homes []Home, tiers bool) map[string]KindInput {
 	return map[string]KindInput{harness.Codex: {AccountsKey: "work.codexAccounts", Homes: homes, Tiers: tiers}}
 }
+
+// A hook command with a slash resolves through Input.Look alone, after ~ is
+// expanded; no file exists on disk.
+func TestHookCommandWithSlashResolvesThroughLook(t *testing.T) {
+	o := newOrch(t)
+	home := t.TempDir()
+	o.write(t, filepath.Join(o.root, ".claude", "settings.json"), `{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"~/bin/rota hook guard # rota-hook"}]}]}}`)
+	run := func(have map[string]bool) Check {
+		f := &fake{have: have, reply: map[string]Result{}}
+		look := func(name string) (string, bool) { p, _ := f.look(name); return p, have[name] }
+		r := Run(context.Background(), Input{Exec: f.exec, Look: look, Home: home, ProjectRoot: o.root, ConfigDirs: []string{o.a, o.b}})
+		return statusOf(r, "guard-hook")
+	}
+	if c := run(map[string]bool{filepath.Join(home, "bin/rota"): true}); c.Status != Pass {
+		t.Fatalf("found: %+v", c)
+	}
+	if c := run(nil); c.Status != Fail || !strings.Contains(c.Detail, "~/bin/rota, which is not found") {
+		t.Fatalf("missing: %+v", c)
+	}
+}

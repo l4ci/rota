@@ -88,6 +88,10 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 	if err != nil {
 		return nil, err
 	}
+	unclear, err := e.labelled(ctx, be, NeedsInfoLabel)
+	if err != nil {
+		return nil, err
+	}
 	var taken func(backlog.Item) bool
 	if o.Scope == roundcfg.ScopeOpen {
 		if taken, err = e.takenOutside(ctx, be); err != nil {
@@ -122,6 +126,9 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		}
 		if _, err := BestOfOf(be.Capabilities(), it); err != nil && c.PickErr == "" {
 			c.PickErr = err.Error()
+		}
+		if unclear[it.IssueKey()] {
+			c.Checks = append(c.Checks, Check{Name: NeedsInfoLabel, Detail: []string{"labelled " + NeedsInfoLabel + ": triage found it unclear, so it waits for the reporter"}})
 		}
 		if len(ms) > 0 {
 			c.Milestone = strings.Join(ms, ",")
@@ -361,10 +368,15 @@ func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog
 // handedToHuman is the open issues carrying the needs-human label (C10): the
 // human holds them, so a round does not offer them. File mode has no labels.
 func (e Env) handedToHuman(ctx context.Context, be backlog.Backend) (map[tracker.IssueKey]bool, error) {
+	return e.labelled(ctx, be, strutil.FirstNonEmpty(e.NeedsHuman, DefaultNeedsHuman))
+}
+
+// labelled is the open issues carrying label; nil without an issue tracker.
+func (e Env) labelled(ctx context.Context, be backlog.Backend, label string) (map[tracker.IssueKey]bool, error) {
 	if !e.forgeOn(be) {
 		return nil, nil
 	}
-	issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{strutil.FirstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}})
+	issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{label}})
 	if err != nil {
 		return nil, err
 	}
