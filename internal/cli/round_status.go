@@ -110,10 +110,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		}
 		ctx := c.Context()
 		renv := withBoard(c, root, c.deps().RoundEnv(ctx, root))
-		// Like round assign and start: a bad round.* key stops the verb.
-		if renv.RoundErr != nil {
-			return Result{}, &Error{Exit: ExitInternal, Message: renv.RoundErr.Error()}
-		}
+		// Status refuses on a bad round.* key (exit 2), like assign and start.
 		rep, err := renv.Status(ctx, root)
 		if err != nil {
 			return Result{}, err

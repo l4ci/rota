@@ -333,11 +333,21 @@ var ()
 
 type worktree struct{ path, name, branch string }
 
-// Status assembles the round. It fails only when git does; an unavailable
-// host or forge is reported in the result.
+// roundCfgErr is RoundErr as a usage error, so a bad round.* key is the user's
+// to fix and never reads as a rota bug; nil when the settings loaded.
+func (e Env) roundCfgErr() error {
+	if e.RoundErr == nil {
+		return nil
+	}
+	return &exitcode.Error{Exit: exitcode.ExitUsage, Message: e.RoundErr.Error()}
+}
+
+// Status assembles the round. It fails when git does, and with a usage error
+// (exit 2) when the round.* keys did not load; an unavailable host or forge is
+// reported in the result.
 func (e Env) Status(ctx context.Context, root string) (*Report, error) {
-	if e.RoundErr != nil {
-		return nil, e.RoundErr
+	if err := e.roundCfgErr(); err != nil {
+		return nil, err
 	}
 	if e.Label == "" {
 		e.Label = DefaultLabel

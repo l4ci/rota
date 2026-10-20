@@ -239,14 +239,16 @@ func TestRoundStatusShowsEventEvidence(t *testing.T) {
 	}
 }
 
-// A bad round.* key reaches the user: status fails like round assign and start
-// do, and names the key, instead of running with zero values.
-func TestRoundStatusReportsInvalidRoundConfig(t *testing.T) {
+// A bad round.* key reaches the user: status and reconcile fail with a usage
+// error (exit 2) naming the key, instead of running with zero values.
+func TestRoundStatusAndReconcileReportInvalidRoundConfig(t *testing.T) {
 	root := gitRepo(t)
 	write(t, filepath.Join(root, ".rota", "config.json"), `{"round":{"stallMinutes":"soon"}}`)
-	code, out, errOut := rotaInWith(t, testDeps(), root, "round", "status")
-	if code != ExitInternal || !strings.Contains(out+errOut, "round.stallMinutes") {
-		t.Errorf("exit %d, out %q, err %q; want exit %d naming round.stallMinutes", code, out, errOut, ExitInternal)
+	for _, verb := range []string{"status", "reconcile"} {
+		code, out, errOut := rotaInWith(t, testDeps(), root, "round", verb)
+		if code != ExitUsage || !strings.Contains(out+errOut, "round.stallMinutes") {
+			t.Errorf("%s: exit %d, out %q, err %q; want exit %d naming round.stallMinutes", verb, code, out, errOut, ExitUsage)
+		}
 	}
 }
 

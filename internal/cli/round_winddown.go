@@ -69,7 +69,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		}
 		set, err := roundcfg.Load(root)
 		if err != nil {
-			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
+			return Result{}, Usage("%s", err.Error())
 		}
 		ctx, stop := workerContext()
 		defer stop()

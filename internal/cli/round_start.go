@@ -144,7 +144,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		}
 		set, err := roundcfg.Load(root)
 		if err != nil {
-			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
+			return Result{}, Usage("%s", err.Error())
 		}
 		// Empty when --scope was not given: Start keeps a renewed round's scope.
 		sc := *scope
@@ -200,7 +200,9 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		if b, ok := round.BoardOf(be); ok && be.Capabilities().ClaimWrites {
 			env.Board = b
 		}
-		if rep, err := env.Status(ctx, root); err == nil {
+		if rep, err := env.Status(ctx, root); err != nil {
+			c.Warn("drift count skipped: %v", err)
+		} else {
 			drift = len(rep.Findings)
 		}
 		d := jsonx.NewObject()
@@ -267,7 +269,7 @@ func roundCandidates(fs *flag.FlagSet) RunFunc {
 		}
 		set, err := roundcfg.Load(root)
 		if err != nil {
-			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
+			return Result{}, Usage("%s", err.Error())
 		}
 		sc, slate := round.ScopeOf(root, set, *scope)
 		if !roundcfg.ValidScope(sc) {
