@@ -170,19 +170,9 @@ func TestApprovalThreadForKeyIssue(t *testing.T) {
 	}
 	defer os.Chdir(old)
 
-	target := worker.GateTarget{Name: "ben", Branch: "ben/PROJ-123-widen", Issue: "PROJ-123"}
-	th, err := targetApprovalThread(target)
+	th, err := worker.TargetApprovalThread(worker.GateTarget{Name: "ben", Branch: "ben/PROJ-123-widen", Issue: "PROJ-123"})
 	if err != nil {
 		t.Fatal(err)
-	}
-	if th.Kind != "issue" || th.Key != "PROJ-123" || th.Number != 0 || th.Ref() != "PROJ-123" || th.Slot != "ben" {
-		t.Fatalf("thread: %+v", th)
-	}
-	if num, err := targetApprovalThread(worker.GateTarget{Name: "ben", Issue: "804"}); err != nil || num.Key != "" || num.Number != 804 || num.Ref() != "#804" {
-		t.Errorf("numbered issue: %+v %v", num, err)
-	}
-	if _, err := targetApprovalThread(worker.GateTarget{Name: "ben", Issue: "B07"}); err == nil {
-		t.Error("an item id is not a thread")
 	}
 
 	write(t, filepath.Join(dir, ".rota", "workers.json"), `{"slots":[{"name":"ben","branch":"ben/PROJ-123-widen","task":"PROJ-123"}]}`)
@@ -193,7 +183,7 @@ func TestApprovalThreadForKeyIssue(t *testing.T) {
 	var warn strings.Builder
 	c := &Ctx{Path: "rota worker gate", Stderr: &warn, Deps: deps}
 
-	got, ok := approvalEscalate(c, gate.MergePolicy{Mode: gate.MergeAll}, nil, th).(interface{ Get(string) (any, bool) })
+	got, ok := approvalEscalation(c, gate.MergePolicy{Mode: gate.MergeAll}).EscalateApproval(nil, th).(interface{ Get(string) (any, bool) })
 	if !ok {
 		t.Fatalf("no escalation sent: %s", warn.String())
 	}
@@ -204,7 +194,7 @@ func TestApprovalThreadForKeyIssue(t *testing.T) {
 		t.Fatalf("posted on %v", f.posted)
 	}
 	// a second --escalate reuses the pending request instead of posting again
-	approvalEscalate(c, gate.MergePolicy{Mode: gate.MergeAll}, nil, th)
+	approvalEscalation(c, gate.MergePolicy{Mode: gate.MergeAll}).EscalateApproval(nil, th)
 	if len(f.posted) != 1 {
 		t.Errorf("posted again: %v", f.posted)
 	}

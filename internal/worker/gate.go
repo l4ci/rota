@@ -173,6 +173,11 @@ type GateOpts struct {
 	// with verdict approval-required; the refusal lands in GateResult.Refusal
 	// and its error, or the callback's own, is returned as is.
 	Approve func(t GateTarget, files func() ([]string, error)) (*exitcode.Refusal, error)
+	// Escalate, when set, sends the approval request on the target's thread
+	// (PR, else issue) when Approve refuses, and puts the entry on the
+	// refusal's data under "escalation" (--escalate). A target with no
+	// thread is exit 2.
+	Escalate *ApprovalEscalation
 	// ItemBody reads the body of an item (#899), whose `## Try it` steps the
 	// gate runs on the scratch merge after test.full and test.e2e. found is
 	// false for an item the backend does not know. nil leaves the behaviour
@@ -1123,6 +1128,11 @@ func (g *gate) stepPremerge() (bool, error) {
 		g.res.Refusal = ref
 		if ref != nil {
 			err = ref.Err
+			if g.o.Escalate != nil {
+				if terr := g.escalateApproval(ref); terr != nil {
+					return true, terr
+				}
+			}
 		}
 		return true, err
 	case err != nil:
@@ -1341,6 +1351,24 @@ func (g *gate) confirmCITree() bool {
 		return false
 	}
 	return true
+}
+
+// escalateApproval asks the human on the target's approval thread after the
+// approval gate refused.
+func (g *gate) escalateApproval(ref *exitcode.Refusal) error {
+	th, err := TargetApprovalThread(g.target)
+	if err != nil {
+		return err
+	}
+	var changed []string
+	if g.o.Escalate.Policy.NeedsFiles() {
+		if changed, err = g.changedFiles(); err != nil {
+			return err
+		}
+	}
+	_, hit := g.o.Escalate.Policy.Covers(changed)
+	g.o.Escalate.attach(ref, hit, th)
+	return nil
 }
 
 // changedFiles lists the paths the merge changes, for the approval gate.

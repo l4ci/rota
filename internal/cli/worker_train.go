@@ -76,7 +76,7 @@ func runTrain(c *Ctx, root string, o trainRunOpts) trainRun {
 	}
 	approve := func(files func() ([]string, error)) (*exitcode.Refusal, error) {
 		req := o.Approval
-		req.Thread = func() (approvalThread, error) { return slotApprovalThread(root, o.Targets[0]) }
+		req.Thread = func() (worker.ApprovalThread, error) { return worker.SlotApprovalThread(root, o.Targets[0]) }
 		return clearMerge(c, policy, "train "+strings.Join(o.Targets, ", ")+" into "+o.Base, o.Confirm, req, files, nil)
 	}
 	ctx, stop := workerContext()
