@@ -183,9 +183,13 @@ mkdir -p "$IS/sigrel/latest/download"
 printf '#!/bin/sh\n' > "$IS/sigrel/latest/download/$ASSET"
 sleepbin="$IS/fakebin"; mkdir -p "$sleepbin"
 printf '#!/bin/sh\necho $$ > "$IS_CURL_PID"\nexec sleep 30\n' > "$sleepbin/curl"; chmod +x "$sleepbin/curl"
+# A loaded machine stretches the gap between mktemp and the install's traps; a slow mktemp stands in for that.
+printf '#!/bin/sh\n%s "$@" || exit\nsleep 1\n' "$(command -v mktemp)" > "$sleepbin/mktemp"; chmod +x "$sleepbin/mktemp"
 IS_CURL_PID="$IS/curl.pid" PATH="$sleepbin:$PATH" ROTA_RELEASE_BASE_URL="file://$IS/sigrel" sh "$INSTALL" --prefix "$IS/psig" >/dev/null 2>&1 &
 SIGPID=$!
-i=0; while [ ! -d "$IS/psig/bin" ] || [ -z "$(ls -A "$IS/psig/bin" 2>/dev/null)" ]; do i=$((i + 1)); [ "$i" -lt 100 ] || break; sleep 0.1; done
+# Ready is the fake curl running, not the temp dir: curl starts after the install's traps are set,
+# the temp dir exists a few lines before them and a signal in between skips the cleanup.
+i=0; while [ ! -s "$IS/curl.pid" ]; do i=$((i + 1)); [ "$i" -lt 300 ] || fail "the install never reached curl"; sleep 0.1; done
 # A terminal's ^C reaches the whole foreground group: sh defers its trap until the
 # running curl exits, so stop the fake curl with it instead of waiting out its sleep.
 kill -TERM "$SIGPID" "$(cat "$IS/curl.pid" 2>/dev/null)" 2>/dev/null || true
