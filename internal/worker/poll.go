@@ -228,7 +228,7 @@ func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stal
 				state, evidence, ok, stale = StateBlocked, ev, true, false
 			}
 		} else if m := doneRe.FindStringSubmatchIndex(rest); m != nil && m[0] == 0 {
-			if ev := strings.TrimSpace(rest[m[4]:m[5]]); !gut || !rePlaceholder.MatchString(ev) {
+			if ev := strings.TrimSpace(rest[m[4]:m[5]]); !rePlaceholder.MatchString(ev) {
 				state, evidence, ok, stale = StateDone, ev, true, false
 			}
 		}
@@ -403,8 +403,8 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 			return StateBlocked, "model " + m[1] + " was refused — fix round.tiers (provider/model ids)"
 		}
 	}
-	if anyMatch(rules.busy, tail) {
-		return StateBusy, "pane shows: " + firstMatch(rules.busy, tail)
+	if anyMatch(rules.busy, own) {
+		return StateBusy, "pane shows: " + firstMatch(rules.busy, own)
 	}
 	if native == "working" {
 		return StateBusy, "herdr: agent working"
@@ -437,6 +437,46 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 		return StateIdle, staleDoneEvidence
 	}
 	return StateIdle, "static pane, no sentinel"
+}
+
+// relayEchoEvidence is the evidence of a done line read before the echo of the
+// relay sent after it.
+const relayEchoEvidence = "relay sent, its echo is not in the pane yet; the ROTA-DONE shown predates it"
+
+// gateRelayEcho holds a done row busy while a relay is pending and the pane
+// still shows only the done line the relay answers: the echo has not rendered,
+// so that line is the previous turn's, not a fresh one (#1017).
+func gateRelayEcho(t pollTarget, st, ev, text string, lines int) (string, string) {
+	if !t.relayPending || st != StateDone || t.evSeq > 0 || !doneAnswersRelay(t.kind, text, lines) {
+		return st, ev
+	}
+	return StateBusy, relayEchoEvidence
+}
+
+// doneAnswersRelay reports that the pane's done line has no relay header after
+// an earlier done line: the relay's own header is the one that marks the work
+// reopened, and a done printed after it is the worker's.
+func doneAnswersRelay(kind, text string, lines int) bool {
+	all := splitLines(text)
+	if lines > 0 && len(all) > lines {
+		all = all[len(all)-lines:]
+	}
+	gutter := paneRulesFor(kind).gutter
+	head := reRelayHead
+	if gutter {
+		head = reRelayHeadG
+	}
+	last := -1
+	for i, l := range all {
+		if head.MatchString(l) {
+			last = i
+		}
+	}
+	if last < 0 {
+		return true
+	}
+	_, _, ok, stale := lastSentinel(all[:last], gutter)
+	return !ok && !stale
 }
 
 // PollRow is one slot's verdict.
@@ -731,6 +771,9 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 	if s.Seen() != key {
 		s.ClearSeen()
 	}
+	if r.Evidence != relayEchoEvidence {
+		s.ClearRelayPending()
+	}
 	if r.State == StateUnverifiable {
 		s.SetReason(r.Evidence)
 	}
@@ -765,7 +808,12 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 type pollTarget struct {
 	name, handle, prev, seen string
 	kind                     string // the slot's harness kind, "" for the default
-	turnSeq                  int
+	// relayPending: a relay went to the slot and no done line has been read
+	// since its header showed in the pane. relays is the length of the slot's
+	// relay log.
+	relayPending bool
+	relays       int
+	turnSeq      int
 	// ev is the slot's standing worker event with the stamps Decide weighs it
 	// against. evSeq is set by classify to the event's seq when the event, not
 	// the pane, decided the row.
@@ -776,6 +824,7 @@ type pollTarget struct {
 
 func slotTarget(s *Slot) pollTarget {
 	return pollTarget{name: s.Name(), kind: s.HarnessKind(), handle: s.PaneHandle(), prev: s.State(), seen: s.Seen(), turnSeq: s.TurnSeq(),
+		relayPending: s.RelayPending(), relays: len(s.Relays()),
 		ev: s.Event(), lastChange: parseStamp(s.ActiveAt())}
 }
 
@@ -783,6 +832,10 @@ func slotTarget(s *Slot) pollTarget {
 // event's seq, so the next event is news even when it reads the same.
 func rowKey(t pollTarget, r PollRow) string {
 	k := seenKey(r.State, r.Evidence)
+	// A done after a relay is news even with the evidence the last one had.
+	if r.State == StateDone && t.relays > 0 {
+		k += "\tr" + strconv.Itoa(t.relays)
+	}
 	if t.evSeq > 0 {
 		k += "\t#" + strconv.Itoa(t.evSeq)
 	}
@@ -856,6 +909,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		}
 		if native, ok := finished[t.name]; ok {
 			st, ev := ClassifyFor(t.kind, first[t.name], false, lines, native)
+			st, ev = gateRelayEcho(t, st, ev, first[t.name], lines)
 			push(PollRow{t.name, st, ev})
 			continue
 		}
@@ -867,6 +921,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		native = withReadFailure(native, err)
 		moved := first[t.name] != second
 		st, ev := ClassifyFor(t.kind, second, moved, lines, native)
+		st, ev = gateRelayEcho(t, st, ev, second, lines)
 		if st == StateUnknown {
 			// herdr says why it could not classify the agent; a failing or
 			// absent explain leaves the generic evidence as it was.

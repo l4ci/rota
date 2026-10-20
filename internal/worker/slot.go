@@ -240,6 +240,7 @@ func (s *Slot) Dispatch(handle, task, kind, now string) {
 	s.setState("busy", now)
 	s.o.Set("activeAt", now)
 	s.o.Delete("seen")
+	s.ClearRelayPending()
 	s.ClearEvent() // a new brief answers whatever the worker last sent
 	s.o.Delete("outcome")
 	if task == "" {
@@ -430,6 +431,15 @@ func (s *Slot) SetHandle(h string) {
 
 // SetBranch records the checked-out branch.
 func (s *Slot) SetBranch(b string) { s.o.Set("branch", b) }
+
+// RelayPending: a relay went out and the pane has not shown its echo yet.
+func (s *Slot) RelayPending() bool { v, _ := s.o.Get("relayPending"); b, _ := v.(bool); return b }
+
+// SetRelayPending marks a relay sent; ClearRelayPending ends the mark.
+func (s *Slot) SetRelayPending() { s.o.Set("relayPending", true) }
+
+// ClearRelayPending removes the relay-pending mark.
+func (s *Slot) ClearRelayPending() { s.o.Delete("relayPending") }
 
 // ClearSeen re-arms `round wait`: the slot's last seen row no longer counts.
 func (s *Slot) ClearSeen() { s.o.Delete("seen") }

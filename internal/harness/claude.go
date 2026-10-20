@@ -143,7 +143,11 @@ func (claude) UsageMeter() bool { return true }
 
 func (claude) LimitPhrases() []string { return SharedLimitPhrases() }
 
-func (claude) PaneVocab() PaneVocab { return PaneVocab{} }
+// A turn in flight (a running command or monitor) shows `esc to interrupt` on
+// the status line while the pane itself may sit still between captures.
+func (claude) PaneVocab() PaneVocab {
+	return PaneVocab{Busy: []string{`esc to interrupt`, `⎿\s+Running…`}}
+}
 
 // Tiers: claude must name every tier, and an unset standard tier takes
 // models.worker, so that one knob governs the standard model.
