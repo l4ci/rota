@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"time"
+
+	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 func TestTickReviewRelaysAndSkipsTheMerge(t *testing.T) {
@@ -107,23 +111,18 @@ func TestReviewStepManual(t *testing.T) {
 	boom := errors.New("boom")
 	for _, tc := range []struct {
 		name    string
-		open    bool
-		openErr error
-		pending string
-		pendErr error
+		summary string
+		err     error
 		want    ReviewOutcome
 		warned  bool
 	}{
-		{name: "closed pr", want: ReviewOutcome{}},
-		{name: "nothing waiting", open: true, want: ReviewOutcome{}},
-		{name: "reports without holding", open: true, pending: "1 from rev u/9", want: ReviewOutcome{Pending: true, Detail: "1 from rev u/9"}},
-		{name: "view failure holds nothing", openErr: boom, want: ReviewOutcome{}, warned: true},
-		{name: "poll failure holds nothing", open: true, pendErr: boom, want: ReviewOutcome{}, warned: true},
+		{name: "nothing waiting", want: ReviewOutcome{}},
+		{name: "reports without holding", summary: "1 from rev u/9", want: ReviewOutcome{Pending: true, Detail: "1 from rev u/9"}},
+		{name: "poll failure holds nothing", err: boom, want: ReviewOutcome{}, warned: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, warned := reviewSrc(false)
-			s.Open = func(context.Context) (bool, error) { return tc.open, tc.openErr }
-			s.Pending = func(context.Context) (string, error) { return tc.pending, tc.pendErr }
+			s.Poll = func(context.Context) (string, error) { return tc.summary, tc.err }
 			if got := ReviewStep(context.Background(), s); got != tc.want {
 				t.Fatalf("got %+v want %+v", got, tc.want)
 			}
@@ -131,6 +130,55 @@ func TestReviewStepManual(t *testing.T) {
 				t.Fatalf("warned %v", *warned)
 			}
 		})
+	}
+}
+
+// reviewFake is the forge side of PendingSummary: a PR in one state with the
+// given notes waiting on it.
+type reviewFake struct {
+	state   string
+	viewErr error
+	notes   []tracker.Comment
+}
+
+func (f reviewFake) MRNotes(context.Context, int) ([]tracker.Comment, error) { return f.notes, nil }
+func (f reviewFake) Reviews(context.Context, int) ([]tracker.Review, error)  { return nil, nil }
+func (f reviewFake) PRView(context.Context, int) (tracker.PRInfo, error) {
+	return tracker.PRInfo{State: f.state}, f.viewErr
+}
+
+func TestPendingSummary(t *testing.T) {
+	boom := errors.New("boom")
+	at := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC)
+	note := []tracker.Comment{{ID: "1", Author: "rev", Body: "please rename x", CreatedAt: at}}
+	slot := worker.NewSlot("nia", "nia/9-x", "", "main", "")
+	slot.SetPR("https://github.com/o/r/pull/9")
+	noPR := worker.NewSlot("nia", "nia/9-x", "", "main", "")
+	for _, tc := range []struct {
+		name string
+		f    reviewFake
+		s    *worker.Slot
+		want string
+		err  error
+	}{
+		{name: "open with input", f: reviewFake{state: "OPEN", notes: note}, s: slot, want: "1 from rev https://github.com/o/r/pull/9"},
+		{name: "state case is ignored", f: reviewFake{state: "open", notes: note}, s: slot, want: "1 from rev https://github.com/o/r/pull/9"},
+		{name: "open and quiet", f: reviewFake{state: "OPEN"}, s: slot},
+		{name: "merged pr", f: reviewFake{state: "MERGED", notes: note}, s: slot},
+		{name: "closed pr", f: reviewFake{state: "CLOSED", notes: note}, s: slot},
+		{name: "slot gone", f: reviewFake{state: "OPEN", notes: note}},
+		{name: "view failure", f: reviewFake{viewErr: boom, notes: note}, s: slot, err: boom},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := PendingSummary(context.Background(), tc.f, tc.s, nil, at)
+			if got != tc.want || !errors.Is(err, tc.err) {
+				t.Fatalf("got %q, %v want %q, %v", got, err, tc.want, tc.err)
+			}
+		})
+	}
+	// A slot without a PR is not polled for review input.
+	if got, _ := PendingSummary(context.Background(), reviewFake{state: "OPEN", notes: note}, noPR, nil, at); got != "" {
+		t.Fatalf("slot without a PR reported %q", got)
 	}
 }
 

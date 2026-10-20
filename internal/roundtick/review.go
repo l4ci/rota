@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
+
+	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // RelayResult is what one relay of a slot's review input reported. AtCap is set
@@ -28,12 +32,9 @@ type ReviewSources struct {
 	SetupErr error
 	// Warn reports a failure that stays out of the tick items.
 	Warn func(format string, args ...any)
-	// Open reports whether the slot's PR is open (manual; a slot without a PR
-	// is not open).
-	Open func(ctx context.Context) (bool, error)
-	// Pending is the summary of the review input waiting on the PR, "" when
-	// there is none (manual).
-	Pending func(ctx context.Context) (string, error)
+	// Poll is the summary of the review input waiting on the slot's open PR
+	// (manual); "" when there is none, or the PR is not open.
+	Poll func(ctx context.Context) (string, error)
 	// Relay hands the input to the worker (auto). A relay that cannot go out
 	// returns its error; at the cap it sets AtCap.
 	Relay func(ctx context.Context) (RelayResult, error)
@@ -58,14 +59,7 @@ func ReviewStep(ctx context.Context, s ReviewSources) ReviewOutcome {
 		return pollFailed(s.SetupErr)
 	}
 	if !s.Auto {
-		open, err := s.Open(ctx)
-		if err != nil {
-			return pollFailed(err)
-		}
-		if !open {
-			return ReviewOutcome{}
-		}
-		summary, err := s.Pending(ctx)
+		summary, err := s.Poll(ctx)
 		if err != nil {
 			return pollFailed(err)
 		}
@@ -88,4 +82,41 @@ func ReviewStep(ctx context.Context, s ReviewSources) ReviewOutcome {
 	s.Warn("review poll of %s: %v", s.Slot, err)
 	why := fmt.Sprintf("%d item(s) not relayed", res.Items)
 	return ReviewOutcome{Pending: true, Hold: true, Detail: strings.TrimSpace(fmt.Sprintf("%s %s: run `rota round review-relay %s` for the error", why, s.PR, s.Slot))}
+}
+
+// PendingSummary resolves, in one call, whether slot s's PR is open on the
+// forge and what review input waits on it: the "<n> from <authors> <pr>"
+// summary, "" when the slot is gone or has no PR, the PR is not open, or
+// nothing waits. v is a FAIL verdict recorded for the slot's branch, nil for
+// none.
+func PendingSummary(ctx context.Context, f round.ReviewForge, s *worker.Slot, v *worker.ReviewVerdict, now time.Time) (string, error) {
+	if s == nil {
+		return "", nil
+	}
+	n, _ := worker.PRRefNumber(s.PR())
+	info, err := f.PRView(ctx, n)
+	if err != nil {
+		return "", err
+	}
+	if !strings.EqualFold(info.State, "OPEN") {
+		return "", nil
+	}
+	b, err := worker.PendingReview(ctx, f, s, v, now)
+	if err != nil || b.Empty() {
+		return "", err
+	}
+	return reviewSummary(b), nil
+}
+
+// reviewSummary is "<n> from <authors>", the value of a slot's review key.
+func reviewSummary(b worker.ReviewBatch) string {
+	n := len(b.Items)
+	from := strings.Join(b.Authors(), ", ")
+	if b.Verdict != "" {
+		if n == 0 {
+			return "review verdict FAIL " + b.PR
+		}
+		from += " and a FAIL verdict"
+	}
+	return fmt.Sprintf("%d from %s %s", n, from, b.PR)
 }
