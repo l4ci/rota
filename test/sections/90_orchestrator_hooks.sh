@@ -225,18 +225,18 @@ dump_pct 74
 [ -z "$(guard_prompt)" ] || fail "guard: warn printed below the threshold"
 dump_pct 80
 OUT="$(guard_prompt)"
-echo "$OUT" | grep -q '/rota-pause' || fail "guard: warn did not recommend /rota-pause at 80: $OUT"
+grep -q '/rota-pause' <<<"$OUT" || fail "guard: warn did not recommend /rota-pause at 80: $OUT"
 [ -z "$(guard_prompt)" ] || fail "guard: warn repeated within one crossing"
 [ -z "$(guard_stop false)" ] || fail "guard: warn blocked the Stop hook"
 dump_pct 10; [ -z "$(guard_prompt)" ] || fail "guard: warn printed after falling below"
 dump_pct 90
-guard_prompt | grep -q '/rota-pause' || fail "guard: warn did not fire on a new crossing"
+OUT="$(guard_prompt)"; grep -q '/rota-pause' <<<"$OUT" || fail "guard: warn did not fire on a new crossing"
 pass "guard: warn adds one /rota-pause line per crossing and never blocks"
 
 rm -rf "$CD/rota/session"; guard_cfg auto; dump_pct 80
 guard_prompt >/dev/null
 for a in false true; do
-  guard_stop "$a" | grep -q '"decision": *"block"' || fail "guard: auto did not block (active=$a)"
+  OUT="$(guard_stop "$a")"; grep -q '"decision": *"block"' <<<"$OUT" || fail "guard: auto did not block (active=$a)"
 done
 [ -z "$(guard_stop true)" ] || fail "guard: auto blocked past handoffMaxBlocks"
 pass "guard: auto blocks handoffMaxBlocks times, then passes"
@@ -248,7 +248,7 @@ done
 rm -rf "$CD/rota/session"; guard_cfg ""; dump_pct 95
 [ -z "$(printf '{"session_id":"s1","cwd":"%s"}' "$P" | env CLAUDE_CONFIG_DIR="$CC" ROTA_TEST_NOW="2026-10-03T12:30:00Z" ROTA_TEST_HOLDER_PID=0 "$ROTA_BIN" hook prompt)" ] || fail "guard: warn acted on a stale reading"
 RC=0; OUT="$("$ROTA_BIN" -C "$P" config set work.contextGuard bogus 2>&1)" || RC=$?
-[ "$RC" -ne 0 ] && echo "$OUT" | grep -q 'warn' && echo "$OUT" | grep -q 'auto' || fail "guard: bad value not rejected with the allowed values: rc=$RC $OUT"
+[ "$RC" -ne 0 ] && grep -q 'warn' <<<"$OUT" && grep -q 'auto' <<<"$OUT" || fail "guard: bad value not rejected with the allowed values: rc=$RC $OUT"
 guard_cfg ""
 pass "guard: off, a bad value and a stale reading stay silent; config set rejects a bad value"
 
