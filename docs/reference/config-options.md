@@ -297,6 +297,12 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `roles.reasoner.tier` | enum | `"heavy"` | `light`, `standard`, `heavy` | Tier of the rota-reasoner agent, which picks its model from round.tiers. |
 | `roles.reasoner.effort` | enum | unset | `low`, `medium`, `high`, `xhigh`, `max` | Reasoning effort of the rota-reasoner agent. Empty leaves the harness default; Codex has no max. |
 
+### brainstorm
+
+| Key | Type | Default | Values | Description |
+|-----|------|---------|--------|-------------|
+| `brainstorm.edgeProbe` | bool | `false` |  | Opt-in edge and prohibition probe in /rota-brainstorm Step 3: walks eight edge categories, records each as covered or dismissed, asks what the change must never do and writes each answer as a negative acceptance criterion. Off leaves /rota-brainstorm unchanged. |
+
 ### orchestrator
 
 | Key | Type | Default | Values | Description |
