@@ -32,6 +32,8 @@ Follow `references/context-load-protocol.md` (parallel, silent), plus `rota item
 
 **Grill first, once.** Run one pass of `references/grilling.md` before drafting when the item is a Major feature or P0 bug, or the invocation has `--grill`. Skip it when the issue body already has `## Acceptance` (`--grill` does not override). For other items ask nothing unless real ambiguity or a decision conflict remains after the item, its thread and the code; then ask the one question that unblocks you (≤ 4 options). Record answers that changed direction in Step 5. If a question needs code-touching evidence (feasibility, library support, performance), say: *"This warrants a spike. Run `/rota-spike <name>` first, then re-invoke `/rota-brainstorm <ID>`."* Don't guess.
 
+**Edge probe (opt-in).** Read `rota config show brainstorm.edgeProbe`. `false` (default): skip this paragraph, brainstorm is unchanged. `true`: run the probe inside this one draft, with no extra approval step, and skip it when the issue body already has `## Acceptance`. Walk eight categories: boundary, empty, ordering, idempotency, concurrency, encoding, precision, adjacency. Answer each from the item and the code, and record it in the draft as `covered: <how>` or `dismissed: <reason>`. Then ask once, "What must this never do?", and write each answer as a `- [ ] AC-n:` line that states a prohibition ("never X"), under Acceptance.
+
 Write the whole design as one unsaved markdown draft:
 
 - **Goal**: one sentence on what shipping this means
