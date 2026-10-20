@@ -94,6 +94,9 @@ type Finding struct {
 	File     string `json:"file,omitempty"`
 	Line     int    `json:"line,omitempty"`
 	Detail   string `json:"detail,omitempty"`
+	// Fix is the expected behaviour: the acceptance criterion of the item a
+	// deferred finding is filed as. Optional.
+	Fix string `json:"fix,omitempty"`
 	// Blocking is whether a bounce relays this finding. ParseBody always sets
 	// it (explicit value, else from the severity); a record stored before the
 	// field existed has none and IsBlocking falls back to the severity.
@@ -162,6 +165,7 @@ type rawBody struct {
 		File     *string `json:"file"`
 		Line     *int    `json:"line"`
 		Detail   *string `json:"detail"`
+		Fix      *string `json:"fix"`
 		Blocking *bool   `json:"blocking"`
 	} `json:"findings"`
 	Items []struct {
@@ -230,6 +234,9 @@ func ParseBody(text string) (Body, error) {
 		}
 		if f.Detail != nil {
 			out.Detail = *f.Detail
+		}
+		if f.Fix != nil {
+			out.Fix = strings.TrimSpace(*f.Fix)
 		}
 		b.Findings = append(b.Findings, out)
 	}

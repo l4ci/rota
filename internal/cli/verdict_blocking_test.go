@@ -154,10 +154,43 @@ func TestVerdictAddFileDeferredWritesAcceptance(t *testing.T) {
 	}
 	b, _ := os.ReadFile(filepath.Join(dir, ".rota", "tasks", "T01.md"))
 	text := string(b)
-	for _, want := range []string{"## Acceptance", "- [ ] AC-1: rename the helper"} {
+	for _, want := range []string{"## Acceptance", "- [ ] AC-1: the problem above no longer reproduces, and a test or check that failed before the fix passes after it"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("T01.md lacks %q:\n%s", want, text)
 		}
+	}
+}
+
+// AC-1..4 (#1092): the finding is the Problem, never an acceptance line; a fix field becomes AC-1.
+func TestVerdictAddFileDeferredProblemAndFix(t *testing.T) {
+	for name, tc := range map[string]struct{ finding, wantAC string }{
+		"without fix": {`{"severity":"minor","title":"rename the helper","detail":"foo is misleading","file":"a.go","line":7}`,
+			"- [ ] AC-1: the problem above no longer reproduces, and a test or check that failed before the fix passes after it"},
+		"with fix": {`{"severity":"minor","title":"rename the helper","detail":"foo is misleading","file":"a.go","line":7,"fix":"the helper is named bar"}`,
+			"- [ ] AC-1: the helper is named bar"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := verdictRepo(t)
+			for f, c := range map[string]string{"BACKLOG.md": "# TODO\n\n## Tasks\n\n## Completed\n", "counters.json": "{}\n"} {
+				if err := os.WriteFile(filepath.Join(dir, ".rota", f), []byte(c), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			body := writeBody(t, t.TempDir(), `{"findings":[`+tc.finding+`]}`)
+			if code, _, errOut := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", "FAIL", "--body-file", body, "--file-deferred", "--pr", "#77"); code != 0 {
+				t.Fatalf("add: %d %s", code, errOut)
+			}
+			b, _ := os.ReadFile(filepath.Join(dir, ".rota", "tasks", "T01.md"))
+			text := string(b)
+			for _, want := range []string{"## Problem", "rename the helper", "foo is misleading", "a.go:7", "#77", "review-quality FAIL", tc.wantAC} {
+				if !strings.Contains(text, want) {
+					t.Errorf("T01.md lacks %q:\n%s", want, text)
+				}
+			}
+			if strings.Contains(text, "AC-1: rename the helper") || strings.Count(text, "- [ ]") != 1 {
+				t.Errorf("title is an acceptance line, or AC count != 1:\n%s", text)
+			}
+		})
 	}
 }
 
