@@ -159,7 +159,8 @@ type Input struct {
 	// Getenv reads the environment for host detection (HERDR_ENV, TMUX); nil
 	// reads as empty.
 	Getenv func(string) string
-	// Look resolves a tool name to a path, or false when it is not found.
+	// Look resolves a tool name, or a path with a slash, to an executable path, or
+	// false when it is not found. It is the only filesystem and PATH read for tools.
 	Look func(name string) (string, bool)
 }
 
@@ -737,12 +738,11 @@ func (d *runner) guardHook() Check {
 	return pass(name, "PreToolUse guard runs rota")
 }
 
-// resolve finds the executable a hook command starts with.
+// resolve finds the executable a hook command starts with; a path with a slash
+// gets its ~ and $ expanded before Look sees it.
 func (d *runner) resolve(word string) (string, bool) {
 	if strings.Contains(word, "/") {
-		w := d.expand(word)
-		fi, err := os.Stat(w)
-		return w, err == nil && fi.Mode().IsRegular() && fi.Mode().Perm()&0o111 != 0
+		word = d.expand(word)
 	}
 	return d.in.Look(word)
 }
