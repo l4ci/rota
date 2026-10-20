@@ -77,15 +77,16 @@ func (s *Slot) Unread() []Mail {
 	return out
 }
 
-// AckUnread marks every unread mail read and returns what it marked. Called
-// inside one registry update with the read, so mail posted afterwards stays
-// unread.
-func (s *Slot) AckUnread() []Mail {
+// AckUnread marks the unread mail read and returns what it marked: all of it
+// when upto is 0, else only mail up to that sequence number, so a relay
+// posted after the worker's listing is not acknowledged unseen. Called inside
+// one registry update with the read.
+func (s *Slot) AckUnread(upto int) []Mail {
 	v, _ := s.o.Get("inbox")
 	l, _ := v.([]any)
 	var acked []Mail
 	for _, e := range l {
-		if o, ok := e.(*jsonx.Object); ok && !jsonx.Bool(o, "read") {
+		if o, ok := e.(*jsonx.Object); ok && !jsonx.Bool(o, "read") && (upto == 0 || mailFrom(o).Seq <= upto) {
 			acked = append(acked, mailFrom(o))
 			o.Set("read", true)
 		}

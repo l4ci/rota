@@ -84,3 +84,24 @@ func TestWorkerDoneFailedStillRefusesUnreadMail(t *testing.T) {
 		t.Fatalf("%d %s", code, out)
 	}
 }
+
+// Mail posted after the worker's listing is not acknowledged unseen: --upto
+// bounds the ack, and worker done still refuses the late mail.
+func TestWorkerInboxAckUptoLeavesLaterMailUnread(t *testing.T) {
+	dir := doneProject(t, "")
+	postMail(t, dir, "first")
+	postMail(t, dir, "late")
+	code, out, errOut := rotaIn(t, dir, "worker", "inbox", "ben", "--ack", "--upto", "1", "--json")
+	if d := data(t, out); code != 0 || d["acked"] != 1.0 || d["unread"] != 1.0 {
+		t.Fatalf("%d %v %s", code, d, errOut)
+	}
+	if strings.Contains(out, "late") {
+		t.Errorf("the late mail was shown as acknowledged: %s", out)
+	}
+	if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json"); code != 4 || data(t, out)["unread"] != 1.0 {
+		t.Fatalf("done passed over late mail: %d %s", code, out)
+	}
+	if code, _, _ := rotaIn(t, dir, "worker", "inbox", "ben", "--upto", "1"); code != 2 {
+		t.Errorf("--upto without --ack: %d, want 2", code)
+	}
+}
