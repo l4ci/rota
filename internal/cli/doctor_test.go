@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/skills"
 )
 
@@ -290,6 +292,54 @@ func TestDoctorVerifyCheck(t *testing.T) {
 		}
 		if c := verify(); c != nil {
 			t.Errorf("%s set still warns: %v", key, c)
+		}
+	}
+}
+
+// Doctor resolves its skill roots from the injected cwd, home and git
+// toplevel: no real git, no real working directory.
+func TestDoctorSkillRootsFromInjectedDeps(t *testing.T) {
+	cwd, home, top := t.TempDir(), t.TempDir(), t.TempDir()
+	var gitDir string
+	d := defaultDeps()
+	d.Getwd = func() (string, error) { return cwd, nil }
+	d.UserHomeDir = func() (string, error) { return home, nil }
+	d.Getenv = func(k string) string {
+		if k == "HOME" {
+			return home
+		}
+		return ""
+	}
+	d.Git = func(_ context.Context, dir string, args ...string) (git.Result, error) {
+		if len(args) == 2 && args[0] == "rev-parse" && args[1] == "--show-toplevel" {
+			gitDir = dir
+			return git.Result{Stdout: top + "\n"}, nil
+		}
+		return git.Result{ExitCode: 1}, nil
+	}
+	in := doctorInput(context.Background(), d)
+	if in.Dir != cwd || in.Home != home {
+		t.Errorf("dir %q home %q, want %q %q", in.Dir, in.Home, cwd, home)
+	}
+	if gitDir != cwd {
+		t.Errorf("toplevel asked in %q, want the injected cwd %q", gitDir, cwd)
+	}
+	if in.Skills == nil {
+		t.Fatal("skills report nil")
+	}
+	want := map[string]bool{
+		filepath.Join(top, ".claude", "skills"):  false,
+		filepath.Join(top, ".agents", "skills"):  false,
+		filepath.Join(home, ".claude", "skills"): false,
+	}
+	for _, r := range in.Skills.Roots {
+		if _, ok := want[r.Path]; ok {
+			want[r.Path] = true
+		}
+	}
+	for p, seen := range want {
+		if !seen {
+			t.Errorf("root %s missing from %+v", p, in.Skills.Roots)
 		}
 	}
 }

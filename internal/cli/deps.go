@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -44,6 +45,12 @@ type Deps struct {
 	// other binary. A test swaps in a fake instead of reaching the machine.
 	Git  git.Runner
 	Proc proc.Runner
+
+	// Getwd and UserHomeDir are the one working-directory and home reads;
+	// Toplevel asks Git from the working directory. A test swaps them to run
+	// in a temp dir with a fake git.
+	Getwd       func() (string, error)
+	UserHomeDir func() (string, error)
 
 	// Now is the one clock. Today is the day date-stamped output and age
 	// checks use; it is Now unless a test pins the day alone. HolderPID names
@@ -132,6 +139,8 @@ func defaultDeps() *Deps {
 		Git:              git.Exec,
 		Proc:             proc.Run,
 		Getenv:           os.Getenv,
+		Getwd:            os.Getwd,
+		UserHomeDir:      os.UserHomeDir,
 		LookPath:         exec.LookPath,
 		WorkerEnv:        func() worker.Env { return worker.Env{} },
 		EscalationEnv:    func() escalation.Env { return escalation.Env{} },
@@ -178,6 +187,20 @@ func defaultDeps() *Deps {
 		return defaultReapEnv(ctx, root, d)
 	}
 	return d
+}
+
+// Toplevel is the toplevel of the git work tree around the working directory,
+// "" outside one or when git cannot run.
+func (d *Deps) Toplevel(ctx context.Context) string {
+	dir, err := d.Getwd()
+	if err != nil {
+		return ""
+	}
+	res, err := d.Git(ctx, dir, "rev-parse", "--show-toplevel")
+	if err != nil || res.ExitCode != 0 {
+		return ""
+	}
+	return strings.TrimSpace(res.Stdout)
 }
 
 // deps is the invocation's dependencies. A Ctx built by hand, without run,

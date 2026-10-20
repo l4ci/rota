@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/skills"
@@ -99,7 +97,7 @@ func skillsEnv(c *Ctx, a skillsArgs) (set *skills.Set, roots []skills.Root, skip
 	home, claudeDirs, skipped := skillsDirs(c, a)
 	top := ""
 	if a.scope != skills.User {
-		top = gitToplevel()
+		top = c.deps().Toplevel(c.Context())
 	}
 	roots, err = skills.RootsFor(a.scope, a.agent, home, claudeDirs, top)
 	switch {
@@ -118,7 +116,7 @@ func skillsEnv(c *Ctx, a skillsArgs) (set *skills.Set, roots []skills.Root, skip
 func skillsDirs(c *Ctx, a skillsArgs) (home string, claudeDirs, skipped []string) {
 	home = c.deps().Getenv("HOME")
 	if home == "" {
-		home, _ = os.UserHomeDir()
+		home, _ = c.deps().UserHomeDir()
 	}
 	root := ""
 	if !a.currentAccount {
@@ -197,13 +195,6 @@ func withSkipped(res Result, skipped []string) Result {
 	return res
 }
 
-// gitToplevel is the toplevel of the git work tree around the working
-// directory, "" outside one.
-func gitToplevel() string {
-	top, _, _ := git.Repo{}.Toplevel(context.Background())
-	return strings.TrimSpace(top)
-}
-
 // skillsErr maps a skills package failure: a busy lock is exit 6, anything
 // else (a root that cannot be created or written) exit 5.
 func skillsErr(err error) error {
@@ -240,7 +231,7 @@ func skillsUpdate(c *Ctx, a skillsArgs) (Result, error) {
 		_, claudeDirs, _ := skillsDirs(c, a)
 		top := ""
 		if a.scope != skills.User {
-			top = gitToplevel()
+			top = c.deps().Toplevel(c.Context())
 		}
 		if plugin, _ := skillsPluginRoots(c.deps().Getenv, claudeDirs, a.scope, a.agent, top); len(plugin) > 0 {
 			hint = "the rota plugin is updated by Claude Code: claude plugin update rota@rota"
@@ -350,7 +341,7 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 	_, claudeDirs, _ := skillsDirs(c, a)
 	top := ""
 	if a.scope != skills.User {
-		top = gitToplevel()
+		top = c.deps().Toplevel(c.Context())
 	}
 	pluginRoots, pluginErrs := skillsPluginRoots(c.deps().Getenv, claudeDirs, a.scope, a.agent, top)
 	roots = append(roots, pluginRoots...)
