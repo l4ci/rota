@@ -2,7 +2,7 @@
 
 [Your first round](../first-round.md) gets a round running, and [parallel rounds](../usage/parallel-rounds.md) documents every verb. This page is the loop a maintainer repeats between releases: shape the slate, run an orchestrated round, wind down, and sometimes release.
 
-It assumes the host is set up and `rota doctor` is green. Solo mode is in the [greenfield walkthrough](greenfield-from-brief.md). The issue numbers below are made up, for a project with a backlog on GitHub issues.
+It assumes the host is set up and `rota doctor` is green. One item without a round is the [manual-mode quickstart](quickstart-manual-mode.md). The issue numbers below are made up, for a project with a backlog on GitHub issues.
 
 ```mermaid
 flowchart LR
@@ -114,7 +114,7 @@ Your decision, per PR:
 - **Fix it yourself** when the gap is one line and a round trip costs more than the fix. A fix you push still needs an independent reviewer.
 - **Dispute the ticket** when the worker is right that the issue is wrong. Edit the issue, not the worker.
 
-At `round.freshAt` (default 2) a bounce moves the branch to a fresh slot, so the second attempt does not carry the first one's context. At `round.maxBounces` rota stops relaying and escalates on the PR. Do not bounce it again: audit the acceptance criteria first, since a criterion with two readings produces the same wrong PR every time. If one is ambiguous, hand the issue to a human (`rota round transfer <issue> --to human --cap-reason ambiguous-criteria --note-file <audit>`). If they all hold, hand it to a stronger worker (`--tier heavy`). See [PRs in review](../usage/parallel-rounds.md#prs-in-review).
+At `round.freshAt` (default 2) a bounce moves the branch to a fresh slot, so the second attempt does not carry the first one's context. At `round.maxBounces` rota stops relaying and escalates on the PR. Do not bounce it again: audit the acceptance criteria first, since a criterion with two readings produces the same wrong PR every time. If one is ambiguous, hand the issue to a human (`rota round transfer <issue> --to human --cap-reason ambiguous-criteria --note-file <audit>`). If they all hold, hand it to a stronger worker (`rota round transfer <issue> --to <slot> --tier heavy --tier-reason <why> --cap-reason tier`). See [PRs in review](../usage/parallel-rounds.md#prs-in-review).
 
 ### Gate and merge
 
@@ -161,7 +161,7 @@ rota reap            # preview; --apply removes what holds no work
 
 `/rota-learn` writes the reusable lessons of the round into `.rota/KNOWLEDGE.md`: a gate trap, a worker mistake that bounced twice, a decision you made once and should not make again. Run it once for the whole round, since workers skip it per PR. Your decision: which of the proposed entries are durable. Drop the ones that only describe this round.
 
-Last, bring the public docs in line with what merged. A PR that changes a command or a skill should carry its own doc edit; this pass is for what no single PR owned, such as an index or a cross-reference.
+Last, run `/rota-docs` once to bring the public docs in line with what merged. A PR that changes a command or a skill should carry its own doc edit; this pass is for what no single PR owned, such as an index or a cross-reference.
 
 Commit the knowledge entries straight to the base branch: bookkeeping needs no PR.
 

@@ -673,6 +673,12 @@ the winner as usual. If one attempt was returned, reclaimed or died without a PR
 the remaining PR alone; while the other worker is still building, it refuses. The autopilot
 assigns best-of issues but never picks: the pick is yours.
 
+An architecture-review item ends with filed issues, not a PR. When its worker prints
+`ROTA-DONE <slot> issues:#a,#b`, read the issues and run `rota round accept <ID>`. It closes the
+item with a note listing them, releases its claim and frees the slot, so no `reclaim` is needed.
+If the slot recorded no issues, pass `--issues #a,#b`. Running it again on a closed item changes
+nothing.
+
 ## Moving an issue that is assigned
 
 ```sh

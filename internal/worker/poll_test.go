@@ -138,6 +138,50 @@ func TestPollRecordsStateAndPRURL(t *testing.T) {
 	}
 }
 
+// A reader of the registry never sees done without the evidence the same done
+// line carried: the state and the PR (or issues list) share one write.
+func TestPollRecordsDoneAndEvidenceInOneWrite(t *testing.T) {
+	for _, tc := range []struct{ line, field string }{
+		{"ROTA-DONE w1 https://github.com/o/r/pull/9", "pr"},
+		{"ROTA-DONE w1 issues:#4,#5", "issues"},
+	} {
+		dir, f := pollRegistry(t, "tmux")
+		f.panes["w1"] = []string{"x\n", "x\n" + tc.line + "\n"}
+		f.panes["w2"] = []string{"a\n", "a\n"}
+		stop, bad := make(chan struct{}), make(chan string, 1)
+		go func() {
+			defer close(bad)
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				reg, err := LoadRegistry(dir)
+				if err != nil {
+					continue
+				}
+				if s := reg.Slot("w1"); s != nil && s.State() == "done" && s.PR() == "" && len(s.Issues()) == 0 {
+					bad <- "done recorded without evidence"
+					return
+				}
+			}
+		}()
+		_, err := envWith(f).Poll(bg, dir, PollOpts{Lines: 60})
+		close(stop)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if msg, ok := <-bad; ok {
+			t.Errorf("%s: %s", tc.field, msg)
+		}
+		reg := LoadRegistryTolerant(dir)
+		if s := reg.Slot("w1"); s.State() != "done" || (s.PR() == "" && len(s.Issues()) == 0) {
+			t.Errorf("%s: final state %s pr=%q issues=%v", tc.field, s.State(), s.PR(), s.Issues())
+		}
+	}
+}
+
 // A branch name after ROTA-DONE must not become slot.pr: `gh pr merge` on a
 // branch fails where the gate's local merge would have worked.
 func TestPollOnlyURLShapedDoneBecomesThePR(t *testing.T) {

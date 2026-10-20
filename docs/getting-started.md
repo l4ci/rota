@@ -38,8 +38,9 @@ Three settings worth a second of thought:
 
 ## 🧪 Worked examples
 
-Two end-to-end walkthroughs carry one concrete project from brief to shipped milestone:
+A short quickstart shows one item through the manual loop, and two end-to-end walkthroughs carry one concrete project from brief to shipped milestone:
 
+- [Quickstart: one item in manual mode](walkthroughs/quickstart-manual-mode.md): one small bug through `/rota-capture`, `/rota-plan`, `/rota-work` and `/rota-ship`, with the proof and review gates marked.
 - [Greenfield: from a brief to a shipped milestone](walkthroughs/greenfield-from-brief.md): empty repo plus a one-page brief, walked through `/rota-vision`, `/rota-plan`, `/rota-work`, `/rota-debug`, `/rota-ship`, `/rota-learn`.
 - [Brownfield: dropping rota into an existing project](walkthroughs/brownfield-existing-project.md): established codebase with open GitHub issues and a mental bug list, walked through `rota init`, `/rota-capture`, then a P0 cycle and a debug cycle.
 
