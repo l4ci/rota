@@ -129,6 +129,11 @@ type Input struct {
 	// project `rota migrate hv` has not moved); "" otherwise.
 	LegacyDir string
 
+	// ConfigDir is the global rota config dir in use and why ("override",
+	// "xdg" or "default"); ConfigDirWarning says a relative ROTA_CONFIG_DIR
+	// was ignored. Empty ConfigDir adds no line.
+	ConfigDir, ConfigDirSource, ConfigDirWarning string
+
 	// ProjectRoot is the directory holding .rota/, "" outside a rota project:
 	// the orchestrator checks (statusline, stop-hook) skip without it.
 	ProjectRoot string
@@ -189,6 +194,9 @@ func Run(ctx context.Context, in Input) Report {
 	if c, ok := d.cacheDisk(); ok {
 		checks = append(checks, c)
 	}
+	if in.ConfigDir != "" {
+		checks = append(checks, d.configDir())
+	}
 	if len(in.AgentProblems) > 0 {
 		checks = append(checks, Check{Name: "agents", Status: Warn, Detail: strings.Join(in.AgentProblems, "; "), Hint: "run: rota agents write"})
 	}
@@ -216,6 +224,20 @@ func Run(ctx context.Context, in Input) Report {
 type runner struct {
 	in  Input
 	ctx context.Context
+}
+
+var configDirWhy = map[string]string{
+	"override": "ROTA_CONFIG_DIR override",
+	"xdg":      "from XDG_CONFIG_HOME",
+	"default":  "default ~/.config/rota",
+}
+
+func (d *runner) configDir() Check {
+	detail := d.in.ConfigDir + " (" + configDirWhy[d.in.ConfigDirSource] + ")"
+	if w := d.in.ConfigDirWarning; w != "" {
+		return Check{Name: "config dir", Status: Warn, Detail: detail + "; " + w, Hint: "set ROTA_CONFIG_DIR to an absolute path, or unset it"}
+	}
+	return pass("config dir", detail)
 }
 
 func pass(name, detail string) Check { return Check{Name: name, Status: Pass, Detail: detail} }
