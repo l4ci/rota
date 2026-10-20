@@ -1,6 +1,6 @@
 ---
 name: rota-refactor
-description: Use on "review the architecture", "find refactoring opportunities", "deepen modules", or scoped to one area ("/rota-refactor internal/cli").
+description: Use on "review the architecture", "find refactoring opportunities", "deepen modules", "map the repo", "refresh the project map" (--map), or scoped to one area ("/rota-refactor internal/cli").
 ---
 
 # rota-refactor
@@ -14,6 +14,7 @@ Surface architectural friction and file each finding as an issue. The default ru
 Read `.rota/config.json`:
 
 - `models.orchestrator`: main session model: exploration and ranking (Claude default `opus`)
+- `map.softcap_subsystems`: `--map` only: the most subsystems the map names (default 20)
 
 `--fix` also reads `models.worker`, `test.full` and `refactor.confirmBeforeExecute`; [`fix-path.md`](fix-path.md) lists them.
 

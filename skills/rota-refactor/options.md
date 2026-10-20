@@ -6,7 +6,7 @@
 
 ## Map mode (`--map`)
 
-On demand only; `rota init` never runs it. It reads `models.orchestrator` and nothing else, and replaces Orient to File: no findings, no issues.
+On demand only; `rota init` never runs it. It reads `models.orchestrator` and `map.softcap_subsystems` and nothing else, and replaces Orient to File: no findings, no issues.
 
 1. **Explore.** One exploration subagent (`light`), scoped to `<area>` if given, else the whole repo. It names the subsystems (one coherent area each, at most `map.softcap_subsystems`) and, per subsystem: entry points as `- <path>:<line> — <what>` lines (real, current lines; `rota map stats` counts a reference that no longer resolves as broken), key files or directories, the stack, the conventions specific to it, the commands that test it, and the concerns (fragile spots, known debt). It reports what the code shows, with no invented rationale.
 2. **Draft.** For each subsystem take `git rev-parse HEAD` once and write the draft in memory, not to disk:
