@@ -171,4 +171,4 @@ The run is resumable: `.rota/issue-map.json` records each old ID, its new ID and
 
 On a tracker with no milestones (It's a Plan) a milestone is reported as skipped and its items migrate without a `Milestone` field. A forge is found from `origin`; It's a Plan is not one, so set `issues.source itsaplan`, `issues.connection` and `issues.itsaplan.project` before the run.
 
-`--apply` never changes `issues.source`. When everything is migrated it adds a "Frozen" banner to `.rota/BACKLOG.md` and prints `Next: rota config set issues.source github` (or `gitlab`). Old IDs are not resolved through the map after the flip; an old `F82` and a new issue `F82` can both exist. Umbrella projects migrate each sub-repo separately.
+`--apply` never changes `issues.source`. When everything is migrated it adds a "Frozen" banner to `.rota/BACKLOG.md` and prints `Next: rota config set issues.source github` (or `gitlab`). On It's a Plan it prints no such line, since `issues.source itsaplan` was set before the run. Old IDs are not resolved through the map after the flip; an old `F82` and a new issue `F82` can both exist. Umbrella projects migrate each sub-repo separately.
