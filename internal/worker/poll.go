@@ -117,11 +117,8 @@ var (
 	reDoneG    = regexp.MustCompile(`(?m)^\s*(?:[●⏺•┃]\s*)?ROTA-DONE\s+(\S+)\s*(.*)$`)
 	reRetry    = regexp.MustCompile(`Retrying in`)
 	reFunds    = regexp.MustCompile(`Add funds`)
-	// A line that quotes text rather than says it: a diff line (optionally
-	// after a line number) or tool output under "⎿" (#1212).
-	reQuoted = regexp.MustCompile(`^\s*(?:\d+\s+)?[+-](?:\s|[^-+\s])|^\s*⎿`)
-	reAPIErr = regexp.MustCompile(`(API Error[^\n]*)`)
-	reResume = regexp.MustCompile(`Resume this session with`)
+	reAPIErr   = regexp.MustCompile(`(API Error[^\n]*)`)
+	reResume   = regexp.MustCompile(`Resume this session with`)
 	// Heuristic, like DEAD: a limited session cannot print a sentinel. The
 	// patterns are anchored to phrasing a session emits about ITSELF, not bare
 	// words like "limit" that a worker reading source code would echo.
@@ -301,19 +298,71 @@ func relayMask(lines []string, gutter, sigEnds bool) []bool {
 	return mask
 }
 
-// StripQuoted is text without the diff and tool-output lines a busy session
-// shows in its scrollback: a limit phrase quoted there is code, not the
-// harness's own dialog.
-func StripQuoted(text string) string {
+// reChrome is a line of the harness's own frame below its dialog: the input
+// prompt, a box border, the permission-mode footer or the shortcut hint.
+var reChrome = regexp.MustCompile(`^\s*(?:[❯>]|[╭╰│─┌└├]|⏵|\? for shortcuts)`)
+
+// DialogRegion is the part of a pane the harness itself wrote: the blocks
+// directly above its input box or footer, up to the nearest reply block. The
+// worker's prose, diffs, code and tool output sit indented inside a reply
+// block, so a limit phrase quoted there is not a hit limit (#1212). From the
+// reply block that ends the walk only its unindented lines count (a banner the
+// harness prints straight after a reply) and, while no spinner or working
+// footer shows, its "⎿" lines (the way Claude Code renders a dialog). busy are
+// the kind's working-footer patterns; a spinner or status line is frame, not
+// dialog. A pane without frame is read the same way from its last line up.
+func DialogRegion(text string, busy []*regexp.Regexp) string {
 	lines := splitLines(text)
-	kept := lines[:0:0]
-	for _, l := range lines {
-		if !reQuoted.MatchString(l) {
-			kept = append(kept, l)
+	working := false
+	end := len(lines)
+	for end > 0 {
+		l := lines[end-1]
+		isWork := anyMatch(busy, l) || reSpinner.MatchString(l)
+		if !(strings.TrimSpace(l) == "" || reChrome.MatchString(l) || isWork) {
+			break
+		}
+		working = working || isWork
+		end--
+	}
+	// Walk up block by block (blank-line separated) until a reply block.
+	start, from := end, end
+	for i := end; i > 0; {
+		j := i
+		for j > 0 && strings.TrimSpace(lines[j-1]) != "" {
+			j--
+		}
+		if j < i {
+			if reReplyMarker.MatchString(lines[j]) {
+				from = j + 1
+				break
+			}
+			start = j
+		}
+		if j == 0 {
+			break
+		}
+		i = j - 1
+	}
+	var kept []string
+	if from < start {
+		for _, l := range lines[from:start] {
+			if strings.TrimSpace(l) != "" && (!reIndent.MatchString(l) || !working && reGutterLine.MatchString(l)) {
+				kept = append(kept, l)
+			}
 		}
 	}
-	return strings.Join(kept, "\n")
+	return strings.Join(append(kept, lines[start:end]...), "\n")
 }
+
+// reIndent starts an indented line; reGutterLine is tool output under "⎿".
+var (
+	reIndent     = regexp.MustCompile(`^\s`)
+	reGutterLine = regexp.MustCompile(`^\s*⎿`)
+)
+
+// reSpinner is a working line: an activity glyph, a verb and an ellipsis
+// ("✻ Running tests…").
+var reSpinner = regexp.MustCompile(`^\s*[✻✶✽✢✳·*]\s+\S.*…`)
 
 // StripRelays is text without the echoed orchestrator blocks, the way
 // lastSentinel skips them: a limit phrase a brief or relay quotes is the
@@ -428,8 +477,8 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	// LIMITED is checked BEFORE movement: a session that hit its usage limit may
 	// still animate a prompt, and reading that as BUSY strands the orchestrator
 	// waiting for work that cannot resume until the window resets.
-	// Diff and tool-output lines are quoted text, not the dialog (#1212).
-	dialog := StripQuoted(own)
+	// Only the harness's own dialog counts, not text the worker quotes (#1212).
+	dialog := DialogRegion(own, rules.busy)
 	if s, e, ok := FindLimit(kind, dialog); ok {
 		// The "Add funds" prompt spends real money and is NEVER the
 		// orchestrator's to answer: flag it so the caller escalates.

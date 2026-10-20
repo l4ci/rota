@@ -897,20 +897,39 @@ func TestParseFindingDone(t *testing.T) {
 }
 
 // A busy session whose scrollback quotes the limit or "Add funds" phrases in a
-// diff, a numbered code listing or tool output is working, not limited (#1212).
+// diff, prose, a code listing, a conflict hunk or tool output is working, not
+// limited: only the harness's own dialog counts (#1212).
 func TestClassifyQuotedLimitTextIsNotLimited(t *testing.T) {
 	spinner := "\n✻ Running tests… (12s · esc to interrupt)\n\n❯ \n  ⏵⏵ bypass permissions on\n"
 	for name, quoted := range map[string]string{
-		"diff added":   "+\tif reFunds.MatchString(tail) { // You've hit your usage limit: Add funds\n",
-		"diff removed": "-\t\treturn StateLimited, \"usage limit reached; pane offers 'Add funds'\"\n",
-		"numbered":     "  417  +\t\t\treturn StateLimited, \"usage limit reached; pane offers 'Add funds'\"\n",
+		"diff added":   "    412 +\tif reFunds.MatchString(tail) { // You've hit your usage limit: Add funds\n",
+		"diff removed": "    413 -\t\treturn StateLimited, \"usage limit reached; pane offers 'Add funds'\"\n",
+		"numbered":     "    417  +\t\t\treturn StateLimited, \"usage limit reached; pane offers 'Add funds'\"\n",
 		"tool output":  "  ⎿  internal/worker/poll.go:417: usage limit reached; pane offers 'Add funds'\n",
+		"prose":        "  The classifier matches \"You've hit your usage limit\" and \"Add funds\" as plain text.\n",
+		"code listing": "    return StateLimited, \"usage limit reached; pane offers 'Add funds'\"\n",
+		"conflict":     "    <<<<<<< HEAD\n    msg := \"You've hit your usage limit\"\n    =======\n    msg := \"Add funds\"\n    >>>>>>> main\n",
 	} {
 		for _, native := range []string{"idle", "working"} {
 			pane := "● Update(internal/worker/poll.go)\n" + quoted + spinner
 			if st, ev := ClassifyFor("claude", pane, false, 60, native); st != StateBusy {
 				t.Errorf("%s/%s: want BUSY, got %s %q", name, native, st, ev)
 			}
+			// Idle, with the worker's last reply quoting the text above the input box.
+			idle := "● " + strings.TrimLeft(quoted, " +-\t") + "\n❯ \n  ⏵⏵ bypass permissions on\n"
+			if st, ev := ClassifyFor("claude", idle, false, 60, native); st == StateLimited {
+				t.Errorf("%s/%s idle: quoted text read as limited: %q", name, native, ev)
+			}
+		}
+	}
+	// A real dialog rendered the way Claude Code shows it, under a ⎿ gutter, stays limited.
+	for name, dialog := range map[string]string{
+		"gutter": "● Update(internal/worker/poll.go)\n\n  ⎿  You've hit your usage limit · resets 5pm\n     Add funds to continue\n",
+		"bare":   "● Update(internal/worker/poll.go)\n  ⎿  Done\n\nYou've hit your usage limit · resets 5pm\n\nAdd funds to continue\n",
+	} {
+		pane := dialog + "\n❯ \n  ⏵⏵ bypass permissions on\n"
+		if st, ev := ClassifyFor("claude", pane, false, 60, "idle"); st != StateLimited || !strings.Contains(ev, "Add funds") {
+			t.Errorf("real dialog %s: %s %q", name, st, ev)
 		}
 	}
 	// The harness's own dialog still reads as limited, even after a diff.
