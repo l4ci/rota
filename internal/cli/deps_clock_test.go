@@ -20,10 +20,10 @@ func TestDepsClockAndGetenvReachWorkerAndAccounts(t *testing.T) {
 		return ""
 	}
 	acc := d.WorkerAccounts()
-	if got := acc.Env.Clock()(); !got.Equal(pinned) {
+	if got := acc.Env.WithDefaults().Now(); !got.Equal(pinned) {
 		t.Errorf("accounts clock = %v, want %v", got, pinned)
 	}
-	if got := acc.Env.Environ()("ROTA_ACCOUNT_USAGE_DIR"); got != "/swapped" {
+	if got := acc.Env.WithDefaults().Getenv("ROTA_ACCOUNT_USAGE_DIR"); got != "/swapped" {
 		t.Errorf("accounts getenv = %q, want /swapped", got)
 	}
 	w := d.workerEnv()

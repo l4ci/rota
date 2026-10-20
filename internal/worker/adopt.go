@@ -75,7 +75,7 @@ func ExternalRefusal(name, verb string) error {
 // leaves a dirty worktree (and with it the branch) in place. A slot a round
 // drives is refused.
 func (e Env) ReleaseExternal(root, name string, prune bool) error {
-	e = e.withDefaults()
+	e = e.WithDefaults()
 	reg, err := LoadRegistry(root)
 	if err != nil {
 		return err

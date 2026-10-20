@@ -415,7 +415,7 @@ func SlotData(sl *Slot) *jsonx.Object {
 
 // git runs git and trims one trailing newline from stdout, like $(...).
 func (e Env) git(dir string, args ...string) (string, int) {
-	return e.runGit(e.context(), dir, args...)
+	return e.runGit(e.Ctx, dir, args...)
 }
 
 // runGit is the one git adapter of package worker: git on ctx, a failure to
@@ -436,7 +436,7 @@ type Env struct {
 	// CLI. Nil means context.Background().
 	Ctx context.Context
 	Git git.Runner
-	// NewHost returns the host for a kind.
+	// NewHost returns the host for a kind; nil means host.New with the real runners.
 	NewHost func(kind host.Kind) host.Host
 	// Sleep defaults to time.Sleep (poll's settle).
 	Sleep func(time.Duration)
@@ -485,50 +485,19 @@ type Env struct {
 	GateInput func(root string) (gateInput, error)
 }
 
-func (e Env) context() context.Context {
-	if e.Ctx != nil {
-		return e.Ctx
+// WithDefaults is the one defaulting mechanism of Env: every nil seam gets its
+// production value. Each verb entry calls it once and then reads the fields
+// directly; code outside the package calls it to read the clock or environment.
+// Idempotent, so a defaulted Env passes through unchanged.
+func (e Env) WithDefaults() Env {
+	if e.Ctx == nil {
+		e.Ctx = context.Background()
 	}
-	return context.Background()
-}
-
-// Clock is the env's clock, time.Now unless a test or Deps swaps it. It is the
-// one nil fallback: round.Env and Accounts read the clock through here.
-func (e Env) Clock() func() time.Time {
-	if e.Now != nil {
-		return e.Now
-	}
-	return time.Now
-}
-
-// Environ is the env's environment reader, os.Getenv unless swapped; the one
-// getenv fallback, shared the same way as Clock.
-func (e Env) Environ() func(string) string {
-	if e.Getenv != nil {
-		return e.Getenv
-	}
-	return os.Getenv
-}
-
-// errWriter is where ledger warnings go: Stderr, os.Stderr when unset.
-func (e Env) errWriter() io.Writer {
-	if e.Stderr != nil {
-		return e.Stderr
-	}
-	return os.Stderr
-}
-
-// leaseEnv is the env's round-lease reader, roundlease.DefaultEnv unless swapped.
-func (e Env) leaseEnv() roundlease.Env {
-	if e.Lease != nil {
-		return e.Lease()
-	}
-	return roundlease.DefaultEnv()
-}
-
-func (e Env) withDefaults() Env {
 	if e.Git == nil {
 		e.Git = git.Exec
+	}
+	if e.NewHost == nil {
+		e.NewHost = func(kind host.Kind) host.Host { return host.New(kind, host.Deps{}) }
 	}
 	if e.Sleep == nil {
 		e.Sleep = time.Sleep
@@ -536,11 +505,18 @@ func (e Env) withDefaults() Env {
 	if e.Stderr == nil {
 		e.Stderr = os.Stderr
 	}
-	e.Now = e.Clock()
-	e.Getenv = e.Environ()
+	if e.Now == nil {
+		e.Now = time.Now
+	}
+	if e.Getenv == nil {
+		e.Getenv = os.Getenv
+	}
+	if e.Lease == nil {
+		e.Lease = roundlease.DefaultEnv
+	}
 	if e.Forge == nil {
 		e.Forge = func(provider, dir string, s tracker.Settings) (Forge, error) {
-			return tracker.NewForge(e.context(), s, provider, dir)
+			return tracker.NewForge(e.Ctx, s, provider, dir)
 		}
 	}
 	if e.Shell == nil {
