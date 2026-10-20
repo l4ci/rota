@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/pystr"
-	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/harness"
@@ -80,18 +79,11 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := workerContext()
 		defer stop()
-		bf := *body
-		if bf == "-" {
-			f, err := os.CreateTemp("", "rota-round-decisions-")
-			if err != nil {
+		var decisions string
+		if *body != "" {
+			if decisions, err = readBodyText(c, "body-file", *body, ExitUsage); err != nil {
 				return Result{}, err
 			}
-			defer os.Remove(f.Name())
-			if _, err := f.ReadFrom(c.Stdin); err != nil {
-				return Result{}, err
-			}
-			f.Close()
-			bf = f.Name()
 		}
 		raw, err := openBacklog(c, root, false, "")
 		if err != nil {
@@ -107,7 +99,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		}
 		env := accountedRoundEnv(c, ctx, root)
 		res, err := env.Assign(ctx, root, be, round.AssignOpts{
-			ID: id, Agent: *agent, BodyFile: bf, Siblings: pystr.SplitCSV(*siblings),
+			ID: id, Agent: *agent, Decisions: decisions, Siblings: pystr.SplitCSV(*siblings),
 			CheckOnly: *checkOnly, AcceptOverlap: *accept, AcceptOpenPR: *acceptOpenPR, AcceptBatch: *acceptBatch, HolderPID: *pid,
 			Tier: *tier, TierReason: *tierReason, Kind: *kind, Model: *model,
 			Settings: set,

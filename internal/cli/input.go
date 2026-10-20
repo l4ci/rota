@@ -11,8 +11,8 @@ import (
 // anything else a path. It returns the raw bytes; callers keep their own
 // trimming and validation. A read failure is an exit error of the given kind
 // (ExitUsage or ExitResolution: each verb keeps the code its callers already
-// script against) with one message shape, the flag, the path and the bare OS
-// reason.
+// script against) with one message shape: the flag, the bare OS
+// reason, then the path (the shape the frozen item records pin).
 func readBodyInput(c *Ctx, flagName, path string, exit int) ([]byte, error) {
 	var b []byte
 	var err error
@@ -22,7 +22,7 @@ func readBodyInput(c *Ctx, flagName, path string, exit int) ([]byte, error) {
 		b, err = os.ReadFile(path)
 	}
 	if err != nil {
-		return nil, exitcode.Errf(exit, "cannot read --%s %s: %v", flagName, path, unwrapPathErr(err))
+		return nil, exitcode.Errf(exit, "cannot read --%s: %v: %s", flagName, unwrapPathErr(err), path)
 	}
 	return b, nil
 }

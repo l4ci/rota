@@ -538,7 +538,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 type TransferOpts struct {
 	Issue, To     string
 	Note          string // the text of --note-file
-	BodyFile      string // decisions already settled, passed verbatim; "" for none
+	Decisions     string // decisions already settled, passed verbatim; "" for none
 	AcceptOverlap bool
 	HolderPID     int
 	// Tier and TierReason are the receiver's tier ("" is round.tier); one above
@@ -664,10 +664,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	if err != nil {
 		return nil, err
 	}
-	decisions, err := readBody(o.BodyFile)
-	if err != nil {
-		return nil, err
-	}
+	decisions := o.Decisions
 	it, err := be.Get(o.Issue)
 	if err != nil {
 		return nil, wrap(err)

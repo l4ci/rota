@@ -51,7 +51,7 @@ func TestReadBodyInput(t *testing.T) {
 			if !errors.As(err, &ee) || ee.Exit != tc.wantExit {
 				t.Fatalf("err = %#v, want exit %d", err, tc.wantExit)
 			}
-			if want := "cannot read --body-file " + tc.path + ": no such file or directory"; ee.Message != want {
+			if want := "cannot read --body-file: no such file or directory: " + tc.path; ee.Message != want {
 				t.Errorf("message = %q, want %q", ee.Message, want)
 			}
 		})
