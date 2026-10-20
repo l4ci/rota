@@ -161,7 +161,7 @@ func TestResolveSurvivesBrokenKeychainWhenFileHasIt(t *testing.T) {
 
 func TestFileStoreIs0600(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "rota")
-	fs := FileStore(dir)
+	fs := FileStore(dir, "")
 	if err := fs.Set(context.Background(), "work", "tok"); err != nil {
 		t.Fatal(err)
 	}
@@ -175,6 +175,35 @@ func TestFileStoreIs0600(t *testing.T) {
 	fs.Delete(context.Background(), "work")
 	if _, ok, _ := fs.Get(context.Background(), "work"); ok {
 		t.Error("delete left the secret")
+	}
+}
+
+func TestFileStoreMovesLegacyFile(t *testing.T) {
+	root := t.TempDir()
+	legacy, dir := filepath.Join(root, "config"), filepath.Join(root, "data")
+	if err := FileStore(legacy, "").Set(context.Background(), "work", "tok"); err != nil {
+		t.Fatal(err)
+	}
+	fs := FileStore(dir, legacy)
+	if v, ok, err := fs.Get(context.Background(), "work"); err != nil || !ok || v != "tok" {
+		t.Fatalf("%q %v %v", v, ok, err)
+	}
+	if _, err := os.Stat(SecretsFile(legacy)); !os.IsNotExist(err) {
+		t.Errorf("legacy file left: %v", err)
+	}
+	fi, err := os.Stat(SecretsFile(dir))
+	if err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("%v %v", fi, err)
+	}
+	if di, _ := os.Stat(dir); di.Mode().Perm() != 0o700 {
+		t.Errorf("dir mode %v", di.Mode().Perm())
+	}
+	// a file already in the new place is never overwritten by a stale legacy one
+	if err := FileStore(legacy, "").Set(context.Background(), "work", "old"); err != nil {
+		t.Fatal(err)
+	}
+	if v, _, _ := fs.Get(context.Background(), "work"); v != "tok" {
+		t.Errorf("legacy overwrote the store: %q", v)
 	}
 }
 
@@ -370,7 +399,7 @@ func TestKeychainDeleteArgv(t *testing.T) {
 
 func TestFileStoreLeavesNoTempFiles(t *testing.T) {
 	dir := t.TempDir()
-	fs := FileStore(dir)
+	fs := FileStore(dir, "")
 	fs.Set(context.Background(), "a", "1")
 	fs.Set(context.Background(), "b", "2")
 	ents, _ := os.ReadDir(dir)
