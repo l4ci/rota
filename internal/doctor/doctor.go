@@ -815,7 +815,11 @@ func (d *runner) skillsCheck() Check {
 		}
 		if !r.Current {
 			manifestBad = true
-			problems = append(problems, fmt.Sprintf("%s: skills %s, rota %s", r.Path, versionOrDigest(r.Version, r.Digest), versionOrDigest(rep.Version, rep.Digest)))
+			if len(r.Changed) > 0 {
+				problems = append(problems, fmt.Sprintf("%s: stub install stale, changed: %s", r.Path, strings.Join(r.Changed, ", ")))
+			} else {
+				problems = append(problems, fmt.Sprintf("%s: skills %s, rota %s", r.Path, versionOrDigest(r.Version, r.Digest), versionOrDigest(rep.Version, rep.Digest)))
+			}
 		}
 		if len(r.Missing) > 0 {
 			manifestBad = true

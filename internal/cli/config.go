@@ -50,7 +50,11 @@ func updateVerb(fs *flag.FlagSet) RunFunc {
 		if err := argCount(c, args, 0, 0, "update takes no arguments"); err != nil {
 			return Result{}, err
 		}
-		r := update.Check(c.deps().UpdateEnv())
+		env := c.deps().UpdateEnv()
+		if env.SkillsNeedUpdate == nil {
+			env.SkillsNeedUpdate = func() bool { return skillsNeedUpdate(c) }
+		}
+		r := update.Check(env)
 		data := jsonObj("installType", r.InstallType, "installRoot", r.InstallRoot,
 			"currentVersion", r.CurrentVersion, "latestVersion", r.LatestVersion,
 			"status", r.Status, "updateCommand", r.UpdateCommand)

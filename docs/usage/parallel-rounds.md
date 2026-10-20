@@ -841,6 +841,7 @@ minutes (`BASH_DEFAULT_TIMEOUT_MS`) and is capped at 10 minutes (`BASH_MAX_TIMEO
 
 ## See also
 
+- [A round cycle](../walkthroughs/round-cycle.md): shaping the slate, running a round, winding down and releasing, in order.
 - [Unattended rounds](unattended-rounds.md): hooks, keepalive, usage limits and account switching.
 - [Doctor and reap](doctor-and-reap.md): the preflight checks and what cleanup removes.
 - [Codex workers](codex-workers.md): `--kind codex`.
