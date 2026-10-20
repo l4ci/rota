@@ -819,6 +819,12 @@ func TestClassifyBareNotLoggedInStatusIsBlocked(t *testing.T) {
 	if st == StateBlocked {
 		t.Errorf("quoted status read as %q", st)
 	}
+	// An indented reply paragraph quoting the status is the session's own
+	// prose, not its dialog.
+	st, _ = ClassifyFor("claude", "\u23fa Here is the error text:\n\n  Not logged in \u00b7 Please run /login\n", false, 0, "")
+	if st == StateBlocked {
+		t.Errorf("indented reply line read as %q", st)
+	}
 }
 
 // #1156 x #1171: the background-task footer only overrides the final idle

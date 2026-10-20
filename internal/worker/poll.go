@@ -534,8 +534,10 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	if reason, ok := strings.CutPrefix(native, host.UnverifiablePrefix); ok {
 		return StateUnverifiable, reason
 	}
-	if rules.loggedOut != nil && rules.loggedOut.MatchString(own) {
-		return StateBlocked, "slot is logged out (\"Login expired\"): its account has no login — set round.accounts with this configDir in .rota/config.local.json, or run rota under the logged-in CLAUDE_CONFIG_DIR"
+	if rules.loggedOut != nil {
+		if m := rules.loggedOut.FindString(dialog); m != "" {
+			return StateBlocked, "slot is logged out (\"" + strings.TrimSpace(m) + "\"): its account has no login — set round.accounts with this configDir in .rota/config.local.json, or run rota under the logged-in CLAUDE_CONFIG_DIR"
+		}
 	}
 	// A dialog for a tier model the provider does not list: the TUI falls back
 	// to its last-used model once it closes, so nothing else shows the worker
