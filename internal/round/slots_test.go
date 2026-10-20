@@ -5,6 +5,7 @@ import (
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -43,6 +44,7 @@ func TestIdleSlotNeverPicksASlotTransferRefuses(t *testing.T) {
 		reg := worker.LoadRegistryTolerant(f.root)
 		ext := slot(f.root, "zed", "park/zed", func(o *jsonx.Object) { o.Set("kind", worker.KindExternal) })
 		d.SetSlots(append(reg.Slots(), ext))
+		d.SetSlotCount(3)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +53,10 @@ func TestIdleSlotNeverPicksASlotTransferRefuses(t *testing.T) {
 	if _, err := f.transfer("12", "zed", nil); blockedBy(t, err) != BlockExternal {
 		t.Fatalf("the fixture's external slot should be refused: %v", err)
 	}
-	name, ok := IdleSlot(worker.LoadRegistryTolerant(f.root), f.set.Roster, "", "")
+	// The watcher offers only the round's active slots (cli buildLimits).
+	reg := worker.LoadRegistryTolerant(f.root)
+	active, _ := Members(reg, f.set)
+	name, ok := IdleSlot(reg, active, "", "")
 	if !ok || name != "dana" {
 		t.Fatalf("idle receiver = %q, %v; want dana (zed is external, ben holds 12)", name, ok)
 	}
@@ -68,7 +73,7 @@ func TestPickSlotsOrderIsResumeIdleParkable(t *testing.T) {
 		slot(root, "dana", "dana/9-x", nil), // holds another issue, no PR: not parkable
 	)
 	reg := worker.LoadRegistryTolerant(root)
-	roster := []string{"ben", "cy", "dana"}
+	roster := roundcfg.Settings{Roster: []string{"ben", "cy", "dana"}}
 	var e Env
 	names := func(ss []*worker.Slot) (out []string) {
 		for _, s := range ss {

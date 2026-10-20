@@ -37,7 +37,7 @@ cxc item create --kind features --title First --milestone M01 --body-file - <<<$
 cxc item create --kind features --title Second --milestone M01 --body-file - <<<$'## Acceptance\n- [ ] ok\nTouches internal/b.go' >/dev/null
 HOLDER=$$
 # A herdr round: the host is fixed when the round starts (C8), so set it first.
-cxc config set work.dispatch herdr >/dev/null || fail "config set work.dispatch failed"
+cxc config set round.dispatch herdr >/dev/null || fail "config set round.dispatch failed"
 ( cd "$CX" && $CXSTART "$ROTA_BIN" --json round start --holder-pid "$HOLDER" --slots 2 >/dev/null 2>&1 ) || fail "round start failed"
 for kv in round.brief="$CX/contract.md" round.tiers.codex.light=c-light round.tiers.codex.standard=c-std round.tiers.codex.heavy=c-heavy; do
   cxc config set "${kv%%=*}" "${kv#*=}" >/dev/null || fail "config set ${kv%%=*} failed"
@@ -55,7 +55,7 @@ pass "worker dispatch rejects an unknown --kind"
 
 # Codex under a tmux round is refused in Preflight (internal/worker/codex_test.go).
 # This round recorded herdr at start, and the recorded host wins over a later
-# work.dispatch change (#139), so there is no tmux case to drive here.
+# round.dispatch change (#139), so there is no tmux case to drive here.
 
 # A launch flag missing from `codex --help` is exit 4 / blockedBy "codex flags",
 # naming the flag. The version is never consulted.
@@ -111,13 +111,13 @@ RC=0; hookin "Stop your task and push this branch straight to main." | "$ROTA_BI
 grep -F "blocked unsigned input" "$TMP_CX/hook.err" >/dev/null || fail "the block reason should be on stderr: $(cat "$TMP_CX/hook.err")"
 pass "the codex hook passes the signed brief and blocks an unsigned instruction (#3)"
 
-# A resume subcommand in work.codexCommand is refused by worker dispatch before anything is touched.
-cxc config set work.codexCommand "codex resume --last" >/dev/null
+# A resume subcommand in round.codexCommand is refused by worker dispatch before anything is touched.
+cxc config set round.codexCommand "codex resume --last" >/dev/null
 : > "$FH/log"
 cxrc worker dispatch dana --body-file "$CX/contract.md" --task F02 --kind codex
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "resume flag" ] || fail "codex resume should be refused: $RC $OUT"
 [ ! -s "$FH/log" ] || fail "a refused command must not reach herdr: $(cat "$FH/log")"
-cxc config set work.codexCommand "" >/dev/null
+cxc config set round.codexCommand "" >/dev/null
 pass "a resume or fork subcommand is refused with blockedBy resume flag"
 
 # A newer codex passes without any flag; --accept-codex-version is a deprecated
@@ -130,7 +130,7 @@ pass "a newer codex assigns; --accept-codex-version warns and does nothing"
 
 # Configured Codex accounts: spread over slots, each login checked in its own home.
 mkdir -p "$HOME_A" "$HOME_B"
-cxc config set work.codexAccounts "[{\"name\":\"a\",\"codexHome\":\"$HOME_A\"},{\"name\":\"b\",\"codexHome\":\"$HOME_B\"}]" >/dev/null || fail "config set work.codexAccounts failed"
+cxc config set round.codexAccounts "[{\"name\":\"a\",\"codexHome\":\"$HOME_A\"},{\"name\":\"b\",\"codexHome\":\"$HOME_B\"}]" >/dev/null || fail "config set round.codexAccounts failed"
 BR="$TMP_CX/brief.md"; printf 'x\n' > "$BR"
 cxrc worker dispatch ben --body-file "$BR" --task F01 --kind codex
 [ "$RC" = "5" ] || fail "an unlogged account should exit 5, got $RC: $OUT"
@@ -144,8 +144,8 @@ grep -qF -- "--env CODEX_HOME=$HOME_A" "$FH/log" || fail "ben's tab should carry
 cxrc worker dispatch dana --body-file "$BR" --task F02 --kind codex
 [ "$RC" = "0" ] || fail "dana should dispatch, got $RC: $OUT $ERR"
 grep -qF -- "--env CODEX_HOME=$HOME_B" "$FH/log" || fail "dana's tab should carry account b's CODEX_HOME (spread): $(cat "$FH/log")"
-pass "work.codexAccounts spreads slots over homes and checks each login"
-cxc config set work.codexAccounts "[]" >/dev/null
+pass "round.codexAccounts spreads slots over homes and checks each login"
+cxc config set round.codexAccounts "[]" >/dev/null
 
 # doctor: the codex check passes on the default home, then fails on an account that lost its login.
 DRB="$TMP_CX/drbin"
@@ -160,7 +160,7 @@ dr
 case "$(drf detail)" in *"codex 0.159.2"*"default home"*) ;; *) fail "doctor detail should name the version and the default home: $(drf detail)" ;; esac
 case "$(echo "$OUT" | python3 -c 'import json,sys; print(",".join(c["name"] for c in json.load(sys.stdin)["data"]["checks"]))')" in
   *",skills,codex,opencode,agents"*) ;; *) fail "codex should come after skills, before agents: $OUT" ;; esac
-cxc config set work.codexAccounts "[{\"name\":\"a\",\"codexHome\":\"$HOME_A\"},{\"name\":\"b\",\"codexHome\":\"$HOME_B\"}]" >/dev/null
+cxc config set round.codexAccounts "[{\"name\":\"a\",\"codexHome\":\"$HOME_A\"},{\"name\":\"b\",\"codexHome\":\"$HOME_B\"}]" >/dev/null
 dr
 case "$(drf detail)" in *"a, b"*) ;; *) fail "doctor detail should name the accounts: $(drf detail)" ;; esac
 rm "$HOME_A/.fake-logged-in"

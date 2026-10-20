@@ -52,8 +52,11 @@ type Role struct{ Tier, Effort string }
 
 // Settings are the round.* keys.
 type Settings struct {
-	Scope       string
-	Roster      []string
+	Scope  string
+	Roster []string
+	// Slots is round.slots: how many roster names, from the first, a round
+	// started without --slots uses.
+	Slots       int
 	Brief       string
 	SharedPaths []string
 	// ScopeOverlap is round.scopeOverlap: "warn" (default) or "block". Block
@@ -85,7 +88,7 @@ type Settings struct {
 	// LedgerKeep is round.ledgerKeep: how many rounds of the round ledger a
 	// new round keeps; 0 keeps everything.
 	LedgerKeep int
-	// ItemTimeoutMinutes is work.itemTimeoutMinutes: how long one item may run
+	// ItemTimeoutMinutes is round.itemTimeoutMinutes: how long one item may run
 	// from its first assignment before `round reconcile` reports it
 	// item-timeout; 0 turns the cap off.
 	ItemTimeoutMinutes int
@@ -180,6 +183,9 @@ func FromConfig(cfg any) (Settings, error) {
 	if len(s.Roster) == 0 {
 		return s, fmt.Errorf("round.roster is empty")
 	}
+	if s.Slots, err = config.Int(cfg, "round.slots", 1, config.MaxInt); err != nil {
+		return s, err
+	}
 	v, err = config.Value(cfg, "round.brief")
 	if err != nil {
 		return s, err
@@ -208,7 +214,7 @@ func FromConfig(cfg any) (Settings, error) {
 	if s.LedgerKeep, err = config.Int(cfg, "round.ledgerKeep", 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.ItemTimeoutMinutes, err = config.Int(cfg, "work.itemTimeoutMinutes", 0, config.MaxInt); err != nil {
+	if s.ItemTimeoutMinutes, err = config.Int(cfg, "round.itemTimeoutMinutes", 0, config.MaxInt); err != nil {
 		return s, err
 	}
 	if s.ArchitectureEvery, err = config.Int(cfg, "round.architectureEvery", 0, config.MaxInt); err != nil {

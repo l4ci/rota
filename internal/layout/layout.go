@@ -72,7 +72,7 @@ type State struct {
 	// CLI is the pane that launched the round, nil when unknown or gone.
 	CLI     *host.LayoutPane
 	Workers []Placed
-	// Group is work.herdrGroupSlots: `tabs` puts each slot back in a linked
+	// Group is round.herdrGroupSlots: `tabs` puts each slot back in a linked
 	// workspace of its own instead of a tab of the orchestrator's.
 	Group bool
 	// Foreign are the other panes of the orchestrator's tab: a shell the

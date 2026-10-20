@@ -19,12 +19,12 @@ func decode(t *testing.T, s string) any {
 
 func TestDispatch(t *testing.T) {
 	for in, want := range map[string]string{
-		`{}`:                            "subagent",
-		`{"work":{"dispatch":null}}`:    "subagent",
-		`{"work":{"dispatch":"herdr"}}`: "herdr",
-		`{"work":{"dispatch":"tmux"}}`:  "tmux",
-		`{"work":{"dispatch":3}}`:       "",
-		`{"work":"x"}`:                  "subagent",
+		`{}`:                             "subagent",
+		`{"round":{"dispatch":null}}`:    "subagent",
+		`{"round":{"dispatch":"herdr"}}`: "herdr",
+		`{"round":{"dispatch":"tmux"}}`:  "tmux",
+		`{"round":{"dispatch":3}}`:       "",
+		`{"round":"x"}`:                  "subagent",
 	} {
 		if got := Dispatch(decode(t, in)); got != want {
 			t.Errorf("Dispatch(%s) = %q, want %q", in, got, want)
@@ -33,12 +33,12 @@ func TestDispatch(t *testing.T) {
 }
 
 func TestAccounts(t *testing.T) {
-	cfg := decode(t, `{"work":{"accounts":[{"name":"a","configDir":"/x"},"junk",{"name":"b"},{"configDir":7}]}}`)
+	cfg := decode(t, `{"round":{"accounts":[{"name":"a","configDir":"/x"},"junk",{"name":"b"},{"configDir":7}]}}`)
 	want := []Account{{"a", "/x"}, {"b", ""}, {"", ""}}
 	if got := Accounts(cfg); !reflect.DeepEqual(got, want) {
 		t.Errorf("Accounts = %v, want %v", got, want)
 	}
-	for _, in := range []string{`{}`, `{"work":{"accounts":null}}`} {
+	for _, in := range []string{`{}`, `{"round":{"accounts":null}}`} {
 		if got := Accounts(decode(t, in)); len(got) != 0 {
 			t.Errorf("Accounts(%s) = %v, want none", in, got)
 		}

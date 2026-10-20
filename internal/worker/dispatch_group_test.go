@@ -74,10 +74,10 @@ func dispatchOnce(t *testing.T, dir string, h host.Host) error {
 	return err
 }
 
-// AC-2: the wiring from work.herdrGroupSlots to SpawnOpts.LinkWorkspace.
+// AC-2: the wiring from round.herdrGroupSlots to SpawnOpts.LinkWorkspace.
 func TestDispatchLinksWorkspaceOnlyWhenTheKeyIsOn(t *testing.T) {
 	for cfg, want := range map[string]bool{
-		``: true, `{"work":{"herdrGroupSlots":false}}`: false, `{"work":{"herdrGroupSlots":true}}`: true,
+		``: true, `{"round":{"herdrGroupSlots":false}}`: false, `{"round":{"herdrGroupSlots":true}}`: true,
 	} {
 		dir := groupProject(t, "", nil)
 		os.Remove(filepath.Join(dir, ".rota", "config.json")) // the seam, not the file, carries the settings
@@ -101,8 +101,8 @@ func TestDispatchLinksWorkspaceOnlyWhenTheKeyIsOn(t *testing.T) {
 func TestDispatchRefusesANonBooleanGroupKey(t *testing.T) {
 	dir := groupProject(t, "", nil)
 	h := &groupHost{fakeHost: tmuxFake()}
-	err := dispatchOnceWith(t, dir, h, `{"work":{"herdrGroupSlots":"yes"}}`)
-	if err == nil || !strings.Contains(err.Error(), "work.herdrGroupSlots") {
+	err := dispatchOnceWith(t, dir, h, `{"round":{"herdrGroupSlots":"yes"}}`)
+	if err == nil || !strings.Contains(err.Error(), "round.herdrGroupSlots") {
 		t.Fatalf("err = %v, want it to name the key", err)
 	}
 	if h.spawnOpts.Slot != "" {
@@ -113,7 +113,7 @@ func TestDispatchRefusesANonBooleanGroupKey(t *testing.T) {
 // AC-5: the next dispatch kills the old session, then closes only the
 // workspace the slot recorded.
 func TestDispatchClosesTheRecordedWorkspaceAfterTheKill(t *testing.T) {
-	dir := groupProject(t, `{"work":{"herdrGroupSlots":true}}`, map[string]string{"w1": "w9N:t2"})
+	dir := groupProject(t, `{"round":{"herdrGroupSlots":true}}`, map[string]string{"w1": "w9N:t2"})
 	UpdateSlot(dir, "w1", func(s *Slot) { s.SetWorkspaceID("w9N") })
 	h := &groupHost{fakeHost: tmuxFake()}
 	if err := dispatchOnce(t, dir, h); err != nil {
@@ -176,7 +176,7 @@ func (g *closerOnlyHost) Capabilities() host.Capabilities              { return 
 func (g *closerOnlyHost) CloseWorkspace(context.Context, string) error { return nil }
 
 func TestDispatchNeedsAHostThatCanLinkToGroup(t *testing.T) {
-	dir := groupProject(t, `{"work":{"herdrGroupSlots":true}}`, nil)
+	dir := groupProject(t, `{"round":{"herdrGroupSlots":true}}`, nil)
 	h := &closerOnlyHost{tmuxFake()}
 	if err := dispatchOnce(t, dir, h); err != nil {
 		t.Fatal(err)
@@ -189,7 +189,7 @@ func TestDispatchNeedsAHostThatCanLinkToGroup(t *testing.T) {
 // A herdr that cannot link falls back to a tab at Spawn: nothing is recorded
 // as a workspace, so a later kill closes none.
 func TestDispatchRecordsNoWorkspaceWhenHerdrFellBackToATab(t *testing.T) {
-	dir := groupProject(t, `{"work":{"herdrGroupSlots":true}}`, nil)
+	dir := groupProject(t, `{"round":{"herdrGroupSlots":true}}`, nil)
 	h := &groupHost{fakeHost: tmuxFake(), cannotLink: true}
 	if err := dispatchOnce(t, dir, h); err != nil {
 		t.Fatal(err)

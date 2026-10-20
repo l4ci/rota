@@ -13,19 +13,19 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 )
 
-// envHashFile is where a slot's last successful work.envSetup is remembered:
+// envHashFile is where a slot's last successful round.envSetup is remembered:
 // inside the worktree's own git dir, so it is per slot, never tracked, and
 // leaves with the worktree on reap.
 const envHashFile = "rota-env-setup"
 
 // lockfiles are the dependency lockfiles whose content decides whether
-// work.envSetup runs again. requirements*.txt is a glob.
+// round.envSetup runs again. requirements*.txt is a glob.
 var lockfiles = []string{
 	"package-lock.json", "pnpm-lock.yaml", "yarn.lock", "uv.lock", "poetry.lock", "go.sum",
 }
 
 // envSetupHash is a digest of the setup command and the lockfiles at the
-// worktree root. The command is part of it so editing work.envSetup re-runs
+// worktree root. The command is part of it so editing round.envSetup re-runs
 // it. A project with no lockfile still hashes (to a constant), so its setup
 // runs once per slot.
 func envSetupHash(dir, command string) string {
@@ -49,7 +49,7 @@ func envSetupHash(dir, command string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// envSetup runs work.envSetup in a slot worktree unless the stored hash
+// envSetup runs round.envSetup in a slot worktree unless the stored hash
 // already matches, and stores the hash only after a zero exit. ran reports
 // whether the command ran. A red command is an error naming slot and command.
 func (e Env) envSetup(ctx context.Context, slot, dir, command string, portBase, portBlock int) (ran bool, err error) {
@@ -66,7 +66,7 @@ func (e Env) envSetup(ctx context.Context, slot, dir, command string, portBase, 
 	os.Remove(stamp)
 	out, code := e.Shell(ctx, dir, exportPrefix(slot, portBase, portBlock)+command)
 	if code != 0 {
-		msg := fmt.Sprintf("slot %s: work.envSetup failed (exit %d): %s", slot, code, command)
+		msg := fmt.Sprintf("slot %s: round.envSetup failed (exit %d): %s", slot, code, command)
 		if t := strings.TrimSpace(out); t != "" {
 			msg += "\n" + t
 		}

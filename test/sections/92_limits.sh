@@ -35,7 +35,7 @@ mkdir -p "$PROJ/.rota"
 ) || fail "D3 fixture repo setup failed"
 printf 'stub worker contract\n' > "$TMP_LM/contract.md"
 lm_cfg() { # lm_cfg [<extra top-level json members, with a leading comma>]
-  printf '{"forge":{"provider":"github"},"issues":{"source":"github","retryWaitSeconds":0},"work":{"dispatch":"tmux","accounts":[{"name":"a","configDir":"%s/cfg-a"},{"name":"b","configDir":"%s/cfg-b"}]},"round":{"brief":"%s"}%s}\n' \
+  printf '{"forge":{"provider":"github"},"issues":{"source":"github","retryWaitSeconds":0},"round":{"dispatch":"tmux","accounts":[{"name":"a","configDir":"%s/cfg-a"},{"name":"b","configDir":"%s/cfg-b"}],"brief":"%s"}%s}\n' \
     "$TMP_LM" "$TMP_LM" "$TMP_LM/contract.md" "${1:-}" > "$PROJ/.rota/config.json"
 }
 lm_cfg
@@ -284,7 +284,7 @@ for _ in $(seq 50); do [ -S "$FK/herdr.sock" ] && break; sleep 0.1; done
 HP="$TMP_LM/hproj"; HREG="$HP/.rota/workers.json"
 mkdir -p "$HP/.rota"
 ( cd "$HP" && git init -q -b main . && git -c user.email=a@b -c user.name=n commit -q --allow-empty -m init \
-    && printf '{"git":{"baseBranch":"main"},"work":{"dispatch":"herdr"}}\n' > .rota/config.json ) || fail "D3: herdr fixture setup failed"
+    && printf '{"git":{"baseBranch":"main"},"round":{"dispatch":"herdr"}}\n' > .rota/config.json ) || fail "D3: herdr fixture setup failed"
 HCD="$(git -C "$HP" rev-parse --path-format=absolute --git-common-dir)"
 sleep 300 >/dev/null 2>&1 & LMSLEEP=$!
 mkdir -p "$HCD/rota"

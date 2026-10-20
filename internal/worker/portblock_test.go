@@ -36,7 +36,7 @@ func TestPoolInitReservesDistinctPortBlocks(t *testing.T) {
 }
 
 func TestPortBlockHonoursConfig(t *testing.T) {
-	b := newProject(t, `{"work":{"portBase":30000,"portBlock":50}}`)
+	b := newProject(t, `{"round":{"portBase":30000,"portBlock":50}}`)
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
 	got := portBases(t, b)
 	if got["w1"] != 30000 || got["w2"] != 30050 {
@@ -87,7 +87,7 @@ func TestSlotEnv(t *testing.T) {
 func TestEnvSetupSeesSlotVariables(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "env.txt")
 	cmd := `printf '%s %s %s %s;' "$ROTA_SLOT" "$ROTA_PORT_BASE" "$ROTA_PORT_BLOCK" "$ROTA_DB_SUFFIX" >> ` + out
-	b := newProject(t, `{"work":{"envSetup":`+jsonString(cmd)+`}}`)
+	b := newProject(t, `{"round":{"envSetup":`+jsonString(cmd)+`}}`)
 	if _, err := goInit(t, b, InitOpts{Slots: 2, Base: "main"}); err != nil {
 		t.Fatal(err)
 	}

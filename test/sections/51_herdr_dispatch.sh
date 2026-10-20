@@ -1,4 +1,4 @@
-echo "worker verbs — herdr dispatch backend (work.dispatch: herdr)"
+echo "worker verbs — herdr dispatch backend (round.dispatch: herdr)"
 # Covers the herdr host against a FAKE `herdr` on PATH: canned JSON replies in
 # the shapes `herdr api schema --json` documents (protocol 22), errors as JSON
 # on stderr with exit 1. A live herdr server stays a manual gate — tabs and
@@ -75,7 +75,7 @@ chmod +x "$FAKE/bin/herdr"
   echo seed > seed.txt
   git add seed.txt
   git commit -q -m seed
-  printf '{"work":{"dispatch":"herdr"}}\n' > .rota/config.json
+  printf '{"round":{"dispatch":"herdr"}}\n' > .rota/config.json
 ) || fail "herdr fixture repo setup failed"
 
 # Every helper call below runs inside a fake herdr pane on the fake server.
@@ -191,7 +191,7 @@ RC=0
 [ "$RC" = "5" ] || fail "herdr dispatch from outside a herdr pane should exit 5 (host not usable), got $RC"
 
 cp "$TMP_HD/repo/.rota/config.json" "$TMP_HD/config.bak"
-printf '{"work":{"dispatch":"herdr","workerCommand":"FOO=1 claude --model haiku --settings s.json"}}\n' \
+printf '{"round":{"dispatch":"herdr","workerCommand":"FOO=1 claude --model haiku --settings s.json"}}\n' \
   > "$TMP_HD/repo/.rota/config.json"
 : >"$FAKE/log"
 hd "$ROTA_BIN" worker dispatch w1 --body-file "$TMP_HD/brief.md" >/dev/null \
@@ -200,7 +200,7 @@ grep -q -- '--env FOO=1 --env CLAUDE_CONFIG_DIR=/acct/one --env ROTA_SLOT=w1 --e
   || fail "leading env assignments in workerCommand must become tab --env; log: $(cat "$FAKE/log")"
 grep -q -- '-- --model haiku --settings s.json$' "$FAKE/log" \
   || fail "workerCommand args must pass through to agent start; log: $(cat "$FAKE/log")"
-printf '{"work":{"dispatch":"herdr","workerCommand":"my-wrapper --x"}}\n' > "$TMP_HD/repo/.rota/config.json"
+printf '{"round":{"dispatch":"herdr","workerCommand":"my-wrapper --x"}}\n' > "$TMP_HD/repo/.rota/config.json"
 RC=0
 hd "$ROTA_BIN" worker dispatch w1 --body-file "$TMP_HD/brief.md" >/dev/null 2>&1 || RC=$?
 [ "$RC" = "5" ] || fail "a workerCommand that does not run claude should exit 5 under herdr, got $RC"

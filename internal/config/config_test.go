@@ -51,9 +51,9 @@ func TestDivergentInputs(t *testing.T) {
 	t.Run("invalid UTF-8", func(t *testing.T) {
 		path, _ := filepath.Abs("divergent/badutf8/config.json")
 		// Go: loads, with U+FFFD for the bad byte.
-		v, ok := Lookup(Load(path), "work.dispatch")
+		v, ok := Lookup(Load(path), "round.dispatch")
 		if !ok || v != "tm\uFFFDux" {
-			t.Fatalf("Go Load work.dispatch = %q", v)
+			t.Fatalf("Go Load round.dispatch = %q", v)
 		}
 		// Python: read_text raises UnicodeDecodeError, which load_json does not catch.
 	})

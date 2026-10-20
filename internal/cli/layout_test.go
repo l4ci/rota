@@ -285,7 +285,7 @@ func TestLayoutSplitAndTabsRecordOnTheRound(t *testing.T) {
 
 func (r *layoutRig) Capabilities() host.Capabilities { return host.CapabilitiesOf(r) }
 
-// linkedRig is herdr with work.herdrGroupSlots: each slot's pane starts in a
+// linkedRig is herdr with round.herdrGroupSlots: each slot's pane starts in a
 // workspace of its own (ws-<slot>), and herdr closes a workspace with its last
 // tab, so a split leaves the slots in the orchestrator's workspace W.
 type linkedRig struct{ *layoutRig }
@@ -377,7 +377,7 @@ func (r *linkedRig) CloseTab(_ context.Context, tab string) error {
 func groupedProject(t *testing.T, slots ...string) (string, *linkedRig, *Deps) {
 	t.Helper()
 	root, rig, deps := layoutProject(t, "herdr", slots, slots...)
-	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"work":{"herdrGroupSlots":true}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"round":{"herdrGroupSlots":true}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for i := range rig.panes {
@@ -460,7 +460,7 @@ func TestLayoutGroupedSplitTabsSplit(t *testing.T) {
 // AC-6: grouping off, tabs is the plain tab move and nothing is recorded.
 func TestLayoutUngroupedTabsKeepsPlainTabs(t *testing.T) {
 	root, rig, deps := groupedProject(t, "ben")
-	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"work":{"herdrGroupSlots":false}}`), 0o644)
+	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"round":{"herdrGroupSlots":false}}`), 0o644)
 	rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
 	rig.log = nil
 	rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root)

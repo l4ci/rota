@@ -33,12 +33,12 @@ a round is the same idea with the assignment, waiting and merging done by verbs.
 ## 🔧 Setup
 
 1. **A host** for the workers' tabs: herdr (pinned to 0.9.x) or tmux. Leave
-   `work.dispatch` at the default `rota init` writes (`subagent`) and `rota round start` detects the
+   `round.dispatch` at the default `rota init` writes (`subagent`) and `rota round start` detects the
    host from where it runs (herdr inside a herdr pane, tmux inside tmux). Set `herdr` or `tmux` only
    to force one. With neither it falls back to
    [solo mode](#solo-mode).
 2. **A backlog.** With `issues.source` set to `github` or `gitlab`, rounds take GitHub (`gh`) or GitLab (`glab`) issues, authenticated. On the file backend (the default) they take `.rota/BACKLOG.md` items and the orchestrator completes them at merge. Either way, workers open a PR against the base and the merge gate merges through the forge, so a project with an `origin` remote needs `gh` or `glab` installed and logged in on the file backend too (`rota doctor` checks it). With `forge.provider: local` (or no `origin` remote under `auto`) there is no PR: workers merge directly (`rota ship strategy` answers `direct`) and the gate never looks for one. See [issue backend](issue-backend.md).
-3. **Accounts, if you have more than one.** `work.accounts` maps slots to separate
+3. **Accounts, if you have more than one.** `round.accounts` maps slots to separate
    `CLAUDE_CONFIG_DIR`s, so workers draw on different usage limits and `rota round assign` can avoid a
    cooling account. The entries are paths on your machine, so they go in `.rota/config.local.json`
    (per developer, gitignored, merged over `.rota/config.json`), not in the tracked file.
@@ -46,7 +46,7 @@ a round is the same idea with the assignment, waiting and merging done by verbs.
 
    ```json
    {
-     "work": {
+     "round": {
        "accounts": [
          { "name": "a", "configDir": "/path/to/claude-a" },
          { "name": "b", "configDir": "/path/to/claude-b" }
@@ -95,7 +95,7 @@ started `/rota-orchestrate`. Nothing is typed into a pane. The session runs unde
 `rota keepalive run`, so it restarts from a handoff when its context fills.
 
 With the `claude` harness it starts under the account in your `CLAUDE_CONFIG_DIR` if that is set.
-Otherwise, if `work.accounts` is configured, it takes the account with the most headroom (the first
+Otherwise, if `round.accounts` is configured, it takes the account with the most headroom (the first
 one when no meter is readable). `rota orchestrate --dry-run` names it.
 
 Where it opens depends on where you ran it:
@@ -108,7 +108,7 @@ Where it opens depends on where you ran it:
 | In neither, only tmux installed | a tmux session `rota-<dir>` (your terminal becomes it) |
 | In neither, no herdr or tmux | in this terminal; workers run as subagents ([solo mode](#solo-mode)) |
 
-`work.dispatch: tmux` skips the herdr-session row and uses tmux. The herdr session is rota's own,
+`round.dispatch: tmux` skips the herdr-session row and uses tmux. The herdr session is rota's own,
 started with `herdr --session rota-<dir> server`; your default herdr session is never driven.
 The agent comes from `orchestrator.harness` (`claude`, `codex`, `hermes` or `opencode`; see
 [orchestrator harnesses](orchestrator-harnesses.md)). `rota orchestrate --dry-run`
@@ -166,7 +166,7 @@ takes `--json` for a machine-readable envelope.
 candidates; it starts no agent.
 
 ```sh
-rota round start --slots 3                    # default work.workerSlots (3); scope from round.scope (default milestone)
+rota round start --slots 3                    # default round.slots (3); scope from round.scope (default milestone)
 rota round start --scope slate --items 12,13  # only these issues
 rota round start --scope open                 # every open issue, as it becomes ready
 rota round candidates                         # re-read the board with readiness checks
@@ -811,7 +811,7 @@ parked anyway, so fix the slot and run it again. It deletes no branch and clears
 ## Solo mode
 
 `rota round start` resolves the round's host once and records it in `.rota/workers.json`. With
-`work.dispatch` at `subagent` (the default) or unset it is herdr inside a herdr pane (`HERDR_ENV=1`), tmux
+`round.dispatch` at `subagent` (the default) or unset it is herdr inside a herdr pane (`HERDR_ENV=1`), tmux
 inside tmux (`TMUX` set), and otherwise **solo**. An explicit `herdr` or `tmux` is used as
 set and fails when unavailable; solo is never a fallback from it.
 

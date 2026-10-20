@@ -40,7 +40,7 @@ type Layouter interface {
 	RenamePane(ctx context.Context, pane, label string) error
 }
 
-// LinkedLayouter is the grouped-slots side of a herdr (work.herdrGroupSlots):
+// LinkedLayouter is the grouped-slots side of a herdr (round.herdrGroupSlots):
 // it puts a slot's pane back in a workspace of its own, linked to the
 // orchestrator's, after a `layout split` closed it.
 type LinkedLayouter interface {

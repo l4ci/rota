@@ -184,7 +184,7 @@ func TestRunTable(t *testing.T) {
 		{"accounts no dir", Input{Accounts: []config.Account{{Name: "a", ConfigDir: filepath.Join(home, "gone")}}}, all, with(nil), "accounts", Fail, "does not exist", "claude /login"},
 		{"accounts no creds", Input{Accounts: []config.Account{{Name: "a", ConfigDir: nocred}}}, all, with(nil), "accounts", Fail, "no credentials file", "CLAUDE_CONFIG_DIR="},
 		{"accounts no access token", Input{Accounts: []config.Account{{Name: "a", ConfigDir: notoken}}}, all, with(nil), "accounts", Fail, "no access token", "CLAUDE_CONFIG_DIR="},
-		{"accounts no configDir", Input{Accounts: []config.Account{{Name: "a", ConfigDir: ""}}}, all, with(nil), "accounts", Fail, "no configDir", "work.accounts"},
+		{"accounts no configDir", Input{Accounts: []config.Account{{Name: "a", ConfigDir: ""}}}, all, with(nil), "accounts", Fail, "no configDir", "round.accounts"},
 
 		{"hook ok", herdrIn, all, with(nil), "hook", Pass, "a: current", ""},
 		{"hook not installed", herdrIn, all, with(map[string]Result{"herdr integration status": {Stdout: miss}}), "hook", Fail, "a: not installed", "herdr integration install claude"},
@@ -393,7 +393,7 @@ func TestCodexCheck(t *testing.T) {
 		detail   string // substring
 		hint     string
 	}{
-		{"skip: no codex, default home", nil, "herdr", []Home{{}}, nil, Skip, "no work.codexAccounts configured", ""},
+		{"skip: no codex, default home", nil, "herdr", []Home{{}}, nil, Skip, "no round.codexAccounts configured", ""},
 		{"pass: codex alone", []string{"codex"}, "", nil, map[string]Result{"codex --version": ver}, Pass, "codex 0.159.2; round.tiers.codex unset (optional)", ""},
 		{"pass: default home logged in", []string{"codex", "herdr"}, "herdr", []Home{{}},
 			map[string]Result{"codex --version": ver, "codex login status": {}, "herdr integration status": {Stdout: codexCur}},
@@ -652,7 +652,7 @@ func TestSwitchCheck(t *testing.T) {
 	if c := run(false, nil, nil); c.Status != Skip {
 		t.Fatalf("off: %+v", c)
 	}
-	if c := run(true, one(two), map[string]bool{"rota": true}); c.Status != Fail || c.Hint != "add a second account to work.accounts" {
+	if c := run(true, one(two), map[string]bool{"rota": true}); c.Status != Fail || c.Hint != "add a second account to round.accounts" {
 		t.Fatalf("one account: %+v", c)
 	}
 	if c := run(true, []config.Account{{Name: "a", ConfigDir: o.a}, {Name: "b", ConfigDir: ""}}, nil); c.Status != Fail {
@@ -795,7 +795,7 @@ func TestPortsUsesEachSlotsOwnBlockWidth(t *testing.T) {
 
 // codexIn is the doctor input of a project that configures Codex.
 func codexIn(homes []Home, tiers bool) map[string]KindInput {
-	return map[string]KindInput{harness.Codex: {AccountsKey: "work.codexAccounts", Homes: homes, Tiers: tiers}}
+	return map[string]KindInput{harness.Codex: {AccountsKey: "round.codexAccounts", Homes: homes, Tiers: tiers}}
 }
 
 // A hook command with a slash resolves through Input.Look alone, after ~ is

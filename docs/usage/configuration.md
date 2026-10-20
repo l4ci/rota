@@ -14,9 +14,11 @@ Default config (what `rota init --no-blocks` writes in a fresh repo):
   },
   "work": {
     "isolation": "branch",
-    "mergeStrategy": "direct",
+    "mergeStrategy": "direct"
+  },
+  "round": {
     "dispatch": "subagent",
-    "workerSlots": 3,
+    "slots": 3,
     "workerCommand": "",
     "accounts": [],
     "operatorCommand": ""
@@ -67,6 +69,8 @@ Default config (what `rota init --no-blocks` writes in a fresh repo):
 }
 ```
 
+Keys split by flow. `work.*` keys apply to `/rota-work` and other solo cycles: `work.isolation`, `work.mergeStrategy`, `work.tdd` and `work.contextGuard`. `round.*` keys apply only to parallel rounds (`rota round`, `rota worker`, `rota orchestrate`). The round-only keys that used to sit under `work.*` now live under `round.*`; see [Moving old `work.*` names](#moving-old-work-names-to-round).
+
 ## models: orchestrator and worker
 
 `models.orchestrator` drives planning, exploration, verification, and design. `models.worker` handles implementation sub-tasks. Set them independently to trade off quality against cost and speed.
@@ -81,7 +85,7 @@ Default config (what `rota init --no-blocks` writes in a fresh repo):
 
 ## work.isolation: branch or worktree
 
-Controls where skill work happens.
+Affects `/rota-work` (solo). Controls where skill work happens.
 
 | Mode | How it works | When to use |
 |------|-------------|-------------|
@@ -92,7 +96,7 @@ Switch to `"worktree"` when you want multiple work streams in flight without con
 
 ## work.mergeStrategy: direct or pr
 
-Controls how [`/rota-ship`](review-and-ship.md) integrates completed work.
+Affects `/rota-work` and `/rota-ship` (solo). Controls how [`/rota-ship`](review-and-ship.md) integrates completed work.
 
 | Strategy | How it works | When to use |
 |----------|-------------|-------------|
@@ -101,9 +105,9 @@ Controls how [`/rota-ship`](review-and-ship.md) integrates completed work.
 
 With `issues.source` set to `github` or `gitlab` this key is ignored: `/rota-work`, `/rota-debug` and `/rota-ship` always open a PR or MR and never merge. See [issue backend](issue-backend.md).
 
-## work.dispatch: subagent, tmux or herdr
+## round.dispatch: subagent, tmux or herdr
 
-`/rota-work` always runs in-process `Agent` workers that write files while the orchestrator commits, whatever this key says. Standing workers in tmux windows or herdr tabs (each its own Claude Code session in its own worktree, opening a PR behind a merge gate) belong to [`/rota-orchestrate`](parallel-rounds.md); this key only chooses their host.
+Affects rounds only. `/rota-work` always runs in-process `Agent` workers that write files while the orchestrator commits, whatever this key says. Standing workers in tmux windows or herdr tabs (each its own Claude Code session in its own worktree, opening a PR behind a merge gate) belong to [`/rota-orchestrate`](parallel-rounds.md); this key only chooses their host.
 
 | Mode | Effect on a round |
 |------|-------------------|
@@ -112,17 +116,17 @@ With `issues.source` set to `github` or `gitlab` this key is ignored: `/rota-wor
 | `"herdr"` | One herdr tab per worker in the orchestrator's workspace; herdr reports each worker's state, notifies when one needs you, and rota titles each tab `<slot> · <task> · <state>`. The orchestrator must run inside a herdr pane. |
 
 ```bash
-rota config set work.dispatch tmux
+rota config set round.dispatch tmux
 ```
 
-**Parallel rounds (`rota round`) pick their host differently, so a round in herdr needs no setting.** With `work.dispatch` unset or `subagent` (the default `rota init` writes), `rota round start` detects one: herdr when it runs inside a herdr pane, tmux when it runs inside tmux, and otherwise **solo mode**, where the orchestrator runs each worker as a Claude `Agent` subagent in the slot's own worktree. An explicit `tmux` or `herdr` is used as set, and fails if unavailable rather than falling back. The round records its host when it starts and keeps it until wind-down. Solo workers share the orchestrator's account, rate window and context, so one usage limit stops them all. Solo mode runs Claude workers only: a Codex subagent cannot be given a working directory. See [Parallel rounds](parallel-rounds.md).
+**Parallel rounds (`rota round`) pick their host differently, so a round in herdr needs no setting.** With `round.dispatch` unset or `subagent` (the default `rota init` writes), `rota round start` detects one: herdr when it runs inside a herdr pane, tmux when it runs inside tmux, and otherwise **solo mode**, where the orchestrator runs each worker as a Claude `Agent` subagent in the slot's own worktree. An explicit `tmux` or `herdr` is used as set, and fails if unavailable rather than falling back. The round records its host when it starts and keeps it until wind-down. Solo workers share the orchestrator's account, rate window and context, so one usage limit stops them all. Solo mode runs Claude workers only: a Codex subagent cannot be given a working directory. See [Parallel rounds](parallel-rounds.md).
 
 Two things behave differently under `tmux` and `herdr` than in `/rota-work`:
 
 - **`work.isolation` stops applying.** Every slot has its own worktree, so its own git index, by construction.
 - **Workers commit.** The orchestrator's per-task commit step is skipped; integration happens through the merge gate instead, which re-verifies the *merged* tree. Two workers can each be honestly green and still break the cycle branch together — a signature one widens while another adds a caller, a constant one stops emitting while another starts reading it. Nothing about a clean merge rules that out, which is why the gate runs `test.full` after every merge rather than trusting the branches.
 
-Related keys: `work.workerSlots` (pool size, default `3`), `work.workerCommand` (default builds `claude --model <models.worker> --dangerously-skip-permissions`), `work.codexAccounts` (named Codex homes for Codex workers, the counterpart of `work.accounts`; unset, they use the default Codex home), `work.opencodeAccounts` (named OpenCode config dirs, each a slot's `OPENCODE_CONFIG_DIR`; unset, OpenCode's default config) and `work.opencodeCommand` (the same for OpenCode workers; default builds `opencode --model <model>`), `work.codexCommand` (the same for Codex workers; default builds `codex --model <model> --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen`), `work.operatorCommand` (starts the orchestrator for `rota orchestrate` and `rota worker session ensure`; default builds `claude --model <models.orchestrator> --permission-mode auto`, with `--continue` added for `session ensure`; `rota keepalive run` restarts it), and `work.accounts`.
+Related keys: `round.slots` (pool size, default `3`), `round.workerCommand` (default builds `claude --model <models.worker> --dangerously-skip-permissions`), `round.codexAccounts` (named Codex homes for Codex workers, the counterpart of `round.accounts`; unset, they use the default Codex home), `round.opencodeAccounts` (named OpenCode config dirs, each a slot's `OPENCODE_CONFIG_DIR`; unset, OpenCode's default config) and `round.opencodeCommand` (the same for OpenCode workers; default builds `opencode --model <model>`), `round.codexCommand` (the same for Codex workers; default builds `codex --model <model> --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen`), `round.operatorCommand` (starts the orchestrator for `rota orchestrate` and `rota worker session ensure`; default builds `claude --model <models.orchestrator> --permission-mode auto`, with `--continue` added for `session ensure`; `rota keepalive run` restarts it), and `round.accounts`.
 
 **Workers run with permissions skipped; the operator does not.** A worker is briefed to commit, open a PR and run tests with nobody in its pane to answer a prompt, so a narrower mode just stalls it. What bounds a worker is scope rather than gating — a throwaway branch in its own worktree, with `rota worker gate` verifying a scratch merge before anything reaches the cycle branch. The operator keeps `auto` because it performs the merges and it is the window a human is actually watching. Narrow either via its config key; a worker that then stops on a prompt reports `NEEDS-PERMISSION` rather than hanging.
 
@@ -146,25 +150,25 @@ rota config set research.packageCheck true
 
 Applies to `/rota-refactor --fix` only; the default findings run files issues and writes no code. When `true` (default), `--fix` confirms the list of candidates before implementing them. Set to `false` to fix without that pause.
 
-## work.itemTimeoutMinutes: wall-clock cap per item
+## round.itemTimeoutMinutes: wall-clock cap per item
 
-Integer 0 or more, silent default `0` (off). Counted per item from its first assignment, not per slot, so handing the item to another worker does not reset it. Once an item is past the limit, `rota round reconcile` reports an `item-timeout` finding; `rota round reconcile --apply` parks the item for a human the way `round.maxBounces` does: the slot is freed, the issue gets the `needs-human` label and a comment naming the limit, and the PR stays open. Parking needs the round lease.
-
-```bash
-rota config set work.itemTimeoutMinutes 240
-```
-
-## work.envSetup: install dependencies in new worker worktrees
-
-Free text, silent default `""` (nothing runs). `rota worker pool init` runs it once in each new slot worktree, with that worktree as the working directory, so a JS or Python worker does not start in a tree with no dependencies. It is skipped while the hash of the command and the lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `uv.lock`, `poetry.lock`, `requirements*.txt`, `go.sum`) matches the one stored by the slot's last successful run, so re-running `pool init` is cheap and a changed lockfile or command reruns it. The hash sits in the worktree's git dir, outside tracked files. A non-zero exit stops `pool init` with exit 1 and a message naming the slot and the command; no hash is stored, so the next `pool init` retries.
+Affects rounds only. Integer 0 or more, silent default `0` (off). Counted per item from its first assignment, not per slot, so handing the item to another worker does not reset it. Once an item is past the limit, `rota round reconcile` reports an `item-timeout` finding; `rota round reconcile --apply` parks the item for a human the way `round.maxBounces` does: the slot is freed, the issue gets the `needs-human` label and a comment naming the limit, and the PR stays open. Parking needs the round lease.
 
 ```bash
-rota config set work.envSetup "npm ci"
+rota config set round.itemTimeoutMinutes 240
 ```
 
-## work.portBase and work.portBlock: a port range per worker slot
+## round.envSetup: install dependencies in new worker worktrees
 
-Integers, silent defaults `20000` and `100`. Each slot reserves one block of `work.portBlock` ports starting at the lowest range from `work.portBase` that no other slot's range overlaps; `pool init` records it as `portBase` and `portBlock` on the slot in `.rota/workers.json`. The slot keeps its block until `rota worker pool reap` or `rota round reclaim` drops it (the next dispatch picks a new one), and two live slots never share a port. A range that would pass 65535 is refused. Every slot's agent, and `work.envSetup` in its worktree, get four variables:
+Affects rounds only. Free text, silent default `""` (nothing runs). `rota worker pool init` runs it once in each new slot worktree, with that worktree as the working directory, so a JS or Python worker does not start in a tree with no dependencies. It is skipped while the hash of the command and the lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `uv.lock`, `poetry.lock`, `requirements*.txt`, `go.sum`) matches the one stored by the slot's last successful run, so re-running `pool init` is cheap and a changed lockfile or command reruns it. The hash sits in the worktree's git dir, outside tracked files. A non-zero exit stops `pool init` with exit 1 and a message naming the slot and the command; no hash is stored, so the next `pool init` retries.
+
+```bash
+rota config set round.envSetup "npm ci"
+```
+
+## round.portBase and round.portBlock: a port range per worker slot
+
+Affects rounds only. Integers, silent defaults `20000` and `100`. Each slot reserves one block of `round.portBlock` ports starting at the lowest range from `round.portBase` that no other slot's range overlaps; `pool init` records it as `portBase` and `portBlock` on the slot in `.rota/workers.json`. The slot keeps its block until `rota worker pool reap` or `rota round reclaim` drops it (the next dispatch picks a new one), and two live slots never share a port. A range that would pass 65535 is refused. Every slot's agent, and `round.envSetup` in its worktree, get four variables:
 
 | Variable | Value |
 |---|---|
@@ -173,28 +177,28 @@ Integers, silent defaults `20000` and `100`. Each slot reserves one block of `wo
 | `ROTA_PORT_BLOCK` | how many ports the block holds: the width the slot was allocated with |
 | `ROTA_DB_SUFFIX` | `_` plus the slot name with anything but letters and digits turned into `_` |
 
-A worker starts servers on `ROTA_PORT_BASE` up to `ROTA_PORT_BASE + ROTA_PORT_BLOCK - 1` and names databases `<name>${ROTA_DB_SUFFIX}`. rota does not rewrite a project's test suites to read them. `rota doctor` warns when a process outside a live slot's worktree listens inside its block. Changing `work.portBase` or `work.portBlock` moves blocks only for slots created afterwards; a registered slot keeps the one it has, with the width it was allocated with, and later slots are placed around it.
+A worker starts servers on `ROTA_PORT_BASE` up to `ROTA_PORT_BASE + ROTA_PORT_BLOCK - 1` and names databases `<name>${ROTA_DB_SUFFIX}`. rota does not rewrite a project's test suites to read them. `rota doctor` warns when a process outside a live slot's worktree listens inside its block. Changing `round.portBase` or `round.portBlock` moves blocks only for slots created afterwards; a registered slot keeps the one it has, with the width it was allocated with, and later slots are placed around it.
 
 ```bash
-rota config set work.portBase 30000
-rota config set work.portBlock 200
+rota config set round.portBase 30000
+rota config set round.portBlock 200
 ```
 
-## work.herdrGroupSlots: slots as linked herdr workspaces
+## round.herdrGroupSlots: slots as linked herdr workspaces
 
-`true` (default): dispatch opens the slot's worktree as a herdr workspace linked to the orchestrator's (`herdr worktree open`), so herdr groups the slots under their project in the sidebar. That helps when several projects share one herdr session. Workers then sit in their own workspaces instead of beside the orchestrator, and each slot costs one extra workspace while it runs. `false`: under herdr, each worker slot is a tab in the orchestrator's own workspace. It changes nothing under tmux. The worktrees stay in `.worktrees/`.
+Affects rounds only. `true` (default): dispatch opens the slot's worktree as a herdr workspace linked to the orchestrator's (`herdr worktree open`), so herdr groups the slots under their project in the sidebar. That helps when several projects share one herdr session. Workers then sit in their own workspaces instead of beside the orchestrator, and each slot costs one extra workspace while it runs. `false`: under herdr, each worker slot is a tab in the orchestrator's own workspace. It changes nothing under tmux. The worktrees stay in `.worktrees/`.
 
 `rota layout split` folds the slots' panes into the orchestrator's tab, so they leave their workspaces (herdr closes a workspace with its last tab); the command says so. `rota layout tabs` opens each slot's workspace again and moves its pane back in. With the key `false`, layout works as it did.
 
 Closing the orchestrator's workspace by hand now needs `herdr workspace close --group`, which also closes every slot's workspace; rota never passes `--group`. See [`herdr-dispatch.md`](../../skills/rota-orchestrate/references/herdr-dispatch.md#linked-workspaces-per-slot).
 
 ```bash
-rota config set work.herdrGroupSlots false
+rota config set round.herdrGroupSlots false
 ```
 
 ## work.tdd: red-first on or off
 
-`true` (default): a behavior change needs a recorded red run, a FAIL proof row from a test that failed on an assertion, before its PASS row. A FAIL whose evidence is a build, compile or setup failure (missing import, typo, undefined symbol) is not a red run; the task gets a fix dispatch. `false`: `/rota-work` Step 7 and the worker contract require no RED row. PASS rows are still recorded.
+Affects `/rota-work` (solo) and the worker contract. `true` (default): a behavior change needs a recorded red run, a FAIL proof row from a test that failed on an assertion, before its PASS row. A FAIL whose evidence is a build, compile or setup failure (missing import, typo, undefined symbol) is not a red run; the task gets a fix dispatch. `false`: `/rota-work` Step 7 and the worker contract require no RED row. PASS rows are still recorded.
 
 ```bash
 rota config set work.tdd false
@@ -216,7 +220,7 @@ rota config set plan.maxTasks 5
 
 ## work.contextGuard: warn or pause a long session
 
-`warn` (default), `auto` or `off`. Acts only where `rota hook install` has run, on a session that is not the orchestrator, when its fresh statusline reading is at or above `orchestrator.handoffThreshold`. `warn` adds one line to the next prompt recommending `/rota-pause`, once per crossing. `auto` also lets the Stop hook block up to `orchestrator.handoffMaxBlocks` times, asking for `/rota-pause` at the next task boundary. See [pausing and resuming](pausing-and-resuming.md#context-guard).
+Affects `/rota-work` and other solo sessions. `warn` (default), `auto` or `off`. Acts only where `rota hook install` has run, on a session that is not the orchestrator, when its fresh statusline reading is at or above `orchestrator.handoffThreshold`. `warn` adds one line to the next prompt recommending `/rota-pause`, once per crossing. `auto` also lets the Stop hook block up to `orchestrator.handoffMaxBlocks` times, asking for `/rota-pause` at the next task boundary. See [pausing and resuming](pausing-and-resuming.md#context-guard).
 
 ```bash
 rota config set work.contextGuard auto
@@ -471,12 +475,48 @@ Settings for `rota round` (parallel rounds; see [the rounds guide](parallel-roun
 | `round.tier` | `"standard"` | Default worker tier: `light` (reading, searching), `standard` (code and tests) or `heavy` (hard reasoning). `rota round assign --tier heavy --tier-reason "…"` goes above it; a tier above the default needs the reason, which lands on the slot. |
 | `round.profile` | unset | A named model profile that fills the three Claude tiers (light / standard / heavy): `quality` sonnet / opus / opus, `balanced` haiku / sonnet / opus, `budget` haiku / haiku / sonnet, `inherit` empty / empty / empty (Claude workers and subagents launch without `--model`). Unset keeps the tier defaults below. Precedence per Claude tier: an explicit `round.tiers.claude.<tier>`, then the profile, then (standard only) `models.worker`, then the default. Codex and OpenCode tiers are not touched. `rota config show` prints each tier's effective model and its source (`explicit`, `profile`, `models.worker`, `default`, or `harness default` when empty), for Claude, Codex and OpenCode. |
 | `round.tiers.claude.light` / `.standard` / `.heavy` | `haiku` / `models.worker` / `opus` | The model each tier starts a Claude worker with. `standard` follows `models.worker` (so `/rota-work` and rounds agree) until set explicitly. |
-| `round.tiers.codex.light` / `.standard` / `.heavy` | `gpt-6-luna` / `gpt-6.1-sol` / `gpt-6-astra` | The same for Codex, lighter to heavier. Set all three to empty and a Codex worker runs on Codex's own default model (the default `work.codexCommand` drops `--model`). Overriding one tier leaves the other two on their defaults; setting one tier empty beside a model on another is refused. `assign --kind codex --check-only` shows the model it would use. |
-| `round.tiers.opencode.light` / `.standard` / `.heavy` | `opencode/claude-haiku-5-5` / `opencode/claude-sonnet-5-5` / `opencode/claude-opus-5-5` | The same for OpenCode, with `provider/model` ids from `opencode models`; the defaults need the built-in `opencode` provider, so set your own ids when `opencode models` does not list them. Set all three to empty and OpenCode picks its own model (the default `work.opencodeCommand` drops `--model`). See [OpenCode workers](opencode-workers.md). |
+| `round.tiers.codex.light` / `.standard` / `.heavy` | `gpt-6-luna` / `gpt-6.1-sol` / `gpt-6-astra` | The same for Codex, lighter to heavier. Set all three to empty and a Codex worker runs on Codex's own default model (the default `round.codexCommand` drops `--model`). Overriding one tier leaves the other two on their defaults; setting one tier empty beside a model on another is refused. `assign --kind codex --check-only` shows the model it would use. |
+| `round.tiers.opencode.light` / `.standard` / `.heavy` | `opencode/claude-haiku-5-5` / `opencode/claude-sonnet-5-5` / `opencode/claude-opus-5-5` | The same for OpenCode, with `provider/model` ids from `opencode models`; the defaults need the built-in `opencode` provider, so set your own ids when `opencode models` does not list them. Set all three to empty and OpenCode picks its own model (the default `round.opencodeCommand` drops `--model`). See [OpenCode workers](opencode-workers.md). |
 
-A custom `work.workerCommand` receives the tier's model only through a `{model}` placeholder in the command; without one, `rota round assign` warns and records the tier but not a model. `work.codexCommand` and `work.opencodeCommand` work the same way for Codex and OpenCode workers.
+A custom `round.workerCommand` receives the tier's model only through a `{model}` placeholder in the command; without one, `rota round assign` warns and records the tier but not a model. `round.codexCommand` and `round.opencodeCommand` work the same way for Codex and OpenCode workers.
 
 `round.scope` is a different axis from `autonomy.level`: the level says how far skills chain on their own, the scope says which issues a round may take. Set with `rota config set round.scope slate`.
+
+## Moving old `work.*` names to `round.*`
+
+Fourteen keys moved out of `work.*` into `round.*` because only rounds read them. Old names are no longer read, and there is no fallback.
+
+| Old name | New name |
+|----------|----------|
+| `work.workerSlots` | `round.slots` |
+| `work.dispatch` | `round.dispatch` |
+| `work.workerCommand` | `round.workerCommand` |
+| `work.operatorCommand` | `round.operatorCommand` |
+| `work.accounts` | `round.accounts` |
+| `work.codexAccounts` | `round.codexAccounts` |
+| `work.codexCommand` | `round.codexCommand` |
+| `work.opencodeAccounts` | `round.opencodeAccounts` |
+| `work.opencodeCommand` | `round.opencodeCommand` |
+| `work.envSetup` | `round.envSetup` |
+| `work.portBase` | `round.portBase` |
+| `work.portBlock` | `round.portBlock` |
+| `work.herdrGroupSlots` | `round.herdrGroupSlots` |
+| `work.itemTimeoutMinutes` | `round.itemTimeoutMinutes` |
+
+`work.isolation`, `work.mergeStrategy`, `work.tdd` and `work.contextGuard` stay under `work`.
+
+`rota migrate config` shows what it would change and writes nothing. `rota migrate config --apply` moves each old name to its new name in both `.rota/config.json` and `.rota/config.local.json`, with the value unchanged. If an old name and its new name are both set to different values, it refuses with exit 4 and writes nothing. Resolve that pair by hand with `rota config set`, then run it again. `rota config fill` and `rota init` run the same migration.
+
+While a config still holds an old name, these verbs exit 4 with `blockedBy: config migration` and list the old keys: `rota round ...`, `rota worker ...`, `rota doctor`, `rota orchestrate`, `rota keepalive`, `rota layout`, `rota limit` and bare `rota`. Other verbs only print a warning. `rota config check` lists an old name as `unknown`.
+
+```bash
+rota migrate config
+rota migrate config --apply
+```
+
+### Slot count and draining
+
+`rota round start` uses exactly the first N names of `round.roster`, where N is `--slots` or `round.slots`. A registered slot beyond N stays registered and parked. If it still holds work (an item, a claim or a queued PR), it stays in the round marked draining. A draining slot gets no new assignment until its work lands or is transferred.
 
 ## roles keys and rota agents write
 
@@ -496,7 +536,7 @@ rota agents write            # write or refresh the files
 rota agents write --check    # report drift, write nothing, exit 1 on drift
 ```
 
-It writes `.claude/agents/rota-<role>.md` (frontmatter `name`, `description`, `model`, `effort` when set, and `tools: Read, Grep, Glob, Bash` for the explorer only) and, when OpenCode is configured, `.opencode/agents/rota-<role>.md` (frontmatter `description`, `mode: subagent`, `model` when the tier map is set, and `permission: edit: deny, bash: deny` for the explorer; OpenCode has no effort field) and, when Codex is configured, `.codex/agents/rota-<role>.toml` (`name`, `description`, `model`, `model_reasoning_effort` when set, `developer_instructions`, and `sandbox_mode = "read-only"` for the explorer). Codex counts as configured when any `round.tiers.codex.*` is set, `work.codexAccounts` or `work.codexCommand` is non-empty, or `round.workerKind` is `codex`. With no Codex tier map the Codex files omit `model` and Codex picks its own. The explorer keeps `Bash`, so on Claude it is read-mostly, not strictly read-only.
+It writes `.claude/agents/rota-<role>.md` (frontmatter `name`, `description`, `model`, `effort` when set, and `tools: Read, Grep, Glob, Bash` for the explorer only) and, when OpenCode is configured, `.opencode/agents/rota-<role>.md` (frontmatter `description`, `mode: subagent`, `model` when the tier map is set, and `permission: edit: deny, bash: deny` for the explorer; OpenCode has no effort field) and, when Codex is configured, `.codex/agents/rota-<role>.toml` (`name`, `description`, `model`, `model_reasoning_effort` when set, `developer_instructions`, and `sandbox_mode = "read-only"` for the explorer). Codex counts as configured when any `round.tiers.codex.*` is set, `round.codexAccounts` or `round.codexCommand` is non-empty, or `round.workerKind` is `codex`. With no Codex tier map the Codex files omit `model` and Codex picks its own. The explorer keeps `Bash`, so on Claude it is read-mostly, not strictly read-only.
 
 Each file starts with a "generated by rota, do not edit" header. The verb never overwrites a same-named file without it. Commit the files like other project config. `rota init` runs the verb once (skipped under `--no-blocks`, and a refusal there only warns); `rota skills update` does not, so rerun it after changing a role or a tier map. `rota doctor` warns on a missing or drifted file and names the verb. The [worker contract](../../skills/references/worker-contract.md) tells workers to use these agents and to fall back to the tier table when the files are absent.
 

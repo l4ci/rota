@@ -10,7 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/golden"
 )
 
-const acctConfig = `{"work":{"accounts":[
+const acctConfig = `{"round":{"accounts":[
  {"name":"alpha","configDir":"/acct/alpha"},
  {"name":"beta","configDir":"/acct/beta"},
  {"name":"gamma","configDir":"/acct/gamma"},
@@ -166,7 +166,7 @@ func TestAccountAssign(t *testing.T) {
 		return -1
 	}
 	_, _, err = acc.Assign(bg, b, "w1", "nope")
-	if exitOf(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "account 'nope' is not in work.accounts") {
+	if exitOf(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "account 'nope' is not in round.accounts") {
 		t.Errorf("unknown account: %v", err)
 	}
 	_, _, err = acc.Assign(bg, b, "w9", "alpha")
@@ -180,7 +180,7 @@ func TestAccountAssign(t *testing.T) {
 }
 
 func TestAccountAssignWithEveryAccountCoolingIsRefused(t *testing.T) {
-	cfg := `{"work":{"accounts":[{"name":"beta","configDir":"/acct/beta"}]}}`
+	cfg := `{"round":{"accounts":[{"name":"beta","configDir":"/acct/beta"}]}}`
 	dir := newProject(t, cfg)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	acc := &Accounts{Env: Env{Getenv: func(k string) string {
@@ -273,7 +273,7 @@ func TestOrchestratorTarget(t *testing.T) {
 		t.Error("an account above the threshold was taken")
 	}
 	// An account with no configDir is not a candidate.
-	d2 := newProject(t, `{"work":{"accounts":[{"name":"alpha","configDir":"/acct/alpha"},{"name":"gamma"}]}}`)
+	d2 := newProject(t, `{"round":{"accounts":[{"name":"alpha","configDir":"/acct/alpha"},{"name":"gamma"}]}}`)
 	if _, ok, o := acc.OrchestratorTarget(bg, d2, "/acct/alpha", 90); ok || !strings.Contains(strings.Join(o, ";"), "gamma: no configDir") {
 		t.Errorf("no configDir: %v %v", ok, o)
 	}

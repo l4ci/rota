@@ -21,8 +21,8 @@ rt() { ( cd "$RT" && $RTENV "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 rtrc() { RC=0; OUT=$( cd "$RT" && $RTENV "$ROTA_BIN" --json "$@" 2>/dev/null ) || RC=$?; }
 rt item create --kind features --title First --milestone M01 --body-file - <<<$'## Acceptance\n- [ ] works' >/dev/null
 HOLDER=$$
-# Tab mode, explicitly: with no work.dispatch a round with no host would be solo (C8).
-rt config set work.dispatch tmux >/dev/null
+# Tab mode, explicitly: with no round.dispatch a round with no host would be solo (C8).
+rt config set round.dispatch tmux >/dev/null
 rt round start --holder-pid "$HOLDER" --slots 1 >/dev/null
 
 # Default tier: standard, on the claude map; standard follows models.worker.
@@ -71,10 +71,10 @@ OUT=$(rt round assign F01 --check-only --kind codex --holder-pid "$HOLDER")
 for t in light standard heavy; do rt config set "round.tiers.codex.$t" '' >/dev/null; done
 rtrc round assign F01 --check-only --kind codex --holder-pid "$HOLDER"
 [ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.kind)" = "codex" ] && ! echo "$OUT" | jget data.model >/dev/null || fail "all-empty codex should resolve to no model: $RC $OUT"
-rt config set work.codexCommand 'codex -m {model}' >/dev/null
+rt config set round.codexCommand 'codex -m {model}' >/dev/null
 rtrc round assign F01 --check-only --kind codex --holder-pid "$HOLDER"
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "no tier map" ] || fail "a {model} command with no map should be refused: $RC $OUT"
-rt config set work.codexCommand '' >/dev/null
+rt config set round.codexCommand '' >/dev/null
 rt config set round.tiers.codex.light c-light >/dev/null
 rtrc round assign F01 --check-only --kind codex --holder-pid "$HOLDER"
 [ "$RC" = "2" ] || fail "a partial codex map is a config error (2), got $RC: $OUT"

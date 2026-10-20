@@ -46,7 +46,7 @@ mkdir -p "$TMP_DR/acct" "$TMP_DR/proj/.rota"
 echo '{"claudeAiOauth":{"accessToken":"t"}}' >"$TMP_DR/acct/.credentials.json"
 : >"$TMP_DR/acct/installed"
 printf '.worktrees/\n' >"$TMP_DR/proj/.gitignore"
-printf '{"work":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]}}\n' "$TMP_DR/acct" >"$TMP_DR/proj/.rota/config.json"
+printf '{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]}}\n' "$TMP_DR/acct" >"$TMP_DR/proj/.rota/config.json"
 # D1 (#65): the orchestrator hooks are opt-in, so a project that has not installed them skips both checks
 git -C "$TMP_DR/proj" init -q
 rc=0; OUT="$(dr_run "$TMP_DR/proj")" || rc=$?
@@ -118,8 +118,8 @@ rc=0; HOME="$TMP_DR/home" CLAUDE_CONFIG_DIR="$TMP_DR/claude" ROTA_TEST_DOCTOR_PA
 [ "$rc" -eq 2 ] || fail "C6[g]: --repo exited $rc, not 2"
 pass "C6[g]: doctor rejects --repo"
 
-# (h) host detection (#236): init's default work.dispatch=subagent still gets the herdr checks inside a herdr pane
-printf '{"work":{"dispatch":"subagent","accounts":[{"name":"a","configDir":"%s"}]}}\n' "$TMP_DR/acct" >"$TMP_DR/proj/.rota/config.json"
+# (h) host detection (#236): init's default round.dispatch=subagent still gets the herdr checks inside a herdr pane
+printf '{"round":{"dispatch":"subagent","accounts":[{"name":"a","configDir":"%s"}]}}\n' "$TMP_DR/acct" >"$TMP_DR/proj/.rota/config.json"
 echo '{"claudeAiOauth":{"accessToken":"t"}}' >"$TMP_DR/acct/.credentials.json"
 rc=0; OUT="$(dr_run "$TMP_DR/proj")" || rc=$?
 [ "$(printf '%s' "$OUT" | dr_field host status)" = "skip" ] || fail "C6[h]: subagent outside a pane did not skip host: $OUT"
@@ -137,6 +137,6 @@ printf '#!/bin/sh\nexit 0\n' >"$DR_BIN/tmux"; chmod +x "$DR_BIN/tmux"
 rc=0; OUT="$(DR_TMUX=/tmp/tmux-1/default,1,0 dr_run "$TMP_DR/proj")" || rc=$?
 [ "$(printf '%s' "$OUT" | dr_field host detail)" = "tmux on PATH" ] || fail "C6[h]: tmux session not detected: $OUT"
 rm "$DR_BIN/tmux"
-pass "C6[h]: doctor detects the host like the round verbs when work.dispatch is subagent"
+pass "C6[h]: doctor detects the host like the round verbs when round.dispatch is subagent"
 
 trap 'rm -rf "$TMP"' EXIT

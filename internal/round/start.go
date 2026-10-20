@@ -17,12 +17,12 @@ import (
 type StartOpts struct {
 	Scope      string
 	Items      []string // the slate, for scope slate
-	Slots      int      // 0 means work.workerSlots, capped by the caller
+	Slots      int      // 0 means DefaultNum (round.slots)
 	Base       string
 	HolderPID  int
 	Settings   roundcfg.Settings
 	DefaultNum int // slots when Slots is 0
-	// Dispatch is work.dispatch and LookPath the PATH probe; together with
+	// Dispatch is round.dispatch and LookPath the PATH probe; together with
 	// the env's Getenv they resolve the round's host (C8). A nil LookPath is exec.LookPath.
 	Dispatch string
 	LookPath func(string) (string, error)
@@ -167,6 +167,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 			doc.SetHost(res.Host)
 		}
 		doc.SetScope(scope)
+		doc.SetSlotCount(n)
 		if scope == roundcfg.ScopeSlate {
 			doc.SetSlate(slate)
 		} else {
@@ -176,19 +177,23 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 		return res, err
 	}
 	res.Round, res.Slate = l.Round, slate
-	// Only roster slots are the round's: slots from `pool init` stay out.
-	want := map[string]bool{}
-	for _, name := range set.Roster {
-		want[name] = true
-	}
+	// The round's slots are the first n roster names, then those past n that
+	// still hold work, marked draining (#1097). Other registered roster slots
+	// stay parked outside the round; slots from `pool init` stay out.
 	reg, err = worker.LoadRegistry(root)
 	if err != nil {
 		return res, err
 	}
-	for _, s := range reg.Slots() {
-		if want[s.Name()] {
+	active, draining := Members(reg, set)
+	for _, name := range active {
+		if s := reg.Slot(name); s != nil {
 			res.Slots = append(res.Slots, worker.SlotData(s))
 		}
+	}
+	for _, name := range draining {
+		d := worker.SlotData(reg.Slot(name))
+		d.Set("draining", true)
+		res.Slots = append(res.Slots, d)
 	}
 	return res, nil
 }

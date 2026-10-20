@@ -10,7 +10,7 @@ import (
 )
 
 // TestResolveHostCrossesTheSeam is the one table for "which host does this
-// round run on" as every verb sees it: recorded host x work.dispatch x env.
+// round run on" as every verb sees it: recorded host x round.dispatch x env.
 func TestResolveHostCrossesTheSeam(t *testing.T) {
 	herdrBin := func(string) (string, error) { return "/bin/herdr", nil }
 	noBin := func(string) (string, error) { return "", errors.New("not found") }
@@ -34,7 +34,7 @@ func TestResolveHostCrossesTheSeam(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			cfg := `{}`
 			if c.dispatch != "" {
-				cfg = `{"work":{"dispatch":"` + c.dispatch + `"}}`
+				cfg = `{"round":{"dispatch":"` + c.dispatch + `"}}`
 			}
 			dir := newProject(t, cfg)
 			if c.registry != "" {

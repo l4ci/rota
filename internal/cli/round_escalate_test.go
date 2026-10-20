@@ -286,9 +286,9 @@ func TestEscalateSendNotifyRules(t *testing.T) {
 		notified       bool
 	}{
 		{"HERDR_ENV", ghCfg, "1", nil, true},
-		{"work.dispatch herdr", `{"forge":{"provider": "github"}, "issues":{"source": "github"},"work":{"dispatch":"herdr"}}`, "", nil, true},
+		{"round.dispatch herdr", `{"forge":{"provider": "github"}, "issues":{"source": "github"},"round":{"dispatch":"herdr"}}`, "", nil, true},
 		{"neither", ghCfg, "", nil, false},
-		{"tmux dispatch", `{"forge":{"provider": "github"}, "issues":{"source": "github"},"work":{"dispatch":"tmux"}}`, "", nil, false},
+		{"tmux dispatch", `{"forge":{"provider": "github"}, "issues":{"source": "github"},"round":{"dispatch":"tmux"}}`, "", nil, false},
 		{"herdr not installed", ghCfg, "1", errors.New("herdr is not installed"), false},
 	} {
 		dir := escProject(t, c.cfg)

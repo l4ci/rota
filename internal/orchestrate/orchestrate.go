@@ -59,7 +59,7 @@ type Plan struct {
 	Mode    string    `json:"mode"`
 	Cwd     string    `json:"cwd"`
 	Session string    `json:"session,omitempty"` // ModeSession, ModeHerdrSession: the session name
-	// Account names the work.accounts entry the agent starts under; ConfigDir is
+	// Account names the round.accounts entry the agent starts under; ConfigDir is
 	// its CLAUDE_CONFIG_DIR. Both empty when the agent keeps the default account.
 	Account   string `json:"account,omitempty"`
 	ConfigDir string `json:"configDir,omitempty"`
@@ -85,13 +85,13 @@ type Env struct {
 	Env  []string // the environment Exec passes on
 	// Self is the rota binary, so the tab runs this very build.
 	Self string
-	// PickAccount names the work.accounts entry with the most headroom, as the
+	// PickAccount names the round.accounts entry with the most headroom, as the
 	// worker slots are balanced; false when none is usable or it is unset.
 	PickAccount func(root string) (name string, ok bool)
 }
 
 // Resolve plans the launch for the project at root: harness from
-// orchestrator.harness, host from where the caller is and from work.dispatch.
+// orchestrator.harness, host from where the caller is and from round.dispatch.
 func (e Env) Resolve(root string, cfg any) (Plan, error) {
 	name := config.StringIfSet(cfg, "orchestrator.harness")
 	if name == "" {
@@ -140,7 +140,7 @@ func (e Env) Resolve(root string, cfg any) (Plan, error) {
 // under. The tab's environment comes from the multiplexer server, not from this
 // process, so the choice travels in the command as `keepalive run --config-dir`.
 // A CLAUDE_CONFIG_DIR already in the caller's environment wins; otherwise the
-// work.accounts entry with the most headroom, else the first one configured.
+// round.accounts entry with the most headroom, else the first one configured.
 // No accounts: both empty, and the agent keeps the default account.
 func (e Env) account(root string, cfg any) (name, dir string) {
 	accts := config.Accounts(cfg)

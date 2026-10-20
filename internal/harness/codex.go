@@ -32,14 +32,14 @@ const BlockCodexFlags = "codex flags"
 const hookTrustFlag = "--dangerously-bypass-hook-trust"
 
 // codex is the Codex CLI. Its account is the default Codex home, or a named
-// home of work.codexAccounts, and every payload sent to it is signed: Codex follows unsigned text typed into its
+// home of round.codexAccounts, and every payload sent to it is signed: Codex follows unsigned text typed into its
 // pane, so a UserPromptSubmit hook blocks anything without the signature.
 type codex struct{}
 
 func (codex) Kind() string       { return Codex }
-func (codex) CommandKey() string { return "work.codexCommand" }
+func (codex) CommandKey() string { return "round.codexCommand" }
 
-// Launch is work.codexCommand, else the default launch line. A model fills
+// Launch is round.codexCommand, else the default launch line. A model fills
 // {model}. The default without a model drops its `--model {model}` pair and
 // Codex picks its own; a custom command that still holds {model} then has
 // nothing to put there, which is a usage error. A custom command without the
@@ -52,7 +52,7 @@ func (c codex) Launch(cfg any, model string) (string, error) {
 	if model == "" {
 		if custom {
 			if strings.Contains(cmd, ModelPlaceholder) {
-				return "", refuse(Usage, "work.codexCommand holds {model} but no model was chosen: pass a tier model (round assign) or drop the placeholder")
+				return "", refuse(Usage, "round.codexCommand holds {model} but no model was chosen: pass a tier model (round assign) or drop the placeholder")
 			}
 			return cmd, nil
 		}
@@ -61,7 +61,7 @@ func (c codex) Launch(cfg any, model string) (string, error) {
 	return strings.ReplaceAll(cmd, ModelPlaceholder, model), nil
 }
 
-// NeedsModel: only a custom work.codexCommand that holds {model} does (Launch
+// NeedsModel: only a custom round.codexCommand that holds {model} does (Launch
 // refuses it with none).
 func (c codex) NeedsModel(cfg any) bool {
 	_, err := c.Launch(cfg, "")
@@ -125,7 +125,7 @@ func (codex) RawPaste() bool { return false }
 
 // AccountEnv is the slot's CODEX_HOME, set only for a configured account: the
 // default home is Codex's own. The claude config dir is not its business, and
-// work.accounts is Anthropic's.
+// round.accounts is Anthropic's.
 func (codex) AccountEnv(a Account) []string {
 	if a.Home == "" {
 		return nil
@@ -134,7 +134,7 @@ func (codex) AccountEnv(a Account) []string {
 }
 
 func (codex) Accounts(cfg any) AccountList {
-	l := AccountList{Key: "work.codexAccounts"}
+	l := AccountList{Key: "round.codexAccounts"}
 	for _, a := range config.CodexAccounts(cfg) {
 		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.CodexHome})
 	}
@@ -351,7 +351,7 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 		return set, refuse(Unavailable, "codex is not installed or not runnable")
 	}
 	if !o.Herdr {
-		return set, refuse(Unavailable, "codex workers need work.dispatch=herdr")
+		return set, refuse(Unavailable, "codex workers need round.dispatch=herdr")
 	}
 	herdr, ok := p.Look("herdr")
 	if !ok {
@@ -370,7 +370,7 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 	acct, _ := PickCodexAccount(o.Accounts, o.Account, o.Load)
 	home := acct.Home
 	if acct.Name != "" && home == "" {
-		return set, refuse(Usage, "work.codexAccounts account '%s' has no codexHome", acct.Name)
+		return set, refuse(Usage, "round.codexAccounts account '%s' has no codexHome", acct.Name)
 	}
 	set.Home, set.Account = home, acct.Name
 	who := "Codex"
@@ -393,7 +393,7 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 		for i, m := range miss {
 			names[i] = m.Flag
 		}
-		r := refuse(Refused, "codex --help does not list %s, which the launch line uses; update codex or change work.codexCommand", strings.Join(names, ", "))
+		r := refuse(Refused, "codex --help does not list %s, which the launch line uses; update codex or change round.codexCommand", strings.Join(names, ", "))
 		r.BlockedBy = BlockCodexFlags
 		return set, r
 	}

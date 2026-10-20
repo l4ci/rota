@@ -275,7 +275,7 @@ func pendingData(id string) *jsonx.Object {
 	return d
 }
 
-// notify raises the herdr notification when the host is herdr: work.dispatch
+// notify raises the herdr notification when the host is herdr: round.dispatch
 // is herdr or the process runs inside herdr, and the binary is installed.
 func notify(ctx context.Context, env Env, root, id string, o SendOpts, warns []string) (bool, []string) {
 	switch worker.ResolveHost(root, config.Load(rotatree.Config(root)), env.Getenv, env.LookPath) {
@@ -283,7 +283,7 @@ func notify(ctx context.Context, env Env, root, id string, o SendOpts, warns []s
 		return false, append(warns, "no notification: the round is solo, there is no herdr")
 	case host.Herdr:
 	default:
-		return false, append(warns, "no notification: the host is not herdr (the round, work.dispatch and the environment do not name herdr)")
+		return false, append(warns, "no notification: the host is not herdr (the round, round.dispatch and the environment do not name herdr)")
 	}
 	h := env.Host()
 	if err := h.Require(); err != nil {

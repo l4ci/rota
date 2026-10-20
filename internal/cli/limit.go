@@ -205,7 +205,10 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 				return "", false
 			}
 			// Tolerant: no idle slot is found in a corrupt registry (callback, no error return).
-			return round.IdleSlot(worker.LoadRegistryTolerant(root), rc.Roster, kind, account)
+			// Only the round's active slots take a moved issue (#1097).
+			reg := worker.LoadRegistryTolerant(root)
+			active, _ := round.Members(reg, rc)
+			return round.IdleSlot(reg, active, kind, account)
 		},
 		Transfer: func(ctx context.Context, issue, to string) error {
 			rc, err := roundcfg.Load(root)

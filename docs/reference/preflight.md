@@ -52,16 +52,16 @@ The checks, in the order they run:
 |-------|-------------|--------------|
 | `git` | git is on `PATH` and `.worktrees/` is gitignored | never |
 | `jq` | `jq` is on `PATH` (the skills read `rota --json` output with it) | never |
-| `host` | the host a round would run on is usable: `work.dispatch` as named, or with it unset or `subagent`, herdr inside a herdr pane, else tmux inside tmux. herdr on `PATH` and 0.9.x, or tmux on `PATH` | no host is detected (solo) |
+| `host` | the host a round would run on is usable: `round.dispatch` as named, or with it unset or `subagent`, herdr inside a herdr pane, else tmux inside tmux. herdr on `PATH` and 0.9.x, or tmux on `PATH` | no host is detected (solo) |
 | `tracker` | `gh` or `glab` is on `PATH` and logged in for the project's provider | the project has no remote |
-| `accounts` | every account in `work.accounts` has a `configDir` whose credentials file holds an access token | no accounts configured |
+| `accounts` | every account in `round.accounts` has a `configDir` whose credentials file holds an access token | no accounts configured |
 | `hook` | herdr's agent integration is installed for each configured account (`herdr integration install claude`) | the host is not herdr, or no account is configured |
 | `statusline` | the effective statusline runs `rota statusline dump` | the orchestrator hooks are not installed (opt-in) |
 | `stop-hook` | a Stop and a SessionStart hook installed by `rota hook install` exist and their command resolves | the orchestrator hooks are not installed (opt-in) |
 | `guard-hook` | a `PreToolUse` hook installed by `rota hook install` sits in project or user scope (project-local never reaches a worker worktree) and its command resolves | the orchestrator hooks are not installed (opt-in) |
 | `switch` | with `orchestrator.switchOnUsage` on: two or more accounts have a `configDir` and the Stop hook is installed | `orchestrator.switchOnUsage` is off |
-| `skills` | every installed skills root (user and project, Claude and Codex, including each `work.accounts` config dir) matches the binary's skill set, and has no missing or edited files | no root has a `.rota-manifest.json` (run `rota skills install`) |
-| `codex` | `codex` runs, and the default Codex home (or each `work.codexAccounts` account) is logged in and has the herdr integration | `codex` is not on `PATH` and no `work.codexAccounts` are configured |
+| `skills` | every installed skills root (user and project, Claude and Codex, including each `round.accounts` config dir) matches the binary's skill set, and has no missing or edited files | no root has a `.rota-manifest.json` (run `rota skills install`) |
+| `codex` | `codex` runs, and the default Codex home (or each `round.codexAccounts` account) is logged in and has the herdr integration | `codex` is not on `PATH` and no `round.codexAccounts` are configured |
 | `agents` | the subagent files `rota agents write` generates are present and current | nothing to report: the line appears only as a `warn`, when a file is missing or stale (fix: `rota agents write`) |
 | `verify` | `test.full` or `test.e2e` is set, so the merge gate has something to run | nothing to report: the line appears only as a `warn`, when both are empty under a local verify (fix: `rota config set test.full '[...]'`) |
 

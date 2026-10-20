@@ -31,14 +31,14 @@ rota config set round.tiers.opencode.heavy    opencode-go/kimi-k2.7-code
 
 The map ships defaults (`opencode/claude-haiku-5-5`, `opencode/claude-sonnet-5-5`, `opencode/claude-opus-5-5`, from the built-in `opencode` provider). Those ids need OpenCode Zen, its paid provider; on any other provider set your own ids, which `opencode models` lists. Override any tier and the others keep their defaults. Set all three to empty and OpenCode picks its own model and the launch line drops `--model`; one empty tier beside a set one is refused. `assign` warns when a tier model is missing from `opencode models` (it asks the network, so the check is skipped if the call takes more than 10 seconds). OpenCode itself refuses an unknown id with a dialog and then falls back to the last model you used, so a typo here shows up as `blocked` rather than as a wrong model.
 
-The launch command is `work.opencodeCommand`, default `opencode --model {model}`. A custom command receives the tier model only through `{model}`. It may not contain `--pure` (that runs OpenCode without plugins and so without the guard below), set `OPENCODE_CONFIG_CONTENT` itself, or resume a session (`-c`, `-s`, `--fork`).
+The launch command is `round.opencodeCommand`, default `opencode --model {model}`. A custom command receives the tier model only through `{model}`. It may not contain `--pure` (that runs OpenCode without plugins and so without the guard below), set `OPENCODE_CONFIG_CONTENT` itself, or resume a session (`-c`, `-s`, `--fork`).
 
 ## Accounts
 
-`work.opencodeAccounts` lists named config dirs, the counterpart of `work.codexAccounts`:
+`round.opencodeAccounts` lists named config dirs, the counterpart of `round.codexAccounts`:
 
 ```json
-{ "work": { "opencodeAccounts": [
+{ "round": { "opencodeAccounts": [
   { "name": "work",     "configDir": "/home/me/.config/opencode-work" },
   { "name": "personal", "configDir": "/home/me/.config/opencode-personal" }
 ] } }
@@ -72,7 +72,7 @@ Known edges:
 
 ## Agent files
 
-`rota agents write` emits `.opencode/agents/rota-explorer.md`, `rota-implementer.md` and `rota-reasoner.md` once OpenCode is configured (any `round.tiers.opencode.*`, `work.opencodeAccounts` or `work.opencodeCommand` set, or `round.workerKind` is `opencode`). Each has `mode: subagent`, the tier model when the map is set, and the role text. The explorer gets `edit: deny` and `bash: deny`. OpenCode has no effort setting, so `roles.<role>.effort` is not written.
+`rota agents write` emits `.opencode/agents/rota-explorer.md`, `rota-implementer.md` and `rota-reasoner.md` once OpenCode is configured (any `round.tiers.opencode.*`, `round.opencodeAccounts` or `round.opencodeCommand` set, or `round.workerKind` is `opencode`). Each has `mode: subagent`, the tier model when the map is set, and the role text. The explorer gets `edit: deny` and `bash: deny`. OpenCode has no effort setting, so `roles.<role>.effort` is not written.
 
 ## Check it
 

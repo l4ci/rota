@@ -47,7 +47,7 @@ occ() { ( cd "$OC" && "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 
 occ item create --kind features --title First --milestone M01 --body-file - <<<$'## Acceptance\n- [ ] works\nTouches internal/a.go' >/dev/null || fail "item create failed"
 HOLDER=$$
-occ config set work.dispatch herdr >/dev/null || fail "config set work.dispatch failed"
+occ config set round.dispatch herdr >/dev/null || fail "config set round.dispatch failed"
 ( cd "$OC" && $OCSTART "$ROTA_BIN" --json round start --holder-pid "$HOLDER" --slots 2 >/dev/null 2>&1 ) || fail "round start failed"
 for kv in round.brief="$OC/contract.md" round.tiers.opencode.light=oc-go/light round.tiers.opencode.standard=oc-go/std round.tiers.opencode.heavy=oc-go/heavy; do
   occ config set "${kv%%=*}" "${kv#*=}" >/dev/null || fail "config set ${kv%%=*} failed"
@@ -67,13 +67,13 @@ pass "round assign --kind opencode resolves the tier model; round.workerKind acc
 # A launch flag missing from `opencode --help` is exit 4 / blockedBy "opencode flags".
 # The version is never consulted. A flag no opencode lists keeps this check
 # true against the real binary too (ROTA_SMOKE_HARNESS=opencode).
-occ config set work.opencodeCommand "opencode --model {model} --rota-no-such-flag" >/dev/null
+occ config set round.opencodeCommand "opencode --model {model} --rota-no-such-flag" >/dev/null
 ocrc round assign F01 --agent ben --kind opencode --holder-pid "$HOLDER"
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "opencode flags" ] || fail "a missing flag should be refused: $RC $OUT"
 case "$ERR$OUT" in *"--rota-no-such-flag"*) ;; *) fail "the refusal should name the flag: $ERR $OUT" ;; esac
 [ "$(echo "$OUT" | jget data.changed)" = "false" ] || fail "the flag refusal must not change anything: $OUT"
 parked ben || fail "the flag refusal must leave ben parked"
-occ config set work.opencodeCommand "" >/dev/null
+occ config set round.opencodeCommand "" >/dev/null
 if [ "${ROTA_SMOKE_HARNESS:-}" != opencode ]; then
   ROTA_FAKE_OPENCODE_LACKS=--model ocrc round assign F01 --agent ben --kind opencode --holder-pid "$HOLDER"
   [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "opencode flags" ] || fail "a flag the fake lacks should be refused: $RC $OUT"
@@ -125,29 +125,29 @@ GUARD
 fi
 pass "an opencode assignment starts --kind opencode with the tier model, the guard as inline config and a signed brief"
 
-# A resume flag in work.opencodeCommand is refused before anything is touched.
-occ config set work.opencodeCommand "opencode --continue" >/dev/null
+# A resume flag in round.opencodeCommand is refused before anything is touched.
+occ config set round.opencodeCommand "opencode --continue" >/dev/null
 : > "$FH/log"
 ocrc worker dispatch dana --body-file "$OC/contract.md" --task F02 --kind opencode
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "resume flag" ] || fail "opencode --continue should be refused: $RC $OUT"
 [ ! -s "$FH/log" ] || fail "a refused command must not reach herdr: $(cat "$FH/log")"
-occ config set work.opencodeCommand "opencode --pure" >/dev/null
+occ config set round.opencodeCommand "opencode --pure" >/dev/null
 ocrc worker dispatch dana --body-file "$OC/contract.md" --task F02 --kind opencode
 [ "$RC" = "5" ] || fail "a --pure launch would keep the guard out and is refused: $RC $OUT"
 [ ! -s "$FH/log" ] || fail "a refused command must not reach herdr: $(cat "$FH/log")"
-occ config set work.opencodeCommand "" >/dev/null
-pass "a resume flag or --pure in work.opencodeCommand is refused before herdr is touched"
+occ config set round.opencodeCommand "" >/dev/null
+pass "a resume flag or --pure in round.opencodeCommand is refused before herdr is touched"
 
-# work.opencodeAccounts: the account's config dir reaches the tab.
+# round.opencodeAccounts: the account's config dir reaches the tab.
 mkdir -p "$TMP_OC/acct-a"
-occ config set work.opencodeAccounts "[{\"name\":\"a\",\"configDir\":\"$TMP_OC/acct-a\"}]" >/dev/null || fail "config set work.opencodeAccounts failed"
+occ config set round.opencodeAccounts "[{\"name\":\"a\",\"configDir\":\"$TMP_OC/acct-a\"}]" >/dev/null || fail "config set round.opencodeAccounts failed"
 : > "$FH/log"
 ocrc worker dispatch dana --body-file "$OC/contract.md" --task F02 --kind opencode
 [ "$RC" = "0" ] || fail "dana should dispatch on account a, got $RC: $OUT $ERR"
 grep -qF -- "--env OPENCODE_CONFIG_DIR=$TMP_OC/acct-a" "$FH/log" || fail "the tab should carry the account's OPENCODE_CONFIG_DIR: $(cat "$FH/log")"
 case "$(cat "$FH/log")" in *CLAUDE_CONFIG_DIR*|*CODEX_HOME*) fail "no other kind's account variable: $(cat "$FH/log")" ;; esac
-pass "work.opencodeAccounts sets OPENCODE_CONFIG_DIR on the tab"
-occ config set work.opencodeAccounts "[]" >/dev/null
+pass "round.opencodeAccounts sets OPENCODE_CONFIG_DIR on the tab"
+occ config set round.opencodeAccounts "[]" >/dev/null
 
 # Pane states: the worker poll classifier on OpenCode 1.17 pane text.
 PANES="$TESTDIR/../internal/worker/testdata/panes"

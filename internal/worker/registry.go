@@ -128,6 +128,14 @@ func (r Registry) Session() string { return jsonx.Str(r.doc, "session") }
 // Scope is the recorded round scope, "" when none.
 func (r Registry) Scope() string { return jsonx.Str(r.doc, "scope") }
 
+// SlotCount is how many roster slots `round start` put in the round (--slots,
+// else round.slots), 0 when no start recorded one.
+func (r Registry) SlotCount() int {
+	v, _ := r.doc.Get("slotCount")
+	n, _ := jsonx.Int(v)
+	return n
+}
+
 // Slate is the recorded slate of a slate-scoped round, nil when none.
 func (r Registry) Slate() []string {
 	var out []string
@@ -330,6 +338,9 @@ func (d *Doc) SetSession(s string) { d.doc.Set("session", s) }
 // SetScope records the round scope.
 func (d *Doc) SetScope(scope string) { d.doc.Set("scope", scope) }
 
+// SetSlotCount records how many roster slots the round uses.
+func (d *Doc) SetSlotCount(n int) { d.doc.Set("slotCount", n) }
+
 // SetSlate records the slate of a slate-scoped round.
 func (d *Doc) SetSlate(slate []string) {
 	l := make([]any, 0, len(slate))
@@ -462,8 +473,8 @@ type Env struct {
 	Executable func() (string, error)
 	// LookPath reports whether a binary is installed; nil means exec.LookPath.
 	LookPath func(string) (string, error)
-	// Config returns the merged project config Dispatch reads work.dispatch,
-	// work.herdrGroupSlots and the port range from; nil loads .rota/config.json.
+	// Config returns the merged project config Dispatch reads round.dispatch,
+	// round.herdrGroupSlots and the port range from; nil loads .rota/config.json.
 	// Tests hand it an in-memory config.
 	Config func(root string) any
 	// Accounts reads the usage meters; poll and wait use it to record the

@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-const noModelPlaceholder = `{"work":{"workerCommand":"mywrap --dangerously-skip-permissions"}}`
+const noModelPlaceholder = `{"round":{"workerCommand":"mywrap --dangerously-skip-permissions"}}`
 
 // preflight is the one answer to "can this item go to this slot": these cases
 // cross it directly, with no slot claimed and nothing dispatched.

@@ -148,7 +148,7 @@ func TestOrchestrateStopsOnADoctorFailureBeforeAnySession(t *testing.T) {
 	deps := testDeps()
 	deps.DoctorPath = doctorFakes(t, map[string]string{"herdr": `echo "herdr 0.8.2"`}) // too old; no git on PATH
 	r := useLaunchRig(deps, map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w1"}, "herdr")
-	dir := trackerProject(t, `{"work":{"dispatch":"herdr"}}`)
+	dir := trackerProject(t, `{"round":{"dispatch":"herdr"}}`)
 	code, out, errs := rotaInWith(t, deps, dir, "orchestrate")
 	if code != ExitFailed || !strings.Contains(errs, "no session started") || !strings.Contains(out, "fail\thost") {
 		t.Fatalf("exit %d: %s | %s", code, out, errs)
@@ -162,7 +162,7 @@ func TestOrchestrateOutsideAMultiplexerAttachesARotaHerdrSession(t *testing.T) {
 	deps := testDeps()
 	deps.DoctorPath = doctorFakes(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`, "herdr": `echo "herdr 0.9.3"`})
 	r := useLaunchRig(deps, nil, "herdr", "tmux")
-	dir := trackerProject(t, `{"work":{"dispatch":"herdr"}}`)
+	dir := trackerProject(t, `{"round":{"dispatch":"herdr"}}`)
 	// The fake herdr answers `status server`, so the session counts as running
 	// and only the attach replaces this process.
 	if code, out, errs := rotaInWith(t, deps, dir, "orchestrate"); code != 0 {
