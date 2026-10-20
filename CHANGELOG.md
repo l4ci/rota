@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.19.0 — 2026-10-20
+
+OpenCode joins Claude and Codex as a worker kind, the gate runs an issue's Try it steps, and the merge train becomes the default when several reviewed PRs wait.
+
+### New
+
+- OpenCode as a third worker kind (#584). Pane classification covers the boot footer, busy, limits and bad-model states; briefs are pasted raw; the slot's account env passes through; `rota doctor` checks the install. Default Codex and OpenCode tier models ship for `round.tiers.*` (#1009); the OpenCode defaults need the built-in Zen provider, otherwise override all three tiers.
+- Try it steps run in the merge gate after verify (#913), and again for each train member before landing (#1012). They run only for collaborators' edits, with an empty HOME and a scrubbed environment; untrusted steps are withheld from the worker brief. New `behaviour` verdict kind and `rota verdict add --transcript`.
+- Typed worker outcomes (#1007). `rota worker done --outcome done|partial|failed --summary-file <f>` records three summary lines; the gate refuses a `partial` or `failed` slot until a relay or transfer. Stale completions are fenced with an attempt id (#982), and workers get a durable inbox that `worker done` must drain (#1013).
+- Round pacing and cost controls: `round.batch` caps open assignments (#1016); `round.profile` fills the tiers from a named model profile (#973); `round.freshAt` transfers to a fresh slot instead of relaying again (#981); `plan.criticHarness` runs the level-4 plan critic on another harness (#1001).
+- Merge train as the default (#1048). `round wait` and `round watch` print a train nudge naming the PRs when two or more reviewed PRs wait, after every autopilot tick (#1064), and a nudge to assign a done slot before gating (#1075).
+- Review gets sharper. A review verdict finding carries `blocking`, only blocking findings count as a bounce, and `rota verdict add --file-deferred` files the rest as items (#999, #1020). Review depth lifts on a one-way door, scope drift or a risky path (#909). `light` depth now runs the Spec reviewer (#916).
+- New skills and modes: `/rota-answer` puts pending decisions to the maintainer one by one (#995); `/rota-capture --triage` handles issues filed by others (#994); `/rota-init` suggests config values from the project (#1034); `/rota-qa uat` and `ship.uat` add human acceptance (#991); `/rota-refactor --map` warns when the map is stale (#1008); `/rota-pause --report` writes a session summary (#970).
+- Session guards: `work.contextGuard` warns or pauses a `/rota-work` session before its context fills (#988); `research.packageCheck` screens new dependencies against the registry (#990); `brainstorm.edgeProbe` adds an edge and prohibition probe (#985); `rota plan check` warns on oversized plans (#987) and checks that tasks honor the item's decision comments (#998).
+- `rota receipt show` answers whether a lost write applied (#984). `rota milestone status --to shipped` exits 4 while the milestone has open items or unticked criteria, unless `--force` (#972).
+
+### Changed
+
+- Defaults that move: `work.herdrGroupSlots` is on (#920), the round tier keys for Codex and OpenCode have values (#1009), a bad `round.*` key exits 2 on status, reconcile, assign, start, architecture, wind-down and watch (#980), and `round escalate send` requires options and a recommendation (#1000).
+- Gate and review rules tightened: a FAIL verdict blocks, a merged PR drops out of review whatever the verdict (#1042), needs-info issues are not ready in `round candidates` (#1043), and a PR carrying a superseded attempt's commits is gated without misfiring during a transfer (#997).
+- Autopilot tick policy moved from `cli` into `roundtick`, and the tier walk, issue-branch name, recorded-review lookup, registry slot decode and round config load each have one owner (#1059, #1074, #1049, #1047, #1003, #980). No behaviour change intended.
+- Knowledge: lessons from rounds 22 to 28; entries store a commit sha beside the date (#971).
+
+### Fixed
+
+- Watch and relay: `round watch` no longer reports stale or placeholder done lines (#1025); a ROTA-DONE that predates the last relay is ignored (#874); an unseen relay gets a fallback window when stall detection is off (#1035); herdr dispatch waits out `agent_pane_busy` before failing (#1033); the gate counts a done by event seq, not a stamp (#1056).
+- Limit detection skips echoed orchestrator blocks (#887), reads phrases per slot kind (#882), and the limits feed no longer resubscribes after a stop or times out before the first pass (#996).
+- `install.sh` installs its cleanup traps before `mktemp`, so no temp dir leaks (#1024); `KNOWLEDGE.md` edits are locked (#896); `round bounce --slot` refuses names outside the pool (#886).
+
+### Documentation
+
+- Round 28 train default, nudges and the idle table; the plain-orchestrator comparison re-judged and published in the user docs (#1021); OpenCode workers; triage, deferred findings and Try it runs; the `KNOWLEDGE.md` lock; the unknown-slot bounce exit 4; limit detection and the `release milestone-check` line.
+
+## Stats
+
+339 commits, 462 files changed, +19496 −2321 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.18.0...v0.19.0
+
 ## v0.18.0 — 2026-10-18
 
 Milestone breakdowns get a shape and a check, workers report through typed events with an unverifiable state, and the round verbs carry request ids and receipts.
