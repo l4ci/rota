@@ -30,6 +30,15 @@ func TestRunTimeoutReturnsContextError(t *testing.T) {
 	}
 }
 
+// A command ended by ctx keeps what it wrote before, beside ctx.Err(), so a
+// caller can show why it hung.
+func TestRunTimeoutKeepsTheOutputSoFar(t *testing.T) {
+	res, err := Run(context.Background(), Cmd{Name: "sh", Args: []string{"-c", "echo before; sleep 5"}, Timeout: 300 * time.Millisecond, Combined: true, Group: true})
+	if !errors.Is(err, context.DeadlineExceeded) || res.Stdout != "before\n" {
+		t.Errorf("%+v %v", res, err)
+	}
+}
+
 func TestRunGroupKillFreesPipeHeldByChild(t *testing.T) {
 	start := time.Now()
 	_, err := Run(context.Background(), Cmd{Name: "sh", Args: []string{"-c", "sleep 30 & wait"}, Timeout: 100 * time.Millisecond, Group: true})

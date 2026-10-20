@@ -596,6 +596,14 @@ func execShellEnv(ctx context.Context, dir, command string, environ []string) (s
 		Name: "sh", Args: []string{"-c", command}, Dir: dir, Environ: environ,
 		Timeout: proc.NoTimeout, Combined: true, Group: true, MaxOutput: behaviourMaxOutput,
 	})
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		// keep what the step wrote before it was stopped: it shows where it hung
+		out := res.Stdout
+		if out != "" && !strings.HasSuffix(out, "\n") {
+			out += "\n"
+		}
+		return out + "[timed out: " + err.Error() + "]\n", 124
+	}
 	if err != nil {
 		return err.Error(), 127
 	}

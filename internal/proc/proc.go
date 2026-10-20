@@ -62,7 +62,8 @@ type Cmd struct {
 // Runner runs one command. A command that ran and exited non-zero is a Result
 // with ExitCode set and a nil error; err means it could not run at all (a
 // missing binary, matching exec.ErrNotFound) or ctx ended it, in which case it
-// is ctx.Err() and the Result is empty.
+// is ctx.Err() and the Result holds only the output written before (no exit
+// code), so a caller can show where a command hung.
 type Runner func(ctx context.Context, c Cmd) (Result, error)
 
 // Run is the production Runner.
@@ -101,7 +102,7 @@ func Run(ctx context.Context, c Cmd) (Result, error) {
 	}
 	err := cmd.Run()
 	if ctx.Err() != nil {
-		return Result{}, ctx.Err()
+		return Result{Stdout: out.String(), Stderr: errb.String(), Truncated: out.cut || errb.cut}, ctx.Err()
 	}
 	r := Result{Stdout: out.String(), Stderr: errb.String(), Truncated: out.cut || errb.cut}
 	var ee *exec.ExitError
