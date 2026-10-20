@@ -29,7 +29,7 @@ func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string)
 	case s.HeldID() == "":
 		return false, "holds nothing"
 	case s.PR() == "" && len(s.Issues()) == 0:
-		return false, "no PR recorded"
+		return false, fmt.Sprintf("no PR recorded for branch %s; check the forge and run `rota round reconcile`", strutil.FirstNonEmpty(s.Branch(), "(none)"))
 	}
 	// A partial or failed report waits for a relay or transfer: queuing its PR
 	// would let the gate merge it by number with nobody having answered it.
@@ -47,6 +47,37 @@ func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string)
 		return false, "uncommitted changes"
 	}
 	return true, ""
+}
+
+// adoptBranchPR is the assign-side repair for a worker whose done landed before
+// its PR was recorded: a held slot that records no PR and no issues gets the
+// open PR headed by its own branch, when the forge shows one. The PR is set on
+// the loaded slot so the caller's parkable sees it, and written to the registry
+// unless persist is false (a check-only run writes nothing). A forge that
+// cannot answer, no PR or a parked branch leaves the slot as it was.
+func (e Env) adoptBranchPR(ctx context.Context, root string, s *worker.Slot, persist bool) {
+	if e.Forge == nil || s.HeldID() == "" || s.PR() != "" || len(s.Issues()) > 0 || s.Branch() == "" || worker.IsOwnPark(s.Branch(), s.Name()) {
+		return
+	}
+	if st := s.State(); st != "done" && st != "idle" {
+		return
+	}
+	prs, err := e.Forge.OpenPRs(ctx)
+	if err != nil {
+		return
+	}
+	for _, p := range prs {
+		if p.Branch != s.Branch() || p.URL == "" {
+			continue
+		}
+		if persist {
+			if editSlot(root, s.Name(), func(w *worker.Slot) error { w.SetPR(p.URL); return nil }) != nil {
+				return
+			}
+		}
+		s.SetPR(p.URL)
+		return
+	}
 }
 
 // busyMsg is the refusal text for a slot that holds an issue and cannot park.
