@@ -160,11 +160,17 @@ func defaultDeps() *Deps {
 	d.NewTracker = func(ctx context.Context, root string, cfg any) (backlog.Tracker, error) {
 		return d.issueTracker(ctx, cfg, root)
 	}
-	// migrate issues runs while issues.source is still file, so the tracker it
-	// fills is not named yet: it is the host forge.provider or the origin names
-	// (the legacy "issues, provider auto" resolution).
+	// migrate issues onto a forge runs while issues.source is still file, so the
+	// tracker it fills is not named yet: it is the host forge.provider or the
+	// origin names (the legacy "issues, provider auto" resolution). It's a Plan
+	// is no forge, so it cannot be told from the origin: that project sets
+	// issues.source itsaplan (and its connection) first, and the run fills it.
 	d.MigrateTracker = func(ctx context.Context, root string, cfg any) (migrate.Tracker, error) {
-		return tracker.NewIssueTracker(ctx, tracker.SettingsFromConfig(cfg), config.SourceIssues, root, d.trackerOptions()...)
+		s := tracker.SettingsFromConfig(cfg)
+		if s.Source == config.SourceItsaplan {
+			return tracker.NewIssueTracker(ctx, s, config.SourceItsaplan, root, d.trackerOptions()...)
+		}
+		return tracker.NewIssueTracker(ctx, s, config.SourceIssues, root, d.trackerOptions()...)
 	}
 	d.RoundEnv = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d, true) }
 	d.RoundEnvLocal = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d, false) }

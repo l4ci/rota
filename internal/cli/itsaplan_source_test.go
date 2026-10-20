@@ -103,3 +103,18 @@ func TestConnectAddItsaplan(t *testing.T) {
 		t.Errorf("secret not stored: %v", e.kc.vals)
 	}
 }
+
+// AC-4: with issues.source itsaplan set first (It's a Plan is no forge, so the
+// origin cannot name it), `rota migrate issues --apply` fills the project.
+func TestItsaplanMigrateIssues(t *testing.T) {
+	s := itsaplantest.New(t, itsaplantest.Options{})
+	deps, dir := itsaplanProject(t, s)
+	write(t, filepath.Join(dir, ".rota", "BACKLOG.md"), "# TODO\n\n## Tasks\n- **[T01] Move me.** Do it.\n\n## Completed\n")
+	code, out, errOut := rotaInWith(t, deps, dir, "--json", "migrate", "issues", "--apply")
+	if code != 0 || s.Issues() != 1 {
+		t.Fatalf("migrate: %d %s %s; %d issues", code, out, errOut, s.Issues())
+	}
+	if d := data(t, out); d["migrated"] != float64(1) {
+		t.Errorf("migrated %v", d["migrated"])
+	}
+}
