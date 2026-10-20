@@ -172,3 +172,145 @@ func TestTierWalkNilRedEndsOnRedTier(t *testing.T) {
 		t.Errorf("ended=%v err=%v fullRed=%v ran=%v", ended, err, w.fullRed, ran)
 	}
 }
+
+// A run that errors on the e2e tier ends the walk with that error and leaves
+// the full tier's record in place: the train maps full vs e2e errors apart by w.at.
+func TestTierWalkE2ERunErrorEndsAtE2E(t *testing.T) {
+	var notes, verified, e2eVerified, ran []string
+	var excluded []testledger.Entry
+	boom := errors.New("boom")
+	w := &tierWalk{
+		subject: "slot",
+		run: func(tier string, _ []string) (VerifyResult, error) {
+			ran = append(ran, tier)
+			if tier == tierE2E {
+				return VerifyResult{}, boom
+			}
+			return VerifyResult{Verified: []string{"f"}}, nil
+		},
+		notes: &notes, verified: &verified, e2eVerified: &e2eVerified, excluded: &excluded,
+	}
+	ended, err := w.walk(GateConfig{Full: []string{"f"}, E2E: []string{"e"}}, tierFull)
+	if !ended || !errors.Is(err, boom) || w.at != tierE2E || w.e2eGreen {
+		t.Errorf("ended=%v err=%v at=%q e2eGreen=%v", ended, err, w.at, w.e2eGreen)
+	}
+	if !reflect.DeepEqual(ran, []string{tierFull, tierE2E}) || !reflect.DeepEqual(verified, []string{"f"}) || e2eVerified != nil {
+		t.Errorf("ran=%q verified=%q e2eVerified=%q", ran, verified, e2eVerified)
+	}
+}
+
+// A red callback that returns an error ends the walk with it, whichever tier
+// was red, and no later tier runs.
+func TestTierWalkRedErrorEndsWalk(t *testing.T) {
+	boom := errors.New("bisect failed")
+	for _, red := range []string{tierFull, tierE2E} {
+		t.Run(red, func(t *testing.T) {
+			var notes, verified, ran []string
+			var excluded []testledger.Entry
+			w := &tierWalk{
+				subject: "slot",
+				run: func(tier string, _ []string) (VerifyResult, error) {
+					ran = append(ran, tier)
+					if tier == red {
+						return VerifyResult{Failed: []string{tier}}, nil
+					}
+					return VerifyResult{Verified: []string{tier}}, nil
+				},
+				red:   func(string, VerifyResult) (bool, error) { return false, boom },
+				notes: &notes, verified: &verified, excluded: &excluded,
+			}
+			ended, err := w.walk(GateConfig{Full: []string{"f"}, E2E: []string{"e"}}, tierFull)
+			want := []string{tierFull}
+			if red == tierE2E {
+				want = []string{tierFull, tierE2E}
+			}
+			if !ended || !errors.Is(err, boom) || w.at != red || !reflect.DeepEqual(ran, want) {
+				t.Errorf("ended=%v err=%v at=%q ran=%q, want ran %q", ended, err, w.at, ran, want)
+			}
+		})
+	}
+}
+
+// stop on the e2e tier ends the walk before recording that tier, and keeps
+// what the full tier recorded.
+func TestTierWalkStopOnE2EEndsBeforeRecording(t *testing.T) {
+	var notes, verified, e2eVerified []string
+	var excluded []testledger.Entry
+	w := &tierWalk{
+		subject: "slot",
+		run: func(tier string, _ []string) (VerifyResult, error) {
+			return VerifyResult{Verified: []string{tier}}, nil
+		},
+		stop:  func(vr VerifyResult) bool { return reflect.DeepEqual(vr.Verified, []string{tierE2E}) },
+		notes: &notes, verified: &verified, e2eVerified: &e2eVerified, excluded: &excluded,
+	}
+	ended, err := w.walk(GateConfig{Full: []string{"f"}, E2E: []string{"e"}}, tierFull)
+	if !ended || err != nil || w.at != tierE2E || w.e2eGreen {
+		t.Errorf("ended=%v err=%v at=%q e2eGreen=%v", ended, err, w.at, w.e2eGreen)
+	}
+	if !reflect.DeepEqual(verified, []string{tierFull}) || e2eVerified != nil || len(notes) != 0 {
+		t.Errorf("verified=%q e2eVerified=%q notes=%q", verified, e2eVerified, notes)
+	}
+}
+
+// take is called directly by the CI gate for the tier it already ran: pin each
+// of its answers and the state it leaves.
+func TestTierWalkTake(t *testing.T) {
+	excusedEntry := testledger.Entry{}
+	for _, c := range []struct {
+		name                      string
+		tier                      string
+		vr                        VerifyResult
+		stop                      bool
+		red                       func(string, VerifyResult) (bool, error)
+		nilRed                    bool
+		ended, ok                 bool
+		err                       error
+		fullEmpty, fullRed, green bool
+		notes, verified, e2e      []string
+		excluded                  int
+	}{
+		{name: "stop ends unrecorded", tier: tierFull, vr: VerifyResult{Failed: []string{"f"}}, stop: true, ended: true},
+		{name: "empty full", tier: tierFull, vr: VerifyResult{NoCommands: true}, ok: true, fullEmpty: true,
+			notes: []string{noVerifyNote("slot"), noVerifyHint}},
+		{name: "empty e2e is not an empty full", tier: tierE2E, vr: VerifyResult{NoCommands: true}, ok: true,
+			notes: []string{noVerifyNote("slot"), noVerifyHint}},
+		{name: "green full", tier: tierFull, vr: VerifyResult{Verified: []string{"f"}}, ok: true, verified: []string{"f"}},
+		{name: "green e2e", tier: tierE2E, vr: VerifyResult{Verified: []string{"e"}}, ok: true, green: true, e2e: []string{"e"}},
+		{name: "excused failure is green", tier: tierFull, vr: VerifyResult{Verified: []string{"f"}, Excluded: []testledger.Entry{excusedEntry}},
+			ok: true, verified: []string{"f"}, excluded: 1},
+		{name: "red full, nil red ends", tier: tierFull, vr: VerifyResult{Failed: []string{"f"}}, nilRed: true,
+			ended: true, fullRed: true, notes: []string{"verify FAILED: f"}},
+		{name: "red e2e, nil red ends, not fullRed", tier: tierE2E, vr: VerifyResult{Failed: []string{"e"}}, nilRed: true,
+			ended: true, notes: []string{"e2e FAILED: e"}},
+		{name: "red, red false goes on without ok", tier: tierFull, vr: VerifyResult{Failed: []string{"f"}},
+			red: func(string, VerifyResult) (bool, error) { return false, nil }, fullRed: true, notes: []string{"verify FAILED: f"}},
+		{name: "red, red error", tier: tierE2E, vr: VerifyResult{Failed: []string{"e"}},
+			red:   func(string, VerifyResult) (bool, error) { return false, errors.New("bisect") },
+			ended: true, err: errors.New("bisect"), notes: []string{"e2e FAILED: e"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var notes, verified, e2eVerified []string
+			var excluded []testledger.Entry
+			w := &tierWalk{
+				subject: "slot",
+				stop:    func(VerifyResult) bool { return c.stop },
+				red:     c.red,
+				notes:   &notes, verified: &verified, e2eVerified: &e2eVerified, excluded: &excluded,
+			}
+			if c.nilRed {
+				w.red = nil
+			}
+			ended, ok, err := w.take(c.tier, c.vr)
+			if ended != c.ended || ok != c.ok || (err == nil) != (c.err == nil) || (err != nil && err.Error() != c.err.Error()) {
+				t.Errorf("ended=%v ok=%v err=%v", ended, ok, err)
+			}
+			if w.at != c.tier || w.fullEmpty != c.fullEmpty || w.fullRed != c.fullRed || w.e2eGreen != c.green {
+				t.Errorf("at=%q fullEmpty=%v fullRed=%v e2eGreen=%v", w.at, w.fullEmpty, w.fullRed, w.e2eGreen)
+			}
+			if !reflect.DeepEqual(notes, c.notes) || !reflect.DeepEqual(verified, c.verified) || !reflect.DeepEqual(e2eVerified, c.e2e) || len(excluded) != c.excluded {
+				t.Errorf("notes=%q verified=%q e2e=%q excluded=%d", notes, verified, e2eVerified, len(excluded))
+			}
+		})
+	}
+}
