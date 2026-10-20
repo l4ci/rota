@@ -519,16 +519,7 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 			return Result{}, Failed("%v", err)
 		}
 		depth, why := res.Depth, res.Why
-		// Door is read from a PR; a result below full has not seen it when there is
-		// no PR to read, or no forge to read one from. A label mapped to none is
-		// final, so the Door line cannot change it.
-		if labelNone := res.Signal == config.SignalLabel && depth == config.DepthNone; !prFound && depth != config.DepthFull && !labelNone && policy.MayBeBelowFull() {
-			if noForge {
-				why += "; no forge to read, so no Door line was read"
-			} else {
-				why += "; no PR yet, so no Door line was read"
-			}
-		}
+		why += worker.DoorNote(policy, res, prFound, noForge)
 		data := gitObj("branch", t.Branch, "base", t.Base, "depth", string(depth), "signal", res.Signal, "why", why, "changedLines", res.Changed, "labels", res.Labels)
 		return Result{Data: data, Text: fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", t.Branch, depth, why)}, nil
 	}

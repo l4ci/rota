@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -123,5 +124,47 @@ func TestResolveReviewDepthUnquotedPaths(t *testing.T) {
 	got, err := ResolveReviewDepth(context.Background(), ReviewSources{Policy: pol, Git: git.Exec, Dir: dir, Span: "main...feat"})
 	if err != nil || got.Signal != config.SignalPath || !strings.Contains(got.Why, "ä\"x.sql") {
 		t.Fatalf("quoted name: %+v %v", got, err)
+	}
+}
+
+func TestReviewKinds(t *testing.T) {
+	for _, c := range []struct {
+		d       config.ReviewDepth
+		hasSpec bool
+		want    []string
+	}{
+		{config.DepthFull, true, []string{"review-spec", "review-quality"}},
+		{config.DepthFull, false, []string{"review-spec", "review-quality"}},
+		{config.DepthLight, true, []string{"review-spec"}},
+		{config.DepthLight, false, []string{"review-quality"}},
+		{config.DepthNone, true, nil},
+	} {
+		if got := ReviewKinds(c.d, c.hasSpec); !slices.Equal(got, c.want) {
+			t.Errorf("ReviewKinds(%s, %v) = %v, want %v", c.d, c.hasSpec, got, c.want)
+		}
+	}
+}
+
+func TestDoorNote(t *testing.T) {
+	below := config.ReviewPolicy{Default: config.DepthLight}
+	full := config.ReviewPolicy{Default: config.DepthFull}
+	light := ReviewDepth{ReviewDecision: config.ReviewDecision{Depth: config.DepthLight}}
+	labelNone := ReviewDepth{ReviewDecision: config.ReviewDecision{Depth: config.DepthNone, Signal: config.SignalLabel}}
+	for name, c := range map[string]struct {
+		p                config.ReviewPolicy
+		res              ReviewDepth
+		prFound, noForge bool
+		want             string
+	}{
+		"no pr":       {below, light, false, false, "; no PR yet, so no Door line was read"},
+		"no forge":    {below, light, false, true, "; no forge to read, so no Door line was read"},
+		"pr read":     {below, light, true, false, ""},
+		"full":        {below, ReviewDepth{ReviewDecision: config.ReviewDecision{Depth: config.DepthFull}}, false, false, ""},
+		"label none":  {below, labelNone, false, false, ""},
+		"never below": {full, light, false, false, ""},
+	} {
+		if got := DoorNote(c.p, c.res, c.prFound, c.noForge); got != c.want {
+			t.Errorf("%s: DoorNote = %q, want %q", name, got, c.want)
+		}
 	}
 }
