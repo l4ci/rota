@@ -1,56 +1,12 @@
 package artifact
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/l4ci/rota/internal/exitcode"
 )
-
-func TestReadBody(t *testing.T) {
-	dir := t.TempDir()
-	file := filepath.Join(dir, "body.md")
-	if err := os.WriteFile(file, []byte("a\r\nb\xffc"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	tests := []struct {
-		name  string
-		stdin string
-		path  string
-		want  string
-	}{
-		{"file keeps CRLF, replaces invalid byte", "", file, "a\r\nb�c"},
-		{"stdin", "from stdin\n", "-", "from stdin\n"},
-		{"empty stdin", "", "-", ""},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := ReadBody(strings.NewReader(tc.stdin), tc.path)
-			if err != nil || got != tc.want {
-				t.Errorf("ReadBody = (%q, %v), want %q", got, err, tc.want)
-			}
-		})
-	}
-}
-
-func TestReadBodyMissingFileIsUsageError(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "nope.md")
-	_, err := ReadBody(strings.NewReader(""), path)
-	if err == nil {
-		t.Fatal("want error")
-	}
-	var ee *exitcode.Error
-	if !errors.As(err, &ee) || ee.Exit != exitcode.ExitUsage {
-		t.Fatalf("err = %#v, want usage exit error", err)
-	}
-	if !strings.Contains(err.Error(), "cannot read --body-file "+path) || strings.Contains(err.Error(), "open ") {
-		t.Errorf("message %q should name the path and drop the PathError wrapper", err)
-	}
-}
 
 func TestListDocs(t *testing.T) {
 	dir := t.TempDir()

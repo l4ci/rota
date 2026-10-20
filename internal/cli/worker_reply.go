@@ -2,8 +2,6 @@ package cli
 
 import (
 	"flag"
-	"io"
-	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
@@ -29,14 +27,9 @@ func workerReply(fs *flag.FlagSet) RunFunc {
 		if *bodyFile == "" {
 			return Result{}, Usage("--body-file is required")
 		}
-		var raw []byte
-		if *bodyFile == "-" {
-			raw, err = io.ReadAll(c.Stdin)
-		} else {
-			raw, err = os.ReadFile(*bodyFile)
-		}
+		raw, err := readBodyInput(c, "body-file", *bodyFile, ExitUsage)
 		if err != nil {
-			return Result{}, Usage("--body-file %s: %v", *bodyFile, unwrapPathErr(err))
+			return Result{}, err
 		}
 		text := strings.TrimSpace(string(raw))
 		if text == "" {

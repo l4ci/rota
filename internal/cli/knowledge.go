@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 
@@ -91,21 +90,6 @@ func trimSentinel(err error) string {
 		}
 	}
 	return err.Error()
-}
-
-// knReadBody reads a --body-file value: a path, or "-" for stdin.
-func knReadBody(c *Ctx, path string) (string, error) {
-	var b []byte
-	var err error
-	if path == "-" {
-		b, err = io.ReadAll(c.Stdin)
-	} else {
-		b, err = os.ReadFile(path)
-		if os.IsNotExist(err) {
-			return "", Resolution("--body-file %s: no such file", path)
-		}
-	}
-	return string(b), err
 }
 
 // knRequire returns a usage error naming the first empty required flag.
@@ -223,7 +207,7 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Usage(err.Error())
 		}
-		body, err := knReadBody(c, *bodyFile)
+		body, err := readBodyText(c, "body-file", *bodyFile, ExitResolution)
 		if err != nil {
 			return Result{}, err
 		}
@@ -258,7 +242,7 @@ func knAmend(fs *flag.FlagSet) RunFunc {
 		if *mode != "append" {
 			return Result{}, Usage("--mode must be append")
 		}
-		body, err := knReadBody(c, *bodyFile)
+		body, err := readBodyText(c, "body-file", *bodyFile, ExitResolution)
 		if err != nil {
 			return Result{}, err
 		}

@@ -5,8 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -86,14 +84,9 @@ func roundEscalateSend(fs *flag.FlagSet) RunFunc {
 		if *timeout < 0 {
 			return Result{}, Usage("--timeout must not be negative")
 		}
-		var raw []byte
-		if *bodyFile == "-" {
-			raw, err = io.ReadAll(c.Stdin)
-		} else {
-			raw, err = os.ReadFile(*bodyFile)
-		}
+		raw, err := readBodyInput(c, "body-file", *bodyFile, ExitUsage)
 		if err != nil {
-			return Result{}, Usage("--body-file %s: %v", *bodyFile, unwrapPathErr(err))
+			return Result{}, err
 		}
 		if strings.TrimSpace(string(raw)) == "" {
 			return Result{}, Usage("the body is empty")

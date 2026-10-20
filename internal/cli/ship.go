@@ -5,14 +5,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/exitcode"
-	"io"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/land"
@@ -139,15 +138,9 @@ func shipBodyArg(c *Ctx, path, what string) (string, error) {
 	if path == "" {
 		return "", Usage("--body-file is required")
 	}
-	var raw []byte
-	var err error
-	if path == "-" {
-		raw, err = io.ReadAll(c.Stdin)
-	} else {
-		raw, err = os.ReadFile(path)
-	}
+	raw, err := readBodyInput(c, "body-file", path, ExitUsage)
 	if err != nil {
-		return "", Usage("cannot read --body-file %s: %v", path, unwrapPathErr(err))
+		return "", err
 	}
 	if pystr.Strip(string(raw)) == "" {
 		return "", Usage("%s is empty", what)

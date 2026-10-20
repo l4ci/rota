@@ -7,7 +7,6 @@ import (
 	"fmt"
 	ms "github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/rotatree"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -308,16 +307,15 @@ func releaseChangelog(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		var notes string
-		if *bodyFile == "-" {
-			b, err := io.ReadAll(c.Stdin)
-			if err != nil {
-				return Result{}, err
-			}
-			notes = releaseNewlines(string(b))
-		} else if notes, err = fsio.ReadText(releaseInDir(dir, *bodyFile)); err != nil {
-			return Result{}, Resolution("notes file not found: %s", *bodyFile)
+		notesPath := *bodyFile
+		if notesPath != "-" {
+			notesPath = releaseInDir(dir, notesPath)
 		}
+		b, err := readBodyInput(c, "body-file", notesPath, ExitResolution)
+		if err != nil {
+			return Result{}, err
+		}
+		notes := releaseNewlines(string(b))
 		target := releaseInDir(dir, *path)
 		existing, rerr := fsio.ReadText(target)
 		if rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
