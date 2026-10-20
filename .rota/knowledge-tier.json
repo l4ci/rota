@@ -458,8 +458,8 @@
     },
     "Rounds: Orchestration: Slate & issues::Label a split issue partial-slice before its first slice merges": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-15"
+      "hits": 1,
+      "lastSeen": "2026-10-20"
     },
     "Rounds: Orchestration: Slate & issues::Overlap counts the held issue's pointers until merge": {
       "tier": "provisional",
