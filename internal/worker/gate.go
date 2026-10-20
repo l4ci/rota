@@ -107,6 +107,10 @@ const (
 	// the slot no longer holds, so a worker whose assignment was reclaimed or
 	// transferred pushed it; the CLI exits 4 with it, blockedBy stale-attempt.
 	GateStaleAttempt = "stale-attempt"
+	// GateOutcomeOpen: the slot's worker reported a partial or failed outcome
+	// and no relay or transfer has answered it; the CLI exits 4 with it,
+	// blockedBy outcome-open.
+	GateOutcomeOpen = "outcome-open"
 )
 
 // AttemptTrailer is the commit trailer a worker stamps its attempt id with.
@@ -226,6 +230,17 @@ type GateTarget struct {
 	// tip it inherited. A queued record or an external PR has neither, so the
 	// attempt check skips them.
 	Attempt, AttemptBase string
+	// Outcome is the partial or failed outcome the worker reported and nobody
+	// has answered, "" otherwise.
+	Outcome string
+}
+
+// openOutcome is the slot's reported outcome when it is partial or failed.
+func openOutcome(s *Slot) string {
+	if k, _ := s.Outcome(); k == OutcomePartial || k == OutcomeFailed {
+		return k
+	}
+	return ""
 }
 
 func gateSlot(s *Slot) GateTarget {
@@ -234,7 +249,7 @@ func gateSlot(s *Slot) GateTarget {
 	if s.IsExternal() {
 		return GateTarget{External: true, Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name())}
 	}
-	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name()), relays: s.Relays(), Attempt: s.Attempt(), AttemptBase: s.AttemptBase()}
+	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name()), relays: s.Relays(), Attempt: s.Attempt(), AttemptBase: s.AttemptBase(), Outcome: openOutcome(s)}
 }
 
 func gateQueued(q QueuedPR) GateTarget {
@@ -411,6 +426,7 @@ var gateSteps = []gateStep{
 	(*gate).stepSlotHead,
 	(*gate).stepRefs,
 	(*gate).stepAttempt,
+	(*gate).stepOutcome,
 	(*gate).stepFreshness,
 	(*gate).stepPRMatches,
 	(*gate).stepProvenance,
@@ -683,6 +699,20 @@ func (g *gate) stepAttempt() (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// stepOutcome refuses a PR whose worker reported partial or failed through
+// `worker done --outcome`: it goes to review or relay, never straight to the
+// gate. A relay or a transfer is a new brief and clears the outcome; so does the
+// worker's next `worker done`. It reads the slot, so a queued PR and an
+// external one have no outcome, and it runs under CheckOnly too.
+func (g *gate) stepOutcome() (bool, error) {
+	if g.target.Queued || g.target.External || g.target.Outcome == "" {
+		return false, nil
+	}
+	g.verdict(GateOutcomeOpen, fmt.Sprintf("GATE %s refused — the worker reported %s; nothing landed", g.o.Slot, g.target.Outcome),
+		fmt.Sprintf("read the summary (`rota round status`), then relay slot %s to finish the rest or `rota round transfer` it; a later `worker done --outcome done` lifts this", g.o.Slot))
+	return true, nil
 }
 
 // stepFreshness is stage 1. Three-way on the exit code: `&& FRESH || STALE`
