@@ -140,8 +140,12 @@ func (r Registry) Slate() []string {
 }
 
 // list is the raw entries under key, nil when the key is missing or not a list.
-func (r Registry) list(key string) []any {
-	raw, _ := r.doc.Get(key)
+func (r Registry) list(key string) []any { return listOf(r.doc, key) }
+
+// listOf is the raw entries under key of o, nil when the key is missing or not
+// a list. It is the one `.([]any)` decode of a registry or record field.
+func listOf(o *jsonx.Object, key string) []any {
+	raw, _ := o.Get(key)
 	l, _ := raw.([]any)
 	return l
 }
@@ -169,12 +173,10 @@ type QueuedPR struct {
 func queuedFrom(o *jsonx.Object) QueuedPR {
 	rv, _ := o.Get("round")
 	round, _ := jsonx.Int(rv)
-	relays, _ := o.Get("relays")
-	l, _ := relays.([]any)
 	return QueuedPR{
 		Issue: jsonx.Str(o, "issue"), Branch: jsonx.Str(o, "branch"), PR: jsonx.Str(o, "pr"),
 		Base: jsonx.Str(o, "base"), From: jsonx.Str(o, "from"), ClaimID: jsonx.Str(o, "claimId"),
-		Round: round, Relays: l,
+		Round: round, Relays: listOf(o, "relays"),
 	}
 }
 
