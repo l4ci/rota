@@ -1173,17 +1173,13 @@ func (g *gate) verifyOnCI(ci *ciVerifier, sha string) (bool, error) {
 	if err != nil {
 		return g.broke(err.Error())
 	}
-	if v, msg, hint := vr.stopVerdict(o.Slot); v != "" {
-		g.verdict(v, msg, hint)
-		return true, nil
-	}
-	out := tierOutcomeOf(tierFull, o.Slot, vr)
-	g.res.Verified = out.Verified
-	g.res.Notes = append(g.res.Notes, out.Notes...)
-	if !out.OK {
+	w := g.tierWalk(nil, func(string, VerifyResult) (bool, error) {
 		g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — the merge result of %s does not pass CI; nothing landed\n%s", o.Slot, g.branch, vr.detail()),
 			fmt.Sprintf("send %s back to fix it, then re-gate", o.Slot))
 		return true, nil
+	})
+	if ended, _, err := w.take(tierFull, vr); ended || err != nil {
+		return true, err
 	}
 	g.ciRun = &vr
 	return false, nil
@@ -1194,14 +1190,43 @@ func (g *gate) verifyLocal(dir, _ string) (bool, error) {
 	return g.verifyTiers(tierFull, dir, false)
 }
 
-// verifyTiers walks the tiers from first in dir through the shared runner,
-// ending at the first that fails. done is true when it ends the gate.
+// verifyTiers walks the tiers from first in dir through the shared walk,
+// ending at the first that fails. landed says the tree is already on the base:
+// a red result is then fixed forward, else nothing landed and the slot goes
+// back. An empty test.full leaves a NO-VERIFY note; test.e2e passing after it
+// clears VerifySkipped. done is true when it ends the gate with a verdict.
 func (g *gate) verifyTiers(first, dir string, landed bool) (bool, error) {
-	ok, err := verifyTiers(g.in.cfg, first, func(tier string, cmds []string) (bool, error) {
-		done, err := g.verifyTier(tier, cmds, dir, landed)
-		return !done && err == nil, err
-	})
-	return !ok || err != nil, err
+	w := g.tierWalk(func(_ string, cmds []string) (VerifyResult, error) {
+		return runVerifyCmds(g.ctx, g.e.Shell, cmds, dir, g.in.ledger, g.e.Now())
+	}, g.redTier(landed))
+	ended, err := w.walk(g.in.cfg, first)
+	if w.fullEmpty {
+		g.res.VerifySkipped = true
+	}
+	if w.e2eGreen {
+		g.res.VerifySkipped = false
+	}
+	return ended, err
+}
+
+// tierWalk builds the gate's walk: it records into the result and stops on a
+// run that gave no answer (only a CI run can). Only run and red differ.
+func (g *gate) tierWalk(run func(string, []string) (VerifyResult, error), red func(string, VerifyResult) (bool, error)) *tierWalk {
+	res := g.res
+	return &tierWalk{
+		subject: g.o.Slot,
+		run:     run,
+		stop: func(vr VerifyResult) bool {
+			v, msg, hint := vr.stopVerdict(g.o.Slot)
+			if v == "" {
+				return false
+			}
+			g.verdict(v, msg, hint)
+			return true
+		},
+		red:   red,
+		notes: &res.Notes, verified: &res.Verified, excluded: &res.Excluded,
+	}
 }
 
 // landedTree is the tree of the commit the merge produced.
@@ -1281,50 +1306,30 @@ func (g *gate) stepVerify() (bool, error) {
 	return true, nil
 }
 
-// verifyTier runs one tier (test.full or test.e2e) in dir and records it.
-// landed says the tree is already on the base: a red result is then fixed
-// forward, else nothing landed and the slot goes back. An empty test.full
-// leaves a NO-VERIFY note; test.e2e passing after it clears VerifySkipped.
-// done is true when it ends the gate with a verdict.
-func (g *gate) verifyTier(tier string, cmds []string, dir string, landed bool) (bool, error) {
-	res, o := g.res, g.o
-	e2e := tier == tierE2E
-	vr, err := runVerifyCmds(g.ctx, g.e.Shell, cmds, dir, g.in.ledger, g.e.Now())
-	if err != nil {
-		return true, err
-	}
-	out := tierOutcomeOf(tier, o.Slot, vr)
-	res.Notes = append(res.Notes, out.Notes...)
-	if out.NoCommands {
-		res.VerifySkipped = true
-		return false, nil
-	}
-	if !e2e {
-		res.Verified = out.Verified
-	}
-	res.Excluded = append(res.Excluded, out.Excluded...)
-	if out.OK {
+// redTier is the gate's answer to a failed tier. landed says the tree is
+// already on the base: a red result is then fixed forward, else nothing landed
+// and the slot goes back. It always ends the gate with a verdict.
+func (g *gate) redTier(landed bool) func(string, VerifyResult) (bool, error) {
+	return func(tier string, vr VerifyResult) (bool, error) {
+		res, o := g.res, g.o
+		e2e := tier == tierE2E
+		what := "verification"
 		if e2e {
-			res.VerifySkipped = false
+			what = "test.e2e"
 		}
-		return false, nil
-	}
-	what := "verification"
-	if e2e {
-		what = "test.e2e"
-	}
-	detail := vr.detail()
-	if e2e {
-		detail = fmt.Sprintf("last lines of the e2e output (full log: %s):\n%s", vr.LogPath, indentTail(vr.Log, 20))
-	}
-	if landed {
-		g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — merged tree does not pass %s at %s\n%s", o.Slot, what, res.SHA, detail),
-			fmt.Sprintf("fix forward on %s; the owning slot has usually moved on", o.Base))
+		detail := vr.detail()
+		if e2e {
+			detail = fmt.Sprintf("last lines of the e2e output (full log: %s):\n%s", vr.LogPath, indentTail(vr.Log, 20))
+		}
+		if landed {
+			g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — merged tree does not pass %s at %s\n%s", o.Slot, what, res.SHA, detail),
+				fmt.Sprintf("fix forward on %s; the owning slot has usually moved on", o.Base))
+			return true, nil
+		}
+		g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — the merge of %s into %s does not pass %s at %s; nothing landed\n%s", o.Slot, g.branch, o.Base, what, res.SHA, detail),
+			fmt.Sprintf("send %s back to fix it, then re-gate", o.Slot))
 		return true, nil
 	}
-	g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — the merge of %s into %s does not pass %s at %s; nothing landed\n%s", o.Slot, g.branch, o.Base, what, res.SHA, detail),
-		fmt.Sprintf("send %s back to fix it, then re-gate", o.Slot))
-	return true, nil
 }
 
 // staleReason says why a branch behind the base must go back to its worker:

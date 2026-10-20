@@ -405,12 +405,6 @@ func (t *trainRun) plan() (bool, error) {
 	return false, nil
 }
 
-// trainEnd is the error a tier visit returns to end the verify stage: the
-// train is over, with err (nil when t.res already holds the answer).
-type trainEnd struct{ err error }
-
-func (trainEnd) Error() string { return "train ended" }
-
 // verifyStage is stage 4: test.full, then test.e2e on the same tree, with a
 // bisect on a red tier. It sets t.passing. The tier policy (what a result means,
 // the note text) is tierOutcomeOf's; this stage owns the cache and the bisect.
@@ -458,72 +452,52 @@ func (t *trainRun) verifyStage() (bool, error) {
 	}
 	full := cached(fullTierName, func() (VerifyResult, error) { return t.verify(scratch) })
 	e2e := cached(tierE2E, func() (VerifyResult, error) { return e.RunVerifyWith(ctx, t.in.cfg.E2E, scratch, t.in.ledger) })
-	var vr VerifyResult
-	fullRed := false // test.full failed, so test.e2e did not run on the train
-	// ends carries the stage's answer out of the tier walk: the train is over.
-	ends := func(err error) (bool, error) { return false, trainEnd{err} }
 	// bisect names the culprit of a red tier; it reports whether the train ends.
 	bisect := func(tier string, run func(int) (VerifyResult, error), failed VerifyResult, key string) (stop bool, err error) {
 		passing, stop, err = e.bisectTrain(scratch, res, tips, tier, run, failed, o.LandGreen)
 		blame(key)
 		return stop, err
 	}
-	_, werr := verifyTiers(t.in.cfg, tierFull, func(tier string, _ []string) (bool, error) {
-		if tier == tierFull {
-			var err error
-			if vr, err = full(n); err != nil {
-				_, err = verifyErr(err)
-				return ends(err)
+	// 4b. E2E: the most expensive tier runs once, on the train result, after
+	// test.full passed. A red e2e bisects the same way a red full does.
+	w := &tierWalk{
+		subject: trainSubject.CIWho,
+		run: func(tier string, _ []string) (VerifyResult, error) {
+			if tier == tierFull {
+				return full(n)
 			}
-			if r, done := trainStopped(*res, vr); done {
+			return e2e(n)
+		},
+		stop: func(vr VerifyResult) bool {
+			r, done := trainStopped(*res, vr)
+			if done {
 				t.res = r
-				return ends(nil)
 			}
-			out := tierOutcomeOf(tierFull, trainSubject.CIWho, vr)
-			res.Notes = append(res.Notes, out.Notes...)
-			if out.NoCommands {
-				return true, nil // nothing ran; test.e2e may
+			return done
+		},
+		red: func(tier string, vr VerifyResult) (bool, error) {
+			if tier == tierFull {
+				return bisect(tierFull, full, vr, fullTierName)
 			}
-			res.Verified = out.Verified
-			res.Excluded = append(res.Excluded, out.Excluded...)
-			if out.OK {
-				return true, nil
-			}
-			fullRed = true
-			if stop, err := bisect(tierFull, full, vr, fullTierName); err != nil {
-				_, err = verifyErr(err)
-				return ends(err)
-			} else if stop {
-				return ends(nil)
-			}
-			return false, nil
-		}
-		// 4b. E2E: the most expensive tier runs once, on the train result, after
-		// test.full passed. A red e2e bisects the same way a red full does.
-		er, err := e2e(n)
-		if err != nil {
-			return ends(err)
-		}
-		eo := tierOutcomeOf(tierE2E, trainSubject.CIWho, er)
-		res.E2EVerified = eo.Verified
-		res.Excluded = append(res.Excluded, eo.Excluded...)
-		res.Notes = append(res.Notes, eo.Notes...)
-		if !eo.OK {
-			if stop, err := bisect(tierE2E, e2e, er, tierE2E); err != nil || stop {
-				return ends(err)
-			}
-		}
-		return true, nil
-	})
-	var te trainEnd
-	if errors.As(werr, &te) {
-		return true, te.err
+			return bisect(tierE2E, e2e, vr, tierE2E)
+		},
+		notes: &res.Notes, verified: &res.Verified, e2eVerified: &res.E2EVerified, excluded: &res.Excluded,
 	}
-	green := !fullRed
+	ended, err := w.walk(t.in.cfg, tierFull)
+	if err != nil {
+		if w.at == tierFull {
+			return verifyErr(err)
+		}
+		return true, err
+	}
+	if ended {
+		return true, nil
+	}
+	green := !w.fullRed
 
 	// A member earlier named culprit that this verified train carries was flaky:
 	// the failure did not reproduce on a different combination.
-	if passing == n && !vr.NoCommands {
+	if passing == n && !w.fullEmpty {
 		for i, m := range res.Members {
 			if cache.forgive(m.Branch, heads[i]) {
 				res.Transient = append(res.Transient, m.Target)
