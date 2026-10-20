@@ -21,6 +21,10 @@ Run `/rota-spike <name> "<question>"` to start. It creates two things:
 
 You experiment freely on that branch: try the library, prototype the integration, whatever it takes to answer the question. The skill keeps you focused on the question rather than on production code. Nothing from that branch is expected to ship. The value is the markdown record, not the experimental code.
 
+### Package check (opt-in)
+
+Set `research.packageCheck` to `true` (default `false`, see [configuration](configuration.md#researchpackagecheck)) and the skill checks each new package it would put in a finding against its registry before it does. This **makes network calls** to npm, PyPI, crates.io or the Go proxy. A `missing` package is dropped. A `suspect` one (first published under 90 days ago, or no source repository link) is listed with its reason and kept only if you say yes. Dependencies already in the repo are not checked.
+
 ## How spikes end
 
 When you have enough evidence, run `/rota-spike done <name>`. It records one of four verdicts in `.rota/spikes/<name>.md`:

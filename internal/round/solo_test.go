@@ -346,3 +346,23 @@ func TestReportRearmsWaitForASoloSlot(t *testing.T) {
 		t.Fatalf("after report: %+v", res)
 	}
 }
+
+func TestReportRefusesAStaleAttempt(t *testing.T) {
+	f := soloAssign(t)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	cur := worker.LoadRegistryTolerant(f.root).Slot("ben").Attempt()
+	url := "https://github.com/o/r/pull/9"
+	_, err := f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "done", PR: url, Attempt: "deadbeef"})
+	var ee *exitcode.Error
+	if !errors.As(err, &ee) || ee.Exit != exitcode.ExitRefused || strings.Contains(err.Error(), cur) || strings.Contains(err.Error(), "\n") {
+		t.Fatalf("a stale attempt is a one-line exit-4 refusal that does not leak the current id: %v", err)
+	}
+	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.State() != "busy" || s.PR() != "" {
+		t.Errorf("a fenced report writes nothing: %v", s)
+	}
+	if _, err := f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "done", PR: url, Attempt: cur}); err != nil {
+		t.Errorf("the current attempt reports: %v", err)
+	}
+}

@@ -1,12 +1,15 @@
 package worker
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"github.com/l4ci/rota/internal/stamp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 )
@@ -65,6 +68,20 @@ func (s *Slot) Model() string      { return jsonx.Str(s.o, "model") }
 func (s *Slot) TierReason() string { return jsonx.Str(s.o, "tierReason") }
 func (s *Slot) PR() string         { return jsonx.Str(s.o, "pr") }
 func (s *Slot) Account() string    { return jsonx.Str(s.o, "account") }
+
+// Attempt is the id minted for the slot's current assignment, "" for none. A
+// worker's done and report carry the id from its brief; one that does not match
+// is from an assignment that was reclaimed or transferred away.
+func (s *Slot) Attempt() string { return jsonx.Str(s.o, "attempt") }
+
+// NewAttempt mints an attempt id: 8 hex characters.
+func NewAttempt() string {
+	var b [4]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(b[:])
+}
 
 // SmokeSection is the smoke section number reserved for the slot's issue, 0
 // for none.
@@ -280,6 +297,8 @@ type Binding struct {
 	Task, ClaimID, Kind, KindSource, Tier, Model, TierReason string
 	// SmokeSection is the reserved test/sections number, 0 for none.
 	SmokeSection int
+	// Attempt is the id of this assignment, "" for none.
+	Attempt string
 }
 
 // Bind records the issue the slot works on. Empty optional fields stay unset.
@@ -287,7 +306,7 @@ func (s *Slot) Bind(b Binding) {
 	s.o.Set("task", b.Task)
 	for _, f := range []struct{ k, v string }{
 		{"claimId", b.ClaimID}, {"kind", b.Kind}, {"kindSource", b.KindSource}, {"tier", b.Tier},
-		{"model", b.Model}, {"tierReason", b.TierReason}, {"smokeSection", smokeStr(b.SmokeSection)},
+		{"model", b.Model}, {"tierReason", b.TierReason}, {"smokeSection", smokeStr(b.SmokeSection)}, {"attempt", b.Attempt},
 	} {
 		if f.v == "" {
 			s.o.Delete(f.k)
@@ -310,7 +329,7 @@ func smokeStr(n int) string {
 func (s *Slot) Unbind() {
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
-	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "issues", "reviewSeen", "event", "heartbeatAt"} {
+	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "issues", "reviewSeen", "event", "heartbeatAt"} {
 		s.o.Delete(k)
 	}
 }
@@ -516,4 +535,18 @@ func slotsDefault() *jsonx.Object {
 	def := jsonx.NewObject()
 	def.Set("slots", []any{})
 	return def
+}
+
+// FenceAttempt refuses (exit 4) a completion carrying an attempt id that is not
+// the slot's current one: the worker's assignment was reclaimed or transferred.
+// "" is a caller that carries no id, which no fence applies to. The message is
+// one line and does not name the current id, so a fenced worker cannot copy it.
+func FenceAttempt(s *Slot, given string) error {
+	if given == "" || given == s.Attempt() {
+		return nil
+	}
+	e := &exitcode.Error{Exit: exitcode.ExitRefused,
+		Message: fmt.Sprintf("slot %s: attempt %s is stale, the assignment was reclaimed or transferred; stop and do not retry", s.Name(), given)}
+	e.Hint = "a fenced worker stops: its result is refused, not recorded"
+	return e
 }

@@ -95,3 +95,22 @@ func TestSlotFileUnchangedOnDisk(t *testing.T) {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
 }
+
+func TestSlotAttemptLifecycle(t *testing.T) {
+	a, b := NewAttempt(), NewAttempt()
+	if len(a) != 8 || a == b {
+		t.Fatalf("attempt ids are 8 hex chars and unique: %q %q", a, b)
+	}
+	s := NewSlot("ben", "ben/5-x", "/wt/ben", "main", "tab1")
+	if s.Attempt() != "" {
+		t.Errorf("a fresh slot has no attempt: %q", s.Attempt())
+	}
+	s.Bind(Binding{Task: "#5", Attempt: a})
+	if s.Attempt() != a {
+		t.Errorf("bind records the attempt: %q want %q", s.Attempt(), a)
+	}
+	s.Unbind()
+	if s.Attempt() != "" {
+		t.Errorf("unbind drops the attempt: %q", s.Attempt())
+	}
+}

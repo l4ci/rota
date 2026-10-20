@@ -1109,3 +1109,41 @@ func TestAssignBriefWithholdsUntrustedTryIt(t *testing.T) {
 		t.Errorf("brief:\n%s (%+v)", f.host.sent, res)
 	}
 }
+
+func TestAssignMintsAnAttemptIntoSlotAndBrief(t *testing.T) {
+	f := newAssignFixture(t)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	first := worker.LoadRegistryTolerant(f.root).Slot("ben").Attempt()
+	if len(first) != 8 {
+		t.Fatalf("slot attempt = %q, want an 8-char id", first)
+	}
+	if !strings.Contains(f.host.sent, "--attempt "+first) {
+		t.Errorf("the brief must hand the worker its attempt id:\n%s", f.host.sent)
+	}
+	// The same slot assigned again for the same issue is the same holder.
+	if _, err := f.assign("12", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := worker.LoadRegistryTolerant(f.root).Slot("ben").Attempt(); got != first {
+		t.Errorf("a resumed assign keeps the attempt: %q want %q", got, first)
+	}
+}
+
+func TestAssignAfterReclaimMintsANewAttempt(t *testing.T) {
+	f := newAssignFixture(t)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	old := worker.LoadRegistryTolerant(f.root).Slot("ben").Attempt()
+	if err := worker.Update(f.root, func(d *worker.Doc) { d.Slot("ben").Park(false) }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := worker.LoadRegistryTolerant(f.root).Slot("ben").Attempt(); got == "" || got == old {
+		t.Errorf("a fresh assignment needs a fresh attempt: %q (old %q)", got, old)
+	}
+}
