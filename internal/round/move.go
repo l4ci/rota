@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/strutil"
@@ -563,6 +564,27 @@ type Transferred struct {
 	Brief, Worktree string
 }
 
+// transferRun is what Transfer settled before it moved anything: who holds the
+// issue, the receiver and its resolved worker. The steps fill branch, parked and
+// oldClaim as they run.
+type transferRun struct {
+	it                *backlog.Item
+	id, from          string
+	toHuman, resuming bool
+	queueTo           bool // the receiver holds a PR that can wait in the queue
+	sender, receiver  *worker.Slot
+	rec               *worker.QueuedPR // no slot holds the issue but a queued PR does
+	to                *worker.Slot
+	kind, kindSource  string
+	model, tier       string // model is the applied one
+	reason            string
+	decisions, brief  string
+	rnd               int
+
+	branch, oldClaim string
+	parked           Parked
+}
+
 // Transfer is the orchestrator's verb to move an issue from the slot holding it
 // to another slot, or to the human. To a slot: the sender is parked, the
 // handoff comment posted, the old claim released and a new one taken, the
@@ -579,56 +601,97 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 			}
 		}
 	}()
+	run, err := e.planTransfer(ctx, root, be, o, &res)
+	if err != nil {
+		return res, err
+	}
+	// The moves run as steps (saga.go). Transfer only goes forward: once the
+	// sender is parked and its claim released there is nothing to give back, so
+	// no step but a failed dispatch compensates, and a repeated call resumes.
+	if run.toHuman {
+		if err := runSteps(e.transferToHumanSteps(ctx, root, be, o, run, &res)); err != nil {
+			return res, err
+		}
+		res.Changed = true
+		return res, nil
+	}
+	steps, d, err := e.transferToSlotSteps(ctx, root, be, o, run, &res)
+	if err != nil {
+		return res, wrap(err)
+	}
+	err = runSteps(steps)
+	d.cleanup()
+	res.Host, res.Brief, res.Worktree = d.Host, d.BriefText, d.Worktree
+	res.Dispatched = res.Dispatched || d.Dispatched
+	res.Changed = res.Changed || d.Changed
+	return res, err
+}
+
+// checkFlags validates the flags that need no board or registry and returns
+// whether the issue goes to the human and the tier reason.
+func (o TransferOpts) checkFlags() (toHuman bool, reason string, err error) {
 	set := o.Settings
-	toHuman := o.To == HumanTarget
+	toHuman = o.To == HumanTarget
 	if o.To == "" || (!toHuman && !slices.Contains(set.Roster, o.To)) {
-		return res, usage("--to must be %s or a roster slot (%s)", HumanTarget, strings.Join(set.Roster, ", "))
+		return false, "", usage("--to must be %s or a roster slot (%s)", HumanTarget, strings.Join(set.Roster, ", "))
 	}
 	switch {
 	case o.CapReason == "":
 	case o.CapReason == ledger.CapAmbiguousCriteria && !toHuman:
-		return res, usage("--cap-reason %s means the criteria need the human: use --to %s", o.CapReason, HumanTarget)
+		return false, "", usage("--cap-reason %s means the criteria need the human: use --to %s", o.CapReason, HumanTarget)
 	case o.CapReason == ledger.CapTier && toHuman:
-		return res, usage("--cap-reason %s moves the item to a stronger worker: use --to <slot>", o.CapReason)
+		return false, "", usage("--cap-reason %s moves the item to a stronger worker: use --to <slot>", o.CapReason)
 	case o.CapReason == ledger.CapFresh && toHuman:
-		return res, usage("--cap-reason %s moves the item to a fresh worker: use --to <slot>", o.CapReason)
+		return false, "", usage("--cap-reason %s moves the item to a fresh worker: use --to <slot>", o.CapReason)
 	case o.CapReason != ledger.CapAmbiguousCriteria && o.CapReason != ledger.CapTier && o.CapReason != ledger.CapFresh:
-		return res, usage("--cap-reason must be %s, %s or %s", ledger.CapAmbiguousCriteria, ledger.CapTier, ledger.CapFresh)
+		return false, "", usage("--cap-reason must be %s, %s or %s", ledger.CapAmbiguousCriteria, ledger.CapTier, ledger.CapFresh)
 	}
 	if o.Tier != "" && !roundcfg.ValidTier(o.Tier) {
-		return res, usage("--tier must be one of %s", strings.Join(roundcfg.Tiers, ", "))
+		return false, "", usage("--tier must be one of %s", strings.Join(roundcfg.Tiers, ", "))
 	}
-	reason := strings.TrimSpace(o.TierReason)
+	reason = strings.TrimSpace(o.TierReason)
 	if !toHuman && roundcfg.TierRank(o.Tier) > roundcfg.TierRank(set.Tier) && reason == "" {
-		return res, usage("--tier %s is above the default tier %s: say why with --tier-reason", o.Tier, set.Tier)
+		return false, "", usage("--tier %s is above the default tier %s: say why with --tier-reason", o.Tier, set.Tier)
+	}
+	return toHuman, reason, nil
+}
+
+// planTransfer makes every refusal Transfer can make before it moves anything
+// and fills res as far as it got.
+func (e Env) planTransfer(ctx context.Context, root string, be Board, o TransferOpts, res *Transferred) (*transferRun, error) {
+	set := o.Settings
+	toHuman, reason, err := o.checkFlags()
+	if err != nil {
+		return nil, err
 	}
 	decisions, err := readBody(o.BodyFile)
 	if err != nil {
-		return res, err
+		return nil, err
 	}
 	it, err := be.Get(o.Issue)
 	if err != nil {
-		return res, wrap(err)
+		return nil, wrap(err)
 	}
 	if it.Closed {
-		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("%s is closed", o.Issue)}
+		return nil, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("%s is closed", o.Issue)}
 	}
 	id := it.ID
 	res.Issue, res.To = id, o.To
 	ok, err := e.holdsLease(ctx, root, o.HolderPID)
 	if err != nil {
-		return res, wrap(err)
+		return nil, wrap(err)
 	}
 	if !ok {
-		return res, blocked(BlockNoRound, "this process holds no round lease: run rota round start first")
+		return nil, blocked(BlockNoRound, "this process holds no round lease: run rota round start first")
 	}
-	rnd := registryRound(root)
+	run := &transferRun{it: it, id: id, toHuman: toHuman, reason: reason, decisions: decisions, rnd: registryRound(root)}
+	rnd := run.rnd
 
 	// Who holds it. A receiver that already holds it and was never dispatched
 	// (idle, its new claim recorded) is a transfer left half done: resume it.
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
-		return res, err
+		return nil, err
 	}
 	// Two attempts of a best-of:2 issue still holding it: transfer cannot
 	// choose one. After a pick, return or reclaim one holder is left.
@@ -646,67 +709,66 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 			}
 		}
 		if len(holders) > 1 {
-			return res, blocked(BlockBestOf, "%s is a best-of:2 issue held by %s: transfer cannot choose an attempt; pick, return or reclaim one first", id, strings.Join(holders, " and "))
+			return nil, blocked(BlockBestOf, "%s is a best-of:2 issue held by %s: transfer cannot choose an attempt; pick, return or reclaim one first", id, strings.Join(holders, " and "))
 		}
 	}
-	var sender, receiver *worker.Slot
 	for _, s := range reg.Slots() {
 		if s.HeldID() != worker.NormID(id) {
 			continue
 		}
 		if s.Name() == o.To {
-			receiver = s
-		} else if sender == nil {
-			sender = s
+			run.receiver = s
+		} else if run.sender == nil {
+			run.sender = s
 		}
 	}
-	resuming := receiver != nil && sender == nil && receiver.State() == "idle" &&
+	sender, receiver := run.sender, run.receiver
+	run.resuming = receiver != nil && sender == nil && receiver.State() == "idle" &&
 		receiver.ClaimID() == o.To+"@"+strconv.Itoa(rnd)
+	resuming := run.resuming
 	// rec: no slot holds the issue but a queued PR does (its slot moved on, or
 	// a transfer from it was left half done).
-	var rec *worker.QueuedPR
 	if sender == nil {
-		rec = reg.QueuedIssue(id)
+		run.rec = reg.QueuedIssue(id)
 	}
 	switch {
 	case resuming:
 	case receiver != nil && sender == nil:
-		return res, blocked(BlockSameSlot, "slot %s already holds %s", o.To, id)
-	case sender == nil && rec == nil:
-		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("no slot holds %s", id)}
+		return nil, blocked(BlockSameSlot, "slot %s already holds %s", o.To, id)
+	case sender == nil && run.rec == nil:
+		return nil, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("no slot holds %s", id)}
 	}
 	switch {
 	case sender != nil:
 		res.From = sender.Name()
-	case rec != nil:
-		res.From = rec.From
+	case run.rec != nil:
+		res.From = run.rec.From
 	default:
 		res.From = o.To
 	}
+	run.from = res.From
 
 	if err := fenceExternal(sender, "transfer", "move a worktree"); err != nil {
-		return res, err
+		return nil, err
 	}
-	var to *worker.Slot
-	queueTo := false // the receiver holds a PR that can wait in the queue
 	if !toHuman {
-		if to = reg.Slot(o.To); to == nil {
-			return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.To)}
+		if run.to = reg.Slot(o.To); run.to == nil {
+			return nil, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.To)}
 		}
-		if err := fenceExternal(to, "transfer", "check a branch out in a worktree"); err != nil {
-			return res, err
+		if err := fenceExternal(run.to, "transfer", "check a branch out in a worktree"); err != nil {
+			return nil, err
 		}
 		if !resuming {
-			if h := to.HeldID(); h != "" {
-				ok, why := e.parkable(ctx, to)
+			if h := run.to.HeldID(); h != "" {
+				ok, why := e.parkable(ctx, run.to)
 				if !ok {
-					return res, blocked(BlockSlotBusy, "%s", busyMsg(o.To, h, why))
+					return nil, blocked(BlockSlotBusy, "%s", busyMsg(o.To, h, why))
 				}
-				queueTo = true
+				run.queueTo = true
 			}
 		}
 	} else if !e.forgeOn(be) {
-		return res, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, strutil.FirstNonEmpty(e.NeedsHuman, DefaultNeedsHuman))
+		return nil, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, strutil.FirstNonEmpty(e.NeedsHuman, DefaultNeedsHuman))
 	}
 
 	// A transferred worker starts on the default tier unless --tier says higher.
@@ -714,126 +776,135 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	// from the item's label, else round.workerKind, else the receiver's
 	// recorded kind, else claude; the model from the item's label, else the
 	// tier map. Headroom and scope are not asked of a receiver that resumes.
-	kind, kindSource, tier := harness.Default, "", strutil.FirstNonEmpty(o.Tier, o.Settings.Tier)
-	var model, appliedModel string
+	run.kind, run.tier = harness.Default, strutil.FirstNonEmpty(o.Tier, o.Settings.Tier)
+	var model string
 	if !toHuman {
-		pf, err := e.preflight(ctx, root, be, preflightIn{Item: it, Settings: set, Tier: tier,
-			SlotKind: to.HarnessKind(), Resuming: resuming})
+		pf, err := e.preflight(ctx, root, be, preflightIn{Item: it, Settings: set, Tier: run.tier,
+			SlotKind: run.to.HarnessKind(), Resuming: resuming})
 		res.Warnings = append(res.Warnings, pf.Warnings...)
 		if err != nil {
-			return res, err
+			return nil, err
 		}
-		kind, kindSource, model, appliedModel = pf.Kind, pf.KindSource, pf.Model, pf.AppliedModel
+		run.kind, run.kindSource, model, run.model = pf.Kind, pf.KindSource, pf.Model, pf.AppliedModel
 	}
 
 	// Checks before anything moves: the brief, the receiver's launch, the
 	// overlap, the receiver's guard.
-	var brief string
 	if !toHuman {
-		if brief, ok = briefPath(root, set, e.getenv()); !ok {
-			return res, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
+		if run.brief, ok = briefPath(root, set, e.getenv()); !ok {
+			return nil, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
 		}
 		// The receiver is refused as assign would refuse it, before anything moves.
-		warns, err := e.deliveryRefusals(ctx, root, kind, o.To, model)
+		warns, err := e.deliveryRefusals(ctx, root, run.kind, o.To, model)
 		if err != nil {
-			return res, wrap(err)
+			return nil, wrap(err)
 		}
 		res.Warnings = append(res.Warnings, warns...)
 		if !resuming {
 			tracked := e.trackedFiles(ctx, root)
 			r, err := AssessScoped(be, id, tracked, set.SharedPaths, e.InFlightItems(ctx, root, be, tracked, set.SharedPaths), o.AcceptOverlap, decisions, set.ScopeOverlap == "block")
 			if err != nil {
-				return res, wrap(err)
+				return nil, wrap(err)
 			}
 			if ov := overlapCheck(r); ov != nil && !ov.OK {
 				blk := blocked(BlockOverlap, "%s overlaps work in flight: %s", id, ov.Name+" ("+strings.Join(ov.Detail, "; ")+")")
 				blk.Readiness = &r
-				return res, blk
+				return nil, blk
 			}
 			// A receiver about to be queued holds unmerged work the guard would
 			// refuse; parking it clears that.
-			if !queueTo {
+			if !run.queueTo {
 				if _, err := e.workerEnv().ResetTo(root, o.To, id, BranchName(o.To, id, it.Title), true); err != nil {
 					var we *exitcode.Error
 					if errors.As(err, &we) && we.Data != nil { // the reset guard's refusal
-						return res, blocked(BlockSlotBusy, "%s", we.Message)
+						return nil, blocked(BlockSlotBusy, "%s", we.Message)
 					}
-					return res, wrap(err)
+					return nil, wrap(err)
 				}
 			}
 		}
 	}
-	// The moves run as steps (saga.go). Transfer only goes forward: once the
-	// sender is parked and its claim released there is nothing to give back, so
-	// no step but a failed dispatch compensates, and a repeated call resumes.
-	var (
-		branch, oldClaim string
-		p                Parked
-	)
-	from := res.From
 	if resuming {
-		branch = receiver.Branch()
-		res.Branch = branch
+		run.branch = receiver.Branch()
+		res.Branch = run.branch
 		res.Head = e.headLine(ctx, receiver.Worktree(), "HEAD")
 		res.ClaimID = receiver.ClaimID()
 	}
+	return run, nil
+}
+
+// transferHeadSteps is what both targets share: park the sender, say so on the
+// issue and give the old claim up. A transfer left half done skips all three.
+func (e Env) transferHeadSteps(ctx context.Context, root string, be Board, o TransferOpts, run *transferRun, res *Transferred) []step {
+	id, from, rnd := run.id, run.from, run.rnd
 	tolerate := tolerateMissing(&res.Warnings, id)
-	moved := func() bool { return resuming }
-	steps := []step{
-		{name: "queue the receiver's PR", skip: func() bool { return !queueTo }, do: func() error {
+	moved := func() bool { return run.resuming }
+	return []step{
+		{name: "queue the receiver's PR", skip: func() bool { return !run.queueTo }, do: func() error {
 			return wrap(e.queuePR(ctx, root, be, o.To))
 		}},
 		{name: "park the sender", skip: moved, do: func() (err error) {
-			oldClaim = from + "@" + strconv.Itoa(rnd)
-			if sender != nil {
-				if p, err = e.Park(ctx, root, from, "transfer"); err != nil {
+			run.oldClaim = from + "@" + strconv.Itoa(rnd)
+			if run.sender != nil {
+				if run.parked, err = e.Park(ctx, root, from, "transfer"); err != nil {
 					return wrap(err)
 				}
-				oldClaim = strutil.FirstNonEmpty(sender.ClaimID(), oldClaim)
+				run.oldClaim = strutil.FirstNonEmpty(run.sender.ClaimID(), run.oldClaim)
 			} else { // a queued PR: already pushed, nothing to park
-				p.Branch = rec.Branch
-				p.Head = e.queuedHead(ctx, root, p.Branch)
-				oldClaim = strutil.FirstNonEmpty(rec.ClaimID, oldClaim)
+				run.parked.Branch = run.rec.Branch
+				run.parked.Head = e.queuedHead(ctx, root, run.parked.Branch)
+				run.oldClaim = strutil.FirstNonEmpty(run.rec.ClaimID, run.oldClaim)
 			}
-			res.Branch, res.Head, res.Salvaged = p.Branch, p.Head, p.Salvaged
-			branch = p.Branch
+			res.Branch, res.Head, res.Salvaged = run.parked.Branch, run.parked.Head, run.parked.Salvaged
+			run.branch = run.parked.Branch
 			return nil
 		}},
 		{name: "handoff comment", skip: moved, do: func() error {
+			p := run.parked
 			h := handoff{verb: "transfer", from: from, round: rnd, branch: p.Branch, head: p.Head, salvaged: p.Salvaged,
 				reason: "transferred to " + o.To, note: o.Note}
 			_, _, err := h.post(be, id)
 			return wrap(tolerate("handoff comment", err))
 		}},
 		{name: "release the old claim", skip: moved, do: func() error {
-			_, err := releaseClaims(be, id, from, oldClaim, false)
+			_, err := releaseClaims(be, id, from, run.oldClaim, false)
 			return wrap(tolerate("claim release", err))
 		}},
 	}
-	if toHuman {
-		steps = append(steps,
-			step{name: "reset the state", do: func() error {
-				_, err := clearState(root, be, id, from)
-				return wrap(tolerate("state reset", err))
-			}},
-			step{name: "needs-human label", do: func() error {
-				return wrap(e.Forge.AddLabels(ctx, it.IssueKey(), []string{strutil.FirstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}, true))
-			}},
-			step{name: "free the sender", do: func() error {
-				if sender != nil {
-					return wrap(freeSlot(root, from, false))
-				}
-				return wrap(worker.RemoveQueuedPR(root, rec.PR))
-			}},
-			step{name: "stop the item clock", do: func() error {
-				return wrap(worker.ClearItemStart(root, worker.NormID(id)))
-			}})
-		if err := runSteps(steps); err != nil {
-			return res, err
-		}
-		res.Changed = true
-		return res, nil
-	}
+}
+
+// transferToHumanSteps is the sequence for --to human: the head, then the state
+// reset, the needs-human label, the sender freed and the item clock stopped.
+func (e Env) transferToHumanSteps(ctx context.Context, root string, be Board, o TransferOpts, run *transferRun, res *Transferred) []step {
+	id, from := run.id, run.from
+	tolerate := tolerateMissing(&res.Warnings, id)
+	return append(e.transferHeadSteps(ctx, root, be, o, run, res),
+		step{name: "reset the state", do: func() error {
+			_, err := clearState(root, be, id, from)
+			return wrap(tolerate("state reset", err))
+		}},
+		step{name: "needs-human label", do: func() error {
+			return wrap(e.Forge.AddLabels(ctx, run.it.IssueKey(), []string{strutil.FirstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}, true))
+		}},
+		step{name: "free the sender", do: func() error {
+			if run.sender != nil {
+				return wrap(freeSlot(root, from, false))
+			}
+			return wrap(worker.RemoveQueuedPR(root, run.rec.PR))
+		}},
+		step{name: "stop the item clock", do: func() error {
+			return wrap(worker.ClearItemStart(root, worker.NormID(id)))
+		}})
+}
+
+// transferToSlotSteps is the sequence for a receiver slot: the head, the new
+// claim, the sender freed, the branch checked out and the receiver bound, then
+// the delivery (its cleanup is the caller's) and the adoption of a queued PR.
+func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o TransferOpts, run *transferRun, res *Transferred) ([]step, *delivery, error) {
+	id, from, rnd := run.id, run.from, run.rnd
+	sender, rec, receiver, resuming := run.sender, run.rec, run.receiver, run.resuming
+	moved := func() bool { return resuming }
+	steps := e.transferHeadSteps(ctx, root, be, o, run, res)
 
 	// A queued PR is still the issue's PR: the receiver takes it and its relay
 	// log over once dispatched (dispatch resets both for a new task), and the
@@ -861,12 +932,12 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	if attempt == "" {
 		attempt = worker.NewAttempt()
 	}
-	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return branch }, Round: rnd, Kind: kind, Model: appliedModel, Wrap: wrap,
+	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return run.branch }, Round: rnd, Kind: run.kind, Model: run.model, Wrap: wrap,
 		Brief: func() string {
 			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
-			text := pointerBrief(o.To, id, branch, brief, nil, decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: kind, Tier: tier, Model: appliedModel, Default: o.Settings.Tier, Reason: reason, Table: o.Settings.Models[kind], Attempt: attempt})
+			text := pointerBrief(o.To, id, run.branch, run.brief, nil, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: run.kind, Tier: run.tier, Model: run.model, Default: o.Settings.Tier, Reason: run.reason, Table: o.Settings.Models[run.kind], Attempt: attempt})
 			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `%s` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
-				res.From, marker.Handoff(res.From, rnd), branch)
+				res.From, marker.Handoff(res.From, rnd), run.branch)
 			if rec != nil {
 				text += fmt.Sprintf("Its PR %s is already open: push to the branch to update it instead of opening another.\n", rec.PR)
 			}
@@ -889,19 +960,19 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 			return wrap(freeSlot(root, from, false))
 		}},
 		step{name: "check out the branch", skip: moved, do: func() error {
-			if err := e.checkout(ctx, root, to, id, it.Title, &branch); err != nil {
+			if err := e.checkout(ctx, root, run.to, id, run.it.Title, &run.branch); err != nil {
 				return wrap(err)
 			}
-			res.Branch = branch
+			res.Branch = run.branch
 			return nil
 		}},
 		step{name: "bind the receiver", skip: moved, do: func() error {
 			if attemptBase == "" {
-				attemptBase = e.branchTip(ctx, root, branch)
+				attemptBase = e.branchTip(ctx, root, run.branch)
 			}
 			err := editSlot(root, o.To, func(s *worker.Slot) error {
-				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: appliedModel, TierReason: reason, Attempt: attempt, AttemptBase: attemptBase})
-				s.SetBranch(branch)
+				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: run.kind, KindSource: run.kindSource, Tier: run.tier, Model: run.model, TierReason: run.reason, Attempt: attempt, AttemptBase: attemptBase})
+				s.SetBranch(run.branch)
 				return nil
 			})
 			if err == nil {
@@ -912,16 +983,10 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	// The account, the pointer brief and the hand-off.
 	ds, err := d.steps(ctx, e, root)
 	if err != nil {
-		return res, wrap(err)
+		return nil, d, err
 	}
 	steps = append(steps, ds...)
-	steps = append(steps, step{name: "adopt the queued PR", do: func() error { return wrap(adopt()) }})
-	err = runSteps(steps)
-	d.cleanup()
-	res.Host, res.Brief, res.Worktree = d.Host, d.BriefText, d.Worktree
-	res.Dispatched = res.Dispatched || d.Dispatched
-	res.Changed = res.Changed || d.Changed
-	return res, err
+	return append(steps, step{name: "adopt the queued PR", do: func() error { return wrap(adopt()) }}), d, nil
 }
 
 // queuedHead is the tip of a queued PR's branch: origin's, else the local one.
