@@ -44,7 +44,7 @@ Show the plan as unsaved markdown:
 
 - **Goal**: one sentence
 - **Approach**: 3-6 sentences: the design choice and why
-- **Tasks**: each with **Observable behavior** (true after it ships), **Serves** (`Serves: AC-1, AC-2`: the acceptance ids it delivers), **Files**, **Interfaces**, **Verify** (the command or check that proves it done)
+- **Tasks**: each with **Observable behavior** (true after it ships), **Serves** (`Serves: AC-1, AC-2`: the acceptance ids it delivers), **Honors** (`Honors: D1, D2`: the item's `decision` comments it respects; `rota plan check` numbers them D1, D2 oldest first), **Files**, **Interfaces**, **Verify** (the command or check that proves it done)
 - **Review Focus**: `## Review Focus`, at most 5 lines: risky inputs or edges the spec implies but never names
 - **Open questions**: decisions needed before or during execution
 - **Assumptions**: implicit constraints made explicit
@@ -55,6 +55,7 @@ Rules:
 
 - **Verify is non-negotiable.** No verify step, no task.
 - **Serves is non-negotiable too.** Every task carries a `Serves: AC-n` sub-bullet (several ids allowed), and every criterion is served by at least one task. A task that serves no criterion is scope creep: drop it or raise the missing criterion first. `rota plan check <key>` enforces this after the write.
+- **Honors covers decisions.** When the item has `decision` comments, every one is cited by some task's `Honors: D<n>` sub-bullet. A decision no task honors, or a task citing a `D<n>` the item lacks, fails the check. Split a task rather than weaken a decision to fit.
 - **Size is advisory.** `rota plan check` adds a `warn:` line for a plan with more than `plan.maxTasks` tasks (default 3) and one for each task whose `Files:` line names more than `plan.maxFilesPerTask` paths (default 5), each with a split suggestion. Warnings never fail the check; `0` turns one off. Tasks are vertical slices and may be wide on purpose, so split only when a task would not fit one execution window.
 - **Behavior tasks name the RED.** Verify states the failure the new test shows before the change (`RED: <command> fails with <expected message>`). The test follows [`references/test-quality.md`](references/test-quality.md). A docs or skill-text task with no test seam writes `no test seam: docs/skill change` instead.
 - **Interfaces** is `Consumes:` (what the task relies on) and `Produces:` (what it creates for later tasks). Write `none` rather than omit a line.
@@ -68,7 +69,7 @@ Rules:
 
 **Self-check before asking** (silent): every Acceptance criterion maps to a task through its `Serves:` line; no placeholders (`TBD`, `...`, `similar to Task N`); names, paths and signatures match across tasks, each Consumes against an earlier Produces. Fix misses, then say in one line what you fixed (omit if nothing).
 
-**Critic (level 4 only).** When the planning dial picked the adversarial pass, follow [`references/plan-critic.md`](references/plan-critic.md): dispatch a fresh `standard` subagent that sees only the item and the proposal, then fold accepted findings into the plan and list rejected ones with a reason under `## Critic findings`, before asking. At levels 1-3 skip this; the flow is unchanged.
+**Critic (level 4, or level 3 when the item has a `decision` comment).** When the planning dial picked the adversarial pass or the item has at least one `decision` comment, follow [`references/plan-critic.md`](references/plan-critic.md): dispatch a fresh `standard` subagent that sees only the item and the proposal, then fold accepted findings into the plan and list rejected ones with a reason under `## Critic findings`, before asking. Otherwise skip this; the flow is unchanged.
 
 Ask once: *"Confirm this plan? (yes / changes)"*. *yes* writes it; *changes* means apply the edits and write; don't loop. Silence is not approval. If the redirect moves the Goal itself, re-propose.
 
@@ -82,7 +83,7 @@ KEY=$(rota plan add --json --milestone <MID> --slice --title "<title>" | jq -r .
 
 Quote `#42`. Pass `--design <ID>` when a design exists; the frontmatter records it. Issue backend: draft in a scratch file and publish with `rota plan put <key> --body-file <file>|-`; file backend: edit the stub's sections, keep the frontmatter. List with `rota plan list [--milestone <M>]`. Record plan-shaping answers with `rota item comment add <ID> --kind decision --body-file -`.
 
-Issue backend: run `rota plan check <key>` (read-only; exit 1 lists uncovered criteria, tasks with no `Serves:` or an unknown AC id, and tasks with no Verify; `warn:` lines for size are advisory) and fix the plan until it passes. On the file backend it exits 1 with `blockedBy: backend`; rely on the Step 3 self-check there.
+Issue backend: run `rota plan check <key>` (read-only; exit 1 lists uncovered criteria, tasks with no `Serves:` or an unknown AC id, tasks with no Verify, decisions no task `Honors:` and unknown `D<n>` ids; `warn:` lines for size are advisory) and fix the plan until it passes. On the file backend it exits 1 with `blockedBy: backend`; rely on the Step 3 self-check there.
 
 When the plan splits into separate items, or after writing, read [`plan-edge-cases.md`](plan-edge-cases.md) for dependent-item filing and the docs-path check.
 
@@ -105,7 +106,7 @@ Offer `/rota-work` in one line.
 - [`plan-edge-cases.md`](plan-edge-cases.md): rename/refactor/docs task rules (Step 3); splitting into dependent items and `validate-docs` (Step 4).
 - [`references/breakdown.md`](references/breakdown.md): the child issue shape and confirm line for a 3+ split.
 - [`references/planning-dial.md`](references/planning-dial.md): the level rubric Step 2 applies.
-- [`references/plan-critic.md`](references/plan-critic.md): the level-4 critic dispatch, brief and fold-in rules (Step 3).
+- [`references/plan-critic.md`](references/plan-critic.md): the critic dispatch (level 4, or level 3 with a decision comment), brief and fold-in rules (Step 3).
 - [`references/dependent-items.md`](references/dependent-items.md): declaring `## Depends on` edges; expand → migrate → contract.
 - [`references/context-load-protocol.md`](references/context-load-protocol.md): shared parallel context load.
 - [`references/knowledge-consult.md`](references/knowledge-consult.md): the K+D query pattern the load uses.
