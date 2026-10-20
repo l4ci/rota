@@ -103,7 +103,14 @@ const (
 	// needs a recorded verdict the branch lacks; the CLI exits 4 with it,
 	// blockedBy review-missing.
 	GateReviewMissing = "review-missing"
+	// GateStaleAttempt: a commit on the PR branch is stamped with an attempt
+	// the slot no longer holds, so a worker whose assignment was reclaimed or
+	// transferred pushed it; the CLI exits 4 with it, blockedBy stale-attempt.
+	GateStaleAttempt = "stale-attempt"
 )
+
+// AttemptTrailer is the commit trailer a worker stamps its attempt id with.
+const AttemptTrailer = "Rota-Attempt"
 
 // PartialSliceLabel marks an issue whose PR lands only a slice of it, so the PR
 // body must not close it.
@@ -215,6 +222,10 @@ type GateTarget struct {
 	Queued, External                    bool
 	Name, Branch, PR, Base, Task, Issue string
 	relays                              []any
+	// Attempt and AttemptBase are the slot's current attempt and the branch
+	// tip it inherited. A queued record or an external PR has neither, so the
+	// attempt check skips them.
+	Attempt, AttemptBase string
 }
 
 func gateSlot(s *Slot) GateTarget {
@@ -223,7 +234,7 @@ func gateSlot(s *Slot) GateTarget {
 	if s.IsExternal() {
 		return GateTarget{External: true, Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name())}
 	}
-	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name()), relays: s.Relays()}
+	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name()), relays: s.Relays(), Attempt: s.Attempt(), AttemptBase: s.AttemptBase()}
 }
 
 func gateQueued(q QueuedPR) GateTarget {
@@ -399,6 +410,7 @@ var gateSteps = []gateStep{
 	(*gate).stepRemote,
 	(*gate).stepSlotHead,
 	(*gate).stepRefs,
+	(*gate).stepAttempt,
 	(*gate).stepFreshness,
 	(*gate).stepPRMatches,
 	(*gate).stepProvenance,
@@ -625,6 +637,50 @@ func (g *gate) stepRefs() (bool, error) {
 	}
 	if _, code := g.git(root, "rev-parse", "--verify", "--quiet", g.baseRef+"^{commit}"); code != 0 {
 		return g.broke(g.baseRef + " does not exist")
+	}
+	return false, nil
+}
+
+// stepAttempt refuses a PR carrying a commit stamped (AttemptTrailer) with an
+// attempt the slot no longer holds: a worker whose assignment was reclaimed or
+// transferred pushed it, with or without --attempt on its verbs. It judges the
+// commits after the branch tip the current attempt inherited, which keep their
+// earlier trailers, so a transfer never turns the new holder's PR away. It
+// reads the slot, not the queued record, and runs under CheckOnly too.
+//
+// Anything it cannot tell passes: a slot with no attempt (assigned before the
+// fence), an unstamped commit, an inherited tip that is not an ancestor of the
+// head (a rebase rewrote it) or a log that fails.
+func (g *gate) stepAttempt() (bool, error) {
+	t := g.target
+	if t.Queued || t.External || t.Attempt == "" {
+		return false, nil
+	}
+	// The base's own commits (a merge of main into the branch brings other
+	// workers' stamped commits) are nobody's attempt here: exclude them too.
+	rng := []string{g.headRef, "^" + g.baseRef}
+	if t.AttemptBase != "" {
+		if _, code := g.git(g.root, "merge-base", "--is-ancestor", t.AttemptBase, g.headRef); code != 0 {
+			// A rebase rewrote the inherited tip: the inherited trailers cannot be
+			// told from the stale ones, so judge nothing.
+			return false, nil
+		}
+		rng = append(rng, "^"+t.AttemptBase)
+	}
+	out, code := g.git(g.root, append([]string{"log", "--format=%h %(trailers:key=" + AttemptTrailer + ",valueonly,separator=%x20)"}, rng...)...)
+	if code != 0 {
+		return false, nil
+	}
+	for _, line := range strings.Split(out, "\n") {
+		sha, stamps, _ := strings.Cut(strings.TrimSpace(line), " ")
+		for _, id := range strings.Fields(stamps) {
+			if id != t.Attempt {
+				g.res.SHA = sha
+				g.verdict(GateStaleAttempt, fmt.Sprintf("GATE %s refused — commit %s on %s was pushed by attempt %s, which the slot no longer holds; nothing landed", g.o.Slot, sha, g.branch, id),
+					"the assignment was reclaimed or transferred: the holder's own commits are not affected, so have it check that branch, or reassign the issue")
+				return true, nil
+			}
+		}
 	}
 	return false, nil
 }

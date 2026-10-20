@@ -74,6 +74,12 @@ func (s *Slot) Account() string    { return jsonx.Str(s.o, "account") }
 // is from an assignment that was reclaimed or transferred away.
 func (s *Slot) Attempt() string { return jsonx.Str(s.o, "attempt") }
 
+// AttemptBase is the tip of the slot's branch when the current attempt took it
+// over, "" when the attempt minted the branch itself or none was recorded. The
+// commits up to it belong to earlier attempts and carry their trailers; the
+// gate judges only what was pushed after it.
+func (s *Slot) AttemptBase() string { return jsonx.Str(s.o, "attemptBase") }
+
 // NewAttempt mints an attempt id: 8 hex characters.
 func NewAttempt() string {
 	var b [4]byte
@@ -299,6 +305,8 @@ type Binding struct {
 	SmokeSection int
 	// Attempt is the id of this assignment, "" for none.
 	Attempt string
+	// AttemptBase is the branch tip the attempt inherited, "" for none.
+	AttemptBase string
 }
 
 // Bind records the issue the slot works on. Empty optional fields stay unset.
@@ -307,6 +315,7 @@ func (s *Slot) Bind(b Binding) {
 	for _, f := range []struct{ k, v string }{
 		{"claimId", b.ClaimID}, {"kind", b.Kind}, {"kindSource", b.KindSource}, {"tier", b.Tier},
 		{"model", b.Model}, {"tierReason", b.TierReason}, {"smokeSection", smokeStr(b.SmokeSection)}, {"attempt", b.Attempt},
+		{"attemptBase", b.AttemptBase},
 	} {
 		if f.v == "" {
 			s.o.Delete(f.k)
@@ -329,7 +338,7 @@ func smokeStr(n int) string {
 func (s *Slot) Unbind() {
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
-	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "issues", "reviewSeen", "event", "heartbeatAt"} {
+	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "issues", "reviewSeen", "event", "heartbeatAt"} {
 		s.o.Delete(k)
 	}
 }
