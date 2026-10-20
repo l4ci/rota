@@ -1537,7 +1537,7 @@ func (e Env) detectProvider(ctx context.Context, root, pr, configured string) st
 // issues.source: none for a file source; the forge adapter itself when the
 // source is that forge's own tracker (github or gitlab matching the forge's
 // provider, forge, or an unmigrated legacy config); else the tracker the source
-// names (Env.Issues, or tracker.NewIssueTracker).
+// names (Env.Issues).
 func (e Env) issueSide(forge Forge, forgeProvider, dir string, s tracker.Settings) (Issues, error) {
 	switch s.Source {
 	case config.SourceFile, "":
@@ -1547,17 +1547,7 @@ func (e Env) issueSide(forge Forge, forgeProvider, dir string, s tracker.Setting
 			return is, nil
 		}
 	}
-	if e.Issues != nil {
-		return e.Issues(dir, s)
-	}
-	it, err := tracker.NewIssueTracker(e.Ctx, s, "", dir)
-	if errors.Is(err, tracker.ErrNoIssueTracker) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return it, nil
+	return e.Issues(dir, s)
 }
 
 type gate struct {

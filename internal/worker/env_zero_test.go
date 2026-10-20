@@ -47,3 +47,12 @@ func TestZeroEnvVerbEntriesDoNotPanic(t *testing.T) {
 		}()
 	}
 }
+
+// Every seam is non-nil after WithDefaults, Config and Issues included.
+func TestWithDefaultsFillsConfigAndIssues(t *testing.T) {
+	e := Env{}.WithDefaults()
+	if e.Config == nil || e.Issues == nil || e.NewHost == nil || e.Lease == nil || e.Ctx == nil {
+		t.Fatalf("seam left nil: Config=%v Issues=%v NewHost=%v Lease=%v Ctx=%v",
+			e.Config != nil, e.Issues != nil, e.NewHost != nil, e.Lease != nil, e.Ctx != nil)
+	}
+}

@@ -81,16 +81,7 @@ func ResolvePaneHost(root string, cfg any, getenv func(string) string, lookPath 
 // hostKind is the host a pane verb drives. Never pass "solo" on to host.New:
 // callers refuse it first (SoloRefusal), and New maps it to tmux anyway.
 func (e Env) hostKind(root string) host.Kind {
-	return ResolveHost(root, e.config(root), e.Getenv, e.LookPath)
-}
-
-// config is the project config through Env.Config; an Env built by hand, with
-// no Config, reads it from disk.
-func (e Env) config(root string) any {
-	if e.Config == nil {
-		return loadConfig(root)
-	}
-	return e.Config(root)
+	return ResolveHost(root, e.Config(root), e.Getenv, e.LookPath)
 }
 
 // SoloRefusal is the exit 2 a pane verb gives when the round's recorded host
@@ -182,7 +173,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	if err != nil {
 		return res, fail(exitcode.ExitResolution, "body file not found: "+o.BodyFile)
 	}
-	cfg := e.config(root)
+	cfg := e.Config(root)
 	h := e.NewHost(ResolveHost(root, cfg, e.Getenv, e.LookPath))
 	if err := h.Require(); err != nil {
 		return res, fail(exitcode.ExitUnavailable, err.Error())

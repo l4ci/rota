@@ -455,7 +455,7 @@ type Env struct {
 	Forge func(provider, dir string, s tracker.Settings) (Forge, error)
 	// Issues returns the issue tracker issues.source names when it is not the
 	// forge's own (jira, linear, or github on a gitlab forge). Nil builds it with
-	// tracker.NewIssueTracker; tests inject a fake.
+	// tracker.NewIssueTracker (no tracker is nil, nil); tests inject a fake.
 	Issues func(dir string, s tracker.Settings) (Issues, error)
 	// Shell runs one verification command through `sh -c` in dir and returns
 	// its combined output and exit code.
@@ -517,6 +517,21 @@ func (e Env) WithDefaults() Env {
 	if e.Forge == nil {
 		e.Forge = func(provider, dir string, s tracker.Settings) (Forge, error) {
 			return tracker.NewForge(e.Ctx, s, provider, dir)
+		}
+	}
+	if e.Config == nil {
+		e.Config = loadConfig
+	}
+	if e.Issues == nil {
+		e.Issues = func(dir string, s tracker.Settings) (Issues, error) {
+			it, err := tracker.NewIssueTracker(e.Ctx, s, "", dir)
+			if errors.Is(err, tracker.ErrNoIssueTracker) {
+				return nil, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+			return it, nil
 		}
 	}
 	if e.Shell == nil {
