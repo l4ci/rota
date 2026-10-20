@@ -1,7 +1,7 @@
 package worker
 
 import (
-	"context"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -32,54 +32,6 @@ func TestTierOutcomeOfLabelsFailuresByTier(t *testing.T) {
 		if !reflect.DeepEqual(out.Verified, vr.Verified) || len(out.Excluded) != 1 {
 			t.Errorf("%s: verified/excluded lost: %+v", tier, out)
 		}
-	}
-}
-
-// verifyStageRun builds a trainRun that stops short of git: the verify stage
-// sees a two-member scratch tree, a fake test.full and a counting test.e2e shell.
-func verifyStageRun(full VerifyResult, e2e []string, ran *[]string) *trainRun {
-	e := Env{Shell: func(_ context.Context, _, cmd string) (string, int) {
-		*ran = append(*ran, cmd)
-		return "", 0
-	}}.withDefaults()
-	in := gateInput{}
-	in.cfg.E2E = e2e
-	return &trainRun{
-		e: e, ctx: context.Background(), cache: loadTrainCache(t0()), in: in, baseSHA: "base",
-		heads: []string{"h1", "h2"}, tips: []string{"t0", "t1", "t2"}, scratch: "scratch",
-		verify: func(string) (VerifyResult, error) { return full, nil },
-		res:    TrainResult{Members: []TrainMember{{Target: "a"}, {Target: "b"}}},
-	}
-}
-
-func t0() string { return "/nonexistent-rota-root" }
-
-func TestVerifyStageRunsE2EAfterFullGreen(t *testing.T) {
-	var ran []string
-	tr := verifyStageRun(VerifyResult{Verified: []string{"go test"}}, []string{"e2e-cmd"}, &ran)
-	done, err := tr.verifyStage()
-	if done || err != nil {
-		t.Fatalf("done=%v err=%v res=%+v", done, err, tr.res)
-	}
-	if tr.passing != 2 || !reflect.DeepEqual(tr.res.Verified, []string{"go test"}) || !reflect.DeepEqual(tr.res.E2EVerified, []string{"e2e-cmd"}) {
-		t.Errorf("passing %d, res %+v", tr.passing, tr.res)
-	}
-	if !reflect.DeepEqual(ran, []string{"e2e-cmd"}) || len(tr.res.Notes) != 0 {
-		t.Errorf("ran %v notes %v", ran, tr.res.Notes)
-	}
-}
-
-func TestVerifyStageEmptyFullNotesNoVerifyAndStillRunsE2E(t *testing.T) {
-	var ran []string
-	tr := verifyStageRun(VerifyResult{NoCommands: true}, []string{"e2e-cmd"}, &ran)
-	if done, err := tr.verifyStage(); done || err != nil {
-		t.Fatalf("done=%v err=%v", done, err)
-	}
-	if len(tr.res.Notes) < 1 || tr.res.Notes[0] != "NO-VERIFY train — test.full is empty; the merged tree was NOT gated by a command." || len(tr.res.Verified) != 0 {
-		t.Errorf("notes %q verified %v", tr.res.Notes, tr.res.Verified)
-	}
-	if !reflect.DeepEqual(ran, []string{"e2e-cmd"}) {
-		t.Errorf("e2e ran %v", ran)
 	}
 }
 
@@ -118,5 +70,87 @@ func TestVerifyTiersSequence(t *testing.T) {
 				t.Errorf("ok=%v err=%v seen=%v, want ok=%v %v", ok, err, seen, c.ok, c.want)
 			}
 		})
+	}
+}
+
+func TestTierWalk(t *testing.T) {
+	cfg := GateConfig{Full: []string{"f"}, E2E: []string{"e"}}
+	green := func(cmd string) VerifyResult { return VerifyResult{Verified: []string{cmd}} }
+	type setup struct {
+		results map[string]VerifyResult
+		err     map[string]error
+		stop    bool
+		redStop bool
+	}
+	for _, c := range []struct {
+		name                         string
+		s                            setup
+		ended, fullEmpty, fullRed    bool
+		e2eGreen, wantErr            bool
+		at                           string
+		ran, redCalls                []string
+		notes, verified, e2eVerified []string
+	}{
+		{name: "green full and e2e", s: setup{results: map[string]VerifyResult{tierFull: green("f"), tierE2E: green("e")}},
+			e2eGreen: true, at: tierE2E, ran: []string{tierFull, tierE2E}, verified: []string{"f"}, e2eVerified: []string{"e"}},
+		{name: "red full skips e2e, red stops", s: setup{redStop: true, results: map[string]VerifyResult{tierFull: {Failed: []string{"f"}}}},
+			ended: true, fullRed: true, at: tierFull, ran: []string{tierFull}, redCalls: []string{tierFull}, notes: []string{"verify FAILED: f"}},
+		{name: "red full, red false does not end", s: setup{results: map[string]VerifyResult{tierFull: {Failed: []string{"f"}}}},
+			fullRed: true, at: tierFull, ran: []string{tierFull}, redCalls: []string{tierFull}, notes: []string{"verify FAILED: f"}},
+		{name: "empty full still runs e2e", s: setup{results: map[string]VerifyResult{tierFull: {NoCommands: true}, tierE2E: green("e")}},
+			fullEmpty: true, e2eGreen: true, at: tierE2E, ran: []string{tierFull, tierE2E},
+			notes: []string{"NO-VERIFY slot — test.full is empty; the merged tree was NOT gated by a command.", noVerifyHint}, e2eVerified: []string{"e"}},
+		{name: "stop ends before recording", s: setup{stop: true, results: map[string]VerifyResult{tierFull: green("f")}},
+			ended: true, at: tierFull, ran: []string{tierFull}},
+		{name: "run error", s: setup{err: map[string]error{tierFull: errors.New("boom")}},
+			ended: true, wantErr: true, at: tierFull, ran: []string{tierFull}},
+		{name: "red e2e", s: setup{redStop: true, results: map[string]VerifyResult{tierFull: green("f"), tierE2E: {Failed: []string{"e"}}}},
+			ended: true, at: tierE2E, ran: []string{tierFull, tierE2E}, redCalls: []string{tierE2E}, verified: []string{"f"}, e2eVerified: nil, notes: []string{"e2e FAILED: e"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var ran, redCalls, notes, verified, e2eVerified []string
+			var excluded []testledger.Entry
+			w := &tierWalk{
+				subject: "slot",
+				run: func(tier string, _ []string) (VerifyResult, error) {
+					ran = append(ran, tier)
+					return c.s.results[tier], c.s.err[tier]
+				},
+				stop: func(VerifyResult) bool { return c.s.stop },
+				red: func(tier string, _ VerifyResult) (bool, error) {
+					redCalls = append(redCalls, tier)
+					return c.s.redStop, nil
+				},
+				notes: &notes, verified: &verified, e2eVerified: &e2eVerified, excluded: &excluded,
+			}
+			ended, err := w.walk(cfg, tierFull)
+			if ended != c.ended || (err != nil) != c.wantErr || w.at != c.at {
+				t.Errorf("ended=%v err=%v at=%q", ended, err, w.at)
+			}
+			if w.fullEmpty != c.fullEmpty || w.fullRed != c.fullRed || w.e2eGreen != c.e2eGreen {
+				t.Errorf("fullEmpty=%v fullRed=%v e2eGreen=%v", w.fullEmpty, w.fullRed, w.e2eGreen)
+			}
+			for name, p := range map[string][2][]string{"ran": {ran, c.ran}, "red": {redCalls, c.redCalls}, "notes": {notes, c.notes}, "verified": {verified, c.verified}, "e2eVerified": {e2eVerified, c.e2eVerified}} {
+				if !reflect.DeepEqual(p[0], p[1]) {
+					t.Errorf("%s = %q, want %q", name, p[0], p[1])
+				}
+			}
+		})
+	}
+}
+
+func TestTierWalkNilE2EVerifiedSinkDiscards(t *testing.T) {
+	var notes, verified []string
+	var excluded []testledger.Entry
+	w := &tierWalk{
+		subject: "slot",
+		run: func(tier string, _ []string) (VerifyResult, error) {
+			return VerifyResult{Verified: []string{tier}}, nil
+		},
+		notes: &notes, verified: &verified, excluded: &excluded,
+	}
+	ended, err := w.walk(GateConfig{Full: []string{"f"}, E2E: []string{"e"}}, tierFull)
+	if ended || err != nil || !w.e2eGreen || !reflect.DeepEqual(verified, []string{tierFull}) {
+		t.Errorf("ended=%v err=%v e2eGreen=%v verified=%v", ended, err, w.e2eGreen, verified)
 	}
 }
