@@ -169,6 +169,9 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		for _, w := range st.Warnings {
 			c.Warn("%s", w)
 		}
+		if w := worker.ConfigDirMismatch(c.deps().Getenv("CLAUDE_CONFIG_DIR"), config.Accounts(cfg)); w != "" {
+			c.Warn("%s", w)
+		}
 		if err != nil {
 			var we *exitcode.Error
 			if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
