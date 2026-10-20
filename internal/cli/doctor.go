@@ -102,6 +102,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 			in.Accounts = append(in.Accounts, a)
 		}
 	}
+	in.OrchestratorConfigDir = d.Getenv("CLAUDE_CONFIG_DIR")
 	in.ProjectRoot = root
 	if name := strings.TrimSpace(str("issues.connection")); name != "" {
 		in.Connection = doctorConnection(ctx, d, name)
