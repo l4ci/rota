@@ -240,6 +240,7 @@ func (s *Slot) Dispatch(handle, task, kind, now string) {
 	s.setState("busy", now)
 	s.o.Set("activeAt", now)
 	s.o.Delete("seen")
+	s.ClearRelayPending()
 	s.ClearEvent() // a new brief answers whatever the worker last sent
 	s.o.Delete("outcome")
 	if task == "" {
@@ -430,6 +431,43 @@ func (s *Slot) SetHandle(h string) {
 
 // SetBranch records the checked-out branch.
 func (s *Slot) SetBranch(b string) { s.o.Set("branch", b) }
+
+// RelayPending is the sequence number of the relay sent whose echo the pane
+// has not shown a done line after; 0 for none.
+func (s *Slot) RelayPending() int {
+	v, _ := s.o.Get("relayPending")
+	n, _ := jsonx.Int(v)
+	return n
+}
+
+// SetRelayPending records relay k as sent at the stamp; ClearRelayPending ends
+// the mark. A pane that has shown the relay's `[relay k]` line has it recorded
+// by SetRelayMarkerSeen: a capture without the line is then a scrolled-out one.
+func (s *Slot) SetRelayPending(k int, at string) {
+	s.o.Set("relayPending", k)
+	s.o.Set("relaySentAt", at)
+	s.o.Delete("relayMarkerSeen")
+}
+
+// RelaySentAt is when the pending relay went out; the zero time for none.
+func (s *Slot) RelaySentAt() time.Time {
+	v, _ := s.o.Get("relaySentAt")
+	str, _ := v.(string)
+	return parseStamp(str)
+}
+
+// RelayMarkerSeen: a capture has shown the pending relay's `[relay k]` line.
+func (s *Slot) RelayMarkerSeen() bool { v, _ := s.o.Get("relayMarkerSeen"); b, _ := v.(bool); return b }
+
+// SetRelayMarkerSeen records that the pending relay's line has been seen.
+func (s *Slot) SetRelayMarkerSeen() { s.o.Set("relayMarkerSeen", true) }
+
+// ClearRelayPending removes the relay-pending mark and what goes with it.
+func (s *Slot) ClearRelayPending() {
+	s.o.Delete("relayPending")
+	s.o.Delete("relaySentAt")
+	s.o.Delete("relayMarkerSeen")
+}
 
 // ClearSeen re-arms `round wait`: the slot's last seen row no longer counts.
 func (s *Slot) ClearSeen() { s.o.Delete("seen") }
