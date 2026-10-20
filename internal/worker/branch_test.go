@@ -38,8 +38,8 @@ func TestBranchNameRoundTrips(t *testing.T) {
 		if got := HeldID("", br, "ben"); got != c.want {
 			t.Errorf("%q: HeldID = %q, want %q", br, got, c.want)
 		}
-		if k, ok := BranchIssue(br); ok && string(k) != c.want {
-			t.Errorf("%q: BranchIssue = %q, want %q", br, k, c.want)
+		if k, ok := BranchIssue(br); !ok || string(k) != c.want {
+			t.Errorf("%q: BranchIssue = %q, %v, want %q, true", br, k, ok, c.want)
 		}
 	}
 	// A lower-case slug that merely looks like a key is not an issue.
