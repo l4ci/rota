@@ -432,11 +432,16 @@ func (s *Slot) SetHandle(h string) {
 // SetBranch records the checked-out branch.
 func (s *Slot) SetBranch(b string) { s.o.Set("branch", b) }
 
-// RelayPending: a relay went out and the pane has not shown its echo yet.
-func (s *Slot) RelayPending() bool { v, _ := s.o.Get("relayPending"); b, _ := v.(bool); return b }
+// RelayPending is the sequence number of the relay sent whose echo the pane
+// has not shown a done line after; 0 for none.
+func (s *Slot) RelayPending() int {
+	v, _ := s.o.Get("relayPending")
+	n, _ := jsonx.Int(v)
+	return n
+}
 
-// SetRelayPending marks a relay sent; ClearRelayPending ends the mark.
-func (s *Slot) SetRelayPending() { s.o.Set("relayPending", true) }
+// SetRelayPending records relay k as sent; ClearRelayPending ends the mark.
+func (s *Slot) SetRelayPending(k int) { s.o.Set("relayPending", k) }
 
 // ClearRelayPending removes the relay-pending mark.
 func (s *Slot) ClearRelayPending() { s.o.Delete("relayPending") }

@@ -175,6 +175,12 @@ var (
 	rePlaceholder = regexp.MustCompile(`^<[^<>]+>`)
 )
 
+// isPlaceholder: evidence that is only the brief's own `<pr-url>`. A real URL
+// written in angle brackets, `<https://...>`, is evidence.
+func isPlaceholder(ev string) bool {
+	return rePlaceholder.MatchString(ev) && !strings.HasPrefix(ev, "<http")
+}
+
 // reEchoIndent is the indent Claude Code gives every line of an echoed prompt
 // after the first; reEchoHead is that first line, behind the "❯" glyph.
 var (
@@ -222,13 +228,12 @@ func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stal
 		// Match against the text from this line on, as the classifier always
 		// has: a bare `ROTA-DONE <slot>` takes the next line as its evidence.
 		rest := strings.Join(lines[i:], "\n")
-		gut := gutter && reGutter.MatchString(l)
 		if m := blockedRe.FindStringSubmatchIndex(rest); m != nil && m[0] == 0 {
-			if ev := strings.TrimSpace(rest[m[4]:m[5]]); !gut || !rePlaceholder.MatchString(ev) {
+			if ev := strings.TrimSpace(rest[m[4]:m[5]]); !isPlaceholder(ev) {
 				state, evidence, ok, stale = StateBlocked, ev, true, false
 			}
 		} else if m := doneRe.FindStringSubmatchIndex(rest); m != nil && m[0] == 0 {
-			if ev := strings.TrimSpace(rest[m[4]:m[5]]); !rePlaceholder.MatchString(ev) {
+			if ev := strings.TrimSpace(rest[m[4]:m[5]]); !isPlaceholder(ev) {
 				state, evidence, ok, stale = StateDone, ev, true, false
 			}
 		}
@@ -439,24 +444,28 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	return StateIdle, "static pane, no sentinel"
 }
 
-// relayEchoEvidence is the evidence of a done line read before the echo of the
-// relay sent after it.
+// relayEchoEvidence is the evidence of a done line read while the pending
+// relay's echo is not in the pane.
 const relayEchoEvidence = "relay sent, its echo is not in the pane yet; the ROTA-DONE shown predates it"
 
-// gateRelayEcho holds a done row busy while a relay is pending and the pane
-// still shows only the done line the relay answers: the echo has not rendered,
-// so that line is the previous turn's, not a fresh one (#1017).
+// reRelaySeq is the `[relay K]` line every relay carries under its header.
+var reRelaySeq = regexp.MustCompile(`^\s*(?:[┃❯]\s*)?\[relay (\d+)\]\s*$`)
+
+// gateRelayEcho holds a done row busy until the pane shows the echo of the
+// relay the slot is waiting on and a done line after it: before that, the done
+// line is an earlier turn's (#1017). A done decided by the slot's own event is
+// not read from the pane and passes.
 func gateRelayEcho(t pollTarget, st, ev, text string, lines int) (string, string) {
-	if !t.relayPending || st != StateDone || t.evSeq > 0 || !doneAnswersRelay(t.kind, text, lines) {
+	if t.relayPending == 0 || st != StateDone || t.evSeq > 0 || doneAfterRelay(t.kind, text, lines, t.relayPending) {
 		return st, ev
 	}
 	return StateBusy, relayEchoEvidence
 }
 
-// doneAnswersRelay reports that the pane's done line has no relay header after
-// an earlier done line: the relay's own header is the one that marks the work
-// reopened, and a done printed after it is the worker's.
-func doneAnswersRelay(kind, text string, lines int) bool {
+// doneAfterRelay reports a done line printed after relay k's echo. The relay is
+// identified by its `[relay k]` line, not by the shape of the pane, so a second
+// relay not yet rendered is never mistaken for the first.
+func doneAfterRelay(kind, text string, lines, k int) bool {
 	all := splitLines(text)
 	if lines > 0 && len(all) > lines {
 		all = all[len(all)-lines:]
@@ -466,17 +475,21 @@ func doneAnswersRelay(kind, text string, lines int) bool {
 	if gutter {
 		head = reRelayHeadG
 	}
-	last := -1
+	mark := -1
 	for i, l := range all {
-		if head.MatchString(l) {
-			last = i
+		if m := reRelaySeq.FindStringSubmatch(l); m != nil && m[1] == strconv.Itoa(k) {
+			mark = i
 		}
 	}
-	if last < 0 {
-		return true
+	if mark < 0 {
+		return false
 	}
-	_, _, ok, stale := lastSentinel(all[:last], gutter)
-	return !ok && !stale
+	start := mark
+	for start > 0 && !head.MatchString(all[start]) {
+		start--
+	}
+	st, _, ok, _ := lastSentinel(all[start:], gutter)
+	return ok && st == StateDone
 }
 
 // PollRow is one slot's verdict.
@@ -771,7 +784,7 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 	if s.Seen() != key {
 		s.ClearSeen()
 	}
-	if r.Evidence != relayEchoEvidence {
+	if r.State == StateDone && r.Evidence != relayEchoEvidence {
 		s.ClearRelayPending()
 	}
 	if r.State == StateUnverifiable {
@@ -808,10 +821,10 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 type pollTarget struct {
 	name, handle, prev, seen string
 	kind                     string // the slot's harness kind, "" for the default
-	// relayPending: a relay went to the slot and no done line has been read
-	// since its header showed in the pane. relays is the length of the slot's
-	// relay log.
-	relayPending bool
+	// relayPending is the number of the relay sent to the slot whose echo no
+	// done line has followed yet (0 for none). relays is the length of the
+	// slot's relay log.
+	relayPending int
 	relays       int
 	turnSeq      int
 	// ev is the slot's standing worker event with the stamps Decide weighs it
