@@ -176,3 +176,34 @@ func TestWorkerDoneFromWorktree(t *testing.T) {
 		}
 	})
 }
+
+// A worker whose slot was reclaimed or reassigned still holds its old attempt
+// id: its done is refused (exit 4) before anything is read or written.
+func TestWorkerDoneFencesAStaleAttempt(t *testing.T) {
+	dir := doneProject(t, "")
+	os.WriteFile(filepath.Join(dir, ".rota", "workers.json"),
+		[]byte(`{"slots":[{"name":"ben","branch":"feat/x","task":"B07","state":"busy","attempt":"bbbb2222"}]}`), 0o644)
+	code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--attempt", "aaaa1111", "--json")
+	if code != 4 || !strings.Contains(out, "attempt") || strings.Contains(out, "bbbb2222") {
+		t.Fatalf("stale attempt: exit %d: %s", code, out)
+	}
+	if slotState(t, dir) == "done" {
+		t.Error("a fenced done must not mark the slot done")
+	}
+	if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--attempt", "bbbb2222", "--json"); code != 0 {
+		t.Fatalf("current attempt: exit %d: %s", code, out)
+	}
+	if slotState(t, dir) != "done" {
+		t.Error("the current attempt marks the slot done")
+	}
+}
+
+// A slot reclaimed and not yet reassigned holds no attempt at all.
+func TestWorkerDoneFencesAReclaimedSlot(t *testing.T) {
+	dir := doneProject(t, "")
+	os.WriteFile(filepath.Join(dir, ".rota", "workers.json"),
+		[]byte(`{"slots":[{"name":"ben","branch":"park/ben","state":"idle"}]}`), 0o644)
+	if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--attempt", "aaaa1111", "--json"); code != 4 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+}
