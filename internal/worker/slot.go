@@ -249,6 +249,7 @@ func (s *Slot) Dispatch(handle, task, kind, now string) {
 	s.o.Set("pr", nil)
 	s.o.Delete("reviewSeen")
 	s.o.Set("relays", []any{})
+	s.o.Delete("inbox")
 	s.o.Delete("unsent")
 	if kind != "" && (!harness.IsDefault(kind) || s.Kind() != "") {
 		s.o.Set("kind", kind)
@@ -339,7 +340,7 @@ func smokeStr(n int) string {
 func (s *Slot) Unbind() {
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
-	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "issues", "reviewSeen", "event", "heartbeatAt", "outcome"} {
+	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "issues", "reviewSeen", "event", "heartbeatAt", "outcome", "inbox"} {
 		s.o.Delete(k)
 	}
 }
