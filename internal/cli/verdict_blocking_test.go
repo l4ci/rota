@@ -48,10 +48,15 @@ func TestVerdictAddBlockingDefaultsFromSeverity(t *testing.T) {
 // the branch tip; the head is returned.
 func bounceFixture(t *testing.T, findings string) (dir, head string) {
 	t.Helper()
+	return bounceFixtureVerdict(t, findings, "CONCERNS")
+}
+
+func bounceFixtureVerdict(t *testing.T, findings, v string) (dir, head string) {
+	t.Helper()
 	dir = workerProject(t, `{"round":{"maxBounces":3}}`)
 	gitIn(t, dir, "checkout", "-q", "-b", "feat/x")
 	body := writeBody(t, t.TempDir(), findings)
-	if code, _, errOut := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", "CONCERNS", "--body-file", body); code != 0 {
+	if code, _, errOut := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", v, "--body-file", body); code != 0 {
 		t.Fatalf("verdict add: %d %s", code, errOut)
 	}
 	_, out, _ := rotaIn(t, dir, "verdict", "show", "--json")
@@ -131,5 +136,45 @@ func TestVerdictAddFilesDeferredFindings(t *testing.T) {
 	}
 	if strings.Contains(text, "forced") {
 		t.Errorf("a blocking finding was filed:\n%s", text)
+	}
+}
+
+// A retry of the same recording files nothing new.
+func TestVerdictAddFileDeferredIsIdempotent(t *testing.T) {
+	dir := verdictRepo(t)
+	for f, c := range map[string]string{"BACKLOG.md": "# TODO\n\n## Tasks\n\n## Completed\n", "counters.json": "{}\n"} {
+		if err := os.WriteFile(filepath.Join(dir, ".rota", f), []byte(c), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	body := writeBody(t, t.TempDir(), mixedFindings)
+	args := []string{"verdict", "add", "--kind", "review-quality", "--verdict", "FAIL", "--body-file", body, "--file-deferred", "--pr", "#77", "--json"}
+	_, out, _ := rotaIn(t, dir, args...)
+	if filed, _ := data(t, out)["filed"].([]any); len(filed) != 2 {
+		t.Fatalf("first call filed %v", filed)
+	}
+	before, _ := os.ReadFile(filepath.Join(dir, ".rota", "BACKLOG.md"))
+	code, out, errOut := rotaIn(t, dir, args...)
+	d := data(t, out)
+	if filed, _ := d["filed"].([]any); code != 0 || len(filed) != 0 || d["skipped"] != 2.0 {
+		t.Fatalf("retry: %d %v %s", code, d, errOut)
+	}
+	if after, _ := os.ReadFile(filepath.Join(dir, ".rota", "BACKLOG.md")); string(after) != string(before) {
+		t.Errorf("retry changed BACKLOG.md:\n%s", after)
+	}
+}
+
+// A FAIL with no findings, or an item FAIL, is blocking: it may be bounced.
+func TestRoundBounceCountsAFailWithoutFindings(t *testing.T) {
+	for name, body := range map[string]string{
+		"no findings": `{"findings":[]}`,
+		"item fail":   `{"findings":[{"severity":"minor","title":"nit"}],"items":[{"id":"31","verdict":"FAIL"}]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir, head := bounceFixtureVerdict(t, body, "FAIL")
+			if code, _, errOut := rotaIn(t, dir, "round", "bounce", "31", "--head", head, "--json"); code != 0 {
+				t.Fatalf("%d %s", code, errOut)
+			}
+		})
 	}
 }

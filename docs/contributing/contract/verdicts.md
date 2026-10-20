@@ -18,12 +18,12 @@ B2 (#55) replaces "parse the last line" routing in `/rota-review`, `/rota-qa`, `
 ### rota verdict add
 rota verdict add [<branch>] --kind <review-spec|review-quality|second-opinion|qa|behaviour> --verdict <verdict> [--body-file <path|->] [--transcript <path>] [--file-deferred --pr <ref>]
 repo: scoped
-data: record, plus {"next": string, "combined"?: string, "filed"?: []string, "changed": true}
+data: record, plus {"next": string, "combined"?: string, "filed"?: []string, "skipped"?: number, "changed": true}
 exit: 2 when `--file-deferred` is given without `--pr` or `--pr` without `--file-deferred`, a deferred finding cannot be built into an item, when --kind or --verdict is missing, the verdict is not one the kind takes, the body is invalid (see body), `--transcript` is given with a kind other than `behaviour`, or at an umbrella root without --repo; 3 when the branch does not exist, HEAD is detached and no branch is named, or no base branch resolves; 5 when git fails
 old: none (new in B2)
 note: `<branch>` defaults to the current branch. The verb works on the base branch too, since `/rota-qa` may run there.
 note: `combined` is set on `review-quality` and `review-spec` records. On `review-quality` it is the worst of this verdict and the branch's previous record, when that record is a `review-spec` at the same `sha`; otherwise it equals `verdict` (a quality-only review). On `review-spec` it equals `verdict`, so a spec-only review (`light` depth) reports its own verdict as the branch's combined one.
-note: (#963) `--file-deferred --pr <ref>` files each deferred finding of the body as a `tasks` item through the `item create` path: the finding's title, a body with its severity, `file:line` and detail, and `--related <ref>`. The ids come back in `filed`. The record is written first; a tracker failure while filing returns that error and the ids filed so far (see `item create --batch-file`), so a retry of the whole call would file the findings again: file the rest by hand.
+note: (#963) `--file-deferred --pr <ref>` files each deferred finding of the body as a `tasks` item through the `item create` path: the finding's title, a body with its severity, `file:line` and detail, and `--related <ref>`. The ids come back in `filed`. The record is written first. Filing is idempotent: a finding whose title already exists as an item (open or closed) with the PR in its `Related` field is skipped and counted in `skipped`, so a retry files only what is missing. A tracker failure while filing returns that error with the record and the ids filed so far in `data` (`filed`).
 note: `next` is the producer's next step. `review-spec`: `quality` on PASS or CONCERNS, `report` on FAIL (Stage 2 is skipped). Every other kind: `report`.
 
 ### rota verdict show

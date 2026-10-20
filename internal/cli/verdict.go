@@ -160,21 +160,63 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
-			res, err := withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) { return fileBatch(be, deferred) })
-			if err != nil {
-				return Result{}, err
-			}
-			items, _ := res.Data.(*jsonx.Object).Get("items")
-			var ids []any
-			for _, it := range items.([]any) {
-				id, _ := it.(*jsonx.Object).Get("id")
-				ids = append(ids, id)
+			skipped := 0
+			res, err := withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
+				fresh, n, err := dropFiled(be, deferred, strings.TrimSpace(*pr))
+				if err != nil {
+					return backlogFail(err)
+				}
+				skipped = n
+				if len(fresh) == 0 {
+					return Result{Data: jsonObj("items", []any{}, "changed", false)}, nil
+				}
+				return fileBatch(be, fresh)
+			})
+			ids := []any{}
+			if rd, ok := res.Data.(*jsonx.Object); ok {
+				items, _ := rd.Get("items")
+				list, _ := items.([]any)
+				for _, it := range list {
+					id, _ := it.(*jsonx.Object).Get("id")
+					ids = append(ids, id)
+				}
 			}
 			d.Set("filed", ids)
-			text += " (filed " + strings.Replace(res.Text, "\n", " ", -1) + ")"
+			d.Set("skipped", skipped)
+			if err != nil {
+				return Result{Data: d, Text: text}, err
+			}
+			if len(ids) > 0 {
+				text += " (filed " + strings.Replace(res.Text, "\n", " ", -1) + ")"
+			}
 		}
 		return Result{Data: d, Text: text + " -> " + next}, nil
 	}
+}
+
+// dropFiled removes from ins the items already filed for pr: an item with the
+// same title and the PR in its Related field, open or closed. A retry of the
+// same recording therefore files nothing new. n counts the ones dropped.
+func dropFiled(be backlog.Backend, ins []backlog.CreateInput, pr string) (fresh []backlog.CreateInput, n int, err error) {
+	have, err := be.List(true)
+	if err != nil {
+		return nil, 0, err
+	}
+	filed := map[string]bool{}
+	for _, it := range have {
+		if strings.Contains(it.Fields.Related, pr) {
+			filed[it.Title] = true
+		}
+	}
+	for _, in := range ins {
+		if filed[in.Title] {
+			n++
+			continue
+		}
+		filed[in.Title] = true // two findings with one title file once
+		fresh = append(fresh, in)
+	}
+	return fresh, n, nil
 }
 
 // deferredItems is one task per deferred finding, related to the PR it was
