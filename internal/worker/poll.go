@@ -317,6 +317,7 @@ func StripRelays(kind, text string) string {
 type paneRules struct {
 	retry, busy, background, limits []*regexp.Regexp
 	authDead, badModel              *regexp.Regexp
+	loggedOut                       *regexp.Regexp
 	gutter                          bool
 }
 
@@ -341,6 +342,9 @@ func paneRulesFor(kind string) *paneRules {
 		r.limits = compileAll(`(?i)`, v.Limits)
 		if v.AuthDead != "" {
 			r.authDead = regexp.MustCompile(`(?i)` + v.AuthDead)
+		}
+		if v.LoggedOut != "" {
+			r.loggedOut = regexp.MustCompile(`(?i)` + v.LoggedOut)
 		}
 		if v.BadModel != "" {
 			r.badModel = regexp.MustCompile(v.BadModel)
@@ -420,6 +424,9 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	}
 	if reason, ok := strings.CutPrefix(native, host.UnverifiablePrefix); ok {
 		return StateUnverifiable, reason
+	}
+	if rules.loggedOut != nil && rules.loggedOut.MatchString(own) {
+		return StateBlocked, "slot is logged out (\"Login expired\"): its account has no login — set round.accounts with this configDir in .rota/config.local.json, or run rota under the logged-in CLAUDE_CONFIG_DIR"
 	}
 	// A dialog for a tier model the provider does not list: the TUI falls back
 	// to its last-used model once it closes, so nothing else shows the worker

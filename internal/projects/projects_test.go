@@ -12,13 +12,14 @@ import (
 func isolate(t *testing.T) string {
 	t.Helper()
 	x := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", x)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(x, "config"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(x, "state"))
 	return x
 }
 
 func TestDirHonoursXDGAndFallsBackToHome(t *testing.T) {
 	x := isolate(t)
-	if d, _ := Dir(); d != filepath.Join(x, "rota") {
+	if d, _ := Dir(); d != filepath.Join(x, "config", "rota") {
 		t.Errorf("xdg: %s", d)
 	}
 	t.Setenv("XDG_CONFIG_HOME", "relative/ignored")
@@ -82,8 +83,8 @@ func TestListEmptyAndCorruptRegistry(t *testing.T) {
 	if ps, err := List(); err != nil || len(ps) != 0 {
 		t.Fatalf("%v %v", ps, err)
 	}
-	os.MkdirAll(filepath.Join(x, "rota"), 0o755)
-	os.WriteFile(filepath.Join(x, "rota", "projects.json"), []byte("{nope"), 0o644)
+	os.MkdirAll(filepath.Join(x, "state", "rota"), 0o755)
+	os.WriteFile(filepath.Join(x, "state", "rota", "projects.json"), []byte("{nope"), 0o644)
 	if ps, err := List(); err != nil || len(ps) != 0 {
 		t.Fatalf("%v %v", ps, err)
 	}
@@ -119,7 +120,7 @@ func TestRemoveFindsAGoneDirectoryAndSkipsAnAbsentRegistry(t *testing.T) {
 	if got, err := Remove("/nope"); err != nil || got != nil {
 		t.Fatalf("absent registry: %+v %v", got, err)
 	}
-	if _, err := os.Stat(filepath.Join(x, "rota", "projects.json")); err == nil {
+	if _, err := os.Stat(filepath.Join(x, "state", "rota", "projects.json")); err == nil {
 		t.Error("an absent registry must not be created")
 	}
 	gone := filepath.Join(t.TempDir(), "gone")
@@ -129,5 +130,68 @@ func TestRemoveFindsAGoneDirectoryAndSkipsAnAbsentRegistry(t *testing.T) {
 	got, err := Remove(gone)
 	if err != nil || len(got) != 1 || !got[0].Missing {
 		t.Fatalf("gone dir: %+v %v", got, err)
+	}
+}
+
+func TestStateDirHonoursXDGAndFallsBackToHome(t *testing.T) {
+	x := isolate(t)
+	if d, _ := StateDir(); d != filepath.Join(x, "state", "rota") {
+		t.Errorf("xdg: %s", d)
+	}
+	t.Setenv("XDG_STATE_HOME", "relative/ignored")
+	h := t.TempDir()
+	t.Setenv("HOME", h)
+	if d, _ := StateDir(); d != filepath.Join(h, ".local", "state", "rota") {
+		t.Errorf("home: %s", d)
+	}
+}
+
+func oldRegistry(t *testing.T, x, body string) string {
+	t.Helper()
+	dir := filepath.Join(x, "config", "rota")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := filepath.Join(dir, "projects.json")
+	if err := os.WriteFile(old, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(old+".lock", nil, 0o644)
+	return old
+}
+
+func TestListMigratesTheConfigDirRegistry(t *testing.T) {
+	x := isolate(t)
+	proj := t.TempDir()
+	old := oldRegistry(t, x, `{"projects":[{"path":"`+proj+`","name":"p","lastSeen":"2026-01-01T00:00:00Z"}]}`)
+	ps, err := List()
+	if err != nil || len(ps) != 1 || ps[0].Path != proj {
+		t.Fatalf("%+v %v", ps, err)
+	}
+	for _, f := range []string{old, old + ".lock"} {
+		if _, err := os.Stat(f); err == nil {
+			t.Errorf("%s must be gone", f)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(x, "state", "rota", "projects.json")); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestMigrationKeepsTheStateRegistryWhenBothExist(t *testing.T) {
+	x := isolate(t)
+	proj := t.TempDir()
+	if _, err := Register(proj, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	old := oldRegistry(t, x, `{"projects":[{"path":"/old","name":"old"}]}`)
+	ps, _ := List()
+	if len(ps) != 1 || ps[0].Path != repos.Realpath(proj) {
+		t.Fatalf("state file must win: %+v", ps)
+	}
+	for _, f := range []string{old, old + ".lock"} {
+		if _, err := os.Stat(f); err == nil {
+			t.Errorf("%s must be removed", f)
+		}
 	}
 }

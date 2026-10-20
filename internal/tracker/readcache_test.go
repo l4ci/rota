@@ -182,3 +182,37 @@ func TestLabelFilteredListComesFromTheCachedOpenList(t *testing.T) {
 		t.Errorf("stale open list served after a write: %v", f.calls)
 	}
 }
+
+type countLayer struct{ resets int }
+
+func (l *countLayer) Reset() { l.resets++ }
+
+func TestReadCacheResetsLayersOnWriteAndKeepsThemOtherwise(t *testing.T) {
+	f := &fakeCLI{}
+	c := f.cli("gitlab")
+	c.Cache = NewReadCache()
+	l := cacheLayer(c.Cache, "k", func() *countLayer { return &countLayer{} })
+	if l2 := cacheLayer(c.Cache, "k", func() *countLayer { return &countLayer{} }); l2 != l {
+		t.Fatal("a second lookup built a new layer")
+	}
+	run(t, c, "issue", "list")
+	if l.resets != 0 {
+		t.Fatalf("a read reset the layer %d times", l.resets)
+	}
+	run(t, c, "issue", "edit", "1")
+	if l.resets == 0 {
+		t.Fatal("a write did not reset the layer")
+	}
+}
+
+func TestStateReasonQuirkSurvivesAWrite(t *testing.T) {
+	f := &fakeCLI{}
+	c := f.cli("github")
+	c.Cache = NewReadCache()
+	g := &GitHub{base: base{cli: c, closing: closingGH}}
+	g.cache().noStateReason.Store(true)
+	run(t, c, "issue", "edit", "1")
+	if !g.lacksStateReason() {
+		t.Fatal("a write forgot that gh rejects stateReason")
+	}
+}

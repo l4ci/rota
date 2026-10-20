@@ -5,13 +5,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/land"
@@ -138,15 +138,9 @@ func shipBodyArg(c *Ctx, path, what string) (string, error) {
 	if path == "" {
 		return "", Usage("--body-file is required")
 	}
-	var raw []byte
-	var err error
-	if path == "-" {
-		raw, err = io.ReadAll(c.Stdin)
-	} else {
-		raw, err = os.ReadFile(path)
-	}
+	raw, err := readBodyInput(c, "body-file", path, ExitUsage)
 	if err != nil {
-		return "", Usage("cannot read --body-file %s: %v", path, unwrapPathErr(err))
+		return "", err
 	}
 	if pystr.Strip(string(raw)) == "" {
 		return "", Usage("%s is empty", what)
@@ -385,11 +379,11 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		g := shipGitRunner{c, dir}
-		sha, err := ship.MergeBranch(ship.MergePorts{
+		sha, ref, err := ship.MergeBranch(ship.MergePorts{
 			Git:     g,
 			Recover: land.RecoveryGit(c.Context(), git.Exec, dir),
 			Verdict: shipVerdict(c, dir, shipRoot(dir)).Block,
-			Approve: func() error {
+			Approve: func() (*exitcode.Refusal, error) {
 				files := func() ([]string, error) {
 					fl, err := ship.ChangedFiles(g, base+"..."+branch)
 					if err != nil {
@@ -401,14 +395,24 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 			},
 			Checkout: ship.Checkout{Cwd: cwd, Dir: dir, Repo: c.Repo},
 		}, branch, base, msg)
+		if ref != nil {
+			return shipRefusal(ref)
+		}
 		if err != nil {
-			if d := refusalData(err); d != nil { // clearMerge's refusal carries its own envelope
-				return Result{Data: d}, err
-			}
 			return shipErr(err)
 		}
 		return Result{Data: gitObj("branch", branch, "base", base, "sha", sha, "changed", true), Text: sha}, nil
 	}
+}
+
+// shipRefusal is the result of a merge an approval or verdict gate refused: the
+// gate's own envelope with its exit-4 error, or shipErr's mapping when the
+// refusal carries no envelope.
+func shipRefusal(ref *exitcode.Refusal) (Result, error) {
+	if d := refusalEnvelope(ref); d != nil {
+		return Result{Data: d}, ref.Err
+	}
+	return shipErr(ref.Err)
 }
 
 // ---- ship pr-merge ---------------------------------------------------------
@@ -447,11 +451,11 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 		}
 		// The verdict check (B3) runs before the merge-approval gate (B1), so
 		// a branch that would be refused never writes an audit line.
-		approve := func(branch string, files func() ([]string, error)) error {
+		approve := func(branch string, files func() ([]string, error)) (*exitcode.Refusal, error) {
 			if branch == "" {
 				c.Warn("could not resolve the head branch of PR %d; verdicts not checked", pr)
 			} else if res, err := shipPRVerdict(c, pr, branch); err != nil {
-				return carryData(res, err)
+				return refusalOf(res, err)
 			}
 			req.Thread = func() (approvalThread, error) {
 				return approvalThread{Kind: "pr", Number: pr, Title: fmt.Sprintf("Merge approval: PR #%d", pr)}, nil
@@ -462,8 +466,8 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 		var refused *ship.PRMergeRefused
 		var unproven *ship.UnprovenError
 		switch {
-		case refusalData(err) != nil:
-			return Result{Data: refusalData(err)}, err
+		case merged.Refusal != nil:
+			return shipRefusal(merged.Refusal)
 		case errors.As(err, &refused):
 			return Result{Data: jsonObj("pr", pr, "merged", false, "unproven", []string{}, "changesRequested", []string{}, "changed", false)},
 				Refused("%s", err.Error())

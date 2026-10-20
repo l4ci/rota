@@ -88,7 +88,7 @@ func glImport(fs *flag.FlagSet) RunFunc {
 		if *bodyFile == "" {
 			return Result{}, Usage("--body-file is required")
 		}
-		manifest, err := knReadBody(c, *bodyFile)
+		manifest, err := readBodyText(c, "body-file", *bodyFile, ExitResolution)
 		if err != nil {
 			return Result{}, err
 		}
@@ -139,7 +139,7 @@ func blockVerb(fs *flag.FlagSet) RunFunc {
 			if c.Repo != "" {
 				return Result{}, Usage("--repo cannot be combined with --body-file")
 			}
-			body, err := knReadBody(c, *bodyFile)
+			body, err := readBodyText(c, "body-file", *bodyFile, ExitResolution)
 			if err != nil {
 				return Result{}, err
 			}

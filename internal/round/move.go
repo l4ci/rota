@@ -538,7 +538,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 type TransferOpts struct {
 	Issue, To     string
 	Note          string // the text of --note-file
-	BodyFile      string // decisions already settled, passed verbatim; "" for none
+	Decisions     string // decisions already settled, passed verbatim; "" for none
 	AcceptOverlap bool
 	HolderPID     int
 	// Tier and TierReason are the receiver's tier ("" is round.tier); one above
@@ -664,10 +664,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	if err != nil {
 		return nil, err
 	}
-	decisions, err := readBody(o.BodyFile)
-	if err != nil {
-		return nil, err
-	}
+	decisions := o.Decisions
 	it, err := be.Get(o.Issue)
 	if err != nil {
 		return nil, wrap(err)
@@ -938,7 +935,7 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return run.branch }, Round: rnd, Kind: run.kind, Model: run.model, Wrap: wrap,
 		Brief: func() string {
 			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
-			text := pointerBrief(o.To, id, run.branch, run.brief, nil, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: run.kind, Tier: run.tier, Model: run.model, Default: o.Settings.Tier, Reason: run.reason, Table: o.Settings.Models[run.kind], Attempt: attempt})
+			text := pointerBrief(o.To, id, run.branch, run.brief, nil, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: run.kind, Tier: run.tier, Model: run.model, Default: o.Settings.Tier, Reason: run.reason, Table: o.Settings.Models[run.kind], Attempt: attempt, FullOnly: o.Settings.FullOnly})
 			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `%s` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
 				res.From, marker.Handoff(res.From, rnd), run.branch)
 			if rec != nil {

@@ -128,7 +128,7 @@ When findings must land in order (one builds on another's seam, or both rewrite 
 
 Body sections:
 
-- **Pointers**: paths and line ranges. Paths live here only, never in Acceptance, which states behavior.
+- **Pointers**: exact file paths and line ranges, never a bare directory (the round overlap check matches a directory against every file below it). Paths live here only, never in Acceptance, which states behavior.
 - **Problem**: the friction, in vocabulary terms, with the deletion-test result.
 - **Solution**: what would change, in plain words. No signatures unless `--designs` ran.
 - **Benefits**: locality, leverage, test improvement.

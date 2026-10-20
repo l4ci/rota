@@ -121,9 +121,7 @@ func TestAssignMarksResetsAndDispatches(t *testing.T) {
 	f := newAssignFixture(t)
 	res, err := f.assign("12", "", func(o *AssignOpts) {
 		o.Siblings = []string{"13"}
-		bf := filepath.Join(t.TempDir(), "d.md")
-		os.WriteFile(bf, []byte("m: use the lease"), 0o644)
-		o.BodyFile = bf
+		o.Decisions = "m: use the lease"
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -393,18 +391,6 @@ func TestAssignDispatchFailureMarksTheSlotIdle(t *testing.T) {
 	}
 	if st := worker.LoadRegistryTolerant(f.root).Slot("ben").State(); st != "idle" {
 		t.Errorf("slot state after a failed dispatch: %q", st)
-	}
-}
-
-func TestAssignUnreadableBodyFileIsRefused(t *testing.T) {
-	f := newAssignFixture(t)
-	_, err := f.assign("12", "ben", func(o *AssignOpts) { o.BodyFile = filepath.Join(f.root, "missing.md") })
-	var we *exitcode.Error
-	if !errors.As(err, &we) || we.Exit != exitcode.ExitUsage {
-		t.Fatalf("want a usage error, got %v", err)
-	}
-	if len(f.be.claims) != 0 {
-		t.Errorf("nothing is claimed: %v", f.be.claims)
 	}
 }
 
@@ -1215,5 +1201,17 @@ func TestAssignAfterReclaimMintsANewAttempt(t *testing.T) {
 	}
 	if got := worker.LoadRegistryTolerant(f.root).Slot("ben").Attempt(); got == "" || got == old {
 		t.Errorf("a fresh assignment needs a fresh attempt: %q (old %q)", got, old)
+	}
+}
+
+// An empty test.fast puts the run-test.full instruction in the brief (#1169).
+func TestPointerBriefFullOnly(t *testing.T) {
+	on := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", tierBrief{Kind: "claude", Tier: "standard", FullOnly: true})
+	if !strings.Contains(on, "rota test run full") {
+		t.Errorf("brief lacks the test.full instruction:\n%s", on)
+	}
+	off := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", tierBrief{Kind: "claude", Tier: "standard"})
+	if strings.Contains(off, "rota test run full") {
+		t.Errorf("brief carries the test.full instruction without FullOnly:\n%s", off)
 	}
 }

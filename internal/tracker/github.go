@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -20,6 +22,85 @@ type GitHub struct {
 	base
 	// noStateReason is set once gh has rejected the stateReason field.
 	noStateReason atomic.Bool
+}
+
+// ghCacheKey names the GitHub layer inside a shared ReadCache.
+type ghCacheKey struct{}
+
+// ghCache is what the GitHub adapter keeps beside the generic argv results:
+// typed issue rows and whole open lists, plus the gh stateReason quirk.
+type ghCache struct {
+	mu   sync.Mutex
+	rows map[string]Issue   // issue list rows, by provider+dir+number
+	open map[string][]Issue // whole open lists (no filter), by provider+dir
+
+	// noStateReason is set once gh rejected the stateReason field, so the
+	// adapters sharing this cache do not each fail and retry the same list.
+	// It describes gh, not repository data, so Reset keeps it.
+	noStateReason atomic.Bool
+}
+
+// Reset drops the held rows and lists after a write.
+func (gc *ghCache) Reset() {
+	gc.mu.Lock()
+	defer gc.mu.Unlock()
+	clear(gc.rows)
+	clear(gc.open)
+}
+
+// cache returns the GitHub layer of the shared read cache, nil without one.
+func (g *GitHub) cache() *ghCache {
+	if g.cli.Cache == nil {
+		return nil
+	}
+	return cacheLayer(g.cli.Cache, ghCacheKey{}, func() *ghCache {
+		return &ghCache{rows: map[string]Issue{}, open: map[string][]Issue{}}
+	})
+}
+
+// putOpen holds the complete, unfiltered open list of a repository.
+func (gc *ghCache) putOpen(scope string, list []Issue) {
+	gc.mu.Lock()
+	defer gc.mu.Unlock()
+	gc.open[scope] = list
+}
+
+// openMatching answers a label-filtered open list from the held complete open
+// list. Label names compare case-insensitively, as the forge does; several
+// labels all have to be present.
+func (gc *ghCache) openMatching(scope string, labels []string) ([]Issue, bool) {
+	gc.mu.Lock()
+	defer gc.mu.Unlock()
+	all, ok := gc.open[scope]
+	if !ok {
+		return nil, false
+	}
+	out := []Issue{}
+next:
+	for _, is := range all {
+		for _, want := range labels {
+			if !slices.ContainsFunc(is.Labels, func(l string) bool { return strings.EqualFold(l, want) }) {
+				continue next
+			}
+		}
+		out = append(out, is)
+	}
+	return out, true
+}
+
+func (gc *ghCache) putIssues(scope string, list []Issue) {
+	gc.mu.Lock()
+	defer gc.mu.Unlock()
+	for _, is := range list {
+		gc.rows[scope+"#"+string(is.Key)] = is
+	}
+}
+
+func (gc *ghCache) issue(scope string, k IssueKey) (Issue, bool) {
+	gc.mu.Lock()
+	defer gc.mu.Unlock()
+	is, ok := gc.rows[scope+"#"+string(k)]
+	return is, ok
 }
 
 // ghLimit is the first --limit a list asks gh for; a full result asks again
@@ -47,7 +128,7 @@ func (g *GitHub) issueFields() string {
 // lacksStateReason is whether gh is known to reject the field: this adapter
 // saw it, or another one sharing the read cache did (one gh per process).
 func (g *GitHub) lacksStateReason() bool {
-	return g.noStateReason.Load() || (g.cli.Cache != nil && g.cli.Cache.noStateReason.Load())
+	return g.noStateReason.Load() || (g.cache() != nil && g.cache().noStateReason.Load())
 }
 
 // withIssueFields runs call with the --json field list, once more without
@@ -56,8 +137,8 @@ func (g *GitHub) withIssueFields(call func(fields string) error) error {
 	err := call(g.issueFields())
 	if err != nil && !g.lacksStateReason() && reNoStateReason.MatchString(err.Error()) {
 		g.noStateReason.Store(true)
-		if g.cli.Cache != nil {
-			g.cli.Cache.noStateReason.Store(true)
+		if gc := g.cache(); gc != nil {
+			gc.noStateReason.Store(true)
 		}
 		return call(g.issueFields())
 	}
@@ -231,9 +312,9 @@ func (g *GitHub) Get(ctx context.Context, key IssueKey, withComments bool) (Issu
 	if err != nil {
 		return Issue{}, err
 	}
-	if !withComments && g.cli.Cache != nil {
+	if gc := g.cache(); !withComments && gc != nil {
 		// A list this process already made carried the same fields.
-		if is, ok := g.cli.Cache.issue(g.cli.cacheScope(), key); ok {
+		if is, ok := gc.issue(g.cli.cacheScope(), key); ok {
 			return is, nil
 		}
 	}
@@ -276,8 +357,9 @@ func (g *GitHub) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	// list when this invocation already read it. Closed, assignee and
 	// milestone lists are not.
 	wholeOpen := state == "open" && !f.Mine && f.Milestone == ""
-	if wholeOpen && len(f.Labels) > 0 && g.cli.Cache != nil {
-		if out, ok := g.cli.Cache.openMatching(g.cli.cacheScope(), f.Labels); ok {
+	gc := g.cache()
+	if wholeOpen && len(f.Labels) > 0 && gc != nil {
+		if out, ok := gc.openMatching(g.cli.cacheScope(), f.Labels); ok {
 			return firstN(out, f.Limit), nil
 		}
 	}
@@ -302,10 +384,10 @@ func (g *GitHub) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	for _, d := range raw {
 		out = append(out, d.norm())
 	}
-	if g.cli.Cache != nil {
-		g.cli.Cache.putIssues(g.cli.cacheScope(), out)
+	if gc != nil {
+		gc.putIssues(g.cli.cacheScope(), out)
 		if wholeOpen && len(f.Labels) == 0 {
-			g.cli.Cache.putOpen(g.cli.cacheScope(), out)
+			gc.putOpen(g.cli.cacheScope(), out)
 		}
 	}
 	return firstN(out, f.Limit), nil

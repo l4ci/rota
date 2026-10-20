@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -34,9 +35,18 @@ func (f *moveFx) inFlightFor(t *testing.T, issue string) InFlight {
 
 // withPR gives ben's slot an open PR (number 7) that changes files.
 func (f *moveFx) withPR(files []string, err error) {
-	branch := f.slot("ben").Branch()
-	f.forge.prs = []tracker.PR{{Number: 7, Branch: branch}}
-	f.env.Forge = prFilesForge{Forge: f.forge.asForge(), files: map[int][]string{7: files}, err: err}
+	f.withPRFor("ben", 7, files, err)
+}
+
+// withPRFor gives a slot an open PR that changes files.
+func (f *moveFx) withPRFor(slot string, number int, files []string, err error) {
+	f.forge.prs = append(f.forge.prs, tracker.PR{Number: number, Branch: f.slot(slot).Branch()})
+	prs := map[int][]string{}
+	if pf, ok := f.env.Forge.(prFilesForge); ok {
+		prs = pf.files
+	}
+	prs[number] = files
+	f.env.Forge = prFilesForge{Forge: f.forge.asForge(), files: prs, err: err}
 }
 
 // overlapWith assesses issue 14 (names internal/cli/round.go) against what is in flight.
@@ -121,5 +131,90 @@ func TestInFlightForgeWithoutPRFilesWarns(t *testing.T) {
 	x := f.inFlightFor(t, "12")
 	if x.FromPR || !hasKind(x.Paths, "internal/cli/round.go") || x.PRFilesErr != "forge cannot list PR files" {
 		t.Errorf("missing capability must be reported: %+v", x)
+	}
+}
+
+// A queue:<slot> item (its slot moved on, its PR waits) is compared by the PR's
+// files too: the second apply call in InFlightItems covers reg.PRs().
+func TestInFlightQueuedPRComparesPRFiles(t *testing.T) {
+	f := newMoveFx(t)
+	f.queueBensPR(t)
+	q := f.queued()
+	if len(q) != 1 {
+		t.Fatalf("one queued PR: %+v", q)
+	}
+	f.forge.prs = []tracker.PR{{Number: 7, Branch: q[0].Branch}}
+	f.env.Forge = prFilesForge{Forge: f.forge.asForge(), files: map[int][]string{7: {"internal/cli/nudge.go"}}}
+	x := f.inFlightFor(t, "12")
+	if x.Slot != "queue:ben" || !x.FromPR || strings.Join(x.Paths, ",") != "internal/cli/nudge.go" {
+		t.Errorf("queued item takes its paths from the PR: %+v", x)
+	}
+}
+
+// The three verbs that judge overlap (candidates, assign, transfer) all read
+// InFlightItems, so each one sees the open PR's files, not the issue text.
+
+func TestCandidatesCompareOpenPRFiles(t *testing.T) {
+	f := newMoveFx(t)
+	overlaps := func() []Overlap {
+		t.Helper()
+		cs, err := f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeMilestone})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range cs {
+			if c.ID == "14" {
+				return c.Overlaps
+			}
+		}
+		t.Fatal("14 is not a candidate")
+		return nil
+	}
+	if len(overlaps()) != 1 {
+		t.Fatalf("without a PR the issue text overlaps ben: %+v", overlaps())
+	}
+	f.withPR([]string{"internal/cli/nudge.go"}, nil)
+	if o := overlaps(); len(o) != 0 {
+		t.Errorf("ben's PR touches only nudge files: %+v", o)
+	}
+	f.withPR([]string{"internal/cli/round.go"}, nil)
+	if o := overlaps(); len(o) != 1 || o[0].Slot != "ben" {
+		t.Errorf("ben's PR touches round.go: %+v", o)
+	}
+}
+
+func TestAssignComparesOpenPRFiles(t *testing.T) {
+	f := newMoveFx(t)
+	f.withPR([]string{"internal/cli/round.go"}, nil)
+	_, err := f.assign("14", "dana")
+	if by := blockedBy(t, err); by != BlockOverlap {
+		t.Fatalf("a PR touching round.go blocks 14: %v", err)
+	}
+	f.forge.prs = nil
+	f.withPR([]string{"internal/cli/nudge.go"}, nil)
+	if _, err := f.assign("14", "dana"); err != nil {
+		t.Fatalf("a PR touching only nudge files leaves 14 free: %v", err)
+	}
+}
+
+func TestTransferComparesOpenPRFiles(t *testing.T) {
+	f := newMoveFx(t)
+	o := startOpts(roundcfg.ScopeMilestone, 100)
+	o.Slots = 3
+	if _, err := f.env.Start(bg, f.root, o); err != nil {
+		t.Fatal(err)
+	}
+	// 13's text names other.go; dana's PR is what counts.
+	if _, err := f.assign("13", "dana"); err != nil {
+		t.Fatal(err)
+	}
+	f.withPRFor("dana", 8, []string{"internal/cli/round.go"}, nil)
+	_, err := f.transfer("12", "nia", nil)
+	if by := blockedBy(t, err); by != BlockOverlap {
+		t.Fatalf("dana's PR touches round.go, which 12 names: %v", err)
+	}
+	f.withPRFor("dana", 8, []string{"internal/cli/nudge.go"}, nil)
+	if _, err := f.transfer("12", "nia", nil); err != nil {
+		t.Fatalf("a PR touching only nudge files leaves 12 free: %v", err)
 	}
 }

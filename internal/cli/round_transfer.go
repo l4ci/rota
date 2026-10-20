@@ -3,7 +3,6 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
@@ -38,18 +37,11 @@ func roundTransfer(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		bf := *body
-		if bf == "-" {
-			f, err := os.CreateTemp("", "rota-round-decisions-")
-			if err != nil {
+		var decisions string
+		if *body != "" {
+			if decisions, err = readBodyText(c, "body-file", *body, ExitUsage); err != nil {
 				return Result{}, err
 			}
-			defer os.Remove(f.Name())
-			if _, err := f.ReadFrom(c.Stdin); err != nil {
-				return Result{}, err
-			}
-			f.Close()
-			bf = f.Name()
 		}
 		env, be, err := moveEnv(c, root)
 		if err != nil {
@@ -60,7 +52,7 @@ func roundTransfer(fs *flag.FlagSet) RunFunc {
 			return backlogFail(err)
 		}
 		res, err := env.Transfer(c.Context(), root, be, round.TransferOpts{
-			Issue: id, To: *to, Note: text, BodyFile: bf, AcceptOverlap: *accept,
+			Issue: id, To: *to, Note: text, Decisions: decisions, AcceptOverlap: *accept,
 			Tier: *tier, TierReason: *tierReason, CapReason: *capReason, HolderPID: *pid, Settings: set,
 		})
 		if err != nil {
