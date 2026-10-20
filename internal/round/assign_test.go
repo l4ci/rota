@@ -361,6 +361,28 @@ func TestAssignDispatchFailureKeepsTheMarks(t *testing.T) {
 	}
 }
 
+// The retry of a failed dispatch resumes the claim the failed attempt wrote,
+// even when the registry round moved on in between (the claim id carries it).
+func TestAssignRetryAfterDispatchFailureResumesItsOwnClaim(t *testing.T) {
+	f := newAssignFixture(t)
+	f.env.Worker.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} }
+	if _, err := f.assign("12", "ben", nil); err == nil {
+		t.Fatal("dispatch failure must surface")
+	}
+	first := f.be.claims["12"]
+	if err := worker.Update(f.root, func(d *worker.Doc) { d.SetRound(7) }); err != nil {
+		t.Fatal(err)
+	}
+	f.env.Worker.NewHost = func(host.Kind) host.Host { return f.host }
+	res, err := f.assign("12", "ben", nil)
+	if err != nil || !res.Dispatched {
+		t.Fatalf("retry must resume its own claim: %v %+v", err, res)
+	}
+	if got := f.be.claims["12"]; got != first || len(f.be.more["12"]) != 0 {
+		t.Errorf("claim after retry %q (more %v), want the first %q alone", got, f.be.more["12"], first)
+	}
+}
+
 // A failed dispatch leaves the slot idle on both paths (transfer's twin asserts
 // the same), so the repeated call knows nothing was delivered.
 func TestAssignDispatchFailureMarksTheSlotIdle(t *testing.T) {
