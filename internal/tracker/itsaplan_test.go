@@ -3,6 +3,8 @@ package tracker
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -290,4 +292,23 @@ func feedRequests(s *itsaplantest.Server) []string {
 		}
 	}
 	return out
+}
+
+// A redirect to another host is refused, so the API key never leaves the
+// instance's own host.
+func TestItsaplanDoesNotFollowRedirectToAnotherHost(t *testing.T) {
+	var leaked string
+	other := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { leaked = r.Header.Get("x-api-key") }))
+	defer other.Close()
+	home := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+r.URL.Path, http.StatusFound)
+	}))
+	defer home.Close()
+	it := NewItsaplan(connections.Connection{Name: "plan", Kind: connections.KindItsaplan, Site: home.URL}, "itp_secret", "MKT")
+	if err := it.CheckAuth(context.Background()); err == nil {
+		t.Fatal("followed a redirect to another host")
+	}
+	if leaked != "" {
+		t.Errorf("the API key reached another host: %q", leaked)
+	}
 }

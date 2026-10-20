@@ -3,6 +3,7 @@ package tracker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -86,9 +87,24 @@ func NewItsaplan(c connections.Connection, apiKey, project string) *Itsaplan {
 	return &Itsaplan{
 		site:    site,
 		project: strings.ToUpper(strings.TrimSpace(project)),
-		rest:    &REST{Base: site, Auth: func(r *http.Request) { r.Header.Set("x-api-key", apiKey) }},
-		ids:     map[IssueKey]int{},
+		rest: &REST{Base: site, Auth: func(r *http.Request) { r.Header.Set("x-api-key", apiKey) },
+			Client: &http.Client{Timeout: RESTTimeout, CheckRedirect: sameHostRedirect}},
+		ids: map[IssueKey]int{},
 	}
+}
+
+// sameHostRedirect refuses a redirect to another host. Go forwards a custom
+// header such as x-api-key across hosts (it drops only Authorization and
+// cookies), so following one would hand the key to whoever the instance, or
+// a proxy in front of it, redirects to.
+func sameHostRedirect(req *http.Request, via []*http.Request) error {
+	if req.URL.Host != via[0].URL.Host {
+		return fmt.Errorf("refusing a redirect from %s to %s: the API key is sent to the instance's own host only", via[0].URL.Host, req.URL.Host)
+	}
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	return nil
 }
 
 // ItsaplanTester is the connections.Tester of kind itsaplan: one read of /me.
