@@ -124,3 +124,34 @@ func TestRegistryListsSkipNonObjectEntries(t *testing.T) {
 		t.Errorf("slots entries = %d, want 4", len(got))
 	}
 }
+
+// Slate skips non-string entries and SortSlots tolerates a junk entry; a
+// tolerant read of the same file sees the same slots.
+func TestRegistryListsSlateSortAndTolerantRead(t *testing.T) {
+	root := t.TempDir()
+	p := RegistryPath(root)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const doc = `{"slate":["#1",7,null,"#2"],"slots":["junk",{"name":"zed"},{"name":"amy"}]}`
+	if err := os.WriteFile(p, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := LoadRegistryTolerant(root)
+	if got := r.Slate(); len(got) != 2 || got[0] != "#1" || got[1] != "#2" {
+		t.Errorf("Slate = %v, want [#1 #2]", got)
+	}
+	if got := r.Slots(); len(got) != 2 {
+		t.Errorf("tolerant Slots = %d, want 2", len(got))
+	}
+	if err := Update(root, func(d *Doc) { d.SortSlots() }); err != nil {
+		t.Fatal(err)
+	}
+	r, _ = LoadRegistry(root)
+	if got := r.Slots(); len(got) != 2 {
+		t.Errorf("Slots after sort = %d, want 2", len(got))
+	}
+	if got := r.list("slots"); len(got) != 3 {
+		t.Errorf("junk entry must survive SortSlots, got %d entries", len(got))
+	}
+}
