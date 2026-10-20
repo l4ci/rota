@@ -790,6 +790,36 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
+    },
+    "Build & Tooling: Smoke testing: Gate & frozen records::rota test run fast skips the frozen config test": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-20"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::A new required config key goes into the F78 complete-config fixture": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-20"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes::A config enum of harness kinds must be allowlisted in the kind-switch guard": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-20"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::Verdict severities are blocker, major, minor and info": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-20"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::A gate failure on a PASS-reviewed PR needs round bounce --force": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-20"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::An orchestrator commit on a worker branch needs an independent reviewer": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-20"
     }
   }
 }
