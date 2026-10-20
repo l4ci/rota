@@ -586,3 +586,26 @@ func TestReviewRelayRetractsTheMailWhenDispatchFails(t *testing.T) {
 		t.Fatalf("%d mails left behind", n)
 	}
 }
+
+// A bounce that lands between the relay's registry snapshot and its count
+// reaches the cap first: the locked write refuses, the relay escalates and the
+// count stays at the cap.
+func TestReviewRelayRacingBounceDoesNotPassTheCap(t *testing.T) {
+	f, fg, o := reviewFx(t)
+	posts := 0
+	o.Escalate = func(context.Context, int, string, string, string) error { posts++; return nil }
+	fg.onView = func() {
+		for i := 0; i < o.MaxBounces; i++ {
+			if _, err := worker.RecordBounce(worker.Env{}, f.root, "12", "", ""); err != nil {
+				t.Error(err)
+			}
+		}
+	}
+	got, err := f.env.ReviewRelay(bg, f.root, o)
+	if !isBlockedBy(err, "maxBounces") || !got.Escalated || posts != 1 {
+		t.Fatalf("got %+v err %v posts %d", got, err, posts)
+	}
+	if n := worker.LoadRegistryTolerant(f.root).Bounces("12"); n != o.MaxBounces {
+		t.Fatalf("bounces %d, want the cap %d", n, o.MaxBounces)
+	}
+}

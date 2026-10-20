@@ -90,13 +90,16 @@ func landed(root, issue string) error {
 func bounce(env worker.Env, root, issue string, r worker.GateResult, park Park) (Outcome, error) {
 	// r.Slot echoes the gate argument, a PR number after its slot moved on; the
 	// slot the target resolved to names the ledger row.
-	n, err := worker.RecordBounceIn(env, r.Round, root, issue, r.TargetSlot, r.SHA)
+	set, err := roundcfg.Load(root)
 	if err != nil {
 		return Outcome{}, err
 	}
-	set, err := roundcfg.Load(root)
-	if err != nil || set.MaxBounces == 0 || n < set.MaxBounces {
-		return Outcome{Bounces: n}, err
+	n, _, _, err := worker.RecordBounceCapped(env, r.Round, root, issue, r.TargetSlot, r.SHA, set.MaxBounces)
+	if err != nil {
+		return Outcome{}, err
+	}
+	if set.MaxBounces == 0 || n < set.MaxBounces {
+		return Outcome{Bounces: n}, nil
 	}
 	why, _, _ := strings.Cut(r.Err, "\n")
 	what := r.PR
