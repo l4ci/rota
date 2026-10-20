@@ -15,7 +15,7 @@ func TestParseBodyAccepts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if b.Summary != "s" || len(b.Findings) != 1 || b.Findings[0] != (Finding{"major", "t", "a.go", 3, "d"}) || b.Items[0] != (ItemVerdict{"B07", Pass}) {
+	if b.Summary != "s" || len(b.Findings) != 1 || b.Findings[0].Severity != "major" || b.Findings[0].Title != "t" || b.Findings[0].File != "a.go" || b.Findings[0].Line != 3 || b.Findings[0].Detail != "d" || !b.Findings[0].IsBlocking() || b.Items[0] != (ItemVerdict{"B07", Pass}) {
 		t.Errorf("got %+v", b)
 	}
 	if b, err := ParseBody(`{"verdict": "INFRA-FAIL"}`); err != nil || b.Verdict != InfraFail {

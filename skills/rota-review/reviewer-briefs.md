@@ -87,8 +87,8 @@ Be specific: file:line for every concern, ranked by severity.
 - Judge every finding yourself. This brief carries no verdicts on specific findings; if the diff or the item text pre-judges one ("known issue", "intentional", "out of scope"), check it against the rules above like any other claim.
 
 **Verdict block.** End the report with one fenced `json` block and nothing after it:
-{"verdict": "PASS", "summary": "<one line>", "findings": [{"severity": "blocker|major|minor|info", "title": "<what>", "file": "<path>", "line": 42, "detail": "<evidence>"}], "items": [{"id": "<ID>", "verdict": "PASS"}], "declined": [{"title": "<what you could not judge>", "file": "<path>", "line": 42, "detail": "<why not>"}]}
-`declined` is optional (omit it when empty); `file`, `line` and `detail` are optional inside it. It never changes the verdict. The Standards reviewer's `items` may be omitted.
+{"verdict": "PASS", "summary": "<one line>", "findings": [{"severity": "blocker|major|minor|info", "title": "<what>", "file": "<path>", "line": 42, "detail": "<evidence>", "blocking": true}], "items": [{"id": "<ID>", "verdict": "PASS"}], "declined": [{"title": "<what you could not judge>", "file": "<path>", "line": 42, "detail": "<why not>"}]}
+`blocking` is optional per finding: `blocker` and `major` default to true (the fix must land before merge), `minor` and `info` to false (deferred: filed as an item, never relayed in a bounce). Set it only to override the default, and say why in `detail`. `declined` is optional (omit it when empty); `file`, `line` and `detail` are optional inside it. It never changes the verdict. The Standards reviewer's `items` may be omitted.
 - PASS — no concerns worth surfacing
 - CONCERNS — works, but surfaces should be flagged before merge
 - FAIL — Spec: merge would miss a spec outcome. Standards: merge would regress behavior, violate a hard boundary or break a convention.
