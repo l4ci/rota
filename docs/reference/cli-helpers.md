@@ -332,11 +332,11 @@ Bare `rota` with no verb does the same in an initialized project and runs `rota 
 
 | Usage | What it does |
 |---|---|
-| `rota skills install [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite] [--current-account] [--stub]` | write the skills into the agent skill directories; `--stub` (also on `update`) writes each `SKILL.md` as a stub that tells the agent to run `rota skills get <name>` and drops the skill's `references/`, which the verb serves; only for harnesses that can run commands when a skill loads |
-| `rota skills status [--scope <user\|project>] [--agent <claude\|codex\|all>] [--current-account]` | compare the installed skills with this binary |
+| `rota skills install [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite] [--current-account] [--stub \| --full]` | write the skills into the agent skill directories; the default (`--stub`) writes each `SKILL.md` as a stub that tells the agent to run `rota skills get <name>` and drops the skill's other files, which `get` serves from a per-version cache; `--full` writes the full text for harnesses that cannot run a command when a skill loads; the mode is recorded in the manifest; both flags exit 1 |
+| `rota skills status [--scope <user\|project>] [--agent <claude\|codex\|all>] [--current-account]` | compare the installed skills with this binary; a stub root is compared on its skill set and frontmatter and the changed skills are named |
 | `rota skills list` | name the skills embedded in this binary and its version |
-| `rota skills get <name> [--references \| --reference <file>]` | print an embedded skill's `SKILL.md` as the binary carries it, list its reference files, or print one; exit 2 on an unknown name or reference (the known ones are listed) or when both flags are given |
-| `rota skills update [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite] [--current-account]` | refresh the skill directories that already have a manifest |
+| `rota skills get <name> [--references \| --reference <file>]` | print an embedded skill's `SKILL.md` as the binary carries it (first line `Base directory for this skill: <dir>` in the per-version cache, last block `Files this skill links to:` with absolute paths; a cache failure prints the text with a warning), list its reference files, or print one; exit 2 on an unknown name or reference (the known ones are listed) or when both flags are given |
+| `rota skills update [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite] [--current-account] [--stub \| --full]` | refresh the skill directories that already have a manifest, each in its recorded mode unless a flag switches it (a manifest with no mode is full); both flags exit 1 |
 | `rota skills uninstall [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite] [--current-account]` | remove what rota installed |
 
 ## `rota round`
@@ -396,7 +396,7 @@ Read-only, runs without `.rota/`. Exit 1 when any check fails; every failure car
 
 | Usage | What it does |
 |---|---|
-| `rota reap [--kind <worktree\|branch\|tab\|process\|lease>[,…]] [--apply]` | list, and with `--apply` remove, what a round left behind that nothing live owns |
+| `rota reap [--kind <worktree\|branch\|tab\|process\|lease\|skillcache>[,…]] [--apply]` | list, and with `--apply` remove, what a round left behind that nothing live owns, and the extracted skill trees of other rota versions |
 
 Previews by default. It never kills a running agent and never deletes work: a candidate that holds uncommitted changes or unmerged commits is listed with `held` and left alone. Exit 1 under `--apply` when a deletion failed. Exit 5, with nothing listed or deleted, when `.rota/workers.json` exists but does not parse; `rota worker pool reap` refuses the same way.
 

@@ -42,10 +42,12 @@ const (
 	KindTab      = "tab"
 	KindProcess  = "process"
 	KindLease    = "lease"
+	// KindSkillCache is an extracted skill tree of another rota version.
+	KindSkillCache = "skillcache"
 )
 
 // Kinds lists every kind, in the order candidates are found and removed.
-var Kinds = []string{KindWorktree, KindBranch, KindTab, KindProcess, KindLease}
+var Kinds = []string{KindWorktree, KindBranch, KindTab, KindProcess, KindLease, KindSkillCache}
 
 // Candidate is something to reap. Held, when set, says why it must not be.
 type Candidate struct {
@@ -106,6 +108,12 @@ type Input struct {
 	// Roster is round.roster: the agent names a round cuts branches for. A
 	// `<agent>/<n>-<slug>` branch is round-made only under one of them.
 	Roster []string
+	// SkillCache is the directory `rota skills get` extracts one tree per
+	// binary version into, and SkillCacheKeep the running version's directory
+	// name inside it. Every other directory there is a candidate. Empty
+	// SkillCache finds none.
+	SkillCache     string
+	SkillCacheKeep string
 }
 
 // Result is what Find and Apply report. Warnings are for the caller to print.
@@ -140,7 +148,7 @@ type state struct {
 // function here.
 type finder func(ctx context.Context, s *state) ([]Candidate, error)
 
-var finders = []finder{findWorktrees, findBranches, findTabs, findProcesses, findLeases}
+var finders = []finder{findWorktrees, findBranches, findTabs, findProcesses, findLeases, findSkillCache}
 
 // findLeases lists the round lease when its holder is gone. A live, foreign
 // or absent lease is never a candidate, and a lease is never Held: stale means
@@ -162,6 +170,35 @@ func findLeases(ctx context.Context, s *state) ([]Candidate, error) {
 		who = fmt.Sprintf("pid %d (round %d, started %s)", l.PID, l.Round, l.StartedAt)
 	}
 	return []Candidate{{ID: KindLease + ":round", Kind: KindLease, Name: "round", Reason: "the round lease is held by " + who + ", which is gone"}}, nil
+}
+
+// skillTree reports whether name is a version tree that is not the running
+// one: a directory directly under the cache whose name is not a temp extract.
+func (s *state) skillTree(name string) bool {
+	return name != "" && name != s.in.SkillCacheKeep && !strings.HasPrefix(name, ".") && filepath.Base(name) == name
+}
+
+// findSkillCache lists the extracted skill trees of other rota versions. The
+// running version's tree is never listed, and neither is a dot directory (an
+// extraction still running).
+func findSkillCache(_ context.Context, s *state) ([]Candidate, error) {
+	if s.in.SkillCache == "" {
+		return nil, nil
+	}
+	ents, err := os.ReadDir(s.in.SkillCache)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			s.warn("skills cache unreadable: %v; skill cache candidates skipped", err)
+		}
+		return nil, nil
+	}
+	var out []Candidate
+	for _, e := range ents {
+		if e.IsDir() && s.skillTree(e.Name()) {
+			out = append(out, Candidate{ID: KindSkillCache + ":" + e.Name(), Kind: KindSkillCache, Name: e.Name(), Path: filepath.Join(s.in.SkillCache, e.Name()), Reason: "extracted skills of another rota version"})
+		}
+	}
+	return out, nil
 }
 
 // Find lists the candidates of the wanted kinds (all when kinds is empty).
@@ -578,6 +615,11 @@ func (s *state) remove(ctx context.Context, c Candidate) error {
 			}
 		}
 		return fmt.Errorf("tab %s is gone", c.Name)
+	case KindSkillCache:
+		if s.in.SkillCache == "" || !s.skillTree(c.Name) {
+			return fmt.Errorf("%s is not a removable skills cache tree", c.Name)
+		}
+		return os.RemoveAll(filepath.Join(s.in.SkillCache, c.Name))
 	case KindLease:
 		if s.in.Lease == nil {
 			return fmt.Errorf("no lease access")

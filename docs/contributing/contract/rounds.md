@@ -248,9 +248,9 @@ note: **Premise changes from #62** (ratified, round 4). (1) `hv-codex-verify --d
 env: `ROTA_TEST_DOCTOR_PATH=<dir>` replaces `PATH` for tool lookup so fixtures can fake or hide `herdr`, `tmux`, `gh`, `glab` and `codex` (the `hook` check runs the `herdr` found there). Not part of the CLI.
 
 ### rota reap
-rota reap [--kind <worktree|branch|tab|process|lease>[,…]] [--apply]
+rota reap [--kind <worktree|branch|tab|process|lease|skillcache>[,…]] [--apply]
 repo: none
-data: {"candidates": [{"id": string, "kind": "worktree" | "branch" | "tab" | "process" | "lease", "name": string, "path"?: string, "reason": string, "held"?: string}], "reaped": []string, "failed": [{"id": string, "error": string}], "changed": bool}
+data: {"candidates": [{"id": string, "kind": "worktree" | "branch" | "tab" | "process" | "lease" | "skillcache", "name": string, "path"?: string, "reason": string, "held"?: string}], "reaped": []string, "failed": [{"id": string, "error": string}], "changed": bool}
 exit: 1 under --apply when any deletion failed (same `data`; the rest were still removed); 2 when --kind names an unknown kind; 3 when there is no project root; 5 when git fails
 old: none (new in C6)
 note: previews by default (rule 5): lists candidates, deletes nothing, adds the warning `preview only; pass --apply`. `--apply` deletes every candidate that has no `held`. There is no `--confirm`: see the gate note.

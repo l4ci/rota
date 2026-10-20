@@ -53,11 +53,16 @@ rota skills install
 
 With no flags this writes the skills to the user roots for both agents: `~/.claude/skills` (or `$CLAUDE_CONFIG_DIR/skills`) for Claude Code and `~/.agents/skills` for Codex.
 
+By default each `SKILL.md` is a stub: its frontmatter plus a short body that tells the agent to run `rota skills get <name>`. That command prints the skill text embedded in the installed binary, so upgrading the binary upgrades every skill body with no `rota skills update`. It also extracts the skill's files (siblings, `references/`, linked skills) once per binary version into your user cache (`rota/skills/<version>/` under `$XDG_CACHE_HOME`, `~/.cache` or `~/Library/Caches`; `ROTA_CACHE_DIR` replaces that base) and prints the first line `Base directory for this skill: <dir>` and a `Files this skill links to:` list of absolute paths, so every relative link in the text resolves to a file that matches the binary. `rota reap` removes the trees of other versions.
+
+`--full` writes the full text instead, with the references copied into each root, for a harness that cannot run a command when a skill loads. The root's manifest records `mode: stub` or `mode: full`. `rota skills update` keeps each root's recorded mode unless you pass `--stub` or `--full` (both is an error). A root installed before stubs became the default has no recorded mode and counts as full; it stays full until you reinstall or update it with `--stub`.
+
 | Flag | Meaning |
 |---|---|
 | `--agent claude\|codex\|all` | which agent's root to write (default: both) |
 | `--scope user\|project` | `user` (default), or `project` for `.claude/skills` and `.agents/skills` in the current repo |
 | `--overwrite` | replace files you edited or rota did not write |
+| `--stub`, `--full` | stub (default) or full text; see above |
 
 The skills are copies, not symlinks, and `install` writes a `.rota-manifest.json` listing what it put there. A file you edited is kept and reported unless you pass `--overwrite`. A project-scope install can be committed so collaborators get the same skills. `rota-decide` and `rota-release` are manual-only: they carry `disable-model-invocation: true` for Claude Code and an `agents/openai.yaml` (`allow_implicit_invocation: false`) for Codex, so only you start them, by typing `/rota-decide` or `$rota-decide`.
 
@@ -70,7 +75,7 @@ Common route: `npx skills add l4ci/rota` installs the skills with the [`skills` 
 - **User scope** (the default) puts one copy in your home directory, and every project on the machine uses it. Pick it when you work alone or across many repos.
 - **Project scope** writes into the repo. Commit `.claude/skills` and `.agents/skills` and everyone who clones gets the same skills, pinned to the rota version that wrote them. Pick it for a team, or when a project must not move when you upgrade rota. Collaborators still need the `rota` binary on their `PATH`.
 
-If both exist, Claude Code uses the user copy of a skill over the project copy with the same name, so a stale user install hides a newer project one. Keep one scope per machine, or run `rota skills update` after every upgrade. `rota skills status` lists every root it finds.
+If both exist, Claude Code uses the user copy of a skill over the project copy with the same name, so a stale user install hides a newer project one. Keep one scope per machine, or run `rota skills update` after every upgrade that `rota skills status` reports stale. `rota skills status` lists every root it finds.
 
 User scope is per Claude Code config directory: rota writes to `$CLAUDE_CONFIG_DIR/skills` when that is set, else `~/.claude/skills`. Inside a rota project, user scope also covers every `work.accounts` `configDir` (install, update, uninstall and status each print one line per root). A configured dir that does not exist is reported and skipped, not created. Pass `--current-account` to touch only the current dir. Project scope is unchanged: one copy serves every account.
 
@@ -114,7 +119,8 @@ Per route, does it update itself?
 |---|---|---|
 | Claude Code plugin | No | `claude plugin update rota@rota`, then `/rota:rota-install` |
 | Codex plugin | No | `codex plugin add rota@rota` again (re-fetches the `codex` branch) |
-| `rota skills install` (Claude Code, Codex) | No | `rota skills update` |
+| `rota skills install` (Claude Code, Codex), stub (default) | Skill text yes; the skill set and frontmatter, no | a new binary; `rota skills update` only when `rota skills status` or `rota doctor` names a skill that was added, removed or changed its frontmatter |
+| `rota skills install --full` | No | `rota skills update` |
 | `npx skills add l4ci/rota` | No | run the command again |
 | Homebrew or install script (binary) | No | `rota update` prints the command |
 
@@ -129,7 +135,9 @@ rota update
 - Homebrew: `brew update && brew upgrade rota && rota skills update`
 - install script: the `curl` line above, then `rota skills update`
 
-`rota skills update` refreshes every skill root that has a manifest. A plugin install skips it: `claude plugin update rota@rota`, then `/rota:rota-install` for the binary. In a project, `rota version --drift` compares the version stamped in `.rota/` with the binary.
+When every installed skill root is a current stub, the command leaves out `&& rota skills update`.
+
+A stub root needs `rota skills update` only when a release adds a skill, removes one or changes a skill's frontmatter (its `description`, which drives when the agent picks it, or `disable-model-invocation`). `rota skills status` and `rota doctor` compare a stub root on exactly that and name the skills that changed. A full root is stale after every release that touches skill text. `rota skills update` refreshes every skill root that has a manifest, in the mode each one recorded. A plugin install skips it: `claude plugin update rota@rota`, then `/rota:rota-install` for the binary. In a project, `rota version --drift` compares the version stamped in `.rota/` with the binary.
 
 ## Uninstalling
 

@@ -118,3 +118,22 @@ func TestLatestRunnerFailuresAreUnknown(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdateOmitsSkillsUpdateForCurrentStubs(t *testing.T) {
+	for _, exeDir := range []string{"/opt/homebrew/Cellar/rota/1.0.0/bin", "/usr/local/bin", "/home/me/go/bin"} {
+		for _, cur := range []string{"1.0.0", "dev"} {
+			e := env(exeDir, cur, "1.1.0")
+			if got := Check(e).UpdateCommand; !strings.HasSuffix(got, " && rota skills update") {
+				t.Errorf("%s: no seam set keeps the refresh step: %q", exeDir, got)
+			}
+			e.SkillsNeedUpdate = func() bool { return true }
+			if got := Check(e).UpdateCommand; !strings.HasSuffix(got, " && rota skills update") {
+				t.Errorf("%s: a stale root needs the refresh step: %q", exeDir, got)
+			}
+			e.SkillsNeedUpdate = func() bool { return false }
+			if got := Check(e).UpdateCommand; got == "" || strings.Contains(got, "rota skills update") {
+				t.Errorf("%s: current stubs must drop the refresh step: %q", exeDir, got)
+			}
+		}
+	}
+}
