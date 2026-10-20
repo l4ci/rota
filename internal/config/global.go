@@ -12,15 +12,15 @@ import (
 )
 
 // The global config is a machine-wide config.json in the rota config dir,
-// beside connections.json. It only seeds: `rota init` and `rota setup` start a
-// new project from it, and nothing reads it once .rota/config.json exists.
-// Load, Show and Check never look at it (#194).
+// beside connections.json. It is the runtime layer under .rota/config.json:
+// Load resolves schema default < global < project < local, so a value set once
+// applies to every project that does not set that key (reverses #194).
 
 // GlobalPath is the global config file under dir, the rota config dir.
 func GlobalPath(dir string) string { return filepath.Join(dir, "config.json") }
 
 // notGlobal are the keys a project owns: the version stamp, the base branch
-// and the umbrella switch describe one checkout, so saving or seeding them
+// and the umbrella switch describe one checkout, so saving or layering them
 // would misconfigure the next project.
 var notGlobal = map[string]bool{VersionKey: true, "git.baseBranch": true, "umbrella.enabled": true}
 
@@ -101,29 +101,4 @@ func MergeGlobal(dir string, vals map[string]any) ([]string, error) {
 		return cfg, nil
 	})
 	return saved, err
-}
-
-// SeedFromGlobal writes every value of the global config under dir into root's
-// .rota/config.json, over what is there, and returns the keys in schema order.
-// Call it on a config.json init just created; it is not idempotent by design.
-func SeedFromGlobal(root, dir string) ([]string, error) {
-	vals, err := LoadGlobal(dir)
-	if err != nil || len(vals) == 0 {
-		return nil, err
-	}
-	seeded := []string{}
-	err = fsio.UpdateJSON(configPath(root), jsonx.NewObject(), func(doc any) (any, error) {
-		cfg, ok := doc.(*jsonx.Object)
-		if !ok {
-			return nil, ErrNotObject
-		}
-		for _, k := range Keys {
-			if v, ok := vals[k.Name]; ok {
-				cfg = fillKey(cfg, "", strings.Split(k.Name, "."), v)
-				seeded = append(seeded, k.Name)
-			}
-		}
-		return cfg, nil
-	})
-	return seeded, err
 }

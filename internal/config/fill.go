@@ -86,12 +86,13 @@ func FillDetect(root string, detect func() string) ([]string, SourceMigration, R
 		cfg, migrated := migrateLegacyVersion(cfg)
 		cfg, copied, moved := migrateLegacyVerify(cfg)
 		cfg, sm = MigrateSource(cfg, detect)
+		global := globalLayer()
 		for _, k := range Keys {
 			if (k.Name == VersionKey && migrated) || (k.Name == TestFullKey && copied) {
 				filled = append(filled, k.Name)
 				continue
 			}
-			if _, ok := walk(cfg, k.Name); !k.Required || ok {
+			if _, ok := walk(cfg, k.Name); !k.Required || ok || globalSupplies(global, k.Name) {
 				continue
 			}
 			cfg = fillKey(cfg, "", strings.Split(k.Name, "."), Default(k))

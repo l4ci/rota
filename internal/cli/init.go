@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/agents"
@@ -83,7 +82,7 @@ func runInit(c *Ctx, noBlocks bool) (Result, error) {
 	for _, p := range res.Created {
 		lines = append(lines, "created: "+p)
 	}
-	cfg, err := initConfig(c, dir, slices.Contains(res.Created, ".rota/config.json"))
+	cfg, err := initConfig(c, dir)
 	if err != nil {
 		return Result{}, err
 	}
@@ -145,22 +144,17 @@ func runInit(c *Ctx, noBlocks bool) (Result, error) {
 // filled and the version it stamped ("" when the stamp already matched or the
 // binary has no release version).
 type initConfigResult struct {
-	seeded   []string
 	filled   []string
 	stamped  string
 	warnings []string
 }
 
 func (r initConfigResult) changed() bool {
-	return len(r.seeded) > 0 || len(r.filled) > 0 || r.stamped != ""
+	return len(r.filled) > 0 || r.stamped != ""
 }
 
 func (r initConfigResult) report(data *jsonx.Object, lines *[]string) {
-	data.Set("configSeeded", strSlice(r.seeded))
 	data.Set("configFilled", strSlice(r.filled))
-	if len(r.seeded) > 0 {
-		*lines = append(*lines, "config seeded from global: "+strings.Join(r.seeded, ", "))
-	}
 	data.Set("versionStamped", r.stamped)
 	if len(r.filled) > 0 {
 		*lines = append(*lines, "config filled: "+strings.Join(r.filled, ", "))
@@ -173,21 +167,10 @@ func (r initConfigResult) report(data *jsonx.Object, lines *[]string) {
 // initConfig is the config half of the old init skill: fill every missing
 // required key with its schema default (never touching a present key), then
 // stamp rota.version with the binary's version, which clears the drift
-// nudge. Idempotent; an unreleased (dev) binary stamps nothing. When
-// freshConfig (init just created config.json) the global config seeds it
-// first; an existing project is never re-seeded, and nothing after init reads
-// the global file.
-func initConfig(c *Ctx, root string, freshConfig bool) (initConfigResult, error) {
+// nudge. Idempotent; an unreleased (dev) binary stamps nothing. The global
+// config is not copied in: a new project inherits it at runtime.
+func initConfig(c *Ctx, root string) (initConfigResult, error) {
 	var r initConfigResult
-	if freshConfig {
-		dir, err := projects.Dir()
-		if err == nil {
-			r.seeded, err = config.SeedFromGlobal(root, dir)
-		}
-		if err != nil {
-			r.warnings = append(r.warnings, "could not seed from the global config: "+err.Error())
-		}
-	}
 	filled, sm, rm, err := config.FillDetect(root, c.deps().originProvider(c.Context(), root))
 	if err != nil {
 		_, err = roundMigrationFail(err)

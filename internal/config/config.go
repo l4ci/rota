@@ -3,15 +3,20 @@
 package config
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 )
 
-// Load reads configPath and merges config.local.json from the same directory
-// over it. Nested objects merge by key; any other override value (scalar,
+// Load reads the global config, merges configPath over it, then merges
+// config.local.json from the same directory over that (schema default < global
+// < project < local). Nested objects merge by key; any other override value (scalar,
 // array, null, or a type mismatch) replaces the base. A missing or
 // unparseable file counts as absent; with no base the result is {}.
 func Load(configPath string) any {
@@ -19,15 +24,60 @@ func Load(configPath string) any {
 	return merged
 }
 
-// loadLayers keeps the local layer alongside the runtime config so display
-// provenance uses the same reads and merge semantics as Load.
-func loadLayers(configPath string) (merged, local any) {
-	base := fsio.LoadJSON(configPath, jsonx.NewObject())
-	local = fsio.LoadJSON(filepath.Join(filepath.Dir(configPath), "config.local.json"), nil)
-	if local == nil {
-		return base, local
+// layers are the config layers as read: global is the machine-wide layer
+// (nil when absent), project is configPath's own content, local the overlay.
+type layers struct{ global, project, local any }
+
+var warnGlobalOnce sync.Once
+
+// globalLayer is the global config as a nested object of its schema keys. A
+// missing file or config dir is no layer; a corrupt file warns once per
+// process and is skipped.
+func globalLayer() any {
+	dir, err := projects.Dir()
+	if err != nil {
+		return nil
 	}
-	return Merge(base, local), local
+	vals, err := LoadGlobal(dir)
+	if err != nil {
+		warnGlobalOnce.Do(func() { fmt.Fprintln(os.Stderr, "rota: warning: global config skipped: "+err.Error()) })
+		return nil
+	}
+	if len(vals) == 0 {
+		return nil
+	}
+	obj := jsonx.NewObject()
+	for _, k := range Keys {
+		if v, ok := vals[k.Name]; ok {
+			obj = fillKey(obj, "", strings.Split(k.Name, "."), v)
+		}
+	}
+	return obj
+}
+
+// globalSupplies is whether the global layer holds key, so a project that does
+// not set it inherits it and needs no default written.
+func globalSupplies(global any, key string) bool {
+	_, ok := walk(global, key)
+	return ok
+}
+
+// loadLayers keeps the layers alongside the runtime config so display
+// provenance uses the same reads and merge semantics as Load.
+func loadLayers(configPath string) (merged any, l layers) {
+	l = layers{
+		global:  globalLayer(),
+		project: fsio.LoadJSON(configPath, jsonx.NewObject()),
+		local:   fsio.LoadJSON(filepath.Join(filepath.Dir(configPath), "config.local.json"), nil),
+	}
+	merged = l.project
+	if l.global != nil {
+		merged = Merge(l.global, merged)
+	}
+	if l.local != nil {
+		merged = Merge(merged, l.local)
+	}
+	return merged, l
 }
 
 // Merge returns base with override merged in; neither input is modified.
