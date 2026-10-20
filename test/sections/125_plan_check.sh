@@ -60,6 +60,34 @@ TMP_PC="$(mktemp -d "$TMP/plancheck.XXXXXX")"
   eq "legacy plan reads as orphans" "1 T1" "$(RC hvj plan check "$KEY") $(jget data.orphans[0] <<<"$(hvj plan check "$KEY" 2>/dev/null)")"
   pass "legacy plan (no Serves: line) is detectable, so /rota-work skips the check"
 
+  PUT '- **T1** — a
+  - Serves: AC-1
+  - Files: a, b, c, d, e, f
+  - Verify: go test ./a
+- **T2** — b
+  - Serves: AC-2
+  - Verify: go test ./b
+- **T3** — c
+  - Serves: AC-2
+  - Verify: go test ./c
+- **T4** — d
+  - Serves: AC-2
+  - Verify: go test ./d'
+  OUT="$(hvj plan check "$KEY")" || fail "size warnings must not fail the check: $OUT"
+  eq "size ok" "true" "$(jget data.ok <<<"$OUT")"
+  jget data.warnings[1] <<<"$OUT" > /dev/null || fail "want two warnings in data.warnings: $OUT"
+  jget data.warnings[2] <<<"$OUT" > /dev/null && fail "want only two warnings in data.warnings: $OUT"
+  TXT="$("$ROTA_BIN" plan check "$KEY")" || fail "text mode must exit 0 too: $TXT"
+  grep -q '^warn: plan has 4 tasks' <<<"$TXT" || fail "no tasks warn line: $TXT"
+  grep -q '^warn: T1 names 6 files' <<<"$TXT" || fail "no files warn line: $TXT"
+  hvj config set plan.maxTasks 0 > /dev/null || fail "config set plan.maxTasks"
+  hvj config set plan.maxFilesPerTask 0 > /dev/null || fail "config set plan.maxFilesPerTask"
+  OUT="$(hvj plan check "$KEY")" || vfail
+  eq "size off" "[]" "$(jget data.warnings <<<"$OUT")"
+  eq "negative rejected" "1" "$([ "$(RC hvj config set plan.maxTasks -1)" != 0 ] && echo 1)"
+  hvj config set plan.maxTasks 3 > /dev/null; hvj config set plan.maxFilesPerTask 5 > /dev/null
+  pass "plan check warns on too many tasks or too wide a task, exit 0; a threshold of 0 turns it off"
+
   eq "no plan" "3" "$(RC hvj plan check "#9999")"
   eq "slice key" "2" "$(RC hvj plan check M01-S01)"
   eq "no arg" "2" "$(RC hvj plan check)"

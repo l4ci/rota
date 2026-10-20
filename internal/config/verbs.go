@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -269,9 +270,27 @@ func deleteIn(o *jsonx.Object, segs []string) bool {
 // projectPathKeys hold a path relative to the project root.
 var projectPathKeys = map[string]bool{"release.versionFile": true}
 
-// validateValue rejects a value its key cannot hold. A project path key takes
+// nonNegativeIntKeys are int keys `config set` refuses a negative or
+// non-integer value for.
+var nonNegativeIntKeys = map[string]bool{
+	"plan.maxTasks":        true,
+	"plan.maxFilesPerTask": true,
+}
+
+func isNonNegInt(n json.Number) bool {
+	i, err := n.Int64()
+	return err == nil && i >= 0
+}
+
+// validateValue rejects a value its key cannot hold. A non-negative int key takes an integer of 0 or more. A project path key takes
 // a relative path that stays inside the project, or "" to clear it.
 func validateValue(key string, value any) error {
+	if nonNegativeIntKeys[key] {
+		if n, ok := value.(json.Number); !ok || !isNonNegInt(n) {
+			return fmt.Errorf("%w for %s: want an integer of 0 or more", ErrBadValue, key)
+		}
+		return nil
+	}
 	if key == ReviewKey {
 		if _, err := ParseReviewPolicy(value); err != nil {
 			return fmt.Errorf("%w for %s: %v", ErrBadValue, key, err)
