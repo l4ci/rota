@@ -489,12 +489,15 @@ func (g *gate) stepRecordLedger() error {
 	return nil
 }
 
-// stepDequeue drops the record of a queued PR that passed.
+// stepDequeue drops the review record of a PR that merged: a pass, or a verdict
+// (merged-remotely, a red verify of the landed tree) that still left the PR on
+// the base. The target may have resolved to a slot, so the record is matched by
+// PR, not by how the argument resolved.
 func (g *gate) stepDequeue() error {
-	if g.target.Queued && g.res.Verdict == GatePass {
-		return RemoveQueuedPR(g.root, g.target.PR)
+	if g.o.CheckOnly || !(g.res.Verdict == GatePass || g.res.Changed) {
+		return nil
 	}
-	return nil
+	return RemoveQueuedPR(g.root, g.target.PR)
 }
 
 // stepReleaseExternal unregisters a merged adopted slot and keeps its checkout.
