@@ -154,3 +154,21 @@ func TestTierWalkNilE2EVerifiedSinkDiscards(t *testing.T) {
 		t.Errorf("ended=%v err=%v e2eGreen=%v verified=%v", ended, err, w.e2eGreen, verified)
 	}
 }
+
+func TestTierWalkNilRedEndsOnRedTier(t *testing.T) {
+	var notes, verified []string
+	var excluded []testledger.Entry
+	var ran []string
+	w := &tierWalk{
+		subject: "slot",
+		run: func(tier string, _ []string) (VerifyResult, error) {
+			ran = append(ran, tier)
+			return VerifyResult{Failed: []string{tier}}, nil
+		},
+		notes: &notes, verified: &verified, excluded: &excluded,
+	}
+	ended, err := w.walk(GateConfig{Full: []string{"f"}, E2E: []string{"e"}}, tierFull)
+	if !ended || err != nil || !w.fullRed || !reflect.DeepEqual(ran, []string{tierFull}) {
+		t.Errorf("ended=%v err=%v fullRed=%v ran=%v", ended, err, w.fullRed, ran)
+	}
+}

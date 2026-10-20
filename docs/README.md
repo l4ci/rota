@@ -13,6 +13,7 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 
 ### Walkthroughs
 
+- [Quickstart: one item in manual mode](walkthroughs/quickstart-manual-mode.md). One small bug taken through `/rota-capture`, `/rota-plan`, `/rota-work` and `/rota-ship`, with the proof and review gates marked. The shortest one.
 - [A round cycle: shape the slate, run the round, release](walkthroughs/round-cycle.md). The loop between releases: `/rota-brainstorm` and `/rota-plan`, an orchestrated round, wind-down, `/rota-learn`, `/rota-release`.
 - [Greenfield: from a brief to a shipped milestone](walkthroughs/greenfield-from-brief.md). Empty repo plus a one-page brief, taken end-to-end through `/rota-vision`, `/rota-plan`, `/rota-work`, `/rota-debug`, `/rota-ship`, `/rota-learn`.
 - [Brownfield: dropping rota into an existing project](walkthroughs/brownfield-existing-project.md). Established codebase with open issues and a mental bug list, walked through `rota init`, `/rota-capture`, then a P0 cycle plus a debug cycle.

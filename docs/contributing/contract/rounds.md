@@ -386,6 +386,14 @@ note: in order: kill the pane when live; `Park`; handoff comment (`Reason: recla
 note: (#27) a not-found from the handoff comment, `item release` or `item state` (the issue is gone from the tracker, or its ID was minted in file mode and never mapped) is skipped, not fatal: reclaim adds a warning per skipped step (`<step> on <issue> skipped, the tracker does not resolve it: <err>`) and still frees the slot. Any other tracker failure is still exit 5 and leaves the slot as found.
 note: `reap` (C6) may reclaim `dead` slots only, never `stalled` ones (maintainer ruling, round 4). A worker in a long test run makes no commits and no status change, so it reads as stalled, and an unattended `reap --apply` would kill it. `stalled` is reported by reconcile, and reclaiming it is always an explicit orchestrator call. `reap` passes no `--force` and checks `health` is `dead` before calling. (#820) An `unverifiable` slot is registered work the host could not vouch for: reap leaves its checkout, branch and tab alone, as it does every registered slot.
 
+### rota round accept
+rota round accept <ID> [--issues <#a,#b>] [--gist <text>]
+repo: none
+data: {"id": string, "slot": string, "issues": [string], "changed": bool}
+exit: 2 when no ID is given; 3 when the item is unknown; 4 with `blockedBy` `slot busy` (the item is not a round-minted architecture review, the slot is busy, reported `partial` or `failed`, or its worktree is dirty), `no issues` (neither the slot nor `--issues` names the filed issues; the message names `--issues`) or `no slot holds it` (no slot holds the item and it is not one accept already closed)
+old: none (new in #1091)
+note: the orchestrator's no-PR completion for an `arch(<area>): architecture review` item the round minted. The slot must be `done`, `idle` or `blocked` with a clean worktree. The issue list is `--issues` when given, else the slot's recorded `issues:`. Through one close path shared with `round assign` and `round transfer` onto a review slot: park, comment `Review done: filed #a, #b.` (`--gist` replaces the note), complete without proof, release the claim, clear `in-progress`, free the slot. An item it already closed answers `changed: false` and writes nothing.
+
 ### rota round pick
 rota round pick <ID> --pr <N> --reason-file <path|-> [--holder-pid <n>]
 repo: none

@@ -141,6 +141,25 @@ func TestGateLocalLandedTreeDiffersIsVerifiedAgain(t *testing.T) {
 	}
 }
 
+// The VERIFY-AGAIN walk runs both tiers on the landed tree: a test.e2e that is
+// green on the scratch merge but red once the moved base landed fails forward,
+// naming test.e2e, not the full tier.
+func TestGateLocalLandedTreeRedE2EFailsForward(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(`{"test":{"full":["test -f work.txt"],"e2e":["test ! -f other.txt"]}}`)
+	w.forge("pushBeforeMerge", "other.txt")
+	res, err := w.gate(false, GateOpts{})
+	if err != nil || res.Verdict != GateVerifyFailed || !res.Changed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !strings.Contains(strings.Join(res.Notes, "\n"), "VERIFY-AGAIN") {
+		t.Errorf("no VERIFY-AGAIN note: %v", res.Notes)
+	}
+	if !strings.Contains(res.Err, "does not pass test.e2e") || !strings.Contains(res.Hint, "fix forward") {
+		t.Errorf("a red e2e of the landed tree must name test.e2e and say it landed: %q / %q", res.Err, res.Hint)
+	}
+}
+
 // --no-verify still merges without a scratch tree or a verify.
 func TestGateLocalNoVerifyMakesNoScratchTree(t *testing.T) {
 	w := newWorld(t, ghURL)

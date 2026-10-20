@@ -105,7 +105,8 @@ type tierWalk struct {
 	// verdict; true ends the walk.
 	stop func(VerifyResult) bool
 	// red handles a failed tier. stop ends the walk; false only ends the tier
-	// sequence (a land-green train goes on with what passed).
+	// sequence (a land-green train goes on with what passed). A nil red ends
+	// the walk on a red tier.
 	red func(tier string, vr VerifyResult) (stop bool, err error)
 	// Sinks: where the outcome is recorded, in place. A nil e2eVerified discards
 	// it (the gate keeps none).
@@ -164,6 +165,9 @@ func (w *tierWalk) take(tier string, vr VerifyResult) (ended, ok bool, err error
 	}
 	if full {
 		w.fullRed = true
+	}
+	if w.red == nil {
+		return true, false, nil
 	}
 	stop, err := w.red(tier, vr)
 	return stop || err != nil, false, err
