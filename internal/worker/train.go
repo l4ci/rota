@@ -28,6 +28,8 @@ import (
 //  3. MERGE the members in order onto the base in a scratch worktree. A conflict
 //     names the member that does not fit on the base plus the members before it.
 //  4. VERIFY the scratch tree once with test.full, then once with test.e2e (#378).
+//     Then run each member's `## Try it` steps in that tree (#915), the first
+//     failing member being the culprit as in 6.
 //  5. On a pass LAND every member through the ordinary gate (forge merge, pinned
 //     to the verified head), in order, without re-verifying. Before the first
 //     landing the base and every head must still be what the scratch tree was
@@ -69,6 +71,9 @@ type TrainOpts struct {
 	Order []string
 	// Say receives each line of the order report before the scratch merge.
 	Say func(string)
+	// ItemBody is GateOpts.ItemBody for every member's behaviour run (#915);
+	// nil leaves the run out.
+	ItemBody func(issue string) (body string, found bool, err error)
 }
 
 // TrainMember is one target of the train, in order.
@@ -177,6 +182,9 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		return t.res, err
 	}
 	if done, err := t.verifyStage(); done || err != nil {
+		return t.res, err
+	}
+	if done, err := t.behaviourStage(); done || err != nil {
 		return t.res, err
 	}
 	return t.land()
@@ -528,6 +536,45 @@ func (t *trainRun) verifyStage() (bool, error) {
 		res.Notes = append(res.Notes, noE2ENote(passing))
 	}
 	t.passing = passing
+	return false, nil
+}
+
+// behaviourStage runs each member's `## Try it` steps (#915), after test.full
+// and test.e2e passed and before anything lands. A member's steps run in the
+// scratch tree with the members up to it merged, through a CheckOnly gate, so
+// the collaborator trust check, the scrubbed environment, the transcript, the
+// behaviour verdict and the PR comment are the gate's own. The first failing
+// member is the culprit: nothing lands, or under LandGreen the members before
+// it do. It lowers t.passing; it is a no-op without ItemBody.
+func (t *trainRun) behaviourStage() (bool, error) {
+	e, ctx, root, o, res := t.e, t.ctx, t.root, t.o, &t.res
+	if o.ItemBody == nil {
+		return false, nil
+	}
+	for i := 0; i < t.passing; i++ {
+		m := res.Members[i]
+		if _, code := e.git(t.scratch, "checkout", "-q", "-f", "--detach", t.tips[i+1]); code != 0 {
+			return t.broke("git checkout " + t.tips[i+1] + " failed in the scratch tree")
+		}
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, CheckOnly: true, Verdict: o.Verdict, Recorded: o.Recorded,
+			ItemBody: o.ItemBody, BehaviourDir: t.scratch})
+		if err != nil {
+			return true, err
+		}
+		res.Notes = append(res.Notes, gr.Notes...)
+		if gr.OK() {
+			continue
+		}
+		res.Members[i].Culprit = true
+		res.Verdict, res.Culprit, res.CulpritGate, res.Err = gr.Verdict, m.Target, gr, gr.Err
+		res.Hint = gr.Hint
+		if !o.LandGreen || i == 0 {
+			return true, nil
+		}
+		res.Hint = strings.TrimSpace(fmt.Sprintf("%s; the verified first %d member(s) landed (--land-green)", res.Hint, i))
+		t.passing = i
+		return false, nil
+	}
 	return false, nil
 }
 
