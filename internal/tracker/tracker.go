@@ -441,14 +441,15 @@ type Settings struct {
 	// Connection is issues.connection, the `rota connect` connection an HTTP
 	// tracker (jira, linear) reaches its site through; JiraProject is
 	// issues.jira.project, LinearTeam issues.linear.team.
-	Connection  string
-	JiraProject string
-	LinearTeam  string
+	Connection      string
+	JiraProject     string
+	LinearTeam      string
+	ItsaplanProject string
 }
 
 // SettingsFromConfig reads forge.provider, issues.source,
 // issues.retryWaitSeconds, issues.labels.notPlanned, issues.connection,
-// issues.jira.project and issues.linear.team, with the schema
+// issues.jira.project, issues.linear.team and issues.itsaplan.project, with the schema
 // defaults for absent or null keys. An invalid forge.provider or issues.source
 // reads as its default here; ValidateConfig (and the *FromConfig constructors)
 // fail on it instead.
@@ -468,7 +469,7 @@ func SettingsFromConfig(cfg any) Settings {
 	if v, ok := config.Lookup(cfg, "issues.labels.notPlanned"); ok && v != nil {
 		s.NotPlannedLabel = fmt.Sprint(v)
 	}
-	for key, dst := range map[string]*string{"issues.connection": &s.Connection, "issues.jira.project": &s.JiraProject, "issues.linear.team": &s.LinearTeam} {
+	for key, dst := range map[string]*string{"issues.connection": &s.Connection, "issues.jira.project": &s.JiraProject, "issues.linear.team": &s.LinearTeam, "issues.itsaplan.project": &s.ItsaplanProject} {
 		if v, ok := config.Lookup(cfg, key); ok && v != nil {
 			*dst = strings.TrimSpace(fmt.Sprint(v))
 		}
@@ -556,6 +557,12 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 			return nil, err // never a nil *Linear inside a non-nil IssueTracker
 		}
 		return l, nil
+	case config.SourceItsaplan:
+		t, err := newItsaplanTracker(ctx, newCLI(s, dir, opts...), s)
+		if err != nil {
+			return nil, err // never a nil *Itsaplan inside a non-nil IssueTracker
+		}
+		return t, nil
 	case config.SourceIssues:
 		provider = config.ForgeAuto
 	case config.SourceForge:

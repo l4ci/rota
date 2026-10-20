@@ -69,7 +69,7 @@ func TestOpenSelectsBackend(t *testing.T) {
 		t.Fatal("issues without a tracker must be an error")
 	}
 	if _, err := Open(context.Background(), root, mustDecode(t, `{"issues": {"source": "git"}}`), Options{}); err == nil ||
-		err.Error() != "invalid issues.source 'git' (expected file|github|gitlab|forge|jira|linear)" {
+		err.Error() != "invalid issues.source 'git' (expected file|github|gitlab|forge|jira|linear|itsaplan)" {
 		t.Fatalf("bad backend: %v", err)
 	}
 

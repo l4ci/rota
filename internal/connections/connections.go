@@ -22,12 +22,13 @@ import (
 
 // Kinds a connection can have.
 const (
-	KindJira   = "jira"
-	KindLinear = "linear"
+	KindJira     = "jira"
+	KindLinear   = "linear"
+	KindItsaplan = "itsaplan"
 )
 
 // Kinds lists the accepted kinds, for messages.
-var Kinds = []string{KindJira, KindLinear}
+var Kinds = []string{KindJira, KindLinear, KindItsaplan}
 
 // ErrExists is Add refusing to overwrite a connection without replace.
 var ErrExists = errors.New("connection already exists")
@@ -70,7 +71,7 @@ func (c Connection) Validate() error {
 		return fmt.Errorf("invalid connection name %q: use letters, digits, - and _", c.Name)
 	}
 	switch c.Kind {
-	case KindJira, KindLinear:
+	case KindJira, KindLinear, KindItsaplan:
 	default:
 		return fmt.Errorf("unknown kind %q (expected %s)", c.Kind, strings.Join(Kinds, "|"))
 	}
@@ -79,6 +80,9 @@ func (c Connection) Validate() error {
 	}
 	if c.Kind == KindLinear && c.Site != "" && !strings.HasPrefix(c.Site, "https://") && !strings.HasPrefix(c.Site, "http://") {
 		return fmt.Errorf("a linear connection's --site is an http(s) URL; leave it out for https://api.linear.app")
+	}
+	if c.Kind == KindItsaplan && !strings.HasPrefix(c.Site, "https://") && !strings.HasPrefix(c.Site, "http://") {
+		return fmt.Errorf("an itsaplan connection needs --site, the http(s) URL of the instance's api, such as https://api.plan.example.com")
 	}
 	if c.Kind != KindJira {
 		if c.Deployment != "" {
