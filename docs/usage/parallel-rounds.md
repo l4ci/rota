@@ -268,6 +268,10 @@ issue to read and dispute, the item's `## Out of scope` section when it has one,
 - **Open PR.** An issue an open PR already resolves (head branch `<agent>/<issue>-*` or `Closes #N`)
   is `not ready: open PR #M` in `round candidates`, and `assign` refuses it. `--accept-open-pr`
   assigns it again for a deliberate redo.
+- **Batch.** `round.batch` N (default `0`, no limit) caps the items open at once: assigned or
+  queued as a PR, and not yet merged, closed or handed to the human. At N, `assign` exits 4 with
+  `blockedBy: batch` until one lands or parks; `--accept-batch` overrides it for one call. Use it to
+  land a round in small batches below the slot count.
 - **Failure.** A failure before dispatch undoes the claim and state; one at or after dispatch keeps
   them, and repeating the call resumes.
 - **Smoke section.** When the issue's text asks for a smoke section (it says "smoke section" or names
@@ -437,7 +441,9 @@ Off by default. With `round.autopilot` on, `rota round watch --autopilot` (or on
 4. assign the first ready candidate of the round's scope to each idle slot, at most
    `round.autopilotCap`, at the default tier and never with `--accept-overlap`. Review items
    minted in the same tick go first, and count against the same cap. While every account is cooling
-   down from a usage limit, steps 3 and 4 are skipped and the tick says why (`capped`).
+   down from a usage limit, steps 3 and 4 are skipped and the tick says why (`capped`). Likewise
+   at `round.batch` open items: the tick assigns nothing and says `batch-full`; gating and merging
+   go on, and the next tick assigns once an item has landed.
 
 It never answers a worker, approves a permission, picks a higher tier, reclaims a slot or merges
 without a passing gate. A blocked, limited or dead slot, a failed gate, drift it will not repair and
