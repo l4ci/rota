@@ -290,7 +290,7 @@ func limitsLoop(c *Ctx, root string, cfg any, set limits.Settings, holderPID int
 // ---- rota limit watch -----------------------------------------------------------
 
 func limitWatch(fs *flag.FlagSet) RunFunc {
-	timeout := fs.Float64("timeout", 0, "seconds to watch before stopping; 0 watches until interrupted")
+	timeout := fs.Float64("timeout", 0, "seconds to watch after the first full pass before stopping; 0 watches until interrupted")
 	settle := fs.Float64("settle", 5, "seconds between pane captures (tmux, and the fallback poll)")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
@@ -320,11 +320,6 @@ func limitWatch(fs *flag.FlagSet) RunFunc {
 		}
 
 		ctx := c.Context()
-		if *timeout > 0 {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, time.Duration(*timeout*float64(time.Second)))
-			defer cancel()
-		}
 		tick := time.Duration(*settle * float64(time.Second))
 		rig, err := buildLimits(ctx, c, root, cfg, set, c.deps().HolderPID(), tick, nil, func(f string, a ...any) { c.Warn(f, a...) })
 		if err != nil {
@@ -339,7 +334,7 @@ func limitWatch(fs *flag.FlagSet) RunFunc {
 		}
 
 		before := limitsJSON(root)
-		rig.W.Run(ctx, rig.Feed)
+		rig.W.RunFor(ctx, rig.Feed, time.Duration(*timeout*float64(time.Second)))
 		for _, w := range rig.W.Warnings() {
 			c.Warn("%s", w)
 		}

@@ -112,6 +112,9 @@ func (f *Feed) Start() {
 				return
 			case r := <-msgs:
 				if r.err != nil {
+					if f.ctx.Err() != nil {
+						return // Stop ended the stream; it did not die
+					}
 					// The stream is dead: try once to open it again.
 					msgs = nil
 					if err := f.subscribe(); err != nil {

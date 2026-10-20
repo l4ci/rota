@@ -147,11 +147,21 @@ func (w *Watcher) warn(format string, a ...any) {
 // Run steps until ctx ends. Text matches arrive on feed (nil for none). A
 // signal ends it without touching any entry: a waiting entry stays waiting
 // for the next watcher.
-func (w *Watcher) Run(ctx context.Context, feed <-chan Match) {
+func (w *Watcher) Run(ctx context.Context, feed <-chan Match) { w.RunFor(ctx, feed, 0) }
+
+// RunFor is Run that also stops d after its first pass (never, for d 0). The
+// clock starts after that pass, so d never cuts it: a short watch on a loaded
+// machine still looks at every session once before it stops.
+func (w *Watcher) RunFor(ctx context.Context, feed <-chan Match, d time.Duration) {
 	sweep := true
 	var matches []Match
-	for {
+	for first := true; ; first = false {
 		w.Step(ctx, matches, sweep)
+		if first && d > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, d)
+			defer cancel()
+		}
 		matches, sweep = nil, w.poll.Load()
 		if ctx.Err() != nil {
 			return
