@@ -314,3 +314,26 @@ func TestClassifyClaudeBackgroundTasksAreBusy(t *testing.T) {
 		t.Errorf("footer without tasks: %s, want idle", st)
 	}
 }
+
+// #1156 review: the task footer stays on screen at a dialog or after a crash;
+// it must not mask those states, and "0 shells" is not a running task.
+func TestClassifyBackgroundFooterKeepsStalledStates(t *testing.T) {
+	foot := "\n  ⏵⏵ bypass permissions on · 1 shell, 2 monitors\n"
+	for name, c := range map[string]struct {
+		pane, native, want string
+	}{
+		"blocked":    {"● x\n" + foot, "blocked", StateNeedsPermission},
+		"gone":       {"● x\n" + foot, "gone", StateDead},
+		"api error":  {"● x\n  ⎿  API Error: 500 internal\n" + foot, "", StateDead},
+		"permission": {"Do you want to proceed?\n ❯ 1. Yes\n   2. No\n" + foot, "", StateNeedsPermission},
+	} {
+		base, _ := ClassifyFor("claude", strings.Replace(c.pane, foot, "\n", 1), false, 60, c.native)
+		if st, ev := ClassifyFor("claude", c.pane, false, 60, c.native); st != base || st != c.want {
+			t.Errorf("%s: %s %q, want %s (without footer %s)", name, st, ev, c.want, base)
+		}
+	}
+	zero := "● x\n\n  ⏵⏵ bypass permissions on · 0 shells\n"
+	if st, _ := ClassifyFor("claude", zero, false, 60, ""); st != StateIdle {
+		t.Errorf("0 shells read as %s, want idle", st)
+	}
+}
