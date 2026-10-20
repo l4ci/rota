@@ -72,6 +72,7 @@ func LedgerNoteIn(env Env, m *RoundMemo, root string, e ledger.Entry) {
 // LedgerAppendErr is LedgerNote that returns the failure instead of warning,
 // for a verb that must exit non-zero when its ledger row is not written.
 func LedgerAppendErr(env Env, root string, e ledger.Entry) error {
+	env = env.WithDefaults()
 	if e.Round == 0 {
 		e.Round = (*RoundMemo)(nil).Round(env, root)
 	}
@@ -87,7 +88,6 @@ func ledgerAppend(env Env, root string, e ledger.Entry) {
 }
 
 func ledgerAppendErr(env Env, root string, e ledger.Entry) error {
-	env = env.WithDefaults()
 	if e.TS.IsZero() {
 		e.TS = env.Now()
 	}
