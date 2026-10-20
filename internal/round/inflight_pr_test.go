@@ -112,3 +112,14 @@ func TestInFlightPRFilesErrorFallsBackAndWarns(t *testing.T) {
 		t.Errorf("the warning says the fallback happened: %+v", r)
 	}
 }
+
+// A forge that cannot list PR files falls back and says so, not silently.
+func TestInFlightForgeWithoutPRFilesWarns(t *testing.T) {
+	f := newMoveFx(t)
+	f.withPR(nil, nil)
+	f.env.Forge = f.forge.asForge()
+	x := f.inFlightFor(t, "12")
+	if x.FromPR || !hasKind(x.Paths, "internal/cli/round.go") || x.PRFilesErr != "forge cannot list PR files" {
+		t.Errorf("missing capability must be reported: %+v", x)
+	}
+}
