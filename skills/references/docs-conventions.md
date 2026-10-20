@@ -1,6 +1,6 @@
-# `/rota-ship` (Docs Mode) scaffold conventions
+# `/rota-docs` scaffold conventions
 
-Used by `/rota-ship` (Docs Mode) Step D4 (Propose Tailored Tree) and Step D5 (Scaffold on Approval). Only `/rota-ship` (Docs Mode) uses the page-naming convention and the seed `.docsignore`; they live here so the skill's prose stays on the UX flow.
+Used by `/rota-docs` Step D4 (Propose Tailored Tree) and Step D5 (Scaffold on Approval). Only `/rota-docs` uses the page-naming convention and the seed `.docsignore`; they live here so the skill's prose stays on the UX flow.
 
 ## Page-naming convention
 
@@ -20,7 +20,7 @@ Seed `.docsignore` at the project's repo root if it doesn't already exist. The s
 - **Noise reduction** — common build/dependency dirs kept out so the diff is human-shaped.
 
 ```
-# rota ship --docs: never read these as source material for public docs
+# /rota-docs: never read these as source material for public docs
 .env
 .env.*
 **/secrets/**
@@ -38,4 +38,4 @@ build/
 target/
 ```
 
-The seed is conservative; the user extends it for project-specific paths after the scaffold lands. `/rota-ship` (Docs Mode)'s after-work flow (Step D-A2) filters the diff through `.docsignore` before classifying changes.
+The seed is conservative; the user extends it for project-specific paths after the scaffold lands. `/rota-docs`'s after-work flow (Step D-A2) filters the diff through `.docsignore` before classifying changes.
