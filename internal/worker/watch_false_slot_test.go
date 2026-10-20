@@ -289,3 +289,51 @@ func TestDoneEventAfterRelayIgnoresSameSecondStaleEvent(t *testing.T) {
 		t.Fatal("same-second done event sent after the relay was refused")
 	}
 }
+
+// #1156: a footer that counts the session's own background shells or monitors
+// is busy on a still pane, with evidence that does not carry the count.
+func TestClassifyClaudeBackgroundTasksAreBusy(t *testing.T) {
+	foot := func(n string) string {
+		return "● Bash(rota test run fast)\n\n  ⏵⏵ bypass permissions on · " + n + " (shift+tab to cycle)\n"
+	}
+	var first string
+	for _, n := range []string{"1 shell", "1 shell, 2 monitors", "3 monitors"} {
+		st, ev := ClassifyFor("claude", foot(n), false, 60, "")
+		if st != StateBusy {
+			t.Errorf("%q: %s %q, want busy", n, st, ev)
+		}
+		if first == "" {
+			first = ev
+		} else if ev != first {
+			t.Errorf("%q: evidence %q changed from %q", n, ev, first)
+		}
+	}
+	// No background tasks, no sentinel: idle as before.
+	idle := "● done thinking\n\n  ⏵⏵ bypass permissions on (shift+tab to cycle)\n"
+	if st, _ := ClassifyFor("claude", idle, false, 60, ""); st != StateIdle {
+		t.Errorf("footer without tasks: %s, want idle", st)
+	}
+}
+
+// #1156 review: the task footer stays on screen at a dialog or after a crash;
+// it must not mask those states, and "0 shells" is not a running task.
+func TestClassifyBackgroundFooterKeepsStalledStates(t *testing.T) {
+	foot := "\n  ⏵⏵ bypass permissions on · 1 shell, 2 monitors\n"
+	for name, c := range map[string]struct {
+		pane, native, want string
+	}{
+		"blocked":    {"● x\n" + foot, "blocked", StateNeedsPermission},
+		"gone":       {"● x\n" + foot, "gone", StateDead},
+		"api error":  {"● x\n  ⎿  API Error: 500 internal\n" + foot, "", StateDead},
+		"permission": {"Do you want to proceed?\n ❯ 1. Yes\n   2. No\n" + foot, "", StateNeedsPermission},
+	} {
+		base, _ := ClassifyFor("claude", strings.Replace(c.pane, foot, "\n", 1), false, 60, c.native)
+		if st, ev := ClassifyFor("claude", c.pane, false, 60, c.native); st != base || st != c.want {
+			t.Errorf("%s: %s %q, want %s (without footer %s)", name, st, ev, c.want, base)
+		}
+	}
+	zero := "● x\n\n  ⏵⏵ bypass permissions on · 0 shells\n"
+	if st, _ := ClassifyFor("claude", zero, false, 60, ""); st != StateIdle {
+		t.Errorf("0 shells read as %s, want idle", st)
+	}
+}

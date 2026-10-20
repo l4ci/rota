@@ -799,6 +799,16 @@ func TestClassifyLoginExpiredIsBlockedOnTheAccount(t *testing.T) {
 	}
 }
 
+// #1156 x #1171: the background-task footer only overrides the final idle
+// outcome, so a logged-out pane that carries it still reads BLOCKED.
+func TestClassifyLoggedOutWithTaskFooterStaysBlocked(t *testing.T) {
+	pane := "  ⎿  Login expired · Please run /login\n\n  ⏵⏵ bypass permissions on · 1 shell, 2 monitors\n"
+	st, ev := ClassifyFor("claude", pane, false, 0, "")
+	if st != StateBlocked || !strings.Contains(ev, "round.accounts") {
+		t.Errorf("state %q evidence %q", st, ev)
+	}
+}
+
 func TestClassifyLimitPhraseInEchoedBriefIsNotLimited(t *testing.T) {
 	brief := "--- ORCHESTRATOR (round 24) ---\nYou are nia.\nOut of scope: The Add funds escalation behaviour.\nThe session says: You've reached your usage limit\n\n"
 	st, ev := Classify(brief, false, 60, "idle")
