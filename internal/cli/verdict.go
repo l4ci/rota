@@ -95,8 +95,9 @@ func checkVerdict(kind, v string) error {
 }
 
 func verdictAdd(fs *flag.FlagSet) RunFunc {
-	kind := fs.String("kind", "", "review-spec, review-quality, second-opinion or qa")
-	v := fs.String("verdict", "", "PASS, CONCERNS or FAIL (qa also INFRA-FAIL)")
+	kind := fs.String("kind", "", "review-spec, review-quality, second-opinion, qa or behaviour")
+	v := fs.String("verdict", "", "PASS, CONCERNS or FAIL (qa also INFRA-FAIL; behaviour takes PASS or FAIL)")
+	transcript := fs.String("transcript", "", "path of the run's transcript (behaviour only)")
 	body := bodyFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if *kind == "" {
@@ -107,6 +108,9 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		}
 		if err := checkVerdict(*kind, *v); err != nil {
 			return Result{}, err
+		}
+		if *transcript != "" && *kind != verdict.Behaviour {
+			return Result{}, Usage("--transcript is only for --kind %s", verdict.Behaviour)
 		}
 		b, err := verdictBody(c, *body)
 		if err != nil {
@@ -121,6 +125,7 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		}
 		r := verdict.NewRecord(*kind, *v, t.head, b, c.deps().Now())
 		r.Branch, r.Repo = t.branch, t.repo
+		r.Transcript = *transcript
 		if r, err = verdict.AddBranch(t.root, t.key, r); err != nil {
 			return Result{}, err
 		}

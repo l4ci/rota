@@ -305,19 +305,46 @@ type bothSides struct {
 func (b bothSides) Provider() string                    { return b.Forge.Provider() }
 func (b bothSides) CheckAuth(ctx context.Context) error { return b.Forge.CheckAuth(ctx) }
 
+// forgeIssues is what forgeAndIssues hands back: bothSides or trustedSides.
+type forgeIssues interface {
+	tracker.Forge
+	tracker.IssueTracker
+}
+
+// trustedSides is bothSides whose issue side says who wrote an issue, so the
+// round can tell whether an issue's Try it steps may go into a brief (#899).
+// Embedding hides the issue side's own methods; these two hand them through.
+type trustedSides struct {
+	bothSides
+	trust worker.IssueTrust
+}
+
+func (t trustedSides) IssueAuthorship(ctx context.Context, key tracker.IssueKey) (tracker.Authorship, error) {
+	return t.trust.IssueAuthorship(ctx, key)
+}
+
+func (t trustedSides) CanPush(ctx context.Context, login string) (bool, error) {
+	return t.trust.CanPush(ctx, login)
+}
+
 // forgeAndIssues builds both seams for a consumer that needs them. A forge
 // failure (a local forge included) fails it; the file source's issue side is
-// tracker.NoIssues.
-func (d *Deps) forgeAndIssues(ctx context.Context, cfg any, dir string) (bothSides, error) {
+// tracker.NoIssues. The result is a worker.IssueTrust exactly when the issue
+// side is.
+func (d *Deps) forgeAndIssues(ctx context.Context, cfg any, dir string) (forgeIssues, error) {
 	f, err := d.forge(ctx, cfg, "", dir)
 	if err != nil {
-		return bothSides{}, err
+		return nil, err
 	}
 	it, err := d.issuesOrNone(ctx, cfg, dir)
 	if err != nil {
-		return bothSides{}, err
+		return nil, err
 	}
-	return bothSides{f, it}, nil
+	both := bothSides{f, it}
+	if t, ok := it.(worker.IssueTrust); ok {
+		return trustedSides{both, t}, nil
+	}
+	return both, nil
 }
 
 // trackerExec is the executor TrackerOptions install (nil: the real one), for a

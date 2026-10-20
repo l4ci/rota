@@ -177,6 +177,17 @@ func (f *fakeForge) PRRequestMerge(_ context.Context, pr int, o tracker.MergeOpt
 	return nil
 }
 
+// AddMRNote logs the comment and keeps its body in the forge DB word
+// "note", so a test reads what the gate posted. "noteErr" makes it fail.
+func (f *fakeForge) AddMRNote(_ context.Context, pr int, body string) (string, error) {
+	f.logf("AddMRNote %d", pr)
+	if msg := f.w.forgeWord("noteErr"); msg != "" {
+		return "", errors.New(msg)
+	}
+	f.w.forge("note", f.w.forgeWord("note")+body)
+	return "1", nil
+}
+
 // CommitChecks reports one check, "ci/test", on a commit pushed to the
 // origin's rota/ci/* branches: failure when its tree holds the file named by
 // "ciFail", else success. "ci" overrides it: none (CI never started), pending
@@ -235,3 +246,38 @@ func (f *fakeForge) CommitChecks(_ context.Context, sha string) ([]tracker.Check
 	}
 	return checks, nil
 }
+
+// IssueAuthorship answers who wrote the issue and what it says: the forge DB
+// word "author" (default alice; "authorUnknown" makes it empty), "editor"
+// (default none) and "issueBody". "editorsErr" makes it fail.
+func (f *fakeForge) IssueAuthorship(_ context.Context, n tracker.IssueKey) (tracker.Authorship, error) {
+	f.logf("IssueAuthorship %s", n)
+	if msg := f.w.forgeWord("editorsErr"); msg != "" {
+		return tracker.Authorship{}, errors.New(msg)
+	}
+	// "edited" says the body was edited; with no "editor" the editor is unknown
+	a := tracker.Authorship{
+		Editor: f.w.forgeWord("editor"), Body: f.w.forgeWord("issueBody"),
+		Edited: f.w.forgeWord("edited") != "" || f.w.forgeWord("editor") != "",
+	}
+	if f.w.forgeWord("authorUnknown") == "" {
+		a.Author = f.w.forgeWord("author")
+		if a.Author == "" {
+			a.Author = "alice"
+		}
+	}
+	return a, nil
+}
+
+// CanPush is true for every login but those in the comma list "readers";
+// "canPushErr" makes it fail.
+func (f *fakeForge) CanPush(_ context.Context, login string) (bool, error) {
+	f.logf("CanPush %s", login)
+	if msg := f.w.forgeWord("canPushErr"); msg != "" {
+		return false, errors.New(msg)
+	}
+	return !slices.Contains(strings.Split(f.w.forgeWord("readers"), ","), login), nil
+}
+
+var _ IssueTrust = (*fakeForge)(nil)
+var _ IssueTrust = (*tracker.GitHub)(nil)

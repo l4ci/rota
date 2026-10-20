@@ -153,6 +153,11 @@ type GateOpts struct {
 	// changes; t is the resolved target. A non-nil error stops the gate with verdict approval-required
 	// and is returned as is.
 	Approve func(t GateTarget, files func() ([]string, error)) error
+	// ItemBody reads the body of an item (#899), whose `## Try it` steps the
+	// gate runs on the scratch merge after test.full and test.e2e. found is
+	// false for an item the backend does not know. nil leaves the behaviour
+	// run out: the train and callers that did not wire it.
+	ItemBody func(issue string) (body string, found bool, err error)
 }
 
 // skipsVerify says the gate runs no verify tier: --no-verify, or a train's
@@ -292,6 +297,8 @@ type Forge interface {
 	ClosedNumbers(body string) []int
 	// CommitChecks reads the CI checks on a pushed commit (test.fullWhere ci).
 	CommitChecks(ctx context.Context, sha string) ([]tracker.CheckRun, error)
+	// AddMRNote posts a comment on the PR (the behaviour run's transcript).
+	AddMRNote(ctx context.Context, number int, body string) (string, error)
 }
 
 // Issues is the part of tracker.IssueTracker the gate reads: the issue a PR
@@ -1043,6 +1050,9 @@ func (g *gate) verifyFirst(what string, check func(dir, sha string) (bool, error
 	tree, _ := g.git(dir, "rev-parse", "HEAD^{tree}")
 	g.res.SHA = strutil.ShortSHA(sha)
 	if done, err := check(dir, sha); done || err != nil {
+		return true, err
+	}
+	if done, err := g.behaviourRun(dir); done || err != nil {
 		return true, err
 	}
 	if g.remote {

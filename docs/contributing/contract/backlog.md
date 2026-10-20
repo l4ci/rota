@@ -36,11 +36,12 @@ note: a field flag given with an empty value (`--related ""`) exits 2, as old di
 ### rota item show
 rota item show <ID>
 repo: scoped
-data: {"id": string, "type": "B"|"F"|"T", "title": string, "status": string, "state": string|null, "claimedBy": string|null, "assignees": []string, "milestone": string|null, "notes": []string, "acceptance": [{"id": string, "text": string, "met": bool, "proof": string|null, "flag": string|null}], "comments": [{"who": string, "kind": string, "text": string}]}
+data: {"id": string, "type": "B"|"F"|"T", "title": string, "status": string, "state": string|null, "claimedBy": string|null, "assignees": []string, "milestone": string|null, "notes": []string, "acceptance": [{"id": string, "text": string, "met": bool, "proof": string|null, "flag": string|null}], "tryIt": [{"run": string, "expect": []string, "line": number}], "tryItError": string|null, "comments": [{"who": string, "kind": string, "text": string}]}
 exit: 3 item unknown; backend (issue-only); tracker
 old: hv-item-show <ID>
 shim: parse the fixed lines (`[id] title`, `type:`, `status:`, `state:`, `claimed by:`, `assignee:`, `milestone:`, `notes:`, `comments: N`) and the comment rows `- <who> · <kind> · <text>`; `none` becomes null and csv values become lists. The old `type:` line is a word (`bug`, `feature`, `task`); `type` is its letter. In issue mode the bracketed id loses its letter (rule 11).
 note: `acceptance` lists the criteria under `## Acceptance` (a body without ids shows the ids `rota plan pass` would give) with their coverage from the `acceptance` note: `met` needs a mark whose text still matches the body and whose proof row is still PASS; `proof` is `<sha>:<check>` of the mark; `flag` says why a marked criterion is not met (`changed`: text edited since, `unproven`: row gone or not PASS, `missing`: the criterion left the body). `[]` when there are none. Text mode adds `acceptance: N/M met` and a line per flagged criterion.
+note: `tryIt` lists the steps of the body's `## Try it` section (`rota item show` parses it with the same grammar the merge gate runs): `run` is the command, `expect` the substrings its output must contain, `line` the body line the step starts on. `[]` when the body has no section or no steps. `tryItError` is the parse error (it names the body line) when the section is malformed, else null; `tryIt` is then `[]`. Text mode adds `try it: N step(s)` when the section exists and `try it: malformed: <error>` on an error, and nothing when there is no section.
 
 ### rota item claim
 rota item claim <ID> --as <claim-id>

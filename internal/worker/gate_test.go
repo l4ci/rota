@@ -134,9 +134,11 @@ func (w *world) forgeWord(key string) string {
 // env builds the Go Env around a fake Forge over the world's bare origin.
 func (w *world) env(brokenMergeBase bool) Env {
 	return Env{
-		Lease:  w.lease,
-		Sleep:  func(time.Duration) {},
-		Getenv: func(k string) string { return map[string]string{"ROTA_GATE_SHA_WAIT": "0"}[k] },
+		Lease: w.lease,
+		Sleep: func(time.Duration) {},
+		Getenv: func(k string) string {
+			return map[string]string{"ROTA_GATE_SHA_WAIT": "0", "PATH": os.Getenv("PATH"), "HOME": os.Getenv("HOME")}[k]
+		},
 	}.withForge(func(provider, dir string) Forge { return &fakeForge{w: w, provider: provider} }, brokenMergeBase)
 }
 

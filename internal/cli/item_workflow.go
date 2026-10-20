@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/pystr"
 )
 
@@ -69,9 +70,11 @@ func itemShow(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFailRead(err)
 		}
+		tryIt, tryErr := tryItData(st.Body)
 		data := jsonObj("id", st.ID, "type", st.Type, "title", st.Title, "status", st.Status,
 			"state", nullIfEmpty(st.State), "claimedBy", nullIfEmpty(st.Claim), "assignees", assignees,
-			"milestone", nullIfEmpty(st.Milestone), "notes", notes, "acceptance", acceptanceData(cover), "comments", comments)
+			"milestone", nullIfEmpty(st.Milestone), "notes", notes, "acceptance", acceptanceData(cover),
+			"tryIt", tryIt.steps, "tryItError", nullIfEmpty(tryErr), "comments", comments)
 		word := map[string]string{"B": "bug", "F": "feature", "T": "task"}[st.Type]
 		lines := []string{
 			fmt.Sprintf("[%s] %s", spellID(st.Type, st.ID), st.Title),
@@ -85,8 +88,39 @@ func itemShow(fs *flag.FlagSet) RunFunc {
 			fmt.Sprintf("comments: %d", len(st.Comments)),
 		}
 		lines = append(lines, acceptanceLines(cover)...)
+		switch {
+		case tryErr != "":
+			lines = append(lines, "try it: malformed: "+tryErr)
+		case tryIt.present:
+			lines = append(lines, fmt.Sprintf("try it: %d step(s)", len(tryIt.steps)))
+		}
 		return Result{Data: data, Text: strings.Join(append(lines, rows...), "\n")}, nil
 	}
+}
+
+// tryItView is an item body's Try it section as show reports it.
+type tryItView struct {
+	steps   []any // {run, expect, line} objects; never nil
+	present bool  // the body has a Try it section
+}
+
+// tryItData parses body's Try it section; errText is the parse error, "" when
+// there is none.
+func tryItData(body string) (v tryItView, errText string) {
+	v.steps = []any{}
+	steps, ok, err := itembody.ParseTryIt(body)
+	v.present = ok
+	if err != nil {
+		return v, err.Error()
+	}
+	for _, st := range steps {
+		expect := []any{}
+		for _, e := range st.Expect {
+			expect = append(expect, e)
+		}
+		v.steps = append(v.steps, jsonObj("run", st.Run, "expect", expect, "line", st.Line))
+	}
+	return v, ""
 }
 
 // spellID is the bullet spelling of an item: "F12", and "repo:F12" for the

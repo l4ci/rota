@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/harness"
@@ -757,9 +758,22 @@ func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
 		req.Thread = func() (approvalThread, error) { return targetApprovalThread(t) }
 		return clearMerge(c, policy, o.Slot+" into "+o.Base, o.Confirm, req, files, nil)
 	}
+	// The backlog opens on the first item read, once: a gate that never reaches
+	// the behaviour run (or whose item has no Try it section) pays nothing.
+	var be backlog.Backend
+	var beErr error
+	itemBody := func(issue string) (string, bool, error) {
+		if be == nil && beErr == nil {
+			be, beErr = openBacklog(c, root, false, "")
+		}
+		if beErr != nil {
+			return "", false, beErr
+		}
+		return be.Detail(issue)
+	}
 	ctx, stop := workerContext()
 	defer stop()
-	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, Prune: o.Prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root)})
+	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, Prune: o.Prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root), ItemBody: itemBody})
 	run := gateRun{Result: r, Err: err, Issue: r.Issue, Refused: isRefusal(worker.ClassifyVerdict(r.Verdict), err)}
 	if run.Refused || err != nil || o.CheckOnly {
 		return run

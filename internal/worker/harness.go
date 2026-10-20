@@ -53,7 +53,7 @@ func (e Env) probe() harness.Probe {
 		Look: func(name string) (string, bool) { p, err := e.LookPath(name); return p, err == nil },
 		Run: func(ctx context.Context, bin string, args, env []string) (harness.Result, error) {
 			r, err := e.Run(ctx, bin, args, env)
-			return harness.Result(r), err
+			return harness.Result{Stdout: r.Stdout, Stderr: r.Stderr, ExitCode: r.ExitCode}, err
 		},
 	}
 }

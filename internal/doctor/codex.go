@@ -69,7 +69,7 @@ func (d *runner) harnessCheck(kind string, plan harness.Doctor) Check {
 	}
 	p := harness.Probe{Look: look, Run: func(ctx context.Context, bin string, args, env []string) (harness.Result, error) {
 		r, err := d.in.Exec(ctx, bin, args, env, d.in.Dir)
-		return harness.Result(r), err
+		return harness.Result{Stdout: r.Stdout, Stderr: r.Stderr, ExitCode: r.ExitCode}, err
 	}}
 	home := ""
 	if len(homes) > 0 {

@@ -863,7 +863,8 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	}
 	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return branch }, Round: rnd, Kind: kind, Model: appliedModel, Wrap: wrap,
 		Brief: func() string {
-			text := pointerBrief(o.To, id, branch, brief, nil, decisions, outOfScope(be, id), touches(be, id), tierBrief{Kind: kind, Tier: tier, Model: appliedModel, Default: o.Settings.Tier, Reason: reason, Table: o.Settings.Models[kind], Attempt: attempt})
+			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
+			text := pointerBrief(o.To, id, branch, brief, nil, decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: kind, Tier: tier, Model: appliedModel, Default: o.Settings.Tier, Reason: reason, Table: o.Settings.Models[kind], Attempt: attempt})
 			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `%s` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
 				res.From, marker.Handoff(res.From, rnd), branch)
 			if rec != nil {
