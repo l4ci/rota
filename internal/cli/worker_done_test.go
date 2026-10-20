@@ -1,11 +1,16 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // doneProject is a backlog project whose slot "ben" holds B07 on branch feat/x.
@@ -206,4 +211,41 @@ func TestWorkerDoneFencesAReclaimedSlot(t *testing.T) {
 	if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--attempt", "aaaa1111", "--json"); code != 4 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
+}
+
+// worker done run from a worktree whose tracked config still has the old
+// work.accounts reads round.accounts from the main checkout: the ledger row
+// carries the headroom of the slot's account (#1190).
+func TestWorkerDoneLedgerAccountsFromMainCheckout(t *testing.T) {
+	main := workerProject(t, `{"round":{"accounts":[{"name":"work","configDir":"/w"}]}}`)
+	wt := filepath.Join(main, ".worktrees", "ben")
+	gitT(t, main, "worktree", "add", "-q", "-b", "ben/x", wt)
+	os.MkdirAll(filepath.Join(wt, ".rota"), 0o755)
+	os.WriteFile(filepath.Join(wt, ".rota", "config.json"), []byte(`{"work":{"accounts":[{"name":"work","configDir":"/w"}]}}`), 0o644)
+	os.WriteFile(filepath.Join(main, ".rota", "workers.json"),
+		[]byte(`{"slots":[{"name":"ben","branch":"ben/x","task":"B07","state":"busy","kind":"claude","account":"work","worktree":"`+wt+`"}]}`), 0o644)
+
+	d := testDeps()
+	d.WorkerAccounts = func() *worker.Accounts {
+		return &worker.Accounts{Fetch: func(_ context.Context, _, _ string) (*jsonx.Object, string) {
+			v, _ := jsonx.Decode([]byte(`{"five_hour":{"utilization":40,"resets_at":null},"seven_day":{"utilization":10,"resets_at":null}}`))
+			return v.(*jsonx.Object), ""
+		}}
+	}
+	if code, out, errOut := rotaInWith(t, d, wt, "worker", "done", "ben", "--base", "main", "--json"); code != 0 {
+		t.Fatalf("exit %d: %s %s", code, out, errOut)
+	}
+	es, err := ledger.Load(main)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range es {
+		if e.Kind == ledger.KindDone && e.Slot == "ben" {
+			if e.Account != "work" || e.Detail == nil || e.Detail.Len() == 0 {
+				t.Fatalf("done row = %+v, want account work with a headroom reading", e)
+			}
+			return
+		}
+	}
+	t.Fatalf("no done row in the main checkout's ledger: %+v", es)
 }
