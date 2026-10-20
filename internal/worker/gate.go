@@ -169,9 +169,10 @@ type GateOpts struct {
 	CheckReviews bool
 	// Approve is the merge-approval gate (B1), run after provenance and right
 	// before the merge, never under CheckOnly. files lists the paths the merge
-	// changes; t is the resolved target. A non-nil error stops the gate with verdict approval-required
-	// and is returned as is.
-	Approve func(t GateTarget, files func() ([]string, error)) error
+	// changes; t is the resolved target. A refusal or an error stops the gate
+	// with verdict approval-required; the refusal lands in GateResult.Refusal
+	// and its error, or the callback's own, is returned as is.
+	Approve func(t GateTarget, files func() ([]string, error)) (*exitcode.Refusal, error)
 	// ItemBody reads the body of an item (#899), whose `## Try it` steps the
 	// gate runs on the scratch merge after test.full and test.e2e. found is
 	// false for an item the backend does not know. nil leaves the behaviour
@@ -215,7 +216,10 @@ type GateResult struct {
 	Round *RoundMemo
 	Err   string
 	Hint  string
-	Notes []string // PROVENANCE-SKIP and NO-VERIFY lines for stderr
+	// Refusal is the approval gate's refusal, set with verdict approval-required
+	// when it refused rather than failed to run.
+	Refusal *exitcode.Refusal
+	Notes   []string // PROVENANCE-SKIP and NO-VERIFY lines for stderr
 	// Warnings are problems the gate survived: the merge landed, but something
 	// after it needs a caller's eye (a Jira issue that would not close).
 	Warnings []string
@@ -862,11 +866,32 @@ func (g *gate) stepPRMatches() (bool, error) {
 		return mismatch(fmt.Sprintf("PR %s targets '%s', the gate's base is '%s' — stacked PR?", g.prNum, info.Base, g.o.Base))
 	case info.Head != g.branch:
 		return mismatch(fmt.Sprintf("PR %s is headed by '%s', slot %s verified '%s'", g.prNum, info.Head, g.o.Slot, g.branch))
-	case info.HeadSHA != g.verified:
-		return mismatch(fmt.Sprintf("PR %s head is %s, the verified %s is %s — pushed since?", g.prNum, info.HeadSHA, g.headRef, g.verified))
+	}
+	// The forge can lag a push: origin has the commit and the PR still names the
+	// old head. Read again a bounded number of times before calling it a mismatch.
+	for i := 1; info.HeadSHA != g.verified && i < gateHeadTries; i++ {
+		g.e.Sleep(gateHeadWait)
+		v, ok := g.prInfo()
+		if !ok {
+			return g.broke(fmt.Sprintf("could not re-read PR %s from %s", g.prNum, g.provider))
+		}
+		info = &v
+		if info.State != "OPEN" || info.Head != g.branch {
+			break
+		}
+	}
+	if info.HeadSHA != g.verified {
+		return mismatch(fmt.Sprintf("PR %s head is %s, the verified %s is %s — pushed since, or %s has not caught up with the push (read %d times)", g.prNum, info.HeadSHA, g.headRef, g.verified, g.provider, gateHeadTries))
 	}
 	return false, nil
 }
+
+// gateHeadTries and gateHeadWait bound the wait for the forge's PR head to reach
+// the commit origin already holds.
+const (
+	gateHeadTries = 5
+	gateHeadWait  = 2 * time.Second
+)
 
 // stepProvenance runs the approvals check.
 func (g *gate) stepProvenance() (bool, error) {
@@ -1089,12 +1114,16 @@ func (g *gate) stepPremerge() (bool, error) {
 		}
 	}
 	if g.o.Approve != nil {
-		run.Approve = func(files func() ([]string, error)) error { return g.o.Approve(g.target, files) }
+		run.Approve = func(files func() ([]string, error)) (*exitcode.Refusal, error) { return g.o.Approve(g.target, files) }
 	}
-	r, approval, err := run.run()
+	r, approval, ref, err := run.run()
 	switch {
 	case approval:
 		g.res.Verdict = GateApprovalRequired
+		g.res.Refusal = ref
+		if ref != nil {
+			err = ref.Err
+		}
 		return true, err
 	case err != nil:
 		return g.broke(err.Error())

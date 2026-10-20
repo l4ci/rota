@@ -130,6 +130,10 @@ func (claude) AccountEnv(a Account) []string {
 	return []string{"CLAUDE_CONFIG_DIR=" + a.ConfigDir}
 }
 
+func (claude) AmbientAccount(getenv func(string) string) Account {
+	return Account{ConfigDir: getenv("CLAUDE_CONFIG_DIR")}
+}
+
 func (claude) Accounts(cfg any) AccountList {
 	l := AccountList{Key: "round.accounts"}
 	for _, a := range config.Accounts(cfg) {
@@ -147,7 +151,8 @@ func (claude) LimitPhrases() []string { return SharedLimitPhrases() }
 // the status line while the pane itself may sit still between captures.
 func (claude) PaneVocab() PaneVocab {
 	return PaneVocab{
-		Busy: []string{`(?m)(?:\(|· )[^()\n]*esc to interrupt\s*(?:·[^()\n]*)?\)?\s*$`, `(?m)^\s*⎿\s+Running…`},
+		LoggedOut: `Login expired|Please run /login`,
+		Busy:      []string{`(?m)(?:\(|· )[^()\n]*esc to interrupt\s*(?:·[^()\n]*)?\)?\s*$`, `(?m)^\s*⎿\s+Running…`},
 		// The footer counts the session's own background tasks:
 		// `⏵⏵ bypass permissions on · 1 shell, 2 monitors`.
 		Background: []string{`(?m)^\s*⏵⏵[^\n]*[·,]\s*[1-9]\d* (?:shell|monitor)s?\b`},

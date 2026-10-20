@@ -1,10 +1,8 @@
 package tracker
 
 import (
-	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 )
 
 // ReadCache remembers the forge reads one rota process has made, so the same
@@ -15,17 +13,29 @@ import (
 type ReadCache struct {
 	mu      sync.Mutex
 	results map[string]Result
-	issues  map[string]Issue   // issue list rows, by provider+dir+number
-	open    map[string][]Issue // whole open lists (no filter), by provider+dir
-
-	// noStateReason is set once gh rejected the stateReason field, so the
-	// adapters sharing this cache do not each fail and retry the same list.
-	noStateReason atomic.Bool
+	layers  map[any]CacheLayer
 }
+
+// CacheLayer is adapter-owned state kept beside the argv results. Reset runs
+// whenever the cache drops its reads; state that must outlive a write (facts
+// about the forge CLI, not about repository data) is left alone by Reset.
+type CacheLayer interface{ Reset() }
 
 // NewReadCache returns an empty cache.
 func NewReadCache() *ReadCache {
-	return &ReadCache{results: map[string]Result{}, issues: map[string]Issue{}, open: map[string][]Issue{}}
+	return &ReadCache{results: map[string]Result{}, layers: map[any]CacheLayer{}}
+}
+
+// cacheLayer returns the layer held under key, creating it with mk on first use.
+func cacheLayer[L CacheLayer](rc *ReadCache, key any, mk func() L) L {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	if l, ok := rc.layers[key]; ok {
+		return l.(L)
+	}
+	l := mk()
+	rc.layers[key] = l
+	return l
 }
 
 // WithReadCache makes the adapter's CLI serve repeated reads from rc.
@@ -51,53 +61,9 @@ func (rc *ReadCache) Clear() {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	clear(rc.results)
-	clear(rc.issues)
-	clear(rc.open)
-}
-
-// putOpen holds the complete, unfiltered open list of a repository.
-func (rc *ReadCache) putOpen(scope string, list []Issue) {
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
-	rc.open[scope] = list
-}
-
-// openMatching answers a label-filtered open list from the held complete open
-// list. Label names compare case-insensitively, as the forge does; several
-// labels all have to be present.
-func (rc *ReadCache) openMatching(scope string, labels []string) ([]Issue, bool) {
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
-	all, ok := rc.open[scope]
-	if !ok {
-		return nil, false
+	for _, l := range rc.layers {
+		l.Reset()
 	}
-	out := []Issue{}
-next:
-	for _, is := range all {
-		for _, want := range labels {
-			if !slices.ContainsFunc(is.Labels, func(l string) bool { return strings.EqualFold(l, want) }) {
-				continue next
-			}
-		}
-		out = append(out, is)
-	}
-	return out, true
-}
-
-func (rc *ReadCache) putIssues(scope string, list []Issue) {
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
-	for _, is := range list {
-		rc.issues[scope+"#"+string(is.Key)] = is
-	}
-}
-
-func (rc *ReadCache) issue(scope string, k IssueKey) (Issue, bool) {
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
-	is, ok := rc.issues[scope+"#"+string(k)]
-	return is, ok
 }
 
 // cacheScope names the repository a CLI talks to, so adapters for different

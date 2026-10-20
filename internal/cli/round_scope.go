@@ -23,9 +23,9 @@ func roundScope(fs *flag.FlagSet) RunFunc {
 		if *bodyFile == "" {
 			return Result{}, Usage("--body-file is required")
 		}
-		raw, err := readInputFile(c, *bodyFile)
+		raw, err := readBodyInput(c, "body-file", *bodyFile, ExitResolution)
 		if err != nil {
-			return Result{}, readInputErr("body-file", *bodyFile, err)
+			return Result{}, err
 		}
 		var entries []string
 		last := ""

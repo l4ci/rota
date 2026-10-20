@@ -356,6 +356,23 @@ func ExpandConfigDirIn(d, home string) string {
 	return filepath.Clean(d)
 }
 
+// ConfigDirMismatch is the warning for an orchestrator running under
+// orchDir (its CLAUDE_CONFIG_DIR) when round.accounts is set and names no such
+// dir: slots take the configured accounts, so they would not run under the
+// orchestrator's login. "" when orchDir is unset or one of the accounts. An
+// empty account list is no mismatch: slots inherit orchDir.
+func ConfigDirMismatch(orchDir string, accts []config.Account) string {
+	if orchDir == "" || len(accts) == 0 {
+		return ""
+	}
+	for _, a := range accts {
+		if a.ConfigDir != "" && SameConfigDir(a.ConfigDir, orchDir) {
+			return ""
+		}
+	}
+	return "the orchestrator runs under CLAUDE_CONFIG_DIR=" + orchDir + ", which is not in round.accounts; slots will use the configured accounts, not that login"
+}
+
 // AccountOf names the round.accounts entry whose configDir is dir, "" when
 // none is.
 func AccountOf(root, dir string) string {

@@ -74,6 +74,9 @@ type Settings struct {
 	// WorkerKind is round.workerKind: the project's default worker harness,
 	// "" when unset (the slot's recorded kind, else claude, decides).
 	WorkerKind string
+	// FullOnly is true when test.fast is empty but test.full is set: workers
+	// have no fast tier to prove against, so their brief says to run test.full.
+	FullOnly bool
 	// StallMinutes is round.stallMinutes: how long a slot may make no progress
 	// before `round reconcile` calls it stalled; 0 turns the check off.
 	StallMinutes int
@@ -259,6 +262,9 @@ func FromConfig(cfg any) (Settings, error) {
 	if err := loadTiers(cfg, &s); err != nil {
 		return s, err
 	}
+	fast, _ := list(cfg, "test.fast")
+	full, _ := list(cfg, "test.full")
+	s.FullOnly = len(fast) == 0 && len(full) > 0
 	return s, loadRoles(cfg, &s)
 }
 

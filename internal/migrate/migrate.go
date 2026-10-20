@@ -219,7 +219,11 @@ func Run(o Options) (*Result, error) {
 	if err := m.remapRegistry(); err != nil {
 		return m.finish(), err
 	}
-	m.say("Next: rota config set issues.source " + m.sourceName())
+	// itsaplan is no forge: its source must already be set for the run to find
+	// the project, so there is no step left to take.
+	if name := m.sourceName(); name != "itsaplan" {
+		m.say("Next: rota config set issues.source " + name)
+	}
 	m.res.Done = true
 	return m.finish(), nil
 }

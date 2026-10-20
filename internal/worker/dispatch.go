@@ -271,7 +271,16 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 				return res, err
 			}
 		}
-		accountEnv = hz.AccountEnv(harness.Account{ConfigDir: configDir, Home: setup.Home})
+		acct := harness.Account{ConfigDir: configDir, Home: setup.Home}
+		// No account configured for the slot: it runs under the orchestrator's.
+		amb := hz.AmbientAccount(e.Environ())
+		if acct.ConfigDir == "" {
+			acct.ConfigDir = amb.ConfigDir
+		}
+		if acct.Home == "" {
+			acct.Home = amb.Home
+		}
+		accountEnv = hz.AccountEnv(acct)
 		if launch, signKey, err = hz.Prepare(launch, e.Executable, setup); err != nil {
 			return res, asError(err)
 		}

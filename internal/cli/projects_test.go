@@ -16,6 +16,7 @@ func projectsXDG(t *testing.T) string {
 	x := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", x)
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", filepath.Join(x, "state"))
 	return x
 }
 
@@ -34,7 +35,7 @@ func TestInitRegistersProjectIdempotently(t *testing.T) {
 	if v, _ := d.Get("changed"); v != false {
 		t.Errorf("registry must not make re-init changed: %v", v)
 	}
-	if _, err := os.Stat(filepath.Join(x, "rota", "projects.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(x, "state", "rota", "projects.json")); err != nil {
 		t.Fatal(err)
 	}
 	if ps, _ := projects.List(); len(ps) != 1 {
@@ -44,7 +45,7 @@ func TestInitRegistersProjectIdempotently(t *testing.T) {
 
 func TestInitWarnsWhenRegistryUnwritable(t *testing.T) {
 	x := projectsXDG(t)
-	os.WriteFile(filepath.Join(x, "rota"), []byte("a file, not a dir"), 0o644)
+	os.WriteFile(filepath.Join(x, "state"), []byte("a file, not a dir"), 0o644)
 	code, env, errOut := initRun(t, t.TempDir(), "init", "--no-blocks")
 	if code != 0 {
 		t.Fatalf("exit %d", code)
@@ -82,6 +83,15 @@ func TestProjectsListsAndMarksMissing(t *testing.T) {
 	}
 }
 
+func TestProjectsReportsTheStateDir(t *testing.T) {
+	x := projectsXDG(t)
+	code, env, _ := initRun(t, t.TempDir(), "projects")
+	dir, _ := initData(env).Get("dir")
+	if want := filepath.Join(x, "state", "rota"); code != 0 || dir != want {
+		t.Fatalf("exit %d dir %v, want %s", code, dir, want)
+	}
+}
+
 func TestProjectsEmpty(t *testing.T) {
 	projectsXDG(t)
 	code, env, _ := initRun(t, t.TempDir(), "projects")
@@ -116,7 +126,7 @@ func TestProjectsCleanupDropsGoneAndNoLongerRota(t *testing.T) {
 	if v, _ := initData(env).Get("changed"); v != false {
 		t.Errorf("second cleanup changed: %v", env)
 	}
-	if _, err := os.Stat(filepath.Join(x, "rota", "projects.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(x, "state", "rota", "projects.json")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -126,7 +136,7 @@ func TestProjectsCleanupWithoutRegistryCreatesNothing(t *testing.T) {
 	if code, _, _ := initRun(t, t.TempDir(), "projects", "cleanup"); code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if _, err := os.Stat(filepath.Join(x, "rota")); err == nil {
+	if _, err := os.Stat(filepath.Join(x, "state", "rota")); err == nil {
 		t.Error("cleanup created the config dir")
 	}
 }
@@ -162,7 +172,7 @@ func TestProjectsRemoveNotRegisteredIsANoopAndNeedsOneDir(t *testing.T) {
 	if v, _ := initData(env).Get("changed"); code != 0 || v != false {
 		t.Fatalf("%d %v", code, env)
 	}
-	if _, err := os.Stat(filepath.Join(x, "rota")); err == nil {
+	if _, err := os.Stat(filepath.Join(x, "state", "rota")); err == nil {
 		t.Error("remove created the config dir")
 	}
 	for _, args := range [][]string{{"projects", "remove"}, {"projects", "remove", "a", "b"}} {
@@ -229,5 +239,24 @@ func TestProjectsUIOpensTheScreenFromTheVerbsData(t *testing.T) {
 		if code, _, _ := r.do("projects", sub, "--ui"); code != ExitUsage {
 			t.Errorf("projects %s --ui exit %d", sub, code)
 		}
+	}
+}
+
+func TestProjectsListsTheSameAfterTheStateMigration(t *testing.T) {
+	x := projectsXDG(t)
+	proj := t.TempDir()
+	os.MkdirAll(filepath.Join(x, "rota"), 0o755)
+	old := filepath.Join(x, "rota", "projects.json")
+	os.WriteFile(old, []byte(`{"projects":[{"path":"`+proj+`","name":"p","lastSeen":"2026-01-01T00:00:00Z"}]}`), 0o644)
+	_, env, _ := initRun(t, t.TempDir(), "projects")
+	rows, _ := initData(env).Get("projects")
+	if l, _ := rows.([]any); len(l) != 1 {
+		t.Fatalf("rows %v", rows)
+	}
+	if _, err := os.Stat(old); err == nil {
+		t.Error("old registry must be moved")
+	}
+	if _, err := os.Stat(filepath.Join(x, "state", "rota", "projects.json")); err != nil {
+		t.Error(err)
 	}
 }

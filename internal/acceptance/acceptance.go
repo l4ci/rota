@@ -24,9 +24,6 @@ type Criterion struct {
 // check) and the criterion text at the time of marking.
 type Mark struct{ ID, Date, Sha, Check, Text string }
 
-// Row is the part of a proof row coverage reads.
-type Row struct{ Check, Result, Sha string }
-
 // Status is one criterion's coverage. Flag is "", "changed" (text edited
 // since the mark), "unproven" (the proof row is gone or not PASS) or
 // "missing" (a mark whose id left the body).
@@ -178,29 +175,13 @@ func Upsert(marks []Mark, m Mark) []Mark {
 	return append(out, m)
 }
 
-// FindProof is the latest row for check whose sha matches sha (a prefix
-// either way, at least 4 characters). The caller decides whether the row's
-// result is good enough.
-func FindProof(rows []Row, sha, check string) (Row, bool) {
-	sha, check = one(sha), one(check)
-	if len(sha) < 4 {
-		return Row{}, false
-	}
-	for i := len(rows) - 1; i >= 0; i-- {
-		r := rows[i]
-		if one(r.Check) != check || len(r.Sha) < 4 {
-			continue
-		}
-		if strings.HasPrefix(sha, r.Sha) || strings.HasPrefix(r.Sha, sha) {
-			return r, true
-		}
-	}
-	return Row{}, false
-}
+// Lookup finds the result of the proof row that speaks for a mark's sha and
+// check. The proof package owns which row that is, so acceptance only asks.
+type Lookup func(sha, check string) (result string, found bool)
 
 // Coverage reports every criterion of body (unlabeled ones under the id
 // Number would give them), then marks whose criterion is gone.
-func Coverage(body string, marks []Mark, rows []Row) []Status {
+func Coverage(body string, marks []Mark, proofOf Lookup) []Status {
 	byID := map[string]Mark{}
 	for _, m := range marks {
 		byID[m.ID] = m
@@ -212,10 +193,10 @@ func Coverage(body string, marks []Mark, rows []Row) []Status {
 		seen[c.ID] = true
 		if m, ok := byID[c.ID]; ok {
 			st.Proof = m.Sha + ":" + m.Check
-			switch r, found := FindProof(rows, m.Sha, m.Check); {
+			switch result, found := proofOf(m.Sha, m.Check); {
 			case m.Text != c.Text:
 				st.Flag = "changed"
-			case !found || r.Result != "PASS":
+			case !found || result != "PASS":
 				st.Flag = "unproven"
 			default:
 				st.Met = true
