@@ -32,9 +32,9 @@ const DefaultOpencodeCommand = "opencode --model {model}"
 type opencode struct{}
 
 func (opencode) Kind() string       { return OpenCode }
-func (opencode) CommandKey() string { return "work.opencodeCommand" }
+func (opencode) CommandKey() string { return "round.opencodeCommand" }
 
-// Launch is work.opencodeCommand, else the default launch line. A model fills
+// Launch is round.opencodeCommand, else the default launch line. A model fills
 // {model}. The default without a model drops its `--model {model}` pair; a
 // custom command that still holds {model} then has nothing to put there, which
 // is a usage error. A custom command without the placeholder runs as written.
@@ -46,7 +46,7 @@ func (o opencode) Launch(cfg any, model string) (string, error) {
 	if model == "" {
 		if custom {
 			if strings.Contains(cmd, ModelPlaceholder) {
-				return "", refuse(Usage, "work.opencodeCommand holds {model} but no model was chosen: pass a tier model (round assign) or drop the placeholder")
+				return "", refuse(Usage, "round.opencodeCommand holds {model} but no model was chosen: pass a tier model (round assign) or drop the placeholder")
 			}
 			return cmd, nil
 		}
@@ -55,7 +55,7 @@ func (o opencode) Launch(cfg any, model string) (string, error) {
 	return strings.ReplaceAll(cmd, ModelPlaceholder, model), nil
 }
 
-// NeedsModel: only a custom work.opencodeCommand that holds {model} does.
+// NeedsModel: only a custom round.opencodeCommand that holds {model} does.
 func (o opencode) NeedsModel(cfg any) bool {
 	_, err := o.Launch(cfg, "")
 	return err != nil
@@ -112,7 +112,7 @@ func (opencode) SoloRefusal() string {
 	return "solo round: workers are Claude subagents; an OpenCode subagent cannot be given the slot's worktree"
 }
 
-// WorkAccounts: work.accounts is Anthropic's.
+// WorkAccounts: round.accounts is Anthropic's.
 func (opencode) WorkAccounts() bool { return false }
 
 // RawPaste: OpenCode's TUI drops the CRs that tmux pastes for line feeds.
@@ -129,7 +129,7 @@ func (opencode) AccountEnv(a Account) []string {
 }
 
 func (opencode) Accounts(cfg any) AccountList {
-	l := AccountList{Key: "work.opencodeAccounts"}
+	l := AccountList{Key: "round.opencodeAccounts"}
 	for _, a := range config.OpencodeAccounts(cfg) {
 		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.ConfigDir})
 	}
@@ -321,7 +321,7 @@ func (o opencode) Preflight(ctx context.Context, p Probe, po PreflightOpts) (Set
 	set.Worktree = po.Worktree
 	acct, _ := PickCodexAccount(po.Accounts, po.Account, po.Load)
 	if acct.Name != "" && acct.Home == "" {
-		return set, refuse(Usage, "work.opencodeAccounts account '%s' has no configDir", acct.Name)
+		return set, refuse(Usage, "round.opencodeAccounts account '%s' has no configDir", acct.Name)
 	}
 	set.Home, set.Account = acct.Home, acct.Name
 	if err := os.MkdirAll(set.StateDir, 0o700); err != nil {
@@ -341,7 +341,7 @@ func (o opencode) Preflight(ctx context.Context, p Probe, po PreflightOpts) (Set
 		for i, m := range miss {
 			names[i] = m.Flag
 		}
-		r := refuse(Refused, "opencode --help does not list %s, which the launch line uses; update opencode or change work.opencodeCommand", strings.Join(names, ", "))
+		r := refuse(Refused, "opencode --help does not list %s, which the launch line uses; update opencode or change round.opencodeCommand", strings.Join(names, ", "))
 		r.BlockedBy = BlockOpencodeFlags
 		return set, r
 	}

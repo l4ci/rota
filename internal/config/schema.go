@@ -301,7 +301,7 @@ var Prompts = []Prompt{
 		"direct": "merge straight into the base branch",
 		"pr":     "open a pull request",
 	}},
-	{Key: "work.dispatch", Title: "Where do workers run?", Help: map[string]string{
+	{Key: "round.dispatch", Title: "Where do workers run?", Help: map[string]string{
 		"subagent": "in-process subagents (rounds detect herdr or tmux)",
 		"tmux":     "separate Claude Code sessions in tmux",
 		"herdr":    "separate Claude Code sessions in herdr",

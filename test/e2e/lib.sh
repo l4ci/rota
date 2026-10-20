@@ -40,7 +40,7 @@ e2e_fixture() {
     cd "$E2E_ROOT" && git init -q -b main . && git config user.email t@t && git config user.name t \
       && echo seed >seed.txt && git add seed.txt && git commit -q -m seed
   ) || e2e_fail "fixture repo setup failed"
-  printf '{"git":{"baseBranch":"main"},"work":{"dispatch":"tmux"}}\n' >"$E2E_ROOT/.rota/config.json"
+  printf '{"git":{"baseBranch":"main"},"round":{"dispatch":"tmux"}}\n' >"$E2E_ROOT/.rota/config.json"
   local n=0 slot rows=""
   for slot in "$@"; do
     n=$((n + 1))

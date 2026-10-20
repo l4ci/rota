@@ -128,7 +128,7 @@ type SpawnOpts struct {
 	Env         []string
 	BootTimeout int // seconds
 	// LinkWorkspace (herdr only): open the worktree as a workspace linked to the
-	// caller's, instead of a tab in the caller's own (work.herdrGroupSlots).
+	// caller's, instead of a tab in the caller's own (round.herdrGroupSlots).
 	LinkWorkspace bool
 	// Linked, when set, is written true if the session really went into a
 	// linked workspace: a herdr that cannot link (ErrUnsupported) falls back
@@ -205,7 +205,7 @@ func (t Turn) Finished(base int) bool {
 }
 
 // WorkspaceCloser hosts can close the linked workspace a slot was opened in
-// (work.herdrGroupSlots). Only herdr has it.
+// (round.herdrGroupSlots). Only herdr has it.
 type WorkspaceCloser interface {
 	// CloseWorkspace closes the workspace by id once it holds no tab. A
 	// workspace that is gone, or still holds a tab, is left alone.
@@ -236,7 +236,7 @@ type Capabilities struct {
 }
 
 // CanGroup reports whether the host can keep slots in linked workspaces
-// (work.herdrGroupSlots): open them, close them and move panes back in. The one
+// (round.herdrGroupSlots): open them, close them and move panes back in. The one
 // test dispatch and layout both apply.
 func (c Capabilities) CanGroup() bool {
 	return c.WorkspaceCloser != nil && c.LinkedLayouter != nil
@@ -296,7 +296,7 @@ type Host interface {
 
 // New returns the host for a kind: Herdr selects herdr, anything else,
 // including Solo, selects tmux (the worker helpers
-// predate work.dispatch=herdr and have always driven tmux).
+// predate round.dispatch=herdr and have always driven tmux).
 func New(kind Kind, d Deps) Host {
 	d.fill()
 	if kind == Herdr {

@@ -1,5 +1,5 @@
 echo "worker verbs — tmux dispatch pool, pane classifier, and merge gate"
-# Covers the deterministic half of the work.dispatch=tmux backend. The TUI-facing
+# Covers the deterministic half of the round.dispatch=tmux backend. The TUI-facing
 # half (`rota worker dispatch` driving a live session) is NOT tested here — it needs a
 # real tmux server and a real Claude Code session, so it stays a manual gate. What
 # IS testable:
@@ -443,7 +443,7 @@ TX="$(mktemp -d)" || fail "mktemp failed"
 mkdir -p "$TX/repo/.rota" "$TX/state"
 ( cd "$TX/repo" && git init -q -b main . && git config user.email t@t && git config user.name t \
   && echo seed > seed.txt && git add seed.txt && git commit -q -m seed ) || fail "tmux fixture repo setup failed"
-printf '{"work":{"dispatch":"tmux"}}\n' > "$TX/repo/.rota/config.json"
+printf '{"round":{"dispatch":"tmux"}}\n' > "$TX/repo/.rota/config.json"
 echo brief > "$TX/brief.md"
 # TXTMUX=<value> puts the caller inside tmux; by default it is outside.
 tx() { ( cd "$TX/repo" && unset TMUX && { [ -z "${TXTMUX:-}" ] || export TMUX="$TXTMUX"; } \

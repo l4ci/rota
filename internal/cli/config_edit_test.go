@@ -77,7 +77,7 @@ func TestConfigUIRefusals(t *testing.T) {
 }
 
 func TestConfigScreenOpensFromEveryEntry(t *testing.T) {
-	root := trackerProject(t, `{"work":{"workerSlots":5}}`+"\n")
+	root := trackerProject(t, `{"round":{"slots":5}}`+"\n")
 	for _, args := range [][]string{{"config", "edit"}, {"config", "--ui"}, {"config", "show", "--ui"}} {
 		code, models, errs := cfgRun(t, root, true, args...)
 		if code != 0 || len(models) != 1 {
@@ -107,9 +107,9 @@ func fxRows() []cfgRow {
 		fxRow("models.worker", "string", "project", "haiku", "sonnet", "Model for implementation sub-tasks and round workers."),
 		fxRow("work.isolation", "enum", "default", "branch", "branch", "How /rota-work isolates changes from main: a feature branch in this checkout, or a separate git worktree.", "branch", "worktree"),
 		fxRow("work.mergeStrategy", "enum", "local", "pr", "direct", "How finished work lands: merged straight into the base branch, or through a pull request.", "direct", "pr"),
-		fxRow("work.workerSlots", "int", "project", json.Number("5"), json.Number("3"), "Number of worker slots rota round start provisions (at least 1)."),
+		fxRow("round.slots", "int", "project", json.Number("5"), json.Number("3"), "Number of worker slots rota round start provisions (at least 1)."),
 		fxRow("work.tdd", "bool", "default", true, true, "Whether /rota-work and workers require a recorded red-first run before a behavior change."),
-		fxRow("work.accounts", "list", "default", []any{}, []any{}, "Claude accounts for worker slots, as {name, configDir} objects."),
+		fxRow("round.accounts", "list", "default", []any{}, []any{}, "Claude accounts for worker slots, as {name, configDir} objects."),
 		fxRow("ship.review", "bool", "project", false, true, "Whether /rota-ship runs /rota-review first."),
 		fxRow("ship.qa", "bool", "default", false, false, "Opt-in product-QA gate."),
 		fxRow("round.scope", "enum", "default", "milestone", "milestone", "Which issues a round may take.", "milestone", "slate", "next", "open"),
@@ -271,20 +271,20 @@ func TestConfigScreenWritesThroughTheStore(t *testing.T) {
 	do("models.worker", cat([]string{"enter"}, rep("backspace", 5), typedKeys("sonnet"), []string{"enter"})) // text, project
 	do("ship.review", []string{"enter", " ", "enter"})                                                       // bool toggled on
 	do("work.isolation", []string{"enter", "right", "enter"})                                                // enum -> worktree
-	do("work.workerSlots", cat([]string{"l"}, rep("backspace", 1), typedKeys("8"), []string{"enter"}))       // local write
+	do("round.slots", cat([]string{"l"}, rep("backspace", 1), typedKeys("8"), []string{"enter"}))            // local write
 	do("work.mergeStrategy", []string{"r"})                                                                  // reset
 	do("ship.qa", []string{"r"})                                                                             // already default: no call
 	want := []string{
 		`set models.worker sonnet local=false`,
 		`set ship.review true local=false`,
 		`set work.isolation worktree local=false`,
-		`set work.workerSlots 8 local=true`,
+		`set round.slots 8 local=true`,
 		`reset work.mergeStrategy`,
 	}
 	if strings.Join(store.calls, "\n") != strings.Join(want, "\n") {
 		t.Errorf("writes:\n%s\nwant:\n%s", strings.Join(store.calls, "\n"), strings.Join(want, "\n"))
 	}
-	if strings.Join(changed, ",") != "models.worker,ship.review,work.isolation,work.workerSlots,work.mergeStrategy" {
+	if strings.Join(changed, ",") != "models.worker,ship.review,work.isolation,round.slots,work.mergeStrategy" {
 		t.Errorf("changed = %v", changed)
 	}
 }
@@ -352,8 +352,8 @@ func TestConfigScreenWritesTheSameFilesAsConfigSet(t *testing.T) {
 		m, _ = play(m, cat([]string{"/"}, typedKeys(filter), []string{"enter"}, keys, []string{"esc"}))
 	}
 	pick("ship.qa", "enter", " ", "enter") // toggle on
-	pick("work.dispatch", "enter", "right", "enter")
-	pick("work.workerSlots", "l", "backspace", "7", "enter")
+	pick("round.dispatch", "enter", "right", "enter")
+	pick("round.slots", "l", "backspace", "7", "enter")
 	pick("work.mergeStrategy", "r") // drops the local override and the project value
 	cfg := readConfig(t, root)
 	for _, want := range []string{`"qa": true`, `"dispatch": "tmux"`} {
@@ -361,11 +361,11 @@ func TestConfigScreenWritesTheSameFilesAsConfigSet(t *testing.T) {
 			t.Errorf("config.json lacks %s:\n%s", want, cfg)
 		}
 	}
-	if strings.Contains(cfg, "workerSlots") || !strings.Contains(cfg, `"mergeStrategy": "direct"`) {
+	if strings.Contains(cfg, `"slots": 7`) || !strings.Contains(cfg, `"mergeStrategy": "direct"`) {
 		t.Errorf("config.json holds the local write, or the reset key lacks its default:\n%s", cfg)
 	}
 	lb, _ := os.ReadFile(local)
-	if !strings.Contains(string(lb), `"workerSlots": 7`) || strings.Contains(string(lb), "mergeStrategy") {
+	if !strings.Contains(string(lb), `"slots": 7`) || strings.Contains(string(lb), "mergeStrategy") {
 		t.Errorf("config.local.json = %s", lb)
 	}
 	rows, _ = store.Rows()
@@ -375,7 +375,7 @@ func TestConfigScreenWritesTheSameFilesAsConfigSet(t *testing.T) {
 			if r.Source != "project" || r.differs() {
 				t.Errorf("reset key = %v from %s; a required key is written with its default", r.Value, r.Source)
 			}
-		case "work.workerSlots":
+		case "round.slots":
 			if r.Source != "local" || compact(r.Value) != "7" {
 				t.Errorf("local key = %v from %s", r.Value, r.Source)
 			}

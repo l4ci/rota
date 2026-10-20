@@ -21,7 +21,7 @@ The "(Recommended)" tag on each option marks the default `rota init` writes.
 | `rota config show <key>` | Prints one key. |
 | `rota config set <key> <value>` | Writes `.rota/config.json` (never `.rota/config.local.json`) and prints `key = value`. |
 
-Values for list and object keys are JSON (`rota config set work.accounts '[...]'`). A key outside the schema exits 2 and nothing is written. The value is not checked against the allowed values on write; `rota config check` only flags a missing key, retired values such as `autonomy.level: "loop"`, and a legacy `refactor.verifyCommands` that still holds commands while `test.full` is empty.
+Values for list and object keys are JSON (`rota config set round.accounts '[...]'`). A key outside the schema exits 2 and nothing is written. The value is not checked against the allowed values on write; `rota config check` only flags a missing key, retired values such as `autonomy.level: "loop"`, and a legacy `refactor.verifyCommands` that still holds commands while `test.full` is empty.
 
 ## Q1: Models
 
@@ -120,22 +120,55 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 |-----|------|---------|--------|-------------|
 | `work.isolation` | enum | `"branch"` | `branch`, `worktree` | How /rota-work isolates changes from main: a feature branch in this checkout, or a separate git worktree. |
 | `work.mergeStrategy` | enum | `"direct"` | `direct`, `pr` | How finished work lands: merged straight into the base branch with --no-ff, or through a pull request. Ignored when issues.source is a tracker, which always opens a PR. |
-| `work.dispatch` | enum | `"subagent"` | `subagent`, `tmux`, `herdr` | Where round workers run. subagent means detect: herdr in a herdr pane, tmux in tmux, else in-harness subagents. /rota-work ignores it. |
-| `work.workerSlots` | int | `3` |  | Number of worker slots rota round start provisions (at least 1). --slots overrides it for one round. |
-| `work.workerCommand` | string | unset |  | Command that starts a worker session in its tmux window. Empty builds claude --model <models.worker> --dangerously-skip-permissions; {model} receives the tier's model. |
-| `work.accounts` | list | `[]` |  | Claude accounts for worker slots, as {name, configDir} objects, each a separate CLAUDE_CONFIG_DIR. Empty: every slot inherits the ambient config dir. Machine-specific, so set it in config.local.json. |
-| `work.operatorCommand` | string | unset |  | Command that starts the orchestrator. Empty builds claude --model <models.orchestrator> --permission-mode auto (with --continue for rota worker session ensure). |
-| `work.codexAccounts` | list | `[]` |  | Codex homes for Codex workers, as {name, codexHome} objects, the counterpart of work.accounts. Empty: the default Codex home. Machine-specific, so set it in config.local.json. |
-| `work.codexCommand` | string | unset |  | Command that starts a Codex worker session. Empty builds the default codex command, with --model from the tier when one is chosen; {model} receives it. |
-| `work.opencodeAccounts` | list | `[]` |  | OpenCode config dirs for OpenCode workers, as {name, configDir} objects, the counterpart of work.codexAccounts. Each becomes the slot's OPENCODE_CONFIG_DIR; the login stays shared. Empty: OpenCode's default config. Machine-specific, so set it in config.local.json. |
-| `work.opencodeCommand` | string | unset |  | Command that starts an OpenCode worker session. Empty builds the default opencode command, with --model from the tier when one is chosen; {model} receives it. |
-| `work.envSetup` | string | unset |  | Shell command rota worker pool init runs in each new slot worktree, for example npm ci. Empty: no setup. |
-| `work.portBase` | int | `20000` |  | First port of the range rota hands out to worker slots. A new slot takes the lowest range of portBlock ports from here that no other slot holds, exported as ROTA_PORT_BASE; a slot keeps its range until it is reaped or reclaimed. |
-| `work.portBlock` | int | `100` |  | Ports reserved per worker slot, so servers started by two slots never collide. A slot's block is exported as ROTA_PORT_BASE. |
-| `work.herdrGroupSlots` | bool | `true` |  | herdr only, on by default: open each worker slot's worktree as a workspace linked to the orchestrator's, so herdr groups the slots under their project; false keeps each slot as a tab in the orchestrator's workspace. `rota layout tabs` puts the slots back in their workspaces. |
 | `work.tdd` | bool | `true` |  | Whether /rota-work and workers require a recorded red-first run before a behavior change. Off skips the RED requirement. |
 | `work.contextGuard` | enum | `"warn"` | `warn`, `off`, `auto` | What a session that is not an orchestrator does at orchestrator.handoffThreshold, where rota hooks are installed. warn adds one line to the next prompt recommending /rota-pause; auto also has the Stop hook ask for /rota-pause at the next task boundary, up to orchestrator.handoffMaxBlocks times; off does nothing. |
-| `work.itemTimeoutMinutes` | int | `0` |  | Minutes one item may run from its first assignment before rota round reconcile reports it as timed out and --apply parks it as needs-human. 0 means no cap. |
+
+### round
+
+| Key | Type | Default | Values | Description |
+|-----|------|---------|--------|-------------|
+| `round.dispatch` | enum | `"subagent"` | `subagent`, `tmux`, `herdr` | Where round workers run. subagent means detect: herdr in a herdr pane, tmux in tmux, else in-harness subagents. /rota-work ignores it. |
+| `round.slots` | int | `3` |  | Number of worker slots rota round start provisions (at least 1). --slots overrides it for one round. |
+| `round.workerCommand` | string | unset |  | Command that starts a worker session in its tmux window. Empty builds claude --model <models.worker> --dangerously-skip-permissions; {model} receives the tier's model. |
+| `round.accounts` | list | `[]` |  | Claude accounts for worker slots, as {name, configDir} objects, each a separate CLAUDE_CONFIG_DIR. Empty: every slot inherits the ambient config dir. Machine-specific, so set it in config.local.json. |
+| `round.operatorCommand` | string | unset |  | Command that starts the orchestrator. Empty builds claude --model <models.orchestrator> --permission-mode auto (with --continue for rota worker session ensure). |
+| `round.scope` | enum | `"milestone"` | `milestone`, `slate`, `next`, `open` | Which issues a round may take. slate: only those named at rota round start --items. milestone: the active milestones. next: also the next ready milestone. open: every open item no slot holds. |
+| `round.roster` | list | `["ben", "dana", "nia", "kit"]` |  | Agent names slots are provisioned under, one slot each. Lowercase letters, digits and -, no duplicates. |
+| `round.brief` | path | unset |  | Path of the standing worker contract the assignment pointer names. Empty means skills/references/worker-contract.md in the checkout, else the installed copy. |
+| `round.sharedPaths` | list | `[]` |  | Repo-relative globs the file-overlap readiness check ignores, for files every issue touches. |
+| `round.scopeOverlap` | enum | `"warn"` | `warn`, `block` | What a clash on declared scopes (the ## Touches section, else Subsystem) does to the overlap check. warn: reported, the item stays ready. block: fails the check like a shared path; --accept-overlap skips it. |
+| `round.adoptPattern` | string | unset |  | Glob over branch names (codex/*, claude/*). rota round reconcile reports a matching branch that no slot holds and that is not merged as unregistered-branch; --apply adopts those whose name carries an issue number. Empty turns the check off. |
+| `round.tier` | enum | `"standard"` | `light`, `standard`, `heavy` | Default worker tier for rota round assign: light for reading, standard for code and tests, heavy for hard reasoning. |
+| `round.workerKind` | enum | unset | `claude`, `codex`, `opencode` | Project default worker harness. Empty: the slot's recorded kind, else claude. --kind and an issue's harness: label beat it. |
+| `round.profile` | enum | unset | `quality`, `balanced`, `budget`, `inherit` | Named model profile that fills round.tiers.claude.* (light/standard/heavy). quality: sonnet/opus/opus. balanced: haiku/sonnet/opus. budget: haiku/haiku/sonnet. inherit: no model, workers launch without --model. Empty keeps the tier defaults. An explicit round.tiers.claude.<tier> beats the profile; Codex and OpenCode tiers are not touched. |
+| `round.tiers.claude.light` | string | `"haiku"` |  | Model a light-tier Claude worker starts with. |
+| `round.tiers.claude.standard` | string | unset |  | Model a standard-tier Claude worker starts with. Empty follows models.worker. |
+| `round.tiers.claude.heavy` | string | `"opus"` |  | Model a heavy-tier Claude worker starts with. |
+| `round.tiers.codex.light` | string | `"gpt-6-luna"` |  | Model a light-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three. |
+| `round.tiers.codex.standard` | string | `"gpt-6.1-sol"` |  | Model a standard-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three. |
+| `round.tiers.codex.heavy` | string | `"gpt-6-astra"` |  | Model a heavy-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three. |
+| `round.tiers.opencode.light` | string | `"opencode/claude-haiku-5-5"` |  | Model a light-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three. |
+| `round.tiers.opencode.standard` | string | `"opencode/claude-sonnet-5-5"` |  | Model a standard-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three. |
+| `round.tiers.opencode.heavy` | string | `"opencode/claude-opus-5-5"` |  | Model a heavy-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three. |
+| `round.stallMinutes` | int | `30` |  | Minutes a slot with a live agent may show no commit, edit or state change before rota round reconcile reports it stalled. 0 turns the check off. |
+| `round.maxBounces` | int | `3` |  | How often rota worker gate may send one item's PR back before it parks the item as needs-human. 0 turns the cap off. |
+| `round.freshAt` | int | `2` |  | Bounce count at which rota round review-relay stops resuming the worker and transfers the branch to a free slot at the same tier, with a brief of the open findings only. Must stay below round.maxBounces to act. 0 turns it off. |
+| `round.ledgerKeep` | int | `0` |  | Rounds of the round ledger (.rota/ledger.jsonl) to keep. A new round trims the entries of older rounds. 0 keeps everything. |
+| `round.architectureEvery` | int | `20` |  | Closed non-refactor items between automatic architecture reviews. 0 turns them off. |
+| `round.architectureAreas` | list | `[]` |  | Areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review. |
+| `round.autopilot` | bool | `false` |  | Lets rota round watch --autopilot and rota round tick assign, gate and merge mechanically. Merges only under ship.mergeApproval none. |
+| `round.autopilotCap` | int | `3` |  | Most assigns, and most merges, one autopilot tick does. 0 means the default. |
+| `round.batch` | int | `0` |  | Most items a round may have assigned and not yet landed or parked at once. rota round assign refuses the next one past it and rota round tick assigns none. 0 means no limit. |
+| `round.reviewLoop` | enum | `"manual"` | `manual`, `auto` | What happens when a reviewer comments on a finished worker's PR. manual reports it and leaves rota round review-relay to the orchestrator; auto relays it to the worker as a counted bounce (round.maxBounces) from rota round watch and rota round tick. |
+| `round.codexAccounts` | list | `[]` |  | Codex homes for Codex workers, as {name, codexHome} objects, the counterpart of round.accounts. Empty: the default Codex home. Machine-specific, so set it in config.local.json. |
+| `round.codexCommand` | string | unset |  | Command that starts a Codex worker session. Empty builds the default codex command, with --model from the tier when one is chosen; {model} receives it. |
+| `round.opencodeAccounts` | list | `[]` |  | OpenCode config dirs for OpenCode workers, as {name, configDir} objects, the counterpart of round.codexAccounts. Each becomes the slot's OPENCODE_CONFIG_DIR; the login stays shared. Empty: OpenCode's default config. Machine-specific, so set it in config.local.json. |
+| `round.opencodeCommand` | string | unset |  | Command that starts an OpenCode worker session. Empty builds the default opencode command, with --model from the tier when one is chosen; {model} receives it. |
+| `round.envSetup` | string | unset |  | Shell command rota worker pool init runs in each new slot worktree, for example npm ci. Empty: no setup. |
+| `round.portBase` | int | `20000` |  | First port of the range rota hands out to worker slots. A new slot takes the lowest range of portBlock ports from here that no other slot holds, exported as ROTA_PORT_BASE; a slot keeps its range until it is reaped or reclaimed. |
+| `round.portBlock` | int | `100` |  | Ports reserved per worker slot, so servers started by two slots never collide. A slot's block is exported as ROTA_PORT_BASE. |
+| `round.herdrGroupSlots` | bool | `true` |  | herdr only, on by default: open each worker slot's worktree as a workspace linked to the orchestrator's, so herdr groups the slots under their project; false keeps each slot as a tab in the orchestrator's workspace. `rota layout tabs` puts the slots back in their workspaces. |
+| `round.itemTimeoutMinutes` | int | `0` |  | Minutes one item may run from its first assignment before rota round reconcile reports it as timed out and --apply parks it as needs-human. 0 means no cap. |
 
 ### refactor
 
@@ -255,39 +288,6 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | Key | Type | Default | Values | Description |
 |-----|------|---------|--------|-------------|
 | `forge.provider` | enum | `"auto"` | `auto`, `github`, `gitlab`, `local` | Where code lands: pull requests, checks and releases. auto reads the origin remote and is local with no remote; local means direct merge, no PR. Set it by hand only when detection misses (self-hosted GitLab without gitlab in the host, SSH host aliases, mirrors). |
-
-### round
-
-| Key | Type | Default | Values | Description |
-|-----|------|---------|--------|-------------|
-| `round.scope` | enum | `"milestone"` | `milestone`, `slate`, `next`, `open` | Which issues a round may take. slate: only those named at rota round start --items. milestone: the active milestones. next: also the next ready milestone. open: every open item no slot holds. |
-| `round.roster` | list | `["ben", "dana", "nia", "kit"]` |  | Agent names slots are provisioned under, one slot each. Lowercase letters, digits and -, no duplicates. |
-| `round.brief` | path | unset |  | Path of the standing worker contract the assignment pointer names. Empty means skills/references/worker-contract.md in the checkout, else the installed copy. |
-| `round.sharedPaths` | list | `[]` |  | Repo-relative globs the file-overlap readiness check ignores, for files every issue touches. |
-| `round.scopeOverlap` | enum | `"warn"` | `warn`, `block` | What a clash on declared scopes (the ## Touches section, else Subsystem) does to the overlap check. warn: reported, the item stays ready. block: fails the check like a shared path; --accept-overlap skips it. |
-| `round.adoptPattern` | string | unset |  | Glob over branch names (codex/*, claude/*). rota round reconcile reports a matching branch that no slot holds and that is not merged as unregistered-branch; --apply adopts those whose name carries an issue number. Empty turns the check off. |
-| `round.tier` | enum | `"standard"` | `light`, `standard`, `heavy` | Default worker tier for rota round assign: light for reading, standard for code and tests, heavy for hard reasoning. |
-| `round.workerKind` | enum | unset | `claude`, `codex`, `opencode` | Project default worker harness. Empty: the slot's recorded kind, else claude. --kind and an issue's harness: label beat it. |
-| `round.profile` | enum | unset | `quality`, `balanced`, `budget`, `inherit` | Named model profile that fills round.tiers.claude.* (light/standard/heavy). quality: sonnet/opus/opus. balanced: haiku/sonnet/opus. budget: haiku/haiku/sonnet. inherit: no model, workers launch without --model. Empty keeps the tier defaults. An explicit round.tiers.claude.<tier> beats the profile; Codex and OpenCode tiers are not touched. |
-| `round.tiers.claude.light` | string | `"haiku"` |  | Model a light-tier Claude worker starts with. |
-| `round.tiers.claude.standard` | string | unset |  | Model a standard-tier Claude worker starts with. Empty follows models.worker. |
-| `round.tiers.claude.heavy` | string | `"opus"` |  | Model a heavy-tier Claude worker starts with. |
-| `round.tiers.codex.light` | string | `"gpt-6-luna"` |  | Model a light-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three. |
-| `round.tiers.codex.standard` | string | `"gpt-6.1-sol"` |  | Model a standard-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three. |
-| `round.tiers.codex.heavy` | string | `"gpt-6-astra"` |  | Model a heavy-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three. |
-| `round.tiers.opencode.light` | string | `"opencode/claude-haiku-5-5"` |  | Model a light-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three. |
-| `round.tiers.opencode.standard` | string | `"opencode/claude-sonnet-5-5"` |  | Model a standard-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three. |
-| `round.tiers.opencode.heavy` | string | `"opencode/claude-opus-5-5"` |  | Model a heavy-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three. |
-| `round.stallMinutes` | int | `30` |  | Minutes a slot with a live agent may show no commit, edit or state change before rota round reconcile reports it stalled. 0 turns the check off. |
-| `round.maxBounces` | int | `3` |  | How often rota worker gate may send one item's PR back before it parks the item as needs-human. 0 turns the cap off. |
-| `round.freshAt` | int | `2` |  | Bounce count at which rota round review-relay stops resuming the worker and transfers the branch to a free slot at the same tier, with a brief of the open findings only. Must stay below round.maxBounces to act. 0 turns it off. |
-| `round.ledgerKeep` | int | `0` |  | Rounds of the round ledger (.rota/ledger.jsonl) to keep. A new round trims the entries of older rounds. 0 keeps everything. |
-| `round.architectureEvery` | int | `20` |  | Closed non-refactor items between automatic architecture reviews. 0 turns them off. |
-| `round.architectureAreas` | list | `[]` |  | Areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review. |
-| `round.autopilot` | bool | `false` |  | Lets rota round watch --autopilot and rota round tick assign, gate and merge mechanically. Merges only under ship.mergeApproval none. |
-| `round.autopilotCap` | int | `3` |  | Most assigns, and most merges, one autopilot tick does. 0 means the default. |
-| `round.batch` | int | `0` |  | Most items a round may have assigned and not yet landed or parked at once. rota round assign refuses the next one past it and rota round tick assigns none. 0 means no limit. |
-| `round.reviewLoop` | enum | `"manual"` | `manual`, `auto` | What happens when a reviewer comments on a finished worker's PR. manual reports it and leaves rota round review-relay to the orchestrator; auto relays it to the worker as a counted bounce (round.maxBounces) from rota round watch and rota round tick. |
 
 ### roles
 

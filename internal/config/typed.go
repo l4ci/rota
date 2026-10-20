@@ -2,16 +2,16 @@ package config
 
 import "github.com/l4ci/rota/internal/jsonx"
 
-// Account is one entry of work.accounts.
+// Account is one entry of round.accounts.
 type Account struct{ Name, ConfigDir string }
 
-// CodexAccount is one entry of work.codexAccounts: a named CODEX_HOME.
+// CodexAccount is one entry of round.codexAccounts: a named CODEX_HOME.
 type CodexAccount struct{ Name, CodexHome string }
 
-// Dispatch returns work.dispatch: "subagent", "tmux" or "herdr". A missing or
+// Dispatch returns round.dispatch: "subagent", "tmux" or "herdr". A missing or
 // null key gives the schema default; a non-string value gives "".
 func Dispatch(cfg any) string {
-	v, _ := Value(cfg, "work.dispatch")
+	v, _ := Value(cfg, "round.dispatch")
 	s, _ := v.(string)
 	return s
 }
@@ -28,11 +28,11 @@ func ContextGuard(cfg any) string {
 	return "off"
 }
 
-// Accounts returns the object entries of work.accounts in order, name and
+// Accounts returns the object entries of round.accounts in order, name and
 // configDir as written ("" when absent or not a string). Entries that are not
 // objects are skipped; callers drop nameless ones where a name is required.
 func Accounts(cfg any) []Account {
-	v, _ := Value(cfg, "work.accounts")
+	v, _ := Value(cfg, "round.accounts")
 	list, _ := v.([]any)
 	var out []Account
 	for _, e := range list {
@@ -50,10 +50,10 @@ func Accounts(cfg any) []Account {
 	return out
 }
 
-// CodexAccounts returns the object entries of work.codexAccounts in order.
+// CodexAccounts returns the object entries of round.codexAccounts in order.
 // Entries that are not objects are skipped; callers drop nameless ones.
 func CodexAccounts(cfg any) []CodexAccount {
-	v, _ := Value(cfg, "work.codexAccounts")
+	v, _ := Value(cfg, "round.codexAccounts")
 	list, _ := v.([]any)
 	var out []CodexAccount
 	for _, e := range list {
@@ -71,14 +71,14 @@ func CodexAccounts(cfg any) []CodexAccount {
 	return out
 }
 
-// OpencodeAccount is one entry of work.opencodeAccounts: a named
+// OpencodeAccount is one entry of round.opencodeAccounts: a named
 // OPENCODE_CONFIG_DIR.
 type OpencodeAccount struct{ Name, ConfigDir string }
 
-// OpencodeAccounts returns the object entries of work.opencodeAccounts in
+// OpencodeAccounts returns the object entries of round.opencodeAccounts in
 // order. Entries that are not objects are skipped; callers drop nameless ones.
 func OpencodeAccounts(cfg any) []OpencodeAccount {
-	v, _ := Value(cfg, "work.opencodeAccounts")
+	v, _ := Value(cfg, "round.opencodeAccounts")
 	list, _ := v.([]any)
 	var out []OpencodeAccount
 	for _, e := range list {

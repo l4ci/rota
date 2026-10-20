@@ -85,7 +85,7 @@ type Settings struct {
 	// LedgerKeep is round.ledgerKeep: how many rounds of the round ledger a
 	// new round keeps; 0 keeps everything.
 	LedgerKeep int
-	// ItemTimeoutMinutes is work.itemTimeoutMinutes: how long one item may run
+	// ItemTimeoutMinutes is round.itemTimeoutMinutes: how long one item may run
 	// from its first assignment before `round reconcile` reports it
 	// item-timeout; 0 turns the cap off.
 	ItemTimeoutMinutes int
@@ -208,7 +208,7 @@ func FromConfig(cfg any) (Settings, error) {
 	if s.LedgerKeep, err = config.Int(cfg, "round.ledgerKeep", 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.ItemTimeoutMinutes, err = config.Int(cfg, "work.itemTimeoutMinutes", 0, config.MaxInt); err != nil {
+	if s.ItemTimeoutMinutes, err = config.Int(cfg, "round.itemTimeoutMinutes", 0, config.MaxInt); err != nil {
 		return s, err
 	}
 	if s.ArchitectureEvery, err = config.Int(cfg, "round.architectureEvery", 0, config.MaxInt); err != nil {

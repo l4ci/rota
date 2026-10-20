@@ -21,7 +21,7 @@ chmod +x "$SF/bin/herdr"
   git add seed.txt
   git commit -q -m seed
 ) || fail "submit fixture repo setup failed"
-printf '{"work":{"dispatch":"herdr"}}\n' > "$TMP_SU/repo/.rota/config.json"
+printf '{"round":{"dispatch":"herdr"}}\n' > "$TMP_SU/repo/.rota/config.json"
 
 su()  { ( cd "$TMP_SU/repo" && PATH="$SF/bin:$PATH" FAKE_HERDR="$SF" HERDR_ENV=1 HERDR_WORKSPACE_ID=w9 "$@" ); }
 slot_field() {

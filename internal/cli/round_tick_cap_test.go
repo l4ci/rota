@@ -16,12 +16,12 @@ import (
 )
 
 // TestTickWithEveryAccountCoolingFillsNothingAndSaysWhy runs the real tick
-// loop against the real quota cap (a cooling work.accounts pool read through its
+// loop against the real quota cap (a cooling round.accounts pool read through its
 // meters) and checks what `rota round tick` prints.
 func TestTickWithEveryAccountCoolingFillsNothingAndSaysWhy(t *testing.T) {
 	root := gitRepo(t)
 	write(t, filepath.Join(root, ".rota", "config.json"),
-		`{"work":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}]},"round":{"roster":["ben"]}}`)
+		`{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}],"roster":["ben"]}}`)
 	set, err := roundcfg.Load(root)
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func TestTickWithEveryAccountCoolingFillsNothingAndSaysWhy(t *testing.T) {
 	if assigned != 0 {
 		t.Fatalf("a capped tick assigned %d", assigned)
 	}
-	if got := tickLines(r); !strings.HasPrefix(got, "capped\t") || !strings.Contains(got, "work.accounts") || !strings.Contains(got, "13:00") {
+	if got := tickLines(r); !strings.HasPrefix(got, "capped\t") || !strings.Contains(got, "round.accounts") || !strings.Contains(got, "13:00") {
 		t.Errorf("tick text %q", got)
 	}
 	if got, _ := tickData(r).Get("capped"); got == nil || got == "" {

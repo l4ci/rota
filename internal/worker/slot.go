@@ -42,7 +42,7 @@ func (s *Slot) Base() string     { return jsonx.Str(s.o, "base") }
 func (s *Slot) Handle() string   { return jsonx.Str(s.o, "handle") }
 
 // WorkspaceID is the linked herdr workspace the slot's session was opened in
-// (work.herdrGroupSlots), "" when it runs in the orchestrator's own workspace.
+// (round.herdrGroupSlots), "" when it runs in the orchestrator's own workspace.
 func (s *Slot) WorkspaceID() string { return jsonx.Str(s.o, "workspaceId") }
 
 // SetWorkspaceID records the slot's linked workspace; "" clears it.
@@ -97,7 +97,7 @@ func (s *Slot) SmokeSection() int {
 }
 func (s *Slot) ConfigDir() string { return jsonx.Str(s.o, "configDir") }
 
-// HomeAccount is the account entry (work.codexAccounts, work.opencodeAccounts)
+// HomeAccount is the account entry (round.codexAccounts, round.opencodeAccounts)
 // the slot last ran a worker under ("" on the kind's default home). The JSON
 // key stays codexAccount so existing registries read.
 func (s *Slot) HomeAccount() string { return jsonx.Str(s.o, "codexAccount") }

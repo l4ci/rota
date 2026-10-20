@@ -106,12 +106,12 @@ func TestResolveByWhereTheCallerIs(t *testing.T) {
 		{"outside, herdr and tmux installed", nil, []string{"tmux", "herdr"}, nil, "herdr", ModeHerdrSession, ""},
 		{"outside, only herdr", nil, []string{"herdr"}, nil, "herdr", ModeHerdrSession, ""},
 		{"outside, only tmux", nil, []string{"tmux"}, nil, "tmux", ModeSession, ""},
-		{"outside, dispatch tmux beats herdr", nil, []string{"tmux", "herdr"}, map[string]any{"work.dispatch": "tmux"}, "tmux", ModeSession, ""},
+		{"outside, dispatch tmux beats herdr", nil, []string{"tmux", "herdr"}, map[string]any{"round.dispatch": "tmux"}, "tmux", ModeSession, ""},
 		{"outside, no multiplexer", nil, nil, nil, "solo", ModeInPlace, ""},
-		{"outside, dispatch tmux without tmux", nil, nil, map[string]any{"work.dispatch": "tmux"}, "", "", "unavailable"},
-		{"outside, dispatch herdr", nil, []string{"herdr", "tmux"}, map[string]any{"work.dispatch": "herdr"}, "herdr", ModeHerdrSession, ""},
-		{"outside, dispatch herdr without herdr", nil, []string{"tmux"}, map[string]any{"work.dispatch": "herdr"}, "", "", "unavailable"},
-		{"inside herdr beats dispatch tmux", herdrIn, []string{"herdr", "tmux"}, map[string]any{"work.dispatch": "tmux"}, "herdr", ModeTab, ""},
+		{"outside, dispatch tmux without tmux", nil, nil, map[string]any{"round.dispatch": "tmux"}, "", "", "unavailable"},
+		{"outside, dispatch herdr", nil, []string{"herdr", "tmux"}, map[string]any{"round.dispatch": "herdr"}, "herdr", ModeHerdrSession, ""},
+		{"outside, dispatch herdr without herdr", nil, []string{"tmux"}, map[string]any{"round.dispatch": "herdr"}, "", "", "unavailable"},
+		{"inside herdr beats dispatch tmux", herdrIn, []string{"herdr", "tmux"}, map[string]any{"round.dispatch": "tmux"}, "herdr", ModeTab, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -141,7 +141,7 @@ func TestSupervisorWrapsTheAgentAndPassesThePromptFirstOnly(t *testing.T) {
 			[]string{"/bin/rota", "keepalive", "run", "--first-prompt", "/rota-orchestrate", "--", "claude", "--model", "opus", "--permission-mode", "auto"}},
 		{"claude on models.orchestrator", map[string]any{"models.orchestrator": "sonnet"},
 			[]string{"/bin/rota", "keepalive", "run", "--first-prompt", "/rota-orchestrate", "--", "claude", "--model", "sonnet", "--permission-mode", "auto"}},
-		{"work.operatorCommand wins for claude", map[string]any{"work.operatorCommand": "claude --model fable"},
+		{"round.operatorCommand wins for claude", map[string]any{"round.operatorCommand": "claude --model fable"},
 			[]string{"/bin/rota", "keepalive", "run", "--first-prompt", "/rota-orchestrate", "--", "claude", "--model", "fable"}},
 		{"codex", map[string]any{"orchestrator.harness": "codex"},
 			[]string{"/bin/rota", "keepalive", "run", "--first-prompt", "$rota-orchestrate", "--", "codex"}},
@@ -280,7 +280,7 @@ func TestLaunchHerdrSessionAlreadyRunningOnlyAttaches(t *testing.T) {
 }
 
 func twoAccounts() map[string]any {
-	return map[string]any{"work.accounts": []any{
+	return map[string]any{"round.accounts": []any{
 		acctObj("a", "/cfg/a"), acctObj("b", "~/.claude-b"),
 	}}
 }

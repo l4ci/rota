@@ -249,8 +249,8 @@ type PreflightOpts struct {
 	// CommonDir is the git common dir, asked for only by a harness that keeps
 	// per-slot state beside it.
 	CommonDir func() (string, error)
-	// Accounts are the kind's configured homes (work.codexAccounts,
-	// work.opencodeAccounts); none means the default home. Account is the one
+	// Accounts are the kind's configured homes (round.codexAccounts,
+	// round.opencodeAccounts); none means the default home. Account is the one
 	// the slot ran under last, Load how many other slots of the kind hold each.
 	Accounts []HomeAccount
 	Account  string
@@ -258,7 +258,7 @@ type PreflightOpts struct {
 }
 
 // HomeAccount is one named account home of a kind: a CODEX_HOME of
-// work.codexAccounts, an OPENCODE_CONFIG_DIR of work.opencodeAccounts.
+// round.codexAccounts, an OPENCODE_CONFIG_DIR of round.opencodeAccounts.
 type HomeAccount struct{ Name, Home string }
 
 // Setup is what a passed preflight leaves for the dispatch. A non-empty Home
@@ -295,7 +295,7 @@ type Harness interface {
 	// SoloRefusal is why the harness cannot run as a subagent of a solo
 	// round, "" when it can.
 	SoloRefusal() string
-	// WorkAccounts reports whether work.accounts (Anthropic's) rotates the
+	// WorkAccounts reports whether round.accounts (Anthropic's) rotates the
 	// slot's account; a harness with its own account model says no.
 	WorkAccounts() bool
 	// RawPaste reports whether a brief pasted into the kind's pane must keep
@@ -305,7 +305,7 @@ type Harness interface {
 	// AccountEnv is the environment that selects the slot's account.
 	AccountEnv(a Account) []string
 	// Accounts is the kind's configured accounts and the config key they come
-	// from (work.accounts, work.codexAccounts).
+	// from (round.accounts, round.codexAccounts).
 	Accounts(cfg any) AccountList
 	// UsageMeter reports whether the kind's accounts expose a usage reading.
 	// One that does not is balanced from the limits the watcher logged.
@@ -343,7 +343,7 @@ type Harness interface {
 // Orchestrator is one agent the orchestrator can run in.
 type Orchestrator interface {
 	Name() string
-	// WorkAccounts reports whether work.accounts (Anthropic's) names the
+	// WorkAccounts reports whether round.accounts (Anthropic's) names the
 	// account the agent starts under.
 	WorkAccounts() bool
 	// Command is the argv that starts the agent, without its first prompt.

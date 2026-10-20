@@ -180,8 +180,8 @@ func TestShowUnknownAndHandEditedKeys(t *testing.T) {
 }
 
 func TestShowLine(t *testing.T) {
-	e := Entry{"work.accounts", []any{"a", "b"}, "default", nil}
-	if got := e.Line(); got != `work.accounts = ["a", "b"]  (source: default)` {
+	e := Entry{"round.accounts", []any{"a", "b"}, "default", nil}
+	if got := e.Line(); got != `round.accounts = ["a", "b"]  (source: default)` {
 		t.Errorf("Line = %s", got)
 	}
 }
@@ -223,12 +223,12 @@ func TestSetWritesCanonicalAndReportsPrevious(t *testing.T) {
 }
 
 func TestSetCreatesAndReplacesParents(t *testing.T) {
-	root := project(t, `{"work": "scalar"}`, "")
-	res, err := Set(root, "work.dispatch", "tmux")
+	root := project(t, `{"round": "scalar"}`, "")
+	res, err := Set(root, "round.dispatch", "tmux")
 	if err != nil || !res.Changed || res.HadPrevious {
 		t.Fatalf("%+v %v", res, err)
 	}
-	if got := read(t, root); got != "{\n  \"work\": {\n    \"dispatch\": \"tmux\"\n  }\n}\n" {
+	if got := read(t, root); got != "{\n  \"round\": {\n    \"dispatch\": \"tmux\"\n  }\n}\n" {
 		t.Errorf("file:\n%s", got)
 	}
 	root = project(t, "", "")

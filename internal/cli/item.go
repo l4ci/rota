@@ -637,7 +637,7 @@ func itemReopen(fs *flag.FlagSet) RunFunc {
 		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
 			res, err := reopenItem(be, args[0])
 			if err == nil {
-				// A reopened item starts a fresh wall-clock (work.itemTimeoutMinutes).
+				// A reopened item starts a fresh wall-clock (round.itemTimeoutMinutes).
 				if id := worker.NormID(args[0]); id != "" {
 					_ = worker.ClearItemStart(root, id)
 				}

@@ -15,11 +15,11 @@ func TestOpenCodeLaunch(t *testing.T) {
 	}{
 		{``, "opencode-go/qwen3.8-flash", "opencode --model opencode-go/qwen3.8-flash", false},
 		{``, "", "opencode", false},
-		{`{"work":{"opencodeCommand":"wrap opencode -m {model}"}}`, "p/m", "wrap opencode -m p/m", false},
-		{`{"work":{"opencodeCommand":"wrap opencode -m {model}"}}`, "", "", true},
-		{`{"work":{"opencodeCommand":"opencode --agent build"}}`, "p/m", "opencode --agent build", false},
-		{`{"work":{"opencodeCommand":"opencode --agent build"}}`, "", "opencode --agent build", false},
-		{`{"work":{"codexCommand":"codex -x"}}`, "", "opencode", false},
+		{`{"round":{"opencodeCommand":"wrap opencode -m {model}"}}`, "p/m", "wrap opencode -m p/m", false},
+		{`{"round":{"opencodeCommand":"wrap opencode -m {model}"}}`, "", "", true},
+		{`{"round":{"opencodeCommand":"opencode --agent build"}}`, "p/m", "opencode --agent build", false},
+		{`{"round":{"opencodeCommand":"opencode --agent build"}}`, "", "opencode --agent build", false},
+		{`{"round":{"codexCommand":"codex -x"}}`, "", "opencode", false},
 	}
 	for _, c := range cases {
 		got, err := (opencode{}).Launch(cfgOf(t, c.cfg), c.model)
@@ -36,7 +36,7 @@ func TestOpenCodeLaunch(t *testing.T) {
 }
 
 func TestOpenCodeModelApplies(t *testing.T) {
-	for cfg, want := range map[string]bool{``: true, `{"work":{"opencodeCommand":"opencode -x"}}`: false, `{"work":{"opencodeCommand":"opencode -m {model}"}}`: true} {
+	for cfg, want := range map[string]bool{``: true, `{"round":{"opencodeCommand":"opencode -x"}}`: false, `{"round":{"opencodeCommand":"opencode -m {model}"}}`: true} {
 		if got := (opencode{}).ModelApplies(cfgOf(t, cfg)); got != want {
 			t.Errorf("%s: %v want %v", cfg, got, want)
 		}
@@ -77,21 +77,21 @@ func TestOpenCodeKinds(t *testing.T) {
 		t.Errorf("ForBinary(opencode) = %v, %v", h, ok)
 	}
 	if h.WorkAccounts() || h.UsageMeter() || h.Tiers() != (TierRule{}) {
-		t.Error("opencode: no work.accounts, no usage meter, optional tier map")
+		t.Error("opencode: no round.accounts, no usage meter, optional tier map")
 	}
 	for cfg, want := range map[string]bool{
 		``:                                    false,
 		`{"round":{"workerKind":"opencode"}}`: true,
-		`{"round":{"tiers":{"opencode":{"light":"p/m"}}}}`:              true,
-		`{"work":{"opencodeCommand":"opencode"}}`:                       true,
-		`{"work":{"opencodeAccounts":[{"name":"a","configDir":"/x"}]}}`: true,
+		`{"round":{"tiers":{"opencode":{"light":"p/m"}}}}`:               true,
+		`{"round":{"opencodeCommand":"opencode"}}`:                       true,
+		`{"round":{"opencodeAccounts":[{"name":"a","configDir":"/x"}]}}`: true,
 	} {
 		if got := h.Configured(cfgOf(t, cfg)); got != want {
 			t.Errorf("Configured(%s) = %v, want %v", cfg, got, want)
 		}
 	}
-	l := h.Accounts(cfgOf(t, `{"work":{"opencodeAccounts":[{"name":"a","configDir":"/x"}]}}`))
-	if l.Key != "work.opencodeAccounts" || len(l.Entries) != 1 || l.Entries[0] != (AccountEntry{Name: "a", Dir: "/x"}) {
+	l := h.Accounts(cfgOf(t, `{"round":{"opencodeAccounts":[{"name":"a","configDir":"/x"}]}}`))
+	if l.Key != "round.opencodeAccounts" || len(l.Entries) != 1 || l.Entries[0] != (AccountEntry{Name: "a", Dir: "/x"}) {
 		t.Errorf("Accounts = %+v", l)
 	}
 }

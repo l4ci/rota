@@ -23,7 +23,7 @@ import (
 // the drift rules are internal/round. Tests swap Deps.RoundEnv for fakes.
 
 // defaultRoundEnv wires the real git, host and forge. The host is herdr when
-// the round recorded (C8); with none it is herdr when work.dispatch says so or
+// the round recorded (C8); with none it is herdr when round.dispatch says so or
 // the process runs inside herdr (rounds are started by hand with `herdr
 // worktree create`, whatever the config says), else tmux.
 // Account picking stays off: it is opt-in (accountedRoundEnv), so start, status

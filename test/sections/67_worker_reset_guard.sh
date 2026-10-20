@@ -67,7 +67,7 @@ slot_field() {
   python3 -c 'import json,sys; s=[s for s in json.load(open(sys.argv[1]))["slots"] if s["name"]==sys.argv[2]][0]; print(s.get(sys.argv[3]))' \
     "$TMP_RG/repo/.rota/workers.json" "$1" "$2"
 }
-cfg() { printf '{"work":{"dispatch":"%s"%s}}\n' "$1" "${2:+,\"workerCommand\":\"$2\"}" > "$TMP_RG/repo/.rota/config.json"; }
+cfg() { printf '{"round":{"dispatch":"%s"%s}}\n' "$1" "${2:+,\"workerCommand\":\"$2\"}" > "$TMP_RG/repo/.rota/config.json"; }
 
 rg hvj worker pool init --slots 1 --base main >/dev/null 2>&1 || fail "pool init failed"
 WT="$(slot_field w1 worktree)"
@@ -160,7 +160,7 @@ kill "$SLEEPER" 2>/dev/null || true; wait "$SLEEPER" 2>/dev/null || true
 pass "dispatch exits 5 and spawns nothing when the old tab/window (or its pids) is not confirmed gone"
 
 # ── (d) resume flags and unparseable commands ───────────────────────────────
-cfgj() { python3 -c 'import json,sys; print(json.dumps({"work":{"dispatch":"herdr","workerCommand":sys.argv[1]}}))' "$1" > "$TMP_RG/repo/.rota/config.json"; }
+cfgj() { python3 -c 'import json,sys; print(json.dumps({"round":{"dispatch":"herdr","workerCommand":sys.argv[1]}}))' "$1" > "$TMP_RG/repo/.rota/config.json"; }
 dispatch_rc() { RC=0; OUT="$(rgh hvj worker dispatch w1 --body-file "$TMP_RG/brief.md" --task T5 2>/dev/null)" || RC=$?; }
 for CMD in "claude --model sonnet --continue" "claude -r" "claude -c" "claude --resume" "claude --resume=abc" \
            "claude --continue=1" "claude -cr" 'sh -c "claude -c"' "env X=1 claude -c" "X=1 claude --resume abc"; do

@@ -92,7 +92,7 @@ func (r *codexRig) ran(prefix string) int {
 
 func codexProject(t *testing.T) (dir, home string) {
 	t.Helper()
-	dir = newProject(t, `{"work":{"dispatch":"herdr"}}`)
+	dir = newProject(t, `{"round":{"dispatch":"herdr"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	return dir, filepath.Join(dir, ".git", "rota", "codex", "w1")
 }
@@ -137,7 +137,7 @@ func TestCodexPreflightSkipsAnInstalledIntegration(t *testing.T) {
 	}
 }
 
-const codexAcctCfg = `{"work":{"dispatch":"herdr","codexAccounts":[{"name":"a","codexHome":"/h/a"},{"name":"b","codexHome":"/h/b"}]}}`
+const codexAcctCfg = `{"round":{"dispatch":"herdr","codexAccounts":[{"name":"a","codexHome":"/h/a"},{"name":"b","codexHome":"/h/b"}]}}`
 
 // Configured accounts are spread over the codex slots, the slot keeps its own
 // while it is configured, and login is checked in the account's home.
@@ -244,7 +244,7 @@ func TestCodexPreflightNeedsHerdr(t *testing.T) {
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	rig := &codexRig{loggedIn: true}
 	_, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", "")
-	if exitOf(err) != exitcode.ExitUnavailable || !strings.Contains(err.Error(), "codex workers need work.dispatch=herdr") {
+	if exitOf(err) != exitcode.ExitUnavailable || !strings.Contains(err.Error(), "codex workers need round.dispatch=herdr") {
 		t.Fatalf("%v", err)
 	}
 	if _, serr := os.Stat(filepath.Join(dir, ".git", "rota", "codex")); serr == nil {
@@ -318,15 +318,15 @@ func TestDispatchCodexRefusalsTouchNothing(t *testing.T) {
 		exit    int
 		by, msg string
 	}{
-		"resume":                    {cfg: `{"work":{"dispatch":"herdr","codexCommand":"codex resume --last"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitRefused, by: "resume flag", msg: "subcommand 'resume'"},
-		"fork":                      {cfg: `{"work":{"dispatch":"herdr","codexCommand":"codex --model x fork"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitRefused, by: "resume flag", msg: "'fork'"},
-		"unparseable":               {cfg: `{"work":{"dispatch":"herdr","codexCommand":"codex \"oops"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUsage, msg: "work.codexCommand cannot be parsed"},
-		"model needed":              {cfg: `{"work":{"dispatch":"herdr","codexCommand":"codex -m {model}"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUsage, msg: "{model}"},
-		"wrong binary":              {cfg: `{"work":{"dispatch":"herdr","codexCommand":"claude --x"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUnavailable, msg: "does not run codex"},
-		"claude kind, codex binary": {cfg: `{"work":{"dispatch":"herdr","workerCommand":"codex --x"}}`, rig: codexRig{loggedIn: true}, kind: "claude", exit: exitcode.ExitUnavailable, msg: "does not run claude"},
-		"flag":                      {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{noFlag: "--no-daemon", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex flags", msg: "--no-daemon"},
-		"login":                     {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{}, exit: exitcode.ExitUnavailable, msg: "not logged in"},
-		"bad kind":                  {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{loggedIn: true}, kind: "gemini", exit: exitcode.ExitUsage, msg: "claude, codex or opencode"},
+		"resume":                    {cfg: `{"round":{"dispatch":"herdr","codexCommand":"codex resume --last"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitRefused, by: "resume flag", msg: "subcommand 'resume'"},
+		"fork":                      {cfg: `{"round":{"dispatch":"herdr","codexCommand":"codex --model x fork"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitRefused, by: "resume flag", msg: "'fork'"},
+		"unparseable":               {cfg: `{"round":{"dispatch":"herdr","codexCommand":"codex \"oops"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUsage, msg: "round.codexCommand cannot be parsed"},
+		"model needed":              {cfg: `{"round":{"dispatch":"herdr","codexCommand":"codex -m {model}"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUsage, msg: "{model}"},
+		"wrong binary":              {cfg: `{"round":{"dispatch":"herdr","codexCommand":"claude --x"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUnavailable, msg: "does not run codex"},
+		"claude kind, codex binary": {cfg: `{"round":{"dispatch":"herdr","workerCommand":"codex --x"}}`, rig: codexRig{loggedIn: true}, kind: "claude", exit: exitcode.ExitUnavailable, msg: "does not run claude"},
+		"flag":                      {cfg: `{"round":{"dispatch":"herdr"}}`, rig: codexRig{noFlag: "--no-daemon", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex flags", msg: "--no-daemon"},
+		"login":                     {cfg: `{"round":{"dispatch":"herdr"}}`, rig: codexRig{}, exit: exitcode.ExitUnavailable, msg: "not logged in"},
+		"bad kind":                  {cfg: `{"round":{"dispatch":"herdr"}}`, rig: codexRig{loggedIn: true}, kind: "gemini", exit: exitcode.ExitUsage, msg: "claude, codex or opencode"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -375,7 +375,7 @@ func TestDispatchCodexCustomCommandProbesItsFlags(t *testing.T) {
 		"unlisted flag":     {cmd: "codex --dangerously-bypass-hook-trust --made-up=1", by: "codex flags"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			dir := newProject(t, `{"work":{"dispatch":"herdr","codexCommand":"`+c.cmd+`"}}`)
+			dir := newProject(t, `{"round":{"dispatch":"herdr","codexCommand":"`+c.cmd+`"}}`)
 			goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 			_, err := (&codexRig{noFlag: "--no-daemon", loggedIn: true}).env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", "")
 			if c.by == "" {
@@ -483,7 +483,7 @@ func TestDispatchCodexRelayWithoutKeyFailsBeforeSending(t *testing.T) {
 }
 
 func TestDispatchCodexNeedsTheHookTrustFlag(t *testing.T) {
-	dir := newProject(t, `{"work":{"dispatch":"herdr","codexCommand":"codex --yolo"}}`)
+	dir := newProject(t, `{"round":{"dispatch":"herdr","codexCommand":"codex --yolo"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	rig := &codexRig{loggedIn: true}
 	f := herdrFake()

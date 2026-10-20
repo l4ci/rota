@@ -15,7 +15,7 @@ import (
 
 // Attachable host session guarantee: the port of bin/hv-worker-session.
 //
-// `work.dispatch: tmux` is worth its cost for one reason: a worker that needs
+// `round.dispatch: tmux` is worth its cost for one reason: a worker that needs
 // a decision can idle and a human can answer it in that worker's pane. If
 // /rota-work is launched from a terminal that is NOT already inside tmux, the
 // worker windows get created in a DETACHED session nobody is looking at, and
@@ -61,13 +61,13 @@ type SessionOpts struct {
 	BootTimeout int    // default 60
 }
 
-// operatorCommand is work.operatorCommand, else a resumed opus session. The
+// operatorCommand is round.operatorCommand, else a resumed opus session. The
 // operator runs in `auto`, not the workers' skip-permissions mode: it is the
 // process that merges into the cycle branch and talks to the user, and the one
 // window a human is actually watching, so it keeps a gate the workers do not.
 func operatorCommand(root string) string {
 	cfg := config.Load(rotatree.Config(root))
-	if v, ok := config.Lookup(cfg, "work.operatorCommand"); ok {
+	if v, ok := config.Lookup(cfg, "round.operatorCommand"); ok {
 		if s, _ := v.(string); s != "" {
 			return s
 		}
@@ -77,7 +77,7 @@ func operatorCommand(root string) string {
 }
 
 // SessionEnsure guarantees a session a human can attach to. Exits: 3 missing
-// body file; 4 work.dispatch=herdr outside herdr; 5 host failure or the
+// body file; 4 round.dispatch=herdr outside herdr; 5 host failure or the
 // operator window never came up.
 func (e Env) SessionEnsure(ctx context.Context, root string, o SessionOpts) (SessionState, error) {
 	e = e.withDefaults()
@@ -99,7 +99,7 @@ func (e Env) SessionEnsure(ctx context.Context, root string, o SessionOpts) (Ses
 	}
 	if h.Kind() == host.Herdr {
 		cwd, _ := os.Getwd()
-		err := fail(exitcode.ExitRefused, "work.dispatch=herdr needs /rota-work to run inside a herdr pane")
+		err := fail(exitcode.ExitRefused, "round.dispatch=herdr needs /rota-work to run inside a herdr pane")
 		err.Data = BlockData{BlockedBy: "outside herdr"}
 		err.Hint = fmt.Sprintf("open herdr, start Claude Code in a pane at %s, and run /rota-work there; worker tabs then open in that workspace, beside the orchestrator", cwd)
 		return SessionState{}, err

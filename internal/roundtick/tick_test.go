@@ -418,7 +418,7 @@ func TestCappedTickFillsNoSlotAndSaysWhy(t *testing.T) {
 		slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "idle"}},
 		cands: []Candidate{{"#1", true}, {"#2", true}},
 	}
-	why := "every work.accounts account is cooling down; slots fill again at 13:00 UTC"
+	why := "every round.accounts account is cooling down; slots fill again at 13:00 UTC"
 	e := f.env()
 	e.Capped = func(context.Context) string { return why }
 	minted := 0
@@ -482,7 +482,7 @@ func TestBatchRefusalMidTickStopsAssigning(t *testing.T) {
 // must say so, not report "nothing to do".
 func TestQuotaRefusalIsReportedAsCapped(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}, {"#2", true}}}
-	why := "every work.accounts account is cooling down; slots fill again at 13:00 UTC"
+	why := "every round.accounts account is cooling down; slots fill again at 13:00 UTC"
 	f.assignFn = func(string) ([]string, error) {
 		return nil, &round.BlockedError{By: round.BlockQuota, Msg: why}
 	}

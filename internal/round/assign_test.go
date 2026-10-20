@@ -421,7 +421,7 @@ func (f *assignFixture) config(t *testing.T, cfg string) {
 	f.set = set
 	// The round recorded its host at start, before this config; the registry
 	// wins, so a config that names a host re-records it, as a new round would.
-	if dv, _ := config.Lookup(config.Load(filepath.Join(f.root, ".rota", "config.json")), "work.dispatch"); dv == "herdr" || dv == "tmux" {
+	if dv, _ := config.Lookup(config.Load(filepath.Join(f.root, ".rota", "config.json")), "round.dispatch"); dv == "herdr" || dv == "tmux" {
 		d := dv.(string)
 		if err := worker.Update(f.root, func(doc *worker.Doc) { doc.SetHost(host.KindOf(d)) }); err != nil {
 			t.Fatal(err)
@@ -561,7 +561,7 @@ func (c *codexRig) install(f *assignFixture) {
 	}
 }
 
-const codexCfg = `{"work":{"dispatch":"herdr"},"round":{"tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`
+const codexCfg = `{"round":{"dispatch":"herdr","tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`
 
 func TestAssignCodexResolvesAndStarts(t *testing.T) {
 	f := newAssignFixture(t)
@@ -605,7 +605,7 @@ func TestAssignCodexResolvesAndStarts(t *testing.T) {
 // loses to --kind, and is what autopilot (which passes no kind) gets.
 func TestAssignProjectWorkerKind(t *testing.T) {
 	f := newAssignFixture(t)
-	f.config(t, `{"work":{"dispatch":"herdr"},"round":{"workerKind":"codex","tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`)
+	f.config(t, `{"round":{"dispatch":"herdr","workerKind":"codex","tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`)
 	worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.Raw().Set("kind", "claude") })
 	res, err := f.assign("12", "ben", func(o *AssignOpts) { o.CheckOnly = true })
 	if err != nil || res.Kind != harness.Codex || res.KindSource != KindFromConfig || res.Model != "c-s" {
@@ -618,12 +618,12 @@ func TestAssignProjectWorkerKind(t *testing.T) {
 }
 
 // An all-empty codex tier map is no model, not a refusal (#68): the default
-// command drops --model and Codex picks its own. A custom work.codexCommand
+// command drops --model and Codex picks its own. A custom round.codexCommand
 // holding {model} has nothing to fill in, so it is refused before the claim.
 // The unset map is no longer empty: it ships defaults (#953).
 func TestAssignCodexWithoutTierMap(t *testing.T) {
 	f := newAssignFixture(t)
-	f.config(t, `{"work":{"dispatch":"herdr"},"round":{"tiers":{"codex":{"light":"","standard":"","heavy":""}}}}`)
+	f.config(t, `{"round":{"dispatch":"herdr","tiers":{"codex":{"light":"","standard":"","heavy":""}}}}`)
 	rig := &codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}
 	rig.install(f)
 	f.host.name = "herdr"
@@ -636,7 +636,7 @@ func TestAssignCodexWithoutTierMap(t *testing.T) {
 	}
 
 	g := newAssignFixture(t)
-	g.config(t, `{"work":{"dispatch":"herdr","codexCommand":"codex -m {model}"},"round":{"tiers":{"codex":{"light":"","standard":"","heavy":""}}}}`)
+	g.config(t, `{"round":{"dispatch":"herdr","codexCommand":"codex -m {model}","tiers":{"codex":{"light":"","standard":"","heavy":""}}}}`)
 	gr := &codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}
 	gr.install(g)
 	g.host.name = "herdr"
@@ -704,10 +704,10 @@ func TestAssignCodexNewVersionPasses(t *testing.T) {
 	}
 }
 
-// work.accounts and its meter are Anthropic's: a codex slot never picks one.
+// round.accounts and its meter are Anthropic's: a codex slot never picks one.
 func TestAssignCodexSkipsAccounts(t *testing.T) {
 	f := newAssignFixture(t)
-	f.config(t, `{"work":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}]},"round":{"tiers":{"codex":{"light":"a","standard":"b","heavy":"c"}}}}`)
+	f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}],"tiers":{"codex":{"light":"a","standard":"b","heavy":"c"}}}}`)
 	(&codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}).install(f)
 	f.host.name = "herdr"
 	fetched := 0
@@ -723,7 +723,7 @@ func TestAssignCodexSkipsAccounts(t *testing.T) {
 
 func TestAssignCustomWorkerCommandModelPlaceholder(t *testing.T) {
 	f := newAssignFixture(t)
-	f.config(t, `{"work":{"workerCommand":"mywrap --dangerously-skip-permissions"}}`)
+	f.config(t, `{"round":{"workerCommand":"mywrap --dangerously-skip-permissions"}}`)
 	res, err := f.assign("12", "ben", nil)
 	if err != nil || res.Model != "" || res.Tier != "standard" || len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "{model}") {
 		t.Fatalf("a command without the placeholder warns and records the tier: %v %+v", err, res)
@@ -736,7 +736,7 @@ func TestAssignCustomWorkerCommandModelPlaceholder(t *testing.T) {
 	}
 
 	g := newAssignFixture(t)
-	g.config(t, `{"work":{"workerCommand":"mywrap --m {model} --dangerously-skip-permissions"}}`)
+	g.config(t, `{"round":{"workerCommand":"mywrap --m {model} --dangerously-skip-permissions"}}`)
 	res, err = g.assign("12", "ben", func(o *AssignOpts) { o.Tier = "light" })
 	if err != nil || res.Model != "haiku" || len(res.Warnings) != 0 || g.host.launch != "mywrap --m haiku --dangerously-skip-permissions" {
 		t.Fatalf("placeholder filled: %v %+v %q", err, res, g.host.launch)
@@ -1059,7 +1059,7 @@ func TestAssignAccountStepFollowsAccountPicking(t *testing.T) {
 	}{{"meter reader only skips the step", false, ""}, {"WithAccounts picks", true, "a"}} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newAssignFixture(t)
-			f.config(t, `{"work":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}]}}`)
+			f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}]}}`)
 			f.host.name = "herdr"
 			acc := &worker.Accounts{Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
 				return nil, "fake: no network in tests"

@@ -17,12 +17,12 @@ import (
 type StartOpts struct {
 	Scope      string
 	Items      []string // the slate, for scope slate
-	Slots      int      // 0 means work.workerSlots, capped by the caller
+	Slots      int      // 0 means round.slots, capped by the caller
 	Base       string
 	HolderPID  int
 	Settings   roundcfg.Settings
 	DefaultNum int // slots when Slots is 0
-	// Dispatch is work.dispatch and LookPath the PATH probe; together with
+	// Dispatch is round.dispatch and LookPath the PATH probe; together with
 	// the env's Getenv they resolve the round's host (C8). A nil LookPath is exec.LookPath.
 	Dispatch string
 	LookPath func(string) (string, error)

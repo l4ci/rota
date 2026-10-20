@@ -95,13 +95,13 @@ func TestRecordedHostOverridesWorkDispatchAndNoneKeepsIt(t *testing.T) {
 		got = append(got, d)
 		return tmuxFake()
 	}
-	dir := newProject(t, `{"work":{"dispatch":"tmux"}}`)
+	dir := newProject(t, `{"round":{"dispatch":"tmux"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	e.SessionCheck(bg, dir)
 	recordHost(t, dir, "herdr")
 	e.SessionCheck(bg, dir)
 	if len(got) != 2 || got[0] != "tmux" || got[1] != "herdr" {
-		t.Errorf("host kinds = %v, want [tmux herdr]: no recorded host keeps work.dispatch, a recorded one wins", got)
+		t.Errorf("host kinds = %v, want [tmux herdr]: no recorded host keeps round.dispatch, a recorded one wins", got)
 	}
 }
 

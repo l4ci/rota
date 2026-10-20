@@ -85,7 +85,7 @@ type Input struct {
 	Home string // expands a leading "~/" in a configDir
 
 	// From the project config when .rota/ exists; zero values otherwise.
-	Dispatch      string // work.dispatch
+	Dispatch      string // round.dispatch
 	ForgeProvider string // forge.provider (auto, github, gitlab or local; "" reads as auto)
 	// IssueSource is issues.source, "" outside a rota project. An unmigrated
 	// legacy config reads as config.SourceIssues. SourceProblem is the reason
@@ -308,7 +308,7 @@ func (d *runner) host() Check {
 		if name == "" {
 			name = "subagent"
 		}
-		return skip("host", "work.dispatch is "+name+", not in herdr or tmux: solo, no terminal host needed")
+		return skip("host", "round.dispatch is "+name+", not in herdr or tmux: solo, no terminal host needed")
 	}
 }
 
@@ -431,7 +431,7 @@ func (d *runner) expand(dir string) string { return worker.ExpandConfigDirIn(dir
 
 func (d *runner) accounts() Check {
 	if len(d.in.Accounts) == 0 {
-		return skip("accounts", "no accounts in work.accounts")
+		return skip("accounts", "no accounts in round.accounts")
 	}
 	var bad []string
 	var hint string
@@ -440,7 +440,7 @@ func (d *runner) accounts() Check {
 		if a.ConfigDir == "" {
 			why = "no configDir"
 			if hint == "" {
-				hint = "set configDir for account " + a.Name + " in work.accounts"
+				hint = "set configDir for account " + a.Name + " in round.accounts"
 			}
 		} else if dir = worker.ExpandConfigDirIn(a.ConfigDir, d.in.Home); !fsio.IsDir(dir) {
 			why = "configDir " + dir + " does not exist"
@@ -467,7 +467,7 @@ func (d *runner) hook() Check {
 		return skip("hook", "host is not herdr")
 	}
 	if len(d.in.Accounts) == 0 {
-		return skip("hook", "no accounts in work.accounts")
+		return skip("hook", "no accounts in round.accounts")
 	}
 	bin, ok := d.in.Look(host.Herdr.Binary())
 	if !ok {
@@ -640,8 +640,8 @@ func (d *runner) switchCheck() Check {
 		}
 	}
 	if len(with) < 2 {
-		return fail(name, fmt.Sprintf("%d account with a configDir in work.accounts, need 2 to move between", len(with)),
-			"add a second account to work.accounts")
+		return fail(name, fmt.Sprintf("%d account with a configDir in round.accounts, need 2 to move between", len(with)),
+			"add a second account to round.accounts")
 	}
 	if h := d.stopHook(); h.Status != Pass {
 		return fail(name, "the Stop hook is not installed: "+h.Detail, stopHookHint)

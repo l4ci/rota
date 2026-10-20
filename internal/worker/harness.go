@@ -60,7 +60,7 @@ func (e Env) probe() harness.Probe {
 
 // ModelApplies reports whether a chosen model reaches the default harness's
 // launch command: the default command always takes it, a custom
-// work.workerCommand only through the {model} placeholder.
+// round.workerCommand only through the {model} placeholder.
 func ModelApplies(root string) bool { return ModelAppliesTo(root, harness.Default) }
 
 // ModelAppliesTo is ModelApplies for a harness kind.

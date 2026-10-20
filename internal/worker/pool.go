@@ -55,7 +55,7 @@ type InitResult struct {
 }
 
 // PoolInit creates the slots' worktrees and registers them, then runs
-// work.envSetup in each slot worktree whose lockfile hash differs from the one
+// round.envSetup in each slot worktree whose lockfile hash differs from the one
 // stored by its last successful setup. It is
 // idempotent: an existing, healthy slot is left alone and only missing slots
 // are created. Re-running with a larger Slots grows the pool and never shrinks
@@ -94,7 +94,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 	cfg := config.Load(rotatree.Config(root))
 	dispatch := host.KindOf(config.Dispatch(cfg))
 
-	envSetup := config.String(cfg, "work.envSetup")
+	envSetup := config.String(cfg, "round.envSetup")
 	portStart, portBlock := PortRange(cfg)
 
 	names, branchOf := o.slotNames()
@@ -180,7 +180,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 
 	// Spread slots across configured accounts. Assignment is by headroom, not
 	// round-robin, so a fleet does not pile onto an account that is nearly
-	// spent. Silent no-op when work.accounts is empty: the single-account
+	// spent. Silent no-op when round.accounts is empty: the single-account
 	// default inherits the ambient CLAUDE_CONFIG_DIR.
 	if acc != nil && len(Configured(root)) > 0 {
 		var used []string
