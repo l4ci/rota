@@ -196,6 +196,12 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 			text = append(text, l)
 		}
 	}
+	if n := res.Slot; n != nil && tick == nil { // a running autopilot assigns by itself
+		if an := assignNudgeFor(c, root, n.Slot); an != nil {
+			d.Set("assignNudge", an.data())
+			text = append(text, an.Text())
+		}
+	}
 	text = addTrainNudge(c, root, d, text)
 	if stopped != "" {
 		d.Set("autopilotStopped", stopped)

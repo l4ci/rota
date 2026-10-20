@@ -70,6 +70,16 @@ type Summary struct {
 	Audit    []AuditRow
 	// CapReasons counts the bounce-cap transfers by reason.
 	CapReasons CapReasons
+	// Idle is each slot's wait between a done and its next assign.
+	Idle []IdleRow
+}
+
+// IdleRow is one stretch a slot sat done before the orchestrator assigned it
+// again: the feed rule of #29 says it is free the moment its PR is open.
+type IdleRow struct {
+	Slot           string
+	DoneAt, NextAt time.Time
+	IdleSeconds    int
 }
 
 // CapReasons counts transfers made at the bounce cap: AmbiguousCriteria went
@@ -140,9 +150,21 @@ func Fold(entries []Entry, audit []*jsonx.Object, round int) Summary {
 	s := Summary{Round: round}
 	f := &folder{}
 	var first, last time.Time
+	doneAt := map[string]time.Time{} // slot -> its first done since the last assign
 	for _, e := range entries {
 		if e.Round != round {
 			continue
+		}
+		switch {
+		case e.Kind == KindDone && e.Slot != "" && !e.TS.IsZero():
+			if _, open := doneAt[e.Slot]; !open { // a re-done after a bounce is not idle time
+				doneAt[e.Slot] = e.TS
+			}
+		case e.Kind == KindAssign && e.Slot != "":
+			if d, open := doneAt[e.Slot]; open && !e.TS.IsZero() {
+				s.Idle = append(s.Idle, IdleRow{Slot: e.Slot, DoneAt: d, NextAt: e.TS, IdleSeconds: max(0, int(e.TS.Sub(d).Seconds()))})
+			}
+			delete(doneAt, e.Slot)
 		}
 		if !e.TS.IsZero() {
 			if first.IsZero() || e.TS.Before(first) {
@@ -379,6 +401,15 @@ func (s Summary) Text() string {
 	if c := s.CapReasons; c.AmbiguousCriteria+c.Tier+c.Fresh > 0 {
 		fmt.Fprintf(&b, "\nBounce cap: %d ambiguous-criteria, %d tier, %d fresh\n", c.AmbiguousCriteria, c.Tier, c.Fresh)
 	}
+	if len(s.Idle) > 0 {
+		fmt.Fprintf(&b, "\nIdle between done and next assign (median %s)\n", mins(s.medianIdle()))
+		tw = tabwriter.NewWriter(&b, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(tw, "SLOT\tDONE\tNEXT ASSIGN\tIDLE")
+		for _, r := range s.Idle {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", r.Slot, clock(&r.DoneAt), clock(&r.NextAt), mins(r.IdleSeconds))
+		}
+		tw.Flush()
+	}
 	fmt.Fprintln(&b, "\nGate audit")
 	if len(s.Audit) == 0 {
 		fmt.Fprintln(&b, "none")
@@ -390,6 +421,17 @@ func (s Summary) Text() string {
 	}
 	tw.Flush()
 	return b.String()
+}
+
+func mins(sec int) string { return fmt.Sprintf("%d min", (sec+30)/60) }
+
+func (s Summary) medianIdle() int {
+	secs := make([]int, len(s.Idle))
+	for i, r := range s.Idle {
+		secs[i] = r.IdleSeconds
+	}
+	sort.Ints(secs)
+	return secs[len(secs)/2]
 }
 
 // ---- JSON -------------------------------------------------------------------
@@ -466,6 +508,16 @@ func (s Summary) Object() *jsonx.Object {
 	d.Set("slots", tot(s.Slots))
 	d.Set("accounts", tot(s.Accounts))
 	d.Set("audit", audit)
+	idle := make([]any, 0, len(s.Idle))
+	for _, r := range s.Idle {
+		o := jsonx.NewObject()
+		o.Set("slot", r.Slot)
+		o.Set("doneAt", r.DoneAt.UTC().Format(time.RFC3339))
+		o.Set("nextAssignAt", r.NextAt.UTC().Format(time.RFC3339))
+		o.Set("idleSeconds", r.IdleSeconds)
+		idle = append(idle, o)
+	}
+	d.Set("idle", idle)
 	cap := jsonx.NewObject()
 	cap.Set(CapAmbiguousCriteria, s.CapReasons.AmbiguousCriteria)
 	cap.Set(CapTier, s.CapReasons.Tier)

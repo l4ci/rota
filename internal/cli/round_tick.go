@@ -143,16 +143,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		}
 		return out, nil
 	}
-	// The architecture is read once per tick: ReviewDue stores it for Review.
-	var arch round.Architecture
-	e.ReviewDue = func(context.Context) (bool, error) {
-		var err error
-		arch, err = architectureFor(c, root, set)
-		return arch.Due, err
-	}
-	e.Review = func(ctx context.Context) ([]string, error) {
-		return renv.MintReview(ctx, root, board, arch, round.Current(root))
-	}
+	e.Review = reviewAdapter{c: c, root: root, set: set, renv: renv, board: board}
 	// Assign takes no tier, no kind and never accepts overlap: the round's
 	// defaults, and only a candidate that is ready as it stands.
 	e.Assign = func(ctx context.Context, id string) ([]string, error) {
@@ -351,4 +342,26 @@ func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundti
 		return out, err
 	}
 	return roundtick.ReviewStep(ctx, src)
+}
+
+// reviewAdapter wires the tick's architecture review to the backlog and the
+// round env. The decision is the tick's (round.DecideReview).
+type reviewAdapter struct {
+	c     *Ctx
+	root  string
+	set   roundcfg.Settings
+	renv  round.Env
+	board round.Board
+}
+
+func (r reviewAdapter) Facts(ctx context.Context) (round.Architecture, bool, error) {
+	cands, err := r.renv.RoundCandidates(ctx, r.root, r.board, r.set, "")
+	if err != nil {
+		return round.Architecture{}, false, err
+	}
+	return r.renv.ArchitectureFacts(ctx, r.root, r.board, r.set, cands)
+}
+
+func (r reviewAdapter) Mint(ctx context.Context, a round.Architecture) ([]string, error) {
+	return r.renv.MintReview(ctx, r.root, r.board, a, round.Current(r.root))
 }
