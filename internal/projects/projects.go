@@ -1,7 +1,7 @@
 // Package projects is the machine-wide registry of rota projects: one
 // projects.json under the rota state dir, $XDG_STATE_HOME/rota (default
-// ~/.local/state/rota); it was under the config dir until #1184. `rota init` registers the project it seeds and
-// `rota projects` lists them. It is not .rota/repos.json, the per-project
+// ~/.local/state/rota); it was under the config dir until #1184. `rota init`
+// registers the project it seeds and `rota projects` lists them. It is not .rota/repos.json, the per-project
 // umbrella sub-repo registry (internal/repos).
 //
 // A path that no longer exists is kept and flagged on read, never pruned by
