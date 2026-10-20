@@ -34,9 +34,9 @@ func TestSkillsHarnessNeutral(t *testing.T) {
 		if parts[0] == "skills/references/authoring-conventions.md" && line == "**Claude Code only:** its picker is `AskUserQuestion`; map the question shape to its supported fields." {
 			line = strings.ReplaceAll(line, "`AskUserQuestion`", "the picker")
 		}
-		// The picker branch of /rota-answer is its own Claude-only bullet; the
+		// The picker branch of /rota-answer and /rota-init is its own Claude-only bullet; the
 		// other-harness branch beside it names no tool.
-		if parts[0] == "skills/rota-answer/SKILL.md" && strings.HasPrefix(line, "- **Claude Code:** `AskUserQuestion`") {
+		if (parts[0] == "skills/rota-answer/SKILL.md" || parts[0] == "skills/rota-init/SKILL.md") && strings.HasPrefix(line, "- **Claude Code:** `AskUserQuestion`") {
 			line = strings.ReplaceAll(line, "`AskUserQuestion`", "the picker")
 		}
 		// UI labels are ordinary English, not calls to the edit tool. Remove
