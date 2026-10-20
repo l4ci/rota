@@ -23,6 +23,17 @@ rota turns a to-do list into reviewed, merged work. You capture an item, your ag
 
 ---
 
+## 🔌 Works with
+
+| | Supported | Set up in |
+|---|---|---|
+| **Forges** (where code lands) | [GitHub](https://github.com), [GitLab](https://gitlab.com) (self-hosted too), local (no remote, direct merge) | [Issue source and forge](docs/usage/issue-backend.md#issue-source-and-forge) |
+| **Issue sources** | `BACKLOG.md` in the repo, [GitHub Issues](https://docs.github.com/en/issues), [GitLab Issues](https://docs.gitlab.com/ee/user/project/issues/), [Jira](https://www.atlassian.com/software/jira), [Linear](https://linear.app), [It's a Plan](https://github.com/croffasia/itsaplan) | [Issue backend](docs/usage/issue-backend.md) · [Tracker connections](docs/usage/configuration.md#tracker-connections) |
+| **Agent harnesses** | [Claude Code](https://claude.com/claude-code), [Codex](https://developers.openai.com/codex), [OpenCode](https://opencode.ai) | [Codex workers](docs/usage/codex-workers.md) · [OpenCode workers](docs/usage/opencode-workers.md) |
+| **Terminal hosts** (a round needs one) | [herdr](https://herdr.dev), [tmux](https://github.com/tmux/tmux) | [Parallel rounds](docs/usage/parallel-rounds.md) |
+
+---
+
 ## 🚀 Quick start
 
 One agent, one item at a time. You need git and [Claude Code](https://claude.com/claude-code) or Codex. No herdr, tmux, `gh` or second account. The steps below are written for Claude Code. In Codex, type `$rota-capture` where it says `/rota-capture`; see [skills in Codex](docs/usage/codex-skills.md).
