@@ -126,7 +126,7 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		o.Round = &RoundMemo{}
 	}
 	var res TrainResult
-	err := e.withLandLock(ctx, root, func() (err error) {
+	err := e.withLandLock(ctx, root, func(bool) (err error) {
 		cache := loadTrainCache(root)
 		gated := map[string]bool{}
 		res, err = e.train(ctx, root, o, cache, gated)

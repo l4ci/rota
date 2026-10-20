@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/strutil"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -29,15 +30,24 @@ func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string)
 	case s.HeldID() == "":
 		return false, "holds nothing"
 	case s.PR() == "" && len(s.Issues()) == 0:
-		return false, "no PR recorded"
+		return false, fmt.Sprintf("no PR recorded for branch %s; check the forge and run `rota round reconcile`", strutil.FirstNonEmpty(s.Branch(), "(none)"))
 	}
+	// A relay can leave a slot blocked after its PR merged: the merged PR frees it.
+	if s.State() == "blocked" && e.prMerged(ctx, s.PR()) {
+		return e.settled(ctx, s, "blocked")
+	}
+	return e.settled(ctx, s, "done", "idle")
+}
+
+// settled is the slot half of parkable: no partial or failed report, a state in
+// states and a clean worktree. why names what is missing when it is not.
+func (e Env) settled(ctx context.Context, s *worker.Slot, states ...string) (ok bool, why string) {
 	// A partial or failed report waits for a relay or transfer: queuing its PR
 	// would let the gate merge it by number with nobody having answered it.
 	if k, _ := s.Outcome(); k == worker.OutcomePartial || k == worker.OutcomeFailed {
 		return false, "reported " + k + "; relay or transfer it first"
 	}
-	// A relay can leave a slot blocked after its PR merged: the merged PR frees it.
-	if st := s.State(); st != "done" && st != "idle" && (st != "blocked" || !e.prMerged(ctx, s.PR())) {
+	if st := s.State(); !slices.Contains(states, st) {
 		return false, strutil.FirstNonEmpty(st, "busy")
 	}
 	dirty, err := e.dirtyPaths(ctx, s.Worktree())
@@ -58,6 +68,37 @@ func (e Env) prMerged(ctx context.Context, pr string) bool {
 	}
 	st, err := e.Forge.PRState(ctx, n)
 	return err == nil && st == "merged"
+}
+
+// adoptBranchPR is the assign-side repair for a worker whose done landed before
+// its PR was recorded: a held slot that records no PR and no issues gets the
+// open PR headed by its own branch, when the forge shows one. The PR is set on
+// the loaded slot so the caller's parkable sees it, and written to the registry
+// unless persist is false (a check-only run writes nothing). A forge that
+// cannot answer, no PR or a parked branch leaves the slot as it was.
+func (e Env) adoptBranchPR(ctx context.Context, root string, s *worker.Slot, persist bool) {
+	if e.Forge == nil || s.HeldID() == "" || s.PR() != "" || len(s.Issues()) > 0 || s.Branch() == "" || worker.IsOwnPark(s.Branch(), s.Name()) {
+		return
+	}
+	if st := s.State(); st != "done" && st != "idle" {
+		return
+	}
+	prs, err := e.Forge.OpenPRs(ctx)
+	if err != nil {
+		return
+	}
+	for _, p := range prs {
+		if p.Branch != s.Branch() || p.URL == "" {
+			continue
+		}
+		if persist {
+			if editSlot(root, s.Name(), func(w *worker.Slot) error { w.SetPR(p.URL); return nil }) != nil {
+				return
+			}
+		}
+		s.SetPR(p.URL)
+		return
+	}
 }
 
 // busyMsg is the refusal text for a slot that holds an issue and cannot park.
@@ -113,26 +154,42 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 	})
 }
 
-// closeReview frees a slot whose architecture-review item reported done with
-// the issues it filed (`ROTA-DONE <slot> issues:#a,#b`): the item is closed
-// with a note listing them and the slot is freed. Only a review item this
-// round minted closes this way, so a worker cannot close an arbitrary issue by
-// naming issues in its done line; any other held item is refused.
-func (e Env) closeReview(ctx context.Context, root string, be Board, s *worker.Slot) error {
-	name, id := s.Name(), s.HeldID()
+// reviewItem returns the item a slot holds when it is an architecture-review
+// item this round minted, and a "needs a PR" refusal otherwise. Only such an
+// item closes without a PR, so a worker cannot close an arbitrary issue by
+// naming issues in its done line.
+func reviewItem(root string, be Board, name, id, did string) (*backlog.Item, error) {
 	it, err := be.Get(id)
 	if err != nil {
-		return wrap(err)
+		return it, wrap(err)
 	}
 	if !IsReviewTitle(it.Title) || !MintedReviews(root)[worker.NormID(it.ID)] {
-		return blocked(BlockSlotBusy, "%s", busyMsg(name, id, "reported issues, but it is not an architecture review item; it needs a PR"))
+		return it, blocked(BlockSlotBusy, "%s", busyMsg(name, id, did+", but it is not an architecture review item; it needs a PR"))
 	}
+	return it, nil
+}
+
+// closeReview frees a slot whose architecture-review item reported done with
+// the issues it filed (`ROTA-DONE <slot> issues:#a,#b`): the item is closed
+// with a note listing them and the slot is freed. Any other held item is refused.
+func (e Env) closeReview(ctx context.Context, root string, be Board, s *worker.Slot) error {
+	it, err := reviewItem(root, be, s.Name(), s.HeldID(), "reported issues")
+	if err != nil {
+		return err
+	}
+	return e.closeNoPR(ctx, root, be, s, it, "filed "+strings.Join(s.Issues(), ", "))
+}
+
+// closeNoPR completes an item that delivers no PR: the slot parks, the note is
+// commented on the item and closes it without proof, the claim and in-progress
+// state go and the slot is freed. Assign, transfer and accept all close here.
+func (e Env) closeNoPR(ctx context.Context, root string, be Board, s *worker.Slot, it *backlog.Item, note string) error {
+	name := s.Name()
 	if _, err := e.Park(ctx, root, name, "assign"); err != nil {
 		return err
 	}
 	now := e.Worker.Clock()
-	note := "filed " + strings.Join(s.Issues(), ", ")
-	// The close note is dropped by the file backend, so the list also goes in a comment.
+	// The close note is dropped by the file backend, so it also goes in a comment.
 	if _, err := be.AddComment(it.ID, "feedback", "Review done: "+note+"."); err != nil {
 		return wrap(err)
 	}

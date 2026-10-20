@@ -574,7 +574,7 @@ Controls whether skills nudge or invoke the next skill directly. Two levels: `"o
 - **Type:** string
 - **Default:** `"docs"`
 
-Relative path (from the project root) to the documentation folder that [`/rota-ship --docs`](../reference/slash-commands.md#rota-ship) reads and writes. Set this when your project keeps docs somewhere other than the default, for example `"documentation"`, `"site/content"`, or `"wiki"`.
+Relative path (from the project root) to the documentation folder that [`/rota-docs`](../reference/slash-commands.md#rota-docs) reads and writes. Set this when your project keeps docs somewhere other than the default, for example `"documentation"`, `"site/content"`, or `"wiki"`.
 
 ```json
 { "docs": { "path": "documentation" } }
@@ -585,7 +585,7 @@ Relative path (from the project root) to the documentation folder that [`/rota-s
 - **Type:** boolean
 - **Default:** `false`
 
-Controls whether `/rota-ship --docs` after-work mode automatically writes proposed doc updates without pausing for approval. When `false` (the default), the after-work flow proposes changes and waits for your confirmation before writing. That's the safe propose-mode path. When `true`, it skips the approval gate and commits the doc updates directly.
+Controls whether `/rota-docs` after-work mode automatically writes proposed doc updates without pausing for approval. When `false` (the default), the after-work flow proposes changes and waits for your confirmation before writing. That's the safe propose-mode path. When `true`, it skips the approval gate and commits the doc updates directly.
 
 | Value | Behavior |
 |-------|----------|
@@ -597,13 +597,13 @@ Controls whether `/rota-ship --docs` after-work mode automatically writes propos
 - **Type:** boolean
 - **Default:** `false`
 
-Gate for the after-work docs flow. When `true`, the skills [`/rota-work`](running-work.md), `/rota-ship`, and [`/rota-release`](../reference/slash-commands.md#rota-release) trigger the docs after-work flow after their primary action completes. `/rota-work` and `/rota-ship` only fire on cycles that resolve 2+ items or touch 5+ files (small fixes don't trigger); `/rota-release` fires on every successful release (release notes are inherently user-facing). `/rota-work` only nudges, in a one-line terminal report, at either autonomy level. `/rota-ship` runs the after-work flow inline, with its approval gate as the checkpoint. `/rota-release` nudges under `autonomy.level: off` and auto-dispatches `/rota-ship --docs` under `auto`.
+Gate for the after-work docs flow. When `true`, the skills [`/rota-work`](running-work.md), `/rota-ship`, and [`/rota-release`](../reference/slash-commands.md#rota-release) trigger the docs after-work flow after their primary action completes. `/rota-work` and `/rota-ship` only fire on cycles that resolve 2+ items or touch 5+ files (small fixes don't trigger); `/rota-release` fires on every successful release (release notes are inherently user-facing). `/rota-work` only nudges, in a one-line terminal report, at either autonomy level. `/rota-ship` runs the after-work flow inline, with its approval gate as the checkpoint. `/rota-release` nudges under `autonomy.level: off` and auto-dispatches `/rota-docs` under `auto`.
 
 ```json
 { "docs": { "afterWork": true } }
 ```
 
-Leave `false` while you're shaping docs by hand. Flip on once your docs structure is stable enough that `/rota-ship --docs`'s propose-mode adds value rather than noise.
+Leave `false` while you're shaping docs by hand. Flip on once your docs structure is stable enough that `/rota-docs`'s propose-mode adds value rather than noise.
 
 ## release.checklistPath
 

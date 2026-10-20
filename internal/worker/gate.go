@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/overlap"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/testledger"
 	"github.com/l4ci/rota/internal/tracker"
@@ -111,6 +112,12 @@ const (
 	// and no relay or transfer has answered it; the CLI exits 4 with it,
 	// blockedBy outcome-open.
 	GateOutcomeOpen = "outcome-open"
+	// GateRunning: another gate for the same PR is running or queued; the CLI
+	// exits 4 with it, blockedBy gate-running, before this one takes the land lock.
+	GateRunning = "gate-running"
+	// GateAlreadyMerged: the PR merged while this gate waited for the land lock.
+	// A success that changes nothing.
+	GateAlreadyMerged = "already-merged"
 )
 
 // AttemptTrailer is the commit trailer a worker stamps its attempt id with.
@@ -149,6 +156,9 @@ type GateOpts struct {
 	// (the train does, through its landing steps), so the gate does not retake
 	// it. Without it a gate takes the lock itself unless it is CheckOnly.
 	HoldsLandLock bool
+	// waited is set by Gate when the land lock was busy: the PR may have merged
+	// meanwhile, so the gate reads it again (stepWaitedMerged).
+	waited bool
 	// Verdict is the review-verdict gate (B3), run after provenance, also under
 	// CheckOnly. A non-nil error (a recorded FAIL) stops the gate with verdict
 	// verdict-blocked and is returned as is. branch is the worker branch.
@@ -356,12 +366,43 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 		return res, err
 	}
 	var res GateResult
-	err := e.withLandLock(ctx, root, func() (err error) {
+	if common, key, ok := e.gateRunKey(ctx, root, o.Slot); ok {
+		other, release, err := claimGateRun(common, key)
+		if err != nil {
+			return res, err
+		}
+		if other != 0 {
+			res = GateResult{Slot: o.Slot, Base: o.Base, Round: o.Round, Verdict: GateRunning,
+				Err:  fmt.Sprintf("GATE %s refused — another gate for this PR is running or queued (pid %d); nothing landed", o.Slot, other),
+				Hint: fmt.Sprintf("wait for pid %d to finish; if it is gone, remove the stale marker under the repo's rota state dir", other)}
+			return res, nil
+		}
+		defer release()
+	}
+	err := e.withLandLock(ctx, root, func(waited bool) (err error) {
+		o.waited = waited
 		res, err = e.gate(ctx, root, o)
 		return err
 	})
 	res.Round = o.Round
 	return res, err
+}
+
+// gateRunKey resolves the PR a gate is about to work on without taking any
+// lock. ok is false when the target cannot be read; gate then reports why.
+func (e Env) gateRunKey(ctx context.Context, root, arg string) (common, key string, ok bool) {
+	reg, err := LoadRegistry(root)
+	if err != nil || !reg.Exists {
+		return "", "", false
+	}
+	t, err := reg.GateTargetAny(arg)
+	if err != nil {
+		return "", "", false
+	}
+	if common, err = rotastate.CommonDirVia(ctx, e.Git, root); err != nil {
+		return "", "", false
+	}
+	return common, gateRunKey(t, arg), true
 }
 
 // gate reads the registry and the gate input, then runs the step table.
@@ -426,6 +467,7 @@ var gateSteps = []gateStep{
 	(*gate).stepAdoptPR,
 	(*gate).stepBestOf,
 	(*gate).stepRemote,
+	(*gate).stepWaitedMerged,
 	(*gate).stepSlotHead,
 	(*gate).stepRefs,
 	(*gate).stepAttempt,
@@ -624,13 +666,37 @@ func (g *gate) stepRemote() (bool, error) {
 		return false, nil
 	}
 	g.prNum = prNumText(g.pr)
-	if _, code := g.git(g.root, "remote", "get-url", "origin"); code != 0 {
+	// Only exit 2 ("No such remote") means origin is absent. A git that cannot
+	// run (its directory gone, a signal, a timeout) or fails otherwise says
+	// nothing about the remote, so it is reported as what it is.
+	res, err := g.e.Git(g.ctx, g.root, "remote", "get-url", "origin")
+	switch {
+	case err != nil:
+		return g.broke(fmt.Sprintf("could not run git in %s to read the origin remote: %v", g.root, err))
+	case res.ExitCode == 2:
 		return g.broke(fmt.Sprintf("slot %s has PR %s but this repo has no 'origin' remote; refusing a local merge that would bypass the PR", g.o.Slot, g.pr))
+	case res.ExitCode != 0:
+		return g.broke(fmt.Sprintf("git remote get-url origin failed in %s (exit %d): %s", g.root, res.ExitCode, strings.TrimSpace(res.Stderr)))
 	}
 	if g.prNum == "" {
 		return g.broke(fmt.Sprintf("cannot read a PR number from '%s'", g.pr))
 	}
 	g.remote = true
+	return false, nil
+}
+
+// stepWaitedMerged re-reads the PR when the gate queued behind another gate or
+// a train: it may have merged in the meantime, and judging it again would fail
+// on a head that is already landed.
+func (g *gate) stepWaitedMerged() (bool, error) {
+	if !g.o.waited || g.o.CheckOnly || !g.remote {
+		return false, nil
+	}
+	if info, ok := g.prInfo(); ok && info.State == "MERGED" {
+		g.res.AlreadyMerged = true
+		g.verdict(GateAlreadyMerged, fmt.Sprintf("GATE %s — PR %s merged while this gate waited for the land lock; nothing changed", g.o.Slot, g.pr), "")
+		return true, nil
+	}
 	return false, nil
 }
 

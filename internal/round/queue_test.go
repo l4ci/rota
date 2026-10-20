@@ -105,6 +105,52 @@ func TestAssignRefusesBusyOrDirtySlot(t *testing.T) {
 	}
 }
 
+// Round 28: done landed before the PR was recorded (#1033, #1043). Assign looks
+// the PR up by the slot's branch instead of refusing, and reconcile has no
+// pr-unrecorded left to report.
+func TestAssignOntoDoneSlotWithoutPRAdoptsTheBranchPR(t *testing.T) {
+	f := newMoveFx(t)
+	branch := f.slot("ben").Branch()
+	f.finish(t, "ben", "")
+	f.forge.prs = []tracker.PR{{Number: 7, Branch: branch, URL: pr7}}
+
+	if _, err := f.assign("13", "ben"); err != nil {
+		t.Fatalf("assign: %v", err)
+	}
+	q := f.queued()
+	if len(q) != 1 || q[0].PR != pr7 || q[0].Issue != "12" {
+		t.Fatalf("the branch's PR is queued: %v", q)
+	}
+	if s := f.slot("ben"); s.Task() != "13" || s.PR() != "" {
+		t.Errorf("slot parked and re-assigned: %v", s)
+	}
+	rep, err := f.env.Status(bg, f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fd := range rep.Findings {
+		if fd.Kind == PRUnrecorded {
+			t.Errorf("pr-unrecorded after assign: %+v", fd)
+		}
+	}
+}
+
+func TestAssignOntoDoneSlotWithNoOpenPRNamesBranchAndReconcile(t *testing.T) {
+	f := newMoveFx(t)
+	branch := f.slot("ben").Branch()
+	f.finish(t, "ben", "")
+	f.forge.prs = []tracker.PR{{Number: 8, Branch: "dana/99-other", URL: "https://github.com/o/r/pull/8"}}
+
+	_, err := f.assign("13", "ben")
+	if blockedBy(t, err) != BlockSlotBusy || !strings.Contains(err.Error(), "no PR recorded") ||
+		!strings.Contains(err.Error(), branch) || !strings.Contains(err.Error(), "round reconcile") {
+		t.Errorf("refusal: %v", err)
+	}
+	if len(f.queued()) != 0 || f.slot("ben").PR() != "" || f.slot("ben").Task() != "12" {
+		t.Errorf("a refusal moves nothing: %v %v", f.queued(), f.slot("ben"))
+	}
+}
+
 func TestAssignRefusalMovesNothingBeforeTheClaim(t *testing.T) {
 	f := newMoveFx(t)
 	f.finish(t, "ben", pr7)

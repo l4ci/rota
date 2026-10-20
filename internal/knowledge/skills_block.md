@@ -5,10 +5,10 @@ This project uses rota for backlog tracking, planning, and skill orchestration. 
 **Capture & pick** — `/rota-capture` (with `--remove <ID>` to delete items; offers to hand off to `/rota-work`), `/rota-pause`
 **Plan & build** — `/rota-brainstorm`, `/rota-plan`, `/rota-spike`, `/rota-work` (no argument reconciles active work and suggests the next item; `--preview` for read-only peek), `/rota-debug`
 **Rounds** — `/rota-orchestrate` (run a parallel round as the orchestrator), `/rota-answer` (put pending decisions to the maintainer one by one)
-**Review & ship** — `/rota-review`, `/rota-qa` (opt-in gate via `ship.qa`), `/rota-ship` (`--undo` to roll back the last cycle, `--docs` to maintain public docs)
+**Review & ship** — `/rota-review`, `/rota-qa` (opt-in gate via `ship.qa`), `/rota-ship` (`--undo` to roll back the last cycle)
 **Persist** — `/rota-learn` (durable knowledge; `--term <name>` for glossary), `/rota-decide` (hard boundaries — manual only)
 **Vision & maps** — `/rota-vision`, `/rota-refactor`
-**Maintenance** — `/rota-release`, `/rota-init` (suggest config values from the project, confirmed one by one). Setup and upkeep are `rota` verbs: `rota init`, `rota config`, `rota update`, `rota migrate`
+**Maintenance** — `/rota-release`, `/rota-docs` (maintain public docs: scaffold, after-work, restructure), `/rota-init` (suggest config values from the project, confirmed one by one). Setup and upkeep are `rota` verbs: `rota init`, `rota config`, `rota update`, `rota migrate`
 
 Before acting on work that touches a topic listed in `## Project Knowledge`, `## Project Decisions`, or `## Project Vision`, pull only the relevant sections:
 
