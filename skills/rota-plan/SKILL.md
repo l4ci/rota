@@ -34,6 +34,8 @@ Follow `references/context-load-protocol.md` (parallel, silent): item detail and
 
 **Choose the planning level.** Apply [`references/planning-dial.md`](references/planning-dial.md) to the loaded context and state the level in one line to the user. Level 1 (pointers) is today's plain plan: continue to Step 3. A higher level adds its artifact first (design, spike, or a grilling pass before the Step 3 confirm).
 
+**Package check (opt-in).** Read `rota config show research.packageCheck`. `false` (default): make no registry call. `true`: before the plan names a new package, run [`references/package-check.md`](references/package-check.md) on each one. Drop a `missing` package; list a `suspect` one with its reason and keep it only after the user says yes.
+
 **Grep before claims.** Validate quantified claims in the detail (*"≥5 callers"*) with `git grep` before drafting tasks; the codebase is ground truth. `ls -d` any path you cite.
 
 ## Step 3 — One proposal

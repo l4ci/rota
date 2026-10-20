@@ -311,6 +311,12 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 |-----|------|---------|--------|-------------|
 | `brainstorm.edgeProbe` | bool | `false` |  | Opt-in edge and prohibition probe in /rota-brainstorm Step 3: walks eight edge categories, records each as covered or dismissed, asks what the change must never do and writes each answer as a negative acceptance criterion. Off leaves /rota-brainstorm unchanged. |
 
+### research
+
+| Key | Type | Default | Values | Description |
+|-----|------|---------|--------|-------------|
+| `research.packageCheck` | bool | `false` |  | Opt-in registry check in /rota-spike Step 2 and /rota-plan Step 2: each new package they would recommend is looked up on its registry (npm, PyPI, crates.io, Go proxy); missing ones are dropped, suspect ones need a user answer. Makes network calls. Off makes no registry call. |
+
 ### orchestrator
 
 | Key | Type | Default | Values | Description |
