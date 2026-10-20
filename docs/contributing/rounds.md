@@ -99,7 +99,7 @@ refs:
 not a known commit, or whose `refs:` path does not exist: those are mistakes in the stamp itself. Drift (a ref changed
 between `verified-sha` and `HEAD`, `git diff <sha> HEAD -- <ref>`) only prints a `WARN` naming the doc and the changed
 paths and exits 0, so an unrelated PR is never blocked by it. `ROTA_DOC_STAMPS=strict bash test/doclint.sh` (or
-`python3 test/check-doc-stamps.py --strict`) fails on drift too; run it before `/rota-ship --docs` and the re-stamp
+`python3 test/check-doc-stamps.py --strict`) fails on drift too; run it before `/rota-docs` and the re-stamp
 below. Other docs under `docs/` need no stamp.
 
 To re-stamp after a ref changed (the strict run lists what to fix): `git diff <verified-sha> HEAD -- <ref>` for each flagged path, read the doc against

@@ -50,7 +50,9 @@ Work only this task, then stop.
   pick one yourself: add no section, or ask (`ROTA-BLOCKED`).
 - Never dispatch a reviewer subagent or run `/rota-review` on your own branch.
   Review is the orchestrator's seat (the merge gate); a worker-side review
-  duplicates it. Verify with targeted checks, then open the PR.
+  duplicates it. Verify with targeted checks, then open the PR the one way: `/rota-ship`
+  on your branch, which takes its round-worker path (`skills/rota-ship/round-worker-and-issue-mode.md`:
+  no review, QA, UAT, docs or item completion; it opens the PR with `--items`).
 - Ports and databases. Your environment carries `ROTA_SLOT`, `ROTA_PORT_BASE`,
   `ROTA_PORT_BLOCK` and `ROTA_DB_SUFFIX`. Anything you start that listens (a dev server, a test server, a
   browser debug port) binds a port from `ROTA_PORT_BASE` through `ROTA_PORT_BASE + ROTA_PORT_BLOCK - 1`
