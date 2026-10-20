@@ -3,8 +3,6 @@ package cli
 import (
 	"context"
 	"flag"
-	"io"
-	"os"
 	"strconv"
 	"strings"
 
@@ -101,14 +99,9 @@ func trSuggest(fs *flag.FlagSet) RunFunc {
 		if *bodyFile == "" {
 			return Result{}, Usage("--body-file is required")
 		}
-		var raw []byte
-		if *bodyFile == "-" {
-			raw, err = io.ReadAll(c.Stdin)
-		} else {
-			raw, err = os.ReadFile(*bodyFile)
-		}
+		raw, err := readBodyInput(c, "body-file", *bodyFile, ExitUsage)
 		if err != nil {
-			return Result{}, Usage("--body-file %s: %v", *bodyFile, unwrapPathErr(err))
+			return Result{}, err
 		}
 		// The old helper read the body with $(cat), which drops trailing newlines.
 		body := strings.TrimRight(string(raw), "\n")

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/host"
 )
 
@@ -88,6 +89,12 @@ func (s *sweepHost) SweepShells(_ context.Context, cwd string) (int, error) {
 func envWith(h host.Host) Env {
 	return Env{NewHost: func(host.Kind) host.Host { return h }, Sleep: func(time.Duration) {}, Now: func() time.Time {
 		return time.Date(2026, 10, 2, 15, 4, 5, 0, time.UTC)
+	}, Getenv: func(k string) string {
+		switch k { // the developer's own account must not reach a dispatch
+		case "CLAUDE_CONFIG_DIR", "CODEX_HOME", "OPENCODE_CONFIG_DIR":
+			return ""
+		}
+		return os.Getenv(k)
 	}}
 }
 
@@ -227,6 +234,41 @@ func TestDispatchPassesTheAccountConfigDir(t *testing.T) {
 	envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "x"), Task: "T1"})
 	if got := accountEnv(f.spawnOpts); got != "CLAUDE_CONFIG_DIR=/acct/a" {
 		t.Errorf("account env = %q", got)
+	}
+}
+
+func TestDispatchInheritsTheOrchestratorConfigDirWithoutAccounts(t *testing.T) {
+	dir := newProject(t, `{}`)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	f := tmuxFake()
+	e := envWith(f)
+	e.Getenv = func(k string) string {
+		if k == "CLAUDE_CONFIG_DIR" {
+			return "/orch/claude-work"
+		}
+		return ""
+	}
+	e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "x"), Task: "T1"})
+	if got := accountEnv(f.spawnOpts); got != "CLAUDE_CONFIG_DIR=/orch/claude-work" {
+		t.Errorf("account env = %q", got)
+	}
+}
+
+func TestConfigDirMismatch(t *testing.T) {
+	accts := []config.Account{{Name: "a", ConfigDir: "/acct/a"}}
+	for _, c := range []struct {
+		name, dir string
+		accts     []config.Account
+		warn      bool
+	}{
+		{"unset", "", accts, false},
+		{"no accounts", "/orch", nil, false},
+		{"listed", "/acct/a/", accts, false},
+		{"unlisted", "/orch", accts, true},
+	} {
+		if got := ConfigDirMismatch(c.dir, c.accts) != ""; got != c.warn {
+			t.Errorf("%s: warn = %v, want %v", c.name, got, c.warn)
+		}
 	}
 }
 

@@ -1,6 +1,6 @@
 # Configuration
 
-All settings live in [`.rota/config.json`](../reference/rota-folder.md). Run `rota config show` to list every key with its value and source, `rota config edit` (or `rota config --ui`) to change keys on [a screen](#the-config-screen) (terminal only; it is also the Config entry of the bare-`rota` menu), and `rota config set <key> <value>` to change one from a script (positional arguments; see [config options](../reference/config-options.md)). `rota init` fills any missing key with its default. Don't hand-edit the file. `rota config save-global` saves this project's `config.json` (not `config.local.json`; without `rota.version`, `git.baseBranch` and `umbrella.enabled`) as `config.json` in the rota config dir (`$XDG_CONFIG_HOME/rota`, default `~/.config/rota`), beside `projects.json`. `rota init` and `rota setup` start a new project from those values, and `rota setup` offers each as the question's default. It only seeds: an existing project is never re-seeded, and nothing reads the global file after init. Interactive `rota setup` ends by offering to save its answers there: all of them when no global file exists yet, later only those that differ from it, merged into the file. `--yes`, `--set` and runs without a terminal never ask; `rota setup --save-global` saves the same answers without asking.
+All settings live in [`.rota/config.json`](../reference/rota-folder.md). Run `rota config show` to list every key with its value and source, `rota config edit` (or `rota config --ui`) to change keys on [a screen](#the-config-screen) (terminal only; it is also the Config entry of the bare-`rota` menu), and `rota config set <key> <value>` to change one from a script (positional arguments; see [config options](../reference/config-options.md)). `rota init` fills any missing key with its default. Don't hand-edit the file. `rota config save-global` saves this project's `config.json` (not `config.local.json`; without `rota.version`, `git.baseBranch` and `umbrella.enabled`) as `config.json` in the rota config dir (`$XDG_CONFIG_HOME/rota`, default `~/.config/rota`), beside `connections.json`. `rota init` and `rota setup` start a new project from those values, and `rota setup` offers each as the question's default. It only seeds: an existing project is never re-seeded, and nothing reads the global file after init. Interactive `rota setup` ends by offering to save its answers there: all of them when no global file exists yet, later only those that differ from it, merged into the file. `--yes`, `--set` and runs without a terminal never ask; `rota setup --save-global` saves the same answers without asking.
 
 For the allowed values and option labels of each key, see [Configuration options](../reference/config-options.md).
 
@@ -744,7 +744,7 @@ Skills that use the base branch (including `/rota-ship`, `/rota-review` and `/ro
 
 ### Tracker connections
 
-Credentials and sites belong to you, not the repo, so they never go in `.rota/`. `rota connect` keeps named connections in `connections.json` under the global rota config dir (`~/.config/rota`, beside `projects.json`); a project only names one with `issues.connection`. GitHub and GitLab keep their own login through `gh` and `glab`; this is for trackers rota reaches over HTTP.
+Credentials and sites belong to you, not the repo, so they never go in `.rota/`. `rota connect` keeps named connections in `connections.json` under the global rota config dir (`~/.config/rota`); a project only names one with `issues.connection`. GitHub and GitLab keep their own login through `gh` and `glab`; this is for trackers rota reaches over HTTP.
 
 ```sh
 echo "$JIRA_TOKEN" | rota connect add work --kind jira --site https://acme.atlassian.net --user me@acme.com --token-stdin
@@ -759,6 +759,19 @@ The secret goes to the OS keychain (`security` on macOS, `secret-tool` on Linux)
 `rota doctor` checks the project's `issues.connection`: it fails with a hint when the connection is unknown, has no secret, or its test read fails. A kind with no test read yet in your build shows as a warning.
 
 `issues.label` is the legacy alias of `issues.labels.inProgress`. It is used when the new key is unset. `rota config show` lists all of these keys with their effective value and source.
+
+### Where rota keeps machine files
+
+Outside a project, rota follows the XDG Base Directory spec. An `XDG_*` variable counts only when it is an absolute path.
+
+| Kind | Location | Holds |
+|---|---|---|
+| Config | `$XDG_CONFIG_HOME/rota`, default `~/.config/rota` | `config.json` (the global seed), `connections.json`, the secrets fallback file |
+| State | `$XDG_STATE_HOME/rota`, default `~/.local/state/rota` | `projects.json` (the project registry) and its lock. `rota doctor` prints the path. |
+| Cache | `$XDG_CACHE_HOME/rota/skills` (the OS user cache dir) | the extracted embedded skills |
+| Data | `$XDG_DATA_HOME` | rota writes nothing here itself |
+
+An older rota kept `projects.json` in the config dir. The first run after upgrading moves it to the state dir and removes the old copy; a registry already in the state dir wins.
 
 ## rota.version (auto-managed)
 

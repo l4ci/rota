@@ -85,27 +85,6 @@ func TestUpsertReplaces(t *testing.T) {
 	}
 }
 
-func TestFindProofLatestWinsAndShaPrefix(t *testing.T) {
-	rows := []Row{
-		{"go test ./x", "PASS", "abc1234"},
-		{"go  test ./x", "FAIL", "abc1234"},
-		{"other", "PASS", "abc1234"},
-	}
-	r, ok := FindProof(rows, "abc1234", "go test ./x")
-	if !ok || r.Result != "FAIL" {
-		t.Fatalf("latest must win: %v %v", r, ok)
-	}
-	if _, ok := FindProof(rows, "abc1234def", "other"); !ok {
-		t.Error("long sha must match short row sha")
-	}
-	if _, ok := FindProof(rows, "abc", "other"); ok {
-		t.Error("sha under 4 chars must not match")
-	}
-	if _, ok := FindProof(rows, "ffff000", "other"); ok {
-		t.Error("different sha matched")
-	}
-}
-
 func TestCoverage(t *testing.T) {
 	body := "## Acceptance\n- [ ] AC-1: a\n- [ ] AC-2: b changed\n- [ ] AC-3: c\n- [ ] AC-4: d\n"
 	marks := []Mark{
@@ -114,8 +93,8 @@ func TestCoverage(t *testing.T) {
 		{"AC-3", "d", "abc1234", "t2", "c"},
 		{"AC-9", "d", "abc1234", "t1", "gone"},
 	}
-	rows := []Row{{"t1", "PASS", "abc1234"}, {"t2", "FAIL", "abc1234"}}
-	got := Coverage(body, marks, rows)
+	results := map[string]string{"t1": "PASS", "t2": "FAIL"}
+	got := Coverage(body, marks, func(_, check string) (string, bool) { r, ok := results[check]; return r, ok })
 	want := []Status{
 		{"AC-1", "a", "abc1234:t1", "", true},
 		{"AC-2", "b changed", "abc1234:t1", "changed", false},

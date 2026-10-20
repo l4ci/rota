@@ -61,6 +61,7 @@ func newRig(t *testing.T, kind string) *hostRig {
 	r.goEnv = Env{
 		NewHost: func(d host.Kind) host.Host { return host.New(d, hostDeps(run, r.hostEnv)) },
 		Sleep:   func(time.Duration) {},
+		Getenv:  envWith(nil).Getenv,
 	}
 	return r
 }
