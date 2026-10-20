@@ -146,11 +146,18 @@ echo "gate: ${#NAMES[@]} checks running ($N smoke shards); logs in $LOGS"
 fail=0
 for idx in "${!PIDS[@]}"; do
   name="${NAMES[$idx]}"
-  if wait "${PIDS[$idx]}"; then
+  rc=0; wait "${PIDS[$idx]}" || rc=$?
+  if [ "$rc" = 0 ]; then
     case "$name" in smoke-*) grep -q 'All smoke tests passed.' "$LOGS/$name.log" || { echo "FAIL $name (no pass line)"; fail=1; continue; } ;; esac
     echo "ok   $name"
   else
-    echo "FAIL $name"; tail -n 25 "$LOGS/$name.log" | sed 's/^/     /'; fail=1
+    echo "FAIL $name (exit $rc)"; tail -n 25 "$LOGS/$name.log" | sed 's/^/     /'
+    # A shard that dies without a summary line (set -e, SIGPIPE 141, a kill) leaves only the
+    # last section header behind; name it so the death is not a bare FAILED (#1242).
+    case "$name" in smoke-*)
+      grep -q 'All smoke tests passed.' "$LOGS/$name.log" || \
+        echo "     $name died without a summary line: exit $rc, last output: $(tail -n 1 "$LOGS/$name.log")" ;; esac
+    fail=1
   fi
 done
 echo "gate: $((SECONDS - START)) s"
