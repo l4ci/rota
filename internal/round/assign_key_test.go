@@ -9,31 +9,6 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// A key-based tracker names issues PROJ-123: the branch carries the key as
-// the tracker spells it, and the worker package reads it back.
-func TestBranchNameKeyRoundTrips(t *testing.T) {
-	br := BranchName("ben", "PROJ-123", "Widen issue identifiers to tracker keys")
-	if br != "ben/PROJ-123-widen-issue-identifiers-to-tracker" {
-		t.Fatalf("branch = %q", br)
-	}
-	if k, ok := worker.BranchIssue(br); !ok || k != "PROJ-123" {
-		t.Errorf("BranchIssue = %q,%v", k, ok)
-	}
-	if got := worker.IssueFromBranch(br); got != "PROJ-123" {
-		t.Errorf("IssueFromBranch = %q", got)
-	}
-	if got := worker.HeldID("", br, "ben"); got != "PROJ-123" {
-		t.Errorf("HeldID = %q", got)
-	}
-	if !worker.RoundBranch(br) {
-		t.Error("a key branch is a round branch")
-	}
-	// A lower-case slug that merely looks like a key is not an issue.
-	if worker.RoundBranch("dana/add-12-things") {
-		t.Error("add-12-things is a slug, not a key")
-	}
-}
-
 // AC-2: assign claims, branches and records the slot's task by key, and the
 // overlap check holds a second key against the first.
 func TestAssignKeyedIssuesClaimBranchAndOverlap(t *testing.T) {

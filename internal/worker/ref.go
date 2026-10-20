@@ -13,10 +13,7 @@ import (
 // round, roundwatch, roundtick and cli call these rather than re-parse.
 
 var (
-	// reIssueBranch is `<agent>/<issue>-<slug>`: the issue is a number or a
-	// tracker key (PROJ-123, upper case, as BranchName spells it).
-	reIssueBranch = regexp.MustCompile(`^[^/]+/(\d+|[A-Z][A-Z0-9_]*-\d+)-`)
-	reIssueToken  = regexp.MustCompile(`(?:(?:^|[^a-z0-9])issue-(\d+)|#(\d+))`)
+	reIssueToken = regexp.MustCompile(`(?:(?:^|[^a-z0-9])issue-(\d+)|#(\d+))`)
 )
 
 // PRRefNumber reads the PR number from `#N`, `N` or a PR URL.
@@ -50,19 +47,8 @@ func HeldID(task, branch, name string) string {
 	if IsOwnPark(branch, name) {
 		return ""
 	}
-	if m := reIssueBranch.FindStringSubmatch(branch); m != nil {
-		return m[1]
-	}
-	return ""
-}
-
-// BranchIssue is the issue key leading a `<agent>/<issue>-<slug>` branch.
-func BranchIssue(branch string) (tracker.IssueKey, bool) {
-	m := reIssueBranch.FindStringSubmatch(branch)
-	if m == nil {
-		return "", false
-	}
-	return tracker.ParseKey(m[1])
+	id, _ := branchIssue(branch)
+	return id
 }
 
 // HeldID is the item the slot holds ("" when none).
@@ -90,15 +76,11 @@ func prNumText(ref string) string {
 	return ""
 }
 
-// RoundBranch reports whether name has the `<agent>/<issue>-<slug>` shape a
-// round cuts for a worker.
-func RoundBranch(name string) bool { return reIssueBranch.MatchString(name) }
-
 // IssueFromBranch is the issue number a branch name carries: the number leading
 // `<agent>/<issue>-<slug>`, else an `issue-N` or `#N` token. "" when none.
 func IssueFromBranch(name string) string {
-	if m := reIssueBranch.FindStringSubmatch(name); m != nil {
-		return m[1]
+	if id, ok := branchIssue(name); ok {
+		return id
 	}
 	if m := reIssueToken.FindStringSubmatch(name); m != nil {
 		return strutil.FirstNonEmpty(m[1], m[2])
