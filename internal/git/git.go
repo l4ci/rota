@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -211,6 +212,17 @@ func (r Repo) ShortHead(ctx context.Context) (string, bool, error) {
 func (r Repo) LastCommitDate(ctx context.Context, path string) (string, bool, error) {
 	d, ok, err := r.out(ctx, "log", "-1", "--format=%cs", "--", path)
 	return d, ok && d != "", err
+}
+
+// CommitsSince counts the commits reachable from HEAD but not from rev; ok is
+// false when rev does not resolve to a commit or git fails.
+func (r Repo) CommitsSince(ctx context.Context, rev string) (int, bool, error) {
+	out, ok, err := r.out(ctx, "rev-list", "--count", rev+"^{commit}..HEAD")
+	if !ok || err != nil {
+		return 0, false, err
+	}
+	n, convErr := strconv.Atoi(out)
+	return n, convErr == nil, nil
 }
 
 // ForEachRef lists the short names of the refs under prefix

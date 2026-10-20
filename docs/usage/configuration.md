@@ -534,6 +534,14 @@ Settings for the usage-limit watcher (`rota limit watch`, and the loop inside `r
 
 An out-of-range value exits 70 in a verb that reads it.
 
+## map.staleCommits: warn when the map falls behind
+
+Commits HEAD may be past a map file's `last_mapped_commit` before `rota map stats` warns. Default `50`; `0` turns the warning off. A map file without `last_mapped_commit` is never checked. The warning is advisory: `rota map stats` exits 0 either way. `rota config set` takes an integer of 0 or more. `/rota-refactor --map` stamps the field.
+
+```bash
+rota config set map.staleCommits 100
+```
+
 ## qa.gate
 
 Controls how `/rota-ship` routes a `/rota-qa run` verdict when `ship.qa: true`. Independent of the `/rota-review` verdict routing.
