@@ -169,10 +169,19 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		out.Bounces = worker.LoadRegistryTolerant(root).Bounces(issue) // rollback path: the registry was read strictly above
 		return out, errors.Join(err, rollbackErr(rerr))
 	}
+	// The same text goes to the slot's inbox first: the pane copy can cross the
+	// worker's ROTA-DONE, and `worker done` refuses while mail is unread.
+	mail, err := worker.PostMail(root, o.Slot, worker.MailReview, ReviewRelayText(batch), e.Worker.Now())
+	if err != nil {
+		rerr, serr := unrecord(), unseen()
+		out.Bounces = worker.LoadRegistryTolerant(root).Bounces(issue)
+		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr))
+	}
 	if _, err := e.Worker.Dispatch(ctx, root, worker.DispatchOpts{Slot: o.Slot, BodyFile: body.Name(), Relay: true}); err != nil {
 		rerr, serr := unrecord(), unseen()
+		merr := worker.RetractMail(root, o.Slot, mail.Seq)
 		out.Bounces = worker.LoadRegistryTolerant(root).Bounces(issue) // rollback path: the registry was read strictly above
-		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr))
+		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr), rollbackErr(merr))
 	}
 	return out, nil
 }

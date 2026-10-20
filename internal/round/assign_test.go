@@ -32,6 +32,8 @@ type hostFake struct {
 	name  host.Kind
 	env   []string // the Env of the last spawn
 	swept []string // worktrees whose shell panes were swept
+	// sendErr, when set, is what Send returns after recording the brief.
+	sendErr error
 }
 
 func (h *hostFake) Kind() host.Kind {
@@ -55,7 +57,7 @@ func (h *hostFake) Send(_ context.Context, slot, handle, file string) error {
 	b, _ := os.ReadFile(file)
 	h.sent = string(b)
 	h.sents = append(h.sents, h.sent)
-	return nil
+	return h.sendErr
 }
 func (h *hostFake) Capture(context.Context, string, string, int) string { return "" }
 func (h *hostFake) Status(context.Context, string, string) string       { return "" }

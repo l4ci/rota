@@ -71,6 +71,12 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		d.Set("slot", slotName)
 		d.Set("item", id)
 		d.Set("changed", false)
+		// Mail first: a relay written after the last test run can change what
+		// the worker must do, and the proof below would be of the old work.
+		if err := unreadMailRefusal(sl); err != nil {
+			d.Set("unread", len(sl.Unread()))
+			return Result{Data: d}, err
+		}
 
 		cmds := worker.LoadGateConfig(root).Tier("fast")
 		if kind == worker.OutcomeFailed {
@@ -131,6 +137,10 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			if fenced = worker.FenceAttempt(s, *attempt); fenced != nil {
 				return
 			}
+			// Mail posted since the snapshot above must not be marked done over.
+			if fenced = unreadMailRefusal(s); fenced != nil {
+				return
+			}
 			now := stamp.Format(c.deps().Now())
 			// The worker's own word, read ahead of the pane: a static pane with
 			// no sentinel must not turn this slot back into idle.
@@ -172,6 +182,18 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: d, Text: text}, nil
 	}
+}
+
+// unreadMailRefusal is the exit-4 refusal of a done while the slot's inbox
+// holds mail the worker has not read, nil when there is none.
+func unreadMailRefusal(s *worker.Slot) error {
+	n := len(s.Unread())
+	if n == 0 {
+		return nil
+	}
+	e := Refused("slot %s has %d unread mail: read it before done", s.Name(), n)
+	e.Hint = fmt.Sprintf("run `rota worker inbox %s --ack`, act on what it says, then `rota worker done %s` again", s.Name(), s.Name())
+	return e
 }
 
 // slotDir is the slot's worktree when it exists on disk, else fallback: the
