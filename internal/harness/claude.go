@@ -146,7 +146,12 @@ func (claude) LimitPhrases() []string { return SharedLimitPhrases() }
 // A turn in flight (a running command or monitor) shows `esc to interrupt` on
 // the status line while the pane itself may sit still between captures.
 func (claude) PaneVocab() PaneVocab {
-	return PaneVocab{Busy: []string{`(?m)(?:\(|· )[^()\n]*esc to interrupt\s*(?:·[^()\n]*)?\)?\s*$`, `(?m)^\s*⎿\s+Running…`}}
+	return PaneVocab{
+		Busy: []string{`(?m)(?:\(|· )[^()\n]*esc to interrupt\s*(?:·[^()\n]*)?\)?\s*$`, `(?m)^\s*⎿\s+Running…`},
+		// The footer counts the session's own background tasks:
+		// `⏵⏵ bypass permissions on · 1 shell, 2 monitors`.
+		Background: []string{`(?m)^\s*⏵⏵[^\n]*[·,]\s*\d+ (?:shell|monitor)s?\b`},
+	}
 }
 
 // Tiers: claude must name every tier, and an unset standard tier takes
