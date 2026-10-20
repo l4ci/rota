@@ -92,10 +92,12 @@ var roundKeyVerbs = []string{"rota round", "rota worker", "rota doctor", "rota o
 // migrate or edit the config, and those that must stay silent (hooks, the
 // statusline) or never read project state. `worker prompt-check` is the Codex
 // prompt hook, which reads no config and must not block a worker's prompt.
-// `worker done|inbox|send|reply` read none of the round keys and run from a
-// worker's own worktree, whose tracked config.json can predate the rename: a
-// refusal there would send the worker to rewrite tracked config on its branch
-// (#1163).
+// `worker done|inbox|send|reply` run from a worker's own worktree, whose
+// tracked config.json can predate the rename: a refusal there would send the
+// worker to rewrite tracked config on its branch (#1163). They never read the
+// worktree's config. `worker done` does read round.accounts (for the ledger
+// headroom), but through the pool root, the main checkout that holds the slot
+// registry (returnRoot), so the old names in the worktree never reach it.
 var roundKeyQuiet = []string{"rota migrate", "rota config", "rota init", "rota update", "rota setup", "rota hook", "rota statusline", "rota version", "rota skills", "rota worker prompt-check", "rota worker done", "rota worker inbox", "rota worker send", "rota worker reply"}
 
 func pathUnder(path string, groups []string) bool {
