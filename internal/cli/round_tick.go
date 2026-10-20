@@ -57,7 +57,16 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 		}
 		d := tickData(r)
 		d.Set("changed", len(r.Did) > 0)
-		return Result{Data: d, Text: tickLines(r)}, nil
+		text := tickLines(r)
+		if lines := addTrainNudge(c, root, d, nil); len(lines) > 0 {
+			if text == "nothing to do" {
+				text = ""
+			} else {
+				text += "\n"
+			}
+			text += strings.Join(lines, "\n")
+		}
+		return Result{Data: d, Text: text}, nil
 	}
 }
 
