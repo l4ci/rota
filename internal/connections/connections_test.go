@@ -207,6 +207,24 @@ func TestFileStoreMovesLegacyFile(t *testing.T) {
 	}
 }
 
+func TestFileStoreMigrationTightensLegacyMode(t *testing.T) {
+	root := t.TempDir()
+	legacy, dir := filepath.Join(root, "config"), filepath.Join(root, "data")
+	if err := FileStore(legacy, "").Set(context.Background(), "work", "tok"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(SecretsFile(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := FileStore(dir, legacy).Get(context.Background(), "work"); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(SecretsFile(dir))
+	if err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("%v %v", fi, err)
+	}
+}
+
 func TestCheckStates(t *testing.T) {
 	dir := t.TempDir()
 	ctx := context.Background()
