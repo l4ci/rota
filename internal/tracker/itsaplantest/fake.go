@@ -57,7 +57,14 @@ type Issue struct {
 
 type issue struct {
 	Issue
-	num int
+	num      int
+	comments []*comment
+	gone     bool // deleted
+}
+
+type comment struct {
+	id   int
+	body string
 }
 
 // Server is the fake. Its embedded httptest.Server exposes URL.
@@ -67,10 +74,16 @@ type Server struct {
 	o  Options
 	mu sync.Mutex
 
-	columns []Column
-	labels  []string // label id is index+1
-	issues  []*issue
-	reqs    []string
+	columns     []Column
+	labels      []string // label id is index+1
+	issues      []*issue
+	reqs        []string
+	hasField    bool
+	nextComment int
+	// After, when set, runs after each request is served, outside the fake's
+	// lock, with "METHOD path". A test uses it to make a second writer act
+	// between two of the tracker's calls.
+	After func(req string)
 }
 
 type obj = map[string]any
@@ -91,7 +104,7 @@ func New(t testing.TB, o Options) *Server {
 	if o.Columns == nil {
 		o.Columns = []Column{{1, "Backlog", "backlog"}, {2, "Todo", "unstarted"}, {3, "In Progress", "started"}, {4, "Done", "completed"}, {5, "Canceled", "canceled"}}
 	}
-	s := &Server{t: t, o: o, columns: o.Columns, labels: append([]string(nil), o.Labels...)}
+	s := &Server{t: t, o: o, columns: o.Columns, labels: append([]string(nil), o.Labels...), hasField: !o.NoField, nextComment: commentIDBase}
 	s.Server = httptest.NewServer(http.HandlerFunc(s.serve))
 	t.Cleanup(s.Close)
 	return s
@@ -110,7 +123,11 @@ func (s *Server) Add(i Issue) string {
 	for _, l := range i.Labels {
 		s.labelID(l)
 	}
-	s.issues = append(s.issues, &issue{Issue: i, num: len(s.issues) + 1})
+	is := &issue{Issue: i, num: len(s.issues) + 1}
+	for _, b := range i.Comments {
+		is.comments = append(is.comments, s.newComment(b))
+	}
+	s.issues = append(s.issues, is)
 	return s.o.Project + "-" + strconv.Itoa(len(s.issues))
 }
 
@@ -153,6 +170,13 @@ func (s *Server) labelID(name string) int {
 }
 
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
+	s.handle(w, r)
+	if s.After != nil {
+		s.After(r.Method + " " + r.URL.Path)
+	}
+}
+
+func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.reqs = append(s.reqs, r.Method+" "+r.URL.Path)
@@ -177,7 +201,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if r.Method != http.MethodGet {
-		reply(w, 405, obj{"error": "the fake serves reads only"})
+		s.write(w, r)
 		return
 	}
 	if rest, ok := strings.CutPrefix(r.URL.Path, "/issues/"); ok {
@@ -191,7 +215,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	case proj + "/issues/board":
 		out := []obj{}
 		for _, i := range s.issues {
-			if !i.Archived {
+			if !i.Archived && !i.gone {
 				out = append(out, s.issueJSON(i, false))
 			}
 		}
@@ -200,7 +224,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	case proj + "/issues/archived":
 		out := []obj{}
 		for _, i := range s.issues {
-			if i.Archived {
+			if i.Archived && !i.gone {
 				out = append(out, s.issueJSON(i, false))
 			}
 		}
@@ -209,7 +233,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	if n, ok := strings.CutPrefix(r.URL.Path, proj+"/issues/"); ok {
 		num, err := strconv.Atoi(n)
-		if err == nil && num >= 1 && num <= len(s.issues) {
+		if err == nil && num >= 1 && num <= len(s.issues) && !s.issues[num-1].gone {
 			reply(w, 200, s.issueJSON(s.issues[num-1], true))
 			return
 		}
@@ -230,7 +254,7 @@ func (s *Server) project() obj {
 		lbs = append(lbs, obj{"id": i + 1, "projectId": 1, "name": l})
 	}
 	fields := []obj{}
-	if !s.o.NoField {
+	if s.hasField {
 		fields = append(fields, obj{"id": fieldID, "name": "rota", "fieldType": "text", "options": []any{}})
 	}
 	perm := func(ok bool) obj { return obj{"create": ok, "edit": ok, "read": true, "delete": ok} }
@@ -262,7 +286,7 @@ func (s *Server) issueJSON(i *issue, single bool) obj {
 		"labelIds": ids, "statusSince": "2026-01-01T00:00:00.000Z", "archivedAt": nil,
 		"fieldValues": []obj{}, "links": []any{},
 	}
-	if i.Fields != "" && !s.o.NoField {
+	if i.Fields != "" && s.hasField {
 		v := obj{"fieldId": fieldID, "value": i.Fields, "valueEnd": nil, "optionIds": []any{}}
 		if single {
 			v["name"], v["fieldType"] = "rota", "text"
@@ -291,9 +315,8 @@ func (s *Server) feed(w http.ResponseWriter, q url.Values, id string, isFeed boo
 		s.t.Errorf("itsaplantest: the feed is served for filter=comments only, got %q", q.Get("filter"))
 	}
 	var items []obj
-	for i, body := range s.issues[num-1].Comments {
-		cid := commentIDBase + num*100 + i
-		items = append(items, obj{"id": cid, "issueId": num, "kind": "comment", "body": body, "actorName": "Rota",
+	for i, c := range s.issues[num-1].comments {
+		items = append(items, obj{"id": c.id, "issueId": num, "kind": "comment", "body": c.body, "actorName": "Rota",
 			"createdAt": fmt.Sprintf("2026-01-01T00:%02d:00.000Z", i)})
 	}
 	if q.Get("order") != "asc" {
