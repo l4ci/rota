@@ -29,6 +29,9 @@ type limFake struct {
 	mu    sync.Mutex
 	sent  []string
 	panes map[string]string
+	// slow is how long a capture takes; a cancelled capture reads nothing, as
+	// tmux killed by its context does.
+	slow time.Duration
 }
 
 func (f *limFake) Kind() host.Kind { return host.Tmux }
@@ -38,7 +41,14 @@ func (f *limFake) Require() error                  { return nil }
 func (f *limFake) PaneOf(_ context.Context, slot, handle string) string {
 	return handle
 }
-func (f *limFake) CapturePane(_ context.Context, pane string, _ int) string {
+func (f *limFake) CapturePane(ctx context.Context, pane string, _ int) string {
+	if f.slow > 0 {
+		select {
+		case <-time.After(f.slow):
+		case <-ctx.Done():
+			return ""
+		}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.panes[pane]
@@ -225,6 +235,28 @@ func TestLimitWatchTextOnTheOrchestratorPane(t *testing.T) {
 	}
 	if len(f.sent) != 0 {
 		t.Errorf("nothing is due yet: %v", f.sent)
+	}
+}
+
+// A loaded machine can take longer than --timeout to capture the panes once.
+// The timeout bounds the watching, never the first pass: a run that has not
+// looked at every pane reports nothing it can stand on.
+func TestLimitWatchTimeoutNeverCutsTheFirstPass(t *testing.T) {
+	dir := limProject(t)
+	deps, f := limDeps()
+	f.panes["%9"] = "work\nClaude usage limit reached. Your limit will reset at 5pm.\n"
+	f.slow = 300 * time.Millisecond
+	t.Setenv("TMUX_PANE", "%9")
+	t.Setenv("ROTA_TEST_HOLDER_PID", strconv.Itoa(os.Getpid()))
+	t.Setenv("ROTA_TEST_NOW", "2026-10-03T12:00:00Z")
+	t.Setenv("TZ", "UTC")
+	cd, _ := rotastate.CommonDir(dir)
+	env := roundlease.DefaultEnv()
+	env.Acquire(cd, dir, env.Discover(os.Getpid(), os.Getenv), 1)
+
+	code, out, _ := rotaInWith(t, deps, dir, "limit", "watch", "--timeout", "0.05", "--settle", "1", "--json")
+	if d := data(t, out); code != 0 || d["waiting"] != float64(1) || d["changed"] != true {
+		t.Fatalf("the first pass must finish past --timeout: exit %d: %v", code, d)
 	}
 }
 
