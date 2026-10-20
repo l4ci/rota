@@ -1,6 +1,14 @@
-# Docs Mode (`/rota-ship --docs`)
+---
+name: rota-docs
+description: Use on "update docs", "scaffold the docs", "sync the docs with recent changes", "restructure the docs", or "/rota-docs".
+disable-model-invocation: true
+---
 
-Loaded by `SKILL.md` Step 0 (`--docs`) and Step 8.6 (`docs.afterWork`). Step labels D1–D6 and D-A1–D-A6 are cited elsewhere: keep them.
+# rota-docs — Maintain Public Docs
+
+Public-docs maintainer: first-run scaffold, after-work updates, restructure. Called by hand, by `/rota-ship` Step 8.6 (after-work, inline) and by `/rota-release`'s docs nudge. In a round it runs once, after wind-down, with no branch being shipped. `/rota-docs` is a deprecated alias for this skill.
+
+Step labels D1–D6 and D-A1–D-A6 are cited elsewhere: keep them.
 
 ### Modes
 
@@ -8,7 +16,7 @@ Loaded by `SKILL.md` Step 0 (`--docs`) and Step 8.6 (`docs.afterWork`). Step lab
 |---|---|
 | `<docs.path>/` missing or empty | First-run (discovery + scaffold) |
 | Post-cycle, from `/rota-work` or Step 8.6 | After-work (propose updates) |
-| `/rota-refactor`, or `--docs restructure` | Restructure (audit + reorganize) |
+| `/rota-refactor`, or `/rota-docs restructure` | Restructure (audit + reorganize) |
 | Manual invoke, no signal | First-run if missing; else after-work in manual mode (trigger gate bypassed, Step D1) |
 
 Shared three-mode skeleton with `/rota-qa`: `references/three-mode-skill-shape.md`.
@@ -19,7 +27,7 @@ Shared three-mode skeleton with `/rota-qa`: `references/three-mode-skill-shape.m
 
 Read `docs.path` (default `"docs"`). Missing or empty `<docs.path>/` means first-run (D2–D6). Otherwise branch on `docs.afterWork`:
 
-- **`true`**: Route to the After-work sub-flow as manual mode. Print *"After-work mode is on. Checking docs against changes since the last `docs:` commit."* then start at D-A1. The user running `/rota-ship --docs` by hand is the trigger, so the trigger gate is bypassed and D-A6 omits `Resolves:`.
+- **`true`**: Route to the After-work sub-flow as manual mode. Print *"After-work mode is on. Checking docs against changes since the last `docs:` commit."* then start at D-A1. The user running `/rota-docs` by hand is the trigger, so the trigger gate is bypassed and D-A6 omits `Resolves:`.
 - **`false`**: ask (header `"After-work"`, *"`<docs.path>/` is initialized but `docs.afterWork` is off. Enable after-work mode? `/rota-work` and `/rota-ship` will then propose doc updates after each cycle."*): `"Enable (Recommended)"` runs `rota config set docs.afterWork true`, prints *"After-work mode enabled."* and exits; `"Leave off"` exits. Ambiguous answers mean Leave off: never flip a flag the user did not ask for.
 
 ### Step D2 — Read Project Signals
@@ -32,7 +40,7 @@ Classify the project (CLI, library, web app/service, plugin, framework, data pro
 
 ### Step D4 — Propose Tailored Tree
 
-Show a plain-markdown tree under `<docs.path>/` with a one-line purpose per file, tailored to the type and surface (spine + usage + reference layout, `references/docs-conventions.md` page-naming section). If it departs from that layout, say so in one line. Ask (header `"Scaffold"`, *"Approve this docs structure?"*): `"Approve as proposed (Recommended)"` / `"Edit"` (free text; revise and re-ask) / `"Minimal — README.md + getting-started.md only"` / `"Cancel"` (print *"Scaffold cancelled. Run `/rota-ship --docs` again whenever you're ready."* and exit). On ambiguity, default to Recommended, naming it.
+Show a plain-markdown tree under `<docs.path>/` with a one-line purpose per file, tailored to the type and surface (spine + usage + reference layout, `references/docs-conventions.md` page-naming section). If it departs from that layout, say so in one line. Ask (header `"Scaffold"`, *"Approve this docs structure?"*): `"Approve as proposed (Recommended)"` / `"Edit"` (free text; revise and re-ask) / `"Minimal — README.md + getting-started.md only"` / `"Cancel"` (print *"Scaffold cancelled. Run `/rota-docs` again whenever you're ready."* and exit). On ambiguity, default to Recommended, naming it.
 
 ### Step D5 — Scaffold on Approval
 
@@ -49,7 +57,7 @@ Files:
   - ...
 
 Next:
-  Run /rota-work on a feature, then /rota-ship --docs will fill in pages from the changes.
+  Run /rota-work on a feature, then /rota-docs will fill in pages from the changes.
   Or write <docs.path>/getting-started.md yourself first to set the voice.
 ```
 
@@ -57,7 +65,7 @@ Next:
 
 Entered from Step 8.6 or manually per Step D1.
 
-**D-A1 — Trigger gate.** For post-cycle entries apply `references/post-cycle-trigger-gate.md`. Manual entry bypasses the gate (Step D1). If `<docs.path>/` is missing or empty, print *"`/rota-ship --docs` not yet initialized — run `/rota-ship --docs` to scaffold."* and exit; never scaffold mid-cycle.
+**D-A1 — Trigger gate.** For post-cycle entries apply `references/post-cycle-trigger-gate.md`. Manual entry bypasses the gate (Step D1). If `<docs.path>/` is missing or empty, print *"`/rota-docs` not yet initialized — run `/rota-docs` to scaffold."* and exit; never scaffold mid-cycle.
 
 **D-A2 — Gather context** in one parallel batch: `git log --oneline <last-docs-marker>..HEAD` (marker is the last `docs:` commit; fall back to the last 20 commits); `git diff <marker>..HEAD` over paths not matched by `.docsignore`; the `<docs.path>/` tree and each page's H1/H2 outline.
 

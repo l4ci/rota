@@ -1,6 +1,6 @@
 ---
 name: rota-ship
-description: Use on "ship it", "open the PR", "finish this branch", or when work is done and ready to integrate. Use --undo on "roll back the last cycle", "revert that merge". Use --docs on "update docs".
+description: Use on "ship it", "open the PR", "finish this branch", or when work is done and ready to integrate. Use --undo on "roll back the last cycle", "revert that merge".
 ---
 
 # rota-ship — Finish a Feature Branch
@@ -32,7 +32,7 @@ Copy this checklist and track your progress:
 
 Read `$ARGUMENTS`. No flag: Normal Ship Mode (Steps 1–10), continue below.
 
-When `--undo` is present, read [`undo-mode.md`](undo-mode.md) and follow it; terminal, never falls through to Docs Mode. When `--docs` (or `--docs restructure`) is present, read [`docs-mode.md`](docs-mode.md) and follow it; nothing else in this file applies.
+When `--undo` is present, read [`undo-mode.md`](undo-mode.md) and follow it; terminal. When `--docs` (or `--docs restructure`) is present, print *"`/rota-ship --docs` is deprecated and goes away next release: use `/rota-docs`."* then read [`../rota-docs/SKILL.md`](../rota-docs/SKILL.md) and follow it with the same arguments; nothing else in this file applies.
 
 ## Configuration
 
@@ -42,7 +42,7 @@ Read `.rota/config.json` (`rota config show`):
 - `ship.review`: review depth, `full` (default), `light` or `none`, or a policy object that picks one by diff size, label and path, and lifts it to `full` on a `Door: one-way` PR or a diff outside the issue's declared files; `true` and `false` still mean `full` and `none`
 - `autonomy.level`: `"off"` (default), `"auto"`: whether Step 8.5 nudges or invokes directly
 
-`ship.secondOpinion`, `ship.qa` and `ship.uat` are read by [`opt-in-gates.md`](opt-in-gates.md); `docs.path`, `docs.afterWork` and `docs.autoCreate` by [`docs-mode.md`](docs-mode.md).
+`ship.secondOpinion`, `ship.qa` and `ship.uat` are read by [`opt-in-gates.md`](opt-in-gates.md); `docs.path`, `docs.afterWork` and `docs.autoCreate` by [`/rota-docs`](../rota-docs/SKILL.md).
 
 ## When to Use
 
@@ -161,7 +161,7 @@ Round workers skip Steps 8.5 and 8.6 (`round-worker-and-issue-mode.md`). Otherwi
 
 ## Step 8.6 — Docs After-Work (inline)
 
-Skipped for round workers (see Step 8.5). Run `references/post-cycle-trigger-gate.md`, inline variant, with config flag `docs.afterWork` (default `false`; enable with `rota config set docs.afterWork true` or by running `/rota-ship --docs` once). On trigger, read [`docs-mode.md`](docs-mode.md) and run its after-work flow (Steps D-A1 to D-A6) in this session, with the resolved IDs and touched files as context. No `autonomy.level` branch: Step D-A5's approval is the checkpoint.
+Skipped for round workers (see Step 8.5). Run `references/post-cycle-trigger-gate.md`, inline variant, with config flag `docs.afterWork` (default `false`; enable with `rota config set docs.afterWork true` or by running `/rota-docs` once). On trigger, read [`../rota-docs/SKILL.md`](../rota-docs/SKILL.md) and run its after-work flow (Steps D-A1 to D-A6) in this session, with the resolved IDs and touched files as context. No `autonomy.level` branch: Step D-A5's approval is the checkpoint.
 
 ## Step 9 — Report to User
 
@@ -183,9 +183,9 @@ After a successful ship (PR or merge): `rota release pending --json`. If `should
 
 When `--undo` is present, read `undo-mode.md` (Steps U1 to U3: preview, confirm, apply). Terminal.
 
-## Docs Mode (--docs)
+## Docs (--docs, deprecated)
 
-When `--docs` is present, read `docs-mode.md` (Steps D1–D6 first-run scaffold, D-A1–D-A6 after-work). Only `--docs` and Step 8.6 load it.
+When `--docs` is present, print the deprecation line from Step 0, then run `/rota-docs` (Steps D1–D6 first-run scaffold, D-A1–D-A6 after-work). Only `--docs` and Step 8.6 load it. Remove this alias next release.
 
 ## Gates: Thought → Reality
 
@@ -207,7 +207,7 @@ When `--docs` is present, read `docs-mode.md` (Steps D1–D6 first-run scaffold,
 ## References
 
 - [`undo-mode.md`](undo-mode.md) — `--undo` rollback (Steps U1 to U3).
-- [`docs-mode.md`](docs-mode.md) — `--docs` scaffold and after-work flow, docs config.
+- [`../rota-docs/SKILL.md`](../rota-docs/SKILL.md) — docs scaffold and after-work flow, docs config (the `--docs` alias runs it).
 - [`opt-in-gates.md`](opt-in-gates.md) — second-opinion and QA gates, their config and skip rules.
 - [`review-gate.md`](review-gate.md) — verdict routing table, `REVIEW_CHOICE`, review-skipped case.
 - [`round-worker-and-issue-mode.md`](round-worker-and-issue-mode.md) — round worker skips, issue backend and umbrella branches.
