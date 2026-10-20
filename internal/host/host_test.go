@@ -631,6 +631,52 @@ func TestHerdrSpawnDialogFailures(t *testing.T) {
 	}
 }
 
+// A just-created tab's shell may not be ready: agent start answers
+// agent_pane_busy until it is. Spawn polls instead of failing, creating one tab.
+func TestHerdrSpawnWaitsForPaneShell(t *testing.T) {
+	busy := 3
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[0] == "tab" {
+			return Result{Stdout: tabCreated}
+		}
+		if busy > 0 {
+			busy--
+			return Result{ExitCode: 1, Stderr: herdrErr("agent_pane_busy")}
+		}
+		return Result{Stdout: agentJSON("idle")}
+	}}
+	got, err := New("herdr", deps(f, herdrEnv, &clock{})).Spawn(bg, SpawnOpts{Slot: "w1", Cwd: "/wt", Launch: "claude", BootTimeout: 60})
+	if err != nil || got != "w9:t7" {
+		t.Fatalf("Spawn = %q, %v", got, err)
+	}
+	if f.count("herdr tab create") != 1 || f.count("herdr agent start") != 4 {
+		t.Errorf("want 1 tab create and 4 agent starts:\n%s", f.log())
+	}
+	if f.count("herdr tab close") != 0 {
+		t.Error("a pane that turned ready must not close its tab")
+	}
+}
+
+// A pane that never becomes a shell fails within the boot budget and closes its tab.
+func TestHerdrSpawnPaneBusyTimesOut(t *testing.T) {
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[0] == "tab" {
+			return Result{Stdout: tabCreated}
+		}
+		return Result{ExitCode: 1, Stderr: herdrErr("agent_pane_busy")}
+	}}
+	_, err := New("herdr", deps(f, herdrEnv, &clock{})).Spawn(bg, SpawnOpts{Slot: "w1", Launch: "claude", BootTimeout: 2})
+	if err == nil || !strings.Contains(err.Error(), "agent_pane_busy") {
+		t.Errorf("err = %v", err)
+	}
+	if f.count("herdr tab close w9:t7") != 1 {
+		t.Errorf("a failed start must close its tab:\n%s", f.log())
+	}
+	if n := f.count("herdr agent start"); n < 2 || n > 6 {
+		t.Errorf("agent start polled %d times, want a bounded few", n)
+	}
+}
+
 func TestHerdrSpawnOtherStartFailure(t *testing.T) {
 	f := &fake{handler: func(_ string, a []string) Result {
 		if a[0] == "tab" {

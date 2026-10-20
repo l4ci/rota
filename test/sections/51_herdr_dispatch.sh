@@ -39,6 +39,10 @@ case "$1 $2" in
     printf '{"id":"cli","result":{"type":"tab_created","tab":{"tab_id":"%s:t%s","workspace_id":"%s","label":"x","number":%s,"focused":false,"pane_count":1,"agent_status":"unknown"},"root_pane":{"pane_id":"%s:p1%s","tab_id":"%s:t%s","workspace_id":"%s"}}}\n' "$ws" "$n" "$ws" "$n" "$ws" "$n" "$ws" "$n" "$ws" ;;
   "tab close") echo '{"id":"cli","result":{"type":"ok"}}' ;;
   "agent start")
+    if [ -f "$F/start_busy" ]; then
+      n=$(cat "$F/start_busy")
+      if [ "$n" -gt 0 ]; then echo $((n - 1)) >"$F/start_busy"; err agent_pane_busy; fi
+    fi
     [ -f "$F/start_not_ready" ] && err agent_not_ready
     agent_json agent_started idle ;;
   "agent get")
@@ -230,6 +234,20 @@ hd "$ROTA_BIN" worker dispatch w1 --body-file "$TMP_HD/brief.md" >/dev/null 2>&1
 rm -f "$FAKE/start_not_ready"
 : >"$FAKE/pane.txt"
 pass "startup dialogs are answered by reading the pane, unknown ones refused"
+
+# ── (c2) pane not yet a shell (#1029) ───────────────────────────────────────
+# agent start answers agent_pane_busy on a just-created tab until its shell is
+# up: dispatch polls inside the one tab instead of failing the caller.
+echo 2 >"$FAKE/start_busy"
+: >"$FAKE/log"
+hd "$ROTA_BIN" worker dispatch w1 --body-file "$TMP_HD/brief.md" >/dev/null \
+  || fail "dispatch must wait out agent_pane_busy; log: $(cat "$FAKE/log")"
+[ "$(grep -c '^tab create' "$FAKE/log")" = "1" ] \
+  || fail "a busy pane must not cost a second tab; log: $(cat "$FAKE/log")"
+[ "$(grep -c '^agent start' "$FAKE/log")" = "3" ] \
+  || fail "agent start must be retried until the shell is up; log: $(cat "$FAKE/log")"
+rm -f "$FAKE/start_busy"
+pass "dispatch waits for the new tab's shell (agent_pane_busy) in one tab"
 
 # ── (d) prompt errors ───────────────────────────────────────────────────────
 # The refused dialog above left the slot without a session (its handle is
