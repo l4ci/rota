@@ -28,6 +28,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
@@ -114,7 +115,16 @@ type Input struct {
 	// SkillCache finds none.
 	SkillCache     string
 	SkillCacheKeep string
+	// Now is the clock for the orphaned-extract age check; nil is time.Now.
+	Now func() time.Time
 }
+
+// extractPrefix and extractMaxAge name a killed `rota skills get` extraction:
+// a `.extract-*` temp dir untouched for longer than extractMaxAge.
+const (
+	extractPrefix = ".extract-"
+	extractMaxAge = time.Hour
+)
 
 // Result is what Find and Apply report. Warnings are for the caller to print.
 type Result struct {
@@ -178,9 +188,28 @@ func (s *state) skillTree(name string) bool {
 	return name != "" && name != s.in.SkillCacheKeep && !strings.HasPrefix(name, ".") && filepath.Base(name) == name
 }
 
-// findSkillCache lists the extracted skill trees of other rota versions. The
-// running version's tree is never listed, and neither is a dot directory (an
-// extraction still running).
+// orphanExtract reports whether name is a `.extract-*` temp dir directly under
+// the cache that nothing has touched for extractMaxAge, so its extraction died.
+// A younger one may still be running and is left alone.
+func (s *state) orphanExtract(name string) bool {
+	if !strings.HasPrefix(name, extractPrefix) || filepath.Base(name) != name {
+		return false
+	}
+	fi, err := os.Lstat(filepath.Join(s.in.SkillCache, name))
+	if err != nil || !fi.IsDir() {
+		return false
+	}
+	now := time.Now
+	if s.in.Now != nil {
+		now = s.in.Now
+	}
+	return now().Sub(fi.ModTime()) > extractMaxAge
+}
+
+// findSkillCache lists the extracted skill trees of other rota versions and
+// the orphaned `.extract-*` dirs of killed extractions. The running version's
+// tree is never listed, and neither is a younger dot directory (an extraction
+// still running).
 func findSkillCache(_ context.Context, s *state) ([]Candidate, error) {
 	if s.in.SkillCache == "" {
 		return nil, nil
@@ -194,8 +223,11 @@ func findSkillCache(_ context.Context, s *state) ([]Candidate, error) {
 	}
 	var out []Candidate
 	for _, e := range ents {
-		if e.IsDir() && s.skillTree(e.Name()) {
+		switch {
+		case e.IsDir() && s.skillTree(e.Name()):
 			out = append(out, Candidate{ID: KindSkillCache + ":" + e.Name(), Kind: KindSkillCache, Name: e.Name(), Path: filepath.Join(s.in.SkillCache, e.Name()), Reason: "extracted skills of another rota version"})
+		case s.orphanExtract(e.Name()):
+			out = append(out, Candidate{ID: KindSkillCache + ":" + e.Name(), Kind: KindSkillCache, Name: e.Name(), Path: filepath.Join(s.in.SkillCache, e.Name()), Reason: "temp extract left by a killed `rota skills get`"})
 		}
 	}
 	return out, nil
@@ -616,7 +648,7 @@ func (s *state) remove(ctx context.Context, c Candidate) error {
 		}
 		return fmt.Errorf("tab %s is gone", c.Name)
 	case KindSkillCache:
-		if s.in.SkillCache == "" || !s.skillTree(c.Name) {
+		if s.in.SkillCache == "" || !(s.skillTree(c.Name) || s.orphanExtract(c.Name)) {
 			return fmt.Errorf("%s is not a removable skills cache tree", c.Name)
 		}
 		return os.RemoveAll(filepath.Join(s.in.SkillCache, c.Name))
