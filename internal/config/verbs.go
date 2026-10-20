@@ -282,10 +282,6 @@ func isNonNegInt(n json.Number) bool {
 	return err == nil && i >= 0
 }
 
-// validateValue rejects a value its key cannot hold. A non-negative int key
-// takes an integer of 0 or more. A project path key takes a relative path that
-// stays inside the project, or "" to clear it.
-
 // strictEnumKeys are enum keys whose Choices are the whole set, so `config set`
 // refuses anything else. Other enum keys accept more than their listed choices
 // (a removed value still reads, a harness may be added), so they stay open.
@@ -303,6 +299,9 @@ func validateEnum(key string, value any) error {
 	return fmt.Errorf("%w for %s: want one of %s", ErrBadValue, key, strings.Join(k.Choices, ", "))
 }
 
+// validateValue rejects a value its key cannot hold. A non-negative int key
+// takes an integer of 0 or more. A project path key takes a relative path that
+// stays inside the project, or "" to clear it.
 func validateValue(key string, value any) error {
 	if nonNegativeIntKeys[key] {
 		if n, ok := value.(json.Number); !ok || !isNonNegInt(n) {
