@@ -8,7 +8,7 @@ Check each **new** package the skill would recommend: one the repo does not alre
 
 ## Lookup
 
-One GET request, nothing written, against the public registry for the ecosystem. Send a `User-Agent` (crates.io requires one). A network failure is not a verdict: say the lookup failed, and treat the package as `suspect` with reason `lookup failed`.
+One GET request, nothing written, against the public registry for the ecosystem. Send a descriptive user-agent header (crates.io requires one). A network failure is not a verdict: say the lookup failed, and treat the package as `suspect` with reason `lookup failed`.
 
 | Ecosystem | URL | First published | Source repository link |
 |-----------|-----|-----------------|------------------------|
