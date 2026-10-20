@@ -37,7 +37,7 @@ func TestRoundVerbsRefuseLegacyKeys(t *testing.T) {
 	for _, verb := range [][]string{
 		{"round", "start"}, {"round", "assign", "B01", "--agent", "ben"}, {"round", "transfer", "B01", "--to", "dana"},
 		{"round", "watch"}, {"round", "wait"}, {"round", "tick"}, {"round", "status"},
-		{"worker", "gate", "ben"}, {"worker", "done", "ben"}, {"worker", "pool", "list"},
+		{"worker", "gate", "ben"}, {"worker", "pool", "list"},
 		{"doctor"}, {"layout"},
 	} {
 		t.Run(strings.Join(verb, " "), func(t *testing.T) {
@@ -63,6 +63,26 @@ func TestRoundVerbsRefuseLegacyKeys(t *testing.T) {
 	// The prompt hook reads no config and must not block a worker's prompt.
 	if code, _, _ := rotaRun(t, "-C", root, "worker", "prompt-check", "--key", filepath.Join(root, "nokey")); code == ExitRefused {
 		t.Error("worker prompt-check refused over the config")
+	}
+}
+
+// A worker verb run from a worktree cut before the rename reads none of the
+// round keys, so a stale tracked config must not stop it (#1163).
+func TestWorkerSlotVerbsIgnoreLegacyKeys(t *testing.T) {
+	root := legacyRoundProject(t)
+	for _, verb := range [][]string{
+		{"worker", "done", "ben"}, {"worker", "inbox", "ben"},
+		{"worker", "send", "ben", "--heartbeat"}, {"worker", "reply", "ben"},
+	} {
+		t.Run(strings.Join(verb, " "), func(t *testing.T) {
+			_, env, errs := rotaRun(t, append([]string{"--json", "-C", root}, verb...)...)
+			if data := envObj(env, "data"); data["blockedBy"] == "config migration" {
+				t.Errorf("refused over legacy keys: %v", env)
+			}
+			if strings.Contains(errs, "rota migrate config") {
+				t.Errorf("told to migrate config: %q", errs)
+			}
+		})
 	}
 }
 
