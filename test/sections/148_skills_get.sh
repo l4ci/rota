@@ -11,7 +11,9 @@ rc=0
 OUT=$(cd "$TMP_SG" && "$ROTA_BIN" skills get rota-pause 2>/dev/null) || rc=$?
 [ "$rc" -eq 0 ] || fail "skills get exited $rc"
 # #1099: the first line names the extracted base directory, then the SKILL.md follows.
-FIRST=$(printf '%s\n' "$OUT" | head -1)
+# First line by expansion, not `| head -1`: under pipefail head can close the pipe before
+# printf finishes, so the pipeline exits 141 and set -e kills the shard silently (#1242).
+FIRST=${OUT%%$'\n'*}
 BODY=$(printf '%s\n' "$OUT" | tail -n +2 | sed '/./,$!d')
 case $FIRST in "Base directory for this skill: "*) ;; *) fail "skills get lacks the base-directory line: ${OUT:0:120}" ;; esac
 [ -f "${FIRST#Base directory for this skill: }/SKILL.md" ] || fail "skills get base directory has no SKILL.md: $FIRST"
@@ -25,7 +27,7 @@ case $OUT in *'"text"'*'name: rota-pause'*) ;; *) fail "skills get --json lacks 
 rc=0
 OUT=$(cd "$TMP_SG" && "$ROTA_BIN" skills get rota-pause --references 2>/dev/null) || rc=$?
 [ "$rc" -eq 0 ] || fail "skills get --references exited $rc"
-REF=$(printf '%s\n' "$OUT" | head -1)
+REF=${OUT%%$'\n'*}
 [ -n "$REF" ] || fail "rota-pause lists no references"
 
 rc=0
