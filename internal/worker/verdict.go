@@ -51,7 +51,6 @@ var verdictMeanings = map[string]VerdictMeaning{
 	GateBestOfUnpicked:   {Refusal: true, BlockedBy: GateBestOfUnpicked},
 	GateReviewMissing:    {Refusal: true, BlockedBy: GateReviewMissing, Hold: true},
 	GateOrder:            {Refusal: true, BlockedBy: GateOrder, Hold: true},
-	GateStaleAttempt:     {Refusal: true, BlockedBy: GateStaleAttempt, Hold: true},
 }
 
 // ClassifyVerdict says what a verdict means. A verdict nobody classified is a

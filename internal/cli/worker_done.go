@@ -110,9 +110,15 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		}
 
 		changed := false
+		var fenced error
 		if err := worker.Update(poolRoot, func(doc *worker.Doc) {
 			s := doc.Slot(slotName)
 			if s == nil {
+				return
+			}
+			// The check above read a snapshot: a reclaim and reassign since then
+			// must not mark the new holder done.
+			if fenced = worker.FenceAttempt(s, *attempt); fenced != nil {
 				return
 			}
 			now := stamp.Format(c.deps().Now())
@@ -130,6 +136,9 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			changed = true
 		}); err != nil {
 			return Result{}, err
+		}
+		if fenced != nil {
+			return Result{}, fenced
 		}
 		if changed {
 			worker.LedgerDone(c.deps().workerEnv(), c.Context(), c.deps().WorkerAccounts(), poolRoot, ledger.Entry{Issue: id, Slot: slotName, Account: sl.Account(), Harness: sl.Kind(), PR: sl.PR()})

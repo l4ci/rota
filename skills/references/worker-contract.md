@@ -66,7 +66,7 @@ Work only this task, then stop.
   commands (`gh pr merge`, force-push to another branch, `git reset --hard` outside your worktree,
   `git branch -D`, `git clean -f`) when `ROTA_SLOT` is set. It is a guardrail, not a boundary: do not
   route around a refusal, and Codex workers are not guarded.
-- Commit your own work, run `rota worker done <slot> --attempt <id>` (from your worktree or the main checkout; it finds the pool through the git common dir and expands `{files}` in the slot's worktree), then open a PR against `<base-branch>`. Never merge.
+- Commit your own work, run `rota worker done <slot>` (add `--attempt <id>` only when your brief names an attempt id; from your worktree or the main checkout; it finds the pool through the git common dir and expands `{files}` in the slot's worktree), then open a PR against `<base-branch>`. Never merge.
 - Attempt id. If your brief names an attempt id, pass `--attempt <id>` to `rota worker done` and
   `rota round report`. A refusal that calls the attempt stale (exit 4) means the orchestrator
   reclaimed or transferred your assignment: you are fenced. Stop at once, do not retry, do not
