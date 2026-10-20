@@ -407,6 +407,23 @@ func (s *Slot) Issues() []string {
 	return out
 }
 
+// Finding is the comment id a research item's worker reported
+// (`ROTA-DONE <slot> finding:<id>`), the slot's done evidence in place of a PR.
+func (s *Slot) Finding() string {
+	v, _ := s.o.Get("finding")
+	id, _ := v.(string)
+	return id
+}
+
+// SetFinding records the reported finding comment; "" clears it.
+func (s *Slot) SetFinding(id string) {
+	if id == "" {
+		s.o.Delete("finding")
+		return
+	}
+	s.o.Set("finding", id)
+}
+
 // SetIssues records the reported issues; none clears them.
 func (s *Slot) SetIssues(refs []string) {
 	if len(refs) == 0 {

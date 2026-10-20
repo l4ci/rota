@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -550,8 +551,13 @@ func setItemField(be backlog.Backend, ref, name, value string) (Result, error) {
 
 // completeItem closes the item behind ref. A done close without proof is a
 // refusal whose hint names the proof verb.
-func completeItem(be backlog.Backend, ref string, in backlog.CompleteInput) (Result, error) {
+func completeItem(be backlog.Backend, ref string, in backlog.CompleteInput, gist string) (Result, error) {
 	return withItem(be, ref, func(id, typ string) (Result, error) {
+		gist = strings.Join(strings.Fields(gist), " ")
+		it, err := checkGist(be, ref, id, gist)
+		if err != nil {
+			return Result{}, err
+		}
 		changed, err := be.Complete(ref, in)
 		if err != nil {
 			if errors.Is(err, backlog.ErrProofMissing) {
@@ -561,9 +567,41 @@ func completeItem(be backlog.Backend, ref string, in backlog.CompleteInput) (Res
 			}
 			return Result{}, err
 		}
-		return Result{Data: jsonObj("id", id, "type", typ, "reason", in.Reason, "commit", in.Commit, "changed", changed),
-			Text: fmt.Sprintf("completed %s (%s) at %s", id, in.Reason, in.Commit)}, nil
+		data := jsonObj("id", id, "type", typ, "reason", in.Reason, "commit", in.Commit, "changed", changed)
+		text := fmt.Sprintf("completed %s (%s) at %s", id, in.Reason, in.Commit)
+		if gist != "" {
+			mid, err := backlog.LogDecision(be, it, backlog.DecisionRef(id), gist)
+			if err != nil {
+				return Result{}, err
+			}
+			data.Set("decisionLog", mid)
+			text += "; no milestone to log the decision in"
+			if mid != "" {
+				text = fmt.Sprintf("completed %s (%s) at %s; logged the decision in %s", id, in.Reason, in.Commit, mid)
+			}
+		}
+		return Result{Data: data, Text: text}, nil
 	})
+}
+
+// checkGist reads the item and enforces the decision-log contract of `item complete --gist`: a
+// decision item closes with a gist, any other item takes none. It runs before
+// the close, so a refusal leaves the item open.
+func checkGist(be backlog.Backend, ref, id, gist string) (*backlog.Item, error) {
+	it, err := be.Get(ref)
+	if err != nil {
+		return nil, err
+	}
+	dec, err := round.DecisionOf(be.Capabilities(), *it)
+	switch {
+	case err != nil:
+		return nil, Failed("%s", err.Error())
+	case dec != "" && gist == "":
+		return nil, Failed("%s is a decision item: pass --gist <one line> for the milestone's decision log", id)
+	case dec == "" && gist != "":
+		return nil, Failed("--gist is only for decision items; %s is not a decision item", id)
+	}
+	return it, nil
 }
 
 // reopenItem restores the completed item behind ref.
@@ -586,6 +624,7 @@ func itemComplete(fs *flag.FlagSet) RunFunc {
 	reason := fs.String("reason", "done", "done|handed-off|blocked|dropped")
 	note := fs.String("note", "", "closure note")
 	noProof := fs.Bool("no-proof", false, "skip the proof gate")
+	gist := fs.String("gist", "", "decision items: the one-line gist for the milestone's decision log")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := argCount(c, args, 1, 1, "item complete takes one item ID"); err != nil {
 			return Result{}, err
@@ -609,7 +648,7 @@ func itemComplete(fs *flag.FlagSet) RunFunc {
 			return completeItem(be, args[0], backlog.CompleteInput{
 				Commit: hash, Date: todayDate(c), Reason: *reason,
 				Note: strings.ReplaceAll(*note, "\n", " "), NoProof: *noProof,
-			})
+			}, *gist)
 		})
 	}
 }

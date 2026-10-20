@@ -24,6 +24,7 @@ func (f *fakeBackend) Capabilities() backlog.Capabilities { return backlog.Capab
 func (f *fakeBackend) SetField(ref, field, value string) (bool, error) {
 	return f.changed, f.err
 }
+func (f *fakeBackend) Get(ref string) (*backlog.Item, error) { return &backlog.Item{ID: ref}, nil }
 func (f *fakeBackend) Complete(ref string, in backlog.CompleteInput) (bool, error) {
 	return f.changed, f.err
 }
@@ -36,7 +37,7 @@ func TestItemMutationsOnFakeBackend(t *testing.T) {
 
 	ops := map[string]func(be backlog.Backend) (Result, error){
 		"complete": func(be backlog.Backend) (Result, error) {
-			return completeItem(be, "B01", backlog.CompleteInput{Commit: "abc123", Reason: "done"})
+			return completeItem(be, "B01", backlog.CompleteInput{Commit: "abc123", Reason: "done"}, "")
 		},
 		"reopen": func(be backlog.Backend) (Result, error) { return reopenItem(be, "B01") },
 		"field set": func(be backlog.Backend) (Result, error) {
