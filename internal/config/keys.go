@@ -135,6 +135,7 @@ var Keys = []Key{
 	k("roles.reasoner.effort", "", false, TypeEnum, "Reasoning effort of the rota-reasoner agent. Empty leaves the harness default; Codex has no max.", "low", "medium", "high", "xhigh", "max"),
 	k("round.stallMinutes", num("30"), false, TypeInt, "Minutes a slot with a live agent may show no commit, edit or state change before rota round reconcile reports it stalled. 0 turns the check off."),
 	k("round.maxBounces", num("3"), false, TypeInt, "How often rota worker gate may send one item's PR back before it parks the item as needs-human. 0 turns the cap off."),
+	k("round.freshAt", num("2"), false, TypeInt, "Bounce count at which rota round review-relay stops resuming the worker and transfers the branch to a free slot at the same tier, with a brief of the open findings only. Must stay below round.maxBounces to act. 0 turns it off."),
 	k("round.ledgerKeep", num("0"), false, TypeInt, "Rounds of the round ledger (.rota/ledger.jsonl) to keep. A new round trims the entries of older rounds. 0 keeps everything."),
 	k("round.architectureEvery", num("20"), false, TypeInt, "Closed non-refactor items between automatic architecture reviews. 0 turns them off."),
 	k("round.architectureAreas", []any{}, false, TypeList, "Areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review."),

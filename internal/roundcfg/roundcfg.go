@@ -75,6 +75,10 @@ type Settings struct {
 	// item's PR back to its worker before parking the item as needs-human; 0
 	// turns the cap off.
 	MaxBounces int
+	// FreshAt is round.freshAt: the bounce at which `round review-relay`
+	// transfers the branch to a fresh slot instead of resuming the worker; 0
+	// turns it off.
+	FreshAt int
 	// LedgerKeep is round.ledgerKeep: how many rounds of the round ledger a
 	// new round keeps; 0 keeps everything.
 	LedgerKeep int
@@ -185,6 +189,9 @@ func Load(root string) (Settings, error) {
 		return s, err
 	}
 	if s.MaxBounces, err = config.Int(cfg, "round.maxBounces", 0, config.MaxInt); err != nil {
+		return s, err
+	}
+	if s.FreshAt, err = config.Int(cfg, "round.freshAt", 0, config.MaxInt); err != nil {
 		return s, err
 	}
 	if s.LedgerKeep, err = config.Int(cfg, "round.ledgerKeep", 0, config.MaxInt); err != nil {

@@ -342,9 +342,7 @@ func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundti
 		return reviewSummary(b), nil
 	}
 	src.Relay = func(ctx context.Context) (roundtick.RelayResult, error) {
-		env := c.deps().RoundEnv(ctx, root)
-		env.Worker = workerEnvCtx(c, ctx)
-		res, err := env.ReviewRelay(ctx, root, o)
+		res, err := reviewEnv(c, ctx, root, o).ReviewRelay(ctx, root, o)
 		out := roundtick.RelayResult{Nothing: res.Nothing, Items: res.Items, Bounces: res.Bounces}
 		if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && bd.BlockedBy == "maxBounces" {
 			out.AtCap = true
