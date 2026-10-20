@@ -78,6 +78,34 @@
         "checkOnly": true,
         "files": null,
         "mode": "",
+        "name": "c: forge lags the push, then catches up",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "fresh"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "c: forge never catches up",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "pr-mismatch"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
         "name": "c: stacked PR",
         "noFiles": null,
         "noVerify": false,
@@ -390,11 +418,23 @@
       "Local": "seed",
       "Forge": "github PRView 7\n"
     },
+    "c: forge lags the push, then catches up": {
+      "Exit": 0,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "github PRView 7\ngithub PRView 7\ngithub PRView 7\ngithub PRView 7\ngithub PRView 7\n"
+    },
+    "c: forge never catches up": {
+      "Exit": 3,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "github PRView 7\ngithub PRView 7\ngithub PRView 7\ngithub PRView 7\ngithub PRView 7\n"
+    },
     "c: head sha moved": {
       "Exit": 3,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "github PRView 7\n"
+      "Forge": "github PRView 7\ngithub PRView 7\ngithub PRView 7\ngithub PRView 7\ngithub PRView 7\n"
     },
     "c: matching PR is fresh": {
       "Exit": 0,

@@ -1,6 +1,6 @@
 # Configuration
 
-All settings live in [`.rota/config.json`](../reference/rota-folder.md). Run `rota config show` to list every key with its value and source, `rota config edit` (or `rota config --ui`) to change keys on [a screen](#the-config-screen) (terminal only; it is also the Config entry of the bare-`rota` menu), and `rota config set <key> <value>` to change one from a script (positional arguments; see [config options](../reference/config-options.md)). `rota init` fills any missing key with its default. Don't hand-edit the file. `rota config save-global` saves this project's `config.json` (not `config.local.json`; without `rota.version`, `git.baseBranch` and `umbrella.enabled`) as `config.json` in the rota config dir (see [the global config dir](#the-global-config-dir)), beside `projects.json`. `rota init` and `rota setup` start a new project from those values, and `rota setup` offers each as the question's default. It only seeds: an existing project is never re-seeded, and nothing reads the global file after init.
+All settings live in [`.rota/config.json`](../reference/rota-folder.md). Run `rota config show` to list every key with its value and source, `rota config edit` (or `rota config --ui`) to change keys on [a screen](#the-config-screen) (terminal only; it is also the Config entry of the bare-`rota` menu), and `rota config set <key> <value>` to change one from a script (positional arguments; see [config options](../reference/config-options.md)). `rota init` fills any missing key with its default. Don't hand-edit the file. `rota config save-global` saves this project's `config.json` (not `config.local.json`; without `rota.version`, `git.baseBranch` and `umbrella.enabled`) as `config.json` in the rota config dir (see [the global config dir](#the-global-config-dir)), beside `connections.json`. `rota init` and `rota setup` start a new project from those values, and `rota setup` offers each as the question's default. It only seeds: an existing project is never re-seeded, and nothing reads the global file after init.
 
 For the allowed values and option labels of each key, see [Configuration options](../reference/config-options.md).
 
@@ -744,7 +744,7 @@ Skills that use the base branch (including `/rota-ship`, `/rota-review` and `/ro
 
 ### Tracker connections
 
-Credentials and sites belong to you, not the repo, so they never go in `.rota/`. `rota connect` keeps named connections in `connections.json` under the global rota config dir (`~/.config/rota`, beside `projects.json`); a project only names one with `issues.connection`. GitHub and GitLab keep their own login through `gh` and `glab`; this is for trackers rota reaches over HTTP.
+Credentials and sites belong to you, not the repo, so they never go in `.rota/`. `rota connect` keeps named connections in `connections.json` under the global rota config dir (`~/.config/rota`); a project only names one with `issues.connection`. GitHub and GitLab keep their own login through `gh` and `glab`; this is for trackers rota reaches over HTTP.
 
 ```sh
 echo "$JIRA_TOKEN" | rota connect add work --kind jira --site https://acme.atlassian.net --user me@acme.com --token-stdin
@@ -759,6 +759,19 @@ The secret goes to the OS keychain (`security` on macOS, `secret-tool` on Linux)
 `rota doctor` checks the project's `issues.connection`: it fails with a hint when the connection is unknown, has no secret, or its test read fails. A kind with no test read yet in your build shows as a warning.
 
 `issues.label` is the legacy alias of `issues.labels.inProgress`. It is used when the new key is unset. `rota config show` lists all of these keys with their effective value and source.
+
+### Where rota keeps machine files
+
+Outside a project, rota follows the XDG Base Directory spec. An `XDG_*` variable counts only when it is an absolute path.
+
+| Kind | Location | Holds |
+|---|---|---|
+| Config | `$XDG_CONFIG_HOME/rota`, default `~/.config/rota` | `config.json` (the global seed), `connections.json`, the secrets fallback file |
+| State | `$XDG_STATE_HOME/rota`, default `~/.local/state/rota` | `projects.json` (the project registry) and its lock. `rota doctor` prints the path. |
+| Cache | `$XDG_CACHE_HOME/rota/skills` (the OS user cache dir) | the extracted embedded skills |
+| Data | `$XDG_DATA_HOME` | rota writes nothing here itself |
+
+An older rota kept `projects.json` in the config dir. The first run after upgrading moves it to the state dir and removes the old copy; a registry already in the state dir wins.
 
 ## rota.version (auto-managed)
 
@@ -792,10 +805,10 @@ While editing, a boolean is a toggle (`Space`), a key with choices is a picker (
 
 ## The global config dir
 
-`projects.json`, `connections.json` and the saved global `config.json` live in the global rota config dir. rota picks it in this order:
+`connections.json` and the saved global `config.json` live in the global rota config dir. rota picks it in this order:
 
 1. `ROTA_CONFIG_DIR`, when it is an absolute path. Use it for a separate rota profile, or to isolate rota alone in CI and tests without moving `XDG_CONFIG_HOME` for every other tool.
 2. `$XDG_CONFIG_HOME/rota`, when `XDG_CONFIG_HOME` is an absolute path.
 3. `~/.config/rota`.
 
-A relative `ROTA_CONFIG_DIR` is ignored with a warning on stderr, and rota falls through to the next rule. `rota doctor` shows the `config dir` line: the dir in use and whether it came from the override, XDG or the default. The state and data dirs have no override.
+A relative `ROTA_CONFIG_DIR` is ignored with a warning on stderr, and rota falls through to the next rule. `rota doctor` shows the `config dir` line: the dir in use and whether it came from the override, XDG or the default. The state and data dirs have no override: `ROTA_CONFIG_DIR` moves only the config dir, so CI isolation also needs `XDG_STATE_HOME` and `XDG_DATA_HOME` (the project registry lives in the state dir).

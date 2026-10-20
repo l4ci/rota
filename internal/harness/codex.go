@@ -133,6 +133,10 @@ func (codex) AccountEnv(a Account) []string {
 	return []string{"CODEX_HOME=" + a.Home}
 }
 
+func (codex) AmbientAccount(getenv func(string) string) Account {
+	return Account{Home: getenv("CODEX_HOME")}
+}
+
 func (codex) Accounts(cfg any) AccountList {
 	l := AccountList{Key: "round.codexAccounts"}
 	for _, a := range config.CodexAccounts(cfg) {

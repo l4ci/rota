@@ -128,6 +128,10 @@ func (opencode) AccountEnv(a Account) []string {
 	return []string{"OPENCODE_CONFIG_DIR=" + a.Home}
 }
 
+func (opencode) AmbientAccount(getenv func(string) string) Account {
+	return Account{Home: getenv("OPENCODE_CONFIG_DIR")}
+}
+
 func (opencode) Accounts(cfg any) AccountList {
 	l := AccountList{Key: "round.opencodeAccounts"}
 	for _, a := range config.OpencodeAccounts(cfg) {

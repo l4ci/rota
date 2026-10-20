@@ -102,7 +102,9 @@ type Input struct {
 	IssuesConnection string
 	TeamProblem      string
 	Accounts         []config.Account
-	SwitchOnUsage    bool // orchestrator.switchOnUsage (D4)
+	// OrchestratorConfigDir is the orchestrator's CLAUDE_CONFIG_DIR, "" when unset.
+	OrchestratorConfigDir string
+	SwitchOnUsage         bool // orchestrator.switchOnUsage (D4)
 	// Kinds is what each worker harness with a check of its own (Doctor) has
 	// configured, by kind.
 	Kinds map[string]KindInput
@@ -118,6 +120,10 @@ type Input struct {
 	// Skills is the state of the installed skill sets (skills.Set.Status);
 	// nil when nothing was read.
 	Skills *skills.Report
+
+	// StateDir is the rota state dir (the project registry lives there); ""
+	// adds no line.
+	StateDir string
 
 	// LegacyDir is the directory that still holds the old state folder with no .rota/ (a
 	// project `rota migrate hv` has not moved); "" otherwise.
@@ -204,6 +210,9 @@ func Run(ctx context.Context, in Input) Report {
 	if in.NothingToVerify {
 		// Only an unconfigured project adds a line; it warns, never fails.
 		checks = append(checks, Check{Name: "verify", Status: Warn, Detail: "test.full and test.e2e are both empty: the merge gate will refuse until test.full is set", Hint: "run: rota config set test.full '[...]'"})
+	}
+	if in.StateDir != "" {
+		checks = append(checks, pass("state dir", in.StateDir))
 	}
 	if in.LegacyDir != "" {
 		// Only a project that still holds the old state folder gets this line.
@@ -463,6 +472,9 @@ func (d *runner) tracker() Check {
 func (d *runner) expand(dir string) string { return worker.ExpandConfigDirIn(dir, d.in.Home) }
 
 func (d *runner) accounts() Check {
+	if w := worker.ConfigDirMismatch(d.in.OrchestratorConfigDir, d.in.Accounts); w != "" {
+		return Check{Name: "accounts", Status: Warn, Detail: w, Hint: "add that configDir to round.accounts in .rota/config.local.json, or start the orchestrator under a listed one"}
+	}
 	if len(d.in.Accounts) == 0 {
 		return skip("accounts", "no accounts in round.accounts")
 	}

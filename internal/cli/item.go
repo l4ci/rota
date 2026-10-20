@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"slices"
 	"strings"
@@ -197,19 +196,6 @@ func givenFlags(fs *flag.FlagSet) map[string]bool {
 	return set
 }
 
-// readInputFile reads a --body-file style path; "-" is stdin.
-func readInputFile(c *Ctx, path string) ([]byte, error) {
-	if path == "-" {
-		return io.ReadAll(c.Stdin)
-	}
-	return os.ReadFile(path)
-}
-
-// readInputErr is exit 3: a named input that cannot be read did not resolve.
-func readInputErr(flagName, path string, err error) error {
-	return Resolution("cannot read --%s: %s: %s", flagName, unwrapPathErr(err), path)
-}
-
 // ---- id next --------------------------------------------------------------
 
 var idCounters = []string{"bugs", "features", "tasks", "milestones"}
@@ -280,9 +266,9 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 					return Result{}, Usage("--raw-file takes only --kind")
 				}
 			}
-			raw, err := readInputFile(c, *rawFile)
+			raw, err := readBodyInput(c, "raw-file", *rawFile, ExitResolution)
 			if err != nil {
-				return Result{}, readInputErr("raw-file", *rawFile, err)
+				return Result{}, err
 			}
 			ops, err := openBacklogFile(c, root, "--raw-file appends to BACKLOG.md; use item create --title")
 			if err != nil {
@@ -300,9 +286,9 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 			req.Fields[n] = *v
 		}
 		if *bodyFile != "" {
-			body, err := readInputFile(c, *bodyFile)
+			body, err := readBodyInput(c, "body-file", *bodyFile, ExitResolution)
 			if err != nil {
-				return Result{}, readInputErr("body-file", *bodyFile, err)
+				return Result{}, err
 			}
 			req.Body, req.HasBody = body, true
 		}
@@ -345,9 +331,9 @@ type batchRecord struct {
 // in order and reports one id per record. A record that fails to file stops the
 // batch; the ids already filed ride in the error so none is lost.
 func itemCreateBatch(c *Ctx, root, path string) (Result, error) {
-	raw, err := readInputFile(c, path)
+	raw, err := readBodyInput(c, "batch-file", path, ExitResolution)
 	if err != nil {
-		return Result{}, readInputErr("batch-file", path, err)
+		return Result{}, err
 	}
 	var recs []batchRecord
 	dec := json.NewDecoder(bytes.NewReader(raw))
@@ -870,9 +856,9 @@ func itemCommentAdd(fs *flag.FlagSet) RunFunc {
 		if *bodyFile == "" {
 			return Result{}, Usage("--body-file is required")
 		}
-		raw, err := readInputFile(c, *bodyFile)
+		raw, err := readBodyInput(c, "body-file", *bodyFile, ExitResolution)
 		if err != nil {
-			return Result{}, readInputErr("body-file", *bodyFile, err)
+			return Result{}, err
 		}
 		text := decodeText(raw)
 		if pystr.Strip(text) == "" {
