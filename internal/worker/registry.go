@@ -160,9 +160,9 @@ func (r Registry) objects(key string) []*jsonx.Object {
 // QueuedPR is a record of the registry's `prs`: an open PR whose slot moved on
 // to another issue. The issue and its claim stay taken while it waits.
 type QueuedPR struct {
-	Issue, Branch, PR, Base, From, ClaimID, Attempt string
-	Round                                           int
-	Relays                                          []any
+	Issue, Branch, PR, Base, From, ClaimID string
+	Round                                  int
+	Relays                                 []any
 }
 
 func queuedFrom(o *jsonx.Object) QueuedPR {
@@ -173,7 +173,7 @@ func queuedFrom(o *jsonx.Object) QueuedPR {
 	return QueuedPR{
 		Issue: jsonx.Str(o, "issue"), Branch: jsonx.Str(o, "branch"), PR: jsonx.Str(o, "pr"),
 		Base: jsonx.Str(o, "base"), From: jsonx.Str(o, "from"), ClaimID: jsonx.Str(o, "claimId"),
-		Attempt: jsonx.Str(o, "attempt"), Round: round, Relays: l,
+		Round: round, Relays: l,
 	}
 }
 
@@ -189,31 +189,9 @@ func (q QueuedPR) object() *jsonx.Object {
 	o.Set("base", q.Base)
 	o.Set("from", q.From)
 	o.Set("claimId", q.ClaimID)
-	if q.Attempt != "" {
-		o.Set("attempt", q.Attempt)
-	}
 	o.Set("round", q.Round)
 	o.Set("relays", relays)
 	return o
-}
-
-// HolderAttempt is the attempt id of the one slot holding issue, "" when no
-// slot holds it, more than one does (a best-of:2 pair) or the holder has none.
-func (r Registry) HolderAttempt(issue string) string {
-	holder := ""
-	for _, sl := range r.Slots() {
-		if h := sl.HeldID(); h == "" || h != NormID(issue) {
-			continue
-		}
-		if holder != "" {
-			return ""
-		}
-		holder = sl.Attempt()
-		if holder == "" {
-			return ""
-		}
-	}
-	return holder
 }
 
 // PRs lists the queued PR records.

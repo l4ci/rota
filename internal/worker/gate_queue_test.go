@@ -91,33 +91,3 @@ func TestQueuedPRHelpers(t *testing.T) {
 		t.Errorf("after remove: %v", got)
 	}
 }
-
-// A queued PR whose issue was reclaimed or transferred and handed to a new
-// holder carries the old attempt id: the gate refuses it as stale.
-func TestGateQueuedPRStaleAttempt(t *testing.T) {
-	for _, c := range []struct {
-		name, slots, rec string
-		wantStale        bool
-	}{
-		{"reassigned to a new attempt", `{"name":"w3","branch":"w3/5-x","task":"5","attempt":"bbbb2222"}`, `"attempt":"aaaa1111",`, true},
-		{"same attempt", `{"name":"w3","branch":"w3/5-x","task":"5","attempt":"aaaa1111"}`, `"attempt":"aaaa1111",`, false},
-		{"record predates attempt ids", `{"name":"w3","branch":"w3/5-x","task":"5","attempt":"bbbb2222"}`, ``, false},
-		{"issue held by nobody", `{"name":"w3","branch":"park/w3"}`, `"attempt":"aaaa1111",`, false},
-		{"two holders is a best-of pair", `{"name":"w3","branch":"w3/5-x","task":"5","attempt":"bbbb2222"},{"name":"w4","branch":"w4/5-x","task":"5","attempt":"cccc3333"}`, `"attempt":"aaaa1111",`, false},
-	} {
-		w := newWorld(t, "")
-		w.forge("body", "Closes #5\n")
-		doc := `{"slots":[` + c.slots + `],"prs":[{"issue":"5","branch":"w1",` + c.rec + `"pr":"` + ghURL + `","base":"main","from":"w2","claimId":"w2@1","round":1,"relays":[]}]}`
-		os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(doc), 0o644)
-		res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "#7", Base: "main", CheckOnly: true})
-		if err != nil {
-			t.Fatalf("%s: %v", c.name, err)
-		}
-		if got := res.Verdict == GateStaleAttempt; got != c.wantStale {
-			t.Errorf("%s: verdict %q, stale = %v want %v", c.name, res.Verdict, got, c.wantStale)
-		}
-		if c.wantStale && !(strings.Contains(res.Err, "aaaa1111") && strings.Contains(res.Err, "bbbb2222")) {
-			t.Errorf("%s: the refusal names both attempts: %q", c.name, res.Err)
-		}
-	}
-}
