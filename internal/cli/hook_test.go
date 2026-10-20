@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -450,8 +451,14 @@ func TestHookPromptContextGuardWarnsOncePerCrossing(t *testing.T) {
 	}
 	dumpAt(t, dir, 80)
 	out := promptOut(t, dir)
-	if !strings.Contains(out, "/rota-pause") || strings.Count(out, "\n") > 0 && !strings.Contains(out, "additionalContext") {
-		t.Fatalf("first prompt above threshold: %q", out)
+	var po struct {
+		Spec struct {
+			Event   string `json:"hookEventName"`
+			Context string `json:"additionalContext"`
+		} `json:"hookSpecificOutput"`
+	}
+	if err := json.Unmarshal([]byte(out), &po); err != nil || po.Spec.Event != "UserPromptSubmit" || !strings.Contains(po.Spec.Context, "/rota-pause") {
+		t.Fatalf("first prompt above threshold: %q %v", out, err)
 	}
 	if again := promptOut(t, dir); again != "" {
 		t.Errorf("second prompt must be silent: %q", again)
@@ -529,5 +536,23 @@ func TestHookStopContextGuardAutoBlocksUpToMax(t *testing.T) {
 	dumpAt(t, dir, 85)
 	if _, out, _ := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop"); !strings.Contains(out, "block") {
 		t.Errorf("a new crossing blocks again: %q", out)
+	}
+}
+
+func TestHookStopContextGuardAutoPassesOnBranchHandoff(t *testing.T) {
+	dir := guardProject(t, "auto")
+	if out, err := exec.Command("git", "-C", dir, "checkout", "-q", "-b", "work/guard").CombinedOutput(); err != nil {
+		t.Fatalf("checkout: %v %s", err, out)
+	}
+	dumpAt(t, dir, 80)
+	if _, out, _ := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop"); !strings.Contains(out, "block") {
+		t.Fatalf("no note yet must block: %q", out)
+	}
+	// /rota-pause writes `rota status handoff work/guard --canonical`.
+	note := filepath.Join(dir, ".rota", "handoff", "work", "guard.md")
+	os.MkdirAll(filepath.Dir(note), 0o755)
+	os.WriteFile(note, []byte("paused\n"), 0o644)
+	if _, out, _ := rotaStdin(t, dir, stopPayload(dir, true), "hook", "stop"); out != "" {
+		t.Errorf("a fresh note at the branch path must pass: %q", out)
 	}
 }

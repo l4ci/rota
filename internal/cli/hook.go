@@ -177,12 +177,30 @@ func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bo
 	if hc.set, err = hook.LoadSettings(hc.cfg); err != nil {
 		return hc, false // a bad value is a pass, never a block
 	}
-	// The git base lookup is only needed by the orchestrator, SessionStart and
-	// the auto guard; an off or warn guard session skips it on every prompt.
-	if hc.who.Orchestrator || !anySession || config.ContextGuard(hc.cfg) == hook.GuardAuto {
+	switch {
+	case hc.who.Orchestrator || !anySession:
 		hc.handoff = handoffFile(hc.root, hc.cfg)
+	case config.ContextGuard(hc.cfg) == hook.GuardAuto:
+		// A work session pauses to .rota/handoff/<its branch>.md, where
+		// /rota-pause writes it; only the auto guard reads it.
+		hc.handoff = branchHandoffFile(hc.root, cwd)
 	}
 	return hc, true
+}
+
+// branchHandoffFile is the absolute `.rota/handoff/<branch>.md` of the branch
+// checked out in cwd, the path `rota status handoff <branch> --canonical`
+// returns from there. "" on a detached HEAD, so no note counts.
+func branchHandoffFile(root, cwd string) string {
+	branch, err := git.Repo{Dir: cwd}.CurrentBranch(context.Background())
+	if err != nil || branch == "" {
+		return ""
+	}
+	rel, err := status.HandoffPath(branch, "")
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(root, filepath.FromSlash(rel))
 }
 
 // handoffFile is the absolute `.rota/handoff/<base>.md`, the path

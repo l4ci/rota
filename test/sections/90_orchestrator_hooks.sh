@@ -240,14 +240,19 @@ for a in false true; do
 done
 [ -z "$(guard_stop true)" ] || fail "guard: auto blocked past handoffMaxBlocks"
 pass "guard: auto blocks handoffMaxBlocks times, then passes"
-# a session that obeyed the first block and wrote its note is not blocked again
-rm -rf "$CD/rota/session"; dump_pct 80; guard_prompt >/dev/null
-OUT="$(guard_stop false)"; grep -q '"decision": *"block"' <<<"$OUT" || fail "guard: auto did not block before the note"
-mkdir -p "$P/.rota/handoff"; printf 'paused\n' > "$HANDOFF"
-python3 -c 'import os,sys; os.utime(sys.argv[1], (int(sys.argv[2])+5,)*2)' "$HANDOFF" "$NOW_EPOCH"
-[ -z "$(guard_stop true)" ] || fail "guard: auto re-blocked after a fresh /rota-pause note"
-rm -f "$HANDOFF"
-pass "guard: auto stops blocking once a fresh handoff note exists"
+# a work session on a feature branch in a worktree: /rota-pause writes
+# .rota/handoff/<branch>.md under the worktree, and a fresh note ends the blocks
+W="$OH/wt"; git -C "$P" worktree add -q -b feat/guard "$W" >/dev/null 2>&1 || fail "guard: worktree setup failed"
+mkdir -p "$W/.rota"; cp "$P/.rota/config.json" "$W/.rota/config.json"
+rm -rf "$CD/rota/session"; guard_cfg auto; cp "$P/.rota/config.json" "$W/.rota/config.json"
+printf '{"session_id":"s1","cwd":"%s","context_window":{"used_percentage":80}}' "$W" | env ROTA_TEST_NOW="$NOW" "$ROTA_BIN" statusline dump || fail "guard: dump in worktree failed"
+wstop() { printf '{"session_id":"s1","cwd":"%s","stop_hook_active":%s}' "$W" "$1" | oh 0 hook stop; }
+OUT="$(wstop false)"; grep -q '"decision": *"block"' <<<"$OUT" || fail "guard: auto did not block before the note"
+WNOTE="$W/.rota/handoff/feat/guard.md"; mkdir -p "$(dirname "$WNOTE")"; printf 'paused\n' > "$WNOTE"
+python3 -c 'import os,sys; os.utime(sys.argv[1], (int(sys.argv[2])+5,)*2)' "$WNOTE" "$NOW_EPOCH"
+[ -z "$(wstop true)" ] || fail "guard: auto re-blocked after a fresh /rota-pause note on the branch path"
+git -C "$P" worktree remove --force "$W"; git -C "$P" branch -q -D feat/guard
+pass "guard: auto stops blocking once a fresh handoff note exists at the branch path"
 
 for mode in off bogus; do
   rm -rf "$CD/rota/session"; guard_cfg "$mode"; dump_pct 95
