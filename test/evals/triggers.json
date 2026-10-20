@@ -79,6 +79,18 @@
       "better": "rota-decide"
     },
     {
+      "id": "rota-init-loads",
+      "skill": "rota-init",
+      "request": "/rota-init: look at this repo and suggest config values for rota.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-init-skips",
+      "skill": "rota-init",
+      "request": "Set ship.review to light in the config.",
+      "expect": "skip"
+    },
+    {
       "id": "rota-orchestrate-loads",
       "skill": "rota-orchestrate",
       "request": "You are the orchestrator. Run a round and assign the next issues to the workers.",
