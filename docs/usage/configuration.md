@@ -681,14 +681,15 @@ Skills that use the base branch (including `/rota-ship`, `/rota-review` and `/ro
 
 | Key | Default | Values |
 |-----|---------|--------|
-| `issues.source` | `"file"` | Where the issues live: `"file"`, `"github"`, `"gitlab"`, `"forge"`, `"jira"` or `"linear"`. `github` and `gitlab` put the backlog on the tracker and must match the forge; `forge` puts each sub-repo of an umbrella on its own forge (mixed hosts); see [issue backend](issue-backend.md). |
+| `issues.source` | `"file"` | Where the issues live: `"file"`, `"github"`, `"gitlab"`, `"forge"`, `"jira"`, `"linear"` or `"itsaplan"`. `github` and `gitlab` put the backlog on the tracker and must match the forge; `forge` puts each sub-repo of an umbrella on its own forge (mixed hosts); see [issue backend](issue-backend.md). |
 | `forge.provider` | `"auto"` | Where code lands: `"auto"` (from `origin`; no remote is `local`), `"github"`, `"gitlab"` or `"local"`. `local` means direct merge: no PR, the gate never looks for one, and `rota ship strategy` answers `direct`. |
 | `issues.retryWaitSeconds` | `60` | Seconds to wait before the single retry after a primary rate limit. |
 | `issues.bulkPaceMs` | `1000` | Milliseconds `rota migrate issues` waits between tracker writes. `0` disables the pause. |
 | `issues.homeRepo` | `""` | Umbrella mode only: sub-repo holding milestone tracking issues. Empty means the first registered sub-repo. |
-| `issues.connection` | `""` | Name of the machine-wide tracker connection (Jira, Linear) added with `rota connect add`. A name only, never a secret. A teammate whose connection has another name overrides it in `config.local.json`. See [Tracker connections](#tracker-connections). |
+| `issues.connection` | `""` | Name of the machine-wide tracker connection (Jira, Linear, It's a Plan) added with `rota connect add`. A name only, never a secret. A teammate whose connection has another name overrides it in `config.local.json`. See [Tracker connections](#tracker-connections). |
 | `issues.jira.project` | `""` | Jira project key the connection reads from and writes to. |
 | `issues.linear.team` | `""` | Linear team key the connection reads from and writes to. |
+| `issues.itsaplan.project` | `""` | It's a Plan project key, such as `MKT`, the connection reads from and writes to. |
 | `issues.labels.inProgress` | `"in-progress"` | Label name. |
 | `issues.labels.needsReview` | `"needs-review"` | Label name. |
 | `issues.labels.changesRequested` | `"changes-requested"` | Label name. |
