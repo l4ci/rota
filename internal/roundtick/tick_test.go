@@ -248,8 +248,7 @@ func TestReviewMintsAreAuditedAndAssignedFirst(t *testing.T) {
 			}
 			e := f.env()
 			e.Cap = 2
-			e.ReviewDue = func(context.Context) (bool, error) { return true, nil }
-			e.Review = func(context.Context) ([]string, error) { return []string{"#9", "#10", "#11"}, nil }
+			e.Review = fakeReview{due: true, mint: func() ([]string, error) { return []string{"#9", "#10", "#11"}, nil }}
 			r, err := Run(context.Background(), e)
 			if err != nil {
 				t.Fatal(err)
@@ -272,8 +271,7 @@ func TestNoReviewHookOrNothingDueMintsNothing(t *testing.T) {
 		t.Fatalf("no hook: %v %v", f.audit, err)
 	}
 	f.audit, f.assigned = nil, nil
-	e.ReviewDue = func(context.Context) (bool, error) { return true, nil }
-	e.Review = func(context.Context) ([]string, error) { return nil, nil }
+	e.Review = fakeReview{due: true, mint: func() ([]string, error) { return nil, nil }}
 	if _, err := Run(context.Background(), e); err != nil || !reflect.DeepEqual(f.audit, []string{"assign #1"}) {
 		t.Fatalf("nothing due: %v %v", f.audit, err)
 	}
@@ -282,8 +280,7 @@ func TestNoReviewHookOrNothingDueMintsNothing(t *testing.T) {
 func TestReviewFailureIsEscalatedAndTickGoesOn(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}}}
 	e := f.env()
-	e.ReviewDue = func(context.Context) (bool, error) { return true, nil }
-	e.Review = func(context.Context) ([]string, error) { return nil, errors.New("tracker down\nmore") }
+	e.Review = fakeReview{due: true, mint: func() ([]string, error) { return nil, errors.New("tracker down\nmore") }}
 	r, err := Run(context.Background(), e)
 	if err != nil || !reflect.DeepEqual(f.assigned, []string{"#1"}) {
 		t.Fatalf("tick should go on: %v %v", f.assigned, err)
@@ -297,8 +294,7 @@ func TestReviewMintRefusedStaysForLaterTick(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}}
 	f.assignFn = func(id string) ([]string, error) { return nil, &round.BlockedError{By: round.BlockNotReady, Msg: "no"} }
 	e := f.env()
-	e.ReviewDue = func(context.Context) (bool, error) { return true, nil }
-	e.Review = func(context.Context) ([]string, error) { return []string{"#9"}, nil }
+	e.Review = fakeReview{due: true, mint: func() ([]string, error) { return []string{"#9"}, nil }}
 	r, err := Run(context.Background(), e)
 	if err != nil || len(r.Did) != 1 || r.Did[0].Action != "mint" {
 		t.Fatalf("%+v %v", r, err)
@@ -411,8 +407,7 @@ func TestCappedTickFillsNoSlotAndSaysWhy(t *testing.T) {
 	e := f.env()
 	e.Capped = func(context.Context) string { return why }
 	minted := 0
-	e.ReviewDue = func(context.Context) (bool, error) { return true, nil }
-	e.Review = func(context.Context) ([]string, error) { minted++; return []string{"#9"}, nil }
+	e.Review = fakeReview{due: true, mint: func() ([]string, error) { minted++; return []string{"#9"}, nil }}
 	r, err := Run(context.Background(), e)
 	if err != nil {
 		t.Fatal(err)
@@ -438,8 +433,7 @@ func TestBatchFullTickAssignsNothingAndSaysSo(t *testing.T) {
 	e.Batch = 2
 	e.OpenItems = func(context.Context) int { return open }
 	minted := 0
-	e.ReviewDue = func(context.Context) (bool, error) { return true, nil }
-	e.Review = func(context.Context) ([]string, error) { minted++; return []string{"#9"}, nil }
+	e.Review = fakeReview{due: true, mint: func() ([]string, error) { minted++; return []string{"#9"}, nil }}
 	r, err := Run(context.Background(), e)
 	if err != nil || !r.BatchFull || len(f.assigned) != 0 || minted != 0 {
 		t.Fatalf("err %v batchFull %v assigned %v minted %d", err, r.BatchFull, f.assigned, minted)
@@ -494,8 +488,7 @@ func TestReviewNotDueMintsNothing(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}}}
 	e := f.env()
 	minted := 0
-	e.ReviewDue = func(context.Context) (bool, error) { return false, nil }
-	e.Review = func(context.Context) ([]string, error) { minted++; return []string{"#9"}, nil }
+	e.Review = fakeReview{due: false, mint: func() ([]string, error) { minted++; return []string{"#9"}, nil }}
 	r, err := Run(context.Background(), e)
 	if err != nil || minted != 0 || len(f.assigned) != 1 || len(r.NeedsYou) != 0 {
 		t.Fatalf("err %v minted %d assigned %v needsYou %v", err, minted, f.assigned, r.NeedsYou)
@@ -505,8 +498,7 @@ func TestReviewNotDueMintsNothing(t *testing.T) {
 func TestReviewDueErrorIsNeedsYou(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}}}
 	e := f.env()
-	e.ReviewDue = func(context.Context) (bool, error) { return false, errors.New("tracker down\nmore") }
-	e.Review = func(context.Context) ([]string, error) { t.Fatal("minted"); return nil, nil }
+	e.Review = fakeReview{factsErr: errors.New("tracker down\nmore"), mint: func() ([]string, error) { t.Fatal("minted"); return nil, nil }}
 	r, err := Run(context.Background(), e)
 	if err != nil || len(r.NeedsYou) != 1 || r.NeedsYou[0].Why != "tracker down" {
 		t.Fatalf("err %v needsYou %v", err, r.NeedsYou)
@@ -519,5 +511,60 @@ func TestZeroCapIsTheDefault(t *testing.T) {
 	}
 	if got := (Env{Cap: 1}).cap(); got != 1 {
 		t.Fatalf("cap %d, want 1", got)
+	}
+}
+
+// fakeReview is a Reviewer over fixed facts: due picks facts at the threshold
+// or well below it, so the decision itself runs in the tick.
+type fakeReview struct {
+	due      bool
+	factsErr error
+	facts    *round.Architecture
+	ready    bool
+	mint     func() ([]string, error)
+}
+
+func (f fakeReview) Facts(context.Context) (round.Architecture, bool, error) {
+	if f.facts != nil {
+		return *f.facts, f.ready, f.factsErr
+	}
+	a := round.Architecture{Every: 3, Count: 1}
+	if f.due {
+		a.Count = 3
+	}
+	return a, f.ready, f.factsErr
+}
+
+func (f fakeReview) Mint(context.Context, round.Architecture) ([]string, error) { return f.mint() }
+
+// The tick owns the due call: the facts alone decide whether it mints.
+func TestReviewDecisionIsMadeInTheTick(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		facts round.Architecture
+		ready bool
+		mints bool
+	}{
+		{"threshold", round.Architecture{Every: 3, Count: 3}, true, true},
+		{"below threshold, work ready", round.Architecture{Every: 3, Count: 1, Idle: 1}, true, false},
+		{"queue empty, idle slot", round.Architecture{Every: 3, Count: 1, Idle: 1}, false, true},
+		{"queue empty, nothing closed", round.Architecture{Every: 3, Count: 0, Idle: 1}, false, false},
+		{"review in flight", round.Architecture{Every: 3, Count: 5, Pending: []string{"#9"}}, false, false},
+		{"count unavailable", round.Architecture{Every: 3, Count: -1}, false, false},
+		{"off", round.Architecture{Every: 0, Count: 9}, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}}
+			e := f.env()
+			minted := 0
+			facts := tc.facts
+			e.Review = fakeReview{facts: &facts, ready: tc.ready, mint: func() ([]string, error) { minted++; return nil, nil }}
+			if _, err := Run(context.Background(), e); err != nil {
+				t.Fatal(err)
+			}
+			if (minted == 1) != tc.mints {
+				t.Fatalf("minted %d times, want mint=%v", minted, tc.mints)
+			}
+		})
 	}
 }
