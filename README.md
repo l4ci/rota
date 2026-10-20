@@ -150,6 +150,7 @@ In the order you'd usually reach for them:
 | Done | `/rota-review`, `/rota-ship` | Review the branch; open the PR or merge |
 | Many issues at once | `/rota-orchestrate`, `/rota-answer` | Run a round with parallel workers; answer its pending decisions one by one |
 | Worth remembering | `/rota-learn`, `/rota-decide` | Save a lesson; lock in a rule |
+| Fresh project | `/rota-init` | Read the repo and suggest config values, confirmed one by one |
 | Out of context | `/rota-pause` | Write a handoff so a fresh session continues |
 | Bigger picture | `/rota-vision`, `/rota-refactor`, `/rota-qa`, `/rota-release` | Milestones, architecture review, product QA, releases |
 
