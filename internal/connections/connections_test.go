@@ -225,6 +225,35 @@ func TestFileStoreMigrationTightensLegacyMode(t *testing.T) {
 	}
 }
 
+func TestFileStoreMigrationCopiesSymlinkTarget(t *testing.T) {
+	root := t.TempDir()
+	legacy, dir := filepath.Join(root, "config"), filepath.Join(root, "data")
+	synced := filepath.Join(root, "dotfiles")
+	if err := FileStore(synced, "").Set(context.Background(), "work", "tok"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(legacy, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(SecretsFile(synced), SecretsFile(legacy)); err != nil {
+		t.Fatal(err)
+	}
+	v, _, err := FileStore(dir, legacy).Get(context.Background(), "work")
+	if err != nil || v != "tok" {
+		t.Fatalf("%q %v", v, err)
+	}
+	fi, err := os.Lstat(SecretsFile(dir))
+	if err != nil || fi.Mode()&os.ModeSymlink != 0 || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("data file is not a plain 0600 file: %v %v", fi, err)
+	}
+	if _, err := os.Lstat(SecretsFile(legacy)); !os.IsNotExist(err) {
+		t.Errorf("legacy link left: %v", err)
+	}
+	if _, err := os.Stat(SecretsFile(synced)); err != nil {
+		t.Errorf("link target removed: %v", err)
+	}
+}
+
 func TestCheckStates(t *testing.T) {
 	dir := t.TempDir()
 	ctx := context.Background()
