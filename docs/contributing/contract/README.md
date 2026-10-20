@@ -84,6 +84,7 @@ Field types use JSON names (`string`, `number`, `bool`, `object`, `[]string`). `
 | skills | `install`, `update`, `uninstall`, `status`, `list`, `get` (F6a, #821) | F6a |
 | gate | `list` | B1 |
 | round | `wait` (C1), `status`, `reconcile` (C2), `start`, `candidates`, `assign`, `wind-down` (C3), `scope` (#900), `escalate send`, `escalate check` (C4), `return`, `transfer`, `reclaim` (C10), `report` (C8) | C1, C2, C3, C4, C10, C8 |
+| receipt | `show` (#959) | C13 |
 | doctor | `doctor` (C6; D1 adds `statusline` and `stop-hook` checks) | C6, D1 |
 | statusline | `dump` (D1) | D1 |
 | hook | `stop`, `session-start`, `install`, `uninstall` (D1) | D1 |
@@ -108,7 +109,7 @@ The entries live one file per verb group, so a change to one group does not conf
 | [verdicts.md](verdicts.md) | B2 | `verdict` |
 | [gates.md](gates.md) | B1 | manual gates, `gate list` |
 | [verdict-refusals.md](verdict-refusals.md) | B3 | verdict refusals, the Iron Law, loop-only flags |
-| [rounds.md](rounds.md) | C | `round`, `doctor`, `reap` |
+| [rounds.md](rounds.md) | C | `round`, `receipt`, `doctor`, `reap` |
 | [codex-workers.md](codex-workers.md) | D1, D2, E | Codex workers, `statusline`, `hook`, `keepalive` |
 | [opencode-workers.md](opencode-workers.md) | F | OpenCode workers |
 | [agent-skills-spec.md](agent-skills-spec.md) | D3, E2 | Agent Skills spec and Codex discovery, `limit` |

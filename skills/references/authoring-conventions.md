@@ -23,6 +23,7 @@ Rules for authoring new rota skills or new behavior in existing ones. Consult th
 - Inventory table beside a citation when ≥4 sibling rules extracted
 - Avoid `&` in `TaskCreate`/`TodoWrite` payloads
 - `/rota-x` and `$rota-x` are the same invocation
+- A lost response is followed by `receipt show`, never a re-run
 - Write instructions the model needs, nothing else
 
 ## Skills are self-contained, with autonomy rules inline
@@ -183,6 +184,17 @@ Claude Code's TUI HTML-escapes task titles but never decodes them, so `&` shows 
 ## `/rota-x` and `$rota-x` are the same invocation
 
 Codex invokes a skill as `$rota-x`; Claude Code as `/rota-x`. Skill text keeps `/rota-x` everywhere and does not branch on the harness: read `$rota-x` as the same call. A skill installed with `rota skills install` lists in Codex as `rota-x`, and `$rota-x` invokes it. Never write both spellings in one sentence, and never rewrite an existing `/rota-x` to `$rota-x`. When the harness has no skill-invocation tool, read the target skill's `SKILL.md` and follow it with the stated arguments and brief; a slash command is not a shell command.
+
+## A lost response is followed by `receipt show`, never a re-run
+
+When a skill has the model call a state-writing `rota` verb that takes `--request-id` (the `round` write verbs, `worker gate`, `worker train`) and the response may be lost (a timeout, a broken pipe, a pipe into `jq` that failed), the skill names the recovery: run `rota receipt show <request-id>` with the id of the first call. `completed` means read the stored `result`; `pending` means replay with the same id and arguments; `absent` means inspect the affected state before deciding, since it is not proof that nothing happened. A blind re-run files twice what the first call already filed.
+
+**Forbids.**
+- `cmd | jq || cmd` and any other retry that repeats a write without asking what the first call did.
+- Reading `absent` as "safe to re-run".
+
+**Permits.**
+- Passing `--request-id` explicitly, so the id survives a lost response.
 
 ## Write instructions the model needs, nothing else
 
