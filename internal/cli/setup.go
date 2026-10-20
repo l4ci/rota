@@ -60,6 +60,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 	var sets setAnswers
 	yes := fs.Bool("yes", false, "take the default for every question not given with --set; never prompt")
 	list := fs.Bool("list", false, "print the questions and how to answer them; write nothing")
+	saveGlobal := fs.Bool("save-global", false, "save the answers as the global defaults without asking (only those that differ from the global config)")
 	fs.Var(&sets, "set", "answer a question: `key=value` (repeatable)")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := knNoArgs(args); err != nil {
@@ -91,7 +92,8 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			return Result{}, Usage("setup needs answers and there is no terminal").
 				WithHint("run: rota setup --list to see the questions, rota setup --yes for the defaults")
 		}
-		answers, err := resolveAnswers(c, given, interactive, setupDefaults(c))
+		in := bufio.NewReader(c.Stdin)
+		answers, err := resolveAnswers(c, in, given, interactive, setupDefaults(c))
 		if err != nil {
 			return Result{}, err
 		}
@@ -114,6 +116,21 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			lines = append(lines, fmt.Sprintf("set %s = %s", p.Key, v))
 		}
 		root.Set("answers", out)
+		globalVals := loadGlobalValues() // a broken file was already warned about by setupDefaults
+		if cands := globalCandidates(answers, globalVals); len(cands) > 0 {
+			save := *saveGlobal
+			if !save && interactive {
+				save = askSaveGlobal(in, c.Stderr, cands, answers, len(globalVals) == 0)
+			}
+			if save {
+				saved, err := saveGlobalAnswers(cands, answers)
+				if err != nil {
+					return Result{}, err
+				}
+				root.Set("savedGlobal", strSlice(saved))
+				lines = append(lines, fmt.Sprintf("saved %d answers as global defaults", len(saved)))
+			}
+		}
 		return Result{Data: root, Text: strings.Join(lines, "\n")}, nil
 	}
 }
@@ -121,9 +138,8 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 // resolveAnswers settles every applicable question: the --set value, else the
 // typed answer when interactive, else the default. A question whose condition
 // does not hold is skipped, and --set naming it is a usage error.
-func resolveAnswers(c *Ctx, given map[string]string, interactive bool, defs map[string]string) (map[string]string, error) {
+func resolveAnswers(c *Ctx, in *bufio.Reader, given map[string]string, interactive bool, defs map[string]string) (map[string]string, error) {
 	answers := map[string]string{}
-	in := bufio.NewReader(c.Stdin)
 	if interactive {
 		fmt.Fprintln(c.Stderr, "rota setup: Enter takes the default [in brackets]; Ctrl-C aborts before anything is written.")
 	}
@@ -210,6 +226,68 @@ func setupDefaults(c *Ctx) map[string]string {
 		}
 	}
 	return defs
+}
+
+// loadGlobalValues is the global config's values, or none when the dir or file
+// cannot be read.
+func loadGlobalValues() map[string]any {
+	dir, err := projects.Dir()
+	if err != nil {
+		return nil
+	}
+	vals, _ := config.LoadGlobal(dir)
+	return vals
+}
+
+// globalCandidates are the answers worth saving globally: all of them when the
+// global config holds nothing yet, else those whose value differs from (or is
+// missing in) it. An unset optional answer has nothing to save. Project-owned
+// keys are not questions and config.MergeGlobal drops them regardless.
+func globalCandidates(answers map[string]string, global map[string]any) []config.Prompt {
+	var out []config.Prompt
+	for _, p := range config.Prompts {
+		v, ok := answers[p.Key]
+		if !ok || (p.Optional && v == "") {
+			continue
+		}
+		if g, has := global[p.Key]; len(global) > 0 && has && fmt.Sprint(g) == v {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+func saveGlobalAnswers(cands []config.Prompt, answers map[string]string) ([]string, error) {
+	vals := map[string]any{}
+	for _, p := range cands {
+		vals[p.Key] = config.Coerce(answers[p.Key])
+	}
+	dir, err := projects.Dir()
+	if err != nil {
+		return nil, Resolution("%v", err)
+	}
+	return config.MergeGlobal(dir, vals)
+}
+
+// askSaveGlobal lists the candidate answers and asks y/N. Anything but yes,
+// including end of input, is no: the project is already set up either way.
+func askSaveGlobal(in *bufio.Reader, out io.Writer, cands []config.Prompt, answers map[string]string, first bool) bool {
+	if first {
+		fmt.Fprintln(out, "\nNo global defaults yet. Save these answers for new projects?")
+	} else {
+		fmt.Fprintln(out, "\nThese answers differ from your global defaults. Save them as the new defaults?")
+	}
+	for _, p := range cands {
+		fmt.Fprintf(out, "  %s = %s\n", p.Key, answers[p.Key])
+	}
+	fmt.Fprint(out, "Save as global defaults? [y/N]: ")
+	line, _ := in.ReadString('\n')
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true
+	}
+	return false
 }
 
 func choiceValues(p config.Prompt) string {
