@@ -82,7 +82,7 @@ When a slot is `dead`, `unknown`, `unverifiable` or stalled, a worker is stuck, 
 
 ## 5. Escalations and provenance
 
-When a worker is `blocked` on a question, or you relay to a worker or review its approvals, read [`escalations-and-provenance.md`](escalations-and-provenance.md). Escalate only choices a user would notice. When several decisions wait on the maintainer, offer `/rota-answer`, which puts them one by one; it runs only when the maintainer types it. Sign every message you send a worker; cite the real channel of every approval.
+When a worker is `blocked` on a question, or you relay to a worker or review its approvals, read [`escalations-and-provenance.md`](escalations-and-provenance.md). Escalate only choices a user would notice. When two or more decisions wait on the maintainer, see *Many waiting* in that file (`/rota-answer`). Sign every message you send a worker; cite the real channel of every approval.
 
 ## 6. Merge
 
