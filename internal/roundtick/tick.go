@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
@@ -91,9 +92,9 @@ type ReviewOutcome struct {
 type Env struct {
 	// Cap bounds assigns and merges per tick; <= 0 means DefaultCap.
 	Cap int
-	// HumanMerge is true when ship.mergeApproval is not none: the autopilot
-	// then merges nothing.
-	HumanMerge bool
+	// MergeApproval is ship.mergeApproval: any mode but none asks for a
+	// person, and the autopilot then merges nothing.
+	MergeApproval string
 	// Slots lists the roster from the registry; Queued the PR refs waiting in
 	// its review queue.
 	Slots  func() []Slot
@@ -113,11 +114,13 @@ type Env struct {
 	// (two for a best-of:2 issue). A *round.BlockedError (not ready after all,
 	// no slot) is a refusal, not a failure; "no round" is a failure.
 	Assign func(ctx context.Context, id string) (agents []string, err error)
-	// Review mints the architecture-review items (#53) when a review is due,
-	// at the round.architectureEvery threshold or because a slot is idle with
-	// nothing assignable, and returns their ids. nil means the round has no
-	// review. The minted items are assigned first, within the same cap.
-	Review func(ctx context.Context) (minted []string, err error)
+	// ReviewDue says an architecture review (#53) is due, at the
+	// round.architectureEvery threshold or because a slot is idle with nothing
+	// assignable; Review then mints the items and returns their ids. nil
+	// ReviewDue means the round has no review. The minted items are assigned
+	// first, within the same cap.
+	ReviewDue func(ctx context.Context) (bool, error)
+	Review    func(ctx context.Context) (minted []string, err error)
 	// ReviewLoop checks a done slot's PR for review input (round.reviewLoop);
 	// nil means the round has no review loop. A slot it relays, or holds, is not
 	// merged this tick; one it only reports (manual) is gated as before.
@@ -127,9 +130,10 @@ type Env struct {
 	// mints and assigns nothing and says why in Result.Capped; it merges and
 	// repairs as usual, and fills again once Capped returns "".
 	Capped func(ctx context.Context) string
-	// BatchFull says round.batch items are already open, so nothing is minted
-	// or assigned; nil means no limit. Merges and repairs run as usual.
-	BatchFull func(ctx context.Context) bool
+	// Batch is round.batch: once that many items are open (OpenItems), nothing
+	// is minted or assigned. <= 0 means no limit. Merges and repairs run as usual.
+	Batch     int
+	OpenItems func(ctx context.Context) int
 	// Audit records one action in the audit log.
 	Audit func(Action)
 	// Held is the targets a previous tick's merge failed on and a person has
@@ -169,6 +173,15 @@ func (e Env) cap() int {
 		return DefaultCap
 	}
 	return e.Cap
+}
+
+// humanMerge is true when the merge policy asks for a person.
+func (e Env) humanMerge() bool {
+	return e.MergeApproval != "" && e.MergeApproval != gate.MergeNone
+}
+
+func (e Env) batchFull(ctx context.Context) bool {
+	return e.Batch > 0 && e.OpenItems != nil && e.OpenItems(ctx) >= e.Batch
 }
 
 func (e Env) audit(r *Result, a Action) {
@@ -234,7 +247,7 @@ func Run(ctx context.Context, e Env) (Result, error) {
 	if e.Capped != nil {
 		r.Capped = e.Capped(ctx)
 	}
-	if e.BatchFull != nil && e.BatchFull(ctx) {
+	if e.batchFull(ctx) {
 		r.BatchFull = true
 	}
 	if r.Capped == "" && !r.BatchFull { // capped: a slot filled now would park at once
@@ -261,7 +274,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 	if len(targets) == 0 {
 		return nil
 	}
-	if e.HumanMerge {
+	if e.humanMerge() {
 		for _, t := range targets {
 			r.NeedsYou = append(r.NeedsYou, Item{"merge", t, "ship.mergeApproval asks for a person; the autopilot merges nothing"})
 		}
@@ -373,10 +386,14 @@ func (e Env) train(ctx context.Context, targets []string, base string) []Merged 
 // review mints the due architecture reviews. A failed mint is the
 // orchestrator's to look at, not a reason to stop the tick's other steps.
 func (e Env) review(ctx context.Context, r *Result) ([]string, error) {
-	if e.Review == nil {
+	if e.ReviewDue == nil || e.Review == nil {
 		return nil, nil
 	}
-	ids, err := e.Review(ctx)
+	due, err := e.ReviewDue(ctx)
+	var ids []string
+	if err == nil && due {
+		ids, err = e.Review(ctx)
+	}
 	if err != nil {
 		r.NeedsYou = append(r.NeedsYou, Item{"architecture-review", "mint", strutil.FirstNonEmpty(strutil.FirstLine(err.Error()), "the review could not be minted")})
 	}

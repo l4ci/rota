@@ -98,3 +98,14 @@ func TestWatchResultNudgesAfterATickWithoutMergeItems(t *testing.T) {
 		}
 	}
 }
+
+func TestTrainNudgeGroupsEmptyBaseWithDefault(t *testing.T) {
+	w := fillDefaultBase([]waitingPR{
+		{PR: "#9", Base: "", Reviewed: true},
+		{PR: "#10", Base: "main", Reviewed: true},
+	}, "main")
+	ns := trainNudges(w)
+	if len(ns) != 1 || ns[0].Base != "main" || len(ns[0].PRs) != 2 {
+		t.Fatalf("nudges = %+v, want one train of two on main", ns)
+	}
+}
