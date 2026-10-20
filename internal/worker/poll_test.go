@@ -799,6 +799,15 @@ func TestClassifyLoginExpiredIsBlockedOnTheAccount(t *testing.T) {
 	}
 }
 
+// #1209: a pane that merely quotes "Please run /login" (a doc, a diff, a brief)
+// is not logged out; only the "Login expired" status line is.
+func TestClassifyQuotedLoginHintIsNotLoggedOut(t *testing.T) {
+	st, _ := ClassifyFor("claude", "the docs say: Please run /login to sign in\n", false, 0, "")
+	if st == StateBlocked {
+		t.Errorf("quoted /login hint read as %q", st)
+	}
+}
+
 // #1156 x #1171: the background-task footer only overrides the final idle
 // outcome, so a logged-out pane that carries it still reads BLOCKED.
 func TestClassifyLoggedOutWithTaskFooterStaysBlocked(t *testing.T) {
