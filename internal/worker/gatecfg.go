@@ -9,7 +9,6 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -48,12 +47,12 @@ type GateConfig struct {
 	isolateErr error
 }
 
-// LoadGateConfig reads root's config once.
-func LoadGateConfig(root string) GateConfig {
-	return ParseGateConfig(config.Load(rotatree.Config(root)))
+// GateConfig reads root's config once, through Env.Config.
+func (e Env) GateConfig(root string) GateConfig {
+	return ParseGateConfig(e.WithDefaults().Config(root))
 }
 
-// ParseGateConfig is LoadGateConfig on a config tree already read. It is the
+// ParseGateConfig is Env.GateConfig on a config tree already read. It is the
 // one place that knows the key names.
 func ParseGateConfig(cfg any) GateConfig {
 	c := GateConfig{

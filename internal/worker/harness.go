@@ -61,18 +61,18 @@ func (e Env) probe() harness.Probe {
 // ModelApplies reports whether a chosen model reaches the default harness's
 // launch command: the default command always takes it, a custom
 // round.workerCommand only through the {model} placeholder.
-func ModelApplies(root string) bool { return ModelAppliesTo(root, harness.Default) }
+func (e Env) ModelApplies(root string) bool { return e.ModelAppliesTo(root, harness.Default) }
 
 // ModelAppliesTo is ModelApplies for a harness kind.
-func ModelAppliesTo(root, kind string) bool {
+func (e Env) ModelAppliesTo(root, kind string) bool {
 	h, ok := harness.Lookup(kind)
-	return ok && h.ModelApplies(loadConfig(root))
+	return ok && h.ModelApplies(e.WithDefaults().Config(root))
 }
 
 // NeedsModel reports whether a launch of kind needs a tier model.
-func NeedsModel(root, kind string) bool {
+func (e Env) NeedsModel(root, kind string) bool {
 	h, ok := harness.Lookup(kind)
-	return !ok || h.NeedsModel(loadConfig(root))
+	return !ok || h.NeedsModel(e.WithDefaults().Config(root))
 }
 
 // CommonDir is the git common dir of root, absolute and symlink-resolved: the
@@ -105,7 +105,7 @@ func (e Env) Preflight(ctx context.Context, root, kind, slot, model string) (har
 	var accts []harness.HomeAccount
 	load := map[string]int{}
 	if !h.WorkAccounts() {
-		for _, a := range h.Accounts(loadConfig(root)).Entries {
+		for _, a := range h.Accounts(e.Config(root)).Entries {
 			accts = append(accts, harness.HomeAccount{Name: a.Name, Home: a.Dir})
 		}
 		for _, s := range reg.Slots() {
@@ -114,7 +114,7 @@ func (e Env) Preflight(ctx context.Context, root, kind, slot, model string) (har
 			}
 		}
 	}
-	launch, _, err := launchLine(root, h, model)
+	launch, _, err := e.launchLine(root, h, model)
 	if err != nil {
 		return harness.Setup{}, err
 	}
@@ -128,8 +128,8 @@ func (e Env) Preflight(ctx context.Context, root, kind, slot, model string) (har
 
 // launchLine is the launch command of h for a chosen model, with the problem
 // that makes it unusable, as the verbs report it.
-func launchLine(root string, h harness.Harness, model string) (launch string, hit harness.ResumeHit, err error) {
-	launch, err = h.Launch(loadConfig(root), model)
+func (e Env) launchLine(root string, h harness.Harness, model string) (launch string, hit harness.ResumeHit, err error) {
+	launch, err = h.Launch(e.Config(root), model)
 	if err == nil {
 		hit, err = h.Resume(launch)
 	}

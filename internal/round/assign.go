@@ -266,7 +266,7 @@ func touches(be backlog.Backend, id string) string {
 func (e Env) tryItBrief(ctx context.Context, root string, be backlog.Backend, id string) (steps, withheld string) {
 	// The source is the one the gate reads (issues.source of the config), not a
 	// guess from the backend: the gate decides on it.
-	src := worker.LoadGateConfig(root).Tracker.Source
+	src := e.workerEnv().GateConfig(root).Tracker.Source
 	var trust worker.IssueTrust
 	if e.Forge != nil {
 		trust, _ = e.Forge.(worker.IssueTrust)

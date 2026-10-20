@@ -444,14 +444,14 @@ type gateInput struct {
 	ledger testledger.Ledger // .rota/test-ledger.json
 }
 
-// loadGateInput is the disk default of Env.GateInput.
+// loadGateInput is the default of Env.GateInput: Env.Config and the ledger on disk.
 //
 // Read before the merge: the branch lands in root and may carry its own
 // .rota/config.json or test-ledger.json, which must not decide how it is
 // verified. The gate and the train both call this ahead of any merge and carry
 // the value through, never re-reading root afterwards.
-func loadGateInput(root string) (gateInput, error) {
-	in := gateInput{cfg: LoadGateConfig(root)}
+func (e Env) loadGateInput(root string) (gateInput, error) {
+	in := gateInput{cfg: e.GateConfig(root)}
 	var err error
 	if _, err = in.cfg.Where(); err != nil {
 		return in, err

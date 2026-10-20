@@ -925,7 +925,7 @@ func (e Env) openPRsByHead(ctx context.Context, root string, reg Registry, polle
 	if _, code := e.git(root, "remote", "get-url", "origin"); code != 0 {
 		return nil
 	}
-	cfg := LoadGateConfig(root)
+	cfg := e.GateConfig(root)
 	provider := e.detectProvider(ctx, root, "", cfg.Tracker.Provider)
 	if provider == tracker.ProviderLocal {
 		return nil
@@ -955,7 +955,7 @@ func (e Env) prMerged(ctx context.Context, root string, s *Slot) bool {
 	if _, code := e.git(root, "remote", "get-url", "origin"); code != 0 {
 		return false
 	}
-	cfg := LoadGateConfig(root)
+	cfg := e.GateConfig(root)
 	provider := e.detectProvider(ctx, root, "", cfg.Tracker.Provider)
 	if provider == tracker.ProviderLocal {
 		return false

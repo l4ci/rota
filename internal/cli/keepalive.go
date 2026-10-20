@@ -213,7 +213,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 			if *configDir != "" {
 				opts.ConfigDir = *configDir
 			}
-			opts.Account = worker.AccountOf(root, opts.ConfigDir)
+			opts.Account = c.deps().WorkerAccounts().AccountOf(root, opts.ConfigDir)
 			env.UsageMarker = keepalive.UsageMarker(cd, root)
 			env.Choose = usageChoose(ctx, c, root)
 			env.Record = keepalive.UsageRecorder(root, c.deps().Now)

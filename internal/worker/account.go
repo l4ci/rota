@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/rotatree"
 	"io"
 	"math"
 	"net/http"
@@ -84,8 +83,8 @@ func (a *Accounts) getenv(k string) string { return a.Env.WithDefaults().Getenv(
 type acct struct{ name, configDir string }
 
 // Configured returns round.accounts of the project config.
-func Configured(root string) []acct {
-	cfg := config.Load(rotatree.Config(root))
+func (a *Accounts) Configured(root string) []acct {
+	cfg := a.Env.WithDefaults().Config(root)
 	var out []acct
 	for _, a := range config.Accounts(cfg) {
 		out = append(out, acct{a.Name, a.ConfigDir})
@@ -100,7 +99,7 @@ func (a *Accounts) Meters(ctx context.Context, root string) []Meter {
 		fetch = a.defaultFetch
 	}
 	var rows []Meter
-	for _, ac := range Configured(root) {
+	for _, ac := range a.Configured(root) {
 		if ac.name == "" {
 			continue
 		}
@@ -450,8 +449,8 @@ func ConfigDirMismatch(orchDir string, accts []config.Account) string {
 
 // AccountOf names the round.accounts entry whose configDir is dir, "" when
 // none is.
-func AccountOf(root, dir string) string {
-	for _, ac := range Configured(root) {
+func (a *Accounts) AccountOf(root, dir string) string {
+	for _, ac := range a.Configured(root) {
 		if ac.configDir != "" && SameConfigDir(ac.configDir, dir) {
 			return ac.name
 		}
@@ -516,7 +515,7 @@ func (a *Accounts) Assign(ctx context.Context, root, slot, account string) (name
 		account = picked
 	}
 	var match *acct
-	for _, ac := range Configured(root) {
+	for _, ac := range a.Configured(root) {
 		if ac.name == account {
 			c := ac
 			match = &c

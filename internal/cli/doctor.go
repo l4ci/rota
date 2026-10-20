@@ -116,7 +116,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		}
 	}
 	in.Slots, in.CwdOf = doctorSlotBlocks(root), procCwd(ctx, d.Proc)
-	in.NothingToVerify = worker.NothingToVerify(root)
+	in.NothingToVerify = d.workerEnv().NothingToVerify(root)
 	in.AgentProblems = agents.Problems(root)
 	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now(), d.DoctorDisk, d.Getenv)
 	if on, err := config.SwitchOnUsage(cfg); err == nil {

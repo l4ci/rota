@@ -39,7 +39,7 @@ func testRun(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		gc := worker.LoadGateConfig(root)
+		gc := c.deps().workerEnv().GateConfig(root)
 		if tier == "full" {
 			gc.WarnLegacy(c.Stderr)
 		}

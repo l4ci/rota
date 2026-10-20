@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 
@@ -65,8 +64,8 @@ type SessionOpts struct {
 // operator runs in `auto`, not the workers' skip-permissions mode: it is the
 // process that merges into the cycle branch and talks to the user, and the one
 // window a human is actually watching, so it keeps a gate the workers do not.
-func operatorCommand(root string) string {
-	cfg := config.Load(rotatree.Config(root))
+func (e Env) operatorCommand(root string) string {
+	cfg := e.Config(root)
 	if v, ok := config.Lookup(cfg, "round.operatorCommand"); ok {
 		if s, _ := v.(string); s != "" {
 			return s
@@ -118,7 +117,7 @@ func (e Env) SessionEnsure(ctx context.Context, root string, o SessionOpts) (Ses
 		abs = root
 	}
 	err = op.EnsureOperator(ctx, host.OperatorOpts{Session: o.Session, Root: abs,
-		Command: operatorCommand(root), Instruction: o.BodyFile, BootTimeout: o.BootTimeout})
+		Command: e.operatorCommand(root), Instruction: o.BodyFile, BootTimeout: o.BootTimeout})
 	if err != nil {
 		w := fail(exitcode.ExitUnavailable, err.Error())
 		switch {
