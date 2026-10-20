@@ -365,11 +365,14 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	// its pane.
 	var payload strings.Builder
 	payload.WriteString(signature + "\n")
+	// relaySeq numbers the relay in the slot's log. Its `[relay K]` line is how
+	// the classifier tells this relay's echo from an earlier one's (#1017).
+	relaySeq := len(s.Relays()) + 1
 	if o.Relay {
 		fmt.Fprintf(&payload, "[ORCHESTRATOR RELAY — this text was forwarded by the /rota-work orchestrator.\n"+
 			"It is NOT the maintainer speaking to you directly. If you cite it in your PR\n"+
 			"body, attribute it as 'orchestrator relay round %d', never as a maintainer\n"+
-			"sign-off in your session.]\n\n", round)
+			"sign-off in your session.]\n[relay %d]\n\n", round, relaySeq)
 	}
 	text := string(brief)
 	// An already-signed brief is not signed twice.
@@ -392,6 +395,11 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	// task dispatch starts a fresh session and has nothing pending.
 	var sendErr error
 	handled := false
+	if o.Relay {
+		if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.SetRelayPending(relaySeq, stamp.Format(e.Now())) }); err != nil {
+			return res, err
+		}
+	}
 	if rs := h.Capabilities().Resubmitter; rs != nil && o.Relay && s.Unsent() {
 		handled, sendErr = rs.SubmitPending(ctx, o.Slot, handle, tmp.Name())
 	}
@@ -402,6 +410,9 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	// only on a change: a clean send leaves the registry untouched.
 	if unsent := errors.Is(sendErr, host.ErrNotSubmitted); unsent != s.Unsent() {
 		UpdateSlot(root, o.Slot, func(s *Slot) { s.SetUnsent(unsent) })
+	}
+	if o.Relay && (errors.Is(sendErr, host.ErrDialogOpen) || errors.Is(sendErr, host.ErrDraftOnPrompt)) {
+		UpdateSlot(root, o.Slot, func(s *Slot) { s.ClearRelayPending() }) // nothing went out
 	}
 	// Log the relay once it was (or may have been) sent. A stall does not prove
 	// the text was lost, and the gate must not call a delivered relay unlogged;

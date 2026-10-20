@@ -288,7 +288,9 @@ echo idle > "$FAKE/status"
 printf 'ROTA-DONE w1 rota-worker/w1\n' > "$FAKE/pane.txt"
 hd "$ROTA_BIN" --json worker poll w1 --settle 0 >/dev/null
 [ "$(slot_field w1 pr)" = "None" ] || fail "a branch name in ROTA-DONE must not become slot.pr"
-printf 'ROTA-DONE w1 https://github.com/o/r/pull/9\n' > "$FAKE/pane.txt"
+# The stalled relay above was logged: a done counts only once its echo is in the pane (#1017).
+K=$(slot_field w1 relayPending)
+printf -- '--- ORCHESTRATOR (round 1) ---\n[relay %s]\n\n● ROTA-DONE w1 https://github.com/o/r/pull/9\n' "$K" > "$FAKE/pane.txt"
 hd "$ROTA_BIN" --json worker poll w1 --settle 0 >/dev/null
 [ "$(slot_field w1 state)" = "done" ] || fail "poll did not write state=done"
 [ "$(slot_field w1 pr)" = "https://github.com/o/r/pull/9" ] || fail "poll did not record the PR URL in slot.pr"
