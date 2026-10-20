@@ -553,6 +553,10 @@ func (t *trainRun) behaviourStage() (bool, error) {
 	}
 	for i := 0; i < t.passing; i++ {
 		m := res.Members[i]
+		// Files an earlier member's steps wrote must not reach this member's run.
+		if _, code := e.git(t.scratch, "clean", "-q", "-fdx"); code != 0 {
+			return t.broke("git clean failed in the scratch tree")
+		}
 		if _, code := e.git(t.scratch, "checkout", "-q", "-f", "--detach", t.tips[i+1]); code != 0 {
 			return t.broke("git checkout " + t.tips[i+1] + " failed in the scratch tree")
 		}
@@ -562,8 +566,17 @@ func (t *trainRun) behaviourStage() (bool, error) {
 			return true, err
 		}
 		res.Notes = append(res.Notes, gr.Notes...)
+		// The gate read the head again; its verdict and comment belong to the
+		// head the steps ran on, so a head that moved since plan ends the train.
+		if cur, _ := e.git(root, "rev-parse", t.headRef(m)); cur != t.heads[i] {
+			t.res, _ = e.trainMoved(*res, m.Target, fmt.Sprintf("%s moved from %s to %s while the train ran its Try it steps", t.headRef(m), strutil.ShortSHA(t.heads[i]), strutil.ShortSHA(cur)))
+			return true, nil
+		}
 		if gr.OK() {
 			continue
+		}
+		for j := range res.Members { // an earlier bisect culprit is outside the landed range now
+			res.Members[j].Culprit = false
 		}
 		res.Members[i].Culprit = true
 		res.Verdict, res.Culprit, res.CulpritGate, res.Err = gr.Verdict, m.Target, gr, gr.Err

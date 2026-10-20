@@ -28,6 +28,9 @@ func behaviourTrain(t *testing.T, bodies ...string) (*world, func(TrainOpts) (Tr
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[`+strings.Join(slots, ",")+`]}`), 0o644)
 	return w, func(o TrainOpts) (TrainResult, error) {
 		o.Targets = branches
+		if o.ItemBody != nil {
+			return w.train(o)
+		}
 		o.ItemBody = func(issue string) (string, bool, error) {
 			var n int
 			if _, err := fmt.Sscanf(issue, "%d", &n); err != nil || n < 1 || n > len(bodies) {
@@ -112,6 +115,58 @@ func TestTrainBehaviourFirstMemberFailingLandsNothingUnderLandGreen(t *testing.T
 		"## Try it\n\n- echo fine\n")
 	res, err := train(TrainOpts{LandGreen: true})
 	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b1" || len(res.Landed) != 0 || w.onMain("b1.txt") {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+func TestTrainBehaviourFailureReplacesAnEarlierBisectCulprit(t *testing.T) {
+	w, train := behaviourTrain(t,
+		"## Try it\n\n- echo fine\n",
+		"## Try it\n\n- exit 1\n",
+		"## Try it\n\n- echo fine\n")
+	w.setConfig(`{"issues":{"source":"file"},"test":{"full":["test ! -f b3.txt"]}}`)
+	res, err := train(TrainOpts{LandGreen: true})
+	if err != nil || res.Culprit != "b2" || strings.Join(res.Landed, ",") != "b1" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	var culprits []string
+	for _, m := range res.Members {
+		if m.Culprit {
+			culprits = append(culprits, m.Target)
+		}
+	}
+	if strings.Join(culprits, ",") != "b2" {
+		t.Errorf("members flagged culprit: %v", culprits)
+	}
+}
+
+func TestTrainBehaviourStepFilesDoNotReachTheNextMember(t *testing.T) {
+	_, train := behaviourTrain(t,
+		"## Try it\n\n- touch leak.txt\n",
+		"## Try it\n\n- test ! -f leak.txt\n")
+	res, err := train(TrainOpts{})
+	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2" {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+func TestTrainBehaviourHeadMovedBeforeTheRunEndsTheTrain(t *testing.T) {
+	w, train := behaviourTrain(t,
+		"## Try it\n\n- echo fine\n",
+		"## Try it\n\n- echo fine\n")
+	moved := false
+	res, err := train(TrainOpts{ItemBody: func(issue string) (string, bool, error) {
+		if issue == "2" && !moved { // b2's gate is reading its item: push a commit to b2
+			moved = true
+			c := gitq(t, w.dir, "commit-tree", "b2^{tree}", "-p", "b2", "-m", "late")
+			gitq(t, w.dir, "update-ref", "refs/heads/b2", strings.TrimSpace(c))
+		}
+		if issue == "2" { // its steps fail, but on a head they never ran on: base-moved, not verify-failed
+			return "## Try it\n\n- exit 1\n", true, nil
+		}
+		return "## Try it\n\n- echo fine\n", true, nil
+	}})
+	if err != nil || res.Verdict != GateBaseMoved || res.Culprit != "b2" || len(res.Landed) != 0 || w.onMain("b1.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
