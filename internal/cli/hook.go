@@ -177,7 +177,11 @@ func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bo
 	if hc.set, err = hook.LoadSettings(hc.cfg); err != nil {
 		return hc, false // a bad value is a pass, never a block
 	}
-	hc.handoff = handoffFile(hc.root, hc.cfg)
+	// The git base lookup is only needed by the orchestrator, SessionStart and
+	// the auto guard; an off or warn guard session skips it on every prompt.
+	if hc.who.Orchestrator || !anySession || config.ContextGuard(hc.cfg) == hook.GuardAuto {
+		hc.handoff = handoffFile(hc.root, hc.cfg)
+	}
 	return hc, true
 }
 
@@ -279,7 +283,7 @@ func guardStop(hc hookContext, sid string) (d hook.StopDecision, ok bool) {
 	if err != nil || !found {
 		return d, false
 	}
-	d = hook.DecideGuardStop(st, hc.set, hc.now())
+	d = hook.DecideGuardStop(st, hc.set, hook.StatHandoff(hc.handoff), hc.now())
 	if d.Persist {
 		_ = hook.UpdateState(path, func(cur hook.State, found bool) hook.State {
 			if !found {

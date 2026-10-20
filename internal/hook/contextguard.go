@@ -58,9 +58,10 @@ func DecideGuardPrompt(st State, set Settings, now time.Time) GuardPromptDecisio
 // threshold with a request for /rota-pause, at most set.HandoffMaxBlks times
 // per crossing, counting every block so a re-entered stop (stop_hook_active)
 // is held no more than a first one. A reading below the threshold starts a new
-// crossing. Past the cap the stop passes, so a session that cannot pause is
-// never held.
-func DecideGuardStop(st State, set Settings, now time.Time) StopDecision {
+// crossing. A fresh handoff note written since the last block means the session
+// obeyed, so the stop passes. Past the cap the stop passes, so a session that
+// cannot pause is never held.
+func DecideGuardStop(st State, set Settings, ho Handoff, now time.Time) StopDecision {
 	d := StopDecision{State: st}
 	pct, ok := guardReading(st, set, now)
 	if !ok {
@@ -74,6 +75,13 @@ func DecideGuardStop(st State, set Settings, now time.Time) StopDecision {
 		return d
 	}
 	if st.HandoffFailed {
+		return d
+	}
+	var blockedAt time.Time
+	if st.BlockedAt != "" {
+		blockedAt, _ = time.Parse(time.RFC3339, st.BlockedAt)
+	}
+	if ho.Fresh(time.Duration(set.HandoffMaxAge)*time.Second, now) && !ho.ModTime.Before(blockedAt) {
 		return d
 	}
 	if st.HandoffBlocks >= set.HandoffMaxBlks {
