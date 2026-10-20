@@ -590,6 +590,10 @@ func completeItem(be backlog.Backend, ref string, in backlog.CompleteInput, gist
 func checkGist(be backlog.Backend, ref, id, gist string) (*backlog.Item, error) {
 	it, err := be.Get(ref)
 	if err != nil {
+		if gist == "" {
+			// Nothing to check: Complete reports an unknown item in its own words.
+			return nil, nil
+		}
 		return nil, err
 	}
 	dec, err := round.DecisionOf(be.Capabilities(), *it)

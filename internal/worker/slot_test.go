@@ -114,3 +114,12 @@ func TestSlotAttemptLifecycle(t *testing.T) {
 		t.Errorf("unbind drops the attempt: %q", s.Attempt())
 	}
 }
+
+func TestSlotParkClearsFinding(t *testing.T) {
+	s := boundSlot()
+	s.SetFinding("42")
+	s.Park(false)
+	if s.Finding() != "" {
+		t.Errorf("a parked slot keeps no finding: %s", render(t, s))
+	}
+}
