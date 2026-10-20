@@ -8,8 +8,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
-	"os"
 	"sort"
 	"strings"
 
@@ -185,13 +183,11 @@ func fingerprint(c *Ctx, fs *flag.FlagSet, args []string) string {
 		if strings.HasSuffix(f.Name, "-file") && v != "" {
 			var b []byte
 			var err error
-			if v == "-" {
-				if c.Stdin != nil {
-					b, err = io.ReadAll(c.Stdin)
-					c.Stdin = bytes.NewReader(b)
-				}
-			} else {
-				b, err = os.ReadFile(v)
+			if v != "-" || c.Stdin != nil {
+				b, err = readBodyInput(c, f.Name, v, ExitUsage)
+			}
+			if v == "-" && err == nil {
+				c.Stdin = bytes.NewReader(b)
 			}
 			if err != nil {
 				v += "#unreadable"

@@ -294,9 +294,9 @@ func itemNoteAdd(fs *flag.FlagSet) RunFunc {
 		if *bodyFile == "" {
 			return Result{}, Usage("--body-file is required")
 		}
-		raw, err := readInputFile(c, *bodyFile)
+		raw, err := readBodyInput(c, "body-file", *bodyFile, ExitResolution)
 		if err != nil {
-			return Result{}, readInputErr("body-file", *bodyFile, err)
+			return Result{}, err
 		}
 		text := decodeText(raw)
 		if pystr.Strip(text) == "" {
