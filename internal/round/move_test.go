@@ -809,6 +809,42 @@ func TestTransferToHumanLabelsAndDispatchesNothing(t *testing.T) {
 	}
 }
 
+// A needs-info issue stays in the list but is not ready, with the label as the reason.
+func TestCandidatesMarkNeedsInfoNotReady(t *testing.T) {
+	f := newMoveFx(t)
+	f.forge.labels = map[int][]string{13: {NeedsInfoLabel}}
+	find := func() Candidate {
+		cands, err := f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeMilestone})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range cands {
+			if c.ID == "13" {
+				return c
+			}
+		}
+		t.Fatalf("13 missing: %v", ids(cands))
+		return Candidate{}
+	}
+	c := find()
+	if c.Ready() {
+		t.Fatal("a needs-info issue must not be ready")
+	}
+	named := false
+	for _, ch := range c.Checks {
+		named = named || (ch.Name == NeedsInfoLabel && !ch.OK && len(ch.Detail) > 0)
+	}
+	if !named {
+		t.Errorf("no needs-info check with a reason: %+v", c.Checks)
+	}
+	f.forge.labels[13] = nil
+	for _, ch := range find().Checks {
+		if ch.Name == NeedsInfoLabel {
+			t.Errorf("clearing the label drops the check: %+v", ch)
+		}
+	}
+}
+
 // ---- reclaim ----------------------------------------------------------------
 
 func TestReclaimDeadSlotParksReleasesAndClearsTheHandle(t *testing.T) {
