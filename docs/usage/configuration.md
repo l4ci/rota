@@ -134,6 +134,14 @@ Opt-in, `false` by default. With `false`, [`/rota-brainstorm`](brainstorm.md) is
 rota config set brainstorm.edgeProbe true
 ```
 
+## research.packageCheck
+
+Opt-in, `false` by default. With `false`, no skill makes a registry call. With `true`, [`/rota-spike`](spikes.md) Step 2 and [`/rota-plan`](vision-and-plans.md) Step 2 look up each new package they would recommend on its registry (npm, PyPI, crates.io, Go proxy), so **it makes network calls**. A package that is not on the registry is `missing` and is not recommended. One first published under 90 days ago, or with no source repository link, is `suspect`: it is listed with its reason and appears in a plan or finding only after you say yes. Dependencies already in the repo are not checked. The verdicts are defined in `skills/references/package-check.md`.
+
+```bash
+rota config set research.packageCheck true
+```
+
 ## refactor.confirmBeforeExecute
 
 Applies to `/rota-refactor --fix` only; the default findings run files issues and writes no code. When `true` (default), `--fix` confirms the list of candidates before implementing them. Set to `false` to fix without that pause.
