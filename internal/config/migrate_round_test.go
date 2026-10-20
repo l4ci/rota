@@ -181,6 +181,20 @@ func TestMigrateRoundKeysCorruptLocal(t *testing.T) {
 	}
 }
 
+func TestMigrateRoundKeysReadErrorIsNotCorrupt(t *testing.T) {
+	root := writeLayers(t, `{"work":{"dispatch":"tmux"}}`, "-")
+	if err := os.Mkdir(localPath(root), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := MigrateRoundKeysFiles(root, true)
+	if err == nil || errors.Is(err, ErrCorrupt) {
+		t.Fatalf("err = %v, want a read error that is not ErrCorrupt", err)
+	}
+	if !strings.Contains(err.Error(), "config.local.json") {
+		t.Errorf("err = %v, want it to name config.local.json", err)
+	}
+}
+
 func TestMigrateRoundKeysMissingAndEmptyLayers(t *testing.T) {
 	for name, layers := range map[string][2]string{
 		"no files":          {"-", "-"},
