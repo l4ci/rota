@@ -38,6 +38,7 @@ type Status struct {
 var (
 	checkboxRe = regexp.MustCompile(`^(\s*[-*]\s+\[[ xX]\]\s+)(.*)$`)
 	idRe       = regexp.MustCompile(`^AC-(\d+):\s*`)
+	humanRe    = regexp.MustCompile(`(?i)\(human\)`)
 	markSep    = " · "
 )
 
@@ -229,3 +230,8 @@ func Coverage(body string, marks []Mark, rows []Row) []Status {
 	}
 	return out
 }
+
+// Human reports whether a criterion's text carries the `(human)` token, the
+// mark for a criterion only a person can judge. The token does not touch the
+// AC-n id, so Parse, IDs and Number read such a line as any other.
+func Human(text string) bool { return humanRe.MatchString(text) }

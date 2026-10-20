@@ -39,7 +39,7 @@ You can run `/rota-review` at any time on a branch, not only before shipping. On
 /rota-ship
 ```
 
-**Default flow:** branch check → `/rota-review` (unless `ship.review` is `none`) → second-opinion gate (if `ship.secondOpinion` is `true`) → `/rota-qa` gate (if `ship.qa` is `true`) → build PR body → open PR or merge → close resolved items (on the issue backend the PR merge closes them).
+**Default flow:** branch check → `/rota-review` (unless `ship.review` is `none`) → second-opinion gate (if `ship.secondOpinion` is `true`) → `/rota-qa` gate (if `ship.qa` is `true`) → UAT gate (if `ship.uat` is `true`) → build PR body → open PR or merge → close resolved items (on the issue backend the PR merge closes them).
 
 The review gate behaves as follows:
 
@@ -65,6 +65,10 @@ Verdict routes per `qa.gate`:
 | `"blocking"` | continue silently | ask you how to proceed | stop the ship |
 
 `INFRA-FAIL` (dev server / creds / binary missing) is always advisory regardless of `qa.gate`. See [product QA](qa.md) for the full strategy file format.
+
+### UAT gate (opt-in)
+
+When `ship.uat: true`, `/rota-ship` runs [`/rota-qa uat <ID>`](qa.md#uat-human-acceptance) for each item on the branch, after review and the QA gate and before the merge or PR. It lists the item's acceptance criteria, auto-passes the ones a PASS test proof row covers and asks you about the rest. A criterion marked `(human)` in the item body always comes to you: `- [ ] AC-4: the error copy reads clearly (human)`. A failed criterion becomes a new captured item that names the original under `Related:`; it does not block the ship. Round PRs never get this gate: `rota worker gate` and the round merge path ignore `ship.uat`.
 
 Use `/rota-ship` to integrate finished work. Finish the implementation cycle in [`/rota-work`](running-work.md) first; don't call `/rota-ship` mid-implementation.
 

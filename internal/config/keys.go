@@ -63,6 +63,7 @@ var Keys = []Key{
 	k("ship.secondOpinion", false, true, TypeBool, "Opt-in fresh-eyes adversarial gate in /rota-ship Step 3.5."),
 	k("ship.secondOpinionRunner", "subagent", true, TypeEnum, "Who runs the /rota-ship second-opinion gate. The codex value was removed in 5.0: /rota-ship notes it and runs the subagent in advisory mode.", "subagent"),
 	k("ship.qa", false, true, TypeBool, "Opt-in product-QA gate: /rota-ship runs /rota-qa run after review and before merge or PR."),
+	k("ship.uat", false, true, TypeBool, "Opt-in human acceptance walk-through: /rota-ship runs /rota-qa uat after review and before merge or PR. Never part of the round merge gate."),
 	k("qa.gate", "advisory", true, TypeEnum, "How /rota-ship treats a /rota-qa verdict. advisory surfaces findings and never blocks; blocking halts the ship on FAIL.", "advisory", "blocking"),
 	k("qa.afterWork", false, true, TypeBool, "Whether /rota-work runs /rota-qa after a cycle when touched files match a QA target's watch globs."),
 	k("autonomy.level", "off", true, TypeEnum, "How much rota chains on its own. off: skills suggest the next step. auto: chain one hop, then stop. The old loop value was removed.", "off", "auto"),
