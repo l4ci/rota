@@ -41,7 +41,7 @@ func Check(ctx context.Context, dir, name string, sec *Secrets, testers map[stri
 	}
 	if !ok {
 		return Diagnosis{State: StateUnknown, Detail: fmt.Sprintf("connection %q is not defined on this machine", name),
-			Hint: fmt.Sprintf("run: rota connect add %s --kind jira|linear --site <url>", name)}
+			Hint: fmt.Sprintf("run: rota connect add %s --kind jira|linear|itsaplan --site <url>", name)}
 	}
 	secret, store, err := sec.Resolve(ctx, name)
 	if err != nil {

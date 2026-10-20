@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -94,6 +95,40 @@ func TestGateRunMarkerOfDeadProcessIsReplaced(t *testing.T) {
 	release()
 }
 
+// A marker whose pid is alive but belongs to a different process (pid reuse
+// after a crash) does not block; the same process still does.
+func TestGateRunMarkerOfReusedPidIsReplaced(t *testing.T) {
+	ppid := os.Getppid()
+	start, ok := procStartTicks(ppid)
+	if !ok {
+		t.Skip("no /proc start time on this platform")
+	}
+	for _, c := range []struct {
+		name    string
+		start   uint64
+		blocked bool
+	}{{"reused", start + 1, false}, {"same process", start, true}} {
+		t.Run(c.name, func(t *testing.T) {
+			common := t.TempDir()
+			os.MkdirAll(rotastate.Dir(common), 0o755)
+			body := fmt.Sprintf("%d %d\n", ppid, c.start)
+			if err := os.WriteFile(rotastate.File(common, "gate-pr1")+".pid", []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			other, release, err := claimGateRun(common, "pr1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.blocked != (other == ppid) {
+				t.Fatalf("other=%d, blocked want %v", other, c.blocked)
+			}
+			if release != nil {
+				release()
+			}
+		})
+	}
+}
+
 // Only exit 2 means origin is absent. A git that cannot run is reported as
 // that, never as a missing remote.
 func TestGateRemoteProbeFailureIsNotAMissingOrigin(t *testing.T) {
@@ -111,5 +146,34 @@ func TestGateRemoteProbeFailureIsNotAMissingOrigin(t *testing.T) {
 	}
 	if strings.Contains(res.Err, "no 'origin' remote") || !strings.Contains(res.Err, "could not run git") {
 		t.Errorf("want the real cause, got %q", res.Err)
+	}
+}
+
+// #1125: the incident path for the false "no origin" of #1118. A second gate
+// resolves the common dir, queues on the land lock, and finds its root gone
+// only once it holds the lock (the first gate merged and removed it). The root
+// is removed inside the lock, after the registry read, just before the remote
+// probe, and the real git runner then fails to start in the gone cwd. Before
+// #1118 stepRemote read any non-zero exit as a missing origin, and runGit maps
+// a failed start to 127, so this exact state printed "no 'origin' remote".
+// (A root gone before the lock fails earlier, at the git-common-dir lookup or
+// the registry read, so that state cannot reach stepRemote.)
+func TestGateGoneRootInsideLockIsNotAMissingOrigin(t *testing.T) {
+	w := newWorld(t, ghURL)
+	env := w.env(false).withDefaults()
+	env.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		if len(args) > 0 && args[0] == "remote" {
+			if err := os.RemoveAll(w.dir); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return git.Exec(ctx, dir, args...)
+	}
+	res, err := env.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+	if err != nil || res.Verdict != GateCheckBroke {
+		t.Fatalf("verdict %q err %v", res.Verdict, err)
+	}
+	if strings.Contains(res.Err, "no 'origin' remote") || !strings.Contains(res.Err, "could not run git") {
+		t.Errorf("want a git run failure, got %q", res.Err)
 	}
 }
