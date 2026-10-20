@@ -645,20 +645,19 @@ func RecordBounceIn(env Env, m *RoundMemo, root, issue, slot, head string) (int,
 	return n, err
 }
 
-// RecordBounceCapped is RecordBounceIn that refuses inside the registry lock
-// once the item already holds max bounces (0 = no cap): capped reports the
-// refusal and n is the unchanged count. The check and the increment share one
-// lock, so concurrent callers never take the count past max.
-func RecordBounceCapped(env Env, m *RoundMemo, root, issue, slot, head string, max int) (n int, capped bool, err error) {
-	n, _, capped, err = recordBounce(env, m, root, issue, slot, head, max)
-	return n, capped, err
+// RecordBounceCapped is RecordBounceCounted that refuses inside the registry
+// lock once the item already holds limit bounces (0 = no cap): capped reports
+// the refusal and n is the unchanged count. The check and the increment share
+// one lock, so concurrent callers never take the count past limit.
+func RecordBounceCapped(env Env, m *RoundMemo, root, issue, slot, head string, limit int) (n int, counted, capped bool, err error) {
+	return recordBounce(env, m, root, issue, slot, head, limit)
 }
 
 // recordBounce counts one bounce per (issue, review head). That is a semantic
 // dedupe across callers (review-relay and bounce both reach it), so it is not a
 // request-id receipt: a retry mints a fresh id, yet must still count once. It
 // stays here, and receiptedVerbs in internal/cli leaves round bounce out.
-func recordBounce(env Env, m *RoundMemo, root, issue, slot, head string, max int) (n int, counted, capped bool, err error) {
+func recordBounce(env Env, m *RoundMemo, root, issue, slot, head string, limit int) (n int, counted, capped bool, err error) {
 	defer func() {
 		if err == nil && counted {
 			LedgerNoteIn(env, m, root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Slot: slot, Detail: ledger.Detail("count", n)})
@@ -669,7 +668,7 @@ func recordBounce(env Env, m *RoundMemo, root, issue, slot, head string, max int
 		b := bouncesOf(doc)
 		heads := bounceHeadsOf(doc)
 		n = bounceCount(b, issue)
-		if max > 0 && n >= max {
+		if limit > 0 && n >= limit {
 			capped = true
 			return
 		}

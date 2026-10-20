@@ -728,7 +728,7 @@ func TestRecordBounceCappedConcurrentNeverExceedsMax(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			n, c, err := RecordBounceCapped(Env{}, nil, root, "31", "", fmt.Sprintf("head%d", i), max)
+			n, _, c, err := RecordBounceCapped(Env{}, nil, root, "31", "", fmt.Sprintf("head%d", i), max)
 			if err != nil || n > max {
 				t.Errorf("caller %d: n=%d err=%v", i, n, err)
 			}
@@ -746,10 +746,10 @@ func TestRecordBounceCappedConcurrentNeverExceedsMax(t *testing.T) {
 	if n := LoadRegistryTolerant(root).Bounces("31"); n != max {
 		t.Errorf("registry holds %d bounces, want %d", n, max)
 	}
-	if n, c, _ := RecordBounceCapped(Env{}, nil, root, "31", "", "late", max); !c || n != max {
+	if n, _, c, _ := RecordBounceCapped(Env{}, nil, root, "31", "", "late", max); !c || n != max {
 		t.Errorf("at the cap: n=%d capped=%v", n, c)
 	}
-	if n, c, _ := RecordBounceCapped(Env{}, nil, root, "31", "", "late", 0); c || n != max+1 {
+	if n, _, c, _ := RecordBounceCapped(Env{}, nil, root, "31", "", "late", 0); c || n != max+1 {
 		t.Errorf("cap 0 is off: n=%d capped=%v", n, c)
 	}
 }

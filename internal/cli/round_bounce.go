@@ -133,7 +133,8 @@ func recordBounce(env worker.Env, root, issue, slot, head string, max int) (n in
 		return 0, false, &Error{Exit: ExitRefused, Message: fmt.Sprintf("unknown slot %q: not in the worker pool", slot),
 			Hint: "see `rota worker pool list` for the slot names"}
 	}
-	return worker.RecordBounceCapped(env, nil, root, issue, slot, head, max)
+	n, _, capped, err = worker.RecordBounceCapped(env, nil, root, issue, slot, head, max)
+	return n, capped, err
 }
 
 func maxText(max int) string {
