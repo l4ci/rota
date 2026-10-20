@@ -8,6 +8,7 @@
 # State lives in the directory $FAKE_HERDR (required): `log` gets one argv line
 # per call; the optional files below steer the answers:
 #   tabs               last tab number (default 6, so the first tab is w9:t7)
+#   start_busy         count of `agent start` calls left to fail with agent_pane_busy
 #   start_not_ready    `agent start` fails with agent_not_ready
 #   gone               `agent get`/`agent read` fail with agent_not_found
 #   status             agent_status for `agent get` (default idle)
@@ -44,6 +45,10 @@ case "$1 $2" in
     if [ -f "$F/closed" ] && [ ! -f "$F/tab_stays" ]; then err tab_not_found; fi
     echo '{"id":"cli","result":{"tab":{"agent_status":"unknown","focused":false,"label":"x","number":7,"pane_count":1,"tab_id":"w9:t7","workspace_id":"w9"},"type":"tab_info"}}' ;;
   "agent start")
+    if [ -f "$F/start_busy" ]; then
+      n=$(cat "$F/start_busy")
+      if [ "$n" -gt 0 ]; then echo $((n - 1)) >"$F/start_busy"; err agent_pane_busy; fi
+    fi
     [ -f "$F/start_not_ready" ] && err agent_not_ready
     agent_json agent_started idle ;;
   "agent get")
