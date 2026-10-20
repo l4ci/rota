@@ -196,6 +196,12 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 			text = append(text, l)
 		}
 	}
+	if n := res.Slot; n != nil && tick == nil { // a running autopilot assigns by itself
+		if an := assignNudgeFor(c, root, n.Slot); an != nil {
+			d.Set("assignNudge", an.data())
+			text = append(text, an.Text())
+		}
+	}
 	if tick == nil || tickNeedsMerge(*tick) { // a running autopilot trains by itself
 		nudges := trainNudges(waitingPRs(c, root))
 		if rows := trainNudgeData(nudges); rows != nil {
