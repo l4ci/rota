@@ -314,6 +314,10 @@ func TestCredentialsProblem(t *testing.T) {
 	}
 }
 
+// Tests default to a platform with no Keychain, so none reaches the real
+// `security` tool on a Mac; fakeKeychain opts one in.
+func init() { goos = "linux" }
+
 // fakeKeychain swaps the platform seams for one test: goos and the Keychain
 // read, which answers from entries keyed by service name.
 func fakeKeychain(t *testing.T, os string, entries map[string]string) {
@@ -357,12 +361,36 @@ func TestKeychainOnlyCredentialsAreUsableOnDarwin(t *testing.T) {
 	}
 }
 
-func TestKeychainWinsOverStaleFile(t *testing.T) {
+func TestExpiredFileYieldsToKeychain(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"old","expiresAt":1000}}`), 0o600)
 	fakeKeychain(t, "darwin", map[string]string{keychainService(dir): `{"claudeAiOauth":{"accessToken":"kc"}}`})
 	if tok, why := (&Accounts{}).token(dir); tok != "kc" || why != "" {
 		t.Errorf("token = %q, %q, want the Keychain token", tok, why)
+	}
+}
+
+func TestExpiredFileWithoutKeychainStaysExpired(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"old","expiresAt":1000}}`), 0o600)
+	fakeKeychain(t, "darwin", nil)
+	if tok, why := (&Accounts{}).token(dir); tok != "" || why != "token expired" {
+		t.Errorf("token = %q, %q", tok, why)
+	}
+}
+
+func TestValidFileWinsAndSkipsKeychain(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"file"}}`), 0o600)
+	fakeKeychain(t, "darwin", map[string]string{keychainService(dir): `{"claudeAiOauth":{"accessToken":"kc"}}`})
+	calls := 0
+	read := keychainRead
+	keychainRead = func(s string) ([]byte, error) { calls++; return read(s) }
+	if tok, why := (&Accounts{}).token(dir); tok != "file" || why != "" {
+		t.Errorf("token = %q, %q, want the file token", tok, why)
+	}
+	if got := CredentialsProblem(dir); got != "" || calls != 0 {
+		t.Errorf("CredentialsProblem = %q, keychain reads = %d, want usable with none", got, calls)
 	}
 }
 
