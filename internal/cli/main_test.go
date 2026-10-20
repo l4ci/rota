@@ -43,8 +43,9 @@ func TestMain(m *testing.M) {
 		os.Unsetenv(k)
 	}
 	// `rota init` registers the project in the global registry (#24): no test
-	// may write the developer's real ~/.config/rota.
+	// may write the developer's real ~/.local/state/rota.
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "xdg"))
+	os.Setenv("XDG_STATE_HOME", filepath.Join(dir, "xstate"))
 	// doctor's disk check reads the real volume: pin a healthy one so a full
 	// developer disk does not add a line to every doctor golden (#85).
 	os.Setenv("ROTA_TEST_DOCTOR_DISK", "50:100")

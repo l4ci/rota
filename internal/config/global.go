@@ -12,7 +12,7 @@ import (
 )
 
 // The global config is a machine-wide config.json in the rota config dir,
-// beside projects.json. It only seeds: `rota init` and `rota setup` start a
+// beside connections.json. It only seeds: `rota init` and `rota setup` start a
 // new project from it, and nothing reads it once .rota/config.json exists.
 // Load, Show and Check never look at it (#194).
 
