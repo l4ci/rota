@@ -66,40 +66,7 @@ func ValidateDocs(root, key string) (mismatches []Mismatch, text string, err err
 	}
 	allRepos := artifact.Repos(root)
 
-	var candidates []string
-	lines := strings.Split(strings.ReplaceAll(tasksSection(body), "\r", ""), "\n")
-	for i := 0; i < len(lines); {
-		m := filesBullet.FindStringSubmatch(lines[i])
-		if m == nil {
-			i++
-			continue
-		}
-		baseIndent := len(m[1])
-		if tail := strings.TrimSpace(m[2]); tail != "" && !placeholder.MatchString(tail) {
-			for _, tok := range tokSplit.Split(tail, -1) {
-				if tok = cleanTok(tok); tok != "" {
-					candidates = append(candidates, tok)
-				}
-			}
-		}
-		j := i + 1
-		for j < len(lines) {
-			nxt := lines[j]
-			if strings.TrimSpace(nxt) == "" {
-				j++
-				continue
-			}
-			bm := subBullet.FindStringSubmatch(nxt)
-			if bm == nil || len(bm[1]) <= baseIndent {
-				break
-			}
-			if tok := cleanTok(bm[2]); tok != "" && !placeholder.MatchString(tok) {
-				candidates = append(candidates, tok)
-			}
-			j++
-		}
-		i = j
-	}
+	candidates := fileTokens(strings.Split(strings.ReplaceAll(tasksSection(body), "\r", ""), "\n"))
 
 	var docPaths []string
 	for _, c := range candidates {
@@ -157,6 +124,45 @@ func ValidateDocs(root, key string) (mismatches []Mismatch, text string, err err
 		}
 	}
 	return mismatches, b.String(), nil
+}
+
+// fileTokens are the path tokens of every Files: bullet in lines, from the
+// inline list and from nested sub-bullets; placeholders are skipped.
+func fileTokens(lines []string) []string {
+	var candidates []string
+	for i := 0; i < len(lines); {
+		m := filesBullet.FindStringSubmatch(lines[i])
+		if m == nil {
+			i++
+			continue
+		}
+		baseIndent := len(m[1])
+		if tail := strings.TrimSpace(m[2]); tail != "" && !placeholder.MatchString(tail) {
+			for _, tok := range tokSplit.Split(tail, -1) {
+				if tok = cleanTok(tok); tok != "" {
+					candidates = append(candidates, tok)
+				}
+			}
+		}
+		j := i + 1
+		for j < len(lines) {
+			nxt := lines[j]
+			if strings.TrimSpace(nxt) == "" {
+				j++
+				continue
+			}
+			bm := subBullet.FindStringSubmatch(nxt)
+			if bm == nil || len(bm[1]) <= baseIndent {
+				break
+			}
+			if tok := cleanTok(bm[2]); tok != "" && !placeholder.MatchString(tok) {
+				candidates = append(candidates, tok)
+			}
+			j++
+		}
+		i = j
+	}
+	return candidates
 }
 
 func tasksSection(body string) string {

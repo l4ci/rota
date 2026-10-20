@@ -297,6 +297,13 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `roles.reasoner.tier` | enum | `"heavy"` | `light`, `standard`, `heavy` | Tier of the rota-reasoner agent, which picks its model from round.tiers. |
 | `roles.reasoner.effort` | enum | unset | `low`, `medium`, `high`, `xhigh`, `max` | Reasoning effort of the rota-reasoner agent. Empty leaves the harness default; Codex has no max. |
 
+### plan
+
+| Key | Type | Default | Values | Description |
+|-----|------|---------|--------|-------------|
+| `plan.maxTasks` | int | `3` |  | Tasks a plan may hold before rota plan check warns and suggests a split into dependent items. Advisory: the check still exits 0. 0 turns the warning off. |
+| `plan.maxFilesPerTask` | int | `5` |  | Paths a task's Files: line may name before rota plan check warns about that task. Advisory: the check still exits 0. 0 turns the warning off. |
+
 ### brainstorm
 
 | Key | Type | Default | Values | Description |
