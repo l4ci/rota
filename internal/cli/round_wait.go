@@ -41,6 +41,10 @@ func roundWait(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		d := jsonx.NewObject()
+		nudges := trainNudges(waitingPRs(c, root))
+		if rows := trainNudgeData(nudges); rows != nil {
+			d.Set("trainNudge", rows)
+		}
 		if res.TimedOut {
 			rows := make([]any, 0, len(res.Slots))
 			var text []string
@@ -55,7 +59,8 @@ func roundWait(fs *flag.FlagSet) RunFunc {
 			d.Set("waited", res.Waited.Seconds())
 			d.Set("slots", rows)
 			msg := fmt.Sprintf("timed out after %.0fs, no slot needs attention", res.Waited.Seconds())
-			return Result{Data: d, Text: strings.Join(append(text, msg), "\n")}, Failed("%s", msg)
+			text = append(append(text, trainNudgeLines(nudges)...), msg)
+			return Result{Data: d, Text: strings.Join(text, "\n")}, Failed("%s", msg)
 		}
 		state := strings.ToLower(res.State)
 		d.Set("slot", res.Slot)
@@ -68,7 +73,7 @@ func roundWait(fs *flag.FlagSet) RunFunc {
 			d.Set("note", res.Note)
 			text += "\t(" + res.Note + ")"
 		}
-		return Result{Data: d, Text: text}, nil
+		return Result{Data: d, Text: strings.Join(append([]string{text}, trainNudgeLines(nudges)...), "\n")}, nil
 	}
 }
 
