@@ -66,7 +66,12 @@ Work only this task, then stop.
   commands (`gh pr merge`, force-push to another branch, `git reset --hard` outside your worktree,
   `git branch -D`, `git clean -f`) when `ROTA_SLOT` is set. It is a guardrail, not a boundary: do not
   route around a refusal, and Codex workers are not guarded.
-- Commit your own work, run `rota worker done <slot>` (from your worktree or the main checkout; it finds the pool through the git common dir and expands `{files}` in the slot's worktree), then open a PR against `<base-branch>`. Never merge.
+- Commit your own work, run `rota worker done <slot>` (add `--attempt <id>` only when your brief names an attempt id; from your worktree or the main checkout; it finds the pool through the git common dir and expands `{files}` in the slot's worktree), then open a PR against `<base-branch>`. Never merge.
+- Attempt id. If your brief names an attempt id, pass `--attempt <id>` to `rota worker done` and
+  `rota round report`. A refusal that calls the attempt stale (exit 4) means the orchestrator
+  reclaimed or transferred your assignment: you are fenced. Stop at once, do not retry, do not
+  push, open a PR or print `ROTA-DONE`, and print `ROTA-BLOCKED <slot>: attempt <id> is stale`
+  as the last line. The fence refuses your results; it does not stop you, so stopping is your job.
 - Run TARGETED verification only: the files you touched. When the project sets
   `test.fast`, that is `rota test run fast`; otherwise pick the checks by hand. The full suite is the
   orchestrator's gate on the merged tree. Several workers running full suites at
@@ -92,7 +97,7 @@ Work only this task, then stop.
   3. File scope: compare `git diff --name-only <base-branch>...HEAD` with the files the
      issue names. Explain every extra or missing file in the PR body.
   4. Done gate: on your final commit, when `test.fast` is set, run
-     `rota proof record <ID> -- rota test run fast`, then `rota worker done <slot>`. It
+     `rota proof record <ID> -- rota test run fast`, then `rota worker done <slot> --attempt <id>`. It
      exits 4 without a PASS row at the current HEAD; a later commit makes the row stale,
      so record again. Do it before the PR and before `ROTA-DONE`.
   5. Closing keyword: the PR body carries `Closes #<issue>` (or `Fixes #<issue>`) for your

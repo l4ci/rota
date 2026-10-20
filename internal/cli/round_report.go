@@ -15,6 +15,7 @@ func roundReport(fs *flag.FlagSet) RunFunc {
 	evidence := fs.String("evidence", "", "what the worker's result said, echoed and not stored")
 	pr := fs.String("pr", "", "the worker's PR, as a URL or a number")
 	issues := fs.String("issues", "", "a review item's filed issues, comma-separated (#139,#140), in place of a PR")
+	attempt := fs.String("attempt", "", "the attempt id from your brief; a stale one exits 4")
 	return func(c *Ctx, args []string) (Result, error) {
 		slot, err := oneArg(args, "slot")
 		if err != nil {
@@ -25,7 +26,7 @@ func roundReport(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		env := c.deps().baseRoundEnv()
-		res, err := env.ReportSlot(c.Context(), root, round.ReportOpts{Slot: slot, State: *state, Evidence: *evidence, PR: *pr, Issues: *issues})
+		res, err := env.ReportSlot(c.Context(), root, round.ReportOpts{Slot: slot, State: *state, Evidence: *evidence, PR: *pr, Issues: *issues, Attempt: *attempt})
 		if err != nil {
 			return Result{}, err
 		}

@@ -364,6 +364,9 @@ type tierBrief struct {
 	Pick string
 	// Smoke is the reserved smoke section number, 0 for none.
 	Smoke int
+	// Attempt is the id of this assignment; the worker passes it back as
+	// --attempt on `rota worker done` and `rota round report`.
+	Attempt string
 	// Sibling and SiblingBranch are the other attempt of a best-of:2 issue.
 	Sibling, SiblingBranch string
 }
@@ -397,6 +400,9 @@ func (t tierBrief) text() string {
 	}
 	if t.Smoke != 0 {
 		fmt.Fprintf(&b, "Your smoke section, if you add one, is number %d (test/sections/%d_*.sh): it is reserved for you, so use exactly that number.\n", t.Smoke, t.Smoke)
+	}
+	if t.Attempt != "" {
+		fmt.Fprintf(&b, "Your attempt id is %s. Pass `--attempt %s` to `rota worker done <slot>` and to `rota round report`. If either refuses it as a stale attempt, your assignment was reclaimed or transferred: stop, do not retry, and push or report nothing more.\n", t.Attempt, t.Attempt)
 	}
 	fmt.Fprintf(&b, "Put `Worker tier: %s` in your PR body.\n", own)
 	return b.String()
@@ -620,6 +626,15 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	// keeps them, because the pane may already hold the brief.
 	rnd := registryRound(root)
 	claimID := agent + "@" + strconv.Itoa(rnd)
+	// The holder resuming its own issue keeps its attempt: the brief already in
+	// its pane names it. Any other assignment is a new attempt.
+	attempt := ""
+	if resuming {
+		attempt = slot.Attempt()
+	}
+	if attempt == "" {
+		attempt = worker.NewAttempt()
+	}
 	holders := 1
 	if bo != nil {
 		holders = 2
@@ -650,7 +665,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 		}},
 		{name: "bind the slot", do: func() error {
 			if err := editSlot(root, agent, func(s *worker.Slot) error {
-				s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: res.Model, TierReason: reason, SmokeSection: res.SmokeSection})
+				s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: res.Model, TierReason: reason, SmokeSection: res.SmokeSection, Attempt: attempt})
 				return nil
 			}); err != nil {
 				return err
@@ -669,7 +684,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	d := &delivery{Slot: agent, Task: id, Branch: func() string { return res.Branch }, Kind: kind, Model: res.Model, Round: rnd,
 		Brief: func() string {
 			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
-			text := pointerBrief(agent, id, res.Branch, brief, o.Siblings, decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: kind, Tier: tier, Model: res.Model, Default: set.Tier, Reason: reason, Table: set.Models[kind], Pick: pick.String(), Smoke: res.SmokeSection, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()})
+			text := pointerBrief(agent, id, res.Branch, brief, o.Siblings, decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: kind, Tier: tier, Model: res.Model, Default: set.Tier, Reason: reason, Table: set.Models[kind], Pick: pick.String(), Smoke: res.SmokeSection, Attempt: attempt, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()})
 			if hb := latestHandoffBranch(be, id); hb != "" {
 				text += fmt.Sprintf("\nAn earlier worker handed this issue back: read the latest `rota:handoff` comment on it. Its work is pushed on branch %s (origin/%s); fetch it before you start over.\n", hb, hb)
 			}

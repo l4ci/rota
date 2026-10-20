@@ -853,10 +853,18 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		return worker.RemoveQueuedPR(root, pr)
 	}
 
+	// The receiver resuming its transfer keeps the attempt its brief named.
+	attempt := ""
+	if resuming {
+		attempt = receiver.Attempt()
+	}
+	if attempt == "" {
+		attempt = worker.NewAttempt()
+	}
 	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return branch }, Round: rnd, Kind: kind, Model: appliedModel, Wrap: wrap,
 		Brief: func() string {
 			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
-			text := pointerBrief(o.To, id, branch, brief, nil, decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: kind, Tier: tier, Model: appliedModel, Default: o.Settings.Tier, Reason: reason, Table: o.Settings.Models[kind]})
+			text := pointerBrief(o.To, id, branch, brief, nil, decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: kind, Tier: tier, Model: appliedModel, Default: o.Settings.Tier, Reason: reason, Table: o.Settings.Models[kind], Attempt: attempt})
 			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `%s` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
 				res.From, marker.Handoff(res.From, rnd), branch)
 			if rec != nil {
@@ -889,7 +897,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		}},
 		step{name: "bind the receiver", skip: moved, do: func() error {
 			err := editSlot(root, o.To, func(s *worker.Slot) error {
-				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: appliedModel, TierReason: reason})
+				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: appliedModel, TierReason: reason, Attempt: attempt})
 				s.SetBranch(branch)
 				return nil
 			})
