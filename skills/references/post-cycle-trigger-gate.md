@@ -28,8 +28,8 @@ Every post-cycle nudge step runs the same sequence. The call site supplies the *
 
 ### Inline variant — `/rota-ship` Step 8.6
 
-`/rota-ship` Step 8.6 deliberately diverges from step 3: it neither branches on `autonomy.level` nor dispatches a skill. When its flag (`docs.afterWork`) is on and the trigger fires, it inline-runs Docs Mode's after-work flow (Steps D-A1 through D-A6 in `rota-ship/docs-mode.md`), passing the resolved item IDs and touched files from the cycle's scope JSON as context; the after-work flow's own approval gate (Step D-A5) supplies the user checkpoint the nudge arm would otherwise provide. `/rota-work` Step 13 only nudges and never dispatches.
+`/rota-ship` Step 8.6 deliberately diverges from step 3: it neither branches on `autonomy.level` nor dispatches a skill. When its flag (`docs.afterWork`) is on and the trigger fires, it inline-runs `/rota-docs`'s after-work flow (Steps D-A1 through D-A6 in `rota-docs/SKILL.md`), passing the resolved item IDs and touched files from the cycle's scope JSON as context; the after-work flow's own approval gate (Step D-A5) supplies the user checkpoint the nudge arm would otherwise provide. `/rota-work` Step 13 only nudges and never dispatches.
 
 ### Manual entry
 
-Manual invocation of a gated flow (e.g. the user running `/rota-ship --docs` by hand) bypasses this gate; the invocation is the trigger. The owning skill states the rule at its entry step (`/rota-ship` Step D1).
+Manual invocation of a gated flow (e.g. the user running `/rota-docs` by hand) bypasses this gate; the invocation is the trigger. The owning skill states the rule at its entry step (`/rota-docs` Step D1).
