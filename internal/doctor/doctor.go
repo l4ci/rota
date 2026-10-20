@@ -496,6 +496,9 @@ func (d *runner) accounts() Check {
 			bad = append(bad, a.Name+": "+why)
 			if hint == "" {
 				hint = "CLAUDE_CONFIG_DIR=" + a.ConfigDir + " claude /login"
+				if strings.Contains(why, "Keychain") {
+					hint += " (on macOS the login is stored in the Keychain, not a file)"
+				}
 			}
 		}
 	}

@@ -1,6 +1,8 @@
 package worker
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
@@ -309,5 +311,107 @@ func TestCredentialsProblem(t *testing.T) {
 	}
 	if got := CredentialsProblem(t.TempDir()); got != "no credentials file" {
 		t.Errorf("missing file: %q", got)
+	}
+}
+
+// Tests default to a platform with no Keychain, so none reaches the real
+// `security` tool on a Mac; fakeKeychain opts one in.
+func init() { goos = "linux" }
+
+// fakeKeychain swaps the platform seams for one test: goos and the Keychain
+// read, which answers from entries keyed by service name.
+func fakeKeychain(t *testing.T, os string, entries map[string]string) {
+	t.Helper()
+	oldOS, oldRead := goos, keychainRead
+	goos = os
+	keychainRead = func(service string) ([]byte, error) {
+		if v, ok := entries[service]; ok {
+			return []byte(v), nil
+		}
+		return nil, errNoKeychainEntry
+	}
+	t.Cleanup(func() { goos, keychainRead = oldOS, oldRead })
+}
+
+func TestKeychainService(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	if got := keychainService(filepath.Join(home, ".claude")); got != "Claude Code-credentials" {
+		t.Errorf("default dir = %q, want no suffix", got)
+	}
+	// sha256("/acct/alpha") = 5c3a1b3b...; the suffix is its first 8 hex chars.
+	want := "Claude Code-credentials-" + sha256Hex8("/acct/alpha")
+	if got := keychainService("/acct/alpha"); got != want || len(got) != len("Claude Code-credentials-")+8 {
+		t.Errorf("custom dir = %q, want %q", got, want)
+	}
+}
+
+func sha256Hex8(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])[:8]
+}
+
+func TestKeychainOnlyCredentialsAreUsableOnDarwin(t *testing.T) {
+	dir := t.TempDir()
+	fakeKeychain(t, "darwin", map[string]string{keychainService(dir): `{"claudeAiOauth":{"accessToken":"kc"}}`})
+	if got := CredentialsProblem(dir); got != "" {
+		t.Errorf("CredentialsProblem = %q, want usable", got)
+	}
+	if tok, why := (&Accounts{}).token(dir); tok != "kc" || why != "" {
+		t.Errorf("token = %q, %q", tok, why)
+	}
+}
+
+func TestExpiredFileYieldsToKeychain(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"old","expiresAt":1000}}`), 0o600)
+	fakeKeychain(t, "darwin", map[string]string{keychainService(dir): `{"claudeAiOauth":{"accessToken":"kc"}}`})
+	if tok, why := (&Accounts{}).token(dir); tok != "kc" || why != "" {
+		t.Errorf("token = %q, %q, want the Keychain token", tok, why)
+	}
+}
+
+func TestExpiredFileWithoutKeychainStaysExpired(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"old","expiresAt":1000}}`), 0o600)
+	fakeKeychain(t, "darwin", nil)
+	if tok, why := (&Accounts{}).token(dir); tok != "" || why != "token expired" {
+		t.Errorf("token = %q, %q", tok, why)
+	}
+}
+
+func TestValidFileWinsAndSkipsKeychain(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"file"}}`), 0o600)
+	fakeKeychain(t, "darwin", map[string]string{keychainService(dir): `{"claudeAiOauth":{"accessToken":"kc"}}`})
+	calls := 0
+	read := keychainRead
+	keychainRead = func(s string) ([]byte, error) { calls++; return read(s) }
+	if tok, why := (&Accounts{}).token(dir); tok != "file" || why != "" {
+		t.Errorf("token = %q, %q, want the file token", tok, why)
+	}
+	if got := CredentialsProblem(dir); got != "" || calls != 0 {
+		t.Errorf("CredentialsProblem = %q, keychain reads = %d, want usable with none", got, calls)
+	}
+}
+
+func TestMissingKeychainEntryNamesKeychain(t *testing.T) {
+	dir := t.TempDir()
+	fakeKeychain(t, "darwin", nil)
+	got := CredentialsProblem(dir)
+	if !strings.Contains(got, "Keychain") {
+		t.Errorf("CredentialsProblem = %q, want it to name the Keychain", got)
+	}
+	// A file still serves when the Keychain has nothing.
+	os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"f"}}`), 0o600)
+	if got := CredentialsProblem(dir); got != "" {
+		t.Errorf("file fallback = %q, want usable", got)
+	}
+}
+
+func TestKeychainIgnoredOffDarwin(t *testing.T) {
+	dir := t.TempDir()
+	fakeKeychain(t, "linux", map[string]string{keychainService(dir): `{"claudeAiOauth":{"accessToken":"kc"}}`})
+	if got := CredentialsProblem(dir); got != "no credentials file" {
+		t.Errorf("CredentialsProblem = %q, want the file-only reason", got)
 	}
 }
