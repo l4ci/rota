@@ -95,6 +95,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.ForgeProvider, in.IssueSource, in.SourceProblem = doctorSourceInput(cfg)
 	in.JiraProject, in.IssuesConnection = strings.TrimSpace(str("issues.jira.project")), strings.TrimSpace(str("issues.connection"))
 	in.LinearTeam = strings.TrimSpace(str("issues.linear.team"))
+	in.ItsaplanProject = strings.TrimSpace(str("issues.itsaplan.project"))
 	in.Kinds = doctorKinds(cfg)
 	for _, a := range config.Accounts(cfg) {
 		if a.Name != "" {
@@ -104,7 +105,8 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.ProjectRoot = root
 	if name := strings.TrimSpace(str("issues.connection")); name != "" {
 		in.Connection = doctorConnection(ctx, d, name)
-		if in.IssueSource == config.SourceLinear && in.LinearTeam != "" && in.Connection.State == string(connections.StateOK) {
+		if in.Connection.State == string(connections.StateOK) &&
+			(in.IssueSource == config.SourceLinear && in.LinearTeam != "" || in.IssueSource == config.SourceItsaplan && in.ItsaplanProject != "") {
 			in.TeamProblem = linearTeamProblem(ctx, d, cfg, root)
 		}
 	}
