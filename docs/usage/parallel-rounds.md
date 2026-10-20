@@ -317,6 +317,13 @@ clock keeps the poll time in that case.
   not a fault. `--timeout` defaults to 0, which waits indefinitely.
 - **Long waits in Claude Code** hit the Bash tool's timeout; see [internals](#internals).
 
+When a returned slot is `done` with a PR and a candidate is ready, `round wait` and `round watch` add an
+`assign before you gate` line with the candidate and its `rota round assign` command (`assignNudge` in
+JSON), so the slot works while you review. When two or more reviewed PRs wait on one base they add a
+`nudge train` line with the PR numbers and the `rota worker train` command (`trainNudge` in JSON). A PR
+with a recorded FAIL review or second-opinion verdict is left out. The autopilot assigns by itself, so
+a watch running with `--autopilot` skips the assign line but still prints the train line.
+
 `rota worker dispatch` and `--relay` check what is on the prompt line before they type. A typed human
 draft is refused as a draft (exit 5, nothing sent). The autocompact settings picker is dismissed once
 with Escape and the send is retried. Any other Claude Code dialog, or a picker that survives Escape, is
@@ -464,7 +471,8 @@ The issue keeps its claim and in-progress label: it is still taken, just not by 
 whose worker is busy, blocked or has uncommitted files is never taken.
 
 - **See it**: `rota round status` lists each PR in review (`review` in JSON).
-- **Merge it**: `rota worker gate <PR number> --base <branch>` (or `'#<N>'`, or the PR URL). A pass drops it from the list.
+- **Merge it**: `rota worker gate <PR number> --base <branch>` (or `'#<N>'`, or the PR URL). A pass drops it from the list, and so does
+  a gate that left the PR merged with a red verify of the landed tree (`merged-remotely` included). A merged PR never stays under `review`.
   `rota worker gate <slot>` on a slot whose PR moved to review is refused with the PR to gate, so a
   habitual slot gate never merges the slot's next branch.
 - **Bounce it**: `rota round transfer <issue> --to <free slot> --body-file <gap>` checks the
@@ -575,8 +583,13 @@ a GitHub App token instead.
 
 ### Merge train
 
-When several PRs wait in review, `rota worker train <slot|PR>... --base <branch>` gates them together and
-pays for the verify once instead of once per PR. It checks each member the way `gate --check-only` does,
+With two or more reviewed PRs waiting on one base, `rota worker train <slot|PR>... --base <branch>` is the
+default way to land them; a single `gate` is for exactly one waiting PR. The train gates them together and
+pays for the verify once instead of once per PR. A train can go red, but the culprit handling below keeps
+the other members moving. A gate or train takes 2 to 3 minutes: start it
+as a background command, review the next PRs and fill free slots meanwhile, and read the verdict when it
+exits. Don't start a second gate or train beside it, and don't write tracked `.rota/` files on the base
+checkout until it exits; the checkout guard fails the gate on a changed tracked file. It checks each member the way `gate --check-only` does,
 merges them onto the base in a scratch worktree in the order it picks, runs `test.full` on that
 tree, then `test.e2e` when set (the most expensive tier runs once per train, not once per PR), and on a pass lands every member through the gate in order. If the base or a member's head moved
 while it verified, nothing lands (`base-moved`); the same verdict stops the train mid-way if the base changes between landings. Members must be all PRs or all slots without one.
@@ -741,7 +754,9 @@ Every round event is appended to `.rota/ledger.jsonl`: an assign, a worker's don
 report, a bounce, a transfer, a best-of pick, a park, each gate verdict and merge, and a usage
 limit hit (a reroute is the transfer it makes). `rota round summary` folds the file, with `.rota/gate-audit.jsonl`, into one
 row per issue (slot, harness, account, assigned and done times, wall time, bounces, gate outcome,
-merged), then totals per slot and per account, then the round's gate audit lines.
+merged), then totals per slot and per account, then an idle table (each stretch a slot sat `done` before
+its next assign, with the median; `idle` in JSON), then the round's gate audit lines. A re-done after a
+bounce is not counted as idle time.
 
 ```sh
 rota round summary              # the current round, else the highest in the ledger
