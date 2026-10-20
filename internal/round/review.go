@@ -145,9 +145,14 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 	prevSeen := s.ReviewSeen()
 	// A bounce RecordBounce deduped on the same head was not counted here and
 	// is not this dispatch's to undo.
-	var counted bool
-	if out.Bounces, counted, err = worker.RecordBounceCounted(e.Worker, root, issue, o.Slot, pr.HeadSHA); err != nil {
+	// The cap is enforced by the locked write: the snapshot check above only
+	// spares the work, and a bounce that landed since then refuses here.
+	var counted, capped bool
+	if out.Bounces, counted, capped, err = worker.RecordBounceCapped(e.Worker, nil, root, issue, o.Slot, pr.HeadSHA, o.MaxBounces); err != nil {
 		return out, err
+	}
+	if capped {
+		return e.reviewCap(ctx, root, o, batch, number, issue, out)
 	}
 	unrecord := func() error {
 		if !counted {
@@ -238,9 +243,15 @@ func (e Env) reviewFresh(ctx context.Context, root string, o ReviewOpts, reg wor
 		return false, werr
 	}
 	prev := out.Bounces
-	bounces, counted, err := worker.RecordBounceCounted(e.Worker, root, issue, o.Slot, head)
+	bounces, counted, capped, err := worker.RecordBounceCapped(e.Worker, nil, root, issue, o.Slot, head, o.MaxBounces)
 	if err != nil {
 		return false, err
+	}
+	if capped {
+		// Another bounce reached the cap meanwhile: the relay that follows
+		// refuses it through the same check and escalates.
+		out.Bounces = bounces
+		return false, nil
 	}
 	out.Bounces = bounces
 	res, terr := e.Transfer(ctx, root, o.Board, TransferOpts{

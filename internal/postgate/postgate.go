@@ -94,7 +94,7 @@ func bounce(env worker.Env, root, issue string, r worker.GateResult, park Park) 
 	if err != nil {
 		return Outcome{}, err
 	}
-	n, _, err := worker.RecordBounceCapped(env, r.Round, root, issue, r.TargetSlot, r.SHA, set.MaxBounces)
+	n, _, _, err := worker.RecordBounceCapped(env, r.Round, root, issue, r.TargetSlot, r.SHA, set.MaxBounces)
 	if err != nil {
 		return Outcome{}, err
 	}
