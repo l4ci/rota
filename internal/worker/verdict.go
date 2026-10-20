@@ -51,6 +51,7 @@ var verdictMeanings = map[string]VerdictMeaning{
 	GateBestOfUnpicked:   {Refusal: true, BlockedBy: GateBestOfUnpicked},
 	GateReviewMissing:    {Refusal: true, BlockedBy: GateReviewMissing, Hold: true},
 	GateStaleAttempt:     {Refusal: true, BlockedBy: GateStaleAttempt, Hold: true},
+	GateOutcomeOpen:      {Refusal: true, BlockedBy: GateOutcomeOpen, Hold: true},
 	GateOrder:            {Refusal: true, BlockedBy: GateOrder, Hold: true},
 }
 

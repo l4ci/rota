@@ -394,7 +394,15 @@ func soloWait(root string, o WaitOpts) (WaitResult, error) {
 			}); err != nil {
 				return WaitResult{}, err
 			}
-			return WaitResult{Slot: name, State: st, Source: SourceRegistry}, nil
+			res := WaitResult{Slot: name, State: st, Source: SourceRegistry}
+			// A reported outcome reads beside the state: the done event's body
+			// carries it with its three summary lines.
+			if k, _ := s.Outcome(); k != "" {
+				if ev := s.Event(); ev != nil && ev.Kind == EventDone {
+					res.Evidence = ev.Body
+				}
+			}
+			return res, nil
 		}
 		rows = append(rows, PollRow{s.Name(), st, ""})
 	}
