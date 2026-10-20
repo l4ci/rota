@@ -78,7 +78,7 @@ type ApprovalEscalator interface {
 	ReplyWords() []string
 }
 
-// ApprovalEscalation asks a gate to send the approval request when the
+// ApprovalEscalation asks a merge verb to send the approval request when the
 // merge-approval gate refuses (--escalate).
 type ApprovalEscalation struct {
 	Esc    ApprovalEscalator
@@ -130,9 +130,11 @@ func (a ApprovalEscalation) EscalateApproval(hit []string, th ApprovalThread) an
 	return entry
 }
 
-// attach sends the request for a refused merge and sets the entry on the
-// refusal's data, where the verb's JSON carries it.
-func (a ApprovalEscalation) attach(ref *exitcode.Refusal, hit []string, th ApprovalThread) {
+// Attach sends the request for a refused merge and sets the entry on the
+// refusal's data, where the verb's JSON carries it. It is the one sender for
+// the gate, the train and ship pr-merge; hit is the list the refusal was
+// judged on, so no caller lists the merge's files again.
+func (a ApprovalEscalation) Attach(ref *exitcode.Refusal, hit []string, th ApprovalThread) {
 	d, ok := ref.Data.(*jsonx.Object)
 	if !ok {
 		return
