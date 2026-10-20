@@ -496,11 +496,16 @@ func relayMarkerVisible(text string, lines, k int) bool {
 	return false
 }
 
+// relayFallbackWindow is how long an unseen relay holds a slot busy when
+// round.stallMinutes is 0 (stall detection off), so a collapsed paste cannot
+// hold it until the next dispatch.
+const relayFallbackWindow = 30 * time.Minute
+
 // noteRelayEcho records what the captures showed about each pending relay:
 // its `[relay K]` line seen, which is what tells a scrolled-out marker from an
 // unrendered one, or the relay given up on after round.stallMinutes without
 // the line (a collapsed paste shows none), which would hold the slot busy for
-// good. It updates the targets it was given, which a wait keeps across passes.
+// good. With round.stallMinutes at 0 the window is relayFallbackWindow. It updates the targets it was given, which a wait keeps across passes.
 func noteRelayEcho(root string, targets []pollTarget, now time.Time) {
 	var stall time.Duration
 	loaded := false
@@ -525,7 +530,10 @@ func noteRelayEcho(root string, targets []pollTarget, now time.Time) {
 					stall = time.Duration(set.StallMinutes) * time.Minute
 				}
 			}
-			if stall > 0 && !t.relaySentAt.IsZero() && now.Sub(t.relaySentAt) >= stall {
+			if stall <= 0 {
+				stall = relayFallbackWindow
+			}
+			if !t.relaySentAt.IsZero() && now.Sub(t.relaySentAt) >= stall {
 				if _, err := UpdateSlot(root, t.name, func(s *Slot) {
 					if s.RelayPending() == k {
 						s.ClearRelayPending()
