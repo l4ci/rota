@@ -92,8 +92,8 @@ type ReviewOutcome struct {
 type Env struct {
 	// Cap bounds assigns and merges per tick; <= 0 means DefaultCap.
 	Cap int
-	// MergeApproval is ship.mergeApproval: any mode but none asks for a
-	// person, and the autopilot then merges nothing.
+	// MergeApproval is ship.mergeApproval: any mode but none (empty
+	// included) asks for a person, and the autopilot then merges nothing.
 	MergeApproval string
 	// Slots lists the roster from the registry; Queued the PR refs waiting in
 	// its review queue.
@@ -175,9 +175,10 @@ func (e Env) cap() int {
 	return e.Cap
 }
 
-// humanMerge is true when the merge policy asks for a person.
+// humanMerge is true when the merge policy asks for a person. An unset policy
+// counts as asking: only an explicit none lets the autopilot merge.
 func (e Env) humanMerge() bool {
-	return e.MergeApproval != "" && e.MergeApproval != gate.MergeNone
+	return e.MergeApproval != gate.MergeNone
 }
 
 func (e Env) batchFull(ctx context.Context) bool {
