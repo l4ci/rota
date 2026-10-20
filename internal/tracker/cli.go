@@ -47,7 +47,7 @@ type CLI struct {
 
 	// Cache, when set, serves repeated reads and is dropped by any other call.
 	Cache *ReadCache
-	// Conn finds the connection of an HTTP tracker (jira, linear); nil reads the
+	// Conn finds the connection of an HTTP tracker (jira, linear, itsaplan); nil reads the
 	// machine's `rota connect` connections.
 	Conn ConnResolver
 }

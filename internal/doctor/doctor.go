@@ -94,10 +94,11 @@ type Input struct {
 	SourceProblem string
 	// JiraProject, LinearTeam and IssuesConnection are issues.jira.project,
 	// issues.linear.team and issues.connection, which issues.source jira and
-	// linear need. TeamProblem is why the Linear team could not be read
+	// linear need, and issues.itsaplan.project for itsaplan. TeamProblem is why the Linear team or It's a Plan project could not be read
 	// through a working connection ("" when it was, or was not tried).
 	JiraProject      string
 	LinearTeam       string
+	ItsaplanProject  string
 	IssuesConnection string
 	TeamProblem      string
 	Accounts         []config.Account
@@ -393,6 +394,16 @@ func (d *runner) tracker() Check {
 			return fail("tracker", "issues.source is linear but issues.connection is not set", "run: rota connect add <name> --kind linear --token-stdin, then rota config set issues.connection <name>")
 		case d.in.TeamProblem != "":
 			return fail("tracker", d.in.TeamProblem, "check issues.linear.team against the team's key in Linear, and the API key's access")
+		}
+	}
+	if d.in.IssueSource == config.SourceItsaplan {
+		switch {
+		case d.in.ItsaplanProject == "":
+			return fail("tracker", "issues.source is itsaplan but issues.itsaplan.project is not set", "run: rota config set issues.itsaplan.project <KEY>")
+		case d.in.IssuesConnection == "":
+			return fail("tracker", "issues.source is itsaplan but issues.connection is not set", "run: rota connect add <name> --kind itsaplan --site <url> --token-stdin, then rota config set issues.connection <name>")
+		case d.in.TeamProblem != "":
+			return fail("tracker", d.in.TeamProblem, "check issues.itsaplan.project against the project's key in It's a Plan, and the API key's access")
 		}
 	}
 	f := d.resolveForge()
