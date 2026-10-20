@@ -545,7 +545,8 @@ type TransferOpts struct {
 	Tier, TierReason string
 	// CapReason says why an item at the bounce cap moves: ledger.CapAmbiguousCriteria
 	// (to the human, after the criteria audit) or ledger.CapTier (to a stronger
-	// worker). "" is a transfer that is not a cap decision.
+	// worker) or ledger.CapFresh (to a fresh context at round.freshAt, below
+	// the cap). "" is a transfer that is not a cap decision.
 	CapReason string
 	Settings  roundcfg.Settings
 }
@@ -589,8 +590,10 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		return res, usage("--cap-reason %s means the criteria need the human: use --to %s", o.CapReason, HumanTarget)
 	case o.CapReason == ledger.CapTier && toHuman:
 		return res, usage("--cap-reason %s moves the item to a stronger worker: use --to <slot>", o.CapReason)
-	case o.CapReason != ledger.CapAmbiguousCriteria && o.CapReason != ledger.CapTier:
-		return res, usage("--cap-reason must be %s or %s", ledger.CapAmbiguousCriteria, ledger.CapTier)
+	case o.CapReason == ledger.CapFresh && toHuman:
+		return res, usage("--cap-reason %s moves the item to a fresh worker: use --to <slot>", o.CapReason)
+	case o.CapReason != ledger.CapAmbiguousCriteria && o.CapReason != ledger.CapTier && o.CapReason != ledger.CapFresh:
+		return res, usage("--cap-reason must be %s, %s or %s", ledger.CapAmbiguousCriteria, ledger.CapTier, ledger.CapFresh)
 	}
 	if o.Tier != "" && !roundcfg.ValidTier(o.Tier) {
 		return res, usage("--tier must be one of %s", strings.Join(roundcfg.Tiers, ", "))
