@@ -7,6 +7,7 @@ import (
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundtick"
+	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -80,7 +81,6 @@ func trainNudges(waiting []waitingPR) []trainNudge {
 // nudge is advice, so an unreadable registry or branch reads as nothing waiting.
 func waitingPRs(c *Ctx, root string) []waitingPR {
 	reg := worker.LoadRegistryTolerant(root)
-	recorded := recordedReviews(root)
 	reviewed := func(branch string) bool {
 		if branch == "" {
 			return false
@@ -89,7 +89,7 @@ func waitingPRs(c *Ctx, root string) []waitingPR {
 		if err != nil || r.ExitCode != 0 {
 			return false
 		}
-		return len(recorded(branch, strings.TrimSpace(r.Stdout))) > 0
+		return len(verdict.Recorded(root, branch, strings.TrimSpace(r.Stdout))) > 0
 	}
 	var out []waitingPR
 	for _, s := range reg.Slots() {
