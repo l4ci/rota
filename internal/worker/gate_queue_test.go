@@ -91,3 +91,33 @@ func TestQueuedPRHelpers(t *testing.T) {
 		t.Errorf("after remove: %v", got)
 	}
 }
+
+// A PR the gate merged leaves the review list whatever the verdict says about
+// the verify or the local base, and however the target resolved (#1028).
+func TestGateDropsMergedQueuedPR(t *testing.T) {
+	for _, arg := range []string{"#7", "w2"} {
+		t.Run(arg, func(t *testing.T) {
+			w := newWorld(t, "")
+			w.setQueued()
+			w.forge("body", "Closes #5\n")
+			if arg == "w2" {
+				// the slot records the PR the queue also holds
+				doc := `{"slots":[{"name":"w2","branch":"w1","pr":"` + ghURL + `","base":"main"}],"prs":[{"issue":"5","branch":"w1","pr":"` + ghURL + `","base":"main","from":"w2","round":1,"relays":[]}]}`
+				os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(doc), 0o644)
+			}
+			os.WriteFile(filepath.Join(w.dir, "local.txt"), []byte("local only\n"), 0o644)
+			gitq(t, w.dir, "add", "local.txt")
+			gitq(t, w.dir, "commit", "-q", "-m", "local only commit")
+			res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: arg, Base: "main"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Verdict != GateMergedRemotely || !res.Changed {
+				t.Fatalf("verdict=%s changed=%v: %s", res.Verdict, res.Changed, res.Err)
+			}
+			if n := len(LoadRegistryTolerant(w.dir).PRs()); n != 0 {
+				t.Errorf("a merged PR stays in review: %d record(s)", n)
+			}
+		})
+	}
+}

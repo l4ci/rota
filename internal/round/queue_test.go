@@ -526,3 +526,18 @@ func TestAssignOntoAPartialSlotDoesNotQueueIt(t *testing.T) {
 		}
 	}
 }
+
+func TestReconcileDropsClosedQueuedPR(t *testing.T) {
+	f := newMoveFx(t)
+	f.finish(t, "ben", pr7)
+	if _, err := f.assign("13", "ben"); err != nil {
+		t.Fatal(err)
+	}
+	f.env.Forge = (&fakeRemote{labelled: []int{12, 13}, states: map[int]string{7: "closed"}}).asForge()
+	if _, err := f.env.Reconcile(bg, f.root, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.queued()) != 0 {
+		t.Errorf("a closed PR stays in review: %v", f.queued())
+	}
+}
