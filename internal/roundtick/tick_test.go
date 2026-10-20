@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -28,8 +29,9 @@ type fake struct {
 
 func (f *fake) env() Env {
 	return Env{
-		Slots:  func() []Slot { return f.slots },
-		Queued: func() []string { return f.queued },
+		MergeApproval: gate.MergeNone,
+		Slots:         func() []Slot { return f.slots },
+		Queued:        func() []string { return f.queued },
 		Reconcile: func(context.Context) ([]string, []string, error) {
 			return f.repaired, f.drift, nil
 		},
@@ -121,6 +123,19 @@ func TestHumanMergePolicyMergesNothing(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "done", PR: "#10"}}, queued: []string{"#11"}}
 	e := f.env()
 	e.MergeApproval = "all"
+	r, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.gated)+len(f.trained) != 0 || len(r.NeedsYou) != 2 {
+		t.Fatalf("gated %v trained %v needsYou %+v", f.gated, f.trained, r.NeedsYou)
+	}
+}
+
+func TestUnsetMergeApprovalFailsClosed(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "ben", State: "done", PR: "#10"}}, queued: []string{"#11"}}
+	e := f.env()
+	e.MergeApproval = ""
 	r, err := Run(context.Background(), e)
 	if err != nil {
 		t.Fatal(err)
