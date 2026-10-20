@@ -36,7 +36,7 @@ func skillsCommands() *Command {
 type skillsArgs struct {
 	scope, agent   string
 	overwrite      bool
-	stub           bool
+	stub, full     bool
 	currentAccount bool
 }
 
@@ -53,7 +53,8 @@ func skillsVerb(run func(*Ctx, skillsArgs) (Result, error), defScope string, ove
 			fs.BoolVar(&a.overwrite, "overwrite", false, "replace edited and unmanaged files")
 		}
 		if stub {
-			fs.BoolVar(&a.stub, "stub", false, "write a SKILL.md that runs `rota skills get <name>` instead of the full text (for harnesses that can run commands at load time)")
+			fs.BoolVar(&a.stub, "stub", false, "write a SKILL.md that runs `rota skills get <name>` instead of the full text (the install default; update keeps each root's recorded mode unless a flag is given)")
+			fs.BoolVar(&a.full, "full", false, "write the full skill text, for harnesses that cannot run a command when a skill loads")
 		}
 		fs.BoolVar(&a.currentAccount, "current-account", false, "user scope: only the current Claude config dir, not every work.accounts dir")
 		return func(c *Ctx, args []string) (Result, error) {
@@ -66,9 +67,23 @@ func skillsVerb(run func(*Ctx, skillsArgs) (Result, error), defScope string, ove
 			if a.agent != "claude" && a.agent != "codex" && a.agent != "all" {
 				return Result{}, Usage("--agent must be claude, codex or all, got %q", a.agent)
 			}
+			if a.stub && a.full {
+				return Result{}, Failed("--stub and --full are exclusive")
+			}
 			return run(c, a)
 		}
 	}
+}
+
+// mode is the install mode the flags ask for; "" leaves it to the verb's default.
+func (a skillsArgs) mode() string {
+	switch {
+	case a.stub:
+		return skills.ModeStub
+	case a.full:
+		return skills.ModeFull
+	}
+	return ""
 }
 
 // skillsEnv resolves the roots a verb works on.
@@ -203,12 +218,7 @@ func skillsInstall(c *Ctx, a skillsArgs) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if a.stub {
-		if set, err = set.Stubbed(); err != nil {
-			return Result{}, Resolution("%v", err)
-		}
-	}
-	res, err := set.Install(roots, skills.Options{Version: version.Get().Version, Overwrite: a.overwrite})
+	res, err := set.Install(roots, skills.Options{Version: version.Get().Version, Overwrite: a.overwrite, Mode: a.mode()})
 	if err != nil {
 		return Result{}, skillsErr(err)
 	}
@@ -221,12 +231,7 @@ func skillsUpdate(c *Ctx, a skillsArgs) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if a.stub {
-		if set, err = set.Stubbed(); err != nil {
-			return Result{}, Resolution("%v", err)
-		}
-	}
-	res, err := set.Update(roots, skills.Options{Version: version.Get().Version, Overwrite: a.overwrite})
+	res, err := set.Update(roots, skills.Options{Version: version.Get().Version, Overwrite: a.overwrite, Mode: a.mode()})
 	if err != nil {
 		return Result{}, skillsErr(err)
 	}
@@ -280,8 +285,8 @@ func skillsInstallResult(c *Ctx, verb string, res []skills.RootResult) (Result, 
 			blockedBy = r.BlockedBy
 		}
 		rootsData = append(rootsData, knObj("root", r.Path, "agent", r.Agent, "scope", r.Scope,
-			"version", r.Version, "digest", r.Digest, "files", files))
-		summary := fmt.Sprintf("%s (%s, %s):", r.Path, r.Agent, r.Scope)
+			"version", r.Version, "digest", r.Digest, "mode", r.Mode, "files", files))
+		summary := fmt.Sprintf("%s (%s, %s, %s):", r.Path, r.Agent, r.Scope, r.Mode)
 		for _, st := range []string{skills.Created, skills.Updated, skills.Replaced, skills.Removed, skills.Edited, skills.Unmanaged, skills.Unchanged} {
 			if counts[st] > 0 {
 				summary += fmt.Sprintf(" %d %s", counts[st], st)
@@ -355,7 +360,7 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 	}
 	warnings := errStrings(pluginErrs)
 	rootsData := []any{}
-	text := []string{fmt.Sprintf("rota %s, skills %s", rep.Version, short(rep.Digest))}
+	text := []string{fmt.Sprintf("rota %s, skills %s (stub %s)", rep.Version, short(rep.Digest), short(rep.StubDigest))}
 	for _, r := range rep.Roots {
 		o := knObj("root", r.Path, "agent", r.Agent, "scope", r.Scope, "plugin", r.Plugin, "installed", r.Installed)
 		line := fmt.Sprintf("%s (%s, %s): ", r.Path, r.Agent, r.Scope)
@@ -367,9 +372,18 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 		} else {
 			o.Set("version", r.Version)
 			o.Set("digest", r.Digest)
+			o.Set("mode", r.Mode)
+			o.Set("changed", strs(r.Changed))
 			line += "current"
 			if !r.Current {
-				line = fmt.Sprintf("%sstale (installed %s, rota %s)", strings.TrimSuffix(line, "current"), short(r.Digest), short(rep.Digest))
+				want := rep.Digest
+				if r.Mode == skills.ModeStub {
+					want = rep.StubDigest
+				}
+				line = fmt.Sprintf("%sstale (installed %s, rota %s)", strings.TrimSuffix(line, "current"), short(r.Digest), short(want))
+				if len(r.Changed) > 0 {
+					line += ": " + strings.Join(r.Changed, ", ")
+				}
 			}
 		}
 		o.Set("current", r.Current)
@@ -384,7 +398,7 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 		}
 		rootsData = append(rootsData, o)
 	}
-	data := knObj("version", rep.Version, "digest", rep.Digest, "roots", rootsData)
+	data := knObj("version", rep.Version, "digest", rep.Digest, "stubDigest", rep.StubDigest, "roots", rootsData)
 	return withWarnings(withSkipped(Result{Data: data, Text: strings.Join(text, "\n")}, skipped), warnings), nil
 }
 
@@ -453,21 +467,59 @@ func skillsGet(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		body, ok := set.Skill(name)
-		if !ok {
+		if _, ok := set.Skill(name); !ok {
 			return Result{}, Usage("unknown skill %q", name).WithHint("known skills: " + strings.Join(set.Skills(), ", "))
 		}
-		switch {
-		case *refs:
+		if *refs {
 			l := set.References(name)
 			return Result{Data: knObj("name", name, "references", strs(l)), Text: strings.Join(l, "\n")}, nil
-		case *ref != "":
-			b, ok := set.Reference(name, *ref)
-			if !ok {
-				return Result{}, Usage("%s has no reference %q", name, *ref).WithHint("known references: " + strings.Join(set.References(name), ", "))
-			}
-			return Result{Data: knObj("name", name, "reference", *ref, "text", string(b)), Text: strings.TrimSuffix(string(b), "\n")}, nil
 		}
-		return Result{Data: knObj("name", name, "text", string(body)), Text: strings.TrimSuffix(string(body), "\n")}, nil
+		file := *ref
+		if file != "" {
+			if _, ok := set.Reference(name, file); !ok {
+				return Result{}, Usage("%s has no reference %q", name, file).WithHint("known references: " + strings.Join(set.References(name), ", "))
+			}
+		}
+		text, warn, err := set.Serve(name, file, skills.CacheDir(c.deps().Getenv), version.Get().Version)
+		if err != nil {
+			return Result{}, err
+		}
+		data := knObj("name", name)
+		if file != "" {
+			data.Set("reference", file)
+		}
+		data.Set("text", text)
+		res := Result{Data: data, Text: strings.TrimSuffix(text, "\n")}
+		if warn != "" {
+			res = withWarnings(res, []string{warn})
+		}
+		return res, nil
 	}
+}
+
+// skillsNeedUpdate is whether `rota skills update` has work: false only when
+// at least one root is installed and every installed root is a current,
+// untouched stub. Plugin roots are not this verb's. Anything unreadable counts
+// as needing the update.
+func skillsNeedUpdate(c *Ctx) bool {
+	a := skillsArgs{agent: "all"}
+	set, roots, _, err := skillsEnv(c, a)
+	if err != nil {
+		return true
+	}
+	rep, err := set.Status(roots, version.Get().Version)
+	if err != nil {
+		return true
+	}
+	installed := 0
+	for _, r := range rep.Roots {
+		if !r.Installed {
+			continue
+		}
+		installed++
+		if r.Mode != skills.ModeStub || !r.Current || len(r.Edited) > 0 || len(r.Missing) > 0 {
+			return true
+		}
+	}
+	return installed == 0
 }
