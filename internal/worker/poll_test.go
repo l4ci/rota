@@ -509,16 +509,16 @@ func TestOpenPRsByHeadRecordsOnlyUnrecordedSlots(t *testing.T) {
 	w.forge("listed", "1")
 	reg := LoadRegistryTolerant(w.dir)
 	polled := map[string]PollRow{"w1": {Name: "w1", State: StateIdle}}
-	if got := w.env(false).withDefaults().openPRsByHead(bg, w.dir, reg, polled)["w1"]; got != ghURL {
+	if got := w.env(false).WithDefaults().openPRsByHead(bg, w.dir, reg, polled)["w1"]; got != ghURL {
 		t.Errorf("w1 -> %q", got)
 	}
 	// an unpolled slot, or one that already records its PR, needs no listing
 	w.forge("listError", "must not be called")
-	if got := w.env(false).withDefaults().openPRsByHead(bg, w.dir, reg, nil); got != nil {
+	if got := w.env(false).WithDefaults().openPRsByHead(bg, w.dir, reg, nil); got != nil {
 		t.Errorf("unpolled: %v", got)
 	}
 	w.setSlot(ghURL, "")
-	if got := w.env(false).withDefaults().openPRsByHead(bg, w.dir, LoadRegistryTolerant(w.dir), polled); got != nil {
+	if got := w.env(false).WithDefaults().openPRsByHead(bg, w.dir, LoadRegistryTolerant(w.dir), polled); got != nil {
 		t.Errorf("recorded: %v", got)
 	}
 }
@@ -531,19 +531,19 @@ func TestPromoteIdleWithPR(t *testing.T) {
 	w := newWorld(t, "")
 
 	w.forge("listed", "1")
-	rows, notes := w.env(false).withDefaults().promoteIdleWithPR(bg, w.dir, idle())
+	rows, notes := w.env(false).WithDefaults().promoteIdleWithPR(bg, w.dir, idle())
 	if rows[0] != (PollRow{"w1", StateDone, ghURL}) || notes["w1"] != missingSentinelNote {
 		t.Errorf("open PR: %+v %v", rows, notes)
 	}
 
 	w.forge("listed", "0")
-	rows, notes = w.env(false).withDefaults().promoteIdleWithPR(bg, w.dir, idle())
+	rows, notes = w.env(false).WithDefaults().promoteIdleWithPR(bg, w.dir, idle())
 	if rows[0].State != StateIdle || notes != nil {
 		t.Errorf("no PR: %+v %v", rows, notes)
 	}
 
 	w.forge("listError", "boom")
-	rows, notes = w.env(false).withDefaults().promoteIdleWithPR(bg, w.dir, idle())
+	rows, notes = w.env(false).WithDefaults().promoteIdleWithPR(bg, w.dir, idle())
 	if rows[0].State != StateIdle || notes != nil {
 		t.Errorf("lookup error: %+v %v", rows, notes)
 	}
@@ -551,7 +551,7 @@ func TestPromoteIdleWithPR(t *testing.T) {
 	// only an idle row is looked at
 	w.forge("listed", "1")
 	busy := []PollRow{{"w1", StateBusy, "x"}}
-	if rows, notes = w.env(false).withDefaults().promoteIdleWithPR(bg, w.dir, busy); rows[0].State != StateBusy || notes != nil {
+	if rows, notes = w.env(false).WithDefaults().promoteIdleWithPR(bg, w.dir, busy); rows[0].State != StateBusy || notes != nil {
 		t.Errorf("busy: %+v %v", rows, notes)
 	}
 }
@@ -603,7 +603,7 @@ func TestClassifyDoneBeforeRelayIsNotDone(t *testing.T) {
 	rows := []PollRow{{"w1", StateIdle, staleDoneEvidence}}
 	w := newWorld(t, "")
 	w.forge("listed", "1")
-	if out, _ := w.env(false).withDefaults().promoteIdleWithPR(bg, w.dir, rows); out[0].State != StateIdle {
+	if out, _ := w.env(false).WithDefaults().promoteIdleWithPR(bg, w.dir, rows); out[0].State != StateIdle {
 		t.Errorf("stale row promoted by branch head: %v", out[0])
 	}
 }

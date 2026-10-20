@@ -21,14 +21,15 @@ import (
 // cannot be read is no round either, and says so on env's stderr: the entries
 // would land under round 0. A verb that writes several entries reads it once.
 func LedgerRound(env Env, root string) int {
+	env = env.WithDefaults()
 	cd, err := rotastate.CommonDir(root)
 	if err != nil {
-		fmt.Fprintf(env.errWriter(), "rota: round lease not read, ledger entries get round 0: %v\n", err)
+		fmt.Fprintf(env.Stderr, "rota: round lease not read, ledger entries get round 0: %v\n", err)
 		return 0
 	}
-	l, st, err := env.leaseEnv().Read(cd)
+	l, st, err := env.Lease().Read(cd)
 	if err != nil {
-		fmt.Fprintf(env.errWriter(), "rota: round lease not read, ledger entries get round 0: %v\n", err)
+		fmt.Fprintf(env.Stderr, "rota: round lease not read, ledger entries get round 0: %v\n", err)
 		return 0
 	}
 	if st != roundlease.Live && st != roundlease.Foreign {
@@ -79,14 +80,16 @@ func LedgerAppendErr(env Env, root string, e ledger.Entry) error {
 
 // ledgerAppend is LedgerNote for an entry whose round is settled.
 func ledgerAppend(env Env, root string, e ledger.Entry) {
+	env = env.WithDefaults()
 	if err := ledgerAppendErr(env, root, e); err != nil {
-		fmt.Fprintf(env.errWriter(), "rota: round ledger not written (%s): %v\n", ledger.Path(root), err)
+		fmt.Fprintf(env.Stderr, "rota: round ledger not written (%s): %v\n", ledger.Path(root), err)
 	}
 }
 
 func ledgerAppendErr(env Env, root string, e ledger.Entry) error {
+	env = env.WithDefaults()
 	if e.TS.IsZero() {
-		e.TS = env.Clock()()
+		e.TS = env.Now()
 	}
 	if e.Account == "" || e.Harness == "" || e.Slot == "" {
 		// Only fills missing fields: a corrupt registry must not lose the entry.

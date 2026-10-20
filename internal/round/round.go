@@ -139,10 +139,10 @@ func (e Env) WithAccounts(a *worker.Accounts) Env {
 }
 
 // getenv is the env's environment reader, from the worker env.
-func (e Env) getenv() func(string) string { return e.Worker.Environ() }
+func (e Env) getenv() func(string) string { return e.Worker.WithDefaults().Getenv }
 
 // now is the env's clock, from the worker env.
-func (e Env) now() time.Time { return e.Worker.Clock()() }
+func (e Env) now() time.Time { return e.Worker.WithDefaults().Now() }
 
 // Row is one line of `rota round status`.
 type Row struct {
@@ -515,7 +515,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 	}
 
-	now := e.Worker.Clock()
+	now := e.Worker.WithDefaults().Now
 	waiting := map[string]bool{}
 	for _, x := range escalation.Load(root) {
 		if x.Status == escalation.StatusPending && x.Slot != "" {

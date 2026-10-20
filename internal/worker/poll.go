@@ -694,7 +694,7 @@ func PollFixture(path, slot, kind, status string, lines int) (PollResult, error)
 // local merge. A slot that newly turns BLOCKED or NEEDS-PERMISSION raises a
 // host notification (herdr only).
 func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, error) {
-	e = e.withDefaults()
+	e = e.WithDefaults()
 	if o.Settle < 0 {
 		o.Settle = 0
 	}

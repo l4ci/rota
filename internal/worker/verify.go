@@ -45,11 +45,12 @@ func (r VerifyResult) OK() bool { return len(r.Failed) == 0 && !r.NotRun && !r.T
 // command goes through Env.Shell, whose default runs it in its own process
 // group and kills the group on cancel. err is the log file failing to open.
 func (e Env) Verify(ctx context.Context, cfg GateConfig, root, dir string) (VerifyResult, error) {
+	e = e.WithDefaults()
 	led, err := LoadLedger(root)
 	if err != nil {
 		return VerifyResult{}, err
 	}
-	cfg.WarnLegacy(e.errWriter())
+	cfg.WarnLegacy(e.Stderr)
 	return e.RunVerifyWith(ctx, cfg.Full, dir, led)
 }
 
@@ -88,7 +89,7 @@ func (e Env) RunVerify(ctx context.Context, cmds []string, dir string) (VerifyRe
 // failing tests all have an unexpired entry counts as verified and is listed
 // in Excluded.
 func (e Env) RunVerifyWith(ctx context.Context, cmds []string, dir string, led testledger.Ledger) (VerifyResult, error) {
-	e = e.withDefaults()
+	e = e.WithDefaults()
 	return runVerifyCmds(ctx, e.Shell, cmds, dir, led, e.Now())
 }
 
@@ -133,5 +134,5 @@ func runVerifyCmds(ctx context.Context, shell func(ctx context.Context, dir, com
 // RunShell runs one command through the Env's shell (sh -c by default) in dir
 // and returns its combined output and exit code.
 func (e Env) RunShell(ctx context.Context, dir, command string) (string, int) {
-	return e.withDefaults().Shell(ctx, dir, command)
+	return e.WithDefaults().Shell(ctx, dir, command)
 }

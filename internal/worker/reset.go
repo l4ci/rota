@@ -42,7 +42,7 @@ func (e Env) Reset(root, slot, task string, checkOnly bool) (ResetResult, error)
 // ResetTo is Reset onto an explicit branch: a round slot works on
 // `<agent>/<issue>-<slug>` and parks on `park/<agent>`, not rota-worker/….
 func (e Env) ResetTo(root, slot, task, newBranch string, checkOnly bool) (ResetResult, error) {
-	e = e.withDefaults()
+	e = e.WithDefaults()
 	res := ResetResult{Slot: slot}
 	reg, err := LoadRegistry(root)
 	if err != nil {
