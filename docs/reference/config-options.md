@@ -286,6 +286,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `round.architectureAreas` | list | `[]` |  | Areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review. |
 | `round.autopilot` | bool | `false` |  | Lets rota round watch --autopilot and rota round tick assign, gate and merge mechanically. Merges only under ship.mergeApproval none. |
 | `round.autopilotCap` | int | `3` |  | Most assigns, and most merges, one autopilot tick does. 0 means the default. |
+| `round.batch` | int | `0` |  | Most items a round may have assigned and not yet landed or parked at once. rota round assign refuses the next one past it and rota round tick assigns none. 0 means no limit. |
 | `round.reviewLoop` | enum | `"manual"` | `manual`, `auto` | What happens when a reviewer comments on a finished worker's PR. manual reports it and leaves rota round review-relay to the orchestrator; auto relays it to the worker as a counted bounce (round.maxBounces) from rota round watch and rota round tick. |
 
 ### roles

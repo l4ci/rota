@@ -1,8 +1,8 @@
 # Plain orchestrator comparison, October 2026
 
-What a Claude Code session with no rota and no skills would do to run a team of subagents, lined up against what rota's rounds do. Written 2026-10-19 by the maintainer's orchestrator session (Fable 5.1) from its own first-principles design and a read of `skills/rota-orchestrate`, `skills/references/worker-contract.md`, `skills/rota-review`, `skills/rota-qa`, `docs/contributing/rounds.md` and this repo's `.rota/config.json`. The six suggestions became issues #897 to #902, in the order below; #903 re-runs this comparison when they land and moves the result into the user docs.
+What a Claude Code session with no rota and no skills would do to run a team of subagents, lined up against what rota's rounds do. Written 2026-10-19 by the maintainer's orchestrator session (Fable 5.1) from its own first-principles design and a read of `skills/rota-orchestrate`, `skills/references/worker-contract.md`, `skills/rota-review`, `skills/rota-qa`, `docs/contributing/rounds.md` and this repo's `.rota/config.json`. The six suggestions became issues #897 to #902, in the order below; #903 re-ran this comparison once they landed and moved the result into the user docs.
 
-Re-read this page before that re-run. It records the baseline the follow-ups were measured against.
+This page is the dated baseline the follow-ups were measured against and is not updated. The re-run after #897 to #902 landed is [rota or a bare session](../usage/rota-vs-plain-session.md), and it answers the open question at the bottom of this page.
 
 ## Summary
 

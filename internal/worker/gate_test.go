@@ -566,11 +566,28 @@ func (w *world) logText() string { b, _ := os.ReadFile(w.log); return string(b) 
 func TestGateShellRunsUnderTheContext(t *testing.T) {
 	w := newWorld(t, "")
 	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
-	w.setConfig(`{"test":{"full":["sleep 30"]}}`)
-	ctx, cancel := context.WithTimeout(bg, 300*time.Millisecond)
+	e := w.env(false)
+	// Every git call is slow, as on a loaded machine: the verify command must
+	// still be what the cancellation lands on, not the merge or the worktree.
+	e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		time.Sleep(200 * time.Millisecond)
+		return git.Exec(ctx, dir, args...)
+	}
+	started := filepath.Join(t.TempDir(), "started")
+	w.setConfig(`{"test":{"full":["touch ` + started + `; sleep 30"]}}`)
+	ctx, cancel := context.WithCancel(bg)
 	defer cancel()
+	go func() { // cancel once the verify command is running, however long the setup took
+		for ctx.Err() == nil {
+			if _, err := os.Stat(started); err == nil {
+				cancel()
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
 	start := time.Now()
-	res, err := w.env(false).Gate(ctx, w.dir, GateOpts{Slot: "w1", Base: "main"})
+	res, err := e.Gate(ctx, w.dir, GateOpts{Slot: "w1", Base: "main"})
 	if err != nil || res.Verdict != GateVerifyFailed || time.Since(start) > 10*time.Second {
 		t.Errorf("a cancelled context must stop the verify command: %+v %v after %v", res, err, time.Since(start))
 	}
