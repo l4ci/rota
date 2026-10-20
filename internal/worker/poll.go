@@ -117,8 +117,11 @@ var (
 	reDoneG    = regexp.MustCompile(`(?m)^\s*(?:[●⏺•┃]\s*)?ROTA-DONE\s+(\S+)\s*(.*)$`)
 	reRetry    = regexp.MustCompile(`Retrying in`)
 	reFunds    = regexp.MustCompile(`Add funds`)
-	reAPIErr   = regexp.MustCompile(`(API Error[^\n]*)`)
-	reResume   = regexp.MustCompile(`Resume this session with`)
+	// A line that quotes text rather than says it: a diff line (optionally
+	// after a line number) or tool output under "⎿" (#1212).
+	reQuoted = regexp.MustCompile(`^\s*(?:\d+\s+)?[+-](?:\s|[^-+\s])|^\s*⎿`)
+	reAPIErr = regexp.MustCompile(`(API Error[^\n]*)`)
+	reResume = regexp.MustCompile(`Resume this session with`)
 	// Heuristic, like DEAD: a limited session cannot print a sentinel. The
 	// patterns are anchored to phrasing a session emits about ITSELF, not bare
 	// words like "limit" that a worker reading source code would echo.
@@ -298,6 +301,20 @@ func relayMask(lines []string, gutter, sigEnds bool) []bool {
 	return mask
 }
 
+// StripQuoted is text without the diff and tool-output lines a busy session
+// shows in its scrollback: a limit phrase quoted there is code, not the
+// harness's own dialog.
+func StripQuoted(text string) string {
+	lines := splitLines(text)
+	kept := lines[:0:0]
+	for _, l := range lines {
+		if !reQuoted.MatchString(l) {
+			kept = append(kept, l)
+		}
+	}
+	return strings.Join(kept, "\n")
+}
+
 // StripRelays is text without the echoed orchestrator blocks, the way
 // lastSentinel skips them: a limit phrase a brief or relay quotes is the
 // orchestrator's, not the session's. kind picks the gutter reading.
@@ -411,7 +428,9 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	// LIMITED is checked BEFORE movement: a session that hit its usage limit may
 	// still animate a prompt, and reading that as BUSY strands the orchestrator
 	// waiting for work that cannot resume until the window resets.
-	if s, e, ok := FindLimit(kind, own); ok {
+	// Diff and tool-output lines are quoted text, not the dialog (#1212).
+	dialog := StripQuoted(own)
+	if s, e, ok := FindLimit(kind, dialog); ok {
 		// The "Add funds" prompt spends real money and is NEVER the
 		// orchestrator's to answer: flag it so the caller escalates.
 		if reFunds.MatchString(tail) { // fail closed: a real limit plus any "Add funds" escalates
@@ -420,7 +439,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 		if rules.authDead != nil && rules.authDead.MatchString(own) {
 			return StateLimited, "API key expired — needs a human to renew it; no reset clock"
 		}
-		return StateLimited, strutil.Clip(strings.TrimSpace(own[s:e]), 120)
+		return StateLimited, strutil.Clip(strings.TrimSpace(dialog[s:e]), 120)
 	}
 	if reason, ok := strings.CutPrefix(native, host.UnverifiablePrefix); ok {
 		return StateUnverifiable, reason
