@@ -745,6 +745,23 @@ type gateRun struct {
 	BookErr error
 }
 
+// lazyItemBody reads item bodies for the behaviour run (#899, #915). The
+// backlog opens on the first item read, once: a gate or train that never
+// reaches the behaviour run (or whose item has no Try it section) pays nothing.
+func lazyItemBody(c *Ctx, root string) func(issue string) (string, bool, error) {
+	var be backlog.Backend
+	var beErr error
+	return func(issue string) (string, bool, error) {
+		if be == nil && beErr == nil {
+			be, beErr = openBacklog(c, root, false, "")
+		}
+		if beErr != nil {
+			return "", false, beErr
+		}
+		return be.Detail(issue)
+	}
+}
+
 // runGate runs the merge gate for one slot and does the item bookkeeping after
 // a real run. `worker gate` and the round autopilot both go through it, so the
 // autopilot reads the result, not a verb's JSON.
@@ -758,22 +775,9 @@ func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
 		req.Thread = func() (approvalThread, error) { return targetApprovalThread(t) }
 		return clearMerge(c, policy, o.Slot+" into "+o.Base, o.Confirm, req, files, nil)
 	}
-	// The backlog opens on the first item read, once: a gate that never reaches
-	// the behaviour run (or whose item has no Try it section) pays nothing.
-	var be backlog.Backend
-	var beErr error
-	itemBody := func(issue string) (string, bool, error) {
-		if be == nil && beErr == nil {
-			be, beErr = openBacklog(c, root, false, "")
-		}
-		if beErr != nil {
-			return "", false, beErr
-		}
-		return be.Detail(issue)
-	}
 	ctx, stop := workerContext()
 	defer stop()
-	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, Prune: o.Prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root), ItemBody: itemBody})
+	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, Prune: o.Prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root), ItemBody: lazyItemBody(c, root)})
 	run := gateRun{Result: r, Err: err, Issue: r.Issue, Refused: isRefusal(worker.ClassifyVerdict(r.Verdict), err)}
 	if run.Refused || err != nil || o.CheckOnly {
 		return run

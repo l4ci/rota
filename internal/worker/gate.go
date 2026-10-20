@@ -167,8 +167,13 @@ type GateOpts struct {
 	// ItemBody reads the body of an item (#899), whose `## Try it` steps the
 	// gate runs on the scratch merge after test.full and test.e2e. found is
 	// false for an item the backend does not know. nil leaves the behaviour
-	// run out: the train and callers that did not wire it.
+	// run out: callers that did not wire it.
 	ItemBody func(issue string) (body string, found bool, err error)
+	// BehaviourDir turns a CheckOnly gate into the train's behaviour step
+	// (#915): once the checks pass, the item's Try it steps run in this
+	// directory, the train's scratch tree with the member merged. A failing step
+	// ends the gate with verify-failed, as at the gate's own merge.
+	BehaviourDir string
 }
 
 // skipsVerify says the gate runs no verify tier: --no-verify, or a train's
@@ -965,6 +970,11 @@ func (g *gate) stepVerdict() (bool, error) {
 // stepCheckOnly ends a CheckOnly gate with verdict fresh.
 func (g *gate) stepCheckOnly() (bool, error) {
 	if g.o.CheckOnly {
+		if g.o.BehaviourDir != "" {
+			if done, err := g.behaviourRun(g.o.BehaviourDir); done || err != nil {
+				return true, err
+			}
+		}
 		// the checked tip: origin/<branch> when a PR is recorded
 		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
 		g.res.Verdict = GateFresh
