@@ -36,6 +36,36 @@ var (
 	nonBlankSub = regexp.MustCompile(`^(\s*)[-*]\s+(.+)$`)
 )
 
+// taskBlock is one top-level task bullet of the Tasks section: its id and the
+// lines under it, up to the next task at the same or a shallower indent.
+type taskBlock struct {
+	name  string
+	lines []string
+}
+
+func taskBlocks(body string) []taskBlock {
+	var out []taskBlock
+	lines := strings.Split(strings.ReplaceAll(tasksSection(body), "\r", ""), "\n")
+	for i := 0; i < len(lines); {
+		m := taskBullet.FindStringSubmatch(lines[i])
+		if m == nil {
+			i++
+			continue
+		}
+		base := len(m[1])
+		j := i + 1
+		for j < len(lines) {
+			if tm := taskBullet.FindStringSubmatch(lines[j]); tm != nil && len(tm[1]) <= base {
+				break
+			}
+			j++
+		}
+		out = append(out, taskBlock{m[2], lines[i+1 : j]})
+		i = j
+	}
+	return out
+}
+
 // Check reads the Tasks section of a plan body against the item's criterion
 // ids (as acceptance.IDs numbers them). A task is a top-level `- **T<n>**`
 // bullet; its `Serves:` sub-bullet names the criteria it delivers and its
@@ -48,24 +78,8 @@ func Check(body string, ids []string) Report {
 	served := map[string]bool{}
 	var r Report
 
-	lines := strings.Split(strings.ReplaceAll(tasksSection(body), "\r", ""), "\n")
-	for i := 0; i < len(lines); {
-		m := taskBullet.FindStringSubmatch(lines[i])
-		if m == nil {
-			i++
-			continue
-		}
-		task, base := m[2], len(m[1])
-		j := i + 1
-		for j < len(lines) {
-			if tm := taskBullet.FindStringSubmatch(lines[j]); tm != nil && len(tm[1]) <= base {
-				break
-			}
-			j++
-		}
-		block := lines[i+1 : j]
-		i = j
-
+	for _, tb := range taskBlocks(body) {
+		task, block := tb.name, tb.lines
 		var serves []string
 		for _, l := range block {
 			if sm := itembody.ServesRe.FindStringSubmatch(l); sm != nil && !placeholder.MatchString(strings.TrimSpace(sm[1])) {

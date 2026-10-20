@@ -53,6 +53,7 @@ Rules:
 
 - **Verify is non-negotiable.** No verify step, no task.
 - **Serves is non-negotiable too.** Every task carries a `Serves: AC-n` sub-bullet (several ids allowed), and every criterion is served by at least one task. A task that serves no criterion is scope creep: drop it or raise the missing criterion first. `rota plan check <key>` enforces this after the write.
+- **Size is advisory.** `rota plan check` adds a `warn:` line for a plan with more than `plan.maxTasks` tasks (default 3) and one for each task whose `Files:` line names more than `plan.maxFilesPerTask` paths (default 5), each with a split suggestion. Warnings never fail the check; `0` turns one off. Tasks are vertical slices and may be wide on purpose, so split only when a task would not fit one execution window.
 - **Behavior tasks name the RED.** Verify states the failure the new test shows before the change (`RED: <command> fails with <expected message>`). The test follows [`references/test-quality.md`](references/test-quality.md). A docs or skill-text task with no test seam writes `no test seam: docs/skill change` instead.
 - **Interfaces** is `Consumes:` (what the task relies on) and `Produces:` (what it creates for later tasks). Write `none` rather than omit a line.
 - **Relies on** lists only entries the plan's approach actually depends on, not every bullet the queries returned. `/rota-review` checks the diff against this list and records a hit only for entries it followed.
@@ -79,7 +80,7 @@ KEY=$(rota plan add --json --milestone <MID> --slice --title "<title>" | jq -r .
 
 Quote `#42`. Pass `--design <ID>` when a design exists; the frontmatter records it. Issue backend: draft in a scratch file and publish with `rota plan put <key> --body-file <file>|-`; file backend: edit the stub's sections, keep the frontmatter. List with `rota plan list [--milestone <M>]`. Record plan-shaping answers with `rota item comment add <ID> --kind decision --body-file -`.
 
-Issue backend: run `rota plan check <key>` (read-only; exit 1 lists uncovered criteria, tasks with no `Serves:` or an unknown AC id, and tasks with no Verify) and fix the plan until it passes. On the file backend it exits 1 with `blockedBy: backend`; rely on the Step 3 self-check there.
+Issue backend: run `rota plan check <key>` (read-only; exit 1 lists uncovered criteria, tasks with no `Serves:` or an unknown AC id, and tasks with no Verify; `warn:` lines for size are advisory) and fix the plan until it passes. On the file backend it exits 1 with `blockedBy: backend`; rely on the Step 3 self-check there.
 
 When the plan splits into separate items, or after writing, read [`plan-edge-cases.md`](plan-edge-cases.md) for dependent-item filing and the docs-path check.
 

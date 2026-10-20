@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/acceptance"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/plan"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // runPlanCheck is read-only: it holds the plan's tasks against the item's
@@ -21,7 +23,7 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	_, issue, err := modeRoot(c)
+	root, issue, err := modeRoot(c)
 	if err != nil {
 		return Result{}, err
 	}
@@ -50,6 +52,15 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 		ids = append(ids, cr.ID)
 	}
 	r := plan.Check(body, ids)
+	cfg := config.Load(rotatree.Config(root))
+	var lim plan.Limits
+	if lim.MaxTasks, err = config.Int(cfg, "plan.maxTasks", 0, config.MaxInt); err != nil {
+		return Result{}, Failed("%v", err)
+	}
+	if lim.MaxFilesPerTask, err = config.Int(cfg, "plan.maxFilesPerTask", 0, config.MaxInt); err != nil {
+		return Result{}, Failed("%v", err)
+	}
+	warns := plan.CheckSize(body, lim)
 
 	unknown := []any{}
 	var lines []string
@@ -68,10 +79,17 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 	}
 	d := jsonObj("key", key, "ok", r.Ok(), "criteria", strs(ids),
 		"uncovered", strs(r.Uncovered), "orphans", strs(r.Orphans),
-		"unknown", unknown, "noVerify", strs(r.NoVerify))
+		"unknown", unknown, "noVerify", strs(r.NoVerify), "warnings", strs(warns))
+	problems := len(lines)
 	if r.Ok() {
-		return Result{Data: d, Text: key + ": ok"}, nil
+		lines = []string{key + ": ok"}
+	}
+	for _, w := range warns {
+		lines = append(lines, "warn: "+w)
+	}
+	if r.Ok() {
+		return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
 	}
 	return Result{Data: d, Text: strings.Join(lines, "\n")},
-		Failed("%s: %d problem(s)", key, len(lines))
+		Failed("%s: %d problem(s)", key, problems)
 }

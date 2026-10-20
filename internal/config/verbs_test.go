@@ -475,3 +475,18 @@ func TestSetInLocalAndUnsetPruneEmptyParents(t *testing.T) {
 		t.Errorf("Validate = %v", err)
 	}
 }
+
+func TestSetRejectsNegativePlanLimits(t *testing.T) {
+	for _, key := range []string{"plan.maxTasks", "plan.maxFilesPerTask"} {
+		for _, bad := range []string{"-1", "2.5", `"many"`, "true"} {
+			if _, err := Set(t.TempDir(), key, bad); !errors.Is(err, ErrBadValue) {
+				t.Errorf("%s=%s: err = %v, want ErrBadValue", key, bad, err)
+			}
+		}
+		for _, ok := range []string{"0", "7"} {
+			if _, err := Set(t.TempDir(), key, ok); err != nil {
+				t.Errorf("%s=%s: %v", key, ok, err)
+			}
+		}
+	}
+}
