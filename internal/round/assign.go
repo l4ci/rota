@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/roundlease"
 	secpkg "github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/tracker"
@@ -439,10 +440,17 @@ func usage(format string, a ...any) error {
 	return &exitcode.Error{Exit: exitcode.ExitUsage, Message: fmt.Sprintf(format, a...)}
 }
 
+// workerEnv is the one place the worker env is derived from the round env:
+// Git and Lease come from e unless the configured Worker already sets them, so
+// a fake on Env.Worker applies on every path and no verb patches fields itself.
 func (e Env) workerEnv() worker.Env {
 	w := e.Worker
 	if w.Git == nil {
 		w.Git = e.Git
+	}
+	if w.Lease == nil {
+		le := e.Lease
+		w.Lease = func() roundlease.Env { return le }
 	}
 	return w
 }
@@ -545,7 +553,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	res.Dispatched = res.Dispatched || d.Dispatched
 	res.Changed = res.Changed || d.Changed
 	if err == nil && !run.resuming {
-		if lerr := worker.LedgerAppendErr(e.Worker, root, ledger.Entry{Kind: ledger.KindAssign, Issue: run.id, Slot: run.agent, Account: res.Account, Harness: run.kind,
+		if lerr := worker.LedgerAppendErr(e.workerEnv(), root, ledger.Entry{Kind: ledger.KindAssign, Issue: run.id, Slot: run.agent, Account: res.Account, Harness: run.kind,
 			Detail: ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts, root, run.kind, res.Account))}); lerr != nil {
 			return res, fmt.Errorf("%s is assigned to %s, but the round ledger row was not written: %w", run.id, run.agent, lerr)
 		}
