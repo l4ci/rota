@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,29 +29,61 @@ func Load(configPath string) any {
 // (nil when absent), project is configPath's own content, local the overlay.
 type layers struct{ global, project, local any }
 
-var warnGlobalOnce sync.Once
+// WarnWriter receives the corrupt-global warning; tests swap it to see it.
+var WarnWriter io.Writer = os.Stderr
 
-// globalLayer is the global config as a nested object of its schema keys. A
-// missing file or config dir is no layer; a corrupt file warns once per
-// process and is skipped.
-func globalLayer() any {
+var (
+	warnMu sync.Mutex
+	warned = map[string]bool{}
+)
+
+// warnGlobal prints msg once per process for each distinct message.
+func warnGlobal(msg string) {
+	warnMu.Lock()
+	defer warnMu.Unlock()
+	if warned[msg] {
+		return
+	}
+	warned[msg] = true
+	fmt.Fprintln(WarnWriter, "rota: warning: "+msg)
+}
+
+// GlobalError is why the global config is unusable: nil when it is missing or
+// valid, else the read or parse error.
+func GlobalError() error {
+	_, err := globalLayerErr()
+	return err
+}
+
+// globalLayerErr is the global config as a nested object of its schema keys
+// (nil when absent) and the error that made it unreadable.
+func globalLayerErr() (any, error) {
 	dir, err := projects.Dir()
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	vals, err := LoadGlobal(dir)
 	if err != nil {
-		warnGlobalOnce.Do(func() { fmt.Fprintln(os.Stderr, "rota: warning: global config skipped: "+err.Error()) })
-		return nil
+		return nil, err
 	}
 	if len(vals) == 0 {
-		return nil
+		return nil, nil
 	}
 	obj := jsonx.NewObject()
 	for _, k := range Keys {
 		if v, ok := vals[k.Name]; ok {
 			obj = fillKey(obj, "", strings.Split(k.Name, "."), v)
 		}
+	}
+	return obj, nil
+}
+
+// globalLayer is the global layer; a corrupt file warns once and is skipped.
+func globalLayer() any {
+	obj, err := globalLayerErr()
+	if err != nil {
+		warnGlobal("global config skipped: " + err.Error())
+		return nil
 	}
 	return obj
 }

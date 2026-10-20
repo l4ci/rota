@@ -24,9 +24,10 @@ func GlobalPath(dir string) string { return filepath.Join(dir, "config.json") }
 // would misconfigure the next project.
 var notGlobal = map[string]bool{VersionKey: true, "git.baseBranch": true, "umbrella.enabled": true}
 
-// SaveGlobal writes the schema keys set in root's .rota/config.json (never
-// config.local.json) to the global config under dir, replacing it. It returns
-// the keys it saved, in schema order.
+// SaveGlobal merges the schema keys set in root's .rota/config.json (never
+// config.local.json) into the global config under dir. Keys the project does
+// not set stay as they are: projects inherit the global, so replacing it would
+// delete inherited values. It returns the keys it saved, in schema order.
 func SaveGlobal(root, dir string) ([]string, error) {
 	raw, err := os.ReadFile(configPath(root))
 	if err != nil {
@@ -36,21 +37,13 @@ func SaveGlobal(root, dir string) ([]string, error) {
 	if !ok {
 		return nil, ErrCorrupt
 	}
-	out := jsonx.NewObject()
-	saved := []string{}
+	vals := map[string]any{}
 	for _, k := range Keys {
-		if notGlobal[k.Name] {
-			continue
-		}
 		if v, ok := walk(cfg, k.Name); ok {
-			out = fillKey(out, "", strings.Split(k.Name, "."), v)
-			saved = append(saved, k.Name)
+			vals[k.Name] = v
 		}
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
-	}
-	return saved, fsio.WriteJSONAtomic(GlobalPath(dir), out)
+	return MergeGlobal(dir, vals)
 }
 
 // LoadGlobal is the global config's values by dotted schema key. A missing

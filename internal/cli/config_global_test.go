@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,9 +13,9 @@ import (
 // isolateGlobal points the rota config dir at a fresh temp dir and returns it.
 func isolateGlobal(t *testing.T) string {
 	t.Helper()
-	x := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", x)
-	return filepath.Join(x, "rota")
+	dir := filepath.Join(t.TempDir(), "rota")
+	t.Setenv("ROTA_CONFIG_DIR", dir)
+	return dir
 }
 
 func writeFile(t *testing.T, path, body string) {
@@ -132,11 +133,56 @@ func TestInitWarnsOnCorruptGlobal(t *testing.T) {
 	gdir := isolateGlobal(t)
 	writeFile(t, config.GlobalPath(gdir), `{not json`)
 	dir := t.TempDir()
+	var warn bytes.Buffer
+	old := config.WarnWriter
+	config.WarnWriter = &warn
+	t.Cleanup(func() { config.WarnWriter = old })
 	code, _, errOut := initRun(t, dir, "init")
 	if code != 0 {
 		t.Errorf("want success, got %d %q", code, errOut)
 	}
+	if !strings.Contains(warn.String(), "global config skipped") {
+		t.Errorf("no corrupt-global warning, got %q", warn.String())
+	}
 	if v := cfgValue(t, dir, "work.isolation"); v != "branch" {
 		t.Errorf("work.isolation = %v", v)
+	}
+}
+
+func TestSaveGlobalKeepsInheritedKeys(t *testing.T) {
+	gdir := isolateGlobal(t)
+	writeFile(t, config.GlobalPath(gdir), `{"work":{"isolation":"worktree"},"ship":{"review":"none"}}`)
+	dir := t.TempDir()
+	if code, _, e := initRun(t, dir, "init"); code != 0 {
+		t.Fatalf("init: %d %s", code, e)
+	}
+	if code, _, e := initRun(t, dir, "config", "save-global"); code != 0 {
+		t.Fatalf("save-global: %d %s", code, e)
+	}
+	raw, err := os.ReadFile(config.GlobalPath(gdir))
+	if err != nil || !strings.Contains(string(raw), `"worktree"`) || !strings.Contains(string(raw), `"none"`) {
+		t.Errorf("save-global dropped inherited keys (%v):\n%s", err, raw)
+	}
+}
+
+func TestConfigCheckNamesACorruptGlobal(t *testing.T) {
+	gdir := isolateGlobal(t)
+	writeFile(t, config.GlobalPath(gdir), `{"work":{"isolation":"worktree"}}`)
+	dir := t.TempDir()
+	if code, _, e := initRun(t, dir, "init"); code != 0 {
+		t.Fatalf("init: %d %s", code, e)
+	}
+	writeFile(t, config.GlobalPath(gdir), `{not json`)
+	code, out, _ := runMainWith(testDeps(), "-C", dir, "config", "check")
+	if code != 1 || !strings.Contains(out, "STALE:") || !strings.Contains(out, "GLOBAL CORRUPT") {
+		t.Errorf("check = %d %q", code, out)
+	}
+	// fill must not pin defaults over the global while it cannot be read.
+	if code, _, e := initRun(t, dir, "config", "fill"); code != 0 {
+		t.Fatalf("fill: %d %s", code, e)
+	}
+	raw, _ := os.ReadFile(filepath.Join(dir, ".rota", "config.json"))
+	if strings.Contains(string(raw), "isolation") {
+		t.Errorf("fill pinned a default under a corrupt global:\n%s", raw)
 	}
 }
