@@ -148,7 +148,7 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 	// The cap is enforced by the locked write: the snapshot check above only
 	// spares the work, and a bounce that landed since then refuses here.
 	var counted, capped bool
-	if out.Bounces, counted, capped, err = worker.RecordBounceCapped(e.Worker, nil, root, issue, o.Slot, pr.HeadSHA, o.MaxBounces); err != nil {
+	if out.Bounces, counted, capped, err = worker.RecordBounceCapped(e.workerEnv(), nil, root, issue, o.Slot, pr.HeadSHA, o.MaxBounces); err != nil {
 		return out, err
 	}
 	if capped {
@@ -182,7 +182,7 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		out.Bounces = worker.LoadRegistryTolerant(root).Bounces(issue)
 		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr))
 	}
-	if _, err := e.Worker.Dispatch(ctx, root, worker.DispatchOpts{Slot: o.Slot, BodyFile: body.Name(), Relay: true}); err != nil {
+	if _, err := e.workerEnv().Dispatch(ctx, root, worker.DispatchOpts{Slot: o.Slot, BodyFile: body.Name(), Relay: true}); err != nil {
 		rerr, serr := unrecord(), unseen()
 		merr := worker.RetractMail(root, o.Slot, mail.Seq)
 		out.Bounces = worker.LoadRegistryTolerant(root).Bounces(issue) // rollback path: the registry was read strictly above
@@ -231,7 +231,7 @@ func (e Env) reviewFresh(ctx context.Context, root string, o ReviewOpts, reg wor
 		return skip("no free slot to transfer to")
 	}
 	prev := out.Bounces
-	bounces, counted, capped, err := worker.RecordBounceCapped(e.Worker, nil, root, issue, o.Slot, head, o.MaxBounces)
+	bounces, counted, capped, err := worker.RecordBounceCapped(e.workerEnv(), nil, root, issue, o.Slot, head, o.MaxBounces)
 	if err != nil {
 		return false, err
 	}

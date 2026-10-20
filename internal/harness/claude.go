@@ -151,7 +151,7 @@ func (claude) LimitPhrases() []string { return SharedLimitPhrases() }
 // the status line while the pane itself may sit still between captures.
 func (claude) PaneVocab() PaneVocab {
 	return PaneVocab{
-		LoggedOut: `Login expired|Please run /login`,
+		LoggedOut: `Login expired`,
 		Busy:      []string{`(?m)(?:\(|· )[^()\n]*esc to interrupt\s*(?:·[^()\n]*)?\)?\s*$`, `(?m)^\s*⎿\s+Running…`},
 		// The footer counts the session's own background tasks:
 		// `⏵⏵ bypass permissions on · 1 shell, 2 monitors`.

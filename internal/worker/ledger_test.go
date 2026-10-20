@@ -175,7 +175,7 @@ func TestGateVerbWithABounceReadsTheLeaseOnce(t *testing.T) {
 	if err != nil || res.Verdict != GateStale {
 		t.Fatalf("gate: %+v %v", res, err)
 	}
-	if _, err := RecordBounceIn(w.env(false), res.Round, w.dir, "12", "w1", res.SHA); err != nil {
+	if _, _, _, err := RecordBounceCapped(w.env(false), res.Round, w.dir, "12", "w1", res.SHA, 0); err != nil {
 		t.Fatal(err)
 	}
 	if reads != 1 {

@@ -639,12 +639,6 @@ func RecordBounceCounted(env Env, root, issue, slot, head string) (int, bool, er
 	return n, counted, err
 }
 
-// RecordBounceIn is RecordBounce reading the round lease through m.
-func RecordBounceIn(env Env, m *RoundMemo, root, issue, slot, head string) (int, error) {
-	n, _, _, err := recordBounce(env, m, root, issue, slot, head, 0)
-	return n, err
-}
-
 // RecordBounceCapped is RecordBounceCounted that refuses inside the registry
 // lock once the item already holds limit bounces (0 = no cap): capped reports
 // the refusal and n is the unchanged count. The check and the increment share
