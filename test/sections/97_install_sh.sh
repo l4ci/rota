@@ -192,6 +192,25 @@ kill -TERM "$SIGPID" "$(cat "$IS/curl.pid" 2>/dev/null)" 2>/dev/null || true
 wait "$SIGPID" 2>/dev/null || true
 [ -z "$(ls -A "$IS/psig/bin" 2>/dev/null)" ] || fail "a terminated install left temp files: $(ls -A "$IS/psig/bin")"
 
+# A signal that lands inside mktemp, before $work is set, leaves no temp dir either:
+# a fake mktemp makes the real dir, then sends TERM to the installer.
+mkdir -p "$IS/mkbin" "$IS/mkrel/latest/download"
+printf '#!/bin/sh\n' > "$IS/mkrel/latest/download/$ASSET"
+REALMKTEMP=$(command -v mktemp)
+cat > "$IS/mkbin/mktemp" <<EOF
+#!/bin/sh
+d=\$("$REALMKTEMP" "\$@") || exit \$?
+echo "\$d"
+touch "$IS/mk.ran"
+kill -TERM "\$(cat "$IS/install.pid")" 2>/dev/null
+sleep 1
+EOF
+chmod +x "$IS/mkbin/mktemp"
+PATH="$IS/mkbin:$PATH" ROTA_RELEASE_BASE_URL="file://$IS/mkrel" \
+  sh -c 'echo $$ > "$0"; exec sh "$@"' "$IS/install.pid" "$INSTALL" --prefix "$IS/pmk" >/dev/null 2>&1 || true
+[ -e "$IS/mk.ran" ] || fail "the fake mktemp never ran, so the signal never landed in it"
+[ -z "$(ls -A "$IS/pmk/bin" 2>/dev/null)" ] || fail "a signal inside mktemp left temp files: $(ls -A "$IS/pmk/bin")"
+
 # Transport: an https base makes curl https-only with TLS 1.2+, redirects included.
 mkdir -p "$IS/tbin"
 printf '#!/bin/sh\necho "$*" >> "$IS_CURL_LOG"\nexit 22\n' > "$IS/tbin/curl"; chmod +x "$IS/tbin/curl"
