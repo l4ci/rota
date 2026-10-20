@@ -11,7 +11,7 @@ import (
 const DecisionsSection = "Decisions"
 
 // AppendDecision adds `- <ref>: <gist>` under the plan's "## Decisions" section,
-// creating the section when it is missing and dropping its `_(...)_` placeholder.
+// creating the section when it is missing and dropping its `_(...)_` filler line.
 // changed is false when a line for ref is already there, so a retried close
 // writes nothing twice. The gist is one line: newlines collapse to spaces.
 func AppendDecision(text, ref, gist string) (out string, changed bool) {
