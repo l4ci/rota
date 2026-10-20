@@ -241,6 +241,7 @@ func (s *Slot) Dispatch(handle, task, kind, now string) {
 	s.o.Set("activeAt", now)
 	s.o.Delete("seen")
 	s.ClearEvent() // a new brief answers whatever the worker last sent
+	s.o.Delete("outcome")
 	if task == "" {
 		return
 	}
@@ -338,7 +339,7 @@ func smokeStr(n int) string {
 func (s *Slot) Unbind() {
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
-	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "issues", "reviewSeen", "event", "heartbeatAt"} {
+	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "issues", "reviewSeen", "event", "heartbeatAt", "outcome"} {
 		s.o.Delete(k)
 	}
 }
@@ -502,6 +503,48 @@ func (s *Slot) MarkEventNotified() {
 			o.Set("notified", true)
 		}
 	}
+}
+
+// Outcome values: what a worker reports with `rota worker done --outcome`.
+const (
+	OutcomeDone    = "done"
+	OutcomePartial = "partial"
+	OutcomeFailed  = "failed"
+)
+
+// Outcomes are the values `worker done --outcome` accepts.
+var Outcomes = []string{OutcomeDone, OutcomePartial, OutcomeFailed}
+
+// Outcome is the outcome the worker last reported and its three summary
+// lines; "" for none. Unlike the event it survives a pane going busy: only a
+// new brief (Dispatch) or the worker's next report replaces it.
+func (s *Slot) Outcome() (kind string, summary []string) {
+	v, _ := s.o.Get("outcome")
+	o, ok := v.(*jsonx.Object)
+	if !ok {
+		return "", nil
+	}
+	l, _ := o.Get("summary")
+	list, _ := l.([]any)
+	for _, e := range list {
+		if line, ok := e.(string); ok {
+			summary = append(summary, line)
+		}
+	}
+	return jsonx.Str(o, "kind"), summary
+}
+
+// SetOutcome records the worker's reported outcome with its summary lines.
+func (s *Slot) SetOutcome(kind string, summary []string, now string) {
+	o := jsonx.NewObject()
+	o.Set("kind", kind)
+	lines := make([]any, len(summary))
+	for i, l := range summary {
+		lines[i] = l
+	}
+	o.Set("summary", lines)
+	o.Set("ts", now)
+	s.o.Set("outcome", o)
 }
 
 // ClearEvent drops the standing event; eventSeq stays.

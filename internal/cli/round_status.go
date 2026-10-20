@@ -257,6 +257,7 @@ func rowList(rows []round.Row) []any {
 			setIf(o, "evidence", r.Evidence)
 		}
 		setIf(o, "state", r.State)
+		setIf(o, "outcome", r.Outcome)
 		setIf(o, "tab", r.Tab)
 		o.Set("registered", r.Registered)
 		o.Set("drift", strs(r.Drift))
@@ -320,6 +321,10 @@ func dash(s string) string {
 func hostStateText(r round.Row) string {
 	if r.HostState == "unverifiable" && r.Evidence != "" {
 		return r.HostState + ":" + r.Evidence
+	}
+	// A partial or failed report shows beside the state; a plain done adds nothing.
+	if r.Outcome == worker.OutcomePartial || r.Outcome == worker.OutcomeFailed {
+		return strutil.FirstNonEmpty(r.HostState, "done") + "/" + r.Outcome
 	}
 	return r.HostState
 }
