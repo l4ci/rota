@@ -133,6 +133,8 @@ var Keys = []Key{
 	k("roles.implementer.effort", "", false, TypeEnum, "Reasoning effort of the rota-implementer agent. Empty leaves the harness default; Codex has no max.", "low", "medium", "high", "xhigh", "max"),
 	k("roles.reasoner.tier", "heavy", false, TypeEnum, "Tier of the rota-reasoner agent, which picks its model from round.tiers.", "light", "standard", "heavy"),
 	k("roles.reasoner.effort", "", false, TypeEnum, "Reasoning effort of the rota-reasoner agent. Empty leaves the harness default; Codex has no max.", "low", "medium", "high", "xhigh", "max"),
+	k("plan.maxTasks", num("3"), false, TypeInt, "Tasks a plan may hold before rota plan check warns and suggests a split into dependent items. Advisory: the check still exits 0. 0 turns the warning off."),
+	k("plan.maxFilesPerTask", num("5"), false, TypeInt, "Paths a task's Files: line may name before rota plan check warns about that task. Advisory: the check still exits 0. 0 turns the warning off."),
 	k("round.stallMinutes", num("30"), false, TypeInt, "Minutes a slot with a live agent may show no commit, edit or state change before rota round reconcile reports it stalled. 0 turns the check off."),
 	k("round.maxBounces", num("3"), false, TypeInt, "How often rota worker gate may send one item's PR back before it parks the item as needs-human. 0 turns the cap off."),
 	k("round.freshAt", num("2"), false, TypeInt, "Bounce count at which rota round review-relay stops resuming the worker and transfers the branch to a free slot at the same tier, with a brief of the open findings only. Must stay below round.maxBounces to act. 0 turns it off."),

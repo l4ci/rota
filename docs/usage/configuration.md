@@ -184,6 +184,19 @@ rota config set work.herdrGroupSlots false
 rota config set work.tdd false
 ```
 
+## plan keys
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `plan.maxTasks` | `3` | Tasks a plan may hold before `rota plan check` warns and suggests splitting it into dependent items. `0` turns the warning off. |
+| `plan.maxFilesPerTask` | `5` | Paths a task's `Files:` line may name before `rota plan check` warns about that task. `0` turns the warning off. |
+
+Both warnings are advisory: the check still exits 0. Both keys take an integer of 0 or more, and `rota config set` refuses anything else.
+
+```bash
+rota config set plan.maxTasks 5
+```
+
 ## test.fast, test.full, test.e2e
 
 Three tiers of shell commands, each an array defaulting to `[]`:
