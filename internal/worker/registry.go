@@ -86,13 +86,9 @@ func CheckRegistry(root string) error {
 
 // Slots lists the slot objects of the registry.
 func (r Registry) Slots() []*Slot {
-	raw, _ := r.doc.Get("slots")
-	list, _ := raw.([]any)
 	var out []*Slot
-	for _, e := range list {
-		if o, ok := e.(*jsonx.Object); ok {
-			out = append(out, AsSlot(o))
-		}
+	for _, o := range r.objects("slots") {
+		out = append(out, AsSlot(o))
 	}
 	return out
 }
@@ -134,10 +130,8 @@ func (r Registry) Scope() string { return jsonx.Str(r.doc, "scope") }
 
 // Slate is the recorded slate of a slate-scoped round, nil when none.
 func (r Registry) Slate() []string {
-	v, _ := r.doc.Get("slate")
-	l, _ := v.([]any)
 	var out []string
-	for _, e := range l {
+	for _, e := range r.list("slate") {
 		if s, ok := e.(string); ok {
 			out = append(out, s)
 		}
@@ -145,11 +139,18 @@ func (r Registry) Slate() []string {
 	return out
 }
 
-func (r Registry) objects(key string) []*jsonx.Object {
+// list is the raw entries under key, nil when the key is missing or not a list.
+func (r Registry) list(key string) []any {
 	raw, _ := r.doc.Get(key)
-	list, _ := raw.([]any)
+	l, _ := raw.([]any)
+	return l
+}
+
+// objects is the one decode of a registry list: the object entries under key,
+// skipping any entry that is not an object.
+func (r Registry) objects(key string) []*jsonx.Object {
 	var out []*jsonx.Object
-	for _, e := range list {
+	for _, e := range r.list(key) {
 		if o, ok := e.(*jsonx.Object); ok {
 			out = append(out, o)
 		}
@@ -203,17 +204,7 @@ func (r Registry) PRs() []QueuedPR {
 	return out
 }
 
-func (r Registry) queued() []*jsonx.Object {
-	raw, _ := r.doc.Get("prs")
-	list, _ := raw.([]any)
-	var out []*jsonx.Object
-	for _, e := range list {
-		if o, ok := e.(*jsonx.Object); ok {
-			out = append(out, o)
-		}
-	}
-	return out
-}
+func (r Registry) queued() []*jsonx.Object { return r.objects("prs") }
 
 // QueuedPR finds a queued record by PR ref (`#N`, `N` or a PR URL), matching
 // on the PR number.
@@ -258,9 +249,7 @@ func (d *Doc) QueuePR(rec QueuedPR) {
 	d.dropQueued(func(q *jsonx.Object) bool {
 		return jsonx.Str(q, "issue") == rec.Issue && jsonx.Str(q, "from") == rec.From
 	})
-	raw, _ := d.doc.Get("prs")
-	l, _ := raw.([]any)
-	d.doc.Set("prs", append(l, rec.object()))
+	d.doc.Set("prs", append(d.list("prs"), rec.object()))
 }
 
 // DropQueued removes the records match accepts.
@@ -269,9 +258,8 @@ func (d *Doc) DropQueued(match func(QueuedPR) bool) {
 }
 
 func (d *Doc) dropQueued(match func(*jsonx.Object) bool) {
-	raw, ok := d.doc.Get("prs")
-	list, _ := raw.([]any)
-	if !ok || len(list) == 0 {
+	list := d.list("prs")
+	if len(list) == 0 {
 		return
 	}
 	var keep []any
@@ -363,15 +351,12 @@ func (d *Doc) SetSlots(slots []*Slot) {
 
 // AppendSlot adds s to the slot list.
 func (d *Doc) AppendSlot(s *Slot) {
-	list, _ := d.doc.Get("slots")
-	l, _ := list.([]any)
-	d.doc.Set("slots", append(l, s.o))
+	d.doc.Set("slots", append(d.list("slots"), s.o))
 }
 
 // SortSlots orders the slot list by name.
 func (d *Doc) SortSlots() {
-	list, _ := d.doc.Get("slots")
-	l, _ := list.([]any)
+	l := d.list("slots")
 	sort.SliceStable(l, func(i, j int) bool {
 		a, _ := l[i].(*jsonx.Object)
 		b, _ := l[j].(*jsonx.Object)
