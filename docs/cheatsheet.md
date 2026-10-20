@@ -21,7 +21,7 @@ What each `/rota-*` skill does, one line each. For details: [`reference/slash-co
 ## Review & ship
 - **`/rota-review`**: one review pass (spec match and code quality).
 - **`/rota-qa`**: product-level QA. Playwright, smoke, lighthouse, axe, ZAP.
-- **`/rota-ship`**: open a PR or direct merge. `--undo` rolls back; `--docs` syncs public docs.
+- **`/rota-ship`**: open a PR or direct merge. `--undo` rolls back.
 
 ## Persist
 - **`/rota-learn`**: capture reusable lessons in `KNOWLEDGE.md`.
@@ -33,6 +33,7 @@ What each `/rota-*` skill does, one line each. For details: [`reference/slash-co
 
 ## Maintenance
 - **`/rota-release`**: cut a release.
+- **`/rota-docs`**: scaffold, update or restructure the public docs. Manual only.
 
 ## Verbs, not skills
 - **`rota`** (bare, in a terminal): opens a palette. Enter on the preselected entry runs `rota setup` in a directory without `.rota/` and launches the orchestrator in an initialized project. Outside a terminal it prints usage.
