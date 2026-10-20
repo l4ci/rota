@@ -126,11 +126,12 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 	kinds[1], sources[1] = kinds[0], sources[0]
 	pinned := o.Kind != "" || pick.Harness != ""
 	if !pinned {
-		// Two kinds with a tier map each run the pair on different harnesses:
-		// the second slot takes the first such kind the first slot is not on.
+		// Two kinds with a tier map of their own run the pair on different
+		// harnesses: the second slot takes the first such kind the first slot
+		// is not on. Shipped defaults do not count: they name no installed harness.
 		var tiered []string
 		for _, k := range harness.Kinds() {
-			if len(set.Models[k]) > 0 {
+			if set.Tiered[k] {
 				tiered = append(tiered, k)
 			}
 		}
