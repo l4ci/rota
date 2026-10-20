@@ -69,17 +69,26 @@ func (failingReader) Read([]byte) (int, error) { return 0, errors.New("stdin bro
 // they once returned the raw OS error (generic exit).
 func TestReadBodyInputNonENOENT(t *testing.T) {
 	dir := t.TempDir()
+	locked := filepath.Join(dir, "locked.md")
+	if err := os.WriteFile(locked, []byte("x"), 0o000); err != nil {
+		t.Fatal(err)
+	}
 	tests := []struct {
-		name  string
-		stdin io.Reader
-		path  string
-		want  string
+		name    string
+		stdin   io.Reader
+		path    string
+		want    string
+		nonRoot bool // root ignores file modes, so the row cannot fail
 	}{
-		{"directory (EISDIR)", strings.NewReader(""), dir, "cannot read --body-file: is a directory: " + dir},
-		{"stdin read failure", failingReader{}, "-", "cannot read --body-file: stdin broke: -"},
+		{"directory (EISDIR)", strings.NewReader(""), dir, "cannot read --body-file: is a directory: " + dir, false},
+		{"unreadable file (EACCES)", strings.NewReader(""), locked, "cannot read --body-file: permission denied: " + locked, true},
+		{"stdin read failure", failingReader{}, "-", "cannot read --body-file: stdin broke: -", false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.nonRoot && os.Geteuid() == 0 {
+				t.Skip("root bypasses file permissions")
+			}
 			_, err := readBodyInput(&Ctx{Stdin: tc.stdin}, "body-file", tc.path, ExitResolution)
 			var ee *exitcode.Error
 			if !errors.As(err, &ee) || ee.Exit != ExitResolution {
