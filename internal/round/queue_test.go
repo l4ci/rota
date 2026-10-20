@@ -499,3 +499,30 @@ func TestReconcileReportsAQueuedRecordWhoseBranchDoesNotHeadItsPR(t *testing.T) 
 		t.Error("reported, not repaired")
 	}
 }
+
+// A slot whose worker reported partial or failed is not parkable: queuing its
+// PR would let the gate merge it by number with no relay or transfer (#961).
+func TestAssignOntoAPartialSlotDoesNotQueueIt(t *testing.T) {
+	for _, kind := range []string{worker.OutcomePartial, worker.OutcomeFailed, worker.OutcomeDone} {
+		f := newMoveFx(t)
+		f.finish(t, "ben", pr7)
+		if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) {
+			s.SetOutcome(kind, []string{"a", "b", "c"}, "2026-10-20T00:00:00Z")
+		}); err != nil {
+			t.Fatal(err)
+		}
+		_, err := f.assign("13", "ben")
+		if kind == worker.OutcomeDone {
+			if err != nil || len(f.queued()) != 1 {
+				t.Errorf("done outcome queues: %v %v", err, f.queued())
+			}
+			continue
+		}
+		if blockedBy(t, err) != BlockSlotBusy || !strings.Contains(err.Error(), kind) {
+			t.Errorf("%s: err = %v, want slot-busy naming the outcome", kind, err)
+		}
+		if len(f.queued()) != 0 {
+			t.Errorf("%s: nothing may queue: %v", kind, f.queued())
+		}
+	}
+}

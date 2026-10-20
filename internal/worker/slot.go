@@ -339,7 +339,7 @@ func smokeStr(n int) string {
 func (s *Slot) Unbind() {
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
-	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "issues", "reviewSeen", "event", "heartbeatAt"} {
+	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "issues", "reviewSeen", "event", "heartbeatAt", "outcome"} {
 		s.o.Delete(k)
 	}
 }
@@ -534,13 +534,8 @@ func (s *Slot) Outcome() (kind string, summary []string) {
 	return jsonx.Str(o, "kind"), summary
 }
 
-// SetOutcome records the worker's reported outcome with its summary lines; an
-// empty kind clears it (a plain `worker done` reports none).
+// SetOutcome records the worker's reported outcome with its summary lines.
 func (s *Slot) SetOutcome(kind string, summary []string, now string) {
-	if kind == "" {
-		s.o.Delete("outcome")
-		return
-	}
 	o := jsonx.NewObject()
 	o.Set("kind", kind)
 	lines := make([]any, len(summary))

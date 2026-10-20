@@ -31,6 +31,11 @@ func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string)
 	case s.PR() == "" && len(s.Issues()) == 0:
 		return false, "no PR recorded"
 	}
+	// A partial or failed report waits for a relay or transfer: queuing its PR
+	// would let the gate merge it by number with nobody having answered it.
+	if k, _ := s.Outcome(); k == worker.OutcomePartial || k == worker.OutcomeFailed {
+		return false, "reported " + k + "; relay or transfer it first"
+	}
 	if st := s.State(); st != "done" && st != "idle" {
 		return false, strutil.FirstNonEmpty(st, "busy")
 	}

@@ -104,4 +104,35 @@ func TestWorkerDoneOutcome(t *testing.T) {
 			t.Fatalf("exit %d: a fenced worker records nothing", code)
 		}
 	})
+	t.Run("a plain done does not answer a standing partial", func(t *testing.T) {
+		dir := doneProject(t, "")
+		sum := writeSummary(t, dir, threeLines)
+		rotaIn(t, dir, "worker", "done", "ben", "--outcome", "partial", "--summary-file", sum)
+		if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json"); code != 0 {
+			t.Fatalf("exit %d: %s", code, out)
+		}
+		if raw := slotJSON(t, dir); !strings.Contains(raw, `"partial"`) {
+			t.Errorf("a plain done lifted the partial outcome: %s", raw)
+		}
+	})
+	t.Run("a summary line is short and holds no separator", func(t *testing.T) {
+		dir := doneProject(t, "")
+		for _, body := range []string{"a | b\nc\nd\n", strings.Repeat("x", 201) + "\nb\nc\n"} {
+			sum := writeSummary(t, dir, body)
+			if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--outcome", "partial", "--summary-file", sum, "--json"); code != 2 {
+				t.Fatalf("exit %d: %s", code, out)
+			}
+		}
+	})
+	t.Run("failed needs no test.fast proof", func(t *testing.T) {
+		dir := doneProject(t, "true")
+		sum := writeSummary(t, dir, threeLines)
+		if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--outcome", "failed", "--summary-file", sum, "--json"); code != 0 {
+			t.Fatalf("exit %d: %s", code, out)
+		}
+		dir = doneProject(t, "true")
+		if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--outcome", "partial", "--summary-file", sum, "--json"); code != 4 {
+			t.Fatalf("partial still needs proof: exit %d: %s", code, out)
+		}
+	})
 }
