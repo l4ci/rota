@@ -220,7 +220,8 @@ func dropFiled(be backlog.Backend, ins []backlog.CreateInput, pr string) (fresh 
 }
 
 // deferredItems is one task per deferred finding, related to the PR it was
-// found on. The title is the finding's; the body carries its location and detail.
+// found on. The title is the finding's; the body carries its location and detail,
+// and one acceptance criterion from the title so the item is ready to assign.
 func deferredItems(findings []verdict.Finding, pr string) ([]backlog.CreateInput, error) {
 	var ins []backlog.CreateInput
 	for _, f := range findings {
@@ -239,6 +240,7 @@ func deferredItems(findings []verdict.Finding, pr string) ([]backlog.CreateInput
 		if f.Detail != "" {
 			body.WriteString("\n" + f.Detail + "\n")
 		}
+		fmt.Fprintf(&body, "\n## Acceptance\n\n- [ ] AC-1: %s\n", strings.TrimSpace(f.Title))
 		in, err := backlog.BuildCreateInput(backlog.CaptureRequest{Kind: "tasks", Title: f.Title, Desc: f.Title,
 			Fields: map[string]string{"related": pr}, Given: map[string]bool{"related": true},
 			Body: []byte(body.String()), HasBody: true})

@@ -15,7 +15,11 @@ cp "$TESTDIR/fakes/tmux" "$FK/bin/tmux"
 # herdr: --version, `agent get` (pane id + status), `agent read` (pane text).
 # The socket server flips `fired` just before it sends the status event, and
 # the pane only reads ROTA-DONE once it exists, so a classification taken before
-# the event sees a working agent and one taken after sees a finished one.
+# the event sees a working agent and one taken after sees a finished one. The
+# server fires only after the client's first `agent get` since subscribing has
+# finished (the `snapshot` marker: a snapshot reads the pane twice, then asks
+# for the status), never after a fixed delay: a delay lets a loaded machine take
+# the snapshot after the event.
 cat > "$FK/bin/herdr" <<'SH'
 #!/usr/bin/env bash
 F="$FAKE_HERDR"
@@ -24,9 +28,12 @@ case "$1 $2" in
   "--version "*|"--version") echo "herdr $(cat "$F/version" 2>/dev/null || echo 0.9.3)" ;;
   "agent get")
     st=working; [ -f "$F/fired" ] && st=done
-    printf '{"id":"cli","result":{"type":"agent_info","agent":{"agent_status":"%s","pane_id":"w9:p11","tab_id":"w9:t7"}}}\n' "$st" ;;
+    printf '{"id":"cli","result":{"type":"agent_info","agent":{"agent_status":"%s","pane_id":"w9:p11","tab_id":"w9:t7"}}}\n' "$st"
+    : >"$F/snapshot" ;;
   "agent read")
     t="working"; [ -f "$F/fired" ] && t="ROTA-DONE w1 https://github.com/o/r/pull/7"
+    # A loaded machine stalls the snapshot read; the lag file stands in for that, once.
+    if [ -f "$F/lag" ]; then sleep "$(cat "$F/lag")"; rm -f "$F/lag"; fi
     printf '%s\n' "$t" ;;  # herdr 0.9.3 prints pane text as is, no JSON envelope
   *) echo '{"error":{"code":"unknown_method","message":"fake"}}' >&2; exit 1 ;;
 esac
@@ -38,16 +45,20 @@ import json, os, socket, sys, time
 sock, fk = sys.argv[1], sys.argv[2]
 srv = socket.socket(socket.AF_UNIX); srv.bind(sock); srv.listen(4)
 held = []  # a quiet subscription stays open, as herdr's does
-while True:
-    c, _ = srv.accept()
-    held.append(c)
-    req = json.loads(c.makefile().readline())
-    open(os.path.join(fk, "request.json"), "w").write(json.dumps(req))
+accepted = handled = 0
+def mark(name, n):
+    open(os.path.join(fk, name), "w").write(str(n))
+def have(name):
+    return os.path.exists(os.path.join(fk, name))
+def serve(c, req):
     c.sendall(b'{"id":"%s","result":{"type":"subscription_started"}}\n' % req["id"].encode())
-    if os.path.exists(os.path.join(fk, "quiet")):
-        continue
-    time.sleep(1)
-    if not os.path.exists(os.path.join(fk, "quiet")):
+    if have("quiet"):
+        return
+    for _ in range(300):  # a client that never takes a snapshot still gets its event after 30s
+        if have("snapshot") or have("quiet"):
+            break
+        time.sleep(0.1)
+    if not have("quiet"):
         open(os.path.join(fk, "fired"), "w").close()
     pane = req["params"]["subscriptions"][0]["pane_id"]
     try:  # the client may have returned from its snapshot and hung up
@@ -55,6 +66,16 @@ while True:
             "pane_id": pane, "workspace_id": "w9", "agent_status": "done"}}) + "\n").encode())
     except OSError:
         pass
+while True:
+    c, _ = srv.accept()
+    held.append(c)
+    req = json.loads(c.makefile().readline())
+    open(os.path.join(fk, "request.json"), "w").write(json.dumps(req))
+    if have("snapshot"):
+        os.remove(os.path.join(fk, "snapshot"))
+    accepted += 1; mark("accepted", accepted)
+    serve(c, req)
+    handled += 1; mark("handled", handled)
 PY
 
 mkdir -p "$TMP_RW/repo/.rota"
@@ -83,6 +104,7 @@ SRV=$!
 for _ in $(seq 50); do [ -S "$FK/herdr.sock" ] && break; sleep 0.1; done
 [ -S "$FK/herdr.sock" ] || fail "fake herdr socket never came up"
 
+echo 2 > "$FK/lag"  # the snapshot read outlasts any fixed delay the server could use before its event
 RC=0; OUT="$(rw hvj round wait --settle 0 --timeout 30 2>/dev/null)" || RC=$?
 [ "$RC" = "0" ] || fail "herdr: wait must exit 0 once the slot finishes, got $RC: $OUT"
 [ "$(jget data.slot <<<"$OUT")" = "w1" ] || fail "herdr: expected slot w1: $OUT"
@@ -109,7 +131,10 @@ RC=0; OUT="$(rw hvj round wait --settle 0 --timeout 30 2>/dev/null)" || RC=$?
 pass "a slot comes back once per change; one that needs attention before the call returns immediately (snapshot)"
 
 # ── herdr: timeout is an answer, other herdr versions are refused ───────────
-rm "$FK/fired"; : >"$FK/quiet"
+# The server may still be firing for the wait above; let it finish before clearing its flag.
+for _ in $(seq 100); do [ "$(cat "$FK/accepted")" = "$(cat "$FK/handled" 2>/dev/null)" ] && break; sleep 0.1; done
+[ "$(cat "$FK/accepted")" = "$(cat "$FK/handled")" ] || fail "fake herdr server never finished its last subscription"
+rm -f "$FK/fired"; : >"$FK/quiet"
 RC=0; OUT="$(rw hvj round wait --settle 0 --timeout 1 2>/dev/null)" || RC=$?
 [ "$RC" = "1" ] || fail "herdr: a timeout must exit 1, got $RC: $OUT"
 [ "$(jget data.timedOut <<<"$OUT")" = "true" ] || fail "herdr: timeout data must say timedOut: $OUT"

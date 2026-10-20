@@ -183,14 +183,45 @@ mkdir -p "$IS/sigrel/latest/download"
 printf '#!/bin/sh\n' > "$IS/sigrel/latest/download/$ASSET"
 sleepbin="$IS/fakebin"; mkdir -p "$sleepbin"
 printf '#!/bin/sh\necho $$ > "$IS_CURL_PID"\nexec sleep 30\n' > "$sleepbin/curl"; chmod +x "$sleepbin/curl"
+# A loaded machine stretches the gap between mktemp and the install's traps; a slow mktemp stands in for that.
+printf '#!/bin/sh\n%s "$@" || exit\nsleep 1\n' "$(command -v mktemp)" > "$sleepbin/mktemp"; chmod +x "$sleepbin/mktemp"
 IS_CURL_PID="$IS/curl.pid" PATH="$sleepbin:$PATH" ROTA_RELEASE_BASE_URL="file://$IS/sigrel" sh "$INSTALL" --prefix "$IS/psig" >/dev/null 2>&1 &
 SIGPID=$!
-i=0; while [ ! -d "$IS/psig/bin" ] || [ -z "$(ls -A "$IS/psig/bin" 2>/dev/null)" ]; do i=$((i + 1)); [ "$i" -lt 100 ] || break; sleep 0.1; done
+# Ready is the fake curl running, not the temp dir: curl starts after the install's traps are set,
+# the temp dir exists a few lines before them and a signal in between skips the cleanup.
+i=0; while [ ! -s "$IS/curl.pid" ]; do i=$((i + 1)); [ "$i" -lt 300 ] || fail "the install never reached curl"; sleep 0.1; done
 # A terminal's ^C reaches the whole foreground group: sh defers its trap until the
 # running curl exits, so stop the fake curl with it instead of waiting out its sleep.
 kill -TERM "$SIGPID" "$(cat "$IS/curl.pid" 2>/dev/null)" 2>/dev/null || true
 wait "$SIGPID" 2>/dev/null || true
 [ -z "$(ls -A "$IS/psig/bin" 2>/dev/null)" ] || fail "a terminated install left temp files: $(ls -A "$IS/psig/bin")"
+
+# A signal that lands inside mktemp, before $work is set, leaves no temp dir either:
+# a fake mktemp makes the real dir, then sends TERM to the installer.
+mkdir -p "$IS/mkbin" "$IS/mkrel/latest/download"
+printf '#!/bin/sh\n' > "$IS/mkrel/latest/download/$ASSET"
+REALMKTEMP=$(command -v mktemp)
+cat > "$IS/mkbin/mktemp" <<EOF
+#!/bin/sh
+d=\$("$REALMKTEMP" "\$@") || exit \$?
+echo "\$d"
+touch "$IS/mk.ran"
+kill -TERM "\$(cat "$IS/install.pid")" 2>/dev/null
+sleep 1
+EOF
+chmod +x "$IS/mkbin/mktemp"
+PATH="$IS/mkbin:$PATH" ROTA_RELEASE_BASE_URL="file://$IS/mkrel" \
+  sh -c 'echo $$ > "$0"; exec sh "$@"' "$IS/install.pid" "$INSTALL" --prefix "$IS/pmk" >/dev/null 2>&1 || true
+[ -e "$IS/mk.ran" ] || fail "the fake mktemp never ran, so the signal never landed in it"
+[ -z "$(ls -A "$IS/pmk/bin" 2>/dev/null)" ] || fail "a signal inside mktemp left temp files: $(ls -A "$IS/pmk/bin")"
+
+# An inherited $work must survive a failed mktemp: the EXIT trap may only remove a dir the script made.
+mkdir -p "$IS/mkfail" "$IS/keep"
+printf '#!/bin/sh\nexit 1\n' > "$IS/mkfail/mktemp"; chmod +x "$IS/mkfail/mktemp"
+touch "$IS/keep/sentinel"
+PATH="$IS/mkfail:$PATH" ROTA_RELEASE_BASE_URL="file://$IS/mkrel" work="$IS/keep" \
+  sh "$INSTALL" --prefix "$IS/pfail" >/dev/null 2>&1 && fail "a failing mktemp should fail the install"
+[ -e "$IS/keep/sentinel" ] || fail "a failed mktemp removed an inherited \$work directory"
 
 # Transport: an https base makes curl https-only with TLS 1.2+, redirects included.
 mkdir -p "$IS/tbin"

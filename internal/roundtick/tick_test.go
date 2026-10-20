@@ -423,6 +423,44 @@ func TestCappedTickFillsNoSlotAndSaysWhy(t *testing.T) {
 	}
 }
 
+func TestBatchFullTickAssignsNothingAndSaysSo(t *testing.T) {
+	f := &fake{
+		slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "idle"}},
+		cands: []Candidate{{"#1", true}, {"#2", true}},
+	}
+	e := f.env()
+	full := true
+	e.BatchFull = func(context.Context) bool { return full }
+	minted := 0
+	e.Review = func(context.Context) ([]string, error) { minted++; return []string{"#9"}, nil }
+	r, err := Run(context.Background(), e)
+	if err != nil || !r.BatchFull || len(f.assigned) != 0 || minted != 0 {
+		t.Fatalf("err %v batchFull %v assigned %v minted %d", err, r.BatchFull, f.assigned, minted)
+	}
+	full = false
+	if r, err = Run(context.Background(), e); err != nil || r.BatchFull || len(f.assigned) != 2 {
+		t.Fatalf("below the cap: err %v batchFull %v assigned %v", err, r.BatchFull, f.assigned)
+	}
+}
+
+// The batch fills inside a tick: Assign refuses the next candidate, and the
+// tick stops trying instead of asking for every one.
+func TestBatchRefusalMidTickStopsAssigning(t *testing.T) {
+	f := &fake{
+		slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "idle"}},
+		cands: []Candidate{{"#1", true}, {"#2", true}, {"#3", true}},
+	}
+	calls := 0
+	f.assignFn = func(string) ([]string, error) {
+		calls++
+		return nil, &round.BlockedError{By: round.BlockBatch, Msg: "2 items are open and round.batch is 2"}
+	}
+	r, err := Run(context.Background(), f.env())
+	if err != nil || !r.BatchFull || calls != 1 {
+		t.Fatalf("err %v batchFull %v calls %d", err, r.BatchFull, calls)
+	}
+}
+
 // A mixed config (Claude workers, Codex logins set) leaves the cap open, so the
 // Claude pool running dry shows up as a quota refusal from Assign. The tick
 // must say so, not report "nothing to do".

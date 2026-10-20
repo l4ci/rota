@@ -275,6 +275,64 @@ func TestAssignSlotBusyAndFreeSlot(t *testing.T) {
 	}
 }
 
+func TestAssignBatchCap(t *testing.T) {
+	f := newAssignFixture(t)
+	f.be.add("15", "Third", "M01", false, "## Acceptance\n- [ ] x")
+	batch := func(o *AssignOpts) { o.Settings.Batch = 1; o.AcceptOverlap = true }
+	if _, err := f.assign("12", "ben", batch); err != nil {
+		t.Fatalf("under the cap: %v", err)
+	}
+	_, err := f.assign("13", "dana", batch)
+	if by := blockedBy(t, err); by != BlockBatch {
+		t.Fatalf("one open of batch 1 refuses the next: %v", err)
+	}
+	var b *BlockedError
+	errors.As(err, &b)
+	if b.Batch != 1 || b.Open != 1 {
+		t.Errorf("data: batch %d open %d", b.Batch, b.Open)
+	}
+	if _, err := f.assign("13", "dana", func(o *AssignOpts) { batch(o); o.AcceptBatch = true }); err != nil {
+		t.Fatalf("--accept-batch overrides one call: %v", err)
+	}
+	// Unset is no limit.
+	if _, err := f.assign("15", "", func(o *AssignOpts) { o.AcceptOverlap = true }); blockedBy(t, err) == BlockBatch {
+		t.Errorf("batch 0 never refuses: %v", err)
+	}
+}
+
+func TestAssignBatchNeverRefusesAResume(t *testing.T) {
+	f := newAssignFixture(t)
+	batch := func(o *AssignOpts) { o.Settings.Batch = 1; o.AcceptOverlap = true }
+	if _, err := f.assign("12", "ben", batch); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.assign("13", "dana", func(o *AssignOpts) { batch(o); o.AcceptBatch = true }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.assign("13", "dana", batch); err != nil {
+		t.Fatalf("repeating an assignment the slot already holds is a resume: %v", err)
+	}
+	// --check-only reports readiness at the cap, and an unknown slot stays exit 3.
+	if res, err := f.assign("13", "dana", func(o *AssignOpts) { batch(o); o.CheckOnly = true }); err != nil || !res.Ready() {
+		t.Fatalf("check-only is not a batch refusal: %v %+v", err, res)
+	}
+	if _, err := f.assign("13", "nobody", batch); err == nil || errors.As(err, new(*BlockedError)) {
+		t.Fatalf("an unknown slot is not a batch refusal: %v", err)
+	}
+}
+
+func TestAssignBatchIgnoresLandedItems(t *testing.T) {
+	f := newAssignFixture(t)
+	batch := func(o *AssignOpts) { o.Settings.Batch = 1; o.AcceptOverlap = true }
+	if _, err := f.assign("12", "ben", batch); err != nil {
+		t.Fatal(err)
+	}
+	f.be.items["12"].Closed = true // merged
+	if _, err := f.assign("13", "dana", batch); err != nil {
+		t.Fatalf("a closed item no longer counts: %v", err)
+	}
+}
+
 func TestAssignCheckOnlyWritesNothing(t *testing.T) {
 	f := newAssignFixture(t)
 	res, err := f.assign("12", "", func(o *AssignOpts) { o.CheckOnly = true })

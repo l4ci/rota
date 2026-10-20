@@ -100,6 +100,9 @@ type Settings struct {
 	// the most assigns and the most merges one tick does.
 	Autopilot    bool
 	AutopilotCap int
+	// Batch is round.batch: the most items a round has assigned and not yet
+	// landed or parked at once; 0 means no limit.
+	Batch int
 	// ReviewLoop is round.reviewLoop: "manual" or "auto" (ReviewLoopManual,
 	// ReviewLoopAuto). Under auto the forge poll relays a done slot's review
 	// input to its worker itself.
@@ -224,6 +227,9 @@ func FromConfig(cfg any) (Settings, error) {
 	}
 	s.Autopilot = b
 	if s.AutopilotCap, err = config.Int(cfg, "round.autopilotCap", 0, config.MaxInt); err != nil {
+		return s, err
+	}
+	if s.Batch, err = config.Int(cfg, "round.batch", 0, config.MaxInt); err != nil {
 		return s, err
 	}
 	v, err = config.Value(cfg, "round.reviewLoop")

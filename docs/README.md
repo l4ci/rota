@@ -25,6 +25,7 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 - [Codex workers](usage/codex-workers.md): run Codex as a worker in a round
 - [OpenCode workers](usage/opencode-workers.md): run OpenCode, and any model it can reach, as a worker in a round
 - [Orchestrator harnesses](usage/orchestrator-harnesses.md): run the orchestrator in Claude Code, Codex, Hermes or opencode
+- [rota or a bare session](usage/rota-vs-plain-session.md): a row-by-row comparison with a plain Claude Code session that runs its own subagents
 - [Skills in Codex](usage/codex-skills.md): install and call the skills from Codex
 
 ### 📥 Capture and backlog
@@ -76,7 +77,7 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 - [Rounds on rota itself](contributing/rounds.md): the gate, repo rules and roster for contributors
 - [Release signing](contributing/release-signing.md): generating or rotating the minisign key, the Actions secret, verifying by hand
 - [Market review, October 2026](contributing/market-review-2026-10.md): what comparable orchestrators' users ask for, where rota stands, and the ranked gaps behind issues #574 to #587
-- [Plain orchestrator comparison, October 2026](contributing/plain-orchestrator-comparison-2026-10.md): what a bare Claude Code session would do to run a team against what rounds do, and the six gaps behind issues #897 to #902
+- [Plain orchestrator comparison, October 2026](contributing/plain-orchestrator-comparison-2026-10.md): what a bare Claude Code session would do to run a team against what rounds do, and the six gaps behind issues #897 to #902. The [re-judged user version](usage/rota-vs-plain-session.md) is the current one
 
 ### Other
 
