@@ -289,7 +289,7 @@ func TestSkillsCoverWorkAccounts(t *testing.T) {
 	}
 
 	// doctor reads the same roots, so the lagging account would show there.
-	rep := doctorSkills(os.Getenv, home, proj)
+	rep := doctorSkills(os.Getenv, home, proj, "")
 	if rep == nil {
 		t.Fatal("doctor skills nil")
 	}
