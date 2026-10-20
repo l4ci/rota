@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/shlex"
@@ -241,6 +242,10 @@ func DialogKeys(pane string) (keys []string, ok bool) {
 	return append(keys, "enter"), true
 }
 
+// paneBusyPolls is how many times a second Spawn retries agent start while the
+// new tab's pane is not yet an available shell.
+const paneBusyPolls = 2
+
 // Spawn adopts the worktree as a new background tab, starts the agent in
 // it, clears any startup dialog, and waits for it to idle. It returns the tab
 // id (the handle). Session is unused: herdr tabs live in the caller's own
@@ -305,6 +310,12 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	timeoutMs := strconv.Itoa(o.BootTimeout * 1000)
 	start := append([]string{"agent", "start", name, "--kind", kind, "--pane", pane, "--timeout", timeoutMs, "--"}, agentArgs...)
 	r = h.herdr(ctx, start...)
+	// A just-created tab's shell may not be ready: agent start answers
+	// agent_pane_busy until it is. Poll within the boot budget (#1029).
+	for i := 0; i < o.BootTimeout*paneBusyPolls && r.ExitCode != 0 && jget(r.Stderr, "error.code") == "agent_pane_busy"; i++ {
+		h.d.Sleep(time.Second / paneBusyPolls)
+		r = h.herdr(ctx, start...)
+	}
 	if r.ExitCode == 0 {
 		return tab, nil
 	}
