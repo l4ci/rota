@@ -23,6 +23,7 @@ Setup, config, update and migration are `rota` verbs, not skills: `rota init` (a
 | `/rota-ship` | Bundle commits into a PR (or direct merge) with ID-linked body; runs `/rota-review` first by default, plus opt-in second-opinion (`ship.secondOpinion`) and product QA (`ship.qa`) gates. Flags: `--undo` (guided rollback of the last cycle on the base branch) and `--docs` (public-docs maintenance: first-run / after-work / restructure modes; auto-fires inline at ship time when `docs.afterWork: true`) |
 | `/rota-learn` | Extract durable session learnings into `KNOWLEDGE.md`, grouped by topic; `--strict` adds Opus verification; `--retro [<session-id|path>]` turns mistakes into guardrails and standards |
 | `/rota-refactor` | Architecture review that files findings as refactor issues; `--fix` implements them; `--map` writes the `.rota/map/` subsystem files |
+| `/rota-init` | Inspect the repo and propose config values with the evidence for each (`test.fast`, `test.full`, `git.baseBranch`, `forge.provider`, `issues.source`, `round.workerKind`, `work.isolation`, `work.dispatch`); asks one question per key, recommended value first, and writes confirmed answers only through `rota setup --set` / `rota config set`. On an initialized project it shows only keys that differ. Maintainer-invoked only |
 | `/rota-release` | Cut a release: walk per-project checklist, bump version, generate notes, tag, push, publish to GitHub/GitLab |
 
 ---
@@ -52,6 +53,10 @@ Runs a parallel round: you are the orchestrator, and standing workers (`work.wor
 ## /rota-answer
 
 During a round, puts every decision waiting on you to you one at a time: open escalations, slots blocked on a question, PRs whose review or bounce cap needs a call, candidates the orchestrator is holding, and items with an open `question` comment. Each question carries the facts, 2 to 4 options and the recommended one first. In Claude Code it uses the `AskUserQuestion` picker; in any other harness it sends one message per question with a lettered list `A)` to `E)` (`A)` the recommendation, the last entry "Write your own answer"). Each answer is recorded as a `decision` comment citing "maintainer, answering the orchestrator in its session", then applied (relay, re-recorded verdict, issue edit, follow-up) before the next question. With nothing pending it prints `no decisions pending`. Manual only: the orchestrator never starts it, and a round otherwise uses no blocking picker. See [parallel rounds](../usage/parallel-rounds.md#asking-the-maintainer).
+
+## /rota-init
+
+Reads the project first, then proposes config values that fit it: the test commands from the manifests, Makefile and CI config (`test.fast`, `test.full`), the base branch and forge from the `origin` remote (`git.baseBranch`, `forge.provider`, `issues.source`), the harness CLIs on `PATH` (`round.workerKind`) and the terminal host (`work.dispatch`, `work.isolation`). Every proposal names the file or command it came from; a key with no signal keeps the schema default and is reported as such. Each choice is one question with the recommended value first (`AskUserQuestion` in Claude Code, a lettered list elsewhere). Answers are written only after you confirm, through `rota setup --set` on a project without `.rota/` and `rota config set` otherwise. On an initialized project it lists only the keys whose current value differs from the suggestion. It does not change `rota init` or `rota setup` defaults and installs no harness or host. Manual only.
 
 ## /rota-pause
 

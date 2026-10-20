@@ -12,7 +12,7 @@ run in `test/doclint.sh`. Run the regressions alone with
 
 ```bash
 python3 test/evals/run.py --check                  # offline: case files are well-formed
-python3 test/evals/run.py triggers  --model haiku  # 32 trigger cases, about $1 on haiku
+python3 test/evals/run.py triggers  --model haiku  # 34 trigger cases, about $1 on haiku
 python3 test/evals/run.py scenarios --model opus   # 12 scenarios, under $1.50
 python3 test/evals/run.py scenarios --model sonnet --only work-no-red rota-ship --out /tmp/r.json
 ```
@@ -26,7 +26,7 @@ scoring. Failures appear in the console and in `--out` results, and make the run
 
 ## Cases
 
-**`triggers.json`**: one request that should load each of the 16 skills (`load`) and one that
+**`triggers.json`**: one request that should load each of the 17 skills (`load`) and one that
 should not (`skip`, with the skill that fits better in `better`). The model sees every skill's
 `description` and names one skill or `none`. Run it after editing any description.
 

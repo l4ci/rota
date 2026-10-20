@@ -8,7 +8,7 @@ This project uses rota for backlog tracking, planning, and skill orchestration. 
 **Review & ship** — `/rota-review`, `/rota-qa` (opt-in gate via `ship.qa`), `/rota-ship` (`--undo` to roll back the last cycle, `--docs` to maintain public docs)
 **Persist** — `/rota-learn` (durable knowledge; `--term <name>` for glossary), `/rota-decide` (hard boundaries — manual only)
 **Vision & maps** — `/rota-vision`, `/rota-refactor`
-**Maintenance** — `/rota-release`. Setup and upkeep are `rota` verbs: `rota init`, `rota config`, `rota update`, `rota migrate`
+**Maintenance** — `/rota-release`, `/rota-init` (suggest config values from the project, confirmed one by one). Setup and upkeep are `rota` verbs: `rota init`, `rota config`, `rota update`, `rota migrate`
 
 Before acting on work that touches a topic listed in `## Project Knowledge`, `## Project Decisions`, or `## Project Vision`, pull only the relevant sections:
 
