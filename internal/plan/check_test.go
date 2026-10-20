@@ -59,7 +59,7 @@ func TestCheck(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Check(checkHead+tt.tasks, ids)
+			got := Check(checkHead+tt.tasks, ids, nil)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("got %+v, want %+v", got, tt.want)
 			}
@@ -71,7 +71,7 @@ func TestCheck(t *testing.T) {
 }
 
 func TestCheckNoTasksSection(t *testing.T) {
-	got := Check("# T\n\n## Goal\n\ng\n", []string{"AC-1"})
+	got := Check("# T\n\n## Goal\n\ng\n", []string{"AC-1"}, nil)
 	if !reflect.DeepEqual(got.Uncovered, []string{"AC-1"}) {
 		t.Fatalf("got %+v", got)
 	}
@@ -111,6 +111,43 @@ func TestCheckSize(t *testing.T) {
 			got := CheckSize(checkHead+tt.tasks, tt.lim)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCheckDecisions(t *testing.T) {
+	ids := []string{"AC-1"}
+	decs := []string{"D1", "D2"}
+	task := func(honors string) string {
+		s := "- **T1** — one\n  - Serves: AC-1\n"
+		if honors != "" {
+			s += "  - " + honors + "\n"
+		}
+		return s + "  - Verify: go test ./a\n"
+	}
+	tests := []struct {
+		name  string
+		tasks string
+		decs  []string
+		want  Report
+	}{
+		{"all honored", task("Honors: D1, D2"), decs, Report{}},
+		{"honors on two tasks", task("Honors: D1") + "- **T2** — two\n  - Serves: AC-1\n  - Honors: D2\n  - Verify: x\n", decs, Report{}},
+		{"uncovered decision", task("Honors: D1"), decs, Report{UncoveredDecisions: []string{"D2"}}},
+		{"no honors line", task(""), decs, Report{UncoveredDecisions: []string{"D1", "D2"}}},
+		{"unknown decision", task("Honors: D1, D2, D7"), decs, Report{UnknownDecisions: []Unknown{{"T1", []string{"D7"}}}}},
+		{"no decisions, no output", task(""), nil, Report{}},
+		{"no decisions, stray honors is unknown", task("Honors: D1"), nil, Report{UnknownDecisions: []Unknown{{"T1", []string{"D1"}}}}},
+		{"placeholder honors is none", task("Honors: _(D-n)_"), decs, Report{UncoveredDecisions: []string{"D1", "D2"}}},
+		{"bold honors", task("**Honors**: D1, D2"), decs, Report{}},
+		{"uncovered sorted numerically", task("Honors: D1"), []string{"D1", "D2", "D10"}, Report{UncoveredDecisions: []string{"D2", "D10"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Check(checkHead+tt.tasks, ids, tt.decs)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("got %+v, want %+v", got, tt.want)
 			}
 		})
 	}

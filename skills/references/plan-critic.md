@@ -1,6 +1,6 @@
 # Plan critic
 
-Used by `/rota-plan` (Step 3, between the self-check and the confirm question) when the planning dial (`references/planning-dial.md`) picks level 4, the adversarial pass. At levels 1-3 the step does not run and the flow is unchanged.
+Used by `/rota-plan` (Step 3, between the self-check and the confirm question) when the planning dial (`references/planning-dial.md`) picks level 4, the adversarial pass, or level 3 when the item has at least one `decision` comment. At levels 1-2, and at level 3 without a decision comment, the step does not run and the flow is unchanged.
 
 The critic is a fresh `standard` subagent (`references/subagent-dispatch.md`, *Subagent tiers*). It sees only the item and the proposal. It never sees the planning conversation, the user's redirects or your reasoning, so it cannot inherit your blind spots.
 
@@ -9,7 +9,7 @@ The critic is a fresh `standard` subagent (`references/subagent-dispatch.md`, *S
 Dispatch one read-only subagent through the current harness (`references/subagent-dispatch.md`). Pass paths and IDs, not pasted content:
 
 - **Inputs**: the item (`rota item show <ID>`, including its `## Acceptance` and `## Out of scope`), and the proposal saved to a scratch file. Nothing else.
-- **Return**: a short list of findings, at most 7, one per line, under the three headings below. Write `none` under a heading with nothing to report. Word budget 250.
+- **Return**: a short list of findings, at most 7, one per line, under the four headings below. Write `none` under a heading with nothing to report. Word budget 250.
 
 ## Critic brief
 
@@ -27,6 +27,8 @@ finding, each naming the task or Acceptance line it concerns:
 3. Unverifiable tasks: any task whose Verify cannot fail (it passes before the change,
    checks only that a file exists, or names no command), and any behavior task with no
    RED.
+4. Weakened outcomes: any task whose Observable behavior is weaker than the acceptance
+   it serves (a narrower input, a softer guarantee, a case dropped to make it fit).
 
 Do not rewrite the plan, praise it or restate it. Do not edit files. Skip style.
 Prefer fewer, concrete findings to many vague ones.
