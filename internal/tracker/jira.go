@@ -73,7 +73,7 @@ func machineConn(ctx context.Context, name string) (connections.Connection, stri
 		return connections.Connection{}, "", err
 	}
 	if !ok {
-		return connections.Connection{}, "", fmt.Errorf("connection %q is not defined on this machine (run: rota connect add %s --kind jira|linear ...)", name, name)
+		return connections.Connection{}, "", fmt.Errorf("connection %q is not defined on this machine (run: rota connect add %s --kind jira|linear|itsaplan ...)", name, name)
 	}
 	sec := &connections.Secrets{Getenv: os.Getenv, Keychain: connections.OSKeychain(proc.Run, runtime.GOOS), File: connections.FileStore(dir)}
 	secret, _, err := sec.Resolve(ctx, name)

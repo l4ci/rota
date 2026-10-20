@@ -19,7 +19,7 @@ import (
 // and their secrets, kept in the global rota config dir. A project only names
 // one (issues.connection). None of these verbs needs a project root.
 func connectCommand() *Command {
-	return &Command{Name: "connect", Summary: "manage machine-wide tracker connections (Jira, Linear) and their secrets", Subs: []*Command{
+	return &Command{Name: "connect", Summary: "manage machine-wide tracker connections (Jira, Linear, It's a Plan) and their secrets", Subs: []*Command{
 		{Name: "add", Summary: "add or replace a named connection and store its token", Verb: connectAddVerb},
 		{Name: "list", Summary: "list connections and which store holds each secret; never the secret", Verb: noFlags(runConnectList)},
 		{Name: "test", Summary: "make one authenticated read through a connection", Verb: noFlags(runConnectTest)},
@@ -56,8 +56,8 @@ func doctorConnection(ctx context.Context, d *Deps, name string) *doctor.ConnChe
 	return &doctor.ConnCheck{Name: name, State: string(dg.State), Detail: dg.Detail, Hint: dg.Hint}
 }
 
-// linearTeamProblem is why the project's Linear team cannot be read through
-// its working connection, for `rota doctor`; "" when it can.
+// linearTeamProblem is why the project's Linear team (or It's a Plan project)
+// cannot be read through its working connection, for `rota doctor`; "" when it can.
 func linearTeamProblem(ctx context.Context, d *Deps, cfg any, root string) string {
 	it, err := d.issueTracker(ctx, cfg, root)
 	if err == nil {
@@ -70,8 +70,8 @@ func linearTeamProblem(ctx context.Context, d *Deps, cfg any, root string) strin
 }
 
 func connectAddVerb(fs *flag.FlagSet) RunFunc {
-	kind := fs.String("kind", "", "connection kind: jira or linear")
-	site := fs.String("site", "", "site URL, e.g. https://acme.atlassian.net (required for jira; linear defaults to https://api.linear.app)")
+	kind := fs.String("kind", "", "connection kind: jira, linear or itsaplan")
+	site := fs.String("site", "", "site URL, e.g. https://acme.atlassian.net (required for jira and itsaplan; linear defaults to https://api.linear.app)")
 	user := fs.String("user", "", "account email the token belongs to (required for Jira Cloud; unused for linear)")
 	deployment := fs.String("deployment", "", "jira only: cloud or datacenter (default cloud for *.atlassian.net sites, else required)")
 	stdin := fs.Bool("token-stdin", false, "read the API token from stdin (the default when stdin is not a terminal)")
@@ -177,7 +177,7 @@ func runConnectList(c *Ctx, args []string) (Result, error) {
 		lines = append(lines, line)
 	}
 	if len(cs) == 0 {
-		lines = append(lines, "no connections: run rota connect add <name> --kind jira|linear --site <url> --token-stdin")
+		lines = append(lines, "no connections: run rota connect add <name> --kind jira|linear|itsaplan --site <url> --token-stdin")
 	}
 	data := jsonx.NewObject()
 	data.Set("dir", dir)

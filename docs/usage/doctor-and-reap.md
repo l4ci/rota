@@ -71,6 +71,7 @@ because everything it deletes is proven unowned and merged, and anything holding
 | `tab` | a herdr tab inside `.worktrees/` whose panes run only plain shells | always (tmux has no agent state, so it yields none) |
 | `process` | a process under a tab with no agent | a real host lists none; only test fakes supply any |
 | `lease` | the round lease, when its holder is gone | the staleness is proven again under the lease lock |
+| `skillcache` | an extracted skill tree (`rota/skills/<version>/` in the user cache) of a rota version other than the running one | always; the running version's tree and a tree being written are never listed |
 
 **What reap never removes.**
 

@@ -103,7 +103,7 @@ var Keys = []Key{
 	k("test.ciChecks", []any{}, false, TypeList, "Check names that must all succeed on the pushed commit under test.fullWhere ci: GitHub check-run names or commit-status contexts, GitLab job names."),
 	// #797: where issues live and where code lands, split. They replace
 	// backlog.backend and issues.provider (migrated by rota migrate source).
-	k("issues.source", "file", false, TypeEnum, "Where issues live: BACKLOG.md in the repo (file), or a tracker. github and gitlab must match the forge. forge means each repo's own forge, for an umbrella whose sub-repos sit on different hosts. jira reads issues.connection and issues.jira.project; linear reads issues.connection and issues.linear.team. Switch with rota migrate issues.", "file", "github", "gitlab", "forge", "jira", "linear"),
+	k("issues.source", "file", false, TypeEnum, "Where issues live: BACKLOG.md in the repo (file), or a tracker. github and gitlab must match the forge. forge means each repo's own forge, for an umbrella whose sub-repos sit on different hosts. jira reads issues.connection and issues.jira.project; linear reads issues.connection and issues.linear.team; itsaplan reads issues.connection and issues.itsaplan.project. Switch with rota migrate issues.", "file", "github", "gitlab", "forge", "jira", "linear", "itsaplan"),
 	k("forge.provider", "auto", false, TypeEnum, "Where code lands: pull requests, checks and releases. auto reads the origin remote and is local with no remote; local means direct merge, no PR. Set it by hand only when detection misses (self-hosted GitLab without gitlab in the host, SSH host aliases, mirrors).", "auto", "github", "gitlab", "local"),
 	// 5.0 keys: not in CONFIG_KEYS.
 	k("ship.mergeApproval", "none", false, TypeEnum, "Which merges need a human: none, all, or only those touching ship.mergeApprovalPaths. The merge verbs enforce it at every autonomy level.", "none", "all", "paths"),
@@ -191,9 +191,10 @@ var Keys = []Key{
 	k("round.itemTimeoutMinutes", num("0"), false, TypeInt, "Minutes one item may run from its first assignment before rota round reconcile reports it as timed out and --apply parks it as needs-human. 0 means no cap."),
 	k("test.isolate", true, false, TypeBool, "Whether rota test run scrubs HERDR_*, TMUX*, ssh-agent variables and pins HOME and XDG_* to a temp root. The merge gate and train do not read it."),
 	k("release.versionFile", "", false, TypePath, "Project-relative file /rota-release and rota release version read and bump. Empty auto-detects; a path outside the project is refused."),
-	k("issues.connection", "", false, TypeString, "Name of the machine-wide tracker connection the issues backend uses for Jira or Linear, added with rota connect add. Holds a name only, never a secret. A teammate whose connection has another name overrides it in config.local.json."),
+	k("issues.connection", "", false, TypeString, "Name of the machine-wide tracker connection the issues backend uses for Jira, Linear or It's a Plan, added with rota connect add. Holds a name only, never a secret. A teammate whose connection has another name overrides it in config.local.json."),
 	k("issues.jira.project", "", false, TypeString, "Jira project key, such as ROTA, that issues.connection reads from and writes to."),
 	k("issues.linear.team", "", false, TypeString, "Linear team key, such as ROT, that issues.connection reads from and writes to."),
+	k("issues.itsaplan.project", "", false, TypeString, "It's a Plan project key, such as MKT, that issues.connection reads from and writes to."),
 }
 
 func init() {
