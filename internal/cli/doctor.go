@@ -69,8 +69,8 @@ func runDoctor(c *Ctx, args []string) (Result, error) {
 // tool lookup (a test hook, not part of the CLI).
 func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in := doctor.Input{Exec: doctorExec(d.Proc), Getenv: d.Getenv, Look: doctorLook(d.LookPath, d.DoctorPath)}
-	in.Dir, _ = os.Getwd()
-	in.Home, _ = os.UserHomeDir()
+	in.Dir, _ = d.Getwd()
+	in.Home, _ = d.UserHomeDir()
 	if dir, src, warn, err := projects.Resolve(); err == nil {
 		in.ConfigDir, in.ConfigDirSource, in.ConfigDirWarning = dir, src, warn
 	}
@@ -84,7 +84,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		in.LegacyDir, _ = legacystate.LegacyState(in.Dir)
 	}
 	root, _ := rotatree.Find(in.Dir)
-	in.Skills = doctorSkills(d.Getenv, in.Home, root)
+	in.Skills = doctorSkills(d.Getenv, in.Home, root, d.Toplevel(ctx))
 	if root == "" {
 		doctorDiskInput(ctx, &in, nil, "", d.Git, d.Now(), d.DoctorDisk, d.Getenv)
 		return in
@@ -143,13 +143,12 @@ func staleBinary(ctx context.Context, run git.Runner, dir string) (stalebin.Find
 
 // doctorSkills reads the skill roots in both scopes; nil when the embedded set
 // or the roots cannot be resolved (the check then skips).
-func doctorSkills(getenv func(string) string, home, root string) *skills.Report {
+func doctorSkills(getenv func(string) string, home, root, top string) *skills.Report {
 	set, err := skills.Embedded()
 	if err != nil {
 		return nil
 	}
 	dirs, _ := skillsClaudeDirs(getenv, home, root)
-	top := gitToplevel()
 	roots, err := skills.RootsFor("", "all", home, dirs, top)
 	if err != nil {
 		return nil
@@ -228,7 +227,7 @@ func staleData(f stalebin.Finding) *jsonx.Object {
 // warning. The once-per-round rule and its marker belong to round
 // (round.ClaimStaleWarning); a marker error comes back as err beside the finding.
 func staleBinaryOncePerRound(c *Ctx, cd string, n int) (f stalebin.Finding, ok bool, err error) {
-	dir, err := os.Getwd()
+	dir, err := c.deps().Getwd()
 	if err != nil {
 		return stalebin.Finding{}, false, err
 	}
