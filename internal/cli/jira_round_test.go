@@ -56,7 +56,7 @@ func newJiraFx(t *testing.T, slots ...string) *jiraFx {
 		rows = append(rows, `{"name":"`+n+`","branch":"park/`+n+`","base":"feat/x","worktree":"`+wt+`"}`)
 	}
 	write(t, filepath.Join(fx.root, ".rota", "workers.json"),
-		`{"architectureReview":{"at":"2020-01-01T00:00:00Z"},"slots":[`+strings.Join(rows, ",")+`]}`)
+		`{"architectureReview":{"at":"2020-01-01T00:00:00Z"},"slotCount":4,"slots":[`+strings.Join(rows, ",")+`]}`)
 	cfg, err := jsonx.Decode([]byte(jiraRoundCfg))
 	if err != nil {
 		t.Fatal(err)

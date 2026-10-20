@@ -52,8 +52,11 @@ type Role struct{ Tier, Effort string }
 
 // Settings are the round.* keys.
 type Settings struct {
-	Scope       string
-	Roster      []string
+	Scope  string
+	Roster []string
+	// Slots is round.slots: how many roster names, from the first, a round
+	// started without --slots uses.
+	Slots       int
 	Brief       string
 	SharedPaths []string
 	// ScopeOverlap is round.scopeOverlap: "warn" (default) or "block". Block
@@ -179,6 +182,9 @@ func FromConfig(cfg any) (Settings, error) {
 	}
 	if len(s.Roster) == 0 {
 		return s, fmt.Errorf("round.roster is empty")
+	}
+	if s.Slots, err = config.Int(cfg, "round.slots", 1, config.MaxInt); err != nil {
+		return s, err
 	}
 	v, err = config.Value(cfg, "round.brief")
 	if err != nil {

@@ -54,6 +54,9 @@ const (
 	BlockBatch      = "batch"
 	BlockSlotBusy   = "slot busy"
 	BlockNoFreeSlot = "no free slot"
+	// BlockDraining: the slot is past the round's slot count (round.slots,
+	// --slots); it finishes the work it holds and takes nothing new.
+	BlockDraining = "draining"
 	// BlockQuota: every account the worker kind could run under is cooling down.
 	BlockQuota        = "quota"
 	BlockBriefMissing = "brief missing"
@@ -586,8 +589,11 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		if slot == nil {
 			return run, false, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.Agent)}
 		}
+		if err := checkActive(reg, set, o.Agent, slot.HeldID() == worker.NormID(id)); err != nil {
+			return run, false, err
+		}
 	} else {
-		picked := e.pickSlots(ctx, reg, set.Roster, worker.NormID(id), 1)
+		picked := e.pickSlots(ctx, reg, set, worker.NormID(id), 1)
 		if len(picked) == 0 {
 			return run, false, blocked(BlockNoFreeSlot, "every roster slot is busy")
 		}

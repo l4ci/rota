@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/strutil"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -165,6 +166,9 @@ type Row struct {
 	// Bounces is how often the slot's issue has been sent back (round.maxBounces
 	// caps it); 0 when never.
 	Bounces int
+	// Draining marks a roster slot past the round's slot count that still
+	// holds work: it takes nothing new (Members).
+	Draining bool
 	// BestOf is the other attempt's slot when the row's issue is built best-of:2.
 	BestOf string
 	// PRTitle is the open PR's title ("" without one) and Evidence the last
@@ -373,6 +377,12 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	}
 
 	rows, slotObj := e.readRows(wts, reg, rep)
+	if len(e.Round.Roster) > 0 {
+		_, draining := Members(reg, e.Round)
+		for _, r := range rows {
+			r.Draining = slices.Contains(draining, r.Name)
+		}
+	}
 
 	agents, hostOK := e.readHost(ctx, rep)
 	claimed := map[int]bool{}
