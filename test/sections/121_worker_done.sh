@@ -33,3 +33,34 @@ echo '{"slots":[{"name":"ben","branch":"feat/x","task":"B07","state":"busy"}]}' 
 RC=0; OUT=$(wdrun worker done ben) || RC=$?
 [ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.proofSkipped)" = "true" ] || fail "unset test.fast should skip the proof half: rc=$RC $OUT"
 pass "an unset test.fast skips the proof half"
+
+# A relay written after the worker's last test run and before done (#964): the
+# slot's inbox holds it, done refuses until the worker has read it.
+echo '{"test":{"fast":["echo fast"]}}' > "$WDP/.rota/config.json"
+python3 - "$WDP/.rota/workers.json" <<'PYEOF'
+import json, sys
+p = sys.argv[1]
+d = {"slots": [{"name": "ben", "branch": "feat/x", "task": "B07", "state": "busy",
+                "inbox": [{"seq": 1, "round": 3, "ts": "2026-10-20T09:00:00Z", "kind": "review",
+                           "text": "REVIEW https://github.com/o/r/pull/9 (1 items)\n> please rename x"}]}]}
+json.dump(d, open(p, "w"))
+PYEOF
+( cd "$WDP" && "$ROTA_BIN" proof record B07 -- "echo fast" >/dev/null ) || fail "proof record at HEAD failed"
+RC=0; OUT=$(wdrun worker done ben) || RC=$?
+[ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.unread)" = "1" ] && [ "$(echo "$OUT" | jget data.changed)" = "false" ] \
+  || fail "done with unread mail should exit 4 with data.unread 1: rc=$RC $OUT"
+grep -q '"state": *"done"' "$WDP/.rota/workers.json" && fail "a refused done must leave the slot busy"
+pass "worker done refuses while the inbox holds unread mail"
+
+RC=0; OUT=$(wdrun worker inbox ben) || RC=$?
+[ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.unread)" = "1" ] && grep -q 'please rename x' <<<"$OUT" \
+  || fail "worker inbox should list the unread relay: rc=$RC $OUT"
+RC=0; OUT=$(wdrun worker inbox ben --ack --upto 1) || RC=$?
+[ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.acked)" = "1" ] || fail "worker inbox --ack should mark the relay read: rc=$RC $OUT"
+OUT=$(wdrun worker inbox ben) || vfail
+[ "$(echo "$OUT" | jget data.unread)" = "0" ] || fail "an acknowledged relay should not list again: $OUT"
+pass "worker inbox lists unread relays and --ack marks them read"
+
+RC=0; OUT=$(wdrun worker done ben) || RC=$?
+[ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "done after --ack should succeed: rc=$RC $OUT"
+pass "worker done succeeds once the inbox is read"
