@@ -497,10 +497,15 @@ and applies it before the next question. Rounds use no blocking picker otherwise
 orchestrator never starts `/rota-answer` itself.
 
 ```sh
-rota round escalate send 59 --slot ben --title "Keep the old flag?" --body-file question.md
-rota round escalate send 61 --pr --title "Merge approval: PR #61" --body-file ask.md
+rota round escalate send 59 --slot ben --title "Keep the old flag?" --body-file question.md \
+  --options "keep it" --options "drop it" --recommend 2 --cost-if-wrong "one more breaking release"
 rota round escalate check
 ```
+
+Every escalation is decision ready: at least two `--options` and a `--recommend` (the option's number),
+or `send` exits 4 and posts nothing. The comment lists the options, marks the recommended one and
+states its cost if wrong. A reply of `ok`, `yes` or an option number resolves to that option in
+`escalate check`; anything longer is read as prose.
 
 An escalation has a deadline when you pass `--timeout <s>`; past it the entry counts as timed out.
 A slot waiting on an open escalation is never reported `stalled`. Under solo mode the comment is the

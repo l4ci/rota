@@ -37,7 +37,7 @@ Gather from these sources, in this order (blocking work first):
 4. Candidates you are holding for a wrong premise or an open design question (`rota round candidates`, your own held list).
 5. Items with an open `question` comment (`rota item comment list <ID>`).
 
-Each becomes one question: the item or PR number, the facts needed to decide, 2 to 4 options, the recommended option first. Drop what the code or the issue already answers ([`references/authoring-conventions.md`](references/authoring-conventions.md), *Don't ask what the code can answer*).
+Each becomes one question: the item or PR number, the facts needed to decide, 2 to 4 options, the recommended option first (an escalation from `rota round escalate send` already lists its options in that order, so its `A)` to `D)` letters match its numbers). Drop what the code or the issue already answers ([`references/authoring-conventions.md`](references/authoring-conventions.md), *Don't ask what the code can answer*).
 
 With nothing pending, print `no decisions pending` and stop.
 

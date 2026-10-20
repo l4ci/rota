@@ -87,7 +87,7 @@ func TestEscalateSendKeyIssue(t *testing.T) {
 	clock := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	useKeyForge(deps, f, h, &clock)
 
-	code, out, errOut := rotaInWith(t, deps, dir, "round", "escalate", "send", "proj-123", "--title", "Pick one", "--body-file", "body.md", "--json")
+	code, out, errOut := rotaInWith(t, deps, dir, "round", "escalate", "send", "proj-123", "--title", "Pick one", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", "body.md", "--json")
 	if code != 0 {
 		t.Fatalf("send: %d %s %s", code, out, errOut)
 	}
@@ -115,7 +115,7 @@ func TestEscalateSendKeyIssue(t *testing.T) {
 	}
 
 	// one pending escalation per thread, spelled as the key
-	code, out, errOut = rotaInWith(t, deps, dir, "round", "escalate", "send", "PROJ-123", "--title", "Again", "--body-file", "body.md")
+	code, out, errOut = rotaInWith(t, deps, dir, "round", "escalate", "send", "PROJ-123", "--title", "Again", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", "body.md")
 	if code != 4 || !strings.Contains(errOut, "still pending on issue PROJ-123") {
 		t.Errorf("second send: %d %s %s", code, out, errOut)
 	}
@@ -154,7 +154,7 @@ func TestEscalateSendKeyUsage(t *testing.T) {
 			t.Errorf("%v: %d %s %s", args, code, out, errOut)
 		}
 	}
-	code, _, errOut := rotaInWith(t, deps, dir, "round", "escalate", "send", "PROJ-999", "--title", "t", "--body-file", "body.md")
+	code, _, errOut := rotaInWith(t, deps, dir, "round", "escalate", "send", "PROJ-999", "--title", "t", "--options", "yes", "--options", "no", "--recommend", "1", "--body-file", "body.md")
 	if code != 3 || !strings.Contains(errOut, "no such issue PROJ-999") {
 		t.Errorf("unknown key: %d %s", code, errOut)
 	}
