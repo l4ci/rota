@@ -20,6 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/legacystate"
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/skills"
@@ -71,6 +72,9 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in := doctor.Input{Exec: doctorExec(d.Proc), Getenv: d.Getenv, Look: doctorLook(d.LookPath, d.DoctorPath)}
 	in.Dir, _ = os.Getwd()
 	in.Home, _ = os.UserHomeDir()
+	if dir, src, warn, err := projects.Resolve(); err == nil {
+		in.ConfigDir, in.ConfigDirSource, in.ConfigDirWarning = dir, src, warn
+	}
 	if f, ok := staleBinary(ctx, d.Git, in.Dir); ok {
 		in.StaleBinary = &f
 	}

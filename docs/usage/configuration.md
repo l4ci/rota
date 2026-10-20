@@ -1,6 +1,6 @@
 # Configuration
 
-All settings live in [`.rota/config.json`](../reference/rota-folder.md). Run `rota config show` to list every key with its value and source, `rota config edit` (or `rota config --ui`) to change keys on [a screen](#the-config-screen) (terminal only; it is also the Config entry of the bare-`rota` menu), and `rota config set <key> <value>` to change one from a script (positional arguments; see [config options](../reference/config-options.md)). `rota init` fills any missing key with its default. Don't hand-edit the file. `rota config save-global` saves this project's `config.json` (not `config.local.json`; without `rota.version`, `git.baseBranch` and `umbrella.enabled`) as `config.json` in the rota config dir (`$XDG_CONFIG_HOME/rota`, default `~/.config/rota`), beside `projects.json`. `rota init` and `rota setup` start a new project from those values, and `rota setup` offers each as the question's default. It only seeds: an existing project is never re-seeded, and nothing reads the global file after init.
+All settings live in [`.rota/config.json`](../reference/rota-folder.md). Run `rota config show` to list every key with its value and source, `rota config edit` (or `rota config --ui`) to change keys on [a screen](#the-config-screen) (terminal only; it is also the Config entry of the bare-`rota` menu), and `rota config set <key> <value>` to change one from a script (positional arguments; see [config options](../reference/config-options.md)). `rota init` fills any missing key with its default. Don't hand-edit the file. `rota config save-global` saves this project's `config.json` (not `config.local.json`; without `rota.version`, `git.baseBranch` and `umbrella.enabled`) as `config.json` in the rota config dir (see [the global config dir](#the-global-config-dir)), beside `projects.json`. `rota init` and `rota setup` start a new project from those values, and `rota setup` offers each as the question's default. It only seeds: an existing project is never re-seeded, and nothing reads the global file after init.
 
 For the allowed values and option labels of each key, see [Configuration options](../reference/config-options.md).
 
@@ -789,3 +789,13 @@ Keys sit under their section (`models`, `work`, `ship`, `round`, ...). Each row 
 | `q` / `Esc` | back (`Esc` clears a filter first) |
 
 While editing, a boolean is a toggle (`Space`), a key with choices is a picker (`←` `→`), and any other key is a text field. `Enter` saves and `Esc` cancels. The text is checked as `rota config set` checks it: JSON when it parses, else a string, and a project-relative path key such as `release.versionFile` refuses a path outside the project. Nothing else is checked, so a number key accepts text just as `config set` does. Every save is written at once, through the code behind `config set`, so leaving the screen never loses or half-applies a change. A key set in `config.local.json` still wins on this machine after a project edit; the screen says so.
+
+## The global config dir
+
+`projects.json`, `connections.json` and the saved global `config.json` live in the global rota config dir. rota picks it in this order:
+
+1. `ROTA_CONFIG_DIR`, when it is an absolute path. Use it for a separate rota profile, or to isolate rota alone in CI and tests without moving `XDG_CONFIG_HOME` for every other tool.
+2. `$XDG_CONFIG_HOME/rota`, when `XDG_CONFIG_HOME` is an absolute path.
+3. `~/.config/rota`.
+
+A relative `ROTA_CONFIG_DIR` is ignored with a warning on stderr, and rota falls through to the next rule. `rota doctor` shows the `config dir` line: the dir in use and whether it came from the override, XDG or the default. The state and data dirs have no override.
