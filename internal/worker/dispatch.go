@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/stamp"
 	"os"
 	"strings"
@@ -48,12 +47,8 @@ type DispatchResult struct {
 	Warnings []string
 }
 
-// dispatchSetting is work.dispatch from the project config, "" when unset.
-func dispatchSetting(root string) host.Kind {
-	v, _ := config.Lookup(config.Load(rotatree.Config(root)), "work.dispatch")
-	s, _ := v.(string)
-	return host.KindOf(s)
-}
+// dispatchSetting is work.dispatch from cfg, "" when unset.
+func dispatchSetting(cfg any) host.Kind { return host.KindOf(config.Dispatch(cfg)) }
 
 // RegistryHost is the round host `round start` recorded (C8), "" when no
 // round is in flight.
@@ -66,16 +61,17 @@ func RegistryHost(root string) host.Kind { return LoadRegistryTolerant(root).Hos
 // round's recorded host, work.dispatch and the environment. Every verb that
 // needs the host asks here. getenv and lookPath default to the process's own;
 // a caller that holds injected ones (cli's Deps, worker.Env) passes them, so
-// the decision reads the same sources as the handle it then drives.
-func ResolveHost(root string, getenv func(string) string, lookPath func(string) (string, error)) host.Kind {
-	return host.Resolve(RegistryHost(root), dispatchSetting(root), getenv, lookPath)
+// the decision reads the same sources as the handle it then drives. cfg is the
+// project's loaded config, which the caller owns.
+func ResolveHost(root string, cfg any, getenv func(string) string, lookPath func(string) (string, error)) host.Kind {
+	return host.Resolve(RegistryHost(root), dispatchSetting(cfg), getenv, lookPath)
 }
 
 // ResolvePaneHost is ResolveHost for a verb that must drive a pane host even
 // with no round recorded: a bare environment reads as tmux, which reports
 // unavailable if it is absent. A recorded solo round stays solo.
-func ResolvePaneHost(root string, getenv func(string) string, lookPath func(string) (string, error)) host.Kind {
-	k := ResolveHost(root, getenv, lookPath)
+func ResolvePaneHost(root string, cfg any, getenv func(string) string, lookPath func(string) (string, error)) host.Kind {
+	k := ResolveHost(root, cfg, getenv, lookPath)
 	if k == host.Solo && RegistryHost(root) == "" {
 		return host.Tmux
 	}
@@ -85,7 +81,16 @@ func ResolvePaneHost(root string, getenv func(string) string, lookPath func(stri
 // hostKind is the host a pane verb drives. Never pass "solo" on to host.New:
 // callers refuse it first (SoloRefusal), and New maps it to tmux anyway.
 func (e Env) hostKind(root string) host.Kind {
-	return ResolveHost(root, e.Getenv, e.LookPath)
+	return ResolveHost(root, e.config(root), e.Getenv, e.LookPath)
+}
+
+// config is the project config through Env.Config; an Env built by hand, with
+// no Config, reads it from disk.
+func (e Env) config(root string) any {
+	if e.Config == nil {
+		return loadConfig(root)
+	}
+	return e.Config(root)
 }
 
 // SoloRefusal is the exit 2 a pane verb gives when the round's recorded host
@@ -177,7 +182,8 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	if err != nil {
 		return res, fail(exitcode.ExitResolution, "body file not found: "+o.BodyFile)
 	}
-	h := e.NewHost(e.hostKind(root))
+	cfg := e.config(root)
+	h := e.NewHost(ResolveHost(root, cfg, e.Getenv, e.LookPath))
 	if err := h.Require(); err != nil {
 		return res, fail(exitcode.ExitUnavailable, err.Error())
 	}
@@ -269,7 +275,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		if launch, signKey, err = hz.Prepare(launch, e.Executable, setup); err != nil {
 			return res, asError(err)
 		}
-		group, err := GroupSlots(root, h.Capabilities())
+		group, err := GroupSlots(cfg, h.Capabilities())
 		if err != nil {
 			return res, fail(exitcode.ExitResolution, err.Error())
 		}
@@ -296,7 +302,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			// The old session was killed and its handle cleared on the way here.
 			return res, resetRefusal(err, true)
 		}
-		portStart, portBlock := PortRange(config.Load(rotatree.Config(root)))
+		portStart, portBlock := PortRange(cfg)
 		portBase, width, err := EnsurePortBase(root, o.Slot, portStart, portBlock)
 		if err != nil {
 			return res, fail(exitcode.ExitUnavailable, err.Error())
@@ -344,7 +350,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	if !o.Relay {
 		// The round was folded into the orchestrator's tab: the new worker
 		// joins the grid instead of keeping its own tab.
-		if w := arrangeNew(ctx, h, root); w != "" {
+		if w := arrangeNew(ctx, h, root, cfg); w != "" {
 			res.Warnings = append(res.Warnings, w)
 		}
 		syncLabel(ctx, h, root, o.Slot)
@@ -545,14 +551,14 @@ func sweepShells(ctx context.Context, h host.Host, worktree string) {
 // worker assigned later does not sit in a tab of its own. A host that cannot
 // arrange panes, or a round in tabs, is a no-op. The worker is already up, so a
 // failure is a warning, never a failed dispatch.
-func arrangeNew(ctx context.Context, h host.Host, root string) string {
+func arrangeNew(ctx context.Context, h host.Host, root string, cfg any) string {
 	l := h.Capabilities().Layouter
 	reg := LoadRegistryTolerant(root) // a warning-only rearrange after a spawn; cannot fail the dispatch
 	if l == nil || reg.Layout() != layout.Split {
 		return ""
 	}
 	_, _, found, err := layout.Arrange(ctx, l, root, layout.Split, reg.CLIPane(), LiveWorkers(ctx, l, reg))
-	if group, gerr := GroupSlots(root, h.Capabilities()); err == nil && found && gerr == nil && group {
+	if group, gerr := GroupSlots(cfg, h.Capabilities()); err == nil && found && gerr == nil && group {
 		// The split closed the new worker's linked workspace.
 		err = RecordWorkspaces(ctx, l, root, reg.CLIPane())
 	}
@@ -584,8 +590,8 @@ func LiveWorkers(ctx context.Context, h host.Layouter, reg Registry) []layout.Wo
 // GroupSlots reads work.herdrGroupSlots: whether a slot lives in a linked
 // workspace of its own. It is on only for a host that can group (herdr); on
 // any other host the default being true must not record workspaces.
-func GroupSlots(root string, caps host.Capabilities) (bool, error) {
-	on, err := config.Bool(config.Load(rotatree.Config(root)), "work.herdrGroupSlots")
+func GroupSlots(cfg any, caps host.Capabilities) (bool, error) {
+	on, err := config.Bool(cfg, "work.herdrGroupSlots")
 	return on && caps.CanGroup(), err
 }
 

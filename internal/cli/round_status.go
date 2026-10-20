@@ -42,7 +42,7 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) 
 	}
 	// A round started by hand (`herdr worktree create`) has no recorded host and
 	// resolves from the environment like every other verb.
-	hostKind := worker.ResolvePaneHost(root, nil, nil)
+	hostKind := worker.ResolvePaneHost(root, cfg, nil, nil)
 	if hostKind == host.Solo {
 		e.HostName = host.Solo // no panes to snapshot, and not an unavailable host
 	} else {
