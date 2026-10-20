@@ -7,7 +7,7 @@ import (
 
 func TestAppendDecision(t *testing.T) {
 	base := "---\nid: M01\n---\n\n## Goal\n\ng\n\n## Decisions\n\n_(none yet)_\n\n## Not yet specified\n\n- fog\n"
-	t.Run("first line replaces the placeholder", func(t *testing.T) {
+	t.Run("first line replaces the filler line", func(t *testing.T) {
 		got, changed := AppendDecision(base, "#12", "use X")
 		if !changed || !strings.Contains(got, "## Decisions\n\n- #12: use X\n\n## Not yet specified") {
 			t.Errorf("%v\n%s", changed, got)
