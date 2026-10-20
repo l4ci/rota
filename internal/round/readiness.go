@@ -35,9 +35,12 @@ type Check struct {
 
 // Overlap says which in-flight item an item's footprint collides with.
 type Overlap struct {
-	With   string
-	Slot   string
-	Paths  []string
+	With  string
+	Slot  string
+	Paths []string
+	// Dirs are the directory pointers (trailing slash) behind Paths: the
+	// clash comes from a directory, not from both issues naming the file.
+	Dirs   []string
 	Scopes []string
 	// Inferred is true when a scope clash involves an inferred entry: it
 	// only warns, whatever round.scopeOverlap says.
@@ -243,6 +246,31 @@ func Overlaps(a, b []string) []string {
 	return out
 }
 
+// OverlapDirs lists the directory entries (trailing slash) that made a and b
+// overlap by matching a different path, not an identical directory. A clash
+// that comes from one of these is a vague pointer, not two issues editing the
+// same file.
+func OverlapDirs(a, b []string) []string {
+	hit := map[string]bool{}
+	for _, x := range a {
+		for _, y := range b {
+			switch {
+			case x == y:
+			case strings.HasSuffix(x, "/") && strings.HasPrefix(y, x):
+				hit[x] = true
+			case strings.HasSuffix(y, "/") && strings.HasPrefix(x, y):
+				hit[y] = true
+			}
+		}
+	}
+	var out []string
+	for d := range hit {
+		out = append(out, d)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // itemParts is an item's body and, separately, the text of its comments, each
 // comment on its own line.
 func itemParts(be backlog.Backend, id string) (body, comments string) {
@@ -342,8 +370,12 @@ func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFli
 			continue
 		}
 		inferred := len(scopes) > 0 && (myScopeSrc == SourceInferred || f.ScopeSource == SourceInferred)
-		r.Overlaps = append(r.Overlaps, Overlap{With: f.Issue, Slot: f.Slot, Paths: paths, Scopes: scopes, Inferred: inferred})
+		dirs := OverlapDirs(mine, f.Paths)
+		r.Overlaps = append(r.Overlaps, Overlap{With: f.Issue, Slot: f.Slot, Paths: paths, Dirs: dirs, Scopes: scopes, Inferred: inferred})
 		detail := overlapDetail(f.Issue, f.Slot, paths, scopes, inferred)
+		if len(dirs) > 0 {
+			detail += fmt.Sprintf(" [from directory %s: name exact files in the pointers]", strings.Join(dirs, ", "))
+		}
 		if f.PRFilesErr != "" {
 			detail += fmt.Sprintf(" [open PR's files unavailable (%s): compared the item's footprint and scope]", f.PRFilesErr)
 		}
