@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -22,10 +23,16 @@ const landLockTimeout = 4 * time.Hour
 // taken outside test/gate.sh's machine-wide lock, never the reverse, so the
 // two cannot deadlock. A train's own landing steps run under the lock it
 // already holds (GateOpts.HoldsLandLock) and do not retake it.
-func (e Env) withLandLock(ctx context.Context, root string, fn func() error) error {
+func (e Env) withLandLock(ctx context.Context, root string, fn func(waited bool) error) error {
 	common, err := rotastate.CommonDirVia(ctx, e.Git, root)
 	if err != nil {
 		return err
 	}
-	return fsio.Locked(rotastate.File(common, "land"), landLockTimeout, fn)
+	path := rotastate.File(common, "land")
+	// waited: the lock was busy, so what fn is about to judge may have changed.
+	err = fsio.Locked(path, 0, func() error { return fn(false) })
+	if errors.Is(err, fsio.ErrLockTimeout) {
+		return fsio.Locked(path, landLockTimeout, func() error { return fn(true) })
+	}
+	return err
 }
