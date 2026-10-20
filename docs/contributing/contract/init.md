@@ -53,7 +53,7 @@ note: `--list` is read-only (G3): it writes nothing, never seeds and never exits
 rota projects
 repo: none
 data: {"dir": string, "projects": [{"name": string, "path": string, "lastSeen": string, "missing": bool}]}
-exit: 70 when the global config dir cannot be located (neither `XDG_CONFIG_HOME` nor `HOME` is set). Read-only; runs without a `.rota/` root and ignores the working directory.
+exit: 70 when the state dir cannot be located (neither `XDG_STATE_HOME` nor `HOME` is set). Read-only; runs without a `.rota/` root and ignores the working directory.
 old: none.
 note: the machine-wide registry `rota init` fills (#24): `<state dir>/projects.json`, `{"projects": [{"path", "name", "lastSeen"}]}`, `path` absolute and realpath-resolved, `name` its directory name, `lastSeen` the UTC RFC 3339 time of the last `rota init` there. Rows are sorted by name, then path. `missing` is true when the path no longer exists; such an entry is flagged, never pruned by this verb (`rota projects cleanup` does), so a project on an unmounted drive returns with it. Text mode prints `name<TAB>path` per row, plus `(missing)`. An absent or unreadable registry lists nothing and exits 0. This is not `.rota/repos.json`, the per-project umbrella sub-repo registry.
 

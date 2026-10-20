@@ -82,6 +82,15 @@ func TestProjectsListsAndMarksMissing(t *testing.T) {
 	}
 }
 
+func TestProjectsReportsTheStateDir(t *testing.T) {
+	x := projectsXDG(t)
+	code, env, _ := initRun(t, t.TempDir(), "projects")
+	dir, _ := initData(env).Get("dir")
+	if want := filepath.Join(x, "state", "rota"); code != 0 || dir != want {
+		t.Fatalf("exit %d dir %v, want %s", code, dir, want)
+	}
+}
+
 func TestProjectsEmpty(t *testing.T) {
 	projectsXDG(t)
 	code, env, _ := initRun(t, t.TempDir(), "projects")
