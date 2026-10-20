@@ -332,3 +332,71 @@ func TestReceiptedVerbsAreWiredIntoTheTree(t *testing.T) {
 		}
 	}
 }
+
+// writeReceipts puts a receipts file in a fresh project and returns its dir.
+func writeReceipts(t *testing.T, body string) string {
+	t.Helper()
+	dir := gitRepo(t)
+	if body != "" {
+		if err := os.WriteFile(filepath.Join(dir, ".rota", "receipts.json"), []byte(body), 0o666); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+const showReceipts = `{"receipts": [
+ {"id": "done-1", "verb": "round assign", "fingerprint": "f", "status": "done", "attempts": 1, "text": "assigned 42", "data": {"issue": "42", "changed": true}, "at": "2026-01-02T03:04:05Z"},
+ {"id": "fail-1", "verb": "worker gate", "fingerprint": "f", "status": "failed", "attempts": 2, "exit": 5, "message": "gh: 502", "failedStage": "merge", "residualResources": ["branch"], "at": "2026-01-02T03:04:06Z"}
+]}`
+
+func TestReceiptShowReportsEachState(t *testing.T) {
+	dir := writeReceipts(t, showReceipts)
+	for id, want := range map[string]string{"done-1": "completed", "fail-1": "pending", "never-used": "absent"} {
+		code, out, errOut := rotaIn(t, dir, "--json", "receipt", "show", id)
+		d := data(t, out)
+		if code != 0 || d["state"] != want || d["requestId"] != id {
+			t.Errorf("%s: want %s, got exit=%d data=%v stderr=%s", id, want, code, d, errOut)
+		}
+	}
+}
+
+func TestReceiptShowCompletedCarriesTheStoredResult(t *testing.T) {
+	dir := writeReceipts(t, showReceipts)
+	_, out, _ := rotaIn(t, dir, "--json", "receipt", "show", "done-1")
+	d := data(t, out)
+	res, _ := d["result"].(map[string]any)
+	if res["issue"] != "42" || d["verb"] != "round assign" || d["text"] != "assigned 42" {
+		t.Errorf("stored result not returned: %v", d)
+	}
+}
+
+func TestReceiptShowPendingNamesTheStageAndTheRetry(t *testing.T) {
+	dir := writeReceipts(t, showReceipts)
+	_, out, _ := rotaIn(t, dir, "--json", "receipt", "show", "fail-1")
+	d := data(t, out)
+	if d["failedStage"] != "merge" || d["message"] != "gh: 502" || d["attempts"] != float64(2) {
+		t.Errorf("failure detail missing: %v", d)
+	}
+	if res, _ := d["residualResources"].([]any); len(res) != 1 {
+		t.Errorf("residualResources missing: %v", d)
+	}
+}
+
+func TestReceiptShowAbsentIsNotProofNothingHappened(t *testing.T) {
+	for name, body := range map[string]string{"no file": "", "other ids": showReceipts} {
+		code, out, _ := rotaIn(t, writeReceipts(t, body), "receipt", "show", "never-used")
+		if code != 0 || !strings.Contains(out, "not proof") {
+			t.Errorf("%s: absent text must say it is not proof, exit=%d out=%q", name, code, out)
+		}
+	}
+}
+
+func TestReceiptShowRefusals(t *testing.T) {
+	if code, _, _ := rotaIn(t, writeReceipts(t, ""), "receipt", "show"); code != 2 {
+		t.Errorf("a missing id is a usage error, got exit %d", code)
+	}
+	if code, _, _ := rotaIn(t, writeReceipts(t, "{not json"), "receipt", "show", "r1"); code != 5 {
+		t.Errorf("a corrupt receipts file is exit 5, got %d", code)
+	}
+}

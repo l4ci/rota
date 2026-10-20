@@ -298,6 +298,17 @@ Added by #822. `round assign`, `round transfer`, `round reclaim`, `round pick`, 
 - **Partial failure.** A call that ends in exit 1, 5, 6, 70 or 71 records a `failed` receipt. `failedStage` is the saga step that failed (`claim`, `dispatch`, ...) and `residualResources` the stages still in place: those whose undo failed, or, for a `keep` step such as `dispatch`, every stage that ran. The error hint names both and the id. The retry runs the verb again under the same id; the saga skip checks resume it, and the result carries `resumedFrom`.
 - **No receipt** for exits 2, 3 and 4 (nothing was written, a retry must judge afresh) or for `--check-only`.
 
+### rota receipt show
+rota receipt show <request-id>
+repo: none
+data: {"requestId": string, "state": "completed" | "pending" | "absent", "verb"?: string, "attempts"?: number, "at"?: string, "result"?: any, "text"?: string, "exit"?: number, "message"?: string, "failedStage"?: string, "residualResources"?: []string}
+exit: 2 when the request id is missing or extra arguments follow; 3 when there is no project root; 5 when `.rota/receipts.json` is unreadable (never reported as `absent`)
+old: none (new in #959)
+note: read-only; it never runs the verb and writes nothing. It looks the id up in `.rota/receipts.json` by id alone, whichever verb recorded it, and answers with exit 0 in all three states: the state is the answer.
+note: `completed` is a `done` receipt: the call applied, `result` is the `data` the verb returned the first time and `text` its text. Read it; do not re-run. `pending` is a `failed` receipt: the call stopped part way, `failedStage`, `residualResources`, `exit` and `message` say where. Replay it with the same `--request-id` and the same arguments, and the saga resumes from that stage. `absent` is no receipt for the id.
+note: `absent` is not proof that nothing happened. A call still running holds the id but has recorded nothing yet; a receipt can have been pruned (`round wind-down`, or the newest 20 per verb); a call that wrote nothing (exit 2 to 4, `--check-only`) leaves none; and a finished call whose receipt could not be recorded applied without one. Inspect the affected state (the tracker, `round status`, `git log`) before deciding to re-run.
+note: the rule for a lost response (a timeout, a broken pipe, a `write | jq || write` whose `jq` failed): run `rota receipt show <request-id>` with the id the first call used, never the same write again. A call made without `--request-id` minted one and printed it as `requestId` in `--json`; if that output was lost too, the id is gone and only inspecting the state is left.
+
 ### C10: round return, transfer, reclaim
 
 C10 (#76) moves an issue that is already assigned. It builds on C3 (`assign` takes the claim, `claimId` on the slot, the lease) and C2 (`reconcile`). Orchestrator rulings (round 4, `c-rulings.md`): the claim lives on the tracker, through the same `item claim`, `item release` and `item state` calls `assign` makes; no local-only claims file; the note transfer hands over is a minimal stand-in for D1's.
