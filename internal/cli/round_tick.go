@@ -125,6 +125,9 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	if !ok {
 		return roundtick.Result{}, &Error{Exit: ExitInternal, Message: "the backlog backend has no workflow"}
 	}
+	if set.Batch > 0 {
+		e.BatchFull = func(context.Context) bool { return round.OpenItems(root, board) >= set.Batch }
+	}
 	e.Candidates = func(ctx context.Context) ([]roundtick.Candidate, error) {
 		cs, err := renv.RoundCandidates(ctx, root, be, set, "")
 		if err != nil {
@@ -272,6 +275,9 @@ func tickData(r roundtick.Result) *jsonx.Object {
 	}
 	d.Set("did", did)
 	setIf(d, "capped", r.Capped)
+	if r.BatchFull {
+		d.Set("batchFull", true)
+	}
 	items := func(l []roundtick.Item) []any {
 		out := make([]any, 0, len(l))
 		for _, it := range l {
@@ -298,6 +304,9 @@ func tickLines(r roundtick.Result) string {
 	}
 	if r.Capped != "" {
 		lines = append(lines, "capped\t"+r.Capped)
+	}
+	if r.BatchFull {
+		lines = append(lines, "batch-full")
 	}
 	if len(lines) == 0 {
 		return "nothing to do"
