@@ -35,9 +35,9 @@ Same defaults as a greenfield setup. For an existing repo I usually flip two wit
 
 `rota init` writes `.rota/` and the managed blocks in `AGENTS.md` (`CLAUDE.md` imports it). It doesn't read your code. That happens next.
 
-## Step 2: Scaffold the project map by hand
+## Step 2: Scaffold the project map
 
-`/rota-work` and `/rota-debug` need to know what subsystems your project has so they don't burn context re-exploring the same directories on every cycle. The project map lives in `.rota/map/<name>.md`: one Markdown file per coherent area of the codebase, hand-authored. `rota init` already created the empty `.rota/map/` directory in Step 1; you fill it in now.
+`/rota-work` and `/rota-debug` need to know what subsystems your project has so they don't burn context re-exploring the same directories on every cycle. The project map lives in `.rota/map/<name>.md`: one Markdown file per coherent area of the codebase, by hand or drafted for you. `rota init` already created the empty `.rota/map/` directory in Step 1; you fill it in now. To have the code read for you, run `/rota-refactor --map`: it drafts one file per subsystem (entry points, stack, conventions, test commands, concerns), shows which files are new and which already exist, writes only what you approve (never overwriting without asking) and runs `rota map index`. The sketch below is what you'd write by hand, or end up with after editing the draft.
 
 For Pinpoint you spend ten minutes sketching out:
 
@@ -59,6 +59,7 @@ subsystem: alerts
 summary: Rule engine that ingests events, dedups, and escalates to integrations.
 touched: 2026-05-16
 created: 2026-05-16
+last_mapped_commit: 3f9c2ab41d7e5a60b8c1d2e9f04a7b6c5d3e8f12
 ---
 
 ## Purpose
@@ -78,7 +79,7 @@ Rule-based alerting. Reads events, evaluates rules, dedups within a window, and 
 - Dedup window is hardcoded; per-rule windows are on the backlog.
 ```
 
-Run `rota map index` once after writing the files; it pulls each file's `summary:` into the always-on `## Project Map` block in `AGENTS.md`. The map isn't exhaustive; just enough for the orchestrator to know where to look. After every `/rota-work` cycle, touched subsystems get their `touched:` date bumped automatically and the always-on block is regenerated. When subsystems drift or duplicate later, edit or retire the relevant `.rota/map/<name>.md` files by hand.
+Run `rota map index` once after writing the files; it pulls each file's `summary:` into the always-on `## Project Map` block in `AGENTS.md`. The map isn't exhaustive; just enough for the orchestrator to know where to look. After every `/rota-work` cycle, touched subsystems get their `touched:` date bumped automatically and the always-on block is regenerated. `last_mapped_commit` is the commit a file was written against, which `/rota-refactor --map` fills in. `rota map stats` counts the commits since and prints a `note:` for each subsystem more than `map.staleCommits` (default 50, `0` turns it off) behind HEAD; it never fails. Re-run `/rota-refactor --map` to refresh. When subsystems drift or duplicate later, edit or retire the relevant `.rota/map/<name>.md` files by hand.
 
 ## Step 3: open issues (optional)
 

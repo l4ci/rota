@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 const decFixture = `# Decisions
@@ -167,6 +169,42 @@ func TestMapStatsCap(t *testing.T) {
 	got := knFrozenView(t, dir, "", func(o *knFrozenOut) { o.Stdout, o.Stderr = "", o.Stdout }, "map", "stats", "--cap")
 	if !strings.HasPrefix(got.Stdout, "note: project map has 2 subsystems") {
 		t.Errorf("text mode: %q", got.Stdout)
+	}
+}
+
+func TestMapStatsStale(t *testing.T) {
+	dir := knProject(t, false)
+	gittest.Init(t, dir, "main")
+	mapped := gittest.Commit(t, dir, "base", "src.txt", "0\n")
+	for _, n := range []string{"a", "b", "c"} {
+		gittest.Commit(t, dir, "churn "+n, n+".txt", n+"\n")
+	}
+	knWrite(t, filepath.Join(dir, ".rota", "map", "old.md"), "---\nsubsystem: old\nlast_mapped_commit: "+mapped+"\n---\nbody\n")
+	knWrite(t, filepath.Join(dir, ".rota", "map", "plain.md"), "---\nsubsystem: plain\n---\nbody\n")
+
+	// Default threshold 50: behind by 3 is no warning, but the value is reported.
+	quiet := knNew(t, dir, "", "map", "stats", "--json")
+	if quiet.rc != 0 || !strings.Contains(quiet.stdout, `"commitsBehind": 3`) || strings.Contains(quiet.stderr, "note") {
+		t.Errorf("below threshold: rc=%d %s / %s", quiet.rc, quiet.stdout, quiet.stderr)
+	}
+	if strings.Count(quiet.stdout, "commitsBehind") != 1 {
+		t.Errorf("plain subsystem must carry no commitsBehind: %s", quiet.stdout)
+	}
+
+	knWrite(t, filepath.Join(dir, ".rota", "config.json"), `{"map": {"staleCommits": 2}}`)
+	loud := knNew(t, dir, "", "map", "stats")
+	if loud.rc != 0 || !strings.Contains(loud.stdout, "note: map old is 3 commits behind HEAD") || !strings.Contains(loud.stderr, "map old is 3 commits behind HEAD") {
+		t.Errorf("above threshold: rc=%d stdout=%q stderr=%q", loud.rc, loud.stdout, loud.stderr)
+	}
+	asJSON := knNew(t, dir, "", "map", "stats", "--json")
+	if !strings.Contains(asJSON.stdout, `"commitsBehind": 3`) || !strings.Contains(asJSON.stdout, `"warnings": ["map old is 3 commits behind HEAD`) {
+		t.Errorf("--json: %s", asJSON.stdout)
+	}
+
+	knWrite(t, filepath.Join(dir, ".rota", "config.json"), `{"map": {"staleCommits": 0}}`)
+	off := knNew(t, dir, "", "map", "stats")
+	if off.rc != 0 || strings.Contains(off.stdout+off.stderr, "note:") {
+		t.Errorf("staleCommits 0 must not warn: %q / %q", off.stdout, off.stderr)
 	}
 }
 

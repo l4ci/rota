@@ -541,3 +541,28 @@ func TestPlanCriticHarnessIsOptInEnum(t *testing.T) {
 		}
 	}
 }
+
+func TestSetRejectsNegativeMapStaleCommits(t *testing.T) {
+	for _, bad := range []string{"-1", "2.5", `"many"`, "true"} {
+		if _, err := Set(t.TempDir(), "map.staleCommits", bad); !errors.Is(err, ErrBadValue) {
+			t.Errorf("map.staleCommits=%s: err = %v, want ErrBadValue", bad, err)
+		}
+	}
+	for _, ok := range []string{"0", "50"} {
+		if _, err := Set(t.TempDir(), "map.staleCommits", ok); err != nil {
+			t.Errorf("map.staleCommits=%s: %v", ok, err)
+		}
+	}
+}
+
+func TestMapStaleCommitsDefault(t *testing.T) {
+	for _, key := range Keys {
+		if key.Name == "map.staleCommits" {
+			if key.Default != num("50") || key.Type != TypeInt || key.Required {
+				t.Errorf("map.staleCommits = %+v, want optional int default 50", key)
+			}
+			return
+		}
+	}
+	t.Error("map.staleCommits is not a known key")
+}
