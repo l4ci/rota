@@ -200,7 +200,7 @@ func migrateRoundPlan(path, local string, m *RoundMigration, apply bool) error {
 // readMigrateTarget reads one config layer for the migration: nil for a
 // missing file (or path ""), and for an empty or blank config.local.json, which
 // Load already treats as absent; ErrCorrupt naming the file for anything that
-// is not a JSON object.
+// is not a JSON object; any other read error is returned wrapped, naming the file.
 func readMigrateTarget(path, name string) (*jsonx.Object, error) {
 	if path == "" {
 		return nil, nil
@@ -210,7 +210,7 @@ func readMigrateTarget(path, name string) (*jsonx.Object, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, corruptFile{name}
+		return nil, fmt.Errorf(".rota/%s: %w", name, err)
 	}
 	if name == "config.local.json" && len(bytes.TrimSpace(raw)) == 0 {
 		return nil, nil
