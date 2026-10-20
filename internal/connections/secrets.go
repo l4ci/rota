@@ -149,7 +149,8 @@ func FileStore(dir, legacyDir string) Store {
 type fileStore struct{ path, legacy string }
 
 // migrate moves the legacy file to path when path does not exist yet. The
-// rename keeps its mode; across devices it is copied at that mode, then removed.
+// result is always mode 0600, whatever the legacy file had; across devices it
+// is copied, then the original removed.
 func (f fileStore) migrate() error {
 	if f.legacy == "" || f.legacy == f.path {
 		return nil
@@ -157,7 +158,7 @@ func (f fileStore) migrate() error {
 	if _, err := os.Stat(f.path); err == nil {
 		return nil
 	}
-	fi, err := os.Stat(f.legacy)
+	_, err := os.Stat(f.legacy)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -168,7 +169,7 @@ func (f fileStore) migrate() error {
 		return err
 	}
 	if os.Rename(f.legacy, f.path) == nil {
-		return nil
+		return os.Chmod(f.path, 0o600)
 	}
 	raw, err := os.ReadFile(f.legacy)
 	if err != nil {
@@ -184,7 +185,7 @@ func (f fileStore) migrate() error {
 		err = cerr
 	}
 	if err == nil {
-		err = os.Chmod(tmp, fi.Mode().Perm())
+		err = os.Chmod(tmp, 0o600)
 	}
 	if err == nil {
 		err = os.Rename(tmp, f.path)
