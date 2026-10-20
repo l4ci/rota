@@ -45,6 +45,7 @@ Sites with multi-paragraph prose may use the *inline* form, a `**always manual**
 | `decision-write` | `/rota-decide` | Step 5 (Confirmation) | Commits a hard boundary to `.rota/DECISIONS.md`; future implementation choices are constrained until the entry is amended. |
 | `pr-open` | `/rota-ship` | Step 6a | Pushes the branch and creates a public PR or MR. |
 | `issue-close` | `/rota-ship` | Step 6c (Direct-push close) | Posts a tracking comment and closes upstream issues after a direct merge. |
+| `issue-close` | `/rota-capture` | Step T5 (Triage Mode) | Comments on, labels and closes an issue another reporter filed. |
 | `issue-close` | `/rota-release` | Step 13 | Closes upstream issues still open for shipped items. |
 
 `/rota-ship` Step 3's *"Ship anyway"* option (in the CONCERNS-routing question) is manual-shaped too and never auto-picked; `references/review-verdict-routing.md` owns why.

@@ -338,8 +338,8 @@ func TestReviewRelayReportsARollbackError(t *testing.T) {
 	if strings.HasPrefix(err.Error(), "rollback of the relay failed") {
 		t.Fatalf("the dispatch error was dropped from the join: %v", err)
 	}
-	if n := strings.Count(err.Error(), "rollback of the relay failed"); n != 2 {
-		t.Fatalf("want both the bounce and the cursor rollback reported, got %d: %v", n, err)
+	if n := strings.Count(err.Error(), "rollback of the relay failed"); n != 3 {
+		t.Fatalf("want the bounce, cursor and inbox rollbacks reported, got %d: %v", n, err)
 	}
 }
 
@@ -557,5 +557,32 @@ func TestReviewRelayFreshNeedsOpenFindings(t *testing.T) {
 	got, err := f.env.ReviewRelay(bg, f.root, o)
 	if err != nil || got.Fresh != "" || !strings.Contains(got.FreshSkipped, "no open findings") {
 		t.Fatalf("%+v %v", got, err)
+	}
+}
+
+// The REVIEW relay is also written to the slot's inbox, so a worker that
+// finishes before it reads the pane still finds it (`worker done` refuses
+// while mail is unread).
+func TestReviewRelayWritesTheInbox(t *testing.T) {
+	f, _, o := reviewFx(t)
+	if _, err := f.env.ReviewRelay(bg, f.root, o); err != nil {
+		t.Fatal(err)
+	}
+	mail := worker.LoadRegistryTolerant(f.root).Slot("ben").Unread()
+	if len(mail) != 1 || mail[0].Kind != worker.MailReview || !strings.Contains(mail[0].Text, "> please rename x") || !strings.HasPrefix(mail[0].Text, "REVIEW https://github.com/o/r/pull/9") {
+		t.Fatalf("inbox %+v", mail)
+	}
+}
+
+// A relay whose dispatch failed never reached the pane, so its mail must not
+// hold the worker's next `worker done`.
+func TestReviewRelayRetractsTheMailWhenDispatchFails(t *testing.T) {
+	f, _, o := reviewFx(t)
+	f.host.sendErr = host.ErrNotSubmitted
+	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
+		t.Fatal("a relay the session never picked up succeeded")
+	}
+	if n := len(worker.LoadRegistryTolerant(f.root).Slot("ben").Inbox()); n != 0 {
+		t.Fatalf("%d mails left behind", n)
 	}
 }

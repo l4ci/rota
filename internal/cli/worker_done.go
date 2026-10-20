@@ -71,6 +71,12 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		d.Set("slot", slotName)
 		d.Set("item", id)
 		d.Set("changed", false)
+		// Mail first: a relay written after the last test run can change what
+		// the worker must do, and the proof below would be of the old work.
+		if err := unreadMailRefusal(sl); err != nil {
+			d.Set("unread", len(sl.Unread()))
+			return Result{Data: d}, err
+		}
 
 		cmds := worker.LoadGateConfig(root).Tier("fast")
 		if kind == worker.OutcomeFailed {
@@ -120,7 +126,8 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		}
 
 		changed := false
-		var fenced error
+		var fenced, mailErr error
+		lateUnread := 0
 		if err := worker.Update(poolRoot, func(doc *worker.Doc) {
 			s := doc.Slot(slotName)
 			if s == nil {
@@ -129,6 +136,11 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			// The check above read a snapshot: a reclaim and reassign since then
 			// must not mark the new holder done.
 			if fenced = worker.FenceAttempt(s, *attempt); fenced != nil {
+				return
+			}
+			// Mail posted since the snapshot above must not be marked done over.
+			if mailErr = unreadMailRefusal(s); mailErr != nil {
+				lateUnread = len(s.Unread())
 				return
 			}
 			now := stamp.Format(c.deps().Now())
@@ -159,6 +171,10 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		if fenced != nil {
 			return Result{}, fenced
 		}
+		if mailErr != nil {
+			d.Set("unread", lateUnread)
+			return Result{Data: d}, mailErr
+		}
 		if changed {
 			worker.LedgerDone(c.deps().workerEnv(), c.Context(), c.deps().WorkerAccounts(), poolRoot, ledger.Entry{Issue: id, Slot: slotName, Account: sl.Account(), Harness: sl.Kind(), PR: sl.PR()})
 		}
@@ -172,6 +188,18 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: d, Text: text}, nil
 	}
+}
+
+// unreadMailRefusal is the exit-4 refusal of a done while the slot's inbox
+// holds mail the worker has not read, nil when there is none.
+func unreadMailRefusal(s *worker.Slot) error {
+	n := len(s.Unread())
+	if n == 0 {
+		return nil
+	}
+	e := Refused("slot %s has %d unread mail: read it before done", s.Name(), n)
+	e.Hint = fmt.Sprintf("run `rota worker inbox %s --ack`, act on what it says, then `rota worker done %s` again", s.Name(), s.Name())
+	return e
 }
 
 // slotDir is the slot's worktree when it exists on disk, else fallback: the
