@@ -71,11 +71,11 @@ func TestStubUpdate(t *testing.T) {
 	s, _ := Load(getFixture())
 	root := t.TempDir()
 	r := []Root{{Path: root, Agent: Codex, Scope: User}}
-	if _, err := s.Install(r, Options{}); err != nil {
+	if _, err := s.Install(r, Options{Mode: ModeFull}); err != nil {
 		t.Fatal(err)
 	}
 	st, _ := s.Stubbed()
-	res, err := st.Update(r, Options{})
+	res, err := s.Update(r, Options{Mode: ModeStub})
 	if err != nil || !res[0].Changed || res[0].BlockedBy != "" {
 		t.Fatalf("%v %+v", err, res)
 	}

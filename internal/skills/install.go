@@ -35,6 +35,12 @@ const (
 	Unmanaged = "unmanaged"
 )
 
+// Install modes, as the manifest records them. A manifest without a mode is full.
+const (
+	ModeStub = "stub"
+	ModeFull = "full"
+)
+
 // ErrNoProject: --scope project outside a git work tree.
 var ErrNoProject = errors.New("not inside a git work tree")
 
@@ -143,6 +149,7 @@ type Manifest struct {
 	Digest  string            `json:"digest"`
 	Agent   string            `json:"agent"`
 	Files   map[string]string `json:"files"`
+	Mode    string            `json:"mode,omitempty"`
 }
 
 func manifestPath(root string) string { return filepath.Join(root, ManifestName) }
@@ -197,6 +204,7 @@ func writeManifest(root string, m Manifest) error {
 type Options struct {
 	Version   string // the binary's version, recorded in the manifest
 	Overwrite bool   // replace edited and unmanaged paths
+	Mode      string // ModeStub or ModeFull; "" is stub for Install, each root's recorded mode for Update
 }
 
 // FileResult is one path and what happened to it.
@@ -210,6 +218,7 @@ type RootResult struct {
 	Root
 	Version string
 	Digest  string
+	Mode    string
 	Files   []FileResult
 	// Kept are the paths left alone, BlockedBy the reason: "edited" when any
 	// path was edited, else "unmanaged".
@@ -238,12 +247,17 @@ func diskHash(p string) (string, error) {
 	return hashBytes(b), nil
 }
 
-// Install writes the set into every root, creating them. On a root that
-// already has a manifest it does what Update does there.
+// Install writes the set into every root, creating them, as stubs unless
+// o.Mode is ModeFull. On a root that already has a manifest it rewrites that
+// root in the requested mode.
 func (s *Set) Install(roots []Root, o Options) ([]RootResult, error) {
 	out := make([]RootResult, 0, len(roots))
 	for _, r := range roots {
-		res, err := s.installRoot(r, o)
+		mode := o.Mode
+		if mode == "" {
+			mode = ModeStub
+		}
+		res, err := s.installRoot(r, o, mode)
 		if err != nil {
 			return out, fmt.Errorf("%s: %w", r.Path, err)
 		}
@@ -252,19 +266,45 @@ func (s *Set) Install(roots []Root, o Options) ([]RootResult, error) {
 	return out, nil
 }
 
-// Update is Install limited to the roots that already have a manifest.
+// Update is Install limited to the roots that already have a manifest. With no
+// o.Mode each root keeps the mode its manifest records (full when it records none).
 func (s *Set) Update(roots []Root, o Options) ([]RootResult, error) {
-	var have []Root
+	out := make([]RootResult, 0, len(roots))
 	for _, r := range roots {
-		if HasManifest(r.Path) {
-			have = append(have, r)
+		if !HasManifest(r.Path) {
+			continue
 		}
+		mode := o.Mode
+		if mode == "" {
+			m, _ := ReadManifest(r.Path)
+			mode = m.EffectiveMode()
+		}
+		res, err := s.installRoot(r, o, mode)
+		if err != nil {
+			return out, fmt.Errorf("%s: %w", r.Path, err)
+		}
+		out = append(out, res)
 	}
-	return s.Install(have, o)
+	return out, nil
 }
 
-func (s *Set) installRoot(r Root, o Options) (RootResult, error) {
-	res := RootResult{Root: r, Version: o.Version, Digest: s.digest}
+// EffectiveMode is the mode a manifest records; one that records none is full.
+func (m Manifest) EffectiveMode() string {
+	if m.Mode == ModeStub {
+		return ModeStub
+	}
+	return ModeFull
+}
+
+func (full *Set) installRoot(r Root, o Options, mode string) (RootResult, error) {
+	s := full
+	if mode == ModeStub {
+		var err error
+		if s, err = full.Stubbed(); err != nil {
+			return RootResult{}, err
+		}
+	}
+	res := RootResult{Root: r, Version: o.Version, Digest: s.digest, Mode: mode}
 	mp := manifestPath(r.Path)
 	err := fsio.Locked(mp, fsio.LockTimeout, func() error {
 		old, hadManifest := ReadManifest(r.Path)
@@ -399,7 +439,7 @@ func (s *Set) installRoot(r Root, o Options) (RootResult, error) {
 		}
 		pruneEmpty(r.Path, removed)
 
-		m := Manifest{Schema: 1, Version: o.Version, Digest: s.digest, Agent: r.Agent, Files: next}
+		m := Manifest{Schema: 1, Version: o.Version, Digest: s.digest, Agent: r.Agent, Files: next, Mode: mode}
 		if !hadManifest || !sameManifest(old, m) {
 			if err := writeManifest(r.Path, m); err != nil {
 				return err
@@ -412,7 +452,7 @@ func (s *Set) installRoot(r Root, o Options) (RootResult, error) {
 }
 
 func sameManifest(a, b Manifest) bool {
-	if a.Version != b.Version || a.Digest != b.Digest || a.Agent != b.Agent || len(a.Files) != len(b.Files) {
+	if a.Version != b.Version || a.Digest != b.Digest || a.Agent != b.Agent || a.EffectiveMode() != b.EffectiveMode() || len(a.Files) != len(b.Files) {
 		return false
 	}
 	for p, h := range a.Files {

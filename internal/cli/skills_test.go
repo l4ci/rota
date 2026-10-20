@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/skills"
 )
 
 // skillsRun runs rota in dir with HOME pointed at home and CLAUDE_CONFIG_DIR unset.
@@ -387,7 +389,7 @@ func TestSkillsListAndGet(t *testing.T) {
 
 func TestSkillsInstallStub(t *testing.T) {
 	home, work := t.TempDir(), t.TempDir()
-	if code, _, errOut := skillsRun(t, home, work, "skills", "install", "--agent", "codex", "--stub"); code != 0 {
+	if code, _, errOut := skillsRun(t, home, work, "skills", "install", "--agent", "codex"); code != 0 {
 		t.Fatalf("stub install %d %s", code, errOut)
 	}
 	root := filepath.Join(home, ".agents", "skills", "rota-pause")
@@ -403,8 +405,8 @@ func TestSkillsInstallStub(t *testing.T) {
 	if code != 0 || r["current"] != true {
 		t.Fatalf("status %d %v", code, r)
 	}
-	// A plain install afterwards restores the full text.
-	if code, _, _ := skillsRun(t, home, work, "skills", "install", "--agent", "codex"); code != 0 {
+	// --full afterwards writes the full text.
+	if code, _, _ := skillsRun(t, home, work, "skills", "install", "--agent", "codex", "--full"); code != 0 {
 		t.Fatalf("full install %d", code)
 	}
 	b, _ = os.ReadFile(filepath.Join(root, "SKILL.md"))
@@ -423,4 +425,43 @@ func TestSkillsGetTextMode(t *testing.T) {
 	if code != 0 || !strings.HasPrefix(out, "Base directory for this skill: ") || !strings.Contains(out, "\n\n---\nname: rota-pause\n") || !strings.HasSuffix(out, "\n") || strings.HasSuffix(out, "\n\n") {
 		t.Fatalf("%d %q %s", code, out[:min(len(out), 80)], errOut)
 	}
+}
+
+func TestSkillsModeFlags(t *testing.T) {
+	home, work := t.TempDir(), t.TempDir()
+	root := filepath.Join(home, ".agents", "skills")
+	mode := func() string {
+		b, _ := os.ReadFile(filepath.Join(root, skills.ManifestName))
+		var m skills.Manifest
+		json.Unmarshal(b, &m)
+		return m.Mode
+	}
+	run := func(want int, args ...string) {
+		t.Helper()
+		if code, _, errOut := skillsRun(t, home, work, append([]string{"skills"}, args...)...); code != want {
+			t.Fatalf("%v: exit %d, want %d: %s", args, code, want, errOut)
+		}
+	}
+	run(0, "install", "--agent", "codex")
+	if m := mode(); m != "stub" {
+		t.Fatalf("default install recorded %q", m)
+	}
+	run(0, "update", "--agent", "codex")
+	if m := mode(); m != "stub" {
+		t.Fatalf("update changed stub to %q", m)
+	}
+	run(0, "update", "--agent", "codex", "--full")
+	if m := mode(); m != "full" {
+		t.Fatalf("update --full recorded %q", m)
+	}
+	run(0, "update", "--agent", "codex")
+	if m := mode(); m != "full" {
+		t.Fatalf("update changed full to %q", m)
+	}
+	run(0, "update", "--agent", "codex", "--stub")
+	if m := mode(); m != "stub" {
+		t.Fatalf("update --stub recorded %q", m)
+	}
+	run(1, "update", "--agent", "codex", "--stub", "--full")
+	run(1, "install", "--agent", "codex", "--stub", "--full")
 }
