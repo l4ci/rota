@@ -192,7 +192,9 @@ func paletteHeader(c *Ctx, inProject bool) palette.Header {
 	h.Host = c.deps().resolveHost(root).String()
 	ctx, cancel := context.WithTimeout(c.Context(), 3*time.Second)
 	defer cancel()
-	if rep, err := c.deps().RoundEnvLocal(ctx, root).Status(ctx, root); err == nil {
+	if rep, err := c.deps().RoundEnvLocal(ctx, root).Status(ctx, root); err != nil {
+		c.Warn("round state skipped: %v", err)
+	} else {
 		active := 0
 		for _, r := range rep.Rows {
 			if r.Issue != "" {

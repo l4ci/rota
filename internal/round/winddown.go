@@ -66,6 +66,10 @@ type WoundDown struct {
 // is reported and left alone, never discarded. Parking happens either way.
 func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts) (res WoundDown, err error) {
 	res.Base = e.Base
+	// Refuse before parking anything: the merge evidence below reads Status.
+	if err := e.roundCfgErr(); err != nil {
+		return res, err
+	}
 	cd, err := e.commonDir(ctx, root)
 	if err != nil {
 		return res, err
