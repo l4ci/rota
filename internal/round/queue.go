@@ -36,7 +36,8 @@ func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string)
 	if k, _ := s.Outcome(); k == worker.OutcomePartial || k == worker.OutcomeFailed {
 		return false, "reported " + k + "; relay or transfer it first"
 	}
-	if st := s.State(); st != "done" && st != "idle" {
+	// A relay can leave a slot blocked after its PR merged: the merged PR frees it.
+	if st := s.State(); st != "done" && st != "idle" && (st != "blocked" || !e.prMerged(ctx, s.PR())) {
 		return false, strutil.FirstNonEmpty(st, "busy")
 	}
 	dirty, err := e.dirtyPaths(ctx, s.Worktree())
@@ -47,6 +48,16 @@ func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string)
 		return false, "uncommitted changes"
 	}
 	return true, ""
+}
+
+// prMerged says whether the forge shows the PR merged. Any other answer, or none, is no.
+func (e Env) prMerged(ctx context.Context, pr string) bool {
+	n, ok := worker.PRRefNumber(pr)
+	if !ok || e.Forge == nil {
+		return false
+	}
+	st, err := e.Forge.PRState(ctx, n)
+	return err == nil && st == "merged"
 }
 
 // busyMsg is the refusal text for a slot that holds an issue and cannot park.
@@ -86,12 +97,7 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 		return err
 	}
 	pr := s.PR()
-	merged := false
-	if n, ok := worker.PRRefNumber(pr); ok && e.Forge != nil {
-		if st, err := e.Forge.PRState(ctx, n); err == nil && st == "merged" {
-			merged = true
-		}
-	}
+	merged := e.prMerged(ctx, pr)
 	rec := worker.QueuedPR{
 		Issue: s.HeldID(), Branch: strutil.FirstNonEmpty(p.Branch, s.Branch()), PR: pr,
 		Base: strutil.FirstNonEmpty(s.Base(), e.Base), From: name, ClaimID: s.ClaimID(),

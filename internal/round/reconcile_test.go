@@ -421,3 +421,18 @@ func TestReconcileApplyKeepsADeadDirtySlotWhoseMergedPR(t *testing.T) {
 		t.Errorf("dirty slot was parked: %q", f.Branch())
 	}
 }
+
+// A relay can leave a slot blocked after its PR merged: it is parked like a
+// done one.
+func TestReconcileApplyParksABlockedSlotWhoseMergedPR(t *testing.T) {
+	root, e := finnDead(t, "merged")
+	if _, err := worker.UpdateSlot(root, "finn", func(s *worker.Slot) { s.SetHandle(""); _ = s.MarkState("blocked", "") }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Reconcile(bg, root, true); err != nil {
+		t.Fatal(err)
+	}
+	if f := worker.LoadRegistryTolerant(root).Slot("finn"); f.Branch() != "park/finn" || f.State() != "idle" {
+		t.Errorf("finn not parked: branch %q state %q", f.Branch(), f.State())
+	}
+}
