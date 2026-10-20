@@ -587,3 +587,24 @@ func TestStartTrimsTheLedgerToLedgerKeep(t *testing.T) {
 		t.Fatalf("entries %+v, want only round 3 kept: the last 2 rounds are 3 and 4", es)
 	}
 }
+
+// TestStartWarnsWhenAncestryUnreadable pins #1167: with no readable process
+// table and no named holder, start binds the parent and says how to name one.
+func TestStartWarnsWhenAncestryUnreadable(t *testing.T) {
+	root := newRepo(t, nil)
+	le := fakeLease("h", 300)
+	le.Parent = func() int { return 300 }
+	le.Proc = func(int) (int, string, bool) { return 0, "", false }
+	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: le}
+	st, err := e.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, w := range st.Warnings {
+		found = found || (strings.Contains(w, roundlease.HolderPIDEnv) && strings.Contains(w, "--holder-pid"))
+	}
+	if !found {
+		t.Fatalf("want the holder warning: %v", st.Warnings)
+	}
+}
