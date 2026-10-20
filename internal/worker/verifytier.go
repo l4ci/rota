@@ -93,3 +93,78 @@ func verifyTiers(cfg GateConfig, first string, visit func(tier string, cmds []st
 	}
 	return true, nil
 }
+
+// tierWalk is the verify stage the gate and the train share: it runs the tiers
+// in order, reads each result through tierOutcomeOf, records the outcome in its
+// sinks and hands a red tier to red. The caller owns what differs: how a tier
+// runs, what a run with no answer means, and what a red tier does.
+type tierWalk struct {
+	subject string // names the gate's slot, or the train, in the NO-VERIFY note
+	run     func(tier string, cmds []string) (VerifyResult, error)
+	// stop says a run gave no answer (CI not run, timed out). The caller sets its
+	// verdict; true ends the walk.
+	stop func(VerifyResult) bool
+	// red handles a failed tier. stop ends the walk; false only ends the tier
+	// sequence (a land-green train goes on with what passed).
+	red func(tier string, vr VerifyResult) (stop bool, err error)
+	// Sinks: where the outcome is recorded, in place. A nil e2eVerified discards
+	// it (the gate keeps none).
+	notes, verified, e2eVerified *[]string
+	excluded                     *[]testledger.Entry
+
+	// What the walk saw.
+	at        string // tier being walked when it ended or errored
+	fullEmpty bool   // test.full had no commands
+	fullRed   bool   // test.full failed
+	e2eGreen  bool   // test.e2e ran with commands and passed
+}
+
+// walk runs the tiers from first through the shared runner. ended is true when
+// a callback or an error ended it; a red tier whose red says false is not ended.
+func (w *tierWalk) walk(cfg GateConfig, first string) (ended bool, err error) {
+	_, err = verifyTiers(cfg, first, func(tier string, cmds []string) (bool, error) {
+		w.at = tier
+		vr, err := w.run(tier, cmds)
+		if err != nil {
+			ended = true
+			return false, err
+		}
+		end, ok, err := w.take(tier, vr)
+		if end || err != nil {
+			ended = true
+		}
+		return ok && !end && err == nil, err
+	})
+	return ended, err
+}
+
+// take records one tier's result, already run. ended is true when the walk is
+// over; ok is true when the tier passed (or was empty) and the next may run.
+func (w *tierWalk) take(tier string, vr VerifyResult) (ended, ok bool, err error) {
+	w.at = tier
+	full := tier == tierFull
+	if w.stop != nil && w.stop(vr) {
+		return true, false, nil
+	}
+	out := tierOutcomeOf(tier, w.subject, vr)
+	*w.notes = append(*w.notes, out.Notes...)
+	if out.NoCommands {
+		w.fullEmpty = w.fullEmpty || full // nothing ran; test.e2e may
+		return false, true, nil
+	}
+	if full {
+		*w.verified = out.Verified
+	} else if w.e2eVerified != nil {
+		*w.e2eVerified = out.Verified
+	}
+	*w.excluded = append(*w.excluded, out.Excluded...)
+	if out.OK {
+		w.e2eGreen = w.e2eGreen || tier == tierE2E
+		return false, true, nil
+	}
+	if full {
+		w.fullRed = true
+	}
+	stop, err := w.red(tier, vr)
+	return stop || err != nil, false, err
+}
