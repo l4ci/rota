@@ -70,7 +70,7 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 	// --model and Codex picks its own. A custom round.codexCommand holding
 	// {model} would fail at dispatch, after the claim, so it is refused here.
 	model := resolveModel(in.FlagModel, out.Pick.Model, set.Model(kind, in.Tier))
-	if model == "" && worker.NeedsModel(root, kind) {
+	if model == "" && e.workerEnv().NeedsModel(root, kind) {
 		return out, blocked(BlockNoTierMap, "round.tiers.%s has no model for the %s tier: set round.tiers.%s.*", kind, in.Tier, kind)
 	}
 	out.Model, out.AppliedModel = model, model
@@ -79,7 +79,7 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 			return out, blocked(BlockQuota, "%s", why)
 		}
 	}
-	if !worker.ModelAppliesTo(root, kind) {
+	if !e.workerEnv().ModelAppliesTo(root, kind) {
 		// A model asked for by name must reach the launch line; the tier map's
 		// is a default and only warns.
 		if in.FlagModel != "" || out.Pick.Model != "" {

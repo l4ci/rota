@@ -78,7 +78,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			return Result{Data: d}, err
 		}
 
-		cmds := worker.LoadGateConfig(root).Tier("fast")
+		cmds := c.deps().workerEnv().GateConfig(root).Tier("fast")
 		if kind == worker.OutcomeFailed {
 			// A worker that cannot deliver has nothing to prove: the summary is its record.
 			d.Set("proofSkipped", true)

@@ -1,10 +1,6 @@
 package worker
 
-import (
-	"os"
-	"path/filepath"
-	"testing"
-)
+import "testing"
 
 func TestNothingToVerify(t *testing.T) {
 	for _, tc := range []struct {
@@ -18,14 +14,7 @@ func TestNothingToVerify(t *testing.T) {
 		{"ci verifies elsewhere", `{"test":{"fullWhere":"ci","ciChecks":["test"]}}`, false},
 		{"bad fullWhere is the gate's error", `{"test":{"fullWhere":"nope"}}`, false},
 	} {
-		root := t.TempDir()
-		if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(tc.cfg), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		if got := NothingToVerify(root); got != tc.want {
+		if got := (Env{Config: memConfig(t, tc.cfg)}).NothingToVerify(""); got != tc.want {
 			t.Errorf("%s: NothingToVerify = %v, want %v", tc.name, got, tc.want)
 		}
 	}
@@ -64,5 +53,18 @@ func TestNoVerifyRuleSymmetricInTiers(t *testing.T) {
 				t.Errorf("where=%q full=%v e2e=%v: rule differs when tiers are swapped", where, tc[0], tc[1])
 			}
 		}
+	}
+}
+
+// The gate's input reads config through Env.Config, not the project's file.
+func TestGateInputDefaultReadsEnvConfig(t *testing.T) {
+	root := newProject(t, `{"test":{"full":["from disk"]}}`)
+	e := Env{Config: memConfig(t, `{"test":{"full":["from memory"]}}`)}.WithDefaults()
+	in, err := e.GateInput(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(in.cfg.Full) != 1 || in.cfg.Full[0] != "from memory" {
+		t.Errorf("Full = %v, want the in-memory config's", in.cfg.Full)
 	}
 }

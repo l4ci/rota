@@ -117,7 +117,7 @@ func TestOperatorCommandModelFollowsKeyDefault(t *testing.T) {
 			config.Keys[i].Default = "orch-default"
 		}
 	}
-	if got := operatorCommand(newProject(t, `{}`)); got != "claude --continue --model orch-default --permission-mode auto" {
+	if got := (Env{Config: memConfig(t, `{}`)}).operatorCommand(""); got != "claude --continue --model orch-default --permission-mode auto" {
 		t.Errorf("operatorCommand = %q", got)
 	}
 }

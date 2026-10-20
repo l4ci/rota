@@ -36,8 +36,11 @@ func TestPoolInitReservesDistinctPortBlocks(t *testing.T) {
 }
 
 func TestPortBlockHonoursConfig(t *testing.T) {
-	b := newProject(t, `{"round":{"portBase":30000,"portBlock":50}}`)
-	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
+	b := newProject(t, `{}`)
+	e := Env{Config: memConfig(t, `{"round":{"portBase":30000,"portBlock":50}}`)}
+	if _, err := e.PoolInit(bg, b, InitOpts{Slots: 2, Base: "main"}, &Accounts{}); err != nil {
+		t.Fatal(err)
+	}
 	got := portBases(t, b)
 	if got["w1"] != 30000 || got["w2"] != 30050 {
 		t.Errorf("portBases = %v, want 30000 and 30050", got)

@@ -5,8 +5,8 @@ package worker
 // same config the gate does, so the early warnings (doctor, init, round start)
 // cannot drift from the refusal. A bad test.fullWhere is the gate's error to
 // report, not a warning here.
-func NothingToVerify(root string) bool {
-	c := LoadGateConfig(root)
+func (e Env) NothingToVerify(root string) bool {
+	c := e.GateConfig(root)
 	where, err := c.Where()
 	return err == nil && noVerifyRule(where, c.Full, c.E2E)
 }
