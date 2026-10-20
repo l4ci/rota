@@ -679,6 +679,14 @@ item with a note listing them, releases its claim and frees the slot, so no `rec
 If the slot recorded no issues, pass `--issues #a,#b`. Running it again on a closed item changes
 nothing.
 
+A `decision:research` item (see decision milestones in `/rota-vision`) ends with a finding comment,
+also with no PR. `round assign` starts it on the `light` tier (`--tier` overrides) and its worker
+prints `ROTA-DONE <slot> finding:<comment-id>`. Read the finding, then run
+`rota round accept <ID> --gist "<one line>"`: it closes the item and the gist lands in the
+milestone's `## Decisions` list. A `decision:grilling` item is never assigned: `round assign` and
+`round transfer` refuse it (`blockedBy: human decision`), `round candidates` lists it as not ready,
+and the human resolves it with `/rota-brainstorm <ID>`.
+
 ## Moving an issue that is assigned
 
 ```sh

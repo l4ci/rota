@@ -435,3 +435,9 @@ func TestReopen(t *testing.T) {
 		}
 	})
 }
+
+func TestCommentKindsHasFinding(t *testing.T) {
+	if !validCommentKind("finding") {
+		t.Errorf("finding is a comment kind: %v", CommentKinds)
+	}
+}

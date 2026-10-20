@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/artifact"
@@ -90,12 +91,16 @@ func milestoneAdd(fs *flag.FlagSet) RunFunc {
 	title := fs.String("title", "", "milestone title")
 	summary := fs.String("summary", "", "one-paragraph summary")
 	depends := fs.String("depends", "", "comma list of milestone IDs this depends on")
+	kind := fs.String("kind", ms.KindDelivery, strings.Join(ms.Kinds, "|"))
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
 			return Result{}, err
 		}
 		if *title == "" || *summary == "" {
 			return Result{}, Usage("--title and --summary are required")
+		}
+		if !slices.Contains(ms.Kinds, *kind) {
+			return Result{}, Failed("unknown --kind %q: use %s", *kind, strings.Join(ms.Kinds, " or "))
 		}
 		st, err := openStore(c)
 		if err != nil {
@@ -104,6 +109,16 @@ func milestoneAdd(fs *flag.FlagSet) RunFunc {
 		id, err := st.Add(*title, *summary, artifact.SplitCSV(*depends))
 		if err != nil {
 			return milestoneFail(err, "")
+		}
+		if *kind != ms.KindDelivery {
+			// The stub is the same for every store; the kind reshapes it once minted.
+			text, err := st.Show(id)
+			if err == nil {
+				_, err = st.Put(id, ms.WithKind(text, *kind))
+			}
+			if err != nil {
+				return milestoneFail(err, "")
+			}
 		}
 		d := jsonx.NewObject()
 		d.Set("id", id)
@@ -167,6 +182,7 @@ func runMilestoneShow(c *Ctx, args []string) (Result, error) {
 	}
 	d := jsonx.NewObject()
 	d.Set("id", id)
+	d.Set("kind", ms.KindOf(body))
 	d.Set("body", body)
 	return Result{Data: d, Text: body}, nil
 }

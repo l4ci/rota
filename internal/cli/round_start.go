@@ -46,6 +46,8 @@ func candidateList(cs []round.Candidate) []any {
 		setIf(o, "harness", c.Pick.Harness)
 		setIf(o, "model", c.Pick.Model)
 		setIf(o, "pickError", c.PickErr)
+		setIf(o, "decision", c.Decision)
+		setIf(o, "blockedBy", c.BlockedBy)
 		o.Set("ready", c.Ready())
 		o.Set("scopeSource", c.ScopeSource)
 		if c.OpenPR != 0 {
@@ -77,6 +79,9 @@ func candidateLines(cs []round.Candidate) []string {
 		}
 		if c.PickErr != "" {
 			state = "not ready: " + c.PickErr
+		}
+		if c.BlockedBy != "" {
+			state = "not ready: " + c.BlockedBy
 		}
 		if p := c.Pick.String(); p != "" {
 			state += " [" + p + "]"

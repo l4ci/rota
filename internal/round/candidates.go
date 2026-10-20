@@ -27,6 +27,9 @@ type Candidate struct {
 	// are refused ("" when fine). assign refuses the same way.
 	Pick    Pick
 	PickErr string
+	// Decision is the item's decision type ("" for an ordinary item); BlockedBy
+	// names why a ready-looking item is still not assignable.
+	Decision, BlockedBy string
 	// ScopeSource is where the item's scope came from: touches, subsystem,
 	// inferred or none. A none candidate wants a scout before it is assigned.
 	ScopeSource string
@@ -34,7 +37,9 @@ type Candidate struct {
 }
 
 // Ready is true when every readiness check holds and no open PR resolves the item.
-func (c Candidate) Ready() bool { return c.OpenPR == 0 && c.PickErr == "" && c.Readiness.Ready() }
+func (c Candidate) Ready() bool {
+	return c.OpenPR == 0 && c.PickErr == "" && c.BlockedBy == "" && c.Readiness.Ready()
+}
 
 // CandidateOpts selects the set.
 type CandidateOpts struct {
@@ -123,6 +128,11 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 			c.PickErr = err.Error()
 		} else {
 			c.Pick = p
+		}
+		if d, err := DecisionOf(be.Capabilities(), it); err != nil {
+			c.PickErr = err.Error()
+		} else if c.Decision = d; d == DecisionGrilling {
+			c.BlockedBy = BlockHumanDecision
 		}
 		if _, err := BestOfOf(be.Capabilities(), it); err != nil && c.PickErr == "" {
 			c.PickErr = err.Error()

@@ -27,7 +27,7 @@
 {"name":"claim/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"claim/unknown-repo","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"[nope:F1] not found in the issue tracker"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"comment-add/ambiguous","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"[F1] is ambiguous across sub-repos — qualify it: api:1, web:1"},"ok":false},"db":"b531f6a20b50548c"}]}
-{"name":"comment-add/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be question|answer|decision|feedback|scope"},"ok":false},"db":"b531f6a20b50548c"}]}
+{"name":"comment-add/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be question|answer|decision|feedback|scope|finding"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"comment-add/bare-unique","steps":[{"exit":0,"env":{"data":{"changed":true,"commentId":"50","id":"api:4","kind":"answer","type":"B"},"ok":true},"db":"e2b31278a413408e"}]}
 {"name":"comment-add/empty","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"empty comment body"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"comment-add/gh","steps":[{"exit":0,"env":{"data":{"changed":true,"commentId":"50","id":"web:2","kind":"question","type":"B"},"ok":true},"db":"05d69559820c4fb1"}]}

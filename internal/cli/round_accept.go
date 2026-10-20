@@ -12,7 +12,7 @@ import (
 
 func roundAccept(fs *flag.FlagSet) RunFunc {
 	issues := fs.String("issues", "", "the filed issues, comma-separated (#a,#b); used when the slot recorded none")
-	gist := fs.String("gist", "", "the close note, in place of \"filed #a, #b\"")
+	gist := fs.String("gist", "", "the close note (default \"filed #a, #b\"); required for a research item, where it is the milestone's decision-log line")
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) != 1 {
 			return Result{}, Usage("round accept takes one item ID")
@@ -43,9 +43,12 @@ func roundAccept(fs *flag.FlagSet) RunFunc {
 		d.Set("id", res.ID)
 		d.Set("slot", res.Slot)
 		d.Set("issues", append([]string{}, res.Issues...))
+		d.Set("finding", res.Finding)
 		d.Set("changed", res.Changed)
 		out := fmt.Sprintf("%s was already accepted", tracker.RefOf(res.ID))
-		if res.Changed {
+		if res.Changed && len(res.Issues) == 0 {
+			out = fmt.Sprintf("accepted %s: closed on its finding, %s is free", tracker.RefOf(res.ID), res.Slot)
+		} else if res.Changed {
 			out = fmt.Sprintf("accepted %s: closed, filed %s, %s is free", tracker.RefOf(res.ID), strings.Join(res.Issues, ", "), res.Slot)
 		}
 		return Result{Data: d, Text: out}, nil

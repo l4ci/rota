@@ -58,6 +58,9 @@ const (
 	BlockQuota        = "quota"
 	BlockBriefMissing = "brief missing"
 	BlockNoTierMap    = "no tier map"
+	// BlockHumanDecision: a decision:grilling item is resolved by the human in
+	// /rota-brainstorm, never by a worker.
+	BlockHumanDecision = "human decision"
 	// BlockCodexFlags: `codex --help` does not list a flag the launch line uses.
 	BlockCodexFlags = harness.BlockCodexFlags
 )
@@ -185,6 +188,11 @@ func pointerBrief(agent, id, branch, brief string, siblings []string, decisions,
 	}
 	// Last, so it is the final thing read: a worker that ends on a prose summary
 	// of its PR otherwise never prints the sentinel the poll routes on.
+	if t.Decision == DecisionResearch {
+		fmt.Fprintf(&b, "\nThis is a research item: its deliverable is a finding, not code. Answer the question the ticket asks, post the answer with `rota --json item comment add %s --kind finding --body-file <file>` (the finding's sections follow /rota-spike: question, findings, decision), commit nothing and open no PR. The orchestrator reads the finding and closes the item.\n", tracker.RefOf(id))
+		fmt.Fprintf(&b, "\nFinal step, after your summary: print exactly `ROTA-DONE %s finding:<comment-id>` (the `commentId` that command printed) as the last line of your last message, then stop. The poll reads only that line; a summary alone leaves your slot looking stuck.\n", agent)
+		return b.String()
+	}
 	fmt.Fprintf(&b, "\nFinal step, after your PR summary: print exactly `ROTA-DONE %s <pr-url>` (your PR's URL) as the last line of your last message, then stop. The poll reads only that line; a summary alone leaves your slot looking stuck.\n", agent)
 	return b.String()
 }
@@ -333,6 +341,9 @@ type tierBrief struct {
 	Table                              map[string]string
 	// Pick is what the issue's labels (file: fields) asked for, "" for none.
 	Pick string
+	// Decision is the item's decision type: a research worker posts a finding
+	// comment and opens no PR.
+	Decision string
 	// Smoke is the reserved smoke section number, 0 for none.
 	Smoke int
 	// Attempt is the id of this assignment; the worker passes it back as
@@ -487,6 +498,7 @@ type assignRun struct {
 	model, tier       string
 	reason            string
 	pick              Pick
+	decision          string // the item's decision type
 	decisions, brief  string
 	bo                *bestOfRun
 	slot              *worker.Slot
@@ -501,6 +513,11 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	tier, reason, err := o.checkFlags(o.Settings)
 	if err != nil {
 		return res, err
+	}
+	// A research item is reading and writing one comment: it starts on the
+	// light tier unless --tier says otherwise.
+	if dec, _ := DecisionOf(be.Capabilities(), *it); dec == DecisionResearch && o.Tier == "" {
+		tier = "light"
 	}
 	run, stop, err := e.planAssign(ctx, root, be, o, it, bo, tier, reason, &res)
 	if err != nil || stop {
@@ -691,7 +708,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	res.SmokeSection = e.reserveSmokeSection(ctx, root, be, reg, set.Roster, id, agent)
 	return assignRun{id: id, agent: agent, branch: res.Branch, resuming: resuming, queue: queue,
 		kind: pf.Kind, kindSource: pf.KindSource, model: pf.Model, tier: tier, reason: reason,
-		pick: pf.Pick, decisions: decisions, brief: brief, bo: bo, slot: slot}, false, nil
+		pick: pf.Pick, decision: pf.Decision, decisions: decisions, brief: brief, bo: bo, slot: slot}, false, nil
 }
 
 // assignSteps is the assignment as steps for runSteps, with the delivery that
@@ -770,7 +787,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 	d := &delivery{Slot: agent, Task: id, Branch: func() string { return res.Branch }, Kind: run.kind, Model: res.Model, Round: rnd,
 		Brief: func() string {
 			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
-			text := pointerBrief(agent, id, res.Branch, run.brief, o.Siblings, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Smoke: res.SmokeSection, Attempt: attempt, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()})
+			text := pointerBrief(agent, id, res.Branch, run.brief, o.Siblings, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()})
 			if hb := latestHandoffBranch(be, id); hb != "" {
 				text += fmt.Sprintf("\nAn earlier worker handed this issue back: read the latest `rota:handoff` comment on it. Its work is pushed on branch %s (origin/%s); fetch it before you start over.\n", hb, hb)
 			}

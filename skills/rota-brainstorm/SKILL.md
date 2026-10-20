@@ -22,6 +22,8 @@ Target: `#N` / bare number (issue backend) or `[BFT]\d{2,}` (file backend), plus
 
 If a design exists, ask once (View / Edit / Replace, default View): View runs `rota design show <ID>` and exits; Edit loads it as the starting draft; Replace runs `rota design rm <ID>` first.
 
+**Decision item.** An item labelled `decision:grilling` (file backend: a `Decision: grilling` field; see `rota item show <ID>`) belongs to a decision milestone and takes the *decision path* instead of Steps 3-5: run one grilling pass (`references/grilling.md`) on the question the item asks, record the settled answer with `rota item comment add <ID> --kind decision --body-file -`, then close it with `rota item complete <ID> --no-proof --gist "<one line>"` (a decision has no tests, so no `rota proof add` row). The gist is what the milestone's `## Decisions` list gets. Stop there: draft no design, offer no next item, and resolve no second grilling item in this session, so each invocation settles exactly one decision. A `decision:research` item is a worker's finding, not a grilling: say *"`rota round assign` takes it"* and exit.
+
 ## Step 2 — Load context
 
 Follow `references/context-load-protocol.md` (parallel, silent), plus `rota item show <ID>` for state and comments (`decision` comments bind; `references/issue-mode.md`, "Resuming an item") or the file backend's detail file, and `rota glossary read <term>`. DECISIONS matches are hard boundaries: on a conflict, surface it before drafting.
