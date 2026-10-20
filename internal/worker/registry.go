@@ -635,20 +635,30 @@ func RecordBounce(env Env, root, issue, slot, head string) (int, error) {
 // registry lock as the write, so a caller that may roll it back never undoes a
 // bounce another writer counted.
 func RecordBounceCounted(env Env, root, issue, slot, head string) (int, bool, error) {
-	return recordBounce(env, nil, root, issue, slot, head)
+	n, counted, _, err := recordBounce(env, nil, root, issue, slot, head, 0)
+	return n, counted, err
 }
 
 // RecordBounceIn is RecordBounce reading the round lease through m.
 func RecordBounceIn(env Env, m *RoundMemo, root, issue, slot, head string) (int, error) {
-	n, _, err := recordBounce(env, m, root, issue, slot, head)
+	n, _, _, err := recordBounce(env, m, root, issue, slot, head, 0)
 	return n, err
+}
+
+// RecordBounceCapped is RecordBounceIn that refuses inside the registry lock
+// once the item already holds max bounces (0 = no cap): capped reports the
+// refusal and n is the unchanged count. The check and the increment share one
+// lock, so concurrent callers never take the count past max.
+func RecordBounceCapped(env Env, m *RoundMemo, root, issue, slot, head string, max int) (n int, capped bool, err error) {
+	n, _, capped, err = recordBounce(env, m, root, issue, slot, head, max)
+	return n, capped, err
 }
 
 // recordBounce counts one bounce per (issue, review head). That is a semantic
 // dedupe across callers (review-relay and bounce both reach it), so it is not a
 // request-id receipt: a retry mints a fresh id, yet must still count once. It
 // stays here, and receiptedVerbs in internal/cli leaves round bounce out.
-func recordBounce(env Env, m *RoundMemo, root, issue, slot, head string) (n int, counted bool, err error) {
+func recordBounce(env Env, m *RoundMemo, root, issue, slot, head string, max int) (n int, counted, capped bool, err error) {
 	defer func() {
 		if err == nil && counted {
 			LedgerNoteIn(env, m, root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Slot: slot, Detail: ledger.Detail("count", n)})
@@ -659,6 +669,10 @@ func recordBounce(env Env, m *RoundMemo, root, issue, slot, head string) (n int,
 		b := bouncesOf(doc)
 		heads := bounceHeadsOf(doc)
 		n = bounceCount(b, issue)
+		if max > 0 && n >= max {
+			capped = true
+			return
+		}
 		if last, _ := heads.Get(issue); head != "" && last == any(head) && n > 0 {
 			return
 		}
@@ -671,7 +685,7 @@ func recordBounce(env Env, m *RoundMemo, root, issue, slot, head string) (n int,
 			doc.Set("bounceHeads", heads)
 		}
 	})
-	return n, counted, err
+	return n, counted, capped, err
 }
 
 // UnrecordBounce undoes one RecordBounce(root, issue, head) whose relay did not

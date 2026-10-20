@@ -121,7 +121,8 @@ func itemFailed(r verdict.Record) bool {
 }
 
 // recordBounce counts one bounce unless the item is already at max (0 = no
-// cap). capped reports the refusal; n is then the unchanged count. A slot that
+// cap); the cap is enforced by the registry write. capped reports the refusal;
+// n is then the unchanged count. A slot that
 // is not in the pool is refused before anything is written.
 func recordBounce(env worker.Env, root, issue, slot, head string, max int) (n int, capped bool, err error) {
 	reg, err := worker.LoadRegistry(root)
@@ -132,11 +133,7 @@ func recordBounce(env worker.Env, root, issue, slot, head string, max int) (n in
 		return 0, false, &Error{Exit: ExitRefused, Message: fmt.Sprintf("unknown slot %q: not in the worker pool", slot),
 			Hint: "see `rota worker pool list` for the slot names"}
 	}
-	if n = reg.Bounces(issue); max > 0 && n >= max {
-		return n, true, nil
-	}
-	n, err = worker.RecordBounce(env, root, issue, slot, head)
-	return n, false, err
+	return worker.RecordBounceCapped(env, nil, root, issue, slot, head, max)
 }
 
 func maxText(max int) string {
