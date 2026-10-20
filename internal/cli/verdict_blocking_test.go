@@ -139,6 +139,28 @@ func TestVerdictAddFilesDeferredFindings(t *testing.T) {
 	}
 }
 
+// AC-1 (#1019): a deferred item carries an Acceptance checkbox derived from the finding.
+func TestVerdictAddFileDeferredWritesAcceptance(t *testing.T) {
+	dir := verdictRepo(t)
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Tasks\n\n## Completed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "counters.json"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	body := writeBody(t, t.TempDir(), `{"findings":[{"severity":"minor","title":"rename the helper","detail":"foo is misleading"}]}`)
+	if code, _, errOut := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", "FAIL", "--body-file", body, "--file-deferred", "--pr", "#77"); code != 0 {
+		t.Fatalf("add: %d %s", code, errOut)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, ".rota", "tasks", "T01.md"))
+	text := string(b)
+	for _, want := range []string{"## Acceptance", "- [ ] AC-1: rename the helper"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("T01.md lacks %q:\n%s", want, text)
+		}
+	}
+}
+
 // A retry of the same recording files nothing new.
 func TestVerdictAddFileDeferredIsIdempotent(t *testing.T) {
 	dir := verdictRepo(t)
@@ -176,5 +198,28 @@ func TestRoundBounceCountsAFailWithoutFindings(t *testing.T) {
 				t.Fatalf("%d %s", code, errOut)
 			}
 		})
+	}
+}
+
+// AC-2 (#1019): a freshly filed deferred item passes the criteria check.
+func TestVerdictAddFileDeferredItemIsReady(t *testing.T) {
+	dir := verdictRepo(t)
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Tasks\n\n## Completed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "counters.json"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	body := writeBody(t, t.TempDir(), `{"findings":[{"severity":"minor","title":"rename the helper"}]}`)
+	if code, _, errOut := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", "FAIL", "--body-file", body, "--file-deferred", "--pr", "#77"); code != 0 {
+		t.Fatalf("add: %d %s", code, errOut)
+	}
+	code, out, errOut := rotaIn(t, dir, "--json", "round", "candidates")
+	if code != 0 {
+		t.Fatalf("candidates: %d %s %s", code, out, errOut)
+	}
+	cs, _ := data(t, out)["candidates"].([]any)
+	if len(cs) != 1 || cs[0].(map[string]any)["ready"] != true {
+		t.Errorf("candidates = %s, want the filed item ready", out)
 	}
 }
