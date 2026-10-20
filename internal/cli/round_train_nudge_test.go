@@ -196,6 +196,29 @@ func TestWaitingPRsReadsDoneSlotsAndQueue(t *testing.T) {
 	}
 }
 
+// TestWaitingPRsFillsEmptyBaseFromConfiguredBase: the wiring from
+// git.baseBranch through resolveBase to the filled base, with a non-main base.
+// A done slot (no base) and a queued PR (explicit base) on it group into one train.
+func TestWaitingPRsFillsEmptyBaseFromConfiguredBase(t *testing.T) {
+	dir := nudgeProject(t, []string{"feat/x", "a/1-x", "b/2-y"}, []string{"a/1-x", "b/2-y"})
+	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"git":{"baseBranch":"feat/x"}}`), 0o644)
+	addRegistryRows(t, dir, map[string][]map[string]any{
+		"slots": {{"name": "a", "state": "done", "branch": "a/1-x", "pr": "#11"}},
+		"prs":   {{"branch": "b/2-y", "pr": "#12", "base": "feat/x"}},
+	})
+	got := waitingPRs(&Ctx{Deps: testDeps(), ctx: context.Background()}, dir)
+	want := []waitingPR{
+		{PR: "#11", Base: "feat/x", Reviewed: true},
+		{PR: "#12", Base: "feat/x", Reviewed: true},
+	}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("waiting = %+v, want %+v", got, want)
+	}
+	if ns := trainNudges(got); len(ns) != 1 || ns[0].Base != "feat/x" || len(ns[0].PRs) != 2 {
+		t.Fatalf("nudges = %+v, want one train of two on feat/x", ns)
+	}
+}
+
 func TestWaitingPRsEmptyWithoutRegistry(t *testing.T) {
 	dir := nudgeProject(t, nil, nil)
 	if got := waitingPRs(&Ctx{Deps: testDeps(), ctx: context.Background()}, dir); len(got) != 0 {
