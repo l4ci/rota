@@ -88,7 +88,7 @@ func runTrain(c *Ctx, root string, o trainRunOpts) trainRun {
 		}
 	}
 	round := &worker.RoundMemo{}
-	r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: o.Targets, Base: o.Base, Order: o.Order, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, NoVerify: o.NoVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root), Round: round})
+	r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: o.Targets, Base: o.Base, Order: o.Order, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, NoVerify: o.NoVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root), Round: round, ItemBody: lazyItemBody(c, root)})
 	run := trainRun{Result: r, Err: err, Refused: isRefusal(worker.ClassifyVerdict(r.Verdict), err)}
 	if run.Refused || err != nil {
 		return run
