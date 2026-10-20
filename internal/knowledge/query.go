@@ -8,8 +8,9 @@ import (
 	"github.com/l4ci/rota/internal/section"
 )
 
-// bulletRe is a dated, titled bullet: "- **Title** — body <!-- YYYY-MM-DD -->".
-var bulletRe = regexp.MustCompile(`^- \*\*([^*]+)\*\* — (.*?)(\s*<!-- \d{4}-\d{2}-\d{2}\s*-->\s*)$`)
+// bulletRe is a dated, titled bullet: "- **Title** — body <!-- YYYY-MM-DD -->",
+// with an optional commit sha beside the date: "<!-- YYYY-MM-DD sha:abc1234 -->".
+var bulletRe = regexp.MustCompile(`^- \*\*([^*]+)\*\* — (.*?)(\s*<!-- \d{4}-\d{2}-\d{2}( sha:[0-9a-f]{7,40})?\s*-->\s*)$`)
 
 // QueryOpts are the filters of Query.
 type QueryOpts struct {

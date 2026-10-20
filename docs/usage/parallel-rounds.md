@@ -207,7 +207,7 @@ Every candidate has one of four scope sources, shown as `scopeSource` in `rota r
 
 - `touches`: the issue has a `## Touches` section.
 - `subsystem`: no `## Touches`, but a `Subsystem:` field, which gives the coarse scope `subsystem:<name>`.
-- `inferred`: neither, but an explorer recorded entries with `rota round scope <ID> --body-file <path>` (at most ten bullets: symbols, endpoints, config keys, tests). `/rota-orchestrate` dispatches one `light` explorer per `none` candidate and records the result before it assigns. The record is a comment of kind `scope` on the issue; a later `## Touches` or `Subsystem:` wins over it, and the declared section is never edited.
+- `inferred`: neither, but an explorer recorded entries with `rota round scope <ID> --body-file <path>` (at most ten bullets: symbols, endpoints, config keys, tests, then a last line `scoped.`; a reply ending `too-vague.` or `no-match.` is refused with exit 4). `/rota-orchestrate` dispatches one `light` explorer per `none` candidate and records the result before it assigns. The record is a comment of kind `scope` on the issue; a later `## Touches` or `Subsystem:` wins over it, and the declared section is never edited.
 - `none`: nothing declared or recorded; only file paths are compared.
 
 `candidates`, `assign`, `transfer` and `adopt` compare inferred entries like declared ones, but a clash that involves an inferred entry on either side only warns, even under `round.scopeOverlap: block`. The overlap detail says `inferred scopes`, and the JSON overlap carries `inferred: true`. A shared file path still blocks as before.
@@ -239,6 +239,21 @@ issue to read and dispute, the item's `## Out of scope` section when it has one,
   tier above the default needs `--tier-reason`. The tier and its model are recorded on the slot,
   shown by `rota round status`, and named in the brief with the tier table for the worker's own
   subagents. See [round keys](configuration.md#round-keys).
+- **Profile.** `round.profile` fills the Claude tier models in one setting; `rota config show`
+  reports the effective model of every tier and where it came from. An explicit
+  `round.tiers.claude.<tier>` beats the profile for that tier; unset keeps today's tiers; Codex and
+  OpenCode tiers are never touched.
+
+  | Profile | light | standard | heavy |
+  | --- | --- | --- | --- |
+  | `quality` | sonnet | opus | opus |
+  | `balanced` | haiku | sonnet | opus |
+  | `budget` | haiku | haiku | sonnet |
+  | `inherit` | empty | empty | empty |
+
+  `inherit` launches workers without `--model`, so they run on whatever model the session's provider
+  picks (a non-Anthropic provider, say). Precedence per Claude tier: explicit key, profile, then
+  `models.worker` (standard only), then the default.
 - **Kind.** `--kind codex` starts a Codex worker instead of a Claude one; see
   [Codex workers](codex-workers.md). An issue can ask for its own harness and model: label it
   `harness:claude` or `harness:codex`, and optionally `model:<id>` (file backend: end the bullet with
@@ -467,7 +482,7 @@ A worker that printed `ROTA-DONE` keeps its PR open for review. When a reviewer 
 - `round.reviewLoop: manual` (the default): `rota round watch` wakes you with a `review/<slot>` change and `rota round tick` lists a `review` item. You run `rota round review-relay <slot>`.
 - `round.reviewLoop: auto`: `round watch` and `round tick` run it themselves, and a tick lists it as `did review-relay`.
 
-`review-relay` counts one bounce on the item (the same counter as the gate and `round bounce`), sends the comments to the worker as a signed `REVIEW` relay and marks the slot `busy`. The worker checks each comment against the code, fixes what holds, pushes, answers on the PR with `rota worker reply`, and prints `ROTA-DONE` again. At `round.maxBounces` nothing is relayed: the slot stays `done`, rota escalates once on the PR, and under `auto` the tick does not merge it. Hand the item to a stronger worker or to the human, as in [Bounce it](#prs-in-review). The merge stays yours: the loop never gates or merges. Under `manual` the tick only lists the review item and merges as before; under `auto` it skips the merge for a slot it relayed or could not relay.
+`review-relay` counts one bounce on the item (the same counter as the gate and `round bounce`), sends the comments to the worker as a signed `REVIEW` relay and marks the slot `busy`. The worker checks each comment against the code, fixes what holds, pushes, answers on the PR with `rota worker reply`, and prints `ROTA-DONE` again. At `round.freshAt` (default 2) the relay is a transfer instead: the branch moves to a free slot at the same tier with a brief of the findings still open in the last review and the review link, so the second attempt does not inherit a context that already holds the wrong model. With no free slot it relays in place and says so. At `round.maxBounces` nothing is relayed: the slot stays `done`, rota escalates once on the PR, and under `auto` the tick does not merge it. Hand the item to a stronger worker or to the human, as in [Bounce it](#prs-in-review). The merge stays yours: the loop never gates or merges. Under `manual` the tick only lists the review item and merges as before; under `auto` it skips the merge for a slot it relayed or could not relay.
 
 ## Asking the maintainer
 

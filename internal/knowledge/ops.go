@@ -51,23 +51,37 @@ var titleRe = regexp.MustCompile(`^- \*\*([^*]+)\*\*`)
 // AddResult reports Add.
 type AddResult struct{ Changed bool }
 
-// Add prepends "- **title** — body <!-- date -->" under "## topic" in scope's
+// shaRe is a commit sha as stored beside a bullet's date.
+var shaRe = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+
+// NormalizeSha lowercases sha and checks it is 7 to 40 hex digits; "" is valid
+// and means the bullet cites no commit.
+func NormalizeSha(sha string) (string, error) {
+	sha = strings.ToLower(strings.TrimSpace(sha))
+	if sha != "" && !shaRe.MatchString(sha) {
+		return "", fmt.Errorf("invalid sha %q: want 7 to 40 hex digits", sha)
+	}
+	return sha, nil
+}
+
+// Add prepends "- **title** — body <!-- date -->" (or "<!-- date sha:sha -->"
+// when sha is not empty) under "## topic" in scope's
 // KNOWLEDGE.md. A bullet whose title already exists (case-insensitive) is a
 // no-op. A new bullet is also registered as provisional in the tier sidecar.
-func (s Store) Add(scope, topic, title, body, date string) (AddResult, error) {
+func (s Store) Add(scope, topic, title, body, date, sha string) (AddResult, error) {
 	target, err := s.KnowledgePath(scope)
 	if err != nil {
 		return AddResult{}, err
 	}
 	var res AddResult
 	err = lockFiles([]string{target}, func() (err error) {
-		res, err = s.addLocked(scope, target, topic, title, body, date)
+		res, err = s.addLocked(scope, target, topic, title, body, date, sha)
 		return err
 	})
 	return res, err
 }
 
-func (s Store) addLocked(scope, target, topic, title, body, date string) (AddResult, error) {
+func (s Store) addLocked(scope, target, topic, title, body, date, sha string) (AddResult, error) {
 	if date == "" {
 		date = s.today()
 	}
@@ -88,7 +102,11 @@ func (s Store) addLocked(scope, target, topic, title, body, date string) (AddRes
 			return AddResult{}, s.initTierUnlessGlossary(scope, topic, title)
 		}
 	}
-	bullet := fmt.Sprintf("- **%s** — %s <!-- %s -->", title, body, date)
+	stamp := date
+	if sha != "" {
+		stamp += " sha:" + sha
+	}
+	bullet := fmt.Sprintf("- **%s** — %s <!-- %s -->", title, body, stamp)
 	rest := strings.TrimLeft(content[start:end], "\n")
 	newBody := "\n" + bullet + "\n" + rest
 	if !strings.HasSuffix(newBody, "\n") {

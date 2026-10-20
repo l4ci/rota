@@ -16,6 +16,9 @@ const (
 // Tiers lists the tiers in order.
 var Tiers = []string{TierLight, TierStandard, TierHeavy}
 
+// ProfileInherit is the round.profile value that names no model for any tier.
+const ProfileInherit = "inherit"
+
 // TierKey is the config key of one kind's model for one tier. Every reader of
 // round.tiers builds its key here.
 func TierKey(kind, tier string) string { return "round.tiers." + kind + "." + tier }

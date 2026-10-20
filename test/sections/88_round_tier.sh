@@ -38,6 +38,19 @@ OUT=$(rt round assign F01 --check-only --holder-pid "$HOLDER")
 [ "$(echo "$OUT" | jget data.model)" = "sonnet" ] || fail "an explicit tiers value should win: $OUT"
 pass "the default tier resolves on the claude map and standard follows models.worker"
 
+# round.profile fills the claude tiers; an explicit tier (standard, set above) wins;
+# inherit names no model, so the claude launch carries no --model.
+rt config set round.profile quality >/dev/null
+OUT=$(rt round assign F01 --check-only --tier light --holder-pid "$HOLDER")
+[ "$(echo "$OUT" | jget data.model)" = "sonnet" ] || fail "quality should make light sonnet: $OUT"
+OUT=$(rt round assign F01 --check-only --holder-pid "$HOLDER")
+[ "$(echo "$OUT" | jget data.model)" = "sonnet" ] || fail "an explicit standard should beat the profile (opus): $OUT"
+rt config set round.profile inherit >/dev/null
+rtrc round assign F01 --check-only --tier light --holder-pid "$HOLDER"
+[ "$RC" = "0" ] && ! echo "$OUT" | jget data.model >/dev/null || fail "inherit should resolve to no model: $RC $OUT"
+rt config set round.profile "" >/dev/null
+pass "round.profile fills the claude tiers, explicit tiers win, inherit launches without a model"
+
 # Above the default: a reason is required, and it is reported back.
 rtrc round assign F01 --check-only --tier heavy --holder-pid "$HOLDER"
 [ "$RC" = "2" ] || fail "heavy above standard without a reason should exit 2, got $RC: $OUT"
