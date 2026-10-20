@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # rota-docs — Maintain Public Docs
 
-Public-docs maintainer: first-run scaffold, after-work updates, restructure. Called by hand, by `/rota-ship` Step 8.6 (after-work, inline) and by `/rota-release`'s docs nudge. In a round it runs once, after wind-down, with no branch being shipped. `/rota-docs` is a deprecated alias for this skill.
+Public-docs maintainer: first-run scaffold, after-work updates, restructure. Called by hand, by `/rota-ship` Step 8.6 (after-work, inline) and by `/rota-release`'s docs nudge. In a round it runs once, after wind-down, with no branch being shipped. `/rota-ship --docs` is a deprecated alias for this skill.
 
 Step labels D1–D6 and D-A1–D-A6 are cited elsewhere: keep them.
 
