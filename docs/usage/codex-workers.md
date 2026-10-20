@@ -84,14 +84,14 @@ you configure it as an account.
 
 A tier (`light`, `standard`, `heavy`) says how heavy a model the worker starts with, and how it sizes its
 own subagents. `rota round assign --tier heavy --tier-reason "..."` picks one; the default is `round.tier`.
-For Claude, the tiers map to models out of the box. For Codex they are optional:
+Claude and Codex both ship a tier map:
 
 | Key | Default |
 |---|---|
-| `round.tiers.codex.light` / `.standard` / `.heavy` | empty |
+| `round.tiers.codex.light` / `.standard` / `.heavy` | `gpt-6-luna` / `gpt-6.1-sol` / `gpt-6-astra` |
 
-Unset, the worker runs on Codex's own default model, and the launch command drops `--model`. Set one and
-you must set all three. `rota round assign --kind codex --check-only` prints the model it would use.
+Override any tier and the others keep their defaults. Set all three to empty and the worker runs on
+Codex's own default model, and the launch command drops `--model`; one empty tier beside a set one is refused. `rota round assign --kind codex --check-only` prints the model it would use.
 
 The launch command is `work.codexCommand`. Its default is `codex --model {model}
 --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen`.

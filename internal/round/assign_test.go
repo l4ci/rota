@@ -570,12 +570,13 @@ func TestAssignProjectWorkerKind(t *testing.T) {
 	}
 }
 
-// An unset codex tier map is no model, not a refusal (#68): the default
+// An all-empty codex tier map is no model, not a refusal (#68): the default
 // command drops --model and Codex picks its own. A custom work.codexCommand
 // holding {model} has nothing to fill in, so it is refused before the claim.
+// The unset map is no longer empty: it ships defaults (#953).
 func TestAssignCodexWithoutTierMap(t *testing.T) {
 	f := newAssignFixture(t)
-	f.config(t, `{"work":{"dispatch":"herdr"}}`)
+	f.config(t, `{"work":{"dispatch":"herdr"},"round":{"tiers":{"codex":{"light":"","standard":"","heavy":""}}}}`)
 	rig := &codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}
 	rig.install(f)
 	f.host.name = "herdr"
@@ -588,7 +589,7 @@ func TestAssignCodexWithoutTierMap(t *testing.T) {
 	}
 
 	g := newAssignFixture(t)
-	g.config(t, `{"work":{"dispatch":"herdr","codexCommand":"codex -m {model}"}}`)
+	g.config(t, `{"work":{"dispatch":"herdr","codexCommand":"codex -m {model}"},"round":{"tiers":{"codex":{"light":"","standard":"","heavy":""}}}}`)
 	gr := &codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}
 	gr.install(g)
 	g.host.name = "herdr"

@@ -120,12 +120,12 @@ var Keys = []Key{
 	k("round.tiers.claude.light", "haiku", false, TypeString, "Model a light-tier Claude worker starts with."),
 	k("round.tiers.claude.standard", "", false, TypeString, "Model a standard-tier Claude worker starts with. Empty follows models.worker."),
 	k("round.tiers.claude.heavy", "opus", false, TypeString, "Model a heavy-tier Claude worker starts with."),
-	k("round.tiers.codex.light", "", false, TypeString, "Model a light-tier Codex worker starts with. Empty: Codex's own default; a configured kind must set all three tiers."),
-	k("round.tiers.codex.standard", "", false, TypeString, "Model a standard-tier Codex worker starts with. Empty: Codex's own default; a configured kind must set all three tiers."),
-	k("round.tiers.codex.heavy", "", false, TypeString, "Model a heavy-tier Codex worker starts with. Empty: Codex's own default; a configured kind must set all three tiers."),
-	k("round.tiers.opencode.light", "", false, TypeString, "Model a light-tier OpenCode worker starts with, as a provider/model id from opencode models. Empty: OpenCode's own default; a configured kind must set all three tiers."),
-	k("round.tiers.opencode.standard", "", false, TypeString, "Model a standard-tier OpenCode worker starts with, as a provider/model id from opencode models. Empty: OpenCode's own default; a configured kind must set all three tiers."),
-	k("round.tiers.opencode.heavy", "", false, TypeString, "Model a heavy-tier OpenCode worker starts with, as a provider/model id from opencode models. Empty: OpenCode's own default; a configured kind must set all three tiers."),
+	k("round.tiers.codex.light", "gpt-6-luna", false, TypeString, "Model a light-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three."),
+	k("round.tiers.codex.standard", "gpt-6.1-sol", false, TypeString, "Model a standard-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three."),
+	k("round.tiers.codex.heavy", "gpt-6-astra", false, TypeString, "Model a heavy-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three."),
+	k("round.tiers.opencode.light", "opencode/claude-haiku-5-5", false, TypeString, "Model a light-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three."),
+	k("round.tiers.opencode.standard", "opencode/claude-sonnet-5-5", false, TypeString, "Model a standard-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three."),
+	k("round.tiers.opencode.heavy", "opencode/claude-opus-5-5", false, TypeString, "Model a heavy-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three."),
 	// Agent roles (#405): the tier and effort of the three subagent definitions
 	// `rota agents write` emits. An empty effort leaves the harness default.
 	k("roles.explorer.tier", "light", false, TypeEnum, "Tier of the rota-explorer agent, which picks its model from round.tiers.", "light", "standard", "heavy"),

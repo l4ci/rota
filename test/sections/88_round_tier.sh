@@ -63,10 +63,14 @@ rtrc round assign F01 --check-only --tier ultra --holder-pid "$HOLDER"
 [ "$RC" = "2" ] || fail "an unknown tier should exit 2, got $RC"
 pass "a tier above the default needs --tier-reason; below it does not"
 
-# Codex: no map is no model (Codex picks its own, #68), unless a custom command
-# holds {model}; a full map resolves, a partial map is a config error.
+# Codex ships a default map (#953); all three tiers set empty is no model (Codex
+# picks its own, #68), unless a custom command holds {model}; a full map
+# resolves, a partial map is a config error.
+OUT=$(rt round assign F01 --check-only --kind codex --holder-pid "$HOLDER")
+[ "$(echo "$OUT" | jget data.model)" = "gpt-6.1-sol" ] || fail "unset codex should resolve to the shipped standard default: $OUT"
+for t in light standard heavy; do rt config set "round.tiers.codex.$t" '' >/dev/null; done
 rtrc round assign F01 --check-only --kind codex --holder-pid "$HOLDER"
-[ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.kind)" = "codex" ] && ! echo "$OUT" | jget data.model >/dev/null || fail "unconfigured codex should resolve to no model: $RC $OUT"
+[ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.kind)" = "codex" ] && ! echo "$OUT" | jget data.model >/dev/null || fail "all-empty codex should resolve to no model: $RC $OUT"
 rt config set work.codexCommand 'codex -m {model}' >/dev/null
 rtrc round assign F01 --check-only --kind codex --holder-pid "$HOLDER"
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "no tier map" ] || fail "a {model} command with no map should be refused: $RC $OUT"
