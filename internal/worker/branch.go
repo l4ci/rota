@@ -20,8 +20,9 @@ var (
 )
 
 // BranchName is `<agent>/<issue>-<slug>`: the issue number or tracker key
-// (PROJ-123, kept upper case; file mode: the lowercased ID), then the title lowercased with non-alphanumerics collapsed
-// to `-`, cut to five words and 40 characters.
+// (PROJ-123, kept upper case; file mode: the lowercased ID), then the title
+// lowercased with non-alphanumerics collapsed to `-`, cut to five words and 40
+// characters.
 func BranchName(agent, id, title string) string {
 	slug := strings.Trim(slugNonWord.ReplaceAllString(strings.ToLower(title), "-"), "-")
 	if words := strings.Split(slug, "-"); len(words) > 5 {
