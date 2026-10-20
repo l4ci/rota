@@ -121,6 +121,7 @@ Read when `rota round status` reports solo (no herdr or tmux host): `solo-and-au
 3. Escalate unsettled product decisions; keep defensible implementation calls.
 4. Cite the channel of every approval. Sign every message.
 5. Stage explicit paths. Never stage everything.
+6. A lost response from a `--request-id` verb is followed by `rota receipt show <request-id>`, never by a re-run: `completed` means read the stored result, `pending` means replay with the same id and arguments, `absent` means inspect the state first (it is not proof nothing happened).
 
 ## References
 

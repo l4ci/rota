@@ -304,6 +304,12 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `plan.maxTasks` | int | `3` |  | Tasks a plan may hold before rota plan check warns and suggests a split into dependent items. Advisory: the check still exits 0. 0 turns the warning off. |
 | `plan.maxFilesPerTask` | int | `5` |  | Paths a task's Files: line may name before rota plan check warns about that task. Advisory: the check still exits 0. 0 turns the warning off. |
 
+### brainstorm
+
+| Key | Type | Default | Values | Description |
+|-----|------|---------|--------|-------------|
+| `brainstorm.edgeProbe` | bool | `false` |  | Opt-in edge and prohibition probe in /rota-brainstorm Step 3: walks eight edge categories, records each as covered or dismissed, asks what the change must never do and writes each answer as a negative acceptance criterion. Off leaves /rota-brainstorm unchanged. |
+
 ### orchestrator
 
 | Key | Type | Default | Values | Description |

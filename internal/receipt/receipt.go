@@ -163,6 +163,22 @@ func (s *Store) Lookup(call Call) (e Entry, found bool, err error) {
 	return Entry{}, false, nil
 }
 
+// Show returns the entry recorded under id, whatever verb wrote it. found is
+// false when none is: the id was never used, its receipt was pruned or capped
+// away, or the call is still running and has recorded nothing yet.
+func (s *Store) Show(id string) (e Entry, found bool, err error) {
+	d, err := load(path(s.Root))
+	if err != nil {
+		return Entry{}, false, err
+	}
+	for _, r := range d.Receipts {
+		if r.ID == id {
+			return r, true, nil
+		}
+	}
+	return Entry{}, false, nil
+}
+
 // record stores e, replacing an earlier entry with the same id. Attempts
 // counts the calls under the id.
 func (s *Store) record(e *Entry) error {

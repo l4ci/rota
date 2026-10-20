@@ -138,3 +138,36 @@ trap 'rm -rf "$TMP"' EXIT
 rm -rf "$PLN_TMP"
 pass "plan add --design records design pointer in frontmatter; rejects a missing design"
 
+
+echo "## brainstorm.edgeProbe (opt-in edge and prohibition probe in Step 3)"
+
+(
+  SKILL="$REPO/skills/rota-brainstorm/SKILL.md"
+  STEP3=$(awk '/^## Step 3 /{f=1;next} /^## Step 4 /{f=0} f' "$SKILL")
+
+  # a. the key is a bool defaulting to false
+  OUT=$("$ROTA_BIN" config show brainstorm.edgeProbe) || { echo "FAIL: config show brainstorm.edgeProbe exited non-zero"; exit 1; }
+  grep -q "brainstorm.edgeProbe = false" <<<"$OUT" || { echo "FAIL: brainstorm.edgeProbe should default to false: '$OUT'"; exit 1; }
+
+  # b. off state: Step 3 gates the probe on the key and says the default leaves brainstorm unchanged
+  grep -q "brainstorm.edgeProbe" <<<"$STEP3" || { echo "FAIL: Step 3 does not name brainstorm.edgeProbe"; exit 1; }
+  grep -qi "off.*unchanged\|unchanged.*off\|false.*unchanged" <<<"$STEP3" || { echo "FAIL: Step 3 does not say the probe is skipped when the key is false"; exit 1; }
+
+  # c. on state: all eight categories, covered/dismissed record, the one prohibition question, negative AC
+  for cat in boundary empty ordering idempotency concurrency encoding precision adjacency; do
+    grep -qi "$cat" <<<"$STEP3" || { echo "FAIL: Step 3 edge probe misses category '$cat'"; exit 1; }
+  done
+  grep -q 'covered: <how>' <<<"$STEP3" || { echo "FAIL: Step 3 lacks the 'covered: <how>' record"; exit 1; }
+  grep -q 'dismissed: <reason>' <<<"$STEP3" || { echo "FAIL: Step 3 lacks the 'dismissed: <reason>' record"; exit 1; }
+  grep -q 'What must this never do?' <<<"$STEP3" || { echo "FAIL: Step 3 lacks the prohibition question"; exit 1; }
+  grep -qi "prohibition" <<<"$STEP3" || { echo "FAIL: Step 3 does not turn answers into prohibition AC"; exit 1; }
+
+  # d. one draft, one approval; skipped when the issue body already has ## Acceptance
+  grep -qi "no extra approval" <<<"$STEP3" || { echo "FAIL: Step 3 does not say the probe adds no approval step"; exit 1; }
+  grep -q '## Acceptance' <<<"$STEP3" || { echo "FAIL: Step 3 does not skip the probe when ## Acceptance exists"; exit 1; }
+
+  # e. docs describe the key
+  grep -q "brainstorm.edgeProbe" "$REPO/docs/usage/brainstorm.md" || { echo "FAIL: docs/usage/brainstorm.md misses brainstorm.edgeProbe"; exit 1; }
+  grep -q "brainstorm.edgeProbe" "$REPO/docs/usage/configuration.md" || { echo "FAIL: docs/usage/configuration.md misses brainstorm.edgeProbe"; exit 1; }
+) || fail "brainstorm.edgeProbe assertions"
+pass "brainstorm.edgeProbe: bool default false; Step 3 probe text for off and on; docs describe the key"
