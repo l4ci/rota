@@ -30,7 +30,7 @@ last_mapped_commit: <full sha of HEAD>
 ```
 
 Keep each file short: a page, not a tour.
-3. **Approve.** List every file the run would write, marking each `new` or `exists`. Ask once (`AskUserQuestion`): write the new files, or pick which. A file that already exists is never overwritten silently: for each, ask overwrite or skip (or show the diff first when the user wants it). With no answer, write nothing.
+3. **Approve.** List every file the run would write, marking each `new` or `exists`. Ask once: write the new files, or pick which. A file that already exists is never overwritten silently: for each, ask overwrite or skip (or show the diff first when the user wants it). With no answer, write nothing.
 4. **Write and index.** Write only the approved files, then run `rota map index` and `rota map stats`. Report the files written and skipped. `rota map stats` warns later, once HEAD is more than `map.staleCommits` commits (default 50) past a file's `last_mapped_commit`; re-run `--map` to refresh.
 
 A file the user kept (skipped) keeps its old `last_mapped_commit`, so it still shows as stale until it is remapped.
