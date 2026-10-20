@@ -248,7 +248,7 @@ func TestDispatchRelayGoesIntoTheRunningSession(t *testing.T) {
 		t.Errorf("a relay must not kill or spawn: %v", f.calls)
 	}
 	if !strings.HasPrefix(f.sent, "--- ORCHESTRATOR (round 2) ---\n[ORCHESTRATOR RELAY — this text was forwarded by the /rota-work orchestrator.\n") ||
-		!strings.Contains(f.sent, "attribute it as 'orchestrator relay round 2'") || !strings.HasSuffix(f.sent, "sign-off in your session.]\n\n\n  the maintainer says use B  \nmore\n") {
+		!strings.Contains(f.sent, "attribute it as 'orchestrator relay round 2'") || !strings.HasSuffix(f.sent, "sign-off in your session.]\n[relay 1]\n\n\n  the maintainer says use B  \nmore\n") {
 		t.Errorf("payload = %q", f.sent)
 	}
 	relays, _ := LoadRegistryTolerant(dir).Slot("w1").Raw().Get("relays")

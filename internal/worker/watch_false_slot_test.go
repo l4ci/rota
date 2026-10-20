@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -46,6 +47,34 @@ func TestClassifyClaudeRunningCommandIsNotIdle(t *testing.T) {
 	}
 }
 
+// relayEcho is a relay as the pane echoes it: header, note, its `[relay K]`
+// line and a worker reply.
+func relayEcho(k int) string {
+	return "❯ --- ORCHESTRATOR (round 27) ---\n  [ORCHESTRATOR RELAY — forwarded.]\n  [relay " + strconv.Itoa(k) + "]\n\n  REVIEW\n\n● on it\n"
+}
+
+func relayRaceSlot(t *testing.T, dir string, k int) {
+	t.Helper()
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
+		s.Dispatch("w9:t1", "", "", "2026-10-20T10:00:00Z")
+		for i := 0; i < k; i++ {
+			s.AppendRelay(newRelayEntry(27, time.Now(), "REVIEW"))
+		}
+		s.SetRelayPending(k)
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func waitOnce(t *testing.T, dir string, h *waitHost, d time.Duration) WaitResult {
+	t.Helper()
+	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: d})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res
+}
+
 // #1017 AC-3: right after a dispatched relay the pane still shows only the old
 // ROTA-DONE (the echo has not rendered): busy, no wake. Once the echo and the
 // worker's new ROTA-DONE (same PR) are in, the done is news exactly once.
@@ -54,33 +83,50 @@ func TestWaitRelayRaceOldDoneIsBusyThenNewDoneWakesOnce(t *testing.T) {
 	h := newWaitHost("herdr")
 	const done = "ROTA-DONE w1 https://github.com/o/r/pull/994\n"
 	brief := "❯ --- ORCHESTRATOR (round 27) ---\n  You are w1.\n\n● working\n"
-	// The slot was done and reported; a relay then went out through dispatch.
-	if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
-		s.Dispatch("w9:t1", "", "", "2026-10-20T10:00:00Z")
-		s.AppendRelay(newRelayEntry(27, time.Now(), "REVIEW"))
-		s.SetRelayPending()
-	}); err != nil {
-		t.Fatal(err)
-	}
+	relayRaceSlot(t, dir, 1)
 	h.set("w1", brief+done, "idle")
-	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 300 * time.Millisecond})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !res.TimedOut {
+	if res := waitOnce(t, dir, h, 300*time.Millisecond); !res.TimedOut {
 		t.Fatalf("old done before the relay echo woke the watch: %+v", res)
 	}
-	h.set("w1", brief+done+"\n❯ --- ORCHESTRATOR (round 27) ---\n  REVIEW\n\n● fixed\n"+done, "idle")
-	res, err = envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.Slot != "w1" || res.State != StateDone {
+	h.set("w1", brief+done+"\n"+relayEcho(1)+done, "idle")
+	if res := waitOnce(t, dir, h, 5*time.Second); res.Slot != "w1" || res.State != StateDone {
 		t.Fatalf("new done after the relay: %+v", res)
 	}
-	res, err = envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 300 * time.Millisecond})
-	if err != nil || !res.TimedOut {
-		t.Errorf("the same done woke twice: %+v %v", res, err)
+	if res := waitOnce(t, dir, h, 300*time.Millisecond); !res.TimedOut {
+		t.Errorf("the same done woke twice: %+v", res)
+	}
+}
+
+// Second relay: the pane holds [D0][R1][D1 same PR] and R2 is sent but not
+// rendered. D1 answers R1, not R2: no wake until R2's echo and a done after it.
+func TestWaitSecondRelayNotRenderedIsBusy(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	h := newWaitHost("herdr")
+	const done = "ROTA-DONE w1 https://github.com/o/r/pull/994\n"
+	pane := "❯ --- ORCHESTRATOR (round 27) ---\n  You are w1.\n\n" + done + "\n" + relayEcho(1) + done
+	relayRaceSlot(t, dir, 2)
+	h.set("w1", pane, "idle")
+	if res := waitOnce(t, dir, h, 300*time.Millisecond); !res.TimedOut {
+		t.Fatalf("the first relay's done woke the watch for the second: %+v", res)
+	}
+	h.set("w1", pane+"\n"+relayEcho(2)+done, "idle")
+	if res := waitOnce(t, dir, h, 5*time.Second); res.Slot != "w1" || res.State != StateDone {
+		t.Fatalf("done after the second relay: %+v", res)
+	}
+}
+
+// The old done scrolled out of the pane: once the relay's echo is visible, a
+// done after it counts.
+func TestWaitDoneAfterVisibleRelayCountsWithoutTheOldDone(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	h := newWaitHost("herdr")
+	relayRaceSlot(t, dir, 1)
+	h.set("w1", relayEcho(1)+strings.Repeat("● work\n", 20)+"ROTA-DONE w1 https://github.com/o/r/pull/994\n", "idle")
+	if res := waitOnce(t, dir, h, 5*time.Second); res.Slot != "w1" || res.State != StateDone {
+		t.Fatalf("done after the visible relay echo: %+v", res)
+	}
+	if got := LoadRegistryTolerant(dir).Slot("w1").RelayPending(); got != 0 {
+		t.Errorf("relayPending = %d after the done, want 0", got)
 	}
 }
 
@@ -89,5 +135,30 @@ func TestRowKeyOfADoneCountsRelays(t *testing.T) {
 	r := PollRow{"w1", StateDone, "https://github.com/o/r/pull/994"}
 	if rowKey(pollTarget{}, r) == rowKey(pollTarget{relays: 1}, r) {
 		t.Error("a done after a relay shares the key of the one before it")
+	}
+}
+
+// Evidence written in angle brackets is real; the template's is not.
+func TestClassifyAngleBracketedURLIsEvidence(t *testing.T) {
+	pane := "● ROTA-DONE nia <https://github.com/o/r/pull/9>\n"
+	if st, ev := ClassifyFor("claude", pane, false, 60, ""); st != StateDone || ev != "<https://github.com/o/r/pull/9>" {
+		t.Errorf("%s %q", st, ev)
+	}
+	blocked := "● ROTA-BLOCKED nia: <one question>\n"
+	if st, _ := ClassifyFor("claude", blocked, false, 60, ""); st == StateBlocked {
+		t.Error("the template's blocked line read as blocked")
+	}
+}
+
+// A busy phrase quoted inside an echoed relay is the orchestrator's, not a
+// turn in flight, on harnesses that gutter their echo as well.
+func TestClassifyOpenCodeBusyPhraseInEchoedRelayIsNotBusy(t *testing.T) {
+	pane := "┃ --- ORCHESTRATOR (round 27) ---\n┃ the footer says esc interrupt while a turn runs\n"
+	if st, ev := ClassifyFor("opencode", pane, false, 60, ""); st == StateBusy {
+		t.Errorf("echoed relay read as busy: %q", ev)
+	}
+	live := pane + "\nesc interrupt\n"
+	if st, _ := ClassifyFor("opencode", live, false, 60, ""); st != StateBusy {
+		t.Errorf("a running opencode turn read as %s", st)
 	}
 }
