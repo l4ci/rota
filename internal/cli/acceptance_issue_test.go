@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 )
@@ -117,6 +118,20 @@ func TestPlanPass(t *testing.T) {
 		if code, _, _ := issueRunWith(t, deps, root, args...); code != 2 {
 			t.Errorf("item note %s acceptance: exit %d, want 2", verb, code)
 		}
+	}
+}
+
+func TestPlanPassStampsDepsToday(t *testing.T) {
+	root := trackerProject(t, issuesConfig)
+	deps := withTracker(t, acceptFixture())
+	deps.Today = func() time.Time { return time.Date(2031, 4, 5, 9, 0, 0, 0, time.UTC) }
+	addProof(t, deps, root, "PASS", "abc1234", "go test: ./x")
+	if code, _, stderr := issueRunWith(t, deps, root, "plan", "pass", "M02-F7", "AC-1", "--proof", "abc1234:go test: ./x"); code != 0 {
+		t.Fatalf("pass: %d %s", code, stderr)
+	}
+	_, env, _ := issueRunWith(t, deps, root, "item", "note", "show", "7", "--kind", "acceptance")
+	if body, _ := ddata(t, env)["body"].(string); !strings.Contains(body, "- AC-1 · 2031-04-05 · abc1234") {
+		t.Errorf("mark not stamped from Deps.Today: %q", body)
 	}
 }
 
