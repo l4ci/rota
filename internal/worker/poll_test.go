@@ -808,6 +808,25 @@ func TestClassifyQuotedLoginHintIsNotLoggedOut(t *testing.T) {
 	}
 }
 
+// #1255: a logged-out pane showing only the bare status line (no "Login
+// expired") reads BLOCKED, while the same words mid-line stay quoted text.
+func TestClassifyBareNotLoggedInStatusIsBlocked(t *testing.T) {
+	st, ev := ClassifyFor("claude", "Not logged in \u00b7 Please run /login\n", false, 0, "")
+	if st != StateBlocked || !strings.Contains(ev, "round.accounts") {
+		t.Errorf("bare status read as %q evidence %q", st, ev)
+	}
+	st, _ = ClassifyFor("claude", "the docs say: Not logged in \u00b7 Please run /login\n", false, 0, "")
+	if st == StateBlocked {
+		t.Errorf("quoted status read as %q", st)
+	}
+	// An indented reply paragraph quoting the status is the session's own
+	// prose, not its dialog.
+	st, _ = ClassifyFor("claude", "\u23fa Here is the error text:\n\n  Not logged in \u00b7 Please run /login\n", false, 0, "")
+	if st == StateBlocked {
+		t.Errorf("indented reply line read as %q", st)
+	}
+}
+
 // #1156 x #1171: the background-task footer only overrides the final idle
 // outcome, so a logged-out pane that carries it still reads BLOCKED.
 func TestClassifyLoggedOutWithTaskFooterStaysBlocked(t *testing.T) {
