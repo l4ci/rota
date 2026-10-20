@@ -31,6 +31,8 @@ Follow `references/context-load-protocol.md` (parallel, silent), plus `.rota/MIL
 
 Open with 3-4 sentences on what you see: the project's shape, existing milestones, obvious gaps. Then one question batch (see `references/design-exploration.md`):
 
+A big effort whose design questions are still open (nobody can write Acceptance yet) is a **decision milestone**: offer it as a *Scope* option and see "Decision milestone" in Step 7.
+
 - **Create** — 2-3 questions: *Scope* (new product / strategic refactor / research / other), *Audience*, *Constraint* (time or scope limit).
 - **Edit** — one question, *Action*: add a milestone (Recommended if the vision feels incomplete), refine one, retire/activate, re-prioritize, or explore a new direction.
 
@@ -88,6 +90,7 @@ MID=$(rota milestone add --json --title "<title>" --summary "<one line>" [--depe
 
 Issue mode: creates the native milestone and tracking issue (status `planned`). Draft the full plan (frontmatter `id: <MNN>` required) in a scratch file and publish with `rota milestone put <MNN> --body-file <file>|-`. File mode: mints `MNN`, a stub `.rota/milestones/MNN.md` and an overview block; edit the stub's sections (keep the frontmatter).
 
+- **Decision milestone** (`--kind decision`): for an effort too foggy to slice. Mint it with `rota milestone add --kind decision --title … --summary …`; the plan gets a `## Decisions` list (one line per closed decision, written by `item complete --gist`, never by hand) and `## Not yet specified` (the fog). Its children are decision items, one per open design question, not delivery work. File each with `rota item create --milestone <MNN> [--depends-on <ID>,…]` and label it `decision:research` (a question a worker answers by reading code and docs: it posts a `finding` comment, and the orchestrator accepts it with `rota round accept <ID> --gist <line>`) or `decision:grilling` (a call only the human can make: `/rota-brainstorm <ID>`, one per session; `round assign` refuses it). File backend: a `Decision: research|grilling` field. Wire the order with `--depends-on`: a decision whose answer another needs waits for it. List decisions and fog in the plan, never the open items. Prototype- and task-typed decisions do not exist yet: spike with `/rota-spike` or file a normal item. A decision milestone ships under the usual rule.
 - **Status:** `rota milestone status <MNN> --to <planned|active|shipped|archived>` per changed milestone. Several can be active when independent. `archived` retires one without deleting it, but an archived dependency does not unblock dependents; `shipped` does. `--to shipped` exits 4 while the milestone has open items or unticked criteria (`data.open`, `data.unticked`); tick or close them, or pass `--force`.
 - **Vision paragraph** (Create only): `rota milestone overview --body-file <file>|-` (file mode: replace the placeholder under `# Milestones`), 2-4 sentences on the why. In Edit mode leave it unless the framing changed.
 - **Index:** `rota milestone index` regenerates the Active list and the managed instructions block. Never hand-edit the Active list.

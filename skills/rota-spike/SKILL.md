@@ -7,6 +7,8 @@ description: Use when X must be tried before committing to it ("can we use SSE?"
 
 **Code on the spike branch is reference, not product.**
 
+A `decision:research` item of a decision milestone (`/rota-vision`) is the round-worker form of a spike: its worker answers with the same sections (question, findings, decision) as a `finding` comment and no branch, and the orchestrator accepts it with `rota round accept`. A spike you run yourself stays a branch and a spike file.
+
 Two modes:
 
 - **Start mode**: open a new spike with a question

@@ -102,7 +102,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota item field get <ID> --name <title\|detail\|related\|milestone\|repos\|subsystem\|since\|reason\|note>` | print one field of an item |
 | `rota item field set <ID> --name <milestone\|related\|repos\|subsystem\|detail> --value <text>` | set, replace or clear a field of an open item |
 | `rota item field list <ID>` | every field of an item |
-| `rota item complete <ID> [--commit <hash>] [--reason <done\|handed-off\|blocked\|dropped>] [--note <text>] [--no-proof]` | close an item |
+| `rota item complete <ID> [--commit <hash>] [--reason <done\|handed-off\|blocked\|dropped>] [--note <text>] [--no-proof] [--gist <text>]` | close an item; a decision item needs `--gist`, its line in the milestone's `## Decisions` |
 | `rota item reopen <ID>` | restore a completed item |
 | `rota item rm <ID>... [--scrub-archive] [--apply]` | remove items with their cross-references and files |
 | `rota item shipped <title>...` | look for evidence that titles already shipped |
@@ -227,7 +227,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 
 | Usage | What it does |
 |---|---|
-| `rota milestone add --title <text> --summary <text> [--depends M01,M02]` | mint a milestone |
+| `rota milestone add --title <text> --summary <text> [--depends M01,M02] [--kind <delivery\|decision>]` | mint a milestone; `--kind decision` adds `kind: decision` and empty `## Decisions` and `## Not yet specified` sections |
 | `rota milestone list` | list milestones |
 | `rota milestone show <id>` | print a milestone |
 | `rota milestone put <id> --body-file <path\|->` | replace a milestone's text |
