@@ -131,7 +131,7 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		}
 		var deferred []backlog.CreateInput
 		if *fileDeferred {
-			if deferred, err = deferredItems(b.Findings, strings.TrimSpace(*pr)); err != nil {
+			if deferred, err = deferredItems(b.Findings, strings.TrimSpace(*pr), *kind, *v); err != nil {
 				return Result{}, err
 			}
 		}
@@ -219,17 +219,26 @@ func dropFiled(be backlog.Backend, ins []backlog.CreateInput, pr string) (fresh 
 	return fresh, n, nil
 }
 
+// neutralAC is the one criterion of a deferred item whose finding carries no fix.
+const neutralAC = "the problem above no longer reproduces, and a test or check that failed before the fix passes after it"
+
 // deferredItems is one task per deferred finding, related to the PR it was
-// found on. The title is the finding's; the body carries its location and detail,
-// and one acceptance criterion from the title so the item is ready to assign.
-func deferredItems(findings []verdict.Finding, pr string) ([]backlog.CreateInput, error) {
+// found on. The title is the finding's. The body states the finding as a
+// Problem (it is the defect, never a requirement) with its location, detail and
+// the verdict it came from; the one acceptance criterion is the finding's fix,
+// or a neutral one when it has none, so the item is ready to assign.
+func deferredItems(findings []verdict.Finding, pr, kind, v string) ([]backlog.CreateInput, error) {
 	var ins []backlog.CreateInput
 	for _, f := range findings {
 		if !f.IsDeferred() {
 			continue
 		}
 		var body strings.Builder
-		fmt.Fprintf(&body, "Deferred %s review finding on %s.\n", f.Severity, pr)
+		title := strings.TrimSpace(f.Title)
+		fmt.Fprintf(&body, "## Problem\n\n%s\n", title)
+		if f.Detail != "" {
+			body.WriteString("\n" + f.Detail + "\n")
+		}
 		if f.File != "" {
 			loc := f.File
 			if f.Line > 0 {
@@ -237,10 +246,12 @@ func deferredItems(findings []verdict.Finding, pr string) ([]backlog.CreateInput
 			}
 			fmt.Fprintf(&body, "\nWhere: `%s`\n", loc)
 		}
-		if f.Detail != "" {
-			body.WriteString("\n" + f.Detail + "\n")
+		fmt.Fprintf(&body, "\nDeferred %s finding from the %s %s verdict on %s.\n", f.Severity, kind, v, pr)
+		ac := neutralAC
+		if fix := strings.TrimSpace(f.Fix); fix != "" {
+			ac = fix
 		}
-		fmt.Fprintf(&body, "\n## Acceptance\n\n- [ ] AC-1: %s\n", strings.TrimSpace(f.Title))
+		fmt.Fprintf(&body, "\n## Acceptance\n\n- [ ] AC-1: %s\n", ac)
 		in, err := backlog.BuildCreateInput(backlog.CaptureRequest{Kind: "tasks", Title: f.Title, Desc: f.Title,
 			Fields: map[string]string{"related": pr}, Given: map[string]bool{"related": true},
 			Body: []byte(body.String()), HasBody: true})
