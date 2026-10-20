@@ -16,7 +16,7 @@ type Rename struct{ Old, New string }
 
 // RoundKeyRenames are the keys only rounds read, which lived under work.*
 // until #1097. The old names are not read any more: `rota migrate config`,
-// `config fill` and `rota update` rewrite them, and round verbs refuse a
+// `rota config fill` and `rota init` rewrite them, and round verbs refuse a
 // config that still holds one (LegacyRoundKeys).
 var RoundKeyRenames = []Rename{
 	{"work.workerSlots", "round.slots"},
