@@ -71,7 +71,7 @@ Work only this task, then stop.
   --summary-file <f>`. The file is exactly three lines: what changed, what was found, what
   remains. `done`: every acceptance criterion is met and verified. `partial`: you opened a
   PR with some criteria met and others not; name the unmet ones on the third line. `failed`:
-  you cannot deliver what the ticket asks and stop (a PR may hold what you learned). Never
+  (the `test.fast` proof is not required) you cannot deliver what the ticket asks and stop (a PR may hold what you learned). Never
   encode partial or failed only in prose or in the PR title. `partial` and `failed` need the
   file; the gate refuses the PR (`blockedBy: outcome-open`) until the orchestrator relays or
   transfers the slot, so say so rather than hoping it merges. Put the `prBlock` the verb prints

@@ -73,7 +73,10 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		d.Set("changed", false)
 
 		cmds := worker.LoadGateConfig(root).Tier("fast")
-		if len(cmds) == 0 {
+		if kind == worker.OutcomeFailed {
+			// A worker that cannot deliver has nothing to prove: the summary is its record.
+			d.Set("proofSkipped", true)
+		} else if len(cmds) == 0 {
 			c.Warn("test.fast is unset: the proof check is skipped for %s", slotName)
 			d.Set("proofSkipped", true)
 		} else {
@@ -131,8 +134,16 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			now := stamp.Format(c.deps().Now())
 			// The worker's own word, read ahead of the pane: a static pane with
 			// no sentinel must not turn this slot back into idle.
-			s.SetEvent(worker.EventDone, outcomeEvidence(kind, summary, s.PR()), now)
-			s.SetOutcome(kind, summary, now)
+			// A plain done reports no outcome and so answers none: only a relay,
+			// a transfer or an explicit --outcome lifts a standing partial.
+			if kind != "" {
+				s.SetOutcome(kind, summary, now)
+			}
+			evidence := outcomeEvidence(kind, summary, s.PR())
+			if k, sum := s.Outcome(); kind == "" && (k == worker.OutcomePartial || k == worker.OutcomeFailed) {
+				evidence = outcomeEvidence(k, sum, s.PR())
+			}
+			s.SetEvent(worker.EventDone, evidence, now)
 			if s.State() == "done" {
 				return
 			}
@@ -214,6 +225,9 @@ func branchHead(c *Ctx, root, branch string) (string, error) {
 	return head, nil
 }
 
+// maxSummaryLine caps one summary line: the three ride one event body.
+const maxSummaryLine = 200
+
 // readOutcome validates --outcome and --summary-file. No outcome and no file is
 // a plain done, as before. partial and failed must say why, so they require
 // the file; a file names three lines: what changed, what was found, what
@@ -238,6 +252,14 @@ func readOutcome(outcome, file string) (kind string, summary []string, err error
 	for _, l := range strings.Split(string(b), "\n") {
 		if l = strings.TrimSpace(l); l != "" {
 			summary = append(summary, l)
+		}
+	}
+	for _, l := range summary {
+		if strings.Contains(l, " | ") {
+			return "", nil, Usage("--summary-file lines must not contain \" | \" (it joins them in the event): %q", l)
+		}
+		if len([]rune(l)) > maxSummaryLine {
+			return "", nil, Usage("--summary-file lines are at most %d characters, got %d", maxSummaryLine, len([]rune(l)))
 		}
 	}
 	if len(summary) != 3 {
