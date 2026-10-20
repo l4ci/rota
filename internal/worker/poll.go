@@ -208,7 +208,9 @@ const staleDoneEvidence = "static pane, ROTA-DONE predates the last relay"
 //
 // A ROTA-DONE followed by a relay header is superseded: the relay (a bounce, a
 // review) reopened the work, so the old line is no longer the worker's state
-// (#873). stale reports that such a line was dropped and no later sentinel
+// (#873). A ROTA-BLOCKED followed by a relay header is superseded the same way:
+// the relay answered the question, so only a blocked line the worker prints
+// after it counts, the same question re-asked included (#1096). stale reports that such a line was dropped and no later sentinel
 // replaced it.
 func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stale bool) {
 	relayHead, blockedRe, doneRe := reRelayHead, reBlocked, reDone
@@ -220,6 +222,8 @@ func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stal
 		if relayHead.MatchString(l) {
 			if ok && state == StateDone {
 				state, evidence, ok, stale = "", "", false, true
+			} else if ok && state == StateBlocked {
+				state, evidence, ok = "", "", false
 			}
 			continue
 		}

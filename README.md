@@ -148,6 +148,7 @@ In the order you'd usually reach for them:
 | Ready to build | `/rota-plan`, `/rota-work` | Plan a bigger item; build the next one |
 | Something broke | `/rota-debug` | Reproduce, find the cause, fix it |
 | Done | `/rota-review`, `/rota-ship` | Review the branch; open the PR or merge |
+| Docs drifted | `/rota-docs` | Scaffold, update or restructure the public docs |
 | Many issues at once | `/rota-orchestrate`, `/rota-answer` | Run a round with parallel workers; answer its pending decisions one by one |
 | Worth remembering | `/rota-learn`, `/rota-decide` | Save a lesson; lock in a rule |
 | Fresh project | `/rota-init` | Read the repo and suggest config values, confirmed one by one |

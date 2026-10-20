@@ -79,6 +79,19 @@
       "better": "rota-decide"
     },
     {
+      "id": "rota-docs-loads",
+      "skill": "rota-docs",
+      "request": "/rota-docs: sync the public docs with what changed since the last docs commit.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-docs-skips",
+      "skill": "rota-docs",
+      "request": "Ship it, open the PR for this branch.",
+      "expect": "skip",
+      "better": "rota-ship"
+    },
+    {
       "id": "rota-init-loads",
       "skill": "rota-init",
       "request": "/rota-init: look at this repo and suggest config values for rota.",

@@ -50,7 +50,9 @@ Work only this task, then stop.
   pick one yourself: add no section, or ask (`ROTA-BLOCKED`).
 - Never dispatch a reviewer subagent or run `/rota-review` on your own branch.
   Review is the orchestrator's seat (the merge gate); a worker-side review
-  duplicates it. Verify with targeted checks, then open the PR.
+  duplicates it. Verify with targeted checks, then open the PR the one way: `/rota-ship`
+  on your branch, which takes its round-worker path (`skills/rota-ship/round-worker-and-issue-mode.md`:
+  no review, QA, UAT, docs or item completion; it opens the PR with `--items`).
 - Ports and databases. Your environment carries `ROTA_SLOT`, `ROTA_PORT_BASE`,
   `ROTA_PORT_BLOCK` and `ROTA_DB_SUFFIX`. Anything you start that listens (a dev server, a test server, a
   browser debug port) binds a port from `ROTA_PORT_BASE` through `ROTA_PORT_BASE + ROTA_PORT_BLOCK - 1`
@@ -184,6 +186,8 @@ Work only this task, then stop.
 ```
 
 `rota worker poll` and `rota round wait` read `issues:#a,#b` as done with the issue list as evidence and record it on the slot instead of a PR. `rota round assign` (or `transfer`) onto that slot then closes the review item with a note listing the issues, releases its claim and frees the slot. Only a review item the round minted closes this way: a worker that reports issues on any other item is refused until it has a PR. Solo rounds record the same with `rota round report <slot> --state done --issues "#a,#b"`.
+
+After `ROTA-DONE <slot> issues:#a,#b`, the orchestrator reads the filed issues and runs `rota round accept <ID>` (add `--issues #a,#b` when the slot recorded none). It closes the item and frees the slot with no PR; assign or transfer onto the slot still closes it as a fallback.
 
 The two sentinels are the contract's load-bearing half. We own the worker's instructions, so state is declared, not inferred from prose, and `rota worker poll` is reliable where pattern-matching a TUI is not.
 
