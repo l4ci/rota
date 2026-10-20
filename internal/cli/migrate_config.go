@@ -17,7 +17,7 @@ func configMigrateCommand() *Command {
 // migrateConfig is `rota migrate config` (#1097): every round-only key under
 // work.* moves to its round.* name in both config layers, value unchanged.
 // An old and a new name with different values refuse (exit 4) and nothing is
-// written. It is idempotent. `rota config fill` and `rota update` run the
+// written. It is idempotent. `rota config fill` and `rota init` run the
 // same migration.
 func migrateConfig(fs *flag.FlagSet) RunFunc {
 	apply := fs.Bool("apply", false, "write the changes; without it only report them")
