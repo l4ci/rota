@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 func project(t *testing.T, cfg string) string {
@@ -255,4 +257,102 @@ func TestReviewLoop(t *testing.T) {
 			t.Errorf("%s should be refused", bad)
 		}
 	}
+}
+
+func TestProfileFillsClaudeTiers(t *testing.T) {
+	for profile, want := range map[string]map[string]string{
+		"quality":  {"light": "sonnet", "standard": "opus", "heavy": "opus"},
+		"balanced": {"light": "haiku", "standard": "sonnet", "heavy": "opus"},
+		"budget":   {"light": "haiku", "standard": "haiku", "heavy": "sonnet"},
+		"inherit":  {"light": "", "standard": "", "heavy": ""},
+	} {
+		s, err := Load(project(t, `{"models":{"worker":"opus"},"round":{"profile":"`+profile+`"}}`))
+		if err != nil {
+			t.Fatalf("%s: %v", profile, err)
+		}
+		if !reflect.DeepEqual(s.Models[harness.Claude], want) {
+			t.Errorf("%s: claude map %v, want %v", profile, s.Models[harness.Claude], want)
+		}
+		if s.Profile != profile {
+			t.Errorf("%s: Profile %q", profile, s.Profile)
+		}
+	}
+}
+
+func TestProfileExplicitTierWins(t *testing.T) {
+	s, err := Load(project(t, `{"round":{"profile":"budget","tiers":{"claude":{"heavy":"opus"}}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"light": "haiku", "standard": "haiku", "heavy": "opus"}
+	if !reflect.DeepEqual(s.Models[harness.Claude], want) {
+		t.Errorf("claude map %v, want %v", s.Models[harness.Claude], want)
+	}
+}
+
+func TestProfileLeavesCodexAndOpenCodeAlone(t *testing.T) {
+	s, err := Load(project(t, `{"round":{"profile":"inherit","tiers":{"codex":{"light":"a","standard":"b","heavy":"c"}}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Models[harness.Codex]; got["light"] != "a" || got["heavy"] != "c" {
+		t.Errorf("codex map touched: %v", got)
+	}
+	if _, ok := s.Models[harness.OpenCode]; ok {
+		t.Errorf("opencode must stay unconfigured: %v", s.Models)
+	}
+}
+
+func TestInvalidProfile(t *testing.T) {
+	if _, err := Load(project(t, `{"round":{"profile":"adaptive"}}`)); err == nil || !strings.Contains(err.Error(), "round.profile") {
+		t.Fatalf("want round.profile error, got %v", err)
+	}
+}
+
+func TestEffectiveModelAndSource(t *testing.T) {
+	type row struct{ model, source string }
+	cases := []struct {
+		name, cfg, kind, tier string
+		want                  row
+	}{
+		{"default light", ``, "claude", "light", row{"haiku", "default"}},
+		{"standard follows models.worker", `{"models":{"worker":"opus"}}`, "claude", "standard", row{"opus", "models.worker"}},
+		{"explicit", `{"round":{"tiers":{"claude":{"heavy":"fable"}}}}`, "claude", "heavy", row{"fable", "explicit"}},
+		{"profile", `{"round":{"profile":"budget"}}`, "claude", "heavy", row{"sonnet", "profile"}},
+		{"explicit beats profile", `{"round":{"profile":"budget","tiers":{"claude":{"light":"opus"}}}}`, "claude", "light", row{"opus", "explicit"}},
+		{"inherit is harness default", `{"round":{"profile":"inherit"}}`, "claude", "standard", row{"", "harness default"}},
+		{"codex unset", ``, "codex", "light", row{"", "harness default"}},
+		{"codex explicit", `{"round":{"tiers":{"codex":{"light":"x"}}}}`, "codex", "light", row{"x", "explicit"}},
+		{"profile does not reach opencode", `{"round":{"profile":"quality"}}`, "opencode", "heavy", row{"", "harness default"}},
+	}
+	for _, c := range cases {
+		cfg := config.Load(rotatree.Config(project(t, c.cfg)))
+		m, src := Effective(cfg, c.kind, c.tier)
+		if m != c.want.model || src != c.want.source {
+			t.Errorf("%s: got (%q, %q), want %v", c.name, m, src, c.want)
+		}
+	}
+}
+
+func TestInheritAllowsAnExplicitTier(t *testing.T) {
+	s, err := Load(project(t, `{"round":{"profile":"inherit","tiers":{"claude":{"heavy":"opus"}}}}`))
+	if err != nil {
+		t.Fatalf("an explicit tier beside inherit is allowed: %v", err)
+	}
+	want := map[string]string{"light": "", "standard": "", "heavy": "opus"}
+	if !reflect.DeepEqual(s.Models[harness.Claude], want) {
+		t.Errorf("claude map %v, want %v", s.Models[harness.Claude], want)
+	}
+}
+
+func TestProfileNamesMatchConfigChoices(t *testing.T) {
+	for _, key := range config.Keys {
+		if key.Name == "round.profile" {
+			if !reflect.DeepEqual(key.Choices, ProfileNames) {
+				t.Errorf("round.profile choices %v != ProfileNames %v", key.Choices, ProfileNames)
+			}
+			return
+		}
+	}
+	t.Fatal("round.profile key missing")
 }

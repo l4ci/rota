@@ -184,6 +184,8 @@ type TierRule struct {
 	// StandardFallback is the config key whose model fills an unset standard
 	// tier, "" for none.
 	StandardFallback string
+	// Profile: round.profile fills this kind's tier map (Claude only).
+	Profile bool
 }
 
 // AgentRole is one rota subagent role as a harness renders it.
