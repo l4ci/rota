@@ -99,6 +99,10 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	e.Slots = func() []roundtick.Slot {
 		return roundtick.SlotsOf(worker.LoadRegistryTolerant(root).Slots())
 	}
+	e.Active = func() []string {
+		active, _ := round.Members(worker.LoadRegistryTolerant(root), set)
+		return active
+	}
 	e.Queued = func() []string {
 		return roundtick.QueuedRefs(worker.LoadRegistryTolerant(root).PRs())
 	}

@@ -667,25 +667,23 @@ func gateData(r worker.GateResult) *jsonx.Object {
 }
 
 // verdictRefusal turns a gate or train verdict that worker classifies as a
-// refusal into its exit-4 envelope. ok is false when the verdict is no refusal,
-// or travels with the wrong error state (see worker.VerdictMeaning.ViaError),
-// and the caller carries on.
-func verdictRefusal(verdict string, err error, msg, hint string, d *jsonx.Object) (res Result, ok bool, rerr error) {
+// refusal into its exit-4 envelope. The caller has checked the run was refused
+// (GateResult.Refused); ref is the approval gate's refusal, when it was one.
+func verdictRefusal(verdict string, ref *exitcode.Refusal, err error, msg, hint string, d *jsonx.Object) (Result, error) {
 	m := worker.ClassifyVerdict(verdict)
-	if !isRefusal(m, err) {
-		return Result{}, false, nil
-	}
+	var res Result
+	var rerr error
 	switch {
 	case m.BlockedBy == worker.BlockedByVerdict:
 		res, rerr = recordedFailRefusal(err, d)
 	case m.ViaError:
-		res, rerr = gateRefusal(err, d)
+		res, rerr = gateRefusal(ref, err, d)
 	case m.BlockedBy == worker.GateNoVerify:
 		res, rerr = noVerifyRefusal(msg, hint, d)
 	default:
 		res, rerr = blockedRefusal(d, m.BlockedBy, msg, hint)
 	}
-	return res, true, rerr
+	return res, rerr
 }
 
 // recordedFailRefusal turns a recorded-FAIL refusal from the gate or train into the
@@ -702,12 +700,6 @@ func recordedFailRefusal(err error, d *jsonx.Object) (Result, error) {
 // blockedBy no-verify, nothing landed.
 func noVerifyRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
 	return blockedRefusal(d, worker.GateNoVerify, msg, hint, "key", config.TestFullKey)
-}
-
-// isRefusal reports whether a gate or train verdict, with the error it came
-// with, is one the CLI turns into an exit-4 refusal.
-func isRefusal(m worker.VerdictMeaning, err error) bool {
-	return m.Refusal && m.ViaError == (err != nil)
 }
 
 // gateRunOpts is what one gate run needs: the verb's flags, without the verb.
@@ -758,7 +750,7 @@ func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
 	if err != nil {
 		return gateRun{Err: err}
 	}
-	approve := func(t worker.GateTarget, files func() ([]string, error)) error {
+	approve := func(t worker.GateTarget, files func() ([]string, error)) (*exitcode.Refusal, error) {
 		req := o.Approval
 		req.Thread = func() (approvalThread, error) { return targetApprovalThread(t) }
 		return clearMerge(c, policy, o.Slot+" into "+o.Base, o.Confirm, req, files, nil)
@@ -766,7 +758,7 @@ func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
 	ctx, stop := workerContext()
 	defer stop()
 	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, Prune: o.Prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block, CheckReviews: true, ItemBody: lazyItemBody(c, root)})
-	run := gateRun{Result: r, Err: err, Issue: r.Issue, Refused: isRefusal(worker.ClassifyVerdict(r.Verdict), err)}
+	run := gateRun{Result: r, Err: err, Issue: r.Issue, Refused: r.Refused(err)}
 	if run.Refused || err != nil || o.CheckOnly {
 		return run
 	}
@@ -799,8 +791,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		run := runGate(c, root, gateRunOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Prune: *prune, Confirm: conf, Approval: req})
 		r, err := run.Result, run.Err
 		if run.Refused {
-			res, _, rerr := verdictRefusal(r.Verdict, err, r.Err, r.Hint, gateData(r))
-			return res, rerr
+			return verdictRefusal(r.Verdict, r.Refusal, err, r.Err, r.Hint, gateData(r))
 		}
 		if err != nil {
 			return Result{}, err

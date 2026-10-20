@@ -62,7 +62,7 @@ type TrainOpts struct {
 	NoVerify bool
 	// Approve is GateOpts.Approve for the whole train: files lists the union of
 	// the paths the members change.
-	Approve func(files func() ([]string, error)) error
+	Approve func(files func() ([]string, error)) (*exitcode.Refusal, error)
 	// Verdict is GateOpts.Verdict, run for every member's check.
 	Verdict func(branch string) error
 	// CheckReviews is GateOpts.CheckReviews, run for every member's check.
@@ -104,8 +104,10 @@ type TrainResult struct {
 	SHA         string
 	Err         string
 	Hint        string
-	Notes       []string
-	Order       []string // one line per member, in merge order, with the reason
+	// Refusal is the approval gate's refusal, set with verdict approval-required.
+	Refusal *exitcode.Refusal
+	Notes   []string
+	Order   []string // one line per member, in merge order, with the reason
 	// CacheHits names each verify answered from the verdict cache instead of
 	// being run; Transient the members earlier named culprit that this train
 	// passed with (#400).
@@ -346,10 +348,14 @@ func (t *trainRun) plan() (bool, error) {
 		}
 	}
 	pre.Approve = o.Approve
-	r, approval, perr := pre.run()
+	r, approval, ref, perr := pre.run()
 	switch {
 	case approval:
 		res.Verdict = GateApprovalRequired
+		res.Refusal = ref
+		if ref != nil {
+			perr = ref.Err
+		}
 		return true, perr
 	case perr != nil:
 		return t.broke(perr.Error())

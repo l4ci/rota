@@ -1203,3 +1203,15 @@ func TestAssignAfterReclaimMintsANewAttempt(t *testing.T) {
 		t.Errorf("a fresh assignment needs a fresh attempt: %q (old %q)", got, old)
 	}
 }
+
+// An empty test.fast puts the run-test.full instruction in the brief (#1169).
+func TestPointerBriefFullOnly(t *testing.T) {
+	on := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", tierBrief{Kind: "claude", Tier: "standard", FullOnly: true})
+	if !strings.Contains(on, "rota test run full") {
+		t.Errorf("brief lacks the test.full instruction:\n%s", on)
+	}
+	off := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", tierBrief{Kind: "claude", Tier: "standard"})
+	if strings.Contains(off, "rota test run full") {
+		t.Errorf("brief carries the test.full instruction without FullOnly:\n%s", off)
+	}
+}

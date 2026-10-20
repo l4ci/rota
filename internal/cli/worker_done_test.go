@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/proof"
 )
 
 // doneProject is a backlog project whose slot "ben" holds B07 on branch feat/x.
@@ -205,5 +207,17 @@ func TestWorkerDoneFencesAReclaimedSlot(t *testing.T) {
 		[]byte(`{"slots":[{"name":"ben","branch":"park/ben","state":"idle"}]}`), 0o644)
 	if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--attempt", "aaaa1111", "--json"); code != 4 {
 		t.Fatalf("exit %d: %s", code, out)
+	}
+}
+
+func TestMissingFastProofLatestRowWins(t *testing.T) {
+	const head = "abc1234def5678"
+	pass := proof.Row{Check: fastTierCheck, Result: "PASS", Sha: "abc1234"}
+	fail := proof.Row{Check: fastTierCheck, Result: "FAIL", Sha: "abc1234"}
+	if got := missingFastProof([]proof.Row{pass}, head, []string{"go test ./..."}); got != nil {
+		t.Errorf("PASS at head: missing = %v", got)
+	}
+	if got := missingFastProof([]proof.Row{pass, fail}, head, []string{"go test ./..."}); len(got) != 1 {
+		t.Errorf("PASS then FAIL at head must be unproven, missing = %v", got)
 	}
 }

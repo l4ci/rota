@@ -354,6 +354,8 @@ type tierBrief struct {
 	Attempt string
 	// Sibling and SiblingBranch are the other attempt of a best-of:2 issue.
 	Sibling, SiblingBranch string
+	// FullOnly: test.fast is empty, so the worker proves with test.full.
+	FullOnly bool
 }
 
 func (t tierBrief) text() string {
@@ -388,6 +390,9 @@ func (t tierBrief) text() string {
 	}
 	if t.Attempt != "" {
 		fmt.Fprintf(&b, "Your attempt id is %s. Pass `--attempt %s` to `rota worker done <slot>` and to `rota round report`. If either refuses it as a stale attempt, your assignment was reclaimed or transferred: stop, do not retry, and push or report nothing more. End every commit message with the trailer `Rota-Attempt: %s` (`git commit --trailer \"Rota-Attempt: %s\"`): the merge gate refuses a PR with a commit stamped by an attempt you no longer hold.\n", t.Attempt, t.Attempt, t.Attempt, t.Attempt)
+	}
+	if t.FullOnly {
+		b.WriteString("test.fast is empty here: run `rota test run full` and have it green before `rota worker done`. `worker done` skips the proof-row check, so missing proof rows are expected.\n")
 	}
 	fmt.Fprintf(&b, "Put `Worker tier: %s` in your PR body.\n", own)
 	return b.String()
@@ -789,7 +794,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 	d := &delivery{Slot: agent, Task: id, Branch: func() string { return res.Branch }, Kind: run.kind, Model: res.Model, Round: rnd,
 		Brief: func() string {
 			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
-			text := pointerBrief(agent, id, res.Branch, run.brief, o.Siblings, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()})
+			text := pointerBrief(agent, id, res.Branch, run.brief, o.Siblings, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, FullOnly: set.FullOnly, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()})
 			if hb := latestHandoffBranch(be, id); hb != "" {
 				text += fmt.Sprintf("\nAn earlier worker handed this issue back: read the latest `rota:handoff` comment on it. Its work is pushed on branch %s (origin/%s); fetch it before you start over.\n", hb, hb)
 			}

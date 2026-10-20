@@ -5,7 +5,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/hook"
+	"github.com/l4ci/rota/internal/limits"
 )
 
 // Actions of a usage Decision, the `action` of its limits entry.
@@ -83,5 +85,46 @@ func decideUsage(env Env, o Options, st *State, curDir *string, m hook.UsageHand
 		if err := env.Record(d); err != nil {
 			warn("limits not recorded: " + err.Error())
 		}
+	}
+}
+
+// UsageMarker finds the newest usage handoff written at or after since in the
+// session files whose cwd is the project root (D4).
+func UsageMarker(commonDir, root string) func(since time.Time) (hook.UsageHandoff, bool) {
+	return func(since time.Time) (hook.UsageHandoff, bool) {
+		var best hook.UsageHandoff
+		var bestAt time.Time
+		for _, st := range hook.Sessions(commonDir) {
+			if st.UsageHandoff == nil || !fsio.SameDir(st.Cwd, root) {
+				continue
+			}
+			at, err := time.Parse(time.RFC3339, st.UsageHandoff.At)
+			if err != nil || at.Before(since.Truncate(time.Second)) {
+				continue
+			}
+			if bestAt.IsZero() || at.After(bestAt) {
+				best, bestAt = *st.UsageHandoff, at
+			}
+		}
+		return best, !bestAt.IsZero()
+	}
+}
+
+// UsageRecorder writes a usage decision to the limits log in
+// .rota/workers.json: a switch is "switched", a same-account restart
+// "resumed".
+func UsageRecorder(root string, now func() time.Time) func(Decision) error {
+	return func(d Decision) error {
+		status := limits.StatusSwitched
+		if d.Action == ActionRestart {
+			status = limits.StatusResumed
+		}
+		t := limits.Time(now())
+		_, err := limits.Append(root, limits.Entry{
+			Session: limits.Orchestrator, Window: d.Marker.Window, Source: limits.SourceData,
+			DetectedAt: d.Marker.At, ResetsAt: d.Marker.ResetsAt, Action: d.Action,
+			Account: d.From, Status: status, ResolvedAt: t, Note: d.Note,
+		})
+		return err
 	}
 }

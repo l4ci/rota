@@ -60,6 +60,14 @@ func Errf(exit int, format string, a ...any) *Error {
 // WithHint returns e with a hint line added.
 func (e *Error) WithHint(hint string) *Error { e.Hint = hint; return e }
 
+// Refusal is a refused gate as a value: the exit-coded error the CLI returns
+// and the envelope it prints with it. A domain callback that can refuse
+// returns one beside its error, so the envelope never rides inside the error.
+type Refusal struct {
+	Err  *Error
+	Data any
+}
+
 // DataOf reads the failure data of the exit-coded error err wraps as a T. It
 // is the one typed accessor for refusal data: a caller names the type it
 // expects instead of asserting on Error.Data itself.
