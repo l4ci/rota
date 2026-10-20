@@ -65,3 +65,16 @@ func ClassifyVerdict(verdict string) VerdictMeaning {
 	}
 	return VerdictMeaning{Hold: true}
 }
+
+// Refused reports whether a gate or train verdict, with the error it came
+// with, is one the CLI turns into an exit-4 refusal.
+func (m VerdictMeaning) refused(err error) bool {
+	return m.Refusal && m.ViaError == (err != nil)
+}
+
+// Refused reports whether the gate's verdict, with the error Gate returned, is
+// a refusal: nothing landed and the CLI answers exit 4.
+func (r GateResult) Refused(err error) bool { return ClassifyVerdict(r.Verdict).refused(err) }
+
+// Refused is GateResult.Refused for the train.
+func (r TrainResult) Refused(err error) bool { return ClassifyVerdict(r.Verdict).refused(err) }

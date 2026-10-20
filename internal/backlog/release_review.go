@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/pystr"
@@ -32,8 +33,9 @@ type PRTracker interface {
 // resolve, before the proof check: branch is the PR's head branch ("" when
 // the forge reported none), for the verdict check (B3), and files lists the
 // PR's changed paths on demand, for merge approval (B1). A non-nil error stops
-// the merge with nothing changed.
-type MergeApprover func(branch string, files func() ([]string, error)) error
+// the merge with nothing changed; a refusal does the same and comes back in
+// MergeResult.Refusal.
+type MergeApprover func(branch string, files func() ([]string, error)) (*exitcode.Refusal, error)
 
 // ReleaseTracker is the part of tracker.Adapter the release calls need: the
 // native milestones and the issues in one.
@@ -110,6 +112,8 @@ type MergeResult struct {
 	SHA      string
 	Closed   []ItemRef
 	Unproven []ItemRef
+	// Refusal is the approver's refusal: nothing merged.
+	Refusal *exitcode.Refusal
 }
 
 // ItemRef is an item as an issue ID plus its type letter.
@@ -188,7 +192,11 @@ func (b *Issues) MergePRGated(pr int, items []string, approve MergeApprover) (Me
 		return MergeResult{}, err
 	}
 	if approve != nil {
-		if err := approve(found.Branch, func() ([]string, error) { return pt.PRFiles(b.ctx(), pr) }); err != nil {
+		ref, err := approve(found.Branch, func() ([]string, error) { return pt.PRFiles(b.ctx(), pr) })
+		if ref != nil {
+			return MergeResult{Refusal: ref}, nil
+		}
+		if err != nil {
 			return MergeResult{}, err
 		}
 	}

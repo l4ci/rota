@@ -108,6 +108,9 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 		return res, &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: err.Error()}
 	}
 	res.Lease, res.Outcome, res.LeaseState = l, out, roundlease.Live
+	if holder.Unverified {
+		res.Warnings = append(res.Warnings, fmt.Sprintf("could not read the process ancestry: the lease is bound to pid %d, likely a shell that exits with this command, so later round verbs may refuse it; set %s or pass --holder-pid", holder.PID, roundlease.HolderPIDEnv))
+	}
 	if out == roundlease.Reclaimed {
 		res.Reclaimed = stale
 		who := "an unreadable lease file"
