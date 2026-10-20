@@ -148,13 +148,45 @@ func FileStore(dir, legacyDir string) Store {
 
 type fileStore struct{ path, legacy string }
 
-// migrate moves the legacy file to path when path does not exist yet. The
+// ensureDir creates the data dir 0700 and tightens one that already exists:
+// MkdirAll leaves an existing dir's mode alone.
+func (f fileStore) ensureDir() error {
+	dir := filepath.Dir(f.path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	return os.Chmod(dir, 0o700)
+}
+
+// migrate moves the legacy file to path when path does not exist yet, under
+// the store's lock so two first-use processes cannot race the copy. The
 // result is always mode 0600, whatever the legacy file had; across devices it
 // is copied, then the original removed.
 func (f fileStore) migrate() error {
-	if f.legacy == "" || f.legacy == f.path {
+	if !f.needsMigration() {
 		return nil
 	}
+	if err := f.ensureDir(); err != nil {
+		return err
+	}
+	return fsio.Locked(f.path, fsio.LockTimeout, f.moveLegacy)
+}
+
+// needsMigration is the cheap unlocked check: false for no legacy file, or a
+// store file already in place.
+func (f fileStore) needsMigration() bool {
+	if f.legacy == "" || f.legacy == f.path {
+		return false
+	}
+	if _, err := os.Stat(f.path); err == nil {
+		return false
+	}
+	_, err := os.Stat(f.legacy)
+	return !errors.Is(err, os.ErrNotExist)
+}
+
+// moveLegacy is the migration proper; the caller holds the store's lock.
+func (f fileStore) moveLegacy() error {
 	if _, err := os.Stat(f.path); err == nil {
 		return nil
 	}
@@ -163,9 +195,6 @@ func (f fileStore) migrate() error {
 		return nil
 	}
 	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(f.path), 0o700); err != nil {
 		return err
 	}
 	if os.Rename(f.legacy, f.path) == nil {
@@ -235,13 +264,13 @@ func (f fileStore) Delete(_ context.Context, name string) error {
 
 // update is a locked read-modify-write that writes a 0600 file atomically.
 func (f fileStore) update(mutate func(*jsonx.Object)) error {
-	if err := f.migrate(); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(f.path), 0o700); err != nil {
+	if err := f.ensureDir(); err != nil {
 		return err
 	}
 	return fsio.Locked(f.path, fsio.LockTimeout, func() error {
+		if err := f.moveLegacy(); err != nil {
+			return err
+		}
 		doc := jsonx.NewObject()
 		if raw, err := os.ReadFile(f.path); err == nil {
 			v, derr := jsonx.Decode(raw)
