@@ -107,7 +107,10 @@ func waitingPRs(c *Ctx, root string) []waitingPR {
 }
 
 // defaultBase is the base a PR with no recorded base merges into, "" when it
-// cannot be resolved. Tolerant like the rest of the nudge.
+// cannot be resolved. Tolerant like the rest of the nudge. resolveBase already
+// tries git.baseBranch first, so "" means no base is knowable at all; empty-base
+// PRs then stay in their own group, apart from PRs with an explicit base, and
+// the nudge may under-report a train. Advice only, so that degrade is accepted.
 func defaultBase(c *Ctx, root string) string {
 	base, ok, err := resolveBase(c.Context(), root)
 	if err != nil || !ok {
