@@ -130,7 +130,9 @@ EOF
   bindir=$prefix/bin
   mkdir -p "$bindir" 2>/dev/null || die "cannot create $bindir" "pass --prefix with a writable directory"
   # Traps go in before mktemp: a signal that lands while it runs still exits,
-  # and the EXIT trap skips the rm while $work is still unset.
+  # and the EXIT trap skips the rm while $work is still unset. Clear $work first:
+  # an inherited value would otherwise make the trap remove that directory.
+  work=
   trap 'if [ -n "${work:-}" ]; then rm -rf "$work"; fi' EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
