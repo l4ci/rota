@@ -21,7 +21,6 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/postgate"
 	"github.com/l4ci/rota/internal/ship"
-	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -752,12 +751,17 @@ func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
 	}
 	approve := func(t worker.GateTarget, files func() ([]string, error)) (*exitcode.Refusal, error) {
 		req := o.Approval
-		req.Thread = func() (approvalThread, error) { return targetApprovalThread(t) }
+		req.Thread = func() (worker.ApprovalThread, error) { return worker.TargetApprovalThread(t) }
+		req.GateSends = true
 		return clearMerge(c, policy, o.Slot+" into "+o.Base, o.Confirm, req, files, nil)
+	}
+	var escalate *worker.ApprovalEscalation
+	if o.Approval.Escalate {
+		escalate = approvalEscalation(c, policy)
 	}
 	ctx, stop := workerContext()
 	defer stop()
-	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, Prune: o.Prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block, CheckReviews: true, ItemBody: lazyItemBody(c, root)})
+	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, Prune: o.Prune, Approve: approve, Escalate: escalate, Verdict: shipVerdict(c, root, root).Block, CheckReviews: true, ItemBody: lazyItemBody(c, root)})
 	run := gateRun{Result: r, Err: err, Issue: r.Issue, Refused: r.Refused(err)}
 	if run.Refused || err != nil || o.CheckOnly {
 		return run
@@ -828,43 +832,4 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		e.Hint = r.Hint
 		return res, e
 	}
-}
-
-// slotApprovalThread is the approval thread of a worker gate (C5): the slot's
-// recorded PR, else the slot's issue. The argument may also be a PR ref, which
-// resolves to a queued PR record. Neither is exit 2.
-func slotApprovalThread(root, slot string) (approvalThread, error) {
-	reg, err := worker.LoadRegistry(root)
-	if err != nil {
-		return approvalThread{}, err
-	}
-	t, err := reg.GateTargetAny(slot)
-	if err != nil {
-		var we *exitcode.Error
-		if errors.As(err, &we) && we.Exit == exitcode.ExitResolution {
-			return approvalThread{}, Resolution("%s", we.Message)
-		}
-		return approvalThread{}, err
-	}
-	return targetApprovalThread(t)
-}
-
-// targetApprovalThread is the approval thread of a resolved gate target: its
-// recorded PR, else its issue. A queued record's slot has moved on, so its
-// thread names none.
-func targetApprovalThread(t worker.GateTarget) (approvalThread, error) {
-	slot := t.Name
-	if n, ok := worker.PRRefNumber(t.PR); ok {
-		return approvalThread{Kind: "pr", Number: n, Slot: slot, Title: fmt.Sprintf("Merge approval: PR #%d", n)}, nil
-	}
-	if k, ok := tracker.ParseKey(t.Issue); ok {
-		th := approvalThread{Kind: "issue", Slot: slot, Title: fmt.Sprintf("Merge approval: %s (%s)", slot, t.Branch)}
-		if n, isNum := k.Number(); isNum {
-			th.Number = n
-		} else {
-			th.Key = k
-		}
-		return th, nil
-	}
-	return approvalThread{}, Usage("--approval and --escalate need an approval thread: slot %s has no PR and no issue number or key", slot)
 }

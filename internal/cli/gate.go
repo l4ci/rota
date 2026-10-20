@@ -5,14 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // gateCommands is the `rota gate` group (B1, #54).
@@ -108,30 +107,16 @@ func mergePolicy(c *Ctx) (gate.MergePolicy, error) {
 	return p, err
 }
 
-// approvalThread is the forge thread a merge's approval request lives on (C5).
-type approvalThread struct {
-	Kind   string           // pr | issue
-	Number int              // the PR, or a numbered issue
-	Key    tracker.IssueKey // a key-based tracker's issue; empty for a numbered one
-	Slot   string
-	Title  string
-}
-
-// Ref is the thread's number as users read it: `#12`, or the key PROJ-123.
-func (t approvalThread) Ref() string {
-	if t.Key != "" {
-		return t.Key.Ref()
-	}
-	return "#" + strconv.Itoa(t.Number)
-}
-
 // approvalReq is --approval and --escalate on a merge verb. Thread resolves
 // lazily, only once the policy covers the merge; an error from it (exit 2:
 // the merge has no thread) stops the verb. The zero value is neither flag.
 type approvalReq struct {
 	ID       string
 	Escalate bool
-	Thread   func() (approvalThread, error)
+	// GateSends says the worker gate sends the request itself on a refusal
+	// (worker.GateOpts.Escalate), so clearMerge only resolves the thread.
+	GateSends bool
+	Thread    func() (worker.ApprovalThread, error)
 }
 
 // approvalFlags defines --approval and --escalate next to --confirm and
@@ -185,7 +170,7 @@ func approvalFail(extra *jsonx.Object, msg string, fields ...any) (Result, error
 // approvalConfirm turns --approval <id> into the confirmation the gate takes:
 // the answered escalation on this merge's thread whose answer the allowlist
 // approves. It reads the registry only.
-func approvalConfirm(c *Ctx, id string, th approvalThread, extra *jsonx.Object) (gate.Confirm, Result, error) {
+func approvalConfirm(c *Ctx, id string, th worker.ApprovalThread, extra *jsonx.Object) (gate.Confirm, Result, error) {
 	root, err := c.Root()
 	if err != nil {
 		return gate.Confirm{}, Result{}, err
@@ -221,54 +206,47 @@ func approvalConfirm(c *Ctx, id string, th approvalThread, extra *jsonx.Object) 
 	return gate.Confirm{Given: true, Note: body, Escalation: id}, Result{}, nil
 }
 
-// approvalRequestBody is the escalation body: the policy, then the reply
-// words from the allowlist.
-func approvalRequestBody(p gate.MergePolicy, hit []string) string {
-	var b strings.Builder
-	if p.Mode == gate.MergePaths {
-		b.WriteString("Merge policy `paths`: these changed files need approval:\n")
-		for _, f := range hit {
-			b.WriteString("- " + f + "\n")
-		}
-	} else {
-		b.WriteString("Merge policy `all`: every merge needs approval.\n")
+// approvalForge is the escalation registry and forge behind a merge's approval
+// request: the worker.ApprovalEscalator the cli wires.
+type approvalForge struct{ c *Ctx }
+
+func (f approvalForge) Pending(th worker.ApprovalThread) (any, bool, error) {
+	root, err := f.c.Root()
+	if err != nil {
+		return nil, false, err
 	}
-	var words []string
-	for _, w := range append(append([]string{}, escalation.ApprovalWords...), escalation.ApprovalPhrase) {
-		words = append(words, "`"+w+"`")
+	e, ok := escalation.PendingOn(escalation.Load(root), th.Kind, th.Ref())
+	if !ok {
+		return nil, false, nil
 	}
-	last := len(words) - 1
-	fmt.Fprintf(&b, "\nReply %s or %s to merge. Any other reply holds the merge.", strings.Join(words[:last], ", "), words[last])
-	return b.String()
+	return e.Object(), true, nil
 }
 
-// approvalEscalate sends the approval request on the thread, or reuses the
-// pending one, and returns the entry for the refusal data. A failure is a
-// warning and nil: the refusal stands.
-func approvalEscalate(c *Ctx, p gate.MergePolicy, hit []string, th approvalThread) any {
-	root, err := c.Root()
+func (f approvalForge) Send(th worker.ApprovalThread, body string) (any, []string, error) {
+	root, err := f.c.Root()
 	if err != nil {
-		c.Warn("approval request not sent: %v", err)
-		return nil
+		return nil, nil, err
 	}
-	if e, ok := escalation.PendingOn(escalation.Load(root), th.Kind, th.Ref()); ok {
-		return e.Object()
-	}
-	env := c.deps().escalationEnv()
+	env := f.c.deps().escalationEnv()
 	if env.Forge == nil {
-		env.Forge = escalationForge(c)
+		env.Forge = escalationForge(f.c)
 	}
-	res, err := escalation.Send(c.Context(), env, root, escalation.SendOpts{
-		Number: th.Number, Key: th.Key, PR: th.Kind == "pr", Slot: th.Slot, Title: th.Title, Body: approvalRequestBody(p, hit),
+	res, err := escalation.Send(f.c.Context(), env, root, escalation.SendOpts{
+		Number: th.Number, Key: th.Key, PR: th.Kind == "pr", Slot: th.Slot, Title: th.Title, Body: body,
 	})
-	for _, w := range res.Warnings {
-		c.Warn("%s", w)
-	}
 	if err != nil {
-		c.Warn("approval request not sent: %v", err)
-		return nil
+		return nil, res.Warnings, err
 	}
-	return res.Entry.Object()
+	return res.Entry.Object(), res.Warnings, nil
+}
+
+func (approvalForge) ReplyWords() []string {
+	return append(append([]string{}, escalation.ApprovalWords...), escalation.ApprovalPhrase)
+}
+
+// approvalEscalation is the worker's escalation step wired to this verb.
+func approvalEscalation(c *Ctx, p gate.MergePolicy) *worker.ApprovalEscalation {
+	return &worker.ApprovalEscalation{Esc: approvalForge{c}, Policy: p, Warn: c.Warn}
 }
 
 // clearMerge applies the merge-approval gate: files lists the merge's changed
@@ -289,7 +267,7 @@ func clearMerge(c *Ctx, p gate.MergePolicy, target string, conf gate.Confirm, re
 	if !covered {
 		return nil, nil
 	}
-	var th approvalThread
+	var th worker.ApprovalThread
 	if req.ID != "" || req.Escalate {
 		var err error
 		if th, err = req.Thread(); err != nil {
@@ -304,9 +282,9 @@ func clearMerge(c *Ctx, p gate.MergePolicy, target string, conf gate.Confirm, re
 		}
 	}
 	res, err := clearGate(c, gate.MergeApproval, target, conf, hit, extra)
-	if err != nil && req.Escalate {
+	if err != nil && req.Escalate && !req.GateSends {
 		if d, ok := res.Data.(*jsonx.Object); ok {
-			if e := approvalEscalate(c, p, hit, th); e != nil {
+			if e := approvalEscalation(c, p).EscalateApproval(hit, th); e != nil {
 				d.Set("escalation", e)
 			}
 		}
