@@ -29,6 +29,8 @@ The report ends with one verdict (`PASS` / `CONCERNS` / `FAIL`) with file:line e
 | `CONCERNS` | Issues found, but not blocking. You can proceed or fix first. |
 | `FAIL` | Integration is blocked. |
 
+Each finding is blocking or not. By default `blocker` and `major` findings block and `minor` and `info` do not. Only blocking findings are relayed to a round worker and count toward a bounce. Non-blocking findings above `info` are deferred: `rota verdict add --file-deferred --pr <ref>` files each one as a task item related to the PR instead of relaying it.
+
 You can run `/rota-review` at any time on a branch, not only before shipping. On the [issue backend](issue-backend.md), `/rota-review --queue` reviews the PRs waiting on `needs-review` items and merges the ones that pass.
 
 ## 🚢 /rota-ship

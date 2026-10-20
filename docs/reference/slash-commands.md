@@ -83,6 +83,10 @@ After publishing, an always-manual gate offers to close any upstream GitHub/GitL
 
 Staff-engineer review of a feature branch before it leaves your machine: scopes the diff, pulls relevant `KNOWLEDGE.md` topics, returns PASS / CONCERNS / FAIL with file-and-line evidence. Read-only; no mutations, no commits. On the issue backend, `--queue` instead works through every `needs-review` item's open PR or MR and merges the ones that pass. See [review and ship](../usage/review-and-ship.md) for the full flow.
 
+## /rota-capture --triage
+
+Vets tracker issues filed by someone else: redundancy search, prior-decision check and, for bugs, a bounded reproduce. Creates no item. Each issue ends in one outcome you confirm: closed with the reason, `needs-info` with a question comment, or ready. See [capturing work](../usage/capturing-work.md#triaging-an-issue-someone-else-filed).
+
 ## /rota-capture --remove
 
 Removes a captured backlog item and cleans up its dependencies in one operation, through `rota item rm`. File backend only; on the issue backend close the issue with `rota item complete <ID> --reason dropped` instead. Strips the item's entry from `BACKLOG.md`, removes `Related:` cross-references that point to it from other items, and deletes any matching detail file (`.rota/bugs/`, `.rota/features/`, `.rota/tasks/`) and plan file (`.rota/plans/`). An item active in `status.json` is refused on apply until its stream is dropped with `rota status rm <branch>`.

@@ -454,7 +454,7 @@ A statusline command, not a query: it prints nothing of its own, always exits 0 
 
 | Usage | What it does |
 |---|---|
-| `rota verdict add [<branch>] --kind <review-spec\|review-quality\|second-opinion\|qa> --verdict <verdict> [--body-file <path\|->]` | record a verdict for a branch |
+| `rota verdict add [<branch>] --kind <review-spec\|review-quality\|second-opinion\|qa> --verdict <verdict> [--body-file <path\|->] [--file-deferred --pr <ref>]` | record a verdict for a branch; `--file-deferred` files each deferred (non-blocking, above `info`) finding as a task item related to the PR |
 | `rota verdict show [<branch>]` | latest verdict of each kind for a branch |
 | `rota verdict route [<branch>] --for <ship-review\|ship-second-opinion\|ship-qa\|queue>` | next step for a consumer of a branch's verdict |
 
