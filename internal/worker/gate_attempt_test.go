@@ -71,6 +71,17 @@ func TestGateRefusesACommitFromASupersededAttempt(t *testing.T) {
 			w.setAttemptSlot(cur, base)
 			w.pushStamped("b.txt", old)
 		}, false, GateStaleAttempt},
+		{"commits merged in from the base are not judged", func(w *world) {
+			base := w.pushStamped("a.txt", old)
+			w.setAttemptSlot(cur, base)
+			os.WriteFile(filepath.Join(w.dir, "other.txt"), []byte("other\n"), 0o644)
+			gitq(w.t, w.dir, "add", "other.txt")
+			gitq(w.t, w.dir, "commit", "-q", "-m", "other work\n\n"+AttemptTrailer+": cccccccc")
+			gitq(w.t, w.dir, "push", "-q", "origin", "main")
+			gitq(w.t, w.worker, "fetch", "-q", "origin")
+			gitq(w.t, w.worker, "merge", "-q", "--no-edit", "origin/main")
+			w.pushStamped("b.txt", cur)
+		}, true, GateFresh},
 		{"inherited tip no longer an ancestor is not judged", func(w *world) {
 			w.pushStamped("a.txt", old)
 			w.setAttemptSlot(cur, strings.Repeat("0", 40))

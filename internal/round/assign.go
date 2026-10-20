@@ -631,6 +631,16 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	attempt, attemptBase := "", ""
 	if resuming {
 		attempt, attemptBase = slot.Attempt(), slot.AttemptBase()
+	} else {
+		// Work already on the branch (a handed-back issue) is an earlier attempt's.
+		// Read before the slot is reset onto the branch, which cuts a missing one
+		// from the base.
+		attemptBase = e.branchTip(ctx, root, res.Branch)
+		if hb := latestHandoffBranch(be, id); hb != "" {
+			// The brief sends the worker to the handed-back branch: its commits
+			// reach the new branch with the earlier attempt's trailers.
+			attemptBase = e.branchTip(ctx, root, hb)
+		}
 	}
 	if attempt == "" {
 		attempt = worker.NewAttempt()
@@ -664,10 +674,6 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 			return nil
 		}},
 		{name: "bind the slot", do: func() error {
-			if !resuming {
-				// Work already on the branch (a handed-back issue) is an earlier attempt's.
-				attemptBase = e.branchTip(ctx, root, res.Branch)
-			}
 			if err := editSlot(root, agent, func(s *worker.Slot) error {
 				s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: res.Model, TierReason: reason, SmokeSection: res.SmokeSection, Attempt: attempt, AttemptBase: attemptBase})
 				return nil
