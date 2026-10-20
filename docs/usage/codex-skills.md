@@ -11,7 +11,7 @@ rota skills install --scope project --agent codex  # this repo: .agents/skills
 
 So installed skills do not drift behind the binary, `rota skills install` writes each `SKILL.md` as a short stub (the default) that tells the agent to run `rota skills get <name>`. That prints the text embedded in the installed binary, a first line `Base directory for this skill: <dir>`, and the absolute paths of the files the text links to (`--references` lists a skill's reference files, `--reference <file>` prints one). The files live in a per-version tree in your user cache, so relative links resolve. Codex runs the command when it loads a skill. For a harness that cannot, `rota skills install --full` writes the full text and the references into the root. `rota skills list` names the embedded skills and the binary version.
 
-A stub root follows the binary. Run `rota skills update` only when `rota skills status` (or `rota doctor`) reports it stale, which for a stub means a skill was added or removed or its frontmatter changed; the report names the skill. A full root needs `rota skills update` after every upgrade. `update` keeps each root's recorded mode unless you pass `--stub` or `--full`.
+A stub root follows the binary. Run `rota skills update` only when `rota skills status` (or `rota doctor`) reports it stale, which for a stub means a skill was added or removed or its stub changed (frontmatter or stub text); the report names the skill. A full root needs `rota skills update` after every upgrade. `update` keeps each root's recorded mode unless you pass `--stub` or `--full`.
 
 This page is about calling the skills from Codex. To run Codex as a worker in a [parallel round](parallel-rounds.md), see [Codex workers](codex-workers.md).
 
