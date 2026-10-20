@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/exitmap"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/marker"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -273,7 +275,7 @@ func pendingData(id string) *jsonx.Object {
 // notify raises the herdr notification when the host is herdr: work.dispatch
 // is herdr or the process runs inside herdr, and the binary is installed.
 func notify(ctx context.Context, env Env, root, id string, o SendOpts, warns []string) (bool, []string) {
-	switch worker.ResolveHost(root, env.Getenv, env.LookPath) {
+	switch worker.ResolveHost(root, config.Load(rotatree.Config(root)), env.Getenv, env.LookPath) {
 	case host.Solo: // the PR comment is the only channel
 		return false, append(warns, "no notification: the round is solo, there is no herdr")
 	case host.Herdr:
