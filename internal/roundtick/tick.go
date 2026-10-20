@@ -88,6 +88,15 @@ type ReviewOutcome struct {
 	Detail string
 }
 
+// Reviewer is the adapter behind the architecture review. Facts reads the
+// counter, the pending items, the idle slots, and whether any candidate is
+// ready, and decides nothing; Mint creates the review items for the facts the
+// tick decided on and returns their ids.
+type Reviewer interface {
+	Facts(ctx context.Context) (a round.Architecture, ready bool, err error)
+	Mint(ctx context.Context, a round.Architecture) (minted []string, err error)
+}
+
 // Env is the outside world of a tick.
 type Env struct {
 	// Cap bounds assigns and merges per tick; <= 0 means DefaultCap.
@@ -114,13 +123,12 @@ type Env struct {
 	// (two for a best-of:2 issue). A *round.BlockedError (not ready after all,
 	// no slot) is a refusal, not a failure; "no round" is a failure.
 	Assign func(ctx context.Context, id string) (agents []string, err error)
-	// ReviewDue says an architecture review (#53) is due, at the
+	// Review supplies the architecture review (#53): the facts the decision
+	// rests on, and the mint. The tick decides with round.DecideReview, at the
 	// round.architectureEvery threshold or because a slot is idle with nothing
-	// assignable; Review then mints the items and returns their ids. nil
-	// ReviewDue means the round has no review. The minted items are assigned
-	// first, within the same cap.
-	ReviewDue func(ctx context.Context) (bool, error)
-	Review    func(ctx context.Context) (minted []string, err error)
+	// assignable, then mints. nil means the round has no review. The minted
+	// items are assigned first, within the same cap.
+	Review Reviewer
 	// ReviewLoop checks a done slot's PR for review input (round.reviewLoop);
 	// nil means the round has no review loop. A slot it relays, or holds, is not
 	// merged this tick; one it only reports (manual) is gated as before.
@@ -387,13 +395,15 @@ func (e Env) train(ctx context.Context, targets []string, base string) []Merged 
 // review mints the due architecture reviews. A failed mint is the
 // orchestrator's to look at, not a reason to stop the tick's other steps.
 func (e Env) review(ctx context.Context, r *Result) ([]string, error) {
-	if e.ReviewDue == nil || e.Review == nil {
+	if e.Review == nil {
 		return nil, nil
 	}
-	due, err := e.ReviewDue(ctx)
+	a, ready, err := e.Review.Facts(ctx)
 	var ids []string
-	if err == nil && due {
-		ids, err = e.Review(ctx)
+	if err == nil {
+		if a = round.DecideReview(a, ready); a.Due {
+			ids, err = e.Review.Mint(ctx, a)
+		}
 	}
 	if err != nil {
 		r.NeedsYou = append(r.NeedsYou, Item{"architecture-review", "mint", strutil.FirstNonEmpty(strutil.FirstLine(err.Error()), "the review could not be minted")})
