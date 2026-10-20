@@ -15,10 +15,10 @@ import (
 // name that yields an issue number is repairable (adopt); the rest need
 // `rota worker adopt --issue`.
 func (e Env) findUnregisteredBranches(ctx context.Context, root string, rep *Report, reg worker.Registry) {
-	if e.AdoptPattern == "" {
+	if e.Round.AdoptPattern == "" {
 		return
 	}
-	if _, err := path.Match(e.AdoptPattern, ""); err != nil {
+	if _, err := path.Match(e.Round.AdoptPattern, ""); err != nil {
 		rep.Warnings = append(rep.Warnings, fmt.Sprintf("round.adoptPattern: %v", err))
 		return
 	}
@@ -36,7 +36,7 @@ func (e Env) findUnregisteredBranches(ctx context.Context, root string, rep *Rep
 		if name == "HEAD" || seen[name] || held[name] || name == e.Base || worker.IsPark(name) {
 			continue
 		}
-		if ok, _ := path.Match(e.AdoptPattern, name); !ok {
+		if ok, _ := path.Match(e.Round.AdoptPattern, name); !ok {
 			continue
 		}
 		seen[name] = true
@@ -66,6 +66,6 @@ func (e Env) adoptBranch(ctx context.Context, root string, f Finding) error {
 			return fmt.Errorf("could not create local branch %s from origin", f.branch)
 		}
 	}
-	_, err := e.Adopt(ctx, root, e.Board, AdoptOpts{Ref: f.branch, Issue: f.Issue, Shared: e.SharedPaths})
+	_, err := e.Adopt(ctx, root, e.Board, AdoptOpts{Ref: f.branch, Issue: f.Issue, Shared: e.Round.SharedPaths})
 	return err
 }

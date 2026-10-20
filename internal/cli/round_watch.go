@@ -53,7 +53,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 		}
 		set, err := roundcfg.Load(root)
 		if err != nil {
-			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
+			return Result{}, Usage("%s", err.Error())
 		}
 		if *autopilot && !set.Autopilot {
 			return Result{}, Refused("round.autopilot is off").WithHint("rota config set round.autopilot true")
@@ -134,7 +134,7 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 			out[roundwatch.EscalationStatusKey(r.Entry.ID)] = r.Status
 		}
 	}
-	if rep, err := c.deps().RoundEnv(ctx, root).Status(ctx, root); err == nil {
+	if rep, err := c.deps().RoundEnv(ctx, root).Status(ctx, root); err == nil { // a bad round.* key is noted once by the config load below
 		for _, r := range rep.Rows {
 			if r.PR != "" && r.PRState != "" {
 				out[roundwatch.PRStateKey(r.Name)] = r.PRState

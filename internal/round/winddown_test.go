@@ -315,3 +315,24 @@ func TestWindDownLeavesExternalSlotsAloneWhenStatusIsUnreadable(t *testing.T) {
 		t.Errorf("released without proof of a merge: %v", outcomes(res))
 	}
 }
+
+// A bad round.* key refuses the wind-down with a usage error before anything
+// is parked or released, instead of losing the merge evidence silently.
+func TestWindDownRefusesOnInvalidRoundConfig(t *testing.T) {
+	f := newAssignFixture(t)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	f.env.RoundErr = errors.New(`round.stallMinutes must be a number (got "soon")`)
+	_, err := f.windDown(nil)
+	var ee *exitcode.Error
+	if !errors.As(err, &ee) || ee.Exit != exitcode.ExitUsage || !strings.Contains(ee.Message, "round.stallMinutes") {
+		t.Fatalf("err = %v, want a usage error naming round.stallMinutes", err)
+	}
+	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.Task() == "" {
+		t.Error("nothing may be parked before the refusal")
+	}
+	if _, st, _ := f.env.ReadLease(bg, f.root); st == roundlease.None {
+		t.Error("the lease must be kept")
+	}
+}
