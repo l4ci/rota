@@ -13,6 +13,7 @@ What each `/rota-*` skill does, one line each. For details: [`reference/slash-co
 - **`/rota-work`**: execute the plan in parallel with per-task commits. `--preview` for a read-only peek. No argument: reconcile the backlog and suggest the next item.
 - **`/rota-debug`**: systematic bug cycle. Reproduce, hypothesize, fix.
 - **`/rota-orchestrate`**: run a parallel round: choose the slate, route workers, merge. The `rota round` verbs do the mechanics.
+- **`/rota-answer`**: in a round, answer the pending decisions one by one.
 
 ## Review & ship
 - **`/rota-review`**: one review pass (spec match and code quality).
