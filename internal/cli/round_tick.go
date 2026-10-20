@@ -84,10 +84,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	ctx := c.Context()
 	renv := withBoard(c, root, accountedRoundEnv(c, ctx, root))
 
-	e := roundtick.Env{Cap: set.AutopilotCap, HumanMerge: policy.Mode != gate.MergeNone}
-	if e.Cap == 0 {
-		e.Cap = roundtick.DefaultCap
-	}
+	e := roundtick.Env{Cap: set.AutopilotCap, MergeApproval: policy.Mode, Batch: set.Batch}
 	e.Capped = quotaCapped(renv, root, set)
 	// Tolerant: a tick callback with no error return; the tick reconciles strictly.
 	e.Slots = func() []roundtick.Slot {
@@ -125,9 +122,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	if !ok {
 		return roundtick.Result{}, &Error{Exit: ExitInternal, Message: "the backlog backend has no workflow"}
 	}
-	if set.Batch > 0 {
-		e.BatchFull = func(context.Context) bool { return round.OpenItems(root, board) >= set.Batch }
-	}
+	e.OpenItems = func(context.Context) int { return round.OpenItems(root, board) }
 	e.Candidates = func(ctx context.Context) ([]roundtick.Candidate, error) {
 		cs, err := renv.RoundCandidates(ctx, root, be, set, "")
 		if err != nil {
@@ -139,12 +134,15 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		}
 		return out, nil
 	}
+	// The architecture is read once per tick: ReviewDue stores it for Review.
+	var arch round.Architecture
+	e.ReviewDue = func(context.Context) (bool, error) {
+		var err error
+		arch, err = architectureFor(c, root, set)
+		return arch.Due, err
+	}
 	e.Review = func(ctx context.Context) ([]string, error) {
-		a, err := architectureFor(c, root, set)
-		if err != nil || !a.Due {
-			return nil, err
-		}
-		return renv.MintReview(ctx, root, board, a, round.Current(root))
+		return renv.MintReview(ctx, root, board, arch, round.Current(root))
 	}
 	// Assign takes no tier, no kind and never accepts overlap: the round's
 	// defaults, and only a candidate that is ready as it stands.

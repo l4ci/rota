@@ -472,11 +472,16 @@ func gateRelayEcho(t pollTarget, st, ev, text string, lines int) (string, string
 	return StateBusy, relayEchoEvidence
 }
 
-// doneEventAfterRelay: the slot's standing event is a `worker done` stamped
-// after the pending relay went out.
+// doneEventAfterRelay: the slot's standing event is a `worker done` sent after
+// the pending relay went out. The event's seq decides it, since stamps have
+// second precision and a stale done can share the relay's second; a relay
+// recorded before the seq existed falls back to the stamp.
 func doneEventAfterRelay(t pollTarget) bool {
 	if t.ev == nil || t.ev.Kind != EventDone {
 		return false
+	}
+	if t.relayEvSeq >= 0 {
+		return t.ev.Seq > t.relayEvSeq
 	}
 	ts, err := stamp.Parse(t.ev.TS)
 	return err == nil && !ts.Before(t.relaySentAt)
@@ -912,6 +917,7 @@ type pollTarget struct {
 	relayPending int
 	relaySeen    bool      // its `[relay K]` line has been seen in a capture
 	relaySentAt  time.Time // when it went out
+	relayEvSeq   int       // the slot's event id when it went out; -1 when unrecorded
 	relayMarker  bool      // set by classify: the last capture shows the line
 	relays       int
 	turnSeq      int
@@ -925,7 +931,7 @@ type pollTarget struct {
 
 func slotTarget(s *Slot) pollTarget {
 	return pollTarget{name: s.Name(), kind: s.HarnessKind(), handle: s.PaneHandle(), prev: s.State(), seen: s.Seen(), turnSeq: s.TurnSeq(),
-		relayPending: s.RelayPending(), relaySeen: s.RelayMarkerSeen(), relaySentAt: s.RelaySentAt(), relays: len(s.Relays()),
+		relayPending: s.RelayPending(), relaySeen: s.RelayMarkerSeen(), relaySentAt: s.RelaySentAt(), relayEvSeq: s.RelayEventSeq(), relays: len(s.Relays()),
 		ev: s.Event(), lastChange: parseStamp(s.ActiveAt())}
 }
 

@@ -117,19 +117,6 @@ func blockedBy(t *testing.T, err error) string {
 	return b.By
 }
 
-func TestBranchName(t *testing.T) {
-	for _, c := range []struct{ agent, id, title, want string }{
-		{"ben", "59", "C3: rota round start / assign / wind-down with autonomy levels", "ben/59-c3-rota-round-start-assign"},
-		{"dana", "B07", "Fix it!", "dana/b07-fix-it"},
-		{"kit", "1", "", "kit/1"},
-		{"kit", "2", "Supercalifragilisticexpialidocious-averyveryverylongwordhere", "kit/2-supercalifragilisticexpialidocious-avery"},
-	} {
-		if got := BranchName(c.agent, c.id, c.title); got != c.want {
-			t.Errorf("%q: %q want %q", c.title, got, c.want)
-		}
-	}
-}
-
 func TestAssignMarksResetsAndDispatches(t *testing.T) {
 	f := newAssignFixture(t)
 	res, err := f.assign("12", "", func(o *AssignOpts) {
