@@ -947,7 +947,15 @@ func overlapCheck(r Readiness) *Check {
 // pushed since root's last fetch); of origin's and the local tip it takes the
 // one that contains the other, origin's when they diverged.
 func (e Env) branchTip(ctx context.Context, root, branch string) string {
-	e.gitOut(ctx, root, "fetch", "-q", "origin", branch)
+	// The name can come from an issue comment (a handoff): refuse anything git
+	// would read as an option or that is not a branch name.
+	if branch == "" || strings.HasPrefix(branch, "-") {
+		return ""
+	}
+	if _, _, code := e.gitOut(ctx, root, "check-ref-format", "--branch", branch); code != 0 {
+		return ""
+	}
+	e.gitOut(ctx, root, "fetch", "-q", "origin", "--", "refs/heads/"+branch+":refs/remotes/origin/"+branch)
 	rev := func(ref string) string {
 		out, _, code := e.gitOut(ctx, root, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 		if code != 0 {

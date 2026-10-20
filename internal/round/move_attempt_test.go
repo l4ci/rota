@@ -165,3 +165,16 @@ func TestFreshRelayKeepsTheReceiversPR(t *testing.T) {
 		t.Fatalf("a later sender push must be refused: %+v", res)
 	}
 }
+
+// A branch name that git would read as an option never reaches git.
+func TestBranchTipRefusesOptionLikeNames(t *testing.T) {
+	f := newMoveFx(t)
+	for _, b := range []string{"--upload-pack=touch pwned", "-x", "a b", "a:b", ""} {
+		if got := f.env.branchTip(bg, f.root, b); got != "" {
+			t.Errorf("branchTip(%q) = %q", b, got)
+		}
+	}
+	if got := f.env.branchTip(bg, f.root, f.slot("ben").Branch()); got == "" {
+		t.Error("a real branch has a tip")
+	}
+}
