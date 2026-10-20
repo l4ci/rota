@@ -175,3 +175,35 @@ func TestConfigShowJSONMetadata(t *testing.T) {
 		t.Errorf("a non-enum key lists choices: %v", rows[0])
 	}
 }
+
+func TestConfigShowReportsEffectiveTierModels(t *testing.T) {
+	root := trackerProject(t, `{"models":{"worker":"opus"},"round":{"profile":"budget","tiers":{"claude":{"heavy":"fable"},"codex":{"light":"c1","standard":"c2","heavy":"c3"}}}}`+"\n")
+	code, env, _ := rotaRun(t, "--json", "-C", root, "config", "show")
+	if code != 0 {
+		t.Fatalf("show: %d %v", code, env)
+	}
+	got := map[string][2]any{}
+	rows, _ := get(dataOf(env), "entries").([]any)
+	for _, r := range rows {
+		k, _ := get(r, "key").(string)
+		if strings.HasPrefix(k, "round.tiers.") {
+			got[k] = [2]any{get(r, "effective"), get(r, "effectiveSource")}
+		}
+	}
+	want := map[string][2]any{
+		"round.tiers.claude.light":    {"haiku", "profile"},
+		"round.tiers.claude.standard": {"haiku", "profile"},
+		"round.tiers.claude.heavy":    {"fable", "explicit"},
+		"round.tiers.codex.standard":  {"c2", "explicit"},
+		"round.tiers.opencode.light":  {"", "harness default"},
+		"round.tiers.opencode.heavy":  {"", "harness default"},
+	}
+	for k, w := range want {
+		if got[k] != w {
+			t.Errorf("%s: got %v, want %v", k, got[k], w)
+		}
+	}
+	if len(got) != 9 {
+		t.Errorf("want all nine tier keys, got %d", len(got))
+	}
+}
