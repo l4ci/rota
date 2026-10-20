@@ -94,6 +94,36 @@ type Finding struct {
 	File     string `json:"file,omitempty"`
 	Line     int    `json:"line,omitempty"`
 	Detail   string `json:"detail,omitempty"`
+	// Blocking is whether a bounce relays this finding. ParseBody always sets
+	// it (explicit value, else from the severity); a record stored before the
+	// field existed has none and IsBlocking falls back to the severity.
+	Blocking *bool `json:"blocking,omitempty"`
+}
+
+// SeverityBlocks is the default of a finding's blocking flag: blocker and
+// major findings block, minor and info ones are deferred.
+func SeverityBlocks(severity string) bool { return severity == "blocker" || severity == "major" }
+
+// IsBlocking reports whether a bounce relays and counts f.
+func (f Finding) IsBlocking() bool {
+	if f.Blocking != nil {
+		return *f.Blocking
+	}
+	return SeverityBlocks(f.Severity)
+}
+
+// IsDeferred reports whether f is filed as an item instead of relayed: it does
+// not block and is more than an info note.
+func (f Finding) IsDeferred() bool { return !f.IsBlocking() && f.Severity != "info" }
+
+// HasBlocking reports whether any finding in list blocks.
+func HasBlocking(list []Finding) bool {
+	for _, f := range list {
+		if f.IsBlocking() {
+			return true
+		}
+	}
+	return false
 }
 
 // Declined is something the reviewer could not judge from the diff. It
@@ -132,6 +162,7 @@ type rawBody struct {
 		File     *string `json:"file"`
 		Line     *int    `json:"line"`
 		Detail   *string `json:"detail"`
+		Blocking *bool   `json:"blocking"`
 	} `json:"findings"`
 	Items []struct {
 		ID      *string `json:"id"`
@@ -183,7 +214,11 @@ func ParseBody(text string) (Body, error) {
 		if f.Title == nil || strings.TrimSpace(*f.Title) == "" {
 			return b, usage("invalid verdict body: %s.title is required", at)
 		}
-		out := Finding{Severity: *f.Severity, Title: strings.TrimSpace(*f.Title)}
+		blocking := SeverityBlocks(*f.Severity)
+		if f.Blocking != nil {
+			blocking = *f.Blocking
+		}
+		out := Finding{Severity: *f.Severity, Title: strings.TrimSpace(*f.Title), Blocking: &blocking}
 		if f.File != nil {
 			out.File = *f.File
 		}
