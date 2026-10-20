@@ -36,10 +36,11 @@ func (s *Set) Reference(name, file string) ([]byte, bool) {
 // Stubbed is the set a stub install writes: each SKILL.md keeps its
 // frontmatter, so the harness still discovers the skill, and its body tells
 // the agent to run `rota skills get`. The skill's other markdown files and
-// references go, since the verb serves them. The digest stays the full set's:
-// a stub defers to the binary, so it is as current as the binary is.
+// references go, since the verb serves them. Its digest covers only what the
+// stub carries (the skill set, each frontmatter, the agent policies): a stub
+// root is as current as that, however the bodies change.
 func (s *Set) Stubbed() (*Set, error) {
-	out := &Set{files: map[string][]byte{}, skills: s.skills, digest: s.digest}
+	out := &Set{files: map[string][]byte{}, skills: s.skills}
 	for _, p := range s.paths {
 		skill, rest, _ := strings.Cut(p, "/")
 		switch {
@@ -57,7 +58,18 @@ func (s *Set) Stubbed() (*Set, error) {
 		out.paths = append(out.paths, p)
 	}
 	sort.Strings(out.paths)
+	out.digest = digestOf(out.paths, out.files)
 	return out, nil
+}
+
+// StubDigest identifies what a stub install of the set writes; "" when a
+// skill has no frontmatter to keep.
+func (s *Set) StubDigest() string {
+	st, err := s.Stubbed()
+	if err != nil {
+		return ""
+	}
+	return st.digest
 }
 
 func stub(skill string, full []byte) ([]byte, error) {

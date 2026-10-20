@@ -2,6 +2,7 @@ package skills
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -689,5 +690,67 @@ func TestLegacyManifestIsFull(t *testing.T) {
 	}
 	if isStub(skillText(t, r, "rota-a/SKILL.md")) {
 		t.Error("update converted a legacy (full) root to stub")
+	}
+}
+
+const fm = "---\nname: %s\ndescription: %s\n---\n"
+
+func stubSet(t *testing.T, a, b string, extra map[string]string) *Set {
+	t.Helper()
+	m := map[string]string{
+		"rota-a/SKILL.md": fmt.Sprintf(fm, "rota-a", "A.") + a,
+		"rota-b/SKILL.md": fmt.Sprintf(fm, "rota-b", "B.") + b,
+	}
+	for k, v := range extra {
+		m[k] = v
+	}
+	return loadFake(t, m)
+}
+
+func stubRootStatus(t *testing.T, old, now *Set) RootStatus {
+	t.Helper()
+	r := modeRoot(t)
+	if _, err := old.Install(r, Options{Mode: ModeStub}); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := now.Status(r, "v2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rep.Roots[0]
+}
+
+func TestStubRootCurrentAfterBodyOnlyChange(t *testing.T) {
+	old := stubSet(t, "# a\n", "# b\n", nil)
+	now := stubSet(t, "# a rewritten\nmore text\n", "# b2\n", map[string]string{"references/y.md": "changed\n"})
+	if old.Digest() == now.Digest() {
+		t.Fatal("test setup: full digests must differ")
+	}
+	if st := stubRootStatus(t, old, now); !st.Current || len(st.Changed) != 0 || st.Mode != ModeStub {
+		t.Errorf("stub root reported stale after a body-only change: %+v", st)
+	}
+	// A full root is stale after the same change.
+	r := modeRoot(t)
+	old.Install(r, Options{Mode: ModeFull})
+	if rep, _ := now.Status(r, "v2"); rep.Roots[0].Current {
+		t.Error("full root reported current after a body change")
+	}
+}
+
+func TestStubRootStaleNamesSkillOnFrontmatterChange(t *testing.T) {
+	old := stubSet(t, "# a\n", "# b\n", nil)
+	changed := stubSet(t, "# a\n", "# b\n", map[string]string{"rota-a/SKILL.md": fmt.Sprintf(fm, "rota-a", "A, with new triggers.") + "# a\n"})
+	st := stubRootStatus(t, old, changed)
+	if st.Current || len(st.Changed) != 1 || !strings.HasPrefix(st.Changed[0], "rota-a") {
+		t.Errorf("frontmatter change: %+v", st)
+	}
+	added := stubSet(t, "# a\n", "# b\n", map[string]string{"rota-c/SKILL.md": fmt.Sprintf(fm, "rota-c", "C.") + "# c\n"})
+	st = stubRootStatus(t, old, added)
+	if st.Current || len(st.Changed) != 1 || !strings.HasPrefix(st.Changed[0], "rota-c") || !strings.Contains(st.Changed[0], "added") {
+		t.Errorf("added skill: %+v", st)
+	}
+	st = stubRootStatus(t, added, old)
+	if st.Current || len(st.Changed) != 1 || !strings.HasPrefix(st.Changed[0], "rota-c") || !strings.Contains(st.Changed[0], "removed") {
+		t.Errorf("removed skill: %+v", st)
 	}
 }

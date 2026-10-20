@@ -3,6 +3,8 @@ package reap
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -544,5 +546,33 @@ func TestReapSkipsMergedBranchesNobodyAdopted(t *testing.T) {
 	want := []string{"branch:codex/issue-612", "branch:kit/9-old"}
 	if got := ids(find(t, in, KindBranch).Candidates); !reflect.DeepEqual(got, want) {
 		t.Fatalf("candidates = %v, want %v", got, want)
+	}
+}
+
+func TestReapPrunesOldSkillCache(t *testing.T) {
+	cache := t.TempDir()
+	for _, d := range []string{"0.18.0/rota-a", "0.19.0/rota-a", ".extract-123"} {
+		if err := os.MkdirAll(filepath.Join(cache, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	os.WriteFile(filepath.Join(cache, "stray-file"), []byte("x"), 0o644)
+	in := input(repo(nil, nil), nil, nil, nil)
+	in.SkillCache, in.SkillCacheKeep = cache, "0.19.0"
+	res := find(t, in, KindSkillCache)
+	if got := strings.Join(ids(res.Candidates), ","); got != "skillcache:0.18.0" {
+		t.Fatalf("candidates %s, want only the other version's tree", got)
+	}
+	if got := Apply(bg, in, res.Candidates); len(got.Failed) != 0 || len(got.Reaped) != 1 {
+		t.Fatalf("apply: %+v", got)
+	}
+	for d, want := range map[string]bool{"0.18.0": false, "0.19.0": true, ".extract-123": true, "stray-file": true} {
+		if _, err := os.Stat(filepath.Join(cache, d)); (err == nil) != want {
+			t.Errorf("%s exists=%v, want %v", d, err == nil, want)
+		}
+	}
+	in.SkillCache = ""
+	if got := find(t, in, KindSkillCache); len(got.Candidates) != 0 {
+		t.Errorf("no cache dir must find nothing: %v", ids(got.Candidates))
 	}
 }

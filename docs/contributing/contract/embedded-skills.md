@@ -21,18 +21,18 @@ F6a (#230, part of #44) makes `rota` the only artifact: the binary carries the s
 - **Proof** (`codex debug prompt-input`, Codex 0.159.2, CODEX_HOME unset, no model session): with the real HOME, Codex lists `~/.agents/skills` as skill root `r0`. After `rota skills install --agent codex` into a temp HOME, it lists all 16 rota skills from `<HOME>/.agents/skills`.
 
 ### rota skills install
-rota skills install [--scope user|project] [--agent claude|codex|all] [--overwrite] [--stub]
+rota skills install [--scope user|project] [--agent claude|codex|all] [--overwrite] [--stub | --full]
 repo: none
-data: {"roots": [{"root": string, "agent": "claude"|"codex", "scope": "user"|"project", "version": string, "digest": string, "files": [{"path": string, "status": "created"|"updated"|"unchanged"|"removed"|"replaced"|"edited"|"unmanaged"}]}], "kept"?: []string, "warnings"?: []string, "changed": bool}
+data: {"roots": [{"root": string, "agent": "claude"|"codex", "scope": "user"|"project", "version": string, "digest": string, "mode": "stub"|"full", "files": [{"path": string, "status": "created"|"updated"|"unchanged"|"removed"|"replaced"|"edited"|"unmanaged"}]}], "kept"?: []string, "warnings"?: []string, "changed": bool}
 exit: 4 when a path was kept (`blockedBy` `edited` or `unmanaged`, `changed` true when anything else was written); 3 when `--scope project` and the working directory is not in a git work tree; 5 when a root cannot be created or written
-note: runs without `.rota/`. Idempotent: on a root that already has a manifest it does what `update` does there. `files` lists only paths whose status is not `unchanged`, unless `--json` is given, where every path is listed. `--stub` (opt-in, never the default; #821) writes each `SKILL.md` as its frontmatter plus a body telling the agent to run `rota skills get <name>`, and drops the skill's other markdown and `references/`, which the verb serves. The manifest records the full set's digest, so a stub root is `current` as long as the binary is; a later install without `--stub` restores the full text. `--stub` is also accepted by `update`.
+note: runs without `.rota/`. Idempotent: on a root that already has a manifest it does what `update` does there. `files` lists only paths whose status is not `unchanged`, unless `--json` is given, where every path is listed. A stub install (the default since #1099; `--stub` is the explicit spelling) writes each `SKILL.md` as its frontmatter plus a body telling the agent to run `rota skills get <name>`, and drops the skill's other markdown and `references/`, which `get` serves from a per-version cache tree. `--full` writes the full text and references. The manifest records `mode` (`stub` or `full`; a manifest with none is `full`). A stub root records the stub digest, over the skill names, each frontmatter and the agent policies, so it is `current` unless a skill was added or removed or its frontmatter changed; `status` and `doctor` name those skills. `--stub` with `--full` exits 1. Both flags are also accepted by `update`.
 
 ### rota skills update
-rota skills update [--scope user|project] [--agent claude|codex|all] [--overwrite]
+rota skills update [--scope user|project] [--agent claude|codex|all] [--overwrite] [--stub | --full]
 repo: none
 data: as `skills install`
 exit: 1 when no root in scope has a manifest (`roots` empty; hint `run: rota skills install`); otherwise as `skills install`
-note: refreshes only roots that already have a manifest. With no flags, it covers every root in both scopes for the current directory, so `rota skills update` after an upgrade refreshes whatever was installed. It never creates a root.
+note: refreshes only roots that already have a manifest. With no flags, it covers every root in both scopes for the current directory, so `rota skills update` after an upgrade refreshes whatever was installed. Each root keeps the mode its manifest records unless `--stub` or `--full` switches it; `--stub` with `--full` exits 1. It never creates a root.
 
 ### rota skills list
 rota skills list
@@ -44,7 +44,7 @@ note: read-only. The skills embedded in this binary and the binary's version. Te
 ### rota skills get
 rota skills get <name> [--references | --reference <file>]
 repo: none
-data: `{"name": string, "text": string}`; with `--references` `{"name": string, "references": []string}`; with `--reference` `{"name": string, "reference": string, "text": string}`
+data: `{"name": string, "text": string}` where `text` starts with the line `Base directory for this skill: <dir>` (the skill's directory in `<user cache>/rota/skills/<version>/`, `ROTA_CACHE_DIR` replacing the user cache dir) and ends with `Files this skill links to:` and the absolute path of each relative link in the text (code spans, fences, URLs and anchors excluded); the tree is extracted once per version through a temp dir and a rename, and a cache that cannot be written prints the text with a warning and no header or footer; with `--references` `{"name": string, "references": []string}`; with `--reference` `{"name": string, "reference": string, "text": string}`
 exit: 2 on an unknown skill or reference (`hint` lists the known names) or when both flags are given
 note: read-only, reads the binary's embedded set (no second copy), so the text matches the verbs and flags the binary accepts. Text mode prints the file with its trailing newline trimmed (the printer adds one back). `--reference` takes a file name from `--references`, not a path.
 
