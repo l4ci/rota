@@ -432,11 +432,6 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	if anyMatch(rules.busy, own) {
 		return StateBusy, "pane shows: " + firstMatch(rules.busy, own)
 	}
-	// The count moves as tasks start and end; a fixed evidence keeps `round
-	// wait` from reporting the slot as changed.
-	if anyMatch(rules.background, own) {
-		return StateBusy, "pane shows background shells or monitors running"
-	}
 	if native == "working" {
 		return StateBusy, "herdr: agent working"
 	}
@@ -463,6 +458,12 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	}
 	if native == "unknown" {
 		return StateUnknown, "herdr cannot classify the agent — inspect the tab; not proof it finished"
+	}
+	// The footer outlives a dialog or a crash, so it only turns the final idle
+	// outcome into busy. The count moves as tasks start and end; a fixed
+	// evidence keeps `round wait` from reporting the slot as changed.
+	if anyMatch(rules.background, own) {
+		return StateBusy, "pane shows background shells or monitors running"
 	}
 	if staleDone {
 		return StateIdle, staleDoneEvidence

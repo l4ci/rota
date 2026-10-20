@@ -150,7 +150,7 @@ func (claude) PaneVocab() PaneVocab {
 		Busy: []string{`(?m)(?:\(|· )[^()\n]*esc to interrupt\s*(?:·[^()\n]*)?\)?\s*$`, `(?m)^\s*⎿\s+Running…`},
 		// The footer counts the session's own background tasks:
 		// `⏵⏵ bypass permissions on · 1 shell, 2 monitors`.
-		Background: []string{`(?m)^\s*⏵⏵[^\n]*[·,]\s*\d+ (?:shell|monitor)s?\b`},
+		Background: []string{`(?m)^\s*⏵⏵[^\n]*[·,]\s*[1-9]\d* (?:shell|monitor)s?\b`},
 	}
 }
 
