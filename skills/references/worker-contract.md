@@ -185,6 +185,8 @@ Work only this task, then stop.
 
 `rota worker poll` and `rota round wait` read `issues:#a,#b` as done with the issue list as evidence and record it on the slot instead of a PR. `rota round assign` (or `transfer`) onto that slot then closes the review item with a note listing the issues, releases its claim and frees the slot. Only a review item the round minted closes this way: a worker that reports issues on any other item is refused until it has a PR. Solo rounds record the same with `rota round report <slot> --state done --issues "#a,#b"`.
 
+After `ROTA-DONE <slot> issues:#a,#b`, the orchestrator reads the filed issues and runs `rota round accept <ID>` (add `--issues #a,#b` when the slot recorded none). It closes the item and frees the slot with no PR; assign or transfer onto the slot still closes it as a fallback.
+
 The two sentinels are the contract's load-bearing half. We own the worker's instructions, so state is declared, not inferred from prose, and `rota worker poll` is reliable where pattern-matching a TUI is not.
 
 ## Handling review feedback
