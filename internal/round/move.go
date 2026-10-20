@@ -854,9 +854,9 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	}
 
 	// The receiver resuming its transfer keeps the attempt its brief named.
-	attempt := ""
+	attempt, attemptBase := "", ""
 	if resuming {
-		attempt = receiver.Attempt()
+		attempt, attemptBase = receiver.Attempt(), receiver.AttemptBase()
 	}
 	if attempt == "" {
 		attempt = worker.NewAttempt()
@@ -896,8 +896,11 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 			return nil
 		}},
 		step{name: "bind the receiver", skip: moved, do: func() error {
+			if attemptBase == "" {
+				attemptBase = e.branchTip(ctx, root, branch)
+			}
 			err := editSlot(root, o.To, func(s *worker.Slot) error {
-				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: appliedModel, TierReason: reason, Attempt: attempt})
+				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: appliedModel, TierReason: reason, Attempt: attempt, AttemptBase: attemptBase})
 				s.SetBranch(branch)
 				return nil
 			})
@@ -936,6 +939,18 @@ func overlapCheck(r Readiness) *Check {
 		}
 	}
 	return nil
+}
+
+// branchTip is the full sha of a work branch's tip (origin's, else the local
+// one), "" when neither exists. A new attempt records it as the commits it
+// inherited, which keep their earlier attempts' trailers.
+func (e Env) branchTip(ctx context.Context, root, branch string) string {
+	for _, ref := range []string{"origin/" + branch, branch} {
+		if out, _, code := e.gitOut(ctx, root, "rev-parse", "--verify", "--quiet", ref+"^{commit}"); code == 0 && out != "" {
+			return strings.TrimSpace(out)
+		}
+	}
+	return ""
 }
 
 func (e Env) headLine(ctx context.Context, wt, ref string) string {

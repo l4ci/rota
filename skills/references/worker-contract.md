@@ -72,6 +72,9 @@ Work only this task, then stop.
   reclaimed or transferred your assignment: you are fenced. Stop at once, do not retry, do not
   push, open a PR or print `ROTA-DONE`, and print `ROTA-BLOCKED <slot>: attempt <id> is stale`
   as the last line. The fence refuses your results; it does not stop you, so stopping is your job.
+  Stamp every commit with it too: `git commit --trailer "Rota-Attempt: <id>"`. `rota worker gate`
+  refuses (`blockedBy: stale-attempt`) a PR with a commit after the branch tip you inherited that
+  carries another attempt's id, which catches a fenced worker that skipped the flag and pushed anyway.
 - Run TARGETED verification only: the files you touched. When the project sets
   `test.fast`, that is `rota test run fast`; otherwise pick the checks by hand. The full suite is the
   orchestrator's gate on the merged tree. Several workers running full suites at
