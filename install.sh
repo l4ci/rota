@@ -129,12 +129,15 @@ EOF
 
   bindir=$prefix/bin
   mkdir -p "$bindir" 2>/dev/null || die "cannot create $bindir" "pass --prefix with a writable directory"
-  work=$(mktemp -d "$bindir/.rota-install.XXXXXX") || die "cannot write to $bindir" "pass --prefix with a writable directory"
-  # A signal exits, which runs the EXIT trap: the temp dir never outlives us.
-  trap 'rm -rf "$work"' EXIT
+  # Traps go in before mktemp: a signal that lands while it runs still exits,
+  # and the EXIT trap skips the rm while $work is still unset. Clear $work first:
+  # an inherited value would otherwise make the trap remove that directory.
+  work=
+  trap 'if [ -n "${work:-}" ]; then rm -rf "$work"; fi' EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
   trap 'exit 129' HUP
+  work=$(mktemp -d "$bindir/.rota-install.XXXXXX") || die "cannot write to $bindir" "pass --prefix with a writable directory"
 
   printf 'Downloading %s from %s\n' "$asset" "$label"
   fetch "$base/$asset" "$work/$asset" || die "download failed: $base/$asset" "check the version exists and is published"
