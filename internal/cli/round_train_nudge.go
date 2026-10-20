@@ -132,6 +132,11 @@ func trainNudgeLines(ns []trainNudge) []string {
 
 // tickNeedsMerge is true when the tick left PRs for a person to merge
 // (ship.mergeApproval is not none), so the train is the orchestrator's to run.
+// `round watch` prints the train nudge only then, or when no tick ran: a tick
+// without merge items means the autopilot merges for itself (it trains several
+// PRs in one run, and lands a held one as a gate-failed item), so a nudge would
+// advise a merge it already owns. `round tick` prints no nudge; its report
+// carries the merge items themselves.
 func tickNeedsMerge(r roundtick.Result) bool {
 	for _, it := range r.NeedsYou {
 		if it.Kind == "merge" {
