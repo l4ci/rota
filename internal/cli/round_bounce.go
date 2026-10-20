@@ -64,7 +64,10 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 // the PR's current head judged it and none of their findings blocks: a nit does
 // not cost a bounce (#963). The branch is the named slot's, else the slot
 // holding the issue. Without a branch, a head, or a review verdict at that head
-// the bounce is not a verdict-driven one and counts as before.
+// the bounce is not a verdict-driven one and counts as before. A FAIL record,
+// or one with an item FAIL, always counts as blocking, findings or not. The
+// store is read under the plain branch key, so an umbrella root (keys
+// "<repo>:<branch>") finds no record and fails open: the bounce counts.
 func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
@@ -94,7 +97,7 @@ func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 		if !ok || !verdict.AtHead(r, head) {
 			continue
 		}
-		if verdict.HasBlocking(r.Findings) {
+		if r.Verdict == verdict.Fail || verdict.HasBlocking(r.Findings) || itemFailed(r) {
 			return nil
 		}
 		judged = true
@@ -104,6 +107,17 @@ func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 	}
 	return &Error{Exit: ExitRefused, Message: fmt.Sprintf("%s has no blocking finding in its current review verdicts: a bounce would relay only nits", issue),
 		Hint: "file the deferred findings with `rota verdict add --file-deferred`, or pass --force to bounce anyway"}
+}
+
+// itemFailed reports a per-item FAIL in r, a spec failure carried by items[]
+// alone, which the findings do not show.
+func itemFailed(r verdict.Record) bool {
+	for _, it := range r.Items {
+		if it.Verdict == verdict.Fail {
+			return true
+		}
+	}
+	return false
 }
 
 // recordBounce counts one bounce unless the item is already at max (0 = no
