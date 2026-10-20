@@ -275,6 +275,7 @@ var projectPathKeys = map[string]bool{"release.versionFile": true}
 var nonNegativeIntKeys = map[string]bool{
 	"plan.maxTasks":        true,
 	"plan.maxFilesPerTask": true,
+	"map.staleCommits":     true,
 }
 
 func isNonNegInt(n json.Number) bool {
