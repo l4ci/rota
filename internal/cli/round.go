@@ -25,5 +25,6 @@ func roundCommands() *Command {
 		{Name: "reclaim", Summary: "free a dead or stalled slot and make its issue assignable", Verb: roundReclaim},
 		{Name: "summary", Summary: "the round's issues, slots and accounts: wall time, bounces, gate outcome, quota share", Verb: roundSummaryVerb},
 		{Name: "pick", Summary: "best-of:2: name the attempt whose PR may merge, close the other with the reason", Verb: roundPick},
+		{Name: "accept", Summary: "close a finished architecture-review item without a PR and free its slot", Verb: roundAccept},
 	}}
 }
