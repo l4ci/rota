@@ -150,7 +150,13 @@ func (claude) LimitPhrases() []string { return SharedLimitPhrases() }
 // A turn in flight (a running command or monitor) shows `esc to interrupt` on
 // the status line while the pane itself may sit still between captures.
 func (claude) PaneVocab() PaneVocab {
-	return PaneVocab{LoggedOut: `Login expired|Please run /login`, Busy: []string{`(?m)(?:\(|· )[^()\n]*esc to interrupt\s*(?:·[^()\n]*)?\)?\s*$`, `(?m)^\s*⎿\s+Running…`}}
+	return PaneVocab{
+		LoggedOut: `Login expired|Please run /login`,
+		Busy:      []string{`(?m)(?:\(|· )[^()\n]*esc to interrupt\s*(?:·[^()\n]*)?\)?\s*$`, `(?m)^\s*⎿\s+Running…`},
+		// The footer counts the session's own background tasks:
+		// `⏵⏵ bypass permissions on · 1 shell, 2 monitors`.
+		Background: []string{`(?m)^\s*⏵⏵[^\n]*[·,]\s*[1-9]\d* (?:shell|monitor)s?\b`},
+	}
 }
 
 // Tiers: claude must name every tier, and an unset standard tier takes
