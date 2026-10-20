@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/tracker"
@@ -370,7 +371,7 @@ func TestGateBehaviourStepEnvironIsScrubbed(t *testing.T) {
 	var homeDuring bool
 	e := w.env(false)
 	e.Getenv = func(k string) string {
-		return map[string]string{"ROTA_GATE_SHA_WAIT": "0", "PATH": "/p", "HOME": "/h-real", "GH_TOKEN": "secret", "XDG_CONFIG_HOME": "/x"}[k]
+		return map[string]string{"ROTA_GATE_SHA_WAIT": "0", "PATH": "/p", "HOME": "/h-real", "GH_TOKEN": "secret", "XDG_CONFIG_HOME": "/x", "SSH_AUTH_SOCK": "/agent.sock"}[k]
 	}
 	e.Run = func(_ context.Context, name string, args, _ []string) (host.Result, error) {
 		if name != "go" || !slices.Equal(args, []string{"env", "GOCACHE", "GOMODCACHE", "GOPATH"}) {
@@ -418,7 +419,21 @@ func TestGateBehaviourStepEnvironIsScrubbed(t *testing.T) {
 	for _, kv := range got {
 		names = append(names, strings.SplitN(kv, "=", 2)[0])
 	}
-	want := []string{"GH_CONFIG_DIR", "GOCACHE", "GOPATH", "HOME", "PATH", "ROTA_DB_SUFFIX", "ROTA_PORT_BASE", "ROTA_PORT_BLOCK", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME"}
+	// git over ssh offers no identity and no agent; git reads no system config
+	// and never prompts (#899 decision, bounce 3)
+	for k, want := range map[string]string{
+		"GIT_SSH_COMMAND":     "ssh -o IdentitiesOnly=yes -o IdentityFile=/dev/null -F /dev/null",
+		"GIT_CONFIG_NOSYSTEM": "1",
+		"GIT_TERMINAL_PROMPT": "0",
+	} {
+		if env[k] != want {
+			t.Errorf("%s=%q, want %q", k, env[k], want)
+		}
+	}
+	if v, ok := env["SSH_AUTH_SOCK"]; ok {
+		t.Errorf("SSH_AUTH_SOCK=%q reached the step", v)
+	}
+	want := []string{"GH_CONFIG_DIR", "GIT_CONFIG_NOSYSTEM", "GIT_SSH_COMMAND", "GIT_TERMINAL_PROMPT", "GOCACHE", "GOPATH", "HOME", "PATH", "ROTA_DB_SUFFIX", "ROTA_PORT_BASE", "ROTA_PORT_BLOCK", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME"}
 	if !slices.Equal(names, want) || env["PATH"] != "/p" || env["GOCACHE"] != "/gc" || env["GOPATH"] != "/gp" || env["ROTA_PORT_BASE"] != "20100" {
 		t.Errorf("environ %q, want names %q", got, want)
 	}
@@ -435,12 +450,57 @@ func TestGateBehaviourHomeGoneAfterAFailedStep(t *testing.T) {
 	}
 }
 
+// The step's HOME is not the gate's: a file in the gate's HOME is not found
+// under the step's $HOME. Fails if the real HOME leaks into the step.
 func TestGateBehaviourStepSeesNoRealHome(t *testing.T) {
-	w, gate := behaviourWorld(t, "## Try it\n\n- test \"$HOME\" != \"$REAL\" && ls -A \"$HOME\" | wc -l\n  expect: 0\n")
-	t.Setenv("REAL", os.Getenv("HOME"))
-	_ = w
-	if res, err := gate(GateOpts{}); err != nil || res.Verdict != GatePass {
+	real := t.TempDir()
+	if err := os.WriteFile(filepath.Join(real, "gate-secret"), []byte("s3cret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", real)
+	w, _ := behaviourWorld(t, "## Try it\n\n- cat \"$HOME/gate-secret\" 2>/dev/null || echo no-secret\n  expect: no-secret\n")
+	e := w.env(false)
+	e.Getenv = func(k string) string {
+		return map[string]string{"ROTA_GATE_SHA_WAIT": "0", "PATH": os.Getenv("PATH"), "HOME": real}[k]
+	}
+	o := GateOpts{Slot: "w1", Base: "main", ItemBody: func(string) (string, bool, error) { return "", false, nil }}
+	if res, err := e.Gate(bg, w.dir, o); err != nil || res.Verdict != GatePass {
 		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+// A HOME the gate cannot remove is reported, not swallowed.
+func TestGateBehaviourHomeLeftBehindIsAWarning(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root removes a read-only dir")
+	}
+	w, gate := behaviourWorld(t, "## Try it\n\n- mkdir \"$HOME/d\" && touch \"$HOME/d/f\" && chmod 0500 \"$HOME/d\"\n")
+	t.Cleanup(func() {
+		ds, _ := filepath.Glob(filepath.Join(w.dir, ".rota", "qa-runs", "behaviour", "home-*", "d"))
+		for _, d := range ds {
+			os.Chmod(d, 0o700)
+		}
+	})
+	res, err := gate(GateOpts{})
+	if err != nil || res.Verdict != GatePass {
+		t.Fatalf("%+v %v", res, err)
+	}
+	found := false
+	for _, x := range res.Warnings {
+		found = found || strings.HasPrefix(x, "BEHAVIOUR-HOME w1 — cannot remove ")
+	}
+	if !found {
+		t.Errorf("no BEHAVIOUR-HOME warning: %q", res.Warnings)
+	}
+}
+
+// A step that times out keeps the output it wrote, with a line saying so.
+func TestExecShellEnvTimeoutKeepsOutput(t *testing.T) {
+	ctx, cancel := context.WithTimeout(bg, 300*time.Millisecond)
+	defer cancel()
+	out, code := execShellEnv(ctx, t.TempDir(), "echo before; sleep 5", nil)
+	if code == 0 || !strings.Contains(out, "before\n") || !strings.Contains(out, "[timed out: context deadline exceeded]") {
+		t.Errorf("code %d out %q", code, out)
 	}
 }
 

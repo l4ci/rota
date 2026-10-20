@@ -22,9 +22,10 @@ Workers do not run it. The same goes for `test.e2e`: the gate and the merge trai
 An item may carry a `## Try it` section: `- <command>` bullets, each optionally followed by `expect: <substring>` lines. After
 `test.full` and `test.e2e` pass, the gate runs the commands on the merged scratch tree, in order. Each runs with a scrubbed
 environment: `PATH`, an empty temp `HOME` (with the XDG and `GH_CONFIG_DIR` dirs inside it, removed when the run ends),
-the gate host's `GOCACHE`, `GOMODCACHE` and `GOPATH`, and the slot's `ROTA_PORT_BASE`, `ROTA_PORT_BLOCK` and `ROTA_DB_SUFFIX`.
-The environment carries no credentials and the step finds none under its `HOME`; it still runs as the gate's OS user, so a
-file that user can read stays readable by its absolute path. Output is capped at 4 MiB. The commands come from an issue
+the gate host's `GOCACHE`, `GOMODCACHE` and `GOPATH`, the slot's `ROTA_PORT_BASE`, `ROTA_PORT_BLOCK` and `ROTA_DB_SUFFIX`,
+and git hardening: `GIT_SSH_COMMAND` set to an ssh that offers no identity, `GIT_CONFIG_NOSYSTEM=1`, `GIT_TERMINAL_PROMPT=0`,
+and no `SSH_AUTH_SOCK`. No variable of the gate's own environment is passed on. This is not a sandbox, and the collaborator trust check below is the boundary. Two known gaps: ssh resolves `~` through passwd, not `$HOME`, so the gate user's `~/.ssh` stays readable; and `/proc/$PPID/environ` exposes the gate's own environment, tokens included. A step still runs as the gate's OS user, so any file that user can read is readable by its absolute path. Output is capped at 4 MiB;
+a step that times out keeps the output it wrote, ending in a `[timed out: ...]` line. The commands come from an issue
 body, so on a forge tracker they run only when the issue's author and its last editor are collaborators with write access
 or higher, judged on the same body that is then run; otherwise the gate says why in a `BEHAVIOUR-SKIP` note and goes on (a skip is not a failure). GitHub is the only
 tracker that can answer that; GitLab, Jira and Linear issues skip. A gate with no PR reads no origin refs and so no forge: a

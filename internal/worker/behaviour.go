@@ -117,6 +117,10 @@ func sectioned(body, ref string) (string, string, error) {
 	return body, "", nil
 }
 
+// behaviourGitSSH is the ssh git uses in a step: no identity file, no user
+// config. It narrows git's reach; it is no sandbox (see behaviourEnviron).
+const behaviourGitSSH = "ssh -o IdentitiesOnly=yes -o IdentityFile=/dev/null -F /dev/null"
+
 // behaviourStepTimeout bounds one Try it step.
 const behaviourStepTimeout = 5 * time.Minute
 
@@ -197,7 +201,11 @@ func (g *gate) behaviourRun(dir string) (bool, error) {
 	if err != nil {
 		return g.broke(fmt.Sprintf("cannot make an empty HOME for the Try it steps of %s: %v", ref, err))
 	}
-	defer os.RemoveAll(home)
+	defer func() {
+		if err := os.RemoveAll(home); err != nil {
+			g.res.Warnings = append(g.res.Warnings, fmt.Sprintf("BEHAVIOUR-HOME %s — cannot remove %s, the Try it steps' HOME: %v", o.Slot, home, err))
+		}
+	}()
 	environ := g.behaviourEnviron(home)
 	results := make([]behaviourStep, len(steps))
 	failedAt := -1
@@ -239,9 +247,12 @@ func (g *gate) behaviourHome() (string, error) {
 // the gate's user is found by its usual name; the Go cache and module paths of
 // the gate host, so a go step does not rebuild the world; and the slot's port
 // block and database suffix, so a step started in the scratch tree does not
-// collide with another slot's. No token or other variable of the gate's
-// environment reaches a step. The step still runs as the gate's OS user, so a
-// file that user can read stays readable by its absolute path.
+// collide with another slot's; and git hardened against ssh identities, system
+// config and prompts. No variable of the gate's own environment is passed on.
+// This is no sandbox; the collaborator trust check is the boundary. ssh finds
+// ~ through passwd, so the gate user's ~/.ssh stays readable;
+// /proc/$PPID/environ shows the gate's environment; and the step runs as the
+// gate's OS user, so a file that user can read is readable by absolute path.
 func (g *gate) behaviourEnviron(home string) []string {
 	environ := []string{}
 	if v := g.e.Getenv("PATH"); v != "" {
@@ -252,7 +263,12 @@ func (g *gate) behaviourEnviron(home string) []string {
 		"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
 		"XDG_DATA_HOME="+filepath.Join(home, ".local", "share"),
 		"XDG_CACHE_HOME="+filepath.Join(home, ".cache"),
-		"GH_CONFIG_DIR="+filepath.Join(home, ".config", "gh"))
+		"GH_CONFIG_DIR="+filepath.Join(home, ".config", "gh"),
+		// git over ssh offers no identity and no agent (SSH_AUTH_SOCK is not
+		// passed), reads no system config and never prompts (#899 decision).
+		"GIT_SSH_COMMAND="+behaviourGitSSH,
+		"GIT_CONFIG_NOSYSTEM=1",
+		"GIT_TERMINAL_PROMPT=0")
 	environ = append(environ, g.goEnv()...)
 	name := g.target.Name
 	if name == "" {
