@@ -396,7 +396,9 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	var sendErr error
 	handled := false
 	if o.Relay {
-		UpdateSlot(root, o.Slot, func(s *Slot) { s.SetRelayPending(relaySeq) })
+		if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.SetRelayPending(relaySeq, stamp.Format(e.Now())) }); err != nil {
+			return res, err
+		}
 	}
 	if rs := h.Capabilities().Resubmitter; rs != nil && o.Relay && s.Unsent() {
 		handled, sendErr = rs.SubmitPending(ctx, o.Slot, handle, tmp.Name())

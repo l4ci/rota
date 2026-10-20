@@ -440,11 +440,34 @@ func (s *Slot) RelayPending() int {
 	return n
 }
 
-// SetRelayPending records relay k as sent; ClearRelayPending ends the mark.
-func (s *Slot) SetRelayPending(k int) { s.o.Set("relayPending", k) }
+// SetRelayPending records relay k as sent at the stamp; ClearRelayPending ends
+// the mark. A pane that has shown the relay's `[relay k]` line has it recorded
+// by SetRelayMarkerSeen: a capture without the line is then a scrolled-out one.
+func (s *Slot) SetRelayPending(k int, at string) {
+	s.o.Set("relayPending", k)
+	s.o.Set("relaySentAt", at)
+	s.o.Delete("relayMarkerSeen")
+}
 
-// ClearRelayPending removes the relay-pending mark.
-func (s *Slot) ClearRelayPending() { s.o.Delete("relayPending") }
+// RelaySentAt is when the pending relay went out; the zero time for none.
+func (s *Slot) RelaySentAt() time.Time {
+	v, _ := s.o.Get("relaySentAt")
+	str, _ := v.(string)
+	return parseStamp(str)
+}
+
+// RelayMarkerSeen: a capture has shown the pending relay's `[relay k]` line.
+func (s *Slot) RelayMarkerSeen() bool { v, _ := s.o.Get("relayMarkerSeen"); b, _ := v.(bool); return b }
+
+// SetRelayMarkerSeen records that the pending relay's line has been seen.
+func (s *Slot) SetRelayMarkerSeen() { s.o.Set("relayMarkerSeen", true) }
+
+// ClearRelayPending removes the relay-pending mark and what goes with it.
+func (s *Slot) ClearRelayPending() {
+	s.o.Delete("relayPending")
+	s.o.Delete("relaySentAt")
+	s.o.Delete("relayMarkerSeen")
+}
 
 // ClearSeen re-arms `round wait`: the slot's last seen row no longer counts.
 func (s *Slot) ClearSeen() { s.o.Delete("seen") }
