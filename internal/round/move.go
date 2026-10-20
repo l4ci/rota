@@ -854,9 +854,9 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	}
 
 	// The receiver resuming its transfer keeps the attempt its brief named.
-	attempt := ""
+	attempt, attemptBase := "", ""
 	if resuming {
-		attempt = receiver.Attempt()
+		attempt, attemptBase = receiver.Attempt(), receiver.AttemptBase()
 	}
 	if attempt == "" {
 		attempt = worker.NewAttempt()
@@ -896,8 +896,11 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 			return nil
 		}},
 		step{name: "bind the receiver", skip: moved, do: func() error {
+			if attemptBase == "" {
+				attemptBase = e.branchTip(ctx, root, branch)
+			}
 			err := editSlot(root, o.To, func(s *worker.Slot) error {
-				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: appliedModel, TierReason: reason, Attempt: attempt})
+				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: appliedModel, TierReason: reason, Attempt: attempt, AttemptBase: attemptBase})
 				s.SetBranch(branch)
 				return nil
 			})
@@ -936,6 +939,40 @@ func overlapCheck(r Readiness) *Check {
 		}
 	}
 	return nil
+}
+
+// branchTip is the full sha of a work branch's tip, "" when it exists nowhere.
+// A new attempt records it as the commits it inherited, which keep their
+// earlier attempts' trailers. The branch is fetched first (the sender may have
+// pushed since root's last fetch); of origin's and the local tip it takes the
+// one that contains the other, origin's when they diverged.
+func (e Env) branchTip(ctx context.Context, root, branch string) string {
+	// The name can come from an issue comment (a handoff): refuse anything git
+	// would read as an option or that is not a branch name.
+	if branch == "" || strings.HasPrefix(branch, "-") {
+		return ""
+	}
+	if _, _, code := e.gitOut(ctx, root, "check-ref-format", "--branch", branch); code != 0 {
+		return ""
+	}
+	e.gitOut(ctx, root, "fetch", "-q", "origin", "--", "refs/heads/"+branch+":refs/remotes/origin/"+branch)
+	rev := func(ref string) string {
+		out, _, code := e.gitOut(ctx, root, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+		if code != 0 {
+			return ""
+		}
+		return strings.TrimSpace(out)
+	}
+	remote, local := rev("origin/"+branch), rev(branch)
+	if remote == "" {
+		return local
+	}
+	if local != "" {
+		if _, _, code := e.gitOut(ctx, root, "merge-base", "--is-ancestor", remote, local); code == 0 {
+			return local
+		}
+	}
+	return remote
 }
 
 func (e Env) headLine(ctx context.Context, wt, ref string) string {
