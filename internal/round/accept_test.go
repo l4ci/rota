@@ -168,3 +168,23 @@ func TestAcceptTwiceChangesNothing(t *testing.T) {
 		t.Fatalf("rerun: %+v %v comments %d -> %d", res, err, n, len(f.be.comments["12"]))
 	}
 }
+
+// The comment assign posts must open with the marker findingSinceAssign looks
+// for, and a finding left before it must not count.
+func TestFindingSinceAssignMatchesAssignNote(t *testing.T) {
+	note := assignNote("ben", "ben/12-x")
+	if !strings.HasPrefix(note, assignMarker) {
+		t.Fatalf("assign note %q does not open with marker %q", note, assignMarker)
+	}
+	f := newMoveFx(t)
+	f.be.comments["12"] = []string{"early finding", note}
+	f.be.kinds["12"] = []string{"finding", "feedback"}
+	if findingSinceAssign(f.be, "12") {
+		t.Error("a finding before the assign note counted")
+	}
+	f.be.comments["12"] = append(f.be.comments["12"], "late finding")
+	f.be.kinds["12"] = append(f.be.kinds["12"], "finding")
+	if !findingSinceAssign(f.be, "12") {
+		t.Error("a finding after the assign note did not count")
+	}
+}
