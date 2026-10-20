@@ -39,6 +39,8 @@ A spike answers a *yes/no/conditional* question. Push back on a vague one:
 
 Name it with a short kebab-case identifier (`sse-feasibility`, `auth-rotation`). It becomes the branch suffix and the spike file's stem.
 
+**Package check (opt-in).** Read `rota config show research.packageCheck`. `false` (default): make no registry call. `true`: when the spike would recommend a new package, run `references/package-check.md` on it before it appears in a finding. Drop a `missing` package; list a `suspect` one with its reason and keep it only after the user says yes.
+
 In umbrella mode (`rota repo umbrella` exits 0), read [`start-umbrella.md`](start-umbrella.md) first: it resolves `<repo>` for `--repo <repo>` in Step 4.
 
 ## Step 3 (Start mode) — Branch Without Asking
