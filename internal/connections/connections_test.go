@@ -305,6 +305,56 @@ func TestFileStoreMigrationCopiesSymlinkTarget(t *testing.T) {
 	}
 }
 
+func TestFileStoreMigrationDanglingSymlinkIsNoOp(t *testing.T) {
+	root := t.TempDir()
+	legacy, dir := filepath.Join(root, "config"), filepath.Join(root, "data")
+	if err := os.MkdirAll(legacy, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "gone.json"), SecretsFile(legacy)); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := FileStore(dir, legacy).Get(context.Background(), "work"); err != nil || ok {
+		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+	if _, err := os.Lstat(SecretsFile(dir)); !os.IsNotExist(err) {
+		t.Errorf("data file created from a dangling link: %v", err)
+	}
+	if _, err := os.Lstat(SecretsFile(legacy)); err != nil {
+		t.Errorf("dangling link removed: %v", err)
+	}
+}
+
+func TestFileStoreMigrationSymlinkToDirErrorsWithoutDeleting(t *testing.T) {
+	root := t.TempDir()
+	legacy, dir := filepath.Join(root, "config"), filepath.Join(root, "data")
+	target := filepath.Join(root, "adir")
+	if err := os.MkdirAll(target, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "keep"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(legacy, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, SecretsFile(legacy)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := FileStore(dir, legacy).Get(context.Background(), "work"); err == nil {
+		t.Fatal("want an error for a link to a directory")
+	}
+	if _, err := os.Lstat(SecretsFile(dir)); !os.IsNotExist(err) {
+		t.Errorf("data file created: %v", err)
+	}
+	if _, err := os.Lstat(SecretsFile(legacy)); err != nil {
+		t.Errorf("link removed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target, "keep")); err != nil {
+		t.Errorf("link target contents removed: %v", err)
+	}
+}
+
 func TestCheckStates(t *testing.T) {
 	dir := t.TempDir()
 	ctx := context.Background()
