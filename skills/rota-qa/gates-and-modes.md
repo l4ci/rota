@@ -8,6 +8,8 @@ Loaded by `SKILL.md` when a caller or config flag decides whether `/rota-qa` run
 - `qa.afterWork` — `false` (default). When `true`, `/rota-work` invokes `/rota-qa run` post-cycle if touched files match a QA target's `Watch globs`.
 - `ship.qa` — `false` (default). When `true`, `/rota-ship` calls `/rota-qa run` between `/rota-review` and the merge/PR step.
 
+- `ship.uat` — `false` (default). When `true`, `/rota-ship` calls `/rota-qa uat <ID>` after review and the other gates, before the merge/PR step. Never read by `rota worker gate` or the round merge path. Calling `/rota-qa uat` directly works either way; `qa.gate` does not apply to it.
+
 ## Modes
 
 `/rota-qa` shares the three-mode skeleton with `/rota-ship`'s Docs Mode (scaffold / after-work / audit); see `references/three-mode-skill-shape.md`. Divergences:
