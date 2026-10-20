@@ -61,6 +61,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 	acceptCodex := fs.Bool("accept-codex-version", false, "deprecated and ignored: rota no longer checks the Codex version")
 	accept := fs.Bool("accept-overlap", false, "skip the file and scope overlap checks")
 	acceptOpenPR := fs.Bool("accept-open-pr", false, "assign an issue an open PR already resolves, for a deliberate redo")
+	acceptBatch := fs.Bool("accept-batch", false, "assign past a full round.batch for this one call")
 	pid := fs.Int("holder-pid", 0, "orchestrator pid, when its ancestry cannot be read")
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) != 1 {
@@ -107,7 +108,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		env := accountedRoundEnv(c, ctx, root)
 		res, err := env.Assign(ctx, root, be, round.AssignOpts{
 			ID: id, Agent: *agent, BodyFile: bf, Siblings: pystr.SplitCSV(*siblings),
-			CheckOnly: *checkOnly, AcceptOverlap: *accept, AcceptOpenPR: *acceptOpenPR, HolderPID: *pid,
+			CheckOnly: *checkOnly, AcceptOverlap: *accept, AcceptOpenPR: *acceptOpenPR, AcceptBatch: *acceptBatch, HolderPID: *pid,
 			Tier: *tier, TierReason: *tierReason, Kind: *kind, Model: *model,
 			Settings: set,
 		})
@@ -129,6 +130,11 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 				}
 			}
 			f.Set("changed", false)
+			if blk.By == round.BlockBatch {
+				f.Set("batch", blk.Batch)
+				f.Set("open", blk.Open)
+				return Result{Data: f}, Refused("%s", blk.Msg).WithHint("land or park an item first, or pass --accept-batch for this one")
+			}
 			return Result{Data: f}, &Error{Exit: ExitRefused, Message: blk.Msg}
 		case err != nil:
 			_, ferr := backlogFail(err)

@@ -194,6 +194,22 @@ func TestAutopilotKeys(t *testing.T) {
 	}
 }
 
+func TestBatchKey(t *testing.T) {
+	s, err := Load(project(t, `{}`))
+	if err != nil || s.Batch != 0 {
+		t.Fatalf("default is no limit: %d %v", s.Batch, err)
+	}
+	s, err = Load(project(t, `{"round":{"batch":2}}`))
+	if err != nil || s.Batch != 2 {
+		t.Fatalf("override: %d %v", s.Batch, err)
+	}
+	for _, bad := range []string{`{"round":{"batch":-1}}`, `{"round":{"batch":"x"}}`} {
+		if _, err := Load(project(t, bad)); err == nil {
+			t.Errorf("%s should be refused", bad)
+		}
+	}
+}
+
 func TestItemTimeoutMinutes(t *testing.T) {
 	if set, err := Load(project(t, `{}`)); err != nil || set.ItemTimeoutMinutes != 0 {
 		t.Fatalf("default is off: %d %v", set.ItemTimeoutMinutes, err)

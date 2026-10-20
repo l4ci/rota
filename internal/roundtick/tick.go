@@ -127,6 +127,9 @@ type Env struct {
 	// mints and assigns nothing and says why in Result.Capped; it merges and
 	// repairs as usual, and fills again once Capped returns "".
 	Capped func(ctx context.Context) string
+	// BatchFull says round.batch items are already open, so nothing is minted
+	// or assigned; nil means no limit. Merges and repairs run as usual.
+	BatchFull func(ctx context.Context) bool
 	// Audit records one action in the audit log.
 	Audit func(Action)
 	// Held is the targets a previous tick's merge failed on and a person has
@@ -150,9 +153,12 @@ func (i Item) Key() string { return i.Kind + " " + i.Target }
 type Result struct {
 	Did []Action
 	// Capped is why the tick filled no slot: the quota cap (Env.Capped).
-	Capped   string
-	NeedsYou []Item
-	New      []Item
+	Capped string
+	// BatchFull is true when round.batch items are open: the tick assigned
+	// nothing more, and minted no review.
+	BatchFull bool
+	NeedsYou  []Item
+	New       []Item
 	// Held and Reported are the state the next tick starts from.
 	Held     map[string]string
 	Reported map[string]bool
@@ -228,7 +234,10 @@ func Run(ctx context.Context, e Env) (Result, error) {
 	if e.Capped != nil {
 		r.Capped = e.Capped(ctx)
 	}
-	if r.Capped == "" { // capped: a slot filled now would park at once
+	if e.BatchFull != nil && e.BatchFull(ctx) {
+		r.BatchFull = true
+	}
+	if r.Capped == "" && !r.BatchFull { // capped: a slot filled now would park at once
 		minted, err := e.review(ctx, &r)
 		if err != nil {
 			return r, err
@@ -427,6 +436,11 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 			var blk *round.BlockedError
 			if errors.As(err, &blk) && blk.By == round.BlockQuota && r.Capped == "" {
 				r.Capped = blk.Msg
+			}
+			// The batch filled during this tick: no later candidate fits either.
+			if errors.As(err, &blk) && blk.By == round.BlockBatch {
+				r.BatchFull = true
+				return nil
 			}
 		default:
 			return fmt.Errorf("assign %s: %w", c.ID, err)
