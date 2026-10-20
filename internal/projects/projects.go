@@ -71,6 +71,20 @@ func Dir() (string, error) {
 	return dir, err
 }
 
+// DataDir is the global rota data dir: $XDG_DATA_HOME/rota when that is an
+// absolute path, else ~/.local/share/rota. It holds what must not travel with
+// a synced config dir, such as the token fallback file.
+func DataDir() (string, error) {
+	if x := os.Getenv("XDG_DATA_HOME"); filepath.IsAbs(x) {
+		return filepath.Join(x, "rota"), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", errors.New("no global data dir: neither XDG_DATA_HOME nor HOME is set")
+	}
+	return filepath.Join(home, ".local", "share", "rota"), nil
+}
+
 // StateDir is the rota state dir, where machine-rewritten files live (the
 // project registry and its lock): $XDG_STATE_HOME/rota when that is an
 // absolute path, else ~/.local/state/rota.

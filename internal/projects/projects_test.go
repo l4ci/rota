@@ -156,6 +156,18 @@ func TestRemoveFindsAGoneDirectoryAndSkipsAnAbsentRegistry(t *testing.T) {
 	}
 }
 
+func TestDataDir(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", "/x/data")
+	if d, _ := DataDir(); d != "/x/data/rota" {
+		t.Errorf("%q", d)
+	}
+	t.Setenv("XDG_DATA_HOME", "relative")
+	t.Setenv("HOME", "/h")
+	if d, _ := DataDir(); d != "/h/.local/share/rota" {
+		t.Errorf("%q", d)
+	}
+}
+
 func TestStateDirHonoursXDGAndFallsBackToHome(t *testing.T) {
 	x := isolate(t)
 	if d, _ := StateDir(); d != filepath.Join(x, "state", "rota") {
