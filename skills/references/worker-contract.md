@@ -96,6 +96,9 @@ Work only this task, then stop.
   arrived after the listing stays unread. `worker done` refuses (exit 4) while any mail is unread, so
   read it rather than retry. A mail you already saw in the pane is the same relay: do not act on
   it twice.
+- After every relay fix, from any relay and not only a `REVIEW` one, even a one-line
+  fix, run `rota worker done <slot>`: the done event it records is what the watch trusts
+  when the relay echo has scrolled out of the pane between polls.
 - Show a failing test first, unless `rota config show work.tdd` is `false` (then no
   RED row; PASS rows stay). For a behavior change, run the new test before the
   production change and see it fail, recording the run itself: `rota proof record <ID> --
