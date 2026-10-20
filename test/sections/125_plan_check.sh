@@ -88,6 +88,51 @@ TMP_PC="$(mktemp -d "$TMP/plancheck.XXXXXX")"
   hvj config set plan.maxTasks 3 > /dev/null; hvj config set plan.maxFilesPerTask 5 > /dev/null
   pass "plan check warns on too many tasks or too wide a task, exit 0; a threshold of 0 turns it off"
 
+  PUT '- **T1** — parse
+  - Serves: AC-1, AC-2
+  - Verify: go test ./parse'
+  OUT="$(hvj plan check "$KEY")" || fail "no decision comment, same result as before: $OUT"
+  jget data.decisions <<<"$OUT" > /dev/null 2>&1 && fail "no decision comment must add no decisions key: $OUT"
+  grep -q 'D1' <<<"$("$ROTA_BIN" plan check "$KEY")" && fail "no decision comment must add no text output"
+  pass "plan check: an item with no decision comment gets no new output"
+
+  printf 'Use JSON, never YAML, for the export format because tooling already reads it\n' | hvj item comment add "$KEY" --kind decision --body-file - > /dev/null || fail "add decision 1"
+  printf 'Keep it read-only\n' | hvj item comment add "$KEY" --kind decision --body-file - > /dev/null || fail "add decision 2"
+  OUT="$(hvj plan check "$KEY")" && fail "uncovered decisions should fail: $OUT"
+  eq "uncovered exit" "1" "$(RC hvj plan check "$KEY")"
+  eq "uncovered decisions" "D1 D2" "$(jget data.uncoveredDecisions[0] <<<"$OUT") $(jget data.uncoveredDecisions[1] <<<"$OUT")"
+  eq "decision printed, 60 chars" "D1: Use JSON, never YAML, for the export format because tooling " "$(jget data.decisions[0] <<<"$OUT")"
+  eq "decision 2 printed" "D2: Keep it read-only" "$(jget data.decisions[1] <<<"$OUT")"
+  TXT="$("$ROTA_BIN" plan check "$KEY" 2>&1)" || true
+  grep -q '^D2 is honored by no task' <<<"$TXT" || fail "no uncovered text line: $TXT"
+  grep -q '^D1: Use JSON' <<<"$TXT" || fail "decision not listed in text: $TXT"
+
+  PUT '- **T1** — parse
+  - Serves: AC-1, AC-2
+  - Honors: D1
+  - Verify: go test ./parse'
+  OUT="$(hvj plan check "$KEY")" && fail "D2 still uncovered"
+  eq "only D2 left" "D2" "$(jget data.uncoveredDecisions[0] <<<"$OUT")"
+
+  PUT '- **T1** — parse
+  - Serves: AC-1, AC-2
+  - Honors: D1, D2, D5
+  - Verify: go test ./parse'
+  OUT="$(hvj plan check "$KEY")" && fail "unknown decision should fail"
+  eq "unknown decision" "T1 D5" "$(jget data.unknownDecisions[0].task <<<"$OUT") $(jget data.unknownDecisions[0].ids[0] <<<"$OUT")"
+
+  PUT '- **T1** — parse
+  - Serves: AC-1
+  - Honors: D1
+  - Verify: go test ./parse
+- **T2** — print
+  - Serves: AC-2
+  - Honors: D2
+  - Verify: go test ./print'
+  OUT="$(hvj plan check "$KEY")" || fail "all decisions honored should pass: $OUT"
+  eq "honored ok" "true" "$(jget data.ok <<<"$OUT")"
+  pass "plan check numbers decision comments, fails on uncovered or unknown Honors ids (exit 1)"
+
   eq "no plan" "3" "$(RC hvj plan check "#9999")"
   eq "slice key" "2" "$(RC hvj plan check M01-S01)"
   eq "no arg" "2" "$(RC hvj plan check)"

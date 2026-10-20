@@ -39,7 +39,7 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return failAny(err)
 	}
-	_, wf, _, _, err := itemFlow(c, ref)
+	be, wf, _, _, err := itemFlow(c, ref)
 	if err != nil {
 		return backlogFailRead(err)
 	}
@@ -51,7 +51,21 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 	for _, cr := range acceptance.IDs(status.Body) {
 		ids = append(ids, cr.ID)
 	}
-	r := plan.Check(body, ids)
+	rows, err := be.Comments(ref, "decision")
+	if err != nil {
+		return backlogFailRead(err)
+	}
+	var decs, decLines []string
+	for i, row := range rows {
+		id := fmt.Sprintf("D%d", i+1)
+		decs = append(decs, id)
+		first, _, _ := strings.Cut(strings.TrimSpace(row.Text), "\n")
+		if rs := []rune(first); len(rs) > 60 {
+			first = string(rs[:60])
+		}
+		decLines = append(decLines, fmt.Sprintf("%s: %s", id, first))
+	}
+	r := plan.Check(body, ids, decs)
 	cfg := config.Load(rotatree.Config(root))
 	var lim plan.Limits
 	if lim.MaxTasks, err = config.Int(cfg, "plan.maxTasks", 0, config.MaxInt); err != nil {
@@ -71,6 +85,12 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 	for _, id := range r.Uncovered {
 		lines = append(lines, id+" has no task")
 	}
+	for _, u := range r.UnknownDecisions {
+		lines = append(lines, fmt.Sprintf("%s honors unknown %s", u.Task, strings.Join(u.IDs, ", ")))
+	}
+	for _, id := range r.UncoveredDecisions {
+		lines = append(lines, id+" is honored by no task")
+	}
 	for _, t := range r.Orphans {
 		lines = append(lines, t+" serves no criterion")
 	}
@@ -80,10 +100,20 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 	d := jsonObj("key", key, "ok", r.Ok(), "criteria", strs(ids),
 		"uncovered", strs(r.Uncovered), "orphans", strs(r.Orphans),
 		"unknown", unknown, "noVerify", strs(r.NoVerify), "warnings", strs(warns))
+	if len(decs) > 0 || len(r.UnknownDecisions) > 0 {
+		unknownDec := []any{}
+		for _, u := range r.UnknownDecisions {
+			unknownDec = append(unknownDec, jsonObj("task", u.Task, "ids", strs(u.IDs)))
+		}
+		d.Set("decisions", strs(decLines))
+		d.Set("uncoveredDecisions", strs(r.UncoveredDecisions))
+		d.Set("unknownDecisions", unknownDec)
+	}
 	problems := len(lines)
 	if r.Ok() {
 		lines = []string{key + ": ok"}
 	}
+	lines = append(lines, decLines...)
 	for _, w := range warns {
 		lines = append(lines, "warn: "+w)
 	}
