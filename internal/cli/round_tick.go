@@ -309,9 +309,10 @@ func tickLines(r roundtick.Result) string {
 // which owns the manual/auto decision and the holds.
 func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundtick.ReviewOutcome {
 	ctx := c.Context()
-	pr := ""
 	// Tolerant: a failed read is a failed poll (reviewOpts reads strictly).
-	if s := worker.LoadRegistryTolerant(root).Slot(slot); s != nil {
+	s := worker.LoadRegistryTolerant(root).Slot(slot)
+	pr := ""
+	if s != nil {
 		pr = s.PR()
 	}
 	o, err := reviewOpts(c, root, set, slot)
@@ -322,24 +323,8 @@ func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundti
 	if err != nil {
 		return roundtick.ReviewStep(ctx, src)
 	}
-	var s *worker.Slot
-	src.Open = func(ctx context.Context) (bool, error) {
-		s = worker.LoadRegistryTolerant(root).Slot(slot) // reviewOpts above read it strictly
-		if s == nil {
-			return false, nil
-		}
-		info, err := o.Forge.PRView(ctx, mustPRNumber(s.PR()))
-		if err != nil {
-			return false, err
-		}
-		return strings.EqualFold(info.State, "OPEN"), nil
-	}
-	src.Pending = func(ctx context.Context) (string, error) {
-		b, err := worker.PendingReview(ctx, o.Forge, s, o.Verdict, c.deps().Now())
-		if err != nil || b.Empty() {
-			return "", err
-		}
-		return reviewSummary(b), nil
+	src.Poll = func(ctx context.Context) (string, error) {
+		return roundtick.PendingSummary(ctx, o.Forge, s, o.Verdict, c.deps().Now())
 	}
 	src.Relay = func(ctx context.Context) (roundtick.RelayResult, error) {
 		res, err := reviewEnv(c, ctx, root, o).ReviewRelay(ctx, root, o)
@@ -350,23 +335,4 @@ func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundti
 		return out, err
 	}
 	return roundtick.ReviewStep(ctx, src)
-}
-
-// mustPRNumber is the number of a slot's PR; 0 when it has none.
-func mustPRNumber(pr string) int {
-	n, _ := worker.PRRefNumber(pr)
-	return n
-}
-
-// reviewSummary is "<n> from <authors>", the value of a slot's review key.
-func reviewSummary(b worker.ReviewBatch) string {
-	n := len(b.Items)
-	from := strings.Join(b.Authors(), ", ")
-	if b.Verdict != "" {
-		if n == 0 {
-			return "review verdict FAIL " + b.PR
-		}
-		from += " and a FAIL verdict"
-	}
-	return fmt.Sprintf("%d from %s %s", n, from, b.PR)
 }
