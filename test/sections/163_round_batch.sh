@@ -40,7 +40,7 @@ RC=0; OUT=$(rb round assign 2) || RC=$?
 [ "$RC" = "4" ] || fail "a second assignment past batch 1 must exit 4, got $RC: $OUT"
 [ "$(echo "$OUT" | jget data.blockedBy)" = "batch" ] && [ "$(echo "$OUT" | jget data.batch)" = "1" ] && [ "$(echo "$OUT" | jget data.open)" = "1" ] \
   || fail "the refusal carries blockedBy batch, batch and open: $OUT"
-echo "$OUT" | grep -q "land or park" || fail "the refusal hints to land or park an item first: $OUT"
+grep -q "land or park" <<<"$OUT" || fail "the refusal hints to land or park an item first: $OUT"
 pass "round assign refuses at round.batch with batch and open in the data"
 
 # ── the override covers one call ────────────────────────────────────────────
@@ -54,7 +54,7 @@ pass "--accept-batch overrides the refusal for one call"
 rb config set round.autopilot true >/dev/null
 OUT=$(rb round tick)
 [ "$(echo "$OUT" | jget data.batchFull)" = "true" ] || fail "a tick at the cap reports batchFull: $OUT"
-if echo "$OUT" | grep -q '"action": "assign"'; then fail "a tick at the cap must assign nothing: $OUT"; fi
+if grep -q '"action": "assign"' <<<"$OUT"; then fail "a tick at the cap must assign nothing: $OUT"; fi
 pass "round tick assigns nothing at the cap and reports batchFull"
 
 # ── unset means no limit ────────────────────────────────────────────────────
