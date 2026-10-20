@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -115,21 +114,31 @@ func TestGateRemoteProbeFailureIsNotAMissingOrigin(t *testing.T) {
 	}
 }
 
-// #1125: "gone cwd after the first gate merged" was the guess for the false
-// "no origin" message of #1118. With the real git runner a gone repo directory
-// fails the gate at the git-common-dir lookup, before stepRemote runs, so it
-// cannot produce that message. The cause must be a git that started and then
-// failed at the remote probe (a cancelled context or a non-2 exit).
-func TestGateGoneRootFailsBeforeTheRemoteProbe(t *testing.T) {
+// #1125: the incident path for the false "no origin" of #1118. A second gate
+// resolves the common dir, queues on the land lock, and finds its root gone
+// only once it holds the lock (the first gate merged and removed it). The root
+// is removed inside the lock, after the registry read, just before the remote
+// probe, and the real git runner then fails to start in the gone cwd. Before
+// #1118 stepRemote read any non-zero exit as a missing origin, and runGit maps
+// a failed start to 127, so this exact state printed "no 'origin' remote".
+// (A root gone before the lock fails earlier, at the git-common-dir lookup or
+// the registry read, so that state cannot reach stepRemote.)
+func TestGateGoneRootInsideLockIsNotAMissingOrigin(t *testing.T) {
 	w := newWorld(t, ghURL)
 	env := w.env(false).withDefaults()
-	env.Git = git.Exec
-	gone := filepath.Join(t.TempDir(), "gone")
-	res, err := env.Gate(bg, gone, GateOpts{Slot: "w1", Base: "main"})
-	if err == nil || !strings.Contains(err.Error(), "git-common-dir") {
-		t.Fatalf("want the common-dir lookup to fail, got err %v verdict %q", err, res.Verdict)
+	env.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		if len(args) > 0 && args[0] == "remote" {
+			if err := os.RemoveAll(w.dir); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return git.Exec(ctx, dir, args...)
 	}
-	if strings.Contains(res.Err, "no 'origin' remote") {
-		t.Errorf("a gone directory was reported as a missing origin: %q", res.Err)
+	res, err := env.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+	if err != nil || res.Verdict != GateCheckBroke {
+		t.Fatalf("verdict %q err %v", res.Verdict, err)
+	}
+	if strings.Contains(res.Err, "no 'origin' remote") || !strings.Contains(res.Err, "could not run git") {
+		t.Errorf("want a git run failure, got %q", res.Err)
 	}
 }
