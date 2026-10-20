@@ -11,9 +11,11 @@ package projects
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -29,17 +31,44 @@ type Project struct {
 	Missing              bool
 }
 
-// Dir is the global rota config dir: $XDG_CONFIG_HOME/rota when that is an
+// Where a resolved config dir came from.
+const (
+	SourceOverride = "override" // ROTA_CONFIG_DIR
+	SourceXDG      = "xdg"      // XDG_CONFIG_HOME
+	SourceDefault  = "default"  // ~/.config/rota
+)
+
+// Resolve finds the global rota config dir and says why: $ROTA_CONFIG_DIR when
+// that is an absolute path, else $XDG_CONFIG_HOME/rota when that is an
 // absolute path (the XDG spec ignores a relative one), else ~/.config/rota.
-func Dir() (string, error) {
+// warning is non-empty when a relative ROTA_CONFIG_DIR was ignored.
+func Resolve() (dir, source, warning string, err error) {
+	if o := os.Getenv("ROTA_CONFIG_DIR"); o != "" {
+		if filepath.IsAbs(o) {
+			return filepath.Clean(o), SourceOverride, "", nil
+		}
+		warning = "ROTA_CONFIG_DIR=" + o + " is not an absolute path, ignored"
+	}
 	if x := os.Getenv("XDG_CONFIG_HOME"); filepath.IsAbs(x) {
-		return filepath.Join(x, "rota"), nil
+		return filepath.Join(x, "rota"), SourceXDG, warning, nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", errors.New("no global config dir: neither XDG_CONFIG_HOME nor HOME is set")
+		return "", "", warning, errors.New("no global config dir: none of ROTA_CONFIG_DIR, XDG_CONFIG_HOME or HOME is set")
 	}
-	return filepath.Join(home, ".config", "rota"), nil
+	return filepath.Join(home, ".config", "rota"), SourceDefault, warning, nil
+}
+
+var warnOnce sync.Once
+
+// Dir is the global rota config dir (see Resolve). A relative ROTA_CONFIG_DIR
+// is ignored with one warning on stderr per process.
+func Dir() (string, error) {
+	dir, _, warning, err := Resolve()
+	if warning != "" {
+		warnOnce.Do(func() { fmt.Fprintln(os.Stderr, "rota: warning: "+warning) })
+	}
+	return dir, err
 }
 
 // StateDir is the rota state dir, where machine-rewritten files live (the
