@@ -307,6 +307,12 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `plan.maxFilesPerTask` | int | `5` |  | Paths a task's Files: line may name before rota plan check warns about that task. Advisory: the check still exits 0. 0 turns the warning off. |
 | `plan.criticHarness` | enum | unset | `claude`, `codex`, `opencode` | Harness that runs the /rota-plan level-4 critic, read-only, with the same brief as the same-harness subagent. Empty: the planning harness runs it. A harness that is not installed, or a failed run, falls back to the same-harness critic with one printed line. Levels 1-3 never read it. |
 
+### map
+
+| Key | Type | Default | Values | Description |
+|-----|------|---------|--------|-------------|
+| `map.staleCommits` | int | `50` |  | Commits HEAD may be past a map file's last_mapped_commit before rota map stats warns that the subsystem is stale. Advisory: the verb still exits 0. 0 turns the warning off. |
+
 ### brainstorm
 
 | Key | Type | Default | Values | Description |

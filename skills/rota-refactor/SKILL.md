@@ -22,6 +22,7 @@ Read `.rota/config.json`:
 - `<area>`: a path, directory or subsystem name. Scopes the review. Without one, review the whole repo (see Explore).
 - `--fix`: after filing, implement the findings you pick (Fix path below). Without it the run ends at Step 4.
 - `--designs`: for structural findings, draft competing interfaces before recommending one (`references/refactor-design-approaches.md`). Off by default (expensive).
+- `--map`: map the repo instead of reviewing it: write one `.rota/map/<name>.md` per subsystem, stamped with `last_mapped_commit`. Files issues never; changes no code. Read [`options.md`](options.md) (Map mode) and follow it instead of the Flow below.
 - `--interactive`: present the ranked findings and ask which to file instead of filing all.
 
 In an umbrella project, read [`options.md`](options.md) (Umbrella projects).
@@ -148,7 +149,7 @@ Read [`fix-path.md`](fix-path.md) when `--fix` was passed and follow it. `--fix`
 
 ## References
 
-- [`options.md`](options.md): umbrella projects, `--interactive` filing, recording rejections.
+- [`options.md`](options.md): umbrella projects, `--map` mode, `--interactive` filing, recording rejections.
 - [`fix-path.md`](fix-path.md): `--fix` configuration, clean-tree guard and the fix steps.
 - [`references/refactor-design-approaches.md`](references/refactor-design-approaches.md): competing-interface choreography for `--designs`.
 - [`references/dependent-items.md`](references/dependent-items.md): ordering filed findings with `--depends-on`.

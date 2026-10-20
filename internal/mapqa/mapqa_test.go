@@ -181,3 +181,57 @@ func TestCapNote(t *testing.T) {
 		t.Errorf("CapNote = %q", got)
 	}
 }
+
+func TestStatsCommitsBehind(t *testing.T) {
+	root := gittest.NewRepo(t, "main")
+	mapped := gittest.Run(t, root, "rev-parse", "HEAD")
+	for _, n := range []string{"a", "b", "c"} {
+		gittest.Commit(t, root, "churn "+n, n+".txt", n+"\n")
+	}
+	write(t, root, ".rota/map/fresh.md", "---\nsubsystem: fresh\nlast_mapped_commit: "+gittest.Run(t, root, "rev-parse", "HEAD")+"\n---\nbody\n")
+	write(t, root, ".rota/map/old.md", "---\nsubsystem: old\nlast_mapped_commit: "+mapped+"\n---\nbody\n")
+	write(t, root, ".rota/map/unmapped.md", "---\nsubsystem: unmapped\n---\nbody\n")
+	write(t, root, ".rota/map/gone.md", "---\nsubsystem: gone\nlast_mapped_commit: 0123456789abcdef0123456789abcdef01234567\n---\nbody\n")
+
+	got := map[string]*int{}
+	for _, s := range Stats(root) {
+		got[s.Name] = s.CommitsBehind
+	}
+	if got["fresh"] == nil || *got["fresh"] != 0 {
+		t.Errorf("fresh = %v, want 0", got["fresh"])
+	}
+	if got["old"] == nil || *got["old"] != 3 {
+		t.Errorf("old = %v, want 3", got["old"])
+	}
+	if got["unmapped"] != nil {
+		t.Errorf("unmapped = %d, want nil (no last_mapped_commit)", *got["unmapped"])
+	}
+	if got["gone"] != nil {
+		t.Errorf("gone = %d, want nil (sha not in history)", *got["gone"])
+	}
+}
+
+func TestStaleCommits(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  string
+		want int
+	}{
+		{"no config", "", DefaultStaleCommits},
+		{"set", `{"map": {"staleCommits": 7}}`, 7},
+		{"zero disables", `{"map": {"staleCommits": 0}}`, 0},
+		{"negative", `{"map": {"staleCommits": -1}}`, DefaultStaleCommits},
+		{"not a number", `{"map": {"staleCommits": "many"}}`, DefaultStaleCommits},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if tc.cfg != "" {
+				write(t, root, ".rota/config.json", tc.cfg)
+			}
+			if got := StaleCommits(root); got != tc.want {
+				t.Errorf("StaleCommits = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
