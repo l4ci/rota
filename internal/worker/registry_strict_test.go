@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/jsonx"
 )
 
 // A truncated workers.json holds the only record of who owns what; Update must
@@ -83,3 +84,74 @@ func TestLoadRegistryStrictVersusTolerant(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+// A non-object entry in a registry list is skipped on read and kept on write:
+// one rule for every list the registry decodes.
+func TestRegistryListsSkipNonObjectEntries(t *testing.T) {
+	root := t.TempDir()
+	p := RegistryPath(root)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const doc = `{"slots":["junk",{"name":"ben"},7],"prs":[null,{"issue":"#1","pr":"#10"},"x",{"issue":"#2","pr":"#11"}]}`
+	if err := os.WriteFile(p, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := LoadRegistry(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := r.Slots(); len(got) != 1 || got[0].Name() != "ben" {
+		t.Errorf("Slots = %v, want just ben", got)
+	}
+	if got := r.PRs(); len(got) != 2 || got[0].Issue != "#1" || got[1].Issue != "#2" {
+		t.Errorf("PRs = %+v, want #1 and #2", got)
+	}
+	if err := Update(root, func(d *Doc) {
+		d.DropQueued(func(q QueuedPR) bool { return q.Issue == "#1" })
+		d.AppendSlot(AsSlot(jsonx.NewObject()))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	r, _ = LoadRegistry(root)
+	if got := r.PRs(); len(got) != 1 || got[0].Issue != "#2" {
+		t.Errorf("after drop PRs = %+v, want #2", got)
+	}
+	if got := r.list("prs"); len(got) != 3 {
+		t.Errorf("non-object entries must survive a write, got %d entries", len(got))
+	}
+	if got := r.list("slots"); len(got) != 4 {
+		t.Errorf("slots entries = %d, want 4", len(got))
+	}
+}
+
+// Slate skips non-string entries and SortSlots tolerates a junk entry; a
+// tolerant read of the same file sees the same slots.
+func TestRegistryListsSlateSortAndTolerantRead(t *testing.T) {
+	root := t.TempDir()
+	p := RegistryPath(root)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const doc = `{"slate":["#1",7,null,"#2"],"slots":["junk",{"name":"zed"},{"name":"amy"}]}`
+	if err := os.WriteFile(p, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := LoadRegistryTolerant(root)
+	if got := r.Slate(); len(got) != 2 || got[0] != "#1" || got[1] != "#2" {
+		t.Errorf("Slate = %v, want [#1 #2]", got)
+	}
+	if got := r.Slots(); len(got) != 2 {
+		t.Errorf("tolerant Slots = %d, want 2", len(got))
+	}
+	if err := Update(root, func(d *Doc) { d.SortSlots() }); err != nil {
+		t.Fatal(err)
+	}
+	r, _ = LoadRegistry(root)
+	if got := r.Slots(); len(got) != 2 {
+		t.Errorf("Slots after sort = %d, want 2", len(got))
+	}
+	if got := r.list("slots"); len(got) != 3 {
+		t.Errorf("junk entry must survive SortSlots, got %d entries", len(got))
+	}
+}
