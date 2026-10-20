@@ -147,7 +147,7 @@ func findingSinceAssign(be Board, id string) bool {
 	}
 	start := 0
 	for i, c := range cs {
-		if c.Kind == "feedback" && strings.HasPrefix(c.Text, "In progress: agent") {
+		if c.Kind == "feedback" && strings.HasPrefix(c.Text, assignMarker) {
 			start = i + 1
 		}
 	}
