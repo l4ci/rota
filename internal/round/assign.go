@@ -513,41 +513,97 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	return e.assignOne(ctx, root, be, o, it, nil)
 }
 
+// assignRun is what assignOne settled before it marked anything: the slot, the
+// resolved worker and the brief. assignSteps turns it into the marks.
+type assignRun struct {
+	id, agent, branch string
+	resuming, queue   bool
+	kind, kindSource  string
+	model, tier       string
+	reason            string
+	pick              Pick
+	decisions, brief  string
+	bo                *bestOfRun
+	slot              *worker.Slot
+}
+
 // assignOne is one slot's assignment of it; bo is set for an attempt of a
-// best-of:2 issue, and a preflight bo stops it once nothing would refuse.
+// best-of:2 issue, and a preflight bo stops it once nothing would refuse. It
+// checks the flags, plans the assignment (every refusal comes before a mark)
+// and runs the planned steps.
 func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts, it *backlog.Item, bo *bestOfRun) (res Assigned, err error) {
-	set := o.Settings
-	id := it.ID
-	res.ID, res.Type = id, it.Type
-	if err := o.checkAgent(); err != nil {
+	res.ID, res.Type = it.ID, it.Type
+	tier, reason, err := o.checkFlags(o.Settings)
+	if err != nil {
 		return res, err
 	}
+	run, stop, err := e.planAssign(ctx, root, be, o, it, bo, tier, reason, &res)
+	if err != nil || stop {
+		return res, err
+	}
+	// The marks and the dispatch run as compensating steps (saga.go): a
+	// failure before dispatch undoes the claim and state; the dispatch itself
+	// keeps them, because the pane may already hold the brief.
+	rnd := registryRound(root)
+	steps, d, err := e.assignSteps(ctx, root, be, o, it, run, rnd, &res)
+	if err != nil {
+		return res, err
+	}
+	err = runSteps(steps)
+	d.cleanup()
+	res.Account, res.Host, res.Brief, res.Worktree = d.Account, d.Host, d.BriefText, d.Worktree
+	res.Dispatched = res.Dispatched || d.Dispatched
+	res.Changed = res.Changed || d.Changed
+	if err == nil && !run.resuming {
+		if lerr := worker.LedgerAppendErr(e.Worker, root, ledger.Entry{Kind: ledger.KindAssign, Issue: run.id, Slot: run.agent, Account: res.Account, Harness: run.kind,
+			Detail: ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts, root, run.kind, res.Account))}); lerr != nil {
+			return res, fmt.Errorf("%s is assigned to %s, but the round ledger row was not written: %w", run.id, run.agent, lerr)
+		}
+	}
+	return res, err
+}
+
+// checkFlags validates the flags that need no board or registry and returns the
+// tier the worker starts on and its reason.
+func (o AssignOpts) checkFlags(set roundcfg.Settings) (tier, reason string, err error) {
+	if err := o.checkAgent(); err != nil {
+		return "", "", err
+	}
 	if o.Tier != "" && !roundcfg.ValidTier(o.Tier) {
-		return res, usage("--tier must be one of %s", strings.Join(roundcfg.Tiers, ", "))
+		return "", "", usage("--tier must be one of %s", strings.Join(roundcfg.Tiers, ", "))
 	}
 	if o.Model != "" && !ValidModel(o.Model) {
-		return res, usage("--model %q is not a valid model id (letters, digits, . _ : / @ -)", o.Model)
+		return "", "", usage("--model %q is not a valid model id (letters, digits, . _ : / @ -)", o.Model)
 	}
 	if o.Kind != "" && !harness.Valid(o.Kind) {
-		return res, usage("--kind must be one of %s", strings.Join(harness.Kinds(), ", "))
+		return "", "", usage("--kind must be one of %s", strings.Join(harness.Kinds(), ", "))
 	}
-	tier := o.Tier
+	tier = o.Tier
 	if tier == "" {
 		tier = set.Tier
 	}
-	reason := strings.TrimSpace(o.TierReason)
+	reason = strings.TrimSpace(o.TierReason)
 	if roundcfg.TierRank(tier) > roundcfg.TierRank(set.Tier) && reason == "" {
-		return res, usage("--tier %s is above the default tier %s: say why with --tier-reason", tier, set.Tier)
+		return "", "", usage("--tier %s is above the default tier %s: say why with --tier-reason", tier, set.Tier)
 	}
 	if o.BodyFile != "" {
 		if _, err := os.Stat(o.BodyFile); err != nil {
-			return res, usage("--body-file %s: %v", o.BodyFile, err)
+			return "", "", usage("--body-file %s: %v", o.BodyFile, err)
 		}
 	}
+	return tier, reason, nil
+}
+
+// planAssign makes every refusal assign can make before it marks anything and
+// fills res as far as it got. stop reports a plan that ends without marks: a
+// readiness check (--check-only) or a best-of preflight.
+func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts, it *backlog.Item, bo *bestOfRun, tier, reason string, res *Assigned) (run assignRun, stop bool, err error) {
+	set := o.Settings
+	id := it.ID
 
 	// 1. This process holds the round's lease.
 	if err := e.requireLease(ctx, root, o); err != nil {
-		return res, err
+		return run, false, err
 	}
 
 	// 2. The slot: the named one, else the first idle roster slot, else the
@@ -556,19 +612,19 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	// refusal on the way moves nothing.
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
-		return res, err
+		return run, false, err
 	}
 	var slot *worker.Slot
 	resuming, queue := false, false
 	if o.Agent != "" {
 		slot = reg.Slot(o.Agent)
 		if slot == nil {
-			return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.Agent)}
+			return run, false, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.Agent)}
 		}
 	} else {
 		picked := e.pickSlots(ctx, reg, set.Roster, worker.NormID(id), 1)
 		if len(picked) == 0 {
-			return res, blocked(BlockNoFreeSlot, "every roster slot is busy")
+			return run, false, blocked(BlockNoFreeSlot, "every roster slot is busy")
 		}
 		slot = picked[0]
 	}
@@ -578,7 +634,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 		if h != worker.NormID(id) {
 			ok, why := e.parkable(ctx, slot)
 			if !ok {
-				return res, blocked(BlockSlotBusy, "%s", busyMsg(agent, h, why))
+				return run, false, blocked(BlockSlotBusy, "%s", busyMsg(agent, h, why))
 			}
 			queue = true
 		} else {
@@ -597,39 +653,38 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 		res.Warnings = append(res.Warnings, pf.Warnings...)
 	}
 	if err != nil {
-		return res, err
+		return run, false, err
 	}
-	pick, kind, kindSource, model := pf.Pick, pf.Kind, pf.KindSource, pf.Model
 
 	if q := inReview(reg, id, bo); q != nil && !resuming {
-		return res, blocked(BlockClaimed, "%s has PR %s in review (from %s): rota round transfer %s --to <slot> picks it up", id, q.PR, q.From, id)
+		return run, false, blocked(BlockClaimed, "%s has PR %s in review (from %s): rota round transfer %s --to <slot> picks it up", id, q.PR, q.From, id)
 	}
 
 	if !resuming && !o.AcceptOpenPR {
 		// An attempt of a best-of:2 issue ignores the PR of its sibling's branch.
 		openPR, err := e.openPRIssuesExcept(ctx, be, bo.otherBranch())
 		if err != nil {
-			return res, err
+			return run, false, err
 		}
 		if n := openPR[it.IssueKey()]; n != 0 {
-			return res, blocked(BlockOpenPR, "%s has open PR #%d: not ready; --accept-open-pr assigns it again for a deliberate redo", id, n)
+			return run, false, blocked(BlockOpenPR, "%s has open PR #%d: not ready; --accept-open-pr assigns it again for a deliberate redo", id, n)
 		}
 	}
 
 	// 4. Readiness.
 	decisions, err := readBody(o.BodyFile)
 	if err != nil {
-		return res, err
+		return run, false, err
 	}
 	tracked := e.trackedFiles(ctx, root)
 	inFlight := e.InFlightItems(ctx, root, be, tracked, set.SharedPaths)
 	r, err := AssessScoped(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap, decisions, set.ScopeOverlap == "block")
 	if err != nil {
-		return res, err
+		return run, false, err
 	}
 	res.Readiness = r
 	if o.CheckOnly {
-		return res, nil
+		return run, true, nil
 	}
 	if !r.Ready() {
 		by := BlockNotReady
@@ -638,7 +693,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 		}
 		blk := blocked(by, "%s is not ready: %s", id, failedChecks(r))
 		blk.Readiness = &r
-		return res, blk
+		return run, false, blk
 	}
 
 	// round.batch: a slot resuming its own issue adds nothing to the open count.
@@ -646,33 +701,39 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 		if open := openItems(be, reg, id); open >= n {
 			blk := blocked(BlockBatch, "%d items are open and round.batch is %d", open, n)
 			blk.Batch, blk.Open = n, open
-			return res, blk
+			return run, false, blk
 		}
 	}
 
 	// A worker that cannot start is refused before anything is marked.
-	warns, err := e.deliveryRefusals(ctx, root, kind, agent, model)
+	warns, err := e.deliveryRefusals(ctx, root, pf.Kind, agent, pf.Model)
 	if err != nil {
-		return res, err
+		return run, false, err
 	}
 	res.Warnings = append(res.Warnings, warns...)
 
 	// 5. The brief exists before anything is marked.
 	brief, ok := briefPath(root, set, e.getenv())
 	if !ok {
-		return res, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
+		return run, false, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
 	}
 
 	if bo != nil && bo.preflight {
-		return res, nil
+		return run, true, nil
 	}
 
 	res.SmokeSection = e.reserveSmokeSection(ctx, root, be, reg, set.Roster, id, agent)
+	return assignRun{id: id, agent: agent, branch: res.Branch, resuming: resuming, queue: queue,
+		kind: pf.Kind, kindSource: pf.KindSource, model: pf.Model, tier: tier, reason: reason,
+		pick: pf.Pick, decisions: decisions, brief: brief, bo: bo, slot: slot}, false, nil
+}
 
-	// 6-9. The marks and the dispatch run as compensating steps (saga.go): a
-	// failure before dispatch undoes the claim and state; the dispatch itself
-	// keeps them, because the pane may already hold the brief.
-	rnd := registryRound(root)
+// assignSteps is the assignment as steps for runSteps, with the delivery that
+// carries the dispatch (its cleanup is the caller's). res.Branch, Model and
+// SmokeSection are the plan's, and the steps fill res.Changed.
+func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpts, it *backlog.Item, run assignRun, rnd int, res *Assigned) ([]step, *delivery, error) {
+	id, agent, slot, bo := run.id, run.agent, run.slot, run.bo
+	resuming := run.resuming
 	claimID := agent + "@" + strconv.Itoa(rnd)
 	// The holder resuming its own issue keeps its attempt: the brief already in
 	// its pane names it. Any other assignment is a new attempt.
@@ -699,7 +760,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	}
 	w := e.workerEnv()
 	steps := []step{
-		{name: "queue the slot's PR", skip: func() bool { return !queue }, do: func() error {
+		{name: "queue the slot's PR", skip: func() bool { return !run.queue }, do: func() error {
 			return wrap(e.queuePR(ctx, root, be, agent))
 		}},
 		claimStep(be, id, claimID, holders, func() error {
@@ -723,7 +784,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 		}},
 		{name: "bind the slot", do: func() error {
 			if err := editSlot(root, agent, func(s *worker.Slot) error {
-				s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: res.Model, TierReason: reason, SmokeSection: res.SmokeSection, Attempt: attempt, AttemptBase: attemptBase})
+				s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: run.kind, KindSource: run.kindSource, Tier: run.tier, Model: res.Model, TierReason: run.reason, SmokeSection: res.SmokeSection, Attempt: attempt, AttemptBase: attemptBase})
 				return nil
 			}); err != nil {
 				return err
@@ -739,10 +800,11 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 			return worker.RecordItemStart(root, worker.NormID(id), e.now())
 		}},
 	}
-	d := &delivery{Slot: agent, Task: id, Branch: func() string { return res.Branch }, Kind: kind, Model: res.Model, Round: rnd,
+	set := o.Settings
+	d := &delivery{Slot: agent, Task: id, Branch: func() string { return res.Branch }, Kind: run.kind, Model: res.Model, Round: rnd,
 		Brief: func() string {
 			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
-			text := pointerBrief(agent, id, res.Branch, brief, o.Siblings, decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: kind, Tier: tier, Model: res.Model, Default: set.Tier, Reason: reason, Table: set.Models[kind], Pick: pick.String(), Smoke: res.SmokeSection, Attempt: attempt, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()})
+			text := pointerBrief(agent, id, res.Branch, run.brief, o.Siblings, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Smoke: res.SmokeSection, Attempt: attempt, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()})
 			if hb := latestHandoffBranch(be, id); hb != "" {
 				text += fmt.Sprintf("\nAn earlier worker handed this issue back: read the latest `rota:handoff` comment on it. Its work is pushed on branch %s (origin/%s); fetch it before you start over.\n", hb, hb)
 			}
@@ -751,21 +813,9 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	// 8-9. The account, the pointer brief and the hand-off.
 	ds, err := d.steps(ctx, e, root)
 	if err != nil {
-		return res, err
+		return nil, d, err
 	}
-	steps = append(steps, ds...)
-	err = runSteps(steps)
-	d.cleanup()
-	res.Account, res.Host, res.Brief, res.Worktree = d.Account, d.Host, d.BriefText, d.Worktree
-	res.Dispatched = res.Dispatched || d.Dispatched
-	res.Changed = res.Changed || d.Changed
-	if err == nil && !resuming {
-		if lerr := worker.LedgerAppendErr(e.Worker, root, ledger.Entry{Kind: ledger.KindAssign, Issue: id, Slot: agent, Account: res.Account, Harness: kind,
-			Detail: ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts, root, kind, res.Account))}); lerr != nil {
-			return res, fmt.Errorf("%s is assigned to %s, but the round ledger row was not written: %w", id, agent, lerr)
-		}
-	}
-	return res, err
+	return append(steps, ds...), d, nil
 }
 
 // claimStep takes the issue's claim, among the first holders open claims (two
