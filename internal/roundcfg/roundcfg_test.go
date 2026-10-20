@@ -75,8 +75,26 @@ func TestTierDefaults(t *testing.T) {
 	if !reflect.DeepEqual(s.Models[harness.Claude], want) {
 		t.Errorf("claude map %v", s.Models[harness.Claude])
 	}
-	if _, ok := s.Models[harness.Codex]; ok || s.Model(harness.Codex, TierLight) != "" {
-		t.Errorf("codex is unconfigured by default: %v", s.Models)
+	for kind, want := range map[string]map[string]string{
+		harness.Codex:    {"light": "gpt-6-luna", "standard": "gpt-6.1-sol", "heavy": "gpt-6-astra"},
+		harness.OpenCode: {"light": "opencode/claude-haiku-5-5", "standard": "opencode/claude-sonnet-5-5", "heavy": "opencode/claude-opus-5-5"},
+	} {
+		if !reflect.DeepEqual(s.Models[kind], want) {
+			t.Errorf("%s ships a light-to-heavy default: %v", kind, s.Models[kind])
+		}
+	}
+}
+
+func TestNonClaudeTierOverrides(t *testing.T) {
+	// One explicit tier wins and the other two stay on their defaults.
+	s, err := Load(project(t, `{"round":{"tiers":{"codex":{"heavy":"x"}}}}`))
+	if err != nil || s.Model(harness.Codex, TierHeavy) != "x" || s.Model(harness.Codex, TierLight) != "gpt-6-luna" {
+		t.Fatalf("one explicit tier: %v %v", err, s.Models[harness.Codex])
+	}
+	// All three empty means the harness default, no --model.
+	s, err = Load(project(t, `{"round":{"tiers":{"opencode":{"light":"","standard":"","heavy":""}}}}`))
+	if err != nil || s.Model(harness.OpenCode, TierLight) != "" || s.Model(harness.OpenCode, TierHeavy) != "" {
+		t.Fatalf("explicit empty is the harness default: %v %v", err, s.Models[harness.OpenCode])
 	}
 }
 
@@ -96,7 +114,7 @@ func TestCodexMapNeedsEveryTier(t *testing.T) {
 	if err != nil || s.Model(harness.Codex, TierHeavy) != "c" {
 		t.Fatalf("a full codex map: %v %v", err, s.Models)
 	}
-	_, err = Load(project(t, `{"round":{"tiers":{"codex":{"light":"a","heavy":"c"}}}}`))
+	_, err = Load(project(t, `{"round":{"tiers":{"codex":{"light":"a","standard":"","heavy":"c"}}}}`))
 	if err == nil || !strings.Contains(err.Error(), "round.tiers.codex.standard") {
 		t.Fatalf("a partial map names the missing tier: %v", err)
 	}
@@ -298,8 +316,8 @@ func TestProfileLeavesCodexAndOpenCodeAlone(t *testing.T) {
 	if got := s.Models[harness.Codex]; got["light"] != "a" || got["heavy"] != "c" {
 		t.Errorf("codex map touched: %v", got)
 	}
-	if _, ok := s.Models[harness.OpenCode]; ok {
-		t.Errorf("opencode must stay unconfigured: %v", s.Models)
+	if got := s.Models[harness.OpenCode]["heavy"]; got != "opencode/claude-opus-5-5" {
+		t.Errorf("opencode must stay on its defaults: %v", s.Models)
 	}
 }
 
@@ -321,9 +339,10 @@ func TestEffectiveModelAndSource(t *testing.T) {
 		{"profile", `{"round":{"profile":"budget"}}`, "claude", "heavy", row{"sonnet", "profile"}},
 		{"explicit beats profile", `{"round":{"profile":"budget","tiers":{"claude":{"light":"opus"}}}}`, "claude", "light", row{"opus", "explicit"}},
 		{"inherit is harness default", `{"round":{"profile":"inherit"}}`, "claude", "standard", row{"", "harness default"}},
-		{"codex unset", ``, "codex", "light", row{"", "harness default"}},
+		{"codex unset", ``, "codex", "light", row{"gpt-6-luna", "default"}},
+		{"codex explicit empty", `{"round":{"tiers":{"codex":{"light":""}}}}`, "codex", "light", row{"", "harness default"}},
 		{"codex explicit", `{"round":{"tiers":{"codex":{"light":"x"}}}}`, "codex", "light", row{"x", "explicit"}},
-		{"profile does not reach opencode", `{"round":{"profile":"quality"}}`, "opencode", "heavy", row{"", "harness default"}},
+		{"profile does not reach opencode", `{"round":{"profile":"quality"}}`, "opencode", "heavy", row{"opencode/claude-opus-5-5", "default"}},
 	}
 	for _, c := range cases {
 		cfg := config.Load(rotatree.Config(project(t, c.cfg)))

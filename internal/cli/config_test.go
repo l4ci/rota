@@ -195,8 +195,8 @@ func TestConfigShowReportsEffectiveTierModels(t *testing.T) {
 		"round.tiers.claude.standard": {"haiku", "profile"},
 		"round.tiers.claude.heavy":    {"fable", "explicit"},
 		"round.tiers.codex.standard":  {"c2", "explicit"},
-		"round.tiers.opencode.light":  {"", "harness default"},
-		"round.tiers.opencode.heavy":  {"", "harness default"},
+		"round.tiers.opencode.light":  {"opencode/claude-haiku-5-5", "default"},
+		"round.tiers.opencode.heavy":  {"opencode/claude-opus-5-5", "default"},
 	}
 	for k, w := range want {
 		if got[k] != w {

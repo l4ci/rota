@@ -272,12 +272,12 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `round.tiers.claude.light` | string | `"haiku"` |  | Model a light-tier Claude worker starts with. |
 | `round.tiers.claude.standard` | string | unset |  | Model a standard-tier Claude worker starts with. Empty follows models.worker. |
 | `round.tiers.claude.heavy` | string | `"opus"` |  | Model a heavy-tier Claude worker starts with. |
-| `round.tiers.codex.light` | string | unset |  | Model a light-tier Codex worker starts with. Empty: Codex's own default; a configured kind must set all three tiers. |
-| `round.tiers.codex.standard` | string | unset |  | Model a standard-tier Codex worker starts with. Empty: Codex's own default; a configured kind must set all three tiers. |
-| `round.tiers.codex.heavy` | string | unset |  | Model a heavy-tier Codex worker starts with. Empty: Codex's own default; a configured kind must set all three tiers. |
-| `round.tiers.opencode.light` | string | unset |  | Model a light-tier OpenCode worker starts with, as a provider/model id from opencode models. Empty: OpenCode's own default; a configured kind must set all three tiers. |
-| `round.tiers.opencode.standard` | string | unset |  | Model a standard-tier OpenCode worker starts with, as a provider/model id from opencode models. Empty: OpenCode's own default; a configured kind must set all three tiers. |
-| `round.tiers.opencode.heavy` | string | unset |  | Model a heavy-tier OpenCode worker starts with, as a provider/model id from opencode models. Empty: OpenCode's own default; a configured kind must set all three tiers. |
+| `round.tiers.codex.light` | string | `"gpt-6-luna"` |  | Model a light-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three. |
+| `round.tiers.codex.standard` | string | `"gpt-6.1-sol"` |  | Model a standard-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three. |
+| `round.tiers.codex.heavy` | string | `"gpt-6-astra"` |  | Model a heavy-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three. |
+| `round.tiers.opencode.light` | string | `"opencode/claude-haiku-5-5"` |  | Model a light-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three. |
+| `round.tiers.opencode.standard` | string | `"opencode/claude-sonnet-5-5"` |  | Model a standard-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three. |
+| `round.tiers.opencode.heavy` | string | `"opencode/claude-opus-5-5"` |  | Model a heavy-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three. |
 | `round.stallMinutes` | int | `30` |  | Minutes a slot with a live agent may show no commit, edit or state change before rota round reconcile reports it stalled. 0 turns the check off. |
 | `round.maxBounces` | int | `3` |  | How often rota worker gate may send one item's PR back before it parks the item as needs-human. 0 turns the cap off. |
 | `round.freshAt` | int | `2` |  | Bounce count at which rota round review-relay stops resuming the worker and transfers the branch to a free slot at the same tier, with a brief of the open findings only. Must stay below round.maxBounces to act. 0 turns it off. |

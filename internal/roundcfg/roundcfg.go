@@ -60,11 +60,14 @@ type Settings struct {
 	// makes a clash on declared scopes fail the overlap check like a shared path.
 	ScopeOverlap string
 	// Tier is the default tier; Models maps kind -> tier -> model name for
-	// every configured kind (a kind with no tier set is absent).
+	// every kind with a model (shipped defaults count; a kind whose tiers are
+	// all set empty is absent). Tiered is the kinds the project opted into:
+	// claude, and a kind whose tier map it set itself.
 	Tier string
 	// Profile is round.profile: "" or a name in Profiles; it fills the Claude tiers.
 	Profile string
 	Models  map[string]map[string]string
+	Tiered  map[string]bool
 	// WorkerKind is round.workerKind: the project's default worker harness,
 	// "" when unset (the slot's recorded kind, else claude, decides).
 	WorkerKind string
@@ -311,8 +314,10 @@ func loadTiers(cfg any, s *Settings) error {
 		return err
 	}
 	s.Models = map[string]map[string]string{}
+	s.Tiered = map[string]bool{}
 	for _, kind := range harness.Kinds() {
 		rule := harness.Resolve(kind).Tiers()
+		s.Tiered[kind] = rule.Required || harness.TierMapSet(cfg, kind)
 		m := map[string]string{}
 		for _, tier := range Tiers {
 			if _, err := config.Value(cfg, harness.TierKey(kind, tier)); err != nil {
