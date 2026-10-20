@@ -251,12 +251,13 @@ note: the generated block text names `rota map query <name>` (it names `.hv/bin/
 ### rota map stats
 rota map stats [--cap]
 repo: none
-data: {"subsystems": [{"name": string, "bytes": number, "touched": string, "entryPoints": number, "brokenRefs": number}], "count": number, "cap"?: number, "overCap"?: bool}
-exit: implied only. `--cap` is advisory and never fails.
+data: {"subsystems": [{"name": string, "bytes": number, "touched": string, "entryPoints": number, "brokenRefs": number, "commitsBehind"?: number}], "count": number, "cap"?: number, "overCap"?: bool}
+exit: implied only. `--cap` and the staleness warning are advisory and never fail.
 old: hv-map-stats    (and, with `--cap`, also hv-map-cap-check)
 shim: the old JSON keys `entry_points` and `broken_refs` are renamed to `entryPoints` and `brokenRefs`, and `count` is `len(subsystems)`. With `--cap` the shim also runs hv-map-cap-check; a stderr `note: project map has N subsystems (cap C)…` sets `overCap: true` and becomes a `warnings` entry. `cap` is config `map.softcap_subsystems`, default 20.
 note: `touched` is `YYYY-MM-DD` from frontmatter `touched:`, else the git mtime, else `""`. A missing `.rota/map/` gives `subsystems: []`. In text mode `--cap` prints only the nudge, or nothing below the cap.
 note: `--cap` only adds `cap`, `overCap` and the warning, so the verb keeps one output shape where the old pair had two.
+note: `commitsBehind` is the count of commits HEAD is past the file's frontmatter `last_mapped_commit` (`git rev-list --count <sha>..HEAD`). It is omitted for a file without the field, with a value that is not a hash, or with a commit not in this history. When it is above config `map.staleCommits` (default 50; 0 disables), the verb prints `note: map <name> is <n> commits behind HEAD (map.staleCommits <limit>); re-run /rota-refactor --map` on stdout, repeats it on stderr and adds it to `warnings`. The text line of a subsystem with the field ends `, <n> commits behind`.
 
 ### rota qa query
 rota qa query <target>…

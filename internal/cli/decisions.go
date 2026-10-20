@@ -132,9 +132,20 @@ func mapStats(fs *flag.FlagSet) RunFunc {
 		subs := mapqa.Stats(st.Root)
 		list := []any{}
 		var lines []string
+		staleLimit := mapqa.StaleCommits(st.Root)
+		var stale []string
 		for _, s := range subs {
-			list = append(list, knObj("name", s.Name, "bytes", s.Bytes, "touched", s.Touched, "entryPoints", s.EntryPoints, "brokenRefs", s.BrokenRefs))
-			lines = append(lines, fmt.Sprintf("%s: %d bytes, touched %s, %d entry points, %d broken", s.Name, s.Bytes, s.Touched, s.EntryPoints, s.BrokenRefs))
+			row := knObj("name", s.Name, "bytes", s.Bytes, "touched", s.Touched, "entryPoints", s.EntryPoints, "brokenRefs", s.BrokenRefs)
+			line := fmt.Sprintf("%s: %d bytes, touched %s, %d entry points, %d broken", s.Name, s.Bytes, s.Touched, s.EntryPoints, s.BrokenRefs)
+			if s.CommitsBehind != nil {
+				row.Set("commitsBehind", *s.CommitsBehind)
+				line += fmt.Sprintf(", %d commits behind", *s.CommitsBehind)
+				if staleLimit > 0 && *s.CommitsBehind > staleLimit {
+					stale = append(stale, mapqa.StaleNote(s.Name, *s.CommitsBehind, staleLimit))
+				}
+			}
+			list = append(list, row)
+			lines = append(lines, line)
 		}
 		data := knObj("subsystems", list, "count", len(subs))
 		text := strings.Join(lines, "\n")
@@ -149,6 +160,13 @@ func mapStats(fs *flag.FlagSet) RunFunc {
 				c.Warn("%s", note)
 				text = "note: " + note
 			}
+		}
+		for _, note := range stale {
+			c.Warn("%s", note)
+			if text != "" {
+				text += "\n"
+			}
+			text += "note: " + note
 		}
 		return Result{Data: data, Text: text}, nil
 	}
