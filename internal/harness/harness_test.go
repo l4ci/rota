@@ -282,6 +282,11 @@ func TestWorkerKindEnumIsKinds(t *testing.T) {
 	if !slices.Equal(got, Kinds()) {
 		t.Errorf("round.workerKind enum %v, want %v", got, Kinds())
 	}
+	for _, k := range config.Keys {
+		if k.Name == "plan.criticHarness" && !slices.Equal(k.Choices, Kinds()) {
+			t.Errorf("plan.criticHarness enum %v, want %v", k.Choices, Kinds())
+		}
+	}
 	if p := config.PromptFor("round.workerKind"); p == nil {
 		t.Error("no setup prompt for round.workerKind")
 	} else {

@@ -205,9 +205,10 @@ rota config set work.tdd false
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `plan.maxTasks` | `3` | Tasks a plan may hold before `rota plan check` warns and suggests splitting it into dependent items. `0` turns the warning off. |
+| `plan.criticHarness` | unset | Harness that runs the level-4 `/rota-plan` critic, read-only: `claude`, `codex` or `opencode`. Unset: the planning harness's own subagent. A missing binary or failed run falls back to that subagent with one printed line. Levels 1-3 never read it. `rota config set` refuses other values; `rota config set plan.criticHarness ""` clears it. |
 | `plan.maxFilesPerTask` | `5` | Paths a task's `Files:` line may name before `rota plan check` warns about that task. `0` turns the warning off. |
 
-Both warnings are advisory: the check still exits 0. Both keys take an integer of 0 or more, and `rota config set` refuses anything else.
+The two limits are advisory warnings: the check still exits 0. Both take an integer of 0 or more, and `rota config set` refuses anything else.
 
 ```bash
 rota config set plan.maxTasks 5
