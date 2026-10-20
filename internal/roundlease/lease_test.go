@@ -446,6 +446,19 @@ func TestPSSourceReadsAncestryWithoutProc(t *testing.T) {
 	}
 }
 
+// TestPSStatParsesSingleDigitDay pins that ps pads days below 10 with two
+// spaces ("Oct  5"); strings.Fields collapses them and layout _2 still parses.
+func TestPSStatParsesSingleDigitDay(t *testing.T) {
+	withPS(t, map[string][2]string{
+		"900000011": {"900000012 Sun Oct  5 09:03:07 2025", "/bin/zsh"},
+	})
+	pp, st, ok := psStat(900000011)
+	want := time.Date(2025, 10, 5, 9, 3, 7, 0, time.Local).Unix()
+	if !ok || pp != 900000012 || int64(st) != want {
+		t.Fatalf("psStat = %d %d %v, want 900000012 %d true", pp, st, ok, want)
+	}
+}
+
 func TestDiscoverFlagsUnreadableAncestry(t *testing.T) {
 	e := fakeEnv("h1", procs{})
 	e.Parent = func() int { return 4242 }
