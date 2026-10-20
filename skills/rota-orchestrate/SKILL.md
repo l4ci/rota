@@ -53,7 +53,7 @@ Work another tool already started (a Codex worktree, an agent-team branch, a clo
 
 ## 3. The loop
 
-**`rota round watch` is how you wait.** Keep one armed: run it as a background command whenever workers are active and re-arm it every time it exits. It wakes you on a slot, PR or escalation change and at a heartbeat, so you stay reachable while you talk to the maintainer. Never use a blocking question picker during a round: ask in prose and keep working. The Stop hook refuses to let you go idle without a watch.
+**`rota round watch` is how you wait.** Keep one armed: run it as a background command whenever workers are active and re-arm it every time it exits. It wakes you on a slot, PR or escalation change and at a heartbeat, so you stay reachable while you talk to the maintainer. Never use a blocking question picker during a round: ask in prose and keep working. The one exception is a maintainer-invoked [`/rota-answer`](../rota-answer/SKILL.md) (section 5). The Stop hook refuses to let you go idle without a watch.
 
 `rota round wait` is the blocking form, for when you have nothing else to do. It returns the slot that needs you with its state and evidence, and records what it returned. A slot comes back once per change: the next `wait` skips it until its worker moves again. Never poll in your own context: no sleep loops, no repeated `status`, no tailing panes. When `watch` or `wait` returns, act, then wait again. If your shell cuts commands short, loop on a finite `--timeout`.
 
@@ -82,7 +82,7 @@ When a slot is `dead`, `unknown`, `unverifiable` or stalled, a worker is stuck, 
 
 ## 5. Escalations and provenance
 
-When a worker is `blocked` on a question, or you relay to a worker or review its approvals, read [`escalations-and-provenance.md`](escalations-and-provenance.md). Escalate only choices a user would notice; sign every message you send a worker; cite the real channel of every approval.
+When a worker is `blocked` on a question, or you relay to a worker or review its approvals, read [`escalations-and-provenance.md`](escalations-and-provenance.md). Escalate only choices a user would notice. When two or more decisions wait on the maintainer, see *Many waiting* in that file (`/rota-answer`). Sign every message you send a worker; cite the real channel of every approval.
 
 ## 6. Merge
 

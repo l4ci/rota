@@ -66,6 +66,19 @@
       "better": "rota-decide"
     },
     {
+      "id": "rota-answer-loads",
+      "skill": "rota-answer",
+      "request": "/rota-answer: put the open decisions of this round to me one by one.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-answer-skips",
+      "skill": "rota-answer",
+      "request": "Lock in the boundary that workers never edit .rota/ by hand.",
+      "expect": "skip",
+      "better": "rota-decide"
+    },
+    {
       "id": "rota-orchestrate-loads",
       "skill": "rota-orchestrate",
       "request": "You are the orchestrator. Run a round and assign the next issues to the workers.",
