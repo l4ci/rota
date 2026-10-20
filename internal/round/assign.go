@@ -402,7 +402,7 @@ func (t tierBrief) text() string {
 		fmt.Fprintf(&b, "Your smoke section, if you add one, is number %d (test/sections/%d_*.sh): it is reserved for you, so use exactly that number.\n", t.Smoke, t.Smoke)
 	}
 	if t.Attempt != "" {
-		fmt.Fprintf(&b, "Your attempt id is %s. Pass `--attempt %s` to `rota worker done <slot>` and to `rota round report`. If either refuses it as a stale attempt, your assignment was reclaimed or transferred: stop, do not retry, and push or report nothing more.\n", t.Attempt, t.Attempt)
+		fmt.Fprintf(&b, "Your attempt id is %s. Pass `--attempt %s` to `rota worker done <slot>` and to `rota round report`. If either refuses it as a stale attempt, your assignment was reclaimed or transferred: stop, do not retry, and push or report nothing more. End every commit message with the trailer `Rota-Attempt: %s` (`git commit --trailer \"Rota-Attempt: %s\"`): the merge gate refuses a PR with a commit stamped by an attempt you no longer hold.\n", t.Attempt, t.Attempt, t.Attempt, t.Attempt)
 	}
 	fmt.Fprintf(&b, "Put `Worker tier: %s` in your PR body.\n", own)
 	return b.String()
@@ -628,9 +628,9 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	claimID := agent + "@" + strconv.Itoa(rnd)
 	// The holder resuming its own issue keeps its attempt: the brief already in
 	// its pane names it. Any other assignment is a new attempt.
-	attempt := ""
+	attempt, attemptBase := "", ""
 	if resuming {
-		attempt = slot.Attempt()
+		attempt, attemptBase = slot.Attempt(), slot.AttemptBase()
 	}
 	if attempt == "" {
 		attempt = worker.NewAttempt()
@@ -664,8 +664,12 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 			return nil
 		}},
 		{name: "bind the slot", do: func() error {
+			if !resuming {
+				// Work already on the branch (a handed-back issue) is an earlier attempt's.
+				attemptBase = e.branchTip(ctx, root, res.Branch)
+			}
 			if err := editSlot(root, agent, func(s *worker.Slot) error {
-				s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: res.Model, TierReason: reason, SmokeSection: res.SmokeSection, Attempt: attempt})
+				s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: res.Model, TierReason: reason, SmokeSection: res.SmokeSection, Attempt: attempt, AttemptBase: attemptBase})
 				return nil
 			}); err != nil {
 				return err
