@@ -9,6 +9,10 @@ description: Use when the session is approaching a context limit, the work must 
 
 `/rota-work` with no argument reads the handoff note next session; it goes away when the stream is resumed or abandoned (`rota status rm` deletes it).
 
+## When to Use
+
+- The context guard fired (`work.contextGuard`): a prompt line or a Stop block recommended `/rota-pause` because the context reached the handoff threshold. Pause at the next task boundary.
+
 ## When NOT to Use
 
 - Work complete → `/rota-ship`

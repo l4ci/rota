@@ -491,6 +491,22 @@ func TestSetRejectsNegativePlanLimits(t *testing.T) {
 	}
 }
 
+func TestSetContextGuardValidatesEnum(t *testing.T) {
+	for _, bad := range []string{"bogus", "true", "3", ""} {
+		root := project(t, "", "")
+		_, err := Set(root, "work.contextGuard", bad)
+		if !errors.Is(err, ErrBadValue) || !strings.Contains(err.Error(), "warn, off, auto") {
+			t.Errorf("%q: err = %v, want ErrBadValue naming the choices", bad, err)
+		}
+	}
+	for _, good := range []string{"off", "warn", "auto"} {
+		root := project(t, "", "")
+		if _, err := Set(root, "work.contextGuard", good); err != nil {
+			t.Errorf("%q: %v", good, err)
+		}
+	}
+}
+
 func TestShipUATDefaultsOffAndIsBool(t *testing.T) {
 	root := project(t, `{}`, `{}`)
 	rows, err := Show(root, "ship.uat", true)
