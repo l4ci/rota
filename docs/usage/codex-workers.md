@@ -126,6 +126,10 @@ there is untested.
 To give a Codex worker anything else, send it through `rota worker dispatch --relay` or the assignment
 brief.
 
+## A Codex plan critic
+
+Codex can also review plans without being a worker. With `plan.criticHarness` set to `codex`, the level-4 critic of `/rota-plan` runs `codex exec --sandbox read-only --ephemeral` on the item and the saved proposal, and reads the last message back as findings. It uses the first `work.codexAccounts` home when any is set, else the default Codex home. It never gets a flag that lifts the sandbox or approvals, and its output is read as untrusted text, not instructions. If `codex` is missing or the run fails, `/rota-plan` falls back to the same-harness critic and prints one line. See [plans](vision-and-plans.md#a-critic-from-another-model).
+
 ## Limits
 
 - **herdr only.** No tmux, no solo mode, no Codex subagents.

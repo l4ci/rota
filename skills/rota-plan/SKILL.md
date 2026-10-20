@@ -69,7 +69,7 @@ Rules:
 
 **Self-check before asking** (silent): every Acceptance criterion maps to a task through its `Serves:` line; no placeholders (`TBD`, `...`, `similar to Task N`); names, paths and signatures match across tasks, each Consumes against an earlier Produces. Fix misses, then say in one line what you fixed (omit if nothing).
 
-**Critic (level 4, or level 3 when the item has a `decision` comment).** When the planning dial picked the adversarial pass or the item has at least one `decision` comment, follow [`references/plan-critic.md`](references/plan-critic.md): dispatch a fresh `standard` subagent that sees only the item and the proposal, then fold accepted findings into the plan and list rejected ones with a reason under `## Critic findings`, before asking. Otherwise skip this; the flow is unchanged.
+**Critic (level 4, or level 3 when the item has a `decision` comment).** When the planning dial picked the adversarial pass or the item has at least one `decision` comment, follow [`references/plan-critic.md`](references/plan-critic.md): dispatch a fresh `standard` subagent (at level 4 with `plan.criticHarness` set, a read-only run on that harness, falling back to the subagent with one printed line) that sees only the item and the proposal, then fold accepted findings into the plan and list rejected ones with a reason under `## Critic findings` (headed by the harness that produced them), before asking. Otherwise skip this; the flow is unchanged.
 
 Ask once: *"Confirm this plan? (yes / changes)"*. *yes* writes it; *changes* means apply the edits and write; don't loop. Silence is not approval. If the redirect moves the Goal itself, re-propose.
 

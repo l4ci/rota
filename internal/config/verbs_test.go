@@ -520,3 +520,24 @@ func TestShipUATDefaultsOffAndIsBool(t *testing.T) {
 		t.Errorf("Set ship.uat true: %v", err)
 	}
 }
+
+func TestPlanCriticHarnessIsOptInEnum(t *testing.T) {
+	rows, err := Show(project(t, `{}`, `{}`), "plan.criticHarness", true)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("plan.criticHarness: %v, %v", rows, err)
+	}
+	if rows[0].Value != "" || rows[0].Source != "default" {
+		t.Errorf("plan.criticHarness = %v (%s), want unset from default", rows[0].Value, rows[0].Source)
+	}
+	for _, bad := range []string{"bogus", "hermes", "true", "3"} {
+		_, err := Set(project(t, "", ""), "plan.criticHarness", bad)
+		if !errors.Is(err, ErrBadValue) || !strings.Contains(err.Error(), "claude, codex, opencode") {
+			t.Errorf("%q: err = %v, want ErrBadValue naming the choices", bad, err)
+		}
+	}
+	for _, good := range []string{"claude", "codex", "opencode", ""} {
+		if _, err := Set(project(t, "", ""), "plan.criticHarness", good); err != nil {
+			t.Errorf("%q: %v", good, err)
+		}
+	}
+}

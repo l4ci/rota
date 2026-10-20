@@ -85,7 +85,17 @@ How much planning an item gets is the planning dial. Before it plans, `/rota-pla
 | 1. Pointers | Nothing: the plain plan. |
 | 2. Spec | Acceptance written first, the chosen approach and the one you rejected (a `/rota-brainstorm` design). |
 | 3. Research round | Open technical questions answered by trying (`/rota-spike`). |
-| 4. Adversarial pass | A grilling pass and a critic subagent argue against the finished plan. |
+| 4. Adversarial pass | A grilling pass and a critic argue against the finished plan. The critic is a subagent of the planning harness, or a read-only run on another harness when `plan.criticHarness` is set. |
+
+### A critic from another model
+
+A critic from the planner's own model shares its blind spots. Set `plan.criticHarness` to `claude`, `codex` or `opencode` and the level-4 critic runs on that harness instead: headless, read-only, with the same brief and the same inputs (the item and the saved proposal, nothing else). Unset, the critic is the same-harness subagent as before. Levels 1-3 never read the key, and level 3 with a `decision` comment keeps the same-harness critic.
+
+```bash
+rota config set plan.criticHarness codex
+```
+
+If that harness is not installed or the run fails, `/rota-plan` runs the same-harness critic and prints one line saying so; the critic is never skipped silently. The `## Critic findings` section names the harness that produced the findings. The critic runs once per plan; it does not loop. See [Codex workers](codex-workers.md#a-codex-plan-critic).
 
 When two levels fit, the lower one wins. A round worker never stops on the level: the issue's acceptance criteria are its spec.
 
