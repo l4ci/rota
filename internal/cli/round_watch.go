@@ -207,9 +207,14 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 		d.Set("autopilotStopped", stopped)
 		text = append(text, "autopilot\tstopped\t"+stopped)
 	}
-	if f, ok := staleBinaryOncePerRound(c, cd, round); ok {
+	f, stale, serr := staleBinaryOncePerRound(c, cd, round)
+	if stale {
 		d.Set("staleBinary", staleData(f))
 		text = append(text, "warning\t"+f.Detail()+"; rebuild: "+f.Rebuild)
+	}
+	if serr != nil {
+		d.Set("staleBinaryError", serr.Error())
+		text = append(text, "warning\tstale-binary check: "+serr.Error())
 	}
 	if len(text) == 0 {
 		text = append(text, res.Reason+"\t"+digest)
