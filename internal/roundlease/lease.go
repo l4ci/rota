@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -61,6 +63,10 @@ type Holder struct {
 	Start    uint64
 	Pane     string
 	PaneHost host.Kind
+	// Unverified is set by Discover when the ancestry walk could not read the
+	// process table and nothing named the holder: PID is then the bare parent,
+	// likely a shell that exits with the command.
+	Unverified bool
 }
 
 // HeldError is returned by Acquire when a live or foreign lease belongs to
@@ -280,8 +286,50 @@ func procStat(pid int) (ppid int, start uint64, ok bool) {
 	return pp, st, true
 }
 
+// psRun runs ps with the C locale and returns its trimmed stdout. Tests swap it.
+var psRun = func(args ...string) (string, error) {
+	cmd := exec.Command("ps", args...)
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	b, err := cmd.Output()
+	return strings.TrimSpace(string(b)), err
+}
+
+// psStat reads ppid and start time (unix seconds) of pid through ps, for hosts
+// without /proc (macOS).
+func psStat(pid int) (ppid int, start uint64, ok bool) {
+	out, err := psRun("-o", "ppid=,lstart=", "-p", strconv.Itoa(pid))
+	if err != nil {
+		return 0, 0, false
+	}
+	f := strings.Fields(out)
+	if len(f) != 6 { // ppid, then "Mon Oct 20 12:00:00 2026"
+		return 0, 0, false
+	}
+	pp, err := strconv.Atoi(f[0])
+	if err != nil {
+		return 0, 0, false
+	}
+	t, err := time.ParseInLocation("Mon Jan _2 15:04:05 2006", strings.Join(f[1:], " "), time.Local)
+	if err != nil || t.Unix() <= 0 {
+		return 0, 0, false
+	}
+	return pp, uint64(t.Unix()), true
+}
+
+// psComm reads the command name of pid through ps; macOS reports a full path.
+func psComm(pid int) string {
+	out, err := psRun("-o", "comm=", "-p", strconv.Itoa(pid))
+	if err != nil || out == "" {
+		return ""
+	}
+	return filepath.Base(out)
+}
+
 func procStart(pid int) (uint64, bool) {
-	_, st, ok := procStat(pid)
+	if _, st, ok := procStat(pid); ok {
+		return st, true
+	}
+	_, st, ok := psStat(pid)
 	return st, ok
 }
 
@@ -293,10 +341,16 @@ func procComm(pid int) string {
 	return strings.TrimSpace(string(b))
 }
 
-// realProc reads ppid and comm from /proc.
+// realProc reads ppid and comm from /proc, or through ps where there is none.
 func realProc(pid int) (int, string, bool) {
-	pp, _, ok := procStat(pid)
-	comm := procComm(pid)
+	if pp, _, ok := procStat(pid); ok {
+		if comm := procComm(pid); comm != "" {
+			return pp, comm, true
+		}
+		return 0, "", false
+	}
+	pp, _, ok := psStat(pid)
+	comm := psComm(pid)
 	return pp, comm, ok && comm != ""
 }
 
@@ -347,6 +401,7 @@ func (e Env) Discover(pid int, getenv func(string) string) Holder {
 		for cur, n := pid, 0; n < 16 && cur > 1; n++ {
 			pp, comm, ok := proc(cur)
 			if !ok {
+				h.Unverified = n == 0
 				break
 			}
 			if hostServer(comm) {

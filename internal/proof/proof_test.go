@@ -213,3 +213,30 @@ func TestAddDatesRowWithTheGivenDay(t *testing.T) {
 		t.Fatalf("row = %+v %v", row, err)
 	}
 }
+
+func TestProvesAtHead(t *testing.T) {
+	const head = "abc1234def5678"
+	pass := Row{Check: "go test ./x", Result: "PASS", Sha: "abc1234"}
+	fail := Row{Check: "go  test ./x", Result: "FAIL", Sha: "abc1234"}
+	for _, tc := range []struct {
+		name  string
+		rows  []Row
+		head  string
+		check string
+		want  bool
+	}{
+		{"pass at head", []Row{pass}, head, "go test ./x", true},
+		{"pass then fail at head", []Row{pass, fail}, head, "go test ./x", false},
+		{"fail then pass at head", []Row{fail, pass}, head, "go test ./x", true},
+		{"pass at another sha", []Row{{Check: "go test ./x", Result: "PASS", Sha: "ffff000"}}, head, "go test ./x", false},
+		{"other check", []Row{pass}, head, "other", false},
+		{"row sha under 7 chars", []Row{{Check: "c", Result: "PASS", Sha: "abc123"}}, head, "c", false},
+		{"head under 7 chars", []Row{pass}, "abc123", "go test ./x", false},
+		{"head shorter than row sha", []Row{{Check: "c", Result: "PASS", Sha: head}}, "abc1234", "c", true},
+		{"no rows", nil, head, "c", false},
+	} {
+		if got := Proves(tc.rows, tc.head, tc.check); got != tc.want {
+			t.Errorf("%s: Proves = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

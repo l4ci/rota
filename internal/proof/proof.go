@@ -141,3 +141,34 @@ func parseRows(content string) (rows []Row, lines []string, err error) {
 	}
 	return
 }
+
+// minSha is the shortest sha a row or a query may carry and still name a commit.
+const minSha = 7
+
+// Latest is the latest row for check at sha: the row's sha and sha agree as
+// prefixes either way, both at least 7 characters, and checks compare with
+// whitespace collapsed. It is the one rule for which row speaks for a commit;
+// the caller reads the row's Result.
+func Latest(rows []Row, sha, check string) (Row, bool) {
+	sha, check = one(sha), one(check)
+	if len(sha) < minSha {
+		return Row{}, false
+	}
+	for i := len(rows) - 1; i >= 0; i-- {
+		r := rows[i]
+		if one(r.Check) != check || len(r.Sha) < minSha {
+			continue
+		}
+		if strings.HasPrefix(sha, r.Sha) || strings.HasPrefix(r.Sha, sha) {
+			return r, true
+		}
+	}
+	return Row{}, false
+}
+
+// Proves reports whether the latest row for check at head is a PASS: a FAIL
+// recorded after a PASS at the same sha withdraws the proof.
+func Proves(rows []Row, head, check string) bool {
+	r, ok := Latest(rows, head, check)
+	return ok && r.Result == "PASS"
+}

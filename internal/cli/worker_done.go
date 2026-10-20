@@ -215,30 +215,22 @@ func slotDir(sl *worker.Slot, fallback string) string {
 
 // missingFastProof lists what the PASS rows at head leave unproven: nothing
 // when a row ran the whole tier (`rota test run fast`), else each test.fast
-// command without a PASS row of its own. A FAIL row or a row at another sha
-// proves nothing.
+// command without a PASS row of its own. The latest row for a check at head
+// decides (proof.Proves): a FAIL after a PASS, or a row at another sha, proves
+// nothing.
 func missingFastProof(rows []proof.Row, head string, want []string) (missing []string) {
-	passed := map[string]bool{}
-	for _, r := range rows {
-		if r.Result == "PASS" && atHead(r.Sha, head) {
-			passed[r.Check] = true
-		}
-	}
 	// `proof record -- rota test run fast` stores the quoted multi-arg form;
 	// `-- "rota test run fast"` stores the plain one. Both prove the tier.
-	if passed[fastTierCheck] || passed[recordedCommand(strings.Fields(fastTierCheck), "")] {
+	if proof.Proves(rows, head, fastTierCheck) || proof.Proves(rows, head, recordedCommand(strings.Fields(fastTierCheck), "")) {
 		return nil
 	}
 	for _, w := range want {
-		if !passed[w] {
+		if !proof.Proves(rows, head, w) {
 			missing = append(missing, w)
 		}
 	}
 	return missing
 }
-
-// atHead reports whether a row's (abbreviated) sha names head.
-func atHead(sha, head string) bool { return len(sha) >= 7 && strings.HasPrefix(head, sha) }
 
 // branchHead is the commit the slot's branch points at.
 func branchHead(c *Ctx, root, branch string) (string, error) {
