@@ -560,7 +560,7 @@ type RootStatus struct {
 	Missing   []string
 	// Mode is the root's recorded install mode. For a stub root Current is
 	// judged against the stub digest and Changed names what differs: skills
-	// added, removed or whose frontmatter changed, as "<skill> (<what>)".
+	// added, removed or whose stub changed, as "<skill> (<what>)".
 	Mode    string
 	Changed []string
 }
@@ -627,8 +627,8 @@ func (s *Set) Status(roots []Root, version string) (Report, error) {
 }
 
 // stubChanges names the skills whose stub differs between what a manifest
-// recorded and the stub set now: added, removed, or changed in frontmatter (or
-// agent policy). Sorted by skill.
+// recorded and the stub set now: added, removed, or changed (a SKILL.md stub,
+// whose frontmatter or body template moved, or an agent policy). Sorted by skill.
 func stubChanges(recorded map[string]string, stub *Set) []string {
 	what := map[string]string{}
 	for _, p := range stub.paths {
@@ -638,7 +638,13 @@ func stubChanges(recorded map[string]string, stub *Set) []string {
 		case !ok && p == skill+"/SKILL.md":
 			what[skill] = "added"
 		case ok && have != hashBytes(stub.files[p]) && what[skill] == "":
-			what[skill] = "frontmatter changed"
+			// The manifest keeps only a hash per file, so the old frontmatter
+			// is gone: name what is known, not a guessed cause (the stub body
+			// template moves too).
+			what[skill] = "stub changed"
+			if p != skill+"/SKILL.md" {
+				what[skill] = "agent policy changed"
+			}
 		}
 	}
 	for p := range recorded {

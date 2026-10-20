@@ -34,7 +34,7 @@ func StampedVersion(cfg any) string {
 const PythonKeys = 46
 
 var (
-	issueSources   = []string{SourceFile, SourceGitHub, SourceGitLab, SourceForge, SourceJira, SourceLinear}
+	issueSources   = []string{SourceFile, SourceGitHub, SourceGitLab, SourceForge, SourceJira, SourceLinear, SourceItsaplan}
 	forgeProviders = []string{ForgeAuto, ForgeGitHub, ForgeGitLab, ForgeLocal}
 )
 
@@ -83,11 +83,12 @@ func effectiveValue(cfg any, k Key) (any, bool) {
 // it is what IssueSource reports for an unmigrated legacy config that says
 // "issues on the tracker" without naming it (the origin remote decides).
 const (
-	SourceFile   = "file"
-	SourceGitHub = "github"
-	SourceGitLab = "gitlab"
-	SourceJira   = "jira"
-	SourceLinear = "linear"
+	SourceFile     = "file"
+	SourceGitHub   = "github"
+	SourceGitLab   = "gitlab"
+	SourceJira     = "jira"
+	SourceLinear   = "linear"
+	SourceItsaplan = "itsaplan"
 	// SourceForge: the issues live on each repo's own forge (an umbrella whose
 	// sub-repos sit on different hosts).
 	SourceForge  = "forge"
@@ -103,7 +104,7 @@ const (
 )
 
 // IssueSource returns where the issues live: issues.source, one of file,
-// github, gitlab, jira or linear. Any other value is an error naming it.
+// github, gitlab, jira, linear or itsaplan. Any other value is an error naming it.
 //
 // While issues.source is unset and the legacy keys remain (an upgraded project
 // before rota migrate source), the legacy keys decide, so such a project never
@@ -286,12 +287,13 @@ type Prompt struct {
 // Prompts is the setup's questions, in the order they are asked.
 var Prompts = []Prompt{
 	{Key: "issues.source", Title: "Where do the issues live?", Help: map[string]string{
-		"file":   "BACKLOG.md in the repo",
-		"github": "GitHub issues (gh)",
-		"gitlab": "GitLab issues (glab)",
-		"forge":  "each repo's own forge (umbrellas on mixed hosts)",
-		"jira":   "Jira (needs a rota connect connection)",
-		"linear": "Linear (needs a rota connect connection)",
+		"file":     "BACKLOG.md in the repo",
+		"github":   "GitHub issues (gh)",
+		"gitlab":   "GitLab issues (glab)",
+		"forge":    "each repo's own forge (umbrellas on mixed hosts)",
+		"jira":     "Jira (needs a rota connect connection)",
+		"linear":   "Linear (needs a rota connect connection)",
+		"itsaplan": "It's a Plan (needs a rota connect connection)",
 	}},
 	{Key: "work.isolation", Title: "How is each piece of work isolated?", Help: map[string]string{
 		"branch":   "a feature branch in this checkout",
