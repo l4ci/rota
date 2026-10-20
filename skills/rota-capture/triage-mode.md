@@ -4,7 +4,7 @@ For tracker issues filed by others: the first read of a raw issue, before `rota 
 
 ### Step T1 — Read the issue
 
-Split `--triage` on commas. For each `<N>`: `gh issue view <N> --json title,body,labels,comments` (`glab issue view <N>` on GitLab; file backend: `rota backlog show <ID>`). Read the whole thread, not just the body: a decision or answer may sit in a comment. Skip an issue that already carries `in-progress` or an open claim.
+Split `--triage` on commas. For each `<N>`: `gh issue view <N> --json title,body,labels,comments` (`glab issue view <N>` on GitLab). Read the whole thread, not just the body: a decision or answer may sit in a comment. Skip an issue that already carries `in-progress` or an open claim.
 
 ### Step T2 — Redundancy search
 
@@ -32,7 +32,7 @@ Pick one, then show the findings from T2 to T4 and the chosen outcome before act
 |----------|---------|
 | Duplicate, already implemented or a decision settles it | **closed with the reason**: comment naming the duplicate `#N`, the location or the decision heading, then `gh issue close <N> --reason "not planned"` (`rota issues close` is for shipped work) |
 | Bug failed to reproduce, or insufficient detail | **needs-info**: post the question template below, then `rota issues label <N> --add needs-info` |
-| Nothing found and, for a bug, confirmed | **ready**: no label change; say so. Readiness for a round stays `rota round candidates`' call |
+| Nothing found and, for a bug, confirmed | **ready**: no label change; say so. run `rota item ready #<N>` and report its verdict; whether a round offers it stays `rota round candidates`' call |
 
 Options: 1. the recommended outcome · 2. *"Ready anyway"* · 3. *"Leave untouched"*.
 
