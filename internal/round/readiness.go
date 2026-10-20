@@ -67,6 +67,12 @@ type InFlight struct {
 	Scopes      []string
 	// ScopeSource is where Scopes came from (the Source* constants).
 	ScopeSource string
+	// FromPR is true when Paths are the open PR's changed files rather than the
+	// item's footprint; its Scopes then hold only declared `## Touches` entries.
+	FromPR bool
+	// PRFilesErr says why an open PR's files could not be read, so Paths and
+	// Scopes fell back to the footprint and the inferred scope. "" otherwise.
+	PRFilesErr string
 }
 
 var (
@@ -339,7 +345,11 @@ func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFli
 		}
 		inferred := len(scopes) > 0 && (myScopeSrc == SourceInferred || f.ScopeSource == SourceInferred)
 		r.Overlaps = append(r.Overlaps, Overlap{With: f.Issue, Slot: f.Slot, Paths: paths, Scopes: scopes, Inferred: inferred})
-		ov.Detail = append(ov.Detail, overlapDetail(f.Issue, f.Slot, paths, scopes, inferred))
+		detail := overlapDetail(f.Issue, f.Slot, paths, scopes, inferred)
+		if f.PRFilesErr != "" {
+			detail += fmt.Sprintf(" [open PR's files unavailable (%s): compared the item's footprint and scope]", f.PRFilesErr)
+		}
+		ov.Detail = append(ov.Detail, detail)
 		if !acceptOverlap && (len(paths) > 0 || (scopeBlock && !inferred)) {
 			ov.OK = false
 		}
@@ -360,6 +370,7 @@ func nonNil(s []string) []string {
 func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend, tracked, shared []string) []InFlight {
 	var out []InFlight
 	reg := worker.LoadRegistryTolerant(root) // no error return; the verbs that call this read the registry strictly themselves
+	prs := e.openPRFiles(ctx)
 	for _, s := range reg.Slots() {
 		name := s.Name()
 		branch := s.Branch()
@@ -377,7 +388,8 @@ func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend,
 			paths = append(paths, e.changed(ctx, wt, base, shared)...)
 		}
 		sort.Strings(paths)
-		out = append(out, InFlight{Slot: name, Issue: id, Paths: paths, Scopes: sc, ScopeSource: src})
+		x := InFlight{Slot: name, Issue: id, Paths: paths, Scopes: sc, ScopeSource: src}
+		out = append(out, prs.apply(be, x, branch, shared))
 	}
 	for _, q := range reg.PRs() {
 		id := queuedIssue(q)
@@ -388,9 +400,76 @@ func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend,
 		sc, src := ItemScopeSource(be, id)
 		paths = append(paths, e.queuedChanged(ctx, root, q, shared)...)
 		sort.Strings(paths)
-		out = append(out, InFlight{Slot: "queue:" + q.From, Issue: id, Paths: paths, Scopes: sc, ScopeSource: src})
+		x := InFlight{Slot: "queue:" + q.From, Issue: id, Paths: paths, Scopes: sc, ScopeSource: src}
+		out = append(out, prs.apply(be, x, q.Branch, shared))
 	}
 	return out
+}
+
+// prFileLister is the forge side that reads a PR's changed files. It is
+// optional on Forge: a forge without it keeps the footprint comparison.
+type prFileLister interface {
+	PRFiles(ctx context.Context, pr int) ([]string, error)
+}
+
+// openPRFiles resolves the open PR of a branch to its changed files, lazily and
+// at most once per branch, so an in-flight item with an open PR is compared by
+// what the PR touches, not by what its issue text names.
+type openPRFiles struct {
+	ctx    context.Context
+	lister prFileLister
+	byHead map[string]int // head branch -> open PR number
+	err    string         // why the open PRs could not be listed
+}
+
+func (e Env) openPRFiles(ctx context.Context) *openPRFiles {
+	o := &openPRFiles{ctx: ctx, byHead: map[string]int{}}
+	l, ok := e.Forge.(prFileLister)
+	if !ok {
+		return o // no forge to ask: every item keeps the footprint comparison
+	}
+	o.lister = l
+	prs, err := e.Forge.OpenPRs(ctx)
+	if err != nil {
+		o.err = "cannot list open PRs: " + err.Error()
+		return o
+	}
+	for _, p := range prs {
+		o.byHead[p.Branch] = p.Number
+	}
+	return o
+}
+
+// apply swaps x's footprint paths for its open PR's changed files and keeps only
+// declared `## Touches` scopes (a subsystem or inferred scope is a guess the PR
+// has outgrown). A branch with no open PR is returned unchanged; one whose files
+// cannot be read is returned unchanged with PRFilesErr set.
+func (o *openPRFiles) apply(be backlog.Backend, x InFlight, branch string, shared []string) InFlight {
+	if o.lister == nil || branch == "" {
+		return x
+	}
+	if o.err != "" {
+		x.PRFilesErr = o.err
+		return x
+	}
+	n, open := o.byHead[branch]
+	if !open {
+		return x
+	}
+	files, err := o.lister.PRFiles(o.ctx, n)
+	if err != nil {
+		x.PRFilesErr = err.Error()
+		return x
+	}
+	x.Paths = overlap.Filter(files, shared)
+	sort.Strings(x.Paths)
+	x.FromPR = true
+	x.Scopes, x.ScopeSource = nil, SourceNone
+	body, _, _ := be.Detail(x.Issue)
+	if s := Scopes(body); len(s) > 0 {
+		x.Scopes, x.ScopeSource = s, SourceTouches
+	}
+	return x
 }
 
 // queuedChanged lists the paths a queued PR's branch changes against its base,
