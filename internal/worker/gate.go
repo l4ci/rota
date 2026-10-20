@@ -153,12 +153,10 @@ type GateOpts struct {
 	// CheckOnly. A non-nil error (a recorded FAIL) stops the gate with verdict
 	// verdict-blocked and is returned as is. branch is the worker branch.
 	Verdict func(branch string) error
-	// Recorded lists the review kinds (verdict.ReviewSpec, verdict.ReviewQuality)
-	// with a verdict recorded for branch at head (the checked tip's full sha;
-	// a record on an older commit is stale and does not count, as in
-	// /rota-review). When set, the gate refuses a branch lacking the verdicts
-	// its resolved review depth needs; nil skips that check.
-	Recorded func(branch, head string) []string
+	// CheckReviews makes the gate refuse a branch lacking the review verdicts
+	// its resolved review depth needs, read with verdict.Recorded at the
+	// checked tip (the full sha). Unset skips that check.
+	CheckReviews bool
 	// Approve is the merge-approval gate (B1), run after provenance and right
 	// before the merge, never under CheckOnly. files lists the paths the merge
 	// changes; t is the resolved target. A non-nil error stops the gate with verdict approval-required
@@ -926,7 +924,7 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	}
 	depth, why := res.Depth, res.Why
 	g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", g.o.Slot, depth, why))
-	if g.o.Recorded == nil {
+	if !g.o.CheckReviews {
 		return false, nil
 	}
 	// stepPRMatches resolved the head when the slot has a remote; otherwise resolve it here
@@ -937,7 +935,7 @@ func (g *gate) stepReviewDepth() (bool, error) {
 			return g.broke(fmt.Sprintf("git rev-parse %s failed (exit %d); cannot tell whether the review verdicts are at head", g.headRef, code))
 		}
 	}
-	have := g.o.Recorded(g.branch, strings.TrimSpace(head))
+	have := verdict.Recorded(g.root, g.branch, strings.TrimSpace(head))
 	var missing []string
 	for _, k := range reviewKinds(depth, hasSpec) {
 		if !slices.Contains(have, k) {
