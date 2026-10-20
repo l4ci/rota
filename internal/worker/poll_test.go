@@ -938,3 +938,116 @@ func TestClassifyQuotedLimitTextIsNotLimited(t *testing.T) {
 		t.Errorf("real dialog after a diff: %s %q", st, ev)
 	}
 }
+
+// Claude Code separates the paragraphs of a reply with blank lines and indents
+// every one after the first, code blocks included. A later paragraph quoting
+// the limit phrase is the worker's prose, idle or busy (#1212).
+func TestClassifyMultiParagraphReplyQuotingLimitIsNotLimited(t *testing.T) {
+	footer := "\n❯ \n  ⏵⏵ bypass permissions on\n"
+	spinner := "\n✻ Running tests… (12s · esc to interrupt)\n"
+	for name, reply := range map[string]string{
+		"prose": "● The classifier matched quoted text.\n\n  It reads \"You've hit your usage limit\" as a dialog.\n\n  Then it offers \"Add funds\".\n",
+		"code":  "● Here is the hunk:\n\n  if reFunds.MatchString(tail) {\n    return \"You've hit your usage limit · Add funds\"\n  }\n",
+	} {
+		for _, busy := range []bool{false, true} {
+			pane := reply
+			if busy {
+				pane += spinner
+			}
+			pane += footer
+			for _, native := range []string{"idle", "working"} {
+				if st, ev := ClassifyFor("claude", pane, false, 60, native); st == StateLimited {
+					t.Errorf("%s busy=%v native=%s: read as limited: %q", name, busy, native, ev)
+				}
+			}
+		}
+	}
+}
+
+// A custom statusline under the footer is frame: the spinner above it still
+// marks the pane working, so tool output quoting the phrase is not a limit.
+func TestClassifyStatuslineUnderFooterIsFrame(t *testing.T) {
+	pane := "● Bash(grep -n 'usage limit' internal/worker/poll.go)\n" +
+		"  ⎿  poll.go:417: You've hit your usage limit · Add funds to continue\n" +
+		"\n✻ Running… (3s · esc to interrupt)\n\n" +
+		"╭──────────────╮\n│ ❯            │\n╰──────────────╯\n" +
+		"  ⏵⏵ bypass permissions on\n  opus · ctx 40% · $1.20\n"
+	for _, native := range []string{"idle", "working"} {
+		if st, ev := ClassifyFor("claude", pane, false, 60, native); st == StateLimited {
+			t.Errorf("native=%s: statusline pane read as limited: %q", native, ev)
+		}
+	}
+}
+
+// Claude Code renders a hit limit as "⎿" lines under the last reply, so an idle
+// pane keeps those lines. The trade-off, by design: an idle pane whose last
+// block is tool output quoting the phrase reads limited too.
+func TestClassifyIdleGutterLinesUnderLastReplyAreDialog(t *testing.T) {
+	footer := "\n❯ \n  ⏵⏵ bypass permissions on\n"
+	for name, pane := range map[string]string{
+		"limit error": "● Update(internal/worker/poll.go)\n  ⎿  You've hit your usage limit · resets 5pm\n",
+		"tool output": "● Bash(grep -n limit poll.go)\n  ⎿  poll.go:417: You've hit your usage limit\n",
+	} {
+		if st, ev := ClassifyFor("claude", pane+footer, false, 60, "idle"); st != StateLimited {
+			t.Errorf("%s: want LIMITED, got %s %q", name, st, ev)
+		}
+	}
+}
+
+// The region's edges: the dialog reads as limited with no input box, with only
+// a footer, with a boxed input and with a statusline under the footer.
+func TestClassifyRealDialogAtEachRegionEdge(t *testing.T) {
+	dialog := "● Done.\n\nYou've hit your usage limit · resets 5pm\n"
+	for name, frame := range map[string]string{
+		"no input box": "",
+		"footer only":  "  ⏵⏵ bypass permissions on\n",
+		"boxed input":  "\n╭────╮\n│ ❯  │\n╰────╯\n  ? for shortcuts\n",
+		"statusline":   "\n╭────╮\n│ ❯  │\n╰────╯\n  ⏵⏵ bypass permissions on\n  opus · ctx 40% · $1.20\n",
+	} {
+		if st, ev := ClassifyFor("claude", dialog+frame, false, 60, "idle"); st != StateLimited {
+			t.Errorf("%s: want LIMITED, got %s %q", name, st, ev)
+		}
+	}
+	// The status area under the footer is the harness's too.
+	pane := "● Done.\n\n❯ \n  ⏵⏵ bypass permissions on\n  You've hit your usage limit · resets 5pm\n"
+	if st, ev := ClassifyFor("claude", pane, false, 60, "idle"); st != StateLimited {
+		t.Errorf("status area: want LIMITED, got %s %q", st, ev)
+	}
+}
+
+// Claude Code 2.1.288 draws its input box as two rules and puts the statusline
+// between the lower rule and the footer (testdata done-after-reply-bullet). The
+// spinner above the box still marks the pane working.
+func TestClassifyStatuslineAboveFooterIsFrame(t *testing.T) {
+	rule := strings.Repeat("─", 40) + "\n"
+	frame := "\n" + rule + "❯\n" + rule +
+		"  Opus 5.5 on kit/204-agent-names | 567k / 1.0m | 44% remain\n" +
+		"  current: ○○○○○○○○○○ 6%  | weekly: ●●○○○○○○○○ 20%\n" +
+		"  resets 8:20pm           | resets Oct 9, 8:00pm\n" +
+		"  ⏵⏵ bypass permissions on (shift+tab to cycle) · PR #208\n"
+	grep := "● Bash(grep -n 'usage limit' internal/worker/poll.go)\n" +
+		"  ⎿  poll.go:417: You've hit your usage limit · Add funds to continue\n"
+	busy := grep + "\n✻ Running… (3s · esc to interrupt)\n" + frame
+	if st, ev := ClassifyFor("claude", busy, false, 60, "working"); st != StateBusy {
+		t.Errorf("busy pane: want BUSY, got %s %q", st, ev)
+	}
+	limited := "● Done.\n\nYou've hit your usage limit · resets 5pm\n" + frame
+	if st, ev := ClassifyFor("claude", limited, false, 60, "idle"); st != StateLimited {
+		t.Errorf("real dialog: want LIMITED, got %s %q", st, ev)
+	}
+}
+
+// Codex indents its footer under an unindented prompt line. Only the indented
+// run straight under the last reply is reply content, so a limit printed above
+// the prompt is still dialog, and a later paragraph of the reply is not.
+func TestClassifyCodexPaneLimitAbovePrompt(t *testing.T) {
+	footer := "\n› Ask Codex to do anything\n\n  GPT-6-Sol default fast · 1 warning · f2 to view\n"
+	reply := "• Fixed the classifier.\n\n  It used to read \"You've hit your usage limit\" as a dialog.\n"
+	if st, ev := ClassifyFor("codex", reply+footer, false, 60, "idle"); st == StateLimited {
+		t.Errorf("codex prose read as limited: %q", ev)
+	}
+	limit := reply + "\n■ You've hit your usage limit. Try again in 2 hours.\n" + footer
+	if st, ev := ClassifyFor("codex", limit, false, 60, "idle"); st != StateLimited {
+		t.Errorf("codex limit: want LIMITED, got %s %q", st, ev)
+	}
+}
