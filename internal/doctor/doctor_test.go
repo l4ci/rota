@@ -168,6 +168,10 @@ func TestRunTable(t *testing.T) {
 		{"tracker linear without a team fails", Input{IssueSource: "linear", IssuesConnection: "work"}, all, with(nil), "tracker", Fail, "issues.linear.team is not set", "rota config set issues.linear.team"},
 		{"tracker linear without a connection fails", Input{IssueSource: "linear", LinearTeam: "ENG"}, all, with(nil), "tracker", Fail, "issues.connection is not set", "--kind linear"},
 		{"tracker linear team the key cannot see fails", Input{IssueSource: "linear", LinearTeam: "NOPE", IssuesConnection: "work", TeamProblem: "Linear team NOPE is not visible to this API key"}, all, with(nil), "tracker", Fail, "team NOPE is not visible", "issues.linear.team"},
+		{"tracker itsaplan issues on a github forge", Input{IssueSource: "itsaplan", ItsaplanProject: "MKT", IssuesConnection: "plan"}, all, with(nil), "tracker", Pass, "forge github (from origin), issues itsaplan", ""},
+		{"tracker itsaplan without a project fails", Input{IssueSource: "itsaplan", IssuesConnection: "plan"}, all, with(nil), "tracker", Fail, "issues.itsaplan.project is not set", "rota config set issues.itsaplan.project"},
+		{"tracker itsaplan without a connection fails", Input{IssueSource: "itsaplan", ItsaplanProject: "MKT"}, all, with(nil), "tracker", Fail, "issues.connection is not set", "--kind itsaplan"},
+		{"tracker itsaplan project the key cannot see fails", Input{IssueSource: "itsaplan", ItsaplanProject: "NOPE", IssuesConnection: "plan", TeamProblem: "It's a Plan project NOPE is not visible to this API key"}, all, with(nil), "tracker", Fail, "project NOPE is not visible", "issues.itsaplan.project"},
 		{"tracker unknown host and github source fails", Input{IssueSource: "github"}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://git.example.com/a/b"}}), "tracker", Fail, "the forge is unknown", "forge.provider github"},
 		{"tracker forge source needs no match", Input{IssueSource: "forge"}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://gitlab.com/a/b"}}), "tracker", Pass, "issues forge", ""},
 		{"tracker legacy keys are named", Input{IssueSource: "issues"}, all, with(nil), "tracker", Pass, "rota migrate source", ""},
@@ -326,6 +330,10 @@ func TestSkillsCheck(t *testing.T) {
 			r.Version = ""
 			return r
 		}(), Fail, "skills bbbbbbbbbbbb, rota aaaaaaaaaaaa", "run: rota skills update"},
+		{"stub current after a body-only release", rep(root(func(r *skills.RootStatus) { r.Mode, r.Version = "stub", "4.9.0" })), Pass, "match rota 5.0.0", ""},
+		{"stub stale names the skill", rep(root(func(r *skills.RootStatus) {
+			r.Mode, r.Current, r.Changed = "stub", false, []string{"rota-new (added)", "rota-work (stub changed)"}
+		})), Fail, "changed: rota-new (added), rota-work (stub changed)", "run: rota skills update"},
 		{"edited", rep(root(func(r *skills.RootStatus) { r.Edited = []string{"rota-work/SKILL.md"} })), Fail, "1 edited (rota-work/SKILL.md)", "run: rota skills update --overwrite"},
 		{"missing", rep(root(func(r *skills.RootStatus) { r.Missing = []string{"rota-work/SKILL.md", "rota-ship/SKILL.md"} })), Fail, "2 missing", "run: rota skills update"},
 		{"second root only", rep(root(func(r *skills.RootStatus) { r.Installed = false }), root(func(r *skills.RootStatus) { r.Path = "/h/.agents/skills" })), Pass, "1 roots", ""},

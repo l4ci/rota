@@ -495,6 +495,29 @@ func TestTrainNotesFlakyCulpritAsTransient(t *testing.T) {
 	}
 }
 
+// An empty test.full verified nothing, so a train carrying an earlier named
+// culprit must not forgive it: no TRANSIENT note, and the culprit record stays.
+func TestTrainNoVerifyDoesNotForgiveCulprit(t *testing.T) {
+	seen := filepath.Join(t.TempDir(), "seen")
+	cmd := fmt.Sprintf("test ! -f b2.txt || test -f %[1]s || { touch %[1]s; exit 1; }", seen)
+	w := trainWorld(t, cmd, "b1", "b2", "b3")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" {
+		t.Fatalf("first train: %+v %v", res, err)
+	}
+	w.setConfig(`{"test":{"full":[]}}`)
+	res, err = w.train(TrainOpts{Targets: []string{"b2", "b3"}, NoVerify: true})
+	if err != nil || res.Verdict != GatePass {
+		t.Fatalf("no-verify train: %+v %v", res, err)
+	}
+	if len(res.Transient) != 0 || strings.Contains(strings.Join(res.Notes, "\n"), "TRANSIENT") {
+		t.Errorf("an unverified train must not forgive a culprit: %+v", res)
+	}
+	if c := loadTrainCache(w.dir); len(c.f.Culprits) == 0 {
+		t.Error("the culprit record must survive an unverified train")
+	}
+}
+
 func TestTrainVerdictRefusal(t *testing.T) {
 	w := trainWorld(t, "touch ran-verify", "b1", "b2")
 	block := fmt.Errorf("FAIL recorded")

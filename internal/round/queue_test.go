@@ -587,3 +587,35 @@ func TestReconcileDropsClosedQueuedPR(t *testing.T) {
 		t.Errorf("a closed PR stays in review: %v", f.queued())
 	}
 }
+
+// A relay can leave a slot blocked after its PR merged. The merged PR frees it
+// for new work whatever the state; an open or closed PR does not.
+func TestParkableBlockedSlotByPRState(t *testing.T) {
+	const pr8 = "https://github.com/o/r/pull/8"
+	for state, wantOK := range map[string]bool{"merged": true, "open": false, "closed": false} {
+		t.Run(state, func(t *testing.T) {
+			f := newMoveFx(t)
+			f.forge.states = map[int]string{8: state}
+			if _, err := f.assign("13", "dana"); err != nil {
+				t.Fatal(err)
+			}
+			rawSlot(f.root, "dana", func(s *jsonx.Object) {
+				s.Set("state", "blocked")
+				s.Set("pr", pr8)
+			})
+			_, err := f.transfer("12", "dana", nil)
+			if wantOK {
+				if err != nil {
+					t.Fatalf("merged PR frees a blocked slot: %v", err)
+				}
+				if len(f.queued()) != 0 {
+					t.Errorf("merged work is in, nothing queued: %v", f.queued())
+				}
+				return
+			}
+			if blockedBy(t, err) != BlockSlotBusy || !strings.Contains(err.Error(), "slot dana holds 13 (blocked;") {
+				t.Errorf("%s PR keeps the refusal: %v", state, err)
+			}
+		})
+	}
+}

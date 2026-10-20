@@ -11,6 +11,8 @@ import (
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/skills"
+	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -44,7 +46,7 @@ func reapCommand() *Command {
 }
 
 func reapVerb(fs *flag.FlagSet) RunFunc {
-	kind := fs.String("kind", "", "only these kinds, comma-separated: worktree, branch, tab, process, lease")
+	kind := fs.String("kind", "", "only these kinds, comma-separated: worktree, branch, tab, process, lease, skillcache")
 	apply := fs.Bool("apply", false, "delete the candidates that hold no work (default: preview)")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
@@ -86,6 +88,10 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 			c.Warn("round ledger unreadable (%v): adopted branches will not be offered for deletion", err)
 		}
 		in := reap.Input{Root: root, Base: env.Base, Git: env.Git, Report: rep, Agents: agents, Host: ops, Lease: env, Adopted: adopted, Roster: set.Roster}
+		if set, err := skills.Embedded(); err == nil {
+			in.SkillCache = skills.CacheDir(c.deps().Getenv)
+			in.SkillCacheKeep = skills.CacheName(version.Get().Version, set.Digest())
+		}
 		found, err := reap.Find(ctx, in, kinds)
 		if err != nil {
 			return Result{}, err

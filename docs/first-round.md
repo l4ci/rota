@@ -180,6 +180,7 @@ See [doctor and reap](usage/doctor-and-reap.md).
 
 ## ➡ Next
 
+- [A round cycle](walkthroughs/round-cycle.md): what you run between releases, from shaping the slate to the release.
 - [Parallel rounds](usage/parallel-rounds.md): every verb, scope, tiers, solo mode.
 - [Unattended rounds](usage/unattended-rounds.md): hooks, keepalive and usage limits.
 - [Codex workers](usage/codex-workers.md): run Codex in some slots.

@@ -1,6 +1,8 @@
 package skills
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -83,7 +85,7 @@ func TestEmbeddedInstallResolvesEveryReference(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Install(roots, Options{}); err != nil {
+	if _, err := s.Install(roots, Options{Mode: ModeFull}); err != nil {
 		t.Fatal(err)
 	}
 	for _, r := range roots {
@@ -154,7 +156,7 @@ func oneRoot(t *testing.T) []Root {
 func TestInstallIdempotentAndManifest(t *testing.T) {
 	s := loadFake(t, nil)
 	roots := oneRoot(t)
-	res, err := s.Install(roots, Options{Version: "5.0.0"})
+	res, err := s.Install(roots, Options{Mode: ModeFull, Version: "5.0.0"})
 	if err != nil || !res[0].Changed || res[0].BlockedBy != "" {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -165,7 +167,7 @@ func TestInstallIdempotentAndManifest(t *testing.T) {
 	if !ok || m.Schema != 1 || m.Version != "5.0.0" || m.Digest != s.Digest() || m.Agent != Claude || len(m.Files) != len(s.Paths()) {
 		t.Errorf("manifest %+v", m)
 	}
-	res, err = s.Install(roots, Options{Version: "5.0.0"})
+	res, err = s.Install(roots, Options{Mode: ModeFull, Version: "5.0.0"})
 	if err != nil || res[0].Changed {
 		t.Fatalf("second install changed: %+v %v", res, err)
 	}
@@ -178,7 +180,7 @@ func TestEditedAndUnmanagedKeptUnlessOverwrite(t *testing.T) {
 	s := loadFake(t, nil)
 	roots := oneRoot(t)
 	root := roots[0].Path
-	if _, err := s.Install(roots, Options{}); err != nil {
+	if _, err := s.Install(roots, Options{Mode: ModeFull}); err != nil {
 		t.Fatal(err)
 	}
 	edited := filepath.Join(root, "rota-a", "SKILL.md")
@@ -190,7 +192,7 @@ func TestEditedAndUnmanagedKeptUnlessOverwrite(t *testing.T) {
 	writeManifest(root, m)
 	os.WriteFile(filepath.Join(root, "rota-a", "extra.md"), []byte("theirs\n"), 0o644)
 
-	res, err := s.Install(roots, Options{})
+	res, err := s.Install(roots, Options{Mode: ModeFull})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,11 +207,11 @@ func TestEditedAndUnmanagedKeptUnlessOverwrite(t *testing.T) {
 		t.Error("edited file was overwritten")
 	}
 	// The next run still sees it as edited.
-	if res, _ = s.Install(roots, Options{}); status(t, res, "rota-a/SKILL.md") != Edited {
+	if res, _ = s.Install(roots, Options{Mode: ModeFull}); status(t, res, "rota-a/SKILL.md") != Edited {
 		t.Error("edited not sticky")
 	}
 
-	res, err = s.Install(roots, Options{Overwrite: true})
+	res, err = s.Install(roots, Options{Mode: ModeFull, Overwrite: true})
 	if err != nil || len(res[0].Kept) != 0 {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -228,7 +230,7 @@ func TestUnmanagedOnlyBlocksAsUnmanaged(t *testing.T) {
 	p := filepath.Join(roots[0].Path, "rota-b", "SKILL.md")
 	os.MkdirAll(filepath.Dir(p), 0o755)
 	os.WriteFile(p, []byte("user's own\n"), 0o644)
-	res, err := s.Install(roots, Options{})
+	res, err := s.Install(roots, Options{Mode: ModeFull})
 	if err != nil || res[0].BlockedBy != Unmanaged || !res[0].Changed {
 		t.Fatalf("%+v %v", res[0], err)
 	}
@@ -244,7 +246,7 @@ func TestIdenticalUnmanagedIsAdopted(t *testing.T) {
 	os.MkdirAll(filepath.Dir(p), 0o755)
 	b, _ := s.File("rota-b/SKILL.md")
 	os.WriteFile(p, b, 0o644)
-	res, _ := s.Install(roots, Options{})
+	res, _ := s.Install(roots, Options{Mode: ModeFull})
 	if res[0].BlockedBy != "" || status(t, res, "rota-b/SKILL.md") != Unchanged {
 		t.Errorf("%+v", res[0])
 	}
@@ -259,7 +261,7 @@ func TestLegacySymlinkReplaced(t *testing.T) {
 	os.WriteFile(filepath.Join(target, "SKILL.md"), []byte("legacy\n"), 0o644)
 	os.MkdirAll(root, 0o755)
 	os.Symlink(target, filepath.Join(root, "rota-a"))
-	res, err := s.Install(roots, Options{})
+	res, err := s.Install(roots, Options{Mode: ModeFull})
 	if err != nil || res[0].BlockedBy != "" {
 		t.Fatalf("%+v %v", res[0], err)
 	}
@@ -281,7 +283,7 @@ func TestForeignSymlinkNotWrittenThrough(t *testing.T) {
 	target := t.TempDir() // a directory without SKILL.md
 	os.MkdirAll(root, 0o755)
 	os.Symlink(target, filepath.Join(root, "rota-b"))
-	res, _ := s.Install(roots, Options{})
+	res, _ := s.Install(roots, Options{Mode: ModeFull})
 	if res[0].BlockedBy != Unmanaged || status(t, res, "rota-b/SKILL.md") != Unmanaged {
 		t.Errorf("%+v", res[0])
 	}
@@ -294,17 +296,17 @@ func TestUpdateRefreshesOnlyInstalledRoots(t *testing.T) {
 	s := loadFake(t, nil)
 	home := t.TempDir()
 	roots, _ := Roots(User, "all", home, filepath.Join(home, ".claude"), "")
-	if res, err := s.Update(roots, Options{}); err != nil || len(res) != 0 {
+	if res, err := s.Update(roots, Options{Mode: ModeFull}); err != nil || len(res) != 0 {
 		t.Fatalf("update with nothing installed: %v %v", res, err)
 	}
 	if _, err := os.Stat(roots[0].Path); err == nil {
 		t.Error("update created a root")
 	}
-	if _, err := s.Install(roots[:1], Options{Version: "1"}); err != nil {
+	if _, err := s.Install(roots[:1], Options{Mode: ModeFull, Version: "1"}); err != nil {
 		t.Fatal(err)
 	}
 	s2 := loadFake(t, map[string]string{"references/y.md": "newer\n"})
-	res, err := s2.Update(roots, Options{Version: "2"})
+	res, err := s2.Update(roots, Options{Mode: ModeFull, Version: "2"})
 	if err != nil || len(res) != 1 || res[0].Agent != Claude {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -323,7 +325,7 @@ func TestUpdateRemovesDroppedFiles(t *testing.T) {
 	s := loadFake(t, nil)
 	roots := oneRoot(t)
 	root := roots[0].Path
-	s.Install(roots, Options{})
+	s.Install(roots, Options{Mode: ModeFull})
 	// The new set drops rota-b and the z and w references; the user edited w.
 	fsys := fakeFS(nil)
 	delete(fsys, "rota-b/SKILL.md")
@@ -334,7 +336,7 @@ func TestUpdateRemovesDroppedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.WriteFile(filepath.Join(root, "rota-a", "references", "w.md"), []byte("mine\n"), 0o644)
-	res, err := next.Install(roots, Options{})
+	res, err := next.Install(roots, Options{Mode: ModeFull})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,10 +358,10 @@ func TestUninstall(t *testing.T) {
 	s := loadFake(t, nil)
 	roots := oneRoot(t)
 	root := roots[0].Path
-	s.Install(roots, Options{})
+	s.Install(roots, Options{Mode: ModeFull})
 	os.WriteFile(filepath.Join(root, "rota-a", "SKILL.md"), []byte("mine\n"), 0o644)
 	os.WriteFile(filepath.Join(root, "rota-a", "stranger.md"), []byte("not ours\n"), 0o644)
-	res, err := Uninstall(roots, Options{})
+	res, err := Uninstall(roots, Options{Mode: ModeFull})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,7 +382,7 @@ func TestUninstall(t *testing.T) {
 		t.Error("empty skill directory left behind")
 	}
 	// With --overwrite the edited file goes; the stranger never does.
-	res, _ = Uninstall(roots, Options{Overwrite: true})
+	res, _ = Uninstall(roots, Options{Mode: ModeFull, Overwrite: true})
 	if len(res[0].Kept) != 0 || HasManifest(root) {
 		t.Errorf("%+v", res[0])
 	}
@@ -391,7 +393,7 @@ func TestUninstall(t *testing.T) {
 		t.Error("edited file survived --overwrite")
 	}
 	// A root without a manifest is skipped.
-	if res, _ = Uninstall(oneRoot(t), Options{}); res[0].Installed {
+	if res, _ = Uninstall(oneRoot(t), Options{Mode: ModeFull}); res[0].Installed {
 		t.Error("uninstall found a manifest in an empty root")
 	}
 }
@@ -403,7 +405,7 @@ func TestStatusDevBuildComparesByDigest(t *testing.T) {
 	if rep.Roots[0].Installed || rep.Roots[0].Current {
 		t.Errorf("%+v", rep.Roots[0])
 	}
-	s.Install(roots, Options{Version: ""})
+	s.Install(roots, Options{Mode: ModeFull, Version: ""})
 	rep, _ = s.Status(roots, "")
 	if !rep.Roots[0].Installed || !rep.Roots[0].Current || rep.Digest != s.Digest() {
 		t.Errorf("%+v", rep)
@@ -459,7 +461,7 @@ func TestManifestTraversalIgnored(t *testing.T) {
 	s := loadFake(t, nil)
 	roots := oneRoot(t)
 	root := roots[0].Path
-	s.Install(roots, Options{})
+	s.Install(roots, Options{Mode: ModeFull})
 	outside := filepath.Join(filepath.Dir(root), "victim.txt")
 	os.WriteFile(outside, []byte("keep\n"), 0o644)
 	m, _ := ReadManifest(root)
@@ -471,13 +473,13 @@ func TestManifestTraversalIgnored(t *testing.T) {
 	if got, _ := ReadManifest(root); len(got.Files) != len(s.Paths()) {
 		t.Errorf("unsafe keys survived: %d files", len(got.Files))
 	}
-	if _, err := s.Install(roots, Options{Overwrite: true}); err != nil {
+	if _, err := s.Install(roots, Options{Mode: ModeFull, Overwrite: true}); err != nil {
 		t.Fatal(err)
 	}
 	if rep, _ := s.Status(roots, ""); len(rep.Roots[0].Edited)+len(rep.Roots[0].Missing) != 0 {
 		t.Errorf("%+v", rep.Roots[0])
 	}
-	if _, err := Uninstall(roots, Options{Overwrite: true}); err != nil {
+	if _, err := Uninstall(roots, Options{Mode: ModeFull, Overwrite: true}); err != nil {
 		t.Fatal(err)
 	}
 	if b, err := os.ReadFile(outside); err != nil || string(b) != "keep\n" {
@@ -491,7 +493,7 @@ func TestSymlinkedParentNotFollowed(t *testing.T) {
 	setup := func() (*Set, []Root, string) {
 		s := loadFake(t, nil)
 		roots := oneRoot(t)
-		s.Install(roots, Options{})
+		s.Install(roots, Options{Mode: ModeFull})
 		target := t.TempDir()
 		for _, f := range names {
 			os.WriteFile(filepath.Join(target, f), []byte("outside\n"), 0o644)
@@ -511,7 +513,7 @@ func TestSymlinkedParentNotFollowed(t *testing.T) {
 	}
 
 	s, roots, target := setup()
-	res, err := s.Install(roots, Options{Overwrite: true})
+	res, err := s.Install(roots, Options{Mode: ModeFull, Overwrite: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -524,7 +526,7 @@ func TestSymlinkedParentNotFollowed(t *testing.T) {
 	if rep, _ := s.Status(roots, ""); len(rep.Roots[0].Edited) == 0 {
 		t.Error("status should flag the symlinked paths")
 	}
-	res2, err := Uninstall(roots, Options{Overwrite: true})
+	res2, err := Uninstall(roots, Options{Mode: ModeFull, Overwrite: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -537,8 +539,8 @@ func TestSymlinkedParentNotFollowed(t *testing.T) {
 func TestUninstallRemovesLockSidecar(t *testing.T) {
 	s := loadFake(t, nil)
 	roots := oneRoot(t)
-	s.Install(roots, Options{})
-	Uninstall(roots, Options{})
+	s.Install(roots, Options{Mode: ModeFull})
+	Uninstall(roots, Options{Mode: ModeFull})
 	if _, err := os.Stat(filepath.Join(roots[0].Path, ManifestName+".lock")); err == nil {
 		t.Error("lock sidecar left behind")
 	}
@@ -565,7 +567,7 @@ func TestAgentsYamlShips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Install(roots, Options{}); err != nil {
+	if _, err := s.Install(roots, Options{Mode: ModeFull}); err != nil {
 		t.Fatal(err)
 	}
 	for _, r := range roots {
@@ -601,4 +603,185 @@ func TestManualOnlySkillsCarryBothFlags(t *testing.T) {
 	if manual == 0 {
 		t.Error("no manual-only skill found, the check proves nothing")
 	}
+}
+
+func modeRoot(t *testing.T) []Root {
+	return []Root{{Path: t.TempDir(), Agent: Codex, Scope: User}}
+}
+
+func skillText(t *testing.T, r Root, p string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(r.Path, p))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func isStub(text string) bool { return strings.Contains(text, "rota skills get") }
+
+func TestInstallDefaultsToStub(t *testing.T) {
+	s := loadFake(t, map[string]string{"rota-a/SKILL.md": "---\nname: rota-a\n---\n# a\nsee [x](../references/x.md)\n", "rota-b/SKILL.md": "---\nname: rota-b\n---\n# b\n"})
+	stub, full := modeRoot(t), modeRoot(t)
+	if _, err := s.Install(stub, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if txt := skillText(t, stub[0], "rota-a/SKILL.md"); !isStub(txt) {
+		t.Errorf("default install wrote full text: %q", txt)
+	}
+	if m, _ := ReadManifest(stub[0].Path); m.Mode != ModeStub {
+		t.Errorf("manifest mode %q, want stub", m.Mode)
+	}
+	if _, err := os.Stat(filepath.Join(stub[0].Path, "rota-a", "extra.md")); err == nil {
+		t.Error("stub install kept a sibling file")
+	}
+	if _, err := s.Install(full, Options{Mode: ModeFull}); err != nil {
+		t.Fatal(err)
+	}
+	if txt := skillText(t, full[0], "rota-a/SKILL.md"); isStub(txt) {
+		t.Errorf("full install wrote a stub: %q", txt)
+	}
+	if m, _ := ReadManifest(full[0].Path); m.Mode != ModeFull {
+		t.Errorf("manifest mode %q, want full", m.Mode)
+	}
+}
+
+func TestUpdateKeepsRecordedMode(t *testing.T) {
+	s := loadFake(t, map[string]string{"rota-a/SKILL.md": "---\nname: rota-a\n---\n# a\n", "rota-b/SKILL.md": "---\nname: rota-b\n---\n# b\n"})
+	stub, full := modeRoot(t)[0], modeRoot(t)[0]
+	s.Install([]Root{stub}, Options{Mode: ModeStub})
+	s.Install([]Root{full}, Options{Mode: ModeFull})
+	if _, err := s.Update([]Root{stub, full}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if !isStub(skillText(t, stub, "rota-a/SKILL.md")) || isStub(skillText(t, full, "rota-a/SKILL.md")) {
+		t.Error("update changed a root's mode")
+	}
+	for r, want := range map[Root]string{stub: ModeStub, full: ModeFull} {
+		if m, _ := ReadManifest(r.Path); m.Mode != want {
+			t.Errorf("%s: manifest mode %q, want %q", r.Path, m.Mode, want)
+		}
+	}
+	if _, err := s.Update([]Root{full}, Options{Mode: ModeStub}); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := ReadManifest(full.Path); m.Mode != ModeStub || !isStub(skillText(t, full, "rota-a/SKILL.md")) {
+		t.Errorf("explicit mode did not switch the root: %+v", m)
+	}
+}
+
+func TestLegacyManifestIsFull(t *testing.T) {
+	s := loadFake(t, map[string]string{"rota-a/SKILL.md": "---\nname: rota-a\n---\n# a\n", "rota-b/SKILL.md": "---\nname: rota-b\n---\n# b\n"})
+	r := modeRoot(t)[0]
+	s.Install([]Root{r}, Options{Mode: ModeFull})
+	b, _ := os.ReadFile(filepath.Join(r.Path, ManifestName))
+	var raw map[string]any
+	if err := json.Unmarshal(b, &raw); err != nil || raw["mode"] != "full" {
+		t.Fatalf("test setup: %s %v", b, err)
+	}
+	delete(raw, "mode")
+	legacy, _ := json.Marshal(raw)
+	os.WriteFile(filepath.Join(r.Path, ManifestName), legacy, 0o644)
+	if m, ok := ReadManifest(r.Path); !ok || m.Mode != "" {
+		t.Fatalf("legacy manifest: %+v %v", m, ok)
+	}
+	if _, err := s.Update([]Root{r}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if isStub(skillText(t, r, "rota-a/SKILL.md")) {
+		t.Error("update converted a legacy (full) root to stub")
+	}
+}
+
+const fm = "---\nname: %s\ndescription: %s\n---\n"
+
+func stubSet(t *testing.T, a, b string, extra map[string]string) *Set {
+	t.Helper()
+	m := map[string]string{
+		"rota-a/SKILL.md": fmt.Sprintf(fm, "rota-a", "A.") + a,
+		"rota-b/SKILL.md": fmt.Sprintf(fm, "rota-b", "B.") + b,
+	}
+	for k, v := range extra {
+		m[k] = v
+	}
+	return loadFake(t, m)
+}
+
+func stubRootStatus(t *testing.T, old, now *Set) RootStatus {
+	t.Helper()
+	r := modeRoot(t)
+	if _, err := old.Install(r, Options{Mode: ModeStub}); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := now.Status(r, "v2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rep.Roots[0]
+}
+
+func TestStubRootCurrentAfterBodyOnlyChange(t *testing.T) {
+	old := stubSet(t, "# a\n", "# b\n", nil)
+	now := stubSet(t, "# a rewritten\nmore text\n", "# b2\n", map[string]string{"references/y.md": "changed\n"})
+	if old.Digest() == now.Digest() {
+		t.Fatal("test setup: full digests must differ")
+	}
+	if st := stubRootStatus(t, old, now); !st.Current || len(st.Changed) != 0 || st.Mode != ModeStub {
+		t.Errorf("stub root reported stale after a body-only change: %+v", st)
+	}
+	// A full root is stale after the same change.
+	r := modeRoot(t)
+	old.Install(r, Options{Mode: ModeFull})
+	if rep, _ := now.Status(r, "v2"); rep.Roots[0].Current {
+		t.Error("full root reported current after a body change")
+	}
+}
+
+func TestStubRootStaleNamesSkillOnFrontmatterChange(t *testing.T) {
+	old := stubSet(t, "# a\n", "# b\n", nil)
+	changed := stubSet(t, "# a\n", "# b\n", map[string]string{"rota-a/SKILL.md": fmt.Sprintf(fm, "rota-a", "A, with new triggers.") + "# a\n"})
+	st := stubRootStatus(t, old, changed)
+	if st.Current || len(st.Changed) != 1 || !strings.HasPrefix(st.Changed[0], "rota-a") {
+		t.Errorf("frontmatter change: %+v", st)
+	}
+	if !strings.Contains(st.Changed[0], "stub changed") {
+		t.Errorf("label %q should say stub changed, not guess frontmatter", st.Changed[0])
+	}
+	added := stubSet(t, "# a\n", "# b\n", map[string]string{"rota-c/SKILL.md": fmt.Sprintf(fm, "rota-c", "C.") + "# c\n"})
+	st = stubRootStatus(t, old, added)
+	if st.Current || len(st.Changed) != 1 || !strings.HasPrefix(st.Changed[0], "rota-c") || !strings.Contains(st.Changed[0], "added") {
+		t.Errorf("added skill: %+v", st)
+	}
+	st = stubRootStatus(t, added, old)
+	if st.Current || len(st.Changed) != 1 || !strings.HasPrefix(st.Changed[0], "rota-c") || !strings.Contains(st.Changed[0], "removed") {
+		t.Errorf("removed skill: %+v", st)
+	}
+}
+
+func TestStubChangesPolicyAndTemplateLabels(t *testing.T) {
+	now := stubSet(t, "# a\n", "# b\n", map[string]string{"rota-a/agents/openai.yaml": "v2\n"})
+	rec := map[string]string{}
+	for _, p := range []string{"rota-a/SKILL.md", "rota-b/SKILL.md"} {
+		rec[p] = hashBytes([]byte("old stub template"))
+	}
+	rec["rota-a/agents/openai.yaml"] = hashBytes([]byte("v1\n"))
+	got := stubChanges(rec, mustStub(t, now))
+	want := []string{"rota-a (stub changed)", "rota-b (stub changed)"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	rec["rota-a/SKILL.md"] = hashBytes(mustStub(t, now).files["rota-a/SKILL.md"])
+	got = stubChanges(rec, mustStub(t, now))
+	if len(got) != 2 || got[0] != "rota-a (agent policy changed)" {
+		t.Errorf("policy-only change: %v", got)
+	}
+}
+
+func mustStub(t *testing.T, s *Set) *Set {
+	t.Helper()
+	st, err := s.Stubbed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st
 }
