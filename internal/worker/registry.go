@@ -128,6 +128,14 @@ func (r Registry) Session() string { return jsonx.Str(r.doc, "session") }
 // Scope is the recorded round scope, "" when none.
 func (r Registry) Scope() string { return jsonx.Str(r.doc, "scope") }
 
+// SlotCount is how many roster slots `round start` put in the round (--slots,
+// else round.slots), 0 when no start recorded one.
+func (r Registry) SlotCount() int {
+	v, _ := r.doc.Get("slotCount")
+	n, _ := jsonx.Int(v)
+	return n
+}
+
 // Slate is the recorded slate of a slate-scoped round, nil when none.
 func (r Registry) Slate() []string {
 	var out []string
@@ -329,6 +337,9 @@ func (d *Doc) SetSession(s string) { d.doc.Set("session", s) }
 
 // SetScope records the round scope.
 func (d *Doc) SetScope(scope string) { d.doc.Set("scope", scope) }
+
+// SetSlotCount records how many roster slots the round uses.
+func (d *Doc) SetSlotCount(n int) { d.doc.Set("slotCount", n) }
 
 // SetSlate records the slate of a slate-scoped round.
 func (d *Doc) SetSlate(slate []string) {

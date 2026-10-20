@@ -291,7 +291,7 @@ func TestOrchestratorDataIsTheNewestSessionFileOfTheRoot(t *testing.T) {
 // outside the roster must never be picked, and the idle one on the account is.
 func TestLimitWatcherIdleSlotNeverPicksASlotTransferRefuses(t *testing.T) {
 	dir := limProject(t)
-	cfg := `{"git":{"baseBranch":"feat/x"},"round":{"roster":["ext","busy","held","dana"]}}`
+	cfg := `{"git":{"baseBranch":"feat/x"},"round":{"roster":["ext","busy","held","dana"],"slots":4}}`
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}

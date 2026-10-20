@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -28,6 +29,43 @@ func SlotAccount(s *worker.Slot) (kind, account string) {
 		return h.Kind(), s.HomeAccount()
 	}
 	return "", s.Account()
+}
+
+// Members splits round.roster into the round's slots. Active is the first n
+// names, where n is the count `round start` recorded (--slots, else
+// round.slots), capped at the roster: only they take new work. Draining is
+// the roster slots past n that still hold work (HoldsWork): they stay in the
+// round, take nothing new, and leave it once their work lands or moves.
+// Other registered slots past n are parked outside the round (#1097 D3).
+// It reads, never writes: only start persists the count.
+func Members(reg worker.Registry, set roundcfg.Settings) (active, draining []string) {
+	n := reg.SlotCount()
+	if n <= 0 {
+		n = set.Slots
+	}
+	if n <= 0 || n > len(set.Roster) {
+		n = len(set.Roster)
+	}
+	for _, name := range set.Roster[n:] {
+		if s := reg.Slot(name); s != nil && HoldsWork(reg, s) {
+			draining = append(draining, name)
+		}
+	}
+	return set.Roster[:n], draining
+}
+
+// HoldsWork says whether a slot still has work in the round: an item, a
+// claim, or a PR queued for review from it.
+func HoldsWork(reg worker.Registry, s *worker.Slot) bool {
+	if s.HeldID() != "" || s.ClaimID() != "" {
+		return true
+	}
+	for _, q := range reg.PRs() {
+		if q.From == s.Name() {
+			return true
+		}
+	}
+	return false
 }
 
 // CountIdle is how many roster slots are idle.
@@ -58,9 +96,13 @@ func IdleSlot(reg worker.Registry, roster []string, kind, account string) (strin
 }
 
 // pickSlots chooses up to n roster slots for the issue held (a normalised ID):
-// the pre-chosen slots first, then holders of the issue (resume), idle slots,
-// and slots whose PR can be queued. A slot is never listed twice.
-func (e Env) pickSlots(ctx context.Context, reg worker.Registry, roster []string, held string, n int, pre ...*worker.Slot) []*worker.Slot {
+// the pre-chosen slots first, then holders of the issue (resume, any roster
+// slot, a draining one included), then the round's active slots that are
+// idle or whose PR can be queued: only they take new work (Members). A slot
+// is never listed twice.
+func (e Env) pickSlots(ctx context.Context, reg worker.Registry, set roundcfg.Settings, held string, n int, pre ...*worker.Slot) []*worker.Slot {
+	roster := set.Roster
+	active, _ := Members(reg, set)
 	var out []*worker.Slot
 	add := func(s *worker.Slot) {
 		if s != nil && len(out) < n && !slices.ContainsFunc(out, func(p *worker.Slot) bool { return p.Name() == s.Name() }) {
@@ -75,12 +117,12 @@ func (e Env) pickSlots(ctx context.Context, reg worker.Registry, roster []string
 			add(s)
 		}
 	}
-	for _, name := range roster {
+	for _, name := range active {
 		if s := reg.Slot(name); SlotIdle(s) {
 			add(s)
 		}
 	}
-	for _, name := range roster {
+	for _, name := range active {
 		if len(out) == n {
 			break
 		}
@@ -91,4 +133,19 @@ func (e Env) pickSlots(ctx context.Context, reg worker.Registry, roster []string
 		}
 	}
 	return out
+}
+
+// checkActive refuses new work for a roster slot past the round's slot count:
+// it drains, or is parked outside the round. resuming is a slot taking back
+// the issue it already holds, which is not new work.
+func checkActive(reg worker.Registry, set roundcfg.Settings, name string, resuming bool) error {
+	active, draining := Members(reg, set)
+	if resuming || slices.Contains(active, name) {
+		return nil
+	}
+	why := "is parked outside the round"
+	if slices.Contains(draining, name) {
+		why = "is draining: it finishes the work it holds"
+	}
+	return blocked(BlockDraining, "slot %s %s and takes no new work; the round uses its first %d roster slots (round.slots or --slots)", name, why, len(active))
 }

@@ -41,7 +41,8 @@ func TestQuotaCapIsTheRosterWhileAnAccountHasHeadroom(t *testing.T) {
 	f.config(t, twoAccounts)
 	f.meters(t, map[string]bool{"a": true})
 	c := f.env.QuotaCap(bg, f.root, f.set)
-	if c.Reduced() || c.Effective != len(f.set.Roster) || c.Reason != "" {
+	// The cap is over the round's slots (the fixture starts two), not the roster.
+	if active, _ := Members(worker.LoadRegistryTolerant(f.root), f.set); c.Reduced() || c.Effective != len(active) || c.Reason != "" {
 		t.Fatalf("one account free, cap %+v", c)
 	}
 	if why := c.Closed("claude"); why != "" {
@@ -57,7 +58,7 @@ func TestQuotaCapStopsFillingWhenEveryAccountIsCooling(t *testing.T) {
 	}
 	f.meters(t, map[string]bool{"a": true, "b": true})
 	c := f.env.QuotaCap(bg, f.root, f.set)
-	if !c.Reduced() || c.Effective != 1 || c.Roster != len(f.set.Roster) {
+	if active, _ := Members(worker.LoadRegistryTolerant(f.root), f.set); !c.Reduced() || c.Effective != 1 || c.Roster != len(active) {
 		t.Fatalf("every account cooling, cap %+v", c)
 	}
 	if !strings.Contains(c.Reason, "round.accounts") || !strings.Contains(c.Reason, "cooling down") || !strings.Contains(c.Reason, "13:00") || !c.ResumesAt.Equal(quotaNow.Add(time.Hour)) {

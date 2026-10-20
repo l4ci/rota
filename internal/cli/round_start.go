@@ -130,7 +130,7 @@ func leaseData(l round.Lease, st round.LeaseState) *jsonx.Object {
 func roundStart(fs *flag.FlagSet) RunFunc {
 	scope := fs.String("scope", "", "which issues the round may take: slate, milestone, next or open (default round.scope; a re-run keeps the round's)")
 	items := fs.String("items", "", "the approved slate, for scope slate")
-	slots := fs.Int("slots", 0, "roster slots to provision (default round.slots)")
+	slots := fs.Int("slots", 0, "roster slots the round uses, the first N names (default round.slots); slots past N that hold work drain")
 	base := fs.String("base", "", "base branch (default git.baseBranch, else the current branch)")
 	consume := fs.Bool("consume-handoff", false, "after reporting the orchestrator handoff note, archive it to <note>.consumed")
 	pid := fs.Int("holder-pid", 0, "orchestrator pid for the lease, when its ancestry cannot be read")
@@ -156,18 +156,10 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		}
 		ctx := c.Context()
 		cfg := config.Load(rotatree.Config(root))
-		def := 3
-		if v, err := config.Value(cfg, "round.slots"); err == nil {
-			if n, ok := v.(interface{ Int64() (int64, error) }); ok {
-				if i, _ := n.Int64(); i > 0 {
-					def = int(i)
-				}
-			}
-		}
 		env := c.deps().RoundEnv(ctx, root)
 		st, err := env.Start(ctx, root, round.StartOpts{
 			Scope: sc, Items: pystr.SplitCSV(*items), Slots: *slots, Base: *base, HolderPID: *pid,
-			Settings: set, DefaultNum: def, Dispatch: config.Dispatch(cfg),
+			Settings: set, DefaultNum: set.Slots, Dispatch: config.Dispatch(cfg),
 		})
 		for _, w := range st.Warnings {
 			c.Warn("%s", w)
@@ -243,7 +235,11 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		d.Set("changed", st.Changed)
 		lines := []string{fmt.Sprintf("round %d\t%s\t%s", st.Round, st.Scope, st.Base)}
 		for _, s := range st.Slots {
-			lines = append(lines, slotLine(s))
+			line := slotLine(s)
+			if jsonx.Bool(s, "draining") {
+				line += "\tdraining"
+			}
+			lines = append(lines, line)
 		}
 		lines = append(lines, candidateLines(cands)...)
 		lines = emptyNote(ctx, d, lines, env, root, be, st.Scope, st.Slate, cands)

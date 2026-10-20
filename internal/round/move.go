@@ -758,6 +758,9 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		if err := fenceExternal(run.to, "transfer", "check a branch out in a worktree"); err != nil {
 			return nil, err
 		}
+		if err := checkActive(reg, set, o.To, resuming); err != nil {
+			return nil, err
+		}
 		if !resuming {
 			if h := run.to.HeldID(); h != "" {
 				ok, why := e.parkable(ctx, run.to)

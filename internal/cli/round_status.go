@@ -168,6 +168,9 @@ func roundStatus(*flag.FlagSet) RunFunc {
 			if r.Bounces > 0 {
 				cols = append(cols, fmt.Sprintf("bounces %d", r.Bounces))
 			}
+			if r.Draining {
+				cols = append(cols, "draining")
+			}
 			lines = append(lines, strings.Join(cols, "\t"))
 		}
 		for _, q := range rep.Queued {
@@ -268,6 +271,9 @@ func rowList(rows []round.Row) []any {
 		setIf(o, "model", r.Model)
 		setIf(o, "tierReason", r.TierReason)
 		o.Set("bounces", r.Bounces)
+		if r.Draining {
+			o.Set("draining", true)
+		}
 		if ev := r.Event; ev != nil {
 			eo := jsonx.NewObject()
 			eo.Set("seq", ev.Seq)
