@@ -751,7 +751,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 		}),
 		stateStep(root, be, id, agent, resuming, &res.Changed),
 		{name: "comment", skip: func() bool { return resuming }, do: func() error {
-			_, err := be.AddComment(id, "feedback", fmt.Sprintf("In progress: agent **%s** on branch `%s`.", agent, res.Branch))
+			_, err := be.AddComment(id, "feedback", assignNote(agent, res.Branch))
 			return err
 		}},
 		// 7. The slot onto its issue branch.
@@ -919,4 +919,13 @@ func failedChecks(r Readiness) string {
 		}
 	}
 	return strings.Join(out, ", ")
+}
+
+// assignMarker opens the feedback comment assign posts on an item. accept
+// reads it to find where an assignment starts, so both go through this const.
+const assignMarker = "In progress: agent"
+
+// assignNote is the assignment comment text for agent on branch.
+func assignNote(agent, branch string) string {
+	return fmt.Sprintf("%s **%s** on branch `%s`.", assignMarker, agent, branch)
 }
