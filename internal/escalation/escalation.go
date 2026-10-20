@@ -113,10 +113,11 @@ func PendingOn(list []Entry, kind, ref string) (Entry, bool) {
 // Marker is the line every escalation comment ends with.
 func Marker(id string) string { return marker.Line("escalation", id) }
 
-// Compose is the comment rota posts: heading, the body, the ask, the marker.
-func Compose(id, title, body string) string {
-	return fmt.Sprintf("**rota escalation %s**: %s\n\n%s\n\nAnswer in a new comment on this thread.\n\n%s\n",
-		id, title, strings.Trim(body, "\n"), Marker(id))
+// Compose is the comment rota posts: heading, the body, the options when there
+// are any, the ask, the marker.
+func Compose(id, title, body string, c Choice) string {
+	return fmt.Sprintf("**rota escalation %s**: %s\n\n%s\n\n%sAnswer in a new comment on this thread.\n\n%s\n",
+		id, title, strings.Trim(body, "\n"), c.render(), Marker(id))
 }
 
 func kindOf(pr bool) string {
@@ -149,6 +150,7 @@ type SendOpts struct {
 	Title   string
 	Body    string
 	Timeout time.Duration
+	Choice
 }
 
 // issueKey is the key of an issue thread.
@@ -208,7 +210,7 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 		return res, fromTracker(err)
 	}
 	id := NextID(list)
-	text := Compose(id, o.Title, o.Body)
+	text := Compose(id, o.Title, o.Body, o.Choice)
 	var cid string
 	if o.PR {
 		cid, err = f.AddMRNote(ctx, o.Number, text)
@@ -238,7 +240,8 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 
 	now := env.Now()
 	e := Entry{ID: id, Kind: kind, Number: o.Number, Slot: o.Slot, Title: o.Title, CommentID: cid,
-		SentAt: Time(now), Notified: res.Notified, Status: StatusPending}
+		SentAt: Time(now), Notified: res.Notified, Status: StatusPending,
+		Options: o.Options, Recommend: o.Recommend, Cost: o.Cost}
 	if o.Timeout > 0 {
 		e.Deadline = Time(now.Add(o.Timeout))
 	}
@@ -360,7 +363,8 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 			continue
 		}
 		if ok {
-			ans := Answer{CommentID: a.ID, Author: a.Author, Body: a.Body, SeenAt: Time(env.Now())}
+			ans := Answer{CommentID: a.ID, Author: a.Author, Body: a.Body, SeenAt: Time(env.Now()),
+				Option: ResolveOption(e.Options, e.Recommend, a.Body)}
 			found[e.ID] = ans
 			targets[i].Status, targets[i].Answer = StatusAnswered, &ans
 		}

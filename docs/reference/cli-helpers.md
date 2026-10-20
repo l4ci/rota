@@ -355,8 +355,8 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 | `rota round status` | list the round's slots with host, PR and drift |
 | `rota round reconcile [--apply]` | report drift between registry, host, git and forge; `--apply` repairs the safe kinds, including parking slots whose PR merged |
 | `rota round report <slot> --state <done\|blocked\|idle\|dead\|limited> [--evidence <text>] [--pr <url\|number> \| --issues <#a,#b>] [--attempt <id>]` | record a solo worker's result (exit 4 on a stale `--attempt`): state and PR (or, for a review item, the issues it filed) |
-| `rota round escalate send <number|key> [--pr] [--slot <name>] --title <text> --body-file <path\|-> [--timeout <seconds>]` | ask the human on an issue or PR thread |
-| `rota round escalate check [<id>…]` | look for the human's answers |
+| `rota round escalate send <number|key> [--pr] [--slot <name>] --title <text> --body-file <path\|-> --options <text>… --recommend <n> [--cost-if-wrong <text>] [--timeout <seconds>]` | ask the human on an issue or PR thread; exit 4 without at least two `--options` and a `--recommend` |
+| `rota round escalate check [<id>…]` | look for the human's answers; a bare `ok`, `yes` or option number resolves to that option |
 | `rota round return <slot> --reason <text> [--note-file <path\|->] [--holder-pid <n>]` | a worker hands its issue back: park, comment, release |
 | `rota round transfer <issue> --to <slot\|human> [--tier <light\|standard\|heavy>] [--tier-reason <text>] [--cap-reason <ambiguous-criteria\|tier>] [--note-file <path\|->] [--body-file <path\|->] [--accept-overlap] [--holder-pid <n>]` | move an assigned issue to another slot or to the human; at the bounce cap `--cap-reason` records why (`ambiguous-criteria` with `--to human`, `tier` with a slot) and `round summary` counts it |
 | `rota round reclaim <slot> [--force] [--note-file <path\|->] [--holder-pid <n>]` | free a dead or stalled slot and make its issue assignable; an `unverifiable` slot (host unreachable, pane unreadable, stale handle) exits 4 with the reason unless `--force`, and `--force` still refuses when the host cannot be asked at all |

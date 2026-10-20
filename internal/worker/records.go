@@ -18,6 +18,7 @@ const (
 // EscalationAnswer is the comment that answered an escalation.
 type EscalationAnswer struct {
 	CommentID, Author, Body, SeenAt string
+	Option                          int // 1-based option the reply resolved to; 0 when it named none
 }
 
 // Escalation is one record of the `escalations` list.
@@ -33,6 +34,9 @@ type Escalation struct {
 	Deadline  string
 	Notified  bool
 	Status    string // stored: pending | answered
+	Options   []string
+	Recommend int // 1-based number of the recommended option
+	Cost      string
 	Answer    *EscalationAnswer
 }
 
@@ -47,10 +51,26 @@ func escalationFrom(o *jsonx.Object) Escalation {
 	if v, _ := o.Get("notified"); v == true {
 		e.Notified = true
 	}
+	if v, ok := o.Get("options"); ok {
+		if l, ok := v.([]any); ok {
+			for _, x := range l {
+				if str, ok := x.(string); ok {
+					e.Options = append(e.Options, str)
+				}
+			}
+		}
+	}
+	if v, ok := o.Get("recommend"); ok {
+		e.Recommend, _ = jsonx.Int(v)
+	}
+	e.Cost = jsonx.Str(o, "cost")
 	if a, ok := o.Get("answer"); ok {
 		if ao, ok := a.(*jsonx.Object); ok {
 			e.Answer = &EscalationAnswer{CommentID: jsonx.Str(ao, "commentId"), Author: jsonx.Str(ao, "author"),
 				Body: jsonx.Str(ao, "body"), SeenAt: jsonx.Str(ao, "seenAt")}
+			if v, ok := ao.Get("option"); ok {
+				e.Answer.Option, _ = jsonx.Int(v)
+			}
 		}
 	}
 	return e
@@ -63,6 +83,9 @@ func (a EscalationAnswer) Object() *jsonx.Object {
 	o.Set("author", a.Author)
 	o.Set("body", a.Body)
 	o.Set("seenAt", a.SeenAt)
+	if a.Option > 0 {
+		o.Set("option", a.Option)
+	}
 	return o
 }
 
@@ -86,6 +109,17 @@ func (e Escalation) Object() *jsonx.Object {
 		o.Set("deadline", e.Deadline)
 	}
 	o.Set("notified", e.Notified)
+	if len(e.Options) > 0 {
+		opts := make([]any, len(e.Options))
+		for i, x := range e.Options {
+			opts[i] = x
+		}
+		o.Set("options", opts)
+		o.Set("recommend", e.Recommend)
+		if e.Cost != "" {
+			o.Set("cost", e.Cost)
+		}
+	}
 	o.Set("status", e.Status)
 	if e.Answer != nil {
 		o.Set("answer", e.Answer.Object())

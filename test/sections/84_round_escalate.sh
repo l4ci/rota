@@ -26,6 +26,7 @@ mkdir -p "$PROJ/.rota"
 git -C "$PROJ" init -q -b main
 echo '{"forge":{"provider":"github"},"issues":{"source":"github","retryWaitSeconds":0}}' > "$PROJ/.rota/config.json"
 printf 'Which of the two options do you want?\n' > "$TMP_ES/body.md"
+OPTS=(--options "option one" --options "option two" --recommend 2 --cost-if-wrong "a revert")
 
 # es <env-prefix-free command...>: run in the project with the fakes first on PATH.
 es() { ( cd "$PROJ" && PATH="$FK/bin:$PATH" FAKE_TRACKER_DB="$TMP_ES/gh.json" FAKE_HERDR="$FK/herdr" "$@" ); }
@@ -41,7 +42,7 @@ es gh issue create --title "First" --body "one" >/dev/null
 es gh issue create --title "Second" --body "two" >/dev/null
 
 # ── send: comment, notification, record ─────────────────────────────────────
-RC=0; OUT="$(es env HERDR_ENV=1 "$ROTA_BIN" --json round escalate send 1 --title "Pick an option" --body-file "$TMP_ES/body.md" 2>/dev/null)" || RC=$?
+RC=0; OUT="$(es env HERDR_ENV=1 "$ROTA_BIN" --json round escalate send 1 --title "Pick an option" --body-file "$TMP_ES/body.md" "${OPTS[@]}" 2>/dev/null)" || RC=$?
 [ "$RC" = "0" ] || fail "send: exit 0 expected, got $RC: $OUT"
 [ "$(jget data.escalation.id <<<"$OUT")" = "e1" ] || fail "send: first id must be e1: $OUT"
 [ "$(jget data.escalation.kind <<<"$OUT")" = "issue" ] || fail "send: kind issue: $OUT"
@@ -63,8 +64,17 @@ case "$(cat "$FK/herdr/log")" in *"notification show rota escalation e1 --body P
 [ "$(reg 'd["escalations"][0]["commentId"]')" = '"1"' ] || fail "send: registry must keep the comment id"
 pass "send posts the marked comment, notifies through herdr and records e1"
 
+# ── options are required (#962) ─────────────────────────────────────────────
+RC=0; OUT="$(es "$ROTA_BIN" --json round escalate send 2 --title "No options" --body-file "$TMP_ES/body.md" 2>/dev/null)" || RC=$?
+[ "$RC" = "4" ] || fail "send without --options/--recommend must exit 4, got $RC: $OUT"
+RC=0; es "$ROTA_BIN" --json round escalate send 2 --title "No recommend" --body-file "$TMP_ES/body.md" --options a --options b >/dev/null 2>&1 || RC=$?
+[ "$RC" = "4" ] || fail "send without --recommend must exit 4, got $RC"
+[ "$(python3 -c 'import json,sys; print(len(json.load(sys.stdin)))' <<<"$(es gh api --paginate repos/o/r/issues/2/comments)")" = "0" ] || fail "a refused send must not post"
+case "$COMMENTS" in *"1. option one"*"2. option two (recommended)"*"Recommended: 2. option two"*"Cost if wrong: a revert"*) ;; *) fail "send: the comment must list the options, mark the recommendation and state its cost: $COMMENTS" ;; esac
+pass "send without --options and --recommend exits 4 and posts nothing; the comment lists options, recommendation and cost"
+
 # ── one per thread ──────────────────────────────────────────────────────────
-RC=0; OUT="$(es "$ROTA_BIN" --json round escalate send 1 --title "Again" --body-file "$TMP_ES/body.md" 2>/dev/null)" || RC=$?
+RC=0; OUT="$(es "$ROTA_BIN" --json round escalate send 1 --title "Again" --body-file "$TMP_ES/body.md" "${OPTS[@]}" 2>/dev/null)" || RC=$?
 [ "$RC" = "4" ] || fail "second send on the same thread must exit 4, got $RC: $OUT"
 [ "$(jget data.pending <<<"$OUT")" = "e1" ] && [ "$(jget data.changed <<<"$OUT")" = "false" ] || fail "second send: failure data names the pending id: $OUT"
 [ "$(python3 -c 'import json,sys; print(len(json.load(sys.stdin)))' <<<"$(es gh api --paginate repos/o/r/issues/1/comments)")" = "1" ] || fail "a refused send must not post"
@@ -90,10 +100,11 @@ OUT="$(es "$ROTA_BIN" --json round escalate check e1 2>/dev/null)"
 [ "$(jget data.changed <<<"$OUT")" = "false" ] && [ "$(jget 'data.escalations[0].status' <<<"$OUT")" = "answered" ] || fail "a named answered entry reads from the registry: $OUT"
 RC=0; es "$ROTA_BIN" --json round escalate check e7 >/dev/null 2>&1 || RC=$?
 [ "$RC" = "3" ] || fail "an unknown id must exit 3, got $RC"
+[ "$(jget 'data.escalations[0].answer.option' <<<"$(es "$ROTA_BIN" --json round escalate check e1 2>/dev/null)" 2>/dev/null || true)" = "" ] || fail "prose such as 'take option two' must not resolve to an option"
 pass "check ignores rota-marked comments, stores the first unmarked one as the answer, and exits 3 for an unknown id"
 
 # ── no herdr: comment only, notified false ──────────────────────────────────
-RC=0; OUT="$(es_noherdr env HERDR_ENV=1 "$ROTA_BIN" --json round escalate send 2 --title "Second question" --body-file "$TMP_ES/body.md" --timeout 3600 2>/dev/null)" || RC=$?
+RC=0; OUT="$(es_noherdr env HERDR_ENV=1 "$ROTA_BIN" --json round escalate send 2 --title "Second question" --body-file "$TMP_ES/body.md" "${OPTS[@]}" --timeout 3600 2>/dev/null)" || RC=$?
 [ "$RC" = "0" ] || fail "send without a herdr binary must still succeed, got $RC: $OUT"
 [ "$(jget data.notified <<<"$OUT")" = "false" ] && [ "$(jget data.escalation.notified <<<"$OUT")" = "false" ] || fail "no herdr: notified must be false: $OUT"
 case "$(jget 'warnings[0]' <<<"$OUT")" in *"no notification"*) ;; *) fail "no herdr: a warning must say why: $OUT" ;; esac
@@ -125,10 +136,11 @@ RC=0; OUT="$(es_noherdr "$ROTA_BIN" --json round status 2>/dev/null)" || RC=$?
 [ "$RC" = "0" ] && [ "$(jget 'data.escalations[0].id' <<<"$OUT")" = "e2" ] && [ "$(jget 'data.escalations[0].status' <<<"$OUT")" = "timed-out" ] || fail "round status must list the open escalation: rc=$RC $OUT"
 RC=0; OUT="$(es_noherdr "$ROTA_BIN" --json round reconcile 2>/dev/null)" || RC=$?
 [ "$RC" = "0" ] && [ "$(python3 -c 'import json,sys; print(len(json.load(sys.stdin)["data"]["escalations"]))' <<<"$OUT")" = "1" ] || fail "round reconcile must list the open escalation: rc=$RC $OUT"
-es gh api -X POST repos/o/r/issues/2/comments -f body="late but fine" >/dev/null
+es gh api -X POST repos/o/r/issues/2/comments -f body="ok" >/dev/null
 OUT="$(es "$ROTA_BIN" --json round escalate check 2>/dev/null)"
 [ "$(jget 'data.escalations[0].status' <<<"$OUT")" = "answered" ] || fail "a late answer must still land: $OUT"
-pass "timed-out is derived on read, round status and reconcile list it, and a late answer still lands"
+[ "$(jget 'data.escalations[0].answer.option' <<<"$OUT")" = "2" ] && [ "$(jget 'data.escalations[0].resolved' <<<"$OUT")" = "option two" ] || fail "a bare ok must resolve to the recommended option (2): $OUT"
+pass "timed-out is derived on read, round status and reconcile list it, and a late bare ok lands as the recommendation"
 
 trap 'rm -rf "$TMP"' EXIT
 rm -rf "${TMP_ES:?}"
