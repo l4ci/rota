@@ -408,7 +408,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	// only a refused dialog or a human draft is certain nothing went out.
 	if o.Relay && !errors.Is(sendErr, host.ErrDialogOpen) && !errors.Is(sendErr, host.ErrDraftOnPrompt) {
 		entry := newRelayEntry(round, e.Now(), string(brief))
-		if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.AppendRelay(entry) }); err != nil {
+		if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.AppendRelay(entry); s.SetRelayPending() }); err != nil {
 			return res, err
 		}
 	}
