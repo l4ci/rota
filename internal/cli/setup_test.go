@@ -246,3 +246,96 @@ func TestSetupIsTTYRejectsNullAndPipes(t *testing.T) {
 		}
 	}
 }
+
+func globalFile(t *testing.T, gdir string) string {
+	t.Helper()
+	raw, err := os.ReadFile(config.GlobalPath(gdir))
+	if err != nil {
+		return ""
+	}
+	return string(raw)
+}
+
+// AC-1, AC-3, AC-5: first use lists the answers, saves them globally on y,
+// and never writes a project-owned key.
+func TestSetupOffersSaveGlobalOnFirstUse(t *testing.T) {
+	gdir := isolateGlobal(t)
+	dir := t.TempDir()
+	in := "1\nworktree\n2\n\n\nnone\n2\n\n\ny\n"
+	code, _, errOut := setupRun(t, dir, in, true)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if !strings.Contains(errOut, "Save as global defaults?") || !strings.Contains(errOut, "work.isolation = worktree") {
+		t.Errorf("offer missing:\n%s", errOut)
+	}
+	g := globalFile(t, gdir)
+	if !strings.Contains(g, `"worktree"`) || !strings.Contains(g, `"issues"`) {
+		t.Errorf("global config lacks the answers:\n%s", g)
+	}
+	for _, bad := range []string{"baseBranch", "umbrella", "rotaVersion", "version"} {
+		if strings.Contains(g, bad) {
+			t.Errorf("global holds project-owned %q:\n%s", bad, g)
+		}
+	}
+	proj, _ := os.ReadFile(filepath.Join(dir, ".rota", "config.json"))
+	if !strings.Contains(string(proj), "worktree") {
+		t.Errorf("project config lost the answers:\n%s", proj)
+	}
+}
+
+func TestSetupSaveGlobalDeclinedWritesNothing(t *testing.T) {
+	gdir := isolateGlobal(t)
+	in := "1\nworktree\n2\n\n\nnone\n2\n\n\nn\n"
+	if code, _, e := setupRun(t, t.TempDir(), in, true); code != 0 {
+		t.Fatalf("exit %d: %s", code, e)
+	}
+	if g := globalFile(t, gdir); g != "" {
+		t.Errorf("declined offer wrote the global config:\n%s", g)
+	}
+}
+
+// AC-2: with a global config, only differing answers are offered and merged.
+func TestSetupOffersOnlyDifferingAnswers(t *testing.T) {
+	gdir := isolateGlobal(t)
+	writeFile(t, config.GlobalPath(gdir), `{"work":{"isolation":"worktree"},"issues":{"source":"file"},"ship":{"qa":false}}`)
+	dir := t.TempDir()
+	// issues.source file (same), isolation worktree (default, same), pr, rest default, qa true (differs)
+	in := "\n\n2\n\n\nnone\n2\n\n\ny\n"
+	code, _, errOut := setupRun(t, dir, in, true)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	offer := errOut[strings.Index(errOut, "differ from your global"):]
+	if strings.Contains(offer, "work.isolation") || strings.Contains(offer, "issues.source") {
+		t.Errorf("unchanged answers were offered:\n%s", offer)
+	}
+	if !strings.Contains(offer, "ship.qa = true") {
+		t.Errorf("changed answer not offered:\n%s", offer)
+	}
+	g := globalFile(t, gdir)
+	if !strings.Contains(g, `"qa": true`) || !strings.Contains(g, `"isolation": "worktree"`) {
+		t.Errorf("merge lost or missed keys:\n%s", g)
+	}
+}
+
+// AC-4: no prompt without a terminal or with --yes; --save-global saves silently.
+func TestSetupSaveGlobalNonInteractive(t *testing.T) {
+	gdir := isolateGlobal(t)
+	if code, _, e := setupRun(t, t.TempDir(), "", false, "--yes"); code != 0 {
+		t.Fatalf("exit %d: %s", code, e)
+	}
+	if g := globalFile(t, gdir); g != "" {
+		t.Errorf("--yes saved globally:\n%s", g)
+	}
+	code, _, errOut := setupRun(t, t.TempDir(), "", false, "--set", "work.isolation=worktree", "--save-global")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if strings.Contains(errOut, "Save as global") {
+		t.Errorf("--save-global prompted:\n%s", errOut)
+	}
+	if g := globalFile(t, gdir); !strings.Contains(g, `"worktree"`) {
+		t.Errorf("--save-global did not save:\n%s", g)
+	}
+}

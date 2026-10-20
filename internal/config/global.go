@@ -78,6 +78,31 @@ func LoadGlobal(dir string) (map[string]any, error) {
 	return vals, nil
 }
 
+// MergeGlobal writes vals (dotted schema key to value) into the global config
+// under dir, keeping every other key already there. Project-owned and
+// non-schema keys are skipped. It returns the keys it wrote, in schema order.
+func MergeGlobal(dir string, vals map[string]any) ([]string, error) {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	saved := []string{}
+	err := fsio.UpdateJSON(GlobalPath(dir), jsonx.NewObject(), func(doc any) (any, error) {
+		cfg, ok := doc.(*jsonx.Object)
+		if !ok {
+			return nil, ErrNotObject
+		}
+		saved = saved[:0]
+		for _, k := range Keys {
+			if v, ok := vals[k.Name]; ok && !notGlobal[k.Name] {
+				cfg = fillKey(cfg, "", strings.Split(k.Name, "."), v)
+				saved = append(saved, k.Name)
+			}
+		}
+		return cfg, nil
+	})
+	return saved, err
+}
+
 // SeedFromGlobal writes every value of the global config under dir into root's
 // .rota/config.json, over what is there, and returns the keys in schema order.
 // Call it on a config.json init just created; it is not idempotent by design.

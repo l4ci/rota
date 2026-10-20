@@ -161,7 +161,8 @@ func (f fileStore) ensureDir() error {
 // migrate moves the legacy file to path when path does not exist yet, under
 // the store's lock so two first-use processes cannot race the copy. The
 // result is always mode 0600, whatever the legacy file had; across devices it
-// is copied, then the original removed.
+// is copied, then the original removed. A symlink is copied through, then the
+// link removed.
 func (f fileStore) migrate() error {
 	if !f.needsMigration() {
 		return nil
@@ -197,7 +198,14 @@ func (f fileStore) moveLegacy() error {
 	if err != nil {
 		return err
 	}
-	if os.Rename(f.legacy, f.path) == nil {
+	li, err := os.Lstat(f.legacy)
+	if err != nil {
+		return err
+	}
+	// A symlink (a dotfiles-managed secrets.json) is never renamed: that would
+	// move the link, not the secret. Its target is copied and only the link
+	// removed, so the synced copy is left alone.
+	if li.Mode()&os.ModeSymlink == 0 && os.Rename(f.legacy, f.path) == nil {
 		return os.Chmod(f.path, 0o600)
 	}
 	raw, err := os.ReadFile(f.legacy)

@@ -2,7 +2,10 @@ package worker
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -10,7 +13,9 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -253,15 +258,71 @@ func (a *Accounts) defaultFetch(ctx context.Context, name, configDir string) (*j
 }
 
 // CredentialsProblem reports why the account whose config dir is dir (already
-// expanded) has no usable credentials: no file, unreadable, or no access
-// token. "" means usable. Expiry is not checked: Claude Code refreshes a
-// stale token itself, and this code never does.
+// expanded) has no usable credentials: no file (or, on macOS, Keychain
+// entry), unreadable, or no access token. "" means usable. Expiry is not
+// checked: Claude Code refreshes a stale token itself, and this code never
+// does.
 func CredentialsProblem(dir string) string {
-	_, _, why := readCredentials(dir)
+	_, _, why := readCredentials(dir, time.Now())
 	return why
 }
 
-func readCredentials(dir string) (*jsonx.Object, string, string) {
+// goos and keychainRead are the platform seams of the credential read: tests
+// swap them to stand in for macOS and its login Keychain.
+var (
+	goos         = runtime.GOOS
+	keychainRead = securityRead
+)
+
+var errNoKeychainEntry = errors.New("no keychain entry")
+
+const keychainBase = "Claude Code-credentials"
+
+// keychainService is the generic-password service name Claude Code files the
+// OAuth credentials under for config dir dir (already expanded): the default
+// ~/.claude has no suffix, any other dir carries the first 8 hex chars of
+// sha256(dir).
+func keychainService(dir string) string {
+	if home, err := os.UserHomeDir(); err == nil && dir == filepath.Join(home, ".claude") {
+		return keychainBase
+	}
+	sum := sha256.Sum256([]byte(dir))
+	return keychainBase + "-" + hex.EncodeToString(sum[:])[:8]
+}
+
+// securityRead reads one generic password through the macOS `security` tool.
+func securityRead(service string) ([]byte, error) {
+	out, err := exec.Command("security", "find-generic-password", "-s", service, "-w").Output()
+	if err != nil {
+		return nil, errNoKeychainEntry
+	}
+	return out, nil
+}
+
+// readCredentials returns the OAuth blob, access token and a reason when there
+// is none. The file comes first. On darwin the login Keychain is consulted only
+// when the file is missing, unusable or expired: Claude Code moved its
+// credentials there, so a leftover file can be stale while the Keychain entry
+// is current. Without a usable Keychain entry the file's own result stands.
+func readCredentials(dir string, now time.Time) (*jsonx.Object, string, string) {
+	oauth, tok, why := readCredentialsFile(dir)
+	if why == "" && !expired(oauth, now) {
+		return oauth, tok, ""
+	}
+	if goos == "darwin" {
+		if b, err := keychainRead(keychainService(dir)); err == nil {
+			if o, t, w := parseCredentials(b); w == "" {
+				return o, t, ""
+			}
+		}
+		if why == "no credentials file" {
+			why = "no credentials file or Keychain entry"
+		}
+	}
+	return oauth, tok, why
+}
+
+func readCredentialsFile(dir string) (*jsonx.Object, string, string) {
 	b, err := os.ReadFile(filepath.Join(dir, ".credentials.json"))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -269,6 +330,24 @@ func readCredentials(dir string) (*jsonx.Object, string, string) {
 		}
 		return nil, "", "unreadable credentials"
 	}
+	return parseCredentials(b)
+}
+
+// expired reports whether the blob's expiresAt is at or before now.
+func expired(oauth *jsonx.Object, now time.Time) bool {
+	exp, ok := oauth.Get("expiresAt")
+	if !ok || !jsonx.Truthy(exp) {
+		return false
+	}
+	n, ok := exp.(json.Number)
+	if !ok {
+		return false
+	}
+	ms, err := n.Int64()
+	return err == nil && !time.UnixMilli(ms).After(now)
+}
+
+func parseCredentials(b []byte) (*jsonx.Object, string, string) {
 	v, err := jsonx.Decode(b)
 	blob, ok := v.(*jsonx.Object)
 	if err != nil || !ok {
@@ -288,16 +367,12 @@ func readCredentials(dir string) (*jsonx.Object, string, string) {
 
 // token reads the access token without refreshing it.
 func (a *Accounts) token(configDir string) (string, string) {
-	oauth, tok, why := readCredentials(ExpandConfigDir(configDir))
+	oauth, tok, why := readCredentials(ExpandConfigDir(configDir), a.now())
 	if why != "" {
 		return "", why
 	}
-	if exp, ok := oauth.Get("expiresAt"); ok && jsonx.Truthy(exp) {
-		if n, ok := exp.(json.Number); ok {
-			if ms, err := n.Int64(); err == nil && !time.UnixMilli(ms).After(a.now()) {
-				return "", "token expired"
-			}
-		}
+	if expired(oauth, a.now()) {
+		return "", "token expired"
 	}
 	return tok, ""
 }

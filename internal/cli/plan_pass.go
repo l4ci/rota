@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/acceptance"
 	"github.com/l4ci/rota/internal/backlog"
@@ -115,7 +114,7 @@ func planPass(fs *flag.FlagSet) RunFunc {
 			return backlogFail(err)
 		}
 		marks := acceptance.Upsert(acceptance.ParseMarks(note), acceptance.Mark{
-			ID: ac, Date: time.Now().Format("2006-01-02"), Sha: row.Sha, Check: row.Check, Text: crit.Text})
+			ID: ac, Date: todayDate(c), Sha: row.Sha, Check: row.Check, Text: crit.Text})
 		put, err := wf.NotePut(ref, "acceptance", acceptance.RenderMarks(marks))
 		if err != nil {
 			return backlogFail(err)
