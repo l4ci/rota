@@ -141,7 +141,7 @@ func TestOpenPRPushFails(t *testing.T) {
 }
 
 func mergePorts(g Git) MergePorts {
-	return MergePorts{Git: g, Verdict: func(string) error { return nil }, Approve: func() error { return nil }}
+	return MergePorts{Git: g, Verdict: func(string) error { return nil }, Approve: func() (*exitcode.Refusal, error) { return nil, nil }}
 }
 
 func mergeGit() *fakeGit {
@@ -156,7 +156,7 @@ func mergeGit() *fakeGit {
 }
 
 func TestMergeBranch(t *testing.T) {
-	sha, err := MergeBranch(mergePorts(mergeGit()), "feat", "main", "msg")
+	sha, _, err := MergeBranch(mergePorts(mergeGit()), "feat", "main", "msg")
 	if err != nil || sha != "abc1234" {
 		t.Fatalf("sha %q err %v", sha, err)
 	}
@@ -164,7 +164,7 @@ func TestMergeBranch(t *testing.T) {
 
 func TestMergeBranchRefusals(t *testing.T) {
 	var ref *Refusal
-	if _, err := MergeBranch(mergePorts(mergeGit()), "main", "main", "msg"); !errors.As(err, &ref) || ref.By != "base branch" {
+	if _, _, err := MergeBranch(mergePorts(mergeGit()), "main", "main", "msg"); !errors.As(err, &ref) || ref.By != "base branch" {
 		t.Errorf("base: %v", err)
 	}
 	g := mergeGit()
@@ -173,7 +173,7 @@ func TestMergeBranchRefusals(t *testing.T) {
 	g.out["merge --abort"] = ""
 	// A conflict aborts the merge and refuses.
 	cg := &conflictGit{fakeGit: g}
-	if _, err := MergeBranch(mergePorts(cg), "feat", "main", "msg"); !errors.As(err, &ref) || ref.By != "conflict" {
+	if _, _, err := MergeBranch(mergePorts(cg), "feat", "main", "msg"); !errors.As(err, &ref) || ref.By != "conflict" {
 		t.Errorf("conflict: %v", err)
 	}
 	if !contains(cg.calls, "merge --abort") {
@@ -205,8 +205,8 @@ func TestMergeBranchGatesFirst(t *testing.T) {
 	boom := errors.New("boom")
 	g := mergeGit()
 	p := mergePorts(g)
-	p.Approve = func() error { return boom }
-	if _, err := MergeBranch(p, "feat", "main", "msg"); !errors.Is(err, boom) {
+	p.Approve = func() (*exitcode.Refusal, error) { return nil, boom }
+	if _, _, err := MergeBranch(p, "feat", "main", "msg"); !errors.Is(err, boom) {
 		t.Fatalf("err = %v", err)
 	}
 	for _, c := range g.calls { // the pin is read first; nothing else may run
@@ -401,7 +401,7 @@ func TestRestore(t *testing.T) {
 func TestMergeBranchPreservesCleanupFailure(t *testing.T) {
 	g := mergeGit()
 	g.fail = map[string]bool{"merge --no-ff -m msg cafe123": true, "merge --abort": true}
-	_, err := MergeBranch(mergePorts(&conflictGit{fakeGit: g}), "feat", "main", "msg")
+	_, _, err := MergeBranch(mergePorts(&conflictGit{fakeGit: g}), "feat", "main", "msg")
 	if err == nil || !strings.Contains(err.Error(), "git merge --abort failed") || !strings.Contains(err.Error(), "CONFLICT") || strings.Contains(err.Error(), "merge aborted") {
 		t.Fatalf("cleanup failure lost: %v", err)
 	}
@@ -410,15 +410,14 @@ func TestMergeBranchPreservesCleanupFailure(t *testing.T) {
 	}
 }
 
-// A refused Approve passes through MergeBranch with its data attached.
-func TestMergeBranchApproveRefusalCarriesData(t *testing.T) {
+// A refused Approve comes back from MergeBranch as a refusal, and nothing runs.
+func TestMergeBranchApproveRefusalIsTyped(t *testing.T) {
 	g := mergeGit()
 	p := mergePorts(g)
-	p.Approve = func() error {
-		return &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate", Data: "envelope"}
-	}
-	_, err := MergeBranch(p, "feat", "main", "msg")
-	if d, ok := exitcode.DataOf[string](err); !ok || d != "envelope" {
-		t.Errorf("refusal data = %q, %v (err %v)", d, ok, err)
+	want := &exitcode.Refusal{Err: &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate"}, Data: "envelope"}
+	p.Approve = func() (*exitcode.Refusal, error) { return want, nil }
+	_, ref, err := MergeBranch(p, "feat", "main", "msg")
+	if ref != want || err != nil {
+		t.Errorf("refusal = %+v, err %v", ref, err)
 	}
 }

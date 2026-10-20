@@ -776,7 +776,7 @@ func TestGateApproveSeesTheAdoptedPR(t *testing.T) {
 	w := newWorld(t, "")
 	w.forge("listed", "1")
 	var got GateTarget
-	res, err := w.gate(false, GateOpts{Approve: func(t GateTarget, _ func() ([]string, error)) error { got = t; return nil }})
+	res, err := w.gate(false, GateOpts{Approve: func(t GateTarget, _ func() ([]string, error)) (*exitcode.Refusal, error) { got = t; return nil, nil }})
 	if err != nil || res.Verdict != GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -932,17 +932,17 @@ func TestGateSkipsE2EWhenFullRed(t *testing.T) {
 	}
 }
 
-// A refused Approve reaches the caller as the same typed refusal, data
+// A refused Approve reaches the caller as a typed refusal on the result, data
 // intact, for the gate and (in train_test.go) the train.
-func TestGateApprovalRefusalCarriesData(t *testing.T) {
+func TestGateApprovalRefusalIsTyped(t *testing.T) {
 	w := newWorld(t, ghURL)
-	want := &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate", Data: BlockData{BlockedBy: "manual gate"}}
-	res, err := w.gate(false, GateOpts{Approve: func(GateTarget, func() ([]string, error)) error { return want }})
+	want := &exitcode.Refusal{Err: &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate"}, Data: BlockData{BlockedBy: "manual gate"}}
+	res, err := w.gate(false, GateOpts{Approve: func(GateTarget, func() ([]string, error)) (*exitcode.Refusal, error) { return want, nil }})
 	if res.Verdict != GateApprovalRequired {
 		t.Fatalf("verdict %q", res.Verdict)
 	}
-	if bd, ok := exitcode.DataOf[BlockData](err); !ok || bd.BlockedBy != "manual gate" {
-		t.Errorf("refusal data = %+v, %v (err %v)", bd, ok, err)
+	if res.Refusal != want || err != want.Err || !res.Refused(err) {
+		t.Errorf("refusal = %+v, err %v, refused %v", res.Refusal, err, res.Refused(err))
 	}
 }
 
