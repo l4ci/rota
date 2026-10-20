@@ -304,3 +304,29 @@ func capCounts(t *testing.T, s Summary) [2]int {
 	}
 	return [2]int{x, y}
 }
+
+// AC-3 (#1060): the summary lists each slot's wait between done and its next
+// assign; a re-done after a bounce does not restart it, an open done is no row.
+func TestSummaryIdleBetweenDoneAndNextAssign(t *testing.T) {
+	es := []Entry{
+		{TS: at(0), Kind: KindAssign, Round: 2, Issue: "1", Slot: "ben"},
+		{TS: at(10), Kind: KindDone, Round: 2, Issue: "1", Slot: "ben", PR: "https://h/o/r/pull/7"},
+		{TS: at(20), Kind: KindDone, Round: 2, Issue: "1", Slot: "ben", PR: "https://h/o/r/pull/7"},
+		{TS: at(27), Kind: KindAssign, Round: 2, Issue: "2", Slot: "ben"},
+		{TS: at(30), Kind: KindDone, Round: 2, Issue: "2", Slot: "ben"}, // no next assign yet
+		{TS: at(5), Kind: KindAssign, Round: 2, Issue: "3", Slot: "dana"},
+	}
+	s := Fold(es, nil, 2)
+	if len(s.Idle) != 1 || s.Idle[0].Slot != "ben" || s.Idle[0].IdleSeconds != 17*60 {
+		t.Fatalf("idle = %+v, want one ben row of 17 min", s.Idle)
+	}
+	if txt := s.Text(); !strings.Contains(txt, "Idle between done and next assign") || !strings.Contains(txt, "17 min") {
+		t.Errorf("text lacks the idle table:\n%s", txt)
+	}
+	if idle, _ := s.Object().Get("idle"); len(idle.([]any)) != 1 {
+		t.Errorf("json idle = %v", idle)
+	}
+	if txt := Fold(es[:2], nil, 2).Text(); strings.Contains(txt, "Idle between") {
+		t.Errorf("no assign after done, yet:\n%s", txt)
+	}
+}

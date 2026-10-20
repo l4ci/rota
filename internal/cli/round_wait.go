@@ -73,7 +73,12 @@ func roundWait(fs *flag.FlagSet) RunFunc {
 			d.Set("note", res.Note)
 			text += "\t(" + res.Note + ")"
 		}
-		return Result{Data: d, Text: strings.Join(append([]string{text}, trainNudgeLines(nudges)...), "\n")}, nil
+		lines := []string{text}
+		if n := assignNudgeFor(c, root, res.Slot); n != nil {
+			d.Set("assignNudge", n.data())
+			lines = append(lines, n.Text())
+		}
+		return Result{Data: d, Text: strings.Join(append(lines, trainNudgeLines(nudges)...), "\n")}, nil
 	}
 }
 
