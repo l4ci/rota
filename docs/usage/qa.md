@@ -27,6 +27,7 @@ Strategies are written once via `/rota-qa first-run`, which probes the repo for 
 | `first-run` | Probes surfaces, detects existing test infra, proposes per-target strategy, writes `.rota/qa/<target>.md` after approval. Never installs tooling. |
 | `run` | Executes the strategy: infra preflight, parallel runner dispatch, audit pass, scored verdict. Read-only against the codebase; writes artifacts to `.rota/qa-runs/<timestamp>/`. |
 | `restructure` | Re-probes surfaces, retires dead strategies, fixes broken commands. Audit equivalent for strategy files. |
+| `uat` | Walks one item's acceptance criteria with you. Criteria a passing test proof row covers auto-pass; you judge the rest. Needs no strategy file. See [UAT](#uat-human-acceptance). |
 
 ## Verdicts
 
@@ -77,8 +78,20 @@ Triggered by `/rota-ship` when `ship.qa: true`. Runs after `/rota-review` and th
 - `qa.gate`: `"advisory"` (default) or `"blocking"`. Controls whether `FAIL` halts `/rota-ship` invocations.
 - `qa.afterWork`: `false` (default). When `true`, `/rota-work` invokes `/rota-qa run` post-cycle if touched files match a target's `Watch globs`.
 - `ship.qa`: `false` (default). When `true`, `/rota-ship` calls `/rota-qa run` between review and the merge/PR step.
+- `ship.uat`: `false` (default). When `true`, `/rota-ship` calls `/rota-qa uat` for each item on the branch, after review and before the merge/PR step.
 
 See [configuration](configuration.md#shipqa) for the full block.
+
+## UAT (human acceptance)
+
+`/rota-qa uat <ID>` lists an item's `## Acceptance` criteria and asks you only about the ones no test proves. It always works when you call it; `ship.uat` only decides whether `/rota-ship` calls it for you.
+
+- A criterion auto-passes when `rota proof show <ID>` has a PASS row at the current commit from a test command (`rota proof record`) that names the criterion, and its line does not carry `(human)`.
+- A criterion whose line carries the token `(human)` always goes to you, whatever the proof says: `- [ ] AC-4: the error copy reads clearly (human)`. The token does not change the `AC-n` id; `rota plan check` reads the line as before.
+- Everything else goes to you as well: no proof row, a row it cannot read, an unclear match. You answer `pass`, `fail` or `skip`, one criterion at a time.
+- A failed criterion is captured through `/rota-capture` as a new item. Its body quotes the criterion and `Related:` names the original, which stays open.
+
+The mode reads and asks; it changes no code and records no verdict. It does not diagnose failures into fix plans and keeps no UAT file across `/clear`. Round PRs stay unattended: `rota worker gate` and the round merge path never run it, with the key on or off.
 
 ## See also
 

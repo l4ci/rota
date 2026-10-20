@@ -490,6 +490,12 @@ A worker or the orchestrator that needs a human decision does not guess. `rota r
 posts the question on the issue or PR thread and raises a host notification; `rota round escalate check`
 reads the answers back.
 
+When several decisions wait, type `/rota-answer`. The orchestrator then asks them one by one (the
+`AskUserQuestion` picker in Claude Code; one message with an `A)` to `E)` list elsewhere, `A)` the
+recommendation, the last entry "Write your own answer"), records each answer as a `decision` comment
+and applies it before the next question. Rounds use no blocking picker otherwise, and the
+orchestrator never starts `/rota-answer` itself.
+
 ```sh
 rota round escalate send 59 --slot ben --title "Keep the old flag?" --body-file question.md
 rota round escalate send 61 --pr --title "Merge approval: PR #61" --body-file ask.md

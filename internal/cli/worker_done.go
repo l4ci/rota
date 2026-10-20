@@ -25,6 +25,7 @@ const fastTierCheck = "rota test run fast"
 // HEAD for test.fast, then marks the slot done.
 func workerDone(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "ref {files} is diffed against (default: the base branch)")
+	attempt := fs.String("attempt", "", "the attempt id from your brief; a stale one exits 4")
 	return func(c *Ctx, args []string) (Result, error) {
 		slotName, err := oneArg(args, "slot")
 		if err != nil {
@@ -51,6 +52,9 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		sl := reg.Slot(slotName)
 		if sl == nil {
 			return Result{}, Resolution("slot '%s' is not in the pool", slotName)
+		}
+		if err := worker.FenceAttempt(sl, *attempt); err != nil {
+			return Result{}, err
 		}
 		id := worker.HeldID(sl.Task(), sl.Branch(), sl.Name())
 		if id == "" {
@@ -106,9 +110,15 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		}
 
 		changed := false
+		var fenced error
 		if err := worker.Update(poolRoot, func(doc *worker.Doc) {
 			s := doc.Slot(slotName)
 			if s == nil {
+				return
+			}
+			// The check above read a snapshot: a reclaim and reassign since then
+			// must not mark the new holder done.
+			if fenced = worker.FenceAttempt(s, *attempt); fenced != nil {
 				return
 			}
 			now := stamp.Format(c.deps().Now())
@@ -126,6 +136,9 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			changed = true
 		}); err != nil {
 			return Result{}, err
+		}
+		if fenced != nil {
+			return Result{}, fenced
 		}
 		if changed {
 			worker.LedgerDone(c.deps().workerEnv(), c.Context(), c.deps().WorkerAccounts(), poolRoot, ledger.Entry{Issue: id, Slot: slotName, Account: sl.Account(), Harness: sl.Kind(), PR: sl.PR()})

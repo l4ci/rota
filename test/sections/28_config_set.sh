@@ -133,6 +133,7 @@ cfg = json.load(open(p))
 cfg["work"].update({"dispatch": "subagent", "workerSlots": 3, "workerCommand": "",
                     "accounts": [], "operatorCommand": ""})
 cfg["ship"]["secondOpinionRunner"] = "subagent"
+cfg["ship"]["uat"] = False
 cfg["test"] = {"fast": [], "full": [], "e2e": []}
 json.dump(cfg, open(p, "w"))
 PYEOF

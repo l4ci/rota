@@ -158,6 +158,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `ship.secondOpinion` | bool | `false` |  | Opt-in fresh-eyes adversarial gate in /rota-ship Step 3.5. |
 | `ship.secondOpinionRunner` | enum | `"subagent"` | `subagent` | Who runs the /rota-ship second-opinion gate. The codex value was removed in 5.0: /rota-ship notes it and runs the subagent in advisory mode. |
 | `ship.qa` | bool | `false` |  | Opt-in product-QA gate: /rota-ship runs /rota-qa run after review and before merge or PR. |
+| `ship.uat` | bool | `false` |  | Opt-in human acceptance walk-through: /rota-ship runs /rota-qa uat after review and before merge or PR. Never part of the round merge gate. |
 | `ship.mergeApproval` | enum | `"none"` | `none`, `all`, `paths` | Which merges need a human: none, all, or only those touching ship.mergeApprovalPaths. The merge verbs enforce it at every autonomy level. |
 | `ship.mergeApprovalPaths` | list | `[]` |  | Repo-relative paths or globs that need human approval when ship.mergeApproval is paths. |
 

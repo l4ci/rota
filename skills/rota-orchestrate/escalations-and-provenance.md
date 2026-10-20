@@ -6,6 +6,8 @@ Loaded by `skills/rota-orchestrate/SKILL.md` section 5 when a worker is `blocked
 
 `rota round escalate send <number|key> --title … --body-file …` posts the question on the issue or PR and notifies the maintainer. It returns at once; keep working the other slots. `rota round escalate check` reads the thread for an answer. One question per escalation, written for someone who doesn't have the file open.
 
+**Many waiting.** When two or more decisions wait on the maintainer, tell them `/rota-answer` will put each one by one with options and a recommendation. Offer it in prose; never start it yourself, since it is the only blocking picker a round allows and only the maintainer's invocation permits it. Its answers are recorded as `decision` comments citing "maintainer, answering the orchestrator in its session"; cite that channel, not `issue comment #N`, in your own approvals.
+
 **Provenance.** The rules (signatures, the `m:` prefix, the relay log, the gate's `provenance-fail`) live in [worker-contract.md](references/worker-contract.md#provenance). What you do with them:
 
 - Sign every message you send a worker. `rota worker dispatch --relay` does it; hand-typed text doesn't.

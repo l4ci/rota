@@ -14,6 +14,7 @@ Copy this checklist and track your progress:
 - [ ] Step 3 — Review (opt-in)
 - [ ] Step 3.5 — Second-Opinion Gate (opt-in)
 - [ ] Step 3.75 — QA Gate (opt-in)
+- [ ] Step 3.8 — UAT Gate (opt-in)
 - [ ] Step 4 — Build the PR Body
 - [ ] Step 5 — Pick Strategy
 - [ ] Step 6a — Open a PR
@@ -41,7 +42,7 @@ Read `.rota/config.json` (`rota config show`):
 - `ship.review`: review depth, `full` (default), `light` or `none`, or a policy object that picks one by diff size, label and path, and lifts it to `full` on a `Door: one-way` PR or a diff outside the issue's declared files; `true` and `false` still mean `full` and `none`
 - `autonomy.level`: `"off"` (default), `"auto"`: whether Step 8.5 nudges or invokes directly
 
-`ship.secondOpinion` and `ship.qa` are read by [`opt-in-gates.md`](opt-in-gates.md); `docs.path`, `docs.afterWork` and `docs.autoCreate` by [`docs-mode.md`](docs-mode.md).
+`ship.secondOpinion`, `ship.qa` and `ship.uat` are read by [`opt-in-gates.md`](opt-in-gates.md); `docs.path`, `docs.afterWork` and `docs.autoCreate` by [`docs-mode.md`](docs-mode.md).
 
 ## When to Use
 
@@ -82,6 +83,10 @@ When `ship.secondOpinion` is `true`, read [`opt-in-gates.md`](opt-in-gates.md) (
 ## Step 3.75 — QA Gate (opt-in)
 
 When `ship.qa` is `true`, read `opt-in-gates.md` (Step 3.75: skip conditions and procedure). Otherwise skip.
+
+## Step 3.8 — UAT Gate (opt-in)
+
+When `ship.uat` is `true`, read `opt-in-gates.md` (Step 3.8: skip conditions and procedure). Otherwise skip.
 
 ## Step 4 — Build the PR Body
 
