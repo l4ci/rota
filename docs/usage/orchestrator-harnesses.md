@@ -9,7 +9,7 @@ rota orchestrate --dry-run     # shows the command and first prompt
 
 | Harness | Command the launcher runs | First prompt | Skills load from |
 |---|---|---|---|
-| `claude` | `claude --model <models.orchestrator> --permission-mode auto` (or `work.operatorCommand`) | `/rota-orchestrate` | `.claude/skills`, `~/.claude/skills` |
+| `claude` | `claude --model <models.orchestrator> --permission-mode auto` (or `round.operatorCommand`) | `/rota-orchestrate` | `.claude/skills`, `~/.claude/skills` |
 | `codex` | `codex` | `$rota-orchestrate` | `.agents/skills`, `~/.agents/skills` |
 | `hermes` | `hermes chat -s rota-orchestrate -q` | plain sentence naming the skill | `.agents/skills` and `.hermes/skills` after `hermes skills trust`; `~/.hermes/skills` |
 | `opencode` | `opencode --prompt` | plain sentence naming the skill | `.agents/skills`, `.claude/skills`, `.opencode/skills` and their `~/` twins |
@@ -29,7 +29,7 @@ hermes skills trust            # Hermes only: a repo's skills stay off until tru
 
 ## Solo mode
 
-The skill's solo mode needs a subagent that can be pinned to a worktree. Only Claude Code has one. In any other harness, run the round in tmux or herdr (`rota config set work.dispatch tmux`); the skill tells the orchestrator to refuse solo and say so.
+The skill's solo mode needs a subagent that can be pinned to a worktree. Only Claude Code has one. In any other harness, run the round in tmux or herdr (`rota config set round.dispatch tmux`); the skill tells the orchestrator to refuse solo and say so.
 
 ## Asking the maintainer
 

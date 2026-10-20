@@ -373,12 +373,12 @@ def prose_rules():
           has("skills/rota-docs/SKILL.md", "Manual entry bypasses the gate", "Docs Mode Step D-A1 missing the manual-entry bypass clause"),
           has("docs/reference/config-options.md", "positional", "missing positional-args mention"),
           has("docs/usage/configuration.md", r"positional|<key>=<value>", "missing positional-args mention", True),
-          has("docs/usage/configuration.md", "work.dispatch", "does not explain work.dispatch")]
+          has("docs/usage/configuration.md", "round.dispatch", "does not explain round.dispatch")]
     for key in ("models.orchestrator models.worker work.isolation work.mergeStrategy ship.review learn.verify "
                 "refactor.confirmBeforeExecute autonomy.level docs.path docs.autoCreate "
-                "docs.afterWork git.baseBranch umbrella.enabled work.dispatch work.workerSlots work.workerCommand").split():
+                "docs.afterWork git.baseBranch umbrella.enabled round.dispatch round.slots round.workerCommand").split():
         r.append(has("docs/reference/config-options.md", key, f"does not document {key}"))
-    for key in ("work.dispatch", "work.workerSlots", "work.workerCommand"):
+    for key in ("round.dispatch", "round.slots", "round.workerCommand"):
         r.append(has("docs/reference/config-options.md", key, f"does not document {key}"))
     # multi-repo flow (M03)
     r += [has("skills/rota-capture/umbrella-tagging.md", "**Selection:** multiple", "Step 4.6 must allow multiple selections for the Repos question"),

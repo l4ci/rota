@@ -173,7 +173,7 @@ cfg_path, afx = sys.argv[1], sys.argv[2]
 # The merge-gate block later in this section writes this file; at this point it
 # may not exist yet, so start from whatever is (or isn't) there.
 cfg = json.load(open(cfg_path)) if os.path.exists(cfg_path) else {}
-cfg.setdefault("work", {})["accounts"] = [
+cfg.setdefault("round", {})["accounts"] = [
     {"name": "alpha", "configDir": "/nonexistent/alpha"},
     {"name": "beta",  "configDir": "/nonexistent/beta"},
     {"name": "gamma", "configDir": "/nonexistent/gamma"},

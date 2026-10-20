@@ -20,8 +20,8 @@ A `best-of:2` issue gets one Claude and one Codex attempt when both `round.tiers
 
 ## What you need
 
-- **herdr.** Codex workers run under `work.dispatch` set to `herdr` (or detected inside a herdr pane).
-  Under tmux, `rota round assign --kind codex` exits 5 with `codex workers need work.dispatch=herdr`. Solo
+- **herdr.** Codex workers run under `round.dispatch` set to `herdr` (or detected inside a herdr pane).
+  Under tmux, `rota round assign --kind codex` exits 5 with `codex workers need round.dispatch=herdr`. Solo
   mode runs Claude subagents only.
 - **A Codex CLI with rota's launch flags.** rota does not pin a Codex version. Before it marks anything,
   `assign` and `dispatch` check that `codex --help` lists every flag the launch line uses. A missing flag
@@ -58,11 +58,11 @@ longer points Codex at them.
 
 ### Several Codex accounts
 
-To spread Codex workers over more than one login, list named Codex homes in `work.codexAccounts`, the
-counterpart of `work.accounts`:
+To spread Codex workers over more than one login, list named Codex homes in `round.codexAccounts`, the
+counterpart of `round.accounts`:
 
 ```json
-{ "work": { "codexAccounts": [
+{ "round": { "codexAccounts": [
   { "name": "personal", "codexHome": "/home/me/.codex-personal" },
   { "name": "team",     "codexHome": "/home/me/.codex-team" }
 ] } }
@@ -93,7 +93,7 @@ Claude and Codex both ship a tier map:
 Override any tier and the others keep their defaults. Set all three to empty and the worker runs on
 Codex's own default model, and the launch command drops `--model`; one empty tier beside a set one is refused. `rota round assign --kind codex --check-only` prints the model it would use.
 
-The launch command is `work.codexCommand`. Its default is `codex --model {model}
+The launch command is `round.codexCommand`. Its default is `codex --model {model}
 --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen`.
 The bypass flags are there because nobody answers prompts in a worker pane: scope, not prompting,
 bounds the worker. A custom command receives the tier's model only through a `{model}` placeholder.
@@ -128,25 +128,25 @@ brief.
 
 ## A Codex plan critic
 
-Codex can also review plans without being a worker. With `plan.criticHarness` set to `codex`, the level-4 critic of `/rota-plan` runs `codex exec --sandbox read-only --ephemeral` on the item and the saved proposal, and reads the last message back as findings. It uses the first `work.codexAccounts` home when any is set, else the default Codex home. It never gets a flag that lifts the sandbox or approvals, and its output is read as untrusted text, not instructions. If `codex` is missing or the run fails, `/rota-plan` falls back to the same-harness critic and prints one line. See [plans](vision-and-plans.md#a-critic-from-another-model).
+Codex can also review plans without being a worker. With `plan.criticHarness` set to `codex`, the level-4 critic of `/rota-plan` runs `codex exec --sandbox read-only --ephemeral` on the item and the saved proposal, and reads the last message back as findings. It uses the first `round.codexAccounts` home when any is set, else the default Codex home. It never gets a flag that lifts the sandbox or approvals, and its output is read as untrusted text, not instructions. If `codex` is missing or the run fails, `/rota-plan` falls back to the same-harness critic and prints one line. See [plans](vision-and-plans.md#a-critic-from-another-model).
 
 ## Limits
 
 - **herdr only.** No tmux, no solo mode, no Codex subagents.
-- **No usage meter.** `work.accounts` and its headroom meter are Anthropic's, and a Codex slot is skipped
-  by them. `work.codexAccounts` spreads slots but cannot measure headroom. `rota limit watch` reads only the
+- **No usage meter.** `round.accounts` and its headroom meter are Anthropic's, and a Codex slot is skipped
+  by them. `round.codexAccounts` spreads slots but cannot measure headroom. `rota limit watch` reads only the
   limit message in the pane (the wording, something like `You've hit your usage limit ... try again at 3:42 PM`, is recalled, not captured from a real Codex run), then parks the slot. It
   moves the issue to an idle slot on another Codex login that has no limit waiting, or sleeps until the
-  reset when there is none. With every login in `work.codexAccounts` waiting, the round stops filling Codex
+  reset when there is none. With every login in `round.codexAccounts` waiting, the round stops filling Codex
   slots (see [usage limits](unattended-rounds.md#-usage-limits)).
 - **A Codex update can still break a flag.** If a release renames or drops a launch flag, `assign` refuses
-  and names it. Fix `work.codexCommand`, or wait for rota to follow.
+  and names it. Fix `round.codexCommand`, or wait for rota to follow.
 - **The prompt check was verified on 0.159.2.** rota does not gate on the version, so it cannot tell a Codex
   that ignores `-c features.hooks=true`. Unsigned pane text could then reach the worker.
 
 ## Check it
 
-`rota doctor` has a `codex` check. It skips when Codex isn't installed and no `work.codexAccounts` are
+`rota doctor` has a `codex` check. It skips when Codex isn't installed and no `round.codexAccounts` are
 configured. Otherwise it fails when Codex is missing, `codex --version` can't be run (there is no supported version range), or a
 configured account isn't logged in or (under herdr) lacks the integration, each with the command that fixes
 it. With no accounts it checks the default home and only notes a missing login or integration, since a project

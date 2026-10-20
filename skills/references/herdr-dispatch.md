@@ -4,7 +4,7 @@ What herdr changes versus tmux, for `/rota-orchestrate` rounds. Each worker is i
 
 Everything about the *workers* rather than the *host* lives in [`worker-contract.md`](worker-contract.md) (standing contract and [provenance](worker-contract.md#provenance)) and [`tmux-dispatch.md`](tmux-dispatch.md): [polling](tmux-dispatch.md#polling), [escalating and relaying](tmux-dispatch.md#escalating-and-relaying), [the merge gate](tmux-dispatch.md#the-merge-gate), [permissions](tmux-dispatch.md#permissions) and [accounts](tmux-dispatch.md#accounts). This file does not repeat them; `/rota-orchestrate` cites all three directly.
 
-Verbs: the same four (`rota worker pool`, `rota worker dispatch`, `rota worker poll`, `rota worker gate`) plus `rota worker session`. `rota` picks the host (herdr or tmux) from `work.dispatch` and the surrounding environment.
+Verbs: the same four (`rota worker pool`, `rota worker dispatch`, `rota worker poll`, `rota worker gate`) plus `rota worker session`. `rota` picks the host (herdr or tmux) from `round.dispatch` and the surrounding environment.
 
 ## Being inside herdr is a precondition
 
@@ -36,7 +36,7 @@ Agent names are unique per herdr **server**, not per workspace, so a bare `w1` w
 
 1. Closes the slot's previous tab (`/exit`, then `tab close`). A fresh session per task is still the only trustworthy reset.
 2. `herdr tab create --workspace $HERDR_WORKSPACE_ID --cwd <worktree> --label <slot> --no-focus --env ROTA_SLOT=<slot> --env ROTA_PORT_BASE=<n> --env ROTA_PORT_BLOCK=<w> --env ROTA_DB_SUFFIX=_<slot> [--env …]` (`--env <KEY=VALUE>`, repeatable), reading `.result.tab.tab_id` and `.result.root_pane.pane_id`.
-3. `herdr agent start <name> --kind claude --pane <pane> -- <worker args>`. A just-created tab's shell may not be ready, and `agent start` then answers `agent_pane_busy`: the verb retries about twice a second, within the boot timeout, in the same tab, and only then closes it and fails. herdr runs `claude` itself, so `work.workerCommand` must launch `claude`: leading `KEY=VALUE` assignments become `--env` on the tab and everything after the binary is passed through. A command that runs a wrapper instead fails with exit 5.
+3. `herdr agent start <name> --kind claude --pane <pane> -- <worker args>`. A just-created tab's shell may not be ready, and `agent start` then answers `agent_pane_busy`: the verb retries about twice a second, within the boot timeout, in the same tab, and only then closes it and fails. herdr runs `claude` itself, so `round.workerCommand` must launch `claude`: leading `KEY=VALUE` assignments become `--env` on the tab and everything after the binary is passed through. A command that runs a wrapper instead fails with exit 5.
 4. Startup dialogs. `agent start` returns `agent_not_ready` when the session opens on a dialog: the folder-trust prompt on a fresh worktree, or the Bypass Permissions warning on a config dir that has not accepted it. The two put their accepting option in different places, and a fixed `down enter` picks **No, exit** on the trust prompt. The verb reads the pane, finds the accepting option and the cursor, and sends the keys between them. An unrecognised dialog is refused (exit 5) rather than answered. Setting `skipDangerousModePermissionPrompt: true` per account still avoids the second dialog entirely.
 5. `herdr agent prompt <name> <brief> --wait --until working --until blocked --timeout 60000`. This returns once the worker has **started**, not when it has finished. Plain `--wait` would hold until the whole task settled.
 6. Records `handle`, `task` and `state: busy` in `.rota/workers.json`.
@@ -47,13 +47,13 @@ Agent names are unique per herdr **server**, not per workspace, so a bare `w1` w
 |---|---|
 | 0 | pickup confirmed (working or blocked observed) |
 | 3 | pool, slot, worktree or body file missing, or `--relay` found no running session |
-| 4 | the reset guard found the slot holding work, or `work.workerCommand` carries a resume flag |
+| 4 | the reset guard found the slot holding work, or `round.workerCommand` carries a resume flag |
 | 5 | host failure, including outside herdr, a wrapper command and an unrecognised startup dialog; also `agent_blocked`: a dialog was already up, nothing was sent; also a human draft on the prompt line (dispatch waited about 4s, then refused, nothing was typed: resend once the draft is submitted or cleared) |
 | 6 | `agent_prompt_stalled` or timeout: no activity after the prompt. Dispatch already pressed Enter up to 3 times if the brief was visible on the prompt line. A `--relay` resend then submits that pending text instead of typing it again (the slot is marked `unsent` in `workers.json`); a task dispatch starts a fresh session. Read the tab (`herdr agent read <name>`) before resending: a stall does not prove the text was lost, and a duplicate brief costs a worker its context |
 
 ## Linked workspaces per slot
 
-`work.herdrGroupSlots` (default `true`) makes dispatch open each slot as a workspace linked to the orchestrator's, so herdr groups the slots under their project (`is_linked_worktree: true`, shared `repo_key`). Set it `false` to keep each slot as a tab in the orchestrator's workspace. Design and checks: `.rota/spikes/herdr-worktree-grouping.md`.
+`round.herdrGroupSlots` (default `true`) makes dispatch open each slot as a workspace linked to the orchestrator's, so herdr groups the slots under their project (`is_linked_worktree: true`, shared `repo_key`). Set it `false` to keep each slot as a tab in the orchestrator's workspace. Design and checks: `.rota/spikes/herdr-worktree-grouping.md`.
 
 `Spawn` with the key on:
 

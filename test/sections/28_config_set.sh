@@ -38,14 +38,14 @@ assert d['learn']['verify'] is True, d
 
   # --- JSON value types: number, false, array, string ---
   hvj config set round.slots 42 >/dev/null || { echo "FAIL: number"; exit 1; }
-  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['work']['workerSlots'] == 42 and isinstance(d['work']['workerSlots'], int)" || { echo "FAIL: int parsing"; exit 1; }
+  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['round']['slots'] == 42 and isinstance(d['round']['slots'], int)" || { echo "FAIL: int parsing"; exit 1; }
 
   OUT=$(hvj config set ship.review false) || { echo "FAIL: false"; exit 1; }
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['ship']['review'] is False" || { echo "FAIL: false parsing"; exit 1; }
   [ "$(echo "$OUT" | jget data.previous)" = "true" ] || { echo "FAIL: false should report previous true: $OUT"; exit 1; }
 
   hvj config set round.accounts '["a","b"]' >/dev/null || { echo "FAIL: array"; exit 1; }
-  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['work']['accounts'] == ['a','b'], d" || { echo "FAIL: array parsing"; exit 1; }
+  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['round']['accounts'] == ['a','b'], d" || { echo "FAIL: array parsing"; exit 1; }
 
   # --- Bare identifier falls back to string ---
   hvj config set autonomy.level auto >/dev/null || { echo "FAIL: string fallback"; exit 1; }
@@ -53,11 +53,11 @@ assert d['learn']['verify'] is True, d
 
   # --- A string that looks like JSON needs shell quoting to stay a string ---
   hvj config set round.workerCommand '"true"' >/dev/null || { echo "FAIL: quoted string"; exit 1; }
-  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['work']['workerCommand'] == 'true', d" || { echo "FAIL: quoted string value"; exit 1; }
+  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['round']['workerCommand'] == 'true', d" || { echo "FAIL: quoted string value"; exit 1; }
 
   # --- Empty string is a valid value ---
   hvj config set round.workerCommand '' >/dev/null || { echo "FAIL: empty value"; exit 1; }
-  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['work']['workerCommand'] == '', d" || { echo "FAIL: empty value stored"; exit 1; }
+  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['round']['workerCommand'] == '', d" || { echo "FAIL: empty value stored"; exit 1; }
 
   # --- Bad inputs exit 2 and leave the file alone ---
   before=$(cat .rota/config.json)
@@ -99,7 +99,7 @@ trap 'rm -rf "$CFG_F78"' EXIT
 mkdir -p "$CFG_F78/.rota"
 python3 - "$CFG_F78/.rota/config.json" <<'PYEOF'
 import json, sys
-# A pre-F78 config: complete for its era, missing only the new work.* keys.
+# A pre-F78 config: complete for its era, missing only the round.* keys rota init now writes.
 json.dump({
     "models": {"orchestrator": "opus", "worker": "sonnet"},
     "work": {"isolation": "branch", "mergeStrategy": "direct"},
@@ -130,8 +130,8 @@ python3 - "$CFG_F78/.rota/config.json" <<'PYEOF'
 import json, sys
 p = sys.argv[1]
 cfg = json.load(open(p))
-cfg["work"].update({"dispatch": "subagent", "workerSlots": 3, "workerCommand": "",
-                    "accounts": [], "operatorCommand": ""})
+cfg.setdefault("round", {}).update({"dispatch": "subagent", "slots": 3, "workerCommand": "",
+                                   "accounts": [], "operatorCommand": ""})
 cfg["ship"]["secondOpinionRunner"] = "subagent"
 cfg["ship"]["uat"] = False
 cfg["test"] = {"fast": [], "full": [], "e2e": []}
