@@ -72,12 +72,7 @@ func operatorCommand(root string) string {
 			return s
 		}
 	}
-	model := "opus"
-	if v, ok := config.Lookup(cfg, "models.orchestrator"); ok {
-		if s, _ := v.(string); s != "" {
-			model = s
-		}
-	}
+	model := config.StringOrDefault(cfg, "models.orchestrator")
 	return "claude --continue --model " + model + " --permission-mode auto"
 }
 

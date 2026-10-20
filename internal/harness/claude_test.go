@@ -3,6 +3,8 @@ package harness
 import (
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/config"
 )
 
 func TestWorkerCommandModel(t *testing.T) {
@@ -76,5 +78,29 @@ func TestResumeFlag(t *testing.T) {
 	}
 	if _, err := ResumeFlag(`claude "oops`); err == nil {
 		t.Error("an unbalanced quote must be an error")
+	}
+}
+
+// The model fallbacks read the key table, so a bumped default reaches both
+// launch lines with no other edit.
+func TestModelFallbacksFollowKeyDefaults(t *testing.T) {
+	for i := range config.Keys {
+		switch config.Keys[i].Name {
+		case "models.worker":
+			defer func(d any) { config.Keys[i].Default = d }(config.Keys[i].Default)
+			config.Keys[i].Default = "worker-default"
+		case "models.orchestrator":
+			defer func(d any) { config.Keys[i].Default = d }(config.Keys[i].Default)
+			config.Keys[i].Default = "orch-default"
+		}
+	}
+	cfg := cfgOf(t, `{}`)
+	got, err := (claude{}).Launch(cfg, "")
+	if err != nil || !strings.Contains(got, "--model worker-default ") {
+		t.Errorf("worker Launch = %q, %v", got, err)
+	}
+	argv, err := (claude{}).Command(cfg)
+	if err != nil || strings.Join(argv, " ") != "claude --model orch-default --permission-mode auto" {
+		t.Errorf("operator Command = %q, %v", argv, err)
 	}
 }
