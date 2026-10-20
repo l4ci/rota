@@ -116,8 +116,9 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			lines = append(lines, fmt.Sprintf("set %s = %s", p.Key, v))
 		}
 		root.Set("answers", out)
-		globalVals := loadGlobalValues() // a broken file was already warned about by setupDefaults
-		if cands := globalCandidates(answers, globalVals); len(cands) > 0 {
+		// A broken global file was already warned about; offering to save into it would fail.
+		globalVals, globalOK := loadGlobalValues()
+		if cands := globalCandidates(answers, globalVals); globalOK && len(cands) > 0 {
 			save := *saveGlobal
 			if !save && interactive {
 				save = askSaveGlobal(in, c.Stderr, cands, answers, len(globalVals) == 0)
@@ -228,15 +229,15 @@ func setupDefaults(c *Ctx) map[string]string {
 	return defs
 }
 
-// loadGlobalValues is the global config's values, or none when the dir or file
-// cannot be read.
-func loadGlobalValues() map[string]any {
+// loadGlobalValues is the global config's values. ok is false when the dir or
+// file cannot be read or parsed; a missing file is ok with no values.
+func loadGlobalValues() (vals map[string]any, ok bool) {
 	dir, err := projects.Dir()
 	if err != nil {
-		return nil
+		return nil, false
 	}
-	vals, _ := config.LoadGlobal(dir)
-	return vals
+	vals, err = config.LoadGlobal(dir)
+	return vals, err == nil
 }
 
 // globalCandidates are the answers worth saving globally: all of them when the
