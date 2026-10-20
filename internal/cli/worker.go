@@ -23,7 +23,6 @@ import (
 	"github.com/l4ci/rota/internal/postgate"
 	"github.com/l4ci/rota/internal/ship"
 	"github.com/l4ci/rota/internal/tracker"
-	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -700,23 +699,6 @@ func noVerifyRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
 	return blockedRefusal(d, worker.GateNoVerify, msg, hint, "key", config.TestFullKey)
 }
 
-// recordedReviews lists the review kinds with a verdict recorded for a branch
-// at head, for the gate's review-depth check. A record on another commit is
-// stale and does not count, as /rota-review treats it. Records hold a short
-// sha, head is the full one, so either may be the prefix.
-func recordedReviews(root string) func(branch, head string) []string {
-	store := verdict.Load(root)
-	return func(branch, head string) []string {
-		var kinds []string
-		for _, k := range []string{verdict.ReviewSpec, verdict.ReviewQuality} {
-			if r, ok := verdict.Latest(store.Branches[verdict.BranchKey("", branch)], k); ok && verdict.AtHead(r, head) {
-				kinds = append(kinds, k)
-			}
-		}
-		return kinds
-	}
-}
-
 // isRefusal reports whether a gate or train verdict, with the error it came
 // with, is one the CLI turns into an exit-4 refusal.
 func isRefusal(m worker.VerdictMeaning, err error) bool {
@@ -778,7 +760,7 @@ func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
 	}
 	ctx, stop := workerContext()
 	defer stop()
-	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, Prune: o.Prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root), ItemBody: lazyItemBody(c, root)})
+	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, Prune: o.Prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block, CheckReviews: true, ItemBody: lazyItemBody(c, root)})
 	run := gateRun{Result: r, Err: err, Issue: r.Issue, Refused: isRefusal(worker.ClassifyVerdict(r.Verdict), err)}
 	if run.Refused || err != nil || o.CheckOnly {
 		return run

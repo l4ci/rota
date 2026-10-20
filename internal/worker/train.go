@@ -65,8 +65,8 @@ type TrainOpts struct {
 	Approve func(files func() ([]string, error)) error
 	// Verdict is GateOpts.Verdict, run for every member's check.
 	Verdict func(branch string) error
-	// Recorded is GateOpts.Recorded, run for every member's check.
-	Recorded func(branch, head string) []string
+	// CheckReviews is GateOpts.CheckReviews, run for every member's check.
+	CheckReviews bool
 	// Order replaces the computed merge order; see orderTrain.
 	Order []string
 	// Say receives each line of the order report before the scratch merge.
@@ -247,7 +247,7 @@ func (t *trainRun) plan() (bool, error) {
 
 	// 1. Check every member.
 	for _, tg := range o.Targets {
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, CheckOnly: true, Verdict: o.Verdict, Recorded: o.Recorded})
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, CheckOnly: true, Verdict: o.Verdict, CheckReviews: o.CheckReviews})
 		if err != nil {
 			if gr.Verdict == GateVerdictBlocked {
 				res.Verdict, res.Culprit = gr.Verdict, tg
@@ -560,7 +560,7 @@ func (t *trainRun) behaviourStage() (bool, error) {
 		if _, code := e.git(t.scratch, "checkout", "-q", "-f", "--detach", t.tips[i+1]); code != 0 {
 			return t.broke("git checkout " + t.tips[i+1] + " failed in the scratch tree")
 		}
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, CheckOnly: true, Verdict: o.Verdict, Recorded: o.Recorded,
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, CheckOnly: true, Verdict: o.Verdict, CheckReviews: o.CheckReviews,
 			ItemBody: o.ItemBody, BehaviourDir: t.scratch})
 		if err != nil {
 			return true, err
