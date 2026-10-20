@@ -87,7 +87,7 @@ CL="$SPEC_HOME/.claude/skills"; AG="$SPEC_HOME/.agents/skills"
 # (d) install writes both roots, self-contained, with a manifest; status is current
 hs "$SPEC_HOME" "$SPEC_TMP/cwd" status --scope user
 [ "$(jget data.roots[0].installed <<<"$OUT")" = "false" ] || fail "F6a[d]: status before install: ${OUT:0:300}"
-hs "$SPEC_HOME" "$SPEC_TMP/cwd" install
+hs "$SPEC_HOME" "$SPEC_TMP/cwd" install --full
 [ "$RC" = 0 ] || fail "F6a[d]: install exited $RC: ${OUT:0:300}"
 [ "$(jget data.roots[0].agent <<<"$OUT")" = "claude" ] && [ "$(jget data.roots[1].agent <<<"$OUT")" = "codex" ] || fail "F6a[d]: install roots: ${OUT:0:300}"
 [ "$(jget data.changed <<<"$OUT")" = "true" ] || fail "F6a[d]: first install changed nothing: ${OUT:0:300}"
@@ -107,7 +107,7 @@ for sk in "$CL"/rota-*; do
     done
   done
 done
-hs "$SPEC_HOME" "$SPEC_TMP/cwd" install
+hs "$SPEC_HOME" "$SPEC_TMP/cwd" install --full
 [ "$RC" = 0 ] && [ "$(jget data.changed <<<"$OUT")" = "false" ] || fail "F6a[d]: second install was not a no-op (rc $RC): ${OUT:0:300}"
 pass "F6a[d]: rota skills install writes both roots with references and a manifest, and is idempotent"
 
@@ -122,9 +122,9 @@ hs "$SPEC_HOME" "$SPEC_TMP/cwd" update --overwrite
 [ "$RC" = 0 ] && [ "$(cat "$CL/rota-pause/$SK")" != "mine" ] || fail "F6a[e]: --overwrite did not replace the edit (rc $RC): ${OUT:0:300}"
 # an edited file in the codex root is kept the same way
 rm "$AG/rota-spike/$SK" && printf '%s' "theirs" > "$AG/rota-spike/$SK"
-hs "$SPEC_HOME" "$SPEC_TMP/cwd" install
+hs "$SPEC_HOME" "$SPEC_TMP/cwd" install --full
 [ "$RC" = 4 ] && [ "$(jget data.blockedBy <<<"$OUT")" = "edited" ] && [ "$(cat "$AG/rota-spike/$SK")" = "theirs" ] || fail "F6a[e]: an edited codex file was not kept (rc $RC): ${OUT:0:300}"
-hs "$SPEC_HOME" "$SPEC_TMP/cwd" install --overwrite
+hs "$SPEC_HOME" "$SPEC_TMP/cwd" install --overwrite --full
 [ "$RC" = 0 ] || fail "F6a[e]: install --overwrite exited $RC: ${OUT:0:300}"
 pass "F6a[e]: an edit is kept with exit 4 and replaced with --overwrite"
 
@@ -144,9 +144,9 @@ pass "F6a[f]: uninstall removes the manifest paths, keeps edits and strangers, a
 
 # (g) project scope: the git toplevel from a subdirectory; exit 3 outside a repo
 PROJ="$SPEC_TMP/proj"; mkdir -p "$PROJ/sub/dir"; git -C "$PROJ" init -q
-hs "$SPEC_HOME" "$SPEC_TMP/cwd" install --scope project
+hs "$SPEC_HOME" "$SPEC_TMP/cwd" install --scope project --full
 [ "$RC" = 3 ] || fail "F6a[g]: project scope outside a repo exited $RC, want 3: ${OUT:0:300}"
-hs "$SPEC_HOME" "$PROJ/sub/dir" install --scope project --agent codex
+hs "$SPEC_HOME" "$PROJ/sub/dir" install --scope project --agent codex --full
 [ "$RC" = 0 ] || fail "F6a[g]: project install exited $RC: ${OUT:0:300}"
 [ -f "$PROJ/.agents/skills/rota-pause/$SK" ] && [ -f "$PROJ/.agents/skills/.rota-manifest.json" ] || fail "F6a[g]: the project root is not at the toplevel"
 [ ! -e "$PROJ/.claude" ] && [ ! -e "$AG/rota-pause" ] || fail "F6a[g]: --agent codex --scope project wrote elsewhere"
@@ -156,7 +156,7 @@ hs "$SPEC_HOME" "$PROJ" status
 hs "$SPEC_HOME" "$PROJ" uninstall --scope project
 mkdir -p "$SPEC_TMP/legacy/rota-pause"; printf -- '---\nname: rota-pause\n---\n' > "$SPEC_TMP/legacy/rota-pause/$SK"
 ln -s "$SPEC_TMP/legacy/rota-pause" "$PROJ/.agents/skills/rota-pause"
-hs "$SPEC_HOME" "$PROJ" install --scope project --agent codex
+hs "$SPEC_HOME" "$PROJ" install --scope project --agent codex --full
 [ "$RC" = 0 ] && [ ! -L "$PROJ/.agents/skills/rota-pause" ] && [ -f "$PROJ/.agents/skills/rota-pause/$SK" ] || fail "F6a[g]: the legacy symlink was not replaced (rc $RC): ${OUT:0:300}"
 grep -q 'name: rota-pause' "$SPEC_TMP/legacy/rota-pause/$SK" || fail "F6a[g]: install wrote through the legacy symlink"
 pass "F6a[g]: project scope installs at the git toplevel, exits 3 outside a repo and replaces a legacy symlink"
@@ -175,7 +175,7 @@ print(cs["skills"].get(sys.argv[1], "ABSENT"))' "$1" <<<"$OUT"
 dr
 [ "$(dsk status)" = "skip" ] || fail "F6a[h]: doctor should skip with nothing installed: ${OUT:0:300}"
 case "$(dsk detail)" in *"rota skills install"*) ;; *) fail "F6a[h]: skip detail lacks the install command: ${OUT:0:300}" ;; esac
-hs "$DHOME" "$DREPO" install --agent claude
+hs "$DHOME" "$DREPO" install --agent claude --full
 dr
 [ "$(dsk status)" = "pass" ] || fail "F6a[h]: doctor should pass on a current install: ${OUT:0:300}"
 echo "mine" > "$DHOME/.claude/skills/rota-work/$SK"
@@ -186,7 +186,7 @@ pass "F6a[h]: doctor skips until installed, passes when current, fails on an edi
 
 # (i) CLAUDE_CONFIG_DIR moves the Claude root only; no HOME exits 3
 CFGH="$SPEC_TMP/cfghome"; CFGD="$SPEC_TMP/cfgdir"; mkdir -p "$CFGH" "$CFGD"
-HS_CFG="$CFGD" hs "$CFGH" "$SPEC_TMP/cwd" install
+HS_CFG="$CFGD" hs "$CFGH" "$SPEC_TMP/cwd" install --full
 [ "$RC" = 0 ] && [ -f "$CFGD/skills/rota-pause/$SK" ] && [ -f "$CFGH/.agents/skills/rota-pause/$SK" ] && [ ! -e "$CFGH/.claude" ] || fail "F6a[i]: CLAUDE_CONFIG_DIR not honored (rc $RC): ${OUT:0:300}"
 RC=0; ( cd "$SPEC_TMP/cwd" && env -u HOME CLAUDE_CONFIG_DIR= "$ROTA_BIN" --json skills install >/dev/null 2>&1 ) || RC=$?
 [ "$RC" = 3 ] || fail "F6a[i]: install without HOME exited $RC, want 3"

@@ -32,6 +32,10 @@ func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string)
 	case s.PR() == "" && len(s.Issues()) == 0:
 		return false, fmt.Sprintf("no PR recorded for branch %s; check the forge and run `rota round reconcile`", strutil.FirstNonEmpty(s.Branch(), "(none)"))
 	}
+	// A relay can leave a slot blocked after its PR merged: the merged PR frees it.
+	if s.State() == "blocked" && e.prMerged(ctx, s.PR()) {
+		return e.settled(ctx, s, "blocked")
+	}
 	return e.settled(ctx, s, "done", "idle")
 }
 
@@ -54,6 +58,16 @@ func (e Env) settled(ctx context.Context, s *worker.Slot, states ...string) (ok 
 		return false, "uncommitted changes"
 	}
 	return true, ""
+}
+
+// prMerged says whether the forge shows the PR merged. Any other answer, or none, is no.
+func (e Env) prMerged(ctx context.Context, pr string) bool {
+	n, ok := worker.PRRefNumber(pr)
+	if !ok || e.Forge == nil {
+		return false
+	}
+	st, err := e.Forge.PRState(ctx, n)
+	return err == nil && st == "merged"
 }
 
 // adoptBranchPR is the assign-side repair for a worker whose done landed before
@@ -124,12 +138,7 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 		return err
 	}
 	pr := s.PR()
-	merged := false
-	if n, ok := worker.PRRefNumber(pr); ok && e.Forge != nil {
-		if st, err := e.Forge.PRState(ctx, n); err == nil && st == "merged" {
-			merged = true
-		}
-	}
+	merged := e.prMerged(ctx, pr)
 	rec := worker.QueuedPR{
 		Issue: s.HeldID(), Branch: strutil.FirstNonEmpty(p.Branch, s.Branch()), PR: pr,
 		Base: strutil.FirstNonEmpty(s.Base(), e.Base), From: name, ClaimID: s.ClaimID(),

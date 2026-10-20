@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -92,6 +93,40 @@ func TestGateRunMarkerOfDeadProcessIsReplaced(t *testing.T) {
 		t.Fatalf("claim: other=%d err=%v", other, err)
 	}
 	release()
+}
+
+// A marker whose pid is alive but belongs to a different process (pid reuse
+// after a crash) does not block; the same process still does.
+func TestGateRunMarkerOfReusedPidIsReplaced(t *testing.T) {
+	ppid := os.Getppid()
+	start, ok := procStartTicks(ppid)
+	if !ok {
+		t.Skip("no /proc start time on this platform")
+	}
+	for _, c := range []struct {
+		name    string
+		start   uint64
+		blocked bool
+	}{{"reused", start + 1, false}, {"same process", start, true}} {
+		t.Run(c.name, func(t *testing.T) {
+			common := t.TempDir()
+			os.MkdirAll(rotastate.Dir(common), 0o755)
+			body := fmt.Sprintf("%d %d\n", ppid, c.start)
+			if err := os.WriteFile(rotastate.File(common, "gate-pr1")+".pid", []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			other, release, err := claimGateRun(common, "pr1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.blocked != (other == ppid) {
+				t.Fatalf("other=%d, blocked want %v", other, c.blocked)
+			}
+			if release != nil {
+				release()
+			}
+		})
+	}
 }
 
 // Only exit 2 means origin is absent. A git that cannot run is reported as

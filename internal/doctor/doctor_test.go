@@ -330,6 +330,10 @@ func TestSkillsCheck(t *testing.T) {
 			r.Version = ""
 			return r
 		}(), Fail, "skills bbbbbbbbbbbb, rota aaaaaaaaaaaa", "run: rota skills update"},
+		{"stub current after a body-only release", rep(root(func(r *skills.RootStatus) { r.Mode, r.Version = "stub", "4.9.0" })), Pass, "match rota 5.0.0", ""},
+		{"stub stale names the skill", rep(root(func(r *skills.RootStatus) {
+			r.Mode, r.Current, r.Changed = "stub", false, []string{"rota-new (added)", "rota-work (frontmatter changed)"}
+		})), Fail, "changed: rota-new (added), rota-work (frontmatter changed)", "run: rota skills update"},
 		{"edited", rep(root(func(r *skills.RootStatus) { r.Edited = []string{"rota-work/SKILL.md"} })), Fail, "1 edited (rota-work/SKILL.md)", "run: rota skills update --overwrite"},
 		{"missing", rep(root(func(r *skills.RootStatus) { r.Missing = []string{"rota-work/SKILL.md", "rota-ship/SKILL.md"} })), Fail, "2 missing", "run: rota skills update"},
 		{"second root only", rep(root(func(r *skills.RootStatus) { r.Installed = false }), root(func(r *skills.RootStatus) { r.Path = "/h/.agents/skills" })), Pass, "1 roots", ""},
