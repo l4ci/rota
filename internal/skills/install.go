@@ -558,13 +558,20 @@ type RootStatus struct {
 	Current   bool
 	Edited    []string
 	Missing   []string
+	// Mode is the root's recorded install mode. For a stub root Current is
+	// judged against the stub digest and Changed names what differs: skills
+	// added, removed or whose frontmatter changed, as "<skill> (<what>)".
+	Mode    string
+	Changed []string
 }
 
 // Report is Status: the binary's version and digest, and each root.
 type Report struct {
 	Version string
 	Digest  string
-	Roots   []RootStatus
+	// StubDigest is the digest stub roots are compared against.
+	StubDigest string
+	Roots      []RootStatus
 	// Warnings are problems reading plugin state that do not fail a root.
 	Warnings []string
 }
@@ -572,6 +579,10 @@ type Report struct {
 // Status reads the roots; it writes nothing.
 func (s *Set) Status(roots []Root, version string) (Report, error) {
 	rep := Report{Version: version, Digest: s.digest}
+	stub, stubErr := s.Stubbed()
+	if stubErr == nil {
+		rep.StubDigest = stub.digest
+	}
 	for _, r := range roots {
 		st := RootStatus{Root: r, Edited: []string{}, Missing: []string{}}
 		if r.Plugin {
@@ -580,8 +591,15 @@ func (s *Set) Status(roots []Root, version string) (Report, error) {
 			continue
 		}
 		if m, ok := ReadManifest(r.Path); ok {
-			st.Installed, st.Version, st.Digest = true, m.Version, m.Digest
+			st.Installed, st.Version, st.Digest, st.Mode = true, m.Version, m.Digest, m.EffectiveMode()
 			st.Current = m.Digest == s.digest
+			if st.Mode == ModeStub {
+				if stubErr != nil {
+					return rep, stubErr
+				}
+				st.Current = m.Digest == stub.digest
+				st.Changed = stubChanges(m.Files, stub)
+			}
 			var paths []string
 			for p := range m.Files {
 				paths = append(paths, p)
@@ -606,4 +624,33 @@ func (s *Set) Status(roots []Root, version string) (Report, error) {
 		rep.Roots = append(rep.Roots, st)
 	}
 	return rep, nil
+}
+
+// stubChanges names the skills whose stub differs between what a manifest
+// recorded and the stub set now: added, removed, or changed in frontmatter (or
+// agent policy). Sorted by skill.
+func stubChanges(recorded map[string]string, stub *Set) []string {
+	what := map[string]string{}
+	for _, p := range stub.paths {
+		skill, _, _ := strings.Cut(p, "/")
+		have, ok := recorded[p]
+		switch {
+		case !ok && p == skill+"/SKILL.md":
+			what[skill] = "added"
+		case ok && have != hashBytes(stub.files[p]) && what[skill] == "":
+			what[skill] = "frontmatter changed"
+		}
+	}
+	for p := range recorded {
+		skill, _, _ := strings.Cut(p, "/")
+		if _, ok := stub.files[p]; !ok && p == skill+"/SKILL.md" {
+			what[skill] = "removed"
+		}
+	}
+	var out []string
+	for skill, w := range what {
+		out = append(out, skill+" ("+w+")")
+	}
+	sort.Strings(out)
+	return out
 }

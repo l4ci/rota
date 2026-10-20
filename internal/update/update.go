@@ -43,6 +43,9 @@ type Env struct {
 	Current string // the running binary's version
 	// Latest returns the latest release version, or "" when it cannot be found.
 	Latest func() string
+	// SkillsNeedUpdate says whether a skill root needs `rota skills update`:
+	// false only when every installed root is a current stub. Nil means yes.
+	SkillsNeedUpdate func() bool
 }
 
 // DefaultEnv is the real machine. Latest reads ROTA_TEST_LATEST_VERSION through
@@ -97,10 +100,14 @@ func Check(e Env) Result {
 		}
 	}
 	r.UpdateCommand = command(kind)
+	if e.SkillsNeedUpdate != nil && !e.SkillsNeedUpdate() {
+		r.UpdateCommand = strings.TrimSuffix(r.UpdateCommand, refresh)
+	}
 	return r
 }
 
-// refresh is the step after any binary update: the skills the binary carries.
+// refresh is the step after a binary update that refreshes the skills the
+// binary carries; it is dropped when every installed root is a current stub.
 const refresh = " && rota skills update"
 
 func command(kind string) string {

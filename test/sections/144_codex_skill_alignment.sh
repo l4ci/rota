@@ -10,7 +10,7 @@ cp "$TESTDIR/fakes/codex" "$TESTDIR/fakes/codex_skill_worker.py" "$TMP_CSA/bin/"
   printf '# Backlog\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n' > .rota/BACKLOG.md
   git add .rota/config.json .rota/BACKLOG.md
   git commit -qm seed
-  "$ROTA_BIN" skills install --scope project --agent codex >/dev/null
+  "$ROTA_BIN" skills install --scope project --agent codex --full >/dev/null
   "$ROTA_BIN" item create --kind bugs --title 'Preview fixture' --tag P2 --desc 'A contained fixture bug.' >/dev/null
   git add .rota .agents
   git commit -qm fixture

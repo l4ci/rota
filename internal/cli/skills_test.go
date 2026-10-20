@@ -465,3 +465,28 @@ func TestSkillsModeFlags(t *testing.T) {
 	run(1, "update", "--agent", "codex", "--stub", "--full")
 	run(1, "install", "--agent", "codex", "--stub", "--full")
 }
+
+func TestUpdateCommandSkipsSkillsUpdateForCurrentStubs(t *testing.T) {
+	home, work := t.TempDir(), t.TempDir()
+	t.Setenv("ROTA_TEST_LATEST_VERSION", "99.0.0")
+	cmd := func() string {
+		t.Helper()
+		code, env, errOut := skillsRun(t, home, work, "update")
+		if code != 0 {
+			t.Fatalf("update %d %s", code, errOut)
+		}
+		c, _ := skData(env)["updateCommand"].(string)
+		return c
+	}
+	if c := cmd(); !strings.Contains(c, "rota skills update") {
+		t.Errorf("no roots installed: %q", c)
+	}
+	skillsRun(t, home, work, "skills", "install", "--agent", "codex")
+	if c := cmd(); c == "" || strings.Contains(c, "rota skills update") {
+		t.Errorf("current stub root: %q", c)
+	}
+	skillsRun(t, home, work, "skills", "install", "--agent", "codex", "--full")
+	if c := cmd(); !strings.Contains(c, "rota skills update") {
+		t.Errorf("full root: %q", c)
+	}
+}

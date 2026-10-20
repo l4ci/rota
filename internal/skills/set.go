@@ -128,12 +128,17 @@ func Load(fsys fs.FS) (*Set, error) {
 	}
 	sort.Strings(s.paths)
 	sort.Strings(s.skills)
-	h := sha256.New()
-	for _, p := range s.paths {
-		fmt.Fprintf(h, "%s\x00%s\n", p, hashBytes(s.files[p]))
-	}
-	s.digest = hex.EncodeToString(h.Sum(nil))
+	s.digest = digestOf(s.paths, s.files)
 	return s, nil
+}
+
+// digestOf is the sha256 of the sorted "path NUL sha256(content) NL" lines.
+func digestOf(paths []string, files map[string][]byte) string {
+	h := sha256.New()
+	for _, p := range paths {
+		fmt.Fprintf(h, "%s\x00%s\n", p, hashBytes(files[p]))
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // closure is the names of the references a skill's own files cite, plus the

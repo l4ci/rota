@@ -360,7 +360,7 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 	}
 	warnings := errStrings(pluginErrs)
 	rootsData := []any{}
-	text := []string{fmt.Sprintf("rota %s, skills %s", rep.Version, short(rep.Digest))}
+	text := []string{fmt.Sprintf("rota %s, skills %s (stub %s)", rep.Version, short(rep.Digest), short(rep.StubDigest))}
 	for _, r := range rep.Roots {
 		o := knObj("root", r.Path, "agent", r.Agent, "scope", r.Scope, "plugin", r.Plugin, "installed", r.Installed)
 		line := fmt.Sprintf("%s (%s, %s): ", r.Path, r.Agent, r.Scope)
@@ -372,9 +372,18 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 		} else {
 			o.Set("version", r.Version)
 			o.Set("digest", r.Digest)
+			o.Set("mode", r.Mode)
+			o.Set("changed", strs(r.Changed))
 			line += "current"
 			if !r.Current {
-				line = fmt.Sprintf("%sstale (installed %s, rota %s)", strings.TrimSuffix(line, "current"), short(r.Digest), short(rep.Digest))
+				want := rep.Digest
+				if r.Mode == skills.ModeStub {
+					want = rep.StubDigest
+				}
+				line = fmt.Sprintf("%sstale (installed %s, rota %s)", strings.TrimSuffix(line, "current"), short(r.Digest), short(want))
+				if len(r.Changed) > 0 {
+					line += ": " + strings.Join(r.Changed, ", ")
+				}
 			}
 		}
 		o.Set("current", r.Current)
@@ -389,7 +398,7 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 		}
 		rootsData = append(rootsData, o)
 	}
-	data := knObj("version", rep.Version, "digest", rep.Digest, "roots", rootsData)
+	data := knObj("version", rep.Version, "digest", rep.Digest, "stubDigest", rep.StubDigest, "roots", rootsData)
 	return withWarnings(withSkipped(Result{Data: data, Text: strings.Join(text, "\n")}, skipped), warnings), nil
 }
 
@@ -486,4 +495,31 @@ func skillsGet(fs *flag.FlagSet) RunFunc {
 		}
 		return res, nil
 	}
+}
+
+// skillsNeedUpdate is whether `rota skills update` has work: false only when
+// at least one root is installed and every installed root is a current,
+// untouched stub. Plugin roots are not this verb's. Anything unreadable counts
+// as needing the update.
+func skillsNeedUpdate(c *Ctx) bool {
+	a := skillsArgs{agent: "all"}
+	set, roots, _, err := skillsEnv(c, a)
+	if err != nil {
+		return true
+	}
+	rep, err := set.Status(roots, version.Get().Version)
+	if err != nil {
+		return true
+	}
+	installed := 0
+	for _, r := range rep.Roots {
+		if !r.Installed {
+			continue
+		}
+		installed++
+		if r.Mode != skills.ModeStub || !r.Current || len(r.Edited) > 0 || len(r.Missing) > 0 {
+			return true
+		}
+	}
+	return installed == 0
 }

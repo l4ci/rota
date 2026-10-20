@@ -43,8 +43,8 @@ func TestGetAndStubbed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Digest() != s.Digest() {
-		t.Error("stub digest differs from the full set's")
+	if st.Digest() != s.StubDigest() || st.Digest() == s.Digest() {
+		t.Error("a stub set's digest is the stub digest, not the full set's")
 	}
 	b, _ := st.Skill("rota-a")
 	if !strings.HasPrefix(string(b), "---\nname: rota-a\ndescription: A.\n---\n") || !strings.Contains(string(b), "rota skills get rota-a") {
