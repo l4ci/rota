@@ -69,6 +69,10 @@ type Deps struct {
 	// edge, into PollFixture, PollStatus, DoctorPath and DoctorDisk.
 	Getenv  func(string) string
 	Environ func() []string
+	// RecordMistakes makes an internal error or panic write a record to the
+	// bug log (#1175). A test leaves it off so a failing fixture does not write
+	// into the enclosing checkout's .rota/.
+	RecordMistakes bool
 	// LookPath is the one PATH lookup the host decision reads, beside Getenv.
 	LookPath func(string) (string, error)
 
@@ -156,6 +160,7 @@ func defaultDeps() *Deps {
 		Palette:          palette.RunTerminal,
 		RunView:          runView,
 		ReadCache:        tracker.NewReadCache(),
+		RecordMistakes:   true,
 	}
 	d.Keychain = func() connections.Store { return connections.OSKeychain(d.Proc, runtime.GOOS) }
 	d.ConnTesters = map[string]connections.Tester{connections.KindJira: tracker.JiraTester{}, connections.KindLinear: tracker.LinearTester{}, connections.KindItsaplan: tracker.ItsaplanTester{}}

@@ -7,7 +7,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/l4ci/rota/internal/bugreport"
 	"github.com/l4ci/rota/internal/gate"
 )
 
@@ -164,6 +166,17 @@ func gateCases() []gateCase {
 				_, err := os.Stat(filepath.Join(dir, "feature.txt"))
 				return os.IsNotExist(err)
 			}, testDeps()
+		}},
+		{gate.BugreportFile, "bugreport file", func(t *testing.T, level string) (string, []string, string, func() bool, *Deps) {
+			root := trProject(t, gateConfig(t, "", level, nil))
+			if _, err := bugreport.Add(root, bugreport.Record{Source: bugreport.SourceAgent, Summary: "wrong refusal"}, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+			f := &forge{answer: func(string, []string) (string, string, int) {
+				return "https://github.com/l4ci/rota/issues/5\n", "", 0
+			}}
+			deps := useForge(t, f)
+			return root, []string{"bugreport", "file", "bug-1"}, "", func() bool { return len(f.calls) == 0 }, deps
 		}},
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/l4ci/rota/internal/bugreport"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
@@ -134,6 +135,10 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		if sum, text, ok := windDownSummary(root, res.Round); ok {
 			d.Set("summary", sum)
 			lines = append(lines, "", text)
+		}
+		if open, _ := bugreport.Open(root); len(open) > 0 {
+			d.Set("bugreports", len(open))
+			lines = append(lines, "", bugreportOffer(open))
 		}
 		out := Result{Data: d, Text: strings.Join(lines, "\n")}
 		switch res.Verdict {

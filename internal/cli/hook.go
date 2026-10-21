@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/bugreport"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/hook"
@@ -239,6 +240,11 @@ func hookStop(c *Ctx, args []string) (res Result, _ error) {
 	if !hc.who.Orchestrator {
 		if d, ok := guardStop(hc, sid); ok && d.Block {
 			return hookPrint(hook.StopOutput(d.Reason)), nil
+		}
+		if !active {
+			if msg := bugreportStopOffer(c, hc.root); msg != "" {
+				return hookPrint(map[string]string{"systemMessage": msg}), nil
+			}
 		}
 		return Result{}, nil
 	}
@@ -623,4 +629,31 @@ func hookUninstall(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: d, Text: text}, nil
 	}
+}
+
+// bugreportStopOffer is the solo session's end-of-turn offer (#1175): one
+// non-blocking line for the records not offered yet, "" when there are none.
+// A round worker stays silent (wind-down offers for the round), and the
+// records stay open until filed or dismissed.
+func bugreportStopOffer(c *Ctx, root string) string {
+	if c.deps().Getenv("ROTA_SLOT") != "" {
+		return ""
+	}
+	open, err := bugreport.Open(root)
+	if err != nil {
+		return ""
+	}
+	var fresh []bugreport.Record
+	for _, r := range open {
+		if !r.Offered {
+			fresh = append(fresh, r)
+		}
+	}
+	if len(fresh) == 0 {
+		return ""
+	}
+	for _, r := range fresh {
+		_, _ = bugreport.Update(root, r.ID, func(r *bugreport.Record) { r.Offered = true })
+	}
+	return bugreportOffer(fresh)
 }

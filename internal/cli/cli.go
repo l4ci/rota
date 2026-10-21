@@ -254,7 +254,9 @@ func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stde
 	c.ctx = sigCtx
 	defer func() {
 		if r := recover(); r != nil {
-			code = fail(c, stdout, asError(fmt.Errorf("panic: %v", r)))
+			e := asError(fmt.Errorf("panic: %v", r))
+			recordMistake(c, args, e)
+			code = fail(c, stdout, e)
 		}
 	}()
 
@@ -364,6 +366,7 @@ func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stde
 	}
 	res, err := runVerb(c, positional)
 	if err != nil {
+		recordMistake(c, args, asError(err))
 		if g.ui && cmd.View != nil && res.Data != nil && asError(err).Exit == ExitFailed {
 			// A failed answer is still an answer: doctor's failing checks
 			// are the screen. The exit code stays the plain verb's.
