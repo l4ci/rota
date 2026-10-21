@@ -488,6 +488,13 @@ func Classify(text string, moved bool, lines int, native string) (state, evidenc
 	return ClassifyFor("", text, moved, lines, native)
 }
 
+// DialogFor is DialogRegion with the busy patterns of the given kind's harness,
+// for callers outside poll (the usage-limit watcher) that read a pane's text
+// as the harness wrote it.
+func DialogFor(kind, text string) string {
+	return DialogRegion(text, paneRulesFor(kind).busy)
+}
+
 // ClassifyFor is Classify for a slot of the given kind: its harness's own pane
 // wording (PaneVocab) is read on top of the shared rules, on that kind's panes
 // only.
@@ -519,7 +526,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	// still animate a prompt, and reading that as BUSY strands the orchestrator
 	// waiting for work that cannot resume until the window resets.
 	// Only the harness's own dialog counts, not text the worker quotes (#1212).
-	dialog := DialogRegion(own, rules.busy)
+	dialog := DialogFor(kind, own)
 	if s, e, ok := FindLimit(kind, dialog); ok {
 		// The "Add funds" prompt spends real money and is NEVER the
 		// orchestrator's to answer: flag it so the caller escalates.

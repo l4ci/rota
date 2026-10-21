@@ -266,7 +266,7 @@ type obs struct {
 // follows the last occurrence of the resume prompt counts, so the message a
 // resume already answered cannot start another cycle. "Approaching" warnings
 // are not limits (worker.FindLimit decides, reading the slot kind's own
-// phrases too). It returns the matched line
+// phrases too), and reads only the harness's dialog region. It returns the matched line
 // and the text from it on (for the reset time).
 func findLimit(kind, text, prompt string) (line, rest string, ok bool) {
 	if prompt != "" {
@@ -280,7 +280,9 @@ func findLimit(kind, text, prompt string) (line, rest string, ok bool) {
 	if len(lines) > tailLines {
 		lines = lines[len(lines)-tailLines:]
 	}
-	tail := worker.StripRelays(kind, strings.Join(lines, "\n"))
+	// Only the harness's own dialog counts, not text the worker quotes (#1246),
+	// the same region poll reads (#1212).
+	tail := worker.DialogFor(kind, worker.StripRelays(kind, strings.Join(lines, "\n")))
 	loc0, _, ok := worker.FindLimit(kind, tail)
 	if !ok {
 		return "", "", false
