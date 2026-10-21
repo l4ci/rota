@@ -26,9 +26,9 @@ func configCommands() []*Command {
 	return []*Command{
 		{Name: "update", Summary: "check for a newer rota release", Verb: updateVerb},
 		{Name: "config", Summary: "read and write .rota/config.json", UISub: "show", Subs: []*Command{
-			{Name: "show", Summary: "effective value and source of config keys", Repo: true, Verb: configShow, View: configView},
-			{Name: "edit", Summary: "change keys interactively (needs a terminal)", Repo: true, Verb: configEdit},
-			{Name: "set", Summary: "set one key in .rota/config.json", Repo: true, Verb: configSet},
+			{Name: "show", Summary: "effective value and source of config keys (--global: the global config)", Repo: true, Verb: configShow, View: configView},
+			{Name: "edit", Summary: "change keys interactively (needs a terminal; --global: the global config)", Repo: true, Verb: configEdit},
+			{Name: "set", Summary: "set one key in .rota/config.json (--global: the global config)", Repo: true, Verb: configSet},
 			{Name: "check", Summary: "compare .rota/config.json with the schema", Repo: true, Verb: configCheck},
 			{Name: "fill", Summary: "write the default of every missing required key", Repo: true, Verb: configFill},
 			{Name: "save-global", Summary: "merge .rota/config.json into the machine-wide global config", Repo: true, Verb: configSaveGlobal},
@@ -75,18 +75,47 @@ func orDash(s string) string {
 
 // ---- config ----------------------------------------------------------------------
 
+// globalDir is the rota config dir the global config lives in. --global verbs
+// use it instead of a project root, so they work outside any project.
+func globalDir(c *Ctx) (string, error) {
+	if c.Repo != "" {
+		return "", Usage("--global and --repo cannot be combined")
+	}
+	dir, err := projects.Dir()
+	if err != nil {
+		return "", Resolution("%v", err)
+	}
+	return dir, nil
+}
+
 func configShow(fs *flag.FlagSet) RunFunc {
+	global := fs.Bool("global", false, "show the global config's own values instead of the project's")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := argCount(c, args, 0, 1, "config show takes at most one key"); err != nil {
-			return Result{}, err
-		}
-		root, err := backlogScope(c)
-		if err != nil {
 			return Result{}, err
 		}
 		key := ""
 		if len(args) == 1 {
 			key = args[0]
+		}
+		if *global {
+			dir, err := globalDir(c)
+			if err != nil {
+				return Result{}, err
+			}
+			entries, err := config.ShowGlobal(dir, key, len(args) == 1)
+			if errors.Is(err, config.ErrUnknownKey) {
+				return Result{}, Resolution("unknown config key '%s'", key)
+			}
+			if err != nil {
+				return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
+			}
+			rows, lines := showRows(entries)
+			return Result{Data: jsonObj("scope", "global", "entries", rows), Text: strings.Join(lines, "\n")}, nil
+		}
+		root, err := backlogScope(c)
+		if err != nil {
+			return Result{}, err
 		}
 		entries, err := config.Show(root, key, len(args) == 1)
 		if err != nil {
@@ -104,6 +133,9 @@ func showRows(entries []config.Entry) (rows []any, lines []string) {
 	lines = make([]string, 0, len(entries))
 	for _, e := range entries {
 		row := jsonObj("key", e.Key, "value", e.Value, "source", e.Source)
+		if e.HasGlobal {
+			row.Set("global", e.Global)
+		}
 		if sk := e.Schema; sk != nil {
 			row.Set("default", config.Default(*sk))
 			row.Set("type", string(sk.Type))
@@ -183,20 +215,31 @@ func configSaveGlobal(fs *flag.FlagSet) RunFunc {
 }
 
 func configSet(fs *flag.FlagSet) RunFunc {
+	global := fs.Bool("global", false, "write the global config instead of .rota/config.json")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := argCount(c, args, 2, 2, "config set takes a key and a value"); err != nil {
 			return Result{}, err
 		}
-		root, err := backlogScope(c)
-		if err != nil {
-			return Result{}, err
+		var res config.SetResult
+		var err error
+		if *global {
+			var dir string
+			if dir, err = globalDir(c); err != nil {
+				return Result{}, err
+			}
+			res, err = config.SetGlobal(dir, args[0], args[1])
+		} else {
+			var root string
+			if root, err = backlogScope(c); err != nil {
+				return Result{}, err
+			}
+			res, err = config.Set(root, args[0], args[1])
 		}
-		res, err := config.Set(root, args[0], args[1])
 		switch {
 		case err == nil:
-		case errors.Is(err, config.ErrMalformedKey), errors.Is(err, config.ErrNotSchemaKey), errors.Is(err, config.ErrBadValue):
+		case errors.Is(err, config.ErrMalformedKey), errors.Is(err, config.ErrNotSchemaKey), errors.Is(err, config.ErrBadValue), errors.Is(err, config.ErrProjectOwned):
 			return Result{}, Usage("%s", err.Error())
-		case errors.Is(err, config.ErrNotObject):
+		case errors.Is(err, config.ErrNotObject), errors.Is(err, config.ErrGlobalNotObject):
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		default:
 			return Result{}, err
