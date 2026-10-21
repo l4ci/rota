@@ -475,12 +475,18 @@ func (u *Umbrella) NotePut(ref, kind, text string) (bool, error) {
 	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.NotePut(plain, kind, text) })
 }
 
+// SetSection writes one body section on the item's sub-repo tracker.
+func (u *Umbrella) SetSection(ref, name, content string) (bool, error) {
+	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.SetSection(plain, name, content) })
+}
+
 // SetBody replaces the item's body.
 func (u *Umbrella) SetBody(ref, body string) (bool, error) {
 	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.SetBody(plain, body) })
 }
 
 var _ BodyEditor = (*Umbrella)(nil)
+var _ SectionEditor = (*Umbrella)(nil)
 
 // NoteRm deletes the item's durable note.
 func (u *Umbrella) NoteRm(ref, kind string) (bool, error) {

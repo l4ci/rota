@@ -241,3 +241,30 @@ func TestTrackerErrorsMapToExits(t *testing.T) {
 		}
 	}
 }
+
+func TestItemSectionSet(t *testing.T) {
+	root := trackerProject(t, issuesConfig)
+	tr := issueFixture()
+	deps := withTracker(t, tr)
+	body := bodyFile(t, "- [ ] shipped\n")
+	empty := bodyFile(t, " \n")
+
+	d := runOKWith(t, deps, root, 0, "item", "section", "set", "F7", "--name", "acceptance", "--body-file", body)
+	if get(d, "changed") != true || get(d, "id") != "7" || get(d, "type") != "F" {
+		t.Fatalf("set: %v", d)
+	}
+	want := "Export the backlog.\n\n## Acceptance\n\n- [ ] AC-1: shipped\n\n<!-- rota:fields\nRelated: B9\n-->"
+	if got := tr.Issues[0].Body; got != want {
+		t.Errorf("body %q, want %q", got, want)
+	}
+	if d = runOKWith(t, deps, root, 0, "item", "section", "set", "7", "--name", "acceptance", "--body-file", body); get(d, "changed") != false {
+		t.Fatalf("set again: %v", d)
+	}
+	runOKWith(t, deps, root, ExitUsage, "item", "section", "set", "7", "--name", "acceptance", "--body-file", empty)
+	runOKWith(t, deps, root, ExitUsage, "item", "section", "set", "7", "--body-file", body)
+	runOKWith(t, deps, root, ExitResolution, "item", "section", "set", "7", "--name", "acceptance", "--body-file", filepath.Join(t.TempDir(), "missing"))
+	runOKWith(t, deps, root, ExitResolution, "item", "section", "set", "99", "--name", "acceptance", "--body-file", body)
+
+	fileRoot := trackerProject(t, "")
+	runOKWith(t, testDeps(), fileRoot, ExitRefused, "item", "section", "set", "B01", "--name", "acceptance", "--body-file", body)
+}
