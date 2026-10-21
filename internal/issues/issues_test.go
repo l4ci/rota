@@ -79,6 +79,10 @@ func TestLabelGitHub(t *testing.T) {
 	view := reply{out: `{"labels": [{"name": "have"}]}`}
 	known := reply{out: `[{"name": "have"}, {"name": "new"}]`}
 	none := reply{out: `[]`}
+	// read-back after the write: the issue as the forge holds it then
+	withNew := reply{out: `{"labels": [{"name": "have"}, {"name": "new"}, {"name": "x"}]}`}
+	without := reply{out: `{"labels": []}`}
+	rb := "api repos/{owner}/{repo}/issues/3"
 	cases := []struct {
 		name        string
 		add         bool
@@ -90,14 +94,14 @@ func TestLabelGitHub(t *testing.T) {
 		wantCalls   []string
 		noCalls     []string
 	}{
-		{"add present", true, "have", true, map[string]reply{"issue view": view, "label list": known}, false, false, []string{"gh issue edit 3 --add-label have"}, nil},
-		{"add new", true, "new", true, map[string]reply{"issue view": view, "label list": known}, true, false, []string{"gh issue edit 3 --add-label new"}, nil},
-		{"remove present", false, "have", true, map[string]reply{"issue view": view}, true, false, []string{"gh issue edit 3 --remove-label have"}, nil},
-		{"remove absent", false, "gone", true, map[string]reply{"issue view": view}, false, false, nil, nil},
-		{"unreadable issue", true, "x", true, map[string]reply{"issue view": {code: 1, err: "nope"}, "label list": reply{out: `[{"name": "x"}]`}}, true, false, []string{"gh issue edit 3 --add-label x"}, nil},
-		{"create the label", true, "new", true, map[string]reply{"issue view": view, "label list": none}, true, false, []string{"gh label create new --force", "gh issue edit 3 --add-label new"}, nil},
-		{"no creation allowed", true, "new", false, map[string]reply{"issue view": view, "label list": none}, false, true, nil, []string{"gh label create", "gh issue edit"}},
-		{"other failure", true, "new", true, map[string]reply{"issue view": view, "label list": known, "issue edit": {code: 1, err: "server exploded"}}, false, true, nil, nil},
+		{"add present", true, "have", true, map[string]reply{"issue view": view, "label list": known, rb: view}, false, false, []string{"gh api -X POST repos/{owner}/{repo}/issues/3/labels"}, nil},
+		{"add new", true, "new", true, map[string]reply{"issue view": view, "label list": known, rb: withNew}, true, false, []string{"gh api -X POST repos/{owner}/{repo}/issues/3/labels"}, nil},
+		{"remove present", false, "have", true, map[string]reply{"issue view": view, rb: without}, true, false, []string{"gh api -X DELETE repos/{owner}/{repo}/issues/3/labels/have"}, nil},
+		{"remove absent", false, "gone", true, map[string]reply{"issue view": view, rb: view}, false, false, nil, nil},
+		{"unreadable issue", true, "x", true, map[string]reply{"issue view": {code: 1, err: "nope"}, "label list": reply{out: `[{"name": "x"}]`}, rb: withNew}, true, false, []string{"gh api -X POST repos/{owner}/{repo}/issues/3/labels"}, nil},
+		{"create the label", true, "new", true, map[string]reply{"issue view": view, "label list": none, rb: withNew}, true, false, []string{"gh label create new --force", "gh api -X POST repos/{owner}/{repo}/issues/3/labels"}, nil},
+		{"no creation allowed", true, "new", false, map[string]reply{"issue view": view, "label list": none}, false, true, nil, []string{"gh label create", "gh api -X POST"}},
+		{"other failure", true, "new", true, map[string]reply{"issue view": view, "label list": known, "api -X POST": {code: 1, err: "server exploded"}}, false, true, nil, nil},
 	}
 	for _, c := range cases {
 		f := &forge{origin: gh, reply: c.replies}
@@ -143,11 +147,11 @@ func TestLabelGitLab(t *testing.T) {
 		t.Errorf("unknown provider: %v", err)
 	}
 	// a missing issue is not found, any other forge failure is not
-	f = &forge{origin: gh, reply: map[string]reply{"issue edit": {code: 1, err: "GraphQL: Could not resolve to an Issue with the number of 99."}}}
+	f = &forge{origin: gh, reply: map[string]reply{"api -X DELETE": {code: 1, err: "HTTP 404: Not Found"}, "api -X POST": {code: 1, err: "HTTP 404: Not Found"}, "api repos/{owner}/{repo}/issues/99": {code: 1, err: "HTTP 404: Not Found"}}}
 	if _, err := Label(ctx, f.env(t), "", tracker.NumKey(99), "x", false, false); !tracker.IsKind(err, tracker.KindNotFound) {
 		t.Errorf("missing issue: %v", err)
 	}
-	f = &forge{origin: gh, reply: map[string]reply{"issue edit": {code: 1, err: "HTTP 500: server error"}}}
+	f = &forge{origin: gh, reply: map[string]reply{"api -X POST": {code: 1, err: "HTTP 500: server error"}, "api -X DELETE": {code: 1, err: "HTTP 500: server error"}}}
 	if _, err := Label(ctx, f.env(t), "", tracker.NumKey(99), "x", false, false); !tracker.IsKind(err, tracker.KindFailed) {
 		t.Errorf("forge error: %v", err)
 	}

@@ -105,7 +105,13 @@ else:
     eq "state no-op writes nothing" 0 "$(WRITES)"
     : > "$P/log"
     "$ROTA_BIN" item state T1 --to in-progress >/dev/null
-    eq "one edit per transition" 1 "$(WRITES)"
+    # github writes labels through the incremental endpoints (no lost updates): add the new state first, then remove the old, so the issue never lacks a state label. gitlab edits once.
+    if [ "$prov" = github ]; then
+      eq "two writes per transition" 2 "$(WRITES)"
+      eq "add before remove" "POST|DELETE" "$(grep -o 'api -X \(POST\|DELETE\)' "$P/log" | awk '{printf "%s%s", (NR>1?"|":""), $3}')"
+    else
+      eq "one edit per transition" 1 "$(WRITES)"
+    fi
     eq "ip" "in-progress,type:task" "$(LABELS 1)"
     "$ROTA_BIN" item state T1 --to changes-requested >/dev/null
     eq "cr" "changes-requested,type:task" "$(LABELS 1)"

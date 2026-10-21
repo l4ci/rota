@@ -223,8 +223,8 @@ func suiteIssues(t *testing.T) {
 	dboth(&all, one("label/bad-number", dr(2, "issues", "label", "abc", "--add", "bug")))
 	dboth(&all, one("label/two-numbers", dr(2, "issues", "label", "1", "2", "--add", "bug")))
 	dboth(&all, one("label/forge-fails", dr(5, "issues", "label", "1", "--add", "bug").env1("FAKE_TRACKER_FAIL=issue")))
-	add(one("label/rate-limited/github", dr(6, "issues", "label", "1", "--add", "bug").env1(append([]string{"FAKE_TRACKER_FAIL=issue edit"}, rate...)...)),
-		one("label/rate-limited-remove/github", dr(6, "issues", "label", "1", "--remove", "bug").env1(append([]string{"FAKE_TRACKER_FAIL=issue edit"}, rate...)...)),
+	add(one("label/rate-limited/github", dr(6, "issues", "label", "1", "--add", "bug").env1(append([]string{"FAKE_TRACKER_FAIL=issues/1/labels"}, rate...)...)),
+		one("label/rate-limited-remove/github", dr(6, "issues", "label", "1", "--remove", "bug").env1(append([]string{"FAKE_TRACKER_FAIL=issues/1/labels"}, rate...)...)),
 		one("label/rate-limited/gitlab", dr(6, "issues", "label", "1", "--add", "bug").env1(append([]string{"FAKE_TRACKER_FAIL=issue update"}, rate...)...)).on("gitlab"),
 		one("label/rate-limited-remove/gitlab", dr(6, "issues", "label", "1", "--remove", "bug").env1(append([]string{"FAKE_TRACKER_FAIL=issue update"}, rate...)...)).on("gitlab"))
 	add(one("label/unknown-provider", dr(3, "issues", "label", "1", "--add", "bug").msg("forge.provider")).on("none"))
@@ -456,7 +456,7 @@ func addMigrate(all *[]dsc) {
 	dboth(all, m("fail/milestone-create", withMS(nil), dseed, mig(5, "--apply").env1("FAKE_TRACKER_FAIL=milestones").msg("0 of 8 migrated")))
 	dboth(all, m("fail/item-create", mfx(nil), dseed, mig(5, "--apply").env1("FAKE_TRACKER_FAIL=issue create").msg("0 of 8 migrated")))
 	dboth(all, m("fail/rate-limit-item", mfx(nil), dseed, mig(6, "--apply").env1("FAKE_TRACKER_FAIL=issue create", rate).msg("0 of 8 migrated")))
-	for _, p := range []struct{ remote, notes, edit string }{{"", "comments", "issue edit"}, {"gitlab", "notes", "issue update"}} {
+	for _, p := range []struct{ remote, notes, edit string }{{"", "comments", "-X PATCH"}, {"gitlab", "notes", "issue update"}} {
 		name := map[string]string{"": "github", "gitlab": "gitlab"}[p.remote]
 		add(m("fail/notes-then-resume/"+name, mfx(nil), dseed,
 			mig(5, "--apply").env1("FAKE_TRACKER_FAIL="+p.notes).msg("8 of 8 migrated"), mig(0, "--apply"), mig(0, "--apply")).on(p.remote),

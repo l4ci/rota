@@ -71,13 +71,20 @@ func TestIssuesLabelClose(t *testing.T) {
 	root := issuesRepo(t, origin)
 	deps := testDeps()
 	calls := issuesForge(t, deps, origin, map[string]string{
-		"issue view": `{"labels": [{"name": "x"}]}`,
-		"label list": `[{"name": "x"}]`,
+		"issue view":                        `{"labels": [{"name": "x"}]}`,
+		"label list":                        `[{"name": "x"}]`,
+		"api repos/{owner}/{repo}/issues/3": `{"labels": [{"name": "x"}]}`,
 	})
 	code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "issues", "label", "3", "--add", "x")
 	if code != 0 || get(dataOf(env), "changed") != false || get(dataOf(env), "action") != "add" {
 		t.Errorf("label no-op: %d %v", code, env)
 	}
+	// the read-back after the removal no longer carries the label
+	deps = testDeps()
+	issuesForge(t, deps, origin, map[string]string{
+		"issue view":                        `{"labels": [{"name": "x"}]}`,
+		"api repos/{owner}/{repo}/issues/3": `{"labels": []}`,
+	})
 	code, env, _ = rotaRunWith(t, deps, "--json", "-C", root, "issues", "label", "3", "--remove", "x")
 	if code != 0 || get(dataOf(env), "changed") != true {
 		t.Errorf("label remove: %d %v", code, env)
@@ -258,14 +265,14 @@ func TestIssuesNoProviderAndMissingIssue(t *testing.T) {
 	// a missing issue is exit 3; another forge failure stays exit 5
 	root = issuesRepo(t, "https://github.com/o/r.git")
 	for stderr, want := range map[string]int{
-		"GraphQL: Could not resolve to an Issue with the number of 99.": ExitResolution,
+		"HTTP 404: Not Found":    ExitResolution,
 		"HTTP 500: server error": ExitUnavailable,
 	} {
 		exe := func(_ context.Context, _ string, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
 			if name == "git" {
 				return []byte("https://github.com/o/r.git\n"), nil, 0, nil
 			}
-			if len(args) > 1 && args[0] == "issue" && args[1] == "edit" {
+			if len(args) > 0 && args[0] == "api" {
 				return nil, []byte(stderr), 1, nil
 			}
 			return nil, nil, 0, nil

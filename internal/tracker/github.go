@@ -3,6 +3,7 @@ package tracker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -393,34 +394,144 @@ func (g *GitHub) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	return firstN(out, f.Limit), nil
 }
 
+// Edit changes the issue over REST and reads it back. `gh issue edit` queries
+// the retired Projects (classic) cards on older gh and can leave the issue
+// unchanged without a usable exit code, so the PATCH goes through `gh api` and
+// the read-back is what proves the change landed.
 func (g *GitHub) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 	number, err := numOf(key)
 	if err != nil {
 		return err
 	}
-	args := []string{"issue", "edit", strconv.Itoa(number)}
+	patch := map[string]any{}
 	if e.Title != nil {
-		args = append(args, "--title", *e.Title)
+		patch["title"] = *e.Title
 	}
-	body := ""
 	if e.Body != nil {
-		args = append(args, "--body-file", "-")
-		body = *e.Body
-	}
-	for _, l := range e.AddLabels {
-		args = append(args, "--add-label", l)
-	}
-	for _, l := range e.RemoveLabels {
-		args = append(args, "--remove-label", l)
+		patch["body"] = *e.Body
 	}
 	if e.Milestone != "" {
-		args = append(args, "--milestone", e.Milestone)
+		ms, err := g.milestones(ctx, "all")
+		if err != nil {
+			return err
+		}
+		n := 0
+		for _, m := range ms {
+			if m.Title == e.Milestone {
+				n = m.Number
+				break
+			}
+		}
+		if n == 0 {
+			return &Error{Kind: KindNotFound, Code: 1, Message: fmt.Sprintf("milestone '%s' not found", e.Milestone)}
+		}
+		patch["milestone"] = n
+	} else if e.RemoveMilestone {
+		patch["milestone"] = nil
 	}
-	if e.RemoveMilestone {
-		args = append(args, "--remove-milestone")
+	path := fmt.Sprintf("repos/{owner}/{repo}/issues/%d", number)
+	if len(patch) > 0 {
+		buf, err := json.Marshal(patch)
+		if err != nil {
+			return err
+		}
+		if _, err := g.run(ctx, []string{"api", "-X", "PATCH", path, "--input", "-"}, string(buf)); err != nil {
+			return err
+		}
 	}
-	_, err = g.run(ctx, args, body)
-	return err
+	// Labels go through the incremental endpoints, never a PATCH of the whole
+	// set: a concurrent label write between a read and that PATCH would be lost.
+	if len(e.AddLabels) > 0 {
+		buf, err := json.Marshal(map[string]any{"labels": e.AddLabels})
+		if err != nil {
+			return err
+		}
+		if _, err := g.run(ctx, []string{"api", "-X", "POST", path + "/labels", "--input", "-"}, string(buf)); err != nil {
+			return err
+		}
+	}
+	for _, l := range e.RemoveLabels {
+		_, err := g.run(ctx, []string{"api", "-X", "DELETE", path + "/labels/" + url.PathEscape(l)}, "")
+		var te *Error
+		// A label the issue does not carry is already removed.
+		if err != nil && !(errors.As(err, &te) && te.Kind == KindNotFound) {
+			return err
+		}
+	}
+	if len(patch) == 0 && len(e.AddLabels) == 0 && len(e.RemoveLabels) == 0 {
+		return nil
+	}
+	got, err := g.issueREST(ctx, path)
+	if err != nil {
+		return err
+	}
+	return got.verify(number, e)
+}
+
+// restIssue is the part of a REST issue Edit reads back.
+type restIssue struct {
+	Title     string                  `json:"title"`
+	Body      string                  `json:"body"`
+	Labels    []struct{ Name string } `json:"labels"`
+	Milestone *struct{ Title string } `json:"milestone"`
+}
+
+func (g *GitHub) issueREST(ctx context.Context, path string) (restIssue, error) {
+	var d restIssue
+	err := g.json(ctx, []string{"api", path}, &d)
+	return d, err
+}
+
+func (r restIssue) labelNames() []string {
+	out := []string{}
+	for _, l := range r.Labels {
+		out = append(out, l.Name)
+	}
+	return out
+}
+
+func contains(xs []string, x string) bool {
+	for _, v := range xs {
+		if v == x {
+			return true
+		}
+	}
+	return false
+}
+
+// verify errors when the issue read back lacks a requested change.
+func (r restIssue) verify(number int, e IssueEdit) error {
+	var miss []string
+	if e.Title != nil && r.Title != *e.Title {
+		miss = append(miss, "title")
+	}
+	if e.Body != nil && strings.ReplaceAll(r.Body, "\r\n", "\n") != strings.ReplaceAll(*e.Body, "\r\n", "\n") {
+		miss = append(miss, "body")
+	}
+	have := map[string]bool{}
+	for _, l := range r.labelNames() {
+		have[l] = true
+	}
+	for _, l := range e.AddLabels {
+		if !have[l] {
+			miss = append(miss, "label "+l)
+		}
+	}
+	for _, l := range e.RemoveLabels {
+		if have[l] {
+			miss = append(miss, "label "+l+" still set")
+		}
+	}
+	if e.Milestone != "" && (r.Milestone == nil || r.Milestone.Title != e.Milestone) {
+		miss = append(miss, "milestone")
+	}
+	if e.Milestone == "" && e.RemoveMilestone && r.Milestone != nil {
+		miss = append(miss, "milestone still set")
+	}
+	if len(miss) > 0 {
+		return failed("edit of #%d did not apply (read back without: %s)", number, strings.Join(miss, ", "))
+	}
+	return nil
 }
 
 // Comments returns the comments oldest first.
