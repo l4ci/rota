@@ -28,6 +28,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "ref {files} is diffed against (default: the base branch)")
 	attempt := fs.String("attempt", "", "the attempt id from your brief; a stale one exits 4")
 	outcome := fs.String("outcome", "", "how the work ended: "+strings.Join(worker.Outcomes, "|")+" (default: done, no summary)")
+	requireRed := fs.Bool("require-red", false, "refuse (exit 4) instead of warning when work.tdd is on and non-test Go changed with no failing (RED) proof row")
 	summaryFile := fs.String("summary-file", "", "three lines: what changed, what was found, what remains (required for partial and failed)")
 	return func(c *Ctx, args []string) (Result, error) {
 		slotName, err := oneArg(args, "slot")
@@ -125,6 +126,21 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			d.Set("head", head)
 		}
 
+		if kind != worker.OutcomeFailed {
+			if noRed, err := missingRed(c, root, sl, id, *base); err != nil {
+				return Result{}, err
+			} else if noRed {
+				d.Set("noRed", true)
+				msg := fmt.Sprintf("%s changes non-test Go code and has no failing (RED) proof row: work.tdd wants a recorded red-first run (`rota proof record %s -- <test command>` before the change)", id, id)
+				if *requireRed {
+					e := Refused("%s", msg)
+					e.Hint = "record the RED run, or drop --require-red to accept the warning"
+					return Result{Data: d}, e
+				}
+				c.Warn("%s", msg)
+			}
+		}
+
 		changed := false
 		var fenced, mailErr error
 		lateUnread := 0
@@ -188,6 +204,35 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: d, Text: text}, nil
 	}
+}
+
+// missingRed reports a branch that changes non-test Go code while work.tdd is
+// on and the item's proof holds no FAIL row, the mark a red-first run leaves.
+// It is a heuristic: a FAIL row is not proof the failure was an assertion. A
+// base that cannot be resolved skips the check rather than refusing the done.
+func missingRed(c *Ctx, root string, sl *worker.Slot, id, base string) (bool, error) {
+	if !c.deps().workerEnv().GateConfig(root).TDD {
+		return false, nil
+	}
+	files, err := changedFiles(c, slotDir(sl, root), base)
+	if err != nil || !slices.ContainsFunc(files, isProdGo) {
+		return false, nil
+	}
+	_, st, _, err := openProof(c, id)
+	if err != nil {
+		return false, err
+	}
+	rows, _, err := proof.Show(st, id)
+	if err != nil {
+		return false, err
+	}
+	return !slices.ContainsFunc(rows, func(r proof.Row) bool { return r.Result == "FAIL" }), nil
+}
+
+// isProdGo is a Go file a test does not own: not *_test.go, not under testdata.
+func isProdGo(f string) bool {
+	return strings.HasSuffix(f, ".go") && !strings.HasSuffix(f, "_test.go") &&
+		!slices.Contains(strings.Split(f, "/"), "testdata")
 }
 
 // unreadMailRefusal is the exit-4 refusal of a done while the slot's inbox

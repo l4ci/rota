@@ -1266,3 +1266,15 @@ func TestStatusMarksSlotWhoseAccountHasNoLogin(t *testing.T) {
 		t.Errorf("NoLogin by slot = %v, want only ben marked", marked)
 	}
 }
+
+// work.tdd on puts the red-first line in the brief (#1300); off leaves it out.
+func TestPointerBriefTDD(t *testing.T) {
+	on := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", tierBrief{Kind: "claude", Tier: "standard", TDD: true})
+	if !strings.Contains(on, "failing test first") || !strings.Contains(on, "rota proof record") {
+		t.Errorf("brief lacks the TDD line:\n%s", on)
+	}
+	off := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", tierBrief{Kind: "claude", Tier: "standard"})
+	if strings.Contains(off, "failing test first") {
+		t.Errorf("brief carries the TDD line without TDD:\n%s", off)
+	}
+}
