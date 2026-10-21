@@ -283,3 +283,17 @@ func TestFoldHitsRacingConcurrentHitsCountsEachOnce(t *testing.T) {
 		t.Fatalf("hits = %d err=%v, want %d", e.Hits, err, n)
 	}
 }
+
+func TestClaimedBuffersFoundUnderMetacharacterRoot(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repo[1]*?")
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s := Store{Root: root}
+	crashedFold(t, s, 2)
+	hp, _ := s.HitsPath(Umbrella)
+	claimed, err := claimedBuffers(hp)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claimedBuffers = %v err=%v, want the one claimed buffer", claimed, err)
+	}
+}
