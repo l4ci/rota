@@ -589,8 +589,8 @@ With two or more reviewed PRs waiting on one base, `rota worker train <slot|PR>.
 default way to land them; a single `gate` is for exactly one waiting PR. The train gates them together and
 pays for the verify once instead of once per PR. A train can go red, but the culprit handling below keeps
 the other members moving. A gate or train takes 2 to 3 minutes: start it
-as a background command, review the next PRs and fill free slots meanwhile, and read the verdict when it
-exits. Don't start a second gate or train beside it, and don't write tracked `.rota/` files on the base
+as a background command, review the next PRs meanwhile, and read the verdict when it
+exits. `round assign` and `round transfer` refuse (`gate-running`) until it exits, so assign freed slots afterwards. Don't start a second gate or train beside it, and don't write tracked `.rota/` files on the base
 checkout until it exits; the checkout guard fails the gate on a changed tracked file. It checks each member the way `gate --check-only` does,
 merges them onto the base in a scratch worktree in the order it picks, runs `test.full` on that
 tree, then `test.e2e` when set (the most expensive tier runs once per train, not once per PR), and on a pass lands every member through the gate in order. If the base or a member's head moved
