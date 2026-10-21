@@ -116,14 +116,22 @@ var scenarios = map[string]scenario{
 		return []any{n1, n2, get(t, ctx, a, n1), get(t, ctx, a, n2)}
 	},
 	"edit title body labels": func(t *testing.T, ctx context.Context, a issueAPI) []any {
-		// A forge rejects a label that does not exist, the Fake does not model
-		// that: a test must create labels first on either.
+		// `gh issue edit` rejects a label that does not exist and the Fake does
+		// not model that: create labels first on either. REST label writes
+		// create one themselves (next scenario).
 		ok(t, a.EnsureLabels(ctx, []string{"a", "b", "c", "d"}, true))
 		n := must[tracker.IssueKey](t)(a.Create(ctx, "t", "b", []string{"a", "b"}, ""))
 		title, body := "t2", "b2"
 		ok(t, a.Edit(ctx, n, tracker.IssueEdit{Title: &title, Body: &body, AddLabels: []string{"c"}, RemoveLabels: []string{"a"}}))
 		ok(t, a.AddLabels(ctx, n, []string{"b", "d"}, true))
 		ok(t, a.RemoveLabels(ctx, n, []string{"c", "absent"}))
+		return []any{get(t, ctx, a, n)}
+	},
+	"rest label write creates an unknown label": func(t *testing.T, ctx context.Context, a issueAPI) []any {
+		// The REST endpoints create a missing label, bypassing the autoCreate
+		// policy; callers run EnsureLabels first to enforce it.
+		n := must[tracker.IssueKey](t)(a.Create(ctx, "t", "b", nil, ""))
+		ok(t, a.Edit(ctx, n, tracker.IssueEdit{AddLabels: []string{"brand-new"}}))
 		return []any{get(t, ctx, a, n)}
 	},
 	"close reopen": func(t *testing.T, ctx context.Context, a issueAPI) []any {
