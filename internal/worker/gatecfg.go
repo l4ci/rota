@@ -33,6 +33,8 @@ type GateConfig struct {
 	InProgressLabel string
 	// SharedPaths is round.sharedPaths.
 	SharedPaths []string
+	// TDD is work.tdd: a behavior change needs a recorded red-first run.
+	TDD bool
 
 	legacy     bool       // Full came from refactor.verifyCommands
 	legacyOnce *sync.Once // shared by copies, so the warning prints once per read
@@ -69,6 +71,7 @@ func ParseGateConfig(cfg any) GateConfig {
 		c.legacy = len(c.Full) > 0
 		c.legacyOnce = new(sync.Once)
 	}
+	c.TDD, _ = config.Bool(cfg, "work.tdd")
 	c.where, c.whereErr = parseFullWhere(cfg, c.CIChecks)
 	c.sourceErr = tracker.ValidateConfig(cfg)
 	c.ciMinutes, c.ciErr = config.Int(cfg, "test.ciTimeoutMinutes", 1, 24*60)
