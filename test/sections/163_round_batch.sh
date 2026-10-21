@@ -57,7 +57,7 @@ RC=0; OUT=$(rb round assign 2 --agent "$SLOT2") || RC=$?
 pass "round assign resumes a held item at the cap"
 
 # ── the tick skips assigning and says batch-full ────────────────────────────
-rb config set round.autopilot true >/dev/null
+rb config set autonomy.level auto >/dev/null
 OUT=$(rb round tick)
 [ "$(echo "$OUT" | jget data.batchFull)" = "true" ] || fail "a tick at the cap reports batchFull: $OUT"
 if grep -q '"action": "assign"' <<<"$OUT"; then fail "a tick at the cap must assign nothing: $OUT"; fi

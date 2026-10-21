@@ -43,7 +43,7 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
 		if !set.Autopilot {
-			return Result{}, Refused("round.autopilot is off").WithHint("rota config set round.autopilot true")
+			return Result{}, Refused("the autopilot runs only under autonomy.level auto").WithHint("rota config set autonomy.level auto")
 		}
 		r, err := autopilotTick(c, root, set, *base, *pid)
 		switch {

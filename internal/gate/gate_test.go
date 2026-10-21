@@ -94,7 +94,7 @@ var fixedNow = time.Date(2026, 10, 3, 12, 0, 0, 0, time.FixedZone("x", 7200))
 // Every enforced gate refuses without --confirm at every autonomy level, and
 // a confirmed pass is audited with the level in force.
 func TestClearAtEveryAutonomyLevel(t *testing.T) {
-	for _, level := range []string{"off", "auto"} {
+	for _, level := range []string{"off", "roundtrip", "auto"} {
 		for _, g := range Registry {
 			if !g.Enforced() {
 				continue

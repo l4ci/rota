@@ -109,8 +109,9 @@ type Settings struct {
 	// needs; 0 drops that condition.
 	ArchitectureIdleMinItems int
 	ArchitectureIdleMinHours int
-	// Autopilot is round.autopilot: `rota round watch --autopilot` and `rota
-	// round tick` do the mechanical steps. AutopilotCap is round.autopilotCap,
+	// Autopilot is autonomy.level auto (#1101; round.autopilot is retired):
+	// `rota round watch --autopilot` and `rota round tick` do the mechanical
+	// steps. AutopilotCap is round.autopilotCap,
 	// the most assigns and the most merges one tick does.
 	Autopilot    bool
 	AutopilotCap int
@@ -240,15 +241,10 @@ func FromConfig(cfg any) (Settings, error) {
 	if s.ArchitectureIdleMinHours, err = config.Int(cfg, "round.architectureIdleMinHours", 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	v, err = config.Value(cfg, "round.autopilot")
-	if err != nil {
+	if v, err = config.Value(cfg, "autonomy.level"); err != nil {
 		return s, err
 	}
-	b, ok := v.(bool)
-	if !ok {
-		return s, fmt.Errorf("round.autopilot must be true or false (got %v)", v)
-	}
-	s.Autopilot = b
+	s.Autopilot = v == "auto"
 	if s.AutopilotCap, err = config.Int(cfg, "round.autopilotCap", 0, config.MaxInt); err != nil {
 		return s, err
 	}

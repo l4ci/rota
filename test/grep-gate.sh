@@ -77,6 +77,7 @@ HV_SCOPE=(
   ':(exclude)internal/round/move_test.go'
   ':(exclude)internal/config/fill.go'
   ':(exclude)internal/config/fill_test.go'
+  ':(exclude)internal/config/autonomy_test.go'
   ':(exclude)internal/cli/init_test.go'
   ':(exclude)internal/cli/init_umbrella_test.go'
   ':(exclude)test/sections/76_config_fill.sh'

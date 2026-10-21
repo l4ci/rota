@@ -309,8 +309,9 @@ var Prompts = []Prompt{
 		"herdr":    "separate Claude Code sessions in herdr",
 	}},
 	{Key: "autonomy.level", Title: "How much may rota chain on its own?", Help: map[string]string{
-		"off":  "skills only suggest the next step",
-		"auto": "chain one hop, then stop",
+		"off":       "skills only suggest the next step",
+		"roundtrip": "run one item from brainstorm to ship, then stop",
+		"auto":      "keep taking the next ready item; rounds run the autopilot",
 	}},
 	{Key: "ship.review", Title: "How deep a review before shipping?", Help: map[string]string{
 		"full":  "run /rota-review",

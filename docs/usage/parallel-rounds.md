@@ -438,7 +438,7 @@ agent but leaves its pane open as a shell.
 
 ## Autopilot
 
-Off by default. With `round.autopilot` on, `rota round watch --autopilot` (or one pass of
+Runs only under `autonomy.level: auto`; under `off` or `roundtrip` both verbs exit 4. With it on, `rota round watch --autopilot` (or one pass of
 `rota round tick`) does the mechanical steps of a round, so you spend judgment on what is left:
 
 1. repair the safe drift (`reconcile --apply`);
@@ -856,5 +856,5 @@ minutes (`BASH_DEFAULT_TIMEOUT_MS`) and is capped at 10 minutes (`BASH_MAX_TIMEO
 - [Doctor and reap](doctor-and-reap.md): the preflight checks and what cleanup removes.
 - [Codex workers](codex-workers.md): `--kind codex`.
 - [Parallel work](parallel-work.md): several `/rota-work` sessions without an orchestrator.
-- [Autonomy levels](autonomy.md): how far skills chain on their own, a different axis from `round.scope`.
+- [Autonomy levels](autonomy.md): how far a run goes before it stops, solo or in a round; `auto` turns on the autopilot.
 - [Contributing: rounds](../contributing/rounds.md): this repo's gate, repo rules and roster.

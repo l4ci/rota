@@ -1,8 +1,8 @@
 echo "autopilot tick runs the architecture trigger: both triggers, audit lines, off switches (#112)"
 
 # File-mode solo rounds as section 109, one fixture per scenario because a
-# review in flight blocks the next one. The tick is driven with round.autopilot
-# on; no worker is ever dispatched (solo: the brief goes to the orchestrator).
+# review in flight blocks the next one. The tick is driven with autonomy.level
+# auto; no worker is ever dispatched (solo: the brief goes to the orchestrator).
 APA_ENV="env -u HERDR_ENV -u HERDR_PANE_ID -u TMUX -u TMUX_PANE"
 APA_HOLD=$$
 apa_fixture() { # <dir>: a project with one slot, autopilot on, an area per review
@@ -18,7 +18,7 @@ apa_fixture() { # <dir>: a project with one slot, autopilot on, an area per revi
   apa config set round.brief "$d.contract.md" >/dev/null
   apa config set round.scope open >/dev/null
   apa config set round.architectureAreas '["cli"]' >/dev/null
-  apa config set round.autopilot true >/dev/null
+  apa config set autonomy.level auto >/dev/null
   apa round start --holder-pid "$APA_HOLD" --slots 1 >/dev/null || fail "round start failed"
 }
 apa() { ( cd "$APA_DIR" && $APA_ENV ROTA_ROUND_HOLDER_PID="$APA_HOLD" "$ROTA_BIN" --json "$@" 2>/dev/null ); }
@@ -69,10 +69,10 @@ APA4="$(mktemp -d "$TMP/apa4.XXXXXX")/proj"
 apa_fixture "$APA4"
 apa config set round.architectureEvery 1 >/dev/null
 apa_feature one F01
-apa config set round.autopilot false >/dev/null
+apa config set autonomy.level roundtrip >/dev/null
 RC=0; OUT=$(apa round tick) || RC=$?
-[ "$RC" = "4" ] && [ "$(apa_audit mint)" = "0" ] || fail "with round.autopilot off the tick refuses and mints nothing: rc=$RC $OUT"
+[ "$RC" = "4" ] && [ "$(apa_audit mint)" = "0" ] || fail "under autonomy.level roundtrip the tick refuses and mints nothing: rc=$RC $OUT"
 case "$(cat "$APA4/.rota/BACKLOG.md")" in *"architecture review"*) fail "autopilot off must not mint" ;; esac
-pass "round.architectureEvery 0 and round.autopilot off both leave the tick minting nothing"
+pass "round.architectureEvery 0 and autonomy.level roundtrip both leave the tick minting nothing"
 
 rm -rf "${APA1%/proj}" "${APA2%/proj}" "${APA3%/proj}" "${APA4%/proj}" "$TMP"/apa?.contract.md

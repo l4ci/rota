@@ -9,7 +9,7 @@ Loaded by `skills/rota-orchestrate/SKILL.md` section 3 (autopilot) and the Solo 
 
 ## Autopilot
 
-With `round.autopilot` on, run `rota round watch --autopilot` in place of the plain watch. Each wake it ticks:
+Under `autonomy.level` set to `auto` ([`../references/autonomy.md`](../references/autonomy.md)), run `rota round watch --autopilot` in place of the plain watch. `roundtrip` runs the round without the tick, and `off` and `roundtrip` refuse `rota round tick` with the hint `rota config set autonomy.level auto`. Each wake it ticks:
 
 - repairs safe drift;
 - gates and merges finished PRs (never where `ship.mergeApproval` asks for a person, never without a pass);

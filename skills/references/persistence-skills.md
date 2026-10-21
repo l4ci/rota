@@ -20,7 +20,7 @@ Every persistence skill (and `/rota-learn`'s `--term` mode) follows:
    - `/rota-decide` → `rota block decisions`
 6. **Confirms via a compact block** — *"Captured `<artifact>` into `.rota/<FILE>.md`… Updated CLAUDE.md `<block>` block."* Match the shape; don't recap the plan.
 
-The duo does **not** commit. `.rota/KNOWLEDGE.md`, `.rota/DECISIONS.md`, and `CLAUDE.md` are all tracked under the partial-ignore model, so the duo leaves up to three working-tree diffs and lets the caller (the user, or a parent `/rota-work` cycle) commit them as one summary. Under `autonomy.level: auto` the duo runs in sequence, so a per-skill commit would split what should be one commit.
+The duo does **not** commit. `.rota/KNOWLEDGE.md`, `.rota/DECISIONS.md`, and `CLAUDE.md` are all tracked under the partial-ignore model, so the duo leaves up to three working-tree diffs and lets the caller (the user, or a parent `/rota-work` cycle) commit them as one summary. Under `autonomy.level: roundtrip` or `auto` ([`references/autonomy.md`](autonomy.md)) the duo runs in sequence, so a per-skill commit would split what should be one commit.
 
 ## Topic-classification rule (rota-learn topic bullets ↔ rota-decide)
 
