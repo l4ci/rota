@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -350,7 +351,10 @@ func TestWaitAfterTheLastEventRechecksAPaneThatMovedOnce(t *testing.T) {
 					h.events <- "w1"
 				}}, nil
 			}
-			res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 2 * time.Second})
+			// A hang guard only: the wait returns the moment the re-check
+			// settles, so a loaded machine costs nothing, where a tight
+			// deadline cut the re-check short.
+			res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 30 * time.Second})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -514,10 +518,20 @@ func TestWaitIgnoresADoneSlotWhoseRecordedPRIsMerged(t *testing.T) {
 		h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/9\n", "done")
 		e := envWith(watcherHost{h})
 		e.Forge = func(string, string, tracker.Settings) (Forge, error) { return stateForge{state: state}, nil }
-		// The merged case runs to its deadline, and the lookup runs git under
-		// that context: a budget a loaded machine can spend before the lookup
-		// ends reads the merged PR as unknown, hence as news.
-		res, err := e.Wait(bg, dir, WaitOpts{Timeout: 2 * time.Second})
+		// The origin lookup answers without running git: under a real git call
+		// the Wait deadline could expire first, the lookup would fall back to
+		// local, and the merged PR would read as unknown, hence as news.
+		realGit := e.Git
+		if realGit == nil {
+			realGit = git.Exec
+		}
+		e.Git = func(ctx context.Context, d string, args ...string) (git.Result, error) {
+			if len(args) >= 2 && args[0] == "remote" && args[1] == "get-url" {
+				return git.Result{Stdout: "https://github.com/o/r.git\n"}, nil
+			}
+			return realGit(ctx, d, args...)
+		}
+		res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond})
 		if err != nil {
 			t.Fatal(err)
 		}
