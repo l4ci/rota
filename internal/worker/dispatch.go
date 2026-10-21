@@ -289,7 +289,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		if err := h.Kill(ctx, o.Slot, handle); err != nil {
 			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
-		closeSlotWorkspace(ctx, h, root, o.Slot)
+		e.closeSlotWorkspace(ctx, h, root, o.Slot)
 		// The old handle names a pane that is gone. Drop it now, not at
 		// recordDispatch after the boot: a watch ticking in between would
 		// read the dead pane and report the slot dead (#707).
@@ -514,7 +514,7 @@ func (e Env) KillSlot(ctx context.Context, root, slot string) error {
 	if err := h.Kill(ctx, slot, handle); err != nil {
 		return fail(exitcode.ExitUnavailable, err.Error())
 	}
-	closeSlotWorkspace(ctx, h, root, slot)
+	e.closeSlotWorkspace(ctx, h, root, slot)
 	return nil
 }
 
@@ -522,14 +522,14 @@ func (e Env) KillSlot(ctx context.Context, root, slot string) error {
 // session is killed, and forgets it. Only a recorded id is closed: a handle from
 // the default path names the orchestrator's own workspace. Best effort, since
 // herdr closes the workspace with its last tab already.
-func closeSlotWorkspace(ctx context.Context, h host.Host, root, slot string) {
+func (e Env) closeSlotWorkspace(ctx context.Context, h host.Host, root, slot string) {
 	s := LoadRegistryTolerant(root).Slot(slot)
 	if s == nil || s.WorkspaceID() == "" {
 		return
 	}
 	if wc := h.Capabilities().WorkspaceCloser; wc != nil {
 		if err := wc.CloseWorkspace(ctx, s.WorkspaceID()); err != nil {
-			fmt.Fprintf(os.Stderr, "rota: slot %s: %v\n", slot, err)
+			fmt.Fprintf(e.Stderr, "rota: slot %s: %v\n", slot, err)
 		}
 	}
 	UpdateSlot(root, slot, func(sl *Slot) { sl.SetWorkspaceID("") })

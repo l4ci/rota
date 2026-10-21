@@ -282,7 +282,7 @@ func usageChoose(ctx context.Context, c *Ctx, root string) func(string, int) kee
 			return keepalive.Choice{Others: others}
 		}
 		return keepalive.Choice{
-			To:     &keepalive.Target{Name: m.Name, ConfigDir: worker.ExpandConfigDir(m.ConfigDir), Headroom: *m.Headroom},
+			To:     &keepalive.Target{Name: m.Name, ConfigDir: worker.ExpandConfigDirIn(m.ConfigDir, homeOf(c.deps().UserHomeDir)), Headroom: *m.Headroom},
 			Others: others,
 		}
 	}

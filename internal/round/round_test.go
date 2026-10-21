@@ -420,3 +420,21 @@ func TestReconcileClearsTheLabelOfClosedIssues(t *testing.T) {
 		t.Errorf("failed removals left %d label-stale in drift, want 2", n)
 	}
 }
+
+func TestInWorktreeRoot(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, worker.WorktreeRoot)
+	for name, tc := range map[string]struct {
+		cwd  string
+		want bool
+	}{
+		"worktree root itself": {dir, true},
+		"inside a worktree":    {filepath.Join(dir, "ben", "sub"), true},
+		"main checkout":        {root, false},
+		"empty cwd":            {"", false},
+	} {
+		if got := inWorktreeRoot(root, tc.cwd); got != tc.want {
+			t.Errorf("%s: inWorktreeRoot(%q) = %v, want %v", name, tc.cwd, got, tc.want)
+		}
+	}
+}
