@@ -30,8 +30,11 @@ var ErrScope = errors.New("scope")
 type Store struct {
 	Root  string
 	Repos map[string]string
-	// Now is the clock that dates new entries; nil is the wall clock.
+	// Now is the clock that stamps instants (a contradiction's loggedAt); nil is
+	// the wall clock.
 	Now func() time.Time
+	// Today is the clock that dates new entries; nil falls back to Now.
+	Today func() time.Time
 	// Config returns the merged project config; nil loads .rota/config.json.
 	Config func(root string) any
 }
@@ -53,7 +56,12 @@ func (s Store) now() time.Time {
 }
 
 // today is the YYYY-MM-DD date stamped on what Store writes.
-func (s Store) today() string { return s.now().Format("2006-01-02") }
+func (s Store) today() string {
+	if s.Today != nil {
+		return s.Today().Format("2006-01-02")
+	}
+	return s.now().Format("2006-01-02")
+}
 
 // check validates a sub-repo scope against the registry.
 func (s Store) check(scope string) error {
