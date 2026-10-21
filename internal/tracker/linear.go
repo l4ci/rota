@@ -71,11 +71,7 @@ func newLinearTracker(ctx context.Context, c *CLI, s Settings) (*Linear, error) 
 	if s.LinearTeam == "" {
 		return nil, unavailable("issues.source is linear but issues.linear.team is not set (run: rota config set issues.linear.team <KEY>)")
 	}
-	resolve := c.Conn
-	if resolve == nil {
-		resolve = machineConn
-	}
-	conn, secret, err := resolve(ctx, s.Connection)
+	conn, secret, err := c.resolver()(ctx, s.Connection)
 	if err != nil {
 		return nil, unavailable("%v", err)
 	}

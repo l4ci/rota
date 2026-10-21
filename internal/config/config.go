@@ -58,7 +58,8 @@ func GlobalError() error {
 // globalLayerErr is the global config as a nested object of its schema keys
 // (nil when absent) and the error that made it unreadable.
 func globalLayerErr() (any, error) {
-	dir, err := projects.Dir(osProjectsEnv)
+	// config.Load has no Deps to take an Env from: the process is its edge.
+	dir, err := projects.Dir(projects.OSEnv())
 	if err != nil {
 		return nil, nil
 	}

@@ -60,11 +60,7 @@ func newItsaplanTracker(ctx context.Context, c *CLI, s Settings) (*Itsaplan, err
 	if s.ItsaplanProject == "" {
 		return nil, unavailable("issues.source is itsaplan but issues.itsaplan.project is not set (run: rota config set issues.itsaplan.project <KEY>)")
 	}
-	resolve := c.Conn
-	if resolve == nil {
-		resolve = machineConn
-	}
-	conn, secret, err := resolve(ctx, s.Connection)
+	conn, secret, err := c.resolver()(ctx, s.Connection)
 	if err != nil {
 		return nil, unavailable("%v", err)
 	}

@@ -272,7 +272,7 @@ func (d *Deps) workerEnv() worker.Env {
 			ctx = context.Background()
 		}
 		e.Forge = func(provider, dir string, s tracker.Settings) (worker.Forge, error) {
-			return tracker.NewForge(ctx, s, provider, dir, d.TrackerOptions...)
+			return tracker.NewForge(ctx, s, provider, dir, d.trackerBase()...)
 		}
 	}
 	return e
@@ -404,12 +404,18 @@ func (d *Deps) freshReads() {
 	}
 }
 
-// trackerOptions is TrackerOptions plus the invocation's read cache.
+// trackerBase is TrackerOptions plus the machine the default connection lookup
+// reads: Deps' own env and keychain. A test's WithConnections still wins.
+func (d *Deps) trackerBase() []tracker.Option {
+	return append([]tracker.Option{tracker.WithMachine(d.projectsEnv(), d.Keychain)}, d.TrackerOptions...)
+}
+
+// trackerOptions is trackerBase plus the invocation's read cache.
 func (d *Deps) trackerOptions() []tracker.Option {
 	if d.ReadCache == nil {
-		return d.TrackerOptions
+		return d.trackerBase()
 	}
-	return append(append([]tracker.Option(nil), d.TrackerOptions...), tracker.WithReadCache(d.ReadCache))
+	return append(d.trackerBase(), tracker.WithReadCache(d.ReadCache))
 }
 
 // forgeOrGitHub is forge falling back to github for an unrecognized origin.

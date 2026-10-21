@@ -362,7 +362,7 @@ func TestConfigScreenWritesTheSameFilesAsConfigSet(t *testing.T) {
 	if err := os.WriteFile(local, []byte(`{"work":{"mergeStrategy":"direct"}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	store := rootStore{root}
+	store := rootStore{root, defaultDeps().projectsEnv()}
 	rows, err := store.Rows()
 	if err != nil {
 		t.Fatal(err)
