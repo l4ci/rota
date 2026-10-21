@@ -230,9 +230,10 @@ type Env struct {
 const secretNames = `token|secret|password|passwd|api[_-]?key|access[_-]?key|credential|authorization`
 
 // secretFlagName matches a flag name that holds a secret: a secret-named
-// substring, or key/auth as a whole hyphen or underscore segment, so --ssh-key
-// and --auth match while --author and --keyword do not.
-const secretFlagName = `(?:[\w-]*(?:` + secretNames + `)[\w-]*|(?:[\w-]*[-_])?(?:key|auth)(?:[-_][\w-]*)?)`
+// substring, a name ending in key (--sshkey) or with key as a leading segment
+// (--key-file), or auth/oauth as a whole segment, so --auth matches while
+// --author and --keyword do not.
+const secretFlagName = `(?:[\w-]*(?:` + secretNames + `)[\w-]*|[\w-]*key(?:[-_][\w-]*)?|(?:[\w-]*[-_])?o?auth(?:[-_][\w-]*)?)`
 
 var (
 	reUserinfo   = regexp.MustCompile(`://[^/\s@]+@`)

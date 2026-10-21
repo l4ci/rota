@@ -282,7 +282,7 @@ func TestRedactFlagValuesOnlyForSecretFlags(t *testing.T) {
 	if got := Redact(keep, Env{}); got != keep {
 		t.Errorf("non-secret flags changed: %q", got)
 	}
-	for _, in := range []string{"rota x --auth plainvalue1", "rota x --auth-token plainvalue1", "rota x --authorization plainvalue1", "rota x --ssh-key plainvalue1", "rota x -key plainvalue1"} {
+	for _, in := range []string{"rota x --auth plainvalue1", "rota x --auth-token plainvalue1", "rota x --authorization plainvalue1", "rota x --ssh-key plainvalue1", "rota x -key plainvalue1", "rota x --sshkey plainvalue1", "rota x --privkey plainvalue1", "rota x --authkey plainvalue1", "rota x --oauth plainvalue1", "rota x --key-file plainvalue1"} {
 		if got := Redact(in, Env{}); strings.Contains(got, "plainvalue1") {
 			t.Errorf("secret flag kept value: %q", got)
 		}
