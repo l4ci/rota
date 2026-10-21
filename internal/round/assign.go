@@ -360,6 +360,8 @@ type tierBrief struct {
 	Sibling, SiblingBranch string
 	// FullOnly: test.fast is empty, so the worker proves with test.full.
 	FullOnly bool
+	// TDD: work.tdd is on, so the brief repeats the red-first rule.
+	TDD bool
 }
 
 func (t tierBrief) text() string {
@@ -397,6 +399,9 @@ func (t tierBrief) text() string {
 	}
 	if t.FullOnly {
 		b.WriteString("test.fast is empty here: run `rota test run full` and have it green before `rota worker done`. `worker done` skips the proof-row check, so missing proof rows are expected.\n")
+	}
+	if t.TDD {
+		b.WriteString("work.tdd is on: for a behavior change, show a failing test first. Run the new test before the production change and see it fail on an assertion, recording the run with `rota proof record <ID> -- <test command>`, then record the PASS row the same way after. `rota worker done` warns when non-test Go changed and no row is a FAIL.\n")
 	}
 	fmt.Fprintf(&b, "Put `Worker tier: %s` in your PR body.\n", own)
 	return b.String()
@@ -814,7 +819,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 	d := &delivery{Slot: agent, Task: id, Branch: func() string { return res.Branch }, Kind: run.kind, Model: res.Model, Round: rnd,
 		Brief: func() string {
 			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
-			text := pointerBrief(agent, id, res.Branch, run.brief, o.Siblings, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, FullOnly: set.FullOnly, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()})
+			text := pointerBrief(agent, id, res.Branch, run.brief, o.Siblings, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, FullOnly: set.FullOnly, TDD: set.TDD, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()})
 			if hb := latestHandoffBranch(be, id); hb != "" {
 				text += fmt.Sprintf("\nAn earlier worker handed this issue back: read the latest `rota:handoff` comment on it. Its work is pushed on branch %s (origin/%s); fetch it before you start over.\n", hb, hb)
 			}
