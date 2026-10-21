@@ -77,3 +77,54 @@ func TestAliveRealZombie(t *testing.T) {
 		t.Error("the live parent must read as alive")
 	}
 }
+
+func TestParseProcStat(t *testing.T) {
+	// Fields after comm, starting at state: ppid is the 2nd, starttime the 20th.
+	rest := " S 42 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 987654 0 0"
+	cases := []struct {
+		name   string
+		line   string
+		ppid   int
+		start  uint64
+		wantOK bool
+	}{
+		{"plain comm", "123 (bash)" + rest, 42, 987654, true},
+		{"spaces in comm", "123 (my proc name)" + rest, 42, 987654, true},
+		{"paren in comm", "123 (a) b (c)" + rest, 42, 987654, true},
+		{"no close paren", "123 bash S 42", 0, 0, false},
+		{"truncated after comm", "123 (bash) S 42 1 1 0", 0, 0, false},
+		{"non-numeric ppid", "123 (bash) S x 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 987654 0 0", 0, 0, false},
+		{"non-numeric start", "123 (bash) S 42 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 zz 0 0", 0, 0, false},
+		{"empty", "", 0, 0, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			pp, st, ok := parseProcStat(c.line)
+			if pp != c.ppid || st != c.start || ok != c.wantOK {
+				t.Errorf("parseProcStat(%q) = %d, %d, %v; want %d, %d, %v", c.line, pp, st, ok, c.ppid, c.start, c.wantOK)
+			}
+		})
+	}
+}
+
+func TestProcStatCurrentPid(t *testing.T) {
+	if _, err := os.Stat("/proc/self/stat"); err != nil {
+		t.Skip("no /proc")
+	}
+	ppid, start, ok := ProcStat(os.Getpid())
+	if !ok {
+		t.Fatal("ProcStat(self) not ok")
+	}
+	if ppid != os.Getppid() {
+		t.Errorf("ppid = %d, want %d", ppid, os.Getppid())
+	}
+	if start == 0 {
+		t.Error("start ticks = 0")
+	}
+	if st, ok := StartTicks(os.Getpid()); !ok || st != start {
+		t.Errorf("StartTicks = %d, %v; want %d, true", st, ok, start)
+	}
+	if _, _, ok := ProcStat(-1); ok {
+		t.Error("ProcStat(-1) ok")
+	}
+}

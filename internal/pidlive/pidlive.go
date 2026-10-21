@@ -60,7 +60,11 @@ func ProcStat(pid int) (ppid int, start uint64, ok bool) {
 	if err != nil {
 		return 0, 0, false
 	}
-	s := string(b)
+	return parseProcStat(string(b))
+}
+
+// parseProcStat is ProcStat's parser over one /proc/<pid>/stat line.
+func parseProcStat(s string) (ppid int, start uint64, ok bool) {
 	i := strings.LastIndex(s, ")")
 	if i < 0 {
 		return 0, 0, false
