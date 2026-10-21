@@ -50,7 +50,8 @@ func (k osKeychain) call(ctx context.Context, stdin string, args ...string) (pro
 
 // SecurityRead reads one macOS generic password through `security`, the one
 // implementation of that read. account "" matches on service alone. ok is
-// false when no item exists; ErrUnavailable wraps every other failure.
+// false when no item exists; a missing security binary or a non-zero exit
+// wraps ErrUnavailable; a runner error is returned as is.
 func SecurityRead(ctx context.Context, run proc.Runner, service, account string) (secret string, ok bool, err error) {
 	args := []string{"find-generic-password", "-s", service}
 	if account != "" {
