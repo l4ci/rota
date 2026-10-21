@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -206,4 +207,30 @@ func TestConfigShowReportsEffectiveTierModels(t *testing.T) {
 	if len(got) != 9 {
 		t.Errorf("want all nine tier keys, got %d", len(got))
 	}
+}
+
+// #1511: config set and save-global say when they rewrite an old auto.
+func TestConfigSetAndSaveGlobalSayAutoRewrite(t *testing.T) {
+	t.Setenv("ROTA_CONFIG_DIR", t.TempDir())
+	stale := `{"rota": {"version": "0.20.0"}, "autonomy": {"level": "auto"}}` + "\n"
+	root := trackerProject(t, stale)
+	code, out := textRun(t, "-C", root, "config", "save-global")
+	if code != 0 || !strings.Contains(out, "rewrote: autonomy.level auto -> roundtrip") {
+		t.Errorf("save-global: %d %q", code, out)
+	}
+	root = trackerProject(t, stale)
+	code, out = textRun(t, "-C", root, "config", "set", "autonomy.level", "off")
+	if code != 0 || !strings.Contains(out, "rewrote: autonomy.level auto -> roundtrip in config.json") {
+		t.Errorf("set: %d %q", code, out)
+	}
+}
+
+// textRun runs rota without --json and returns the exit code and stdout.
+func textRun(t *testing.T, args ...string) (int, string) {
+	t.Helper()
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	var out, errb bytes.Buffer
+	code := mainWith(testDeps(), args, strings.NewReader(""), &out, &errb)
+	return code, out.String()
 }

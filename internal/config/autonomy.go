@@ -264,12 +264,14 @@ func migrateAutonomyGlobal() (bool, error) {
 
 // updateProject rewrites the config.json at path with fn under its lock when
 // it is stale; fn returns the new object, or nil to leave the file. A missing
-// or unreadable file, or a current stamp, is left alone.
-func updateProject(path string, fn func(*jsonx.Object) *jsonx.Object) error {
+// or unreadable file, or a current stamp, is left alone. It reports whether it
+// wrote.
+func updateProject(path string, fn func(*jsonx.Object) *jsonx.Object) (bool, error) {
 	if _, err := os.Stat(path); err != nil {
-		return nil
+		return false, nil
 	}
-	return fsio.Locked(path, fsio.LockTimeout, func() error {
+	wrote := false
+	err := fsio.Locked(path, fsio.LockTimeout, func() error {
 		obj := readObject(path)
 		if obj == nil || !autonomyStale(obj) {
 			return nil
@@ -277,14 +279,16 @@ func updateProject(path string, fn func(*jsonx.Object) *jsonx.Object) error {
 		if obj = fn(obj); obj == nil {
 			return nil
 		}
+		wrote = true
 		return fsio.WriteJSONAtomic(path, obj)
 	})
+	return wrote && err == nil, err
 }
 
 // migrateProjectAuto rewrites an old auto in a stale config.json at path to
 // roundtrip, leaving the stamp: it runs before a set, so the stamp the set
-// raises never blesses the old value.
-func migrateProjectAuto(path string) error {
+// raises never blesses the old value. It reports whether it rewrote.
+func migrateProjectAuto(path string) (bool, error) {
 	return updateProject(path, func(obj *jsonx.Object) *jsonx.Object {
 		if !isAuto(obj) {
 			return nil
@@ -296,9 +300,10 @@ func migrateProjectAuto(path string) error {
 // raiseProjectStamp raises rota.version in a stale config.json at path to
 // AutonomyLevelsSince.
 func raiseProjectStamp(path string) error {
-	return updateProject(path, func(obj *jsonx.Object) *jsonx.Object {
+	_, err := updateProject(path, func(obj *jsonx.Object) *jsonx.Object {
 		return fillKey(obj, "", strings.Split(VersionKey, "."), AutonomyLevelsSince)
 	})
+	return err
 }
 
 // autonomySet is how a write of autonomy.level to root's project or local
@@ -307,20 +312,24 @@ func raiseProjectStamp(path string) error {
 // AutonomyLevelsSince it migrates an old auto in config.local.json and
 // config.json first (it is still one-hop), runs set, then raises config.json's
 // stamp: a stamp never blesses a value it guards that nobody migrated. Any other
-// key, or a current stamp, is set alone.
+// key, or a current stamp, is set alone. The result carries the rewrites in
+// Migration, since the stamp it raises would otherwise hide them from a later fill.
 func autonomySet(root, key string, set func() (SetResult, error)) (SetResult, error) {
 	if key != "autonomy.level" || !autonomyStale(readObject(configPath(root))) {
 		return set()
 	}
-	if _, err := migrateAutonomyLocal(root, true); err != nil {
+	var am AutonomyMigration
+	var err error
+	if am.LocalRewrite, err = migrateAutonomyLocal(root, true); err != nil {
 		return SetResult{}, err
 	}
-	if err := migrateProjectAuto(configPath(root)); err != nil {
+	if am.Rewrite, err = migrateProjectAuto(configPath(root)); err != nil {
 		return SetResult{}, err
 	}
 	res, err := set()
 	if err != nil {
 		return res, err
 	}
+	res.Migration = am
 	return res, raiseProjectStamp(configPath(root))
 }

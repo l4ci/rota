@@ -139,8 +139,9 @@ func rowsFromData(data any) ([]cfgRow, error) {
 type configStore interface {
 	Rows() ([]cfgRow, error)
 	// Set writes raw as `config set` does, to config.local.json when local.
-	// changed is false when the file already held that value.
-	Set(key, raw string, local bool) (changed bool, err error)
+	// changed is false when the file already held that value. note is what the
+	// write did besides setting key (an old auto rewritten to roundtrip), or "".
+	Set(key, raw string, local bool) (changed bool, note string, err error)
 	// Reset puts key back to its schema default.
 	Reset(key string) error
 	// Global is whether the store is the global config, which has no local
@@ -184,13 +185,13 @@ func (s rootStore) Inherit(key string) error {
 	return notObjectInternal(err)
 }
 
-func (s rootStore) Set(key, raw string, local bool) (bool, error) {
+func (s rootStore) Set(key, raw string, local bool) (bool, string, error) {
 	layer := config.LayerProject
 	if local {
 		layer = config.LayerLocal
 	}
 	res, err := config.SetIn(s.root, key, raw, layer)
-	return res.Changed, notObjectInternal(err)
+	return res.Changed, strings.Join(autonomyLines(res.Migration), "; "), notObjectInternal(err)
 }
 
 // Reset drops the local override, then makes the project value the default: a
@@ -214,15 +215,15 @@ func (s globalStore) Rows() ([]cfgRow, error) {
 
 func (s globalStore) Global() bool { return true }
 
-func (s globalStore) Set(key, raw string, local bool) (bool, error) {
+func (s globalStore) Set(key, raw string, local bool) (bool, string, error) {
 	if local {
-		return false, errors.New("the global config has no local override")
+		return false, "", errors.New("the global config has no local override")
 	}
 	res, err := config.SetGlobal(s.dir, key, raw)
 	if errors.Is(err, config.ErrProjectOwned) {
-		return false, err
+		return false, "", err
 	}
-	return res.Changed, notObjectInternal(err)
+	return res.Changed, "", notObjectInternal(err)
 }
 
 // Reset removes the key: a project that does not set it falls back to the default.
@@ -524,9 +525,12 @@ func (m configScreen) write(row int, raw string, local bool) (tui.Model, tui.Cmd
 	p := &cfgPending{key: r.Key, msg: msg}
 	m.pend = p
 	return m, tui.Cmd{Exec: func() error {
-		changed, err := store.Set(r.Key, raw, local)
+		changed, note, err := store.Set(r.Key, raw, local)
 		if err != nil {
 			return err
+		}
+		if note != "" {
+			p.msg += "; " + note
 		}
 		p.set = changed
 		p.rows, err = store.Rows()
