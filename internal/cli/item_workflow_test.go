@@ -272,3 +272,41 @@ func TestItemSectionSet(t *testing.T) {
 	fileRoot := trackerProject(t, "")
 	runOKWith(t, testDeps(), fileRoot, ExitRefused, "item", "section", "set", "B01", "--name", "acceptance", "--body-file", body)
 }
+
+// A closed issue is refused with exit 4 and {blockedBy: closed}, nothing written.
+func TestItemSectionSetClosedItem(t *testing.T) {
+	root := trackerProject(t, issuesConfig)
+	tr := issueFixture()
+	deps := withTracker(t, tr)
+	d := runOKWith(t, deps, root, ExitRefused, "item", "section", "set", "9", "--name", "acceptance", "--body-file", bodyFile(t, "- [ ] x\n"))
+	if get(d, "blockedBy") != "closed item" || get(d, "changed") != false {
+		t.Errorf("closed: %v", d)
+	}
+	if tr.Issues[1].Body != "" {
+		t.Errorf("closed item body written: %q", tr.Issues[1].Body)
+	}
+}
+
+// --body-file - reads the section body from stdin.
+func TestItemSectionSetStdin(t *testing.T) {
+	root := trackerProject(t, issuesConfig)
+	tr := issueFixture()
+	deps := withTracker(t, tr)
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	var out, errb bytes.Buffer
+	code := mainWith(deps, []string{"--json", "-C", root, "item", "section", "set", "7", "--name", "acceptance", "--body-file", "-"},
+		strings.NewReader("- [ ] from stdin\n"), &out, &errb)
+	if code != 0 {
+		t.Fatalf("exit %d\n%s%s", code, out.String(), errb.String())
+	}
+	want := "Export the backlog.\n\n## Acceptance\n\n- [ ] AC-1: from stdin\n\n<!-- rota:fields\nRelated: B9\n-->"
+	if got := tr.Issues[0].Body; got != want {
+		t.Errorf("body %q, want %q", got, want)
+	}
+	errb.Reset()
+	if code := mainWith(deps, []string{"--json", "-C", root, "item", "section", "set", "7", "--name", "acceptance", "--body-file", "-"},
+		strings.NewReader(" \n"), &out, &errb); code != ExitUsage {
+		t.Errorf("empty stdin: exit %d, want %d", code, ExitUsage)
+	}
+}
