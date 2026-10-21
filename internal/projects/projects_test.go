@@ -12,6 +12,7 @@ import (
 func isolate(t *testing.T) string {
 	t.Helper()
 	x := t.TempDir()
+	t.Setenv("ROTA_CONFIG_DIR", "")
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(x, "config"))
 	t.Setenv("XDG_STATE_HOME", filepath.Join(x, "state"))
 	return x
