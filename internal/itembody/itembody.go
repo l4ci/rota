@@ -94,3 +94,31 @@ func appendBullets(body []byte, heading string, items []string) []byte {
 	}
 	return []byte(b.String())
 }
+
+// SetSection replaces the content of the "## name" section of text, or appends
+// the section when text has none. The heading may be of any level and any
+// case; a replaced heading keeps its spelling, a new one is written as
+// "## Name". The section runs to the next heading of any level. Everything
+// outside it is untouched. content is trimmed of surrounding newlines.
+func SetSection(text, name, content string) string {
+	content = strings.Trim(content, "\n")
+	head := regexp.MustCompile(`(?mi)^#{1,6}[ \t]+` + regexp.QuoteMeta(name) + `[ \t]*$`)
+	loc := head.FindStringIndex(text)
+	if loc == nil {
+		title := strings.ToUpper(name[:1]) + name[1:]
+		sec := "## " + title + "\n\n" + content + "\n"
+		if t := strings.TrimRight(text, "\n"); t != "" {
+			return t + "\n\n" + sec
+		}
+		return sec
+	}
+	end := len(text)
+	if n := anyHeadRe.FindStringIndex(text[loc[1]:]); n != nil {
+		end = loc[1] + n[0]
+	}
+	sec := text[:loc[1]] + "\n\n" + content + "\n"
+	if end < len(text) {
+		sec += "\n"
+	}
+	return sec + text[end:]
+}

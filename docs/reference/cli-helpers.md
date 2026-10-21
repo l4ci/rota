@@ -102,6 +102,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota item note rm <ID> --kind <proof\|design\|plan>` | delete a note |
 | `rota item field get <ID> --name <title\|detail\|related\|milestone\|repos\|subsystem\|since\|reason\|note>` | print one field of an item |
 | `rota item field set <ID> --name <milestone\|related\|repos\|subsystem\|detail> --value <text>` | set, replace or clear a field of an open item |
+| `rota item section set <ID> --name <heading> --body-file <path\|->` | replace or add one `## <heading>` section of an issue-mode body, fields block kept |
 | `rota item field list <ID>` | every field of an item |
 | `rota item complete <ID> [--commit <hash>] [--reason <done\|handed-off\|blocked\|dropped>] [--note <text>] [--no-proof] [--gist <text>]` | close an item; a decision item needs `--gist`, its line in the milestone's `## Decisions` |
 | `rota item reopen <ID>` | restore a completed item |

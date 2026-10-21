@@ -87,6 +87,9 @@ func itemCommands() []*Command {
 				{Name: "set", Summary: "set, replace or clear a field of an open item", Repo: true, Verb: itemFieldSet},
 				{Name: "list", Summary: "every field of an item", Repo: true, Verb: itemFieldList},
 			}},
+			{Name: "section", Summary: "edit one body section of an item", Subs: []*Command{
+				{Name: "set", Summary: "replace or add one ## section of an issue-mode body", Repo: true, Verb: itemSectionSet},
+			}},
 			{Name: "complete", Summary: "close an item", Repo: true, Verb: itemComplete},
 			{Name: "reopen", Summary: "restore a completed item", Repo: true, Verb: itemReopen},
 			{Name: "rm", Summary: "remove items with their cross-references and files", Repo: true, Verb: itemRm},
@@ -531,6 +534,50 @@ func setItemField(be backlog.Backend, ref, name, value string) (Result, error) {
 		return Result{Data: jsonObj("id", id, "type", typ, "field", name, "value", value, "changed", changed),
 			Text: fmt.Sprintf("%s %s: %s", id, name, value)}, nil
 	})
+}
+
+// ---- item section set ------------------------------------------------------
+
+func itemSectionSet(fs *flag.FlagSet) RunFunc {
+	name := fs.String("name", "", "section heading, e.g. acceptance")
+	bodyFile := fs.String("body-file", "", "section text, path or - for stdin")
+	return func(c *Ctx, args []string) (Result, error) {
+		if err := argCount(c, args, 1, 1, "item section set takes one item ID"); err != nil {
+			return Result{}, err
+		}
+		if strings.TrimSpace(*name) == "" || strings.ContainsAny(*name, "\r\n") {
+			return Result{}, Usage("--name is required: one section heading")
+		}
+		if *bodyFile == "" {
+			return Result{}, Usage("--body-file is required")
+		}
+		root, err := backlogScope(c)
+		if err != nil {
+			return Result{}, err
+		}
+		raw, err := readBodyInput(c, "body-file", *bodyFile, ExitResolution)
+		if err != nil {
+			return Result{}, err
+		}
+		text := decodeText(raw)
+		if pystr.Strip(text) == "" {
+			return Result{}, Usage("empty section body")
+		}
+		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
+			ed, ok := be.(backlog.SectionEditor)
+			if !ok {
+				return Result{}, Refused("item section set edits an issue body; in file mode edit the item's detail file under .rota/ directly")
+			}
+			return withItem(be, args[0], func(id, typ string) (Result, error) {
+				changed, err := ed.SetSection(args[0], *name, text)
+				if err != nil {
+					return Result{}, err
+				}
+				return Result{Data: jsonObj("id", id, "type", typ, "section", *name, "changed", changed),
+					Text: fmt.Sprintf("%s section %s", id, *name)}, nil
+			})
+		})
+	}
 }
 
 // ---- item complete / reopen -----------------------------------------------

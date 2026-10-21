@@ -130,3 +130,18 @@ func TestEntry(t *testing.T) {
 		t.Errorf("Entry empty = %q", got)
 	}
 }
+
+func TestSetSection(t *testing.T) {
+	for _, c := range []struct{ name, text, section, content, want string }{
+		{"append", "intro\n", "acceptance", "- [ ] AC-1: x\n", "intro\n\n## Acceptance\n\n- [ ] AC-1: x\n"},
+		{"append to empty", "", "Files", "- a", "## Files\n\n- a\n"},
+		{"replace middle", "a\n\n## Acceptance\n\nold\n\n## Pointers\n\n- p\n", "acceptance", "new", "a\n\n## Acceptance\n\nnew\n\n## Pointers\n\n- p\n"},
+		{"replace last keeps heading case", "a\n\n### ACCEPTANCE\n\nold\n", "Acceptance", "new\n", "a\n\n### ACCEPTANCE\n\nnew\n"},
+		{"first of two", "## X\n\n1\n\n## X\n\n2\n", "x", "n", "## X\n\nn\n\n## X\n\n2\n"},
+		{"name with regexp chars", "## a.b\n\nold\n", "a.b", "n", "## a.b\n\nn\n"},
+	} {
+		if got := SetSection(c.text, c.section, c.content); got != c.want {
+			t.Errorf("%s:\n got %q\nwant %q", c.name, got, c.want)
+		}
+	}
+}
