@@ -2,6 +2,7 @@ package round
 
 import (
 	"context"
+	"fmt"
 	"slices"
 
 	"github.com/l4ci/rota/internal/harness"
@@ -29,6 +30,22 @@ func SlotAccount(s *worker.Slot) (kind, account string) {
 		return h.Kind(), s.HomeAccount()
 	}
 	return "", s.Account()
+}
+
+// SlotLoginProblem says why a slot's account cannot start a session: its
+// config dir has no usable Claude login (worker.CredentialsProblem). "" when it
+// has one, and for a slot with no config dir or on a harness without a usage
+// meter (codex), which this check does not cover.
+func SlotLoginProblem(s *worker.Slot) string {
+	if s == nil || s.ConfigDir() == "" || !harness.Resolve(s.Kind()).UsageMeter() {
+		return ""
+	}
+	return worker.CredentialsProblem(worker.ExpandConfigDir(s.ConfigDir()))
+}
+
+// loginHint names the two commands that repair a slot whose account has no login.
+func loginHint(s *worker.Slot) string {
+	return "rota worker account assign " + s.Name() + " <account> moves it to another account, or CLAUDE_CONFIG_DIR=" + s.ConfigDir() + " claude /login logs this one in again"
 }
 
 // Members splits round.roster into the round's slots. Active is the first n
@@ -99,11 +116,12 @@ func IdleSlot(reg worker.Registry, roster []string, kind, account string) (strin
 // the pre-chosen slots first, then holders of the issue (resume, any roster
 // slot, a draining one included), then the round's active slots that are
 // idle or whose PR can be queued: only they take new work (Members). A slot
-// is never listed twice.
-func (e Env) pickSlots(ctx context.Context, reg worker.Registry, set roundcfg.Settings, held string, n int, pre ...*worker.Slot) []*worker.Slot {
+// is never listed twice. A new-work slot whose account has no login
+// (SlotLoginProblem) is not picked: skipped names each with its problem, for
+// the caller's warning.
+func (e Env) pickSlots(ctx context.Context, reg worker.Registry, set roundcfg.Settings, held string, n int, pre ...*worker.Slot) (out []*worker.Slot, skipped []string) {
 	roster := set.Roster
 	active, _ := Members(reg, set)
-	var out []*worker.Slot
 	add := func(s *worker.Slot) {
 		if s != nil && len(out) < n && !slices.ContainsFunc(out, func(p *worker.Slot) bool { return p.Name() == s.Name() }) {
 			out = append(out, s)
@@ -117,8 +135,15 @@ func (e Env) pickSlots(ctx context.Context, reg worker.Registry, set roundcfg.Se
 			add(s)
 		}
 	}
+	usable := func(s *worker.Slot) bool {
+		if why := SlotLoginProblem(s); why != "" {
+			skipped = append(skipped, fmt.Sprintf("%s (%s in %s)", s.Name(), why, s.ConfigDir()))
+			return false
+		}
+		return true
+	}
 	for _, name := range active {
-		if s := reg.Slot(name); SlotIdle(s) {
+		if s := reg.Slot(name); SlotIdle(s) && len(out) < n && usable(s) {
 			add(s)
 		}
 	}
@@ -127,12 +152,12 @@ func (e Env) pickSlots(ctx context.Context, reg worker.Registry, set roundcfg.Se
 			break
 		}
 		if s := reg.Slot(name); s != nil {
-			if ok, _ := e.parkable(ctx, s); ok {
+			if ok, _ := e.parkable(ctx, s); ok && usable(s) {
 				add(s)
 			}
 		}
 	}
-	return out
+	return out, skipped
 }
 
 // checkActive refuses new work for a roster slot past the round's slot count:
