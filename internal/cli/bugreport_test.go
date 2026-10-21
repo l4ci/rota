@@ -206,14 +206,26 @@ func recordingDeps() *Deps {
 	return d
 }
 
+// chdirForTest enters dir and restores the old directory when the test ends, even on t.Fatalf.
+// t.Chdir needs go 1.24; go.mod is at 1.22.
+func chdirForTest(t *testing.T, dir string) {
+	t.Helper()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(wd) })
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestInternalErrorsAndPanicsAreRecorded(t *testing.T) {
 	for _, verb := range []string{"plain", "panic"} {
 		dir := trProject(t, "{}")
-		wd, _ := os.Getwd()
-		os.Chdir(dir)
+		chdirForTest(t, dir)
 		var so, se bytes.Buffer
 		code := run(testTree(), recordingDeps(), []string{"fail", verb}, strings.NewReader(""), &so, &se)
-		os.Chdir(wd)
 		if code != 70 {
 			t.Fatalf("%s: exit %d", verb, code)
 		}
@@ -227,8 +239,7 @@ func TestInternalErrorsAndPanicsAreRecorded(t *testing.T) {
 
 func TestRecordedArgsDropGlobalFlags(t *testing.T) {
 	dir := trProject(t, "{}")
-	wd, _ := os.Getwd()
-	defer os.Chdir(wd)
+	chdirForTest(t, ".") // -C changes the process directory; restore it
 	var so, se bytes.Buffer
 	code := run(testTree(), recordingDeps(), []string{"--json", "-C", dir, "fail", "plain", "--json", "--cwd", dir}, strings.NewReader(""), &so, &se)
 	if code != 70 {
@@ -246,9 +257,7 @@ func reflectArgs(got []string, want ...string) bool {
 
 func TestOtherExitCodesAreNotRecorded(t *testing.T) {
 	dir := trProject(t, "{}")
-	wd, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(wd)
+	chdirForTest(t, dir)
 	var so, se bytes.Buffer
 	for _, verb := range []string{"refused", "lock", "leak"} {
 		run(testTree(), recordingDeps(), []string{"fail", verb}, strings.NewReader(""), &so, &se)

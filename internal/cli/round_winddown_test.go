@@ -84,13 +84,11 @@ func TestWindDownOffersBugreports(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		old, _ := os.Getwd()
-		os.Chdir(dir)
+		chdirForTest(t, dir)
 		d := testDeps()
 		d.LeaseEnv = func() roundlease.Env { return le }
 		var so, se strings.Builder
 		code := mainWith(d, []string{"round", "wind-down", "--no-verify", "--holder-pid", strconv.Itoa(os.Getpid())}, strings.NewReader(""), &so, &se)
-		os.Chdir(old)
 		if code != 0 {
 			t.Fatalf("%d records: exit %d\n%s%s", records, code, so.String(), se.String())
 		}
