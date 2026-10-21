@@ -250,12 +250,13 @@ func (s Store) RenameTopic(scope, from, to, title string) (RenameResult, error) 
 	if err != nil {
 		return RenameResult{}, err
 	}
-	// Buffered hits are keyed by the old names: fold them before the re-key.
-	if _, err := s.FoldHits(scope); err != nil {
-		return RenameResult{}, err
-	}
 	var res RenameResult
 	err = lockFiles([]string{km}, func() (err error) {
+		// Buffered hits are keyed by the old names: fold them under the lock,
+		// right before the re-key, so none lands in the gap between the two.
+		if _, err := s.FoldHits(scope); err != nil {
+			return err
+		}
 		res, err = s.renameLocked(km, sidecar, from, to, title, mode)
 		return err
 	})
