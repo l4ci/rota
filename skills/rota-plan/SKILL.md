@@ -71,7 +71,7 @@ Rules:
 
 **Critic (level 4, or level 3 when the item has a `decision` comment).** When the planning dial picked the adversarial pass or the item has at least one `decision` comment, follow [`references/plan-critic.md`](references/plan-critic.md): dispatch a fresh `standard` subagent (at level 4 with `plan.criticHarness` set, a read-only run on that harness, falling back to the subagent with one printed line) that sees only the item and the proposal, then fold accepted findings into the plan and list rejected ones with a reason under `## Critic findings` (headed by the harness that produced them), before asking. Otherwise skip this; the flow is unchanged.
 
-Ask once: *"Confirm this plan? (yes / changes)"*. *yes* writes it; *changes* means apply the edits and write; don't loop. Silence is not approval. If the redirect moves the Goal itself, re-propose.
+Ask once: *"Confirm this plan? (yes / changes)"*. *yes* writes it; *changes* means apply the edits and write; don't loop. Silence is not approval. If the redirect moves the Goal itself, re-propose. Under `autonomy.level: roundtrip` or `auto` ([`references/autonomy.md`](references/autonomy.md)) do not ask: approve the plan yourself (a process call; the plan stays on the item for review), report it in one line, and write it. A product-behavior, public-name, breaking-change or scope-cut question still stops with options and your recommendation. `off` asks as above.
 
 ## Step 4 — Write
 
@@ -95,7 +95,7 @@ Plan written: #42 Auth foundation
 Next: /rota-work #42 (or --preview to peek first).
 ```
 
-Offer `/rota-work` in one line.
+Under `autonomy.level: off`, offer `/rota-work` in one line. Under `roundtrip` or `auto`, dispatch `/rota-work` on the item by reading and following its instructions immediately: no prompt, no confirmation, no "want me to" question.
 
 ## Key principles
 

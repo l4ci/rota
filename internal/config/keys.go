@@ -91,7 +91,7 @@ var Keys = []Key{
 	k("issues.autoCreateLabel", true, false, TypeBool, "Create a tracker label the first time something asks for it. When off, adding a missing label fails."),
 	k("issues.homeRepo", "", false, TypeString, "Umbrella mode with the issues backend only: the registered sub-repo that holds milestone tracking issues. Empty means the first registered sub-repo."),
 	k("release.checklistPath", ".rota/RELEASE.md", false, TypePath, "Project's release checklist, whose open items /rota-release walks before it tags."),
-	k("release.confirmLargePushCommits", num("10"), false, TypeInt, "Unpushed commits /rota-release pushes without asking under autonomy.level auto. At or above this it asks once."),
+	k("release.confirmLargePushCommits", num("10"), false, TypeInt, "Unpushed commits /rota-release pushes without asking under autonomy.level roundtrip or auto. At or above this it asks once."),
 	k("release.nudgeAfterCommits", num("10"), false, TypeInt, "Commits since the last release tag before rota release pending suggests /rota-release."),
 	k("release.nudgeAfterDays", num("14"), false, TypeInt, "Days since the last release tag before rota release pending suggests /rota-release."),
 	// Test tiers (replace refactor.verifyCommands): not in CONFIG_KEYS.

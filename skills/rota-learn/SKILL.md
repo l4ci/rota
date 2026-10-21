@@ -107,7 +107,7 @@ Captured 3 learnings into .rota/KNOWLEDGE.md:
 Updated the topic index in <AGENTS.md|CLAUDE.md> — /rota-work will consult these on relevant tasks.
 ```
 
-**Topic-size handling.** Run `rota knowledge stats --json`. When any topic in `data.topics` has `bullets >= 25` OR `bytes >= 10240`, read [`topic-size.md`](topic-size.md) (nudge or auto-split by `autonomy.level`).
+**Topic-size handling.** Run `rota knowledge stats --json`. When any topic in `data.topics` has `bullets >= 25` OR `bytes >= 10240`, read [`topic-size.md`](topic-size.md) (nudge or auto-split by `autonomy.level`, see [`references/autonomy.md`](references/autonomy.md)).
 
 If verification ran and passed, add a middle line: `Opus verification: PASS — all entries durable, sharp, correctly categorized.` If it returned `PASS_WITH_NOTES`, replace that line with a one-liner naming what was adjusted. If it failed, say so and stop.
 

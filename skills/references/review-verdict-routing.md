@@ -25,6 +25,8 @@
 - **`surface`** (an advisory gate: QA under `qa.gate: "advisory"`, or any QA `INFRA-FAIL`): surface the findings and continue. `data.advisory` is true.
 - **`stop`** (FAIL): stop unconditionally. Surface the findings; never auto-route to ship/merge.
 
+Under `autonomy.level: roundtrip` or `auto` ([`references/autonomy.md`](autonomy.md)), a CONCERNS verdict with a clear recommendation routes via `/rota-work` as a fix list without asking, then reruns the calling skill. `off` asks.
+
 ## Why "Ship anyway" never auto-picks
 
 *"Address via /rota-work"* is the safe routing: it goes back through review on the next ship attempt and surfaces repeat concerns. *"Ship anyway"* is a user-volition gate: it overrides surfaced concerns and produces a public artifact (merge or PR) on the user's authority. It is an **acceptance-of-risk** answer, never auto-picked at any autonomy level. If a project genuinely wants concerns ignored, set `ship.review` to `false`.

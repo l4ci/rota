@@ -1,13 +1,13 @@
 # Checklist file absent (Step 2)
 
-**File absent.** `autonomy.level` `"auto"`: skip silently; never interrupt an unattended run to scaffold. `"off"`: header `"Checklist"`, *"No `<release.checklistPath>` found. Scaffold a starter checklist now, or continue without?"*, options `Scaffold starter (Recommended)` (write the template, let the user edit, re-read, walk it) / `Continue without` (summary says *"no project checklist"*) / `Abort`.
+**File absent.** `autonomy.level` (see [`references/autonomy.md`](references/autonomy.md)) `"roundtrip"` or `"auto"`: skip silently; never interrupt an unattended run to scaffold. `"off"`: header `"Checklist"`, *"No `<release.checklistPath>` found. Scaffold a starter checklist now, or continue without?"*, options `Scaffold starter (Recommended)` (write the template, let the user edit, re-read, walk it) / `Continue without` (summary says *"no project checklist"*) / `Abort`.
 
 Starter template:
 
 ```markdown
 # Release Checklist
 
-Each `- [ ]` line is a gate `/rota-release` walks before bumping the version. `- [x]` items are ignored. Append `(manual)` to an item that must ask even in `autonomy.level: auto`.
+Each `- [ ]` line is a gate `/rota-release` walks before bumping the version. `- [x]` items are ignored. Append `(manual)` to an item that must ask even under `autonomy.level: roundtrip` or `auto`.
 
 - [ ] Sibling version-bearing files are in sync (e.g., `.claude-plugin/marketplace.json`, lockfiles, docs version refs)
 - [ ] CI is green on the release branch (the merge gate already ran the full suite on the release commit: confirm it, don't re-run smoke or `go test`)

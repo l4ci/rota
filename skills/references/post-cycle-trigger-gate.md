@@ -22,9 +22,9 @@ Every post-cycle nudge step runs the same sequence. The call site supplies the *
 
 1. **Config flag** *(only when the site names one, e.g. `docs.afterWork`)*: read it from `.rota/config.json` (default `false`). `false` → skip the step entirely. The flag is opt-in, set via `rota config set` or the owning skill's first-run / manual-toggle flow.
 2. **Trigger**: apply *The condition* above, subject to *When the gate does NOT fire*. When the site names a **trigger override** (a site's own counts), apply that instead of the default condition; the don't-repeat exclusion applies to every trigger, override or not. Not triggered → skip silently.
-3. **Branch on `autonomy.level`:**
+3. **Branch on `autonomy.level`** (see [`references/autonomy.md`](autonomy.md)):
    - `"off"` → emit the site's **nudge line**, placed where the site says (standalone message, or appended to the cycle's final report).
-   - `"auto"` → dispatch the site's **target skill** by reading and following its instructions immediately: no prompt, no confirmation, no "want me to" question. Each site restates this inline beside its target, per the inline-at-dispatch-point rule in `references/authoring-conventions.md`. Pass a **brief** naming the cycle's resolved item IDs and touched files (plus anything else the site names).
+   - `"roundtrip"` or `"auto"` → dispatch the site's **target skill** by reading and following its instructions immediately: no prompt, no confirmation, no "want me to" question. Each site restates this inline beside its target, per the inline-at-dispatch-point rule in `references/authoring-conventions.md`. Pass a **brief** naming the cycle's resolved item IDs and touched files (plus anything else the site names).
 
 ### Inline variant — `/rota-ship` Step 8.6
 

@@ -52,6 +52,8 @@ Self-review before showing: no placeholders, no contradictions (pick matches Des
 
 Ask once: **Approve and hand off to `/rota-plan`**, **Approve, no plan yet**, or **Revise** (apply redlines, show again). Silence is not approval.
 
+Under `autonomy.level: roundtrip` or `auto` ([`references/autonomy.md`](references/autonomy.md)) do not ask: approve the design yourself (a process call; the artifact stays on the item for review), report it in one line, and hand off to `/rota-plan`. A product-behavior, public-name, breaking-change or scope-cut question still stops with options and your recommendation. `off` asks as above.
+
 ## Step 5 — Store
 
 ```bash
@@ -61,7 +63,7 @@ rota design put <ID> --body-file <scratch-file>            # issue backend: publ
 
 On the issue backend the design is a note on the item's issue (`references/issue-mode.md`). On the file backend it is `.rota/designs/<ID>.md`: edit the stub's sections, keep the frontmatter. Post each answer that changed direction with `rota item comment add <ID> --kind decision --body-file -`.
 
-Report two lines (artifact, approaches, open questions). On hand-off say *"Run `/rota-plan <ID>` next."*
+Report two lines (artifact, approaches, open questions). On hand-off say *"Run `/rota-plan <ID>` next."* Under `roundtrip` or `auto`, instead dispatch `/rota-plan <ID>` by reading and following its instructions immediately: no prompt, no confirmation, no "want me to" question.
 
 ## Key principles
 

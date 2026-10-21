@@ -18,7 +18,7 @@ From `.rota/config.json` (all keys optional):
 | `release.tagPrefix` | `v` | Set to `""` for unprefixed tags |
 | `release.draft` | `false` | Pass `--draft` to `gh`/`glab` |
 | `release.requireCleanTree` | `true` | Set `false` to allow dirty releases (testing only) |
-| `release.confirmLargePushCommits` | `10` | Threshold (commits) above which auto autonomy still confirms before pushing unpushed HEAD |
+| `release.confirmLargePushCommits` | `10` | Threshold (commits) above which `roundtrip` and `auto` still confirm before pushing unpushed HEAD |
 
 Copy this checklist and track your progress:
 
@@ -55,12 +55,12 @@ Stop with a one-liner on any failure.
 
 Per-project release steps live in `release.checklistPath`; the skill hardcodes none. Skip in `--dry-run`: print the parsed items and `DRY RUN — checklist walk skipped.`
 
-**File absent.** Read [`checklist-scaffold.md`](checklist-scaffold.md) and follow it (`"auto"` skips silently, `"off"` offers a starter scaffold).
+**File absent.** Read [`checklist-scaffold.md`](checklist-scaffold.md) and follow it (`"roundtrip"` and `"auto"` skip silently, `"off"` offers a starter scaffold; levels in [`references/autonomy.md`](references/autonomy.md)).
 
 **File present.** Every line matching `^\s*-\s+\[\s*\]\s+(.+)$` is a gate, in file order; `- [x]` lines are skipped. Zero gates: say *"Checklist has no open items — continuing."* Per gate:
 
 - `"off"`: ask: header `"Checklist"`, *"Checklist item: \<text\>. Done?"*, options `Yes, continue (Recommended)` / `Fix it now and continue` (pause, re-ask the same item) / `Skip this item` (record `skipped: <text>`) / `Abort release` (*"Release aborted at checklist item: \<text\>. Nothing written."*).
-- `"auto"`: auto-acknowledge items not ending in `(manual)`; ask the `"off"` question for items that do, so sensitive items stay confirmed in unattended runs.
+- `"roundtrip"` or `"auto"`: auto-acknowledge items not ending in `(manual)`; ask the `"off"` question for items that do, so sensitive items stay confirmed in unattended runs.
 
 ## Step 3 — Milestone Gate (issue mode)
 
