@@ -387,8 +387,21 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 	}
 
+	// A draining slot takes nothing new, so its login is not read. Slots on
+	// one account share a config dir, so each dir is read once per call.
+	loginByDir := map[string]string{}
 	for _, r := range rows {
-		r.NoLogin = SlotLoginProblem(reg.Slot(r.Name))
+		s := reg.Slot(r.Name)
+		if r.Draining || s == nil {
+			continue
+		}
+		key := s.Kind() + "\x00" + s.ConfigDir()
+		why, seen := loginByDir[key]
+		if !seen {
+			why = SlotLoginProblem(s)
+			loginByDir[key] = why
+		}
+		r.NoLogin = why
 	}
 
 	agents, hostOK := e.readHost(ctx, rep)
