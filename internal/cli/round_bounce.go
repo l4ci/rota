@@ -9,6 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -35,6 +36,15 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
 		issue := worker.NormID(args[0])
+		if slotName, lead := bundleHolder(root, issue); lead != "" {
+			d := jsonx.NewObject()
+			d.Set("issue", issue)
+			d.Set("blockedBy", round.BlockBundle)
+			d.Set("lead", lead)
+			d.Set("changed", false)
+			return Result{Data: d}, &Error{Exit: ExitRefused, Message: fmt.Sprintf("%s is bundled under %s (slot %s): a bundle bounces once, on its lead", tracker.RefOf(issue), tracker.RefOf(lead), slotName),
+				Hint: fmt.Sprintf("run `rota round bounce %s`", lead)}
+		}
 		if !*force {
 			if refused := noBlockingFindings(c, root, issue, *slot, *head); refused != nil {
 				d := jsonx.NewObject()
@@ -59,6 +69,19 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: d, Text: fmt.Sprintf("bounce %d of %s for %s", n, maxText(set.MaxBounces), issue)}, nil
 	}
+}
+
+// bundleHolder is the slot (or the queued PR's origin slot) and the lead of the
+// bundle that holds issue as a member; lead is "" when issue is no member.
+func bundleHolder(root, issue string) (slot, lead string) {
+	s, q := worker.LoadRegistryTolerant(root).BundleHolder(issue)
+	switch {
+	case s != nil:
+		return s.Name(), s.HeldID()
+	case q != nil:
+		return q.From, q.Issue
+	}
+	return "", ""
 }
 
 // noBlockingFindings is the refusal of a bounce when the verdicts recorded at
