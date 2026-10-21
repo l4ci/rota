@@ -67,8 +67,8 @@ func writeErrKind(err error) string {
 		return "tracker:" + strconv.Itoa(te.Code)
 	case errors.Is(err, ErrProofMissing):
 		return "proofmissing"
-	case errors.Is(err, ErrNotFound) && strings.Contains(err.Error(), "not found on the tracker"):
-		// Python raises TrackerError(1) for an unknown milestone; Go wraps ErrNotFound (exit 3 either way).
+	case errors.Is(err, ErrInvalid) && strings.Contains(err.Error(), "not found on the tracker"):
+		// Python raises TrackerError(1) for an unknown milestone; Go wraps ErrInvalid (a usage error, deliberately stricter).
 		return "tracker:1"
 	case errors.Is(err, ErrNotFound), errors.Is(err, ErrClosed):
 		// Python raises LookupError for a closed item too; Go refuses it (ErrClosed).

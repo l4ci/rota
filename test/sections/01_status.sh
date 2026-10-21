@@ -126,6 +126,8 @@ rc=0; "$ROTA_BIN" item complete B01 --commit "$HASH" --reason bogus 2>/dev/null 
 pass "item complete --reason/--note renders, reads back via item field get and summary"
 
 echo "item field set"
+mkdir -p .rota/milestones
+for m in M01 M07; do printf -- '---\nid: %s\ntitle: Milestone %s\nstatus: planned\n---\n' "$m" "$m" > ".rota/milestones/$m.md"; done
 # F01 is still an open feature bullet at this point (B01 was completed above).
 "$ROTA_BIN" item field set F01 --name milestone --value M01 >/dev/null
 grep -q "\[F01\].*Milestone: M01" .rota/BACKLOG.md || fail "F01 milestone not appended"

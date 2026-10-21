@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	gitx "github.com/l4ci/rota/internal/git"
+	ms "github.com/l4ci/rota/internal/milestone"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -239,6 +240,13 @@ func (f *File) Create(in CreateInput) (CreateResult, error) {
 	if err := f.requireBacklog(); err != nil {
 		return CreateResult{}, err
 	}
+	for _, fv := range fields {
+		if fv.Name == "Milestone" {
+			if err := f.requireMilestone(fv.Value); err != nil {
+				return CreateResult{}, err
+			}
+		}
+	}
 	id, err := f.NextID(in.Kind)
 	if err != nil {
 		return CreateResult{}, err
@@ -280,6 +288,25 @@ func (f *File) Create(in CreateInput) (CreateResult, error) {
 	return res, nil
 }
 
+// requireMilestone is ErrInvalid unless .rota/milestones/ holds every milestone
+// in value (a file-mode bullet may list several, comma-separated).
+func (f *File) requireMilestone(value string) error {
+	list, err := ms.List(f.Root)
+	if err != nil {
+		return err
+	}
+	known := map[string]bool{}
+	for _, e := range list {
+		known[e.ID] = true
+	}
+	for _, id := range strings.Split(value, ",") {
+		if id = pystr.Strip(id); !known[id] {
+			return errf(ErrInvalid, "unknown milestone %s; list milestones with: rota milestone list", id)
+		}
+	}
+	return nil
+}
+
 func sectionName(kind string) string { return sectionForDir(kind) }
 
 // SetField sets, replaces or clears a trailing field on the open bullet of
@@ -307,6 +334,11 @@ func (f *File) SetField(ref, field, value string) (bool, error) {
 			return errf(ErrNotFound, "[%s] has no open bullet in .rota/BACKLOG.md (unknown, completed, or archived)", ref)
 		}
 		raw := content[m[0]:m[1]]
+		if field == "milestone" && pystr.Strip(value) != "" {
+			if err := f.requireMilestone(pystr.Strip(value)); err != nil {
+				return err
+			}
+		}
 		if field == "detail" && pystr.Strip(value) != "" {
 			rel := strings.Trim(value, "` \t")
 			if rel == "" {

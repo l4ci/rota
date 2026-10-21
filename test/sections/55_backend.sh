@@ -46,6 +46,8 @@ mkdir -p "$TMP_GB/.rota"
 MD
   printf '# Archive\n\n- ~~**[B05] [P2] Archived.** old. Related: [B01]~~ Done 2025-12-01 [`1111111`] (blocked: waiting)\n' > .rota/ARCHIVE.md
   echo '{"active":[{"items":["B02"],"branch":"fix/b02","startedAt":"2026-01-01T00:00:00Z"}]}' > .rota/status.json
+  mkdir -p .rota/milestones
+  for m in M01 M02 M03; do printf -- '---\nid: %s\ntitle: Milestone %s\nstatus: planned\n---\n' "$m" "$m" > ".rota/milestones/$m.md"; done
   git add -A && git commit -qm seed
   cp .rota/BACKLOG.md "$TMP_GB/orig.md"
 
@@ -76,6 +78,8 @@ MD
   SFV F02 milestone "" >/dev/null
   eq "set-field clear" '- **[F02] [Minor] Small feature.** No fields.' "$(grep -F '[F02]' .rota/BACKLOG.md)"
   cmp -s .rota/BACKLOG.md "$TMP_GB/orig.md" || fail "set-field round trip changed BACKLOG.md"
+  eq "set-field unknown milestone" "2" "$(rcof hvj item field set F02 --name milestone --value M99)"
+  eq "create unknown milestone" "2" "$(rcof hvj item create --kind bugs --title Nope --milestone M99)"
   eq "set-field unknown" "3" "$(rcof hvj item field set B99 --name milestone --value M1)"
   eq "set-field completed" "4" "$(rcof hvj item field set B03 --name milestone --value M1)"
   eq "set-field archived" "4" "$(rcof hvj item field set B05 --name milestone --value M1)"
@@ -369,6 +373,8 @@ mkdir -p "$TMP_IC/new/.rota"
   git init -q && git config user.email t@t && git config user.name t
   printf '# Backlog\n\n## Bugs\n\n- **[B01] [P1] Old bug.** d. Since: abc1234\n\n## Features\n\n## Tasks\n\n## Completed\n' > .rota/BACKLOG.md
   echo '{"bugs": 1}' > .rota/counters.json
+  mkdir -p .rota/milestones
+  printf -- '---\nid: M01\ntitle: Milestone M01\nstatus: planned\n---\n' > .rota/milestones/M01.md
   printf 'Body for {ID}\n\nsecond {ID} line, no trailing newline' > "$TMP_IC/body.md"
   git add -A && git commit -q -m seed
   head="$(git rev-parse --short HEAD)"
@@ -467,7 +473,7 @@ print(",".join(sorted(v)) if isinstance(v, list) else (v if v is not None else "
       TC api 'projects/:id/milestones' -f "title=M07 — Issue backend"
     fi
 
-    eq "missing milestone" "3" "$(rcof hvj item create --kind bugs --title Nope --milestone M99)"
+    eq "missing milestone" "2" "$(rcof hvj item create --kind bugs --title Nope --milestone M99)"
     [ "$(rcof hvj item create --kind bugs --title Nope --milestone "M07, M08")" != 0 ] || fail "$prov item create: two milestones should fail"
 
     printf 'Detail for {ID}.\n' > "$P/body.md"
@@ -515,7 +521,7 @@ print(",".join(sorted(v)) if isinstance(v, list) else (v if v is not None else "
     SF T3 milestone "" >/dev/null
     eq "clear milestone" "-" "$(IV 3 milestone)"
     e3="$(EDITS)"; SF T3 milestone "" >/dev/null; eq "clear milestone no-op" "$e3" "$(EDITS)"
-    eq "set missing milestone" "3" "$(rcof hvj item field set T3 --name milestone --value M99)"
+    eq "set missing milestone" "2" "$(rcof hvj item field set T3 --name milestone --value M99)"
     eq "detail not settable" "4" "$(rcof hvj item field set T3 --name detail --value x)"
     eq "unknown item" "3" "$(rcof hvj item field set T99 --name related --value x)"
     eq "type mismatch" "3" "$(rcof hvj item field set B3 --name related --value x)"
