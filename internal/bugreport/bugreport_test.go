@@ -261,3 +261,34 @@ func TestAddRedactsSpaceSeparatedFlagArgs(t *testing.T) {
 		t.Errorf("draft keeps the value:\n%s", body)
 	}
 }
+
+func TestRedactMatchesNamesOnBoundaries(t *testing.T) {
+	env := Env{Repo: "shop", Remote: "git@gitlab.acme.internal:acme/shop.git"}
+	for _, c := range []struct{ name, in, want string }{
+		{"substring of a word", "shopping cart and acmetools", "shopping cart and acmetools"},
+		{"repo as a word", "repo shop is red", "repo <repo> is red"},
+		{"repo in a path", "/src/shop/main.go and shop-api", "/src/<repo>/main.go and <repo>-api"},
+		{"owner on a boundary", "owner acme, acme/x", "owner <owner>, <owner>/x"},
+		{"word then repo", "bookshop shop", "bookshop <repo>"},
+	} {
+		if got := Redact(c.in, env); got != c.want {
+			t.Errorf("%s: Redact(%q) = %q, want %q", c.name, c.in, got, c.want)
+		}
+	}
+}
+
+func TestRedactFlagValuesOnlyForSecretFlags(t *testing.T) {
+	keep := "rota x --author dana --keyword foo --authority bar"
+	if got := Redact(keep, Env{}); got != keep {
+		t.Errorf("non-secret flags changed: %q", got)
+	}
+	for _, in := range []string{"rota x --auth plainvalue1", "rota x --auth-token plainvalue1", "rota x --authorization plainvalue1", "rota x --ssh-key plainvalue1", "rota x -key plainvalue1", "rota x --sshkey plainvalue1", "rota x --privkey plainvalue1", "rota x --authkey plainvalue1", "rota x --oauth plainvalue1", "rota x --key-file plainvalue1"} {
+		if got := Redact(in, Env{}); strings.Contains(got, "plainvalue1") {
+			t.Errorf("secret flag kept value: %q", got)
+		}
+	}
+	out := redactArgs([]string{"--author", "dana", "--auth", "plainvalue2", "--keyword", "foo"}, Env{})
+	if out[1] != "dana" || out[3] != "<redacted>" || out[5] != "foo" {
+		t.Errorf("redactArgs = %q", out)
+	}
+}
