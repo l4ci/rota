@@ -13,6 +13,11 @@
 # files, py_compile on the python ones, and test/runner_leak_test.py.
 # A change under test/sections/, test/lib.sh or test/runner.sh also runs section 71
 # (the piped grep -q lint), which scans all of them.
+# A non-test .go file (or embed asset) in a package also runs every package that
+# imports it, transitively (go list .Deps), so a change to internal/fsio runs the
+# dependents and the internal/cli goldens (#1303). A path-to-check table follows
+# the loop: internal/config runs TestFrozenConfig, internal/doctor smoke 83,
+# internal/host and internal/worker/dispatch.go smoke 51.
 # FAST_DRY_RUN=1 prints the selected checks as "plan: <check>" and runs nothing;
 # test/sections/120_fast_mapping.sh asserts the mapping through it.
 set -euo pipefail
@@ -29,12 +34,30 @@ docs=0
 infra=0
 pipe_lint=0
 pkgs=()
+src_pkgs=()
 sections=()
+frozen=0
 
 add_pkg() {
   local p="$1" q
   for q in ${pkgs[@]+"${pkgs[@]}"}; do [ "$q" = "$p" ] && return 0; done
   pkgs+=("$p")
+}
+
+# add_section <section file>: queue a smoke section once.
+add_section() {
+  local s q
+  s="test/sections/$1"
+  for q in ${sections[@]+"${sections[@]}"}; do [ "$q" = "$s" ] && return 0; done
+  sections+=("$s")
+}
+
+# add_src_pkg <dir>: a source change; remember the package so its dependents run.
+add_src_pkg() {
+  local p="$1"
+  [ "$p" = "." ] || p="./$p"
+  add_pkg "$p"
+  src_pkgs+=("$p")
 }
 
 for f in "$@"; do
@@ -43,7 +66,10 @@ for f in "$@"; do
     *.go)
       d="$(dirname "$f")"
       [ -d "$d" ] || continue
-      if [ "$d" = "." ]; then add_pkg "."; else add_pkg "./$d"; fi
+      case "$f" in
+        *_test.go) if [ "$d" = "." ]; then add_pkg "."; else add_pkg "./$d"; fi ;;
+        *) add_src_pkg "$d" ;;
+      esac
       ;;
   esac
   case "$f" in
@@ -57,9 +83,16 @@ for f in "$@"; do
       d="$(dirname "$f")"
       if [ -d "$d" ] && compgen -G "$d/*.go" >/dev/null &&
          grep -l '^//go:embed' "$d"/*.go >/dev/null 2>&1; then
-        if [ "$d" = "." ]; then add_pkg "."; else add_pkg "./$d"; fi
+        add_src_pkg "$d"
       fi
       ;;
+  esac
+  case "$f" in
+    internal/config/*) frozen=1 ;;
+  esac
+  case "$f" in
+    internal/doctor/*) add_section 83_doctor.sh ;;
+    internal/host/*|internal/worker/dispatch.go) add_section 51_herdr_dispatch.sh ;;
   esac
   case "$f" in
     test/lib/*|test/fakes/*|test/e2e/*|test/runner.sh|test/lib.sh) infra=1 ;;
@@ -75,6 +108,18 @@ for f in "$@"; do
   esac
 done
 
+# Dependents of a changed source package: every package whose transitive imports
+# include it. rel() strips the module path so names match add_pkg's "./dir".
+if [ "${#src_pkgs[@]}" -gt 0 ]; then
+  mod="$(go list -m)"
+  while IFS= read -r dep; do
+    add_pkg "$dep"
+  done < <(go list -f '{{.ImportPath}} {{join .Deps " "}}' ./... | awk -v mod="$mod" -v list="${src_pkgs[*]}" '
+    function rel(p) { if (p == mod) return "."; sub("^" mod "/", "./", p); return p }
+    BEGIN { n = split(list, a, " "); for (i = 1; i <= n; i++) want[a[i]] = 1 }
+    { for (i = 2; i <= NF; i++) if (rel($i) in want) { print rel($1); break } }' | sort -u)
+fi
+
 # Section 71 lints every section, lib.sh and runner.sh for piped grep -q, so any
 # change under those paths runs it (#459) instead of leaving it to the gate.
 if [ "$pipe_lint" = 1 ]; then
@@ -89,6 +134,7 @@ if [ "${FAST_DRY_RUN:-}" = 1 ]; then
   for p in ${pkgs[@]+"${pkgs[@]}"}; do echo "plan: go $p"; done
   [ "$docs" = 1 ] && echo "plan: docs"
   [ "$infra" = 1 ] && echo "plan: infra"
+  [ "$frozen" = 1 ] && echo "plan: frozen-config"
   for s in ${sections[@]+"${sections[@]}"}; do echo "plan: section $s"; done
   exit 0
 fi
@@ -107,6 +153,11 @@ elif [ "${#pkgs[@]}" -gt 0 ]; then
   go vet "${pkgs[@]}"
   echo "fast: go test ${pkgs[*]}"
   go test "${pkgs[@]}"
+fi
+
+if [ "$frozen" = 1 ]; then
+  echo "fast: go test ./cmd/rota -run '^TestFrozenConfig\$'"
+  go test ./cmd/rota -run '^TestFrozenConfig$'
 fi
 
 if [ "$docs" = 1 ]; then

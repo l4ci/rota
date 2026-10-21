@@ -4,7 +4,10 @@ fast_plan() { FAST_DRY_RUN=1 bash "$TESTDIR/fast.sh" "$@"; }
 GOLD="internal/cli/testdata/golden/TestGlossaryWriteMatchGolden__alias_collision_refuses.json"
 
 OUT=$(fast_plan internal/knowledge/instructions.go)
-[ "$OUT" = "plan: go ./internal/knowledge" ] || fail "a .go file should select its package: $OUT"
+[ "$(head -1 <<<"$OUT")" = "plan: go ./internal/knowledge" ] || fail "a .go file should select its package first: $OUT"
+
+OUT=$(fast_plan internal/knowledge/instructions_test.go)
+[ "$OUT" = "plan: go ./internal/knowledge" ] || fail "a _test.go file should select only its package: $OUT"
 
 OUT=$(fast_plan "$GOLD")
 [ "$OUT" = "plan: go ./internal/cli" ] || fail "testdata should select its owning package: $OUT"
@@ -30,6 +33,29 @@ if grep -q "section" <<<"$OUT"; then fail "a file outside the lint paths must no
 
 OUT=$(fast_plan notes/unmapped.txt)
 [ -z "$OUT" ] || fail "an unmapped file should select nothing: $OUT"
+# #1303: shared packages pull in their dependents; config, doctor and host map to checks.
+OUT=$(fast_plan internal/fsio/fsio.go)
+for dep in ./internal/fsio ./internal/section ./internal/cli ./cmd/rota; do
+  grep -qx "plan: go $dep" <<<"$OUT" || fail "an internal/fsio change should run $dep: $OUT"
+done
+OUT=$(fast_plan internal/section/section.go)
+grep -qx "plan: go ./internal/acceptance" <<<"$OUT" || fail "an internal/section change should run its dependents: $OUT"
+
+OUT=$(fast_plan internal/config/keys.go)
+grep -qx "plan: frozen-config" <<<"$OUT" || fail "a config change should run TestFrozenConfig: $OUT"
+OUT=$(fast_plan internal/knowledge/instructions.go)
+if grep -q "frozen-config" <<<"$OUT"; then fail "a non-config change must not run TestFrozenConfig: $OUT"; fi
+
+OUT=$(fast_plan internal/doctor/doctor.go)
+grep -qx "plan: section test/sections/83_doctor.sh" <<<"$OUT" || fail "a doctor change should run section 83: $OUT"
+OUT=$(fast_plan internal/host/herdr.go)
+grep -qx "plan: section test/sections/51_herdr_dispatch.sh" <<<"$OUT" || fail "a host change should run section 51: $OUT"
+OUT=$(fast_plan internal/worker/dispatch.go)
+grep -qx "plan: section test/sections/51_herdr_dispatch.sh" <<<"$OUT" || fail "worker/dispatch.go should run section 51: $OUT"
+OUT=$(fast_plan internal/worker/other.go)
+if grep -q "section" <<<"$OUT"; then fail "other worker files must not run section 51: $OUT"; fi
+pass "fast.sh adds dependents of shared packages, the frozen config test and doctor/host smoke sections"
+
 pass "fast.sh selects package, testdata, embed and infra checks; unmapped files select none"
 
 # #672: the gofmt check CI runs fails the gate and the fast tier on an unformatted file.
