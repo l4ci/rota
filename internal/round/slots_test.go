@@ -1,6 +1,7 @@
 package round
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -127,14 +129,37 @@ func TestSlotLoginProblemExemptsCodex(t *testing.T) {
 		slot(root, "cy", "park/cy", func(o *jsonx.Object) { o.Set("kind", harness.Codex); o.Set("configDir", empty) }),
 	)
 	reg := worker.LoadRegistryTolerant(root)
-	if SlotLoginProblem(reg.Slot("ben")) == "" {
+	if (Env{}).SlotLoginProblem(reg.Slot("ben")) == "" {
 		t.Error("a claude slot with no credentials should have a login problem")
 	}
-	if why := SlotLoginProblem(reg.Slot("cy")); why != "" {
+	if why := (Env{}).SlotLoginProblem(reg.Slot("cy")); why != "" {
 		t.Errorf("codex slot: %q, want no login problem", why)
 	}
 	got, skipped := Env{}.pickSlots(bg, reg, roundcfg.Settings{Roster: []string{"cy"}}, "8", 1)
 	if len(got) != 1 || got[0].Name() != "cy" || len(skipped) != 0 {
 		t.Errorf("picked %v skipped %v, want cy picked", got, skipped)
+	}
+}
+
+// The login check reads through Env.Login, so a darwin Keychain entry makes a
+// slot with no credentials file usable, and a miss names the Keychain.
+func TestSlotLoginProblemReadsThroughEnvLogin(t *testing.T) {
+	dir := t.TempDir()
+	root := t.TempDir()
+	writeRegistry(t, root, slot(root, "ben", "park/ben", func(o *jsonx.Object) { o.Set("configDir", dir) }))
+	s := worker.LoadRegistryTolerant(root).Slot("ben")
+	keychain := func(blob string) worker.Credentials {
+		return worker.Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
+			if blob == "" {
+				return proc.Result{ExitCode: 44}, nil
+			}
+			return proc.Result{Stdout: blob + "\n"}, nil
+		}}
+	}
+	if why := (Env{Login: keychain(`{"claudeAiOauth":{"accessToken":"kc"}}`)}).SlotLoginProblem(s); why != "" {
+		t.Errorf("keychain entry: %q, want usable", why)
+	}
+	if why := (Env{Login: keychain("")}).SlotLoginProblem(s); !strings.Contains(why, "Keychain") {
+		t.Errorf("keychain miss: %q, want it to name the Keychain", why)
 	}
 }
