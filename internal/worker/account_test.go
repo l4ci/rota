@@ -458,3 +458,44 @@ func TestKeychainReadFailureIsNamedNotMissing(t *testing.T) {
 		t.Errorf("Problem = %q, must not claim a missing entry", got)
 	}
 }
+
+// Every account lacks a login: Pick fails, and the reason names each account
+// and its problem instead of leaving the caller to say "cooling down".
+func TestAccountNoPickReasonNamesLoginlessAccounts(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	empty := t.TempDir()
+	cfg := strings.ReplaceAll(acctConfig, `"/acct/`, `"~/acct/`)
+	dir := newProject(t, cfg)
+	acc := &Accounts{Env: Env{Getenv: func(string) string { return empty }}}
+	if _, ok := acc.Pick(bg, dir, nil); ok {
+		t.Fatal("Pick found an account without any login")
+	}
+	got := acc.NoPickReason(bg, dir, nil)
+	for _, want := range []string{"no login", "alpha", "no credentials file"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("NoPickReason = %q, want it to contain %q", got, want)
+		}
+	}
+	if strings.Contains(got, "cooling down") && !strings.Contains(got, "no login") {
+		t.Errorf("NoPickReason = %q mislabels the login problem", got)
+	}
+	if got := acc.NoPickReason(bg, dir, []string{"alpha", "beta", "gamma", "delta", "epsilon", "zeta"}); got != "" {
+		t.Errorf("every account excluded, NoPickReason = %q, want empty", got)
+	}
+}
+
+func TestAccountAssignAllLoginlessNamesLogin(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	empty := t.TempDir()
+	cfg := strings.ReplaceAll(acctConfig, `"/acct/`, `"~/acct/`)
+	b := newProject(t, cfg)
+	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
+	acc := &Accounts{Env: Env{Getenv: func(string) string { return empty }}}
+	_, _, err := acc.Assign(bg, b, "w1", "")
+	if err == nil {
+		t.Fatal("Assign with no login anywhere succeeded")
+	}
+	if msg := err.Error(); !strings.Contains(msg, "no login") || !strings.Contains(msg, "alpha") || strings.Contains(msg, "every configured account is cooling down") {
+		t.Errorf("Assign error = %q, want the login problem and account named, not 'cooling down'", msg)
+	}
+}
