@@ -121,6 +121,30 @@ func TestBugreportFileCreatesTheIssueAndMarksFiled(t *testing.T) {
 	}
 }
 
+func TestBugreportFileSurfacesTheURLWhenTheStatusUpdateFails(t *testing.T) {
+	dir := trProject(t, gateConfig(t, "", "auto", nil))
+	addRecord(t, dir)
+	f := &forge{answer: func(_ string, args []string) (string, string, int) {
+		if args[0] == "issue" {
+			// The issue is created; the bug log then becomes unreadable so the status update fails.
+			log := bugreport.Path(dir)
+			_ = os.Remove(log)
+			_ = os.MkdirAll(log, 0o755)
+			return "https://github.com/l4ci/rota/issues/9\n", "", 0
+		}
+		return "", "", 0
+	}}
+	d := useForge(t, f)
+	t.Setenv("ROTA_UPSTREAM_REPO", "")
+	o := trRunWith(t, d, dir, "", append([]string{"bugreport", "file", "bug-1", "--harness", "claude", "--model", "sonnet"}, brOK...)...)
+	if !strings.Contains(o.stdout+o.stderr, "https://github.com/l4ci/rota/issues/9") {
+		t.Fatalf("the created URL is not surfaced: %+v", o)
+	}
+	if !strings.Contains(o.stdout+o.stderr, "bug-1") || !strings.Contains(o.stdout+o.stderr, "dismiss") {
+		t.Errorf("no hint to close the record by hand: %+v", o)
+	}
+}
+
 func TestBugreportFileCommentsOnADuplicate(t *testing.T) {
 	dir := trProject(t, gateConfig(t, "", "off", nil))
 	addRecord(t, dir)
