@@ -510,13 +510,41 @@ func EffectiveReview(list []Record) (Record, bool) {
 	return Record{}, false
 }
 
+// EffectiveFail is the branch's effective review when its verdict is FAIL.
+// It is the relay rule: a review the worker is told about, and a ship blocker,
+// only when the effective verdict itself is FAIL. Failing is wider.
+func EffectiveFail(list []Record) (Record, bool) {
+	r, ok := EffectiveReview(list)
+	return r, ok && r.Verdict == Fail
+}
+
+// ItemFailed reports a per-item FAIL in r, a spec failure carried by items[]
+// alone, which the findings do not show.
+func (r Record) ItemFailed() bool {
+	for _, it := range r.Items {
+		if it.Verdict == Fail {
+			return true
+		}
+	}
+	return false
+}
+
+// Failing reports whether r gives a bounce something to relay: a FAIL
+// verdict, a blocking finding or a failed item. It is the bounce rule, wider
+// than EffectiveFail on purpose: a CONCERNS review can still carry a blocking
+// finding or a failed item, and a bounce relays those, while a relay or ship
+// block follows the effective verdict alone.
+func (r Record) Failing() bool {
+	return r.Verdict == Fail || HasBlocking(r.Findings) || r.ItemFailed()
+}
+
 // Blocking is the record that blocks a ship (B3): the effective review
 // verdict when it is FAIL, else the latest second-opinion record when it is
 // FAIL and the runner is not the advisory codex fallback. A stale record
 // still blocks; only a newer record of the same kind clears it. CONCERNS and
 // QA never block.
 func Blocking(list []Record, s Settings) (Record, bool) {
-	if r, ok := EffectiveReview(list); ok && r.Verdict == Fail {
+	if r, ok := EffectiveFail(list); ok {
 		return r, true
 	}
 	if r, ok := Latest(list, SecondOpinion); ok && r.Verdict == Fail && s.Runner != "codex" {

@@ -378,3 +378,36 @@ func TestRecordedIgnoresStaleVerdicts(t *testing.T) {
 		t.Errorf("a branch with no records has none: %v", got)
 	}
 }
+
+func TestFailingVersusEffectiveFail(t *testing.T) {
+	blocker := []Finding{{Severity: "major", Title: "t"}}
+	nit := []Finding{{Severity: "minor", Title: "t"}}
+	cases := []struct {
+		name        string
+		r           Record
+		failing     bool
+		effectFails bool
+	}{
+		{"pass", Record{Kind: ReviewQuality, Verdict: Pass}, false, false},
+		{"fail verdict", Record{Kind: ReviewQuality, Verdict: Fail}, true, true},
+		{"concerns with nit", Record{Kind: ReviewQuality, Verdict: Concerns, Findings: nit}, false, false},
+		{"concerns with blocker", Record{Kind: ReviewQuality, Verdict: Concerns, Findings: blocker}, true, false},
+		{"pass with failed item", Record{Kind: ReviewSpec, Verdict: Pass, Items: []ItemVerdict{{"B07", Fail}}}, true, false},
+	}
+	for _, c := range cases {
+		if got := c.r.Failing(); got != c.failing {
+			t.Errorf("%s: Failing = %v, want %v", c.name, got, c.failing)
+		}
+		if _, got := EffectiveFail([]Record{c.r}); got != c.effectFails {
+			t.Errorf("%s: EffectiveFail = %v, want %v", c.name, got, c.effectFails)
+		}
+	}
+	// the combined verdict of a quality record decides, not its own Verdict
+	q := Record{Kind: ReviewQuality, Verdict: Pass, Combined: Fail}
+	if r, ok := EffectiveFail([]Record{q}); !ok || r.Verdict != Fail {
+		t.Errorf("combined FAIL: %+v %v", r, ok)
+	}
+	if _, ok := EffectiveFail(nil); ok {
+		t.Error("no records must not fail")
+	}
+}
