@@ -61,6 +61,9 @@ func Path(root string) string { return rotatree.File(root, File) }
 // Add appends r (assigning ID, TS, Status open). An open record with the same
 // verb, exit and error is counted instead of added again.
 func Add(root string, r Record, now time.Time) (Record, error) {
+	// The log is gitignored, but a project whose .gitignore predates it could
+	// commit it: keep secrets out of what is stored, whatever the draft does later.
+	r = redactRecord(r)
 	var out Record
 	err := fsio.Locked(Path(root), fsio.LockTimeout, func() error {
 		all, err := Load(root)
@@ -87,6 +90,20 @@ func Add(root string, r Record, now time.Time) (Record, error) {
 		return save(root, append(all, r))
 	})
 	return out, err
+}
+
+func redactRecord(r Record) Record {
+	r.Error = Redact(r.Error, Env{})
+	r.Summary = Redact(r.Summary, Env{})
+	r.Expected = Redact(r.Expected, Env{})
+	if r.Args != nil {
+		args := make([]string, len(r.Args))
+		for i, a := range r.Args {
+			args[i] = Redact(a, Env{})
+		}
+		r.Args = args
+	}
+	return r
 }
 
 func idNumber(id string) int {
@@ -132,7 +149,10 @@ func save(root string, all []Record) error {
 	if err := os.MkdirAll(filepath.Dir(Path(root)), 0o755); err != nil {
 		return err
 	}
-	return fsio.WriteFileAtomic(Path(root), buf.Bytes())
+	if err := fsio.WriteFileAtomic(Path(root), buf.Bytes()); err != nil {
+		return err
+	}
+	return os.Chmod(Path(root), 0o600)
 }
 
 // Open returns the records still waiting for an offer to be answered.
@@ -179,10 +199,10 @@ type Env struct {
 }
 
 var (
-	reUserinfo = regexp.MustCompile(`://[^/\s:@]+:[^/\s@]+@`)
+	reUserinfo = regexp.MustCompile(`://[^/\s@]+@`)
 	reEmail    = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`)
 	reHomeDir  = regexp.MustCompile(`/(?:home|Users)/[^/\s"']+`)
-	reTokens   = regexp.MustCompile(`github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|glpat-[A-Za-z0-9_-]{16,}|xox[abprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+`)
+	reTokens   = regexp.MustCompile(`github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|glpat-[A-Za-z0-9_-]{16,}|xox[abprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|lin_api_[A-Za-z0-9]{16,}|ATATT[A-Za-z0-9_=-]{16,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+`)
 	reBearer   = regexp.MustCompile(`(?i)(bearer\s+)[^\s"',;]+`)
 	reKeyValue = regexp.MustCompile(`(?i)((?:token|secret|password|passwd|api[_-]?key|authorization)["']?\s*[:=]\s*["']?)[^\s"',;}]+`)
 )
@@ -246,7 +266,7 @@ func Draft(r Record, env Environment, red Env) (title, body string) {
 	if r.Verb != "" {
 		title += " " + r.Verb
 	}
-	title = Redact(truncate(title+": "+what, 90), red)
+	title = truncate(Redact(title+": "+what, red), 90)
 
 	var b strings.Builder
 	b.WriteString("## Summary\n\n" + orNone(Redact(what, red)) + "\n\n")

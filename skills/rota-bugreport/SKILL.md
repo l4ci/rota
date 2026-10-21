@@ -9,6 +9,7 @@ description: Use when rota itself misbehaved (a verb exited 70, a refusal was wr
 
 rota records its own failures in `.rota/bugreports.jsonl` (per-developer, gitignored): a verb that fails with an internal error or panic (exit 70) writes a record by itself. Anything else you noticed, add yourself (Step 1). This skill turns records into reports on the rota repo (`l4ci/rota`, or `$ROTA_UPSTREAM_REPO`).
 
+Copy this checklist and track your progress:
 ```
 - [ ] Step 1 — Record (when invoked by hand)
 - [ ] Step 2 — Pick the records
