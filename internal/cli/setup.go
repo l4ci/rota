@@ -230,6 +230,11 @@ func setupDefaults(c *Ctx) map[string]string {
 		c.Warn("ignoring the global config: %v", err)
 		return defs
 	}
+	// runInit migrates the global after the answers are taken, so a pre-0.21
+	// auto must default to the roundtrip it is about to become.
+	if config.GlobalAutoStale(dir, vals) {
+		vals["autonomy.level"] = "roundtrip"
+	}
 	for _, p := range config.Prompts {
 		if v, ok := vals[p.Key]; ok && p.Valid(fmt.Sprint(v)) {
 			defs[p.Key] = fmt.Sprint(v)
