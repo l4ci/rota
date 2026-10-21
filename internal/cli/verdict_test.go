@@ -373,3 +373,22 @@ func TestVerdictAddShaOnUnpushedBranch(t *testing.T) {
 		t.Errorf("--sha at local head: %d %v %s", code, d, errs)
 	}
 }
+
+// AC-1: a verdict recorded while the branch's depth needs more says which
+// verdict is still missing at head, so the orchestrator records it before gating.
+func TestVerdictAddNamesMissingVerdictOfRaisedDepth(t *testing.T) {
+	dir := verdictRepo(t)
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"ship":{"review":{"default":"full"}}}`), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	code, out, _ := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", "PASS", "--json")
+	d := data(t, out)
+	note, _ := d["depthNote"].(string)
+	if code != 0 || !strings.Contains(note, "light -> full") || !strings.Contains(note, "review-spec") {
+		t.Fatalf("depthNote %q (exit %d), want light -> full naming review-spec", note, code)
+	}
+	code, out, _ = rotaIn(t, dir, "verdict", "add", "--kind", "review-spec", "--verdict", "PASS", "--json")
+	if d := data(t, out); code != 0 || d["depthNote"] != nil {
+		t.Errorf("complete set still noted: %v", d["depthNote"])
+	}
+}

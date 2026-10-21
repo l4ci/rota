@@ -491,6 +491,24 @@ func Recorded(root, branch, head string) []string {
 	return kinds
 }
 
+// LastReviewSet lists the review kinds recorded at the commit of the branch's
+// newest review verdict, whatever head that was: the review set the branch last
+// had, which a later push has made stale. It is nil when no review was recorded.
+func LastReviewSet(root, branch string) []string {
+	list := Load(root).Branches[BranchKey("", branch)]
+	var newest Record
+	for i := len(list) - 1; i >= 0; i-- {
+		if k := list[i].Kind; k == ReviewSpec || k == ReviewQuality {
+			newest = list[i]
+			break
+		}
+	}
+	if newest.Sha == "" {
+		return nil
+	}
+	return Recorded(root, branch, newest.Sha)
+}
+
 // EffectiveReview is a branch's review verdict: the latest review-quality
 // record's combined verdict, unless a review-spec record is newer (a
 // spec-only review, or a spec FAIL that skipped Stage 2). The record

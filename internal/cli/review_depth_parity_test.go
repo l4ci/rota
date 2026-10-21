@@ -92,4 +92,35 @@ func TestGateAndReviewDepthPrintTheSameReason(t *testing.T) {
 			}
 		})
 	}
+
+	// A bounce fix outside the issue's files raises light to full after the
+	// light review ran: review depth, at the new head with no verdict on it,
+	// reports the rise from the newest review set on record.
+	t.Run("bounce", func(t *testing.T) {
+		prBody, issueBody = "Closes #6\n", "## Files\n\n- feature.txt\n"
+		if code, out, errOut := rotaInWith(t, deps, dir, "verdict", "add", "nia/6-x", "--kind", "review-spec", "--verdict", "PASS", "--sha", headSHA); code != 0 {
+			t.Fatalf("verdict add: %d %s %s", code, out, errOut)
+		}
+		_, out, _ := rotaInWith(t, deps, dir, "review", "depth", "nia/6-x", "--json")
+		if d := data(t, out); d["depth"] != "light" || d["depthNote"] != nil {
+			t.Fatalf("before the bounce fix: %v", d)
+		}
+		write(t, filepath.Join(wt, "other.txt"), "o")
+		git("add", "other.txt")
+		git("commit", "-q", "-m", "bounce fix")
+		git("push", "-q", "origin", "nia/6-x")
+		if o, err := exec.Command("git", "-C", wt, "rev-parse", "HEAD").Output(); err == nil {
+			headSHA = strings.TrimSpace(string(o))
+		}
+		_, out, _ = rotaInWith(t, deps, dir, "review", "depth", "nia/6-x", "--json")
+		d := data(t, out)
+		note, _ := d["depthNote"].(string)
+		if d["previousDepth"] != "light" || !strings.Contains(note, "light -> full") || !strings.Contains(note, "other.txt") {
+			t.Errorf("depth after the bounce fix: %v", d)
+		}
+		_, text, _ := rotaInWith(t, deps, dir, "review", "depth", "nia/6-x")
+		if !strings.Contains(text, "light -> full") {
+			t.Errorf("text output says nothing of the rise:\n%s", text)
+		}
+	})
 }

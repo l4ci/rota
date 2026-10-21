@@ -7,6 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/verdict"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // verdictCommands is the `rota verdict` group (B2, #55). `rota debug verdict`
@@ -266,6 +268,10 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		if r.Combined != "" {
 			text = r.Combined
 		}
+		if note := raisedDepthNote(c, args, t, head, r.Kind); note != "" {
+			d.Set("depthNote", note)
+			text += " (" + note + ")"
+		}
 		if len(deferred) > 0 {
 			// The record is already written, so a failure here reports what was
 			// filed and leaves the rest to a by-hand `item create`.
@@ -305,6 +311,38 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: d, Text: text + " -> " + next}, nil
 	}
+}
+
+// raisedDepthNote tells a reviewer's verdict add when the branch's review depth
+// needs a verdict kind not yet recorded at head: a fix outside the issue's files
+// can raise light to full after the review ran, and the gate then refuses with
+// review-missing. It is empty for other kinds, when nothing is missing, or when
+// the depth cannot be read (the record is already written; the gate will say).
+func raisedDepthNote(c *Ctx, args []string, t verdictBranch, head, kind string) string {
+	if kind != verdict.ReviewSpec && kind != verdict.ReviewQuality {
+		return ""
+	}
+	bt, err := resolveBranch(c, args)
+	if err != nil || bt.Branch == bt.Base {
+		return ""
+	}
+	res, why, err := branchReviewDepth(c, bt, nil)
+	if err != nil {
+		return ""
+	}
+	_, hasSpec := worker.BranchIssue(t.branch)
+	have := verdict.Recorded(t.root, t.branch, head)
+	var missing []string
+	for _, k := range worker.ReviewKinds(res.Depth, hasSpec) {
+		if !slices.Contains(have, k) {
+			missing = append(missing, k)
+		}
+	}
+	if len(missing) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("review depth %s -> %s (%s): still needs %s at head, or the gate refuses review-missing",
+		worker.CoveredDepth(verdict.LastReviewSet(t.root, t.branch), hasSpec), res.Depth, why, strings.Join(missing, " and "))
 }
 
 // dropFiled removes from ins the items already filed for pr: an item with the
