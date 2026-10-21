@@ -6,10 +6,26 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
+
+// testDay pins the clock the stubs are dated by.
+func testDay() time.Time { return time.Date(2031, 4, 5, 9, 0, 0, 0, time.UTC) }
+
+func TestAddStampsInjectedClock(t *testing.T) {
+	s := Files(t.TempDir())
+	if err := Add(s, "B07", "t", testDay); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := Show(s, "B07")
+	if !strings.Contains(got, "created: 2031-04-05\n") {
+		t.Errorf("not dated by the injected clock:\n%s", got)
+	}
+}
 
 func exitOf(err error) int {
 	var ae *exitcode.Error
@@ -33,7 +49,7 @@ func project(t *testing.T) string {
 func TestAddMatchesOldHelper(t *testing.T) {
 	root := project(t)
 	for id, title := range map[string]string{"B07": "Title: with colon & é", "F12": "Second"} {
-		if err := Add(Files(root), id, title); err != nil {
+		if err := Add(Files(root), id, title, testDay); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := os.ReadFile(path(root, id))
@@ -47,12 +63,12 @@ func TestAddMatchesOldHelper(t *testing.T) {
 func TestLifecycleAndExits(t *testing.T) {
 	root := project(t)
 	for _, id := range []string{"S01", "M01", "B7", "b07", "../x"} {
-		if err := Add(Files(root), id, "t"); exitOf(err) != 2 {
+		if err := Add(Files(root), id, "t", testDay); exitOf(err) != 2 {
 			t.Errorf("Add(%q) = %v, want exit 2", id, err)
 		}
 	}
-	Add(Files(root), "B07", "t")
-	if err := Add(Files(root), "B07", "again"); exitOf(err) != 4 {
+	Add(Files(root), "B07", "t", testDay)
+	if err := Add(Files(root), "B07", "again", testDay); exitOf(err) != 4 {
 		t.Errorf("duplicate add: %v", err)
 	}
 	if _, err := Show(Files(root), "F99"); exitOf(err) != 3 {
@@ -102,7 +118,7 @@ func TestAddConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			switch err := Add(Files(root), "B07", "t"); {
+			switch err := Add(Files(root), "B07", "t", testDay); {
 			case err == nil:
 				ok.Add(1)
 			case exitOf(err) == 4:
@@ -121,7 +137,7 @@ func TestAddConcurrent(t *testing.T) {
 // Three amend calls against the frozen output of the retired helper.
 func TestAmendMatchesOldHelper(t *testing.T) {
 	root := project(t)
-	Add(Files(root), "B07", "Title: with colon & é")
+	Add(Files(root), "B07", "Title: with colon & é", testDay)
 	steps := []struct{ heading, mode, text, golden string }{
 		{"Goal", "append", "first line\nsecond line\n\n", ""},
 		{"Open questions", "append", "- one more", "B07.amend-append.md"},
@@ -154,7 +170,7 @@ func TestAmendExits(t *testing.T) {
 	if _, err := Amend(root, "B07", "Goal", "append", "x"); exitOf(err) != 3 {
 		t.Errorf("missing design: %v", err)
 	}
-	Add(Files(root), "B07", "t")
+	Add(Files(root), "B07", "t", testDay)
 	if _, err := Amend(root, "B07", "No such", "append", "x"); exitOf(err) != 3 {
 		t.Errorf("missing section: %v", err)
 	}

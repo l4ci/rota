@@ -3,7 +3,9 @@ package knowledge
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestHitBuffersAndLeavesTrackedSidecarAlone(t *testing.T) {
@@ -295,5 +297,17 @@ func TestClaimedBuffersFoundUnderMetacharacterRoot(t *testing.T) {
 	claimed, err := claimedBuffers(hp)
 	if err != nil || len(claimed) != 1 {
 		t.Fatalf("claimedBuffers = %v err=%v, want the one claimed buffer", claimed, err)
+	}
+}
+
+func TestAddContradictionStampsInjectedClock(t *testing.T) {
+	s := lockedStore(t)
+	s.Now = func() time.Time { return time.Date(2031, 4, 5, 9, 30, 0, 0, time.UTC) }
+	if _, err := s.AddContradiction("Arch", "bullet", "wrong"); err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.Contradictions()
+	if err != nil || len(list) != 1 || !strings.HasPrefix(list[0].LoggedAt, "2031-04-05T09:30:00") {
+		t.Fatalf("loggedAt not from the injected clock: %+v %v", list, err)
 	}
 }
