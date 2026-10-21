@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -608,4 +609,21 @@ func findDoneIn(text, id string) (start, end int, d Done, ok bool) {
 		pos += len(raw) + 1
 	}
 	return 0, 0, Done{}, false
+}
+
+// DetailWriter replaces an open item's detail text: the detail file of the
+// file backend, the issue body above the fields block of a tracker. Callers
+// reach it with `dw, ok := be.(backlog.DetailWriter)`.
+type DetailWriter interface {
+	SetDetail(ref, text string) error
+}
+
+// SetDetail rewrites the item's detail file; the item must already have one.
+func (f *File) SetDetail(ref, text string) error {
+	if _, ok, _ := f.Detail(ref); !ok {
+		return errf(ErrNotFound, "[%s] has no detail file to rewrite", ref)
+	}
+	r, _ := utf8.DecodeRuneInString(ref)
+	t, _ := TypeByLetter(strings.ToUpper(string(r)))
+	return fsio.WriteFileAtomic(f.rota(t.Kind, ref+".md"), []byte(text))
 }

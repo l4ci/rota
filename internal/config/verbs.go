@@ -372,7 +372,7 @@ func isNonNegInt(n json.Number) bool {
 // strictEnumKeys are enum keys whose Choices are the whole set, so `config set`
 // refuses anything else. Other enum keys accept more than their listed choices
 // (a removed value still reads, a harness may be added), so they stay open.
-var strictEnumKeys = map[string]bool{"work.contextGuard": true, "plan.criticHarness": true, "autonomy.level": true}
+var strictEnumKeys = map[string]bool{"work.contextGuard": true, "plan.criticHarness": true, "autonomy.level": true, "review.fileDeferred": true}
 
 func validateEnum(key string, value any) error {
 	k, _ := SchemaKey(key)
