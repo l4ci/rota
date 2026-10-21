@@ -278,6 +278,24 @@ func commitFile(t *testing.T, dir, name string) {
 	}
 }
 
+// TestIsProdGo pins the missing-RED file filter: testdata fixtures are not
+// production code, a cmd/ Go file is.
+func TestIsProdGo(t *testing.T) {
+	for f, want := range map[string]bool{
+		"cmd/rota/main.go":                  true,
+		"internal/cli/worker_done.go":       true,
+		"internal/cli/testdata/fixture.go":  false,
+		"testdata/sample.go":                false,
+		"internal/cli/worker_done_test.go":  false,
+		"internal/cli/testdata/golden.json": false,
+		"cmd/rota/README.md":                false,
+	} {
+		if got := isProdGo(f); got != want {
+			t.Errorf("isProdGo(%q) = %v, want %v", f, got, want)
+		}
+	}
+}
+
 // TestWorkerDoneFlagsMissingRed: with work.tdd on, a branch that changes
 // non-test Go code and holds no FAIL proof row warns, and --require-red refuses (#1300).
 func TestWorkerDoneFlagsMissingRed(t *testing.T) {
