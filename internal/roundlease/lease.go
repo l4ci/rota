@@ -264,27 +264,7 @@ func (e Env) ClearStale(commonDir string) (Lease, bool, error) {
 }
 
 // procStat reads ppid and start ticks of pid from /proc/<pid>/stat.
-func procStat(pid int) (ppid int, start uint64, ok bool) {
-	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
-	if err != nil {
-		return 0, 0, false
-	}
-	s := string(b)
-	i := strings.LastIndex(s, ")")
-	if i < 0 {
-		return 0, 0, false
-	}
-	f := strings.Fields(s[i+1:])
-	if len(f) < 20 {
-		return 0, 0, false
-	}
-	pp, err1 := strconv.Atoi(f[1])
-	st, err2 := strconv.ParseUint(f[19], 10, 64)
-	if err1 != nil || err2 != nil {
-		return 0, 0, false
-	}
-	return pp, st, true
-}
+func procStat(pid int) (ppid int, start uint64, ok bool) { return pidlive.ProcStat(pid) }
 
 // psRun runs ps with the C locale and returns its trimmed stdout. Tests swap it.
 var psRun = func(args ...string) (string, error) {
