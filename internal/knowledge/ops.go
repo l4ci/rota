@@ -424,10 +424,10 @@ func (s Store) replaceLocked(scope, km, topic, old, new string) (ReplaceResult, 
 		if err != nil {
 			return res, err
 		}
+		if _, err := s.FoldHits(scope); err != nil {
+			return res, err
+		}
 		if fileExists(sidecar) {
-			if _, err := s.FoldHits(scope); err != nil {
-				return res, err
-			}
 			err = Update(sidecar, func(sc *Sidecar) (bool, error) { return sc.Retitle(topic, oldTitle, newTitle), nil })
 		}
 		return res, err
