@@ -119,6 +119,10 @@ type Input struct {
 	// drifted from config (agents.Problems); empty adds no line.
 	AgentProblems []string
 
+	// GitignoreMissing are the managed .gitignore lines the project lacks
+	// (initproj.MissingIgnoreLines); empty adds no line.
+	GitignoreMissing []string
+
 	// Skills is the state of the installed skill sets (skills.Set.Status);
 	// nil when nothing was read.
 	Skills *skills.Report
@@ -201,6 +205,9 @@ func Run(ctx context.Context, in Input) Report {
 	}
 	if len(in.AgentProblems) > 0 {
 		checks = append(checks, Check{Name: "agents", Status: Warn, Detail: strings.Join(in.AgentProblems, "; "), Hint: "run: rota agents write"})
+	}
+	if len(in.GitignoreMissing) > 0 {
+		checks = append(checks, Check{Name: "gitignore", Status: Warn, Detail: "missing from .gitignore: " + strings.Join(in.GitignoreMissing, ", "), Hint: "run: rota init"})
 	}
 	if c, ok := d.ports(); ok {
 		checks = append(checks, c)

@@ -216,6 +216,8 @@ func TestInitRefusesACorruptCounters(t *testing.T) {
 
 func TestMergeGitignore(t *testing.T) {
 	block := strings.Join(ignoreLines, "\n") + "\n"
+	const hitsLine = ".rota/**/knowledge-hits.jsonl*"
+	withoutHits := strings.Replace(block, hitsLine+"\n", "", 1)
 	cases := []struct {
 		name, in string
 		exists   bool
@@ -226,6 +228,8 @@ func TestMergeGitignore(t *testing.T) {
 		{"complete", block + ".worktrees/\n", true, block + ".worktrees/\n"},
 		{"slash spelling", block + "/.worktrees\n", true, block + "/.worktrees\n"},
 		{"crlf worktrees", block + ".worktrees/\r\n", true, block + ".worktrees/\r\n"},
+		{"older block lacks one line", withoutHits + ".worktrees/\n", true,
+			withoutHits + ".worktrees/\n" + "\n# ── rota ──\n" + hitsLine + "\n"},
 		{"no trailing newline", "a", true, "a\n" + block + worktreesBlock},
 	}
 	for _, c := range cases {
