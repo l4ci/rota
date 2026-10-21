@@ -241,6 +241,12 @@ func configSet(fs *flag.FlagSet) RunFunc {
 			}
 			res, err = config.Set(root, args[0], args[1])
 		}
+		if err != nil {
+			// A failed set may follow a rewrite that already hit disk (#1524).
+			for _, line := range autonomyLines(res.Migration) {
+				c.Warn("%s", line)
+			}
+		}
 		switch {
 		case err == nil:
 		case errors.Is(err, config.ErrMalformedKey), errors.Is(err, config.ErrNotSchemaKey), errors.Is(err, config.ErrBadValue), errors.Is(err, config.ErrProjectOwned):
