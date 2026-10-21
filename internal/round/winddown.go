@@ -7,6 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/strutil"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/ledger"
@@ -102,6 +103,12 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		}
 		res.Warnings = append(res.Warnings, rep.Warnings...)
 		seen = true
+	}
+
+	// Buffered knowledge hits are gitignored, so the tree check cannot see
+	// them: name the one command that folds them into the tracked sidecar.
+	if pendingHitBuffers(root) {
+		res.Warnings = append(res.Warnings, "knowledge hits are buffered and not yet in the tracked sidecar: run `rota knowledge tier fold`, then commit the sidecar (never while a gate runs)")
 	}
 
 	// 1. Re-verify the base in the project root.
@@ -276,9 +283,9 @@ func (e Env) requireBase(ctx context.Context, root string) error {
 		return &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git status failed in " + root}
 	}
 	if strings.TrimSpace(out) != "" {
-		if onlyTierSidecars(out) {
+		if paths := tierSidecarPaths(out); len(paths) > 0 {
 			return &exitcode.Error{Exit: exitcode.ExitResolution, Message: "the only uncommitted change is folded knowledge-hit bookkeeping (knowledge-tier.json)",
-				Hint: "commit it: git add .rota/knowledge-tier.json .rota/knowledge/*/knowledge-tier.json && git commit -m 'Fold knowledge hits'"}
+				Hint: "commit it: git add " + strings.Join(paths, " ") + " && git commit -m 'Fold knowledge hits'"}
 		}
 		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: "the project root has uncommitted changes to tracked files", Hint: "commit or stash them: wind-down verifies the base as it is"}
 	}
@@ -293,16 +300,34 @@ func tail(text string, n int) string {
 	return strings.Join(lines, "\n")
 }
 
-// onlyTierSidecars reports whether every path of a `git status --porcelain`
-// listing is a knowledge-tier.json sidecar: bookkeeping `rota knowledge tier
-// fold` wrote, which one commit settles.
-func onlyTierSidecars(porcelain string) bool {
-	n := 0
+// tierSidecarPaths returns the paths of a `git status --porcelain` listing
+// when every one is a knowledge-tier.json sidecar (bookkeeping `rota knowledge
+// tier fold` wrote, which one commit settles), else nil. The hint names these
+// paths, so it works in a single-repo project and an umbrella alike.
+func tierSidecarPaths(porcelain string) []string {
+	var paths []string
 	for _, l := range strings.Split(strings.TrimRight(porcelain, "\n"), "\n") {
 		if len(l) < 4 || !strings.HasSuffix(l, "knowledge-tier.json") {
-			return false
+			return nil
 		}
-		n++
+		paths = append(paths, strings.TrimSpace(l[3:]))
 	}
-	return n > 0
+	return paths
+}
+
+// pendingHitBuffers reports whether any knowledge-hits.jsonl under root's
+// .rota holds buffered hits.
+func pendingHitBuffers(root string) bool {
+	for _, pat := range []string{
+		filepath.Join(root, ".rota", "knowledge-hits.jsonl"),
+		filepath.Join(root, ".rota", "knowledge", "*", "knowledge-hits.jsonl"),
+	} {
+		files, _ := filepath.Glob(pat)
+		for _, f := range files {
+			if fi, err := os.Stat(f); err == nil && fi.Size() > 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
