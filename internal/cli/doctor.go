@@ -26,6 +26,7 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/stalebin"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -70,7 +71,7 @@ func runDoctor(c *Ctx, args []string) (Result, error) {
 // doctorInput gathers the real environment: Deps.DoctorPath replaces PATH for
 // tool lookup (a test hook, not part of the CLI).
 func doctorInput(ctx context.Context, d *Deps) doctor.Input {
-	in := doctor.Input{Exec: doctorExec(d.Proc), Getenv: d.Getenv, Look: doctorLook(d.LookPath, d.DoctorPath), Credentials: d.credentials()}
+	in := doctor.Input{Exec: doctorExec(d.Proc), Look: doctorLook(d.LookPath, d.DoctorPath), Credentials: d.credentials()}
 	in.Dir, _ = d.Getwd()
 	in.Home, _ = d.UserHomeDir()
 	if dir, src, warn, err := projects.Resolve(d.projectsEnv()); err == nil {
@@ -88,21 +89,16 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	root, _ := rotatree.Find(in.Dir)
 	in.Skills = doctorSkills(d.Getenv, in.Home, root, d.Toplevel(ctx))
 	if root == "" {
+		in.RoundHost = worker.ResolveHost("", nil, d.Getenv, doctorLookErr(in.Look))
 		doctorDiskInput(ctx, &in, nil, "", d.Git, d.Now(), d.DoctorDisk, d.Getenv)
 		return in
 	}
 	cfg := config.Load(rotatree.Config(root))
-	str := func(key string) string {
-		v, _ := config.Lookup(cfg, key)
-		s, _ := v.(string)
-		return s
-	}
 	in.Dispatch = config.Dispatch(cfg)
 	in.RegistryHost = worker.RegistryHost(root)
-	in.ForgeProvider, in.IssueSource, in.SourceProblem = doctorSourceInput(cfg)
-	in.JiraProject, in.IssuesConnection = strings.TrimSpace(str("issues.jira.project")), strings.TrimSpace(str("issues.connection"))
-	in.LinearTeam = strings.TrimSpace(str("issues.linear.team"))
-	in.ItsaplanProject = strings.TrimSpace(str("issues.itsaplan.project"))
+	in.RoundHost = worker.ResolveHost(root, cfg, d.Getenv, doctorLookErr(in.Look))
+	in.SourceProblem = doctorSourceProblem(cfg)
+	in.Tracker = tracker.SettingsFromConfig(cfg)
 	in.Kinds = doctorKinds(cfg)
 	for _, a := range config.Accounts(cfg) {
 		if a.Name != "" {
@@ -111,10 +107,10 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	}
 	in.OrchestratorConfigDir = d.Getenv("CLAUDE_CONFIG_DIR")
 	in.ProjectRoot = root
-	if name := strings.TrimSpace(str("issues.connection")); name != "" {
+	if name := in.Tracker.Connection; name != "" {
 		in.Connection = doctorConnection(ctx, d, name)
 		if in.Connection.State == string(connections.StateOK) &&
-			(in.IssueSource == config.SourceLinear && in.LinearTeam != "" || in.IssueSource == config.SourceItsaplan && in.ItsaplanProject != "") {
+			(in.Tracker.Source == config.SourceLinear && in.Tracker.LinearTeam != "" || in.Tracker.Source == config.SourceItsaplan && in.Tracker.ItsaplanProject != "") {
 			in.TeamProblem = linearTeamProblem(ctx, d, cfg, root)
 		}
 	}
@@ -279,16 +275,25 @@ func procCwdOf(ctx context.Context, run proc.Runner, pid int) string {
 	return doctor.ParseLsofCwd(res.Stdout)
 }
 
-// doctorSourceInput reads forge.provider and issues.source for the forge
-// check. An invalid value is reported as the problem, not read as a default.
-func doctorSourceInput(cfg any) (forge, source, problem string) {
-	forge, ferr := config.ForgeProvider(cfg)
-	source, serr := config.IssueSource(cfg)
-	switch {
-	case ferr != nil:
-		return "", "", ferr.Error()
-	case serr != nil:
-		return "", "", serr.Error()
+// doctorSourceProblem is the reason forge.provider or issues.source holds an
+// invalid value, "" when both are valid. The tracker check reports it instead
+// of reading the invalid value as a default.
+func doctorSourceProblem(cfg any) string {
+	if _, err := config.ForgeProvider(cfg); err != nil {
+		return err.Error()
 	}
-	return forge, source, ""
+	if _, err := config.IssueSource(cfg); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
+// doctorLookErr adapts doctor's Look to the lookPath worker.ResolveHost takes.
+func doctorLookErr(look func(string) (string, bool)) func(string) (string, error) {
+	return func(name string) (string, error) {
+		if p, ok := look(name); ok {
+			return p, nil
+		}
+		return "", os.ErrNotExist
+	}
 }

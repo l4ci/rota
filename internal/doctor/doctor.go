@@ -10,7 +10,6 @@ package doctor
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 
@@ -84,24 +83,19 @@ type Input struct {
 	Home string // expands a leading "~/" in a configDir
 
 	// From the project config when .rota/ exists; zero values otherwise.
-	Dispatch      string    // round.dispatch
-	RegistryHost  host.Kind // the host `round start` recorded, "" when no round is in flight
-	ForgeProvider string    // forge.provider (auto, github, gitlab or local; "" reads as auto)
-	// IssueSource is issues.source, "" outside a rota project. An unmigrated
-	// legacy config reads as config.SourceIssues. SourceProblem is the reason
-	// forge.provider or issues.source holds an invalid value ("" when valid).
-	IssueSource   string
+	Dispatch     string           // round.dispatch
+	RegistryHost host.Kind        // the host `round start` recorded, "" when no round is in flight
+	RoundHost    host.Kind        // the host the round's verbs drive (worker.ResolveHost), resolved with no project too
+	Tracker      tracker.Settings // tracker.SettingsFromConfig over the project config
+	// Tracker.Source is issues.source, "" outside a rota project (an unmigrated
+	// legacy config reads as config.SourceIssues). SourceProblem is the reason
+	// forge.provider or issues.source holds an invalid value ("" when valid);
+	// the settings are then left zero. TeamProblem is why the Linear team or
+	// It's a Plan project could not be read through a working connection ("" when
+	// it was, or was not tried).
 	SourceProblem string
-	// JiraProject, LinearTeam and IssuesConnection are issues.jira.project,
-	// issues.linear.team and issues.connection, which issues.source jira and
-	// linear need, and issues.itsaplan.project for itsaplan. TeamProblem is why the Linear team or It's a Plan project could not be read
-	// through a working connection ("" when it was, or was not tried).
-	JiraProject      string
-	LinearTeam       string
-	ItsaplanProject  string
-	IssuesConnection string
-	TeamProblem      string
-	Accounts         []config.Account
+	TeamProblem   string
+	Accounts      []config.Account
 	// Credentials reads each account's login; the zero value reads files only.
 	Credentials worker.Credentials
 	// OrchestratorConfigDir is the orchestrator's CLAUDE_CONFIG_DIR, "" when unset.
@@ -178,9 +172,6 @@ type Input struct {
 	CwdOf func(pid int) string
 
 	Exec Exec
-	// Getenv reads the environment for host detection (HERDR_ENV, TMUX); nil
-	// reads as empty.
-	Getenv func(string) string
 	// Look resolves a tool name, or a path with a slash, to an executable path, or
 	// false when it is not found. It is the only filesystem and PATH read for tools.
 	Look func(name string) (string, bool)
@@ -313,21 +304,9 @@ func (d *runner) jq() Check {
 	return pass("jq", "jq on PATH")
 }
 
-// roundHost is the host a round runs on: host.Resolve over the recorded round
-// host, round.dispatch and the environment, the call worker.ResolveHost makes,
-// so doctor checks what the round verbs will drive.
-func (d *runner) roundHost() host.Kind {
-	getenv := d.in.Getenv
-	if getenv == nil {
-		getenv = func(string) string { return "" }
-	}
-	return host.Resolve(d.in.RegistryHost, host.KindOf(d.in.Dispatch), getenv, func(name string) (string, error) {
-		if p, ok := d.in.Look(name); ok {
-			return p, nil
-		}
-		return "", os.ErrNotExist
-	})
-}
+// roundHost is the host a round runs on, resolved by worker.ResolveHost when
+// the input was gathered, so doctor checks what the round verbs will drive.
+func (d *runner) roundHost() host.Kind { return d.in.RoundHost }
 
 func (d *runner) host() Check {
 	switch d.roundHost() {
@@ -385,7 +364,7 @@ func (d *runner) trackerExec() tracker.Exec {
 // local, else the origin host; no origin remote at all is local. "" when the
 // origin names no forge.
 func (d *runner) resolveForge() string {
-	p, err := tracker.ResolveProvider(d.ctx, "", d.in.ForgeProvider, d.in.Dir, d.trackerExec())
+	p, err := tracker.ResolveProvider(d.ctx, "", d.in.Tracker.Provider, d.in.Dir, d.trackerExec())
 	if err != nil {
 		return ""
 	}
@@ -400,7 +379,7 @@ func (d *runner) forgeLine(f string) string {
 	switch {
 	case f == "":
 		how = "origin names neither github nor gitlab"
-	case d.in.ForgeProvider == "github" || d.in.ForgeProvider == "gitlab" || d.in.ForgeProvider == "local":
+	case d.in.Tracker.Provider == "github" || d.in.Tracker.Provider == "gitlab" || d.in.Tracker.Provider == "local":
 		how = "forge.provider"
 	case f == "local":
 		how = "no origin remote"
@@ -410,7 +389,7 @@ func (d *runner) forgeLine(f string) string {
 		shown = "unknown"
 	}
 	line := "forge " + shown + " (" + how + ")"
-	switch src := d.in.IssueSource; src {
+	switch src := d.in.Tracker.Source; src {
 	case "":
 	case config.SourceIssues:
 		line += ", issues on the tracker (legacy backlog.backend, run: rota migrate source --apply)"
@@ -429,29 +408,29 @@ func (d *runner) tracker() Check {
 	if d.in.SourceProblem != "" {
 		return fail("tracker", d.in.SourceProblem, "run: rota config set forge.provider auto, and rota config set issues.source file|github|gitlab")
 	}
-	if d.in.IssueSource == config.SourceJira {
+	if d.in.Tracker.Source == config.SourceJira {
 		switch {
-		case d.in.JiraProject == "":
+		case d.in.Tracker.JiraProject == "":
 			return fail("tracker", "issues.source is jira but issues.jira.project is not set", "run: rota config set issues.jira.project <KEY>")
-		case d.in.IssuesConnection == "":
+		case d.in.Tracker.Connection == "":
 			return fail("tracker", "issues.source is jira but issues.connection is not set", "run: rota connect add <name> --kind jira ..., then rota config set issues.connection <name>")
 		}
 	}
-	if d.in.IssueSource == config.SourceLinear {
+	if d.in.Tracker.Source == config.SourceLinear {
 		switch {
-		case d.in.LinearTeam == "":
+		case d.in.Tracker.LinearTeam == "":
 			return fail("tracker", "issues.source is linear but issues.linear.team is not set", "run: rota config set issues.linear.team <KEY>")
-		case d.in.IssuesConnection == "":
+		case d.in.Tracker.Connection == "":
 			return fail("tracker", "issues.source is linear but issues.connection is not set", "run: rota connect add <name> --kind linear --token-stdin, then rota config set issues.connection <name>")
 		case d.in.TeamProblem != "":
 			return fail("tracker", d.in.TeamProblem, "check issues.linear.team against the team's key in Linear, and the API key's access")
 		}
 	}
-	if d.in.IssueSource == config.SourceItsaplan {
+	if d.in.Tracker.Source == config.SourceItsaplan {
 		switch {
-		case d.in.ItsaplanProject == "":
+		case d.in.Tracker.ItsaplanProject == "":
 			return fail("tracker", "issues.source is itsaplan but issues.itsaplan.project is not set", "run: rota config set issues.itsaplan.project <KEY>")
-		case d.in.IssuesConnection == "":
+		case d.in.Tracker.Connection == "":
 			return fail("tracker", "issues.source is itsaplan but issues.connection is not set", "run: rota connect add <name> --kind itsaplan --site <url> --token-stdin, then rota config set issues.connection <name>")
 		case d.in.TeamProblem != "":
 			return fail("tracker", d.in.TeamProblem, "check issues.itsaplan.project against the project's key in It's a Plan, and the API key's access")
@@ -459,7 +438,7 @@ func (d *runner) tracker() Check {
 	}
 	f := d.resolveForge()
 	line := d.forgeLine(f)
-	if src := d.in.IssueSource; (src == config.SourceGitHub || src == config.SourceGitLab) && f != src {
+	if src := d.in.Tracker.Source; (src == config.SourceGitHub || src == config.SourceGitLab) && f != src {
 		shown := f
 		if shown == "" {
 			shown = "unknown"

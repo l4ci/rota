@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/stalebin"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -98,18 +99,8 @@ func TestRunTable(t *testing.T) {
 		}
 		return m
 	}
-	herdrIn := Input{Dispatch: "herdr", Accounts: []config.Account{{Name: "a", ConfigDir: good}}}
-	env := func(kv ...string) func(string) string {
-		return func(k string) string {
-			for i := 0; i+1 < len(kv); i += 2 {
-				if kv[i] == k {
-					return kv[i+1]
-				}
-			}
-			return ""
-		}
-	}
-	inHerdr := Input{Dispatch: "subagent", Getenv: env("HERDR_ENV", "1"), Accounts: []config.Account{{Name: "a", ConfigDir: good}}}
+	herdrIn := Input{Dispatch: "herdr", RoundHost: host.Herdr, Accounts: []config.Account{{Name: "a", ConfigDir: good}}}
+	inHerdr := Input{Dispatch: "subagent", RoundHost: host.Herdr, Accounts: []config.Account{{Name: "a", ConfigDir: good}}}
 
 	for _, tc := range []struct {
 		name   string
@@ -134,51 +125,46 @@ func TestRunTable(t *testing.T) {
 		{"host herdr 0.10", herdrIn, all, with(map[string]Result{"herdr --version": {Stdout: "herdr 0.10.0"}}), "host", Fail, "need 0.9.x", ""},
 		{"host herdr garbage", herdrIn, all, with(map[string]Result{"herdr --version": {Stdout: "??"}}), "host", Fail, "unreadable", ""},
 		{"host herdr missing", herdrIn, without("herdr"), with(nil), "host", Fail, "not found", ""},
-		{"host tmux ok", Input{Dispatch: "tmux"}, all, with(nil), "host", Pass, "tmux", ""},
-		{"host tmux missing", Input{Dispatch: "tmux"}, without("tmux"), with(nil), "host", Fail, "tmux not found", "install tmux"},
+		{"host tmux ok", Input{Dispatch: "tmux", RoundHost: host.Tmux}, all, with(nil), "host", Pass, "tmux", ""},
+		{"host tmux missing", Input{Dispatch: "tmux", RoundHost: host.Tmux}, without("tmux"), with(nil), "host", Fail, "tmux not found", "install tmux"},
 
 		{"host detects herdr in a pane", inHerdr, all, with(nil), "host", Pass, "herdr 0.9.3", ""},
-		{"host detects herdr when dispatch is unset", Input{Getenv: env("HERDR_ENV", "1")}, all, with(nil), "host", Pass, "herdr 0.9.3", ""},
-		{"host detects tmux inside tmux", Input{Dispatch: "subagent", Getenv: env("TMUX", "/tmp/tmux-1/default,1,0")}, all, with(nil), "host", Pass, "tmux on PATH", ""},
-		{"host herdr pane without herdr falls to solo", Input{Dispatch: "subagent", Getenv: env("HERDR_ENV", "1")}, without("herdr"), with(nil), "host", Skip, "solo", ""},
-		{"host herdr pane prefers herdr over tmux", Input{Getenv: env("HERDR_ENV", "1", "TMUX", "x")}, all, with(nil), "host", Pass, "herdr", ""},
-		{"host explicit tmux ignores a herdr pane", Input{Dispatch: "tmux", Getenv: env("HERDR_ENV", "1")}, all, with(nil), "host", Pass, "tmux", ""},
-		{"host reads the recorded round host with no pane env", Input{Dispatch: "subagent", RegistryHost: host.Herdr}, all, with(nil), "host", Pass, "herdr 0.9.3", ""},
-		{"host recorded solo beats a tmux pane", Input{Dispatch: "tmux", RegistryHost: host.Solo}, all, with(nil), "host", Skip, "solo", ""},
-		{"host explicit herdr missing fails in tmux", Input{Dispatch: "herdr", Getenv: env("TMUX", "x")}, without("herdr"), with(nil), "host", Fail, "herdr not found", ""},
+		{"host detects herdr when dispatch is unset", Input{RoundHost: host.Herdr}, all, with(nil), "host", Pass, "herdr 0.9.3", ""},
+		{"host reads the recorded round host with no pane env", Input{Dispatch: "subagent", RegistryHost: host.Herdr, RoundHost: host.Herdr}, all, with(nil), "host", Pass, "herdr 0.9.3", ""},
+		{"host recorded solo beats a tmux pane", Input{Dispatch: "tmux", RegistryHost: host.Solo, RoundHost: host.Solo}, all, with(nil), "host", Skip, "solo", ""},
 
 		{"tracker github ok", Input{}, all, with(nil), "tracker", Pass, "gh authenticated", ""},
 		{"tracker gh unauthenticated", Input{}, all, with(map[string]Result{"gh auth status": {ExitCode: 1}}), "tracker", Fail, "not authenticated", "gh auth login"},
 		{"tracker gh missing", Input{}, without("gh"), with(nil), "tracker", Fail, "gh not found", ""},
 		{"tracker gitlab", Input{}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://gitlab.com/a/b"}}), "tracker", Pass, "glab", ""},
 		{"tracker no remote", Input{}, all, with(map[string]Result{"git remote get-url origin": {ExitCode: 2}}), "tracker", Skip, "no origin", ""},
-		{"tracker config fallback", Input{ForgeProvider: "gitlab"}, all, with(map[string]Result{"git remote get-url origin": {ExitCode: 2}}), "tracker", Pass, "glab", ""},
+		{"tracker config fallback", Input{Tracker: tracker.Settings{Provider: "gitlab"}}, all, with(map[string]Result{"git remote get-url origin": {ExitCode: 2}}), "tracker", Pass, "glab", ""},
 
 		{"tracker unknown host", Input{}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://git.example.com/a/b"}}), "tracker", Skip, "forge.provider", ""},
 
 		// the tracker line reports the forge and the issue source (#797)
-		{"tracker github origin, file issues", Input{IssueSource: "file"}, all, with(nil), "tracker", Pass, "gh authenticated (forge github (from origin), issues file)", ""},
-		{"tracker no remote is local", Input{IssueSource: "file"}, all, with(noRemote), "tracker", Skip, "forge local (no origin remote), issues file", ""},
-		{"tracker no remote and github source fails", Input{IssueSource: "github"}, all, with(noRemote), "tracker", Fail, "issues.source is github but the forge is local", "forge.provider github"},
-		{"tracker gitlab origin and github source fails", Input{IssueSource: "github"}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://gitlab.com/a/b"}}), "tracker", Fail, "issues.source is github but the forge is gitlab", "issues.source gitlab"},
-		{"tracker matching github source", Input{IssueSource: "github"}, all, with(nil), "tracker", Pass, "forge github (from origin), issues github", ""},
-		{"tracker matching gitlab source", Input{IssueSource: "gitlab"}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "git@gitlab.example.org:a/b.git"}}), "tracker", Pass, "issues gitlab", ""},
-		{"tracker explicit provider beats a silent origin", Input{IssueSource: "github", ForgeProvider: "github"}, all, with(noRemote), "tracker", Pass, "forge github (forge.provider), issues github", ""},
-		{"tracker explicit local", Input{IssueSource: "file", ForgeProvider: "local"}, all, with(nil), "tracker", Skip, "forge local (forge.provider)", ""},
-		{"tracker jira issues on a github forge", Input{IssueSource: "jira", JiraProject: "PROJ", IssuesConnection: "work"}, all, with(nil), "tracker", Pass, "forge github (from origin), issues jira", ""},
-		{"tracker jira without a project fails", Input{IssueSource: "jira", IssuesConnection: "work"}, all, with(nil), "tracker", Fail, "issues.jira.project is not set", "rota config set issues.jira.project"},
-		{"tracker jira without a connection fails", Input{IssueSource: "jira", JiraProject: "PROJ"}, all, with(nil), "tracker", Fail, "issues.connection is not set", "rota connect add"},
-		{"tracker linear issues on a github forge", Input{IssueSource: "linear", LinearTeam: "ENG", IssuesConnection: "work"}, all, with(nil), "tracker", Pass, "forge github (from origin), issues linear", ""},
-		{"tracker linear without a team fails", Input{IssueSource: "linear", IssuesConnection: "work"}, all, with(nil), "tracker", Fail, "issues.linear.team is not set", "rota config set issues.linear.team"},
-		{"tracker linear without a connection fails", Input{IssueSource: "linear", LinearTeam: "ENG"}, all, with(nil), "tracker", Fail, "issues.connection is not set", "--kind linear"},
-		{"tracker linear team the key cannot see fails", Input{IssueSource: "linear", LinearTeam: "NOPE", IssuesConnection: "work", TeamProblem: "Linear team NOPE is not visible to this API key"}, all, with(nil), "tracker", Fail, "team NOPE is not visible", "issues.linear.team"},
-		{"tracker itsaplan issues on a github forge", Input{IssueSource: "itsaplan", ItsaplanProject: "MKT", IssuesConnection: "plan"}, all, with(nil), "tracker", Pass, "forge github (from origin), issues itsaplan", ""},
-		{"tracker itsaplan without a project fails", Input{IssueSource: "itsaplan", IssuesConnection: "plan"}, all, with(nil), "tracker", Fail, "issues.itsaplan.project is not set", "rota config set issues.itsaplan.project"},
-		{"tracker itsaplan without a connection fails", Input{IssueSource: "itsaplan", ItsaplanProject: "MKT"}, all, with(nil), "tracker", Fail, "issues.connection is not set", "--kind itsaplan"},
-		{"tracker itsaplan project the key cannot see fails", Input{IssueSource: "itsaplan", ItsaplanProject: "NOPE", IssuesConnection: "plan", TeamProblem: "It's a Plan project NOPE is not visible to this API key"}, all, with(nil), "tracker", Fail, "project NOPE is not visible", "issues.itsaplan.project"},
-		{"tracker unknown host and github source fails", Input{IssueSource: "github"}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://git.example.com/a/b"}}), "tracker", Fail, "the forge is unknown", "forge.provider github"},
-		{"tracker forge source needs no match", Input{IssueSource: "forge"}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://gitlab.com/a/b"}}), "tracker", Pass, "issues forge", ""},
-		{"tracker legacy keys are named", Input{IssueSource: "issues"}, all, with(nil), "tracker", Pass, "rota migrate source", ""},
+		{"tracker github origin, file issues", Input{Tracker: tracker.Settings{Source: "file"}}, all, with(nil), "tracker", Pass, "gh authenticated (forge github (from origin), issues file)", ""},
+		{"tracker no remote is local", Input{Tracker: tracker.Settings{Source: "file"}}, all, with(noRemote), "tracker", Skip, "forge local (no origin remote), issues file", ""},
+		{"tracker no remote and github source fails", Input{Tracker: tracker.Settings{Source: "github"}}, all, with(noRemote), "tracker", Fail, "issues.source is github but the forge is local", "forge.provider github"},
+		{"tracker gitlab origin and github source fails", Input{Tracker: tracker.Settings{Source: "github"}}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://gitlab.com/a/b"}}), "tracker", Fail, "issues.source is github but the forge is gitlab", "issues.source gitlab"},
+		{"tracker matching github source", Input{Tracker: tracker.Settings{Source: "github"}}, all, with(nil), "tracker", Pass, "forge github (from origin), issues github", ""},
+		{"tracker matching gitlab source", Input{Tracker: tracker.Settings{Source: "gitlab"}}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "git@gitlab.example.org:a/b.git"}}), "tracker", Pass, "issues gitlab", ""},
+		{"tracker explicit provider beats a silent origin", Input{Tracker: tracker.Settings{Source: "github", Provider: "github"}}, all, with(noRemote), "tracker", Pass, "forge github (forge.provider), issues github", ""},
+		{"tracker explicit local", Input{Tracker: tracker.Settings{Source: "file", Provider: "local"}}, all, with(nil), "tracker", Skip, "forge local (forge.provider)", ""},
+		{"tracker jira issues on a github forge", Input{Tracker: tracker.Settings{Source: "jira", JiraProject: "PROJ", Connection: "work"}}, all, with(nil), "tracker", Pass, "forge github (from origin), issues jira", ""},
+		{"tracker jira without a project fails", Input{Tracker: tracker.Settings{Source: "jira", Connection: "work"}}, all, with(nil), "tracker", Fail, "issues.jira.project is not set", "rota config set issues.jira.project"},
+		{"tracker jira without a connection fails", Input{Tracker: tracker.Settings{Source: "jira", JiraProject: "PROJ"}}, all, with(nil), "tracker", Fail, "issues.connection is not set", "rota connect add"},
+		{"tracker linear issues on a github forge", Input{Tracker: tracker.Settings{Source: "linear", LinearTeam: "ENG", Connection: "work"}}, all, with(nil), "tracker", Pass, "forge github (from origin), issues linear", ""},
+		{"tracker linear without a team fails", Input{Tracker: tracker.Settings{Source: "linear", Connection: "work"}}, all, with(nil), "tracker", Fail, "issues.linear.team is not set", "rota config set issues.linear.team"},
+		{"tracker linear without a connection fails", Input{Tracker: tracker.Settings{Source: "linear", LinearTeam: "ENG"}}, all, with(nil), "tracker", Fail, "issues.connection is not set", "--kind linear"},
+		{"tracker linear team the key cannot see fails", Input{TeamProblem: "Linear team NOPE is not visible to this API key", Tracker: tracker.Settings{Source: "linear", LinearTeam: "NOPE", Connection: "work"}}, all, with(nil), "tracker", Fail, "team NOPE is not visible", "issues.linear.team"},
+		{"tracker itsaplan issues on a github forge", Input{Tracker: tracker.Settings{Source: "itsaplan", ItsaplanProject: "MKT", Connection: "plan"}}, all, with(nil), "tracker", Pass, "forge github (from origin), issues itsaplan", ""},
+		{"tracker itsaplan without a project fails", Input{Tracker: tracker.Settings{Source: "itsaplan", Connection: "plan"}}, all, with(nil), "tracker", Fail, "issues.itsaplan.project is not set", "rota config set issues.itsaplan.project"},
+		{"tracker itsaplan without a connection fails", Input{Tracker: tracker.Settings{Source: "itsaplan", ItsaplanProject: "MKT"}}, all, with(nil), "tracker", Fail, "issues.connection is not set", "--kind itsaplan"},
+		{"tracker itsaplan project the key cannot see fails", Input{TeamProblem: "It's a Plan project NOPE is not visible to this API key", Tracker: tracker.Settings{Source: "itsaplan", ItsaplanProject: "NOPE", Connection: "plan"}}, all, with(nil), "tracker", Fail, "project NOPE is not visible", "issues.itsaplan.project"},
+		{"tracker unknown host and github source fails", Input{Tracker: tracker.Settings{Source: "github"}}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://git.example.com/a/b"}}), "tracker", Fail, "the forge is unknown", "forge.provider github"},
+		{"tracker forge source needs no match", Input{Tracker: tracker.Settings{Source: "forge"}}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://gitlab.com/a/b"}}), "tracker", Pass, "issues forge", ""},
+		{"tracker legacy keys are named", Input{Tracker: tracker.Settings{Source: "issues"}}, all, with(nil), "tracker", Pass, "rota migrate source", ""},
 		{"tracker invalid config fails", Input{SourceProblem: "invalid issues.source 'svn'"}, all, with(nil), "tracker", Fail, "invalid issues.source", "rota config set"},
 		{"tracker outside a project says the forge", Input{}, all, with(noRemote), "tracker", Skip, "forge local", ""},
 
@@ -194,9 +180,9 @@ func TestRunTable(t *testing.T) {
 		{"hook not installed", herdrIn, all, with(map[string]Result{"herdr integration status": {Stdout: miss}}), "hook", Fail, "a: not installed", "herdr integration install claude"},
 		{"hook status errors", herdrIn, all, with(map[string]Result{"herdr integration status": {ExitCode: 1}}), "hook", Fail, "status failed", "herdr integration install claude"},
 		{"hook runs for a detected herdr pane", inHerdr, all, with(nil), "hook", Pass, "a: current", ""},
-		{"hook skips for detected tmux", Input{Dispatch: "subagent", Getenv: env("TMUX", "x"), Accounts: []config.Account{{Name: "a", ConfigDir: good}}}, all, with(nil), "hook", Skip, "not herdr", ""},
+		{"hook skips for detected tmux", Input{Dispatch: "subagent", RoundHost: host.Tmux, Accounts: []config.Account{{Name: "a", ConfigDir: good}}}, all, with(nil), "hook", Skip, "not herdr", ""},
 		{"hook skips off herdr", Input{Dispatch: "tmux", Accounts: []config.Account{{Name: "a", ConfigDir: good}}}, all, with(nil), "hook", Skip, "not herdr", ""},
-		{"hook skips without accounts", Input{Dispatch: "herdr"}, all, with(nil), "hook", Skip, "no accounts", ""},
+		{"hook skips without accounts", Input{Dispatch: "herdr", RoundHost: host.Herdr}, all, with(nil), "hook", Skip, "no accounts", ""},
 		{"hook skips without herdr", herdrIn, without("herdr"), with(nil), "hook", Skip, "see host", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -225,7 +211,7 @@ func TestHookRunsPerAccountWithItsConfigDir(t *testing.T) {
 	f := &fake{have: map[string]bool{"herdr": true}, reply: map[string]Result{
 		"herdr integration status": {Stdout: fixture(t, "integration_status_current.txt")},
 	}}
-	in := Input{Dispatch: "herdr", Home: d, Accounts: []config.Account{{Name: "a", ConfigDir: "~/one"}, {Name: "b", ConfigDir: "/two"}}, Exec: f.exec, Look: f.look}
+	in := Input{Dispatch: "herdr", RoundHost: host.Herdr, Home: d, Accounts: []config.Account{{Name: "a", ConfigDir: "~/one"}, {Name: "b", ConfigDir: "/two"}}, Exec: f.exec, Look: f.look}
 	c := statusOf(Run(context.Background(), in), "hook")
 	if c.Status != Pass {
 		t.Fatalf("%+v", c)
@@ -695,7 +681,7 @@ func TestHostFollowsSupportedHerdr(t *testing.T) {
 		have:  map[string]bool{"herdr": true},
 		reply: map[string]Result{"herdr --version": {Stdout: "herdr 0.10.1\n"}},
 	}
-	in := Input{Dispatch: "herdr", Exec: f.exec, Look: f.look}
+	in := Input{Dispatch: "herdr", RoundHost: host.Herdr, Exec: f.exec, Look: f.look}
 	if c := statusOf(Run(context.Background(), in), "host"); c.Status != Pass || !strings.Contains(c.Detail, "0.10.1") {
 		t.Errorf("0.10.1 under pin 0.10: %+v", c)
 	}
