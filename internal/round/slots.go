@@ -33,14 +33,14 @@ func SlotAccount(s *worker.Slot) (kind, account string) {
 }
 
 // SlotLoginProblem says why a slot's account cannot start a session: its
-// config dir has no usable Claude login (worker.CredentialsProblem). "" when it
+// config dir has no usable Claude login (Env.Login). "" when it
 // has one, and for a slot with no config dir or on a harness without a usage
 // meter (codex), which this check does not cover.
-func SlotLoginProblem(s *worker.Slot) string {
+func (e Env) SlotLoginProblem(s *worker.Slot) string {
 	if s == nil || s.ConfigDir() == "" || !harness.Resolve(s.Kind()).UsageMeter() {
 		return ""
 	}
-	return worker.CredentialsProblem(worker.ExpandConfigDir(s.ConfigDir()))
+	return e.Login.Problem(worker.ExpandConfigDir(s.ConfigDir()))
 }
 
 // loginHint names the two commands that repair a slot whose account has no login.
@@ -117,7 +117,7 @@ func IdleSlot(reg worker.Registry, roster []string, kind, account string) (strin
 // slot, a draining one included), then the round's active slots that are
 // idle or whose PR can be queued: only they take new work (Members). A slot
 // is never listed twice. A new-work slot whose account has no login
-// (SlotLoginProblem) is not picked: skipped names each with its problem, for
+// (Env.SlotLoginProblem) is not picked: skipped names each with its problem, for
 // the caller's warning.
 func (e Env) pickSlots(ctx context.Context, reg worker.Registry, set roundcfg.Settings, held string, n int, pre ...*worker.Slot) (out []*worker.Slot, skipped []string) {
 	roster := set.Roster
@@ -136,7 +136,7 @@ func (e Env) pickSlots(ctx context.Context, reg worker.Registry, set roundcfg.Se
 		}
 	}
 	usable := func(s *worker.Slot) bool {
-		if why := SlotLoginProblem(s); why != "" {
+		if why := e.SlotLoginProblem(s); why != "" {
 			skipped = append(skipped, fmt.Sprintf("%s (%s in %s)", s.Name(), why, s.ConfigDir()))
 			return false
 		}
