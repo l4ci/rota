@@ -40,7 +40,8 @@ func (e Env) SlotLoginProblem(s *worker.Slot) string {
 	if s == nil || s.ConfigDir() == "" || !harness.Resolve(s.Kind()).UsageMeter() {
 		return ""
 	}
-	return e.Login.Problem(worker.ExpandConfigDir(s.ConfigDir()))
+	home, _ := e.Worker.WithDefaults().Home()
+	return e.Login.Problem(worker.ExpandConfigDirIn(s.ConfigDir(), home))
 }
 
 // loginHint names the two commands that repair a slot whose account has no login.

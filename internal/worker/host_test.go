@@ -266,7 +266,7 @@ func TestConfigDirMismatch(t *testing.T) {
 		{"listed", "/acct/a/", accts, false},
 		{"unlisted", "/orch", accts, true},
 	} {
-		if got := ConfigDirMismatch(c.dir, c.accts) != ""; got != c.warn {
+		if got := ConfigDirMismatch(c.dir, c.accts, "/home/u") != ""; got != c.warn {
 			t.Errorf("%s: warn = %v, want %v", c.name, got, c.warn)
 		}
 	}

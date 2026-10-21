@@ -167,7 +167,7 @@ func defaultDeps() *Deps {
 	d.UpdateEnv = func() update.Env { return update.DefaultEnv(version.Get().Version, d.Getenv, d.Proc) }
 	d.OrchestrateEnv = func() orchestrate.Env { return defaultOrchestrateEnv(d) }
 	d.WorkerAccounts = func() *worker.Accounts {
-		return &worker.Accounts{Env: worker.Env{Now: d.Now, Getenv: d.Getenv}, Login: worker.SystemCredentials(d.Proc)}
+		return &worker.Accounts{Env: worker.Env{Now: d.Now, Getenv: d.Getenv}, Login: d.credentials()}
 	}
 	d.NewTracker = func(ctx context.Context, root string, cfg any) (backlog.Tracker, error) {
 		return d.issueTracker(ctx, cfg, root)
@@ -227,6 +227,22 @@ func (d *Deps) resolveHost(root string) host.Kind {
 	return worker.ResolveHost(root, config.Load(rotatree.Config(root)), d.Getenv, d.LookPath)
 }
 
+// credentials is worker.SystemCredentials with the home read off Deps.
+func (d *Deps) credentials() worker.Credentials {
+	c := worker.SystemCredentials(d.Proc)
+	c.Home = d.UserHomeDir
+	return c
+}
+
+// homeOf reads a home seam; "" when it has none or fails.
+func homeOf(f func() (string, error)) string {
+	if f == nil {
+		return ""
+	}
+	h, _ := f()
+	return h
+}
+
 // workerEnv is the WorkerEnv hook with its host filled from Host.
 func (d *Deps) workerEnv() worker.Env {
 	e := d.WorkerEnv()
@@ -241,6 +257,12 @@ func (d *Deps) workerEnv() worker.Env {
 	}
 	if e.Getenv == nil {
 		e.Getenv = d.Getenv
+	}
+	if e.Home == nil {
+		e.Home = d.UserHomeDir
+	}
+	if e.Getwd == nil {
+		e.Getwd = d.Getwd
 	}
 	if e.LookPath == nil {
 		e.LookPath = d.LookPath
@@ -281,7 +303,7 @@ func (d *Deps) workerEnv() worker.Env {
 // baseRoundEnv is the round.Env every round verb starts from: the one Git, the
 // lease and the worker env, all read off Deps so a swapped fake reaches them.
 func (d *Deps) baseRoundEnv() round.Env {
-	return round.Env{Git: d.Git, Lease: d.LeaseEnv(), Worker: d.workerEnv(), Login: worker.SystemCredentials(d.Proc)}
+	return round.Env{Git: d.Git, Lease: d.LeaseEnv(), Worker: d.workerEnv(), Login: d.credentials()}
 }
 
 // escalationEnv is the EscalationEnv hook with its host (always herdr, the
