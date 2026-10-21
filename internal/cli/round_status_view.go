@@ -181,6 +181,9 @@ func blockedWhy(c round.Candidate) []string {
 	if c.OpenPR != 0 {
 		why = append(why, fmt.Sprintf("waiting on open PR #%d", c.OpenPR))
 	}
+	if c.DependsOnPR != 0 {
+		why = append(why, fmt.Sprintf("depends on PR #%d", c.DependsOnPR))
+	}
 	for _, o := range c.Overlaps {
 		why = append(why, overlapText(o))
 	}
