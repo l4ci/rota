@@ -9,89 +9,55 @@ import (
 	"github.com/l4ci/rota/internal/repos"
 )
 
-func isolate(t *testing.T) string {
+// isolate returns a temp root and an Env whose config and state dirs live
+// under it; HOME is a dir of its own, so nothing reads the real one.
+func isolate(t *testing.T) (string, Env) {
 	t.Helper()
 	x := t.TempDir()
-	t.Setenv("ROTA_CONFIG_DIR", "")
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(x, "config"))
-	t.Setenv("XDG_STATE_HOME", filepath.Join(x, "state"))
-	return x
-}
-
-func TestDirHonoursXDGAndFallsBackToHome(t *testing.T) {
-	x := isolate(t)
-	if d, _ := Dir(); d != filepath.Join(x, "config", "rota") {
-		t.Errorf("xdg: %s", d)
-	}
-	t.Setenv("XDG_CONFIG_HOME", "relative/ignored")
-	h := t.TempDir()
-	t.Setenv("HOME", h)
-	if d, _ := Dir(); d != filepath.Join(h, ".config", "rota") {
-		t.Errorf("home: %s", d)
-	}
-}
-
-func TestResolveOverrideBeatsXDGAndIgnoresRelative(t *testing.T) {
-	x := isolate(t)
-	o := t.TempDir()
-	t.Setenv("ROTA_CONFIG_DIR", o)
-	if d, src, w, _ := Resolve(); d != o || src != SourceOverride || w != "" {
-		t.Errorf("override: %s %s %q", d, src, w)
-	}
-	t.Setenv("ROTA_CONFIG_DIR", "rel/dir")
-	d, src, w, _ := Resolve()
-	if d != filepath.Join(x, "config", "rota") || src != SourceXDG || w == "" {
-		t.Errorf("relative: %s %s %q", d, src, w)
-	}
-	t.Setenv("ROTA_CONFIG_DIR", "")
-	if _, src, w, _ := Resolve(); src != SourceXDG || w != "" {
-		t.Errorf("unset: %s %q", src, w)
-	}
-	t.Setenv("XDG_CONFIG_HOME", "")
-	t.Setenv("HOME", t.TempDir())
-	if _, src, _, _ := Resolve(); src != SourceDefault {
-		t.Errorf("default: %s", src)
-	}
+	return x, fakeEnv(map[string]string{
+		"XDG_CONFIG_HOME": filepath.Join(x, "config"),
+		"XDG_STATE_HOME":  filepath.Join(x, "state"),
+	}, filepath.Join(x, "home"))
 }
 
 func TestRegisterIsIdempotentAndRefreshesLastSeen(t *testing.T) {
-	isolate(t)
+	_, env := isolate(t)
 	proj := t.TempDir()
-	if added, err := Register(proj, time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)); err != nil || !added {
+	if added, err := Register(env, proj, time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)); err != nil || !added {
 		t.Fatalf("first: %v %v", added, err)
 	}
-	if added, err := Register(proj, time.Date(2026, 2, 2, 0, 0, 0, 0, time.UTC)); err != nil || added {
+	if added, err := Register(env, proj, time.Date(2026, 2, 2, 0, 0, 0, 0, time.UTC)); err != nil || added {
 		t.Fatalf("second: %v %v", added, err)
 	}
-	ps, _ := List()
+	ps, _ := List(env)
 	if len(ps) != 1 || ps[0].LastSeen != "2026-02-02T00:00:00Z" || ps[0].Name != filepath.Base(proj) || ps[0].Missing {
 		t.Fatalf("%+v", ps)
 	}
 }
 
 func TestRegisterResolvesSymlinks(t *testing.T) {
-	isolate(t)
+	_, env := isolate(t)
 	proj := t.TempDir()
 	link := filepath.Join(t.TempDir(), "link")
 	if err := os.Symlink(proj, link); err != nil {
 		t.Skip(err)
 	}
-	Register(proj, time.Now())
-	Register(link, time.Now())
-	if ps, _ := List(); len(ps) != 1 {
+	Register(env, proj, time.Now())
+	Register(env, link, time.Now())
+	if ps, _ := List(env); len(ps) != 1 {
 		t.Fatalf("%+v", ps)
 	}
 }
 
 func TestListFlagsMissingPathsAndKeepsThem(t *testing.T) {
-	isolate(t)
+	_, env := isolate(t)
 	gone := filepath.Join(t.TempDir(), "gone")
 	os.Mkdir(gone, 0o755)
 	live := t.TempDir()
-	Register(gone, time.Now())
-	Register(live, time.Now())
+	Register(env, gone, time.Now())
+	Register(env, live, time.Now())
 	os.Remove(gone)
-	ps, _ := List()
+	ps, _ := List(env)
 	if len(ps) != 2 {
 		t.Fatalf("%+v", ps)
 	}
@@ -103,45 +69,45 @@ func TestListFlagsMissingPathsAndKeepsThem(t *testing.T) {
 }
 
 func TestListEmptyAndCorruptRegistry(t *testing.T) {
-	x := isolate(t)
-	if ps, err := List(); err != nil || len(ps) != 0 {
+	x, env := isolate(t)
+	if ps, err := List(env); err != nil || len(ps) != 0 {
 		t.Fatalf("%v %v", ps, err)
 	}
 	os.MkdirAll(filepath.Join(x, "state", "rota"), 0o755)
 	os.WriteFile(filepath.Join(x, "state", "rota", "projects.json"), []byte("{nope"), 0o644)
-	if ps, err := List(); err != nil || len(ps) != 0 {
+	if ps, err := List(env); err != nil || len(ps) != 0 {
 		t.Fatalf("%v %v", ps, err)
 	}
-	if added, err := Register(t.TempDir(), time.Now()); err != nil || !added {
+	if added, err := Register(env, t.TempDir(), time.Now()); err != nil || !added {
 		t.Fatalf("register over corrupt: %v %v", added, err)
 	}
 }
 
 func TestRemoveDropsOneEntryAndKeepsTheDirectory(t *testing.T) {
-	isolate(t)
+	_, env := isolate(t)
 	a, b := t.TempDir(), t.TempDir()
-	Register(a, time.Now())
-	Register(b, time.Now())
+	Register(env, a, time.Now())
+	Register(env, b, time.Now())
 	link := filepath.Join(t.TempDir(), "link")
 	os.Symlink(a, link)
-	got, err := Remove(link)
+	got, err := Remove(env, link)
 	if err != nil || len(got) != 1 || got[0].Path != repos.Realpath(a) {
 		t.Fatalf("remove via symlink: %+v %v", got, err)
 	}
 	if _, err := os.Stat(a); err != nil {
 		t.Errorf("the directory must stay: %v", err)
 	}
-	if ps, _ := List(); len(ps) != 1 || ps[0].Path != repos.Realpath(b) {
+	if ps, _ := List(env); len(ps) != 1 || ps[0].Path != repos.Realpath(b) {
 		t.Errorf("other entry must stay: %+v", ps)
 	}
-	if got, _ := Remove(a); len(got) != 0 {
+	if got, _ := Remove(env, a); len(got) != 0 {
 		t.Errorf("second remove should match nothing: %+v", got)
 	}
 }
 
 func TestRemoveFindsAGoneDirectoryAndSkipsAnAbsentRegistry(t *testing.T) {
-	x := isolate(t)
-	if got, err := Remove("/nope"); err != nil || got != nil {
+	x, env := isolate(t)
+	if got, err := Remove(env, "/nope"); err != nil || got != nil {
 		t.Fatalf("absent registry: %+v %v", got, err)
 	}
 	if _, err := os.Stat(filepath.Join(x, "state", "rota", "projects.json")); err == nil {
@@ -149,36 +115,11 @@ func TestRemoveFindsAGoneDirectoryAndSkipsAnAbsentRegistry(t *testing.T) {
 	}
 	gone := filepath.Join(t.TempDir(), "gone")
 	os.Mkdir(gone, 0o755)
-	Register(gone, time.Now())
+	Register(env, gone, time.Now())
 	os.Remove(gone)
-	got, err := Remove(gone)
+	got, err := Remove(env, gone)
 	if err != nil || len(got) != 1 || !got[0].Missing {
 		t.Fatalf("gone dir: %+v %v", got, err)
-	}
-}
-
-func TestDataDir(t *testing.T) {
-	t.Setenv("XDG_DATA_HOME", "/x/data")
-	if d, _ := DataDir(); d != "/x/data/rota" {
-		t.Errorf("%q", d)
-	}
-	t.Setenv("XDG_DATA_HOME", "relative")
-	t.Setenv("HOME", "/h")
-	if d, _ := DataDir(); d != "/h/.local/share/rota" {
-		t.Errorf("%q", d)
-	}
-}
-
-func TestStateDirHonoursXDGAndFallsBackToHome(t *testing.T) {
-	x := isolate(t)
-	if d, _ := StateDir(); d != filepath.Join(x, "state", "rota") {
-		t.Errorf("xdg: %s", d)
-	}
-	t.Setenv("XDG_STATE_HOME", "relative/ignored")
-	h := t.TempDir()
-	t.Setenv("HOME", h)
-	if d, _ := StateDir(); d != filepath.Join(h, ".local", "state", "rota") {
-		t.Errorf("home: %s", d)
 	}
 }
 
@@ -197,10 +138,10 @@ func oldRegistry(t *testing.T, x, body string) string {
 }
 
 func TestListMigratesTheConfigDirRegistry(t *testing.T) {
-	x := isolate(t)
+	x, env := isolate(t)
 	proj := t.TempDir()
 	old := oldRegistry(t, x, `{"projects":[{"path":"`+proj+`","name":"p","lastSeen":"2026-01-01T00:00:00Z"}]}`)
-	ps, err := List()
+	ps, err := List(env)
 	if err != nil || len(ps) != 1 || ps[0].Path != proj {
 		t.Fatalf("%+v %v", ps, err)
 	}
@@ -215,19 +156,83 @@ func TestListMigratesTheConfigDirRegistry(t *testing.T) {
 }
 
 func TestMigrationKeepsTheStateRegistryWhenBothExist(t *testing.T) {
-	x := isolate(t)
+	x, env := isolate(t)
 	proj := t.TempDir()
-	if _, err := Register(proj, time.Now()); err != nil {
+	if _, err := Register(env, proj, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	old := oldRegistry(t, x, `{"projects":[{"path":"/old","name":"old"}]}`)
-	ps, _ := List()
+	ps, _ := List(env)
 	if len(ps) != 1 || ps[0].Path != repos.Realpath(proj) {
 		t.Fatalf("state file must win: %+v", ps)
 	}
 	for _, f := range []string{old, old + ".lock"} {
 		if _, err := os.Stat(f); err == nil {
 			t.Errorf("%s must be removed", f)
+		}
+	}
+}
+
+func fakeEnv(vars map[string]string, home string) Env {
+	return Env{
+		Getenv: func(k string) string { return vars[k] },
+		Home: func() (string, error) {
+			if home == "" {
+				return "", os.ErrNotExist
+			}
+			return home, nil
+		},
+	}
+}
+
+func TestResolveReadsOnlyTheInjectedEnv(t *testing.T) {
+	t.Setenv("ROTA_CONFIG_DIR", "/process/override")
+	t.Setenv("XDG_CONFIG_HOME", "/process/xdg")
+	t.Setenv("HOME", "/process/home")
+	cases := []struct {
+		name         string
+		vars         map[string]string
+		home, dir    string
+		source, warn string
+	}{
+		{"override", map[string]string{"ROTA_CONFIG_DIR": "/o/dir", "XDG_CONFIG_HOME": "/x"}, "/h", "/o/dir", SourceOverride, ""},
+		{"xdg", map[string]string{"XDG_CONFIG_HOME": "/x"}, "/h", "/x/rota", SourceXDG, ""},
+		{"home", nil, "/h", "/h/.config/rota", SourceDefault, ""},
+		{"relative override", map[string]string{"ROTA_CONFIG_DIR": "rel"}, "/h", "/h/.config/rota", SourceDefault, "ROTA_CONFIG_DIR=rel is not an absolute path, ignored"},
+	}
+	for _, c := range cases {
+		dir, src, warn, err := Resolve(fakeEnv(c.vars, c.home))
+		if err != nil || dir != c.dir || src != c.source || warn != c.warn {
+			t.Errorf("%s: got %q %q %q %v, want %q %q %q", c.name, dir, src, warn, err, c.dir, c.source, c.warn)
+		}
+	}
+	if _, _, _, err := Resolve(fakeEnv(nil, "")); err == nil {
+		t.Error("no env and no home: want an error")
+	}
+}
+
+func TestDirLookupsReadOnlyTheInjectedEnv(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", "/process/xdg")
+	t.Setenv("XDG_DATA_HOME", "/process/xdg")
+	t.Setenv("XDG_STATE_HOME", "/process/xdg")
+	t.Setenv("HOME", "/process/home")
+	lookups := []struct {
+		name, xdg, rel string
+		fn             func(Env) (string, error)
+	}{
+		{"Dir", "XDG_CONFIG_HOME", ".config", Dir},
+		{"DataDir", "XDG_DATA_HOME", ".local/share", DataDir},
+		{"StateDir", "XDG_STATE_HOME", ".local/state", StateDir},
+	}
+	for _, l := range lookups {
+		if d, err := l.fn(fakeEnv(map[string]string{l.xdg: "/x"}, "/h")); err != nil || d != "/x/rota" {
+			t.Errorf("%s xdg: %q %v", l.name, d, err)
+		}
+		if d, err := l.fn(fakeEnv(map[string]string{l.xdg: "relative/ignored"}, "/h")); err != nil || d != "/h/"+l.rel+"/rota" {
+			t.Errorf("%s home: %q %v", l.name, d, err)
+		}
+		if _, err := l.fn(fakeEnv(nil, "")); err == nil {
+			t.Errorf("%s: no env and no home must error", l.name)
 		}
 	}
 }

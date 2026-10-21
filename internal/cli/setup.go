@@ -108,7 +108,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 		root, _ := res.Data.(*jsonx.Object)
 		out := jsonx.NewObject()
 		lines := []string{res.Text}
-		globalVals, globalOK := loadGlobalValues()
+		globalVals, globalOK := loadGlobalValues(c.deps().projectsEnv())
 		for _, p := range config.Prompts {
 			v, ok := answers[p.Key]
 			if !ok || (p.Optional && v == "") {
@@ -133,7 +133,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 				save = askSaveGlobal(in, c.Stderr, cands, answers, len(globalVals) == 0)
 			}
 			if save {
-				saved, err := saveGlobalAnswers(cands, answers)
+				saved, err := saveGlobalAnswers(c.deps().projectsEnv(), cands, answers)
 				if err != nil {
 					return Result{}, err
 				}
@@ -221,7 +221,7 @@ func setupDefaults(c *Ctx) map[string]string {
 	for _, p := range config.Prompts {
 		defs[p.Key] = p.DefaultChoice()
 	}
-	dir, err := projects.Dir()
+	dir, err := projects.Dir(c.deps().projectsEnv())
 	var vals map[string]any
 	if err == nil {
 		vals, err = config.LoadGlobal(dir)
@@ -240,8 +240,8 @@ func setupDefaults(c *Ctx) map[string]string {
 
 // loadGlobalValues is the global config's values. ok is false when the dir or
 // file cannot be read or parsed; a missing file is ok with no values.
-func loadGlobalValues() (vals map[string]any, ok bool) {
-	dir, err := projects.Dir()
+func loadGlobalValues(env projects.Env) (vals map[string]any, ok bool) {
+	dir, err := projects.Dir(env)
 	if err != nil {
 		return nil, false
 	}
@@ -268,12 +268,12 @@ func globalCandidates(answers map[string]string, global map[string]any) []config
 	return out
 }
 
-func saveGlobalAnswers(cands []config.Prompt, answers map[string]string) ([]string, error) {
+func saveGlobalAnswers(env projects.Env, cands []config.Prompt, answers map[string]string) ([]string, error) {
 	vals := map[string]any{}
 	for _, p := range cands {
 		vals[p.Key] = config.Coerce(answers[p.Key])
 	}
-	dir, err := projects.Dir()
+	dir, err := projects.Dir(env)
 	if err != nil {
 		return nil, Resolution("%v", err)
 	}

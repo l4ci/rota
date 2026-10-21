@@ -23,6 +23,7 @@ import (
 	"github.com/l4ci/rota/internal/orchestrate"
 	"github.com/l4ci/rota/internal/palette"
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
@@ -216,6 +217,12 @@ func (c *Ctx) deps() *Deps {
 
 // resolveHost is worker.ResolveHost over Deps' own getenv and lookPath, so the
 // decision and the handle from Host come from the same injected sources.
+// projectsEnv is the environment the global dir lookups read: Deps.Getenv and
+// Deps.UserHomeDir, so nothing under internal/projects reads the process.
+func (d *Deps) projectsEnv() projects.Env {
+	return projects.Env{Getenv: d.Getenv, Home: d.UserHomeDir}
+}
+
 func (d *Deps) resolveHost(root string) host.Kind {
 	return worker.ResolveHost(root, config.Load(rotatree.Config(root)), d.Getenv, d.LookPath)
 }
