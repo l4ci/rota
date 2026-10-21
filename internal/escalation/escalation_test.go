@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/l4ci/rota/internal/jsonx"
 	"testing"
 	"time"
 
@@ -91,5 +93,19 @@ func TestSendRecordWriteFailureKeepsTheURL(t *testing.T) {
 	}
 	if len(res.Warnings) == 0 {
 		t.Error("the url read failure should be a warning")
+	}
+}
+
+// The host decision reads the injected config, not .rota/config.json.
+func TestNotifyReadsTheInjectedConfig(t *testing.T) {
+	v, err := jsonx.Decode([]byte(`{"round":{"dispatch":"tmux"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := Env{Getenv: func(string) string { return "" }, Config: func(string) any { return v },
+		LookPath: func(string) (string, error) { return "", errors.New("none") }}
+	sent, warns := notify(context.Background(), env, t.TempDir(), "e1", SendOpts{Title: "t"}, nil)
+	if sent || len(warns) != 1 || !strings.Contains(warns[0], "host is not herdr") {
+		t.Fatalf("sent=%v warns=%v", sent, warns)
 	}
 }

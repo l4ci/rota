@@ -68,6 +68,16 @@ type Env struct {
 	Forge func(ctx context.Context, root string) (Forge, error)
 	// Host returns the herdr host (never tmux, which has no notifications).
 	Host func() host.Host
+	// Config returns the merged project config; nil loads .rota/config.json.
+	Config func(root string) any
+}
+
+// config is the project config through the Config seam.
+func (e Env) config(root string) any {
+	if e.Config != nil {
+		return e.Config(root)
+	}
+	return config.Load(rotatree.Config(root))
 }
 
 func (e Env) withDefaults() Env {
@@ -278,7 +288,7 @@ func pendingData(id string) *jsonx.Object {
 // notify raises the herdr notification when the host is herdr: round.dispatch
 // is herdr or the process runs inside herdr, and the binary is installed.
 func notify(ctx context.Context, env Env, root, id string, o SendOpts, warns []string) (bool, []string) {
-	switch worker.ResolveHost(root, config.Load(rotatree.Config(root)), env.Getenv, env.LookPath) {
+	switch worker.ResolveHost(root, env.config(root), env.Getenv, env.LookPath) {
 	case host.Solo: // the PR comment is the only channel
 		return false, append(warns, "no notification: the round is solo, there is no herdr")
 	case host.Herdr:

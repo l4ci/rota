@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/l4ci/rota/internal/jsonx"
 	"testing"
 	"time"
 )
@@ -309,5 +311,16 @@ func TestAddContradictionStampsInjectedClock(t *testing.T) {
 	list, err := s.Contradictions()
 	if err != nil || len(list) != 1 || !strings.HasPrefix(list[0].LoggedAt, "2031-04-05T09:30:00") {
 		t.Fatalf("loggedAt not from the injected clock: %+v %v", list, err)
+	}
+}
+
+func TestPromoteThresholdReadsTheInjectedConfig(t *testing.T) {
+	v, err := jsonx.Decode([]byte(`{"learn":{"promoteThreshold":4}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := Store{Root: t.TempDir(), Config: func(string) any { return v }}
+	if got := s.PromoteThreshold(); got != 4 {
+		t.Fatalf("threshold %d, want 4", got)
 	}
 }
