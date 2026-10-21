@@ -88,6 +88,8 @@ type Env struct {
 	// PickAccount names the round.accounts entry with the most headroom, as the
 	// worker slots are balanced; false when none is usable or it is unset.
 	PickAccount func(root string) (name string, ok bool)
+	// Home reads the user home dir for a configDir's ~/; nil means none.
+	Home func() (string, error)
 }
 
 // Resolve plans the launch for the project at root: harness from
@@ -144,9 +146,13 @@ func (e Env) Resolve(root string, cfg any) (Plan, error) {
 // No accounts: both empty, and the agent keeps the default account.
 func (e Env) account(root string, cfg any) (name, dir string) {
 	accts := config.Accounts(cfg)
+	home := ""
+	if e.Home != nil {
+		home, _ = e.Home()
+	}
 	if d := e.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
 		for _, a := range accts {
-			if a.ConfigDir != "" && worker.SameConfigDir(a.ConfigDir, d) {
+			if a.ConfigDir != "" && worker.SameConfigDirIn(a.ConfigDir, d, home) {
 				return a.Name, d
 			}
 		}
@@ -171,7 +177,7 @@ func (e Env) account(root string, cfg any) (name, dir string) {
 			}
 		}
 	}
-	return pick.Name, worker.ExpandConfigDir(pick.ConfigDir)
+	return pick.Name, worker.ExpandConfigDirIn(pick.ConfigDir, home)
 }
 
 // sessionName is the tmux session for a project: tmux rejects '.' and ':'.

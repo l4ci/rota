@@ -38,6 +38,7 @@ func defaultOrchestrateEnv(d *Deps) orchestrate.Env {
 		Exec:     syscall.Exec,
 		Env:      d.Environ(),
 		Self:     self,
+		Home:     d.UserHomeDir,
 	}
 }
 
