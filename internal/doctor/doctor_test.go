@@ -907,3 +907,23 @@ func TestAccountsKeychainThroughInjectedRunner(t *testing.T) {
 		t.Errorf("accounts = %+v, want a fail naming the Keychain", c)
 	}
 }
+
+func TestStaleMilestoneFilesWarn(t *testing.T) {
+	f := &fake{}
+	find := func(in Input) Check {
+		in.Exec, in.Look = f.exec, f.look
+		for _, c := range Run(context.Background(), in).Checks {
+			if c.Name == "milestones" {
+				return c
+			}
+		}
+		return Check{}
+	}
+	if c := find(Input{}); c.Name != "" {
+		t.Fatalf("no stale files adds no line: %+v", c)
+	}
+	c := find(Input{StaleMilestoneFiles: []string{"M01.md", "M07.md"}})
+	if c.Status != Warn || !strings.Contains(c.Detail, "M01.md, M07.md") || !strings.Contains(c.Hint, "rota migrate milestone-files --apply") {
+		t.Fatalf("%+v", c)
+	}
+}
