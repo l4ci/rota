@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"strings"
@@ -62,21 +61,8 @@ func escalateFunc(ctx context.Context, c *Ctx, root string) func(issue tracker.I
 // evidence, so it reads as unknown.
 func orchestratorData(commonDir, root string, maxAge time.Duration) func(now time.Time) limits.Data {
 	return func(now time.Time) limits.Data {
-		var best hook.State
-		var bestAt time.Time
-		for _, st := range hook.Sessions(commonDir) {
-			if !fsio.SameDir(st.Cwd, root) {
-				continue
-			}
-			at, err := time.Parse(time.RFC3339, st.UpdatedAt)
-			if err != nil {
-				continue
-			}
-			if bestAt.IsZero() || at.After(bestAt) {
-				best, bestAt = st, at
-			}
-		}
-		if bestAt.IsZero() {
+		best, bestAt, ok := hook.NewestAtRoot(commonDir, root, func(st hook.State) (string, bool) { return st.UpdatedAt, true })
+		if !ok {
 			return limits.Data{}
 		}
 		d := limits.DataFromRateLimits(best.RateLimits, now)
