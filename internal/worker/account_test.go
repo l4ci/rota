@@ -367,12 +367,12 @@ func fakeKeychain(goos string, entries map[string]string) (c Credentials, reads 
 
 func TestKeychainService(t *testing.T) {
 	home, _ := os.UserHomeDir()
-	if got := keychainService(filepath.Join(home, ".claude")); got != "Claude Code-credentials" {
+	if got := keychainService(filepath.Join(home, ".claude"), home); got != "Claude Code-credentials" {
 		t.Errorf("default dir = %q, want no suffix", got)
 	}
 	// sha256("/acct/alpha") = 5c3a1b3b...; the suffix is its first 8 hex chars.
 	want := "Claude Code-credentials-" + sha256Hex8("/acct/alpha")
-	if got := keychainService("/acct/alpha"); got != want || len(got) != len("Claude Code-credentials-")+8 {
+	if got := keychainService("/acct/alpha", home); got != want || len(got) != len("Claude Code-credentials-")+8 {
 		t.Errorf("custom dir = %q, want %q", got, want)
 	}
 }
@@ -384,7 +384,7 @@ func sha256Hex8(s string) string {
 
 func TestKeychainOnlyCredentialsAreUsableOnDarwin(t *testing.T) {
 	dir := t.TempDir()
-	kc, _ := fakeKeychain("darwin", map[string]string{keychainService(dir): `{"claudeAiOauth":{"accessToken":"kc"}}`})
+	kc, _ := fakeKeychain("darwin", map[string]string{keychainService(dir, ""): `{"claudeAiOauth":{"accessToken":"kc"}}`})
 	if got := kc.Problem(dir); got != "" {
 		t.Errorf("Problem = %q, want usable", got)
 	}
@@ -396,7 +396,7 @@ func TestKeychainOnlyCredentialsAreUsableOnDarwin(t *testing.T) {
 func TestExpiredFileYieldsToKeychain(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"old","expiresAt":1000}}`), 0o600)
-	kc, _ := fakeKeychain("darwin", map[string]string{keychainService(dir): `{"claudeAiOauth":{"accessToken":"kc"}}`})
+	kc, _ := fakeKeychain("darwin", map[string]string{keychainService(dir, ""): `{"claudeAiOauth":{"accessToken":"kc"}}`})
 	if tok, why := (&Accounts{Login: kc}).token(dir); tok != "kc" || why != "" {
 		t.Errorf("token = %q, %q, want the Keychain token", tok, why)
 	}
@@ -414,7 +414,7 @@ func TestExpiredFileWithoutKeychainStaysExpired(t *testing.T) {
 func TestValidFileWinsAndSkipsKeychain(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"file"}}`), 0o600)
-	kc, calls := fakeKeychain("darwin", map[string]string{keychainService(dir): `{"claudeAiOauth":{"accessToken":"kc"}}`})
+	kc, calls := fakeKeychain("darwin", map[string]string{keychainService(dir, ""): `{"claudeAiOauth":{"accessToken":"kc"}}`})
 	if tok, why := (&Accounts{Login: kc}).token(dir); tok != "file" || why != "" {
 		t.Errorf("token = %q, %q, want the file token", tok, why)
 	}
@@ -439,7 +439,7 @@ func TestMissingKeychainEntryNamesKeychain(t *testing.T) {
 
 func TestKeychainIgnoredOffDarwin(t *testing.T) {
 	dir := t.TempDir()
-	kc, calls := fakeKeychain("linux", map[string]string{keychainService(dir): `{"claudeAiOauth":{"accessToken":"kc"}}`})
+	kc, calls := fakeKeychain("linux", map[string]string{keychainService(dir, ""): `{"claudeAiOauth":{"accessToken":"kc"}}`})
 	if got := kc.Problem(dir); got != "no credentials file" || *calls != 0 {
 		t.Errorf("Problem = %q, want the file-only reason", got)
 	}
