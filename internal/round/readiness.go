@@ -420,6 +420,7 @@ func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend,
 		sort.Strings(paths)
 		x := InFlight{Slot: name, Issue: id, Paths: paths, Scopes: sc, ScopeSource: src}
 		out = append(out, prs.apply(be, x, branch, shared))
+		out = append(out, memberInFlight(be, name, s.Bundle(), tracked, shared)...)
 	}
 	for _, q := range reg.PRs() {
 		id := queuedIssue(q)
@@ -432,6 +433,20 @@ func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend,
 		sort.Strings(paths)
 		x := InFlight{Slot: "queue:" + q.From, Issue: id, Paths: paths, Scopes: sc, ScopeSource: src}
 		out = append(out, prs.apply(be, x, q.Branch, shared))
+		out = append(out, memberInFlight(be, "queue:"+q.From, q.Bundle, tracked, shared)...)
+	}
+	return out
+}
+
+// memberInFlight is one entry per member of a bundle, labelled with its slot:
+// the member's own footprint and scopes. The slot's changed files and open PR
+// stay on the lead's entry, which holds the bundle's one branch.
+func memberInFlight(be backlog.Backend, slot string, members, tracked, shared []string) []InFlight {
+	var out []InFlight
+	for _, id := range members {
+		paths := itemFootprint(be, id, tracked, shared)
+		sc, src := ItemScopeSource(be, id)
+		out = append(out, InFlight{Slot: slot, Issue: id, Paths: paths, Scopes: sc, ScopeSource: src})
 	}
 	return out
 }

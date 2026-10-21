@@ -53,7 +53,8 @@ func newScopeFx(t *testing.T, overlap string, extraCfg string) *scopeFx {
 	issue := func(n int, title string) string {
 		return fmt.Sprintf(`{"number":%d,"title":%q,"body":"%s","labels":[],"state":"OPEN"}`, n, title, body)
 	}
-	issues := map[string]string{"1": issue(1, "Holder"), "2": issue(2, "Candidate")}
+	// 3..5 answer `issue view` only (round assign --bundle members); the list stays 1 and 2.
+	issues := map[string]string{"1": issue(1, "Holder"), "2": issue(2, "Candidate"), "3": issue(3, "Member three"), "4": issue(4, "Member four"), "5": issue(5, "Member five")}
 	comments := map[int][]string{}
 	labels := map[int][]string{}
 	fx := &scopeFx{root: root}

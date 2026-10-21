@@ -181,6 +181,17 @@ type QueuedPR struct {
 	Issue, Branch, PR, Base, From, ClaimID string
 	Round                                  int
 	Relays                                 []any
+	// Bundle is the member issues the PR closes beside Issue (a bundled slot's
+	// PR that was queued), none for one issue.
+	Bundle []string
+}
+
+// Issues is every issue the queued PR holds: Issue first, then its members.
+func (q QueuedPR) Issues() []string {
+	if q.Issue == "" {
+		return nil
+	}
+	return append([]string{q.Issue}, q.Bundle...)
 }
 
 func queuedFrom(o *jsonx.Object) QueuedPR {
@@ -189,7 +200,7 @@ func queuedFrom(o *jsonx.Object) QueuedPR {
 	return QueuedPR{
 		Issue: jsonx.Str(o, "issue"), Branch: jsonx.Str(o, "branch"), PR: jsonx.Str(o, "pr"),
 		Base: jsonx.Str(o, "base"), From: jsonx.Str(o, "from"), ClaimID: jsonx.Str(o, "claimId"),
-		Round: round, Relays: listOf(o, "relays"),
+		Round: round, Relays: listOf(o, "relays"), Bundle: strList(o, "bundle"),
 	}
 }
 
@@ -207,6 +218,7 @@ func (q QueuedPR) object() *jsonx.Object {
 	o.Set("claimId", q.ClaimID)
 	o.Set("round", q.Round)
 	o.Set("relays", relays)
+	setStrList(o, "bundle", q.Bundle)
 	return o
 }
 
