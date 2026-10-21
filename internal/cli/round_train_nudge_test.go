@@ -381,3 +381,48 @@ func TestWaitingPRsLeavesOutABouncedPR(t *testing.T) {
 		t.Fatalf("waiting = %+v, want two PRs", got)
 	}
 }
+
+// TestWaitingPRsReviewedByHead: a bounce recorded at an older head no longer
+// holds the PR back once it is pushed to, and a blocking verdict recorded at an
+// older head leaves the PR unreviewed, not blocked-and-reviewed.
+func TestWaitingPRsReviewedByHead(t *testing.T) {
+	const oldSha = "0123456789abcdef0123456789abcdef01234567"
+	for name, tc := range map[string]struct {
+		reviewed []string
+		setup    func(t *testing.T, dir string)
+		want     bool
+	}{
+		"push clears the bounce": {
+			reviewed: []string{"a/1-x"},
+			setup: func(t *testing.T, dir string) {
+				if _, err := worker.RecordBounce(worker.Env{}, dir, "1", "", oldSha); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: true,
+		},
+		"blocking verdict at an older head": {
+			setup: func(t *testing.T, dir string) {
+				rec := verdict.NewRecord(verdict.ReviewQuality, verdict.Concerns, oldSha,
+					verdict.Body{Findings: []verdict.Finding{{Severity: "major", Title: "x"}}}, time.Now())
+				if _, err := verdict.AddBranch(dir, verdict.BranchKey("", "a/1-x"), rec); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: false,
+		},
+	} {
+		dir := nudgeProject(t, []string{"a/1-x"}, tc.reviewed)
+		addRegistryRows(t, dir, map[string][]map[string]any{
+			"slots": {{"name": "a", "state": "done", "issue": "1", "branch": "a/1-x", "pr": "#11"}},
+		})
+		tc.setup(t, dir)
+		got := waitingPRs(&Ctx{Deps: testDeps(), ctx: context.Background()}, dir)
+		if len(got) != 1 {
+			t.Fatalf("%s: waiting = %+v, want one PR", name, got)
+		}
+		if got[0].Reviewed != tc.want {
+			t.Errorf("%s: reviewed = %v, want %v", name, got[0].Reviewed, tc.want)
+		}
+	}
+}
