@@ -35,6 +35,11 @@ func FirstLine(path string) string {
 	return line
 }
 
+// archive moves a handoff to path+".consumed", replacing an earlier one.
+func archive(path string) error {
+	return os.Rename(path, path+".consumed")
+}
+
 // Consume reads the handoff and moves it to path+".consumed" (replacing an
 // earlier one), so a crash after the print loses nothing. A failure at either
 // step leaves the file and returns ok false.
@@ -43,7 +48,7 @@ func Consume(path string) (body string, ok bool) {
 	if err != nil {
 		return "", false
 	}
-	if err := os.Rename(path, path+".consumed"); err != nil {
+	if err := archive(path); err != nil {
 		return "", false
 	}
 	return string(b), true
@@ -82,7 +87,7 @@ func ReadOrchestratorNote(path string, consume bool) (note *OrchestratorNote, wa
 		}
 	}
 	if consume {
-		if err := os.Rename(path, path+".consumed"); err != nil {
+		if err := archive(path); err != nil {
 			n.ConsumeFailed = true
 			warn = "could not archive handoff note " + path + ": " + err.Error()
 		} else {
