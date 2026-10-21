@@ -208,6 +208,26 @@ func TestFailVerdictReadsAFailReview(t *testing.T) {
 	}
 }
 
+// A CONCERNS verdict with a blocking finding is Failing (it may be bounced) but
+// not an effective FAIL: the relay input reads EffectiveFail, so it relays
+// nothing. Swapping the two predicates at either call site fails this test.
+func TestRelayInputIgnoresConcernsWithABlocker(t *testing.T) {
+	dir := workerProject(t, ghCfg)
+	rec := verdict.NewRecord(verdict.ReviewQuality, verdict.Concerns, "abcdef1234", verdict.Body{Summary: "meh", Findings: []verdict.Finding{{Severity: "major", Title: "real"}}}, testNow)
+	if !rec.Failing() {
+		t.Fatal("fixture must be Failing, or the test proves nothing")
+	}
+	if _, err := verdict.AddBranch(dir, verdict.BranchKey("", "nia/577-x"), rec); err != nil {
+		t.Fatal(err)
+	}
+	if v := failVerdict(dir, "nia/577-x"); v != nil {
+		t.Errorf("failVerdict relayed a CONCERNS verdict: %+v", v)
+	}
+	if got := openFindings(dir, "nia/577-x"); got != nil {
+		t.Errorf("openFindings listed a CONCERNS verdict: %v", got)
+	}
+}
+
 // A FAIL verdict whose timestamp does not parse cannot be ordered against the
 // review cursor, so it is not relayed.
 func TestFailVerdictIgnoresAnUnparseableTimestamp(t *testing.T) {
