@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/limits"
 )
@@ -92,21 +91,18 @@ func decideUsage(env Env, o Options, st *State, curDir *string, m hook.UsageHand
 // session files whose cwd is the project root (D4).
 func UsageMarker(commonDir, root string) func(since time.Time) (hook.UsageHandoff, bool) {
 	return func(since time.Time) (hook.UsageHandoff, bool) {
-		var best hook.UsageHandoff
-		var bestAt time.Time
-		for _, st := range hook.Sessions(commonDir) {
-			if st.UsageHandoff == nil || !fsio.SameDir(st.Cwd, root) {
-				continue
+		// Ranked by the handoff's own time, so a newer session with no handoff
+		// does not mask an older one that has it.
+		st, at, ok := hook.NewestAtRoot(commonDir, root, func(st hook.State) (string, bool) {
+			if st.UsageHandoff == nil {
+				return "", false
 			}
-			at, err := time.Parse(time.RFC3339, st.UsageHandoff.At)
-			if err != nil || at.Before(since.Truncate(time.Second)) {
-				continue
-			}
-			if bestAt.IsZero() || at.After(bestAt) {
-				best, bestAt = *st.UsageHandoff, at
-			}
+			return st.UsageHandoff.At, true
+		})
+		if !ok || at.Before(since.Truncate(time.Second)) {
+			return hook.UsageHandoff{}, false
 		}
-		return best, !bestAt.IsZero()
+		return *st.UsageHandoff, true
 	}
 }
 
