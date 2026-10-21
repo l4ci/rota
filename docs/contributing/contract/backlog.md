@@ -137,6 +137,14 @@ shim: `value` echoes the argument; `changed` is false when the stored value alre
 note: the value is a flag, not a positional, so a value that starts with `-` cannot be mistaken for a flag and `--value ""` is explicit (conventions: a flag takes the next token).
 note: setting a field on a closed item is refused (4) where old returned rc 1.
 
+### rota item section set
+rota item section set <ID> --name <heading> --body-file <path|->
+repo: scoped
+data: {"id": string, "type": "B"|"F"|"T", "section": string, "changed": bool}
+exit: 2 for a missing or empty `--name` or an empty body; 3 item unknown or the body file unreadable; 4 for a closed item; backend (issue mode only: file mode refuses with a hint to edit the detail file); tracker
+old: none (the orchestrator patched the issue body by hand with `gh api`)
+note: replaces the `## <heading>` section (any heading level, any case, up to the next heading) or appends it before the `<!-- rota:fields -->` block; the rest of the body and the block are kept. An `acceptance` section gets its criteria numbered, as at capture. `changed` is false when the body already reads so. The current body is read first; a failed read writes nothing.
+
 ### rota item field list
 rota item field list <ID>
 repo: scoped
