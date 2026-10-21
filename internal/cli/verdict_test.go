@@ -287,3 +287,16 @@ func TestVerdictAddShaBindsStaleLocalRef(t *testing.T) {
 		t.Fatalf("--sha on stale ref: %d %v %s", code, d, errs)
 	}
 }
+
+// A tracking ref that lags the pushed head is a fetch problem, not a stale --sha.
+func TestVerdictAddShaAheadOfTrackingHintsFetch(t *testing.T) {
+	dir := pushedVerdictRepo(t)
+	behind := headSha(t, dir, "origin/feat/x")
+	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "worker push")
+	pushed := headSha(t, dir, "feat/x")
+	gitIn(t, dir, "update-ref", "refs/remotes/origin/feat/x", behind) // origin/feat/x not fetched
+	code, _, errs := rotaIn(t, dir, "verdict", "add", "--kind", "qa", "--verdict", "PASS", "--sha", pushed)
+	if code != 4 || !strings.Contains(errs, "behind") || !strings.Contains(errs, "git fetch") || strings.Contains(errs, "review the current head") {
+		t.Errorf("--sha ahead of tracking ref: exit %d, stderr %q (want 4, behind, git fetch hint)", code, errs)
+	}
+}

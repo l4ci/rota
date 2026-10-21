@@ -71,8 +71,8 @@ func (r Repo) Run(ctx context.Context, args ...string) (Result, error) {
 	return Exec(ctx, r.Dir, args...)
 }
 
-// ok reports whether a call exited 0; a failure to run is an error.
-func (r Repo) ok(ctx context.Context, args ...string) (bool, error) {
+// Ok reports whether a call exited 0; a failure to run is an error.
+func (r Repo) Ok(ctx context.Context, args ...string) (bool, error) {
 	res, err := r.Run(ctx, args...)
 	if err != nil {
 		return false, err
@@ -82,7 +82,7 @@ func (r Repo) ok(ctx context.Context, args ...string) (bool, error) {
 
 // Verify reports whether ref resolves (`git rev-parse --verify`).
 func (r Repo) Verify(ctx context.Context, ref string) (bool, error) {
-	return r.ok(ctx, "rev-parse", "--verify", "-q", ref)
+	return r.Ok(ctx, "rev-parse", "--verify", "-q", ref)
 }
 
 // Base resolves the base branch: configured when it exists, then main,
@@ -124,7 +124,7 @@ func (r Repo) CurrentBranch(ctx context.Context) (string, error) {
 
 // IsRepo reports whether Dir is inside a git work tree or git dir.
 func (r Repo) IsRepo(ctx context.Context) (bool, error) {
-	return r.ok(ctx, "rev-parse", "--git-dir")
+	return r.Ok(ctx, "rev-parse", "--git-dir")
 }
 
 // Dirty reports uncommitted changes (`git status --porcelain` not empty).
@@ -144,7 +144,7 @@ func (r Repo) HasHead(ctx context.Context) (bool, error) {
 
 // BranchExists reports whether refs/heads/<name> exists.
 func (r Repo) BranchExists(ctx context.Context, name string) (bool, error) {
-	return r.ok(ctx, "show-ref", "--verify", "--quiet", "refs/heads/"+name)
+	return r.Ok(ctx, "show-ref", "--verify", "--quiet", "refs/heads/"+name)
 }
 
 // CreateBranch creates name at HEAD without switching to it. msg is git's
