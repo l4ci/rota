@@ -139,7 +139,7 @@ func extras(root string, s Store, o AddOpts, unit string) (design, repo string, 
 }
 
 // stub is the starter text of a plan.
-func stub(key, milestone, unit, unitKind, repo, design, title string) string {
+func stub(key, milestone, unit, unitKind, repo, design, title string, today func() time.Time) string {
 	repoLine, designLine := "", ""
 	if repo != "" {
 		repoLine = "repo: " + repo + "\n"
@@ -185,7 +185,7 @@ _(3–6 sentences — the shape of the implementation, the design choice, why th
 ## Relies on
 
 - _(KNOWLEDGE <Topic>: **<title>**, or DECISIONS <title>: each entry the plan depends on; none if neither)_
-`, key, milestone, unit, unitKind, repoLine, designLine, title, time.Now().Format("2006-01-02"))
+`, key, milestone, unit, unitKind, repoLine, designLine, title, today().Format("2006-01-02"))
 }
 
 func kindOfUnit(unit string) string {
@@ -197,7 +197,7 @@ func kindOfUnit(unit string) string {
 
 // Add creates a plan and returns its key and kind ("slice"|"item"). root is
 // where --repos names are looked up.
-func Add(root string, s Store, o AddOpts) (key, unitKind string, err error) {
+func Add(root string, s Store, o AddOpts, today func() time.Time) (key, unitKind string, err error) {
 	milestone, unit, err := parseAdd(o, s)
 	if err != nil {
 		return "", "", err
@@ -211,7 +211,7 @@ func Add(root string, s Store, o AddOpts) (key, unitKind string, err error) {
 		if milestone == "" { // milestone-free: the key is the item ref as given
 			k = o.Key
 		}
-		return stub(k, milestone, unit, kindOfUnit(unit), repo, design, o.Title)
+		return stub(k, milestone, unit, kindOfUnit(unit), repo, design, o.Title, today)
 	})
 	if err != nil {
 		return "", "", err

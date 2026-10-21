@@ -35,10 +35,10 @@ func TestStoresShareTheVerbs(t *testing.T) {
 			if _, err := Show(st, id); exitOf(err) != 3 {
 				t.Errorf("show before add: %v, want exit 3", err)
 			}
-			if err := Add(st, id, "Title"); err != nil {
+			if err := Add(st, id, "Title", testDay); err != nil {
 				t.Fatalf("add: %v", err)
 			}
-			if err := Add(st, id, "again"); exitOf(err) != 4 {
+			if err := Add(st, id, "again", testDay); exitOf(err) != 4 {
 				t.Errorf("duplicate add: %v, want exit 4", err)
 			}
 			got, err := Show(st, id)
@@ -91,7 +91,7 @@ func TestNotesAcceptIssueNumbers(t *testing.T) {
 	for _, id := range []string{"233", "#233"} {
 		notes := artifacttest.NewNotes()
 		st := NewNotes(func() (artifact.Notes, error) { return notes, nil })
-		if err := Add(st, id, "T"); err != nil {
+		if err := Add(st, id, "T", testDay); err != nil {
 			t.Fatalf("add %s: %v", id, err)
 		}
 		got, err := Show(st, id)
