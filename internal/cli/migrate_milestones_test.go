@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -26,12 +27,18 @@ func TestMigrateMilestoneFiles(t *testing.T) {
 		if code != 0 || ddata(t, env)["changed"] != false {
 			t.Fatalf("preview exit %d %v %s", code, env, stderr)
 		}
+		if strings.Contains(stderr, "commit") {
+			t.Fatalf("preview printed a commit hint: %s", stderr)
+		}
 		if _, err := os.Stat(file); err != nil {
 			t.Fatal("preview moved the file")
 		}
 		code, env, stderr = rotaRunWith(t, deps, "--json", "-C", root, "migrate", "milestone-files", "--apply")
 		if code != 0 || ddata(t, env)["changed"] != true {
 			t.Fatalf("apply exit %d %v %s", code, env, stderr)
+		}
+		if !strings.Contains(stderr, "commit .rota/milestones and .rota/archive/milestones") {
+			t.Fatalf("apply gave no commit hint: %s", stderr)
 		}
 		if _, err := os.Stat(filepath.Join(root, ".rota", "archive", "milestones", "M07.md")); err != nil {
 			t.Fatalf("not archived: %v", err)
