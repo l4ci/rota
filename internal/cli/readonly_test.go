@@ -70,6 +70,7 @@ func TestWrongBackendRefusals(t *testing.T) {
 		// mutating, issue-only verbs in file mode
 		{"item note add", fileConfig, []string{"item", "note", "add", "B01", "--kind", "plan", "--body-file", "BODY"}, ExitRefused},
 		{"item note rm", fileConfig, []string{"item", "note", "rm", "B01", "--kind", "plan"}, ExitRefused},
+		{"item section set", fileConfig, []string{"item", "section", "set", "B01", "--name", "acceptance", "--body-file", "BODY"}, ExitRefused},
 		// mutating, file-only verbs in issue mode
 		{"id next", issuesConfig, []string{"id", "next", "--kind", "bugs"}, ExitRefused},
 		{"item rm", issuesConfig, []string{"item", "rm", "7", "--apply"}, ExitRefused},
