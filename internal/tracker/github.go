@@ -508,17 +508,18 @@ func (r restIssue) verify(number int, e IssueEdit) error {
 	if e.Body != nil && strings.ReplaceAll(r.Body, "\r\n", "\n") != strings.ReplaceAll(*e.Body, "\r\n", "\n") {
 		miss = append(miss, "body")
 	}
+	// GitHub label names are case-insensitive.
 	have := map[string]bool{}
 	for _, l := range r.labelNames() {
-		have[l] = true
+		have[strings.ToLower(l)] = true
 	}
 	for _, l := range e.AddLabels {
-		if !have[l] {
+		if !have[strings.ToLower(l)] {
 			miss = append(miss, "label "+l)
 		}
 	}
 	for _, l := range e.RemoveLabels {
-		if have[l] {
+		if have[strings.ToLower(l)] {
 			miss = append(miss, "label "+l+" still set")
 		}
 	}
