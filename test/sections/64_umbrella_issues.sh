@@ -127,7 +127,7 @@ done
   eq "capture with milestone" "0" "$RCV"; GHMS="$(ID)"; GHMS="${GHMS#ghrepo:}"
   eq "home milestone not duplicated" "M05 — Alpha:open,M06 — Beta:open" "$(NATIVE ghrepo)"
   RC hvj item field set glrepo:T3 --name milestone --value M99
-  eq "unknown milestone exit" "2" "$RCV"
+  eq "unknown milestone exit" "3" "$RCV"
 
   # --- status aggregation
   LSTAT() { hvj milestone list | python3 -c 'import json,sys; print([m["status"] for m in json.load(sys.stdin)["data"]["milestones"] if m["id"] == "M05"][0])'; }

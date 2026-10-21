@@ -79,7 +79,7 @@ func TestIssuesCreateErrors(t *testing.T) {
 		"bad tag":        {CreateInput{Kind: "bugs", Title: "t", Tag: "Major"}, ErrInvalid},
 		"bad field":      {CreateInput{Kind: "bugs", Title: "t", Fields: []Field{{"Nope", "x"}}}, ErrInvalid},
 		"milestone fmt":  {CreateInput{Kind: "bugs", Title: "t", Fields: []Field{{"Milestone", "7"}}}, ErrInvalid},
-		"milestone gone": {CreateInput{Kind: "bugs", Title: "t", Fields: []Field{{"Milestone", "M99"}}}, ErrInvalid},
+		"milestone gone": {CreateInput{Kind: "bugs", Title: "t", Fields: []Field{{"Milestone", "M99"}}}, ErrNotFound},
 	} {
 		if _, err := b.Create(c.in); !errors.Is(err, c.want) {
 			t.Errorf("%s: %v, want %v", name, err, c.want)
@@ -109,7 +109,7 @@ func TestIssuesSetField(t *testing.T) {
 		{"milestone clear", "2", "milestone", "", true, nil, `get[2] edit[2,{"remove_milestone":true}]`},
 		{"milestone clear none", "1", "milestone", "", false, nil, `get[1]`},
 		{"milestone bad", "1", "milestone", "x", false, ErrInvalid, `get[1]`},
-		{"milestone gone", "1", "milestone", "M42", false, ErrInvalid, `get[1] find_milestone["M42"]`},
+		{"milestone gone", "1", "milestone", "M42", false, ErrNotFound, `get[1] find_milestone["M42"]`},
 		{"block same", "2", "related", "B1", false, nil, `get[2]`},
 		{"block replace keeps order", "2", "related", "F5,  B6", true, nil,
 			`get[2] edit[2,{"body":"text\n\n<!-- rota:fields\nRelated: F5, B6\nRepos: web\n-->"}]`},
