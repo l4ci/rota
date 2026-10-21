@@ -400,3 +400,48 @@ func TestReceiptShowRefusals(t *testing.T) {
 		t.Errorf("a corrupt receipts file is exit 5, got %d", code)
 	}
 }
+
+func TestReceiptRerunWithoutIDWarnsAboutThePendingReceipt(t *testing.T) {
+	dir := workerProject(t, `{}`)
+	f := &fakeVerb{fail: &round.StageError{Stage: "claim", Err: errors.New("gh: 502")}}
+	callReceipted(t, dir, f, "--request-id", "r1", "--agent", "ben", "42")
+	f.fail = nil
+	_, err, stderr := callReceipted(t, dir, f, "--agent", "ben", "42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"r1", "--agent=ben", "42", "--request-id r1"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("warning must mention %q, got %q", want, stderr)
+		}
+	}
+	_, _, stderr = callReceipted(t, dir, f, "43")
+	if strings.Contains(stderr, "r1") {
+		t.Errorf("another target must not warn about r1: %q", stderr)
+	}
+}
+
+func TestReceiptMismatchRefusalPrintsTheOriginalArguments(t *testing.T) {
+	dir := workerProject(t, `{}`)
+	f := &fakeVerb{}
+	callReceipted(t, dir, f, "--request-id", "r1", "--agent", "ben", "42")
+	_, err, _ := callReceipted(t, dir, f, "--request-id", "r1", "43")
+	if err == nil || !strings.Contains(err.Error(), "--agent=ben") || !strings.Contains(err.Error(), "42") {
+		t.Errorf("refusal must print the original arguments: %v", err)
+	}
+}
+
+func TestReceiptShowPendingPrintsTheOriginalArguments(t *testing.T) {
+	dir := writeReceipts(t, `{"receipts": [
+ {"id": "fail-2", "verb": "worker gate", "fingerprint": "f", "args": ["--agent=ben", "42"], "status": "failed", "attempts": 1, "exit": 5, "message": "gh: 502", "at": "2026-01-02T03:04:06Z"}
+]}`)
+	code, out, _ := rotaIn(t, dir, "--json", "receipt", "show", "fail-2")
+	d := data(t, out)
+	if args, _ := d["args"].([]any); code != 0 || len(args) != 2 || args[0] != "--agent=ben" {
+		t.Errorf("json args: exit=%d %v", code, d)
+	}
+	_, out, _ = rotaIn(t, dir, "receipt", "show", "fail-2")
+	if !strings.Contains(out, "--agent=ben 42") {
+		t.Errorf("text must print the arguments: %q", out)
+	}
+}
