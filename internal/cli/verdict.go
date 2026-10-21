@@ -342,7 +342,7 @@ func raisedDepthNote(c *Ctx, args []string, t verdictBranch, head, kind string) 
 		return ""
 	}
 	return fmt.Sprintf("review depth %s -> %s (%s): still needs %s at head, or the gate refuses review-missing",
-		worker.CoveredDepth(have, hasSpec), res.Depth, why, strings.Join(missing, " and "))
+		worker.CoveredDepth(verdict.LastReviewSet(t.root, t.branch), hasSpec), res.Depth, why, strings.Join(missing, " and "))
 }
 
 // dropFiled removes from ins the items already filed for pr: an item with the
