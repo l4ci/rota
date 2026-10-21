@@ -308,7 +308,7 @@ func TestStampNeverBlessesAnOldAuto(t *testing.T) {
 	gdir := t.TempDir()
 	t.Setenv("ROTA_CONFIG_DIR", gdir)
 	root = project(t, `{"rota": {"version": "0.20.0"}, "autonomy": {"level": "auto"}}`, "")
-	if _, err := SaveGlobal(root, gdir); err != nil {
+	if _, _, err := SaveGlobal(root, gdir); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Fill(root); err != nil {
@@ -345,5 +345,38 @@ func TestGlobalStampFailureLeavesNoAuto(t *testing.T) {
 		if g, _ := LoadGlobal(gdir); g["autonomy.level"] == "auto" {
 			t.Errorf("%s: auto left on disk after the stamp failed", name)
 		}
+	}
+}
+
+// #1511: a set or save-global that rewrites an old auto says so, so the
+// stamp it raises is not the only trace.
+func TestAutonomyRewritesAreReported(t *testing.T) {
+	root := project(t, `{"rota": {"version": "0.20.0"}, "autonomy": {"level": "auto"}}`, `{"autonomy": {"level": "auto"}}`)
+	res, err := SetIn(root, "autonomy.level", "off", LayerLocal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Migration.Rewrite || !res.Migration.LocalRewrite {
+		t.Errorf("set did not report its rewrites: %+v", res.Migration)
+	}
+	// A current stamp rewrites nothing.
+	res, err = SetIn(root, "autonomy.level", "off", LayerLocal)
+	if err != nil || res.Migration != (AutonomyMigration{}) {
+		t.Errorf("a current stamp reported %+v, %v", res.Migration, err)
+	}
+
+	gdir := t.TempDir()
+	t.Setenv("ROTA_CONFIG_DIR", gdir)
+	root = project(t, `{"rota": {"version": "0.20.0"}, "autonomy": {"level": "auto"}}`, "")
+	_, am, err := SaveGlobal(root, gdir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !am.GlobalRewrite {
+		t.Errorf("save-global did not report its rewrite: %+v", am)
+	}
+	root = project(t, `{"rota": {"version": "0.21.0"}, "autonomy": {"level": "auto"}}`, "")
+	if _, am, _ = SaveGlobal(root, gdir); am != (AutonomyMigration{}) {
+		t.Errorf("a deliberate auto reported %+v", am)
 	}
 }
