@@ -116,3 +116,25 @@ func TestPickSlotsSkipsAccountsWithoutLogin(t *testing.T) {
 		t.Errorf("skipped = %v, want ben with its problem", skipped)
 	}
 }
+
+// Codex has no usage meter, so its slots are exempt from the login check even
+// when their config dir holds no credentials.
+func TestSlotLoginProblemExemptsCodex(t *testing.T) {
+	empty := t.TempDir()
+	root := t.TempDir()
+	writeRegistry(t, root,
+		slot(root, "ben", "park/ben", func(o *jsonx.Object) { o.Set("configDir", empty) }),
+		slot(root, "cy", "park/cy", func(o *jsonx.Object) { o.Set("kind", harness.Codex); o.Set("configDir", empty) }),
+	)
+	reg := worker.LoadRegistryTolerant(root)
+	if SlotLoginProblem(reg.Slot("ben")) == "" {
+		t.Error("a claude slot with no credentials should have a login problem")
+	}
+	if why := SlotLoginProblem(reg.Slot("cy")); why != "" {
+		t.Errorf("codex slot: %q, want no login problem", why)
+	}
+	got, skipped := Env{}.pickSlots(bg, reg, roundcfg.Settings{Roster: []string{"cy"}}, "8", 1)
+	if len(got) != 1 || got[0].Name() != "cy" || len(skipped) != 0 {
+		t.Errorf("picked %v skipped %v, want cy picked", got, skipped)
+	}
+}
