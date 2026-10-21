@@ -45,7 +45,7 @@ Neither author can see it, and git's mergeability answer is about text, not mean
 - `base-moved`: the base changed while the gate verified. With `data.changed` false nothing landed: re-gate on the new base. With `data.changed` true it landed but the landed tree is not the verified one: never re-merge, verify the base as it is.
 - `data.verifySkipped: true` means no command gated the merged tree. A project on this backend should set `test.full`; otherwise the verify is a structural diff review and nothing more.
 
-Background: run `rota worker gate` (and `rota worker train`) as a background command and read `data.verdict` when it exits. Meanwhile review the next waiting PRs and assign free slots. Start no second gate or train, and make no tracked `.rota/` write on the base checkout until it exits ([section 6](../rota-orchestrate/SKILL.md#6-merge)).
+Background: run `rota worker gate` (and `rota worker train`) as a background command and read `data.verdict` when it exits. Meanwhile review the next waiting PRs, and hold `round assign` and `round transfer` until it exits (they refuse with `gate-running` while the land lock is held). Start no second gate or train, and make no tracked `.rota/` write on the base checkout until it exits ([section 6](../rota-orchestrate/SKILL.md#6-merge)).
 
 Batching: the gate is the one full run, so nothing re-verifies after it. Gate each PR individually by default. A group of PRs with genuinely disjoint file sets can be merged and gated once; never batch when a PR touches a shared module, widens a shared type, or renames a shared symbol.
 
