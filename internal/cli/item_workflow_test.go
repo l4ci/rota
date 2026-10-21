@@ -292,6 +292,8 @@ func TestItemSectionSetStdin(t *testing.T) {
 	root := trackerProject(t, issuesConfig)
 	tr := issueFixture()
 	deps := withTracker(t, tr)
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
 	var out, errb bytes.Buffer
 	code := mainWith(deps, []string{"--json", "-C", root, "item", "section", "set", "7", "--name", "acceptance", "--body-file", "-"},
 		strings.NewReader("- [ ] from stdin\n"), &out, &errb)
