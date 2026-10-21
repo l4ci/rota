@@ -8,7 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/skills"
 )
 
@@ -371,5 +373,32 @@ func TestDoctorHostFromRegistry(t *testing.T) {
 	}
 	if c := hostCheck(); c["detail"] != "tmux on PATH" {
 		t.Fatalf("registry host tmux not wired into doctor: %v", c)
+	}
+}
+
+// doctorInput takes the tracker keys from tracker.SettingsFromConfig and the
+// round host from worker.ResolveHost instead of re-reading the keys (#1535).
+func TestDoctorInputTrackerAndHostFromOwners(t *testing.T) {
+	root := t.TempDir()
+	cwd, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(cwd, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"round":{"dispatch":"tmux"},"issues":{"source":"jira","connection":" work ","jira":{"project":"PROJ"}}}`
+	if err := os.WriteFile(filepath.Join(cwd, ".rota", "config.json"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d := defaultDeps()
+	d.Getwd = func() (string, error) { return cwd, nil }
+	d.Getenv = func(string) string { return "" }
+	in := doctorInput(context.Background(), d)
+	if in.Tracker.Source != config.SourceJira || in.Tracker.JiraProject != "PROJ" || in.Tracker.Connection != "work" {
+		t.Errorf("tracker settings %+v", in.Tracker)
+	}
+	if in.RoundHost != host.Tmux {
+		t.Errorf("round host %q, want tmux", in.RoundHost)
 	}
 }
