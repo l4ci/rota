@@ -664,11 +664,14 @@
      "name": "gh",
      "argv": [
       "api",
+      "-X",
+      "PATCH",
       "repos/{owner}/{repo}/issues/1",
-      "--paginate"
+      "--input",
+      "-"
      ],
-     "stdin": "",
-     "stdout": "{\"number\": 1, \"title\": \"First\", \"body\": \"line1\\nline2 with `ticks` and $vars\", \"labels\": [{\"name\": \"bug\"}, {\"name\": \"p1\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"open\"}\n",
+     "stdin": "{\"body\":\"new body\\nmore\",\"title\":\"First!\"}",
+     "stdout": "{}\n",
      "stderr": "",
      "code": 0
     },
@@ -677,13 +680,11 @@
      "argv": [
       "api",
       "-X",
-      "PATCH",
-      "repos/{owner}/{repo}/issues/1",
-      "--input",
-      "-"
+      "DELETE",
+      "repos/{owner}/{repo}/issues/1/labels/p1"
      ],
-     "stdin": "{\"body\":\"new body\\nmore\",\"labels\":[\"bug\"],\"title\":\"First!\"}",
-     "stdout": "{}\n",
+     "stdin": "",
+     "stdout": "[{\"name\": \"bug\"}]\n",
      "stderr": "",
      "code": 0
     },
@@ -745,26 +746,14 @@
      "name": "gh",
      "argv": [
       "api",
-      "repos/{owner}/{repo}/issues/1",
-      "--paginate"
-     ],
-     "stdin": "",
-     "stdout": "{\"number\": 1, \"title\": \"First!\", \"body\": \"new body\\nmore\", \"labels\": [{\"name\": \"bug\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"open\"}\n",
-     "stderr": "",
-     "code": 0
-    },
-    {
-     "name": "gh",
-     "argv": [
-      "api",
       "-X",
-      "PATCH",
-      "repos/{owner}/{repo}/issues/1",
+      "POST",
+      "repos/{owner}/{repo}/issues/1/labels",
       "--input",
       "-"
      ],
-     "stdin": "{\"labels\":[\"bug\",\"extra\"]}",
-     "stdout": "{}\n",
+     "stdin": "{\"labels\":[\"extra\"]}",
+     "stdout": "[{\"name\": \"bug\"}, {\"name\": \"extra\"}]\n",
      "stderr": "",
      "code": 0
     },
@@ -833,26 +822,12 @@
      "name": "gh",
      "argv": [
       "api",
-      "repos/{owner}/{repo}/issues/1",
-      "--paginate"
+      "-X",
+      "DELETE",
+      "repos/{owner}/{repo}/issues/1/labels/extra"
      ],
      "stdin": "",
-     "stdout": "{\"number\": 1, \"title\": \"First!\", \"body\": \"new body\\nmore\", \"labels\": [{\"name\": \"bug\"}, {\"name\": \"extra\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"open\"}\n",
-     "stderr": "",
-     "code": 0
-    },
-    {
-     "name": "gh",
-     "argv": [
-      "api",
-      "-X",
-      "PATCH",
-      "repos/{owner}/{repo}/issues/1",
-      "--input",
-      "-"
-     ],
-     "stdin": "{\"labels\":[\"bug\"]}",
-     "stdout": "{}\n",
+     "stdout": "[{\"name\": \"bug\"}]\n",
      "stderr": "",
      "code": 0
     },

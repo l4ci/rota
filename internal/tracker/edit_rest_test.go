@@ -24,7 +24,7 @@ func (r *editRig) exec(_ context.Context, _, name string, args []string, stdin [
 	switch {
 	case strings.Contains(strings.Join(args, " "), "milestones"):
 		return []byte(`[{"number":4,"title":"M1","state":"open"}]`), nil, 0, nil
-	case args[0] == "api" && len(args) > 2 && args[2] == "PATCH":
+	case args[0] == "api" && len(args) > 2 && (args[2] == "PATCH" || args[2] == "POST" || args[2] == "DELETE"):
 		if r.apply {
 			r.issue = r.patchd
 		}
@@ -44,8 +44,9 @@ func (r *editRig) adapter(t *testing.T) Adapter {
 }
 
 // TestGitHubEditGoesOverRESTAndReadsBack pins the argv: gh 2.45 `issue edit`
-// fails on the Projects (classic) GraphQL query, so title, body, labels and
-// milestone go through one PATCH on the issue, whose JSON body is on stdin.
+// fails on the Projects (classic) GraphQL query, so title, body and milestone
+// go through one PATCH whose JSON body is on stdin, and labels through the
+// incremental endpoints: a PATCH of the whole set would lose a concurrent write.
 func TestGitHubEditGoesOverRESTAndReadsBack(t *testing.T) {
 	r := &editRig{apply: true,
 		issue:  `{"title":"old","body":"b","labels":[{"name":"bug"},{"name":"p1"}],"milestone":null}`,
@@ -58,16 +59,20 @@ func TestGitHubEditGoesOverRESTAndReadsBack(t *testing.T) {
 	}
 	want := []string{
 		"gh api repos/{owner}/{repo}/milestones?state=all&per_page=100 --paginate",
-		"gh api repos/{owner}/{repo}/issues/7 --paginate",
 		"gh api -X PATCH repos/{owner}/{repo}/issues/7 --input -",
+		"gh api -X POST repos/{owner}/{repo}/issues/7/labels --input -",
+		"gh api -X DELETE repos/{owner}/{repo}/issues/7/labels/p1",
 		"gh api repos/{owner}/{repo}/issues/7 --paginate",
 	}
 	if strings.Join(r.calls, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("calls\n%s\nwant\n%s", strings.Join(r.calls, "\n"), strings.Join(want, "\n"))
 	}
-	const patch = `{"body":"x\ny","labels":["bug","extra"],"milestone":4,"title":"new"}`
-	if r.stdin[2] != patch {
-		t.Fatalf("PATCH body %q, want %q", r.stdin[2], patch)
+	const patch = `{"body":"x\ny","milestone":4,"title":"new"}`
+	if r.stdin[1] != patch {
+		t.Fatalf("PATCH body %q, want %q", r.stdin[1], patch)
+	}
+	if want := `{"labels":["extra"]}`; r.stdin[2] != want {
+		t.Fatalf("POST body %q, want %q", r.stdin[2], want)
 	}
 	for _, c := range r.calls {
 		if strings.Contains(c, "issue edit") {

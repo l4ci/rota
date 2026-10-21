@@ -419,7 +419,7 @@ func suiteUmbrella(t *testing.T) {
 		ubcase{name: "fieldset/repos-readonly-unknown-item", argv: j("item", "field", "set", "nope:F1", "--name", "repos", "--value", "api"), want: 3},
 		ubcase{name: "fieldset/milestone-bad-format", argv: j("item", "field", "set", "api:F1", "--name", "milestone", "--value", "later"), want: 2},
 		ubcase{name: "fieldset/rate-limit", argv: j("item", "field", "set", "web:F1", "--name", "related", "--value", "B1"), want: 6,
-			env: []string{"FAKE_TRACKER_FAIL=issue edit", "FAKE_TRACKER_FAIL_MSG=secondary rate limit"}},
+			env: []string{"FAKE_TRACKER_FAIL=-X PATCH", "FAKE_TRACKER_FAIL_MSG=secondary rate limit"}},
 	)
 	for _, cw := range []string{"web", "api", "docs/deep"} {
 		withCwds(fset("milestone-created", "api:F1", "milestone", "M07", 0, yes()), cw)

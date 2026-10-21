@@ -3,6 +3,7 @@ package tracker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -429,29 +430,42 @@ func (g *GitHub) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 		patch["milestone"] = nil
 	}
 	path := fmt.Sprintf("repos/{owner}/{repo}/issues/%d", number)
-	if len(e.AddLabels) > 0 || len(e.RemoveLabels) > 0 {
-		// PATCH replaces the label set, so start from the current one.
-		cur, err := g.issueREST(ctx, path)
+	if len(patch) > 0 {
+		buf, err := json.Marshal(patch)
 		if err != nil {
 			return err
 		}
-		patch["labels"] = editedLabels(cur.labelNames(), e.AddLabels, e.RemoveLabels)
+		if _, err := g.run(ctx, []string{"api", "-X", "PATCH", path, "--input", "-"}, string(buf)); err != nil {
+			return err
+		}
 	}
-	if len(patch) == 0 {
+	// Labels go through the incremental endpoints, never a PATCH of the whole
+	// set: a concurrent label write between a read and that PATCH would be lost.
+	if len(e.AddLabels) > 0 {
+		buf, err := json.Marshal(map[string]any{"labels": e.AddLabels})
+		if err != nil {
+			return err
+		}
+		if _, err := g.run(ctx, []string{"api", "-X", "POST", path + "/labels", "--input", "-"}, string(buf)); err != nil {
+			return err
+		}
+	}
+	for _, l := range e.RemoveLabels {
+		_, err := g.run(ctx, []string{"api", "-X", "DELETE", path + "/labels/" + url.PathEscape(l)}, "")
+		var te *Error
+		// A label the issue does not carry is already removed.
+		if err != nil && !(errors.As(err, &te) && te.Kind == KindNotFound) {
+			return err
+		}
+	}
+	if len(patch) == 0 && len(e.AddLabels) == 0 && len(e.RemoveLabels) == 0 {
 		return nil
-	}
-	buf, err := json.Marshal(patch)
-	if err != nil {
-		return err
-	}
-	if _, err := g.run(ctx, []string{"api", "-X", "PATCH", path, "--input", "-"}, string(buf)); err != nil {
-		return err
 	}
 	got, err := g.issueREST(ctx, path)
 	if err != nil {
 		return err
 	}
-	return got.verify(number, e, patch)
+	return got.verify(number, e)
 }
 
 // restIssue is the part of a REST issue Edit reads back.
@@ -476,22 +490,6 @@ func (r restIssue) labelNames() []string {
 	return out
 }
 
-// editedLabels is cur without remove, then add, each label once.
-func editedLabels(cur, add, remove []string) []string {
-	out := []string{}
-	for _, l := range cur {
-		if !contains(remove, l) && !contains(out, l) {
-			out = append(out, l)
-		}
-	}
-	for _, l := range add {
-		if !contains(out, l) {
-			out = append(out, l)
-		}
-	}
-	return out
-}
-
 func contains(xs []string, x string) bool {
 	for _, v := range xs {
 		if v == x {
@@ -502,7 +500,7 @@ func contains(xs []string, x string) bool {
 }
 
 // verify errors when the issue read back lacks a requested change.
-func (r restIssue) verify(number int, e IssueEdit, patch map[string]any) error {
+func (r restIssue) verify(number int, e IssueEdit) error {
 	var miss []string
 	if e.Title != nil && r.Title != *e.Title {
 		miss = append(miss, "title")
@@ -510,20 +508,18 @@ func (r restIssue) verify(number int, e IssueEdit, patch map[string]any) error {
 	if e.Body != nil && strings.ReplaceAll(r.Body, "\r\n", "\n") != strings.ReplaceAll(*e.Body, "\r\n", "\n") {
 		miss = append(miss, "body")
 	}
-	if want, ok := patch["labels"].([]string); ok {
-		have := map[string]bool{}
-		for _, l := range r.labelNames() {
-			have[l] = true
+	have := map[string]bool{}
+	for _, l := range r.labelNames() {
+		have[l] = true
+	}
+	for _, l := range e.AddLabels {
+		if !have[l] {
+			miss = append(miss, "label "+l)
 		}
-		for _, l := range want {
-			if !have[l] {
-				miss = append(miss, "label "+l)
-			}
-		}
-		for _, l := range e.RemoveLabels {
-			if have[l] && !contains(want, l) {
-				miss = append(miss, "label "+l+" still set")
-			}
+	}
+	for _, l := range e.RemoveLabels {
+		if have[l] {
+			miss = append(miss, "label "+l+" still set")
 		}
 	}
 	if e.Milestone != "" && (r.Milestone == nil || r.Milestone.Title != e.Milestone) {
