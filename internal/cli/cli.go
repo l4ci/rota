@@ -77,6 +77,9 @@ type Ctx struct {
 	// dashAt is how many positional arguments came before a bare "--", -1
 	// when there was none. Verbs that run a command after "--" need to tell.
 	dashAt int
+	// verbArgs is what followed the verb words, global flags removed: what
+	// the bug log records.
+	verbArgs []string
 }
 
 // Context is the verb's context. run cancels it on SIGINT and SIGTERM, so a
@@ -255,7 +258,7 @@ func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stde
 	defer func() {
 		if r := recover(); r != nil {
 			e := asError(fmt.Errorf("panic: %v", r))
-			recordMistake(c, args, e)
+			recordMistake(c, e)
 			code = fail(c, stdout, e)
 		}
 	}()
@@ -306,6 +309,7 @@ func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stde
 		runVerb = cmd.Verb(verbFlags)
 		var post globals
 		post.register(verbFlags, false, cmd.Repo)
+		c.verbArgs = stripGlobals(args[i:])
 		for ; i < len(args); i++ {
 			tok := args[i]
 			if tok == "--" {
@@ -366,7 +370,7 @@ func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stde
 	}
 	res, err := runVerb(c, positional)
 	if err != nil {
-		recordMistake(c, args, asError(err))
+		recordMistake(c, asError(err))
 		if g.ui && cmd.View != nil && res.Data != nil && asError(err).Exit == ExitFailed {
 			// A failed answer is still an answer: doctor's failing checks
 			// are the screen. The exit code stays the plain verb's.
