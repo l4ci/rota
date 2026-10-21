@@ -2,7 +2,7 @@ package cli
 
 import (
 	"context"
-	"os"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -73,12 +73,13 @@ func TestRoundEnvClockAndGetenvDriveAccountMeters(t *testing.T) {
 	}
 }
 
-// Deps' home and config seams reach the accounts: with no real HOME and no
-// config on disk, the accounts still resolve a ~/ configDir and list the
-// accounts the injected config names.
+// Deps' home and config seams reach the accounts: with no real HOME and a
+// decoy config on disk, the accounts still resolve a ~/ configDir and list the
+// accounts the injected config names, not the disk's.
 func TestDepsHomeAndConfigReachWorkerAccounts(t *testing.T) {
 	t.Setenv("HOME", "")
 	root := t.TempDir()
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"round":{"accounts":[{"name":"disk","configDir":"/nowhere"}]}}`)
 	d := defaultDeps()
 	home := t.TempDir()
 	d.UserHomeDir = func() (string, error) { return home, nil }
@@ -94,15 +95,12 @@ func TestDepsHomeAndConfigReachWorkerAccounts(t *testing.T) {
 	if h, _ := acc.Env.WithDefaults().Home(); h != home {
 		t.Errorf("accounts home = %q, want %q", h, home)
 	}
-	if got := acc.Configured(root); len(got) != 1 {
-		t.Errorf("accounts configured = %v, want the one injected account", got)
+	if got := acc.Configured(root); fmt.Sprint(got) != "[{a ~/.claude-a}]" {
+		t.Errorf("accounts configured = %v, want only the injected account a", got)
 	}
 	// Pick only passes the login check when ~/.claude-a expands against home.
 	acc.Fetch = func(context.Context, string, string) (*jsonx.Object, string) { return nil, "no usage" }
 	if name, ok := acc.Pick(context.Background(), root, nil); !ok || name != "a" {
 		t.Errorf("Pick = %q, %v; want a (the ~/ configDir resolved to %s/.claude-a)", name, ok, home)
-	}
-	if _, err := os.Stat(filepath.Join(root, ".rota", "config.json")); err == nil {
-		t.Fatal("test root must have no on-disk config")
 	}
 }
