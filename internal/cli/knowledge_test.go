@@ -493,7 +493,7 @@ func TestKnowledgeTierFoldReports(t *testing.T) {
 	f.WriteString("{\"topic\":\"Arch\n")
 	f.Close()
 	got := knNew(t, dir, "", "knowledge", "tier", "fold")
-	if got.rc != 0 || !strings.Contains(got.stdout, "folded 2 hit(s) into the sidecar: commit it") || !strings.Contains(got.stdout, "skipped 1 malformed buffer line(s)") {
+	if got.rc != 0 || !strings.Contains(got.stdout, "folded 2 hit(s) into the sidecar: commit .rota/knowledge-tier.json") || !strings.Contains(got.stdout, "skipped 1 malformed buffer line(s)") {
 		t.Fatalf("fold = %+v", got)
 	}
 	if _, err := os.Stat(hp); !os.IsNotExist(err) {
@@ -503,5 +503,16 @@ func TestKnowledgeTierFoldReports(t *testing.T) {
 	js := knNew(t, dir, "", "--json", "knowledge", "tier", "fold")
 	if !strings.Contains(js.stdout, `"hits": 1`) || !strings.Contains(js.stdout, `"changed": true`) || !strings.Contains(js.stdout, `"skipped": 0`) {
 		t.Fatalf("json fold = %+v", js)
+	}
+}
+
+// The fold output names the sidecar to commit, repo-relative, so the next
+// step is a concrete command rather than "commit it".
+func TestKnowledgeTierFoldNamesSidecar(t *testing.T) {
+	dir := knProject(t, false)
+	knNew(t, dir, "", "knowledge", "hit", "--topic", "Architecture", "--title", "Beta rule")
+	got := knNew(t, dir, "", "knowledge", "tier", "fold")
+	if !strings.Contains(got.stdout, "commit .rota/knowledge-tier.json") {
+		t.Fatalf("fold output = %q, want the sidecar path to commit", got.stdout)
 	}
 }

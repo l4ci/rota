@@ -191,4 +191,42 @@ func TestTransferLogsTheBriefAsARelay(t *testing.T) {
 	if len(relays) != 1 {
 		t.Fatalf("relays %d, want the transfer brief logged once", len(relays))
 	}
+	const cite = "## Approvals\n- take over the issue — orchestrator relay round 1\n"
+	if got := worker.CheckApprovals(cite, relays); got != "" {
+		t.Errorf("a PR citing the transfer is refused: %s", got)
+	}
+	if got := worker.CheckApprovals(strings.Replace(cite, "round 1", "round 2", 1), relays); got == "" {
+		t.Error("a cite of a round never sent must still be refused")
+	}
+}
+
+// A transfer that sends no brief logs no relay, so nothing can be cited: a
+// failed dispatch, solo (the brief is returned, not sent) and --to human.
+func TestTransferThatSendsNoBriefLogsNoRelay(t *testing.T) {
+	for name, tc := range map[string]struct {
+		to    string
+		setup func(*moveFx)
+		fails bool
+	}{
+		"failed dispatch": {"dana", func(f *moveFx) {
+			f.env.Worker.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} }
+		}, true},
+		"solo":     {"dana", func(f *moveFx) { setHost(t, f.root, host.Solo) }, false},
+		"to human": {HumanTarget, func(*moveFx) {}, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newMoveFx(t)
+			tc.setup(f)
+			if _, err := f.transfer("12", tc.to, nil); (err != nil) != tc.fails {
+				t.Fatalf("transfer error %v, want failure %v", err, tc.fails)
+			}
+			if got := f.slot("dana").Relays(); len(got) != 0 {
+				t.Errorf("relays %v, want none", got)
+			}
+			const cite = "## Approvals\n- orchestrator relay round 1\n"
+			if got := worker.CheckApprovals(cite, f.slot("dana").Relays()); got == "" {
+				t.Error("a cite with no relay logged must be refused")
+			}
+		})
+	}
 }

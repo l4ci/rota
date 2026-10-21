@@ -53,9 +53,9 @@ func TestCheckApprovals(t *testing.T) {
 		{"non-object relay entries are skipped", "just a body", []any{"junk"}, ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			got := checkApprovals(c.body, c.relays)
+			got := CheckApprovals(c.body, c.relays)
 			if c.want == "" && got != "" || !strings.Contains(got, c.want) {
-				t.Errorf("checkApprovals = %q, want %q", got, c.want)
+				t.Errorf("CheckApprovals = %q, want %q", got, c.want)
 			}
 		})
 	}

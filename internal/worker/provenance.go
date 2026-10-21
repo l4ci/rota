@@ -60,11 +60,11 @@ func norm(s string) string {
 	return strings.TrimSpace(reSpaces.ReplaceAllString(strings.ToLower(s), " "))
 }
 
-// checkApprovals cross-checks a PR body's `## Approvals` section against the
+// CheckApprovals cross-checks a PR body's `## Approvals` section against the
 // slot's relay log. It returns "" for a pass, else what is wrong: a missing
 // section while relays exist, a cited relay round that was never sent, or the
 // maintainer cited for text the orchestrator relayed.
-func checkApprovals(body string, relayLog []any) string {
+func CheckApprovals(body string, relayLog []any) string {
 	var relays []*jsonx.Object
 	for _, r := range relayLog {
 		if o, ok := r.(*jsonx.Object); ok {

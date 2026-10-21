@@ -1650,7 +1650,7 @@ func (g *gate) checkProvenance() (failMsg, brokeMsg string) {
 		}
 		return "", fmt.Sprintf("could not read the body of %s to check its approvals: %v", g.pr, err)
 	}
-	if msg := checkApprovals(body, g.target.relays); msg != "" {
+	if msg := CheckApprovals(body, g.target.relays); msg != "" {
 		return fmt.Sprintf("PROVENANCE-FAIL %s: %s", g.o.Slot, msg), ""
 	}
 	return "", ""
