@@ -55,6 +55,7 @@ func TestInvalid(t *testing.T) {
 		`{"round":{"stallMinutes":"x"}}`: "stallMinutes",
 		`{"round":{"maxBounces":-1}}`:    "maxBounces",
 		`{"round":{"maxBounces":"x"}}`:   "maxBounces",
+		`{"work":{"tdd":"yes"}}`:         "work.tdd",
 	} {
 		_, err := Load(project(t, cfg))
 		if err == nil || !strings.Contains(err.Error(), want) {
