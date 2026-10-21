@@ -24,6 +24,10 @@ func doneProject(t *testing.T, fast string) string {
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(cfg), 0o644)
 	os.WriteFile(filepath.Join(dir, ".rota", "workers.json"),
 		[]byte(`{"slots":[{"name":"ben","branch":"feat/x","task":"B07","state":"busy"}]}`), 0o644)
+	// done refuses a dirty tree: ignore the fixture's own .rota files.
+	os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".rota/\n"), 0o644)
+	runGit(t, dir, "add", ".gitignore")
+	runGit(t, dir, "commit", "-q", "-m", "ignore rota")
 	return dir
 }
 
@@ -220,6 +224,9 @@ func TestWorkerDoneFencesAReclaimedSlot(t *testing.T) {
 func TestWorkerDoneLedgerAccountsFromMainCheckout(t *testing.T) {
 	main := workerProject(t, `{"round":{"accounts":[{"name":"work","configDir":"/w"}]}}`)
 	wt := filepath.Join(main, ".worktrees", "ben")
+	os.WriteFile(filepath.Join(main, ".gitignore"), []byte(".rota/\n"), 0o644)
+	runGit(t, main, "add", ".gitignore")
+	runGit(t, main, "commit", "-q", "-m", "ignore rota")
 	gitT(t, main, "worktree", "add", "-q", "-b", "ben/x", wt)
 	os.MkdirAll(filepath.Join(wt, ".rota"), 0o755)
 	os.WriteFile(filepath.Join(wt, ".rota", "config.json"), []byte(`{"work":{"accounts":[{"name":"work","configDir":"/w"}]}}`), 0o644)

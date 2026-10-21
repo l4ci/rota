@@ -10,6 +10,8 @@ echo '{"test":{"fast":["echo fast"]}}' > "$WDP/.rota/config.json"
     && echo seed > seed.txt && git add seed.txt .rota/BACKLOG.md .rota/config.json && git commit -q -m seed
 ) || fail "worker-done fixture repo setup failed"
 echo '{"slots":[{"name":"ben","branch":"feat/x","task":"B07","state":"busy"}]}' > "$WDP/.rota/workers.json"
+# done refuses a dirty tree (#1529): keep untracked .rota state (registry, proof rows) out of it.
+echo '.rota/*' >> "$WDP/.git/info/exclude"
 wdrun() { ( cd "$WDP" && "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 
 RC=0; OUT=$(wdrun worker done ben) || RC=$?
@@ -29,6 +31,7 @@ grep -q '"state": *"done"' "$WDP/.rota/workers.json" || fail "the slot should be
 pass "a PASS row at HEAD marks the slot done"
 
 echo '{}' > "$WDP/.rota/config.json"
+( cd "$WDP" && git commit -q -am "unset test.fast" )
 echo '{"slots":[{"name":"ben","branch":"feat/x","task":"B07","state":"busy"}]}' > "$WDP/.rota/workers.json"
 RC=0; OUT=$(wdrun worker done ben) || RC=$?
 [ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.proofSkipped)" = "true" ] || fail "unset test.fast should skip the proof half: rc=$RC $OUT"
@@ -37,6 +40,7 @@ pass "an unset test.fast skips the proof half"
 # A relay written after the worker's last test run and before done (#964): the
 # slot's inbox holds it, done refuses until the worker has read it.
 echo '{"test":{"fast":["echo fast"]}}' > "$WDP/.rota/config.json"
+( cd "$WDP" && git commit -q -am "set test.fast" )
 python3 - "$WDP/.rota/workers.json" <<'PYEOF'
 import json, sys
 p = sys.argv[1]
