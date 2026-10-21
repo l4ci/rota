@@ -19,6 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/legacystate"
+	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -123,6 +124,9 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	// No .gitignore at all is not an older project's drift: init creates it.
 	if raw, err := os.ReadFile(filepath.Join(root, ".gitignore")); err == nil {
 		in.GitignoreMissing = initproj.MissingIgnoreLines(string(raw))
+	}
+	if issue, err := issueBackend(root); err == nil && issue {
+		in.StaleMilestoneFiles, _ = migrate.StaleMilestoneFiles(root)
 	}
 	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now(), d.DoctorDisk, d.Getenv)
 	if on, err := config.SwitchOnUsage(cfg); err == nil {

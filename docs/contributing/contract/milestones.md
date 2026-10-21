@@ -85,6 +85,14 @@ exit: 2 on a positional argument; 3 when the milestone store can't be opened; tr
 old: none (new)
 note: renames `## Acceptance criteria` to `## Acceptance` and prefixes every bare top-level bullet in that section with `[ ] ` (an indented sub-bullet stays detail under its criterion), so the acceptance package can number the criteria AC-n as it does for issues. Nothing else in the body changes. Preview by default: without `--apply` it prints `<id>: would migrate` and writes nothing. `changed` is true only when `--apply` rewrote at least one body. Idempotent: a second run prints `nothing to migrate`. It goes through the milestone store, so it works on `.rota/milestones` files and on tracker milestones alike.
 
+### rota migrate milestone-files
+rota migrate milestone-files [--apply]
+repo: none
+data: {"applied": bool, "files": [string], "changed": bool}
+exit: 2 on a positional argument; 4 in file mode (`blockedBy: backend`), where the files are the milestone store; tracker
+old: none (new)
+note: with milestones on the tracker no verb reads `.rota/milestones/*.md`, so files left from file mode mislead (`milestone show` says not found while the file sits there). `rota doctor` warns (`milestones`) when they exist. This verb moves them to `.rota/archive/milestones/`. Preview by default: without `--apply` it prints `would archive <file>` and writes nothing. Idempotent: a second run prints `nothing to archive`.
+
 ### rota milestone check
 rota milestone check <MNN> [--strict]
 repo: none
