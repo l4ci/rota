@@ -144,7 +144,7 @@ slot `wait` named, or gate a PR in review by number (`rota worker gate 61 --base
 | Check | `rota doctor` | git, jq, host, tracker auth, accounts, herdr hooks, `rota` version, Codex; each failure carries its fix |
 | Start | `rota round start` | takes the repo's orchestrator lease, provisions slots, lists ready candidates |
 | Pick | `rota round candidates` | the open items that pass the criteria, dependency and overlap checks |
-| Review | `rota round architecture` | after `round.architectureEvery` closed non-refactor items, or when a slot is idle and nothing is assignable, mints one architecture-review item per area and assigns them to idle slots |
+| Review | `rota round architecture` | after `round.architectureEvery` closed non-refactor items, or when a slot is idle and nothing is assignable (at least `round.architectureIdleMinItems` closed and `round.architectureIdleMinHours` since the last review; not in a slate round), mints one architecture-review item per area and assigns them to idle slots |
 | Assign | `rota round assign <ID>` | claims the item, marks it in progress, cuts `<agent>/<issue>-<slug>`, starts the worker with a signed pointer brief |
 | Wait | `rota round wait` | blocks until one slot needs the orchestrator, then returns it; never poll |
 | Watch | `rota round watch` | the background form of `wait`: run it as a background command and it exits when a slot, PR or escalation changes, or at a heartbeat |

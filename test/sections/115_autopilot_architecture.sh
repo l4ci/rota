@@ -50,6 +50,8 @@ pass "a tick at the threshold mints the review, assigns it ahead of the backlog 
 APA2="$(mktemp -d "$TMP/apa2.XXXXXX")/proj"
 apa_fixture "$APA2"
 apa config set round.architectureEvery 5 >/dev/null
+apa config set round.architectureIdleMinItems 0 >/dev/null
+apa config set round.architectureIdleMinHours 0 >/dev/null
 apa_feature one F01
 OUT=$(apa round tick) || fail "tick failed: $OUT"
 case "$(apa_did <<<"$OUT")" in mint:*,assign:*) ;; *) fail "an idle slot with an empty queue should mint and assign a review: $OUT" ;; esac

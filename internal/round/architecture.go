@@ -65,8 +65,15 @@ type Architecture struct {
 	Idle    int      // roster slots holding nothing
 	Pending []string // open review items: a review is in flight
 	Areas   []string // what a review would be split into
-	Due     bool
-	Trigger string // TriggerThreshold or TriggerQueueEmpty when Due
+	// IdleMinItems is round.architectureIdleMinItems: the closed items the
+	// queue-empty trigger needs. Cooling is set while the last review is
+	// younger than round.architectureIdleMinHours; Slate when the round's
+	// scope is a slate. Either keeps queue-empty from firing.
+	IdleMinItems int
+	Cooling      bool
+	Slate        bool
+	Due          bool
+	Trigger      string // TriggerThreshold or TriggerQueueEmpty when Due
 	// Unavailable says why Count could not be read.
 	Unavailable string
 }
@@ -101,10 +108,12 @@ func (e Env) Architecture(ctx context.Context, root string, be backlog.Backend, 
 // nothing: the counter, the pending items, the idle slots, and whether any
 // candidate is ready. DecideReview turns them into Due.
 func (e Env) ArchitectureFacts(ctx context.Context, root string, be backlog.Backend, set roundcfg.Settings, cands []Candidate) (a Architecture, ready bool, err error) {
-	a = Architecture{Every: set.ArchitectureEvery, Since: ReviewSince(root)}
+	a = Architecture{Every: set.ArchitectureEvery, Since: ReviewSince(root), IdleMinItems: set.ArchitectureIdleMinItems}
 	if a.Every == 0 {
 		return a, false, nil
 	}
+	scope, _ := ScopeOf(root, set, "")
+	a.Slate = scope == roundcfg.ScopeSlate
 	items, err := be.List(false)
 	if err != nil {
 		return a, false, err
@@ -124,6 +133,9 @@ func (e Env) ArchitectureFacts(ctx context.Context, root string, be backlog.Back
 	a.Areas = reviewAreas(root, set)
 
 	a.Count, a.Unavailable = e.closedSinceReview(ctx, root, be, &a.Since)
+	if at, err := time.Parse(time.RFC3339, a.Since); err == nil && set.ArchitectureIdleMinHours > 0 {
+		a.Cooling = e.now().Sub(at) < time.Duration(set.ArchitectureIdleMinHours)*time.Hour
+	}
 	for _, c := range cands {
 		if c.Ready() {
 			ready = true
@@ -146,9 +158,10 @@ func DecideReview(a Architecture, ready bool) Architecture {
 	switch {
 	case a.Count >= a.Every:
 		a.Due, a.Trigger = true, TriggerThreshold
-	case a.Idle > 0 && !ready && a.Count > 0:
-		// Something closed since the last review, a slot is free and nothing
-		// can be given to it: spend the slot on a review.
+	case a.Idle > 0 && !ready && a.Count > 0 && a.Count >= a.IdleMinItems && !a.Cooling && !a.Slate:
+		// Enough closed since a review that is not recent, a slot is free and
+		// nothing can be given to it: spend the slot on a review. A slate
+		// round states its own need, so an idle slot there is not a dry queue.
 		a.Due, a.Trigger = true, TriggerQueueEmpty
 	}
 	return a
