@@ -243,6 +243,20 @@ func (s *Sidecar) Rekey(oldTopic, oldTitle, newTopic string) bool {
 	return true
 }
 
+// Delete drops the entry of a removed bullet. A missing entry and the
+// Glossary topic are left alone. It reports whether anything was dropped.
+func (s *Sidecar) Delete(topic, title string) bool {
+	if topic == GlossaryTopic {
+		return false
+	}
+	k := key(topic, title)
+	if s.rec(k) == nil {
+		return false
+	}
+	s.ents.Delete(k)
+	return true
+}
+
 // Retitle moves the entry of a retitled bullet within one topic. A missing
 // entry and the Glossary topic are left alone. It reports whether anything
 // moved.
