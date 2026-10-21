@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -41,6 +42,8 @@ type Entry struct {
 	ID          string          `json:"id"`
 	Verb        string          `json:"verb"`
 	Fingerprint string          `json:"fingerprint"`
+	Target      string          `json:"target,omitempty"`
+	Args        []string        `json:"args,omitempty"`
 	Status      string          `json:"status"`
 	Attempts    int             `json:"attempts"`
 	Exit        int             `json:"exit,omitempty"`
@@ -55,10 +58,16 @@ type Entry struct {
 // Mismatch is the error for an id already used by a different call.
 type Mismatch struct {
 	ID, Verb string
+	// Args are the arguments the id was first used with, as recorded.
+	Args []string
 }
 
 func (m *Mismatch) Error() string {
-	return fmt.Sprintf("request id %s was already used for a different call (%s) with other arguments", m.ID, m.Verb)
+	msg := fmt.Sprintf("request id %s was already used for a different call (%s) with other arguments", m.ID, m.Verb)
+	if len(m.Args) > 0 {
+		msg += "; original arguments: " + strings.Join(m.Args, " ")
+	}
+	return msg
 }
 
 type fileData struct {
@@ -92,9 +101,13 @@ type Store struct {
 func New(root string) *Store { return &Store{Root: root, Now: time.Now} }
 
 // Call is the identity of one verb call: the request id the caller retries
-// with, the verb, and a fingerprint of everything the call judges.
+// with, the verb, and a fingerprint of everything the call judges. Target names
+// the work the call is about (so a rerun without the id can be matched to it)
+// and Args are the arguments to show a caller; neither is part of the identity.
 type Call struct {
 	ID, Verb, Fingerprint string
+	Target                string
+	Args                  []string
 }
 
 // Outcome is what Do reports once the call is settled.
@@ -137,6 +150,7 @@ func (s *Store) Do(call Call, run func(prior Entry) (Entry, bool)) (Outcome, err
 			return nil
 		}
 		e.ID, e.Verb, e.Fingerprint = call.ID, call.Verb, call.Fingerprint
+		e.Target, e.Args = call.Target, call.Args
 		out.Entry = e
 		out.RecordErr = s.record(&out.Entry)
 		return nil
@@ -156,7 +170,7 @@ func (s *Store) Lookup(call Call) (e Entry, found bool, err error) {
 			continue
 		}
 		if r.Verb != call.Verb || r.Fingerprint != call.Fingerprint {
-			return Entry{}, false, &Mismatch{ID: call.ID, Verb: r.Verb}
+			return Entry{}, false, &Mismatch{ID: call.ID, Verb: r.Verb, Args: r.Args}
 		}
 		return r, true, nil
 	}
@@ -173,6 +187,21 @@ func (s *Store) Show(id string) (e Entry, found bool, err error) {
 	}
 	for _, r := range d.Receipts {
 		if r.ID == id {
+			return r, true, nil
+		}
+	}
+	return Entry{}, false, nil
+}
+
+// Pending returns the newest failed receipt for verb and target: a call that
+// stopped part way and has not been replayed. found is false when none is.
+func (s *Store) Pending(verb, target string) (e Entry, found bool, err error) {
+	d, err := load(path(s.Root))
+	if err != nil {
+		return Entry{}, false, err
+	}
+	for i := len(d.Receipts) - 1; i >= 0; i-- {
+		if r := d.Receipts[i]; r.Status == Failed && r.Verb == verb && r.Target == target {
 			return r, true, nil
 		}
 	}
