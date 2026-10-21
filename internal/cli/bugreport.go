@@ -51,31 +51,31 @@ func brAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		return Result{Data: brData(rec), Text: rec.ID}, nil
+		return Result{Data: brData(rec, brRedactEnv(c, root)), Text: rec.ID}, nil
 	}
 }
 
-func brData(r bugreport.Record) *jsonx.Object {
+func brData(r bugreport.Record, red bugreport.Env) *jsonx.Object {
 	o := jsonx.NewObject()
 	o.Set("id", r.ID)
 	o.Set("source", r.Source)
-	o.Set("verb", r.Verb)
+	o.Set("verb", bugreport.Redact(r.Verb, red))
 	o.Set("exit", r.Exit)
-	o.Set("summary", r.Summary)
-	o.Set("error", r.Error)
+	o.Set("summary", bugreport.Redact(r.Summary, red))
+	o.Set("error", bugreport.Redact(r.Error, red))
 	o.Set("count", r.Count)
 	o.Set("status", r.Status)
 	o.Set("issue", r.Issue)
 	return o
 }
 
-func brLine(r bugreport.Record) string {
+func brLine(r bugreport.Record, red bugreport.Env) string {
 	what := r.Summary
 	if what == "" {
 		what = r.Error
 	}
 	what, _, _ = strings.Cut(what, "\n")
-	return strings.Join([]string{r.ID, r.Source, dash(r.Verb), what}, "\t")
+	return strings.Join([]string{r.ID, r.Source, dash(bugreport.Redact(r.Verb, red)), bugreport.Redact(what, red)}, "\t")
 }
 
 func brList(c *Ctx, args []string) (Result, error) {
@@ -90,11 +90,12 @@ func brList(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	red := brRedactEnv(c, root)
 	rows := []any{}
 	var lines []string
 	for _, r := range open {
-		rows = append(rows, brData(r))
-		lines = append(lines, brLine(r))
+		rows = append(rows, brData(r, red))
+		lines = append(lines, brLine(r, red))
 	}
 	return Result{Data: gitObj("records", rows), Text: strings.Join(lines, "\n")}, nil
 }
