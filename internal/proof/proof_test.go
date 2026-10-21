@@ -58,9 +58,9 @@ func project(t *testing.T) string {
 	return root
 }
 
-// The detail files and the shown rows must stay byte-identical to what the
-// retired proof add and show helpers produced (testdata/golden, frozen,
-// changed only by reviewed edit).
+// The shown rows must stay byte-identical to what the retired proof add and
+// show helpers produced (testdata/golden, frozen, changed only by reviewed
+// edit); the rows now live in the sidecar, and the detail file stays as it was.
 func TestAddAndShowMatchOldHelpers(t *testing.T) {
 	root := project(t)
 	steps := []struct {
@@ -80,10 +80,15 @@ func TestAddAndShowMatchOldHelpers(t *testing.T) {
 			t.Fatalf("Add(%s %+v) = %v %v, want changed=%v", s.id, s.o, changed, err, s.ch)
 		}
 	}
+	// Rows go to the gitignored sidecar; the tracked detail file is never touched.
 	for id, kind := range map[string]string{"B07": "bugs", "F13": "features", "T03": "tasks", "B05": "bugs"} {
+		if _, err := os.Stat(filepath.Join(root, ".rota", kind, id+".proof")); err != nil {
+			t.Errorf("%s: no proof sidecar: %v", id, err)
+		}
 		got, _ := os.ReadFile(filepath.Join(root, ".rota", kind, id+".md"))
-		if mask(string(got)) != golden(t, id+".md") {
-			t.Errorf("%s differs from golden:\n%s", id, got)
+		want, _ := os.ReadFile(filepath.Join("testdata", "fixture", kind, id+".md"))
+		if string(got) != string(want) {
+			t.Errorf("%s: detail file changed:\n%s", id, got)
 		}
 	}
 	for _, id := range []string{"B07", "F13", "T03", "B05", "B09"} {
@@ -149,12 +154,11 @@ func TestDefaultShaFromGit(t *testing.T) {
 
 func TestAddCRLFDetailFile(t *testing.T) {
 	root := project(t)
-	p := filepath.Join(root, ".rota/tasks/T03.md")
-	os.WriteFile(p, []byte("# T03\r\n\r\n## Proof\r\n\r\n- 2026-01-01 · a · PASS · s · e\r\n"), 0o644)
+	os.WriteFile(filepath.Join(root, ".rota/tasks/T03.md"), []byte("# T03\r\n\r\n## Proof\r\n\r\n- 2026-01-01 · a · PASS · s · e\r\n"), 0o644)
 	if _, changed, err := Add(Files(root), root, "T03", proofDay, AddOpts{"b", "PASS", "e", "s"}); err != nil || !changed {
 		t.Fatal(err)
 	}
-	got, _ := os.ReadFile(p)
+	got, _ := os.ReadFile(filepath.Join(root, ".rota/tasks/T03.proof"))
 	if strings.Contains(string(got), "\r") || strings.Count(string(got), "- ") != 2 {
 		t.Errorf("got %q", got)
 	}
@@ -186,10 +190,10 @@ func TestAddConcurrentIdenticalRows(t *testing.T) {
 	}
 }
 
-// An unreadable detail file is not a missing one: nothing is overwritten.
+// An unreadable proof file is not a missing one: nothing is overwritten.
 func TestUnreadableDetailFileIsExit70(t *testing.T) {
 	root := project(t)
-	p := filepath.Join(root, ".rota/bugs/B07.md")
+	p := filepath.Join(root, ".rota/bugs/B07.proof")
 	if err := os.MkdirAll(p, 0o777); err != nil { // a directory: ReadFile fails with EISDIR
 		t.Fatal(err)
 	}
@@ -238,5 +242,30 @@ func TestProvesAtHead(t *testing.T) {
 		if got := Proves(tc.rows, tc.head, tc.check); got != tc.want {
 			t.Errorf("%s: Proves = %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+// Rows an older rota wrote into the detail file still count, and the first
+// write seeds the sidecar with them instead of dropping them.
+func TestLegacyDetailRowsAreReadAndSeedTheSidecar(t *testing.T) {
+	root := project(t)
+	detail := filepath.Join(root, ".rota/features/F13.md")
+	before, _ := os.ReadFile(detail)
+	rows, _, err := Show(Files(root), "F13")
+	if err != nil || len(rows) != 1 || rows[0].Check != "seed" {
+		t.Fatalf("legacy read = %+v %v", rows, err)
+	}
+	if _, _, err := Add(Files(root), root, "F13", proofDay, AddOpts{"lint", "PASS", "clean", "def5678"}); err != nil {
+		t.Fatal(err)
+	}
+	if rows, _, _ := Show(Files(root), "F13"); len(rows) != 2 || rows[0].Check != "seed" || rows[1].Check != "lint" {
+		t.Errorf("after add = %+v", rows)
+	}
+	side, _ := os.ReadFile(filepath.Join(root, ".rota/features/F13.proof"))
+	if strings.Contains(string(side), "Notes") || strings.Contains(string(side), "after") {
+		t.Errorf("sidecar copied more than the proof rows:\n%s", side)
+	}
+	if after, _ := os.ReadFile(detail); string(after) != string(before) {
+		t.Errorf("detail file changed:\n%s", after)
 	}
 }

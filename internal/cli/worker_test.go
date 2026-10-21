@@ -612,3 +612,30 @@ func TestMergeApprovalAuditLineTakesROTA_TEST_NOW(t *testing.T) {
 		t.Fatalf("audit %v", a)
 	}
 }
+
+// #1547: file-mode proof rows live in a gitignored sidecar, so a slot that
+// recorded its proof at HEAD still passes the dirty check `round assign` (via
+// worker reset) and the other dirty checks make.
+func TestFileModeProofDoesNotDirtySlot(t *testing.T) {
+	dir := workerProject(t, `{}`)
+	os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".worktrees/\n.rota/**/*.proof\n.rota/**/*.lock\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# Backlog\n\n## Bugs\n\n- **[B07] [Major] Parser.** Unclear.\n"), 0o644)
+	gitIn(t, dir, "add", ".gitignore", ".rota/BACKLOG.md")
+	gitIn(t, dir, "commit", "-q", "-m", "backlog")
+	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+	wt := filepath.Join(dir, ".worktrees", "w1")
+	if code, out, errOut := rotaIn(t, dir, "worker", "reset", "w1", "--task", "B07", "--json"); code != 0 {
+		t.Fatalf("reset: %d %s %s", code, out, errOut)
+	}
+
+	if code, out, errOut := rotaIn(t, wt, "proof", "add", "B07", "--check", "true", "--result", "PASS", "--evidence", "ok", "--json"); code != 0 {
+		t.Fatalf("proof add: %d %s %s", code, out, errOut)
+	}
+	if out, _ := exec.Command("git", "-C", wt, "status", "--porcelain").Output(); strings.TrimSpace(string(out)) != "" {
+		t.Fatalf("proof row dirtied the worktree:\n%s", out)
+	}
+	code, out, errOut := rotaIn(t, dir, "worker", "reset", "w1", "--check-only", "--json")
+	if d := data(t, out); code != 0 || d["clean"] != true {
+		t.Fatalf("assign's dirty check refused a slot that only recorded proof: %d %v %s", code, d, errOut)
+	}
+}

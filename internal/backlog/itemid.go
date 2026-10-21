@@ -90,3 +90,15 @@ func DetailPath(root, id string) string {
 	}
 	return rotatree.Doc(root, dir, id)
 }
+
+// ProofPath is the file-mode proof sidecar of an item,
+// <root>/.rota/<bugs|features|tasks>/<ID>.proof, "" when the ID's prefix has
+// no detail directory. It is gitignored: proof rows are per-checkout facts and
+// must not dirty the worktree the dirty checks (worker done, assign, ship) read.
+func ProofPath(root, id string) string {
+	dir := detailDir(id)
+	if dir == "" {
+		return ""
+	}
+	return rotatree.File(root, dir, id+".proof")
+}
