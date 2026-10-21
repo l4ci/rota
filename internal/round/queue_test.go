@@ -619,3 +619,24 @@ func TestParkableBlockedSlotByPRState(t *testing.T) {
 		})
 	}
 }
+
+// A parkable slot whose account has no login is not picked: its PR stays
+// unqueued and the refusal names it.
+func TestAssignSkipsParkableSlotWithoutLogin(t *testing.T) {
+	f := newMoveFx(t)
+	f.finish(t, "ben", pr7)
+	if _, err := f.assign("13", "dana"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccount("work", t.TempDir()) }); err != nil {
+		t.Fatal(err)
+	}
+	f.be.add("16", "Other", "M01", false, "## Acceptance\n- [ ] ok\n\nedits internal/other2.go")
+	_, err := f.assign("16", "")
+	if blockedBy(t, err) != BlockNoLogin || !strings.Contains(err.Error(), "ben") {
+		t.Fatalf("err = %v, want %s naming ben", err, BlockNoLogin)
+	}
+	if len(f.queued()) != 0 || f.slot("ben").Task() != "12" {
+		t.Errorf("a skipped slot parks nothing: %v", f.queued())
+	}
+}

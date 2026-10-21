@@ -1269,6 +1269,25 @@ func TestAssignResumingHolderWithoutLoginRefuses(t *testing.T) {
 	}
 }
 
+func TestAssignRefusesWhenEveryFreeSlotHasNoLogin(t *testing.T) {
+	f := newAssignFixture(t)
+	for _, name := range []string{"ben", "dana"} {
+		if _, err := worker.UpdateSlot(f.root, name, func(s *worker.Slot) { s.SetAccount("work", t.TempDir()) }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, err := f.assign("12", "", nil)
+	if blockedBy(t, err) != BlockNoLogin {
+		t.Fatalf("err = %v, want %s", err, BlockNoLogin)
+	}
+	if !strings.Contains(err.Error(), "every free roster slot") || !strings.Contains(err.Error(), "ben") || !strings.Contains(err.Error(), "dana") {
+		t.Errorf("message %q should name the refusal and both slots", err)
+	}
+	if len(res.Warnings) == 0 || !strings.Contains(res.Warnings[0], "no login") {
+		t.Errorf("warnings = %v, want the skipped-slots warning", res.Warnings)
+	}
+}
+
 func TestStatusMarksSlotWhoseAccountHasNoLogin(t *testing.T) {
 	f := noLoginFixture(t)
 	rep, err := f.env.Status(bg, f.root)
