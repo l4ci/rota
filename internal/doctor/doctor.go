@@ -83,11 +83,10 @@ type Input struct {
 	Home string // expands a leading "~/" in a configDir
 
 	// From the project config when .rota/ exists; zero values otherwise.
-	Dispatch      string           // round.dispatch
-	RegistryHost  host.Kind        // the host `round start` recorded, "" when no round is in flight
-	RoundHost     host.Kind        // the host the round's verbs drive (worker.ResolveHost), "" outside a project
-	Tracker       tracker.Settings // tracker.SettingsFromConfig over the project config
-	ForgeProvider string           // forge.provider (auto, github, gitlab or local; "" reads as auto)
+	Dispatch     string           // round.dispatch
+	RegistryHost host.Kind        // the host `round start` recorded, "" when no round is in flight
+	RoundHost    host.Kind        // the host the round's verbs drive (worker.ResolveHost), resolved with no project too
+	Tracker      tracker.Settings // tracker.SettingsFromConfig over the project config
 	// Tracker.Source is issues.source, "" outside a rota project (an unmigrated
 	// legacy config reads as config.SourceIssues). SourceProblem is the reason
 	// forge.provider or issues.source holds an invalid value ("" when valid);
@@ -173,9 +172,6 @@ type Input struct {
 	CwdOf func(pid int) string
 
 	Exec Exec
-	// Getenv reads the environment for host detection (HERDR_ENV, TMUX); nil
-	// reads as empty.
-	Getenv func(string) string
 	// Look resolves a tool name, or a path with a slash, to an executable path, or
 	// false when it is not found. It is the only filesystem and PATH read for tools.
 	Look func(name string) (string, bool)

@@ -100,16 +100,6 @@ func TestRunTable(t *testing.T) {
 		return m
 	}
 	herdrIn := Input{Dispatch: "herdr", RoundHost: host.Herdr, Accounts: []config.Account{{Name: "a", ConfigDir: good}}}
-	env := func(kv ...string) func(string) string {
-		return func(k string) string {
-			for i := 0; i+1 < len(kv); i += 2 {
-				if kv[i] == k {
-					return kv[i+1]
-				}
-			}
-			return ""
-		}
-	}
 	inHerdr := Input{Dispatch: "subagent", RoundHost: host.Herdr, Accounts: []config.Account{{Name: "a", ConfigDir: good}}}
 
 	for _, tc := range []struct {
@@ -190,7 +180,7 @@ func TestRunTable(t *testing.T) {
 		{"hook not installed", herdrIn, all, with(map[string]Result{"herdr integration status": {Stdout: miss}}), "hook", Fail, "a: not installed", "herdr integration install claude"},
 		{"hook status errors", herdrIn, all, with(map[string]Result{"herdr integration status": {ExitCode: 1}}), "hook", Fail, "status failed", "herdr integration install claude"},
 		{"hook runs for a detected herdr pane", inHerdr, all, with(nil), "hook", Pass, "a: current", ""},
-		{"hook skips for detected tmux", Input{Dispatch: "subagent", Getenv: env("TMUX", "x"), Accounts: []config.Account{{Name: "a", ConfigDir: good}}}, all, with(nil), "hook", Skip, "not herdr", ""},
+		{"hook skips for detected tmux", Input{Dispatch: "subagent", RoundHost: host.Tmux, Accounts: []config.Account{{Name: "a", ConfigDir: good}}}, all, with(nil), "hook", Skip, "not herdr", ""},
 		{"hook skips off herdr", Input{Dispatch: "tmux", Accounts: []config.Account{{Name: "a", ConfigDir: good}}}, all, with(nil), "hook", Skip, "not herdr", ""},
 		{"hook skips without accounts", Input{Dispatch: "herdr", RoundHost: host.Herdr}, all, with(nil), "hook", Skip, "no accounts", ""},
 		{"hook skips without herdr", herdrIn, without("herdr"), with(nil), "hook", Skip, "see host", ""},

@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -400,5 +401,51 @@ func TestDoctorInputTrackerAndHostFromOwners(t *testing.T) {
 	}
 	if in.RoundHost != host.Tmux {
 		t.Errorf("round host %q, want tmux", in.RoundHost)
+	}
+}
+
+// A bad issues.source still reaches the connection check: doctor reports both
+// the source problem and the undefined connection (#1535).
+func TestDoctorInputKeepsConnectionWithSourceProblem(t *testing.T) {
+	cwd, _ := filepath.EvalSymlinks(t.TempDir())
+	os.MkdirAll(filepath.Join(cwd, ".rota"), 0o755)
+	os.WriteFile(filepath.Join(cwd, ".rota", "config.json"), []byte(`{"issues":{"source":"svn","connection":"work"}}`), 0o644)
+	d := defaultDeps()
+	d.Getwd = func() (string, error) { return cwd, nil }
+	d.Getenv = func(string) string { return "" }
+	in := doctorInput(context.Background(), d)
+	if in.SourceProblem == "" {
+		t.Error("no source problem for svn")
+	}
+	if in.Tracker.Connection != "work" || in.Connection == nil {
+		t.Errorf("connection dropped: tracker %q, check %+v", in.Tracker.Connection, in.Connection)
+	}
+}
+
+// doctorInput hands worker.ResolveHost its own Getenv and DoctorPath-aware Look:
+// a herdr pane resolves herdr only when herdr is found on DoctorPath.
+func TestDoctorInputHostUsesGetenvAndDoctorPath(t *testing.T) {
+	cwd, _ := filepath.EvalSymlinks(t.TempDir())
+	os.MkdirAll(filepath.Join(cwd, ".rota"), 0o755)
+	os.WriteFile(filepath.Join(cwd, ".rota", "config.json"), []byte(`{}`), 0o644)
+	for path, want := range map[string]host.Kind{"/missing": host.Solo, "/found": host.Herdr} {
+		d := defaultDeps()
+		d.Getwd = func() (string, error) { return cwd, nil }
+		d.Getenv = func(k string) string {
+			if k == "HERDR_ENV" {
+				return "1"
+			}
+			return ""
+		}
+		d.LookPath = func(n string) (string, error) {
+			if n == "/found/herdr" {
+				return n, nil
+			}
+			return "", errors.New("not found")
+		}
+		d.DoctorPath = path
+		if got := doctorInput(context.Background(), d).RoundHost; got != want {
+			t.Errorf("DoctorPath %s: round host %q, want %q", path, got, want)
+		}
 	}
 }
