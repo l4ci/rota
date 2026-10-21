@@ -24,13 +24,15 @@ never exits 5.
 | `jq` | `jq` on `PATH`; the skills read fields from `rota … --json` output with it | never |
 | `host` | the host a round would run on: `round.dispatch` as named, or with it unset or `subagent`, herdr inside a herdr pane, else tmux inside tmux. herdr on `PATH` and 0.9.x, or tmux on `PATH` | no host is detected (solo needs none) |
 | `tracker` | the forge and the issue source together. The line reads `forge github (from origin), issues file`, naming the resolved forge (`forge.provider`, else `origin`; no remote is `local`) and `issues.source`. Fails when `issues.source` is `github` or `gitlab` but the forge is something else. Otherwise `gh` or `glab` on `PATH` and authenticated for the forge | forge is `local` (no pull requests), or `origin` names neither GitHub nor GitLab and `forge.provider` is not set |
-| `accounts` | every account in `round.accounts` has an existing `configDir` whose credentials file holds an access token | no accounts configured. Warns when the orchestrator's `CLAUDE_CONFIG_DIR` is not one of them |
+| `accounts` | every account in `round.accounts` has an existing `configDir` whose credentials file holds an access token (on macOS the login Keychain entry is read when the file is missing, unusable or expired) | no accounts configured. Warns when the orchestrator's `CLAUDE_CONFIG_DIR` is not one of them |
 | `hook` | herdr's agent integration for each account (`herdr integration status`) | the host is not herdr, or no account is configured |
 | `statusline` | the effective statusline runs `rota statusline dump` | hooks not installed (opt-in) |
 | `stop-hook` | a `Stop` and a `SessionStart` entry marked `# rota-hook`, and the command resolves | hooks not installed (opt-in) |
 | `guard-hook` | a `PreToolUse` entry marked `# rota-hook` in project (`.claude/settings.json`) or user scope, and the command resolves; warns when Codex tiers are set (Codex workers are not guarded) | hooks not installed (opt-in) |
 | `switch` | with `orchestrator.switchOnUsage` on: the Stop hook and two accounts with a `configDir` | the key is off |
 | `skills` | every installed skills root (user and project, Claude and Codex) matches the binary's skill set, and has no missing or edited files | no root has a `.rota-manifest.json` (run `rota skills install`) |
+| `config dir` | the global config dir in use and where it came from (`ROTA_CONFIG_DIR` override, `XDG_CONFIG_HOME` or the default). Warns when a relative `ROTA_CONFIG_DIR` was ignored | never |
+| `state dir` | the state dir that holds the project registry (`projects.json`) | never |
 | `codex` | `codex` runs, the default Codex home (or each `round.codexAccounts` account) logged in, herdr integration per home | `codex` is not on `PATH` and no `round.codexAccounts` are configured |
 
 `verify` also appears only when something is wrong: it warns when `test.full` and `test.e2e` are both empty under a local verify (`test.fullWhere` is `local`), because the merge gate refuses to merge then (`blockedBy: no-verify`). The hint is `run: rota config set test.full '[...]'`. It never fails the run. `rota init` and `rota round start` print the same warning.

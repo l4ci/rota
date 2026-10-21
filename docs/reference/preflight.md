@@ -54,7 +54,7 @@ The checks, in the order they run:
 | `jq` | `jq` is on `PATH` (the skills read `rota --json` output with it) | never |
 | `host` | the host a round would run on is usable: `round.dispatch` as named, or with it unset or `subagent`, herdr inside a herdr pane, else tmux inside tmux. herdr on `PATH` and 0.9.x, or tmux on `PATH` | no host is detected (solo) |
 | `tracker` | `gh` or `glab` is on `PATH` and logged in for the project's provider | the project has no remote |
-| `accounts` | every account in `round.accounts` has a `configDir` whose credentials file holds an access token | no accounts configured |
+| `accounts` | every account in `round.accounts` has a `configDir` whose credentials file holds an access token. On macOS the login Keychain entry is read when the file is missing, unusable or expired. Warns when the orchestrator's `CLAUDE_CONFIG_DIR` is not one of the accounts | no accounts configured |
 | `hook` | herdr's agent integration is installed for each configured account (`herdr integration install claude`) | the host is not herdr, or no account is configured |
 | `statusline` | the effective statusline runs `rota statusline dump` | the orchestrator hooks are not installed (opt-in) |
 | `stop-hook` | a Stop and a SessionStart hook installed by `rota hook install` exist and their command resolves | the orchestrator hooks are not installed (opt-in) |
@@ -63,6 +63,8 @@ The checks, in the order they run:
 | `skills` | every installed skills root (user and project, Claude and Codex, including each `round.accounts` config dir) matches the binary's skill set, and has no missing or edited files | no root has a `.rota-manifest.json` (run `rota skills install`) |
 | `codex` | `codex` runs, and the default Codex home (or each `round.codexAccounts` account) is logged in and has the herdr integration | `codex` is not on `PATH` and no `round.codexAccounts` are configured |
 | `agents` | the subagent files `rota agents write` generates are present and current | nothing to report: the line appears only as a `warn`, when a file is missing or stale (fix: `rota agents write`) |
+| `config dir` | nothing to fail: the line shows the global config dir in use and where it came from (`ROTA_CONFIG_DIR` override, `XDG_CONFIG_HOME` or the default). Warns when a relative `ROTA_CONFIG_DIR` was ignored | never |
+| `state dir` | nothing to fail: the line shows the state dir that holds the project registry | never |
 | `verify` | `test.full` or `test.e2e` is set, so the merge gate has something to run | nothing to report: the line appears only as a `warn`, when both are empty under a local verify (fix: `rota config set test.full '[...]'`) |
 
 The three hook checks are opt-in. Until something `rota hook install` writes is present, they skip and do not fail a project that never installed the hooks. Once it is, a partial or broken install fails. `skills` follows the same rule: it skips until `rota skills install` has written a manifest.

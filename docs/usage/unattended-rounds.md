@@ -190,7 +190,9 @@ another watcher.
   against the slot's `round.codexAccounts` login, and the reset comes from `try again at <time>` in the text.
 - **The message as fallback:** on herdr 0.9.x the loop subscribes to `pane.output_matched` with the
   phrases `rota worker poll` already uses for LIMITED. On tmux, or if herdr refuses the subscription, it
-  captures the panes every `--settle` seconds.
+  captures the panes every `--settle` seconds. A match counts only in the harness's own dialog region of
+  the pane, the block above the input box. A limit phrase quoted in a reply, a diff or a tool listing
+  starts nothing.
 - **No data behind a message:** the reset time comes from the text (`resets at 3pm` reads as the next 3pm
   in your time zone, within 8 days). Otherwise it sleeps `limits.fallbackSleepSeconds`.
 
