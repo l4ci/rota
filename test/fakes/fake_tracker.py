@@ -512,7 +512,7 @@ def ms_by_number(db, n):
 
 
 def gh_api(db, args):
-    path, method, fields, _ = parse_api(args, {})
+    path, method, fields, opts = parse_api(args, {"--input": "input"})
     method = (method or ("POST" if fields else "GET")).upper()
     m = re.match(r"^repos/[^/]+/[^/]+/(.+)$", path)
     if not m:
@@ -547,6 +547,26 @@ def gh_api(db, args):
                 x[k] = fields[k]
         save(db)
         emit(gm(x))
+    elif re.match(r"^issues/\d+$", rest) and method in ("GET", "PATCH"):
+        i = find_issue(db, rest.split("/")[1])
+        if method == "PATCH":
+            f = opts.get("input")
+            body = json.loads(sys.stdin.read() if f and f[-1] == "-" else open(f[-1]).read())
+            if "title" in body:
+                i["title"] = body["title"]
+            if "body" in body:
+                i["body"] = body["body"]
+            if "labels" in body:
+                gh_check_labels(db, body["labels"])
+                i["labels"] = list(body["labels"])
+            if "milestone" in body:
+                n = body["milestone"]
+                i["milestone"] = None if n is None else [ms_by_number(db, n)["title"], int(n)]
+            save(db)
+        emit({"number": i["number"], "title": i["title"], "body": i["body"],
+              "labels": [{"name": n} for n in i["labels"]],
+              "milestone": {"title": i["milestone"][0], "number": i["milestone"][1]} if i["milestone"] else None,
+              "state": i["state"]})
     elif re.match(r"^issues/\d+/comments$", rest) and method == "GET":
         i = thread(db, rest.split("/")[1])
         emit([{"id": c["id"], "body": c["body"], "user": {"login": c["author"]}} for c in i["comments"]])
