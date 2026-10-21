@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -37,5 +38,17 @@ func TestRoundTickRefusesBelowAuto(t *testing.T) {
 		if code != ExitRefused || !strings.Contains(fmt.Sprint(get(get(env, "error"), "hint")), "rota config set autonomy.level auto") {
 			t.Errorf("%s: %d %v", level, code, env)
 		}
+	}
+}
+
+// An old global auto is rewritten and named in fill's notice.
+func TestConfigFillReportsGlobalAutonomyRewrite(t *testing.T) {
+	gdir := t.TempDir()
+	t.Setenv("ROTA_CONFIG_DIR", gdir)
+	write(t, filepath.Join(gdir, "config.json"), `{"autonomy": {"level": "auto"}}`)
+	root := trackerProject(t, `{"rota": {"version": "0.21.0"}}`+"\n")
+	code, out, errOut := rotaIn(t, root, "config", "fill")
+	if code != 0 || !strings.Contains(out, "rewrote: autonomy.level auto -> roundtrip in the global config") || !strings.Contains(out, "--global") {
+		t.Errorf("fill: %d\n%s%s", code, out, errOut)
 	}
 }

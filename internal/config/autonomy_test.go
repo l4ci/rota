@@ -138,3 +138,50 @@ func slicesContain(s []string, v string) bool {
 	}
 	return false
 }
+
+// A global auto written before the split meant one hop too. The global file
+// carries no project stamp, so it gets its own: fill rewrites a global auto
+// once, stamps the global file, and a later deliberate global auto survives.
+// A project at the current stamp still migrates an unstamped global.
+func TestFillRewritesGlobalAutoOnce(t *testing.T) {
+	gdir := t.TempDir()
+	t.Setenv("ROTA_CONFIG_DIR", gdir)
+	gpath := filepath.Join(gdir, "config.json")
+	os.WriteFile(gpath, []byte(`{"autonomy": {"level": "auto"}}`), 0o644)
+	root := project(t, `{"rota": {"version": "`+AutonomyLevelsSince+`"}}`, "")
+	if p := AutonomyPending(root); !p.GlobalRewrite || p.Rewrite {
+		t.Fatalf("pending %+v, want only the global rewritten", p)
+	}
+	if _, err := Fill(root); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := Value(Load(configPath(root)), "autonomy.level"); v != "roundtrip" {
+		t.Errorf("level %v after fill", v)
+	}
+	if strings.Contains(read(t, root), `"autonomy"`) {
+		t.Errorf("fill pinned the level in the project:\n%s", read(t, root))
+	}
+	if _, err := SetGlobal(gdir, "autonomy.level", "auto"); err != nil {
+		t.Fatal(err)
+	}
+	if p := AutonomyPending(root); p.GlobalRewrite {
+		t.Errorf("second pending %+v", p)
+	}
+	if _, err := Fill(root); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := Value(Load(configPath(root)), "autonomy.level"); v != "auto" {
+		t.Errorf("deliberate global auto rewritten: %v", v)
+	}
+	// An unreadable global is left alone and fill still works.
+	os.WriteFile(gpath, []byte(`[1]`), 0o644)
+	if p := AutonomyPending(root); p.GlobalRewrite {
+		t.Errorf("corrupt global pending %+v", p)
+	}
+	if _, err := Fill(root); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(gpath); string(b) != `[1]` {
+		t.Errorf("corrupt global rewritten: %s", b)
+	}
+}

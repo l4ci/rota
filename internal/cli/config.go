@@ -370,7 +370,7 @@ func configFill(fs *flag.FlagSet) RunFunc {
 		if len(removed) > 0 {
 			add("removed: " + strings.Join(removed, ", "))
 		}
-		rewrote := am.Rewrite || am.LocalRewrite
+		rewrote := am.Rewrite || am.LocalRewrite || am.GlobalRewrite
 		data := jsonObj("filled", anySlice(filled), "removed", anySlice(removed), "changed", len(filled) > 0 || len(removed) > 0 || sm.Changed || rm.Changed() || rewrote)
 		data.Set("autonomy", jsonObj("rewrote", rewrote, "autopilotWasOn", am.AutopilotWasOn))
 		for _, line := range autonomyLines(am) {
@@ -403,7 +403,7 @@ func configFill(fs *flag.FlagSet) RunFunc {
 // round.autopilot true that no longer turns anything on by itself.
 func autonomyLines(am config.AutonomyMigration) []string {
 	var out []string
-	if am.Rewrite || am.LocalRewrite {
+	if am.Rewrite || am.LocalRewrite || am.GlobalRewrite {
 		var files []string
 		if am.Rewrite {
 			files = append(files, "config.json")
@@ -411,7 +411,14 @@ func autonomyLines(am config.AutonomyMigration) []string {
 		if am.LocalRewrite {
 			files = append(files, "config.local.json")
 		}
-		out = append(out, "rewrote: autonomy.level auto -> roundtrip in "+strings.Join(files, " and ")+" (auto used to mean one hop; it now keeps taking the next ready item: rota config set autonomy.level auto)")
+		if am.GlobalRewrite {
+			files = append(files, "the global config")
+		}
+		set := "rota config set autonomy.level auto"
+		if am.GlobalRewrite {
+			set += ", with --global for the global config"
+		}
+		out = append(out, "rewrote: autonomy.level auto -> roundtrip in "+strings.Join(files, " and ")+" (auto used to mean one hop; it now keeps taking the next ready item: "+set+")")
 	}
 	if am.AutopilotWasOn {
 		out = append(out, "round.autopilot was true and is removed: the round autopilot now runs only under autonomy.level auto (rota config set autonomy.level auto)")
