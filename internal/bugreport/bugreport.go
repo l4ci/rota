@@ -499,7 +499,7 @@ func Draft(r Record, env Environment, red Env) (title, body string) {
 		ver += " (" + env.Commit + ")"
 	}
 	fmt.Fprintf(&b, "- rota: %s\n- OS/arch: %s/%s\n- harness: %s\n- model: %s\n\n",
-		ver, orUnknown(env.OS), orUnknown(env.Arch), orUnknown(env.Harness), orUnknown(env.Model))
+		ver, orUnknown(env.OS), orUnknown(env.Arch), orUnknown(Redact(env.Harness, red)), orUnknown(Redact(env.Model, red)))
 	b.WriteString("## Redaction note\n\nThis report was redacted by `rota bugreport` before filing: tokens and keys, email addresses, home-directory paths, hostnames and the reporter's own repo name and remote URL were removed.\n")
 	return title, b.String()
 }
