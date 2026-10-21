@@ -6,7 +6,7 @@ refs:
 
 ## A5: knowledge, decisions, glossary, blocks, map, qa
 
-Every verb that rewrites S's KNOWLEDGE.md (`knowledge add`, `amend`, `replace`, `rename-topic`, `glossary write`, `glossary import`) holds the advisory lock on the sibling `KNOWLEDGE.md.lock` for its whole read-modify-write, and takes the `knowledge-tier.json.lock` inside it, never the reverse. N concurrent calls each land their own change (the parallel rename batch in `rota-learn/topic-size.md` relies on it), and the temp file each write renames over the target is unique per call (`<path>.<pid>.<n>.tmp`), per the Writes rule in `cli-conventions.md`. The empty `.lock` stays behind, so a golden that records a writer's changed files lists it. (#895)
+Every verb that rewrites S's KNOWLEDGE.md (`knowledge add`, `amend`, `replace`, `rm`, `rename-topic`, `glossary write`, `glossary import`) holds the advisory lock on the sibling `KNOWLEDGE.md.lock` for its whole read-modify-write, and takes the `knowledge-tier.json.lock` inside it, never the reverse. N concurrent calls each land their own change (the parallel rename batch in `rota-learn/topic-size.md` relies on it), and the temp file each write renames over the target is unique per call (`<path>.<pid>.<n>.tmp`), per the Writes rule in `cli-conventions.md`. The empty `.lock` stays behind, so a golden that records a writer's changed files lists it. (#895)
 
 ### rota knowledge query
 rota knowledge query <topic>… [--tier provisional|confirmed|deprecated] [--include-deprecated]
@@ -63,6 +63,14 @@ exit: 2 when `--topic`, `--old` or `--new` is missing (`--new ""` is allowed and
 old: none (new in T4)
 note: `--old` is a case-sensitive exact substring. A bullet runs from its `- ` line to the next sibling bullet, so a wrapped bullet matches as a whole. Every occurrence inside the one matched bullet is replaced. `changed` is false when `--old` equals `--new`. When the edit changes the bullet's bold title, the tier entry is re-keyed to the new title (hits and tier kept). The Glossary topic has no tier entries, so nothing is re-keyed there.
 note: `amend` only appends and `rename-topic` only renames or moves; this is the verb that corrects a stale bullet. Unlike `amend`, ambiguity is exit 4 (the file is intact and the caller can retry with a longer fragment), not 2. The ticket asked for exit 4 on zero matches too; zero matches stays exit 3, as for `amend` and `rename-topic`, because the bullet could not be resolved (unratified).
+
+### rota knowledge rm
+rota knowledge rm --topic <T> --title <title>
+repo: scoped (scope S); edits S's KNOWLEDGE.md and tier sidecar only
+data: {"topic": string, "title": string, "changed": true}
+exit: 2 when `--topic` or `--title` is missing; 3 when the topic or the bullet is not found (nothing is written)
+old: none (new in #1286)
+note: removes the one bullet with that bold title, from its `- ` line to the next sibling bullet, and its `<topic>::<title>` tier entry; every other byte is kept, and the last bullet of a section leaves the blank line before the next heading. Buffered hits are folded under the lock first, so none recreates the entry. A rerun finds no bullet and exits 3, as `amend` and `rename-topic` do; the ticket also asked for `changed: false` on a rerun, which cannot hold beside exit 3 for an unknown title, so `changed` is always true on success (unratified).
 
 ### rota knowledge rename-topic
 rota knowledge rename-topic --from <X> --to <Y> [--title <T>]
