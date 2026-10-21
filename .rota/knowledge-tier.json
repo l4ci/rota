@@ -910,6 +910,21 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Orchestrator fix on a live slot branch": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-21"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::ENOSPC reds are environmental": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-21"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::Shape changes hide in smoke sections": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-21"
     }
   }
 }
