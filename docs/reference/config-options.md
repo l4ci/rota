@@ -270,7 +270,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | Key | Type | Default | Values | Description |
 |-----|------|---------|--------|-------------|
 | `release.checklistPath` | path | `".rota/RELEASE.md"` |  | Project's release checklist, whose open items /rota-release walks before it tags. |
-| `release.confirmLargePushCommits` | int | `10` |  | Unpushed commits /rota-release pushes without asking under autonomy.level auto. At or above this it asks once. |
+| `release.confirmLargePushCommits` | int | `10` |  | Unpushed commits /rota-release pushes without asking under autonomy.level roundtrip or auto. At or above this it asks once. |
 | `release.nudgeAfterCommits` | int | `10` |  | Commits since the last release tag before rota release pending suggests /rota-release. |
 | `release.nudgeAfterDays` | int | `14` |  | Days since the last release tag before rota release pending suggests /rota-release. |
 | `release.versionFile` | path | unset |  | Project-relative file /rota-release and rota release version read and bump. Empty auto-detects; a path outside the project is refused. |

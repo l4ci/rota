@@ -2,6 +2,8 @@
 
 Loaded by `skills/rota-orchestrate/SKILL.md` section 5 when a worker is `blocked` on a question, or when you relay to a worker or review its approvals.
 
+The list below is the same at every `autonomy.level`; `roundtrip` and `auto` change only who answers the process calls ([`references/autonomy.md`](references/autonomy.md)).
+
 **What to escalate.** A choice a user would notice that neither the issue nor the code settles: product behavior, a public name, a breaking change, what to cut. Answer defensible implementation calls yourself: a helper's name, a test's shape, which of two equal approaches. When a worker asks the first kind, you ask the human.
 
 `rota round escalate send <number|key> --title … --body-file … --options … --options … --recommend N [--cost-if-wrong …]` posts the question on the issue or PR and notifies the maintainer. It exits 4 without at least two options and a recommendation: do the work first, then ask once, late, with a brief the maintainer can answer with `ok`. State the cost if the recommendation is wrong. It returns at once; keep working the other slots. `rota round escalate check` reads the thread for an answer and resolves a bare `ok`, `yes` or option number to that option (`answer.option`, `resolved`); read any longer reply yourself. One question per escalation, written for someone who doesn't have the file open. A worker's `ROTA-BLOCKED` carries the same shape; pass its options and recommendation straight through, and when it has none, ask it for them rather than inventing them.

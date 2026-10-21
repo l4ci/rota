@@ -16,7 +16,7 @@ Skip on the PR path (`rota ship body` already emits `Closes #N`) and on the issu
 
 `rota issues imported --json --open-only`; keep `data.entries` whose `itemId` is in the shipped IDs from Step 2. None: skip silently.
 
-> **Manual gate — closing public upstream issues (`issue-close`).** Closing posts a comment and changes issue state on the remote. This step is **always manual** — never auto-invoked, regardless of `autonomy.level`. Skill-enforced only. See `references/manual-gates.md`.
+> **Manual gate — closing public upstream issues (`issue-close`).** Closing posts a comment and changes issue state on the remote. This step is **always manual** — never auto-invoked, regardless of `autonomy.level` (see [`references/autonomy.md`](references/autonomy.md)). Skill-enforced only. See `references/manual-gates.md`.
 
 Ask (header `"Close"`, *"Close N upstream issue(s) tied to the shipped items? (`#N, …`)"*): `"Yes, close all"` / `"Pick subset"` / `"No, leave open"`. For a subset, a second multi-select question (header `"Pick issues"`, options `"#N (item <ID>)"`, chunk by 4). Close each selected issue in one parallel batch:
 

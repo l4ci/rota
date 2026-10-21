@@ -7,7 +7,7 @@ A lifted boundary is marked in `.rota/DECISIONS.md`, never hand-edited away. The
 The boundary is lifted and nothing replaces it.
 
 1. Find the `### <title>` entry under `## <topic>` (case-insensitive; one match required, else list candidates and stop). Refuse an entry that already carries a `*Status.*` line.
-2. Show the entry and ask for confirmation (Step 5 shape): Header `"Retire"`, Question *"Retire this decision? Its forbids stop applying."*, options *"Retire it (Recommended)"* / *"Cancel"*. Write only on an explicit "Retire it". Same manual gate as a new decision, even in `autonomy.level: auto`. Cancel stops with *"Decision unchanged."*
+2. Show the entry and ask for confirmation (Step 5 shape): Header `"Retire"`, Question *"Retire this decision? Its forbids stop applying."*, options *"Retire it (Recommended)"* / *"Cancel"*. Write only on an explicit "Retire it". Same manual gate as a new decision, even under `autonomy.level: roundtrip` or `auto` ([`references/autonomy.md`](references/autonomy.md)). Cancel stops with *"Decision unchanged."*
 3. Append to the entry, before its `<!-- YYYY-MM-DD -->` stamp:
 
    ```markdown

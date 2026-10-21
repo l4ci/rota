@@ -34,7 +34,7 @@ Pick the level from the ratings:
 - Else any `mid`, or a behavior change with more than one reasonable design: **2, spec**.
 - Else all `low`: **1, pointers**.
 
-When two levels fit, take the lower one and say what would push it up. The dial never blocks: the user can override the level in a word.
+When two levels fit, take the lower one and say what would push it up. The dial never blocks: the user can override the level in a word. Under `autonomy.level: roundtrip` or `auto`, level 2 and above runs the named step instead of offering it (see [`references/autonomy.md`](autonomy.md)); the round orchestrator applies the dial per candidate.
 
 ## Worked examples
 

@@ -4,7 +4,7 @@ Closes upstream issues shipped in this release but still open (pushed straight t
 
 `rota issues imported --json --open-only` lists candidates (already-closed or unresolvable ones are dropped). Empty `data.entries`: skip silently.
 
-> **Manual gate — closing public upstream issues.** Closing posts a comment and changes issue state remotely. **Always manual** — never auto-invoked, regardless of `autonomy.level`. See `references/manual-gates.md`.
+> **Manual gate — closing public upstream issues.** Closing posts a comment and changes issue state remotely. **Always manual** — never auto-invoked, regardless of `autonomy.level` (see [`references/autonomy.md`](references/autonomy.md)). See `references/manual-gates.md`.
 
 Ask (single-select): header `"Close"`, *"Close N upstream issue(s) released in `v<new_version>`? (`<#N list>`)"*, options `Yes, close all` / `Pick subset` / `No, leave open`.
 

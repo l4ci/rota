@@ -142,7 +142,7 @@ If the entry created a new topic, prepend a line: *"New topic: `<topic>`."*
 
 ## Key Principles
 
-- **Never auto-invoked.** Regardless of `autonomy.level`; Step 5's confirmation is the only gate. Manual confirmation is the verification: no verifier runs.
+- **Never auto-invoked.** Regardless of `autonomy.level` ([`references/autonomy.md`](references/autonomy.md)); Step 5's confirmation is the only gate. Manual confirmation is the verification: no verifier runs.
 - **One sentence rule, one paragraph why.** More: link a plan or knowledge entry.
 
 ## References
