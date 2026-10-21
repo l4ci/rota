@@ -160,7 +160,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota migrate hv [--apply] [--verbose] [--skip-skills]` | move a project from the old state folder and names to `.rota/` and rota (preview unless --apply) |
 | `rota migrate issues [--apply] [--limit <n>]` | move the file backlog onto the issue tracker (preview unless --apply) |
 | `rota migrate milestones [--apply]` | rename `## Acceptance criteria` to `## Acceptance` and make each bullet a checkbox (preview unless --apply) |
-| `rota migrate milestone-files [--apply]` | move `.rota/milestones/*.md` left from file mode to `.rota/archive/milestones/` when milestones live on the tracker (preview unless --apply) |
+| `rota migrate milestone-files [--apply]` | move `.rota/milestones/*.md` left from file mode to `.rota/archive/milestones/` when milestones live on the tracker (preview unless --apply); refuses, preview included, when the archive already holds a file of the same name |
 
 ## `rota knowledge`
 
@@ -518,6 +518,19 @@ Verdicts are `PASS`, `CONCERNS` or `FAIL` (`qa` also takes `INFRA-FAIL`). They l
 | `rota release close-milestone <MNN> --release <X.Y.Z>` | close out a released milestone |
 | `rota release push <X.Y.Z> [--branch <name>] [--tag-only\|--branch-only] --confirm --confirm-note <answer>` | push the release tag and branch to origin, or one of them (manual gate) |
 | `rota release publish <X.Y.Z> --title <text> --body-file <path\|-> [--draft] --confirm --confirm-note <answer>` | create the GitHub or GitLab release, or finish the draft the release workflow made (manual gate) |
+
+## `rota bugreport`
+
+| Usage | What it does |
+|---|---|
+| `rota bugreport add --summary <text> [--expected <text>] [--verb <verb>] [--harness <name>] [--model <name>]` | record a mistake rota made in `.rota/bugreports.jsonl` |
+| `rota bugreport list` | list the open records, redacted |
+| `rota bugreport draft <id> [--harness <name>] [--model <name>]` | print the redacted report for a record |
+| `rota bugreport duplicates <id>` | search the open issues on the rota repo for a likely duplicate |
+| `rota bugreport file <id> --confirm --confirm-note <answer> [--comment <number>]` | file the report on the rota repo, or comment on a duplicate (manual gate) |
+| `rota bugreport dismiss <id>` | drop a record without filing it |
+
+A verb that fails with exit 70 writes a record by itself. See [`/rota-bugreport`](slash-commands.md#rota-bugreport).
 
 ## `rota gate`
 

@@ -63,6 +63,7 @@ The checks, in the order they run:
 | `skills` | every installed skills root (user and project, Claude and Codex, including each `round.accounts` config dir) matches the binary's skill set, and has no missing or edited files | no root has a `.rota-manifest.json` (run `rota skills install`) |
 | `codex` | `codex` runs, and the default Codex home (or each `round.codexAccounts` account) is logged in and has the herdr integration | `codex` is not on `PATH` and no `round.codexAccounts` are configured |
 | `agents` | the subagent files `rota agents write` generates are present and current | nothing to report: the line appears only as a `warn`, when a file is missing or stale (fix: `rota agents write`) |
+| `milestones` | with milestones on the tracker, `.rota/milestones/` holds no files left from file mode | nothing to report: the line appears only as a `warn`, when stale files exist (fix: `rota migrate milestone-files --apply`) |
 | `config dir` | nothing to fail: the line shows the global config dir in use and where it came from (`ROTA_CONFIG_DIR` override, `XDG_CONFIG_HOME` or the default). Warns when a relative `ROTA_CONFIG_DIR` was ignored | never |
 | `state dir` | nothing to fail: the line shows the state dir that holds the project registry | never |
 | `verify` | `test.full` or `test.e2e` is set, so the merge gate has something to run | nothing to report: the line appears only as a `warn`, when both are empty under a local verify (fix: `rota config set test.full '[...]'`) |

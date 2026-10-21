@@ -659,9 +659,9 @@ Leave `false` while you're shaping docs by hand. Flip on once your docs structur
 - **Type:** string
 - **Default:** `.rota/RELEASE.md`
 
-Path to the project's release checklist: a flat markdown file with `- [ ]` items that `/rota-release` walks as gates before bumping the version (Step 1.5). Each open checkbox becomes an `AskUserQuestion` interjection: *Yes, continue* / *Fix now and continue* / *Skip* / *Abort*. Items marked `- [x]` are ignored. Items whose text ends with `(manual)` always interject even under `autonomy.level: auto`. Use this for sensitive gates (staging migrations, infra rollouts) that need attention regardless of autonomy.
+Path to the project's release checklist: a flat markdown file with `- [ ]` items that `/rota-release` walks as gates before bumping the version (Step 1.5). Each open checkbox becomes an `AskUserQuestion` interjection: *Yes, continue* / *Fix now and continue* / *Skip* / *Abort*. Items marked `- [x]` are ignored. Items whose text ends with `(manual)` always interject even under `autonomy.level: roundtrip` or `auto`. Use this for sensitive gates (staging migrations, infra rollouts) that need attention regardless of autonomy.
 
-The file is per-project and tracked by default, so the checklist is shared with the team. When absent under `autonomy.level: off`, the skill offers to scaffold a starter template; under `auto`, the skill silently skips the gate rather than interrupt an unattended run. To keep the checklist per-contributor instead, add it to `.gitignore`.
+The file is per-project and tracked by default, so the checklist is shared with the team. When absent under `autonomy.level: off`, the skill offers to scaffold a starter template; under `roundtrip` or `auto`, the skill silently skips the gate rather than interrupt an unattended run. To keep the checklist per-contributor instead, add it to `.gitignore`.
 
 The skill itself stays generic: no release step is hardcoded. Drift like a forgotten sibling-version-file bump (e.g. the marketplace.json that went stale by two majors) gets caught by adding an item, not by patching the skill.
 
@@ -687,7 +687,7 @@ Project-relative path of the version file. Empty means `/rota-release` and `rota
 - **Type:** integer
 - **Default:** `10`
 
-Threshold for the number of unpushed commits above which `/rota-release` will interject one confirmation prompt before pushing, even under `autonomy.level: auto`. Below the threshold, auto autonomy silently pushes the unpushed range as part of the release (the existing speed-contract behavior). Above it, the skill always asks. Releases that push 10+ commits are not the common case and the user usually wants a beat to confirm.
+Threshold for the number of unpushed commits above which `/rota-release` will interject one confirmation prompt before pushing, even under `autonomy.level: roundtrip` or `auto`. Below the threshold, those levels silently push the unpushed range as part of the release (the existing speed-contract behavior). Above it, the skill always asks. Releases that push 10+ commits are not the common case and the user usually wants a beat to confirm.
 
 ```json
 { "release": { "confirmLargePushCommits": 25 } }
