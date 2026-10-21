@@ -229,7 +229,7 @@ func TestWindDownOffersOpenRecords(t *testing.T) {
 	}
 }
 
-func TestHookStopOffersNewRecordsOnce(t *testing.T) {
+func TestHookStopOffersOncePerSession(t *testing.T) {
 	t.Setenv("ROTA_SLOT", "")
 	dir := orchProject(t, false)
 	if code, out, _ := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop"); code != 0 || out != "" {
@@ -244,7 +244,12 @@ func TestHookStopOffersNewRecordsOnce(t *testing.T) {
 		t.Fatalf("offer: %d %q %v", code, out, err)
 	}
 	if code, out, _ := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop"); code != 0 || out != "" {
-		t.Errorf("offered twice: %d %q", code, out)
+		t.Errorf("offered twice in one session: %d %q", code, out)
+	}
+	// nobody answered: the next session offers it again
+	next := strings.Replace(stopPayload(dir, false), `"s1"`, `"s2"`, 1)
+	if _, out, _ := rotaStdin(t, dir, next, "hook", "stop"); !strings.Contains(out, "/rota-bugreport") {
+		t.Errorf("a new session did not re-offer: %q", out)
 	}
 	if open, _ := bugreport.Open(dir); len(open) != 1 {
 		t.Errorf("the offer closed the record: %+v", open)

@@ -242,7 +242,7 @@ func hookStop(c *Ctx, args []string) (res Result, _ error) {
 			return hookPrint(hook.StopOutput(d.Reason)), nil
 		}
 		if !active {
-			if msg := bugreportStopOffer(c, hc.root); msg != "" {
+			if msg := bugreportStopOffer(c, hc.root, sid); msg != "" {
 				return hookPrint(map[string]string{"systemMessage": msg}), nil
 			}
 		}
@@ -632,12 +632,15 @@ func hookUninstall(fs *flag.FlagSet) RunFunc {
 }
 
 // bugreportStopOffer is the solo session's end-of-turn offer (#1175): one
-// non-blocking line for the records not offered yet, "" when there are none.
-// A round worker stays silent (wind-down offers for the round), and the
-// records stay open until filed or dismissed.
-func bugreportStopOffer(c *Ctx, root string) string {
+// non-blocking line, at most once per session, naming the open records. An
+// unanswered record is offered again by the next session. A round worker stays
+// silent (wind-down offers for the round).
+func bugreportStopOffer(c *Ctx, root, sid string) string {
 	if c.deps().Getenv("ROTA_SLOT") != "" {
 		return ""
+	}
+	if sid == "" {
+		sid = "-"
 	}
 	open, err := bugreport.Open(root)
 	if err != nil {
@@ -645,7 +648,7 @@ func bugreportStopOffer(c *Ctx, root string) string {
 	}
 	var fresh []bugreport.Record
 	for _, r := range open {
-		if !r.Offered {
+		if r.OfferedSession != sid {
 			fresh = append(fresh, r)
 		}
 	}
@@ -653,7 +656,7 @@ func bugreportStopOffer(c *Ctx, root string) string {
 		return ""
 	}
 	for _, r := range fresh {
-		_, _ = bugreport.Update(root, r.ID, func(r *bugreport.Record) { r.Offered = true })
+		_, _ = bugreport.Update(root, r.ID, func(r *bugreport.Record) { r.OfferedSession = sid })
 	}
 	return bugreportOffer(fresh)
 }
