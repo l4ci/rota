@@ -103,7 +103,7 @@ Affects `/rota-work` and `/rota-ship` (solo). Controls how [`/rota-ship`](review
 | `"direct"` | Merge to main, delete branch | Solo work, fast iteration |
 | `"pr"` | Push branch, open a PR (GitHub) or MR (GitLab) | Team work, code review required |
 
-With `issues.source` set to `github` or `gitlab` this key is ignored: `/rota-work`, `/rota-debug` and `/rota-ship` always open a PR or MR and never merge. See [issue backend](issue-backend.md).
+With `issues.source` set to `github` or `gitlab` this key is ignored: `/rota-work`, `/rota-debug` and `/rota-ship` always open a PR or MR and never merge. A local forge (no `origin` remote, or `forge.provider: local`) lands `direct` whatever this key says. The routing lives in one place, `ship.Strategy` in `internal/ship`, and `rota ship strategy` prints its answer. See [issue backend](issue-backend.md).
 
 ## round.dispatch: subagent, tmux or herdr
 
