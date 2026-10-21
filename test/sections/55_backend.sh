@@ -78,8 +78,8 @@ MD
   SFV F02 milestone "" >/dev/null
   eq "set-field clear" '- **[F02] [Minor] Small feature.** No fields.' "$(grep -F '[F02]' .rota/BACKLOG.md)"
   cmp -s .rota/BACKLOG.md "$TMP_GB/orig.md" || fail "set-field round trip changed BACKLOG.md"
-  eq "set-field unknown milestone" "2" "$(rcof hvj item field set F02 --name milestone --value M99)"
-  eq "create unknown milestone" "2" "$(rcof hvj item create --kind bugs --title Nope --milestone M99)"
+  eq "set-field unknown milestone" "3" "$(rcof hvj item field set F02 --name milestone --value M99)"
+  eq "create unknown milestone" "3" "$(rcof hvj item create --kind bugs --title Nope --milestone M99)"
   eq "set-field unknown" "3" "$(rcof hvj item field set B99 --name milestone --value M1)"
   eq "set-field completed" "4" "$(rcof hvj item field set B03 --name milestone --value M1)"
   eq "set-field archived" "4" "$(rcof hvj item field set B05 --name milestone --value M1)"
@@ -473,7 +473,7 @@ print(",".join(sorted(v)) if isinstance(v, list) else (v if v is not None else "
       TC api 'projects/:id/milestones' -f "title=M07 — Issue backend"
     fi
 
-    eq "missing milestone" "2" "$(rcof hvj item create --kind bugs --title Nope --milestone M99)"
+    eq "missing milestone" "3" "$(rcof hvj item create --kind bugs --title Nope --milestone M99)"
     [ "$(rcof hvj item create --kind bugs --title Nope --milestone "M07, M08")" != 0 ] || fail "$prov item create: two milestones should fail"
 
     printf 'Detail for {ID}.\n' > "$P/body.md"
@@ -521,7 +521,7 @@ print(",".join(sorted(v)) if isinstance(v, list) else (v if v is not None else "
     SF T3 milestone "" >/dev/null
     eq "clear milestone" "-" "$(IV 3 milestone)"
     e3="$(EDITS)"; SF T3 milestone "" >/dev/null; eq "clear milestone no-op" "$e3" "$(EDITS)"
-    eq "set missing milestone" "2" "$(rcof hvj item field set T3 --name milestone --value M99)"
+    eq "set missing milestone" "3" "$(rcof hvj item field set T3 --name milestone --value M99)"
     eq "detail not settable" "4" "$(rcof hvj item field set T3 --name detail --value x)"
     eq "unknown item" "3" "$(rcof hvj item field set T99 --name related --value x)"
     eq "type mismatch" "3" "$(rcof hvj item field set B3 --name related --value x)"

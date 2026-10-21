@@ -288,7 +288,7 @@ func (f *File) Create(in CreateInput) (CreateResult, error) {
 	return res, nil
 }
 
-// requireMilestone is ErrInvalid unless .rota/milestones/ holds every milestone
+// requireMilestone is ErrNotFound unless .rota/milestones/ holds every milestone
 // in value (a file-mode bullet may list several, comma-separated).
 func (f *File) requireMilestone(value string) error {
 	list, err := ms.List(f.Root)
@@ -301,7 +301,7 @@ func (f *File) requireMilestone(value string) error {
 	}
 	for _, id := range strings.Split(value, ",") {
 		if id = pystr.Strip(id); !known[id] {
-			return errf(ErrInvalid, "unknown milestone %s; list milestones with: rota milestone list", id)
+			return errf(ErrNotFound, "unknown milestone %s; list milestones with: rota milestone list", id)
 		}
 	}
 	return nil

@@ -112,7 +112,7 @@ func (b *Issues) number(ref string) (tracker.IssueKey, error) {
 // ---- create ----------------------------------------------------------------
 
 // milestoneTitle is the native milestone title for rota ID value ("M07")
-// (_milestone_title). An ID the tracker does not know wraps ErrInvalid (a usage error).
+// (_milestone_title). An ID the tracker does not know wraps ErrNotFound.
 func (b *Issues) milestoneTitle(value string) (string, error) {
 	value = pystr.Strip(value)
 	if !(ms.LeadingID(value) == value && value != "") {
@@ -128,7 +128,7 @@ func (b *Issues) milestoneTitle(value string) (string, error) {
 		}
 	}
 	if !ok {
-		return "", errf(ErrInvalid, "milestone %s not found on the tracker; list milestones with: rota milestone list, or create it with /rota-vision (M07-S05)", value)
+		return "", errf(ErrNotFound, "milestone %s not found on the tracker; list milestones with: rota milestone list, or create it with /rota-vision (M07-S05)", value)
 	}
 	return title, nil
 }
@@ -676,7 +676,7 @@ func (b *Issues) applyState(is Issue, want string) (bool, error) {
 // claim record), re-reads the claims, and the earliest open claim wins
 // (IssueBackend.claim). A loser posts its release
 // marker and changes no labels; the winner gets the in-progress label and the
-// assignment. An unknown or closed item wraps ErrInvalid (a usage error).
+// assignment. An unknown or closed item wraps ErrNotFound.
 func (b *Issues) Claim(ref, claimID string) (won bool, holder string, err error) {
 	return b.ClaimShared(ref, claimID, 1)
 }
@@ -916,7 +916,7 @@ type Status struct {
 	Comments  []Comment
 }
 
-// Status reads the issue and its comments. An unknown item wraps ErrInvalid (a usage error).
+// Status reads the issue and its comments. An unknown item wraps ErrNotFound.
 func (b *Issues) Status(ref string) (*Status, error) {
 	if _, err := b.tracker(); err != nil {
 		return nil, err

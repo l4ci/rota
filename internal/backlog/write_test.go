@@ -239,7 +239,7 @@ func TestMilestoneMustExist(t *testing.T) {
 		f, _ := proj(t, rotaFiles(nil))
 		before := read(t, f, ".rota/BACKLOG.md")
 		_, err := f.Create(CreateInput{Kind: "bugs", Title: "t", Fields: []Field{{"Milestone", "M99"}}})
-		if !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "M99") || !strings.Contains(err.Error(), "rota milestone list") {
+		if !errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), "M99") || !strings.Contains(err.Error(), "rota milestone list") {
 			t.Fatalf("err = %v", err)
 		}
 		if read(t, f, ".rota/BACKLOG.md") != before {
@@ -249,7 +249,7 @@ func TestMilestoneMustExist(t *testing.T) {
 	t.Run("set names the id and the list verb", func(t *testing.T) {
 		f, _ := proj(t, rotaFiles(nil))
 		_, err := f.SetField("T01", "milestone", "M99")
-		if !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "M99") || !strings.Contains(err.Error(), "rota milestone list") {
+		if !errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), "M99") || !strings.Contains(err.Error(), "rota milestone list") {
 			t.Fatalf("err = %v", err)
 		}
 	})
@@ -258,7 +258,18 @@ func TestMilestoneMustExist(t *testing.T) {
 		if _, err := f.SetField("T01", "milestone", "M01, M02"); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := f.SetField("T01", "milestone", "M01, M99"); !errors.Is(err, ErrInvalid) {
+		if _, err := f.SetField("T01", "milestone", "M01, M99"); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("err = %v", err)
+		}
+	})
+	t.Run("no milestones directory reports unknown milestone", func(t *testing.T) {
+		files := rotaFiles(nil)
+		for _, id := range []string{"M01", "M02", "M03"} {
+			delete(files, ".rota/milestones/"+id+".md")
+		}
+		f, _ := proj(t, files)
+		_, err := f.SetField("T01", "milestone", "M01")
+		if !errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), "unknown milestone M01") {
 			t.Fatalf("err = %v", err)
 		}
 	})

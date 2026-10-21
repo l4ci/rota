@@ -6,7 +6,7 @@
 
 - File-mode proof rows move from the tracked detail file to a gitignored `.rota/<bugs|features|tasks>/<ID>.proof` sidecar (#1547), so `rota proof record` no longer dirties the worktree and `worker done` is not refused by its own proof. Rows already in a detail file are still read and seed the sidecar on first write. Re-run `rota init` to add the `.rota/**/*.proof` ignore rule; until then the sidecar shows as untracked, and the doctor warns about the missing line. File-mode proof is no longer committed with the item.
 
-- `rota item create --milestone` and `rota item field set --name milestone` now refuse an unknown milestone ID with a usage error (exit 2, was a silent write on the file backend and exit 3 on trackers). The error names the ID and points at `rota milestone list`. Clearing the field still needs no milestone (#1588).
+- `rota item create --milestone` and `rota item field set --name milestone` now refuse an unknown milestone ID with exit 3 on the file backend too (was a silent write). Trackers keep exit 3 with a clearer message. Both errors name the ID and point at `rota milestone list`. Clearing the field still needs no milestone (#1588).
 
 ## v0.21.0 — 2026-10-21
 

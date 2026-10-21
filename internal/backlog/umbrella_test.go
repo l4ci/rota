@@ -502,7 +502,7 @@ func TestUmbrellaMilestoneWithoutTrackingIssue(t *testing.T) {
 		"api": {typed(1, "task", "a")},
 	}, "web", "api")
 	_, err := u.SetField("api:1", "milestone", "M99")
-	if !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "milestone M99 not found") {
+	if !errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), "milestone M99 not found") {
 		t.Fatalf("%v", err)
 	}
 	for _, c := range fakes["api"].Calls {

@@ -131,7 +131,7 @@ note: two positionals become `<ID>` plus `--name` (rule 1).
 rota item field set <ID> --name <milestone|related|repos|subsystem|detail> --value <text>
 repo: scoped
 data: {"id": string, "type": "B"|"F"|"T", "field": string, "value": string, "changed": bool}
-exit: 2 for an unknown or read-only field, when `--value` is missing, or when `--name detail` gets an empty value (backticks only); 3 item unknown, or the `--name detail` file does not exist; 4 for a completed or archived item; backend (`--name detail` is file-only); tracker
+exit: 2 for an unknown or read-only field, when `--value` is missing, or when `--name detail` gets an empty value (backticks only); 3 item unknown, the `--name detail` file does not exist, or `--name milestone` names an unknown milestone; 4 for a completed or archived item; backend (`--name detail` is file-only); tracker
 old: hv-todo-set-field <ID> <field> <value>
 shim: `value` echoes the argument; `changed` is false when the stored value already matched (the shim compares BACKLOG.md before and after). `--value ""` clears the field. `--name detail` takes an existing file path as the value, file mode only.
 note: the value is a flag, not a positional, so a value that starts with `-` cannot be mistaken for a flag and `--value ""` is explicit (conventions: a flag takes the next token).
