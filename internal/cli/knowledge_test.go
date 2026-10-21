@@ -478,6 +478,34 @@ func TestKnowledgeContradictionClearOnePair(t *testing.T) {
 	}
 }
 
+func TestKnowledgeTierFoldReports(t *testing.T) {
+	dir := knProject(t, false)
+	if got := knNew(t, dir, "", "knowledge", "tier", "fold"); got.rc != 0 || !strings.Contains(got.stdout, "no buffered hits") {
+		t.Fatalf("empty fold = %+v", got)
+	}
+	knNew(t, dir, "", "knowledge", "hit", "--topic", "Architecture", "--title", "Beta rule")
+	knNew(t, dir, "", "knowledge", "hit", "--topic", "Architecture", "--title", "Beta rule")
+	hp := filepath.Join(dir, ".rota", "knowledge-hits.jsonl")
+	f, err := os.OpenFile(hp, os.O_APPEND|os.O_WRONLY, 0o666)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString("{\"topic\":\"Arch\n")
+	f.Close()
+	got := knNew(t, dir, "", "knowledge", "tier", "fold")
+	if got.rc != 0 || !strings.Contains(got.stdout, "folded 2 hit(s) into the sidecar: commit .rota/knowledge-tier.json") || !strings.Contains(got.stdout, "skipped 1 malformed buffer line(s)") {
+		t.Fatalf("fold = %+v", got)
+	}
+	if _, err := os.Stat(hp); !os.IsNotExist(err) {
+		t.Errorf("buffer not emptied: %v", err)
+	}
+	knNew(t, dir, "", "knowledge", "hit", "--topic", "Architecture", "--title", "Beta rule")
+	js := knNew(t, dir, "", "--json", "knowledge", "tier", "fold")
+	if !strings.Contains(js.stdout, `"hits": 1`) || !strings.Contains(js.stdout, `"changed": true`) || !strings.Contains(js.stdout, `"skipped": 0`) {
+		t.Fatalf("json fold = %+v", js)
+	}
+}
+
 // The fold output names the sidecar to commit, repo-relative, so the next
 // step is a concrete command rather than "commit it".
 func TestKnowledgeTierFoldNamesSidecar(t *testing.T) {
