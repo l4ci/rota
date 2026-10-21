@@ -72,11 +72,15 @@ func Via(run proc.Runner, ctx context.Context, dir string, args ...string) (Resu
 // Run runs git with args. A non-zero exit is a Result, not an error; err is
 // ErrNoGit when git is missing, or the context's error.
 func (r Repo) Run(ctx context.Context, args ...string) (Result, error) {
-	run := r.Runner
-	if run == nil {
-		run = Exec
+	return r.runner()(ctx, r.Dir, args...)
+}
+
+// runner is Runner, or Exec when none is set.
+func (r Repo) runner() Runner {
+	if r.Runner == nil {
+		return Exec
 	}
-	return run(ctx, r.Dir, args...)
+	return r.Runner
 }
 
 // Ok reports whether a call exited 0; a failure to run is an error.
@@ -179,7 +183,7 @@ func (r Repo) out(ctx context.Context, args ...string) (s string, ok bool, err e
 // linked worktree resolves to its main repository's .git and every spelling of
 // the path agrees. ok is false when Dir is not in a repository.
 func (r Repo) CommonDir(ctx context.Context) (dir string, ok bool, err error) {
-	return CommonDirVia(ctx, Exec, r.Dir)
+	return CommonDirVia(ctx, r.runner(), r.Dir)
 }
 
 // CommonDirVia is Repo.CommonDir through a Runner, for layers that run git
