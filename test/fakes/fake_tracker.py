@@ -384,6 +384,12 @@ def gh_milestone_ref(db, title):
     return [m["title"], m["number"]]
 
 
+def gh_rest_ensure_labels(db, labels):
+    # Real REST label writes create a missing label themselves, bypassing the
+    # autoCreate policy (only `gh issue edit` refuses): rota ensures labels first.
+    db["labels"] += [n for n in dict.fromkeys(labels) if n not in db["labels"]]
+
+
 def gh_check_labels(db, labels):
     for n in labels:
         if n not in db["labels"]:
@@ -558,7 +564,7 @@ def gh_api(db, args):
             if "body" in body:
                 i["body"] = body["body"]
             if "labels" in body:
-                gh_check_labels(db, body["labels"])
+                gh_rest_ensure_labels(db, body["labels"])
                 i["labels"] = list(body["labels"])
             if "milestone" in body:
                 n = body["milestone"]
@@ -572,7 +578,7 @@ def gh_api(db, args):
         i = find_issue(db, rest.split("/")[1])
         f = opts.get("input")
         body = json.loads(sys.stdin.read() if f and f[-1] == "-" else open(f[-1]).read())
-        gh_check_labels(db, body["labels"])
+        gh_rest_ensure_labels(db, body["labels"])
         for n in body["labels"]:
             if n not in i["labels"]:
                 i["labels"].append(n)
