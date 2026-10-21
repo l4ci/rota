@@ -287,3 +287,20 @@ func TestInitIgnoresTrainCache(t *testing.T) {
 		t.Errorf("train-cache.json shows in git status: %s", out)
 	}
 }
+
+// The hit buffer and the claimed buffer a fold renames it to (#1333) are both
+// per-developer: git ignores either, so a fold never dirties the tree.
+func TestInitIgnoresClaimedHitBuffer(t *testing.T) {
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	if _, err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{".rota/knowledge-hits.jsonl", ".rota/knowledge-hits.jsonl.abc123.folding", ".rota/map/knowledge-hits.jsonl.abc123.folding"} {
+		if out, err := exec.Command("git", "-C", dir, "check-ignore", "-q", p).CombinedOutput(); err != nil {
+			t.Errorf("%s is not gitignored: %v %s", p, err, out)
+		}
+	}
+}
