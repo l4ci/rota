@@ -144,6 +144,28 @@ func (f *fakeStore) Set(key, raw string, local bool) (bool, error) {
 	return true, nil
 }
 
+func (f *fakeStore) Global() bool { return false }
+
+func (f *fakeStore) Override(key string, value any) error {
+	f.calls = append(f.calls, "override "+key)
+	for i := range f.rows {
+		if f.rows[i].Key == key {
+			f.rows[i].Source = "project"
+		}
+	}
+	return nil
+}
+
+func (f *fakeStore) Inherit(key string) error {
+	f.calls = append(f.calls, "inherit "+key)
+	for i := range f.rows {
+		if f.rows[i].Key == key {
+			f.rows[i].Value, f.rows[i].Source = f.rows[i].Global, "global"
+		}
+	}
+	return nil
+}
+
 func (f *fakeStore) Reset(key string) error {
 	f.calls = append(f.calls, "reset "+key)
 	for i := range f.rows {

@@ -95,3 +95,57 @@ func MergeGlobal(dir string, vals map[string]any) ([]string, error) {
 	})
 	return saved, err
 }
+
+// ErrGlobalNotObject is SetGlobal's and UnsetGlobal's answer when the global
+// config holds JSON that is not an object.
+var ErrGlobalNotObject = errors.New("the global config is not a JSON object")
+
+// ErrProjectOwned is SetGlobal's answer for a key a project owns (see notGlobal).
+var ErrProjectOwned = errors.New("project-owned key, not a global one")
+
+// IsProjectOwned is whether key belongs to one project and never to the global config.
+func IsProjectOwned(key string) bool { return notGlobal[key] }
+
+// ShowGlobal lists the global config's own values, not the merged runtime
+// ones: every schema key in schema order, or the one key given. A key the
+// global config sets reports source "global" and its value; any other reports
+// its default with source "default". A project-owned key is an unknown key here.
+func ShowGlobal(dir, key string, one bool) ([]Entry, error) {
+	vals, err := LoadGlobal(dir)
+	if err != nil {
+		return nil, err
+	}
+	var out []Entry
+	for _, k := range Keys {
+		if notGlobal[k.Name] || (one && k.Name != key) {
+			continue
+		}
+		e := Entry{Key: k.Name, Value: Default(k), Source: "default", Schema: &k}
+		if v, ok := vals[k.Name]; ok {
+			e.Value, e.Source, e.Global, e.HasGlobal = v, "global", v, true
+		}
+		out = append(out, e)
+	}
+	if len(out) == 0 && one {
+		return nil, fmt.Errorf("%w %q", ErrUnknownKey, key)
+	}
+	return out, nil
+}
+
+// SetGlobal is Set on the global config under dir, with the same validation. A
+// project-owned key is refused.
+func SetGlobal(dir, key, raw string) (SetResult, error) {
+	if notGlobal[key] {
+		return SetResult{}, fmt.Errorf("%w %q", ErrProjectOwned, key)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return SetResult{}, err
+	}
+	return setAt(GlobalPath(dir), ErrGlobalNotObject, key, raw)
+}
+
+// UnsetGlobal removes key from the global config under dir, so projects fall
+// back to the schema default. It reports whether the key was there.
+func UnsetGlobal(dir, key string) (bool, error) {
+	return unsetAt(GlobalPath(dir), ErrGlobalNotObject, key)
+}

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"github.com/l4ci/rota/internal/jsonx"
 	"os"
 	"path/filepath"
 	"strings"
@@ -184,5 +185,91 @@ func TestConfigCheckNamesACorruptGlobal(t *testing.T) {
 	raw, _ := os.ReadFile(filepath.Join(dir, ".rota", "config.json"))
 	if strings.Contains(string(raw), "isolation") {
 		t.Errorf("fill pinned a default under a corrupt global:\n%s", raw)
+	}
+}
+
+func TestConfigGlobalVerbsWorkOutsideAProject(t *testing.T) {
+	gdir := isolateGlobal(t)
+	bare := t.TempDir() // no .rota/ here or above
+	if code, _, e := initRun(t, bare, "config", "set", "--global", "work.isolation", "worktree"); code != 0 {
+		t.Fatalf("set --global: %d %s", code, e)
+	}
+	raw, err := os.ReadFile(config.GlobalPath(gdir))
+	if err != nil || !strings.Contains(string(raw), `"worktree"`) {
+		t.Fatalf("global file (%v):\n%s", err, raw)
+	}
+	code, env, e := initRun(t, bare, "config", "show", "--global", "work.isolation")
+	if code != 0 {
+		t.Fatalf("show --global: %d %s", code, e)
+	}
+	row := initData(env)
+	entries, _ := row.Get("entries")
+	got := entries.([]any)[0].(*jsonx.Object)
+	if src, _ := got.Get("source"); src != "global" {
+		t.Errorf("source = %v, want global", src)
+	}
+	if v, _ := got.Get("value"); v != "worktree" {
+		t.Errorf("value = %v, want worktree", v)
+	}
+	// a key the global does not set reports the default, not the project's
+	_, env, _ = initRun(t, bare, "config", "show", "--global", "work.mergeStrategy")
+	entries, _ = initData(env).Get("entries")
+	if src, _ := entries.([]any)[0].(*jsonx.Object).Get("source"); src != "default" {
+		t.Errorf("unset global key source = %v, want default", src)
+	}
+}
+
+func TestConfigSetGlobalRefusesProjectOwnedKeys(t *testing.T) {
+	isolateGlobal(t)
+	for _, key := range []string{"git.baseBranch", "umbrella.enabled"} {
+		if code, _, _ := initRun(t, t.TempDir(), "config", "set", "--global", key, "x"); code != 2 {
+			t.Errorf("set --global %s exit %d, want 2", key, code)
+		}
+	}
+	if code, _, _ := initRun(t, t.TempDir(), "config", "set", "--global", "work.contextGuard", "bogus"); code != 2 {
+		t.Errorf("set --global with an invalid value exit %d, want 2", code)
+	}
+}
+
+func TestConfigShowJSONCarriesGlobalPerKey(t *testing.T) {
+	gdir := isolateGlobal(t)
+	writeFile(t, config.GlobalPath(gdir), `{"work":{"isolation":"worktree","mergeStrategy":"pr"}}`)
+	dir := t.TempDir()
+	if code, _, e := initRun(t, dir, "init"); code != 0 {
+		t.Fatalf("init: %d %s", code, e)
+	}
+	if _, err := config.Set(dir, "work.mergeStrategy", "direct"); err != nil {
+		t.Fatal(err)
+	}
+	_, env, _ := initRun(t, dir, "config", "show")
+	entries, _ := initData(env).Get("entries")
+	byKey := map[string]*jsonx.Object{}
+	for _, e := range entries.([]any) {
+		o := e.(*jsonx.Object)
+		k, _ := o.Get("key")
+		byKey[k.(string)] = o
+	}
+	if src, _ := byKey["work.isolation"].Get("source"); src != "global" {
+		t.Errorf("inherited key source = %v, want global", src)
+	}
+	// an overridden key still tells what it would inherit
+	if g, _ := byKey["work.mergeStrategy"].Get("global"); g != "pr" {
+		t.Errorf("overridden key global = %v, want pr", g)
+	}
+	if _, ok := byKey["ship.qa"].Get("global"); ok {
+		t.Error("a key the global does not set carries a global value")
+	}
+}
+
+func TestConfigScreenSwitchesInheritAndOverride(t *testing.T) {
+	m, _ := play(newFxScreen(&fakeStore{rows: []cfgRow{
+		{Key: "work.isolation", Source: "global", Group: "work", Type: "enum", Value: "worktree", Default: "branch", Global: "worktree", HasGlobal: true},
+	}}), []string{"down", "g"})
+	if r := m.(configScreen).rows[0]; r.Source != "project" {
+		t.Errorf("after g on an inherited key: source %q, want project", r.Source)
+	}
+	m, _ = play(m, []string{"g"})
+	if r := m.(configScreen).rows[0]; r.Source != "global" {
+		t.Errorf("after g on an override: source %q, want global", r.Source)
 	}
 }
