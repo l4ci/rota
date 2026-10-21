@@ -348,6 +348,9 @@ func accountPick(fs *flag.FlagSet) RunFunc {
 		d := jsonx.NewObject()
 		d.Set("found", found)
 		if !found {
+			if why := c.deps().WorkerAccounts().NoPickReason(ctx, root, skip); why != "" {
+				return Result{Data: d}, Failed(why)
+			}
 			return Result{Data: d}, Failed("every configured account is cooling down, or none is configured")
 		}
 		d.Set("account", name)
