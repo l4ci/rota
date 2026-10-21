@@ -315,13 +315,17 @@ func (c Credentials) read(dir string, now time.Time) (*jsonx.Object, string, str
 		return oauth, tok, ""
 	}
 	if c.GOOS == "darwin" && c.Run != nil {
-		if b, ok, err := connections.SecurityRead(context.Background(), c.Run, keychainService(dir), ""); err == nil && ok {
+		b, ok, err := connections.SecurityRead(context.Background(), c.Run, keychainService(dir), "")
+		if err == nil && ok {
 			if o, t, w := parseCredentials([]byte(b)); w == "" {
 				return o, t, ""
 			}
 		}
 		if why == "no credentials file" {
 			why = "no credentials file or Keychain entry"
+			if err != nil {
+				why = "no credentials file, Keychain unavailable: " + err.Error()
+			}
 		}
 	}
 	return oauth, tok, why
