@@ -229,6 +229,12 @@ type Env struct {
 
 const secretNames = `token|secret|password|passwd|api[_-]?key|access[_-]?key|credential|authorization`
 
+// secretFlagName matches a flag name that holds a secret: a secret-named
+// substring, a name ending in key (--sshkey) or with key as a leading segment
+// (--key-file), or auth/oauth as a whole segment, so --auth matches while
+// --author and --keyword do not.
+const secretFlagName = `(?:[\w-]*(?:` + secretNames + `)[\w-]*|[\w-]*key(?:[-_][\w-]*)?|(?:[\w-]*[-_])?o?auth(?:[-_][\w-]*)?)`
+
 var (
 	reUserinfo   = regexp.MustCompile(`://[^/\s@]+@`)
 	reEmail      = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`)
@@ -241,9 +247,9 @@ var (
 	reTokens     = regexp.MustCompile(`github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|glpat-[A-Za-z0-9_-]{16,}|xox[abprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|lin_api_[A-Za-z0-9]{16,}|ATATT[A-Za-z0-9_=-]{16,}|npm_[A-Za-z0-9]{30,}|AIza[0-9A-Za-z_-]{30,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+`)
 	reAuth       = regexp.MustCompile(`(?i)\b(bearer|basic)\s+[A-Za-z0-9+/=._~-]+`)
 	reKeyValue   = regexp.MustCompile(`(?i)([\w.-]*(?:` + secretNames + `)[\w.-]*["']?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s"',;}]+)`)
-	reFlagValue  = regexp.MustCompile(`(?i)(--?[\w-]*(?:` + secretNames + `|key|auth)[\w-]*\s+)("[^"]*"|'[^']*'|[^\s-]\S*)`)
+	reFlagValue  = regexp.MustCompile(`(?i)(--?` + secretFlagName + `\s+)("[^"]*"|'[^']*'|[^\s-]\S*)`)
 	reEnvValue   = regexp.MustCompile(`\b([A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Z0-9_]*)(\s+)(\S+)`)
-	reSecretFlag = regexp.MustCompile(`(?i)^--?[\w-]*(?:` + secretNames + `|key|auth)[\w-]*$`)
+	reSecretFlag = regexp.MustCompile(`(?i)^--?` + secretFlagName + `$`)
 	reSecretEnv  = regexp.MustCompile(`^[A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Z0-9_]*$`)
 )
 
@@ -287,6 +293,28 @@ func replaceFold(s, old, with string) string {
 		return s
 	}
 	return regexp.MustCompile(`(?i)`+regexp.QuoteMeta(old)).ReplaceAllString(s, with)
+}
+
+// replaceWord is replaceFold limited to matches not touching a letter or digit,
+// so a repo named shop leaves "shopping" alone but still hits shop-api and /shop/.
+func replaceWord(s, old, with string) string {
+	if old == "" {
+		return s
+	}
+	isAlnum := func(b byte) bool {
+		return b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z'
+	}
+	var sb strings.Builder
+	last := 0
+	for _, ix := range regexp.MustCompile(`(?i)`+regexp.QuoteMeta(old)).FindAllStringIndex(s, -1) {
+		if ix[0] > 0 && isAlnum(s[ix[0]-1]) || ix[1] < len(s) && isAlnum(s[ix[1]]) {
+			continue
+		}
+		sb.WriteString(s[last:ix[0]])
+		sb.WriteString(with)
+		last = ix[1]
+	}
+	return sb.String() + s[last:]
 }
 
 // fileExts are the last labels that mark a name:port match as a file:line
@@ -372,14 +400,14 @@ func Redact(s string, e Env) string {
 	}
 	if !upstream {
 		if len(owner) >= 3 && !strings.EqualFold(owner, upstreamOwner) {
-			s = replaceFold(s, owner, "<owner>")
+			s = replaceWord(s, owner, "<owner>")
 		}
 		if len(name) >= 3 && !strings.EqualFold(name, upstreamName) {
-			s = replaceFold(s, name, "<repo>")
+			s = replaceWord(s, name, "<repo>")
 		}
 	}
 	if len(e.Repo) >= 3 && !strings.EqualFold(e.Repo, upstreamName) {
-		s = replaceFold(s, e.Repo, "<repo>")
+		s = replaceWord(s, e.Repo, "<repo>")
 	}
 	return s
 }
