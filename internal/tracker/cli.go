@@ -12,7 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // Exec starts name with args in dir and returns its output and exit code.
@@ -50,6 +52,9 @@ type CLI struct {
 	// Conn finds the connection of an HTTP tracker (jira, linear, itsaplan); nil reads the
 	// machine's `rota connect` connections.
 	Conn ConnResolver
+	// Env and Keychain are the machine the default lookup reads (WithMachine).
+	Env      projects.Env
+	Keychain func() connections.Store
 }
 
 var (

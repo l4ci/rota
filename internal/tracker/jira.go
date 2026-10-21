@@ -8,9 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/strutil"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -21,7 +19,6 @@ import (
 
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/marker"
-	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/projects"
 )
 
@@ -60,35 +57,44 @@ func WithConnections(r ConnResolver) Option {
 	return func(c *CLI) { c.Conn = r }
 }
 
-// osProjectsEnv is this package's edge to the process environment for the
-// global config dir: the default connection lookup has no Deps to take it from.
-var osProjectsEnv = projects.Env{Getenv: os.Getenv, Home: os.UserHomeDir}
+// WithMachine points the default connection lookup at env and the keychain of
+// the machine `rota connect` writes to. Without it (or WithConnections) a
+// connection cannot be resolved.
+func WithMachine(env projects.Env, keychain func() connections.Store) Option {
+	return func(c *CLI) { c.Env, c.Keychain = env, keychain }
+}
+
+// resolver is the connection lookup of c: the injected one, else the machine's.
+func (c *CLI) resolver() ConnResolver {
+	if c.Conn != nil {
+		return c.Conn
+	}
+	return c.machineConn
+}
 
 // machineConn is the connection lookup of `rota connect`: connections.json
 // under the global config dir, the secret from ROTA_<NAME>_TOKEN, the
 // keychain or the file store.
-func machineConn(ctx context.Context, name string) (connections.Connection, string, error) {
-	dir, err := projects.Dir(osProjectsEnv)
+func (c *CLI) machineConn(ctx context.Context, name string) (connections.Connection, string, error) {
+	if c.Env.Getenv == nil || c.Env.Home == nil {
+		return connections.Connection{}, "", fmt.Errorf("no machine environment to find connection %q in", name)
+	}
+	dir, sec, err := connections.Machine(c.Env, c.Keychain)
 	if err != nil {
 		return connections.Connection{}, "", err
 	}
-	c, ok, err := connections.Get(dir, name)
+	conn, ok, err := connections.Get(dir, name)
 	if err != nil {
 		return connections.Connection{}, "", err
 	}
 	if !ok {
 		return connections.Connection{}, "", fmt.Errorf("connection %q is not defined on this machine (run: rota connect add %s --kind jira|linear|itsaplan ...)", name, name)
 	}
-	data, err := projects.DataDir(osProjectsEnv)
-	if err != nil {
-		return connections.Connection{}, "", err
-	}
-	sec := &connections.Secrets{Getenv: os.Getenv, Keychain: connections.OSKeychain(proc.Run, runtime.GOOS), File: connections.FileStore(data, dir)}
 	secret, _, err := sec.Resolve(ctx, name)
 	if err != nil {
 		return connections.Connection{}, "", fmt.Errorf("reading the secret of connection %q: %v", name, err)
 	}
-	return c, secret, nil
+	return conn, secret, nil
 }
 
 // newJiraTracker is NewIssueTracker for issues.source jira.
@@ -99,11 +105,7 @@ func newJiraTracker(ctx context.Context, c *CLI, s Settings) (*Jira, error) {
 	if s.JiraProject == "" {
 		return nil, unavailable("issues.source is jira but issues.jira.project is not set (run: rota config set issues.jira.project <KEY>)")
 	}
-	resolve := c.Conn
-	if resolve == nil {
-		resolve = machineConn
-	}
-	conn, secret, err := resolve(ctx, s.Connection)
+	conn, secret, err := c.resolver()(ctx, s.Connection)
 	if err != nil {
 		return nil, unavailable("%v", err)
 	}

@@ -46,6 +46,10 @@ type Env struct {
 	Home   func() (string, error)
 }
 
+// OSEnv is the process environment and home dir: the edge for code that has
+// no Deps to take an Env from.
+func OSEnv() Env { return Env{Getenv: os.Getenv, Home: os.UserHomeDir} }
+
 // Resolve finds the global rota config dir and says why: $ROTA_CONFIG_DIR when
 // that is an absolute path, else $XDG_CONFIG_HOME/rota when that is an
 // absolute path (the XDG spec ignores a relative one), else ~/.config/rota.
