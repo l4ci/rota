@@ -138,6 +138,9 @@ func TestSetSection(t *testing.T) {
 		{"replace middle", "a\n\n## Acceptance\n\nold\n\n## Pointers\n\n- p\n", "acceptance", "new", "a\n\n## Acceptance\n\nnew\n\n## Pointers\n\n- p\n"},
 		{"replace last keeps heading case", "a\n\n### ACCEPTANCE\n\nold\n", "Acceptance", "new\n", "a\n\n### ACCEPTANCE\n\nnew\n"},
 		{"first of two", "## X\n\n1\n\n## X\n\n2\n", "x", "n", "## X\n\nn\n\n## X\n\n2\n"},
+		{"subsection belongs", "## A\n\n- old\n\n### Edge\n\n- old edge\n\n## B\n", "a", "new", "## A\n\nnew\n\n## B\n"},
+		{"higher heading ends", "### A\n\nold\n\n## B\n", "a", "new", "### A\n\nnew\n\n## B\n"},
+		{"non-ascii title", "x\n", "über", "y", "x\n\n## Über\n\ny\n"},
 		{"name with regexp chars", "## a.b\n\nold\n", "a.b", "n", "## a.b\n\nn\n"},
 	} {
 		if got := SetSection(c.text, c.section, c.content); got != c.want {
