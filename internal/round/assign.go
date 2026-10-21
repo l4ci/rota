@@ -625,7 +625,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		if err := checkActive(reg, set, o.Agent, slot.HeldID() == worker.NormID(id)); err != nil {
 			return run, false, err
 		}
-		if why := SlotLoginProblem(slot); why != "" {
+		if why := e.SlotLoginProblem(slot); why != "" {
 			return run, false, blocked(BlockNoLogin, "slot %s's account has no login (%s in %s): %s", o.Agent, why, slot.ConfigDir(), loginHint(slot))
 		}
 	} else {
@@ -643,7 +643,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		// A holder resumes without the usable() gate in pickSlots: refuse it
 		// like the explicit --agent path rather than re-dispatch into a login prompt.
 		if slot.HeldID() == worker.NormID(id) {
-			if why := SlotLoginProblem(slot); why != "" {
+			if why := e.SlotLoginProblem(slot); why != "" {
 				return run, false, blocked(BlockNoLogin, "slot %s's account has no login (%s in %s): %s", slot.Name(), why, slot.ConfigDir(), loginHint(slot))
 			}
 		}

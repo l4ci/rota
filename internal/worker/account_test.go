@@ -336,11 +336,11 @@ func TestCredentialsProblem(t *testing.T) {
 		dir := t.TempDir()
 		os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(tc.body), 0o600)
 		if got := (Credentials{}).Problem(dir); got != tc.want {
-			t.Errorf("%s: CredentialsProblem = %q, want %q", tc.name, got, tc.want)
+			t.Errorf("%s: Credentials.Problem = %q, want %q", tc.name, got, tc.want)
 		}
 		tok, why := (&Accounts{}).token(dir)
 		if (tok == "") != (tc.want != "") || (tc.want != "" && why != tc.want) {
-			t.Errorf("%s: token = %q, %q disagrees with CredentialsProblem %q", tc.name, tok, why, tc.want)
+			t.Errorf("%s: token = %q, %q disagrees with Credentials.Problem %q", tc.name, tok, why, tc.want)
 		}
 	}
 	if got := (Credentials{}).Problem(t.TempDir()); got != "no credentials file" {
@@ -428,7 +428,7 @@ func TestMissingKeychainEntryNamesKeychain(t *testing.T) {
 	kc, _ := fakeKeychain("darwin", nil)
 	got := kc.Problem(dir)
 	if !strings.Contains(got, "Keychain") {
-		t.Errorf("CredentialsProblem = %q, want it to name the Keychain", got)
+		t.Errorf("Credentials.Problem = %q, want it to name the Keychain", got)
 	}
 	// A file still serves when the Keychain has nothing.
 	os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"f"}}`), 0o600)
