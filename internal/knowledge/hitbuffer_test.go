@@ -176,6 +176,18 @@ func TestFoldHitsAfterCrashDoesNotDoubleCount(t *testing.T) {
 	}
 }
 
+func TestFoldHitsRecoveryOnlyReportsChanged(t *testing.T) {
+	s := lockedStore(t)
+	crashedFold(t, s, 2) // sidecar holds the hits and the mark; the claimed file is left
+	res, err := s.FoldHits(Umbrella)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Changed || res.Hits != 0 {
+		t.Fatalf("fold = %+v, want Changed=true Hits=0 (the mark was cleared from the tracked sidecar)", res)
+	}
+}
+
 func TestFoldHitsReplaysClaimedBufferTheSidecarNeverGot(t *testing.T) {
 	s := lockedStore(t)
 	for i := 0; i < 2; i++ {
