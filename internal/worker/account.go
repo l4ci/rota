@@ -384,8 +384,9 @@ func (a *Accounts) token(configDir string) (string, string) {
 
 // Pick returns the account with the most headroom, skipping cooling and
 // excluded accounts. Unknown meters sort last but stay eligible, so a fleet
-// with no readable meters still rotates instead of stalling. ok is false when
-// no account is usable.
+// with no readable meters still rotates instead of stalling. An account whose
+// config dir has no usable login (Login.Problem) is never picked: it would
+// dispatch into a login prompt. ok is false when no account is usable.
 func (a *Accounts) Pick(ctx context.Context, root string, exclude []string) (name string, ok bool) {
 	skip := map[string]bool{}
 	for _, n := range exclude {
@@ -393,7 +394,7 @@ func (a *Accounts) Pick(ctx context.Context, root string, exclude []string) (nam
 	}
 	var usable []Meter
 	for _, m := range a.Meters(ctx, root) {
-		if !skip[m.Name] && m.Verdict != VerdictCooling {
+		if !skip[m.Name] && m.Verdict != VerdictCooling && a.Login.Problem(ExpandConfigDir(m.ConfigDir)) == "" {
 			usable = append(usable, m)
 		}
 	}
