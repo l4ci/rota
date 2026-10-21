@@ -177,11 +177,7 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 // tierMap loads the (topic, title) → tier lookup of scope's sidecar. A
 // missing sidecar is empty, so every bullet prints unfiltered.
 func (s Store) tierMap(scope string) (map[[2]string]string, error) {
-	p, err := s.TierPath(scope)
-	if err != nil {
-		return nil, err
-	}
-	sc, err := LoadSidecar(p)
+	sc, err := s.effective(scope)
 	if err != nil {
 		return nil, err
 	}

@@ -294,22 +294,25 @@ func TestKnowledgeWritesMatchGolden(t *testing.T) {
 	}
 }
 
-// TestKnowledgeSequenceMatchGolden chains calls so state accumulates,
-// including auto-promotion at the hit threshold.
-func TestKnowledgeSequenceMatchGolden(t *testing.T) {
+// TestKnowledgeSequence chains calls so state accumulates, including
+// auto-promotion at the hit threshold. Hits buffer and `tier fold` writes the
+// sidecar (#1290), so the retired helper's golden no longer applies.
+func TestKnowledgeSequence(t *testing.T) {
 	dir := knProject(t, false)
 	for i := 0; i < 3; i++ {
-		knFrozen(t, dir, "", "knowledge", "hit", "--topic", "Architecture", "--title", "Beta rule")
+		knNew(t, dir, "", "knowledge", "hit", "--topic", "Architecture", "--title", "Beta rule")
 	}
+	knNew(t, dir, "", "knowledge", "tier", "fold")
 	if tier := knTree(t, dir)["knowledge-tier.json"]; !strings.Contains(tier, `"tier": "confirmed"`) {
 		t.Fatalf("Beta rule not promoted:\n%s", tier)
 	}
 
 	// A pending contradiction blocks promotion.
-	knFrozen(t, dir, "", "knowledge", "contradiction", "add", "--topic", "Build", "--title", "Gamma tip", "--text", "c")
+	knNew(t, dir, "", "knowledge", "contradiction", "add", "--topic", "Build", "--title", "Gamma tip", "--text", "c")
 	for i := 0; i < 4; i++ {
-		knFrozen(t, dir, "", "knowledge", "hit", "--topic", "Build", "--title", "Gamma tip")
+		knNew(t, dir, "", "knowledge", "hit", "--topic", "Build", "--title", "Gamma tip")
 	}
+	knNew(t, dir, "", "knowledge", "tier", "fold")
 	if tier := knTree(t, dir)["knowledge-tier.json"]; !strings.Contains(tier, `"Build::Gamma tip": {
       "tier": "provisional",
       "hits": 4`) {
