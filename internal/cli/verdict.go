@@ -34,6 +34,34 @@ func verdictCommands() *Command {
 // records live.
 type verdictBranch struct {
 	root, key, repo, branch, head string
+	// ref is the revision the caller named (the branch, or <remote>/<branch>
+	// when a remote prefix was stripped); dir is the checkout git runs in;
+	// remote is the stripped prefix, "" when the argument was a bare branch.
+	ref, dir, remote string
+}
+
+// splitRemote strips a leading `<remote>/` from a branch argument so
+// `origin/feat` and `feat` share one record key. A local branch of that
+// exact name wins: `origin/feat` stays whole when refs/heads/origin/feat exists.
+func splitRemote(c *Ctx, dir, branch string) (bare, remote string, err error) {
+	r := git.Repo{Dir: dir}
+	local, err := r.Verify(c.Context(), "refs/heads/"+branch)
+	if err != nil {
+		return "", "", gitErr(err)
+	}
+	if local {
+		return branch, "", nil
+	}
+	out, err := reviewGit(c.Context(), dir, "remote")
+	if err != nil {
+		return "", "", err
+	}
+	for _, name := range strings.Fields(out) {
+		if rest, ok := strings.CutPrefix(branch, name+"/"); ok && rest != "" {
+			return rest, name, nil
+		}
+	}
+	return branch, "", nil
 }
 
 func resolveVerdictBranch(c *Ctx, args []string) (verdictBranch, error) {
@@ -49,7 +77,11 @@ func resolveVerdictBranch(c *Ctx, args []string) (verdictBranch, error) {
 	if err != nil {
 		return verdictBranch{}, Resolution("no .rota/ directory here or in any parent").WithHint("run: rota init")
 	}
-	v := verdictBranch{root: root, repo: c.Repo, branch: t.Branch}
+	bare, remote, err := splitRemote(c, t.Dir, t.Branch)
+	if err != nil {
+		return verdictBranch{}, err
+	}
+	v := verdictBranch{root: root, repo: c.Repo, branch: bare, ref: t.Branch, dir: t.Dir, remote: remote}
 	if v.repo == "" && repos.Umbrella(root) {
 		if r, err := repos.Which(t.Dir); err == nil {
 			v.repo = r.Name
@@ -62,6 +94,74 @@ func resolveVerdictBranch(c *Ctx, args []string) (verdictBranch, error) {
 	}
 	v.head = strings.TrimSpace(out)
 	return v, nil
+}
+
+// bindVerdictHead is the sha a new verdict records. With --sha it is that
+// commit, which must be the head of the remote branch (the local branch when
+// nothing was pushed): a verdict bound to a commit no reviewer saw, or to a
+// stale worktree, would pass the merge gate on code nobody read. Without
+// --sha the local tip is recorded, and a local ref that differs from the
+// remote branch is refused rather than guessed at.
+func bindVerdictHead(c *Ctx, t verdictBranch, sha string) (string, error) {
+	ctx := c.Context()
+	r := git.Repo{Dir: t.dir}
+	remote := t.remote
+	if remote == "" {
+		remote = "origin"
+	}
+	remoteRef := remote + "/" + t.branch
+	pushed, err := r.Verify(ctx, "refs/remotes/"+remoteRef)
+	if err != nil {
+		return "", gitErr(err)
+	}
+	rev := func(args ...string) (string, error) {
+		out, err := reviewGit(ctx, t.dir, append([]string{"rev-parse"}, args...)...)
+		return strings.TrimSpace(out), err
+	}
+	if sha == "" {
+		if !pushed || t.remote != "" {
+			return t.head, nil
+		}
+		local, err := rev(t.ref)
+		if err != nil {
+			return "", err
+		}
+		tip, err := rev(remoteRef)
+		if err != nil {
+			return "", err
+		}
+		if local != tip {
+			return "", Refused("local %s (%s) differs from %s (%s)", t.branch, local[:7], remoteRef, tip[:7]).
+				WithHint("pass --sha <the sha the reviewers were briefed on> to bind the verdict to it")
+		}
+		return t.head, nil
+	}
+	if found, err := r.Verify(ctx, sha+"^{commit}"); err != nil {
+		return "", gitErr(err)
+	} else if !found {
+		return "", Resolution("--sha %s is not a commit here", sha)
+	}
+	full, err := rev(sha + "^{commit}")
+	if err != nil {
+		return "", err
+	}
+	target := t.ref
+	if pushed {
+		target = remoteRef
+	}
+	tip, err := rev(target)
+	if err != nil {
+		return "", err
+	}
+	if full != tip {
+		extra, _ := reviewGit(ctx, t.dir, "log", "--format=%h %s", full+".."+tip)
+		msg := fmt.Sprintf("--sha %s is not the head of %s (%s)", sha, target, tip[:7])
+		if extra = strings.TrimSpace(extra); extra != "" {
+			msg += ", which has commits after it:\n" + extra
+		}
+		return "", Refused("%s", msg).WithHint("review the current head, then pass its sha")
+	}
+	return rev("--short", full)
 }
 
 // verdictBody reads and validates an optional --body-file.
@@ -102,6 +202,7 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 	transcript := fs.String("transcript", "", "path of the run's transcript (behaviour only)")
 	fileDeferred := fs.Bool("file-deferred", false, "file each deferred (non-blocking, non-info) finding as a task item related to --pr")
 	pr := fs.String("pr", "", "the PR the deferred items cite in --related (with --file-deferred)")
+	sha := fs.String("sha", "", "the reviewed commit: record it, refusing unless it is the head of origin/<branch>")
 	body := bodyFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if *kind == "" {
@@ -139,7 +240,11 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		r := verdict.NewRecord(*kind, *v, t.head, b, c.deps().Now())
+		head, err := bindVerdictHead(c, t, strings.TrimSpace(*sha))
+		if err != nil {
+			return Result{}, err
+		}
+		r := verdict.NewRecord(*kind, *v, head, b, c.deps().Now())
 		r.Branch, r.Repo = t.branch, t.repo
 		r.Transcript = *transcript
 		if r, err = verdict.AddBranch(t.root, t.key, r); err != nil {
