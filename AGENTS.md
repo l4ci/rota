@@ -22,6 +22,7 @@ Durable learnings live in `.rota/KNOWLEDGE.md`. Consult it when work touches the
 - Build & Tooling: Smoke testing: Sections & fixtures
 - Build & Tooling: Smoke testing: Gate & frozen records
 - Build & Tooling: Git & isolation
+- Process: Knowledge capture
 - Product: Market & competitors
 - Rounds: Orchestration: Reviews & verdicts
 - Rounds: Orchestration: Gate, trains & bookkeeping
