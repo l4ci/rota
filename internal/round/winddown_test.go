@@ -391,6 +391,9 @@ func TestWindDownWarnsOnBufferedHits(t *testing.T) {
 	if !strings.Contains(strings.Join(res.Warnings, "\n"), "rota knowledge tier fold") {
 		t.Errorf("warnings = %v, want one naming rota knowledge tier fold", res.Warnings)
 	}
+	if !strings.Contains(strings.Join(res.Warnings, "\n"), "commit .rota/knowledge-tier.json") {
+		t.Errorf("warnings = %v, want the sidecar path to commit", res.Warnings)
+	}
 }
 
 // An umbrella sub-repo buffer needs its own fold command: the bare verb folds
@@ -413,5 +416,8 @@ func TestWindDownNamesFoldPerScopeBuffer(t *testing.T) {
 	w := strings.Join(res.Warnings, "\n")
 	if !strings.Contains(w, "rota --repo web knowledge tier fold") || strings.Contains(w, "`rota knowledge tier fold`") {
 		t.Errorf("warnings = %v, want only the sub-repo fold command", res.Warnings)
+	}
+	if !strings.Contains(w, "commit .rota/knowledge/web/knowledge-tier.json") {
+		t.Errorf("warnings = %v, want the sub-repo sidecar path to commit", res.Warnings)
 	}
 }
