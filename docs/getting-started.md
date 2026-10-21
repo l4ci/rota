@@ -20,7 +20,7 @@ config defaults (models, isolation, merge strategy, quality gates, autonomy leve
 defaults unless you have a reason not to.
 
 > [!TIP]
-> `rota setup` does the same and, on a terminal, asks the main choices (backlog backend, isolation, merge strategy, autonomy, review and QA gates); bare `rota` in an uninitialized project runs it.
+> `rota setup` does the same and, on a terminal, asks the main choices (backlog backend, isolation, merge strategy, autonomy, review and QA gates); bare `rota` in an uninitialized project runs it. In your home directory both `rota init` and `rota setup` refuse (pass `--force` to init there); bare `rota` opens the projects picker instead.
 
 Three settings worth a second of thought:
 
