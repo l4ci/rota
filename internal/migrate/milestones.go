@@ -1,6 +1,7 @@
 package migrate
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -89,13 +90,25 @@ func StaleMilestoneFiles(root string) ([]string, error) {
 
 // ArchiveMilestoneFiles moves every stale milestone file to
 // .rota/archive/milestones and returns the names. Without apply it only
-// reports them. A second run finds nothing.
+// reports them. A second run finds nothing. A name already present in the
+// archive is refused, preview included, before any file moves: a rename would
+// silently replace the archived copy.
 func ArchiveMilestoneFiles(root string, apply bool) ([]string, error) {
 	names, err := StaleMilestoneFiles(root)
-	if err != nil || !apply || len(names) == 0 {
+	if err != nil || len(names) == 0 {
 		return names, err
 	}
 	dest := rotatree.File(root, "archive", rotatree.MilestonesDir)
+	for _, n := range names {
+		if _, err := os.Lstat(filepath.Join(dest, n)); err == nil {
+			return nil, fmt.Errorf("archive already holds %s: move or remove one of the two copies, then rerun", filepath.Join(dest, n))
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
+	if !apply {
+		return names, nil
+	}
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return nil, err
 	}
