@@ -11,7 +11,30 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
+
+// testDay pins the clock the stubs are dated by.
+func testDay() time.Time { return time.Date(2031, 4, 5, 9, 0, 0, 0, time.UTC) }
+
+func TestAddAndFinishStampInjectedClock(t *testing.T) {
+	root := repo(t)
+	if _, err := Add(root, root, "sse", "q", "", testDay); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(file(root, "sse"))
+	if !strings.Contains(string(raw), "created: 2031-04-05\n") {
+		t.Errorf("add not dated by the injected clock:\n%s", raw)
+	}
+	later := func() time.Time { return time.Date(2032, 6, 7, 9, 0, 0, 0, time.UTC) }
+	if _, err := Finish(root, "sse", later); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ = os.ReadFile(file(root, "sse"))
+	if !strings.Contains(string(raw), "finished: 2032-06-07\n") {
+		t.Errorf("finish not dated by the injected clock:\n%s", raw)
+	}
+}
 
 func run(t *testing.T, dir string, args ...string) {
 	t.Helper()
@@ -74,14 +97,14 @@ _(if viable, the shape of the real implementation — write only at /rota-spike 
 // Spike files are shared with older plugin versions; pin them byte for byte.
 func TestSpikeFileBytes(t *testing.T) {
 	root := repo(t)
-	if _, err := Add(root, root, "sse", "Can SSE work?", ""); err != nil {
+	if _, err := Add(root, root, "sse", "Can SSE work?", "", testDay); err != nil {
 		t.Fatal(err)
 	}
 	raw, _ := os.ReadFile(file(root, "sse"))
 	if got := date.ReplaceAllString(string(raw), "DATE"); got != wantAdded {
 		t.Fatalf("after add:\n%s", got)
 	}
-	if changed, err := Finish(root, "sse"); err != nil || !changed {
+	if changed, err := Finish(root, "sse", testDay); err != nil || !changed {
 		t.Fatalf("finish: %v %v", changed, err)
 	}
 	raw, _ = os.ReadFile(file(root, "sse"))
@@ -95,7 +118,7 @@ func TestFinishRewritesExistingFinishedLine(t *testing.T) {
 	root := repo(t)
 	os.MkdirAll(filepath.Dir(file(root, "x")), 0o777)
 	os.WriteFile(file(root, "x"), []byte("---\nname: x\nstatus: open\nfinished: 2000-01-01\n---\nbody\n"), 0o644)
-	if _, err := Finish(root, "x"); err != nil {
+	if _, err := Finish(root, "x", testDay); err != nil {
 		t.Fatal(err)
 	}
 	raw, _ := os.ReadFile(file(root, "x"))
@@ -108,13 +131,13 @@ func TestFinishWithoutStatusIs70(t *testing.T) {
 	root := repo(t)
 	os.MkdirAll(filepath.Dir(file(root, "x")), 0o777)
 	os.WriteFile(file(root, "x"), []byte("---\nname: x\n---\nbody\n"), 0o644)
-	if _, err := Finish(root, "x"); exitOf(err) != 70 {
+	if _, err := Finish(root, "x", testDay); exitOf(err) != 70 {
 		t.Fatalf("got %v", err)
 	}
-	if _, err := Finish(root, "missing"); exitOf(err) != 3 {
+	if _, err := Finish(root, "missing", testDay); exitOf(err) != 3 {
 		t.Fatalf("missing: %v", err)
 	}
-	if _, err := Finish(root, "Bad"); exitOf(err) != 2 {
+	if _, err := Finish(root, "Bad", testDay); exitOf(err) != 2 {
 		t.Fatalf("bad name: %v", err)
 	}
 }
@@ -154,12 +177,12 @@ func umbrella(t *testing.T) (root, sub string) {
 func TestAddUmbrellaRepo(t *testing.T) {
 	root, sub := umbrella(t)
 	// From the umbrella root (not a git repo) with no repo: usage, naming the repos.
-	_, err := Add(root, root, "sse", "q", "")
+	_, err := Add(root, root, "sse", "q", "", testDay)
 	var ae *exitcode.Error
 	if !errors.As(err, &ae) || ae.Exit != 2 || !strings.Contains(ae.Hint, "web") {
 		t.Fatalf("no --repo: %v", err)
 	}
-	branch, err := Add(root, sub, "sse", "q", "web")
+	branch, err := Add(root, sub, "sse", "q", "web", testDay)
 	if err != nil || branch != "spike/sse" {
 		t.Fatalf("add: %q %v", branch, err)
 	}
@@ -179,7 +202,7 @@ func TestAddUmbrellaRepo(t *testing.T) {
 func TestAddNotGit(t *testing.T) {
 	dir, _ := filepath.EvalSymlinks(t.TempDir())
 	os.MkdirAll(filepath.Join(dir, ".rota"), 0o777)
-	if _, err := Add(dir, dir, "x", "q", ""); exitOf(err) != 5 {
+	if _, err := Add(dir, dir, "x", "q", "", testDay); exitOf(err) != 5 {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -193,7 +216,7 @@ func TestAddConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := Add(root, root, "dup", "q", "")
+			_, err := Add(root, root, "dup", "q", "", testDay)
 			switch {
 			case err == nil:
 				ok.Add(1)
@@ -218,7 +241,7 @@ func TestCRLFSpikeFile(t *testing.T) {
 	if len(list) != 1 || list[0].Status != "open" {
 		t.Fatalf("list = %+v", list)
 	}
-	if changed, err := Finish(root, "x"); err != nil || !changed {
+	if changed, err := Finish(root, "x", testDay); err != nil || !changed {
 		t.Fatalf("finish: %v %v", changed, err)
 	}
 	raw, _ := os.ReadFile(file(root, "x"))

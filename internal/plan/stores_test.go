@@ -74,19 +74,19 @@ func TestStoresShareTheVerbs(t *testing.T) {
 	} {
 		t.Run(s.name, func(t *testing.T) {
 			st := s.st
-			if _, _, err := Add(root, st, AddOpts{Key: "M01-B07", Title: "Item"}); err != nil {
+			if _, _, err := Add(root, st, AddOpts{Key: "M01-B07", Title: "Item"}, testDay); err != nil {
 				t.Fatalf("add item plan: %v", err)
 			}
-			if _, _, err := Add(root, st, AddOpts{Key: "M01-B07", Title: "Item"}); exitOf(err) != 4 {
+			if _, _, err := Add(root, st, AddOpts{Key: "M01-B07", Title: "Item"}, testDay); exitOf(err) != 4 {
 				t.Errorf("duplicate item plan: %v, want exit 4", err)
 			}
 			for i, title := range []string{"One", "Two"} {
-				key, kind, err := Add(root, st, AddOpts{Milestone: "M01", Slice: true, Title: title})
+				key, kind, err := Add(root, st, AddOpts{Milestone: "M01", Slice: true, Title: title}, testDay)
 				if want := "M01-S0" + strconv.Itoa(i+1); err != nil || key != want || kind != "slice" {
 					t.Errorf("minted slice: %q %q %v, want %s", key, kind, err, want)
 				}
 			}
-			if _, _, err := Add(root, st, AddOpts{Key: "M01-S02", Title: "x"}); exitOf(err) != 4 {
+			if _, _, err := Add(root, st, AddOpts{Key: "M01-S02", Title: "x"}, testDay); exitOf(err) != 4 {
 				t.Errorf("duplicate slice plan: %v, want exit 4", err)
 			}
 			list, err := List(st, "M01")
@@ -144,10 +144,10 @@ func TestAddUnitDigitsByStore(t *testing.T) {
 	notes := NewNotes(
 		func(string) (artifact.Notes, error) { return artifacttest.NewNotes(), nil },
 		func() (SliceStore, error) { return &slicesFake{m: map[[2]string]string{}}, nil }, nil)
-	if _, _, err := Add(root, Files(root), AddOpts{Key: "M01-B7", Title: "t"}); exitOf(err) != 2 {
+	if _, _, err := Add(root, Files(root), AddOpts{Key: "M01-B7", Title: "t"}, testDay); exitOf(err) != 2 {
 		t.Errorf("files B7: %v, want exit 2", err)
 	}
-	if key, _, err := Add(root, notes, AddOpts{Key: "M01-B7", Title: "t"}); err != nil || key != "M01-B7" {
+	if key, _, err := Add(root, notes, AddOpts{Key: "M01-B7", Title: "t"}, testDay); err != nil || key != "M01-B7" {
 		t.Errorf("notes B7: %q %v", key, err)
 	}
 }

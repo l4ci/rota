@@ -116,7 +116,7 @@ func designAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if err := design.Add(st, id, *title); err != nil {
+		if err := design.Add(st, id, *title, c.deps().Today); err != nil {
 			return failAny(err)
 		}
 		return Result{Data: typedData(w.ID, w.Type, true), Text: w.ID}, nil
@@ -279,7 +279,7 @@ func planAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		key, kind, err := plan.Add(root, st, o)
+		key, kind, err := plan.Add(root, st, o, c.deps().Today)
 		if err != nil {
 			return failAny(err)
 		}
