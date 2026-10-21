@@ -19,12 +19,16 @@ import (
 // .rota/config.local.json under root, the project root.
 
 // Entry is one row of `config show`: a key, its effective value and the layer
-// that supplied it ("local", "project" or "default").
+// that supplied it ("local", "project", "global" or "default").
 type Entry struct {
 	Key    string
 	Value  any
 	Source string
 	Schema *Key // the schema row; nil for a hand-edited key outside the schema
+	// Global is what the global config holds for the key; HasGlobal is false
+	// when it holds none. ShowGlobal leaves both unset: its Value is the global value.
+	Global    any
+	HasGlobal bool
 }
 
 // ErrUnknownKey is Show's answer for a key that is neither in the schema nor
@@ -82,7 +86,8 @@ func Show(root string, key string, one bool) ([]Entry, error) {
 		if configured {
 			src = source(k.Name)
 		}
-		return Entry{k.Name, v, src, &k}
+		gv, hasG := walk(l.global, k.Name)
+		return Entry{Key: k.Name, Value: v, Source: src, Schema: &k, Global: gv, HasGlobal: hasG}
 	}
 	var out []Entry
 	for _, k := range Keys {
@@ -189,6 +194,14 @@ func Set(root, key, raw string) (SetResult, error) {
 // SetIn is Set on the chosen layer. LayerLocal writes config.local.json, which
 // overrides config.json on this machine.
 func SetIn(root, key, raw string, layer Layer) (SetResult, error) {
+	return setAt(layer.path(root), layer.notObject(), key, raw, fsio.UpdateJSON)
+}
+
+// setAt is SetIn on the config file at path; notObject is the error for a file
+// that holds JSON other than an object.
+// update is fsio.UpdateJSON, or UpdateJSONStrict for a file whose loss is
+// destructive.
+func setAt(path string, notObject error, key, raw string, update func(string, any, func(any) (any, error)) error) (SetResult, error) {
 	if err := Validate(key, raw); err != nil {
 		return SetResult{}, err
 	}
@@ -196,10 +209,10 @@ func SetIn(root, key, raw string, layer Layer) (SetResult, error) {
 	value := Coerce(raw)
 	var res SetResult
 	res.Value = value
-	err := fsio.UpdateJSON(layer.path(root), jsonx.NewObject(), func(doc any) (any, error) {
+	err := update(path, jsonx.NewObject(), func(doc any) (any, error) {
 		cfg, ok := doc.(*jsonx.Object)
 		if !ok {
-			return nil, layer.notObject()
+			return nil, notObject
 		}
 		before, err := jsonx.Marshal(cfg)
 		if err != nil {
@@ -229,18 +242,44 @@ func SetIn(root, key, raw string, layer Layer) (SetResult, error) {
 // Unset removes key from the layer's file, and the objects it leaves empty. It
 // reports whether the key was there; a layer without the key is not rewritten.
 func Unset(root, key string, layer Layer) (removed bool, err error) {
+	return unsetAt(layer.path(root), layer.notObject(), key, false)
+}
+
+// unsetAt is Unset on the config file at path. strict refuses a file that
+// exists but does not parse, rather than reading it as empty.
+func unsetAt(path string, notObject error, key string, strict bool) (removed bool, err error) {
 	segs := strings.Split(key, ".")
-	cur := asObject(fsio.LoadJSON(layer.path(root), nil))
+	update := fsio.UpdateJSON
+	var cur *jsonx.Object
+	if strict {
+		update = fsio.UpdateJSONStrict
+		raw, rerr := os.ReadFile(path)
+		if errors.Is(rerr, os.ErrNotExist) {
+			return false, nil
+		}
+		if rerr != nil {
+			return false, fmt.Errorf("%w: %s: %v", fsio.ErrUnreadable, path, rerr)
+		}
+		doc, derr := jsonx.Decode(raw)
+		if derr != nil {
+			return false, fmt.Errorf("%w: %s does not parse (%v); fix or remove it, rota will not overwrite it", fsio.ErrUnreadable, path, derr)
+		}
+		if cur = asObject(doc); cur == nil {
+			return false, notObject
+		}
+	} else {
+		cur = asObject(fsio.LoadJSON(path, nil))
+	}
 	if cur == nil {
 		return false, nil
 	}
 	if _, ok := lookupPresent(cur, segs); !ok {
 		return false, nil
 	}
-	err = fsio.UpdateJSON(layer.path(root), jsonx.NewObject(), func(doc any) (any, error) {
+	err = update(path, jsonx.NewObject(), func(doc any) (any, error) {
 		cfg, ok := doc.(*jsonx.Object)
 		if !ok {
-			return nil, layer.notObject()
+			return nil, notObject
 		}
 		removed = deleteIn(cfg, segs)
 		return cfg, nil
