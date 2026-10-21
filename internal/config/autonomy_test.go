@@ -381,3 +381,17 @@ func TestAutonomyRewritesAreReported(t *testing.T) {
 		t.Errorf("a deliberate auto reported %+v", am)
 	}
 }
+
+// #1524: a set that fails after the migration rewrote old autos still reports
+// the rewrites, since the files changed and the stamp stays old.
+func TestAutonomySetErrorKeepsMigration(t *testing.T) {
+	root := project(t, `{"rota": {"version": "0.20.0"}, "autonomy": {"level": "auto"}}`, `{"autonomy": {"level": "auto"}}`)
+	boom := errors.New("boom")
+	res, err := autonomySet(root, "autonomy.level", func() (SetResult, error) { return SetResult{}, boom })
+	if !errors.Is(err, boom) {
+		t.Fatalf("err = %v, want boom", err)
+	}
+	if !res.Migration.Rewrite || !res.Migration.LocalRewrite {
+		t.Errorf("failed set dropped the rewrites: %+v", res.Migration)
+	}
+}
