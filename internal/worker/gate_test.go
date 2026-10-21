@@ -1502,3 +1502,23 @@ func TestGateKeepsRefusingAPRFromAnotherIssuesBranch(t *testing.T) {
 		t.Fatalf("verdict = %q (%v): %+v", res.Verdict, err, res)
 	}
 }
+
+// A PR head that never catches up is refused with a hint that names the re-run:
+// the same --request-id would replay the stored refusal, not look again.
+func TestGatePRHeadLagHintNamesTheRerun(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.forge("staleHeadFor", "99")
+	res, err := w.gate(false, GateOpts{CheckOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Verdict != GatePRMismatch {
+		t.Fatalf("verdict = %s, want %s", res.Verdict, GatePRMismatch)
+	}
+	if want := "rota worker gate " + res.Slot; !strings.Contains(res.Hint, want) {
+		t.Errorf("hint = %q, want it to name %q", res.Hint, want)
+	}
+	if !strings.Contains(res.Hint, "without --request-id") {
+		t.Errorf("hint = %q, want it to say the re-run takes no --request-id", res.Hint)
+	}
+}
