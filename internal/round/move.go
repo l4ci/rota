@@ -664,6 +664,9 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	if err != nil {
 		return nil, err
 	}
+	if err := e.refuseWhileGateRuns(ctx, root, "transfer"); err != nil {
+		return nil, err
+	}
 	decisions := o.Decisions
 	it, err := be.Get(o.Issue)
 	if err != nil {

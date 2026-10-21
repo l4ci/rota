@@ -36,3 +36,19 @@ func (e Env) withLandLock(ctx context.Context, root string, fn func(waited bool)
 	}
 	return err
 }
+
+// LandLockHeld reports whether a gate or train holds the repository's land
+// lock right now. It probes without waiting and releases the lock at once, so
+// the answer is a snapshot: a verb that must not run beside a gate refuses on
+// true and the caller reruns it once the gate exits.
+func (e Env) LandLockHeld(ctx context.Context, root string) (bool, error) {
+	common, err := rotastate.CommonDirVia(ctx, e.Git, root)
+	if err != nil {
+		return false, err
+	}
+	err = fsio.Locked(rotastate.File(common, "land"), 0, func() error { return nil })
+	if errors.Is(err, fsio.ErrLockTimeout) {
+		return true, nil
+	}
+	return false, err
+}
