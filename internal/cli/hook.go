@@ -179,11 +179,11 @@ func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bo
 	}
 	switch {
 	case hc.who.Orchestrator || !anySession:
-		hc.handoff = handoffFile(hc.root, hc.cfg)
+		hc.handoff = handoffFile(c.deps(), hc.root, hc.cfg)
 	case config.ContextGuard(hc.cfg) == hook.GuardAuto:
 		// A work session pauses to .rota/handoff/<its branch>.md, where
 		// /rota-pause writes it; only the auto guard reads it.
-		hc.handoff = branchHandoffFile(hc.root, cwd)
+		hc.handoff = branchHandoffFile(c.deps(), hc.root, cwd)
 	}
 	return hc, true
 }
@@ -191,8 +191,8 @@ func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bo
 // branchHandoffFile is the absolute `.rota/handoff/<branch>.md` of the branch
 // checked out in cwd, the path `rota status handoff <branch> --canonical`
 // returns from there. "" on a detached HEAD, so no note counts.
-func branchHandoffFile(root, cwd string) string {
-	branch, err := git.Repo{Dir: cwd}.CurrentBranch(context.Background())
+func branchHandoffFile(d *Deps, root, cwd string) string {
+	branch, err := d.Repo(cwd).CurrentBranch(context.Background())
 	if err != nil || branch == "" {
 		return ""
 	}
@@ -205,12 +205,12 @@ func branchHandoffFile(root, cwd string) string {
 
 // handoffFile is the absolute `.rota/handoff/<base>.md`, the path
 // `rota status handoff <base> --canonical` returns.
-func handoffFile(root string, cfg any) string {
+func handoffFile(d *Deps, root string, cfg any) string {
 	configured := ""
 	if v, err := config.Value(cfg, "git.baseBranch"); err == nil {
 		configured, _ = v.(string)
 	}
-	base, ok, _ := git.Repo{Dir: root}.Base(context.Background(), configured)
+	base, ok, _ := d.Repo(root).Base(context.Background(), configured)
 	if !ok || base == "" {
 		base = configured
 		if base == "" {

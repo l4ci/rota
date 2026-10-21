@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/limits"
@@ -37,12 +36,12 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) 
 	e := d.baseRoundEnv()
 	e.Worker.Accounts, e.AccountPicking = nil, false
 	e.Base = "main"
-	if b, ok, err := (git.Repo{Dir: root}).Base(ctx, ""); err == nil && ok {
+	if b, ok, err := d.Repo(root).Base(ctx, ""); err == nil && ok {
 		e.Base = b
 	}
 	// A round started by hand (`herdr worktree create`) has no recorded host and
 	// resolves from the environment like every other verb.
-	hostKind := worker.ResolvePaneHost(root, cfg, nil, nil)
+	hostKind := d.resolvePaneHost(root, cfg)
 	if hostKind == host.Solo {
 		e.HostName = host.Solo // no panes to snapshot, and not an unavailable host
 	} else {

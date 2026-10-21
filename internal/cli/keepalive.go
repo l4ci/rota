@@ -196,14 +196,14 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 			Signals:  sigs,
 			Lease:    le,
 			Holder:   le.Discover(os.Getpid(), c.deps().Getenv),
-			Handoff:  func() keepalive.HandoffRead { return readHandoff(handoffFile(root, cfg)) },
+			Handoff:  func() keepalive.HandoffRead { return readHandoff(handoffFile(c.deps(), root, cfg)) },
 			Escalate: escalateFunc(ctx, c, root),
 			Notify:   func(title, body string) { keepaliveNotify(context.WithoutCancel(ctx), c, root, title, body) },
 		}
 		gap := keepaliveGap(set.SwitchOnUsage)
 		env.Gap = gap
 		opts := keepalive.Options{
-			Command: args, Root: root, CommonDir: cd, HandoffPath: handoffFile(root, cfg),
+			Command: args, Root: root, CommonDir: cd, HandoffPath: handoffFile(c.deps(), root, cfg),
 			HandoffMaxAge: set.HandoffMaxAge, MaxRestarts: set.MaxRestarts, Breaker: set.Breaker,
 			Backoff: set.Backoff, Prompt: set.Prompt, FirstPrompt: *first, EscalateIssue: set.EscalateIssue,
 		}

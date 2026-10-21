@@ -29,7 +29,7 @@ func writeFile(t *testing.T, dir, name, content string) {
 func TestChangedPathsAndLines(t *testing.T) {
 	dir := branchWithChanges(t)
 	ctx := context.Background()
-	repo := Repo{dir}
+	repo := Repo{Dir: dir}
 	paths, err := repo.ChangedPaths(ctx, "main...feat")
 	if err != nil || !reflect.DeepEqual(paths, []string{"b.txt"}) {
 		t.Fatalf("paths = %v, %v", paths, err)
@@ -62,7 +62,7 @@ func TestRemoteBase(t *testing.T) {
 		t.Fatal("empty base resolved")
 	}
 	mustGit(t, dir, "update-ref", "refs/remotes/origin/main", "HEAD")
-	if got := (Repo{dir}).RemoteBase(ctx, "main"); got != "origin/main" {
+	if got := (Repo{Dir: dir}).RemoteBase(ctx, "main"); got != "origin/main" {
 		t.Fatalf("with remote: got %q", got)
 	}
 	if ref, ok := RemoteRef(ctx, Exec, dir, "main"); !ok || ref != "origin/main" {
@@ -72,12 +72,12 @@ func TestRemoteBase(t *testing.T) {
 
 func TestExitErrorCarriesStderr(t *testing.T) {
 	dir := newRepo(t)
-	_, err := Repo{dir}.ChangedPaths(context.Background(), "nope...main")
+	_, err := Repo{Dir: dir}.ChangedPaths(context.Background(), "nope...main")
 	var ee *ExitError
 	if !errors.As(err, &ee) || ee.ExitCode == 0 || !strings.Contains(ee.Stderr, "nope") {
 		t.Fatalf("err = %#v, want ExitError with git's stderr", err)
 	}
-	_, err = Repo{dir}.ChangedLines(context.Background(), "nope...main")
+	_, err = Repo{Dir: dir}.ChangedLines(context.Background(), "nope...main")
 	if !errors.As(err, &ee) || ee.Stderr == "" {
 		t.Fatalf("lines err = %#v", err)
 	}
@@ -86,7 +86,7 @@ func TestExitErrorCarriesStderr(t *testing.T) {
 func TestChangedPathsRenameBinaryEmpty(t *testing.T) {
 	dir := newRepo(t)
 	ctx := context.Background()
-	repo := Repo{dir}
+	repo := Repo{Dir: dir}
 	if p, err := repo.ChangedPaths(ctx, "main...main"); err != nil || len(p) != 0 {
 		t.Fatalf("empty diff: %v, %v", p, err)
 	}

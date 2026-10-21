@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proof"
@@ -299,7 +298,7 @@ func missingFastProof(rows []proof.Row, head string, want []string) (missing []s
 
 // branchHead is the commit the slot's branch points at.
 func branchHead(c *Ctx, root, branch string) (string, error) {
-	res, err := git.Repo{Dir: root}.Run(c.Context(), "rev-parse", "--verify", "--quiet", branch+"^{commit}")
+	res, err := c.deps().Repo(root).Run(c.Context(), "rev-parse", "--verify", "--quiet", branch+"^{commit}")
 	if err != nil {
 		return "", gitErr(err)
 	}

@@ -33,8 +33,12 @@ func IsMergeConflict(out string) bool {
 	return strings.Contains(out, "CONFLICT") || strings.Contains(out, "Automatic merge failed")
 }
 
-// Repo runs git in Dir ("" is the process cwd).
-type Repo struct{ Dir string }
+// Repo runs git in Dir ("" is the process cwd), through Runner when set and
+// Exec otherwise.
+type Repo struct {
+	Dir    string
+	Runner Runner
+}
 
 // Result is one git call: what proc reports for any command.
 type Result = proc.Result
@@ -68,7 +72,11 @@ func Via(run proc.Runner, ctx context.Context, dir string, args ...string) (Resu
 // Run runs git with args. A non-zero exit is a Result, not an error; err is
 // ErrNoGit when git is missing, or the context's error.
 func (r Repo) Run(ctx context.Context, args ...string) (Result, error) {
-	return Exec(ctx, r.Dir, args...)
+	run := r.Runner
+	if run == nil {
+		run = Exec
+	}
+	return run(ctx, r.Dir, args...)
 }
 
 // Ok reports whether a call exited 0; a failure to run is an error.

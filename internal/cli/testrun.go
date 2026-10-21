@@ -161,9 +161,9 @@ func remoteBase(ctx context.Context, repo git.Repo, base string) string {
 // files git does not ignore), minus deleted ones.
 func changedFiles(c *Ctx, root, base string) ([]string, error) {
 	ctx := c.Context()
-	repo := git.Repo{Dir: root}
+	repo := c.deps().Repo(root)
 	if base == "" {
-		b, ok, err := resolveBase(ctx, root)
+		b, ok, err := resolveBase(ctx, c.deps(), root)
 		if err != nil {
 			return nil, err
 		}

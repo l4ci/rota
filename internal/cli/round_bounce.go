@@ -85,7 +85,7 @@ func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 		return nil
 	}
 	if head == "" {
-		out, err := reviewGit(c.Context(), root, "rev-parse", "--short", branch)
+		out, err := reviewGit(c.Context(), c.deps(), root, "rev-parse", "--short", branch)
 		if err != nil {
 			return nil
 		}

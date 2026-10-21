@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
@@ -271,7 +270,7 @@ func backlogBackfill(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		head, ok, gerr := git.Repo{Dir: root}.ShortHead(context.Background())
+		head, ok, gerr := c.deps().Repo(root).ShortHead(context.Background())
 		if gerr != nil || !ok || head == "" {
 			return Result{}, Unavailable("not in a git repo with a HEAD commit: cannot backfill Since:")
 		}
