@@ -36,6 +36,7 @@ __pycache__/
 .rota/verdicts.json
 .rota/gate-audit.jsonl
 .rota/ledger.jsonl
+.rota/bugreports.jsonl
 .rota/train-cache.json
 .rota/receipts.json
 .rota/**/knowledge-hits.jsonl*

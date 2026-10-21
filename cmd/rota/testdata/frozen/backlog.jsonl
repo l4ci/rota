@@ -22,7 +22,7 @@
 {"name":"archive/existing-plain-archive","steps":[{"exit":0,"env":{"data":{"changed":true,"days":5,"moved":2},"ok":true},"tree":{".rota/ARCHIVE.md":"a2c0ee77625df05e",".rota/BACKLOG.md":"cc6606ca40c674ad"}}]}
 {"name":"archive/existing-sectioned-archive","steps":[{"exit":0,"env":{"data":{"changed":true,"days":5,"moved":2},"ok":true},"tree":{".rota/ARCHIVE.md":"28bf0f75d7656da4",".rota/BACKLOG.md":"cc6606ca40c674ad"}}]}
 {"name":"archive/handed-off-and-blocked-moved","steps":[{"exit":0,"env":{"data":{"changed":true,"days":5,"moved":2},"ok":true},"tree":{".rota/ARCHIVE.md":"a1ce6b01501b5e26",".rota/BACKLOG.md":"6daba0722879d2ad"}}]}
-{"name":"archive/invalid-date-line","steps":[{"exit":70,"env":{"error":{"code":"internal","exit":70,"hint":"this is a bug in rota; please report it","message":"invalid date in ## Completed: 2026-13-45"},"ok":false}}]}
+{"name":"archive/invalid-date-line","steps":[{"exit":70,"env":{"error":{"code":"internal","exit":70,"hint":"this is a bug in rota; please report it","message":"invalid date in ## Completed: 2026-13-45"},"ok":false},"tree":{".rota/bugreports.jsonl":"4a40c70368f84e9d"}}]}
 {"name":"archive/issues-backend","steps":[{"exit":4,"env":{"data":{"blockedBy":"backend","changed":false},"error":{"code":"refused","exit":4,"hint":"closed issues are the archive","message":"not available when issues.source is a tracker"},"ok":false}}]}
 {"name":"archive/no-backlog","steps":[{"exit":0,"env":{"data":{"changed":false,"days":5,"moved":0},"ok":true}}]}
 {"name":"archive/no-completed-section","steps":[{"exit":0,"env":{"data":{"changed":false,"days":5,"moved":0},"ok":true}}]}

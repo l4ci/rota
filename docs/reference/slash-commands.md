@@ -13,6 +13,7 @@ Setup, config, update and migration are `rota` verbs, not skills: `rota init` (a
 | `/rota-pause` | Gracefully stop mid-session; writes a handoff note (next step, hypothesis, mid-edit files) for the next session's `/rota-work` (no argument) |
 | `/rota-plan` | Write an implementation plan for a milestone slice or item (`M01-S01`, `M01-B07`): task decomposition with verifiable outcomes, named assumptions, open questions; `/rota-work` consults if present |
 | `/rota-docs` | Public-docs maintainer: scaffolds `<docs.path>/` on first run, proposes doc updates in after-work mode, or audits and reorganizes (`restructure`). Manual only; `/rota-ship --docs` is a deprecated alias |
+| `/rota-bugreport` | File rota's own mistakes (a verb that exited 70, a wrong refusal, a contradicting skill step) as issues on the rota repo. Reads the local `.rota/bugreports.jsonl`, shows a redacted draft with version, OS, harness and model, checks for a duplicate, and files only on your explicit yes (`bugreport-file` manual gate) |
 | `/rota-spike` | Throwaway feasibility experiment on a `spike/<name>` branch. Branch never merges, only findings come back as `.rota/spikes/<name>.md` |
 | `/rota-work` | Orchestrated parallel implementation with per-task commits. With no item argument it reconciles the backlog against git state and suggests the next item; consults `KNOWLEDGE.md` and `.rota/plans/<key>.md` if present. Pass `--preview <ID>` for a read-only peek of the intended approach (files, tests, assumptions, unknowns) that gates high-stakes work without writing anything |
 | `/rota-orchestrate` | Run a [parallel round](../usage/parallel-rounds.md) as the orchestrator: choose the slate, read what workers are doing, answer or escalate their questions, merge their PRs, wind the round down. The `rota round` verbs do the sequencing; the skill holds the judgment |
@@ -112,6 +113,10 @@ One mode folded in via a flag:
 Manual-invocation skill, the public-docs maintainer. Scaffolds `<docs.path>/` on first run (discovery + tailored tree + interactive approval), proposes doc updates in after-work mode, or audits and reorganizes in restructure mode (`/rota-docs restructure`). Runs inline at ship time when `docs.afterWork: true` and the post-cycle trigger condition matches.
 
 `/rota-ship --docs` still works for one release as a deprecated alias: it prints a one-line pointer to `/rota-docs` and runs it.
+
+## /rota-bugreport
+
+Files rota's own mistakes upstream. rota records them in `.rota/bugreports.jsonl` while it runs: a verb that fails with an internal error or panic (exit 70) writes a record, and an agent adds one it noticed with `rota bugreport add`. `rota round wind-down` and the Stop hook of a solo session print one non-blocking line when records are open. The skill lists them, shows each report redacted (tokens and keys, email addresses, home-directory paths, hostnames, your repo name and remote URL are removed) with the rota version, OS and architecture, harness and model, searches `l4ci/rota` for a duplicate (offering a comment instead), and files only after your yes for that report. Bugs in your own project stay with `/rota-capture`. Nothing is sent in the background.
 
 ## /rota-spike
 
