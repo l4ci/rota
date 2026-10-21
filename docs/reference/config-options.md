@@ -119,7 +119,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | Key | Type | Default | Values | Description |
 |-----|------|---------|--------|-------------|
 | `work.isolation` | enum | `"branch"` | `branch`, `worktree` | /rota-work: How a cycle isolates changes from main: a feature branch in this checkout, or a separate git worktree. |
-| `work.mergeStrategy` | enum | `"direct"` | `direct`, `pr` | /rota-work: How finished work lands: merged straight into the base branch with --no-ff, or through a pull request. Ignored when issues.source is a tracker, which always opens a PR. |
+| `work.mergeStrategy` | enum | `"direct"` | `direct`, `pr` | /rota-work: How finished work lands: merged straight into the base branch with --no-ff, or through a pull request. Ignored when issues.source is a tracker (always pr) or the forge is local (always direct); rota ship strategy prints the answer. |
 | `work.tdd` | bool | `true` |  | /rota-work: Whether a cycle needs a recorded red-first run before a behavior change; round workers follow it too. Off skips the RED requirement. |
 | `work.contextGuard` | enum | `"warn"` | `warn`, `off`, `auto` | /rota-work: What a session that is not an orchestrator does at orchestrator.handoffThreshold, where rota hooks are installed. warn adds one line to the next prompt recommending /rota-pause; auto also has the Stop hook ask for /rota-pause at the next task boundary, up to orchestrator.handoffMaxBlocks times; off does nothing. |
 

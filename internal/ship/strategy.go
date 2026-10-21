@@ -17,7 +17,7 @@ type Landing struct {
 // on a tracker, which closes them through a PR, but the forge is local.
 var ErrTrackerNeedsLocalForge = errors.New("issues are on a tracker, which needs a PR, but the forge is local (no origin remote, or forge.provider local): set forge.provider or an origin remote")
 
-// Strategy owns the landing rule, and the `rota ship strategy` verb only renders it, and work.mergeStrategy (internal/config/keys.go) defers to it:
+// Strategy owns the landing rule; the rota ship strategy verb only renders it.
 //
 //   - issues on a tracker (backend "issues"): pr, always;
 //   - a local forge: direct, whatever configured says, since there is no PR to open;
