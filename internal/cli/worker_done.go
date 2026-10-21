@@ -28,7 +28,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "ref {files} is diffed against (default: the base branch)")
 	attempt := fs.String("attempt", "", "the attempt id from your brief; a stale one exits 4")
 	outcome := fs.String("outcome", "", "how the work ended: "+strings.Join(worker.Outcomes, "|")+" (default: done, no summary)")
-	requireRed := fs.Bool("require-red", false, "refuse (exit 4) instead of warning when work.tdd is on and non-test Go changed with no failing (RED) proof row")
+	requireRed := fs.Bool("require-red", false, "refuse (exit 4) instead of warning when work.tdd is on and non-test Go changed with no failing (RED) proof row, or the diff cannot be computed")
 	summaryFile := fs.String("summary-file", "", "three lines: what changed, what was found, what remains (required for partial and failed)")
 	return func(c *Ctx, args []string) (Result, error) {
 		slotName, err := oneArg(args, "slot")
