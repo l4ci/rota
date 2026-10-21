@@ -49,14 +49,14 @@ func git(dir string, args ...string) error {
 // Add (under the spike file's lock) creates branch spike/<name> in gitDir (the sub-repo named by repo, or
 // the working repository) and .rota/spikes/<name>.md under root. The spike
 // file check runs first, so an existing file leaves no branch behind.
-func Add(root, gitDir, name, question, repo string) (branch string, err error) {
+func Add(root, gitDir, name, question, repo string, today func() time.Time) (branch string, err error) {
 	if err = checkName(name); err != nil {
 		return
 	}
 	path := file(root, name)
 	err = fsio.Locked(path, fsio.LockTimeout, func() error {
 		var aerr error
-		branch, aerr = add(root, gitDir, path, name, question, repo)
+		branch, aerr = add(root, gitDir, path, name, question, repo, today)
 		return aerr
 	})
 	if err != nil {
@@ -67,7 +67,7 @@ func Add(root, gitDir, name, question, repo string) (branch string, err error) {
 
 // add is Add's body; the caller holds the spike file's lock, so the
 // existence checks and the writes cannot interleave with another add.
-func add(root, gitDir, path, name, question, repo string) (branch string, err error) {
+func add(root, gitDir, path, name, question, repo string, today func() time.Time) (branch string, err error) {
 	branch = "spike/" + name
 	if _, serr := os.Stat(path); serr == nil {
 		return "", exitcode.Errf(exitcode.ExitRefused, ".rota/spikes/%s.md already exists", name)
@@ -123,7 +123,7 @@ _(viable / not viable / depends-on-X)_
 ## Recommended approach
 
 _(if viable, the shape of the real implementation — write only at /rota-spike done)_
-`, name, branch, repoLine, time.Now().Format("2006-01-02"), name, question)
+`, name, branch, repoLine, today().Format("2006-01-02"), name, question)
 	if err = os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
 		return
 	}
@@ -132,7 +132,7 @@ _(if viable, the shape of the real implementation — write only at /rota-spike 
 
 // Finish sets status: done and a finished date. A spike that is already
 // done is left alone (changed false).
-func Finish(root, name string) (changed bool, err error) {
+func Finish(root, name string, today func() time.Time) (changed bool, err error) {
 	if err = checkName(name); err != nil {
 		return
 	}
@@ -152,7 +152,7 @@ func Finish(root, name string) (changed bool, err error) {
 	if !found {
 		return false, exitcode.Errf(exitcode.ExitInternal, "status field not found in .rota/spikes/%s.md", name)
 	}
-	date := time.Now().Format("2006-01-02")
+	date := today().Format("2006-01-02")
 	finished := regexp.MustCompile(`(?m)^(finished:\s*).+$`)
 	if finished.MatchString(updated) {
 		loc := finished.FindStringSubmatchIndex(updated)

@@ -17,6 +17,20 @@ import (
 	"github.com/l4ci/rota/internal/proof"
 )
 
+// testDay pins the clock the stubs are dated by.
+func testDay() time.Time { return time.Date(2031, 4, 5, 9, 0, 0, 0, time.UTC) }
+
+func TestAddStampsInjectedClock(t *testing.T) {
+	root := t.TempDir()
+	if _, _, err := Add(root, Files(root), AddOpts{Key: "M01-B07", Title: "t"}, testDay); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := Show(Files(root), "M01-B07")
+	if !strings.Contains(got, "created: 2031-04-05\n") {
+		t.Errorf("not dated by the injected clock:\n%s", got)
+	}
+}
+
 func exitOf(err error) int {
 	var ae *exitcode.Error
 	if errors.As(err, &ae) {
@@ -63,7 +77,7 @@ func TestAddMatchesOldHelper(t *testing.T) {
 		{AddOpts{Milestone: "M02", Slice: true, Title: "After S05"}, "M02-S06", "slice"},
 	}
 	for _, s := range steps {
-		key, kind, err := Add(root, Files(root), s.o)
+		key, kind, err := Add(root, Files(root), s.o, testDay)
 		if err != nil || key != s.key || kind != s.knd {
 			t.Fatalf("Add(%+v) = %q %q %v", s.o, key, kind, err)
 		}
@@ -96,25 +110,25 @@ func TestAddArgumentExits(t *testing.T) {
 		{"repos unregistered", AddOpts{Key: "M01-B07", Title: "t", Repos: "web,ghost"}, 3},
 	}
 	for _, c := range cases {
-		if _, _, err := Add(root, Files(root), c.o); exitOf(err) != c.exit {
+		if _, _, err := Add(root, Files(root), c.o, testDay); exitOf(err) != c.exit {
 			t.Errorf("%s: %v, want exit %d", c.name, err, c.exit)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(root, ".rota/plans")); err == nil {
 		t.Error("a failed add created .rota/plans")
 	}
-	Add(root, Files(root), AddOpts{Key: "M01-B07", Title: "t"})
-	if _, _, err := Add(root, Files(root), AddOpts{Key: "M01-B07", Title: "t"}); exitOf(err) != 4 {
+	Add(root, Files(root), AddOpts{Key: "M01-B07", Title: "t"}, testDay)
+	if _, _, err := Add(root, Files(root), AddOpts{Key: "M01-B07", Title: "t"}, testDay); exitOf(err) != 4 {
 		t.Errorf("duplicate: %v", err)
 	}
 }
 
 func TestSliceMintingIgnoresOtherMilestonesAndItems(t *testing.T) {
 	root := project(t)
-	Add(root, Files(root), AddOpts{Key: "M01-S09", Title: "t"})
-	Add(root, Files(root), AddOpts{Key: "M02-S30", Title: "t"})
-	Add(root, Files(root), AddOpts{Key: "M01-B50", Title: "t"})
-	key, _, _ := Add(root, Files(root), AddOpts{Milestone: "M01", Slice: true, Title: "t"})
+	Add(root, Files(root), AddOpts{Key: "M01-S09", Title: "t"}, testDay)
+	Add(root, Files(root), AddOpts{Key: "M02-S30", Title: "t"}, testDay)
+	Add(root, Files(root), AddOpts{Key: "M01-B50", Title: "t"}, testDay)
+	key, _, _ := Add(root, Files(root), AddOpts{Milestone: "M01", Slice: true, Title: "t"}, testDay)
 	if key != "M01-S10" {
 		t.Fatalf("key = %s", key)
 	}
@@ -129,7 +143,7 @@ func TestSliceMintingConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			key, _, err := Add(root, Files(root), AddOpts{Milestone: "M01", Slice: true, Title: "t"})
+			key, _, err := Add(root, Files(root), AddOpts{Milestone: "M01", Slice: true, Title: "t"}, testDay)
 			if err != nil {
 				t.Error(err)
 				return
@@ -153,7 +167,7 @@ func TestAddConcurrentExplicitKey(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			switch _, _, err := Add(root, Files(root), AddOpts{Key: "M01-B07", Title: "t"}); {
+			switch _, _, err := Add(root, Files(root), AddOpts{Key: "M01-B07", Title: "t"}, testDay); {
 			case err == nil:
 				ok.Add(1)
 			case exitOf(err) == 4:
@@ -171,8 +185,8 @@ func TestAddConcurrentExplicitKey(t *testing.T) {
 
 func TestListShowPutRm(t *testing.T) {
 	root := project(t)
-	Add(root, Files(root), AddOpts{Milestone: "M01", Slice: true, Title: "One"})
-	Add(root, Files(root), AddOpts{Key: "M02-B07", Title: "Two", Repos: "web,api"})
+	Add(root, Files(root), AddOpts{Milestone: "M01", Slice: true, Title: "One"}, testDay)
+	Add(root, Files(root), AddOpts{Key: "M02-B07", Title: "Two", Repos: "web,api"}, testDay)
 	os.WriteFile(path(root, "M01-S99"), []byte("# no frontmatter\n"), 0o644)
 	all, _ := List(Files(root), "")
 	if len(all) != 2 || all[0].Key != "M01-S01" || all[0].UnitKind != "slice" || !reflect.DeepEqual(all[0].Repos, []string{}) ||
@@ -289,14 +303,14 @@ func TestRenameCheck(t *testing.T) {
 func TestExplicitAndMintedSliceRace(t *testing.T) {
 	for round := 0; round < 20; round++ {
 		root := project(t)
-		Add(root, Files(root), AddOpts{Key: "M01-S01", Title: "seed"}) // so minting targets S02
+		Add(root, Files(root), AddOpts{Key: "M01-S01", Title: "seed"}, testDay) // so minting targets S02
 		var wg sync.WaitGroup
 		var okExplicit, okMint atomic.Int32
 		var mintedKey atomic.Value
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			if _, _, err := Add(root, Files(root), AddOpts{Key: "M01-S02", Title: "explicit"}); err == nil {
+			if _, _, err := Add(root, Files(root), AddOpts{Key: "M01-S02", Title: "explicit"}, testDay); err == nil {
 				okExplicit.Add(1)
 			} else if exitOf(err) != 4 {
 				t.Error(err)
@@ -304,7 +318,7 @@ func TestExplicitAndMintedSliceRace(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			key, _, err := Add(root, Files(root), AddOpts{Milestone: "M01", Slice: true, Title: "minted"})
+			key, _, err := Add(root, Files(root), AddOpts{Milestone: "M01", Slice: true, Title: "minted"}, testDay)
 			if err != nil {
 				t.Error(err)
 				return
@@ -406,7 +420,7 @@ func TestStubHasReliesOnHeading(t *testing.T) {
 		{Key: "M01-B07", Title: "Item plan"},
 		{Milestone: "M01", Slice: true, Title: "Slice plan"},
 	} {
-		key, _, err := Add(root, Files(root), o)
+		key, _, err := Add(root, Files(root), o, testDay)
 		if err != nil {
 			t.Fatal(err)
 		}

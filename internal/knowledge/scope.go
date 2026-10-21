@@ -33,14 +33,16 @@ type Store struct {
 	Now func() time.Time
 }
 
-// today is the YYYY-MM-DD date stamped on what Store writes.
-func (s Store) today() string {
-	now := time.Now
+// now is the Store's clock; nil is the wall clock.
+func (s Store) now() time.Time {
 	if s.Now != nil {
-		now = s.Now
+		return s.Now()
 	}
-	return now().Format("2006-01-02")
+	return time.Now()
 }
+
+// today is the YYYY-MM-DD date stamped on what Store writes.
+func (s Store) today() string { return s.now().Format("2006-01-02") }
 
 // check validates a sub-repo scope against the registry.
 func (s Store) check(scope string) error {

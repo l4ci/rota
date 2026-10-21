@@ -43,12 +43,12 @@ func CheckID(s Store, id string) error {
 	return exitcode.Errf(exitcode.ExitUsage, "ID must match [%s]\\d{%d,} (e.g. B07, F03, T11); designs are per-item, not per-slice or per-milestone, got %q", backlog.ItemLetters, s.Digits(), id)
 }
 
-// Add creates the design stub; an existing design is exit 4.
-func Add(s Store, id, title string) error {
+// Add creates the design stub, dated by today; an existing design is exit 4.
+func Add(s Store, id, title string, today func() time.Time) error {
 	if err := CheckID(s, id); err != nil {
 		return err
 	}
-	return s.Create(id, stubText(strings.TrimPrefix(id, "#"), title, time.Now().Format("2006-01-02")))
+	return s.Create(id, stubText(strings.TrimPrefix(id, "#"), title, today().Format("2006-01-02")))
 }
 
 // Show is the stored design.

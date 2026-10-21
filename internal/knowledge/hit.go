@@ -6,7 +6,6 @@ import (
 	"github.com/l4ci/rota/internal/stamp"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
@@ -149,7 +148,7 @@ func (s Store) AddContradiction(topic, title, text string) (int, error) {
 		e.Set("topic", topic)
 		e.Set("title", title)
 		e.Set("correctionText", text)
-		e.Set("loggedAt", stamp.Format(time.Now()))
+		e.Set("loggedAt", stamp.Format(s.now()))
 		pending = append(pending, e)
 		doc.Set("pending", pending)
 		n = len(pending)

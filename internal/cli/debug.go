@@ -442,7 +442,7 @@ func spikeAdd(fs *flag.FlagSet) RunFunc {
 				return Result{}, err
 			}
 		}
-		branch, err := spike.Add(root, gitDir, name, *question, c.Repo)
+		branch, err := spike.Add(root, gitDir, name, *question, c.Repo, c.deps().Today)
 		if err != nil {
 			return Result{Data: refusal(err)}, err
 		}
@@ -463,7 +463,7 @@ func runSpikeFinish(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	changed, err := spike.Finish(root, name)
+	changed, err := spike.Finish(root, name, c.deps().Today)
 	if err != nil {
 		return Result{}, err
 	}
