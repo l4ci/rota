@@ -82,6 +82,28 @@ func (a *Accounts) now() time.Time { return a.Env.WithDefaults().Now().UTC() }
 
 func (a *Accounts) getenv(k string) string { return a.Env.WithDefaults().Getenv(k) }
 
+// home is the home dir Env reports; "" when it has none, which leaves a
+// leading ~/ unexpanded.
+func (a *Accounts) home() string {
+	h, _ := a.Env.WithDefaults().Home()
+	return h
+}
+
+// expand is ExpandConfigDir against Env's home.
+func (a *Accounts) expand(d string) string { return ExpandConfigDirIn(d, a.home()) }
+
+// same is SameConfigDir against Env's home.
+func (a *Accounts) same(x, y string) bool { return a.expand(x) == a.expand(y) }
+
+// login is Login with Env's home unless Login names its own.
+func (a *Accounts) login() Credentials {
+	c := a.Login
+	if c.Home == nil {
+		c.Home = a.Env.WithDefaults().Home
+	}
+	return c
+}
+
 type acct struct{ name, configDir string }
 
 // Configured returns round.accounts of the project config.
@@ -266,6 +288,9 @@ type Credentials struct {
 	GOOS string
 	Run  proc.Runner
 	Now  func() time.Time
+	// Home defaults to os.UserHomeDir: whose ~/.claude is the unsuffixed
+	// Keychain service.
+	Home func() (string, error)
 }
 
 // SystemCredentials is Credentials on this machine, running tools through run.
@@ -292,8 +317,8 @@ const keychainBase = "Claude Code-credentials"
 // OAuth credentials under for config dir dir (already expanded): the default
 // ~/.claude has no suffix, any other dir carries the first 8 hex chars of
 // sha256(dir).
-func keychainService(dir string) string {
-	if home, err := os.UserHomeDir(); err == nil && dir == filepath.Join(home, ".claude") {
+func keychainService(dir, home string) string {
+	if home != "" && dir == filepath.Join(home, ".claude") {
 		return keychainBase
 	}
 	sum := sha256.Sum256([]byte(dir))
@@ -311,7 +336,13 @@ func (c Credentials) read(dir string, now time.Time) (*jsonx.Object, string, str
 		return oauth, tok, ""
 	}
 	if c.GOOS == "darwin" && c.Run != nil {
-		b, ok, err := connections.SecurityRead(context.Background(), c.Run, keychainService(dir), "")
+		home := ""
+		if c.Home != nil {
+			home, _ = c.Home()
+		} else if h, err := os.UserHomeDir(); err == nil {
+			home = h
+		}
+		b, ok, err := connections.SecurityRead(context.Background(), c.Run, keychainService(dir, home), "")
 		if err == nil && ok {
 			if o, t, w := parseCredentials([]byte(b)); w == "" {
 				return o, t, ""
@@ -372,7 +403,7 @@ func parseCredentials(b []byte) (*jsonx.Object, string, string) {
 
 // token reads the access token without refreshing it.
 func (a *Accounts) token(configDir string) (string, string) {
-	oauth, tok, why := a.Login.read(ExpandConfigDir(configDir), a.now())
+	oauth, tok, why := a.login().read(a.expand(configDir), a.now())
 	if why != "" {
 		return "", why
 	}
@@ -394,7 +425,7 @@ func (a *Accounts) Pick(ctx context.Context, root string, exclude []string) (nam
 	}
 	var usable []Meter
 	for _, m := range a.Meters(ctx, root) {
-		if !skip[m.Name] && m.Verdict != VerdictCooling && a.Login.Problem(ExpandConfigDir(m.ConfigDir)) == "" {
+		if !skip[m.Name] && m.Verdict != VerdictCooling && a.login().Problem(a.expand(m.ConfigDir)) == "" {
 			usable = append(usable, m)
 		}
 	}
@@ -433,7 +464,7 @@ func (a *Accounts) NoPickReason(ctx context.Context, root string, exclude []stri
 			cooling = true
 			continue
 		}
-		if why := a.Login.Problem(ExpandConfigDir(m.ConfigDir)); why != "" {
+		if why := a.login().Problem(a.expand(m.ConfigDir)); why != "" {
 			loginless = append(loginless, m.Name+" ("+why+")")
 		}
 	}
@@ -491,7 +522,7 @@ func ConfigDirMismatch(orchDir string, accts []config.Account) string {
 // none is.
 func (a *Accounts) AccountOf(root, dir string) string {
 	for _, ac := range a.Configured(root) {
-		if ac.configDir != "" && SameConfigDir(ac.configDir, dir) {
+		if ac.configDir != "" && a.same(ac.configDir, dir) {
 			return ac.name
 		}
 	}
@@ -511,7 +542,7 @@ func (a *Accounts) OrchestratorTarget(ctx context.Context, root, currentDir stri
 		switch {
 		case c.ConfigDir == "":
 			why = "no configDir"
-		case SameConfigDir(c.ConfigDir, currentDir):
+		case a.same(c.ConfigDir, currentDir):
 			why = "current account"
 		case c.Verdict != VerdictFree:
 			why = c.Verdict
