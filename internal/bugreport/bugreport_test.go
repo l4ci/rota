@@ -209,6 +209,7 @@ func TestRedactGaps(t *testing.T) {
 		{"token scheme", "Authorization: token 0123456789abcdef0123456789abcdef01234567", "0123456789abcdef"},
 		{"userinfo then host", "GET https://bot@ci.corp.example.net/x", "ci.corp.example.net"},
 		{"userinfo pass then host", "dial http://user:pass@proxy.acme.corp/", "proxy.acme.corp"},
+		{"tld-like host with port", "dial db.corp.sh:5432 refused", "db.corp.sh"},
 		{"ipv4 with port", "dial 10.1.2.3:8080 refused", "10.1.2.3"},
 		{"flag value", "rota x --token plainvalue1 --force", "plainvalue1"},
 		{"flag equals quoted", `rota x --password="two words"`, "two words"},
@@ -234,7 +235,7 @@ func TestRedactKeepsFileLocations(t *testing.T) {
 		"goroutine 1 [running]:\n" +
 		"main.run(...)\n\t/src/rota/internal/cli/hook.go:242 +0x1d\n" +
 		"main.main()\n\tmain.go:12 +0x25\n" +
-		"read .rota/backlog.md:12 and v0.12.3:100"
+		"read .rota/backlog.md:12, scripts/run.sh:7 and v0.12.3:100"
 	if got := Redact(in, env); got != in {
 		t.Errorf("file:line locations changed:\n%q\nwant\n%q", got, in)
 	}

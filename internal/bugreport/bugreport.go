@@ -291,24 +291,32 @@ func replaceFold(s, old, with string) string {
 
 // fileExts are the last labels that mark a name:port match as a file:line
 // location (a panic frame, a backlog reference) rather than a host.
-var fileExts = map[string]bool{
-	"go": true, "md": true, "sh": true, "json": true, "jsonl": true, "js": true, "ts": true,
-	"py": true, "yml": true, "yaml": true, "toml": true, "txt": true, "rs": true,
-	"c": true, "h": true, "rb": true, "java": true, "lock": true, "mod": true, "sum": true,
-}
+// pathOnlyExts are also TLDs (db.corp.sh:5432), so they count only after a
+// path separator.
+var (
+	fileExts     = map[string]bool{"go": true, "json": true, "jsonl": true, "js": true, "ts": true, "yml": true, "yaml": true, "toml": true, "txt": true, "c": true, "h": true, "rb": true, "java": true, "lock": true, "mod": true, "sum": true}
+	pathOnlyExts = map[string]bool{"md": true, "sh": true, "py": true, "rs": true}
+)
 
 // isFileLocation reports whether h, the part before ":<digits>", is a file
-// name or a version, not a host: its last label is a file extension or all
-// digits. A dotted IPv4 address stays a host.
-func isFileLocation(h string) bool {
+// name or a version, not a host. prev is the byte before h. A dotted IPv4
+// address stays a host, and so does a multi-label name ending in a TLD-like
+// extension unless a path separator precedes it.
+func isFileLocation(h string, prev byte) bool {
 	if reIPv4.MatchString(h) {
 		return false
 	}
-	last := h[strings.LastIndex(h, ".")+1:]
-	if fileExts[strings.ToLower(last)] {
+	last := strings.ToLower(h[strings.LastIndex(h, ".")+1:])
+	afterSep := prev == '/' || prev == '\\'
+	switch {
+	case strings.Trim(last, "0123456789") == "":
 		return true
+	case pathOnlyExts[last]:
+		return afterSep
+	case fileExts[last]:
+		return afterSep || strings.Count(h, ".") == 1
 	}
-	return strings.Trim(last, "0123456789") == ""
+	return false
 }
 
 // Redact removes secrets and identifying details from s: tokens and keys,
@@ -343,13 +351,22 @@ func Redact(s string, e Env) string {
 		}
 		return sub[1] + sub[2] + "<host>"
 	})
-	s = reHostPort.ReplaceAllStringFunc(s, func(m string) string {
-		h := reHostPort.FindStringSubmatch(m)[1]
-		if publicHosts[strings.ToLower(h)] || isFileLocation(h) {
-			return m
+	var sb strings.Builder
+	last := 0
+	for _, ix := range reHostPort.FindAllStringSubmatchIndex(s, -1) {
+		h := s[ix[2]:ix[3]]
+		var prev byte
+		if ix[0] > 0 {
+			prev = s[ix[0]-1]
 		}
-		return "<host>"
-	})
+		if publicHosts[strings.ToLower(h)] || isFileLocation(h, prev) {
+			continue
+		}
+		sb.WriteString(s[last:ix[0]])
+		sb.WriteString("<host>")
+		last = ix[1]
+	}
+	s = sb.String() + s[last:]
 	if len(e.Hostname) >= 3 {
 		s = regexp.MustCompile(`(?i)\b`+regexp.QuoteMeta(e.Hostname)+`(?:\.[A-Za-z0-9-]+)*`).ReplaceAllString(s, "<host>")
 	}
