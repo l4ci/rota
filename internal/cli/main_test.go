@@ -68,6 +68,7 @@ func TestMain(m *testing.M) {
 // tests.
 func testDeps() *Deps {
 	d := defaultDeps()
+	d.RecordMistakes = false
 	d.Host = func(kind host.Kind) host.Host {
 		if kind == "herdr" {
 			return &absentHerdr{}

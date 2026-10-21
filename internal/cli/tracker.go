@@ -107,10 +107,7 @@ func trSuggest(fs *flag.FlagSet) RunFunc {
 		body := strings.TrimRight(string(raw), "\n")
 		repo := *upstream
 		if repo == "" {
-			repo = c.deps().Getenv("ROTA_UPSTREAM_REPO")
-		}
-		if repo == "" {
-			repo = "l4ci/rota"
+			repo = upstreamRepoName(c)
 		}
 		manual := "file it by hand at https://github.com/" + repo + "/issues/new"
 		if res, err := clearGate(c, gate.PublicFiling, repo+": "+*title, conf, nil, nil); err != nil {
@@ -118,12 +115,9 @@ func trSuggest(fs *flag.FlagSet) RunFunc {
 		}
 
 		ctx := c.Context()
-		cl, err := tracker.NewCLI(ctx, trackerSettings(c), "github", "", c.deps().trackerBase()...)
+		cl, err := upstreamCLI(c, manual)
 		if err != nil {
-			return Result{}, trackerErr(err).WithHint(manual)
-		}
-		if err := cl.CheckAuth(ctx); err != nil {
-			return Result{}, Unavailable("gh is not available or not authenticated").WithHint(manual)
+			return Result{}, err
 		}
 		r, err := cl.Run(ctx, []string{"issue", "create", "-R", repo, "-t", *title, "-F", "-"}, strings.NewReader(body))
 		if err != nil {
@@ -144,6 +138,29 @@ func trSuggest(fs *flag.FlagSet) RunFunc {
 		data.Set("changed", true)
 		return Result{Data: data, Text: url}, nil
 	}
+}
+
+// upstreamCLI is an authenticated gh for the rota repo's issues. manual is the
+// hint when it is not available.
+func upstreamCLI(c *Ctx, manual string) (*tracker.CLI, error) {
+	ctx := c.Context()
+	cl, err := tracker.NewCLI(ctx, trackerSettings(c), "github", "", c.deps().trackerBase()...)
+	if err != nil {
+		return nil, trackerErr(err).WithHint(manual)
+	}
+	if err := cl.CheckAuth(ctx); err != nil {
+		return nil, Unavailable("gh is not available or not authenticated").WithHint(manual)
+	}
+	return cl, nil
+}
+
+// upstreamRepoName is where rota's own bug reports and suggestions go:
+// $ROTA_UPSTREAM_REPO, else l4ci/rota.
+func upstreamRepoName(c *Ctx) string {
+	if repo := c.deps().Getenv("ROTA_UPSTREAM_REPO"); repo != "" {
+		return repo
+	}
+	return "l4ci/rota"
 }
 
 // originProvider is the detect callback of config.FillDetect and

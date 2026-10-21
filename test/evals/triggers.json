@@ -208,6 +208,19 @@
       "better": "rota-release"
     },
     {
+      "id": "rota-bugreport-loads",
+      "skill": "rota-bugreport",
+      "request": "rota worker done exited 70 and crashed. File that as a bug on the rota repo.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-bugreport-skips",
+      "skill": "rota-bugreport",
+      "request": "The login page of my app throws a 500. Note that bug down for later.",
+      "expect": "skip",
+      "better": "rota-capture"
+    },
+    {
       "id": "rota-spike-loads",
       "skill": "rota-spike",
       "request": "Can we use SSE for this? Try it on a throwaway branch before we commit to it.",

@@ -1,4 +1,4 @@
-{"utc":"2026-10-21","local":"2026-10-21"}
+{"utc":"2026-10-03","local":"2026-10-03"}
 {"name":"config-check/corrupt-empty-file","steps":[{"exit":1,"env":{"data":{"missing":[],"removed":[],"status":"corrupt","upToDate":false},"error":{"code":"failed","exit":1,"message":".rota/config.json is not a valid JSON object"},"ok":false},"text":"CORRUPT\n"}]}
 {"name":"config-check/corrupt-invalid-json","steps":[{"exit":1,"env":{"data":{"missing":[],"removed":[],"status":"corrupt","upToDate":false},"error":{"code":"failed","exit":1,"message":".rota/config.json is not a valid JSON object"},"ok":false},"text":"CORRUPT\n"}]}
 {"name":"config-check/corrupt-list","steps":[{"exit":1,"env":{"data":{"missing":[],"removed":[],"status":"corrupt","upToDate":false},"error":{"code":"failed","exit":1,"message":".rota/config.json is not a valid JSON object"},"ok":false},"text":"CORRUPT\n"}]}
@@ -73,11 +73,11 @@
 {"name":"config-set/missing-both","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"config set takes a key and a value"},"ok":false}}]}
 {"name":"config-set/missing-value","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"config set takes a key and a value"},"ok":false}}]}
 {"name":"config-set/no-hv","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"hint":"run: rota init","message":"no .rota/ directory here or in any parent"},"ok":false}}]}
-{"name":"config-set/not-an-object/\"s\"","steps":[{"exit":70,"env":{"error":{"code":"internal","exit":70,"message":".rota/config.json is not a JSON object"},"ok":false}}]}
-{"name":"config-set/not-an-object/7","steps":[{"exit":70,"env":{"error":{"code":"internal","exit":70,"message":".rota/config.json is not a JSON object"},"ok":false}}]}
-{"name":"config-set/not-an-object/[1]","steps":[{"exit":70,"env":{"error":{"code":"internal","exit":70,"message":".rota/config.json is not a JSON object"},"ok":false}}]}
-{"name":"config-set/not-an-object/null","steps":[{"exit":70,"env":{"error":{"code":"internal","exit":70,"message":".rota/config.json is not a JSON object"},"ok":false}}]}
-{"name":"config-set/not-an-object/true","steps":[{"exit":70,"env":{"error":{"code":"internal","exit":70,"message":".rota/config.json is not a JSON object"},"ok":false}}]}
+{"name":"config-set/not-an-object/\"s\"","steps":[{"exit":70,"env":{"error":{"code":"internal","exit":70,"message":".rota/config.json is not a JSON object"},"ok":false},"tree":{".rota/bugreports.jsonl":"e851fb57fb1317b1"}}]}
+{"name":"config-set/not-an-object/7","steps":[{"exit":70,"env":{"error":{"code":"internal","exit":70,"message":".rota/config.json is not a JSON object"},"ok":false},"tree":{".rota/bugreports.jsonl":"e851fb57fb1317b1"}}]}
+{"name":"config-set/not-an-object/[1]","steps":[{"exit":70,"env":{"error":{"code":"internal","exit":70,"message":".rota/config.json is not a JSON object"},"ok":false},"tree":{".rota/bugreports.jsonl":"e851fb57fb1317b1"}}]}
+{"name":"config-set/not-an-object/null","steps":[{"exit":70,"env":{"error":{"code":"internal","exit":70,"message":".rota/config.json is not a JSON object"},"ok":false},"tree":{".rota/bugreports.jsonl":"e851fb57fb1317b1"}}]}
+{"name":"config-set/not-an-object/true","steps":[{"exit":70,"env":{"error":{"code":"internal","exit":70,"message":".rota/config.json is not a JSON object"},"ok":false},"tree":{".rota/bugreports.jsonl":"e851fb57fb1317b1"}}]}
 {"name":"config-set/order/duplicate-keys-collapse","steps":[{"exit":0,"env":{"data":{"changed":true,"key":"models.worker","previous":"b","value":"c"},"ok":true},"tree":{".rota/config.json":"2b3f3600366698e1"}}]}
 {"name":"config-set/order/new-key-is-last","steps":[{"exit":0,"env":{"data":{"changed":true,"key":"models.worker","value":"b"},"ok":true},"tree":{".rota/config.json":"663119a170faaf9b"}}]}
 {"name":"config-set/order/replace-keeps-position","steps":[{"exit":0,"env":{"data":{"changed":true,"key":"models.worker","previous":"a","value":"b"},"ok":true},"tree":{".rota/config.json":"f9e1e42a1ef22fed"}}]}

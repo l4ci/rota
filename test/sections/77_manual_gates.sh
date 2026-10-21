@@ -7,10 +7,10 @@ python3 - "$OUT" <<'PY' || fail "gate list: unexpected registry: $OUT"
 import json, sys
 gates = json.loads(sys.argv[1])["data"]["gates"]
 enforced = [g["name"] for g in gates if g["enforced"]]
-assert enforced == ["tag-push", "release-publish", "public-filing", "merge-approval", "debug-reset"], enforced
+assert enforced == ["tag-push", "release-publish", "public-filing", "merge-approval", "debug-reset", "bugreport-file"], enforced
 assert {"issue-close", "decision-write", "pr-open"} <= {g["name"] for g in gates}
 PY
-pass "gate list prints the registry with the five enforced gates"
+pass "gate list prints the registry with the six enforced gates"
 
 # A project whose origin is a local bare repo, with a release tag to push.
 mg_project() { # mg_project <dir> <autonomy level> [<ship json>]

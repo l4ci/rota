@@ -82,6 +82,7 @@ Field types use JSON names (`string`, `number`, `bool`, `object`, `[]string`). `
 | init | `init`, `init check`, `init umbrella`, `projects` (#24) | A9 |
 | skills | `install`, `update`, `uninstall`, `status`, `list`, `get` (F6a, #821) | F6a |
 | gate | `list` | B1 |
+| bugreport | `add`, `list`, `draft`, `duplicates`, `file`, `dismiss` | #1175 |
 | round | `wait` (C1), `status`, `reconcile` (C2), `start`, `candidates`, `assign`, `wind-down` (C3), `scope` (#900), `escalate send`, `escalate check` (C4), `return`, `transfer`, `reclaim` (C10), `report` (C8) | C1, C2, C3, C4, C10, C8 |
 | receipt | `show` (#959) | C13 |
 | doctor | `doctor` (C6; D1 adds `statusline` and `stop-hook` checks) | C6, D1 |
@@ -107,6 +108,7 @@ The entries live one file per verb group, so a change to one group does not conf
 | [init.md](init.md) | A9 | `init` |
 | [verdicts.md](verdicts.md) | B2 | `verdict` |
 | [gates.md](gates.md) | B1 | manual gates, `gate list` |
+| [bugreport.md](bugreport.md) | #1175 | `bugreport` |
 | [verdict-refusals.md](verdict-refusals.md) | B3 | verdict refusals, the Iron Law, loop-only flags |
 | [rounds.md](rounds.md) | C | `round`, `receipt`, `doctor`, `reap` |
 | [codex-workers.md](codex-workers.md) | D1, D2, E | Codex workers, `statusline`, `hook`, `keepalive` |
