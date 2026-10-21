@@ -11,6 +11,7 @@ import (
 
 	"github.com/l4ci/rota/internal/acceptance"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/notechunk"
 	"github.com/l4ci/rota/internal/pystr"
@@ -828,6 +829,59 @@ func (b *Issues) SetBody(ref, body string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if is.Body == body {
+		return false, nil
+	}
+	if err := tr.Edit(b.ctx(), is.Key, tracker.IssueEdit{Body: &body}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// SectionEditor is a backend that can replace or add one "## <name>" section
+// of an item's body, leaving the rest and the fields block as they are.
+type SectionEditor interface {
+	// SetSection writes content under the named section; false when the body
+	// already reads so. Empty content or a name that is not a single line wraps
+	// ErrInvalid.
+	SetSection(ref, name, content string) (bool, error)
+}
+
+var _ SectionEditor = (*Issues)(nil)
+
+// SetSection replaces or adds one section of the issue body, keeping the
+// fields block. The body is read first; a failed read writes nothing. An
+// acceptance section gets its criteria numbered, as at capture.
+func (b *Issues) SetSection(ref, name, content string) (bool, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || strings.ContainsAny(name, "\r\n") {
+		return false, errf(ErrInvalid, "section name must be one non-empty line")
+	}
+	if strings.TrimSpace(content) == "" {
+		return false, errf(ErrInvalid, "section body is empty")
+	}
+	tr, err := b.tracker()
+	if err != nil {
+		return false, err
+	}
+	is, _, err := b.require(ref)
+	if err != nil {
+		return false, err
+	}
+	if is.State != "open" {
+		return false, refused("closed item", ErrClosed, "[%s] is closed on the issue tracker", ref)
+	}
+	old := strings.ReplaceAll(is.Body, "\r\n", "\n")
+	text, _, _ := marker.SplitFields(old)
+	rest := strings.TrimLeft(old[len(text):], "\n")
+	text = itembody.SetSection(text, name, strings.ReplaceAll(content, "\r\n", "\n"))
+	if strings.EqualFold(name, "acceptance") {
+		text, _ = acceptance.Number(text)
+	}
+	if rest != "" {
+		text = strings.TrimRight(text, "\n") + "\n\n"
+	}
+	body := text + rest
 	if is.Body == body {
 		return false, nil
 	}

@@ -216,6 +216,8 @@ func TestInitRefusesACorruptCounters(t *testing.T) {
 
 func TestMergeGitignore(t *testing.T) {
 	block := strings.Join(ignoreLines, "\n") + "\n"
+	const hitsLine = ".rota/**/knowledge-hits.jsonl*"
+	withoutHits := strings.Replace(block, hitsLine+"\n", "", 1)
 	cases := []struct {
 		name, in string
 		exists   bool
@@ -226,8 +228,8 @@ func TestMergeGitignore(t *testing.T) {
 		{"complete", block + ".worktrees/\n", true, block + ".worktrees/\n"},
 		{"slash spelling", block + "/.worktrees\n", true, block + "/.worktrees\n"},
 		{"crlf worktrees", block + ".worktrees/\r\n", true, block + ".worktrees/\r\n"},
-		{"older block lacks one line", strings.Replace(block, ".rota/**/knowledge-hits.jsonl\n", "", 1) + ".worktrees/\n", true,
-			strings.Replace(block, ".rota/**/knowledge-hits.jsonl\n", "", 1) + ".worktrees/\n" + "\n# ── rota ──\n.rota/**/knowledge-hits.jsonl\n"},
+		{"older block lacks one line", withoutHits + ".worktrees/\n", true,
+			withoutHits + ".worktrees/\n" + "\n# ── rota ──\n" + hitsLine + "\n"},
 		{"no trailing newline", "a", true, "a\n" + block + worktreesBlock},
 	}
 	for _, c := range cases {
@@ -287,5 +289,22 @@ func TestInitIgnoresTrainCache(t *testing.T) {
 	out, _ := exec.Command("git", "-C", dir, "status", "--porcelain", "--", ".rota/train-cache.json").Output()
 	if len(out) != 0 {
 		t.Errorf("train-cache.json shows in git status: %s", out)
+	}
+}
+
+// The hit buffer and the claimed buffer a fold renames it to (#1333) are both
+// per-developer: git ignores either, so a fold never dirties the tree.
+func TestInitIgnoresClaimedHitBuffer(t *testing.T) {
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	if _, err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{".rota/knowledge-hits.jsonl", ".rota/knowledge-hits.jsonl.abc123.folding", ".rota/map/knowledge-hits.jsonl.abc123.folding"} {
+		if out, err := exec.Command("git", "-C", dir, "check-ignore", "-q", p).CombinedOutput(); err != nil {
+			t.Errorf("%s is not gitignored: %v %s", p, err, out)
+		}
 	}
 }

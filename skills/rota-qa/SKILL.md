@@ -97,8 +97,10 @@ Per target:
 **Record the verdict** for the current branch, once per repo (umbrella: read [`umbrella-scope.md`](umbrella-scope.md)). The body carries the failed executable checks and P0/P1 audit findings, mapping P0 `blocker` to `blocker`, other P0 and P1 to `major`, the rest to `minor`:
 
 ```bash
-rota verdict add <branch> --kind qa --verdict <PASS|CONCERNS|FAIL|INFRA-FAIL> --body-file "$VERDICT" --json
+rota verdict add <branch> --kind qa --verdict <PASS|CONCERNS|FAIL|INFRA-FAIL> --sha "$QA_SHA" --body-file "$VERDICT" --json
 ```
+
+`QA_SHA` is the commit you ran against: `git rev-parse <branch>`, taken before the run starts. `verdict add` refuses (exit 4) unless it is the head of `origin/<branch>`.
 
 `$VERDICT` is one JSON object (`internal/verdict`: strict, unknown keys rejected). `verdict`, when present, must equal `--verdict`:
 
@@ -112,7 +114,7 @@ rota verdict add <branch> --kind qa --verdict <PASS|CONCERNS|FAIL|INFRA-FAIL> --
 }
 ```
 
-Exit 2 names the failing field: fix the body, re-run `rota verdict add`, and continue to Step 7 only on exit 0. `/rota-ship` routes on this record, not the printed report.
+Exit 2 names the failing field: fix the body, re-run `rota verdict add`. Exit 4 means `QA_SHA` is not the pushed head (local branch ahead of or behind origin): push or fetch, and if the head moved since the run, re-run the checks at the new head rather than recording a stale sha. Continue to Step 7 only on exit 0. `/rota-ship` routes on this record, not the printed report.
 
 #### Step 7 — Report
 

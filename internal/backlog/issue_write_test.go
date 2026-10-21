@@ -550,3 +550,31 @@ func TestIssuesClaimByTrackerKey(t *testing.T) {
 		t.Errorf("a key item spells itself: %q", n)
 	}
 }
+
+func TestIssuesSetSection(t *testing.T) {
+	withBlock := Issue{Key: tracker.NumKey(2), Title: "T", State: "open", Body: "## Problem\n\nbad\n\n<!-- rota:fields\nRelated: B1\n-->"}
+	withAC := Issue{Key: tracker.NumKey(4), Title: "T", State: "open", Body: "## Acceptance\n\n- [ ] old\n\n## Pointers\n\n- p"}
+	closed := Issue{Key: tracker.NumKey(3), Title: "T", State: "closed"}
+	for _, c := range []struct {
+		name, ref, section, content string
+		changed                     bool
+		err                         error
+		calls                       string
+	}{
+		{"add keeps block", "2", "acceptance", "- [ ] x\n", true, nil,
+			`get[2] edit[2,{"body":"## Problem\n\nbad\n\n## Acceptance\n\n- [ ] AC-1: x\n\n<!-- rota:fields\nRelated: B1\n-->"}]`},
+		{"replace", "4", "Acceptance", "- [ ] new", true, nil,
+			`get[4] edit[4,{"body":"## Acceptance\n\n- [ ] AC-1: new\n\n## Pointers\n\n- p"}]`},
+		{"empty body", "2", "acceptance", " \n", false, ErrInvalid, ``},
+		{"bad name", "2", "a\nb", "x", false, ErrInvalid, ``},
+		{"unknown", "99", "acceptance", "x", false, ErrNotFound, `get[99]`},
+		{"closed", "3", "acceptance", "x", false, ErrClosed, `get[3]`},
+	} {
+		b, tr := newIssues(t, `{}`, open(1), withBlock, closed, withAC)
+		got, err := b.SetSection(c.ref, c.section, c.content)
+		if !errors.Is(err, c.err) || (c.err == nil && err != nil) || got != c.changed {
+			t.Errorf("%s: %v, %v; want %v, %v", c.name, got, err, c.changed, c.err)
+		}
+		wantCalls(t, tr, c.calls)
+	}
+}

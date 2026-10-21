@@ -1252,6 +1252,20 @@ func TestAssignExplicitSlotWithoutLoginRefusesWithHint(t *testing.T) {
 	}
 }
 
+func TestAssignResumingHolderWithoutLoginRefuses(t *testing.T) {
+	f := newAssignFixture(t)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccount("work", t.TempDir()) }); err != nil {
+		t.Fatal(err)
+	}
+	_, err := f.assign("12", "", nil)
+	if blockedBy(t, err) != BlockNoLogin {
+		t.Fatalf("err = %v, want %s", err, BlockNoLogin)
+	}
+}
+
 func TestStatusMarksSlotWhoseAccountHasNoLogin(t *testing.T) {
 	f := noLoginFixture(t)
 	rep, err := f.env.Status(bg, f.root)
