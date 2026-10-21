@@ -124,6 +124,7 @@ type fakeStore struct {
 	rows  []cfgRow
 	calls []string
 	fail  error
+	note  string
 }
 
 func (f *fakeStore) Rows() ([]cfgRow, error) { return append([]cfgRow(nil), f.rows...), nil }
@@ -131,7 +132,7 @@ func (f *fakeStore) Rows() ([]cfgRow, error) { return append([]cfgRow(nil), f.ro
 func (f *fakeStore) Set(key, raw string, local bool) (bool, string, error) {
 	f.calls = append(f.calls, fmt.Sprintf("set %s %s local=%v", key, raw, local))
 	if f.fail != nil {
-		return false, "", f.fail
+		return false, f.note, f.fail
 	}
 	for i := range f.rows {
 		if f.rows[i].Key == key {
@@ -334,6 +335,15 @@ func TestConfigScreenShowsAWriteError(t *testing.T) {
 	m, _ := play(newFxScreen(store), cat([]string{"/"}, typedKeys("ship.review"), []string{"enter", "enter", " ", "enter"}))
 	if got := strings.Join(frame(t, m), "\n"); !strings.Contains(got, "disk full") {
 		t.Errorf("error not shown:\n%s", got)
+	}
+}
+
+func TestConfigScreenShowsTheRewriteWhenTheSetFails(t *testing.T) {
+	store := &fakeStore{rows: fxRows(), fail: fmt.Errorf("disk full"), note: "rewrote 2 autonomy values"}
+	m, _ := play(newFxScreen(store), cat([]string{"/"}, typedKeys("ship.review"), []string{"enter", "enter", " ", "enter"}))
+	got := strings.Join(frame(t, m), "\n")
+	if !strings.Contains(got, "disk full") || !strings.Contains(got, "rewrote 2 autonomy values") {
+		t.Errorf("rewrite hidden behind the error:\n%s", got)
 	}
 }
 
