@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
@@ -336,9 +337,10 @@ func pendingHitFolds(root string) (cmds, sidecars []string) {
 		cmds = append(cmds, "rota knowledge tier fold")
 		sidecars = append(sidecars, ".rota/knowledge-tier.json")
 	}
-	files, _ := filepath.Glob(filepath.Join(root, ".rota", "knowledge", "*", "knowledge-hits.jsonl"))
-	for _, f := range files {
-		name := filepath.Base(filepath.Dir(f))
+	scopes := filepath.Join(root, ".rota", "knowledge")
+	for _, d := range fsio.GlobDir(scopes, "*") {
+		f := filepath.Join(d, "knowledge-hits.jsonl")
+		name := filepath.Base(d)
 		if nonEmpty(f) && hitScopeName.MatchString(name) {
 			cmds = append(cmds, "rota --repo "+name+" knowledge tier fold")
 			sidecars = append(sidecars, ".rota/knowledge/"+name+"/knowledge-tier.json")

@@ -24,7 +24,7 @@ type Doc struct {
 // ListDocs globs dir/*.md in name order and returns the files that carry
 // frontmatter, like hv-fm-list. A missing dir is an empty list.
 func ListDocs(dir string) ([]Doc, error) {
-	files, _ := filepath.Glob(filepath.Join(dir, "*.md"))
+	files := fsio.GlobDir(dir, "*.md")
 	sort.Strings(files)
 	docs := []Doc{}
 	for _, f := range files {
