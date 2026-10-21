@@ -59,14 +59,14 @@ func TestSpikeStampsDepsToday(t *testing.T) {
 	}
 }
 
-func TestContradictionAddStampsDepsToday(t *testing.T) {
+func TestContradictionAddStampsDepsNow(t *testing.T) {
 	root := trackerProject(t, "")
 	deps := pinnedDeps()
 	if code, _, se := rotaInWith(t, deps, root, "knowledge", "contradiction", "add", "--topic", "A", "--title", "B", "--text", "c"); code != 0 {
 		t.Fatalf("add: %d %s", code, se)
 	}
 	_, out, _ := rotaInWith(t, deps, root, "knowledge", "contradiction", "list", "--json")
-	if !strings.Contains(out, "2031-04-05T") {
-		t.Errorf("loggedAt not stamped from Deps.Today:\n%s", out)
+	if !strings.Contains(out, "2031-04-06T09:30:00Z") {
+		t.Errorf("loggedAt not stamped from Deps.Now:\n%s", out)
 	}
 }
