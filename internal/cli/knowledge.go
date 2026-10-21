@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -459,9 +460,16 @@ func knTierFold(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return knFail(err)
 		}
+		sidecar, err := st.TierPath(scope)
+		if err != nil {
+			return knFail(err)
+		}
+		if rel, err := filepath.Rel(st.Root, sidecar); err == nil {
+			sidecar = filepath.ToSlash(rel)
+		}
 		text := "no buffered hits"
 		if res.Changed {
-			text = fmt.Sprintf("folded %d hit(s) into the sidecar: commit it", res.Hits)
+			text = fmt.Sprintf("folded %d hit(s) into the sidecar: commit %s", res.Hits, sidecar)
 		}
 		if res.Skipped > 0 {
 			text += fmt.Sprintf("; skipped %d malformed buffer line(s)", res.Skipped)

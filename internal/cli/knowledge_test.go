@@ -477,3 +477,14 @@ func TestKnowledgeContradictionClearOnePair(t *testing.T) {
 		t.Errorf("bare clear left %q", list)
 	}
 }
+
+// The fold output names the sidecar to commit, repo-relative, so the next
+// step is a concrete command rather than "commit it".
+func TestKnowledgeTierFoldNamesSidecar(t *testing.T) {
+	dir := knProject(t, false)
+	knNew(t, dir, "", "knowledge", "hit", "--topic", "Architecture", "--title", "Beta rule")
+	got := knNew(t, dir, "", "knowledge", "tier", "fold")
+	if !strings.Contains(got.stdout, "commit .rota/knowledge-tier.json") {
+		t.Fatalf("fold output = %q, want the sidecar path to commit", got.stdout)
+	}
+}
