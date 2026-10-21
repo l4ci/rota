@@ -211,7 +211,7 @@ func layoutRoots(c *Ctx, project string) ([]string, error) {
 	if root, err := c.Root(); err == nil {
 		add(root)
 	}
-	ps, err := projects.List()
+	ps, err := projects.List(c.deps().projectsEnv())
 	if err != nil {
 		return nil, &Error{Exit: ExitInternal, Message: err.Error()}
 	}

@@ -33,11 +33,11 @@ func (c *Ctx) connectEnv() (string, *connections.Secrets, error) {
 }
 
 func (d *Deps) connectEnv() (string, *connections.Secrets, error) {
-	dir, err := projects.Dir()
+	dir, err := projects.Dir(d.projectsEnv())
 	if err != nil {
 		return "", nil, &Error{Exit: ExitInternal, Message: err.Error()}
 	}
-	data, err := projects.DataDir()
+	data, err := projects.DataDir(d.projectsEnv())
 	if err != nil {
 		return "", nil, &Error{Exit: ExitInternal, Message: err.Error()}
 	}
@@ -183,7 +183,7 @@ func runConnectList(c *Ctx, args []string) (Result, error) {
 	if len(cs) == 0 {
 		lines = append(lines, "no connections: run rota connect add <name> --kind jira|linear|itsaplan --site <url> --token-stdin")
 	}
-	secretsDir, err := projects.DataDir()
+	secretsDir, err := projects.DataDir(c.deps().projectsEnv())
 	if err != nil {
 		return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 	}
