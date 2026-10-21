@@ -420,6 +420,26 @@ func TestWorkerDoneBundleNeedsEveryProof(t *testing.T) {
 	}
 }
 
+// A member closed since the assign leaves the bundle: done no longer asks for
+// its proof row, but the lead's still counts.
+func TestWorkerDoneBundleSkipsAClosedMember(t *testing.T) {
+	dir := bundleDoneProject(t)
+	if code, out, errOut := rotaIn(t, dir, "item", "complete", "B08", "--commit", "abc", "--no-proof"); code != 0 {
+		t.Fatalf("close B08: %d %s %s", code, out, errOut)
+	}
+	code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json")
+	if code != 4 || !strings.Contains(out, "B07 has no PASS proof row") {
+		t.Fatalf("the lead still needs its row: exit %d: %s", code, out)
+	}
+	if code, out, _ := rotaIn(t, dir, "proof", "record", "B07", "--", "true"); code != 0 {
+		t.Fatalf("record lead: %d %s", code, out)
+	}
+	code, out, _ = rotaIn(t, dir, "worker", "done", "ben", "--json")
+	if code != 0 || data(t, out)["changed"] != true || slotState(t, dir) != "done" {
+		t.Fatalf("closed member without a row: exit %d: %s", code, out)
+	}
+}
+
 // One red-first run anywhere in the bundle satisfies work.tdd, and the warning
 // names the lead.
 func TestWorkerDoneBundleRedFromAnyIssue(t *testing.T) {

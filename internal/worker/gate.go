@@ -605,6 +605,7 @@ func (g *gate) stepExternal() (bool, error) {
 	g.branch, g.target.Branch, g.res.Branch = info.Head, info.Head, info.Head
 	// the head branch names the issue of a PR no slot or record owns
 	g.target.Issue = HeldID(g.target.Task, info.Head, g.target.Name)
+	g.target.Bundle = nil // a bundle belongs to a slot's lead, not to a branch-derived issue
 	g.res.Issue = g.target.Issue
 	return false, nil
 }
@@ -961,13 +962,17 @@ func (g *gate) stepCloses() (bool, error) {
 	// A bundled slot's PR closes the lead and every member: collect each one the
 	// body leaves open, so one refusal names them all.
 	var open []tracker.IssueKey
-	for _, key := range keys {
+	for i, key := range keys {
 		if g.issues.ClosesIssue(key, tracker.ClosingSource{Body: info.Body, Title: info.Title, Branch: info.Head}) {
 			continue
 		}
 		is, err := g.issues.Get(g.ctx, key, false)
 		if err != nil {
 			return g.broke(fmt.Sprintf("could not read %s to check for the %s label: %v", key.Ref(), PartialSliceLabel, err))
+		}
+		// a member closed since the assign has left the bundle (the lead, keys[0], stays)
+		if i > 0 && is.State == "closed" {
+			continue
 		}
 		if !slices.Contains(is.Labels, PartialSliceLabel) {
 			open = append(open, key)

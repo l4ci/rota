@@ -1,6 +1,8 @@
 package round
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -160,6 +162,34 @@ func TestWindDownReleasesBundleMemberClaims(t *testing.T) {
 		}
 	}
 	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.Task() != "" || len(s.Bundle()) != 0 {
+		t.Errorf("slot: %v", s)
+	}
+}
+
+// A bundled slot whose worktree holds unmerged work is retained: the lead and
+// every member keep their claims and stay in progress.
+func TestWindDownRetainsBundleWithUnmergedWork(t *testing.T) {
+	f := bundleFixture(t)
+	if _, err := f.assign("12", "ben", bundleOf("15", "16")); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(f.root, ".worktrees", "ben", "wip.txt"), []byte("x"), 0o644)
+	res, err := f.windDown(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcomes(res)["ben"] != OutcomeRetained {
+		t.Fatalf("outcomes %v", outcomes(res))
+	}
+	for _, id := range []string{"12", "15", "16"} {
+		if _, held := f.be.claims[id]; !held {
+			t.Errorf("%s must keep its claim: %v", id, f.be.claims)
+		}
+		if f.be.bstates[id] != "in-progress" {
+			t.Errorf("%s must stay in progress: %v", id, f.be.bstates)
+		}
+	}
+	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.Task() != "12" || len(s.Bundle()) != 2 {
 		t.Errorf("slot: %v", s)
 	}
 }

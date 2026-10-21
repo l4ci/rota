@@ -711,7 +711,7 @@ bundle and resolves to the highest depth any of its issues needs, so review each
 acceptance. The gate refuses (`blockedBy: closes`) a PR that does not close every one. A bundle
 lands or bounces as a unit: `rota round bounce` counts it on the lead and refuses a member.
 
-To drop one member, `rota round transfer <member> --to human`; closing a member also drops it.
+To drop one member, `rota round transfer <member> --to human`. Closing a member drops it too: `rota worker done` no longer wants its proof row, the gate no longer wants its `Closes` line, and the next `round assign` of the lead removes it from the slot's bundle.
 The lead cannot be transferred while members remain, not even after `round.maxBounces`: transfer the members to the human first, or return or reclaim the slot. `round return`, `round reclaim` and
 `round wind-down` release the lead and its members together. `rota round status` shows the slot
 as `1559 (+#1563, +#1564)`.
