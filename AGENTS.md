@@ -16,9 +16,7 @@ before running or joining a round. A worker reads `skills/references/worker-cont
 
 Durable learnings live in `.rota/KNOWLEDGE.md`. Consult it when work touches these topics:
 
-- Architecture: Module extraction & migration safety
 - Architecture: Helper conventions & invariants: Go verbs & fakes
-- Architecture: Helper conventions & invariants: Shell helpers
 - Architecture: Skill authoring
 - Build & Tooling: Helpers & migrations
 - Build & Tooling: Smoke testing: Sections & fixtures
