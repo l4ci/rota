@@ -7,6 +7,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // AutonomyLevelsSince is the release that split autonomy.level into off,
@@ -16,12 +17,14 @@ const AutonomyLevelsSince = "0.21.0"
 
 // AutonomyMigration is what `config fill` does to autonomy.level and
 // round.autopilot. Rewrite and LocalRewrite: auto becomes roundtrip in
-// config.json and config.local.json. LocalAutopilot: config.local.json holds
+// config.json and config.local.json. GlobalRewrite: the same in the global
+// config, gated on that file's own stamp (see migrateAutonomyGlobal). LocalAutopilot: config.local.json holds
 // round.autopilot, which fill deletes there too (config.json's copy is a
 // RemovedKeys entry). AutopilotWasOn: either file had it true, which now takes
 // autonomy.level auto.
 type AutonomyMigration struct {
 	Rewrite, LocalRewrite bool
+	GlobalRewrite         bool
 	LocalAutopilot        bool
 	AutopilotWasOn        bool
 }
@@ -35,7 +38,9 @@ func AutonomyPending(root string) AutonomyMigration {
 	if local != nil {
 		_, localAP = lookupPresent(local, []string{"round", "autopilot"})
 	}
+	global := readObject(globalConfigPath())
 	return AutonomyMigration{
+		GlobalRewrite:  autonomyStale(global) && isAuto(global),
 		Rewrite:        stale && isAuto(cfg),
 		LocalRewrite:   stale && isAuto(local),
 		LocalAutopilot: localAP,
@@ -162,6 +167,44 @@ func migrateAutonomyLocal(root string, stale bool) (bool, error) {
 			return nil
 		}
 		return fsio.WriteJSONAtomic(local, obj)
+	})
+	return rewrote, err
+}
+
+// globalConfigPath is the global config file, or "" when the config dir
+// cannot be resolved.
+func globalConfigPath() string {
+	dir, err := projects.Dir(projects.OSEnv())
+	if err != nil {
+		return ""
+	}
+	return GlobalPath(dir)
+}
+
+// migrateAutonomyGlobal is the autonomy rewrite for the global config, which
+// projects inherit autonomy.level from. It has no project stamp (rota.version is
+// project-owned, and every global read drops it), so the file gets its own: an
+// auto in a global file stamped before AutonomyLevelsSince (or not at all)
+// becomes roundtrip and the file is stamped, so a later deliberate global auto
+// survives. A missing or unreadable global is left alone.
+func migrateAutonomyGlobal() (bool, error) {
+	path := globalConfigPath()
+	if path == "" {
+		return false, nil
+	}
+	if _, err := os.Stat(path); err != nil {
+		return false, nil
+	}
+	rewrote := false
+	err := fsio.Locked(path, fsio.LockTimeout, func() error {
+		obj := readObject(path)
+		if obj == nil || !autonomyStale(obj) || !isAuto(obj) {
+			return nil
+		}
+		obj = fillKey(obj, "", []string{"autonomy", "level"}, "roundtrip")
+		obj = fillKey(obj, "", strings.Split(VersionKey, "."), AutonomyLevelsSince)
+		rewrote = true
+		return fsio.WriteJSONAtomic(path, obj)
 	})
 	return rewrote, err
 }

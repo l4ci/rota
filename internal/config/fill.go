@@ -56,8 +56,9 @@ func decodeObject(raw []byte) (*jsonx.Object, bool) {
 //
 // Last it runs the autonomy migration (#1101, AutonomyPending reports it): in a
 // config stamped before AutonomyLevelsSince, autonomy.level auto becomes
-// roundtrip in config.json and config.local.json and the stamp is raised, and
-// round.autopilot is deleted from both files.
+// roundtrip in config.json and config.local.json and the stamp is raised, an
+// auto in a global config older than its own stamp becomes roundtrip too, and
+// round.autopilot is deleted from both project files.
 func Fill(root string) ([]string, error) {
 	filled, _, _, err := FillDetect(root, nil)
 	return filled, err
@@ -121,6 +122,9 @@ func FillDetect(root string, detect func() string) ([]string, SourceMigration, R
 		return fsio.WriteJSONAtomic(path, cfg)
 	})
 	if err != nil {
+		return nil, sm, rm, err
+	}
+	if _, err := migrateAutonomyGlobal(); err != nil {
 		return nil, sm, rm, err
 	}
 	return filled, sm, rm, nil

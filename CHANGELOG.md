@@ -6,7 +6,7 @@
 
 - `autonomy.level` takes three values, `off`, `roundtrip` and `auto`, for solo skills and rounds alike (#1101). `roundtrip` runs one item from brainstorm to ship without process questions. `auto` continues with the next ready item and turns on the round autopilot. Manual gates, `ship.mergeApproval`, `/rota-decide` and the human-only calls (product behavior, public names, breaking changes, scope cuts) stop every level. `rota config check` and `rota config set` reject any other value.
 - `round.autopilot` is retired (#1101). `rota round tick` and `rota round watch --autopilot` exit 4 unless `autonomy.level` is `auto`. `rota config fill` deletes the key and, when it was `true`, points at `rota config set autonomy.level auto`.
-- One-time migration (#1101): `rota config fill` (also run by `rota init` and `rota update`) rewrites an `auto` in a config stamped older than 0.21.0 to `roundtrip` and raises the stamp, so a later `auto` stays. To roll back after downgrading, run `rota config set autonomy.level auto`; an older binary's `config check` rejects `roundtrip`.
+- One-time migration (#1101): `rota config fill` (also run by `rota init` and `rota update`) rewrites an `auto` in a config stamped older than 0.21.0 to `roundtrip` and raises the stamp, so a later `auto` stays. A global-config `auto` is rewritten the same way, under a stamp the global file keeps for itself. To roll back after downgrading, run `rota config set autonomy.level auto`; an older binary's `config check` rejects `roundtrip`.
 
 ## v0.20.0 — 2026-10-21
 
