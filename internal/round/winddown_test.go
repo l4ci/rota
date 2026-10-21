@@ -336,3 +336,82 @@ func TestWindDownRefusesOnInvalidRoundConfig(t *testing.T) {
 		t.Error("the lease must be kept")
 	}
 }
+
+func TestTierSidecarPaths(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want string
+	}{
+		{" M .rota/knowledge-tier.json\n", ".rota/knowledge-tier.json"},
+		{" M .rota/knowledge-tier.json\n M .rota/knowledge/web/knowledge-tier.json\n", ".rota/knowledge-tier.json .rota/knowledge/web/knowledge-tier.json"},
+		{" M .rota/knowledge-tier.json\n M internal/x.go\n", ""},
+		{" M internal/x.go\n", ""},
+		{"", ""},
+	} {
+		if got := strings.Join(tierSidecarPaths(c.in), " "); got != c.want {
+			t.Errorf("tierSidecarPaths(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// A single-repo project has no .rota/knowledge/: the hint names only the
+// sidecar that is dirty, so it runs as typed in bash and zsh.
+func TestRequireBaseHintNamesDirtySidecarOnly(t *testing.T) {
+	f := newAssignFixture(t)
+	rel := filepath.Join(".rota", "knowledge-tier.json")
+	abs := filepath.Join(f.root, rel)
+	if err := os.WriteFile(abs, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range [][]string{{"add", rel}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "sidecar"}} {
+		if res, err := f.env.Git(bg, f.root, a...); err != nil || res.ExitCode != 0 {
+			t.Fatalf("git %v: %v %s", a, err, res.Stderr)
+		}
+	}
+	if err := os.WriteFile(abs, []byte("{\"x\":1}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := f.env.requireBase(bg, f.root)
+	var ee *exitcode.Error
+	if !errors.As(err, &ee) || !strings.Contains(ee.Hint, "git add "+rel+" &&") || strings.Contains(ee.Hint, "*") {
+		t.Fatalf("err = %v, want a hint naming only %s with no glob", err, rel)
+	}
+}
+
+func TestWindDownWarnsOnBufferedHits(t *testing.T) {
+	f := newAssignFixture(t)
+	f.verifyWith(t, `["true"]`)
+	if err := os.WriteFile(filepath.Join(f.root, ".rota", "knowledge-hits.jsonl"), []byte("{\"topic\":\"a\",\"title\":\"b\",\"date\":\"2026-01-01\"}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.windDown(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(res.Warnings, "\n"), "rota knowledge tier fold") {
+		t.Errorf("warnings = %v, want one naming rota knowledge tier fold", res.Warnings)
+	}
+}
+
+// An umbrella sub-repo buffer needs its own fold command: the bare verb folds
+// the root scope only.
+func TestWindDownNamesFoldPerScopeBuffer(t *testing.T) {
+	f := newAssignFixture(t)
+	f.verifyWith(t, `["true"]`)
+	dir := filepath.Join(f.root, ".rota", "knowledge", "web")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hit := []byte("{\"topic\":\"a\",\"title\":\"b\",\"date\":\"2026-01-01\"}\n")
+	if err := os.WriteFile(filepath.Join(dir, "knowledge-hits.jsonl"), hit, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.windDown(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := strings.Join(res.Warnings, "\n")
+	if !strings.Contains(w, "rota --repo web knowledge tier fold") || strings.Contains(w, "`rota knowledge tier fold`") {
+		t.Errorf("warnings = %v, want only the sub-repo fold command", res.Warnings)
+	}
+}

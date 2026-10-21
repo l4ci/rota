@@ -11,7 +11,7 @@
 | `DECISIONS.md` | Hard-boundary decisions with explicit forbids/permits. Active commitments future work must respect |
 | `MILESTONES.md` | Milestone overview: one short section per milestone, with a vision intro paragraph and an active list |
 | `MAP.md` + `map/<subsystem>.md` | Project map: AI-facing narratives describing one coherent area each. Source-of-truth for the `## Project Map` block in `CLAUDE.md`. Hand-authored; `touched:` auto-bumped by cycle skills (`/rota-work`, `/rota-debug`). |
-| `knowledge-tier.json` | Sidecar for `KNOWLEDGE.md`: each bullet's tier (`provisional`, `confirmed`, `deprecated`) and hit count. Tracked. Written by `rota knowledge`; in umbrella mode each sub-repo keeps its own copy beside its scoped `KNOWLEDGE.md` |
+| `knowledge-tier.json` | Sidecar for `KNOWLEDGE.md`: each bullet's tier (`provisional`, `confirmed`, `deprecated`) and hit count. Tracked. Written by `rota knowledge` and by `rota knowledge tier fold`, which applies the buffered hits; in umbrella mode each sub-repo keeps its own copy beside its scoped `KNOWLEDGE.md` |
 | `issue-map.json` | Maps old file-backlog IDs to issue numbers. Tracked. Written by `rota migrate issues`, which resumes from it after an interrupted run; `rota round candidates` reads it |
 | `test-ledger.json` | Known-red tests the merge gate and `rota worker train` may pass over. Tracked, created by hand when the first entry is needed (a missing file means no exclusions); an expired entry fails the gate. Check it with `rota test ledger check` ([format](../usage/configuration.md)) |
 | `counters.json` | Auto-incrementing IDs for each item type |
@@ -177,6 +177,7 @@ The backlog is shared by default: state travels with the repo so collaborators s
 | `.rota/train-cache.json` | Per-developer merge train verdict cache; keyed by local shas, so tracked it would only churn |
 | `.rota/receipts.json` | Per-developer request-id receipts of the round verbs; a retry returns the first result, so it is machine-local state |
 | `.rota/workers.json` | Per-developer worker slot registry (tab handles, account config dirs, claims); machine-specific |
+| `.rota/**/knowledge-hits.jsonl` | Per-developer buffer of `rota knowledge hit`; keeps a consulted bullet from dirtying the tracked sidecar. `rota knowledge tier fold` applies it and empties it |
 | `.rota/**/*.lock` | Transient advisory lockfiles guarding sidecar read-modify-write |
 
 `rota init` writes these under a `# ── rota ──` header in your project's `.gitignore`. It also adds `.worktrees/` once: worker worktrees (worker-pool slots and parallel rounds) live in `<project>/.worktrees/<name>`, and a nested checkout must stay out of `git status`.

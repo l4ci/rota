@@ -26,6 +26,7 @@ func knowledgeCommands() *Command {
 			{Name: "get", Summary: "show one bullet's tier", Repo: true, Verb: knTierGet},
 			{Name: "set", Summary: "set one bullet's tier", Repo: true, Verb: knTierSet},
 			{Name: "list", Summary: "list tracked bullets", Repo: true, Verb: knTierList},
+			{Name: "fold", Summary: "fold buffered hits into the tracked sidecar", Repo: true, Verb: knTierFold},
 		}},
 		{Name: "contradiction", Summary: "pending-contradiction queue", Subs: []*Command{
 			{Name: "add", Summary: "queue a contradiction candidate", Verb: knContraAdd},
@@ -442,6 +443,27 @@ func knTierList(fs *flag.FlagSet) RunFunc {
 			lines = append(lines, fmt.Sprintf("%s :: %s: %s (hits=%d)", e.Topic, e.Title, e.Tier, e.Hits))
 		}
 		return Result{Data: knObj("entries", entries), Text: strings.Join(lines, "\n")}, nil
+	}
+}
+
+func knTierFold(fs *flag.FlagSet) RunFunc {
+	return func(c *Ctx, args []string) (Result, error) {
+		if err := knNoArgs(args); err != nil {
+			return Result{}, err
+		}
+		st, scope, err := knStore(c)
+		if err != nil {
+			return Result{}, err
+		}
+		res, err := st.FoldHits(scope)
+		if err != nil {
+			return knFail(err)
+		}
+		text := "no buffered hits"
+		if res.Changed {
+			text = fmt.Sprintf("folded %d hit(s) into the sidecar: commit it", res.Hits)
+		}
+		return Result{Data: knObj("hits", res.Hits, "changed", res.Changed), Text: text}, nil
 	}
 }
 

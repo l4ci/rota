@@ -53,7 +53,7 @@ The command writes:
 - `.claude/agents/rota-{explorer,implementer,reasoner}.md`, the subagent definitions workers use (`--no-blocks` skips them)
 - Managed blocks in `AGENTS.md` (`CLAUDE.md` imports it) so the orchestrator picks up project knowledge, decisions, the map, and the active milestone
 
-Most of `.rota/` is tracked by default, so the backlog and learnings travel with the repo from the first commit. Only `.rota/status.json`, `.rota/repos.json`, `.rota/config.local.json`, `.rota/handoff/`, `.rota/review/`, `.rota/qa-runs/`, `.rota/verdicts.json`, `.rota/gate-audit.jsonl`, `.rota/train-cache.json`, `.rota/workers.json`, `.rota/receipts.json`, and `.rota/**/*.lock` files are gitignored.
+Most of `.rota/` is tracked by default, so the backlog and learnings travel with the repo from the first commit. Only `.rota/status.json`, `.rota/repos.json`, `.rota/config.local.json`, `.rota/handoff/`, `.rota/review/`, `.rota/qa-runs/`, `.rota/verdicts.json`, `.rota/gate-audit.jsonl`, `.rota/train-cache.json`, `.rota/workers.json`, `.rota/receipts.json`, `.rota/**/knowledge-hits.jsonl`, and `.rota/**/*.lock` files are gitignored.
 
 ## Step 2: /rota-vision
 
