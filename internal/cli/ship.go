@@ -381,7 +381,7 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 		g := shipGitRunner{c, dir}
 		sha, ref, err := ship.MergeBranch(ship.MergePorts{
 			Git:     g,
-			Recover: land.RecoveryGit(c.Context(), git.Exec, dir),
+			Recover: land.RecoveryGit(c.Context(), c.deps().Git, dir),
 			Verdict: shipVerdict(c, dir, shipRoot(dir)).Block,
 			Approve: func() (*exitcode.Refusal, error) {
 				files := func() ([]string, error) {

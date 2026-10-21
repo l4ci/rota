@@ -13,7 +13,6 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
@@ -465,7 +464,7 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Failed("%v; run rota config check", err)
 		}
-		src := worker.ReviewSources{Policy: policy, Git: git.Exec, Dir: t.Dir, Span: t.Base + "..." + t.Branch}
+		src := worker.ReviewSources{Policy: policy, Git: c.deps().Git, Dir: t.Dir, Span: t.Base + "..." + t.Branch}
 		for _, l := range strings.Split(*labelsFlag, ",") {
 			if l = strings.TrimSpace(l); l != "" {
 				src.Labels = append(src.Labels, l)

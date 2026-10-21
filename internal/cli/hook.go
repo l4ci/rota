@@ -15,7 +15,6 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -468,7 +467,7 @@ func hookGuard(c *Ctx, args []string) (res Result, _ error) {
 		}
 	}()
 	gitOut := func(dir string, a ...string) (string, error) {
-		r, err := git.Exec(c.Context(), dir, a...)
+		r, err := c.deps().Git(c.Context(), dir, a...)
 		if err != nil {
 			return "", err
 		}

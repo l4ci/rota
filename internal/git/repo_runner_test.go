@@ -20,3 +20,19 @@ func TestRepoRunnerReceivesDirAndArgs(t *testing.T) {
 		t.Fatalf("runner saw dir=%q args=%v", gotDir, gotArgs)
 	}
 }
+
+func TestRepoRunnerReachesEveryMethod(t *testing.T) {
+	var calls int
+	r := Repo{Dir: "/x", Runner: func(context.Context, string, ...string) (Result, error) {
+		calls++
+		return Result{ExitCode: 1}, nil
+	}}
+	ctx := context.Background()
+	r.ChangedPaths(ctx, "a...b")
+	r.ChangedLines(ctx, "a...b")
+	r.RemoteBase(ctx, "main")
+	r.CommonDir(ctx)
+	if calls < 4 {
+		t.Fatalf("runner saw %d calls, want one per method at least", calls)
+	}
+}
