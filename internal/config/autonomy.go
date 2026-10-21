@@ -213,7 +213,8 @@ func GlobalAutoStale(dir string, vals map[string]any) bool {
 }
 
 // stampGlobal writes AutonomyLevelsSince to the global stamp file under dir
-// when it is stale; a current stamp is not rewritten.
+// when it is stale; a current stamp is not rewritten. The caller holds the
+// global config.json's lock, so the check and the write are one step.
 func stampGlobal(dir string) error {
 	if !globalStale(dir) {
 		return nil
@@ -228,7 +229,7 @@ func stampGlobal(dir string) error {
 // global is left alone and stays unstamped.
 func migrateAutonomyGlobal() (bool, error) {
 	dir := globalConfigDir()
-	if dir == "" || !globalStale(dir) {
+	if dir == "" {
 		return false, nil
 	}
 	path := GlobalPath(dir)
@@ -237,6 +238,9 @@ func migrateAutonomyGlobal() (bool, error) {
 	}
 	rewrote := false
 	err := fsio.Locked(path, fsio.LockTimeout, func() error {
+		if !globalStale(dir) { // a concurrent set may have stamped it since
+			return nil
+		}
 		obj := readObject(path)
 		if obj == nil {
 			return nil
