@@ -145,7 +145,7 @@ func runInit(c *Ctx, noBlocks bool) (Result, error) {
 	if !noBlocks {
 		// Ruling (#405): init writes the agent files, best effort. A foreign
 		// file or a bad role config must not fail the seed; it warns.
-		es, err := agents.Write(dir)
+		es, err := agents.Write(dir, c.deps().Config(dir))
 		if err != nil {
 			warnings = append(warnings, "agent files not written: "+err.Error())
 		}

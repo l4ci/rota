@@ -90,7 +90,7 @@ func landed(root, issue string) error {
 func bounce(env worker.Env, root, issue string, r worker.GateResult, park Park) (Outcome, error) {
 	// r.Slot echoes the gate argument, a PR number after its slot moved on; the
 	// slot the target resolved to names the ledger row.
-	set, err := roundcfg.Load(root)
+	set, err := roundcfg.FromConfig(env.WithDefaults().Config(root))
 	if err != nil {
 		return Outcome{}, err
 	}
