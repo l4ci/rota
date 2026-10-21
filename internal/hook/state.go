@@ -92,6 +92,32 @@ func Sessions(commonDir string) []State {
 	return out
 }
 
+// NewestAtRoot is the session at root with the newest time at reports. at
+// returns the RFC3339 time that ranks a session, and false to skip it: the
+// callers rank by different fields (UpdatedAt for limits, UsageHandoff.At for
+// keepalive), so a session that lacks the field must not mask an older one
+// that has it. A session whose cwd is another directory, or whose time does
+// not parse, is skipped; a tie keeps the first one read.
+func NewestAtRoot(commonDir, root string, at func(State) (string, bool)) (best State, bestAt time.Time, ok bool) {
+	for _, st := range Sessions(commonDir) {
+		if !fsio.SameDir(st.Cwd, root) {
+			continue
+		}
+		raw, use := at(st)
+		if !use {
+			continue
+		}
+		t, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			continue
+		}
+		if !ok || t.After(bestAt) {
+			best, bestAt, ok = st, t, true
+		}
+	}
+	return best, bestAt, ok
+}
+
 func writeState(path string, st State) error {
 	b, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
