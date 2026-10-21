@@ -1,6 +1,6 @@
 // Package proof holds the verification proof rows on items (rota proof add,
 // show): rows in the "## Proof" section of an item's text, which a Store
-// keeps: the item's detail file (Files) or its `proof` note (NewNotes).
+// keeps: the item's gitignored proof sidecar (Files) or its `proof` note (NewNotes).
 // Rows are facts, not acceptance.
 package proof
 

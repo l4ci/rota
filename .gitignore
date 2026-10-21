@@ -40,6 +40,7 @@ __pycache__/
 .rota/train-cache.json
 .rota/receipts.json
 .rota/**/knowledge-hits.jsonl*
+.rota/**/*.proof
 .rota/migrate-backup/
 
 # Worker worktrees (rota worker pool, parallel rounds): nested checkouts

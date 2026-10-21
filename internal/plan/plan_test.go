@@ -13,8 +13,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/l4ci/rota/internal/proof"
 )
 
 // testDay pins the clock the stubs are dated by.
@@ -355,8 +353,10 @@ func TestUncertainMatchesOldHelper(t *testing.T) {
 		b, _ := os.ReadFile(p)
 		return os.WriteFile(filepath.Join(rota, rel), b, 0o644)
 	})
-	// The recorded run did uncertain after its proof adds, so B07 has the detail file they create.
-	if _, _, err := proof.Add(proof.Files(root), root, "B07", time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), proof.AddOpts{Check: "unit  tests", Result: "PASS", Evidence: "go test ./... ok", Sha: "abc1234"}); err != nil {
+	// The recorded run did uncertain after its proof adds, so B07 has the detail file they created.
+	b07 := "# B07: Parser drops `foo`\n\n> Related TODO entry: `[B07]` in `.rota/BACKLOG.md`\n\n## Proof\n\n- 2026-01-02 · unit  tests · PASS · abc1234 · go test ./... ok\n"
+	os.MkdirAll(filepath.Join(rota, "bugs"), 0o777)
+	if err := os.WriteFile(filepath.Join(rota, "bugs", "B07.md"), []byte(b07), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	gold := filepath.Join("..", "proof", "testdata", "golden")
