@@ -65,3 +65,41 @@ func TestRoundBounceSlotMustBeInThePool(t *testing.T) {
 		t.Errorf("known slot must count, registry says %d", n)
 	}
 }
+
+// A bundle bounces once, on its lead: a member is refused before it counts.
+func TestRoundBounceBundleMember(t *testing.T) {
+	deps := testDeps()
+	dir := workerProject(t, `{}`)
+	rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+	slots := worker.LoadRegistryTolerant(dir).Slots()
+	name := slots[0].Name()
+	if _, err := worker.UpdateSlot(dir, name, func(s *worker.Slot) { s.SetTask("31"); s.SetBundle([]string{"32", "33"}) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.Update(dir, func(d *worker.Doc) {
+		d.QueuePR(worker.QueuedPR{Issue: "40", PR: "#9", From: "kit", Bundle: []string{"41"}})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ member, lead, slot string }{{"#32", "31", name}, {"41", "40", "kit"}} {
+		code, out, errOut := rotaInWith(t, deps, dir, "round", "bounce", c.member, "--json")
+		d := data(t, out)
+		if code != 4 || d["blockedBy"] != "bundle" || d["lead"] != c.lead || d["changed"] != false {
+			t.Fatalf("%s: %d %v %s", c.member, code, d, errOut)
+		}
+		if !strings.Contains(errOut, "bundled under #"+c.lead+" (slot "+c.slot+")") || !strings.Contains(errOut, "rota round bounce "+c.lead) {
+			t.Errorf("%s: %s", c.member, errOut)
+		}
+	}
+	reg := worker.LoadRegistryTolerant(dir)
+	if reg.Bounces("32") != 0 || reg.Bounces("41") != 0 {
+		t.Error("a refused member bounce counts nothing")
+	}
+	// The lead counts as for any item.
+	if code, _, _ := rotaInWith(t, deps, dir, "round", "bounce", "31", "--head", "a"); code != 0 {
+		t.Errorf("the lead bounces: %d", code)
+	}
+	if n := worker.LoadRegistryTolerant(dir).Bounces("31"); n != 1 {
+		t.Errorf("lead bounces %d", n)
+	}
+}

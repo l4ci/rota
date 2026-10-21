@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -317,6 +318,54 @@ func RemoveQueuedPR(root, ref string) error {
 	return Update(root, func(d *Doc) {
 		if q := d.queuedByRef(ref); q != nil {
 			d.dropQueued(func(o *jsonx.Object) bool { return o == q })
+		}
+	})
+}
+
+// BundleHolder finds who holds id as a bundle member (not as a lead): the slot
+// whose bundle lists it, else the queued record whose bundle does. Both are nil
+// when id is no member.
+func (r Registry) BundleHolder(id string) (*Slot, *QueuedPR) {
+	want := NormID(id)
+	has := func(ids []string) bool {
+		return want != "" && slices.ContainsFunc(ids, func(m string) bool { return NormID(m) == want })
+	}
+	for _, s := range r.Slots() {
+		if has(s.Bundle()) {
+			return s, nil
+		}
+	}
+	for _, q := range r.PRs() {
+		if has(q.Bundle) {
+			return nil, &q
+		}
+	}
+	return nil, nil
+}
+
+// DropBundleMember removes id from the bundle of the slot or queued record
+// that lists it, locked. A bundle left empty loses the field.
+func DropBundleMember(root, id string) error {
+	want := NormID(id)
+	keep := func(ids []string) []string {
+		var out []string
+		for _, m := range ids {
+			if NormID(m) != want {
+				out = append(out, m)
+			}
+		}
+		return out
+	}
+	return Update(root, func(d *Doc) {
+		for _, s := range d.Slots() {
+			if b := s.Bundle(); len(keep(b)) != len(b) {
+				s.SetBundle(keep(b))
+			}
+		}
+		for _, o := range d.queued() {
+			if b := strList(o, "bundle"); len(keep(b)) != len(b) {
+				setStrList(o, "bundle", keep(b))
+			}
 		}
 	})
 }

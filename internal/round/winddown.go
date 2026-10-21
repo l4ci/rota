@@ -165,6 +165,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		wasParked := s.Branch() == park && s.Task() == ""
 		claim := s.ClaimID()
 		issue := s.HeldID()
+		members := s.Bundle() // read before the park unbinds them
 		if !wasParked {
 			so.Issue = strutil.FirstNonEmpty(so.Issue, issue)
 		} else {
@@ -210,6 +211,11 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 			if claim != "" && issue != "" && be != nil {
 				if _, err := be.Release(issue, claim); err != nil {
 					res.Warnings = append(res.Warnings, fmt.Sprintf("release claim %s on %s: %v", claim, issue, err))
+				}
+				for _, m := range members {
+					if _, err := be.Release(m, claim); err != nil {
+						res.Warnings = append(res.Warnings, fmt.Sprintf("release claim %s on %s: %v", claim, m, err))
+					}
 				}
 			}
 		}

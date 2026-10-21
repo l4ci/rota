@@ -149,7 +149,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 			}
 		}
 		for _, r := range rep.Rows {
-			issue := dash(r.Issue)
+			issue := dash(r.Issue) + bundleSuffix(r.Bundle)
 			if r.BestOf != "" {
 				issue += " (best-of: " + r.BestOf + ")"
 			}
@@ -176,7 +176,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 			lines = append(lines, strings.Join(cols, "\t"))
 		}
 		for _, q := range rep.Queued {
-			lines = append(lines, fmt.Sprintf("review\t%s\t%s\t%s\tfrom %s", tracker.RefOf(q.Issue), dash(q.PR), dash(q.Branch), dash(q.From)))
+			lines = append(lines, fmt.Sprintf("review\t%s\t%s\t%s\tfrom %s", tracker.RefOf(q.Issue)+bundleSuffix(q.Bundle), dash(q.PR), dash(q.Branch), dash(q.From)))
 		}
 		for _, l := range escLines {
 			lines = append(lines, "escalation\t"+l)
@@ -188,6 +188,19 @@ func roundStatus(*flag.FlagSet) RunFunc {
 	}
 }
 
+// bundleSuffix is the status text after a bundle lead: ` (+#1563, +#1564)`,
+// nothing for a single issue.
+func bundleSuffix(members []string) string {
+	if len(members) == 0 {
+		return ""
+	}
+	refs := make([]string, len(members))
+	for i, m := range members {
+		refs[i] = "+" + tracker.RefOf(m)
+	}
+	return " (" + strings.Join(refs, ", ") + ")"
+}
+
 func queuedRows(qs []round.QueuedPR) []any {
 	out := make([]any, 0, len(qs))
 	for _, q := range qs {
@@ -196,6 +209,9 @@ func queuedRows(qs []round.QueuedPR) []any {
 		setIf(o, "pr", q.PR)
 		setIf(o, "branch", q.Branch)
 		setIf(o, "from", q.From)
+		if len(q.Bundle) > 0 {
+			o.Set("bundle", strs(q.Bundle))
+		}
 		out = append(out, o)
 	}
 	return out
@@ -253,6 +269,9 @@ func rowList(rows []round.Row) []any {
 		o.Set("name", r.Name)
 		setIf(o, "agent", r.Agent)
 		setIf(o, "issue", r.Issue)
+		if len(r.Bundle) > 0 {
+			o.Set("bundle", strs(r.Bundle))
+		}
 		setIf(o, "bestOf", r.BestOf)
 		o.Set("branch", r.Branch)
 		setIf(o, "pr", r.PR)
