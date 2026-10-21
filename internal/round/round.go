@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/strutil"
-	"os"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -194,6 +193,12 @@ type Row struct {
 	Burn *float64
 }
 
+// inWorktreeRoot says whether cwd is strictly inside <root>/.worktrees.
+func inWorktreeRoot(root, cwd string) bool {
+	dir := filepath.Join(root, worker.WorktreeRoot)
+	return worker.PathContains(dir, cwd) && !worker.PathContains(cwd, dir)
+}
+
 // ExternalHost is the HostState of an adopted slot: no host session runs it.
 const ExternalHost = "external"
 
@@ -202,7 +207,7 @@ const ExternalHost = "external"
 func inExternal(rows []*Row, views map[string]*view, cwd string) bool {
 	for _, r := range rows {
 		if v := views[r.Name]; r.HostState == ExternalHost && v != nil && v.worktree != "" {
-			if c := filepath.Clean(cwd); c == v.worktree || strings.HasPrefix(c, v.worktree+string(os.PathSeparator)) {
+			if worker.PathContains(v.worktree, cwd) {
 				return true
 			}
 		}
@@ -436,9 +441,8 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 	}
 	if hostOK {
-		wtDir := filepath.Join(root, ".worktrees") + string(os.PathSeparator)
 		for i, a := range agents {
-			if claimed[i] || !strings.HasPrefix(filepath.Clean(a.Cwd)+string(os.PathSeparator), wtDir) || inExternal(rows, rep.views, a.Cwd) {
+			if claimed[i] || !inWorktreeRoot(root, a.Cwd) || inExternal(rows, rep.views, a.Cwd) {
 				continue
 			}
 			name := strutil.FirstNonEmpty(a.Name, a.Tab)
@@ -778,8 +782,7 @@ func matchAgent(agents []host.Agent, slot, tab, wt string) int {
 		return -1
 	}
 	for i, a := range agents {
-		c := filepath.Clean(a.Cwd)
-		if c == wt || strings.HasPrefix(c, wt+string(os.PathSeparator)) {
+		if worker.PathContains(wt, a.Cwd) {
 			return i
 		}
 	}
@@ -793,7 +796,7 @@ func (e Env) worktrees(ctx context.Context, root string) ([]worktree, error) {
 	if err != nil || code != 0 {
 		return nil, &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git worktree list failed: " + strings.TrimSpace(errOut)}
 	}
-	dir := filepath.Join(root, ".worktrees")
+	dir := filepath.Join(root, worker.WorktreeRoot)
 	var wts []worktree
 	var cur *worktree
 	flush := func() {
