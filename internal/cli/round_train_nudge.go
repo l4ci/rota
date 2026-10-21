@@ -81,7 +81,7 @@ func trainNudges(waiting []waitingPR) []trainNudge {
 func waitingPRs(c *Ctx, root string) []waitingPR {
 	reg := worker.LoadRegistryTolerant(root)
 	vc := shipVerdict(c, root, root)
-	reviewed := func(branch string) bool {
+	reviewed := func(branch, issue string) bool {
 		if branch == "" {
 			return false
 		}
@@ -89,20 +89,46 @@ func waitingPRs(c *Ctx, root string) []waitingPR {
 		if err != nil || r.ExitCode != 0 {
 			return false
 		}
-		return len(verdict.Recorded(root, branch, strings.TrimSpace(r.Stdout))) > 0 && !trainBlocked(vc.Store, branch, vc.Settings)
+		head := strings.TrimSpace(r.Stdout)
+		if bh := reg.BounceHead(issue); issue != "" && bh != "" && head != "" && (strings.HasPrefix(head, bh) || strings.HasPrefix(bh, head)) {
+			return false // sent back and not yet pushed to
+		}
+		return len(verdict.Recorded(root, branch, head)) > 0 && !trainBlocked(vc.Store, branch, vc.Settings)
 	}
 	var out []waitingPR
 	for _, s := range reg.Slots() {
 		if s.PR() != "" && strings.EqualFold(s.State(), "done") {
-			out = append(out, waitingPR{PR: s.PR(), Base: s.Base(), Reviewed: reviewed(s.Branch())})
+			out = append(out, waitingPR{PR: s.PR(), Base: s.Base(), Reviewed: reviewed(s.Branch(), s.Issue())})
 		}
 	}
 	for _, q := range reg.PRs() {
 		if q.PR != "" {
-			out = append(out, waitingPR{PR: q.PR, Base: q.Base, Reviewed: reviewed(q.Branch)})
+			out = append(out, waitingPR{PR: q.PR, Base: q.Base, Reviewed: reviewed(q.Branch, q.Issue)})
 		}
 	}
-	return fillDefaultBase(out, defaultBase(c, root))
+	return fillDefaultBase(openOnly(c, root, out), defaultBase(c, root))
+}
+
+// openOnly drops the PRs the forge no longer lists as open: gate and train
+// merge a PR without clearing its registry row at once. A forge that cannot
+// answer (or a PR number that does not parse) keeps the row, since the nudge is
+// advice and a stale name beats a missing one.
+func openOnly(c *Ctx, root string, waiting []waitingPR) []waitingPR {
+	if len(waiting) == 0 {
+		return waiting
+	}
+	open, ok := c.deps().workerEnv().OpenPRNumbers(c.Context(), root)
+	if !ok {
+		return waiting
+	}
+	var out []waitingPR
+	for _, w := range waiting {
+		if n, parsed := worker.PRRefNumber(w.PR); parsed && !open[n] {
+			continue
+		}
+		out = append(out, w)
+	}
+	return out
 }
 
 // defaultBase is the base a PR with no recorded base merges into, "" when it
@@ -131,11 +157,16 @@ func fillDefaultBase(waiting []waitingPR, def string) []waitingPR {
 }
 
 // trainBlocked is true when the branch's recorded verdicts would block the
-// gate: a FAIL (review or second opinion) keeps the PR out of a nudged train,
-// CONCERNS and PASS let it in.
+// gate or bounce the PR: a FAIL (review or second opinion) or a review with a
+// blocking finding keeps it out of a nudged train, a clean CONCERNS and PASS
+// let it in.
 func trainBlocked(store verdict.Store, branch string, s verdict.Settings) bool {
-	_, blocked := verdict.Blocking(store.Branches[verdict.BranchKey("", branch)], s)
-	return blocked
+	list := store.Branches[verdict.BranchKey("", branch)]
+	if _, blocked := verdict.Blocking(list, s); blocked {
+		return true
+	}
+	r, ok := verdict.EffectiveReview(list)
+	return ok && r.Failing()
 }
 
 // trainNudgeData is the nudges as the `trainNudge` JSON array, nil when none.
