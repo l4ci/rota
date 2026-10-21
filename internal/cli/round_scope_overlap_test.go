@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/rotastate"
@@ -23,6 +24,14 @@ type scopeFx struct {
 	root string
 	deps *Deps
 	git  []string // git calls, in order
+}
+
+// autopilotOn sets autonomy.level auto, which turns the round tick on.
+func autopilotOn(t *testing.T, root string) {
+	t.Helper()
+	if _, err := config.Set(root, "autonomy.level", "auto"); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func newScopeFx(t *testing.T, overlap string, extraCfg string) *scopeFx {
@@ -211,7 +220,8 @@ func TestRoundAssignWarnsEachScopeOverlap(t *testing.T) {
 // An autopilot assign under warn goes ahead despite a scope clash, and says
 // which item it overlaps; under block the tick leaves #2 unassigned.
 func TestRoundTickWarnsEachScopeOverlap(t *testing.T) {
-	f := newScopeFx(t, "warn", `,"autopilot":true`)
+	f := newScopeFx(t, "warn", "")
+	autopilotOn(t, f.root)
 	code, out, errOut := rotaInWith(t, f.deps, f.root, "--json", "round", "tick", "--holder-pid", "4242")
 	if code != 0 || !strings.Contains(out, `"action": "assign", "target": "2"`) {
 		t.Fatalf("tick should assign #2 under warn: %d %s %s", code, out, errOut)
@@ -233,7 +243,8 @@ func TestRoundTickWarnsEachScopeOverlap(t *testing.T) {
 // round_tick.go fails this test.
 func TestRoundTickBlocksScopeOverlap(t *testing.T) {
 	attempts := func(overlap string) int {
-		f := newScopeFx(t, overlap, `,"autopilot":true`)
+		f := newScopeFx(t, overlap, "")
+		autopilotOn(t, f.root)
 		code, out, errOut := rotaInWith(t, f.deps, f.root, "--json", "round", "tick", "--holder-pid", "4242")
 		if code != 0 {
 			t.Fatalf("tick exit %d: %s %s", code, out, errOut)

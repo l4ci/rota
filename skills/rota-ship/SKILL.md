@@ -26,6 +26,7 @@ Copy this checklist and track your progress:
 - [ ] Step 8.6 — Docs After-Work (inline)
 - [ ] Step 9 — Report to User
 - [ ] Step 9.5 — Release Nudge
+- [ ] Step 9.7 — After the Ship
 ```
 
 ## Step 0 — Mode Dispatch
@@ -40,7 +41,7 @@ Read `.rota/config.json` (`rota config show`):
 
 - `work.mergeStrategy`: `"pr"` or `"direct"`; unset means ask (Step 5)
 - `ship.review`: review depth, `full` (default), `light` or `none`, or a policy object that picks one by diff size, label and path, and lifts it to `full` on a `Door: one-way` PR or a diff outside the issue's declared files; `true` and `false` still mean `full` and `none`
-- `autonomy.level`: `"off"` (default), `"auto"`: whether Step 8.5 nudges or invokes directly
+- `autonomy.level`: `"off"` (default), `"roundtrip"`, `"auto"` ([`references/autonomy.md`](references/autonomy.md)): whether Step 8.5 nudges or invokes directly, and whether Step 9.7 stops or runs the next item
 
 `ship.secondOpinion`, `ship.qa` and `ship.uat` are read by [`opt-in-gates.md`](opt-in-gates.md); `docs.path`, `docs.afterWork` and `docs.autoCreate` by [`/rota-docs`](../rota-docs/SKILL.md).
 
@@ -156,7 +157,7 @@ Already-completed IDs are a no-op; an unknown ID exits 3. When it exits 4 with `
 Round workers skip Steps 8.5 and 8.6 (`round-worker-and-issue-mode.md`). Otherwise run `references/post-cycle-trigger-gate.md` with:
 
 - **Nudge (`"off"`):** append to the Step 9 report *"Capture learnings before context fades? Run `/rota-learn` — this cycle has the fresh session context."*
-- **Target (`"auto"`):** dispatch `rota-learn` by reading and following its instructions immediately, no prompt.
+- **Target (`"roundtrip"` or `"auto"`):** dispatch `rota-learn` by reading and following its instructions immediately, no prompt.
 - **Brief:** the resolved IDs and touched files.
 
 ## Step 8.6 — Docs After-Work (inline)
@@ -178,6 +179,10 @@ or `Merged `rota/demo` into main — commit a1b2c3d` plus the `Resolved:` line. 
 ## Step 9.5 — Release Nudge
 
 After a successful ship (PR or merge): `rota release pending --json`. If `shouldNudge` is false or `lastTag` is empty (the first release is the user's call), say nothing. Otherwise append `data.message` to the report as one line after `Resolved:`.
+
+## Step 9.7 — After the Ship
+
+Round workers skip this step. Read `autonomy.level` ([`references/autonomy.md`](references/autonomy.md)). `"off"`: stop after the report. `"roundtrip"`: stop; add one line naming the next ready item as a suggestion (`/rota-work` with no argument shows it). `"auto"`: run `/rota-work` with no argument for the next ready item, by reading and following its instructions immediately: no prompt, no confirmation, no "want me to" question. Stop and name why when no ready item is left or a stop in the reference is reached. The manual gates above (`pr-open`, `issue-close`) still ask at every level; a gate the user declined means nothing shipped, so stop there.
 
 ## Undo Mode (--undo)
 
@@ -213,6 +218,7 @@ When `--docs` is present, print the deprecation line from Step 0, then run `/rot
 - [`round-worker-and-issue-mode.md`](round-worker-and-issue-mode.md) — round worker skips, issue backend and umbrella branches.
 - [`direct-merge.md`](direct-merge.md) — Steps 6b and 6c.
 - [`proof-missing.md`](proof-missing.md) — Step 8 proof-missing handling.
+- [`references/autonomy.md`](references/autonomy.md) — what each `autonomy.level` chains and where a run stops.
 - [`references/authoring-conventions.md`](references/authoring-conventions.md) — skill authoring rules.
 - [`references/docs-conventions.md`](references/docs-conventions.md) — docs page layout and naming.
 - [`references/humanizing-prose.md`](references/humanizing-prose.md) — self-audit for the PR body.

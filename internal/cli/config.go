@@ -286,6 +286,10 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		removed := config.Removed(root)
 		data.Set("removed", anySlice(removed))
 		res := Result{Data: data, Text: token}
+		if config.AutonomyPending(root).LocalAutopilot {
+			removed = append(removed, "round.autopilot (config.local.json)")
+			data.Set("removed", anySlice(removed))
+		}
 		if len(removed) > 0 {
 			res.Text += "\nREMOVED: " + strings.Join(removed, ", ") + " (nothing reads them; run: rota config fill)"
 		}
@@ -336,6 +340,10 @@ func configFill(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		removed := config.Removed(root)
+		am := config.AutonomyPending(root)
+		if am.LocalAutopilot {
+			removed = append(removed, "round.autopilot (config.local.json)")
+		}
 		// Same condition as `config check`: STALE with an unreadable global.
 		var corrupt error
 		if status, _ := config.Check(root); status == config.Stale {
@@ -352,44 +360,70 @@ func configFill(fs *flag.FlagSet) RunFunc {
 		} else if corrupt != nil {
 			text = "nothing filled. " + globalCorruptLine(corrupt)
 		}
-		if len(removed) > 0 {
+		add := func(line string) {
 			if text == upToDate {
-				text = ""
+				text = line
 			} else {
-				text += "\n"
+				text += "\n" + line
 			}
-			text += "removed: " + strings.Join(removed, ", ")
 		}
-		data := jsonObj("filled", anySlice(filled), "removed", anySlice(removed), "changed", len(filled) > 0 || len(removed) > 0 || sm.Changed || rm.Changed())
+		if len(removed) > 0 {
+			add("removed: " + strings.Join(removed, ", "))
+		}
+		rewrote := am.Rewrite || am.LocalRewrite || am.GlobalRewrite
+		data := jsonObj("filled", anySlice(filled), "removed", anySlice(removed), "changed", len(filled) > 0 || len(removed) > 0 || sm.Changed || rm.Changed() || rewrote)
+		data.Set("autonomy", jsonObj("rewrote", rewrote, "autopilotWasOn", am.AutopilotWasOn))
+		for _, line := range autonomyLines(am) {
+			add(line)
+		}
 		if rm.Changed() {
 			data.Set("renamed", jsonObj("config", renameList(rm.Config), "local", renameList(rm.Local)))
-			if text == upToDate {
-				text = ""
-			} else {
-				text += "\n"
-			}
 			var moved []string
 			for _, r := range append(append([]config.Rename{}, rm.Config...), rm.Local...) {
 				moved = append(moved, r.Old+" -> "+r.New)
 			}
-			text += "renamed: " + strings.Join(moved, ", ")
+			add("renamed: " + strings.Join(moved, ", "))
 		}
 		if sm.Changed {
 			data.Set("migrated", jsonObj("source", sm.Source, "forge", sm.Forge, "removed", anySlice(sm.Removed)))
-			if text == upToDate {
-				text = ""
-			} else {
-				text += "\n"
-			}
-			text += "migrated: " + strings.Join(sm.Removed, ", ") + " -> issues.source " + sm.Source
+			line := "migrated: " + strings.Join(sm.Removed, ", ") + " -> issues.source " + sm.Source
 			if sm.Forge != "" {
-				text += ", forge.provider " + sm.Forge
+				line += ", forge.provider " + sm.Forge
 			}
+			add(line)
 		} else if sm.Unresolved {
 			c.Warn("backlog.backend is issues and issues.provider is auto, but the origin remote names neither github nor gitlab: set issues.source by hand")
 		}
 		return Result{Data: data, Text: text}, nil
 	}
+}
+
+// autonomyLines are what `config fill` and `rota init` say about the autonomy
+// migration (#1101): an old one-hop auto rewritten to roundtrip, and a
+// round.autopilot true that no longer turns anything on by itself.
+func autonomyLines(am config.AutonomyMigration) []string {
+	var out []string
+	if am.Rewrite || am.LocalRewrite || am.GlobalRewrite {
+		var files []string
+		if am.Rewrite {
+			files = append(files, "config.json")
+		}
+		if am.LocalRewrite {
+			files = append(files, "config.local.json")
+		}
+		if am.GlobalRewrite {
+			files = append(files, "the global config")
+		}
+		set := "rota config set autonomy.level auto"
+		if am.GlobalRewrite {
+			set += ", with --global for the global config"
+		}
+		out = append(out, "rewrote: autonomy.level auto -> roundtrip in "+strings.Join(files, " and ")+" (auto used to mean one hop; it now keeps taking the next ready item: "+set+")")
+	}
+	if am.AutopilotWasOn {
+		out = append(out, "round.autopilot was true and is removed: the round autopilot now runs only under autonomy.level auto (rota config set autonomy.level auto)")
+	}
+	return out
 }
 
 // ---- repo ------------------------------------------------------------------------

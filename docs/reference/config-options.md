@@ -21,7 +21,7 @@ The "(Recommended)" tag on each option marks the default `rota init` writes.
 | `rota config show <key>` | Prints one key. |
 | `rota config set <key> <value>` | Writes `.rota/config.json` (never `.rota/config.local.json`) and prints `key = value`. |
 
-Values for list and object keys are JSON (`rota config set round.accounts '[...]'`). A key outside the schema exits 2 and nothing is written. The value is not checked against the allowed values on write; `rota config check` only flags a missing key, retired values such as `autonomy.level: "loop"`, and a legacy `refactor.verifyCommands` that still holds commands while `test.full` is empty.
+Values for list and object keys are JSON (`rota config set round.accounts '[...]'`). A key outside the schema exits 2 and nothing is written. The value is not checked against the allowed values on write, except for the strict enums (`autonomy.level`, `work.contextGuard`, `plan.criticHarness`); `rota config check` only flags a missing key, an `autonomy.level` outside `off`, `roundtrip` and `auto`, and a legacy `refactor.verifyCommands` that still holds commands while `test.full` is empty.
 
 ## Q1: Models
 
@@ -79,9 +79,10 @@ Values for list and object keys are JSON (`rota config set round.accounts '[...]
 | Label | Description |
 |-------|-------------|
 | Off (Recommended) | Skills nudge with a one-line suggestion at decision points. You stay in the driver's seat. |
-| Auto chain | One-hop chaining: `/rota-ship` → `/rota-learn` when the cycle is big enough to warrant it. Stops after the chained step. |
+| Roundtrip | One item start to finish: brainstorm (when the planning dial calls for it), plan, work, review and ship chain with no process questions, then stop. |
+| Auto | Keeps taking the next ready item after each ship, and a round runs the autopilot tick. Stops only for a human-reserved decision, no recommendation, no ready item or a session limit. |
 
-`autonomy.level: "loop"` was removed; `rota config check` fails on it (rounds and automatic reviews cover unattended work).
+Manual gates and `ship.mergeApproval` hold at every level. `autonomy.level: "loop"` was removed; `rota config check` fails on it and on any value other than `off`, `roundtrip` and `auto`. Before 0.21.0, `auto` meant one-hop chaining: `rota config fill` rewrites an `auto` in a config stamped older than 0.21.0 (and in a global config whose `config.version` stamp file is missing or older) to `roundtrip` once (see [Removed keys](#removed-keys) for `round.autopilot`). See [Autonomy](../usage/autonomy.md).
 
 ## Mapping table: options to config values
 
@@ -101,7 +102,8 @@ Each Q1–Q5 option maps to a single `key.path: value` in `.rota/config.json`:
 | Q4 includes "Verify learnings" | `learn.verify: true` (else `false`) |
 | Q4 includes "Confirm before refactor" | `refactor.confirmBeforeExecute: true` (else `false`) |
 | Q5 Off | `autonomy.level: "off"` |
-| Q5 Auto chain | `autonomy.level: "auto"` |
+| Q5 Roundtrip | `autonomy.level: "roundtrip"` |
+| Q5 Auto | `autonomy.level: "auto"` |
 
 ## Keys
 
@@ -158,7 +160,6 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `round.architectureAreas` | list | `[]` |  | Rounds: Areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review. |
 | `round.architectureIdleMinItems` | int | `5` |  | Rounds: Closed non-refactor items since the last review before an idle slot with no ready candidate (queue-empty) triggers one. 0 drops the condition. A slate round never fires queue-empty. |
 | `round.architectureIdleMinHours` | int | `24` |  | Rounds: Hours since the last review before the queue-empty trigger may fire again. 0 drops the condition. Applies only where a review time is recorded (issue mode); file mode records none, so the floor never holds a review back there. |
-| `round.autopilot` | bool | `false` |  | Rounds: Lets rota round watch --autopilot and rota round tick assign, gate and merge mechanically. Merges only under ship.mergeApproval none. |
 | `round.autopilotCap` | int | `3` |  | Rounds: Most assigns, and most merges, one autopilot tick does. 0 means the default. |
 | `round.batch` | int | `0` |  | Rounds: Most items a round may have assigned and not yet landed or parked at once. rota round assign refuses the next one past it and rota round tick assigns none. 0 means no limit. |
 | `round.reviewLoop` | enum | `"manual"` | `manual`, `auto` | Rounds: What happens when a reviewer comments on a finished worker's PR. manual reports it and leaves rota round review-relay to the orchestrator; auto relays it to the worker as a counted bounce (round.maxBounces) from rota round watch and rota round tick. |
@@ -208,7 +209,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 
 | Key | Type | Default | Values | Description |
 |-----|------|---------|--------|-------------|
-| `autonomy.level` | enum | `"off"` | `off`, `auto` | How much rota chains on its own. off: skills suggest the next step. auto: chain one hop, then stop. The old loop value was removed. |
+| `autonomy.level` | enum | `"off"` | `off`, `roundtrip`, `auto` | How much rota chains on its own, in solo skills and rounds. off: skills suggest the next step and stop. roundtrip: one item runs brainstorm to ship with no process questions, then stops. auto: keeps taking the next ready item, and a round runs the autopilot tick; it stops only for a human-reserved decision, no recommendation, no ready item or a session limit. Manual gates and ship.mergeApproval hold at every level. |
 
 ### docs
 
@@ -269,7 +270,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | Key | Type | Default | Values | Description |
 |-----|------|---------|--------|-------------|
 | `release.checklistPath` | path | `".rota/RELEASE.md"` |  | Project's release checklist, whose open items /rota-release walks before it tags. |
-| `release.confirmLargePushCommits` | int | `10` |  | Unpushed commits /rota-release pushes without asking under autonomy.level auto. At or above this it asks once. |
+| `release.confirmLargePushCommits` | int | `10` |  | Unpushed commits /rota-release pushes without asking under autonomy.level roundtrip or auto. At or above this it asks once. |
 | `release.nudgeAfterCommits` | int | `10` |  | Commits since the last release tag before rota release pending suggests /rota-release. |
 | `release.nudgeAfterDays` | int | `14` |  | Days since the last release tag before rota release pending suggests /rota-release. |
 | `release.versionFile` | path | unset |  | Project-relative file /rota-release and rota release version read and bump. Empty auto-detects; a path outside the project is refused. |
@@ -371,7 +372,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 
 ## Removed keys
 
-`issues.filterMineOnly`, `issues.providers.github` and `issues.providers.gitlab` were seeded by older `rota init` runs but nothing ever read them (use `issues.source` and `forge.provider`). `rota config check` lists any still in `.rota/config.json` as `removed` with a hint and does not fail on them; `rota config fill` deletes them. `rota config set` refuses them as unknown keys.
+`issues.filterMineOnly`, `issues.providers.github` and `issues.providers.gitlab` were seeded by older `rota init` runs but nothing ever read them (use `issues.source` and `forge.provider`). `round.autopilot` was retired in 0.21.0: `autonomy.level: "auto"` turns the round autopilot on, and `rota config fill` deletes the key from `.rota/config.json` and `.rota/config.local.json`, saying so when it was `true`. `rota config check` lists any still in `.rota/config.json` as `removed` with a hint and does not fail on them; `rota config fill` deletes them. `rota config set` refuses them as unknown keys.
 
 ## Legacy keys
 
@@ -380,7 +381,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 ## Validation rules
 
 - **`rota config set`** checks only that the key is in the schema. It accepts any value (JSON when it parses, else the string) and checks no enum or range.
-- **Enums without a reader check.** `models.*` (`opus`, `sonnet` or `haiku`), `work.isolation` (`branch` or `worktree`), `work.mergeStrategy` (`direct` or `pr`) and `autonomy.level` (`off` or `auto`) are not validated by any verb. The skills and the launch command read them as plain strings, so a bad value surfaces as that skill's or the model's failure. `rota config check` only reports a missing key, the removed `autonomy.level` `"loop"`, or a `refactor.verifyCommands` that still holds commands `test.full` lacks (run `rota config fill` to move them).
+- **Enums without a reader check.** `models.*` (`opus`, `sonnet` or `haiku`), `work.isolation` (`branch` or `worktree`) and `work.mergeStrategy` (`direct` or `pr`) are not validated by any verb. The skills and the launch command read them as plain strings, so a bad value surfaces as that skill's or the model's failure. `rota config check` only reports a missing key, an `autonomy.level` that is not `off`, `roundtrip` or `auto`, or a `refactor.verifyCommands` that still holds commands `test.full` lacks (run `rota config fill` to move them).
 - **Checked where a verb reads them.** A bad value exits 70 (`rota round` verbs for the `round.*` keys, `rota keepalive` and `rota limit` for the `orchestrator.*` keepalive and switch keys and the `limits.*` keys, and any verb that reads `issues.source` or `forge.provider`). The checks are these: booleans take `true` or `false`; integers must be in the minimum-to-maximum range stated in the key's description; `round.scope` and `limits.mode` take their listed enums; `round.roster` entries are unique lowercase names. `ship.mergeApproval` is also checked at read time, but a bad value there exits 2.
 
 For the full per-key behavior (defaults, value semantics, and how each setting affects skill execution), see [`usage/configuration.md`](../usage/configuration.md).

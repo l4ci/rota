@@ -30,7 +30,7 @@ Rules for authoring new rota skills or new behavior in existing ones. Consult th
 
 Each skill owns its rules inline. A shared contract file is a smell when every rule has a single owner: audit the cross-refs, and if each rule is already mirrored at its call site, the central file is vestigial pointer-chasing. Build one only when N≥3 callers need the same long rule verbatim.
 
-Steps that branch on `autonomy.level` (off/auto) and dispatch the next skill by reading and following its instructions ("no prompt, no confirmation, no 'want me to' question") repeat that directive verbatim beside each skill invocation. Readers don't chase cross-refs, and the harness drifts toward asking when only the rule's name is at the dispatch site. Redundancy is cheaper than scattered authority.
+Steps that branch on `autonomy.level` (off/roundtrip/auto, see [`references/autonomy.md`](autonomy.md)) and dispatch the next skill by reading and following its instructions ("no prompt, no confirmation, no 'want me to' question") repeat that directive verbatim beside each skill invocation. Readers don't chase cross-refs, and the harness drifts toward asking when only the rule's name is at the dispatch site. Redundancy is cheaper than scattered authority.
 
 ## Don't ask what the code can answer
 

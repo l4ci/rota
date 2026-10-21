@@ -184,11 +184,11 @@ func TestAutopilotKeys(t *testing.T) {
 	if err != nil || s.Autopilot || s.AutopilotCap != 3 {
 		t.Fatalf("defaults: %+v %v", s, err)
 	}
-	s, err = Load(project(t, `{"round":{"autopilot":true,"autopilotCap":1}}`))
+	s, err = Load(project(t, `{"autonomy":{"level":"auto"},"round":{"autopilotCap":1}}`))
 	if err != nil || !s.Autopilot || s.AutopilotCap != 1 {
 		t.Fatalf("overrides: %+v %v", s, err)
 	}
-	for _, bad := range []string{`{"round":{"autopilot":"yes"}}`, `{"round":{"autopilotCap":-1}}`} {
+	for _, bad := range []string{`{"round":{"autopilotCap":-1}}`} {
 		if _, err := Load(project(t, bad)); err == nil {
 			t.Errorf("%s should be refused", bad)
 		}
@@ -405,6 +405,25 @@ func TestFullOnly(t *testing.T) {
 		}
 		if s.FullOnly != want {
 			t.Errorf("%s: FullOnly = %v, want %v", cfg, s.FullOnly, want)
+		}
+	}
+}
+
+// The autopilot follows autonomy.level auto; round.autopilot is no longer
+// read, and a leftover value of any type does not break the load.
+func TestAutopilotFollowsAutonomy(t *testing.T) {
+	for cfg, want := range map[string]bool{
+		``:                                     false,
+		`{"autonomy":{"level":"off"}}`:         false,
+		`{"autonomy":{"level":"roundtrip"}}`:   false,
+		`{"autonomy":{"level":"auto"}}`:        true,
+		`{"round":{"autopilot":true}}`:         false,
+		`{"round":{"autopilot":"yes please"}}`: false,
+		`{"autonomy":{"level":"auto"},"round":{"autopilot":false}}`: true,
+	} {
+		s, err := Load(project(t, cfg))
+		if err != nil || s.Autopilot != want {
+			t.Errorf("%s: Autopilot %v, err %v, want %v", cfg, s.Autopilot, err, want)
 		}
 	}
 }

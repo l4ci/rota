@@ -1,6 +1,6 @@
 # Manual gates
 
-Certain operations are **manual gates**: no `autonomy.level` (`"off"` or `"auto"`) may pass them on its own. They produce externally-visible state or commit the project to a hard boundary. Auto mode chains routing steps (one hop toward done) but never answers an acceptance-of-risk question.
+Certain operations are **manual gates**: no `autonomy.level` (`"off"`, `"roundtrip"` or `"auto"`, see [`references/autonomy.md`](autonomy.md)) may pass them on its own. They produce externally-visible state or commit the project to a hard boundary. The `roundtrip` and `auto` levels chain routing steps but never pass a gate or answer an acceptance-of-risk question.
 
 The registry lives in code. `rota gate list` prints every gate, whether a verb enforces it, the verbs and skills involved, and the state it creates. There are two kinds.
 

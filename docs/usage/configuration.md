@@ -468,8 +468,7 @@ Settings for `rota round` (parallel rounds; see [the rounds guide](parallel-roun
 | `round.architectureIdleMinItems` | `5` | Closed non-refactor items since the last review the queue-empty trigger needs; `0` drops the condition. A slate round never fires queue-empty. |
 | `round.architectureIdleMinHours` | `24` | Hours since the last review before queue-empty may fire again; `0` drops the condition. The floor applies only where a review time is recorded (issue mode); in file mode there is none, so it never holds a review back. A first look that seeds the review time starts the clock at that moment. |
 | `round.architectureAreas` | `[]` | The areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review. |
-| `round.autopilot` | `false` | Lets `rota round watch --autopilot` and `rota round tick` assign ready items to idle slots, gate and merge finished PRs and repair safe drift, so the orchestrator spends judgment on what is left. Merges only under `ship.mergeApproval: none`. See [Autopilot](parallel-rounds.md#autopilot). |
-| `round.autopilotCap` | `3` | The most assigns, and the most merges, one autopilot tick does. `0` means the default. |
+| `round.autopilotCap` | `3` | The most assigns, and the most merges, one autopilot tick does. `0` means the default. The autopilot runs only under `autonomy.level: auto`; see [Autopilot](parallel-rounds.md#autopilot). |
 | `round.batch` | `0` | The most items a round may have assigned and not yet merged, closed or parked at once. `rota round assign` refuses the next one (exit 4, `blockedBy: batch`; `--accept-batch` overrides one call) and `rota round tick` assigns none (`batchFull`). `0` means no limit. See [Batch](parallel-rounds.md#assigning-an-issue). |
 | `round.freshAt` | `2` | The bounce at which `rota round review-relay` stops resuming the worker and instead runs `round transfer` to a free slot at the same tier, with a brief of the findings still NOT ADDRESSED in the last review plus the review link (no relay history). The transfer counts as that bounce and is ledgered with `--cap-reason fresh`. With no free slot, no open findings or a refused transfer the relay goes to the same worker and says why. Only acts below `round.maxBounces`. `0` turns it off. |
 | `round.reviewLoop` | `"manual"` | What happens when a reviewer comments on a finished worker's PR. `manual` reports it (`review/<slot>` change in `rota round watch`, a `review` item in `rota round tick`) and leaves `rota round review-relay <slot>` to the orchestrator. `auto` relays it to the worker as a counted bounce from `round watch` and `round tick`; at `round.maxBounces` it escalates on the PR instead. See [Review loop](parallel-rounds.md#review-loop). |
@@ -482,7 +481,7 @@ Settings for `rota round` (parallel rounds; see [the rounds guide](parallel-roun
 
 A custom `round.workerCommand` receives the tier's model only through a `{model}` placeholder in the command; without one, `rota round assign` warns and records the tier but not a model. `round.codexCommand` and `round.opencodeCommand` work the same way for Codex and OpenCode workers.
 
-`round.scope` is a different axis from `autonomy.level`: the level says how far skills chain on their own, the scope says which issues a round may take. Set with `rota config set round.scope slate`.
+`autonomy.level: auto` turns on the round autopilot; `round.scope` says which issues a round may take. Set with `rota config set round.scope slate`.
 
 ## Moving old `work.*` names to `round.*`
 
@@ -617,7 +616,7 @@ Skip turning this on until you have stable strategies and want continuous covera
 
 ## autonomy.level
 
-Controls whether skills nudge or invoke the next skill directly. Two levels: `"off"` (default), `"auto"`. `"loop"` was removed; `rota config check` flags it. See [autonomy levels](autonomy.md) for the full breakdown: when each level fires, what gates still apply, and how to pick.
+Controls how far a run goes before it stops. Three levels: `"off"` (default), `"roundtrip"`, `"auto"`. `"auto"` also turns on the round autopilot. `"loop"` was removed; `rota config check` fails on it and on any other value. See [autonomy levels](autonomy.md) for the full breakdown: when each level fires, what gates still apply, and how to pick.
 
 ## docs.path
 
@@ -776,7 +775,7 @@ Outside a project, rota follows the XDG Base Directory spec. An `XDG_*` variable
 
 | Kind | Location | Holds |
 |---|---|---|
-| Config | `$XDG_CONFIG_HOME/rota`, default `~/.config/rota` | `config.json` (the global config layer) and `connections.json` |
+| Config | `$XDG_CONFIG_HOME/rota`, default `~/.config/rota` | `config.json` (the global config layer), its `config.version` stamp and `connections.json` |
 | State | `$XDG_STATE_HOME/rota`, default `~/.local/state/rota` | `projects.json` (the project registry) and its lock. `rota doctor` prints the path. |
 | Cache | `$XDG_CACHE_HOME/rota/skills` (the OS user cache dir) | the extracted embedded skills |
 | Data | `$XDG_DATA_HOME/rota`, default `~/.local/share/rota` | the secrets fallback file (`secrets.json`), in a `0700` dir |

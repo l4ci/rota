@@ -44,6 +44,11 @@ func SaveGlobal(root, dir string) ([]string, error) {
 			vals[k.Name] = v
 		}
 	}
+	// An auto from a project stamped before the split is one-hop: copy it as
+	// roundtrip, since MergeGlobal stamps the global as current (#1101).
+	if vals["autonomy.level"] == "auto" && autonomyStale(cfg) {
+		vals["autonomy.level"] = "roundtrip"
+	}
 	return MergeGlobal(dir, vals)
 }
 
@@ -95,6 +100,10 @@ func MergeGlobal(dir string, vals map[string]any) ([]string, error) {
 		}
 		return cfg, nil
 	})
+	if _, ok := vals["autonomy.level"]; ok && err == nil {
+		// A post-split value: stamp the global so fill keeps it (#1101).
+		err = stampGlobal(dir)
+	}
 	return saved, err
 }
 
@@ -143,7 +152,12 @@ func SetGlobal(dir, key, raw string) (SetResult, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return SetResult{}, err
 	}
-	return setAt(GlobalPath(dir), ErrGlobalNotObject, key, raw, fsio.UpdateJSONStrict)
+	res, err := setAt(GlobalPath(dir), ErrGlobalNotObject, key, raw, fsio.UpdateJSONStrict)
+	if err == nil && key == "autonomy.level" {
+		// A post-split value: stamp the global so fill keeps it (#1101).
+		err = stampGlobal(dir)
+	}
+	return res, err
 }
 
 // UnsetGlobal removes key from the global config under dir, so projects fall

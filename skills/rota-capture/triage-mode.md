@@ -35,7 +35,7 @@ A reproduce is bounded: stop at the first answer, never investigate the cause.
 
 ### Step T5 — Outcome
 
-> **Manual gate — comment, label and close on another reporter's issue.** Posting a comment, adding `needs-info` and closing are externally visible on a tracker issue someone else filed. This step is **always manual** — never auto-invoked, regardless of `autonomy.level`.
+> **Manual gate — comment, label and close on another reporter's issue.** Posting a comment, adding `needs-info` and closing are externally visible on a tracker issue someone else filed. This step is **always manual** — never auto-invoked, regardless of `autonomy.level` (see [`references/autonomy.md`](references/autonomy.md)).
 
 Pick one, then show the findings from T2 to T4 and the chosen outcome before acting. One question per issue, option 1 marked `(Recommended)`:
 
