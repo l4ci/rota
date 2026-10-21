@@ -16,6 +16,7 @@ import json
 import os
 import re
 import sys
+import urllib.parse
 
 # hashlib, subprocess and datetime load on first use: a fake runs thousands of times per
 # smoke run, and each import costs 5 to 18 ms of interpreter start (#84).
@@ -567,6 +568,24 @@ def gh_api(db, args):
               "labels": [{"name": n} for n in i["labels"]],
               "milestone": {"title": i["milestone"][0], "number": i["milestone"][1]} if i["milestone"] else None,
               "state": i["state"]})
+    elif re.match(r"^issues/\d+/labels$", rest) and method == "POST":
+        i = find_issue(db, rest.split("/")[1])
+        f = opts.get("input")
+        body = json.loads(sys.stdin.read() if f and f[-1] == "-" else open(f[-1]).read())
+        gh_check_labels(db, body["labels"])
+        for n in body["labels"]:
+            if n not in i["labels"]:
+                i["labels"].append(n)
+        save(db)
+        emit([{"name": n} for n in i["labels"]])
+    elif re.match(r"^issues/\d+/labels/[^/]+$", rest) and method == "DELETE":
+        i = find_issue(db, rest.split("/")[1])
+        name = urllib.parse.unquote(rest.split("/")[3])
+        if name not in i["labels"]:
+            raise Fail("404 Not Found")
+        i["labels"].remove(name)
+        save(db)
+        emit([{"name": n} for n in i["labels"]])
     elif re.match(r"^issues/\d+/comments$", rest) and method == "GET":
         i = thread(db, rest.split("/")[1])
         emit([{"id": c["id"], "body": c["body"], "user": {"login": c["author"]}} for c in i["comments"]])
