@@ -26,7 +26,7 @@ type Entry struct {
 	Source string
 	Schema *Key // the schema row; nil for a hand-edited key outside the schema
 	// Global is what the global config holds for the key; HasGlobal is false
-	// when it holds none (always so under ShowGlobal, where Value is it).
+	// when it holds none. ShowGlobal leaves both unset: its Value is the global value.
 	Global    any
 	HasGlobal bool
 }
@@ -194,12 +194,14 @@ func Set(root, key, raw string) (SetResult, error) {
 // SetIn is Set on the chosen layer. LayerLocal writes config.local.json, which
 // overrides config.json on this machine.
 func SetIn(root, key, raw string, layer Layer) (SetResult, error) {
-	return setAt(layer.path(root), layer.notObject(), key, raw)
+	return setAt(layer.path(root), layer.notObject(), key, raw, fsio.UpdateJSON)
 }
 
 // setAt is SetIn on the config file at path; notObject is the error for a file
 // that holds JSON other than an object.
-func setAt(path string, notObject error, key, raw string) (SetResult, error) {
+// update is fsio.UpdateJSON, or UpdateJSONStrict for a file whose loss is
+// destructive.
+func setAt(path string, notObject error, key, raw string, update func(string, any, func(any) (any, error)) error) (SetResult, error) {
 	if err := Validate(key, raw); err != nil {
 		return SetResult{}, err
 	}
@@ -207,7 +209,7 @@ func setAt(path string, notObject error, key, raw string) (SetResult, error) {
 	value := Coerce(raw)
 	var res SetResult
 	res.Value = value
-	err := fsio.UpdateJSON(path, jsonx.NewObject(), func(doc any) (any, error) {
+	err := update(path, jsonx.NewObject(), func(doc any) (any, error) {
 		cfg, ok := doc.(*jsonx.Object)
 		if !ok {
 			return nil, notObject
@@ -240,20 +242,41 @@ func setAt(path string, notObject error, key, raw string) (SetResult, error) {
 // Unset removes key from the layer's file, and the objects it leaves empty. It
 // reports whether the key was there; a layer without the key is not rewritten.
 func Unset(root, key string, layer Layer) (removed bool, err error) {
-	return unsetAt(layer.path(root), layer.notObject(), key)
+	return unsetAt(layer.path(root), layer.notObject(), key, false)
 }
 
-// unsetAt is Unset on the config file at path.
-func unsetAt(path string, notObject error, key string) (removed bool, err error) {
+// unsetAt is Unset on the config file at path. strict refuses a file that
+// exists but does not parse, rather than reading it as empty.
+func unsetAt(path string, notObject error, key string, strict bool) (removed bool, err error) {
 	segs := strings.Split(key, ".")
-	cur := asObject(fsio.LoadJSON(path, nil))
+	update := fsio.UpdateJSON
+	var cur *jsonx.Object
+	if strict {
+		update = fsio.UpdateJSONStrict
+		raw, rerr := os.ReadFile(path)
+		if errors.Is(rerr, os.ErrNotExist) {
+			return false, nil
+		}
+		if rerr != nil {
+			return false, fmt.Errorf("%w: %s: %v", fsio.ErrUnreadable, path, rerr)
+		}
+		doc, derr := jsonx.Decode(raw)
+		if derr != nil {
+			return false, fmt.Errorf("%w: %s does not parse (%v); fix or remove it, rota will not overwrite it", fsio.ErrUnreadable, path, derr)
+		}
+		if cur = asObject(doc); cur == nil {
+			return false, notObject
+		}
+	} else {
+		cur = asObject(fsio.LoadJSON(path, nil))
+	}
 	if cur == nil {
 		return false, nil
 	}
 	if _, ok := lookupPresent(cur, segs); !ok {
 		return false, nil
 	}
-	err = fsio.UpdateJSON(path, jsonx.NewObject(), func(doc any) (any, error) {
+	err = update(path, jsonx.NewObject(), func(doc any) (any, error) {
 		cfg, ok := doc.(*jsonx.Object)
 		if !ok {
 			return nil, notObject

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/repos"
@@ -200,7 +201,7 @@ func configSaveGlobal(fs *flag.FlagSet) RunFunc {
 			return Result{}, Resolution("%v", err)
 		}
 		saved, err := config.SaveGlobal(root, dir)
-		if errors.Is(err, config.ErrCorrupt) {
+		if errors.Is(err, config.ErrCorrupt) || errors.Is(err, fsio.ErrUnreadable) {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
 		if err != nil {
@@ -239,7 +240,7 @@ func configSet(fs *flag.FlagSet) RunFunc {
 		case err == nil:
 		case errors.Is(err, config.ErrMalformedKey), errors.Is(err, config.ErrNotSchemaKey), errors.Is(err, config.ErrBadValue), errors.Is(err, config.ErrProjectOwned):
 			return Result{}, Usage("%s", err.Error())
-		case errors.Is(err, config.ErrNotObject), errors.Is(err, config.ErrGlobalNotObject):
+		case errors.Is(err, config.ErrNotObject), errors.Is(err, config.ErrGlobalNotObject), errors.Is(err, fsio.ErrUnreadable):
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		default:
 			return Result{}, err
