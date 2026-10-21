@@ -104,18 +104,18 @@ func layoutRows(env map[string]any) []*jsonx.Object {
 
 func TestLayoutStatusReportsTabsSplitAndMixed(t *testing.T) {
 	root, rig, deps := layoutProject(t, "herdr", []string{"ben", "dana"}, "ben", "dana")
-	code, env, errs := rotaRunWith(t, deps, "--json", "layout", "--project", root)
+	code, env, errs := rotaRunWith(t, deps, "--json", "-C", root, "layout", "--project", root)
 	rows := layoutRows(env)
 	if code != 0 || len(rows) != 1 || jsonx.Str(rows[0], "layout") != "tabs" {
 		t.Fatalf("exit %d rows %v: %s", code, rows, errs)
 	}
 	rig.setTab("p-ben", "T")
-	_, env, _ = rotaRunWith(t, deps, "--json", "layout", "--project", root)
+	_, env, _ = rotaRunWith(t, deps, "--json", "-C", root, "layout", "--project", root)
 	if got := jsonx.Str(layoutRows(env)[0], "layout"); got != "mixed" {
 		t.Errorf("one folded: %s", got)
 	}
 	rig.setTab("p-dana", "T")
-	_, env, _ = rotaRunWith(t, deps, "--json", "layout", "--project", root)
+	_, env, _ = rotaRunWith(t, deps, "--json", "-C", root, "layout", "--project", root)
 	if got := jsonx.Str(layoutRows(env)[0], "layout"); got != "split" {
 		t.Errorf("both folded: %s", got)
 	}
@@ -126,7 +126,7 @@ func TestLayoutStatusReportsTabsSplitAndMixed(t *testing.T) {
 
 func TestLayoutSplitThenTabs(t *testing.T) {
 	root, rig, deps := layoutProject(t, "herdr", []string{"ben", "dana", "nia"}, "ben", "dana", "nia")
-	code, env, errs := rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+	code, env, errs := rotaRunWith(t, deps, "--json", "-C", root, "layout", "split", "--project", root)
 	rows := layoutRows(env)
 	if code != 0 || jsonx.Str(rows[0], "layout") != "split" || jsonx.Str(rows[0], "before") != "tabs" {
 		t.Fatalf("exit %d rows %v: %s", code, rows, errs)
@@ -140,7 +140,7 @@ func TestLayoutSplitThenTabs(t *testing.T) {
 		t.Errorf("the report shows the panes where they were, not where they are: tab %q", tab)
 	}
 	rig.log = nil
-	code, env, _ = rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root)
+	code, env, _ = rotaRunWith(t, deps, "--json", "-C", root, "layout", "tabs", "--project", root)
 	if code != 0 || jsonx.Str(layoutRows(env)[0], "layout") != "tabs" {
 		t.Fatalf("tabs: exit %d %v", code, env)
 	}
@@ -186,7 +186,7 @@ func TestLayoutSplitKeepsTheLaunchingCLIOnTop(t *testing.T) {
 func TestLayoutSkipsParkedAndDeadSlots(t *testing.T) {
 	// dana has a handle but no agent (dead); kit has neither (parked).
 	root, rig, deps := layoutProject(t, "herdr", []string{"ben", "dana", "kit"}, "ben")
-	if code, _, errs := rotaRunWith(t, deps, "--json", "layout", "split", "--project", root); code != 0 {
+	if code, _, errs := rotaRunWith(t, deps, "--json", "-C", root, "layout", "split", "--project", root); code != 0 {
 		t.Fatalf("exit %d: %s", code, errs)
 	}
 	if got := strings.Join(rig.log, "|"); got != "split p-ben right p0 0.4|rename tab T rota|name pane p0 orchestrator" {
@@ -197,7 +197,7 @@ func TestLayoutSkipsParkedAndDeadSlots(t *testing.T) {
 func TestLayoutWarnsAboutAForeignPane(t *testing.T) {
 	root, rig, deps := layoutProject(t, "herdr", []string{"ben"}, "ben")
 	rig.panes = append(rig.panes, host.LayoutPane{ID: "sh", Tab: "T", Cwd: root})
-	code, _, errs := rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+	code, _, errs := rotaRunWith(t, deps, "--json", "-C", root, "layout", "split", "--project", root)
 	if code != 0 || !strings.Contains(errs, "pane sh in the orchestrator tab is not rota's") {
 		t.Errorf("exit %d, stderr %q", code, errs)
 	}
@@ -211,7 +211,7 @@ func TestLayoutWarnsAboutAForeignPane(t *testing.T) {
 func TestLayoutTmuxAndSoloRoundsAreSkipped(t *testing.T) {
 	for _, h := range []string{"tmux", "solo"} {
 		root, rig, deps := layoutProject(t, h, []string{"ben"}, "ben")
-		code, env, errs := rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+		code, env, errs := rotaRunWith(t, deps, "--json", "-C", root, "layout", "split", "--project", root)
 		if code != ExitUnavailable || !strings.Contains(errs, "host is "+h+": layout needs herdr") {
 			t.Errorf("%s: exit %d, stderr %q", h, code, errs)
 		}
@@ -222,7 +222,7 @@ func TestLayoutTmuxAndSoloRoundsAreSkipped(t *testing.T) {
 	}
 	// Bare status exits 0 and names the skip.
 	root, _, deps := layoutProject(t, "tmux", []string{"ben"}, "ben")
-	code, env, _ := rotaRunWith(t, deps, "--json", "layout", "--project", root)
+	code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "layout", "--project", root)
 	if code != 0 || jsonx.Str(layoutRows(env)[0], "skipped") != "host is tmux: layout needs herdr" {
 		t.Errorf("status: exit %d %v", code, env)
 	}
@@ -248,15 +248,15 @@ func TestLayoutAllProjectsDefaultsToTheOnesOpenInHerdr(t *testing.T) {
 
 func TestLayoutWithoutHerdrIsUnavailable(t *testing.T) {
 	root, _, _ := layoutProject(t, "herdr", []string{"ben"}, "ben")
-	code, _, errs := rotaRunWith(t, testDeps(), "--json", "layout", "split", "--project", root)
+	code, _, errs := rotaRunWith(t, testDeps(), "--json", "-C", root, "layout", "split", "--project", root)
 	if code != ExitUnavailable || !strings.Contains(errs, "herdr is not installed") {
 		t.Errorf("exit %d, stderr %q", code, errs)
 	}
 }
 
 func TestLayoutRefusesADirectoryWithoutRota(t *testing.T) {
-	_, _, deps := layoutProject(t, "herdr", nil)
-	code, _, _ := rotaRunWith(t, deps, "--json", "layout", "--project", t.TempDir())
+	root, _, deps := layoutProject(t, "herdr", nil)
+	code, _, _ := rotaRunWith(t, deps, "--json", "-C", root, "layout", "--project", t.TempDir())
 	if code != ExitResolution {
 		t.Errorf("exit %d", code)
 	}
@@ -269,15 +269,15 @@ func TestLayoutSplitAndTabsRecordOnTheRound(t *testing.T) {
 	if got := worker.LoadRegistryTolerant(root).Layout(); got != "" {
 		t.Fatalf("fresh round layout = %q", got)
 	}
-	rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+	rotaRunWith(t, deps, "--json", "-C", root, "layout", "split", "--project", root)
 	if got := worker.LoadRegistryTolerant(root).Layout(); got != "split" {
 		t.Errorf("after split: %q", got)
 	}
-	rotaRunWith(t, deps, "--json", "layout", "--project", root)
+	rotaRunWith(t, deps, "--json", "-C", root, "layout", "--project", root)
 	if got := worker.LoadRegistryTolerant(root).Layout(); got != "split" {
 		t.Errorf("report changed it: %q", got)
 	}
-	rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root)
+	rotaRunWith(t, deps, "--json", "-C", root, "layout", "tabs", "--project", root)
 	if got := worker.LoadRegistryTolerant(root).Layout(); got != "" {
 		t.Errorf("after tabs: %q", got)
 	}
@@ -410,7 +410,7 @@ func workspaceIDs(root string, slots ...string) string {
 func TestLayoutGroupedSplitTabsSplit(t *testing.T) {
 	root, rig, deps := groupedProject(t, "ben", "kit")
 
-	code, env, errs := rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+	code, env, errs := rotaRunWith(t, deps, "--json", "-C", root, "layout", "split", "--project", root)
 	if note := jsonx.Str(layoutRows(env)[0], "note"); code != 0 || note != "slots leave their linked workspaces until `rota layout tabs`" {
 		t.Fatalf("split: exit %d note %q: %s", code, note, errs)
 	}
@@ -432,7 +432,7 @@ func TestLayoutGroupedSplitTabsSplit(t *testing.T) {
 	}
 
 	rig.log = nil
-	if code, _, errs := rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root); code != 0 {
+	if code, _, errs := rotaRunWith(t, deps, "--json", "-C", root, "layout", "tabs", "--project", root); code != 0 {
 		t.Fatalf("tabs: exit %d: %s", code, errs)
 	}
 	// The split renumbered both panes: tabs finds them again by agent.
@@ -444,7 +444,7 @@ func TestLayoutGroupedSplitTabsSplit(t *testing.T) {
 		t.Errorf("after tabs: %s", got)
 	}
 
-	code, env, errs = rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+	code, env, errs = rotaRunWith(t, deps, "--json", "-C", root, "layout", "split", "--project", root)
 	rows := layoutRows(env)
 	if code != 0 || len(rows) != 1 {
 		t.Fatalf("second split: exit %d: %s", code, errs)
@@ -461,9 +461,9 @@ func TestLayoutGroupedSplitTabsSplit(t *testing.T) {
 func TestLayoutUngroupedTabsKeepsPlainTabs(t *testing.T) {
 	root, rig, deps := groupedProject(t, "ben")
 	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"round":{"herdrGroupSlots":false}}`), 0o644)
-	rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+	rotaRunWith(t, deps, "--json", "-C", root, "layout", "split", "--project", root)
 	rig.log = nil
-	rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root)
+	rotaRunWith(t, deps, "--json", "-C", root, "layout", "tabs", "--project", root)
 	if got := strings.Join(rig.log, "|"); got != "tab p-ben' ben|rename tab T orchestrator" {
 		t.Errorf("calls = %s", got)
 	}
@@ -477,9 +477,9 @@ func TestLayoutUngroupedTabsKeepsPlainTabs(t *testing.T) {
 // root tab the open made for kit is closed.
 func TestLayoutGroupedTabsFailurePartway(t *testing.T) {
 	root, rig, deps := groupedProject(t, "ben", "kit")
-	rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+	rotaRunWith(t, deps, "--json", "-C", root, "layout", "split", "--project", root)
 	rig.log, rig.failIn = nil, "kit"
-	code, _, errs := rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root)
+	code, _, errs := rotaRunWith(t, deps, "--json", "-C", root, "layout", "tabs", "--project", root)
 	if code == 0 {
 		t.Fatalf("want a failure: %s", errs)
 	}
@@ -496,9 +496,9 @@ func TestLayoutGroupedTabsFailurePartway(t *testing.T) {
 func TestLayoutGroupedNeedsALinkingHost(t *testing.T) {
 	root, rig, deps := groupedProject(t, "ben")
 	deps.Host = func(host.Kind) host.Host { return &closerOnlyRig{rig.layoutRig} }
-	rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+	rotaRunWith(t, deps, "--json", "-C", root, "layout", "split", "--project", root)
 	rig.log = nil
-	rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root)
+	rotaRunWith(t, deps, "--json", "-C", root, "layout", "tabs", "--project", root)
 	if got := strings.Join(rig.log, "|"); got != "tab p-ben ben|rename tab T orchestrator" {
 		t.Errorf("calls = %s", got)
 	}
@@ -517,9 +517,9 @@ func (r *closerOnlyRig) CloseWorkspace(context.Context, string) error { return n
 // no workspaceId, and still returns the others to their workspaces.
 func TestLayoutGroupedTabsWarnsWhenHerdrCannotLink(t *testing.T) {
 	root, rig, deps := groupedProject(t, "ben", "kit")
-	rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+	rotaRunWith(t, deps, "--json", "-C", root, "layout", "split", "--project", root)
 	rig.cannotLink = "kit"
-	code, _, errs := rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root)
+	code, _, errs := rotaRunWith(t, deps, "--json", "-C", root, "layout", "tabs", "--project", root)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errs)
 	}
