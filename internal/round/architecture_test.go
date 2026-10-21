@@ -284,3 +284,51 @@ func TestArchitectureQueueEmptySkipsSlateRound(t *testing.T) {
 		t.Fatalf("threshold should fire in a slate round: %+v", a)
 	}
 }
+
+func TestArchitectureZeroHoursNeverCools(t *testing.T) {
+	ctx := context.Background()
+	notReady := []Candidate{{ID: "7", Readiness: Readiness{Checks: []Check{{Name: "criteria", OK: false}}}}}
+	root, e, be, set := archFixture(t, 20, []tracker.Issue{closedIssue(1, "a", "2026-10-04T11:30:00Z")})
+	set.ArchitectureIdleMinItems, set.ArchitectureIdleMinHours = 1, 0
+	// A review one hour before the fixture clock: only the hours floor could hold it back.
+	if err := worker.Update(root, func(d *worker.Doc) { d.StartReview("2026-10-04T11:00:00Z", 1, "test", nil) }); err != nil {
+		t.Fatal(err)
+	}
+	if a, _ := e.Architecture(ctx, root, be, set, notReady); a.Cooling || !a.Due || a.Trigger != TriggerQueueEmpty {
+		t.Fatalf("0 hours drops the condition, a fresh review must not cool: %+v", a)
+	}
+	set.ArchitectureIdleMinHours = 24
+	e.Worker.Now = func() time.Time { return time.Date(2026, 10, 4, 12, 30, 0, 0, time.UTC) } // past the closed-count cache
+	if a, _ := e.Architecture(ctx, root, be, set, notReady); !a.Cooling || a.Due {
+		t.Fatalf("control: 24 hours must cool the same review: %+v", a)
+	}
+}
+
+func TestArchitectureUnparsableSinceNeverCools(t *testing.T) {
+	ctx := context.Background()
+	notReady := []Candidate{{ID: "7", Readiness: Readiness{Checks: []Check{{Name: "criteria", OK: false}}}}}
+	root, e, be, set := archFixture(t, 20, []tracker.Issue{closedIssue(1, "a", "2026-10-03T00:00:00Z")})
+	set.ArchitectureIdleMinItems, set.ArchitectureIdleMinHours = 0, 24
+	// No review time to measure from: the hours floor does not apply, as in file mode where Since is empty.
+	if err := worker.Update(root, func(d *worker.Doc) { d.StartReview("not-a-time", 1, "test", nil) }); err != nil {
+		t.Fatal(err)
+	}
+	a, _ := e.Architecture(ctx, root, be, set, notReady)
+	if a.Cooling {
+		t.Fatalf("an unparsable Since must not cool: %+v", a)
+	}
+}
+
+func TestArchitectureSeededFirstLookCools(t *testing.T) {
+	ctx := context.Background()
+	notReady := []Candidate{{ID: "7", Readiness: Readiness{Checks: []Check{{Name: "criteria", OK: false}}}}}
+	root, e, be, set := archFixture(t, 20, []tracker.Issue{closedIssue(1, "a", "2026-10-03T00:00:00Z")})
+	set.ArchitectureIdleMinItems, set.ArchitectureIdleMinHours = 0, 24
+	a, _ := e.Architecture(ctx, root, be, set, notReady)
+	if !worker.LoadRegistryTolerant(root).Review().Seeded {
+		t.Fatal("first look should seed")
+	}
+	if !a.Cooling || a.Due {
+		t.Fatalf("a seeded first look is a review time of now: it cools: %+v", a)
+	}
+}
