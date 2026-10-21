@@ -245,6 +245,7 @@ func (s Store) FoldHits(scope string) (FoldResult, error) {
 		if err != nil {
 			return err
 		}
+		recovered := foldedMark(sc) != "" // a crashed fold left its mark in the tracked sidecar
 		pending := claimed[:0:0]
 		for _, c := range claimed {
 			if filepath.Base(c) != foldedMark(sc) {
@@ -291,6 +292,10 @@ func (s Store) FoldHits(scope string) (FoldResult, error) {
 				return false, nil
 			}
 			sc.obj.Delete(foldedKey)
+			// A mark this fold set and cleared nets out; one it found was a rewrite.
+			if recovered {
+				res.Changed = true
+			}
 			return true, nil
 		})
 	})
