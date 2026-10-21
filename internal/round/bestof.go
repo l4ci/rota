@@ -166,6 +166,7 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 	}
 	if o.CheckOnly {
 		first := checked[0]
+		first.Warnings = append(res.Warnings, first.Warnings...)
 		first.BestOf = []Assigned{checked[0], checked[1]}
 		return first, nil
 	}
@@ -202,11 +203,13 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 			return done[0], err
 		}
 		first := done[0]
+		first.Warnings = append(res.Warnings, first.Warnings...)
 		first.Warnings = append(first.Warnings, fmt.Sprintf("the second best-of attempt (%s) failed: %v; the first runs alone, re-run assign to retry", slots[1].Name(), err))
 		first.BestOf = []Assigned{done[0]}
 		return first, err
 	}
 	first := done[0]
+	first.Warnings = append(res.Warnings, first.Warnings...)
 	first.BestOf = []Assigned{done[0], done[1]}
 	return first, nil
 }

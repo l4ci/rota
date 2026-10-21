@@ -293,3 +293,33 @@ func TestRoundStatusShowsTheReportedOutcome(t *testing.T) {
 		t.Errorf("text lacks the outcome beside the state: %q", text)
 	}
 }
+
+// A slot whose account has no login shows it in the table and as noLogin in
+// JSON; a slot with a login has neither.
+func TestRoundStatusShowsNoLoginSlot(t *testing.T) {
+	root, deps := roundFixture(t, nil)
+	if code, out, _ := rotaInWith(t, deps, root, "--json", "round", "reconcile", "--apply"); code != 0 {
+		t.Fatalf("reconcile exit %d: %s", code, out)
+	}
+	if _, err := worker.UpdateSlot(root, "ben", func(s *worker.Slot) { s.SetAccount("work", t.TempDir()) }); err != nil {
+		t.Fatal(err)
+	}
+	_, out, _ := rotaInWith(t, deps, root, "--json", "round", "status")
+	for _, r := range data(t, out)["slots"].([]any) {
+		row := r.(map[string]any)
+		switch row["name"] {
+		case "ben":
+			if row["noLogin"] != "no credentials file" {
+				t.Errorf("ben noLogin = %v", row["noLogin"])
+			}
+		case "dana":
+			if _, ok := row["noLogin"]; ok {
+				t.Errorf("dana has no account problem: %v", row)
+			}
+		}
+	}
+	_, out, _ = rotaInWith(t, deps, root, "round", "status")
+	if !strings.Contains(out, "no login: no credentials file") {
+		t.Errorf("the table lacks the no-login column:\n%s", out)
+	}
+}
