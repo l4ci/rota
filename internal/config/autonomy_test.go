@@ -106,8 +106,9 @@ func TestFillRemovesAutopilot(t *testing.T) {
 		{`{` + stamp + `"round": {"autopilot": false}}`, "", false},
 	} {
 		root := project(t, tc.cfg, tc.local)
-		if !slicesContain(Removed(root), "round.autopilot") && !strings.Contains(tc.local, "autopilot") {
-			t.Errorf("%s: check does not name round.autopilot: %v", tc.cfg, Removed(root))
+		// Removed reads config.json only, so a local file never changes it.
+		if want := strings.Contains(tc.cfg, "autopilot"); slicesContain(Removed(root), "round.autopilot") != want {
+			t.Errorf("%s / %s: check names round.autopilot = %v, want %v: %v", tc.cfg, tc.local, !want, want, Removed(root))
 		}
 		if p := AutonomyPending(root); p.AutopilotWasOn != tc.wasOn {
 			t.Errorf("%s / %s: pending %+v, want AutopilotWasOn %v", tc.cfg, tc.local, p, tc.wasOn)
