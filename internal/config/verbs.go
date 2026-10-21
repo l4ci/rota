@@ -195,7 +195,12 @@ func Set(root, key, raw string) (SetResult, error) {
 // SetIn is Set on the chosen layer. LayerLocal writes config.local.json, which
 // overrides config.json on this machine.
 func SetIn(root, key, raw string, layer Layer) (SetResult, error) {
-	return setAt(layer.path(root), layer.notObject(), key, raw, fsio.UpdateJSON)
+	if err := Validate(key, raw); err != nil {
+		return SetResult{}, err
+	}
+	return autonomySet(root, key, func() (SetResult, error) {
+		return setAt(layer.path(root), layer.notObject(), key, raw, fsio.UpdateJSON)
+	})
 }
 
 // setAt is SetIn on the config file at path; notObject is the error for a file

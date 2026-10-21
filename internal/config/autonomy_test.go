@@ -185,3 +185,107 @@ func TestFillRewritesGlobalAutoOnce(t *testing.T) {
 		t.Errorf("corrupt global rewritten: %s", b)
 	}
 }
+
+func globalStamp(t *testing.T, path string) string {
+	t.Helper()
+	b, _ := os.ReadFile(filepath.Join(filepath.Dir(path), GlobalStampFile))
+	if strings.Contains(string(readFileOr(path)), "version") {
+		t.Errorf("the global config.json holds a stamp: %s", readFileOr(path))
+	}
+	return strings.TrimSpace(string(b))
+}
+
+func readFileOr(path string) []byte {
+	b, _ := os.ReadFile(path)
+	return b
+}
+
+// A global with no auto is stamped by fill, and a global auto written after
+// the split (by config set or setup's save) carries the stamp, so the next
+// fill keeps it.
+func TestGlobalDeliberateAutoSurvivesFill(t *testing.T) {
+	for name, seed := range map[string]string{"no-file": "", "off": `{"autonomy": {"level": "off"}}`, "other-keys": `{"models": {"worker": "haiku"}}`} {
+		gdir := t.TempDir()
+		t.Setenv("ROTA_CONFIG_DIR", gdir)
+		gpath := filepath.Join(gdir, "config.json")
+		if seed != "" {
+			os.WriteFile(gpath, []byte(seed), 0o644)
+		}
+		root := project(t, `{"rota": {"version": "`+AutonomyLevelsSince+`"}}`, "")
+		if _, err := Fill(root); err != nil {
+			t.Fatal(err)
+		}
+		if seed != "" {
+			if s := globalStamp(t, gpath); s != AutonomyLevelsSince {
+				t.Errorf("%s: stale global not stamped by fill: %q", name, s)
+			}
+			os.Remove(filepath.Join(gdir, GlobalStampFile)) // unstamped again: the set must stamp it
+		}
+		if _, err := SetGlobal(gdir, "autonomy.level", "auto"); err != nil {
+			t.Fatal(err)
+		}
+		if s := globalStamp(t, gpath); s != AutonomyLevelsSince {
+			t.Errorf("%s: set --global did not stamp: %q", name, s)
+		}
+		if _, err := Fill(root); err != nil {
+			t.Fatal(err)
+		}
+		if g, _ := LoadGlobal(gdir); g["autonomy.level"] != "auto" {
+			t.Errorf("%s: deliberate global auto rewritten: %v", name, g["autonomy.level"])
+		}
+	}
+	gdir := t.TempDir()
+	t.Setenv("ROTA_CONFIG_DIR", gdir)
+	if _, err := MergeGlobal(gdir, map[string]any{"autonomy.level": "auto"}); err != nil {
+		t.Fatal(err)
+	}
+	if s := globalStamp(t, filepath.Join(gdir, "config.json")); s != AutonomyLevelsSince {
+		t.Errorf("setup save did not stamp: %q", s)
+	}
+}
+
+// #1488: on a config stamped before the split, config set autonomy.level auto
+// is a post-split value. The set migrates the stale layers first, then raises
+// the stamp, so the next fill keeps it.
+func TestSetAutoOnStaleStampSurvivesFill(t *testing.T) {
+	root := project(t, `{"rota": {"version": "0.20.0"}, "autonomy": {"level": "off"}}`, "")
+	if _, err := Set(root, "autonomy.level", "auto"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Fill(root); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := Value(Load(configPath(root)), "autonomy.level"); v != "auto" {
+		t.Errorf("deliberate auto rewritten: %v", v)
+	}
+	if s := StampedVersion(Load(configPath(root))); s != AutonomyLevelsSince {
+		t.Errorf("stamp %q", s)
+	}
+	// A local set stamps config.json too, and an old local auto is migrated
+	// before a project set makes the stamp current.
+	root = project(t, `{"rota": {"version": "0.20.0"}}`, `{"autonomy": {"level": "auto"}}`)
+	if _, err := Set(root, "autonomy.level", "off"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(readLocal(t, root), `"roundtrip"`) {
+		t.Errorf("old local auto not migrated before the stamp rose:\n%s", readLocal(t, root))
+	}
+	root = project(t, `{"rota": {"version": "0.20.0"}}`, "")
+	if _, err := SetIn(root, "autonomy.level", "auto", LayerLocal); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Fill(root); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(readLocal(t, root), `"auto"`) {
+		t.Errorf("deliberate local auto rewritten:\n%s", readLocal(t, root))
+	}
+	// A refused value changes nothing.
+	root = project(t, `{"rota": {"version": "0.20.0"}}`, `{"autonomy": {"level": "auto"}}`)
+	if _, err := Set(root, "autonomy.level", "bogus"); err == nil {
+		t.Fatal("bogus accepted")
+	}
+	if !strings.Contains(readLocal(t, root), `"auto"`) || StampedVersion(Load(configPath(root))) != "0.20.0" {
+		t.Errorf("a refused set migrated:\n%s\n%s", read(t, root), readLocal(t, root))
+	}
+}
