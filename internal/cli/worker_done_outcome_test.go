@@ -9,7 +9,8 @@ import (
 
 func writeSummary(t *testing.T, dir, body string) string {
 	t.Helper()
-	p := filepath.Join(dir, "summary.txt")
+	// Outside the repo: done refuses a dirty worktree.
+	p := filepath.Join(t.TempDir(), "summary.txt")
 	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}

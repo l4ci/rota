@@ -69,7 +69,7 @@ Work only this task, then stop.
   commands (`gh pr merge`, force-push to another branch, `git reset --hard` outside your worktree,
   `git branch -D`, `git clean -f`) when `ROTA_SLOT` is set. It is a guardrail, not a boundary: do not
   route around a refusal, and Codex workers are not guarded.
-- Commit your own work, run `rota worker done <slot>` (add `--outcome`/`--summary-file` as in *Outcome*, and `--attempt <id>` only when your brief names an attempt id; from your worktree or the main checkout; it finds the pool through the git common dir and expands `{files}` in the slot's worktree), then open a PR against `<base-branch>`. Never merge.
+- Commit your own work, open the PR against `<base-branch>` (`/rota-ship` pushes it), then run `rota worker done <slot>` as the last action (add `--outcome`/`--summary-file` as in *Outcome*, and `--attempt <id>` only when your brief names an attempt id; from your worktree or the main checkout; it finds the pool through the git common dir and expands `{files}` in the slot's worktree). Never merge.
 - Outcome. Say how the work ended: `rota worker done <slot> --outcome done|partial|failed
   --summary-file <f>`. The file is exactly three lines: what changed, what was found, what
   remains. `done`: every acceptance criterion is met and verified. `partial`: you opened a
@@ -81,7 +81,7 @@ Work only this task, then stop.
   `partial-slice` reports `done`: the criteria are those of this PR's slice, and the third
   line names the slices still to come. Use `partial` there only when the PR misses part of
   its own slice. Put the `prBlock` the verb prints
-  first in the PR body, above the other sections.
+  first in the PR body, above the other sections: done runs after the PR exists, so add it with `gh pr edit <pr> --body-file <f>` (the branch does not change).
 - Attempt id. If your brief names an attempt id, pass `--attempt <id>` to `rota worker done` and
   `rota round report`. A refusal that calls the attempt stale (exit 4) means the orchestrator
   reclaimed or transferred your assignment: you are fenced. Stop at once, do not retry, do not
@@ -102,6 +102,7 @@ Work only this task, then stop.
   arrived after the listing stays unread. `worker done` refuses (exit 4) while any mail is unread, so
   read it rather than retry. A mail you already saw in the pane is the same relay: do not act on
   it twice.
+- Done is the last action. Order: final commit, proof record at HEAD, push and open the PR (`/rota-ship`), `rota worker inbox <slot>`, `rota worker done <slot>`, then print `ROTA-DONE`. `worker done` refuses (exit 4) a dirty worktree, a branch never pushed or a HEAD that differs from `origin/<branch>`. Make no commit, push or edit after it, because a review or the gate binds to the head it recorded. A fix after done means another push and another `rota worker done`.
 - After every relay fix, from any relay and not only a `REVIEW` one, even a one-line
   fix, run `rota worker done <slot>`: the done event it records is what the watch trusts
   when the relay echo has scrolled out of the pane between polls.
@@ -125,9 +126,9 @@ Work only this task, then stop.
   3. File scope: compare `git diff --name-only <base-branch>...HEAD` with the files the
      issue names. Explain every extra or missing file in the PR body.
   4. Done gate: on your final commit, when `test.fast` is set, run
-     `rota proof record <ID> -- rota test run fast`, then `rota worker done <slot> --attempt <id>`. It
-     exits 4 without a PASS row at the current HEAD; a later commit makes the row stale,
-     so record again. Do it before the PR and before `ROTA-DONE`.
+     `rota proof record <ID> -- rota test run fast`, push and open the PR, then run
+     `rota worker done <slot> --attempt <id>` last. It exits 4 without a PASS row at the current
+     HEAD; a later commit makes the row stale, so record again. Done comes after the PR and before `ROTA-DONE`.
   5. Closing keyword: the PR body carries `Closes #<issue>` (or `Fixes #<issue>`) for your
      issue. `rota worker gate` and `rota worker train` refuse a body without it (exit 4,
      `blockedBy: closes`), since the merge would leave the issue open and claimed. A PR
