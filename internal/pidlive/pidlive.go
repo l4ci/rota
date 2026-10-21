@@ -7,6 +7,7 @@ package pidlive
 import (
 	"context"
 	"errors"
+	"os"
 	"strconv"
 	"strings"
 	"syscall"
@@ -48,4 +49,36 @@ func psState(pid int) (string, bool) {
 		return "", false
 	}
 	return r.Stdout, true
+}
+
+// ProcStat reads the parent pid and start time (clock ticks since boot) of pid
+// from /proc/<pid>/stat. ok is false where /proc is absent or unreadable. It is
+// the one parser of that file: the comm field may hold spaces and parentheses,
+// so the fields after it are found from the last ")".
+func ProcStat(pid int) (ppid int, start uint64, ok bool) {
+	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return 0, 0, false
+	}
+	s := string(b)
+	i := strings.LastIndex(s, ")")
+	if i < 0 {
+		return 0, 0, false
+	}
+	f := strings.Fields(s[i+1:])
+	if len(f) < 20 {
+		return 0, 0, false
+	}
+	pp, err1 := strconv.Atoi(f[1])
+	st, err2 := strconv.ParseUint(f[19], 10, 64)
+	if err1 != nil || err2 != nil {
+		return 0, 0, false
+	}
+	return pp, st, true
+}
+
+// StartTicks is the start time half of ProcStat.
+func StartTicks(pid int) (uint64, bool) {
+	_, st, ok := ProcStat(pid)
+	return st, ok
 }
