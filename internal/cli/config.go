@@ -82,7 +82,7 @@ func globalDir(c *Ctx) (string, error) {
 	if c.Repo != "" {
 		return "", Usage("--repo cannot be combined with the global config")
 	}
-	dir, err := projects.Dir()
+	dir, err := projects.Dir(c.deps().projectsEnv())
 	if err != nil {
 		return "", Resolution("%v", err)
 	}
@@ -196,7 +196,7 @@ func configSaveGlobal(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		dir, err := projects.Dir()
+		dir, err := projects.Dir(c.deps().projectsEnv())
 		if err != nil {
 			return Result{}, Resolution("%v", err)
 		}

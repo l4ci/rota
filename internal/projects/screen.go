@@ -27,6 +27,8 @@ type Screen struct {
 	// Run calls a rota verb in process on the cooked terminal: the arguments
 	// as typed after `rota`.
 	Run func(args ...string) error
+	// Home is the home-dir reader a leading ~ in a typed path expands with.
+	Home func() (string, error)
 
 	rows    []Row
 	list    tui.List
@@ -47,8 +49,8 @@ const (
 )
 
 // NewScreen shows rows; an empty registry still opens, with a hint to add one.
-func NewScreen(rows []Row, load func() ([]Row, error), run func(args ...string) error) Screen {
-	s := Screen{Load: load, Run: run}
+func NewScreen(rows []Row, load func() ([]Row, error), run func(args ...string) error, home func() (string, error)) Screen {
+	s := Screen{Load: load, Run: run, Home: home}
 	return s.withRows(rows)
 }
 
@@ -143,7 +145,7 @@ func (s Screen) updateBrowse(k tui.Key) (tui.Model, tui.Cmd) {
 			if strings.TrimSpace(v) == "" {
 				return fmt.Errorf("enter a directory")
 			}
-			if fi, err := os.Stat(expandHome(strings.TrimSpace(v))); err != nil || !fi.IsDir() {
+			if fi, err := os.Stat(s.expandHome(strings.TrimSpace(v))); err != nil || !fi.IsDir() {
 				return fmt.Errorf("not a directory")
 			}
 			return nil
@@ -175,15 +177,15 @@ func (s Screen) updatePrompt(k tui.Key) (tui.Model, tui.Cmd) {
 		s.mode = browse
 	case tui.Submitted:
 		s.mode = browse
-		dir, _ := filepath.Abs(expandHome(strings.TrimSpace(s.input.Text)))
+		dir, _ := filepath.Abs(s.expandHome(strings.TrimSpace(s.input.Text)))
 		return s, s.exec(true, "-C", dir, "init")
 	}
 	return s, tui.Cmd{}
 }
 
-func expandHome(p string) string {
+func (s Screen) expandHome(p string) string {
 	if p == "~" || strings.HasPrefix(p, "~/") {
-		if h, err := os.UserHomeDir(); err == nil {
+		if h, err := s.Home(); err == nil {
 			return filepath.Join(h, p[1:])
 		}
 	}

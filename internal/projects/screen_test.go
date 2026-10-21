@@ -39,7 +39,7 @@ func newRig(t *testing.T) *rig {
 	r.s = NewScreen(r.rows, func() ([]Row, error) { return r.rows, nil }, func(args ...string) error {
 		r.calls = append(r.calls, args)
 		return r.err
-	})
+	}, func() (string, error) { return "/injected/home", nil })
 	return r
 }
 
@@ -132,7 +132,7 @@ func TestScreenNewPromptGolden(t *testing.T) {
 
 func TestScreenEmptyGolden(t *testing.T) {
 	r := newRig(t)
-	r.s = NewScreen(nil, nil, nil)
+	r.s = NewScreen(nil, nil, nil, nil)
 	golden.Check(t, in{[]string{"empty"}, gw, gh}, r.frame())
 }
 
@@ -233,5 +233,18 @@ func TestFailedActionShowsTheErrorAndKeepsRunning(t *testing.T) {
 	r.press("c")
 	if !strings.Contains(strings.Join(r.frame(), "\n"), "error: rota projects cleanup exited 70") {
 		t.Error("the failure is not shown")
+	}
+}
+
+func TestScreenExpandsTildeWithTheInjectedHome(t *testing.T) {
+	s := newRig(t).s.(Screen)
+	if got := s.expandHome("~/work"); got != "/injected/home/work" {
+		t.Errorf("~/work: %q", got)
+	}
+	if got := s.expandHome("~"); got != "/injected/home" {
+		t.Errorf("~: %q", got)
+	}
+	if got := s.expandHome("/abs"); got != "/abs" {
+		t.Errorf("/abs: %q", got)
 	}
 }
