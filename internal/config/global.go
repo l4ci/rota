@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // The global config is a machine-wide config.json in the rota config dir,
@@ -72,14 +73,15 @@ func LoadGlobal(dir string) (map[string]any, error) {
 }
 
 // MergeGlobal writes vals (dotted schema key to value) into the global config
-// under dir, keeping every other key already there. Project-owned and
+// under dir, keeping every other key already there. A global file that does
+// not parse is an error (fsio.ErrUnreadable) and is left as it is. Project-owned and
 // non-schema keys are skipped. It returns the keys it wrote, in schema order.
 func MergeGlobal(dir string, vals map[string]any) ([]string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
 	saved := []string{}
-	err := fsio.UpdateJSON(GlobalPath(dir), jsonx.NewObject(), func(doc any) (any, error) {
+	err := fsio.UpdateJSONStrict(GlobalPath(dir), jsonx.NewObject(), func(doc any) (any, error) {
 		cfg, ok := doc.(*jsonx.Object)
 		if !ok {
 			return nil, ErrNotObject
@@ -122,7 +124,7 @@ func ShowGlobal(dir, key string, one bool) ([]Entry, error) {
 		}
 		e := Entry{Key: k.Name, Value: Default(k), Source: "default", Schema: &k}
 		if v, ok := vals[k.Name]; ok {
-			e.Value, e.Source, e.Global, e.HasGlobal = v, "global", v, true
+			e.Value, e.Source = v, "global"
 		}
 		out = append(out, e)
 	}
@@ -141,11 +143,23 @@ func SetGlobal(dir, key, raw string) (SetResult, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return SetResult{}, err
 	}
-	return setAt(GlobalPath(dir), ErrGlobalNotObject, key, raw)
+	return setAt(GlobalPath(dir), ErrGlobalNotObject, key, raw, fsio.UpdateJSONStrict)
 }
 
 // UnsetGlobal removes key from the global config under dir, so projects fall
 // back to the schema default. It reports whether the key was there.
 func UnsetGlobal(dir, key string) (bool, error) {
-	return unsetAt(GlobalPath(dir), ErrGlobalNotObject, key)
+	return unsetAt(GlobalPath(dir), ErrGlobalNotObject, key, true)
+}
+
+// GlobalSupplies is whether the global config under the rota config dir sets
+// key, so a project can drop its own value and inherit it.
+func GlobalSupplies(key string) bool {
+	dir, err := projects.Dir()
+	if err != nil {
+		return false
+	}
+	vals, _ := LoadGlobal(dir)
+	_, ok := vals[key]
+	return ok
 }

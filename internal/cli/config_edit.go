@@ -9,6 +9,7 @@ import (
 	"unicode"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tui"
 )
@@ -199,7 +200,7 @@ func (s rootStore) Reset(key string) error {
 		if k.Name != key {
 			continue
 		}
-		if k.Required {
+		if k.Required && !config.GlobalSupplies(key) {
 			b, err := jsonx.MarshalCompact(config.Default(k))
 			if err != nil {
 				return err
@@ -252,7 +253,7 @@ func (s globalStore) Inherit(string) error {
 }
 
 func notObjectInternal(err error) error {
-	if errors.Is(err, config.ErrNotObject) || errors.Is(err, config.ErrLocalNotObject) || errors.Is(err, config.ErrGlobalNotObject) {
+	if errors.Is(err, fsio.ErrUnreadable) || errors.Is(err, config.ErrNotObject) || errors.Is(err, config.ErrLocalNotObject) || errors.Is(err, config.ErrGlobalNotObject) {
 		return &Error{Exit: ExitInternal, Message: err.Error()}
 	}
 	return err
@@ -553,7 +554,11 @@ func (m configScreen) reset(row int) (tui.Model, tui.Cmd) {
 		m.msg = r.Key + " is already the default"
 		return m, tui.Cmd{}
 	}
-	p := &cfgPending{key: r.Key, msg: fmt.Sprintf("%s reset to %s", r.Key, compact(r.Default))}
+	msg := fmt.Sprintf("%s reset to %s", r.Key, compact(r.Default))
+	if r.HasGlobal && !store.Global() {
+		msg = fmt.Sprintf("%s now inherits the global value %s", r.Key, compact(r.Global))
+	}
+	p := &cfgPending{key: r.Key, msg: msg}
 	m.pend = p
 	return m, tui.Cmd{Exec: func() error {
 		if err := store.Reset(r.Key); err != nil {

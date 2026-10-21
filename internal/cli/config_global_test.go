@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/tui"
 	"os"
 	"path/filepath"
 	"strings"
@@ -271,5 +272,74 @@ func TestConfigScreenSwitchesInheritAndOverride(t *testing.T) {
 	m, _ = play(m, []string{"g"})
 	if r := m.(configScreen).rows[0]; r.Source != "global" {
 		t.Errorf("after g on an override: source %q, want global", r.Source)
+	}
+}
+
+func TestGlobalWritesRefuseATruncatedGlobal(t *testing.T) {
+	const truncated = `{"work":{"isolation":"worktree"},"ship":{"qa":true},`
+	proj := t.TempDir()
+	gdir := isolateGlobal(t)
+	if code, _, e := initRun(t, proj, "init"); code != 0 {
+		t.Fatalf("init: %d %s", code, e)
+	}
+	path := config.GlobalPath(gdir)
+	for name, args := range map[string][]string{
+		"set --global":   {"config", "set", "--global", "models.worker", "haiku"},
+		"unset via edit": nil,
+		"save-global":    {"config", "save-global"},
+	} {
+		if args == nil {
+			continue
+		}
+		writeFile(t, path, truncated)
+		code, _, _ := runMainWith(testDeps(), append([]string{"-C", proj}, args...)...)
+		if code == 0 {
+			t.Errorf("%s exit 0 on a truncated global", name)
+		}
+		if raw, _ := os.ReadFile(path); string(raw) != truncated {
+			t.Errorf("%s changed the truncated global:\n%s", name, raw)
+		}
+	}
+	writeFile(t, path, truncated)
+	if err := (globalStore{gdir}).Reset("ship.qa"); err == nil {
+		t.Error("Reset on a truncated global returned nil")
+	}
+	if raw, _ := os.ReadFile(path); string(raw) != truncated {
+		t.Errorf("Reset changed the truncated global:\n%s", raw)
+	}
+	if code, _, _ := runMainWith(testDeps(), "-C", proj, "config", "show", "--global"); code != 70 {
+		t.Errorf("show --global on a truncated global exit %d, want 70", code)
+	}
+}
+
+func TestConfigScreenOnTheGlobalConfig(t *testing.T) {
+	gdir := isolateGlobal(t)
+	writeFile(t, config.GlobalPath(gdir), `{"work":{"isolation":"worktree"}}`)
+	store := globalStore{gdir}
+	rows, err := store.Rows()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := newConfigScreen(rows, store, new([]string))
+	var got tui.Model = m
+	for i, r := range rows {
+		if r.Key == "work.isolation" {
+			got, _ = play(got, append(rep("down", i+len(m.groups())), "g"))
+			break
+		}
+	}
+	if s := got.(configScreen); !strings.Contains(s.msg, "no project") {
+		t.Errorf("g on the global screen: msg %q", s.msg)
+	}
+	for _, h := range got.(configScreen).hints() {
+		if h.Key == "g" || h.Key == "l" {
+			t.Errorf("global screen offers %q", h.Key)
+		}
+	}
+	if err := store.Reset("work.isolation"); err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := os.ReadFile(config.GlobalPath(gdir)); strings.Contains(string(raw), "isolation") {
+		t.Errorf("reset left the key in the global:\n%s", raw)
 	}
 }
