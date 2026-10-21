@@ -5,9 +5,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/rotastate"
 )
 
@@ -47,35 +47,10 @@ func claimGateRun(common, key string) (other int, release func(), err error) {
 	return 0, func() { os.Remove(path + ".pid") }, nil
 }
 
-func pidAlive(pid int) bool {
-	err := syscall.Kill(pid, 0)
-	return err == nil || err == syscall.EPERM
-}
-
-// procStartTicks reads the start time of pid (clock ticks since boot) from
-// /proc/<pid>/stat. It is false where /proc is absent or unreadable.
-func procStartTicks(pid int) (uint64, bool) {
-	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
-	if err != nil {
-		return 0, false
-	}
-	s := string(b)
-	i := strings.LastIndex(s, ")")
-	if i < 0 {
-		return 0, false
-	}
-	f := strings.Fields(s[i+1:])
-	if len(f) < 20 {
-		return 0, false
-	}
-	st, err := strconv.ParseUint(f[19], 10, 64)
-	return st, err == nil
-}
-
 // gateMarker is the marker body: the pid and, where /proc gives it, the start
 // time that tells this process from a later one reusing the pid.
 func gateMarker(pid int) string {
-	if st, ok := procStartTicks(pid); ok {
+	if st, ok := pidlive.StartTicks(pid); ok {
 		return fmt.Sprintf("%d %d\n", pid, st)
 	}
 	return fmt.Sprintf("%d\n", pid)
@@ -101,12 +76,12 @@ func parseGateMarker(body string) (pid int, start uint64) {
 // markerLive reports whether the process a marker names is still that process:
 // alive, and when the marker recorded a start time, started at that time.
 func markerLive(pid int, start uint64) bool {
-	if !pidAlive(pid) {
+	if !pidlive.Alive(pid) {
 		return false
 	}
 	if start == 0 {
 		return true
 	}
-	cur, ok := procStartTicks(pid)
+	cur, ok := pidlive.StartTicks(pid)
 	return !ok || cur == start
 }
