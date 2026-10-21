@@ -240,10 +240,8 @@ func capPerVerb(rs []Entry) []Entry {
 // Prune drops every receipt: the round is over, so no retry can reach them.
 func Prune(root string) error {
 	p := path(root)
-	if claims, _ := filepath.Glob(p + ".*.lock"); len(claims) > 0 {
-		for _, c := range claims {
-			os.Remove(c)
-		}
+	for _, c := range fsio.GlobDir(filepath.Dir(p), filepath.Base(p)+".*.lock") {
+		os.Remove(c)
 	}
 	if _, err := os.Stat(p); errors.Is(err, os.ErrNotExist) {
 		return nil

@@ -93,7 +93,7 @@ func fmtDate(t time.Time) string { return t.Format("2006-01-02") }
 
 func findMap(root string, days int, today time.Time) ([]Entry, error) {
 	dir := rotatree.File(root, rotatree.MapDir)
-	paths, _ := filepath.Glob(filepath.Join(dir, "*.md"))
+	paths := fsio.GlobDir(dir, "*.md")
 	sort.Strings(paths)
 	type ent struct {
 		name, rel string

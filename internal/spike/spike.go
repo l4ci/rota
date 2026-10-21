@@ -200,7 +200,7 @@ func spikeBranches(dir string) map[string]bool {
 // skipped. branchExists is checked in the spike's own sub-repo, or in dir
 // (the working directory) for a spike with no repo.
 func List(root, dir string) ([]Entry, error) {
-	files, _ := filepath.Glob(rotatree.File(root, rotatree.SpikesDir, "*.md"))
+	files := fsio.GlobDir(rotatree.File(root, rotatree.SpikesDir), "*.md")
 	sort.Strings(files)
 	var regs map[string]string
 	cache := map[string]map[string]bool{}

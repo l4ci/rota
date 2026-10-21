@@ -73,7 +73,7 @@ func (s files) Create(milestone, unit string, render func(unit string) string) (
 
 // nextSlice is 1 + the highest S<NN> among the milestone's plan files.
 func nextSlice(dir, milestone string) int {
-	files, _ := filepath.Glob(filepath.Join(dir, milestone+"-S*.md"))
+	files := fsio.GlobDir(dir, milestone+"-S*.md")
 	re := regexp.MustCompile(`^` + regexp.QuoteMeta(milestone) + `-S(\d+)`)
 	max := 0
 	for _, f := range files {
