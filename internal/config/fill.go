@@ -53,6 +53,11 @@ func decodeObject(raw []byte) (*jsonx.Object, bool) {
 // config.json and config.local.json (MigrateRoundKeysFiles), so a required
 // round key is never filled beside its old name. A conflict between an old
 // and a new name is a *ConflictError and nothing is written.
+//
+// Last it runs the autonomy migration (#1101, AutonomyPending reports it): in a
+// config stamped before AutonomyLevelsSince, autonomy.level auto becomes
+// roundtrip in config.json and config.local.json and the stamp is raised, and
+// round.autopilot is deleted from both files.
 func Fill(root string) ([]string, error) {
 	filled, _, _, err := FillDetect(root, nil)
 	return filled, err
@@ -83,6 +88,8 @@ func FillDetect(root string, detect func() string) ([]string, SourceMigration, R
 			}
 			cfg = obj
 		}
+		// Read before the legacy stamp moves: an hv-era stamp predates rota.
+		stale := autonomyStale(cfg)
 		cfg, migrated := migrateLegacyVersion(cfg)
 		cfg, copied, moved := migrateLegacyVerify(cfg)
 		cfg, sm = MigrateSource(cfg, detect)
@@ -102,7 +109,13 @@ func FillDetect(root string, detect func() string) ([]string, SourceMigration, R
 			filled = append(filled, k.Name)
 		}
 		stripped := stripRemoved(cfg)
-		if len(filled) == 0 && !moved && !sm.Changed && len(stripped) == 0 {
+		localRewrote, err := migrateAutonomyLocal(root, stale)
+		if err != nil {
+			return err
+		}
+		var rewrote bool
+		cfg, rewrote = migrateAutonomy(cfg, stale, localRewrote)
+		if len(filled) == 0 && !moved && !sm.Changed && len(stripped) == 0 && !rewrote && !localRewrote {
 			return nil
 		}
 		return fsio.WriteJSONAtomic(path, cfg)
@@ -180,7 +193,8 @@ func migrateLegacyVerify(cfg *jsonx.Object) (*jsonx.Object, bool, bool) {
 
 // RemovedKeys are keys older `rota init` runs seeded that nothing reads any
 // more. `config check` names them and `config fill` deletes them.
-var RemovedKeys = []string{"issues.filterMineOnly", "issues.providers.github", "issues.providers.gitlab"}
+// round.autopilot went with #1101: autonomy.level auto turns the tick on.
+var RemovedKeys = []string{"issues.filterMineOnly", "issues.providers.github", "issues.providers.gitlab", "round.autopilot"}
 
 // stripRemoved deletes every RemovedKeys entry present in cfg, drops a parent
 // object that ends up empty (issues.providers) and returns the keys it removed.
