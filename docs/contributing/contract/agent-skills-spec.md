@@ -1,5 +1,4 @@
 ---
-verified-sha: f74a0de6ce6168f29007f05eb4b13947eb334a53
 refs:
   - test/validate-skills.py
   - internal/skills

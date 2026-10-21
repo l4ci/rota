@@ -1,5 +1,4 @@
 ---
-verified-sha: d0f5a4238843e7def00adf8d11e729c4333379fa
 refs:
   - docs/contributing/contract/cli-conventions.md
   - internal/cli/contract_test.go
