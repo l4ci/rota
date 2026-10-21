@@ -309,3 +309,14 @@ func TestRedactHidesDashLeadingSecretFlagValue(t *testing.T) {
 		}
 	}
 }
+
+func TestDraftRedactsHarnessAndModel(t *testing.T) {
+	env := Env{Hostname: "vo-laptop", Home: "/home/vo"}
+	_, body := Draft(Record{Source: SourceAgent, Summary: "x"}, Environment{Version: "dev", OS: "linux", Arch: "amd64",
+		Harness: "claude on vo-laptop", Model: "ghp_abcdefghijklmnopqrstuvwxyz0123456789"}, env)
+	for _, leak := range []string{"vo-laptop", "ghp_abcdef"} {
+		if strings.Contains(body, leak) {
+			t.Errorf("environment block leaks %q:\n%s", leak, body)
+		}
+	}
+}

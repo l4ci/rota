@@ -303,3 +303,19 @@ func TestHookStopSkipsTheOfferForARoundWorker(t *testing.T) {
 		t.Errorf("%d %q", code, out)
 	}
 }
+
+func TestBugreportListRedactsLikeDraft(t *testing.T) {
+	dir := trProject(t, "{}")
+	if _, err := bugreport.Add(dir, bugreport.Record{Source: bugreport.SourceAgent, Verb: "worker done",
+		Summary: "broke in " + filepath.Base(dir)}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	o := trRun(t, dir, "", "bugreport", "list")
+	if o.code != 0 || strings.Contains(o.stdout, filepath.Base(dir)) || !strings.Contains(o.stdout, "<repo>") {
+		t.Errorf("list leaks the repo name: %+v", o)
+	}
+	j := trRun(t, dir, "", "--json", "bugreport", "list")
+	if strings.Contains(j.stdout, filepath.Base(dir)) {
+		t.Errorf("json list leaks the repo name: %+v", j)
+	}
+}
