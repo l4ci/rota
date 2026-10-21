@@ -135,7 +135,7 @@ func crashedFold(t *testing.T, s Store, n int) {
 	}
 	p, _ := s.TierPath(Umbrella)
 	if err := Update(p, func(sc *Sidecar) (bool, error) {
-		hits, _ := readPending(claimed)
+		hits, _, _ := readPending(claimed)
 		for _, h := range hits {
 			sc.Bump(h.Topic, h.Title, h.Date)
 		}
@@ -192,5 +192,25 @@ func TestFoldHitsReplaysClaimedBufferTheSidecarNeverGot(t *testing.T) {
 	}
 	if e, _, _ := s.TierGet(Umbrella, "Arch", "bullet"); e.Hits != 2 {
 		t.Fatalf("hits = %d, want 2", e.Hits)
+	}
+}
+
+func TestFoldHitsCountsMalformedBufferLines(t *testing.T) {
+	s := lockedStore(t)
+	if _, err := s.Hit(Umbrella, "Arch", "bullet"); err != nil {
+		t.Fatal(err)
+	}
+	hp, _ := s.HitsPath(Umbrella)
+	f, err := os.OpenFile(hp, os.O_APPEND|os.O_WRONLY, 0o666)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("{\"topic\":\"Arch\",\"ti\n\n{\"topic\":\"\",\"title\":\"x\"}\n"); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	res, err := s.FoldHits(Umbrella)
+	if err != nil || res.Hits != 1 || res.Skipped != 2 {
+		t.Fatalf("fold = %+v err=%v, want 1 hit and 2 skipped (blank line is not malformed)", res, err)
 	}
 }
