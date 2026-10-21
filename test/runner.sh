@@ -17,7 +17,10 @@ TESTDIR="$REPO/test"
 # them all. Checked before anything is set up, and loudly: a typo must never end
 # in "All smoke tests passed." for sections that did not run. A relative entry
 # is taken from the repo root; every entry must be an existing test/sections/*.sh
-# file; a list with no entries (set but empty) is an error too.
+# file; a list with no entries (set but empty) is an error too. An entry from
+# another checkout's test/sections/ (a reviewer's git archive export) runs only
+# with ROTA_BIN set: without it the runner would build its own tree's binary and
+# a pass would say nothing about the tree the section came from (#1479).
 SECTIONS=()
 if [ "${SECTION_LIST+set}" = set ]; then
   SECTIONS_DIR="$(cd "$TESTDIR/sections" && pwd -P)"
@@ -33,7 +36,14 @@ if [ "${SECTION_LIST+set}" = set ]; then
       *.sh) ;;
       *) echo "runner: SECTION_LIST entry is not a .sh section: $entry" >&2; exit 2 ;;
     esac
-    if [ "$dir" != "$SECTIONS_DIR" ]; then
+    if [ "$dir" != "$SECTIONS_DIR" ] && [ "$(basename "$dir")" = sections ] \
+      && [ "$(basename "$(dirname "$dir")")" = test ] && [ -z "${ROTA_BIN:-}" ]; then
+      echo "runner: SECTION_LIST entry $entry belongs to the tree $(dirname "$(dirname "$dir")"), but this runner is in $REPO and would build its own binary, which says nothing about that tree." >&2
+      echo "runner: build that tree's binary and set ROTA_BIN to its absolute path, or run that tree's own test/runner.sh." >&2
+      exit 2
+    fi
+    if [ "$dir" != "$SECTIONS_DIR" ] && { [ "$(basename "$dir")" != sections ] \
+      || [ "$(basename "$(dirname "$dir")")" != test ]; }; then
       echo "runner: SECTION_LIST entry is not in test/sections/: $entry" >&2
       exit 2
     fi
@@ -138,14 +148,21 @@ export ROTA_TEST_DOCTOR_DISK="50:100"
 isolate_env "$RUN_TMP/iso"
 # Leak guard: this repo's worktree list must be the same after the run. A section
 # that removes or prunes a live round's slot worktrees fails here.
+# Both leak guards read git, so a tree without .git (a git archive export) runs
+# without them (#1479).
+HAS_GIT=0; [ -e "$REPO/.git" ] && HAS_GIT=1
 WORKTREES_BEFORE="$(mktemp)" || exit 1
-worktree_snapshot "$REPO" > "$WORKTREES_BEFORE"
+[ "$HAS_GIT" = 0 ] || worktree_snapshot "$REPO" > "$WORKTREES_BEFORE"
 
 # Snapshot the checkout read-only. A difference may be a leak OR legitimate
 # concurrent work; never restore it. The explicit post-loop check survives
 # sections replacing EXIT traps and retains before/after evidence on failure.
 REPO_SNAPSHOT="$ROTA_STAGE/checkout-before"
-python3 "$TESTDIR/lib/checkout-guard.py" snapshot "$REPO" "$REPO_SNAPSHOT"
+if [ "$HAS_GIT" = 1 ]; then
+  python3 "$TESTDIR/lib/checkout-guard.py" snapshot "$REPO" "$REPO_SNAPSHOT"
+else
+  echo "note: $REPO has no .git; the checkout and worktree leak guards are skipped" >&2
+fi
 
 cd "$TMP"
 mkdir -p .rota/bugs .rota/features .rota/tasks .rota/milestones
@@ -215,8 +232,10 @@ set -e
 # Fail conservatively on checkout differences, without attributing them to a
 # section or writing back to the checkout. Each shard keeps its own evidence.
 LEAKED=0
-python3 "$TESTDIR/lib/checkout-guard.py" check "$REPO" "$REPO_SNAPSHOT" "$SMOKE_DIAGNOSTICS" || LEAKED=1
-worktree_guard_check "$WORKTREES_BEFORE" "$REPO" || LEAKED=1
+if [ "$HAS_GIT" = 1 ]; then
+  python3 "$TESTDIR/lib/checkout-guard.py" check "$REPO" "$REPO_SNAPSHOT" "$SMOKE_DIAGNOSTICS" || LEAKED=1
+  worktree_guard_check "$WORKTREES_BEFORE" "$REPO" || LEAKED=1
+fi
 rm -f "$WORKTREES_BEFORE"
 # Temp-dir guard (#110): everything the run made is under $RUN_TMP. Entries
 # other than the runner's own were left behind by sections or helpers; report
