@@ -1,5 +1,12 @@
 # Reviewer briefs (Step 7)
 
+## Contents
+
+- Shared block (commits, items, diff, running the branch)
+- Spec reviewer brief
+- Standards reviewer brief
+- Both briefs end with
+
 Fill the bracketed parts from Steps 2-6 and drop any empty section. Both briefs open with the shared block, then add their own rubric.
 
 ```
@@ -18,6 +25,12 @@ Review `<branch>` against base `<base>` on one axis (named below).
 <same>
 
 **Diff:** read `<data.path from Step 5>` (commits, `--stat`, full diff with context). Do not ask for the diff to be pasted.
+
+**Running the branch.** The merge gate fails `FAIL worktree guard` when `git worktree list` changes during verify, so never touch the repo's worktrees or checkout. Export the branch and run everything there:
+- `git -C <repo> archive <ref> | tar -x -C <scratch>`, then run tests and probes only inside `<scratch>`.
+- Never run `git worktree add`, `git worktree remove`, `git checkout` or `git switch` in the repo, and never write a probe or test file into it.
+- If the extract fails, stop and report it. No fallback: do not fall back to a checkout, a worktree or the repo itself.
+- To run a smoke section, build the binary from the exported tree and set `ROTA_BIN` to it. `test/runner.sh` reads `ROTA_BIN`, not `PATH`, so a binary only prepended to `PATH` silently tests the installed one.
 ```
 
 ## Spec reviewer brief
