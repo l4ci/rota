@@ -44,8 +44,7 @@ func hasLine(text, line string) bool {
 // it works on raw bytes, so a CRLF line does not match the managed lines.
 //
 //  1. a missing file gets the managed block;
-//  2. an existing one gets the whole block appended when any line but the
-//     header is missing;
+//  2. an existing one gets the header and the missing lines appended;
 //  3. `.worktrees/` is added unless an equivalent line exists: any spelling git
 //     treats the same, with or without a slash and with CRLF line ends.
 func MergeGitignore(cur string, exists bool) string {
@@ -54,18 +53,24 @@ func MergeGitignore(cur string, exists bool) string {
 		out = strings.Join(ignoreLines, "\n") + "\n"
 	} else {
 		out = cur
-		missing := false
-		for _, l := range ignoreLines[1:] {
-			if !hasLine(out, l) {
-				missing = true
-			}
-		}
-		if missing {
-			out += "\n" + strings.Join(ignoreLines, "\n") + "\n"
+		if missing := MissingIgnoreLines(out); len(missing) > 0 {
+			out += "\n" + strings.Join(append([]string{ignoreLines[0]}, missing...), "\n") + "\n"
 		}
 	}
 	if !worktreesRe.MatchString(strings.ReplaceAll(out, "\r", "")) {
 		out += worktreesBlock
 	}
 	return out
+}
+
+// MissingIgnoreLines are the managed ignore lines (the header aside) that the
+// .gitignore text lacks.
+func MissingIgnoreLines(text string) []string {
+	var missing []string
+	for _, l := range ignoreLines[1:] {
+		if !hasLine(text, l) {
+			missing = append(missing, l)
+		}
+	}
+	return missing
 }
