@@ -169,6 +169,9 @@ type Row struct {
 	// Draining marks a roster slot past the round's slot count that still
 	// holds work: it takes nothing new (Members).
 	Draining bool
+	// NoLogin is why the slot's account has no usable Claude login ("" when it
+	// has one): assign skips the slot and refuses to name it.
+	NoLogin string
 	// BestOf is the other attempt's slot when the row's issue is built best-of:2.
 	BestOf string
 	// PRTitle is the open PR's title ("" without one) and Evidence the last
@@ -382,6 +385,10 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		for _, r := range rows {
 			r.Draining = slices.Contains(draining, r.Name)
 		}
+	}
+
+	for _, r := range rows {
+		r.NoLogin = SlotLoginProblem(reg.Slot(r.Name))
 	}
 
 	agents, hostOK := e.readHost(ctx, rep)

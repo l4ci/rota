@@ -55,6 +55,9 @@ const (
 	BlockBatch      = "batch"
 	BlockSlotBusy   = "slot busy"
 	BlockNoFreeSlot = "no free slot"
+	// BlockNoLogin: the slot's account has no usable Claude login, so a session
+	// there would stall at a login prompt.
+	BlockNoLogin = "no login"
 	// BlockDraining: the slot is past the round's slot count (round.slots,
 	// --slots); it finishes the work it holds and takes nothing new.
 	BlockDraining = "draining"
@@ -617,9 +620,18 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		if err := checkActive(reg, set, o.Agent, slot.HeldID() == worker.NormID(id)); err != nil {
 			return run, false, err
 		}
+		if why := SlotLoginProblem(slot); why != "" {
+			return run, false, blocked(BlockNoLogin, "slot %s's account has no login (%s in %s): %s", o.Agent, why, slot.ConfigDir(), loginHint(slot))
+		}
 	} else {
-		picked := e.pickSlots(ctx, reg, set, worker.NormID(id), 1)
+		picked, skipped := e.pickSlots(ctx, reg, set, worker.NormID(id), 1)
+		if len(skipped) > 0 {
+			res.Warnings = append(res.Warnings, "skipped slots whose account has no login: "+strings.Join(skipped, "; "))
+		}
 		if len(picked) == 0 {
+			if len(skipped) > 0 {
+				return run, false, blocked(BlockNoLogin, "every free roster slot has an account with no login: %s", strings.Join(skipped, "; "))
+			}
 			return run, false, blocked(BlockNoFreeSlot, "every roster slot is busy")
 		}
 		slot = picked[0]

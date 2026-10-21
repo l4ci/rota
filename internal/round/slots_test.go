@@ -1,6 +1,9 @@
 package round
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/harness"
@@ -75,7 +78,7 @@ func TestPickSlotsOrderIsResumeIdleParkable(t *testing.T) {
 	reg := worker.LoadRegistryTolerant(root)
 	roster := roundcfg.Settings{Roster: []string{"ben", "cy", "dana"}}
 	var e Env
-	names := func(ss []*worker.Slot) (out []string) {
+	names := func(ss []*worker.Slot, _ []string) (out []string) {
 		for _, s := range ss {
 			out = append(out, s.Name())
 		}
@@ -89,5 +92,27 @@ func TestPickSlotsOrderIsResumeIdleParkable(t *testing.T) {
 	}
 	if got := names(e.pickSlots(bg, reg, roster, "8", 2, reg.Slot("dana"))); len(got) != 2 || got[0] != "dana" || got[1] != "ben" {
 		t.Errorf("a pre-chosen slot leads and is not listed twice: %v", got)
+	}
+}
+
+func TestPickSlotsSkipsAccountsWithoutLogin(t *testing.T) {
+	root, good, bad := t.TempDir(), t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(good, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"t"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeRegistry(t, root,
+		slot(root, "ben", "park/ben", func(o *jsonx.Object) { o.Set("configDir", bad) }),
+		slot(root, "cy", "park/cy", func(o *jsonx.Object) { o.Set("configDir", good) }),
+		slot(root, "dana", "park/dana", nil), // no config dir: nothing to check
+	)
+	reg := worker.LoadRegistryTolerant(root)
+	set := roundcfg.Settings{Roster: []string{"ben", "cy", "dana"}}
+	var e Env
+	got, skipped := e.pickSlots(bg, reg, set, "8", 3)
+	if len(got) != 2 || got[0].Name() != "cy" || got[1].Name() != "dana" {
+		t.Errorf("picked %v, want cy then dana", got)
+	}
+	if len(skipped) != 1 || !strings.Contains(skipped[0], "ben") || !strings.Contains(skipped[0], "no credentials file") {
+		t.Errorf("skipped = %v, want ben with its problem", skipped)
 	}
 }
