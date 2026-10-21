@@ -323,7 +323,7 @@ func (s *state) warn(format string, a ...any) {
 	s.warnings = append(s.warnings, fmt.Sprintf(format, a...))
 }
 
-func (s *state) wtDir() string { return filepath.Join(s.root, ".worktrees") }
+func (s *state) wtDir() string { return filepath.Join(s.root, worker.WorktreeRoot) }
 
 // inside reports whether p is dir or below it.
 func inside(p, dir string) bool {
