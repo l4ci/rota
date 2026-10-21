@@ -16,18 +16,21 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -569,7 +572,7 @@ func (e Env) WithDefaults() Env {
 	}
 	if e.Forge == nil {
 		e.Forge = func(provider, dir string, s tracker.Settings) (Forge, error) {
-			return tracker.NewForge(e.Ctx, s, provider, dir)
+			return tracker.NewForge(e.Ctx, s, provider, dir, machineOption())
 		}
 	}
 	if e.Config == nil {
@@ -577,7 +580,7 @@ func (e Env) WithDefaults() Env {
 	}
 	if e.Issues == nil {
 		e.Issues = func(dir string, s tracker.Settings) (Issues, error) {
-			it, err := tracker.NewIssueTracker(e.Ctx, s, "", dir)
+			it, err := tracker.NewIssueTracker(e.Ctx, s, "", dir, machineOption())
 			if errors.Is(err, tracker.ErrNoIssueTracker) {
 				return nil, nil
 			}
@@ -606,6 +609,14 @@ func (e Env) WithDefaults() Env {
 		e.GateInput = e.loadGateInput
 	}
 	return e
+}
+
+// machineOption points a default-built tracker at this machine's connections,
+// as cli's trackerBase does for the production Env.
+func machineOption() tracker.Option {
+	return tracker.WithMachine(projects.OSEnv(), func() connections.Store {
+		return connections.OSKeychain(proc.Run, runtime.GOOS)
+	})
 }
 
 // execRun is the production Env.Run. It bounds the call like the host runner.
