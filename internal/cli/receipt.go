@@ -125,7 +125,11 @@ func hasVerdict(data any) bool {
 
 // retryHint tells the caller what stopped and how to retry; an exit-5 failure
 // carries no data envelope, so the hint is where the stage and residue show.
+// A settled verdict is not retried by id, so it names what reruns it instead.
 func retryHint(id string, e receipt.Entry) string {
+	if e.Status == receipt.Done { // a settled verdict: the same id replays it
+		return "request " + id + " replays this verdict; rerun with a fresh call without --request-id (after a push if the head should change)"
+	}
 	h := "retry with --request-id " + id
 	if e.FailedStage != "" {
 		h = "failed at stage " + e.FailedStage + "; " + h
