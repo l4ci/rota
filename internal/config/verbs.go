@@ -364,7 +364,7 @@ func isNonNegInt(n json.Number) bool {
 // strictEnumKeys are enum keys whose Choices are the whole set, so `config set`
 // refuses anything else. Other enum keys accept more than their listed choices
 // (a removed value still reads, a harness may be added), so they stay open.
-var strictEnumKeys = map[string]bool{"work.contextGuard": true, "plan.criticHarness": true}
+var strictEnumKeys = map[string]bool{"work.contextGuard": true, "plan.criticHarness": true, "autonomy.level": true}
 
 func validateEnum(key string, value any) error {
 	k, _ := SchemaKey(key)
@@ -499,12 +499,18 @@ func legacyVerifyPending(doc *jsonx.Object) bool {
 
 // Retired lists the config values rota no longer supports, one message each.
 // `config check` fails on them rather than let a skill quietly ignore the
-// value. autonomy.level "loop" went with loop autonomy (#70). It also holds a
+// value. autonomy.level takes only off, roundtrip and auto: "loop" went with
+// loop autonomy (#70), and anything else is no level. It also holds a
 // malformed ship.review policy, which would otherwise read as the default.
 func Retired(root string) []string {
 	out := []string{}
-	if s, _ := Value(Load(configPath(root)), "autonomy.level"); s == "loop" {
-		out = append(out, `autonomy.level "loop" was removed: set it to "auto" or "off" (rounds and automatic reviews cover unattended work)`)
+	if v, _ := Value(Load(configPath(root)), "autonomy.level"); validateEnum("autonomy.level", v) != nil {
+		b, _ := jsonx.MarshalCompact(v)
+		msg := "autonomy.level " + string(b) + " is not a level: set it to off, roundtrip or auto"
+		if v == "loop" {
+			msg = `autonomy.level "loop" was removed: set it to off, roundtrip or auto (rounds and automatic reviews cover unattended work)`
+		}
+		out = append(out, msg)
 	}
 	if v, _ := Value(Load(configPath(root)), ReviewKey); v != nil {
 		if _, err := ParseReviewPolicy(v); err != nil {

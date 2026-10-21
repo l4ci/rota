@@ -47,14 +47,17 @@ ap item create --kind tasks --title "Two" --body-file "$TMP_AP/body.md" >/dev/nu
 ap round start --holder-pid "$AHOLD" --scope slate --items 1,2 --slots 2 >/dev/null || fail "round start failed"
 
 # ── off by default ──────────────────────────────────────────────────────────
-RC=0; OUT=$(ap round tick) || RC=$?
-[ "$RC" = "4" ] || fail "tick must refuse while round.autopilot is off, got $RC: $OUT"
-RC=0; OUT=$(ap round watch --autopilot --heartbeat 5) || RC=$?
-[ "$RC" = "4" ] || fail "watch --autopilot must refuse while round.autopilot is off, got $RC: $OUT"
-pass "round.autopilot is off by default: tick and watch --autopilot refuse"
+for level in off roundtrip; do
+  ap config set autonomy.level "$level" >/dev/null
+  RC=0; OUT=$(ap round tick) || RC=$?
+  [ "$RC" = "4" ] || fail "tick must refuse under autonomy.level $level, got $RC: $OUT"
+  RC=0; OUT=$(ap round watch --autopilot --heartbeat 5) || RC=$?
+  [ "$RC" = "4" ] || fail "watch --autopilot must refuse under autonomy.level $level, got $RC: $OUT"
+done
+pass "the autopilot runs only under autonomy.level auto: tick and watch --autopilot refuse under off and roundtrip"
 
 # ── assign: ready items to idle slots, bounded by the cap, audited ─────────
-ap config set round.autopilot true >/dev/null
+ap config set autonomy.level auto >/dev/null
 ap config set round.autopilotCap 1 >/dev/null
 RC=0; OUT=$(ROTA_TEST_NOW=2026-10-03T12:00:00Z ap round tick) || RC=$?
 [ "$RC" = "0" ] && [ "$(apdid <<<"$OUT")" = "assign:1" ] || fail "first tick should assign exactly one item (cap 1): rc=$RC $OUT"

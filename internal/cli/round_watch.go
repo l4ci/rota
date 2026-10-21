@@ -30,7 +30,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 	forgePoll := fs.Float64("forge-poll", 120, "seconds between forge checks (escalation answers, PR states); 0 never asks the forge")
 	settle := fs.Float64("settle", 5, "seconds between the two pane captures of one classification")
 	lines := fs.Int("lines", 60, "pane lines to classify")
-	autopilot := fs.Bool("autopilot", false, "run a round tick on every wake and wake the orchestrator only for something new (needs round.autopilot)")
+	autopilot := fs.Bool("autopilot", false, "run a round tick on every wake and wake the orchestrator only for something new (needs autonomy.level auto)")
 	base := fs.String("base", "", "with --autopilot: the cycle branch PRs merge into (default each PR's recorded base)")
 	pid := fs.Int("holder-pid", 0, "with --autopilot: orchestrator pid for the lease, when its ancestry cannot be read")
 	return func(c *Ctx, args []string) (Result, error) {
@@ -56,7 +56,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 			return Result{}, Usage("%s", err.Error())
 		}
 		if *autopilot && !set.Autopilot {
-			return Result{}, Refused("round.autopilot is off").WithHint("rota config set round.autopilot true")
+			return Result{}, Refused("the autopilot runs only under autonomy.level auto").WithHint("rota config set autonomy.level auto")
 		}
 		cd, err := rotastate.CommonDir(root)
 		if err != nil {

@@ -212,6 +212,7 @@ func (r initConfigResult) report(data *jsonx.Object, lines *[]string) {
 // config is not copied in: a new project inherits it at runtime.
 func initConfig(c *Ctx, root string) (initConfigResult, error) {
 	var r initConfigResult
+	am := config.AutonomyPending(root)
 	filled, sm, rm, err := config.FillDetect(root, c.deps().originProvider(c.Context(), root))
 	if err != nil {
 		_, err = roundMigrationFail(err)
@@ -224,6 +225,7 @@ func initConfig(c *Ctx, root string) (initConfigResult, error) {
 	if rm.Changed() {
 		r.warnings = append(r.warnings, "moved the round-only work.* keys to round.* (rota migrate config)")
 	}
+	r.warnings = append(r.warnings, autonomyLines(am)...)
 	if err := initIssueSource(c, root); err != nil {
 		return r, err
 	}
