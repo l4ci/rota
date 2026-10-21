@@ -990,6 +990,17 @@ func ReviewKinds(d config.ReviewDepth, hasSpec bool) []string {
 	return nil
 }
 
+// CoveredDepth is the highest depth whose ReviewKinds are all in have: what the
+// verdicts recorded at head already satisfy.
+func CoveredDepth(have []string, hasSpec bool) config.ReviewDepth {
+	for _, d := range []config.ReviewDepth{config.DepthFull, config.DepthLight} {
+		if !slices.ContainsFunc(ReviewKinds(d, hasSpec), func(k string) bool { return !slices.Contains(have, k) }) {
+			return d
+		}
+	}
+	return config.DepthNone
+}
+
 // stepReviewDepth applies ship.review: it resolves the depth for this branch
 // from the diff size against the base and the labels of the slot's issue, notes
 // it, and refuses a branch that lacks the recorded verdicts that depth needs.
