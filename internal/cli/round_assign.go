@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // The C3 verb `rota round assign`; the steps are round.Env.Assign.
@@ -63,6 +64,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 	acceptCodex := fs.Bool("accept-codex-version", false, "deprecated and ignored: rota no longer checks the Codex version")
 	accept := fs.Bool("accept-overlap", false, "skip the file and scope overlap checks")
 	acceptOpenPR := fs.Bool("accept-open-pr", false, "assign an issue an open PR already resolves, for a deliberate redo")
+	bundle := fs.String("bundle", "", "member issues handed to the same slot beside the lead, comma-separated: one branch, one PR that closes them all (at most round.bundleMax)")
 	acceptBatch := fs.Bool("accept-batch", false, "assign past a full round.batch for this one call")
 	pid := fs.Int("holder-pid", 0, "orchestrator pid, when its ancestry cannot be read")
 	return func(c *Ctx, args []string) (Result, error) {
@@ -102,7 +104,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		}
 		env := accountedRoundEnv(c, ctx, root)
 		res, err := env.Assign(ctx, root, be, round.AssignOpts{
-			ID: id, Agent: *agent, Decisions: decisions, Siblings: pystr.SplitCSV(*siblings),
+			ID: id, Agent: *agent, Decisions: decisions, Siblings: pystr.SplitCSV(*siblings), Bundle: bundleArg(*bundle),
 			CheckOnly: *checkOnly, AcceptOverlap: *accept, AcceptOpenPR: *acceptOpenPR, AcceptBatch: *acceptBatch, HolderPID: *pid,
 			Tier: *tier, TierReason: *tierReason, Kind: *kind, Model: *model,
 			Settings: set,
@@ -147,6 +149,10 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		if len(res.Overlaps) > 0 {
 			d.Set("overlaps", overlapList(res.Overlaps))
 		}
+		if len(res.Bundle) > 0 {
+			d.Set("bundle", strs(res.Bundle))
+			d.Set("members", memberList(res.Members))
+		}
 		setIf(d, "account", res.Account)
 		d.Set("kind", res.Kind)
 		setIf(d, "kindSource", res.KindSource)
@@ -183,7 +189,11 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		if len(res.BestOf) > 0 {
 			return Result{Data: d, Text: fmt.Sprintf("assigned %s best-of:2 to %s", id, bestOfText(res.BestOf))}, nil
 		}
-		return Result{Data: d, Text: fmt.Sprintf("assigned %s to %s on %s", id, res.Agent, res.Branch)}, nil
+		lead := id
+		if len(res.Bundle) > 0 {
+			lead += " (+" + strings.Join(res.Bundle, ", +") + ")"
+		}
+		return Result{Data: d, Text: fmt.Sprintf("assigned %s to %s on %s", lead, res.Agent, res.Branch)}, nil
 	}
 }
 
@@ -219,6 +229,7 @@ func bestOfText(as []round.Assigned) string {
 	return strings.Join(out, " and ")
 }
 
+// readyDetail is every failed check, a bundle member's prefixed with its id.
 func readyDetail(r round.Assigned) string {
 	var out []string
 	for _, ch := range r.Checks {
@@ -226,5 +237,37 @@ func readyDetail(r round.Assigned) string {
 			out = append(out, ch.Name+": "+strings.Join(ch.Detail, "; "))
 		}
 	}
+	for _, m := range r.Members {
+		for _, ch := range m.Checks {
+			if !ch.OK {
+				out = append(out, "member "+m.ID+" "+ch.Name+": "+strings.Join(ch.Detail, "; "))
+			}
+		}
+	}
 	return strings.Join(out, " | ")
+}
+
+// bundleArg is --bundle as normalized ids; a repeat survives for Assign to refuse.
+func bundleArg(s string) []string {
+	var out []string
+	for _, m := range pystr.SplitCSV(s) {
+		out = append(out, worker.NormID(m))
+	}
+	return out
+}
+
+// memberList is the `members` list of the JSON: one object per bundle member.
+func memberList(ms []round.Readiness) []any {
+	out := make([]any, 0, len(ms))
+	for _, m := range ms {
+		o := jsonx.NewObject()
+		o.Set("id", m.ID)
+		o.Set("ready", m.Ready())
+		o.Set("checks", checkList(m.Checks))
+		if len(m.Overlaps) > 0 {
+			o.Set("overlaps", overlapList(m.Overlaps))
+		}
+		out = append(out, o)
+	}
+	return out
 }

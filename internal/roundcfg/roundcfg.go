@@ -118,6 +118,9 @@ type Settings struct {
 	// Batch is round.batch: the most items a round has assigned and not yet
 	// landed or parked at once; 0 means no limit.
 	Batch int
+	// BundleMax is round.bundleMax: the most member issues `round assign
+	// --bundle` hands one slot beside the lead; 0 means no limit.
+	BundleMax int
 	// ReviewLoop is round.reviewLoop: "manual" or "auto" (ReviewLoopManual,
 	// ReviewLoopAuto). Under auto the forge poll relays a done slot's review
 	// input to its worker itself.
@@ -249,6 +252,9 @@ func FromConfig(cfg any) (Settings, error) {
 		return s, err
 	}
 	if s.Batch, err = config.Int(cfg, "round.batch", 0, config.MaxInt); err != nil {
+		return s, err
+	}
+	if s.BundleMax, err = config.Int(cfg, "round.bundleMax", 0, config.MaxInt); err != nil {
 		return s, err
 	}
 	v, err = config.Value(cfg, "round.reviewLoop")

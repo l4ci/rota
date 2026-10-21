@@ -172,7 +172,8 @@ func (e Env) trackedFiles(ctx context.Context, root string) []string {
 	return files
 }
 
-// heldIDs are the items the registry's slots hold, and those a queued PR holds.
+// heldIDs are the items the registry's slots hold, and those a queued PR holds,
+// bundle members with their lead.
 // An ID a mid-round `migrate issues` left in file spelling (`B31`) also holds
 // the issue the map gives it.
 func heldIDs(root string) map[string]bool {
@@ -197,9 +198,15 @@ func heldIDs(root string) map[string]bool {
 	reg := worker.LoadRegistryTolerant(root) // no error return; assign and adopt read the registry strictly before they claim
 	for _, s := range reg.Slots() {
 		hold(s.HeldID())
+		for _, m := range s.Bundle() {
+			hold(m)
+		}
 	}
 	for _, q := range reg.PRs() {
 		hold(queuedIssue(q))
+		for _, m := range q.Bundle {
+			hold(m)
+		}
 	}
 	return held
 }
