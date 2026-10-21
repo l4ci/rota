@@ -92,6 +92,8 @@ Write the diff to a file, not into your context:
 rota review package <branch> --base <base> [--since <sha>] --json
 ```
 
+Right after packaging, fix the sha the reviewers are briefed on: `REVIEWED` is `data.head`, the sha the package diffed (the local `<branch>` tip). Never derive it from another ref: a local branch behind or ahead of origin would bind the verdict to commits no reviewer read. Step 8 records the verdicts at it; `verdict add` refuses (exit 4) when it is not the pushed head, so push or fetch first.
+
 `data.path` is the file (commits, `--stat` and the full `-U10` diff); `data.files` and `data.bytes` size it. No file cap: the reviewer reads the file, you don't. Exit 3 means an empty range or a `--since` not on the branch: report it and stop.
 
 When invoked with `--since <sha>` (re-review of a bounced branch), read [`re-review.md`](re-review.md) and follow it in place of the full Step 7 brief.
@@ -124,9 +126,11 @@ Fill the bracketed parts from Steps 2-6 and drop any empty section. Read [`revie
 Save each reviewer's JSON block to its own temp file. Record **spec first, then quality**, at the same sha (umbrella: add `--repo <name>`, see `umbrella-mode.md`):
 
 ```bash
-rota verdict add <branch> --kind review-spec --verdict <PASS|CONCERNS|FAIL> --body-file "$SPEC" --json
-rota verdict add <branch> --kind review-quality --verdict <PASS|CONCERNS|FAIL> --body-file "$STANDARDS" --json
+rota verdict add <branch> --kind review-spec --verdict <PASS|CONCERNS|FAIL> --sha "$REVIEWED" --body-file "$SPEC" --json
+rota verdict add <branch> --kind review-quality --verdict <PASS|CONCERNS|FAIL> --sha "$REVIEWED" --body-file "$STANDARDS" --json
 ```
+
+`--sha` binds the record to the reviewed commit. Exit 4 means the branch moved on origin after the briefing (the message names the extra commits): review the new head, do not record against it. Never skip `--sha` to get past the refusal.
 
 With no spec (Step 3, no referenced items), record only `review-quality`, and start its `summary` with `Spec axis not run: no referenced items.` so `rota verdict show` carries the gap. A `light` depth review with referenced items records only `review-spec`, and starts its `summary` with `Standards axis not run: light depth.`; `data.combined` of that call is the branch's review verdict (a spec-only record is its own combined verdict, and `rota worker gate` at `light` requires it).
 

@@ -560,6 +560,9 @@ func TestReviewPackage(t *testing.T) {
 	if want := filepath.Join(plain, ".rota", "review", "feat-x.md"); path != want {
 		t.Errorf("path %q, want %q", path, want)
 	}
+	if want := strings.TrimSpace(gitT(t, plain, "rev-parse", "feat/x")); data["head"] != want {
+		t.Errorf("head %v, want the local branch tip %s", data["head"], want)
+	}
 	body, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)

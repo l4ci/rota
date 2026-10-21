@@ -456,7 +456,7 @@ A statusline command, not a query: it prints nothing of its own, always exits 0 
 
 | Usage | What it does |
 |---|---|
-| `rota verdict add [<branch>] --kind <review-spec\|review-quality\|second-opinion\|qa> --verdict <verdict> [--body-file <path\|->] [--file-deferred --pr <ref>]` | record a verdict for a branch; `--file-deferred` files each deferred (non-blocking, above `info`) finding as a task item related to the PR |
+| `rota verdict add [<branch>] --kind <review-spec\|review-quality\|second-opinion\|qa> --verdict <verdict> [--sha <sha>] [--body-file <path\|->] [--file-deferred --pr <ref>]` | record a verdict for a branch; `--sha` binds it to the reviewed commit and is refused (exit 4) unless that is the head of `origin/<branch>`; `--file-deferred` files each deferred (non-blocking, above `info`) finding as a task item related to the PR |
 | `rota verdict show [<branch>]` | latest verdict of each kind for a branch |
 | `rota verdict route [<branch>] --for <ship-review\|ship-second-opinion\|ship-qa\|queue>` | next step for a consumer of a branch's verdict |
 
@@ -486,7 +486,7 @@ Verdicts are `PASS`, `CONCERNS` or `FAIL` (`qa` also takes `INFRA-FAIL`). They l
 | `rota review scope [<branch>]` | commits, files, item IDs and origin entries of a branch |
 | `rota review brief [<branch>]` | fresh-eyes second-opinion brief for a branch |
 | `rota review scaffolding [<branch>] [--base <branch>]` | added diff lines that look like leftover task scaffolding |
-| `rota review package [<branch>] [--base <ref>] [--since <sha>]` | write a branch's commits, `--stat` and full diff (`-U10`) to `.rota/review/<branch>.md` and print the path; `--since` packages only the commits after a sha |
+| `rota review package [<branch>] [--base <ref>] [--since <sha>]` | write a branch's commits, `--stat` and full diff (`-U10`) to `.rota/review/<branch>.md` and print the path (`data.head` is the branch sha it diffed, the sha to pass `verdict add --sha`); `--since` packages only the commits after a sha |
 | `rota review depth [<branch>] [--labels <a,b>]` | review depth `ship.review` picks for a branch (`full`, `light`, `none`) from its diff size and the labels given, and why |
 | `rota review queue` | open issues waiting for review |
 
