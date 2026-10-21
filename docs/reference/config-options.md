@@ -156,6 +156,8 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `round.ledgerKeep` | int | `0` |  | Rounds: Rounds of the round ledger (.rota/ledger.jsonl) to keep. A new round trims the entries of older rounds. 0 keeps everything. |
 | `round.architectureEvery` | int | `20` |  | Rounds: Closed non-refactor items between automatic architecture reviews. 0 turns them off. |
 | `round.architectureAreas` | list | `[]` |  | Rounds: Areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review. |
+| `round.architectureIdleMinItems` | int | `5` |  | Rounds: Closed non-refactor items since the last review before an idle slot with no ready candidate (queue-empty) triggers one. 0 drops the condition. A slate round never fires queue-empty. |
+| `round.architectureIdleMinHours` | int | `24` |  | Rounds: Hours since the last review before the queue-empty trigger may fire again. 0 drops the condition. |
 | `round.autopilot` | bool | `false` |  | Rounds: Lets rota round watch --autopilot and rota round tick assign, gate and merge mechanically. Merges only under ship.mergeApproval none. |
 | `round.autopilotCap` | int | `3` |  | Rounds: Most assigns, and most merges, one autopilot tick does. 0 means the default. |
 | `round.batch` | int | `0` |  | Rounds: Most items a round may have assigned and not yet landed or parked at once. rota round assign refuses the next one past it and rota round tick assigns none. 0 means no limit. |

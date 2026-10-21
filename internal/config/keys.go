@@ -144,6 +144,8 @@ var Keys = []Key{
 	k("round.ledgerKeep", num("0"), false, TypeInt, "Rounds: Rounds of the round ledger (.rota/ledger.jsonl) to keep. A new round trims the entries of older rounds. 0 keeps everything."),
 	k("round.architectureEvery", num("20"), false, TypeInt, "Rounds: Closed non-refactor items between automatic architecture reviews. 0 turns them off."),
 	k("round.architectureAreas", []any{}, false, TypeList, "Rounds: Areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review."),
+	k("round.architectureIdleMinItems", num("5"), false, TypeInt, "Rounds: Closed non-refactor items since the last review before an idle slot with no ready candidate (queue-empty) triggers one. 0 drops the condition. A slate round never fires queue-empty."),
+	k("round.architectureIdleMinHours", num("24"), false, TypeInt, "Rounds: Hours since the last review before the queue-empty trigger may fire again. 0 drops the condition."),
 	k("round.autopilot", false, false, TypeBool, "Rounds: Lets rota round watch --autopilot and rota round tick assign, gate and merge mechanically. Merges only under ship.mergeApproval none."),
 	k("round.autopilotCap", num("3"), false, TypeInt, "Rounds: Most assigns, and most merges, one autopilot tick does. 0 means the default."),
 	k("round.batch", num("0"), false, TypeInt, "Rounds: Most items a round may have assigned and not yet landed or parked at once. rota round assign refuses the next one past it and rota round tick assigns none. 0 means no limit."),

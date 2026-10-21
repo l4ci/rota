@@ -228,3 +228,59 @@ func TestMintedReviewsNormalisesRecordedSpelling(t *testing.T) {
 		t.Fatalf("minted reviews = %v, want 101 and B7", got)
 	}
 }
+
+func TestArchitectureQueueEmptyRateLimit(t *testing.T) {
+	ctx := context.Background()
+	notReady := []Candidate{{ID: "7", Readiness: Readiness{Checks: []Check{{Name: "criteria", OK: false}}}}}
+	closed := []tracker.Issue{
+		closedIssue(1, "a", "2026-10-01T00:00:00Z"), closedIssue(2, "b", "2026-10-02T00:00:00Z"),
+		closedIssue(3, "c", "2026-10-03T00:00:00Z"),
+	}
+	root, e, be, set := archFixture(t, 20, closed)
+	set.ArchitectureIdleMinItems, set.ArchitectureIdleMinHours = 3, 24
+	seedReview(t, root) // 2026-09-30, more than 24h before the fixture clock
+
+	if a, _ := e.Architecture(ctx, root, be, set, notReady); !a.Due || a.Trigger != TriggerQueueEmpty {
+		t.Fatalf("three closed items, old review: want queue-empty, got %+v", a)
+	}
+
+	set.ArchitectureIdleMinItems = 4
+	if a, _ := e.Architecture(ctx, root, be, set, notReady); a.Due {
+		t.Fatalf("below the item floor must not fire: %+v", a)
+	}
+
+	// Right after a review: due is false whatever has closed since.
+	set.ArchitectureIdleMinItems = 1
+	e.Worker.Now = func() time.Time { return time.Date(2026, 10, 1, 6, 0, 0, 0, time.UTC) } // 6h before the first close
+	if err := worker.Update(root, func(d *worker.Doc) { d.StartReview("2026-10-01T00:00:00Z", 2, "test", nil) }); err != nil {
+		t.Fatal(err)
+	}
+	be.closedIssues = closed
+	if a, _ := e.Architecture(ctx, root, be, set, notReady); a.Due || !a.Cooling {
+		t.Fatalf("a review younger than the minimum hours must not retrigger: %+v", a)
+	}
+	e.Worker.Now = func() time.Time { return time.Date(2026, 10, 3, 6, 0, 0, 0, time.UTC) } // 30h on, past the cache
+	if a, _ := e.Architecture(ctx, root, be, set, notReady); !a.Due || a.Trigger != TriggerQueueEmpty {
+		t.Fatalf("after the minimum hours: %+v", a)
+	}
+}
+
+func TestArchitectureQueueEmptySkipsSlateRound(t *testing.T) {
+	ctx := context.Background()
+	notReady := []Candidate{{ID: "7", Readiness: Readiness{Checks: []Check{{Name: "criteria", OK: false}}}}}
+	root, e, be, set := archFixture(t, 20, []tracker.Issue{closedIssue(1, "a", "2026-10-01T00:00:00Z")})
+	seedReview(t, root)
+	set.Scope = roundcfg.ScopeSlate
+	if a, _ := e.Architecture(ctx, root, be, set, notReady); a.Due {
+		t.Fatalf("a slate round must not fire queue-empty: %+v", a)
+	}
+	set.Scope = roundcfg.ScopeOpen
+	if a, _ := e.Architecture(ctx, root, be, set, notReady); !a.Due {
+		t.Fatalf("an open-scope round still fires: %+v", a)
+	}
+	// The threshold still applies to a slate round.
+	set.Scope, set.ArchitectureEvery = roundcfg.ScopeSlate, 1
+	if a, _ := e.Architecture(ctx, root, be, set, notReady); !a.Due || a.Trigger != TriggerThreshold {
+		t.Fatalf("threshold should fire in a slate round: %+v", a)
+	}
+}
