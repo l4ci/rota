@@ -81,15 +81,35 @@ func LoadGlobal(dir string) (map[string]any, error) {
 // stamp, mutate runs behind the stamp, written under the same lock before the
 // value: a post-split autonomy.level must never meet a stale stamp, or a
 // concurrent fill would rewrite it, and a failed stamp leaves the value unwritten (#1101, #1502).
+// A stamp this call wrote is undone when the value then fails to write, so a
+// leftover stamp never blesses a pre-split auto fill has yet to migrate (#1517).
 func updateGlobal(dir string, stamp bool, mutate func(any) (any, error)) error {
-	return fsio.UpdateJSONStrict(GlobalPath(dir), jsonx.NewObject(), func(doc any) (any, error) {
+	var undo func()
+	path := GlobalPath(dir)
+	err := fsio.UpdateJSONStrict(path, jsonx.NewObject(), func(doc any) (any, error) {
 		if stamp {
+			prev, perr := os.ReadFile(globalStampPath(dir))
+			had := perr == nil
+			wrote := globalStale(dir)
 			if err := stampGlobal(dir); err != nil {
 				return nil, err
+			}
+			if wrote {
+				undo = func() {
+					if had {
+						_ = fsio.WriteFileAtomic(globalStampPath(dir), prev)
+					} else {
+						_ = os.Remove(globalStampPath(dir))
+					}
+				}
 			}
 		}
 		return mutate(doc)
 	})
+	if err != nil && undo != nil {
+		_ = fsio.Locked(path, fsio.LockTimeout, func() error { undo(); return nil })
+	}
+	return err
 }
 
 // MergeGlobal writes vals (dotted schema key to value) into the global config
