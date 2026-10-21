@@ -327,7 +327,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 |---|---|
 | `rota orchestrate [--dry-run]` | launch the orchestrator: an agent under `rota keepalive run` that starts `/rota-orchestrate`; `--dry-run` runs `rota doctor` and prints what would start |
 
-Bare `rota` with no verb does the same in an initialized project and runs `rota setup` in one that is not. The agent comes from `orchestrator.harness`.
+Bare `rota` with no verb does the same in an initialized project and runs `rota setup` in a directory that is not one. In your home directory (with no `.rota/` there or above) it is a launcher instead: Projects is the default entry, Setup is hidden, and Config opens the global config. The agent comes from `orchestrator.harness`.
 
 ## `rota skills`
 
@@ -527,7 +527,7 @@ A gated verb refuses with exit 4 (`blockedBy: "manual gate"`) at every autonomy 
 
 | Usage | What it does |
 |---|---|
-| `rota init` | create or refresh `.rota/`, the managed blocks and `.gitignore` |
+| `rota init [--force]` | create or refresh `.rota/`, the managed blocks and `.gitignore`; in your home directory (no `.rota/` there or above) it refuses and points at `rota projects`, and `--force` inits there anyway |
 | `rota projects` | list the projects registered on this machine; `rota init` registers, a missing path is marked, not pruned |
 | `rota projects cleanup` | delete every entry whose directory is gone or has no `.rota/`, printing each; no preview |
 | `rota projects remove <dir>` | drop one registry entry; the directory stays |
@@ -536,7 +536,7 @@ A gated verb refuses with exit 4 (`blockedBy: "manual gate"`) at every autonomy 
 | `rota connect list` | connections with the store holding each secret (`keychain`, `file`, `none`) and whether `ROTA_<NAME>_TOKEN` overrides it; never the secret |
 | `rota connect test <name>` | one authenticated read through the connection; exit 1 on an unknown name, no secret or a failed read; exit 5 when this build has no test read for the connection's kind yet |
 | `rota connect remove <name>` | drop the connection and clear its secret from every store |
-| `rota setup [--yes] [--set <key>=<value>]... [--save-global] \| --list` | `rota init` plus the main config choices, asked on a terminal; `--yes` takes defaults, `--list` prints the questions; on a terminal it ends by offering to save the answers (all on first use, else those that differ) as the global defaults, and `--save-global` does that without asking |
+| `rota setup [--force] [--yes] [--set <key>=<value>]... [--save-global] \| --list` | `rota init` plus the main config choices, asked on a terminal; `--yes` takes defaults, `--list` prints the questions; on a terminal it ends by offering to save the answers (all on first use, else those that differ) as the global defaults, and `--save-global` does that without asking; refuses in your home directory like `rota init`, `--force` overrides |
 | `rota init check` | is `.rota/` initialized (exit 1 when not) |
 | `rota init umbrella (--repos <csv> \| --all \| --list)` | register sub-repos and make this directory an umbrella |
 

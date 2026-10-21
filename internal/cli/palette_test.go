@@ -344,8 +344,68 @@ func TestPaletteHomeConfigEntryOpensTheGlobalConfig(t *testing.T) {
 	if code := mainWith(deps, nil, term, &outb, &errb); code != 0 {
 		t.Fatalf("exit %d: %s", code, errb.String())
 	}
-	if out := tui.Strip(outb.String()); !strings.Contains(out, "▾ work (") || strings.Contains(out, "press any key") {
+	out := tui.Strip(outb.String())
+	if !strings.Contains(out, "▾ work (") || strings.Contains(out, "press any key") || !strings.Contains(out, "view and change the global config") {
 		t.Errorf("config screen not opened in place:\n%s", out)
+	}
+}
+
+// The screens `config edit` and `config show --ui` open in $HOME (what the
+// palette's Config entry hosts) write the global config, not a project.
+func TestConfigScreensInHomeAreTheGlobalOne(t *testing.T) {
+	projectsXDG(t)
+	home := homeDir(t)
+	for _, args := range [][]string{{"config", "edit"}, {"config", "show", "--ui"}} {
+		code, models, errs := cfgRun(t, home, true, args...)
+		if code != 0 || len(models) != 1 {
+			t.Fatalf("%v: exit %d, %d screens: %s", args, code, len(models), errs)
+		}
+		if _, ok := models[0].(configScreen).store.(globalStore); !ok {
+			t.Errorf("%v: store is %T, want globalStore", args, models[0].(configScreen).store)
+		}
+	}
+}
+
+// A $HOME that holds .rota/ (dotfiles repo) is a project: no global fallback,
+// no init refusal, the project palette.
+func TestHomeWithRotaDirIsAProject(t *testing.T) {
+	projectsXDG(t)
+	home := homeDir(t)
+	if err := os.Mkdir(filepath.Join(home, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if atHome(&Ctx{}) {
+		t.Fatal("atHome true in a $HOME with .rota/")
+	}
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	os.Chdir(home)
+	if code, out, _ := runMainWith(testDeps(), "config", "show", "--json"); code != 0 || strings.Contains(out, `"scope": "global"`) {
+		t.Errorf("config show: exit %d: %s", code, out)
+	}
+	if code, _, errs := runMainWith(testDeps(), "init"); code != 0 {
+		t.Errorf("init in a dotfiles HOME: exit %d: %s", code, errs)
+	}
+}
+
+func TestConfigSetInHomeSaysItWroteTheGlobalConfig(t *testing.T) {
+	projectsXDG(t)
+	home := homeDir(t)
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	os.Chdir(home)
+	code, out, errs := runMainWith(testDeps(), "config", "set", "work.isolation", "worktree")
+	if code != 0 || !strings.Contains(out, `global: work.isolation = "worktree"`) {
+		t.Fatalf("text: exit %d: %s %s", code, out, errs)
+	}
+	code, out, _ = runMainWith(testDeps(), "config", "set", "--json", "work.isolation", "branch")
+	if code != 0 || !strings.Contains(out, `"scope": "global"`) {
+		t.Errorf("json: exit %d: %s", code, out)
+	}
+	// The global config has no sub-repo; the message must not blame a --global
+	// the user never typed (in $HOME the fallback supplies it).
+	if _, err := globalDir(&Ctx{Repo: "x"}); err == nil || strings.Contains(err.Error(), "--global") {
+		t.Errorf("globalDir with --repo: %v", err)
 	}
 }
 

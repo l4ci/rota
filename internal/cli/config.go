@@ -80,7 +80,7 @@ func orDash(s string) string {
 // use it instead of a project root, so they work outside any project.
 func globalDir(c *Ctx) (string, error) {
 	if c.Repo != "" {
-		return "", Usage("--global and --repo cannot be combined")
+		return "", Usage("--repo cannot be combined with the global config")
 	}
 	dir, err := projects.Dir()
 	if err != nil {
@@ -223,7 +223,9 @@ func configSet(fs *flag.FlagSet) RunFunc {
 		}
 		var res config.SetResult
 		var err error
+		scope := "project"
 		if *global || atHome(c) {
+			scope = "global"
 			var dir string
 			if dir, err = globalDir(c); err != nil {
 				return Result{}, err
@@ -251,7 +253,12 @@ func configSet(fs *flag.FlagSet) RunFunc {
 		}
 		data.Set("changed", res.Changed)
 		b, _ := jsonx.MarshalCompact(res.Value)
-		return Result{Data: data, Text: args[0] + " = " + string(b)}, nil
+		text := args[0] + " = " + string(b)
+		if scope == "global" {
+			data.Set("scope", "global")
+			text = "global: " + text + " (global config, applies to every project that does not override it)"
+		}
+		return Result{Data: data, Text: text}, nil
 	}
 }
 
