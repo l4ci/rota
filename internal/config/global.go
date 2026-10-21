@@ -29,14 +29,14 @@ var notGlobal = map[string]bool{VersionKey: true, "git.baseBranch": true, "umbre
 // config.local.json) into the global config under dir. Keys the project does
 // not set stay as they are: projects inherit the global, so replacing it would
 // delete inherited values. It returns the keys it saved, in schema order.
-func SaveGlobal(root, dir string) ([]string, error) {
+func SaveGlobal(root, dir string) ([]string, AutonomyMigration, error) {
 	raw, err := os.ReadFile(configPath(root))
 	if err != nil {
-		return nil, fmt.Errorf("no .rota/config.json to save: %w", err)
+		return nil, AutonomyMigration{}, fmt.Errorf("no .rota/config.json to save: %w", err)
 	}
 	cfg, ok := decodeObject(raw)
 	if !ok {
-		return nil, ErrCorrupt
+		return nil, AutonomyMigration{}, ErrCorrupt
 	}
 	vals := map[string]any{}
 	for _, k := range Keys {
@@ -46,10 +46,13 @@ func SaveGlobal(root, dir string) ([]string, error) {
 	}
 	// An auto from a project stamped before the split is one-hop: copy it as
 	// roundtrip, since MergeGlobal stamps the global as current (#1101).
+	var am AutonomyMigration
 	if vals["autonomy.level"] == "auto" && autonomyStale(cfg) {
 		vals["autonomy.level"] = "roundtrip"
+		am.GlobalRewrite = true
 	}
-	return MergeGlobal(dir, vals)
+	saved, err := MergeGlobal(dir, vals)
+	return saved, am, err
 }
 
 // LoadGlobal is the global config's values by dotted schema key. A missing
