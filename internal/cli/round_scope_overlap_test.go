@@ -130,7 +130,7 @@ func TestScopeOverlapReachesRoundCandidates(t *testing.T) {
 // a closed item since the last review and no ready candidate, a review is due.
 func TestScopeOverlapReachesRoundArchitecture(t *testing.T) {
 	trigger := func(overlap string) any {
-		f := newScopeFx(t, overlap, "")
+		f := newScopeFx(t, overlap, `,"architectureIdleMinItems":0`)
 		code, out, errOut := rotaInWith(t, f.deps, f.root, "--json", "round", "architecture", "--check")
 		if code != 0 {
 			t.Fatalf("architecture exit %d: %s %s", code, out, errOut)

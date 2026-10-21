@@ -101,6 +101,12 @@ type Settings struct {
 	// split into; empty means the subsystem map, else one whole-repo review.
 	ArchitectureEvery int
 	ArchitectureAreas []string
+	// ArchitectureIdleMinItems and ArchitectureIdleMinHours are
+	// round.architectureIdleMinItems and round.architectureIdleMinHours: the
+	// closed items and the hours since the last review the queue-empty trigger
+	// needs; 0 drops that condition.
+	ArchitectureIdleMinItems int
+	ArchitectureIdleMinHours int
 	// Autopilot is round.autopilot: `rota round watch --autopilot` and `rota
 	// round tick` do the mechanical steps. AutopilotCap is round.autopilotCap,
 	// the most assigns and the most merges one tick does.
@@ -224,6 +230,12 @@ func FromConfig(cfg any) (Settings, error) {
 		return s, err
 	}
 	if s.ArchitectureAreas, err = list(cfg, "round.architectureAreas"); err != nil {
+		return s, err
+	}
+	if s.ArchitectureIdleMinItems, err = config.Int(cfg, "round.architectureIdleMinItems", 0, config.MaxInt); err != nil {
+		return s, err
+	}
+	if s.ArchitectureIdleMinHours, err = config.Int(cfg, "round.architectureIdleMinHours", 0, config.MaxInt); err != nil {
 		return s, err
 	}
 	v, err = config.Value(cfg, "round.autopilot")

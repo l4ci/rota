@@ -164,14 +164,14 @@ func TestMaxBounces(t *testing.T) {
 
 func TestArchitectureKeys(t *testing.T) {
 	s, err := Load(project(t, `{}`))
-	if err != nil || s.ArchitectureEvery != 20 || len(s.ArchitectureAreas) != 0 {
+	if err != nil || s.ArchitectureEvery != 20 || len(s.ArchitectureAreas) != 0 || s.ArchitectureIdleMinItems != 5 || s.ArchitectureIdleMinHours != 24 {
 		t.Fatalf("defaults: %+v %v", s, err)
 	}
 	s, err = Load(project(t, `{"round":{"architectureEvery":0,"architectureAreas":["cli","worker"]}}`))
 	if err != nil || s.ArchitectureEvery != 0 || len(s.ArchitectureAreas) != 2 {
 		t.Fatalf("overrides: %+v %v", s, err)
 	}
-	for _, bad := range []string{`{"round":{"architectureEvery":-1}}`, `{"round":{"architectureEvery":"x"}}`, `{"round":{"architectureAreas":"cli"}}`} {
+	for _, bad := range []string{`{"round":{"architectureEvery":-1}}`, `{"round":{"architectureEvery":"x"}}`, `{"round":{"architectureAreas":"cli"}}`, `{"round":{"architectureIdleMinItems":-1}}`, `{"round":{"architectureIdleMinHours":"x"}}`} {
 		if _, err := Load(project(t, bad)); err == nil {
 			t.Errorf("%s should be refused", bad)
 		}
