@@ -115,7 +115,11 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 				}
 			}
 			// A bundle is one change: every issue it closes needs its own proof.
-			for _, bid := range sl.BundleIssues() {
+			ids, err := openBundleIssues(c, root, sl)
+			if err != nil {
+				return Result{}, err
+			}
+			for _, bid := range ids {
 				_, st, _, err := openProof(c, bid)
 				if err != nil {
 					return Result{}, err
@@ -249,7 +253,11 @@ func missingRed(c *Ctx, root string, sl *worker.Slot, base string) (noRed bool, 
 		return false, nil, nil
 	}
 	// A bundle is one change: a red-first run on any of its issues is enough.
-	for _, bid := range sl.BundleIssues() {
+	ids, err := openBundleIssues(c, root, sl)
+	if err != nil {
+		return false, nil, err
+	}
+	for _, bid := range ids {
 		_, st, _, err := openProof(c, bid)
 		if err != nil {
 			return false, nil, err
@@ -263,6 +271,29 @@ func missingRed(c *Ctx, root string, sl *worker.Slot, base string) (noRed bool, 
 		}
 	}
 	return true, nil, nil
+}
+
+// openBundleIssues is the slot's bundle, lead first, less every member whose
+// item is closed: a member leaves the bundle by closing, so done no longer asks
+// for its proof. The lead always stays. A backlog that cannot be read keeps the
+// member (its proof is still required).
+func openBundleIssues(c *Ctx, root string, sl *worker.Slot) ([]string, error) {
+	ids := sl.BundleIssues()
+	if len(ids) < 2 {
+		return ids, nil
+	}
+	be, err := openBacklog(c, root, false, "")
+	if err != nil {
+		return ids, nil
+	}
+	out := ids[:1:1]
+	for _, id := range ids[1:] {
+		if it, err := be.Get(id); err == nil && it.Closed {
+			continue
+		}
+		out = append(out, id)
+	}
+	return out, nil
 }
 
 // isProdGo is a Go file a test does not own: not *_test.go, not under testdata.
