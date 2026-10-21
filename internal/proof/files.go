@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
@@ -50,8 +51,12 @@ func (s files) Update(id string, fn func(string) (string, bool, error)) error {
 		}
 		if rerr != nil { // missing: start the sidecar, from the legacy rows when the detail file has any
 			content = fmt.Sprintf("# %s: %s\n", id, title)
-			if legacy, ok, _ := backlog.ProofText(s.root, id); ok && CountRows(legacy) > 0 {
-				content = legacy
+			legacy, _, lerr := backlog.ProofText(s.root, id)
+			if lerr != nil {
+				return exitcode.Errf(exitcode.ExitInternal, "cannot read proof of %s: %v", id, lerr)
+			}
+			if rows := rowLines(legacy); len(rows) > 0 {
+				content += "\n## Proof\n\n" + strings.Join(rows, "\n") + "\n"
 			}
 		}
 		updated, changed, err := fn(content)

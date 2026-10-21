@@ -58,9 +58,9 @@ func project(t *testing.T) string {
 	return root
 }
 
-// The detail files and the shown rows must stay byte-identical to what the
-// retired proof add and show helpers produced (testdata/golden, frozen,
-// changed only by reviewed edit).
+// The shown rows must stay byte-identical to what the retired proof add and
+// show helpers produced (testdata/golden, frozen, changed only by reviewed
+// edit); the rows now live in the sidecar, and the detail file stays as it was.
 func TestAddAndShowMatchOldHelpers(t *testing.T) {
 	root := project(t)
 	steps := []struct {
@@ -260,6 +260,10 @@ func TestLegacyDetailRowsAreReadAndSeedTheSidecar(t *testing.T) {
 	}
 	if rows, _, _ := Show(Files(root), "F13"); len(rows) != 2 || rows[0].Check != "seed" || rows[1].Check != "lint" {
 		t.Errorf("after add = %+v", rows)
+	}
+	side, _ := os.ReadFile(filepath.Join(root, ".rota/features/F13.proof"))
+	if strings.Contains(string(side), "Notes") || strings.Contains(string(side), "after") {
+		t.Errorf("sidecar copied more than the proof rows:\n%s", side)
 	}
 	if after, _ := os.ReadFile(detail); string(after) != string(before) {
 		t.Errorf("detail file changed:\n%s", after)
