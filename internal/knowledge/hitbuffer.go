@@ -3,6 +3,8 @@ package knowledge
 import (
 	"bufio"
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -113,6 +115,49 @@ func (s Store) applyPending(sc *Sidecar, hits []pendingHit) error {
 	return nil
 }
 
+// foldedKey is the sidecar field naming the claimed buffer whose hits the
+// sidecar already holds. A fold that dies after the sidecar write leaves that
+// buffer behind; the mark is how the next fold or read knows not to replay it.
+const foldedKey = "foldedBuffer"
+
+const claimedSuffix = ".folding"
+
+// claimedBuffers lists the buffers a fold claimed and has not yet removed.
+func claimedBuffers(hp string) ([]string, error) {
+	return filepath.Glob(hp + ".*" + claimedSuffix)
+}
+
+func foldedMark(sc *Sidecar) string {
+	v, _ := sc.obj.Get(foldedKey)
+	name, _ := v.(string)
+	return name
+}
+
+// unfoldedHits is every buffered hit the sidecar does not yet hold: claimed
+// buffers it has not marked folded, then the live buffer.
+func unfoldedHits(sc *Sidecar, hp string) ([]pendingHit, error) {
+	claimed, err := claimedBuffers(hp)
+	if err != nil {
+		return nil, err
+	}
+	var out []pendingHit
+	for _, c := range claimed {
+		if filepath.Base(c) == foldedMark(sc) {
+			continue
+		}
+		hits, err := readPending(c)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, hits...)
+	}
+	live, err := readPending(hp)
+	if err != nil {
+		return nil, err
+	}
+	return append(out, live...), nil
+}
+
 // effective is scope's sidecar as it reads once the buffered hits are folded
 // in: nothing is written, so reads stay clean.
 func (s Store) effective(scope string) (*Sidecar, error) {
@@ -128,7 +173,7 @@ func (s Store) effective(scope string) (*Sidecar, error) {
 	if err != nil {
 		return nil, err
 	}
-	hits, err := readPending(hp)
+	hits, err := unfoldedHits(sc, hp)
 	if err != nil {
 		return nil, err
 	}
@@ -141,9 +186,31 @@ type FoldResult struct {
 	Changed bool // the tracked sidecar was rewritten
 }
 
+// claim renames the live buffer to a uniquely named claimed file, so hits
+// appended from here on land in a fresh buffer instead of being removed with
+// the folded one. It returns "" when there is no live buffer.
+func claim(hp string) (string, error) {
+	var nonce [6]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return "", err
+	}
+	dst := hp + "." + hex.EncodeToString(nonce[:]) + claimedSuffix
+	if err := os.Rename(hp, dst); os.IsNotExist(err) {
+		return "", nil
+	} else if err != nil {
+		return "", err
+	}
+	return dst, nil
+}
+
 // FoldHits applies the buffered hits of scope to its tracked sidecar and
 // empties the buffer. It is the one verb that writes the sidecar for hits, so
 // the caller commits the result.
+//
+// A fold is crash-safe: the buffer is claimed by rename, the sidecar write
+// records the claimed file's name, and only then is the file removed. A fold
+// that dies, or fails to remove, after the sidecar write leaves a claimed file
+// the sidecar already marks, which the next fold removes without replaying.
 func (s Store) FoldHits(scope string) (FoldResult, error) {
 	var res FoldResult
 	p, err := s.TierPath(scope)
@@ -155,28 +222,69 @@ func (s Store) FoldHits(scope string) (FoldResult, error) {
 		return res, err
 	}
 	if _, err := os.Stat(hp); os.IsNotExist(err) {
-		return res, nil // nothing buffered: take no lock, leave no lockfile
+		if left, _ := claimedBuffers(hp); len(left) == 0 {
+			return res, nil // nothing buffered: take no lock, leave no lockfile
+		}
 	}
 	err = fsio.Locked(hp, fsio.LockTimeout, func() error {
-		hits, err := readPending(hp)
-		if err != nil || len(hits) == 0 {
+		if _, err := claim(hp); err != nil {
 			return err
+		}
+		claimed, err := claimedBuffers(hp)
+		if err != nil || len(claimed) == 0 {
+			return err
+		}
+		// Drop the already-folded leftover before anything overwrites the mark.
+		sc, err := LoadSidecar(p)
+		if err != nil {
+			return err
+		}
+		pending := claimed[:0:0]
+		for _, c := range claimed {
+			if filepath.Base(c) != foldedMark(sc) {
+				pending = append(pending, c)
+			} else if err := os.Remove(c); err != nil {
+				return err
+			}
 		}
 		cm, err := s.contradicted()
 		if err != nil {
 			return err
 		}
 		th := s.PromoteThreshold()
-		if err := Update(p, func(sc *Sidecar) (bool, error) {
-			for _, h := range hits {
-				bumpHit(sc, h, th, cm)
+		for _, c := range pending {
+			name := filepath.Base(c)
+			hits, err := readPending(c)
+			if err != nil {
+				return err
 			}
-			return true, nil
-		}); err != nil {
-			return err
+			var applied int
+			if err := Update(p, func(sc *Sidecar) (bool, error) {
+				for _, h := range hits {
+					bumpHit(sc, h, th, cm)
+				}
+				sc.obj.Set(foldedKey, name)
+				applied = len(hits)
+				return true, nil
+			}); err != nil {
+				return err
+			}
+			if applied > 0 {
+				res = FoldResult{Hits: res.Hits + applied, Changed: true}
+			}
+			if err := os.Remove(c); err != nil {
+				return err
+			}
 		}
-		res = FoldResult{Hits: len(hits), Changed: true}
-		return os.Remove(hp)
+		// The mark has done its job; clear it so the tracked sidecar carries no
+		// per-fold noise. Names are unique, so a failure here leaves it harmless.
+		return Update(p, func(sc *Sidecar) (bool, error) {
+			if foldedMark(sc) == "" {
+				return false, nil
+			}
+			sc.obj.Delete(foldedKey)
+			return true, nil
+		})
 	})
 	return res, err
 }

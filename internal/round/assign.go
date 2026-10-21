@@ -640,6 +640,13 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 			return run, false, blocked(BlockNoFreeSlot, "every roster slot is busy")
 		}
 		slot = picked[0]
+		// A holder resumes without the usable() gate in pickSlots: refuse it
+		// like the explicit --agent path rather than re-dispatch into a login prompt.
+		if slot.HeldID() == worker.NormID(id) {
+			if why := SlotLoginProblem(slot); why != "" {
+				return run, false, blocked(BlockNoLogin, "slot %s's account has no login (%s in %s): %s", slot.Name(), why, slot.ConfigDir(), loginHint(slot))
+			}
+		}
 	}
 	agent := slot.Name()
 	res.Agent = agent

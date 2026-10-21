@@ -210,7 +210,7 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 	transcript := fs.String("transcript", "", "path of the run's transcript (behaviour only)")
 	fileDeferred := fs.Bool("file-deferred", false, "file each deferred (non-blocking, non-info) finding as a task item related to --pr")
 	pr := fs.String("pr", "", "the PR the deferred items cite in --related (with --file-deferred)")
-	sha := fs.String("sha", "", "the reviewed commit: record it, refusing unless it is the head of origin/<branch>")
+	sha := fs.String("sha", "", "the reviewed commit: record it, refusing unless it is the head of origin/<branch>, or the local branch when it is not pushed")
 	body := bodyFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if *kind == "" {
