@@ -71,7 +71,7 @@ func runDoctor(c *Ctx, args []string) (Result, error) {
 // doctorInput gathers the real environment: Deps.DoctorPath replaces PATH for
 // tool lookup (a test hook, not part of the CLI).
 func doctorInput(ctx context.Context, d *Deps) doctor.Input {
-	in := doctor.Input{Exec: doctorExec(d.Proc), Getenv: d.Getenv, Look: doctorLook(d.LookPath, d.DoctorPath), Credentials: d.credentials()}
+	in := doctor.Input{Exec: doctorExec(d.Proc), Look: doctorLook(d.LookPath, d.DoctorPath), Credentials: d.credentials()}
 	in.Dir, _ = d.Getwd()
 	in.Home, _ = d.UserHomeDir()
 	if dir, src, warn, err := projects.Resolve(d.projectsEnv()); err == nil {
@@ -98,9 +98,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.RegistryHost = worker.RegistryHost(root)
 	in.RoundHost = worker.ResolveHost(root, cfg, d.Getenv, doctorLookErr(in.Look))
 	in.SourceProblem = doctorSourceProblem(cfg)
-	if in.SourceProblem == "" {
-		in.Tracker = tracker.SettingsFromConfig(cfg)
-	}
+	in.Tracker = tracker.SettingsFromConfig(cfg)
 	in.Kinds = doctorKinds(cfg)
 	for _, a := range config.Accounts(cfg) {
 		if a.Name != "" {
