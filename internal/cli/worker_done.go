@@ -78,6 +78,14 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			return Result{Data: d}, err
 		}
 
+		// Done is the worker's last action: a late edit or commit after it moves
+		// the head a review or the gate has already bound to.
+		if kind != worker.OutcomeFailed {
+			if err := settledBranch(c, slotDir(sl, root), sl.Branch(), d); err != nil {
+				return Result{Data: d}, err
+			}
+		}
+
 		cmds := c.deps().workerEnv().GateConfig(root).Tier("fast")
 		if kind == worker.OutcomeFailed {
 			// A worker that cannot deliver has nothing to prove: the summary is its record.
@@ -294,6 +302,41 @@ func missingFastProof(rows []proof.Row, head string, want []string) (missing []s
 		}
 	}
 	return missing
+}
+
+// settledBranch refuses a worktree with uncommitted changes, and a branch
+// whose pushed copy (origin/<branch>) trails HEAD. A branch never pushed passes:
+// the contract opens the PR, and so pushes, after done.
+func settledBranch(c *Ctx, dir, branch string, d *jsonx.Object) error {
+	repo := c.deps().Repo(dir)
+	dirty, ok, err := repo.Dirty(c.Context())
+	if err != nil {
+		return gitErr(err)
+	}
+	if ok && dirty {
+		d.Set("dirty", true)
+		e := Refused("worktree %s has uncommitted changes: done is the last action", dir)
+		e.Hint = "commit (or discard) them, push, record the proof at the new HEAD, then run `rota worker done` again"
+		return e
+	}
+	remote, err := repo.Run(c.Context(), "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+branch)
+	if err != nil {
+		return gitErr(err)
+	}
+	if remote.ExitCode != 0 {
+		return nil
+	}
+	head, err := repo.Run(c.Context(), "rev-parse", "HEAD")
+	if err != nil {
+		return gitErr(err)
+	}
+	if strings.TrimSpace(remote.Stdout) != strings.TrimSpace(head.Stdout) {
+		d.Set("unpushed", true)
+		e := Refused("%s has commits not pushed to origin/%s: done is the last action", branch, branch)
+		e.Hint = fmt.Sprintf("`git push origin %s`, then run `rota worker done` again", branch)
+		return e
+	}
+	return nil
 }
 
 // branchHead is the commit the slot's branch points at.

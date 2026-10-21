@@ -102,6 +102,7 @@ Work only this task, then stop.
   arrived after the listing stays unread. `worker done` refuses (exit 4) while any mail is unread, so
   read it rather than retry. A mail you already saw in the pane is the same relay: do not act on
   it twice.
+- Done is the last action. `rota worker done <slot>` refuses (exit 4) a dirty worktree or a HEAD that trails `origin/<branch>`: commit and push first, and make no commit, push or edit after it, because a review or the gate binds to the head it recorded. A fix after done means another `rota worker done`.
 - After every relay fix, from any relay and not only a `REVIEW` one, even a one-line
   fix, run `rota worker done <slot>`: the done event it records is what the watch trusts
   when the relay echo has scrolled out of the pane between polls.
