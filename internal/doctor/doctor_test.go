@@ -143,6 +143,8 @@ func TestRunTable(t *testing.T) {
 		{"host herdr pane without herdr falls to solo", Input{Dispatch: "subagent", Getenv: env("HERDR_ENV", "1")}, without("herdr"), with(nil), "host", Skip, "solo", ""},
 		{"host herdr pane prefers herdr over tmux", Input{Getenv: env("HERDR_ENV", "1", "TMUX", "x")}, all, with(nil), "host", Pass, "herdr", ""},
 		{"host explicit tmux ignores a herdr pane", Input{Dispatch: "tmux", Getenv: env("HERDR_ENV", "1")}, all, with(nil), "host", Pass, "tmux", ""},
+		{"host reads the recorded round host with no pane env", Input{Dispatch: "subagent", RegistryHost: host.Herdr}, all, with(nil), "host", Pass, "herdr 0.9.3", ""},
+		{"host recorded solo beats a tmux pane", Input{Dispatch: "tmux", RegistryHost: host.Solo}, all, with(nil), "host", Skip, "solo", ""},
 		{"host explicit herdr missing fails in tmux", Input{Dispatch: "herdr", Getenv: env("TMUX", "x")}, without("herdr"), with(nil), "host", Fail, "herdr not found", ""},
 
 		{"tracker github ok", Input{}, all, with(nil), "tracker", Pass, "gh authenticated", ""},
