@@ -3,7 +3,6 @@ package orchestrate
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -295,7 +294,7 @@ func acctObj(name, dir string) *jsonx.Object {
 func TestAccountTheOrchestratorStartsUnder(t *testing.T) {
 	pickB := func(string) (string, bool) { return "b", true }
 	none := func(string) (string, bool) { return "", false }
-	home, _ := os.UserHomeDir()
+	home := "/fake/home"
 	bDir := filepath.Join(home, ".claude-b")
 	flagged := func(dir string) []string {
 		return []string{"/bin/rota", "keepalive", "run", "--first-prompt", "/rota-orchestrate", "--config-dir", dir, "--", "claude", "--model", "opus", "--permission-mode", "auto"}
@@ -322,6 +321,7 @@ func TestAccountTheOrchestratorStartsUnder(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			l := newRig(c.env).launcher()
 			l.PickAccount = c.pick
+			l.Home = func() (string, error) { return home, nil }
 			cfg := map[string]any{}
 			for k, v := range c.cfg {
 				cfg[k] = v

@@ -11,6 +11,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
@@ -237,6 +238,31 @@ func setAt(path string, notObject error, key, raw string, update func(string, an
 		return cfg, nil
 	})
 	return res, err
+}
+
+// Reset drops key's local override, then makes the project value the default: a
+// required key is written with its default unless the global config under env
+// supplies it, any other key is removed from the project layer.
+func Reset(root string, env projects.Env, key string) error {
+	if _, err := Unset(root, key, LayerLocal); err != nil {
+		return err
+	}
+	for _, k := range Keys {
+		if k.Name != key {
+			continue
+		}
+		if k.Required && !GlobalSupplies(env, key) {
+			b, err := jsonx.MarshalCompact(Default(k))
+			if err != nil {
+				return err
+			}
+			_, err = Set(root, key, string(b))
+			return err
+		}
+		_, err := Unset(root, key, LayerProject)
+		return err
+	}
+	return Validate(key, "")
 }
 
 // Unset removes key from the layer's file, and the objects it leaves empty. It

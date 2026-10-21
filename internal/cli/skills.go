@@ -159,10 +159,10 @@ func skillsClaudeDirs(getenv func(string) string, home, root string) (dirs, skip
 		if ac.ConfigDir == "" {
 			continue
 		}
-		dir := worker.ExpandConfigDir(ac.ConfigDir)
+		dir := worker.ExpandConfigDirIn(ac.ConfigDir, home)
 		dup := false
 		for _, d := range append(append([]string{}, dirs...), skipped...) {
-			dup = dup || worker.SameConfigDir(d, dir)
+			dup = dup || worker.SameConfigDirIn(d, dir, home)
 		}
 		if dup {
 			continue

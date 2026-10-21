@@ -97,7 +97,7 @@ func (e Env) SessionEnsure(ctx context.Context, root string, o SessionOpts) (Ses
 		return SessionState{Inside: true, Where: h.Where()}, nil
 	}
 	if h.Kind() == host.Herdr {
-		cwd, _ := os.Getwd()
+		cwd, _ := e.Getwd()
 		err := fail(exitcode.ExitRefused, "round.dispatch=herdr needs /rota-work to run inside a herdr pane")
 		err.Data = BlockData{BlockedBy: "outside herdr"}
 		err.Hint = fmt.Sprintf("open herdr, start Claude Code in a pane at %s, and run /rota-work there; worker tabs then open in that workspace, beside the orchestrator", cwd)

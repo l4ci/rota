@@ -35,7 +35,7 @@ func ClearWorktree(g Git, branch string, at Checkout) error {
 	if wt == "" {
 		return nil
 	}
-	if PathContains(wt, at.Cwd) {
+	if worker.PathContains(wt, at.Cwd) {
 		return &Refusal{By: "worktree", Msg: "worktree contains the current directory: " + wt, Hint: "run ship merge from outside this worktree"}
 	}
 	if err := checkOwnership(res.Stdout, at, branch, wt); err != nil {
@@ -81,7 +81,7 @@ func checkOwnership(listing string, at Checkout, branch, wt string) error {
 			return &GitError{Msg: fmt.Sprintf("cannot read round slots: %v", err)}
 		}
 		for _, slot := range reg.Slots() {
-			if path := slot.Worktree(); path != "" && PathContains(resolve(root, path), wt) {
+			if path := slot.Worktree(); path != "" && worker.PathContains(resolve(root, path), wt) {
 				return &Refusal{By: "worktree", Msg: "worktree belongs to round slot " + slot.Name() + ": " + wt, Hint: "leave slot cleanup to the round orchestrator"}
 			}
 		}
@@ -98,7 +98,7 @@ func checkOwnership(listing string, at Checkout, branch, wt string) error {
 				continue
 			}
 			path := resolve(root, entry.Worktree)
-			if PathContains(path, wt) && PathContains(wt, path) {
+			if worker.PathContains(path, wt) && worker.PathContains(wt, path) {
 				return nil
 			}
 		}
@@ -120,22 +120,6 @@ func projectRoot(dir string) string {
 		return root
 	}
 	return dir
-}
-
-// PathContains compares physical paths, with component boundaries (wt-2 is
-// not inside wt). Relative paths are resolved against the process cwd.
-func PathContains(parent, child string) bool {
-	clean := func(p string) string {
-		if real, err := filepath.EvalSymlinks(p); err == nil {
-			p = real
-		}
-		if abs, err := filepath.Abs(p); err == nil {
-			p = abs
-		}
-		return filepath.Clean(p)
-	}
-	rel, err := filepath.Rel(clean(parent), clean(child))
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // linkedWorktree is the path of the linked (not the first) worktree in a
