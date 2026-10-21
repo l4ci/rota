@@ -10,6 +10,7 @@
   - `--promote <topic> "<title>"`
   - `--deprecate <topic> "<title>"`
   - `--amend <topic> "<title>"`
+  - `--remove <topic> "<title>"`
 - Process contradiction candidates
 
 ## Manual flags
@@ -124,6 +125,24 @@ Deprecated: <topic> :: <title> → deprecated
 ```
 
 **Important:** manual deprecations do NOT touch the contradictions queue. Do NOT call `rota knowledge contradiction clear` here: the queue holds heuristic candidates only.
+
+
+### `--remove <topic> "<title>"`
+
+Deletes the bullet from `.rota/KNOWLEDGE.md` and its entry from `.rota/knowledge-tier.json`. Deprecate keeps the text in the file; remove is for a bullet that no longer earns its lines.
+
+Remove instead of deprecate when the learning is now a tracked issue, or the gap it described is fixed. Deprecate when the text still explains a past decision a reader may hit again.
+
+Shell command shape:
+```bash
+rota knowledge rm --topic "<topic>" --title "<title>"
+```
+
+An unknown topic or title exits 3 and changes nothing, so a second run fails the same way. Report one line:
+
+```
+Removed: <topic> :: <title>
+```
 
 
 ### `--amend <topic> "<title>"`

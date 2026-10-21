@@ -442,3 +442,61 @@ func bulletTitle(block string) string {
 	}
 	return ""
 }
+
+// RemoveResult reports Remove.
+type RemoveResult struct{ File string }
+
+// Remove deletes the bullet titled title under "## topic" in scope's
+// KNOWLEDGE.md and its tier entry. A bullet runs from its "- " line to the
+// next sibling bullet; the last bullet of a section keeps the blank line that
+// separates it from the next heading. It returns ErrNotFound when the topic or
+// the bullet is missing, leaving both files untouched.
+func (s Store) Remove(scope, topic, title string) (RemoveResult, error) {
+	km, err := s.KnowledgePath(scope)
+	if err != nil {
+		return RemoveResult{}, err
+	}
+	sidecar, err := s.TierPath(scope)
+	if err != nil {
+		return RemoveResult{}, err
+	}
+	res := RemoveResult{File: km}
+	err = lockFiles([]string{km}, func() error {
+		content, err := ReadFile(km)
+		if err != nil {
+			return err
+		}
+		st, en, ok := section.Find(content, topic)
+		if !ok {
+			return notFound("topic '%s' not found in %s", topic, km)
+		}
+		body := content[st:en]
+		starts := bulletStart.FindAllStringSubmatchIndex(body, -1)
+		for i, m := range starts {
+			if body[m[2]:m[3]] != title {
+				continue
+			}
+			a, b := m[0], len(body)
+			if i+1 < len(starts) {
+				b = starts[i+1][0]
+			} else if !strings.HasSuffix(body[:a], "\n\n") {
+				b = a + len(strings.TrimRight(body[a:], "\n")) + 1
+			}
+			next := content[:st] + body[:a] + body[b:] + content[en:]
+			if err := writeText(km, next, fsio.WriteFileAtomic); err != nil {
+				return err
+			}
+			// Buffered hits are keyed by this bullet: fold them first so a
+			// later fold cannot recreate the entry.
+			if _, err := s.FoldHits(scope); err != nil {
+				return err
+			}
+			if !fileExists(sidecar) {
+				return nil
+			}
+			return Update(sidecar, func(sc *Sidecar) (bool, error) { return sc.Delete(topic, title), nil })
+		}
+		return notFound("bullet titled '%s' not found under '## %s' in %s", title, topic, km)
+	})
+	return res, err
+}

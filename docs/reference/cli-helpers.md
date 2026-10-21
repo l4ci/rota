@@ -172,6 +172,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota knowledge add --topic <T> --title <S> --body-file <path\|-> [--date YYYY-MM-DD] [--sha <hex>]` | add a bullet under a topic |
 | `rota knowledge amend --topic <T> --fragment <F> --mode append --body-file <path\|->` | append text to an existing bullet |
 | `rota knowledge replace --topic <T> --old <text> --new <text>` | replace text inside the one bullet that contains it |
+| `rota knowledge rm --topic <T> --title <title>` | delete one bullet and its tier entry |
 | `rota knowledge rename-topic --from <X> --to <Y> [--title <T>]` | rename a topic or move one bullet |
 | `rota knowledge hit --topic <T> --title <S>` | register a consulted bullet; buffered in the gitignored `knowledge-hits.jsonl` until `tier fold` |
 | `rota knowledge tier get --topic <T> --title <S>` | show one bullet's tier |

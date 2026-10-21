@@ -21,7 +21,7 @@ Copy this checklist and track your progress:
 
 - `--strict`: run the Opus verifier (Step 7) for this run.
 - `--retro [<session-id|path>]`: retrospective mode. Skip Steps 2 to 8 and follow *`--retro`* in [`references/learn-rare-modes.md`](references/learn-rare-modes.md), then exit.
-- `--term <name>`, `--promote <topic> "<title>"`, `--deprecate <topic> "<title>"`, `--amend <topic> "<title>"`: manual modes. Skip Steps 2 to 8 and follow the matching section of [`references/learn-rare-modes.md`](references/learn-rare-modes.md), then exit.
+- `--term <name>`, `--promote <topic> "<title>"`, `--deprecate <topic> "<title>"`, `--amend <topic> "<title>"`, `--remove <topic> "<title>"`: manual modes. Skip Steps 2 to 8 and follow the matching section of [`references/learn-rare-modes.md`](references/learn-rare-modes.md), then exit.
 
 With none of those, run the normal flow (Step 2 onward).
 
@@ -121,7 +121,7 @@ If verification ran and passed, add a middle line: `Opus verification: PASS — 
 ## References
 
 - [`references/persistence-skills.md`](references/persistence-skills.md): shared spine and divergence axes for `/rota-learn` and `/rota-decide`, including `--term` for Glossary entries.
-- [`references/learn-rare-modes.md`](references/learn-rare-modes.md): `--term`, `--promote`, `--deprecate`, `--amend`, and the contradiction queue.
+- [`references/learn-rare-modes.md`](references/learn-rare-modes.md): `--term`, `--promote`, `--deprecate`, `--amend`, `--remove`, and the contradiction queue.
 - [`umbrella-routing.md`](umbrella-routing.md): Step 5 / 6 `--repo` scope flag and scope question in umbrella mode.
 - [`topic-size.md`](topic-size.md): Step 8 nudge or auto-split for large topics.
 - [`verifier.md`](verifier.md): Step 7 Opus verifier dispatch, prompt and verdict rules.
