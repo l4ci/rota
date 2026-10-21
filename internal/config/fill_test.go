@@ -384,3 +384,25 @@ func TestLegacyKeysStillDecide(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+// A removed key held only in config.local.json is as inert as one in
+// config.json: check names it, marked local, and fill deletes it from the
+// local file.
+func TestRemovedNamesLocalOnlyKeys(t *testing.T) {
+	root := project(t, `{"issues": {"label": "mine"}}`,
+		`{"round": {"autopilot": true}, "issues": {"filterMineOnly": true, "label": "x"}}`)
+	want := []string{"issues.filterMineOnly (config.local.json)", "round.autopilot (config.local.json)"}
+	if got := Removed(root); !reflect.DeepEqual(got, want) {
+		t.Fatalf("Removed before fill: %v, want %v", got, want)
+	}
+	if _, err := Fill(root); err != nil {
+		t.Fatal(err)
+	}
+	if got := Removed(root); len(got) != 0 {
+		t.Errorf("Removed after fill: %v", got)
+	}
+	local := readLocal(t, root)
+	if strings.Contains(local, "filterMineOnly") || strings.Contains(local, "autopilot") || !strings.Contains(local, `"label"`) {
+		t.Errorf("config.local.json after fill:\n%s", local)
+	}
+}

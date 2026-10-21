@@ -525,22 +525,24 @@ func Retired(root string) []string {
 	return out
 }
 
+// LocalMark tags a Removed entry held only by .rota/config.local.json.
+const LocalMark = " (config.local.json)"
+
 // Removed lists the RemovedKeys that .rota/config.json still holds, in
-// RemovedKeys order. They are inert: `config check` names them, `config fill`
-// deletes them, and no verb fails on them.
+// RemovedKeys order, then those config.local.json holds, each suffixed with
+// LocalMark. They are inert: `config check` names them, `config fill`
+// deletes them from both files, and no verb fails on them.
 func Removed(root string) []string {
 	out := []string{}
-	raw, err := os.ReadFile(configPath(root))
-	if err != nil {
-		return out
-	}
-	doc, ok := decodeObject(raw)
-	if !ok {
-		return out
-	}
-	for _, k := range RemovedKeys {
-		if _, ok := lookupPresent(doc, strings.Split(k, ".")); ok {
-			out = append(out, k)
+	for _, f := range []struct{ path, mark string }{{configPath(root), ""}, {localPath(root), LocalMark}} {
+		doc := readObject(f.path)
+		if doc == nil {
+			continue
+		}
+		for _, k := range RemovedKeys {
+			if _, ok := lookupPresent(doc, strings.Split(k, ".")); ok {
+				out = append(out, k+f.mark)
+			}
 		}
 	}
 	return out
