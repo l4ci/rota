@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -375,7 +374,7 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		cwd, err := os.Getwd()
+		cwd, err := c.deps().Getwd()
 		if err != nil {
 			return Result{}, err
 		}
