@@ -942,6 +942,9 @@ func (e Env) pickAccount(ctx context.Context, root, agent string) (string, error
 	}
 	name, ok := e.Worker.Accounts.Pick(ctx, root, nil)
 	if !ok {
+		if why := e.Worker.Accounts.NoPickReason(ctx, root, nil); why != "" {
+			return "", &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "no round.accounts account is usable: " + why}
+		}
 		return "", &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "no round.accounts account has headroom: every configured account is cooling down"}
 	}
 	if _, _, err := e.Worker.Accounts.Assign(ctx, root, agent, name); err != nil {
