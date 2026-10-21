@@ -629,3 +629,23 @@ func TestJiraDeployment(t *testing.T) {
 		t.Errorf("stored %+v, want %+v", got, dc)
 	}
 }
+
+func TestSecurityRead(t *testing.T) {
+	var got proc.Cmd
+	run := func(_ context.Context, c proc.Cmd) (proc.Result, error) {
+		got = c
+		return proc.Result{Stdout: "blob\n"}, nil
+	}
+	v, ok, err := SecurityRead(context.Background(), run, "svc", "")
+	if v != "blob" || !ok || err != nil || got.Name != "security" || strings.Join(got.Args, " ") != "find-generic-password -s svc -w" {
+		t.Errorf("service-only read = %q %v %v via %v", v, ok, err, got)
+	}
+	SecurityRead(context.Background(), run, "svc", "acct")
+	if strings.Join(got.Args, " ") != "find-generic-password -s svc -a acct -w" {
+		t.Errorf("account read args = %v", got.Args)
+	}
+	miss := func(context.Context, proc.Cmd) (proc.Result, error) { return proc.Result{ExitCode: 44}, nil }
+	if _, ok, err := SecurityRead(context.Background(), miss, "svc", ""); ok || err != nil {
+		t.Errorf("miss = %v, %v", ok, err)
+	}
+}

@@ -5,14 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"io"
 	"math"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -21,7 +19,9 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // Account usage headroom and slot assignment: the port of
@@ -74,6 +74,8 @@ type Accounts struct {
 	Fetch Fetcher
 	// HTTP is the client for the usage endpoint; nil means a 5s-timeout client.
 	HTTP *http.Client
+	// Login reads each account's credentials; the zero value reads files only.
+	Login Credentials
 }
 
 func (a *Accounts) now() time.Time { return a.Env.WithDefaults().Now().UTC() }
@@ -256,24 +258,37 @@ func (a *Accounts) defaultFetch(ctx context.Context, name, configDir string) (*j
 	return o, ""
 }
 
-// CredentialsProblem reports why the account whose config dir is dir (already
-// expanded) has no usable credentials: no file (or, on macOS, Keychain
-// entry), unreadable, or no access token. "" means usable. Expiry is not
-// checked: Claude Code refreshes a stale token itself, and this code never
-// does.
-func CredentialsProblem(dir string) string {
-	_, _, why := readCredentials(dir, time.Now())
-	return why
+// Credentials reads an account's login. GOOS and Run are the platform seams:
+// on darwin the login Keychain is consulted through Run (the one `security`
+// read, connections.SecurityRead), elsewhere never. The zero value reads files
+// only. Now defaults to time.Now.
+type Credentials struct {
+	GOOS string
+	Run  proc.Runner
+	Now  func() time.Time
 }
 
-// goos and keychainRead are the platform seams of the credential read: tests
-// swap them to stand in for macOS and its login Keychain.
-var (
-	goos         = runtime.GOOS
-	keychainRead = securityRead
-)
+// SystemCredentials is Credentials on this machine, running tools through run.
+func SystemCredentials(run proc.Runner) Credentials {
+	return Credentials{GOOS: runtime.GOOS, Run: run, Now: time.Now}
+}
 
-var errNoKeychainEntry = errors.New("no keychain entry")
+// CredentialsProblem reports why the account whose config dir is dir (already
+// expanded) has no usable credentials on this machine; see Credentials.Problem.
+func CredentialsProblem(dir string) string { return SystemCredentials(proc.Run).Problem(dir) }
+
+// Problem reports why the account whose config dir is dir (already expanded)
+// has no usable credentials: no file (or, on macOS, Keychain entry),
+// unreadable, or no access token. "" means usable. Expiry is not checked:
+// Claude Code refreshes a stale token itself, and this code never does.
+func (c Credentials) Problem(dir string) string {
+	now := time.Now
+	if c.Now != nil {
+		now = c.Now
+	}
+	_, _, why := c.read(dir, now())
+	return why
+}
 
 const keychainBase = "Claude Code-credentials"
 
@@ -289,28 +304,19 @@ func keychainService(dir string) string {
 	return keychainBase + "-" + hex.EncodeToString(sum[:])[:8]
 }
 
-// securityRead reads one generic password through the macOS `security` tool.
-func securityRead(service string) ([]byte, error) {
-	out, err := exec.Command("security", "find-generic-password", "-s", service, "-w").Output()
-	if err != nil {
-		return nil, errNoKeychainEntry
-	}
-	return out, nil
-}
-
 // readCredentials returns the OAuth blob, access token and a reason when there
 // is none. The file comes first. On darwin the login Keychain is consulted only
 // when the file is missing, unusable or expired: Claude Code moved its
 // credentials there, so a leftover file can be stale while the Keychain entry
 // is current. Without a usable Keychain entry the file's own result stands.
-func readCredentials(dir string, now time.Time) (*jsonx.Object, string, string) {
+func (c Credentials) read(dir string, now time.Time) (*jsonx.Object, string, string) {
 	oauth, tok, why := readCredentialsFile(dir)
 	if why == "" && !expired(oauth, now) {
 		return oauth, tok, ""
 	}
-	if goos == "darwin" {
-		if b, err := keychainRead(keychainService(dir)); err == nil {
-			if o, t, w := parseCredentials(b); w == "" {
+	if c.GOOS == "darwin" && c.Run != nil {
+		if b, ok, err := connections.SecurityRead(context.Background(), c.Run, keychainService(dir), ""); err == nil && ok {
+			if o, t, w := parseCredentials([]byte(b)); w == "" {
 				return o, t, ""
 			}
 		}
@@ -366,7 +372,7 @@ func parseCredentials(b []byte) (*jsonx.Object, string, string) {
 
 // token reads the access token without refreshing it.
 func (a *Accounts) token(configDir string) (string, string) {
-	oauth, tok, why := readCredentials(ExpandConfigDir(configDir), a.now())
+	oauth, tok, why := a.Login.read(ExpandConfigDir(configDir), a.now())
 	if why != "" {
 		return "", why
 	}

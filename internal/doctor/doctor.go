@@ -102,6 +102,8 @@ type Input struct {
 	IssuesConnection string
 	TeamProblem      string
 	Accounts         []config.Account
+	// Credentials reads each account's login; the zero value reads files only.
+	Credentials worker.Credentials
 	// OrchestratorConfigDir is the orchestrator's CLAUDE_CONFIG_DIR, "" when unset.
 	OrchestratorConfigDir string
 	SwitchOnUsage         bool // orchestrator.switchOnUsage (D4)
@@ -489,7 +491,7 @@ func (d *runner) accounts() Check {
 			}
 		} else if dir = worker.ExpandConfigDirIn(a.ConfigDir, d.in.Home); !fsio.IsDir(dir) {
 			why = "configDir " + dir + " does not exist"
-		} else if p := worker.CredentialsProblem(dir); p != "" {
+		} else if p := d.in.Credentials.Problem(dir); p != "" {
 			why = p + " in " + dir
 		}
 		if why != "" {
