@@ -473,9 +473,10 @@ type Env struct {
 	Executable func() (string, error)
 	// LookPath reports whether a binary is installed; nil means exec.LookPath.
 	LookPath func(string) (string, error)
-	// Config returns the merged project config Dispatch reads round.dispatch,
-	// round.herdrGroupSlots and the port range from; nil loads .rota/config.json.
-	// Tests hand it an in-memory config.
+	// Config returns the merged project config every worker verb reads (dispatch,
+	// pool init, preflight, account meters, the operator command, the gate); nil
+	// loads .rota/config.json. It is the one disk read of config in this package:
+	// tests hand it an in-memory config.
 	Config func(root string) any
 	// Accounts reads the usage meters; poll and wait use it to record the
 	// account's headroom when a pane reports done. Nil records none.
@@ -550,7 +551,7 @@ func (e Env) WithDefaults() Env {
 		e.LookPath = exec.LookPath
 	}
 	if e.GateInput == nil {
-		e.GateInput = loadGateInput
+		e.GateInput = e.loadGateInput
 	}
 	return e
 }

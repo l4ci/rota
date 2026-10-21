@@ -233,12 +233,12 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			d.Set("staleBinary", staleData(stale))
 			c.Warn("%s; rebuild: %s", stale.Detail(), stale.Rebuild)
 		}
-		noVerify := worker.NothingToVerify(root)
+		noVerify := c.deps().workerEnv().NothingToVerify(root)
 		d.Set("noVerify", noVerify)
 		if noVerify {
 			c.Warn("%s", noVerifyWarning)
 		}
-		if gc := worker.LoadGateConfig(root); len(gc.Fast) == 0 && len(gc.Full) > 0 {
+		if gc := c.deps().workerEnv().GateConfig(root); len(gc.Fast) == 0 && len(gc.Full) > 0 {
 			d.Set("noFast", true)
 			c.Warn("%s", noFastWarning)
 		}

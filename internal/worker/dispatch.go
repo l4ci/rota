@@ -227,7 +227,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		res.Kind = kind
 		recKind = kind
 		key := hz.CommandKey()
-		launch, hit, err := launchLine(root, hz, o.Model)
+		launch, hit, err := e.launchLine(root, hz, o.Model)
 		if err != nil {
 			return res, err
 		}
