@@ -1081,3 +1081,36 @@ func TestClassifyCodexPaneLimitAbovePrompt(t *testing.T) {
 		t.Errorf("codex limit: want LIMITED, got %s %q", st, ev)
 	}
 }
+
+// A reply-marker block's gutter lines are dialog only when no indented
+// paragraph of the same reply follows it: the paragraph proves the "⎿" output
+// belongs to the reply, so the limit phrase under it is not a hit limit.
+func TestDialogRegionGutterBeforeIndentedParagraphIsReply(t *testing.T) {
+	footer := "\n❯ \n  ⏵⏵ bypass permissions on\n"
+	const phrase = "You've hit your usage limit"
+	with := "● Update(x)\n  ⎿  " + phrase + "\n\n  The edit is done.\n" + footer
+	if got := DialogRegion(with, nil); strings.Contains(got, phrase) {
+		t.Errorf("gutter line before a reply paragraph kept as dialog: %q", got)
+	}
+	without := "● Update(x)\n  ⎿  " + phrase + "\n" + footer
+	if got := DialogRegion(without, nil); !strings.Contains(got, phrase) {
+		t.Errorf("idle gutter line with no paragraph after it dropped: %q", got)
+	}
+}
+
+// The working flag is seeded from the status area under the input box's edge:
+// a spinner or busy footer only there still marks the pane working, so "⎿"
+// tool output quoting the phrase above the box is not a hit limit.
+func TestDialogRegionWorkingFromStatusAreaOnly(t *testing.T) {
+	const phrase = "You've hit your usage limit"
+	reply := "● Bash(grep limit poll.go)\n  ⎿  poll.go:417: " + phrase + "\n"
+	box := "\n╭────╮\n│ ❯  │\n╰────╯\n"
+	got := DialogRegion(reply+box+"✻ Running… (3s · esc to interrupt)\n", nil)
+	if strings.Contains(got, phrase) {
+		t.Errorf("spinner below the box edge not read as working: %q", got)
+	}
+	idle := DialogRegion(reply+box+"  opus · ctx 40%\n", nil)
+	if !strings.Contains(idle, phrase) {
+		t.Errorf("idle pane dropped its gutter line: %q", idle)
+	}
+}
