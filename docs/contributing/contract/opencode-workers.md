@@ -3,6 +3,7 @@ refs:
   - internal/harness/opencode.go
   - internal/harness/opencode_guard.js
   - internal/host/tmux.go
+  - internal/worker/pane.go
   - internal/worker/poll.go
   - internal/worker/dispatch.go
   - test/sections/152_opencode_workers.sh
