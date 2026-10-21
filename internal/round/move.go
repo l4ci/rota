@@ -669,8 +669,14 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	if err != nil {
 		return nil, wrap(err)
 	}
-	if it.Closed {
+	// A closed issue still holds its slot and claim when it was closed before it
+	// was released: handing it to the human frees both, with no label (nothing
+	// is left to do) and no reopen.
+	if it.Closed && !toHuman {
 		return nil, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("%s is closed", o.Issue)}
+	}
+	if it.Closed {
+		res.Warnings = append(res.Warnings, fmt.Sprintf("%s is closed: released its slot and claim without the needs-human label", o.Issue))
 	}
 	id := it.ID
 	res.Issue, res.To = id, o.To
@@ -883,7 +889,7 @@ func (e Env) transferToHumanSteps(ctx context.Context, root string, be Board, o 
 			_, err := clearState(root, be, id, from)
 			return wrap(tolerate("state reset", err))
 		}},
-		step{name: "needs-human label", do: func() error {
+		step{name: "needs-human label", skip: func() bool { return run.it.Closed }, do: func() error {
 			return wrap(e.Forge.AddLabels(ctx, run.it.IssueKey(), []string{strutil.FirstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}, true))
 		}},
 		step{name: "free the sender", do: func() error {

@@ -366,3 +366,34 @@ func TestTransferToHumanResetsAPlainIssueWithAStaleClaim(t *testing.T) {
 		t.Errorf("a plain issue's state is reset whatever claims stay open: %v", f.be.bstates)
 	}
 }
+
+func TestTransferToHumanReleasesAClosedIssue(t *testing.T) {
+	f := newMoveFx(t)
+	if _, err := f.assign("12", "ben"); err != nil {
+		t.Fatal(err)
+	}
+	f.be.items["12"].Closed = true
+	res, err := f.transfer("12", HumanTarget, nil)
+	if err != nil {
+		t.Fatalf("a closed issue still transfers to the human: %v", err)
+	}
+	if f.slot("ben").HeldID() != "" || f.be.claims["12"] != "" {
+		t.Errorf("slot and claim are released: held %q claim %q", f.slot("ben").HeldID(), f.be.claims["12"])
+	}
+	if !f.be.items["12"].Closed {
+		t.Error("the issue is not reopened")
+	}
+	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "is closed") {
+		t.Errorf("the result notes the closed issue: %v", res.Warnings)
+	}
+	if _, err := f.assign("13", "dana"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.transfer("13", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	f.be.items["13"].Closed = true
+	if _, err := f.transfer("13", "dana", nil); err == nil || !strings.Contains(err.Error(), "is closed") {
+		t.Errorf("a closed issue still cannot move to a slot: %v", err)
+	}
+}
