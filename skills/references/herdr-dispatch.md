@@ -91,5 +91,5 @@ Append to the [standing contract](worker-contract.md#the-standing-contract) unde
 
 ## Rules herdr adds
 
-- **`focused: true` means a human is looking at that agent.** The `rota` verbs do not check it. Before a relay or a re-dispatch, check `herdr agent get <name>` (the slot's agent name, above); if the tab is focused, someone is typing in it, so tell them instead of typing over them.
+- **`focused: true` is not a person typing.** herdr keeps it true on a selected idle tab, so do not hold a relay or re-dispatch for it. `rota worker dispatch` refuses a human draft on the prompt line (`ErrDraftOnPrompt`) and an open dialog (`ErrDialogOpen`) itself; read the pane (`herdr agent read`) only when it refuses.
 - **Install the herdr Claude integration once per config dir** (`herdr integration`) when provisioning an account for herdr slots.
