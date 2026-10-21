@@ -262,6 +262,10 @@ func TestItemSectionSet(t *testing.T) {
 	}
 	runOKWith(t, deps, root, ExitUsage, "item", "section", "set", "7", "--name", "acceptance", "--body-file", empty)
 	runOKWith(t, deps, root, ExitUsage, "item", "section", "set", "7", "--body-file", body)
+	runOKWith(t, deps, root, ExitUsage, "item", "section", "set", "7", "--name", "## Acceptance", "--body-file", body)
+	if got := tr.Issues[0].Body; got != want {
+		t.Errorf("a leading # in --name changed the body: %q", got)
+	}
 	runOKWith(t, deps, root, ExitResolution, "item", "section", "set", "7", "--name", "acceptance", "--body-file", filepath.Join(t.TempDir(), "missing"))
 	runOKWith(t, deps, root, ExitResolution, "item", "section", "set", "99", "--name", "acceptance", "--body-file", body)
 
