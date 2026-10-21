@@ -193,10 +193,9 @@ type Row struct {
 	Burn *float64
 }
 
-// inWorktreeRoot says whether cwd is strictly inside <root>/.worktrees.
+// inWorktreeRoot says whether cwd is <root>/.worktrees or inside it.
 func inWorktreeRoot(root, cwd string) bool {
-	dir := filepath.Join(root, worker.WorktreeRoot)
-	return worker.PathContains(dir, cwd) && !worker.PathContains(cwd, dir)
+	return worker.PathContains(filepath.Join(root, worker.WorktreeRoot), cwd)
 }
 
 // ExternalHost is the HostState of an adopted slot: no host session runs it.
