@@ -60,11 +60,15 @@ func WithConnections(r ConnResolver) Option {
 	return func(c *CLI) { c.Conn = r }
 }
 
+// osProjectsEnv is this package's edge to the process environment for the
+// global config dir: the default connection lookup has no Deps to take it from.
+var osProjectsEnv = projects.Env{Getenv: os.Getenv, Home: os.UserHomeDir}
+
 // machineConn is the connection lookup of `rota connect`: connections.json
 // under the global config dir, the secret from ROTA_<NAME>_TOKEN, the
 // keychain or the file store.
 func machineConn(ctx context.Context, name string) (connections.Connection, string, error) {
-	dir, err := projects.Dir()
+	dir, err := projects.Dir(osProjectsEnv)
 	if err != nil {
 		return connections.Connection{}, "", err
 	}
@@ -75,7 +79,7 @@ func machineConn(ctx context.Context, name string) (connections.Connection, stri
 	if !ok {
 		return connections.Connection{}, "", fmt.Errorf("connection %q is not defined on this machine (run: rota connect add %s --kind jira|linear|itsaplan ...)", name, name)
 	}
-	data, err := projects.DataDir()
+	data, err := projects.DataDir(osProjectsEnv)
 	if err != nil {
 		return connections.Connection{}, "", err
 	}

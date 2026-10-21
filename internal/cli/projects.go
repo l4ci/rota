@@ -30,7 +30,7 @@ func runProjectsCleanup(c *Ctx, args []string) (Result, error) {
 	if err := knNoArgs(args); err != nil {
 		return Result{}, err
 	}
-	gone, err := projects.Cleanup()
+	gone, err := projects.Cleanup(c.deps().projectsEnv())
 	if err != nil {
 		return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 	}
@@ -55,7 +55,7 @@ func runProjectsRemove(c *Ctx, args []string) (Result, error) {
 	if len(args) != 1 {
 		return Result{}, Usage("projects remove takes one directory").WithHint("run: rota projects remove <dir>")
 	}
-	gone, err := projects.Remove(args[0])
+	gone, err := projects.Remove(c.deps().projectsEnv(), args[0])
 	if err != nil {
 		return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 	}
@@ -78,7 +78,7 @@ func runProjects(c *Ctx, args []string) (Result, error) {
 	if err := knNoArgs(args); err != nil {
 		return Result{}, err
 	}
-	ps, err := projects.List()
+	ps, err := projects.List(c.deps().projectsEnv())
 	if err != nil {
 		return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 	}
@@ -95,7 +95,7 @@ func runProjects(c *Ctx, args []string) (Result, error) {
 	if len(ps) == 0 {
 		lines = append(lines, "no projects registered: run rota init in a project")
 	}
-	dir, _ := projects.StateDir()
+	dir, _ := projects.StateDir(c.deps().projectsEnv())
 	data := jsonx.NewObject()
 	data.Set("dir", dir)
 	data.Set("projects", rows)
@@ -120,7 +120,7 @@ func projectsView(c *Ctx, res Result) (tui.Model, error) {
 		}
 		return nil
 	}
-	return projects.NewScreen(projectRows(res.Data, lease), load, run), nil
+	return projects.NewScreen(projectRows(res.Data, lease), load, run, c.deps().UserHomeDir), nil
 }
 
 // projectRows turns `rota projects` Data into screen rows, adding what the

@@ -38,21 +38,29 @@ const (
 	SourceDefault  = "default"  // ~/.config/rota
 )
 
+// Env is the process environment the dir lookups read: Getenv the variable
+// reader and Home the home-dir reader. The cli supplies them from Deps; the
+// package reads neither the process env nor the home itself.
+type Env struct {
+	Getenv func(string) string
+	Home   func() (string, error)
+}
+
 // Resolve finds the global rota config dir and says why: $ROTA_CONFIG_DIR when
 // that is an absolute path, else $XDG_CONFIG_HOME/rota when that is an
 // absolute path (the XDG spec ignores a relative one), else ~/.config/rota.
 // warning is non-empty when a relative ROTA_CONFIG_DIR was ignored.
-func Resolve() (dir, source, warning string, err error) {
-	if o := os.Getenv("ROTA_CONFIG_DIR"); o != "" {
+func Resolve(env Env) (dir, source, warning string, err error) {
+	if o := env.Getenv("ROTA_CONFIG_DIR"); o != "" {
 		if filepath.IsAbs(o) {
 			return filepath.Clean(o), SourceOverride, "", nil
 		}
 		warning = "ROTA_CONFIG_DIR=" + o + " is not an absolute path, ignored"
 	}
-	if x := os.Getenv("XDG_CONFIG_HOME"); filepath.IsAbs(x) {
+	if x := env.Getenv("XDG_CONFIG_HOME"); filepath.IsAbs(x) {
 		return filepath.Join(x, "rota"), SourceXDG, warning, nil
 	}
-	home, err := os.UserHomeDir()
+	home, err := env.Home()
 	if err != nil {
 		return "", "", warning, errors.New("no global config dir: none of ROTA_CONFIG_DIR, XDG_CONFIG_HOME or HOME is set")
 	}
@@ -63,8 +71,8 @@ var warnOnce sync.Once
 
 // Dir is the global rota config dir (see Resolve). A relative ROTA_CONFIG_DIR
 // is ignored with one warning on stderr per process.
-func Dir() (string, error) {
-	dir, _, warning, err := Resolve()
+func Dir(env Env) (string, error) {
+	dir, _, warning, err := Resolve(env)
 	if warning != "" {
 		warnOnce.Do(func() { fmt.Fprintln(os.Stderr, "rota: warning: "+warning) })
 	}
@@ -74,11 +82,11 @@ func Dir() (string, error) {
 // DataDir is the global rota data dir: $XDG_DATA_HOME/rota when that is an
 // absolute path, else ~/.local/share/rota. It holds what must not travel with
 // a synced config dir, such as the token fallback file.
-func DataDir() (string, error) {
-	if x := os.Getenv("XDG_DATA_HOME"); filepath.IsAbs(x) {
+func DataDir(env Env) (string, error) {
+	if x := env.Getenv("XDG_DATA_HOME"); filepath.IsAbs(x) {
 		return filepath.Join(x, "rota"), nil
 	}
-	home, err := os.UserHomeDir()
+	home, err := env.Home()
 	if err != nil {
 		return "", errors.New("no global data dir: neither XDG_DATA_HOME nor HOME is set")
 	}
@@ -88,11 +96,11 @@ func DataDir() (string, error) {
 // StateDir is the rota state dir, where machine-rewritten files live (the
 // project registry and its lock): $XDG_STATE_HOME/rota when that is an
 // absolute path, else ~/.local/state/rota.
-func StateDir() (string, error) {
-	if x := os.Getenv("XDG_STATE_HOME"); filepath.IsAbs(x) {
+func StateDir(env Env) (string, error) {
+	if x := env.Getenv("XDG_STATE_HOME"); filepath.IsAbs(x) {
 		return filepath.Join(x, "rota"), nil
 	}
-	home, err := os.UserHomeDir()
+	home, err := env.Home()
 	if err != nil {
 		return "", errors.New("no state dir: neither XDG_STATE_HOME nor HOME is set")
 	}
@@ -103,13 +111,13 @@ const registryName = "projects.json"
 
 // file is the registry path. The first call after an upgrade moves a registry
 // left in the config dir (migrate).
-func file() (string, error) {
-	d, err := StateDir()
+func file(env Env) (string, error) {
+	d, err := StateDir(env)
 	if err != nil {
 		return "", err
 	}
 	path := filepath.Join(d, registryName)
-	if old, err := Dir(); err == nil {
+	if old, err := Dir(env); err == nil {
 		migrate(filepath.Join(old, registryName), path)
 	}
 	return path, nil
@@ -144,8 +152,8 @@ func migrate(old, path string) {
 // Register adds root to the registry, or refreshes its lastSeen when it is
 // already there. It is keyed by realpath, so a symlinked checkout does not
 // register twice. added says whether the entry is new.
-func Register(root string, now time.Time) (added bool, err error) {
-	path, err := file()
+func Register(env Env, root string, now time.Time) (added bool, err error) {
+	path, err := file(env)
 	if err != nil {
 		return false, err
 	}
@@ -179,8 +187,8 @@ func Register(root string, now time.Time) (added bool, err error) {
 
 // List returns the registered projects sorted by name then path, with Missing
 // set for a path that is gone. An absent or unreadable registry is empty.
-func List() ([]Project, error) {
-	path, err := file()
+func List(env Env) ([]Project, error) {
+	path, err := file(env)
 	if err != nil {
 		return nil, err
 	}
@@ -220,8 +228,8 @@ func List() ([]Project, error) {
 // Cleanup drops every entry whose directory is gone or no longer holds .rota/,
 // under the registry lock, and returns what it removed (in registry order). An
 // absent registry removes nothing and is not created.
-func Cleanup() ([]Project, error) {
-	path, err := file()
+func Cleanup(env Env) ([]Project, error) {
+	path, err := file(env)
 	if err != nil {
 		return nil, err
 	}
@@ -269,8 +277,8 @@ func Cleanup() ([]Project, error) {
 // matched as given (made absolute) or by realpath, so a symlinked path or a
 // directory that is already gone still finds its entry. removed is false when
 // nothing matched. An absent registry removes nothing and is not created.
-func Remove(dir string) ([]Project, error) {
-	path, err := file()
+func Remove(env Env, dir string) ([]Project, error) {
+	path, err := file(env)
 	if err != nil {
 		return nil, err
 	}
