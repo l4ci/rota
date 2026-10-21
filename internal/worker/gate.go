@@ -242,7 +242,10 @@ func (r GateResult) OK() bool { return r.Verdict == GateFresh || r.Verdict == Ga
 type GateTarget struct {
 	Queued, External                    bool
 	Name, Branch, PR, Base, Task, Issue string
-	relays                              []any
+	// Bundle is the member issues the PR closes beside Issue (the lead), from
+	// the slot or the queued record. An external or adopted PR has none.
+	Bundle []string
+	relays []any
 	// Attempt and AttemptBase are the slot's current attempt and the branch
 	// tip it inherited. A queued record or an external PR has neither, so the
 	// attempt check skips them.
@@ -266,11 +269,11 @@ func gateSlot(s *Slot) GateTarget {
 	if s.IsExternal() {
 		return GateTarget{External: true, Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name())}
 	}
-	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name()), relays: s.Relays(), Attempt: s.Attempt(), AttemptBase: s.AttemptBase(), Outcome: openOutcome(s)}
+	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name()), Bundle: s.Bundle(), relays: s.Relays(), Attempt: s.Attempt(), AttemptBase: s.AttemptBase(), Outcome: openOutcome(s)}
 }
 
 func gateQueued(q QueuedPR) GateTarget {
-	return GateTarget{Queued: true, Issue: q.Issue, Branch: q.Branch, PR: q.PR, Base: q.Base, relays: q.Relays}
+	return GateTarget{Queued: true, Issue: q.Issue, Bundle: q.Bundle, Branch: q.Branch, PR: q.PR, Base: q.Base, relays: q.Relays}
 }
 
 // GateTarget resolves the argument of `rota worker gate`: a slot name, or a PR (`#N`, `N`
@@ -944,8 +947,8 @@ func (g *gate) stepBestOf() (bool, error) {
 // CheckOnly too, so a train member is refused before anything merges. A slot
 // with no PR, or holding no numeric issue (file backend), has nothing to check.
 func (g *gate) stepCloses() (bool, error) {
-	key, ok := tracker.ParseKey(g.target.Issue)
-	if g.pr == "" || g.issues == nil || !ok {
+	keys := g.bundleKeys()
+	if g.pr == "" || g.issues == nil || len(keys) == 0 {
 		return false, nil
 	}
 	info, err := g.prView()
@@ -953,27 +956,73 @@ func (g *gate) stepCloses() (bool, error) {
 		if tracker.IsCLIMissing(err) {
 			return false, nil
 		}
-		return g.broke(fmt.Sprintf("could not read %s to check it closes %s: %v", g.pr, key.Ref(), err))
+		return g.broke(fmt.Sprintf("could not read %s to check it closes %s: %v", g.pr, refList(keys), err))
 	}
-	if g.issues.ClosesIssue(key, tracker.ClosingSource{Body: info.Body, Title: info.Title, Branch: info.Head}) {
-		return false, nil
+	// A bundled slot's PR closes the lead and every member: collect each one the
+	// body leaves open, so one refusal names them all.
+	var open []tracker.IssueKey
+	for _, key := range keys {
+		if g.issues.ClosesIssue(key, tracker.ClosingSource{Body: info.Body, Title: info.Title, Branch: info.Head}) {
+			continue
+		}
+		is, err := g.issues.Get(g.ctx, key, false)
+		if err != nil {
+			return g.broke(fmt.Sprintf("could not read %s to check for the %s label: %v", key.Ref(), PartialSliceLabel, err))
+		}
+		if !slices.Contains(is.Labels, PartialSliceLabel) {
+			open = append(open, key)
+		}
 	}
-	is, err := g.issues.Get(g.ctx, key, false)
-	if err != nil {
-		return g.broke(fmt.Sprintf("could not read %s to check for the %s label: %v", key.Ref(), PartialSliceLabel, err))
-	}
-	if slices.Contains(is.Labels, PartialSliceLabel) {
+	if len(open) == 0 {
 		return false, nil
 	}
 	g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
-	if _, numbered := key.Number(); numbered {
-		g.verdict(GateNotClosing, fmt.Sprintf("GATE %s refused — the body of %s does not close %s, so the merge would leave it open and claimed; nothing landed", g.o.Slot, g.pr, key.Ref()),
-			fmt.Sprintf("add a line `Closes %s` to the PR body, or label %s %s if this PR lands only part of it", key.Ref(), key.Ref(), PartialSliceLabel))
+	refs := refList(open)
+	it, them := "it", "them"
+	if len(open) == 1 {
+		them = it
+	}
+	if _, numbered := open[0].Number(); numbered {
+		lines := "a line `Closes " + open[0].Ref() + "`"
+		if len(open) > 1 {
+			var each []string
+			for _, k := range open {
+				each = append(each, "`Closes "+k.Ref()+"`")
+			}
+			lines = "the lines " + strings.Join(each, ", ")
+		}
+		g.verdict(GateNotClosing, fmt.Sprintf("GATE %s refused — the body of %s does not close %s, so the merge would leave %s open and claimed; nothing landed", g.o.Slot, g.pr, refs, them),
+			fmt.Sprintf("add %s to the PR body, or label %s %s if this PR lands only part of %s", lines, refs, PartialSliceLabel, them))
 	} else {
-		g.verdict(GateNotClosing, fmt.Sprintf("GATE %s refused — the branch and title of %s do not name %s, so the merge would leave it open and claimed; nothing landed", g.o.Slot, g.pr, key.Ref()),
-			fmt.Sprintf("put %s in the PR title or branch, or label %s %s if this PR lands only part of it", key.Ref(), key.Ref(), PartialSliceLabel))
+		g.verdict(GateNotClosing, fmt.Sprintf("GATE %s refused — the branch and title of %s do not name %s, so the merge would leave %s open and claimed; nothing landed", g.o.Slot, g.pr, refs, them),
+			fmt.Sprintf("put %s in the PR title or branch, or label %s %s if this PR lands only part of %s", refs, refs, PartialSliceLabel, them))
 	}
 	return true, nil
+}
+
+// bundleKeys is the lead issue of the target followed by its bundle members,
+// as keys: nil when the target holds no issue, unparsable members skipped.
+func (g *gate) bundleKeys() []tracker.IssueKey {
+	lead, ok := tracker.ParseKey(g.target.Issue)
+	if !ok {
+		return nil
+	}
+	keys := []tracker.IssueKey{lead}
+	for _, id := range g.target.Bundle {
+		if k, ok := tracker.ParseKey(id); ok && !slices.Contains(keys, k) {
+			keys = append(keys, k)
+		}
+	}
+	return keys
+}
+
+// refList is the keys' refs joined by ", ".
+func refList(keys []tracker.IssueKey) string {
+	refs := make([]string, len(keys))
+	for i, k := range keys {
+		refs[i] = k.Ref()
+	}
+	return strings.Join(refs, ", ")
 }
 
 // ReviewKinds are the verdict kinds a review depth needs on record: full both
@@ -1027,6 +1076,11 @@ func (g *gate) stepReviewDepth() (bool, error) {
 		hasSpec = true
 		if g.issues != nil {
 			src.Issue, src.Issues = key, g.issues
+			for _, id := range g.target.Bundle {
+				if m, ok := tracker.ParseKey(id); ok {
+					src.Members = append(src.Members, m)
+				}
+			}
 		}
 	}
 	if g.pr != "" {
@@ -1810,7 +1864,7 @@ func (g *gate) ffFailureCause(mergeOut string) string {
 	return "merge refused, cause not found: no overlapping local changes, not ahead of " + g.baseRef
 }
 
-// closeMerged closes the slot's issue on a tracker a merge does not close
+// closeMerged closes the slot's issue (and each bundle member the PR names) on a tracker a merge does not close
 // (tracker.MergeCloser: Jira, Linear) when the merged PR names it, so it is not left
 // open, in progress and claimed. A partial slice stays open. It reports false
 // when the close failed: the merge has landed either way, so the failure is a
@@ -1818,22 +1872,27 @@ func (g *gate) ffFailureCause(mergeOut string) string {
 // `rota round reconcile` lists the issue.
 func (g *gate) closeMerged(src tracker.ClosingSource) bool {
 	mc, ok := g.issues.(tracker.MergeCloser)
-	key, isKey := tracker.ParseKey(g.target.Issue)
-	if !ok || !isKey || !g.issues.ClosesIssue(key, src) {
+	if !ok {
 		return true
 	}
-	is, err := g.issues.Get(g.ctx, key, false)
-	if err == nil && slices.Contains(is.Labels, PartialSliceLabel) {
-		return true
+	closed := true
+	for _, key := range g.bundleKeys() { // the lead, then each member the PR names
+		if !g.issues.ClosesIssue(key, src) {
+			continue
+		}
+		is, err := g.issues.Get(g.ctx, key, false)
+		if err == nil && slices.Contains(is.Labels, PartialSliceLabel) {
+			continue
+		}
+		if err == nil {
+			err = mc.CloseAfterMerge(g.ctx, key, g.pr)
+		}
+		if err != nil {
+			g.res.Warnings = append(g.res.Warnings, fmt.Sprintf("ISSUE-OPEN %s — %s merged but %s could not be closed, so it keeps its claim for `rota round reconcile`: %v", g.o.Slot, g.pr, key.Ref(), err))
+			closed = false
+		}
 	}
-	if err == nil {
-		err = mc.CloseAfterMerge(g.ctx, key, g.pr)
-	}
-	if err != nil {
-		g.res.Warnings = append(g.res.Warnings, fmt.Sprintf("ISSUE-OPEN %s — %s merged but %s could not be closed, so it keeps its claim for `rota round reconcile`: %v", g.o.Slot, g.pr, key.Ref(), err))
-		return false
-	}
-	return true
+	return closed
 }
 
 // releaseClaimLabels drops the in-progress label from every issue the merged PR
@@ -1851,8 +1910,10 @@ func (g *gate) releaseClaimLabels(src tracker.ClosingSource) {
 		keys = append(keys, tracker.NumKey(n))
 	}
 	// a key-based tracker names the issue in the branch or title, not a keyword
-	if key, ok := tracker.ParseKey(g.target.Issue); ok && !slices.Contains(keys, key) && g.issues.ClosesIssue(key, src) {
-		keys = append(keys, key)
+	for _, key := range g.bundleKeys() {
+		if !slices.Contains(keys, key) && g.issues.ClosesIssue(key, src) {
+			keys = append(keys, key)
+		}
 	}
 	for _, key := range keys {
 		is, err := g.issues.Get(g.ctx, key, false)

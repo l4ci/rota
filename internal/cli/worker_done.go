@@ -114,27 +114,30 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 					want[i] = recordedCommand([]string{cmd}, strings.Join(quoted, " "))
 				}
 			}
-			_, st, _, err := openProof(c, id)
-			if err != nil {
-				return Result{}, err
-			}
-			rows, _, err := proof.Show(st, id)
-			if err != nil {
-				return failAny(err)
-			}
-			missing := missingFastProof(rows, head, want)
-			if len(missing) > 0 {
-				d.Set("head", head)
-				d.Set("missing", strList(missing))
-				e := Refused("%s has no PASS proof row at %s for test.fast: %s", id, strutil.ShortSHA(head), strings.Join(missing, "; "))
-				e.Hint = fmt.Sprintf("run `rota proof record %s -- %s` at the current HEAD, then `rota worker done %s` again", id, fastTierCheck, slotName)
-				return Result{Data: d}, e
+			// A bundle is one change: every issue it closes needs its own proof.
+			for _, bid := range sl.BundleIssues() {
+				_, st, _, err := openProof(c, bid)
+				if err != nil {
+					return Result{}, err
+				}
+				rows, _, err := proof.Show(st, bid)
+				if err != nil {
+					return failAny(err)
+				}
+				missing := missingFastProof(rows, head, want)
+				if len(missing) > 0 {
+					d.Set("head", head)
+					d.Set("missing", strList(missing))
+					e := Refused("%s has no PASS proof row at %s for test.fast: %s", bid, strutil.ShortSHA(head), strings.Join(missing, "; "))
+					e.Hint = fmt.Sprintf("run `rota proof record %s -- %s` at the current HEAD, then `rota worker done %s` again", bid, fastTierCheck, slotName)
+					return Result{Data: d}, e
+				}
 			}
 			d.Set("head", head)
 		}
 
 		if kind != worker.OutcomeFailed {
-			noRed, unchecked, err := missingRed(c, root, sl, id, *base)
+			noRed, unchecked, err := missingRed(c, root, sl, *base)
 			if err != nil {
 				return Result{}, err
 			}
@@ -225,12 +228,12 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 }
 
 // missingRed reports a branch that changes non-test Go code while work.tdd is
-// on and the item's proof holds no FAIL row, the mark a red-first run leaves.
+// on and no bundled issue's proof holds a FAIL row, the mark a red-first run leaves.
 // It is a heuristic: a FAIL row is not proof the failure was an assertion.
 // unchecked is the diff error when the changed files could not be computed (an
 // unresolvable base, no merge base, a git failure): the caller warns, or
 // refuses under --require-red, rather than passing the done unchecked.
-func missingRed(c *Ctx, root string, sl *worker.Slot, id, base string) (noRed bool, unchecked, err error) {
+func missingRed(c *Ctx, root string, sl *worker.Slot, base string) (noRed bool, unchecked, err error) {
 	tdd, err := c.deps().workerEnv().GateConfig(root).TDDEnabled()
 	if err != nil {
 		return false, nil, err
@@ -245,15 +248,21 @@ func missingRed(c *Ctx, root string, sl *worker.Slot, id, base string) (noRed bo
 	if !slices.ContainsFunc(files, isProdGo) {
 		return false, nil, nil
 	}
-	_, st, _, err := openProof(c, id)
-	if err != nil {
-		return false, nil, err
+	// A bundle is one change: a red-first run on any of its issues is enough.
+	for _, bid := range sl.BundleIssues() {
+		_, st, _, err := openProof(c, bid)
+		if err != nil {
+			return false, nil, err
+		}
+		rows, _, err := proof.Show(st, bid)
+		if err != nil {
+			return false, nil, err
+		}
+		if slices.ContainsFunc(rows, func(r proof.Row) bool { return r.Result == "FAIL" }) {
+			return false, nil, nil
+		}
 	}
-	rows, _, err := proof.Show(st, id)
-	if err != nil {
-		return false, nil, err
-	}
-	return !slices.ContainsFunc(rows, func(r proof.Row) bool { return r.Result == "FAIL" }), nil, nil
+	return true, nil, nil
 }
 
 // isProdGo is a Go file a test does not own: not *_test.go, not under testdata.

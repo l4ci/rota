@@ -385,3 +385,59 @@ func TestWorkerDoneFlagsMissingRed(t *testing.T) {
 		}
 	})
 }
+
+// bundleDoneProject is doneProject whose slot also holds member B08.
+func bundleDoneProject(t *testing.T) string {
+	dir := doneProject(t, "true")
+	os.WriteFile(filepath.Join(dir, ".rota", "workers.json"),
+		[]byte(`{"slots":[{"name":"ben","branch":"feat/x","task":"B07","state":"busy","bundle":["B08"]}]}`), 0o644)
+	return dir
+}
+
+// A bundled slot is done only when the lead and every member hold a PASS row at
+// HEAD; the refusal names the first issue without one.
+func TestWorkerDoneBundleNeedsEveryProof(t *testing.T) {
+	dir := bundleDoneProject(t)
+	if code, out, _ := rotaIn(t, dir, "proof", "record", "B07", "--", "true"); code != 0 {
+		t.Fatalf("record lead: %d %s", code, out)
+	}
+	code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json")
+	if code != 4 || !strings.Contains(out, "B08 has no PASS proof row") || !strings.Contains(out, "rota proof record B08") {
+		t.Fatalf("member without a row: exit %d: %s", code, out)
+	}
+	if d := data(t, out); d["item"] != "B07" || d["missing"] == nil || d["changed"] != false {
+		t.Errorf("item stays the lead, missing kept: %s", out)
+	}
+	if slotState(t, dir) == "done" {
+		t.Error("a refusal must not mark the slot done")
+	}
+	if code, out, _ := rotaIn(t, dir, "proof", "record", "B08", "--", "true"); code != 0 {
+		t.Fatalf("record B08: %d %s", code, out)
+	}
+	code, out, _ = rotaIn(t, dir, "worker", "done", "ben", "--json")
+	if code != 0 || data(t, out)["changed"] != true || slotState(t, dir) != "done" {
+		t.Fatalf("all rows: exit %d: %s", code, out)
+	}
+}
+
+// One red-first run anywhere in the bundle satisfies work.tdd, and the warning
+// names the lead.
+func TestWorkerDoneBundleRedFromAnyIssue(t *testing.T) {
+	dir := bundleDoneProject(t)
+	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{}`), 0o644)
+	b := headOf(t, dir)
+	commitFile(t, dir, "prod.go")
+	code, out, errOut := rotaIn(t, dir, "worker", "done", "ben", "--base", b, "--json")
+	if code != 0 || data(t, out)["noRed"] != true || !strings.Contains(errOut+out, "B07 changes non-test Go code") {
+		t.Fatalf("no row anywhere: exit %d: %s %s", code, out, errOut)
+	}
+	dir = bundleDoneProject(t)
+	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{}`), 0o644)
+	b = headOf(t, dir)
+	commitFile(t, dir, "prod.go")
+	rotaIn(t, dir, "proof", "add", "B08", "--check", "go test ./x", "--result", "FAIL", "--evidence", "x", "--sha", headOf(t, dir))
+	code, out, errOut = rotaIn(t, dir, "worker", "done", "ben", "--base", b, "--require-red", "--json")
+	if code != 0 || data(t, out)["noRed"] == true || strings.Contains(errOut, "RED") {
+		t.Fatalf("member FAIL row: exit %d: %s %s", code, out, errOut)
+	}
+}
