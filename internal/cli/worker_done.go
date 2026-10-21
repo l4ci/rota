@@ -224,7 +224,11 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 // unresolvable base, no merge base, a git failure): the caller warns, or
 // refuses under --require-red, rather than passing the done unchecked.
 func missingRed(c *Ctx, root string, sl *worker.Slot, id, base string) (noRed bool, unchecked, err error) {
-	if !c.deps().workerEnv().GateConfig(root).TDD {
+	tdd, err := c.deps().workerEnv().GateConfig(root).TDDEnabled()
+	if err != nil {
+		return false, nil, err
+	}
+	if !tdd {
 		return false, nil, nil
 	}
 	files, derr := changedFiles(c, slotDir(sl, root), base)

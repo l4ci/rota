@@ -45,6 +45,7 @@ type GateConfig struct {
 	sourceErr  error // an invalid forge.provider or issues.source: a corrupt config
 	review     config.ReviewPolicy
 	reviewErr  error
+	tddErr     error
 	isolate    bool
 	isolateErr error
 }
@@ -71,7 +72,7 @@ func ParseGateConfig(cfg any) GateConfig {
 		c.legacy = len(c.Full) > 0
 		c.legacyOnce = new(sync.Once)
 	}
-	c.TDD, _ = config.Bool(cfg, "work.tdd")
+	c.TDD, c.tddErr = config.Bool(cfg, "work.tdd")
 	c.where, c.whereErr = parseFullWhere(cfg, c.CIChecks)
 	c.sourceErr = tracker.ValidateConfig(cfg)
 	c.ciMinutes, c.ciErr = config.Int(cfg, "test.ciTimeoutMinutes", 1, 24*60)
@@ -134,6 +135,9 @@ func (c GateConfig) HasVerifyCommands() bool { return len(c.Full) > 0 }
 
 // ReviewPolicy is ship.review, or the error of a malformed one.
 func (c GateConfig) ReviewPolicy() (config.ReviewPolicy, error) { return c.review, c.reviewErr }
+
+// TDDEnabled is work.tdd, or the error of a non-boolean value.
+func (c GateConfig) TDDEnabled() (bool, error) { return c.TDD, c.tddErr }
 
 // IsolateEnabled is test.isolate, or the error of a non-boolean value.
 func (c GateConfig) IsolateEnabled() (bool, error) { return c.isolate, c.isolateErr }

@@ -21,6 +21,9 @@ func TestParseGateConfigDefersBadValues(t *testing.T) {
 	if _, err := c.IsolateEnabled(); err == nil {
 		t.Error("non-boolean test.isolate must fail at IsolateEnabled")
 	}
+	if _, err := ParseGateConfig(parseCfg(`{"work":{"tdd":"yes"}}`)).TDDEnabled(); err == nil {
+		t.Error("non-boolean work.tdd must fail at TDDEnabled")
+	}
 }
 
 func TestParseGateConfigLegacyKey(t *testing.T) {
