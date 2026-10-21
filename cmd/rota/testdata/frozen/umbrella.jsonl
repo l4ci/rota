@@ -72,7 +72,7 @@
 {"name":"create/cwd=web_src_deep","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"web:6","kind":"tasks","type":"T"},"ok":true},"db":"2830faa865bad928"}]}
 {"name":"create/empty-repos","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--repos needs a value"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"create/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"issues.source is forge, but the forge of <T>/web is local (no origin remote): there is no tracker to read"},"ok":false},"db":"b531f6a20b50548c"}]}
-{"name":"create/milestone-missing","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"milestone M99 not found on the tracker — create it with /rota-vision (M07-S05)"},"ok":false},"db":"b531f6a20b50548c"}]}
+{"name":"create/milestone-missing","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"milestone M99 not found on the tracker; list milestones with: rota milestone list, or create it with /rota-vision (M07-S05)"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"create/no-target","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"umbrella issue mode needs a target sub-repo — pass --repo <name> or --repos <name> (registered: api, web) or run from inside one"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"create/no-title","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--title is required"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"create/other-forge-down","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"api:6","kind":"tasks","type":"T"},"ok":true},"db":"0179710611901d2e"}]}
@@ -164,8 +164,8 @@
 {"name":"fieldset/milestone-created/cwd=web","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"milestone","id":"api:1","type":"F","value":"M07"},"ok":true},"db":"a78cb08edee20187"}]}
 {"name":"fieldset/milestone-native-exists","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"milestone","id":"web:2","type":"B","value":"M07"},"ok":true},"db":"04e34aff1b1d712c"}]}
 {"name":"fieldset/milestone-same","steps":[{"exit":0,"env":{"data":{"changed":false,"field":"milestone","id":"web:1","type":"F","value":"M07"},"ok":true},"db":"b531f6a20b50548c"}]}
-{"name":"fieldset/milestone-unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"milestone M99 not found on the tracker — create it with /rota-vision (M07-S05)"},"ok":false},"db":"b531f6a20b50548c"}]}
-{"name":"fieldset/milestone-unknown-home","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"milestone M99 not found on the tracker — create it with /rota-vision (M07-S05)"},"ok":false},"db":"b531f6a20b50548c"}]}
+{"name":"fieldset/milestone-unknown","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"milestone M99 not found on the tracker; list milestones with: rota milestone list, or create it with /rota-vision (M07-S05)"},"ok":false},"db":"b531f6a20b50548c"}]}
+{"name":"fieldset/milestone-unknown-home","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"milestone M99 not found on the tracker; list milestones with: rota milestone list, or create it with /rota-vision (M07-S05)"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"fieldset/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"fieldset/related","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"related","id":"api:1","type":"F","value":"B4"},"ok":true},"db":"84c69c39deb1beb1"}]}
 {"name":"fieldset/related-clear","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"related","id":"web:1","type":"F","value":""},"ok":true},"db":"7269e8f19bdefecb"}]}
