@@ -4,7 +4,7 @@
 
 ### Changed
 
-- File-mode proof rows move from the tracked detail file to a gitignored `.rota/<bugs|features|tasks>/<ID>.proof` sidecar (#1547), so `rota proof record` no longer dirties the worktree and `worker done` is not refused by its own proof. Rows already in a detail file are still read and seed the sidecar on first write. Re-run `rota init` (or `rota update`) to add the `.rota/**/*.proof` ignore rule; until then the sidecar shows as untracked, and the doctor warns about the missing line. File-mode proof is no longer committed with the item.
+- File-mode proof rows move from the tracked detail file to a gitignored `.rota/<bugs|features|tasks>/<ID>.proof` sidecar (#1547), so `rota proof record` no longer dirties the worktree and `worker done` is not refused by its own proof. Rows already in a detail file are still read and seed the sidecar on first write. Re-run `rota init` to add the `.rota/**/*.proof` ignore rule; until then the sidecar shows as untracked, and the doctor warns about the missing line. File-mode proof is no longer committed with the item.
 
 ## v0.21.0 — 2026-10-21
 
