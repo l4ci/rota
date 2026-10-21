@@ -6,6 +6,8 @@ rota supports planning above the day-to-day backlog. `/rota-vision` frames miles
 
 `/rota-vision` is a brainstorming skill. It runs Socratic discovery (a couple of questions tailored to whether you are creating a roadmap from scratch or editing an existing one), optionally pulls grounded findings from web research (it asks first), pushes back on your scope and ordering, and proposes milestones with explicit dependencies. You iterate until the breakdown feels right.
 
+Before it asks anything, `/rota-vision` looks for a concept, spec or PRD markdown file in the repo (or a README that is mostly a plan) that no milestone covers yet. When it finds one it says so and offers to seed milestones from it, with title, goal, acceptance and dependencies drawn from the document; you confirm before anything is written. No flag is needed. Each seeded plan carries a `Source: <path>#<heading>` line, so a later run knows the document is covered and proposes only what existing milestones do not. With no such document and no milestones, it runs the interview described above.
+
 When the session ends, `/rota-vision` writes two things:
 
 - `.rota/MILESTONES.md`: a short vision paragraph and the Active list, regenerated with `rota milestone index`.
