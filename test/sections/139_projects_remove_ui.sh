@@ -2,7 +2,11 @@ echo "projects remove drops one entry; projects --ui is refused off a terminal (
 
 GP="$(mktemp -d "$TMP/prm.XXXXXX")"
 OLD_XDG=$XDG_CONFIG_HOME
+OLD_XDG_STATE=$XDG_STATE_HOME
 export XDG_CONFIG_HOME="$GP/xdg"
+# The registry lives in the state dir: isolate it too, or entries other
+# sections registered earlier in a serial run inflate the count.
+export XDG_STATE_HOME="$GP/xdgstate"
 mkdir -p "$GP/alpha" "$GP/beta"
 gpv() { ( cd "$1" && shift && "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 gpv "$GP/alpha" init --no-blocks >/dev/null || fail "init alpha failed"
@@ -32,4 +36,5 @@ case "$ERR" in *"no --ui view for this verb"*) ;; *) fail "remove has no view: $
 rc=0; OUT=$( gpv "$GP" projects --ui ) || rc=$?
 [ "$rc" = 2 ] || fail "projects --ui --json should exit 2, got $rc"
 export XDG_CONFIG_HOME="$OLD_XDG"
+export XDG_STATE_HOME="$OLD_XDG_STATE"
 pass "projects remove drops one entry and noops on an unknown one; projects --ui refusals hold"
