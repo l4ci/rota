@@ -363,7 +363,7 @@ func TestRequireBaseHintNamesDirtySidecarOnly(t *testing.T) {
 	if err := os.WriteFile(abs, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	for _, a := range [][]string{{"add", rel}, {"commit", "-m", "sidecar"}} {
+	for _, a := range [][]string{{"add", rel}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "sidecar"}} {
 		if res, err := f.env.Git(bg, f.root, a...); err != nil || res.ExitCode != 0 {
 			t.Fatalf("git %v: %v %s", a, err, res.Stderr)
 		}

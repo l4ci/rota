@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/strutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/l4ci/rota/internal/ledger"
@@ -300,6 +301,9 @@ func tail(text string, n int) string {
 	return strings.Join(lines, "\n")
 }
 
+// tierSidecarPath is the only shape the commit hint may echo into a shell.
+var tierSidecarPath = regexp.MustCompile(`^\.rota/(knowledge/[A-Za-z0-9._-]+/)?knowledge-tier\.json$`)
+
 // tierSidecarPaths returns the paths of a `git status --porcelain` listing
 // when every one is a knowledge-tier.json sidecar (bookkeeping `rota knowledge
 // tier fold` wrote, which one commit settles), else nil. The hint names these
@@ -307,10 +311,10 @@ func tail(text string, n int) string {
 func tierSidecarPaths(porcelain string) []string {
 	var paths []string
 	for _, l := range strings.Split(strings.TrimRight(porcelain, "\n"), "\n") {
-		if len(l) < 4 || !strings.HasSuffix(l, "knowledge-tier.json") {
+		if len(l) < 4 || !tierSidecarPath.MatchString(l[3:]) {
 			return nil
 		}
-		paths = append(paths, strings.TrimSpace(l[3:]))
+		paths = append(paths, l[3:])
 	}
 	return paths
 }
