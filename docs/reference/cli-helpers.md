@@ -160,6 +160,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota migrate hv [--apply] [--verbose] [--skip-skills]` | move a project from the old state folder and names to `.rota/` and rota (preview unless --apply) |
 | `rota migrate issues [--apply] [--limit <n>]` | move the file backlog onto the issue tracker (preview unless --apply) |
 | `rota migrate milestones [--apply]` | rename `## Acceptance criteria` to `## Acceptance` and make each bullet a checkbox (preview unless --apply) |
+| `rota migrate milestone-files [--apply]` | move `.rota/milestones/*.md` left from file mode to `.rota/archive/milestones/` when milestones live on the tracker (preview unless --apply) |
 
 ## `rota knowledge`
 

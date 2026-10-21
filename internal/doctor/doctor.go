@@ -128,6 +128,10 @@ type Input struct {
 	// nil when nothing was read.
 	Skills *skills.Report
 
+	// StaleMilestoneFiles are the .rota/milestones/*.md names left over while
+	// milestones live on the tracker; empty adds no line.
+	StaleMilestoneFiles []string
+
 	// StateDir is the rota state dir (the project registry lives there); ""
 	// adds no line.
 	StateDir string
@@ -209,6 +213,9 @@ func Run(ctx context.Context, in Input) Report {
 	}
 	if len(in.GitignoreMissing) > 0 {
 		checks = append(checks, Check{Name: "gitignore", Status: Warn, Detail: "missing from .gitignore: " + strings.Join(in.GitignoreMissing, ", "), Hint: "run: rota init"})
+	}
+	if len(in.StaleMilestoneFiles) > 0 {
+		checks = append(checks, Check{Name: "milestones", Status: Warn, Detail: "milestones live on the tracker, but .rota/milestones still holds " + strings.Join(in.StaleMilestoneFiles, ", ") + ": no verb reads them", Hint: "run: rota migrate milestone-files --apply"})
 	}
 	if c, ok := d.ports(); ok {
 		checks = append(checks, c)

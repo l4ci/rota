@@ -1,10 +1,14 @@
 package migrate
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	ms "github.com/l4ci/rota/internal/milestone"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 var (
@@ -65,4 +69,40 @@ func RunMilestones(st ms.Store, apply bool) ([]MilestoneChange, error) {
 		res = append(res, MilestoneChange{ID: e.ID, Changed: changed})
 	}
 	return res, nil
+}
+
+// StaleMilestoneFiles names the *.md files under .rota/milestones, sorted. The
+// caller decides they are stale: no verb reads them while milestones live on
+// the tracker.
+func StaleMilestoneFiles(root string) ([]string, error) {
+	files, err := filepath.Glob(filepath.Join(rotatree.File(root, rotatree.MilestonesDir), "*.md"))
+	if err != nil {
+		return nil, err
+	}
+	names := []string{}
+	for _, f := range files {
+		names = append(names, filepath.Base(f))
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+// ArchiveMilestoneFiles moves every stale milestone file to
+// .rota/archive/milestones and returns the names. Without apply it only
+// reports them. A second run finds nothing.
+func ArchiveMilestoneFiles(root string, apply bool) ([]string, error) {
+	names, err := StaleMilestoneFiles(root)
+	if err != nil || !apply || len(names) == 0 {
+		return names, err
+	}
+	dest := rotatree.File(root, "archive", rotatree.MilestonesDir)
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		return nil, err
+	}
+	for _, n := range names {
+		if err := os.Rename(filepath.Join(rotatree.File(root, rotatree.MilestonesDir), n), filepath.Join(dest, n)); err != nil {
+			return nil, err
+		}
+	}
+	return names, nil
 }
