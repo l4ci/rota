@@ -1094,6 +1094,21 @@ func TestTransferTierBindsTheReceiverAndNeedsAReason(t *testing.T) {
 	}
 }
 
+func TestTransferBriefCarriesTheTDDLine(t *testing.T) {
+	const line = "work.tdd is on: for a behavior change, show a failing test first."
+	for _, tdd := range []bool{true, false} {
+		f := newMoveFx(t)
+		f.set.TDD = tdd
+		f.host.sent = ""
+		if _, err := f.transfer("12", "dana", nil); err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(f.host.sent, line); got != tdd {
+			t.Errorf("TDD=%v: brief carries the line = %v:\n%s", tdd, got, f.host.sent)
+		}
+	}
+}
+
 // Transfer applies the preflight Assign does: a launch line that cannot start a
 // worker is refused before the sender is parked or the claim moves.
 func TestTransferPreflightRefusesBeforeMoving(t *testing.T) {
