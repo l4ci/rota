@@ -50,7 +50,7 @@ var Keys = []Key{
 	k("models.orchestrator", "opus", true, TypeString, "Model for planning, exploration, verification and design. Usually opus, sonnet or haiku."),
 	k("models.worker", "sonnet", true, TypeString, "Model for implementation sub-tasks and round workers. Usually opus, sonnet or haiku."),
 	k("work.isolation", "branch", true, TypeEnum, "/rota-work: How a cycle isolates changes from main: a feature branch in this checkout, or a separate git worktree.", "branch", "worktree"),
-	k("work.mergeStrategy", "direct", true, TypeEnum, "/rota-work: How finished work lands: merged straight into the base branch with --no-ff, or through a pull request. Ignored when issues.source is a tracker, which always opens a PR.", "direct", "pr"),
+	k("work.mergeStrategy", "direct", true, TypeEnum, "/rota-work: How finished work lands: merged straight into the base branch with --no-ff, or through a pull request. Ignored when issues.source is a tracker (always pr) or the forge is local (always direct); rota ship strategy prints the answer.", "direct", "pr"),
 	k("round.dispatch", "subagent", true, TypeEnum, "Rounds: Where round workers run. subagent means detect: herdr in a herdr pane, tmux in tmux, else in-harness subagents. /rota-work ignores it.", "subagent", "tmux", "herdr"),
 	k("round.slots", num("3"), true, TypeInt, "Rounds: Number of worker slots rota round start provisions (at least 1). --slots overrides it for one round."),
 	k("round.workerCommand", "", true, TypeString, "Rounds: Command that starts a worker session in its tmux window. Empty builds claude --model <models.worker> --dangerously-skip-permissions; {model} receives the tier's model."),
