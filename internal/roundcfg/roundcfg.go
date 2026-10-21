@@ -279,7 +279,9 @@ func FromConfig(cfg any) (Settings, error) {
 	fast, _ := list(cfg, "test.fast")
 	full, _ := list(cfg, "test.full")
 	s.FullOnly = len(fast) == 0 && len(full) > 0
-	s.TDD, _ = config.Bool(cfg, "work.tdd")
+	if s.TDD, err = config.Bool(cfg, "work.tdd"); err != nil {
+		return s, err
+	}
 	return s, loadRoles(cfg, &s)
 }
 
