@@ -514,7 +514,10 @@ func TestWaitIgnoresADoneSlotWhoseRecordedPRIsMerged(t *testing.T) {
 		h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/9\n", "done")
 		e := envWith(watcherHost{h})
 		e.Forge = func(string, string, tracker.Settings) (Forge, error) { return stateForge{state: state}, nil }
-		res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond})
+		// The merged case runs to its deadline, and the lookup runs git under
+		// that context: a budget a loaded machine can spend before the lookup
+		// ends reads the merged PR as unknown, hence as news.
+		res, err := e.Wait(bg, dir, WaitOpts{Timeout: 2 * time.Second})
 		if err != nil {
 			t.Fatal(err)
 		}
