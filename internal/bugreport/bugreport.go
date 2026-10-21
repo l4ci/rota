@@ -233,7 +233,9 @@ var (
 	reUserinfo   = regexp.MustCompile(`://[^/\s@]+@`)
 	reEmail      = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`)
 	reHomeDir    = regexp.MustCompile(`/(?:home|Users)/[^/\s"']+|/root\b|[A-Za-z]:\\Users\\[^\\\s"']+`)
-	reURLHost    = regexp.MustCompile(`(://)([A-Za-z0-9.-]+)`)
+	reURLHost    = regexp.MustCompile(`(://)(<redacted>@)?([A-Za-z0-9.-]+)`)
+	reIPv4       = regexp.MustCompile(`^\d{1,3}(?:\.\d{1,3}){3}$`)
+	reAuthHeader = regexp.MustCompile(`(?i)(\bauthorization["']?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\r\n"']+)`)
 	reHostPort   = regexp.MustCompile(`\b([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+):\d{2,5}\b`)
 	rePEM        = regexp.MustCompile(`(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)`)
 	reTokens     = regexp.MustCompile(`github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|glpat-[A-Za-z0-9_-]{16,}|xox[abprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|lin_api_[A-Za-z0-9]{16,}|ATATT[A-Za-z0-9_=-]{16,}|npm_[A-Za-z0-9]{30,}|AIza[0-9A-Za-z_-]{30,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+`)
@@ -287,6 +289,28 @@ func replaceFold(s, old, with string) string {
 	return regexp.MustCompile(`(?i)`+regexp.QuoteMeta(old)).ReplaceAllString(s, with)
 }
 
+// fileExts are the last labels that mark a name:port match as a file:line
+// location (a panic frame, a backlog reference) rather than a host.
+var fileExts = map[string]bool{
+	"go": true, "md": true, "sh": true, "json": true, "jsonl": true, "js": true, "ts": true,
+	"py": true, "yml": true, "yaml": true, "toml": true, "txt": true, "rs": true,
+	"c": true, "h": true, "rb": true, "java": true, "lock": true, "mod": true, "sum": true,
+}
+
+// isFileLocation reports whether h, the part before ":<digits>", is a file
+// name or a version, not a host: its last label is a file extension or all
+// digits. A dotted IPv4 address stays a host.
+func isFileLocation(h string) bool {
+	if reIPv4.MatchString(h) {
+		return false
+	}
+	last := h[strings.LastIndex(h, ".")+1:]
+	if fileExts[strings.ToLower(last)] {
+		return true
+	}
+	return strings.Trim(last, "0123456789") == ""
+}
+
 // Redact removes secrets and identifying details from s: tokens and keys,
 // email addresses, home-directory paths, hostnames, and the user's own repo
 // (name, owner and remote, in every URL form).
@@ -303,6 +327,7 @@ func Redact(s string, e Env) string {
 	s = reHomeDir.ReplaceAllString(s, "~")
 	s = reUserinfo.ReplaceAllString(s, "://<redacted>@")
 	s = reTokens.ReplaceAllString(s, "<redacted>")
+	s = reAuthHeader.ReplaceAllString(s, "${1}<redacted>")
 	s = reAuth.ReplaceAllString(s, "${1} <redacted>")
 	s = reKeyValue.ReplaceAllString(s, "${1}<redacted>")
 	s = reFlagValue.ReplaceAllString(s, "${1}<redacted>")
@@ -312,15 +337,15 @@ func Redact(s string, e Env) string {
 		s = replaceFold(s, host, "<host>")
 	}
 	s = reURLHost.ReplaceAllStringFunc(s, func(m string) string {
-		h := reURLHost.FindStringSubmatch(m)[2]
-		if publicHosts[strings.ToLower(h)] || h == "<host>" {
+		sub := reURLHost.FindStringSubmatch(m)
+		if publicHosts[strings.ToLower(sub[3])] || sub[3] == "<host>" {
 			return m
 		}
-		return "://<host>"
+		return sub[1] + sub[2] + "<host>"
 	})
 	s = reHostPort.ReplaceAllStringFunc(s, func(m string) string {
 		h := reHostPort.FindStringSubmatch(m)[1]
-		if publicHosts[strings.ToLower(h)] {
+		if publicHosts[strings.ToLower(h)] || isFileLocation(h) {
 			return m
 		}
 		return "<host>"

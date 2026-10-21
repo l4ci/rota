@@ -206,6 +206,10 @@ func TestRedactGaps(t *testing.T) {
 		{"unknown url host", "GET https://ci.corp.example.net/api failed", "ci.corp.example.net"},
 		{"local fqdn", "on box.lan.example the lock", "lan.example"},
 		{"basic auth", "Authorization: Basic dXNlcjpwYXNz", "dXNlcjpwYXNz"},
+		{"token scheme", "Authorization: token 0123456789abcdef0123456789abcdef01234567", "0123456789abcdef"},
+		{"userinfo then host", "GET https://bot@ci.corp.example.net/x", "ci.corp.example.net"},
+		{"userinfo pass then host", "dial http://user:pass@proxy.acme.corp/", "proxy.acme.corp"},
+		{"ipv4 with port", "dial 10.1.2.3:8080 refused", "10.1.2.3"},
 		{"flag value", "rota x --token plainvalue1 --force", "plainvalue1"},
 		{"flag equals quoted", `rota x --password="two words"`, "two words"},
 		{"env style", "GH_TOKEN plainvalue2 rota x", "plainvalue2"},
@@ -221,6 +225,18 @@ func TestRedactGaps(t *testing.T) {
 		if strings.Contains(got, c.gone) {
 			t.Errorf("%s: %q still holds %q", c.name, got, c.gone)
 		}
+	}
+}
+
+func TestRedactKeepsFileLocations(t *testing.T) {
+	env := Env{Home: "/home/vo", Hostname: "box"}
+	in := "panic: runtime error: index out of range [3] with length 3\n\n" +
+		"goroutine 1 [running]:\n" +
+		"main.run(...)\n\t/src/rota/internal/cli/hook.go:242 +0x1d\n" +
+		"main.main()\n\tmain.go:12 +0x25\n" +
+		"read .rota/backlog.md:12 and v0.12.3:100"
+	if got := Redact(in, env); got != in {
+		t.Errorf("file:line locations changed:\n%q\nwant\n%q", got, in)
 	}
 }
 
