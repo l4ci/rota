@@ -566,3 +566,21 @@ func TestMapStaleCommitsDefault(t *testing.T) {
 	}
 	t.Error("map.staleCommits is not a known key")
 }
+
+func TestSoftcapSubsystemsIsDeclared(t *testing.T) {
+	key, ok := SchemaKey("map.softcap_subsystems")
+	if !ok {
+		t.Fatal("map.softcap_subsystems has no schema row")
+	}
+	if key.Type != TypeInt || key.Default != num("20") {
+		t.Errorf("row = %+v, want int default 20", key)
+	}
+	for _, bad := range []string{"0", "-1", "2.5", `"many"`, "true"} {
+		if _, err := Set(t.TempDir(), "map.softcap_subsystems", bad); !errors.Is(err, ErrBadValue) {
+			t.Errorf("map.softcap_subsystems=%s: err = %v, want ErrBadValue", bad, err)
+		}
+	}
+	if _, err := Set(t.TempDir(), "map.softcap_subsystems", "7"); err != nil {
+		t.Errorf("map.softcap_subsystems=7: %v", err)
+	}
+}

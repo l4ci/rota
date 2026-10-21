@@ -316,6 +316,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | Key | Type | Default | Values | Description |
 |-----|------|---------|--------|-------------|
 | `map.staleCommits` | int | `50` |  | Commits HEAD may be past a map file's last_mapped_commit before rota map stats warns that the subsystem is stale. Advisory: the verb still exits 0. 0 turns the warning off. |
+| `map.softcap_subsystems` | int | `20` |  | Subsystems the project map may name before rota decisions check --cap and /rota-refactor --map nudge to merge or retire stale entries. An integer of 1 or more. |
 
 ### brainstorm
 

@@ -157,10 +157,10 @@ func TestSoftCap(t *testing.T) {
 		cfg  string
 		want int
 	}{
-		{"no config", "", DefaultCap},
+		{"no config", "", 20},
 		{"set", `{"map": {"softcap_subsystems": 7}}`, 7},
-		{"not a number", `{"map": {"softcap_subsystems": "many"}}`, DefaultCap},
-		{"other keys only", `{"map": {}}`, DefaultCap},
+		{"not a number", `{"map": {"softcap_subsystems": "many"}}`, 20},
+		{"other keys only", `{"map": {}}`, 20},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -217,11 +217,11 @@ func TestStaleCommits(t *testing.T) {
 		cfg  string
 		want int
 	}{
-		{"no config", "", DefaultStaleCommits},
+		{"no config", "", 50},
 		{"set", `{"map": {"staleCommits": 7}}`, 7},
 		{"zero disables", `{"map": {"staleCommits": 0}}`, 0},
-		{"negative", `{"map": {"staleCommits": -1}}`, DefaultStaleCommits},
-		{"not a number", `{"map": {"staleCommits": "many"}}`, DefaultStaleCommits},
+		{"negative", `{"map": {"staleCommits": -1}}`, 50},
+		{"not a number", `{"map": {"staleCommits": "many"}}`, 50},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
