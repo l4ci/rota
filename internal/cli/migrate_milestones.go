@@ -92,6 +92,9 @@ func migrateMilestoneFiles(fs *flag.FlagSet) RunFunc {
 				lines[i] = verb + n
 			}
 			text = strings.Join(lines, "\n")
+			if *apply {
+				c.Warn("both paths are tracked: commit .rota/milestones and .rota/archive/milestones")
+			}
 		}
 		return Result{Data: jsonObj("applied", *apply, "files", names, "changed", *apply && len(names) > 0), Text: text}, nil
 	}

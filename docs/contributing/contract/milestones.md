@@ -91,7 +91,7 @@ repo: none
 data: {"applied": bool, "files": [string], "changed": bool}
 exit: 2 on a positional argument; 4 in file mode (`blockedBy: backend`), where the files are the milestone store; tracker
 old: none (new)
-note: with milestones on the tracker no verb reads `.rota/milestones/*.md`, so files left from file mode mislead (`milestone show` says not found while the file sits there). `rota doctor` warns (`milestones`) when they exist. This verb moves them to `.rota/archive/milestones/`. Preview by default: without `--apply` it prints `would archive <file>` and writes nothing. Idempotent: a second run prints `nothing to archive`.
+note: with milestones on the tracker no verb reads `.rota/milestones/*.md`, so files left from file mode mislead (`milestone show` says not found while the file sits there). `rota doctor` warns (`milestones`) when they exist. This verb moves them to `.rota/archive/milestones/`. Preview by default: without `--apply` it prints `would archive <file>` and writes nothing. Idempotent: a second run prints `nothing to archive`. Both `.rota/milestones` and `.rota/archive` are tracked, so after `--apply` the tree holds deletions plus untracked files: the verb warns `commit .rota/milestones and .rota/archive/milestones` and leaves the commit to the caller.
 
 ### rota milestone check
 rota milestone check <MNN> [--strict]
