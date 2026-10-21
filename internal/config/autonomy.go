@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -18,7 +19,7 @@ const AutonomyLevelsSince = "0.21.0"
 // AutonomyMigration is what `config fill` does to autonomy.level and
 // round.autopilot. Rewrite and LocalRewrite: auto becomes roundtrip in
 // config.json and config.local.json. GlobalRewrite: the same in the global
-// config, gated on that file's own stamp (see migrateAutonomyGlobal). LocalAutopilot: config.local.json holds
+// config, gated on its own stamp file (see migrateAutonomyGlobal). LocalAutopilot: config.local.json holds
 // round.autopilot, which fill deletes there too (config.json's copy is a
 // RemovedKeys entry). AutopilotWasOn: either file had it true, which now takes
 // autonomy.level auto.
@@ -38,9 +39,13 @@ func AutonomyPending(root string) AutonomyMigration {
 	if local != nil {
 		_, localAP = lookupPresent(local, []string{"round", "autopilot"})
 	}
-	global := readObject(globalConfigPath())
+	gdir := globalConfigDir()
+	global := (*jsonx.Object)(nil)
+	if gdir != "" {
+		global = readObject(GlobalPath(gdir))
+	}
 	return AutonomyMigration{
-		GlobalRewrite:  autonomyStale(global) && isAuto(global),
+		GlobalRewrite:  global != nil && globalStale(gdir) && isAuto(global),
 		Rewrite:        stale && isAuto(cfg),
 		LocalRewrite:   stale && isAuto(local),
 		LocalAutopilot: localAP,
@@ -171,40 +176,106 @@ func migrateAutonomyLocal(root string, stale bool) (bool, error) {
 	return rewrote, err
 }
 
-// globalConfigPath is the global config file, or "" when the config dir
-// cannot be resolved.
-func globalConfigPath() string {
+// globalConfigDir is the rota config dir, or "" when it cannot be resolved.
+func globalConfigDir() string {
 	dir, err := projects.Dir(projects.OSEnv())
 	if err != nil {
 		return ""
 	}
-	return GlobalPath(dir)
+	return dir
 }
 
-// migrateAutonomyGlobal is the autonomy rewrite for the global config, which
-// projects inherit autonomy.level from. It has no project stamp (rota.version is
-// project-owned, and every global read drops it), so the file gets its own: an
-// auto in a global file stamped before AutonomyLevelsSince (or not at all)
-// becomes roundtrip and the file is stamped, so a later deliberate global auto
-// survives. A missing or unreadable global is left alone.
+// GlobalStampFile is the global config's own version stamp, a one-line file
+// beside it in the config dir. The global config.json holds only keys projects
+// inherit (rota.version is project-owned), and rota init never stamps it, so
+// the once-guard of the autonomy migration lives here instead.
+const GlobalStampFile = "config.version"
+
+func globalStampPath(dir string) string { return filepath.Join(dir, GlobalStampFile) }
+
+// globalStale is whether the global config under dir predates
+// AutonomyLevelsSince: no stamp file, or an older or unparseable one.
+func globalStale(dir string) bool {
+	b, err := os.ReadFile(globalStampPath(dir))
+	if err != nil {
+		return true
+	}
+	return versionBefore(strings.TrimSpace(string(b)), AutonomyLevelsSince)
+}
+
+// stampGlobal writes AutonomyLevelsSince to the global stamp file under dir
+// when it is stale; a current stamp is not rewritten.
+func stampGlobal(dir string) error {
+	if !globalStale(dir) {
+		return nil
+	}
+	return fsio.WriteFileAtomic(globalStampPath(dir), []byte(AutonomyLevelsSince+"\n"))
+}
+
+// migrateAutonomyGlobal is the autonomy migration for the global config, which
+// projects inherit autonomy.level from. When its stamp file is stale, an auto
+// in the global config.json becomes roundtrip, and the stamp is written either
+// way, so a later deliberate global auto survives. A missing or unreadable
+// global is left alone and stays unstamped.
 func migrateAutonomyGlobal() (bool, error) {
-	path := globalConfigPath()
-	if path == "" {
+	dir := globalConfigDir()
+	if dir == "" || !globalStale(dir) {
 		return false, nil
 	}
+	path := GlobalPath(dir)
 	if _, err := os.Stat(path); err != nil {
 		return false, nil
 	}
 	rewrote := false
 	err := fsio.Locked(path, fsio.LockTimeout, func() error {
 		obj := readObject(path)
-		if obj == nil || !autonomyStale(obj) || !isAuto(obj) {
+		if obj == nil {
 			return nil
 		}
-		obj = fillKey(obj, "", []string{"autonomy", "level"}, "roundtrip")
-		obj = fillKey(obj, "", strings.Split(VersionKey, "."), AutonomyLevelsSince)
-		rewrote = true
-		return fsio.WriteJSONAtomic(path, obj)
+		if isAuto(obj) {
+			obj = fillKey(obj, "", []string{"autonomy", "level"}, "roundtrip")
+			if err := fsio.WriteJSONAtomic(path, obj); err != nil {
+				return err
+			}
+			rewrote = true
+		}
+		return stampGlobal(dir)
 	})
 	return rewrote, err
+}
+
+// raiseProjectStamp raises rota.version in the config.json at path to
+// AutonomyLevelsSince when it is older. A missing or unreadable file, or a
+// current stamp, is left alone.
+func raiseProjectStamp(path string) error {
+	if _, err := os.Stat(path); err != nil {
+		return nil
+	}
+	return fsio.Locked(path, fsio.LockTimeout, func() error {
+		obj := readObject(path)
+		if obj == nil || !autonomyStale(obj) {
+			return nil
+		}
+		return fsio.WriteJSONAtomic(path, fillKey(obj, "", strings.Split(VersionKey, "."), AutonomyLevelsSince))
+	})
+}
+
+// autonomySet is how a write of autonomy.level to root's project or local
+// layer keeps the once-guard (#1488): the value written is a post-split one,
+// so the fill after it must not rewrite it. On a config.json stamped before
+// AutonomyLevelsSince it migrates config.local.json first (an old auto there
+// is still one-hop), runs set, then raises config.json's stamp. Any other
+// key, or a current stamp, is set alone.
+func autonomySet(root, key string, set func() (SetResult, error)) (SetResult, error) {
+	if key != "autonomy.level" || !autonomyStale(readObject(configPath(root))) {
+		return set()
+	}
+	if _, err := migrateAutonomyLocal(root, true); err != nil {
+		return SetResult{}, err
+	}
+	res, err := set()
+	if err != nil {
+		return res, err
+	}
+	return res, raiseProjectStamp(configPath(root))
 }

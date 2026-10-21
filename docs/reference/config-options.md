@@ -82,7 +82,7 @@ Values for list and object keys are JSON (`rota config set round.accounts '[...]
 | Roundtrip | One item start to finish: brainstorm (when the planning dial calls for it), plan, work, review and ship chain with no process questions, then stop. |
 | Auto | Keeps taking the next ready item after each ship, and a round runs the autopilot tick. Stops only for a human-reserved decision, no recommendation, no ready item or a session limit. |
 
-Manual gates and `ship.mergeApproval` hold at every level. `autonomy.level: "loop"` was removed; `rota config check` fails on it and on any value other than `off`, `roundtrip` and `auto`. Before 0.21.0, `auto` meant one-hop chaining: `rota config fill` rewrites an `auto` in a config stamped older than 0.21.0 (and in a global config without its own 0.21.0 stamp) to `roundtrip` once (see [Removed keys](#removed-keys) for `round.autopilot`). See [Autonomy](../usage/autonomy.md).
+Manual gates and `ship.mergeApproval` hold at every level. `autonomy.level: "loop"` was removed; `rota config check` fails on it and on any value other than `off`, `roundtrip` and `auto`. Before 0.21.0, `auto` meant one-hop chaining: `rota config fill` rewrites an `auto` in a config stamped older than 0.21.0 (and in a global config whose `config.version` stamp file is missing or older) to `roundtrip` once (see [Removed keys](#removed-keys) for `round.autopilot`). See [Autonomy](../usage/autonomy.md).
 
 ## Mapping table: options to config values
 

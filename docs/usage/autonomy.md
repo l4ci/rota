@@ -35,7 +35,9 @@ Every stop carries options and a recommendation. Solo skills ask one question in
 
 ## Upgrading from the old `auto`
 
-Before 0.21.0, `auto` meant one-hop chaining. `rota config fill` (which `rota init` and `rota update` run) rewrites an `auto` in a config whose `rota.version` stamp is older than 0.21.0 (or empty or unparseable) to `roundtrip`, in `.rota/config.json` and `.rota/config.local.json`. An `auto` in the global config gets the same rewrite, guarded by a stamp of its own in the global file, since it holds no project stamp. It prints `rewrote: autonomy.level auto -> roundtrip in ...` and raises the stamp to 0.21.0, so an `auto` you set afterwards stays.
+Before 0.21.0, `auto` meant one-hop chaining. `rota config fill` (which `rota init` and `rota update` run) rewrites an `auto` in a config whose `rota.version` stamp is older than 0.21.0 (or empty or unparseable) to `roundtrip`, in `.rota/config.json` and `.rota/config.local.json`. It prints `rewrote: autonomy.level auto -> roundtrip in ...` and raises the stamp to 0.21.0, so an `auto` you set afterwards stays. The global config holds no project stamp, so it gets its own: a one-line `config.version` file beside it in the rota config dir. Fill rewrites a global `auto` when that file is missing or older than 0.21.0, then writes it.
+
+Setting `autonomy.level` (`rota config set`, `--local`, `--global`, the config screen, `rota setup` and its save offer) counts as choosing a level under the new meaning. On a stale project it first migrates an old `auto` in `config.local.json`, then raises the stamp; on the global it writes `config.version`. So an `auto` you set right after upgrading, before any fill, stays too.
 
 Fill also deletes `round.autopilot` from both files. `rota config check` lists it under REMOVED. When it was `true`, fill prints a line pointing at `rota config set autonomy.level auto`; it does not switch the autopilot on for you.
 
