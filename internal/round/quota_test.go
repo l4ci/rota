@@ -3,6 +3,8 @@ package round
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -132,5 +134,26 @@ func TestMixedConfigClaudeAssignIsRefusedByQuota(t *testing.T) {
 	_, err := f.assign("12", "ben", nil)
 	if by := blockedBy(t, err); by != BlockQuota || !strings.Contains(err.Error(), "round.accounts") {
 		t.Fatalf("assign: %v", err)
+	}
+}
+
+// The account pool is read through Worker.Config: no .rota/config.json exists.
+func TestHeadroomReadsAccountsFromTheInjectedConfig(t *testing.T) {
+	f := newAssignFixture(t)
+	v, err := jsonx.Decode([]byte(`{"round":{"codexAccounts":[{"name":"c1","codexHome":"/h1"}]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(f.root, ".rota", "config.json")); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	f.env.Worker.Config = func(string) any { return v }
+	f.env.Worker.Now = func() time.Time { return quotaNow }
+	if _, err := limits.Append(f.root, limits.Entry{Session: "ben", Kind: harness.Codex, Account: "c1", Status: limits.StatusWaiting,
+		ResetsAt: limits.Time(quotaNow.Add(30 * time.Minute))}); err != nil {
+		t.Fatal(err)
+	}
+	if why := f.env.Headroom(bg, f.root, harness.Codex); !strings.Contains(why, "round.codexAccounts") {
+		t.Fatalf("headroom %q", why)
 	}
 }

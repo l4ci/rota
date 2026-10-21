@@ -71,7 +71,11 @@ type Deps struct {
 	// env, the accounts and every cli env read go through it. A test swaps it.
 	// defaultDeps also reads the remaining ROTA_TEST_* hooks once, at this
 	// edge, into PollFixture, PollStatus, DoctorPath and DoctorDisk.
-	Getenv  func(string) string
+	Getenv func(string) string
+	// Config is the one read of the project config the domain envs (worker,
+	// escalation, knowledge, gate) take: the merged .rota/config.json by
+	// default, a fixed value in a test.
+	Config  func(root string) any
 	Environ func() []string
 	// RecordMistakes makes an internal error or panic write a record to the
 	// bug log (#1175). A test leaves it off so a failing fixture does not write
@@ -148,6 +152,7 @@ func defaultDeps() *Deps {
 		Git:              git.Exec,
 		Proc:             proc.Run,
 		Getenv:           os.Getenv,
+		Config:           func(root string) any { return config.Load(rotatree.Config(root)) },
 		Getwd:            os.Getwd,
 		UserHomeDir:      os.UserHomeDir,
 		LookPath:         exec.LookPath,
@@ -268,6 +273,9 @@ func homeOf(f func() (string, error)) string {
 // workerEnv is the WorkerEnv hook with its host filled from Host.
 func (d *Deps) workerEnv() worker.Env {
 	e := d.WorkerEnv()
+	if e.Config == nil {
+		e.Config = d.Config
+	}
 	if e.Git == nil {
 		e.Git = d.Git
 	}
@@ -332,6 +340,9 @@ func (d *Deps) baseRoundEnv() round.Env {
 // only one with notifications) filled from Host.
 func (d *Deps) escalationEnv() escalation.Env {
 	e := d.EscalationEnv()
+	if e.Config == nil {
+		e.Config = d.Config
+	}
 	if e.Host == nil {
 		e.Host = func() host.Host { return d.Host(host.Herdr) }
 	}

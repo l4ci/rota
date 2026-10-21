@@ -6,10 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/limits"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -67,7 +65,7 @@ func (e Env) meterPool(ctx context.Context, root string) pool {
 // loggedPool reads the accounts of a kind with no usage meter through the
 // limits the watcher logged.
 func (e Env) loggedPool(root string, h harness.Harness) (p pool, configured bool) {
-	logins := h.Accounts(config.Load(rotatree.Config(root))).Entries
+	logins := h.Accounts(e.Worker.WithDefaults().Config(root)).Entries
 	cooling := limits.Cooling(root, h.Kind(), e.now())
 	for _, l := range logins {
 		if at, ok := cooling[l.Name]; ok {
@@ -87,8 +85,8 @@ func (e Env) poolOf(ctx context.Context, root string, h harness.Harness) (pool, 
 }
 
 // poolKey is the config key of the kind's accounts.
-func poolKey(root string, h harness.Harness) string {
-	return h.Accounts(config.Load(rotatree.Config(root))).Key
+func (e Env) poolKey(root string, h harness.Harness) string {
+	return h.Accounts(e.Worker.WithDefaults().Config(root)).Key
 }
 
 // Headroom says why a worker of the harness kind has no account to run under,
@@ -96,7 +94,7 @@ func poolKey(root string, h harness.Harness) string {
 func (e Env) Headroom(ctx context.Context, root, kind string) string {
 	h := harness.Resolve(kind)
 	if p, _ := e.poolOf(ctx, root, h); p.closed {
-		return coolingWhy(poolKey(root, h), earliest(p.resets))
+		return coolingWhy(e.poolKey(root, h), earliest(p.resets))
 	}
 	return ""
 }
@@ -120,7 +118,7 @@ func (e Env) QuotaCap(ctx context.Context, root string, set roundcfg.Settings) C
 	for _, k := range harness.Kinds() {
 		h := harness.Resolve(k)
 		p, configured := e.poolOf(ctx, root, h)
-		key := poolKey(root, h)
+		key := e.poolKey(root, h)
 		if p.closed {
 			c.why[k] = coolingWhy(key, earliest(p.resets))
 		}
