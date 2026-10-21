@@ -10,8 +10,10 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/stalebin"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 func fixture(t *testing.T, name string) string {
@@ -863,5 +865,24 @@ func TestConfigDirCheck(t *testing.T) {
 		if got == nil || got.Status != tc.status || !strings.Contains(got.Detail, tc.detail) {
 			t.Errorf("%s: got %+v", tc.name, got)
 		}
+	}
+}
+
+func TestAccountsKeychainThroughInjectedRunner(t *testing.T) {
+	dir := t.TempDir()
+	var asked []string
+	in := Input{Home: t.TempDir(), Accounts: []config.Account{{Name: "a", ConfigDir: dir}},
+		Credentials: worker.Credentials{GOOS: "darwin", Run: func(_ context.Context, c proc.Cmd) (proc.Result, error) {
+			asked = append(asked, c.Name)
+			return proc.Result{Stdout: `{"claudeAiOauth":{"accessToken":"kc"}}`}, nil
+		}}}
+	r := &runner{in: in, ctx: context.Background()}
+	if c := r.accounts(); c.Status != Pass || len(asked) != 1 || asked[0] != "security" {
+		t.Errorf("accounts = %+v, runner calls %v, want a pass through security", c, asked)
+	}
+	in.Credentials.Run = func(context.Context, proc.Cmd) (proc.Result, error) { return proc.Result{ExitCode: 44}, nil }
+	r = &runner{in: in, ctx: context.Background()}
+	if c := r.accounts(); c.Status != Fail || !strings.Contains(c.Detail, "Keychain") {
+		t.Errorf("accounts = %+v, want a fail naming the Keychain", c)
 	}
 }

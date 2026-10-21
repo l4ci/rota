@@ -68,7 +68,7 @@ func runDoctor(c *Ctx, args []string) (Result, error) {
 // doctorInput gathers the real environment: Deps.DoctorPath replaces PATH for
 // tool lookup (a test hook, not part of the CLI).
 func doctorInput(ctx context.Context, d *Deps) doctor.Input {
-	in := doctor.Input{Exec: doctorExec(d.Proc), Getenv: d.Getenv, Look: doctorLook(d.LookPath, d.DoctorPath)}
+	in := doctor.Input{Exec: doctorExec(d.Proc), Getenv: d.Getenv, Look: doctorLook(d.LookPath, d.DoctorPath), Credentials: worker.SystemCredentials(d.Proc)}
 	in.Dir, _ = d.Getwd()
 	in.Home, _ = d.UserHomeDir()
 	if dir, src, warn, err := projects.Resolve(); err == nil {

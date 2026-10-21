@@ -165,7 +165,9 @@ func defaultDeps() *Deps {
 	d.DoctorDisk = doctorDisk(d.Getenv("ROTA_TEST_DOCTOR_DISK"))
 	d.UpdateEnv = func() update.Env { return update.DefaultEnv(version.Get().Version, d.Getenv, d.Proc) }
 	d.OrchestrateEnv = func() orchestrate.Env { return defaultOrchestrateEnv(d) }
-	d.WorkerAccounts = func() *worker.Accounts { return &worker.Accounts{Env: worker.Env{Now: d.Now, Getenv: d.Getenv}} }
+	d.WorkerAccounts = func() *worker.Accounts {
+		return &worker.Accounts{Env: worker.Env{Now: d.Now, Getenv: d.Getenv}, Login: worker.SystemCredentials(d.Proc)}
+	}
 	d.NewTracker = func(ctx context.Context, root string, cfg any) (backlog.Tracker, error) {
 		return d.issueTracker(ctx, cfg, root)
 	}
