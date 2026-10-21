@@ -229,7 +229,11 @@ func TestMergeGitignore(t *testing.T) {
 		{"slash spelling", block + "/.worktrees\n", true, block + "/.worktrees\n"},
 		{"crlf worktrees", block + ".worktrees/\r\n", true, block + ".worktrees/\r\n"},
 		{"older block lacks one line", withoutHits + ".worktrees/\n", true,
-			withoutHits + ".worktrees/\n" + "\n# ── rota ──\n" + hitsLine + "\n"},
+			strings.Replace(withoutHits, ignoreLines[0]+"\n", ignoreLines[0]+"\n"+hitsLine+"\n", 1) + ".worktrees/\n"},
+		{"header without managed lines", ignoreLines[0] + "\n.worktrees/\n", true,
+			block + ".worktrees/\n"},
+		{"stray line, no header", ".rota/status.json\n.worktrees/\n", true,
+			".rota/status.json\n.worktrees/\n\n" + strings.Replace(block, ".rota/status.json\n", "", 1)},
 		{"no trailing newline", "a", true, "a\n" + block + worktreesBlock},
 	}
 	for _, c := range cases {
