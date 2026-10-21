@@ -455,71 +455,83 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		root, err := backlogScope(c)
+		var extra []string
+		for _, l := range strings.Split(*labelsFlag, ",") {
+			if l = strings.TrimSpace(l); l != "" {
+				extra = append(extra, l)
+			}
+		}
+		res, why, err := branchReviewDepth(c, t, extra)
 		if err != nil {
 			return Result{}, err
 		}
-		cfg := config.Load(rotatree.Config(root))
-		policy, err := config.ReviewPolicyOf(cfg)
-		if err != nil {
-			return Result{}, Failed("%v; run rota config check", err)
-		}
-		src := worker.ReviewSources{Policy: policy, Git: c.deps().Git, Dir: t.Dir, Span: t.Base + "..." + t.Branch}
-		for _, l := range strings.Split(*labelsFlag, ",") {
-			if l = strings.TrimSpace(l); l != "" {
-				src.Labels = append(src.Labels, l)
-			}
-		}
-		// The issue behind a `<agent>/<issue>-<slug>` branch is read, as the worker
-		// gate does, when the policy can use it: a label to match or a file set to
-		// drift from.
-		if n, ok := worker.BranchIssue(t.Branch); ok && policy.NeedsIssue() {
-			it, err := c.deps().issuesOrNone(c.Context(), cfg, root)
-			if err != nil {
-				return Result{}, trackerErr(err)
-			}
-			if _, none := it.(tracker.NoIssues); !none { // the file source has no issues to read
-				src.Issue, src.Issues = n, it
-			}
-		}
-		// The branch's open PR carries the Door line. Like the gate, an unreadable
-		// forge fails the verb: skipping would print a depth that ignores the line.
-		// A local forge or a missing forge CLI has no PR to read.
-		prFound, noForge := false, false
-		if policy.MayBeBelowFull() {
-			f, err := c.deps().forge(c.Context(), cfg, "", root)
-			switch {
-			case err == nil:
-				src.PRBody = func() (string, error) {
-					prs, err := f.OpenPRs(c.Context())
-					if err != nil {
-						return "", err
-					}
-					for _, pr := range prs {
-						if pr.Branch == t.Branch {
-							prFound = true
-							return pr.Body, nil
-						}
-					}
-					return "", nil
-				}
-			case errors.Is(err, tracker.ErrLocalForge) || tracker.IsCLIMissing(err):
-				noForge = true
-			default:
-				return Result{}, Failed("could not reach the forge to read the PR body for its Door line to pick the review depth: %v", err)
-			}
-		}
-		res, err := worker.ResolveReviewDepth(c.Context(), src)
-		if err != nil {
-			var de *worker.ReviewDepthError
-			if errors.As(err, &de) && de.Stage == "diff" {
-				return Result{}, diffErr(de.Err)
-			}
-			return Result{}, Failed("%v", err)
-		}
-		depth, why := res.Depth, res.Why
-		why += worker.DoorNote(policy, res, prFound, noForge)
+		depth := res.Depth
 		data := gitObj("branch", t.Branch, "base", t.Base, "depth", string(depth), "signal", res.Signal, "why", why, "changedLines", res.Changed, "labels", res.Labels)
 		return Result{Data: data, Text: fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", t.Branch, depth, why)}, nil
 	}
+}
+
+// branchReviewDepth resolves the depth ship.review picks for t, from its diff
+// size against the base, the labels of the branch's issue (read from the
+// tracker when the policy has a labels map) plus extra, and the Door line of
+// its open PR. why carries the Door note.
+func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDepth, string, error) {
+	root, err := backlogScope(c)
+	if err != nil {
+		return worker.ReviewDepth{}, "", err
+	}
+	cfg := config.Load(rotatree.Config(root))
+	policy, err := config.ReviewPolicyOf(cfg)
+	if err != nil {
+		return worker.ReviewDepth{}, "", Failed("%v; run rota config check", err)
+	}
+	src := worker.ReviewSources{Policy: policy, Git: c.deps().Git, Dir: t.Dir, Span: t.Base + "..." + t.Branch, Labels: extra}
+	// The issue behind a `<agent>/<issue>-<slug>` branch is read, as the worker
+	// gate does, when the policy can use it: a label to match or a file set to
+	// drift from.
+	if n, ok := worker.BranchIssue(t.Branch); ok && policy.NeedsIssue() {
+		it, err := c.deps().issuesOrNone(c.Context(), cfg, root)
+		if err != nil {
+			return worker.ReviewDepth{}, "", trackerErr(err)
+		}
+		if _, none := it.(tracker.NoIssues); !none { // the file source has no issues to read
+			src.Issue, src.Issues = n, it
+		}
+	}
+	// The branch's open PR carries the Door line. Like the gate, an unreadable
+	// forge fails the verb: skipping would print a depth that ignores the line.
+	// A local forge or a missing forge CLI has no PR to read.
+	prFound, noForge := false, false
+	if policy.MayBeBelowFull() {
+		f, err := c.deps().forge(c.Context(), cfg, "", root)
+		switch {
+		case err == nil:
+			src.PRBody = func() (string, error) {
+				prs, err := f.OpenPRs(c.Context())
+				if err != nil {
+					return "", err
+				}
+				for _, pr := range prs {
+					if pr.Branch == t.Branch {
+						prFound = true
+						return pr.Body, nil
+					}
+				}
+				return "", nil
+			}
+		case errors.Is(err, tracker.ErrLocalForge) || tracker.IsCLIMissing(err):
+			noForge = true
+		default:
+			return worker.ReviewDepth{}, "", Failed("could not reach the forge to read the PR body for its Door line to pick the review depth: %v", err)
+		}
+	}
+	res, err := worker.ResolveReviewDepth(c.Context(), src)
+	if err != nil {
+		var de *worker.ReviewDepthError
+		if errors.As(err, &de) && de.Stage == "diff" {
+			return worker.ReviewDepth{}, "", diffErr(de.Err)
+		}
+		return worker.ReviewDepth{}, "", Failed("%v", err)
+	}
+	return res, res.Why + worker.DoorNote(policy, res, prFound, noForge), nil
 }
