@@ -80,7 +80,9 @@ func TestDepsHomeAndConfigReachWorkerAccounts(t *testing.T) {
 	t.Setenv("HOME", "")
 	root := t.TempDir()
 	d := defaultDeps()
-	d.UserHomeDir = func() (string, error) { return "/fake/home", nil }
+	home := t.TempDir()
+	d.UserHomeDir = func() (string, error) { return home, nil }
+	write(t, filepath.Join(home, ".claude-a", ".credentials.json"), `{"claudeAiOauth":{"accessToken":"tok"}}`)
 	d.Config = func(string) any {
 		cfg, err := jsonx.Decode([]byte(`{"round":{"accounts":[{"name":"a","configDir":"~/.claude-a"}]}}`))
 		if err != nil {
@@ -89,11 +91,16 @@ func TestDepsHomeAndConfigReachWorkerAccounts(t *testing.T) {
 		return cfg
 	}
 	acc := d.WorkerAccounts()
-	if h, _ := acc.Env.WithDefaults().Home(); h != "/fake/home" {
-		t.Errorf("accounts home = %q, want /fake/home", h)
+	if h, _ := acc.Env.WithDefaults().Home(); h != home {
+		t.Errorf("accounts home = %q, want %q", h, home)
 	}
 	if got := acc.Configured(root); len(got) != 1 {
 		t.Errorf("accounts configured = %v, want the one injected account", got)
+	}
+	// Pick only passes the login check when ~/.claude-a expands against home.
+	acc.Fetch = func(context.Context, string, string) (*jsonx.Object, string) { return nil, "no usage" }
+	if name, ok := acc.Pick(context.Background(), root, nil); !ok || name != "a" {
+		t.Errorf("Pick = %q, %v; want a (the ~/ configDir resolved to %s/.claude-a)", name, ok, home)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".rota", "config.json")); err == nil {
 		t.Fatal("test root must have no on-disk config")
