@@ -22,7 +22,7 @@ RC=0; OUT=$(wdrun worker done ben) || RC=$?
 pass "a slot without a test.fast proof row is refused, exit 4"
 
 wdrun proof record B07 -- "echo fast" > /dev/null || fail "proof record failed"
-( cd "$WDP" && git commit -q --allow-empty -m more )
+( cd "$WDP" && git commit -q --allow-empty -m more && git push -q origin feat/x )
 RC=0; wdrun worker done ben > /dev/null || RC=$?
 [ "$RC" = "4" ] || fail "a PASS row at an older sha should exit 4: rc=$RC"
 pass "a PASS row at an older sha does not count"
