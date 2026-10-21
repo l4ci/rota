@@ -769,6 +769,14 @@ func (r Registry) Bounces(issue string) int {
 	return bounceCount(bouncesOf(r.doc), issue)
 }
 
+// BounceHead is the PR head the gate last sent back for an item, "" when it
+// never did. A branch still at that head has not answered the bounce.
+func (r Registry) BounceHead(issue string) string {
+	v, _ := bounceHeadsOf(r.doc).Get(issue)
+	s, _ := v.(string)
+	return s
+}
+
 // ClearBounces forgets an item's count: its PR merged or it was handed over.
 func ClearBounces(root, issue string) error {
 	return Update(root, func(d *Doc) {
