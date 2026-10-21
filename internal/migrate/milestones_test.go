@@ -129,3 +129,37 @@ func TestArchiveMilestoneFiles(t *testing.T) {
 		t.Fatalf("second apply = %v %v", moved, err)
 	}
 }
+
+func TestArchiveMilestoneFilesRefusesCollision(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, ".rota", "milestones")
+	dest := filepath.Join(root, ".rota", "archive", "milestones")
+	for _, d := range []string{src, dest} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files := map[string]string{
+		filepath.Join(dest, "M01.md"): "old",
+		filepath.Join(src, "M01.md"):  "new",
+		filepath.Join(src, "M02.md"):  "other",
+	}
+	for p, body := range files {
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, apply := range []bool{false, true} {
+		if _, err := ArchiveMilestoneFiles(root, apply); err == nil || !strings.Contains(err.Error(), "M01.md") {
+			t.Fatalf("apply=%v: want collision error naming M01.md, got %v", apply, err)
+		}
+	}
+	for p, body := range files {
+		if got, err := os.ReadFile(p); err != nil || string(got) != body {
+			t.Fatalf("%s = %q %v, want untouched %q", p, got, err, body)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dest, "M02.md")); err == nil {
+		t.Fatal("M02.md moved despite the collision on M01.md")
+	}
+}
