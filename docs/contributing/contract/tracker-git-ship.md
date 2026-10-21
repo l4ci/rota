@@ -110,10 +110,10 @@ note: findings are added diff lines matching `Task N`, `in flight`, `placeholder
 ### rota review package
 rota review package [<branch>] [--base <ref>] [--since <sha>]
 repo: scoped
-data: {"path": string, "files": number, "bytes": number}
+data: {"path": string, "files": number, "bytes": number, "head": string}
 exit: 2 at an umbrella root without --repo; 3 when the branch, base or `--since` commit does not exist, when the range is empty, when `--since` is not an ancestor of the branch, or when the branch and base share no history; 1 when the branch is the resolved base; 5 when git fails
 old: none (new verb)
-note: writes `<project root>/.rota/review/<branch>.md` (gitignored; `/` in the branch becomes `-`) with the commits, `git diff --stat` and `git diff -U10`, and prints the absolute path. The file is rewritten on every call.
+note: writes `<project root>/.rota/review/<branch>.md` (gitignored; `/` in the branch becomes `-`) with the commits, `git diff --stat` and `git diff -U10`, and prints the absolute path. The file is rewritten on every call. `data.head` is the branch sha resolved once and diffed; pass it to `rota verdict add --sha`.
 note: the base need not be an ancestor of the branch tip: the diff is `base...branch`, so a base that moved on since the fork is fine. Only unrelated histories fail. `--since` is a point on the branch and must be an ancestor; the range is then `since..branch`.
 
 ### rota review queue
