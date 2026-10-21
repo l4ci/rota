@@ -61,6 +61,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 	yes := fs.Bool("yes", false, "take the default for every question not given with --set; never prompt")
 	list := fs.Bool("list", false, "print the questions and how to answer them; write nothing")
 	saveGlobal := fs.Bool("save-global", false, "save the answers as the global defaults without asking (only those that differ from the global config)")
+	force := fs.Bool("force", false, "set up even in your home directory")
 	fs.Var(&sets, "set", "answer a question: `key=value` (repeatable)")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := knNoArgs(args); err != nil {
@@ -68,6 +69,9 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 		}
 		if *list {
 			return setupList(setupDefaults(c)), nil
+		}
+		if err := refuseHomeInit(c, "setup", *force); err != nil {
+			return Result{}, err
 		}
 		dir, err := initDir()
 		if err != nil {

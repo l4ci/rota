@@ -99,7 +99,7 @@ func configShow(fs *flag.FlagSet) RunFunc {
 		if len(args) == 1 {
 			key = args[0]
 		}
-		if *global {
+		if *global || atHome(c) {
 			dir, err := globalDir(c)
 			if err != nil {
 				return Result{}, err
@@ -223,7 +223,7 @@ func configSet(fs *flag.FlagSet) RunFunc {
 		}
 		var res config.SetResult
 		var err error
-		if *global {
+		if *global || atHome(c) {
 			var dir string
 			if dir, err = globalDir(c); err != nil {
 				return Result{}, err

@@ -123,6 +123,7 @@ func paletteEntries(c *Ctx, out *paletteOutcome) []palette.Entry {
 	verb := func(label, hint string, scope palette.Scope, v ...string) palette.Entry {
 		return paletteVerb(c, root, label, hint, scope, v...)
 	}
+	home := atHome(c)
 	entries := []palette.Entry{
 		{Label: "Orchestrate", Hint: "start or attach the round", Scope: palette.InProject, Default: true, Ends: true, Run: func() error {
 			out.set(runOrchestrate(c, false))
@@ -133,17 +134,28 @@ func paletteEntries(c *Ctx, out *paletteOutcome) []palette.Entry {
 	if e, ok := layoutToggle(c); ok {
 		entries = append(entries, e)
 	}
-	return append(entries,
+	entries = append(entries,
 		verb("Doctor", "check git, forge, host and agent", palette.InProject, "doctor"),
 		verb("Skills update", "refresh the installed skills", palette.Always, "skills", "update"),
-		verb("Projects", "rota projects on this machine", palette.Always, "projects"),
-		palette.Entry{Label: "Setup", Hint: "init this directory", Scope: palette.NoProject, Default: true, Ends: true, Run: func() error {
+	)
+	projects := verb("Projects", "rota projects on this machine", palette.Always, "projects")
+	// In $HOME bare rota is a launcher: Projects leads and Setup is gone, so
+	// one Enter cannot init the home directory. Config there is the global one
+	// (config show falls back to it in $HOME).
+	projects.Default = home
+	entries = append(entries, projects)
+	if !home {
+		entries = append(entries, palette.Entry{Label: "Setup", Hint: "init this directory", Scope: palette.NoProject, Default: true, Ends: true, Run: func() error {
 			out.set(c.deps().BareSetup(c, nil))
 			return nil
-		}},
-		verb("Config", "view and change the config", palette.InProject, "config", "show"),
-		palette.Entry{Label: "Quit", Hint: "q", Quit: true},
-	)
+		}})
+	}
+	if home {
+		entries = append(entries, verb("Config", "view and change the global config", palette.Always, "config", "show"))
+	} else {
+		entries = append(entries, verb("Config", "view and change the config", palette.InProject, "config", "show"))
+	}
+	return append(entries, palette.Entry{Label: "Quit", Hint: "q", Quit: true})
 }
 
 // paletteOutcome is the Result of the entry that ended the palette.
