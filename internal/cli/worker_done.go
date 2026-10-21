@@ -127,8 +127,19 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		}
 
 		if kind != worker.OutcomeFailed {
-			if noRed, err := missingRed(c, root, sl, id, *base); err != nil {
+			noRed, unchecked, err := missingRed(c, root, sl, id, *base)
+			if err != nil {
 				return Result{}, err
+			}
+			if unchecked != nil {
+				d.Set("noRedUnchecked", true)
+				msg := fmt.Sprintf("cannot check for a RED proof row: %v", unchecked)
+				if *requireRed {
+					e := Refused("%s", msg)
+					e.Hint = "fix the base (--base <ref>) so the diff resolves, or drop --require-red to accept the warning"
+					return Result{Data: d}, e
+				}
+				c.Warn("%s", msg)
 			} else if noRed {
 				d.Set("noRed", true)
 				msg := fmt.Sprintf("%s changes non-test Go code and has no failing (RED) proof row: work.tdd wants a recorded red-first run (`rota proof record %s -- <test command>` before the change)", id, id)
@@ -208,25 +219,30 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 
 // missingRed reports a branch that changes non-test Go code while work.tdd is
 // on and the item's proof holds no FAIL row, the mark a red-first run leaves.
-// It is a heuristic: a FAIL row is not proof the failure was an assertion. A
-// base that cannot be resolved skips the check rather than refusing the done.
-func missingRed(c *Ctx, root string, sl *worker.Slot, id, base string) (bool, error) {
+// It is a heuristic: a FAIL row is not proof the failure was an assertion.
+// unchecked is the diff error when the changed files could not be computed (an
+// unresolvable base, no merge base, a git failure): the caller warns, or
+// refuses under --require-red, rather than passing the done unchecked.
+func missingRed(c *Ctx, root string, sl *worker.Slot, id, base string) (noRed bool, unchecked, err error) {
 	if !c.deps().workerEnv().GateConfig(root).TDD {
-		return false, nil
+		return false, nil, nil
 	}
-	files, err := changedFiles(c, slotDir(sl, root), base)
-	if err != nil || !slices.ContainsFunc(files, isProdGo) {
-		return false, nil
+	files, derr := changedFiles(c, slotDir(sl, root), base)
+	if derr != nil {
+		return false, derr, nil
+	}
+	if !slices.ContainsFunc(files, isProdGo) {
+		return false, nil, nil
 	}
 	_, st, _, err := openProof(c, id)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	rows, _, err := proof.Show(st, id)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
-	return !slices.ContainsFunc(rows, func(r proof.Row) bool { return r.Result == "FAIL" }), nil
+	return !slices.ContainsFunc(rows, func(r proof.Row) bool { return r.Result == "FAIL" }), nil, nil
 }
 
 // isProdGo is a Go file a test does not own: not *_test.go, not under testdata.

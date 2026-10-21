@@ -302,6 +302,20 @@ func TestWorkerDoneFlagsMissingRed(t *testing.T) {
 			t.Fatalf("exit %d: %s", code, out)
 		}
 	})
+	t.Run("unresolvable base warns", func(t *testing.T) {
+		dir, _ := base(t)
+		code, out, errOut := rotaIn(t, dir, "worker", "done", "ben", "--base", "no-such-ref", "--json")
+		if code != 0 || data(t, out)["noRedUnchecked"] != true || !strings.Contains(errOut, "cannot check for a RED proof row") {
+			t.Fatalf("exit %d: %s %s", code, out, errOut)
+		}
+	})
+	t.Run("unresolvable base refuses under --require-red", func(t *testing.T) {
+		dir, _ := base(t)
+		code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--base", "no-such-ref", "--require-red", "--json")
+		if code != 4 || slotState(t, dir) == "done" {
+			t.Fatalf("exit %d: %s", code, out)
+		}
+	})
 	t.Run("a FAIL row satisfies it", func(t *testing.T) {
 		dir, b := base(t)
 		rotaIn(t, dir, "proof", "add", "B07", "--check", "go test ./x", "--result", "FAIL", "--evidence", "x", "--sha", headOf(t, dir))
