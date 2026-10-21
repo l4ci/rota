@@ -127,3 +127,40 @@ func cutFunc(t *testing.T, file, src, name string) string {
 	}
 	return src
 }
+
+// TestDepsConfigReachesEveryConfigReader pins the one config source: a swapped
+// Deps.Config is what the worker env, escalation env, knowledge store and host
+// decision read, so none of them goes to disk.
+func TestDepsConfigReachesEveryConfigReader(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var reads int
+	sentinel := new(int)
+	d := testDeps()
+	d.Getwd = func() (string, error) { return root, nil }
+	d.Config = func(string) any { reads++; return sentinel }
+
+	for name, cfg := range map[string]func(string) any{
+		"workerEnv":     d.workerEnv().Config,
+		"escalationEnv": d.escalationEnv().Config,
+	} {
+		before := reads
+		if cfg == nil || cfg(root) != sentinel || reads != before+1 {
+			t.Errorf("%s: Config did not reach Deps.Config", name)
+		}
+	}
+	st, _, err := knStore(&Ctx{Deps: d})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before := reads; st.Config == nil || st.Config(root) != sentinel || reads != before+1 {
+		t.Error("knStore: Config did not reach Deps.Config")
+	}
+	before := reads
+	d.resolveHost(root)
+	if reads != before+1 {
+		t.Error("resolveHost did not read Deps.Config")
+	}
+}

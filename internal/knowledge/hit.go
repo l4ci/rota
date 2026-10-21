@@ -24,7 +24,7 @@ type HitResult struct {
 // PromoteThreshold reads learn.promoteThreshold from the project config. A
 // value below 1 or not an integer gives the schema default.
 func (s Store) PromoteThreshold() int {
-	return config.IntOr(config.Load(rotatree.Config(s.Root)), "learn.promoteThreshold", 1, config.MaxInt)
+	return config.IntOr(s.config(), "learn.promoteThreshold", 1, config.MaxInt)
 }
 
 // Hit registers that a bullet was consulted: it counts one hit and promotes a
