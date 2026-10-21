@@ -917,6 +917,39 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	return PollResult{Slots: rows, Notes: notes, Changed: ChangeCount(root) != before}, nil
 }
 
+// openPRs lists the forge's open PRs. Best effort: ok is false with no origin,
+// a local forge, no forge or a failing listing, where nothing is known.
+func (e Env) openPRs(ctx context.Context, root string) (prs []tracker.PR, ok bool) {
+	if _, code := e.runGit(ctx, root, "remote", "get-url", "origin"); code != 0 {
+		return nil, false
+	}
+	cfg := e.GateConfig(root)
+	provider := e.detectProvider(ctx, root, "", cfg.Tracker.Provider)
+	if provider == tracker.ProviderLocal {
+		return nil, false
+	}
+	f, err := e.Forge(provider, root, cfg.Tracker)
+	if err != nil {
+		return nil, false
+	}
+	prs, err = f.OpenPRs(ctx)
+	return prs, err == nil
+}
+
+// OpenPRNumbers is the set of open PR numbers, ok false when the forge cannot
+// say. A caller that drops PRs absent from it must keep them all when !ok.
+func (e Env) OpenPRNumbers(ctx context.Context, root string) (open map[int]bool, ok bool) {
+	prs, ok := e.openPRs(ctx, root)
+	if !ok {
+		return nil, false
+	}
+	open = map[int]bool{}
+	for _, p := range prs {
+		open[p.Number] = true
+	}
+	return open, true
+}
+
 // openPRsByHead maps head branch to PR URL for the open PRs, read only when a
 // polled slot records no PR. Best effort: with no forge, no origin or a failing
 // listing the poll records what the panes say and nothing more.
@@ -930,20 +963,8 @@ func (e Env) openPRsByHead(ctx context.Context, root string, reg Registry, polle
 	if !need {
 		return nil
 	}
-	if _, code := e.git(root, "remote", "get-url", "origin"); code != 0 {
-		return nil
-	}
-	cfg := e.GateConfig(root)
-	provider := e.detectProvider(ctx, root, "", cfg.Tracker.Provider)
-	if provider == tracker.ProviderLocal {
-		return nil
-	}
-	f, err := e.Forge(provider, root, cfg.Tracker)
-	if err != nil {
-		return nil
-	}
-	prs, err := f.OpenPRs(ctx)
-	if err != nil {
+	prs, ok := e.openPRs(ctx, root)
+	if !ok {
 		return nil
 	}
 	out := map[string]string{}

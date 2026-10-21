@@ -102,7 +102,29 @@ func waitingPRs(c *Ctx, root string) []waitingPR {
 			out = append(out, waitingPR{PR: q.PR, Base: q.Base, Reviewed: reviewed(q.Branch)})
 		}
 	}
-	return fillDefaultBase(out, defaultBase(c, root))
+	return fillDefaultBase(openOnly(c, root, out), defaultBase(c, root))
+}
+
+// openOnly drops the PRs the forge no longer lists as open: gate and train
+// merge a PR without clearing its registry row at once. A forge that cannot
+// answer (or a PR number that does not parse) keeps the row, since the nudge is
+// advice and a stale name beats a missing one.
+func openOnly(c *Ctx, root string, waiting []waitingPR) []waitingPR {
+	if len(waiting) == 0 {
+		return waiting
+	}
+	open, ok := c.deps().workerEnv().OpenPRNumbers(c.Context(), root)
+	if !ok {
+		return waiting
+	}
+	var out []waitingPR
+	for _, w := range waiting {
+		if n, parsed := worker.PRRefNumber(w.PR); parsed && !open[n] {
+			continue
+		}
+		out = append(out, w)
+	}
+	return out
 }
 
 // defaultBase is the base a PR with no recorded base merges into, "" when it

@@ -3,10 +3,14 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/worker"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -290,6 +294,54 @@ func TestTrainBlockedOnFailNotConcerns(t *testing.T) {
 		}
 		if got := trainBlocked(verdict.Load(root), "w1", verdict.Settings{}); got != tc.want {
 			t.Errorf("%s: blocked %v want %v", name, got, tc.want)
+		}
+	}
+}
+
+// openPRForge is a forge whose open PR list is fixed.
+type openPRForge struct {
+	worker.Forge
+	open []int
+	err  error
+}
+
+func (f openPRForge) OpenPRs(context.Context) ([]tracker.PR, error) {
+	var out []tracker.PR
+	for _, n := range f.open {
+		out = append(out, tracker.PR{Number: n})
+	}
+	return out, f.err
+}
+
+// TestWaitingPRsDropsMergedPRs: a PR the forge no longer lists as open (merged
+// by gate or train) leaves the waiting list, so the nudge never names it. A
+// forge that cannot answer filters nothing: the nudge is advice.
+func TestWaitingPRsDropsMergedPRs(t *testing.T) {
+	for name, tc := range map[string]struct {
+		forge openPRForge
+		want  []string
+	}{
+		"merged PR drops":       {openPRForge{open: []int{12}}, []string{"#12"}},
+		"forge error keeps all": {openPRForge{err: errors.New("offline")}, []string{"#11", "#12"}},
+	} {
+		dir := nudgeProject(t, []string{"a/1-x", "b/2-y"}, []string{"a/1-x", "b/2-y"})
+		if out, err := exec.Command("git", "-C", dir, "remote", "add", "origin", "https://github.com/o/r.git").CombinedOutput(); err != nil {
+			t.Fatalf("git remote add: %v %s", err, out)
+		}
+		addRegistryRows(t, dir, map[string][]map[string]any{
+			"slots": {{"name": "a", "state": "done", "branch": "a/1-x", "pr": "#11"}},
+			"prs":   {{"branch": "b/2-y", "pr": "#12", "base": "main"}},
+		})
+		deps := testDeps()
+		deps.WorkerEnv = func() worker.Env {
+			return worker.Env{Forge: func(string, string, tracker.Settings) (worker.Forge, error) { return tc.forge, nil }}
+		}
+		var got []string
+		for _, w := range waitingPRs(&Ctx{Deps: deps, ctx: context.Background()}, dir) {
+			got = append(got, w.PR)
+		}
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: waiting = %v, want %v", name, got, tc.want)
 		}
 	}
 }
