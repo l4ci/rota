@@ -444,3 +444,17 @@ func TestKeychainIgnoredOffDarwin(t *testing.T) {
 		t.Errorf("Problem = %q, want the file-only reason", got)
 	}
 }
+
+func TestKeychainReadFailureIsNamedNotMissing(t *testing.T) {
+	dir := t.TempDir()
+	kc := Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
+		return proc.Result{ExitCode: 51, Stderr: "boom\n"}, nil
+	}}
+	got := kc.Problem(dir)
+	if !strings.Contains(got, "Keychain unavailable") || !strings.Contains(got, "exit 51") {
+		t.Errorf("Problem = %q, want the Keychain read failure named", got)
+	}
+	if strings.Contains(got, "no credentials file or Keychain entry") {
+		t.Errorf("Problem = %q, must not claim a missing entry", got)
+	}
+}
