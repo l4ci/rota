@@ -280,9 +280,9 @@ func saveGlobalAnswers(cands []config.Prompt, answers map[string]string) ([]stri
 // including end of input, is no: the project is already set up either way.
 func askSaveGlobal(in *bufio.Reader, out io.Writer, cands []config.Prompt, answers map[string]string, first bool) bool {
 	if first {
-		fmt.Fprintln(out, "\nNo global defaults yet. Save these answers for new projects?")
+		fmt.Fprintln(out, "\nNo global defaults yet. Save these answers as defaults for every project that does not set the key itself?")
 	} else {
-		fmt.Fprintln(out, "\nThese answers differ from your global defaults. Save them as the new defaults?")
+		fmt.Fprintln(out, "\nThese answers differ from your global defaults. Save them as the new defaults for every project that does not set the key itself?")
 	}
 	for _, p := range cands {
 		fmt.Fprintf(out, "  %s = %s\n", p.Key, answers[p.Key])
