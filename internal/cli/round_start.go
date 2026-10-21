@@ -8,7 +8,6 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
-	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -214,12 +213,15 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			d.Set("slate", strs(st.Slate))
 		}
 		d.Set("candidates", candidateList(cands))
-		note, noteWarn := orchestratorHandoff(root, cfg, *consume)
+		notePath := handoffFile(root, cfg)
+		note, noteWarn := hook.ReadOrchestratorNote(notePath, *consume)
 		if noteWarn != "" {
 			c.Warn("%s", noteWarn)
 		}
+		var hn *handoffNote
 		if note != nil {
-			d.Set("handoff", note.data())
+			hn = &handoffNote{path: notePath, heading: note.Heading, consumed: note.Consumed, consumeFailed: note.ConsumeFailed}
+			d.Set("handoff", hn.data())
 		}
 		var archLine string
 		if a, err := env.Architecture(ctx, root, be, set, cands); err == nil {
@@ -227,7 +229,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			archLine = a.Line()
 		}
 		d.Set("drift", drift)
-		cwd, _ := os.Getwd()
+		cwd, _ := c.deps().Getwd()
 		stale, isStale := staleBinary(ctx, c.deps().Git, cwd)
 		if isStale {
 			d.Set("staleBinary", staleData(stale))
@@ -255,8 +257,8 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		}
 		lines = append(lines, candidateLines(cands)...)
 		lines = emptyNote(ctx, d, lines, env, root, be, st.Scope, st.Slate, cands)
-		if note != nil {
-			lines = append(lines, note.line())
+		if hn != nil {
+			lines = append(lines, hn.line())
 		}
 		if archLine != "" {
 			lines = append(lines, "architecture\t"+archLine)
@@ -343,41 +345,4 @@ func (n *handoffNote) line() string {
 		return l + "\tconsume failed: note left in place"
 	}
 	return l + "\tread it before choosing the slate, then rerun with --consume-handoff"
-}
-
-// orchestratorHandoff finds the note `/rota-pause` left for the orchestrator,
-// at the path the opt-in hook reads (handoffFile). Only a note carrying the
-// orchestrator marker counts; a worker's branch note lives elsewhere. With
-// consume it archives the note the way the SessionStart hook does, so a second
-// start finds nothing. A note that cannot be read or archived comes back as a
-// warning instead of vanishing.
-func orchestratorHandoff(root string, cfg any, consume bool) (note *handoffNote, warn string) {
-	path := handoffFile(root, cfg)
-	b, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return nil, ""
-	}
-	if err != nil {
-		return nil, fmt.Sprintf("handoff note %s unreadable: %v", path, err)
-	}
-	first, rest, _ := strings.Cut(string(b), "\n")
-	if strings.TrimSpace(first) != hook.HandoffMarker {
-		return nil, ""
-	}
-	n := &handoffNote{path: path}
-	for _, l := range strings.Split(rest, "\n") {
-		if strings.HasPrefix(l, "#") {
-			n.heading = strings.TrimSpace(strings.TrimLeft(l, "#"))
-			break
-		}
-	}
-	if consume {
-		if err := os.Rename(path, path+".consumed"); err != nil {
-			n.consumeFailed = true
-			warn = fmt.Sprintf("could not archive handoff note %s: %v", path, err)
-		} else {
-			n.consumed = true
-		}
-	}
-	return n, warn
 }

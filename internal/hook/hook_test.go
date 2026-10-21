@@ -507,3 +507,64 @@ func TestDecideGuardStopFreshHandoff(t *testing.T) {
 		t.Errorf("a stale note must not pass: %+v", r)
 	}
 }
+
+func TestReadOrchestratorNote(t *testing.T) {
+	write := func(t *testing.T, body string) string {
+		p := filepath.Join(t.TempDir(), "orch.md")
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	t.Run("missing", func(t *testing.T) {
+		n, w := ReadOrchestratorNote(filepath.Join(t.TempDir(), "none.md"), true)
+		if n != nil || w != "" {
+			t.Fatalf("got %v %q", n, w)
+		}
+	})
+	t.Run("unmarked is left alone", func(t *testing.T) {
+		p := write(t, "# worker note\n")
+		if n, w := ReadOrchestratorNote(p, true); n != nil || w != "" {
+			t.Fatalf("got %v %q", n, w)
+		}
+		if _, err := os.Stat(p); err != nil {
+			t.Fatalf("unmarked note moved: %v", err)
+		}
+	})
+	t.Run("marked, no consume", func(t *testing.T) {
+		p := write(t, HandoffMarker+"\n\n## Round 7\nbody\n")
+		n, w := ReadOrchestratorNote(p, false)
+		if w != "" || n == nil || n.Heading != "Round 7" || n.Consumed || n.ConsumeFailed {
+			t.Fatalf("got %+v %q", n, w)
+		}
+		if _, err := os.Stat(p); err != nil {
+			t.Fatalf("note moved without consume: %v", err)
+		}
+	})
+	t.Run("marked, consume archives once", func(t *testing.T) {
+		p := write(t, HandoffMarker+"\n# Round 7\n")
+		n, w := ReadOrchestratorNote(p, true)
+		if w != "" || n == nil || !n.Consumed {
+			t.Fatalf("got %+v %q", n, w)
+		}
+		if _, err := os.Stat(p + ".consumed"); err != nil {
+			t.Fatalf("no archive: %v", err)
+		}
+		if n2, _ := ReadOrchestratorNote(p, true); n2 != nil {
+			t.Fatal("second read found a note")
+		}
+	})
+	t.Run("archive failure warns", func(t *testing.T) {
+		p := write(t, HandoffMarker+"\n")
+		if err := os.Mkdir(p+".consumed", 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(p+".consumed", "x"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		n, w := ReadOrchestratorNote(p, true)
+		if n == nil || !n.ConsumeFailed || w == "" {
+			t.Fatalf("got %+v %q", n, w)
+		}
+	})
+}
