@@ -178,8 +178,12 @@ func TestConfigCheckNamesACorruptGlobal(t *testing.T) {
 		t.Errorf("check = %d %q", code, out)
 	}
 	// fill must not pin defaults over the global while it cannot be read.
-	if code, _, e := initRun(t, dir, "config", "fill"); code != 0 {
-		t.Fatalf("fill: %d %s", code, e)
+	code, fout, ferr := runMainWith(testDeps(), "-C", dir, "config", "fill")
+	if code != 0 {
+		t.Fatalf("fill: %d %s", code, ferr)
+	}
+	if strings.Contains(fout, "up to date") || !strings.Contains(fout, "GLOBAL CORRUPT") {
+		t.Errorf("fill must name the corrupt global, not claim up to date: %q", fout)
 	}
 	raw, _ := os.ReadFile(filepath.Join(dir, ".rota", "config.json"))
 	if strings.Contains(string(raw), "isolation") {
