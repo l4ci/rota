@@ -85,8 +85,9 @@ type Input struct {
 	Home string // expands a leading "~/" in a configDir
 
 	// From the project config when .rota/ exists; zero values otherwise.
-	Dispatch      string // round.dispatch
-	ForgeProvider string // forge.provider (auto, github, gitlab or local; "" reads as auto)
+	Dispatch      string    // round.dispatch
+	RegistryHost  host.Kind // the host `round start` recorded, "" when no round is in flight
+	ForgeProvider string    // forge.provider (auto, github, gitlab or local; "" reads as auto)
 	// IssueSource is issues.source, "" outside a rota project. An unmigrated
 	// legacy config reads as config.SourceIssues. SourceProblem is the reason
 	// forge.provider or issues.source holds an invalid value ("" when valid).
@@ -306,14 +307,15 @@ func (d *runner) jq() Check {
 	return pass("jq", "jq on PATH")
 }
 
-// roundHost is the host a round would run on: the same detection the round
-// verbs use, so doctor checks what `round start` will drive.
+// roundHost is the host a round runs on: host.Resolve over the recorded round
+// host, round.dispatch and the environment, the call worker.ResolveHost makes,
+// so doctor checks what the round verbs will drive.
 func (d *runner) roundHost() host.Kind {
 	getenv := d.in.Getenv
 	if getenv == nil {
 		getenv = func(string) string { return "" }
 	}
-	return host.Resolve("", host.KindOf(d.in.Dispatch), getenv, func(name string) (string, error) {
+	return host.Resolve(d.in.RegistryHost, host.KindOf(d.in.Dispatch), getenv, func(name string) (string, error) {
 		if p, ok := d.in.Look(name); ok {
 			return p, nil
 		}
@@ -345,6 +347,9 @@ func (d *runner) host() Check {
 		}
 		return pass("host", "tmux on PATH")
 	default:
+		if d.in.RegistryHost == host.Solo {
+			return skip("host", "the recorded round is solo: workers are subagents, no terminal host needed")
+		}
 		name := d.in.Dispatch
 		if name == "" {
 			name = "subagent"
