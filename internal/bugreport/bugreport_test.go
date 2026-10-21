@@ -2,6 +2,7 @@ package bugreport
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -162,5 +163,84 @@ func TestAddRedactsWhatItStores(t *testing.T) {
 	}
 	if fi, _ := os.Stat(Path(root)); fi.Mode().Perm() != 0o600 {
 		t.Errorf("log mode %v, want 0600", fi.Mode().Perm())
+	}
+}
+
+func gitIn(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-c", "user.email=a@b", "-c", "user.name=n"}, args...)...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v %s", args, err, out)
+	}
+}
+
+// A worker's worktree has its own .rota/ (tracked), yet its records must land
+// where the main checkout's wind-down reads them.
+func TestWorktreeRecordsLandInTheMainLog(t *testing.T) {
+	base, _ := filepath.EvalSymlinks(t.TempDir())
+	main := filepath.Join(base, "main")
+	os.MkdirAll(filepath.Join(main, ".rota"), 0o755)
+	gitIn(t, main, "init", "-q", "-b", "main")
+	os.WriteFile(filepath.Join(main, ".rota", "config.json"), []byte("{}"), 0o644)
+	gitIn(t, main, "add", ".rota/config.json")
+	gitIn(t, main, "commit", "-q", "-m", "i")
+	wt := filepath.Join(base, "wt")
+	gitIn(t, main, "worktree", "add", "-q", "-b", "w", wt)
+	if _, err := Add(wt, Record{Source: SourceAgent, Summary: "from a worker"}, t0); err != nil {
+		t.Fatal(err)
+	}
+	open, err := Open(main)
+	if err != nil || len(open) != 1 || open[0].Summary != "from a worker" {
+		t.Fatalf("main sees %+v %v", open, err)
+	}
+}
+
+func TestRedactGaps(t *testing.T) {
+	env := Env{Home: "/home/vo", Hostname: "box", Repo: "checkout-dir", Remote: "git@gitlab.acme.internal:acme-org/Shop-App.git"}
+	for _, c := range []struct{ name, in, gone string }{
+		{"https form of the remote", "cloned https://gitlab.acme.internal/acme-org/Shop-App failed", "acme-org"},
+		{"owner alone", "owner acme-org denied", "acme-org"},
+		{"repo name, other case", "repo shop-app is red", "shop-app"},
+		{"remote host", "dial gitlab.acme.internal:8443 refused", "gitlab.acme.internal"},
+		{"unknown url host", "GET https://ci.corp.example.net/api failed", "ci.corp.example.net"},
+		{"local fqdn", "on box.lan.example the lock", "lan.example"},
+		{"basic auth", "Authorization: Basic dXNlcjpwYXNz", "dXNlcjpwYXNz"},
+		{"flag value", "rota x --token plainvalue1 --force", "plainvalue1"},
+		{"flag equals quoted", `rota x --password="two words"`, "two words"},
+		{"env style", "GH_TOKEN plainvalue2 rota x", "plainvalue2"},
+		{"aws secret", "aws_secret_access_key = wJalrXUtnFEMI/K7MDENG", "wJalrXUtnFEMI"},
+		{"quoted value", `{"secret": "has space inside"}`, "has space inside"},
+		{"pem", "-----BEGIN RSA PRIVATE KEY-----\nMIIEabc\n-----END RSA PRIVATE KEY-----", "MIIEabc"},
+		{"npm token", "npm_abcdefghijklmnopqrstuvwxyz0123456789", "npm_abcdef"},
+		{"google key", "AIzaSyA-abcdefghijklmnopqrstuvwxyz012345", "AIzaSyA"},
+		{"root home", "open /root/.config/x", "/root"},
+		{"windows home", `open C:\Users\jane\x`, "jane"},
+	} {
+		got := Redact(c.in, env)
+		if strings.Contains(got, c.gone) {
+			t.Errorf("%s: %q still holds %q", c.name, got, c.gone)
+		}
+	}
+}
+
+func TestRedactKeepsUpstreamAndPublicNames(t *testing.T) {
+	env := Env{Remote: "git@github.com:l4ci/rota.git"}
+	in := "see https://github.com/l4ci/rota/issues/1 and github.com"
+	if got := Redact(in, env); got != in {
+		t.Errorf("changed %q", got)
+	}
+}
+
+func TestAddRedactsSpaceSeparatedFlagArgs(t *testing.T) {
+	root := project(t)
+	Add(root, Record{Source: SourceAuto, Verb: "x", Exit: 70, Args: []string{"--token", "plainvalue", "--force", "GH_TOKEN", "other"}, Error: "e"}, t0)
+	raw, _ := os.ReadFile(Path(root))
+	if strings.Contains(string(raw), "plainvalue") {
+		t.Errorf("log keeps the value: %s", raw)
+	}
+	_, body := Draft(Record{Verb: "x", Args: []string{"--token", "plainvalue"}}, Environment{}, Env{})
+	if strings.Contains(body, "plainvalue") {
+		t.Errorf("draft keeps the value:\n%s", body)
 	}
 }

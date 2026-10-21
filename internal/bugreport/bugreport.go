@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
@@ -52,11 +53,22 @@ type Record struct {
 	Count    int      `json:"count"`
 	Status   string   `json:"status"`
 	Issue    string   `json:"issue,omitempty"`
-	Offered  bool     `json:"offered,omitempty"`
+	// OfferedSession is the Stop-hook session that last offered the record.
+	OfferedSession string `json:"offeredSession,omitempty"`
 }
 
-// Path is the log's path under the project root.
-func Path(root string) string { return rotatree.File(root, File) }
+// Path is the log's path. A worker's worktree carries its own tracked .rota/,
+// so the log lives in the main checkout's: every worktree of one repo shares it,
+// and the main checkout's wind-down and Stop hook see a worker's records. A
+// project that is not a git repo keeps it under its own root.
+func Path(root string) string {
+	if cd, err := rotastate.CommonDir(root); err == nil && filepath.Base(cd) == ".git" {
+		if main := filepath.Dir(cd); fsio.IsDir(rotatree.Dir(main)) {
+			return rotatree.File(main, File)
+		}
+	}
+	return rotatree.File(root, File)
+}
 
 // Add appends r (assigning ID, TS, Status open). An open record with the same
 // verb, exit and error is counted instead of added again.
@@ -96,14 +108,31 @@ func redactRecord(r Record) Record {
 	r.Error = Redact(r.Error, Env{})
 	r.Summary = Redact(r.Summary, Env{})
 	r.Expected = Redact(r.Expected, Env{})
-	if r.Args != nil {
-		args := make([]string, len(r.Args))
-		for i, a := range r.Args {
-			args[i] = Redact(a, Env{})
-		}
-		r.Args = args
-	}
+	r.Args = redactArgs(r.Args, Env{})
 	return r
+}
+
+// redactArgs redacts each argument, and the value argument that follows a
+// secret-named flag given without "=" (the shape Redact cannot see one string at a time).
+func redactArgs(args []string, e Env) []string {
+	if args == nil {
+		return nil
+	}
+	out := make([]string, len(args))
+	hide := false
+	for i, a := range args {
+		switch {
+		case hide && !strings.HasPrefix(a, "-"):
+			out[i] = "<redacted>"
+		default:
+			out[i] = Redact(a, e)
+		}
+		hide = strings.HasPrefix(a, "-") && !strings.Contains(a, "=") && reSecretFlag.MatchString(a)
+		if !hide && reSecretEnv.MatchString(a) {
+			hide = true
+		}
+	}
+	return out
 }
 
 func idNumber(id string) int {
@@ -198,39 +227,117 @@ type Env struct {
 	Remote   string // the user's own remote URL
 }
 
+const secretNames = `token|secret|password|passwd|api[_-]?key|access[_-]?key|credential|authorization`
+
 var (
-	reUserinfo = regexp.MustCompile(`://[^/\s@]+@`)
-	reEmail    = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`)
-	reHomeDir  = regexp.MustCompile(`/(?:home|Users)/[^/\s"']+`)
-	reTokens   = regexp.MustCompile(`github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|glpat-[A-Za-z0-9_-]{16,}|xox[abprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|lin_api_[A-Za-z0-9]{16,}|ATATT[A-Za-z0-9_=-]{16,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+`)
-	reBearer   = regexp.MustCompile(`(?i)(bearer\s+)[^\s"',;]+`)
-	reKeyValue = regexp.MustCompile(`(?i)((?:token|secret|password|passwd|api[_-]?key|authorization)["']?\s*[:=]\s*["']?)[^\s"',;}]+`)
+	reUserinfo   = regexp.MustCompile(`://[^/\s@]+@`)
+	reEmail      = regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`)
+	reHomeDir    = regexp.MustCompile(`/(?:home|Users)/[^/\s"']+|/root\b|[A-Za-z]:\\Users\\[^\\\s"']+`)
+	reURLHost    = regexp.MustCompile(`(://)([A-Za-z0-9.-]+)`)
+	reHostPort   = regexp.MustCompile(`\b([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+):\d{2,5}\b`)
+	rePEM        = regexp.MustCompile(`(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)`)
+	reTokens     = regexp.MustCompile(`github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|glpat-[A-Za-z0-9_-]{16,}|xox[abprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|lin_api_[A-Za-z0-9]{16,}|ATATT[A-Za-z0-9_=-]{16,}|npm_[A-Za-z0-9]{30,}|AIza[0-9A-Za-z_-]{30,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+`)
+	reAuth       = regexp.MustCompile(`(?i)\b(bearer|basic)\s+[A-Za-z0-9+/=._~-]+`)
+	reKeyValue   = regexp.MustCompile(`(?i)([\w.-]*(?:` + secretNames + `)[\w.-]*["']?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s"',;}]+)`)
+	reFlagValue  = regexp.MustCompile(`(?i)(--?[\w-]*(?:` + secretNames + `|key|auth)[\w-]*\s+)("[^"]*"|'[^']*'|[^\s-]\S*)`)
+	reEnvValue   = regexp.MustCompile(`\b([A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Z0-9_]*)(\s+)(\S+)`)
+	reSecretFlag = regexp.MustCompile(`(?i)^--?[\w-]*(?:` + secretNames + `|key|auth)[\w-]*$`)
+	reSecretEnv  = regexp.MustCompile(`^[A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Z0-9_]*$`)
 )
 
-// upstreamRepo is never redacted: it is the repo a report is filed on.
-const upstreamRepo = "rota"
+// publicHosts are never redacted: they identify no one.
+var publicHosts = map[string]bool{"github.com": true, "gitlab.com": true, "bitbucket.org": true}
+
+// upstream is the repo a report is filed on: its owner and name are never redacted.
+const (
+	upstreamOwner = "l4ci"
+	upstreamName  = "rota"
+)
+
+// splitRemote reads host, owner and name out of a remote in any URL form
+// (scp-like, ssh://, https://); a part it cannot find is "".
+func splitRemote(remote string) (host, owner, name string) {
+	r := strings.TrimSpace(remote)
+	if i := strings.Index(r, "://"); i >= 0 {
+		r = r[i+3:]
+		if j := strings.LastIndex(r[:strings.Index(r+"/", "/")], "@"); j >= 0 {
+			r = r[j+1:]
+		}
+		host, r, _ = strings.Cut(r, "/")
+	} else if i := strings.Index(r, ":"); i >= 0 {
+		host, r = r[:i], r[i+1:]
+		if j := strings.Index(host, "@"); j >= 0 {
+			host = host[j+1:]
+		}
+	}
+	host, _, _ = strings.Cut(host, ":")
+	r = strings.TrimSuffix(strings.Trim(r, "/"), ".git")
+	if i := strings.LastIndex(r, "/"); i >= 0 {
+		owner, name = r[:i], r[i+1:]
+	} else {
+		name = r
+	}
+	return host, owner, name
+}
+
+func replaceFold(s, old, with string) string {
+	if old == "" {
+		return s
+	}
+	return regexp.MustCompile(`(?i)`+regexp.QuoteMeta(old)).ReplaceAllString(s, with)
+}
 
 // Redact removes secrets and identifying details from s: tokens and keys,
-// email addresses, home-directory paths, the hostname, and the user's own repo
-// name and remote URL.
+// email addresses, home-directory paths, hostnames, and the user's own repo
+// (name, owner and remote, in every URL form).
 func Redact(s string, e Env) string {
+	host, owner, name := splitRemote(e.Remote)
+	upstream := strings.EqualFold(owner, upstreamOwner) && strings.EqualFold(name, upstreamName)
 	if e.Remote != "" {
-		s = strings.ReplaceAll(s, e.Remote, "<remote>")
+		s = replaceFold(s, e.Remote, "<remote>")
 	}
 	if e.Home != "" && e.Home != "/" {
 		s = strings.ReplaceAll(s, e.Home, "~")
 	}
+	s = rePEM.ReplaceAllString(s, "<redacted key>")
 	s = reHomeDir.ReplaceAllString(s, "~")
 	s = reUserinfo.ReplaceAllString(s, "://<redacted>@")
 	s = reTokens.ReplaceAllString(s, "<redacted>")
-	s = reBearer.ReplaceAllString(s, "${1}<redacted>")
+	s = reAuth.ReplaceAllString(s, "${1} <redacted>")
 	s = reKeyValue.ReplaceAllString(s, "${1}<redacted>")
+	s = reFlagValue.ReplaceAllString(s, "${1}<redacted>")
+	s = reEnvValue.ReplaceAllString(s, "${1}${2}<redacted>")
 	s = reEmail.ReplaceAllString(s, "<email>")
-	if len(e.Hostname) >= 3 {
-		s = strings.ReplaceAll(s, e.Hostname, "<host>")
+	if host != "" && !publicHosts[strings.ToLower(host)] {
+		s = replaceFold(s, host, "<host>")
 	}
-	if len(e.Repo) >= 3 && e.Repo != upstreamRepo {
-		s = strings.ReplaceAll(s, e.Repo, "<repo>")
+	s = reURLHost.ReplaceAllStringFunc(s, func(m string) string {
+		h := reURLHost.FindStringSubmatch(m)[2]
+		if publicHosts[strings.ToLower(h)] || h == "<host>" {
+			return m
+		}
+		return "://<host>"
+	})
+	s = reHostPort.ReplaceAllStringFunc(s, func(m string) string {
+		h := reHostPort.FindStringSubmatch(m)[1]
+		if publicHosts[strings.ToLower(h)] {
+			return m
+		}
+		return "<host>"
+	})
+	if len(e.Hostname) >= 3 {
+		s = regexp.MustCompile(`(?i)\b`+regexp.QuoteMeta(e.Hostname)+`(?:\.[A-Za-z0-9-]+)*`).ReplaceAllString(s, "<host>")
+	}
+	if !upstream {
+		if len(owner) >= 3 && !strings.EqualFold(owner, upstreamOwner) {
+			s = replaceFold(s, owner, "<owner>")
+		}
+		if len(name) >= 3 && !strings.EqualFold(name, upstreamName) {
+			s = replaceFold(s, name, "<repo>")
+		}
+	}
+	if len(e.Repo) >= 3 && !strings.EqualFold(e.Repo, upstreamName) {
+		s = replaceFold(s, e.Repo, "<repo>")
 	}
 	return s
 }
