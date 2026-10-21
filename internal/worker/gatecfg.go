@@ -15,7 +15,7 @@ import (
 
 // GateConfig is the typed owner of the config keys the gate, the train and
 // verify read: test.*, ship.review, issues.* and round.sharedPaths. It is
-// loaded once per run (LoadGateConfig) and passed down, so no worker interface
+// loaded once per run (Env.GateConfig) and passed down, so no worker interface
 // takes the raw config tree or a dotted key.
 //
 // A key that is bad is reported where the old code reported it, not at load:
