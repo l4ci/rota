@@ -537,3 +537,26 @@ func TestPlanItemsReadsTheProofSidecar(t *testing.T) {
 	}
 	t.Fatal("F01 not planned")
 }
+
+// With no sidecar, the proof rows come from the detail file's Proof section,
+// and the section leaves the body.
+func TestPlanItemsFallsBackToTheDetailFileProof(t *testing.T) {
+	root := migProject(t, nil)
+	text, err := os.ReadFile(filepath.Join(root, ".rota", "BACKLOG.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, it := range planItems(root, string(text), func(string) {}) {
+		if it.id != "F01" {
+			continue
+		}
+		if it.proof == nil || !strings.Contains(*it.proof, "- ok") {
+			t.Fatalf("proof = %v, want the detail file rows", it.proof)
+		}
+		if it.body == nil || strings.Contains(*it.body, "## Proof") || !strings.Contains(*it.body, "body text") {
+			t.Errorf("body = %v, want the detail text without its Proof section", it.body)
+		}
+		return
+	}
+	t.Fatal("F01 not planned")
+}
