@@ -642,3 +642,27 @@ func TestListingActiveStreamsHideOnlyTheirOwnRepoRow(t *testing.T) {
 		}
 	}
 }
+
+// SetSection routes to the owning sub-repo's tracker, refuses a closed item
+// there with ErrClosed and an unknown sub-repo as not found.
+func TestUmbrellaSetSection(t *testing.T) {
+	u, fakes, _ := twoRepos(t)
+	changed, err := u.SetSection("api:1", "acceptance", "- [ ] shipped\n")
+	if err != nil || !changed {
+		t.Fatalf("set: %v %v", changed, err)
+	}
+	if got := fakes["api"].Issues[0].Body; !strings.Contains(got, "## Acceptance\n\n- [ ] AC-1: shipped") {
+		t.Errorf("api #1 body %q", got)
+	}
+	for _, c := range fakes["web"].Calls {
+		if c.Method != "get" && c.Method != "list" {
+			t.Errorf("web saw write %v", c)
+		}
+	}
+	if _, err := u.SetSection("api:2", "acceptance", "x"); !errors.Is(err, ErrClosed) {
+		t.Errorf("closed item: %v, want ErrClosed", err)
+	}
+	if _, err := u.SetSection("nope:9", "acceptance", "x"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("unknown repo: %v, want ErrNotFound", err)
+	}
+}
