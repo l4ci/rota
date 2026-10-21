@@ -235,15 +235,11 @@ func TestReplaceRetitleFoldsBufferedHitsFirst(t *testing.T) {
 	if err := os.WriteFile(km, []byte("# Knowledge\n\n## Arch\n\n- **old** — body\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// The retitle path only runs once a sidecar exists, so fold one hit first.
-	if _, err := s.Hit(Umbrella, "Arch", "old"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.FoldHits(Umbrella); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Hit(Umbrella, "Arch", "old"); err != nil {
-		t.Fatal(err)
+	// No sidecar exists yet: both hits are still buffered under the old title.
+	for range 2 {
+		if _, err := s.Hit(Umbrella, "Arch", "old"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if _, err := s.Replace(Umbrella, "Arch", "**old**", "**new**"); err != nil {
 		t.Fatal(err)
