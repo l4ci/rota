@@ -56,7 +56,7 @@ With no item, ID or brief, read [`no-argument-mode.md`](no-argument-mode.md) and
 rota git guard clean --context "/rota-work"
 ```
 
-Exit 0: continue. Exit 3: not a repo, surface and stop. Exit 1 (dirty tree): when every dirty path is a tool-generated sibling, sweep them into a `chore:` commit and continue; any user change stops with the guard's message. Procedure and sibling list: [`sibling-sweep.md`](sibling-sweep.md).
+Exit 0: continue. Exit 3: not a repo, surface and stop. Exit 1 (dirty tree): when every dirty path is a tool-generated sibling or the target item's own fresh design/plan file, sweep them into a `chore:` commit and continue; any user change stops with the guard's message. Procedure and sibling list: [`sibling-sweep.md`](sibling-sweep.md).
 
 ## Step 2 — Clarify Ambiguous Briefs (only when needed)
 
