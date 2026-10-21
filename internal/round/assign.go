@@ -444,6 +444,20 @@ func blocked(by, format string, a ...any) *BlockedError {
 	return &BlockedError{By: by, Msg: fmt.Sprintf(format, a...)}
 }
 
+// refuseWhileGateRuns refuses (blockedBy gate-running) a verb that switches a
+// slot worktree's branch while a gate or train holds the land lock: the gate's
+// checkout guard would see the change and turn the merge red.
+func (e Env) refuseWhileGateRuns(ctx context.Context, root, verb string) error {
+	held, err := e.workerEnv().LandLockHeld(ctx, root)
+	if err != nil {
+		return err
+	}
+	if held {
+		return blocked(worker.GateRunning, "a gate or train holds the land lock and %s would switch a worktree's branch under it: rerun once it exits", verb)
+	}
+	return nil
+}
+
 func usage(format string, a ...any) error {
 	return &exitcode.Error{Exit: exitcode.ExitUsage, Message: fmt.Sprintf(format, a...)}
 }
@@ -604,6 +618,9 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 
 	// 1. This process holds the round's lease.
 	if err := e.requireLease(ctx, root, o); err != nil {
+		return run, false, err
+	}
+	if err := e.refuseWhileGateRuns(ctx, root, "assign"); err != nil {
 		return run, false, err
 	}
 
