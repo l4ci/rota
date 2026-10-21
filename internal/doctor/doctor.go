@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
@@ -572,8 +571,8 @@ const (
 // projectFiles reads the project's two settings files, in precedence order.
 func (d *runner) projectFiles() []hookFile {
 	return []hookFile{
-		d.read(filepath.Join(d.in.ProjectRoot, ".claude", "settings.local.json")),
-		d.read(filepath.Join(d.in.ProjectRoot, ".claude", "settings.json")),
+		d.read(hook.SettingsPath(hook.ScopeProjectLocal, d.in.ProjectRoot)),
+		d.read(hook.SettingsPath(hook.ScopeProject, d.in.ProjectRoot)),
 	}
 }
 
@@ -603,7 +602,7 @@ func (d *runner) read(path string) hookFile {
 }
 
 func (d *runner) userFile(dir string) hookFile {
-	return d.read(filepath.Join(d.expand(dir), "settings.json"))
+	return d.read(hook.SettingsPath(hook.ScopeUser, d.expand(dir)))
 }
 
 // optIn reports whether anything `rota hook install` writes is present in any

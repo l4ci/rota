@@ -1043,17 +1043,17 @@ func planSettings(o HvOptions, projs []*hvProj, accounts []string) ([]hvEdit, []
 		}
 	}
 	if o.ClaudeDir != "" {
-		add(filepath.Join(o.ClaudeDir, "settings.json"))
+		add(hook.SettingsPath(hook.ScopeUser, o.ClaudeDir))
 	}
 	for _, a := range accounts {
 		if strings.HasPrefix(a, "~/") && o.Home != "" {
 			a = filepath.Join(o.Home, a[2:])
 		}
-		add(filepath.Join(a, "settings.json"))
+		add(hook.SettingsPath(hook.ScopeUser, a))
 	}
 	for _, p := range projs {
-		add(filepath.Join(p.dir, ".claude", "settings.json"))
-		add(filepath.Join(p.dir, ".claude", "settings.local.json"))
+		add(hook.SettingsPath(hook.ScopeProject, p.dir))
+		add(hook.SettingsPath(hook.ScopeProjectLocal, p.dir))
 	}
 	var edits []hvEdit
 	var manual []string
