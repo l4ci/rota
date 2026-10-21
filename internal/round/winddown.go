@@ -7,6 +7,8 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/strutil"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/l4ci/rota/internal/ledger"
@@ -102,6 +104,13 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		}
 		res.Warnings = append(res.Warnings, rep.Warnings...)
 		seen = true
+	}
+
+	// Buffered knowledge hits are gitignored, so the tree check cannot see
+	// them: name the command that folds each scope's buffer into its tracked
+	// sidecar (the fold verb takes one scope at a time).
+	if cmds := pendingHitFolds(root); len(cmds) > 0 {
+		res.Warnings = append(res.Warnings, "knowledge hits are buffered and not yet in the tracked sidecar: run `"+strings.Join(cmds, "`, `")+"`, then commit the sidecar (never while a gate runs)")
 	}
 
 	// 1. Re-verify the base in the project root.
@@ -276,6 +285,10 @@ func (e Env) requireBase(ctx context.Context, root string) error {
 		return &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git status failed in " + root}
 	}
 	if strings.TrimSpace(out) != "" {
+		if paths := tierSidecarPaths(out); len(paths) > 0 {
+			return &exitcode.Error{Exit: exitcode.ExitResolution, Message: "the only uncommitted change is folded knowledge-hit bookkeeping (knowledge-tier.json)",
+				Hint: "commit it: git add " + strings.Join(paths, " ") + " && git commit -m 'Fold knowledge hits'"}
+		}
 		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: "the project root has uncommitted changes to tracked files", Hint: "commit or stash them: wind-down verifies the base as it is"}
 	}
 	return nil
@@ -287,4 +300,47 @@ func tail(text string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// tierSidecarPath is the only shape the commit hint may echo into a shell.
+var tierSidecarPath = regexp.MustCompile(`^\.rota/(knowledge/[A-Za-z0-9._-]+/)?knowledge-tier\.json$`)
+
+// tierSidecarPaths returns the paths of a `git status --porcelain` listing
+// when every one is a knowledge-tier.json sidecar (bookkeeping `rota knowledge
+// tier fold` wrote, which one commit settles), else nil. The hint names these
+// paths, so it works in a single-repo project and an umbrella alike.
+func tierSidecarPaths(porcelain string) []string {
+	var paths []string
+	for _, l := range strings.Split(strings.TrimRight(porcelain, "\n"), "\n") {
+		if len(l) < 4 || !tierSidecarPath.MatchString(l[3:]) {
+			return nil
+		}
+		paths = append(paths, l[3:])
+	}
+	return paths
+}
+
+// hitScopeName is the only sub-repo name echoed into the fold command.
+var hitScopeName = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
+// pendingHitFolds returns one `rota knowledge tier fold` command per scope
+// under root's .rota whose knowledge-hits.jsonl holds buffered hits: the bare
+// verb for the root scope, --repo <name> for an umbrella sub-repo.
+func pendingHitFolds(root string) []string {
+	nonEmpty := func(f string) bool {
+		fi, err := os.Stat(f)
+		return err == nil && fi.Size() > 0
+	}
+	var cmds []string
+	if nonEmpty(filepath.Join(root, ".rota", "knowledge-hits.jsonl")) {
+		cmds = append(cmds, "rota knowledge tier fold")
+	}
+	files, _ := filepath.Glob(filepath.Join(root, ".rota", "knowledge", "*", "knowledge-hits.jsonl"))
+	for _, f := range files {
+		name := filepath.Base(filepath.Dir(f))
+		if nonEmpty(f) && hitScopeName.MatchString(name) {
+			cmds = append(cmds, "rota --repo "+name+" knowledge tier fold")
+		}
+	}
+	return cmds
 }
