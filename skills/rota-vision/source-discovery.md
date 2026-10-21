@@ -6,7 +6,7 @@ Find a concept, spec or PRD document no milestone covers yet, so Step 3 can offe
 
 `git ls-files '*.md'`, then drop `.rota/`, `.worktrees/`, `docs/contributing/`, vendored trees (`node_modules/`, `vendor/`, `third_party/`), `CHANGELOG*`, `LICENSE*`, `AGENTS.md` and `CLAUDE.md`. Keep a file when its name or first heading reads as a plan: spec, concept, PRD, design, vision, roadmap, plan, requirements, brief.
 
-`README.md` counts only when most of it is plan-shaped: its headings are mostly Goals, Features, Roadmap, Requirements, Milestones or similar, and little of it is install, usage or API text. A README that documents a working product is not a source. When unsure, leave it out.
+`README.md` counts when most of it is plan-shaped, judged by content, not only headings: it states goals, must-haves, constraints, nice-to-haves, a roadmap or milestones, whether under such headings or as plain paragraphs under a single title. A brief with one `# Title` and Must-haves / Constraints paragraphs qualifies. A README that mostly documents a working product (install, usage, API reference) is not a source. When it is a toss-up, leave it out.
 
 ## Covered
 

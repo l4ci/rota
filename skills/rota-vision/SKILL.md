@@ -71,13 +71,13 @@ Show the milestone list as plain markdown, not yet saved, one block per mileston
 - [ ] <checkable bullet>
 - [ ] <checkable bullet>
 **Rationale:** <why this one, why now>
-**Source:** <optional: path#heading of the document it was seeded from>
+Source: <optional: path#heading of the document it was seeded from>
 **Open risks:** <at least one; if you can't name one it isn't thought through>
 **Not yet specified:** <optional: in-scope work too unsharp to write as Acceptance yet>
 **Out of scope:** <optional: ruled-out ideas, each with a one-line reason>
 ```
 
-Source, Not yet specified and Out of scope are optional; omit a line with nothing to put in it. A seeded milestone's plan carries `Source: <path>#<heading>` as plain text (never `.rota/milestones/*.md` in issue mode: it goes in the plan body published with `rota milestone put`); a later run reads it as coverage. In the milestone body Capabilities and Acceptance are the `## Capabilities` and `## Acceptance` sections, and the optional two are `## Not yet specified` and `## Out of scope` sections (bullets), after Open risks.
+Source, Not yet specified and Out of scope are optional; omit a line with nothing to put in it. A seeded milestone's plan carries the plain line `Source: <path>#<heading>` (no bold, no section header); a later run reads it as coverage. In the milestone body Capabilities and Acceptance are the `## Capabilities` and `## Acceptance` sections, and the optional two are `## Not yet specified` and `## Out of scope` sections (bullets), after Open risks.
 
 The tag is `[ready · no deps]` or `[blocked · depends M01]`. No cap on count, but don't slice everything upfront: park unsharp in-scope work under Not yet specified instead of inventing Acceptance bullets for it. Order by dependency layer and make parallel-able milestones visible. Apply the user's redlines (merge, cut, retire, add, re-order) and ask for one explicit confirmation before writing; silence is not confirmation.
 
@@ -89,7 +89,7 @@ Batch the writes, then refresh the index once.
 MID=$(rota milestone add --json --title "<title>" --summary "<one line>" [--depends M01,M02] | jq -r .data.id)
 ```
 
-Issue mode: creates the native milestone and tracking issue (status `planned`). Draft the full plan (frontmatter `id: <MNN>` required) in a scratch file and publish with `rota milestone put <MNN> --body-file <file>|-`. File mode: mints `MNN`, a stub `.rota/milestones/MNN.md` and an overview block; edit the stub's sections (keep the frontmatter).
+Issue mode: creates the native milestone and tracking issue (status `planned`). Draft the full plan (frontmatter `id: <MNN>` required) in a scratch file and publish with `rota milestone put <MNN> --body-file <file>|-`. File mode: mints `MNN`, a stub `.rota/milestones/MNN.md` and an overview block; edit the stub's sections (keep the frontmatter). For a seeded milestone, put the plain line `Source: <path>#<heading>` in the plan body, right after the Goal: issue mode in the drafted file published with `put` (never read or write `.rota/milestones/*.md`), file mode in the stub.
 
 - **Decision milestone** (`--kind decision`): for an effort too foggy to slice. Mint it with `rota milestone add --kind decision --title … --summary …`; the plan gets a `## Decisions` list (one line per closed decision, written by `item complete --gist`, never by hand) and `## Not yet specified` (the fog). Its children are decision items, one per open design question, not delivery work. File each with `rota item create --milestone <MNN> [--depends-on <ID>,…]` and label it `decision:research` (a question a worker answers by reading code and docs: it posts a `finding` comment, and the orchestrator accepts it with `rota round accept <ID> --gist <line>`) or `decision:grilling` (a call only the human can make: `/rota-brainstorm <ID>`, one per session; `round assign` refuses it). File backend: a `Decision: research|grilling` field. Wire the order with `--depends-on`: a decision whose answer another needs waits for it. List decisions and fog in the plan, never the open items. Prototype- and task-typed decisions do not exist yet: spike with `/rota-spike` or file a normal item. A decision milestone ships under the usual rule.
 - **Status:** `rota milestone status <MNN> --to <planned|active|shipped|archived>` per changed milestone. Several can be active when independent. `archived` retires one without deleting it, but an archived dependency does not unblock dependents; `shipped` does. `--to shipped` exits 4 while the milestone has open items or unticked criteria (`data.open`, `data.unticked`); tick or close them, or pass `--force`.
