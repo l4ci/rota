@@ -44,7 +44,7 @@ type verdictBranch struct {
 // `origin/feat` and `feat` share one record key. A local branch of that
 // exact name wins: `origin/feat` stays whole when refs/heads/origin/feat exists.
 func splitRemote(c *Ctx, dir, branch string) (bare, remote string, err error) {
-	r := git.Repo{Dir: dir}
+	r := c.deps().Repo(dir)
 	local, err := r.Verify(c.Context(), "refs/heads/"+branch)
 	if err != nil {
 		return "", "", gitErr(err)
@@ -52,7 +52,7 @@ func splitRemote(c *Ctx, dir, branch string) (bare, remote string, err error) {
 	if local {
 		return branch, "", nil
 	}
-	out, err := reviewGit(c.Context(), dir, "remote")
+	out, err := reviewGit(c.Context(), c.deps(), dir, "remote")
 	if err != nil {
 		return "", "", err
 	}
@@ -88,7 +88,7 @@ func resolveVerdictBranch(c *Ctx, args []string) (verdictBranch, error) {
 		}
 	}
 	v.key = verdict.BranchKey(v.repo, v.branch)
-	out, err := reviewGit(c.Context(), t.Dir, "rev-parse", "--short", t.Branch)
+	out, err := reviewGit(c.Context(), c.deps(), t.Dir, "rev-parse", "--short", t.Branch)
 	if err != nil {
 		return verdictBranch{}, err
 	}
@@ -104,7 +104,7 @@ func resolveVerdictBranch(c *Ctx, args []string) (verdictBranch, error) {
 // remote branch is refused rather than guessed at.
 func bindVerdictHead(c *Ctx, t verdictBranch, sha string) (string, error) {
 	ctx := c.Context()
-	r := git.Repo{Dir: t.dir}
+	r := c.deps().Repo(t.dir)
 	remote := t.remote
 	if remote == "" {
 		remote = "origin"
@@ -115,7 +115,7 @@ func bindVerdictHead(c *Ctx, t verdictBranch, sha string) (string, error) {
 		return "", gitErr(err)
 	}
 	rev := func(args ...string) (string, error) {
-		out, err := reviewGit(ctx, t.dir, append([]string{"rev-parse"}, args...)...)
+		out, err := reviewGit(ctx, c.deps(), t.dir, append([]string{"rev-parse"}, args...)...)
 		return strings.TrimSpace(out), err
 	}
 	if sha == "" {
@@ -162,7 +162,7 @@ func bindVerdictHead(c *Ctx, t verdictBranch, sha string) (string, error) {
 					WithHint("git fetch " + remote + ", then retry")
 			}
 		}
-		extra, _ := reviewGit(ctx, t.dir, "log", "--format=%h %s", full+".."+tip)
+		extra, _ := reviewGit(ctx, c.deps(), t.dir, "log", "--format=%h %s", full+".."+tip)
 		msg := fmt.Sprintf("--sha %s is not the head of %s (%s)", sha, target, tip[:7])
 		if extra = strings.TrimSpace(extra); extra != "" {
 			msg += ", which has commits after it:\n" + extra
@@ -472,7 +472,7 @@ func debugVerdict(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		out, err := reviewGit(c.Context(), root, "rev-parse", "--short", "HEAD")
+		out, err := reviewGit(c.Context(), c.deps(), root, "rev-parse", "--short", "HEAD")
 		if err != nil {
 			return Result{}, err
 		}
@@ -586,7 +586,7 @@ func debugReset(fs *flag.FlagSet) RunFunc {
 			return res, err
 		}
 		sha := ""
-		if out, err := reviewGit(c.Context(), root, "rev-parse", "--short", "HEAD"); err == nil {
+		if out, err := reviewGit(c.Context(), c.deps(), root, "rev-parse", "--short", "HEAD"); err == nil {
 			sha = strings.TrimSpace(out)
 		}
 		r := verdict.NewRecord(verdict.DebugReset, verdict.Reset, sha, verdict.Body{Summary: strings.TrimSpace(*reason)}, c.deps().Now())

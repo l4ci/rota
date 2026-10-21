@@ -48,8 +48,8 @@ type reviewInfo struct {
 }
 
 // reviewGit runs git in dir; a failed call is exit 5.
-func reviewGit(ctx context.Context, dir string, args ...string) (string, error) {
-	res, err := git.Repo{Dir: dir}.Run(ctx, args...)
+func reviewGit(ctx context.Context, d *Deps, dir string, args ...string) (string, error) {
+	res, err := d.Repo(dir).Run(ctx, args...)
 	if err != nil {
 		return "", gitErr(err)
 	}
@@ -81,7 +81,7 @@ func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
 	info := reviewInfo{Branch: t.Branch, Base: t.Base, Commits: []reviewCommit{}, Files: []string{}, IDs: []string{}, Intents: []reviewIntent{}}
 	ctx := c.Context()
 	span := t.Base + ".." + t.Branch
-	logOut, err := reviewGit(ctx, t.Dir, "log", "--no-merges", "--format=%h%x1f%s", span)
+	logOut, err := reviewGit(ctx, c.deps(), t.Dir, "log", "--no-merges", "--format=%h%x1f%s", span)
 	if err != nil {
 		return info, err
 	}
@@ -90,7 +90,7 @@ func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
 			info.Commits = append(info.Commits, reviewCommit{h, s})
 		}
 	}
-	files, err := git.Repo{Dir: t.Dir}.ChangedPaths(ctx, t.Base+"..."+t.Branch)
+	files, err := c.deps().Repo(t.Dir).ChangedPaths(ctx, t.Base+"..."+t.Branch)
 	if err != nil {
 		return info, diffErr(err)
 	}
@@ -102,7 +102,7 @@ func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
 		info.Files = append(info.Files, f)
 	}
 	sort.Strings(info.Files)
-	bodies, err := reviewGit(ctx, t.Dir, "log", "--no-merges", "--format=%B", span)
+	bodies, err := reviewGit(ctx, c.deps(), t.Dir, "log", "--no-merges", "--format=%B", span)
 	if err != nil {
 		return info, err
 	}
@@ -255,7 +255,7 @@ func reviewBrief(c *Ctx, args []string) (Result, error) {
 	p("")
 	for _, path := range info.Files {
 		// A failing per-file diff printed as empty, as subprocess.run(check=False) did.
-		res, err := git.Repo{Dir: t.Dir}.Run(ctx, "diff", t.Base+"..."+t.Branch, "--", path)
+		res, err := c.deps().Repo(t.Dir).Run(ctx, "diff", t.Base+"..."+t.Branch, "--", path)
 		if err != nil {
 			return Result{}, gitErr(err)
 		}
@@ -363,10 +363,10 @@ func reviewScaffolding(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		ctx := c.Context()
-		r := git.Repo{Dir: dir}
+		r := c.deps().Repo(dir)
 		base := *baseFlag
 		if base == "" {
-			b, ok, err := resolveBase(ctx, dir)
+			b, ok, err := resolveBase(ctx, c.deps(), dir)
 			if err != nil {
 				return Result{}, err
 			}
@@ -394,7 +394,7 @@ func reviewScaffolding(fs *flag.FlagSet) RunFunc {
 				return Result{}, Resolution("%s: no such branch", ref)
 			}
 		}
-		diff, err := reviewGit(ctx, dir, "diff", base+"..."+branch)
+		diff, err := reviewGit(ctx, c.deps(), dir, "diff", base+"..."+branch)
 		if err != nil {
 			return Result{}, err
 		}

@@ -215,6 +215,12 @@ func (c *Ctx) deps() *Deps {
 	return c.Deps
 }
 
+// Repo is the git handle for dir, running through Deps.Git, so every cli
+// repository read follows the one seam a test swaps.
+func (d *Deps) Repo(dir string) git.Repo {
+	return git.Repo{Dir: dir, Runner: d.Git}
+}
+
 // projectsEnv is the environment the global dir lookups read: Deps.Getenv and
 // Deps.UserHomeDir, so nothing under internal/projects reads the process.
 func (d *Deps) projectsEnv() projects.Env {
@@ -225,6 +231,11 @@ func (d *Deps) projectsEnv() projects.Env {
 // decision and the handle from Host come from the same injected sources.
 func (d *Deps) resolveHost(root string) host.Kind {
 	return worker.ResolveHost(root, config.Load(rotatree.Config(root)), d.Getenv, d.LookPath)
+}
+
+// resolvePaneHost is worker.ResolvePaneHost over Deps' own getenv and lookPath.
+func (d *Deps) resolvePaneHost(root string, cfg any) host.Kind {
+	return worker.ResolvePaneHost(root, cfg, d.Getenv, d.LookPath)
 }
 
 // credentials is worker.SystemCredentials with the home read off Deps.

@@ -111,7 +111,7 @@ func waitingPRs(c *Ctx, root string) []waitingPR {
 // PRs then stay in their own group, apart from PRs with an explicit base, and
 // the nudge may under-report a train. Advice only, so that degrade is accepted.
 func defaultBase(c *Ctx, root string) string {
-	base, ok, err := resolveBase(c.Context(), root)
+	base, ok, err := resolveBase(c.Context(), c.deps(), root)
 	if err != nil || !ok {
 		return ""
 	}
