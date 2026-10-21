@@ -46,26 +46,34 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 				return Result{}, Resolution("%s: no such commit or branch", ref)
 			}
 		}
+		// head is the sha every read below uses and the one reported: the sha a
+		// verdict on this review binds to (verdict add --sha), even if the branch
+		// moves while the package is written.
+		head, err := reviewGit(ctx, t.Dir, "rev-parse", "--verify", t.Branch+"^{commit}")
+		if err != nil {
+			return Result{}, err
+		}
+		head = strings.TrimSpace(head)
 		// base...branch is the merge-base diff, so a base that has moved on since
 		// the branch forked is fine; only unrelated histories have no merge-base.
 		// --since is a point on the branch, so it must be an ancestor of its tip.
 		var from, logSpan, diffSpan string
 		if *sinceFlag != "" {
-			if ok, err := reviewIsAncestor(c, t.Dir, *sinceFlag, t.Branch); err != nil {
+			if ok, err := reviewIsAncestor(c, t.Dir, *sinceFlag, head); err != nil {
 				return Result{}, err
 			} else if !ok {
 				return Result{}, Resolution("--since %s is not an ancestor of '%s'", *sinceFlag, t.Branch)
 			}
 			from = *sinceFlag
-			logSpan = from + ".." + t.Branch
+			logSpan = from + ".." + head
 			diffSpan = logSpan
 		} else {
-			if _, err := reviewGit(ctx, t.Dir, "merge-base", t.Base, t.Branch); err != nil {
+			if _, err := reviewGit(ctx, t.Dir, "merge-base", t.Base, head); err != nil {
 				return Result{}, Resolution("'%s' and base '%s' share no history", t.Branch, t.Base)
 			}
 			from = t.Base
-			logSpan = from + ".." + t.Branch
-			diffSpan = t.Base + "..." + t.Branch
+			logSpan = from + ".." + head
+			diffSpan = t.Base + "..." + head
 		}
 		count, err := reviewGit(ctx, t.Dir, "rev-list", "--count", logSpan)
 		if err != nil {
@@ -104,7 +112,7 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 		if err := fsio.WriteFileAtomic(path, []byte(b.String())); err != nil {
 			return Result{}, err
 		}
-		data := gitObj("path", path, "files", files, "bytes", b.Len())
+		data := gitObj("path", path, "files", files, "bytes", b.Len(), "head", head)
 		return Result{Data: data, Text: path}, nil
 	}
 }

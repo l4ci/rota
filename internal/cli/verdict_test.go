@@ -202,3 +202,88 @@ func TestDebugVerdictIronLaw(t *testing.T) {
 		t.Fatalf("pass: %d %v", code, d)
 	}
 }
+
+// pushedVerdictRepo is verdictRepo with an origin that already holds feat/x.
+func pushedVerdictRepo(t *testing.T) string {
+	t.Helper()
+	dir := verdictRepo(t)
+	origin := filepath.Join(t.TempDir(), "origin.git")
+	gitIn(t, dir, "init", "-q", "--bare", origin)
+	gitIn(t, dir, "remote", "add", "origin", origin)
+	gitIn(t, dir, "push", "-q", "origin", "feat/x")
+	gitIn(t, dir, "fetch", "-q", "origin")
+	return dir
+}
+
+func headSha(t *testing.T, dir, ref string) string {
+	t.Helper()
+	c := exec.Command("git", "rev-parse", ref)
+	c.Dir = dir
+	out, err := c.Output()
+	if err != nil {
+		t.Fatalf("rev-parse %s: %v", ref, err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func TestVerdictAddStripsRemotePrefix(t *testing.T) {
+	dir := pushedVerdictRepo(t)
+	if code, out, errs := rotaIn(t, dir, "verdict", "add", "origin/feat/x", "--kind", "qa", "--verdict", "PASS", "--json"); code != 0 {
+		t.Fatalf("add origin/feat/x: %d %s %s", code, out, errs)
+	}
+	_, out, _ := rotaIn(t, dir, "verdict", "show", "feat/x", "--json")
+	if d := data(t, out); d["branch"] != "feat/x" || len(d["records"].([]any)) != 1 {
+		t.Errorf("bare key holds no record: %v", d)
+	}
+	_, out, _ = rotaIn(t, dir, "verdict", "show", "origin/feat/x", "--json")
+	if d := data(t, out); len(d["records"].([]any)) != 1 {
+		t.Errorf("origin/feat/x reads another key: %v", d)
+	}
+}
+
+func TestVerdictAddRefusesLocalAheadOfOrigin(t *testing.T) {
+	dir := pushedVerdictRepo(t)
+	reviewed := headSha(t, dir, "origin/feat/x")
+	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "unpushed")
+	args := []string{"verdict", "add", "--kind", "qa", "--verdict", "PASS", "--json"}
+	if code, _, _ := rotaIn(t, dir, args...); code != 4 {
+		t.Errorf("local ahead of origin, no --sha: exit %d, want 4", code)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".rota", "verdicts.json")); err == nil {
+		t.Error("a refused verdict wrote the store")
+	}
+	code, out, _ := rotaIn(t, dir, append(args, "--sha", reviewed)...)
+	if d := data(t, out); code != 0 || !strings.HasPrefix(reviewed, d["sha"].(string)) {
+		t.Errorf("--sha at origin head: %d %v", code, d)
+	}
+}
+
+func TestVerdictAddShaMustBeOriginHead(t *testing.T) {
+	dir := pushedVerdictRepo(t)
+	old := headSha(t, dir, "feat/x")
+	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "worker push")
+	gitIn(t, dir, "push", "-q", "origin", "feat/x")
+	code, _, errs := rotaIn(t, dir, "verdict", "add", "--kind", "qa", "--verdict", "PASS", "--sha", old)
+	if code != 4 || !strings.Contains(errs, "worker push") {
+		t.Errorf("stale --sha: exit %d, stderr %q (want 4 naming the extra commit)", code, errs)
+	}
+	if code, _, _ := rotaIn(t, dir, "verdict", "add", "--kind", "qa", "--verdict", "PASS", "--sha", "deadbeef"); code != 3 {
+		t.Errorf("unknown --sha: exit %d, want 3", code)
+	}
+	if code, _, _ := rotaIn(t, dir, "verdict", "add", "--kind", "qa", "--verdict", "PASS", "--sha", headSha(t, dir, "origin/feat/x")); code != 0 {
+		t.Errorf("--sha at origin head: exit %d, want 0", code)
+	}
+}
+
+// With a stale slot worktree, --sha still binds the verdict to the pushed head.
+func TestVerdictAddShaBindsStaleLocalRef(t *testing.T) {
+	dir := pushedVerdictRepo(t)
+	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "orchestrator push")
+	gitIn(t, dir, "push", "-q", "origin", "feat/x")
+	pushed := headSha(t, dir, "origin/feat/x")
+	gitIn(t, dir, "reset", "-q", "--hard", "HEAD~1") // slot worktree one behind origin
+	code, out, errs := rotaIn(t, dir, "verdict", "add", "--kind", "qa", "--verdict", "PASS", "--sha", pushed, "--json")
+	if d := data(t, out); code != 0 || !strings.HasPrefix(pushed, d["sha"].(string)) {
+		t.Fatalf("--sha on stale ref: %d %v %s", code, d, errs)
+	}
+}
