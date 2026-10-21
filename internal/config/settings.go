@@ -27,6 +27,18 @@ func Int(cfg any, key string, min, max int) (int, error) {
 	return int(i), nil
 }
 
+// IntOr is Int for an advisory key a reader must not fail on: a value outside
+// min..max, or one that is not an integer, gives the schema default.
+func IntOr(cfg any, key string, min, max int) int {
+	if n, err := Int(cfg, key, min, max); err == nil {
+		return n
+	}
+	k, _ := SchemaKey(key)
+	n, _ := Default(k).(interface{ Int64() (int64, error) })
+	i, _ := n.Int64()
+	return int(i)
+}
+
 // Bool reads a boolean key. A missing key gives its schema default.
 func Bool(cfg any, key string) (bool, error) {
 	v, err := Value(cfg, key)

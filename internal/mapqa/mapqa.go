@@ -206,33 +206,17 @@ func gitDate(root, path string) string {
 	return d
 }
 
-// DefaultCap is the subsystem count at which the map nudge fires.
-const DefaultCap = 20
-
-// SoftCap reads map.softcap_subsystems from the project config.
+// SoftCap reads map.softcap_subsystems from the project config: the subsystem
+// count at which the map nudge fires. A value below 1 or not an integer gives
+// the schema default.
 func SoftCap(root string) int {
-	cfg := config.Load(rotatree.Config(root))
-	if v, ok := config.Lookup(cfg, "map.softcap_subsystems"); ok {
-		if n, err := strconv.Atoi(fmt.Sprint(v)); err == nil {
-			return n
-		}
-	}
-	return DefaultCap
+	return config.IntOr(config.Load(rotatree.Config(root)), "map.softcap_subsystems", 1, config.MaxInt)
 }
 
-// DefaultStaleCommits is the map.staleCommits default.
-const DefaultStaleCommits = 50
-
 // StaleCommits reads map.staleCommits from the project config: 0 disables the
-// staleness warning; a missing, negative or non-integer value gives the default.
+// staleness warning; a negative or non-integer value gives the schema default.
 func StaleCommits(root string) int {
-	cfg := config.Load(rotatree.Config(root))
-	if v, ok := config.Lookup(cfg, "map.staleCommits"); ok {
-		if n, err := strconv.Atoi(fmt.Sprint(v)); err == nil && n >= 0 {
-			return n
-		}
-	}
-	return DefaultStaleCommits
+	return config.IntOr(config.Load(rotatree.Config(root)), "map.staleCommits", 0, config.MaxInt)
 }
 
 // StaleNote is the warning for a subsystem whose map is behind HEAD by n commits.

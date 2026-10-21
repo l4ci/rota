@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -106,19 +105,10 @@ func prunableWorktrees(ctx context.Context, run git.Runner, root string) int {
 }
 
 // doctorDiskInput fills the disk fields of in: the threshold from config
-// (doctor.minFreeDiskPercent, default 10) and, when the volume is under it,
+// (doctor.minFreeDiskPercent) and, when the volume is under it,
 // the leftovers worth naming. A non-numeric threshold falls back to the default.
 func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string, run git.Runner, now time.Time, disk func(string) *doctor.Disk, getenv func(string) string) {
-	min := 10
-	if cfg != nil {
-		if v, ok := config.Lookup(cfg, "doctor.minFreeDiskPercent"); ok {
-			if num, ok := v.(json.Number); ok {
-				if n, err := num.Int64(); err == nil && n >= 0 && n <= 100 {
-					min = int(n)
-				}
-			}
-		}
-	}
+	min := config.IntOr(cfg, "doctor.minFreeDiskPercent", 0, 100)
 	in.MinFreeDiskPercent = min
 	dir := root
 	if dir == "" {

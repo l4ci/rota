@@ -322,6 +322,14 @@ var nonNegativeIntKeys = map[string]bool{
 	"map.staleCommits":     true,
 }
 
+// positiveIntKeys are int keys `config set` refuses anything below 1 for.
+var positiveIntKeys = map[string]bool{"map.softcap_subsystems": true}
+
+func isPositiveInt(n json.Number) bool {
+	i, err := n.Int64()
+	return err == nil && i >= 1
+}
+
 func isNonNegInt(n json.Number) bool {
 	i, err := n.Int64()
 	return err == nil && i >= 0
@@ -355,6 +363,12 @@ func validateValue(key string, value any) error {
 	if nonNegativeIntKeys[key] {
 		if n, ok := value.(json.Number); !ok || !isNonNegInt(n) {
 			return fmt.Errorf("%w for %s: want an integer of 0 or more", ErrBadValue, key)
+		}
+		return nil
+	}
+	if positiveIntKeys[key] {
+		if n, ok := value.(json.Number); !ok || !isPositiveInt(n) {
+			return fmt.Errorf("%w for %s: want an integer of 1 or more", ErrBadValue, key)
 		}
 		return nil
 	}
