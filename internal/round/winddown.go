@@ -109,8 +109,8 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	// Buffered knowledge hits are gitignored, so the tree check cannot see
 	// them: name the command that folds each scope's buffer into its tracked
 	// sidecar (the fold verb takes one scope at a time).
-	if cmds := pendingHitFolds(root); len(cmds) > 0 {
-		res.Warnings = append(res.Warnings, "knowledge hits are buffered and not yet in the tracked sidecar: run `"+strings.Join(cmds, "`, `")+"`, then commit the sidecar (never while a gate runs)")
+	if cmds, sidecars := pendingHitFolds(root); len(cmds) > 0 {
+		res.Warnings = append(res.Warnings, "knowledge hits are buffered and not yet in the tracked sidecar: run `"+strings.Join(cmds, "`, `")+"`, then commit "+strings.Join(sidecars, " ")+" (never while a gate runs)")
 	}
 
 	// 1. Re-verify the base in the project root.
@@ -325,22 +325,24 @@ var hitScopeName = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
 // pendingHitFolds returns one `rota knowledge tier fold` command per scope
 // under root's .rota whose knowledge-hits.jsonl holds buffered hits: the bare
-// verb for the root scope, --repo <name> for an umbrella sub-repo.
-func pendingHitFolds(root string) []string {
+// verb for the root scope, --repo <name> for an umbrella sub-repo. The second
+// result is the sidecar each fold writes, root-relative, in the same order.
+func pendingHitFolds(root string) (cmds, sidecars []string) {
 	nonEmpty := func(f string) bool {
 		fi, err := os.Stat(f)
 		return err == nil && fi.Size() > 0
 	}
-	var cmds []string
 	if nonEmpty(filepath.Join(root, ".rota", "knowledge-hits.jsonl")) {
 		cmds = append(cmds, "rota knowledge tier fold")
+		sidecars = append(sidecars, ".rota/knowledge-tier.json")
 	}
 	files, _ := filepath.Glob(filepath.Join(root, ".rota", "knowledge", "*", "knowledge-hits.jsonl"))
 	for _, f := range files {
 		name := filepath.Base(filepath.Dir(f))
 		if nonEmpty(f) && hitScopeName.MatchString(name) {
 			cmds = append(cmds, "rota --repo "+name+" knowledge tier fold")
+			sidecars = append(sidecars, ".rota/knowledge/"+name+"/knowledge-tier.json")
 		}
 	}
-	return cmds
+	return cmds, sidecars
 }
