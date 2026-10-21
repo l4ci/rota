@@ -127,7 +127,7 @@ Out of scope: It's a Plan's agent runner, MCP server and webhooks, initiatives a
 An ID is the type letter plus the issue number: `#42` is `F42`, `B42` or `T42`. The letter must match the issue's type label.
 
 - **Labels** carry type (`type:bug`), priority (`p0`..) and, for features, size (`size:Major`).
-- **Body** holds the description and a fields block (`Related`, `Milestone`, `Repos`, ...).
+- **Body** holds the description and a fields block (`Related`, `Repos`, `Subsystem`, ...). The milestone is the native tracker milestone, not a body field; a `Milestone` line in the block is only a read fallback. `item create --milestone` and `item field set --name milestone` refuse an unknown milestone ID with a usage error (exit 2); `rota milestone list` shows the known ones.
 - **Notes** are marker comments on the issue, edited in place: `proof`, `design`, `plan`, `acceptance`. Read them with `rota item note show <ID> --kind design`, `rota design show`, `rota plan show`.
 - **Comments** record `question`, `answer`, `decision` and `feedback`. Decisions are binding for later sessions.
 
