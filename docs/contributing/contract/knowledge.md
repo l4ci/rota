@@ -68,9 +68,9 @@ note: `amend` only appends and `rename-topic` only renames or moves; this is the
 rota knowledge rm --topic <T> --title <title>
 repo: scoped (scope S); edits S's KNOWLEDGE.md and tier sidecar only
 data: {"topic": string, "title": string, "changed": true}
-exit: 2 when `--topic` or `--title` is missing; 3 when the topic or the bullet is not found (nothing is written)
+exit: 2 when `--topic` or `--title` is missing; 3 when the topic or the bullet is not found (nothing is written); 4 when several bullets share the title (`blockedBy: ambiguous`)
 old: none (new in #1286)
-note: removes the one bullet with that bold title, from its `- ` line to the next sibling bullet, and its `<topic>::<title>` tier entry; every other byte is kept, and the last bullet of a section leaves the blank line before the next heading. Buffered hits are folded under the lock first, so none recreates the entry. A rerun finds no bullet and exits 3, as `amend` and `rename-topic` do; the ticket also asked for `changed: false` on a rerun, which cannot hold beside exit 3 for an unknown title, so `changed` is always true on success (unratified).
+note: removes the one bullet with that bold title, from its `- ` line to the next sibling bullet, and its `<topic>::<title>` tier entry. The span is the bullet's `- ` line plus its indented continuation lines, so prose after it stays; a blank line left doubled by the removal collapses to one, and every other byte is kept. Buffered hits are folded under the lock first, so none recreates the entry. A rerun finds no bullet and exits 3, as `amend` and `rename-topic` do; the ticket also asked for `changed: false` on a rerun, which cannot hold beside exit 3 for an unknown title, so `changed` is always true on success (unratified).
 
 ### rota knowledge rename-topic
 rota knowledge rename-topic --from <X> --to <Y> [--title <T>]
