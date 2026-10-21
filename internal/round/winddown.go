@@ -276,6 +276,10 @@ func (e Env) requireBase(ctx context.Context, root string) error {
 		return &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git status failed in " + root}
 	}
 	if strings.TrimSpace(out) != "" {
+		if onlyTierSidecars(out) {
+			return &exitcode.Error{Exit: exitcode.ExitResolution, Message: "the only uncommitted change is folded knowledge-hit bookkeeping (knowledge-tier.json)",
+				Hint: "commit it: git add .rota/knowledge-tier.json .rota/knowledge/*/knowledge-tier.json && git commit -m 'Fold knowledge hits'"}
+		}
 		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: "the project root has uncommitted changes to tracked files", Hint: "commit or stash them: wind-down verifies the base as it is"}
 	}
 	return nil
@@ -287,4 +291,18 @@ func tail(text string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// onlyTierSidecars reports whether every path of a `git status --porcelain`
+// listing is a knowledge-tier.json sidecar: bookkeeping `rota knowledge tier
+// fold` wrote, which one commit settles.
+func onlyTierSidecars(porcelain string) bool {
+	n := 0
+	for _, l := range strings.Split(strings.TrimRight(porcelain, "\n"), "\n") {
+		if len(l) < 4 || !strings.HasSuffix(l, "knowledge-tier.json") {
+			return false
+		}
+		n++
+	}
+	return n > 0
 }

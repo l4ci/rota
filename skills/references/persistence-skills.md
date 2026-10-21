@@ -73,4 +73,6 @@ The scoped `rota knowledge` and `rota glossary` verbs resolve the target file an
 
 **Tier sidecars** are per file: `.rota/knowledge-tier.json` (umbrella) and `.rota/knowledge/<name>/knowledge-tier.json`, each tracking only its own bullets. Glossary is exempt in both.
 
+**Hits are buffered, not written.** `rota knowledge hit` appends to the gitignored `knowledge-hits.jsonl` beside the sidecar, so consulting a bullet never dirties the tree; `tier get`, `tier list` and `query` read the sidecar with the buffer applied, and read-only verbs write nothing. `rota knowledge tier fold` applies the buffer to the tracked sidecar (promotion included) and empties it: run it, then commit the sidecar, when you commit knowledge changes. Never fold while a gate runs.
+
 **CLAUDE.md managed block.** A sub-repo's CLAUDE.md (or AGENTS.md when present) gets `rota block knowledge --repo <name>`, listing umbrella topics plus that sub-repo's own, so a reader in the sub-repo sees the full topic index. The umbrella-root file lists umbrella topics only. Single-repo projects are unchanged.

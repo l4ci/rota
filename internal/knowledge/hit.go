@@ -39,38 +39,34 @@ func (s Store) PromoteThreshold() int {
 	return DefaultPromoteThreshold
 }
 
-// Hit registers that a bullet was consulted: it bumps the hit counter and
-// promotes a provisional bullet to confirmed once hits reach the threshold,
-// unless the pair sits in the contradiction queue. Glossary terms are never
-// tiered, so a Glossary hit changes nothing.
+// Hit registers that a bullet was consulted: it counts one hit and promotes a
+// provisional bullet to confirmed once hits reach the threshold, unless the
+// pair sits in the contradiction queue. Glossary terms are never tiered, so a
+// Glossary hit changes nothing. The hit lands in the gitignored buffer, not the
+// tracked sidecar; the result is what the sidecar reads once the buffer is
+// folded (`rota knowledge tier fold`).
 func (s Store) Hit(scope, topic, title string) (HitResult, error) {
 	if topic == GlossaryTopic {
 		return HitResult{Entry: Entry{Topic: topic, Title: title, Tier: Provisional}}, nil
 	}
-	p, err := s.TierPath(scope)
+	hp, err := s.HitsPath(scope)
 	if err != nil {
 		return HitResult{}, err
 	}
-	threshold := s.PromoteThreshold()
 	var res HitResult
-	err = Update(p, func(sc *Sidecar) (bool, error) {
-		e := sc.Bump(topic, title, s.today())
-		if e.Tier == Provisional && e.Hits >= threshold {
-			has, err := s.HasContradiction(topic, title)
-			if err != nil {
-				return false, err
-			}
-			if has {
-				res.PromotionBlocked = true
-			} else {
-				sc.Promote(topic, title)
-				e.Tier = Confirmed
-				res.Promoted = true
-			}
+	err = fsio.Locked(hp, fsio.LockTimeout, func() error {
+		sc, err := s.effective(scope)
+		if err != nil {
+			return err
 		}
-		res.Entry = e
+		cm, err := s.contradicted()
+		if err != nil {
+			return err
+		}
+		h := pendingHit{Topic: topic, Title: title, Date: s.today()}
+		res.Entry, res.Promoted, res.PromotionBlocked = bumpHit(sc, h, s.PromoteThreshold(), cm)
 		res.Changed = true
-		return true, nil
+		return appendPending(hp, h)
 	})
 	return res, err
 }

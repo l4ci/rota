@@ -336,3 +336,20 @@ func TestWindDownRefusesOnInvalidRoundConfig(t *testing.T) {
 		t.Error("the lease must be kept")
 	}
 }
+
+func TestOnlyTierSidecars(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want bool
+	}{
+		{" M .rota/knowledge-tier.json\n", true},
+		{" M .rota/knowledge-tier.json\n M .rota/knowledge/web/knowledge-tier.json\n", true},
+		{" M .rota/knowledge-tier.json\n M internal/x.go\n", false},
+		{" M internal/x.go\n", false},
+		{"", false},
+	} {
+		if got := onlyTierSidecars(c.in); got != c.want {
+			t.Errorf("onlyTierSidecars(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}

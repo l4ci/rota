@@ -304,12 +304,7 @@ func (s Store) TierGet(scope, topic, title string) (Entry, bool, error) {
 	if topic == GlossaryTopic {
 		return Entry{}, false, nil
 	}
-	p, err := s.TierPath(scope)
-	if err != nil {
-		return Entry{}, false, err
-	}
-	s.backfillTiers(scope)
-	sc, err := LoadSidecar(p)
+	sc, err := s.effectiveBackfilled(scope)
 	if err != nil {
 		return Entry{}, false, err
 	}
@@ -327,6 +322,12 @@ func (s Store) TierSet(scope, topic, title, tier string) (previous string, chang
 	if err != nil {
 		return "", false, err
 	}
+	// Buffered hits predate this write: fold them first so the set is not
+	// replayed over by hits that were already counted (a demotion would
+	// otherwise promote again on read).
+	if _, err := s.FoldHits(scope); err != nil {
+		return "", false, err
+	}
 	err = Update(p, func(sc *Sidecar) (bool, error) {
 		previous = sc.Set(topic, title, tier, s.today())
 		changed = previous != tier
@@ -337,48 +338,40 @@ func (s Store) TierSet(scope, topic, title, tier string) (previous string, chang
 
 // TierList lists scope's tracked entries, optionally for one tier.
 func (s Store) TierList(scope, tier string) ([]Entry, error) {
-	p, err := s.TierPath(scope)
-	if err != nil {
-		return nil, err
-	}
-	s.backfillTiers(scope)
-	sc, err := LoadSidecar(p)
+	sc, err := s.effectiveBackfilled(scope)
 	if err != nil {
 		return nil, err
 	}
 	return sc.List(tier), nil
 }
 
-// backfillTiers registers every titled bullet of scope's KNOWLEDGE.md that has
-// no sidecar entry as provisional, so bullets written before tiers existed read
-// like new ones. It is the lazy form of the retired hv-knowledge-migrate and
-// runs on `tier get` and `tier list`; `query` stays read-only. Like initTier it is best effort: a failure leaves the
-// read to see the untracked bullets rather than failing it.
-func (s Store) backfillTiers(scope string) {
+// effectiveBackfilled is effective plus, in memory, a provisional entry for
+// every titled bullet of scope's KNOWLEDGE.md that has none, so bullets written
+// before tiers existed read like new ones. It is the lazy form of the retired
+// hv-knowledge-migrate and serves `tier get` and `tier list`; `query` stays
+// read-only. Nothing is written: a read must not dirty the tracked sidecar.
+func (s Store) effectiveBackfilled(scope string) (*Sidecar, error) {
+	sc, err := s.effective(scope)
+	if err != nil {
+		return nil, err
+	}
 	km, err := s.KnowledgePath(scope)
 	if err != nil {
-		return
-	}
-	p, err := s.TierPath(scope)
-	if err != nil {
-		return
+		return sc, nil
 	}
 	content, err := ReadFile(km)
 	if err != nil || content == "" {
-		return
+		return sc, nil
 	}
-	_ = Update(p, func(sc *Sidecar) (bool, error) {
-		changed := false
-		for _, t := range section.Topics(content) {
-			if t.Name == GlossaryTopic {
-				continue
-			}
-			for _, line := range section.Lines(t.Body) {
-				if m := titleRe.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
-					changed = sc.Init(t.Name, m[1], s.today()) || changed
-				}
+	for _, t := range section.Topics(content) {
+		if t.Name == GlossaryTopic {
+			continue
+		}
+		for _, line := range section.Lines(t.Body) {
+			if m := titleRe.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
+				sc.Init(t.Name, m[1], s.today())
 			}
 		}
-		return changed, nil
-	})
+	}
+	return sc, nil
 }
