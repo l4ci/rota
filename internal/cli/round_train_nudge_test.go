@@ -275,16 +275,24 @@ func TestRoundWaitCarriesTheTrainNudge(t *testing.T) {
 }
 
 func TestTrainBlockedOnFailNotConcerns(t *testing.T) {
+	recWith := func(kind, v string, f ...verdict.Finding) verdict.Record {
+		return verdict.Record{Kind: kind, Verdict: v, Sha: "bbbbbbb", Findings: f}
+	}
 	rec := func(kind, v string) verdict.Record { return verdict.Record{Kind: kind, Verdict: v, Sha: "bbbbbbb"} }
 	for name, tc := range map[string]struct {
 		recs []verdict.Record
 		want bool
 	}{
-		"pass":                 {[]verdict.Record{rec(verdict.ReviewSpec, verdict.Pass)}, false},
-		"concerns":             {[]verdict.Record{rec(verdict.ReviewQuality, verdict.Concerns)}, false},
-		"fail":                 {[]verdict.Record{rec(verdict.ReviewSpec, verdict.Fail)}, true},
-		"spec fail after pass": {[]verdict.Record{rec(verdict.ReviewQuality, verdict.Pass), rec(verdict.ReviewSpec, verdict.Fail)}, true},
-		"none":                 {nil, false},
+		"pass":                           {[]verdict.Record{rec(verdict.ReviewSpec, verdict.Pass)}, false},
+		"concerns":                       {[]verdict.Record{rec(verdict.ReviewQuality, verdict.Concerns)}, false},
+		"fail":                           {[]verdict.Record{rec(verdict.ReviewSpec, verdict.Fail)}, true},
+		"spec fail after pass":           {[]verdict.Record{rec(verdict.ReviewQuality, verdict.Pass), rec(verdict.ReviewSpec, verdict.Fail)}, true},
+		"none":                           {nil, false},
+		"concerns with blocking finding": {[]verdict.Record{recWith(verdict.ReviewQuality, verdict.Concerns, verdict.Finding{Severity: "major", Title: "x"})}, true},
+		"concerns with minor finding":    {[]verdict.Record{recWith(verdict.ReviewQuality, verdict.Concerns, verdict.Finding{Severity: "minor", Title: "x"})}, false},
+		"blocking finding then newer clean review": {[]verdict.Record{
+			recWith(verdict.ReviewQuality, verdict.Concerns, verdict.Finding{Severity: "major", Title: "x"}),
+			rec(verdict.ReviewSpec, verdict.Pass)}, false},
 	} {
 		root := t.TempDir()
 		for _, r := range tc.recs {
@@ -343,5 +351,33 @@ func TestWaitingPRsDropsMergedPRs(t *testing.T) {
 		if !slices.Equal(got, tc.want) {
 			t.Errorf("%s: waiting = %v, want %v", name, got, tc.want)
 		}
+	}
+}
+
+// TestWaitingPRsLeavesOutABouncedPR: a PR the gate sent back at its current head
+// is not reviewed, though its verdict is on record; a push (new head) clears it.
+func TestWaitingPRsLeavesOutABouncedPR(t *testing.T) {
+	dir := nudgeProject(t, []string{"a/1-x", "b/2-y"}, []string{"a/1-x", "b/2-y"})
+	head, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	addRegistryRows(t, dir, map[string][]map[string]any{
+		"slots": {{"name": "a", "state": "done", "issue": "1", "branch": "a/1-x", "pr": "#11"}},
+		"prs":   {{"issue": "2", "branch": "b/2-y", "pr": "#12", "base": "main"}},
+	})
+	for _, issue := range []string{"1", "2"} {
+		if _, err := worker.RecordBounce(worker.Env{}, dir, issue, "", strings.TrimSpace(string(head))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := waitingPRs(&Ctx{Deps: testDeps(), ctx: context.Background()}, dir)
+	for _, w := range got {
+		if w.Reviewed {
+			t.Errorf("%s reviewed = true, want false (bounced at head)", w.PR)
+		}
+	}
+	if len(got) != 2 {
+		t.Fatalf("waiting = %+v, want two PRs", got)
 	}
 }
