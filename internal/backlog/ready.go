@@ -151,6 +151,14 @@ func (f *File) Comments(ref, kind string) ([]Comment, error) {
 	return out, nil
 }
 
+// today is the injected day clock, time.Now when none is set.
+func (f *File) today() time.Time {
+	if f.Today != nil {
+		return f.Today()
+	}
+	return time.Now()
+}
+
 // AddComment appends `- <date> · <kind> · <first line>` (continuation lines
 // indented two spaces) under ## Log in the item's detail file, creating the
 // file when missing (FileBackend.comment_add). The returned id is always "".
@@ -170,7 +178,7 @@ func (f *File) AddComment(ref, kind, text string) (string, error) {
 		title = ref
 	}
 	lines := strings.Split(strings.Trim(strings.ReplaceAll(text, "\r\n", "\n"), "\n"), "\n")
-	row := "- " + time.Now().Format("2006-01-02") + " · " + kind + " · " + pystr.Strip(lines[0]) + "\n"
+	row := "- " + f.today().Format("2006-01-02") + " · " + kind + " · " + pystr.Strip(lines[0]) + "\n"
 	for _, l := range lines[1:] {
 		if pystr.Strip(l) != "" {
 			row += "  " + l + "\n"
