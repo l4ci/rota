@@ -19,7 +19,7 @@ rota review brief [--repo "$REPO"] <branch>
 Dispatch the brief verbatim to a fresh `standard` subagent through the harness's dispatch interface (`references/subagent-dispatch.md`), with the brief labelled "Second-opinion review of <branch>". It returns a report ending in a fenced `json` verdict block. Save the block to a temp file, then:
 
 ```bash
-rota verdict add <branch> --kind second-opinion --verdict <PASS|CONCERNS|FAIL> --body-file "$VERDICT" --json
+rota verdict add <branch> --kind second-opinion --verdict <PASS|CONCERNS|FAIL> --sha "$(git rev-parse <branch>)" --body-file "$VERDICT" --json
 rota verdict route <branch> --for ship-second-opinion --json
 ```
 
