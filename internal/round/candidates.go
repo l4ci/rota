@@ -23,6 +23,10 @@ type Candidate struct {
 	// OpenPR is the open PR that already resolves the item, 0 for none: the
 	// item is not ready while one is open.
 	OpenPR int
+	// DependsOnPR is the open PR a deferred finding was filed from (the item's
+	// Related PR), 0 for none: its fix builds on code only that PR adds, so the
+	// item is not ready until the PR merges.
+	DependsOnPR int
 	// Pick is the harness and model the item asks for; PickErr why its labels
 	// are refused ("" when fine). assign refuses the same way.
 	Pick    Pick
@@ -38,7 +42,7 @@ type Candidate struct {
 
 // Ready is true when every readiness check holds and no open PR resolves the item.
 func (c Candidate) Ready() bool {
-	return c.OpenPR == 0 && c.PickErr == "" && c.BlockedBy == "" && c.Readiness.Ready()
+	return c.OpenPR == 0 && c.DependsOnPR == 0 && c.PickErr == "" && c.BlockedBy == "" && c.Readiness.Ready()
 }
 
 // CandidateOpts selects the set.
@@ -103,9 +107,14 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 			return nil, err
 		}
 	}
-	openPR, err := e.openPRIssues(ctx, be)
+	prs, err := e.listOpenPRs(ctx, be)
 	if err != nil {
 		return nil, err
+	}
+	openPR := e.issuesOfPRs(prs, "")
+	openNums := map[int]bool{}
+	for _, p := range prs {
+		openNums[p.Number] = true
 	}
 	tracked := e.trackedFiles(ctx, root)
 	inFlight := e.InFlightItems(ctx, root, be, tracked, o.Shared)
@@ -123,7 +132,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		}
 		ms := backlog.ParseMilestones(it.Fields.Get("milestone"))
 		_, src := ItemScopeSource(be, it.ID)
-		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()], ScopeSource: src, Readiness: r}
+		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()], DependsOnPR: deferredDependency(be, it, openNums), ScopeSource: src, Readiness: r}
 		if p, err := PickOf(be.Capabilities(), it); err != nil {
 			c.PickErr = err.Error()
 		} else {
