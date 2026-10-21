@@ -168,6 +168,22 @@ func TestReceiptVerdictFailureIsSettledNotPending(t *testing.T) {
 	}
 }
 
+func TestReceiptSettledVerdictHintDoesNotSuggestRetryWithID(t *testing.T) {
+	dir := workerProject(t, `{}`)
+	f := &fakeVerb{verdict: "verify-failed", fail: Failed("verify FAILED")}
+	_, err, _ := callReceipted(t, dir, f, "--request-id", "r1", "42")
+	var e *Error
+	if !errors.As(asError(err), &e) {
+		t.Fatalf("first call: %v", err)
+	}
+	if strings.Contains(e.Hint, "retry with --request-id") {
+		t.Errorf("a settled verdict replays on the same id, hint must not suggest it: %q", e.Hint)
+	}
+	if !strings.Contains(e.Hint, "without --request-id") {
+		t.Errorf("hint must name what reruns the call: %q", e.Hint)
+	}
+}
+
 func TestReceiptLeavesNothingForARefusalOrCheckOnly(t *testing.T) {
 	dir := workerProject(t, `{}`)
 	f := &fakeVerb{fail: Refused("not ready")}
