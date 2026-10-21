@@ -414,6 +414,39 @@ func (a *Accounts) Pick(ctx context.Context, root string, exclude []string) (nam
 	return usable[0].Name, true
 }
 
+// NoPickReason explains a failed Pick when a missing login is involved: it
+// names each non-excluded, non-cooling account without a usable login and why.
+// "" when no account is blocked by its login, so the caller's own reason (all
+// cooling, nothing configured) stands.
+func (a *Accounts) NoPickReason(ctx context.Context, root string, exclude []string) string {
+	skip := map[string]bool{}
+	for _, n := range exclude {
+		skip[strings.TrimSpace(n)] = true
+	}
+	var loginless []string
+	cooling := false
+	for _, m := range a.Meters(ctx, root) {
+		if skip[m.Name] {
+			continue
+		}
+		if m.Verdict == VerdictCooling {
+			cooling = true
+			continue
+		}
+		if why := a.Login.Problem(ExpandConfigDir(m.ConfigDir)); why != "" {
+			loginless = append(loginless, m.Name+" ("+why+")")
+		}
+	}
+	if len(loginless) == 0 {
+		return ""
+	}
+	lead := "every configured account has no login: "
+	if cooling {
+		lead = "every configured account is cooling down or has no login: "
+	}
+	return lead + strings.Join(loginless, ", ")
+}
+
 // SameConfigDir reports whether two CLAUDE_CONFIG_DIR values name one
 // directory: compared after Clean, with a leading ~/ expanded and empty
 // meaning ~/.claude (what Claude Code uses when the variable is unset).
@@ -517,6 +550,9 @@ func (a *Accounts) Assign(ctx context.Context, root, slot, account string) (name
 	if account == "" {
 		picked, ok := a.Pick(ctx, root, nil)
 		if !ok {
+			if why := a.NoPickReason(ctx, root, nil); why != "" {
+				return "", false, fail(exitcode.ExitRefused, why)
+			}
 			return "", false, fail(exitcode.ExitRefused, "every configured account is cooling down")
 		}
 		account = picked
