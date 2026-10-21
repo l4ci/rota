@@ -140,6 +140,8 @@ type Options struct {
 	CountProof func(text string) int
 	// NoteLimit is the ROTA_NOTE_LIMIT value; see Issues.NoteLimit.
 	NoteLimit string
+	// Today is the day clock of the file backend's dated rows; nil is time.Now.
+	Today func() time.Time
 }
 
 // Open returns the backend selected by issues.source in cfg, the loaded
@@ -153,7 +155,7 @@ func Open(ctx context.Context, root string, cfg any, opts Options) (Backend, err
 		return nil, err
 	}
 	if name == "file" {
-		return &File{Root: root, CountProof: opts.CountProof}, nil
+		return &File{Root: root, CountProof: opts.CountProof, Today: opts.Today}, nil
 	}
 	if opts.NewTracker == nil {
 		return nil, errors.New("issues.source needs a tracker")

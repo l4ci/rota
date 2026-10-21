@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestReady(t *testing.T) {
@@ -114,4 +115,22 @@ func TestAddComment(t *testing.T) {
 			t.Errorf("unknown: %v", err)
 		}
 	})
+}
+
+// A pinned clock stamps the comment row, whatever the real day is, so a
+// frozen run that crosses local midnight still records one date.
+func TestAddCommentStampsInjectedToday(t *testing.T) {
+	f, _ := proj(t, rotaFiles(nil))
+	pinned := time.Date(2001, 2, 3, 23, 59, 59, 0, time.UTC)
+	f.Today = func() time.Time { return pinned }
+	for range 2 {
+		if _, err := f.AddComment("B02", "question", "Is it?"); err != nil {
+			t.Fatal(err)
+		}
+		pinned = pinned.Add(2 * time.Second) // crosses midnight; Today is read per call
+	}
+	got := read(t, f, ".rota/bugs/B02.md")
+	if !strings.Contains(got, "- 2001-02-03 · question") || !strings.Contains(got, "- 2001-02-04 · question") {
+		t.Errorf("rows not stamped from the injected clock:\n%s", got)
+	}
 }

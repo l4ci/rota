@@ -550,7 +550,12 @@ func variants(s scn) []scn {
 
 // startDay is the UTC date the harness started; a timestamp on or after it was
 // written by the run under test, an older one came from a fixture.
-var startDay = time.Now().UTC().Format("2006-01-02")
+var startDay = startNow.Format("2006-01-02")
+
+// startNow is the instant the harness started. Every frozen child run gets it as
+// ROTA_TEST_NOW (frozenEnv), so a gate that crosses UTC midnight stamps the same
+// day the harness pinned (realUTC) instead of reading the wall clock again.
+var startNow = time.Now().UTC().Truncate(time.Second)
 
 func (s scn) exec(t *testing.T) {
 	t.Parallel()
