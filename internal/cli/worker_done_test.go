@@ -262,3 +262,69 @@ func TestMissingFastProofLatestRowWins(t *testing.T) {
 		t.Errorf("PASS then FAIL at head must be unproven, missing = %v", got)
 	}
 }
+
+// commitFile commits one file on the checked-out branch.
+func commitFile(t *testing.T, dir, name string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("package x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", name}, {"-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "-m", "add " + name}} {
+		c := exec.Command("git", args...)
+		c.Dir = dir
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+}
+
+// TestWorkerDoneFlagsMissingRed: with work.tdd on, a branch that changes
+// non-test Go code and holds no FAIL proof row warns, and --require-red refuses (#1300).
+func TestWorkerDoneFlagsMissingRed(t *testing.T) {
+	base := func(t *testing.T) (dir, baseSha string) {
+		dir = doneProject(t, "")
+		baseSha = headOf(t, dir)
+		commitFile(t, dir, "prod.go")
+		return dir, baseSha
+	}
+	t.Run("warns without a FAIL row", func(t *testing.T) {
+		dir, b := base(t)
+		code, out, errOut := rotaIn(t, dir, "worker", "done", "ben", "--base", b, "--json")
+		d := data(t, out)
+		if code != 0 || d["noRed"] != true || !strings.Contains(errOut+out, "no failing (RED) proof row") {
+			t.Fatalf("exit %d: %s %s", code, out, errOut)
+		}
+	})
+	t.Run("--require-red refuses", func(t *testing.T) {
+		dir, b := base(t)
+		code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--base", b, "--require-red", "--json")
+		if code != 4 || slotState(t, dir) == "done" {
+			t.Fatalf("exit %d: %s", code, out)
+		}
+	})
+	t.Run("a FAIL row satisfies it", func(t *testing.T) {
+		dir, b := base(t)
+		rotaIn(t, dir, "proof", "add", "B07", "--check", "go test ./x", "--result", "FAIL", "--evidence", "x", "--sha", headOf(t, dir))
+		code, out, errOut := rotaIn(t, dir, "worker", "done", "ben", "--base", b, "--require-red", "--json")
+		if code != 0 || data(t, out)["noRed"] == true || strings.Contains(errOut, "RED") {
+			t.Fatalf("exit %d: %s %s", code, out, errOut)
+		}
+	})
+	t.Run("test-only change is not flagged", func(t *testing.T) {
+		dir := doneProject(t, "")
+		b := headOf(t, dir)
+		commitFile(t, dir, "prod_test.go")
+		code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--base", b, "--require-red", "--json")
+		if code != 0 || data(t, out)["noRed"] == true {
+			t.Fatalf("exit %d: %s", code, out)
+		}
+	})
+	t.Run("work.tdd off is not flagged", func(t *testing.T) {
+		dir, b := base(t)
+		os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"work":{"tdd":false}}`), 0o644)
+		code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--base", b, "--require-red", "--json")
+		if code != 0 || data(t, out)["noRed"] == true {
+			t.Fatalf("exit %d: %s", code, out)
+		}
+	})
+}
