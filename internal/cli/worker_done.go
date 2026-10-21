@@ -20,7 +20,7 @@ import (
 // writes: the tier run as one command, which the worker contract recommends.
 const fastTierCheck = "rota test run fast"
 
-// workerDone is `rota worker done <slot>`: the step before the PR. It refuses
+// workerDone is `rota worker done <slot>`: the last step before ROTA-DONE, after the PR. It refuses
 // (exit 4) a slot whose item has no PASS proof row at the branch's current
 // HEAD for test.fast, then marks the slot done.
 func workerDone(fs *flag.FlagSet) RunFunc {
@@ -193,8 +193,8 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			if s.State() == "done" {
 				return
 			}
-			// The PR is opened after this verb, so the poll never sees the
-			// busy-to-done edge that baselines the review cursor elsewhere.
+			// The poll never sees the busy-to-done edge that baselines the
+			// review cursor elsewhere: the worker reports done after its PR.
 			s.BaselineReview(c.deps().Now())
 			_ = s.MarkState("done", now)
 			s.ClearSeen()
@@ -305,8 +305,8 @@ func missingFastProof(rows []proof.Row, head string, want []string) (missing []s
 }
 
 // settledBranch refuses a worktree with uncommitted changes, and a branch
-// whose pushed copy (origin/<branch>) trails HEAD. A branch never pushed passes:
-// the contract opens the PR, and so pushes, after done.
+// whose pushed copy (origin/<branch>) is absent or not HEAD: the contract opens
+// the PR, and so pushes, before done.
 func settledBranch(c *Ctx, dir, branch string, d *jsonx.Object) error {
 	repo := c.deps().Repo(dir)
 	dirty, ok, err := repo.Dirty(c.Context())
@@ -324,7 +324,10 @@ func settledBranch(c *Ctx, dir, branch string, d *jsonx.Object) error {
 		return gitErr(err)
 	}
 	if remote.ExitCode != 0 {
-		return nil
+		d.Set("unpushed", true)
+		e := Refused("%s was never pushed to origin: done is the last action, after the PR", branch)
+		e.Hint = fmt.Sprintf("`git push origin %s` and open the PR, then run `rota worker done` again", branch)
+		return e
 	}
 	head, err := repo.Run(c.Context(), "rev-parse", "HEAD")
 	if err != nil {

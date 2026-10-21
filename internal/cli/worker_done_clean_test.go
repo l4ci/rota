@@ -18,11 +18,19 @@ func runGit(t *testing.T, dir string, args ...string) {
 }
 
 // TestWorkerDoneNeedsACleanPushedBranch: done is the worker's last action, so
-// a dirty worktree or a HEAD past the pushed branch is refused (#1529).
+// a dirty worktree, an unpushed branch or a HEAD past the pushed branch is refused (#1529).
 func TestWorkerDoneNeedsACleanPushedBranch(t *testing.T) {
-	t.Run("clean, never pushed passes", func(t *testing.T) {
+	t.Run("clean and pushed passes", func(t *testing.T) {
 		dir := doneProject(t, "")
 		if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json"); code != 0 {
+			t.Fatalf("exit %d: %s", code, out)
+		}
+	})
+	t.Run("never pushed refuses", func(t *testing.T) {
+		dir := doneProject(t, "")
+		runGit(t, dir, "update-ref", "-d", "refs/remotes/origin/feat/x")
+		code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json")
+		if code != 4 || data(t, out)["unpushed"] != true || slotState(t, dir) == "done" {
 			t.Fatalf("exit %d: %s", code, out)
 		}
 	})
@@ -36,10 +44,6 @@ func TestWorkerDoneNeedsACleanPushedBranch(t *testing.T) {
 	})
 	t.Run("commits past the pushed branch refuse", func(t *testing.T) {
 		dir := doneProject(t, "")
-		remote := filepath.Join(t.TempDir(), "r.git")
-		runGit(t, dir, "init", "-q", "--bare", remote)
-		runGit(t, dir, "remote", "add", "origin", remote)
-		runGit(t, dir, "push", "-q", "origin", "feat/x")
 		runGit(t, dir, "commit", "-q", "--allow-empty", "-m", "late")
 		code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json")
 		if code != 4 || data(t, out)["unpushed"] != true || !strings.Contains(out, "git push") {
