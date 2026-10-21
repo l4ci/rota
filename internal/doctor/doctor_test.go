@@ -739,6 +739,25 @@ func TestAgentsCheck(t *testing.T) {
 	}
 }
 
+func TestGitignoreCheck(t *testing.T) {
+	find := func(in Input) Check {
+		in.Look = func(string) (string, bool) { return "", false }
+		for _, c := range Run(context.Background(), in).Checks {
+			if c.Name == "gitignore" {
+				return c
+			}
+		}
+		return Check{}
+	}
+	if c := find(Input{}); c.Name != "" {
+		t.Fatalf("nothing missing adds no line: %+v", c)
+	}
+	c := find(Input{GitignoreMissing: []string{".rota/**/knowledge-hits.jsonl"}})
+	if c.Status != Warn || !strings.Contains(c.Detail, "knowledge-hits.jsonl") || !strings.Contains(c.Hint, "rota init") {
+		t.Fatalf("%+v", c)
+	}
+}
+
 func portsInput(f *fake, cwd map[int]string) Input {
 	return Input{
 		Slots: []SlotBlock{{Name: "w1", Worktree: "/p/.worktrees/w1", Base: 20000, Size: 100}, {Name: "w2", Worktree: "/p/.worktrees/w2", Base: 20100, Size: 100}},
