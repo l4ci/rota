@@ -545,8 +545,8 @@ func itemSectionSet(fs *flag.FlagSet) RunFunc {
 		if err := argCount(c, args, 1, 1, "item section set takes one item ID"); err != nil {
 			return Result{}, err
 		}
-		if strings.TrimSpace(*name) == "" || strings.ContainsAny(*name, "\r\n") {
-			return Result{}, Usage("--name is required: one section heading")
+		if strings.TrimSpace(*name) == "" || strings.ContainsAny(*name, "\r\n") || strings.HasPrefix(strings.TrimSpace(*name), "#") {
+			return Result{}, Usage("--name is required: one section heading, without a leading #")
 		}
 		if *bodyFile == "" {
 			return Result{}, Usage("--body-file is required")

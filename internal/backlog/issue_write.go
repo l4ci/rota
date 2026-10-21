@@ -858,8 +858,8 @@ var acceptanceHeadRe = regexp.MustCompile(`(?mi)^#{1,6}[ \t]+acceptance[ \t]*$`)
 // acceptance section gets its criteria numbered, as at capture.
 func (b *Issues) SetSection(ref, name, content string) (bool, error) {
 	name = strings.TrimSpace(name)
-	if name == "" || strings.ContainsAny(name, "\r\n") {
-		return false, errf(ErrInvalid, "section name must be one non-empty line")
+	if name == "" || strings.ContainsAny(name, "\r\n") || strings.HasPrefix(name, "#") {
+		return false, errf(ErrInvalid, "section name must be one non-empty line without a leading #")
 	}
 	if strings.TrimSpace(content) == "" {
 		return false, errf(ErrInvalid, "section body is empty")
