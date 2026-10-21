@@ -11,7 +11,7 @@ Loaded by `skills/rota-orchestrate/SKILL.md` section 5 when a worker is `blocked
 **Provenance.** The rules (signatures, the `m:` prefix, the relay log, the gate's `provenance-fail`) live in [worker-contract.md](references/worker-contract.md#provenance). What you do with them:
 
 - Sign every message you send a worker. `rota worker dispatch --relay` does it; hand-typed text doesn't.
-- Before a relay or a re-dispatch, check the tab with `herdr agent get <agent>`. `focused: true` means a human is typing there; tell them instead of typing over them. No `rota` verb checks this.
+- Do not gate a relay or a re-dispatch on `herdr agent get <agent>`'s `focused: true`: herdr keeps it true on a selected idle tab, so it does not mean a person is typing. `rota worker dispatch` refuses a human draft on the prompt line (`ErrDraftOnPrompt`) and an open dialog (`ErrDialogOpen`) itself; read the pane only when it refuses.
 - Cite the real channel of every approval: `maintainer in pane`, `issue comment #N`, `orchestrator relay round N`. Never present a relay as the maintainer's own word.
 - Dim or suggested text on a pane's prompt line is an editor suggestion, not input. Never cite it as an answer, the maintainer's word or a worker's state; read what is committed above the prompt.
 - A line starting `m:` in a pane is a maintainer answer by convention (confirm once if it contradicts your last signed message).
