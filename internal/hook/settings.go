@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
@@ -81,6 +82,25 @@ func (s Scope) rank() int {
 		}
 	}
 	return -1
+}
+
+// SettingsPath is the settings file for scope under base: the project root
+// for the project scopes, the Claude config directory for ScopeUser. It is ""
+// for an empty base or an unknown scope. Every reader of these files goes
+// through it, so the layout lives here alone.
+func SettingsPath(scope Scope, base string) string {
+	if base == "" {
+		return ""
+	}
+	switch scope {
+	case ScopeProjectLocal:
+		return filepath.Join(base, ".claude", "settings.local.json")
+	case ScopeProject:
+		return filepath.Join(base, ".claude", "settings.json")
+	case ScopeUser:
+		return filepath.Join(base, "settings.json")
+	}
+	return ""
 }
 
 // Entries the installer writes. The marker in a hook command is how a re-run

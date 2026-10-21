@@ -486,16 +486,17 @@ func hookGuard(c *Ctx, args []string) (res Result, _ error) {
 
 // settingsPaths maps each scope to its file. Project scopes are "" outside a
 // project root.
-func settingsPaths(root string, getenv func(string) string) map[hook.Scope]string {
-	home, _ := os.UserHomeDir()
+func settingsPaths(root, home string, getenv func(string) string) map[hook.Scope]string {
 	cfgDir := skills.ClaudeDir(getenv, home)
 	m := map[hook.Scope]string{}
-	if cfgDir != "" {
-		m[hook.ScopeUser] = filepath.Join(cfgDir, "settings.json")
-	}
-	if root != "" {
-		m[hook.ScopeProjectLocal] = filepath.Join(root, ".claude", "settings.local.json")
-		m[hook.ScopeProject] = filepath.Join(root, ".claude", "settings.json")
+	for _, sc := range hook.Scopes {
+		base := root
+		if sc == hook.ScopeUser {
+			base = cfgDir
+		}
+		if p := hook.SettingsPath(sc, base); p != "" {
+			m[sc] = p
+		}
 	}
 	return m
 }
@@ -511,7 +512,8 @@ func settingsTarget(c *Ctx, scopeFlag string) (hook.Scope, string, map[hook.Scop
 	if rerr != nil && scope != hook.ScopeUser {
 		return "", "", nil, rerr
 	}
-	paths := settingsPaths(root, c.deps().Getenv)
+	home, _ := c.deps().UserHomeDir()
+	paths := settingsPaths(root, home, c.deps().Getenv)
 	p := paths[scope]
 	if p == "" {
 		return "", "", nil, Resolution("no settings path for scope %s (CLAUDE_CONFIG_DIR and HOME unset)", scope)
