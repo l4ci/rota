@@ -896,32 +896,17 @@
       "hits": 0,
       "lastSeen": "2026-10-21"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::No assign, transfer or relay while a gate or train runs": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-21"
-    },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Replay a pending receipt with its id and the original arguments only": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-21"
-    },
-    "Rounds: Orchestration: Slate & issues::Directory Pointers serialize an issue against the whole directory": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-21"
-    },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Smoke runs against a branch need ROTA_BIN, not PATH": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-21"
-    },
     "Rounds: Orchestration: Reviews & verdicts::Record verdicts at review package data.head": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
     },
     "Process: Knowledge capture::Tool gotchas become issues; knowledge only for current blockers": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-21"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Until #1480: no assign or transfer while a gate runs": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
