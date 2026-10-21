@@ -78,7 +78,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 		session = "rota"
 	}
 	res.Base, res.Session = base, session
-	before, _ := os.ReadFile(RegistryPath(root))
+	before := ChangeCount(root)
 
 	if err := os.MkdirAll(filepath.Join(root, WorktreeRoot), 0o777); err != nil {
 		return res, fail(exitcode.ExitUnavailable, err.Error())
@@ -200,8 +200,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 		}
 	}
 
-	after, _ := os.ReadFile(RegistryPath(root))
-	res.Changed = string(before) != string(after)
+	res.Changed = ChangeCount(root) != before
 	reg, err := LoadRegistry(root)
 	if err != nil {
 		return res, err
@@ -237,7 +236,7 @@ func registerSlot(root, name, branch, worktree, base, session, handle string) er
 	def := jsonx.NewObject()
 	def.Set("session", session)
 	def.Set("slots", []any{})
-	return update(root, def, func(d *Doc) {
+	_, err := update(root, def, func(d *Doc) {
 		d.SetSession(session)
 		if _, ok := d.doc.Get("slots"); !ok {
 			d.doc.Set("slots", []any{})
@@ -249,6 +248,7 @@ func registerSlot(root, name, branch, worktree, base, session, handle string) er
 		}
 		d.SortSlots()
 	})
+	return err
 }
 
 // PoolList returns the registry for `pool list`; ok is false when there is none.
