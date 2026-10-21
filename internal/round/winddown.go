@@ -107,9 +107,10 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	}
 
 	// Buffered knowledge hits are gitignored, so the tree check cannot see
-	// them: name the one command that folds them into the tracked sidecar.
-	if pendingHitBuffers(root) {
-		res.Warnings = append(res.Warnings, "knowledge hits are buffered and not yet in the tracked sidecar: run `rota knowledge tier fold`, then commit the sidecar (never while a gate runs)")
+	// them: name the command that folds each scope's buffer into its tracked
+	// sidecar (the fold verb takes one scope at a time).
+	if cmds := pendingHitFolds(root); len(cmds) > 0 {
+		res.Warnings = append(res.Warnings, "knowledge hits are buffered and not yet in the tracked sidecar: run `"+strings.Join(cmds, "`, `")+"`, then commit the sidecar (never while a gate runs)")
 	}
 
 	// 1. Re-verify the base in the project root.
@@ -319,19 +320,27 @@ func tierSidecarPaths(porcelain string) []string {
 	return paths
 }
 
-// pendingHitBuffers reports whether any knowledge-hits.jsonl under root's
-// .rota holds buffered hits.
-func pendingHitBuffers(root string) bool {
-	for _, pat := range []string{
-		filepath.Join(root, ".rota", "knowledge-hits.jsonl"),
-		filepath.Join(root, ".rota", "knowledge", "*", "knowledge-hits.jsonl"),
-	} {
-		files, _ := filepath.Glob(pat)
-		for _, f := range files {
-			if fi, err := os.Stat(f); err == nil && fi.Size() > 0 {
-				return true
-			}
+// hitScopeName is the only sub-repo name echoed into the fold command.
+var hitScopeName = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
+// pendingHitFolds returns one `rota knowledge tier fold` command per scope
+// under root's .rota whose knowledge-hits.jsonl holds buffered hits: the bare
+// verb for the root scope, --repo <name> for an umbrella sub-repo.
+func pendingHitFolds(root string) []string {
+	nonEmpty := func(f string) bool {
+		fi, err := os.Stat(f)
+		return err == nil && fi.Size() > 0
+	}
+	var cmds []string
+	if nonEmpty(filepath.Join(root, ".rota", "knowledge-hits.jsonl")) {
+		cmds = append(cmds, "rota knowledge tier fold")
+	}
+	files, _ := filepath.Glob(filepath.Join(root, ".rota", "knowledge", "*", "knowledge-hits.jsonl"))
+	for _, f := range files {
+		name := filepath.Base(filepath.Dir(f))
+		if nonEmpty(f) && hitScopeName.MatchString(name) {
+			cmds = append(cmds, "rota --repo "+name+" knowledge tier fold")
 		}
 	}
-	return false
+	return cmds
 }
