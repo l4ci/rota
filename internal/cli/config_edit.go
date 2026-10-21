@@ -527,6 +527,10 @@ func (m configScreen) write(row int, raw string, local bool) (tui.Model, tui.Cmd
 	return m, tui.Cmd{Exec: func() error {
 		changed, note, err := store.Set(r.Key, raw, local)
 		if err != nil {
+			// A failed set may follow a rewrite that already hit disk (#1524).
+			if note != "" {
+				err = fmt.Errorf("%w; %s", err, note)
+			}
 			return err
 		}
 		if note != "" {
