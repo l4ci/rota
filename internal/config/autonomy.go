@@ -314,6 +314,8 @@ func raiseProjectStamp(path string) error {
 // stamp: a stamp never blesses a value it guards that nobody migrated. Any other
 // key, or a current stamp, is set alone. The result carries the rewrites in
 // Migration, since the stamp it raises would otherwise hide them from a later fill.
+// A failure after a rewrite returns the Migration beside the error (#1524): the
+// files changed, and the stamp is still old, so a later fill finds no auto.
 func autonomySet(root, key string, set func() (SetResult, error)) (SetResult, error) {
 	if key != "autonomy.level" || !autonomyStale(readObject(configPath(root))) {
 		return set()
@@ -321,15 +323,15 @@ func autonomySet(root, key string, set func() (SetResult, error)) (SetResult, er
 	var am AutonomyMigration
 	var err error
 	if am.LocalRewrite, err = migrateAutonomyLocal(root, true); err != nil {
-		return SetResult{}, err
+		return SetResult{Migration: am}, err
 	}
 	if am.Rewrite, err = migrateProjectAuto(configPath(root)); err != nil {
-		return SetResult{}, err
+		return SetResult{Migration: am}, err
 	}
 	res, err := set()
+	res.Migration = am
 	if err != nil {
 		return res, err
 	}
-	res.Migration = am
 	return res, raiseProjectStamp(configPath(root))
 }
