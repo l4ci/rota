@@ -364,3 +364,17 @@ func TestSetupCorruptGlobalSkipsOffer(t *testing.T) {
 		t.Fatalf("--save-global exit %d: %s", code, errOut)
 	}
 }
+
+// A pre-0.21 global auto (no stamp) is one-hop: setup --yes must not pin it as
+// a current project auto.
+func TestSetupYesMapsStaleGlobalAutoToRoundtrip(t *testing.T) {
+	gdir := isolateGlobal(t)
+	writeFile(t, config.GlobalPath(gdir), `{"autonomy":{"level":"auto"}}`)
+	dir := t.TempDir()
+	if code, _, errOut := setupRun(t, dir, "", false, "--yes"); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if got := cfgValue(t, dir, "autonomy.level"); got != "roundtrip" {
+		t.Errorf("project autonomy.level = %v, want roundtrip", got)
+	}
+}
