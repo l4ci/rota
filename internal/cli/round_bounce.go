@@ -98,7 +98,7 @@ func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 		if !ok || !verdict.AtHead(r, head) {
 			continue
 		}
-		if r.Verdict == verdict.Fail || verdict.HasBlocking(r.Findings) || itemFailed(r) {
+		if r.Failing() {
 			return nil
 		}
 		judged = true
@@ -108,17 +108,6 @@ func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 	}
 	return &Error{Exit: ExitRefused, Message: fmt.Sprintf("%s has no blocking finding in its current review verdicts: a bounce would relay only nits", issue),
 		Hint: "file the deferred findings with `rota verdict add --file-deferred`, or pass --force to bounce anyway"}
-}
-
-// itemFailed reports a per-item FAIL in r, a spec failure carried by items[]
-// alone, which the findings do not show.
-func itemFailed(r verdict.Record) bool {
-	for _, it := range r.Items {
-		if it.Verdict == verdict.Fail {
-			return true
-		}
-	}
-	return false
 }
 
 // recordBounce counts one bounce unless the item is already at max (0 = no
