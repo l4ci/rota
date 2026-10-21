@@ -171,6 +171,9 @@ func roundStatus(*flag.FlagSet) RunFunc {
 			if r.Draining {
 				cols = append(cols, "draining")
 			}
+			if r.NoLogin != "" {
+				cols = append(cols, "no login: "+r.NoLogin)
+			}
 			lines = append(lines, strings.Join(cols, "\t"))
 		}
 		for _, q := range rep.Queued {
@@ -274,6 +277,7 @@ func rowList(rows []round.Row) []any {
 		if r.Draining {
 			o.Set("draining", true)
 		}
+		setIf(o, "noLogin", r.NoLogin)
 		if ev := r.Event; ev != nil {
 			eo := jsonx.NewObject()
 			eo.Set("seq", ev.Seq)
