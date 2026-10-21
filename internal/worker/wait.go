@@ -217,7 +217,7 @@ wait:
 		if ctx.Err() != nil {
 			return stop()
 		}
-		noteRelayEcho(root, targets, e.Now())
+		e.noteRelayEcho(root, targets, e.Now())
 		rows, notes := e.promoteIdleWithPR(ctx, root, rows)
 		last = rows
 		for _, r := range rows {

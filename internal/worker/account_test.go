@@ -286,8 +286,8 @@ func TestSameConfigDirAndAccountOf(t *testing.T) {
 	if !SameConfigDir("", filepath.Join(home, ".claude")) || !SameConfigDir("~/.x/", filepath.Join(home, ".x")) || SameConfigDir("/a", "/b") {
 		t.Error("SameConfigDir")
 	}
-	dir := newProject(t, acctConfig)
-	if AccountOf(dir, "/acct/beta/") != "beta" || AccountOf(dir, "/elsewhere") != "" {
+	acc := &Accounts{Env: Env{Config: memConfig(t, acctConfig)}}
+	if acc.AccountOf("", "/acct/beta/") != "beta" || acc.AccountOf("", "/elsewhere") != "" {
 		t.Error("AccountOf")
 	}
 }

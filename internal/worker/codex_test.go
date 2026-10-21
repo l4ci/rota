@@ -142,10 +142,11 @@ const codexAcctCfg = `{"round":{"dispatch":"herdr","codexAccounts":[{"name":"a",
 // Configured accounts are spread over the codex slots, the slot keeps its own
 // while it is configured, and login is checked in the account's home.
 func TestCodexPreflightAccounts(t *testing.T) {
-	dir := newProject(t, codexAcctCfg)
+	dir := newProject(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 3, Base: "main"})
 	rig := &codexRig{loggedIn: true, installed: true}
 	e := rig.env(tmuxFake())
+	e.Config = memConfig(t, codexAcctCfg)
 	pick := func(slot string) harness.Setup {
 		t.Helper()
 		set, err := e.Preflight(bg, dir, harness.Codex, slot, "")
@@ -179,10 +180,12 @@ func TestCodexPreflightAccounts(t *testing.T) {
 }
 
 func TestCodexPreflightAccountNotLoggedIn(t *testing.T) {
-	dir := newProject(t, codexAcctCfg)
+	dir := newProject(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	rig := &codexRig{installed: true}
-	_, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", "")
+	e := rig.env(tmuxFake())
+	e.Config = memConfig(t, codexAcctCfg)
+	_, err := e.Preflight(bg, dir, harness.Codex, "w1", "")
 	we, _ := err.(*exitcode.Error)
 	if we == nil || we.Exit != exitcode.ExitUnavailable || we.Hint != "CODEX_HOME=/h/a codex login" || !strings.Contains(we.Message, "account 'a'") {
 		t.Fatalf("%v", err)
