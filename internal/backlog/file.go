@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/counter"
@@ -24,6 +25,9 @@ type File struct {
 	// belongs to the proof package, which imports backlog, so it is injected;
 	// Open wires it. Completing an item as done needs it.
 	CountProof func(text string) int
+	// Today stamps dated rows (comments); nil is time.Now. The cli injects
+	// Deps.Today so a pinned test clock reaches the write.
+	Today func() time.Time
 }
 
 // Name is "file".
