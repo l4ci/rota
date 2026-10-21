@@ -442,3 +442,89 @@ func bulletTitle(block string) string {
 	}
 	return ""
 }
+
+// RemoveResult reports Remove.
+type RemoveResult struct{ File string }
+
+// Remove deletes the bullet titled title under "## topic" in scope's
+// KNOWLEDGE.md and its tier entry. A bullet runs from its "- " line to the
+// next sibling bullet; the last bullet of a section keeps the blank line that
+// separates it from the next heading. It returns ErrNotFound when the topic or
+// the bullet is missing, leaving both files untouched.
+func (s Store) Remove(scope, topic, title string) (RemoveResult, error) {
+	km, err := s.KnowledgePath(scope)
+	if err != nil {
+		return RemoveResult{}, err
+	}
+	sidecar, err := s.TierPath(scope)
+	if err != nil {
+		return RemoveResult{}, err
+	}
+	res := RemoveResult{File: km}
+	err = lockFiles([]string{km}, func() error {
+		content, err := ReadFile(km)
+		if err != nil {
+			return err
+		}
+		st, en, ok := section.Find(content, topic)
+		if !ok {
+			return notFound("topic '%s' not found in %s", topic, km)
+		}
+		body := content[st:en]
+		var hits [][]int
+		for _, m := range bulletStart.FindAllStringSubmatchIndex(body, -1) {
+			if body[m[2]:m[3]] == title {
+				hits = append(hits, m)
+			}
+		}
+		switch {
+		case len(hits) == 0:
+			return notFound("bullet titled '%s' not found under '## %s' in %s", title, topic, km)
+		case len(hits) > 1:
+			return fmt.Errorf("%w: %d bullets titled '%s' under '## %s' in %s", ErrMultiMatch, len(hits), title, topic, km)
+		}
+		a, b := hits[0][0], bulletEnd(body, hits[0][0])
+		// A blank line on both sides collapses to one.
+		tail := content[en:]
+		if strings.HasSuffix(content[:st+a], "\n\n") {
+			if strings.HasPrefix(body[b:], "\n") {
+				b++
+			} else if b == len(body) && strings.HasPrefix(tail, "\n") {
+				tail = tail[1:]
+			}
+		}
+		// Buffered hits are keyed by this bullet: fold them before the write
+		// so a failed fold changes nothing and no later fold recreates the entry.
+		if _, err := s.FoldHits(scope); err != nil {
+			return err
+		}
+		next := content[:st] + body[:a] + body[b:] + tail
+		if err := writeText(km, next, fsio.WriteFileAtomic); err != nil {
+			return err
+		}
+		if !fileExists(sidecar) {
+			return nil
+		}
+		return Update(sidecar, func(sc *Sidecar) (bool, error) { return sc.Delete(topic, title), nil })
+	})
+	return res, err
+}
+
+// bulletEnd is the offset just past the bullet starting at a: its own line and
+// the indented lines that continue it, including their newlines. Prose or
+// blank lines after it are not part of it.
+func bulletEnd(body string, a int) int {
+	e := a
+	for first := true; e < len(body); first = false {
+		nl := strings.IndexByte(body[e:], '\n')
+		line, next := body[e:], len(body)
+		if nl >= 0 {
+			line, next = body[e:e+nl], e+nl+1
+		}
+		if !first && (line == "" || (line[0] != ' ' && line[0] != '\t')) {
+			break
+		}
+		e = next
+	}
+	return e
+}

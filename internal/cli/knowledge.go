@@ -21,6 +21,7 @@ func knowledgeCommands() *Command {
 		{Name: "add", Summary: "add a bullet under a topic", Repo: true, Verb: knAdd},
 		{Name: "amend", Summary: "append text to an existing bullet", Repo: true, Verb: knAmend},
 		{Name: "replace", Summary: "replace text inside one bullet", Repo: true, Verb: knReplace},
+		{Name: "rm", Summary: "delete one bullet and its tier entry", Repo: true, Verb: knRm},
 		{Name: "rename-topic", Summary: "rename a topic or move one bullet", Repo: true, Verb: knRename},
 		{Name: "hit", Summary: "register a consulted bullet", Repo: true, Verb: knHit},
 		{Name: "tier", Summary: "read and write bullet tiers", Subs: []*Command{
@@ -289,6 +290,28 @@ func knReplace(fs *flag.FlagSet) RunFunc {
 			return knFail(err)
 		}
 		return Result{Data: knObj("topic", *topic, "changed", r.Changed), Text: "replaced: " + r.File}, nil
+	}
+}
+
+func knRm(fs *flag.FlagSet) RunFunc {
+	topic := fs.String("topic", "", "the `topic` heading")
+	title := fs.String("title", "", "bullet `title`")
+	return func(c *Ctx, args []string) (Result, error) {
+		if err := knNoArgs(args); err != nil {
+			return Result{}, err
+		}
+		if err := knRequire(map[string]string{"topic": *topic, "title": *title}, "topic", "title"); err != nil {
+			return Result{}, err
+		}
+		st, scope, err := knStore(c)
+		if err != nil {
+			return Result{}, err
+		}
+		res, err := st.Remove(scope, *topic, *title)
+		if err != nil {
+			return knFail(err)
+		}
+		return Result{Data: knObj("topic", *topic, "title", *title, "changed", true), Text: fmt.Sprintf("removed: %s :: %s (%s)", *topic, *title, res.File)}, nil
 	}
 }
 
