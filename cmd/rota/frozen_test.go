@@ -57,6 +57,7 @@ func pinDay() {
 	if v := os.Getenv("ROTA_FROZEN_DAY"); v != "" {
 		if utc, local, ok := strings.Cut(v, ","); ok {
 			startDay, localDay = utc, local
+			startNow, _ = time.Parse(time.RFC3339, utc+"T23:59:59Z")
 		}
 	}
 }
@@ -340,10 +341,13 @@ func unionKeys(a, b map[string]string) []string {
 
 // ---- building a record -------------------------------------------------------
 
-// frozenEnv pins the day archive and stale measure age from; a scenario's own
-// ROTA_TEST_TODAY comes later and wins.
-func frozenEnv(env []string) []string {
-	return append([]string{"ROTA_TEST_TODAY=" + localDay}, env...)
+// frozenEnv pins the day archive and stale measure age from and the clock the
+// run stamps with (startNow, so it cannot cross UTC midnight mid-gate); a
+// scenario's own ROTA_TEST_TODAY or ROTA_TEST_NOW comes later and wins.
+func frozenEnv(env []string) []string { return frozenEnvAt(startNow, env) }
+
+func frozenEnvAt(now time.Time, env []string) []string {
+	return append([]string{"ROTA_TEST_TODAY=" + localDay, "ROTA_TEST_NOW=" + now.Format(time.RFC3339)}, env...)
 }
 
 var (
@@ -444,3 +448,20 @@ func TestFrozenIssues(t *testing.T)       { t.Parallel(); runFrozen(t, suiteIssu
 func TestFrozenItemIssue(t *testing.T)    { t.Parallel(); runFrozen(t, suiteItemIssue) }
 func TestFrozenUmbrella(t *testing.T)     { t.Parallel(); runFrozen(t, suiteUmbrella) }
 func TestFrozenUmbrellaFile(t *testing.T) { t.Parallel(); runFrozen(t, suiteUmbrellaFile) }
+
+// TestFrozenEnvPinsClockAcrossMidnight fakes a harness that started the minute
+// before UTC midnight: a child run after the wall clock rolled over must still
+// stamp the start day, or a gate crossing 00:00Z fails the date-stamped records.
+func TestFrozenEnvPinsClockAcrossMidnight(t *testing.T) {
+	t.Parallel()
+	start := time.Date(2001, 2, 3, 23, 59, 59, 0, time.UTC)
+	dir := copyTree(t, func() string { b, _ := fx{}.build(t); return b }())
+	env := frozenEnvAt(start, nil)
+	r := exec1e(t, dir, "", env, rotaBin, "--json", "status", "add", "feat/x", "--items", "B01")
+	if r.code != 0 {
+		t.Fatalf("exit = %d\nstdout: %s\nstderr: %s", r.code, r.stdout, r.stderr)
+	}
+	if want := `"startedAt": "2001-02-03T23:59:59Z"`; !strings.Contains(r.stdout, want) {
+		t.Errorf("child stamped the wall clock, want %s in:\n%s", want, r.stdout)
+	}
+}
