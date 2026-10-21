@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.20.0 — 2026-10-21
+
+It's a Plan becomes an issue source, the global config becomes a real runtime layer with its own XDG dirs, and pane detection stops misreading quoted text as a limit or logout.
+
+### New
+
+- It's a Plan as an issue source (#1100): connection and doctor check, read and write verbs, claims, assign and close on merge, and `rota migrate` from a file backlog.
+- The global config is a runtime layer under the project config (#1179), no longer only a seed for new projects. `rota config show/set/edit --global` and an inherit toggle in the config screen (#1180). `rota setup` offers to save its answers as global defaults (#1181). `ROTA_CONFIG_DIR` overrides the global config dir (#1186).
+- Decision items: research findings, grilling refusals and a decision log, taught to vision, brainstorm and spike (#967).
+- `/rota-docs` takes over docs maintenance from `/rota-ship --docs`, which is now a deprecated alias (#1098). `rota round accept` completes an architecture review that opens no PR (#1091).
+- Bare `rota` run in HOME is a launcher, and `init`/`setup` refuse to run there (#1183). Stub skill installs are the default (#1099).
+
+### Changed
+
+- XDG layout: the project registry moves to the state dir (#1184) and the secrets fallback file to the data dir, forced to 0600 (#1185, #1221). A symlinked legacy file is copied, and a non-file one is left alone (#1220, #1253, #1254). Doctor reports both dirs.
+- Round-only config keys move from `work.*` to `round.*`; `rota migrate config --apply` moves them, and `round start` uses exactly the configured slot count (#1097).
+- Worker slots with no `round.accounts` entry inherit the orchestrator's `CLAUDE_CONFIG_DIR`, and doctor warns on a mismatch (#1171). The account check reads macOS Keychain credentials when the credentials file is missing or expired (#1176).
+- A corrupt global config refuses every write with exit 70 and skips the save offer (#1180, #1223).
+- The overlap check compares an open PR's changed files and names directory pointers as the cause (#1094, #1170).
+- Refactors with no intended behaviour change: one body-file reader for the CLI (#1106), typed gate refusals (#1108), and single owners for merge-approval policy and escalation (#1105, #1263), review kinds and depth (#1230), worker env and config reads (#1225, #1228, #1229), the PASS-at-HEAD proof rule (#1149), the keepalive marker (#1150) and the stale-binary state (#1109).
+
+### Fixed
+
+- Pane classification: limit and logged-out phrases count only inside the harness dialog region, so a phrase quoted in a reply, diff or tool listing no longer marks a slot limited (#1212, #1246). Only "Login expired" and the bare "Not logged in" status line count as logged out (#1209, #1255). A footer with running shells or monitors reads as busy (#1156), and a relay clears an answered ROTA-BLOCKED (#1096).
+- Gate and round: the bounce cap holds under concurrent writes (#1226). A second gate on one PR is refused with the real cause (#1095), and a gate marker whose pid was reused is replaced (#1126). The gate waits for the forge PR head before failing on a SHA mismatch (#1168). A retried assign resumes under its existing claim id (#1172), assign adopts the open PR of a done slot (#1090), and transfer and reconcile free a blocked slot whose PR merged (#1093).
+- Process ancestry falls back to `ps` where `/proc` is missing (#1167). Orphaned `.extract-*` dirs older than an hour are reaped (#1120). `Depends on` is read from the issue body only (#1139). `--file-deferred` no longer copies the finding title into AC-1 (#1092).
+- Smoke: a shard that dies without a summary is reported with its exit code and last output, and section 148 no longer dies silently (#1242). Worker wait tests no longer depend on wall-clock timing (#1266).
+- Knowledge: lessons from round 29.
+
+## Stats
+132 commits, 476 files changed, +14746 −3442 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.19.0...v0.20.0
+
 ## v0.19.0 — 2026-10-20
 
 OpenCode joins Claude and Codex as a worker kind, the gate runs an issue's Try it steps, and the merge train becomes the default when several reviewed PRs wait.
