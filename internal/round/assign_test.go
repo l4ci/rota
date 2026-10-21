@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/rotastate"
 	"os"
 	"path/filepath"
 	"slices"
@@ -184,6 +186,35 @@ func TestAssignRefusals(t *testing.T) {
 	}
 	if len(f.be.claims) != 0 || len(f.be.bstates) != 0 {
 		t.Fatalf("brief check comes before any marking: %+v", f.be.claims)
+	}
+}
+
+// A gate or train holding the land lock refuses assign (and transfer, below):
+// switching a slot worktree's branch would trip the gate's checkout guard.
+func holdLandLock(t *testing.T, root string, fn func()) {
+	t.Helper()
+	cd, err := rotastate.CommonDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fsio.Locked(rotastate.File(cd, "land"), 0, func() error { fn(); return nil }); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAssignRefusedWhileGateHoldsLandLock(t *testing.T) {
+	f := newAssignFixture(t)
+	holdLandLock(t, f.root, func() {
+		_, err := f.assign("12", "ben", nil)
+		if by := blockedBy(t, err); by != worker.GateRunning || !strings.Contains(err.Error(), "exits") {
+			t.Errorf("lock held: %v", err)
+		}
+		if len(f.be.claims) != 0 || len(f.be.bstates) != 0 || len(f.host.spawned) != 0 {
+			t.Errorf("a refused assign must touch nothing: %+v %+v %v", f.be.claims, f.be.bstates, f.host.spawned)
+		}
+	})
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatalf("lock released: %v", err)
 	}
 }
 

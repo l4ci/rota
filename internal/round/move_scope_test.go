@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // round.scopeOverlap reaches Transfer: the receiver's item clashes with dana's
@@ -38,4 +39,23 @@ func TestTransferScopeOverlapBlock(t *testing.T) {
 	if f.be.claims["12"] != "ben@1" || f.slot("ben").Task() != "12" {
 		t.Error("an overlap refusal changes nothing")
 	}
+}
+
+// A held land lock refuses Transfer before it moves a branch.
+func TestTransferRefusedWhileGateHoldsLandLock(t *testing.T) {
+	f := newMoveFx(t)
+	o := startOpts(roundcfg.ScopeMilestone, 100)
+	o.Slots = 3
+	if _, err := f.env.Start(bg, f.root, o); err != nil {
+		t.Fatal(err)
+	}
+	holdLandLock(t, f.root, func() {
+		_, err := f.transfer("12", "nia", nil)
+		if by := blockedBy(t, err); by != worker.GateRunning {
+			t.Errorf("lock held: %v", err)
+		}
+		if f.be.claims["12"] != "ben@1" || f.slot("ben").Task() != "12" {
+			t.Error("a gate-running refusal changes nothing")
+		}
+	})
 }
