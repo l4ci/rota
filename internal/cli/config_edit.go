@@ -197,25 +197,7 @@ func (s rootStore) Set(key, raw string, local bool) (bool, error) {
 // required key is written with it (config check wants it present), any other
 // key is removed.
 func (s rootStore) Reset(key string) error {
-	if _, err := config.Unset(s.root, key, config.LayerLocal); err != nil {
-		return notObjectInternal(err)
-	}
-	for _, k := range config.Keys {
-		if k.Name != key {
-			continue
-		}
-		if k.Required && !config.GlobalSupplies(s.env, key) {
-			b, err := jsonx.MarshalCompact(config.Default(k))
-			if err != nil {
-				return err
-			}
-			_, err = config.Set(s.root, key, string(b))
-			return notObjectInternal(err)
-		}
-		_, err := config.Unset(s.root, key, config.LayerProject)
-		return notObjectInternal(err)
-	}
-	return config.Validate(key, "")
+	return notObjectInternal(config.Reset(s.root, s.env, key))
 }
 
 // globalStore is the store on the global config under dir.
