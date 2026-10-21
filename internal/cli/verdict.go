@@ -154,6 +154,14 @@ func bindVerdictHead(c *Ctx, t verdictBranch, sha string) (string, error) {
 		return "", err
 	}
 	if full != tip {
+		if pushed {
+			if behind, err := r.Ok(ctx, "merge-base", "--is-ancestor", tip, full); err != nil {
+				return "", gitErr(err)
+			} else if behind {
+				return "", Refused("--sha %s is ahead of %s (%s): the remote-tracking ref is behind", sha, target, tip[:7]).
+					WithHint("git fetch " + remote + ", then retry")
+			}
+		}
 		extra, _ := reviewGit(ctx, t.dir, "log", "--format=%h %s", full+".."+tip)
 		msg := fmt.Sprintf("--sha %s is not the head of %s (%s)", sha, target, tip[:7])
 		if extra = strings.TrimSpace(extra); extra != "" {
