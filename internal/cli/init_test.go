@@ -336,3 +336,31 @@ func TestInitWarnsEmptyTestFull(t *testing.T) {
 		t.Errorf("noVerify with test.full set = %v", nv)
 	}
 }
+
+// A pre-release binary (VERSION=0.20.0) must not lower a stamp already at the
+// autonomy gate (0.21.0), or a deliberate auto set afterwards is rewritten to
+// roundtrip by the next init (#1489).
+func TestInitKeepsStampAtOrAboveAutonomyGate(t *testing.T) {
+	deps := testDeps()
+	deps.InstalledVersion = func() string { return "0.20.0" }
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".rota", "config.json")
+	os.MkdirAll(filepath.Join(dir, ".rota"), 0o755)
+	os.WriteFile(cfgPath, []byte(`{"rota":{"version":"0.21.0"},"autonomy":{"level":"auto"}}`), 0o644)
+	for i := 0; i < 2; i++ {
+		code, env, _ := initRunWith(t, deps, dir, "init", "--no-blocks")
+		if code != 0 {
+			t.Fatal(env)
+		}
+		if v, _ := initData(env).Get("versionStamped"); v != "" {
+			t.Errorf("run %d stamped %v, want none", i, v)
+		}
+		cfg := readCfg(t, cfgPath)
+		if got, _ := lookupDotted(cfg, "rota.version"); got != "0.21.0" {
+			t.Errorf("run %d rota.version = %v, want 0.21.0", i, got)
+		}
+		if got, _ := lookupDotted(cfg, "autonomy.level"); got != "auto" {
+			t.Errorf("run %d autonomy.level = %v, want auto", i, got)
+		}
+	}
+}

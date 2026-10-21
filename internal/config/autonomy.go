@@ -75,6 +75,14 @@ func autonomyStale(cfg *jsonx.Object) bool {
 	return versionBefore(s, AutonomyLevelsSince)
 }
 
+// LowersGatedStamp is whether stamping installed over stamped would lower a
+// stamp already at or above AutonomyLevelsSince. A pre-release binary
+// (VERSION below the gate) must not do that: the lowered stamp makes the next
+// fill rewrite a deliberate auto to roundtrip (#1489).
+func LowersGatedStamp(stamped, installed string) bool {
+	return stamped != "" && !versionBefore(stamped, AutonomyLevelsSince) && versionBefore(installed, stamped)
+}
+
 // versionBefore is whether the numeric core of v (a leading "v" and any
 // "-pre" or "+build" suffix dropped) sorts before min. An unparseable v does.
 func versionBefore(v, min string) bool {
