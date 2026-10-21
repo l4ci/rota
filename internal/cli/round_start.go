@@ -52,6 +52,9 @@ func candidateList(cs []round.Candidate) []any {
 		if c.OpenPR != 0 {
 			o.Set("openPr", c.OpenPR)
 		}
+		if c.DependsOnPR != 0 {
+			o.Set("dependsOnPr", c.DependsOnPR)
+		}
 		o.Set("checks", checkList(c.Checks))
 		if len(c.Overlaps) > 0 {
 			o.Set("overlaps", overlapList(c.Overlaps))
@@ -67,6 +70,8 @@ func candidateLines(cs []round.Candidate) []string {
 		state := "ready"
 		if c.OpenPR != 0 {
 			state = fmt.Sprintf("not ready: open PR #%d", c.OpenPR)
+		} else if c.DependsOnPR != 0 {
+			state = fmt.Sprintf("not ready: depends on PR #%d", c.DependsOnPR)
 		} else if !c.Ready() {
 			var bad []string
 			for _, ch := range c.Checks {
