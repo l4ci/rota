@@ -177,3 +177,22 @@ func TestIntOrFallsBackToSchemaDefault(t *testing.T) {
 		t.Errorf("nil cfg: IntOr = %d, want 20", got)
 	}
 }
+
+func TestIntOrClampsAboveMaxAndRejectsFloats(t *testing.T) {
+	cases := []struct {
+		name     string
+		cfg      string
+		key      string
+		min, max int
+		want     int
+	}{
+		{"above max", `{"doctor":{"minFreeDiskPercent":101}}`, "doctor.minFreeDiskPercent", 0, 100, 10},
+		{"at max", `{"doctor":{"minFreeDiskPercent":100}}`, "doctor.minFreeDiskPercent", 0, 100, 100},
+		{"float", `{"map":{"softcap_subsystems":2.5}}`, "map.softcap_subsystems", 1, MaxInt, 20},
+	}
+	for _, tc := range cases {
+		if got := IntOr(decode(t, tc.cfg), tc.key, tc.min, tc.max); got != tc.want {
+			t.Errorf("%s: IntOr = %d, want %d", tc.name, got, tc.want)
+		}
+	}
+}
