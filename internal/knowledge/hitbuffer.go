@@ -32,25 +32,30 @@ func (s Store) HitsPath(scope string) (string, error) {
 	return filepath.Join(s.dir(scope), HitsFile), nil
 }
 
-// readPending returns the buffered hits in order. A missing file is empty and
-// a line that does not parse is skipped, so one torn append loses one hit.
-func readPending(path string) ([]pendingHit, error) {
+// readPending returns the buffered hits in order and how many lines it
+// skipped. A missing file is empty and a non-blank line that does not parse is
+// skipped, so one torn append loses one hit; the count lets the fold say so.
+func readPending(path string) (hits []pendingHit, skipped int, err error) {
 	raw, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return nil, nil
+		return nil, 0, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	var out []pendingHit
 	sc := bufio.NewScanner(bytes.NewReader(raw))
 	for sc.Scan() {
+		if len(bytes.TrimSpace(sc.Bytes())) == 0 {
+			continue
+		}
 		var h pendingHit
 		if json.Unmarshal(sc.Bytes(), &h) == nil && h.Topic != "" && h.Title != "" {
-			out = append(out, h)
+			hits = append(hits, h)
+		} else {
+			skipped++
 		}
 	}
-	return out, sc.Err()
+	return hits, skipped, sc.Err()
 }
 
 func appendPending(path string, h pendingHit) error {
@@ -145,13 +150,13 @@ func unfoldedHits(sc *Sidecar, hp string) ([]pendingHit, error) {
 		if filepath.Base(c) == foldedMark(sc) {
 			continue
 		}
-		hits, err := readPending(c)
+		hits, _, err := readPending(c)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, hits...)
 	}
-	live, err := readPending(hp)
+	live, _, err := readPending(hp)
 	if err != nil {
 		return nil, err
 	}
@@ -184,6 +189,7 @@ func (s Store) effective(scope string) (*Sidecar, error) {
 type FoldResult struct {
 	Hits    int  // buffered hits applied
 	Changed bool // the tracked sidecar was rewritten
+	Skipped int  // buffer lines dropped as malformed
 }
 
 // claim renames the live buffer to a uniquely named claimed file, so hits
@@ -254,10 +260,11 @@ func (s Store) FoldHits(scope string) (FoldResult, error) {
 		th := s.PromoteThreshold()
 		for _, c := range pending {
 			name := filepath.Base(c)
-			hits, err := readPending(c)
+			hits, skipped, err := readPending(c)
 			if err != nil {
 				return err
 			}
+			res.Skipped += skipped
 			var applied int
 			if err := Update(p, func(sc *Sidecar) (bool, error) {
 				for _, h := range hits {
@@ -270,7 +277,8 @@ func (s Store) FoldHits(scope string) (FoldResult, error) {
 				return err
 			}
 			if applied > 0 {
-				res = FoldResult{Hits: res.Hits + applied, Changed: true}
+				res.Hits += applied
+				res.Changed = true
 			}
 			if err := os.Remove(c); err != nil {
 				return err
