@@ -676,3 +676,16 @@ func TestLimitPhraseInEchoedBriefIsIgnored(t *testing.T) {
 		t.Error("a phrase after the worker's reply marker was dropped")
 	}
 }
+
+func TestLimitPhraseQuotedInReplyIsIgnored(t *testing.T) {
+	// A diff the worker printed inside its reply quotes the phrase; the
+	// harness wrote none of it (#1246).
+	quoted := "● Here is the change:\n\n  - old: \"" + strings.TrimSpace(limitMsg) + "\"\n  + new: ok\n\n❯ \n"
+	if _, _, ok := findLimit("", quoted, ""); ok {
+		t.Error("a limit phrase quoted inside a reply was read as a limit")
+	}
+	dialog := "● done\n\n" + limitMsg + "\n❯ \n"
+	if _, _, ok := findLimit("", dialog, ""); !ok {
+		t.Error("a limit dialog below the reply was dropped")
+	}
+}
