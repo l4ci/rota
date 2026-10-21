@@ -415,6 +415,13 @@ def prose_rules():
     r += [has(D, "DECISIONS.md", "must cite the .rota/DECISIONS.md worktree-isolation rule"),
           lacks(D, r"TBD|TODO|FIXME|XXX", "contains placeholders", True, re.I),
           has(D, "Skills MUST consult this file", "missing the rule that skills consult the dispatch discipline")]
+    # reviewer brief: export with git archive, never touch the repo's worktrees (#1293)
+    RB = "skills/rota-review/reviewer-briefs.md"
+    r += [has(RB, "archive <ref> | tar -x -C <scratch>", "reviewer brief must export the branch with git archive | tar"),
+          has(RB, "Never run `git worktree add`, `git worktree remove`, `git checkout` or `git switch` in the repo",
+              "reviewer brief must forbid worktree add/remove, checkout and switch in the repo"),
+          has(RB, "If the extract fails, stop and report it. No fallback", "reviewer brief must stop on a failed extract"),
+          has(RB, "set `ROTA_BIN`", "reviewer brief must say to set ROTA_BIN for smoke sections")]
     # --retro reads the session transcript for evidence
     RR = "skills/references/learn-rare-modes.md"
     r += [has(RR, "~/.codex/sessions/", "--retro Step 1 must locate the Codex transcript"),
