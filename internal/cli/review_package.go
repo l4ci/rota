@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/git"
 )
 
 // reviewPackageDir is where review packages land, relative to the project root (gitignored).
@@ -33,7 +32,7 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 			t.Base = *baseFlag
 		}
 		ctx := c.Context()
-		r := git.Repo{Dir: t.Dir}
+		r := c.deps().Repo(t.Dir)
 		for _, ref := range []string{t.Base, *sinceFlag} {
 			if ref == "" {
 				continue
@@ -49,7 +48,7 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 		// head is the sha every read below uses and the one reported: the sha a
 		// verdict on this review binds to (verdict add --sha), even if the branch
 		// moves while the package is written.
-		head, err := reviewGit(ctx, t.Dir, "rev-parse", "--verify", t.Branch+"^{commit}")
+		head, err := reviewGit(ctx, c.deps(), t.Dir, "rev-parse", "--verify", t.Branch+"^{commit}")
 		if err != nil {
 			return Result{}, err
 		}
@@ -68,33 +67,33 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 			logSpan = from + ".." + head
 			diffSpan = logSpan
 		} else {
-			if _, err := reviewGit(ctx, t.Dir, "merge-base", t.Base, head); err != nil {
+			if _, err := reviewGit(ctx, c.deps(), t.Dir, "merge-base", t.Base, head); err != nil {
 				return Result{}, Resolution("'%s' and base '%s' share no history", t.Branch, t.Base)
 			}
 			from = t.Base
 			logSpan = from + ".." + head
 			diffSpan = t.Base + "..." + head
 		}
-		count, err := reviewGit(ctx, t.Dir, "rev-list", "--count", logSpan)
+		count, err := reviewGit(ctx, c.deps(), t.Dir, "rev-list", "--count", logSpan)
 		if err != nil {
 			return Result{}, err
 		}
 		if strings.TrimSpace(count) == "0" {
 			return Result{}, Resolution("no commits in %s", logSpan)
 		}
-		commits, err := reviewGit(ctx, t.Dir, "log", "--no-merges", "--format=%h %s", logSpan)
+		commits, err := reviewGit(ctx, c.deps(), t.Dir, "log", "--no-merges", "--format=%h %s", logSpan)
 		if err != nil {
 			return Result{}, err
 		}
-		stat, err := reviewGit(ctx, t.Dir, "diff", "--stat", diffSpan)
+		stat, err := reviewGit(ctx, c.deps(), t.Dir, "diff", "--stat", diffSpan)
 		if err != nil {
 			return Result{}, err
 		}
-		diff, err := reviewGit(ctx, t.Dir, "diff", reviewPackageContext, diffSpan)
+		diff, err := reviewGit(ctx, c.deps(), t.Dir, "diff", reviewPackageContext, diffSpan)
 		if err != nil {
 			return Result{}, err
 		}
-		paths, err := git.Repo{Dir: t.Dir}.ChangedPaths(ctx, diffSpan)
+		paths, err := c.deps().Repo(t.Dir).ChangedPaths(ctx, diffSpan)
 		if err != nil {
 			return Result{}, diffErr(err)
 		}
@@ -119,7 +118,7 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 
 // reviewIsAncestor reports whether ancestor is reachable from ref.
 func reviewIsAncestor(c *Ctx, dir, ancestor, ref string) (bool, error) {
-	res, err := git.Repo{Dir: dir}.Run(c.Context(), "merge-base", "--is-ancestor", ancestor, ref)
+	res, err := c.deps().Repo(dir).Run(c.Context(), "merge-base", "--is-ancestor", ancestor, ref)
 	if err != nil {
 		return false, gitErr(err)
 	}

@@ -8,7 +8,7 @@ import (
 )
 
 // The helpers below take a Runner, not a Repo, so a layer that fakes git (the
-// gate, the round env) keeps its seam. Repo's methods run them on Exec.
+// gate, the round env) keeps its seam. Repo's methods run them on its runner.
 
 // ExitError is a git call that ran and exited non-zero. Callers map it to
 // their own exit class and message; Stderr is what git said.
@@ -96,17 +96,17 @@ func CountLines(numstat string) int {
 	return total
 }
 
-// RemoteBase is the package function on Exec in r.Dir.
+// RemoteBase is the package function on r's runner in r.Dir.
 func (r Repo) RemoteBase(ctx context.Context, base string) string {
-	return RemoteBase(ctx, Exec, r.Dir, base)
+	return RemoteBase(ctx, r.runner(), r.Dir, base)
 }
 
-// ChangedPaths is the package function on Exec in r.Dir.
+// ChangedPaths is the package function on r's runner in r.Dir.
 func (r Repo) ChangedPaths(ctx context.Context, span string) ([]string, error) {
-	return ChangedPaths(ctx, Exec, r.Dir, span)
+	return ChangedPaths(ctx, r.runner(), r.Dir, span)
 }
 
-// ChangedLines is the package function on Exec in r.Dir.
+// ChangedLines is the package function on r's runner in r.Dir.
 func (r Repo) ChangedLines(ctx context.Context, span string) (int, error) {
-	return ChangedLines(ctx, Exec, r.Dir, span)
+	return ChangedLines(ctx, r.runner(), r.Dir, span)
 }

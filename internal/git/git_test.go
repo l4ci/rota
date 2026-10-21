@@ -26,11 +26,11 @@ func newRepo(t *testing.T) string {
 
 func TestRunMapsExitCodeToResult(t *testing.T) {
 	dir := newRepo(t)
-	res, err := Repo{dir}.Run(context.Background(), "rev-parse", "--verify", "-q", "nope")
+	res, err := Repo{Dir: dir}.Run(context.Background(), "rev-parse", "--verify", "-q", "nope")
 	if err != nil || res.ExitCode == 0 {
 		t.Fatalf("got %+v, %v; want non-zero Result and nil error", res, err)
 	}
-	res, err = Repo{dir}.Run(context.Background(), "rev-parse", "--git-dir")
+	res, err = Repo{Dir: dir}.Run(context.Background(), "rev-parse", "--git-dir")
 	if err != nil || res.ExitCode != 0 || strings.TrimSpace(res.Stdout) != ".git" {
 		t.Fatalf("got %+v, %v", res, err)
 	}
@@ -63,7 +63,7 @@ func TestRunTimeout(t *testing.T) {
 func TestRunForcesCLocale(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LC_ALL", "de_DE.UTF-8")
-	res, err := Repo{dir}.Run(context.Background(), "status")
+	res, err := Repo{Dir: dir}.Run(context.Background(), "status")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestRunForcesCLocale(t *testing.T) {
 func TestQueries(t *testing.T) {
 	ctx := context.Background()
 	dir := newRepo(t)
-	r := Repo{dir}
+	r := Repo{Dir: dir}
 
 	if got, ok, err := r.CommonDir(ctx); err != nil || !ok || got != filepath.Join(dir, ".git") {
 		t.Fatalf("CommonDir = %q, %v, %v", got, ok, err)
@@ -104,7 +104,7 @@ func TestCommonDirOfLinkedWorktree(t *testing.T) {
 	dir := newRepo(t)
 	wt := filepath.Join(t.TempDir(), "wt")
 	mustGit(t, dir, "worktree", "add", "-q", "-b", "side", wt)
-	got, ok, err := Repo{wt}.CommonDir(context.Background())
+	got, ok, err := Repo{Dir: wt}.CommonDir(context.Background())
 	if err != nil || !ok || got != filepath.Join(dir, ".git") {
 		t.Fatalf("CommonDir = %q, %v, %v; want %s", got, ok, err, filepath.Join(dir, ".git"))
 	}
@@ -112,7 +112,7 @@ func TestCommonDirOfLinkedWorktree(t *testing.T) {
 
 func TestQueriesOutsideRepo(t *testing.T) {
 	ctx := context.Background()
-	r := Repo{t.TempDir()}
+	r := Repo{Dir: t.TempDir()}
 	if _, ok, err := r.CommonDir(ctx); ok || err != nil {
 		t.Fatalf("CommonDir ok=%v err=%v", ok, err)
 	}

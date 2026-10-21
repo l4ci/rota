@@ -39,7 +39,7 @@ func shipCommands() *Command {
 
 // shipGit runs git in dir; a failure to run it is mapped onto the exit table.
 func shipGit(c *Ctx, dir string, args ...string) (git.Result, error) {
-	res, err := git.Repo{Dir: dir}.Run(c.Context(), args...)
+	res, err := c.deps().Repo(dir).Run(c.Context(), args...)
 	return res, gitErr(err)
 }
 
@@ -165,7 +165,7 @@ func shipExistingBranch(c *Ctx, branch string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	ok, err := git.Repo{Dir: dir}.Verify(c.Context(), branch+"^{commit}")
+	ok, err := c.deps().Repo(dir).Verify(c.Context(), branch+"^{commit}")
 	if err != nil {
 		return "", gitErr(err)
 	}
@@ -177,7 +177,7 @@ func shipExistingBranch(c *Ctx, branch string) (string, error) {
 
 // shipBase is the base branch of dir; none resolving is exit 3.
 func shipBase(c *Ctx, dir string) (string, error) {
-	base, ok, err := resolveBase(c.Context(), dir)
+	base, ok, err := resolveBase(c.Context(), c.deps(), dir)
 	if err != nil {
 		return "", err
 	}
@@ -381,7 +381,7 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 		g := shipGitRunner{c, dir}
 		sha, ref, err := ship.MergeBranch(ship.MergePorts{
 			Git:     g,
-			Recover: land.RecoveryGit(c.Context(), git.Exec, dir),
+			Recover: land.RecoveryGit(c.Context(), c.deps().Git, dir),
 			Verdict: shipVerdict(c, dir, shipRoot(dir)).Block,
 			Approve: func() (*exitcode.Refusal, error) {
 				files := func() ([]string, error) {
@@ -504,7 +504,7 @@ func shipUndo(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		ctx := c.Context()
-		base, ok, err := resolveBase(ctx, dir)
+		base, ok, err := resolveBase(ctx, c.deps(), dir)
 		if err != nil {
 			return Result{}, err
 		}
@@ -517,7 +517,7 @@ func shipUndo(fs *flag.FlagSet) RunFunc {
 		} else if res.ExitCode == 0 {
 			cur = shipLine(res.Stdout)
 		}
-		dirty, _, err := git.Repo{Dir: dir}.Dirty(ctx)
+		dirty, _, err := c.deps().Repo(dir).Dirty(ctx)
 		if err != nil {
 			return Result{}, gitErr(err)
 		}

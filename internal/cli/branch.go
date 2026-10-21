@@ -46,7 +46,7 @@ func resolveBranch(c *Ctx, args []string) (branchTarget, error) {
 		t.Dir = cwd
 	}
 	ctx := c.Context()
-	r := git.Repo{Dir: t.Dir}
+	r := c.deps().Repo(t.Dir)
 	if len(args) == 1 && args[0] != "" {
 		t.Branch = args[0]
 	} else {
@@ -57,7 +57,7 @@ func resolveBranch(c *Ctx, args []string) (branchTarget, error) {
 			return branchTarget{}, Resolution("no branch given and HEAD is not on a branch")
 		}
 	}
-	base, ok, err := resolveBase(ctx, t.Dir)
+	base, ok, err := resolveBase(ctx, c.deps(), t.Dir)
 	if err != nil {
 		return branchTarget{}, err
 	}

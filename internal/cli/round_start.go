@@ -213,7 +213,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			d.Set("slate", strs(st.Slate))
 		}
 		d.Set("candidates", candidateList(cands))
-		notePath := handoffFile(root, cfg)
+		notePath := handoffFile(c.deps(), root, cfg)
 		note, noteWarn := hook.ReadOrchestratorNote(notePath, *consume)
 		if noteWarn != "" {
 			c.Warn("%s", noteWarn)
