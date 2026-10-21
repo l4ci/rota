@@ -1001,6 +1001,12 @@ func CoveredDepth(have []string, hasSpec bool) config.ReviewDepth {
 	return config.DepthNone
 }
 
+// DepthRose reports whether to ranks above from, both known depths.
+func DepthRose(from, to config.ReviewDepth) bool {
+	rank := map[config.ReviewDepth]int{config.DepthNone: 0, config.DepthLight: 1, config.DepthFull: 2}
+	return from != "" && rank[to] > rank[from]
+}
+
 // stepReviewDepth applies ship.review: it resolves the depth for this branch
 // from the diff size against the base and the labels of the slot's issue, notes
 // it, and refuses a branch that lacks the recorded verdicts that depth needs.

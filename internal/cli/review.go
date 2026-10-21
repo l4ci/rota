@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -467,7 +468,22 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		}
 		depth := res.Depth
 		data := gitObj("branch", t.Branch, "base", t.Base, "depth", string(depth), "signal", res.Signal, "why", why, "changedLines", res.Changed, "labels", res.Labels)
-		return Result{Data: data, Text: fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", t.Branch, depth, why)}, nil
+		text := fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", t.Branch, depth, why)
+		// The depth can rise after the review ran (a bounce fix outside the
+		// issue's files); the newest review set on record is the old depth.
+		if root, err := backlogScope(c); err == nil {
+			bare, _, _ := splitRemote(c, t.Dir, t.Branch)
+			if last := verdict.LastReviewSet(root, bare); len(last) > 0 {
+				_, hasSpec := worker.BranchIssue(t.Branch)
+				if old := worker.CoveredDepth(last, hasSpec); worker.DepthRose(old, depth) {
+					note := fmt.Sprintf("review depth %s -> %s (%s): record the missing review verdict before gating", old, depth, why)
+					data.Set("previousDepth", string(old))
+					data.Set("depthNote", note)
+					text += "\n" + note
+				}
+			}
+		}
+		return Result{Data: data, Text: text}, nil
 	}
 }
 
