@@ -113,7 +113,8 @@ func redactRecord(r Record) Record {
 }
 
 // redactArgs redacts each argument, and the value argument that follows a
-// secret-named flag given without "=" (the shape Redact cannot see one string at a time).
+// secret-named flag given without "=" (the shape Redact cannot see one string at a time),
+// even when that value starts with "-".
 func redactArgs(args []string, e Env) []string {
 	if args == nil {
 		return nil
@@ -121,18 +122,24 @@ func redactArgs(args []string, e Env) []string {
 	out := make([]string, len(args))
 	hide := false
 	for i, a := range args {
-		switch {
-		case hide && !strings.HasPrefix(a, "-"):
+		if hide {
 			out[i] = "<redacted>"
-		default:
-			out[i] = Redact(a, e)
+			// A secret flag swallowed as a value still takes the next argument.
+			hide = isSecretFlagArg(a)
+			continue
 		}
-		hide = strings.HasPrefix(a, "-") && !strings.Contains(a, "=") && reSecretFlag.MatchString(a)
+		out[i] = Redact(a, e)
+		hide = isSecretFlagArg(a)
 		if !hide && reSecretEnv.MatchString(a) {
 			hide = true
 		}
 	}
 	return out
+}
+
+// isSecretFlagArg reports whether a is a secret-named flag without an inline value.
+func isSecretFlagArg(a string) bool {
+	return strings.HasPrefix(a, "-") && !strings.Contains(a, "=") && reSecretFlag.MatchString(a)
 }
 
 func idNumber(id string) int {
@@ -247,11 +254,25 @@ var (
 	reTokens     = regexp.MustCompile(`github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|glpat-[A-Za-z0-9_-]{16,}|xox[abprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|lin_api_[A-Za-z0-9]{16,}|ATATT[A-Za-z0-9_=-]{16,}|npm_[A-Za-z0-9]{30,}|AIza[0-9A-Za-z_-]{30,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+`)
 	reAuth       = regexp.MustCompile(`(?i)\b(bearer|basic)\s+[A-Za-z0-9+/=._~-]+`)
 	reKeyValue   = regexp.MustCompile(`(?i)([\w.-]*(?:` + secretNames + `)[\w.-]*["']?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s"',;}]+)`)
-	reFlagValue  = regexp.MustCompile(`(?i)(--?` + secretFlagName + `\s+)("[^"]*"|'[^']*'|[^\s-]\S*)`)
+	reFlagValue  = regexp.MustCompile(`(?i)((?:--?` + secretFlagName + `\s+)+)("[^"]*"|'[^']*'|\S+)`)
 	reEnvValue   = regexp.MustCompile(`\b([A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Z0-9_]*)(\s+)(\S+)`)
 	reSecretFlag = regexp.MustCompile(`(?i)^--?` + secretFlagName + `$`)
 	reSecretEnv  = regexp.MustCompile(`^[A-Z][A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Z0-9_]*$`)
 )
+
+// redactFlagRun redacts the value of a secret flag. A secret flag that follows
+// another is that flag's value, so it is hidden too and the next token stays covered.
+func redactFlagRun(m string) string {
+	sub := reFlagValue.FindStringSubmatch(m)
+	flags := strings.Fields(sub[1])
+	var b strings.Builder
+	b.WriteString(flags[0] + " ")
+	for range flags[1:] {
+		b.WriteString("<redacted> ")
+	}
+	b.WriteString("<redacted>")
+	return b.String()
+}
 
 // publicHosts are never redacted: they identify no one.
 var publicHosts = map[string]bool{"github.com": true, "gitlab.com": true, "bitbucket.org": true}
@@ -366,7 +387,7 @@ func Redact(s string, e Env) string {
 	s = reAuthHeader.ReplaceAllString(s, "${1}<redacted>")
 	s = reAuth.ReplaceAllString(s, "${1} <redacted>")
 	s = reKeyValue.ReplaceAllString(s, "${1}<redacted>")
-	s = reFlagValue.ReplaceAllString(s, "${1}<redacted>")
+	s = reFlagValue.ReplaceAllStringFunc(s, redactFlagRun)
 	s = reEnvValue.ReplaceAllString(s, "${1}${2}<redacted>")
 	s = reEmail.ReplaceAllString(s, "<email>")
 	if host != "" && !publicHosts[strings.ToLower(host)] {
