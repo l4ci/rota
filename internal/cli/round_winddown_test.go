@@ -6,7 +6,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/l4ci/rota/internal/bugreport"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
 )
@@ -60,5 +62,40 @@ func TestWindDownPrintsWarningsOnError(t *testing.T) {
 	}
 	if !strings.Contains(se.String(), "rota knowledge tier fold") {
 		t.Errorf("buffered-hits warning dropped on error (exit %d):\n%s", code, se.String())
+	}
+}
+
+// The offer is one non-blocking line, printed only when open bug records exist.
+func TestWindDownOffersBugreports(t *testing.T) {
+	for _, records := range []int{0, 2} {
+		dir := workerProject(t, `{}`)
+		cd, err := rotastate.CommonDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		le := roundlease.DefaultEnv()
+		if _, _, _, err := le.Acquire(cd, dir, roundlease.Holder{PID: os.Getpid(), Start: 1}, 1); err != nil {
+			t.Fatal(err)
+		}
+		le.Alive = func(p int) bool { return p == os.Getpid() }
+		le.StartTime = func(p int) (uint64, bool) { return 1, p == os.Getpid() }
+		for i := 0; i < records; i++ {
+			if _, err := bugreport.Add(dir, bugreport.Record{Source: bugreport.SourceAgent, Summary: "mistake " + strconv.Itoa(i)}, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+		}
+		old, _ := os.Getwd()
+		os.Chdir(dir)
+		d := testDeps()
+		d.LeaseEnv = func() roundlease.Env { return le }
+		var so, se strings.Builder
+		code := mainWith(d, []string{"round", "wind-down", "--no-verify", "--holder-pid", strconv.Itoa(os.Getpid())}, strings.NewReader(""), &so, &se)
+		os.Chdir(old)
+		if code != 0 {
+			t.Fatalf("%d records: exit %d\n%s%s", records, code, so.String(), se.String())
+		}
+		if has := strings.Contains(so.String(), "/rota-bugreport"); has != (records > 0) {
+			t.Errorf("%d records: offer present=%v\n%s", records, has, so.String())
+		}
 	}
 }

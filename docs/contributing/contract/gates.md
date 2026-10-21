@@ -15,6 +15,7 @@ B1 (#54) moves the manual gates out of skill prose and into the verbs. Orchestra
 | `tag-push` | `release push` | the release tag (and branch) on the remote |
 | `release-publish` | `release publish` | a GitHub or GitLab release page |
 | `public-filing` | `tracker suggest-upstream` | a public issue on the hv-skills repo |
+| `bugreport-file` | `bugreport file` (#1175) | a public issue or comment on the rota repo |
 | `merge-approval` | `ship merge`, `ship pr-merge`, `worker gate` (only when `ship.mergeApproval` applies) | a merge into the base branch |
 | `debug-reset` | `debug reset` (B3) | a fresh failed-fix count for an item the Iron Law halted |
 | `pr-open` | skill only (`/rota-ship`) | a public PR or MR |
