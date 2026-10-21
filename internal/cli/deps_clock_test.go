@@ -2,9 +2,12 @@ package cli
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/l4ci/rota/internal/jsonx"
 )
 
 // One Deps clock and getenv reach the round env, the worker env and the
@@ -67,5 +70,32 @@ func TestRoundEnvClockAndGetenvDriveAccountMeters(t *testing.T) {
 	after := verdict(time.Date(2026, 10, 9, 10, 0, 0, 0, time.UTC))
 	if before == after || before != "cooling" {
 		t.Errorf("verdict before reset %q, after %q: want cooling then free", before, after)
+	}
+}
+
+// Deps' home and config seams reach the accounts: with no real HOME and no
+// config on disk, the accounts still resolve a ~/ configDir and list the
+// accounts the injected config names.
+func TestDepsHomeAndConfigReachWorkerAccounts(t *testing.T) {
+	t.Setenv("HOME", "")
+	root := t.TempDir()
+	d := defaultDeps()
+	d.UserHomeDir = func() (string, error) { return "/fake/home", nil }
+	d.Config = func(string) any {
+		cfg, err := jsonx.Decode([]byte(`{"round":{"accounts":[{"name":"a","configDir":"~/.claude-a"}]}}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg
+	}
+	acc := d.WorkerAccounts()
+	if h, _ := acc.Env.WithDefaults().Home(); h != "/fake/home" {
+		t.Errorf("accounts home = %q, want /fake/home", h)
+	}
+	if got := acc.Configured(root); len(got) != 1 {
+		t.Errorf("accounts configured = %v, want the one injected account", got)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".rota", "config.json")); err == nil {
+		t.Fatal("test root must have no on-disk config")
 	}
 }
