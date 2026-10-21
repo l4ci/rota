@@ -52,7 +52,7 @@ Field types use JSON names (`string`, `number`, `bool`, `object`, `[]string`). `
 | config | `show`, `set`, `check` (A4), `fill` (A9) | A4, A9 |
 | repo | `which`, `resolve`, `umbrella` | A4 |
 | id | `next` | A4 |
-| item | `create`, `show`, `claim`, `release`, `ready`, `state`, `comment add`, `comment list`, `note add`, `note show`, `note rm`, `field get`, `field set`, `field list`, `complete`, `reopen`, `rm`, `shipped` | A4 |
+| item | `create`, `show`, `claim`, `release`, `ready`, `state`, `comment add`, `comment list`, `note add`, `note show`, `note rm`, `field get`, `field set`, `section set`, `field list`, `complete`, `reopen`, `rm`, `shipped` | A4 |
 | backlog | `list`, `ids`, `milestones`, `drift`, `backfill`, `archive`, `stale` | A4 |
 | summary | `summary` | A4 |
 | issues | `list`, `label`, `imported`, `close`, `provider` | A4 |
