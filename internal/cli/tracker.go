@@ -55,7 +55,7 @@ func trCall(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		ctx := c.Context()
-		cl, err := tracker.NewCLI(ctx, trackerSettings(c), *provider, dir, c.deps().TrackerOptions...)
+		cl, err := tracker.NewCLI(ctx, trackerSettings(c), *provider, dir, c.deps().trackerBase()...)
 		if err != nil {
 			return Result{}, trackerErr(err)
 		}
@@ -118,7 +118,7 @@ func trSuggest(fs *flag.FlagSet) RunFunc {
 		}
 
 		ctx := c.Context()
-		cl, err := tracker.NewCLI(ctx, trackerSettings(c), "github", "", c.deps().TrackerOptions...)
+		cl, err := tracker.NewCLI(ctx, trackerSettings(c), "github", "", c.deps().trackerBase()...)
 		if err != nil {
 			return Result{}, trackerErr(err).WithHint(manual)
 		}

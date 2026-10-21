@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/tui"
 )
 
@@ -48,7 +49,7 @@ func configEdit(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
-			store = rootStore{root}
+			store = rootStore{root, c.deps().projectsEnv()}
 		}
 		rows, err := store.Rows()
 		if err != nil {
@@ -87,7 +88,7 @@ func configView(c *Ctx, res Result) (tui.Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newConfigScreen(rows, rootStore{root}, new([]string)), nil
+	return newConfigScreen(rows, rootStore{root, c.deps().projectsEnv()}, new([]string)), nil
 }
 
 // cfgRow is one key as the screen shows it, read from a `config show` entry.
@@ -153,7 +154,10 @@ type configStore interface {
 }
 
 // rootStore is the store on a project's .rota/.
-type rootStore struct{ root string }
+type rootStore struct {
+	root string
+	env  projects.Env // locates the global config a Reset may fall back to
+}
 
 func (s rootStore) Rows() ([]cfgRow, error) {
 	entries, err := config.Show(s.root, "", false)
@@ -200,7 +204,7 @@ func (s rootStore) Reset(key string) error {
 		if k.Name != key {
 			continue
 		}
-		if k.Required && !config.GlobalSupplies(key) {
+		if k.Required && !config.GlobalSupplies(s.env, key) {
 			b, err := jsonx.MarshalCompact(config.Default(k))
 			if err != nil {
 				return err

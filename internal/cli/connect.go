@@ -33,19 +33,9 @@ func (c *Ctx) connectEnv() (string, *connections.Secrets, error) {
 }
 
 func (d *Deps) connectEnv() (string, *connections.Secrets, error) {
-	dir, err := projects.Dir(d.projectsEnv())
+	dir, sec, err := connections.Machine(d.projectsEnv(), d.Keychain)
 	if err != nil {
 		return "", nil, &Error{Exit: ExitInternal, Message: err.Error()}
-	}
-	data, err := projects.DataDir(d.projectsEnv())
-	if err != nil {
-		return "", nil, &Error{Exit: ExitInternal, Message: err.Error()}
-	}
-	sec := &connections.Secrets{Getenv: d.Getenv, File: connections.FileStore(data, dir)}
-	if d.Keychain != nil {
-		if kc := d.Keychain(); kc != nil {
-			sec.Keychain = kc
-		}
 	}
 	return dir, sec, nil
 }
