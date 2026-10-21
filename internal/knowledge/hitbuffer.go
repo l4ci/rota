@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
 )
@@ -127,9 +128,26 @@ const foldedKey = "foldedBuffer"
 
 const claimedSuffix = ".folding"
 
-// claimedBuffers lists the buffers a fold claimed and has not yet removed.
+// claimedBuffers lists the buffers a fold claimed and has not yet removed. It
+// lists the directory and matches names as strings: a glob on the absolute
+// path would read [, * or ? in the repo path as a pattern and miss the buffer.
 func claimedBuffers(hp string) ([]string, error) {
-	return filepath.Glob(hp + ".*" + claimedSuffix)
+	dir, prefix := filepath.Dir(hp), filepath.Base(hp)+"."
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var out []string
+	for _, e := range entries {
+		n := e.Name()
+		if len(n) > len(prefix)+len(claimedSuffix) && strings.HasPrefix(n, prefix) && strings.HasSuffix(n, claimedSuffix) {
+			out = append(out, filepath.Join(dir, n))
+		}
+	}
+	return out, nil
 }
 
 func foldedMark(sc *Sidecar) string {
