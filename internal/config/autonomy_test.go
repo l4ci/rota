@@ -318,3 +318,32 @@ func TestStampNeverBlessesAnOldAuto(t *testing.T) {
 		t.Errorf("save-global copied a stale auto: %v", g["autonomy.level"])
 	}
 }
+
+// #1502: the global stamp is written under config.json's lock before the value,
+// so a stamp that fails leaves no auto on disk for a later fill to downgrade.
+func TestGlobalStampFailureLeavesNoAuto(t *testing.T) {
+	setters := map[string]func(dir string) error{
+		"set": func(dir string) error {
+			_, err := SetGlobal(dir, "autonomy.level", "auto")
+			return err
+		},
+		"merge": func(dir string) error {
+			_, err := MergeGlobal(dir, map[string]any{"autonomy.level": "auto"})
+			return err
+		},
+	}
+	for name, run := range setters {
+		gdir := t.TempDir()
+		t.Setenv("ROTA_CONFIG_DIR", gdir)
+		// A directory where the stamp file belongs makes the stamp write fail.
+		if err := os.Mkdir(filepath.Join(gdir, GlobalStampFile), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := run(gdir); err == nil {
+			t.Fatalf("%s: stamp failure was not reported", name)
+		}
+		if g, _ := LoadGlobal(gdir); g["autonomy.level"] == "auto" {
+			t.Errorf("%s: auto left on disk after the stamp failed", name)
+		}
+	}
+}

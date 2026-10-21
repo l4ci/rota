@@ -77,6 +77,21 @@ func LoadGlobal(dir string) (map[string]any, error) {
 	return vals, nil
 }
 
+// updateGlobal is a strict locked update of the global config under dir. With
+// stamp, mutate runs behind the stamp, written under the same lock before the
+// value: a post-split autonomy.level must never meet a stale stamp, or a
+// concurrent fill would rewrite it, and a failed stamp leaves the value unwritten (#1101, #1502).
+func updateGlobal(dir string, stamp bool, mutate func(any) (any, error)) error {
+	return fsio.UpdateJSONStrict(GlobalPath(dir), jsonx.NewObject(), func(doc any) (any, error) {
+		if stamp {
+			if err := stampGlobal(dir); err != nil {
+				return nil, err
+			}
+		}
+		return mutate(doc)
+	})
+}
+
 // MergeGlobal writes vals (dotted schema key to value) into the global config
 // under dir, keeping every other key already there. A global file that does
 // not parse is an error (fsio.ErrUnreadable) and is left as it is. Project-owned and
@@ -86,7 +101,8 @@ func MergeGlobal(dir string, vals map[string]any) ([]string, error) {
 		return nil, err
 	}
 	saved := []string{}
-	err := fsio.UpdateJSONStrict(GlobalPath(dir), jsonx.NewObject(), func(doc any) (any, error) {
+	_, stamp := vals["autonomy.level"]
+	err := updateGlobal(dir, stamp, func(doc any) (any, error) {
 		cfg, ok := doc.(*jsonx.Object)
 		if !ok {
 			return nil, ErrNotObject
@@ -100,10 +116,6 @@ func MergeGlobal(dir string, vals map[string]any) ([]string, error) {
 		}
 		return cfg, nil
 	})
-	if _, ok := vals["autonomy.level"]; ok && err == nil {
-		// A post-split value: stamp the global so fill keeps it (#1101).
-		err = stampGlobal(dir)
-	}
 	return saved, err
 }
 
@@ -152,12 +164,10 @@ func SetGlobal(dir, key, raw string) (SetResult, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return SetResult{}, err
 	}
-	res, err := setAt(GlobalPath(dir), ErrGlobalNotObject, key, raw, fsio.UpdateJSONStrict)
-	if err == nil && key == "autonomy.level" {
-		// A post-split value: stamp the global so fill keeps it (#1101).
-		err = stampGlobal(dir)
-	}
-	return res, err
+	return setAt(GlobalPath(dir), ErrGlobalNotObject, key, raw,
+		func(path string, def any, mutate func(any) (any, error)) error {
+			return updateGlobal(dir, key == "autonomy.level", mutate)
+		})
 }
 
 // UnsetGlobal removes key from the global config under dir, so projects fall
