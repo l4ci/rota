@@ -93,6 +93,19 @@ func TestGitHubEditErrorsWhenTheChangeIsNotThere(t *testing.T) {
 	}
 }
 
+// TestGitHubEditLabelReadBackIgnoresCase: GitHub label names are
+// case-insensitive, so a label that landed as "Bug" satisfies a request for
+// "bug", and a removed "P1" is gone even when asked as "p1".
+func TestGitHubEditLabelReadBackIgnoresCase(t *testing.T) {
+	r := &editRig{apply: true,
+		issue:  `{"title":"t","body":"b","labels":[{"name":"P1"}],"milestone":null}`,
+		patchd: `{"title":"t","body":"b","labels":[{"name":"Bug"}],"milestone":null}`}
+	err := r.adapter(t).Edit(context.Background(), NumKey(7), IssueEdit{AddLabels: []string{"bug"}, RemoveLabels: []string{"p1"}})
+	if err != nil {
+		t.Fatalf("got %v, want the read-back to match case-insensitively", err)
+	}
+}
+
 func TestGitHubEditUnknownMilestoneIsNotFound(t *testing.T) {
 	r := &editRig{issue: `{}`}
 	err := r.adapter(t).Edit(context.Background(), NumKey(7), IssueEdit{Milestone: "nope"})
