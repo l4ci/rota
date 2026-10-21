@@ -201,6 +201,21 @@ func TestInternalErrorsAndPanicsAreRecorded(t *testing.T) {
 	}
 }
 
+func TestRecordedArgsDropGlobalFlags(t *testing.T) {
+	dir := trProject(t, "{}")
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	var so, se bytes.Buffer
+	code := run(testTree(), recordingDeps(), []string{"--json", "-C", dir, "fail", "plain", "--json", "--cwd", dir}, strings.NewReader(""), &so, &se)
+	if code != 70 {
+		t.Fatalf("exit %d", code)
+	}
+	recs, _ := bugreport.Load(dir)
+	if len(recs) != 1 || !reflectArgs(recs[0].Args, "plain") {
+		t.Errorf("records %+v", recs)
+	}
+}
+
 func reflectArgs(got []string, want ...string) bool {
 	return strings.Join(got, " ") == strings.Join(want, " ")
 }
