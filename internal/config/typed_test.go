@@ -155,3 +155,25 @@ func TestStringOrDefault(t *testing.T) {
 		}
 	}
 }
+
+func TestIntOrFallsBackToSchemaDefault(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  string
+		want int
+	}{
+		{"unset", `{}`, 20},
+		{"set", `{"map":{"softcap_subsystems":7}}`, 7},
+		{"below min", `{"map":{"softcap_subsystems":0}}`, 20},
+		{"not a number", `{"map":{"softcap_subsystems":"many"}}`, 20},
+	}
+	for _, tc := range cases {
+		cfg := decode(t, tc.cfg)
+		if got := IntOr(cfg, "map.softcap_subsystems", 1, MaxInt); got != tc.want {
+			t.Errorf("%s: IntOr = %d, want %d", tc.name, got, tc.want)
+		}
+	}
+	if got := IntOr(nil, "map.softcap_subsystems", 1, MaxInt); got != 20 {
+		t.Errorf("nil cfg: IntOr = %d, want 20", got)
+	}
+}

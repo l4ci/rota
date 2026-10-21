@@ -14,10 +14,6 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
-// DefaultPromoteThreshold is used when learn.promoteThreshold is unset or
-// not a positive integer.
-const DefaultPromoteThreshold = 3
-
 // HitResult reports Hit.
 type HitResult struct {
 	Entry            Entry
@@ -26,17 +22,10 @@ type HitResult struct {
 	Changed          bool
 }
 
-// PromoteThreshold reads learn.promoteThreshold from the project config.
+// PromoteThreshold reads learn.promoteThreshold from the project config. A
+// value below 1 or not an integer gives the schema default.
 func (s Store) PromoteThreshold() int {
-	cfg := config.Load(rotatree.Config(s.Root))
-	if v, ok := config.Lookup(cfg, "learn.promoteThreshold"); ok {
-		if n, isNum := v.(json.Number); isNum {
-			if i, err := n.Int64(); err == nil && i > 0 {
-				return int(i)
-			}
-		}
-	}
-	return DefaultPromoteThreshold
+	return config.IntOr(config.Load(rotatree.Config(s.Root)), "learn.promoteThreshold", 1, config.MaxInt)
 }
 
 // Hit registers that a bullet was consulted: it counts one hit and promotes a

@@ -585,6 +585,14 @@ Commits HEAD may be past a map file's `last_mapped_commit` before `rota map stat
 rota config set map.staleCommits 100
 ```
 
+## map.softcap_subsystems: cap the project map
+
+Subsystems the map may name before `rota decisions check --cap` and `/rota-refactor --map` nudge you to merge or retire stale entries. Default `20`. `rota config set` takes an integer of 1 or more.
+
+```bash
+rota config set map.softcap_subsystems 30
+```
+
 ## qa.gate
 
 Controls how `/rota-ship` routes a `/rota-qa run` verdict when `ship.qa: true`. Independent of the `/rota-review` verdict routing.
