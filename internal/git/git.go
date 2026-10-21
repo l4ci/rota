@@ -149,6 +149,22 @@ func (r Repo) Dirty(ctx context.Context) (dirty, ok bool, err error) {
 	return strings.TrimSpace(res.Stdout) != "", true, nil
 }
 
+// DirtyExcept is Dirty with the given paths left out of the status: changes
+// to them alone do not count. Paths are absolute or relative to Dir.
+func (r Repo) DirtyExcept(ctx context.Context, paths ...string) (dirty, ok bool, err error) {
+	args := []string{"status", "--porcelain", "--", "."}
+	for _, p := range paths {
+		if p != "" {
+			args = append(args, ":(exclude)"+p)
+		}
+	}
+	res, err := r.Run(ctx, args...)
+	if err != nil || res.ExitCode != 0 {
+		return false, false, err
+	}
+	return strings.TrimSpace(res.Stdout) != "", true, nil
+}
+
 // HasHead reports whether the repo has a first commit.
 func (r Repo) HasHead(ctx context.Context) (bool, error) {
 	return r.Verify(ctx, "HEAD")

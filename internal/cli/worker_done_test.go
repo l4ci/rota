@@ -125,6 +125,38 @@ func TestWorkerDone(t *testing.T) {
 			t.Error("slot not marked done")
 		}
 	})
+	t.Run("a tracked detail file holding the proof row is not dirty", func(t *testing.T) {
+		dir := doneProject(t, "true")
+		// File backend: the detail file is tracked, so the proof row modifies it.
+		os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".rota/workers.json\n.rota/**/*.lock\n"), 0o644)
+		detail := filepath.Join(dir, ".rota", "bugs", "B07.md")
+		os.MkdirAll(filepath.Dir(detail), 0o755)
+		os.WriteFile(detail, []byte("# B07: Parser\n"), 0o644)
+		runGit(t, dir, "add", ".gitignore", ".rota/bugs/B07.md", ".rota/BACKLOG.md", ".rota/config.json")
+		runGit(t, dir, "commit", "-q", "-m", "track detail")
+		runGit(t, dir, "push", "-q", "origin", "feat/x")
+		if code, out, _ := rotaIn(t, dir, "proof", "record", "B07", "--", "true"); code != 0 {
+			t.Fatalf("record: %d %s", code, out)
+		}
+		if out, _ := exec.Command("git", "-C", dir, "status", "--porcelain", "--", ".rota/bugs/B07.md").Output(); !strings.Contains(string(out), "B07.md") {
+			t.Fatalf("fixture: proof row did not dirty the detail file: %q", out)
+		}
+		code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json")
+		if code != 0 || data(t, out)["changed"] != true {
+			st, _ := exec.Command("git", "-C", dir, "status", "--porcelain").Output()
+			t.Fatalf("exit %d: %s\nstatus: %s", code, out, st)
+		}
+	})
+	t.Run("another dirty file still refuses", func(t *testing.T) {
+		dir := doneProject(t, "true")
+		if code, out, _ := rotaIn(t, dir, "proof", "record", "B07", "--", "true"); code != 0 {
+			t.Fatalf("record: %d %s", code, out)
+		}
+		os.WriteFile(filepath.Join(dir, "stray.txt"), []byte("x"), 0o644)
+		if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json"); code != 4 {
+			t.Fatalf("exit %d: %s", code, out)
+		}
+	})
 	t.Run("unknown slot is 3", func(t *testing.T) {
 		dir := doneProject(t, "true")
 		if code, _, _ := rotaIn(t, dir, "worker", "done", "nope"); code != 3 {

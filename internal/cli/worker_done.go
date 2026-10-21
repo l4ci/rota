@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proof"
@@ -81,7 +82,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		// Done is the worker's last action: a late edit or commit after it moves
 		// the head a review or the gate has already bound to.
 		if kind != worker.OutcomeFailed {
-			if err := settledBranch(c, slotDir(sl, root), sl.Branch(), d); err != nil {
+			if err := settledBranch(c, slotDir(sl, root), sl.Branch(), id, d); err != nil {
 				return Result{Data: d}, err
 			}
 		}
@@ -307,9 +308,12 @@ func missingFastProof(rows []proof.Row, head string, want []string) (missing []s
 // settledBranch refuses a worktree with uncommitted changes, and a branch
 // whose pushed copy (origin/<branch>) is absent or not HEAD: the contract opens
 // the PR, and so pushes, before done.
-func settledBranch(c *Ctx, dir, branch string, d *jsonx.Object) error {
+func settledBranch(c *Ctx, dir, branch, id string, d *jsonx.Object) error {
 	repo := c.deps().Repo(dir)
-	dirty, ok, err := repo.Dirty(c.Context())
+	// The required proof row lands in the item's tracked detail file (file
+	// mode) after the last commit; committing it would move HEAD and stale
+	// the row, so that file alone never counts as dirty.
+	dirty, ok, err := repo.DirtyExcept(c.Context(), backlog.DetailPath(dir, id))
 	if err != nil {
 		return gitErr(err)
 	}
