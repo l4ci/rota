@@ -66,8 +66,11 @@ func receipted(verb string, inner func(*flag.FlagSet) RunFunc, inputs ...inputsF
 					}
 					e.Status, e.Exit, e.Message = receipt.Failed, ae.Exit, ae.Message
 					var se *round.StageError
-					if errors.As(runErr, &se) {
+					switch {
+					case errors.As(runErr, &se):
 						e.FailedStage, e.Residual = se.Stage, se.Residual
+					case ae.Exit == ExitFailed && hasVerdict(res.Data):
+						e.Status = receipt.Done // a verdict is the run's answer, not an interrupted run
 					}
 				}
 				if res.Data == nil && ae != nil {
@@ -107,6 +110,17 @@ func receipted(verb string, inner func(*flag.FlagSet) RunFunc, inputs ...inputsF
 			return res, runErr
 		}
 	}
+}
+
+// hasVerdict reports whether a result carries a gate or train verdict.
+func hasVerdict(data any) bool {
+	o, ok := data.(*jsonx.Object)
+	if !ok {
+		return false
+	}
+	v, _ := o.Get("verdict")
+	s, _ := v.(string)
+	return s != ""
 }
 
 // retryHint tells the caller what stopped and how to retry; an exit-5 failure
@@ -160,7 +174,11 @@ func replay(c *Ctx, e receipt.Entry) (Result, error) {
 		}
 		o.Set("replayed", true)
 	}
-	return Result{Data: data, Text: e.Text}, nil
+	res := Result{Data: data, Text: e.Text}
+	if e.Exit != 0 { // a settled verdict replays its failure, not a success
+		return res, &Error{Exit: e.Exit, Message: e.Message}
+	}
+	return res, nil
 }
 
 func checkOnly(fs *flag.FlagSet) bool {
