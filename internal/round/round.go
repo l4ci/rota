@@ -436,7 +436,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 	}
 	if hostOK {
-		wtDir := filepath.Join(root, ".worktrees") + string(os.PathSeparator)
+		wtDir := filepath.Join(root, worker.WorktreeRoot) + string(os.PathSeparator)
 		for i, a := range agents {
 			if claimed[i] || !strings.HasPrefix(filepath.Clean(a.Cwd)+string(os.PathSeparator), wtDir) || inExternal(rows, rep.views, a.Cwd) {
 				continue
@@ -793,7 +793,7 @@ func (e Env) worktrees(ctx context.Context, root string) ([]worktree, error) {
 	if err != nil || code != 0 {
 		return nil, &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git worktree list failed: " + strings.TrimSpace(errOut)}
 	}
-	dir := filepath.Join(root, ".worktrees")
+	dir := filepath.Join(root, worker.WorktreeRoot)
 	var wts []worktree
 	var cur *worktree
 	flush := func() {

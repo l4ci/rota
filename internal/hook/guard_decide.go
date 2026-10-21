@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"strings"
+
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // GitFunc runs `git <args>` in dir and returns trimmed stdout; a non-zero exit
@@ -66,7 +68,7 @@ func DecideGuard(r GuardRequest) string {
 // cwd, else the entry of `git worktree list` with that name. "" when neither.
 func slotWorktree(cwd, slot string, git GitFunc) string {
 	for d := cwd; d != "" && d != filepath.Dir(d); d = filepath.Dir(d) {
-		if filepath.Base(d) == slot && filepath.Base(filepath.Dir(d)) == ".worktrees" {
+		if filepath.Base(d) == slot && filepath.Base(filepath.Dir(d)) == worker.WorktreeRoot {
 			return d
 		}
 	}
