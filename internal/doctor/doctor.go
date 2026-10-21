@@ -492,7 +492,7 @@ func (d *runner) tracker() Check {
 func (d *runner) expand(dir string) string { return worker.ExpandConfigDirIn(dir, d.in.Home) }
 
 func (d *runner) accounts() Check {
-	if w := worker.ConfigDirMismatch(d.in.OrchestratorConfigDir, d.in.Accounts); w != "" {
+	if w := worker.ConfigDirMismatch(d.in.OrchestratorConfigDir, d.in.Accounts, d.in.Home); w != "" {
 		return Check{Name: "accounts", Status: Warn, Detail: w, Hint: "add that configDir to round.accounts in .rota/config.local.json, or start the orchestrator under a listed one"}
 	}
 	if len(d.in.Accounts) == 0 {

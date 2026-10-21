@@ -486,6 +486,10 @@ type Env struct {
 	Stderr io.Writer
 	// Now defaults to time.Now (relay timestamps, ledger rows).
 	Now func() time.Time
+	// Home defaults to os.UserHomeDir (the ~/ of an account's configDir).
+	Home func() (string, error)
+	// Getwd defaults to os.Getwd (the directory a handoff hint names).
+	Getwd func() (string, error)
 	// Lease reads the round lease the ledger stamps its rows with; nil means
 	// roundlease.DefaultEnv.
 	Lease func() roundlease.Env
@@ -550,6 +554,12 @@ func (e Env) WithDefaults() Env {
 	}
 	if e.Now == nil {
 		e.Now = time.Now
+	}
+	if e.Home == nil {
+		e.Home = os.UserHomeDir
+	}
+	if e.Getwd == nil {
+		e.Getwd = os.Getwd
 	}
 	if e.Getenv == nil {
 		e.Getenv = os.Getenv
