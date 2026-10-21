@@ -46,7 +46,8 @@ dr_run() { # dr_run <dir>: doctor in <dir> against the fakes; prints the envelop
 mkdir -p "$TMP_DR/proj/.rota"
 echo '{"claudeAiOauth":{"accessToken":"t"}}' >"$TMP_DR/claude/.credentials.json"
 : >"$TMP_DR/claude/installed"
-printf '.worktrees/\n' >"$TMP_DR/proj/.gitignore"
+# every managed line (internal/initproj/gitignore.go), or doctor warns about the gitignore
+printf '%s\n' '# ── rota ──' .rota/status.json .rota/repos.json .rota/config.local.json .rota/handoff/ .rota/debug/ .rota/review/ .rota/qa-runs/ .rota/verdicts.json .rota/gate-audit.jsonl .rota/ledger.jsonl .rota/train-cache.json .rota/workers.json .rota/receipts.json '.rota/**/knowledge-hits.jsonl' '.rota/**/*.lock' .worktrees/ >"$TMP_DR/proj/.gitignore"
 printf '{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]}}\n' "$TMP_DR/claude" >"$TMP_DR/proj/.rota/config.json"
 # D1 (#65): the orchestrator hooks are opt-in, so a project that has not installed them skips both checks
 git -C "$TMP_DR/proj" init -q
@@ -61,6 +62,17 @@ done
 [ "$(printf '%s' "$OUT" | dr_field "state dir" status)" = "pass" ] || fail "C6[a]: state dir was not pass: $OUT"
 case "$OUT" in *'"changed"'*) fail "C6[a]: doctor reports changed: $OUT" ;; esac
 pass "C6[a]: a healthy herdr project passes in contract order, with no changed"
+
+# (a1) #1331: a .gitignore missing a managed line warns with the init hint
+cp "$TMP_DR/proj/.gitignore" "$TMP_DR/gitignore.full"
+grep -vF 'knowledge-hits.jsonl' "$TMP_DR/gitignore.full" >"$TMP_DR/proj/.gitignore"
+rc=0; OUT="$(dr_run "$TMP_DR/proj")" || rc=$?
+[ "$rc" -eq 0 ] || fail "C6[a1]: a missing gitignore line must warn, not fail; exited $rc: $OUT"
+[ "$(printf '%s' "$OUT" | dr_field gitignore status)" = "warn" ] || fail "C6[a1]: gitignore was not warn: $OUT"
+case "$(printf '%s' "$OUT" | dr_field gitignore detail)" in *knowledge-hits.jsonl*) ;; *) fail "C6[a1]: detail misses the hits line: $OUT" ;; esac
+[ "$(printf '%s' "$OUT" | dr_field gitignore hint)" = "run: rota init" ] || fail "C6[a1]: hint was not 'run: rota init': $OUT"
+cp "$TMP_DR/gitignore.full" "$TMP_DR/proj/.gitignore"
+pass "C6[a1]: a .gitignore missing a managed line warns with the init hint"
 
 # (a2) #1171: an orchestrator login that is not in round.accounts warns, so slots silently using other logins show up
 mkdir -p "$TMP_DR/other"
