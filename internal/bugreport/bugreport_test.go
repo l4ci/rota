@@ -292,3 +292,13 @@ func TestRedactFlagValuesOnlyForSecretFlags(t *testing.T) {
 		t.Errorf("redactArgs = %q", out)
 	}
 }
+
+func TestRedactHidesDashLeadingSecretFlagValue(t *testing.T) {
+	out := redactArgs([]string{"--api-key", "-sEcReT", "--force"}, Env{})
+	if out[1] != "<redacted>" || out[2] != "--force" {
+		t.Errorf("redactArgs = %q", out)
+	}
+	if got := Redact("rota x --api-key -sEcReT", Env{}); strings.Contains(got, "sEcReT") {
+		t.Errorf("Redact kept dash-leading value: %q", got)
+	}
+}
