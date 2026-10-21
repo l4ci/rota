@@ -27,7 +27,14 @@ done_feature() { # <id>: create, commit, complete: one counted feature
 OUT=$(ar round start --holder-pid "$HOLD" --slots 1) || fail "round start failed: $OUT"
 [ "$(echo "$OUT" | jget data.architecture.count)" = "0" ] || fail "start should report the counter: $OUT"
 done_feature one F01
+# With the defaults (min items 5, min hours 24) one closed item must not fire queue-empty (#1301).
+OUT=$(ar round architecture --check) || fail "architecture --check failed: $OUT"
+[ "$(echo "$OUT" | jget data.due)" = "false" ] \
+  || fail "with the default idle floors one closed item should not make a review due: $OUT"
+pass "queue-empty is rate-limited by the default idle floors"
 # Queue-empty: a slot is idle, nothing is assignable and something closed since the last review.
+ar config set round.architectureIdleMinItems 0 >/dev/null
+ar config set round.architectureIdleMinHours 0 >/dev/null
 OUT=$(ar round architecture --check) || fail "architecture --check failed: $OUT"
 [ "$(echo "$OUT" | jget data.due)" = "true" ] && [ "$(echo "$OUT" | jget data.trigger)" = "queue-empty" ] \
   || fail "an idle slot with an empty queue should make a review due: $OUT"
