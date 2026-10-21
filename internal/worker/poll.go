@@ -843,7 +843,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	if len(targets) == 0 {
 		return PollResult{}, nil
 	}
-	before, _ := os.ReadFile(RegistryPath(root))
+	before := ChangeCount(root)
 
 	rows, _, _ := e.classify(ctx, h, targets, o.Settle, o.Lines)
 	e.noteRelayEcho(root, targets, e.Now())
@@ -914,8 +914,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 		return PollResult{}, rowErr
 	}
 	syncChanged(ctx, h, root, rows, targets)
-	after, _ := os.ReadFile(RegistryPath(root))
-	return PollResult{Slots: rows, Notes: notes, Changed: string(before) != string(after)}, nil
+	return PollResult{Slots: rows, Notes: notes, Changed: ChangeCount(root) != before}, nil
 }
 
 // openPRsByHead maps head branch to PR URL for the open PRs, read only when a
