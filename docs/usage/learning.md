@@ -97,7 +97,7 @@ whose root cause wasn't obvious. Skip it for single-item fixes and mechanical
 changes where nothing worth re-using was learned.
 
 Skills nudge or auto-invoke `/rota-learn` depending on your
-[autonomy](autonomy.md) level. With `off` you get a one-line nudge; with `auto`,
+[autonomy](autonomy.md) level. With `off` you get a one-line nudge; with `roundtrip` or `auto`,
 `/rota-ship` runs it after integrating. `/rota-work` only nudges.
 
 ## Verification

@@ -126,8 +126,8 @@ The nudge fires when EITHER `release.nudgeAfterCommits` (default 10) OR `release
 - [ ] Push staging migration (manual)
 ```
 
-For each gate the skill asks: *Yes, continue* / *Fix now and continue* / *Skip this item* / *Abort release*. Skipped items show up in the post-release summary so the release record stays honest. Items ending in `(manual)` always interject even under `autonomy.level: auto`, useful for sensitive gates that should not auto-acknowledge.
+For each gate the skill asks: *Yes, continue* / *Fix now and continue* / *Skip this item* / *Abort release*. Skipped items show up in the post-release summary so the release record stays honest. Items ending in `(manual)` always interject even under `autonomy.level: roundtrip` or `auto`, useful for sensitive gates that should not auto-acknowledge.
 
-When the file is absent, the skill offers to scaffold a starter under `autonomy.level: off`, or silently skips the gate under `auto` (don't interrupt unattended runs). See [`release.checklistPath`](configuration.md#releasechecklistpath) to override the path.
+When the file is absent, the skill offers to scaffold a starter under `autonomy.level: off`, or silently skips the gate under `roundtrip` and `auto` (don't interrupt unattended runs). See [`release.checklistPath`](configuration.md#releasechecklistpath) to override the path.
 
 The file is tracked by default, so the release checklist is shared with the team like any other source file. To keep it per-contributor instead, add `.rota/RELEASE.md` to `.gitignore`.

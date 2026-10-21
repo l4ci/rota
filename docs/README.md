@@ -61,7 +61,7 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 ### ⚙ Configuration
 
 - [Configuration](usage/configuration.md): every key in `.rota/config.json` and what it does
-- [Autonomy levels](usage/autonomy.md): how `off` / `auto` change skill chaining
+- [Autonomy levels](usage/autonomy.md): how `off`, `roundtrip` and `auto` change skill chaining
 - [Issue backend](usage/issue-backend.md): backlog on GitHub/GitLab issues, setup, labels, milestones, `rota migrate issues`
 - [Umbrella mode](usage/umbrella-mode.md): coordinator at umbrella, work in sub-repos (M02 V1)
 
