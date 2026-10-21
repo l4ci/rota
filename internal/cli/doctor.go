@@ -97,6 +97,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		return s
 	}
 	in.Dispatch = config.Dispatch(cfg)
+	in.RegistryHost = worker.RegistryHost(root)
 	in.ForgeProvider, in.IssueSource, in.SourceProblem = doctorSourceInput(cfg)
 	in.JiraProject, in.IssuesConnection = strings.TrimSpace(str("issues.jira.project")), strings.TrimSpace(str("issues.connection"))
 	in.LinearTeam = strings.TrimSpace(str("issues.linear.team"))
