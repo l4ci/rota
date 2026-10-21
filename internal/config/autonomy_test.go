@@ -289,3 +289,32 @@ func TestSetAutoOnStaleStampSurvivesFill(t *testing.T) {
 		t.Errorf("a refused set migrated:\n%s\n%s", read(t, root), readLocal(t, root))
 	}
 }
+
+// A stamp is never raised over an old one-hop auto it guards: a local set on
+// a stale project migrates config.json's auto too, and save-global copies a
+// stale project's auto as roundtrip.
+func TestStampNeverBlessesAnOldAuto(t *testing.T) {
+	root := project(t, `{"rota": {"version": "0.20.0"}, "autonomy": {"level": "auto"}}`, "")
+	if _, err := SetIn(root, "autonomy.level", "off", LayerLocal); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Fill(root); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(read(t, root), `"roundtrip"`) {
+		t.Errorf("config.json's old auto stamped as current:\n%s", read(t, root))
+	}
+
+	gdir := t.TempDir()
+	t.Setenv("ROTA_CONFIG_DIR", gdir)
+	root = project(t, `{"rota": {"version": "0.20.0"}, "autonomy": {"level": "auto"}}`, "")
+	if _, err := SaveGlobal(root, gdir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Fill(root); err != nil {
+		t.Fatal(err)
+	}
+	if g, _ := LoadGlobal(gdir); g["autonomy.level"] != "roundtrip" {
+		t.Errorf("save-global copied a stale auto: %v", g["autonomy.level"])
+	}
+}

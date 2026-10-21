@@ -244,10 +244,10 @@ func migrateAutonomyGlobal() (bool, error) {
 	return rewrote, err
 }
 
-// raiseProjectStamp raises rota.version in the config.json at path to
-// AutonomyLevelsSince when it is older. A missing or unreadable file, or a
-// current stamp, is left alone.
-func raiseProjectStamp(path string) error {
+// updateProject rewrites the config.json at path with fn under its lock when
+// it is stale; fn returns the new object, or nil to leave the file. A missing
+// or unreadable file, or a current stamp, is left alone.
+func updateProject(path string, fn func(*jsonx.Object) *jsonx.Object) error {
 	if _, err := os.Stat(path); err != nil {
 		return nil
 	}
@@ -256,21 +256,48 @@ func raiseProjectStamp(path string) error {
 		if obj == nil || !autonomyStale(obj) {
 			return nil
 		}
-		return fsio.WriteJSONAtomic(path, fillKey(obj, "", strings.Split(VersionKey, "."), AutonomyLevelsSince))
+		if obj = fn(obj); obj == nil {
+			return nil
+		}
+		return fsio.WriteJSONAtomic(path, obj)
+	})
+}
+
+// migrateProjectAuto rewrites an old auto in a stale config.json at path to
+// roundtrip, leaving the stamp: it runs before a set, so the stamp the set
+// raises never blesses the old value.
+func migrateProjectAuto(path string) error {
+	return updateProject(path, func(obj *jsonx.Object) *jsonx.Object {
+		if !isAuto(obj) {
+			return nil
+		}
+		return fillKey(obj, "", []string{"autonomy", "level"}, "roundtrip")
+	})
+}
+
+// raiseProjectStamp raises rota.version in a stale config.json at path to
+// AutonomyLevelsSince.
+func raiseProjectStamp(path string) error {
+	return updateProject(path, func(obj *jsonx.Object) *jsonx.Object {
+		return fillKey(obj, "", strings.Split(VersionKey, "."), AutonomyLevelsSince)
 	})
 }
 
 // autonomySet is how a write of autonomy.level to root's project or local
 // layer keeps the once-guard (#1488): the value written is a post-split one,
 // so the fill after it must not rewrite it. On a config.json stamped before
-// AutonomyLevelsSince it migrates config.local.json first (an old auto there
-// is still one-hop), runs set, then raises config.json's stamp. Any other
+// AutonomyLevelsSince it migrates an old auto in config.local.json and
+// config.json first (it is still one-hop), runs set, then raises config.json's
+// stamp: a stamp never blesses a value it guards that nobody migrated. Any other
 // key, or a current stamp, is set alone.
 func autonomySet(root, key string, set func() (SetResult, error)) (SetResult, error) {
 	if key != "autonomy.level" || !autonomyStale(readObject(configPath(root))) {
 		return set()
 	}
 	if _, err := migrateAutonomyLocal(root, true); err != nil {
+		return SetResult{}, err
+	}
+	if err := migrateProjectAuto(configPath(root)); err != nil {
 		return SetResult{}, err
 	}
 	res, err := set()

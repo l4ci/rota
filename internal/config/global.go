@@ -44,6 +44,11 @@ func SaveGlobal(root, dir string) ([]string, error) {
 			vals[k.Name] = v
 		}
 	}
+	// An auto from a project stamped before the split is one-hop: copy it as
+	// roundtrip, since MergeGlobal stamps the global as current (#1101).
+	if vals["autonomy.level"] == "auto" && autonomyStale(cfg) {
+		vals["autonomy.level"] = "roundtrip"
+	}
 	return MergeGlobal(dir, vals)
 }
 
