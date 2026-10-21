@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -106,6 +107,46 @@ func TestAssignBestOfNeedsTwoFreeSlots(t *testing.T) {
 	reg := worker.LoadRegistryTolerant(f.root)
 	if reg.BestOf("12") != nil || reg.Slot("dana").HeldID() != before || len(f.be.claims) != claims || f.be.claims["12"] != "" || f.be.bstates["12"] != "" {
 		t.Errorf("nothing changed: %v %v %v", f.be.claims, f.be.bstates, reg.BestOf("12"))
+	}
+}
+
+// A best-of pair skips a slot whose account has no login, says so, and takes
+// the next free slot instead.
+func TestAssignBestOfSkipsSlotWithoutLogin(t *testing.T) {
+	f := bestOfFixture(t)
+	o := startOpts(roundcfg.ScopeMilestone, 100)
+	o.Slots = 3
+	if _, err := f.env.Start(bg, f.root, o); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccount("work", t.TempDir()) }); err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.assign("12", "", nil)
+	if err != nil || len(res.BestOf) != 2 {
+		t.Fatalf("%v %+v", err, res)
+	}
+	if res.BestOf[0].Agent != "dana" || res.BestOf[1].Agent != "nia" {
+		t.Errorf("attempts on %s and %s, want dana and nia", res.BestOf[0].Agent, res.BestOf[1].Agent)
+	}
+	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "ben") || !strings.Contains(res.Warnings[0], "no login") {
+		t.Errorf("warnings = %v, want one naming ben", res.Warnings)
+	}
+}
+
+// With the login-less slot leaving only one free, the pair is refused and the
+// refusal still carries the skipped-slots warning.
+func TestAssignBestOfRefusalKeepsNoLoginWarning(t *testing.T) {
+	f := bestOfFixture(t)
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccount("work", t.TempDir()) }); err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.assign("12", "", nil)
+	if blockedBy(t, err) != BlockBestOfSlots {
+		t.Fatalf("err = %v, want %s", err, BlockBestOfSlots)
+	}
+	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "ben") {
+		t.Errorf("warnings = %v, want one naming ben", res.Warnings)
 	}
 }
 
