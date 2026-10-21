@@ -27,6 +27,8 @@ type fakeVerb struct {
 	heads func() []string
 	// body is what the verb read from --body-file -.
 	body string
+	// verdict, when set, is carried in the failure's data like a gate verdict.
+	verdict string
 }
 
 func (f *fakeVerb) verb(fs *flag.FlagSet) RunFunc {
@@ -42,6 +44,9 @@ func (f *fakeVerb) verb(fs *flag.FlagSet) RunFunc {
 		d := jsonx.NewObject()
 		d.Set("id", args[0])
 		d.Set("changed", true)
+		if f.verdict != "" {
+			d.Set("verdict", f.verdict)
+		}
 		if f.fail != nil {
 			return Result{Data: d}, f.fail
 		}
@@ -138,6 +143,28 @@ func TestReceiptFailureNamesTheStageAndRetryResumes(t *testing.T) {
 	}
 	if _, _, _ = callReceipted(t, dir, f, "--request-id", "r1", "42"); f.runs != 2 {
 		t.Errorf("a done receipt must replay, runs=%d", f.runs)
+	}
+}
+
+func TestReceiptVerdictFailureIsSettledNotPending(t *testing.T) {
+	dir := workerProject(t, `{}`)
+	f := &fakeVerb{verdict: "verify-failed", fail: Failed("verify FAILED")}
+	_, err, _ := callReceipted(t, dir, f, "--request-id", "r1", "42")
+	var e *Error
+	if !errors.As(asError(err), &e) || e.Exit != ExitFailed {
+		t.Fatalf("first call: %v", err)
+	}
+	if _, found, _ := receipt.New(dir).Pending("round assign", callTarget(&Ctx{}, []string{"42"})); found {
+		t.Errorf("a verdict is an answer, not an interrupted run: receipt must not be pending")
+	}
+	_, _, stderr := callReceipted(t, dir, f, "42")
+	if strings.Contains(stderr, "stopped part way") {
+		t.Errorf("rerun warned about a finished call: %q", stderr)
+	}
+	f.runs = 1
+	_, err, _ = callReceipted(t, dir, f, "--request-id", "r1", "42")
+	if f.runs != 1 || !errors.As(asError(err), &e) || e.Exit != ExitFailed {
+		t.Errorf("replay must keep the verdict's exit 1 and not rerun: runs=%d err=%v", f.runs, err)
 	}
 }
 
