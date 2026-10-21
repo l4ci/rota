@@ -463,7 +463,10 @@ func knTierFold(fs *flag.FlagSet) RunFunc {
 		if res.Changed {
 			text = fmt.Sprintf("folded %d hit(s) into the sidecar: commit it", res.Hits)
 		}
-		return Result{Data: knObj("hits", res.Hits, "changed", res.Changed), Text: text}, nil
+		if res.Skipped > 0 {
+			text += fmt.Sprintf("; skipped %d malformed buffer line(s)", res.Skipped)
+		}
+		return Result{Data: knObj("hits", res.Hits, "changed", res.Changed, "skipped", res.Skipped), Text: text}, nil
 	}
 }
 
