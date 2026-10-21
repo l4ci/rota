@@ -4,8 +4,9 @@ import (
 	"testing"
 )
 
-// rota ship strategy answers how the branch lands: a local forge has no PR, so
-// it is always direct; a tracker source needs a PR; otherwise work.mergeStrategy.
+// rota ship strategy wires the backend, the resolved forge and work.mergeStrategy
+// into ship.Strategy, which owns the rule (see its tests). These cases cover the
+// wiring: forge resolution from the origin, the config key, the exit code.
 func TestShipStrategy(t *testing.T) {
 	const gh, gl = "git@github.com:o/r.git", "https://gitlab.com/o/r"
 	for _, c := range []struct {
@@ -13,12 +14,8 @@ func TestShipStrategy(t *testing.T) {
 		want, forge       string
 		code              int
 	}{
-		{"file, pr, github", `{"issues":{"source":"file"},"work":{"mergeStrategy":"pr"}}`, gh, "pr", "github", 0},
-		{"file, direct, github", `{"issues":{"source":"file"},"work":{"mergeStrategy":"direct"}}`, gh, "direct", "github", 0},
-		{"file, unset, github", `{"issues":{"source":"file"}}`, gh, "unset", "github", 0},
+		{"file, pr, github origin", `{"issues":{"source":"file"},"work":{"mergeStrategy":"pr"}}`, gh, "pr", "github", 0},
 		{"file, pr, no remote is local", `{"issues":{"source":"file"},"work":{"mergeStrategy":"pr"}}`, "", "direct", "local", 0},
-		{"file, pr, forge.provider local", `{"forge":{"provider":"local"},"work":{"mergeStrategy":"pr"}}`, gh, "direct", "local", 0},
-		{"file, unset, no remote", `{}`, "", "direct", "local", 0},
 		{"tracker source forces pr", `{"forge":{"provider":"gitlab"},"issues":{"source":"gitlab"},"work":{"mergeStrategy":"direct"}}`, gl, "pr", "gitlab", 0},
 		{"tracker source on a local forge cannot open a PR", `{"issues":{"source":"github"}}`, "", "", "local", ExitResolution},
 	} {
