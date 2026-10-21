@@ -153,7 +153,7 @@ func migrateAutonomy(cfg *jsonx.Object, stale, localRewrote bool) (*jsonx.Object
 
 // migrateAutonomyLocal is migrateAutonomy's half for config.local.json, under
 // its lock: the same gated rewrite (the stamp is config.json's) and the
-// removal of round.autopilot. A missing or unreadable file is left alone.
+// removal of every RemovedKeys entry. A missing or unreadable file is left alone.
 func migrateAutonomyLocal(root string, stale bool) (bool, error) {
 	local := localPath(root)
 	if _, err := os.Stat(local); err != nil {
@@ -170,11 +170,8 @@ func migrateAutonomyLocal(root string, stale bool) (bool, error) {
 			obj = fillKey(obj, "", []string{"autonomy", "level"}, "roundtrip")
 			rewrote, changed = true, true
 		}
-		if round, ok := getObject(obj, "round"); ok {
-			if _, ok := round.Get("autopilot"); ok {
-				round.Delete("autopilot")
-				changed = true
-			}
+		if len(stripRemoved(obj)) > 0 {
+			changed = true
 		}
 		if !changed {
 			return nil
