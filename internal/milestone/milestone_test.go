@@ -304,3 +304,45 @@ func TestPutAcceptsOptionalPlanSections(t *testing.T) {
 		t.Errorf("sections not kept: %v\n%s", err, got)
 	}
 }
+
+const issueIntro = "Project milestones are tracker milestones, each with a tracking issue (`rota milestone show MNN`). `.rota/MILESTONES.md` is the index."
+
+func TestIndexFromIssueModeVisionBlock(t *testing.T) {
+	shippedHistory := "# Milestones\n\nvision\n\n## Milestones\n\n### M01 — Old\n\n**Status:** shipped · **Depends:** —\n"
+	cases := []struct {
+		name     string
+		items    []Entry
+		overview string
+		want     []string
+		notWant  []string
+	}{
+		{"empty tracker", nil, "", []string{issueIntro, "_(no milestones yet — run `/rota-vision` to brainstorm)_"}, []string{"live in `.rota/MILESTONES.md`"}},
+		{"planned only", []Entry{{ID: "M02", Title: "P", Status: "planned"}}, "", []string{issueIntro, "_(no active milestones — 1 planned; set one active with `/rota-vision`)_"}, []string{"live in `.rota/MILESTONES.md`"}},
+		{"active", []Entry{{ID: "M02", Title: "A", Status: "active"}}, "", []string{"Active milestones live in `.rota/MILESTONES.md` (detail in the tracking issues (`rota milestone show MNN`))."}, []string{issueIntro}},
+		{"file-era shipped, empty tracker", nil, shippedHistory, []string{issueIntro, "_(no active milestones — all shipped or archived; run `/rota-vision` to plan more)_"}, []string{"no milestones yet"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root := project(t)
+			if c.overview != "" {
+				if err := os.WriteFile(filepath.Join(root, ".rota/MILESTONES.md"), []byte(c.overview), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := IndexFrom(root, c.items, true); err != nil {
+				t.Fatal(err)
+			}
+			got := read(t, filepath.Join(root, "CLAUDE.md"))
+			for _, w := range c.want {
+				if !strings.Contains(got, w) {
+					t.Errorf("block lacks %q:\n%s", w, got)
+				}
+			}
+			for _, w := range c.notWant {
+				if strings.Contains(got, w) {
+					t.Errorf("block has %q:\n%s", w, got)
+				}
+			}
+		})
+	}
+}
