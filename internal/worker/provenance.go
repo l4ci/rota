@@ -26,6 +26,14 @@ func newRelayEntry(round int, now time.Time, brief string) *jsonx.Object {
 	return entry
 }
 
+// LogRelay appends a relays[] record for a brief delivered outside a relay
+// dispatch (a transfer's hand-off), so the gate finds it when a PR cites it.
+func LogRelay(root, slot string, round int, now time.Time, brief string) error {
+	entry := newRelayEntry(round, now, brief)
+	_, err := UpdateSlot(root, slot, func(s *Slot) { s.AppendRelay(entry) })
+	return err
+}
+
 // relaySummary is the first non-blank line of the brief that is not the
 // signature, stripped and cut to 200 characters.
 func relaySummary(text string) string {

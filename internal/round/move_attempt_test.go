@@ -178,3 +178,17 @@ func TestBranchTipRefusesOptionLikeNames(t *testing.T) {
 		t.Error("a real branch has a tip")
 	}
 }
+
+// The transfer brief is the receiver's only signed message from the
+// orchestrator, so it lands in the receiver's relay log: a PR citing it as
+// `orchestrator relay round N` passes the provenance check (#1299).
+func TestTransferLogsTheBriefAsARelay(t *testing.T) {
+	f := newMoveFx(t)
+	if _, err := f.transfer("12", "dana", nil); err != nil {
+		t.Fatal(err)
+	}
+	relays := f.slot("dana").Relays()
+	if len(relays) != 1 {
+		t.Fatalf("relays %d, want the transfer brief logged once", len(relays))
+	}
+}
