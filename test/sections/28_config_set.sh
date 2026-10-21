@@ -81,7 +81,7 @@ assert d['learn']['verify'] is True, d
   # --- Missing config.json: verb creates it ---
   rm -f .rota/config.json
   hvj config set autonomy.level auto >/dev/null || { echo "FAIL: missing file"; exit 1; }
-  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d == {'autonomy':{'level':'auto'}}" || { echo "FAIL: missing file content"; exit 1; }
+  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d == {'autonomy':{'level':'auto'},'rota':{'version':'0.21.0'}}" || { echo "FAIL: missing file content (an autonomy.level set also stamps rota.version, #1488)"; exit 1; }
 
   # --- A config that is not a JSON object is an internal error (70), file untouched ---
   echo '[1]' > .rota/config.json
