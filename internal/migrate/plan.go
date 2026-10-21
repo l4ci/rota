@@ -103,12 +103,23 @@ func planItems(root, backlogText string, warn func(string)) []*migItem {
 		it.milestone = migMilestoneID.FindString(pystr.Strip(e.Fields.Milestone))
 		it.since = pystr.Strip(e.Fields.Since)
 		if t, ok := backlog.TypeByLetter(e.ID[:1]); ok {
+			// Proof rows recorded since the sidecar existed are there, not in the detail file.
+			if sc := readOpt(filepath.Join(rota, t.Kind, e.ID+".proof")); sc != nil {
+				if s, end, ok := section.Find(*sc, "Proof"); ok {
+					if at := strings.LastIndex((*sc)[:s], "## Proof"); at >= 0 {
+						proof := pystr.Strip((*sc)[at:end])
+						it.proof = &proof
+					}
+				}
+			}
 			if d := readOpt(filepath.Join(rota, t.Kind, e.ID+".md")); d != nil {
 				detail := *d
 				if s, end, ok := section.Find(detail, "Proof"); ok {
 					if at := strings.LastIndex(detail[:s], "## Proof"); at >= 0 {
-						proof := pystr.Strip(detail[at:end])
-						it.proof = &proof
+						if it.proof == nil {
+							proof := pystr.Strip(detail[at:end])
+							it.proof = &proof
+						}
 						detail = strings.Trim(detail[:at]+detail[end:], "\n")
 					}
 				}

@@ -47,7 +47,7 @@ mkdir -p "$TMP_DR/proj/.rota"
 echo '{"claudeAiOauth":{"accessToken":"t"}}' >"$TMP_DR/claude/.credentials.json"
 : >"$TMP_DR/claude/installed"
 # every managed line (internal/initproj/gitignore.go), or doctor warns about the gitignore
-printf '%s\n' '# ── rota ──' .rota/status.json .rota/repos.json .rota/config.local.json .rota/handoff/ .rota/debug/ .rota/review/ .rota/qa-runs/ .rota/verdicts.json .rota/gate-audit.jsonl .rota/ledger.jsonl .rota/bugreports.jsonl .rota/train-cache.json .rota/workers.json .rota/receipts.json '.rota/**/knowledge-hits.jsonl*' '.rota/**/*.lock' .worktrees/ >"$TMP_DR/proj/.gitignore"
+printf '%s\n' '# ── rota ──' .rota/status.json .rota/repos.json .rota/config.local.json .rota/handoff/ .rota/debug/ .rota/review/ .rota/qa-runs/ .rota/verdicts.json .rota/gate-audit.jsonl .rota/ledger.jsonl .rota/bugreports.jsonl .rota/train-cache.json .rota/workers.json .rota/receipts.json '.rota/**/knowledge-hits.jsonl*' '.rota/**/*.proof' '.rota/**/*.lock' .worktrees/ >"$TMP_DR/proj/.gitignore"
 printf '{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]}}\n' "$TMP_DR/claude" >"$TMP_DR/proj/.rota/config.json"
 # D1 (#65): the orchestrator hooks are opt-in, so a project that has not installed them skips both checks
 git -C "$TMP_DR/proj" init -q

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	gitx "github.com/l4ci/rota/internal/git"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -82,17 +83,30 @@ var (
 	refactorSubject = regexp.MustCompile(`\Arefactor(\(.+?\))?!?:`)
 )
 
+// ProofText is the text an item's file-mode proof rows live in: its proof
+// sidecar, else the detail file, where rows recorded before the sidecar
+// existed still sit. ok is false when neither exists.
+func ProofText(root, id string) (content string, ok bool, err error) {
+	for _, path := range []string{ProofPath(root, id), DetailPath(root, id)} {
+		if path == "" {
+			continue
+		}
+		content, err = fsio.ReadText(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		return content, err == nil, err
+	}
+	return "", false, nil
+}
+
 // proofRows is the number of proof rows recorded for an item: the rows of the
-// "## Proof" section of its detail file, counted by the injected CountProof.
+// "## Proof" section of its proof text (see ProofText), counted by the injected CountProof.
 func (f *File) proofRows(id string) (int, error) {
 	if f.CountProof == nil {
 		return 0, errors.New("backlog: no proof counter injected")
 	}
-	path := DetailPath(f.Root, id)
-	if path == "" {
-		return 0, nil
-	}
-	content, err := fsio.ReadText(path)
+	content, _, err := ProofText(f.Root, id)
 	if err != nil || content == "" {
 		return 0, nil
 	}
