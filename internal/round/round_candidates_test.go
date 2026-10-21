@@ -121,6 +121,27 @@ func TestCandidateDeferredFromOpenPRWaits(t *testing.T) {
 	}
 }
 
+// #1545 AC-1: a source PR closed without merging leaves the open set, which
+// releases the deferred item on purpose: no code will arrive to wait for.
+func TestCandidateDeferredReleasedWhenSourcePRClosedUnmerged(t *testing.T) {
+	root := newRepo(t, nil)
+	be := &fakeRemote{}
+	deferred := "## Problem\n\nx\n\nDeferred minor finding from the review-spec FAIL verdict on #77.\n\n## Acceptance\n\n- [ ] AC-1: fixed\n"
+	be.add("20", "deferred from #77", "", false, deferred)
+	be.items["20"].Fields.Related = "#77"
+	e := Env{Git: git.Exec, Base: "main", Forge: be.asForge(), Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100)}
+	be.prs = []tracker.PR{{Number: 88, Branch: "ben/9-other"}} // #77 was closed, not merged
+	cs, err := e.RoundCandidates(bg, root, be, roundcfg.Settings{Scope: roundcfg.ScopeOpen}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cs {
+		if c.ID == "20" && (c.DependsOnPR != 0 || !c.Ready()) {
+			t.Errorf("closed-unmerged source PR: DependsOnPR=%d ready=%v, want released", c.DependsOnPR, c.Ready())
+		}
+	}
+}
+
 // TestCandidateDeferredRelatedForms: --file-deferred stores --pr verbatim, so
 // Related is usually a bare number, sometimes #N or a PR URL.
 func TestCandidateDeferredRelatedForms(t *testing.T) {

@@ -79,6 +79,11 @@ var relatedPRRe = regexp.MustCompile(`^(?:#|\S*/(?:pull|merge_requests)/)?(\d+)(
 // deferredDependency is the open PR a --file-deferred item was filed from, 0
 // when it is not such an item or that PR is no longer open. Another item that
 // merely relates to an open PR is not held back.
+//
+// The hold is keyed on the open set, so a source PR closed without merging
+// releases the item like a merged one (#1545). That is deliberate: no code will
+// arrive for it, and holding forever would strand the item with no signal. It
+// turns ready for a worker, who can dispute it if the finding is moot.
 func deferredDependency(be backlog.Backend, it backlog.Item, open map[int]bool) int {
 	if len(open) == 0 || it.Fields.Related == "" {
 		return 0
