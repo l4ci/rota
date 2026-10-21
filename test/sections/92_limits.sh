@@ -34,6 +34,11 @@ mkdir -p "$PROJ/.rota"
     && git remote add origin "$ORIGIN" && git push -q origin main
 ) || fail "D3 fixture repo setup failed"
 printf 'stub worker contract\n' > "$TMP_LM/contract.md"
+# assign skips a slot whose account has no login, so both accounts need a credentials file
+for a in cfg-a cfg-b; do
+  mkdir -p "$TMP_LM/$a"
+  echo '{"claudeAiOauth":{"accessToken":"t"}}' > "$TMP_LM/$a/.credentials.json"
+done
 lm_cfg() { # lm_cfg [<extra top-level json members, with a leading comma>]
   printf '{"forge":{"provider":"github"},"issues":{"source":"github","retryWaitSeconds":0},"round":{"dispatch":"tmux","accounts":[{"name":"a","configDir":"%s/cfg-a"},{"name":"b","configDir":"%s/cfg-b"}],"brief":"%s"}%s}\n' \
     "$TMP_LM" "$TMP_LM" "$TMP_LM/contract.md" "${1:-}" > "$PROJ/.rota/config.json"
