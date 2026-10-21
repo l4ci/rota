@@ -36,6 +36,44 @@ func initDir() (string, error) {
 	return dir, nil
 }
 
+// atHome is whether the working directory is the user's home with no .rota/
+// here or above: the place bare `rota` is a launcher, not a project to init.
+func atHome(c *Ctx) bool {
+	if _, err := c.Root(); err == nil {
+		return false
+	}
+	dir, err := initDir()
+	if err != nil {
+		return false
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return false
+	}
+	return sameDir(dir, home)
+}
+
+// sameDir is whether a and b are one directory, symlinks resolved.
+func sameDir(a, b string) bool {
+	resolve := func(p string) string {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return r
+		}
+		return filepath.Clean(p)
+	}
+	return resolve(a) == resolve(b)
+}
+
+// refuseHomeInit stops init and setup from seeding the home directory, which
+// one Enter on the old default made easy. --force still allows it.
+func refuseHomeInit(c *Ctx, verb string, force bool) error {
+	if force || !atHome(c) {
+		return nil
+	}
+	return Refused("rota %s would seed your home directory", verb).
+		WithHint("run: rota projects to pick a project, or pass --force to init here")
+}
+
 func initErr(err error) error {
 	switch {
 	case err == nil:
@@ -51,12 +89,16 @@ func initVerb(fs *flag.FlagSet) RunFunc {
 	// Removed by F6a; kept as flags so they exit 2 with a hint, not "unknown flag".
 	codex := fs.Bool("codex", false, "removed: use rota skills install --scope project --agent codex")
 	skillsDir := fs.String("skills-dir", "", "removed: use rota skills install --scope project --agent codex")
+	force := fs.Bool("force", false, "init even in your home directory")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := knNoArgs(args); err != nil {
 			return Result{}, err
 		}
 		if *codex || *skillsDir != "" {
 			return Result{}, Usage("--codex and --skills-dir were removed").WithHint("run: rota skills install --scope project --agent codex")
+		}
+		if err := refuseHomeInit(c, "init", *force); err != nil {
+			return Result{}, err
 		}
 		return runInit(c, *noBlocks)
 	}

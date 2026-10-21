@@ -37,7 +37,7 @@ func configEdit(fs *flag.FlagSet) RunFunc {
 				WithHint("run: rota config set <key> <value>")
 		}
 		var store configStore
-		if *global {
+		if *global || atHome(c) {
 			dir, err := globalDir(c)
 			if err != nil {
 				return Result{}, err
