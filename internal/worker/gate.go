@@ -881,7 +881,10 @@ func (g *gate) stepPRMatches() (bool, error) {
 		}
 	}
 	if info.HeadSHA != g.verified {
-		return mismatch(fmt.Sprintf("PR %s head is %s, the verified %s is %s — pushed since, or %s has not caught up with the push (read %d times)", g.prNum, info.HeadSHA, g.headRef, g.verified, g.provider, gateHeadTries))
+		g.verdict(GatePRMismatch,
+			fmt.Sprintf("error: PR %s head is %s, the verified %s is %s — pushed since, or %s has not caught up with the push (read %d times)", g.prNum, info.HeadSHA, g.headRef, g.verified, g.provider, gateHeadTries),
+			fmt.Sprintf("once the PR shows the pushed head, run `rota worker gate %s` again without --request-id: the same id replays this refusal", g.o.Slot))
+		return true, nil
 	}
 	return false, nil
 }
