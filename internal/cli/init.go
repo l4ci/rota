@@ -230,7 +230,8 @@ func initConfig(c *Ctx, root string) (initConfigResult, error) {
 		return r, err
 	}
 	if v := c.deps().InstalledVersion(); v != "" {
-		if config.StampedVersion(config.Load(rotatree.Config(root))) != v {
+		stamped := config.StampedVersion(config.Load(rotatree.Config(root)))
+		if stamped != v && !config.LowersGatedStamp(stamped, v) {
 			if _, err := config.Set(root, config.VersionKey, v); err != nil {
 				return r, err
 			}
