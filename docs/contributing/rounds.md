@@ -83,29 +83,31 @@ There are no servers and no ports in this repo.
 
 ## Contract doc stamps
 
-Every `docs/contributing/contract/*.md` opens with frontmatter naming the commit it was last verified against and the
-repo paths it describes:
+Every `docs/contributing/contract/*.md` opens with frontmatter naming the repo paths it describes:
 
 ```
 ---
-verified-sha: <commit sha>
 refs:
   - internal/gate
   - internal/cli/gate.go
 ---
 ```
 
+The commit each doc was last verified against lives in one sidecar, `docs/contributing/contract/STAMPS`, one
+`<doc>.md <sha>` line per doc. It is not in the doc, so two PRs editing one doc never conflict on a stamp line.
+**A PR never edits `STAMPS`** (a new contract doc is the one exception: add its line).
+
 `test/doclint.sh` runs `test/check-doc-stamps.py`. It fails a doc whose stamp is missing or malformed, whose sha is
 not a known commit, or whose `refs:` path does not exist: those are mistakes in the stamp itself. Drift (a ref changed
-between `verified-sha` and `HEAD`, `git diff <sha> HEAD -- <ref>`) only prints a `WARN` naming the doc and the changed
+between the stamped sha and `HEAD`, `git diff <sha> HEAD -- <ref>`) only prints a `WARN` naming the doc and the changed
 paths and exits 0, so an unrelated PR is never blocked by it. `ROTA_DOC_STAMPS=strict bash test/doclint.sh` (or
 `python3 test/check-doc-stamps.py --strict`) fails on drift too; run it before `/rota-docs` and the re-stamp
 below. Other docs under `docs/` need no stamp.
 
-To re-stamp after a ref changed (the strict run lists what to fix): `git diff <verified-sha> HEAD -- <ref>` for each flagged path, read the doc against
-that diff and fix what drifted, then set `verified-sha:` to `git rev-parse HEAD` (the commit your change sits on is
-fine; a later commit that touches a ref re-flags the doc). Add a path to `refs:` when the doc starts describing
-new code. A new contract doc needs the stamp before it passes.
+To re-stamp (on `main`, as bookkeeping after merges; the strict run lists what to fix): `git diff <sha> HEAD -- <ref>`
+for each flagged path, read the doc against that diff and fix what drifted, then
+`python3 test/check-doc-stamps.py --restamp <doc>.md…` sets those stamps to `git rev-parse HEAD`. Add a path to
+`refs:` when the doc starts describing new code.
 
 ## Review, merge and completion
 

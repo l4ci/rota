@@ -1,5 +1,4 @@
 ---
-verified-sha: 6a8e4e1ef7597e90fff7c5370e78a6c73423aa1a
 refs:
   - internal/harness/opencode.go
   - internal/harness/opencode_guard.js
