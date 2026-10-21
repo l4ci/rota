@@ -55,6 +55,11 @@ type delivery struct {
 	Brief func() string
 	// Wrap maps a step's failure onto the exit table; nil leaves it as is.
 	Wrap func(error) error
+	// LogRelay records the brief in the slot's relay log once dispatched. A
+	// transfer sets it: its brief is the receiver's only signed message from
+	// the orchestrator, so a PR citing it as a relay passes provenance. An
+	// assignment brief is not a relay.
+	LogRelay bool
 
 	// Out: filled as the steps run.
 	Host                         host.Kind
@@ -102,6 +107,7 @@ func (d *delivery) steps(ctx context.Context, e Env, root string) ([]step, error
 				return d.wrap(err)
 			}
 			d.tmpName = tmp.Name()
+			d.BriefText = text
 			tmp.WriteString(text)
 			return d.wrap(tmp.Close())
 		}},
@@ -129,6 +135,9 @@ func (d *delivery) steps(ctx context.Context, e Env, root string) ([]step, error
 			return err
 		}
 		d.Dispatched, d.Changed = true, true
+		if d.LogRelay {
+			return d.wrap(worker.LogRelay(root, d.Slot, rnd, e.now(), d.BriefText))
+		}
 		return nil
 	}}), nil
 }

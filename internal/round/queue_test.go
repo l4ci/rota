@@ -348,7 +348,7 @@ func TestTransferFromAQueuedRecord(t *testing.T) {
 	if s.Task() != "12" || s.PR() != pr7 || s.Branch() != branch || s.ClaimID() != "dana@1" {
 		t.Errorf("dana: %v", s)
 	}
-	if v, _ := s.Raw().Get("relays"); len(v.([]any)) != 1 {
+	if v, _ := s.Raw().Get("relays"); len(v.([]any)) != 2 { // the carried relay and the transfer brief
 		t.Errorf("relays carry over: %v", s)
 	}
 	if cur := gitIn(t, f.wt("dana"), "symbolic-ref", "--short", "HEAD"); cur != branch {
