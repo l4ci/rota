@@ -49,7 +49,10 @@ func receipted(verb string, inner func(*flag.FlagSet) RunFunc, inputs ...inputsF
 			for _, in := range inputs {
 				fp += "\x00" + strings.Join(in(c, root, args), "\x00")
 			}
-			call := receipt.Call{ID: id, Verb: verb, Fingerprint: fp}
+			call := receipt.Call{ID: id, Verb: verb, Fingerprint: fp, Target: callTarget(c, args), Args: callArgs(fs, args)}
+			if minted {
+				warnPending(c, root, call)
+			}
 			var res Result
 			var runErr error
 			var ae *Error
@@ -200,6 +203,38 @@ func fingerprint(c *Ctx, fs *flag.FlagSet, args []string) string {
 	})
 	sort.Strings(parts)
 	return strings.Join(append(append([]string{"repo=" + c.Repo}, parts...), args...), "\x00")
+}
+
+// callTarget is what a call is about: the repo and the positional arguments,
+// without flags, so a rerun that differs only in flags still finds its receipt.
+func callTarget(c *Ctx, args []string) string {
+	return strings.Join(append([]string{"repo=" + c.Repo}, args...), "\x00")
+}
+
+// callArgs is the call as the caller typed it, for a message: the flags set,
+// sorted, then the positional arguments.
+func callArgs(fs *flag.FlagSet, args []string) []string {
+	var flags []string
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name != "request-id" {
+			flags = append(flags, "--"+f.Name+"="+f.Value.String())
+		}
+	})
+	sort.Strings(flags)
+	return append(flags, args...)
+}
+
+// warnPending tells a caller who reran a verb without --request-id that an
+// earlier call on the same target stopped part way and is still pending, so
+// this run starts a second receipt for the same work. It only warns: the new
+// call may be deliberate.
+func warnPending(c *Ctx, root string, call receipt.Call) {
+	p, found, err := receipt.New(root).Pending(call.Verb, call.Target)
+	if err != nil || !found {
+		return
+	}
+	c.Warn("%s on this target stopped part way under request id %s (arguments: %s); this run starts a second receipt. To resume instead, %s with those arguments",
+		call.Verb, p.ID, strings.Join(p.Args, " "), retryHint(p.ID, p))
 }
 
 func mintRequestID() string {

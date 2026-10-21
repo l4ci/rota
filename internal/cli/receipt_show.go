@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/receipt"
@@ -59,11 +60,18 @@ func runReceiptShow(c *Ctx, args []string) (Result, error) {
 		return Result{Data: d, Text: fmt.Sprintf("completed: %s applied (%s); the stored result is the answer, do not re-run\n%s", e.Verb, e.At, e.Text)}, nil
 	}
 	d.Set("state", receiptPending)
+	if len(e.Args) > 0 {
+		d.Set("args", append([]string{}, e.Args...))
+	}
 	d.Set("exit", e.Exit)
 	d.Set("message", e.Message)
 	if e.FailedStage != "" {
 		d.Set("failedStage", e.FailedStage)
 		d.Set("residualResources", append([]string{}, e.Residual...))
 	}
-	return Result{Data: d, Text: "pending: " + e.Verb + " stopped part way; " + retryHint(id, e) + " and the same arguments"}, nil
+	text := "pending: " + e.Verb + " stopped part way; " + retryHint(id, e) + " and the same arguments"
+	if len(e.Args) > 0 {
+		text += ": " + strings.Join(e.Args, " ")
+	}
+	return Result{Data: d, Text: text}, nil
 }
