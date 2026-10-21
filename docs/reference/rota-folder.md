@@ -177,7 +177,7 @@ The backlog is shared by default: state travels with the repo so collaborators s
 | `.rota/train-cache.json` | Per-developer merge train verdict cache; keyed by local shas, so tracked it would only churn |
 | `.rota/receipts.json` | Per-developer request-id receipts of the round verbs; a retry returns the first result, so it is machine-local state |
 | `.rota/workers.json` | Per-developer worker slot registry (tab handles, account config dirs, claims); machine-specific |
-| `.rota/**/knowledge-hits.jsonl` | Per-developer buffer of `rota knowledge hit`; keeps a consulted bullet from dirtying the tracked sidecar. `rota knowledge tier fold` applies it and empties it |
+| `.rota/**/knowledge-hits.jsonl*` | Per-developer buffer of `rota knowledge hit`; keeps a consulted bullet from dirtying the tracked sidecar. `rota knowledge tier fold` applies it and empties it |
 | `.rota/**/*.lock` | Transient advisory lockfiles guarding sidecar read-modify-write |
 
 `rota init` writes these under a `# ── rota ──` header in your project's `.gitignore`. It also adds `.worktrees/` once: worker worktrees (worker-pool slots and parallel rounds) live in `<project>/.worktrees/<name>`, and a nested checkout must stay out of `git status`.
