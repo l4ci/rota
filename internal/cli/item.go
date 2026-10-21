@@ -566,7 +566,9 @@ func itemSectionSet(fs *flag.FlagSet) RunFunc {
 		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
 			ed, ok := be.(backlog.SectionEditor)
 			if !ok {
-				return Result{}, Refused("item section set edits an issue body; in file mode edit the item's detail file under .rota/ directly")
+				return Result{}, &backlog.RefusedError{BlockedBy: "backend", Err: backlog.ErrWrongBackend,
+					Hint: "in file mode edit the item's detail file under .rota/ directly",
+					Msg:  "item section set is not available when issues.source is file"}
 			}
 			return withItem(be, args[0], func(id, typ string) (Result, error) {
 				changed, err := ed.SetSection(args[0], *name, text)
