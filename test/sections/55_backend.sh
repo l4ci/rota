@@ -455,7 +455,7 @@ v = i[sys.argv[2]]
 if sys.argv[2] == "milestone":
     v = v[0] if v else None   # the store keeps [title, number]
 print(",".join(sorted(v)) if isinstance(v, list) else (v if v is not None else "-"))' "$1" "$2" "$P/db.json"; }
-    EDITS() { grep -c 'issue \(edit\|update\)' "$P/log" || true; }
+    EDITS() { grep -c 'issue \(edit\|update\)\|api -X PATCH' "$P/log" || true; }
 
     if [ "$prov" = github ]; then
       CFG ',"autoCreateLabel":false'
