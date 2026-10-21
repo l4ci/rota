@@ -128,10 +128,10 @@ type fakeStore struct {
 
 func (f *fakeStore) Rows() ([]cfgRow, error) { return append([]cfgRow(nil), f.rows...), nil }
 
-func (f *fakeStore) Set(key, raw string, local bool) (bool, error) {
+func (f *fakeStore) Set(key, raw string, local bool) (bool, string, error) {
 	f.calls = append(f.calls, fmt.Sprintf("set %s %s local=%v", key, raw, local))
 	if f.fail != nil {
-		return false, f.fail
+		return false, "", f.fail
 	}
 	for i := range f.rows {
 		if f.rows[i].Key == key {
@@ -141,7 +141,7 @@ func (f *fakeStore) Set(key, raw string, local bool) (bool, error) {
 			}
 		}
 	}
-	return true, nil
+	return true, "", nil
 }
 
 func (f *fakeStore) Global() bool { return false }

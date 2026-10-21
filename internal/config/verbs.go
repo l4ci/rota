@@ -136,6 +136,9 @@ type SetResult struct {
 	Previous    any
 	HadPrevious bool
 	Changed     bool
+	// Migration is the old auto the set rewrote to roundtrip before writing
+	// (autonomySet), for the caller to say so.
+	Migration AutonomyMigration
 }
 
 // Layer is the file a write lands in.

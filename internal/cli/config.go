@@ -200,7 +200,7 @@ func configSaveGlobal(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Resolution("%v", err)
 		}
-		saved, err := config.SaveGlobal(root, dir)
+		saved, am, err := config.SaveGlobal(root, dir)
 		if errors.Is(err, config.ErrCorrupt) || errors.Is(err, fsio.ErrUnreadable) {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
@@ -208,10 +208,13 @@ func configSaveGlobal(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		path := config.GlobalPath(dir)
-		return Result{
-			Data: jsonObj("path", path, "saved", strSlice(saved)),
-			Text: fmt.Sprintf("saved %d keys to %s", len(saved), path),
-		}, nil
+		data := jsonObj("path", path, "saved", strSlice(saved))
+		text := fmt.Sprintf("saved %d keys to %s", len(saved), path)
+		if lines := autonomyLines(am); len(lines) > 0 {
+			data.Set("autonomy", jsonObj("rewrote", true))
+			text += "\n" + strings.Join(lines, "\n")
+		}
+		return Result{Data: data, Text: text}, nil
 	}
 }
 
@@ -257,6 +260,10 @@ func configSet(fs *flag.FlagSet) RunFunc {
 		if scope == "global" {
 			data.Set("scope", "global")
 			text = "global: " + text + " (global config, applies to every project that does not override it)"
+		}
+		if lines := autonomyLines(res.Migration); len(lines) > 0 {
+			data.Set("autonomy", jsonObj("rewrote", true))
+			text += "\n" + strings.Join(lines, "\n")
 		}
 		return Result{Data: data, Text: text}, nil
 	}
