@@ -938,7 +938,7 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 	if attempt == "" {
 		attempt = worker.NewAttempt()
 	}
-	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return run.branch }, Round: rnd, Kind: run.kind, Model: run.model, Wrap: wrap,
+	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return run.branch }, Round: rnd, Kind: run.kind, Model: run.model, Wrap: wrap, LogRelay: true,
 		Brief: func() string {
 			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
 			text := pointerBrief(o.To, id, run.branch, run.brief, nil, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: run.kind, Tier: run.tier, Model: run.model, Default: o.Settings.Tier, Reason: run.reason, Table: o.Settings.Models[run.kind], Attempt: attempt, FullOnly: o.Settings.FullOnly})

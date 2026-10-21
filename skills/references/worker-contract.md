@@ -224,7 +224,7 @@ The worker writes its own PR body, and an orchestrator relay, a maintainer typin
 - **Unsigned text** means ask, never act, never ignore. On Codex, the hook means the worker never sees it.
 - **`m:` prefix** is optional, for a maintainer's typed answer. It is imitable, so a prefixed line that contradicts the last signed message still gets one confirmation. The Codex hook lets it through (maintainer ruling, #3), so it stays the one unsigned path into any worker: whoever can type in the pane can use it.
 - **Phantom text.** Claude Code renders a dim generated suggestion on the prompt line. It was never typed by anyone.
-- **Relay log.** `rota worker dispatch --relay` appends `{round, ts, summary}` to the slot's `relays[]` in `.rota/workers.json`; the summary is the first line of the relayed text. A new task dispatch resets the list.
+- **Relay log.** `rota worker dispatch --relay` appends `{round, ts, summary}` to the slot's `relays[]` in `.rota/workers.json`; the summary is the first line of the relayed text. A new task dispatch resets the list. A transfer's brief is logged there too, so cite it as `orchestrator relay round N`; an assignment brief is not a relay.
 - **Gate.** `rota worker gate` reads the `## Approvals` section of the slot's PR body (`gh pr view --json body`) and fails with verdict `provenance-fail` (exit 1) on:
   - *inflation*: a line citing the maintainer that quotes a logged relay;
   - *deflation*: a line citing `orchestrator relay round N` when no relay for round N is logged;
