@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/fsio"
 )
 
 // envHashFile is where a slot's last successful round.envSetup is remembered:
@@ -30,10 +31,8 @@ var lockfiles = []string{
 // runs once per slot.
 func envSetupHash(dir, command string) string {
 	names := append([]string(nil), lockfiles...)
-	if m, err := filepath.Glob(filepath.Join(dir, "requirements*.txt")); err == nil {
-		for _, p := range m {
-			names = append(names, filepath.Base(p))
-		}
+	for _, p := range fsio.GlobDir(dir, "requirements*.txt") {
+		names = append(names, filepath.Base(p))
 	}
 	sort.Strings(names)
 	h := sha256.New()

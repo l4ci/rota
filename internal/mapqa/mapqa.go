@@ -65,7 +65,7 @@ type entry struct {
 
 // mapEntries lists the map files that declare a `subsystem:`, sorted by it.
 func mapEntries(dir string) []entry {
-	files, _ := filepath.Glob(filepath.Join(dir, "*.md"))
+	files := fsio.GlobDir(dir, "*.md")
 	sort.Strings(files)
 	var out []entry
 	for _, f := range files {
@@ -98,7 +98,7 @@ func MapIndexBlock(root string) string {
 
 // QAIndexBlock is the body of the rota-qa managed block.
 func QAIndexBlock(root string) string {
-	files, _ := filepath.Glob(rotatree.File(root, rotatree.QADir, "*.md"))
+	files := fsio.GlobDir(rotatree.File(root, rotatree.QADir), "*.md")
 	sort.Strings(files)
 	bullets := "- _(no QA strategy yet — run `/rota-qa first-run` to scaffold)_"
 	if len(files) > 0 {
