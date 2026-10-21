@@ -273,10 +273,6 @@ func SystemCredentials(run proc.Runner) Credentials {
 	return Credentials{GOOS: runtime.GOOS, Run: run, Now: time.Now}
 }
 
-// CredentialsProblem reports why the account whose config dir is dir (already
-// expanded) has no usable credentials on this machine; see Credentials.Problem.
-func CredentialsProblem(dir string) string { return SystemCredentials(proc.Run).Problem(dir) }
-
 // Problem reports why the account whose config dir is dir (already expanded)
 // has no usable credentials: no file (or, on macOS, Keychain entry),
 // unreadable, or no access token. "" means usable. Expiry is not checked:

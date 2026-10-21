@@ -105,6 +105,10 @@ type Env struct {
 	// lease, host and brief lookups) and Accounts, the meter reader that quota
 	// and the ledger read; picking an account is AccountPicking's job.
 	Worker worker.Env
+	// Login reads a slot account's Claude login for the no-login check
+	// (SlotLoginProblem). The zero value reads credentials files only, never the
+	// macOS Keychain; baseRoundEnv sets the system one.
+	Login worker.Credentials
 	// AccountPicking turns the delivery's account step on: keep the slot's own
 	// round.accounts account while it has headroom, else pick. Off is the zero
 	// value; WithAccounts is the one way to turn it on, so a verb opts in by
@@ -398,7 +402,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		key := s.Kind() + "\x00" + s.ConfigDir()
 		why, seen := loginByDir[key]
 		if !seen {
-			why = SlotLoginProblem(s)
+			why = e.SlotLoginProblem(s)
 			loginByDir[key] = why
 		}
 		r.NoLogin = why
