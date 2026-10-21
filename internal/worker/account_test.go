@@ -101,9 +101,19 @@ func TestAccountListWithoutAccounts(t *testing.T) {
 	}
 }
 
+// loggedIn is a Credentials whose Keychain holds a usable login for every
+// config dir, so tests with made-up dirs pass the Pick login check.
+func loggedIn() Credentials {
+	c, _ := fakeKeychain("darwin", nil)
+	c.Run = func(context.Context, proc.Cmd) (proc.Result, error) {
+		return proc.Result{Stdout: `{"claudeAiOauth":{"accessToken":"t"}}` + "\n"}, nil
+	}
+	return c
+}
+
 func TestAccountPick(t *testing.T) {
 	dir, usage := newProject(t, acctConfig), usageDir(t)
-	acc := &Accounts{Env: Env{Getenv: func(k string) string {
+	acc := &Accounts{Login: loggedIn(), Env: Env{Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
 			return usage
 		}
@@ -125,10 +135,32 @@ func TestAccountPick(t *testing.T) {
 func TestAccountPickRotatesWhenNoMeterIsReadable(t *testing.T) {
 	dir := newProject(t, acctConfig)
 	empty := t.TempDir()
-	acc := &Accounts{Env: Env{Getenv: func(string) string { return empty }}}
+	acc := &Accounts{Login: loggedIn(), Env: Env{Getenv: func(string) string { return empty }}}
 	name, ok := acc.Pick(bg, dir, nil)
 	if !ok || name != "alpha" {
 		t.Errorf("unknown meters must stay eligible: go %q", name)
+	}
+}
+
+func TestAccountPickSkipsAccountWithoutLogin(t *testing.T) {
+	empty := t.TempDir()
+	// alpha is the best pick; its config dir has no login, so beta must win.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for _, n := range []string{"beta", "gamma", "delta", "epsilon", "zeta"} {
+		d := filepath.Join(home, "acct", n)
+		os.MkdirAll(d, 0o755)
+		os.WriteFile(filepath.Join(d, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"t"}}`), 0o600)
+	}
+	cfg := strings.ReplaceAll(acctConfig, `"/acct/`, `"~/acct/`)
+	dir := newProject(t, cfg)
+	acc := &Accounts{Env: Env{Getenv: func(string) string { return empty }}}
+	name, ok := acc.Pick(bg, dir, nil)
+	if !ok || name != "beta" {
+		t.Errorf("Pick = %q, %v; want beta (alpha has no login)", name, ok)
+	}
+	if name, ok := acc.Pick(bg, dir, []string{"beta", "gamma", "delta", "epsilon", "zeta"}); ok {
+		t.Errorf("only login-less alpha left, Pick = %q", name)
 	}
 }
 
@@ -137,7 +169,7 @@ func TestAccountAssign(t *testing.T) {
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
 	got := map[string]string{} // workers.json after each assign
 	usage := usageDir(t)
-	acc := &Accounts{Env: Env{Getenv: func(k string) string {
+	acc := &Accounts{Login: loggedIn(), Env: Env{Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
 			return usage
 		}
@@ -204,7 +236,7 @@ func TestAccountAssignWithEveryAccountCoolingIsRefused(t *testing.T) {
 func TestPoolInitSpreadsAccounts(t *testing.T) {
 	b := newProject(t, acctConfig)
 	usage := usageDir(t)
-	acc := &Accounts{Env: Env{Getenv: func(k string) string {
+	acc := &Accounts{Login: loggedIn(), Env: Env{Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
 			return usage
 		}
