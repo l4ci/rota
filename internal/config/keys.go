@@ -54,7 +54,7 @@ var Keys = []Key{
 	k("round.dispatch", "subagent", true, TypeEnum, "Rounds: Where round workers run. subagent means detect: herdr in a herdr pane, tmux in tmux, else in-harness subagents. /rota-work ignores it.", "subagent", "tmux", "herdr"),
 	k("round.slots", num("3"), true, TypeInt, "Rounds: Number of worker slots rota round start provisions (at least 1). --slots overrides it for one round."),
 	k("round.workerCommand", "", true, TypeString, "Rounds: Command that starts a worker session in its tmux window. Empty builds claude --model <models.worker> --dangerously-skip-permissions; {model} receives the tier's model."),
-	k("round.accounts", []any{}, true, TypeList, "Rounds: Claude accounts for worker slots, as {name, configDir} objects, each a separate CLAUDE_CONFIG_DIR. Empty: every slot inherits the ambient config dir. Machine-specific, so set it in the global config or config.local.json."),
+	k("round.accounts", []any{}, true, TypeList, "Rounds: Claude accounts for worker slots, as {name, configDir} objects, each a separate CLAUDE_CONFIG_DIR. Empty: every slot uses the orchestrator's CLAUDE_CONFIG_DIR. Machine-specific, so set it in the global config or config.local.json."),
 	k("round.operatorCommand", "", true, TypeString, "Rounds: Command that starts the orchestrator. Empty builds claude --model <models.orchestrator> --permission-mode auto (with --continue for rota worker session ensure)."),
 	k("refactor.confirmBeforeExecute", true, true, TypeBool, "Whether /rota-refactor --fix confirms the candidate list before implementing it. Off means no pause."),
 	k("learn.verify", false, true, TypeBool, "Whether /rota-learn always runs a fresh-context verifier on the entries it just wrote."),
