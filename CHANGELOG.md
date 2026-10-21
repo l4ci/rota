@@ -1,12 +1,37 @@
 # Changelog
 
-## Unreleased
+## v0.21.0 — 2026-10-21
+
+Three autonomy levels replace the old on/off switch, rota records its own mistakes and offers to file them upstream, and rounds stop switching worktrees under a running gate.
 
 ### Changed
 
-- `autonomy.level` takes three values, `off`, `roundtrip` and `auto`, for solo skills and rounds alike (#1101). `roundtrip` runs one item from brainstorm to ship without process questions. `auto` continues with the next ready item and turns on the round autopilot. Manual gates, `ship.mergeApproval`, `/rota-decide` and the human-only calls (product behavior, public names, breaking changes, scope cuts) stop every level. `rota config check` and `rota config set` reject any other value.
-- `round.autopilot` is retired (#1101). `rota round tick` and `rota round watch --autopilot` exit 4 unless `autonomy.level` is `auto`. `rota config fill` deletes the key and, when it was `true`, points at `rota config set autonomy.level auto`.
-- One-time migration (#1101): `rota config fill` (also run by `rota init` and `rota update`) rewrites an `auto` in a config stamped older than 0.21.0 to `roundtrip` and raises the stamp, so a later `auto` stays. A global-config `auto` is rewritten the same way, guarded by a `config.version` stamp file beside it. Setting `autonomy.level` on any layer stamps that layer, so an `auto` set right after upgrading also stays (#1488). To roll back after downgrading, run `rota config set autonomy.level auto`; an older binary's `config check` rejects `roundtrip`.
+- `autonomy.level` takes three values, `off`, `roundtrip` and `auto`, for solo skills and rounds alike (#1101). `roundtrip` runs one item from brainstorm to ship without process questions. `auto` continues with the next ready item and turns on the round autopilot. Manual gates, `ship.mergeApproval`, `/rota-decide` and the human-only calls (product behavior, public names, breaking changes, scope cuts) stop every level.
+- `round.autopilot` is retired (#1101). `rota round tick` and `rota round watch --autopilot` exit 4 unless `autonomy.level` is `auto`. `rota config fill` deletes the key, and `rota config check` names it under REMOVED in `config.json` or `config.local.json` (#1520).
+- One-time migration: `rota config fill` (also run by `rota init` and `rota update`) rewrites an `auto` in a config stamped older than 0.21.0 to `roundtrip`, because the old `auto` meant one hop. A global `auto` gets the same rewrite, guarded by a `config.version` stamp file beside the global config. Setting `autonomy.level` on any layer stamps that layer, so an `auto` set after upgrading stays. `config set`, `config save-global` and `rota setup` report or follow the rewrite too (#1511, #1512). To keep running until the queue is empty, run `rota config set autonomy.level auto` once after upgrading.
+- `rota round assign` and `rota round transfer` refuse with `gate-running` while a gate or train holds the land lock (#1480).
+- Round assign skips accounts with no usable login and names the login problem when none is left.
+- `rota verdict add --sha` binds a verdict to the commit the review package diffed, not the local branch ref.
+
+### New
+
+- `/rota-bugreport` and `rota bugreport` (#1175): a verb that fails with exit 70 records the mistake in `.rota/bugreports.jsonl`, agents can add one by hand, and the skill drafts a redacted report, checks for a duplicate and files it on the rota repo only after you say yes.
+- `rota knowledge rm` deletes a knowledge bullet and its tier entry.
+- `rota item section set` replaces one section of an issue body.
+- `rota migrate milestone-files` moves milestone files left from file mode into the archive, and doctor warns while they remain.
+
+### Fixed
+
+- Knowledge hits are buffered in a gitignored file and folded by `rota knowledge tier fold`, so recording a hit no longer dirties the tree during a gate.
+- GitHub issue edits go over REST and are verified by reading them back.
+- A receipt rerun points at the pending call it duplicates. The smoke runner refuses foreign sections and runs without `.git`.
+
+Refactors with no intended behaviour change: worktree containment, the Claude settings layout, machine secrets and the projects config dir each have one owner, and the CLI's git and pane-host reads go through injected dependencies.
+
+## Stats
+281 commits, 347 files changed, +10129 −1479 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.20.0...v0.21.0
 
 ## v0.20.0 — 2026-10-21
 
