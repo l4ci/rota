@@ -5,7 +5,8 @@ Loaded by `SKILL.md` Step 1 (dirty guard) and Step 8.5 (after the task commits).
 Exit 1 from `rota git guard clean` (dirty tree): if **every** dirty path in `git status --porcelain` is a tool-generated sibling, sweep them into their own `chore:` commit (never inside a task commit) and continue; any user change stops with the guard's message. Siblings are:
 
 - a path beside a tracked file (e.g. `Foo.gd.uid` beside tracked `Foo.gd`), or
-- one of `*.gd.uid`, `*.xcworkspace/contents.xcworkspacedata`, `Package.resolved`, `*.xcodeproj/project.pbxproj` regenerated without a meaningful diff, `.DS_Store`.
+- one of `*.gd.uid`, `*.xcworkspace/contents.xcworkspacedata`, `Package.resolved`, `*.xcodeproj/project.pbxproj` regenerated without a meaningful diff, `.DS_Store`, or
+- the target item's own fresh artifacts from the `/rota-brainstorm` → `/rota-plan` → `/rota-work` chain (file backend): `.rota/designs/<ID>.md` and `.rota/plans/<ID>.md` (item key, e.g. `B07`; for a milestone item `M01-B07`). Match the target's ID exactly: another item's or a slice's design/plan is a user change. Commit them as `chore: capture <ID> design` / `chore: capture <ID> plan` (one commit each, or one `chore: capture <ID> design and plan`).
 
 Stage by name:
 
