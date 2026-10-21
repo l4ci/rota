@@ -12,7 +12,6 @@ import (
 	"github.com/l4ci/rota/internal/bugreport"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -301,7 +300,7 @@ func bugreportOffer(open []bugreport.Record) string {
 
 // recordMistake writes an internal error or a panic to the bug log. It never
 // fails the verb: a log that cannot be written is only a missed report.
-func recordMistake(c *Ctx, args []string, e *Error) {
+func recordMistake(c *Ctx, e *Error) {
 	if c.deps() == nil || !c.deps().RecordMistakes || e.Exit != ExitInternal {
 		return
 	}
@@ -310,25 +309,37 @@ func recordMistake(c *Ctx, args []string, e *Error) {
 	if verb == "" || strings.HasPrefix(verb, "bugreport") {
 		return
 	}
-	dir, err := os.Getwd()
+	root, err := c.Root()
 	if err != nil {
 		return
 	}
-	root, ok := rotatree.Find(dir)
-	if !ok {
-		return
-	}
-	_, _ = bugreport.Add(root, bugreport.Record{Source: bugreport.SourceAuto, Verb: verb, Args: verbArgs(verb, args),
+	_, _ = bugreport.Add(root, bugreport.Record{Source: bugreport.SourceAuto, Verb: verb, Args: c.verbArgs,
 		Exit: e.Exit, Error: e.Message}, c.deps().Now())
 }
 
-// verbArgs is args without the command words that name the verb.
-func verbArgs(verb string, args []string) []string {
-	rest := args
-	for _, w := range strings.Fields(verb) {
-		if len(rest) > 0 && rest[0] == w {
-			rest = rest[1:]
+// stripGlobals is args without the global flags (and the value of -C, --cwd
+// and --repo), up to a "--" that ends flag parsing.
+func stripGlobals(args []string) []string {
+	var out []string
+	for i := 0; i < len(args); i++ {
+		tok := args[i]
+		if tok == "--" {
+			return append(out, args[i:]...)
+		}
+		name, _, hasVal := strings.Cut(strings.TrimLeft(tok, "-"), "=")
+		if !isFlag(tok) {
+			out = append(out, tok)
+			continue
+		}
+		switch name {
+		case "json", "ui", "h", "help":
+		case "C", "cwd", "repo":
+			if !hasVal {
+				i++
+			}
+		default:
+			out = append(out, tok)
 		}
 	}
-	return rest
+	return out
 }
