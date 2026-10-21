@@ -99,6 +99,10 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 				roundtick.ClearState(cd)
 			}
 		}
+		// Warnings first: a refusal must not hide the buffered-hits fold command.
+		for _, w := range res.Warnings {
+			c.Warn("%s", w)
+		}
 		if err != nil {
 			return Result{}, err
 		}
@@ -106,9 +110,6 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 			if perr := receipt.Prune(root); perr != nil {
 				c.Warn("receipts not pruned: %v", perr)
 			}
-		}
-		for _, w := range res.Warnings {
-			c.Warn("%s", w)
 		}
 		d := jsonx.NewObject()
 		if res.Retained && res.Verdict == round.VerdictHoldsWork {
