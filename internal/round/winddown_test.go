@@ -392,3 +392,26 @@ func TestWindDownWarnsOnBufferedHits(t *testing.T) {
 		t.Errorf("warnings = %v, want one naming rota knowledge tier fold", res.Warnings)
 	}
 }
+
+// An umbrella sub-repo buffer needs its own fold command: the bare verb folds
+// the root scope only.
+func TestWindDownNamesFoldPerScopeBuffer(t *testing.T) {
+	f := newAssignFixture(t)
+	f.verifyWith(t, `["true"]`)
+	dir := filepath.Join(f.root, ".rota", "knowledge", "web")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hit := []byte("{\"topic\":\"a\",\"title\":\"b\",\"date\":\"2026-01-01\"}\n")
+	if err := os.WriteFile(filepath.Join(dir, "knowledge-hits.jsonl"), hit, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.windDown(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := strings.Join(res.Warnings, "\n")
+	if !strings.Contains(w, "rota --repo web knowledge tier fold") || strings.Contains(w, "`rota knowledge tier fold`") {
+		t.Errorf("warnings = %v, want only the sub-repo fold command", res.Warnings)
+	}
+}
