@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/legacystate"
 	"github.com/l4ci/rota/internal/proc"
@@ -118,6 +119,10 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.Slots, in.CwdOf = doctorSlotBlocks(root), procCwd(ctx, d.Proc)
 	in.NothingToVerify = d.workerEnv().NothingToVerify(root)
 	in.AgentProblems = agents.Problems(root)
+	// No .gitignore at all is not an older project's drift: init creates it.
+	if raw, err := os.ReadFile(filepath.Join(root, ".gitignore")); err == nil {
+		in.GitignoreMissing = initproj.MissingIgnoreLines(string(raw))
+	}
 	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now(), d.DoctorDisk, d.Getenv)
 	if on, err := config.SwitchOnUsage(cfg); err == nil {
 		in.SwitchOnUsage = on
