@@ -96,6 +96,9 @@ func TestRedact(t *testing.T) {
 		{"repo name", "repo acme-shop is red", "acme-shop"},
 		{"remote", "origin git@github.com:acme/acme-shop.git", "acme/acme-shop"},
 		{"url userinfo", "https://bob:hunter2@git.example.com/x", "hunter2"},
+		{"userinfo token only", "https://ghp_realtoken123@github.com/x", "ghp_realtoken123"},
+		{"linear key", "key lin_api_AbCdEf0123456789xyz", "lin_api_AbCdEf0123456789xyz"},
+		{"atlassian token", "tok ATATT3xFfGF0abcDEF_123=45", "ATATT3xFfGF0abcDEF_123"},
 	} {
 		got := Redact(c.in, env)
 		if strings.Contains(got, c.gone) || got == c.in {
@@ -134,5 +137,30 @@ func TestDraftUnknownHarnessAndModel(t *testing.T) {
 	_, body := Draft(Record{Source: SourceAgent, Summary: "wrong refusal"}, Environment{Version: "dev", OS: "linux", Arch: "arm64"}, Env{})
 	if strings.Count(body, "unknown") < 2 {
 		t.Errorf("missing harness/model not marked unknown:\n%s", body)
+	}
+}
+
+func TestDraftTitleIsRedactedBeforeItIsTruncated(t *testing.T) {
+	secret := "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+	// the secret straddles the 90-character cut: a cut-then-redact leaves a prefix
+	r := Record{Source: SourceAgent, Verb: "x", Summary: strings.Repeat("a", 60) + " " + secret}
+	title, _ := Draft(r, Environment{}, Env{})
+	if strings.Contains(title, "ghp_") {
+		t.Errorf("title keeps a token fragment: %q", title)
+	}
+}
+
+func TestAddRedactsWhatItStores(t *testing.T) {
+	root := project(t)
+	got, err := Add(root, Record{Source: SourceAuto, Verb: "x", Args: []string{"--token", "ghp_abcdefghijklmnopqrstuvwxyz0123456789"}, Error: "bad key sk-abcdefghijklmnopqrstuv"}, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(Path(root))
+	if strings.Contains(string(raw), "ghp_abc") || strings.Contains(string(raw), "sk-abcdef") || strings.Contains(got.Error, "sk-abc") {
+		t.Errorf("log keeps secrets: %s", raw)
+	}
+	if fi, _ := os.Stat(Path(root)); fi.Mode().Perm() != 0o600 {
+		t.Errorf("log mode %v, want 0600", fi.Mode().Perm())
 	}
 }
