@@ -211,6 +211,12 @@ func configSet(fs *flag.FlagSet) RunFunc {
 	}
 }
 
+// globalCorruptLine is the one wording `config check` and `config fill` share
+// when the global config cannot be read.
+func globalCorruptLine(gerr error) string {
+	return "GLOBAL CORRUPT: " + gerr.Error() + " (inherited keys read as missing; repair the global config, do not run fill)"
+}
+
 func configCheck(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := argCount(c, args, 0, 0, "config check takes no arguments"); err != nil {
@@ -246,7 +252,7 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		}
 		if gerr := config.GlobalError(); gerr != nil && status == config.Stale {
 			data.Set("globalCorrupt", gerr.Error())
-			res.Text += "\nGLOBAL CORRUPT: " + gerr.Error() + " (inherited keys read as missing; repair the global config, do not run fill)"
+			res.Text += "\n" + globalCorruptLine(gerr)
 		}
 		if status == config.UpToDate || status == config.Stale {
 			if retired := config.Retired(root); len(retired) > 0 {
@@ -279,16 +285,24 @@ func configFill(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		removed := config.Removed(root)
+		// Same condition as `config check`: STALE with an unreadable global.
+		var corrupt error
+		if status, _ := config.Check(root); status == config.Stale {
+			corrupt = config.GlobalError()
+		}
 		filled, sm, rm, err := config.FillDetect(root, c.deps().originProvider(c.Context(), root))
 		if err != nil {
 			return roundMigrationFail(err)
 		}
-		text := "config up to date; nothing to fill"
+		const upToDate = "config up to date; nothing to fill"
+		text := upToDate
 		if len(filled) > 0 {
 			text = "filled: " + strings.Join(filled, ", ")
+		} else if corrupt != nil {
+			text = "nothing filled. " + globalCorruptLine(corrupt)
 		}
 		if len(removed) > 0 {
-			if len(filled) == 0 {
+			if text == upToDate {
 				text = ""
 			} else {
 				text += "\n"
@@ -298,7 +312,7 @@ func configFill(fs *flag.FlagSet) RunFunc {
 		data := jsonObj("filled", anySlice(filled), "removed", anySlice(removed), "changed", len(filled) > 0 || len(removed) > 0 || sm.Changed || rm.Changed())
 		if rm.Changed() {
 			data.Set("renamed", jsonObj("config", renameList(rm.Config), "local", renameList(rm.Local)))
-			if text == "config up to date; nothing to fill" {
+			if text == upToDate {
 				text = ""
 			} else {
 				text += "\n"
@@ -311,7 +325,7 @@ func configFill(fs *flag.FlagSet) RunFunc {
 		}
 		if sm.Changed {
 			data.Set("migrated", jsonObj("source", sm.Source, "forge", sm.Forge, "removed", anySlice(sm.Removed)))
-			if text == "config up to date; nothing to fill" {
+			if text == upToDate {
 				text = ""
 			} else {
 				text += "\n"

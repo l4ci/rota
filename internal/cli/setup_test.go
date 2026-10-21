@@ -266,6 +266,9 @@ func TestSetupOffersSaveGlobalOnFirstUse(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
+	if !strings.Contains(errOut, "every project that does not set the key itself") {
+		t.Errorf("save offer must say the answers apply to every project, got:\n%s", errOut)
+	}
 	if !strings.Contains(errOut, "Save as global defaults?") || !strings.Contains(errOut, "work.isolation = worktree") {
 		t.Errorf("offer missing:\n%s", errOut)
 	}
