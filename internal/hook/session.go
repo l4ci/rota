@@ -48,3 +48,46 @@ func Consume(path string) (body string, ok bool) {
 	}
 	return string(b), true
 }
+
+// OrchestratorNote is a marked orchestrator handoff found at a path.
+type OrchestratorNote struct {
+	Heading       string
+	Consumed      bool
+	ConsumeFailed bool
+}
+
+// ReadOrchestratorNote finds the note `/rota-pause` left for the orchestrator.
+// Only a file whose first line is HandoffMarker counts; a missing or unmarked
+// file returns nil with no warning. With consume it archives the note to
+// path+".consumed" like the SessionStart hook, so a second read finds nothing.
+// A note that cannot be read or archived comes back as a warning instead of
+// vanishing.
+func ReadOrchestratorNote(path string, consume bool) (note *OrchestratorNote, warn string) {
+	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil, ""
+	}
+	if err != nil {
+		return nil, "handoff note " + path + " unreadable: " + err.Error()
+	}
+	first, rest, _ := strings.Cut(string(b), "\n")
+	if strings.TrimSpace(first) != HandoffMarker {
+		return nil, ""
+	}
+	n := &OrchestratorNote{}
+	for _, l := range strings.Split(rest, "\n") {
+		if strings.HasPrefix(l, "#") {
+			n.Heading = strings.TrimSpace(strings.TrimLeft(l, "#"))
+			break
+		}
+	}
+	if consume {
+		if err := os.Rename(path, path+".consumed"); err != nil {
+			n.ConsumeFailed = true
+			warn = "could not archive handoff note " + path + ": " + err.Error()
+		} else {
+			n.Consumed = true
+		}
+	}
+	return n, warn
+}
