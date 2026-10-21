@@ -850,6 +850,51 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-20"
+    },
+    "Rounds: Orchestration: Slate & issues::Sibling follow-ups from one review can contradict": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-21"
+    },
+    "Rounds: Orchestration: Workers & relays::A busy background shell reads as idle": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-21"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::Reviewers must stop when the archive extract fails": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-21"
+    },
+    "Build & Tooling: Smoke testing: Gate & frozen records::Doctor changes must run smoke 83": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-21"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Wind-down verifies the real checkout, not a scratch merge": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-21"
+    },
+    "Rounds: Orchestration: Workers & relays::Release a held issue before closing it": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-21"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes::A bigger timeout is not a flake fix": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-21"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::printf into head dies under pipefail": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-21"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes::Isolate the global config without a temp dir leak": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-21"
     }
   }
 }
