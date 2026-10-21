@@ -25,7 +25,7 @@ func kaProject(t *testing.T, cfg string) string {
 }
 
 func kaHandoff(dir string) string {
-	return handoffFile(dir, config.Load(filepath.Join(dir, ".rota", "config.json")))
+	return handoffFile(defaultDeps(), dir, config.Load(filepath.Join(dir, ".rota", "config.json")))
 }
 
 // kaChild is a shell child that counts its starts, records its arguments and

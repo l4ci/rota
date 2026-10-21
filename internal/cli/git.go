@@ -97,8 +97,8 @@ func configuredBase(dir string) string {
 	return s
 }
 
-func resolveBase(ctx context.Context, dir string) (string, bool, error) {
-	base, ok, err := git.Repo{Dir: dir}.Base(ctx, configuredBase(dir))
+func resolveBase(ctx context.Context, d *Deps, dir string) (string, bool, error) {
+	base, ok, err := d.Repo(dir).Base(ctx, configuredBase(dir))
 	return base, ok, gitErr(err)
 }
 
@@ -110,7 +110,7 @@ func gitBase(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	base, ok, err := resolveBase(c.Context(), dir)
+	base, ok, err := resolveBase(c.Context(), c.deps(), dir)
 	if err != nil {
 		return Result{}, err
 	}
@@ -137,7 +137,7 @@ func gitGuardClean(fs *flag.FlagSet) RunFunc {
 				return Result{}, err
 			}
 		}
-		r := git.Repo{Dir: dir}
+		r := c.deps().Repo(dir)
 		isRepo, err := r.IsRepo(ctx)
 		if err != nil {
 			return Result{}, gitErr(err)
@@ -171,7 +171,7 @@ func gitGuardClean(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		for _, repo := range list {
-			d, ok, err := git.Repo{Dir: repo.Path}.Dirty(ctx)
+			d, ok, err := c.deps().Repo(repo.Path).Dirty(ctx)
 			switch {
 			case err != nil && errors.Is(err, git.ErrNoGit):
 				return Result{}, gitErr(err)
@@ -203,7 +203,7 @@ func gitGuardFeature(c *Ctx, args []string) (Result, error) {
 		branch = args[0]
 	}
 	if branch == "" {
-		if branch, err = (git.Repo{Dir: dir}).CurrentBranch(ctx); err != nil {
+		if branch, err = c.deps().Repo(dir).CurrentBranch(ctx); err != nil {
 			return Result{}, gitErr(err)
 		}
 	}
@@ -211,7 +211,7 @@ func gitGuardFeature(c *Ctx, args []string) (Result, error) {
 		return Result{Data: gitObj("feature", false, "reason", "detached")},
 			Failed("could not determine the current branch (detached HEAD?)")
 	}
-	base, ok, err := resolveBase(ctx, dir)
+	base, ok, err := resolveBase(ctx, c.deps(), dir)
 	if err != nil {
 		return Result{}, err
 	}
@@ -263,7 +263,7 @@ func gitBranch(fs *flag.FlagSet) RunFunc {
 		ctx := c.Context()
 		var taken []string
 		for _, n := range names {
-			exists, err := git.Repo{Dir: repos[n]}.BranchExists(ctx, branch)
+			exists, err := c.deps().Repo(repos[n]).BranchExists(ctx, branch)
 			if err != nil {
 				return Result{}, gitErr(err)
 			}
@@ -285,7 +285,7 @@ func gitBranch(fs *flag.FlagSet) RunFunc {
 			return "; already created in: " + strings.Join(created, ", ")
 		}
 		for _, n := range names {
-			msg, ok, err := git.Repo{Dir: repos[n]}.CreateBranch(ctx, branch)
+			msg, ok, err := c.deps().Repo(repos[n]).CreateBranch(ctx, branch)
 			if err != nil {
 				if errors.Is(err, git.ErrNoGit) {
 					return Result{}, Unavailable("git is not installed%s", partial())
