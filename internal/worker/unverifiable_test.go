@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/stamp"
+	"sync"
 	"testing"
 	"time"
 
@@ -147,12 +148,21 @@ func TestWaitOnEventsReturnsAnUnverifiableSlotWhenItComesDue(t *testing.T) {
 	h := newWaitHost("herdr") // never emits
 	h.set("w1", "", "unverifiable:stale-handle")
 	e := envWith(watcherHost{h})
-	e.Now = time.Now
+	// A clock that starts at its first read, which is the wait's own: a
+	// scheduler stall between the registry write and the wait cannot make the
+	// slot overdue before the event wait begins.
+	base := time.Date(2026, 10, 2, 15, 4, 5, 0, time.UTC)
+	var first sync.Once
+	var began time.Time
+	e.Now = func() time.Time {
+		first.Do(func() { began = time.Now() })
+		return base.Add(time.Since(began))
+	}
 	if err := Update(dir, func(d *Doc) {
 		s := d.Slot("w1")
 		s.Raw().Set("state", "unverifiable")
 		s.Raw().Set("reason", "stale-handle")
-		s.Raw().Set("activeAt", stamp.Format(time.Now().Add(-1*time.Second))) // due in about a second
+		s.Raw().Set("activeAt", stamp.Format(base.Add(-1*time.Second))) // due in about a second
 	}); err != nil {
 		t.Fatal(err)
 	}
