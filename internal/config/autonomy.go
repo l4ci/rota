@@ -203,6 +203,15 @@ func globalStale(dir string) bool {
 	return versionBefore(strings.TrimSpace(string(b)), AutonomyLevelsSince)
 }
 
+// GlobalAutoStale is whether vals, the global config's values under dir, hold
+// an auto that migrateAutonomyGlobal has yet to rewrite to roundtrip: the
+// global is unstamped or older than AutonomyLevelsSince. A caller reading the
+// global before the migration runs uses it to see the value the migration will
+// leave.
+func GlobalAutoStale(dir string, vals map[string]any) bool {
+	return vals["autonomy.level"] == "auto" && globalStale(dir)
+}
+
 // stampGlobal writes AutonomyLevelsSince to the global stamp file under dir
 // when it is stale; a current stamp is not rewritten.
 func stampGlobal(dir string) error {
