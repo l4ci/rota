@@ -101,11 +101,11 @@ rc=0; BAD="$(python3 "$LINT" "$ROTA_BIN" "$TMP/c10b.md" 2>&1)" || rc=$?
 [ "$rc" = "1" ] && grep -q 'MISSING .*rota round bouncer' <<<"$BAD" || fail "a made-up round verb should fail: rc=$rc $BAD"
 pass "every rota verb in skills/rota-orchestrate/SKILL.md and docs/usage/parallel-rounds.md resolves ($(grep -o 'RESOLVED [0-9]*' <<<"$OUT"))"
 
-# ── contract docs carry a verified-sha stamp and no ref drifted since (#392) ──
-# test/check-doc-stamps.py: `verified-sha:` + `refs:` frontmatter on every
-# docs/contributing/contract/*.md; a ref changed after the sha is drift: a WARN by default,
-# a failure under --strict / ROTA_DOC_STAMPS=strict. A broken stamp always fails. All
-# outcomes run against a throwaway repo so the real history never has to drift.
+# ── contract docs carry refs, STAMPS carries each doc's verified sha, no ref drifted since (#392, #1294) ──
+# test/check-doc-stamps.py: `refs:` frontmatter on every docs/contributing/contract/*.md and one
+# `<doc> <sha>` line per doc in docs/contributing/contract/STAMPS; a ref changed after the sha is
+# drift: a WARN by default, a failure under --strict / ROTA_DOC_STAMPS=strict. A broken stamp
+# always fails. All outcomes run against a throwaway repo so the real history never has to drift.
 OUT="$(python3 "$TESTDIR/check-doc-stamps.py" 2>&1)" || fail "contract docs have a broken stamp: $OUT"
 SG="$TMP/stamps"; mkdir -p "$SG/docs/contributing/contract" "$SG/src"
 git -C "$SG" init -q
@@ -113,11 +113,13 @@ git -C "$SG" config user.email t@t; git -C "$SG" config user.name t
 echo one > "$SG/src/a.go"; echo one > "$SG/src/b.go"
 git -C "$SG" add src; git -C "$SG" commit -qm base
 SSHA="$(git -C "$SG" rev-parse HEAD)"
-printf -- '---\nverified-sha: %s\nrefs:\n  - src/a.go\n---\n\n# doc\n' "$SSHA" > "$SG/docs/contributing/contract/ok.md"
+SDOC="$SG/docs/contributing/contract/ok.md"; SSTAMPS="$SG/docs/contributing/contract/STAMPS"
+printf -- '---\nrefs:\n  - src/a.go\n---\n\n# doc\n' > "$SDOC"
+printf 'ok.md %s\n' "$SSHA" > "$SSTAMPS"
 rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
 [ "$rc" = 0 ] || fail "a stamped, unchanged doc should pass (rc $rc): $OUT"
 echo two > "$SG/src/b.go"; echo two > "$SG/src/a.go"
-git -C "$SG" commit -qam drift
+git -C "$SG" add -A; git -C "$SG" commit -qm drift
 rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
 [ "$rc" = 0 ] && grep -qF "WARN docs/contributing/contract/ok.md: refs changed since verified-sha $SSHA: src/a.go" <<<"$OUT" && ! grep -qF "src/b.go" <<<"$OUT" \
   || fail "drift should warn about only the changed path and exit 0 (rc $rc): $OUT"
@@ -126,19 +128,46 @@ rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" --strict 2>&1)"
   || fail "--strict should fail on drift (rc $rc): $OUT"
 rc=0; OUT="$(ROTA_DOC_STAMPS=strict python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
 [ "$rc" = 1 ] || fail "ROTA_DOC_STAMPS=strict should fail on drift (rc $rc): $OUT"
-printf -- '---\nverified-sha: nothex\nrefs:\n  - src/a.go\n---\n' > "$SG/docs/contributing/contract/ok.md"
+# --restamp clears the drift and touches only STAMPS, never the doc
+DOC_BEFORE="$(cat "$SDOC")"
+rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" --restamp ok.md 2>&1)" || rc=$?
+[ "$rc" = 0 ] && [ "$DOC_BEFORE" = "$(cat "$SDOC")" ] || fail "--restamp should exit 0 and leave the doc alone (rc $rc): $OUT"
+rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" --strict 2>&1)" || rc=$?
+[ "$rc" = 0 ] || fail "a restamped doc should pass --strict (rc $rc): $OUT"
+rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" --restamp nope.md 2>&1)" || rc=$?
+[ "$rc" = 1 ] && grep -qF "nope.md: not a contract doc" <<<"$OUT" || fail "--restamp of an unknown doc should fail (rc $rc): $OUT"
+printf 'ok.md nothex\n' > "$SSTAMPS"
 rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
 [ "$rc" = 1 ] && grep -qF "malformed verified-sha" <<<"$OUT" || fail "a malformed sha should fail (rc $rc): $OUT"
-printf -- '---\nverified-sha: %s\nrefs:\n  - src/a.go\n---\n' "0000000000000000000000000000000000000000" > "$SG/docs/contributing/contract/ok.md"
+printf 'ok.md %s\n' "0000000000000000000000000000000000000000" > "$SSTAMPS"
 rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
 [ "$rc" = 1 ] && grep -qF "not a known commit" <<<"$OUT" || fail "an unknown sha should fail (rc $rc): $OUT"
-printf -- '---\nverified-sha: %s\nrefs:\n  - src/gone.go\n---\n' "$SSHA" > "$SG/docs/contributing/contract/ok.md"
+printf 'ok.md %s\n' "$SSHA" > "$SSTAMPS"
+printf -- '---\nrefs:\n  - src/gone.go\n---\n' > "$SDOC"
 rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
 [ "$rc" = 1 ] && grep -qF "ref src/gone.go does not exist" <<<"$OUT" || fail "a missing ref path should fail (rc $rc): $OUT"
-printf '# no frontmatter\n' > "$SG/docs/contributing/contract/ok.md"
+printf '# no frontmatter\n' > "$SDOC"
 rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
 [ "$rc" = 1 ] && grep -qF "no frontmatter" <<<"$OUT" || fail "an unstamped doc should fail (rc $rc): $OUT"
-pass "contract doc drift warns by default and fails under strict; a bad sha, unknown sha, missing ref and missing stamp always fail by name"
+printf -- '---\nrefs:\n  - src/a.go\n---\n' > "$SDOC"
+: > "$SSTAMPS"
+rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
+[ "$rc" = 1 ] && grep -qF "missing stamp" <<<"$OUT" || fail "a doc with no STAMPS line should fail (rc $rc): $OUT"
+printf -- '---\nverified-sha: %s\nrefs:\n  - src/a.go\n---\n' "$SSHA" > "$SDOC"
+printf 'ok.md %s\n' "$SSHA" > "$SSTAMPS"
+rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
+[ "$rc" = 1 ] && grep -qF "belongs in docs/contributing/contract/STAMPS" <<<"$OUT" || fail "a stamp left in the doc should fail (rc $rc): $OUT"
+# #1294: two branches editing one doc's body in different places merge with no stamp conflict
+printf -- '---\nrefs:\n  - src/a.go\n---\n\n# doc\n\nfirst\n\n'"$(printf 'x\n%.0s' 1 2 3 4 5 6)"'\nlast\n' > "$SDOC"
+git -C "$SG" add -A; git -C "$SG" commit -qm "doc body"
+BASE="$(git -C "$SG" rev-parse HEAD)"
+git -C "$SG" checkout -q -b pr1 "$BASE"; sed -i 's/^first$/first edited/' "$SDOC"; git -C "$SG" commit -qam pr1
+git -C "$SG" checkout -q -b pr2 "$BASE"; sed -i 's/^last$/last edited/' "$SDOC"; git -C "$SG" commit -qam pr2
+rc=0; OUT="$(git -C "$SG" merge -q pr1 2>&1)" || rc=$?
+[ "$rc" = 0 ] || fail "pr1 should merge (rc $rc): $OUT"
+rc=0; OUT="$(git -C "$SG" merge -q pr2 2>&1)" || rc=$?
+[ "$rc" = 0 ] || fail "two PRs on one contract doc should merge with no stamp conflict (rc $rc): $OUT"
+pass "contract doc drift warns by default and fails under strict; --restamp clears it; a bad sha, unknown sha, missing ref, missing stamp and a stamp left in the doc always fail by name; two PRs on one doc merge clean"
 
 # ── the config reference page is generated from the schema (#541) ───────────
 # internal/config/keys.go is the source; a hand edit or a stale page fails.
