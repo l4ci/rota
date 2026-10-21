@@ -90,3 +90,42 @@ func TestRunMilestones(t *testing.T) {
 		t.Fatalf("second apply = %+v %v", res, err)
 	}
 }
+
+func TestArchiveMilestoneFiles(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".rota", "milestones")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := StaleMilestoneFiles(root); err != nil || len(got) != 0 {
+		t.Fatalf("empty dir = %v %v", got, err)
+	}
+	for _, n := range []string{"M01.md", "M07.md"} {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := StaleMilestoneFiles(root)
+	if err != nil || strings.Join(got, ",") != "M01.md,M07.md" {
+		t.Fatalf("stale = %v %v", got, err)
+	}
+	moved, err := ArchiveMilestoneFiles(root, false)
+	if err != nil || len(moved) != 2 {
+		t.Fatalf("preview = %v %v", moved, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "M01.md")); err != nil {
+		t.Fatal("preview moved a file")
+	}
+	if moved, err = ArchiveMilestoneFiles(root, true); err != nil || len(moved) != 2 {
+		t.Fatalf("apply = %v %v", moved, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".rota", "archive", "milestones", "M07.md")); err != nil {
+		t.Fatalf("not archived: %v", err)
+	}
+	if got, _ := StaleMilestoneFiles(root); len(got) != 0 {
+		t.Fatalf("still stale: %v", got)
+	}
+	if moved, err = ArchiveMilestoneFiles(root, true); err != nil || len(moved) != 0 {
+		t.Fatalf("second apply = %v %v", moved, err)
+	}
+}
