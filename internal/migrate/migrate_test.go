@@ -512,3 +512,28 @@ func TestMigratePreviewAndApplyPlanTheSameOps(t *testing.T) {
 		t.Errorf("preview ops:\n%q\napply ops:\n%q", preview, applied)
 	}
 }
+
+// Proof rows recorded in the file-mode sidecar (#1547) migrate; the sidecar
+// wins over rows an older rota left in the detail file.
+func TestPlanItemsReadsTheProofSidecar(t *testing.T) {
+	root := migProject(t, map[string]string{
+		".rota/features/F01.proof": "# F01\n\n## Proof\n\n- 2026-01-01 · fresh · PASS · abc1234 · sidecar row\n",
+	})
+	text, err := os.ReadFile(filepath.Join(root, ".rota", "BACKLOG.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, it := range planItems(root, string(text), func(string) {}) {
+		if it.id != "F01" {
+			continue
+		}
+		if it.proof == nil || !strings.Contains(*it.proof, "sidecar row") || strings.Contains(*it.proof, "- ok") {
+			t.Fatalf("proof = %v, want the sidecar rows only", it.proof)
+		}
+		if it.body != nil && strings.Contains(*it.body, "## Proof") {
+			t.Errorf("body keeps the legacy proof section: %q", *it.body)
+		}
+		return
+	}
+	t.Fatal("F01 not planned")
+}
