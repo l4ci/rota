@@ -104,7 +104,13 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 		if err := fsio.WriteFileAtomic(path, []byte(b.String())); err != nil {
 			return Result{}, err
 		}
-		data := gitObj("path", path, "files", files, "bytes", b.Len())
+		// head is the sha the diff above was read at: the sha a verdict on this
+		// review binds to (verdict add --sha), whatever origin says.
+		head, err := reviewGit(ctx, t.Dir, "rev-parse", t.Branch)
+		if err != nil {
+			return Result{}, err
+		}
+		data := gitObj("path", path, "files", files, "bytes", b.Len(), "head", strings.TrimSpace(head))
 		return Result{Data: data, Text: path}, nil
 	}
 }

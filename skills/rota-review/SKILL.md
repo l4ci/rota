@@ -92,7 +92,7 @@ Write the diff to a file, not into your context:
 rota review package <branch> --base <base> [--since <sha>] --json
 ```
 
-Right after packaging, fix the sha the reviewers are briefed on: `REVIEWED=$(git rev-parse origin/<branch> 2>/dev/null || git rev-parse <branch>)` (the pushed head, else the local tip when nothing was pushed). Step 8 records the verdicts at it.
+Right after packaging, fix the sha the reviewers are briefed on: `REVIEWED` is `data.head`, the sha the package diffed (the local `<branch>` tip). Never derive it from another ref: a local branch behind or ahead of origin would bind the verdict to commits no reviewer read. Step 8 records the verdicts at it; `verdict add` refuses (exit 4) when it is not the pushed head, so push or fetch first.
 
 `data.path` is the file (commits, `--stat` and the full `-U10` diff); `data.files` and `data.bytes` size it. No file cap: the reviewer reads the file, you don't. Exit 3 means an empty range or a `--since` not on the branch: report it and stop.
 
