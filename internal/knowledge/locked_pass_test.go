@@ -8,6 +8,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/l4ci/rota/internal/fsio"
 )
 
 // Contract note (hit, tier set, contradiction add): the port reads the value it
@@ -175,5 +178,55 @@ func TestGlossaryWriteKeepsEveryTermUnderConcurrency(t *testing.T) {
 		if !strings.Contains(string(got), fmt.Sprintf("term%02d", i)) {
 			t.Errorf("term%02d lost:\n%s", i, got)
 		}
+	}
+}
+
+// A hit buffered while RenameTopic waits for the KNOWLEDGE.md lock must be
+// folded under that lock, or it lands keyed to the old topic after the re-key.
+func TestRenameTopicFoldsHitsInsideItsLock(t *testing.T) {
+	s := lockedStore(t)
+	km, _ := s.KnowledgePath(Umbrella)
+	if err := os.WriteFile(km, []byte("# Knowledge\n\n## Old\n\n- **b** — body\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Hit(Umbrella, "Old", "b"); err != nil {
+		t.Fatal(err)
+	}
+	hp, _ := s.HitsPath(Umbrella)
+
+	held, release, done := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	go func() {
+		done <- fsio.Locked(km, fsio.LockTimeout, func() error {
+			close(held)
+			<-release
+			return nil
+		})
+	}()
+	<-held
+	renamed := make(chan error, 1)
+	go func() {
+		_, err := s.RenameTopic(Umbrella, "Old", "New", "")
+		renamed <- err
+	}()
+	time.Sleep(300 * time.Millisecond)
+	if _, err := os.Stat(hp); err != nil {
+		t.Errorf("RenameTopic folded the hit buffer before taking the lock: %v", err)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-renamed; err != nil {
+		t.Fatal(err)
+	}
+	sc, err := LoadSidecar(mustTier(t, s))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := sc.Get("New", "b"); !ok {
+		t.Error("hit not re-keyed under New")
+	}
+	if _, ok := sc.Get("Old", "b"); ok {
+		t.Error("hit still keyed under Old")
 	}
 }
