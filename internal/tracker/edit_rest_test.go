@@ -81,15 +81,50 @@ func TestGitHubEditGoesOverRESTAndReadsBack(t *testing.T) {
 	}
 }
 
-// TestGitHubEditErrorsWhenTheChangeIsNotThere: a PATCH that exits 0 but leaves
-// the issue as it was is an error, not a silent success.
+// TestGitHubEditErrorsWhenTheChangeIsNotThere: a write that exits 0 but leaves
+// the issue as it was is an error naming what is missing, for each field the
+// read-back verifies.
 func TestGitHubEditErrorsWhenTheChangeIsNotThere(t *testing.T) {
-	r := &editRig{apply: false, issue: `{"title":"old","body":"b","labels":[],"milestone":null}`}
-	title := "new"
-	err := r.adapter(t).Edit(context.Background(), NumKey(7), IssueEdit{Title: &title})
-	var e *Error
-	if !errors.As(err, &e) || !strings.Contains(e.Message, "#7") || !strings.Contains(e.Message, "title") {
-		t.Fatalf("got %v, want a read-back error naming the title", err)
+	title, body := "new", "new body"
+	const (
+		plain   = `{"title":"old","body":"b","labels":[],"milestone":null}`
+		labeled = `{"title":"old","body":"b","labels":[{"name":"p1"}],"milestone":null}`
+		inMile  = `{"title":"old","body":"b","labels":[],"milestone":{"title":"M1"}}`
+	)
+	cases := []struct {
+		name  string
+		issue string
+		edit  IssueEdit
+		want  string
+	}{
+		{"title", plain, IssueEdit{Title: &title}, "title"},
+		{"body", plain, IssueEdit{Body: &body}, "body"},
+		{"added label", plain, IssueEdit{AddLabels: []string{"extra"}}, "label extra"},
+		{"removed label", labeled, IssueEdit{RemoveLabels: []string{"p1"}}, "label p1 still set"},
+		{"milestone", plain, IssueEdit{Milestone: "M1"}, "milestone"},
+		{"removed milestone", inMile, IssueEdit{RemoveMilestone: true}, "milestone still set"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &editRig{apply: false, issue: tc.issue}
+			err := r.adapter(t).Edit(context.Background(), NumKey(7), tc.edit)
+			var e *Error
+			if !errors.As(err, &e) || !strings.Contains(e.Message, "#7") || !strings.Contains(e.Message, "without: "+tc.want) {
+				t.Fatalf("got %v, want a read-back error naming %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestGitHubEditEmptyPatchIsANoOp: an edit that asks for nothing makes no call,
+// neither a write nor a read-back.
+func TestGitHubEditEmptyPatchIsANoOp(t *testing.T) {
+	r := &editRig{apply: false, issue: `{}`}
+	if err := r.adapter(t).Edit(context.Background(), NumKey(7), IssueEdit{}); err != nil {
+		t.Fatalf("got %v, want nil", err)
+	}
+	if len(r.calls) != 0 {
+		t.Fatalf("an empty edit must call nothing: %v", r.calls)
 	}
 }
 
