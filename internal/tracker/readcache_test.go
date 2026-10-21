@@ -216,3 +216,55 @@ func TestStateReasonQuirkSurvivesAWrite(t *testing.T) {
 		t.Fatal("a write forgot that gh rejects stateReason")
 	}
 }
+
+// Edit goes over the real PATCH and label endpoints, not `issue edit`: a read
+// held before it must not be served after it, whichever write it makes.
+func TestGitHubEditDropsHeldReads(t *testing.T) {
+	title := "new"
+	for name, edit := range map[string]IssueEdit{
+		"patch":  {Title: &title},
+		"labels": {AddLabels: []string{"x"}},
+	} {
+		f := &fakeCLI{answer: func(_ int, args []string) (string, string, int) {
+			switch {
+			case args[0] == "issue" && args[1] == "list":
+				return `[{"number":7,"title":"old","body":"b","labels":[],"state":"OPEN"}]`, "", 0
+			case args[0] == "api" && apiMethod(args) == "GET":
+				return `{"number":7,"title":"new","body":"b","labels":[{"name":"x"}],"state":"open"}`, "", 0
+			}
+			return `{"number":7,"title":"viewed","state":"OPEN"}`, "", 0
+		}}
+		c := f.cli("github")
+		c.Cache = NewReadCache()
+		g := &GitHub{base: base{cli: c, closing: closingGH}}
+		ctx := context.Background()
+		if _, err := g.List(ctx, ListFilter{}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := g.Get(ctx, NumKey(7), false); err != nil {
+			t.Fatal(err)
+		}
+		if len(f.calls) != 1 {
+			t.Fatalf("%s: setup: Get re-fetched a listed issue: %v", name, f.calls)
+		}
+		if err := g.Edit(ctx, NumKey(7), edit); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(strings.Join(f.calls[1], " "), "api -X") {
+			t.Fatalf("%s: Edit did not take a REST write: %v", name, f.calls)
+		}
+		f.calls = nil
+		if _, err := g.Get(ctx, NumKey(7), false); err != nil {
+			t.Fatal(err)
+		}
+		if len(f.calls) != 1 || !strings.Contains(f.last(), "issue view 7") {
+			t.Fatalf("%s: stale listed issue served after Edit: %v", name, f.calls)
+		}
+		if _, err := g.List(ctx, ListFilter{}); err != nil {
+			t.Fatal(err)
+		}
+		if len(f.calls) != 2 || !strings.Contains(f.last(), "issue list") {
+			t.Fatalf("%s: stale list served after Edit: %v", name, f.calls)
+		}
+	}
+}
