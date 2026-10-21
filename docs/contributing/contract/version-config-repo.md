@@ -31,34 +31,35 @@ note: strings may be empty rather than absent, as in the old helper.
 note: F6b (#230) replaced the plugin-era detection. `currentVersion` is the running binary's version and `installRoot` is the directory holding the binary (symlinks resolved). `installType` is `brew` for a path under a Homebrew prefix (`/Cellar/`, `/homebrew/`, `/linuxbrew/`), `dev` for an unstamped or `-dev` build, `unknown` when the binary path does not resolve, otherwise `script`. `updateCommand` is `brew update && brew upgrade rota`, the `install.sh` pipe, or a rebuild, each followed by `&& rota skills update`. `HV_INSTALL_ROOT` and `CLAUDE_PLUGIN_ROOT` are no longer read.
 
 ### rota config show
-rota config show [<key>]
-repo: scoped
-data: {"entries": [{"key": string, "value": any, "source": "local"|"project"|"default", "default"?: any, "type"?: "bool"|"int"|"string"|"list"|"path"|"enum"|"object", "group"?: string, "desc"?: string, "choices"?: [string], "effective"?: string, "effectiveSource"?: "explicit"|"profile"|"models.worker"|"default"|"harness default"}]}
+rota config show [--global] [<key>]
+repo: scoped (not with `--global`)
+data: {"entries": [{"key": string, "value": any, "source": "local"|"project"|"global"|"default", "global"?: any, "default"?: any, "type"?: "bool"|"int"|"string"|"list"|"path"|"enum"|"object", "group"?: string, "desc"?: string, "choices"?: [string], "effective"?: string, "effectiveSource"?: "explicit"|"profile"|"models.worker"|"default"|"harness default"}]}
 exit: 3 when `<key>` is neither a schema key nor present in the merged config; 2 when more than one positional is given. `value` is the raw JSON value (not a JSON string of it). No key: every schema key in schema order. With a key: `entries` holds exactly one element, so both forms share one shape.
 note: `default`, `type`, `group`, `desc` and (enum keys only) `choices` are the schema row's metadata (#541). They are absent for a hand-edited key outside the schema. Text output is unchanged.
 old: hv-config-show [<key>] (new `<key>` maps to the old single positional; unchanged).
 shim: parse each stdout line with `^(\S+) = (.*)  \(source: (local|project|default)\)$` into `key`, `value` (JSON-parsed), `source`; old rc 1 with `unknown key` on stderr becomes exit 3, rc 1 with `usage:` becomes exit 2.
 note: old rejected any key outside the schema table. 5.0 accepts a key that is in the schema or present in the merged config, so a hand-edited key stays readable (`config set` itself is schema-only). The shim cannot do this; it fails with exit 3 as before.
 note: `effective` and `effectiveSource` appear on the nine `round.tiers.<kind>.<tier>` rows only (#932): the model a worker of that kind and tier launches with after `round.profile` and the `models.worker` fallback, `""` when the harness picks, and where it came from. `round.profile` fills Claude tiers only. The text line gains a suffix `  effective <model|-> (<source>)` after `(source: ...)`, so the shim's end-anchored regex does not match those nine lines.
+note: `global` is what the global config holds for the key, present only when it holds one, so a project value that overrides it still shows what dropping the override would inherit. `--global` lists the global config's own values instead of the merged ones (no `.rota/` needed; `data` gains `"scope": "global"`, `source` is `global` or `default`, project-owned keys are unknown keys; exit 2 with `--repo`). A global file that does not parse is exit 70 with the message naming its path, on `show`, `set` and `edit --global` and on `save-global`; no write ever replaces such a file, so repair or remove it by hand.
 note: `--ui` (global flag) opens the config screen over these entries instead of printing them; it exits 2 off a terminal or with `--json`, and the screen's writes are described under `config edit`.
 note: schema values resolve from the same merged configuration as runtime reads. A local null or non-object parent replaces the project value; an absent or null key after merging uses its schema default and reports `source: default`. Otherwise the source is `local` when that layer supplies the key, or `project`.
 
 ### rota config edit
-rota config edit
-repo: scoped
+rota config edit [--global]
+repo: scoped (not with `--global`)
 data: {"changed": [string]}
 exit: 4 when `--json` is given, TERM is `dumb`, or stdin or stdout is not a terminal (hint: `run: rota config set <key> <value>`); 3 when no `.rota/` is found; 70 when a config file holds JSON that is not an object.
 old: none (added in #193; the screen is #542).
-note: opens the config screen, the same one `rota config show --ui` and `rota config --ui` open. Keys are grouped by section, with a detail pane built from `config show`'s `default`, `type`, `group`, `desc` and `choices`. A value is checked by the code `config set` runs (`config.Validate`), so the screen rejects exactly what `config set` rejects. Enter edits the project value (`.rota/config.json`), `l` edits the local override (`.rota/config.local.json`), `r` resets a key: it drops the local override, then restores the schema default for a required key or removes the key for an optional one. Every change is written at once, so quitting loses nothing. `changed` lists the keys written, in order; the text is `changed: <keys>` or `no changes`. The earlier numbered prompt loop is gone, with no fallback: its type check was stricter than `config set`'s.
+note: opens the config screen, the same one `rota config show --ui` and `rota config --ui` open. Keys are grouped by section, with a detail pane built from `config show`'s `default`, `type`, `group`, `desc` and `choices`. A value is checked by the code `config set` runs (`config.Validate`), so the screen rejects exactly what `config set` rejects. Enter edits the project value (`.rota/config.json`), `l` edits the local override (`.rota/config.local.json`), `g` switches a key between inheriting the global value (the project value is dropped) and overriding it (the global value is written into `.rota/config.json`); `r` resets a key: it drops the local override, then restores the schema default for a required key or removes the key for an optional one. Every change is written at once, so quitting loses nothing. `changed` lists the keys written, in order; the text is `changed: <keys>` or `no changes`. `--global` edits the global config instead: no `l`, no `g`, `r` removes the key from it, and no `.rota/` is needed. The earlier numbered prompt loop is gone, with no fallback: its type check was stricter than `config set`'s.
 
 ### rota config set
-rota config set <key> <value>
-repo: scoped
+rota config set [--global] <key> <value>
+repo: scoped (not with `--global`)
 data: {"key": string, "value": any, "previous"?: any, "changed": bool}
 exit: 2 when `<key>` is not in the schema that `config check` uses (the shared `Keys` table in `internal/config/keys.go`), is a malformed path (empty segment: `""`, `.a`, `a.`), an argument is missing, or `<value>` is one the key cannot hold (`invalid value`: `release.versionFile` takes a project-relative path string that stays inside the project, or `""` to clear it; `ship.review` takes `true`, `false`, `full`, `light`, `none` or a `{default, lightBelow, labels}` object, anything else is `invalid value`); 70 when `.rota/config.json` exists but is not a JSON object, or the write fails.
 old: hv-config-set <key> <value> (both map to the old positionals in order). Writes `.rota/config.json` only, never `config.local.json`. `<value>` is parsed as JSON first (`true`, `42`, `"x"`, `[…]`, `{…}`) and falls back to a raw string (`opus`, empty string). `previous` is the stored value before the write and is absent when the key was unset.
 shim: old accepts any key, so the shim checks `<key>` against the schema table first and exits 2 without calling the helper when it is absent; old stdout is empty; read `.rota/config.json` before and after the call to fill `value`, `previous` and `changed`; old rc 1 with `malformed key path` on stderr becomes exit 2, rc 1 for missing argv becomes exit 2, any other rc 1 becomes exit 70.
-note: the JSON-then-string coercion is kept because `hv-init` and `hv-config` skills depend on it. A string that looks like JSON (`"true"`) still needs shell quoting (`'"true"'`). No `--string` or `--local` flag is added.
+note: the JSON-then-string coercion is kept because `hv-init` and `hv-config` skills depend on it. A string that looks like JSON (`"true"`) still needs shell quoting (`'"true"'`). `--global` writes the global config (same validation, no `.rota/` needed; a project-owned key is exit 2) instead of `.rota/config.json`. No `--string` or `--local` flag is added.
 note: a key outside the schema is rejected (maintainer decision), where old accepted any key.
 note: an empty `<value>` is valid and stores the empty string; the old helper rejected it, so the shim passes `""` as a JSON literal.
 

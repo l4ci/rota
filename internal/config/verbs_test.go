@@ -51,11 +51,11 @@ func TestShowSources(t *testing.T) {
 		`{"models": {"worker": "haiku", "orchestrator": null}, "work": {"isolation": "worktree"}}`,
 		`{"work": {"isolation": "branch"}, "docs": {"path": "d"}}`)
 	for key, want := range map[string]Entry{
-		"work.isolation":      {"work.isolation", "branch", "local", nil},
-		"models.worker":       {"models.worker", "haiku", "project", nil},
-		"models.orchestrator": {"models.orchestrator", "opus", "default", nil}, // null counts as unset
-		"docs.path":           {"docs.path", "d", "local", nil},
-		"docs.afterWork":      {"docs.afterWork", false, "default", nil},
+		"work.isolation":      {"work.isolation", "branch", "local", nil, nil, false},
+		"models.worker":       {"models.worker", "haiku", "project", nil, nil, false},
+		"models.orchestrator": {"models.orchestrator", "opus", "default", nil, nil, false}, // null counts as unset
+		"docs.path":           {"docs.path", "d", "local", nil, nil, false},
+		"docs.afterWork":      {"docs.afterWork", false, "default", nil, nil, false},
 	} {
 		es, err := Show(root, key, true)
 		if err == nil && len(es) == 1 {
@@ -146,10 +146,10 @@ func TestShowDeepMergeSources(t *testing.T) {
 		`{"ship":{"qa":true,"review":false},"issues":{"labels":{"types":{"bug":"defect","task":"chore"}}}}`,
 		`{"ship":{"qa":null},"issues":{"labels":{"types":{"bug":"bug"}}}}`)
 	for key, want := range map[string]Entry{
-		"ship.qa":                  {"ship.qa", false, "default", nil},
-		"ship.review":              {"ship.review", false, "project", nil},
-		"issues.labels.types.bug":  {"issues.labels.types.bug", "bug", "local", nil},
-		"issues.labels.types.task": {"issues.labels.types.task", "chore", "project", nil},
+		"ship.qa":                  {"ship.qa", false, "default", nil, nil, false},
+		"ship.review":              {"ship.review", false, "project", nil, nil, false},
+		"issues.labels.types.bug":  {"issues.labels.types.bug", "bug", "local", nil, nil, false},
+		"issues.labels.types.task": {"issues.labels.types.task", "chore", "project", nil, nil, false},
 	} {
 		rows, err := Show(root, key, true)
 		if err == nil && len(rows) == 1 {
@@ -180,7 +180,7 @@ func TestShowUnknownAndHandEditedKeys(t *testing.T) {
 }
 
 func TestShowLine(t *testing.T) {
-	e := Entry{"round.accounts", []any{"a", "b"}, "default", nil}
+	e := Entry{Key: "round.accounts", Value: []any{"a", "b"}, Source: "default"}
 	if got := e.Line(); got != `round.accounts = ["a", "b"]  (source: default)` {
 		t.Errorf("Line = %s", got)
 	}

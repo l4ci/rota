@@ -9,6 +9,7 @@ import (
 	"unicode"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tui"
 )
@@ -25,6 +26,7 @@ import (
 // one that is not a terminal.
 
 func configEdit(fs *flag.FlagSet) RunFunc {
+	global := fs.Bool("global", false, "edit the global config instead of the project's")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := argCount(c, args, 0, 0, "config edit takes no arguments"); err != nil {
 			return Result{}, err
@@ -34,11 +36,20 @@ func configEdit(fs *flag.FlagSet) RunFunc {
 			return Result{}, Refused("config edit needs an interactive terminal").
 				WithHint("run: rota config set <key> <value>")
 		}
-		root, err := backlogScope(c)
-		if err != nil {
-			return Result{}, err
+		var store configStore
+		if *global {
+			dir, err := globalDir(c)
+			if err != nil {
+				return Result{}, err
+			}
+			store = globalStore{dir}
+		} else {
+			root, err := backlogScope(c)
+			if err != nil {
+				return Result{}, err
+			}
+			store = rootStore{root}
 		}
-		store := rootStore{root}
 		rows, err := store.Rows()
 		if err != nil {
 			return Result{}, err
@@ -56,13 +67,23 @@ func configEdit(fs *flag.FlagSet) RunFunc {
 }
 
 // configView is `config show`'s --ui view: the screen over the entries of its
-// own Data. Screen actions write to the project the verb read.
+// own Data. Screen actions write to the project (or, for --global, the global
+// config) the verb read.
 func configView(c *Ctx, res Result) (tui.Model, error) {
-	root, err := backlogScope(c)
+	rows, err := rowsFromData(res.Data)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := rowsFromData(res.Data)
+	if obj, _ := res.Data.(*jsonx.Object); obj != nil {
+		if scope, _ := obj.Get("scope"); scope == "global" {
+			dir, err := globalDir(c)
+			if err != nil {
+				return nil, err
+			}
+			return newConfigScreen(rows, globalStore{dir}, new([]string)), nil
+		}
+	}
+	root, err := backlogScope(c)
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +94,8 @@ func configView(c *Ctx, res Result) (tui.Model, error) {
 type cfgRow struct {
 	Key, Source, Type, Group, Desc string
 	Value, Default                 any
+	Global                         any // what the global config holds, when HasGlobal
+	HasGlobal                      bool
 	Choices                        []string
 }
 
@@ -94,6 +117,7 @@ func rowsFromData(data any) ([]cfgRow, error) {
 		r := cfgRow{Key: str("key"), Source: str("source"), Type: str("type"), Group: str("group"), Desc: str("desc")}
 		r.Value, _ = o.Get("value")
 		r.Default, _ = o.Get("default")
+		r.Global, r.HasGlobal = o.Get("global")
 		if cs, ok := o.Get("choices"); ok {
 			l, _ := cs.([]any)
 			for _, ch := range l {
@@ -118,6 +142,14 @@ type configStore interface {
 	Set(key, raw string, local bool) (changed bool, err error)
 	// Reset puts key back to its schema default.
 	Reset(key string) error
+	// Global is whether the store is the global config, which has no local
+	// override and no inherit/override choice.
+	Global() bool
+	// Override writes the key's current value into the project, so it stays
+	// when the global value changes.
+	Override(key string, value any) error
+	// Inherit drops the project's value so the global one applies.
+	Inherit(key string) error
 }
 
 // rootStore is the store on a project's .rota/.
@@ -130,6 +162,22 @@ func (s rootStore) Rows() ([]cfgRow, error) {
 	}
 	rows, _ := showRows(entries)
 	return rowsFromData(jsonObj("entries", rows))
+}
+
+func (s rootStore) Global() bool { return false }
+
+func (s rootStore) Override(key string, value any) error {
+	b, err := jsonx.MarshalCompact(value)
+	if err != nil {
+		return err
+	}
+	_, err = config.Set(s.root, key, string(b))
+	return notObjectInternal(err)
+}
+
+func (s rootStore) Inherit(key string) error {
+	_, err := config.Unset(s.root, key, config.LayerProject)
+	return notObjectInternal(err)
 }
 
 func (s rootStore) Set(key, raw string, local bool) (bool, error) {
@@ -152,7 +200,7 @@ func (s rootStore) Reset(key string) error {
 		if k.Name != key {
 			continue
 		}
-		if k.Required {
+		if k.Required && !config.GlobalSupplies(key) {
 			b, err := jsonx.MarshalCompact(config.Default(k))
 			if err != nil {
 				return err
@@ -166,8 +214,46 @@ func (s rootStore) Reset(key string) error {
 	return config.Validate(key, "")
 }
 
+// globalStore is the store on the global config under dir.
+type globalStore struct{ dir string }
+
+func (s globalStore) Rows() ([]cfgRow, error) {
+	entries, err := config.ShowGlobal(s.dir, "", false)
+	if err != nil {
+		return nil, notObjectInternal(err)
+	}
+	rows, _ := showRows(entries)
+	return rowsFromData(jsonObj("entries", rows))
+}
+
+func (s globalStore) Global() bool { return true }
+
+func (s globalStore) Set(key, raw string, local bool) (bool, error) {
+	if local {
+		return false, errors.New("the global config has no local override")
+	}
+	res, err := config.SetGlobal(s.dir, key, raw)
+	if errors.Is(err, config.ErrProjectOwned) {
+		return false, err
+	}
+	return res.Changed, notObjectInternal(err)
+}
+
+// Reset removes the key: a project that does not set it falls back to the default.
+func (s globalStore) Reset(key string) error {
+	_, err := config.UnsetGlobal(s.dir, key)
+	return notObjectInternal(err)
+}
+
+func (s globalStore) Override(string, any) error {
+	return errors.New("the global config has no override")
+}
+func (s globalStore) Inherit(string) error {
+	return errors.New("the global config has nothing to inherit")
+}
+
 func notObjectInternal(err error) error {
-	if errors.Is(err, config.ErrNotObject) || errors.Is(err, config.ErrLocalNotObject) {
+	if errors.Is(err, fsio.ErrUnreadable) || errors.Is(err, config.ErrNotObject) || errors.Is(err, config.ErrLocalNotObject) || errors.Is(err, config.ErrGlobalNotObject) {
 		return &Error{Exit: ExitInternal, Message: err.Error()}
 	}
 	return err
@@ -352,6 +438,8 @@ func (m configScreen) updateList(k tui.Key) (tui.Model, tui.Cmd) {
 			return m.startEdit(line.row, true), tui.Cmd{}
 		case k.Is('r') && onLine && line.row >= 0:
 			return m.reset(line.row)
+		case k.Is('g') && onLine && line.row >= 0:
+			return m.toggleInherit(line.row)
 		case k.Kind == tui.KeyLeft && onLine && m.list.Filter == "":
 			return m.toggleGroup(line.group, true), tui.Cmd{}
 		case k.Kind == tui.KeyRight && onLine && m.list.Filter == "":
@@ -440,6 +528,9 @@ func (m configScreen) write(row int, raw string, local bool) (tui.Model, tui.Cmd
 	if local {
 		where = ".rota/config.local.json"
 	}
+	if store.Global() {
+		where = "the global config"
+	}
 	msg := fmt.Sprintf("%s = %s  (%s)", r.Key, compact(config.Coerce(raw)), where)
 	if !local && r.Source == "local" {
 		msg += "; config.local.json still overrides it here"
@@ -459,14 +550,54 @@ func (m configScreen) write(row int, raw string, local bool) (tui.Model, tui.Cmd
 
 func (m configScreen) reset(row int) (tui.Model, tui.Cmd) {
 	r, store := m.rows[row], m.store
-	if r.Source == "default" || (r.Source == "project" && !r.differs()) {
+	if r.Source == "default" || (!store.Global() && r.Source == "project" && !r.differs() && !r.HasGlobal) {
 		m.msg = r.Key + " is already the default"
 		return m, tui.Cmd{}
 	}
-	p := &cfgPending{key: r.Key, msg: fmt.Sprintf("%s reset to %s", r.Key, compact(r.Default))}
+	msg := fmt.Sprintf("%s reset to %s", r.Key, compact(r.Default))
+	if r.HasGlobal && !store.Global() {
+		msg = fmt.Sprintf("%s now inherits the global value %s", r.Key, compact(r.Global))
+	}
+	p := &cfgPending{key: r.Key, msg: msg}
 	m.pend = p
 	return m, tui.Cmd{Exec: func() error {
 		if err := store.Reset(r.Key); err != nil {
+			return err
+		}
+		p.set = true
+		var err error
+		p.rows, err = store.Rows()
+		return err
+	}}
+}
+
+// toggleInherit switches a key between the global value and a project override:
+// an inherited key gets the global value written into the project, an
+// overridden one drops its project value.
+func (m configScreen) toggleInherit(row int) (tui.Model, tui.Cmd) {
+	r, store := m.rows[row], m.store
+	var p *cfgPending
+	var act func() error
+	switch {
+	case store.Global():
+		m.msg = "the global config has no project to inherit into"
+		return m, tui.Cmd{}
+	case r.Source == "global":
+		p = &cfgPending{key: r.Key, msg: r.Key + " overrides the global value in .rota/config.json"}
+		act = func() error { return store.Override(r.Key, r.Value) }
+	case r.Source == "project" && r.HasGlobal:
+		p = &cfgPending{key: r.Key, msg: fmt.Sprintf("%s inherits %s from the global config", r.Key, compact(r.Global))}
+		act = func() error { return store.Inherit(r.Key) }
+	case r.Source == "local":
+		m.msg = r.Key + " is set in config.local.json; r drops it first"
+		return m, tui.Cmd{}
+	default:
+		m.msg = "the global config sets no " + r.Key
+		return m, tui.Cmd{}
+	}
+	m.pend = p
+	return m, tui.Cmd{Exec: func() error {
+		if err := act(); err != nil {
 			return err
 		}
 		p.set = true
@@ -519,8 +650,12 @@ func (m configScreen) hints() []tui.Hint {
 	case "text":
 		return []tui.Hint{{Key: "enter", Desc: "save"}, {Key: "esc", Desc: "cancel"}}
 	}
-	return []tui.Hint{{Key: "↑/↓", Desc: "move"}, {Key: "enter", Desc: "edit"}, {Key: "l", Desc: "local"},
-		{Key: "r", Desc: "reset"}, {Key: "/", Desc: "filter"}, {Key: "←/→", Desc: "fold"}, {Key: "q", Desc: "back"}}
+	hints := []tui.Hint{{Key: "↑/↓", Desc: "move"}, {Key: "enter", Desc: "edit"}}
+	if !m.store.Global() {
+		hints = append(hints, tui.Hint{Key: "l", Desc: "local"}, tui.Hint{Key: "g", Desc: "global/project"})
+	}
+	return append(hints, tui.Hint{Key: "r", Desc: "reset"}, tui.Hint{Key: "/", Desc: "filter"},
+		tui.Hint{Key: "←/→", Desc: "fold"}, tui.Hint{Key: "q", Desc: "back"})
 }
 
 func (e *cfgEdit) kind() string {
@@ -561,6 +696,12 @@ func (m configScreen) describe() tui.Detail {
 	var b strings.Builder
 	b.WriteString(r.Desc + "\n\n")
 	fmt.Fprintf(&b, "Type: %s\nDefault: %s\nValue: %s\nSet in: %s", r.Type, compact(r.Default), compact(r.Value), sourceWhere(r.Source))
+	switch {
+	case r.Source == "global" && !m.store.Global():
+		b.WriteString("\nInherited from the global config; g overrides it in this project.")
+	case r.Source != "global" && r.HasGlobal && !m.store.Global():
+		fmt.Fprintf(&b, "\nGlobal value: %s; g drops the project value to inherit it.", compact(r.Global))
+	}
 	if len(r.Choices) > 0 {
 		b.WriteString("\nChoices: " + strings.Join(r.Choices, ", "))
 	}
@@ -574,6 +715,8 @@ func sourceWhere(src string) string {
 		return ".rota/config.local.json"
 	case "project":
 		return ".rota/config.json"
+	case "global":
+		return "the global config"
 	}
 	return "nowhere, the default applies"
 }
