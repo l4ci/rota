@@ -6,11 +6,12 @@ import (
 	"time"
 )
 
-// pinnedDay is a day no wall clock reaches during the test run.
+// pinnedDeps pins Today and Now to different days no wall clock reaches during
+// the test run, so a verb reading the wrong clock fails its assertion.
 func pinnedDeps() *Deps {
 	d := testDeps()
 	d.Today = func() time.Time { return time.Date(2031, 4, 5, 9, 0, 0, 0, time.UTC) }
-	d.Now = func() time.Time { return time.Date(2031, 4, 5, 9, 30, 0, 0, time.UTC) }
+	d.Now = func() time.Time { return time.Date(2031, 4, 6, 9, 30, 0, 0, time.UTC) }
 	return d
 }
 
@@ -58,7 +59,7 @@ func TestSpikeStampsDepsToday(t *testing.T) {
 	}
 }
 
-func TestContradictionAddStampsDepsNow(t *testing.T) {
+func TestContradictionAddStampsDepsToday(t *testing.T) {
 	root := trackerProject(t, "")
 	deps := pinnedDeps()
 	if code, _, se := rotaInWith(t, deps, root, "knowledge", "contradiction", "add", "--topic", "A", "--title", "B", "--text", "c"); code != 0 {
@@ -66,6 +67,6 @@ func TestContradictionAddStampsDepsNow(t *testing.T) {
 	}
 	_, out, _ := rotaInWith(t, deps, root, "knowledge", "contradiction", "list", "--json")
 	if !strings.Contains(out, "2031-04-05T") {
-		t.Errorf("loggedAt not stamped from the injected clock:\n%s", out)
+		t.Errorf("loggedAt not stamped from Deps.Today:\n%s", out)
 	}
 }
