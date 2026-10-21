@@ -25,11 +25,11 @@ Copy this checklist and track your progress:
 
 ## Step 2 — Load context
 
-Follow `references/context-load-protocol.md` (parallel, silent), plus `.rota/MILESTONES.md`, `rota milestone show <MNN>` for each existing milestone, the root stack file (`README.md`, `package.json`, …) and `rota glossary read <term>` for the user's terms. Definitional signals (*"by X I mean…"*) trigger `rota glossary write`. Issue mode: never read `.rota/milestones/*.md`. DECISIONS matches constrain what milestones can promise; surface conflicts before proposing.
+Follow `references/context-load-protocol.md` (parallel, silent), plus `.rota/MILESTONES.md`, `rota milestone show <MNN>` for each existing milestone, the root stack file (`README.md`, `package.json`, …) and `rota glossary read <term>` for the user's terms. Definitional signals (*"by X I mean…"*) trigger `rota glossary write`. Issue mode: never read `.rota/milestones/*.md`. DECISIONS matches constrain what milestones can promise; surface conflicts before proposing. Then run [`source-discovery.md`](source-discovery.md) to find a concept or spec document no milestone covers.
 
 ## Step 3 — Frame and discover
 
-Open with 3-4 sentences on what you see: the project's shape, existing milestones, obvious gaps. Then one question batch (see `references/design-exploration.md`):
+Open with 3-4 sentences on what you see: the project's shape, existing milestones, obvious gaps. When Step 2 found an uncovered document, say `I found <path> (<title>)` here and lead the batch with *Seed from it* (Recommended; a pick between documents when there are several). On yes, seed per `source-discovery.md`, then continue at Step 5 with the drafted milestones. Otherwise, or with no document found, one question batch (see `references/design-exploration.md`):
 
 A big effort whose design questions are still open (nobody can write Acceptance yet) is a **decision milestone**: offer it as a *Scope* option and see "Decision milestone" in Step 7.
 
@@ -71,12 +71,13 @@ Show the milestone list as plain markdown, not yet saved, one block per mileston
 - [ ] <checkable bullet>
 - [ ] <checkable bullet>
 **Rationale:** <why this one, why now>
+**Source:** <optional: path#heading of the document it was seeded from>
 **Open risks:** <at least one; if you can't name one it isn't thought through>
 **Not yet specified:** <optional: in-scope work too unsharp to write as Acceptance yet>
 **Out of scope:** <optional: ruled-out ideas, each with a one-line reason>
 ```
 
-Not yet specified and Out of scope are optional; omit a line with nothing to put in it. In the milestone body Capabilities and Acceptance are the `## Capabilities` and `## Acceptance` sections, and the optional two are `## Not yet specified` and `## Out of scope` sections (bullets), after Open risks.
+Source, Not yet specified and Out of scope are optional; omit a line with nothing to put in it. A seeded milestone's plan carries `Source: <path>#<heading>` as plain text (never `.rota/milestones/*.md` in issue mode: it goes in the plan body published with `rota milestone put`); a later run reads it as coverage. In the milestone body Capabilities and Acceptance are the `## Capabilities` and `## Acceptance` sections, and the optional two are `## Not yet specified` and `## Out of scope` sections (bullets), after Open risks.
 
 The tag is `[ready · no deps]` or `[blocked · depends M01]`. No cap on count, but don't slice everything upfront: park unsharp in-scope work under Not yet specified instead of inventing Acceptance bullets for it. Order by dependency layer and make parallel-able milestones visible. Apply the user's redlines (merge, cut, retire, add, re-order) and ask for one explicit confirmation before writing; silence is not confirmation.
 
@@ -115,6 +116,7 @@ If a newly active milestone has no items, offer (default Capture): `/rota-captur
 
 ## References
 
+- [`source-discovery.md`](source-discovery.md): find an uncovered concept document and seed milestones from it; read from Step 2.
 - [`research.md`](research.md): opt-in web research; read from Step 4.
 - [`references/context-load-protocol.md`](references/context-load-protocol.md): shared parallel context load.
 - [`references/knowledge-consult.md`](references/knowledge-consult.md): the K+D query pattern the load uses.

@@ -63,7 +63,7 @@ Most of `.rota/` is tracked by default, so the backlog and learnings travel with
 $ /rota-vision
 ```
 
-It reads `README.md` and any stack file (`package.json`, `go.mod`, `Cargo.toml`, …) at the project root before asking anything. If your brief lives under a different name (`briefing.md`, `pitch.md`, `idea.md`), point at it in the opening message (*"there's a brief at brief.md"*) and the skill picks it up.
+It reads `README.md` and any stack file (`package.json`, `go.mod`, `Cargo.toml`, …) at the project root before asking anything. It also finds the brief on its own: a plan-shaped `README.md`, or a file named like `brief.md`, `spec.md` or `concept.md`, that no milestone covers yet. It opens with *"I found README.md (Tally)"* and offers to seed milestones from it, which you can take or decline in favour of the interview below. A brief under an unrelated name (`pitch.md`, `idea.md`) is still found when its first heading reads as a plan; otherwise point at it in the opening message.
 
 The first discovery question is usually short and pointed:
 
