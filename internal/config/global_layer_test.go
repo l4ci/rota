@@ -1,6 +1,9 @@
 package config
 
 import (
+	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"testing"
@@ -103,4 +106,44 @@ func TestMissingOrCorruptGlobalIsSkipped(t *testing.T) {
 	if e := showOne(t, root, "work.isolation"); e.Source != "default" {
 		t.Errorf("corrupt global leaked: %v (%s)", e.Value, e.Source)
 	}
+}
+
+func TestResetAppliesTheRequiredKeyRule(t *testing.T) {
+	const key = "work.mergeStrategy" // a required key
+	cases := []struct {
+		name, global string
+		wantWritten  bool
+	}{
+		{"no global supplier", ``, true},
+		{"global supplies it", `{"work":{"mergeStrategy":"pr"}}`, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root := layerRig(t, c.global, `{"work":{"mergeStrategy":"pr"}}`, `{"work":{"mergeStrategy":"direct"}}`)
+			if err := Reset(root, projects.OSEnv(), key); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := walk(fsio.LoadJSON(localPath(root), jsonx.NewObject()), key); ok {
+				t.Errorf("local override survived Reset")
+			}
+			v, ok := walk(fsio.LoadJSON(configPath(root), jsonx.NewObject()), key)
+			if ok != c.wantWritten {
+				t.Fatalf("project holds %s = %v (present %v), want present %v", key, v, ok, c.wantWritten)
+			}
+			if ok && v != Default(keyByName(t, key)) {
+				t.Errorf("project %s = %v, want the default", key, v)
+			}
+		})
+	}
+}
+
+func keyByName(t *testing.T, name string) Key {
+	t.Helper()
+	for _, k := range Keys {
+		if k.Name == name {
+			return k
+		}
+	}
+	t.Fatalf("no key %s", name)
+	return Key{}
 }
