@@ -920,6 +920,11 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
+    },
+    "Process: Knowledge capture::Tool gotchas become issues; knowledge only for current blockers": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-21"
     }
   }
 }
