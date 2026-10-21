@@ -5,6 +5,7 @@ import (
 	"flag"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -295,3 +296,163 @@ type demoScreen struct{}
 
 func (demoScreen) Update(tui.Msg) (tui.Model, tui.Cmd) { return demoScreen{}, tui.Cmd{} }
 func (demoScreen) Render(int, int, tui.Style) string   { return "demo screen\n" }
+
+// homeDir points HOME at a fresh directory with no project above it.
+func homeDir(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	return home
+}
+
+func TestPaletteInHomeIsALauncherWithProjectsDefaultAndNoSetup(t *testing.T) {
+	deps := testDeps()
+	setups := bareRig(deps)
+	paletteRig(deps, "q")
+	projectsXDG(t)
+	home := homeDir(t)
+	code, out, _ := bareIn(t, deps, home)
+	if code != 0 || *setups != 0 {
+		t.Fatalf("exit %d setups %d", code, *setups)
+	}
+	if strings.Contains(out, "Setup") || !strings.Contains(out, "Config") || !strings.Contains(out, "› 2  Projects") {
+		t.Errorf("home palette:\n%s", out)
+	}
+}
+
+func TestPaletteHomeConfigEntryOpensTheGlobalConfig(t *testing.T) {
+	deps := testDeps()
+	bareRig(deps)
+	projectsXDG(t)
+	home := homeDir(t)
+	// Skills update 1, Projects 2, Config 3; q leaves the screen, q the palette.
+	term := &scriptedKeys{[]string{"3", "q", "q"}}
+	var outb, errb bytes.Buffer
+	deps.IsTerminal = func(w any) bool { return w == term || w == &outb }
+	deps.Palette = func(cfg palette.Config) error {
+		cfg.In = term
+		cfg.MakeRaw = func() (func(), error) { return func() {}, nil }
+		cfg.Width = func() int { return 100 }
+		return palette.Run(cfg)
+	}
+	t.Setenv("TERM", "xterm")
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	if err := os.Chdir(home); err != nil {
+		t.Fatal(err)
+	}
+	if code := mainWith(deps, nil, term, &outb, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	out := tui.Strip(outb.String())
+	if !strings.Contains(out, "▾ work (") || strings.Contains(out, "press any key") || !strings.Contains(out, "view and change the global config") {
+		t.Errorf("config screen not opened in place:\n%s", out)
+	}
+}
+
+// The screens `config edit` and `config show --ui` open in $HOME (what the
+// palette's Config entry hosts) write the global config, not a project.
+func TestConfigScreensInHomeAreTheGlobalOne(t *testing.T) {
+	projectsXDG(t)
+	home := homeDir(t)
+	for _, args := range [][]string{{"config", "edit"}, {"config", "show", "--ui"}} {
+		code, models, errs := cfgRun(t, home, true, args...)
+		if code != 0 || len(models) != 1 {
+			t.Fatalf("%v: exit %d, %d screens: %s", args, code, len(models), errs)
+		}
+		if _, ok := models[0].(configScreen).store.(globalStore); !ok {
+			t.Errorf("%v: store is %T, want globalStore", args, models[0].(configScreen).store)
+		}
+	}
+}
+
+// A $HOME that holds .rota/ (dotfiles repo) is a project: no global fallback,
+// no init refusal, the project palette.
+func TestHomeWithRotaDirIsAProject(t *testing.T) {
+	projectsXDG(t)
+	home := homeDir(t)
+	if err := os.Mkdir(filepath.Join(home, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if atHome(&Ctx{}) {
+		t.Fatal("atHome true in a $HOME with .rota/")
+	}
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	os.Chdir(home)
+	if code, out, _ := runMainWith(testDeps(), "config", "show", "--json"); code != 0 || strings.Contains(out, `"scope": "global"`) {
+		t.Errorf("config show: exit %d: %s", code, out)
+	}
+	if code, _, errs := runMainWith(testDeps(), "init"); code != 0 {
+		t.Errorf("init in a dotfiles HOME: exit %d: %s", code, errs)
+	}
+}
+
+func TestConfigSetInHomeSaysItWroteTheGlobalConfig(t *testing.T) {
+	projectsXDG(t)
+	home := homeDir(t)
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	os.Chdir(home)
+	code, out, errs := runMainWith(testDeps(), "config", "set", "work.isolation", "worktree")
+	if code != 0 || !strings.Contains(out, `global: work.isolation = "worktree"`) {
+		t.Fatalf("text: exit %d: %s %s", code, out, errs)
+	}
+	code, out, _ = runMainWith(testDeps(), "config", "set", "--json", "work.isolation", "branch")
+	if code != 0 || !strings.Contains(out, `"scope": "global"`) {
+		t.Errorf("json: exit %d: %s", code, out)
+	}
+	// The global config has no sub-repo; the message must not blame a --global
+	// the user never typed (in $HOME the fallback supplies it).
+	if _, err := globalDir(&Ctx{Repo: "x"}); err == nil || strings.Contains(err.Error(), "--global") {
+		t.Errorf("globalDir with --repo: %v", err)
+	}
+}
+
+func TestConfigShowInHomeTargetsTheGlobalConfig(t *testing.T) {
+	projectsXDG(t)
+	home := homeDir(t)
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	if err := os.Chdir(home); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errs := runMainWith(testDeps(), "config", "show", "--json")
+	if code != 0 || !strings.Contains(out, `"scope": "global"`) {
+		t.Fatalf("exit %d: %s %s", code, out, errs)
+	}
+}
+
+func TestInitAndSetupInHomeRefuseUnlessForced(t *testing.T) {
+	projectsXDG(t)
+	home := homeDir(t)
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	if err := os.Chdir(home); err != nil {
+		t.Fatal(err)
+	}
+	for _, verb := range []string{"init", "setup"} {
+		code, _, errs := runMainWith(testDeps(), verb, "--yes")
+		if verb == "init" {
+			code, _, errs = runMainWith(testDeps(), verb)
+		}
+		if code != ExitRefused || !strings.Contains(errs, "rota projects") {
+			t.Errorf("%s: exit %d: %s", verb, code, errs)
+		}
+		if _, err := os.Stat(filepath.Join(home, ".rota")); err == nil {
+			t.Fatalf("%s seeded home", verb)
+		}
+	}
+	if code, _, errs := runMainWith(testDeps(), "init", "--force"); code != 0 {
+		t.Errorf("init --force: exit %d: %s", code, errs)
+	}
+}
+
+func TestInitInANonHomeDirectoryIsUnchanged(t *testing.T) {
+	homeDir(t)
+	wd, _ := os.Getwd() // -C changes the process directory; put it back
+	defer os.Chdir(wd)
+	if code, _, errs := runMainWith(testDeps(), "-C", t.TempDir(), "init"); code != 0 {
+		t.Errorf("exit %d: %s", code, errs)
+	}
+}
