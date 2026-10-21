@@ -129,7 +129,7 @@ const claimedSuffix = ".folding"
 
 // claimedBuffers lists the buffers a fold claimed and has not yet removed.
 func claimedBuffers(hp string) ([]string, error) {
-	return filepath.Glob(hp + ".*" + claimedSuffix)
+	return fsio.GlobDir(filepath.Dir(hp), filepath.Base(hp)+".*"+claimedSuffix), nil
 }
 
 func foldedMark(sc *Sidecar) string {
