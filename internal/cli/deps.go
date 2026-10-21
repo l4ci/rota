@@ -53,6 +53,10 @@ type Deps struct {
 	Getwd       func() (string, error)
 	UserHomeDir func() (string, error)
 
+	// Config returns the merged project config of root; the worker accounts
+	// read it through here. A test swaps in an in-memory config.
+	Config func(root string) any
+
 	// Now is the one clock. Today is the day date-stamped output and age
 	// checks use; it is Now unless a test pins the day alone. HolderPID names
 	// the process that holds a round lease, 0 meaning find it from the process
@@ -160,6 +164,7 @@ func defaultDeps() *Deps {
 		Palette:          palette.RunTerminal,
 		RunView:          runView,
 		ReadCache:        tracker.NewReadCache(),
+		Config:           func(root string) any { return config.Load(rotatree.Config(root)) },
 		RecordMistakes:   true,
 	}
 	d.Keychain = func() connections.Store { return connections.OSKeychain(d.Proc, runtime.GOOS) }
@@ -172,7 +177,8 @@ func defaultDeps() *Deps {
 	d.UpdateEnv = func() update.Env { return update.DefaultEnv(version.Get().Version, d.Getenv, d.Proc) }
 	d.OrchestrateEnv = func() orchestrate.Env { return defaultOrchestrateEnv(d) }
 	d.WorkerAccounts = func() *worker.Accounts {
-		return &worker.Accounts{Env: worker.Env{Now: d.Now, Getenv: d.Getenv}, Login: d.credentials()}
+		env := worker.Env{Now: d.Now, Getenv: d.Getenv, Home: d.UserHomeDir, Config: d.Config}
+		return &worker.Accounts{Env: env, Login: d.credentials()}
 	}
 	d.NewTracker = func(ctx context.Context, root string, cfg any) (backlog.Tracker, error) {
 		return d.issueTracker(ctx, cfg, root)
