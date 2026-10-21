@@ -171,7 +171,7 @@ func TestWaitOnEventsReturnsAnUnverifiableSlotWhenItComesDue(t *testing.T) {
 	if err != nil || res.State != StateUnverifiable || res.Evidence != "stale-handle" || res.Source != SourceEvent && res.Source != SourcePoll {
 		t.Fatalf("%+v %v", res, err)
 	}
-	if took := time.Since(start); took > 15*time.Second {
+	if took := time.Since(start); took > 5*time.Second {
 		t.Errorf("returned after %s: the event wait was not bounded by the deadline", took)
 	}
 }
