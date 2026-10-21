@@ -3,12 +3,15 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/skills"
 )
 
@@ -371,5 +374,78 @@ func TestDoctorHostFromRegistry(t *testing.T) {
 	}
 	if c := hostCheck(); c["detail"] != "tmux on PATH" {
 		t.Fatalf("registry host tmux not wired into doctor: %v", c)
+	}
+}
+
+// doctorInput takes the tracker keys from tracker.SettingsFromConfig and the
+// round host from worker.ResolveHost instead of re-reading the keys (#1535).
+func TestDoctorInputTrackerAndHostFromOwners(t *testing.T) {
+	root := t.TempDir()
+	cwd, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(cwd, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"round":{"dispatch":"tmux"},"issues":{"source":"jira","connection":" work ","jira":{"project":"PROJ"}}}`
+	if err := os.WriteFile(filepath.Join(cwd, ".rota", "config.json"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d := defaultDeps()
+	d.Getwd = func() (string, error) { return cwd, nil }
+	d.Getenv = func(string) string { return "" }
+	in := doctorInput(context.Background(), d)
+	if in.Tracker.Source != config.SourceJira || in.Tracker.JiraProject != "PROJ" || in.Tracker.Connection != "work" {
+		t.Errorf("tracker settings %+v", in.Tracker)
+	}
+	if in.RoundHost != host.Tmux {
+		t.Errorf("round host %q, want tmux", in.RoundHost)
+	}
+}
+
+// A bad issues.source still reaches the connection check: doctor reports both
+// the source problem and the undefined connection (#1535).
+func TestDoctorInputKeepsConnectionWithSourceProblem(t *testing.T) {
+	cwd, _ := filepath.EvalSymlinks(t.TempDir())
+	os.MkdirAll(filepath.Join(cwd, ".rota"), 0o755)
+	os.WriteFile(filepath.Join(cwd, ".rota", "config.json"), []byte(`{"issues":{"source":"svn","connection":"work"}}`), 0o644)
+	d := defaultDeps()
+	d.Getwd = func() (string, error) { return cwd, nil }
+	d.Getenv = func(string) string { return "" }
+	in := doctorInput(context.Background(), d)
+	if in.SourceProblem == "" {
+		t.Error("no source problem for svn")
+	}
+	if in.Tracker.Connection != "work" || in.Connection == nil {
+		t.Errorf("connection dropped: tracker %q, check %+v", in.Tracker.Connection, in.Connection)
+	}
+}
+
+// doctorInput hands worker.ResolveHost its own Getenv and DoctorPath-aware Look:
+// a herdr pane resolves herdr only when herdr is found on DoctorPath.
+func TestDoctorInputHostUsesGetenvAndDoctorPath(t *testing.T) {
+	cwd, _ := filepath.EvalSymlinks(t.TempDir())
+	os.MkdirAll(filepath.Join(cwd, ".rota"), 0o755)
+	os.WriteFile(filepath.Join(cwd, ".rota", "config.json"), []byte(`{}`), 0o644)
+	for path, want := range map[string]host.Kind{"/missing": host.Solo, "/found": host.Herdr} {
+		d := defaultDeps()
+		d.Getwd = func() (string, error) { return cwd, nil }
+		d.Getenv = func(k string) string {
+			if k == "HERDR_ENV" {
+				return "1"
+			}
+			return ""
+		}
+		d.LookPath = func(n string) (string, error) {
+			if n == "/found/herdr" {
+				return n, nil
+			}
+			return "", errors.New("not found")
+		}
+		d.DoctorPath = path
+		if got := doctorInput(context.Background(), d).RoundHost; got != want {
+			t.Errorf("DoctorPath %s: round host %q, want %q", path, got, want)
+		}
 	}
 }
