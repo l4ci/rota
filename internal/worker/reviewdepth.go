@@ -94,3 +94,18 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	}
 	return ReviewDepth{s.Policy.Decide(in), changed, in.Labels}, nil
 }
+
+// DoorNote explains why a depth below full has not seen the PR's Door line: there
+// was no PR to read, or no forge to read one from. It is empty when the line was
+// read, when the depth is full, when a label mapped to none (final, so the line
+// cannot change it) or when the policy cannot come out below full.
+func DoorNote(policy config.ReviewPolicy, res ReviewDepth, prFound, noForge bool) string {
+	labelNone := res.Signal == config.SignalLabel && res.Depth == config.DepthNone
+	if prFound || res.Depth == config.DepthFull || labelNone || !policy.MayBeBelowFull() {
+		return ""
+	}
+	if noForge {
+		return "; no forge to read, so no Door line was read"
+	}
+	return "; no PR yet, so no Door line was read"
+}
