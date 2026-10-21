@@ -118,3 +118,79 @@ func TestTierSetFoldsBufferedHitsFirst(t *testing.T) {
 		t.Fatalf("demoted bullet read back as %+v err=%v", e, err)
 	}
 }
+
+// crashedFold leaves what a fold that wrote the sidecar and died before
+// os.Remove leaves behind: the claimed buffer, with the sidecar marking it.
+func crashedFold(t *testing.T, s Store, n int) {
+	t.Helper()
+	for i := 0; i < n; i++ {
+		if _, err := s.Hit(Umbrella, "Arch", "bullet"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hp, _ := s.HitsPath(Umbrella)
+	claimed, err := claim(hp)
+	if err != nil || claimed == "" {
+		t.Fatalf("claim = %q err=%v", claimed, err)
+	}
+	p, _ := s.TierPath(Umbrella)
+	if err := Update(p, func(sc *Sidecar) (bool, error) {
+		hits, _ := readPending(claimed)
+		for _, h := range hits {
+			sc.Bump(h.Topic, h.Title, h.Date)
+		}
+		sc.obj.Set(foldedKey, filepath.Base(claimed))
+		return true, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFoldHitsAfterCrashDoesNotDoubleCount(t *testing.T) {
+	s := lockedStore(t)
+	crashedFold(t, s, 2)
+	if _, err := s.Hit(Umbrella, "Arch", "bullet"); err != nil { // arrives after the crash
+		t.Fatal(err)
+	}
+	if e, ok, err := s.TierGet(Umbrella, "Arch", "bullet"); err != nil || !ok || e.Hits != 3 {
+		t.Fatalf("read after crash = %+v ok=%v err=%v", e, ok, err)
+	}
+	res, err := s.FoldHits(Umbrella)
+	if err != nil || res.Hits != 1 {
+		t.Fatalf("fold = %+v err=%v", res, err)
+	}
+	p, _ := s.TierPath(Umbrella)
+	sc, err := LoadSidecar(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e, _ := sc.Get("Arch", "bullet"); e.Hits != 3 {
+		t.Fatalf("hits = %d, want 3", e.Hits)
+	}
+	if foldedMark(sc) != "" {
+		t.Fatalf("mark left in tracked sidecar: %q", foldedMark(sc))
+	}
+	hp, _ := s.HitsPath(Umbrella)
+	if left, _ := claimedBuffers(hp); len(left) != 0 {
+		t.Fatalf("claimed buffer left: %v", left)
+	}
+}
+
+func TestFoldHitsReplaysClaimedBufferTheSidecarNeverGot(t *testing.T) {
+	s := lockedStore(t)
+	for i := 0; i < 2; i++ {
+		if _, err := s.Hit(Umbrella, "Arch", "bullet"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hp, _ := s.HitsPath(Umbrella)
+	if _, err := claim(hp); err != nil { // died right after the claim
+		t.Fatal(err)
+	}
+	if res, err := s.FoldHits(Umbrella); err != nil || res.Hits != 2 {
+		t.Fatalf("fold = %+v err=%v", res, err)
+	}
+	if e, _, _ := s.TierGet(Umbrella, "Arch", "bullet"); e.Hits != 2 {
+		t.Fatalf("hits = %d, want 2", e.Hits)
+	}
+}
