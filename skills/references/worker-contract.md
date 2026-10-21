@@ -114,7 +114,7 @@ Work only this task, then stop.
   typed; `rota proof add` is for docs-only rows with no command. A test that passes before the change
   proves nothing: fix the test. So does one that fails on a build, compile or setup
   error (missing import, typo, undefined symbol): the RED must be a failed assertion. Write tests to `references/test-quality.md`. Docs and skill-only changes have no RED: say
-  `no test seam: docs/skill change` in the proof row's check.
+  `no test seam: docs/skill change` in the proof row's check. `rota worker done` checks this: with `work.tdd` on, when non-test Go changed and no proof row for the item is a FAIL it warns, and exits 4 under `--require-red`. It also warns (exit 4 under `--require-red`) when it cannot compute that diff, for example an unresolvable `--base` (`data.noRedUnchecked`); fix the base rather than skip the check. `--outcome failed` skips both.
 - Before opening a PR, run this deterministic checklist on your own branch. It is
   commands only, no model reviewer, so the no-reviewer rule above stands:
   1. Scaffolding: `rota review scaffolding --base <base-branch> <your-branch>`. Fix each
