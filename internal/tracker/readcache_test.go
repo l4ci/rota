@@ -108,7 +108,7 @@ func TestGetTakesAListedIssueFromTheList(t *testing.T) {
 		t.Fatalf("calls %d, want 3: %v", len(f.calls), f.calls)
 	}
 	// A write drops the listed copy.
-	if err := g.Edit(ctx, NumKey(7), IssueEdit{AddLabels: []string{"y"}}); err != nil {
+	if err := g.Close(ctx, NumKey(7), CloseCompleted, ""); err != nil {
 		t.Fatal(err)
 	}
 	f.calls = nil
@@ -171,7 +171,7 @@ func TestLabelFilteredListComesFromTheCachedOpenList(t *testing.T) {
 		}
 	}
 	// A write drops the held list.
-	if err := g.Edit(ctx, NumKey(1), IssueEdit{AddLabels: []string{"y"}}); err != nil {
+	if err := g.Close(ctx, NumKey(1), CloseCompleted, ""); err != nil {
 		t.Fatal(err)
 	}
 	before := len(f.calls)

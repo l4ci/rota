@@ -663,18 +663,40 @@
     {
      "name": "gh",
      "argv": [
-      "issue",
-      "edit",
-      "1",
-      "--title",
-      "First!",
-      "--body-file",
-      "-",
-      "--remove-label",
-      "p1"
+      "api",
+      "-X",
+      "PATCH",
+      "repos/{owner}/{repo}/issues/1",
+      "--input",
+      "-"
      ],
-     "stdin": "new body\nmore",
-     "stdout": "https://github.com/fake/repo/issues/1\n",
+     "stdin": "{\"body\":\"new body\\nmore\",\"title\":\"First!\"}",
+     "stdout": "{}\n",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "-X",
+      "DELETE",
+      "repos/{owner}/{repo}/issues/1/labels/p1"
+     ],
+     "stdin": "",
+     "stdout": "[{\"name\": \"bug\"}]\n",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "repos/{owner}/{repo}/issues/1",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "{\"number\": 1, \"title\": \"First!\", \"body\": \"new body\\nmore\", \"labels\": [{\"name\": \"bug\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"open\"}\n",
      "stderr": "",
      "code": 0
     }
@@ -723,14 +745,27 @@
     {
      "name": "gh",
      "argv": [
-      "issue",
-      "edit",
-      "1",
-      "--add-label",
-      "extra"
+      "api",
+      "-X",
+      "POST",
+      "repos/{owner}/{repo}/issues/1/labels",
+      "--input",
+      "-"
+     ],
+     "stdin": "{\"labels\":[\"extra\"]}",
+     "stdout": "[{\"name\": \"bug\"}, {\"name\": \"extra\"}]\n",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "repos/{owner}/{repo}/issues/1",
+      "--paginate"
      ],
      "stdin": "",
-     "stdout": "https://github.com/fake/repo/issues/1\n",
+     "stdout": "{\"number\": 1, \"title\": \"First!\", \"body\": \"new body\\nmore\", \"labels\": [{\"name\": \"bug\"}, {\"name\": \"extra\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"open\"}\n",
      "stderr": "",
      "code": 0
     }
@@ -786,14 +821,25 @@
     {
      "name": "gh",
      "argv": [
-      "issue",
-      "edit",
-      "1",
-      "--remove-label",
-      "extra"
+      "api",
+      "-X",
+      "DELETE",
+      "repos/{owner}/{repo}/issues/1/labels/extra"
      ],
      "stdin": "",
-     "stdout": "https://github.com/fake/repo/issues/1\n",
+     "stdout": "[{\"name\": \"bug\"}]\n",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "repos/{owner}/{repo}/issues/1",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "{\"number\": 1, \"title\": \"First!\", \"body\": \"new body\\nmore\", \"labels\": [{\"name\": \"bug\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"open\"}\n",
      "stderr": "",
      "code": 0
     }
@@ -819,13 +865,27 @@
     {
      "name": "gh",
      "argv": [
-      "issue",
-      "edit",
-      "1",
-      "--remove-milestone"
+      "api",
+      "-X",
+      "PATCH",
+      "repos/{owner}/{repo}/issues/1",
+      "--input",
+      "-"
+     ],
+     "stdin": "{\"milestone\":null}",
+     "stdout": "{}\n",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "repos/{owner}/{repo}/issues/1",
+      "--paginate"
      ],
      "stdin": "",
-     "stdout": "https://github.com/fake/repo/issues/1\n",
+     "stdout": "{\"number\": 1, \"title\": \"First!\", \"body\": \"new body\\nmore\", \"labels\": [{\"name\": \"bug\"}], \"milestone\": null, \"state\": \"open\"}\n",
      "stderr": "",
      "code": 0
     }
@@ -878,14 +938,39 @@
     {
      "name": "gh",
      "argv": [
-      "issue",
-      "edit",
-      "1",
-      "--milestone",
-      "M07 Tracker"
+      "api",
+      "repos/{owner}/{repo}/milestones?state=all&per_page=100",
+      "--paginate"
      ],
      "stdin": "",
-     "stdout": "https://github.com/fake/repo/issues/1\n",
+     "stdout": "[{\"number\": 1, \"title\": \"M07 Tracker\", \"description\": \"tracker port\", \"state\": \"open\"}]\n",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "-X",
+      "PATCH",
+      "repos/{owner}/{repo}/issues/1",
+      "--input",
+      "-"
+     ],
+     "stdin": "{\"milestone\":1}",
+     "stdout": "{}\n",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "repos/{owner}/{repo}/issues/1",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "{\"number\": 1, \"title\": \"First!\", \"body\": \"new body\\nmore\", \"labels\": [{\"name\": \"bug\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"open\"}\n",
      "stderr": "",
      "code": 0
     }

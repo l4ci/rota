@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -45,11 +46,33 @@ func newScopeFx(t *testing.T, overlap string, extraCfg string) *scopeFx {
 	}
 	issues := map[string]string{"1": issue(1, "Holder"), "2": issue(2, "Candidate")}
 	comments := map[int][]string{}
+	labels := map[int][]string{}
 	fx := &scopeFx{root: root}
 	deps := testDeps()
-	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
 		joined := strings.Join(args, " ")
 		switch {
+		case len(args) > 3 && args[0] == "api" && args[1] == "-X" && (args[2] == "POST" || args[2] == "DELETE") && strings.Contains(args[3], "/labels"):
+			// Labels change one by one, and the read-back sees them.
+			var n int
+			fmt.Sscanf(args[3], "repos/{owner}/{repo}/issues/%d/labels", &n)
+			if args[2] == "DELETE" {
+				drop := args[3][strings.LastIndex(args[3], "/")+1:]
+				labels[n] = slices.DeleteFunc(labels[n], func(l string) bool { return l == drop })
+			} else {
+				var in struct{ Labels []string }
+				_ = json.Unmarshal(stdin, &in)
+				labels[n] = append(labels[n], in.Labels...)
+			}
+			return []byte("[]"), nil, 0, nil
+		case len(args) == 3 && args[0] == "api" && strings.HasPrefix(args[1], "repos/{owner}/{repo}/issues/") && !strings.Contains(args[1][len("repos/{owner}/{repo}/issues/"):], "/"):
+			var n int
+			fmt.Sscanf(args[1], "repos/{owner}/{repo}/issues/%d", &n)
+			ls := []string{}
+			for _, l := range labels[n] {
+				ls = append(ls, fmt.Sprintf(`{"name":%q}`, l))
+			}
+			return []byte(fmt.Sprintf(`{"number":%d,"title":"t","body":"","labels":[%s],"state":"open"}`, n, strings.Join(ls, ","))), nil, 0, nil
 		case len(args) > 2 && args[0] == "api" && args[1] == "-X" && args[2] == "POST":
 			// A posted comment is visible to the next read, as on a real forge.
 			var n int

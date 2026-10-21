@@ -16,6 +16,7 @@ import json
 import os
 import re
 import sys
+import urllib.parse
 
 # hashlib, subprocess and datetime load on first use: a fake runs thousands of times per
 # smoke run, and each import costs 5 to 18 ms of interpreter start (#84).
@@ -512,7 +513,7 @@ def ms_by_number(db, n):
 
 
 def gh_api(db, args):
-    path, method, fields, _ = parse_api(args, {})
+    path, method, fields, opts = parse_api(args, {"--input": "input"})
     method = (method or ("POST" if fields else "GET")).upper()
     m = re.match(r"^repos/[^/]+/[^/]+/(.+)$", path)
     if not m:
@@ -547,6 +548,44 @@ def gh_api(db, args):
                 x[k] = fields[k]
         save(db)
         emit(gm(x))
+    elif re.match(r"^issues/\d+$", rest) and method in ("GET", "PATCH"):
+        i = find_issue(db, rest.split("/")[1])
+        if method == "PATCH":
+            f = opts.get("input")
+            body = json.loads(sys.stdin.read() if f and f[-1] == "-" else open(f[-1]).read())
+            if "title" in body:
+                i["title"] = body["title"]
+            if "body" in body:
+                i["body"] = body["body"]
+            if "labels" in body:
+                gh_check_labels(db, body["labels"])
+                i["labels"] = list(body["labels"])
+            if "milestone" in body:
+                n = body["milestone"]
+                i["milestone"] = None if n is None else [ms_by_number(db, n)["title"], int(n)]
+            save(db)
+        emit({"number": i["number"], "title": i["title"], "body": i["body"],
+              "labels": [{"name": n} for n in i["labels"]],
+              "milestone": {"title": i["milestone"][0], "number": i["milestone"][1]} if i["milestone"] else None,
+              "state": i["state"]})
+    elif re.match(r"^issues/\d+/labels$", rest) and method == "POST":
+        i = find_issue(db, rest.split("/")[1])
+        f = opts.get("input")
+        body = json.loads(sys.stdin.read() if f and f[-1] == "-" else open(f[-1]).read())
+        gh_check_labels(db, body["labels"])
+        for n in body["labels"]:
+            if n not in i["labels"]:
+                i["labels"].append(n)
+        save(db)
+        emit([{"name": n} for n in i["labels"]])
+    elif re.match(r"^issues/\d+/labels/[^/]+$", rest) and method == "DELETE":
+        i = find_issue(db, rest.split("/")[1])
+        name = urllib.parse.unquote(rest.split("/")[3])
+        if name not in i["labels"]:
+            raise Fail("404 Not Found")
+        i["labels"].remove(name)
+        save(db)
+        emit([{"name": n} for n in i["labels"]])
     elif re.match(r"^issues/\d+/comments$", rest) and method == "GET":
         i = thread(db, rest.split("/")[1])
         emit([{"id": c["id"], "body": c["body"], "user": {"login": c["author"]}} for c in i["comments"]])
