@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotatree"
 )
@@ -31,6 +32,16 @@ type Store struct {
 	Repos map[string]string
 	// Now is the clock that dates new entries; nil is the wall clock.
 	Now func() time.Time
+	// Config returns the merged project config; nil loads .rota/config.json.
+	Config func(root string) any
+}
+
+// config is the project config through the Config seam.
+func (s Store) config() any {
+	if s.Config != nil {
+		return s.Config(s.Root)
+	}
+	return config.Load(rotatree.Config(s.Root))
 }
 
 // now is the Store's clock; nil is the wall clock.

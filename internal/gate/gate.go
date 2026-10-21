@@ -15,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/overlap"
-	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Gate names.
@@ -97,7 +96,7 @@ func (r *Refused) Hint() string {
 // returns *Refused, whatever autonomy.level says. With it, it appends the
 // approval to the audit log before the caller acts. paths travels into the
 // refusal for merge-approval.
-func Clear(root string, now time.Time, name, verb, target string, c Confirm, paths []string) error {
+func Clear(root string, cfg any, now time.Time, name, verb, target string, c Confirm, paths []string) error {
 	if !c.Given {
 		if paths == nil {
 			paths = []string{}
@@ -105,7 +104,7 @@ func Clear(root string, now time.Time, name, verb, target string, c Confirm, pat
 		return &Refused{Gate: name, Paths: paths}
 	}
 	autonomy := "off"
-	if v, err := config.Value(config.Load(rotatree.Config(root)), "autonomy.level"); err == nil {
+	if v, err := config.Value(cfg, "autonomy.level"); err == nil {
 		if s, ok := v.(string); ok {
 			autonomy = s
 		}
@@ -200,9 +199,8 @@ type MergePolicy struct {
 // ErrBadMergeMode is a ship.mergeApproval value other than none, all, paths.
 var ErrBadMergeMode = errors.New("ship.mergeApproval must be none, all or paths")
 
-// LoadMergePolicy reads the merge policy from the project config.
-func LoadMergePolicy(root string) (MergePolicy, error) {
-	cfg := config.Load(rotatree.Config(root))
+// LoadMergePolicy reads the merge policy from a loaded project config.
+func LoadMergePolicy(cfg any) (MergePolicy, error) {
 	var p MergePolicy
 	v, err := config.Value(cfg, "ship.mergeApproval")
 	if err != nil {

@@ -65,14 +65,16 @@ func confirmFlags(fs *flag.FlagSet) func() (gate.Confirm, error) {
 // failure data (worker gate's own shape).
 func clearGate(c *Ctx, name, target string, conf gate.Confirm, paths []string, extra *jsonx.Object) (Result, error) {
 	root := ""
+	var cfg any
 	if conf.Given {
 		var err error
 		if root, err = c.Root(); err != nil {
 			return Result{}, err
 		}
+		cfg = c.deps().Config(root)
 	}
 	verb := strings.TrimPrefix(c.Path, "rota ")
-	err := gate.Clear(root, c.deps().Now(), name, verb, target, conf, paths)
+	err := gate.Clear(root, cfg, c.deps().Now(), name, verb, target, conf, paths)
 	var r *gate.Refused
 	switch {
 	case errors.As(err, &r):
@@ -100,7 +102,7 @@ func mergePolicy(c *Ctx) (gate.MergePolicy, error) {
 	if err != nil {
 		return gate.MergePolicy{Mode: gate.MergeNone}, nil
 	}
-	p, err := gate.LoadMergePolicy(root)
+	p, err := gate.LoadMergePolicy(c.deps().Config(root))
 	if errors.Is(err, gate.ErrBadMergeMode) {
 		return p, Usage("%v", err)
 	}

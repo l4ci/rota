@@ -53,8 +53,9 @@ type Deps struct {
 	Getwd       func() (string, error)
 	UserHomeDir func() (string, error)
 
-	// Config returns the merged project config of root; the worker accounts
-	// read it through here. A test swaps in an in-memory config.
+	// Config returns the merged project config of root: the one read the worker
+	// and escalation envs, the knowledge store, the gate and the host decision
+	// take. A test swaps in an in-memory config.
 	Config func(root string) any
 
 	// Now is the one clock. Today is the day date-stamped output and age
@@ -241,7 +242,7 @@ func (d *Deps) projectsEnv() projects.Env {
 // resolveHost is worker.ResolveHost over Deps' own getenv and lookPath, so the
 // decision and the handle from Host come from the same injected sources.
 func (d *Deps) resolveHost(root string) host.Kind {
-	return worker.ResolveHost(root, config.Load(rotatree.Config(root)), d.Getenv, d.LookPath)
+	return worker.ResolveHost(root, d.Config(root), d.Getenv, d.LookPath)
 }
 
 // resolvePaneHost is worker.ResolvePaneHost over Deps' own getenv and lookPath.
@@ -268,6 +269,9 @@ func homeOf(f func() (string, error)) string {
 // workerEnv is the WorkerEnv hook with its host filled from Host.
 func (d *Deps) workerEnv() worker.Env {
 	e := d.WorkerEnv()
+	if e.Config == nil {
+		e.Config = d.Config
+	}
 	if e.Git == nil {
 		e.Git = d.Git
 	}
@@ -332,6 +336,9 @@ func (d *Deps) baseRoundEnv() round.Env {
 // only one with notifications) filled from Host.
 func (d *Deps) escalationEnv() escalation.Env {
 	e := d.EscalationEnv()
+	if e.Config == nil {
+		e.Config = d.Config
+	}
 	if e.Host == nil {
 		e.Host = func() host.Host { return d.Host(host.Herdr) }
 	}
