@@ -31,7 +31,7 @@ func configCommands() []*Command {
 			{Name: "set", Summary: "set one key in .rota/config.json", Repo: true, Verb: configSet},
 			{Name: "check", Summary: "compare .rota/config.json with the schema", Repo: true, Verb: configCheck},
 			{Name: "fill", Summary: "write the default of every missing required key", Repo: true, Verb: configFill},
-			{Name: "save-global", Summary: "save .rota/config.json as the machine-wide defaults for new projects", Repo: true, Verb: configSaveGlobal},
+			{Name: "save-global", Summary: "merge .rota/config.json into the machine-wide global config", Repo: true, Verb: configSaveGlobal},
 		}},
 		{Name: "repo", Summary: "umbrella sub-repo registry", Subs: []*Command{
 			{Name: "which", Summary: "the registered sub-repo the working directory is in", Verb: repoWhich},
@@ -152,8 +152,8 @@ func tierKeyParts(key string) (kind, tier string, ok bool) {
 	return kind, tier, found && roundcfg.ValidTier(tier)
 }
 
-// configSaveGlobal copies the project's config.json keys (not config.local.json)
-// to the global config, which only seeds `rota init` and `rota setup`.
+// configSaveGlobal merges the project's config.json keys (not config.local.json)
+// into the global config, the runtime layer under every project.
 func configSaveGlobal(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := argCount(c, args, 0, 0, "config save-global takes no arguments"); err != nil {
@@ -243,6 +243,10 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		if legacy := config.Legacy(root); len(legacy) > 0 {
 			data.Set("legacy", anySlice(legacy))
 			res.Text += "\nLEGACY: " + strings.Join(legacy, ", ") + " (replaced by issues.source and forge.provider; run: rota migrate source --apply, or rota config fill)"
+		}
+		if gerr := config.GlobalError(); gerr != nil && status == config.Stale {
+			data.Set("globalCorrupt", gerr.Error())
+			res.Text += "\nGLOBAL CORRUPT: " + gerr.Error() + " (inherited keys read as missing; repair the global config, do not run fill)"
 		}
 		if status == config.UpToDate || status == config.Stale {
 			if retired := config.Retired(root); len(retired) > 0 {

@@ -104,9 +104,15 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 		root, _ := res.Data.(*jsonx.Object)
 		out := jsonx.NewObject()
 		lines := []string{res.Text}
+		globalVals, globalOK := loadGlobalValues()
 		for _, p := range config.Prompts {
 			v, ok := answers[p.Key]
 			if !ok || (p.Optional && v == "") {
+				continue
+			}
+			if g, has := globalVals[p.Key]; has && fmt.Sprint(g) == v {
+				// The project inherits the global value; copying it would pin it.
+				out.Set(p.Key, config.Coerce(v))
 				continue
 			}
 			if _, err := config.Set(dir, p.Key, v); err != nil {
@@ -117,7 +123,6 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 		}
 		root.Set("answers", out)
 		// A broken global file was already warned about; offering to save into it would fail.
-		globalVals, globalOK := loadGlobalValues()
 		if cands := globalCandidates(answers, globalVals); globalOK && len(cands) > 0 {
 			save := *saveGlobal
 			if !save && interactive {
