@@ -333,6 +333,23 @@ var (
 	activeHeadRe = regexp.MustCompile(`(?m)^## Milestones[ \t\r\f\v]*$`)
 )
 
+// noActiveIntro is the vision block's opening line when no milestone is active.
+func noActiveIntro(issue bool) string {
+	if issue {
+		return "Project milestones are tracker milestones, each with a tracking issue (`rota milestone show MNN`). `.rota/MILESTONES.md` is the index."
+	}
+	return "Project milestones live in `.rota/MILESTONES.md`."
+}
+
+var historyStatusRe = regexp.MustCompile(`(?m)^\*\*Status:\*\* (?:shipped|archived)\b`)
+
+// fileHistory reports whether MILESTONES.md keeps shipped or archived entries
+// from file mode, which the tracker list does not carry.
+func fileHistory(ms string) bool {
+	text, err := fsio.ReadText(ms)
+	return err == nil && historyStatusRe.MatchString(text)
+}
+
 // updateStatusLine is hvlib_repos.update_milestone_status_line: the first
 // "### <id> — <title>\n\n**Status:** <status>" gets the new status.
 func updateStatusLine(content, id, status string) string {
@@ -456,7 +473,7 @@ func IndexFrom(root string, items []Entry, issue bool) (changed bool, err error)
 			where = "the tracking issues (`rota milestone show MNN`)"
 		}
 		intro = "Active milestones live in `.rota/MILESTONES.md` (detail in " + where + "). Tag captured items with their milestone via the `Milestone:` field where applicable."
-	case len(items) > 0:
+	case len(items) > 0 || (issue && fileHistory(ms)):
 		planned := 0
 		for _, i := range items {
 			if i.Status == "planned" {
@@ -468,10 +485,10 @@ func IndexFrom(root string, items []Entry, issue bool) (changed bool, err error)
 		} else {
 			body = "_(no active milestones — all shipped or archived; run `/rota-vision` to plan more)_"
 		}
-		intro = "Project milestones live in `.rota/MILESTONES.md`."
+		intro = noActiveIntro(issue)
 	default:
 		body = "_(no milestones yet — run `/rota-vision` to brainstorm)_"
-		intro = "Project milestones live in `.rota/MILESTONES.md`."
+		intro = noActiveIntro(issue)
 	}
 	status, err := section.UpsertManaged(root, "vision", "## Project Vision\n\n"+intro+"\n\n"+body)
 	if err != nil {
