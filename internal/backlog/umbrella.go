@@ -581,3 +581,9 @@ var (
 	_ Backend  = (*Umbrella)(nil)
 	_ Workflow = (*Umbrella)(nil)
 )
+
+// SetDetail rewrites the item's body on its sub-repo's tracker.
+func (u *Umbrella) SetDetail(ref, text string) error {
+	_, err := viaOwner(u, ref, func(s *Issues, plain string) (struct{}, error) { return struct{}{}, s.SetDetail(plain, text) })
+	return err
+}

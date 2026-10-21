@@ -108,6 +108,7 @@ var Keys = []Key{
 	// 5.0 keys: not in CONFIG_KEYS.
 	k("ship.mergeApproval", "none", false, TypeEnum, "Which merges need a human: none, all, or only those touching ship.mergeApprovalPaths. The merge verbs enforce it at every autonomy level.", "none", "all", "paths"),
 	k("ship.mergeApprovalPaths", []any{}, false, TypeList, "Repo-relative paths or globs that need human approval when ship.mergeApproval is paths."),
+	k("review.fileDeferred", "minor", false, TypeEnum, "Which deferred review findings rota verdict add --file-deferred files, as one follow-up item per PR. minor: minor and major. major: only major (minor stays in the verdict record). off: none.", "minor", "major", "off"),
 	k("round.scope", "milestone", false, TypeEnum, "Rounds: Which issues a round may take. slate: only those named at rota round start --items. milestone: the active milestones. next: also the next ready milestone. open: every open item no slot holds.", "milestone", "slate", "next", "open"),
 	k("round.roster", []any{"ben", "dana", "nia", "kit"}, false, TypeList, "Rounds: Agent names slots are provisioned under, one slot each. Lowercase letters, digits and -, no duplicates."),
 	k("round.brief", "", false, TypePath, "Rounds: Path of the standing worker contract the assignment pointer names. Empty means skills/references/worker-contract.md in the checkout, else the installed copy."),

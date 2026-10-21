@@ -124,10 +124,11 @@ func TestVerdictAddFilesDeferredFindings(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("add: %d %s", code, errOut)
 	}
-	if filed, _ := data(t, out)["filed"].([]any); len(filed) != 2 {
-		t.Fatalf("filed = %v, want the minor and the waived major (not info, not blocking)", filed)
+	d := data(t, out)
+	if filed, _ := d["filed"].([]any); len(filed) != 1 || d["appended"] != 2.0 {
+		t.Fatalf("filed = %v appended = %v, want one item with the minor and the waived major (not info, not blocking)", d["filed"], d["appended"])
 	}
-	b, _ := os.ReadFile(filepath.Join(dir, ".rota", "BACKLOG.md"))
+	b, _ := os.ReadFile(filepath.Join(dir, ".rota", "tasks", "T01.md"))
 	text := string(b)
 	for _, want := range []string{"n", "waived", "#77"} {
 		if !strings.Contains(text, want) {
@@ -205,13 +206,13 @@ func TestVerdictAddFileDeferredIsIdempotent(t *testing.T) {
 	body := writeBody(t, t.TempDir(), mixedFindings)
 	args := []string{"verdict", "add", "--kind", "review-quality", "--verdict", "FAIL", "--body-file", body, "--file-deferred", "--pr", "#77", "--json"}
 	_, out, _ := rotaIn(t, dir, args...)
-	if filed, _ := data(t, out)["filed"].([]any); len(filed) != 2 {
-		t.Fatalf("first call filed %v", filed)
+	if d := data(t, out); d["appended"] != 2.0 {
+		t.Fatalf("first call appended %v", d["appended"])
 	}
 	before, _ := os.ReadFile(filepath.Join(dir, ".rota", "BACKLOG.md"))
 	code, out, errOut := rotaIn(t, dir, args...)
 	d := data(t, out)
-	if filed, _ := d["filed"].([]any); code != 0 || len(filed) != 0 || d["skipped"] != 2.0 {
+	if code != 0 || d["appended"] != 0.0 {
 		t.Fatalf("retry: %d %v %s", code, d, errOut)
 	}
 	if after, _ := os.ReadFile(filepath.Join(dir, ".rota", "BACKLOG.md")); string(after) != string(before) {
