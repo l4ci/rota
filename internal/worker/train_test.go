@@ -743,3 +743,20 @@ func TestOrderTrainOverrideRejectsBadTokens(t *testing.T) {
 		}
 	}
 }
+
+// A PR a train lands leaves the review list, like one the gate merged (#1526).
+func TestTrainDropsLandedQueuedPR(t *testing.T) {
+	w := newWorld(t, "")
+	w.setQueued()
+	w.forge("body", "Closes #5\n")
+	if n := len(LoadRegistryTolerant(w.dir).PRs()); n != 1 {
+		t.Fatalf("setup: %d queued record(s)", n)
+	}
+	res, err := w.train(TrainOpts{Targets: []string{"#7"}})
+	if err != nil || res.Verdict != GatePass || len(res.Landed) != 1 {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if n := len(LoadRegistryTolerant(w.dir).PRs()); n != 0 {
+		t.Errorf("a train-landed PR stays in review: %d record(s)", n)
+	}
+}
