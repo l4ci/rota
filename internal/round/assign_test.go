@@ -1281,6 +1281,37 @@ func TestStatusMarksSlotWhoseAccountHasNoLogin(t *testing.T) {
 	}
 }
 
+// A draining slot takes nothing new, so status does not read its credentials (#1337).
+func TestStatusSkipsLoginCheckForDrainingSlot(t *testing.T) {
+	f := newAssignFixture(t)
+	o := startOpts(roundcfg.ScopeMilestone, 100)
+	o.Slots = 3
+	if _, err := f.env.Start(bg, f.root, o); err != nil {
+		t.Fatal(err)
+	}
+	holdTask(t, f.root, "nia", "41")
+	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"nia", "dana"} {
+		if _, err := worker.UpdateSlot(f.root, name, func(s *worker.Slot) { s.SetAccount("work", t.TempDir()) }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.env.Round = roundcfg.Settings{Roster: fiveRoster, Slots: 2}
+	rep, err := f.env.Status(bg, f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marked := map[string]string{}
+	for _, r := range rep.Rows {
+		marked[r.Name] = r.NoLogin
+	}
+	if marked["dana"] == "" || marked["nia"] != "" {
+		t.Errorf("NoLogin by slot = %v, want dana marked and draining nia not checked", marked)
+	}
+}
+
 // work.tdd on puts the red-first line in the brief (#1300); off leaves it out.
 func TestPointerBriefTDD(t *testing.T) {
 	on := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", tierBrief{Kind: "claude", Tier: "standard", TDD: true})
