@@ -214,3 +214,64 @@ func TestFoldHitsCountsMalformedBufferLines(t *testing.T) {
 		t.Fatalf("fold = %+v err=%v, want 1 hit and 2 skipped (blank line is not malformed)", res, err)
 	}
 }
+
+// A hit buffered under the old title must be folded before Replace re-keys the
+// sidecar, or it lands under a title no bullet carries.
+func TestReplaceRetitleFoldsBufferedHitsFirst(t *testing.T) {
+	s := lockedStore(t)
+	km, _ := s.KnowledgePath(Umbrella)
+	if err := os.WriteFile(km, []byte("# Knowledge\n\n## Arch\n\n- **old** — body\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The retitle path only runs once a sidecar exists, so fold one hit first.
+	if _, err := s.Hit(Umbrella, "Arch", "old"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.FoldHits(Umbrella); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Hit(Umbrella, "Arch", "old"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Replace(Umbrella, "Arch", "**old**", "**new**"); err != nil {
+		t.Fatal(err)
+	}
+	sc, err := LoadSidecar(mustTier(t, s))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e, ok := sc.Get("Arch", "new"); !ok || e.Hits != 2 {
+		t.Errorf("hits not carried to the new title: %+v ok=%v", e, ok)
+	}
+	if _, ok := sc.Get("Arch", "old"); ok {
+		t.Error("hits still keyed under the old title")
+	}
+	hp, _ := s.HitsPath(Umbrella)
+	if _, err := os.Stat(hp); !os.IsNotExist(err) {
+		t.Errorf("buffer not emptied: %v", err)
+	}
+}
+
+// Hits appended while folds run are each counted exactly once: none is lost
+// to a removed buffer and none is replayed.
+func TestFoldHitsRacingConcurrentHitsCountsEachOnce(t *testing.T) {
+	s := lockedStore(t)
+	const n = 20
+	parallel(n, func(i int) {
+		if _, err := s.Hit(Umbrella, "Arch", "bullet"); err != nil {
+			t.Error(err)
+		}
+		if i%4 == 0 {
+			if _, err := s.FoldHits(Umbrella); err != nil {
+				t.Error(err)
+			}
+		}
+	})
+	if _, err := s.FoldHits(Umbrella); err != nil {
+		t.Fatal(err)
+	}
+	e, _, err := s.TierGet(Umbrella, "Arch", "bullet")
+	if err != nil || e.Hits != n {
+		t.Fatalf("hits = %d err=%v, want %d", e.Hits, err, n)
+	}
+}
