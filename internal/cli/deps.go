@@ -53,8 +53,9 @@ type Deps struct {
 	Getwd       func() (string, error)
 	UserHomeDir func() (string, error)
 
-	// Config returns the merged project config of root; the worker accounts
-	// read it through here. A test swaps in an in-memory config.
+	// Config returns the merged project config of root: the one read the worker
+	// and escalation envs, the knowledge store, the gate and the host decision
+	// take. A test swaps in an in-memory config.
 	Config func(root string) any
 
 	// Now is the one clock. Today is the day date-stamped output and age
@@ -71,11 +72,7 @@ type Deps struct {
 	// env, the accounts and every cli env read go through it. A test swaps it.
 	// defaultDeps also reads the remaining ROTA_TEST_* hooks once, at this
 	// edge, into PollFixture, PollStatus, DoctorPath and DoctorDisk.
-	Getenv func(string) string
-	// Config is the one read of the project config the domain envs (worker,
-	// escalation, knowledge, gate) take: the merged .rota/config.json by
-	// default, a fixed value in a test.
-	Config  func(root string) any
+	Getenv  func(string) string
 	Environ func() []string
 	// RecordMistakes makes an internal error or panic write a record to the
 	// bug log (#1175). A test leaves it off so a failing fixture does not write
@@ -152,7 +149,6 @@ func defaultDeps() *Deps {
 		Git:              git.Exec,
 		Proc:             proc.Run,
 		Getenv:           os.Getenv,
-		Config:           func(root string) any { return config.Load(rotatree.Config(root)) },
 		Getwd:            os.Getwd,
 		UserHomeDir:      os.UserHomeDir,
 		LookPath:         exec.LookPath,
@@ -246,7 +242,7 @@ func (d *Deps) projectsEnv() projects.Env {
 // resolveHost is worker.ResolveHost over Deps' own getenv and lookPath, so the
 // decision and the handle from Host come from the same injected sources.
 func (d *Deps) resolveHost(root string) host.Kind {
-	return worker.ResolveHost(root, config.Load(rotatree.Config(root)), d.Getenv, d.LookPath)
+	return worker.ResolveHost(root, d.Config(root), d.Getenv, d.LookPath)
 }
 
 // resolvePaneHost is worker.ResolvePaneHost over Deps' own getenv and lookPath.
