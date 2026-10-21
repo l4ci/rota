@@ -1215,3 +1215,54 @@ func TestPointerBriefFullOnly(t *testing.T) {
 		t.Errorf("brief carries the test.full instruction without FullOnly:\n%s", off)
 	}
 }
+
+func noLoginFixture(t *testing.T) *assignFixture {
+	t.Helper()
+	f := newAssignFixture(t)
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccount("work", t.TempDir()) }); err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
+func TestAssignSkipsSlotWhoseAccountHasNoLogin(t *testing.T) {
+	f := noLoginFixture(t)
+	res, err := f.assign("12", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Agent == "ben" {
+		t.Errorf("assigned %s, whose account has no login", res.Agent)
+	}
+	if len(res.Warnings) == 0 || !strings.Contains(res.Warnings[0], "ben") || !strings.Contains(res.Warnings[0], "no login") {
+		t.Errorf("warnings = %v, want one naming ben", res.Warnings)
+	}
+}
+
+func TestAssignExplicitSlotWithoutLoginRefusesWithHint(t *testing.T) {
+	f := noLoginFixture(t)
+	_, err := f.assign("12", "ben", nil)
+	if blockedBy(t, err) != BlockNoLogin {
+		t.Fatalf("err = %v, want %s", err, BlockNoLogin)
+	}
+	for _, want := range []string{"rota worker account assign", "claude /login", "CLAUDE_CONFIG_DIR="} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("message %q lacks %q", err, want)
+		}
+	}
+}
+
+func TestStatusMarksSlotWhoseAccountHasNoLogin(t *testing.T) {
+	f := noLoginFixture(t)
+	rep, err := f.env.Status(bg, f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marked := map[string]string{}
+	for _, r := range rep.Rows {
+		marked[r.Name] = r.NoLogin
+	}
+	if marked["ben"] != "no credentials file" || marked["dana"] != "" {
+		t.Errorf("NoLogin by slot = %v, want only ben marked", marked)
+	}
+}
