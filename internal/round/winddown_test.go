@@ -337,19 +337,58 @@ func TestWindDownRefusesOnInvalidRoundConfig(t *testing.T) {
 	}
 }
 
-func TestOnlyTierSidecars(t *testing.T) {
+func TestTierSidecarPaths(t *testing.T) {
 	for _, c := range []struct {
 		in   string
-		want bool
+		want string
 	}{
-		{" M .rota/knowledge-tier.json\n", true},
-		{" M .rota/knowledge-tier.json\n M .rota/knowledge/web/knowledge-tier.json\n", true},
-		{" M .rota/knowledge-tier.json\n M internal/x.go\n", false},
-		{" M internal/x.go\n", false},
-		{"", false},
+		{" M .rota/knowledge-tier.json\n", ".rota/knowledge-tier.json"},
+		{" M .rota/knowledge-tier.json\n M .rota/knowledge/web/knowledge-tier.json\n", ".rota/knowledge-tier.json .rota/knowledge/web/knowledge-tier.json"},
+		{" M .rota/knowledge-tier.json\n M internal/x.go\n", ""},
+		{" M internal/x.go\n", ""},
+		{"", ""},
 	} {
-		if got := onlyTierSidecars(c.in); got != c.want {
-			t.Errorf("onlyTierSidecars(%q) = %v, want %v", c.in, got, c.want)
+		if got := strings.Join(tierSidecarPaths(c.in), " "); got != c.want {
+			t.Errorf("tierSidecarPaths(%q) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+// A single-repo project has no .rota/knowledge/: the hint names only the
+// sidecar that is dirty, so it runs as typed in bash and zsh.
+func TestRequireBaseHintNamesDirtySidecarOnly(t *testing.T) {
+	f := newAssignFixture(t)
+	rel := filepath.Join(".rota", "knowledge-tier.json")
+	abs := filepath.Join(f.root, rel)
+	if err := os.WriteFile(abs, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range [][]string{{"add", rel}, {"commit", "-m", "sidecar"}} {
+		if res, err := f.env.Git(bg, f.root, a...); err != nil || res.ExitCode != 0 {
+			t.Fatalf("git %v: %v %s", a, err, res.Stderr)
+		}
+	}
+	if err := os.WriteFile(abs, []byte("{\"x\":1}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := f.env.requireBase(bg, f.root)
+	var ee *exitcode.Error
+	if !errors.As(err, &ee) || !strings.Contains(ee.Hint, "git add "+rel+" &&") || strings.Contains(ee.Hint, "*") {
+		t.Fatalf("err = %v, want a hint naming only %s with no glob", err, rel)
+	}
+}
+
+func TestWindDownWarnsOnBufferedHits(t *testing.T) {
+	f := newAssignFixture(t)
+	f.verifyWith(t, `["true"]`)
+	if err := os.WriteFile(filepath.Join(f.root, ".rota", "knowledge-hits.jsonl"), []byte("{\"topic\":\"a\",\"title\":\"b\",\"date\":\"2026-01-01\"}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.windDown(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(res.Warnings, "\n"), "rota knowledge tier fold") {
+		t.Errorf("warnings = %v, want one naming rota knowledge tier fold", res.Warnings)
 	}
 }
