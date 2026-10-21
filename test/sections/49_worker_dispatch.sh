@@ -170,14 +170,19 @@ mkdir -p "$AFX"
 python3 - "$TMP_WD/.rota/config.json" "$AFX" <<'PYEOF' || fail "could not write accounts fixture"
 import json, os, sys
 cfg_path, afx = sys.argv[1], sys.argv[2]
+# Pick skips an account whose config dir has no login, so each fixture account
+# gets a real dir holding a minimal OAuth credentials file.
+for n in ("alpha", "beta", "gamma", "delta"):
+    os.makedirs(f"{afx}/dirs/{n}", exist_ok=True)
+    json.dump({"claudeAiOauth": {"accessToken": "t"}}, open(f"{afx}/dirs/{n}/.credentials.json", "w"))
 # The merge-gate block later in this section writes this file; at this point it
 # may not exist yet, so start from whatever is (or isn't) there.
 cfg = json.load(open(cfg_path)) if os.path.exists(cfg_path) else {}
 cfg.setdefault("round", {})["accounts"] = [
-    {"name": "alpha", "configDir": "/nonexistent/alpha"},
-    {"name": "beta",  "configDir": "/nonexistent/beta"},
-    {"name": "gamma", "configDir": "/nonexistent/gamma"},
-    {"name": "delta", "configDir": "/nonexistent/delta"},
+    {"name": "alpha", "configDir": f"{afx}/dirs/alpha"},
+    {"name": "beta",  "configDir": f"{afx}/dirs/beta"},
+    {"name": "gamma", "configDir": f"{afx}/dirs/gamma"},
+    {"name": "delta", "configDir": f"{afx}/dirs/delta"},
 ]
 json.dump(cfg, open(cfg_path, "w"))
 def w(name, five, five_r, seven, seven_r, extra):
@@ -224,6 +229,16 @@ print(next(r["verdict"] for r in json.load(sys.stdin)["data"]["accounts"] if r["
 RC=0
 acct pick >/dev/null 2>&1 || RC=$?
 [ "$RC" = "0" ] || fail "pick should still rotate onto an unknown-meter account, got exit $RC"
+# A login-less account is never picked, even with a free or unknown meter.
+CREDS_BAK="$AFX/creds.bak"; mkdir -p "$CREDS_BAK"
+for n in beta gamma delta; do mv "$AFX/dirs/$n/.credentials.json" "$CREDS_BAK/$n.json"; done
+[ "$(acct pick | jget data.account)" = "alpha" ] || fail "pick must skip accounts with no login and choose alpha"
+mv "$AFX/dirs/alpha/.credentials.json" "$CREDS_BAK/alpha.json"
+RC=0
+OUT=$(acct pick 2>/dev/null) || RC=$?
+[ "$RC" = "1" ] || fail "pick should exit 1 when no account has a login, got $RC"
+[ "$(jget data.found <<<"$OUT")" = "false" ] || fail "pick must answer found=false when no account has a login, got '$OUT'"
+for n in alpha beta gamma delta; do mv "$CREDS_BAK/$n.json" "$AFX/dirs/$n/.credentials.json"; done
 # Every account cooling is the one case that must refuse rather than guess.
 python3 - "$AFX" <<'PYEOF'
 import json, sys
@@ -245,7 +260,7 @@ slot_cfg() { python3 -c 'import json,sys; print(next(s.get("configDir") for s in
 RC=0
 OUT=$(acct assign w1 2>/dev/null) || RC=$?
 [ "$RC" = "4" ] || fail "assign without --account must exit 4 when no account is usable, got $RC: $OUT"
-[ "$(slot_cfg w1)" != "/nonexistent/beta" ] || fail "a refused assign must not touch the slot"
+[ "$(slot_cfg w1)" != "$AFX/dirs/beta" ] || fail "a refused assign must not touch the slot"
 python3 - "$AFX" <<'PYEOF' || fail "could not rewrite the usage fixtures"
 import json, sys
 afx = sys.argv[1]
@@ -258,12 +273,12 @@ OUT=$(acct assign w1 --account beta) || fail "assign --account beta failed"
 [ "$(jget data.slot <<<"$OUT")" = "w1" ] && [ "$(jget data.account <<<"$OUT")" = "beta" ] \
   || fail "assign data must name slot and account, got: $OUT"
 [ "$(jget data.changed <<<"$OUT")" = "true" ] || fail "a first assignment reports changed:true, got: $OUT"
-[ "$(slot_cfg w1)" = "/nonexistent/beta" ] || fail "the registry must record beta's configDir on w1, got $(slot_cfg w1)"
+[ "$(slot_cfg w1)" = "$AFX/dirs/beta" ] || fail "the registry must record beta's configDir on w1, got $(slot_cfg w1)"
 OUT=$(acct assign w1 --account beta) || fail "repeat assign failed"
 [ "$(jget data.changed <<<"$OUT")" = "false" ] || fail "re-assigning the same account reports changed:false, got: $OUT"
 OUT=$(acct assign w2) || fail "assign without --account failed with a usable account"
 [ "$(jget data.account <<<"$OUT")" = "gamma" ] || fail "assign without --account must pick the only usable account (gamma), got: $OUT"
-[ "$(slot_cfg w2)" = "/nonexistent/gamma" ] || fail "the picked account must land on w2, got $(slot_cfg w2)"
+[ "$(slot_cfg w2)" = "$AFX/dirs/gamma" ] || fail "the picked account must land on w2, got $(slot_cfg w2)"
 RC=0
 acct assign w1 --account nosuch >/dev/null 2>&1 || RC=$?
 [ "$RC" = "3" ] || fail "assign of an unknown account must exit 3, got $RC"

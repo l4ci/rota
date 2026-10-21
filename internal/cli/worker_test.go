@@ -154,7 +154,12 @@ func TestWorkerResetVerb(t *testing.T) {
 }
 
 func TestWorkerAccountVerbs(t *testing.T) {
-	cfg := `{"round":{"accounts":[{"name":"alpha","configDir":"/a"},{"name":"beta","configDir":"/b"}]}}`
+	logins := t.TempDir()
+	for _, n := range []string{"a", "b"} {
+		os.MkdirAll(filepath.Join(logins, n), 0o755)
+		os.WriteFile(filepath.Join(logins, n, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"t"}}`), 0o600)
+	}
+	cfg := `{"round":{"accounts":[{"name":"alpha","configDir":"` + filepath.Join(logins, "a") + `"},{"name":"beta","configDir":"` + filepath.Join(logins, "b") + `"}]}}`
 	dir := workerProject(t, cfg)
 	usage := t.TempDir()
 	os.WriteFile(filepath.Join(usage, "alpha.json"), []byte(`{"five_hour":{"utilization":90,"resets_at":null},"seven_day":{"utilization":10,"resets_at":null}}`), 0o644)

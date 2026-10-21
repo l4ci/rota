@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -1071,7 +1072,9 @@ func TestAssignAccountStepFollowsAccountPicking(t *testing.T) {
 			f.host.name = "herdr"
 			acc := &worker.Accounts{Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
 				return nil, "fake: no network in tests"
-			}}
+			}, Login: worker.Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
+				return proc.Result{Stdout: `{"claudeAiOauth":{"accessToken":"t"}}`}, nil
+			}}}
 			if tc.picking {
 				f.env = f.env.WithAccounts(acc)
 			} else {
