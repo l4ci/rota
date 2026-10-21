@@ -63,6 +63,7 @@ Work only this task, then stop.
   variables, say so in your PR instead of changing its test suite.
 - Stay in your worktree. Confirm `pwd` before editing and use worktree-rooted
   paths. An absolute path under the main checkout silently edits the WRONG tree.
+- Never edit `docs/contributing/contract/STAMPS` or run `check-doc-stamps.py --restamp`: the orchestrator restamps on `main` after merges. A new contract doc is the one exception: add its line.
 - Stage explicit paths. Never `git add -A` or `git add .`. A `PreToolUse` guard (`rota hook guard`,
   installed by `rota hook install` in project or user scope) refuses these and the other forbidden
   commands (`gh pr merge`, force-push to another branch, `git reset --hard` outside your worktree,
