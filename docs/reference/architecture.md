@@ -18,6 +18,7 @@ Everything Claude reads or mutates lives under `.rota/` in your project. Git is 
 ├── workers.json      # round state: slots, escalations, usage-limit log (gitignored)
 ├── receipts.json     # request-id receipts of the round verbs (gitignored)
 ├── verdicts.json     # recorded review, second-opinion and QA verdicts (gitignored)
+├── knowledge-hits.jsonl  # buffer of `rota knowledge hit`, folded into the sidecar by `tier fold` (gitignored)
 ├── bugs/ features/ tasks/   # overflow detail files (file backend)
 ├── designs/          # /rota-brainstorm output (<ID>.md, file backend)
 ├── milestones/       # one detail file per milestone (M01.md, M02.md, ...)
