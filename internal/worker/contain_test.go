@@ -31,6 +31,9 @@ func TestPathContains(t *testing.T) {
 		{"parent is not inside child", filepath.Join(wt, "sub"), wt, false},
 		{"symlinked child", wt, filepath.Join(linked, "sub"), true},
 		{"symlinked parent", linked, filepath.Join(wt, "sub"), true},
+		{"empty child is never contained", ".", "", false},
+		{"empty parent contains nothing", "", wt, false},
+		{"both empty", "", "", false},
 	} {
 		if got := PathContains(tc.parent, tc.child); got != tc.want {
 			t.Errorf("%s: PathContains(%q, %q) = %v, want %v", tc.name, tc.parent, tc.child, got, tc.want)
