@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/rotastate"
 )
 
@@ -99,7 +101,7 @@ func TestGateRunMarkerOfDeadProcessIsReplaced(t *testing.T) {
 // after a crash) does not block; the same process still does.
 func TestGateRunMarkerOfReusedPidIsReplaced(t *testing.T) {
 	ppid := os.Getppid()
-	start, ok := procStartTicks(ppid)
+	start, ok := pidlive.StartTicks(ppid)
 	if !ok {
 		t.Skip("no /proc start time on this platform")
 	}
@@ -176,4 +178,32 @@ func TestGateGoneRootInsideLockIsNotAMissingOrigin(t *testing.T) {
 	if strings.Contains(res.Err, "no 'origin' remote") || !strings.Contains(res.Err, "could not run git") {
 		t.Errorf("want a git run failure, got %q", res.Err)
 	}
+}
+
+// A marker whose holder has exited but not been reaped (a zombie) does not
+// block: pidlive reads it as dead.
+func TestGateRunMarkerOfZombieHolderIsReplaced(t *testing.T) {
+	cmd := exec.Command("sh", "-c", "exit 0")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer cmd.Wait()
+	pid := cmd.Process.Pid
+	deadline := time.Now().Add(5 * time.Second)
+	for pidlive.Alive(pid) {
+		if time.Now().After(deadline) {
+			t.Skip("child did not become a zombie (ps unavailable?)")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	common := t.TempDir()
+	os.MkdirAll(rotastate.Dir(common), 0o755)
+	if err := os.WriteFile(rotastate.File(common, "gate-pr1")+".pid", []byte(fmt.Sprintf("%d\n", pid)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	other, release, err := claimGateRun(common, "pr1")
+	if err != nil || other != 0 {
+		t.Fatalf("zombie holder blocked the gate: other=%d err=%v", other, err)
+	}
+	release()
 }
