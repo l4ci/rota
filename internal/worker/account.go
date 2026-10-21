@@ -288,14 +288,14 @@ type Credentials struct {
 	GOOS string
 	Run  proc.Runner
 	Now  func() time.Time
-	// Home defaults to os.UserHomeDir: whose ~/.claude is the unsuffixed
-	// Keychain service.
+	// Home is whose ~/.claude is the unsuffixed Keychain service; nil means
+	// none is, and SystemCredentials sets os.UserHomeDir.
 	Home func() (string, error)
 }
 
 // SystemCredentials is Credentials on this machine, running tools through run.
 func SystemCredentials(run proc.Runner) Credentials {
-	return Credentials{GOOS: runtime.GOOS, Run: run, Now: time.Now}
+	return Credentials{GOOS: runtime.GOOS, Run: run, Now: time.Now, Home: os.UserHomeDir}
 }
 
 // Problem reports why the account whose config dir is dir (already expanded)
@@ -339,8 +339,6 @@ func (c Credentials) read(dir string, now time.Time) (*jsonx.Object, string, str
 		home := ""
 		if c.Home != nil {
 			home, _ = c.Home()
-		} else if h, err := os.UserHomeDir(); err == nil {
-			home = h
 		}
 		b, ok, err := connections.SecurityRead(context.Background(), c.Run, keychainService(dir, home), "")
 		if err == nil && ok {
@@ -478,19 +476,15 @@ func (a *Accounts) NoPickReason(ctx context.Context, root string, exclude []stri
 	return lead + strings.Join(loginless, ", ")
 }
 
-// SameConfigDir reports whether two CLAUDE_CONFIG_DIR values name one
-// directory: compared after Clean, with a leading ~/ expanded and empty
-// meaning ~/.claude (what Claude Code uses when the variable is unset).
-func SameConfigDir(a, b string) bool { return ExpandConfigDir(a) == ExpandConfigDir(b) }
-
-// ExpandConfigDir is the cleaned absolute form of a configDir.
-func ExpandConfigDir(d string) string {
-	home, _ := os.UserHomeDir()
-	return ExpandConfigDirIn(d, home)
+// SameConfigDirIn reports whether two CLAUDE_CONFIG_DIR values name one
+// directory under home: compared after Clean, with a leading ~/ expanded and
+// empty meaning ~/.claude (what Claude Code uses when the variable is unset).
+func SameConfigDirIn(a, b, home string) bool {
+	return ExpandConfigDirIn(a, home) == ExpandConfigDirIn(b, home)
 }
 
-// ExpandConfigDirIn is ExpandConfigDir against an explicit home. An empty home
-// leaves a leading ~/ unexpanded.
+// ExpandConfigDirIn is the cleaned absolute form of a configDir against home.
+// An empty home leaves a leading ~/ unexpanded.
 func ExpandConfigDirIn(d, home string) string {
 	if d == "" {
 		d = "~/.claude"
@@ -506,12 +500,12 @@ func ExpandConfigDirIn(d, home string) string {
 // dir: slots take the configured accounts, so they would not run under the
 // orchestrator's login. "" when orchDir is unset or one of the accounts. An
 // empty account list is no mismatch: slots inherit orchDir.
-func ConfigDirMismatch(orchDir string, accts []config.Account) string {
+func ConfigDirMismatch(orchDir string, accts []config.Account, home string) string {
 	if orchDir == "" || len(accts) == 0 {
 		return ""
 	}
 	for _, a := range accts {
-		if a.ConfigDir != "" && SameConfigDir(a.ConfigDir, orchDir) {
+		if a.ConfigDir != "" && SameConfigDirIn(a.ConfigDir, orchDir, home) {
 			return ""
 		}
 	}

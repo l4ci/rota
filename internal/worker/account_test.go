@@ -317,7 +317,7 @@ func TestOrchestratorTarget(t *testing.T) {
 
 func TestSameConfigDirAndAccountOf(t *testing.T) {
 	home, _ := os.UserHomeDir()
-	if !SameConfigDir("", filepath.Join(home, ".claude")) || !SameConfigDir("~/.x/", filepath.Join(home, ".x")) || SameConfigDir("/a", "/b") {
+	if !SameConfigDirIn("", filepath.Join(home, ".claude"), home) || !SameConfigDirIn("~/.x/", filepath.Join(home, ".x"), home) || SameConfigDirIn("/a", "/b", home) {
 		t.Error("SameConfigDir")
 	}
 	acc := &Accounts{Env: Env{Config: memConfig(t, acctConfig)}}
