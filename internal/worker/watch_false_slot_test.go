@@ -2,8 +2,6 @@ package worker
 
 import (
 	"github.com/l4ci/rota/internal/stamp"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -221,13 +219,14 @@ func TestWaitDoneEventPassesTheRelayGate(t *testing.T) {
 // round.stallMinutes instead of holding the slot busy for good.
 func TestNoteRelayEchoGivesUpAfterStallMinutes(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	e := Env{Config: memConfig(t, `{}`)}
 	relayRaceSlot(t, dir, 1)
 	targets := []pollTarget{slotTarget(LoadRegistryTolerant(dir).Slot("w1"))}
-	noteRelayEcho(dir, targets, time.Now().Add(time.Minute))
+	e.noteRelayEcho(dir, targets, time.Now().Add(time.Minute))
 	if LoadRegistryTolerant(dir).Slot("w1").RelayPending() != 1 {
 		t.Fatal("a young relay was given up on")
 	}
-	noteRelayEcho(dir, targets, time.Now().Add(31*time.Minute))
+	e.noteRelayEcho(dir, targets, time.Now().Add(31*time.Minute))
 	if got := LoadRegistryTolerant(dir).Slot("w1").RelayPending(); got != 0 || targets[0].relayPending != 0 {
 		t.Errorf("relayPending = %d (target %d) after the stall window", got, targets[0].relayPending)
 	}
@@ -237,16 +236,14 @@ func TestNoteRelayEchoGivesUpAfterStallMinutes(t *testing.T) {
 // fixed fallback window.
 func TestNoteRelayEchoStallOffUsesFallbackWindow(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
-	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"round":{"stallMinutes":0}}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	e := Env{Config: memConfig(t, `{"round":{"stallMinutes":0}}`)}
 	relayRaceSlot(t, dir, 1)
 	targets := []pollTarget{slotTarget(LoadRegistryTolerant(dir).Slot("w1"))}
-	noteRelayEcho(dir, targets, time.Now().Add(time.Minute))
+	e.noteRelayEcho(dir, targets, time.Now().Add(time.Minute))
 	if LoadRegistryTolerant(dir).Slot("w1").RelayPending() != 1 {
 		t.Fatal("a young relay was given up on")
 	}
-	noteRelayEcho(dir, targets, time.Now().Add(relayFallbackWindow+time.Minute))
+	e.noteRelayEcho(dir, targets, time.Now().Add(relayFallbackWindow+time.Minute))
 	if got := LoadRegistryTolerant(dir).Slot("w1").RelayPending(); got != 0 || targets[0].relayPending != 0 {
 		t.Errorf("relayPending = %d (target %d) after the fallback window", got, targets[0].relayPending)
 	}

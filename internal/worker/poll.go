@@ -653,7 +653,7 @@ const relayFallbackWindow = 30 * time.Minute
 // unrendered one, or the relay given up on after round.stallMinutes without
 // the line (a collapsed paste shows none), which would hold the slot busy for
 // good. With round.stallMinutes at 0 the window is relayFallbackWindow. It updates the targets it was given, which a wait keeps across passes.
-func noteRelayEcho(root string, targets []pollTarget, now time.Time) {
+func (e Env) noteRelayEcho(root string, targets []pollTarget, now time.Time) {
 	var stall time.Duration
 	loaded := false
 	for i, t := range targets {
@@ -673,7 +673,7 @@ func noteRelayEcho(root string, targets []pollTarget, now time.Time) {
 		case !t.relaySeen:
 			if !loaded {
 				loaded = true
-				if set, err := roundcfg.Load(root); err == nil {
+				if set, err := roundcfg.FromConfig(e.WithDefaults().Config(root)); err == nil {
 					stall = time.Duration(set.StallMinutes) * time.Minute
 				}
 			}
@@ -837,7 +837,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	before, _ := os.ReadFile(RegistryPath(root))
 
 	rows, _, _ := e.classify(ctx, h, targets, o.Settle, o.Lines)
-	noteRelayEcho(root, targets, e.Now())
+	e.noteRelayEcho(root, targets, e.Now())
 	rows, notes := e.promoteIdleWithPR(ctx, root, rows)
 	notified := map[string]int{} // slot -> seq of the event whose notification went out
 	for i, r := range rows {
