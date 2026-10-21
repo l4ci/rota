@@ -260,15 +260,20 @@ func brFile(fs *flag.FlagSet) RunFunc {
 			return Result{}, Unavailable("gh %s %s failed: %s", cmd[0], cmd[1], strings.TrimSpace(string(res.Stderr))).WithHint(manual)
 		}
 		url := strings.TrimSpace(string(res.Stdout))
-		if _, err := bugreport.Update(root, r.ID, func(r *bugreport.Record) { r.Status = bugreport.StatusFiled; r.Issue = url }); err != nil {
-			return Result{}, err
-		}
 		d := jsonx.NewObject()
 		d.Set("id", r.ID)
 		d.Set("url", url)
 		d.Set("upstreamRepo", repo)
 		d.Set("changed", true)
-		return Result{Data: d, Text: url}, nil
+		text := url
+		// The issue exists now: a failed status update must not hide the URL, or
+		// a retry files a duplicate. Say so and tell the caller how to close the record.
+		if _, err := bugreport.Update(root, r.ID, func(r *bugreport.Record) { r.Status = bugreport.StatusFiled; r.Issue = url }); err != nil {
+			d.Set("recorded", false)
+			d.Set("warning", err.Error())
+			text = fmt.Sprintf("%s\nwarning: filed, but %s stays open (%v); do not file it again, run `rota bugreport dismiss %s`", url, r.ID, err, r.ID)
+		}
+		return Result{Data: d, Text: text}, nil
 	}
 }
 
