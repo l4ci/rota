@@ -22,8 +22,11 @@ type ReviewSources struct {
 	Labels []string // labels already known, added to the issue's own
 	// Issue and Issues read the branch's issue for its labels and its declared
 	// files. Issues is nil for a file source, which has none.
-	Issue  tracker.IssueKey
-	Issues interface {
+	Issue tracker.IssueKey
+	// Members are the other issues of a bundled slot (Issue is the lead). Each is
+	// read like the lead and the highest depth any of them requires wins.
+	Members []tracker.IssueKey
+	Issues  interface {
 		Get(ctx context.Context, key tracker.IssueKey, withComments bool) (tracker.Issue, error)
 	}
 	// PRBody reads the PR description for its Door line; nil when there is no PR.
@@ -73,17 +76,46 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 		return ReviewDepth{}, &ReviewDepthError{"diff", fmt.Sprintf("could not list the files of %s to pick the review depth", s.Span), err}
 	}
 	in := config.ReviewInput{Changed: changed, Files: files, Labels: slices.Clone(s.Labels)}
+	decide := s.Policy.Decide
 	if s.Issues != nil && s.Issue != "" && s.Policy.NeedsIssue() {
-		is, err := s.Issues.Get(ctx, s.Issue, false)
-		if err != nil {
-			return ReviewDepth{}, &ReviewDepthError{"issue", fmt.Sprintf("could not read %s for its labels and files to pick the review depth: %v", s.Issue.Ref(), err), err}
-		}
-		for _, l := range is.Labels {
-			if !slices.Contains(in.Labels, l) {
-				in.Labels = append(in.Labels, l)
+		keys := append([]tracker.IssueKey{s.Issue}, s.Members...)
+		var got []tracker.Issue
+		var bodies []string
+		for _, key := range keys {
+			is, err := s.Issues.Get(ctx, key, false)
+			if err != nil {
+				return ReviewDepth{}, &ReviewDepthError{"issue", fmt.Sprintf("could not read %s for its labels and files to pick the review depth: %v", key.Ref(), err), err}
+			}
+			got = append(got, is)
+			bodies = append(bodies, is.Body)
+			for _, l := range is.Labels {
+				if !slices.Contains(in.Labels, l) {
+					in.Labels = append(in.Labels, l)
+				}
 			}
 		}
-		in.IssueBody = is.Body
+		in.IssueBody = strings.Join(bodies, "\n\n")
+		if len(got) > 1 {
+			// One decision per bundled issue, the highest wins: a union of
+			// labels would let a `none` on one issue beat another's default.
+			// The PR body is read below, once, for every decision.
+			decide = func(in config.ReviewInput) config.ReviewDecision {
+				var best config.ReviewDecision
+				for i, is := range got {
+					one := in
+					one.Labels = slices.Clone(s.Labels)
+					for _, l := range is.Labels {
+						if !slices.Contains(one.Labels, l) {
+							one.Labels = append(one.Labels, l)
+						}
+					}
+					if d := s.Policy.Decide(one); i == 0 || d.Depth.Outranks(best.Depth) {
+						best = d
+					}
+				}
+				return best
+			}
+		}
 	}
 	if s.PRBody != nil && s.Policy.MayBeBelowFull() {
 		body, err := s.PRBody()
@@ -92,7 +124,7 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 		}
 		in.PRBody = body
 	}
-	return ReviewDepth{s.Policy.Decide(in), changed, in.Labels}, nil
+	return ReviewDepth{decide(in), changed, in.Labels}, nil
 }
 
 // DoorNote explains why a depth below full has not seen the PR's Door line: there

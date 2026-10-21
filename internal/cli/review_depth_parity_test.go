@@ -123,4 +123,26 @@ func TestGateAndReviewDepthPrintTheSameReason(t *testing.T) {
 			t.Errorf("text output says nothing of the rise:\n%s", text)
 		}
 	})
+
+	// A bundled slot's branch lists its members, so the reviewer checks every
+	// bundled issue's acceptance.
+	t.Run("bundle", func(t *testing.T) {
+		prBody, issueBody = "Closes #6\nCloses #7\n", ""
+		_, out, _ := rotaInWith(t, deps, dir, "review", "depth", "nia/6-x", "--json")
+		if d := data(t, out); d["bundle"] != nil {
+			t.Fatalf("no bundle yet: %v", d)
+		}
+		doc := registryDoc(t, dir)
+		doc["slots"].([]any)[0].(map[string]any)["bundle"] = []any{"7"}
+		b, _ := json.Marshal(doc)
+		write(t, filepath.Join(dir, ".rota", "workers.json"), string(b))
+		_, out, _ = rotaInWith(t, deps, dir, "review", "depth", "nia/6-x", "--json")
+		if list, _ := data(t, out)["bundle"].([]any); len(list) != 1 || list[0] != "#7" {
+			t.Errorf("bundle = %v", data(t, out)["bundle"])
+		}
+		_, text, _ := rotaInWith(t, deps, dir, "review", "depth", "nia/6-x")
+		if !strings.Contains(text, " bundle: #7") {
+			t.Errorf("text output lacks the bundle:\n%s", text)
+		}
+	})
 }
