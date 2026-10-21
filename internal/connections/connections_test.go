@@ -640,12 +640,43 @@ func TestSecurityRead(t *testing.T) {
 	if v != "blob" || !ok || err != nil || got.Name != "security" || strings.Join(got.Args, " ") != "find-generic-password -s svc -w" {
 		t.Errorf("service-only read = %q %v %v via %v", v, ok, err, got)
 	}
-	SecurityRead(context.Background(), run, "svc", "acct")
-	if strings.Join(got.Args, " ") != "find-generic-password -s svc -a acct -w" {
-		t.Errorf("account read args = %v", got.Args)
+	v, ok, err = SecurityRead(context.Background(), run, "svc", "acct")
+	if v != "blob" || !ok || err != nil || strings.Join(got.Args, " ") != "find-generic-password -s svc -a acct -w" {
+		t.Errorf("account read = %q %v %v args %v", v, ok, err, got.Args)
 	}
 	miss := func(context.Context, proc.Cmd) (proc.Result, error) { return proc.Result{ExitCode: 44}, nil }
-	if _, ok, err := SecurityRead(context.Background(), miss, "svc", ""); ok || err != nil {
-		t.Errorf("miss = %v, %v", ok, err)
+	if v, ok, err := SecurityRead(context.Background(), miss, "svc", ""); v != "" || ok || err != nil {
+		t.Errorf("miss = %q, %v, %v", v, ok, err)
+	}
+
+	boom := errors.New("boom")
+	for _, tc := range []struct {
+		name        string
+		run         proc.Runner
+		unavailable bool
+		wantIs      error
+		wantMsg     string
+	}{
+		{"binary missing", func(context.Context, proc.Cmd) (proc.Result, error) { return proc.Result{}, exec.ErrNotFound }, true, nil, "security not found"},
+		{"other exit", func(context.Context, proc.Cmd) (proc.Result, error) {
+			return proc.Result{ExitCode: 51, Stderr: " denied\n"}, nil
+		}, true, nil, "security exit 51: denied"},
+		// a runner failure (cancelled context, spawn error) is not an unavailable keychain
+		{"runner error", func(context.Context, proc.Cmd) (proc.Result, error) { return proc.Result{}, boom }, false, boom, "boom"},
+	} {
+		v, ok, err := SecurityRead(context.Background(), tc.run, "svc", "")
+		if v != "" || ok || err == nil {
+			t.Errorf("%s = %q, %v, %v; want an error", tc.name, v, ok, err)
+			continue
+		}
+		if errors.Is(err, ErrUnavailable) != tc.unavailable {
+			t.Errorf("%s: errors.Is(ErrUnavailable) = %v, want %v (%v)", tc.name, !tc.unavailable, tc.unavailable, err)
+		}
+		if tc.wantIs != nil && !errors.Is(err, tc.wantIs) {
+			t.Errorf("%s: %v does not wrap %v", tc.name, err, tc.wantIs)
+		}
+		if !strings.Contains(err.Error(), tc.wantMsg) {
+			t.Errorf("%s: %q lacks %q", tc.name, err, tc.wantMsg)
+		}
 	}
 }
