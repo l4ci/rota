@@ -60,7 +60,7 @@
 {"name":"create/gitlab-feature/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"features","type":"F"},"ok":true},"db":"3a4869ab2960edb5"}]}
 {"name":"create/id-placeholder-body","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"tasks","type":"T"},"ok":true},"db":"10790c8f0ee64b2e"}]}
 {"name":"create/milestone-bad-format","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issue mode takes one milestone ID like M07, got 'next'"},"ok":false},"db":"396d7faf5419e420"}]}
-{"name":"create/milestone-missing","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"milestone M99 not found on the tracker — create it with /rota-vision (M07-S05)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"create/milestone-missing","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"milestone M99 not found on the tracker; list milestones with: rota milestone list, or create it with /rota-vision (M07-S05)"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"create/no-title","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--title is required"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"create/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"503099116efd58ba"}]}
 {"name":"create/task-plain","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"tasks","type":"T"},"ok":true},"db":"76db7a0b6bfed16e"}]}
@@ -85,7 +85,7 @@
 {"name":"fieldset/milestone-bad-format","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issue mode takes one milestone ID like M07, got 'later'"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"fieldset/milestone-clear","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"milestone","id":"1","type":"F","value":""},"ok":true},"db":"c325c3df19dba40d"}]}
 {"name":"fieldset/milestone-clear-none","steps":[{"exit":0,"env":{"data":{"changed":false,"field":"milestone","id":"2","type":"B","value":""},"ok":true},"db":"396d7faf5419e420"}]}
-{"name":"fieldset/milestone-missing","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"milestone M99 not found on the tracker — create it with /rota-vision (M07-S05)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldset/milestone-missing","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"milestone M99 not found on the tracker; list milestones with: rota milestone list, or create it with /rota-vision (M07-S05)"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"fieldset/milestone-same","steps":[{"exit":0,"env":{"data":{"changed":false,"field":"milestone","id":"1","type":"F","value":"M07"},"ok":true},"db":"396d7faf5419e420"}]}
 {"name":"fieldset/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"fieldset/related","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"related","id":"2","type":"B","value":"B1"},"ok":true},"db":"c8702f5b0e2dfa9c"}]}

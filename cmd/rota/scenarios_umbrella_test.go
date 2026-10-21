@@ -402,8 +402,8 @@ func suiteUmbrella(t *testing.T) {
 		fset("milestone-clear-none", "api:F1", "milestone", "", 0, no()),
 		fset("milestone-created-on-first-use", "api:F1", "milestone", "M07", 0, yes()),
 		fset("milestone-created-bare", "B4", "milestone", "M07", 0, yes()),
-		fset("milestone-unknown", "api:F1", "milestone", "M99", 3, nil),
-		fset("milestone-unknown-home", "web:B2", "milestone", "M99", 3, nil),
+		fset("milestone-unknown", "api:F1", "milestone", "M99", 2, nil),
+		fset("milestone-unknown-home", "web:B2", "milestone", "M99", 2, nil),
 		fset("related", "api:F1", "related", "B4", 0, yes()),
 		fset("related-same", "web:F1", "related", "B2", 0, no()),
 		fset("related-clear", "web:F1", "related", "", 0, yes()),
@@ -450,7 +450,7 @@ func suiteUmbrella(t *testing.T) {
 		cr("repos-spaces", 0, "--kind", "tasks", "--title", "Spaced", "--repos", " web "),
 		cr("repos-milestone-native", 0, "--kind", "tasks", "--title", "With ms", "--repos", "web", "--milestone", "M07"),
 		cr("repos-milestone-created", 0, "--kind", "tasks", "--title", "With ms", "--repos", "api", "--milestone", "M07"),
-		cr("milestone-missing", 3, "--kind", "tasks", "--title", "Frozen item", "--repos", "api", "--milestone", "M99"),
+		cr("milestone-missing", 2, "--kind", "tasks", "--title", "Frozen item", "--repos", "api", "--milestone", "M99"),
 		cr("no-target", 3, "--kind", "tasks", "--title", "Nowhere"),
 		cr("several-repos", 3, "--kind", "tasks", "--title", "Both", "--repos", "web,api"),
 		cr("unknown-repo", 3, "--kind", "tasks", "--title", "Bad", "--repos", "nope"),
@@ -928,7 +928,13 @@ func suiteUmbrellaFile(t *testing.T) {
 	} {
 		c := c
 		reg := append(append([]string{}, c.argv...), "--repo", "web")
-		add(scn{name: "repoflag-registered/" + c.n, fx: umb, argv: reg, want: c.want})
+		sc := scn{name: "repoflag-registered/" + c.n, fx: umb, argv: reg, want: c.want}
+		if c.n == "fieldset" {
+			sc.prep = func(t *testing.T, dir string) {
+				write(t, dir, ".rota/milestones/M02.md", "---\nid: M02\ntitle: M02\nstatus: planned\n---\n")
+			}
+		}
+		add(sc)
 		bad := append(append([]string{}, c.argv...), "--repo", "nope")
 		add(scn{name: "repoflag-unregistered/" + c.n, fx: umb, argv: bad, want: 3})
 	}
