@@ -48,18 +48,31 @@ func (k osKeychain) call(ctx context.Context, stdin string, args ...string) (pro
 	return r, nil
 }
 
+// SecurityRead reads one macOS generic password through `security`, the one
+// implementation of that read. account "" matches on service alone. ok is
+// false when no item exists; ErrUnavailable wraps every other failure.
+func SecurityRead(ctx context.Context, run proc.Runner, service, account string) (secret string, ok bool, err error) {
+	args := []string{"find-generic-password", "-s", service}
+	if account != "" {
+		args = append(args, "-a", account)
+	}
+	r, err := run(ctx, proc.Cmd{Name: "security", Args: append(args, "-w")})
+	switch {
+	case errors.Is(err, exec.ErrNotFound):
+		return "", false, fmt.Errorf("%w: security not found", ErrUnavailable)
+	case err != nil:
+		return "", false, err
+	case r.ExitCode == 0:
+		return strings.TrimRight(r.Stdout, "\r\n"), true, nil
+	case r.ExitCode == 44: // errSecItemNotFound
+		return "", false, nil
+	}
+	return "", false, fmt.Errorf("%w: security exit %d: %s", ErrUnavailable, r.ExitCode, strings.TrimSpace(r.Stderr))
+}
+
 func (k osKeychain) Get(ctx context.Context, name string) (string, bool, error) {
 	if k.goos == "darwin" {
-		r, err := k.call(ctx, "", "find-generic-password", "-s", keychainService, "-a", name, "-w")
-		switch {
-		case err != nil:
-			return "", false, err
-		case r.ExitCode == 0:
-			return strings.TrimRight(r.Stdout, "\r\n"), true, nil
-		case r.ExitCode == 44: // errSecItemNotFound
-			return "", false, nil
-		}
-		return "", false, fmt.Errorf("%w: security exit %d: %s", ErrUnavailable, r.ExitCode, strings.TrimSpace(r.Stderr))
+		return SecurityRead(ctx, k.run, keychainService, name)
 	}
 	r, err := k.call(ctx, "", "lookup", "service", keychainService, "account", name)
 	switch {
