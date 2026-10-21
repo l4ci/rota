@@ -7,8 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 func project(t *testing.T, cfg string) string {
@@ -21,9 +24,15 @@ func project(t *testing.T, cfg string) string {
 	return root
 }
 
+// load is the spec of the project config cfg, read as the cli does.
+func load(t *testing.T, root string) (Spec, error) {
+	t.Helper()
+	return FromConfig(config.Load(rotatree.Config(root)))
+}
+
 func render(t *testing.T, cfg string) map[string]string {
 	t.Helper()
-	sp, err := Load(project(t, cfg))
+	sp, err := load(t, project(t, cfg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +79,7 @@ func TestCodexWithoutTierMapOmitsModel(t *testing.T) {
 }
 
 func TestCodexRefusesEffortItCannotExpress(t *testing.T) {
-	sp, err := Load(project(t, `{"round":{"codexCommand":"codex"},"roles":{"reasoner":{"effort":"max"}}}`))
+	sp, err := load(t, project(t, `{"round":{"codexCommand":"codex"},"roles":{"reasoner":{"effort":"max"}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +95,7 @@ func TestCodexRefusesEffortItCannotExpress(t *testing.T) {
 
 func TestWriteIdempotentAndCheck(t *testing.T) {
 	root := project(t, "")
-	es, err := Write(root)
+	es, err := Write(root, config.Load(rotatree.Config(root)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +104,7 @@ func TestWriteIdempotentAndCheck(t *testing.T) {
 			t.Fatalf("first write: %s %s", e.Path, e.Status)
 		}
 	}
-	es, err = Write(root)
+	es, err = Write(root, config.Load(rotatree.Config(root)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,12 +113,12 @@ func TestWriteIdempotentAndCheck(t *testing.T) {
 			t.Fatalf("second write: %s %s", e.Path, e.Status)
 		}
 	}
-	if p := Problems(root); len(p) != 0 {
+	if p := Problems(root, config.Load(rotatree.Config(root))); len(p) != 0 {
 		t.Fatalf("problems after write: %v", p)
 	}
 	// Config change makes the files drift; Compare writes nothing.
 	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"roles":{"explorer":{"effort":"low"}}}`), 0o644)
-	p := Problems(root)
+	p := Problems(root, config.Load(rotatree.Config(root)))
 	if len(p) != 1 || !strings.Contains(p[0], "rota-explorer.md: drift") {
 		t.Fatalf("problems: %v", p)
 	}
@@ -117,10 +126,10 @@ func TestWriteIdempotentAndCheck(t *testing.T) {
 	if strings.Contains(string(b), "effort") {
 		t.Fatal("Compare wrote")
 	}
-	if _, err := Write(root); err != nil {
+	if _, err := Write(root, config.Load(rotatree.Config(root))); err != nil {
 		t.Fatal(err)
 	}
-	if p := Problems(root); len(p) != 0 {
+	if p := Problems(root, config.Load(rotatree.Config(root))); len(p) != 0 {
 		t.Fatalf("problems after rewrite: %v", p)
 	}
 }
@@ -130,7 +139,7 @@ func TestWriteRefusesForeignFile(t *testing.T) {
 	foreign := filepath.Join(root, ".claude/agents/rota-reasoner.md")
 	os.MkdirAll(filepath.Dir(foreign), 0o755)
 	os.WriteFile(foreign, []byte("mine\n"), 0o644)
-	_, err := Write(root)
+	_, err := Write(root, config.Load(rotatree.Config(root)))
 	if !errors.Is(err, ErrForeign) || !strings.Contains(err.Error(), "rota-reasoner.md") {
 		t.Fatalf("got %v", err)
 	}
@@ -147,7 +156,7 @@ func TestBadRoleConfig(t *testing.T) {
 		`{"roles":{"explorer":{"tier":"giant"}}}`:  "roles.explorer.tier",
 		`{"roles":{"reasoner":{"effort":"huge"}}}`: "roles.reasoner.effort",
 	} {
-		if _, err := Load(project(t, cfg)); err == nil || !strings.Contains(err.Error(), want) {
+		if _, err := load(t, project(t, cfg)); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: got %v", cfg, err)
 		}
 	}
@@ -157,11 +166,32 @@ func TestWriteRefusesSymlinkedDir(t *testing.T) {
 	root := project(t, "")
 	outside := t.TempDir()
 	os.Symlink(outside, filepath.Join(root, ".claude"))
-	_, err := Write(root)
+	_, err := Write(root, config.Load(rotatree.Config(root)))
 	if !errors.Is(err, ErrForeign) || !strings.Contains(err.Error(), "symlink") {
 		t.Fatalf("got %v", err)
 	}
 	if ents, _ := os.ReadDir(outside); len(ents) != 0 {
 		t.Fatalf("wrote through the link: %v", ents)
+	}
+}
+
+// FromConfig renders from a config tree already in hand: no project on disk.
+func TestFromConfigNeedsNoOnDiskConfig(t *testing.T) {
+	cfg, err := jsonx.Decode([]byte(`{"roles":{"reasoner":{"effort":"xhigh"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp, err := FromConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var effort string
+	for _, r := range sp.Roles {
+		if r.Name == "reasoner" {
+			effort = r.Effort
+		}
+	}
+	if effort != "xhigh" || len(sp.Kinds) == 0 {
+		t.Fatalf("effort %q kinds %v", effort, sp.Kinds)
 	}
 }

@@ -29,7 +29,7 @@ func agentsWrite(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if *check {
-			es, err := agents.Compare(root)
+			es, err := agents.Compare(root, c.deps().Config(root))
 			if err != nil {
 				return Result{}, agentsErr(err)
 			}
@@ -39,7 +39,7 @@ func agentsWrite(fs *flag.FlagSet) RunFunc {
 			}
 			return Result{Data: data, Text: text}, nil
 		}
-		es, err := agents.Write(root)
+		es, err := agents.Write(root, c.deps().Config(root))
 		if err != nil {
 			return Result{}, agentsErr(err)
 		}

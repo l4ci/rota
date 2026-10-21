@@ -116,7 +116,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	}
 	in.Slots, in.CwdOf = doctorSlotBlocks(root), procCwd(ctx, d.Proc)
 	in.NothingToVerify = d.workerEnv().NothingToVerify(root)
-	in.AgentProblems = agents.Problems(root)
+	in.AgentProblems = agents.Problems(root, cfg)
 	// No .gitignore at all is not an older project's drift: init creates it.
 	if raw, err := os.ReadFile(filepath.Join(root, ".gitignore")); err == nil {
 		in.GitignoreMissing = initproj.MissingIgnoreLines(string(raw))

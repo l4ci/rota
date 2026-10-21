@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
@@ -147,5 +148,24 @@ func TestGateBounceByPRNumberUsesTheResolvedSlot(t *testing.T) {
 	}
 	if len(es) != 1 || es[0].Kind != ledger.KindBounce || es[0].Slot != "nia" {
 		t.Fatalf("entries %+v, want one bounce for nia", es)
+	}
+}
+
+// The bounce accounting reads round.maxBounces from Env.Config, not from the
+// project config on disk: root holds no .rota/config.json here.
+func TestBounceReadsMaxBouncesFromTheInjectedConfig(t *testing.T) {
+	root := t.TempDir()
+	cfg, err := jsonx.Decode([]byte(`{"round":{"maxBounces":1}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := worker.Env{Config: func(string) any { return cfg }}
+	p := &parked{}
+	o, err := Gate(env, root, "9", worker.GateResult{Verdict: worker.GateStale, Slot: "w1", SHA: "sha1"}, p.park)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.Bounces != 1 || !o.Parked || len(p.issues) != 1 {
+		t.Fatalf("maxBounces 1 from the injected config must park on the first bounce: %+v, parked %v", o, p.issues)
 	}
 }
