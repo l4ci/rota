@@ -155,3 +155,31 @@ func TestRegistryListsSlateSortAndTolerantRead(t *testing.T) {
 		t.Errorf("junk entry must survive SortSlots, got %d entries", len(got))
 	}
 }
+
+// Update reports change from what the callback did to the document, not from
+// the bytes on disk: a no-op or same-value write is unchanged (#1310).
+func TestUpdateChangedReportsMutationNotRewrite(t *testing.T) {
+	root := t.TempDir()
+	if _, err := UpdateChanged(root, func(d *Doc) { d.SetSession("s1") }); err != nil {
+		t.Fatal(err)
+	}
+	start := ChangeCount(root)
+	cases := []struct {
+		name   string
+		mutate func(d *Doc)
+		want   bool
+	}{
+		{"no-op", func(d *Doc) {}, false},
+		{"same value", func(d *Doc) { d.SetSession("s1") }, false},
+		{"new value", func(d *Doc) { d.SetSession("s2") }, true},
+	}
+	for _, c := range cases {
+		got, err := UpdateChanged(root, c.mutate)
+		if err != nil || got != c.want {
+			t.Errorf("%s: changed=%v err=%v, want %v", c.name, got, err, c.want)
+		}
+	}
+	if n := ChangeCount(root) - start; n != 1 {
+		t.Errorf("ChangeCount advanced by %d, want 1", n)
+	}
+}

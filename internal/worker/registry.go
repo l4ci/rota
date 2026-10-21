@@ -5,6 +5,7 @@
 package worker
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -18,6 +19,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -381,19 +383,59 @@ func (d *Doc) SortSlots() {
 // from {"slots": []}. A file that exists but does not parse is an error: the
 // slots in it are the only record of who holds what (#579).
 func Update(root string, mutate func(d *Doc)) error {
+	_, err := UpdateChanged(root, mutate)
+	return err
+}
+
+// UpdateChanged is Update that also reports whether mutate changed the
+// registry document. A callback that sets a field to the value it already
+// holds, or does nothing, reports false.
+func UpdateChanged(root string, mutate func(d *Doc)) (bool, error) {
 	return update(root, slotsDefault(), mutate)
 }
 
-// update is Update with the document a missing or corrupt file starts from.
-func update(root string, def *jsonx.Object, mutate func(d *Doc)) error {
-	return fsio.UpdateJSONStrict(RegistryPath(root), def, func(v any) (any, error) {
+// writeGens counts, per registry path, the updates of this process that
+// changed the document. A caller that runs many writers (pool init, poll)
+// compares ChangeCount before and after instead of diffing the file's bytes.
+var (
+	writeGensMu sync.Mutex
+	writeGens   = map[string]uint64{}
+)
+
+// ChangeCount is how many updates of this process changed root's registry.
+func ChangeCount(root string) uint64 {
+	writeGensMu.Lock()
+	defer writeGensMu.Unlock()
+	return writeGens[RegistryPath(root)]
+}
+
+// update is UpdateChanged with the document a missing or corrupt file starts
+// from.
+func update(root string, def *jsonx.Object, mutate func(d *Doc)) (bool, error) {
+	changed := false
+	err := fsio.UpdateJSONStrict(RegistryPath(root), def, func(v any) (any, error) {
 		doc, ok := v.(*jsonx.Object)
 		if !ok {
 			return nil, fmt.Errorf("%w: %s is not a JSON object; fix or remove it, rota will not overwrite it", fsio.ErrUnreadable, RegistryPath(root))
 		}
+		before, err := jsonx.MarshalCompact(doc)
+		if err != nil {
+			return nil, err
+		}
 		mutate(&Doc{Registry{doc: doc}})
+		after, err := jsonx.MarshalCompact(doc)
+		if err != nil {
+			return nil, err
+		}
+		changed = !bytes.Equal(before, after)
 		return doc, nil
 	})
+	if err == nil && changed {
+		writeGensMu.Lock()
+		writeGens[RegistryPath(root)]++
+		writeGensMu.Unlock()
+	}
+	return changed && err == nil, err
 }
 
 // SlotData is a slot as `data` shows it: null registry fields are absent.
