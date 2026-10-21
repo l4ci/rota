@@ -300,3 +300,76 @@ func TestVerdictAddShaAheadOfTrackingHintsFetch(t *testing.T) {
 		t.Errorf("--sha ahead of tracking ref: exit %d, stderr %q (want 4, behind, git fetch hint)", code, errs)
 	}
 }
+
+// A local branch literally named origin/feat/x wins over the remote split:
+// its verdicts live under their own key, not feat/x's.
+func TestVerdictAddLocalBranchNamedLikeRemoteStaysWhole(t *testing.T) {
+	dir := pushedVerdictRepo(t)
+	gitIn(t, dir, "branch", "origin/feat/x", "feat/x")
+	if code, out, errs := rotaIn(t, dir, "verdict", "add", "origin/feat/x", "--kind", "qa", "--verdict", "PASS", "--json"); code != 0 {
+		t.Fatalf("add origin/feat/x: %d %s %s", code, out, errs)
+	}
+	_, out, _ := rotaIn(t, dir, "verdict", "show", "origin/feat/x", "--json")
+	if d := data(t, out); d["branch"] != "origin/feat/x" || len(d["records"].([]any)) != 1 {
+		t.Errorf("local branch split at the remote: %v", d)
+	}
+	_, out, _ = rotaIn(t, dir, "verdict", "show", "feat/x", "--json")
+	if d := data(t, out); len(d["records"].([]any)) != 0 {
+		t.Errorf("origin/feat/x leaked into feat/x: %v", d)
+	}
+}
+
+// A remote other than origin is stripped and --sha is checked against that
+// remote's head, not origin's.
+func TestVerdictAddShaUsesNamedRemote(t *testing.T) {
+	dir := pushedVerdictRepo(t)
+	up := filepath.Join(t.TempDir(), "up.git")
+	gitIn(t, dir, "init", "-q", "--bare", up)
+	gitIn(t, dir, "remote", "add", "up", up)
+	old := headSha(t, dir, "feat/x")
+	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "up push")
+	gitIn(t, dir, "push", "-q", "up", "feat/x")
+	gitIn(t, dir, "fetch", "-q", "up")
+	pushed := headSha(t, dir, "up/feat/x")
+	args := []string{"verdict", "add", "up/feat/x", "--kind", "qa", "--verdict", "PASS", "--json"}
+	// origin still holds the old head, so only the named remote accepts the new sha.
+	code, out, errs := rotaIn(t, dir, append(args, "--sha", pushed)...)
+	if d := data(t, out); code != 0 || !strings.HasPrefix(pushed, d["sha"].(string)) {
+		t.Fatalf("--sha at up head: %d %v %s", code, d, errs)
+	}
+	if code, _, errs := rotaIn(t, dir, append(args, "--sha", old)...); code != 4 || !strings.Contains(errs, "up/feat/x") {
+		t.Errorf("--sha behind up head: exit %d, stderr %q (want 4 naming up/feat/x)", code, errs)
+	}
+	_, out, _ = rotaIn(t, dir, "verdict", "show", "feat/x", "--json")
+	if d := data(t, out); len(d["records"].([]any)) != 1 {
+		t.Errorf("up/feat/x not keyed as feat/x: %v", d)
+	}
+}
+
+// origin/<b> without --sha records the local tip and skips the local-vs-origin
+// check, which only guards a bare branch argument.
+func TestVerdictAddRemoteArgWithoutShaRecordsTip(t *testing.T) {
+	dir := pushedVerdictRepo(t)
+	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "unpushed")
+	tip := headSha(t, dir, "origin/feat/x")
+	code, out, errs := rotaIn(t, dir, "verdict", "add", "origin/feat/x", "--kind", "qa", "--verdict", "PASS", "--json")
+	if d := data(t, out); code != 0 || !strings.HasPrefix(tip, d["sha"].(string)) {
+		t.Errorf("origin/feat/x without --sha: %d %v %s (want origin head %s)", code, d, errs, tip[:7])
+	}
+}
+
+// With nothing pushed, --sha is checked against the local branch.
+func TestVerdictAddShaOnUnpushedBranch(t *testing.T) {
+	dir := verdictRepo(t)
+	old := headSha(t, dir, "feat/x")
+	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "second")
+	args := []string{"verdict", "add", "--kind", "qa", "--verdict", "PASS", "--json"}
+	if code, _, errs := rotaIn(t, dir, append(args, "--sha", old)...); code != 4 || !strings.Contains(errs, "feat/x") {
+		t.Errorf("stale --sha, unpushed: exit %d, stderr %q (want 4)", code, errs)
+	}
+	head := headSha(t, dir, "feat/x")
+	code, out, errs := rotaIn(t, dir, append(args, "--sha", head)...)
+	if d := data(t, out); code != 0 || !strings.HasPrefix(head, d["sha"].(string)) {
+		t.Errorf("--sha at local head: %d %v %s", code, d, errs)
+	}
+}
