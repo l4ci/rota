@@ -286,10 +286,6 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		removed := config.Removed(root)
 		data.Set("removed", anySlice(removed))
 		res := Result{Data: data, Text: token}
-		if config.AutonomyPending(root).LocalAutopilot {
-			removed = append(removed, "round.autopilot (config.local.json)")
-			data.Set("removed", anySlice(removed))
-		}
 		if len(removed) > 0 {
 			res.Text += "\nREMOVED: " + strings.Join(removed, ", ") + " (nothing reads them; run: rota config fill)"
 		}
@@ -341,9 +337,6 @@ func configFill(fs *flag.FlagSet) RunFunc {
 		}
 		removed := config.Removed(root)
 		am := config.AutonomyPending(root)
-		if am.LocalAutopilot {
-			removed = append(removed, "round.autopilot (config.local.json)")
-		}
 		// Same condition as `config check`: STALE with an unreadable global.
 		var corrupt error
 		if status, _ := config.Check(root); status == config.Stale {
