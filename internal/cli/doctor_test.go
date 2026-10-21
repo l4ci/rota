@@ -343,3 +343,33 @@ func TestDoctorSkillRootsFromInjectedDeps(t *testing.T) {
 		}
 	}
 }
+
+// doctorInput reads the round's recorded host from the registry. With
+// round.dispatch=subagent and no TMUX/HERDR_ENV in the environment, only the
+// registry can make the host line read tmux (#1413).
+func TestDoctorHostFromRegistry(t *testing.T) {
+	doctorFakes(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`, "tmux": "exit 0"})
+	t.Setenv("TMUX", "")
+	t.Setenv("HERDR_ENV", "")
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	if code, out, _ := rotaIn(t, dir, "init"); code != 0 {
+		t.Fatalf("init %d %s", code, out)
+	}
+	if code, out, _ := rotaIn(t, dir, "config", "set", "round.dispatch", "subagent"); code != 0 {
+		t.Fatalf("config set %d %s", code, out)
+	}
+	hostCheck := func() map[string]any {
+		_, out, _ := rotaIn(t, dir, "doctor", "--json")
+		_, c := doctorData(t, out)
+		return c["host"]
+	}
+	if c := hostCheck(); c["status"] != "skip" {
+		t.Fatalf("no registry: %v", c)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "workers.json"), []byte(`{"host":"tmux","slots":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if c := hostCheck(); c["detail"] != "tmux on PATH" {
+		t.Fatalf("registry host tmux not wired into doctor: %v", c)
+	}
+}
