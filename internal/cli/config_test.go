@@ -225,6 +225,27 @@ func TestConfigSetAndSaveGlobalSayAutoRewrite(t *testing.T) {
 	}
 }
 
+// #1552: a set that fails after the migration rewrote an old auto still warns
+// the rewrite line, once, on stderr (#1524). config.json.lock is a directory,
+// so the set's own write fails after config.local.json was already rewritten.
+func TestConfigSetWarnsRewriteOnFailedSet(t *testing.T) {
+	t.Setenv("ROTA_CONFIG_DIR", t.TempDir())
+	root := trackerProject(t, `{"rota": {"version": "0.20.0"}}`+"\n")
+	rota := filepath.Join(root, ".rota")
+	write(t, filepath.Join(rota, "config.local.json"), `{"autonomy": {"level": "auto"}}`+"\n")
+	if err := os.Mkdir(filepath.Join(rota, "config.json.lock"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errOut := rotaIn(t, root, "config", "set", "autonomy.level", "off")
+	if code == 0 {
+		t.Fatalf("set succeeded, want a failure: %q", out)
+	}
+	const line = "rewrote: autonomy.level auto -> roundtrip in config.local.json"
+	if n := strings.Count(errOut, line); n != 1 {
+		t.Errorf("rewrite line warned %d times, want once: stdout %q stderr %q", n, out, errOut)
+	}
+}
+
 // textRun runs rota without --json and returns the exit code and stdout.
 func textRun(t *testing.T, args ...string) (int, string) {
 	t.Helper()
