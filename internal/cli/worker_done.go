@@ -20,7 +20,7 @@ import (
 // writes: the tier run as one command, which the worker contract recommends.
 const fastTierCheck = "rota test run fast"
 
-// workerDone is `rota worker done <slot>`: the step before the PR. It refuses
+// workerDone is `rota worker done <slot>`: the last step before ROTA-DONE, after the PR. It refuses
 // (exit 4) a slot whose item has no PASS proof row at the branch's current
 // HEAD for test.fast, then marks the slot done.
 func workerDone(fs *flag.FlagSet) RunFunc {
@@ -76,6 +76,14 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		if err := unreadMailRefusal(sl); err != nil {
 			d.Set("unread", len(sl.Unread()))
 			return Result{Data: d}, err
+		}
+
+		// Done is the worker's last action: a late edit or commit after it moves
+		// the head a review or the gate has already bound to.
+		if kind != worker.OutcomeFailed {
+			if err := settledBranch(c, slotDir(sl, root), sl.Branch(), d); err != nil {
+				return Result{Data: d}, err
+			}
 		}
 
 		cmds := c.deps().workerEnv().GateConfig(root).Tier("fast")
@@ -185,8 +193,8 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			if s.State() == "done" {
 				return
 			}
-			// The PR is opened after this verb, so the poll never sees the
-			// busy-to-done edge that baselines the review cursor elsewhere.
+			// The poll never sees the busy-to-done edge that baselines the
+			// review cursor elsewhere: the worker reports done after its PR.
 			s.BaselineReview(c.deps().Now())
 			_ = s.MarkState("done", now)
 			s.ClearSeen()
@@ -294,6 +302,44 @@ func missingFastProof(rows []proof.Row, head string, want []string) (missing []s
 		}
 	}
 	return missing
+}
+
+// settledBranch refuses a worktree with uncommitted changes, and a branch
+// whose pushed copy (origin/<branch>) is absent or not HEAD: the contract opens
+// the PR, and so pushes, before done.
+func settledBranch(c *Ctx, dir, branch string, d *jsonx.Object) error {
+	repo := c.deps().Repo(dir)
+	dirty, ok, err := repo.Dirty(c.Context())
+	if err != nil {
+		return gitErr(err)
+	}
+	if ok && dirty {
+		d.Set("dirty", true)
+		e := Refused("worktree %s has uncommitted changes: done is the last action", dir)
+		e.Hint = "commit (or discard) them, push, record the proof at the new HEAD, then run `rota worker done` again"
+		return e
+	}
+	remote, err := repo.Run(c.Context(), "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+branch)
+	if err != nil {
+		return gitErr(err)
+	}
+	if remote.ExitCode != 0 {
+		d.Set("unpushed", true)
+		e := Refused("%s was never pushed to origin: done is the last action, after the PR", branch)
+		e.Hint = fmt.Sprintf("`git push origin %s` and open the PR, then run `rota worker done` again", branch)
+		return e
+	}
+	head, err := repo.Run(c.Context(), "rev-parse", "HEAD")
+	if err != nil {
+		return gitErr(err)
+	}
+	if strings.TrimSpace(remote.Stdout) != strings.TrimSpace(head.Stdout) {
+		d.Set("unpushed", true)
+		e := Refused("%s has commits not pushed to origin/%s: done is the last action", branch, branch)
+		e.Hint = fmt.Sprintf("`git push origin %s`, then run `rota worker done` again", branch)
+		return e
+	}
+	return nil
 }
 
 // branchHead is the commit the slot's branch points at.
