@@ -116,8 +116,8 @@ func findingLine(f verdict.Finding) string {
 // after a re-review those are the NOT ADDRESSED ones plus any the fix
 // introduced (skills/rota-review/re-review.md). Nil when there are none.
 func openFindings(root, branch string) []string {
-	r, ok := verdict.EffectiveReview(verdict.Load(root).Branches[verdict.BranchKey("", branch)])
-	if !ok || r.Verdict != verdict.Fail {
+	r, ok := verdict.EffectiveFail(verdict.Load(root).Branches[verdict.BranchKey("", branch)])
+	if !ok {
 		return nil
 	}
 	var out []string
@@ -130,8 +130,8 @@ func openFindings(root, branch string) []string {
 // failVerdict is the effective review verdict recorded for branch when it is
 // FAIL, as relay input; nil when there is none.
 func failVerdict(root, branch string) *worker.ReviewVerdict {
-	r, ok := verdict.EffectiveReview(verdict.Load(root).Branches[verdict.BranchKey("", branch)])
-	if !ok || r.Verdict != verdict.Fail {
+	r, ok := verdict.EffectiveFail(verdict.Load(root).Branches[verdict.BranchKey("", branch)])
+	if !ok {
 		return nil
 	}
 	at, err := stamp.Parse(r.RecordedAt)
