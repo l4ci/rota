@@ -152,14 +152,10 @@ func UnsetGlobal(dir, key string) (bool, error) {
 	return unsetAt(GlobalPath(dir), ErrGlobalNotObject, key, true)
 }
 
-// osProjectsEnv is this package's edge to the process environment for the
-// global config dir: config.Load has no Deps to take it from.
-var osProjectsEnv = projects.Env{Getenv: os.Getenv, Home: os.UserHomeDir}
-
 // GlobalSupplies is whether the global config under the rota config dir sets
-// key, so a project can drop its own value and inherit it.
-func GlobalSupplies(key string) bool {
-	dir, err := projects.Dir(osProjectsEnv)
+// key, so a project can drop its own value and inherit it. env locates the dir.
+func GlobalSupplies(env projects.Env, key string) bool {
+	dir, err := projects.Dir(env)
 	if err != nil {
 		return false
 	}
