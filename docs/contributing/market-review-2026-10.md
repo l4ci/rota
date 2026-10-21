@@ -78,6 +78,7 @@ Top requests by thumbs-up on open issues, pulled 2026-10-08. Reaction counts in 
 | [orca](https://github.com/stablyai/orca) | Electron IDE for fleets of agents, coordinator/worker protocol over SQLite | 94k (2026-10-16) | multi-repo diff (+42), Jujutsu workspaces (+43), multi-repo groups (+21); see *Orca orchestration* below |
 | [superpowers](https://github.com/obra/superpowers) | Skills methodology | 296.5k | agent teams (+94), slowness (+32), Kiro (+23), skip review for easy tasks (+17) |
 | [paperclip](https://github.com/paperclipai/paperclip) | Agent "company" manager | 98.6k | local LLMs (+68), Copilot CLI (+44), OpenRouter (+35), knowledge layer (+16) |
+| [OpenSpec](https://github.com/Fission-AI/OpenSpec) | Spec-driven workflow: living `specs/`, delta change folders, propose/apply/archive, 30+ tool integrations; rota borrowed its delta model in #853 | 72.7k (2026-10-21) | validator gaps (scenario without WHEN/THEN passes #2078, header spacing #2132), non-markdown spec artifacts #2115, `update --dry-run --json` #2088, configurable requirement limits #2069 |
 | [beads](https://github.com/steveyegge/beads) | Git/Dolt-backed agent issue tracker | 27.7k | memory beads, versioned history, Dolt migration crashes |
 | [ralph](https://github.com/snarktank/ralph) | Loop runner with prd.json | 21.9k | progress visibility (+10), auto-wait on limits (+5), Codex support |
 | superset | IDE for 100+ parallel agents | 15.0k | choose worktree and branch names (+13), offline mode (+11) |
