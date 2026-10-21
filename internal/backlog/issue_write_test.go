@@ -554,6 +554,8 @@ func TestIssuesClaimByTrackerKey(t *testing.T) {
 func TestIssuesSetSection(t *testing.T) {
 	withBlock := Issue{Key: tracker.NumKey(2), Title: "T", State: "open", Body: "## Problem\n\nbad\n\n<!-- rota:fields\nRelated: B1\n-->"}
 	withAC := Issue{Key: tracker.NumKey(4), Title: "T", State: "open", Body: "## Acceptance\n\n- [ ] old\n\n## Pointers\n\n- p"}
+	lower := Issue{Key: tracker.NumKey(5), Title: "T", State: "open", Body: "## acceptance\n\n- [ ] old\n\n## Pointers\n\n- p"}
+	deep := Issue{Key: tracker.NumKey(6), Title: "T", State: "open", Body: "### Acceptance\n\n- [ ] old\n\n### Pointers\n\n- p"}
 	closed := Issue{Key: tracker.NumKey(3), Title: "T", State: "closed"}
 	for _, c := range []struct {
 		name, ref, section, content string
@@ -565,12 +567,16 @@ func TestIssuesSetSection(t *testing.T) {
 			`get[2] edit[2,{"body":"## Problem\n\nbad\n\n## Acceptance\n\n- [ ] AC-1: x\n\n<!-- rota:fields\nRelated: B1\n-->"}]`},
 		{"replace", "4", "Acceptance", "- [ ] new", true, nil,
 			`get[4] edit[4,{"body":"## Acceptance\n\n- [ ] AC-1: new\n\n## Pointers\n\n- p"}]`},
+		{"lowercase heading normalised", "5", "acceptance", "- [ ] new", true, nil,
+			`get[5] edit[5,{"body":"## Acceptance\n\n- [ ] AC-1: new\n\n## Pointers\n\n- p"}]`},
+		{"deeper heading normalised", "6", "acceptance", "- [ ] new", true, nil,
+			`get[6] edit[6,{"body":"## Acceptance\n\n- [ ] AC-1: new\n\n### Pointers\n\n- p"}]`},
 		{"empty body", "2", "acceptance", " \n", false, ErrInvalid, ``},
 		{"bad name", "2", "a\nb", "x", false, ErrInvalid, ``},
 		{"unknown", "99", "acceptance", "x", false, ErrNotFound, `get[99]`},
 		{"closed", "3", "acceptance", "x", false, ErrClosed, `get[3]`},
 	} {
-		b, tr := newIssues(t, `{}`, open(1), withBlock, closed, withAC)
+		b, tr := newIssues(t, `{}`, open(1), withBlock, closed, withAC, lower, deep)
 		got, err := b.SetSection(c.ref, c.section, c.content)
 		if !errors.Is(err, c.err) || (c.err == nil && err != nil) || got != c.changed {
 			t.Errorf("%s: %v, %v; want %v, %v", c.name, got, err, c.changed, c.err)

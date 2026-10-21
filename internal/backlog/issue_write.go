@@ -849,6 +849,10 @@ type SectionEditor interface {
 
 var _ SectionEditor = (*Issues)(nil)
 
+// acceptanceHeadRe matches the heading itembody.SetSection replaces for the
+// acceptance section: any level, any case.
+var acceptanceHeadRe = regexp.MustCompile(`(?mi)^#{1,6}[ \t]+acceptance[ \t]*$`)
+
 // SetSection replaces or adds one section of the issue body, keeping the
 // fields block. The body is read first; a failed read writes nothing. An
 // acceptance section gets its criteria numbered, as at capture.
@@ -876,6 +880,11 @@ func (b *Issues) SetSection(ref, name, content string) (bool, error) {
 	rest := strings.TrimLeft(old[len(text):], "\n")
 	text = itembody.SetSection(text, name, strings.ReplaceAll(content, "\r\n", "\n"))
 	if strings.EqualFold(name, "acceptance") {
+		// acceptance.Number only finds "## Acceptance", so a replaced heading
+		// of another case or level is rewritten to it first.
+		if loc := acceptanceHeadRe.FindStringIndex(text); loc != nil {
+			text = text[:loc[0]] + "## Acceptance" + text[loc[1]:]
+		}
 		text, _ = acceptance.Number(text)
 	}
 	if rest != "" {
