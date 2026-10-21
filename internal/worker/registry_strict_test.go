@@ -183,3 +183,60 @@ func TestUpdateChangedReportsMutationNotRewrite(t *testing.T) {
 		t.Errorf("ChangeCount advanced by %d, want 1", n)
 	}
 }
+
+// A failed update reports changed=false and leaves ChangeCount alone, even
+// when the callback would have changed the document: the counter feeds
+// pool-init and poll's Changed, so a refused write must not look like one.
+func TestUpdateChangedOnCorruptRegistryIsUnchanged(t *testing.T) {
+	root := t.TempDir()
+	p := RegistryPath(root)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const bad = `{"slots": [{"name": "ben"`
+	if err := os.WriteFile(p, []byte(bad), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	start := ChangeCount(root)
+	changed, err := UpdateChanged(root, func(d *Doc) { d.SetSession("s1") })
+	if !errors.Is(err, fsio.ErrUnreadable) {
+		t.Fatalf("err = %v, want ErrUnreadable", err)
+	}
+	if changed {
+		t.Error("changed = true on a refused update, want false")
+	}
+	if n := ChangeCount(root); n != start {
+		t.Errorf("ChangeCount moved %d -> %d on a refused update", start, n)
+	}
+	if b, _ := os.ReadFile(p); string(b) != bad {
+		t.Errorf("registry was overwritten: %q", b)
+	}
+}
+
+// The same holds when the callback changed the document and the write then
+// failed: err != nil, so the change is neither reported nor counted.
+func TestUpdateChangedOnFailedWriteIsUnchanged(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	root := t.TempDir()
+	if _, err := UpdateChanged(root, func(d *Doc) { d.SetSession("s1") }); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Dir(RegistryPath(root))
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	start := ChangeCount(root)
+	changed, err := UpdateChanged(root, func(d *Doc) { d.SetSession("s2") })
+	if err == nil {
+		t.Fatal("update succeeded in a read-only directory; the write must fail")
+	}
+	if changed {
+		t.Error("changed = true on a failed write, want false")
+	}
+	if n := ChangeCount(root); n != start {
+		t.Errorf("ChangeCount moved %d -> %d on a failed write", start, n)
+	}
+}
