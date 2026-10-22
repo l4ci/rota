@@ -121,6 +121,8 @@ Fires when the batch includes a `[Major]` feature or a `[P0]` bug; skip otherwis
 
 **Never grill and never invoke `/rota-brainstorm` from here** (`references/grilling.md` is not loaded by capture). `/rota-work` with no argument suggests the next item.
 
+If no milestone exists (`rota milestone list`) and the repo had no open items before this run (`rota backlog list`, checked before creating items), add to the report: "No milestone exists; `/rota-vision` splits a concept into milestones."
+
 Print every new ID with its title, then stop. Capture ends here; do not offer to start work.
 
 ---

@@ -65,6 +65,8 @@ On the issue backend the design is a note on the item's issue (`references/issue
 
 Report two lines (artifact, approaches, open questions). On hand-off say *"Run `/rota-plan <ID>` next."* Under `roundtrip` or `auto`, instead dispatch `/rota-plan <ID>` by reading and following its instructions immediately: no prompt, no confirmation, no "want me to" question.
 
+If no milestone exists (`rota milestone list`) and the repo had no open items before this run (`rota backlog list`, checked while loading context), add to the report: "No milestone exists; `/rota-vision` splits a concept into milestones."
+
 ## Key principles
 
 - **No noise.** Don't narrate loads or recap.
