@@ -704,3 +704,7 @@ func FenceAttempt(s *Slot, given string) error {
 	e.Hint = "a fenced worker stops: its result is refused, not recorded"
 	return e
 }
+
+// OutcomeOpen reports whether kind is an open outcome (partial or failed):
+// the worker delivered less than the ticket asked.
+func OutcomeOpen(kind string) bool { return kind == OutcomePartial || kind == OutcomeFailed }
