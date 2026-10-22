@@ -32,3 +32,17 @@ func TestParseGateConfigLegacyKey(t *testing.T) {
 		t.Errorf("%+v", c)
 	}
 }
+
+// The gate and the round settings read one parse: a malformed list is held
+// as TestsErr (and reads empty) rather than dropped, and a bad work.tdd stays
+// TDDEnabled's alone.
+func TestParseGateConfigTestsErr(t *testing.T) {
+	c := ParseGateConfig(parseCfg(`{"test":{"fast":"x","full":["a"]}}`))
+	if c.TestsErr() == nil || len(c.Fast) != 0 {
+		t.Errorf("malformed test.fast: err %v fast %v", c.TestsErr(), c.Fast)
+	}
+	c = ParseGateConfig(parseCfg(`{"work":{"tdd":"yes"}}`))
+	if c.TestsErr() != nil {
+		t.Errorf("bad work.tdd leaked into TestsErr: %v", c.TestsErr())
+	}
+}
