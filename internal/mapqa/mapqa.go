@@ -206,17 +206,17 @@ func gitDate(root, path string) string {
 	return d
 }
 
-// SoftCap reads map.softcap_subsystems from the project config: the subsystem
+// SoftCap reads map.softcap_subsystems from cfg, the loaded project config: the subsystem
 // count at which the map nudge fires. A value below 1 or not an integer gives
 // the schema default.
-func SoftCap(root string) int {
-	return config.IntOr(config.Load(rotatree.Config(root)), "map.softcap_subsystems", 1, config.MaxInt)
+func SoftCap(cfg any) int {
+	return config.IntOr(cfg, "map.softcap_subsystems", 1, config.MaxInt)
 }
 
-// StaleCommits reads map.staleCommits from the project config: 0 disables the
+// StaleCommits reads map.staleCommits from cfg, the loaded project config: 0 disables the
 // staleness warning; a negative or non-integer value gives the schema default.
-func StaleCommits(root string) int {
-	return config.IntOr(config.Load(rotatree.Config(root)), "map.staleCommits", 0, config.MaxInt)
+func StaleCommits(cfg any) int {
+	return config.IntOr(cfg, "map.staleCommits", 0, config.MaxInt)
 }
 
 // StaleNote is the warning for a subsystem whose map is behind HEAD by n commits.

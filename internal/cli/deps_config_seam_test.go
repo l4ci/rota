@@ -1,32 +1,47 @@
 package cli
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
-// Only deps.go reads the project config from disk; every verb takes it from
-// Deps.Config, so a test can swap in an in-memory config.
-func TestCliConfigLoadsStayOnDeps(t *testing.T) {
-	for _, f := range cliSources(t) {
-		if strings.HasSuffix(f, "_test.go") || f == "deps.go" {
-			continue
-		}
-		b, err := os.ReadFile(f)
+// Only internal/config and cli/deps.go read the project config from disk; every
+// verb and leaf package takes it from Deps.Config (a loaded value or a loader
+// func), so a test can swap in an in-memory config.
+func TestConfigLoadsStayOnDeps(t *testing.T) {
+	root := filepath.Join("..", "..")
+	for _, dir := range []string{"cmd", "internal"} {
+		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, e fs.DirEntry, err error) error {
+			if err != nil || e.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return err
+			}
+			rel := filepath.ToSlash(strings.TrimPrefix(path, root+string(filepath.Separator)))
+			if strings.HasPrefix(rel, "internal/config/") || rel == "internal/cli/deps.go" {
+				return nil
+			}
+			b, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			for _, line := range strings.Split(string(b), "\n") {
+				if strings.HasPrefix(strings.TrimSpace(line), "//") {
+					continue
+				}
+				if strings.Contains(line, "config.Load(") {
+					t.Errorf("%s calls config.Load; take the config from Deps.Config: %s", rel, strings.TrimSpace(line))
+				}
+			}
+			return nil
+		})
 		if err != nil {
 			t.Fatal(err)
-		}
-		for _, line := range strings.Split(string(b), "\n") {
-			if strings.HasPrefix(strings.TrimSpace(line), "//") {
-				continue
-			}
-			if strings.Contains(line, "config.Load(") {
-				t.Errorf("%s calls config.Load; read the config through Deps.Config: %s", f, strings.TrimSpace(line))
-			}
 		}
 	}
 }
@@ -54,3 +69,6 @@ func TestShipStrategyReadsInMemoryConfig(t *testing.T) {
 		t.Errorf("strategy = %q, want direct from the in-memory config: %v", got, env)
 	}
 }
+
+// diskConfig reads the .rota/config.json a test wrote, as the real Deps.Config does.
+func diskConfig(root string) any { return config.Load(rotatree.Config(root)) }

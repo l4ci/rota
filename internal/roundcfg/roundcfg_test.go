@@ -579,3 +579,8 @@ func TestHarnessesInvalid(t *testing.T) {
 		}
 	}
 }
+
+// Load reads the round.* keys from the config on disk under root.
+func Load(root string) (Settings, error) {
+	return FromConfig(config.Load(rotatree.Config(root)))
+}

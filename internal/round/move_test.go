@@ -3,9 +3,11 @@ package round
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -84,9 +86,9 @@ func newMoveFx(t *testing.T) *moveFx {
 	sh(t, f.root, "push", "-q", "origin", "main")
 	milestoneDoc(t, f.root, "M01", "active")
 
-	f.env = Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100), Round: roundcfg.Settings{StallMinutes: 30}, Forge: f.forge.asForge()}
+	f.env = Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100), Round: roundcfg.Settings{StallMinutes: 30}, Forge: f.forge.asForge()}
 	f.env.Label, f.env.NeedsHuman, f.env.NeedsReview, f.env.SupportLabel = configLabels()
-	f.env.Worker = worker.Env{Git: git.Exec, Getenv: noEnv, Now: func() time.Time { return f.now }, Sleep: func(time.Duration) {},
+	f.env.Worker = worker.Env{Config: diskConfig, Git: git.Exec, Getenv: noEnv, Now: func() time.Time { return f.now }, Sleep: func(time.Duration) {},
 		NewHost: func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }}
 
 	fb := f.be
@@ -97,7 +99,7 @@ func newMoveFx(t *testing.T) *moveFx {
 		n, _ := strconv.Atoi(it.ID)
 		it.Number = n
 	}
-	f.set, _ = roundcfg.Load(os.TempDir())
+	f.set, _ = roundcfg.FromConfig(config.Load(rotatree.Config(os.TempDir())))
 
 	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
 		t.Fatal(err)

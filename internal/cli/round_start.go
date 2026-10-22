@@ -136,7 +136,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		set, err := roundcfg.Load(root)
+		set, err := roundcfg.FromConfig(c.deps().Config(root))
 		if err != nil {
 			return Result{}, Usage("%s", err.Error())
 		}
@@ -270,7 +270,7 @@ func roundCandidates(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		set, err := roundcfg.Load(root)
+		set, err := roundcfg.FromConfig(c.deps().Config(root))
 		if err != nil {
 			return Result{}, Usage("%s", err.Error())
 		}

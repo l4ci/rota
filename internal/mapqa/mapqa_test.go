@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 func write(t *testing.T, root, rel, content string) {
@@ -168,7 +170,7 @@ func TestSoftCap(t *testing.T) {
 			if tc.cfg != "" {
 				write(t, root, ".rota/config.json", tc.cfg)
 			}
-			if got := SoftCap(root); got != tc.want {
+			if got := SoftCap(config.Load(rotatree.Config(root))); got != tc.want {
 				t.Errorf("SoftCap = %d, want %d", got, tc.want)
 			}
 		})
@@ -229,7 +231,7 @@ func TestStaleCommits(t *testing.T) {
 			if tc.cfg != "" {
 				write(t, root, ".rota/config.json", tc.cfg)
 			}
-			if got := StaleCommits(root); got != tc.want {
+			if got := StaleCommits(config.Load(rotatree.Config(root))); got != tc.want {
 				t.Errorf("StaleCommits = %d, want %d", got, tc.want)
 			}
 		})

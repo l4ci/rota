@@ -50,7 +50,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 			return Result{}, &Error{Exit: ExitUnavailable, Message: "a solo round has no panes to watch",
 				Hint: "solo workers report through rota round report; call rota round wait"}
 		}
-		set, err := roundcfg.Load(root)
+		set, err := roundcfg.FromConfig(c.deps().Config(root))
 		if err != nil {
 			return Result{}, Usage("%s", err.Error())
 		}
@@ -86,7 +86,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 			Wait: func(ctx context.Context, d time.Duration) (*roundwatch.SlotNews, error) {
 				// The timeout covers one whole classification (its settle gap),
 				// or a wait that ends mid-capture would never see a slot.
-				res, err := wenv.Wait(ctx, root, worker.WaitOpts{Timeout: d + secs(*settle) + 2*time.Second, Settle: secs(*settle), Lines: *lines, UnverifiableAfter: unverifiableAfter(root)})
+				res, err := wenv.Wait(ctx, root, worker.WaitOpts{Timeout: d + secs(*settle) + 2*time.Second, Settle: secs(*settle), Lines: *lines, UnverifiableAfter: unverifiableAfter(c, root)})
 				var we *exitcode.Error
 				if errors.As(err, &we) && we.Exit == exitcode.ExitResolution {
 					return nil, roundwatch.ErrNothingToWatch
@@ -140,7 +140,7 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 			}
 		}
 	}
-	set, err := roundcfg.Load(root)
+	set, err := roundcfg.FromConfig(c.deps().Config(root))
 	if err != nil {
 		if !c.reviewSkipNoted {
 			c.reviewSkipNoted = true

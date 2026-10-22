@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"context"
+	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/rotatree"
 	"io"
 	"os"
 	"path/filepath"
@@ -183,7 +185,7 @@ func TestWatchForgeSurfacesABadRoundConfig(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"round":{"maxBounces":"many"}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := roundcfg.Load(dir); err == nil {
+	if _, err := roundcfg.FromConfig(config.Load(rotatree.Config(dir))); err == nil {
 		t.Skip("config still loads")
 	}
 	watchForge(context.Background(), c, dir)

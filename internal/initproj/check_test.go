@@ -6,22 +6,30 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/rotatree"
 )
+
+// checkDir runs Check against the config on disk under dir.
+func checkDir(dir string, drift func() string) CheckResult {
+	return Check(dir, config.Load(rotatree.Config(dir)), drift)
+}
 
 func TestCheck(t *testing.T) {
 	dir := t.TempDir()
-	if r := Check(dir, nil); r.Initialized || !reflect.DeepEqual(r.Missing, []string{".rota"}) {
+	if r := checkDir(dir, nil); r.Initialized || !reflect.DeepEqual(r.Missing, []string{".rota"}) {
 		t.Errorf("no .rota: %+v", r)
 	}
 	if _, err := Init(dir); err != nil {
 		t.Fatal(err)
 	}
-	if r := Check(dir, nil); !r.Initialized || len(r.Missing) != 0 || len(r.Warnings) != 0 {
+	if r := checkDir(dir, nil); !r.Initialized || len(r.Missing) != 0 || len(r.Warnings) != 0 {
 		t.Errorf("initialized: %+v", r)
 	}
 	os.Remove(filepath.Join(dir, ".rota", "counters.json"))
 	os.Remove(filepath.Join(dir, ".rota", "DECISIONS.md"))
-	r := Check(dir, nil)
+	r := checkDir(dir, nil)
 	want := []string{".rota/DECISIONS.md", ".rota/counters.json"}
 	if r.Initialized || !reflect.DeepEqual(r.Missing, want) {
 		t.Errorf("every missing path is reported: %+v", r)
@@ -35,23 +43,23 @@ func TestCheckWarnings(t *testing.T) {
 	}
 	cfg := filepath.Join(dir, ".rota", "config.json")
 	os.WriteFile(cfg, []byte(`{"umbrella":{"enabled":true}}`), 0o644)
-	r := Check(dir, func() string { return "rota drift: x" })
+	r := checkDir(dir, func() string { return "rota drift: x" })
 	if !r.Initialized || len(r.Warnings) != 2 || !strings.Contains(r.Warnings[0], "no sub-repos") || r.Warnings[1] != "rota drift: x" {
 		t.Errorf("%+v", r)
 	}
 	os.Remove(filepath.Join(dir, ".rota", "repos.json"))
-	if r := Check(dir, nil); len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "repos.json missing") {
+	if r := checkDir(dir, nil); len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "repos.json missing") {
 		t.Errorf("%+v", r)
 	}
 	// the registry is the truth: registered repos silence the flag warning
 	os.WriteFile(filepath.Join(dir, ".rota", "repos.json"), []byte(`{"repos":[{"name":"a","path":"a"}]}`), 0o644)
-	if r := Check(dir, nil); len(r.Warnings) != 0 {
+	if r := checkDir(dir, nil); len(r.Warnings) != 0 {
 		t.Errorf("%+v", r)
 	}
 	// a flag of false warns nothing
 	os.WriteFile(cfg, []byte(`{"umbrella":{"enabled":false}}`), 0o644)
 	os.WriteFile(filepath.Join(dir, ".rota", "repos.json"), []byte(`{"repos":[]}`), 0o644)
-	if r := Check(dir, nil); len(r.Warnings) != 0 {
+	if r := checkDir(dir, nil); len(r.Warnings) != 0 {
 		t.Errorf("%+v", r)
 	}
 }

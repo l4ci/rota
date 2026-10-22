@@ -7,6 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 	"slices"
@@ -94,9 +95,9 @@ func newAssignFixture(t *testing.T) *assignFixture {
 	}
 	h := &hostFake{}
 	f := &assignFixture{root: root, host: h}
-	f.env = Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100)}
+	f.env = Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
 	f.env.Label, f.env.NeedsHuman, f.env.NeedsReview, f.env.SupportLabel = configLabels()
-	f.env.Worker = worker.Env{Git: git.Exec, NewHost: func(host.Kind) host.Host { return h },
+	f.env.Worker = worker.Env{Config: diskConfig, Git: git.Exec, NewHost: func(host.Kind) host.Host { return h },
 		Sleep: func(time.Duration) {}, Now: time.Now, Getenv: noEnv}
 	fb := &fakeRemote{}
 	fb.add("12", "Add the round assign verb now please", "M01", false, "## Acceptance\n- [ ] works\n\nedits internal/cli/round.go")
@@ -104,7 +105,7 @@ func newAssignFixture(t *testing.T) *assignFixture {
 	fb.add("14", "No criteria", "M01", false, "")
 	fb.ready = map[string][]string{"14": {"no acceptance criteria in the issue body", "no design or plan note"}}
 	f.be = fb
-	f.set, _ = roundcfg.Load(os.TempDir())
+	f.set, _ = roundcfg.FromConfig(config.Load(rotatree.Config(os.TempDir())))
 	if _, err := f.env.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
 		t.Fatal(err)
 	}
@@ -462,7 +463,7 @@ func (f *assignFixture) config(t *testing.T, cfg string) {
 	if err := os.WriteFile(filepath.Join(f.root, ".rota", "config.json"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	set, err := roundcfg.Load(f.root)
+	set, err := roundcfg.FromConfig(config.Load(rotatree.Config(f.root)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1109,7 +1110,7 @@ func TestAssignAccountStepFollowsAccountPicking(t *testing.T) {
 			f := newAssignFixture(t)
 			f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}]}}`)
 			f.host.name = "herdr"
-			acc := &worker.Accounts{Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
+			acc := &worker.Accounts{Env: worker.Env{Config: diskConfig}, Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
 				return nil, "fake: no network in tests"
 			}, Login: worker.Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
 				return proc.Result{Stdout: `{"claudeAiOauth":{"accessToken":"t"}}`}, nil
@@ -1174,7 +1175,7 @@ func TestTryItBriefFollowsTheGatesTrustDecision(t *testing.T) {
 		"vouched body":     {source: "github", forge: trustingForge{a: tracker.Authorship{Author: "ann", Body: "## Try it\n- echo vouched\n"}}, steps: "- `echo vouched`"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			steps, why := Env{Forge: tc.forge}.tryItBrief(bg, tryItRoot(t, tc.source), be, "9")
+			steps, why := Env{Forge: tc.forge, Worker: worker.Env{Config: diskConfig}}.tryItBrief(bg, tryItRoot(t, tc.source), be, "9")
 			if steps != tc.steps || !strings.Contains(why, tc.whyContains) || (tc.whyContains == "" && why != "") {
 				t.Errorf("steps %q why %q", steps, why)
 			}

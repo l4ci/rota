@@ -121,7 +121,7 @@ func TestTransferPreflightMatchesAssign(t *testing.T) {
 			t.Fatal(err)
 		}
 		f.env.Worker.Now = func() time.Time { return quotaNow }
-		f.env.Worker.Accounts = &worker.Accounts{Env: worker.Env{Now: func() time.Time { return quotaNow }},
+		f.env.Worker.Accounts = &worker.Accounts{Env: worker.Env{Config: diskConfig, Now: func() time.Time { return quotaNow }},
 			Fetch: func(_ context.Context, _, _ string) (*jsonx.Object, string) {
 				v, err := jsonx.Decode([]byte(`{"five_hour":{"utilization":100,"resets_at":"` + quotaNow.Add(time.Hour).Format(time.RFC3339) + `"}}`))
 				if err != nil {

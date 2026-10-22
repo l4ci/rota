@@ -604,6 +604,10 @@ type Env struct {
 // production value. Each verb entry calls it once and then reads the fields
 // directly; code outside the package calls it to read the clock or environment.
 // Idempotent, so a defaulted Env passes through unchanged.
+// defaultConfig is the Config of an Env that sets none: no config, the schema
+// defaults. cli's Deps fills Env.Config; worker tests swap in a disk reader.
+var defaultConfig = func(string) any { return nil }
+
 func (e Env) WithDefaults() Env {
 	if e.Ctx == nil {
 		e.Ctx = context.Background()
@@ -641,7 +645,7 @@ func (e Env) WithDefaults() Env {
 		}
 	}
 	if e.Config == nil {
-		e.Config = loadConfig
+		e.Config = defaultConfig
 	}
 	if e.Issues == nil {
 		e.Issues = func(dir string, s tracker.Settings) (Issues, error) {

@@ -26,7 +26,7 @@ func roundTransfer(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		set, err := roundcfg.Load(root)
+		set, err := roundcfg.FromConfig(c.deps().Config(root))
 		if err != nil {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
