@@ -68,7 +68,12 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if *list {
-			return setupList(setupDefaults(c)), nil
+			dir, err := initDir(c)
+			if err != nil {
+				return Result{}, err
+			}
+			defs, sigs := setupSuggestions(c, dir, nil)
+			return setupList(defs, sigs), nil
 		}
 		if err := refuseHomeInit(c, "setup", *force); err != nil {
 			return Result{}, err
@@ -86,10 +91,14 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			if p == nil {
 				return Result{}, Usage("--set %s: not a setup question", kv[0]).WithHint("run: rota setup --list")
 			}
-			if !p.Valid(kv[1]) {
+			val := setupValue(*p, kv[1])
+			if !p.Valid(val) {
+				if p.Free {
+					return Result{}, Usage("--set %s: %q is not a valid value", kv[0], kv[1]).WithHint("run: rota config show --schema " + kv[0])
+				}
 				return Result{}, Usage("--set %s: %q is not one of %s", kv[0], kv[1], choiceValues(*p)).WithHint("run: rota setup --list")
 			}
-			given[kv[0]] = kv[1]
+			given[kv[0]] = val
 		}
 		interactive := !*yes && !c.JSON && c.deps().SetupIsTTY(c.Stdin)
 		if !interactive && !*yes && len(given) == 0 {
@@ -97,7 +106,8 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 				WithHint("run: rota setup --list to see the questions, rota setup --yes for the defaults")
 		}
 		in := bufio.NewReader(c.Stdin)
-		answers, err := resolveAnswers(c, in, given, interactive, setupDefaults(c))
+		defs, sigs := setupSuggestions(c, dir, given)
+		answers, err := resolveAnswers(c, in, given, interactive, defs, sigs)
 		if err != nil {
 			return Result{}, err
 		}
@@ -148,7 +158,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 // resolveAnswers settles every applicable question: the --set value, else the
 // typed answer when interactive, else the default. A question whose condition
 // does not hold is skipped, and --set naming it is a usage error.
-func resolveAnswers(c *Ctx, in *bufio.Reader, given map[string]string, interactive bool, defs map[string]string) (map[string]string, error) {
+func resolveAnswers(c *Ctx, in *bufio.Reader, given map[string]string, interactive bool, defs map[string]string, sigs map[string]setupSignal) (map[string]string, error) {
 	answers := map[string]string{}
 	if interactive {
 		fmt.Fprintln(c.Stderr, "rota setup: Enter takes the default [in brackets]; Ctrl-C aborts before anything is written.")
@@ -165,7 +175,7 @@ func resolveAnswers(c *Ctx, in *bufio.Reader, given map[string]string, interacti
 		case ok:
 		case interactive:
 			var err error
-			if v, err = ask(in, c.Stderr, p, defs[p.Key]); err != nil {
+			if v, err = ask(in, c.Stderr, p, defs[p.Key], sigs[p.Key]); err != nil {
 				return nil, err
 			}
 		default:
@@ -179,8 +189,14 @@ func resolveAnswers(c *Ctx, in *bufio.Reader, given map[string]string, interacti
 // ask prints p and reads until the answer is a choice number, a choice value
 // or empty (the default). End of input is a usage error, not a default: a
 // closed pipe must not silently configure the project.
-func ask(in *bufio.Reader, out io.Writer, p config.Prompt, def string) (string, error) {
+func ask(in *bufio.Reader, out io.Writer, p config.Prompt, def string, sig setupSignal) (string, error) {
 	fmt.Fprintf(out, "\n%s (%s)\n", p.Title, p.Key)
+	if sig.Value != "" {
+		fmt.Fprintf(out, "  suggested: %s (%s)\n", sig.Value, sig.Evidence)
+	}
+	if p.Free {
+		return askFree(in, out, p, def)
+	}
 	defN := 0
 	for i, ch := range p.Choices {
 		mark := ""
@@ -213,34 +229,105 @@ func ask(in *bufio.Reader, out io.Writer, p config.Prompt, def string) (string, 
 	}
 }
 
-// setupDefaults is each question's default: the global config's value when it
-// is one of the question's choices (a hand-edited bad value is ignored), else
-// the schema default. A broken global file warns and falls back to the schema.
-func setupDefaults(c *Ctx) map[string]string {
-	defs := map[string]string{}
+// askFree reads a free-text answer: Enter takes def (leaves the key unset when
+// def is empty), anything else must pass the key's validation. As in ask, end
+// of input is a usage error.
+func askFree(in *bufio.Reader, out io.Writer, p config.Prompt, def string) (string, error) {
+	for {
+		if def == "" {
+			fmt.Fprint(out, "Type a value, or Enter to leave it unset: ")
+		} else {
+			fmt.Fprintf(out, "Enter takes %s, or type a value: ", def)
+		}
+		line, err := in.ReadString('\n')
+		line = strings.TrimSpace(line)
+		if err != nil && line == "" {
+			return "", Usage("input ended before setup was answered; nothing was written").WithHint("run: rota setup --yes for the defaults")
+		}
+		if line == "" {
+			return def, nil
+		}
+		if v := setupValue(p, line); p.Valid(v) {
+			return v, nil
+		}
+		fmt.Fprintf(out, "  not a valid value: %s\n", line)
+	}
+}
+
+// setupValue is raw as the config value a free-text prompt stores: a list key
+// given one bare command becomes a one-element JSON list. Choice prompts and
+// values already JSON pass through.
+func setupValue(p config.Prompt, raw string) string {
+	k, ok := config.SchemaKey(p.Key)
+	if !p.Free || !ok || k.Type != config.TypeList {
+		return raw
+	}
+	if _, isList := config.Coerce(raw).([]any); isList {
+		return raw
+	}
+	b, err := jsonx.MarshalCompact([]any{raw})
+	if err != nil {
+		return raw
+	}
+	return string(b)
+}
+
+// setupSuggestions settles what each question starts from. Precedence per
+// question: --set (given), then the global config's value when it is one of
+// the question's choices (a hand-edited bad value is ignored), then the value
+// read from the project, then the schema default. defs is the starting value;
+// sigs is what the prompt and --list show beside it: the project's signal, or
+// the global value with the differing signal noted. A broken global file warns
+// and counts as empty.
+func setupSuggestions(c *Ctx, dir string, given map[string]string) (defs map[string]string, sigs map[string]setupSignal) {
+	defs = map[string]string{}
 	for _, p := range config.Prompts {
 		defs[p.Key] = p.DefaultChoice()
 	}
-	dir, err := projects.Dir(c.deps().projectsEnv())
+	globals := map[string]string{}
+	gdir, err := projects.Dir(c.deps().projectsEnv())
 	var vals map[string]any
 	if err == nil {
-		vals, err = config.LoadGlobal(dir)
+		vals, err = config.LoadGlobal(gdir)
 	}
 	if err != nil {
 		c.Warn("ignoring the global config: %v", err)
-		return defs
-	}
-	// runInit migrates the global after the answers are taken, so a pre-0.21
-	// auto must default to the roundtrip it is about to become.
-	if config.GlobalAutoStale(dir, vals) {
-		vals["autonomy.level"] = "roundtrip"
-	}
-	for _, p := range config.Prompts {
-		if v, ok := vals[p.Key]; ok && p.Valid(fmt.Sprint(v)) {
-			defs[p.Key] = fmt.Sprint(v)
+	} else {
+		// runInit migrates the global after the answers are taken, so a pre-0.21
+		// auto must default to the roundtrip it is about to become.
+		if config.GlobalAutoStale(gdir, vals) {
+			vals["autonomy.level"] = "roundtrip"
+		}
+		for _, p := range config.Prompts {
+			if v, ok := vals[p.Key]; ok && p.Valid(fmt.Sprint(v)) {
+				globals[p.Key] = fmt.Sprint(v)
+			}
 		}
 	}
-	return defs
+	answered := map[string]bool{}
+	for k := range given {
+		answered[k] = true
+	}
+	for k := range globals {
+		answered[k] = true
+	}
+	sigs = readSetupSignals(c, dir, answered)
+	for _, p := range config.Prompts {
+		sig, hasSig := sigs[p.Key]
+		g, hasGlobal := globals[p.Key]
+		switch {
+		case hasGlobal:
+			defs[p.Key] = g
+			if hasSig && sig.Value != g {
+				sigs[p.Key] = setupSignal{g, fmt.Sprintf("global config; project suggests %s: %s", sig.Value, sig.Evidence)}
+			} else {
+				delete(sigs, p.Key)
+			}
+		case hasSig:
+			defs[p.Key] = sig.Value
+		}
+	}
+	return defs, sigs
 }
 
 // loadGlobalValues is the global config's values. ok is false when the dir or
@@ -262,7 +349,7 @@ func globalCandidates(answers map[string]string, global map[string]any) []config
 	var out []config.Prompt
 	for _, p := range config.Prompts {
 		v, ok := answers[p.Key]
-		if !ok || (p.Optional && v == "") {
+		if !ok || p.Free || (p.Optional && v == "") {
 			continue
 		}
 		if g, has := global[p.Key]; len(global) > 0 && has && fmt.Sprint(g) == v {
@@ -315,7 +402,7 @@ func choiceValues(p config.Prompt) string {
 
 // setupList is `setup --list`: every question with its choices, default and
 // the flag that answers it.
-func setupList(defs map[string]string) Result {
+func setupList(defs map[string]string, sigs map[string]setupSignal) Result {
 	var qs []any
 	var lines []string
 	for _, p := range config.Prompts {
@@ -325,6 +412,15 @@ func setupList(defs map[string]string) Result {
 		}
 		q := knObj("key", p.Key, "title", p.Title, "default", defs[p.Key], "choices", chs)
 		line := fmt.Sprintf("%s  %s  [%s]  default %s", p.Key, p.Title, choiceValues(p), defs[p.Key])
+		if p.Free {
+			q.Set("free", true)
+			line = fmt.Sprintf("%s  %s  (free text)", p.Key, p.Title)
+		}
+		if sig, ok := sigs[p.Key]; ok {
+			q.Set("suggestion", sig.Value)
+			q.Set("evidence", sig.Evidence)
+			line += fmt.Sprintf("  suggested %s (%s)", sig.Value, sig.Evidence)
+		}
 		if p.IfKey != "" {
 			q.Set("if", p.IfKey+"="+p.IfValue)
 			line += fmt.Sprintf("  (only when %s=%s)", p.IfKey, p.IfValue)
@@ -332,6 +428,6 @@ func setupList(defs map[string]string) Result {
 		qs = append(qs, q)
 		lines = append(lines, line)
 	}
-	lines = append(lines, "", "answer with: rota setup --set <key>=<value> (repeatable); rota setup --yes takes the defaults")
+	lines = append(lines, "", "answer with: rota setup --set <key>=<value> (repeatable); rota setup --yes takes the suggestions, else the defaults")
 	return Result{Data: knObj("questions", qs), Text: strings.Join(lines, "\n")}
 }

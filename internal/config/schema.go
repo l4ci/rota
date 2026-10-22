@@ -219,6 +219,9 @@ type Prompt struct {
 	// Optional marks a question whose absence is meaningful: Enter (or --yes)
 	// leaves the key unset, and only an explicit answer is written.
 	Optional bool
+	// Free marks a question answered with free text, not a choice: a string
+	// key or a list key (a JSON list, or one command). It has no Choices.
+	Free bool
 }
 
 // Prompts is the setup's questions, in the order they are asked.
@@ -270,6 +273,9 @@ var Prompts = []Prompt{
 		"hermes":   "Hermes",
 		"opencode": "OpenCode",
 	}},
+	{Key: "git.baseBranch", Title: "Which branch do the skills merge into?", Optional: true, Free: true},
+	{Key: "test.fast", Title: "Which command is the quick per-task check?", Optional: true, Free: true},
+	{Key: "test.full", Title: "Which command runs the full suite?", Optional: true, Free: true},
 }
 
 func init() {
@@ -320,6 +326,9 @@ func (p Prompt) DefaultChoice() string {
 
 // Valid is whether v is one of p's choice values.
 func (p Prompt) Valid(v string) bool {
+	if p.Free {
+		return v != "" && Validate(p.Key, v) == nil
+	}
 	for _, c := range p.Choices {
 		if c.Value == v {
 			return true
