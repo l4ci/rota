@@ -17,7 +17,6 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/hook"
-	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/rotastate"
@@ -351,7 +350,7 @@ func guardPrompt(hc hookContext, sid string) string {
 // because nothing would wake it when a worker finishes. A solo round has no
 // panes to watch.
 func watchBlock(hc hookContext) (reason string, block bool) {
-	if worker.RegistryHost(hc.root) == host.Solo {
+	if worker.IsSolo(hc.root) {
 		return "", false
 	}
 	need, attn := roundwatch.NeedsWatch(hc.root)
@@ -396,7 +395,7 @@ func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 			"additionalContext": line,
 		}}), nil
 	}
-	if worker.RegistryHost(hc.root) == host.Solo {
+	if worker.IsSolo(hc.root) {
 		return Result{}, nil
 	}
 	if need, _ := roundwatch.NeedsWatch(hc.root); !need {

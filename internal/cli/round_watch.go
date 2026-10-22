@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/escalation"
-	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -47,7 +46,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if worker.RegistryHost(root) == host.Solo {
+		if worker.IsSolo(root) {
 			return Result{}, &Error{Exit: ExitUnavailable, Message: "a solo round has no panes to watch",
 				Hint: "solo workers report through rota round report; call rota round wait"}
 		}

@@ -2,6 +2,7 @@ package worker
 
 import (
 	"github.com/l4ci/rota/internal/exitcode"
+	"os"
 	"strings"
 	"testing"
 
@@ -86,6 +87,13 @@ func TestSoloRefusalIsNilWithoutASoloHost(t *testing.T) {
 			t.Errorf("host %q: %v", h, err)
 		}
 	}
+	p := RegistryPath(dir)
+	if err := os.WriteFile(p, []byte(`{"slots": [{"name": "ben"`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if IsSolo(dir) {
+		t.Error("a corrupt registry must read as not solo (tolerant load)")
+	}
 }
 
 func TestRecordedHostOverridesWorkDispatchAndNoneKeepsIt(t *testing.T) {
@@ -157,5 +165,22 @@ func TestWaitCarriesTheOutcomeEvidence(t *testing.T) {
 	res, err := e.Wait(bg, dir, WaitOpts{})
 	if err != nil || res.Slot != "w1" || res.Evidence != "partial: a | b | c" {
 		t.Fatalf("wait = %+v (%v), want the outcome as evidence", res, err)
+	}
+}
+
+func TestIsSoloReadsTheRecordedHost(t *testing.T) {
+	dir := newProject(t, `{}`)
+	if IsSolo(dir) {
+		t.Error("no registry must not read as solo")
+	}
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	for _, c := range []struct {
+		h    host.Kind
+		want bool
+	}{{host.Solo, true}, {host.Tmux, false}, {host.Herdr, false}} {
+		recordHost(t, dir, c.h)
+		if got := IsSolo(dir); got != c.want {
+			t.Errorf("host %q: IsSolo = %v, want %v", c.h, got, c.want)
+		}
 	}
 }

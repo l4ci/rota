@@ -57,6 +57,16 @@ func dispatchSetting(cfg any) host.Kind { return host.KindOf(config.Dispatch(cfg
 // talk to and cannot refuse; the verbs that write the registry refuse it.
 func RegistryHost(root string) host.Kind { return LoadRegistryTolerant(root).Host() }
 
+// IsSoloHost reports whether k, a recorded round host, is the solo host:
+// workers are in-harness subagents and no verb drives a pane. It is the one
+// place a registry host is compared to host.Solo; a caller that already holds
+// the host (one registry read) asks here instead of comparing.
+func IsSoloHost(k host.Kind) bool { return k == host.Solo }
+
+// IsSolo is IsSoloHost over root's recorded host. A missing or corrupt
+// registry reads as no host, so not solo (RegistryHost tolerates both).
+func IsSolo(root string) bool { return IsSoloHost(RegistryHost(root)) }
+
 // ResolveHost is the host the project's round runs on: host.Resolve over the
 // round's recorded host, round.dispatch and the environment. Every verb that
 // needs the host asks here. getenv and lookPath default to the process's own;
@@ -72,7 +82,7 @@ func ResolveHost(root string, cfg any, getenv func(string) string, lookPath func
 // unavailable if it is absent. A recorded solo round stays solo.
 func ResolvePaneHost(root string, cfg any, getenv func(string) string, lookPath func(string) (string, error)) host.Kind {
 	k := ResolveHost(root, cfg, getenv, lookPath)
-	if k == host.Solo && RegistryHost(root) == "" {
+	if k == host.Solo && !IsSolo(root) {
 		return host.Tmux
 	}
 	return k
@@ -87,7 +97,7 @@ func (e Env) hostKind(root string) host.Kind {
 // SoloRefusal is the exit 2 a pane verb gives when the round's recorded host
 // is solo, nil otherwise. equiv names the solo verb that does the same job.
 func SoloRefusal(root, equiv string) error {
-	if RegistryHost(root) != host.Solo {
+	if !IsSolo(root) {
 		return nil
 	}
 	return &exitcode.Error{Exit: exitcode.ExitUsage, Message: "solo round: workers are subagents, there are no panes", Hint: equiv}
@@ -502,7 +512,7 @@ func (e Env) KillSlot(ctx context.Context, root, slot string) error {
 	if s == nil {
 		return fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", slot))
 	}
-	if RegistryHost(root) == host.Solo {
+	if IsSolo(root) {
 		return nil // a subagent has no pane to close
 	}
 	handle := s.PaneHandle()
@@ -541,7 +551,7 @@ func (e Env) closeSlotWorkspace(ctx context.Context, h host.Host, root, slot str
 func (e Env) SweepSlot(ctx context.Context, root, slot string) {
 	e = e.WithDefaults()
 	s := LoadRegistryTolerant(root).Slot(slot) // best effort: a corrupt registry leaves the stray panes
-	if s == nil || RegistryHost(root) == host.Solo {
+	if s == nil || IsSolo(root) {
 		return
 	}
 	h := e.NewHost(e.hostKind(root))
