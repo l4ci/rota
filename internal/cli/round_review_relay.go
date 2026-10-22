@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/stamp"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
@@ -112,39 +113,62 @@ func findingLine(f verdict.Finding) string {
 	return line
 }
 
-// openFindings are the findings of branch's effective review when it is FAIL:
-// after a re-review those are the NOT ADDRESSED ones plus any the fix
-// introduced (skills/rota-review/re-review.md). Nil when there are none.
-func openFindings(root, branch string) []string {
-	r, ok := verdict.EffectiveFail(verdict.Load(root).Branches[verdict.BranchKey("", branch)])
-	if !ok {
-		return nil
+// failRecords are branch's FAIL verdicts a relay carries: the effective review
+// and the cross-harness review (#1612), each when it is FAIL.
+func failRecords(root, branch string) []verdict.Record {
+	list := verdict.Load(root).Branches[verdict.BranchKey("", branch)]
+	var out []verdict.Record
+	if r, ok := verdict.EffectiveFail(list); ok {
+		out = append(out, r)
 	}
-	var out []string
-	for _, f := range r.Findings {
-		out = append(out, findingLine(f))
+	if r, ok := verdict.CrossFail(list); ok {
+		out = append(out, r)
 	}
 	return out
 }
 
-// failVerdict is the effective review verdict recorded for branch when it is
-// FAIL, as relay input; nil when there is none.
+// openFindings are the findings of branch's FAIL reviews: after a re-review
+// those are the NOT ADDRESSED ones plus any the fix introduced
+// (skills/rota-review/re-review.md). Nil when there are none.
+func openFindings(root, branch string) []string {
+	var out []string
+	for _, r := range failRecords(root, branch) {
+		for _, f := range r.Findings {
+			out = append(out, findingLine(f))
+		}
+	}
+	return out
+}
+
+// failVerdict is branch's FAIL reviews as relay input, stamped with the newest
+// one's time; nil when there is none.
 func failVerdict(root, branch string) *worker.ReviewVerdict {
-	r, ok := verdict.EffectiveFail(verdict.Load(root).Branches[verdict.BranchKey("", branch)])
-	if !ok {
-		return nil
-	}
-	at, err := stamp.Parse(r.RecordedAt)
-	if err != nil {
-		return nil
-	}
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "%s FAIL at %s", r.Kind, strutil.ShortSHA(r.Sha))
-	if r.Summary != "" {
-		sb.WriteString(": " + r.Summary)
+	var at time.Time
+	for i, r := range failRecords(root, branch) {
+		t, err := stamp.Parse(r.RecordedAt)
+		if err != nil {
+			return nil
+		}
+		if t.After(at) {
+			at = t
+		}
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		fmt.Fprintf(&sb, "%s FAIL at %s", r.Kind, strutil.ShortSHA(r.Sha))
+		if r.Harness != "" {
+			fmt.Fprintf(&sb, " (%s)", strings.TrimSpace(r.Harness+" "+r.Model))
+		}
+		if r.Summary != "" {
+			sb.WriteString(": " + r.Summary)
+		}
+		for _, f := range r.Findings {
+			sb.WriteString("\n  - " + findingLine(f))
+		}
 	}
-	for _, f := range r.Findings {
-		sb.WriteString("\n  - " + findingLine(f))
+	if sb.Len() == 0 {
+		return nil
 	}
 	return &worker.ReviewVerdict{At: at, Text: sb.String()}
 }

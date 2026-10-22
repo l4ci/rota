@@ -121,6 +121,8 @@ At `full`, dispatch two reviewers **in parallel** (one message, two dispatches),
 
 Fill the bracketed parts from Steps 2-6 and drop any empty section. Read [`reviewer-briefs.md`](reviewer-briefs.md) for the shared block, the Spec and Standards briefs, and the closing calibration and verdict-block text; build both briefs from it.
 
+**Cross-harness reviewer.** When the depth JSON carries `cross` naming a harness (a `size:Major` or `risk:high` issue, per `review.crossLabels` and `round.harnesses`; `data.crossWhy` says why), run a third review on that harness beside the two, and say in the report which harness and model ran it. `cross: none`, or no `cross`, runs nothing extra. Read [`cross-harness-reviewer.md`](cross-harness-reviewer.md) and follow it: one read-only run in a scratch extract, the Standards brief plus the Spec rubric, the same verdict block, recorded as `review-cross` in Step 8.
+
 ## Step 8 — Record and Relay the Verdict
 
 Save each reviewer's JSON block to its own temp file. Record **spec first, then quality**, at the same sha (umbrella: add `--repo <name>`, see `umbrella-mode.md`):
@@ -131,6 +133,8 @@ rota verdict add <branch> --kind review-quality --verdict <PASS|CONCERNS|FAIL> -
 ```
 
 `--sha` binds the record to the reviewed commit. Exit 4 means the branch moved on origin after the briefing (the message names the extra commits): review the new head, do not record against it. Never skip `--sha` to get past the refusal.
+
+Record the cross-harness reviewer's block, when Step 7 ran one, after those two: `rota verdict add <branch> --kind review-cross --verdict <V> --harness <cross> --model <model> --sha "$REVIEWED" --body-file "$CROSS" --json`. Its retry and unavailable rules are in [`cross-harness-reviewer.md`](cross-harness-reviewer.md); without the record `rota worker gate` refuses `review-missing`.
 
 With no spec (Step 3, no referenced items), record only `review-quality`, and start its `summary` with `Spec axis not run: no referenced items.` so `rota verdict show` carries the gap. A `light` depth review with referenced items records only `review-spec`, and starts its `summary` with `Standards axis not run: light depth.`; `data.combined` of that call is the branch's review verdict (a spec-only record is its own combined verdict, and `rota worker gate` at `light` requires it).
 
@@ -186,6 +190,7 @@ Read [`queue-mode.md`](queue-mode.md) when invoked with `--queue` (issue backend
 ## References
 
 - [`reviewer-briefs.md`](reviewer-briefs.md) — Step 7 shared block, Spec and Standards briefs, calibration rules, verdict block.
+- [`cross-harness-reviewer.md`](cross-harness-reviewer.md) — Step 7 third review on another harness for a `size:Major` or `risk:high` issue.
 - [`re-review.md`](re-review.md) — `--since <sha>` re-review of a bounced branch.
 - [`umbrella-mode.md`](umbrella-mode.md) — `--repo <name>` at Steps 2, 6, 8 in a multi-repo umbrella.
 - [`file-mode-spec.md`](file-mode-spec.md) — Step 3 spec collection on the file backend.

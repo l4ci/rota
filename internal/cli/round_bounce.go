@@ -127,7 +127,7 @@ func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 	}
 	list := verdict.Load(root).Branches[verdict.BranchKey("", branch)]
 	judged := false
-	for _, kind := range worker.ReviewKinds(config.DepthFull, true) {
+	for _, kind := range append(worker.ReviewKinds(config.DepthFull, true), verdict.ReviewCross) {
 		r, ok := verdict.Latest(list, kind)
 		if !ok || !verdict.AtHead(r, head) {
 			continue

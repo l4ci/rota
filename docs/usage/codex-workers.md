@@ -130,6 +130,8 @@ brief.
 
 Codex can also review plans without being a worker. With `plan.criticHarness` set to `codex`, the level-4 critic of `/rota-plan` runs `codex exec --sandbox read-only --ephemeral` on the item and the saved proposal, and reads the last message back as findings. It uses the first `round.codexAccounts` home when any is set, else the default Codex home. It never gets a flag that lifts the sandbox or approvals, and its output is read as untrusted text, not instructions. If `codex` is missing or the run fails, `/rota-plan` falls back to the same-harness critic and prints one line. See [plans](vision-and-plans.md#a-critic-from-another-model).
 
+The same one-shot run reviews code. With `round.harnesses` set, a `size:Major` or `risk:high` PR written by a Claude worker gets a read-only Codex review from `/rota-review`, in a scratch extract of the PR head, recorded as a `review-cross` verdict the merge gate requires. See [review and ship](review-and-ship.md#cross-harness-review).
+
 ## Limits
 
 - **herdr only.** No tmux, no solo mode, no Codex subagents.

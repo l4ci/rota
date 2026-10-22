@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
@@ -470,6 +471,13 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		depth := res.Depth
 		data := gitObj("branch", t.Branch, "base", t.Base, "depth", string(depth), "signal", res.Signal, "why", why, "changedLines", res.Changed, "labels", res.Labels)
 		text := fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", t.Branch, depth, why)
+		// Printed only when a label asks about it, so a Minor PR's output is
+		// unchanged.
+		if res.Cross != "" {
+			data.Set("cross", res.Cross)
+			data.Set("crossWhy", res.CrossWhy)
+			text += fmt.Sprintf("\nREVIEW-CROSS %s — %s (%s)", t.Branch, res.Cross, res.CrossWhy)
+		}
 		// A bundled branch closes more than its lead: the reviewer checks every
 		// bundled issue's acceptance.
 		if root, err := backlogScope(c); err == nil {
@@ -509,16 +517,7 @@ func branchBundle(c *Ctx, root, branch string) []tracker.IssueKey {
 	if !ok {
 		return nil
 	}
-	reg := worker.LoadRegistryTolerant(root)
-	if !reg.Exists {
-		common, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
-		if err != nil {
-			return nil
-		}
-		if main, ok := rotastate.MainCheckout(common); ok && main != root {
-			reg = worker.LoadRegistryTolerant(main)
-		}
-	}
+	reg := branchRegistry(c, root)
 	var ids []string
 	for _, sl := range reg.Slots() {
 		if held, ok := tracker.ParseKey(sl.HeldID()); ok && held == lead && sl.Branch() == branch {
@@ -543,6 +542,33 @@ func branchBundle(c *Ctx, root, branch string) []tracker.IssueKey {
 	return keys
 }
 
+// branchRegistry is the worker registry of root, else of the main checkout
+// when root is a worktree without one.
+func branchRegistry(c *Ctx, root string) worker.Registry {
+	reg := worker.LoadRegistryTolerant(root)
+	if !reg.Exists {
+		common, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
+		if err != nil {
+			return reg
+		}
+		if main, ok := rotastate.MainCheckout(common); ok && main != root {
+			reg = worker.LoadRegistryTolerant(main)
+		}
+	}
+	return reg
+}
+
+// branchAuthor is the harness of the slot holding branch, the PR's author for
+// the cross-harness review; "" when no slot holds it.
+func branchAuthor(c *Ctx, root, branch string) string {
+	for _, sl := range branchRegistry(c, root).Slots() {
+		if sl.Branch() == branch {
+			return sl.HarnessKind()
+		}
+	}
+	return ""
+}
+
 // branchReviewDepth resolves the depth ship.review picks for t, from its diff
 // size against the base, the labels of the branch's issue (read from the
 // tracker when the policy has a labels map) plus extra, and the Door line of
@@ -557,11 +583,16 @@ func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDep
 	if err != nil {
 		return worker.ReviewDepth{}, "", Failed("%v; run rota config check", err)
 	}
-	src := worker.ReviewSources{Policy: policy, Git: c.deps().Git, Dir: t.Dir, Span: t.Base + "..." + t.Branch, Labels: extra}
+	cross, err := roundcfg.ParseCrossReview(cfg)
+	if err != nil {
+		return worker.ReviewDepth{}, "", Failed("%v; run rota config check", err)
+	}
+	src := worker.ReviewSources{Policy: policy, Git: c.deps().Git, Dir: t.Dir, Span: t.Base + "..." + t.Branch, Labels: extra,
+		Cross: cross, Author: branchAuthor(c, root, t.Branch)}
 	// The issue behind a `<agent>/<issue>-<slug>` branch is read, as the worker
-	// gate does, when the policy can use it: a label to match or a file set to
-	// drift from.
-	if n, ok := worker.BranchIssue(t.Branch); ok && policy.NeedsIssue() {
+	// gate does, when the policy can use it (a label to match or a file set to
+	// drift from) or a cross-harness review may be required.
+	if n, ok := worker.BranchIssue(t.Branch); ok && (policy.NeedsIssue() || cross.Active()) {
 		it, err := c.deps().issuesOrNone(c.Context(), cfg, root)
 		if err != nil {
 			return worker.ReviewDepth{}, "", trackerErr(err)
