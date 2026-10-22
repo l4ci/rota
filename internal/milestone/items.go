@@ -54,6 +54,13 @@ func itemsBody(items []ItemRef) string {
 // items, leaving the rest of the file alone. A milestone with no items and no
 // section is not touched. changed is false when the section already matches.
 func SyncItems(root, id string, items []ItemRef) (changed bool, err error) {
+	return SyncItemsWith(root, id, func() ([]ItemRef, error) { return items, nil })
+}
+
+// SyncItemsWith is SyncItems with the items read by items. It runs inside the
+// milestone file's lock, so the list it returns cannot go stale before the
+// write; items may take other locks, and must take them after this one.
+func SyncItemsWith(root, id string, items func() ([]ItemRef, error)) (changed bool, err error) {
 	if err = checkID(id); err != nil {
 		return
 	}
@@ -63,11 +70,15 @@ func SyncItems(root, id string, items []ItemRef) (changed bool, err error) {
 		if rerr != nil {
 			return notFound(id)
 		}
+		list, ierr := items()
+		if ierr != nil {
+			return ierr
+		}
 		start, end, has := section.Find(old, ItemsHeading)
-		if !has && len(items) == 0 {
+		if !has && len(list) == 0 {
 			return nil
 		}
-		body := itemsBody(items)
+		body := itemsBody(list)
 		var next string
 		if has {
 			if end < len(old) {

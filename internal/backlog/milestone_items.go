@@ -4,7 +4,6 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/l4ci/rota/internal/fsio"
 	ms "github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/pystr"
 )
@@ -57,15 +56,11 @@ func closedMilestoneItems(text, mid string, seen map[string]bool) []ms.ItemRef {
 // stop the rest; the errors come back joined. A project without BACKLOG.md has no items
 // to list.
 func (f *File) SyncMilestones() ([]string, error) {
-	rows, err := f.Rows()
-	if errors.Is(err, ErrNotFound) {
+	if _, err := f.Rows(); errors.Is(err, ErrNotFound) {
 		return nil, nil
-	}
-	if err != nil {
+	} else if err != nil {
 		return nil, err
 	}
-	md, _ := f.Markdown(0)
-	archive, _ := fsio.ReadText(f.rota("ARCHIVE.md"))
 	list, err := ms.List(f.Root)
 	if err != nil {
 		return nil, err
@@ -73,11 +68,9 @@ func (f *File) SyncMilestones() ([]string, error) {
 	var changed []string
 	var errs []error
 	for _, m := range list {
-		items := MilestoneItems(rows, m.ID)
-		seen := map[string]bool{}
-		items = append(items, closedMilestoneItems(sectionBody(md, "Completed"), m.ID, seen)...)
-		items = append(items, closedMilestoneItems(archive, m.ID, seen)...)
-		ok, err := ms.SyncItems(f.Root, m.ID, items)
+		// The rows are read inside the milestone's lock, so a writer that landed
+		// between two milestones cannot leave a later one with stale rows.
+		ok, err := ms.SyncItemsWith(f.Root, m.ID, func() ([]ms.ItemRef, error) { return f.milestoneItems(m.ID) })
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -87,6 +80,24 @@ func (f *File) SyncMilestones() ([]string, error) {
 		}
 	}
 	return changed, errors.Join(errs...)
+}
+
+// milestoneItems is the Items list of milestone mid, read under the BACKLOG and
+// ARCHIVE locks (the withDocuments order) so it is one consistent snapshot.
+func (f *File) milestoneItems(mid string) ([]ms.ItemRef, error) {
+	var items []ms.ItemRef
+	err := f.withDocuments(func(d *documents) error {
+		rows, err := f.Rows()
+		if err != nil {
+			return err
+		}
+		items = MilestoneItems(rows, mid)
+		seen := map[string]bool{}
+		items = append(items, closedMilestoneItems(sectionBody(d.backlog, "Completed"), mid, seen)...)
+		items = append(items, closedMilestoneItems(d.archive, mid, seen)...)
+		return nil
+	})
+	return items, err
 }
 
 // syncMilestonesIf is SyncMilestones for a verb whose bullet carried a Milestone
