@@ -361,6 +361,12 @@ func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stde
 	if res, err := roundKeysStop(c); err != nil {
 		return failWith(c, stdout, err, res)
 	}
+	if res, err := roleInTrackedConfigStop(c); err != nil {
+		return failWith(c, stdout, err, res)
+	}
+	if res, err := supportRoleStop(c); err != nil {
+		return failWith(c, stdout, err, res)
+	}
 	// An unregistered --repo is exit 3 on every repo-scoped verb, ahead of
 	// the verb's own checks (contract rule 9).
 	if c.Repo != "" {
