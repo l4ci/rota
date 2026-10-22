@@ -260,7 +260,7 @@ func (t *trainRun) plan() (bool, error) {
 			}
 			return true, err
 		}
-		res.Notes = append(res.Notes, gr.Notes...)
+		res.Notes = appendNew(res.Notes, gr.Notes...)
 		if !gr.OK() {
 			res.Verdict, res.Culprit, res.CulpritGate, res.Err, res.Hint = gr.Verdict, tg, gr, gr.Err, gr.Hint
 			return true, nil
@@ -549,7 +549,7 @@ func (t *trainRun) behaviourStage() (bool, error) {
 		if err != nil {
 			return true, err
 		}
-		res.Notes = append(res.Notes, gr.Notes...)
+		res.Notes = appendNew(res.Notes, gr.Notes...)
 		// The gate read the head again; its verdict and comment belong to the
 		// head the steps ran on, so a head that moved since plan ends the train.
 		if cur, _ := e.git(root, "rev-parse", t.headRef(m)); cur != t.heads[i] {
@@ -609,7 +609,7 @@ func (t *trainRun) land() (TrainResult, error) {
 		}
 		t.gated[m.Target] = true
 		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, LandVerified: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), HoldsLandLock: true, Round: o.Round})
-		res.Notes = append(res.Notes, gr.Notes...)
+		res.Notes = appendNew(res.Notes, gr.Notes...)
 		res.Changed = res.Changed || gr.Changed
 		if gr.Changed && gr.Verdict != GatePass { // the PR is on the base but the gate could not finish (merged-remotely)
 			res.Landed = append(res.Landed, m.Target)
@@ -884,4 +884,16 @@ func conflictPair(ms []TrainMember, foots []trainFoot, failed int) string {
 		}
 	}
 	return fmt.Sprintf("%s conflicts with the members before it", memberLabel(ms[failed]))
+}
+
+// appendNew adds the notes dst does not hold yet: the train gates a member in
+// every stage, and a note the gate raises each time (CLOSING-REFS-UNKNOWN) is
+// said once.
+func appendNew(dst []string, notes ...string) []string {
+	for _, n := range notes {
+		if !slices.Contains(dst, n) {
+			dst = append(dst, n)
+		}
+	}
+	return dst
 }

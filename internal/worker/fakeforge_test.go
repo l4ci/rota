@@ -40,6 +40,10 @@ func (f *fakeForge) PRView(_ context.Context, pr int) (tracker.PRInfo, error) {
 	w := f.w
 	info := tracker.PRInfo{Head: w.forgeWord("head"), HeadSHA: w.forgeWord("sha"), Base: w.forgeWord("base"),
 		State: w.forgeWord("state"), MergeSHA: w.forgeWord("merge"), Title: w.forgeWord("title"), Body: w.forgeWord("body")}
+	// A second PR (a train of two) names its own head and sha: "head#8", "sha#8".
+	if h := w.forgeWord(fmt.Sprintf("head#%d", pr)); h != "" {
+		info.Head, info.HeadSHA = h, w.forgeWord(fmt.Sprintf("sha#%d", pr))
+	}
 	if w.mode == "ff" {
 		info.MergeSHA = "" // a fast-forward merge has no merge commit
 	}
