@@ -63,6 +63,9 @@ const DefaultLabel = "in-progress"
 // DefaultNeedsHuman is the label of an issue handed to the human (C10).
 const DefaultNeedsHuman = "needs-human"
 
+// DefaultNeedsReview is the label of an issue whose PR awaits review.
+const DefaultNeedsReview = "needs-review"
+
 // NeedsInfoLabel is the label `/rota-capture --triage` puts on an issue it
 // found too unclear to build. A constant: triage writes it literally.
 const NeedsInfoLabel = "needs-info"
@@ -131,6 +134,8 @@ type Env struct {
 	NeedsHuman string
 	// SupportLabel is issues.labels.support; "" means DefaultSupportLabel.
 	SupportLabel string
+	// NeedsReview is issues.labels.needsReview; "" means DefaultNeedsReview.
+	NeedsReview string
 }
 
 // WithAccounts is the env with account picking on, reading the meters through
@@ -309,6 +314,9 @@ type Finding struct {
 	pr string
 	// branch is the branch an unregistered-branch finding is about.
 	branch string
+	// support marks an unregistered-branch finding of the support machine's
+	// (#1598): its pr is the open PR to adopt with, and adopting fetches it.
+	support bool
 }
 
 // Key names what the finding is about, for a caller that tells findings apart:
@@ -340,6 +348,9 @@ type Report struct {
 	Limits []limits.Entry
 
 	views map[string]*view
+	// openPRs is the forge's open PRs by head branch, nil when the forge was
+	// not read; the support handoff scan reuses it.
+	openPRs map[string]*tracker.PR
 }
 
 // QueuedPR is one record of the registry's PR queue.
@@ -457,6 +468,9 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 
 	fs := e.readForge(ctx, rep)
 	prs, labelled, stale, forgeOK, labelsOK := fs.prs, fs.labelled, fs.stale, fs.ok, fs.labelsOK
+	if forgeOK {
+		rep.openPRs = prs
+	}
 
 	held := map[string]bool{}
 	for _, r := range rows {
