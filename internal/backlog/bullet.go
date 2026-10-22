@@ -75,14 +75,17 @@ func (f *Fields) set(name, v string) {
 // and the first position where the lookahead holds ends the match.
 
 // harnessField is the Harness: field a round writes when a quota fallback
-// moves an item to another harness. It delimits the value before it, but it
-// is not one of FieldNames: capture never writes it and ParseFields skips it.
+// moves an item to another harness; Model: is its twin. Both delimit the value
+// before them, but neither is one of FieldNames: capture never writes them and
+// ParseFields skips them.
 const harnessField = "Harness"
+
+var pickFields = []string{harnessField, "Model"}
 
 // othersOf is every field name except cap.
 func othersOf(cap string) []string {
 	out := make([]string, 0, len(FieldNames))
-	for _, n := range append(append([]string(nil), FieldNames...), harnessField) {
+	for _, n := range append(append([]string(nil), FieldNames...), pickFields...) {
 		if n != cap {
 			out = append(out, n)
 		}

@@ -26,6 +26,9 @@ type preflightIn struct {
 	// Fixed pins the kind and its source (a best-of:2 attempt whose pair
 	// settled its kinds together); it replaces the resolved kind.
 	Fixed *bestOfRun
+	// NoFallback keeps a quota refusal a refusal (transfer: the receiver's
+	// kind is not re-picked, and no label would record the move).
+	NoFallback bool
 	// Resuming is a slot that already holds the item: it has its account and
 	// its place in the scope, so neither is checked again.
 	Resuming bool
@@ -139,14 +142,11 @@ func (e Env) fallbackFor(ctx context.Context, root string, be backlog.Backend, i
 	set := in.Settings
 	refuse := blocked(BlockQuota, "%s", why)
 	pinned := out.KindSource == KindFromFlag || out.KindSource == KindFromLabel || in.FlagModel != "" || out.Pick.Model != ""
-	if len(set.Harnesses) == 0 || pinned || in.Fixed != nil || !e.canRecordHarness(be) {
+	if len(set.Harnesses) == 0 || in.NoFallback || pinned || in.Fixed != nil || !e.canRecordHarness(be) {
 		return fallbackPick{}, refuse
 	}
 	var tried []string
-	for _, k := range set.Harnesses {
-		if k == kind {
-			continue
-		}
+	for _, k := range laterHarnesses(set.Harnesses, kind) {
 		hz, err := worker.Harness(k)
 		if err != nil {
 			continue
