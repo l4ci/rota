@@ -82,6 +82,14 @@ shim: `mode` is `bullet` iff `--title` was passed; `changed` is false only for `
 note: the shim cannot honor the contract's file scope, so `--repo <sub-repo>` runs sidecar-only until the port, and smoke must not assert sub-repo file edits for this verb before then.
 note: one verb keeps both modes, selected by `--title`, instead of splitting out a `move-bullet` verb.
 
+### rota knowledge harvest
+rota knowledge harvest [--round <n>] [--mark <commentId>]
+repo: none (reads the issue tracker for the project root)
+data: list: {"round": number, "learnings": [{"issue": string, "commentId": string, "who": string, "text": string}]}; `--mark`: {"issue": string, "commentId": string, "changed": bool}; on exit 4 `{"blockedBy": "backend"|"forge"|"role"|"config", "changed": false}`
+exit: 2 on an argument; 3 when `--mark` names a comment that is no learning on an issue merged in the round; 4 when `issues.source` is `file` (`blockedBy: backend`), when the forge cannot say who has write access (`blockedBy: forge`), or when `--mark` runs on a support machine (`blockedBy: role`) or one whose role cannot be read (`blockedBy: config`)
+old: none (new)
+note: lists the `learning` comments on the issues the ledger records as merged in the round (default: the lease's round, else the highest in the ledger), minus those a `harvested` comment already names. Only comments by authors with write access count, for learnings and marks alike. `--mark` adds a `harvested` comment whose body is the learning's comment id; `changed` is false when the mark already exists. Only list mode lacks `changed`, so the read-only-set convention in `backlog.md` does not apply to it.
+
 ### rota knowledge hit
 rota knowledge hit --topic <T> --title <S>
 repo: scoped (scope S)
