@@ -750,7 +750,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 			return nil, blocked(BlockBundle, "%s is bundled: a member leaves a bundle only to the human (--to %s)", id, HumanTarget)
 		}
 		if !e.forgeOn(be) {
-			return nil, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, strutil.FirstNonEmpty(e.NeedsHuman, DefaultNeedsHuman))
+			return nil, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, e.NeedsHuman)
 		}
 		run.member, run.holder, run.holderRec = true, hs, hr
 		if hs != nil {
@@ -856,7 +856,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 			}
 		}
 	} else if !e.forgeOn(be) {
-		return nil, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, strutil.FirstNonEmpty(e.NeedsHuman, DefaultNeedsHuman))
+		return nil, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, e.NeedsHuman)
 	}
 
 	// A transferred worker starts on the default tier unless --tier says higher.
@@ -972,7 +972,7 @@ func (e Env) transferToHumanSteps(ctx context.Context, root string, be Board, o 
 			return wrap(tolerate("state reset", err))
 		}},
 		step{name: "needs-human label", skip: func() bool { return run.it.Closed }, do: func() error {
-			return wrap(e.Forge.AddLabels(ctx, run.it.IssueKey(), []string{strutil.FirstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}, true))
+			return wrap(e.Forge.AddLabels(ctx, run.it.IssueKey(), []string{e.NeedsHuman}, true))
 		}},
 		step{name: "free the sender", do: func() error {
 			if run.sender != nil {
@@ -1018,7 +1018,7 @@ func (e Env) transferMemberSteps(ctx context.Context, root string, be Board, run
 			return wrap(tolerate("state reset", err))
 		}},
 		{name: "needs-human label", skip: func() bool { return run.it.Closed }, do: func() error {
-			return wrap(e.Forge.AddLabels(ctx, run.it.IssueKey(), []string{strutil.FirstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}, true))
+			return wrap(e.Forge.AddLabels(ctx, run.it.IssueKey(), []string{e.NeedsHuman}, true))
 		}},
 		{name: "leave the bundle", do: func() error {
 			return wrap(worker.DropBundleMember(root, id))
