@@ -811,7 +811,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	}
 	inFlight = slices.DeleteFunc(inFlight, func(x InFlight) bool { return own[worker.NormID(x.Issue)] })
 	assess := func(id string) (Readiness, error) {
-		return AssessScoped(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap, decisions, set.ScopeOverlap == "block")
+		return AssessScoped(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap, decisions, set.BlockScopeOverlap)
 	}
 	r, err := assess(id)
 	if err != nil {

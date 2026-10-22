@@ -32,7 +32,7 @@ func TestTransferScopeOverlapBlock(t *testing.T) {
 	}
 
 	f = setup()
-	_, err = f.transfer("12", "nia", func(o *TransferOpts) { o.Settings.ScopeOverlap = "block" })
+	_, err = f.transfer("12", "nia", func(o *TransferOpts) { o.Settings.BlockScopeOverlap = true })
 	if by := blockedBy(t, err); by != BlockOverlap {
 		t.Fatalf("block: a scope-only clash refuses the move: %v", err)
 	}
