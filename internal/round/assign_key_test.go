@@ -50,7 +50,7 @@ func TestDependenciesReadKeysOnlyOnAKeyedTracker(t *testing.T) {
 	if refs, _ := dependencies(text, "PROJ"); strings.Join(refs, ",") != "7,PROJ-12" {
 		t.Errorf("keyed refs = %v", refs)
 	}
-	if refs, _ := Dependencies(text); strings.Join(refs, ",") != "7" {
+	if refs, _ := dependencies(text, ""); strings.Join(refs, ",") != "7" {
 		t.Errorf("numbered refs = %v, want just 7", refs)
 	}
 }
