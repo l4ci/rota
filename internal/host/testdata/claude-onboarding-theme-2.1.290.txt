@@ -1,0 +1,19 @@
+
+ Welcome to Claude Code v2.1.290
+ ……………………………………………………………………………………………………………
+
+ Let's get started.
+
+ Choose the text style that looks best with your terminal
+ To change this later, run /theme
+
+ ❯ Dark mode ✔
+   Light mode
+   Dark mode (colorblind-friendly)
+   Light mode (colorblind-friendly)
+   Dark mode (ANSI colors only)
+   Light mode (ANSI colors only)
+
+ ╭──────────────────────────────────────────╮
+ │ Preview                                  │
+ ╰──────────────────────────────────────────╯
