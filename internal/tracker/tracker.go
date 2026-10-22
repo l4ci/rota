@@ -572,15 +572,20 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 	case config.SourceForge:
 		// The issues live on dir's own forge: the repo's forge resolution
 		// (forge.provider, else its origin) names the tracker.
+		// It resolves as a ForgeReader: an origin naming no forge reads as
+		// github, and every write refuses as an actor would (assumedForge).
 		c := newCLI(s, dir, opts...)
-		p, err := c.resolveForge(ctx, config.ForgeAuto, s.Provider)
+		r, err := c.resolveForge(ctx, ForgeReader, config.ForgeAuto, s.Provider)
 		if err != nil {
 			return nil, err
 		}
-		if p == config.ForgeLocal {
+		if r.Provider == config.ForgeLocal {
 			return nil, unavailable("issues.source is forge, but the forge of %s is local (no origin remote): there is no tracker to read", dirLabel(dir))
 		}
-		c.Provider = p
+		c.Provider = r.Provider
+		if r.How == HowAssumed {
+			return assumedForge{IssueTracker: adapterFor(c, s), r: r}, nil
+		}
 		return adapterFor(c, s), nil
 	case config.SourceGitHub, config.SourceGitLab:
 	default:
@@ -625,18 +630,6 @@ func NewForgeFromConfig(ctx context.Context, cfg any, provider, dir string, opts
 		return nil, err
 	}
 	return NewForge(ctx, SettingsFromConfig(cfg), provider, dir, opts...)
-}
-
-// NewFromConfigOrGitHub is NewFromConfig that falls back to github when the
-// provider cannot be resolved, e.g. an origin that is neither GitHub nor
-// GitLab. A fresh clone with no recognizable remote still opens a PR that way.
-// A local forge is not a failure to resolve: it stays ErrLocalForge.
-func NewFromConfigOrGitHub(ctx context.Context, cfg any, provider, dir string, opts ...Option) (Adapter, error) {
-	a, err := NewFromConfig(ctx, cfg, provider, dir, opts...)
-	if err != nil && !errors.Is(err, ErrLocalForge) && !IsKind(err, KindInternal) {
-		return NewFromConfig(ctx, cfg, "github", dir, opts...)
-	}
-	return a, err
 }
 
 // NewCLI returns the forge CLI runner for provider, resolved as in New. A

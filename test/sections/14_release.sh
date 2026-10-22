@@ -344,11 +344,11 @@ pass "release host returns none with no origin"
   OUT=$(hvj release host | jget data.host) || vfail
   [ "$OUT" = "github-enterprise" ] || { echo "FAIL: expected 'github-enterprise', got '$OUT'"; exit 1; }
 
-  # Bitbucket (unrecognised) -> none
+  # Bitbucket (unrecognised): release is a forge actor, so it refuses (#889)
   git remote set-url origin https://bitbucket.org/foo/bar.git
-  OUT=$(hvj release host | jget data.host) || vfail
-  [ "$OUT" = "none" ] || { echo "FAIL: expected 'none' for bitbucket.org, got '$OUT'"; exit 1; }
+  rc=0; OUT=$(hvj release host) || rc=$?
+  [ "$rc" = 4 ] && [ "$(printf '%s' "$OUT" | jget data.blockedBy)" = "forge" ] || { echo "FAIL: expected exit 4 blockedBy forge for bitbucket.org, got $rc '$OUT'"; exit 1; }
 )
 rm -rf "$DH1"
 trap 'rm -rf "$TMP"' EXIT
-pass "release host classifies github/gitlab/github-enterprise/gitlab-self-hosted/none"
+pass "release host classifies github/gitlab/github-enterprise/gitlab-self-hosted/none, refuses an unknown origin"
