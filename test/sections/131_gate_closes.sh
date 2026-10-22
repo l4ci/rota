@@ -15,6 +15,9 @@ if a[:2] == ["pr", "view"]:
 elif a[:2] == ["issue", "view"]:
     print(json.dumps({"number": 5, "title": "t", "body": "", "state": "OPEN", "url": "",
                       "labels": [{"name": n} for n in st["labels"]], "assignees": [], "milestone": None}))
+elif a[:2] == ["api", "graphql"]:
+    print(json.dumps({"data": {"repository": {"pullRequest": {"closingIssuesReferences": {
+        "nodes": [{"number": n} for n in st.get("closing", [])]}}}}}))
 else:
     print("fake gh: unsupported: %s" % a, file=sys.stderr); sys.exit(2)
 PYEOF
@@ -31,7 +34,7 @@ git init -q --bare -b main "$CLORIGIN"
 CLSHA="$(git -C "$CLPROJ" rev-parse ben/5-thing)"
 printf '{"issues":{"source":"github"},"ship":{"review":"none"},"test":{"full":["true"]}}\n' > "$CLPROJ/.rota/config.json"
 printf '{"slots":[{"name":"ben","branch":"ben/5-thing","task":"#5","pr":"https://github.com/o/r/pull/7"}]}\n' > "$CLPROJ/.rota/workers.json"
-cl_state() { printf '{"sha":"%s","body":"%s","labels":[%s]}\n' "$CLSHA" "$1" "$2" > "$TMP_CL/state.json"; }
+cl_state() { printf '{"sha":"%s","body":"%s","labels":[%s],"closing":[%s]}\n' "$CLSHA" "$1" "$2" "${3:-}" > "$TMP_CL/state.json"; }
 cl() { ( cd "$CLPROJ" && CL_STATE="$TMP_CL/state.json" ROTA_GATE_SHA_WAIT=0 PATH="$CLBIN:$ROTA_POISON_BIN:$PATH" "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 
 cl_state "Adds the thing." ""
@@ -53,4 +56,21 @@ cl_state "Refs #5" '"partial-slice"'
 RC=0; OUT=$(cl worker gate ben --base main --check-only) || RC=$?
 [ "$RC" = "0" ] || fail "a partial-slice issue should pass without a closing keyword: rc=$RC $OUT"
 pass "a closing keyword, or the partial-slice label, passes"
+
+# A slice PR whose prose carries a closing keyword: the forge lists #5, so the gate
+# refuses (a body check would miss it); --final-slice lets the last slice through.
+cl_state "Refs #5 (Closes #5)" '"partial-slice"' 5
+RC=0; OUT=$(cl worker gate ben --base main --check-only) || RC=$?
+[ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "closes" ] \
+  || fail "a slice PR the forge says closes its issue should be refused with 4: rc=$RC $OUT"
+case "$OUT" in *"--final-slice"*) ;; *) fail "the hint should name --final-slice: $OUT" ;; esac
+RC=0; OUT=$(cl worker train ben --base main) || RC=$?
+[ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "closes" ] \
+  || fail "train should refuse the same slice member with 4: rc=$RC $OUT"
+RC=0; OUT=$(cl worker gate ben --base main --check-only --final-slice) || RC=$?
+[ "$RC" = "0" ] || fail "--final-slice should pass the last slice: rc=$RC $OUT"
+cl_state "Refs #5" '"partial-slice"'
+RC=0; OUT=$(cl worker gate ben --base main --check-only) || RC=$?
+[ "$RC" = "0" ] || fail "a slice PR the forge lists no closing issue for should pass: rc=$RC $OUT"
+pass "gate refuses a slice PR the forge says closes its partial-slice issue; --final-slice exempts it"
 rm -rf "$TMP_CL"
