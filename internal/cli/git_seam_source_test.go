@@ -26,3 +26,28 @@ func TestCliGitReadsStayOnDeps(t *testing.T) {
 		}
 	}
 }
+
+// The working directory and home come from Deps.Getwd and Deps.UserHomeDir;
+// only deps.go names the process reads.
+func TestCliCwdAndHomeReadsStayOnDeps(t *testing.T) {
+	files, _ := filepath.Glob("*.go")
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") || f == "deps.go" {
+			continue
+		}
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(string(b), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "//") {
+				continue
+			}
+			for _, bad := range []string{"os.Getwd(", "os.UserHomeDir("} {
+				if strings.Contains(line, bad) {
+					t.Errorf("%s uses %s; go through Deps", f, bad)
+				}
+			}
+		}
+	}
+}

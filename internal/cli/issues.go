@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -48,7 +47,7 @@ func issuesScope(c *Ctx) (root, dir string, env issues.Env, err error) {
 		if dir, err = c.RepoPath(); err != nil {
 			return
 		}
-	} else if cwd, werr := os.Getwd(); werr == nil {
+	} else if cwd, werr := c.deps().Getwd(); werr == nil {
 		here := repos.Realpath(cwd)
 		for _, r := range repos.Load(root) {
 			if rel, rerr := filepath.Rel(r.Path, here); rerr == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {

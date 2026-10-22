@@ -98,7 +98,7 @@ func roundReturn(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		res, err := env.Return(c.Context(), root, be, round.ReturnOpts{
-			Slot: args[0], Reason: *reason, Note: text, InSlot: inSlot(root, args[0]), HolderPID: *pid,
+			Slot: args[0], Reason: *reason, Note: text, InSlot: inSlot(c, root, args[0]), HolderPID: *pid,
 		})
 		if err != nil {
 			return moveFailure(err, res.Changed)
@@ -121,14 +121,14 @@ func roundReturn(fs *flag.FlagSet) RunFunc {
 
 // inSlot: the working directory is inside the slot's worktree, which makes the
 // caller the slot's own worker.
-func inSlot(root, slot string) bool {
+func inSlot(c *Ctx, root, slot string) bool {
 	// Tolerant: a bool probe; the return verb reads the registry strictly.
 	s := worker.LoadRegistryTolerant(root).Slot(slot)
 	if s == nil {
 		return false
 	}
 	wt, cwd := s.Worktree(), ""
-	if wd, err := os.Getwd(); err == nil {
+	if wd, err := c.deps().Getwd(); err == nil {
 		cwd = wd
 	}
 	if wt == "" || cwd == "" {
