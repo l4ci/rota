@@ -272,6 +272,11 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 				return res, err
 			}
 		}
+		if configDir != "" {
+			// A slot cached by an older rota may hold the path as written.
+			home, _ := e.Home()
+			configDir = ExpandConfigDirIn(configDir, home)
+		}
 		acct := harness.Account{ConfigDir: configDir, Home: setup.Home}
 		// No account configured for the slot: it runs under the orchestrator's.
 		amb := hz.AmbientAccount(e.Getenv)
@@ -322,6 +327,12 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			Env: append(accountEnv, SlotEnv(o.Slot, portBase, width)...), Launch: launch, BootTimeout: timeout})
 		if err != nil {
 			clearHandle(root, o.Slot)
+			if handle != "" {
+				// The spawn failed with its session still open (an unanswered
+				// startup screen). Record the handle so the replay's kill
+				// reaps it instead of spawning a second one beside it.
+				UpdateSlot(root, o.Slot, func(sl *Slot) { sl.SetHandle(handle) })
+			}
 			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
 		if group && linked {

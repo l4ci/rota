@@ -95,7 +95,7 @@ func TestDepsHomeAndConfigReachWorkerAccounts(t *testing.T) {
 	if h, _ := acc.Env.WithDefaults().Home(); h != home {
 		t.Errorf("accounts home = %q, want %q", h, home)
 	}
-	if got := acc.Configured(root); fmt.Sprint(got) != "[{a ~/.claude-a}]" {
+	if got := acc.Configured(root); fmt.Sprint(got) != "[{a "+filepath.Join(home, ".claude-a")+"}]" {
 		t.Errorf("accounts configured = %v, want only the injected account a", got)
 	}
 	// Pick only passes the login check when ~/.claude-a expands against home.
