@@ -53,19 +53,31 @@ func Entry(line string) string {
 // Entries lists the bullet entries of a section, normalised by Entry,
 // deduplicated and sorted. It returns nil when there are none.
 func Entries(section string) []string {
-	seen := map[string]bool{}
-	var out []string
+	var entries []string
 	for _, line := range strings.Split(section, "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, "- ") && !strings.HasPrefix(line, "* ") {
 			continue
 		}
 		e := Entry(line[2:])
-		if e == "" || seen[e] {
+		if e == "" {
 			continue
 		}
-		seen[e] = true
-		out = append(out, e)
+		entries = append(entries, e)
+	}
+	return SortedEntries(entries)
+}
+
+// SortedEntries deduplicates and sorts entries already normalised by Entry.
+// It returns nil when there are none and does not modify entries.
+func SortedEntries(entries []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, e := range entries {
+		if !seen[e] {
+			seen[e] = true
+			out = append(out, e)
+		}
 	}
 	sort.Strings(out)
 	return out
