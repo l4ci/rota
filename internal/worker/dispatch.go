@@ -265,6 +265,12 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			return res, err
 		}
 		res.Warnings = setup.Warnings
+		// A session started into an account at its limit stops on its first turn.
+		if why := e.accountLimited(ctx, root, hz, configDir); why != "" {
+			le := fail(exitcode.ExitRefused, why)
+			le.Data = BlockData{BlockedBy: "limited"}
+			return res, le
+		}
 		if !hz.WorkAccounts() {
 			configDir = "" // a codex slot's account is its home, not a claude config dir
 			account := setup.Account
