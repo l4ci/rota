@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/proof"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 func backlogProject(t *testing.T) string {
@@ -126,5 +129,21 @@ func TestProofRecord(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "ran.txt")); err == nil {
 		t.Errorf("command ran for an unknown item")
+	}
+}
+
+// The worker reads the tier proof back in the forms recordedCommand writes:
+// both spellings of `proof record -- rota test run fast` must prove the tier.
+func TestRecordedCommandTierFormsProveFastTier(t *testing.T) {
+	const head = "abc1234def5678"
+	forms := []string{
+		recordedCommand([]string{worker.FastTierCheck}, ""),
+		recordedCommand(strings.Fields(worker.FastTierCheck), ""),
+	}
+	for _, f := range forms {
+		rows := []proof.Row{{Check: f, Result: "PASS", Sha: "abc1234"}}
+		if got := worker.MissingFastProof(rows, head, forms, []string{"go test ./..."}); got != nil {
+			t.Errorf("row %q must prove the tier, missing = %v", f, got)
+		}
 	}
 }
