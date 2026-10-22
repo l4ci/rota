@@ -31,6 +31,10 @@ type File struct {
 	// Warn receives notices for failures after a write has committed (a
 	// milestone sync); nil drops them.
 	Warn func(string)
+	// writeAtomic replaces fsio.WriteFileAtomic for the archive/reopen
+	// transfer writes; nil is the real one. Tests in this package fail a
+	// chosen path through it.
+	writeAtomic func(path string, data []byte) error
 }
 
 // Name is "file".

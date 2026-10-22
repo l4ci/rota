@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/l4ci/rota/internal/gopath"
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/overlap"
@@ -336,7 +337,7 @@ func matchSupport(glob, file string) bool {
 // a declared file: its tests belong to the declared code. A declared directory
 // has no sibling files; its own files are covered by the declared set.
 func sitsBesideDeclared(file string, allowed []string) bool {
-	if !strings.HasSuffix(file, "_test.go") {
+	if !gopath.IsTestGo(file) {
 		return false
 	}
 	dir := path.Dir(file)

@@ -6,22 +6,25 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/stale"
 )
 
 // goldenDay is the day the goldens in testdata/golden were recorded from the
 // retired helpers. The knowledge, glossary, decisions and migrate verbs stamp
-// the day on what they write, so the tests pin ROTA_TEST_TODAY to that day.
+// the day on what they write, so testDeps pins Deps.Today to that day.
 const goldenDay = "2026-10-03"
 
-// TestMain pins ROTA_TEST_TODAY to goldenDay and puts tripwire gh and glab
+// TestMain puts tripwire gh and glab
 // first on PATH: issue mode builds the real tracker unless a test injects one,
 // and no test may reach a forge.
 func TestMain(m *testing.M) {
-	os.Setenv("ROTA_TEST_TODAY", goldenDay)
 	dir, err := os.MkdirTemp("", "cli-tripwire")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -46,9 +49,6 @@ func TestMain(m *testing.M) {
 	// may write the developer's real ~/.local/state/rota.
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "xdg"))
 	os.Setenv("XDG_STATE_HOME", filepath.Join(dir, "xstate"))
-	// doctor's disk check reads the real volume: pin a healthy one so a full
-	// developer disk does not add a line to every doctor golden (#85).
-	os.Setenv("ROTA_TEST_DOCTOR_DISK", "50:100")
 	// Fixture repos commit and merge: the identity comes from here, not from
 	// the developer's (or CI's missing) global git config. t@x, not gittest's
 	// default: the goldens hold commit hashes made under it.
@@ -69,11 +69,61 @@ func TestMain(m *testing.M) {
 func testDeps() *Deps {
 	d := defaultDeps()
 	d.RecordMistakes = false
+	pinDay(d, goldenDay)
+	// doctor's disk check reads the real volume: pin a healthy one so a full
+	// developer disk does not add a line to every doctor golden (#85).
+	d.DoctorDisk = doctorDisk("50:100")
 	d.Host = func(kind host.Kind) host.Host {
 		if kind == "herdr" {
 			return &absentHerdr{}
 		}
 		return &limFake{}
+	}
+	return d
+}
+
+// pinNow fixes the clock Deps.Now reads (RFC 3339). Today stays as pinned.
+func pinNow(d *Deps, rfc3339 string) {
+	t, err := time.Parse(time.RFC3339, rfc3339)
+	if err != nil {
+		panic(err)
+	}
+	d.Now = func() time.Time { return t }
+}
+
+// pinDay fixes the day Deps.Today reads (YYYY-MM-DD).
+func pinDay(d *Deps, day string) {
+	t, ok := stale.ParseDate(day)
+	if !ok {
+		panic("bad day " + day)
+	}
+	d.Today = func() time.Time { return t }
+}
+
+// pinHolder names pid as the process holding the round lease.
+func pinHolder(d *Deps, pid int) { d.HolderPID = func() int { return pid } }
+
+// dirPins are per-project Deps pins: a helper that builds a project (orchProject)
+// registers them, and rotaIn/rotaStdin apply them when they run in that dir.
+// Keys are unique temp dirs, removed at test cleanup.
+var dirPins sync.Map // dir -> []func(*Deps)
+
+// pinDir adds pins to every testDeps-based run in dir.
+func pinDir(t *testing.T, dir string, pins ...func(*Deps)) {
+	t.Helper()
+	old, _ := dirPins.Load(dir)
+	prev, _ := old.([]func(*Deps))
+	dirPins.Store(dir, append(slices.Clone(prev), pins...))
+	t.Cleanup(func() { dirPins.Delete(dir) })
+}
+
+// depsIn is testDeps with the pins registered for dir.
+func depsIn(dir string) *Deps {
+	d := testDeps()
+	v, _ := dirPins.Load(dir)
+	pins, _ := v.([]func(*Deps))
+	for _, p := range pins {
+		p(d)
 	}
 	return d
 }

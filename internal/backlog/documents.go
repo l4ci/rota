@@ -57,6 +57,9 @@ func (d *documents) write(backlog, archive string, toArchive bool) error {
 		if old == next {
 			return nil
 		}
+		if d.f.writeAtomic != nil {
+			return d.f.writeAtomic(path, []byte(next))
+		}
 		return fsio.WriteFileAtomic(path, []byte(next))
 	}
 	if toArchive {
