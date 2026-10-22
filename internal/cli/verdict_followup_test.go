@@ -4,7 +4,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/verdict"
 )
 
 // fileDeferredRepo is a file-backend repo with an empty backlog.
@@ -135,5 +141,124 @@ func TestConfigRefusesUnknownFileDeferred(t *testing.T) {
 	}
 	if code, _, errOut := rotaIn(t, dir, "config", "set", "review.fileDeferred", "major"); code != 0 {
 		t.Errorf("major refused: %s", errOut)
+	}
+}
+
+func followUpIssues() (*backlog.Issues, *trackertest.Fake) {
+	tr := &trackertest.Fake{}
+	return &backlog.Issues{Cfg: jsonx.NewObject(), Tracker: tr, CountProof: func(string) int { return 0 }}, tr
+}
+
+func testFollowUps(titles ...string) []followUp {
+	var fs []followUp
+	for _, ti := range titles {
+		fs = append(fs, newFollowUp(verdict.Finding{Severity: "minor", Title: ti, File: ti + ".go"}, "#77", "review-quality", "FAIL"))
+	}
+	return fs
+}
+
+// #1599 relay 1: the tracker path files, then appends to, the PR's one item.
+func TestFileFollowUpsOnIssueBackend(t *testing.T) {
+	be, tr := followUpIssues()
+	id, added, err := fileFollowUps(be, testFollowUps("one"), "#77")
+	if err != nil || id == "" || added != 1 {
+		t.Fatalf("first: %q %d %v", id, added, err)
+	}
+	id2, added, err := fileFollowUps(be, testFollowUps("one", "two"), "77") // `77` is `#77`
+	if err != nil || id2 != id || added != 1 {
+		t.Fatalf("second: %q %d %v, want %q and 1 new line", id2, added, err, id)
+	}
+	if len(tr.Issues) != 1 {
+		t.Fatalf("%d issues, want 1", len(tr.Issues))
+	}
+	body := tr.Issues[0].Body
+	if strings.Count(body, "- [ ] AC-") != 2 || !strings.Contains(body, "### two") || !strings.Contains(body, "Related: #77") {
+		t.Errorf("body after append:\n%s", body)
+	}
+}
+
+// #1599 relay 3: the PR matches by number, so `77` and `#77` reach one item and #7 is another.
+func TestFollowUpPRMatchesByNumber(t *testing.T) {
+	for _, tc := range []struct {
+		related, pr string
+		want        bool
+	}{
+		{"#77", "77", true}, {"77", "#77", true}, {"B1, #77", "https://github.com/o/r/pull/77", true},
+		{"#771", "#77", false}, {"#7", "#77", false},
+	} {
+		if got := relatesTo(tc.related, tc.pr); got != tc.want {
+			t.Errorf("relatesTo(%q, %q) = %v, want %v", tc.related, tc.pr, got, tc.want)
+		}
+	}
+	dir := fileDeferredRepo(t)
+	body := writeBody(t, t.TempDir(), `{"findings":[{"severity":"minor","title":"a"}]}`)
+	for _, pr := range []string{"#77", "77"} {
+		if code, _, errOut := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", "FAIL", "--body-file", body, "--file-deferred", "--pr", pr); code != 0 {
+			t.Fatalf("--pr %s: %d %s", pr, code, errOut)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".rota", "tasks", "T02.md")); err == nil {
+		t.Error("`--pr 77` filed a second item beside `--pr #77`")
+	}
+}
+
+// #1599 relay 2 and 4: an open follow-up with no Acceptance section is an error
+// naming the item, not a silent no-op, and `filed` still names it.
+func TestFileDeferredBrokenFollowUpReportsItem(t *testing.T) {
+	dir := fileDeferredRepo(t)
+	if code, _, errOut := fileDeferred(t, dir, "review-spec", `{"severity":"minor","title":"first"}`); code != 0 {
+		t.Fatalf("first: %d %s", code, errOut)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "tasks", "T01.md"), []byte("## Problem\n\nhand edited\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	body := writeBody(t, t.TempDir(), `{"findings":[{"severity":"minor","title":"second"}]}`)
+	code, out, errOut := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", "FAIL", "--body-file", body, "--file-deferred", "--pr", "#77", "--json")
+	if code == 0 || !strings.Contains(errOut+out, "T01") {
+		t.Fatalf("exit %d, want an error naming T01:\n%s\n%s", code, out, errOut)
+	}
+	if got := readTask(t, dir, "T01"); strings.Contains(got, "second") {
+		t.Errorf("body changed despite the error:\n%s", got)
+	}
+}
+
+// #1599 relay 6: verdicts recorded together for one PR still end in one item holding every finding.
+func TestFileDeferredConcurrentVerdicts(t *testing.T) {
+	dir := fileDeferredRepo(t)
+	var wg sync.WaitGroup
+	names := []string{"alpha", "beta", "gamma", "delta"}
+	for _, n := range names {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			body := writeBody(t, t.TempDir(), `{"findings":[{"severity":"minor","title":"`+n+`"}]}`)
+			if code, _, errOut := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", "FAIL", "--body-file", body, "--file-deferred", "--pr", "#77"); code != 0 {
+				t.Errorf("%s: %d %s", n, code, errOut)
+			}
+		}()
+	}
+	wg.Wait()
+	text := readTask(t, dir, "T01")
+	for _, n := range names {
+		if !strings.Contains(text, "### "+n) {
+			t.Errorf("T01.md lacks %s:\n%s", n, text)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".rota", "tasks", "T02.md")); err == nil {
+		t.Error("a second item was filed")
+	}
+}
+
+// #1599 relay 7: a floor that is not minor, major or off stops the call before the record is written.
+func TestFileDeferredBadFloorStopsBeforeRecord(t *testing.T) {
+	dir := fileDeferredRepo(t)
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"review":{"fileDeferred":"sometimes"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, _ := fileDeferred(t, dir, "review-quality", `{"severity":"minor","title":"nit"}`); code == 0 {
+		t.Fatal("a bad floor was accepted")
+	}
+	if code, out, _ := rotaIn(t, dir, "verdict", "show", "--json"); code == 0 && strings.Contains(out, "review-quality") {
+		t.Errorf("a verdict was recorded despite the bad floor:\n%s", out)
 	}
 }
