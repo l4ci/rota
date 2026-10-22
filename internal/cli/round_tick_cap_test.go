@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/rotatree"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -22,12 +24,12 @@ func TestTickWithEveryAccountCoolingFillsNothingAndSaysWhy(t *testing.T) {
 	root := gitRepo(t)
 	write(t, filepath.Join(root, ".rota", "config.json"),
 		`{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}],"roster":["ben"]}}`)
-	set, err := roundcfg.Load(root)
+	set, err := roundcfg.FromConfig(config.Load(rotatree.Config(root)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
-	renv := round.Env{Worker: worker.Env{Now: func() time.Time { return now }, Accounts: &worker.Accounts{Env: worker.Env{Now: func() time.Time { return now }},
+	renv := round.Env{Worker: worker.Env{Config: diskConfig, Now: func() time.Time { return now }, Accounts: &worker.Accounts{Env: worker.Env{Config: diskConfig, Now: func() time.Time { return now }},
 		Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
 			v, err := jsonx.Decode([]byte(fmt.Sprintf(`{"five_hour":{"utilization":100,"resets_at":"%s"}}`, now.Add(time.Hour).Format(time.RFC3339))))
 			if err != nil {

@@ -24,7 +24,7 @@ const twoAccounts = `{"round":{"dispatch":"herdr","accounts":[{"name":"a","confi
 func (f *assignFixture) meters(t *testing.T, spent map[string]bool) {
 	t.Helper()
 	f.env.Worker.Now = func() time.Time { return quotaNow }
-	f.env.Worker.Accounts = &worker.Accounts{Env: worker.Env{Now: func() time.Time { return quotaNow }},
+	f.env.Worker.Accounts = &worker.Accounts{Env: worker.Env{Config: diskConfig, Now: func() time.Time { return quotaNow }},
 		Fetch: func(_ context.Context, name, _ string) (*jsonx.Object, string) {
 			util, reset := 10, "null"
 			if spent[name] {

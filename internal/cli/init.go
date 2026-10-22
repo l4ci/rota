@@ -277,7 +277,7 @@ func initCheck(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	res := initproj.Check(dir, func() string { return versionDriftLine(c, dir) })
+	res := initproj.Check(dir, c.deps().Config(dir), func() string { return versionDriftLine(c, dir) })
 	data := knObj("initialized", res.Initialized, "missing", strSlice(res.Missing))
 	if !res.Initialized {
 		return Result{Data: data}, Failed("not initialized: %s missing", strings.Join(res.Missing, ", ")).WithHint("run: rota init")

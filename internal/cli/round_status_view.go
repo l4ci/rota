@@ -91,7 +91,7 @@ func loadRoundSnap(c *Ctx, root string) (roundSnap, error) {
 	s := snapFromReport(rep)
 	s.CandsLoaded = true
 	fillBurn(c, root, s.Slots)
-	set, err := roundcfg.Load(root)
+	set, err := roundcfg.FromConfig(c.deps().Config(root))
 	if err != nil {
 		s.CandsErr = err.Error()
 		return s, nil

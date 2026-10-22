@@ -2,6 +2,8 @@ package round
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,3 +38,6 @@ func TestMain(m *testing.M) {
 
 // noEnv is an empty process environment for Env.Worker.Getenv.
 func noEnv(string) string { return "" }
+
+// diskConfig reads the .rota/config.json a test wrote, as cli's Deps.Config does.
+func diskConfig(root string) any { return config.Load(rotatree.Config(root)) }

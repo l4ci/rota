@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/rotatree"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/rotastate"
@@ -17,8 +15,6 @@ import (
 // The glue between the worker verbs and internal/harness: dispatch and assign
 // pick a harness adapter once and call it, and what an adapter refuses with is
 // mapped onto the verbs' exit codes here.
-
-func loadConfig(root string) any { return config.Load(rotatree.Config(root)) }
 
 // Harness is the adapter for kind ("" is the default), or a usage error when
 // the kind is not a worker harness.
