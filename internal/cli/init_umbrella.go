@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"flag"
-	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
@@ -25,7 +24,7 @@ func initUmbrella(fs *flag.FlagSet) RunFunc {
 		}
 		reposGiven := false
 		fs.Visit(func(f *flag.Flag) { reposGiven = reposGiven || f.Name == "repos" })
-		root, err := os.Getwd()
+		root, err := c.deps().Getwd()
 		if err != nil {
 			return Result{}, err
 		}

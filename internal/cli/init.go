@@ -28,8 +28,8 @@ func initCommands() *Command {
 }
 
 // initDir is the directory init acts on: the working directory, symlinks resolved.
-func initDir() (string, error) {
-	dir, err := os.Getwd()
+func initDir(c *Ctx) (string, error) {
+	dir, err := c.deps().Getwd()
 	if err != nil {
 		return "", Resolution("cannot read the working directory: %v", err)
 	}
@@ -42,11 +42,11 @@ func atHome(c *Ctx) bool {
 	if _, err := c.Root(); err == nil {
 		return false
 	}
-	dir, err := initDir()
+	dir, err := initDir(c)
 	if err != nil {
 		return false
 	}
-	home, err := os.UserHomeDir()
+	home, err := c.deps().UserHomeDir()
 	if err != nil || home == "" {
 		return false
 	}
@@ -108,7 +108,7 @@ func initVerb(fs *flag.FlagSet) RunFunc {
 // config, run the managed blocks. `rota setup` runs it too, so whatever init
 // gains (the project registry, #24) reaches both.
 func runInit(c *Ctx, noBlocks bool) (Result, error) {
-	dir, err := initDir()
+	dir, err := initDir(c)
 	if err != nil {
 		return Result{}, err
 	}
@@ -273,7 +273,7 @@ func initCheck(c *Ctx, args []string) (Result, error) {
 	if err := knNoArgs(args); err != nil {
 		return Result{}, err
 	}
-	dir, err := initDir()
+	dir, err := initDir(c)
 	if err != nil {
 		return Result{}, err
 	}

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"os"
 	"path/filepath"
 
 	"github.com/l4ci/rota/internal/git"
@@ -28,7 +27,7 @@ func resolveBranch(c *Ctx, args []string) (branchTarget, error) {
 	if len(args) > 1 {
 		return branchTarget{}, Usage("unexpected argument %q", args[1])
 	}
-	cwd, err := os.Getwd()
+	cwd, err := c.deps().Getwd()
 	if err != nil {
 		return branchTarget{}, err
 	}

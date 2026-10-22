@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"github.com/l4ci/rota/internal/exitcode"
-	"os"
 	"strconv"
 	"strings"
 
@@ -438,7 +437,7 @@ func spikeAdd(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if gitDir == "" {
-			if gitDir, err = os.Getwd(); err != nil {
+			if gitDir, err = c.deps().Getwd(); err != nil {
 				return Result{}, err
 			}
 		}
@@ -501,7 +500,7 @@ func runSpikeList(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	cwd, _ := os.Getwd()
+	cwd, _ := c.deps().Getwd()
 	list, err := spike.List(root, cwd)
 	if err != nil {
 		return Result{}, err

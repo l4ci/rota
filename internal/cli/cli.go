@@ -101,7 +101,7 @@ func (c *Ctx) Warn(format string, a ...any) {
 // Root finds the project root: the nearest directory at or above the
 // working directory that holds .rota/.
 func (c *Ctx) Root() (string, error) {
-	dir, err := os.Getwd()
+	dir, err := c.deps().Getwd()
 	if err != nil {
 		return "", err
 	}
@@ -354,8 +354,8 @@ func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stde
 			return fail(c, stdout, Resolution("cannot use -C %s: %v", g.cwd, unwrapPathErr(err)))
 		}
 	}
-	physicalCwd()
-	if err := legacyStateStop(c.Path); err != nil {
+	physicalCwd(c.deps().Getwd)
+	if err := legacyStateStop(c.Path, c.deps().Getwd); err != nil {
 		return fail(c, stdout, err)
 	}
 	if res, err := roundKeysStop(c); err != nil {
@@ -592,8 +592,8 @@ func hasHelp(args []string) bool {
 // from a symlinked directory (link -> umb/web) every walk-up and sub-repo
 // match would see the link instead. Setting PWD too keeps later os.Getwd
 // calls, in every verb, on the physical path.
-func physicalCwd() {
-	wd, err := os.Getwd()
+func physicalCwd(getwd func() (string, error)) {
+	wd, err := getwd()
 	if err != nil {
 		return
 	}

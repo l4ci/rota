@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -71,7 +70,7 @@ func resolveVerdictBranch(c *Ctx, args []string) (verdictBranch, error) {
 	if err != nil {
 		return verdictBranch{}, err
 	}
-	cwd, err := os.Getwd()
+	cwd, err := c.deps().Getwd()
 	if err != nil {
 		return verdictBranch{}, err
 	}
