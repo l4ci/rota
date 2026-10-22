@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"strings"
@@ -54,9 +55,17 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 				return Result{Data: d}, refused
 			}
 		}
-		n, capped, err := recordBounce(c.deps().workerEnv(), root, issue, *slot, *head, set.MaxBounces)
+		env := c.deps().workerEnv()
+		rec, err := recordBounce(env, root, issue, *slot, *head, set.MaxBounces)
 		if err != nil {
 			return Result{}, err
+		}
+		n, capped := rec.N, rec.Capped
+		if rec.Counted {
+			if err := postSupportBounce(env, root, issue, *slot, *head); err != nil {
+				// The count and the notice go together: a retry counts and posts again.
+				return Result{}, errors.Join(err, rec.Undo())
+			}
 		}
 		d := jsonx.NewObject()
 		d.Set("issue", issue)
@@ -137,21 +146,44 @@ func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 // cap); the cap is enforced by the bounce store's write. capped reports the
 // refusal; n is then the unchanged count. A slot that
 // is not in the pool is refused before anything is written.
-func recordBounce(env worker.Env, root, issue, slot, head string, max int) (n int, capped bool, err error) {
+func recordBounce(env worker.Env, root, issue, slot, head string, max int) (worker.BounceRecord, error) {
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
-		return 0, false, err
+		return worker.BounceRecord{}, err
 	}
 	if slot != "" && reg.Slot(slot) == nil {
-		return 0, false, &Error{Exit: ExitRefused, Message: fmt.Sprintf("unknown slot %q: not in the worker pool", slot),
+		return worker.BounceRecord{}, &Error{Exit: ExitRefused, Message: fmt.Sprintf("unknown slot %q: not in the worker pool", slot),
 			Hint: "see `rota worker pool list` for the slot names"}
 	}
 	store, err := env.BounceStore(root)
 	if err != nil {
-		return 0, false, err
+		return worker.BounceRecord{}, err
 	}
-	rec, err := store.Record(nil, issue, slot, head, max)
-	return rec.N, rec.Capped, err
+	return store.Record(nil, issue, slot, head, max)
+}
+
+// postSupportBounce posts a counted bounce on the PR when the support machine
+// built it (#1598 AC-8), with the open findings of the branch's review verdict
+// as the reason. The PR is the named slot's, else the one of the slot or the
+// queued record holding the issue; any other PR posts nothing.
+func postSupportBounce(env worker.Env, root, issue, slot, head string) error {
+	reg := worker.LoadRegistryTolerant(root)
+	var branch, pr string
+	for _, s := range reg.Slots() {
+		if (slot != "" && s.Name() == slot) || (slot == "" && s.HeldID() == issue) {
+			branch, pr = s.Branch(), s.PR()
+			break
+		}
+	}
+	if q := reg.QueuedIssue(issue); branch == "" && slot == "" && q != nil {
+		branch, pr = q.Branch, q.PR
+	}
+	why := "The orchestrator sent the PR back after review: read the review on this PR."
+	if fs := openFindings(root, branch); len(fs) > 0 {
+		why = "Open findings:\n- " + strings.Join(fs, "\n- ")
+	}
+	_, err := env.PostReviewBounce(root, branch, pr, head, why)
+	return err
 }
 
 func maxText(max int) string {

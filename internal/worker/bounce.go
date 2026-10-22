@@ -220,3 +220,34 @@ func atHead(head string) string {
 	}
 	return " at " + strings.TrimSpace(head)
 }
+
+// PostReviewBounce tells the support machine that main sent its PR back
+// (#1598 AC-8): on main with round.support set, a PR headed by a
+// `<round.support>-` branch gets a comment marked `rota:review-bounce
+// head=<sha>` holding why. The support machine's review poll takes it as
+// review input and relays it to the worker, and its reconcile reports a queued
+// PR still at that head as bounced. The machines usually share one forge
+// login, which cannot request changes on its own PR, so a comment it is.
+// Anywhere else it posts nothing and posted is false.
+func (e Env) PostReviewBounce(root, branch, pr, head, why string) (posted bool, err error) {
+	e = e.WithDefaults()
+	cfg := e.Config(root)
+	support := roundcfg.SupportName(cfg)
+	if role, _ := roundcfg.MachineRole(cfg); support == "" || role == roundcfg.RoleSupport || !strings.HasPrefix(branch, support+"-") {
+		return false, nil
+	}
+	n, ok := PRRefNumber(pr)
+	if !ok {
+		return false, fmt.Errorf("%s is the support machine's branch, but its PR %q has no number to post the bounce on", branch, pr)
+	}
+	gc := e.GateConfig(root)
+	forge, err := e.Forge(e.detectProvider(e.Ctx, root, pr, gc.Tracker.Provider), root, gc.Tracker)
+	if err != nil {
+		return false, err
+	}
+	body := marker.ReviewBounce(head) + "\n" + fmt.Sprintf("Sent back by the main machine%s. Fix it on this branch and push; the PR stays open.\n\n%s", atHead(head), strings.TrimSpace(why))
+	if _, err := forge.AddMRNote(e.Ctx, n, body); err != nil {
+		return false, fmt.Errorf("posting the bounce on PR %d: %w", n, err)
+	}
+	return true, nil
+}

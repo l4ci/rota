@@ -6,6 +6,7 @@
 package postgate
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -108,6 +109,14 @@ func bounce(env worker.Env, root, issue string, r worker.GateResult, park Park) 
 	}
 	n := rec.N
 	if set.MaxBounces == 0 || n < set.MaxBounces {
+		if rec.Counted {
+			// A support machine's worker learns of the bounce on its PR (#1598).
+			// The count and the notice go together: the next gate counts and
+			// posts again.
+			if _, err := env.PostReviewBounce(root, r.Branch, r.PR, r.SHA, r.Err); err != nil {
+				return Outcome{Bounces: n - 1}, errors.Join(err, rec.Undo())
+			}
+		}
 		return Outcome{Bounces: n}, nil
 	}
 	why, _, _ := strings.Cut(r.Err, "\n")

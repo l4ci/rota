@@ -46,6 +46,8 @@ const (
 	ItemTimeout          = "item-timeout"
 	ClaimMismatch        = "claim-mismatch"
 	UnregisteredBranch   = "unregistered-branch"
+	// Bounced: on the support machine, a queued PR main sent back (#1598).
+	Bounced              = "bounced"
 	MergedExternal       = "merged-external"
 	QueuedBranchMismatch = "queued-branch-mismatch"
 	// LeaseStale is declared in lease.go.
