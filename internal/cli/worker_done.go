@@ -197,7 +197,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 				evidence = outcomeEvidence(k, sum, s.PR())
 			}
 			s.SetEvent(worker.EventDone, evidence, now)
-			if s.State() == "done" {
+			if worker.IsDone(s.State()) {
 				return
 			}
 			// The poll never sees the busy-to-done edge that baselines the

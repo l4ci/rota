@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/strutil"
-	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -35,21 +34,21 @@ func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string)
 		return false, fmt.Sprintf("no PR recorded for branch %s; check the forge and run `rota round reconcile`", strutil.FirstNonEmpty(s.Branch(), "(none)"))
 	}
 	// A relay can leave a slot blocked after its PR merged: the merged PR frees it.
-	if s.State() == "blocked" && e.prMerged(ctx, s.PR()) {
-		return e.settled(ctx, s, "blocked")
+	if worker.IsBlocked(s.State()) && e.prMerged(ctx, s.PR()) {
+		return e.settled(ctx, s, worker.IsBlocked)
 	}
-	return e.settled(ctx, s, "done", "idle")
+	return e.settled(ctx, s, worker.Parkable)
 }
 
-// settled is the slot half of parkable: no partial or failed report, a state in
-// states and a clean worktree. why names what is missing when it is not.
-func (e Env) settled(ctx context.Context, s *worker.Slot, states ...string) (ok bool, why string) {
+// settled is the slot half of parkable: no partial or failed report, a state
+// the predicate accepts and a clean worktree. why names what is missing when it is not.
+func (e Env) settled(ctx context.Context, s *worker.Slot, accept func(state string) bool) (ok bool, why string) {
 	// A partial or failed report waits for a relay or transfer: queuing its PR
 	// would let the gate merge it by number with nobody having answered it.
 	if k, _ := s.Outcome(); worker.OutcomeOpen(k) {
 		return false, "reported " + k + "; relay or transfer it first"
 	}
-	if st := s.State(); !slices.Contains(states, st) {
+	if st := s.State(); !accept(st) {
 		return false, strutil.FirstNonEmpty(st, "busy")
 	}
 	dirty, err := e.dirtyPaths(ctx, s.Worktree())
@@ -82,7 +81,7 @@ func (e Env) adoptBranchPR(ctx context.Context, root string, s *worker.Slot, per
 	if e.Forge == nil || s.HeldID() == "" || s.PR() != "" || len(s.Issues()) > 0 || s.Branch() == "" || worker.IsOwnPark(s.Branch(), s.Name()) {
 		return
 	}
-	if st := s.State(); st != "done" && st != "idle" {
+	if !worker.Parkable(s.State()) {
 		return
 	}
 	prs, err := e.Forge.OpenPRs(ctx)

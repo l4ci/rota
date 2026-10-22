@@ -408,7 +408,7 @@ func (e Env) Health(ctx context.Context, root string, s *worker.Slot, now time.T
 			h.Alive = matchAgent(agents, name, tab, wt) >= 0
 		}
 	}
-	if s.State() == "dead" || (h.Known && !h.Alive && tab != "") {
+	if worker.IsDead(s.State()) || (h.Known && !h.Alive && tab != "") {
 		h.Health = HealthDead
 		return h
 	}
@@ -791,7 +791,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		}
 	}
 	sender, receiver := run.sender, run.receiver
-	run.resuming = receiver != nil && sender == nil && receiver.State() == "idle" &&
+	run.resuming = receiver != nil && sender == nil && worker.IsIdle(receiver.State()) &&
 		receiver.ClaimID() == o.To+"@"+strconv.Itoa(rnd)
 	resuming := run.resuming
 	// rec: no slot holds the issue but a queued PR does (its slot moved on, or
