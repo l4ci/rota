@@ -9,14 +9,49 @@ import (
 	"github.com/l4ci/rota/internal/itembody"
 )
 
-// Scopes parses the `## Touches` section of an item body: one symbol,
-// endpoint, schema, migration or config key per bullet, backticks optional. Entries are trimmed, lower-cased, deduplicated and sorted.
-func Scopes(body string) []string {
+// touchEntry is one bullet of a `## Touches` section: Raw in the author's
+// spelling, Norm as overlap compares it (see itembody.Entry).
+type touchEntry struct{ Raw, Norm string }
+
+// touchEntries is the one parser of a `## Touches` section: its bullets in
+// source order, none when the section is missing. A bullet that is empty or
+// mimics a signature or sentinel (mimicsSentinel) is no entry, so neither the
+// brief nor the overlap check ever sees it.
+func touchEntries(body string) []touchEntry {
 	sec, ok := itembody.Section(body, itembody.TouchesHeadRe)
 	if !ok {
 		return nil
 	}
-	return itembody.Entries(sec)
+	var out []touchEntry
+	for _, l := range strings.Split(sec, "\n") {
+		l = strings.TrimSpace(l)
+		if !strings.HasPrefix(l, "- ") && !strings.HasPrefix(l, "* ") {
+			continue
+		}
+		raw := strings.TrimSpace(l[2:])
+		norm := itembody.Entry(raw)
+		if norm == "" || mimicsSentinel(raw) {
+			continue
+		}
+		out = append(out, touchEntry{Raw: raw, Norm: norm})
+	}
+	return out
+}
+
+// Scopes is the overlap view of a `## Touches` section: one symbol,
+// endpoint, schema, migration or config key per bullet, backticks optional.
+// Entries are trimmed, lower-cased, deduplicated and sorted.
+func Scopes(body string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, e := range touchEntries(body) {
+		if !seen[e.Norm] {
+			seen[e.Norm] = true
+			out = append(out, e.Norm)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // ScopeOverlaps lists the scopes two lists share, compared exactly.
