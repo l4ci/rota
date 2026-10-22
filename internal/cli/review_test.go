@@ -13,6 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/golden"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -854,7 +855,7 @@ func TestReviewDepthShowsTheCrossHarnessReview(t *testing.T) {
 		return d
 	}
 	labels = `{"name":"size:Major"}`
-	if d := run(); d["cross"] != "codex" || !strings.Contains(d["crossWhy"].(string), "label size:Major") {
+	if d := run(); d["cross"] != harness.Codex || !strings.Contains(d["crossWhy"].(string), "label size:Major") {
 		t.Errorf("major: %v", d)
 	}
 	labels = `{"name":"size:Major"},{"name":"review:none"}`

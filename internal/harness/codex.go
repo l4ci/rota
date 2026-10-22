@@ -149,6 +149,8 @@ func (codex) Accounts(cfg any) AccountList {
 // the limits the watcher logged.
 func (codex) UsageMeter() bool { return false }
 
+func (codex) CrossReviewer() bool { return true }
+
 func (codex) LimitPhrases() []string { return SharedLimitPhrases() }
 
 func (codex) PaneVocab() PaneVocab { return PaneVocab{} }

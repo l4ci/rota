@@ -321,6 +321,9 @@ type Harness interface {
 	// UsageMeter reports whether the kind's accounts expose a usage reading.
 	// One that does not is balanced from the limits the watcher logged.
 	UsageMeter() bool
+	// CrossReviewer reports whether the kind can run the one-shot read-only
+	// cross-harness review of another kind's PR (#1612).
+	CrossReviewer() bool
 	// LimitPhrases are the usage-limit messages the kind's session prints
 	// about itself, as case-insensitive regex sources.
 	LimitPhrases() []string
