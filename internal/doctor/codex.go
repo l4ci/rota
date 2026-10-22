@@ -18,6 +18,9 @@ type KindInput struct {
 	Homes []Home
 	// Tiers is whether any round.tiers.<kind>.<tier> is set.
 	Tiers bool
+	// Models are the "tier=model" pairs a worker starts with when Tiers is
+	// false: the shipped defaults, or none once all three keys are emptied.
+	Models []string
 }
 
 // Home is one account home a worker can run under: a named account (Slot is
@@ -83,11 +86,16 @@ func (d *runner) harnessCheck(kind string, plan harness.Doctor) Check {
 	if v != "" {
 		head += " " + v
 	}
-	// The tier map is optional for codex (#68): unset, a worker runs on
-	// Codex's own default model.
+	// The tier map is optional for codex (#68). Unset, a worker runs on the
+	// shipped tier defaults, or on Codex's own model once all three are emptied.
 	tiers := ""
 	if !in.Tiers {
-		tiers = "; round.tiers." + name + " unset (optional): workers use " + plan.Title + "'s default model"
+		tiers = "; round.tiers." + name + " unset (optional): workers use "
+		if len(in.Models) > 0 {
+			tiers += strings.Join(in.Models, ", ")
+		} else {
+			tiers += plan.Title + "'s default model"
+		}
 	}
 	if len(homes) == 0 {
 		return pass(name, head+tiers)
