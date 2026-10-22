@@ -20,7 +20,9 @@ const dirName = "rota"
 // ErrNotRepo is returned when the directory is not inside a git repository.
 var ErrNotRepo = errors.New("not a git repository")
 
-// CommonDir is the symlink-resolved git common dir of dir.
+// CommonDir is the symlink-resolved git common dir of dir through real git.
+// It is for tests that build a real repository; production code holds a git
+// runner and calls CommonDirVia, so a fake git reaches the lookup.
 func CommonDir(dir string) (string, error) {
 	return CommonDirVia(context.Background(), git.Exec, dir)
 }

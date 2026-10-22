@@ -75,7 +75,7 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride string, pid int) (roundtick.Result, error) {
 	c.deps().freshReads()
 	le := c.deps().LeaseEnv()
-	cd, err := rotastate.CommonDir(root)
+	cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
 	if err != nil {
 		return roundtick.Result{}, Resolution("%v", err)
 	}

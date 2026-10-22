@@ -109,7 +109,7 @@ func dumpState(c *Ctx, input []byte, now time.Time) (err error) {
 	if json.Unmarshal(input, &m) != nil || m == nil {
 		return fmt.Errorf("input is not a JSON object")
 	}
-	cd, err := rotastate.CommonDir(payloadCwd(c, m))
+	cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, payloadCwd(c, m))
 	if err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bo
 		return hc, false
 	}
 	cwd := payloadCwd(c, hc.payload)
-	cd, err := rotastate.CommonDir(cwd)
+	cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, cwd)
 	if err != nil {
 		return hc, false
 	}
