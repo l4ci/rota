@@ -246,15 +246,15 @@
 {"name":"provider/github","steps":[{"exit":0,"env":{"data":{"provider":"github"},"ok":true},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"provider/gitlab","steps":[{"exit":0,"env":{"data":{"provider":"gitlab"},"ok":true},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"provider/no-hv","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"hint":"run: rota init","message":"no .rota/ directory here or in any parent"},"ok":false}}]}
-{"name":"provider/none","steps":[{"exit":0,"env":{"data":{"provider":"unknown"},"ok":true},"db":"c7ec7d64d1f5c1d8"}]}
+{"name":"provider/none","steps":[{"exit":0,"env":{"data":{"provider":"local"},"ok":true},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"provider/repo-no-umbrella","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"--repo web: not in umbrella mode (no sub-repos in .rota/repos.json)"},"ok":false}}]}
 {"name":"provider/repo-unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"--repo nope is not registered in .rota/repos.json"},"ok":false}}]}
 {"name":"provider/umbrella-api","steps":[{"exit":0,"env":{"data":{"provider":"gitlab"},"ok":true}}]}
-{"name":"provider/umbrella-root","steps":[{"exit":0,"env":{"data":{"provider":"unknown"},"ok":true}}]}
+{"name":"provider/umbrella-root","steps":[{"exit":0,"env":{"data":{"provider":"local"},"ok":true}}]}
 {"name":"provider/umbrella-web","steps":[{"exit":0,"env":{"data":{"provider":"github"},"ok":true}}]}
 {"name":"provider/url-ghe-host","steps":[{"exit":0,"env":{"data":{"provider":"github"},"ok":true},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"provider/url-gitlab-self","steps":[{"exit":0,"env":{"data":{"provider":"gitlab"},"ok":true},"db":"c7ec7d64d1f5c1d8"}]}
-{"name":"provider/url-other","steps":[{"exit":0,"env":{"data":{"provider":"unknown"},"ok":true},"db":"c7ec7d64d1f5c1d8"}]}
+{"name":"provider/url-other","steps":[{"exit":0,"env":{"data":{"provider":"github"},"ok":true,"warnings":["origin https://bitbucket.org/o/r.git names no forge; assumed github (set forge.provider)"]},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"provider/url-ssh-short","steps":[{"exit":0,"env":{"data":{"provider":"gitlab"},"ok":true},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"provider/url-ssh-url","steps":[{"exit":0,"env":{"data":{"provider":"github"},"ok":true},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"provider/url-upper-host","steps":[{"exit":0,"env":{"data":{"provider":"github"},"ok":true},"db":"c7ec7d64d1f5c1d8"}]}
