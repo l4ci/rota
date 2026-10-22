@@ -228,16 +228,7 @@ func setAt(path string, notObject error, key, raw string, update func(string, an
 			return nil, err
 		}
 		res.Previous, res.HadPrevious = lookupPresent(cfg, segs)
-		cur := cfg
-		for _, s := range segs[:len(segs)-1] {
-			next, ok := getObject(cur, s)
-			if !ok {
-				next = jsonx.NewObject()
-				cur.Set(s, next)
-			}
-			cur = next
-		}
-		cur.Set(segs[len(segs)-1], value)
+		putIn(cfg, segs, value)
 		after, err := jsonx.Marshal(cfg)
 		if err != nil {
 			return nil, err
@@ -319,6 +310,21 @@ func unsetAt(path string, notObject error, key string, strict bool) (removed boo
 		return cfg, nil
 	})
 	return removed, err
+}
+
+// putIn sets value at segs below cfg, creating intermediate objects or
+// replacing a scalar in the way.
+func putIn(cfg *jsonx.Object, segs []string, value any) {
+	cur := cfg
+	for _, s := range segs[:len(segs)-1] {
+		next, ok := getObject(cur, s)
+		if !ok {
+			next = jsonx.NewObject()
+			cur.Set(s, next)
+		}
+		cur = next
+	}
+	cur.Set(segs[len(segs)-1], value)
 }
 
 func asObject(v any) *jsonx.Object {
