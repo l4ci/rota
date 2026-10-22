@@ -55,6 +55,7 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) 
 	e.NeedsHuman = config.Label(cfg, "needsHuman")
 	e.Label = config.Label(cfg, "inProgress")
 	e.SupportLabel = config.Label(cfg, "support")
+	e.NeedsReview = config.Label(cfg, "needsReview")
 	e.Round, e.RoundErr = roundcfg.FromConfig(cfg)
 	if !withForge {
 		return e

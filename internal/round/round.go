@@ -46,6 +46,8 @@ const (
 	ItemTimeout          = "item-timeout"
 	ClaimMismatch        = "claim-mismatch"
 	UnregisteredBranch   = "unregistered-branch"
+	// Bounced: on the support machine, a queued PR main sent back (#1598).
+	Bounced              = "bounced"
 	MergedExternal       = "merged-external"
 	QueuedBranchMismatch = "queued-branch-mismatch"
 	// LeaseStale is declared in lease.go.
@@ -62,6 +64,9 @@ const DefaultLabel = "in-progress"
 
 // DefaultNeedsHuman is the label of an issue handed to the human (C10).
 const DefaultNeedsHuman = "needs-human"
+
+// DefaultNeedsReview is the label of an issue whose PR awaits review.
+const DefaultNeedsReview = "needs-review"
 
 // NeedsInfoLabel is the label `/rota-capture --triage` puts on an issue it
 // found too unclear to build. A constant: triage writes it literally.
@@ -131,6 +136,8 @@ type Env struct {
 	NeedsHuman string
 	// SupportLabel is issues.labels.support; "" means DefaultSupportLabel.
 	SupportLabel string
+	// NeedsReview is issues.labels.needsReview; "" means DefaultNeedsReview.
+	NeedsReview string
 }
 
 // WithAccounts is the env with account picking on, reading the meters through
@@ -309,6 +316,9 @@ type Finding struct {
 	pr string
 	// branch is the branch an unregistered-branch finding is about.
 	branch string
+	// support marks an unregistered-branch finding of the support machine's
+	// (#1598): its pr is the open PR to adopt with, and adopting fetches it.
+	support bool
 }
 
 // Key names what the finding is about, for a caller that tells findings apart:
@@ -340,6 +350,9 @@ type Report struct {
 	Limits []limits.Entry
 
 	views map[string]*view
+	// openPRs is the forge's open PRs by head branch, nil when the forge was
+	// not read; the support handoff scan reuses it.
+	openPRs map[string]*tracker.PR
 }
 
 // QueuedPR is one record of the registry's PR queue.
@@ -457,6 +470,10 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 
 	fs := e.readForge(ctx, rep)
 	prs, labelled, stale, forgeOK, labelsOK := fs.prs, fs.labelled, fs.stale, fs.ok, fs.labelsOK
+	if forgeOK {
+		rep.openPRs = prs
+		e.issueBounces(root, rows, rep)
+	}
 
 	held := map[string]bool{}
 	for _, r := range rows {
@@ -624,6 +641,27 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	}
 	rep.Limits = limits.Waiting(limits.Load(root))
 	return rep, nil
+}
+
+// issueBounces reads each row's bounce count from the issue when round.support
+// keeps it there (#1598): the registry holds none then. A failed read leaves
+// the registry's count and warns once.
+func (e Env) issueBounces(root string, rows []*Row, rep *Report) {
+	if e.Round.Support == "" {
+		return
+	}
+	store, err := e.workerEnv().BounceStore(root)
+	for _, r := range rows {
+		if err != nil {
+			break
+		}
+		if r.Issue != "" {
+			r.Bounces, _, err = store.Count(r.Issue)
+		}
+	}
+	if err != nil {
+		rep.Warnings = append(rep.Warnings, fmt.Sprintf("bounce counts not read from the issues: %v", err))
+	}
 }
 
 // readRows is the worktree and registry source: registry slots first, then

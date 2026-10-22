@@ -120,3 +120,31 @@ func TestFieldsRoundTrip(t *testing.T) {
 		t.Errorf("SplitFields without a block = %q %v", text, ok)
 	}
 }
+
+func TestParseBounce(t *testing.T) {
+	for _, c := range []struct {
+		name, body string
+		kind, head string
+		reset, ok  bool
+	}{
+		{"bounce", "<!-- rota:bounce head=abc123 -->\ntext", KindBounce, "abc123", false, true},
+		{"review-bounce", "<!-- rota:review-bounce head=ABC123 -->\ntext", KindReviewBounce, "ABC123", false, true},
+		{"reset", "<!-- rota:bounce reset -->\ntext", KindBounce, "", true, true},
+		{"empty head", "<!-- rota:bounce head= -->", KindBounce, "", false, true},
+		{"no argument", "<!-- rota:bounce -->", KindBounce, "", false, true},
+		{"legacy prefix", "<!-- hv:bounce head=abc -->", KindBounce, "abc", false, true},
+		{"CRLF", "<!-- rota:bounce head=abc -->\r\nline\r\n", KindBounce, "abc", false, true},
+		{"quoted mid-body", "> quoting\n<!-- rota:bounce head=abc -->", "", "", false, false},
+		{"after text", "see <!-- rota:bounce reset -->", "", "", false, false},
+		{"malformed head", "<!-- rota:bounce head=xyz -->", "", "", false, false},
+		{"unterminated", "<!-- rota:bounce head=abc", "", "", false, false},
+		{"other kind", "<!-- rota:claim ben@3 -->", "", "", false, false},
+		{"plain text", "bounce head=abc", "", "", false, false},
+		{"empty", "", "", "", false, false},
+	} {
+		kind, head, reset, ok := ParseBounce(c.body)
+		if kind != c.kind || head != c.head || reset != c.reset || ok != c.ok {
+			t.Errorf("%s: ParseBounce(%q) = %q %q %v %v", c.name, c.body, kind, head, reset, ok)
+		}
+	}
+}

@@ -517,6 +517,14 @@ func Effective(cfg any, kind, tier string) (model, source string) {
 	return "", SourceHarnessDefault
 }
 
+// SupportName is round.support read alone, trimmed: "" when unset or not a
+// string. The bounce store reads it to pick the registry or the issue.
+func SupportName(cfg any) string {
+	v, _ := config.Value(cfg, "round.support")
+	s, _ := v.(string)
+	return strings.TrimSpace(s)
+}
+
 // MachineRole is round.role read alone, so a bad value in another round.* key cannot
 // hide it: the support fence reads it before anything else.
 func MachineRole(cfg any) (string, error) {
