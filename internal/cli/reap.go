@@ -10,7 +10,6 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/round"
-	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
@@ -65,6 +64,10 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 		if err := worker.CheckRegistry(root); err != nil {
 			return Result{}, &Error{Exit: ExitUnavailable, Message: "reap refused: " + err.Error()}
 		}
+		set, err := c.deps().roundSettings(root, roundConfigRequired)
+		if err != nil {
+			return Result{}, err
+		}
 		ctx := c.Context()
 		env, ops := c.deps().ReapEnv(ctx, root)
 		var agents []host.Agent
@@ -76,10 +79,6 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		rep, err := env.Status(ctx, root)
-		if err != nil {
-			return Result{}, err
-		}
-		set, err := roundcfg.FromConfig(c.deps().Config(root))
 		if err != nil {
 			return Result{}, err
 		}
