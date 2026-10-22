@@ -21,6 +21,13 @@ Work only this task, then stop.
   invisible in the body. Then dispute it before building: if the ticket is wrong,
   already decided or contradicted by the code, say so (`ROTA-BLOCKED`, or in your PR
   if you built a narrower thing) instead of implementing it as written.
+- Bundle. If your brief says the assignment is a bundle, you hold a lead issue plus
+  members: read and dispute each one, build them all on the one branch the brief names
+  and open one PR with a `Closes #<issue>` line for every issue. Record proof per issue id
+  (`rota proof record <ID> -- ...` once for each); `rota worker done` refuses while any
+  of them lacks its PASS row at HEAD, and the gate refuses a PR that does not close every
+  one. The bundle lands or bounces as a unit. If one member cannot be built, say so
+  (`ROTA-BLOCKED`): the orchestrator can transfer it to the human, which drops it.
 - Best-of. If your brief says the issue is labelled `best-of:2`, another slot builds
   the same issue at the same time. Do not read, fetch, check out or diff its branch or
   its PR: your attempt stands on its own. Your PR still says `Closes #<issue>`; the

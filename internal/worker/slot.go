@@ -89,6 +89,25 @@ func NewAttempt() string {
 	return hex.EncodeToString(b[:])
 }
 
+// Bundle is the member issues the slot holds beside its task, the lead
+// (`rota round assign <lead> --bundle <id>,<id>`): one branch and one PR
+// close them all. None for a slot holding one issue, and for a registry
+// written before bundles.
+func (s *Slot) Bundle() []string { return strList(s.o, "bundle") }
+
+// SetBundle records the member issues; none removes the field.
+func (s *Slot) SetBundle(ids []string) { setStrList(s.o, "bundle", ids) }
+
+// BundleIssues is every issue the slot holds: the lead (HeldID) first, then
+// its members. None when the slot holds nothing.
+func (s *Slot) BundleIssues() []string {
+	lead := s.HeldID()
+	if lead == "" {
+		return nil
+	}
+	return append([]string{lead}, s.Bundle()...)
+}
+
 // SmokeSection is the smoke section number reserved for the slot's issue, 0
 // for none.
 func (s *Slot) SmokeSection() int {
@@ -310,6 +329,8 @@ type Binding struct {
 	Attempt string
 	// AttemptBase is the branch tip the attempt inherited, "" for none.
 	AttemptBase string
+	// Bundle is the member issues held beside Task, none for one issue.
+	Bundle []string
 }
 
 // Bind records the issue the slot works on. Empty optional fields stay unset.
@@ -326,6 +347,7 @@ func (s *Slot) Bind(b Binding) {
 		}
 		s.o.Set(f.k, f.v)
 	}
+	s.SetBundle(b.Bundle)
 }
 
 func smokeStr(n int) string {
@@ -341,7 +363,7 @@ func smokeStr(n int) string {
 func (s *Slot) Unbind() {
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
-	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "issues", "reviewSeen", "event", "heartbeatAt", "outcome", "inbox", "finding"} {
+	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "bundle", "issues", "reviewSeen", "event", "heartbeatAt", "outcome", "inbox", "finding"} {
 		s.o.Delete(k)
 	}
 }
@@ -395,8 +417,11 @@ func (s *Slot) SetPR(url string) {
 
 // Issues are the issues a review item's worker reported filing
 // (`ROTA-DONE <slot> issues:#a,#b`), the slot's done evidence in place of a PR.
-func (s *Slot) Issues() []string {
-	l, _ := s.o.Get("issues")
+func (s *Slot) Issues() []string { return strList(s.o, "issues") }
+
+// strList is the string entries of the list under key, skipping any other.
+func strList(o *jsonx.Object, key string) []string {
+	l, _ := o.Get(key)
 	list, _ := l.([]any)
 	var out []string
 	for _, e := range list {
@@ -405,6 +430,19 @@ func (s *Slot) Issues() []string {
 		}
 	}
 	return out
+}
+
+// setStrList records vals under key; none removes the key.
+func setStrList(o *jsonx.Object, key string, vals []string) {
+	if len(vals) == 0 {
+		o.Delete(key)
+		return
+	}
+	l := make([]any, len(vals))
+	for i, v := range vals {
+		l[i] = v
+	}
+	o.Set(key, l)
 }
 
 // Finding is the comment id a research item's worker reported
@@ -425,17 +463,7 @@ func (s *Slot) SetFinding(id string) {
 }
 
 // SetIssues records the reported issues; none clears them.
-func (s *Slot) SetIssues(refs []string) {
-	if len(refs) == 0 {
-		s.o.Delete("issues")
-		return
-	}
-	l := make([]any, len(refs))
-	for i, r := range refs {
-		l[i] = r
-	}
-	s.o.Set("issues", l)
-}
+func (s *Slot) SetIssues(refs []string) { setStrList(s.o, "issues", refs) }
 
 // SetHandle records the pane handle; "" clears it.
 func (s *Slot) SetHandle(h string) {

@@ -149,9 +149,11 @@ func (e Env) now() time.Time { return e.Worker.WithDefaults().Now() }
 
 // Row is one line of `rota round status`.
 type Row struct {
-	Name      string
-	Agent     string
-	Issue     string
+	Name  string
+	Agent string
+	Issue string
+	// Bundle is the member issues the slot holds beside Issue, the lead.
+	Bundle    []string
 	Branch    string
 	PR        string
 	PRState   string
@@ -341,6 +343,7 @@ type Report struct {
 // QueuedPR is one record of the registry's PR queue.
 type QueuedPR struct {
 	Issue, PR, Branch, From string
+	Bundle                  []string // the member issues beside Issue
 }
 
 // view is a row plus what repairs need.
@@ -463,6 +466,11 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		if r.Issue != "" {
 			held[worker.NormID(r.Issue)] = true
 		}
+		if so := slotObj[r.Name]; so != nil { // a bundled slot holds its members too
+			for _, m := range so.Bundle() {
+				held[worker.NormID(m)] = true
+			}
+		}
 		if !r.Registered {
 			rep.add(Finding{Kind: UnregisteredWorktree, Slot: r.Name, Detail: fmt.Sprintf("%s has no slot in .rota/workers.json", v.worktree), Repair: "register the slot"})
 		}
@@ -506,9 +514,12 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 	}
 	for _, q := range reg.PRs() {
-		rep.Queued = append(rep.Queued, QueuedPR{Issue: q.Issue, PR: q.PR, Branch: q.Branch, From: q.From})
+		rep.Queued = append(rep.Queued, QueuedPR{Issue: q.Issue, PR: q.PR, Branch: q.Branch, From: q.From, Bundle: q.Bundle})
 		if id := queuedIssue(q); id != "" {
 			held[worker.NormID(id)] = true
+		}
+		for _, m := range q.Bundle {
+			held[worker.NormID(m)] = true
 		}
 		if n, ok := worker.PRRefNumber(q.PR); ok && forgeOK {
 			st, err := e.Forge.PRState(ctx, n)
@@ -642,6 +653,7 @@ func (e Env) readRows(wts []worktree, reg worker.Registry, rep *Report) ([]*Row,
 		}
 		r := &Row{Name: name, Branch: branch, PR: s.PR(), Tab: s.Handle(), Registered: true}
 		r.Issue = worker.HeldID(s.Task(), branch, name)
+		r.Bundle = s.Bundle()
 		if s.IsExternal() {
 			r.HostState = ExternalHost
 		}

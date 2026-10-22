@@ -246,7 +246,7 @@ func TestStatusReportsQueuedPRs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rep.Queued) != 1 || rep.Queued[0] != (QueuedPR{Issue: "12", PR: pr7, Branch: f.queued()[0].Branch, From: "ben"}) {
+	if len(rep.Queued) != 1 || !reflect.DeepEqual(rep.Queued[0], QueuedPR{Issue: "12", PR: pr7, Branch: f.queued()[0].Branch, From: "ben"}) {
 		t.Errorf("queued: %+v", rep.Queued)
 	}
 	for _, fd := range rep.Findings {

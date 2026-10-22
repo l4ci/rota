@@ -41,6 +41,9 @@ func (d ReviewDepth) rank() int {
 	return 0
 }
 
+// Outranks reports whether d is strictly stricter than o: none < light < full.
+func (d ReviewDepth) Outranks(o ReviewDepth) bool { return d.rank() > o.rank() }
+
 // ReviewPolicy is ship.review in object form. Default applies when no label
 // and no size rule does. LightBelow, when above 0, downgrades a Default of full
 // to light for a diff of fewer changed lines. Labels override both. Paths maps
@@ -352,13 +355,13 @@ func sitsBesideDeclared(file string, allowed []string) bool {
 // that declares none has no set to drift from.
 func scopeDrift(issueBody string, files, support []string) []string {
 	var allowed []string
-	if sec, ok := itembody.Section(issueBody, itembody.FilesHeadRe); ok {
+	for _, sec := range sections(issueBody, itembody.FilesHeadRe) {
 		allowed = append(allowed, bulletPaths(sec, false)...)
 	}
-	if sec, ok := itembody.Section(issueBody, itembody.TouchesHeadRe); ok {
+	for _, sec := range sections(issueBody, itembody.TouchesHeadRe) {
 		allowed = append(allowed, bulletPaths(sec, true)...)
 	}
-	if sec, ok := itembody.Section(issueBody, pointersHeadRe); ok {
+	for _, sec := range sections(issueBody, pointersHeadRe) {
 		allowed = append(allowed, bulletPaths(sec, true)...)
 	}
 	if len(allowed) == 0 {
@@ -374,6 +377,20 @@ func scopeDrift(issueBody string, files, support []string) []string {
 		out = append(out, f)
 	}
 	return out
+}
+
+// sections is every section under head, in order. A bundle's issue bodies are
+// joined, so the joined text can hold one Files section per issue.
+func sections(text string, head *regexp.Regexp) []string {
+	var out []string
+	for {
+		sec, ok := itembody.Section(text, head)
+		if !ok {
+			return out
+		}
+		out = append(out, sec)
+		text = text[head.FindStringIndex(text)[1]+len(sec):]
+	}
 }
 
 // bulletPaths reads the paths of each bullet in a section: every backticked

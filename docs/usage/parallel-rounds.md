@@ -689,6 +689,33 @@ milestone's `## Decisions` list. A `decision:grilling` item is never assigned: `
 `round transfer` refuse it (`blockedBy: human decision`), `round candidates` lists it as not ready,
 and the human resolves it with `/rota-brainstorm <ID>`.
 
+## Bundles: one worker, several small issues
+
+Small related issues (a few follow-ups in the same two files) each cost a worker boot, a PR,
+a review and a gate run when assigned one by one. Bundle them instead:
+
+```sh
+rota round assign 1559 --bundle 1563,1564   # lead 1559, members 1563 and 1564, one slot
+```
+
+The slot works on `<agent>/<lead>-<slug>`. Every member is checked for readiness like the lead,
+and the overlap check runs against other slots for the whole bundle, so other slots see it as
+one unit. Each member is claimed and marked in progress for the slot, and the brief quotes every
+issue's Acceptance, Out of scope and Touches. `round.bundleMax` caps the members (default 3, `0`
+means no limit). A `best-of:2` issue cannot be bundled, and a member another slot holds is refused.
+rota does not judge whether the issues are related: that is your call.
+
+The worker opens one PR with a `Closes #N` line for every issue and records proof per issue;
+`rota worker done` refuses while any issue lacks its PASS row. `rota review depth` lists the
+bundle and resolves to the highest depth any of its issues needs, so review each issue's
+acceptance. The gate refuses (`blockedBy: closes`) a PR that does not close every one. A bundle
+lands or bounces as a unit: `rota round bounce` counts it on the lead and refuses a member.
+
+To drop one member, `rota round transfer <member> --to human`. Closing a member drops it too: `rota worker done` no longer wants its proof row, the gate no longer wants its `Closes` line, and the next `round assign` of the lead removes it from the slot's bundle.
+The lead cannot be transferred while members remain, not even after `round.maxBounces`: transfer the members to the human first, or return or reclaim the slot. `round return`, `round reclaim` and
+`round wind-down` release the lead and its members together. `rota round status` shows the slot
+as `1559 (+#1563, +#1564)`.
+
 ## Moving an issue that is assigned
 
 ```sh

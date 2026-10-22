@@ -184,6 +184,44 @@ func TestRoundStatusShowsTheBestOfSibling(t *testing.T) {
 	}
 }
 
+// A bundled slot shows its members beside the lead, as text and as a JSON list;
+// a queued PR of a bundle does the same on its review line.
+func TestRoundStatusShowsTheBundle(t *testing.T) {
+	root, deps := roundFixture(t, nil)
+	if code, out, _ := rotaInWith(t, deps, root, "--json", "round", "reconcile", "--apply"); code != 0 {
+		t.Fatalf("reconcile exit %d: %s", code, out)
+	}
+	_, out, _ := rotaInWith(t, deps, root, "--json", "round", "status")
+	for _, r := range data(t, out)["slots"].([]any) {
+		if _, ok := r.(map[string]any)["bundle"]; ok {
+			t.Fatalf("a single issue has no bundle: %v", r)
+		}
+	}
+	if _, err := worker.UpdateSlot(root, "dana", func(s *worker.Slot) { s.SetBundle([]string{"63", "64"}) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.Update(root, func(d *worker.Doc) {
+		d.QueuePR(worker.QueuedPR{Issue: "70", PR: "#9", Branch: "ben/70-x", From: "ben", Bundle: []string{"71"}})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, out, _ = rotaInWith(t, deps, root, "--json", "round", "status")
+	d := data(t, out)
+	for _, r := range d["slots"].([]any) {
+		if row := r.(map[string]any); row["name"] == "dana" && !reflect.DeepEqual(row["bundle"], []any{"63", "64"}) {
+			t.Errorf("dana's bundle: %v", row)
+		}
+	}
+	rev := d["review"].([]any)
+	if len(rev) != 1 || !reflect.DeepEqual(rev[0].(map[string]any)["bundle"], []any{"71"}) {
+		t.Errorf("review: %v", d["review"])
+	}
+	_, out, _ = rotaInWith(t, deps, root, "round", "status")
+	if !strings.Contains(out, "58 (+#63, +#64)") || !strings.Contains(out, "review\t#70 (+#71)\t") {
+		t.Errorf("the table shows the members:\n%s", out)
+	}
+}
+
 // When every account the roster could run under is cooling down, round status
 // shows the effective cap and why; with headroom it adds nothing.
 func TestRoundStatusShowsTheEffectiveCapWhenBelowTheRoster(t *testing.T) {
