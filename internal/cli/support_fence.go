@@ -14,7 +14,33 @@ import (
 // run: the ones that merge and the ones that write tracked .rota/ content.
 // Only the main orchestrator does either.
 var supportFenced = []string{
-	"rota worker gate",
+	// Merge.
+	"rota worker gate", "rota worker train",
+	"rota ship merge", "rota ship pr-merge", "rota ship undo",
+	// Tracked .rota/ writes.
+	"rota knowledge add", "rota knowledge amend", "rota knowledge rename-topic", "rota knowledge replace", "rota knowledge rm",
+	"rota knowledge tier fold", "rota knowledge tier set",
+	"rota knowledge contradiction add", "rota knowledge contradiction clear",
+	"rota glossary write", "rota glossary import",
+	"rota map index", "rota qa index",
+	"rota milestone add", "rota milestone index", "rota milestone overview", "rota milestone put", "rota milestone status",
+	// Release.
+	"rota release bump", "rota release changelog", "rota release close-milestone", "rota release publish", "rota release push",
+}
+
+// supportAllowed are the other leaves of the groups supportFenced draws from:
+// reads and local-only writes. Naming them keeps a new verb from landing
+// unclassified (the table test fails on a group leaf in neither list).
+var supportAllowed = []string{
+	"rota knowledge hit", "rota knowledge query", "rota knowledge stats", "rota knowledge topics",
+	"rota knowledge contradiction list", "rota knowledge contradiction has",
+	"rota knowledge tier get", "rota knowledge tier list",
+	"rota glossary read",
+	"rota map query", "rota map stats",
+	"rota qa query",
+	"rota milestone active", "rota milestone check", "rota milestone list", "rota milestone show",
+	"rota release host", "rota release milestone-check", "rota release notes", "rota release pending", "rota release version",
+	"rota ship body", "rota ship pr", "rota ship strategy",
 }
 
 // supportBackendHint is the hint for a support key under issues.source file.

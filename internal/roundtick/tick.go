@@ -104,6 +104,9 @@ type Env struct {
 	// MergeApproval is ship.mergeApproval: any mode but none (empty
 	// included) asks for a person, and the autopilot then merges nothing.
 	MergeApproval string
+	// NoMerge is a support machine (round.role support): the tick merges
+	// nothing and calls neither Gate nor Train. The queued PRs are main's.
+	NoMerge bool
 	// Slots lists the roster from the registry; Queued the PR refs waiting in
 	// its review queue.
 	Slots  func() []Slot
@@ -284,6 +287,9 @@ func Run(ctx context.Context, e Env) (Result, error) {
 
 func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 	if len(targets) == 0 {
+		return nil
+	}
+	if e.NoMerge {
 		return nil
 	}
 	if e.humanMerge() {

@@ -120,11 +120,16 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		}
 		return targetBase(root, target, renv.Base)
 	}
-	e.Gate = func(_ context.Context, target, base string) roundtick.GateOutcome {
-		return gateTarget(c, root, target, base)
-	}
-	e.Train = func(_ context.Context, targets []string, base string) roundtick.TrainOutcome {
-		return trainTargets(c, root, targets, base)
+	if set.Role == roundcfg.RoleSupport {
+		// A support machine never gates; main adopts and merges its PRs.
+		e.NoMerge = true
+	} else {
+		e.Gate = func(_ context.Context, target, base string) roundtick.GateOutcome {
+			return gateTarget(c, root, target, base)
+		}
+		e.Train = func(_ context.Context, targets []string, base string) roundtick.TrainOutcome {
+			return trainTargets(c, root, targets, base)
+		}
 	}
 	be, err := openBacklog(c, root, false, "")
 	if err != nil {
