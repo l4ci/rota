@@ -1052,10 +1052,7 @@ func planSettings(o HvOptions, projs []*hvProj, accounts []string) ([]hvEdit, []
 		add(hook.SettingsPath(hook.ScopeUser, o.ClaudeDir))
 	}
 	for _, a := range accounts {
-		if strings.HasPrefix(a, "~/") && o.Home != "" {
-			a = filepath.Join(o.Home, a[2:])
-		}
-		add(hook.SettingsPath(hook.ScopeUser, a))
+		add(hook.SettingsPath(hook.ScopeUser, fsio.ExpandHome(a, o.Home)))
 	}
 	for _, p := range projs {
 		add(hook.SettingsPath(hook.ScopeProject, p.dir))

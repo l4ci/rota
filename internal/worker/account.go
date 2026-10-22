@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/fsio"
 	"io"
 	"math"
 	"net/http"
@@ -490,10 +491,7 @@ func ExpandConfigDirIn(d, home string) string {
 	if d == "" {
 		d = "~/.claude"
 	}
-	if strings.HasPrefix(d, "~/") && home != "" {
-		d = filepath.Join(home, d[2:])
-	}
-	return filepath.Clean(d)
+	return filepath.Clean(fsio.ExpandHome(d, home))
 }
 
 // ConfigDirMismatch is the warning for an orchestrator running under
