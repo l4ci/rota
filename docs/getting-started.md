@@ -16,7 +16,7 @@ The skills land in the Claude Code and Codex skill directories. Options, upgradi
 ## ⚙ Set up the project
 
 Run `rota setup` once at the project root. It asks the main config questions, scaffolds `.rota/`
-and writes your answers. Press Enter to keep a default. Each question decides one thing:
+and writes your answers. Press Enter to keep the value it suggests. Where the repo gives a signal (your `go.mod` or `package.json`, CI files, the `origin` host, the harnesses on your `PATH`), setup suggests that value and says where it read it, for example `suggested: github (origin is github.com, gh is authenticated)`. A value you saved in your global config wins over the repo's signal, which is then shown as a note. Each question decides one thing:
 
 - **Issue source** (`issues.source`). Where the backlog lives. `file` (default) keeps it in `.rota/BACKLOG.md`. `github`, `gitlab`, `forge`, `jira`, `linear` or `itsaplan` make that tracker the backlog. See the [issue backend](usage/issue-backend.md).
 - **Isolation** (`work.isolation`). `worktree` (default) keeps `main` untouched while agents run and allows parallel `/rota-work` sessions. `branch` is fine for solo work.
@@ -27,11 +27,14 @@ and writes your answers. Press Enter to keep a default. Each question decides on
 - **QA** (`ship.qa`). Whether `/rota-ship` runs QA first.
 - **Worker harness** (`round.workerKind`). Which harness round workers run on: `claude`, `codex` or `opencode`.
 - **Orchestrator harness** (`orchestrator.harness`). Which harness runs the round orchestrator.
+- **Base branch** (`git.baseBranch`). The branch the skills merge into. Free text; leave it empty to auto-detect.
+- **Quick test command** (`test.fast`). The per-task check, such as `go test ./...`. Type one command or a JSON list; empty leaves it unset.
+- **Full test command** (`test.full`). The whole suite the merge gate runs. Same format.
 
-`rota setup --list` prints the questions and how to answer them. Bare `rota` in an uninitialized project runs setup. In your home directory `rota setup` refuses (pass `--force`); bare `rota` opens the projects picker instead.
+`rota setup --list` prints the questions, how to answer them and each suggestion with its evidence (`--json` for scripts). Bare `rota` in an uninitialized project runs setup. In your home directory `rota setup` refuses (pass `--force`); bare `rota` opens the projects picker instead.
 
 > [!TIP]
-> For scripts and CI, `rota init` scaffolds `.rota/` with the Recommended defaults and asks nothing. `rota setup --yes` also takes the defaults, and `--set key=value` answers one question.
+> For scripts and CI, `rota init` scaffolds `.rota/` with the Recommended defaults and asks nothing. `rota setup --yes` takes the suggested values (the defaults where there is no signal), and `--set key=value` answers one question.
 
 > [!IMPORTANT]
 > Set `test.full` to your project's test command (`rota config set test.full "npm test"`). The solo loop below doesn't need it. A parallel round does: the gate refuses to merge while `test.full` is empty, unless you pass `--no-verify`.

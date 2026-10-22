@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -25,7 +26,10 @@ type setupSignal struct {
 // (#1782). A question with no signal is absent and keeps its default. Nothing
 // here runs a project command: the evidence is a file, a git answer or a PATH
 // entry, and the one process started is `gh auth status` / `glab auth status`.
-func readSetupSignals(c *Ctx, dir string) map[string]setupSignal {
+//
+// A key in answered (given with --set or held by the global config) is not
+// probed: its value is already settled, so the probe would only cost time.
+func readSetupSignals(c *Ctx, dir string, answered map[string]bool) map[string]setupSignal {
 	sigs := map[string]setupSignal{}
 	d := c.deps()
 	run := func(args ...string) (string, bool) {
@@ -38,7 +42,7 @@ func readSetupSignals(c *Ctx, dir string) map[string]setupSignal {
 	if base, ok := baseBranchSignal(run); ok {
 		sigs["git.baseBranch"] = base
 	}
-	if sig, ok := issuesSourceSignal(c, dir, run, onPath); ok {
+	if sig, ok := issuesSourceSignal(c, dir, run, onPath, answered["issues.source"]); ok {
 		sigs["issues.source"] = sig
 	}
 	if sig, ok := testSignals(dir); ok {
@@ -95,7 +99,10 @@ func baseBranchSignal(run func(...string) (string, bool)) (setupSignal, bool) {
 // issuesSourceSignal is the forge named by origin's host, when its CLI is
 // installed and signed in; file when origin names a forge whose CLI is not
 // ready. No origin, or a host that is neither, is no signal.
-func issuesSourceSignal(c *Ctx, dir string, run func(...string) (string, bool), onPath func(string) bool) (setupSignal, bool) {
+func issuesSourceSignal(c *Ctx, dir string, run func(...string) (string, bool), onPath func(string) bool, skip bool) (setupSignal, bool) {
+	if skip {
+		return setupSignal{}, false
+	}
 	raw, ok := run("remote", "get-url", "origin")
 	if !ok {
 		return setupSignal{}, false
@@ -113,12 +120,19 @@ func issuesSourceSignal(c *Ctx, dir string, run func(...string) (string, bool), 
 	if !onPath(cli) {
 		return setupSignal{"file", "origin is " + host + " but " + cli + " is not installed"}, true
 	}
-	res, err := c.deps().Proc(c.Context(), proc.Cmd{Name: cli, Args: []string{"auth", "status"}, Dir: dir})
-	if err != nil || res.ExitCode != 0 {
+	res, err := c.deps().Proc(c.Context(), proc.Cmd{Name: cli, Args: []string{"auth", "status", "--hostname", host}, Dir: dir, Timeout: authProbeTimeout})
+	if err != nil {
+		// A timeout or a failed exec is no answer: keep the schema default.
+		return setupSignal{}, false
+	}
+	if res.ExitCode != 0 {
 		return setupSignal{"file", "origin is " + host + " but " + cli + " is not authenticated"}, true
 	}
 	return setupSignal{forge, "origin is " + host + ", " + cli + " is authenticated"}, true
 }
+
+// authProbeTimeout bounds `gh|glab auth status`, which can reach the network.
+const authProbeTimeout = 5 * time.Second
 
 // remoteHost is the host of a git remote URL (https://, ssh:// or scp-like).
 func remoteHost(raw string) string {
