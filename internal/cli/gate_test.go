@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/l4ci/rota/internal/bugreport"
 	"github.com/l4ci/rota/internal/gate"
+	"github.com/l4ci/rota/internal/git"
 )
 
 // gateConfig is base (a JSON object) with autonomy.level and the ship keys
@@ -169,7 +171,7 @@ func gateCases() []gateCase {
 		}},
 		{gate.BugreportFile, "bugreport file", func(t *testing.T, level string) (string, []string, string, func() bool, *Deps) {
 			root := trProject(t, gateConfig(t, "", level, nil))
-			if _, err := bugreport.Add(root, bugreport.Record{Source: bugreport.SourceAgent, Summary: "wrong refusal"}, time.Now()); err != nil {
+			if _, err := bugreport.Add(context.Background(), git.Exec, root, bugreport.Record{Source: bugreport.SourceAgent, Summary: "wrong refusal"}, time.Now()); err != nil {
 				t.Fatal(err)
 			}
 			f := &forge{answer: func(string, []string) (string, string, int) {

@@ -46,7 +46,7 @@ func brAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		rec, err := bugreport.Add(root, bugreport.Record{Source: bugreport.SourceAgent, Verb: *verb,
+		rec, err := bugreport.Add(c.Context(), c.deps().Git, root, bugreport.Record{Source: bugreport.SourceAgent, Verb: *verb,
 			Summary: *summary, Expected: *expected, Harness: *harness, Model: *model}, c.deps().Now())
 		if err != nil {
 			return Result{}, err
@@ -86,7 +86,7 @@ func brList(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	open, err := bugreport.Open(root)
+	open, err := bugreport.Open(c.Context(), c.deps().Git, root)
 	if err != nil {
 		return Result{}, err
 	}
@@ -109,7 +109,7 @@ func brRecord(c *Ctx, args []string) (string, bugreport.Record, error) {
 	if err != nil {
 		return "", bugreport.Record{}, err
 	}
-	all, err := bugreport.Load(root)
+	all, err := bugreport.Load(c.Context(), c.deps().Git, root)
 	if err != nil {
 		return "", bugreport.Record{}, err
 	}
@@ -269,7 +269,7 @@ func brFile(fs *flag.FlagSet) RunFunc {
 		text := url
 		// The issue exists now: a failed status update must not hide the URL, or
 		// a retry files a duplicate. Say so and tell the caller how to close the record.
-		if _, err := bugreport.Update(root, r.ID, func(r *bugreport.Record) { r.Status = bugreport.StatusFiled; r.Issue = url }); err != nil {
+		if _, err := bugreport.Update(c.Context(), c.deps().Git, root, r.ID, func(r *bugreport.Record) { r.Status = bugreport.StatusFiled; r.Issue = url }); err != nil {
 			d.Set("recorded", false)
 			d.Set("warning", err.Error())
 			text = fmt.Sprintf("%s\nwarning: filed, but %s stays open (%v); do not file it again, run `rota bugreport dismiss %s`", url, r.ID, err, r.ID)
@@ -283,7 +283,7 @@ func brDismiss(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if _, err := bugreport.Update(root, r.ID, func(r *bugreport.Record) { r.Status = bugreport.StatusDismissed }); err != nil {
+	if _, err := bugreport.Update(c.Context(), c.deps().Git, root, r.ID, func(r *bugreport.Record) { r.Status = bugreport.StatusDismissed }); err != nil {
 		return Result{}, err
 	}
 	d := jsonx.NewObject()
@@ -319,7 +319,7 @@ func recordMistake(c *Ctx, e *Error) {
 	if err != nil {
 		return
 	}
-	_, _ = bugreport.Add(root, bugreport.Record{Source: bugreport.SourceAuto, Verb: verb, Args: c.verbArgs,
+	_, _ = bugreport.Add(c.Context(), c.deps().Git, root, bugreport.Record{Source: bugreport.SourceAuto, Verb: verb, Args: c.verbArgs,
 		Exit: e.Exit, Error: e.Message}, c.deps().Now())
 }
 

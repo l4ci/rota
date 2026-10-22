@@ -1,15 +1,19 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/tui"
 )
 
 func projectsXDG(t *testing.T) string {
@@ -196,7 +200,7 @@ func TestProjectsViewStatusRoundAndLease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows := projectRows(res.Data, roundlease.Env{}, git.Exec)
+	rows := projectRows(&Ctx{}, res.Data, roundlease.Env{})
 	byPath := map[string]string{}
 	for _, r := range rows {
 		byPath[r.Path] = r.Status
@@ -210,12 +214,47 @@ func TestProjectsViewStatusRoundAndLease(t *testing.T) {
 func TestProjectStateReadsRoundAndLease(t *testing.T) {
 	root := t.TempDir()
 	initRun(t, root, "init", "--no-blocks")
-	if _, round, lease := projectState(root, false, roundlease.Env{}, git.Exec); round != "none" || lease != "none" {
+	if _, round, lease := projectState(&Ctx{}, root, false, roundlease.Env{}); round != "none" || lease != "none" {
 		t.Errorf("fresh project: round %q lease %q", round, lease)
 	}
 	os.WriteFile(filepath.Join(root, ".rota", "workers.json"), []byte(`{"round": 4, "slots": []}`), 0o644)
-	if _, round, _ := projectState(root, false, roundlease.Env{}, git.Exec); round != "4" {
+	if _, round, _ := projectState(&Ctx{}, root, false, roundlease.Env{}); round != "4" {
 		t.Errorf("round from workers.json: %q", round)
+	}
+}
+
+func TestProjectsViewHonorsCancellation(t *testing.T) {
+	projectsXDG(t)
+	root, common := trProject(t, "{}"), t.TempDir()
+	d := testDeps()
+	if _, err := projects.Register(d.projectsEnv(), root, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	lease := roundlease.Env{Host: "test-host", Alive: func(int) bool { return true }, Now: time.Now}
+	if _, _, _, err := lease.Acquire(common, root, roundlease.Holder{PID: 100}, 7); err != nil {
+		t.Fatal(err)
+	}
+	d.LeaseEnv = func() roundlease.Env { return lease }
+	d.Git = func(ctx context.Context, _ string, _ ...string) (git.Result, error) {
+		return git.Result{Stdout: common}, ctx.Err()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	c := &Ctx{Deps: d, ctx: ctx}
+	res, err := runProjects(c, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := projectsView(c, res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rendered := m.Render(160, 20, tui.Style{}); !strings.Contains(rendered, "round lease: none") {
+		t.Fatalf("canceled view read the lease:\n%s", rendered)
+	}
+	rows, err := m.(projects.Screen).Load()
+	if err != nil || len(rows) != 1 || rows[0].Round != "none" || rows[0].Lease != "none" {
+		t.Fatalf("canceled reload: %+v, %v; want no round or lease", rows, err)
 	}
 }
 

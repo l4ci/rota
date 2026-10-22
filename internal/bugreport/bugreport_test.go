@@ -1,15 +1,39 @@
 package bugreport
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/l4ci/rota/internal/git"
 )
 
 var t0 = time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
+
+func TestPathUsesRunner(t *testing.T) {
+	root, main := project(t), project(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	run := func(got context.Context, _ string, _ ...string) (git.Result, error) {
+		if got != ctx {
+			t.Error("path lookup lost the caller's context")
+		}
+		return git.Result{Stdout: filepath.Join(main, ".git")}, nil
+	}
+	if got, want := Path(ctx, run, root), filepath.Join(main, ".rota", File); got != want {
+		t.Fatalf("shared path = %q, want %q", got, want)
+	}
+	if err := os.RemoveAll(filepath.Join(main, ".rota")); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := Path(ctx, run, root), filepath.Join(root, ".rota", File); got != want {
+		t.Fatalf("fallback path = %q, want %q", got, want)
+	}
+}
 
 func project(t *testing.T) string {
 	t.Helper()
@@ -22,28 +46,28 @@ func project(t *testing.T) string {
 
 func TestAddLoadRoundTrip(t *testing.T) {
 	root := project(t)
-	got, err := Add(root, Record{Source: SourceAuto, Verb: "worker done", Exit: 70, Error: "boom"}, t0)
+	got, err := Add(context.Background(), git.Exec, root, Record{Source: SourceAuto, Verb: "worker done", Exit: 70, Error: "boom"}, t0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.ID != "bug-1" || got.Status != StatusOpen || got.TS != "2026-10-21T12:00:00Z" || got.Count != 1 {
 		t.Fatalf("added %+v", got)
 	}
-	second, err := Add(root, Record{Source: SourceAgent, Summary: "a wrong refusal"}, t0)
+	second, err := Add(context.Background(), git.Exec, root, Record{Source: SourceAgent, Summary: "a wrong refusal"}, t0)
 	if err != nil || second.ID != "bug-2" {
 		t.Fatalf("second %+v %v", second, err)
 	}
-	all, err := Load(root)
+	all, err := Load(context.Background(), git.Exec, root)
 	if err != nil || len(all) != 2 || all[0].Verb != "worker done" || all[1].Summary != "a wrong refusal" {
 		t.Fatalf("loaded %+v %v", all, err)
 	}
-	if _, err := os.Stat(Path(root)); err != nil || !strings.HasSuffix(Path(root), filepath.Join(".rota", File)) {
-		t.Errorf("log path %q: %v", Path(root), err)
+	if _, err := os.Stat(Path(context.Background(), git.Exec, root)); err != nil || !strings.HasSuffix(Path(context.Background(), git.Exec, root), filepath.Join(".rota", File)) {
+		t.Errorf("log path %q: %v", Path(context.Background(), git.Exec, root), err)
 	}
 }
 
 func TestLoadMissingLogIsEmpty(t *testing.T) {
-	all, err := Load(project(t))
+	all, err := Load(context.Background(), git.Exec, project(t))
 	if err != nil || len(all) != 0 {
 		t.Fatalf("%+v %v", all, err)
 	}
@@ -52,12 +76,12 @@ func TestLoadMissingLogIsEmpty(t *testing.T) {
 func TestAddCountsAnOpenRepeat(t *testing.T) {
 	root := project(t)
 	r := Record{Source: SourceAuto, Verb: "gate", Exit: 70, Error: "x"}
-	Add(root, r, t0)
-	again, err := Add(root, r, t0)
+	Add(context.Background(), git.Exec, root, r, t0)
+	again, err := Add(context.Background(), git.Exec, root, r, t0)
 	if err != nil || again.ID != "bug-1" || again.Count != 2 {
 		t.Fatalf("repeat %+v %v", again, err)
 	}
-	all, _ := Load(root)
+	all, _ := Load(context.Background(), git.Exec, root)
 	if len(all) != 1 {
 		t.Fatalf("repeat added a record: %+v", all)
 	}
@@ -65,18 +89,18 @@ func TestAddCountsAnOpenRepeat(t *testing.T) {
 
 func TestOpenSkipsFiledAndDismissed(t *testing.T) {
 	root := project(t)
-	Add(root, Record{Source: SourceAgent, Summary: "a"}, t0)
-	Add(root, Record{Source: SourceAgent, Summary: "b"}, t0)
-	Add(root, Record{Source: SourceAgent, Summary: "c"}, t0)
-	if _, err := Update(root, "bug-1", func(r *Record) { r.Status = StatusFiled; r.Issue = "https://x/1" }); err != nil {
+	Add(context.Background(), git.Exec, root, Record{Source: SourceAgent, Summary: "a"}, t0)
+	Add(context.Background(), git.Exec, root, Record{Source: SourceAgent, Summary: "b"}, t0)
+	Add(context.Background(), git.Exec, root, Record{Source: SourceAgent, Summary: "c"}, t0)
+	if _, err := Update(context.Background(), git.Exec, root, "bug-1", func(r *Record) { r.Status = StatusFiled; r.Issue = "https://x/1" }); err != nil {
 		t.Fatal(err)
 	}
-	Update(root, "bug-2", func(r *Record) { r.Status = StatusDismissed })
-	open, err := Open(root)
+	Update(context.Background(), git.Exec, root, "bug-2", func(r *Record) { r.Status = StatusDismissed })
+	open, err := Open(context.Background(), git.Exec, root)
 	if err != nil || len(open) != 1 || open[0].ID != "bug-3" {
 		t.Fatalf("open %+v %v", open, err)
 	}
-	if _, err := Update(root, "bug-9", func(*Record) {}); err == nil {
+	if _, err := Update(context.Background(), git.Exec, root, "bug-9", func(*Record) {}); err == nil {
 		t.Error("updating an unknown id succeeded")
 	}
 }
@@ -153,15 +177,15 @@ func TestDraftTitleIsRedactedBeforeItIsTruncated(t *testing.T) {
 
 func TestAddRedactsWhatItStores(t *testing.T) {
 	root := project(t)
-	got, err := Add(root, Record{Source: SourceAuto, Verb: "x", Args: []string{"--token", "ghp_abcdefghijklmnopqrstuvwxyz0123456789"}, Error: "bad key sk-abcdefghijklmnopqrstuv"}, t0)
+	got, err := Add(context.Background(), git.Exec, root, Record{Source: SourceAuto, Verb: "x", Args: []string{"--token", "ghp_abcdefghijklmnopqrstuvwxyz0123456789"}, Error: "bad key sk-abcdefghijklmnopqrstuv"}, t0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, _ := os.ReadFile(Path(root))
+	raw, _ := os.ReadFile(Path(context.Background(), git.Exec, root))
 	if strings.Contains(string(raw), "ghp_abc") || strings.Contains(string(raw), "sk-abcdef") || strings.Contains(got.Error, "sk-abc") {
 		t.Errorf("log keeps secrets: %s", raw)
 	}
-	if fi, _ := os.Stat(Path(root)); fi.Mode().Perm() != 0o600 {
+	if fi, _ := os.Stat(Path(context.Background(), git.Exec, root)); fi.Mode().Perm() != 0o600 {
 		t.Errorf("log mode %v, want 0600", fi.Mode().Perm())
 	}
 }
@@ -177,7 +201,7 @@ func gitIn(t *testing.T, dir string, args ...string) {
 
 // A worker's worktree has its own .rota/ (tracked), yet its records must land
 // where the main checkout's wind-down reads them.
-func TestWorktreeRecordsLandInTheMainLog(t *testing.T) {
+func TestBugreportWorktreeRecordsLandInTheMainLog(t *testing.T) {
 	base, _ := filepath.EvalSymlinks(t.TempDir())
 	main := filepath.Join(base, "main")
 	os.MkdirAll(filepath.Join(main, ".rota"), 0o755)
@@ -187,10 +211,10 @@ func TestWorktreeRecordsLandInTheMainLog(t *testing.T) {
 	gitIn(t, main, "commit", "-q", "-m", "i")
 	wt := filepath.Join(base, "wt")
 	gitIn(t, main, "worktree", "add", "-q", "-b", "w", wt)
-	if _, err := Add(wt, Record{Source: SourceAgent, Summary: "from a worker"}, t0); err != nil {
+	if _, err := Add(context.Background(), git.Exec, wt, Record{Source: SourceAgent, Summary: "from a worker"}, t0); err != nil {
 		t.Fatal(err)
 	}
-	open, err := Open(main)
+	open, err := Open(context.Background(), git.Exec, main)
 	if err != nil || len(open) != 1 || open[0].Summary != "from a worker" {
 		t.Fatalf("main sees %+v %v", open, err)
 	}
@@ -251,8 +275,8 @@ func TestRedactKeepsUpstreamAndPublicNames(t *testing.T) {
 
 func TestAddRedactsSpaceSeparatedFlagArgs(t *testing.T) {
 	root := project(t)
-	Add(root, Record{Source: SourceAuto, Verb: "x", Exit: 70, Args: []string{"--token", "plainvalue", "--force", "GH_TOKEN", "other"}, Error: "e"}, t0)
-	raw, _ := os.ReadFile(Path(root))
+	Add(context.Background(), git.Exec, root, Record{Source: SourceAuto, Verb: "x", Exit: 70, Args: []string{"--token", "plainvalue", "--force", "GH_TOKEN", "other"}, Error: "e"}, t0)
+	raw, _ := os.ReadFile(Path(context.Background(), git.Exec, root))
 	if strings.Contains(string(raw), "plainvalue") {
 		t.Errorf("log keeps the value: %s", raw)
 	}
