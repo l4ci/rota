@@ -68,6 +68,26 @@ func TestFollowUpBodyShape(t *testing.T) {
 	}
 }
 
+// Dedup keys on title+file: the same title in another file is a new finding.
+func TestFileFollowUpsDedupSameTitleDifferentFile(t *testing.T) {
+	be, tr := followUpIssues()
+	root := t.TempDir()
+	a := Finding{Severity: "minor", Title: "nit", File: "a.go"}
+	b := Finding{Severity: "minor", Title: "nit", File: "b.go"}
+	id, added, err := FileFollowUps(be, root, []Finding{a}, "#5", "review-quality", "FAIL")
+	if err != nil || added != 1 {
+		t.Fatalf("first: %q %d %v", id, added, err)
+	}
+	id2, added, err := FileFollowUps(be, root, []Finding{a, b}, "#5", "review-quality", "FAIL")
+	if err != nil || id2 != id || added != 1 {
+		t.Fatalf("second: %q %d %v, want %q and 1 new line", id2, added, err, id)
+	}
+	body := tr.Issues[0].Body
+	if strings.Count(body, "### nit") != 2 || !strings.Contains(body, "`a.go`") || !strings.Contains(body, "`b.go`") {
+		t.Errorf("body lacks both files:\n%s", body)
+	}
+}
+
 func TestRelatesTo(t *testing.T) {
 	for _, tc := range []struct {
 		related, pr string
