@@ -222,11 +222,22 @@ type Prompt struct {
 	// Free marks a question answered with free text, not a choice: a string
 	// key or a list key (a JSON list, or one command). It has no Choices.
 	Free bool
+	// Roles are the round.role values whose setup asks the question; nil is
+	// every role. The support path (#1774) asks only machine-local questions:
+	// the project-owned answers arrive with the clone's tracked config.
+	Roles []string
 }
+
+// mainOnly marks a question the support machine never asks.
+var mainOnly = []string{"main"}
 
 // Prompts is the setup's questions, in the order they are asked.
 var Prompts = []Prompt{
-	{Key: "issues.source", Title: "Where do the issues live?", Help: map[string]string{
+	{Key: "round.role", Title: "Is this the main machine or a support machine?", Help: map[string]string{
+		"main":    "the main orchestrator: sets the project up and merges",
+		"support": "a support orchestrator for a project main already set up (round.support)",
+	}},
+	{Key: "issues.source", Title: "Where do the issues live?", Roles: mainOnly, Help: map[string]string{
 		"file":     "BACKLOG.md in the repo",
 		"github":   "GitHub issues (gh)",
 		"gitlab":   "GitLab issues (glab)",
@@ -235,11 +246,11 @@ var Prompts = []Prompt{
 		"linear":   "Linear (needs a rota connect connection)",
 		"itsaplan": "It's a Plan (needs a rota connect connection)",
 	}},
-	{Key: "work.isolation", Title: "How is each piece of work isolated?", Help: map[string]string{
+	{Key: "work.isolation", Title: "How is each piece of work isolated?", Roles: mainOnly, Help: map[string]string{
 		"branch":   "a feature branch in this checkout",
 		"worktree": "a separate git worktree per item",
 	}},
-	{Key: "work.mergeStrategy", Title: "How does finished work land?", Help: map[string]string{
+	{Key: "work.mergeStrategy", Title: "How does finished work land?", Roles: mainOnly, Help: map[string]string{
 		"direct": "merge straight into the base branch",
 		"pr":     "open a pull request",
 	}},
@@ -253,12 +264,12 @@ var Prompts = []Prompt{
 		"roundtrip": "run one item from brainstorm to ship, then stop",
 		"auto":      "keep taking the next ready item; rounds run the autopilot",
 	}},
-	{Key: "ship.review", Title: "How deep a review before shipping?", Help: map[string]string{
+	{Key: "ship.review", Title: "How deep a review before shipping?", Roles: mainOnly, Help: map[string]string{
 		"full":  "run /rota-review",
 		"light": "Spec reviewer only",
 		"none":  "skip the review",
 	}},
-	{Key: "ship.qa", Title: "Run QA before shipping?", Help: map[string]string{
+	{Key: "ship.qa", Title: "Run QA before shipping?", Roles: mainOnly, Help: map[string]string{
 		"false": "no",
 		"true":  "yes, run /rota-qa",
 	}},
@@ -273,9 +284,9 @@ var Prompts = []Prompt{
 		"hermes":   "Hermes",
 		"opencode": "OpenCode",
 	}},
-	{Key: "git.baseBranch", Title: "Which branch do the skills merge into?", Optional: true, Free: true},
-	{Key: "test.fast", Title: "Which command is the quick per-task check?", Optional: true, Free: true},
-	{Key: "test.full", Title: "Which command runs the full suite?", Optional: true, Free: true},
+	{Key: "git.baseBranch", Title: "Which branch do the skills merge into?", Optional: true, Free: true, Roles: mainOnly},
+	{Key: "test.fast", Title: "Which command is the quick per-task check?", Optional: true, Free: true, Roles: mainOnly},
+	{Key: "test.full", Title: "Which command runs the full suite?", Optional: true, Free: true, Roles: mainOnly},
 }
 
 func init() {
@@ -335,6 +346,20 @@ func (p Prompt) Valid(v string) bool {
 		}
 	}
 	return false
+}
+
+// RoleNames are the round.role values whose setup asks p.
+func (p Prompt) RoleNames() []string {
+	if p.Roles != nil {
+		return p.Roles
+	}
+	k, _ := SchemaKey("round.role")
+	return k.Choices
+}
+
+// ForRole is whether the setup for role asks p.
+func (p Prompt) ForRole(role string) bool {
+	return slices.Contains(p.RoleNames(), role)
 }
 
 // PromptFor is the prompt for key, or nil.
