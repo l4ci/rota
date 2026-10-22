@@ -33,9 +33,14 @@ func TestCliGitReadsStayOnDeps(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, bad := range []string{"git.Repo{", "git.Exec"} {
-			if strings.Contains(string(b), bad) {
-				t.Errorf("%s uses %s; go through Deps", f, bad)
+		for _, line := range strings.Split(string(b), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "//") {
+				continue
+			}
+			for _, bad := range []string{"git.Repo{", "git.Exec", "rotastate.CommonDir("} {
+				if strings.Contains(line, bad) {
+					t.Errorf("%s uses %s; go through Deps", f, bad)
+				}
 			}
 		}
 	}

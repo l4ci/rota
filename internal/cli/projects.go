@@ -1,12 +1,10 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
 
-	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotastate"
@@ -114,7 +112,7 @@ func projectsView(c *Ctx, res Result) (tui.Model, error) {
 		if err != nil {
 			return nil, err
 		}
-		return projectRows(res.Data, lease, c.deps().Git), nil
+		return projectRows(c, res.Data, lease), nil
 	}
 	run := func(args ...string) error {
 		if code := run(Tree(), c.deps(), args, c.Stdin, c.Stdout, c.Stderr); code != ExitOK {
@@ -122,12 +120,12 @@ func projectsView(c *Ctx, res Result) (tui.Model, error) {
 		}
 		return nil
 	}
-	return projects.NewScreen(projectRows(res.Data, lease, c.deps().Git), load, run, c.deps().UserHomeDir), nil
+	return projects.NewScreen(projectRows(c, res.Data, lease), load, run, c.deps().UserHomeDir), nil
 }
 
 // projectRows turns `rota projects` Data into screen rows, adding what the
 // directory itself says: no .rota/, the last round number, the round lease.
-func projectRows(data any, lease roundlease.Env, run git.Runner) []projects.Row {
+func projectRows(c *Ctx, data any, lease roundlease.Env) []projects.Row {
 	d, _ := data.(*jsonx.Object)
 	if d == nil {
 		return nil
@@ -142,7 +140,7 @@ func projectRows(data any, lease roundlease.Env, run git.Runner) []projects.Row 
 		}
 		missing, _ := o.Get("missing")
 		r := projects.Row{Name: jsonx.Str(o, "name"), Path: jsonx.Str(o, "path"), LastSeen: jsonx.Str(o, "lastSeen")}
-		r.Status, r.Round, r.Lease = projectState(r.Path, missing == true, lease, run)
+		r.Status, r.Round, r.Lease = projectState(c, r.Path, missing == true, lease)
 		out = append(out, r)
 	}
 	return out
@@ -150,7 +148,7 @@ func projectRows(data any, lease roundlease.Env, run git.Runner) []projects.Row 
 
 // projectState is the status, last round and lease of one registered path.
 // Only a project that still holds .rota/ has rounds to report.
-func projectState(path string, missing bool, lease roundlease.Env, run git.Runner) (status, round, held string) {
+func projectState(c *Ctx, path string, missing bool, lease roundlease.Env) (status, round, held string) {
 	switch {
 	case missing:
 		return "missing directory", "-", "-"
@@ -164,7 +162,7 @@ func projectState(path string, missing bool, lease roundlease.Env, run git.Runne
 		round = fmt.Sprint(n)
 	}
 	held = "none"
-	if common, err := rotastate.CommonDirVia(context.Background(), run, path); err == nil {
+	if common, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, path); err == nil {
 		if l, st, err := lease.Read(common); err == nil && st != roundlease.None {
 			switch st {
 			case roundlease.Stale:

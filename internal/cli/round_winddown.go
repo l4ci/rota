@@ -136,7 +136,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 			d.Set("summary", sum)
 			lines = append(lines, "", text)
 		}
-		if open, _ := bugreport.Open(root); len(open) > 0 {
+		if open, _ := bugreport.Open(c.Context(), c.deps().Git, root); len(open) > 0 {
 			d.Set("bugreports", len(open))
 			lines = append(lines, "", bugreportOffer(open))
 		}

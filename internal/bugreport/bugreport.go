@@ -63,8 +63,8 @@ type Record struct {
 // so the log lives in the main checkout's: every worktree of one repo shares it,
 // and the main checkout's wind-down and Stop hook see a worker's records. A
 // project that is not a git repo keeps it under its own root.
-func Path(root string) string {
-	if cd, err := rotastate.CommonDirVia(context.Background(), git.Exec, root); err == nil && filepath.Base(cd) == ".git" {
+func Path(ctx context.Context, run git.Runner, root string) string {
+	if cd, err := rotastate.CommonDirVia(ctx, run, root); err == nil && filepath.Base(cd) == ".git" {
 		if main := filepath.Dir(cd); fsio.IsDir(rotatree.Dir(main)) {
 			return rotatree.File(main, File)
 		}
@@ -74,13 +74,13 @@ func Path(root string) string {
 
 // Add appends r (assigning ID, TS, Status open). An open record with the same
 // verb, exit and error is counted instead of added again.
-func Add(root string, r Record, now time.Time) (Record, error) {
+func Add(ctx context.Context, run git.Runner, root string, r Record, now time.Time) (Record, error) {
 	// The log is gitignored, but a project whose .gitignore predates it could
 	// commit it: keep secrets out of what is stored, whatever the draft does later.
 	r = redactRecord(r)
 	var out Record
-	err := fsio.Locked(Path(root), fsio.LockTimeout, func() error {
-		all, err := Load(root)
+	err := fsio.Locked(Path(ctx, run, root), fsio.LockTimeout, func() error {
+		all, err := Load(ctx, run, root)
 		if err != nil {
 			return err
 		}
@@ -93,7 +93,7 @@ func Add(root string, r Record, now time.Time) (Record, error) {
 				all[i].Verb == r.Verb && all[i].Exit == r.Exit && all[i].Error == r.Error {
 				all[i].Count++
 				out = all[i]
-				return save(root, all)
+				return save(ctx, run, root, all)
 			}
 		}
 		r.ID = fmt.Sprintf("bug-%d", next+1)
@@ -101,7 +101,7 @@ func Add(root string, r Record, now time.Time) (Record, error) {
 		r.Status = StatusOpen
 		r.Count = 1
 		out = r
-		return save(root, append(all, r))
+		return save(ctx, run, root, append(all, r))
 	})
 	return out, err
 }
@@ -154,8 +154,8 @@ func idNumber(id string) int {
 
 // Load returns every record in order; a missing log is none. A line that is
 // not a record is skipped.
-func Load(root string) ([]Record, error) {
-	data, err := os.ReadFile(Path(root))
+func Load(ctx context.Context, run git.Runner, root string) ([]Record, error) {
+	data, err := os.ReadFile(Path(ctx, run, root))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -174,7 +174,7 @@ func Load(root string) ([]Record, error) {
 	return out, sc.Err()
 }
 
-func save(root string, all []Record) error {
+func save(ctx context.Context, run git.Runner, root string, all []Record) error {
 	var buf bytes.Buffer
 	for _, r := range all {
 		line, err := json.Marshal(r)
@@ -184,18 +184,18 @@ func save(root string, all []Record) error {
 		buf.Write(line)
 		buf.WriteByte('\n')
 	}
-	if err := os.MkdirAll(filepath.Dir(Path(root)), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(Path(ctx, run, root)), 0o755); err != nil {
 		return err
 	}
-	if err := fsio.WriteFileAtomic(Path(root), buf.Bytes()); err != nil {
+	if err := fsio.WriteFileAtomic(Path(ctx, run, root), buf.Bytes()); err != nil {
 		return err
 	}
-	return os.Chmod(Path(root), 0o600)
+	return os.Chmod(Path(ctx, run, root), 0o600)
 }
 
 // Open returns the records still waiting for an offer to be answered.
-func Open(root string) ([]Record, error) {
-	all, err := Load(root)
+func Open(ctx context.Context, run git.Runner, root string) ([]Record, error) {
+	all, err := Load(ctx, run, root)
 	var out []Record
 	for _, r := range all {
 		if r.Status == StatusOpen {
@@ -209,10 +209,10 @@ func Open(root string) ([]Record, error) {
 var ErrUnknown = errors.New("no such bug record")
 
 // Update applies fn to the record with id and saves it.
-func Update(root, id string, fn func(*Record)) (Record, error) {
+func Update(ctx context.Context, run git.Runner, root, id string, fn func(*Record)) (Record, error) {
 	var out Record
-	err := fsio.Locked(Path(root), fsio.LockTimeout, func() error {
-		all, err := Load(root)
+	err := fsio.Locked(Path(ctx, run, root), fsio.LockTimeout, func() error {
+		all, err := Load(ctx, run, root)
 		if err != nil {
 			return err
 		}
@@ -220,7 +220,7 @@ func Update(root, id string, fn func(*Record)) (Record, error) {
 			if all[i].ID == id {
 				fn(&all[i])
 				out = all[i]
-				return save(root, all)
+				return save(ctx, run, root, all)
 			}
 		}
 		return fmt.Errorf("%w: %s", ErrUnknown, id)
