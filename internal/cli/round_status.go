@@ -353,7 +353,7 @@ func hostStateText(r round.Row) string {
 		return r.HostState + ":" + r.Evidence
 	}
 	// A partial or failed report shows beside the state; a plain done adds nothing.
-	if r.Outcome == worker.OutcomePartial || r.Outcome == worker.OutcomeFailed {
+	if worker.OutcomeOpen(r.Outcome) {
 		return strutil.FirstNonEmpty(r.HostState, "done") + "/" + r.Outcome
 	}
 	return r.HostState

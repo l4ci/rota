@@ -193,7 +193,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 				s.SetOutcome(kind, summary, now)
 			}
 			evidence := outcomeEvidence(kind, summary, s.PR())
-			if k, sum := s.Outcome(); kind == "" && (k == worker.OutcomePartial || k == worker.OutcomeFailed) {
+			if k, sum := s.Outcome(); kind == "" && worker.OutcomeOpen(k) {
 				evidence = outcomeEvidence(k, sum, s.PR())
 			}
 			s.SetEvent(worker.EventDone, evidence, now)
@@ -407,7 +407,7 @@ func readOutcome(outcome, file string) (kind string, summary []string, err error
 		return "", nil, Usage("--outcome must be one of %s, got %q", strings.Join(worker.Outcomes, ", "), outcome)
 	}
 	if file == "" {
-		if outcome == worker.OutcomePartial || outcome == worker.OutcomeFailed {
+		if worker.OutcomeOpen(outcome) {
 			return "", nil, Usage("--outcome %s needs --summary-file: three lines naming what changed, what was found and what remains", outcome)
 		}
 		return outcome, nil, nil
