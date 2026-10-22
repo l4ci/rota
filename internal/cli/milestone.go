@@ -364,7 +364,8 @@ func runMilestoneIndex(c *Ctx, args []string) (Result, error) {
 }
 
 // milestoneCheck holds a milestone's feature issues against its criteria and
-// capabilities. Read-only.
+// capabilities. Under the file backend it also regenerates the milestone files'
+// Items sections and reports the ones that had drifted.
 func milestoneCheck(fs *flag.FlagSet) RunFunc {
 	strict := fs.Bool("strict", false, "fail on a criterion no feature issue serves")
 	return func(c *Ctx, args []string) (Result, error) {
@@ -379,6 +380,10 @@ func milestoneCheck(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		drifted, err := syncMilestoneItems(c, id)
+		if err != nil {
+			return backlogFail(err)
+		}
 		body, err := st.Show(id)
 		if err != nil {
 			return milestoneFail(err, "")
@@ -389,6 +394,12 @@ func milestoneCheck(fs *flag.FlagSet) RunFunc {
 		}
 		r := ms.Check(body, kids, *strict)
 		res, err := milestoneCheckResult(id, r)
+		if drifted {
+			if d, ok := res.Data.(*jsonx.Object); ok {
+				d.Set("itemsRegenerated", true)
+			}
+			res.Text += "\n" + id + ": regenerated the ## Items section (it had drifted from the items' Milestone fields)"
+		}
 		return withChildSync(c, id, res), err
 	}
 }
@@ -433,6 +444,29 @@ func refList(refs []string) string {
 		return "none"
 	}
 	return strings.Join(refs, ", ")
+}
+
+// syncMilestoneItems regenerates every milestone file's Items section under the
+// file backend and reports whether milestone id's had drifted. Tracker backends
+// keep the list on the tracking issue, so nothing is written there.
+func syncMilestoneItems(c *Ctx, id string) (drifted bool, err error) {
+	root, err := backlogScope(c)
+	if err != nil {
+		return false, err
+	}
+	be, err := openBacklog(c, root, false, "")
+	if err != nil {
+		return false, err
+	}
+	f, ok := be.(*backlog.File)
+	if !ok {
+		return false, nil
+	}
+	changed, err := f.SyncMilestones()
+	for _, m := range changed {
+		drifted = drifted || m == id
+	}
+	return drifted, err
 }
 
 // milestoneChildren is the milestone's backlog items as ms.Check reads them:
