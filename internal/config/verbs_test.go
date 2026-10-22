@@ -594,3 +594,24 @@ func TestSetScopeOverlapRefusesNonChoices(t *testing.T) {
 		t.Errorf("block: %v", err)
 	}
 }
+
+// An account dir that is neither absolute nor ~-prefixed would resolve against
+// whatever directory the launch runs in, so config check fails on it (#1777).
+func TestRetiredRejectsRelativeAccountDirs(t *testing.T) {
+	good := `{"round":{"accounts":[{"name":"a","configDir":"~/.claude-a"},{"name":"b","configDir":"/abs/b"}],` +
+		`"codexAccounts":[{"name":"c","codexHome":"~"}],"opencodeAccounts":[{"name":"o","configDir":"~/.oc"}]}}`
+	if got := Retired(project(t, good, "")); len(got) != 0 {
+		t.Errorf("valid dirs flagged: %v", got)
+	}
+	bad := `{"round":{"accounts":[{"name":"a","configDir":".claude-a"}],` +
+		`"codexAccounts":[{"name":"c","codexHome":"$HOME/.codex"}],"opencodeAccounts":[{"name":"o","configDir":"~bob/x"}]}}`
+	got := Retired(project(t, bad, ""))
+	if len(got) != 3 {
+		t.Fatalf("want 3 problems, got %v", got)
+	}
+	for i, key := range []string{"round.accounts", "round.codexAccounts", "round.opencodeAccounts"} {
+		if !strings.Contains(got[i], key) || !strings.Contains(got[i], "must be absolute or start with ~") {
+			t.Errorf("problem %d does not name %s and the rule: %q", i, key, got[i])
+		}
+	}
+}

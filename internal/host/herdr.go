@@ -169,6 +169,11 @@ var dialogLine = regexp.MustCompile(`^\s*(❯|>)?\s*(?:\d+\.\s+)?(.*\S)`)
 
 var dialogAccept = []string{"Yes, I trust this folder", "Yes, I accept", "Yes, proceed"}
 
+// onboardingTheme is Claude Code's first-run theme picker, which a config dir
+// with no profile opens on. Enter keeps the highlighted default, which is all
+// a worker needs from it.
+var onboardingTheme = regexp.MustCompile(`(?m)Choose the text style|^\s*(?:❯|>)?\s*(?:\d+\.\s+)?Dark mode\b[\s\S]*^\s*(?:\d+\.\s+)?Light mode\b`)
+
 // numbered is an option line that carries a number.
 var numbered = regexp.MustCompile(`^\s*(❯|>)?\s*\d+\.\s+\S`)
 
@@ -182,6 +187,9 @@ var numbered = regexp.MustCompile(`^\s*(❯|>)?\s*\d+\.\s+\S`)
 // from the cursor to the accepting option plus `enter`; ok is false on an
 // unknown dialog.
 func DialogKeys(pane string) (keys []string, ok bool) {
+	if onboardingTheme.MatchString(pane) {
+		return []string{"enter"}, true
+	}
 	var blocks [][]string
 	var cur []string
 	for _, line := range strings.Split(pane, "\n") {
@@ -329,8 +337,15 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	for i := 0; ; {
 		text := paneText(h.herdr(ctx, "agent", "read", name, "--source", "visible", "--format", "text"))
 		keys, ok := DialogKeys(text)
+		if !ok && looksBooted(text) {
+			// herdr did not call the session ready, but the pane is a booted
+			// session idle at its empty prompt: nothing is left to answer.
+			return tab, nil
+		}
 		if !ok {
-			return "", fmt.Errorf("slot '%s' is stuck on an unrecognised startup dialog in tab %s", o.Slot, tab)
+			// The tab is returned with the error: a session is running in it,
+			// and the caller records it so the next dispatch reaps it.
+			return tab, fmt.Errorf("slot '%s' is stuck on an unrecognised startup dialog in tab %s", o.Slot, tab)
 		}
 		h.herdr(ctx, append([]string{"agent", "send-keys", name}, keys...)...)
 		w := h.herdr(ctx, "agent", "wait", name, "--until", "idle", "--until", "blocked", "--timeout", timeoutMs)
@@ -338,7 +353,7 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 			return tab, nil
 		}
 		if i++; i >= 3 {
-			return "", fmt.Errorf("slot '%s' did not reach idle after its startup dialogs (tab %s)", o.Slot, tab)
+			return tab, fmt.Errorf("slot '%s' did not reach idle after its startup dialogs (tab %s)", o.Slot, tab)
 		}
 	}
 }

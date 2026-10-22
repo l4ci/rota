@@ -471,7 +471,7 @@ func TestDoctorKindsCodexEffectiveModels(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		k := doctorKinds(config.Load(p))[harness.Codex]
+		k := doctorKinds(config.Load(p), "")[harness.Codex]
 		if k.Tiers || !slices.Equal(k.Models, want) {
 			t.Errorf("%s: Tiers=%v Models=%v, want %v", doc, k.Tiers, k.Models, want)
 		}

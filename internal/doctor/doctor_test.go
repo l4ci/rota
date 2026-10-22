@@ -939,3 +939,14 @@ func TestStaleMilestoneFilesWarn(t *testing.T) {
 		t.Fatalf("%+v", c)
 	}
 }
+
+// A configDir that is neither absolute nor ~-prefixed fails, naming the rule
+// (#1777), instead of being looked up under the current directory.
+func TestAccountsFailsOnARelativeConfigDir(t *testing.T) {
+	f := &fake{}
+	in := Input{Home: t.TempDir(), Accounts: []config.Account{{Name: "a", ConfigDir: ".claude-a"}}, Exec: f.exec, Look: f.look}
+	c := statusOf(Run(context.Background(), in), "accounts")
+	if c.Status != Fail || !strings.Contains(c.Detail, "configDir must be absolute or start with ~") || !strings.Contains(c.Detail, "a:") {
+		t.Fatalf("%+v", c)
+	}
+}

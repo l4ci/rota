@@ -117,7 +117,7 @@ func (t *tmux) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	}
 	t.tmux(ctx, "send-keys", "-t", handle, launch, "C-m")
 	if !t.waitReady(ctx, handle, o.BootTimeout) {
-		return "", fmt.Errorf("slot '%s' session did not come up within %ds", o.Slot, o.BootTimeout)
+		return handle, fmt.Errorf("slot '%s' session did not come up within %ds", o.Slot, o.BootTimeout)
 	}
 	return handle, nil
 }

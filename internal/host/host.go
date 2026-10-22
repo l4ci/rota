@@ -279,7 +279,10 @@ type Host interface {
 	InSession() bool
 	// Where names the session for status lines.
 	Where() string
-	// Spawn creates the slot's session and returns its handle.
+	// Spawn creates the slot's session and returns its handle. A Spawn that
+	// fails with its session still open returns that handle beside the error,
+	// so the caller can record it and a later dispatch reaps it; "" means no
+	// session remains.
 	Spawn(ctx context.Context, o SpawnOpts) (string, error)
 	// Send submits the file as a prompt and confirms pickup. The error is
 	// ErrNotSubmitted, ErrDialogOpen, or another failure.
