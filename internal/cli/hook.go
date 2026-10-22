@@ -21,6 +21,7 @@ import (
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/skills"
@@ -162,7 +163,7 @@ func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bo
 	hc.commonDir = cd
 	hc.now = c.deps().Now
 	hc.lease = c.deps().LeaseEnv()
-	hc.who = hook.Identify(hc.lease, c.deps().Getenv, c.deps().HolderPID(), cd)
+	hc.who = hook.Identify(round.LeaseProbe{Env: hc.lease, HolderPID: c.deps().HolderPID(), Getenv: c.deps().Getenv}, cd)
 	switch {
 	case hc.who.Orchestrator:
 		hc.root = hc.who.Lease.Root
