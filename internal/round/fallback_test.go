@@ -265,3 +265,35 @@ func TestFallbackFromAnUnlistedKindTakesTheFirstHarness(t *testing.T) {
 		t.Fatalf("assign: %v %+v", err, res)
 	}
 }
+
+// A slot resuming its own issue keeps the kind it was assigned with: the
+// first round.harnesses entry is the default for a fresh assign only.
+func TestResumeKeepsTheSlotKind(t *testing.T) {
+	for name, c := range map[string]struct {
+		labels   []string
+		wantKind string
+		wantSrc  string
+	}{
+		"no label":     {wantKind: harness.Codex, wantSrc: KindFromSlot + " (resume)"},
+		"claude label": {labels: []string{"harness:claude"}, wantKind: harness.Claude, wantSrc: KindFromLabel},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := fallbackRig(t, fallbackCfg)
+			f.meters(t, nil)
+			if _, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = harness.Codex }); err != nil {
+				t.Fatalf("first assign: %v", err)
+			}
+			f.labelled("12", c.labels...)
+			res, err := f.assign("12", "ben", nil)
+			if err != nil {
+				t.Fatalf("resume: %v", err)
+			}
+			if res.Kind != c.wantKind || res.KindSource != c.wantSrc {
+				t.Fatalf("kind %q (%s), want %q (%s)", res.Kind, res.KindSource, c.wantKind, c.wantSrc)
+			}
+			if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.Kind() != c.wantKind {
+				t.Errorf("slot kind %q, want %q", s.Kind(), c.wantKind)
+			}
+		})
+	}
+}

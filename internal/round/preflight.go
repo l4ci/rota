@@ -68,7 +68,7 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 		// a slot that once ran a fallback must not carry it to the next issue.
 		project, projectSource = set.Harnesses[0], KindFromHarnesses
 	}
-	kind, kindSource := resolveKind(in.FlagKind, out.Pick.Harness, project, in.SlotKind)
+	kind, kindSource := resolveKind(in.FlagKind, out.Pick.Harness, project, in.SlotKind, in.Resuming)
 	if kindSource == KindFromConfig {
 		kindSource = projectSource
 	}
