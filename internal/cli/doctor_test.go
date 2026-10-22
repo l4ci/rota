@@ -66,6 +66,8 @@ func doctorData(t *testing.T, out string) (bool, map[string]map[string]any) {
 	order = strings.Replace(order, "agents,", "", 1)
 	// The verify line appears only in a project with no test.full or test.e2e.
 	order = strings.Replace(order, "verify,", "", 1)
+	// The test line (lock width, shard count) appears in any project.
+	order = strings.Replace(order, "test,", "", 1)
 	if order != "git,jq,host,tracker,accounts,hook,statusline,stop-hook,guard-hook,switch,skills,codex,opencode,config dir,state dir," {
 		t.Errorf("check order %s", order)
 	}
@@ -475,5 +477,28 @@ func TestDoctorKindsCodexEffectiveModels(t *testing.T) {
 		if k.Tiers || !slices.Equal(k.Models, want) {
 			t.Errorf("%s: Tiers=%v Models=%v, want %v", doc, k.Tiers, k.Models, want)
 		}
+	}
+}
+
+// The test line shows the lock width and the smoke shard count in a project.
+func TestDoctorTestLine(t *testing.T) {
+	d := doctorDeps(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`})
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	if code, out, _ := rotaInWith(t, d, dir, "init"); code != 0 {
+		t.Fatalf("init %d %s", code, out)
+	}
+	line := func() map[string]any {
+		_, out, _ := rotaInWith(t, d, dir, "doctor", "--json")
+		_, c := doctorData(t, out)
+		return c["test"]
+	}
+	c := line()
+	if c == nil || c["status"] != "pass" || !strings.Contains(c["detail"].(string), "test lock width 1; smoke shards ") {
+		t.Fatalf("default: %v", c)
+	}
+	rotaInWith(t, d, dir, "config", "set", "test.slots", "3")
+	rotaInWith(t, d, dir, "config", "set", "gate.smokeShards", "2")
+	if c := line(); !strings.Contains(c["detail"].(string), "width 3; smoke shards 2 (gate.smokeShards)") {
+		t.Errorf("configured: %v", c)
 	}
 }

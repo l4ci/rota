@@ -165,6 +165,13 @@ type Input struct {
 	// local verify, so the merge gate would refuse; false adds no line.
 	NothingToVerify bool
 
+	// TestSlots is test.slots, the width of the test lock; 0 (no project)
+	// skips the test line. SmokeShards is the shard count test/gate.sh would
+	// use on this machine, SmokeShardsSource what decided it.
+	TestSlots         int
+	SmokeShards       int
+	SmokeShardsSource string
+
 	// Slots are the live worker slots with a reserved port block; empty skips
 	// the ports check. CwdOf answers a process's working directory ("" when
 	// unknown); nil reads every directory as unknown.
@@ -217,6 +224,9 @@ func Run(ctx context.Context, in Input) Report {
 	if in.NothingToVerify {
 		// Only an unconfigured project adds a line; it warns, never fails.
 		checks = append(checks, Check{Name: "verify", Status: Warn, Detail: "test.full and test.e2e are both empty: the merge gate will refuse until test.full is set", Hint: "run: rota config set test.full '[...]'"})
+	}
+	if in.TestSlots > 0 {
+		checks = append(checks, pass("test", fmt.Sprintf("test lock width %d; smoke shards %d (%s)", in.TestSlots, in.SmokeShards, in.SmokeShardsSource)))
 	}
 	if in.StateDir != "" {
 		checks = append(checks, pass("state dir", in.StateDir))
