@@ -53,16 +53,18 @@ func OpenBundle(ids []string, closed func(id string) bool) []string {
 	return out
 }
 
-// MissingRed reports a change to non-test Go code while work.tdd is on and no
-// bundled issue's proof holds a FAIL row, the mark a red-first run leaves.
+// MissingRed reports a change to non-test Go code and no bundled issue's proof
+// holding a FAIL row, the mark a red-first run leaves. The caller checks
+// work.tdd first. bundle is a func so the backlog behind it is only opened
+// when files hold prod Go and a FAIL search is needed.
 // It is a heuristic: a FAIL row is not proof the failure was an assertion.
 // A bundle is one change: a red-first run on any of its issues is enough, so
 // rows is asked per issue until one answers with a FAIL.
-func MissingRed(tdd bool, files, bundle []string, rows func(id string) ([]proof.Row, error)) (bool, error) {
-	if !tdd || !slices.ContainsFunc(files, gopath.IsProdGo) {
+func MissingRed(files []string, bundle func() []string, rows func(id string) ([]proof.Row, error)) (bool, error) {
+	if !slices.ContainsFunc(files, gopath.IsProdGo) {
 		return false, nil
 	}
-	for _, id := range bundle {
+	for _, id := range bundle() {
 		rs, err := rows(id)
 		if err != nil {
 			return false, err

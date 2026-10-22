@@ -394,7 +394,7 @@ func missingRed(c *Ctx, root string, sl *worker.Slot, base string) (noRed bool, 
 	if derr != nil {
 		return false, derr, nil
 	}
-	noRed, err = worker.MissingRed(tdd, files, openBundleIssues(c, root, sl), func(id string) ([]proof.Row, error) {
+	noRed, err = worker.MissingRed(files, func() []string { return openBundleIssues(c, root, sl) }, func(id string) ([]proof.Row, error) {
 		_, st, _, err := openProof(c, id)
 		if err != nil {
 			return nil, err
