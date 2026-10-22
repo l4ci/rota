@@ -57,6 +57,7 @@ func testRun(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Resolution("%v", err)
 		}
+		environ := os.Environ()
 		if isolate {
 			// A command may not reach the live round, ssh-agent or the
 			// developer's home (#388); the temp root goes with the run.
@@ -65,12 +66,13 @@ func testRun(fs *flag.FlagSet) RunFunc {
 				return Result{}, err
 			}
 			defer os.RemoveAll(tmp)
-			environ, err := worker.IsolatedEnviron(os.Environ(), tmp)
-			if err != nil {
+			if environ, err = worker.IsolatedEnviron(environ, tmp); err != nil {
 				return Result{}, err
 			}
-			env.Shell = worker.IsolatedShell(environ)
 		}
+		// The commands run inside the held test lock: mark it so a nested
+		// `rota test lock` or `bash test/gate.sh` does not queue behind us (#1844).
+		env.Shell = worker.IsolatedShell(append(environ, testLockHeldEnv+"=1"))
 		var ran, passed, failed []string
 		var lines []string
 		logPath := ""
