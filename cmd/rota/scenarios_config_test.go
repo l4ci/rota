@@ -271,8 +271,17 @@ func suiteConfig(t *testing.T) {
 	)
 
 	// ---- config set
+	// setArgv is `config set key val`; a machine key takes --project, so these
+	// scenarios keep exercising the tracked file (#1786 routes it to the local one).
+	setArgv := func(key string, vals ...string) []string {
+		argv := j("config", "set")
+		if config.ScopeOf(key) == config.ScopeMachine {
+			argv = append(argv, "--project")
+		}
+		return append(append(argv, key), vals...)
+	}
 	set := func(name string, f fx, key, val string, check func(t *testing.T, e envl)) scn {
-		return scn{name: "config-set/" + name, fx: f, argv: j("config", "set", key, val),
+		return scn{name: "config-set/" + name, fx: f, argv: setArgv(key, val),
 			want: 0, check: check}
 	}
 	for _, c := range []struct {
@@ -297,7 +306,7 @@ func suiteConfig(t *testing.T) {
 		})
 		if strings.HasPrefix(c.raw, "-") {
 			// a value that starts with - is a flag until -- (conventions, rule 7)
-			s.argv = j("config", "set", "models.worker", "--", c.raw)
+			s.argv = setArgv("models.worker", "--", c.raw)
 		}
 		add(s)
 	}
@@ -331,10 +340,16 @@ func suiteConfig(t *testing.T) {
 		set("file/local-is-never-touched", fx{files: map[string]string{".rota/config.local.json": `{"models":{"worker":"local"}}`}}, "models.worker", "opus", nil),
 		set("file/set-in-config-even-when-local-overrides", fx{files: map[string]string{".rota/config.local.json": `{"models":{"worker":"local"}}`}, config: `{"models": {"worker": "p"}}`}, "models.worker", "q", eqCheck("data.previous", "p")),
 		set("from-subdir", withFile("sub/x.txt", "x\n"), "docs.path", "d", nil),
+		// #1786: with no flag a machine key lands in config.local.json.
+		scn{name: "config-set/route/machine-key-writes-local", fx: stdFx, argv: j("config", "set", "round.slots", "4"),
+			want: 0, check: both(eqCheck("data.scope", "local"), eqCheck("data.keyScope", "machine"))},
+		scn{name: "config-set/route/taste-key-writes-tracked", fx: stdFx, argv: j("config", "set", "work.isolation", "worktree"),
+			want: 0, check: eqCheck("data.keyScope", "taste")},
+		scn{name: "config-set/route/local-and-project-refused", fx: stdFx, argv: j("config", "set", "--local", "--project", "docs.path", "d"), want: 2},
 	)
 	for _, body := range []string{"[1]", "null", `"s"`, "7", "true"} {
 		body := body
-		add(scn{name: "config-set/not-an-object/" + body, fx: fx{config: body}, argv: j("config", "set", "models.worker", "x"),
+		add(scn{name: "config-set/not-an-object/" + body, fx: fx{config: body}, argv: setArgv("models.worker", "x"),
 			want: 70})
 	}
 	for _, key := range []string{"", ".a", "a.", "a..b", "."} {
@@ -379,19 +394,21 @@ func suiteConfig(t *testing.T) {
 	}
 	add(
 		chk("up-to-date", fx{config: fullConfig()}, 0, "upToDate"),
-		chk("up-to-date-extra-keys", fx{config: strings.Replace(fullConfig(), "{\n", "{\n  \"extra\": [1],\n", 1)}, 0, "upToDate"),
+		// A key the schema does not know fails the check (#1786).
+		chk("up-to-date-extra-keys", fx{config: strings.Replace(fullConfig(), "{\n", "{\n  \"extra\": [1],\n", 1)}, 1, "upToDate"),
 		chk("up-to-date-null-in-optional-key", fx{config: strings.Replace(fullConfig(), "{\n", "{\n  \"issues\": {\"label\": null},\n", 1)}, 0, "upToDate"),
 		chk("fresh", withFx(stdFx, func(f *fx) { f.after = noConfigFile }), 1, "fresh"),
 		chk("stale-std-config", stdFx, 1, "stale", allReq...),
 		chk("stale-empty-object", fx{config: "{}"}, 1, "stale", allReq...),
 		chk("stale-one-key", fx{config: fullConfig("umbrella.enabled")}, 1, "stale", "umbrella.enabled"),
-		chk("stale-schema-order", fx{config: fullConfig("rota.version", "models.orchestrator", "docs.path")}, 1, "stale", "models.orchestrator", "docs.path", "rota.version"),
+		chk("stale-schema-order", fx{config: fullConfig("rota.version", "learn.promoteThreshold", "docs.path")}, 1, "stale", "learn.promoteThreshold", "docs.path", "rota.version"),
 		chk("stale-null-value", fx{config: strings.Replace(fullConfig(), `"enabled": false`, `"enabled": null`, 1)}, 1, "stale", "umbrella.enabled"),
-		chk("stale-false-is-present", fx{config: fullConfig("ship.qa")}, 1, "stale", "ship.qa"),
-		chk("stale-parent-scalar", fx{config: strings.Replace(fullConfig(), "\"models\": {", "\"models\": 5, \"zzz\": {", 1)}, 1, "stale", "models.orchestrator", "models.worker"),
+		chk("stale-false-is-present", fx{config: fullConfig("test.e2e")}, 1, "stale", "test.e2e"),
+		chk("stale-parent-scalar", fx{config: strings.Replace(fullConfig(), "\"learn\": {", "\"learn\": 5, \"zzz\": {", 1)}, 1, "stale", "learn.promoteThreshold"),
 		chk("stale-parent-null", fx{config: `{"models": null}`}, 1, "stale", allReq...),
 		chk("up-to-date-local-supplies-keys", withFx(fx{config: "{}"}, func(f *fx) { f.files = map[string]string{".rota/config.local.json": fullConfig()} }), 0, "upToDate"),
-		chk("stale-optional-keys-never-count", fx{config: fullConfig("docs.afterWork")}, 1, "stale", "docs.afterWork"),
+		// docs.afterWork is a taste key, so it is not required (#1786).
+		chk("stale-optional-keys-never-count", fx{config: fullConfig("docs.afterWork")}, 0, "upToDate"),
 		chk("corrupt-invalid-json", fx{config: `{oops`}, 1, "corrupt"),
 		chk("corrupt-list", fx{config: `[1, 2]`}, 1, "corrupt"),
 		chk("corrupt-null", fx{config: `null`}, 1, "corrupt"),

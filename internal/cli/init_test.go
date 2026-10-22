@@ -364,3 +364,27 @@ func TestInitKeepsStampAtOrAboveAutonomyGate(t *testing.T) {
 		}
 	}
 }
+
+// #1786: init writes no machine or taste key, so a fresh project inherits
+// them from the global config or the defaults.
+func TestInitWritesNoMachineKeys(t *testing.T) {
+	gdir := isolateGlobal(t)
+	writeFile(t, config.GlobalPath(gdir), `{"round":{"slots":5}}`)
+	dir := t.TempDir()
+	if code, env, e := initRun(t, dir, "init"); code != 0 {
+		t.Fatalf("init: %d %v %s", code, env, e)
+	}
+	raw := readConfig(t, dir)
+	for _, k := range []string{"accounts", "dispatch", "slots", "workerCommand", "operatorCommand", `"models"`, "isolation", "mergeStrategy"} {
+		if strings.Contains(raw, k) {
+			t.Errorf("init wrote %s:\n%s", k, raw)
+		}
+	}
+	for key, src := range map[string]string{"round.slots": "global", "round.dispatch": "default"} {
+		_, env, _ := rotaRun(t, "--json", "-C", dir, "config", "show", key)
+		rows, _ := get(dataOf(env), "entries").([]any)
+		if len(rows) != 1 || get(rows[0], "source") != src {
+			t.Errorf("%s: %v, want source %s", key, env, src)
+		}
+	}
+}
