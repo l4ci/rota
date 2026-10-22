@@ -185,7 +185,7 @@ func TestPollDoneOnAPaneHostRecordsHeadroom(t *testing.T) {
 // holds the bounced PR instead of landing on the first slot holding the issue.
 func TestBounceEntryNamesTheSlotHoldingThePR(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"ben","task":"12","kind":"claude"},{"name":"dana","task":"12","kind":"claude"}`)
-	if _, err := RecordBounce(Env{}, dir, "12", "dana", "h1"); err != nil {
+	if _, err := recordBounceVia(Env{}, dir, "12", "dana", "h1"); err != nil {
 		t.Fatal(err)
 	}
 	es, _ := ledger.Load(dir)
@@ -201,7 +201,7 @@ func TestBounceByPRNumberAfterTheSlotMovedOnMakesNoPseudoSlot(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"ben","task":"13","kind":"claude"}`)
 	env := Env{Now: func() time.Time { return ledgerNow }}
 	ledgerAppend(env, dir, ledger.Entry{Kind: ledger.KindAssign, Issue: "12", Slot: "ben", PR: "847", Round: 0})
-	if _, err := RecordBounce(env, dir, "12", "", "h1"); err != nil {
+	if _, err := recordBounceVia(env, dir, "12", "", "h1"); err != nil {
 		t.Fatal(err)
 	}
 	es, _ := ledger.Load(dir)
