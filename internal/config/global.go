@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -28,15 +29,16 @@ var notGlobal = map[string]bool{VersionKey: true, "git.baseBranch": true, "umbre
 // SaveGlobal merges the schema keys set in root's .rota/config.json (never
 // config.local.json) into the global config under dir. Keys the project does
 // not set stay as they are: projects inherit the global, so replacing it would
-// delete inherited values. It returns the keys it saved, in schema order.
-func SaveGlobal(root, dir string) ([]string, AutonomyMigration, error) {
+// delete inherited values. It returns the keys it saved, in schema order, and
+// whether any of them held a different value in the global config before.
+func SaveGlobal(root, dir string) ([]string, bool, AutonomyMigration, error) {
 	raw, err := os.ReadFile(configPath(root))
 	if err != nil {
-		return nil, AutonomyMigration{}, fmt.Errorf("no .rota/config.json to save: %w", err)
+		return nil, false, AutonomyMigration{}, fmt.Errorf("no .rota/config.json to save: %w", err)
 	}
 	cfg, ok := decodeObject(raw)
 	if !ok {
-		return nil, AutonomyMigration{}, ErrCorrupt
+		return nil, false, AutonomyMigration{}, ErrCorrupt
 	}
 	vals := map[string]any{}
 	for _, k := range Keys {
@@ -51,8 +53,20 @@ func SaveGlobal(root, dir string) ([]string, AutonomyMigration, error) {
 		vals["autonomy.level"] = "roundtrip"
 		am.GlobalRewrite = true
 	}
+	// An unparseable global reads as empty here: MergeGlobal refuses it below.
+	before, _ := LoadGlobal(dir)
 	saved, err := MergeGlobal(dir, vals)
-	return saved, am, err
+	if err != nil {
+		return saved, false, am, err
+	}
+	changed := false
+	for _, k := range saved {
+		if old, ok := before[k]; !ok || !reflect.DeepEqual(old, vals[k]) {
+			changed = true
+			break
+		}
+	}
+	return saved, changed, am, nil
 }
 
 // LoadGlobal is the global config's values by dotted schema key. A missing

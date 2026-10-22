@@ -309,7 +309,7 @@ func TestStampNeverBlessesAnOldAuto(t *testing.T) {
 	gdir := t.TempDir()
 	t.Setenv("ROTA_CONFIG_DIR", gdir)
 	root = project(t, `{"rota": {"version": "0.20.0"}, "autonomy": {"level": "auto"}}`, "")
-	if _, _, err := SaveGlobal(root, gdir); err != nil {
+	if _, _, _, err := SaveGlobal(root, gdir); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Fill(root); err != nil {
@@ -369,7 +369,7 @@ func TestAutonomyRewritesAreReported(t *testing.T) {
 	gdir := t.TempDir()
 	t.Setenv("ROTA_CONFIG_DIR", gdir)
 	root = project(t, `{"rota": {"version": "0.20.0"}, "autonomy": {"level": "auto"}}`, "")
-	_, am, err := SaveGlobal(root, gdir)
+	_, _, am, err := SaveGlobal(root, gdir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,7 +377,7 @@ func TestAutonomyRewritesAreReported(t *testing.T) {
 		t.Errorf("save-global did not report its rewrite: %+v", am)
 	}
 	root = project(t, `{"rota": {"version": "0.21.0"}, "autonomy": {"level": "auto"}}`, "")
-	if _, am, _ = SaveGlobal(root, gdir); am != (AutonomyMigration{}) {
+	if _, _, am, _ = SaveGlobal(root, gdir); am != (AutonomyMigration{}) {
 		t.Errorf("a deliberate auto reported %+v", am)
 	}
 }

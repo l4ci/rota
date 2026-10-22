@@ -63,6 +63,16 @@ note: a key outside the schema is rejected (maintainer decision), where old acce
 note: an empty `<value>` is valid and stores the empty string; the old helper rejected it, so the shim passes `""` as a JSON literal.
 note: (#1101) `autonomy.level` takes `off`, `roundtrip` or `auto`. A project file stamped before the split may still hold the old one-hop `auto`; `config set autonomy.level` first rewrites it to `roundtrip` in `config.json` and `config.local.json` (with `--global`, in the global config), applies the value, then raises the stamp, so a deliberate `rota config set autonomy.level auto` is kept. A rewrite adds `autonomy: {"rewrote": true}` to `data` and a `rewrote: autonomy.level auto -> roundtrip in <files> ...` line to the text; when the set itself then fails, the same lines go to stderr as warnings.
 
+### rota config save-global
+rota config save-global
+repo: scoped
+data: {"path": string, "saved": []string, "changed": bool, "autonomy"?: {"rewrote": true}}
+exit: 3 when no `.rota/` is found; 70 when `.rota/config.json` is missing or is not a JSON object, when the global config exists but is not a JSON object (it is left as it is), or the write fails.
+old: none (added with the global config, #194).
+note: merges the schema keys `.rota/config.json` sets (never `config.local.json`, and never `rota.version`, `git.baseBranch` or `umbrella.enabled`) into the global config in the rota config dir, keeping the global keys the project does not set. `path` is the global file and `saved` lists the keys merged, in schema order.
+note: `changed` is true when at least one saved key was absent from the global config or held a different value there before the write, so a repeat run reports `false` although `saved` is the same list. The verb takes no arguments.
+note: an old one-hop `autonomy.level auto` in a project stamped before the split is copied as `roundtrip`; that adds `autonomy: {"rewrote": true}` to `data` and a `rewrote: ...` line to the text (#1511). Text mode prints `saved <n> keys to <path>`.
+
 ### rota config check
 rota config check
 repo: scoped
