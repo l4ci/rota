@@ -53,7 +53,8 @@ func closedMilestoneItems(text, mid string, seen map[string]bool) []ms.ItemRef {
 
 // SyncMilestones regenerates the Items section of every milestone file from the
 // open bullets and the done lines (completed items stay listed, marked), so the Milestone field and the list agree after a write. It
-// returns the milestones it rewrote. A project without BACKLOG.md has no items
+// returns the milestones it rewrote. One milestone that fails to sync does not
+// stop the rest; the errors come back joined. A project without BACKLOG.md has no items
 // to list.
 func (f *File) SyncMilestones() ([]string, error) {
 	rows, err := f.Rows()
@@ -70,6 +71,7 @@ func (f *File) SyncMilestones() ([]string, error) {
 		return nil, err
 	}
 	var changed []string
+	var errs []error
 	for _, m := range list {
 		items := MilestoneItems(rows, m.ID)
 		seen := map[string]bool{}
@@ -77,22 +79,26 @@ func (f *File) SyncMilestones() ([]string, error) {
 		items = append(items, closedMilestoneItems(archive, m.ID, seen)...)
 		ok, err := ms.SyncItems(f.Root, m.ID, items)
 		if err != nil {
-			return changed, err
+			errs = append(errs, err)
+			continue
 		}
 		if ok {
 			changed = append(changed, m.ID)
 		}
 	}
-	return changed, nil
+	return changed, errors.Join(errs...)
 }
 
-// syncMilestonesIf is SyncMilestones for a verb whose bullet carried a Milestone field.
-func (f *File) syncMilestonesIf(tagged bool) error {
+// syncMilestonesIf is SyncMilestones for a verb whose bullet carried a Milestone
+// field. The write has already committed, so a failure is a warning, never the
+// verb's error: a caller that retried a "failed" create would duplicate the item.
+func (f *File) syncMilestonesIf(tagged bool) {
 	if !tagged {
-		return nil
+		return
 	}
-	_, err := f.SyncMilestones()
-	return err
+	if _, err := f.SyncMilestones(); err != nil && f.Warn != nil {
+		f.Warn("milestone sync after the write: " + err.Error())
+	}
 }
 
 func bulletTagged(bullet string) bool { return ParseFields(bullet).Milestone != "" }
