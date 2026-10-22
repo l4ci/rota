@@ -132,15 +132,14 @@ func TestProofRecord(t *testing.T) {
 	}
 }
 
-// The worker reads the tier proof back in the forms recordedCommand writes:
-// both spellings of `proof record -- rota test run fast` must prove the tier.
-func TestRecordedCommandTierFormsProveFastTier(t *testing.T) {
+// The worker reads the tier proof back in the forms proof rows carry: both
+// spellings of `proof record -- rota test run fast` must prove the tier. The
+// literals are what rows store, so a quoting change in recordedCommand fails here.
+func TestFastTierFormsProveFastTier(t *testing.T) {
 	const head = "abc1234def5678"
-	forms := []string{
-		recordedCommand([]string{worker.FastTierCheck}, ""),
-		recordedCommand(strings.Fields(worker.FastTierCheck), ""),
-	}
-	for _, f := range forms {
+	stored := []string{"rota test run fast", "'rota' 'test' 'run' 'fast'"}
+	forms := fastTierForms()
+	for _, f := range stored {
 		rows := []proof.Row{{Check: f, Result: "PASS", Sha: "abc1234"}}
 		if got := worker.MissingFastProof(rows, head, forms, []string{"go test ./..."}); got != nil {
 			t.Errorf("row %q must prove the tier, missing = %v", f, got)

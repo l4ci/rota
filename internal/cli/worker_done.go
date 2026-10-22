@@ -93,15 +93,12 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
-			want := cmds
 			// {files} is the slot branch's diff, whatever cwd this runs from.
-			if want, err = expandFiles(c, slotDir(sl, root), *base, shellLines(cmds)...); err != nil {
+			want, err := expandFiles(c, slotDir(sl, root), *base, shellLines(cmds)...)
+			if err != nil {
 				return Result{}, err
 			}
-			tierForms := []string{
-				recordedCommand([]string{worker.FastTierCheck}, ""),
-				recordedCommand(strings.Fields(worker.FastTierCheck), ""),
-			}
+			tierForms := fastTierForms()
 			// A bundle is one change: every issue it closes needs its own proof.
 			for _, bid := range openBundleIssues(c, root, sl) {
 				_, st, _, err := openProof(c, bid)
