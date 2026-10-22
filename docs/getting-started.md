@@ -13,22 +13,25 @@ rota skills install
 
 The skills land in the Claude Code and Codex skill directories. Options, upgrading and removal are on the [install page](install.md).
 
-## ⚙ Initialize the project
+## ⚙ Set up the project
 
-Run `rota init` once at the project root. It scaffolds `.rota/` and writes the Recommended
-config defaults (models, isolation, merge strategy, quality gates, autonomy level). Keep the
-defaults unless you have a reason not to.
+Run `rota setup` once at the project root. It asks the main config questions, scaffolds `.rota/`
+and writes your answers. Press Enter to keep a default. Each question decides one thing:
+
+- **Issue source** (`issues.source`). Where the backlog lives. `file` (default) keeps it in `.rota/BACKLOG.md`. `github`, `gitlab`, `forge`, `jira`, `linear` or `itsaplan` make that tracker the backlog. See the [issue backend](usage/issue-backend.md).
+- **Isolation** (`work.isolation`). `worktree` (default) keeps `main` untouched while agents run and allows parallel `/rota-work` sessions. `branch` is fine for solo work.
+- **Merge strategy** (`work.mergeStrategy`). `direct` merges finished work straight into the base branch. `pr` opens a PR for review (the issue backend always opens a PR).
+- **Round dispatch** (`round.dispatch`). Where parallel round workers run: `subagent`, `tmux` or `herdr`. Solo work ignores it.
+- **Autonomy** (`autonomy.level`). How much rota may chain on its own: `off`, `roundtrip` or `auto`.
+- **Review depth** (`ship.review`). How thorough the review before shipping is: `full`, `light` or `none`.
+- **QA** (`ship.qa`). Whether `/rota-ship` runs QA first.
+- **Worker harness** (`round.workerKind`). Which harness round workers run on: `claude`, `codex` or `opencode`.
+- **Orchestrator harness** (`orchestrator.harness`). Which harness runs the round orchestrator.
+
+`rota setup --list` prints the questions and how to answer them. Bare `rota` in an uninitialized project runs setup. In your home directory `rota setup` refuses (pass `--force`); bare `rota` opens the projects picker instead.
 
 > [!TIP]
-> `rota setup` does the same and, on a terminal, asks the main choices (backlog backend, isolation, merge strategy, autonomy, review and QA gates); bare `rota` in an uninitialized project runs it. In your home directory both `rota init` and `rota setup` refuse (pass `--force` to init there); bare `rota` opens the projects picker instead.
-
-Three settings worth a second of thought:
-
-- **Backlog.** `file` (default) keeps it in `.rota/BACKLOG.md`. `issues` makes GitHub or GitLab issues the backlog. See the [issue backend](usage/issue-backend.md).
-
-- **Isolation.** `branch` is fine for solo work. Switch to `worktree` if you want `main`
-  untouched while agents run, or if you plan to run parallel `/rota-work` sessions.
-- **Merge strategy.** `direct` for fast iteration. `pr` if your team requires GitHub review (the issue backend always opens a PR).
+> For scripts and CI, `rota init` scaffolds `.rota/` with the Recommended defaults and asks nothing. `rota setup --yes` also takes the defaults, and `--set key=value` answers one question.
 
 > [!IMPORTANT]
 > Set `test.full` to your project's test command (`rota config set test.full "npm test"`). The solo loop below doesn't need it. A parallel round does: the gate refuses to merge while `test.full` is empty, unless you pass `--no-verify`.
