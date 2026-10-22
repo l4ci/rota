@@ -10,6 +10,14 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
+// Bounce's contract keeps exit 70 specifically for invalid round.maxBounces.
+func TestRoundBounceReportsInvalidMaxBounces(t *testing.T) {
+	code, out, stderr := roundConfigRun(t, `{"round":{"maxBounces":"many"}}`, "round", "bounce", "31")
+	if code != ExitInternal || !strings.Contains(out+stderr, "round.maxBounces must be an integer (got many)") {
+		t.Fatalf("exit %d, out %q, stderr %q; want exit %d naming round.maxBounces", code, out, stderr, ExitInternal)
+	}
+}
+
 func TestRoundBounceCountsAndRefusesAtTheCap(t *testing.T) {
 	deps := testDeps()
 	dir := workerProject(t, `{"round":{"maxBounces":2}}`)
