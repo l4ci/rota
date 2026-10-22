@@ -9,7 +9,6 @@ import (
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/shlex"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -49,19 +48,8 @@ func testRun(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := workerContext()
 		defer stop()
-		if anyContains(cmds, filesPlaceholder) {
-			files, err := changedFiles(c, root, *base)
-			if err != nil {
-				return Result{}, err
-			}
-			quoted := make([]string, len(files))
-			for i, f := range files {
-				quoted[i] = shlex.QuoteAlways(f)
-			}
-			list := strings.Join(quoted, " ")
-			for i, cmd := range cmds {
-				cmds[i] = strings.ReplaceAll(cmd, filesPlaceholder, list)
-			}
+		if cmds, err = expandFiles(c, root, *base, shellLines(cmds)...); err != nil {
+			return Result{}, err
 		}
 		env := workerEnvCtx(c, ctx)
 		isolate, err := gc.IsolateEnabled()
@@ -119,15 +107,13 @@ func testRun(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-const filesPlaceholder = "{files}"
-
-func anyContains(list []string, sub string) bool {
-	for _, s := range list {
-		if strings.Contains(s, sub) {
-			return true
-		}
+// shellLines wraps each command as the single-argument form expandFiles takes.
+func shellLines(cmds []string) [][]string {
+	out := make([][]string, len(cmds))
+	for i, cmd := range cmds {
+		out[i] = []string{cmd}
 	}
-	return false
+	return out
 }
 
 // remoteBase prefers origin/<base> over a local base it is strictly ahead of,
