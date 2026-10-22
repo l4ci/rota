@@ -15,6 +15,7 @@ import (
 func testCommands() *Command {
 	return &Command{Name: "test", Summary: "run a config test tier", Subs: []*Command{
 		{Name: "run", Summary: "run test.fast, test.full or test.e2e in order, stopping at the first failure", Verb: testRun},
+		{Name: "lock", Summary: "run a command holding a slot of the machine-wide test lock", Verb: testLock},
 		{Name: "ledger", Summary: "the exclusion ledger of known-red tests", Subs: []*Command{
 			{Name: "check", Summary: "report expired and malformed entries in .rota/test-ledger.json", Verb: noFlags(testLedgerCheck)},
 		}},
@@ -73,23 +74,29 @@ func testRun(fs *flag.FlagSet) RunFunc {
 		var ran, passed, failed []string
 		var lines []string
 		logPath := ""
-		for _, cmd := range cmds {
-			// One command per call: RunVerify runs every command it is given,
-			// and a tier stops at the first failure.
-			res, err := env.RunVerify(ctx, []string{cmd}, root)
-			if err != nil {
-				return Result{}, err
+		err = withTestLock(c, ctx, root, gc, "test run", func() error {
+			for _, cmd := range cmds {
+				// One command per call: RunVerify runs every command it is given,
+				// and a tier stops at the first failure.
+				res, err := env.RunVerify(ctx, []string{cmd}, root)
+				if err != nil {
+					return err
+				}
+				ran = append(ran, cmd)
+				if res.OK() {
+					passed = append(passed, cmd)
+					lines = append(lines, "pass: "+cmd)
+					continue
+				}
+				failed = append(failed, cmd)
+				logPath = res.LogPath
+				lines = append(lines, "FAIL: "+cmd, "log: "+res.LogPath)
+				break
 			}
-			ran = append(ran, cmd)
-			if res.OK() {
-				passed = append(passed, cmd)
-				lines = append(lines, "pass: "+cmd)
-				continue
-			}
-			failed = append(failed, cmd)
-			logPath = res.LogPath
-			lines = append(lines, "FAIL: "+cmd, "log: "+res.LogPath)
-			break
+			return nil
+		})
+		if err != nil {
+			return Result{}, err
 		}
 		d := jsonx.NewObject()
 		d.Set("tier", tier)
