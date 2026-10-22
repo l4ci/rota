@@ -59,13 +59,28 @@ func TestExpandFilesPrefersAheadRemoteBase(t *testing.T) {
 	write(t, filepath.Join(root, "branch.txt"), "b")
 	gitT(t, root, "add", "branch.txt")
 	gitT(t, root, "commit", "-q", "-m", "branch")
-	got, _ := expandFiles(expandCtx(), root, "", []string{"t {files}"})
+	got, err := expandFiles(expandCtx(), root, "", []string{"t {files}"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 1 || strings.Contains(got[0], "upstream.txt") || !strings.Contains(got[0], "branch.txt") {
 		t.Errorf("default base: %q, want only the branch changes", got)
 	}
-	got, _ = expandFiles(expandCtx(), root, "main", []string{"t {files}"})
+	got, err = expandFiles(expandCtx(), root, "main", []string{"t {files}"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 1 || !strings.Contains(got[0], "upstream.txt") {
 		t.Errorf("explicit base main: %q, want it used as given", got)
+	}
+}
+
+// A bad base is an error when {files} needs the diff.
+func TestExpandFilesBadBaseErrors(t *testing.T) {
+	root := tierProject(t, `{}`)
+	gitT(t, root, "checkout", "-q", "-b", "feat")
+	if got, err := expandFiles(expandCtx(), root, "no-such-ref", []string{"t {files}"}); err == nil {
+		t.Errorf("bad base with {files}: got %q, want an error", got)
 	}
 }
 

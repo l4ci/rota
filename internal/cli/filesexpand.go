@@ -54,6 +54,16 @@ func expandFiles(c *Ctx, dir, base string, cmds ...[]string) ([]string, error) {
 	return out, nil
 }
 
+// shellLines wraps each command as the single-argument form expandFiles takes:
+// one argument is a shell line, not a program name.
+func shellLines(cmds []string) [][]string {
+	out := make([][]string, len(cmds))
+	for i, cmd := range cmds {
+		out[i] = []string{cmd}
+	}
+	return out
+}
+
 // recordedCommand is the shell line that ran: one argument is a shell line
 // already; several are quoted one by one. {files} expands to list, which is
 // already quoted, and stays unquoted when it is a whole argument.

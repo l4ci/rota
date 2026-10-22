@@ -93,9 +93,9 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
-			want := cmds
 			// {files} is the slot branch's diff, whatever cwd this runs from.
-			if want, err = expandFiles(c, slotDir(sl, root), *base, shellLines(cmds)...); err != nil {
+			want, err := expandFiles(c, slotDir(sl, root), *base, shellLines(cmds)...)
+			if err != nil {
 				return Result{}, err
 			}
 			tierForms := fastTierForms()
