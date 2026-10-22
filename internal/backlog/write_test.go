@@ -493,3 +493,33 @@ func TestCommentKindsHasFinding(t *testing.T) {
 		t.Errorf("finding is a comment kind: %v", CommentKinds)
 	}
 }
+
+func TestSetHarness(t *testing.T) {
+	f, _ := proj(t, rotaFiles(nil))
+	if changed, err := f.SetHarness("B02", "codex"); err != nil || !changed {
+		t.Fatalf("set: %v %v", changed, err)
+	}
+	if got := read(t, f, ".rota/BACKLOG.md"); !strings.Contains(got, "[T01] Harness: codex\n") {
+		t.Fatalf("harness not appended:\n%s", got)
+	}
+	if changed, err := f.SetHarness("B02", "codex"); err != nil || changed {
+		t.Fatalf("same value: %v %v", changed, err)
+	}
+	// A field written before Harness: still ends where Harness: starts.
+	if _, err := f.SetField("B02", "related", "[F01], [B01]"); err != nil {
+		t.Fatal(err)
+	}
+	it, err := f.Get("B02")
+	if err != nil || ParseFields(it.Line).Related != "[F01], [B01]" {
+		t.Fatalf("related swallowed the harness: %q %v", it.Line, err)
+	}
+	if changed, err := f.SetHarness("B02", ""); err != nil || !changed {
+		t.Fatalf("clear: %v %v", changed, err)
+	}
+	if got := read(t, f, ".rota/BACKLOG.md"); strings.Contains(got, "Harness:") {
+		t.Errorf("harness left behind:\n%s", got)
+	}
+	if _, err := f.SetHarness("B99", "codex"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("unknown: %v", err)
+	}
+}

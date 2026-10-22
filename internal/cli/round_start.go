@@ -307,6 +307,11 @@ func roundCandidates(fs *flag.FlagSet) RunFunc {
 		d.Set("scope", sc)
 		d.Set("candidates", candidateList(cands))
 		lines := emptyNote(ctx, d, candidateLines(cands), env, root, be, sc, slate, cands)
+		if st := quotaFallback(c, ctx, root, set); st.Active {
+			fb, _ := fallbackData(st)
+			d.Set("fallback", fb)
+			lines = append([]string{fmt.Sprintf("fallback\tnew work goes to %s; %s accounts reset at %s", st.To, st.From, st.ResetsAt.UTC().Format(fallbackTime))}, lines...)
+		}
 		if a, err := env.Architecture(ctx, root, be, set, cands); err == nil {
 			d.Set("architecture", architectureData(a))
 			if l := a.Line(); l != "" {

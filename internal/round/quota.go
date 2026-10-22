@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -102,8 +103,8 @@ func (e Env) Headroom(ctx context.Context, root, kind string) string {
 // QuotaCap reads the account headroom behind the roster. The cap drops to the
 // slots already holding an issue when no pool a worker could run under has
 // headroom. A pool counts when its kind is the worker kind (round.workerKind,
-// else the default); a kind without a usage meter counts too once it has
-// configured accounts.
+// else the default) or listed in round.harnesses; a kind without a usage meter
+// counts too once it has configured accounts.
 func (e Env) QuotaCap(ctx context.Context, root string, set roundcfg.Settings) Cap {
 	reg := worker.LoadRegistryTolerant(root) // no error return: a cap is advisory, the assign verb reads the registry strictly
 	active, _ := Members(reg, set)
@@ -122,7 +123,7 @@ func (e Env) QuotaCap(ctx context.Context, root string, set roundcfg.Settings) C
 		if p.closed {
 			c.why[k] = coolingWhy(key, earliest(p.resets))
 		}
-		if k != wk && !(!h.UsageMeter() && configured) {
+		if k != wk && !slices.Contains(set.Harnesses, k) && !(!h.UsageMeter() && configured) {
 			continue
 		}
 		if !p.closed {
@@ -158,4 +159,37 @@ func earliest(ts []time.Time) time.Time {
 		}
 	}
 	return out
+}
+
+// Fallback is a worker handed from one harness to the next in
+// round.harnesses: From has no account with headroom, Why says so.
+type Fallback struct {
+	From, To, Why string
+}
+
+// FallbackState is whether new work goes to a later harness right now:
+// Active when the first harness in round.harnesses has no headroom and a later
+// one has, ResetsAt the earliest reset of the first harness's accounts.
+type FallbackState struct {
+	Active   bool
+	From, To string
+	ResetsAt time.Time
+}
+
+// Fallback reads the fallback state; zero when round.harnesses is unset.
+func (e Env) Fallback(ctx context.Context, root string, set roundcfg.Settings) FallbackState {
+	if len(set.Harnesses) < 2 {
+		return FallbackState{}
+	}
+	from := harness.Resolve(set.Harnesses[0])
+	p, _ := e.poolOf(ctx, root, from)
+	if !p.closed {
+		return FallbackState{}
+	}
+	for _, k := range set.Harnesses[1:] {
+		if e.Headroom(ctx, root, k) == "" {
+			return FallbackState{Active: true, From: from.Kind(), To: harness.Resolve(k).Kind(), ResetsAt: earliest(p.resets)}
+		}
+	}
+	return FallbackState{}
 }

@@ -159,6 +159,13 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		d.Set("tier", res.Tier)
 		setIf(d, "model", res.Model)
 		setIf(d, "pick", res.Pick.String())
+		if res.Fallback != nil {
+			fo := jsonx.NewObject()
+			fo.Set("from", res.Fallback.From)
+			fo.Set("to", res.Fallback.To)
+			fo.Set("why", res.Fallback.Why)
+			d.Set("fallback", fo)
+		}
 		setIf(d, "tierReason", res.TierReason)
 		if res.SmokeSection != 0 {
 			d.Set("smokeSection", res.SmokeSection)
@@ -193,7 +200,11 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		if len(res.Bundle) > 0 {
 			lead += " (+" + strings.Join(res.Bundle, ", +") + ")"
 		}
-		return Result{Data: d, Text: fmt.Sprintf("assigned %s to %s on %s", lead, res.Agent, res.Branch)}, nil
+		text := fmt.Sprintf("assigned %s to %s on %s", lead, res.Agent, res.Branch)
+		if fb := res.Fallback; fb != nil {
+			text += fmt.Sprintf("\nfallback\t%s -> %s: %s", fb.From, fb.To, fb.Why)
+		}
+		return Result{Data: d, Text: text}, nil
 	}
 }
 

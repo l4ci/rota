@@ -504,3 +504,30 @@ func TestEnumErrorNamesOffendingValue(t *testing.T) {
 		}
 	}
 }
+
+func TestHarnessesLoad(t *testing.T) {
+	s, err := Load(project(t, `{"round":{"harnesses":["claude","codex"]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(s.Harnesses, []string{"claude", "codex"}) {
+		t.Fatalf("Harnesses = %v", s.Harnesses)
+	}
+	if s, err = Load(project(t, "")); err != nil || len(s.Harnesses) != 0 {
+		t.Fatalf("unset: %v %v", s.Harnesses, err)
+	}
+}
+
+func TestHarnessesInvalid(t *testing.T) {
+	for cfg, want := range map[string]string{
+		`{"round":{"harnesses":["claude","bogus"]}}`: "round.harnesses must list kinds from",
+		`{"round":{"harnesses":["codex","codex"]}}`:  "codex twice",
+		`{"round":{"harnesses":"claude"}}`:           "round.harnesses",
+		`{"round":{"harnesses":[1]}}`:                "round.harnesses",
+	} {
+		_, err := Load(project(t, cfg))
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err %v, want %q", cfg, err, want)
+		}
+	}
+}
