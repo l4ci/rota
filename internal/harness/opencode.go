@@ -143,6 +143,9 @@ func (opencode) Accounts(cfg any) AccountList {
 // UsageMeter: OpenCode has no usage reading; a provider is billed per token.
 func (opencode) UsageMeter() bool { return false }
 
+// CrossReviewer is false: OpenCode is not a reviewer yet (#1612).
+func (opencode) CrossReviewer() bool { return false }
+
 func (opencode) LimitPhrases() []string { return SharedLimitPhrases() }
 
 // PaneVocab is OpenCode's own wording. The limit texts are the account caps of

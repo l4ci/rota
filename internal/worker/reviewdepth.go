@@ -165,9 +165,8 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 // review gets none: review:none, or no other harness to run it.
 const CrossNone = "none"
 
-// crossReviewers are the harnesses that can run a cross-harness review.
-// OpenCode is not one yet (#1612, out of scope).
-var crossReviewers = []string{harness.Claude, harness.Codex}
+// crossReviewer reports whether kind can run a cross-harness review.
+func crossReviewer(kind string) bool { return harness.Valid(kind) && harness.Resolve(kind).CrossReviewer() }
 
 // crossRank orders cross results for a bundle: a harness beats none beats "".
 func crossRank(c string) int {
@@ -204,7 +203,7 @@ func resolveCross(c roundcfg.CrossReview, labels []string, author string) (strin
 		if trigger == "" && slices.Contains(c.Labels, l) {
 			trigger = l
 		}
-		if v, ok := strings.CutPrefix(l, "review:"); ok && route != CrossNone && (v == CrossNone || slices.Contains(crossReviewers, v)) {
+		if v, ok := strings.CutPrefix(l, "review:"); ok && route != CrossNone && (v == CrossNone || crossReviewer(v)) {
 			route = v
 		}
 	}
@@ -219,7 +218,7 @@ func resolveCross(c roundcfg.CrossReview, labels []string, author string) (strin
 		return route, fmt.Sprintf("label %s; label review:%s", trigger, route)
 	}
 	for _, k := range c.Harnesses {
-		if k != author && slices.Contains(crossReviewers, k) {
+		if k != author && crossReviewer(k) {
 			return k, fmt.Sprintf("label %s; first of round.harnesses other than the author's %s", trigger, author)
 		}
 	}

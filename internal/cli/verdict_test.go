@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/verdict"
 )
 
@@ -410,7 +411,7 @@ func TestVerdictAddCrossHarness(t *testing.T) {
 		}
 	}
 	code, out, _ := rotaIn(t, dir, "verdict", "add", "--kind", "review-cross", "--verdict", "CONCERNS", "--harness", "codex", "--model", "gpt-5.5", "--json")
-	if d := data(t, out); code != 0 || d["kind"] != "review-cross" || d["harness"] != "codex" || d["model"] != "gpt-5.5" || d["next"] != "report" {
+	if d := data(t, out); code != 0 || d["kind"] != "review-cross" || d["harness"] != harness.Codex || d["model"] != "gpt-5.5" || d["next"] != "report" {
 		t.Fatalf("add: %d %v", code, d)
 	}
 	code, out, _ = rotaIn(t, dir, "verdict", "add", "--kind", "review-spec", "--verdict", "PASS", "--harness", "claude", "--model", "opus")
@@ -429,7 +430,7 @@ func TestVerdictAddCrossHarness(t *testing.T) {
 			cross = m
 		}
 	}
-	if code != 0 || cross == nil || cross["harness"] != "codex" || cross["model"] != "gpt-5.5" {
+	if code != 0 || cross == nil || cross["harness"] != harness.Codex || cross["model"] != "gpt-5.5" {
 		t.Fatalf("show --json: %d %v", code, recs)
 	}
 }
