@@ -142,6 +142,8 @@ type Options struct {
 	NoteLimit string
 	// Today is the day clock of the file backend's dated rows; nil is time.Now.
 	Today func() time.Time
+	// Warn receives the file backend's post-write notices; nil drops them.
+	Warn func(string)
 }
 
 // Open returns the backend selected by issues.source in cfg, the loaded
@@ -155,7 +157,7 @@ func Open(ctx context.Context, root string, cfg any, opts Options) (Backend, err
 		return nil, err
 	}
 	if name == "file" {
-		return &File{Root: root, CountProof: opts.CountProof, Today: opts.Today}, nil
+		return &File{Root: root, CountProof: opts.CountProof, Today: opts.Today, Warn: opts.Warn}, nil
 	}
 	if opts.NewTracker == nil {
 		return nil, errors.New("issues.source needs a tracker")
