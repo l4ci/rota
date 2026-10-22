@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.24.0 — 2026-10-22
+
+Config keys gain scopes, rounds get a test lock and a support role, and one rule decides the forge.
+
+## Upgrade notes
+
+- **Config keys now carry a scope.** Every key is project, machine or taste scope. `rota config set` on a machine key writes `.rota/config.local.json`, not the tracked file; pass `--project` to pin a key in the repo. `rota config show` prints the scope. `rota config check` validates the merged layers, warns about machine keys and default-pinned taste keys in the tracked file, and now fails on unknown keys and on account directories that are not absolute or `~`-relative. `rota migrate config` previews the scope move and `--apply` writes exactly that preview: read the preview before applying, because deleting a tracked key pinned at its default lets a different global value through.
+- **Empty account lists inherit the global accounts.** A `round.accounts`, `round.codexAccounts` or `round.opencodeAccounts` set to `[]` in the project or local file no longer forces the ambient account when the global config lists accounts.
+- **One forge rule.** `forge.provider` wins, then the origin. An origin that names no forge makes writers (`worker gate`, `worker train`, `ship pr`, `release host|push|publish`, issue writes) refuse with exit 4 `blockedBy: forge`; readers (doctor, `issues provider`, issue listing) assume GitHub and say so. Set `forge.provider` for aliased or enterprise hosts. `release host` now exits 4 on an unrecognised origin instead of printing `none`.
+- **Round config errors have one exit class.** An invalid `round.*` key exits 3 from `round candidates`, `tick`, `transfer`, `adopt`, `review-relay` and `reap` (candidates was 2, the others 70); `start`, `assign`, `watch`, `wind-down`, `status` and `reconcile` keep exit 2, `bounce` keeps 70 on a bad `round.maxBounces`. `test.fast` and `test.full` must be lists of strings; a malformed list stops the gate instead of being ignored.
+- **Cross-harness review on big PRs.** With `round.harnesses` set, PRs labelled `size:Major` or `risk:high` need a `review-cross` verdict at HEAD before the gate merges. Refresh the installed skills together with the binary, or exempt an issue with `review:none`.
+
+## New
+
+- **Test lock.** `rota test run`, `rota proof record` and the gate take a slot of a per-repo lock (`test.slots`, default 1, machine scope); a busy lock waits and says who holds it. Proofs run niced. `rota test lock -- <cmd>` runs any command under a slot. The gate sizes its smoke shards to the machine.
+- **Support machines.** `rota setup` asks the machine role first; `--set round.role=support` takes the support path, which writes only `.rota/config.local.json`, refuses a clone whose main never enabled support, and ends with the doctor. `rota round support enable|disable <name>` on main manages the tracked key. `rota round assign` and `worker dispatch` refuse a slot account at its usage limit (`blockedBy: limited`) and fall back to the installed worker contract when the checkout has none.
+- **Codex workers.** `round assign` to a Codex slot verifies the session took the brief and exits 5 `blockedBy: dispatch` with the leftover steps when it did not; `worker dispatch --task` rebuilds the same brief, branch and model; the commits-not-on-main check compares against `origin/<base>`.
+- **Harness quota fallback.** A worker whose harness runs out of quota falls back to the next configured harness for the next assignment.
+- **Setup signals.** `rota setup` suggests `git.baseBranch`, `issues.source`, `test.fast`, `test.full`, `round.workerKind`, `work.isolation` and `round.dispatch` from the project, with the evidence shown; a saved global value beats the signal.
+
+## Fixed
+
+- The autopilot and the orchestrator no longer race on one slot, bundle members keep their claims, and `rota config check` reads the local layer.
+- The worker wait test no longer hangs under load; the proof-record nice test passes when the suite itself runs niced.
+- `rota setup` from a subdirectory of a support clone no longer writes tracked files.
+- Review-kind, lease-check and round-config-exit rules each have one owner (three refactor findings from the architecture review).
+- `rota test run` passes the lock mark to its tier commands, so a tier that re-enters the lock (`bash test/gate.sh`) no longer fails at one slot.
+
+## Stats
+146 commits, 323 files changed, +10855 −2645 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.23.0...v0.24.0
+
 ## v0.23.0 — 2026-10-22
 
 A second machine can build issues for the same repo while one machine keeps every merge, file-mode milestone files list their items, and the gate now checks what GitHub will close.
