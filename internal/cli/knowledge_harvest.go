@@ -57,11 +57,7 @@ func knHarvest(fs *flag.FlagSet) RunFunc {
 		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
 			var rows []harvestRow
 			for _, issue := range issues {
-				learnings, err := writtenBy(be, trust, issue, "learning")
-				if err != nil {
-					return Result{}, err
-				}
-				marks, err := writtenBy(be, trust, issue, "harvested")
+				learnings, marks, err := learningsAndMarks(be, trust, issue)
 				if err != nil {
 					return Result{}, err
 				}
@@ -69,12 +65,23 @@ func knHarvest(fs *flag.FlagSet) RunFunc {
 				for _, m := range marks {
 					done[strings.TrimSpace(m.Text)] = true
 				}
+				var here []harvestRow
 				for _, l := range learnings {
-					rows = append(rows, harvestRow{issue: issue, comment: l, done: done[l.ID]})
+					here = append(here, harvestRow{issue: issue, comment: l, done: done[l.ID]})
 				}
+				// --mark stops at the issue holding the id.
+				if *mark != "" {
+					for _, r := range here {
+						if r.comment.ID == *mark {
+							return markHarvested(be, here, *mark)
+						}
+					}
+					continue
+				}
+				rows = append(rows, here...)
 			}
 			if *mark != "" {
-				return markHarvested(be, rows, *mark)
+				return markHarvested(be, nil, *mark)
 			}
 			list := []any{}
 			var lines []string
@@ -104,21 +111,29 @@ func refuseHarvest(writes bool, blockedBy string, e *Error) (Result, error) {
 	return Result{Data: jsonObj("blockedBy", blockedBy)}, e
 }
 
-// writtenBy is the issue's comments of kind by authors the forge says can push.
-func writtenBy(be backlog.Backend, trust *worker.MarkerTrust, issue, kind string) ([]backlog.Comment, error) {
-	all, err := be.Comments(issue, kind)
+// learningsAndMarks reads the issue's comments once and splits the `learning`
+// and `harvested` ones, keeping only authors the forge says can push.
+func learningsAndMarks(be backlog.Backend, trust *worker.MarkerTrust, issue string) (learnings, marks []backlog.Comment, err error) {
+	all, err := be.Comments(issue, "")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	var out []backlog.Comment
 	for _, cm := range all {
+		if cm.Kind != "learning" && cm.Kind != "harvested" {
+			continue
+		}
 		if ok, err := trust.Writer(cm.Who); err != nil {
-			return nil, err
-		} else if ok {
-			out = append(out, cm)
+			return nil, nil, err
+		} else if !ok {
+			continue
+		}
+		if cm.Kind == "learning" {
+			learnings = append(learnings, cm)
+		} else {
+			marks = append(marks, cm)
 		}
 	}
-	return out, nil
+	return learnings, marks, nil
 }
 
 type harvestRow struct {

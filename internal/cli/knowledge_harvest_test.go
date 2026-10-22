@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/tracker"
@@ -200,5 +201,52 @@ func TestKnowledgeHarvestMarkRefusesStrangerLearning(t *testing.T) {
 		if strings.Contains(cm.Body, "rota:comment harvested") {
 			t.Errorf("a harvested mark was written: %+v", cm)
 		}
+	}
+}
+
+// countingTracker counts Comments reads per issue.
+type countingTracker struct {
+	*trackertest.Fake
+	reads map[string]int
+}
+
+func (c *countingTracker) Comments(ctx context.Context, key tracker.IssueKey) ([]tracker.Comment, error) {
+	c.reads[key.String()]++
+	return c.Fake.Comments(ctx, key)
+}
+
+func TestKnowledgeHarvestFetchesCommentsOncePerIssue(t *testing.T) {
+	root := trackerProject(t, issuesConfig)
+	ct := &countingTracker{Fake: issueFixture(), reads: map[string]int{}}
+	deps := trustedDeps(t, ct, harvestTrust{})
+	var ids []string
+	for _, issue := range []string{"7", "9"} {
+		body := bodyFile(t, "learning for "+issue+"\n")
+		code, env, stderr := rotaRunWith(t, deps, "--json", "-C", root, "item", "comment", "add", issue, "--kind", "learning", "--body-file", body)
+		if code != 0 {
+			t.Fatalf("comment add %s: exit %d: %s", issue, code, stderr)
+		}
+		id, _ := issueGet(issueData(t, env), "commentId").(string)
+		ids = append(ids, id)
+		harvestMerged(t, root, issue, 1)
+	}
+
+	clear(ct.reads)
+	if got := harvestList(t, deps, root); len(got) != 2 {
+		t.Fatalf("want two learnings, got %v", got)
+	}
+	for k, n := range ct.reads {
+		if n != 1 {
+			t.Errorf("listing read comments of %s %d times, want 1", k, n)
+		}
+	}
+
+	// --mark stops at the issue holding the id: the later issue is never read.
+	clear(ct.reads)
+	if c, _, stderr := rotaRunWith(t, deps, "--json", "-C", root, "knowledge", "harvest", "--mark", ids[0]); c != 0 {
+		t.Fatalf("mark: exit %d: %s", c, stderr)
+	}
+	if n := ct.reads[tracker.NumKey(9).String()]; n != 0 {
+		t.Errorf("--mark read the issue after the match %d times, want 0", n)
 	}
 }
