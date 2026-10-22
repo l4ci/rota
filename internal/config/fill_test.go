@@ -427,3 +427,21 @@ func TestInvalidValueErrorsNameTheValue(t *testing.T) {
 		}
 	}
 }
+
+// #1786: fill writes the required project keys only; a machine or taste key
+// stays with the global config or the defaults.
+func TestFillWritesOnlyProjectKeys(t *testing.T) {
+	root := project(t, "", "")
+	filled, err := Fill(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range filled {
+		if ScopeOf(k) != ScopeProject {
+			t.Errorf("fill wrote the %s key %s", ScopeOf(k), k)
+		}
+	}
+	if raw := read(t, root); strings.Contains(raw, "accounts") || strings.Contains(raw, "isolation") {
+		t.Errorf("config.json:\n%s", raw)
+	}
+}

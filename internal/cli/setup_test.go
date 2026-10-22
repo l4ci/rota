@@ -703,3 +703,46 @@ func TestSetupSupportPathFromSubdirOfEnabledClone(t *testing.T) {
 	}
 	assertTrackedUntouched(t, dir, tracked)
 }
+
+// #1786: setup writes a project answer to the tracked config, a machine
+// answer to config.local.json, and a taste answer to the tracked config only
+// when it differs from what the project would inherit.
+func TestSetupRoutesAnswersByScope(t *testing.T) {
+	isolateGlobal(t)
+	dir := t.TempDir()
+	code, _, errOut := setupRun(t, dir, "", false, "--yes", "--set", "round.dispatch=tmux", "--set", "round.workerKind=codex", "--set", "work.isolation=worktree", "--set", "issues.source=file")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	tracked := readConfig(t, dir)
+	for _, k := range []string{`"dispatch"`, `"workerKind"`} {
+		if strings.Contains(tracked, k) {
+			t.Errorf("a machine answer reached config.json (%s):\n%s", k, tracked)
+		}
+	}
+	if !strings.Contains(tracked, `"isolation": "worktree"`) || !strings.Contains(tracked, `"source": "file"`) {
+		t.Errorf("config.json lacks the taste or project answer:\n%s", tracked)
+	}
+	lb, _ := os.ReadFile(filepath.Join(dir, ".rota", "config.local.json"))
+	if !strings.Contains(string(lb), `"dispatch": "tmux"`) || !strings.Contains(string(lb), `"workerKind": "codex"`) {
+		t.Errorf("config.local.json = %s", lb)
+	}
+}
+
+// --yes takes every default, so it pins no taste or machine key.
+func TestSetupYesWritesNoTasteKey(t *testing.T) {
+	isolateGlobal(t)
+	dir := t.TempDir()
+	if code, _, errOut := setupRun(t, dir, "", false, "--yes"); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	tracked := readConfig(t, dir)
+	for _, k := range []string{`"work"`, `"autonomy"`, `"ship"`, `"round"`, `"models"`} {
+		if strings.Contains(tracked, k) {
+			t.Errorf("--yes pinned %s in config.json:\n%s", k, tracked)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".rota", "config.local.json")); err == nil {
+		t.Error("--yes wrote config.local.json")
+	}
+}

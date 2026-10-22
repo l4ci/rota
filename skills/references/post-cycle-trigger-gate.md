@@ -20,7 +20,7 @@ A post-cycle nudge or auto-dispatch fires when **at least one** of:
 
 Every post-cycle nudge step runs the same sequence. The call site supplies the **bolded parameters**; this reference supplies the sequence.
 
-1. **Config flag** *(only when the site names one, e.g. `docs.afterWork`)*: read it from `.rota/config.json` (default `false`). `false` → skip the step entirely. The flag is opt-in, set via `rota config set` or the owning skill's first-run / manual-toggle flow.
+1. **Config flag** *(only when the site names one, e.g. `docs.afterWork`)*: read it with `rota config show <key>`, which merges the global config and `config.local.json` (default `false`). `false` → skip the step entirely. The flag is opt-in, set via `rota config set` or the owning skill's first-run / manual-toggle flow.
 2. **Trigger**: apply *The condition* above, subject to *When the gate does NOT fire*. When the site names a **trigger override** (a site's own counts), apply that instead of the default condition; the don't-repeat exclusion applies to every trigger, override or not. Not triggered → skip silently.
 3. **Branch on `autonomy.level`** (see [`references/autonomy.md`](autonomy.md)):
    - `"off"` → emit the site's **nudge line**, placed where the site says (standalone message, or appended to the cycle's final report).

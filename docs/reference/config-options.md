@@ -5,7 +5,7 @@ This page lists every config key with its type, default, allowed values and desc
 The key tables are generated from the schema in `internal/config/keys.go` (`go generate ./internal/config`); do not edit them here. Four verbs cover configuration:
 
 - **`rota setup`** asks the machine role first (`round.role`; `support` takes the support path, see [Support role](../contributing/rounds.md#support-role)). On main it runs `rota init`, then asks the main choices on a terminal (where the issues live, isolation, merge strategy, dispatch, autonomy, review, QA), then optional ones: the worker harness (`round.workerKind`), the orchestrator harness (`orchestrator.harness`), the base branch (`git.baseBranch`) and the test commands (`test.fast`, `test.full`). Skip one and the key stays unset. Where the repo gives a signal (go.mod, CI files, the origin host, harnesses on PATH), the question suggests that value and shows where it was read. `--yes` takes the suggestion, else the default; `--list` prints the questions with each suggestion and its evidence.
-- **`rota init`** writes `.rota/config.json` on first setup, fills any missing keys with the Recommended defaults on later runs, and stamps `rota.version`. It never overwrites a value you set.
+- **`rota init`** writes `.rota/config.json` on first setup, fills any missing required project keys with their defaults on later runs, and stamps `rota.version`. It writes no machine or taste key, so those come from the global config or the defaults. It never overwrites a value you set.
 - **`rota config show`** and **`rota config set`** read and change keys later. `rota config show --json` adds each key's `type`, `group`, `desc` and `choices`.
 - **`rota config edit`** opens the config screen in a terminal (also `rota config --ui`): keys grouped by section with a detail pane, booleans toggle, enum keys pick from their choices, the rest take a typed value checked as `config set` checks it. See [configuration](../usage/configuration.md#the-config-screen).
 
@@ -17,11 +17,11 @@ The "(Recommended)" tag on each option marks the default `rota init` writes.
 
 | Shape | Behavior |
 |-------|----------|
-| `rota config show` | Prints every key, value and source layer: `local`, `project` or `default`. |
+| `rota config show` | Prints every key, value, source layer (`local`, `project`, `global` or `default`) and scope. |
 | `rota config show <key>` | Prints one key. |
-| `rota config set <key> <value>` | Writes `.rota/config.json` (never `.rota/config.local.json`) and prints `key = value`. |
+| `rota config set <key> <value>` | Writes the layer the key's scope names: `.rota/config.local.json` for a machine key, `.rota/config.json` for a project or taste key. `--local`, `--project` and `--global` pick the layer instead. |
 
-Values for list and object keys are JSON (`rota config set round.accounts '[...]'`). A key outside the schema exits 2 and nothing is written. The value is not checked against the allowed values on write, except for the strict enums (`autonomy.level`, `work.contextGuard`, `plan.criticHarness`); `rota config check` only flags a missing key, an `autonomy.level` outside `off`, `roundtrip` and `auto`, and a legacy `refactor.verifyCommands` that still holds commands while `test.full` is empty.
+Values for list and object keys are JSON (`rota config set round.accounts '[...]'`). A key outside the schema exits 2 and nothing is written. The value is not checked against the allowed values on write, except for the strict enums (`autonomy.level`, `work.contextGuard`, `plan.criticHarness`); `rota config check` flags a missing required key, a key the schema does not know, an `autonomy.level` outside `off`, `roundtrip` and `auto`, and a legacy `refactor.verifyCommands` that still holds commands while `test.full` is empty.
 
 ## Q1: Models
 

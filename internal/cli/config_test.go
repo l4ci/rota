@@ -39,7 +39,8 @@ func TestConfigRoundTrip(t *testing.T) {
 	code, env, _ = rotaRun(t, "--json", "-C", root, "config", "show", "round.slots")
 	d := dataOf(env)
 	rows, _ := get(d, "entries").([]any)
-	if code != 0 || len(rows) != 1 || get(rows[0], "source") != "project" {
+	// round.slots is a machine key: config set writes it to config.local.json (#1786).
+	if code != 0 || len(rows) != 1 || get(rows[0], "source") != "local" {
 		t.Errorf("show: %d %v", code, env)
 	}
 	if code, _, _ = rotaRun(t, "--json", "-C", root, "config", "show", "nope"); code != ExitResolution {
