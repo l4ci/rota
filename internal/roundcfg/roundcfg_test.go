@@ -402,6 +402,9 @@ func TestParseTests(t *testing.T) {
 		legacy   bool
 		fullOnly bool
 		bad      bool
+		nilFast  bool
+		nilFull  bool
+		tddBad   bool
 	}{
 		{cfg: `{"test":{"full":["go test ./..."]}}`, full: []string{"go test ./..."}, fullOnly: true},
 		{cfg: `{"test":{"fast":["go test {files}"],"full":["go test ./..."]}}`, full: []string{"go test ./..."}},
@@ -409,8 +412,10 @@ func TestParseTests(t *testing.T) {
 		// Only the legacy key: the same answer the gate gives.
 		{cfg: `{"refactor":{"verifyCommands":["old"]}}`, full: []string{"old"}, legacy: true, fullOnly: true},
 		{cfg: `{"refactor":{"verifyCommands":["old"]},"test":{"full":["new"]}}`, full: []string{"new"}, fullOnly: true},
-		{cfg: `{"test":{"fast":"go test","full":["x"]}}`, bad: true},
-		{cfg: `{"test":{"fast":[1],"full":["x"]}}`, bad: true},
+		{cfg: `{"test":{"fast":"go test","full":["x"]}}`, bad: true, nilFast: true},
+		{cfg: `{"test":{"fast":[1],"full":["x"]}}`, bad: true, nilFast: true},
+		{cfg: `{"test":{"full":["F",1]}}`, bad: true, nilFull: true},
+		{cfg: `{"work":{"tdd":"yes"}}`, tddBad: true},
 	} {
 		v, err := jsonx.Decode([]byte(c.cfg))
 		if err != nil {
@@ -419,6 +424,12 @@ func TestParseTests(t *testing.T) {
 		got := ParseTests(v)
 		if (got.Err != nil) != c.bad {
 			t.Errorf("%s: Err = %v, want error %v", c.cfg, got.Err, c.bad)
+		}
+		if (got.TDDErr != nil) != c.tddBad {
+			t.Errorf("%s: TDDErr = %v, want error %v", c.cfg, got.TDDErr, c.tddBad)
+		}
+		if c.nilFast && got.Fast != nil || c.nilFull && got.Full != nil {
+			t.Errorf("%s: malformed list not nil: fast %v full %v", c.cfg, got.Fast, got.Full)
 		}
 		if c.bad {
 			continue

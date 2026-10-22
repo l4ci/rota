@@ -280,6 +280,9 @@ func FromConfig(cfg any) (Settings, error) {
 	if t.Err != nil {
 		return s, t.Err
 	}
+	if t.TDDErr != nil {
+		return s, t.TDDErr
+	}
 	s.FullOnly, s.TDD = t.FullOnly(), t.TDD
 	return s, loadRoles(cfg, &s)
 }
@@ -432,9 +435,9 @@ type Tests struct {
 	Legacy     bool
 	// TDD is work.tdd.
 	TDD bool
-	// Err is the first malformed test.fast or test.full; those lists are nil.
-	// TDDErr is a non-boolean work.tdd. They are kept apart so the gate can
-	// defer each to the step that needs it.
+	// Err is every malformed test.fast or test.full (joined); a malformed list
+	// is nil. TDDErr is a non-boolean work.tdd. They are kept apart so the gate
+	// can defer each to the step that needs it.
 	Err, TDDErr error
 }
 
@@ -454,9 +457,6 @@ func ParseTests(cfg any) Tests {
 	}
 	t.Err = errors.Join(errFast, errFull)
 	t.TDD, t.TDDErr = config.Bool(cfg, "work.tdd")
-	if t.Err == nil {
-		t.Err = t.TDDErr
-	}
 	return t
 }
 
