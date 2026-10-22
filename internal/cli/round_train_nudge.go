@@ -80,6 +80,14 @@ func trainNudges(waiting []waitingPR) []trainNudge {
 // nudge is advice, so an unreadable registry or branch reads as nothing waiting.
 func waitingPRs(c *Ctx, root string) []waitingPR {
 	reg := worker.LoadRegistryTolerant(root)
+	store, _ := c.deps().workerEnv().BounceStore(root)
+	bounceHead := func(issue string) string {
+		if store == nil || issue == "" {
+			return ""
+		}
+		_, head, _ := store.Count(issue)
+		return head
+	}
 	vc := shipVerdict(c, root, root)
 	reviewed := func(branch, issue string) bool {
 		if branch == "" {
@@ -90,7 +98,7 @@ func waitingPRs(c *Ctx, root string) []waitingPR {
 			return false
 		}
 		head := strings.TrimSpace(r.Stdout)
-		if bh := reg.BounceHead(issue); issue != "" && bh != "" && head != "" && (strings.HasPrefix(head, bh) || strings.HasPrefix(bh, head)) {
+		if bh := bounceHead(issue); bh != "" && head != "" && (strings.HasPrefix(head, bh) || strings.HasPrefix(bh, head)) {
 			return false // sent back and not yet pushed to
 		}
 		return len(verdict.Recorded(root, branch, head)) > 0 && !trainBlocked(vc.Store, branch, vc.Settings)

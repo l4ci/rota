@@ -470,6 +470,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	prs, labelled, stale, forgeOK, labelsOK := fs.prs, fs.labelled, fs.stale, fs.ok, fs.labelsOK
 	if forgeOK {
 		rep.openPRs = prs
+		e.issueBounces(root, rows, rep)
 	}
 
 	held := map[string]bool{}
@@ -638,6 +639,27 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	}
 	rep.Limits = limits.Waiting(limits.Load(root))
 	return rep, nil
+}
+
+// issueBounces reads each row's bounce count from the issue when round.support
+// keeps it there (#1598): the registry holds none then. A failed read leaves
+// the registry's count and warns once.
+func (e Env) issueBounces(root string, rows []*Row, rep *Report) {
+	if e.Round.Support == "" {
+		return
+	}
+	store, err := e.workerEnv().BounceStore(root)
+	for _, r := range rows {
+		if err != nil {
+			break
+		}
+		if r.Issue != "" {
+			r.Bounces, _, err = store.Count(r.Issue)
+		}
+	}
+	if err != nil {
+		rep.Warnings = append(rep.Warnings, fmt.Sprintf("bounce counts not read from the issues: %v", err))
+	}
 }
 
 // readRows is the worktree and registry source: registry slots first, then
