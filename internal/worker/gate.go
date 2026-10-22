@@ -1033,7 +1033,10 @@ func (g *gate) stepNoSliceClose(keys []tracker.IssueKey) (bool, error) {
 	var nums []int
 	known := false
 	if rep, ok := g.forge.(closingReporter); ok {
-		n, _ := PRRefNumber(g.pr)
+		n, ok := PRRefNumber(g.pr)
+		if !ok {
+			return g.broke(fmt.Sprintf("cannot read a PR number from '%s' to ask what it closes", g.pr))
+		}
 		var err error
 		if nums, known, err = rep.ClosingRefs(g.ctx, n); err != nil {
 			// A forge that cannot answer the query is the same as one without the
