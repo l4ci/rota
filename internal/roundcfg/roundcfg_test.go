@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -468,4 +469,21 @@ func TestSupportPrefixesRoster(t *testing.T) {
 	if _, err := Load(project(t, `{"round":{"support":"Mac Book"}}`)); err == nil || !strings.Contains(err.Error(), "round.support") {
 		t.Errorf("a support name unusable in a branch: %v", err)
 	}
+}
+
+func TestScopesAreSchemaChoices(t *testing.T) {
+	for _, k := range config.Keys {
+		if k.Name != "round.scope" {
+			continue
+		}
+		got := slices.Clone(k.Choices)
+		want := slices.Clone(Scopes)
+		slices.Sort(got)
+		slices.Sort(want)
+		if !slices.Equal(got, want) {
+			t.Errorf("round.scope enum %v, want %v", k.Choices, Scopes)
+		}
+		return
+	}
+	t.Fatal("round.scope key not found")
 }

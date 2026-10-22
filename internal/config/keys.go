@@ -18,6 +18,14 @@ const (
 	TypeObject Type = "object"
 )
 
+// The values of round.scope: which issues a round may take.
+const (
+	ScopeSlate     = "slate"
+	ScopeMilestone = "milestone"
+	ScopeNext      = "next"
+	ScopeOpen      = "open"
+)
+
 // The values of round.scopeOverlap.
 const (
 	ScopeOverlapWarn  = "warn"
@@ -115,7 +123,7 @@ var Keys = []Key{
 	k("ship.mergeApproval", "none", false, TypeEnum, "Which merges need a human: none, all, or only those touching ship.mergeApprovalPaths. The merge verbs enforce it at every autonomy level.", "none", "all", "paths"),
 	k("ship.mergeApprovalPaths", []any{}, false, TypeList, "Repo-relative paths or globs that need human approval when ship.mergeApproval is paths."),
 	k("review.fileDeferred", "minor", false, TypeEnum, "Which deferred review findings rota verdict add --file-deferred files, as one follow-up item per PR. minor: minor and major. major: only major (minor stays in the verdict record). off: none.", "minor", "major", "off"),
-	k("round.scope", "milestone", false, TypeEnum, "Rounds: Which issues a round may take. slate: only those named at rota round start --items. milestone: the active milestones. next: also the next ready milestone. open: every open item no slot holds.", "milestone", "slate", "next", "open"),
+	k("round.scope", ScopeMilestone, false, TypeEnum, "Rounds: Which issues a round may take. slate: only those named at rota round start --items. milestone: the active milestones. next: also the next ready milestone. open: every open item no slot holds.", ScopeMilestone, ScopeSlate, ScopeNext, ScopeOpen),
 	k("round.roster", []any{"ben", "dana", "nia", "kit"}, false, TypeList, "Rounds: Agent names slots are provisioned under, one slot each. Lowercase letters, digits and -, no duplicates."),
 	k("round.brief", "", false, TypePath, "Rounds: Path of the standing worker contract the assignment pointer names. Empty means skills/references/worker-contract.md in the checkout, else the installed copy."),
 	k("round.sharedPaths", []any{}, false, TypeList, "Rounds: Repo-relative globs the file-overlap readiness check ignores, for files every issue touches."),
