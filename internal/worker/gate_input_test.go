@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -59,4 +60,22 @@ func TestGateAndTrainStopOnInputError(t *testing.T) {
 	if _, err := e.Train(bg, w.dir, TrainOpts{Targets: []string{"w1"}, Base: "main"}); !errors.Is(err, boom) {
 		t.Errorf("train err = %v, want boom", err)
 	}
+}
+
+// A malformed test.full stops the gate and the train, naming the key as
+// malformed, rather than reading as empty and blaming a key that is set.
+func TestGateAndTrainRefuseMalformedTestFull(t *testing.T) {
+	w := newWorld(t, "")
+	w.setConfig(`{"test":{"full":["F",1]}}`)
+	e := w.env(false)
+	check := func(who string, err error) {
+		t.Helper()
+		if err == nil || !strings.Contains(err.Error(), "test.full must be a list of strings") {
+			t.Errorf("%s err = %v, want test.full malformed", who, err)
+		}
+	}
+	_, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+	check("gate", err)
+	_, err = e.Train(bg, w.dir, TrainOpts{Targets: []string{"w1"}, Base: "main"})
+	check("train", err)
 }

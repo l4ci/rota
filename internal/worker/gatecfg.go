@@ -70,9 +70,6 @@ func ParseGateConfig(cfg any) GateConfig {
 	c.Full, c.Fast, c.legacy, c.testsErr = t.Full, t.Fast, t.Legacy, t.Err
 	c.legacyOnce = new(sync.Once)
 	c.TDD, c.tddErr = t.TDD, t.TDDErr
-	if c.testsErr == t.TDDErr {
-		c.testsErr = nil // a bad work.tdd is TDDEnabled's to report
-	}
 	c.where, c.whereErr = parseFullWhere(cfg, c.CIChecks)
 	c.sourceErr = tracker.ValidateConfig(cfg)
 	c.ciMinutes, c.ciErr = config.Int(cfg, "test.ciTimeoutMinutes", 1, 24*60)
@@ -140,7 +137,8 @@ func (c GateConfig) ReviewPolicy() (config.ReviewPolicy, error) { return c.revie
 func (c GateConfig) TDDEnabled() (bool, error) { return c.TDD, c.tddErr }
 
 // TestsErr is the error of a malformed test.fast or test.full. The lists read
-// as empty until a step that needs them asks.
+// as empty; loadGateInput refuses the gate and the train with it, before the
+// empty test.full check can blame a key that is set.
 func (c GateConfig) TestsErr() error { return c.testsErr }
 
 // IsolateEnabled is test.isolate, or the error of a non-boolean value.
