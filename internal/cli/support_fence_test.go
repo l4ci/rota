@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -277,5 +279,21 @@ func TestRoundStartSupportNeedsPushTrust(t *testing.T) {
 	hint, _ := envObj(env, "error")["hint"].(string)
 	if !strings.Contains(hint, "GitHub") {
 		t.Errorf("hint = %q", hint)
+	}
+}
+
+// Any BounceStore failure other than a missing push trust stops round start
+// instead of surfacing later.
+func TestRoundStartSupportSurfacesStoreError(t *testing.T) {
+	root := trackerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`+"\n")
+	deps := testDeps()
+	deps.WorkerEnv = func() worker.Env {
+		return worker.Env{IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) {
+			return nil, errors.New("tracker unreachable")
+		}}
+	}
+	code, env, stderr := rotaRunWith(t, deps, "--json", "-C", root, "round", "start")
+	if code == ExitOK || !strings.Contains(stderr+fmt.Sprint(env), "tracker unreachable") {
+		t.Fatalf("exit %d: %v %s", code, env, stderr)
 	}
 }
