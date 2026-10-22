@@ -107,7 +107,7 @@ func loadRoundSnap(c *Ctx, root string) (roundSnap, error) {
 		return s, nil
 	}
 	for _, cd := range cands {
-		s.Cands = append(s.Cands, roundCand{ID: cd.ID, Title: cd.Title, Ready: cd.Ready(), Why: blockedWhy(cd)})
+		s.Cands = append(s.Cands, roundCand{ID: cd.ID, Title: cd.Title, Ready: cd.Ready(), Why: cd.NotReady()})
 	}
 	return s, nil
 }
@@ -168,42 +168,6 @@ func burnLabel(r round.Row) string {
 		return "n/a"
 	}
 	return "-"
-}
-
-// blockedWhy says why a candidate cannot be assigned yet: the open PR, the
-// file overlap with an in-flight item, each failed check (a dependency names
-// what it waits on) and a refused pick. Empty for a ready one.
-func blockedWhy(c round.Candidate) []string {
-	if c.Ready() {
-		return nil
-	}
-	var why []string
-	if c.OpenPR != 0 {
-		why = append(why, fmt.Sprintf("waiting on open PR #%d", c.OpenPR))
-	}
-	if c.DependsOnPR != 0 {
-		why = append(why, fmt.Sprintf("depends on PR #%d", c.DependsOnPR))
-	}
-	for _, o := range c.Overlaps {
-		why = append(why, overlapText(o))
-	}
-	for _, ch := range c.Checks {
-		if ch.OK {
-			continue
-		}
-		w := ch.Name
-		if len(ch.Detail) > 0 {
-			w += ": " + strings.Join(ch.Detail, "; ")
-		}
-		why = append(why, w)
-	}
-	if c.PickErr != "" {
-		why = append(why, c.PickErr)
-	}
-	if c.BlockedBy != "" {
-		why = append(why, c.BlockedBy)
-	}
-	return why
 }
 
 // loadBox carries a refresh's result from Exec back to Update, which is pure.
