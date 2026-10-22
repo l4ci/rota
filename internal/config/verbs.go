@@ -515,7 +515,8 @@ func legacyVerifyPending(doc *jsonx.Object) bool {
 // `config check` fails on them rather than let a skill quietly ignore the
 // value. autonomy.level takes only off, roundtrip and auto: "loop" went with
 // loop autonomy (#70), and anything else is no level. It also holds a
-// malformed ship.review policy, which would otherwise read as the default.
+// malformed ship.review policy, which would otherwise read as the default, and
+// an account dir that is neither absolute nor ~-prefixed.
 func Retired(root string) []string {
 	out := []string{}
 	if v, _ := Value(Load(configPath(root)), "autonomy.level"); validateEnum("autonomy.level", v) != nil {
@@ -531,6 +532,7 @@ func Retired(root string) []string {
 			out = append(out, err.Error())
 		}
 	}
+	out = append(out, AccountDirProblems(Load(configPath(root)))...)
 	return out
 }
 

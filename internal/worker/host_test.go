@@ -25,6 +25,7 @@ type fakeHost struct {
 	where      string
 	requireErr error
 	spawnErr   error
+	spawnTab   string // the tab a failing Spawn leaves open
 	killErr    error
 	sendErr    error
 	status     map[string]string
@@ -44,7 +45,7 @@ func (f *fakeHost) Spawn(_ context.Context, o host.SpawnOpts) (string, error) {
 	f.calls = append(f.calls, "spawn "+o.Slot)
 	f.spawnOpts = o
 	if f.spawnErr != nil {
-		return "", f.spawnErr
+		return f.spawnTab, f.spawnErr
 	}
 	return "w9:t7", nil
 }
@@ -511,6 +512,31 @@ func TestDispatchSpawnFailureClearsTheDeadHandle(t *testing.T) {
 	}
 	if h, s := slotField(t, dir, "w1", "handle"), slotField(t, dir, "w1", "state"); h != "<null>" || s != "idle" {
 		t.Errorf("handle=%s state=%s; the old session is dead, a poll must not chase it", h, s)
+	}
+}
+
+// A Spawn that fails with its tab still open (a startup screen nobody
+// answered) leaves a running session: its handle is recorded, and the replay
+// reaps it before spawning, so no orphan tab outlives the retry (#1791).
+func TestDispatchSpawnFailureWithOpenTabIsRecordedAndReapedOnReplay(t *testing.T) {
+	dir := newProject(t, `{}`)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	f := tmuxFake()
+	f.spawnErr, f.spawnTab = fmt.Errorf("slot 'w1' is stuck on an unrecognised startup dialog in tab w9:t7"), "w9:t7"
+	e := envWith(f)
+	opts := DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1"}
+	if _, err := e.Dispatch(bg, dir, opts); exitOf(err) != exitcode.ExitUnavailable {
+		t.Fatalf("err = %v", err)
+	}
+	if got := slotField(t, dir, "w1", "handle"); got != "w9:t7" {
+		t.Fatalf("handle = %s; the open tab must be recorded", got)
+	}
+	f.calls, f.spawnErr, f.spawnTab = nil, nil, ""
+	if _, err := e.Dispatch(bg, dir, opts); err != nil {
+		t.Fatalf("replay: %v", err)
+	}
+	if got := strings.Join(f.calls, ","); !strings.HasPrefix(got, "kill w1 w9:t7") || strings.Count(got, "spawn w1") != 1 {
+		t.Errorf("replay must reap the recorded tab, then spawn once: %v", f.calls)
 	}
 }
 

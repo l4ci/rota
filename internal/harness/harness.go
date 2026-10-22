@@ -10,14 +10,17 @@
 // can also run in Hermes, which only has the orchestrator facet: the worker
 // and orchestrator sets differ (#33), and both are views over this package.
 //
-// The package imports no other rota package but config and shlex, so doctor,
+// The package imports no other rota package but config, fsio and shlex, so doctor,
 // host, worker and orchestrate can all depend on it.
 package harness
 
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
+
+	"github.com/l4ci/rota/internal/fsio"
 )
 
 // Harness kinds of a worker.
@@ -170,6 +173,21 @@ type AccountEntry struct{ Name, Dir string }
 type AccountList struct {
 	Key     string
 	Entries []AccountEntry
+}
+
+// In returns the list with a leading ~ of each entry's Dir expanded against
+// home and the path cleaned. An empty Dir stays empty (the kind's default
+// home), and an empty home leaves a ~ path as written. Every consumer of a
+// list reads it through In, so a ~/.codex reaches CODEX_HOME as a real path.
+func (l AccountList) In(home string) AccountList {
+	out := AccountList{Key: l.Key, Entries: make([]AccountEntry, len(l.Entries))}
+	for i, e := range l.Entries {
+		if e.Dir != "" {
+			e.Dir = filepath.Clean(fsio.ExpandHome(e.Dir, home))
+		}
+		out.Entries[i] = e
+	}
+	return out
 }
 
 // PaneVocab is a kind's own pane texts, as regex sources. Every field is read
