@@ -79,7 +79,7 @@ note: the state moves from a second positional to `--to`, the one spelling for s
 rota item comment add <ID> --kind <question|answer|decision|feedback|scope|finding|learning|harvested> --body-file <path|->
 repo: scoped
 data: {"id": string, "type": "B"|"F"|"T", "kind": string, "commentId"?: string, "changed": bool}
-exit: 2 for an empty body or an invalid kind; 3 item unknown; tracker
+exit: 2 for an empty body or an invalid kind; 3 item unknown; 4 for `--kind harvested` on a support machine (`round.role` support: `blockedBy` `role`, the mark is `knowledge harvest --mark`'s to post, #1631); tracker
 old: hv-item-comment <ID> --kind <kind> --body-file <path|->
 shim: `commentId` is the printed id (issue mode only), `changed` true.
 note: split from the old `--list` mode, because read and write have different data.
