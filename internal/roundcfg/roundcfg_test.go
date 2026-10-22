@@ -268,11 +268,11 @@ func TestRoleBadValues(t *testing.T) {
 
 func TestScopeOverlap(t *testing.T) {
 	s, err := Load(project(t, ""))
-	if err != nil || s.ScopeOverlap != "warn" {
+	if err != nil || s.BlockScopeOverlap {
 		t.Fatalf("default: %v %+v", err, s)
 	}
 	s, err = Load(project(t, `{"round":{"scopeOverlap":"block"}}`))
-	if err != nil || s.ScopeOverlap != "block" {
+	if err != nil || !s.BlockScopeOverlap {
 		t.Fatalf("block: %v %+v", err, s)
 	}
 	if _, err := Load(project(t, `{"round":{"scopeOverlap":"off"}}`)); err == nil || !strings.Contains(err.Error(), "scopeOverlap") {

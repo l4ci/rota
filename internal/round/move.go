@@ -890,7 +890,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		res.Warnings = append(res.Warnings, warns...)
 		if !resuming {
 			tracked := e.trackedFiles(ctx, root)
-			r, err := AssessScoped(be, id, tracked, set.SharedPaths, e.InFlightItems(ctx, root, be, tracked, set.SharedPaths), o.AcceptOverlap, decisions, set.ScopeOverlap == "block")
+			r, err := AssessScoped(be, id, tracked, set.SharedPaths, e.InFlightItems(ctx, root, be, tracked, set.SharedPaths), o.AcceptOverlap, decisions, set.BlockScopeOverlap)
 			if err != nil {
 				return nil, wrap(err)
 			}
