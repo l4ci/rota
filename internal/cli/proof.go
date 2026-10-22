@@ -10,7 +10,6 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/plan"
 	"github.com/l4ci/rota/internal/proof"
-	"github.com/l4ci/rota/internal/shlex"
 )
 
 // Glue for the proof group and plan uncertain, which read items through
@@ -83,19 +82,11 @@ func proofRecord(fs *flag.FlagSet) RunFunc {
 		if err := st.Update(id, func(content string) (string, bool, error) { return content, false, nil }); err != nil {
 			return failAny(err)
 		}
-		list := ""
-		if anyContains(cmdArgs, filesPlaceholder) {
-			files, err := changedFiles(c, root, *base)
-			if err != nil {
-				return Result{}, err
-			}
-			quoted := make([]string, len(files))
-			for i, f := range files {
-				quoted[i] = shlex.QuoteAlways(f)
-			}
-			list = strings.Join(quoted, " ")
+		expanded, err := expandFiles(c, root, *base, cmdArgs)
+		if err != nil {
+			return Result{}, err
 		}
-		command := recordedCommand(cmdArgs, list)
+		command := expanded[0]
 		ctx, stop := workerContext()
 		defer stop()
 		out, code := workerEnvCtx(c, ctx).RunShell(ctx, root, command)
@@ -121,27 +112,6 @@ func proofRecord(fs *flag.FlagSet) RunFunc {
 		}
 		return res, nil
 	}
-}
-
-// recordedCommand is the shell line that ran: one argument is a shell line
-// already; several are quoted one by one. {files} expands to list, which is
-// already quoted, and stays unquoted when it is a whole argument.
-func recordedCommand(args []string, list string) string {
-	if len(args) == 1 {
-		return strings.ReplaceAll(args[0], filesPlaceholder, list)
-	}
-	parts := make([]string, 0, len(args))
-	for _, a := range args {
-		switch {
-		case a == filesPlaceholder:
-			if list != "" {
-				parts = append(parts, list)
-			}
-		default:
-			parts = append(parts, shlex.QuoteAlways(strings.ReplaceAll(a, filesPlaceholder, list)))
-		}
-	}
-	return strings.Join(parts, " ")
 }
 
 func proofShow(fs *flag.FlagSet) RunFunc {
