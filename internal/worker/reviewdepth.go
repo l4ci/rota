@@ -144,8 +144,8 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	}
 	out := ReviewDepth{ReviewDecision: decide(in), Changed: changed, Labels: in.Labels}
 	author := s.Author
-	if author == "" {
-		author = harnessLabel(labelSets[0])
+	if author == "" && len(labelSets) > 0 {
+		author = harness.FromLabels(labelSets[0])
 	}
 	if author == "" {
 		author = s.Cross.DefaultKind
@@ -179,16 +179,6 @@ func crossRank(c string) int {
 		return 1
 	}
 	return 2
-}
-
-// harnessLabel is the kind a harness:<kind> label names, "" when none does.
-func harnessLabel(labels []string) string {
-	for _, l := range labels {
-		if k, ok := strings.CutPrefix(l, "harness:"); ok && harness.Valid(k) {
-			return k
-		}
-	}
-	return ""
 }
 
 // resolveCross is one issue's cross-harness requirement (#1612): the reviewer
