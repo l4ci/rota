@@ -47,18 +47,16 @@ type Forge interface {
 	Close(ctx context.Context, key tracker.IssueKey, reason, comment string) error
 }
 
-// Provider is "github", "gitlab" or "unknown" for dir ("" is the process
-// cwd). An issues.source of github or gitlab names the tracker outright. A
-// file source (or an unmigrated config) falls back to the origin host, as in
-// hv-issues-provider; forge.provider is only the fallback when origin is
-// missing or names no forge.
-func Provider(ctx context.Context, env Env, dir string) string {
+// Provider is the issue tracker's provider for dir ("" is the process cwd).
+// An issues.source of github or gitlab names it outright; any other source
+// takes dir's forge as kind resolves it (tracker.ResolveProvider), which can be
+// the local forge.
+func Provider(ctx context.Context, env Env, kind tracker.ForgeKind, dir string) (tracker.Resolution, error) {
 	s := tracker.SettingsFromConfig(env.Config)
 	if s.Source == "github" || s.Source == "gitlab" {
-		return s.Source
+		return tracker.Resolution{Provider: s.Source, How: tracker.HowConfig}, nil
 	}
-	origin := tracker.OriginURL(ctx, dir, execOf(env))
-	return tracker.ProviderFromOrigin(origin, s.Provider)
+	return tracker.ResolveProvider(ctx, kind, "", s.Provider, dir, execOf(env))
 }
 
 func noProvider(verb string) error {
@@ -95,11 +93,11 @@ func (e Env) tracker(ctx context.Context, verb, dir string) (Forge, error) {
 		}
 		return tracker.NewIssueTracker(ctx, s, "", dir, e.Opts...)
 	}
-	provider := Provider(ctx, e, dir)
-	if provider == "unknown" {
+	r, err := Provider(ctx, e, tracker.ForgeActor, dir)
+	if err != nil || r.Provider == tracker.ProviderLocal {
 		return nil, noProvider(verb)
 	}
-	return e.adapter(ctx, provider, dir)
+	return e.adapter(ctx, r.Provider, dir)
 }
 
 // ---- label ----------------------------------------------------------------

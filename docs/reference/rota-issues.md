@@ -11,7 +11,7 @@ Under `issues.source` set to `github` or `gitlab` the open issues on GitHub or G
 | `rota issues imported` | File-backend items that still carry a `GH: #N` / `GL: #N` tag |
 | `rota issues label <N> --add\|--remove <label>` | Label an upstream issue |
 | `rota issues close <N> --commit <hash>` | Close an issue naming the shipping commit |
-| `rota issues provider` | `github`, `gitlab` or `unknown` for the origin remote |
+| `rota issues provider` | `github`, `gitlab` or `local` for the origin remote (an origin naming no forge is `github`, with a note) |
 
 On the file backend, add the `GH: #N` tag by hand when creating an item with `rota item create`; `/rota-ship` then emits `Closes #N` and the direct-push path offers a manual-gated close prompt.
 

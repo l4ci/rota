@@ -134,7 +134,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota issues label <issue> (--add <name> \| --remove <name>)` | add or remove a label on an upstream issue |
 | `rota issues imported [--for-repo <name>] [--open-only]` | backlog items that point at upstream issues |
 | `rota issues close <issue> --commit <sha> [--item <ID>]` | close an upstream issue naming the shipping commit |
-| `rota issues provider` | github, gitlab or unknown for the origin remote |
+| `rota issues provider` | github, gitlab or local for the origin remote (an origin naming no forge is github, with a note) |
 
 ## `rota status`
 

@@ -359,36 +359,24 @@ func (d *runner) trackerExec() tracker.Exec {
 	}
 }
 
-// resolveForge is the forge doctor resolves the way the verbs do
-// (tracker.ResolveProvider): forge.provider when it names github, gitlab or
-// local, else the origin host; no origin remote at all is local. "" when the
-// origin names no forge.
-func (d *runner) resolveForge() string {
-	p, err := tracker.ResolveProvider(d.ctx, "", d.in.Tracker.Provider, d.in.Dir, d.trackerExec())
-	if err != nil {
-		return ""
-	}
-	return p
+// resolveForge is the forge doctor resolves, as a reader
+// (tracker.ResolveProvider): an origin naming no forge is an assumed github.
+func (d *runner) resolveForge() tracker.Resolution {
+	r, _ := tracker.ResolveProvider(d.ctx, tracker.ForgeReader, "", d.in.Tracker.Provider, d.in.Dir, d.trackerExec())
+	return r
 }
 
 // forgeLine says which forge doctor resolved and how, and what issues.source
 // is: "forge github (from origin), issues file". An empty source (outside a
 // rota project) leaves the issues half out.
-func (d *runner) forgeLine(f string) string {
-	how := "from origin"
-	switch {
-	case f == "":
-		how = "origin names neither github nor gitlab"
-	case d.in.Tracker.Provider == "github" || d.in.Tracker.Provider == "gitlab" || d.in.Tracker.Provider == "local":
-		how = "forge.provider"
-	case f == "local":
-		how = "no origin remote"
-	}
-	shown := f
-	if shown == "" {
-		shown = "unknown"
-	}
-	line := "forge " + shown + " (" + how + ")"
+func (d *runner) forgeLine(r tracker.Resolution) string {
+	how := map[string]string{
+		tracker.HowConfig:   "forge.provider",
+		tracker.HowOrigin:   "from origin",
+		tracker.HowNoOrigin: "no origin remote",
+		tracker.HowAssumed:  "assumed: origin " + r.Origin + " names no forge",
+	}[r.How]
+	line := "forge " + r.Provider + " (" + how + ")"
 	switch src := d.in.Tracker.Source; src {
 	case "":
 	case config.SourceIssues:
@@ -436,21 +424,14 @@ func (d *runner) tracker() Check {
 			return fail("tracker", d.in.TeamProblem, "check issues.itsaplan.project against the project's key in It's a Plan, and the API key's access")
 		}
 	}
-	f := d.resolveForge()
-	line := d.forgeLine(f)
+	r := d.resolveForge()
+	f, line := r.Provider, d.forgeLine(r)
 	if src := d.in.Tracker.Source; (src == config.SourceGitHub || src == config.SourceGitLab) && f != src {
-		shown := f
-		if shown == "" {
-			shown = "unknown"
-		}
-		return fail("tracker", "issues.source is "+src+" but the forge is "+shown+": "+line,
+		return fail("tracker", "issues.source is "+src+" but the forge is "+f+": "+line,
 			"set issues.source "+strutil.OrDefault(f, "file")+", or forge.provider "+src+" if detection is wrong")
 	}
-	switch f {
-	case "local":
+	if f == tracker.ProviderLocal {
 		return skip("tracker", "no pull requests: "+line)
-	case "":
-		return skip("tracker", "no origin remote naming github or gitlab (set forge.provider): "+line)
 	}
 	cli := tracker.CLIName(f)
 	if _, ok := d.in.Look(cli); !ok {

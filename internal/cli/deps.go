@@ -484,9 +484,31 @@ func (d *Deps) trackerOptions() []tracker.Option {
 	return append(d.trackerBase(), tracker.WithReadCache(d.ReadCache))
 }
 
-// forgeOrGitHub is forge falling back to github for an unrecognized origin.
-func (d *Deps) forgeOrGitHub(ctx context.Context, cfg any, provider, dir string) (tracker.Forge, error) {
-	return tracker.NewFromConfigOrGitHub(ctx, cfg, provider, dir, d.trackerOptions()...)
+// actorForge is the provider an actor verb (ship pr, release) acts on in
+// dir: tracker.ResolveProvider as a tracker.ForgeActor under cfg's
+// forge.provider, reading origin through Deps.Git. An origin naming no forge
+// is the exit-4 refusal whose data is blockedBy forge (failData lifts it into
+// the Result); a corrupt config is exit 70, as in every forge constructor.
+func actorForge(c *Ctx, cfg any, dir string) (string, error) {
+	if err := tracker.ValidateConfig(cfg); err != nil {
+		return "", trackerErr(err)
+	}
+	r, err := tracker.ResolveProvider(c.Context(), tracker.ForgeActor, "", tracker.SettingsFromConfig(cfg).Provider, dir, tracker.GitExec(c.deps().Git))
+	if err != nil {
+		e := Refused("%s", err.Error())
+		e.Data = jsonObj("blockedBy", "forge", "changed", false)
+		return "", e
+	}
+	return r.Provider, nil
+}
+
+// failData is the Result carrying the failure data err holds, if any.
+func failData(err error) Result {
+	var e *Error
+	if errors.As(err, &e) {
+		return Result{Data: e.Data}
+	}
+	return Result{}
 }
 
 // envClock reads the test overrides of the clock once, at the edge:
