@@ -3,6 +3,8 @@ package backlog
 import (
 	"strings"
 	"testing"
+
+	ms "github.com/l4ci/rota/internal/milestone"
 )
 
 func itemsOf(t *testing.T, f *File, id string) string {
@@ -97,4 +99,23 @@ func TestMilestoneItemsSection(t *testing.T) {
 			t.Fatalf("M02:\n%s", got)
 		}
 	})
+}
+
+func TestSyncFailureAfterWriteIsAWarning(t *testing.T) {
+	// M00.md claims id M07, so syncing M07 fails; it sorts before M01.
+	files := rotaFiles(map[string]string{".rota/milestones/M00.md": ms.Stub("M07", "Wrong id", "s", nil)})
+	f, _ := proj(t, files)
+	var warned []string
+	f.Warn = func(msg string) { warned = append(warned, msg) }
+	res, err := f.Create(CreateInput{Kind: "bugs", Title: "Crash on save", Tag: "P1", Fields: []Field{{"Milestone", "M01"}},
+		Body: []byte("# {ID}\n"), HasBody: true})
+	if err != nil {
+		t.Fatalf("create failed after the write: %v", err)
+	}
+	if got := itemsOf(t, f, "M01"); !strings.Contains(got, res.ID) {
+		t.Errorf("a bad milestone file stopped the sync of M01:\n%s", got)
+	}
+	if len(warned) != 1 || !strings.Contains(warned[0], "M07") {
+		t.Errorf("warnings = %q", warned)
+	}
 }

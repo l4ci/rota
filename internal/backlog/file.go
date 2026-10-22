@@ -28,6 +28,9 @@ type File struct {
 	// Today stamps dated rows (comments); nil is time.Now. The cli injects
 	// Deps.Today so a pinned test clock reaches the write.
 	Today func() time.Time
+	// Warn receives notices for failures after a write has committed (a
+	// milestone sync); nil drops them.
+	Warn func(string)
 }
 
 // Name is "file".
