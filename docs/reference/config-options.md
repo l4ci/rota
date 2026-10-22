@@ -294,6 +294,12 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 |-----|------|---------|--------|-------------|
 | `forge.provider` | enum | `"auto"` | `auto`, `github`, `gitlab`, `local` | Where code lands: pull requests, checks and releases. auto reads the origin remote and is local with no remote; local means direct merge, no PR. Set it by hand only when detection misses (self-hosted GitLab without gitlab in the host, SSH host aliases, mirrors). |
 
+### review
+
+| Key | Type | Default | Values | Description |
+|-----|------|---------|--------|-------------|
+| `review.fileDeferred` | enum | `"minor"` | `minor`, `major`, `off` | Which deferred review findings rota verdict add --file-deferred files, as one follow-up item per PR. minor: minor and major. major: only major (minor stays in the verdict record). off: none. |
+
 ### roles
 
 | Key | Type | Default | Values | Description |

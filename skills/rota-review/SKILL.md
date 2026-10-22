@@ -136,7 +136,7 @@ With no spec (Step 3, no referenced items), record only `review-quality`, and st
 
 Record both even when Spec is FAIL: the Standards findings are the author's to-do list too. Order decides the result: `review-quality` stores `combined`, the worse of the two at the same sha. `data.combined` on the second call is the branch's review verdict.
 
-Only blocking findings are relayed to the worker and count toward a bounce. File the deferred ones (`blocking: false`, severity above `info`) as items by adding `--file-deferred --pr <pr-ref>` to the recording call: it files one task per deferred finding, with the PR in `--related`, and returns the ids in `data.filed`. Give each deferred finding a `fix` (the expected behaviour, see the reviewer brief): it becomes the item's AC-1, and the finding itself is filed under `## Problem`. Pass it once per verdict, not on a retry (a second call files them again).
+Only blocking findings are relayed to the worker and count toward a bounce. File the deferred ones (`blocking: false`, severity above `info`) as items by adding `--file-deferred --pr <pr-ref>` to the recording call: it adds them to the one follow-up task for the PR ("Review follow-ups from PR #N", PR in `--related`) and returns the item in `data.filed` and the new lines in `data.appended`. A later verdict on the same PR appends to that item; a repeated finding (same title and file) is skipped, so a retry is safe. `review.fileDeferred` (`minor` default, `major`, `off`) sets the floor. Give each deferred finding a `fix` (the expected behaviour, see the reviewer brief): it becomes one acceptance line, and the finding itself is filed under `## Problem`.
 
 Then register the Step 4 hits (parallel batch) for the entries no finding names.
 

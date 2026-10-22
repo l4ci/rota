@@ -210,7 +210,7 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", "review-spec, review-quality, second-opinion, qa or behaviour")
 	v := fs.String("verdict", "", "PASS, CONCERNS or FAIL (qa also INFRA-FAIL; behaviour takes PASS or FAIL)")
 	transcript := fs.String("transcript", "", "path of the run's transcript (behaviour only)")
-	fileDeferred := fs.Bool("file-deferred", false, "file each deferred (non-blocking, non-info) finding as a task item related to --pr")
+	fileDeferred := fs.Bool("file-deferred", false, "add each deferred (non-blocking, non-info) finding at or above review.fileDeferred to the one follow-up item for --pr")
 	pr := fs.String("pr", "", "the PR the deferred items cite in --related (with --file-deferred)")
 	sha := fs.String("sha", "", "the reviewed commit: record it, refusing unless it is the head of origin/<branch>, or the local branch when it is not pushed")
 	body := bodyFlag(fs)
@@ -240,10 +240,23 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		if err := sameVerdict(b, *v); err != nil {
 			return Result{}, err
 		}
-		var deferred []backlog.CreateInput
+		var deferred []followUp
+		floor := floorMinor
+		var fileRoot string
 		if *fileDeferred {
-			if deferred, err = deferredItems(b.Findings, strings.TrimSpace(*pr), *kind, *v); err != nil {
+			// Resolved before the record is written: a config the floor cannot
+			// be read from stops the call instead of guessing the default.
+			if fileRoot, err = backlogScope(c); err != nil {
 				return Result{}, err
+			}
+			if f := config.StringIfSet(config.Load(rotatree.Config(fileRoot)), "review.fileDeferred"); f != "" {
+				floor = f
+			}
+			if floor != floorMinor && floor != floorMajor && floor != floorOff {
+				return Result{}, Usage("review.fileDeferred is %q: want minor, major or off", floor)
+			}
+			for _, f := range deferredAbove(b.Findings, floor) {
+				deferred = append(deferred, newFollowUp(f, strings.TrimSpace(*pr), *kind, *v))
 			}
 		}
 		t, err := resolveVerdictBranch(c, args)
@@ -272,41 +285,36 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 			d.Set("depthNote", note)
 			text += " (" + note + ")"
 		}
+		if *fileDeferred {
+			d.Set("filed", []any{})
+			d.Set("appended", 0)
+		}
+		if *fileDeferred && floor == floorOff {
+			why := "review.fileDeferred is off: no deferred finding is filed"
+			d.Set("filedWhy", why)
+			text += " (" + why + ")"
+		}
 		if len(deferred) > 0 {
 			// The record is already written, so a failure here reports what was
 			// filed and leaves the rest to a by-hand `item create`.
-			root, err := backlogScope(c)
-			if err != nil {
-				return Result{}, err
-			}
-			skipped := 0
-			res, err := withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
-				fresh, n, err := dropFiled(be, deferred, strings.TrimSpace(*pr))
-				if err != nil {
-					return backlogFail(err)
+			var id string
+			var added int
+			_, err = withBackend(c, fileRoot, false, "", func(be backlog.Backend) (Result, error) {
+				var ferr error
+				if id, added, ferr = fileFollowUpsLocked(be, fileRoot, deferred, strings.TrimSpace(*pr)); ferr != nil {
+					return backlogFail(ferr)
 				}
-				skipped = n
-				if len(fresh) == 0 {
-					return Result{Data: jsonObj("items", []any{}, "changed", false)}, nil
-				}
-				return fileBatch(be, fresh)
+				return Result{}, nil
 			})
-			ids := []any{}
-			if rd, ok := res.Data.(*jsonx.Object); ok {
-				items, _ := rd.Get("items")
-				list, _ := items.([]any)
-				for _, it := range list {
-					id, _ := it.(*jsonx.Object).Get("id")
-					ids = append(ids, id)
-				}
+			if id != "" {
+				d.Set("filed", []any{id})
 			}
-			d.Set("filed", ids)
-			d.Set("skipped", skipped)
+			d.Set("appended", added)
 			if err != nil {
 				return Result{Data: d, Text: text}, err
 			}
-			if len(ids) > 0 {
-				text += " (filed " + strings.Replace(res.Text, "\n", " ", -1) + ")"
+			if added > 0 {
+				text += fmt.Sprintf(" (follow-up %s: %d added)", id, added)
 			}
 		}
 		return Result{Data: d, Text: text + " -> " + next}, nil
@@ -343,75 +351,6 @@ func raisedDepthNote(c *Ctx, args []string, t verdictBranch, head, kind string) 
 	}
 	return fmt.Sprintf("review depth %s -> %s (%s): still needs %s at head, or the gate refuses review-missing",
 		worker.CoveredDepth(verdict.LastReviewSet(t.root, t.branch), hasSpec), res.Depth, why, strings.Join(missing, " and "))
-}
-
-// dropFiled removes from ins the items already filed for pr: an item with the
-// same title and the PR in its Related field, open or closed. A retry of the
-// same recording therefore files nothing new. n counts the ones dropped.
-func dropFiled(be backlog.Backend, ins []backlog.CreateInput, pr string) (fresh []backlog.CreateInput, n int, err error) {
-	have, err := be.List(true)
-	if err != nil {
-		return nil, 0, err
-	}
-	filed := map[string]bool{}
-	for _, it := range have {
-		if strings.Contains(it.Fields.Related, pr) {
-			filed[it.Title] = true
-		}
-	}
-	for _, in := range ins {
-		if filed[in.Title] {
-			n++
-			continue
-		}
-		filed[in.Title] = true // two findings with one title file once
-		fresh = append(fresh, in)
-	}
-	return fresh, n, nil
-}
-
-// neutralAC is the one criterion of a deferred item whose finding carries no fix.
-const neutralAC = "the problem above no longer reproduces, and a test or check that failed before the fix passes after it"
-
-// deferredItems is one task per deferred finding, related to the PR it was
-// found on. The title is the finding's. The body states the finding as a
-// Problem (it is the defect, never a requirement) with its location, detail and
-// the verdict it came from; the one acceptance criterion is the finding's fix,
-// or a neutral one when it has none, so the item is ready to assign.
-func deferredItems(findings []verdict.Finding, pr, kind, v string) ([]backlog.CreateInput, error) {
-	var ins []backlog.CreateInput
-	for _, f := range findings {
-		if !f.IsDeferred() {
-			continue
-		}
-		var body strings.Builder
-		title := strings.TrimSpace(f.Title)
-		fmt.Fprintf(&body, "## Problem\n\n%s\n", title)
-		if f.Detail != "" {
-			body.WriteString("\n" + f.Detail + "\n")
-		}
-		if f.File != "" {
-			loc := f.File
-			if f.Line > 0 {
-				loc += ":" + strconv.Itoa(f.Line)
-			}
-			fmt.Fprintf(&body, "\nWhere: `%s`\n", loc)
-		}
-		fmt.Fprintf(&body, "\nDeferred %s finding from the %s %s verdict on %s.\n", f.Severity, kind, v, pr)
-		ac := neutralAC
-		if fix := strings.TrimSpace(f.Fix); fix != "" {
-			ac = fix
-		}
-		fmt.Fprintf(&body, "\n## Acceptance\n\n- [ ] AC-1: %s\n", ac)
-		in, err := backlog.BuildCreateInput(backlog.CaptureRequest{Kind: "tasks", Title: f.Title, Desc: f.Title,
-			Fields: map[string]string{"related": pr}, Given: map[string]bool{"related": true},
-			Body: []byte(body.String()), HasBody: true})
-		if err != nil {
-			return nil, Usage("cannot file finding %q: %v", f.Title, err)
-		}
-		ins = append(ins, in)
-	}
-	return ins, nil
 }
 
 func verdictShow(c *Ctx, args []string) (Result, error) {
