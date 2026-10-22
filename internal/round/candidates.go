@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -313,6 +316,45 @@ type Empty struct {
 	Reason, Next string
 }
 
+// hasConcept finds the first concept document, returning its repo-relative path.
+// README needs ten non-empty lines; the document directories need only a file.
+func hasConcept(root string) (bool, string) {
+	entries, _ := os.ReadDir(root)
+	for _, entry := range entries {
+		name := entry.Name()
+		if !entry.Type().IsRegular() || !(strings.EqualFold(name, "README") || strings.EqualFold(name, "README.md") || strings.EqualFold(name, "README.rst")) {
+			continue
+		}
+		text, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			continue
+		}
+		lines := 0
+		for _, line := range strings.Split(string(text), "\n") {
+			if strings.TrimSpace(line) != "" {
+				lines++
+			}
+		}
+		if lines >= 10 {
+			return true, name
+		}
+	}
+	for _, dir := range []string{"docs", ".rota/designs", ".rota/plans", ".rota/spikes"} {
+		var evidence string
+		_ = filepath.WalkDir(filepath.Join(root, dir), func(path string, entry fs.DirEntry, err error) error {
+			if err == nil && entry.Type().IsRegular() && (dir != "docs" || filepath.Ext(path) == ".md") {
+				evidence, _ = filepath.Rel(root, path)
+				return fs.SkipAll
+			}
+			return nil
+		})
+		if evidence != "" {
+			return true, filepath.ToSlash(evidence)
+		}
+	}
+	return false, ""
+}
+
 // WhyEmpty explains an empty candidate list: the backlog has no open items,
 // the scope selects none, or everything the scope selects is held, in review,
 // taken or handed to a human. Next is the command that moves the round on.
@@ -328,6 +370,19 @@ func (e Env) WhyEmpty(ctx context.Context, root string, be backlog.Backend, scop
 		}
 	}
 	if open == 0 {
+		if ok, evidence := hasConcept(root); ok {
+			var store milestone.Store = milestone.FileStore{Root: root}
+			if b, ok := be.(interface{ MilestoneStore() milestone.Store }); ok {
+				store = b.MilestoneStore()
+			}
+			milestones, err := store.List()
+			if err != nil {
+				return Empty{}, err
+			}
+			if len(milestones) == 0 {
+				return Empty{"the backlog has no open items", fmt.Sprintf("the backlog is empty and %s holds a concept: run /rota-vision to split it into milestones, then capture issues", evidence)}, nil
+			}
+		}
 		return Empty{"the backlog has no open items", "capture work with /rota-capture, then run rota round candidates"}, nil
 	}
 	inScope, err := scopeSet(root, items, nil, scope, slate)
