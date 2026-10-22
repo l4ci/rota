@@ -13,6 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -269,7 +270,7 @@ func TestReviewDepthCrossBundle(t *testing.T) {
 		Issue: tracker.NumKey(5), Members: []tracker.IssueKey{tracker.NumKey(6)},
 		Issues: issueMap{5: {Labels: []string{"size:Minor"}}, 6: {Labels: []string{"size:Major"}}}}
 	got, err := ResolveReviewDepth(context.Background(), src)
-	if err != nil || got.Cross != "codex" {
+	if err != nil || got.Cross != harness.Codex {
 		t.Fatalf("cross = %q (%v)", got.Cross, err)
 	}
 }
