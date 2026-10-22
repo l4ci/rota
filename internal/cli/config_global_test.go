@@ -347,3 +347,38 @@ func TestConfigScreenOnTheGlobalConfig(t *testing.T) {
 		t.Errorf("reset left the key in the global:\n%s", raw)
 	}
 }
+
+// #1603: save-global reports changed, true only when a global value differs.
+func TestConfigSaveGlobalReportsChanged(t *testing.T) {
+	isolateGlobal(t)
+	src := t.TempDir()
+	if code, _, e := initRun(t, src, "init"); code != 0 {
+		t.Fatalf("init: %d %s", code, e)
+	}
+	if code, _, e := initRun(t, src, "config", "set", "work.isolation", "worktree"); code != 0 {
+		t.Fatalf("set: %d %s", code, e)
+	}
+	changed := func() any {
+		code, env, e := initRun(t, src, "config", "save-global")
+		if code != 0 {
+			t.Fatalf("save-global: %d %s", code, e)
+		}
+		v, ok := initData(env).Get("changed")
+		if !ok {
+			t.Fatalf("data has no changed field: %v", env)
+		}
+		return v
+	}
+	if got := changed(); got != true {
+		t.Errorf("first save-global changed = %v, want true", got)
+	}
+	if got := changed(); got != false {
+		t.Errorf("repeat save-global changed = %v, want false", got)
+	}
+	if code, _, e := initRun(t, src, "config", "set", "work.isolation", "none"); code != 0 {
+		t.Fatalf("set: %d %s", code, e)
+	}
+	if got := changed(); got != true {
+		t.Errorf("save-global after a value change: changed = %v, want true", got)
+	}
+}
