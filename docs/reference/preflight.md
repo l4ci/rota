@@ -66,6 +66,7 @@ The checks, in the order they run:
 | `milestones` | with milestones on the tracker, `.rota/milestones/` holds no files left from file mode | nothing to report: the line appears only as a `warn`, when stale files exist (fix: `rota migrate milestone-files --apply`) |
 | `config dir` | nothing to fail: the line shows the global config dir in use and where it came from (`ROTA_CONFIG_DIR` override, `XDG_CONFIG_HOME` or the default). Warns when a relative `ROTA_CONFIG_DIR` was ignored | never |
 | `state dir` | nothing to fail: the line shows the state dir that holds the project registry | never |
+| `test` | nothing to fail: the line shows the test lock width (`test.slots`) and the smoke shard count `bash test/gate.sh` would use here: `ROTA_SMOKE_SHARDS`, else `gate.smokeShards`, else one shard per two cores, at most four | never; the line appears only inside a project |
 | `verify` | `test.full` or `test.e2e` is set, so the merge gate has something to run | nothing to report: the line appears only as a `warn`, when both are empty under a local verify (fix: `rota config set test.full '[...]'`) |
 
 The three hook checks are opt-in. Until something `rota hook install` writes is present, they skip and do not fail a project that never installed the hooks. Once it is, a partial or broken install fails. `skills` follows the same rule: it skips until `rota skills install` has written a manifest.

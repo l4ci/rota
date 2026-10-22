@@ -23,6 +23,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 	attempt := fs.String("attempt", "", "the attempt id from your brief; a stale one exits 4")
 	outcome := fs.String("outcome", "", "how the work ended: "+strings.Join(worker.Outcomes, "|")+" (default: done, no summary)")
 	requireRed := fs.Bool("require-red", false, "refuse (exit 4) instead of warning when work.tdd is on and non-test Go changed with no failing (RED) proof row, or the diff cannot be computed")
+	targeted := fs.String("proof", "", "a targeted proof command for a small task: run at HEAD and recorded as the targeted proof row instead of test.fast")
 	summaryFile := fs.String("summary-file", "", "three lines: what changed, what was found, what remains (required for partial and failed)")
 	return func(c *Ctx, args []string) (Result, error) {
 		slotName, err := oneArg(args, "slot")
@@ -85,6 +86,15 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		if kind == worker.OutcomeFailed {
 			// A worker that cannot deliver has nothing to prove: the summary is its record.
 			d.Set("proofSkipped", true)
+		} else if *targeted != "" {
+			head, err := branchHead(c, root, sl.Branch())
+			if err != nil {
+				return Result{}, err
+			}
+			if err := targetedProof(c, root, sl, *targeted, *base, head, d); err != nil {
+				return Result{Data: d}, err
+			}
+			d.Set("head", head)
 		} else if len(cmds) == 0 {
 			c.Warn("test.fast is unset: the proof check is skipped for %s", slotName)
 			d.Set("proofSkipped", true)
@@ -210,6 +220,63 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: d, Text: text}, nil
 	}
+}
+
+// targetedProof stands in for the test.fast proof of a small task whose brief
+// names its own check: for each issue the slot holds, a PASS row for command at
+// head is enough; a missing one is made by running the command here, niced and
+// under the test lock, in the slot's worktree. The row is marked targeted. The
+// gate still runs everything. A failing run refuses the done (exit 4).
+func targetedProof(c *Ctx, root string, sl *worker.Slot, command, base, head string, d *jsonx.Object) error {
+	dir := slotDir(sl, root)
+	expanded, err := expandFiles(c, dir, base, []string{command})
+	if err != nil {
+		return err
+	}
+	command = expanded[0]
+	d.Set("targeted", true)
+	d.Set("proofCommand", command)
+	ctx, stop := workerContext()
+	defer stop()
+	for _, id := range openBundleIssues(c, root, sl) {
+		_, st, _, err := openProof(c, id)
+		if err != nil {
+			return err
+		}
+		rows, _, err := proof.Show(st, id)
+		if err != nil {
+			_, err = failAny(err)
+			return err
+		}
+		if proof.Proves(rows, head, command) {
+			// The worker recorded the passing run itself: the row stays the
+			// record, now marked targeted.
+			if _, err := proof.Mark(st, id, head, command, "targeted=true"); err != nil {
+				_, err = failAny(err)
+				return err
+			}
+			continue
+		}
+		run, err := runProofCommand(c, ctx, root, dir, command, "worker done")
+		if err != nil {
+			return err
+		}
+		run.targeted = true
+		result := "PASS"
+		if run.code != 0 {
+			result = "FAIL"
+		}
+		if _, _, err := proof.Add(st, root, id, c.deps().Today(), proof.AddOpts{Check: command, Result: result, Evidence: run.evidence(), Sha: head}); err != nil {
+			_, err = failAny(err)
+			return err
+		}
+		if run.code != 0 {
+			e := Refused("%s: the targeted proof `%s` failed (exit %d)", id, command, run.code)
+			e.Hint = "fix it, commit and push, then run `rota worker done` again"
+			return e
+		}
+	}
+	return nil
 }
 
 // unreadMailRefusal is the exit-4 refusal of a done while the slot's inbox
