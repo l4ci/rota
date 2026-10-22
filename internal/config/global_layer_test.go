@@ -109,17 +109,17 @@ func TestMissingOrCorruptGlobalIsSkipped(t *testing.T) {
 }
 
 func TestResetAppliesTheRequiredKeyRule(t *testing.T) {
-	const key = "work.mergeStrategy" // a required key
+	const key = "docs.path" // a required key
 	cases := []struct {
 		name, global string
 		wantWritten  bool
 	}{
 		{"no global supplier", ``, true},
-		{"global supplies it", `{"work":{"mergeStrategy":"pr"}}`, false},
+		{"global supplies it", `{"docs":{"path":"doc"}}`, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			root := layerRig(t, c.global, `{"work":{"mergeStrategy":"pr"}}`, `{"work":{"mergeStrategy":"direct"}}`)
+			root := layerRig(t, c.global, `{"docs":{"path":"doc"}}`, `{"docs":{"path":"manual"}}`)
 			if err := Reset(root, projects.OSEnv(), key); err != nil {
 				t.Fatal(err)
 			}

@@ -83,7 +83,7 @@ func TestA9ConfigFill(t *testing.T) {
 	code, env, _ := rotaRun(t, "--json", "-C", root, "config", "fill")
 	d := dataOf(env)
 	filled, _ := get(d, "filled").([]any)
-	if code != 0 || get(d, "changed") != true || len(filled) == 0 || filled[0] != "models.orchestrator" {
+	if code != 0 || get(d, "changed") != true || len(filled) == 0 || filled[0] != "learn.promoteThreshold" {
 		t.Fatalf("fill: %d %v", code, env)
 	}
 	if code, _, _ := rotaRun(t, "--json", "-C", root, "config", "check"); code != 0 {
@@ -254,4 +254,27 @@ func textRun(t *testing.T, args ...string) (int, string) {
 	var out, errb bytes.Buffer
 	code := mainWith(testDeps(), args, strings.NewReader(""), &out, &errb)
 	return code, out.String()
+}
+
+// #1786: config show prints each key's scope beside its source, in text and
+// as scope in --json, for the project and the global config alike.
+func TestConfigShowScope(t *testing.T) {
+	t.Setenv("ROTA_CONFIG_DIR", t.TempDir())
+	root := trackerProject(t, "{}\n")
+	code, out := textRun(t, "-C", root, "config", "show", "round.accounts")
+	if code != 0 || !strings.Contains(out, "(source: default, scope: machine)") {
+		t.Errorf("text: %d %q", code, out)
+	}
+	for key, want := range map[string]string{"round.accounts": "machine", "work.isolation": "taste", "issues.source": "project"} {
+		code, env, _ := rotaRun(t, "--json", "-C", root, "config", "show", key)
+		rows, _ := get(dataOf(env), "entries").([]any)
+		if code != 0 || len(rows) != 1 || get(rows[0], "scope") != want {
+			t.Errorf("%s: %d %v, want scope %s", key, code, env, want)
+		}
+	}
+	code, env, _ := rotaRun(t, "--json", "config", "show", "--global", "round.slots")
+	rows, _ := get(dataOf(env), "entries").([]any)
+	if code != 0 || len(rows) != 1 || get(rows[0], "scope") != "machine" {
+		t.Errorf("--global: %d %v", code, env)
+	}
 }
