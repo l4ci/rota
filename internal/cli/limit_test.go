@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -72,6 +73,26 @@ func limProject(t *testing.T) string {
 	dir := gitRepo(t)
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"git":{"baseBranch":"feat/x"}}`), 0o644)
 	return dir
+}
+
+func TestLimitsLoopCommonDirUsesWatcherContext(t *testing.T) {
+	root, common := trProject(t, "{}"), t.TempDir()
+	d, _ := limDeps()
+	var lookups []context.Context
+	d.Git = func(ctx context.Context, _ string, _ ...string) (git.Result, error) {
+		lookups = append(lookups, ctx)
+		return git.Result{Stdout: common}, nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	loop := limitsLoop(&Ctx{Deps: d}, root, config.Load(rotatree.Config(root)), limits.Settings{}, os.Getpid(), nil)
+	loop(ctx)
+	if len(lookups) < 2 {
+		t.Fatalf("common-dir lookups = %d, want watcher setup and watching record", len(lookups))
+	}
+	if got := lookups[1].Err(); got != context.Canceled {
+		t.Fatalf("watching-record context error = %v, want canceled watcher context", got)
+	}
 }
 
 func addLimit(t *testing.T, root string, e limits.Entry) limits.Entry {

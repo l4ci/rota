@@ -263,7 +263,7 @@ func limitsLoop(c *Ctx, root string, cfg any, set limits.Settings, holderPID int
 			return warns
 		}
 		defer rig.Cancel()
-		if cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root); err == nil {
+		if cd, err := rotastate.CommonDirVia(ctx, c.deps().Git, root); err == nil {
 			rec := ownWatching(c, limits.ModeSupervisor)
 			if err := limits.WriteWatching(cd, rec); err == nil {
 				defer limits.RemoveWatching(cd, rec.PID)
