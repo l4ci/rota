@@ -7,9 +7,9 @@ refs:
 
 ## #1175: bugreport
 
-`rota bugreport` is the local log of rota's own mistakes and their gated filing on the rota repo. The log is `.rota/bugreports.jsonl` (per-developer, gitignored): one JSON line per record `{"id": "bug-<n>", "ts", "source": "auto"|"agent", "verb", "args", "exit", "error", "summary", "expected", "harness", "model", "count", "status": "open"|"filed"|"dismissed", "issue", "offered"}`. An invocation that ends in an internal error or a panic (exit 70) appends an `auto` record by itself, unless the verb is under `bugreport`; an open `auto` record with the same verb, exit and error is counted (`count`) instead of added again. Other exit codes record nothing. `rota round wind-down` (a `bugreports` count in `data` and one text line) and the Stop hook of a solo session (a `systemMessage`, once per record, silent under `ROTA_SLOT`) offer the open records without blocking.
+`rota bugreport` is the local log of rota's own mistakes and their gated filing on the rota repo. The log is `.rota/bugreports.jsonl` (per-developer, gitignored): one JSON line per record `{"id": "bug-<n>", "ts", "source": "auto"|"agent", "verb", "args", "exit", "error", "summary", "expected", "harness", "model", "count", "status": "open"|"filed"|"dismissed", "issue", "offeredSession"}`. Every worktree of a repo shares the main checkout's log, and secrets in `error`, `summary`, `expected` and `args` are redacted when the record is stored. An invocation that ends in an internal error or a panic (exit 70) appends an `auto` record by itself, unless the verb is under `bugreport`; an open `auto` record with the same verb, exit and error is counted (`count`) instead of added again. Other exit codes record nothing. `rota round wind-down` (a `bugreports` count in `data` and one text line) and the Stop hook of a solo session (a `systemMessage`, once per record and session, silent under `ROTA_SLOT`) offer the open records without blocking.
 
-Every draft is redacted before it is shown or filed: tokens and keys, email addresses, home-directory paths, the hostname, and the project's own repo name and remote URL. It carries the rota version, OS and architecture, harness and model (the flags, then the record, then the slot named by `ROTA_SLOT`, else `unknown`).
+Every draft, and the `add` and `list` output, is redacted before it is shown or filed: tokens and keys, email addresses, home-directory paths, the hostname, and the project's own repo name and remote URL. It carries the rota version, OS and architecture, harness and model (the flags, then the record, then the slot named by `ROTA_SLOT`, else `unknown`).
 
 ### rota bugreport add
 rota bugreport add --summary <text> [--expected <text>] [--verb <verb>] [--harness <kind>] [--model <name>]
@@ -40,9 +40,9 @@ note: searches the open issues of the upstream repo (`$ROTA_UPSTREAM_REPO`, else
 ### rota bugreport file
 rota bugreport file <id> [--comment <number>] [--harness <kind>] [--model <name>] --confirm --confirm-note <answer>
 repo: none
-data: {"id": string, "url": string, "upstreamRepo": string, "changed": true}
+data: {"id": string, "url": string, "upstreamRepo": string, "changed": true, "recorded"?: false, "warning"?: string}
 exit: 2 as draft, or a confirmation flag given without the other; 3 for an unknown id; 4 when the `bugreport-file` gate is not cleared (checked after the arguments, before `gh` runs), or the record is already filed and no `--comment` is given; 5 when `gh` is missing, not authenticated or failing (the hint carries the manual `issues/new` URL)
-note: creates the issue with the redacted title and body, or comments on `--comment <number>`; marks the record `filed` with the URL. Gated in every autonomy mode (see gates.md); the audit target is `<repo>: <title>`.
+note: creates the issue with the redacted title and body, or comments on `--comment <number>`; marks the record `filed` with the URL. When that status update fails after the issue exists, the verb still exits 0 with `recorded: false` and `warning`, and the text says to run `rota bugreport dismiss <id>` instead of filing again. Gated in every autonomy mode (see gates.md); the audit target is `<repo>: <title>`.
 
 ### rota bugreport dismiss
 rota bugreport dismiss <id>

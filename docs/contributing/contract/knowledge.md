@@ -6,7 +6,7 @@ refs:
 
 ## A5: knowledge, decisions, glossary, blocks, map, qa
 
-Every verb that rewrites S's KNOWLEDGE.md (`knowledge add`, `amend`, `replace`, `rm`, `rename-topic`, `glossary write`, `glossary import`) holds the advisory lock on the sibling `KNOWLEDGE.md.lock` for its whole read-modify-write, and takes the `knowledge-tier.json.lock` inside it, never the reverse. N concurrent calls each land their own change (the parallel rename batch in `rota-learn/topic-size.md` relies on it), and the temp file each write renames over the target is unique per call (`<path>.<pid>.<n>.tmp`), per the Writes rule in `cli-conventions.md`. The empty `.lock` stays behind, so a golden that records a writer's changed files lists it. (#895)
+Every verb that rewrites S's KNOWLEDGE.md (`knowledge add`, `amend`, `replace`, `rm`, `rename-topic`, `glossary write`, `glossary import`) holds the advisory lock on the sibling `KNOWLEDGE.md.lock` for its whole read-modify-write, and takes the `knowledge-tier.json.lock` inside it, never the reverse. `rename-topic`, `replace`, `rm` and `tier set` fold the buffered hits (see `knowledge hit`) under the `KNOWLEDGE.md` lock before they touch the sidecar. N concurrent calls each land their own change (the parallel rename batch in `rota-learn/topic-size.md` relies on it), and the temp file each write renames over the target is unique per call (`<path>.<pid>.<n>.tmp`), per the Writes rule in `cli-conventions.md`. The empty `.lock` stays behind, so a golden that records a writer's changed files lists it. (#895)
 
 ### rota knowledge query
 rota knowledge query <topic>… [--tier provisional|confirmed|deprecated] [--include-deprecated]
@@ -91,6 +91,7 @@ old: hv-knowledge-hit [--repo <name>] --topic <T> --title <S>    (same flags)
 shim: stderr `auto-promoted:` sets `promoted: true`; stderr `skip-auto-promote:` sets `promotionBlocked: true`; `hits` and `tier` come from a follow-up `hv-knowledge-tier --get` on the same scope.
 note: the result moves from stderr into `data`. For topic `Glossary` the old helper does nothing and exits 0; the contract returns `changed: false` with `hits` 0 and `tier` `provisional`. An untracked bullet is created with hits 1, provisional (`bump_hit` behaviour). The threshold is config `learn.promoteThreshold` (default 3), and promotion is skipped while the pair is in the contradiction queue.
 note: the port reads the value it reports in the same locked pass as the write; the shim's follow-up read can skew it under concurrent writers.
+note: since #1290 a hit appends one JSON line `{topic, title, date}` to the gitignored per-developer buffer `knowledge-hits.jsonl` beside the scope's sidecar (under its `.lock`) and does not write the tracked `knowledge-tier.json`, so consulting a bullet never dirties the tree. `data` is what the sidecar reads once the buffer is folded in (`hits`, `tier`, `promoted`, `promotionBlocked`); `changed` is true. `rota knowledge tier fold` applies the buffer.
 
 ### rota knowledge tier get
 rota knowledge tier get --topic <T> --title <S>
@@ -99,7 +100,7 @@ data: {"topic": string, "title": string, "found": bool, "tier"?: string, "hits"?
 exit: 2 when `--topic` or `--title` is missing
 old: hv-knowledge-tier [--repo <name>] --get --topic <T> --title <S>
 shim: stdout `{}` gives `found: false`; otherwise the keys are copied across (`lastSeen` is already camelCase).
-note: redesign. `rota knowledge tier` is now a group with sub-verbs `get`, `set` and `list`, replacing the old `--get/--set/--init/--inc/--list` mode flags. An untracked entry is `found: false` with exit 0, as the old helper returned `{}`. Topic `Glossary` is always `found: false`.
+note: reads the sidecar with buffered hits replayed in memory and a provisional entry for each bullet that has none; nothing is written. redesign. `rota knowledge tier` is now a group with sub-verbs `get`, `set`, `list` and `fold`, replacing the old `--get/--set/--init/--inc/--list` mode flags. An untracked entry is `found: false` with exit 0, as the old helper returned `{}`. Topic `Glossary` is always `found: false`.
 
 ### rota knowledge tier set
 rota knowledge tier set --topic <T> --title <S> --tier provisional|confirmed|deprecated
@@ -118,7 +119,15 @@ data: {"entries": [{"topic": string, "title": string, "tier": string, "hits": nu
 exit: 2 when `--tier` is not one of the three values
 old: hv-knowledge-tier [--repo <name>] --list [--tier <t>]    (`--tier` is emitted after `--list`, so it is read as a filter)
 shim: stdout JSON array becomes `entries`.
-note: Glossary entries are never listed. `tier init` and `tier inc` are not verbs: `init` happens lazily inside `knowledge add` and on first read (the absorbed `hv-knowledge-migrate`), and `inc` is covered by `knowledge hit`. Smoke that used `--init` to seed state must seed through `knowledge add` instead.
+note: Glossary entries are never listed. `tier init` and `tier inc` are not verbs: `init` happens lazily inside `knowledge add` and, in memory only, on a `tier get` or `tier list` read (the absorbed `hv-knowledge-migrate`), and `inc` is covered by `knowledge hit`. Smoke that used `--init` to seed state must seed through `knowledge add` instead. Reads include buffered hits.
+
+### rota knowledge tier fold
+rota knowledge tier fold
+repo: scoped (scope S)
+data: {"hits": number, "changed": bool, "skipped": number}
+exit: implied only
+old: none (new in #1290)
+note: applies the buffered hits of S to the tracked sidecar and empties the buffer: the one verb that writes the sidecar for hits, so the caller commits the result (text: `folded N hit(s) into the sidecar: commit <sidecar>`, or `no buffered hits`). Promotion at `learn.promoteThreshold` and the contradiction block apply as on a hit. `skipped` counts malformed buffer lines, which are dropped. The buffer is claimed by rename and its name recorded in the sidecar before it is removed, so a fold that dies midway does not replay hits. With nothing buffered it takes no lock and writes nothing.
 
 ### rota knowledge contradiction add
 rota knowledge contradiction add --topic <T> --title <S> --text <text>
