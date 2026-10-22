@@ -3,7 +3,6 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/roundcfg"
 	"strings"
 	"time"
 
@@ -86,8 +85,8 @@ func roundWait(fs *flag.FlagSet) RunFunc {
 // reports it: round.stallMinutes, the same patience as for a stalled slot (0
 // turns it off).
 func unverifiableAfter(c *Ctx, root string) time.Duration {
-	set, err := roundcfg.FromConfig(c.deps().Config(root))
-	if err != nil {
+	set, ok := c.deps().tolerantRoundSettings(root)
+	if !ok {
 		return 0
 	}
 	return time.Duration(set.StallMinutes) * time.Minute
