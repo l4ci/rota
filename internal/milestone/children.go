@@ -5,6 +5,10 @@ import (
 	"strings"
 )
 
+// titleSafe keeps a title from carrying an HTML comment delimiter, which could
+// close the generated section early or open a marker of its own.
+var titleSafe = strings.NewReplacer("<!--", "&lt;!--", "-->", "--&gt;")
+
 // The generated child list of a tracker-backed milestone's tracking issue: the
 // issues in its native milestone, as links. It sits between these markers in
 // the body text, after the plan, so the plan and the list can each be rewritten
@@ -29,7 +33,7 @@ func RenderChildren(kids []ChildRef) string {
 		lines = append(lines, "_none_")
 	}
 	for _, k := range kids {
-		lines = append(lines, "- "+k.Ref+" "+strings.Join(strings.Fields(k.Title), " "))
+		lines = append(lines, "- "+k.Ref+" "+titleSafe.Replace(strings.Join(strings.Fields(k.Title), " ")))
 	}
 	return strings.Join(append(lines, ChildrenClose), "\n")
 }

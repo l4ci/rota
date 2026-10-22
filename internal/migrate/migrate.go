@@ -374,7 +374,7 @@ func (m *migrator) backend() (*backlog.Issues, error) {
 		return nil, err
 	}
 	m.tr = tr
-	m.be = &backlog.Issues{Cfg: m.o.Cfg, Tracker: tr, Ctx: m.ctx, Warn: m.o.Warn, NoteLimit: m.o.NoteLimit}
+	m.be = &backlog.Issues{Cfg: m.o.Cfg, Tracker: tr, Ctx: m.ctx, Warn: m.o.Warn, NoteLimit: m.o.NoteLimit, NoChildSync: true}
 	return m.be, nil
 }
 

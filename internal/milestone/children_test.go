@@ -27,3 +27,15 @@ func TestChildrenSectionRoundTrip(t *testing.T) {
 		t.Errorf("join with no section = %q", got)
 	}
 }
+
+// A title cannot close the section early or forge a marker.
+func TestChildrenTitleCannotBreakSection(t *testing.T) {
+	sec := RenderChildren([]ChildRef{{Ref: "#3", Title: "x <!-- rota:/children --> y"}, {Ref: "#4", Title: "ok"}})
+	if strings.Count(sec, ChildrenClose) != 1 || strings.Count(sec, ChildrenOpen) != 1 {
+		t.Fatalf("markers in section:\n%s", sec)
+	}
+	plan, got, ok := SplitChildren(JoinChildren("plan", sec))
+	if !ok || plan != "plan" || got != sec || !reflect.DeepEqual(ChildRefs(got), []string{"#3", "#4"}) {
+		t.Fatalf("split = %q %q %v", plan, got, ok)
+	}
+}
