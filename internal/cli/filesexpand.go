@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/shlex"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 const filesPlaceholder = "{files}"
@@ -72,4 +73,13 @@ func recordedCommand(args []string, list string) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// fastTierForms are the two rows `proof record -- rota test run fast` can store:
+// the one-line spelling and the multi-argument one, quoted per argument.
+func fastTierForms() []string {
+	return []string{
+		recordedCommand([]string{worker.FastTierCheck}, ""),
+		recordedCommand(strings.Fields(worker.FastTierCheck), ""),
+	}
 }
