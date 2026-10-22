@@ -28,11 +28,12 @@ func minors(titles ...string) []Finding {
 // The tracker path files, then appends to, the PR's one item.
 func TestFileFollowUpsOnIssueBackend(t *testing.T) {
 	be, tr := followUpIssues()
-	id, added, err := FileFollowUps(be, t.TempDir(), minors("one"), "#77", "review-quality", "FAIL")
+	root := t.TempDir() // one root, so both calls take the same per-PR lock file
+	id, added, err := FileFollowUps(be, root, minors("one"), "#77", "review-quality", "FAIL")
 	if err != nil || id == "" || added != 1 {
 		t.Fatalf("first: %q %d %v", id, added, err)
 	}
-	id2, added, err := FileFollowUps(be, t.TempDir(), minors("one", "two"), "77", "review-quality", "FAIL") // `77` is `#77`
+	id2, added, err := FileFollowUps(be, root, minors("one", "two"), "77", "review-quality", "FAIL") // `77` is `#77`
 	if err != nil || id2 != id || added != 1 {
 		t.Fatalf("second: %q %d %v, want %q and 1 new line", id2, added, err, id)
 	}
