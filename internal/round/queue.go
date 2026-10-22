@@ -46,7 +46,7 @@ func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string)
 func (e Env) settled(ctx context.Context, s *worker.Slot, states ...string) (ok bool, why string) {
 	// A partial or failed report waits for a relay or transfer: queuing its PR
 	// would let the gate merge it by number with nobody having answered it.
-	if k, _ := s.Outcome(); k == worker.OutcomePartial || k == worker.OutcomeFailed {
+	if k, _ := s.Outcome(); worker.OutcomeOpen(k) {
 		return false, "reported " + k + "; relay or transfer it first"
 	}
 	if st := s.State(); !slices.Contains(states, st) {
