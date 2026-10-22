@@ -71,7 +71,7 @@ var supportAllowed = []string{
 	"rota knowledge contradiction has", "rota knowledge contradiction list", "rota knowledge query", "rota knowledge stats",
 	"rota knowledge tier get", "rota knowledge tier list", "rota knowledge topics",
 	"rota map query", "rota map stats",
-	"rota milestone active", "rota milestone check", "rota milestone list", "rota milestone show",
+	"rota milestone active", "rota milestone list", "rota milestone show",
 	"rota plan check", "rota plan list", "rota plan rename-check", "rota plan show", "rota plan uncertain", "rota plan validate-docs",
 	"rota projects", "rota proof show", "rota qa query", "rota receipt show",
 	"rota refactor age", "rota refactor targets",
@@ -95,6 +95,9 @@ var supportAllowed = []string{
 	"rota item note add", "rota item note rm", "rota item ready", "rota item release", "rota item reopen", "rota item rm",
 	"rota item section set", "rota item shipped", "rota item state",
 	"rota issues close", "rota issues label", "rota tracker call",
+	// Regenerates the tracking issue's child list; in file mode it also rewrites
+	// tracked milestone files, which a support machine never reaches (D3).
+	"rota milestone check",
 	// Opens a PR: the support side's whole output.
 	"rota ship pr",
 	// Rotates a support round: workers.json, the lease, the ledger, receipts
