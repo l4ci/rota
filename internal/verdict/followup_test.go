@@ -66,6 +66,14 @@ func TestFollowUpBodyShape(t *testing.T) {
 			t.Errorf("body lacks %q:\n%s", want, body)
 		}
 	}
+	// A bare finding (no File) has no Where line and dedups on its title alone.
+	bare := body[strings.Index(body, "### bare"):]
+	if strings.Contains(bare, "Where:") {
+		t.Errorf("bare finding has a Where line:\n%s", bare)
+	}
+	if _, added, err := FileFollowUps(be, t.TempDir(), fs[1:], "#9", "review-spec", "FAIL"); err != nil || added != 0 {
+		t.Errorf("refiled bare finding: added %d, %v, want 0", added, err)
+	}
 }
 
 // Dedup keys on title+file: the same title in another file is a new finding.
