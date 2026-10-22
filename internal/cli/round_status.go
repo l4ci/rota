@@ -134,13 +134,13 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		var lines []string
 		if set, err := roundcfg.Load(root); err == nil {
 			// Status ran without accounts; the quota read gets its own accounted env.
-			renv := accountedRoundEnv(c, ctx, root)
-			if st := renv.Fallback(ctx, root, set); st.Active {
+			qc := accountedRoundEnv(c, ctx, root).QuotaCap(ctx, root, set) // one meter read serves the fallback and the cap
+			if st := qc.Fallback(set); st.Active {
 				fb, _ := fallbackData(st)
 				d.Set("fallback", fb)
 				lines = append(lines, fmt.Sprintf("fallback\t%s -> %s until %s", st.From, st.To, st.ResetsAt.UTC().Format(fallbackTime)))
 			}
-			if qc := renv.QuotaCap(ctx, root, set); qc.Reduced() {
+			if qc.Reduced() {
 				co := jsonx.NewObject()
 				co.Set("effective", qc.Effective)
 				co.Set("roster", qc.Roster)

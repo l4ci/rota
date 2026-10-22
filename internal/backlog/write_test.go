@@ -523,3 +523,20 @@ func TestSetHarness(t *testing.T) {
 		t.Errorf("unknown: %v", err)
 	}
 }
+
+// Harness: and Model: both end the value before them; a Detail that only
+// mentions the words does not change any field.
+func TestPickFieldsDelimitValues(t *testing.T) {
+	f := ParseFields("- **[B01] T.** x Related: [F01] Model: opus")
+	if f.Related != "[F01]" {
+		t.Errorf("Model: must end Related, got %q", f.Related)
+	}
+	f = ParseFields("- **[B01] T.** x Related: [F01] Harness: codex")
+	if f.Related != "[F01]" {
+		t.Errorf("Harness: must end Related, got %q", f.Related)
+	}
+	f = ParseFields("- **[B01] T.** x Detail: `notes on Harness and Model handling` Related: [F01]")
+	if f.Detail != "`notes on Harness and Model handling`" || f.Related != "[F01]" {
+		t.Errorf("words without a colon change nothing: %+v", f)
+	}
+}

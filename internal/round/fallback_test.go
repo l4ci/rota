@@ -1,13 +1,21 @@
 package round
 
 import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/limits"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -178,5 +186,64 @@ func TestHarnessStepWritesTheFieldOnTheFileBackend(t *testing.T) {
 	}
 	if !harnessStep(bg, e, b, &backlog.Item{ID: "B02"}, nil).skip() {
 		t.Error("no fallback, no step")
+	}
+}
+
+// A cooling codex with workerKind=codex does not fall back to claude: only a
+// LATER harness in round.harnesses can take the issue.
+func TestFallbackGoesOnlyToALaterHarness(t *testing.T) {
+	cfg := `{"round":{"dispatch":"herdr","workerKind":"codex","harnesses":["claude","codex"],"codexAccounts":[{"name":"c1","codexHome":"/h1"}],"tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`
+	f := newAssignFixture(t)
+	f.config(t, cfg)
+	f.env.Forge = f.be.asForge()
+	(&codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}).install(f)
+	f.host.name = "herdr"
+	f.env.Worker.Now = func() time.Time { return quotaNow }
+	if _, err := limits.Append(f.root, limits.Entry{Session: "ben", Kind: harness.Codex, Account: "c1", Status: limits.StatusWaiting,
+		ResetsAt: limits.Time(quotaNow.Add(30 * time.Minute))}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := f.assign("12", "ben", nil)
+	if by := blockedBy(t, err); by != BlockQuota {
+		t.Fatalf("err %v", err)
+	}
+	// status derives from the resolved default (codex), which has no later harness
+	if st := f.env.Fallback(bg, f.root, f.set); st.Active {
+		t.Fatalf("fallback %+v", st)
+	}
+}
+
+// With workerKind naming another harness than harnesses[0], the state follows
+// the resolved default.
+func TestFallbackStateFollowsTheResolvedDefault(t *testing.T) {
+	f := fallbackRig(t, strings.Replace(fallbackCfg, `"harnesses"`, `"workerKind":"codex","harnesses"`, 1))
+	if st := f.env.Fallback(bg, f.root, f.set); st.Active {
+		t.Fatalf("codex is the default and has headroom: %+v", st)
+	}
+}
+
+// Transfer keeps its quota refusal: no label would record the move.
+func TestTransferDoesNotFallBack(t *testing.T) {
+	f := newMoveFx(t)
+	if err := os.WriteFile(filepath.Join(f.root, ".rota", "config.json"), []byte(fallbackCfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	set, err := roundcfg.Load(f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.set = set
+	f.env.Worker.Now = func() time.Time { return quotaNow }
+	f.env.Worker.Accounts = &worker.Accounts{Env: worker.Env{Now: func() time.Time { return quotaNow }},
+		Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
+			v, _ := jsonx.Decode([]byte(fmt.Sprintf(`{"five_hour":{"utilization":100,"resets_at":"%s"}}`, quotaNow.Add(time.Hour).Format(time.RFC3339))))
+			return v.(*jsonx.Object), ""
+		}}
+	_, err = f.transfer("12", "dana", nil)
+	if by := blockedBy(t, err); by != BlockQuota {
+		t.Fatalf("err %v", err)
+	}
+	if ls := f.be.items["12"].Labels; slices.Contains(ls, "harness:codex") {
+		t.Errorf("label written: %v", ls)
 	}
 }

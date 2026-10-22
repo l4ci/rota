@@ -1262,7 +1262,12 @@ func harnessStep(ctx context.Context, e Env, be Board, it *backlog.Item, fb *Fal
 		return step{name: "harness", skip: func() bool { return true }}
 	}
 	if !be.Capabilities().IssueIDs {
-		hs := be.(backlog.HarnessSetter) // fallbackFor checked it
+		hs, ok := be.(backlog.HarnessSetter)
+		if !ok {
+			return step{name: "harness field", do: func() error {
+				return blocked(BlockQuota, "%s cannot record the harness pick", be.Name())
+			}}
+		}
 		return step{name: "harness field", do: func() error {
 			_, err := hs.SetHarness(it.ID, fb.To)
 			return err
