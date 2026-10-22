@@ -252,3 +252,38 @@ func TestSameDir(t *testing.T) {
 		}
 	}
 }
+
+func TestWriteFileAtomicFailureLeavesNoTemp(t *testing.T) {
+	cases := map[string]func(t *testing.T) (path, dir string){
+		// OpenFile of the temp name fails: the parent does not exist.
+		"missing parent dir": func(t *testing.T) (string, string) {
+			dir := t.TempDir()
+			return filepath.Join(dir, "absent", "out.json"), dir
+		},
+		// Rename fails after the temp file is written: a directory sits at path.
+		"directory at path": func(t *testing.T) (string, string) {
+			dir := t.TempDir()
+			p := filepath.Join(dir, "out.json")
+			if err := os.Mkdir(p, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			return p, dir
+		},
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			path, dir := setup(t)
+			if err := WriteFileAtomic(path, []byte("data")); err == nil {
+				t.Fatal("WriteFileAtomic succeeded, want an error")
+			}
+			left, err := filepath.Glob(filepath.Join(dir, "*", "*.tmp"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			top, _ := filepath.Glob(filepath.Join(dir, "*.tmp"))
+			if len(left)+len(top) != 0 {
+				t.Fatalf("leftover temp files: %v %v", left, top)
+			}
+		})
+	}
+}
