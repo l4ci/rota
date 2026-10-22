@@ -109,13 +109,15 @@ func bounce(env worker.Env, root, issue string, r worker.GateResult, park Park) 
 	}
 	n := rec.N
 	if set.MaxBounces == 0 || n < set.MaxBounces {
-		if rec.Counted {
-			// A support machine's worker learns of the bounce on its PR (#1598).
-			// The count and the notice go together: the next gate counts and
-			// posts again.
-			if _, err := env.PostReviewBounce(root, r.Branch, r.PR, r.SHA, r.Err); err != nil {
-				return Outcome{Bounces: n - 1}, errors.Join(err, rec.Undo())
+		// A support machine's worker learns of the bounce on its PR (#1598).
+		// The post is idempotent per head, so it also goes out for a head
+		// already counted: a failed post whose undo failed too still lands on
+		// the retry.
+		if _, err := env.PostReviewBounce(root, r.Branch, r.PR, r.SHA, r.Err); err != nil {
+			if rec.Counted {
+				n--
 			}
+			return Outcome{Bounces: n}, errors.Join(err, rec.Undo())
 		}
 		return Outcome{Bounces: n}, nil
 	}

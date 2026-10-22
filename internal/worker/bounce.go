@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/ledger"
@@ -58,6 +59,57 @@ func (r BounceRecord) Undo() error {
 	return r.undo()
 }
 
+// PushTrust says whether a login holds write access on the repository
+// (tracker.GitHub.CanPush).
+type PushTrust interface {
+	CanPush(ctx context.Context, login string) (bool, error)
+}
+
+// MarkerTrust answers whether a comment's author may post rota's bounce
+// markers: anyone who can comment could otherwise reset the cap or force a
+// park. Write access keeps the machines' shared login and drops strangers. A
+// source that cannot say trusts nobody. Answers are kept for the life of the
+// value, so one pass asks the forge once per login.
+type MarkerTrust struct {
+	ctx   context.Context
+	trust PushTrust
+	known map[string]bool
+}
+
+// NewMarkerTrust takes the trust check from src when it implements PushTrust.
+func NewMarkerTrust(ctx context.Context, src any) *MarkerTrust {
+	t, _ := src.(PushTrust)
+	return &MarkerTrust{ctx: ctx, trust: t, known: map[string]bool{}}
+}
+
+// Writer reports whether login may post bounce markers. A failed lookup is an
+// error, not a refusal: the count must not move on a guess.
+func (m *MarkerTrust) Writer(login string) (bool, error) {
+	if m.trust == nil || login == "" {
+		return false, nil
+	}
+	if ok, seen := m.known[login]; seen {
+		return ok, nil
+	}
+	ok, err := m.trust.CanPush(m.ctx, login)
+	if err != nil {
+		return false, fmt.Errorf("checking whether %s may post bounce markers: %w", login, err)
+	}
+	m.known[login] = ok
+	return ok, nil
+}
+
+// sameHead reports whether a and b name one commit: equal, or one the prefix of
+// the other with at least 7 characters (the merge gate records a 7-character
+// head, the relay a full one).
+func sameHead(a, b string) bool {
+	a, b = strings.ToLower(a), strings.ToLower(b)
+	if len(a) > len(b) {
+		a, b = b, a
+	}
+	return a != "" && (a == b || (len(a) >= 7 && strings.HasPrefix(b, a)))
+}
+
 // BounceStore is the store round.support picks for root (see BounceStore).
 // round.support is read alone, so a bad value in another key cannot move the
 // count between stores.
@@ -79,6 +131,9 @@ func (e Env) BounceStore(root string) (BounceStore, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+	if _, ok := it.(PushTrust); !ok {
+		return nil, fmt.Errorf("round.support keeps bounces on the issue, and this issue tracker cannot say who has write access to trust them")
 	}
 	return issueBounces{e: e, root: root, it: it}, nil
 }
@@ -110,8 +165,10 @@ func (s registryBounces) Clear(issue string) error { return ClearBounces(s.root,
 // bounce on the issue (`<!-- rota:bounce head=<sha> -->`), and a reset comment
 // (`<!-- rota:bounce reset -->`) where a count was cleared. The count is the
 // distinct heads after the last reset; a bounce with no known head always
-// counts. Only main bounces, under its own gate and relay locks, so two writers
-// never race across machines.
+// counts. Main's gate and the support machine's review relay both write, so
+// two writers can race across machines: Record re-reads after it writes and
+// takes its own comment back when it landed past the cap. Only comments from
+// authors with write access count.
 type issueBounces struct {
 	e    Env
 	root string
@@ -126,7 +183,7 @@ type bounceTally struct {
 
 func (t bounceTally) has(head string) bool {
 	for _, h := range t.heads {
-		if h == head {
+		if sameHead(h, head) {
 			return true
 		}
 	}
@@ -158,10 +215,18 @@ func (s issueBounces) tally(issue string) (tracker.IssueKey, bounceTally, error)
 		return k, bounceTally{}, fmt.Errorf("reading the bounces on %s: %w", tracker.RefOf(issue), err)
 	}
 	var t bounceTally
+	trust := NewMarkerTrust(s.e.Ctx, s.it)
 	for _, c := range comments {
 		kind, head, reset, ok := marker.ParseBounce(c.Body)
+		if !ok || kind != marker.KindBounce {
+			continue
+		}
+		if w, err := trust.Writer(c.Author); err != nil {
+			return k, bounceTally{}, err
+		} else if !w {
+			continue
+		}
 		switch {
-		case !ok || kind != marker.KindBounce:
 		case reset:
 			t = bounceTally{}
 		case head == "" || !t.has(head):
@@ -193,6 +258,24 @@ func (s issueBounces) Record(m *RoundMemo, issue, slot, head string, limit int) 
 	id, err := s.it.AddComment(s.e.Ctx, k, body)
 	if err != nil {
 		return BounceRecord{N: n - 1}, fmt.Errorf("recording the bounce on %s: %w", tracker.RefOf(issue), err)
+	}
+	// The read above and the write are not atomic: another machine may have
+	// counted meanwhile. Read again; a comment that landed past the cap, or
+	// that another writer's same head already covers, is taken back.
+	_, after, err := s.tally(issue)
+	if err != nil {
+		return BounceRecord{N: n - 1}, errors.Join(err, s.it.DeleteComment(s.e.Ctx, k, id))
+	}
+	at := slices.Index(after.ids, id)
+	if at < 0 || (limit > 0 && at >= limit) {
+		kept := len(after.heads)
+		if at >= 0 {
+			kept-- // this comment was one of them
+		}
+		if err := s.it.DeleteComment(s.e.Ctx, k, id); err != nil {
+			return BounceRecord{N: kept}, fmt.Errorf("taking back the bounce on %s that landed past the cap: %w", tracker.RefOf(issue), err)
+		}
+		return BounceRecord{N: kept, Capped: at >= 0}, nil
 	}
 	LedgerNoteIn(s.e, m, s.root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Slot: slot, Detail: ledger.Detail("count", n)})
 	return BounceRecord{N: n, Counted: true, undo: func() error { return s.it.DeleteComment(s.e.Ctx, k, id) }}, nil
@@ -228,7 +311,9 @@ func atHead(head string) string {
 // review input and relays it to the worker, and its reconcile reports a queued
 // PR still at that head as bounced. The machines usually share one forge
 // login, which cannot request changes on its own PR, so a comment it is.
-// Anywhere else it posts nothing and posted is false.
+// One comment per head: a head already carrying a trusted review-bounce posts
+// nothing, so a caller whose count was deduped (or whose undo failed) can post
+// again safely. Anywhere else it posts nothing and posted is false.
 func (e Env) PostReviewBounce(root, branch, pr, head, why string) (posted bool, err error) {
 	e = e.WithDefaults()
 	cfg := e.Config(root)
@@ -244,6 +329,23 @@ func (e Env) PostReviewBounce(root, branch, pr, head, why string) (posted bool, 
 	forge, err := e.Forge(e.detectProvider(e.Ctx, root, pr, gc.Tracker.Provider), root, gc.Tracker)
 	if err != nil {
 		return false, err
+	}
+	if rf, ok := forge.(ReviewForge); ok {
+		notes, err := rf.MRNotes(e.Ctx, n)
+		if err != nil {
+			return false, fmt.Errorf("reading the comments of PR %d: %w", n, err)
+		}
+		trust := NewMarkerTrust(e.Ctx, forge)
+		for _, c := range notes {
+			if kind, h, _, ok := marker.ParseBounce(c.Body); !ok || kind != marker.KindReviewBounce || !sameHead(h, head) {
+				continue
+			}
+			if w, err := trust.Writer(c.Author); err != nil {
+				return false, err
+			} else if w {
+				return false, nil
+			}
+		}
 	}
 	body := marker.ReviewBounce(head) + "\n" + fmt.Sprintf("Sent back by the main machine%s. Fix it on this branch and push; the PR stays open.\n\n%s", atHead(head), strings.TrimSpace(why))
 	if _, err := forge.AddMRNote(e.Ctx, n, body); err != nil {

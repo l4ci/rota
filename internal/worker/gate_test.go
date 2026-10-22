@@ -838,6 +838,41 @@ func TestGateExternalPRIssueComesFromItsHead(t *testing.T) {
 	}
 }
 
+// #1598 AC-8 (T7): main's adopted slot for a support PR judges the head the
+// support machine pushed since, not the one it was adopted at, so a fix that
+// answers a bounce is gated as itself.
+func TestGateAdoptedSupportSlotJudgesThePushedFixHead(t *testing.T) {
+	w := newWorld(t, "")
+	const branch = "mac-ben/5-x"
+	gitq(t, w.worker, "push", "-q", "origin", "w1:"+branch)
+	if err := RegisterExternal(w.dir, "ext-1", branch, "", "main", "5", ghURL); err != nil {
+		t.Fatal(err)
+	}
+	w.forge("head", branch)
+	w.forge("body", "Closes #5")
+	w.forge("sha", gitq(t, w.worker, "rev-parse", "HEAD"))
+	gate := func() string {
+		t.Helper()
+		res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "ext-1", Base: "main", CheckOnly: true})
+		if err != nil || res.SHA == "" {
+			t.Fatalf("gate = %+v, %v", res, err)
+		}
+		return res.SHA
+	}
+	first := gate()
+	if err := os.WriteFile(filepath.Join(w.worker, "fix.txt"), []byte("fix\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitq(t, w.worker, "add", "fix.txt")
+	gitq(t, w.worker, "commit", "-q", "-m", "answer the bounce")
+	gitq(t, w.worker, "push", "-q", "origin", "w1:"+branch)
+	w.forge("sha", gitq(t, w.worker, "rev-parse", "HEAD"))
+	want := strings.TrimSpace(gitq(t, w.worker, "rev-parse", "--short=7", "HEAD"))
+	if got := gate(); got != want || got == first {
+		t.Errorf("the adopted slot judged %s, want the pushed fix %s (adopted at %s)", got, want, first)
+	}
+}
+
 func TestGateCheckOnlyAdoptsTheOpenPRWithoutRecordingIt(t *testing.T) {
 	w := newWorld(t, "")
 	w.forge("listed", "1")
