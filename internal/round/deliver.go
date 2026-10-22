@@ -26,7 +26,7 @@ func (e Env) deliveryRefusals(ctx context.Context, root, kind, slot, model strin
 	if err != nil {
 		return nil, err
 	}
-	if why := hz.SoloRefusal(); why != "" && isSolo(root) {
+	if why := hz.SoloRefusal(); why != "" && worker.IsSolo(root) {
 		return nil, usage("%s", why)
 	}
 	setup, err := e.workerEnv().Preflight(ctx, root, kind, slot, model)
@@ -83,7 +83,7 @@ func (d *delivery) steps(ctx context.Context, e Env, root string) ([]step, error
 	if err != nil {
 		return nil, err
 	}
-	solo := isSolo(root)
+	solo := worker.IsSolo(root)
 	var text string
 	steps := []step{
 		// The account is the pane's CLAUDE_CONFIG_DIR: keep the slot's own while
