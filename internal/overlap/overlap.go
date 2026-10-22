@@ -4,10 +4,12 @@
 // clash (Paths, Dirs). It works on path lists, so callers own the git diff and
 // the policy is testable without git.
 //
-// Two entry forms exist on purpose. MatchPath takes a configured entry (config,
-// sharedPaths) and normalises `./` and a trailing `/`. Paths and Dirs take
-// footprints already normalised by round.Footprint, where a trailing `/` marks
-// a directory and `./` is not stripped.
+// Every entry goes through Clean first: leading `./` (repeated) is dropped,
+// in MatchPath, Paths, Dirs and round.Footprint alike. One rule differs on
+// purpose. MatchPath takes a configured entry (config, sharedPaths), where a
+// slashless entry is also a directory, so a trailing `/` is optional. Paths
+// and Dirs take item footprints, where only a trailing `/` marks a directory
+// and a slashless entry is a file.
 package overlap
 
 import (
@@ -16,11 +18,23 @@ import (
 	"strings"
 )
 
+// Clean drops any leading `./` from a footprint or configured entry. A
+// trailing `/` is kept: Paths and Dirs read it as the directory marker.
+func Clean(entry string) string {
+	for strings.HasPrefix(entry, "./") {
+		entry = strings.TrimPrefix(entry, "./")
+	}
+	if entry == "." {
+		return ""
+	}
+	return entry
+}
+
 // MatchPath reports whether the repo-relative file matches a listed entry:
 // equal to it, under it as a directory, or matching it as a path.Match glob
 // against the whole path.
 func MatchPath(entry, file string) bool {
-	entry = strings.TrimPrefix(strings.TrimSuffix(entry, "/"), "./")
+	entry = strings.TrimSuffix(Clean(entry), "/")
 	if entry == "" {
 		return false
 	}
@@ -76,7 +90,9 @@ func Both(a, b, shared []string) []string {
 func Paths(a, b []string) []string {
 	hit := map[string]bool{}
 	for _, x := range a {
+		x = Clean(x)
 		for _, y := range b {
+			y = Clean(y)
 			switch {
 			case x == y:
 				hit[x] = true
@@ -108,7 +124,9 @@ func Paths(a, b []string) []string {
 func Dirs(a, b []string) []string {
 	hit := map[string]bool{}
 	for _, x := range a {
+		x = Clean(x)
 		for _, y := range b {
+			y = Clean(y)
 			switch {
 			case x == y:
 			case strings.HasSuffix(x, "/") && strings.HasPrefix(y, x):

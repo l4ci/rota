@@ -73,8 +73,8 @@ func TestFootprintClash(t *testing.T) {
 		{"file without slash is not a dir", []string{"a"}, []string{"a/b.go"}, nil, nil},
 		{"glob over file", []string{"internal/new/*.go"}, []string{"internal/new/x.go"}, []string{"internal/new/x.go"}, nil},
 		{"glob does not cross slash", []string{"internal/*.go"}, []string{"internal/new/x.go"}, nil, nil},
-		{"dot-slash prefix is not stripped", []string{"./a/b.go"}, []string{"a/b.go"}, nil, nil},
-		{"dot-slash dir is not stripped", []string{"./a/"}, []string{"a/b.go"}, nil, nil},
+		{"dot-slash prefix is stripped", []string{"./a/b.go"}, []string{"a/b.go"}, []string{"a/b.go"}, nil},
+		{"dot-slash dir is stripped", []string{"./a/"}, []string{"a/b.go"}, []string{"a/b.go"}, []string{"a/"}},
 		{"malformed glob only matches itself", []string{"["}, []string{"["}, []string{"["}, nil},
 		{"empty side", nil, []string{"a.go"}, nil, nil},
 	} {
