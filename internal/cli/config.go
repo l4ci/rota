@@ -239,6 +239,12 @@ func configSet(fs *flag.FlagSet) RunFunc {
 			if root, err = backlogScope(c); err != nil {
 				return Result{}, err
 			}
+			if args[0] != "round.role" {
+				// A tracked key goes to main through config.json; a support machine writes none.
+				if res, err := supportRefusal(root, "rota config set "+args[0]); err != nil {
+					return res, err
+				}
+			}
 			if supportKeyNonDefault(args[0], args[1]) && config.Validate(args[0], args[1]) == nil {
 				issue, ierr := issueBackend(root)
 				if ierr != nil {

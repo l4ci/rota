@@ -146,3 +146,52 @@ func TestMainRoleDoesNotHitSupportFence(t *testing.T) {
 		t.Errorf("worker gate hit the support fence with no role set: %v", env)
 	}
 }
+
+// An unrelated bad round.* key must not open the fence: it reads round.role alone.
+func TestSupportFenceIgnoresUnrelatedBadKey(t *testing.T) {
+	root := trackerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac","scope":"nonsense"}}`+"\n")
+	writeLocalConfig(t, root, `{"round":{"role":"support"}}`+"\n")
+	code, env, _ := rotaRun(t, "--json", "-C", root, "worker", "gate", "ben")
+	if code != ExitRefused {
+		t.Fatalf("exit %d, want %d: %v", code, ExitRefused, env)
+	}
+	if got := envObj(env, "data")["blockedBy"]; got != "role" {
+		t.Errorf("blockedBy = %v", got)
+	}
+}
+
+// A round.role that cannot be read refuses a fenced verb instead of running it.
+func TestSupportFenceRefusesUnreadableRole(t *testing.T) {
+	root := trackerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`+"\n")
+	writeLocalConfig(t, root, `{"round":{"role":"helper"}}`+"\n")
+	code, env, _ := rotaRun(t, "--json", "-C", root, "worker", "gate", "ben")
+	if code != ExitRefused {
+		t.Fatalf("exit %d, want %d: %v", code, ExitRefused, env)
+	}
+	if got := envObj(env, "data")["blockedBy"]; got != "config" {
+		t.Errorf("blockedBy = %v", got)
+	}
+	hint, _ := envObj(env, "error")["hint"].(string)
+	if !strings.Contains(hint, "round.role") {
+		t.Errorf("hint = %q", hint)
+	}
+}
+
+// On support, config set refuses a tracked key and allows round.role and --global.
+func TestSupportConfigSetTrackedKeyRefused(t *testing.T) {
+	root := supportProject(t)
+	code, env, _ := rotaRun(t, "--json", "-C", root, "config", "set", "round.maxBounces", "5")
+	if code != ExitRefused {
+		t.Fatalf("tracked key: exit %d, want %d: %v", code, ExitRefused, env)
+	}
+	if got := envObj(env, "data")["blockedBy"]; got != "role" {
+		t.Errorf("blockedBy = %v", got)
+	}
+	if code, env, _ := rotaRun(t, "--json", "-C", root, "config", "set", "round.role", "support"); code != ExitOK {
+		t.Errorf("round.role: exit %d: %v", code, env)
+	}
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if code, env, _ := rotaRun(t, "--json", "-C", root, "config", "set", "--global", "round.maxBounces", "5"); code != ExitOK {
+		t.Errorf("--global: exit %d: %v", code, env)
+	}
+}

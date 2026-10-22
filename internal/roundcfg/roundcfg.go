@@ -288,10 +288,9 @@ func FromConfig(cfg any) (Settings, error) {
 	}
 	s.Support, _ = v.(string)
 	s.Support = strings.TrimSpace(s.Support)
-	if v, err = config.Value(cfg, "round.role"); err != nil {
+	if s.Role, err = MachineRole(cfg); err != nil {
 		return s, err
 	}
-	s.Role, _ = v.(string)
 	if s.WorkerKind, err = loadWorkerKind(cfg); err != nil {
 		return s, err
 	}
@@ -513,4 +512,17 @@ func Effective(cfg any, kind, tier string) (model, source string) {
 		}
 	}
 	return "", SourceHarnessDefault
+}
+
+// MachineRole is round.role read alone, so a bad value in another round.* key cannot
+// hide it: the support fence reads it before anything else.
+func MachineRole(cfg any) (string, error) {
+	v, err := config.Value(cfg, "round.role")
+	if err != nil {
+		return "", err
+	}
+	if r, _ := v.(string); r == RoleMain || r == RoleSupport {
+		return r, nil
+	}
+	return "", fmt.Errorf("round.role must be %s or %s, not %v", RoleMain, RoleSupport, v)
 }

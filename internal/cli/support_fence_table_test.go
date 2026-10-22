@@ -34,7 +34,10 @@ func TestSupportAllowedVerbsPassTheFence(t *testing.T) {
 	// File mode, so no verb reaches for a forge CLI; the fence reads only the role.
 	root := trackerProject(t, "")
 	writeLocalConfig(t, root, `{"round":{"role":"support"}}`+"\n")
-	for _, path := range supportAllowed {
+	// A sample: many allowed verbs launch agents, sleep or install into the
+	// harness. The classify test keeps the tables disjoint, so no allowed verb
+	// reaches the pre-verb fence.
+	for _, path := range []string{"rota knowledge query", "rota knowledge topics", "rota config show", "rota round status", "rota ship strategy", "rota release version"} {
 		t.Run(path, func(t *testing.T) {
 			_, env, _ := rotaRun(t, append([]string{"--json", "-C", root}, strings.Fields(path)[1:]...)...)
 			if got := envObj(env, "data")["blockedBy"]; got == "role" {
@@ -44,39 +47,32 @@ func TestSupportAllowedVerbsPassTheFence(t *testing.T) {
 	}
 }
 
-// Every verb of a merge or tracked-write group is classified: a new verb has
-// to land in supportFenced or supportAllowed, so it cannot ship unfenced.
+// Every verb is classified: a new verb has to land in supportFenced,
+// supportInVerb or supportAllowed, so it cannot ship unfenced.
 func TestSupportTablesClassifyEveryVerb(t *testing.T) {
-	groups := []string{"rota knowledge", "rota glossary", "rota map", "rota qa", "rota milestone", "rota release", "rota ship"}
-	fenced, allowed := map[string]bool{}, map[string]bool{}
-	for _, p := range supportFenced {
-		fenced[p] = true
-	}
-	for _, p := range supportAllowed {
-		if fenced[p] {
-			t.Errorf("%s is in both tables", p)
+	seen := map[string]string{}
+	for name, table := range map[string][]string{"supportFenced": supportFenced, "supportInVerb": supportInVerb, "supportAllowed": supportAllowed} {
+		for _, p := range table {
+			if other, dup := seen[p]; dup {
+				t.Errorf("%s is in both %s and %s", p, other, name)
+			}
+			seen[p] = name
 		}
-		allowed[p] = true
 	}
 	leaves := treeLeaves()
 	for leaf := range leaves {
-		if pathUnder(leaf, groups) && !fenced[leaf] && !allowed[leaf] {
-			t.Errorf("%s is in neither supportFenced nor supportAllowed", leaf)
+		if seen[leaf] == "" {
+			t.Errorf("%s is in no support table", leaf)
 		}
 	}
-	for _, p := range []string{"rota worker gate", "rota worker train"} {
-		if !fenced[p] {
+	for p, table := range seen {
+		if !leaves[p] {
+			t.Errorf("%s names %s, which is not a verb", table, p)
+		}
+	}
+	for _, p := range []string{"rota worker gate", "rota worker train", "rota spike add", "rota init", "rota update", "rota migrate config", "rota config fill"} {
+		if seen[p] != "supportFenced" {
 			t.Errorf("%s is not fenced", p)
-		}
-	}
-	for p := range fenced {
-		if !leaves[p] {
-			t.Errorf("supportFenced names %s, which is not a verb", p)
-		}
-	}
-	for p := range allowed {
-		if !leaves[p] {
-			t.Errorf("supportAllowed names %s, which is not a verb", p)
 		}
 	}
 }
