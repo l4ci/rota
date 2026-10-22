@@ -67,6 +67,8 @@ func issuesErr(err error) error {
 		return nil
 	case errors.Is(err, issues.ErrCommitNotFound):
 		return Resolution("%s", strings.TrimPrefix(err.Error(), issues.ErrCommitNotFound.Error()+": "))
+	case errors.Is(err, tracker.ErrUnknownForge):
+		return forgeRefusal(err)
 	case errors.Is(err, issues.ErrNoProvider):
 		return Resolution("%s", strings.TrimPrefix(err.Error(), issues.ErrNoProvider.Error()+": "))
 	case errors.As(err, &te):
@@ -112,8 +114,11 @@ func issuesProvider(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		p := issues.Provider(c.Context(), env, dir)
-		return Result{Data: jsonObj("provider", p), Text: p}, nil
+		r, _ := issues.Provider(c.Context(), env, tracker.ForgeReader, dir) // a reader never fails
+		if note := r.Note(); note != "" {
+			c.Warn("%s", note)
+		}
+		return Result{Data: jsonObj("provider", r.Provider), Text: r.Provider}, nil
 	}
 }
 
@@ -148,7 +153,8 @@ func issuesLabel(fs *flag.FlagSet) RunFunc {
 		auto, _ := config.Value(c.deps().Config(root), "issues.autoCreateLabel")
 		changed, err := issues.Label(c.Context(), env, dir, key, name, action == "add", auto != false && auto != nil)
 		if err != nil {
-			return Result{}, issuesErr(err)
+			err = issuesErr(err)
+			return failData(err), err
 		}
 		return Result{Data: jsonObj("issue", issueJSON(key), "label", name, "action", action, "changed", changed),
 			Text: fmt.Sprintf("%s %s on %s", action, name, key.Ref())}, nil
@@ -222,7 +228,8 @@ func issuesClose(fs *flag.FlagSet) RunFunc {
 		}
 		changed, err := issues.Close(c.Context(), env, dir, key, *commit, *item)
 		if err != nil {
-			return Result{}, issuesErr(err)
+			err = issuesErr(err)
+			return failData(err), err
 		}
 		text := "closed " + key.Ref()
 		if !changed {

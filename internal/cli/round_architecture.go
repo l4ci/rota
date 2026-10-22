@@ -56,9 +56,9 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		set, err := roundcfg.FromConfig(c.deps().Config(root))
+		set, err := c.deps().roundSettings(root, roundConfigUsage)
 		if err != nil {
-			return Result{}, Usage("%s", err.Error())
+			return Result{}, err
 		}
 		a, err := architectureFor(c, root, set)
 		if err != nil {

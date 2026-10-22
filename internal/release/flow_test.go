@@ -70,7 +70,7 @@ func TestCheckPushModeGoreleaserTagFirst(t *testing.T) {
 }
 
 func pushPorts(g fakeGit, f fakeForge) PushPorts {
-	return PushPorts{Git: g, Forge: func(string) (Forge, error) { return f, nil }}
+	return PushPorts{Git: g, Forge: func() (Forge, error) { return f, nil }}
 }
 
 func TestPlanPushBranchFollowsTag(t *testing.T) {
@@ -108,6 +108,11 @@ func TestPlanPushBranchFollowsTag(t *testing.T) {
 		if exitOf(t, err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "not published") {
 			t.Errorf("%s release: %v", name, err)
 		}
+	}
+
+	local := PushPorts{Git: base(), Forge: func() (Forge, error) { return nil, nil }}
+	if _, err := PlanPush(context.Background(), local, req); err != nil {
+		t.Errorf("a local forge has no release to wait for: %v", err)
 	}
 }
 

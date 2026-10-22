@@ -254,6 +254,10 @@ func TestRunMissingCLI(t *testing.T) {
 	}
 }
 
+// TestResolveProvider pins the one forge rule at its seam, an origin fake: a
+// named provider decides, then the origin host; no origin is local for both
+// kinds; an origin naming no forge refuses an actor and is an announced github
+// for a reader.
 func TestResolveProvider(t *testing.T) {
 	origin := func(url string, code int) Exec {
 		return func(_ context.Context, dir, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
@@ -264,35 +268,46 @@ func TestResolveProvider(t *testing.T) {
 		}
 	}
 	gh := origin("git@github.com:o/r.git", 0)
+	odd := origin("https://example.com/o/r", 0)
 	for _, c := range []struct {
+		kind             ForgeKind
 		want, configured string
 		x                Exec
-		out              string
+		out, how         string
 	}{
-		{"gitlab", "github", gh, "gitlab"},
-		{"auto", "gitlab", gh, "gitlab"},
-		{"", "github", gh, "github"},
-		{"", "auto", gh, "github"},
-		{"", "bogus", origin("https://gitlab.example.com/o/r", 0), "gitlab"},
-		{"", "auto", origin("", 2), "local"}, // no remote: local
-		{"", "auto", origin("", 0), "local"},
-		{"", "local", gh, "local"},
-		{"local", "github", gh, "local"},
-		{"auto", "local", gh, "local"},
-		{"", "auto", origin("https://example.com/o/r", 0), ""},
+		{ForgeActor, "gitlab", "github", gh, "gitlab", HowFlag},
+		{ForgeActor, "auto", "gitlab", gh, "gitlab", HowConfig},
+		{ForgeActor, "", "github", gh, "github", HowConfig},
+		{ForgeActor, "", "auto", gh, "github", HowOrigin},
+		{ForgeActor, "", "bogus", origin("https://gitlab.example.com/o/r", 0), "gitlab", HowOrigin},
+		{ForgeActor, "", "auto", origin("", 2), "local", HowNoOrigin},
+		{ForgeReader, "", "auto", origin("", 2), "local", HowNoOrigin},
+		{ForgeActor, "", "auto", origin("", 0), "local", HowNoOrigin},
+		{ForgeActor, "", "local", gh, "local", HowConfig},
+		{ForgeActor, "local", "github", gh, "local", HowFlag},
+		{ForgeReader, "", "github", odd, "github", HowConfig},
+		{ForgeReader, "", "auto", odd, "github", HowAssumed},
+		{ForgeActor, "", "auto", odd, "", ""},
 	} {
-		p, err := ResolveProvider(context.Background(), c.want, c.configured, "/repo", c.x)
+		r, err := ResolveProvider(context.Background(), c.kind, c.want, c.configured, "/repo", c.x)
 		if c.out == "" {
-			var te *Error
-			if !IsKind(err, KindUnavailable) || !strings.Contains(err.Error(), "cannot determine the forge from origin https://example.com/o/r (set forge.provider)") ||
-				!errors.As(err, &te) || te.Code != 3 {
-				t.Errorf("%+v: %q, %v", c, p, err)
+			var ufe *UnknownForgeError
+			if !errors.Is(err, ErrUnknownForge) || !strings.Contains(err.Error(), "cannot determine the forge from origin https://example.com/o/r (set forge.provider)") ||
+				!errors.As(err, &ufe) || ufe.Origin != "https://example.com/o/r" {
+				t.Errorf("%+v: %+v, %v", c, r, err)
 			}
 			continue
 		}
-		if p != c.out || err != nil {
-			t.Errorf("%+v: %q, %v; want %q", c, p, err, c.out)
+		if r.Provider != c.out || r.How != c.how || err != nil {
+			t.Errorf("%+v: %+v, %v; want %s by %s", c, r, err, c.out, c.how)
 		}
+		if note := r.Note(); (c.how == HowAssumed) != (note != "") {
+			t.Errorf("%+v: note %q", c, note)
+		}
+	}
+	r, _ := ResolveProvider(context.Background(), ForgeReader, "", "", "/repo", odd)
+	if want := "origin https://example.com/o/r names no forge; assumed github (set forge.provider)"; r.Note() != want {
+		t.Errorf("note = %q, want %q", r.Note(), want)
 	}
 }
 
@@ -314,25 +329,6 @@ func TestProviderFromURL(t *testing.T) {
 	for url, want := range cases {
 		if got := ProviderFromURL(url); got != want {
 			t.Errorf("ProviderFromURL(%q) = %q, want %q", url, got, want)
-		}
-	}
-}
-
-// TestProviderFromOrigin pins the one resolver: origin decides, configured is
-// only the fallback, and ProviderUnknown is the single unknown answer.
-func TestProviderFromOrigin(t *testing.T) {
-	for _, c := range []struct{ origin, configured, want string }{
-		{"git@github.com:o/r.git", "", "github"},
-		{"https://gitlab.com/o/r", "github", "gitlab"},
-		{"https://gitlab.corp.example/o/r", "", "gitlab"},
-		{"https://github.example.com/o/r", "", "github"},
-		{"https://git.example.com/o/r", "gitlab", "gitlab"},
-		{"", "github", "github"},
-		{"https://git.example.com/o/r", "bogus", "unknown"},
-		{"", "", "unknown"},
-	} {
-		if got := ProviderFromOrigin(c.origin, c.configured); got != c.want {
-			t.Errorf("ProviderFromOrigin(%q, %q) = %q, want %q", c.origin, c.configured, got, c.want)
 		}
 	}
 }
@@ -401,29 +397,6 @@ func TestPagesConcatenates(t *testing.T) {
 	}
 }
 
-func TestNewFromConfigOrGitHubFallsBack(t *testing.T) {
-	x := func(_ context.Context, _, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
-		if name == "git" {
-			return []byte("https://example.com/x/y.git\n"), nil, 0, nil
-		}
-		return []byte("[]"), nil, 0, nil
-	}
-	opts := []Option{WithExec(x, func(string) (string, error) { return "/fake", nil })}
-
-	if _, err := NewFromConfig(context.Background(), nil, "", "", opts...); err == nil {
-		t.Fatal("NewFromConfig: want an error for an unrecognized origin")
-	}
-	a, err := NewFromConfigOrGitHub(context.Background(), nil, "", "", opts...)
-	if err != nil || a.Provider() != "github" {
-		t.Fatalf("fallback = %v, %v; want github", a, err)
-	}
-	cfg, _ := jsonx.Decode([]byte(`{"issues":{"provider":"gitlab"}}`))
-	a, err = NewFromConfigOrGitHub(context.Background(), cfg, "", "", opts...)
-	if err != nil || a.Provider() != "gitlab" {
-		t.Fatalf("configured provider = %v, %v; want gitlab, no fallback", a, err)
-	}
-}
-
 // The two constructors of the seam: the forge resolves from forge.provider and
 // origin (no remote is local), the issue tracker from issues.source.
 func TestNewForgeAndNewIssueTracker(t *testing.T) {
@@ -487,6 +460,44 @@ func TestNewForgeAndNewIssueTracker(t *testing.T) {
 	}
 }
 
+// issues.source forge on an origin naming no forge: the tracker reads as a
+// ForgeReader (an announced github) and refuses every write as an actor, with
+// the origin in the reason (#889).
+func TestForgeIssueTrackerReadsAssumedGitHubAndRefusesWrites(t *testing.T) {
+	ctx := context.Background()
+	var calls []string
+	x := func(_ context.Context, _, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
+		if name == "git" {
+			return []byte("https://git.example.com/o/r.git\n"), nil, 0, nil
+		}
+		calls = append(calls, name+" "+strings.Join(args, " "))
+		return []byte("[]"), nil, 0, nil
+	}
+	it, err := NewIssueTracker(ctx, Settings{Source: "forge", Provider: "auto"}, "", "/repo", WithExec(x, func(string) (string, error) { return "/fake", nil }))
+	if err != nil || it.Provider() != "github" {
+		t.Fatalf("forge source, unknown origin: %v, %v", it, err)
+	}
+	if want := "origin https://git.example.com/o/r.git names no forge; assumed github (set forge.provider)"; AssumedNote(it) != want {
+		t.Errorf("note = %q, want %q", AssumedNote(it), want)
+	}
+	if _, err := it.List(ctx, ListFilter{}); err != nil || len(calls) != 1 {
+		t.Errorf("a read goes through: %v %q", err, calls)
+	}
+	_, err = it.AddComment(ctx, NumKey(1), "hi")
+	var ufe *UnknownForgeError
+	if !errors.As(err, &ufe) || !errors.Is(err, ErrUnknownForge) || ufe.Origin != "https://git.example.com/o/r.git" ||
+		!strings.Contains(err.Error(), "cannot determine the forge from origin https://git.example.com/o/r.git") || len(calls) != 1 {
+		t.Errorf("a write is refused before the CLI runs: %v %q", err, calls)
+	}
+	if err := it.Close(ctx, NumKey(1), "", ""); !errors.Is(err, ErrUnknownForge) {
+		t.Errorf("close: %v", err)
+	}
+	gh, _ := NewIssueTracker(ctx, Settings{Source: "github"}, "", "/repo", WithExec(x, func(string) (string, error) { return "/fake", nil }))
+	if AssumedNote(gh) != "" {
+		t.Errorf("a named tracker assumed nothing: %q", AssumedNote(gh))
+	}
+}
+
 // An invalid forge.provider or issues.source is a corrupt config (exit 70),
 // not a silent default.
 func TestFromConfigConstructorsRejectAnInvalidSource(t *testing.T) {
@@ -501,9 +512,6 @@ func TestFromConfigConstructorsRejectAnInvalidSource(t *testing.T) {
 		}
 		if _, err := NewIssueTrackerFromConfig(ctx, cfg, "/repo"); !IsKind(err, KindInternal) {
 			t.Errorf("%s: NewIssueTrackerFromConfig %v", raw, err)
-		}
-		if _, err := NewFromConfigOrGitHub(ctx, cfg, "", "/repo"); !IsKind(err, KindInternal) {
-			t.Errorf("%s: NewFromConfigOrGitHub fell back: %v", raw, err)
 		}
 	}
 }

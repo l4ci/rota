@@ -212,7 +212,11 @@ func releaseHost(c *Ctx, args []string) (Result, error) {
 	if res, err := c.deps().Repo(dir).Run(c.Context(), "remote", "get-url", "origin"); err == nil && res.ExitCode == 0 {
 		url = strings.TrimRight(res.Stdout, "\n")
 	}
-	host := release.Host(url)
+	provider, err := actorForge(c, c.deps().Config(dir), dir)
+	if err != nil {
+		return failData(err), err
+	}
+	host := release.Host(provider, url)
 	return Result{Data: gitObj("host", host), Text: host}, nil
 }
 

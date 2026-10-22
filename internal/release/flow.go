@@ -48,14 +48,6 @@ func Goreleaser(dir string) string {
 	return ""
 }
 
-// RemoteForge is the forge a remote runs ("" for none we publish to).
-func RemoteForge(url string) string {
-	if p := tracker.ProviderFromURL(url); p != tracker.ProviderUnknown {
-		return p
-	}
-	return ""
-}
-
 // Missing lists what a draft still lacks: each required asset, then the
 // <name>.minisig of every required or attached asset. install.sh refuses an
 // unsigned binary, so a release without its signatures breaks every install.
@@ -125,12 +117,12 @@ type PushRequest struct {
 	Mode             PushMode
 }
 
-// PushPorts are what PlanPush cannot decide itself. Forge builds the forge
-// client for a provider; it is only called when the branch-follows-tag rule
-// has to look at the release.
+// PushPorts are what PlanPush cannot decide itself. Forge builds the client of
+// the repo's forge, nil for the local forge (no release to look at); it is
+// only called when the branch-follows-tag rule has to look at the release.
 type PushPorts struct {
 	Git   Git
-	Forge func(provider string) (Forge, error)
+	Forge func() (Forge, error)
 }
 
 // PushPlan is the refs to push, checked and ready for the gate.
@@ -183,7 +175,7 @@ func PlanPush(ctx context.Context, p PushPorts, r PushRequest) (PushPlan, error)
 	} else if !ok {
 		return PushPlan{}, exitcode.Errf(exitcode.ExitResolution, "branch %s does not exist", branch)
 	}
-	url, ok, err := p.Git.Query("remote", "get-url", "origin")
+	_, ok, err = p.Git.Query("remote", "get-url", "origin")
 	if err != nil {
 		return PushPlan{}, err
 	}
@@ -198,11 +190,11 @@ func PlanPush(ctx context.Context, p PushPorts, r PushRequest) (PushPlan, error)
 		}
 		// On GitHub the tag alone is not enough: the release must be
 		// published, so the binaries resolve for the version the branch names.
-		if prov := RemoteForge(url); prov != "" {
-			cl, err := p.Forge(prov)
-			if err != nil {
-				return PushPlan{}, err
-			}
+		cl, err := p.Forge()
+		if err != nil {
+			return PushPlan{}, err
+		}
+		if cl != nil {
 			rel, checked, err := cl.ReleaseView(ctx, tag)
 			if err != nil {
 				return PushPlan{}, err
