@@ -88,6 +88,7 @@ func newAssignFixture(t *testing.T) *assignFixture {
 	h := &hostFake{}
 	f := &assignFixture{root: root, host: h}
 	f.env = Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100)}
+	f.env.Label, f.env.NeedsHuman, f.env.NeedsReview, f.env.SupportLabel = config.Label(nil, "inProgress"), config.Label(nil, "needsHuman"), config.Label(nil, "needsReview"), config.Label(nil, "support")
 	f.env.Worker = worker.Env{Git: git.Exec, NewHost: func(host.Kind) host.Host { return h },
 		Sleep: func(time.Duration) {}, Now: time.Now, Getenv: noEnv}
 	fb := &fakeRemote{}

@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/config"
 	"slices"
 	"strings"
 	"testing"
@@ -19,7 +20,7 @@ func fakeJira(t *testing.T, o jiratest.Options) (*Jira, *jiratest.Server) {
 	if s.Version() == 2 {
 		c.User, c.Deployment = "", connections.DeploymentDataCenter
 	}
-	j := NewJira(c, "tok", s.Project(), "")
+	j := NewJira(c, "tok", s.Project(), config.Label(nil, "notPlanned"))
 	j.rest.Sleep = func(context.Context, time.Duration) error { return nil }
 	return j, s
 }
