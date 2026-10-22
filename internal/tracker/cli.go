@@ -122,6 +122,27 @@ type Resolution struct {
 	Origin string
 }
 
+// ErrUnknownForge is what an UnknownForgeError Is: an origin naming no forge,
+// met by a ForgeActor.
+var ErrUnknownForge = errors.New("the origin names no forge")
+
+// UnknownForgeHint is the one fix for an UnknownForgeError.
+const UnknownForgeHint = "set forge.provider to github, gitlab or local"
+
+// UnknownForgeError is ResolveProvider's refusal for an actor whose origin
+// names no forge. The CLI exits 4 with it, blockedBy forge (exitmap).
+type UnknownForgeError struct {
+	// Origin is the origin URL that names no forge.
+	Origin string
+}
+
+func (e *UnknownForgeError) Error() string {
+	return "cannot determine the forge from origin " + e.Origin + " (set forge.provider)"
+}
+
+// Is makes errors.Is(err, ErrUnknownForge) true.
+func (e *UnknownForgeError) Is(target error) bool { return target == ErrUnknownForge }
+
 // Note is the one line a reader prints when it assumed github, "" otherwise.
 func (r Resolution) Note() string {
 	if r.How != HowAssumed {
@@ -136,10 +157,10 @@ func (r Resolution) Note() string {
 // or gitlab is that forge. The fallback rule, per caller kind:
 //
 //   - no origin remote at all is the local forge, for both kinds;
-//   - an origin naming no forge is an error for a ForgeActor (KindUnavailable,
-//     the message names the origin; an actor verb refuses with exit 4,
-//     blockedBy forge), and github for a ForgeReader, with How HowAssumed so
-//     the verb prints Note.
+//   - an origin naming no forge is an *UnknownForgeError for a ForgeActor
+//     (the message names the origin; the CLI refuses with exit 4, blockedBy
+//     forge), and github for a ForgeReader, with How HowAssumed so the verb
+//     prints Note.
 func ResolveProvider(ctx context.Context, kind ForgeKind, want, configured, dir string, x Exec) (Resolution, error) {
 	c := &CLI{Dir: dir, Exec: x}
 	return c.resolveForge(ctx, kind, want, configured)
@@ -178,7 +199,7 @@ func (c *CLI) resolveForge(ctx context.Context, kind ForgeKind, want, configured
 	if kind == ForgeReader {
 		return Resolution{Provider: "github", How: HowAssumed, Origin: origin}, nil
 	}
-	return Resolution{}, unavailable("cannot determine the forge from origin %s (set forge.provider)", origin)
+	return Resolution{}, &UnknownForgeError{Origin: origin}
 }
 
 // resolveIssues picks the provider of an issue tracker: want unless it is

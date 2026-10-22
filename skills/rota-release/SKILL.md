@@ -82,7 +82,7 @@ If `Breaking` commits were found but the user chose `patch` or `minor`, ask befo
 
 - **Compact dense buckets.** 3+ entries on one concern become one theme line plus at most 1-2 bullets for the highest-impact pieces (breaking change, flag flip, new public surface). Smaller buckets stay.
 - **Stats.** Replace the verb's `## Stats` with `## Stats\n<N commits, M files changed, +X −Y lines>` from `git diff --shortstat <prev_tag>..HEAD` (drop `<prev_tag>..` with no previous tag).
-- **Compare link.** With a previous tag, `rota release host --json` `data.host` picks the URL: `github`/`github-enterprise` → `https://<host>/<owner>/<repo>/compare/<prev_tag>...v<new_version>`; `gitlab`/`gitlab-self-hosted` → `https://<host>/<owner>/<repo>/-/compare/<prev_tag>...v<new_version>`. Append `**Full changelog:** <url>`. Host `none` or no previous tag: omit.
+- **Compare link.** With a previous tag, `rota release host --json` `data.host` picks the URL: `github`/`github-enterprise` → `https://<host>/<owner>/<repo>/compare/<prev_tag>...v<new_version>`; `gitlab`/`gitlab-self-hosted` → `https://<host>/<owner>/<repo>/-/compare/<prev_tag>...v<new_version>`. Append `**Full changelog:** <url>`. Host `none` or no previous tag: omit. `rota release host` exit 4 with `data.blockedBy` `forge` means the origin names no forge: omit the link, and tell the user that `release publish` will refuse the same way until `forge.provider` is set to github, gitlab or local.
 - **One-line summary.** Prepend one line on the top 2-3 themes. It becomes the release title suffix in Step 11.
 
 Before showing the draft, silently apply `references/humanizing-prose.md` to all model-written prose.

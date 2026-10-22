@@ -572,16 +572,20 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 	case config.SourceForge:
 		// The issues live on dir's own forge: the repo's forge resolution
 		// (forge.provider, else its origin) names the tracker.
+		// It resolves as a ForgeReader: an origin naming no forge reads as
+		// github, and every write refuses as an actor would (assumedForge).
 		c := newCLI(s, dir, opts...)
-		r, err := c.resolveForge(ctx, ForgeActor, config.ForgeAuto, s.Provider)
+		r, err := c.resolveForge(ctx, ForgeReader, config.ForgeAuto, s.Provider)
 		if err != nil {
 			return nil, err
 		}
-		p := r.Provider
-		if p == config.ForgeLocal {
+		if r.Provider == config.ForgeLocal {
 			return nil, unavailable("issues.source is forge, but the forge of %s is local (no origin remote): there is no tracker to read", dirLabel(dir))
 		}
-		c.Provider = p
+		c.Provider = r.Provider
+		if r.How == HowAssumed {
+			return assumedForge{IssueTracker: adapterFor(c, s), r: r}, nil
+		}
 		return adapterFor(c, s), nil
 	case config.SourceGitHub, config.SourceGitLab:
 	default:
