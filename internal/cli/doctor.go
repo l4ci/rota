@@ -24,6 +24,7 @@ import (
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/stalebin"
 	"github.com/l4ci/rota/internal/tracker"
@@ -220,6 +221,13 @@ func doctorKinds(cfg any) map[string]doctor.KindInput {
 			in.Homes = []doctor.Home{{}}
 		}
 		in.Tiers = harness.TierMapSet(cfg, k)
+		if !in.Tiers {
+			for _, tier := range harness.Tiers {
+				if m, _ := roundcfg.Effective(cfg, k, tier); m != "" {
+					in.Models = append(in.Models, tier+"="+m)
+				}
+			}
+		}
 		out[k] = in
 	}
 	return out
