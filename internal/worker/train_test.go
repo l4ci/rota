@@ -760,3 +760,65 @@ func TestTrainDropsLandedQueuedPR(t *testing.T) {
 		t.Errorf("a train-landed PR stays in review: %d record(s)", n)
 	}
 }
+
+// slicePRTrain is two partial-slice PRs (#7 on w1 for issue #5, #8 on w2 for
+// issue #6) the forge says close their issues, one slot per PR.
+func slicePRTrain(t *testing.T) *world {
+	t.Helper()
+	w := newWorld(t, "")
+	gitq(t, w.worker, "checkout", "-q", "-b", "w2", "main")
+	os.WriteFile(filepath.Join(w.worker, "work2.txt"), []byte("work2\n"), 0o644)
+	gitq(t, w.worker, "add", "work2.txt")
+	gitq(t, w.worker, "commit", "-q", "-m", "work2")
+	gitq(t, w.worker, "push", "-q", "origin", "w2")
+	w.forge("head#8", "w2")
+	w.forge("sha#8", gitq(t, w.worker, "rev-parse", "HEAD"))
+	pr := func(n int) string { return fmt.Sprintf("https://github.com/o/r/pull/%d", n) }
+	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(fmt.Sprintf(
+		`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q},{"name":"w2","branch":"w2","task":"#6","pr":%q}]}`, pr(7), pr(8))), 0o644)
+	w.forge("body", "Refs #5 #6\n")
+	w.forge("issueLabels", "in-progress,"+PartialSliceLabel)
+	w.forge("closingRefs", "5,6")
+	return w
+}
+
+// --final-slice exempts only the members it names, by the token the train was
+// given: a slot name or a PR.
+func TestTrainFinalSliceExemptsOnlyTheNamedMember(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		targets []string
+		final   []string
+		culprit string
+	}{
+		{"none named", []string{"#7", "#8"}, nil, "#7"},
+		{"first by PR", []string{"#7", "#8"}, []string{"#7"}, "#8"},
+		{"second by PR", []string{"#7", "#8"}, []string{"#8"}, "#7"},
+		{"first by slot", []string{"w1", "w2"}, []string{"w1"}, "w2"},
+		{"second by slot", []string{"w1", "w2"}, []string{"w2"}, "w1"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := slicePRTrain(t)
+			res, err := w.train(TrainOpts{Targets: c.targets, FinalSlice: c.final})
+			if err != nil || res.Verdict != GateNotClosing || res.Culprit != c.culprit || res.Changed {
+				t.Fatalf("verdict %q culprit %q (want %q), changed %v: %v", res.Verdict, res.Culprit, c.culprit, res.Changed, err)
+			}
+		})
+	}
+}
+
+// A forge that cannot report closing references makes the gate note
+// CLOSING-REFS-UNKNOWN on every stage of the train; the train says it once.
+func TestTrainNotesClosingRefsUnknownOnce(t *testing.T) {
+	w := newWorld(t, "")
+	w.setQueued()
+	w.forge("body", "Refs #5\n")
+	w.forge("issueLabels", "in-progress,"+PartialSliceLabel)
+	res, err := w.train(TrainOpts{Targets: []string{"#7"}})
+	if err != nil || res.Verdict != GatePass {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if got := strings.Count(strings.Join(res.Notes, "\n"), "CLOSING-REFS-UNKNOWN"); got != 1 {
+		t.Errorf("CLOSING-REFS-UNKNOWN notes = %d, want 1: %q", got, res.Notes)
+	}
+}
