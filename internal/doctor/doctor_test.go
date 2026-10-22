@@ -140,7 +140,7 @@ func TestRunTable(t *testing.T) {
 		{"tracker no remote", Input{}, all, with(map[string]Result{"git remote get-url origin": {ExitCode: 2}}), "tracker", Skip, "no origin", ""},
 		{"tracker config fallback", Input{Tracker: tracker.Settings{Provider: "gitlab"}}, all, with(map[string]Result{"git remote get-url origin": {ExitCode: 2}}), "tracker", Pass, "glab", ""},
 
-		{"tracker unknown host", Input{}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://git.example.com/a/b"}}), "tracker", Skip, "forge.provider", ""},
+		{"tracker unknown host assumes github", Input{}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://git.example.com/a/b"}}), "tracker", Pass, "gh authenticated (forge github (assumed: origin https://git.example.com/a/b names no forge))", ""},
 
 		// the tracker line reports the forge and the issue source (#797)
 		{"tracker github origin, file issues", Input{Tracker: tracker.Settings{Source: "file"}}, all, with(nil), "tracker", Pass, "gh authenticated (forge github (from origin), issues file)", ""},
@@ -162,7 +162,7 @@ func TestRunTable(t *testing.T) {
 		{"tracker itsaplan without a project fails", Input{Tracker: tracker.Settings{Source: "itsaplan", Connection: "plan"}}, all, with(nil), "tracker", Fail, "issues.itsaplan.project is not set", "rota config set issues.itsaplan.project"},
 		{"tracker itsaplan without a connection fails", Input{Tracker: tracker.Settings{Source: "itsaplan", ItsaplanProject: "MKT"}}, all, with(nil), "tracker", Fail, "issues.connection is not set", "--kind itsaplan"},
 		{"tracker itsaplan project the key cannot see fails", Input{TeamProblem: "It's a Plan project NOPE is not visible to this API key", Tracker: tracker.Settings{Source: "itsaplan", ItsaplanProject: "NOPE", Connection: "plan"}}, all, with(nil), "tracker", Fail, "project NOPE is not visible", "issues.itsaplan.project"},
-		{"tracker unknown host and github source fails", Input{Tracker: tracker.Settings{Source: "github"}}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://git.example.com/a/b"}}), "tracker", Fail, "the forge is unknown", "forge.provider github"},
+		{"tracker unknown host and gitlab source fails", Input{Tracker: tracker.Settings{Source: "gitlab"}}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://git.example.com/a/b"}}), "tracker", Fail, "the forge is github: forge github (assumed: origin", "forge.provider gitlab"},
 		{"tracker forge source needs no match", Input{Tracker: tracker.Settings{Source: "forge"}}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://gitlab.com/a/b"}}), "tracker", Pass, "issues forge", ""},
 		{"tracker legacy keys are named", Input{Tracker: tracker.Settings{Source: "issues"}}, all, with(nil), "tracker", Pass, "rota migrate source", ""},
 		{"tracker invalid config fails", Input{SourceProblem: "invalid issues.source 'svn'"}, all, with(nil), "tracker", Fail, "invalid issues.source", "rota config set"},

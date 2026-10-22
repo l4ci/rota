@@ -64,16 +64,6 @@ func (f *forge) did(prefix string) bool {
 
 const gh, gl = "https://github.com/o/r.git", "https://gitlab.com/o/r.git"
 
-func TestProvider(t *testing.T) {
-	for url, want := range map[string]string{gh: "github", gl: "gitlab", "": "unknown", "https://example.org/x.git": "unknown",
-		"git@gitlab.corp:o/r.git": "gitlab", "ssh://git@GitHub.com/o/r.git": "github"} {
-		f := &forge{origin: url}
-		if got := Provider(context.Background(), f.env(t), ""); got != want {
-			t.Errorf("origin %q: %s, want %s", url, got, want)
-		}
-	}
-}
-
 func TestLabelGitHub(t *testing.T) {
 	ctx := context.Background()
 	view := reply{out: `{"labels": [{"name": "have"}]}`}
@@ -141,10 +131,16 @@ func TestLabelGitLab(t *testing.T) {
 	if _, err := Label(ctx, f.env(t), "", tracker.NumKey(3), "x", true, false); err != nil || f.did("glab label create") {
 		t.Errorf("no creation: %v %q", err, f.calls)
 	}
-	// unknown provider
+	// no origin: the forge is local, there is no tracker host
 	f = &forge{}
-	if _, err := Label(ctx, f.env(t), "", tracker.NumKey(3), "x", true, true); !errors.Is(err, ErrNoProvider) {
-		t.Errorf("unknown provider: %v", err)
+	if _, err := Label(ctx, f.env(t), "", tracker.NumKey(3), "x", true, true); !errors.Is(err, ErrNoProvider) || !strings.Contains(err.Error(), "the forge is local") {
+		t.Errorf("local forge: %v", err)
+	}
+	// an origin naming no forge: a write is the actor refusal, naming the origin
+	f = &forge{origin: "https://git.example.com/o/r.git"}
+	if _, err := Label(ctx, f.env(t), "", tracker.NumKey(3), "x", true, true); !errors.Is(err, tracker.ErrUnknownForge) ||
+		!strings.Contains(err.Error(), "cannot label upstream issue: cannot determine the forge from origin https://git.example.com/o/r.git") || len(f.calls) != 0 {
+		t.Errorf("unknown origin: %v %q", err, f.calls)
 	}
 	// a missing issue is not found, any other forge failure is not
 	f = &forge{origin: gh, reply: map[string]reply{"api -X DELETE": {code: 1, err: "HTTP 404: Not Found"}, "api -X POST": {code: 1, err: "HTTP 404: Not Found"}, "api repos/{owner}/{repo}/issues/99": {code: 1, err: "HTTP 404: Not Found"}}}
@@ -157,20 +153,23 @@ func TestLabelGitLab(t *testing.T) {
 	}
 }
 
-func TestProviderFallsBackToConfig(t *testing.T) {
+// TestProviderIsSourceThenForge pins the one rule issues adds to the
+// resolver: an issues.source of github or gitlab names the tracker outright,
+// whatever the forge; any other source is the forge, as the kind resolves it.
+func TestProviderIsSourceThenForge(t *testing.T) {
 	ctx := context.Background()
-	for _, c := range []struct{ origin, key, cfg, want string }{
-		{gh, "forge", "gitlab", "github"}, // origin wins over forge.provider
-		{"", "forge", "gitlab", "gitlab"}, // no origin: forge.provider
-		{"https://example.org/r.git", "forge", "github", "github"},
-		{"", "forge", "auto", "unknown"},
-		{"", "forge", "local", "unknown"},
-		{"", "forge", "bogus", "unknown"},
-		// issues.source names the tracker outright, whatever the origin says
-		{gh, "issues", "gitlab", "gitlab"},
-		{"", "issues", "github", "github"},
-		{gh, "issues", "file", "github"}, // a file source reads the origin
-		{"", "issues", "jira", "unknown"},
+	for _, c := range []struct {
+		origin, key, cfg string
+		kind             tracker.ForgeKind
+		want             string
+	}{
+		{gh, "issues", "gitlab", tracker.ForgeActor, "gitlab"},
+		{"", "issues", "github", tracker.ForgeActor, "github"},
+		{gh, "issues", "file", tracker.ForgeActor, "github"},
+		{"", "issues", "jira", tracker.ForgeActor, "local"},
+		{gh, "forge", "gitlab", tracker.ForgeActor, "gitlab"}, // forge.provider beats the origin, as everywhere
+		{"https://example.org/r.git", "forge", "auto", tracker.ForgeReader, "github"},
+		{"https://example.org/r.git", "forge", "auto", tracker.ForgeActor, ""},
 	} {
 		f := &forge{origin: c.origin}
 		env := f.env(t)
@@ -183,8 +182,8 @@ func TestProviderFallsBackToConfig(t *testing.T) {
 		root := jsonx.NewObject()
 		root.Set(c.key, obj)
 		env.Config = root
-		if got := Provider(ctx, env, ""); got != c.want {
-			t.Errorf("origin %q %s %q: %s, want %s", c.origin, c.key, c.cfg, got, c.want)
+		if r, err := Provider(ctx, env, c.kind, ""); r.Provider != c.want || (err != nil) != (c.want == "") {
+			t.Errorf("origin %q %s %q kind %d: %+v, %v; want %q", c.origin, c.key, c.cfg, c.kind, r, err, c.want)
 		}
 	}
 }

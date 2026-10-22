@@ -25,7 +25,8 @@ const (
 	TrackerNotFound
 	// Lock: fsio.ErrLockTimeout, a busy lock (exit 6).
 	Lock
-	// Tracker: any tracker.Error, by its kind (Kind.Exit).
+	// Tracker: any tracker.Error, by its kind (Kind.Exit), and a
+	// tracker.UnknownForgeError (exit 4, blockedBy forge).
 	Tracker
 	// Exiter: an error with its own Exit() int.
 	Exiter
@@ -96,7 +97,11 @@ func translate(err error, o Options) (any, error) {
 	var ref *backlog.RefusedError
 	var act *backlog.ActiveError
 	has := func(c Class) bool { return o.Classes&c != 0 }
+	var ufe *tracker.UnknownForgeError
 	switch {
+	case has(Tracker) && errors.As(err, &ufe):
+		return jsonObj("blockedBy", "forge", "changed", false),
+			&exitcode.Error{Exit: exitcode.ExitRefused, Message: err.Error(), Hint: tracker.UnknownForgeHint}
 	case has(Tracker) && errors.As(err, &te):
 		return nil, &exitcode.Error{Exit: te.Kind.Exit(), Message: te.Message}
 	case has(Exiter) && errors.As(err, &ex):
