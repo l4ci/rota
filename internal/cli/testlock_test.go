@@ -2,9 +2,12 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -45,16 +48,42 @@ func TestTestSlotsRejectsBadWidth(t *testing.T) {
 	}
 }
 
+// niceInheritedEnv marks the re-exec of this test under `nice -n 10`, so the
+// already-niced parent case runs once and does not recurse.
+const niceInheritedEnv = "ROTA_TEST_NICE_REEXEC"
+
 func TestProofRecordRunsNicedAndHoldingTheLock(t *testing.T) {
 	needNice(t)
+	// The probe sees the parent's niceness plus 10, capped at 19: the suite may
+	// itself run under `rota proof record`, so an absolute 10 is wrong.
+	out, err := exec.Command("nice").Output()
+	if err != nil {
+		t.Fatalf("read own niceness: %v", err)
+	}
+	parent, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil {
+		t.Fatalf("parse niceness %q: %v", out, err)
+	}
+	want := min(parent+10, 19)
 	dir := backlogProject(t)
-	code, out, _ := rotaIn(t, dir, "proof", "record", "B07", "--json", "--", `test "$ROTA_TEST_LOCK_HELD" = 1 && nice | grep -qx 10`)
-	d := data(t, out)
+	probe := fmt.Sprintf(`test "$ROTA_TEST_LOCK_HELD" = 1 && test "$(nice)" -ge %d`, want)
+	code, rec, _ := rotaIn(t, dir, "proof", "record", "B07", "--json", "--", probe)
+	d := data(t, rec)
 	if code != 0 || d["niced"] != true {
-		t.Fatalf("exit %d: %s", code, out)
+		t.Fatalf("parent niceness %d, want child >= %d: exit %d: %s", parent, want, code, rec)
 	}
 	if ev, _ := d["evidence"].(string); !strings.HasSuffix(ev, " niced=true") {
 		t.Errorf("the row should say it was niced: %q", ev)
+	}
+
+	if os.Getenv(niceInheritedEnv) == "" {
+		t.Run("already niced parent", func(t *testing.T) {
+			cmd := exec.Command("nice", "-n", "10", os.Args[0], "-test.run", "^TestProofRecordRunsNicedAndHoldingTheLock$", "-test.count=1")
+			cmd.Env = append(os.Environ(), niceInheritedEnv+"=1")
+			if o, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("under nice -n 10: %v\n%s", err, o)
+			}
+		})
 	}
 }
 
