@@ -414,6 +414,8 @@ func TestInvalidValueErrorsNameTheValue(t *testing.T) {
 		{`{"issues":{"source":"svn"}}`, `invalid issues.source "svn" (expected `},
 		{`{"issues":{"source":3}}`, `invalid issues.source 3 (expected `},
 		{`{"issues":{"source":["a",null]}}`, `invalid issues.source ["a", null] (expected `},
+		{`{"issues":{"source":"a\"b\\c\nd"}}`, `invalid issues.source "a\"b\\c\nd" (expected `},
+		{`{"issues":{"source":{"k":1}}}`, `invalid issues.source {"k": 1} (expected `},
 		{`{"backlog":{"backend":"git"}}`, `invalid backlog.backend "git" (expected file|issues)`},
 	} {
 		cfg, _ := jsonx.Decode([]byte(tc.cfg))
