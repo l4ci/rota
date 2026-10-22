@@ -136,7 +136,11 @@ func (f *fakeForge) Get(_ context.Context, n tracker.IssueKey, _ bool) (tracker.
 		state = "open"
 	}
 	is := tracker.Issue{Key: n, State: state, Body: f.w.forgeWord("issueBody")}
-	if l := f.w.forgeWord("issueLabels"); l != "" {
+	l := f.w.forgeWord("issueLabels")
+	if per := f.w.forgeWord("issueLabels." + string(n)); per != "" {
+		l = per // labels of one issue, beside the default every other issue gets
+	}
+	if l != "" {
 		is.Labels = strings.Split(l, ",")
 	}
 	return is, nil
