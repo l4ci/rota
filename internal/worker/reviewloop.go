@@ -96,11 +96,22 @@ func PendingReview(ctx context.Context, f ReviewForge, s *Slot, v *ReviewVerdict
 			keys = append(keys, key)
 		}
 	}
+	trust := NewMarkerTrust(ctx, f)
 	for _, e := range all {
 		r := e.r
+		// Main's bounce of a support PR is review input, from an author with
+		// write access only; any other marker comment is rota's own post.
+		bounced := isReviewBounce(r.Body) && !s.IsExternal()
+		if bounced {
+			w, err := trust.Writer(r.Author)
+			if err != nil {
+				return b, err
+			}
+			bounced = w
+		}
 		bodyless := strings.TrimSpace(r.Body) == ""
 		switch {
-		case r.State == tracker.ReviewApproved, marker.Has(r.Body) && !(isReviewBounce(r.Body) && !s.IsExternal()):
+		case r.State == tracker.ReviewApproved, marker.Has(r.Body) && !bounced:
 			continue
 		case bodyless && r.State != tracker.ReviewChangesRequested:
 			continue

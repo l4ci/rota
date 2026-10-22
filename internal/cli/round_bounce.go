@@ -61,9 +61,11 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		n, capped := rec.N, rec.Capped
-		if rec.Counted {
+		if !capped {
+			// Idempotent per head, so a head the store deduped posts too: a
+			// failed post whose undo failed leaves the head counted, and the
+			// retry must still reach the support worker.
 			if err := postSupportBounce(env, root, issue, *slot, *head); err != nil {
-				// The count and the notice go together: a retry counts and posts again.
 				return Result{}, errors.Join(err, rec.Undo())
 			}
 		}
@@ -143,8 +145,8 @@ func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 }
 
 // recordBounce counts one bounce unless the item is already at max (0 = no
-// cap); the cap is enforced by the bounce store's write. capped reports the
-// refusal; n is then the unchanged count. A slot that
+// cap); the bounce store enforces it, the issue store by re-reading after its
+// write. capped reports the refusal; n is then the unchanged count. A slot that
 // is not in the pool is refused before anything is written.
 func recordBounce(env worker.Env, root, issue, slot, head string, max int) (worker.BounceRecord, error) {
 	reg, err := worker.LoadRegistry(root)

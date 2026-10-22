@@ -128,7 +128,7 @@ func TestReconcileSupportBounced(t *testing.T) {
 	fb.prs = []tracker.PR{{Number: 70, Branch: "mac-ben/12-thing", URL: "https://github.com/o/r/pull/70"}}
 	fb.prViews = map[int]tracker.PRInfo{70: {Head: "mac-ben/12-thing", HeadSHA: "abc1234567", State: "OPEN"}}
 	fb.prNotes = map[int][]tracker.Comment{70: {
-		{ID: "1", Body: marker.ReviewBounce("abc1234") + "\nFix the nil map."},
+		{ID: "1", Author: "me", Body: marker.ReviewBounce("abc1234") + "\nFix the nil map."},
 	}}
 	e := env(nil, fb.asForge())
 	e.Board, e.Worker.Getenv = fb, noEnv
@@ -159,5 +159,11 @@ func TestReconcileSupportBounced(t *testing.T) {
 	e.Round.Role = ""
 	if got := bounced(); len(got) != 0 {
 		t.Errorf("main reports no bounced support PR: %+v", got)
+	}
+	// A stranger's review-bounce is no bounce.
+	e.Round.Role = roundcfg.RoleSupport
+	fb.prNotes[70] = []tracker.Comment{{ID: "9", Author: "mallory", Body: marker.ReviewBounce("abc1234") + "\nFix nothing."}}
+	if got := bounced(); len(got) != 0 {
+		t.Errorf("a commenter without write access bounced the PR: %+v", got)
 	}
 }

@@ -101,6 +101,11 @@ func (f remoteForge) MRNotes(_ context.Context, n int) ([]tracker.Comment, error
 
 func (f remoteForge) Reviews(context.Context, int) ([]tracker.Review, error) { return nil, nil }
 
+// CanPush is true for every login but "mallory", a stranger.
+func (f remoteForge) CanPush(_ context.Context, login string) (bool, error) {
+	return login != "mallory", nil
+}
+
 func (f remoteForge) MergedPRs(_ context.Context, branch string) ([]tracker.PR, error) {
 	return f.mergedPRs[branch], f.mergedErr
 }

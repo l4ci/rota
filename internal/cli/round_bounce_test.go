@@ -117,7 +117,7 @@ type bounceFakes struct {
 func (f *bounceFakes) Comments(context.Context, tracker.IssueKey) ([]tracker.Comment, error) {
 	out := make([]tracker.Comment, len(f.issue))
 	for i, b := range f.issue {
-		out[i] = tracker.Comment{ID: fmt.Sprint(i), Body: b}
+		out[i] = tracker.Comment{ID: fmt.Sprint(i), Author: "ann", Body: b}
 	}
 	return out, nil
 }
@@ -127,11 +127,23 @@ func (f *bounceFakes) AddComment(_ context.Context, _ tracker.IssueKey, body str
 	return fmt.Sprint(len(f.issue) - 1), nil
 }
 
+func (f *bounceFakes) CanPush(context.Context, string) (bool, error) { return true, nil }
+
 func (f *bounceFakes) DeleteComment(context.Context, tracker.IssueKey, string) error { return nil }
 
 type bounceNotes struct {
 	worker.Forge
 	f *bounceFakes
+}
+
+func (n bounceNotes) CanPush(context.Context, string) (bool, error) { return true, nil }
+
+func (n bounceNotes) MRNotes(_ context.Context, pr int) ([]tracker.Comment, error) {
+	var out []tracker.Comment
+	for i, b := range n.f.pr[pr] {
+		out = append(out, tracker.Comment{ID: fmt.Sprint(i), Author: "ann", Body: b})
+	}
+	return out, nil
 }
 
 func (n bounceNotes) AddMRNote(_ context.Context, pr int, body string) (string, error) {

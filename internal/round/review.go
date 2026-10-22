@@ -151,8 +151,9 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 	prevSeen := s.ReviewSeen()
 	// A bounce the store deduped on the same head was not counted here and
 	// is not this dispatch's to undo.
-	// The cap is enforced by the store's write: the snapshot check above only
-	// spares the work, and a bounce that landed since then refuses here.
+	// The snapshot check above only spares the work. The registry store holds
+	// the cap under its lock; the issue store, across machines, re-reads after
+	// its comment and takes it back when another machine's landed first.
 	rec, err := store.Record(nil, issue, o.Slot, pr.HeadSHA, o.MaxBounces)
 	if err != nil {
 		return out, err

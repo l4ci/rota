@@ -153,6 +153,7 @@ func (e Env) findSupportBounced(ctx context.Context, rep *Report, reg worker.Reg
 	if !ok {
 		return
 	}
+	trust := worker.NewMarkerTrust(ctx, e.Forge)
 	for _, q := range reg.PRs() {
 		n, ok := worker.PRRefNumber(q.PR)
 		if !ok {
@@ -165,7 +166,17 @@ func (e Env) findSupportBounced(ctx context.Context, rep *Report, reg worker.Reg
 		}
 		head := ""
 		for _, c := range notes {
-			if kind, h, _, ok := marker.ParseBounce(c.Body); ok && kind == marker.KindReviewBounce {
+			kind, h, _, ok := marker.ParseBounce(c.Body)
+			if !ok || kind != marker.KindReviewBounce {
+				continue
+			}
+			w, err := trust.Writer(c.Author)
+			if err != nil {
+				rep.Warnings = append(rep.Warnings, fmt.Sprintf("bounces on %s not read: %v", q.PR, err))
+				head = ""
+				break
+			}
+			if w {
 				head = h
 			}
 		}
