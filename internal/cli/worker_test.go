@@ -206,6 +206,7 @@ func TestWorkerAccountVerbs(t *testing.T) {
 // ── host verbs, with the host swapped for a fake ────────────────────────────
 
 type cliHost struct {
+	spawnOpts host.SpawnOpts
 	herdr     bool
 	inSession bool
 	sendErr   error
@@ -225,6 +226,7 @@ func (h *cliHost) InSession() bool                 { return h.inSession }
 func (h *cliHost) Where() string                   { return "main" }
 func (h *cliHost) Spawn(_ context.Context, o host.SpawnOpts) (string, error) {
 	h.calls = append(h.calls, "spawn")
+	h.spawnOpts = o
 	return "rota:" + o.Slot, nil
 }
 func (h *cliHost) Send(_ context.Context, slot, handle, file string) error {
@@ -637,5 +639,60 @@ func TestFileModeProofDoesNotDirtySlot(t *testing.T) {
 	code, out, errOut := rotaIn(t, dir, "worker", "reset", "w1", "--check-only", "--json")
 	if d := data(t, out); code != 0 || d["clean"] != true {
 		t.Fatalf("assign's dirty check refused a slot that only recorded proof: %d %v %s", code, d, errOut)
+	}
+}
+
+func TestWorkerDispatchAssignedCodexRebuildsBrief(t *testing.T) {
+	f := newScopeFx(t, "warn", `,"dispatch":"herdr","tiers":{"codex":{"standard":"tier-default"}}`)
+	f.issues["2"] = strings.Replace(f.issues["2"], `"labels":[]`, `"labels":[{"name":"harness:codex"},{"name":"model:gpt-task"}]`, 1)
+	h := &cliHost{herdr: true, inSession: true}
+	useCodex(f.deps, h, "codex-cli 0.163.0", true)
+	f.deps.Host = func(host.Kind) host.Host { return h }
+	settled := filepath.Join(t.TempDir(), "settled.md")
+	os.WriteFile(settled, []byte("Keep the legacy callback signature.\n"), 0o600)
+	code, out, errOut := rotaInWith(t, f.deps, f.root, "--json", "round", "assign", "2", "--agent", "dana", "--holder-pid", "4242", "--accept-overlap", "--body-file", settled, "--siblings", "3")
+	if code != 0 {
+		t.Fatalf("assign: %d %s %s", code, out, errOut)
+	}
+	assignedBrief := h.calls[len(h.calls)-1]
+	branch := worker.LoadRegistryTolerant(f.root).Slot("dana").Branch()
+	attempt := worker.LoadRegistryTolerant(f.root).Slot("dana").Attempt()
+	notes := filepath.Join(t.TempDir(), "notes.md")
+	os.WriteFile(notes, []byte("Recovery note: keep the public callback.\n"), 0o600)
+	code, out, errOut = rotaInWith(t, f.deps, f.root, "--json", "worker", "dispatch", "dana", "--task", "2", "--body-file", notes)
+	if code != 0 {
+		t.Fatalf("recovery: %d %s %s", code, out, errOut)
+	}
+	payload := h.calls[len(h.calls)-1]
+	original := strings.Split(assignedBrief, "--- ROTA-SIG ")[0]
+	if !strings.HasPrefix(payload, original) {
+		t.Errorf("recovery lost assignment context:\n%s", payload)
+	}
+	for _, want := range []string{"worker-contract.md", "Then read issue 2", "POST /items", "ROTA-DONE dana <pr-url>", "Recovery note: keep the public callback.", attempt} {
+		if !strings.Contains(payload, want) {
+			t.Errorf("rebuilt brief lacks %q: %s", want, payload)
+		}
+	}
+	s := worker.LoadRegistryTolerant(f.root).Slot("dana")
+	if s.Branch() != branch || !strings.Contains(h.spawnOpts.Launch, " --model gpt-task ") {
+		t.Errorf("recovery branch/model: branch=%s want=%s launch=%s", s.Branch(), branch, h.spawnOpts.Launch)
+	}
+}
+
+func TestRoundAssignCodexUnsentEnvelope(t *testing.T) {
+	f := newScopeFx(t, "warn", `,"dispatch":"herdr","tiers":{"codex":{"standard":"gpt-task"}}`)
+	h := &cliHost{herdr: true, inSession: true, sendErr: host.ErrNotSubmitted}
+	useCodex(f.deps, h, "codex-cli 0.163.0", true)
+	f.deps.Host = func(host.Kind) host.Host { return h }
+	code, out, errOut := rotaInWith(t, f.deps, f.root, "--json", "round", "assign", "2", "--agent", "dana", "--kind", "codex", "--holder-pid", "4242", "--accept-overlap")
+	if code != 5 {
+		t.Fatalf("unsent assign: %d %s %s", code, out, errOut)
+	}
+	d := data(t, out)
+	if d["blockedBy"] != "dispatch" || d["slot"] != "dana" || d["failedStage"] != "dispatch" || d["changed"] != true || !strings.Contains(out+errOut, "dana") {
+		t.Fatalf("unsent assign must name the dispatch and slot: %s %s", out, errOut)
+	}
+	if !strings.Contains(out, "comment") || !strings.Contains(out, "claim") || !strings.Contains(out, "in-progress") {
+		t.Fatalf("unsent assign must report retained marks: %s", out)
 	}
 }

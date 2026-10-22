@@ -21,9 +21,10 @@ import (
 // scopeFx is an issues-backed repo where #1 is held by slot ben and #2 clashes
 // with it on a declared scope only (`## Touches` names the same route, no file).
 type scopeFx struct {
-	root string
-	deps *Deps
-	git  []string // git calls, in order
+	root   string
+	issues map[string]string
+	deps   *Deps
+	git    []string // git calls, in order
 }
 
 // autopilotOn sets autonomy.level auto, which turns the round tick on.
@@ -57,7 +58,7 @@ func newScopeFx(t *testing.T, overlap string, extraCfg string) *scopeFx {
 	issues := map[string]string{"1": issue(1, "Holder"), "2": issue(2, "Candidate"), "3": issue(3, "Member three"), "4": issue(4, "Member four"), "5": issue(5, "Member five")}
 	comments := map[int][]string{}
 	labels := map[int][]string{}
-	fx := &scopeFx{root: root}
+	fx := &scopeFx{root: root, issues: issues}
 	deps := testDeps()
 	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
 		joined := strings.Join(args, " ")
