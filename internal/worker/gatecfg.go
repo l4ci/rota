@@ -46,6 +46,7 @@ type GateConfig struct {
 	review     config.ReviewPolicy
 	reviewErr  error
 	tddErr     error
+	testsErr   error // a malformed test.fast or test.full
 	isolate    bool
 	isolateErr error
 }
@@ -59,20 +60,19 @@ func (e Env) GateConfig(root string) GateConfig {
 // one place that knows the key names.
 func ParseGateConfig(cfg any) GateConfig {
 	c := GateConfig{
-		Full:            commandList(cfg, config.TestFullKey),
-		Fast:            commandList(cfg, "test.fast"),
 		E2E:             commandList(cfg, "test.e2e"),
 		CIChecks:        commandList(cfg, "test.ciChecks"),
 		Tracker:         tracker.SettingsFromConfig(cfg),
 		InProgressLabel: config.Label(cfg, "inProgress"),
 		SharedPaths:     roundcfg.SharedPaths(cfg),
 	}
-	if len(c.Full) == 0 {
-		c.Full = commandList(cfg, config.LegacyVerifyKey)
-		c.legacy = len(c.Full) > 0
-		c.legacyOnce = new(sync.Once)
+	t := roundcfg.ParseTests(cfg)
+	c.Full, c.Fast, c.legacy, c.testsErr = t.Full, t.Fast, t.Legacy, t.Err
+	c.legacyOnce = new(sync.Once)
+	c.TDD, c.tddErr = t.TDD, t.TDDErr
+	if c.testsErr == t.TDDErr {
+		c.testsErr = nil // a bad work.tdd is TDDEnabled's to report
 	}
-	c.TDD, c.tddErr = config.Bool(cfg, "work.tdd")
 	c.where, c.whereErr = parseFullWhere(cfg, c.CIChecks)
 	c.sourceErr = tracker.ValidateConfig(cfg)
 	c.ciMinutes, c.ciErr = config.Int(cfg, "test.ciTimeoutMinutes", 1, 24*60)
@@ -138,6 +138,10 @@ func (c GateConfig) ReviewPolicy() (config.ReviewPolicy, error) { return c.revie
 
 // TDDEnabled is work.tdd, or the error of a non-boolean value.
 func (c GateConfig) TDDEnabled() (bool, error) { return c.TDD, c.tddErr }
+
+// TestsErr is the error of a malformed test.fast or test.full. The lists read
+// as empty until a step that needs them asks.
+func (c GateConfig) TestsErr() error { return c.testsErr }
 
 // IsolateEnabled is test.isolate, or the error of a non-boolean value.
 func (c GateConfig) IsolateEnabled() (bool, error) { return c.isolate, c.isolateErr }

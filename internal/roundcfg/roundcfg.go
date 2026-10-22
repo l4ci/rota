@@ -2,6 +2,7 @@
 package roundcfg
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"regexp"
@@ -275,12 +276,11 @@ func FromConfig(cfg any) (Settings, error) {
 	if err := loadTiers(cfg, &s); err != nil {
 		return s, err
 	}
-	fast, _ := list(cfg, "test.fast")
-	full, _ := list(cfg, "test.full")
-	s.FullOnly = len(fast) == 0 && len(full) > 0
-	if s.TDD, err = config.Bool(cfg, "work.tdd"); err != nil {
-		return s, err
+	t := ParseTests(cfg)
+	if t.Err != nil {
+		return s, t.Err
 	}
+	s.FullOnly, s.TDD = t.FullOnly(), t.TDD
 	return s, loadRoles(cfg, &s)
 }
 
@@ -400,6 +400,11 @@ func list(cfg any, key string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return listValue(key, v)
+}
+
+// listValue is list on a value already read.
+func listValue(key string, v any) ([]string, error) {
 	raw, ok := v.([]any)
 	if !ok {
 		return nil, fmt.Errorf("%s must be a list of strings", key)
@@ -416,6 +421,47 @@ func list(cfg any, key string) ([]string, error) {
 	}
 	return out, nil
 }
+
+// Tests is the one typed parse of test.fast, test.full and work.tdd. The gate
+// (worker.GateConfig) and the round settings both read it, so the two cannot
+// disagree on the legacy key or on a malformed value.
+type Tests struct {
+	// Fast is test.fast. Full is test.full, or the deprecated
+	// refactor.verifyCommands while a config holds only that (Legacy).
+	Fast, Full []string
+	Legacy     bool
+	// TDD is work.tdd.
+	TDD bool
+	// Err is the first malformed test.fast or test.full; those lists are nil.
+	// TDDErr is a non-boolean work.tdd. They are kept apart so the gate can
+	// defer each to the step that needs it.
+	Err, TDDErr error
+}
+
+// ParseTests reads the test commands and work.tdd from a loaded config.
+func ParseTests(cfg any) Tests {
+	var t Tests
+	var errFast, errFull error
+	t.Fast, errFast = list(cfg, "test.fast")
+	t.Full, errFull = list(cfg, config.TestFullKey)
+	if len(t.Full) == 0 && errFull == nil {
+		// The legacy key is not in the schema, so it is looked up, not defaulted.
+		if v, ok := config.Lookup(cfg, config.LegacyVerifyKey); ok {
+			if old, err := listValue(config.LegacyVerifyKey, v); err == nil && len(old) > 0 {
+				t.Full, t.Legacy = old, true
+			}
+		}
+	}
+	t.Err = errors.Join(errFast, errFull)
+	t.TDD, t.TDDErr = config.Bool(cfg, "work.tdd")
+	if t.Err == nil {
+		t.Err = t.TDDErr
+	}
+	return t
+}
+
+// FullOnly is true when test.fast is empty but a full command is set.
+func (t Tests) FullOnly() bool { return len(t.Fast) == 0 && len(t.Full) > 0 }
 
 // SharedPaths reads round.sharedPaths from a loaded config: the globs two
 // branches may both touch without counting as an overlap. An unreadable value
