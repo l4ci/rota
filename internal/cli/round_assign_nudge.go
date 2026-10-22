@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
@@ -50,7 +49,7 @@ func nextReady(cs []round.Candidate) (round.Candidate, bool) {
 // never fails the wait, so an unreadable config or backlog reads as no candidate.
 func assignNudgeFor(c *Ctx, root, slot string) *assignNudge {
 	s := worker.LoadRegistryTolerant(root).Slot(slot)
-	if s == nil || s.PR() == "" || !strings.EqualFold(s.State(), "done") {
+	if s == nil || s.PR() == "" || !worker.IsDone(s.State()) {
 		return nil
 	}
 	set, err := roundcfg.Load(root)

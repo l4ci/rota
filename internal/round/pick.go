@@ -145,7 +145,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 		return res, nil
 	}
 	if lv.State == AttemptNoPR && lv.slot != nil {
-		if st := lv.slot.State(); st == "busy" || st == "" || st == "blocked" {
+		if worker.Building(lv.slot.State()) {
 			return res, blocked(BlockAttemptRunning, "%s is still building %s: wait for its PR, or reclaim it", lv.Slot, tracker.RefOf(id))
 		}
 	}
@@ -274,7 +274,7 @@ func (e Env) retireSlot(ctx context.Context, root string, v pickView, id string,
 		*warnings = append(*warnings, fmt.Sprintf("slot %s is an adopted external slot holding %s: release it with rota worker pool reap %s", v.Slot, tracker.RefOf(id), v.Slot))
 		return nil
 	}
-	if st == "done" || st == "idle" {
+	if worker.Parkable(st) {
 		if dirty, err := e.dirtyPaths(ctx, v.slot.Worktree()); err == nil && len(dirty) == 0 {
 			if _, err := e.Park(ctx, root, v.Slot, "pick"); err != nil {
 				return err
