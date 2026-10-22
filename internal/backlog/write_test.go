@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	ms "github.com/l4ci/rota/internal/milestone"
 )
 
 // proj builds a throwaway project: a git repo with one "refactor:" commit and
@@ -71,6 +73,9 @@ const base = `# TODO
 
 func rotaFiles(extra map[string]string) map[string]string {
 	m := map[string]string{".rota/BACKLOG.md": base, ".rota/counters.json": "{\n  \"bugs\": 2\n}\n"}
+	for _, id := range []string{"M01", "M02", "M03"} {
+		m[".rota/milestones/"+id+".md"] = ms.Stub(id, "Title "+id, "s", nil)
+	}
 	for k, v := range extra {
 		m[k] = v
 	}
@@ -225,6 +230,53 @@ func TestCreate(t *testing.T) {
 		}
 		if read(t, f, ".rota/counters.json") != "{}\n" {
 			t.Error("counter written")
+		}
+	})
+}
+
+func TestMilestoneMustExist(t *testing.T) {
+	t.Run("create names the id and the list verb", func(t *testing.T) {
+		f, _ := proj(t, rotaFiles(nil))
+		before := read(t, f, ".rota/BACKLOG.md")
+		_, err := f.Create(CreateInput{Kind: "bugs", Title: "t", Fields: []Field{{"Milestone", "M99"}}})
+		if !errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), "M99") || !strings.Contains(err.Error(), "rota milestone list") {
+			t.Fatalf("err = %v", err)
+		}
+		if read(t, f, ".rota/BACKLOG.md") != before {
+			t.Error("a rejected create changed BACKLOG.md")
+		}
+	})
+	t.Run("set names the id and the list verb", func(t *testing.T) {
+		f, _ := proj(t, rotaFiles(nil))
+		_, err := f.SetField("T01", "milestone", "M99")
+		if !errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), "M99") || !strings.Contains(err.Error(), "rota milestone list") {
+			t.Fatalf("err = %v", err)
+		}
+	})
+	t.Run("a comma list is checked id by id", func(t *testing.T) {
+		f, _ := proj(t, rotaFiles(nil))
+		if _, err := f.SetField("T01", "milestone", "M01, M02"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.SetField("T01", "milestone", "M01, M99"); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("err = %v", err)
+		}
+	})
+	t.Run("no milestones directory reports unknown milestone", func(t *testing.T) {
+		files := rotaFiles(nil)
+		for _, id := range []string{"M01", "M02", "M03"} {
+			delete(files, ".rota/milestones/"+id+".md")
+		}
+		f, _ := proj(t, files)
+		_, err := f.SetField("T01", "milestone", "M01")
+		if !errors.Is(err, ErrNotFound) || !strings.Contains(err.Error(), "unknown milestone M01") {
+			t.Fatalf("err = %v", err)
+		}
+	})
+	t.Run("clearing needs no milestone", func(t *testing.T) {
+		f, _ := proj(t, rotaFiles(nil))
+		if _, err := f.SetField("T01", "milestone", ""); err != nil {
+			t.Fatal(err)
 		}
 	})
 }

@@ -9,6 +9,15 @@ import (
 	"testing"
 )
 
+// seedMilestones is a prep that writes milestone files M01..M09: item create and
+// field set refuse a milestone ID with no file (#1588). It runs after the
+// fixture commit, so the recorded head sha is unchanged.
+func seedMilestones(t *testing.T, dir string) {
+	for _, id := range []string{"M01", "M02", "M03", "M04", "M05", "M06", "M07", "M08", "M09"} {
+		write(t, dir, ".rota/milestones/"+id+".md", "---\nid: "+id+"\ntitle: "+id+"\nstatus: planned\n---\n")
+	}
+}
+
 func suiteItem(t *testing.T) {
 	bodyFx := fx{files: map[string]string{"body.md": "# {ID}\n\nSee [{ID}] in the backlog.\n"}}
 	relFx := fx{backlog: "# TODO\n\n## Bugs\n- **[B01] [P1] a.** x\n- **[B02] [P2] b.** y Related: [B01], [F01], [T01] Milestone: M01 Since: {h1}\n\n## Features\n- **[F01] [Major] f.** z Related: [B01], [B02]\n\n## Tasks\n- **[T01] t.** w Related: [B01]\n"}
@@ -41,7 +50,7 @@ func suiteItem(t *testing.T) {
 	// ---- item create
 	add(variants(scn{name: "create/bug-all-fields", want: 0,
 		argv: j("item", "create", "--kind", "bugs", "--title", "Crash  on   save", "--tag", "P1", "--desc", "It crashes.",
-			"--related", "[B01]", "--milestone", "M01", "--repos", "web", "--subsystem", "io", "--captured", "2026-10-02"),
+			"--related", "[B01]", "--milestone", "M01", "--repos", "web", "--subsystem", "io", "--captured", "2026-10-02"), prep: seedMilestones,
 		check: func(t *testing.T, e envl) { eq(t, e, "data.id", "B10"); eq(t, e, "data.type", "B") }})...)
 	add(variants(scn{name: "create/feature", argv: j("item", "create", "--kind", "features", "--title", "New thing", "--tag", "Major"), want: 0})...)
 	add(
@@ -167,7 +176,11 @@ func suiteItem(t *testing.T) {
 
 	// ---- item field set
 	set := func(name, id, field, value string, want int, extra ...string) scn {
-		return scn{name: "fieldset/" + name, argv: j(append([]string{"item", "field", "set", id, "--name", field, "--value", value}, extra...)...), want: want}
+		s := scn{name: "fieldset/" + name, argv: j(append([]string{"item", "field", "set", id, "--name", field, "--value", value}, extra...)...), want: want}
+		if field == "milestone" {
+			s.prep = seedMilestones
+		}
+		return s
 	}
 	add(variants(set("milestone-set", "B03", "milestone", "M09", 0))...)
 	add(

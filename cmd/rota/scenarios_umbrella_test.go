@@ -928,7 +928,13 @@ func suiteUmbrellaFile(t *testing.T) {
 	} {
 		c := c
 		reg := append(append([]string{}, c.argv...), "--repo", "web")
-		add(scn{name: "repoflag-registered/" + c.n, fx: umb, argv: reg, want: c.want})
+		sc := scn{name: "repoflag-registered/" + c.n, fx: umb, argv: reg, want: c.want}
+		if c.n == "fieldset" {
+			sc.prep = func(t *testing.T, dir string) {
+				write(t, dir, ".rota/milestones/M02.md", "---\nid: M02\ntitle: M02\nstatus: planned\n---\n")
+			}
+		}
+		add(sc)
 		bad := append(append([]string{}, c.argv...), "--repo", "nope")
 		add(scn{name: "repoflag-unregistered/" + c.n, fx: umb, argv: bad, want: 3})
 	}
