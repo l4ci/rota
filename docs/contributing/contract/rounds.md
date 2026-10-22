@@ -417,6 +417,14 @@ note: the orchestrator's verb for a `best-of:2` issue (see `round assign`). An a
 note: when the other attempt was returned, reclaimed or is dead without a PR, the remaining PR is picked alone. Until a pick names it, `worker gate` and `worker train` refuse either attempt (`best-of-unpicked`).
 note: (#404, ruling) bounces stay per item. An attempt cannot be bounced before the pick (the gate refuses it before its freshness check), and the pick resets the count, so the count is the picked attempt's. `round transfer` refuses a best-of item while two attempts still hold it (two slots, or a slot and a PR in review; `blockedBy` `best-of`): pick, return or reclaim one first. Once one holder is left it transfers as usual, so the bounce-cap and item-timeout parks work after a pick. `round return` and `round reclaim` of one attempt keep the `in-progress` label while the other attempt still holds a claim. The autopilot assigns a best-of item when two slots are free and never picks.
 
+### rota round support enable
+rota round support enable <name> | rota round support disable
+repo: none
+data: {"name": string, "file": ".rota/config.json", "changed": bool}
+exit: 2 when `enable` gets no name, more than one, or a name that is not lowercase letters, digits and `-` starting with a letter (the roster's name rule), and when `disable` gets any argument; 4 with `blockedBy` `backend` when `issues.source` is `file` (a support round needs a tracker; nothing is written) and `blockedBy` `role` on a support machine (fenced, main only)
+old: none (new in #1774; before it the operator set `round.support` by hand)
+note: the main machine's one step to turn the support orchestrator on (#1774). `enable` writes `round.support: "<name>"` to the tracked `.rota/config.json`, never to `config.local.json`, so the name reaches the support machine with the commit; the text names the file and says to commit it. `disable` removes the key from the tracked config; `name` is the value it removed, `""` when none was set. Writing the value already there, or removing an absent key, is `changed: false` with a `noop:` line. The second step runs on the support machine: `rota setup` with `round.role` support (see `rota setup`).
+
 ### C11: launch the orchestrator
 
 #19 gives the orchestrator what `round assign` gives a worker: one command that opens its session. Bare `rota` routes to it. The skill still chooses the slate; the launcher never runs `round start`.

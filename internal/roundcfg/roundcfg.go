@@ -169,6 +169,10 @@ func (s Settings) Model(kind, tier string) string { return s.Models[kind][tier] 
 // `park/<agent>`) and a directory (`.worktrees/<agent>`).
 var agentRe = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
+// ValidName reports whether n is usable as an agent or support machine name
+// (agentRe).
+func ValidName(n string) bool { return agentRe.MatchString(n) }
+
 // ValidScope reports whether s is a scope.
 func ValidScope(s string) bool {
 	for _, v := range Scopes {
