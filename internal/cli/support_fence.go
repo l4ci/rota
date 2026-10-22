@@ -35,7 +35,7 @@ var supportFenced = []string{
 	"rota config fill",
 	"rota id next", "rota refactor reset",
 	"rota spike add", "rota spike finish",
-	"rota init", "rota init umbrella", "rota setup", "rota update",
+	"rota init", "rota init umbrella", "rota update",
 	"rota migrate config", "rota migrate hv", "rota migrate issues", "rota migrate milestone-files", "rota migrate milestones", "rota migrate source",
 	// Tracked instruction and agent files, which main regenerates and commits.
 	"rota block", "rota instructions init", "rota agents write",
@@ -48,8 +48,10 @@ var supportFenced = []string{
 // supportInVerb are fenced inside the verb, which knows what it writes:
 // config set and config edit refuse a tracked key on a support machine and
 // allow --global and round.role (config.local.json); knowledge harvest lists
-// freely and refuses --mark, which writes a tracker comment main owns.
-var supportInVerb = []string{"rota config set", "rota config edit", "rota knowledge harvest"}
+// freely and refuses --mark, which writes a tracker comment main owns; setup's
+// support path writes config.local.json only, and its main path refuses the
+// initialized clone a support machine runs in (#1774).
+var supportInVerb = []string{"rota config set", "rota config edit", "rota knowledge harvest", "rota setup"}
 
 // supportAllowed run on a support machine. Each writer here writes the
 // tracker, gitignored per-machine state or files outside the repo.

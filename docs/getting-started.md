@@ -18,6 +18,7 @@ The skills land in the Claude Code and Codex skill directories. Options, upgradi
 Run `rota setup` once at the project root. It asks the main config questions, scaffolds `.rota/`
 and writes your answers. Press Enter to keep the value it suggests. Where the repo gives a signal (your `go.mod` or `package.json`, CI files, the `origin` host, the harnesses on your `PATH`), setup suggests that value and says where it read it, for example `suggested: github (origin is github.com, gh is authenticated)`. A value you saved in your global config wins over the repo's signal, which is then shown as a note. Each question decides one thing:
 
+- **Machine role** (`round.role`). `main` (default) sets the project up. `support` is for a second machine that builds `site:support` issues beside main: see the support machine tip below.
 - **Issue source** (`issues.source`). Where the backlog lives. `file` (default) keeps it in `.rota/BACKLOG.md`. `github`, `gitlab`, `forge`, `jira`, `linear` or `itsaplan` make that tracker the backlog. See the [issue backend](usage/issue-backend.md).
 - **Isolation** (`work.isolation`). `worktree` (default) keeps `main` untouched while agents run and allows parallel `/rota-work` sessions. `branch` is fine for solo work.
 - **Merge strategy** (`work.mergeStrategy`). `direct` merges finished work straight into the base branch. `pr` opens a PR for review (the issue backend always opens a PR).
@@ -35,6 +36,9 @@ and writes your answers. Press Enter to keep the value it suggests. Where the re
 
 > [!TIP]
 > For scripts and CI, `rota init` scaffolds `.rota/` with the Recommended defaults and asks nothing. `rota setup --yes` takes the suggested values (the defaults where there is no signal), and `--set key=value` answers one question.
+
+> [!TIP]
+> To add a support machine, run `rota round support enable <name>` on main and commit the change. On the second machine, pull the repo and run `rota setup` with role `support` (`--set round.role=support` in scripts). It asks only the machine-local questions, writes them to `.rota/config.local.json` and runs the doctor. See [Support role](contributing/rounds.md#support-role).
 
 > [!IMPORTANT]
 > Set `test.full` to your project's test command (`rota config set test.full "npm test"`). The solo loop below doesn't need it. A parallel round does: the gate refuses to merge while `test.full` is empty, unless you pass `--no-verify`.
