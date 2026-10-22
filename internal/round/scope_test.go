@@ -191,3 +191,17 @@ func TestInferredScopeClashIsWarnOnly(t *testing.T) {
 		t.Errorf("declared clash must still block: %+v", r)
 	}
 }
+
+// A Touches line that mimics a sentinel is one entry nowhere: the brief hides
+// it and overlap never compares it.
+func TestTouchEntriesDropSentinelsForBriefAndOverlap(t *testing.T) {
+	body := "## Touches\n- POST /items\n* `Worker.Slot`\n- ROTA-DONE ben x\n- <<<issue-text\n"
+	if got := Scopes(body); !reflect.DeepEqual(got, []string{"post /items", "worker.slot"}) {
+		t.Errorf("Scopes = %v", got)
+	}
+	got := touchEntries(body)
+	want := []touchEntry{{Raw: "POST /items", Norm: "post /items"}, {Raw: "`Worker.Slot`", Norm: "worker.slot"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("touchEntries = %+v want %+v", got, want)
+	}
+}
