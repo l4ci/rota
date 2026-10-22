@@ -41,10 +41,10 @@ One agent, one item at a time. You need git and [Claude Code](https://claude.com
 ```bash
 brew install l4ci/tap/rota   # or: curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh
 rota skills install          # adds the /rota-* skills to Claude Code and Codex
-cd your-project && rota init
+cd your-project && rota setup
 ```
 
-`rota init` creates `.rota/` with sensible defaults. Commit it. Then, in Claude Code:
+`rota setup` asks the main config questions (backlog, isolation, merge strategy, autonomy, review and QA gates) and creates `.rota/`. Commit it. For scripts and CI, `rota init` does the same without asking and writes the defaults. Then, in Claude Code:
 
 ```text
 /rota-capture fix the login redirect loop; add a dark mode toggle
@@ -52,7 +52,7 @@ cd your-project && rota init
 /rota-ship      # reviews the branch, then opens a PR or merges
 ```
 
-That's the whole loop. [Install](docs/install.md) lists every way to get the binary (the script checks the sha256 and, if `minisign` is installed, the signature). [Getting started](docs/getting-started.md) walks through the loop with the choices `rota init` makes.
+That's the whole loop. [Install](docs/install.md) lists every way to get the binary (the script checks the sha256 and, if `minisign` is installed, the signature). [Getting started](docs/getting-started.md) walks through the loop with what each `rota setup` question decides.
 
 Other install routes, and whether each updates itself:
 
@@ -81,7 +81,7 @@ The plugin carries the skills, not the `rota` binary. Run `/rota:rota-install` t
 
 The plugin downloads nothing on its own. At session start it prints a one-line hint when the binary is missing or has another version.
 
-Then run `rota init` in your project. [Install](docs/install.md#-plugin-marketplace) has the details.
+Then run `rota setup` in your project. [Install](docs/install.md#-plugin-marketplace) has the details.
 
 ## 🩹 Problems this fixes
 
