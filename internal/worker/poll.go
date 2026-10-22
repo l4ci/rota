@@ -508,6 +508,7 @@ func refreshEvents(reg Registry, targets []pollTarget) {
 	for i := range targets {
 		if s := reg.Slot(targets[i].name); s != nil {
 			targets[i].ev, targets[i].lastChange, targets[i].prev = s.Event(), parseStamp(s.ActiveAt()), s.State()
+			targets[i].unsent = s.Unsent()
 		}
 		targets[i].evSeq = 0
 	}
