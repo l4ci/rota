@@ -143,12 +143,12 @@ rota ship pr <branch> --title <text> --body-file <path|-> [--items <ID>[,<ID>…
 repo: scoped
 note: PR creation never removes a worktree; it can run inside a round slot or cycle worktree, including one with uncommitted files.
 data: {"branch": string, "url": string, "provider": string, "number"?: number, "items": []string, "changed": bool}; failure data on exit 4 is the verdict-refusal shape (B3)
-exit: 2 when --title or --body-file is missing or the body is empty, or at an umbrella root without --repo; 3 when an --items item is unknown, the branch does not exist, or no base branch resolves; 4 when a FAIL verdict blocks the branch (B3; checked after the --items lookup and before the push); 5 when the push fails; tracker
+exit: 2 when --title or --body-file is missing or the body is empty, or at an umbrella root without --repo; 3 when an --items item is unknown, the branch does not exist, or no base branch resolves; 4 when a FAIL verdict blocks the branch (B3; checked after the --items lookup and before the push); 4 when the origin names no forge and `forge.provider` names none (`blockedBy: forge`); 5 when the push fails; tracker
 old: hv-pr [--repo <repo>] [--closes <ID,ID>] <branch> <title> < <body-file>    (`--items` is the old `--closes`)
 shim: `--body-file` goes to the old stdin; `--title` is the second positional. `url` is the last stdout line, `number` the trailing digits of the URL, `provider` from the URL host. Old exit 1 is split by message (missing body becomes 2, unknown item becomes 3, CLI error becomes 5); old exit 3 becomes 5; old exit 4 becomes 6.
 note: in issue mode `--items` appends `Closes #<n>` lines to the PR body; in file mode it is accepted and ignored. An unknown item fails before the push, and `data.items` echoes the IDs as given.
 note: old `--closes` is renamed `--items`, the one item-ID list flag (rule 11).
-note: the provider is `forge.provider` when it is `github` or `gitlab`, else the one the `origin` URL names; an origin that names neither falls back to `github`, as the old helper did. `forge.provider: local` (or `auto` with no origin remote) means direct merge: there is no PR to open.
+note: the provider is the forge rule (#889, one resolver, `tracker.ResolveProvider`): `forge.provider` when it names github, gitlab or local, else the `origin` host; no `origin` remote is local; an origin naming no forge is exit 4, `blockedBy: forge`, the message naming the origin, for an actor (worker gate, worker train, ship pr, release), and github, said so in the output, for a reader (doctor names it in its `tracker` line, `issues provider` prints one stderr line); `ship pr` is an actor, so an origin that names neither is refused, where the old helper fell back to `github`. `forge.provider: local` (or `auto` with no origin remote) means direct merge: there is no PR to open.
 note: no resolvable base branch is exit 3 (`resolution`, conventions); the shim maps the old helper's failure there to 5.
 note: in umbrella issue mode `--items` resolves inside the sub-repo the PR opens in (`--repo`, else the one the working directory is in); an item of another sub-repo is unknown there (3), and with neither the verb exits 2.
 
@@ -213,9 +213,10 @@ note: the old third positional (`patch|minor|major|X.Y.Z`) becomes `--level` or 
 rota release host
 repo: scoped
 data: {"host": string}
-exit: implied only
+exit: 4 when the origin names no forge and `forge.provider` names none (`blockedBy: forge`)
 old: hv-release-detect-host
 shim: `host` is the stdout line: `github`, `github-enterprise`, `gitlab`, `gitlab-self-hosted` or `none`.
+note: the forge is the forge rule (#889, one resolver, `tracker.ResolveProvider`): `forge.provider` when it names github, gitlab or local, else the `origin` host; no `origin` remote is local; an origin naming no forge is exit 4, `blockedBy: forge`, the message naming the origin, for an actor (worker gate, worker train, ship pr, release), and github, said so in the output, for a reader (doctor names it in its `tracker` line, `issues provider` prints one stderr line); `release host` is an actor. The canonical host (`github.com`, `gitlab.com`) splits `github` from `github-enterprise` and `gitlab` from `gitlab-self-hosted`; the local forge is `none`.
 
 ### rota release notes
 rota release notes --from commits [--since <ref>]

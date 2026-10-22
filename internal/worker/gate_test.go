@@ -61,7 +61,9 @@ func newWorld(t *testing.T, pr string) *world {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := &world{t: t, dir: filepath.Join(base, "gate"), origin: filepath.Join(base, "origin.git"), worker: filepath.Join(base, "worker"),
+	// The origin path names github, so the gate resolves the forge from it: an
+	// origin naming no forge is the gate's refusal (tracker.ResolveProvider).
+	w := &world{t: t, dir: filepath.Join(base, "gate"), origin: filepath.Join(base, "github-origin.git"), worker: filepath.Join(base, "worker"),
 		forgeDB: filepath.Join(base, "forge.json"), log: filepath.Join(base, "forge.log"), mode: "ok"}
 	gittest.Run(t, base, "init", "-q", "--bare", "-b", "main", w.origin)
 	gittest.Run(t, base, "clone", "-q", w.origin, w.dir)

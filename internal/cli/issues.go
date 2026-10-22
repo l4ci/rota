@@ -112,8 +112,11 @@ func issuesProvider(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		p := issues.Provider(c.Context(), env, dir)
-		return Result{Data: jsonObj("provider", p), Text: p}, nil
+		r, _ := issues.Provider(c.Context(), env, tracker.ForgeReader, dir) // a reader never fails
+		if note := r.Note(); note != "" {
+			c.Warn("%s", note)
+		}
+		return Result{Data: jsonObj("provider", r.Provider), Text: r.Provider}, nil
 	}
 }
 

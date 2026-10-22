@@ -31,7 +31,8 @@ func shipStrategy(*flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		fp, _ := config.ForgeProvider(cfg)
-		forge, ferr := tracker.ResolveProvider(c.Context(), "", fp, dir, c.deps().trackerExec())
+		r, ferr := tracker.ResolveProvider(c.Context(), tracker.ForgeActor, "", fp, dir, c.deps().trackerExec())
+		forge := r.Provider
 		if ferr != nil {
 			forge = tracker.ProviderUnknown // an origin that names no forge: the configured strategy stands
 		}

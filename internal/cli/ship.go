@@ -263,7 +263,11 @@ func shipPR(fs *flag.FlagSet) RunFunc {
 		root := shipRoot(dir)
 		cfg := c.deps().Config(root)
 
-		cl, err := c.deps().forgeOrGitHub(ctx, cfg, "", dir)
+		provider, err := actorForge(c, cfg, dir)
+		if err != nil {
+			return failData(err), err
+		}
+		cl, err := c.deps().forge(ctx, cfg, provider, dir)
 		if err != nil {
 			return Result{}, trackerErr(err)
 		}

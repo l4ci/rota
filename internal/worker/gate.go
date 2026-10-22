@@ -117,6 +117,10 @@ const (
 	// GateRunning: another gate for the same PR is running or queued; the CLI
 	// exits 4 with it, blockedBy gate-running, before this one takes the land lock.
 	GateRunning = "gate-running"
+	// GateForge: the origin names no forge and forge.provider names none, so
+	// the gate cannot tell where the PR lives (tracker.ResolveProvider, an
+	// actor); the CLI exits 4 with it, blockedBy forge.
+	GateForge = "forge"
 	// GateAlreadyMerged: the PR merged while this gate waited for the land lock.
 	// A success that changes nothing.
 	GateAlreadyMerged = "already-merged"
@@ -585,7 +589,12 @@ func (g *gate) stepForge() (bool, error) {
 		return true, fail(exitcode.ExitInternal, err.Error())
 	}
 	g.res.Branch, g.res.PR = g.target.Branch, g.target.PR
-	g.provider = g.e.detectProvider(g.ctx, g.root, g.pr, g.in.cfg.Tracker.Provider)
+	var err error
+	if g.provider, err = g.e.detectProvider(g.ctx, g.root, g.pr, g.in.cfg.Tracker.Provider, tracker.ForgeActor); err != nil {
+		g.verdict(GateForge, fmt.Sprintf("GATE %s refused — %v; nothing landed", g.o.Slot, err),
+			"set forge.provider to the forge that holds the PR, or to local to merge directly")
+		return true, nil
+	}
 	g.cliName = tracker.CLIName(g.provider)
 	g.label = g.in.cfg.InProgressLabel
 	if g.provider == tracker.ProviderLocal {
@@ -596,7 +605,6 @@ func (g *gate) stepForge() (bool, error) {
 		}
 		return false, nil
 	}
-	var err error
 	if g.forge, err = g.e.Forge(g.provider, g.root, g.in.cfg.Tracker); err != nil {
 		return g.broke(fmt.Sprintf("cannot reach the %s forge: %v", g.provider, err))
 	}
@@ -1706,26 +1714,15 @@ func indentTail(text string, n int) string {
 	return "    " + strings.Join(lines, "\n    ")
 }
 
-// detectProvider reads the forge from the PR URL (a bare number carries none),
-// then forge.provider (configured: github, gitlab or local), then origin. An
-// origin naming no forge falls back to github, which is what this gate always
-// assumed; no origin at all is the local forge (tracker.ProviderLocal).
-func (e Env) detectProvider(ctx context.Context, root, pr, configured string) string {
+// detectProvider is the forge the PR URL names (a bare number carries none),
+// else tracker.ResolveProvider's answer for kind under forge.provider
+// (configured), reading origin through Env.Git.
+func (e Env) detectProvider(ctx context.Context, root, pr, configured string, kind tracker.ForgeKind) (string, error) {
 	if p, ok := tracker.ParsePRURL(pr); ok {
-		return p.Provider
+		return p.Provider, nil
 	}
-	switch configured {
-	case "github", "gitlab", tracker.ProviderLocal:
-		return configured
-	}
-	url, code := e.runGit(ctx, root, "remote", "get-url", "origin")
-	if p := tracker.ProviderFromURL(url); p != tracker.ProviderUnknown {
-		return p
-	}
-	if code != 0 || strings.TrimSpace(url) == "" {
-		return tracker.ProviderLocal
-	}
-	return "github"
+	r, err := tracker.ResolveProvider(ctx, kind, "", configured, root, tracker.GitExec(e.Git))
+	return r.Provider, err
 }
 
 // issueSide is the issue source the gate reads beside forge, built from

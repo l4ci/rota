@@ -64,16 +64,6 @@ func (f *forge) did(prefix string) bool {
 
 const gh, gl = "https://github.com/o/r.git", "https://gitlab.com/o/r.git"
 
-func TestProvider(t *testing.T) {
-	for url, want := range map[string]string{gh: "github", gl: "gitlab", "": "unknown", "https://example.org/x.git": "unknown",
-		"git@gitlab.corp:o/r.git": "gitlab", "ssh://git@GitHub.com/o/r.git": "github"} {
-		f := &forge{origin: url}
-		if got := Provider(context.Background(), f.env(t), ""); got != want {
-			t.Errorf("origin %q: %s, want %s", url, got, want)
-		}
-	}
-}
-
 func TestLabelGitHub(t *testing.T) {
 	ctx := context.Background()
 	view := reply{out: `{"labels": [{"name": "have"}]}`}
@@ -157,20 +147,23 @@ func TestLabelGitLab(t *testing.T) {
 	}
 }
 
-func TestProviderFallsBackToConfig(t *testing.T) {
+// TestProviderIsSourceThenForge pins the one rule issues adds to the
+// resolver: an issues.source of github or gitlab names the tracker outright,
+// whatever the forge; any other source is the forge, as the kind resolves it.
+func TestProviderIsSourceThenForge(t *testing.T) {
 	ctx := context.Background()
-	for _, c := range []struct{ origin, key, cfg, want string }{
-		{gh, "forge", "gitlab", "github"}, // origin wins over forge.provider
-		{"", "forge", "gitlab", "gitlab"}, // no origin: forge.provider
-		{"https://example.org/r.git", "forge", "github", "github"},
-		{"", "forge", "auto", "unknown"},
-		{"", "forge", "local", "unknown"},
-		{"", "forge", "bogus", "unknown"},
-		// issues.source names the tracker outright, whatever the origin says
-		{gh, "issues", "gitlab", "gitlab"},
-		{"", "issues", "github", "github"},
-		{gh, "issues", "file", "github"}, // a file source reads the origin
-		{"", "issues", "jira", "unknown"},
+	for _, c := range []struct {
+		origin, key, cfg string
+		kind             tracker.ForgeKind
+		want             string
+	}{
+		{gh, "issues", "gitlab", tracker.ForgeActor, "gitlab"},
+		{"", "issues", "github", tracker.ForgeActor, "github"},
+		{gh, "issues", "file", tracker.ForgeActor, "github"},
+		{"", "issues", "jira", tracker.ForgeActor, "local"},
+		{gh, "forge", "gitlab", tracker.ForgeActor, "gitlab"}, // forge.provider beats the origin, as everywhere
+		{"https://example.org/r.git", "forge", "auto", tracker.ForgeReader, "github"},
+		{"https://example.org/r.git", "forge", "auto", tracker.ForgeActor, ""},
 	} {
 		f := &forge{origin: c.origin}
 		env := f.env(t)
@@ -183,8 +176,8 @@ func TestProviderFallsBackToConfig(t *testing.T) {
 		root := jsonx.NewObject()
 		root.Set(c.key, obj)
 		env.Config = root
-		if got := Provider(ctx, env, ""); got != c.want {
-			t.Errorf("origin %q %s %q: %s, want %s", c.origin, c.key, c.cfg, got, c.want)
+		if r, err := Provider(ctx, env, c.kind, ""); r.Provider != c.want || (err != nil) != (c.want == "") {
+			t.Errorf("origin %q %s %q kind %d: %+v, %v; want %q", c.origin, c.key, c.cfg, c.kind, r, err, c.want)
 		}
 	}
 }

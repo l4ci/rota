@@ -292,8 +292,8 @@ note: the issue number moves from `--issue` to the positional.
 ### rota issues provider
 rota issues provider
 repo: scoped
-data: {"provider": "github"|"gitlab"|"unknown"}
-exit: implied only. `issues.source` `github` or `gitlab` answers outright. Otherwise the `origin` host answers; with no `origin` remote (or one naming no forge) `forge.provider` `github` or `gitlab` answers, else `unknown`.
+data: {"provider": "github"|"gitlab"|"local"}
+exit: implied only. `issues.source` `github` or `gitlab` answers outright. Otherwise the forge answers, by the forge rule (#889, one resolver, `tracker.ResolveProvider`): `forge.provider` when it names github, gitlab or local, else the `origin` host; no `origin` remote is local; an origin naming no forge is exit 4, `blockedBy: forge`, the message naming the origin, for an actor (worker gate, worker train, ship pr, release), and github, said so in the output, for a reader (doctor names it in its `tracker` line, `issues provider` prints one stderr line); `issues provider` is a reader, so an origin naming no forge is `github` with the stderr note `origin <url> names no forge; assumed github (set forge.provider)`. `issues label` and `issues close` resolve as actors and refuse a local forge or an origin naming no forge as before (exit 3).
 old: hv-issues-provider [--repo <name>]
 shim: the single stdout word becomes `provider`.
 
