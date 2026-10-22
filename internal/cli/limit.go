@@ -112,7 +112,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 	if ph == nil {
 		return nil, &Error{Exit: ExitUnavailable, Message: kind.String() + " cannot address panes"}
 	}
-	cd, err := rotastate.CommonDir(root)
+	cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
 	if err != nil {
 		return nil, &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}
@@ -265,7 +265,7 @@ func limitsLoop(c *Ctx, root string, cfg any, set limits.Settings, holderPID int
 			return warns
 		}
 		defer rig.Cancel()
-		if cd, err := rotastate.CommonDir(root); err == nil {
+		if cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root); err == nil {
 			rec := ownWatching(c, limits.ModeSupervisor)
 			if err := limits.WriteWatching(cd, rec); err == nil {
 				defer limits.RemoveWatching(cd, rec.PID)
@@ -300,7 +300,7 @@ func limitWatch(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error(), Hint: "fix the limits.* key with: rota config set"}
 		}
-		cd, err := rotastate.CommonDir(root)
+		cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
 		if err != nil {
 			return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 		}
@@ -430,7 +430,7 @@ func limitStatus(c *Ctx, args []string) (Result, error) {
 	}
 	list := limits.Load(root)
 	watching := false
-	if cd, err := rotastate.CommonDir(root); err == nil {
+	if cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root); err == nil {
 		le := c.deps().LeaseEnv()
 		if _, ok := limits.ActiveWatching(le, cd); ok {
 			watching = true
