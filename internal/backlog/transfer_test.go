@@ -12,11 +12,18 @@ import (
 
 const archivedNeighbor = "# Archive\n- ~~**[B09] [P2] neighbor.** keep~~ Done 2020-01-01 [`z`]\n"
 
-// pinTemp restores the fixed "<path>.tmp" temp name so a test can block it.
-func pinTemp(t *testing.T) {
-	t.Helper()
-	t.Cleanup(fsio.SetTempNameForTest(func(p string) string { return p + ".tmp" }))
+// failWrite makes the transfer write to path fail on f until healWrites.
+func failWrite(f *File, path string) {
+	f.writeAtomic = func(p string, data []byte) error {
+		if p == path {
+			return errors.New("injected write failure")
+		}
+		return fsio.WriteFileAtomic(p, data)
+	}
 }
+
+// healWrites ends failWrite.
+func healWrites(f *File) { f.writeAtomic = nil }
 
 func blockPath(t *testing.T, path string) {
 	t.Helper()
@@ -26,7 +33,6 @@ func blockPath(t *testing.T, path string) {
 }
 
 func TestArchiveTransferFailures(t *testing.T) {
-	pinTemp(t)
 	for _, failure := range []string{"lock", "read", "destination write", "source write"} {
 		t.Run(failure, func(t *testing.T) {
 			f := fileBackend(t, completed)
@@ -34,17 +40,17 @@ func TestArchiveTransferFailures(t *testing.T) {
 			path := f.archivePath()
 			switch failure {
 			case "lock":
-				path += ".lock"
+				blockPath(t, path+".lock")
 			case "read":
 				if err := os.Remove(path); err != nil {
 					t.Fatal(err)
 				}
+				blockPath(t, path)
 			case "destination write":
-				path += ".tmp"
+				failWrite(f, path)
 			case "source write":
-				path = f.backlogPath() + ".tmp"
+				failWrite(f, f.backlogPath())
 			}
-			blockPath(t, path)
 			if _, err := f.Archive(5, day(t, "2026-10-02")); err == nil {
 				t.Fatal("expected injected failure")
 			}
@@ -54,8 +60,17 @@ func TestArchiveTransferFailures(t *testing.T) {
 			if failure == "source write" && strings.Count(readFile(t, f, "ARCHIVE.md"), "[B02]") != 1 {
 				t.Fatal("destination was not persisted before source cleanup")
 			}
-			if err := os.Remove(path); err != nil {
-				t.Fatal(err)
+			switch failure {
+			case "lock":
+				path += ".lock"
+			case "read":
+			default:
+				path = ""
+			}
+			if path != "" {
+				if err := os.Remove(path); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if failure == "read" {
 				writeHV(t, f, "ARCHIVE.md", archivedNeighbor)
@@ -79,17 +94,13 @@ func TestArchiveTransferFailures(t *testing.T) {
 }
 
 func TestReopenTransferRetry(t *testing.T) {
-	pinTemp(t)
 	f := fileBackend(t, completed)
 	if _, err := f.Archive(5, day(t, "2026-10-02")); err != nil {
 		t.Fatal(err)
 	}
-	blockPath(t, f.archivePath()+".tmp")
+	failWrite(f, f.archivePath())
 	if _, err := f.Reopen("B02"); err == nil {
 		t.Fatal("expected archive write failure")
-	}
-	if err := os.Remove(f.archivePath() + ".tmp"); err != nil {
-		t.Fatal(err)
 	}
 	f = &File{Root: f.Root}
 	if _, err := f.Reopen("B02"); err != nil {
@@ -178,18 +189,15 @@ func TestLifecycleWaitsForArchiveLock(t *testing.T) {
 }
 
 func TestInterruptedArchiveFollowup(t *testing.T) {
-	pinTemp(t)
 	for _, op := range []string{"reopen", "remove"} {
 		t.Run(op, func(t *testing.T) {
 			f := fileBackend(t, completed)
 			writeHV(t, f, "ARCHIVE.md", archivedNeighbor)
-			blockPath(t, f.backlogPath()+".tmp")
+			failWrite(f, f.backlogPath())
 			if _, err := f.Archive(5, day(t, "2026-10-02")); err == nil {
 				t.Fatal("expected source write failure")
 			}
-			if err := os.Remove(f.backlogPath() + ".tmp"); err != nil {
-				t.Fatal(err)
-			}
+			healWrites(f)
 			switch op {
 			case "reopen":
 				if _, err := f.Reopen("B02"); err != nil {

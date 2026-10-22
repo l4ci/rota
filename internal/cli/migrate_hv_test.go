@@ -50,9 +50,9 @@ func TestAMigratedProjectIsNotStopped(t *testing.T) {
 }
 
 func TestDoctorFailsOnAnHvLeftover(t *testing.T) {
-	doctorFakes(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`})
+	d := doctorDeps(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`})
 	_, sub := legacyProject(t)
-	code, out, _ := rotaIn(t, sub, "doctor", "--json")
+	code, out, _ := rotaInWith(t, d, sub, "doctor", "--json")
 	if code != ExitFailed || !strings.Contains(out, `"name": "state"`) || !strings.Contains(out, "run: rota migrate hv") {
 		t.Errorf("exit %d: %s", code, out)
 	}

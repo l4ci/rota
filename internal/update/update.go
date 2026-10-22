@@ -48,10 +48,9 @@ type Env struct {
 	SkillsNeedUpdate func() bool
 }
 
-// DefaultEnv is the real machine. Latest reads ROTA_TEST_LATEST_VERSION through
-// getenv first (no network) and otherwise runs `gh api repos/<repo>/releases/latest`
+// DefaultEnv is the real machine. Latest runs `gh api repos/<repo>/releases/latest`
 // through run, which only reads.
-func DefaultEnv(current string, getenv func(string) string, run proc.Runner) Env {
+func DefaultEnv(current string, run proc.Runner) Env {
 	var dir string
 	if exe, err := os.Executable(); err == nil {
 		if real, err := filepath.EvalSymlinks(exe); err == nil {
@@ -59,15 +58,11 @@ func DefaultEnv(current string, getenv func(string) string, run proc.Runner) Env
 		}
 		dir = filepath.Dir(exe)
 	}
-	return Env{ExeDir: dir, Current: current, Latest: func() string { return ghLatest(getenv, run) }}
+	return Env{ExeDir: dir, Current: current, Latest: func() string { return ghLatest(run) }}
 }
 
-// ghLatest reads ROTA_TEST_LATEST_VERSION (no network) first; otherwise it asks
-// gh through run. A missing gh, a non-zero exit or a timeout is "".
-func ghLatest(getenv func(string) string, run proc.Runner) string {
-	if v := getenv("ROTA_TEST_LATEST_VERSION"); v != "" {
-		return v
-	}
+// ghLatest asks gh through run. A missing gh, a non-zero exit or a timeout is "".
+func ghLatest(run proc.Runner) string {
 	res, err := run(context.Background(), proc.Cmd{
 		Name:    "gh",
 		Args:    []string{"api", "repos/" + Repo + "/releases/latest", "--jq", ".tag_name"},

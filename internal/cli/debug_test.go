@@ -19,7 +19,7 @@ func rotaIn(t *testing.T, dir string, args ...string) (int, string, string) {
 	}
 	defer os.Chdir(old)
 	var so, se bytes.Buffer
-	code := mainWith(testDeps(), args, strings.NewReader(""), &so, &se)
+	code := mainWith(depsIn(dir), args, strings.NewReader(""), &so, &se)
 	return code, so.String(), se.String()
 }
 

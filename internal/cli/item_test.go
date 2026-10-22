@@ -350,15 +350,16 @@ func TestItemCreateBatchKeepsFiledIDsOnPlainError(t *testing.T) {
 }
 
 // TestItemCommentAddStampsTestToday pins the Today wiring in openBacklog: the
-// file backend dates a comment row from ROTA_TEST_TODAY, not the wall clock.
+// file backend dates a comment row from Deps.Today, not the wall clock.
 func TestItemCommentAddStampsTestToday(t *testing.T) {
 	root := trackerProject(t, "")
-	t.Setenv("ROTA_TEST_TODAY", "2001-02-03")
+	d := testDeps()
+	pinDay(d, "2001-02-03")
 	body := filepath.Join(t.TempDir(), "body.txt")
 	if err := os.WriteFile(body, []byte("Why?"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if code, _, stderr := rotaRun(t, "--json", "-C", root, "item", "comment", "add", "B01", "--kind", "question", "--body-file", body); code != 0 {
+	if code, _, stderr := rotaRunWith(t, d, "--json", "-C", root, "item", "comment", "add", "B01", "--kind", "question", "--body-file", body); code != 0 {
 		t.Fatalf("exit %d, stderr %s", code, stderr)
 	}
 	detail, err := os.ReadFile(filepath.Join(root, ".rota", "bugs", "B01.md"))
@@ -366,6 +367,6 @@ func TestItemCommentAddStampsTestToday(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(detail), "\n- 2001-02-03 · question · Why?\n") {
-		t.Errorf("comment row not dated from ROTA_TEST_TODAY:\n%s", detail)
+		t.Errorf("comment row not dated from Deps.Today:\n%s", detail)
 	}
 }

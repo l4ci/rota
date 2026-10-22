@@ -181,8 +181,8 @@ func TestLimitWatchResumesAnEntryWhoseResetPassed(t *testing.T) {
 	dir := limProject(t)
 	deps, f := limDeps()
 	t.Setenv("TMUX_PANE", "%9")
-	t.Setenv("ROTA_TEST_HOLDER_PID", strconv.Itoa(os.Getpid()))
-	t.Setenv("ROTA_TEST_NOW", "2026-10-03T16:00:00Z")
+	pinHolder(deps, os.Getpid())
+	pinNow(deps, "2026-10-03T16:00:00Z")
 	cd, _ := rotastate.CommonDir(dir)
 	env := roundlease.DefaultEnv()
 	if _, _, _, err := env.Acquire(cd, dir, env.Discover(os.Getpid(), os.Getenv), 1); err != nil {
@@ -214,8 +214,8 @@ func TestLimitWatchTextOnTheOrchestratorPane(t *testing.T) {
 	deps, f := limDeps()
 	f.panes["%9"] = "work\nClaude usage limit reached. Your limit will reset at 5pm.\n"
 	t.Setenv("TMUX_PANE", "%9")
-	t.Setenv("ROTA_TEST_HOLDER_PID", strconv.Itoa(os.Getpid()))
-	t.Setenv("ROTA_TEST_NOW", "2026-10-03T12:00:00Z")
+	pinHolder(deps, os.Getpid())
+	pinNow(deps, "2026-10-03T12:00:00Z")
 	t.Setenv("TZ", "UTC")
 	cd, _ := rotastate.CommonDir(dir)
 	env := roundlease.DefaultEnv()
@@ -247,8 +247,8 @@ func TestLimitWatchTimeoutNeverCutsTheFirstPass(t *testing.T) {
 	f.panes["%9"] = "work\nClaude usage limit reached. Your limit will reset at 5pm.\n"
 	f.slow = 300 * time.Millisecond
 	t.Setenv("TMUX_PANE", "%9")
-	t.Setenv("ROTA_TEST_HOLDER_PID", strconv.Itoa(os.Getpid()))
-	t.Setenv("ROTA_TEST_NOW", "2026-10-03T12:00:00Z")
+	pinHolder(deps, os.Getpid())
+	pinNow(deps, "2026-10-03T12:00:00Z")
 	t.Setenv("TZ", "UTC")
 	cd, _ := rotastate.CommonDir(dir)
 	env := roundlease.DefaultEnv()
