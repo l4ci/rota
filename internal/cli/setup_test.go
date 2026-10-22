@@ -616,9 +616,16 @@ func TestSetupSupportPathRunsDoctor(t *testing.T) {
 	if !ok {
 		t.Fatalf("data.doctor = %v", doc)
 	}
-	pass, _ := o.Get("ok")
-	if check, _ := o.Get("check"); pass == false && check == nil {
-		t.Errorf("a failing doctor names no check: %v", o)
+	pass, has := o.Get("ok")
+	if _, isBool := pass.(bool); !has || !isBool {
+		t.Fatalf("data.doctor.ok = %v (present %v)", pass, has)
+	}
+	if pass == false {
+		for _, k := range []string{"check", "hint"} {
+			if v, _ := o.Get(k); v == nil || v == "" {
+				t.Errorf("a failing doctor has empty %s: %v", k, o)
+			}
+		}
 	}
 }
 
@@ -635,4 +642,64 @@ func TestSetupSupportPathDefaultsFromTrackedConfig(t *testing.T) {
 			t.Errorf("local %s = %v, want %v", k, got, want)
 		}
 	}
+}
+
+// Relay 1 on #1830: setup run from a subdirectory of a support clone acts on
+// the enclosing project. The main path is refused there as `rota init` is,
+// before anything is written; the support path writes the root's local file.
+func TestSetupFromSubdirOfSupportClone(t *testing.T) {
+	dir, tracked := supportClone(t)
+	writeLocalConfig(t, dir, `{"round":{"role":"support"}}`+"\n")
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errOut := setupRun(t, sub, "", false, "--json", "--yes", "--set", "round.role=main")
+	if code != ExitRefused {
+		t.Fatalf("main path: exit %d: %s %s", code, out, errOut)
+	}
+	if got, _ := setupData(t, out).Get("blockedBy"); got != "role" {
+		t.Errorf("blockedBy = %v", got)
+	}
+	for _, f := range []string{".rota", "AGENTS.md", "CLAUDE.md", ".claude"} {
+		if _, err := os.Stat(filepath.Join(sub, f)); err == nil {
+			t.Errorf("refused setup wrote sub/%s", f)
+		}
+	}
+	assertTrackedUntouched(t, dir, tracked)
+
+	code, out, errOut = setupRun(t, sub, "", false, "--json", "--yes")
+	if code != 0 {
+		t.Fatalf("support path: exit %d: %s %s", code, out, errOut)
+	}
+	if role, _ := setupData(t, out).Get("role"); role != "support" {
+		t.Errorf("data.role = %v", role)
+	}
+	if _, err := os.Stat(filepath.Join(sub, ".rota")); err == nil {
+		t.Error("support path wrote sub/.rota")
+	}
+	if got, _ := config.Lookup(localConfig(t, dir), "round.dispatch"); got != "subagent" {
+		t.Errorf("root local round.dispatch = %v", got)
+	}
+	assertTrackedUntouched(t, dir, tracked)
+}
+
+// Relay 1 on #1830: the support checks read the enclosing project's tracked
+// config, so a subdirectory of an enabled clone is not refused.
+func TestSetupSupportPathFromSubdirOfEnabledClone(t *testing.T) {
+	dir, tracked := supportClone(t)
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errOut := setupRun(t, sub, "", false, "--yes", "--set", "round.role=support"); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if got, _ := config.Lookup(localConfig(t, dir), "round.role"); got != "support" {
+		t.Errorf("root local round.role = %v", got)
+	}
+	if _, err := os.Stat(filepath.Join(sub, ".rota")); err == nil {
+		t.Error("support path wrote sub/.rota")
+	}
+	assertTrackedUntouched(t, dir, tracked)
 }
