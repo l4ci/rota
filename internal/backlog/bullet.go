@@ -74,10 +74,15 @@ func (f *Fields) set(name, v string) {
 // at a time, the lazy group then grows one non-newline character at a time,
 // and the first position where the lookahead holds ends the match.
 
+// harnessField is the Harness: field a round writes when a quota fallback
+// moves an item to another harness. It delimits the value before it, but it
+// is not one of FieldNames: capture never writes it and ParseFields skips it.
+const harnessField = "Harness"
+
 // othersOf is every field name except cap.
 func othersOf(cap string) []string {
-	out := make([]string, 0, len(FieldNames)-1)
-	for _, n := range FieldNames {
+	out := make([]string, 0, len(FieldNames))
+	for _, n := range append(append([]string(nil), FieldNames...), harnessField) {
 		if n != cap {
 			out = append(out, n)
 		}
@@ -206,6 +211,11 @@ func SetField(line, field, value string) (string, error) {
 	if !settable {
 		return "", errors.New(field + " is not a settable field; pick one of " + strings.Join(SettableFields, "/"))
 	}
+	return setField(line, field, value)
+}
+
+// setField is SetField without the settable-name check.
+func setField(line, field, value string) (string, error) {
 	cap := capitalize(field)
 	marker := cap + ":"
 	others := othersOf(cap)

@@ -80,6 +80,9 @@ type Settings struct {
 	// WorkerKind is round.workerKind: the project's default worker harness,
 	// "" when unset (the slot's recorded kind, else claude, decides).
 	WorkerKind string
+	// Harnesses is round.harnesses: the kinds a round may use, in quota-fallback
+	// order; empty means only the default harness.
+	Harnesses []string
 	// FullOnly is true when test.fast is empty but test.full is set: workers
 	// have no fast tier to prove against, so their brief says to run test.full.
 	FullOnly bool
@@ -272,6 +275,9 @@ func FromConfig(cfg any) (Settings, error) {
 	if s.WorkerKind, err = loadWorkerKind(cfg); err != nil {
 		return s, err
 	}
+	if s.Harnesses, err = loadHarnesses(cfg); err != nil {
+		return s, err
+	}
 	if err := loadTiers(cfg, &s); err != nil {
 		return s, err
 	}
@@ -341,6 +347,26 @@ func loadWorkerKind(cfg any) (string, error) {
 		return "", fmt.Errorf("round.workerKind must be %s (got %v)", harness.KindList(), v)
 	}
 	return k, nil
+}
+
+// loadHarnesses reads round.harnesses: harness kinds in fallback order, none
+// twice. A bad entry is an error, never skipped.
+func loadHarnesses(cfg any) ([]string, error) {
+	kinds, err := list(cfg, "round.harnesses")
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	for _, k := range kinds {
+		if !harness.Valid(k) {
+			return nil, fmt.Errorf("round.harnesses must list kinds from %s (got %q)", harness.KindList(), k)
+		}
+		if seen[k] {
+			return nil, fmt.Errorf("round.harnesses lists %s twice", k)
+		}
+		seen[k] = true
+	}
+	return kinds, nil
 }
 
 // loadTiers reads round.tier and round.tiers.<kind>.<tier>. The claude standard

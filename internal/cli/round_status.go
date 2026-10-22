@@ -134,7 +134,13 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		var lines []string
 		if set, err := roundcfg.Load(root); err == nil {
 			// Status ran without accounts; the quota read gets its own accounted env.
-			if qc := accountedRoundEnv(c, ctx, root).QuotaCap(ctx, root, set); qc.Reduced() {
+			renv := accountedRoundEnv(c, ctx, root)
+			if st := renv.Fallback(ctx, root, set); st.Active {
+				fb, _ := fallbackData(st)
+				d.Set("fallback", fb)
+				lines = append(lines, fmt.Sprintf("fallback\t%s -> %s until %s", st.From, st.To, st.ResetsAt.UTC().Format(fallbackTime)))
+			}
+			if qc := renv.QuotaCap(ctx, root, set); qc.Reduced() {
 				co := jsonx.NewObject()
 				co.Set("effective", qc.Effective)
 				co.Set("roster", qc.Roster)
@@ -357,4 +363,25 @@ func hostStateText(r round.Row) string {
 		return strutil.FirstNonEmpty(r.HostState, "done") + "/" + r.Outcome
 	}
 	return r.HostState
+}
+
+// quotaFallback reads the fallback state with the account meters.
+func quotaFallback(c *Ctx, ctx context.Context, root string, set roundcfg.Settings) round.FallbackState {
+	return accountedRoundEnv(c, ctx, root).Fallback(ctx, root, set)
+}
+
+// fallbackTime is how a fallback's reset prints in text.
+const fallbackTime = "2006-01-02 15:04 MST"
+
+// fallbackData is the `fallback` object of round status and candidates; ok is
+// false while no fallback is active.
+func fallbackData(st round.FallbackState) (*jsonx.Object, bool) {
+	if !st.Active {
+		return nil, false
+	}
+	o := jsonx.NewObject()
+	o.Set("from", st.From)
+	o.Set("to", st.To)
+	o.Set("resetsAt", limits.Time(st.ResetsAt))
+	return o, true
 }

@@ -265,6 +265,15 @@ issue to read and dispute, the item's `## Out of scope` section when it has one,
   `. _ : / @ -` refuses with exit 4 (`blockedBy` `harness label` or `model label`). A model named by
   flag or label needs a `{model}` placeholder in the harness's command. `round candidates` and
   `round status` show the choice.
+  **Quota fallback.** List the harnesses a round may use in `round.harnesses` (`[claude, codex]`);
+  the first is the project default when `round.workerKind` is unset. When every account of an
+  issue's harness is cooling down and a later entry has headroom, `assign` and the tick give the
+  issue to that harness (`kindSource` `quota fallback`), label it `harness:<kind>` (file backend:
+  the `Harness:` field) and record `fallbackFrom` in the ledger. The label makes the pick explicit
+  for a later re-assign. An issue pinned by `--kind`, a `harness:` label, `--model` or a `model:`
+  label never falls back and is refused with `blockedBy: quota`. `round status` and
+  `round candidates` show `fallback` while it is active, with the first harness's reset time.
+  Unset: only the default harness.
 - **Overlap.** `--accept-overlap` skips the file-overlap check only. Say which PR merges first in
   the second worker's brief.
 - **Open PR.** An issue an open PR already resolves (head branch `<agent>/<issue>-*` or `Closes #N`)
