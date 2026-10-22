@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/tui"
 )
 
@@ -184,12 +185,8 @@ func (s Screen) updatePrompt(k tui.Key) (tui.Model, tui.Cmd) {
 }
 
 func (s Screen) expandHome(p string) string {
-	if p == "~" || strings.HasPrefix(p, "~/") {
-		if h, err := s.Home(); err == nil {
-			return filepath.Join(h, p[1:])
-		}
-	}
-	return p
+	h, _ := s.Home()
+	return fsio.ExpandHome(p, h)
 }
 
 // Render draws the list beside the detail pane, the prompt line if one is
