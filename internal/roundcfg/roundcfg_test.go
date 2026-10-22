@@ -427,3 +427,20 @@ func TestAutopilotFollowsAutonomy(t *testing.T) {
 		}
 	}
 }
+
+func TestSupportKeys(t *testing.T) {
+	s, err := Load(project(t, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Support != "" || s.Role != "main" {
+		t.Fatalf("defaults: Support %q Role %q", s.Support, s.Role)
+	}
+	s, err = Load(project(t, `{"round":{"support":"mac","role":"support"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Support != "mac" || s.Role != "support" {
+		t.Fatalf("Support %q Role %q", s.Support, s.Role)
+	}
+}

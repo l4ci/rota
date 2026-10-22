@@ -29,6 +29,12 @@ const (
 	ReviewLoopAuto   = "auto"
 )
 
+// Values of round.role.
+const (
+	RoleMain    = "main"
+	RoleSupport = "support"
+)
+
 // The tiers are owned by harness, which roundcfg already imports.
 const (
 	TierLight    = harness.TierLight
@@ -129,6 +135,11 @@ type Settings struct {
 	// reconcile` reports as unregistered-branch when no slot holds them; "" turns
 	// the check off.
 	AdoptPattern string
+	// Support is round.support: the support machine's name and roster prefix;
+	// "" leaves the support orchestrator off.
+	Support string
+	// Role is round.role: RoleMain or RoleSupport, per machine.
+	Role string
 	// Roles is roles.<role>.tier and .effort for every name in Roles.
 	Roles map[string]Role
 }
@@ -272,6 +283,15 @@ func FromConfig(cfg any) (Settings, error) {
 	if _, err := path.Match(s.AdoptPattern, ""); err != nil {
 		return s, fmt.Errorf("round.adoptPattern %q: %v", s.AdoptPattern, err)
 	}
+	if v, err = config.Value(cfg, "round.support"); err != nil {
+		return s, err
+	}
+	s.Support, _ = v.(string)
+	s.Support = strings.TrimSpace(s.Support)
+	if v, err = config.Value(cfg, "round.role"); err != nil {
+		return s, err
+	}
+	s.Role, _ = v.(string)
 	if s.WorkerKind, err = loadWorkerKind(cfg); err != nil {
 		return s, err
 	}

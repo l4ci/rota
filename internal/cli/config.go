@@ -239,7 +239,22 @@ func configSet(fs *flag.FlagSet) RunFunc {
 			if root, err = backlogScope(c); err != nil {
 				return Result{}, err
 			}
-			res, err = config.Set(root, args[0], args[1])
+			if supportKeyNonDefault(args[0], args[1]) && config.Validate(args[0], args[1]) == nil {
+				issue, ierr := issueBackend(root)
+				if ierr != nil {
+					return Result{}, ierr
+				}
+				if !issue {
+					return supportFileModeStop()
+				}
+			}
+			if args[0] == "round.role" {
+				// The role belongs to one machine: config.local.json only.
+				scope = "local"
+				res, err = config.SetIn(root, args[0], args[1], config.LayerLocal)
+			} else {
+				res, err = config.Set(root, args[0], args[1])
+			}
 		}
 		if err != nil {
 			// A failed set may follow a rewrite that already hit disk (#1524).
@@ -263,6 +278,10 @@ func configSet(fs *flag.FlagSet) RunFunc {
 		data.Set("changed", res.Changed)
 		b, _ := jsonx.MarshalCompact(res.Value)
 		text := args[0] + " = " + string(b)
+		if scope == "local" {
+			data.Set("scope", "local")
+			text = "local: " + text + " (.rota/config.local.json, this machine only)"
+		}
 		if scope == "global" {
 			data.Set("scope", "global")
 			text = "global: " + text + " (global config, applies to every project that does not override it)"
