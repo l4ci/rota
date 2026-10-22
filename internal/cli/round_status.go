@@ -12,7 +12,6 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/limits"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
@@ -32,7 +31,7 @@ import (
 // forge at all (Forge and ForgeErr stay empty), for a caller that reads only
 // the local sources and would not wait on the network.
 func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) round.Env {
-	cfg := config.Load(rotatree.Config(root))
+	cfg := d.Config(root)
 	e := d.baseRoundEnv()
 	e.Worker.Accounts, e.AccountPicking = nil, false
 	e.Base = "main"
@@ -86,7 +85,7 @@ func withBoard(c *Ctx, root string, env round.Env) round.Env {
 	if env.Board != nil {
 		return env
 	}
-	if name, _, err := backendMode(root); err != nil || name != "issues" {
+	if name, _, err := backendMode(c.deps(), root); err != nil || name != "issues" {
 		return env
 	}
 	be, err := openBacklog(c, root, false, "")

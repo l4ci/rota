@@ -15,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotastate"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
@@ -107,7 +106,7 @@ func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
 	if err != nil {
 		return info, err
 	}
-	issue, err := issueBackend(t.CorpusRoot)
+	issue, err := issueBackend(c.deps(), t.CorpusRoot)
 	if err != nil {
 		return info, err
 	}
@@ -552,7 +551,7 @@ func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDep
 	if err != nil {
 		return worker.ReviewDepth{}, "", err
 	}
-	cfg := config.Load(rotatree.Config(root))
+	cfg := c.deps().Config(root)
 	policy, err := config.ReviewPolicyOf(cfg)
 	if err != nil {
 		return worker.ReviewDepth{}, "", Failed("%v; run rota config check", err)

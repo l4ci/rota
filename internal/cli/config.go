@@ -11,7 +11,6 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/repos"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/status"
 	"github.com/l4ci/rota/internal/update"
@@ -122,7 +121,7 @@ func configShow(fs *flag.FlagSet) RunFunc {
 			return Result{}, Resolution("unknown config key '%s'", key)
 		}
 		rows, lines := showRows(entries)
-		annotateTierModels(roundcfgOf(root), entries, rows, lines)
+		annotateTierModels(roundcfgOf(c, root), entries, rows, lines)
 		return Result{Data: jsonObj("entries", rows), Text: strings.Join(lines, "\n")}, nil
 	}
 }
@@ -152,7 +151,7 @@ func showRows(entries []config.Entry) (rows []any, lines []string) {
 }
 
 // roundcfgOf is the merged project config, for resolving tier models.
-func roundcfgOf(root string) any { return config.Load(rotatree.Config(root)) }
+func roundcfgOf(c *Ctx, root string) any { return c.deps().Config(root) }
 
 // annotateTierModels adds the effective model and its source to every
 // round.tiers.<kind>.<tier> row: after the profile and the models.worker
@@ -240,12 +239,12 @@ func configSet(fs *flag.FlagSet) RunFunc {
 			}
 			if args[0] != "round.role" {
 				// A tracked key goes to main through config.json; a support machine writes none.
-				if res, err := supportRefusal(root, "rota config set "+args[0]); err != nil {
+				if res, err := supportRefusal(c, root, "rota config set "+args[0]); err != nil {
 					return res, err
 				}
 			}
 			if supportKeyNonDefault(args[0], args[1]) && config.Validate(args[0], args[1]) == nil {
-				issue, ierr := issueBackend(root)
+				issue, ierr := issueBackend(c.deps(), root)
 				if ierr != nil {
 					return Result{}, ierr
 				}
@@ -326,7 +325,7 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		if len(removed) > 0 {
 			res.Text += "\nREMOVED: " + strings.Join(removed, ", ") + " (nothing reads them; run: rota config fill)"
 		}
-		if old := config.LegacyRoundKeys(config.Load(rotatree.Config(root))); len(old) > 0 {
+		if old := config.LegacyRoundKeys(c.deps().Config(root)); len(old) > 0 {
 			data.Set("unknown", anySlice(old))
 			var names []string
 			for _, k := range old {

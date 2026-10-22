@@ -172,7 +172,7 @@ func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bo
 	if hc.root == "" {
 		return hc, false
 	}
-	hc.cfg = config.Load(rotatree.Config(hc.root))
+	hc.cfg = c.deps().Config(hc.root)
 	if hc.set, err = hook.LoadSettings(hc.cfg); err != nil {
 		return hc, false // a bad value is a pass, never a block
 	}

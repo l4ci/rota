@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	ms "github.com/l4ci/rota/internal/milestone"
-	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -51,8 +50,8 @@ func releaseDir(c *Ctx) (string, error) {
 	return c.deps().Getwd()
 }
 
-func releaseConfig(dir string) any {
-	return config.Load(rotatree.Config(dir))
+func releaseConfig(c *Ctx, dir string) any {
+	return c.deps().Config(dir)
 }
 
 // releaseFlagGiven reports whether the user passed --name, even with an empty value.
@@ -113,7 +112,7 @@ func releaseVersion(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		override, _ := config.Lookup(releaseConfig(dir), "release.versionFile")
+		override, _ := config.Lookup(releaseConfig(c, dir), "release.versionFile")
 		ov, _ := override.(string)
 		file, version, kind, err := release.Detect(dir, ov)
 		if err != nil {
@@ -163,7 +162,7 @@ func releaseBump(fs *flag.FlagSet) RunFunc {
 				}
 			}
 		} else {
-			override, _ := config.Lookup(releaseConfig(dir), "release.versionFile")
+			override, _ := config.Lookup(releaseConfig(c, dir), "release.versionFile")
 			ov, _ := override.(string)
 			f, _, k, err := release.Detect(dir, ov)
 			if err != nil {
@@ -373,7 +372,7 @@ func releasePending(c *Ctx, args []string) (Result, error) {
 		}
 		commits, tagTS = int(n), ts
 	}
-	data := release.Pending(releaseConfig(dir), tag, commits, tagTS, c.deps().Now().Unix())
+	data := release.Pending(releaseConfig(c, dir), tag, commits, tagTS, c.deps().Now().Unix())
 	text, err := jsonx.MarshalCompact(data)
 	if err != nil {
 		return Result{}, err
