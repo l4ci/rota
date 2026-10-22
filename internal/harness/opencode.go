@@ -118,6 +118,8 @@ func (opencode) WorkAccounts() bool { return false }
 // RawPaste: OpenCode's TUI drops the CRs that tmux pastes for line feeds.
 func (opencode) RawPaste() bool { return true }
 
+func (opencode) PromptAcknowledgement() PromptAcknowledgement { return PromptAcknowledgement{} }
+
 // AccountEnv is the slot's OPENCODE_CONFIG_DIR, set only for a configured
 // account: the default config is OpenCode's own. Credentials stay shared
 // (~/.local/share/opencode/auth.json): the config dir moves config, not login.
