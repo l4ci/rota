@@ -49,6 +49,9 @@ func configEdit(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
+			if res, err := supportRefusal(root, "rota config edit"); err != nil {
+				return res, err
+			}
 			store = rootStore{root, c.deps().projectsEnv()}
 		}
 		rows, err := store.Rows()

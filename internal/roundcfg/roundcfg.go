@@ -29,6 +29,12 @@ const (
 	ReviewLoopAuto   = "auto"
 )
 
+// Values of round.role.
+const (
+	RoleMain    = "main"
+	RoleSupport = "support"
+)
+
 // The tiers are owned by harness, which roundcfg already imports.
 const (
 	TierLight    = harness.TierLight
@@ -129,6 +135,11 @@ type Settings struct {
 	// reconcile` reports as unregistered-branch when no slot holds them; "" turns
 	// the check off.
 	AdoptPattern string
+	// Support is round.support: the support machine's name and roster prefix;
+	// "" leaves the support orchestrator off.
+	Support string
+	// Role is round.role: RoleMain or RoleSupport, per machine.
+	Role string
 	// Roles is roles.<role>.tier and .effort for every name in Roles.
 	Roles map[string]Role
 }
@@ -271,6 +282,14 @@ func FromConfig(cfg any) (Settings, error) {
 	s.AdoptPattern = strings.TrimSpace(s.AdoptPattern)
 	if _, err := path.Match(s.AdoptPattern, ""); err != nil {
 		return s, fmt.Errorf("round.adoptPattern %q: %v", s.AdoptPattern, err)
+	}
+	if v, err = config.Value(cfg, "round.support"); err != nil {
+		return s, err
+	}
+	s.Support, _ = v.(string)
+	s.Support = strings.TrimSpace(s.Support)
+	if s.Role, err = MachineRole(cfg); err != nil {
+		return s, err
 	}
 	if s.WorkerKind, err = loadWorkerKind(cfg); err != nil {
 		return s, err
@@ -493,4 +512,17 @@ func Effective(cfg any, kind, tier string) (model, source string) {
 		}
 	}
 	return "", SourceHarnessDefault
+}
+
+// MachineRole is round.role read alone, so a bad value in another round.* key cannot
+// hide it: the support fence reads it before anything else.
+func MachineRole(cfg any) (string, error) {
+	v, err := config.Value(cfg, "round.role")
+	if err != nil {
+		return "", err
+	}
+	if r, _ := v.(string); r == RoleMain || r == RoleSupport {
+		return r, nil
+	}
+	return "", fmt.Errorf("round.role must be %s or %s, not %v", RoleMain, RoleSupport, v)
 }
