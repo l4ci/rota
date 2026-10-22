@@ -55,7 +55,7 @@ func k(name string, def any, required bool, t Type, desc string, choices ...stri
 func num(s string) json.Number { return json.Number(s) }
 
 // Keys is the table of every known config key. Leaf keys only: object-valued
-// parents are not rows. The first PythonKeys rows are CONFIG_KEYS of the
+// parents are not rows. The first 46 rows are CONFIG_KEYS of the
 // retired bin/hvlib_config.py, in its order, which the parity goldens freeze;
 // keys added in 5.0 follow them. A Desc comes from docs/usage/configuration.md,
 // else from the code that reads the key; docs/reference/config-options.md is

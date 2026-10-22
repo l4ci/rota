@@ -30,9 +30,6 @@ func StampedVersion(cfg any) string {
 	return ""
 }
 
-// PythonKeys is how many leading rows of Keys are CONFIG_KEYS.
-const PythonKeys = 46
-
 var (
 	issueSources   = []string{SourceFile, SourceGitHub, SourceGitLab, SourceForge, SourceJira, SourceLinear, SourceItsaplan}
 	forgeProviders = []string{ForgeAuto, ForgeGitHub, ForgeGitLab, ForgeLocal}
