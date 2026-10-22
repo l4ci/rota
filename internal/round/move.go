@@ -868,7 +868,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	var model string
 	if !toHuman {
 		pf, err := e.preflight(ctx, root, be, preflightIn{Item: it, Settings: set, Tier: run.tier,
-			SlotKind: run.to.HarnessKind(), Resuming: resuming})
+			SlotKind: run.to.HarnessKind(), Resuming: resuming, NoFallback: true})
 		res.Warnings = append(res.Warnings, pf.Warnings...)
 		if err != nil {
 			return nil, err

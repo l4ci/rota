@@ -2,8 +2,10 @@ package round
 
 import (
 	"context"
+	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -24,6 +26,9 @@ type preflightIn struct {
 	// Fixed pins the kind and its source (a best-of:2 attempt whose pair
 	// settled its kinds together); it replaces the resolved kind.
 	Fixed *bestOfRun
+	// NoFallback keeps a quota refusal a refusal (transfer: the receiver's
+	// kind is not re-picked, and no label would record the move).
+	NoFallback bool
 	// Resuming is a slot that already holds the item: it has its account and
 	// its place in the scope, so neither is checked again.
 	Resuming bool
@@ -38,6 +43,7 @@ type preflightOut struct {
 	Model            string // resolved: what the delivery refusals check
 	AppliedModel     string // Model, or "" when the launch command has no {model}
 	Warnings         []string
+	Fallback         *Fallback // set when Kind took over from a harness without headroom
 }
 
 // preflight answers "can this item go to this slot" for assign and transfer:
@@ -56,7 +62,16 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 	if out.Decision == DecisionGrilling {
 		return out, blocked(BlockHumanDecision, "%s is a grilling decision: the human resolves it, one per session; run /rota-brainstorm %s", id, id)
 	}
-	kind, kindSource := resolveKind(in.FlagKind, out.Pick.Harness, set.WorkerKind, in.SlotKind)
+	project, projectSource := set.WorkerKind, KindFromConfig
+	if project == "" && len(set.Harnesses) > 0 {
+		// The first harness is the project default, ahead of the slot's kind:
+		// a slot that once ran a fallback must not carry it to the next issue.
+		project, projectSource = set.Harnesses[0], KindFromHarnesses
+	}
+	kind, kindSource := resolveKind(in.FlagKind, out.Pick.Harness, project, in.SlotKind)
+	if kindSource == KindFromConfig {
+		kindSource = projectSource
+	}
 	if in.Fixed != nil {
 		kind, kindSource = in.Fixed.kind, in.Fixed.kindSource
 	}
@@ -76,7 +91,12 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 	out.Model, out.AppliedModel = model, model
 	if !in.Resuming {
 		if why := e.Headroom(ctx, root, kind); why != "" {
-			return out, blocked(BlockQuota, "%s", why)
+			fb, ferr := e.fallbackFor(ctx, root, be, in, out, kind, why)
+			if ferr != nil {
+				return out, ferr
+			}
+			out.Kind, out.KindSource, out.Model, out.AppliedModel, out.Fallback = fb.to, KindFromFallback, fb.model, fb.model, &Fallback{From: kind, To: fb.to, Why: why}
+			kind, hz = fb.to, fb.hz
 		}
 	}
 	if !e.workerEnv().ModelAppliesTo(root, kind) {
@@ -104,4 +124,58 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 		}
 	}
 	return out, nil
+}
+
+// fallbackPick is the harness a refused assignment moves to.
+type fallbackPick struct {
+	to    string
+	model string
+	hz    harness.Harness
+}
+
+// fallbackFor picks the next harness in round.harnesses with headroom for an
+// item whose resolved kind has none (why says so); no pick is the quota
+// refusal. An item that asked for its harness (--kind, a harness: label) or
+// its model (--model, a model: label; a model id belongs to one harness), a
+// best-of attempt and a backend that cannot record the pick never move.
+func (e Env) fallbackFor(ctx context.Context, root string, be backlog.Backend, in preflightIn, out preflightOut, kind, why string) (fallbackPick, error) {
+	set := in.Settings
+	refuse := blocked(BlockQuota, "%s", why)
+	pinned := out.KindSource == KindFromFlag || out.KindSource == KindFromLabel || in.FlagModel != "" || out.Pick.Model != ""
+	if len(set.Harnesses) == 0 || in.NoFallback || pinned || in.Fixed != nil || !e.canRecordHarness(be) {
+		return fallbackPick{}, refuse
+	}
+	var tried []string
+	for _, k := range laterHarnesses(set.Harnesses, kind) {
+		hz, err := worker.Harness(k)
+		if err != nil {
+			continue
+		}
+		k = hz.Kind()
+		if e.Headroom(ctx, root, k) != "" {
+			tried = append(tried, k)
+			continue
+		}
+		model := resolveModel("", "", set.Model(k, in.Tier))
+		if model == "" && e.workerEnv().NeedsModel(root, k) {
+			tried = append(tried, k)
+			continue
+		}
+		return fallbackPick{to: k, model: model, hz: hz}, nil
+	}
+	if len(tried) > 0 {
+		return fallbackPick{}, blocked(BlockQuota, "%s; no fallback harness has headroom or a model (%s)", why, strings.Join(tried, ", "))
+	}
+	return fallbackPick{}, refuse
+}
+
+// canRecordHarness says whether a fallback's pick can be written on the item:
+// the forge adds a label to an issue, the file backend writes its Harness:
+// field. Without either the pick would be lost on the next assign.
+func (e Env) canRecordHarness(be backlog.Backend) bool {
+	if be.Capabilities().IssueIDs {
+		return e.forgeOn(be)
+	}
+	_, ok := be.(backlog.HarnessSetter)
+	return ok
 }

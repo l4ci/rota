@@ -166,6 +166,9 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		for _, o := range res.Overlaps {
 			c.Warn("%s %s", tracker.RefOf(id), overlapText(o))
 		}
+		if fb := res.Fallback; fb != nil {
+			c.Warn("fallback\t%s: %s -> %s: %s", tracker.RefOf(id), fb.From, fb.To, fb.Why)
+		}
 		return roundtick.AssignedAgents(res), nil
 	}
 	e.ReviewLoop = func(_ context.Context, sl roundtick.Slot) roundtick.ReviewOutcome {

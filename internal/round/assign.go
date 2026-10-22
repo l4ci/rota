@@ -129,6 +129,9 @@ type Assigned struct {
 	KindSource string
 	// Pick is what the item's labels (or file fields) ask for.
 	Pick Pick
+	// Fallback is set when Kind is not the harness the item resolved to: that
+	// one's accounts were all cooling (round.harnesses).
+	Fallback *Fallback
 	// SmokeSection is the test/sections number reserved for the worker, 0 for none.
 	SmokeSection int
 	Warnings     []string
@@ -609,6 +612,7 @@ type assignRun struct {
 	slot              *worker.Slot
 	members           []*backlog.Item // the bundle's, none for one issue
 	from              string          // the start point the branch is cut from; "" for the slot's base
+	fallback          *Fallback       // set when the kind took over from a harness without headroom
 }
 
 // assignOne is one slot's assignment of it; bo is set for an attempt of a
@@ -645,7 +649,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	res.Changed = res.Changed || d.Changed
 	if err == nil && !run.resuming {
 		if lerr := worker.LedgerAppendErr(e.workerEnv(), root, ledger.Entry{Kind: ledger.KindAssign, Issue: run.id, Slot: run.agent, Account: res.Account, Harness: run.kind,
-			Detail: ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts, root, run.kind, res.Account), "bundle", strings.Join(res.Bundle, ","))}); lerr != nil {
+			Detail: ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts, root, run.kind, res.Account), "bundle", strings.Join(res.Bundle, ","), "fallbackFrom", run.fallback.from(), "fallbackWhy", run.fallback.why())}); lerr != nil {
 			return res, fmt.Errorf("%s is assigned to %s, but the round ledger row was not written: %w", run.id, run.agent, lerr)
 		}
 	}
@@ -773,6 +777,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	if pf.Kind != "" {
 		res.Kind, res.KindSource, res.Tier, res.TierReason = pf.Kind, pf.KindSource, tier, reason
 		res.Model = pf.AppliedModel
+		res.Fallback = pf.Fallback
 		res.Warnings = append(res.Warnings, pf.Warnings...)
 	}
 	if err != nil {
@@ -878,7 +883,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	res.SmokeSection = e.reserveSmokeSection(ctx, root, be, reg, set.Roster, id, agent)
 	return assignRun{id: id, agent: agent, branch: res.Branch, resuming: resuming, queue: queue,
 		kind: pf.Kind, kindSource: pf.KindSource, model: pf.Model, tier: tier, reason: reason,
-		pick: pf.Pick, decision: pf.Decision, decisions: decisions, brief: brief, bo: bo, slot: slot, members: members, from: from}, false, nil
+		pick: pf.Pick, decision: pf.Decision, decisions: decisions, brief: brief, bo: bo, slot: slot, members: members, from: from, fallback: pf.Fallback}, false, nil
 }
 
 // notReadyBy is the blockedBy of a failed readiness: overlap when only the
@@ -1037,6 +1042,10 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 			_, err := be.AddComment(id, "feedback", assignNote(agent, res.Branch))
 			return err
 		}},
+	}
+	if run.fallback != nil {
+		// Right after the claim: a failure before dispatch gives the pick back.
+		steps = slices.Insert(steps, 2, harnessStep(ctx, e, be, it, run.fallback))
 	}
 	// A bundle's members are claimed and marked like the lead, each with its own
 	// undo; a resume finds them done.
@@ -1241,4 +1250,50 @@ func bundleNote(agent, branch, lead string) string {
 // assignNote is the assignment comment text for agent on branch.
 func assignNote(agent, branch string) string {
 	return fmt.Sprintf("%s **%s** on branch `%s`.", assignMarker, agent, branch)
+}
+
+// harnessStep records a quota fallback on the issue as harness:<kind>, so a
+// later assign of the same issue (a bounce, an unclaim) reads it as an
+// explicit pick and stays on that harness. The file backend has no labels: it
+// writes the Harness: field instead. Its undo takes the pick back; no
+// fallback, nothing to do.
+func harnessStep(ctx context.Context, e Env, be Board, it *backlog.Item, fb *Fallback) step {
+	if fb == nil {
+		return step{name: "harness", skip: func() bool { return true }}
+	}
+	if !be.Capabilities().IssueIDs {
+		hs, ok := be.(backlog.HarnessSetter)
+		if !ok {
+			return step{name: "harness field", do: func() error {
+				return blocked(BlockQuota, "%s cannot record the harness pick", be.Name())
+			}}
+		}
+		return step{name: "harness field", do: func() error {
+			_, err := hs.SetHarness(it.ID, fb.To)
+			return err
+		}, undo: func() error {
+			_, err := hs.SetHarness(it.ID, "")
+			return err
+		}}
+	}
+	label := "harness:" + fb.To
+	return step{name: "harness label", do: func() error {
+		return wrap(e.Forge.AddLabels(ctx, it.IssueKey(), []string{label}, true))
+	}, undo: func() error {
+		return wrap(e.Forge.RemoveLabels(ctx, it.IssueKey(), []string{label}))
+	}}
+}
+
+func (f *Fallback) from() string {
+	if f == nil {
+		return ""
+	}
+	return f.From
+}
+
+func (f *Fallback) why() string {
+	if f == nil {
+		return ""
+	}
+	return f.Why
 }
