@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"slices"
@@ -242,11 +243,18 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		}
 		var deferred []followUp
 		floor := floorMinor
+		var fileRoot string
 		if *fileDeferred {
-			if root, rerr := backlogScope(c); rerr == nil {
-				if f := config.StringIfSet(config.Load(rotatree.Config(root)), "review.fileDeferred"); f != "" {
-					floor = f
-				}
+			// Resolved before the record is written: a config the floor cannot
+			// be read from stops the call instead of guessing the default.
+			if fileRoot, err = backlogScope(c); err != nil {
+				return Result{}, err
+			}
+			if f := config.StringIfSet(config.Load(rotatree.Config(fileRoot)), "review.fileDeferred"); f != "" {
+				floor = f
+			}
+			if floor != floorMinor && floor != floorMajor && floor != floorOff {
+				return Result{}, Usage("review.fileDeferred is %q: want minor, major or off", floor)
 			}
 			for _, f := range deferredAbove(b.Findings, floor) {
 				deferred = append(deferred, newFollowUp(f, strings.TrimSpace(*pr), *kind, *v))
@@ -290,15 +298,18 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		if len(deferred) > 0 {
 			// The record is already written, so a failure here reports what was
 			// filed and leaves the rest to a by-hand `item create`.
-			root, err := backlogScope(c)
-			if err != nil {
-				return Result{}, err
-			}
 			var id string
 			var added int
-			_, err = withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
-				var ferr error
-				if id, added, ferr = fileFollowUps(be, deferred, strings.TrimSpace(*pr)); ferr != nil {
+			// Two verdicts for one PR can be recorded together: the read-modify-write
+			// of its follow-up item runs under a lock keyed by the PR.
+			lock := rotatree.File(fileRoot, "followup-"+prKey(*pr))
+			_, err = withBackend(c, fileRoot, false, "", func(be backlog.Backend) (Result, error) {
+				ferr := fsio.Locked(lock, fsio.LockTimeout, func() error {
+					var e error
+					id, added, e = fileFollowUps(be, deferred, strings.TrimSpace(*pr))
+					return e
+				})
+				if ferr != nil {
 					return backlogFail(ferr)
 				}
 				return Result{}, nil

@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/verdict"
@@ -23,12 +24,32 @@ const (
 // prNumberRe is the number at the end of a --pr ref: `77`, `#77` or a PR URL.
 var prNumberRe = regexp.MustCompile(`^(?:#|\S*/(?:pull|merge_requests)/)?(\d+)(?:[/?#]\S*)?$`)
 
+// prKey is the PR number of a --pr or Related ref, so `77`, `#77` and a PR URL
+// name the same PR; a ref with no number is its own key.
+func prKey(ref string) string {
+	if m := prNumberRe.FindStringSubmatch(strings.TrimSpace(ref)); m != nil {
+		return m[1]
+	}
+	return strings.TrimSpace(ref)
+}
+
+// relatesTo is whether a Related field names the PR.
+func relatesTo(related, pr string) bool {
+	want := prKey(pr)
+	for _, ref := range strings.FieldsFunc(related, func(r rune) bool { return r == ',' || unicode.IsSpace(r) }) {
+		if prKey(ref) == want {
+			return true
+		}
+	}
+	return false
+}
+
 // followUpTitle names the one item that collects a PR's deferred findings.
 func followUpTitle(pr string) string {
-	if m := prNumberRe.FindStringSubmatch(pr); m != nil {
-		return "Review follow-ups from PR #" + m[1]
+	if k := prKey(pr); prNumberRe.MatchString(k) {
+		return "Review follow-ups from PR #" + k
 	}
-	return "Review follow-ups from PR " + pr
+	return "Review follow-ups from PR " + prKey(pr)
 }
 
 // deferredAbove is the deferred findings at or above the floor, in order. The
@@ -113,10 +134,11 @@ func followUpHead(pr string) string {
 
 // addFollowUps writes fs into body: the blocks end the Problem section, the
 // criteria end the Acceptance section, numbered after the highest AC id.
-func addFollowUps(body string, fs []followUp) string {
+// ok is false when the body has no Acceptance section to extend.
+func addFollowUps(body string, fs []followUp) (out string, ok bool) {
 	i := strings.Index(body, acceptanceHead)
 	if i < 0 {
-		return body + "\n" // not a follow-up body: leave it alone
+		return body, false
 	}
 	next := 1
 	for _, m := range followUpACRe.FindAllStringSubmatch(body, -1) {
@@ -134,13 +156,14 @@ func addFollowUps(body string, fs []followUp) string {
 	if strings.HasSuffix(tail, "## Acceptance") {
 		tail += "\n" // an empty section: keep the blank line before the first criterion
 	}
-	return head + "\n" + blocks.String() + tail + "\n" + acs.String()
+	return head + "\n" + blocks.String() + tail + "\n" + acs.String(), true
 }
 
 // fileFollowUps adds the findings to the PR's open follow-up item, or files it
 // when there is none. A finding the PR's items already hold (same title and
 // file) is not added again. It returns the item id ("" when nothing was added
-// and no item exists) and how many criteria it added.
+// and no item exists; also on an error once the item was found) and how many
+// criteria it added.
 func fileFollowUps(be backlog.Backend, fs []followUp, pr string) (id string, added int, err error) {
 	if len(fs) == 0 {
 		return "", 0, nil
@@ -153,7 +176,7 @@ func fileFollowUps(be backlog.Backend, fs []followUp, pr string) (id string, add
 	have := map[string]bool{}
 	var open *backlog.Item
 	for _, it := range items {
-		if it.Title != title || !strings.Contains(it.Fields.Related, pr) {
+		if it.Title != title || !relatesTo(it.Fields.Related, pr) {
 			continue
 		}
 		body, _, _ := be.Detail(it.ID)
@@ -181,20 +204,25 @@ func fileFollowUps(be backlog.Backend, fs []followUp, pr string) (id string, add
 	if open != nil {
 		dw, ok := be.(backlog.DetailWriter)
 		if !ok {
-			return "", 0, fmt.Errorf("this backlog backend cannot append to %s", open.ID)
+			return id, 0, fmt.Errorf("this backlog backend cannot append to %s", open.ID)
 		}
 		body, _, err := be.Detail(open.ID)
 		if err != nil {
-			return "", 0, err
+			return id, 0, err
 		}
-		if err := dw.SetDetail(open.ID, addFollowUps(body, fresh)); err != nil {
-			return "", 0, err
+		merged, ok := addFollowUps(body, fresh)
+		if !ok {
+			return id, 0, Usage("follow-up %s has no ## Acceptance section to add to; add the findings by hand or close it", open.ID)
+		}
+		if err := dw.SetDetail(open.ID, merged); err != nil {
+			return id, 0, err
 		}
 		return id, len(fresh), nil
 	}
+	created, _ := addFollowUps(followUpHead(pr), fresh)
 	in, err := backlog.BuildCreateInput(backlog.CaptureRequest{Kind: "tasks", Title: title, Desc: title,
 		Fields: map[string]string{"related": pr}, Given: map[string]bool{"related": true},
-		Body: []byte(addFollowUps(followUpHead(pr), fresh)), HasBody: true})
+		Body: []byte(created), HasBody: true})
 	if err != nil {
 		return "", 0, Usage("cannot file the follow-up item: %v", err)
 	}
