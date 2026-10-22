@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/l4ci/rota/internal/gopath"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proof"
@@ -16,10 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
 )
-
-// fastTierCheck is the check `rota proof record <ID> -- rota test run fast`
-// writes: the tier run as one command, which the worker contract recommends.
-const fastTierCheck = "rota test run fast"
 
 // workerDone is `rota worker done <slot>`: the last step before ROTA-DONE, after the PR. It refuses
 // (exit 4) a slot whose item has no PASS proof row at the branch's current
@@ -116,11 +111,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 				}
 			}
 			// A bundle is one change: every issue it closes needs its own proof.
-			ids, err := openBundleIssues(c, root, sl)
-			if err != nil {
-				return Result{}, err
-			}
-			for _, bid := range ids {
+			for _, bid := range openBundleIssues(c, root, sl) {
 				_, st, _, err := openProof(c, bid)
 				if err != nil {
 					return Result{}, err
@@ -129,12 +120,12 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 				if err != nil {
 					return failAny(err)
 				}
-				missing := missingFastProof(rows, head, want)
+				missing := worker.MissingFastProof(rows, head, want)
 				if len(missing) > 0 {
 					d.Set("head", head)
 					d.Set("missing", strList(missing))
 					e := Refused("%s has no PASS proof row at %s for test.fast: %s", bid, strutil.ShortSHA(head), strings.Join(missing, "; "))
-					e.Hint = fmt.Sprintf("run `rota proof record %s -- %s` at the current HEAD, then `rota worker done %s` again", bid, fastTierCheck, slotName)
+					e.Hint = fmt.Sprintf("run `rota proof record %s -- %s` at the current HEAD, then `rota worker done %s` again", bid, worker.FastTierCheck, slotName)
 					return Result{Data: d}, e
 				}
 			}
@@ -232,71 +223,6 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-// missingRed reports a branch that changes non-test Go code while work.tdd is
-// on and no bundled issue's proof holds a FAIL row, the mark a red-first run leaves.
-// It is a heuristic: a FAIL row is not proof the failure was an assertion.
-// unchecked is the diff error when the changed files could not be computed (an
-// unresolvable base, no merge base, a git failure): the caller warns, or
-// refuses under --require-red, rather than passing the done unchecked.
-func missingRed(c *Ctx, root string, sl *worker.Slot, base string) (noRed bool, unchecked, err error) {
-	tdd, err := c.deps().workerEnv().GateConfig(root).TDDEnabled()
-	if err != nil {
-		return false, nil, err
-	}
-	if !tdd {
-		return false, nil, nil
-	}
-	files, derr := changedFiles(c, slotDir(sl, root), base)
-	if derr != nil {
-		return false, derr, nil
-	}
-	if !slices.ContainsFunc(files, gopath.IsProdGo) {
-		return false, nil, nil
-	}
-	// A bundle is one change: a red-first run on any of its issues is enough.
-	ids, err := openBundleIssues(c, root, sl)
-	if err != nil {
-		return false, nil, err
-	}
-	for _, bid := range ids {
-		_, st, _, err := openProof(c, bid)
-		if err != nil {
-			return false, nil, err
-		}
-		rows, _, err := proof.Show(st, bid)
-		if err != nil {
-			return false, nil, err
-		}
-		if slices.ContainsFunc(rows, func(r proof.Row) bool { return r.Result == "FAIL" }) {
-			return false, nil, nil
-		}
-	}
-	return true, nil, nil
-}
-
-// openBundleIssues is the slot's bundle, lead first, less every member whose
-// item is closed: a member leaves the bundle by closing, so done no longer asks
-// for its proof. The lead always stays. A backlog that cannot be read keeps the
-// member (its proof is still required).
-func openBundleIssues(c *Ctx, root string, sl *worker.Slot) ([]string, error) {
-	ids := sl.BundleIssues()
-	if len(ids) < 2 {
-		return ids, nil
-	}
-	be, err := openBacklog(c, root, false, "")
-	if err != nil {
-		return ids, nil
-	}
-	out := ids[:1:1]
-	for _, id := range ids[1:] {
-		if it, err := be.Get(id); err == nil && it.Closed {
-			continue
-		}
-		out = append(out, id)
-	}
-	return out, nil
-}
-
 // unreadMailRefusal is the exit-4 refusal of a done while the slot's inbox
 // holds mail the worker has not read, nil when there is none.
 func unreadMailRefusal(s *worker.Slot) error {
@@ -318,25 +244,6 @@ func slotDir(sl *worker.Slot, fallback string) string {
 		}
 	}
 	return fallback
-}
-
-// missingFastProof lists what the PASS rows at head leave unproven: nothing
-// when a row ran the whole tier (`rota test run fast`), else each test.fast
-// command without a PASS row of its own. The latest row for a check at head
-// decides (proof.Proves): a FAIL after a PASS, or a row at another sha, proves
-// nothing.
-func missingFastProof(rows []proof.Row, head string, want []string) (missing []string) {
-	// `proof record -- rota test run fast` stores the quoted multi-arg form;
-	// `-- "rota test run fast"` stores the plain one. Both prove the tier.
-	if proof.Proves(rows, head, fastTierCheck) || proof.Proves(rows, head, recordedCommand(strings.Fields(fastTierCheck), "")) {
-		return nil
-	}
-	for _, w := range want {
-		if !proof.Proves(rows, head, w) {
-			missing = append(missing, w)
-		}
-	}
-	return missing
 }
 
 // settledBranch refuses a worktree with uncommitted changes, and a branch
@@ -455,4 +362,45 @@ func outcomeBlock(kind string, summary []string) string {
 		b.WriteString("- " + l + "\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// openBundleIssues is the slot's bundle with the closed members dropped. A
+// backlog that cannot be read keeps every member.
+func openBundleIssues(c *Ctx, root string, sl *worker.Slot) []string {
+	ids := sl.BundleIssues()
+	if len(ids) < 2 {
+		return ids
+	}
+	be, err := openBacklog(c, root, false, "")
+	if err != nil {
+		return ids
+	}
+	return worker.OpenBundle(ids, func(id string) bool {
+		it, err := be.Get(id)
+		return err == nil && it.Closed
+	})
+}
+
+// missingRed gathers the inputs for worker.MissingRed. unchecked is the diff
+// error when the changed files could not be computed (an unresolvable base, no
+// merge base, a git failure): the caller warns, or refuses under --require-red,
+// rather than passing the done unchecked.
+func missingRed(c *Ctx, root string, sl *worker.Slot, base string) (noRed bool, unchecked, err error) {
+	tdd, err := c.deps().workerEnv().GateConfig(root).TDDEnabled()
+	if err != nil || !tdd {
+		return false, nil, err
+	}
+	files, derr := changedFiles(c, slotDir(sl, root), base)
+	if derr != nil {
+		return false, derr, nil
+	}
+	noRed, err = worker.MissingRed(tdd, files, openBundleIssues(c, root, sl), func(id string) ([]proof.Row, error) {
+		_, st, _, err := openProof(c, id)
+		if err != nil {
+			return nil, err
+		}
+		rows, _, err := proof.Show(st, id)
+		return rows, err
+	})
+	return noRed, nil, err
 }
