@@ -5,15 +5,11 @@ import (
 	"github.com/l4ci/rota/internal/stamp"
 	"path/filepath"
 
-	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/worker"
 )
 
 // C8: a solo round runs its workers as in-harness subagents, so no verb here
 // drives a pane. assign and transfer hand the brief back instead of sending it.
-
-// isSolo: the round's recorded host is solo.
-func isSolo(root string) bool { return worker.RegistryHost(root) == host.Solo }
 
 // soloBrief is the text dispatch would send into the pane: the pointer brief
 // under dispatch's `--- ORCHESTRATOR (round N) ---` signature.

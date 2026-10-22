@@ -159,3 +159,20 @@ func TestWaitCarriesTheOutcomeEvidence(t *testing.T) {
 		t.Fatalf("wait = %+v (%v), want the outcome as evidence", res, err)
 	}
 }
+
+func TestIsSoloReadsTheRecordedHost(t *testing.T) {
+	dir := newProject(t, `{}`)
+	if IsSolo(dir) {
+		t.Error("no registry must not read as solo")
+	}
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	for _, c := range []struct {
+		h    host.Kind
+		want bool
+	}{{host.Solo, true}, {host.Tmux, false}, {host.Herdr, false}} {
+		recordHost(t, dir, c.h)
+		if got := IsSolo(dir); got != c.want {
+			t.Errorf("host %q: IsSolo = %v, want %v", c.h, got, c.want)
+		}
+	}
+}

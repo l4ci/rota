@@ -70,7 +70,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		o.Lines = 60
 	}
 	start := e.Now()
-	if RegistryHost(root) == host.Solo {
+	if IsSolo(root) {
 		return soloWait(root, o)
 	}
 	h := e.NewHost(e.hostKind(root))
