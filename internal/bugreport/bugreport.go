@@ -7,6 +7,7 @@ package bugreport
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
 )
@@ -62,7 +64,7 @@ type Record struct {
 // and the main checkout's wind-down and Stop hook see a worker's records. A
 // project that is not a git repo keeps it under its own root.
 func Path(root string) string {
-	if cd, err := rotastate.CommonDir(root); err == nil && filepath.Base(cd) == ".git" {
+	if cd, err := rotastate.CommonDirVia(context.Background(), git.Exec, root); err == nil && filepath.Base(cd) == ".git" {
 		if main := filepath.Dir(cd); fsio.IsDir(rotatree.Dir(main)) {
 			return rotatree.File(main, File)
 		}

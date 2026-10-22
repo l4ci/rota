@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -195,7 +196,7 @@ func TestProjectsViewStatusRoundAndLease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows := projectRows(res.Data, roundlease.Env{})
+	rows := projectRows(res.Data, roundlease.Env{}, git.Exec)
 	byPath := map[string]string{}
 	for _, r := range rows {
 		byPath[r.Path] = r.Status
@@ -209,11 +210,11 @@ func TestProjectsViewStatusRoundAndLease(t *testing.T) {
 func TestProjectStateReadsRoundAndLease(t *testing.T) {
 	root := t.TempDir()
 	initRun(t, root, "init", "--no-blocks")
-	if _, round, lease := projectState(root, false, roundlease.Env{}); round != "none" || lease != "none" {
+	if _, round, lease := projectState(root, false, roundlease.Env{}, git.Exec); round != "none" || lease != "none" {
 		t.Errorf("fresh project: round %q lease %q", round, lease)
 	}
 	os.WriteFile(filepath.Join(root, ".rota", "workers.json"), []byte(`{"round": 4, "slots": []}`), 0o644)
-	if _, round, _ := projectState(root, false, roundlease.Env{}); round != "4" {
+	if _, round, _ := projectState(root, false, roundlease.Env{}, git.Exec); round != "4" {
 		t.Errorf("round from workers.json: %q", round)
 	}
 }
