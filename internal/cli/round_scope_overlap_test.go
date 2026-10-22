@@ -272,6 +272,16 @@ func TestScopeOverlapReachesRoundStart(t *testing.T) {
 		if code != 0 {
 			t.Fatalf("start exit %d: %s %s", code, out, errOut)
 		}
+		code, text, errOut := rotaInWith(t, f.deps, f.root, "round", "start", "--holder-pid", "4242", "--slots", "2", "--base", "feat/x")
+		if code != 0 {
+			t.Fatalf("start text exit %d: %s %s", code, text, errOut)
+		}
+		// NotReady already includes the overlap; only a ready row needs it appended.
+		warning := "overlaps #1 (ben): scopes post /items"
+		wantReadyWarning := overlap == "warn"
+		if strings.Count(text, warning) != 1 || strings.Contains(text, "; "+warning+"\tCandidate") != wantReadyWarning {
+			t.Errorf("%s: overlap warning must appear once, appended only when ready:\n%s", overlap, text)
+		}
 		cs, _ := data(t, out)["candidates"].([]any)
 		for _, c := range cs {
 			if m := c.(map[string]any); m["id"] == "2" {

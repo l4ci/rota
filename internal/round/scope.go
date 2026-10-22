@@ -49,16 +49,11 @@ func touchEntries(body string) []touchEntry {
 // endpoint, schema, migration or config key per bullet, backticks optional.
 // Entries are trimmed, lower-cased, deduplicated and sorted.
 func Scopes(body string) []string {
-	seen := map[string]bool{}
-	var out []string
+	var entries []string
 	for _, e := range touchEntries(body) {
-		if !seen[e.Norm] {
-			seen[e.Norm] = true
-			out = append(out, e.Norm)
-		}
+		entries = append(entries, e.Norm)
 	}
-	sort.Strings(out)
-	return out
+	return itembody.SortedEntries(entries)
 }
 
 // ScopeOverlaps lists the scopes two lists share, compared exactly.
