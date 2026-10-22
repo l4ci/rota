@@ -168,7 +168,7 @@ func (f *File) Append(sec, line string) error {
 		return err
 	}
 	path := f.backlogPath()
-	return fsio.Locked(path, fsio.LockTimeout, func() error {
+	err := fsio.Locked(path, fsio.LockTimeout, func() error {
 		content, err := fsio.ReadText(path)
 		if err != nil {
 			return err
@@ -184,6 +184,10 @@ func (f *File) Append(sec, line string) error {
 		content = strings.TrimRight(content[:end], "\n") + "\n" + line + "\n" + tail
 		return fsio.WriteFileAtomic(path, []byte(content))
 	})
+	if err != nil {
+		return err
+	}
+	return f.syncMilestonesIf(bulletTagged(line))
 }
 
 // checkCreate is _check_create: the cleaned title and fields, or ErrInvalid.
@@ -360,7 +364,10 @@ func (f *File) SetField(ref, field, value string) (bool, error) {
 		changed = true
 		return fsio.WriteFileAtomic(path, []byte(content[:m[0]]+line+content[m[1]:]))
 	})
-	return changed, err
+	if err != nil {
+		return changed, err
+	}
+	return changed, f.syncMilestonesIf(changed && field == "milestone")
 }
 
 // isFile is Path(rel).is_file(), tried against the project root first (the
@@ -383,7 +390,7 @@ func (f *File) Complete(ref string, in CompleteInput) (bool, error) {
 		return false, err
 	}
 	path := f.backlogPath()
-	moved := false
+	moved, tagged := false, false
 	err := fsio.Locked(path, fsio.LockTimeout, func() error {
 		content, err := fsio.ReadText(path)
 		if err != nil {
@@ -406,6 +413,7 @@ func (f *File) Complete(ref string, in CompleteInput) (bool, error) {
 			}
 		}
 		line := content[m[0]:m[1]]
+		tagged = bulletTagged(line)
 		rest := ""
 		if m[1]+1 <= len(content) {
 			rest = content[m[1]+1:]
@@ -425,6 +433,9 @@ func (f *File) Complete(ref string, in CompleteInput) (bool, error) {
 	})
 	if err != nil || !moved {
 		return false, err
+	}
+	if err := f.syncMilestonesIf(tagged); err != nil {
+		return true, err
 	}
 	if ref != "" && strings.Contains("BF", ref[:1]) {
 		if key := detailDir(ref); key != "" && !f.isRefactor(in.Commit) {
@@ -483,7 +494,7 @@ func (f *File) Reopen(ref string) (bool, error) {
 	if err := f.requireBacklog(); err != nil {
 		return false, err
 	}
-	restored := false
+	restored, tagged := false, false
 	doneHash, dirName := "", ""
 	err := f.withDocuments(func(docs *documents) error {
 		content := docs.backlog
@@ -543,6 +554,7 @@ func (f *File) Reopen(ref string) (bool, error) {
 			return errf(ErrNotFound, "[%s] not found in BACKLOG.md (## Completed) or .rota/ARCHIVE.md", ref)
 		}
 		activeLine := "- " + done.Inner
+		tagged = bulletTagged(done.Inner)
 		dirName = detailDir(ref)
 		target := sectionForDir(dirName)
 		if target == "Unknown" {
@@ -586,6 +598,9 @@ func (f *File) Reopen(ref string) (bool, error) {
 	})
 	if err != nil || !restored {
 		return false, err
+	}
+	if err := f.syncMilestonesIf(tagged); err != nil {
+		return true, err
 	}
 	// Mirror Complete's bump in reverse; tasks and refactor commits carry no
 	// count, and a hash git cannot resolve is skipped.
