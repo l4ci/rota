@@ -105,7 +105,7 @@ func waitingPRs(c *Ctx, root string) []waitingPR {
 	}
 	var out []waitingPR
 	for _, s := range reg.Slots() {
-		if s.PR() != "" && strings.EqualFold(s.State(), "done") {
+		if s.PR() != "" && worker.IsDone(s.State()) {
 			out = append(out, waitingPR{PR: s.PR(), Base: s.Base(), Reviewed: reviewed(s.Branch(), s.Issue())})
 		}
 	}

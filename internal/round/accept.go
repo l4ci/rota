@@ -91,7 +91,7 @@ func (e Env) Accept(ctx context.Context, root string, be Board, in AcceptInput) 
 	if it, err = reviewItem(root, be, s.Name(), id, "accept needs an architecture review or a research item"); err != nil {
 		return res, err
 	}
-	if ok, why := e.settled(ctx, s, "done", "idle", "blocked"); !ok {
+	if ok, why := e.settled(ctx, s, worker.Settled); !ok {
 		return res, blocked(BlockSlotBusy, "%s", busyMsg(s.Name(), id, why))
 	}
 	issues := s.Issues()
@@ -115,7 +115,7 @@ func (e Env) Accept(ctx context.Context, root string, be Board, in AcceptInput) 
 // acceptResearch closes a decision:research item whose worker posted a finding
 // since the assignment. The gist is the line the milestone's decision log gets.
 func (e Env) acceptResearch(ctx context.Context, root string, be Board, s *worker.Slot, it *backlog.Item, in AcceptInput, res Accepted) (Accepted, error) {
-	if ok, why := e.settled(ctx, s, "done", "idle", "blocked"); !ok {
+	if ok, why := e.settled(ctx, s, worker.Settled); !ok {
 		return res, blocked(BlockSlotBusy, "%s", busyMsg(s.Name(), it.ID, why))
 	}
 	if !findingSinceAssign(be, it.ID) {

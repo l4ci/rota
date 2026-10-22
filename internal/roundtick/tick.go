@@ -234,7 +234,7 @@ func Run(ctx context.Context, e Env) (Result, error) {
 				why += " on " + s.Issue
 			}
 			r.NeedsYou = append(r.NeedsYou, Item{s.State, s.Name, why})
-		case s.State == "done" && s.PR != "":
+		case worker.IsDone(s.State) && s.PR != "":
 			if e.ReviewLoop != nil {
 				switch out := e.ReviewLoop(ctx, s); {
 				case out.Relayed:
@@ -429,7 +429,7 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 		if e.Active != nil && !slices.Contains(e.Active(), s.Name) {
 			continue
 		}
-		if s.State == "idle" || s.State == "" {
+		if worker.IsIdle(s.State) || s.State == "" {
 			if s.Issue == "" {
 				idle++
 			}
