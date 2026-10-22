@@ -130,8 +130,8 @@ func TestRunTable(t *testing.T) {
 
 		{"host detects herdr in a pane", inHerdr, all, with(nil), "host", Pass, "herdr 0.9.3", ""},
 		{"host detects herdr when dispatch is unset", Input{RoundHost: host.Herdr}, all, with(nil), "host", Pass, "herdr 0.9.3", ""},
-		{"host reads the recorded round host with no pane env", Input{Dispatch: "subagent", RegistryHost: host.Herdr, RoundHost: host.Herdr}, all, with(nil), "host", Pass, "herdr 0.9.3", ""},
-		{"host recorded solo beats a tmux pane", Input{Dispatch: "tmux", RegistryHost: host.Solo, RoundHost: host.Solo}, all, with(nil), "host", Skip, "solo", ""},
+		{"host reads the recorded round host with no pane env", Input{Dispatch: "subagent", RoundHost: host.Herdr}, all, with(nil), "host", Pass, "herdr 0.9.3", ""},
+		{"host recorded solo beats a tmux pane", Input{Dispatch: "tmux", RegistrySolo: true, RoundHost: host.Solo}, all, with(nil), "host", Skip, "solo", ""},
 
 		{"tracker github ok", Input{}, all, with(nil), "tracker", Pass, "gh authenticated", ""},
 		{"tracker gh unauthenticated", Input{}, all, with(map[string]Result{"gh auth status": {ExitCode: 1}}), "tracker", Fail, "not authenticated", "gh auth login"},

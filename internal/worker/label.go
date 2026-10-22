@@ -105,7 +105,7 @@ func labelWorkspace(ctx context.Context, h host.Host, root string) {
 // about to be reaped. No-op for solo, a slot without a session or a host that
 // cannot label.
 func (e Env) ClearLabel(ctx context.Context, root, slot string) {
-	if RegistryHost(root) == host.Solo {
+	if IsSolo(root) {
 		return
 	}
 	s := LoadRegistryTolerant(root).Slot(slot)
