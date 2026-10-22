@@ -12,6 +12,9 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
+// pythonKeys is how many leading rows of Keys are CONFIG_KEYS.
+const pythonKeys = 46
+
 type schemaCase struct {
 	Cfg string `json:"cfg"` // JSON text; both sides decode it themselves
 	Key string `json:"key"`
@@ -110,7 +113,7 @@ func TestSchemaMatchesPython(t *testing.T) {
 	py = append(py, Key{Name: "backlog.backend"}, Key{Name: "issues.provider"})
 	py = append(py, Keys[26:41]...)
 	py = append(py, Key{Name: "issues.filterMineOnly"})
-	py = append(py, Keys[41:PythonKeys]...)
+	py = append(py, Keys[41:pythonKeys]...)
 	add = func(add func(map[string]any, string)) func(map[string]any, string) {
 		return func(tree map[string]any, key string) {
 			switch key {
@@ -169,16 +172,16 @@ func TestKeysShape(t *testing.T) {
 		}
 		seen[k.Name] = true
 	}
-	if len(Keys) < PythonKeys {
-		t.Fatalf("Keys has %d rows, want at least %d (CONFIG_KEYS)", len(Keys), PythonKeys)
+	if len(Keys) < pythonKeys {
+		t.Fatalf("Keys has %d rows, want at least %d (CONFIG_KEYS)", len(Keys), pythonKeys)
 	}
 }
 
-// The leading PythonKeys rows must stay the same table as CONFIG_KEYS: name,
+// The leading pythonKeys rows must stay the same table as CONFIG_KEYS: name,
 // default and required flag.
 func TestKeysMatchPython(t *testing.T) {
 	var got [][]any
-	for _, k := range Keys[:PythonKeys] {
+	for _, k := range Keys[:pythonKeys] {
 		got = append(got, []any{k.Name, k.Default, k.Required})
 	}
 	golden.Check(t, map[string]any{"input": nil}, got)
