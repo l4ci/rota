@@ -3,10 +3,10 @@ package cli
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 )
 
@@ -53,13 +53,21 @@ func TestDepsRepoRunsThroughGit(t *testing.T) {
 	}
 }
 
-// With no label keys set, the round environment carries the schema defaults
-// from internal/config: round holds no copy of them.
+// The round environment's labels are the ones the project's config names, not a
+// default restated in the env build: each role is set to a value no default
+// equals, so a hardcoded label fails.
 func TestDefaultRoundEnvLabelsComeFromConfig(t *testing.T) {
-	e := defaultRoundEnv(context.Background(), t.TempDir(), defaultDeps(), false)
-	for role, got := range map[string]string{"inProgress": e.Label, "needsHuman": e.NeedsHuman, "needsReview": e.NeedsReview, "support": e.SupportLabel} {
-		if want := config.Label(nil, role); got == "" || got != want {
-			t.Errorf("issues.labels.%s = %q, want the config default %q", role, got, want)
+	root := t.TempDir()
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"issues": {"labels": {"inProgress": "wip-x", "needsHuman": "human-x", "needsReview": "review-x", "support": "support-x"}}}`)
+	e := defaultRoundEnv(context.Background(), root, defaultDeps(), false)
+	for role, c := range map[string]struct{ got, want string }{
+		"inProgress":  {e.Label, "wip-x"},
+		"needsHuman":  {e.NeedsHuman, "human-x"},
+		"needsReview": {e.NeedsReview, "review-x"},
+		"support":     {e.SupportLabel, "support-x"},
+	} {
+		if c.got != c.want {
+			t.Errorf("issues.labels.%s = %q, want the configured %q", role, c.got, c.want)
 		}
 	}
 }
