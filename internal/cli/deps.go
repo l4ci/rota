@@ -262,9 +262,7 @@ func (d *Deps) resolvePaneHost(root string, cfg any) host.Kind {
 
 // credentials is worker.SystemCredentials with the home read off Deps.
 func (d *Deps) credentials() worker.Credentials {
-	c := worker.SystemCredentials(d.Proc)
-	c.Home = d.UserHomeDir
-	return c
+	return worker.SystemCredentials(d.Proc, d.UserHomeDir)
 }
 
 // homeOf reads a home seam; "" when it has none or fails.

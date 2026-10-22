@@ -27,7 +27,7 @@ func openMilestones(c *Ctx) (ms.Store, error) {
 		return nil, err
 	}
 	if !issue {
-		return ms.FileStore{Root: root}, nil
+		return ms.FileStore{Root: root, Today: c.deps().Today}, nil
 	}
 	be, err := openIssueBackend(c, "", false)
 	if err != nil {

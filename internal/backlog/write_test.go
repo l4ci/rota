@@ -74,7 +74,7 @@ const base = `# TODO
 func rotaFiles(extra map[string]string) map[string]string {
 	m := map[string]string{".rota/BACKLOG.md": base, ".rota/counters.json": "{\n  \"bugs\": 2\n}\n"}
 	for _, id := range []string{"M01", "M02", "M03"} {
-		m[".rota/milestones/"+id+".md"] = ms.Stub(id, "Title "+id, "s", nil)
+		m[".rota/milestones/"+id+".md"] = ms.StubOn(id, "Title "+id, "s", nil, "2026-01-02")
 	}
 	for k, v := range extra {
 		m[k] = v

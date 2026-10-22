@@ -94,12 +94,26 @@ type Env struct {
 	// process's parent. Nil means the real /proc and os.Getppid.
 	Proc   func(pid int) (ppid int, comm string, ok bool)
 	Parent func() int
+	// PS runs ps and returns its trimmed stdout; it is the process-table read
+	// for hosts without /proc. Nil means the real ps.
+	PS PSFunc
 }
+
+// PSFunc runs ps with args and returns its trimmed stdout.
+type PSFunc func(args ...string) (string, error)
 
 // DefaultEnv reads the real host, process table and clock.
 func DefaultEnv() Env {
 	name, _ := os.Hostname()
-	return Env{Host: name, Alive: pidlive.Alive, StartTime: procStart, Now: time.Now}
+	return Env{Host: name, Alive: pidlive.Alive, Now: time.Now}.WithPS(realPS)
+}
+
+// WithPS returns e reading the process table through run, with StartTime bound
+// to it: the one place the ps seam and the start-time read are tied together.
+func (e Env) WithPS(run PSFunc) Env {
+	e.PS = run
+	e.StartTime = func(pid int) (uint64, bool) { return procStart(run, pid) }
+	return e
 }
 
 // Path is the lease file under a common dir.
@@ -266,8 +280,8 @@ func (e Env) ClearStale(commonDir string) (Lease, bool, error) {
 // procStat reads ppid and start ticks of pid from /proc/<pid>/stat.
 func procStat(pid int) (ppid int, start uint64, ok bool) { return pidlive.ProcStat(pid) }
 
-// psRun runs ps with the C locale and returns its trimmed stdout. Tests swap it.
-var psRun = func(args ...string) (string, error) {
+// realPS runs ps with the C locale and returns its trimmed stdout.
+func realPS(args ...string) (string, error) {
 	cmd := exec.Command("ps", args...)
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	b, err := cmd.Output()
@@ -276,8 +290,8 @@ var psRun = func(args ...string) (string, error) {
 
 // psStat reads ppid and start time (unix seconds) of pid through ps, for hosts
 // without /proc (macOS).
-func psStat(pid int) (ppid int, start uint64, ok bool) {
-	out, err := psRun("-o", "ppid=,lstart=", "-p", strconv.Itoa(pid))
+func psStat(run PSFunc, pid int) (ppid int, start uint64, ok bool) {
+	out, err := run("-o", "ppid=,lstart=", "-p", strconv.Itoa(pid))
 	if err != nil {
 		return 0, 0, false
 	}
@@ -297,19 +311,19 @@ func psStat(pid int) (ppid int, start uint64, ok bool) {
 }
 
 // psComm reads the command name of pid through ps; macOS reports a full path.
-func psComm(pid int) string {
-	out, err := psRun("-o", "comm=", "-p", strconv.Itoa(pid))
+func psComm(run PSFunc, pid int) string {
+	out, err := run("-o", "comm=", "-p", strconv.Itoa(pid))
 	if err != nil || out == "" {
 		return ""
 	}
 	return filepath.Base(out)
 }
 
-func procStart(pid int) (uint64, bool) {
+func procStart(run PSFunc, pid int) (uint64, bool) {
 	if _, st, ok := procStat(pid); ok {
 		return st, true
 	}
-	_, st, ok := psStat(pid)
+	_, st, ok := psStat(run, pid)
 	return st, ok
 }
 
@@ -322,15 +336,15 @@ func procComm(pid int) string {
 }
 
 // realProc reads ppid and comm from /proc, or through ps where there is none.
-func realProc(pid int) (int, string, bool) {
+func realProc(run PSFunc, pid int) (int, string, bool) {
 	if pp, _, ok := procStat(pid); ok {
 		if comm := procComm(pid); comm != "" {
 			return pp, comm, true
 		}
 		return 0, "", false
 	}
-	pp, _, ok := psStat(pid)
-	comm := psComm(pid)
+	pp, _, ok := psStat(run, pid)
+	comm := psComm(run, pid)
 	return pp, comm, ok && comm != ""
 }
 
@@ -371,7 +385,11 @@ func (e Env) Discover(pid int, getenv func(string) string) Holder {
 	if pid <= 0 {
 		proc, parent := e.Proc, e.Parent
 		if proc == nil {
-			proc = realProc
+			run := e.PS
+			if run == nil {
+				run = realPS
+			}
+			proc = func(pid int) (int, string, bool) { return realProc(run, pid) }
 		}
 		if parent == nil {
 			parent = os.Getppid
