@@ -56,20 +56,45 @@ func TestMilestoneItemsSection(t *testing.T) {
 			t.Fatalf("M01:\n%s", itemsOf(t, f, "M01"))
 		}
 	})
-	t.Run("complete drops and reopen restores", func(t *testing.T) {
+	t.Run("complete keeps the item, marked with its reason, and reopen unmarks it", func(t *testing.T) {
 		f, _ := proj(t, rotaFiles(nil))
 		id := create(t, f, "M01")
 		if _, err := f.Complete(id, CompleteInput{Reason: "dropped", Note: "n", Commit: "abc1234", Date: "2026-01-02"}); err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(itemsOf(t, f, "M01"), id) {
-			t.Fatalf("after complete:\n%s", itemsOf(t, f, "M01"))
+		if got := itemsOf(t, f, "M01"); !strings.Contains(got, "["+id+"] Crash on save](../bugs/"+id+".md) (dropped)") {
+			t.Fatalf("after complete:\n%s", got)
+		}
+		rows, _ := f.Rows()
+		if got := IDsByMilestone(rows, "M01"); len(got) != 0 {
+			t.Errorf("ids --milestone must stay open-only, got %v", got)
 		}
 		if _, err := f.Reopen(id); err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(itemsOf(t, f, "M01"), id) {
-			t.Fatalf("after reopen:\n%s", itemsOf(t, f, "M01"))
+		got := itemsOf(t, f, "M01")
+		if !strings.Contains(got, id) || strings.Contains(got, "(dropped)") {
+			t.Fatalf("after reopen:\n%s", got)
+		}
+	})
+	t.Run("done item is marked done", func(t *testing.T) {
+		f, _ := proj(t, rotaFiles(nil))
+		id := create(t, f, "M01")
+		if _, err := f.Complete(id, CompleteInput{Reason: "done", NoProof: true, Commit: "abc1234", Date: "2026-01-02"}); err != nil {
+			t.Fatal(err)
+		}
+		if got := itemsOf(t, f, "M01"); !strings.Contains(got, "(done)") {
+			t.Fatalf("after complete:\n%s", got)
+		}
+	})
+	t.Run("raw append lists the item", func(t *testing.T) {
+		f, _ := proj(t, rotaFiles(nil))
+		raw := []byte("- **[B90] [P2] Raw one.** Milestone: M02\n")
+		if _, err := AppendRaw(f, "bugs", raw); err != nil {
+			t.Fatal(err)
+		}
+		if got := itemsOf(t, f, "M02"); !strings.Contains(got, "[B90] Raw one") {
+			t.Fatalf("M02:\n%s", got)
 		}
 	})
 }

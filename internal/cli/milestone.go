@@ -209,6 +209,10 @@ func milestonePut(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return milestoneFail(err, "id mismatch")
 		}
+		// A redraft carries no generated Items section; put it back so the list still agrees with the items.
+		if _, err := syncMilestoneItems(c, id); err != nil {
+			return backlogFail(err)
+		}
 		d := jsonx.NewObject()
 		d.Set("id", id)
 		d.Set("changed", changed)
