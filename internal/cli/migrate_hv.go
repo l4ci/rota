@@ -177,13 +177,14 @@ var legacyStateExempt = []string{"rota migrate hv", "rota doctor", "rota version
 // legacyStateStop is the one hard stop for an un-migrated project (#236):
 // rota looks for .rota/ only, so with .hv/ at the nearest state directory
 // every verb but the exempt ones stops and says how to migrate.
-func legacyStateStop(path string, getwd func() (string, error)) error {
+func legacyStateStop(c *Ctx) error {
+	path := c.Path
 	for _, e := range legacyStateExempt {
 		if path == e || strings.HasPrefix(path, e+" ") {
 			return nil
 		}
 	}
-	cwd, err := getwd()
+	cwd, err := c.deps().Getwd()
 	if err != nil {
 		return nil
 	}
