@@ -6,7 +6,6 @@ import (
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
-	"github.com/l4ci/rota/internal/roundcfg"
 )
 
 func roundTransfer(fs *flag.FlagSet) RunFunc {
@@ -26,9 +25,9 @@ func roundTransfer(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		set, err := roundcfg.FromConfig(c.deps().Config(root))
+		set, err := c.deps().roundSettings(root, roundConfigRequired)
 		if err != nil {
-			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
+			return Result{}, err
 		}
 		if *to == "" {
 			return Result{}, Usage("--to is required: a roster slot or human")

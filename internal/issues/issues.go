@@ -23,8 +23,8 @@ import (
 // ErrCommitNotFound: the commit is not in the repository (exit 3).
 var ErrCommitNotFound = errors.New("commit not found")
 
-// ErrNoProvider: neither issues.source, the origin remote nor forge.provider
-// names a tracker host (exit 3).
+// ErrNoProvider: issues.source names no tracker and the forge is local, so
+// there is no tracker host (exit 3).
 var ErrNoProvider = errors.New("no issue provider")
 
 // Env is what every call runs with.
@@ -47,22 +47,20 @@ type Forge interface {
 	Close(ctx context.Context, key tracker.IssueKey, reason, comment string) error
 }
 
-// Provider is "github", "gitlab" or "unknown" for dir ("" is the process
-// cwd). An issues.source of github or gitlab names the tracker outright. A
-// file source (or an unmigrated config) falls back to the origin host, as in
-// hv-issues-provider; forge.provider is only the fallback when origin is
-// missing or names no forge.
-func Provider(ctx context.Context, env Env, dir string) string {
+// Provider is the issue tracker's provider for dir ("" is the process cwd).
+// An issues.source of github or gitlab names it outright; any other source
+// takes dir's forge as kind resolves it (tracker.ResolveProvider), which can be
+// the local forge.
+func Provider(ctx context.Context, env Env, kind tracker.ForgeKind, dir string) (tracker.Resolution, error) {
 	s := tracker.SettingsFromConfig(env.Config)
 	if s.Source == "github" || s.Source == "gitlab" {
-		return s.Source
+		return tracker.Resolution{Provider: s.Source, How: tracker.HowConfig}, nil
 	}
-	origin := tracker.OriginURL(ctx, dir, execOf(env))
-	return tracker.ProviderFromOrigin(origin, s.Provider)
+	return tracker.ResolveProvider(ctx, kind, "", s.Provider, dir, execOf(env))
 }
 
 func noProvider(verb string) error {
-	return fmt.Errorf("%w: cannot %s (issues.source does not name a tracker, no origin remote names github or gitlab, and forge.provider is not set)", ErrNoProvider, verb)
+	return fmt.Errorf("%w: cannot %s (issues.source does not name a tracker, and the forge is local: no origin remote, or forge.provider local)", ErrNoProvider, verb)
 }
 
 // execOf is the executor the env's options install, or nil for the real one.
@@ -95,11 +93,14 @@ func (e Env) tracker(ctx context.Context, verb, dir string) (Forge, error) {
 		}
 		return tracker.NewIssueTracker(ctx, s, "", dir, e.Opts...)
 	}
-	provider := Provider(ctx, e, dir)
-	if provider == "unknown" {
+	r, err := Provider(ctx, e, tracker.ForgeActor, dir)
+	if err != nil {
+		return nil, fmt.Errorf("cannot %s: %w", verb, err) // the origin names no forge
+	}
+	if r.Provider == tracker.ProviderLocal {
 		return nil, noProvider(verb)
 	}
-	return e.adapter(ctx, provider, dir)
+	return e.adapter(ctx, r.Provider, dir)
 }
 
 // ---- label ----------------------------------------------------------------

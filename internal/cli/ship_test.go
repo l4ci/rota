@@ -397,11 +397,13 @@ func TestShipPRTrackerFailures(t *testing.T) {
 
 func TestShipPRProviderDetection(t *testing.T) {
 	shipDeterministic(t)
-	// forge.provider auto: the origin host decides, an unknown host means
-	// github, and no origin at all is the local forge: there is no PR to open.
+	// forge.provider auto: the origin host decides (read through git, not the
+	// forge CLI), an origin naming no forge is the actor refusal, and no origin
+	// at all is the local forge: there is no PR to open.
 	for _, tc := range []struct{ url, want string }{
 		{"git@gitlab.example.com:g/r.git", "gitlab"},
 		{"https://github.example.com/g/r.git", "github"},
+		{"https://git.example.com/g/r.git", "refused"},
 		{"", "local"},
 	} {
 		work := shipFixture(t, `{"issues": {"source": "file"}}`)
@@ -411,24 +413,22 @@ func TestShipPRProviderDetection(t *testing.T) {
 			origin := gitT(t, work, "remote", "get-url", "origin")
 			gitT(t, work, "remote", "set-url", "origin", tc.url)
 			gitT(t, work, "remote", "set-url", "--push", "origin", origin)
+		} else {
+			gitT(t, work, "remote", "remove", "origin")
 		}
 		f := shipPRForge("https://x.test/p/7")
-		answer := f.answer
-		url := tc.url
-		f.answer = func(name string, args []string) (string, string, int) {
-			if name == "git" { // the fake serves the origin URL detection reads
-				if url == "" {
-					return "", "", 2
-				}
-				return url + "\n", "", 0
-			}
-			return answer(name, args)
-		}
 		deps := useForge(t, f)
 		n := trRunWith(t, deps, work, "b", "ship", "pr", "feat/p", "--title", "T", "--body-file", "-", "--json")
-		if tc.want == "local" {
-			if n.code != ExitUnavailable || !strings.Contains(n.stderr, "the forge is local") || len(f.calls) != 1 || f.calls[0] != "git remote get-url origin" {
+		switch tc.want {
+		case "local":
+			if n.code != ExitUnavailable || !strings.Contains(n.stderr, "the forge is local") || len(f.calls) != 0 {
 				t.Errorf("no origin: %+v calls %q", n, f.calls)
+			}
+			continue
+		case "refused":
+			d, _ := envelope(t, n.stdout)["data"].(map[string]any)
+			if n.code != ExitRefused || d["blockedBy"] != "forge" || !strings.Contains(n.stderr, "cannot determine the forge from origin "+tc.url) || len(f.calls) != 0 {
+				t.Errorf("unknown origin: %+v calls %q", n, f.calls)
 			}
 			continue
 		}

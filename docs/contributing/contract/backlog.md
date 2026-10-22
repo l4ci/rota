@@ -265,7 +265,7 @@ shim: parse the labelled lines (`Backlog:`, `Active:` one per entry, `Recent:` t
 rota issues label <issue|key> (--add <name> | --remove <name>)
 repo: scoped
 data: {"issue": number|string, "label": string, "action": "add"|"remove", "changed": bool}
-exit: 3 when the issue does not exist upstream (the forge CLI says not found) or no provider resolves; tracker (works under both backends, so there is no `backend` exit)
+exit: 3 when the issue does not exist upstream (the forge CLI says not found) or no provider resolves (a local forge); 4 `blockedBy: forge` when the origin names no forge (forge rule, actor); tracker (works under both backends, so there is no `backend` exit)
 old: hv-issues-label <apply|remove> --issue <issue> --label <name> [--repo <name>]
 note: `issue` is a number for a numbered issue (GitHub, GitLab) and the key text, a string, for a key-based tracker's issue (`PROJ-123`). Same for `issues close`.
 shim: `--add` maps to `apply`, `--remove` to `remove`; stdout is empty, so `changed` is true on rc 0 (old cannot report a no-op); the Go port reports the real value. Config `issues.autoCreateLabel` (default true) still governs label creation. Old exits 5 for a missing issue or provider; both are 3 now.
@@ -284,7 +284,7 @@ note: `repo: none`, because the verb reads the umbrella-root files and filters o
 rota issues close <issue|key> --commit <sha> [--item <ID>]
 repo: scoped
 data: {"issue": number|string, "commit": string, "changed": bool}
-exit: 3 when the commit is not found, the issue does not exist upstream (the forge CLI says not found) or no provider resolves; tracker (works under both backends, so there is no `backend` exit)
+exit: 3 when the commit is not found, the issue does not exist upstream (the forge CLI says not found) or no provider resolves (a local forge); 4 `blockedBy: forge` when the origin names no forge (forge rule, actor); tracker (works under both backends, so there is no `backend` exit)
 old: hv-issues-close --issue <issue> --commit <sha> [--item <ID>] [--repo <name>]
 shim: stdout is empty (gh output passes through), so `changed` is true on rc 0 (old cannot report "already closed"); the Go port reports the real value. Old exits 5 for a missing issue or provider; both are 3 now. The comment posted is `Closed by hv-skills: shipped in <short-sha>[ ([<ITEM>])]`. Global `--repo` maps to old `--repo`.
 note: the issue number moves from `--issue` to the positional.
@@ -292,8 +292,8 @@ note: the issue number moves from `--issue` to the positional.
 ### rota issues provider
 rota issues provider
 repo: scoped
-data: {"provider": "github"|"gitlab"|"unknown"}
-exit: implied only. `issues.source` `github` or `gitlab` answers outright. Otherwise the `origin` host answers; with no `origin` remote (or one naming no forge) `forge.provider` `github` or `gitlab` answers, else `unknown`.
+data: {"provider": "github"|"gitlab"|"local"}
+exit: implied only. `issues.source` `github` or `gitlab` answers outright. Otherwise the forge answers by the forge rule, as a reader: an origin naming no forge is `github` with the stderr note. `issues label` and `issues close` resolve as actors: a local forge is exit 3 as before, an origin naming no forge is exit 4 `blockedBy: forge` (forge rule).
 old: hv-issues-provider [--repo <name>]
 shim: the single stdout word becomes `provider`.
 

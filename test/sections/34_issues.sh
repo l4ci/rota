@@ -36,14 +36,14 @@ trap 'rm -rf "$TMP_PROV"; trap '"'"'rm -rf "$TMP"'"'"' EXIT' EXIT
   out=$("$ROTA_BIN" --json issues provider | jget data.provider) || vfail
   [ "$out" = "github" ] || { echo "GH Enterprise HTTPS → $out, expected github"; exit 1; }
 
-  # Test 5: no origin at all
+  # Test 5: no origin at all is the local forge (#889)
   git remote remove origin
   out=$("$ROTA_BIN" --json issues provider | jget data.provider) || vfail
-  [ "$out" = "unknown" ] || { echo "no origin → $out, expected unknown"; exit 1; }
+  [ "$out" = "local" ] || { echo "no origin → $out, expected local"; exit 1; }
 ) || fail "issues provider classification failed (see subshell output above)"
 
 trap 'rm -rf "$TMP"' EXIT
-pass "issues provider classifies github/gitlab/unknown across 5 fixtures"
+pass "issues provider classifies github/gitlab/local across 5 fixtures"
 
 # === issues imported smoke ===
 echo "Section 32: issues imported smoke"
@@ -273,12 +273,12 @@ for argv in "issues label 1 --add bug" "issues close 1 --commit HEAD"; do
   { grep -q "issues.source" "$TMP_EX/out" && grep -q "forge.provider" "$TMP_EX/out"; } || fail "no provider: rota $argv message should name issues.source and forge.provider: $(cat "$TMP_EX/out")"
 done
 
-# forge.provider stands in when origin names no forge; an origin that does wins.
+# forge.provider stands in when origin names no forge, and beats one that does (#889).
 P="$TMP_EX/fallback"
 mkexit "$P" "" '{"forge":{"provider":"github"},"issues":{"retryWaitSeconds":0}}'
 [ "$(cd "$P" && "$ROTA_BIN" --json issues provider | jget data.provider)" = "github" ] || fail "issues provider should answer from forge.provider with no origin"
 git -C "$P" remote add origin "https://gitlab.com/o/r.git"
-[ "$(cd "$P" && "$ROTA_BIN" --json issues provider | jget data.provider)" = "gitlab" ] || fail "an origin naming a forge should beat forge.provider"
+[ "$(cd "$P" && "$ROTA_BIN" --json issues provider | jget data.provider)" = "github" ] || fail "forge.provider should beat an origin naming a forge"
 
 trap 'rm -rf "$TMP"' EXIT
 pass "issues label/close exit 3 for a missing issue and for no provider; forge.provider is the fallback"

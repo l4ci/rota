@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // Backend selection: the one place in cli that reads issues.source, builds a
@@ -99,7 +100,13 @@ func openBacklog(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backe
 		Warn:       func(msg string) { c.Warn("%s", msg) },
 		NoteLimit:  c.deps().Getenv("ROTA_NOTE_LIMIT"),
 		NewTracker: func(ctx context.Context, dir string) (backlog.Tracker, error) {
-			return c.deps().NewTracker(ctx, dir, cfg)
+			tr, err := c.deps().NewTracker(ctx, dir, cfg)
+			if it, ok := tr.(tracker.IssueTracker); ok && err == nil {
+				if note := tracker.AssumedNote(it); note != "" {
+					c.Warn("%s", note) // a read on a guessed github; writes refuse
+				}
+			}
+			return tr, err
 		},
 	})
 }
