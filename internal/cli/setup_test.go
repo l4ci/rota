@@ -729,10 +729,15 @@ func TestSetupRoutesAnswersByScope(t *testing.T) {
 	}
 }
 
-// --yes takes every default, so it pins no taste or machine key.
+// --yes takes every default or project signal, so it pins no taste or
+// machine key: .worktrees/ suggests work.isolation worktree, which stays a
+// suggestion.
 func TestSetupYesWritesNoTasteKey(t *testing.T) {
 	isolateGlobal(t)
 	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, ".worktrees"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if code, _, errOut := setupRun(t, dir, "", false, "--yes"); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}

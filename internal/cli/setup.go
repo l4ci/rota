@@ -171,9 +171,15 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 				continue
 			}
 			// A machine or taste answer at the value the project inherits pins
-			// nothing; one that differs goes where its scope says (#1786).
+			// nothing; one that differs goes where its scope says (#1786). A
+			// taste key reaches the tracked config only as a deliberate pin: a
+			// --set value, or a typed answer other than the suggestion. A signal
+			// or default taken by --yes or Enter stays a suggestion.
 			scope := config.ScopeOf(p.Key)
-			if _, has := globalVals[p.Key]; !has && scope != config.ScopeProject && v == p.DefaultChoice() {
+			_, set := given[p.Key]
+			deliberate := set || (interactive && v != defs[p.Key])
+			_, has := globalVals[p.Key]
+			if (!has && scope != config.ScopeProject && v == p.DefaultChoice()) || (scope == config.ScopeTaste && !deliberate) {
 				out.Set(p.Key, config.Coerce(v))
 				continue
 			}

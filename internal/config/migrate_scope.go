@@ -40,7 +40,9 @@ func (m ScopeMigration) Changed() bool { return len(m.Changes) > 0 }
 // is. Under apply config.local.json is written first (created holding only the
 // moved keys when it is missing), then config.json, so a run cut short is
 // finished by the next; a second run plans nothing. A malformed file is
-// ErrCorrupt naming it, and nothing is written.
+// ErrCorrupt naming it, and nothing is written. The step plans on the files as
+// the round-key rename (MigrateRoundKeys) leaves them, so a preview that also
+// renames old work.* names lists what --apply, which renames first, does.
 func MigrateScopeFiles(root string, apply bool, keep []string) (ScopeMigration, error) {
 	var m ScopeMigration
 	path, local := configPath(root), localPath(root)
@@ -61,7 +63,14 @@ func migrateScopePlan(path, local string, keep []string, m *ScopeMigration, appl
 	if err != nil {
 		return err
 	}
-	merged, l := loadLayers(path)
+	// The renamed view; under apply the rename already ran, so this is a no-op.
+	cfg, _, _ = MigrateRoundKeys(cfg)
+	l := layers{global: globalLayer(), project: cloneObject(cfg)}
+	if loc != nil {
+		loc, _, _ = MigrateRoundKeys(loc)
+		l.local = cloneObject(loc)
+	}
+	merged := mergeLayers(&l)
 	moves := false
 	for _, k := range Keys {
 		v, ok := walk(cfg, k.Name)
@@ -123,6 +132,17 @@ func migrateScopePlan(path, local string, keep []string, m *ScopeMigration, appl
 		deleteIn(cfg, strings.Split(c.Key, "."))
 	}
 	return fsio.WriteJSONAtomic(path, cfg)
+}
+
+// cloneObject is a deep copy of o, for mergeLayers to edit without touching
+// the documents the step writes.
+func cloneObject(o *jsonx.Object) *jsonx.Object {
+	b, err := jsonx.Marshal(o)
+	if err != nil {
+		return jsonx.NewObject()
+	}
+	c, _ := decodeObject(b)
+	return c
 }
 
 func compactJSON(v any) string {

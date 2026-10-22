@@ -226,3 +226,23 @@ func TestMigrateConfigScope(t *testing.T) {
 		t.Errorf("created config.local.json = %q", lb)
 	}
 }
+
+// The scope step plans on the renamed view, so a preview that also renames
+// old work.* names lists exactly what --apply then does (#1786 review).
+func TestMigrateConfigPreviewMatchesApplyWithRename(t *testing.T) {
+	isolateGlobal(t)
+	root := trackerProject(t, `{"work":{"workerSlots":7,"dispatch":"subagent"}}`+"\n")
+	_, pre, _ := rotaRun(t, "--json", "-C", root, "migrate", "config")
+	_, app, _ := rotaRun(t, "--json", "-C", root, "migrate", "config", "--apply")
+	for _, k := range []string{"config", "scope"} {
+		p, _ := jsonx.MarshalCompact(get(dataOf(pre), k))
+		a, _ := jsonx.MarshalCompact(get(dataOf(app), k))
+		if string(p) != string(a) {
+			t.Errorf("%s: preview %s, apply %s", k, p, a)
+		}
+	}
+	scope, _ := get(dataOf(pre), "scope").([]any)
+	if len(scope) != 2 {
+		t.Errorf("preview scope = %v, want round.dispatch deleted and round.slots moved", scope)
+	}
+}

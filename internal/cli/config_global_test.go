@@ -122,8 +122,10 @@ func TestSetupOffersGlobalAsDefault(t *testing.T) {
 	if v := cfgValue(t, dir, "work.mergeStrategy"); v != "pr" {
 		t.Errorf("work.mergeStrategy = %v, want global pr", v)
 	}
-	if v := cfgValue(t, dir, "work.isolation"); v != "branch" {
-		t.Errorf("work.isolation = %v, want schema default branch", v)
+	// --yes pins no taste key (#1786): the project inherits the global value,
+	// even an invalid one, rather than setup writing the fallback over it.
+	if raw := readConfig(t, dir); strings.Contains(raw, "isolation") {
+		t.Errorf("--yes pinned work.isolation:\n%s", raw)
 	}
 	_, out, _ := setupRun(t, t.TempDir(), "", false, "--list")
 	if !strings.Contains(out, "work.mergeStrategy") || !strings.Contains(out, "default pr") {
