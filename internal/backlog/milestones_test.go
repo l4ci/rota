@@ -216,3 +216,113 @@ func TestSliceNotesMixedWithPlainPlan(t *testing.T) {
 		t.Errorf("bad slice kind: %v", err)
 	}
 }
+
+func childFixture() (*trackertest.MS, *Issues) {
+	f := &trackertest.MS{Fake: &trackertest.Fake{}, Native: []tracker.Milestone{{Number: 1, Title: "M01 — a"}, {Number: 2, Title: "M02 — b"}}}
+	f.Fake.Milestones = []string{"M01 — a", "M02 — b"}
+	b := msIssues(f)
+	for _, id := range []string{"M01", "M02"} {
+		if _, err := b.MilestoneAdd(id, map[string]string{"M01": "a", "M02": "b"}[id], "sum", nil, "2026-10-02"); err != nil {
+			panic(err)
+		}
+	}
+	return f, b
+}
+
+func trackerBody(t *testing.T, b *Issues, mid string) string {
+	t.Helper()
+	is, err := b.TrackerIssue(mid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return is.Body
+}
+
+// AC-1: creating an item in a milestone lists it on the tracking issue.
+func TestCreateListsChildOnTrackingIssue(t *testing.T) {
+	_, b := childFixture()
+	res, err := b.Create(CreateInput{Kind: "features", Title: "New thing", Fields: []Field{{Name: "Milestone", Value: "M01"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := trackerBody(t, b, "M01")
+	if want := "- #" + res.ID + " New thing"; !strings.Contains(body, want) {
+		t.Fatalf("tracking body lacks %q:\n%s", want, body)
+	}
+	if strings.Contains(trackerBody(t, b, "M02"), "New thing") {
+		t.Error("M02 lists the item")
+	}
+}
+
+// AC-2: moving or clearing the milestone updates both tracking issues.
+func TestSetMilestoneUpdatesBothTrackingIssues(t *testing.T) {
+	_, b := childFixture()
+	res, err := b.Create(CreateInput{Kind: "features", Title: "Mover", Fields: []Field{{Name: "Milestone", Value: "M01"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := "- #" + res.ID + " Mover"
+	if _, err := b.SetField(res.ID, "milestone", "M02"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(trackerBody(t, b, "M01"), line) || !strings.Contains(trackerBody(t, b, "M02"), line) {
+		t.Fatalf("after move:\nM01:\n%s\nM02:\n%s", trackerBody(t, b, "M01"), trackerBody(t, b, "M02"))
+	}
+	if _, err := b.SetField(res.ID, "milestone", ""); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(trackerBody(t, b, "M02"), line) {
+		t.Fatalf("after clear M02 still lists it:\n%s", trackerBody(t, b, "M02"))
+	}
+}
+
+// AC-3: sync regenerates the section and reports the drift.
+func TestSyncMilestoneChildrenReportsDrift(t *testing.T) {
+	f, b := childFixture()
+	f.Fake.Issues = append(f.Fake.Issues,
+		tracker.Issue{Key: tracker.NumKey(50), Title: "late", State: "closed", Milestone: "M01 — a"},
+		tracker.Issue{Key: tracker.NumKey(51), Title: "other", State: "open", Milestone: "M02 — b"})
+	r, err := b.SyncMilestoneChildren("M01")
+	if err != nil || !r.Changed || !reflect.DeepEqual(r.Added, []string{"#50"}) || len(r.Removed) != 0 {
+		t.Fatalf("first sync = %+v %v", r, err)
+	}
+	if body := trackerBody(t, b, "M01"); !strings.Contains(body, "- #50 late") || strings.Contains(body, "other") || strings.Contains(body, "- #1 ") {
+		t.Fatalf("body:\n%s", body)
+	}
+	r, err = b.SyncMilestoneChildren("M01")
+	if err != nil || r.Changed {
+		t.Fatalf("second sync = %+v %v", r, err)
+	}
+	f.Fake.Issues[len(f.Fake.Issues)-2].Milestone = ""
+	r, err = b.SyncMilestoneChildren("M01")
+	if err != nil || !r.Changed || !reflect.DeepEqual(r.Removed, []string{"#50"}) {
+		t.Fatalf("drift sync = %+v %v", r, err)
+	}
+}
+
+// AC-4: put keeps the generated section; sync keeps the plan.
+func TestMilestonePutKeepsChildrenAndSyncKeepsPlan(t *testing.T) {
+	f, b := childFixture()
+	f.Fake.Issues = append(f.Fake.Issues, tracker.Issue{Key: tracker.NumKey(50), Title: "kid", State: "open", Milestone: "M01 — a"})
+	if _, err := b.SyncMilestoneChildren("M01"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.MilestonePut("M01", "---\nid: M01\n---\n\n# Rewritten plan"); err != nil {
+		t.Fatal(err)
+	}
+	body := trackerBody(t, b, "M01")
+	if !strings.Contains(body, "Rewritten plan") || !strings.Contains(body, "- #50 kid") {
+		t.Fatalf("after put:\n%s", body)
+	}
+	plan, err := b.MilestoneShow("M01")
+	if err != nil || strings.Contains(plan, "kid") || strings.Contains(plan, "rota:children") || !strings.HasSuffix(plan, "# Rewritten plan") {
+		t.Fatalf("show = %q %v", plan, err)
+	}
+	f.Fake.Issues[len(f.Fake.Issues)-1].Title = "kid renamed"
+	if _, err := b.SyncMilestoneChildren("M01"); err != nil {
+		t.Fatal(err)
+	}
+	if body := trackerBody(t, b, "M01"); !strings.Contains(body, "# Rewritten plan") || !strings.Contains(body, "- #50 kid renamed") {
+		t.Fatalf("after sync:\n%s", body)
+	}
+}

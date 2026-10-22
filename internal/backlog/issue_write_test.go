@@ -55,7 +55,7 @@ func TestIssuesCreate(t *testing.T) {
 	fixed := strings.ReplaceAll(body, "{ID}", "B1")
 	wantCalls(t, tr, `find_milestone["M07"] ensure_labels[["type:bug","p1"],true] `+
 		`create["Fix it","`+strings.ReplaceAll(body, "\n", `\n`)+`",["type:bug","p1"],"M07 — Title"] `+
-		`edit[1,{"body":"`+strings.ReplaceAll(fixed, "\n", `\n`)+`"}]`)
+		`edit[1,{"body":"`+strings.ReplaceAll(fixed, "\n", `\n`)+`"}] list["all"]`)
 	if got := tr.Issues[0]; got.Body != fixed || got.Milestone != "M07 — Title" {
 		t.Fatalf("issue %+v", got)
 	}
@@ -105,8 +105,8 @@ func TestIssuesSetField(t *testing.T) {
 		calls                   string
 	}{
 		{"milestone same", "2", "milestone", "M07", false, nil, `get[2] find_milestone["M07"]`},
-		{"milestone set", "1", "Milestone", " M09 ", true, nil, `get[1] find_milestone["M09"] edit[1,{"milestone":"M09"}]`},
-		{"milestone clear", "2", "milestone", "", true, nil, `get[2] edit[2,{"remove_milestone":true}]`},
+		{"milestone set", "1", "Milestone", " M09 ", true, nil, `get[1] find_milestone["M09"] edit[1,{"milestone":"M09"}] list["all"]`},
+		{"milestone clear", "2", "milestone", "", true, nil, `get[2] edit[2,{"remove_milestone":true}] list["all"]`},
 		{"milestone clear none", "1", "milestone", "", false, nil, `get[1]`},
 		{"milestone bad", "1", "milestone", "x", false, ErrInvalid, `get[1]`},
 		{"milestone gone", "1", "milestone", "M42", false, ErrNotFound, `get[1] find_milestone["M42"]`},

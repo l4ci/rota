@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -198,5 +199,28 @@ func TestIssueModeSlicePlans(t *testing.T) {
 	}
 	if code, _, _ := issueRunWith(t, deps, root, "plan", "rm", "M02-S09"); code != 3 {
 		t.Errorf("second rm: %d", code)
+	}
+}
+
+// `milestone check` regenerates the tracking issue's child list and reports the drift it found.
+func TestMilestoneCheckRegeneratesChildList(t *testing.T) {
+	root := trackerProject(t, issuesConfig)
+	fake := msFixture()
+	deps := withTracker(t, fake)
+	_, env, _ := issueRunWith(t, deps, root, "milestone", "check", "M02")
+	ch, _ := ddata(t, env)["children"].(*jsonx.Object)
+	if ch == nil || issueGet(ch, "changed") != true || fmt.Sprint(issueGet(ch, "count")) != "1" {
+		t.Fatalf("first check: %v", ddata(t, env)["children"])
+	}
+	if body := fake.Issues[2].Body; !strings.Contains(body, "- #7 Add export") || !strings.Contains(body, "Share it.") || !strings.Contains(body, "Depends: M01") {
+		t.Errorf("tracking body:\n%s", body)
+	}
+	_, env, _ = issueRunWith(t, deps, root, "milestone", "check", "M02")
+	if ch, _ = ddata(t, env)["children"].(*jsonx.Object); ch == nil || issueGet(ch, "changed") != false {
+		t.Errorf("second check: %v", env)
+	}
+	_, env, _ = issueRunWith(t, deps, root, "milestone", "show", "M02")
+	if body, _ := ddata(t, env)["body"].(string); strings.Contains(body, "Add export") || strings.Contains(body, "rota:children") {
+		t.Errorf("show leaks the list: %q", body)
 	}
 }

@@ -64,6 +64,11 @@ type Issues struct {
 	Cfg     any             // loaded config, for the label names
 	Tracker Tracker         // where the issues come from
 	Ctx     context.Context // for every tracker call; nil is context.Background()
+	// NoChildSync stops item writes from refreshing the milestone child list
+	// on the tracking issue. The bulk migration sets it: one list call per
+	// created issue would spend the forge's rate limit, and `rota milestone
+	// check` regenerates the list afterwards.
+	NoChildSync bool
 	// CountProof counts the proof rows in an item's proof note, read through
 	// Tracker. The row format belongs to the proof package, which imports
 	// backlog, so Open injects it.

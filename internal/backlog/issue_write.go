@@ -196,6 +196,7 @@ func (b *Issues) Create(in CreateInput) (CreateResult, error) {
 			return CreateResult{}, err
 		}
 	}
+	b.syncChildrenOf(msTitle)
 	return CreateResult{ID: n.String(), Type: letter}, nil
 }
 
@@ -235,7 +236,11 @@ func (b *Issues) SetField(ref, field, value string) (bool, error) {
 			if is.Milestone == "" {
 				return false, nil
 			}
-			return true, tr.Edit(b.ctx(), n, tracker.IssueEdit{RemoveMilestone: true})
+			if err := tr.Edit(b.ctx(), n, tracker.IssueEdit{RemoveMilestone: true}); err != nil {
+				return true, err
+			}
+			b.syncChildrenOf(is.Milestone)
+			return true, nil
 		}
 		title, err := b.milestoneTitle(value)
 		if err != nil {
@@ -244,7 +249,11 @@ func (b *Issues) SetField(ref, field, value string) (bool, error) {
 		if is.Milestone == title {
 			return false, nil
 		}
-		return true, tr.Edit(b.ctx(), n, tracker.IssueEdit{Milestone: title})
+		if err := tr.Edit(b.ctx(), n, tracker.IssueEdit{Milestone: title}); err != nil {
+			return true, err
+		}
+		b.syncChildrenOf(is.Milestone, title)
+		return true, nil
 	}
 	name := strings.ToUpper(field[:1]) + field[1:]
 	text, block, order := ParseFieldsBlock(is.Body)
