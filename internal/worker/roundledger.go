@@ -22,7 +22,7 @@ import (
 // would land under round 0. A verb that writes several entries reads it once.
 func LedgerRound(env Env, root string) int {
 	env = env.WithDefaults()
-	cd, err := rotastate.CommonDir(root)
+	cd, err := rotastate.CommonDirVia(context.Background(), env.Git, root)
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "rota: round lease not read, ledger entries get round 0: %v\n", err)
 		return 0

@@ -58,7 +58,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 		if *autopilot && !set.Autopilot {
 			return Result{}, Refused("the autopilot runs only under autonomy.level auto").WithHint("rota config set autonomy.level auto")
 		}
-		cd, err := rotastate.CommonDir(root)
+		cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
 		if err != nil {
 			return Result{}, Resolution("%v", err)
 		}

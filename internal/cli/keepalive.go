@@ -180,7 +180,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 		if promptSet {
 			set.Prompt = *prompt
 		}
-		cd, err := rotastate.CommonDir(root)
+		cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
 		if err != nil {
 			return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 		}
@@ -309,7 +309,7 @@ func keepaliveStatus(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	cd, err := rotastate.CommonDir(root)
+	cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
 	if err != nil {
 		return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}
