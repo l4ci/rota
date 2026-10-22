@@ -469,7 +469,7 @@ const (
 // Check is hv-config-schema-check: the state of .rota/config.json against the
 // required schema keys. Missing lists, in schema order, the required keys that
 // are absent or null, then LegacyVerifyKey when it still holds commands that
-// test.full does not; it is non-empty only for Stale. A key the global config supplies is not missing.
+// test.full does not; it is non-empty only for Stale. A key the local overlay or the global config supplies is not missing.
 func Check(root string) (status string, missing []string) {
 	missing = []string{}
 	raw, err := os.ReadFile(configPath(root))
@@ -484,8 +484,9 @@ func Check(root string) (status string, missing []string) {
 		return Corrupt, missing
 	}
 	global := globalLayer()
+	local := fsio.LoadJSON(localPath(root), nil)
 	for _, k := range Keys {
-		if _, ok := walk(doc, k.Name); k.Required && !ok && !globalSupplies(global, k.Name) {
+		if _, ok := walk(doc, k.Name); k.Required && !ok && !globalSupplies(global, k.Name) && !globalSupplies(local, k.Name) {
 			missing = append(missing, k.Name)
 		}
 	}

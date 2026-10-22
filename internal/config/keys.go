@@ -44,12 +44,22 @@ type Key struct {
 	Desc     string   // one or two plain sentences
 	Choices  []string // allowed values of an enum key, the default first when it has one
 	Group    string   // first dotted segment, e.g. "work"
+	// EmptyUnset: an empty list in the project or local layer counts as unset,
+	// so a non-empty global value shows through (machine-specific list keys).
+	EmptyUnset bool
 }
 
 // k builds one table row. Group is the first segment of the name.
 func k(name string, def any, required bool, t Type, desc string, choices ...string) Key {
 	group, _, _ := strings.Cut(name, ".")
-	return Key{name, def, required, t, desc, choices, group}
+	return Key{Name: name, Default: def, Required: required, Type: t, Desc: desc, Choices: choices, Group: group}
+}
+
+// emptyUnset marks a list key whose empty value in the project or local layer
+// falls back to the global one.
+func emptyUnset(key Key) Key {
+	key.EmptyUnset = true
+	return key
 }
 
 func num(s string) json.Number { return json.Number(s) }
@@ -68,7 +78,7 @@ var Keys = []Key{
 	k("round.dispatch", "subagent", true, TypeEnum, "Rounds: Where round workers run. subagent means detect: herdr in a herdr pane, tmux in tmux, else in-harness subagents. /rota-work ignores it.", "subagent", "tmux", "herdr"),
 	k("round.slots", num("3"), true, TypeInt, "Rounds: Number of worker slots rota round start provisions (at least 1). --slots overrides it for one round."),
 	k("round.workerCommand", "", true, TypeString, "Rounds: Command that starts a worker session in its tmux window. Empty builds claude --model <models.worker> --dangerously-skip-permissions; {model} receives the tier's model."),
-	k("round.accounts", []any{}, true, TypeList, "Rounds: Claude accounts for worker slots, as {name, configDir} objects, each a separate CLAUDE_CONFIG_DIR. Empty: every slot uses the orchestrator's CLAUDE_CONFIG_DIR. Machine-specific, so set it in the global config or config.local.json."),
+	emptyUnset(k("round.accounts", []any{}, true, TypeList, "Rounds: Claude accounts for worker slots, as {name, configDir} objects, each a separate CLAUDE_CONFIG_DIR. Empty: every slot uses the orchestrator's CLAUDE_CONFIG_DIR. Machine-specific, so set it in the global config or config.local.json. An empty list in the project or local file counts as unset, so the global value applies.")),
 	k("round.operatorCommand", "", true, TypeString, "Rounds: Command that starts the orchestrator. Empty builds claude --model <models.orchestrator> --permission-mode auto (with --continue for rota worker session ensure)."),
 	k("refactor.confirmBeforeExecute", true, true, TypeBool, "Whether /rota-refactor --fix confirms the candidate list before implementing it. Off means no pause."),
 	k("learn.verify", false, true, TypeBool, "Whether /rota-learn always runs a fresh-context verifier on the entries it just wrote."),
@@ -172,9 +182,9 @@ var Keys = []Key{
 	k("round.reviewLoop", "manual", false, TypeEnum, "Rounds: What happens when a reviewer comments on a finished worker's PR. manual reports it and leaves rota round review-relay to the orchestrator; auto relays it to the worker as a counted bounce (round.maxBounces) from rota round watch and rota round tick.", "manual", "auto"),
 	k("issues.labels.needsHuman", "needs-human", false, TypeString, "Label rota round transfer --to human puts on an issue handed to the human. rota round candidates skips an issue that carries it."),
 	k("issues.labels.support", "site:support", false, TypeString, "Tracker label for an issue main offers to the support machine (round.support). Main's round skips it; the support round takes only these."),
-	k("round.codexAccounts", []any{}, false, TypeList, "Rounds: Codex homes for Codex workers, as {name, codexHome} objects, the counterpart of round.accounts. Empty: the default Codex home. Machine-specific, so set it in the global config or config.local.json."), // named Codex homes; empty: the default Codex home
+	emptyUnset(k("round.codexAccounts", []any{}, false, TypeList, "Rounds: Codex homes for Codex workers, as {name, codexHome} objects, the counterpart of round.accounts. Empty: the default Codex home. Machine-specific, so set it in the global config or config.local.json. An empty list in the project or local file counts as unset, so the global value applies.")), // named Codex homes; empty: the default Codex home
 	k("round.codexCommand", "", false, TypeString, "Rounds: Command that starts a Codex worker session. Empty builds the default codex command, with --model from the tier when one is chosen; {model} receives it."),
-	k("round.opencodeAccounts", []any{}, false, TypeList, "Rounds: OpenCode config dirs for OpenCode workers, as {name, configDir} objects, the counterpart of round.codexAccounts. Each becomes the slot's OPENCODE_CONFIG_DIR; the login stays shared. Empty: OpenCode's default config. Machine-specific, so set it in the global config or config.local.json."),
+	emptyUnset(k("round.opencodeAccounts", []any{}, false, TypeList, "Rounds: OpenCode config dirs for OpenCode workers, as {name, configDir} objects, the counterpart of round.codexAccounts. Each becomes the slot's OPENCODE_CONFIG_DIR; the login stays shared. Empty: OpenCode's default config. Machine-specific, so set it in the global config or config.local.json. An empty list in the project or local file counts as unset, so the global value applies.")),
 	k("round.opencodeCommand", "", false, TypeString, "Rounds: Command that starts an OpenCode worker session. Empty builds the default opencode command, with --model from the tier when one is chosen; {model} receives it."),
 	k("round.envSetup", "", false, TypeString, "Rounds: Shell command rota worker pool init runs in each new slot worktree, for example npm ci. Empty: no setup."),
 	k("round.portBase", num("20000"), false, TypeInt, "Rounds: First port of the range rota hands out to worker slots. A new slot takes the lowest range of portBlock ports from here that no other slot holds, exported as ROTA_PORT_BASE; a slot keeps its range until it is reaped or reclaimed."),
