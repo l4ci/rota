@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -8,9 +9,80 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/tui"
+	"github.com/l4ci/rota/internal/worker"
 )
+
+// The command must hand a useful registry frame to the terminal before waiting
+// for any tracker process. Blocking at the real process boundary also catches
+// eager reads in dispatch, environment construction and view initialization.
+func TestRoundOverviewResponsive(t *testing.T) {
+	root := gitRepo(t)
+	t.Setenv("TERM", "xterm")
+	for path, body := range map[string]string{
+		filepath.Join(root, ".rota", "config.json"): `{"forge":{"provider":"github"},"issues":{"source":"github"}}`,
+		worker.RegistryPath(root):                   `{"host":"herdr","slots":[{"name":"ben","issue":"101","branch":"ben/101-work","state":"working"},{"name":"dana","issue":"102","branch":"dana/102-review","state":"done","pr":"https://github.com/acme/project/pull/202"},{"name":"kit","branch":"park/kit","state":"idle"},{"name":"nia","issue":"103","branch":"nia/103-work","state":"dead"}],"prs":[{"issue":"104","pr":"https://github.com/acme/project/pull/204","from":"ben"},{"issue":"105","pr":"https://github.com/acme/project/pull/205","from":"dana"}]}`,
+	} {
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	blocked, release := make(chan struct{}), make(chan struct{})
+	frame := make(chan string, 1)
+	done := make(chan int, 1)
+	var once sync.Once
+	d := testDeps()
+	d.IsTerminal = func(any) bool { return true }
+	d.TrackerOptions = []tracker.Option{tracker.WithExec(func(ctx context.Context, _, _ string, _ []string, _ []byte) ([]byte, []byte, int, error) {
+		once.Do(func() { close(blocked) })
+		select {
+		case <-release:
+			return []byte("[]"), nil, 0, nil
+		case <-ctx.Done():
+			return nil, nil, 1, ctx.Err()
+		}
+	}, func(name string) (string, error) { return "/fake/" + name, nil })}
+	d.RunView = func(_ *Ctx, m tui.Model) error {
+		frame <- tui.Strip(m.Render(120, 40, tui.Style{}))
+		return nil
+	}
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	var out, errs bytes.Buffer
+	started := time.Now()
+	go func() { done <- mainWith(d, []string{"round", "status", "--ui"}, strings.NewReader(""), &out, &errs) }()
+	defer func() {
+		close(release)
+		code := <-done
+		os.Chdir(old)
+		t.Logf("command completed after %s (exit %d)", time.Since(started), code)
+	}()
+	select {
+	case rendered := <-frame:
+		if !strings.Contains(rendered, "ben") || !strings.Contains(rendered, "101") || !strings.Contains(rendered, "kit") {
+			t.Fatalf("first frame lost local work or parked slots:\n%s", rendered)
+		}
+		t.Logf("first local frame: %s", time.Since(started))
+	case <-blocked:
+		// Channel ordering, rather than a latency threshold, proves startup
+		// attempted an external read before handing its frame to RunView.
+		select {
+		case <-frame:
+		default:
+			t.Fatal("first local frame is blocked behind a tracker read")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("command produced neither a local frame nor a tracker read")
+	}
+}
 
 // TestRoundStatusReadsTheForgeOnce pins the gh calls of one `round status` on
 // a repo with seven open issues: no identical call is made twice, an issue the
