@@ -1109,6 +1109,8 @@ func TestGateRefusesAPRThatDoesNotCloseItsIssue(t *testing.T) {
 // A partial-slice issue is closed by no slice but the last: a PR the forge says
 // closes it (a keyword in prose counts) is refused unless FinalSlice is set, and
 // a forge that cannot report closing references skips the check and says so.
+// #1616 AC-1 is the cases "forge says it closes" and "final slice may close"; AC-2
+// is "forge cannot report" and "forge errors on the read".
 func TestGateRefusesASlicePRTheForgeSaysClosesItsIssue(t *testing.T) {
 	cases := []struct {
 		name, refs string
@@ -1129,7 +1131,7 @@ func TestGateRefusesASlicePRTheForgeSaysClosesItsIssue(t *testing.T) {
 			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
 			w.forge("body", "Refs #5\n\nD=T8 learnings (Closes #5)\n")
-			w.forge("issueLabels", "in-progress,"+PartialSliceLabel)
+			w.forge("issueLabels.5", "in-progress,"+PartialSliceLabel)
 			w.forge("closingRefs", c.refs)
 			res, err := w.gate(false, GateOpts{FinalSlice: c.final})
 			if err != nil || res.Verdict != c.verdict {
@@ -1176,6 +1178,40 @@ func TestGateSliceCloseNamesAnUnparsablePRRef(t *testing.T) {
 	}
 	if len(spy.asked) != 0 {
 		t.Errorf("closing refs asked for PR %v despite the unparsable ref", spy.asked)
+	}
+}
+
+// The closing-refs check reads every issue the forge says the PR closes, not
+// only the slot's own: a sub-issue slice that closes its partial-slice parent
+// is refused though its own issue carries no label.
+func TestGateRefusesASlicePRClosingAnotherPartialSliceIssue(t *testing.T) {
+	cases := []struct {
+		name, refs, parentLabels string
+		final                    bool
+		verdict                  string
+	}{
+		{name: "forge says it closes the labelled parent", refs: "5,9", parentLabels: "in-progress," + PartialSliceLabel, verdict: GateNotClosing},
+		{name: "parent is not partial", refs: "5,9", parentLabels: "in-progress", verdict: GatePass},
+		{name: "forge does not list the parent", refs: "5", parentLabels: "in-progress," + PartialSliceLabel, verdict: GatePass},
+		{name: "final slice may close the parent", refs: "5,9", parentLabels: "in-progress," + PartialSliceLabel, final: true, verdict: GatePass},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
+			w.forge("body", "Closes #5\n\nCloses #9\n")
+			w.forge("issueLabels", "in-progress")
+			w.forge("issueLabels.9", c.parentLabels)
+			w.forge("closingRefs", c.refs)
+			res, err := w.gate(false, GateOpts{FinalSlice: c.final})
+			if err != nil || res.Verdict != c.verdict {
+				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.verdict, res)
+			}
+			if c.verdict == GateNotClosing && !strings.Contains(res.Err, "#9") {
+				t.Errorf("the refusal must name the parent #9: %q", res.Err)
+			}
+		})
 	}
 }
 
