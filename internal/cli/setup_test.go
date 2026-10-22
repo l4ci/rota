@@ -569,3 +569,70 @@ func TestSetupListRoles(t *testing.T) {
 		}
 	}
 }
+
+// #1774 T3: on a machine already set up as support, setup is not fenced: it
+// re-enters the support path, starts from the local answers and keeps them.
+func TestSetupRerunsOnSupportMachine(t *testing.T) {
+	dir, tracked := supportClone(t)
+	writeLocalConfig(t, dir, `{"round":{"role":"support","dispatch":"tmux"},"keep":true}`+"\n")
+	code, out, errOut := setupRun(t, dir, "", false, "--json", "--yes")
+	if code != 0 {
+		t.Fatalf("exit %d: %s %s", code, out, errOut)
+	}
+	assertTrackedUntouched(t, dir, tracked)
+	if role, _ := setupData(t, out).Get("role"); role != "support" {
+		t.Errorf("data.role = %v", role)
+	}
+	local := localConfig(t, dir)
+	for k, want := range map[string]any{"round.role": "support", "round.dispatch": "tmux", "keep": true} {
+		if got, _ := config.Lookup(local, k); got != want {
+			t.Errorf("local %s = %v, want %v", k, got, want)
+		}
+	}
+	// The main path stays refused on the initialized clone.
+	if code, _, errOut := setupRun(t, dir, "", false, "--yes", "--set", "round.role=main"); code != ExitRefused {
+		t.Errorf("main path on a clone: exit %d: %s", code, errOut)
+	}
+}
+
+// #1774 T3: the support path ends with the doctor's verdict, so the operator
+// sees what still blocks a support round.
+func TestSetupSupportPathRunsDoctor(t *testing.T) {
+	dir, _ := supportClone(t)
+	code, out, errOut := setupRun(t, dir, "", false, "--yes", "--set", "round.role=support")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	last := out[strings.LastIndex(strings.TrimRight(out, "\n"), "\n")+1:]
+	if !strings.HasPrefix(last, "doctor: ") {
+		t.Errorf("last line = %q, want a doctor: line:\n%s", last, out)
+	}
+	code, out, errOut = setupRun(t, dir, "", false, "--json", "--yes")
+	if code != 0 {
+		t.Fatalf("json: exit %d: %s", code, errOut)
+	}
+	doc, _ := setupData(t, out).Get("doctor")
+	o, ok := doc.(*jsonx.Object)
+	if !ok {
+		t.Fatalf("data.doctor = %v", doc)
+	}
+	pass, _ := o.Get("ok")
+	if check, _ := o.Get("check"); pass == false && check == nil {
+		t.Errorf("a failing doctor names no check: %v", o)
+	}
+}
+
+// A question the support path takes the default for starts from main's
+// tracked value, so the local answer never overrides it with the schema's.
+func TestSetupSupportPathDefaultsFromTrackedConfig(t *testing.T) {
+	dir := trackerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac","dispatch":"herdr"},"autonomy":{"level":"auto"}}`+"\n")
+	if code, _, errOut := setupRun(t, dir, "", false, "--yes", "--set", "round.role=support"); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	local := localConfig(t, dir)
+	for k, want := range map[string]any{"autonomy.level": "auto", "round.dispatch": "herdr"} {
+		if got, _ := config.Lookup(local, k); got != want {
+			t.Errorf("local %s = %v, want %v", k, got, want)
+		}
+	}
+}

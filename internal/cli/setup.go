@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
@@ -258,8 +259,22 @@ func setupSupport(c *Ctx, dir string, in *bufio.Reader, given map[string]string,
 		}
 		return Result{}, err
 	}
-	data := jsonObj("role", roundcfg.RoleSupport, "file", rotatree.DirName+"/"+rotatree.ConfigLocalFile, "answers", out)
+	doc, line := setupDoctor(c)
+	lines = append(lines, line)
+	data := jsonObj("role", roundcfg.RoleSupport, "file", rotatree.DirName+"/"+rotatree.ConfigLocalFile, "answers", out, "doctor", doc)
 	return Result{Data: data, Text: strings.Join(lines, "\n")}, nil
+}
+
+// setupDoctor runs the doctor after the support path and reports its first
+// failing check with the hint, or pass. Setup succeeded either way.
+func setupDoctor(c *Ctx) (*jsonx.Object, string) {
+	rep := doctor.Run(c.Context(), doctorInput(c.Context(), c.deps()))
+	for _, ch := range rep.Checks {
+		if ch.Status == doctor.Fail {
+			return jsonObj("ok", false, "check", ch.Name, "hint", ch.Hint), fmt.Sprintf("doctor: %s: %s", ch.Name, ch.Hint)
+		}
+	}
+	return jsonObj("ok", true), "doctor: pass"
 }
 
 // supportSetupStop refuses the support path when the clone's tracked config
@@ -369,7 +384,9 @@ func setupValue(p config.Prompt, raw string) string {
 }
 
 // setupSuggestions settles what each question starts from. Precedence per
-// question: --set (given), then the global config's value when it is one of
+// question: --set (given), then the value the checkout already holds in
+// .rota/config.local.json or .rota/config.json (a clone on the support path),
+// then the global config's value when it is one of
 // the question's choices (a hand-edited bad value is ignored), then the value
 // read from the project, then the schema default. defs is the starting value;
 // sigs is what the prompt and --list show beside it: the project's signal, or
@@ -400,6 +417,21 @@ func setupSuggestions(c *Ctx, dir string, given map[string]string) (defs map[str
 			}
 		}
 	}
+	// A clone (the support path) starts from what the checkout already
+	// holds: this machine's config.local.json, then main's tracked config.
+	// Else a default would override main's choice locally.
+	existing := map[string]setupSignal{}
+	for _, file := range []string{rotatree.ConfigLocalFile, rotatree.ConfigFile} {
+		vals := fsio.LoadJSON(rotatree.File(dir, file), jsonx.NewObject())
+		for _, p := range config.Prompts {
+			if _, seen := existing[p.Key]; seen {
+				continue
+			}
+			if v, ok := config.Lookup(vals, p.Key); ok && p.Valid(fmt.Sprint(v)) {
+				existing[p.Key] = setupSignal{fmt.Sprint(v), rotatree.DirName + "/" + file}
+			}
+		}
+	}
 	answered := map[string]bool{}
 	for k := range given {
 		answered[k] = true
@@ -407,11 +439,17 @@ func setupSuggestions(c *Ctx, dir string, given map[string]string) (defs map[str
 	for k := range globals {
 		answered[k] = true
 	}
+	for k := range existing {
+		answered[k] = true
+	}
 	sigs = readSetupSignals(c, dir, answered)
 	for _, p := range config.Prompts {
 		sig, hasSig := sigs[p.Key]
 		g, hasGlobal := globals[p.Key]
 		switch {
+		case existing[p.Key].Value != "":
+			defs[p.Key] = existing[p.Key].Value
+			sigs[p.Key] = existing[p.Key]
 		case hasGlobal:
 			defs[p.Key] = g
 			if hasSig && sig.Value != g {
