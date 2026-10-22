@@ -169,7 +169,7 @@ func TestSaveGlobalKeepsInheritedKeys(t *testing.T) {
 
 func TestConfigCheckNamesACorruptGlobal(t *testing.T) {
 	gdir := isolateGlobal(t)
-	writeFile(t, config.GlobalPath(gdir), `{"work":{"isolation":"worktree"}}`)
+	writeFile(t, config.GlobalPath(gdir), `{"docs":{"path":"manual"}}`)
 	dir := t.TempDir()
 	if code, _, e := initRun(t, dir, "init"); code != 0 {
 		t.Fatalf("init: %d %s", code, e)
@@ -188,7 +188,7 @@ func TestConfigCheckNamesACorruptGlobal(t *testing.T) {
 		t.Errorf("fill must name the corrupt global, not claim up to date: %q", fout)
 	}
 	raw, _ := os.ReadFile(filepath.Join(dir, ".rota", "config.json"))
-	if strings.Contains(string(raw), "isolation") {
+	if strings.Contains(string(raw), `"path"`) {
 		t.Errorf("fill pinned a default under a corrupt global:\n%s", raw)
 	}
 }

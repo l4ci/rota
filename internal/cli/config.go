@@ -136,6 +136,7 @@ func showRows(entries []config.Entry) (rows []any, lines []string) {
 			row.Set("global", e.Global)
 		}
 		if sk := e.Schema; sk != nil {
+			row.Set("scope", string(sk.Scope))
 			row.Set("default", config.Default(*sk))
 			row.Set("type", string(sk.Type))
 			row.Set("group", sk.Group)

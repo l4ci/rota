@@ -217,8 +217,9 @@ func TestMigrateRoundKeysMissingAndEmptyLayers(t *testing.T) {
 	}
 }
 
-// Fill migrates before it fills, so a fresh repo gets the new names and an
-// old config never ends up holding both.
+// Fill migrates before it fills, so an old config never ends up holding both
+// names; a fresh repo gets none of the round keys, which are machine keys
+// (#1786).
 func TestMigrateRoundKeysFillOnEmpty(t *testing.T) {
 	root := writeLayers(t, "-", "-")
 	if _, err := Fill(root); err != nil {
@@ -226,8 +227,8 @@ func TestMigrateRoundKeysFillOnEmpty(t *testing.T) {
 	}
 	cfg := Load(configPath(root))
 	for _, k := range []string{"round.slots", "round.dispatch", "round.workerCommand", "round.accounts", "round.operatorCommand"} {
-		if _, ok := Lookup(cfg, k); !ok {
-			t.Errorf("fill on empty did not write %s", k)
+		if _, ok := Lookup(cfg, k); ok {
+			t.Errorf("fill on empty wrote the machine key %s", k)
 		}
 	}
 	if got := LegacyRoundKeys(cfg); len(got) != 0 {

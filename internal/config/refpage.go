@@ -30,15 +30,15 @@ func keyTables() string {
 		byGroup[key.Group] = append(byGroup[key.Group], key)
 	}
 	var b strings.Builder
-	b.WriteString("## Keys\n\nEvery key, by group. Default is what a missing key reads as; Values lists the allowed values of an enum key.\n")
+	b.WriteString("## Keys\n\nEvery key, by group. Scope is the layer the key belongs in, with the file `rota config set` writes it to by default; Default is what a missing key reads as; Values lists the allowed values of an enum key.\n")
 	for _, g := range groups {
-		fmt.Fprintf(&b, "\n### %s\n\n| Key | Type | Default | Values | Description |\n|-----|------|---------|--------|-------------|\n", g)
+		fmt.Fprintf(&b, "\n### %s\n\n| Key | Scope | Type | Default | Values | Description |\n|-----|-------|------|---------|--------|-------------|\n", g)
 		for _, key := range byGroup[g] {
 			values := ""
 			if len(key.Choices) > 0 {
 				values = "`" + strings.Join(key.Choices, "`, `") + "`"
 			}
-			fmt.Fprintf(&b, "| `%s` | %s | %s | %s | %s |\n", key.Name, key.Type, defaultCell(key), values, cell(key.Desc))
+			fmt.Fprintf(&b, "| `%s` | %s | %s | %s | %s | %s |\n", key.Name, scopeCell(key), key.Type, defaultCell(key), values, cell(key.Desc))
 		}
 	}
 	return b.String()
@@ -55,6 +55,15 @@ func defaultCell(key Key) string {
 		raw = []byte(fmt.Sprint(key.Default))
 	}
 	return "`" + cell(string(raw)) + "`"
+}
+
+// scopeCell is the key's scope and the file `rota config set` writes it to
+// without --global, --local or --project.
+func scopeCell(key Key) string {
+	if key.Scope == ScopeMachine {
+		return "machine (local)"
+	}
+	return string(key.Scope) + " (tracked)"
 }
 
 func cell(s string) string { return strings.ReplaceAll(s, "|", `\|`) }

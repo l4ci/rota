@@ -113,13 +113,18 @@ func Default(k Key) any {
 	return k.Default
 }
 
-// Line is the old helper's output line: `key = json  (source: x)`.
+// Line is the old helper's output line, `key = json  (source: x)`, with the
+// schema key's scope beside the source: `(source: x, scope: machine)`.
 func (e Entry) Line() string {
 	b, err := jsonx.MarshalCompact(e.Value)
 	if err != nil {
 		b = []byte(fmt.Sprint(e.Value))
 	}
-	return fmt.Sprintf("%s = %s  (source: %s)", e.Key, b, e.Source)
+	scope := ""
+	if e.Schema != nil && e.Schema.Scope != "" {
+		scope = ", scope: " + string(e.Schema.Scope)
+	}
+	return fmt.Sprintf("%s = %s  (source: %s%s)", e.Key, b, e.Source, scope)
 }
 
 // Coerce parses a `config set` value: JSON first, else the raw string.
