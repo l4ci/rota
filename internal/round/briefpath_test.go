@@ -3,6 +3,7 @@ package round
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -35,50 +36,50 @@ func TestBriefPathOrder(t *testing.T) {
 		return ""
 	}
 	writeAt(t, filepath.Join(home, "plugin", "references", "worker-contract.md"), "plugin")
-	if p, ok := briefPath(root, roundcfg.Settings{}, env); ok {
+	if p, ok := briefPath(root, roundcfg.Settings{}, env, ""); ok {
 		t.Fatalf("CLAUDE_PLUGIN_ROOT still read: %s", p)
 	}
 	rel := filepath.Join("rota-orchestrate", "references", "worker-contract.md")
 	userRoot := filepath.Join(home, ".claude", "skills")
 	writeAt(t, filepath.Join(userRoot, rel), "user")
-	if p, ok := briefPath(root, roundcfg.Settings{}, env); ok {
+	if p, ok := briefPath(root, roundcfg.Settings{}, env, ""); ok {
 		t.Fatalf("a root without a manifest counts as installed: %s", p)
 	}
 	writeAt(t, filepath.Join(userRoot, ".rota-manifest.json"), "{}")
-	if p, ok := briefPath(root, roundcfg.Settings{}, env); !ok || p != filepath.Join(userRoot, rel) {
+	if p, ok := briefPath(root, roundcfg.Settings{}, env, ""); !ok || p != filepath.Join(userRoot, rel) {
 		t.Errorf("user root: %q %v", p, ok)
 	}
 	projRoot := filepath.Join(root, ".claude", "skills")
 	writeAt(t, filepath.Join(projRoot, rel), "project")
 	writeAt(t, filepath.Join(projRoot, ".rota-manifest.json"), "{}")
-	if p, _ := briefPath(root, roundcfg.Settings{}, env); p != filepath.Join(projRoot, rel) {
+	if p, _ := briefPath(root, roundcfg.Settings{}, env, ""); p != filepath.Join(projRoot, rel) {
 		t.Errorf("project root before user: %q", p)
 	}
 	writeAt(t, filepath.Join(root, "skills", "references", "worker-contract.md"), "checkout")
-	if p, _ := briefPath(root, roundcfg.Settings{}, env); p != filepath.Join(root, "skills", "references", "worker-contract.md") {
+	if p, _ := briefPath(root, roundcfg.Settings{}, env, ""); p != filepath.Join(root, "skills", "references", "worker-contract.md") {
 		t.Errorf("source checkout first: %q", p)
 	}
 	// CLAUDE_CONFIG_DIR replaces ~/.claude as the user root.
 	cfgDir = t.TempDir()
-	if p, _ := briefPath(root, roundcfg.Settings{}, env); p != filepath.Join(root, "skills", "references", "worker-contract.md") {
+	if p, _ := briefPath(root, roundcfg.Settings{}, env, ""); p != filepath.Join(root, "skills", "references", "worker-contract.md") {
 		t.Errorf("checkout still first: %q", p)
 	}
 	os.Remove(filepath.Join(root, "skills", "references", "worker-contract.md"))
 	os.RemoveAll(projRoot)
-	if p, ok := briefPath(root, roundcfg.Settings{}, env); ok {
+	if p, ok := briefPath(root, roundcfg.Settings{}, env, ""); ok {
 		t.Errorf("~/.claude used although CLAUDE_CONFIG_DIR is set: %q", p)
 	}
 	writeAt(t, filepath.Join(cfgDir, "skills", ".rota-manifest.json"), "{}")
 	writeAt(t, filepath.Join(cfgDir, "skills", rel), "cfg")
-	if p, _ := briefPath(root, roundcfg.Settings{}, env); p != filepath.Join(cfgDir, "skills", rel) {
+	if p, _ := briefPath(root, roundcfg.Settings{}, env, ""); p != filepath.Join(cfgDir, "skills", rel) {
 		t.Errorf("config dir root: %q", p)
 	}
 	cfgDir = ""
 	writeAt(t, filepath.Join(root, "mine.md"), "own")
-	if p, _ := briefPath(root, roundcfg.Settings{Brief: "mine.md"}, env); p != filepath.Join(root, "mine.md") {
+	if p, _ := briefPath(root, roundcfg.Settings{Brief: "mine.md"}, env, ""); p != filepath.Join(root, "mine.md") {
 		t.Errorf("round.brief first: %q", p)
 	}
-	if _, ok := briefPath(root, roundcfg.Settings{Brief: "gone.md"}, env); ok {
+	if _, ok := briefPath(root, roundcfg.Settings{Brief: "gone.md"}, env, ""); ok {
 		t.Error("round.brief set but missing must not fall back")
 	}
 }
@@ -96,13 +97,39 @@ func TestBriefPathCodexRoots(t *testing.T) {
 	userRoot := filepath.Join(home, ".agents", "skills")
 	writeAt(t, filepath.Join(userRoot, ".rota-manifest.json"), "{}")
 	writeAt(t, filepath.Join(userRoot, rel), "user")
-	if p, ok := briefPath(root, roundcfg.Settings{}, env); !ok || p != filepath.Join(userRoot, rel) {
+	if p, ok := briefPath(root, roundcfg.Settings{}, env, ""); !ok || p != filepath.Join(userRoot, rel) {
 		t.Errorf("user codex root: %q %v", p, ok)
 	}
 	projRoot := filepath.Join(root, ".agents", "skills")
 	writeAt(t, filepath.Join(projRoot, ".rota-manifest.json"), "{}")
 	writeAt(t, filepath.Join(projRoot, rel), "project")
-	if p, _ := briefPath(root, roundcfg.Settings{}, env); p != filepath.Join(projRoot, rel) {
+	if p, _ := briefPath(root, roundcfg.Settings{}, env, ""); p != filepath.Join(projRoot, rel) {
 		t.Errorf("project codex root before user: %q", p)
+	}
+}
+
+// With round.brief unset and neither a checkout copy nor an installed skills
+// root, the contract comes from the skills cache, extracted from the binary
+// when the cache has none yet. A set round.brief that is missing stays a miss.
+func TestBriefPathFallsBackToTheSkillsCache(t *testing.T) {
+	root, home, cache := t.TempDir(), t.TempDir(), t.TempDir()
+	env := func(k string) string {
+		if k == "HOME" {
+			return home
+		}
+		return ""
+	}
+	p, ok := briefPath(root, roundcfg.Settings{}, env, cache)
+	if !ok || !strings.HasPrefix(p, cache) || filepath.Base(p) != "worker-contract.md" {
+		t.Fatalf("no cache fallback: %q %v", p, ok)
+	}
+	if b, err := os.ReadFile(p); err != nil || !strings.Contains(string(b), "Worker contract") {
+		t.Errorf("cached contract unreadable: %v", err)
+	}
+	if p2, _ := briefPath(root, roundcfg.Settings{}, env, cache); p2 != p {
+		t.Errorf("second lookup moved: %q vs %q", p2, p)
+	}
+	if _, ok := briefPath(root, roundcfg.Settings{Brief: "gone.md"}, env, cache); ok {
+		t.Error("a missing round.brief fell back to the cache")
 	}
 }

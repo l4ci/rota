@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -10,9 +11,12 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/doctor"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/roundcfg"
 )
 
 // `rota setup` is rota init with the main config choices asked up front. It is
@@ -72,7 +76,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
-			defs, sigs := setupSuggestions(c, dir, nil)
+			defs, sigs := setupSuggestions(c, dir, setupProject(c, dir), nil)
 			return setupList(defs, sigs), nil
 		}
 		if err := refuseHomeInit(c, "setup", *force); err != nil {
@@ -81,9 +85,6 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 		dir, err := initDir(c)
 		if err != nil {
 			return Result{}, err
-		}
-		if rotatree.Exists(dir) {
-			return Result{}, Refused("%s is already initialized", dir).WithHint("run: rota config set <key> <value>")
 		}
 		given := map[string]string{}
 		for _, kv := range sets.pairs {
@@ -101,13 +102,52 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			given[kv[0]] = val
 		}
 		interactive := !*yes && !c.JSON && c.deps().SetupIsTTY(c.Stdin)
+		proj := setupProject(c, dir)
+		// The main path inits dir, so an enclosing support project refuses it
+		// as it refuses `rota init`, before anything is written.
+		mainStop := func() (Result, error) {
+			if rotatree.Exists(proj) {
+				if res, err := supportRefusal(c, proj, c.Path); err != nil {
+					return res, err
+				}
+			}
+			if rotatree.Exists(dir) {
+				return Result{}, initializedStop(dir)
+			}
+			return Result{}, nil
+		}
+		defs, sigs := setupSuggestions(c, dir, proj, given)
+		// The role picks the path. Off a terminal it is known now, so an
+		// initialized main project is refused before anything else.
+		role, roleKnown := given["round.role"], true
+		if role == "" {
+			role, roleKnown = defs["round.role"], !interactive
+		}
+		if roleKnown && role != roundcfg.RoleSupport {
+			if res, err := mainStop(); err != nil {
+				return res, err
+			}
+		}
 		if !interactive && !*yes && len(given) == 0 {
 			return Result{}, Usage("setup needs answers and there is no terminal").
 				WithHint("run: rota setup --list to see the questions, rota setup --yes for the defaults")
 		}
 		in := bufio.NewReader(c.Stdin)
-		defs, sigs := setupSuggestions(c, dir, given)
-		answers, err := resolveAnswers(c, in, given, interactive, defs, sigs)
+		if interactive {
+			fmt.Fprintln(c.Stderr, "rota setup: Enter takes the default [in brackets]; Ctrl-C aborts before anything is written.")
+		}
+		if !roleKnown {
+			if role, err = setupAnswer(c, in, *config.PromptFor("round.role"), given, interactive, defs, sigs); err != nil {
+				return Result{}, err
+			}
+		}
+		if role == roundcfg.RoleSupport {
+			return setupSupport(c, proj, in, given, interactive, defs, sigs)
+		}
+		if res, err := mainStop(); err != nil {
+			return res, err
+		}
+		answers, err := resolveAnswers(c, in, given, interactive, defs, sigs, role)
 		if err != nil {
 			return Result{}, err
 		}
@@ -121,7 +161,8 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 		globalVals, globalOK := loadGlobalValues(c.deps().projectsEnv())
 		for _, p := range config.Prompts {
 			v, ok := answers[p.Key]
-			if !ok || (p.Optional && v == "") {
+			// Main is round.role's default, and the tracked config may not hold the key.
+			if !ok || (p.Optional && v == "") || p.Key == "round.role" {
 				continue
 			}
 			if g, has := globalVals[p.Key]; has && fmt.Sprint(g) == v {
@@ -155,35 +196,130 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-// resolveAnswers settles every applicable question: the --set value, else the
-// typed answer when interactive, else the default. A question whose condition
-// does not hold is skipped, and --set naming it is a usage error.
-func resolveAnswers(c *Ctx, in *bufio.Reader, given map[string]string, interactive bool, defs map[string]string, sigs map[string]setupSignal) (map[string]string, error) {
-	answers := map[string]string{}
-	if interactive {
-		fmt.Fprintln(c.Stderr, "rota setup: Enter takes the default [in brackets]; Ctrl-C aborts before anything is written.")
-	}
+// resolveAnswers settles every question setup for role asks, role itself
+// already settled: the --set value, else the typed answer when interactive,
+// else the default. A question whose condition does not hold, or that role
+// does not ask, is skipped, and --set naming it is a usage error.
+func resolveAnswers(c *Ctx, in *bufio.Reader, given map[string]string, interactive bool, defs map[string]string, sigs map[string]setupSignal, role string) (map[string]string, error) {
+	answers := map[string]string{"round.role": role}
 	for _, p := range config.Prompts {
-		v, ok := given[p.Key]
+		if p.Key == "round.role" {
+			continue
+		}
+		_, ok := given[p.Key]
+		if !p.ForRole(role) {
+			if ok {
+				return nil, Usage("--set %s is not asked on a %s machine", p.Key, role).WithHint("run: rota setup --list")
+			}
+			continue
+		}
 		if p.IfKey != "" && answers[p.IfKey] != p.IfValue {
 			if ok {
 				return nil, Usage("--set %s only applies when %s=%s", p.Key, p.IfKey, p.IfValue)
 			}
 			continue
 		}
-		switch {
-		case ok:
-		case interactive:
-			var err error
-			if v, err = ask(in, c.Stderr, p, defs[p.Key], sigs[p.Key]); err != nil {
-				return nil, err
-			}
-		default:
-			v = defs[p.Key]
+		v, err := setupAnswer(c, in, p, given, interactive, defs, sigs)
+		if err != nil {
+			return nil, err
 		}
 		answers[p.Key] = v
 	}
 	return answers, nil
+}
+
+// setupAnswer is p's answer: the --set value, else the typed answer when
+// interactive, else the default.
+func setupAnswer(c *Ctx, in *bufio.Reader, p config.Prompt, given map[string]string, interactive bool, defs map[string]string, sigs map[string]setupSignal) (string, error) {
+	if v, ok := given[p.Key]; ok {
+		return v, nil
+	}
+	if interactive {
+		return ask(in, c.Stderr, p, defs[p.Key], sigs[p.Key])
+	}
+	return defs[p.Key], nil
+}
+
+// setupProject is the project setup acts on: the one enclosing dir, else dir
+// itself (a fresh directory). The support path reads and writes its config.
+func setupProject(c *Ctx, dir string) string {
+	if root, err := c.Root(); err == nil {
+		return root
+	}
+	return dir
+}
+
+func initializedStop(dir string) error {
+	return Refused("%s is already initialized", dir).WithHint("run: rota config set <key> <value>, or on a support machine: rota setup --set round.role=support")
+}
+
+// setupSupport is the support path (#1774): a clone of a project main
+// already set up. It asks only the questions a support machine answers for
+// itself and writes them, with round.role, to .rota/config.local.json; the
+// tracked config is main's and arrives with the clone. It refuses before
+// asking when main has not named the support machine or there is no tracker.
+func setupSupport(c *Ctx, dir string, in *bufio.Reader, given map[string]string, interactive bool, defs map[string]string, sigs map[string]setupSignal) (Result, error) {
+	if res, err := supportSetupStop(c, dir); err != nil {
+		return res, err
+	}
+	answers, err := resolveAnswers(c, in, given, interactive, defs, sigs, roundcfg.RoleSupport)
+	if err != nil {
+		return Result{}, err
+	}
+	vals := map[string]string{}
+	out := jsonx.NewObject()
+	lines := []string{"support machine: answers go to .rota/config.local.json, this machine only"}
+	for _, p := range config.Prompts {
+		v, ok := answers[p.Key]
+		if !ok || (p.Optional && v == "") {
+			continue
+		}
+		vals[p.Key] = v
+		out.Set(p.Key, config.Coerce(v))
+		lines = append(lines, fmt.Sprintf("local: set %s = %s", p.Key, v))
+	}
+	if err := config.SaveLocal(dir, vals); err != nil {
+		if errors.Is(err, fsio.ErrUnreadable) || errors.Is(err, config.ErrLocalNotObject) {
+			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
+		}
+		return Result{}, err
+	}
+	doc, line := setupDoctor(c)
+	lines = append(lines, line)
+	data := jsonObj("role", roundcfg.RoleSupport, "file", rotatree.DirName+"/"+rotatree.ConfigLocalFile, "answers", out, "doctor", doc)
+	return Result{Data: data, Text: strings.Join(lines, "\n")}, nil
+}
+
+// setupDoctor runs the doctor after the support path and reports its first
+// failing check with the hint, or pass. Setup succeeded either way.
+func setupDoctor(c *Ctx) (*jsonx.Object, string) {
+	rep := doctor.Run(c.Context(), doctorInput(c.Context(), c.deps()))
+	for _, ch := range rep.Checks {
+		if ch.Status == doctor.Fail {
+			return jsonObj("ok", false, "check", ch.Name, "hint", ch.Hint), fmt.Sprintf("doctor: %s: %s", ch.Name, ch.Hint)
+		}
+	}
+	return jsonObj("ok", true), "doctor: pass"
+}
+
+// supportSetupStop refuses the support path when the clone's tracked config
+// does not name the support machine (main runs `round support enable`
+// first) or the project has no tracker.
+func supportSetupStop(c *Ctx, dir string) (Result, error) {
+	tracked := fsio.LoadJSON(rotatree.Config(dir), jsonx.NewObject())
+	if roundcfg.SupportName(tracked) == "" {
+		d := jsonObj("blockedBy", "config", "key", "round.support", "changed", false)
+		return Result{Data: d}, Refused("the support path needs round.support in the tracked .rota/config.json, and it is empty").
+			WithHint("on the main machine run: rota round support enable <name>, commit and push; then pull here and run rota setup again")
+	}
+	issue, err := issueBackend(c.deps(), dir)
+	if err != nil {
+		return Result{}, err
+	}
+	if !issue {
+		return supportFileModeStop()
+	}
+	return Result{}, nil
 }
 
 // ask prints p and reads until the answer is a choice number, a choice value
@@ -273,13 +409,16 @@ func setupValue(p config.Prompt, raw string) string {
 }
 
 // setupSuggestions settles what each question starts from. Precedence per
-// question: --set (given), then the global config's value when it is one of
+// question: --set (given), then the value the checkout already holds in
+// .rota/config.local.json or .rota/config.json (a clone on the support path),
+// then the global config's value when it is one of
 // the question's choices (a hand-edited bad value is ignored), then the value
-// read from the project, then the schema default. defs is the starting value;
+// read from the project, then the schema default. dir is where the project
+// signals are read; proj is the enclosing project whose config files count. defs is the starting value;
 // sigs is what the prompt and --list show beside it: the project's signal, or
 // the global value with the differing signal noted. A broken global file warns
 // and counts as empty.
-func setupSuggestions(c *Ctx, dir string, given map[string]string) (defs map[string]string, sigs map[string]setupSignal) {
+func setupSuggestions(c *Ctx, dir, proj string, given map[string]string) (defs map[string]string, sigs map[string]setupSignal) {
 	defs = map[string]string{}
 	for _, p := range config.Prompts {
 		defs[p.Key] = p.DefaultChoice()
@@ -304,6 +443,21 @@ func setupSuggestions(c *Ctx, dir string, given map[string]string) (defs map[str
 			}
 		}
 	}
+	// A clone (the support path) starts from what the checkout already
+	// holds: this machine's config.local.json, then main's tracked config.
+	// Else a default would override main's choice locally.
+	existing := map[string]setupSignal{}
+	for _, file := range []string{rotatree.ConfigLocalFile, rotatree.ConfigFile} {
+		vals := fsio.LoadJSON(rotatree.File(proj, file), jsonx.NewObject())
+		for _, p := range config.Prompts {
+			if _, seen := existing[p.Key]; seen {
+				continue
+			}
+			if v, ok := config.Lookup(vals, p.Key); ok && p.Valid(fmt.Sprint(v)) {
+				existing[p.Key] = setupSignal{fmt.Sprint(v), rotatree.DirName + "/" + file}
+			}
+		}
+	}
 	answered := map[string]bool{}
 	for k := range given {
 		answered[k] = true
@@ -311,11 +465,17 @@ func setupSuggestions(c *Ctx, dir string, given map[string]string) (defs map[str
 	for k := range globals {
 		answered[k] = true
 	}
+	for k := range existing {
+		answered[k] = true
+	}
 	sigs = readSetupSignals(c, dir, answered)
 	for _, p := range config.Prompts {
 		sig, hasSig := sigs[p.Key]
 		g, hasGlobal := globals[p.Key]
 		switch {
+		case existing[p.Key].Value != "":
+			defs[p.Key] = existing[p.Key].Value
+			sigs[p.Key] = existing[p.Key]
 		case hasGlobal:
 			defs[p.Key] = g
 			if hasSig && sig.Value != g {
@@ -349,7 +509,8 @@ func globalCandidates(answers map[string]string, global map[string]any) []config
 	var out []config.Prompt
 	for _, p := range config.Prompts {
 		v, ok := answers[p.Key]
-		if !ok || p.Free || (p.Optional && v == "") {
+		// The role belongs to one machine and one project, never the global config.
+		if !ok || p.Free || (p.Optional && v == "") || p.Key == "round.role" {
 			continue
 		}
 		if g, has := global[p.Key]; len(global) > 0 && has && fmt.Sprint(g) == v {
@@ -424,6 +585,13 @@ func setupList(defs map[string]string, sigs map[string]setupSignal) Result {
 		if p.IfKey != "" {
 			q.Set("if", p.IfKey+"="+p.IfValue)
 			line += fmt.Sprintf("  (only when %s=%s)", p.IfKey, p.IfValue)
+		}
+		roles := p.RoleNames()
+		q.Set("roles", strSlice(roles))
+		if p.Roles == nil {
+			line += "  roles: both"
+		} else {
+			line += "  roles: " + strings.Join(roles, ", ")
 		}
 		qs = append(qs, q)
 		lines = append(lines, line)

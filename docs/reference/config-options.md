@@ -4,7 +4,7 @@ This page lists every config key with its type, default, allowed values and desc
 
 The key tables are generated from the schema in `internal/config/keys.go` (`go generate ./internal/config`); do not edit them here. Four verbs cover configuration:
 
-- **`rota setup`** runs `rota init`, then asks the main choices on a terminal (where the issues live, isolation, merge strategy, dispatch, autonomy, review, QA), then optional ones: the worker harness (`round.workerKind`), the orchestrator harness (`orchestrator.harness`), the base branch (`git.baseBranch`) and the test commands (`test.fast`, `test.full`). Skip one and the key stays unset. Where the repo gives a signal (go.mod, CI files, the origin host, harnesses on PATH), the question suggests that value and shows where it was read. `--yes` takes the suggestion, else the default; `--list` prints the questions with each suggestion and its evidence.
+- **`rota setup`** asks the machine role first (`round.role`; `support` takes the support path, see [Support role](../contributing/rounds.md#support-role)). On main it runs `rota init`, then asks the main choices on a terminal (where the issues live, isolation, merge strategy, dispatch, autonomy, review, QA), then optional ones: the worker harness (`round.workerKind`), the orchestrator harness (`orchestrator.harness`), the base branch (`git.baseBranch`) and the test commands (`test.fast`, `test.full`). Skip one and the key stays unset. Where the repo gives a signal (go.mod, CI files, the origin host, harnesses on PATH), the question suggests that value and shows where it was read. `--yes` takes the suggestion, else the default; `--list` prints the questions with each suggestion and its evidence.
 - **`rota init`** writes `.rota/config.json` on first setup, fills any missing keys with the Recommended defaults on later runs, and stamps `rota.version`. It never overwrites a value you set.
 - **`rota config show`** and **`rota config set`** read and change keys later. `rota config show --json` adds each key's `type`, `group`, `desc` and `choices`.
 - **`rota config edit`** opens the config screen in a terminal (also `rota config --ui`): keys grouped by section with a detail pane, booleans toggle, enum keys pick from their choices, the rest take a typed value checked as `config set` checks it. See [configuration](../usage/configuration.md#the-config-screen).
@@ -290,6 +290,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `test.fullWhere` | enum | `"local"` | `local`, `ci` | Where the gate and train run the full tier: here, or by pushing the merge result and waiting for the forge's checks (needs test.ciChecks). |
 | `test.ciTimeoutMinutes` | int | `60` |  | How long a ci run waits for its checks, 1 to 1440 minutes. ROTA_CI_TIMEOUT (seconds) overrides it for one run. |
 | `test.ciChecks` | list | `[]` |  | Check names that must all succeed on the pushed commit under test.fullWhere ci: GitHub check-run names or commit-status contexts, GitLab job names. |
+| `test.slots` | int | `1` |  | How many heavy test runs may hold the machine-wide test lock at once, 1 or more. The merge gate, rota test run and rota proof record queue on it; a run that finds every slot taken waits and says so on stderr. |
 | `test.isolate` | bool | `true` |  | Whether rota test run scrubs HERDR_*, TMUX*, ssh-agent variables and pins HOME and XDG_* to a temp root. The merge gate and train do not read it. |
 
 ### forge
@@ -374,7 +375,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 
 | Key | Type | Default | Values | Description |
 |-----|------|---------|--------|-------------|
-| `gate.smokeShards` | int | `4` |  | Concurrent shards bash test/gate.sh splits the smoke suite into, 1 or more. ROTA_SMOKE_SHARDS overrides it for one run. |
+| `gate.smokeShards` | int | `4` |  | Concurrent shards bash test/gate.sh splits the smoke suite into, 1 or more. ROTA_SMOKE_SHARDS overrides it for one run. Unset, the gate uses one shard per two cores, at most four. |
 
 ### doctor
 
