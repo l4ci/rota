@@ -1121,6 +1121,7 @@ func TestGateRefusesASlicePRTheForgeSaysClosesItsIssue(t *testing.T) {
 		{name: "forge lists none", refs: "none", verdict: GatePass},
 		{name: "final slice may close", refs: "5", final: true, verdict: GatePass},
 		{name: "forge cannot report", refs: "", verdict: GatePass, note: true},
+		{name: "forge errors on the read", refs: "error", verdict: GatePass, note: true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
