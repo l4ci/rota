@@ -35,8 +35,7 @@ func knHarvest(fs *flag.FlagSet) RunFunc {
 		if issue, err := issueBackend(root); err != nil {
 			return Result{}, err
 		} else if !issue {
-			d := jsonObj("blockedBy", "backend", "changed", false)
-			return Result{Data: d}, Refused("rota knowledge harvest reads issue comments (issues.source is file)")
+			return refuseHarvest(*mark != "", "backend", Refused("rota knowledge harvest reads issue comments (issues.source is file)"))
 		}
 		entries, err := ledger.Load(root)
 		if err != nil {
@@ -51,8 +50,7 @@ func knHarvest(fs *flag.FlagSet) RunFunc {
 		// only a comment by someone with write access counts, and so does a mark.
 		trust, err := c.deps().workerEnv().WriterTrust(root)
 		if errors.Is(err, worker.ErrNoPushTrust) {
-			d := jsonObj("blockedBy", "forge", "changed", false)
-			return Result{Data: d}, Refused("%s", err.Error()).WithHint("harvest needs GitHub: only GitHub can say whose learning comments to trust")
+			return refuseHarvest(*mark != "", "forge", Refused("%s", err.Error()).WithHint("harvest needs GitHub: only GitHub can say whose learning comments to trust"))
 		} else if err != nil {
 			return Result{}, err
 		}
@@ -94,6 +92,16 @@ func knHarvest(fs *flag.FlagSet) RunFunc {
 			return Result{Data: jsonObj("round", n, "learnings", list), Text: text}, nil
 		})
 	}
+}
+
+// refuseHarvest answers a refusal. The listing is read-only, so it exits 1 and
+// its data carries no "changed"; --mark writes, so it keeps exit 4.
+func refuseHarvest(writes bool, blockedBy string, e *Error) (Result, error) {
+	if writes {
+		return Result{Data: jsonObj("blockedBy", blockedBy, "changed", false)}, e
+	}
+	e.Exit = ExitFailed
+	return Result{Data: jsonObj("blockedBy", blockedBy)}, e
 }
 
 // writtenBy is the issue's comments of kind by authors the forge says can push.
