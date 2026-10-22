@@ -13,11 +13,6 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
-// usageErr is a refusal of the caller's input (exit 2).
-func usageErr(format string, a ...any) *exitcode.Error {
-	return exitcode.Errf(exitcode.ExitUsage, format, a...)
-}
-
 // neutralAC is the one criterion of a deferred finding that carries no fix.
 const neutralAC = "the problem above no longer reproduces, and a test or check that failed before the fix passes after it"
 
@@ -237,7 +232,7 @@ func fileFollowUps(be backlog.Backend, fs []followUp, pr string) (id string, add
 		}
 		merged, ok := addFollowUps(body, fresh)
 		if !ok {
-			return id, 0, usageErr("follow-up %s has no ## Acceptance section to add to; add the findings by hand or close it", open.ID)
+			return id, 0, exitcode.Errf(exitcode.ExitUsage, "follow-up %s has no ## Acceptance section to add to; add the findings by hand or close it", open.ID)
 		}
 		if err := dw.SetDetail(open.ID, merged); err != nil {
 			return id, 0, err
@@ -249,7 +244,7 @@ func fileFollowUps(be backlog.Backend, fs []followUp, pr string) (id string, add
 		Fields: map[string]string{"related": pr}, Given: map[string]bool{"related": true},
 		Body: []byte(created), HasBody: true})
 	if err != nil {
-		return "", 0, usageErr("cannot file the follow-up item: %v", err)
+		return "", 0, exitcode.Errf(exitcode.ExitUsage, "cannot file the follow-up item: %v", err)
 	}
 	res, err := be.Create(in)
 	if err != nil {
