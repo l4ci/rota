@@ -454,20 +454,12 @@ type Settings struct {
 // reads as its default here; ValidateConfig (and the *FromConfig constructors)
 // fail on it instead.
 func SettingsFromConfig(cfg any) Settings {
-	s := Settings{Provider: config.ForgeAuto, Source: config.SourceFile, RetryWait: 60 * time.Second, NotPlannedLabel: "not-planned"}
+	s := Settings{Provider: config.ForgeAuto, Source: config.SourceFile, RetryWait: retryWait(cfg), NotPlannedLabel: config.Label(cfg, "notPlanned")}
 	if p, err := config.ForgeProvider(cfg); err == nil {
 		s.Provider = p
 	}
 	if src, err := config.IssueSource(cfg); err == nil {
 		s.Source = src
-	}
-	if v, ok := config.Lookup(cfg, "issues.retryWaitSeconds"); ok && v != nil {
-		if f, err := strconv.ParseFloat(fmt.Sprint(v), 64); err == nil {
-			s.RetryWait = time.Duration(f * float64(time.Second))
-		}
-	}
-	if v, ok := config.Lookup(cfg, "issues.labels.notPlanned"); ok && v != nil {
-		s.NotPlannedLabel = fmt.Sprint(v)
 	}
 	for key, dst := range map[string]*string{"issues.connection": &s.Connection, "issues.jira.project": &s.JiraProject, "issues.linear.team": &s.LinearTeam, "issues.itsaplan.project": &s.ItsaplanProject} {
 		if v, ok := config.Lookup(cfg, key); ok && v != nil {
@@ -475,6 +467,18 @@ func SettingsFromConfig(cfg any) Settings {
 		}
 	}
 	return s
+}
+
+// retryWait is issues.retryWaitSeconds, fractions allowed. A value that is not
+// a number reads as the schema default.
+func retryWait(cfg any) time.Duration {
+	v, _ := config.Value(cfg, "issues.retryWaitSeconds")
+	f, err := strconv.ParseFloat(fmt.Sprint(v), 64)
+	if err != nil {
+		k, _ := config.SchemaKey("issues.retryWaitSeconds")
+		f, _ = strconv.ParseFloat(fmt.Sprint(config.Default(k)), 64)
+	}
+	return time.Duration(f * float64(time.Second))
 }
 
 // ValidateConfig is the corrupt-config check of the keys SettingsFromConfig

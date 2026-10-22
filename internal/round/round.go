@@ -59,15 +59,6 @@ const (
 	SourceForge = "forge"
 )
 
-// DefaultLabel is the issue label that means an agent is on the issue.
-const DefaultLabel = "in-progress"
-
-// DefaultNeedsHuman is the label of an issue handed to the human (C10).
-const DefaultNeedsHuman = "needs-human"
-
-// DefaultNeedsReview is the label of an issue whose PR awaits review.
-const DefaultNeedsReview = "needs-review"
-
 // NeedsInfoLabel is the label `/rota-capture --triage` puts on an issue it
 // found too unclear to build. A constant: triage writes it literally.
 const NeedsInfoLabel = "needs-info"
@@ -132,11 +123,13 @@ type Env struct {
 	// HolderPID names the lease holder for the item-timeout park; 0 discovers
 	// it from the process, as the other verbs do.
 	HolderPID int
-	// NeedsHuman is issues.labels.needsHuman; "" means DefaultNeedsHuman.
+	// NeedsHuman is issues.labels.needsHuman, the label of an issue handed to the
+	// human (C10); config.Label supplies its default.
 	NeedsHuman string
-	// SupportLabel is issues.labels.support; "" means DefaultSupportLabel.
+	// SupportLabel is issues.labels.support; config.Label supplies its default.
 	SupportLabel string
-	// NeedsReview is issues.labels.needsReview; "" means DefaultNeedsReview.
+	// NeedsReview is issues.labels.needsReview, the label of an issue whose PR
+	// awaits review; config.Label supplies its default.
 	NeedsReview string
 }
 
@@ -388,9 +381,6 @@ func (e Env) roundCfgErr() error {
 func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	if err := e.roundCfgErr(); err != nil {
 		return nil, err
-	}
-	if e.Label == "" {
-		e.Label = DefaultLabel
 	}
 	rep := &Report{views: map[string]*view{}}
 	if real, err := filepath.EvalSymlinks(root); err == nil {

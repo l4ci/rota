@@ -18,9 +18,6 @@ import (
 // to main. Main offers and withdraws the label; each side offers and assigns
 // only its own issues. With round.support empty nothing here applies.
 
-// DefaultSupportLabel is issues.labels.support when unset.
-const DefaultSupportLabel = "site:support"
-
 // Blocked reasons of the support split and the support side's fresh base.
 const (
 	// BlockSite: the issue belongs to the other machine's side of the split.
@@ -36,20 +33,18 @@ const (
 	BlockConfig = "config"
 )
 
-func (e Env) supportLabel() string { return strutil.FirstNonEmpty(e.SupportLabel, DefaultSupportLabel) }
-
 // offSite is why it belongs to the other side of the split ("" when this
 // machine may take it, and always with round.support empty).
 func (e Env) offSite(support, role string, it backlog.Item) string {
 	if support == "" {
 		return ""
 	}
-	labelled := slices.Contains(it.Labels, e.supportLabel())
+	labelled := slices.Contains(it.Labels, e.SupportLabel)
 	switch {
 	case role == roundcfg.RoleSupport && !labelled:
-		return fmt.Sprintf("%s is not labelled %s: the support machine (round.role support) takes only the issues main offers it", it.ID, e.supportLabel())
+		return fmt.Sprintf("%s is not labelled %s: the support machine (round.role support) takes only the issues main offers it", it.ID, e.SupportLabel)
 	case role != roundcfg.RoleSupport && labelled:
-		return fmt.Sprintf("%s is labelled %s and belongs to the support machine %s: rota round support offer --withdraw %s takes it back", it.ID, e.supportLabel(), support, it.ID)
+		return fmt.Sprintf("%s is labelled %s and belongs to the support machine %s: rota round support offer --withdraw %s takes it back", it.ID, e.SupportLabel, support, it.ID)
 	}
 	return ""
 }
@@ -98,15 +93,15 @@ func (e Env) OfferSupport(ctx context.Context, root string, be Board, ids []stri
 	}
 	var changed []string
 	for _, it := range items {
-		has := slices.Contains(it.Labels, e.supportLabel())
+		has := slices.Contains(it.Labels, e.SupportLabel)
 		if has != withdraw {
 			continue
 		}
 		var err error
 		if withdraw {
-			err = e.Forge.RemoveLabels(ctx, it.IssueKey(), []string{e.supportLabel()})
+			err = e.Forge.RemoveLabels(ctx, it.IssueKey(), []string{e.SupportLabel})
 		} else {
-			err = e.Forge.AddLabels(ctx, it.IssueKey(), []string{e.supportLabel()}, true)
+			err = e.Forge.AddLabels(ctx, it.IssueKey(), []string{e.SupportLabel}, true)
 		}
 		if err != nil {
 			return changed, fmt.Errorf("%s: %w", tracker.RefOf(it.ID), err)

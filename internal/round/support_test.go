@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/config"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -20,8 +21,9 @@ func TestCandidatesSupportSplit(t *testing.T) {
 	be := &fakeRemote{}
 	be.add("1", "main work", "", false, "")
 	be.add("2", "support work", "", false, "")
-	be.items["2"].Labels = []string{DefaultSupportLabel}
+	be.items["2"].Labels = []string{config.Label(nil, "support")}
 	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100)}
+	e.SupportLabel = config.Label(nil, "support")
 	get := func(set roundcfg.Settings) []string {
 		t.Helper()
 		set.Scope = roundcfg.ScopeOpen
@@ -72,7 +74,7 @@ func supportFixture(t *testing.T, cfg string) (*assignFixture, string) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"12", "13"} {
-		f.be.items[id].Labels = []string{DefaultSupportLabel}
+		f.be.items[id].Labels = []string{config.Label(nil, "support")}
 	}
 	return f, origin
 }
@@ -145,7 +147,7 @@ func TestSupportAssignRefusesTheOtherSite(t *testing.T) {
 
 	m := newAssignFixture(t)
 	m.set.Support = "mac"
-	m.be.items["12"].Labels = []string{DefaultSupportLabel}
+	m.be.items["12"].Labels = []string{config.Label(nil, "support")}
 	if _, err := m.assign("12", "", nil); blockedBy(t, err) != BlockSite || !strings.Contains(err.Error(), "--withdraw") {
 		t.Errorf("main assign of a support issue: %v", err)
 	}
@@ -269,7 +271,7 @@ func TestOfferSupport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(offered, []string{"12", "13"}) || !slices.Contains(f.be.labels[12], DefaultSupportLabel) || !slices.Contains(f.be.labels[13], DefaultSupportLabel) {
+	if !reflect.DeepEqual(offered, []string{"12", "13"}) || !slices.Contains(f.be.labels[12], config.Label(nil, "support")) || !slices.Contains(f.be.labels[13], config.Label(nil, "support")) {
 		t.Fatalf("offered %v, labels %v", offered, f.be.labels)
 	}
 
