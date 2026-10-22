@@ -235,6 +235,8 @@ func supportRoundStartStop(c *Ctx, root string, set roundcfg.Settings) (Result, 
 		if _, err := c.deps().workerEnv().BounceStore(root); errors.Is(err, worker.ErrNoPushTrust) {
 			d := jsonObj("blockedBy", "forge", "changed", false)
 			return Result{Data: d}, Refused("%s", err.Error()).WithHint("a support round needs GitHub: only GitHub can say who has write access, which the bounce markers rely on")
+		} else if err != nil {
+			return Result{}, err
 		}
 	}
 	return Result{}, nil
