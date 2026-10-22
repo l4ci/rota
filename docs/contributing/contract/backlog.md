@@ -21,7 +21,7 @@ rota item create --kind <bugs|features|tasks> --title <text> [--tag <tag>] [--de
 rota item create --batch-file <path|->
 repo: scoped
 data: {"id": string, "type": "B"|"F"|"T", "kind": string, "detail"?: string, "changed": bool}
-exit: 3 when BACKLOG.md or its section is missing, `--body-file` or `--raw-file` cannot be read, the milestone is absent on the tracker, or the umbrella repo is unknown or ambiguous; backend (`--raw-file` is file-only); tracker
+exit: 3 when BACKLOG.md or its section is missing, `--body-file` or `--raw-file` cannot be read, the milestone is unknown (not under `.rota/milestones/` on the file backend, absent on the tracker), or the umbrella repo is unknown or ambiguous; backend (`--raw-file` is file-only); tracker
 old: hv-item-create <kind> --title <text> [--tag T] [--desc D] [--body-file F] [--field Related=<v>] [--field Milestone=<v>] [--field Repos=<v>] [--field Subsystem=<v>] [--field Captured=<v>]; with `--raw-file`: hv-append "<section for kind>" "$(cat <file>)"
 shim: the helper prints one ID line. File mode: `id` is that line (for `--raw-file`, the ID parsed from the bullet). Issue mode: the line is `B12`, so `id` is `12` (letter dropped, rule 11). `type` is the dropped or leading letter; `detail` is `.rota/<kind>/<ID>.md` when `--body-file` was given; `kind` and `changed:true` are set by the shim.
 note: `--kind` is a flag, not the old first positional, because the verb creates an item rather than acting on one (rule 1).

@@ -94,9 +94,10 @@ note: `<branch>` is optional (default current branch) to match `scope`, where th
 ### rota review depth
 rota review depth [<branch>] [--labels <a,b>]
 repo: scoped
-note: reads the labels of the issue behind a `<agent>/<issue>-<slug>` branch from the tracker when the `ship.review` policy has a `labels` map; `--labels` adds to them.
-data: {"branch": string, "base": string, "depth": "full"|"light"|"none", "why": string, "changedLines": number, "labels": [string]}
-exit: 2 at an umbrella root without --repo; 3 when the branch does not exist; 1 when ship.review is malformed or the issue's labels cannot be read
+note: reads the issue behind a `<agent>/<issue>-<slug>` branch from the tracker when the `ship.review` policy can use it (a `labels` map to match, or scope drift on a policy that can come out below `full`); `--labels` adds to its labels. The base depth comes from a matching label (the strictest wins, `none` is final), then `lightBelow` against the changed lines, then `default`. A one-way door (a `Door: one-way` line in the branch's open PR body), a diff touching files the issue never named (scope drift; docs, frozen records, golden files and smoke sections are ignored unless `supportPaths` replaces them) or a changed file matching a `paths` glob raises the depth, never lowers it.
+data: {"branch": string, "base": string, "depth": "full"|"light"|"none", "signal": "label"|"door"|"scope-drift"|"path"|"size"|"default", "why": string, "changedLines": number, "labels": [string], "bundle"?: [string], "previousDepth"?: string, "depthNote"?: string}
+exit: 2 at an umbrella root without --repo; 3 when the branch does not exist; 1 when ship.review is malformed, the issue's labels cannot be read, or the forge cannot be reached to read the PR body (a local forge or a missing forge CLI has no PR to read, and `why` then notes that no Door line was read)
+note: `signal` names the rule that decided. `bundle` lists the member issues when the branch is a bundled slot's (or queued PR's): each bundled issue is read like the lead, its depth decided on its own labels, and the highest wins, with every issue's declared files counting for scope drift. `previousDepth` and `depthNote` appear when the depth rose since the branch's newest recorded review set (`review depth <old> -> <new> (<why>): record the missing review verdict before gating`); the text prints the note on a second line.
 
 ### rota review scaffolding
 rota review scaffolding [<branch>] [--base <branch>]

@@ -14,6 +14,7 @@ exit: 1 when `--kind` is not `delivery` or `decision`; 2 when --title or --summa
 old: hv-vision-add "<--title>" "<--summary>" ["<--depends>"]    (title, summary, depends-csv were positionals 1, 2, 3)
 shim: wraps the printed ID (`M01`) as `id`; old rc 2 and 3 both become 5, rc 4 becomes 6.
 note: `--kind decision` marks a milestone of decision items (`decision:research`, `decision:grilling`): the plan gets `kind: decision` in its frontmatter plus `## Decisions` (one line per closed decision, written by `rota item complete --gist` and `rota round accept --gist`) and `## Not yet specified` (the fog). `--kind delivery` (the default) leaves the plan byte-identical to before. A decision milestone ships under the usual rule.
+note: a new plan carries `## Capabilities` (one contract per bullet, tagged `(new)`, `(modified)` or `(removed)`) and `## Acceptance` with `- [ ]` criteria, as `milestone check` reads them.
 note: the key is minted, so `add` takes no positional and never exits 4 for an existing key; `--depends` IDs are not validated, as old.
 note: at an umbrella root in issue mode the milestone lives on the home sub-repo (`issues.homeRepo`, else the first registered): its tracking issue, plan text and slice plans. `add` mints the ID over the native milestones of every sub-repo and creates the native milestone on the home repo only (other sub-repos get theirs on first use of the ID). `list` and `active` report `shipped` only while every sub-repo's native milestone of it is closed, else `active`, and `ready` follows the adjusted status. `status` moves the home tracking issue, then opens or closes the native milestone in every other sub-repo that has one. `show` and `put` act on the home plan. No `--repo` is needed for any of these.
 
@@ -76,6 +77,7 @@ data: {"changed": bool}
 exit: tracker
 old: hv-vision-index
 shim: `changed` compares a hash of `.rota/MILESTONES.md` and CLAUDE.md before and after. The old helper's stdout (managed-block output) is dropped.
+note: with no active milestone the vision block's intro is `Project milestones live in .rota/MILESTONES.md.` in file mode and, in issue mode, says milestones are tracker milestones with a tracking issue (`rota milestone show MNN`) and `.rota/MILESTONES.md` is the index. In issue mode a MILESTONES.md that still holds `shipped` or `archived` file-mode entries counts as history, so the block reads `no active milestones` rather than `no milestones yet`.
 
 ### rota migrate milestones
 rota migrate milestones [--apply]
