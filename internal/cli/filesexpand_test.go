@@ -81,8 +81,8 @@ func TestExpandFilesMultiArgAndNoPlaceholder(t *testing.T) {
 	if want := []string{`'go' 'vet' '.rota/config.json' 'a.txt'`, "echo hi there"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("got %q, want %q", got, want)
 	}
-	// No placeholder: git is never consulted, so a bad base is no error.
+	// Without {files}, git is never consulted, so a bad base is no error.
 	if got, err := expandFiles(expandCtx(), root, "no-such-ref", []string{"echo hi"}); err != nil || got[0] != "echo hi" {
-		t.Errorf("no placeholder: %q, %v", got, err)
+		t.Errorf("without {files}: %q, %v", got, err)
 	}
 }

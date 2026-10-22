@@ -17,11 +17,11 @@ func anyContains(list []string, sub string) bool {
 	return false
 }
 
-// expandFiles is the one owner of the {files} placeholder. Each element of cmds
+// expandFiles is the one owner of the {files} token. Each element of cmds
 // is one command (its arguments; a single argument is a shell line) and comes
 // back as the shell line that runs and that proof records. {files} becomes the
 // shell-quoted changed files of dir against base. git is asked once, and only
-// when some command carries the placeholder.
+// when some command uses {files}.
 //
 // The changed set is the working tree against the merge-base of base and HEAD:
 // committed and uncommitted changes plus untracked files git does not ignore,
