@@ -460,6 +460,9 @@ func (b *Issues) SyncMilestoneChildren(mid string) (ChildSync, error) {
 // native titles. The item write has already landed, so a failure here is a
 // warning, not an error: `rota milestone check` regenerates the list.
 func (b *Issues) syncChildrenOf(titles ...string) {
+	if b.NoChildSync {
+		return
+	}
 	seen := map[string]bool{}
 	for _, t := range titles {
 		mid, _, ok := parseMSTitle(t)
