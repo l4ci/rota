@@ -4,7 +4,7 @@
 
 ### Changed
 
-- `rota verdict add --file-deferred` files one follow-up item per PR ("Review follow-ups from PR #N") instead of one per finding; a later verdict on the same PR appends to it. `review.fileDeferred` (`minor` default, `major`, `off`) sets the severity floor. `data.filed` names the item, `data.appended` counts the new lines The `skipped` field is gone from the verdict add JSON (#1599).
+- `rota verdict add --file-deferred` files one follow-up item per PR ("Review follow-ups from PR #N") instead of one per finding; a later verdict on the same PR appends to it. `review.fileDeferred` (`minor` default, `major`, `off`) sets the severity floor. `data.filed` names the item, `data.appended` counts the new lines. The `skipped` field is gone from the verdict add JSON (#1599).
 - File-mode proof rows move from the tracked detail file to a gitignored `.rota/<bugs|features|tasks>/<ID>.proof` sidecar (#1547), so `rota proof record` no longer dirties the worktree and `worker done` is not refused by its own proof. Rows already in a detail file are still read and seed the sidecar on first write. Re-run `rota init` to add the `.rota/**/*.proof` ignore rule; until then the sidecar shows as untracked, and the doctor warns about the missing line. File-mode proof is no longer committed with the item.
 
 - `rota item create --milestone` and `rota item field set --name milestone` now refuse an unknown milestone ID with exit 3 on the file backend too (was a silent write). Trackers keep exit 3 with a clearer message. Both errors name the ID and point at `rota milestone list`. Clearing the field still needs no milestone (#1588).
