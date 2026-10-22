@@ -76,7 +76,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
-			defs, sigs := setupSuggestions(c, dir, nil)
+			defs, sigs := setupSuggestions(c, dir, setupProject(c, dir), nil)
 			return setupList(defs, sigs), nil
 		}
 		if err := refuseHomeInit(c, "setup", *force); err != nil {
@@ -102,15 +102,31 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			given[kv[0]] = val
 		}
 		interactive := !*yes && !c.JSON && c.deps().SetupIsTTY(c.Stdin)
-		defs, sigs := setupSuggestions(c, dir, given)
+		proj := setupProject(c, dir)
+		// The main path inits dir, so an enclosing support project refuses it
+		// as it refuses `rota init`, before anything is written.
+		mainStop := func() (Result, error) {
+			if rotatree.Exists(proj) {
+				if res, err := supportRefusal(c, proj, c.Path); err != nil {
+					return res, err
+				}
+			}
+			if rotatree.Exists(dir) {
+				return Result{}, initializedStop(dir)
+			}
+			return Result{}, nil
+		}
+		defs, sigs := setupSuggestions(c, dir, proj, given)
 		// The role picks the path. Off a terminal it is known now, so an
 		// initialized main project is refused before anything else.
 		role, roleKnown := given["round.role"], true
 		if role == "" {
 			role, roleKnown = defs["round.role"], !interactive
 		}
-		if roleKnown && role != roundcfg.RoleSupport && rotatree.Exists(dir) {
-			return Result{}, initializedStop(dir)
+		if roleKnown && role != roundcfg.RoleSupport {
+			if res, err := mainStop(); err != nil {
+				return res, err
+			}
 		}
 		if !interactive && !*yes && len(given) == 0 {
 			return Result{}, Usage("setup needs answers and there is no terminal").
@@ -126,10 +142,10 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		if role == roundcfg.RoleSupport {
-			return setupSupport(c, dir, in, given, interactive, defs, sigs)
+			return setupSupport(c, proj, in, given, interactive, defs, sigs)
 		}
-		if rotatree.Exists(dir) {
-			return Result{}, initializedStop(dir)
+		if res, err := mainStop(); err != nil {
+			return res, err
 		}
 		answers, err := resolveAnswers(c, in, given, interactive, defs, sigs, role)
 		if err != nil {
@@ -222,6 +238,15 @@ func setupAnswer(c *Ctx, in *bufio.Reader, p config.Prompt, given map[string]str
 		return ask(in, c.Stderr, p, defs[p.Key], sigs[p.Key])
 	}
 	return defs[p.Key], nil
+}
+
+// setupProject is the project setup acts on: the one enclosing dir, else dir
+// itself (a fresh directory). The support path reads and writes its config.
+func setupProject(c *Ctx, dir string) string {
+	if root, err := c.Root(); err == nil {
+		return root
+	}
+	return dir
 }
 
 func initializedStop(dir string) error {
@@ -388,11 +413,12 @@ func setupValue(p config.Prompt, raw string) string {
 // .rota/config.local.json or .rota/config.json (a clone on the support path),
 // then the global config's value when it is one of
 // the question's choices (a hand-edited bad value is ignored), then the value
-// read from the project, then the schema default. defs is the starting value;
+// read from the project, then the schema default. dir is where the project
+// signals are read; proj is the enclosing project whose config files count. defs is the starting value;
 // sigs is what the prompt and --list show beside it: the project's signal, or
 // the global value with the differing signal noted. A broken global file warns
 // and counts as empty.
-func setupSuggestions(c *Ctx, dir string, given map[string]string) (defs map[string]string, sigs map[string]setupSignal) {
+func setupSuggestions(c *Ctx, dir, proj string, given map[string]string) (defs map[string]string, sigs map[string]setupSignal) {
 	defs = map[string]string{}
 	for _, p := range config.Prompts {
 		defs[p.Key] = p.DefaultChoice()
@@ -422,7 +448,7 @@ func setupSuggestions(c *Ctx, dir string, given map[string]string) (defs map[str
 	// Else a default would override main's choice locally.
 	existing := map[string]setupSignal{}
 	for _, file := range []string{rotatree.ConfigLocalFile, rotatree.ConfigFile} {
-		vals := fsio.LoadJSON(rotatree.File(dir, file), jsonx.NewObject())
+		vals := fsio.LoadJSON(rotatree.File(proj, file), jsonx.NewObject())
 		for _, p := range config.Prompts {
 			if _, seen := existing[p.Key]; seen {
 				continue
