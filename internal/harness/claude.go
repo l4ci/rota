@@ -122,6 +122,8 @@ func (claude) WorkAccounts() bool { return true }
 
 func (claude) RawPaste() bool { return false }
 
+func (claude) PromptAcknowledgement() PromptAcknowledgement { return PromptAcknowledgement{} }
+
 // AccountEnv is the pane's CLAUDE_CONFIG_DIR.
 func (claude) AccountEnv(a Account) []string {
 	if a.ConfigDir == "" {

@@ -432,11 +432,11 @@ func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 		"--wait", "--until", "working", "--until", "blocked", "--timeout", "60000")
 	if r.ExitCode == 0 {
 		status, kind := jget(r.Stdout, "result.agent.agent_status"), jget(r.Stdout, "result.agent.agent")
-		if (status == "working" || status == "blocked") && kind != "" && kind != harness.Codex {
+		if hz, known := harness.Lookup(kind); known && kind != "" && !hz.PromptAcknowledgement().RequireEcho && (status == "working" || status == "blocked") {
 			return nil
 		}
 		pane := h.promptPane(ctx, name)
-		// Codex can remain at its empty startup prompt even when herdr's
+		// A harness can remain at its empty startup prompt even when herdr's
 		// prompt RPC reports success (including a transient working status).
 		// Only an echo above the input line acknowledges a finished turn.
 		output := pane
@@ -444,7 +444,7 @@ func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 			output = pane[:i]
 		}
 		ack := briefTail(text) != "" && strings.Contains(squeeze(output), briefTail(text))
-		if ack || ((status == "working" || status == "blocked") && kind != harness.Codex && !strings.Contains(pane, "Ask Codex to do anything")) {
+		if ack || ((status == "working" || status == "blocked") && !harness.RequiresPromptEcho(kind, pane)) {
 			return nil
 		}
 	}

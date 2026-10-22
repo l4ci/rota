@@ -123,6 +123,10 @@ func (codex) WorkAccounts() bool { return false }
 
 func (codex) RawPaste() bool { return false }
 
+func (codex) PromptAcknowledgement() PromptAcknowledgement {
+	return PromptAcknowledgement{RequireEcho: true, EmptyPrompt: "Ask Codex to do anything"}
+}
+
 // AccountEnv is the slot's CODEX_HOME, set only for a configured account: the
 // default home is Codex's own. The claude config dir is not its business, and
 // round.accounts is Anthropic's.
