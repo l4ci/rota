@@ -373,16 +373,6 @@ func TestLegacyKeysStillDecide(t *testing.T) {
 			t.Errorf("%s: ForgeProvider = %q, %v; want %q", tc.cfg, got, err, tc.forge)
 		}
 	}
-	for _, bad := range []string{`{"issues":{"source":"svn"}}`, `{"issues":{"source":3}}`} {
-		cfg, _ := jsonx.Decode([]byte(bad))
-		if _, err := IssueSource(cfg); err == nil || !strings.Contains(err.Error(), "invalid issues.source") {
-			t.Errorf("%s: err = %v", bad, err)
-		}
-	}
-	cfg, _ := jsonx.Decode([]byte(`{"forge":{"provider":"bitbucket"}}`))
-	if _, err := ForgeProvider(cfg); err == nil || !strings.Contains(err.Error(), "invalid forge.provider") {
-		t.Errorf("err = %v", err)
-	}
 }
 
 // A removed key held only in config.local.json is as inert as one in
@@ -417,14 +407,21 @@ func TestInvalidValueErrorsNameTheValue(t *testing.T) {
 		{`{"issues":{"source":"a\"b\\c\nd"}}`, `invalid issues.source "a\"b\\c\nd" (expected `},
 		{`{"issues":{"source":{"k":1}}}`, `invalid issues.source {"k": 1} (expected `},
 		{`{"backlog":{"backend":"git"}}`, `invalid backlog.backend "git" (expected file|issues)`},
+		{`{"issues":{"source":"ünï"}}`, `invalid issues.source "ünï" (expected `},
+		{`{"issues":{"source":"a\"b\\c"}}`, `invalid issues.source "a\"b\\c" (expected `},
 	} {
 		cfg, _ := jsonx.Decode([]byte(tc.cfg))
 		if _, err := IssueSource(cfg); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: err = %v, want %q", tc.cfg, err, tc.want)
 		}
 	}
-	cfg, _ := jsonx.Decode([]byte(`{"forge":{"provider":false}}`))
-	if _, err := ForgeProvider(cfg); err == nil || !strings.Contains(err.Error(), "invalid forge.provider false (expected ") {
-		t.Errorf("err = %v", err)
+	for _, tc := range []struct{ cfg, want string }{
+		{`{"forge":{"provider":false}}`, "invalid forge.provider false (expected "},
+		{`{"forge":{"provider":"bitbucket"}}`, `invalid forge.provider "bitbucket" (expected `},
+	} {
+		cfg, _ := jsonx.Decode([]byte(tc.cfg))
+		if _, err := ForgeProvider(cfg); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v, want %q", tc.cfg, err, tc.want)
+		}
 	}
 }
