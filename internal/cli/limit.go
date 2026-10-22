@@ -349,7 +349,7 @@ func ownWatching(c *Ctx, mode string) limits.Watching {
 // standing: a live supervisor, another watcher, or a caller without the lease.
 func limitWatchGuard(c *Ctx, root, cd string) (Result, error) {
 	le := c.deps().LeaseEnv()
-	lease, st, held, err := le.Holds(cd, c.deps().HolderPID(), c.deps().Getenv)
+	lease, st, held, err := round.HoldsLease(round.LeaseProbe{Env: le, HolderPID: c.deps().HolderPID(), Getenv: c.deps().Getenv}, cd)
 	if err != nil {
 		return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}
