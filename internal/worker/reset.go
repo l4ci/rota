@@ -26,8 +26,8 @@ type ResetResult struct {
 //
 // The guard refuses when the worktree has uncommitted changes (untracked files
 // included) or commits that never reached the base (`git cherry <base> HEAD`
-// shows `+`). The base is the slot's cycle branch, which is local and where
-// the gate lands finished work; `git cherry` compares by patch, so a rebased
+// shows `+`). The base is the slot's cycle branch, or its fetched origin ref
+// when the local branch is behind; `git cherry` compares by patch, so a rebased
 // or cherry-picked merge counts as merged and a squash merge does not.
 //
 // Retry: dispatching the task id the slot already holds, while it sits on that
@@ -74,6 +74,12 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 	}
 	if _, code := e.git(root, "rev-parse", "--verify", "--quiet", base+"^{commit}"); base == "" || code != 0 {
 		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' base '%s' does not exist", slot, base))
+	}
+	if from == "" {
+		base, err = e.resetBase(root, slot, base)
+		if err != nil {
+			return res, err
+		}
 	}
 	res.Base = base
 
@@ -147,6 +153,28 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 	res.Branch, res.Changed = newBranch, true
 	res.SHA, _ = e.git(root, "rev-parse", "--short", base)
 	return res, nil
+}
+
+// resetBase refreshes a tracked base before judging the slot's commits. A
+// support machine's local main can lag landed work. Local cycle branches
+// without an origin counterpart, or ahead of origin, retain their own base.
+func (e Env) resetBase(root, slot, base string) (string, error) {
+	remote := "origin/" + base
+	if _, code := e.git(root, "rev-parse", "--verify", "--quiet", "refs/remotes/"+remote+"^{commit}"); code != 0 {
+		return base, nil
+	}
+	if _, code := e.git(root, "fetch", "-q", "origin", base); code != 0 {
+		return "", fail(exitcode.ExitUnavailable, fmt.Sprintf("could not fetch %s before checking slot '%s'; not resetting it", remote, slot))
+	}
+	_, code := e.git(root, "merge-base", "--is-ancestor", base, remote)
+	switch code {
+	case 0:
+		return remote, nil
+	case 1:
+		return base, nil
+	default:
+		return "", fail(exitcode.ExitUnavailable, fmt.Sprintf("could not compare %s with %s before resetting slot '%s'", base, remote, slot))
+	}
 }
 
 func indent(lines []string) string {

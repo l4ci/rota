@@ -457,11 +457,17 @@ func ok(c *Ctx, stdout io.Writer, res Result) int {
 
 func fail(c *Ctx, stdout io.Writer, err error) int { return failWith(c, stdout, err, Result{}) }
 
-// failWith reports err; res is kept only on exit 1 and 4, the codes whose
-// failure may carry data.
+// failWith keeps failure data on exit 1 and 4, plus round assign's explicit
+// exit-5 dispatch result: it changed state and must name the unsent slot.
 func failWith(c *Ctx, stdout io.Writer, err error, res Result) int {
 	e := asError(err)
-	if e.Exit != ExitFailed && e.Exit != ExitRefused {
+	keepDispatch := false
+	if e.Exit == ExitUnavailable && c.Path == "rota round assign" {
+		if d, ok := res.Data.(*jsonx.Object); ok {
+			keepDispatch = jsonx.Str(d, "blockedBy") == "dispatch"
+		}
+	}
+	if e.Exit != ExitFailed && e.Exit != ExitRefused && !keepDispatch {
 		res = Result{}
 	}
 	if !c.JSON && res.Text != "" {
