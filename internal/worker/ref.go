@@ -94,6 +94,9 @@ func IsBlocked(state string) bool { return stateIs(state, "blocked") }
 // IsDead: the worker's session is gone.
 func IsDead(state string) bool { return stateIs(state, "dead") }
 
+// IsBusy: a live session is working in its pane.
+func IsBusy(state string) bool { return stateIs(state, "busy") }
+
 // Parkable: finished, so a clean worktree can be parked and the slot freed.
 func Parkable(state string) bool { return stateIs(state, "done", "idle") }
 

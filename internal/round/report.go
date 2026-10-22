@@ -128,7 +128,7 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 			res.Changed = true
 			// A reply on a PR has no state, so it never reaches this edge: the
 			// review cursor stays where the bounce left it.
-			if state == "done" {
+			if worker.IsDone(state) {
 				s.BaselineReview(e.now())
 			}
 		}

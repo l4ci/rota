@@ -20,7 +20,7 @@ import (
 // (external) slot has no session to dispatch into, so Transfer and assign
 // refuse it; it is never idle.
 func SlotIdle(s *worker.Slot) bool {
-	return s != nil && s.HeldID() == "" && s.State() != "busy" && !s.IsExternal()
+	return s != nil && s.HeldID() == "" && !worker.IsBusy(s.State()) && !s.IsExternal()
 }
 
 // SlotAccount is the harness kind ("codex", or "" for Claude) and the account
