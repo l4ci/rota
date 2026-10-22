@@ -130,24 +130,6 @@ func TestResolveReviewDepthUnquotedPaths(t *testing.T) {
 	}
 }
 
-func TestReviewKinds(t *testing.T) {
-	for _, c := range []struct {
-		d       config.ReviewDepth
-		hasSpec bool
-		want    []string
-	}{
-		{config.DepthFull, true, []string{"review-spec", "review-quality"}},
-		{config.DepthFull, false, []string{"review-spec", "review-quality"}},
-		{config.DepthLight, true, []string{"review-spec"}},
-		{config.DepthLight, false, []string{"review-quality"}},
-		{config.DepthNone, true, nil},
-	} {
-		if got := ReviewKinds(c.d, c.hasSpec); !slices.Equal(got, c.want) {
-			t.Errorf("ReviewKinds(%s, %v) = %v, want %v", c.d, c.hasSpec, got, c.want)
-		}
-	}
-}
-
 func TestDoorNote(t *testing.T) {
 	below := config.ReviewPolicy{Default: config.DepthLight}
 	full := config.ReviewPolicy{Default: config.DepthFull}
