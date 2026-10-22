@@ -63,14 +63,6 @@ note: a key outside the schema is rejected (maintainer decision), where old acce
 note: an empty `<value>` is valid and stores the empty string; the old helper rejected it, so the shim passes `""` as a JSON literal.
 note: (#1101) `autonomy.level` takes `off`, `roundtrip` or `auto`. A project file stamped before the split may still hold the old one-hop `auto`; `config set autonomy.level` first rewrites it to `roundtrip` in `config.json` and `config.local.json` (with `--global`, in the global config), applies the value, then raises the stamp, so a deliberate `rota config set autonomy.level auto` is kept. A rewrite adds `autonomy: {"rewrote": true}` to `data` and a `rewrote: autonomy.level auto -> roundtrip in <files> ...` line to the text; when the set itself then fails, the same lines go to stderr as warnings.
 
-### rota config save-global
-rota config save-global
-repo: scoped
-data: {"path": string, "saved": []string, "autonomy"?: {"rewrote": true}}
-exit: 2 when an argument is given; 3 when no `.rota/` is found; 70 when the global config is not a JSON object or cannot be read (nothing is written)
-old: none
-note: merges the schema keys `.rota/config.json` sets (never `config.local.json`, never the project-owned `rota.version`, `git.baseBranch` and `umbrella.enabled`) into the global config. Keys the project does not set stay as the global holds them, so a project saving its values never deletes an inherited one. `saved` lists the keys written, in schema order. An old one-hop `autonomy.level auto` in a project stamped before the split is saved as `roundtrip` (`autonomy.rewrote`, same line as `config set`).
-
 ### rota config check
 rota config check
 repo: scoped
