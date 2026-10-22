@@ -37,7 +37,8 @@ func assignedTaskDispatch(c *Ctx, ctx context.Context, root string, o worker.Dis
 	if err != nil {
 		return o, cleanup, Usage("%s", err)
 	}
-	env := accountedRoundEnv(c, ctx, root)
+	env := c.deps().RoundEnv(ctx, root)
+	env.Worker = workerEnvCtx(c, ctx)
 	text, rebuilt, err := env.RebuildTaskBrief(ctx, root, board, o, set)
 	if err != nil {
 		var b *round.BlockedError

@@ -1434,7 +1434,7 @@ func ghostPaneFake(styled string, send func(a []string)) *fake {
 		if send != nil {
 			send(a)
 		}
-		if a[0] == "agent" && a[1] == "get" {
+		if a[0] == "agent" && (a[1] == "get" || a[1] == "prompt") {
 			return Result{Stdout: agentJSON("working")}
 		}
 		if a[0] == "capture-pane" || (a[0] == "agent" && a[1] == "read") {
