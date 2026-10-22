@@ -212,6 +212,51 @@ func TestSupportResumeMergesOriginOrRefusesOnConflict(t *testing.T) {
 	}
 }
 
+// #1598 slice B review: a dirty worktree refuses the resume before any merge
+// runs, as dirty and never as a conflict, and leaves the branch and the change
+// where they were.
+func TestSupportResumeRefusesDirtyWorktree(t *testing.T) {
+	f, origin := supportFixture(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
+	if _, err := f.assign("12", "mac-ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	wt := filepath.Join(f.root, ".worktrees", "mac-ben")
+	writeFile(t, filepath.Join(wt, "work"), "mine")
+	sh(t, wt, "add", "work")
+	sh(t, wt, "commit", "-q", "-m", "worker commit")
+	writeFile(t, filepath.Join(wt, "work"), "uncommitted")
+	pushToOrigin(t, origin, "other", "theirs")
+	before, _ := git.Exec(bg, wt, "rev-parse", "HEAD")
+	sent := len(f.host.sents)
+	if _, err := f.assign("12", "mac-ben", nil); blockedBy(t, err) != BlockDirty {
+		t.Fatalf("dirty resume: %v", err)
+	}
+	after, _ := git.Exec(bg, wt, "rev-parse", "HEAD")
+	if before.Stdout != after.Stdout {
+		t.Error("a dirty resume merged origin/main")
+	}
+	if b, _ := os.ReadFile(filepath.Join(wt, "work")); string(b) != "uncommitted" {
+		t.Errorf("the uncommitted change is gone: %q", b)
+	}
+	if len(f.host.sents) != sent {
+		t.Error("a dirty resume was dispatched")
+	}
+}
+
+// #1598 slice B review: every --bundle member must be on this machine's side
+// of the split, not only the lead.
+func TestSupportAssignRefusesOffSiteBundleMember(t *testing.T) {
+	f, _ := supportFixture(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
+	f.be.items["13"].Labels = nil
+	_, err := f.assign("12", "", func(o *AssignOpts) { o.Bundle = []string{"13"} })
+	if blockedBy(t, err) != BlockSite || !strings.Contains(err.Error(), "13") {
+		t.Fatalf("support bundle with an unlabelled member: %v", err)
+	}
+	if len(f.be.claims) != 0 {
+		t.Errorf("a refused assign claims nothing: %v", f.be.claims)
+	}
+}
+
 // #1598 AC-2: main offers issues to the support side by label and withdraws
 // them; an issue a main slot holds is not offered, and one a support claim
 // holds is not withdrawn.

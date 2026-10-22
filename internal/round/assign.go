@@ -760,6 +760,9 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		return run, false, err
 	}
 	for _, m := range members {
+		if why := e.offSite(set.Support, set.Role, *m); why != "" {
+			return run, false, blocked(BlockSite, "bundle member %s", why)
+		}
 		res.Bundle = append(res.Bundle, worker.NormID(m.ID))
 	}
 
