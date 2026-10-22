@@ -257,6 +257,7 @@ func TestSetupIssuesSourceSignal(t *testing.T) {
 		"gh missing":         {"git@github.com:acme/x.git", signalOpts{}, "file", "gh is not installed"},
 		"gh unauthenticated": {"git@github.com:acme/x.git", signalOpts{onPath: []string{"gh"}, authRC: 1}, "file", "not authenticated"},
 		"probe fails":        {"git@github.com:acme/x.git", signalOpts{onPath: []string{"gh"}, authErr: context.DeadlineExceeded}, "", ""},
+		"lookalike host":     {"git@notgitlab.evil.example:acme/x.git", signalOpts{onPath: []string{"glab"}}, "", ""},
 		"other host":         {"git@git.example.com:acme/x.git", signalOpts{onPath: []string{"gh"}}, "", ""},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -293,6 +294,8 @@ func TestSetupGlobalBeatsSignalAndSkipsProbe(t *testing.T) {
 		return proc.Result{}, nil
 	}
 	var so, se bytes.Buffer
+	wd, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(wd) })
 	if code := mainWith(d, []string{"-C", dir, "setup", "--list", "--json"}, strings.NewReader(""), &so, &se); code != 0 {
 		t.Fatalf("exit %d: %s", code, se.String())
 	}
