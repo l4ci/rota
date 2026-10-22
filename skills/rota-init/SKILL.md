@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # rota-init: Suggest Config Values From the Project
 
-`rota init` and `rota setup` offer the schema defaults whatever the project is. This skill reads the repo first, proposes values with the evidence for each and asks the maintainer to confirm them one at a time. It writes nothing the maintainer did not confirm.
+`rota setup` suggests values it reads from the project, with the evidence for each, and `rota init` seeds the schema defaults. This skill takes the verb's suggestions, adds judgement and asks the maintainer to confirm them one at a time. It writes nothing the maintainer did not confirm.
 
 ## When NOT to use
 
@@ -25,22 +25,19 @@ Copy this checklist and track your progress:
 
 ## Step 1 — Read signals
 
-Read the repo; do not ask what it can answer ([`references/authoring-conventions.md`](references/authoring-conventions.md), *Don't ask what the code can answer*). For each key below, note the value and the evidence (file, line or command output). A key with no signal is not proposed: it keeps the schema default, and the report says so.
+Run `rota setup --list --json` from the project root. `data.questions[]` carries, per question, `suggestion` and `evidence` when the repo gave a signal (`git.baseBranch`, `issues.source`, `test.fast`, `test.full`, `round.workerKind`, `round.dispatch`, `work.isolation`). A question without them has no signal: it keeps the schema default, and the report says so. The verb reads `go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml`, the Makefile, CI files, the origin host, PATH and `git worktree list`; do not re-read them to second-guess it ([`references/authoring-conventions.md`](references/authoring-conventions.md), *Don't ask what the code can answer*).
 
-| Key | Affects | Signals |
-|---|---|---|
-| `test.fast` | /rota-work and rounds | The narrowest test command that takes changed files: `go test`, `package.json` scripts (`test`, `lint`), `pyproject.toml` pytest or ruff config, `cargo test`, Makefile targets (`test`, `check`, `lint`) |
-| `test.full` | /rota-work and rounds | The whole-suite command from the same files, plus what CI runs (`.github/workflows/*`, `.gitlab-ci.yml`) |
-| `git.baseBranch` | both | `git symbolic-ref --short refs/remotes/origin/HEAD`, else the branch `git branch --list main master trunk` finds |
-| `forge.provider` | both | The `origin` host from `git remote get-url origin`: github.com → `github`, a GitLab host → `gitlab`, no remote → `local` |
-| `issues.source` | both | The forge above (`github` or `gitlab`) when `gh` or `glab` is installed and authenticated; `file` otherwise. A `.jira` or `.linear` config is a hint, not a proof: say so |
-| `round.workerKind` | rounds | Harness CLIs on `PATH` (`command -v claude codex opencode`). Several installed: list them, recommend the one running this session |
-| `work.isolation` | /rota-work (solo) | `worktree` when the repo already has linked worktrees (`git worktree list`) or `.worktrees/`; `branch` otherwise |
-| `round.dispatch` | rounds | `herdr` when it is on `PATH`, else `tmux` when it is and `$TMUX` is set, else `subagent` |
+Add only judgement the verb cannot make:
+
+- `round.workerKind`: the verb takes the first harness CLI on `PATH`. When the evidence lists several, recommend the one running this session.
+- `test.fast`: the verb proposes the manifest's whole-suite command. When a narrower command that takes changed files exists (a `package.json` `lint` or `test` script, a Makefile `check` target, `pytest` or `ruff` config), propose it with its evidence; `{files}` expands to the changed files, single-quoted, after `--`.
+- `test.full`: when the verb proposes the manifest command and a CI file runs more, say so.
+- `issues.source`: a `.jira` or `.linear` config is a hint, not a proof: say so.
+- `forge.provider` is not a setup question; read `git remote get-url origin` (github.com → `github`, a GitLab host → `gitlab`, no remote → `local`) when you want to propose it.
 
 `work.*` keys affect `/rota-work` and other solo cycles. `round.*` keys affect parallel rounds (`rota round`, `rota worker`). Say which one each proposal affects when you ask.
 
-Never run a test command to prove it works: the evidence is where you read it.
+Never run a test command to prove it works: the evidence is where the verb read it.
 
 ## Step 2 — Compare with current config
 
@@ -60,7 +57,7 @@ Silence, an unavailable picker or an unclear reply is never a yes. Ask once more
 
 Only confirmed values, only through rota verbs; never edit `.rota/config.json`.
 
-- **No `.rota/` yet:** one `rota setup --set key=value` per answer to a key `rota setup --list` offers (`issues.source`, `work.isolation`, `round.dispatch`, `round.workerKind`, ...). If no answer is one of those, `rota init` first.
+- **No `.rota/` yet:** one `rota setup --set key=value` per answer to a key `rota setup --list` offers (`issues.source`, `work.isolation`, `round.dispatch`, `round.workerKind`, `git.baseBranch`, ...). If no answer is one of those, `rota init` first.
 - **Everything else, and every key on an initialized project:** `rota config set <key> <value>`. List values are JSON (`rota config set test.fast '["go test ./..."]'`).
 
 Run `rota config check` after the writes. Fix what it flags, re-run, and continue only when it is clean.
@@ -83,4 +80,4 @@ One line per key: `<key>: <value> (<evidence>)` for a confirmed write, `<key>: u
 - Evidence with every proposal, recommended value first.
 - Nothing written unconfirmed, nothing written outside the rota verbs.
 - Initialized project: show only the keys that differ.
-- No new verb: the skill composes `rota setup`, `rota config` and plain repo reads.
+- No signal table of its own: the signals live in `rota setup --list --json`; the skill composes `rota setup`, `rota config` and judgement.
