@@ -95,7 +95,8 @@ const (
 	GateNoVerify = "no-verify"
 	// GateNotClosing: the PR body has no closing keyword for the slot's issue,
 	// so the merge would leave it open and drifted; the CLI exits 4 with it,
-	// blockedBy closes. An issue labelled PartialSliceLabel is exempt.
+	// blockedBy closes. An issue labelled PartialSliceLabel is exempt, but a PR
+	// the forge says closes one is refused with the same verdict (FinalSlice).
 	GateNotClosing = "closes"
 	// GateBestOfUnpicked: the PR is an attempt of a best-of:2 issue and no
 	// `rota round pick` names it; the CLI exits 4 with it, blockedBy best-of-unpicked.
@@ -140,6 +141,10 @@ type GateOpts struct {
 	Base      string
 	CheckOnly bool
 	NoVerify  bool
+	// FinalSlice marks the PR as the last slice of a partial-slice issue, the
+	// one PR allowed to close it (--final-slice). Without it a PR the forge
+	// says closes a partial-slice issue is refused (stepCloses).
+	FinalSlice bool
 	// Prune makes a pass that releases an adopted slot also remove its
 	// worktree and branch.
 	Prune bool
@@ -345,6 +350,14 @@ type Forge interface {
 	CommitChecks(ctx context.Context, sha string) ([]tracker.CheckRun, error)
 	// AddMRNote posts a comment on the PR (the behaviour run's transcript).
 	AddMRNote(ctx context.Context, number int, body string) (string, error)
+}
+
+// closingReporter is the optional Forge capability of reading what the forge
+// itself says merging a PR closes (GitHub closingIssuesReferences), which sees
+// a closing keyword anywhere in the body. known is false for a forge that
+// cannot report it.
+type closingReporter interface {
+	ClosingRefs(ctx context.Context, pr int) (nums []int, known bool, err error)
 }
 
 // Issues is the part of tracker.IssueTracker the gate reads: the issue a PR
@@ -959,6 +972,9 @@ func (g *gate) stepCloses() (bool, error) {
 		}
 		return g.broke(fmt.Sprintf("could not read %s to check it closes %s: %v", g.pr, refList(keys), err))
 	}
+	if stop, err := g.stepNoSliceClose(keys); stop || err != nil {
+		return stop, err
+	}
 	// A bundled slot's PR closes the lead and every member: collect each one the
 	// body leaves open, so one refusal names them all.
 	var open []tracker.IssueKey
@@ -1002,6 +1018,60 @@ func (g *gate) stepCloses() (bool, error) {
 		g.verdict(GateNotClosing, fmt.Sprintf("GATE %s refused — the branch and title of %s do not name %s, so the merge would leave %s open and claimed; nothing landed", g.o.Slot, g.pr, refs, them),
 			fmt.Sprintf("put %s in the PR title or branch, or label %s %s if this PR lands only part of %s", refs, refs, PartialSliceLabel, them))
 	}
+	return true, nil
+}
+
+// stepNoSliceClose refuses a PR the forge says closes an issue labelled
+// PartialSliceLabel: merging it would close the parent with slices to come. A
+// closing keyword in prose is enough, so the forge's own list is read, not the
+// body. FinalSlice exempts the last slice. A forge that cannot report closing
+// references skips the check, noted once.
+func (g *gate) stepNoSliceClose(keys []tracker.IssueKey) (bool, error) {
+	if g.o.FinalSlice {
+		return false, nil
+	}
+	var nums []int
+	known := false
+	if rep, ok := g.forge.(closingReporter); ok {
+		n, _ := PRRefNumber(g.pr)
+		var err error
+		if nums, known, err = rep.ClosingRefs(g.ctx, n); err != nil {
+			return g.broke(fmt.Sprintf("could not read what %s closes: %v", g.pr, err))
+		}
+	}
+	var leaks []tracker.IssueKey
+	partial := false
+	for _, key := range keys {
+		num, numbered := key.Number()
+		if !numbered || (known && !slices.Contains(nums, num)) {
+			continue
+		}
+		is, err := g.issues.Get(g.ctx, key, false)
+		if err != nil {
+			if !known {
+				continue // no verdict to give without the forge's list; later steps read the issue too
+			}
+			return g.broke(fmt.Sprintf("could not read %s to check for the %s label: %v", key.Ref(), PartialSliceLabel, err))
+		}
+		if slices.Contains(is.Labels, PartialSliceLabel) {
+			partial = true
+			leaks = append(leaks, key)
+		}
+	}
+	if !known {
+		// Nothing to judge: say so once, and only when a slice PR made it matter.
+		if partial {
+			g.res.Notes = append(g.res.Notes, fmt.Sprintf("CLOSING-REFS-UNKNOWN %s — the forge cannot report what %s closes; the %s check is skipped", g.o.Slot, g.pr, PartialSliceLabel))
+		}
+		return false, nil
+	}
+	if len(leaks) == 0 {
+		return false, nil
+	}
+	g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
+	refs := refList(leaks)
+	g.verdict(GateNotClosing, fmt.Sprintf("GATE %s refused — the forge says %s closes %s, a %s issue with slices still to come; nothing landed", g.o.Slot, g.pr, refs, PartialSliceLabel),
+		fmt.Sprintf("drop the closing keyword for %s from the PR body (use `Refs`), or pass --final-slice if this is the last slice", refs))
 	return true, nil
 }
 

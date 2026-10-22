@@ -97,6 +97,22 @@ func (f *fakeForge) ClosedNumbers(body string) []int {
 	return out
 }
 
+// ClosingRefs answers from the forge DB word "closingRefs": unset the forge
+// cannot report them, "none" none, else comma-separated issue numbers.
+func (f *fakeForge) ClosingRefs(context.Context, int) ([]int, bool, error) {
+	word := f.w.forgeWord("closingRefs")
+	if word == "" {
+		return nil, false, nil
+	}
+	var out []int
+	for _, p := range strings.Split(word, ",") {
+		if n, err := strconv.Atoi(p); err == nil {
+			out = append(out, n)
+		}
+	}
+	return out, true, nil
+}
+
 // ClosesIssue is the keyword convention of the forge's own tracker.
 func (f *fakeForge) ClosesIssue(key tracker.IssueKey, c tracker.ClosingSource) bool {
 	n, ok := key.Number()
