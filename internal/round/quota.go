@@ -45,6 +45,8 @@ func kindOrDefault(kind string) string { return harness.Resolve(kind).Kind() }
 // every configured account is cooling (an unconfigured pool is never closed).
 type pool struct {
 	resets []time.Time
+	// names are the cooling accounts, in config order.
+	names  []string
 	closed bool
 }
 
@@ -59,6 +61,7 @@ func (e Env) meterPool(ctx context.Context, root string) pool {
 	for _, m := range meters {
 		if m.Verdict == worker.VerdictCooling && m.ResetsAt != nil {
 			p.resets = append(p.resets, *m.ResetsAt)
+			p.names = append(p.names, m.Name)
 		}
 	}
 	p.closed = len(meters) > 0 && len(p.resets) == len(meters)
@@ -73,6 +76,7 @@ func (e Env) loggedPool(root string, h harness.Harness) (p pool, configured bool
 	for _, l := range logins {
 		if at, ok := cooling[l.Name]; ok {
 			p.resets = append(p.resets, at)
+			p.names = append(p.names, l.Name)
 		}
 	}
 	p.closed = len(logins) > 0 && len(p.resets) == len(logins)
@@ -97,7 +101,7 @@ func (e Env) poolKey(root string, h harness.Harness) string {
 func (e Env) Headroom(ctx context.Context, root, kind string) string {
 	h := harness.Resolve(kind)
 	if p, _ := e.poolOf(ctx, root, h); p.closed {
-		return coolingWhy(e.poolKey(root, h), earliest(p.resets))
+		return coolingWhy(e.poolKey(root, h), earliest(p.resets)) + " (" + strings.Join(p.names, ", ") + ")"
 	}
 	return ""
 }

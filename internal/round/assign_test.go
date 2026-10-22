@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
@@ -1383,5 +1384,55 @@ func TestPointerBriefTDD(t *testing.T) {
 	off := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", nil, tierBrief{Kind: "claude", Tier: "standard"})
 	if strings.Contains(off, "failing test first") {
 		t.Errorf("brief carries the TDD line without TDD:\n%s", off)
+	}
+}
+
+// usageFor is a usage payload whose weekly window is at pct and resets in a day.
+func usageFor(t *testing.T, pct int, resets time.Time) *jsonx.Object {
+	t.Helper()
+	v, err := jsonx.Decode([]byte(fmt.Sprintf(`{"five_hour":{"utilization":1},"seven_day":{"utilization":%d,"resets_at":%q}}`, pct, resets.UTC().Format(time.RFC3339))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v.(*jsonx.Object)
+}
+
+// limitedFixture is an assign fixture whose round.accounts a and b read their
+// usage from pct (account name to weekly utilization).
+func limitedFixture(t *testing.T, pct map[string]int) *assignFixture {
+	t.Helper()
+	f := newAssignFixture(t)
+	f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere/a"},{"name":"b","configDir":"/nowhere/b"}]}}`)
+	f.host.name = "herdr"
+	reset := time.Now().Add(24 * time.Hour)
+	f.env = f.env.WithAccounts(&worker.Accounts{Env: worker.Env{Config: diskConfig}, Fetch: func(_ context.Context, name, _ string) (*jsonx.Object, string) {
+		return usageFor(t, pct[name], reset), ""
+	}, Login: worker.Credentials{GOOS: "darwin", Run: func(context.Context, proc.Cmd) (proc.Result, error) {
+		return proc.Result{Stdout: `{"claudeAiOauth":{"accessToken":"t"}}`}, nil
+	}}})
+	return f
+}
+
+func TestAssignSkipsALimitedAccount(t *testing.T) {
+	f := limitedFixture(t, map[string]int{"a": 100, "b": 37})
+	res, err := f.assign("12", "ben", nil)
+	if err != nil || !res.Dispatched || res.Account != "b" {
+		t.Fatalf("%v %+v: want account b", err, res)
+	}
+}
+
+func TestAssignRefusesQuotaNamingEveryExhaustedAccount(t *testing.T) {
+	f := limitedFixture(t, map[string]int{"a": 100, "b": 100})
+	_, err := f.assign("12", "ben", nil)
+	if got := blockedBy(t, err); got != BlockQuota {
+		t.Fatalf("blockedBy %q, want %q (%v)", got, BlockQuota, err)
+	}
+	for _, name := range []string{"a", "b"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("refusal %q does not name account %s", err, name)
+		}
+	}
+	if len(f.host.spawned) != 0 {
+		t.Errorf("dispatched into an exhausted account: %v", f.host.spawned)
 	}
 }

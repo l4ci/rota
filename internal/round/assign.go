@@ -21,6 +21,7 @@ import (
 	secpkg "github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -158,8 +159,10 @@ func (a Assigned) Ready() bool {
 // else skills/references/worker-contract.md in the project (a source checkout), else
 // rota-orchestrate/references/worker-contract.md under the first installed
 // skills root (rota skills install): the project's before the user's, Claude's
-// before Codex's, so a Codex-only install finds it too.
-func briefPath(root string, set roundcfg.Settings, getenv func(string) string) (string, bool) {
+// before Codex's, so a Codex-only install finds it too. With round.brief unset
+// and none of those present, the copy in the skills cache under cache (the
+// tree this binary extracts, made when missing); "" skips it.
+func briefPath(root string, set roundcfg.Settings, getenv func(string) string, cache string) (string, bool) {
 	var cands []string
 	if set.Brief != "" {
 		p := set.Brief
@@ -180,6 +183,16 @@ func briefPath(root string, set roundcfg.Settings, getenv func(string) string) (
 	for _, c := range cands {
 		if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
 			return c, true
+		}
+	}
+	if set.Brief == "" && cache != "" {
+		if set, err := skills.Embedded(); err == nil {
+			if tree, err := skills.Extract(set, version.Get().Version, cache); err == nil {
+				c := filepath.Join(tree, "references", "worker-contract.md")
+				if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
+					return c, true
+				}
+			}
 		}
 	}
 	return "", false
@@ -853,7 +866,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	res.Warnings = append(res.Warnings, warns...)
 
 	// 5. The brief exists before anything is marked.
-	brief, ok := briefPath(root, set, e.getenv())
+	brief, ok := briefPath(root, set, e.getenv(), skills.CacheDir(e.getenv()))
 	if !ok {
 		return run, false, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
 	}
