@@ -3,8 +3,14 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"strconv"
 	"strings"
 
+	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -14,7 +20,71 @@ import (
 func roundSupport() *Command {
 	return &Command{Name: "support", Summary: "split work with the support machine (round.support)", Subs: []*Command{
 		{Name: "offer", Summary: "label issues for the support machine; --withdraw takes them back", Verb: roundSupportOffer},
+		{Name: "enable", Summary: "name the support machine in the tracked config (round.support)", Verb: roundSupportEnable},
+		{Name: "disable", Summary: "remove round.support from the tracked config", Verb: roundSupportDisable},
 	}}
+}
+
+// supportConfigFile is where enable and disable write: the tracked config, so
+// the name reaches the support machine with the next pull (#1774).
+var supportConfigFile = rotatree.DirName + "/" + rotatree.ConfigFile
+
+func roundSupportEnable(fs *flag.FlagSet) RunFunc {
+	return func(c *Ctx, args []string) (Result, error) {
+		if len(args) != 1 {
+			return Result{}, Usage("round support enable takes the support machine's name")
+		}
+		name := args[0]
+		if !roundcfg.ValidName(name) {
+			return Result{}, Usage("round support enable: %q is not a lowercase name usable in a branch (letters, digits, -)", name)
+		}
+		root, issue, err := modeRoot(c)
+		if err != nil {
+			return Result{}, err
+		}
+		if !issue {
+			return supportFileModeStop()
+		}
+		// Quoted, so a name such as "true" stays a string.
+		res, err := config.Set(root, "round.support", strconv.Quote(name))
+		if err != nil {
+			return Result{}, err
+		}
+		text := fmt.Sprintf("round.support = %s (%s); commit it, then run rota setup with round.role support on the %s machine", name, supportConfigFile, name)
+		if !res.Changed {
+			text = fmt.Sprintf("noop: round.support is already %s", name)
+		}
+		return Result{Data: supportConfigData(name, res.Changed), Text: text}, nil
+	}
+}
+
+func roundSupportDisable(fs *flag.FlagSet) RunFunc {
+	return func(c *Ctx, args []string) (Result, error) {
+		if len(args) != 0 {
+			return Result{}, Usage("round support disable takes no arguments")
+		}
+		root, issue, err := modeRoot(c)
+		if err != nil {
+			return Result{}, err
+		}
+		if !issue {
+			return supportFileModeStop()
+		}
+		name := roundcfg.SupportName(fsio.LoadJSON(rotatree.Config(root), jsonx.NewObject()))
+		removed, err := config.Unset(root, "round.support", config.LayerProject)
+		if err != nil {
+			return Result{}, err
+		}
+		text := fmt.Sprintf("removed round.support from %s; commit it", supportConfigFile)
+		if !removed {
+			text = "noop: round.support is not set in " + supportConfigFile
+		}
+		return Result{Data: supportConfigData(name, removed), Text: text}, nil
+	}
+}
+
+func supportConfigData(name string, changed bool) *jsonx.Object {
+	return jsonObj("name", name, "file", supportConfigFile, "changed", changed)
 }
 
 func roundSupportOffer(fs *flag.FlagSet) RunFunc {
