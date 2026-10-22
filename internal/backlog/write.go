@@ -62,13 +62,14 @@ type CompleteInput struct {
 
 // Comment is one comment of an item.
 type Comment struct {
+	ID   string `json:"-"` // the tracker's comment ID; "" on the file backend
 	Who  string // author (issues) or date (file)
 	Kind string
 	Text string
 }
 
 // CommentKinds are the kinds a comment can have (COMMENT_KINDS).
-var CommentKinds = []string{"question", "answer", "decision", "feedback", "scope", "finding"}
+var CommentKinds = []string{"question", "answer", "decision", "feedback", "scope", "finding", "learning", "harvested"}
 
 // CreateFields are the fields a capture may set: everything but the ones it
 // derives itself (Detail from the body, Since from HEAD).

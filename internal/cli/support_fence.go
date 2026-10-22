@@ -46,8 +46,9 @@ var supportFenced = []string{
 
 // supportInVerb are fenced inside the verb, which knows what it writes:
 // config set and config edit refuse a tracked key on a support machine and
-// allow --global and round.role (config.local.json).
-var supportInVerb = []string{"rota config set", "rota config edit"}
+// allow --global and round.role (config.local.json); knowledge harvest lists
+// freely and refuses --mark, which writes a tracker comment main owns.
+var supportInVerb = []string{"rota config set", "rota config edit", "rota knowledge harvest"}
 
 // supportAllowed run on a support machine. Each writer here writes the
 // tracker, gitignored per-machine state or files outside the repo.
