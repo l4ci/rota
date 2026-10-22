@@ -249,7 +249,7 @@ func TestFillBurnFromLedger(t *testing.T) {
 	fetches := 0
 	d := testDeps()
 	d.WorkerAccounts = func() *worker.Accounts {
-		return &worker.Accounts{Fetch: func(_ context.Context, name, _ string) (*jsonx.Object, string) {
+		return &worker.Accounts{Env: worker.Env{Config: d.Config}, Fetch: func(_ context.Context, name, _ string) (*jsonx.Object, string) {
 			fetches++
 			v, _ := jsonx.Decode([]byte(`{"five_hour":{"utilization":40,"resets_at":null},"seven_day":{"utilization":10,"resets_at":null}}`))
 			return v.(*jsonx.Object), ""

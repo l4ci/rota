@@ -184,7 +184,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 			return accounts().Pick(ctx, root, []string{exclude})
 		},
 		IdleSlot: func(ctx context.Context, kind, account string) (string, bool) {
-			rc, err := roundcfg.Load(root)
+			rc, err := roundcfg.FromConfig(c.deps().Config(root))
 			if err != nil {
 				return "", false
 			}
@@ -195,7 +195,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 			return round.IdleSlot(reg, active, kind, account)
 		},
 		Transfer: func(ctx context.Context, issue, to string) error {
-			rc, err := roundcfg.Load(root)
+			rc, err := roundcfg.FromConfig(c.deps().Config(root))
 			if err != nil {
 				return err
 			}

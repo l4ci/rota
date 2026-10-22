@@ -251,7 +251,7 @@ func TestWorkerDoneLedgerAccountsFromMainCheckout(t *testing.T) {
 
 	d := testDeps()
 	d.WorkerAccounts = func() *worker.Accounts {
-		return &worker.Accounts{Fetch: func(_ context.Context, _, _ string) (*jsonx.Object, string) {
+		return &worker.Accounts{Env: worker.Env{Config: d.Config}, Fetch: func(_ context.Context, _, _ string) (*jsonx.Object, string) {
 			v, _ := jsonx.Decode([]byte(`{"five_hour":{"utilization":40,"resets_at":null},"seven_day":{"utilization":10,"resets_at":null}}`))
 			return v.(*jsonx.Object), ""
 		}}

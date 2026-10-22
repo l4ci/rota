@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/overlap"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -239,14 +241,14 @@ func fakeLease(host string, alive ...int) roundlease.Env {
 }
 
 func startOpts(scope string, pid int, items ...string) StartOpts {
-	set, _ := roundcfg.Load(os.TempDir()) // defaults: no config there
+	set, _ := roundcfg.FromConfig(config.Load(rotatree.Config(os.TempDir()))) // defaults: no config there
 	// Dispatch tmux: these tests drive tab mode through a fake host.
 	return StartOpts{Scope: scope, Items: items, HolderPID: pid, Settings: set, DefaultNum: 2, Dispatch: "tmux"}
 }
 
 func TestStartProvisionsRosterAndTakesLease(t *testing.T) {
 	root := newRepo(t, nil)
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100, 200)}
+	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100, 200)}
 	st, err := e.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100))
 	if err != nil {
 		t.Fatal(err)
@@ -296,14 +298,14 @@ func TestStartProvisionsRosterAndTakesLease(t *testing.T) {
 
 func TestStartReclaimsStaleLeaseAndBumpsRound(t *testing.T) {
 	root := newRepo(t, nil)
-	first := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100)}
+	first := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
 	if _, err := first.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
 		t.Fatal(err)
 	}
 	if err := worker.Update(root, func(d *worker.Doc) { d.SetLayout("split"); d.SetCLIPane("pc") }); err != nil {
 		t.Fatal(err)
 	}
-	second := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 300)} // pid 100 is gone
+	second := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 300)} // pid 100 is gone
 	_, st, _ := second.ReadLease(bg, root)
 	if st != roundlease.Stale {
 		t.Fatalf("holder gone must read stale: %v", st)
@@ -339,14 +341,14 @@ func TestStartReclaimsStaleLeaseAndBumpsRound(t *testing.T) {
 
 func TestClearStaleLeaseLeavesLiveOnes(t *testing.T) {
 	root := newRepo(t, nil)
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
 	if _, err := e.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
 		t.Fatal(err)
 	}
 	if _, cleared, _ := e.ClearStaleLease(bg, root); cleared {
 		t.Fatal("a live lease must stay")
 	}
-	dead := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h")}
+	dead := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h")}
 	l, cleared, err := dead.ClearStaleLease(bg, root)
 	if err != nil || !cleared || l.PID != 100 {
 		t.Fatalf("a stale lease is cleared: %v %v %+v", err, cleared, l)
@@ -355,7 +357,7 @@ func TestClearStaleLeaseLeavesLiveOnes(t *testing.T) {
 
 func TestStartRecordsSlateAndValidatesFlags(t *testing.T) {
 	root := newRepo(t, nil)
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
 	for name, o := range map[string]StartOpts{
 		"slate without items":    startOpts(roundcfg.ScopeSlate, 100),
 		"items without slate":    startOpts(roundcfg.ScopeMilestone, 100, "12"),
@@ -388,7 +390,7 @@ func TestStartRecordsSlateAndValidatesFlags(t *testing.T) {
 
 func TestStartRenewKeepsRecordedScope(t *testing.T) {
 	root := newRepo(t, nil)
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
 	// --items without --scope is a slate.
 	st, err := e.Start(bg, root, startOpts("", 100, "12", "13"))
 	if err != nil || st.Scope != roundcfg.ScopeSlate || !reflect.DeepEqual(st.Slate, []string{"12", "13"}) {
@@ -421,7 +423,7 @@ func TestStartRenewKeepsRecordedScope(t *testing.T) {
 
 func TestStartFreshWithoutScopeUsesConfig(t *testing.T) {
 	root := newRepo(t, nil)
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
 	o := startOpts("", 100)
 	o.Settings.Scope = roundcfg.ScopeNext
 	st, err := e.Start(bg, root, o)
@@ -448,7 +450,7 @@ func TestStartNumbersALeaseTakenUnnumberedByTheSameHolder(t *testing.T) {
 	if _, _, _, err := le.Acquire(cd, root, le.Discover(100, func(string) string { return "" }), 0); err != nil {
 		t.Fatal(err)
 	}
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: le}
+	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: le}
 	// Its child runs `round start` with ROTA_ROUND_HOLDER_PID, no --holder-pid.
 	o := startOpts(roundcfg.ScopeMilestone, 0)
 	e.Worker.Getenv = func(k string) string {
@@ -545,7 +547,7 @@ func TestStartTrimsTheLedgerToLedgerKeep(t *testing.T) {
 	}
 	o := startOpts(roundcfg.ScopeMilestone, 100)
 	o.Settings.LedgerKeep = 2
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
 	if _, err := e.Start(bg, root, o); err != nil { // takes round 1 of the registry: nothing is old yet
 		t.Fatal(err)
 	}
@@ -556,7 +558,7 @@ func TestStartTrimsTheLedgerToLedgerKeep(t *testing.T) {
 	if err := worker.Update(root, func(d *worker.Doc) { d.SetRound(3) }); err != nil {
 		t.Fatal(err)
 	}
-	e = Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 300)} // pid 100 is gone: round 4
+	e = Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 300)} // pid 100 is gone: round 4
 	if st, err := e.Start(bg, root, o); err != nil || st.Round != 4 {
 		t.Fatalf("%v %+v", err, st)
 	}
@@ -573,7 +575,7 @@ func TestStartWarnsWhenAncestryUnreadable(t *testing.T) {
 	le := fakeLease("h", 300)
 	le.Parent = func() int { return 300 }
 	le.Proc = func(int) (int, string, bool) { return 0, "", false }
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: le}
+	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: le}
 	st, err := e.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 0))
 	if err != nil {
 		t.Fatal(err)
@@ -595,7 +597,7 @@ func TestStartPoolInitUsesConfiguredWorkerEnv(t *testing.T) {
 		calls++
 		return git.Exec(ctx, dir, args...)
 	}
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Git: spy, Getenv: noEnv}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Config: diskConfig, Git: spy, Getenv: noEnv}, Lease: fakeLease("h", 100)}
 	if _, err := e.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
 		t.Fatal(err)
 	}

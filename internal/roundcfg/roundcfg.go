@@ -10,7 +10,6 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
-	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Scope values of round.scope: which issues a round may take.
@@ -178,11 +177,6 @@ func ValidScope(s string) bool {
 		}
 	}
 	return false
-}
-
-// Load reads and validates the round.* keys from the project config.
-func Load(root string) (Settings, error) {
-	return FromConfig(config.Load(rotatree.Config(root)))
 }
 
 // FromConfig reads and validates the round.* keys from an already loaded

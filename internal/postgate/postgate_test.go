@@ -3,6 +3,8 @@ package postgate
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -35,14 +37,14 @@ func TestGatePassEndsTheItemClockAndBestOf(t *testing.T) {
 	}
 	worker.Update(root, func(d *worker.Doc) { d.SetBestOf(worker.BestOf{Issue: "12"}) })
 	// A verdict nobody bounces or lands on keeps the item running.
-	if _, err := Gate(worker.Env{}, root, "12", worker.GateResult{Verdict: "other"}, nil); err != nil {
+	if _, err := Gate(worker.Env{Config: diskConfig}, root, "12", worker.GateResult{Verdict: "other"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	reg := worker.LoadRegistryTolerant(root)
 	if _, ok := reg.ItemStart("12"); !ok || reg.BestOf("12") == nil {
 		t.Fatal("a non-pass verdict must keep the clock and the best-of record")
 	}
-	if _, err := Gate(worker.Env{}, root, "12", worker.GateResult{Verdict: worker.GatePass}, nil); err != nil {
+	if _, err := Gate(worker.Env{Config: diskConfig}, root, "12", worker.GateResult{Verdict: worker.GatePass}, nil); err != nil {
 		t.Fatal(err)
 	}
 	reg = worker.LoadRegistryTolerant(root)
@@ -55,7 +57,7 @@ func TestGateBouncesAreParkedAtMaxBounces(t *testing.T) {
 	root := t.TempDir() // round.maxBounces defaults to 3
 	p := &parked{}
 	for i := 1; i <= 3; i++ {
-		o, err := Gate(worker.Env{}, root, "7", worker.GateResult{Verdict: worker.GateStale, Slot: "w1", SHA: "sha" + string(rune('a'+i))}, p.park)
+		o, err := Gate(worker.Env{Config: diskConfig}, root, "7", worker.GateResult{Verdict: worker.GateStale, Slot: "w1", SHA: "sha" + string(rune('a'+i))}, p.park)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -73,9 +75,9 @@ func TestGateBouncesAreParkedAtMaxBounces(t *testing.T) {
 
 func TestParkFailureIsReportedAndTheCountStands(t *testing.T) {
 	root := t.TempDir()
-	recordBounceCappedVia(worker.Env{}, nil, root, "7", "w1", "a", 0)
-	recordBounceCappedVia(worker.Env{}, nil, root, "7", "w1", "b", 0)
-	o, err := Gate(worker.Env{}, root, "7", worker.GateResult{Verdict: worker.GateProvenanceFail, SHA: "c"}, func(string, string, roundcfg.Settings) error { return errors.New("no lease") })
+	recordBounceCappedVia(worker.Env{Config: diskConfig}, nil, root, "7", "w1", "a", 0)
+	recordBounceCappedVia(worker.Env{Config: diskConfig}, nil, root, "7", "w1", "b", 0)
+	o, err := Gate(worker.Env{Config: diskConfig}, root, "7", worker.GateResult{Verdict: worker.GateProvenanceFail, SHA: "c"}, func(string, string, roundcfg.Settings) error { return errors.New("no lease") })
 	if err == nil || o.Parked || o.Bounces != 3 {
 		t.Fatalf("%+v %v", o, err)
 	}
@@ -95,7 +97,7 @@ func TestTrainBouncesTheCulpritAndEndsLandedItems(t *testing.T) {
 		CulpritGate: worker.GateResult{SHA: "abc1234"},
 	}
 	issues := map[string]string{"w1": "1", "w2": "2"}
-	if fails := Train(worker.Env{}, nil, root, issues, r, (&parked{}).park); len(fails) != 0 {
+	if fails := Train(worker.Env{Config: diskConfig}, nil, root, issues, r, (&parked{}).park); len(fails) != 0 {
 		t.Fatal(fails)
 	}
 	if _, ok := worker.LoadRegistryTolerant(root).ItemStart("1"); ok {
@@ -105,7 +107,7 @@ func TestTrainBouncesTheCulpritAndEndsLandedItems(t *testing.T) {
 		t.Errorf("bounces: culprit %d, landed %d", bounces(root, "2"), bounces(root, "1"))
 	}
 	// The same head again is the same refusal, not a second bounce.
-	Train(worker.Env{}, nil, root, issues, r, (&parked{}).park)
+	Train(worker.Env{Config: diskConfig}, nil, root, issues, r, (&parked{}).park)
 	if bounces(root, "2") != 1 {
 		t.Errorf("a repeat on the same head counted again: %d", bounces(root, "2"))
 	}
@@ -120,7 +122,7 @@ func TestStaleGateByPRNumberAfterTheSlotMovedOnMakesNoPseudoSlot(t *testing.T) {
 	if err := ledger.Append(root, ledger.Entry{TS: at, Kind: ledger.KindAssign, Issue: "12", Slot: "nia", Account: "work", Harness: "claude", PR: "847"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Gate(worker.Env{Now: func() time.Time { return at }}, root, "12", worker.GateResult{Verdict: worker.GateStale, Slot: "847", PR: "847", SHA: "h1"}, nil); err != nil {
+	if _, err := Gate(worker.Env{Config: diskConfig, Now: func() time.Time { return at }}, root, "12", worker.GateResult{Verdict: worker.GateStale, Slot: "847", PR: "847", SHA: "h1"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	es, err := ledger.Load(root)
@@ -145,7 +147,7 @@ func TestGateBounceByPRNumberUsesTheResolvedSlot(t *testing.T) {
 	root := t.TempDir()
 	at := time.Date(2026, 10, 17, 21, 0, 0, 0, time.UTC)
 	res := worker.GateResult{Verdict: worker.GateStale, Slot: "847", TargetSlot: "nia", PR: "847", SHA: "h1"}
-	if _, err := Gate(worker.Env{Now: func() time.Time { return at }}, root, "12", res, nil); err != nil {
+	if _, err := Gate(worker.Env{Config: diskConfig, Now: func() time.Time { return at }}, root, "12", res, nil); err != nil {
 		t.Fatal(err)
 	}
 	es, err := ledger.Load(root)
@@ -215,6 +217,7 @@ func TestGateBouncesOnTheIssueWithSupport(t *testing.T) {
 	ic := &issueComments{}
 	nf := &noteForge{}
 	env := worker.Env{
+		Config:        diskConfig,
 		IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return ic, nil },
 		Forge:         func(string, string, tracker.Settings) (worker.Forge, error) { return nf, nil },
 	}
@@ -288,6 +291,7 @@ func TestGateRetryPostsTheReviewBounceAfterAFailedUndo(t *testing.T) {
 	ic := &issueComments{deleteErr: errors.New("issue tracker down")}
 	nf := &noteForge{failPosts: 1}
 	env := worker.Env{
+		Config:        diskConfig,
 		IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return ic, nil },
 		Forge:         func(string, string, tracker.Settings) (worker.Forge, error) { return nf, nil },
 	}
@@ -319,7 +323,7 @@ func TestGateAndRelayHeadsCountOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	ic := &issueComments{}
-	env := worker.Env{IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return ic, nil }}
+	env := worker.Env{Config: diskConfig, IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return ic, nil }}
 	store, err := env.BounceStore(root)
 	if err != nil {
 		t.Fatal(err)
@@ -331,3 +335,6 @@ func TestGateAndRelayHeadsCountOnce(t *testing.T) {
 		t.Errorf("the relay counted the gate's bounce again: %+v %v", r, err)
 	}
 }
+
+// diskConfig reads the .rota/config.json a test wrote, as cli's Deps.Config does.
+func diskConfig(root string) any { return config.Load(rotatree.Config(root)) }

@@ -182,6 +182,7 @@ func supportRefusal(c *Ctx, root, what string) (Result, error) {
 		d := jsonObj("blockedBy", "config", "key", "round.role", "changed", false)
 		return Result{Data: d}, Refused("%s needs to know this machine's role: %s", what, why).WithHint(hint)
 	}
+	// Reads the layer from disk on purpose, not through Deps.Config.
 	// config.Load skips a local layer it cannot read or decode, which would
 	// read as role main and open the fence.
 	if raw, err := os.ReadFile(rotatree.ConfigLocal(root)); err == nil {

@@ -2,6 +2,7 @@ package round
 
 import (
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -22,7 +23,7 @@ func TestCandidatesSupportSplit(t *testing.T) {
 	be.add("1", "main work", "", false, "")
 	be.add("2", "support work", "", false, "")
 	be.items["2"].Labels = []string{config.Label(nil, "support")}
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
 	e.SupportLabel = config.Label(nil, "support")
 	get := func(set roundcfg.Settings) []string {
 		t.Helper()
@@ -64,7 +65,7 @@ func supportFixture(t *testing.T, cfg string) (*assignFixture, string) {
 	sh(t, f.root, "config", "user.name", "t")
 	writeFile(t, filepath.Join(f.root, ".rota", "config.json"), cfg)
 	writeFile(t, filepath.Join(f.root, ".rota", "config.local.json"), `{"round":{"role":"support"}}`)
-	set, err := roundcfg.Load(f.root)
+	set, err := roundcfg.FromConfig(config.Load(rotatree.Config(f.root)))
 	if err != nil {
 		t.Fatal(err)
 	}

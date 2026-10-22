@@ -35,7 +35,7 @@ func roundWait(fs *flag.FlagSet) RunFunc {
 			Timeout:           time.Duration(*timeout * float64(time.Second)),
 			Settle:            time.Duration(*settle * float64(time.Second)),
 			Lines:             *lines,
-			UnverifiableAfter: unverifiableAfter(root),
+			UnverifiableAfter: unverifiableAfter(c, root),
 		})
 		if err != nil {
 			return Result{}, err
@@ -85,8 +85,8 @@ func roundWait(fs *flag.FlagSet) RunFunc {
 // unverifiableAfter is how long a slot may stay unverifiable before a wait
 // reports it: round.stallMinutes, the same patience as for a stalled slot (0
 // turns it off).
-func unverifiableAfter(root string) time.Duration {
-	set, err := roundcfg.Load(root)
+func unverifiableAfter(c *Ctx, root string) time.Duration {
+	set, err := roundcfg.FromConfig(c.deps().Config(root))
 	if err != nil {
 		return 0
 	}
