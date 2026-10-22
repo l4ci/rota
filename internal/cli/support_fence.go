@@ -40,7 +40,7 @@ var supportFenced = []string{
 	// Tracked instruction and agent files, which main regenerates and commits.
 	"rota block", "rota instructions init", "rota agents write",
 	// Main only: the work split.
-	"rota round support offer",
+	"rota round support offer", "rota round support enable", "rota round support disable",
 	// Release.
 	"rota release bump", "rota release changelog", "rota release close-milestone", "rota release publish", "rota release push",
 }
