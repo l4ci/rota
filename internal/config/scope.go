@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // LayerFor is the file `config set` writes key to (#1786): config.local.json
@@ -25,12 +26,14 @@ func LayerFor(key string, project, local bool) Layer {
 
 // Warnings are `config check`'s scope warnings on .rota/config.json, in
 // schema order: a machine key the tracked file holds, and a taste key it pins
-// at the schema default. Neither fails the check.
+// at the schema default; then each key the global config holds that the
+// schema does not know (AC-4 checks every layer; only the tracked and local
+// files fail on one, see Unknown). None fails the check.
 func Warnings(root string) []string {
 	out := []string{}
 	doc := readObject(configPath(root))
 	if doc == nil {
-		return out
+		doc = jsonx.NewObject()
 	}
 	for _, k := range Keys {
 		v, ok := walk(doc, k.Name)
@@ -42,6 +45,16 @@ func Warnings(root string) []string {
 			out = append(out, k.Name+" is a machine key in .rota/config.json")
 		case k.Scope == ScopeTaste && sameJSON(v, Default(k)):
 			out = append(out, k.Name+" is pinned at its default in .rota/config.json")
+		}
+	}
+	// The raw file: globalLayer keeps schema keys only.
+	if dir, err := projects.Dir(projects.OSEnv()); err == nil {
+		if g := readObject(GlobalPath(dir)); g != nil {
+			for _, p := range leafPaths(g, "") {
+				if !knownPath(p) {
+					out = append(out, p+" in the global config is not a config key (nothing reads it)")
+				}
+			}
 		}
 	}
 	return out

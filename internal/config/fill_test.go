@@ -445,3 +445,18 @@ func TestFillWritesOnlyProjectKeys(t *testing.T) {
 		t.Errorf("config.json:\n%s", raw)
 	}
 }
+
+// debug.competingHypotheses is removed (CHANGELOG): fill deletes it and the
+// debug object it leaves empty.
+func TestFillStripsCompetingHypotheses(t *testing.T) {
+	root := project(t, `{"debug": {"competingHypotheses": true}}`, "")
+	if got := Removed(root); !reflect.DeepEqual(got, []string{"debug.competingHypotheses"}) {
+		t.Fatalf("Removed before fill: %v", got)
+	}
+	if _, err := Fill(root); err != nil {
+		t.Fatal(err)
+	}
+	if raw := read(t, root); strings.Contains(raw, "debug") {
+		t.Errorf("fill left debug behind:\n%s", raw)
+	}
+}

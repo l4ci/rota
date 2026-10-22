@@ -246,6 +246,7 @@ func configSet(fs *flag.FlagSet) RunFunc {
 		scope := "project"
 		keyScope := config.ScopeOf(args[0])
 		routed := false // a machine key sent to the local file by its scope, not by --local
+		pinned := false // a machine key pinned in the tracked file by --project
 		if *global || (atHome(c) && !*local && !*project) {
 			scope = "global"
 			var dir string
@@ -280,8 +281,8 @@ func configSet(fs *flag.FlagSet) RunFunc {
 			if layer == config.LayerLocal {
 				scope = "local"
 				routed = !*local
-			} else if keyScope == config.ScopeMachine && config.Validate(args[0], args[1]) == nil {
-				c.Warn("%s is a machine key: --project pins it in the tracked .rota/config.json, where it shadows every developer's global config", args[0])
+			} else if keyScope == config.ScopeMachine {
+				pinned = true
 			}
 			res, err = config.SetIn(root, args[0], args[1], layer)
 		}
@@ -293,6 +294,9 @@ func configSet(fs *flag.FlagSet) RunFunc {
 		}
 		switch {
 		case err == nil:
+			if pinned {
+				c.Warn("%s is a machine key: --project pinned it in the tracked .rota/config.json, where it shadows every developer's global config", args[0])
+			}
 		case errors.Is(err, config.ErrMalformedKey), errors.Is(err, config.ErrNotSchemaKey), errors.Is(err, config.ErrBadValue), errors.Is(err, config.ErrProjectOwned):
 			return Result{}, Usage("%s", err.Error())
 		case errors.Is(err, config.ErrNotObject), errors.Is(err, config.ErrGlobalNotObject), errors.Is(err, fsio.ErrUnreadable):
@@ -312,9 +316,10 @@ func configSet(fs *flag.FlagSet) RunFunc {
 		text := args[0] + " = " + string(b)
 		if scope == "local" {
 			data.Set("scope", "local")
-			text = "local: " + text + " (.rota/config.local.json, this machine only)"
 			if routed {
-				text += "\nwrote .rota/config.local.json (machine key; --project writes the tracked config, --global every project's)"
+				text = "local: " + text + " (.rota/config.local.json: a machine key, this machine only; --project writes the tracked config)"
+			} else {
+				text = "local: " + text + " (.rota/config.local.json, this machine only)"
 			}
 		}
 		if scope == "global" {

@@ -19,7 +19,8 @@ func TestConfigSetRoutesByScope(t *testing.T) {
 	root := trackerProject(t, "{}\n")
 	local := filepath.Join(root, ".rota", "config.local.json")
 	code, out := textRun(t, "-C", root, "config", "set", "round.slots", "3")
-	if code != 0 || !strings.Contains(out, "wrote .rota/config.local.json (machine key") {
+	// One line names the file and why (#1786 review).
+	if want := "local: round.slots = 3 (.rota/config.local.json: a machine key, this machine only; --project writes the tracked config)"; code != 0 || strings.TrimSpace(out) != want {
 		t.Errorf("machine key: %d %q", code, out)
 	}
 	if lb, _ := os.ReadFile(local); !strings.Contains(string(lb), `"slots": 3`) {
@@ -31,6 +32,11 @@ func TestConfigSetRoutesByScope(t *testing.T) {
 	code, out, errOut := rotaIn(t, root, "config", "set", "--project", "round.slots", "4")
 	if code != 0 || !strings.Contains(readConfig(t, root), `"slots": 4`) || !strings.Contains(errOut, "round.slots is a machine key") {
 		t.Errorf("--project: %d %q %q", code, out, errOut)
+	}
+	// The --project warning follows the write: a refused write warns nothing.
+	broken := trackerProject(t, "7\n")
+	if code, _, errOut := rotaIn(t, broken, "config", "set", "--project", "round.slots", "4"); code == 0 || strings.Contains(errOut, "machine key") {
+		t.Errorf("a refused --project write warned: %d %q", code, errOut)
 	}
 	if code, _ := textRun(t, "-C", root, "config", "set", "--global", "round.slots", "5"); code != 0 {
 		t.Errorf("--global: %d", code)
@@ -106,13 +112,13 @@ func TestConfigCheckWarnsOnScope(t *testing.T) {
 		t.Errorf("a taste key pinned off its default warned: %q", out)
 	}
 
-	root = filledProject(t, `{"debug": {"competingHypotheses": true}}`)
+	root = filledProject(t, `{"debug": {"notAKey": true}}`)
 	code, env, _ = rotaRun(t, "--json", "-C", root, "config", "check")
 	unknown, _ := get(dataOf(env), "unknown").([]any)
-	if code != ExitFailed || len(unknown) != 1 || unknown[0] != "debug.competingHypotheses" {
+	if code != ExitFailed || len(unknown) != 1 || unknown[0] != "debug.notAKey" {
 		t.Errorf("unknown key: %d %v", code, env)
 	}
-	if _, out := textRun(t, "-C", root, "config", "check"); !strings.Contains(out, "unknown: debug.competingHypotheses") {
+	if _, out := textRun(t, "-C", root, "config", "check"); !strings.Contains(out, "unknown: debug.notAKey") {
 		t.Errorf("unknown text: %q", out)
 	}
 }

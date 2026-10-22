@@ -71,14 +71,16 @@ func TestCheckReadsMergedConfig(t *testing.T) {
 }
 
 func TestWarningsAndUnknown(t *testing.T) {
-	root := layerRig(t, ``,
-		`{"round":{"slots":3},"work":{"isolation":"branch","mergeStrategy":"pr"},"ship":{"review":{"default":"full"}},"backlog":{"backend":"file"},"debug":{"competingHypotheses":true},"models":5}`,
+	// debug.competingHypotheses is a removed key, not an unknown one; an
+	// unknown key in the global config warns, as the tracked file's fail.
+	root := layerRig(t, `{"models":{"worker":"opus"},"zzg":{"a":1}}`,
+		`{"round":{"slots":3},"work":{"isolation":"branch","mergeStrategy":"pr"},"ship":{"review":{"default":"full"}},"backlog":{"backend":"file"},"debug":{"competingHypotheses":true},"legacy":{"x":1},"models":5}`,
 		`{"work":{"workerSlots":2},"zzz":{}}`)
-	want := []string{"work.isolation is pinned at its default in .rota/config.json", "round.slots is a machine key in .rota/config.json"}
+	want := []string{"work.isolation is pinned at its default in .rota/config.json", "round.slots is a machine key in .rota/config.json", "zzg.a in the global config is not a config key (nothing reads it)"}
 	if got := Warnings(root); !reflect.DeepEqual(got, want) {
 		t.Errorf("Warnings = %v", got)
 	}
-	if got := Unknown(root); !reflect.DeepEqual(got, []string{"debug.competingHypotheses", "zzz" + LocalMark}) {
+	if got := Unknown(root); !reflect.DeepEqual(got, []string{"legacy.x", "zzz" + LocalMark}) {
 		t.Errorf("Unknown = %v", got)
 	}
 }
