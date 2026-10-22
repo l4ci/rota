@@ -333,8 +333,8 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Embedding host fakes must redeclare Capabilities": {
       "tier": "confirmed",
-      "hits": 4,
-      "lastSeen": "2026-10-19"
+      "hits": 5,
+      "lastSeen": "2026-10-22"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Palette entries name the verb that registers the View": {
       "tier": "provisional",
@@ -403,18 +403,18 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate target fields change mid-run": {
       "tier": "confirmed",
-      "hits": 4,
-      "lastSeen": "2026-10-19"
+      "hits": 5,
+      "lastSeen": "2026-10-22"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate steps read the forge only after stepRemote": {
       "tier": "confirmed",
-      "hits": 3,
-      "lastSeen": "2026-10-19"
+      "hits": 4,
+      "lastSeen": "2026-10-22"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::The tracker REST layer never resends a POST after a 5xx": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-15"
+      "hits": 1,
+      "lastSeen": "2026-10-22"
     },
     "Rounds: Orchestration: Workers & relays::Sonnet workers write tests after the code unless the brief names the RED": {
       "tier": "provisional",
@@ -548,13 +548,13 @@
     },
     "Build & Tooling: Smoke testing: Gate & frozen records::Pin ROTA_FROZEN_DAY when regenerating frozen records": {
       "tier": "confirmed",
-      "hits": 3,
-      "lastSeen": "2026-10-19"
+      "hits": 4,
+      "lastSeen": "2026-10-22"
     },
     "Build & Tooling: Smoke testing: Gate & frozen records::A config key change regenerates the frozen config record": {
       "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-19"
+      "hits": 2,
+      "lastSeen": "2026-10-22"
     },
     "Build & Tooling: Smoke testing: Gate & frozen records::A gate that crosses UTC midnight fails the frozen tests": {
       "tier": "provisional",
@@ -568,8 +568,8 @@
     },
     "Build & Tooling: Smoke testing: Gate & frozen records::Behavior-changing tasks must sweep smoke sections asserting the old behavior": {
       "tier": "confirmed",
-      "hits": 5,
-      "lastSeen": "2026-10-18"
+      "hits": 6,
+      "lastSeen": "2026-10-22"
     },
     "Build & Tooling: Smoke testing: Gate & frozen records::Pre-existing smoke failures: check main before triaging your branch": {
       "tier": "provisional",
@@ -623,8 +623,8 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::The worker forge must not share the read cache": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-19"
+      "hits": 1,
+      "lastSeen": "2026-10-22"
     },
     "Rounds: Orchestration: Slate & issues::The queue-empty architecture trigger re-fires on every idle check": {
       "tier": "provisional",
@@ -663,8 +663,8 @@
     },
     "Rounds: Orchestration: Reviews & verdicts::Re-reviews are one reviewer, majors only, fix range only": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-09"
+      "hits": 1,
+      "lastSeen": "2026-10-22"
     },
     "Rounds: Orchestration: Reviews & verdicts::rota verdict add takes no extra top-level fields": {
       "tier": "provisional",
@@ -718,13 +718,13 @@
     },
     "Rounds: Orchestration: Reviews & verdicts::Refactor reviews need an old-vs-new input table": {
       "tier": "confirmed",
-      "hits": 3,
-      "lastSeen": "2026-10-19"
+      "hits": 5,
+      "lastSeen": "2026-10-22"
     },
     "Rounds: Orchestration: Reviews & verdicts::Mutation-check source-grep guard tests": {
-      "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-19"
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-10-22"
     },
     "Rounds: Orchestration: Gate, trains & bookkeeping::Train PRs with disjoint paths; a new config key reds the frozen config record": {
       "tier": "provisional",
@@ -743,8 +743,8 @@
     },
     "Rounds: Orchestration: Reviews & verdicts::Renamed Go tests can silently stop running": {
       "tier": "confirmed",
-      "hits": 5,
-      "lastSeen": "2026-10-19"
+      "hits": 6,
+      "lastSeen": "2026-10-22"
     },
     "Rounds: Orchestration: Gate, trains & bookkeeping::Rebuild the installed rota after merging round-verb fixes": {
       "tier": "provisional",
@@ -823,8 +823,8 @@
     },
     "Rounds: Orchestration: Gate, trains & bookkeeping::Grep open PR heads for callers before landing a symbol removal": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-20"
+      "hits": 1,
+      "lastSeen": "2026-10-22"
     },
     "Rounds: Orchestration: Slate & issues::Keep deferred findings out of the round that filed them": {
       "tier": "provisional",
@@ -926,11 +926,6 @@
       "hits": 0,
       "lastSeen": "2026-10-21"
     },
-    "Rounds: Orchestration: Gate, trains & bookkeeping::Check closing references on slice PRs": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-22"
-    },
     "Build & Tooling: Git & isolation::zsh does not split unquoted variables": {
       "tier": "provisional",
       "hits": 0,
@@ -942,6 +937,46 @@
       "lastSeen": "2026-10-22"
     },
     "Rounds: Orchestration: Reviews & verdicts::Packages before -run in review test commands": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-22"
+    },
+    "Build & Tooling: Smoke testing: Gate & frozen records::The worker forge must not share the read cache": {
+      "tier": "provisional",
+      "hits": 1,
+      "lastSeen": "2026-10-22"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Chained background scripts wait on a unique marker, not a shared phrase": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-22"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Kill a chained shell by its tee pid, never by the log name": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-22"
+    },
+    "Build & Tooling: Git & isolation::Use an unshipped verb from a scratch build beside the installed binary": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-22"
+    },
+    "Rounds: Orchestration: Workers & relays::A brief never narrows the issue's acceptance": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-22"
+    },
+    "Rounds: Orchestration: Workers & relays::Weekly limit: answer Stop-and-wait, reassign the account, resume the slot": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-22"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::A forge-reading gate step skips on error; the smoke fake cannot answer it": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-22"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::Rebuild a missing reviewer verdict file from the report's JSON block": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-22"
