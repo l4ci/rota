@@ -306,6 +306,9 @@ func touches(be backlog.Backend, id string) string {
 	text, _, _ := be.Detail(id)
 	var keep []string
 	for _, e := range touchEntries(text) {
+		if e.Hidden {
+			continue
+		}
 		keep = append(keep, "- "+e.Raw)
 	}
 	out := strings.Join(keep, "\n")

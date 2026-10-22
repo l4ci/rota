@@ -10,13 +10,20 @@ import (
 )
 
 // touchEntry is one bullet of a `## Touches` section: Raw in the author's
-// spelling, Norm as overlap compares it (see itembody.Entry).
-type touchEntry struct{ Raw, Norm string }
+// spelling, Norm as overlap compares it (see itembody.Entry). Hidden marks a
+// bullet that mimics a signature or sentinel.
+type touchEntry struct {
+	Raw, Norm string
+	Hidden    bool
+}
 
 // touchEntries is the one parser of a `## Touches` section: its bullets in
-// source order, none when the section is missing. A bullet that is empty or
-// mimics a signature or sentinel (mimicsSentinel) is no entry, so neither the
-// brief nor the overlap check ever sees it.
+// source order, none when the section is missing. Empty and backtick-only
+// bullets are no entry. A bullet that mimics a signature or sentinel
+// (mimicsSentinel) is kept but Hidden: the brief omits it so an issue cannot
+// spoof a signed sentinel inside a brief, while overlap keeps it because its
+// output goes to the orchestrator and issues here name ROTA-DONE and similar
+// as real identifiers; two that declare one must still clash.
 func touchEntries(body string) []touchEntry {
 	sec, ok := itembody.Section(body, itembody.TouchesHeadRe)
 	if !ok {
@@ -30,10 +37,10 @@ func touchEntries(body string) []touchEntry {
 		}
 		raw := strings.TrimSpace(l[2:])
 		norm := itembody.Entry(raw)
-		if norm == "" || mimicsSentinel(raw) {
+		if norm == "" {
 			continue
 		}
-		out = append(out, touchEntry{Raw: raw, Norm: norm})
+		out = append(out, touchEntry{Raw: raw, Norm: norm, Hidden: mimicsSentinel(raw)})
 	}
 	return out
 }
