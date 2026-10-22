@@ -1036,7 +1036,10 @@ func (g *gate) stepNoSliceClose(keys []tracker.IssueKey) (bool, error) {
 		n, _ := PRRefNumber(g.pr)
 		var err error
 		if nums, known, err = rep.ClosingRefs(g.ctx, n); err != nil {
-			return g.broke(fmt.Sprintf("could not read what %s closes: %v", g.pr, err))
+			// A forge that cannot answer the query is the same as one without the
+			// capability: only a positive answer refuses, or every gate dies with it.
+			nums, known = nil, false
+			g.closingErr = err
 		}
 	}
 	var leaks []tracker.IssueKey
@@ -1061,7 +1064,11 @@ func (g *gate) stepNoSliceClose(keys []tracker.IssueKey) (bool, error) {
 	if !known {
 		// Nothing to judge: say so once, and only when a slice PR made it matter.
 		if partial {
-			g.res.Notes = append(g.res.Notes, fmt.Sprintf("CLOSING-REFS-UNKNOWN %s — the forge cannot report what %s closes; the %s check is skipped", g.o.Slot, g.pr, PartialSliceLabel))
+			why := "the forge cannot report"
+			if g.closingErr != nil {
+				why = fmt.Sprintf("the forge could not report (%v)", g.closingErr)
+			}
+			g.res.Notes = append(g.res.Notes, fmt.Sprintf("CLOSING-REFS-UNKNOWN %s — %s what %s closes; the %s check is skipped", g.o.Slot, why, g.pr, PartialSliceLabel))
 		}
 		return false, nil
 	}
@@ -1672,13 +1679,14 @@ func (e Env) issueSide(forge Forge, forgeProvider, dir string, s tracker.Setting
 }
 
 type gate struct {
-	e      Env // defaulted once, by Env.Gate
-	ctx    context.Context
-	root   string
-	res    *GateResult
-	o      GateOpts
-	in     gateInput
-	target GateTarget
+	closingErr error // set when the forge failed the closing-refs read (stepNoSliceClose)
+	e          Env   // defaulted once, by Env.Gate
+	ctx        context.Context
+	root       string
+	res        *GateResult
+	o          GateOpts
+	in         gateInput
+	target     GateTarget
 	// resolved is the target as GateTarget returned it. stepExternal rewrites
 	// target.Branch to the forge head; the ledger keeps the resolved one.
 	resolved GateTarget
