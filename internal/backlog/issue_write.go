@@ -128,7 +128,7 @@ func (b *Issues) milestoneTitle(value string) (string, error) {
 		}
 	}
 	if !ok {
-		return "", errf(ErrNotFound, "milestone %s not found on the tracker — create it with /rota-vision (M07-S05)", value)
+		return "", errf(ErrNotFound, "milestone %s not found on the tracker; list milestones with: rota milestone list, or create it with /rota-vision (M07-S05)", value)
 	}
 	return title, nil
 }

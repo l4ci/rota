@@ -50,7 +50,7 @@
 {"name":"repoflag-registered/complete","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"ffd4cc6","id":"B01","reason":"done","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"9cfe0d6257cd315b",".rota/counters.json":"aab9151adc86dac3"}}]}
 {"name":"repoflag-registered/create","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"T09","kind":"tasks","type":"T"},"ok":true},"tree":{".rota/BACKLOG.md":"46e5a90104f4c810",".rota/counters.json":"613a8d288a3c80ad"}}]}
 {"name":"repoflag-registered/fieldget","steps":[{"exit":0,"env":{"data":{"field":"repos","id":"B03","type":"B","value":"web"},"ok":true}}]}
-{"name":"repoflag-registered/fieldset","steps":[{"exit":0,"env":{"data":{"changed":false,"field":"milestone","id":"B03","type":"B","value":"M02"},"ok":true}}]}
+{"name":"repoflag-registered/fieldset","steps":[{"exit":0,"env":{"data":{"changed":false,"field":"milestone","id":"B03","type":"B","value":"M02"},"ok":true},"tree":{".rota/milestones/M02.md":"0066f0fe4f063886"}}]}
 {"name":"repoflag-registered/idnext","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"T09","kind":"tasks"},"ok":true},"tree":{".rota/counters.json":"613a8d288a3c80ad"}}]}
 {"name":"repoflag-registered/ready","steps":[{"exit":0,"env":{"data":{"id":"B01","ready":true,"reasons":[],"type":"B"},"ok":true}}]}
 {"name":"repoflag-registered/reopen","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B08","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"b10849d196579680",".rota/counters.json":"025a8a42bd10c7d5"}}]}
