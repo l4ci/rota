@@ -1126,38 +1126,10 @@ func refList(keys []tracker.IssueKey) string {
 	return strings.Join(refs, ", ")
 }
 
-// ReviewKinds are the verdict kinds a review depth needs on record: full both
-// reviewers, none nothing, light the Spec reviewer when the branch has a spec
-// (an issue) and the Standards reviewer when it has none (#683): the gate
-// already runs the mechanical half of Standards, nothing else checks spec drift.
-func ReviewKinds(d config.ReviewDepth, hasSpec bool) []string {
-	switch d {
-	case config.DepthFull:
-		return []string{verdict.ReviewSpec, verdict.ReviewQuality}
-	case config.DepthLight:
-		if hasSpec {
-			return []string{verdict.ReviewSpec}
-		}
-		return []string{verdict.ReviewQuality}
-	}
-	return nil
-}
-
 // NeedsCross reports whether a branch at depth needs a review-cross verdict:
 // its cross requirement names a harness and the depth reviews anything.
 func NeedsCross(res ReviewDepth, depth config.ReviewDepth) bool {
 	return res.Cross != "" && res.Cross != CrossNone && depth != config.DepthNone
-}
-
-// CoveredDepth is the highest depth whose ReviewKinds are all in have: what the
-// verdicts recorded at head already satisfy.
-func CoveredDepth(have []string, hasSpec bool) config.ReviewDepth {
-	for _, d := range []config.ReviewDepth{config.DepthFull, config.DepthLight} {
-		if !slices.ContainsFunc(ReviewKinds(d, hasSpec), func(k string) bool { return !slices.Contains(have, k) }) {
-			return d
-		}
-	}
-	return config.DepthNone
 }
 
 // DepthRose reports whether to ranks above from, both known depths.
@@ -1202,9 +1174,8 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	if src.Author == "" {
 		src.Author = assignedHarness(g.root, g.target.Issue)
 	}
-	hasSpec := false
+	hasSpec := verdict.HasSpec(g.target.Issue)
 	if key, ok := tracker.ParseKey(g.target.Issue); ok {
-		hasSpec = true
 		if g.issues != nil {
 			src.Issue, src.Issues = key, g.issues
 			for _, id := range g.target.Bundle {
@@ -1238,12 +1209,7 @@ func (g *gate) stepReviewDepth() (bool, error) {
 		}
 	}
 	have := verdict.Recorded(g.root, g.branch, strings.TrimSpace(head))
-	var missing []string
-	for _, k := range ReviewKinds(depth, hasSpec) {
-		if !slices.Contains(have, k) {
-			missing = append(missing, k)
-		}
-	}
+	missing := verdict.MissingReviews(depth, hasSpec, have)
 	// A depth of none reviews nothing, so it asks for no cross review either.
 	crossMissing := ""
 	if NeedsCross(res, depth) {
