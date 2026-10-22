@@ -47,6 +47,23 @@ type Overlap struct {
 	Inferred bool
 }
 
+// String is the overlap as text: the holder, then the declared scopes the two
+// share ("overlaps #12 (ben): scopes post /items").
+func (o Overlap) String() string {
+	w := "overlaps #" + strings.TrimPrefix(o.With, "#")
+	if o.Slot != "" {
+		w += " (" + o.Slot + ")"
+	}
+	if len(o.Scopes) > 0 {
+		label := ": scopes "
+		if o.Inferred {
+			label = ": inferred scopes "
+		}
+		w += label + strings.Join(o.Scopes, ", ")
+	}
+	return w
+}
+
 // Readiness is the verdict on one item: ready when every check holds.
 type Readiness struct {
 	ID       string

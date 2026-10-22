@@ -164,7 +164,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 			return nil, err
 		}
 		for _, o := range res.Overlaps {
-			c.Warn("%s %s", tracker.RefOf(id), overlapText(o))
+			c.Warn("%s %s", tracker.RefOf(id), o.String())
 		}
 		if fb := res.Fallback; fb != nil {
 			c.Warn("fallback\t%s: %s -> %s: %s", tracker.RefOf(id), fb.From, fb.To, fb.Why)
