@@ -104,11 +104,15 @@ func pinDay(d *Deps, day string) {
 func pinHolder(d *Deps, pid int) { d.HolderPID = func() int { return pid } }
 
 // dirPins are per-project Deps pins: a helper that builds a project (orchProject)
-// registers them, and rotaIn/rotaStdin apply them when they run in that dir.
+// registers them, and ONLY rotaIn/rotaStdin (via depsIn) apply them, and only
+// when they run in exactly that dir. Helpers that take explicit Deps (rotaInWith,
+// rotaRunWith, runMain, runMainWith, mainWith(testDeps())) and runs in a subdir
+// of the pinned dir get the real clock and holder with no error: pass
+// depsIn(dir) as their Deps, or pin the Deps yourself.
 // Keys are unique temp dirs, removed at test cleanup.
 var dirPins sync.Map // dir -> []func(*Deps)
 
-// pinDir adds pins to every testDeps-based run in dir.
+// pinDir adds pins to rotaIn/rotaStdin runs in dir (see dirPins for what it misses).
 func pinDir(t *testing.T, dir string, pins ...func(*Deps)) {
 	t.Helper()
 	old, _ := dirPins.Load(dir)
