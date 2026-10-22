@@ -14,10 +14,10 @@ import (
 
 // Scope values of round.scope: which issues a round may take.
 const (
-	ScopeSlate     = "slate"
-	ScopeMilestone = "milestone"
-	ScopeNext      = "next"
-	ScopeOpen      = "open"
+	ScopeSlate     = config.ScopeSlate
+	ScopeMilestone = config.ScopeMilestone
+	ScopeNext      = config.ScopeNext
+	ScopeOpen      = config.ScopeOpen
 )
 
 // Scopes lists the valid scope values.
@@ -185,14 +185,11 @@ func Load(root string) (Settings, error) {
 // config, for a caller that holds one.
 func FromConfig(cfg any) (Settings, error) {
 	var s Settings
-	v, err := config.Value(cfg, "round.scope")
-	if err != nil {
+	s.Scope = config.String(cfg, "round.scope")
+	if err := config.CheckEnum("round.scope", s.Scope); err != nil {
 		return s, err
 	}
-	s.Scope, _ = v.(string)
-	if !ValidScope(s.Scope) {
-		return s, fmt.Errorf("round.scope must be %s (got %v)", strings.Join(Scopes, ", "), v)
-	}
+	var err error
 	if s.Roster, err = list(cfg, "round.roster"); err != nil {
 		return s, err
 	}
@@ -212,22 +209,15 @@ func FromConfig(cfg any) (Settings, error) {
 	if s.Slots, err = config.Int(cfg, "round.slots", 1, config.MaxInt); err != nil {
 		return s, err
 	}
-	v, err = config.Value(cfg, "round.brief")
-	if err != nil {
-		return s, err
-	}
-	s.Brief, _ = v.(string)
+	s.Brief = config.String(cfg, "round.brief")
 	if s.SharedPaths, err = list(cfg, "round.sharedPaths"); err != nil {
 		return s, err
 	}
-	v, err = config.Value(cfg, "round.scopeOverlap")
-	if err != nil {
+	overlap := config.String(cfg, "round.scopeOverlap")
+	if err := config.CheckEnum("round.scopeOverlap", overlap); err != nil {
 		return s, err
 	}
-	if err := config.CheckEnum("round.scopeOverlap", v); err != nil {
-		return s, err
-	}
-	s.BlockScopeOverlap = v == config.ScopeOverlapBlock
+	s.BlockScopeOverlap = overlap == config.ScopeOverlapBlock
 	if s.StallMinutes, err = config.Int(cfg, "round.stallMinutes", 0, config.MaxInt); err != nil {
 		return s, err
 	}
@@ -255,10 +245,7 @@ func FromConfig(cfg any) (Settings, error) {
 	if s.ArchitectureIdleMinHours, err = config.Int(cfg, "round.architectureIdleMinHours", 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if v, err = config.Value(cfg, "autonomy.level"); err != nil {
-		return s, err
-	}
-	s.Autopilot = v == "auto"
+	s.Autopilot = config.String(cfg, "autonomy.level") == "auto"
 	if s.AutopilotCap, err = config.Int(cfg, "round.autopilotCap", 0, config.MaxInt); err != nil {
 		return s, err
 	}
@@ -268,26 +255,14 @@ func FromConfig(cfg any) (Settings, error) {
 	if s.BundleMax, err = config.Int(cfg, "round.bundleMax", 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	v, err = config.Value(cfg, "round.reviewLoop")
-	if err != nil {
-		return s, err
+	if s.ReviewLoop = config.String(cfg, "round.reviewLoop"); s.ReviewLoop != ReviewLoopManual && s.ReviewLoop != ReviewLoopAuto {
+		return s, fmt.Errorf("round.reviewLoop must be %s or %s (got %v)", ReviewLoopManual, ReviewLoopAuto, s.ReviewLoop)
 	}
-	if s.ReviewLoop, _ = v.(string); s.ReviewLoop != ReviewLoopManual && s.ReviewLoop != ReviewLoopAuto {
-		return s, fmt.Errorf("round.reviewLoop must be %s or %s (got %v)", ReviewLoopManual, ReviewLoopAuto, v)
-	}
-	if v, err = config.Value(cfg, "round.adoptPattern"); err != nil {
-		return s, err
-	}
-	s.AdoptPattern, _ = v.(string)
-	s.AdoptPattern = strings.TrimSpace(s.AdoptPattern)
+	s.AdoptPattern = strings.TrimSpace(config.String(cfg, "round.adoptPattern"))
 	if _, err := path.Match(s.AdoptPattern, ""); err != nil {
 		return s, fmt.Errorf("round.adoptPattern %q: %v", s.AdoptPattern, err)
 	}
-	if v, err = config.Value(cfg, "round.support"); err != nil {
-		return s, err
-	}
-	s.Support, _ = v.(string)
-	s.Support = strings.TrimSpace(s.Support)
+	s.Support = strings.TrimSpace(config.String(cfg, "round.support"))
 	if s.Role, err = MachineRole(cfg); err != nil {
 		return s, err
 	}
