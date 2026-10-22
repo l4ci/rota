@@ -139,11 +139,17 @@ func (p Pick) String() string {
 
 // Where a worker's kind came from, as resolveKind reports it.
 const (
-	KindFromFlag    = "--kind"
-	KindFromLabel   = "harness label"
-	KindFromConfig  = "round.workerKind"
-	KindFromSlot    = "slot"
-	KindFromDefault = "default"
+	KindFromFlag   = "--kind"
+	KindFromLabel  = "harness label"
+	KindFromConfig = "round.workerKind"
+	// KindFromHarnesses is the first entry of round.harnesses, the project
+	// default when round.workerKind is unset.
+	KindFromHarnesses = "round.harnesses"
+	KindFromSlot      = "slot"
+	KindFromDefault   = "default"
+	// KindFromFallback is a kind another harness's cooling accounts handed
+	// over to (round.harnesses).
+	KindFromFallback = "quota fallback"
 )
 
 // resolveKind is the harness and where it came from: --kind, else the item's

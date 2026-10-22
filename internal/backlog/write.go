@@ -314,6 +314,44 @@ func (f *File) requireMilestone(value string) error {
 	return nil
 }
 
+// HarnessSetter records the harness an item runs on in a backend with no
+// labels: the Harness: field of a file bullet. Empty kind clears it.
+type HarnessSetter interface {
+	SetHarness(ref, kind string) (changed bool, err error)
+}
+
+// SetHarness sets, replaces or clears the Harness: field on the open bullet
+// of ref, the file-mode twin of the harness:<kind> label.
+func (f *File) SetHarness(ref, kind string) (bool, error) {
+	if err := f.requireBacklog(); err != nil {
+		return false, err
+	}
+	path := f.backlogPath()
+	changed := false
+	err := fsio.Locked(path, fsio.LockTimeout, func() error {
+		content, err := fsio.ReadText(path)
+		if err != nil {
+			return err
+		}
+		re := regexp.MustCompile(`(?m)^- \*\*\[` + regexp.QuoteMeta(ref) + `\].*$`)
+		m := re.FindStringIndex(content)
+		if m == nil {
+			return errf(ErrNotFound, "[%s] has no open bullet in .rota/BACKLOG.md (unknown, completed, or archived)", ref)
+		}
+		raw := content[m[0]:m[1]]
+		line, err := setField(raw, harnessField, kind)
+		if err != nil {
+			return errf(ErrInvalid, "%s", err.Error())
+		}
+		if line == raw {
+			return nil
+		}
+		changed = true
+		return fsio.WriteFileAtomic(path, []byte(content[:m[0]]+line+content[m[1]:]))
+	})
+	return changed, err
+}
+
 func sectionName(kind string) string { return sectionForDir(kind) }
 
 // SetField sets, replaces or clears a trailing field on the open bullet of
