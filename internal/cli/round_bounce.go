@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -127,7 +126,7 @@ func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 	}
 	list := verdict.Load(root).Branches[verdict.BranchKey("", branch)]
 	judged := false
-	for _, kind := range append(worker.ReviewKinds(config.DepthFull, true), verdict.ReviewCross) {
+	for _, kind := range []string{verdict.ReviewSpec, verdict.ReviewQuality, verdict.ReviewCross} {
 		r, ok := verdict.Latest(list, kind)
 		if !ok || !verdict.AtHead(r, head) {
 			continue
