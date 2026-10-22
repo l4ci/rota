@@ -63,6 +63,8 @@ type HvOptions struct {
 	// of the project at dir (it works from the issue tracker in issue mode,
 	// which lives in the verb layer); nil uses the file-mode index.
 	Milestone func(dir string) func() (bool, error)
+	// Now stamps the backup folder; nil is the wall clock.
+	Now func() time.Time
 }
 
 // HvProject is what the run does to one project: the root or a sub-repo.
@@ -786,7 +788,11 @@ func RunHv(o HvOptions) (*HvReport, error) {
 }
 
 func applyHv(o HvOptions, projs []*hvProj, legacyRoots []skills.Root, settingsEdits []hvEdit, rep *HvReport, want string) error {
-	ts := time.Now().Format("20060102T150405")
+	now := o.Now
+	if now == nil {
+		now = time.Now
+	}
+	ts := now().Format("20060102T150405")
 	var rootBackup string // absolute, for the files outside any project
 	for i, p := range projs {
 		pl := p.plan

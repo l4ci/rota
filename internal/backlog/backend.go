@@ -140,7 +140,8 @@ type Options struct {
 	CountProof func(text string) int
 	// NoteLimit is the ROTA_NOTE_LIMIT value; see Issues.NoteLimit.
 	NoteLimit string
-	// Today is the day clock of the file backend's dated rows; nil is time.Now.
+	// Today is the day clock of the file backend's dated rows and of milestone
+	// created dates; nil is time.Now.
 	Today func() time.Time
 	// Warn receives the file backend's post-write notices; nil drops them.
 	Warn func(string)
@@ -167,6 +168,7 @@ func Open(ctx context.Context, root string, cfg any, opts Options) (Backend, err
 		u.Ctx = ctx
 		u.CountProof = opts.CountProof
 		u.NoteLimit = opts.NoteLimit
+		u.Today = opts.Today
 		u.Scope = opts.Scope
 		if opts.Cwd != "" {
 			u.CwdRepo = CwdSubRepo(opts.Cwd, u.Repos)
@@ -177,7 +179,7 @@ func Open(ctx context.Context, root string, cfg any, opts Options) (Backend, err
 	if err != nil {
 		return nil, err
 	}
-	return &Issues{Cfg: cfg, Tracker: tr, Ctx: ctx, CountProof: opts.CountProof, NoteLimit: opts.NoteLimit}, nil
+	return &Issues{Cfg: cfg, Tracker: tr, Ctx: ctx, CountProof: opts.CountProof, NoteLimit: opts.NoteLimit, Today: opts.Today}, nil
 }
 
 var (

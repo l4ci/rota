@@ -172,7 +172,7 @@ func openCounter(c *Ctx) (*debugctr.Counter, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctr, err := debugctr.Open(root)
+	ctr, err := debugctr.Open(root, c.deps().Now)
 	return ctr, err
 }
 

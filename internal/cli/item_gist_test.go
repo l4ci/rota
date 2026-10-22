@@ -22,7 +22,7 @@ func gistProject(t *testing.T) string {
 	if err := os.MkdirAll(filepath.Join(rota, "milestones"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(rota, "milestones", "M01.md"), []byte(ms.Stub("M01", "Fog", "Find out.", nil)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(rota, "milestones", "M01.md"), []byte(ms.StubOn("M01", "Fog", "Find out.", nil, "2026-01-02")), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return root
