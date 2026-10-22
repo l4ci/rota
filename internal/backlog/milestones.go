@@ -259,6 +259,7 @@ func (b *Issues) MilestoneShow(mid string) (string, error) {
 		return "", err
 	}
 	text, _, _ := ParseFieldsBlock(is.Body)
+	text, _, _ = ms.SplitChildren(text)
 	return strings.TrimRight(text, "\n"), nil
 }
 
@@ -379,7 +380,8 @@ func (b *Issues) MilestonePut(mid, text string) error {
 	if err != nil {
 		return err
 	}
-	_, block, order := ParseFieldsBlock(is.Body)
+	old, block, order := ParseFieldsBlock(is.Body)
+	_, children, _ := ms.SplitChildren(old)
 	if _, has := fm["depends"]; has {
 		if _, ok := block["Depends"]; !ok {
 			order = append(order, "Depends")
@@ -387,8 +389,91 @@ func (b *Issues) MilestonePut(mid, text string) error {
 		block["Depends"] = strings.Join(ms.DependsOf(fm), ", ")
 	}
 	text, _ = frontmatter.UpdateField(text, "status", msStatusOf(is))
-	body := RenderFieldsBlock(text, order, block)
+	body := RenderFieldsBlock(ms.JoinChildren(text, children), order, block)
 	return mt.Edit(b.ctx(), is.Key, tracker.IssueEdit{Body: &body})
+}
+
+// ChildSync is the outcome of SyncMilestoneChildren: whether the tracking
+// issue's child list changed, and the refs it gained and lost.
+type ChildSync struct {
+	Changed        bool
+	Count          int // issues in the list
+	Added, Removed []string
+}
+
+// SyncMilestoneChildren regenerates the child list on milestone mid's tracking
+// issue from the issues in its native milestone, open and closed, and leaves
+// the plan text alone. The list is rewritten only when it differs; Added and
+// Removed are the drift it found against the native milestone.
+func (b *Issues) SyncMilestoneChildren(mid string) (ChildSync, error) {
+	tr, err := b.tracker()
+	if err != nil {
+		return ChildSync{}, err
+	}
+	is, err := b.TrackerIssue(mid)
+	if err != nil {
+		return ChildSync{}, err
+	}
+	if is.Milestone == "" {
+		return ChildSync{}, nil
+	}
+	list, err := tr.List(b.ctx(), tracker.ListFilter{State: "all", Milestone: is.Milestone})
+	if err != nil {
+		return ChildSync{}, err
+	}
+	label := config.Label(b.Cfg, "milestoneTracker")
+	var kids []tracker.Issue
+	for _, c := range list {
+		if c.Milestone == is.Milestone && !slices.Contains(c.Labels, label) {
+			kids = append(kids, c)
+		}
+	}
+	sort.SliceStable(kids, func(i, j int) bool { return tracker.CompareKeys(kids[i].Key, kids[j].Key) < 0 })
+	refs := make([]ms.ChildRef, len(kids))
+	for i, c := range kids {
+		refs[i] = ms.ChildRef{Ref: c.Key.Ref(), Title: c.Title}
+	}
+	text, block, order := ParseFieldsBlock(is.Body)
+	plan, old, _ := ms.SplitChildren(text)
+	section := ms.RenderChildren(refs)
+	r := ChildSync{Count: len(refs)}
+	was := ms.ChildRefs(old)
+	for _, c := range refs {
+		if !slices.Contains(was, c.Ref) {
+			r.Added = append(r.Added, c.Ref)
+		}
+	}
+	for _, w := range was {
+		if !slices.ContainsFunc(refs, func(c ms.ChildRef) bool { return c.Ref == w }) {
+			r.Removed = append(r.Removed, w)
+		}
+	}
+	if section == old {
+		return r, nil
+	}
+	body := RenderFieldsBlock(ms.JoinChildren(plan, section), order, block)
+	r.Changed = true
+	return r, tr.Edit(b.ctx(), is.Key, tracker.IssueEdit{Body: &body})
+}
+
+// syncChildrenOf refreshes the child lists of the milestones named by the
+// native titles. The item write has already landed, so a failure here is a
+// warning, not an error: `rota milestone check` regenerates the list.
+func (b *Issues) syncChildrenOf(titles ...string) {
+	if b.NoChildSync {
+		return
+	}
+	seen := map[string]bool{}
+	for _, t := range titles {
+		mid, _, ok := parseMSTitle(t)
+		if !ok || seen[mid] {
+			continue
+		}
+		seen[mid] = true
+		if _, err := b.SyncMilestoneChildren(mid); err != nil && !errors.Is(err, ErrNotFound) {
+			b.warn(fmt.Sprintf("could not refresh the child list of %s: %v", mid, err))
+		}
+	}
 }
 
 // ---- slice plans: plan:S<NN> notes on the tracking issue ---------------------
