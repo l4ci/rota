@@ -105,14 +105,9 @@ func keyMatches(line, project string) [][]string {
 	return out
 }
 
-// Dependencies parses the `## Depends on` section into item references (in
-// the item's own spelling) and references that cannot be looked up.
-func Dependencies(text string) (refs, unverifiable []string) {
-	return dependencies(text, "")
-}
-
-// dependencies is Dependencies; a project key also reads a key-based
-// tracker's refs of that project (PROJ-123). A list item headed by another
+// dependencies parses the `## Depends on` section into item references (in
+// the item's own spelling) and references that cannot be looked up. A project
+// key also reads a key-based tracker's refs of that project (PROJ-123). A list item headed by another
 // project's key is unverifiable; such a word inside a sentence (UTF-8) is prose.
 func dependencies(text, project string) (refs, unverifiable []string) {
 	sec, ok := itembody.Section(text, itembody.DependsHeadRe)
