@@ -252,7 +252,7 @@ func TestIssuesComments(t *testing.T) {
 	tr.Issues[0].Comments = append(tr.Issues[0].Comments,
 		tracker.Comment{ID: "9", Body: "plain chatter"}, tracker.Comment{ID: "10", Body: "<!-- rota:comment answer -->\n\nA\n\n", Author: "bob"})
 	rows, err := b.Comments("1", "")
-	if err != nil || len(rows) != 2 || rows[0] != (Comment{ID: rows[0].ID, Who: "fake-user", Kind: "question", Text: "Why?\nBecause."}) || rows[1] != (Comment{ID: rows[1].ID, Who: "bob", Kind: "answer", Text: "A"}) {
+	if err != nil || len(rows) != 2 || rows[0] != (Comment{ID: rows[0].ID, Who: "fake-user", Kind: "question", Text: "Why?\nBecause."}) || rows[1] != (Comment{ID: "10", Who: "bob", Kind: "answer", Text: "A"}) {
 		t.Fatalf("%+v, %v", rows, err)
 	}
 	if rows, _ = b.Comments("1", "answer"); len(rows) != 1 {

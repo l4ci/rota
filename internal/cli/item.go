@@ -902,6 +902,13 @@ func itemCommentAdd(fs *flag.FlagSet) RunFunc {
 		if !slices.Contains(backlog.CommentKinds, *kind) {
 			return Result{}, Usage("--kind must be %s", strings.Join(backlog.CommentKinds, "|"))
 		}
+		// harvested is the mark knowledge harvest --mark writes, which a support
+		// machine may not post.
+		if *kind == "harvested" {
+			if res, err := supportRefusal(root, "rota item comment add --kind harvested"); err != nil {
+				return res, err
+			}
+		}
 		if *bodyFile == "" {
 			return Result{}, Usage("--body-file is required")
 		}
