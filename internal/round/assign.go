@@ -300,26 +300,16 @@ func sectionText(be backlog.Backend, id, name string) string {
 	return out
 }
 
-// touches is the item's "## Touches" entries, one "- " bullet each in the
-// issue's own spelling, "" when it declares none. The same filter as
-// outOfScope keeps lines that mimic a signature out of a signed brief.
+// touches is the item's "## Touches" entries as a brief quotes them, one "- "
+// bullet each in the issue's own spelling, "" when it declares none.
 func touches(be backlog.Backend, id string) string {
 	text, _, _ := be.Detail(id)
-	sec, ok := itembody.Section(text, itembody.TouchesHeadRe)
-	if !ok {
-		return ""
-	}
 	var keep []string
-	for _, l := range strings.Split(sec, "\n") {
-		l = strings.TrimSpace(l)
-		if !strings.HasPrefix(l, "- ") && !strings.HasPrefix(l, "* ") {
+	for _, e := range touchEntries(text) {
+		if e.Hidden {
 			continue
 		}
-		l = strings.TrimSpace(l[2:])
-		if l == "" || mimicsSentinel(l) {
-			continue
-		}
-		keep = append(keep, "- "+l)
+		keep = append(keep, "- "+e.Raw)
 	}
 	out := strings.Join(keep, "\n")
 	if len(out) > maxOutOfScope {
