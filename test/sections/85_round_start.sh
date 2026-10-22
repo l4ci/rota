@@ -85,8 +85,8 @@ OUT=$(rn round candidates --scope milestone)
 pass "scope slate limits candidates to the approved slate"
 
 # assign: readiness, scope and the lease are checked before anything is marked.
-# The worker contract is not in this fixture, so a ready item stops at the
-# brief; a not-ready one and an out-of-scope one stop earlier. No host is used.
+# The fixture's round.brief names a missing file (an unset one falls back to the
+# skills cache copy, #1778), so a ready item stops at the brief; a not-ready one and an out-of-scope one stop earlier. No host is used.
 rn round start --holder-pid "$HOLDER" --scope milestone >/dev/null
 OUT=$(rn round assign F01 --check-only --holder-pid "$HOLDER")
 [ "$(echo "$OUT" | jget data.ready)" = "true" ] || fail "F01 should be ready: $OUT"
@@ -100,9 +100,11 @@ RC=0; OUT=$( cd "$RN" && $RNENV "$ROTA_BIN" --json round assign T01 --holder-pid
 grep -q 'no acceptance criteria' <<<"$OUT" || fail "the refusal should say why: $OUT"
 RC=0; OUT=$( cd "$RN" && $RNENV "$ROTA_BIN" --json round assign F01 --holder-pid 1 2>/dev/null ) || RC=$?
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "no round" ] || fail "a process without the lease is refused: $RC $OUT"
+rn config set round.brief no-such-contract.md >/dev/null
 RC=0; OUT=$( cd "$RN" && $RNENV "$ROTA_BIN" --json round assign F01 --holder-pid "$HOLDER" 2>/dev/null ) || RC=$?
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "brief missing" ] || fail "a missing worker contract is refused before marking: $RC $OUT"
 [ "$(git -C "$RN/.worktrees/ben" symbolic-ref --short HEAD)" = "park/ben" ] || fail "a refused assign must leave the slot parked"
+rn config set round.brief "" >/dev/null
 pass "assign refuses before marking: not ready, no lease, missing contract; check-only writes nothing"
 
 # wind-down: verify, park, release. A slot holding work is reported and kept.
