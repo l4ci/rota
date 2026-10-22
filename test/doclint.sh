@@ -107,6 +107,7 @@ pass "every rota verb in skills/rota-orchestrate/SKILL.md and docs/usage/paralle
 # drift: a WARN by default, a failure under --strict / ROTA_DOC_STAMPS=strict. A broken stamp
 # always fails. All outcomes run against a throwaway repo so the real history never has to drift.
 OUT="$(python3 "$TESTDIR/check-doc-stamps.py" 2>&1)" || fail "contract docs have a broken stamp: $OUT"
+unset ROTA_DOC_STAMPS # the fixture cases below pin their own mode; the caller's must not leak in
 SG="$TMP/stamps"; mkdir -p "$SG/docs/contributing/contract" "$SG/src"
 git -C "$SG" init -q
 git -C "$SG" config user.email t@t; git -C "$SG" config user.name t
