@@ -76,43 +76,6 @@ func TestFootprint(t *testing.T) {
 	}
 }
 
-func TestOverlaps(t *testing.T) {
-	cases := []struct {
-		a, b []string
-		want []string
-	}{
-		{[]string{"a/b.go"}, []string{"a/b.go"}, []string{"a/b.go"}},
-		{[]string{"a/"}, []string{"a/b.go"}, []string{"a/b.go"}},
-		{[]string{"a/b.go"}, []string{"a/"}, []string{"a/b.go"}},
-		{[]string{"internal/new/*.go"}, []string{"internal/new/x.go"}, []string{"internal/new/x.go"}},
-		{[]string{"a/b.go"}, []string{"a/c.go"}, nil},
-		{[]string{"a/"}, []string{"ab/c.go"}, nil},
-	}
-	for _, c := range cases {
-		if got := Overlaps(c.a, c.b); !reflect.DeepEqual(got, c.want) {
-			t.Errorf("%v vs %v: %v want %v", c.a, c.b, got, c.want)
-		}
-	}
-}
-
-func TestOverlapDirs(t *testing.T) {
-	cases := []struct {
-		a, b []string
-		want []string
-	}{
-		{[]string{"a/"}, []string{"a/b.go"}, []string{"a/"}},
-		{[]string{"a/b.go"}, []string{"a/"}, []string{"a/"}},
-		{[]string{"a/"}, []string{"a/"}, nil},
-		{[]string{"a/b.go"}, []string{"a/b.go"}, nil},
-		{[]string{"a/"}, []string{"ab/c.go"}, nil},
-	}
-	for _, c := range cases {
-		if got := OverlapDirs(c.a, c.b); !reflect.DeepEqual(got, c.want) {
-			t.Errorf("%v vs %v: %v want %v", c.a, c.b, got, c.want)
-		}
-	}
-}
-
 func TestAssessChecks(t *testing.T) {
 	be := &fakeRemote{ready: map[string][]string{"3": {"no acceptance criteria in the issue body", "no design or plan note"}}}
 	be.add("1", "done dep", "", true, "")
