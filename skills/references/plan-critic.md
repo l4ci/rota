@@ -15,7 +15,7 @@ Dispatch one read-only subagent through the current harness (`references/subagen
 
 Only level 4 reads `plan.criticHarness` (`rota config show plan.criticHarness`). Level 3 with a `decision` comment always takes the same-harness subagent above, whatever the key says. Unset, or equal to the harness you run in, changes nothing: use the subagent.
 
-With `claude`, `codex` or `opencode` set (a different harness than yours), save the critic brief below to a scratch file and run it headless and read-only from the project root, as [`cross-harness-run.md`](cross-harness-run.md) says (command, account, token line, reading the output). The inputs and the return shape are the ones above: the item, written with `rota item show <ID> > <scratch-item-file>` and passed by path, and the proposal file, by path, nothing else. The token goes on the first line of the proposal file.
+With `claude`, `codex` or `opencode` set (a different harness than yours), save the critic brief below to a scratch file and run it headless and read-only from the project root, as [`cross-harness-run.md`](cross-harness-run.md) says (command, account, token line, reading the output). The inputs and the return shape are the ones above: the item, written with `rota item show <ID> > <scratch-item-file>` and passed by path, and the proposal file, by path, nothing else. Write the token into a scratch copy of the proposal (`{ echo "Review token: <hex>"; cat <proposal>; } > <scratch-proposal>`) and pass that copy, never the planner's own file. The repo guard in `cross-harness-run.md` applies: a run that changed the repo is unavailable.
 
 Trim the reply to the return shape (at most 7 lines, four headings).
 
