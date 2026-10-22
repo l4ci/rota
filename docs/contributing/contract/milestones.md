@@ -300,10 +300,11 @@ note: `data.sha`, `check` and `evidence` carry the whitespace-collapsed values t
 ### rota proof record
 rota proof record <ID> [--base <ref>] -- <cmd>...
 repo: none    (an umbrella-issue item is addressed as `<repo>:<ID>`, as in shared definitions)
-data: {"id": string, "type": "B"|"F"|"T", "check": string, "result": "PASS"|"FAIL", "sha": string, "evidence": string, "exitCode": number, "changed": bool}
+data: {"id": string, "type": "B"|"F"|"T", "check": string, "result": "PASS"|"FAIL", "sha": string, "evidence": string, "exitCode": number, "niced": bool, "changed": bool}
 exit: 0 when the command exited 0; 1 when it exited non-zero (the FAIL row is still written, and `data` is the same shape); 2 when `--` or the command is missing; 3 when the item doesn't exist (checked before the command runs, so nothing runs for an unknown item) or `{files}` is used and no base resolves; tracker
 old: none (new in the proof family)
 note: runs the command in the project root and records what ran, so a row cannot be invented. `check` is the command as run: one argument is a shell line as typed, several are each single-quoted and joined by spaces. `{files}` expands as in `rota test run` (changed files against `--base`, default the base branch, each single-quoted), so an empty expansion shows in `check`. `result` is PASS for exit 0, else FAIL. `sha` is HEAD. `evidence` is `exit=<code> output-sha256=<hex>`, the hash over the combined stdout and stderr. The command's own output is not echoed or stored.
+note: (#1815) the command runs holding a slot of the test lock (`rota test run` describes it) and at lowered priority, `nice -n 10` and `ionice -c3` when `ionice` is on PATH, which its descendants inherit; `niced` says whether it was wrapped (no `nice` on PATH: false). A niced run's evidence ends in ` niced=true`. The command's environment carries `ROTA_TEST_LOCK_HELD=1`, so a `rota test run` inside it does not wait behind its own slot.
 note: dedup is `proof add`'s: an identical (check, result, sha, evidence) row is not added and `changed` is false. A re-run whose output differs (a timestamp, say) is a new row.
 note: `rota proof add` is unchanged and stays for rows no command backs (docs-only changes).
 

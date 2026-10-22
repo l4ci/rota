@@ -9,15 +9,31 @@
 #   --random      deal the sections to shards at random, so a section
 #                 that quietly needs another's state fails (shard-safety guard)
 #   --shards N    shard count; default ROTA_SMOKE_SHARDS, else config
-#                 gate.smokeShards, else 4
+#                 gate.smokeShards, else one per two cores (nproc/2, 1 to 4)
 # Env: ROTA_GATE_LOGS=<dir> keeps the per-check logs there (else a tmp dir that
 #      is kept only when a check fails); ROTA_GATE_LOCK=<path> moves the lock.
 #
 # Only one gate runs per machine: a second one waits for the first. Two gates at
-# once starve the Go tests of CPU and produce time-budget false reds.
+# once starve the Go tests of CPU and produce time-budget false reds. The gate
+# also takes a slot of the repo's test lock (test.slots), the one `rota test run`
+# and `rota proof record` queue on, so a worker proof does not run beside it.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# Run under the test lock: re-enter through `rota test lock`, which marks the
+# child (ROTA_TEST_LOCK_HELD) so this branch runs once.
+if [ -z "${ROTA_TEST_LOCK_HELD:-}" ]; then
+  LOCK_BIN="${ROTA_BIN:-}"
+  if [ -z "$LOCK_BIN" ]; then
+    LOCK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/rota-gate-bin-XXXXXX")" || exit 1
+    (cd "$REPO" && go build -trimpath -o "$LOCK_DIR/rota" ./cmd/rota) || { rm -rf "$LOCK_DIR"; echo "gate: go build ./cmd/rota failed" >&2; exit 2; }
+    LOCK_BIN="$LOCK_DIR/rota"
+  fi
+  rc=0
+  (cd "$REPO" && "$LOCK_BIN" test lock -- bash "$REPO/test/gate.sh" "$@") || rc=$?
+  [ -z "${LOCK_DIR:-}" ] || rm -rf "$LOCK_DIR"
+  exit "$rc"
+fi
 SMOKE_ONLY=0 RANDOM_PART=0 SHARDS="${ROTA_SMOKE_SHARDS:-}"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -43,10 +59,15 @@ for name in ("config.json", "config.local.json"):  # local overrides, as rota re
     except Exception:
         pass
 v = cfg.get("gate", {}).get("smokeShards")
-print(v if isinstance(v, int) and not isinstance(v, bool) and v >= 1 else 4)
+print(v if isinstance(v, int) and not isinstance(v, bool) and v >= 1 else "")
 PY
 )"
-  SHARDS="${SHARDS:-4}"
+  if [ -z "$SHARDS" ]; then
+    # Nothing set it: one shard per two cores, at least one, at most four, so a
+    # gate takes about half the machine (the same sum as worker.DefaultSmokeShards).
+    CORES="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
+    SHARDS=$((CORES / 2)); [ "$SHARDS" -ge 1 ] || SHARDS=1; [ "$SHARDS" -le 4 ] || SHARDS=4
+  fi
 fi
 case "$SHARDS" in ''|*[!0-9]*|0) echo "gate: shard count must be an integer >= 1, got: $SHARDS" >&2; exit 2 ;; esac
 
@@ -135,7 +156,7 @@ if [ "$SMOKE_ONLY" = 0 ]; then
   launch grepgate bash test/grep-gate.sh
   launch gofmt bash test/gofmt.sh
   launch vet go vet ./...
-  launch gotest go test -race -timeout 30m ./...
+  launch gotest go test -race -timeout 30m -p "$SHARDS" ./...
 fi
 N="$(partition)" || { echo "gate: partition failed" >&2; exit 2; }
 for i in $(seq 1 "$N"); do

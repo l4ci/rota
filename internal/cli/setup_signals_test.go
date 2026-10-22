@@ -181,8 +181,8 @@ func TestSetupYesTakesSuggestions(t *testing.T) {
 
 func TestSetupInteractiveFreeTextWrapsBareCommand(t *testing.T) {
 	dir := t.TempDir()
-	// nine choice questions at their defaults, then base branch, test.fast typed, test.full unset
-	in := strings.Repeat("\n", 9) + "trunk\nmake check\n\n"
+	// ten choice questions (the role first) at their defaults, then base branch, test.fast typed, test.full unset
+	in := strings.Repeat("\n", 10) + "trunk\nmake check\n\n"
 	if code, _, errOut := setupRun(t, dir, in, true); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
