@@ -78,7 +78,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		return res, err
 	}
 	le := e.Lease
-	lease, _, held, err := le.Holds(cd, o.HolderPID, e.getenv())
+	lease, _, held, err := HoldsLease(le, cd, o.HolderPID, e.getenv())
 	if err != nil {
 		return res, err
 	}
