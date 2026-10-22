@@ -133,7 +133,7 @@ func TestWaitReturnsASlotThatAlreadyNeedsAttention(t *testing.T) {
 	h := newWaitHost("herdr")
 	h.set("w1", "working...\n", "working")
 	h.set("w2", "ROTA-BLOCKED w2: A or B?\n", "idle")
-	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{})
+	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestWaitSkipsHandlelessSlotsUnlessNamed(t *testing.T) {
 	dir := waitProject(t, 2, map[string]string{"w2": "w9:t2"})
 	h := newWaitHost("herdr")
 	h.set("w2", "ROTA-DONE w2 x\n", "done")
-	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{})
+	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second})
 	if err != nil || res.Slot != "w2" {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -211,7 +211,7 @@ func TestWaitSkipsHandlelessSlotsUnlessNamed(t *testing.T) {
 		t.Errorf("watched = %v", h.watched)
 	}
 	for _, name := range []string{"w1", "nope"} {
-		_, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Slots: []string{name}})
+		_, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Slots: []string{name}, Timeout: 5 * time.Second})
 		if exitOf(err) != exitcode.ExitResolution {
 			t.Errorf("named %s: %v, want exit 3", name, err)
 		}
@@ -225,20 +225,20 @@ func TestWaitDoesNotWatchSlotsRecordedIdle(t *testing.T) {
 	})
 	h := newWaitHost("herdr")
 	h.set("w2", "ROTA-DONE w2 x\n", "done")
-	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{})
+	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second})
 	if err != nil || res.Slot != "w2" || len(h.watched) != 1 {
 		t.Fatalf("%+v %v watched=%v", res, err, h.watched)
 	}
 	// Naming a slot watches it whatever its recorded state.
 	h.set("w1", "ROTA-DONE w1 x\n", "done")
-	if res, err = envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Slots: []string{"w1"}}); err != nil || res.Slot != "w1" {
+	if res, err = envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Slots: []string{"w1"}, Timeout: 5 * time.Second}); err != nil || res.Slot != "w1" {
 		t.Errorf("named: %+v %v", res, err)
 	}
 }
 
 func TestWaitWithNothingToWatchIsAResolutionError(t *testing.T) {
 	dir := waitProject(t, 1, nil)
-	_, err := envWith(newWaitHost("tmux")).Wait(bg, dir, WaitOpts{})
+	_, err := envWith(newWaitHost("tmux")).Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second})
 	if exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("%v, want exit 3", err)
 	}
@@ -248,12 +248,12 @@ func TestWaitHostFailuresAreUnavailable(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
 	h.watchOK = host.ErrUnsupportedHerdr
-	if _, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{}); exitOf(err) != exitcode.ExitUnavailable {
+	if _, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); exitOf(err) != exitcode.ExitUnavailable {
 		t.Errorf("watch failure: %v, want exit 5", err)
 	}
 	h = newWaitHost("herdr")
 	h.requireErr = errors.New("herdr is not installed")
-	if _, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{}); exitOf(err) != exitcode.ExitUnavailable {
+	if _, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); exitOf(err) != exitcode.ExitUnavailable {
 		t.Errorf("not installed: %v, want exit 5", err)
 	}
 }
@@ -264,7 +264,7 @@ func TestWaitCancelIsNotATimeout(t *testing.T) {
 	h.set("w1", "working\n", "working")
 	ctx, cancel := context.WithCancel(bg)
 	go func() { time.Sleep(20 * time.Millisecond); cancel() }()
-	res, err := envWith(watcherHost{h}).Wait(ctx, dir, WaitOpts{})
+	res, err := envWith(watcherHost{h}).Wait(ctx, dir, WaitOpts{Timeout: 5 * time.Second})
 	if exitOf(err) != exitcode.ExitFailed || res.TimedOut {
 		t.Errorf("%+v %v", res, err)
 	}
@@ -374,7 +374,7 @@ func TestWaitRecordsWhatItReturned(t *testing.T) {
 	h := newWaitHost("herdr")
 	url := "https://github.com/o/r/pull/7"
 	h.set("w1", "ROTA-DONE w1 "+url+"\n", "done")
-	if _, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{}); err != nil {
+	if _, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil {
 		t.Fatal(err)
 	}
 	if got := seenField(dir, "w1", "state"); got != "done" {
@@ -388,12 +388,49 @@ func TestWaitRecordsWhatItReturned(t *testing.T) {
 	}
 }
 
+// armedWatch tells the test the wait reached its watch, which it does only
+// after a full classification pass, then blocks like blockWatch.
+type armedWatch struct{ armed chan<- struct{} }
+
+func (a armedWatch) Next(ctx context.Context) (string, error) {
+	select {
+	case a.armed <- struct{}{}:
+	default:
+	}
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+func (armedWatch) Close() {}
+
+// waitPassThenStop runs a wait until it has classified the slots once and
+// parked on its watch, then interrupts it. A short Timeout cannot stand in:
+// under load it expires before the first pass and the pass never happens.
+func waitPassThenStop(t *testing.T, h *waitHost, e Env, dir string) {
+	t.Helper()
+	armed := make(chan struct{}, 1)
+	h.watchFn = func(int) (host.Watch, error) { return armedWatch{armed}, nil }
+	defer func() { h.watchFn = nil }()
+	ctx, cancel := context.WithCancel(bg)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { _, err := e.Wait(ctx, dir, WaitOpts{Timeout: 5 * time.Second}); done <- err }()
+	select {
+	case <-armed:
+	case err := <-done:
+		t.Fatalf("wait ended before parking on its watch: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("wait never parked on its watch")
+	}
+	cancel()
+	<-done
+}
+
 func TestWaitDoesNotReturnTheSameArrivalTwice(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
 	h.set("w1", "ROTA-DONE w1 x\n", "done")
 	e := envWith(watcherHost{h})
-	if res, err := e.Wait(bg, dir, WaitOpts{}); err != nil || res.State != StateDone {
+	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil || res.State != StateDone {
 		t.Fatalf("first: %+v %v", res, err)
 	}
 	res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond})
@@ -402,14 +439,12 @@ func TestWaitDoesNotReturnTheSameArrivalTwice(t *testing.T) {
 	}
 	// The slot goes busy, then finishes again: it is news.
 	h.set("w1", "working...\n", "working")
-	if res, err = e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond}); err != nil || !res.TimedOut {
-		t.Fatalf("busy: %+v %v", res, err)
-	}
+	waitPassThenStop(t, h, e, dir)
 	if got := seenField(dir, "w1", "seen"); got != "" {
 		t.Errorf("seen = %q after the slot was observed busy", got)
 	}
 	h.set("w1", "ROTA-DONE w1 x\n", "done")
-	if res, err = e.Wait(bg, dir, WaitOpts{}); err != nil || res.State != StateDone {
+	if res, err = e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil || res.State != StateDone {
 		t.Fatalf("third: %+v %v", res, err)
 	}
 }
@@ -421,7 +456,7 @@ func TestWaitReturnsPromptsAndNewQuestions(t *testing.T) {
 	h := newWaitHost("herdr")
 	e := envWith(watcherHost{h})
 	h.set("w1", "Do you want to proceed?\n", "idle")
-	if res, err := e.Wait(bg, dir, WaitOpts{}); err != nil || res.State != StateNeedsPermission {
+	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil || res.State != StateNeedsPermission {
 		t.Fatalf("first prompt: %+v %v", res, err)
 	}
 	h.set("w1", "Allow bash to run go test?\n", "idle")
@@ -433,7 +468,7 @@ func TestWaitReturnsPromptsAndNewQuestions(t *testing.T) {
 	}
 	// A blocked worker comes back once per question.
 	h.set("w1", "ROTA-BLOCKED w1: keep the old flag?\n", "idle")
-	if res, err := e.Wait(bg, dir, WaitOpts{}); err != nil || res.State != StateBlocked {
+	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil || res.State != StateBlocked {
 		t.Fatalf("first question: %+v %v", res, err)
 	}
 	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond}); err != nil || !res.TimedOut {
@@ -486,11 +521,11 @@ func TestDispatchAndPollClearSeen(t *testing.T) {
 func TestSoloWaitReturnsAnArrivalOnce(t *testing.T) {
 	dir := soloProject(t)
 	setState(t, dir, "w1", "done")
-	res, err := soloWait(dir, WaitOpts{Slots: []string{"w1"}})
+	res, err := soloWait(dir, WaitOpts{Slots: []string{"w1"}, Timeout: 5 * time.Second})
 	if err != nil || res.Slot != "w1" || res.State != "done" {
 		t.Fatalf("first: %+v %v", res, err)
 	}
-	if res, err = soloWait(dir, WaitOpts{Slots: []string{"w1"}}); err != nil || !res.TimedOut {
+	if res, err = soloWait(dir, WaitOpts{Slots: []string{"w1"}, Timeout: 5 * time.Second}); err != nil || !res.TimedOut {
 		t.Fatalf("second: %+v %v, want timed out", res, err)
 	}
 }
@@ -581,7 +616,7 @@ func TestWaitResubscribesAfterALostStream(t *testing.T) {
 			var errBuf strings.Builder
 			e := envWith(watcherHost{h})
 			e.Stderr = &errBuf
-			res, err := e.Wait(bg, dir, WaitOpts{})
+			res, err := e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second})
 			if err != nil || res.Slot != "w1" || res.State != StateDone {
 				t.Fatalf("%+v %v", res, err)
 			}
@@ -618,7 +653,7 @@ func TestWaitFallsBackToPollingAfterRepeatedLoss(t *testing.T) {
 	var errBuf strings.Builder
 	e := envWith(watcherHost{h})
 	e.Stderr = &errBuf
-	res, err := e.Wait(bg, dir, WaitOpts{})
+	res, err := e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second})
 	if err != nil || res.State != StateDone || res.Source != SourcePoll {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -728,7 +763,7 @@ func TestSoloWaitReturnsEachBlockedEventOnce(t *testing.T) {
 		}
 	}
 	send()
-	w := WaitOpts{Slots: []string{"w1"}}
+	w := WaitOpts{Slots: []string{"w1"}, Timeout: 5 * time.Second}
 	if res, err := soloWait(dir, w); err != nil || res.State != "blocked" {
 		t.Fatalf("first: %+v %v", res, err)
 	}
