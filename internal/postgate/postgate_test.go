@@ -73,8 +73,8 @@ func TestGateBouncesAreParkedAtMaxBounces(t *testing.T) {
 
 func TestParkFailureIsReportedAndTheCountStands(t *testing.T) {
 	root := t.TempDir()
-	worker.RecordBounceCapped(worker.Env{}, nil, root, "7", "w1", "a", 0)
-	worker.RecordBounceCapped(worker.Env{}, nil, root, "7", "w1", "b", 0)
+	recordBounceCappedVia(worker.Env{}, nil, root, "7", "w1", "a", 0)
+	recordBounceCappedVia(worker.Env{}, nil, root, "7", "w1", "b", 0)
 	o, err := Gate(worker.Env{}, root, "7", worker.GateResult{Verdict: worker.GateProvenanceFail, SHA: "c"}, func(string, string, roundcfg.Settings) error { return errors.New("no lease") })
 	if err == nil || o.Parked || o.Bounces != 3 {
 		t.Fatalf("%+v %v", o, err)

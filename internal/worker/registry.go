@@ -737,36 +737,6 @@ const behaviourMaxOutput = 4 << 20
 // outputTruncatedMarker is the last line of a step's output that hit the cap.
 const outputTruncatedMarker = "[output truncated at 4 MiB]"
 
-// RecordBounce counts one gate bounce against an item (`bounces` in the
-// registry maps the issue to how often the gate sent its PR back) and returns
-// the new count. Counts live per item, not per slot, so a transfer to another
-// slot does not reset them. head is the PR head the gate refused: the same head
-// seen again (a re-gate before the worker pushed anything) is not a new bounce
-// and returns the count unchanged. head "" always counts. slot names the slot
-// that holds the bounced PR, so the ledger entry of a best-of attempt lands on
-// its own row; "" falls back to the first slot holding the issue.
-func RecordBounce(env Env, root, issue, slot, head string) (int, error) {
-	n, _, err := RecordBounceCounted(env, root, issue, slot, head)
-	return n, err
-}
-
-// RecordBounceCounted is RecordBounce that also says whether this call counted
-// the bounce (false when it deduped on the same head), decided under the same
-// registry lock as the write, so a caller that may roll it back never undoes a
-// bounce another writer counted.
-func RecordBounceCounted(env Env, root, issue, slot, head string) (int, bool, error) {
-	n, counted, _, err := recordBounce(env, nil, root, issue, slot, head, 0)
-	return n, counted, err
-}
-
-// RecordBounceCapped is RecordBounceCounted that refuses inside the registry
-// lock once the item already holds limit bounces (0 = no cap): capped reports
-// the refusal and n is the unchanged count. The check and the increment share
-// one lock, so concurrent callers never take the count past limit.
-func RecordBounceCapped(env Env, m *RoundMemo, root, issue, slot, head string, limit int) (n int, counted, capped bool, err error) {
-	return recordBounce(env, m, root, issue, slot, head, limit)
-}
-
 // recordBounce counts one bounce per (issue, review head). That is a semantic
 // dedupe across callers (review-relay and bounce both reach it), so it is not a
 // request-id receipt: a retry mints a fresh id, yet must still count once. It
@@ -801,12 +771,12 @@ func recordBounce(env Env, m *RoundMemo, root, issue, slot, head string, limit i
 	return n, counted, capped, err
 }
 
-// UnrecordBounce undoes one RecordBounce(root, issue, head) whose relay did not
+// UnrecordBounce undoes one recordBounce(root, issue, head) whose relay did not
 // go out; prev is the registry from before it. The count drops by one from what
 // the registry holds now, never to prev's, so a bounce another writer counted
 // meanwhile stays. The head goes back to prev's only while it is still the one
 // this call recorded: a newer head from another writer stays. A call that did
-// not count (RecordBounce deduped on the same head) has nothing to undo, so
+// not count (recordBounce deduped on the same head) has nothing to undo, so
 // the caller does not call this for it.
 func UnrecordBounce(root, issue, head string, prev Registry) error {
 	return Update(root, func(d *Doc) {

@@ -111,7 +111,7 @@ func TestReviewRelayNothingPending(t *testing.T) {
 func TestReviewRelayAtCapEscalates(t *testing.T) {
 	f, _, o := reviewFx(t)
 	for i := 0; i < 3; i++ {
-		if _, err := worker.RecordBounce(worker.Env{}, f.root, "12", "", ""); err != nil {
+		if _, err := recordBounceVia(worker.Env{}, f.root, "12", "", ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -304,7 +304,7 @@ func TestReviewRelayRollbackKeepsAConcurrentBounce(t *testing.T) {
 	f, _, o := reviewFx(t)
 	f.env.Worker.NewHost = func(host.Kind) host.Host {
 		return &sendHook{hostFake: f.host, hook: func() {
-			if _, err := worker.RecordBounce(worker.Env{}, f.root, "12", "", ""); err != nil {
+			if _, err := recordBounceVia(worker.Env{}, f.root, "12", "", ""); err != nil {
 				t.Error(err)
 			}
 		}}
@@ -361,16 +361,16 @@ func TestReviewRelayRollbackKeepsAConcurrentCursor(t *testing.T) {
 	}
 }
 
-// A bounce RecordBounce deduped on the same head was not this relay's, so the
+// A bounce recordBounceVia deduped on the same head was not this relay's, so the
 // rollback leaves it, and a bounce another writer added, alone.
 func TestReviewRelayRollbackLeavesABounceItDidNotCount(t *testing.T) {
 	f, _, o := reviewFx(t)
-	if _, err := worker.RecordBounce(worker.Env{}, f.root, "12", "", "abc123"); err != nil {
+	if _, err := recordBounceVia(worker.Env{}, f.root, "12", "", "abc123"); err != nil {
 		t.Fatal(err)
 	}
 	f.env.Worker.NewHost = func(host.Kind) host.Host {
 		return &sendHook{hostFake: f.host, hook: func() {
-			if _, err := worker.RecordBounce(worker.Env{}, f.root, "12", "", ""); err != nil {
+			if _, err := recordBounceVia(worker.Env{}, f.root, "12", "", ""); err != nil {
 				t.Error(err)
 			}
 		}}
@@ -388,7 +388,7 @@ func TestReviewRelayRollbackKeepsAConcurrentBounceHead(t *testing.T) {
 	f, _, o := reviewFx(t)
 	f.env.Worker.NewHost = func(host.Kind) host.Host {
 		return &sendHook{hostFake: f.host, hook: func() {
-			if _, err := worker.RecordBounce(worker.Env{}, f.root, "12", "", "newer"); err != nil {
+			if _, err := recordBounceVia(worker.Env{}, f.root, "12", "", "newer"); err != nil {
 				t.Error(err)
 			}
 		}}
@@ -397,8 +397,8 @@ func TestReviewRelayRollbackKeepsAConcurrentBounceHead(t *testing.T) {
 		t.Fatal("want the dispatch failure")
 	}
 	// The same head again is deduped: only a kept head makes it so.
-	if n, err := worker.RecordBounce(worker.Env{}, f.root, "12", "", "newer"); err != nil || n != 1 {
-		t.Fatalf("RecordBounce on the kept head = %d, %v; want 1 (deduped)", n, err)
+	if n, err := recordBounceVia(worker.Env{}, f.root, "12", "", "newer"); err != nil || n != 1 {
+		t.Fatalf("recordBounceVia on the kept head = %d, %v; want 1 (deduped)", n, err)
 	}
 }
 
@@ -414,7 +414,7 @@ func TestReviewRelayTextStripsInvisibleFormatCharacters(t *testing.T) {
 func TestReviewRelayAtCapDoesNotEscalateTwice(t *testing.T) {
 	f, _, o := reviewFx(t)
 	for i := 0; i < 3; i++ {
-		if _, err := worker.RecordBounce(worker.Env{}, f.root, "12", "", ""); err != nil {
+		if _, err := recordBounceVia(worker.Env{}, f.root, "12", "", ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -435,12 +435,12 @@ func TestReviewRelayAtCapDoesNotEscalateTwice(t *testing.T) {
 }
 
 // A bounce the gate counts on the same head after the relay loaded its registry
-// makes this relay's RecordBounce dedupe: it counted nothing, so a failed
+// makes this relay's recordBounceVia dedupe: it counted nothing, so a failed
 // dispatch must not undo the gate's bounce.
 func TestReviewRelayRollbackLeavesABounceCountedAfterTheSnapshot(t *testing.T) {
 	f, fg, o := reviewFx(t)
 	fg.onView = func() {
-		if _, err := worker.RecordBounce(worker.Env{}, f.root, "12", "", "abc123"); err != nil {
+		if _, err := recordBounceVia(worker.Env{}, f.root, "12", "", "abc123"); err != nil {
 			t.Error(err)
 		}
 	}
@@ -462,7 +462,7 @@ func (h *sendHook) Capabilities() host.Capabilities { return host.CapabilitiesOf
 func freshFx(t *testing.T) (*moveFx, ReviewOpts) {
 	t.Helper()
 	f, _, o := reviewFx(t)
-	if _, err := worker.RecordBounce(worker.Env{}, f.root, "12", "", ""); err != nil {
+	if _, err := recordBounceVia(worker.Env{}, f.root, "12", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	o.FreshAt, o.Board, o.Settings, o.HolderPID = 2, f.be, f.set, 100
@@ -596,7 +596,7 @@ func TestReviewRelayRacingBounceDoesNotPassTheCap(t *testing.T) {
 	o.Escalate = func(context.Context, int, string, string, string) error { posts++; return nil }
 	fg.onView = func() {
 		for i := 0; i < o.MaxBounces; i++ {
-			if _, err := worker.RecordBounce(worker.Env{}, f.root, "12", "", ""); err != nil {
+			if _, err := recordBounceVia(worker.Env{}, f.root, "12", "", ""); err != nil {
 				t.Error(err)
 			}
 		}
