@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/verdict"
 )
 
 // verdictRepo is a git repo on feat/x with a main base branch and .rota/.
@@ -390,5 +392,66 @@ func TestVerdictAddNamesMissingVerdictOfRaisedDepth(t *testing.T) {
 	code, out, _ = rotaIn(t, dir, "verdict", "add", "--kind", "review-spec", "--verdict", "PASS", "--json")
 	if d := data(t, out); code != 0 || d["depthNote"] != nil {
 		t.Errorf("complete set still noted: %v", d["depthNote"])
+	}
+}
+
+// A review-cross verdict (#1612) records the reviewer's harness and model, and
+// verdict show prints them; review-cross refuses a record without both.
+func TestVerdictAddCrossHarness(t *testing.T) {
+	dir := verdictRepo(t)
+	for _, args := range [][]string{
+		{"--kind", "review-cross", "--verdict", "PASS"},
+		{"--kind", "review-cross", "--verdict", "PASS", "--harness", "codex"},
+		{"--kind", "review-cross", "--verdict", "PASS", "--model", "gpt-5"},
+		{"--kind", "review-cross", "--verdict", "PASS", "--harness", "gemini", "--model", "g"},
+	} {
+		if code, _, _ := rotaIn(t, dir, append([]string{"verdict", "add"}, args...)...); code != 2 {
+			t.Errorf("%v: exit %d, want 2", args, code)
+		}
+	}
+	code, out, _ := rotaIn(t, dir, "verdict", "add", "--kind", "review-cross", "--verdict", "CONCERNS", "--harness", "codex", "--model", "gpt-5.5", "--json")
+	if d := data(t, out); code != 0 || d["kind"] != "review-cross" || d["harness"] != "codex" || d["model"] != "gpt-5.5" || d["next"] != "report" {
+		t.Fatalf("add: %d %v", code, d)
+	}
+	code, out, _ = rotaIn(t, dir, "verdict", "add", "--kind", "review-spec", "--verdict", "PASS", "--harness", "claude", "--model", "opus")
+	if code != 0 {
+		t.Fatalf("spec with harness: %d %s", code, out)
+	}
+	code, out, _ = rotaIn(t, dir, "verdict", "show")
+	if code != 0 || !strings.Contains(out, "review-cross CONCERNS @ ") || !strings.Contains(out, "(codex gpt-5.5)") || !strings.Contains(out, "(claude opus)") {
+		t.Fatalf("show: %d %q", code, out)
+	}
+	code, out, _ = rotaIn(t, dir, "verdict", "show", "--json")
+	recs := data(t, out)["records"].([]any)
+	var cross map[string]any
+	for _, r := range recs {
+		if m := r.(map[string]any); m["kind"] == "review-cross" {
+			cross = m
+		}
+	}
+	if code != 0 || cross == nil || cross["harness"] != "codex" || cross["model"] != "gpt-5.5" {
+		t.Fatalf("show --json: %d %v", code, recs)
+	}
+}
+
+// A review-cross FAIL is relayed like a review FAIL (#1612): its findings
+// reach the bounce reason and the relay text names the reviewer.
+func TestRelayCarriesACrossFail(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, ".rota"), 0o777)
+	pass := verdict.Record{Kind: verdict.ReviewQuality, Verdict: verdict.Pass, Sha: "abc1234", RecordedAt: "2026-10-22T10:00:00Z", Findings: []verdict.Finding{}}
+	cross := verdict.Record{Kind: verdict.ReviewCross, Verdict: verdict.Fail, Sha: "abc1234", RecordedAt: "2026-10-22T10:05:00Z", Harness: "codex", Model: "gpt-5.5",
+		Findings: []verdict.Finding{{Severity: "major", Title: "exit code changed", File: "a.go", Line: 3}}}
+	for _, r := range []verdict.Record{pass, cross} {
+		if _, err := verdict.AddBranch(root, "nia/6-x", r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := openFindings(root, "nia/6-x"); len(got) != 1 || got[0] != "[major] exit code changed (a.go:3)" {
+		t.Errorf("open findings: %v", got)
+	}
+	v := failVerdict(root, "nia/6-x")
+	if v == nil || !strings.Contains(v.Text, "review-cross FAIL at abc1234 (codex gpt-5.5)") || !strings.Contains(v.Text, "exit code changed") {
+		t.Fatalf("relay: %+v", v)
 	}
 }

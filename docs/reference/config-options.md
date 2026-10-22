@@ -303,6 +303,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | Key | Type | Default | Values | Description |
 |-----|------|---------|--------|-------------|
 | `review.fileDeferred` | enum | `"minor"` | `minor`, `major`, `off` | Which deferred review findings rota verdict add --file-deferred files, as one follow-up item per PR. minor: minor and major. major: only major (minor stays in the verdict record). off: none. |
+| `review.crossLabels` | list | `["size:Major", "risk:high"]` |  | Issue labels that make a PR need a cross-harness review: one read-only review on a harness other than the author's, recorded as a review-cross verdict the merge gate requires. Applies only when round.harnesses is set. A review:<harness> label (claude or codex) picks the reviewer, review:none skips it. Empty: no PR needs one. |
 
 ### roles
 
