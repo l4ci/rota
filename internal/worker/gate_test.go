@@ -1150,6 +1150,35 @@ func TestGateRefusesASlicePRTheForgeSaysClosesItsIssue(t *testing.T) {
 	}
 }
 
+// closingSpy is a Forge that reports closing refs and records the PR number it
+// was asked about.
+type closingSpy struct {
+	Forge
+	asked []int
+}
+
+func (c *closingSpy) ClosingRefs(_ context.Context, n int) ([]int, bool, error) {
+	c.asked = append(c.asked, n)
+	return nil, false, nil
+}
+
+// A PR ref the slice-close check cannot parse is a broken check naming the ref,
+// not a closing-refs query for PR 0 that fails with "cannot read PR 0".
+func TestGateSliceCloseNamesAnUnparsablePRRef(t *testing.T) {
+	spy := &closingSpy{}
+	g := &gate{ctx: context.Background(), res: &GateResult{}, o: GateOpts{Slot: "w1"}, pr: "not-a-pr", forge: spy}
+	stop, err := g.stepNoSliceClose(nil)
+	if err != nil || !stop || g.res.Verdict != GateCheckBroke {
+		t.Fatalf("stop=%v err=%v verdict=%q, want a stopped %q", stop, err, g.res.Verdict, GateCheckBroke)
+	}
+	if !strings.Contains(g.res.Err, "not-a-pr") {
+		t.Errorf("message must name the unparsable ref: %q", g.res.Err)
+	}
+	if len(spy.asked) != 0 {
+		t.Errorf("closing refs asked for PR %v despite the unparsable ref", spy.asked)
+	}
+}
+
 // A PR no slot or review record owns (a fix-forward PR, a PR after wind-down)
 // is gated by number like a round PR: it lands when fresh and is refused STALE
 // when its merge with the base conflicts.
