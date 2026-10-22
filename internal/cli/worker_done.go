@@ -249,6 +249,12 @@ func targetedProof(c *Ctx, root string, sl *worker.Slot, command, base, head str
 			return err
 		}
 		if proof.Proves(rows, head, command) {
+			// The worker recorded the passing run itself: the row stays the
+			// record, now marked targeted.
+			if _, err := proof.Mark(st, id, head, command, "targeted=true"); err != nil {
+				_, err = failAny(err)
+				return err
+			}
 			continue
 		}
 		run, err := runProofCommand(c, ctx, root, dir, command, "worker done")

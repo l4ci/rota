@@ -101,15 +101,15 @@ Work only this task, then stop.
   `test.fast`, that is `rota test run fast`; otherwise pick the checks by hand. The full suite is the
   orchestrator's gate on the merged tree. Several workers running full suites at
   once starve the CPU and turn time-budgeted tests into false reds, which costs
-  everyone a re-measurement to disprove.
+  everyone a re-measurement to disprove. Every `rota proof record` and `rota test run` also
+  queues for the machine's test lock (`test.slots`, default 1) and says
+  `waiting for the test lock` while it waits: that is normal, not a hang. Do not kill it.
 - Targeted proof. If your brief carries a `Proof: <command>` line, the task is small
   and that command is its proof, not `test.fast`: record it with `rota proof record <ID> --
   <command>` and run `rota worker done <slot> --proof '<command>'` (the quoted command, as
   written in the brief). `done` accepts a PASS row for it at HEAD, or runs and records it
-  itself; the row is marked `targeted`. The gate still runs everything. `done` cannot read
-  the brief, so the flag is how the command reaches it. Every `rota proof record` and
-  `rota test run` queues for the machine's test lock (`test.slots`, default 1) and says
-  `waiting for the test lock` while it waits: that is normal, not a hang. Do not kill it.
+  itself; either way the row ends up marked `targeted`. The gate still runs everything. `done` cannot read
+  the brief, so the flag is how the command reaches it.
 - Inbox. The orchestrator's `REVIEW` relays are also written to a durable inbox, because a pane
   relay sent while you finish can cross your `ROTA-DONE`. Run `rota worker inbox <slot>` after each
   test run and immediately before `rota worker done <slot>`. Act on what it lists, then run the

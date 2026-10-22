@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"os"
 	"os/exec"
@@ -21,12 +22,14 @@ const testLockHeldEnv = "ROTA_TEST_LOCK_HELD"
 // test.slots), unless an enclosing run already holds one. A busy lock waits and
 // says so on stderr; it never fails.
 func withTestLock(c *Ctx, ctx context.Context, root string, gc worker.GateConfig, verb string, fn func() error) error {
-	if c.deps().Getenv(testLockHeldEnv) != "" {
-		return fn()
-	}
+	// A bad test.slots is refused even inside a held lock: the mark must not
+	// hide a broken config.
 	slots, err := gc.TestSlots()
 	if err != nil {
 		return Resolution("%v", err)
+	}
+	if c.deps().Getenv(testLockHeldEnv) != "" {
+		return fn()
 	}
 	return workerEnvCtx(c, ctx).WithTestLock(ctx, root, slots, verb, c.Stderr, fn)
 }
@@ -64,11 +67,18 @@ func testLock(fs *flag.FlagSet) RunFunc {
 			cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
 			cmd.WaitDelay = 30 * time.Second
 			runErr := cmd.Run()
-			if ee, ok := runErr.(*exec.ExitError); ok {
+			var ee *exec.ExitError
+			if errors.As(runErr, &ee) {
 				code = ee.ExitCode()
+				if ws, ok := ee.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+					code = 128 + int(ws.Signal()) // a signalled child, as a shell reports it
+				}
 				return nil
 			}
-			return runErr
+			if runErr != nil {
+				return Unavailable("cannot run %s: %v", args[0], runErr)
+			}
+			return nil
 		})
 		if err != nil {
 			return Result{}, err

@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"context"
+	"io"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -76,4 +79,52 @@ func TestWorkerDoneTargetedProof(t *testing.T) {
 			t.Fatalf("exit %d: %s", code, out)
 		}
 	})
+}
+
+func TestTestLockHeldMarkSkipsQueueingButNotConfigCheck(t *testing.T) {
+	root := tierProject(t, `{"test":{"fast":["true"]}}`)
+	t.Setenv("ROTA_TEST_LOCK_HELD", "1")
+	// A slot taken by someone else: a run under the mark must not wait for it.
+	env := testDeps().workerEnv()
+	holding, release := make(chan struct{}), make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- env.WithTestLock(context.Background(), root, 1, "test run", io.Discard, func() error { close(holding); <-release; return nil })
+	}()
+	<-holding
+	defer func() { close(release); <-done }()
+	o := trRun(t, root, "", "test", "run", "fast")
+	if o.code != 0 || strings.Contains(o.stderr, "waiting for the test lock") {
+		t.Fatalf("held mark should bypass the queue: exit %d, stderr %q", o.code, o.stderr)
+	}
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"test":{"slots":0,"fast":["true"]}}`)
+	if o := trRun(t, root, "", "test", "run", "fast"); o.code != 3 || !strings.Contains(o.stderr, "test.slots") {
+		t.Errorf("bad test.slots under the mark: exit %d, stderr %q", o.code, o.stderr)
+	}
+}
+
+func TestTestLockSignalledChildExitsAs128PlusSignal(t *testing.T) {
+	root := tierProject(t, `{}`)
+	if o := trRun(t, root, "", "test", "lock", "--", "sh", "-c", "kill -TERM $$"); o.code != 143 {
+		t.Errorf("signalled child: exit %d, want 143\n%s", o.code, o.stderr)
+	}
+	if o := trRun(t, root, "", "test", "lock", "--", "/no/such/command"); o.code != 5 {
+		t.Errorf("start failure: exit %d, want 5\n%s", o.code, o.stderr)
+	}
+}
+
+func TestWorkerDoneMarksAnExistingRowTargeted(t *testing.T) {
+	needNice(t)
+	dir := doneProject(t, "false")
+	if code, out, _ := rotaIn(t, dir, "proof", "record", "B07", "--", "true"); code != 0 {
+		t.Fatalf("record: %d %s", code, out)
+	}
+	code, out, errOut := rotaIn(t, dir, "worker", "done", "ben", "--proof", "true", "--json")
+	if code != 0 {
+		t.Fatalf("exit %d: %s %s", code, out, errOut)
+	}
+	_, shown, _ := rotaIn(t, dir, "proof", "show", "B07", "--json")
+	if !strings.Contains(shown, "niced=true targeted=true") {
+		t.Errorf("the recorded row should carry targeted=true: %s", shown)
+	}
 }

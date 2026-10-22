@@ -85,6 +85,9 @@ func tryTestSlot(paths []string) (*os.File, error) {
 	return nil, nil
 }
 
+// The holder record is advisory: a holder killed mid-run leaves its pid in the
+// slot file until the next holder overwrites it; the flock is the truth.
+
 // testLockHolder is "<pid> <verb>" of a holder, from the first slot that
 // names one; "unknown" when a holder has not written its record yet.
 func testLockHolder(paths []string) string {

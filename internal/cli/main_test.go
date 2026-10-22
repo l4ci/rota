@@ -42,7 +42,7 @@ func TestMain(m *testing.M) {
 	// The usage-limit watcher (D3) types into panes: no test may reach the
 	// real tmux or herdr this round runs in. The default host is a fake that
 	// records, and the pane variables are cleared.
-	for _, k := range []string{"TMUX", "TMUX_PANE", "HERDR_ENV", "HERDR_PANE_ID", "HERDR_WORKSPACE_ID", "HERDR_SOCKET_PATH"} {
+	for _, k := range []string{"TMUX", "TMUX_PANE", "HERDR_ENV", "HERDR_PANE_ID", "HERDR_WORKSPACE_ID", "HERDR_SOCKET_PATH", "ROTA_TEST_LOCK_HELD"} {
 		os.Unsetenv(k)
 	}
 	// `rota init` registers the project in the global registry (#24): no test

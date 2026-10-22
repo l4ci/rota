@@ -375,7 +375,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 
 | Key | Type | Default | Values | Description |
 |-----|------|---------|--------|-------------|
-| `gate.smokeShards` | int | `4` |  | Concurrent shards bash test/gate.sh splits the smoke suite into, 1 or more. ROTA_SMOKE_SHARDS overrides it for one run. |
+| `gate.smokeShards` | int | `4` |  | Concurrent shards bash test/gate.sh splits the smoke suite into, 1 or more. ROTA_SMOKE_SHARDS overrides it for one run. Unset, the gate uses one shard per two cores, at most four. |
 
 ### doctor
 
