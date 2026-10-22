@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -116,7 +115,7 @@ func IssueSource(cfg any) (string, error) {
 		if s, ok := v.(string); ok && slices.Contains(issueSources, s) {
 			return s, nil
 		}
-		return "", fmt.Errorf("invalid issues.source '%s' (expected %s)", pyStr(v), strings.Join(issueSources, "|"))
+		return "", fmt.Errorf("invalid issues.source %s (expected %s)", jsonText(v), strings.Join(issueSources, "|"))
 	}
 	if v, ok := walk(cfg, LegacyBackendKey); ok {
 		switch v {
@@ -128,7 +127,7 @@ func IssueSource(cfg any) (string, error) {
 			}
 			return SourceIssues, nil
 		}
-		return "", fmt.Errorf("invalid backlog.backend '%s' (expected file|issues)", pyStr(v))
+		return "", fmt.Errorf("invalid backlog.backend %s (expected file|issues)", jsonText(v))
 	}
 	return SourceFile, nil
 }
@@ -142,7 +141,7 @@ func ForgeProvider(cfg any) (string, error) {
 		if s, ok := v.(string); ok && slices.Contains(forgeProviders, s) {
 			return s, nil
 		}
-		return "", fmt.Errorf("invalid forge.provider '%s' (expected %s)", pyStr(v), strings.Join(forgeProviders, "|"))
+		return "", fmt.Errorf("invalid forge.provider %s (expected %s)", jsonText(v), strings.Join(forgeProviders, "|"))
 	}
 	if p, ok := walk(cfg, LegacyProviderKey); ok && (p == "github" || p == "gitlab") {
 		return p.(string), nil
@@ -185,77 +184,14 @@ func Label(cfg any, role string) string {
 	return s
 }
 
-// pyStr is Python's str(v) for a decoded JSON value, as an f-string shows it.
-func pyStr(v any) string {
-	if s, ok := v.(string); ok {
-		return s
+// jsonText shows a decoded JSON value as compact JSON, for the invalid-value
+// errors: a string comes quoted, a number, list or object as it was written.
+func jsonText(v any) string {
+	raw, err := jsonx.MarshalCompact(v)
+	if err != nil {
+		return fmt.Sprint(v)
 	}
-	return pyRepr(v)
-}
-
-// pyRepr is Python's repr(v) for a decoded JSON value. String escaping covers
-// the common cases (quotes, backslash, control characters), not every
-// non-printable code point.
-func pyRepr(v any) string {
-	switch x := v.(type) {
-	case nil:
-		return "None"
-	case bool:
-		if x {
-			return "True"
-		}
-		return "False"
-	case json.Number:
-		raw, err := jsonx.MarshalCompact(x)
-		if err != nil {
-			return x.String()
-		}
-		return string(raw)
-	case string:
-		return pyQuote(x)
-	case []any:
-		parts := make([]string, len(x))
-		for i, e := range x {
-			parts[i] = pyRepr(e)
-		}
-		return "[" + strings.Join(parts, ", ") + "]"
-	case *jsonx.Object:
-		var parts []string
-		for _, k := range x.Keys() {
-			e, _ := x.Get(k)
-			parts = append(parts, pyQuote(k)+": "+pyRepr(e))
-		}
-		return "{" + strings.Join(parts, ", ") + "}"
-	}
-	return fmt.Sprint(v)
-}
-
-func pyQuote(s string) string {
-	q := byte('\'')
-	if strings.Contains(s, "'") && !strings.Contains(s, `"`) {
-		q = '"'
-	}
-	var b strings.Builder
-	b.WriteByte(q)
-	for _, r := range s {
-		switch {
-		case r == rune(q) || r == '\\':
-			b.WriteByte('\\')
-			b.WriteRune(r)
-		case r == '\n':
-			b.WriteString(`\n`)
-		case r == '\r':
-			b.WriteString(`\r`)
-		case r == '\t':
-			b.WriteString(`\t`)
-		case r < 0x20 || r == 0x7f:
-			b.WriteString(`\x` + fmt.Sprintf("%02x", r))
-		default:
-			b.WriteRune(r)
-		}
-	}
-	b.WriteByte(q)
-	return b.String()
+	return string(raw)
 }
 
 // Choice is one answer to a Prompt: Value is what config set stores (JSON, so
