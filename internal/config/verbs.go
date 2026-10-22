@@ -375,7 +375,8 @@ func isNonNegInt(n json.Number) bool {
 var strictEnumKeys = map[string]bool{"work.contextGuard": true, "plan.criticHarness": true, "autonomy.level": true, "review.fileDeferred": true, "round.scopeOverlap": true}
 
 // CheckEnum reports whether value is one of the schema choices of an enum key,
-// for a loader that reads the key from a hand-edited file.
+// for a loader that reads the key from a hand-edited file. Pass the raw
+// config.Value, not config.String, so the error names a non-string value.
 func CheckEnum(key string, value any) error { return validateEnum(key, value) }
 
 func validateEnum(key string, value any) error {
@@ -391,7 +392,7 @@ func validateEnum(key string, value any) error {
 			}
 		}
 	}
-	return fmt.Errorf("%w for %s: want one of %s", ErrBadValue, key, strings.Join(k.Choices, ", "))
+	return fmt.Errorf("%w for %s (got %v): want one of %s", ErrBadValue, key, value, strings.Join(k.Choices, ", "))
 }
 
 // validateValue rejects a value its key cannot hold. A non-negative int key
