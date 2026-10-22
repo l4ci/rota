@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -64,7 +63,7 @@ func knStore(c *Ctx) (knowledge.Store, string, error) {
 	if c.Repo != "" {
 		return st, c.Repo, nil
 	}
-	cwd, err := os.Getwd()
+	cwd, err := c.deps().Getwd()
 	if err != nil {
 		return st, "", err
 	}

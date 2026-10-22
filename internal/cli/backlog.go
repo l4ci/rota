@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"regexp"
 	"slices"
 	"sort"
@@ -667,7 +666,7 @@ func refactorTargets(fs *flag.FlagSet) RunFunc {
 		if err := argCount(c, args, 0, 0, "refactor targets takes no arguments"); err != nil {
 			return Result{}, err
 		}
-		cwd, err := os.Getwd()
+		cwd, err := c.deps().Getwd()
 		if err != nil {
 			return Result{}, err
 		}

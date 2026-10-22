@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 
@@ -822,7 +821,7 @@ func itemShipped(fs *flag.FlagSet) RunFunc {
 		if _, err := backlogScope(c); err != nil {
 			return Result{}, err
 		}
-		dir, err := os.Getwd()
+		dir, err := c.deps().Getwd()
 		if err != nil {
 			return Result{}, err
 		}

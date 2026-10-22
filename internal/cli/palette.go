@@ -191,12 +191,12 @@ func runPalette(c *Ctx, inProject bool) (Result, error) {
 // part of the line instead of blocking the menu.
 func paletteHeader(c *Ctx, inProject bool) palette.Header {
 	h := palette.Header{Version: version.Get().Version}
-	dir, _ := os.Getwd()
+	dir, _ := c.deps().Getwd()
 	root, err := c.Root()
 	if err == nil {
 		dir = root
 	}
-	h.Dir = tildePath(dir)
+	h.Dir = tildePath(c, dir)
 	if !inProject || err != nil {
 		h.Host = host.Resolve("", "", c.deps().Getenv, c.deps().LookPath).String()
 		return h
@@ -232,8 +232,8 @@ func roundSummary(active int) string {
 }
 
 // tildePath shortens the home directory prefix to ~.
-func tildePath(p string) string {
-	home, err := os.UserHomeDir()
+func tildePath(c *Ctx, p string) string {
+	home, err := c.deps().UserHomeDir()
 	if err != nil || home == "" {
 		return p
 	}

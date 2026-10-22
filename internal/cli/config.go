@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
@@ -464,7 +463,7 @@ func repoWhich(fs *flag.FlagSet) RunFunc {
 		if err := argCount(c, args, 0, 0, "repo which takes no arguments"); err != nil {
 			return Result{}, err
 		}
-		cwd, err := os.Getwd()
+		cwd, err := c.deps().Getwd()
 		if err != nil {
 			return Result{}, err
 		}

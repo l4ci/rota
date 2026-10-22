@@ -73,7 +73,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 		if err := refuseHomeInit(c, "setup", *force); err != nil {
 			return Result{}, err
 		}
-		dir, err := initDir()
+		dir, err := initDir(c)
 		if err != nil {
 			return Result{}, err
 		}

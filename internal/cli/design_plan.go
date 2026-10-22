@@ -4,7 +4,6 @@ import (
 	"flag"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
-	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/design"
@@ -441,7 +440,7 @@ func runPlanRenameCheck(c *Ctx, args []string) (Result, error) {
 	if len(args) == 0 {
 		return Result{}, Usage("missing <old> name")
 	}
-	cwd, err := os.Getwd()
+	cwd, err := c.deps().Getwd()
 	if err != nil {
 		return Result{}, err
 	}

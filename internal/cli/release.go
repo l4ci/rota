@@ -48,7 +48,7 @@ func releaseDir(c *Ctx) (string, error) {
 	if err != nil || dir != "" {
 		return dir, err
 	}
-	return os.Getwd()
+	return c.deps().Getwd()
 }
 
 func releaseConfig(dir string) any {
@@ -279,7 +279,7 @@ func releaseNotAtUmbrella(c *Ctx) error {
 	if c.Repo != "" {
 		return nil
 	}
-	cwd, err := os.Getwd()
+	cwd, err := c.deps().Getwd()
 	if err != nil {
 		return err
 	}
