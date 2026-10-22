@@ -1,6 +1,6 @@
 {
   "name": "rota",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "description": "Backlog, planning and parallel-round skills for Codex. Install the rota binary separately.",
   "author": {
     "name": "Volker Otto"

@@ -1,17 +1,37 @@
 # Changelog
 
-## Unreleased
+## v0.23.0 — 2026-10-22
+
+A second machine can build issues for the same repo while one machine keeps every merge, file-mode milestone files list their items, and the gate now checks what GitHub will close.
 
 ### New
 
-- **Support orchestrator, first three slices (#1598).** A second machine can build issues for the same repo and tracker while one machine keeps every merge. The machines never connect; the tracker is the only shared state.
-  - Keys: `round.support` (tracked) names the support machine and turns the feature on. `round.role: support` goes in that machine's `config.local.json`, and is refused in the tracked config. Both need an issue tracker: with `issues.source: file`, setting either key or starting a round with one set exits 4 with `blockedBy: backend`.
-  - Fences: on the support machine, `worker gate`, `worker train`, `ship merge`, the gate step of `round tick` and every verb that writes tracked `.rota/` files exit 4 with `blockedBy: role`.
-  - Work split: main labels issues for the support machine with `rota round support offer <ID>...` (`--withdraw` takes them back). Each side lists and assigns only its own issues; assigning the other side's, a bundle member included, exits 4 with `blockedBy: site`.
-  - Names and base: support slots, branches, claims and workspaces carry the machine name as a prefix (`mac-ben/1588-...`), and main refuses a roster name with that prefix. Every support branch is cut from a freshly fetched `origin/<base>`, and a resumed one merges it first (`blockedBy: fetch`, `conflict` or `dirty` when that cannot happen).
-  - Handoff: main's `round reconcile` lists a support PR once its issue is `needs-review`, read from the forge, and `--apply` adopts it as a hostless slot. A support branch still in flight is never listed.
-  - Bounces: with `round.support` set, bounce counts live on the issue as marked comments (distinct PR heads since the last reset), so both machines read one count and one cap. Main's bounce of a support PR is also posted on the PR, where the support machine's review poll relays it to the worker; its reconcile reports a queued PR still at the bounced head as `bounced`.
-  - Still to come: learnings posted to the issue for main to fold into knowledge.
+- **Support orchestrator (#1598).** A second machine builds issues for the same repo and tracker while one machine keeps every merge; the tracker is the only shared state. `round.support` names the support machine, `round.role: support` goes in its `config.local.json`, and both need an issue tracker. Main offers issues with `rota round support offer <ID>...`, each side assigns only its own, and support slots and branches carry the machine name as a prefix. Main's `round reconcile --apply` adopts a support PR once its issue is `needs-review`, bounce counts live on the issue so both machines read one cap, and main's bounces reach the support worker through the PR. Learnings travel the same way: a support machine posts `learning` comments, `rota knowledge harvest [--mark <commentId>]` lists and marks them on main, and `/rota-learn` folds them. Only comments by authors with write access count; `round start` refuses `round.support` on a forge that cannot say who may write.
+- **Milestone files list their items (#1586).** On the file backend a milestone file carries a generated `## Items` section: open items first, then completed ones with their closure reason, each linked to its detail file. Every verb that writes an item's milestone regenerates it, as does `rota milestone check` (`itemsRegenerated`). On the tracker backend a milestone's tracking issue lists its child issues the same way (#1585).
+- **The gate reads closing references (#1616).** `rota worker gate` and `worker train` ask GitHub what merging a PR closes and refuse, with exit 4 and `blockedBy: closes`, a PR that would close any `partial-slice` issue, its own or another. `--final-slice` (repeatable on `train`) exempts the last slice. A forge that cannot answer, or errors, skips the check with one `CLOSING-REFS-UNKNOWN` note per member.
+- `rota item comment add|list --kind learning|harvested`; `rota knowledge harvest` is classified in the support fence (listing allowed, `--mark` refused).
+
+### Changed
+
+- `rota knowledge harvest` without `--mark` is read-only, so a refusal exits 1 with `blockedBy: backend|forge`; `--mark` keeps exit 4. `rota item comment add --kind harvested` is refused on a support machine (#1631).
+- Invalid-value config errors show strings quoted with their printable runes intact and numbers, lists and objects as compact JSON; the Python-repr emulation is gone (#1622, #1648). An invalid `round.scope` reports the schema's choices; `config set round.scopeOverlap` refuses a non-choice at set time (#1621, #1703).
+- `rota milestone check` is a write verb in file mode and leaves the support machine's read list; its contract documents `itemsRegenerated` (#1623). A milestone sync that fails after an item write is a warning, not a failed verb, and one bad milestone file no longer stops the others (#1624, #1625).
+- The stale-binary warning ignores `.go` files under `testdata/` (#1699). The train prints each gate note once per member rather than once per stage (#1668).
+
+### Fixed
+
+- `rota doctor` names the effective Codex tier models when `round.tiers.codex` is unset (#1602). `config save-global` reports `changed` (#1603). The doc lint's stamp fixtures no longer inherit `ROTA_DOC_STAMPS` (#1604).
+- A gate step that reads the forge no longer breaks every gate when the forge cannot answer (#1616).
+
+### Internal
+
+- The threshold architecture review ran twice and its refactors landed: one owner each for the partial-or-failed outcome rule, the slot-state sets (with a source guard), verdict follow-up filing, label and retry defaults, footprint overlap matching and the worker-done finish rules; `round.scopeOverlap` and `round.scope` are typed at load; test seams left the shipped binary (`ROTA_TEST_*` reads, `fsio.SetTempNameForTest`), and ps, clock, home and cwd reads go through seams. Behaviour-neutral by review; old-vs-new tables are in the PRs.
+- Bundles (`round assign --bundle`) carried most of this round's follow-ups. Contract docs restamped; knowledge from rounds 33 and 34.
+
+## Stats
+107 commits, 218 files changed, +6899 −1116 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.22.0...v0.23.0
 
 ## v0.22.0 — 2026-10-22
 
