@@ -323,3 +323,21 @@ func TestEveryKindDescribesItself(t *testing.T) {
 		t.Error("codex is not configured on an empty config")
 	}
 }
+
+func TestFromLabels(t *testing.T) {
+	for name, tc := range map[string]struct {
+		labels []string
+		want   string
+	}{
+		"none":              {nil, ""},
+		"unrelated":         {[]string{"size:Major", "model:x"}, ""},
+		"codex":             {[]string{"size:Major", "harness:codex"}, "codex"},
+		"unknown kind":      {[]string{"harness:vim"}, ""},
+		"first valid wins":  {[]string{"harness:vim", "harness:opencode", "harness:claude"}, "opencode"},
+		"prefix not a kind": {[]string{"harness:"}, ""},
+	} {
+		if got := FromLabels(tc.labels); got != tc.want {
+			t.Errorf("%s: FromLabels(%v) = %q, want %q", name, tc.labels, got, tc.want)
+		}
+	}
+}

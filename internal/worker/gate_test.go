@@ -1525,6 +1525,26 @@ func TestGateReviewDepthLabelReadFailureIsCheckBroke(t *testing.T) {
 	}
 }
 
+// With round.harnesses set the cross requirement reads each issue even when
+// ship.review needs none, so an unreadable issue is a check-broke (fail-closed):
+// guessing could skip a Major PR's cross review.
+func TestGateReviewDepthCrossIssueReadFailureIsCheckBroke(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(`{"round":{"harnesses":["claude","codex"]},"test":{"full":["true"]}}`)
+	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","kind":"claude","pr":%q}]}`, ghURL)), 0o644)
+	w.forge("body", "Closes #5\n")
+	w.forge("issueErr", "HTTP 500: server error")
+	w.record("w1", "", verdict.ReviewSpec, verdict.ReviewQuality)
+	res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "could not read #5 for its labels") {
+		t.Errorf("issue read failure: %s (%s)", res.Verdict, res.Err)
+	}
+}
+
 // An unreadable diff is a check-broke too: the size rule needs it.
 func TestGateReviewDepthDiffReadFailureIsCheckBroke(t *testing.T) {
 	w := newWorld(t, ghURL)

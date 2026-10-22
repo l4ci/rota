@@ -279,6 +279,9 @@ func TestTrainBlockedOnFailNotConcerns(t *testing.T) {
 		return verdict.Record{Kind: kind, Verdict: v, Sha: "bbbbbbb", Findings: f}
 	}
 	rec := func(kind, v string) verdict.Record { return verdict.Record{Kind: kind, Verdict: v, Sha: "bbbbbbb"} }
+	cross := func(v string, f ...verdict.Finding) verdict.Record {
+		return verdict.Record{Kind: verdict.ReviewCross, Verdict: v, Sha: "bbbbbbb", Harness: "codex", Model: "m", Findings: f}
+	}
 	for name, tc := range map[string]struct {
 		recs []verdict.Record
 		want bool
@@ -290,6 +293,10 @@ func TestTrainBlockedOnFailNotConcerns(t *testing.T) {
 		"none":                           {nil, false},
 		"concerns with blocking finding": {[]verdict.Record{recWith(verdict.ReviewQuality, verdict.Concerns, verdict.Finding{Severity: "major", Title: "x"})}, true},
 		"concerns with minor finding":    {[]verdict.Record{recWith(verdict.ReviewQuality, verdict.Concerns, verdict.Finding{Severity: "minor", Title: "x"})}, false},
+		"cross pass":                     {[]verdict.Record{cross(verdict.Pass)}, false},
+		"cross concerns, no blocker":     {[]verdict.Record{cross(verdict.Concerns, verdict.Finding{Severity: "minor", Title: "x"})}, false},
+		"cross concerns with blocker":    {[]verdict.Record{cross(verdict.Concerns, verdict.Finding{Severity: "major", Title: "x"})}, true},
+		"cross blocker then newer clean": {[]verdict.Record{cross(verdict.Concerns, verdict.Finding{Severity: "major", Title: "x"}), cross(verdict.Pass)}, false},
 		"blocking finding then newer clean review": {[]verdict.Record{
 			recWith(verdict.ReviewQuality, verdict.Concerns, verdict.Finding{Severity: "major", Title: "x"}),
 			rec(verdict.ReviewSpec, verdict.Pass)}, false},
