@@ -494,8 +494,7 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		if root, err := backlogScope(c); err == nil {
 			bare, _, _ := splitRemote(c, t.Dir, t.Branch)
 			if last := verdict.LastReviewSet(root, bare); len(last) > 0 {
-				_, hasSpec := worker.BranchIssue(t.Branch)
-				if old := worker.CoveredDepth(last, hasSpec); worker.DepthRose(old, depth) {
+				if old := verdict.CoveredDepth(last, worker.BranchHasSpec(t.Branch)); worker.DepthRose(old, depth) {
 					note := fmt.Sprintf("review depth %s -> %s (%s): record the missing review verdict before gating", old, depth, why)
 					data.Set("previousDepth", string(old))
 					data.Set("depthNote", note)
