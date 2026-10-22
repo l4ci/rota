@@ -18,6 +18,12 @@ const (
 	TypeObject Type = "object"
 )
 
+// The values of round.scopeOverlap.
+const (
+	ScopeOverlapWarn  = "warn"
+	ScopeOverlapBlock = "block"
+)
+
 // Key is one known .rota/config.json key: its dotted name, the default used
 // when the key is absent, and whether rota init writes it. Defaults use the
 // jsonx value types: string, bool, json.Number and []any. The rest is what a
@@ -113,7 +119,7 @@ var Keys = []Key{
 	k("round.roster", []any{"ben", "dana", "nia", "kit"}, false, TypeList, "Rounds: Agent names slots are provisioned under, one slot each. Lowercase letters, digits and -, no duplicates."),
 	k("round.brief", "", false, TypePath, "Rounds: Path of the standing worker contract the assignment pointer names. Empty means skills/references/worker-contract.md in the checkout, else the installed copy."),
 	k("round.sharedPaths", []any{}, false, TypeList, "Rounds: Repo-relative globs the file-overlap readiness check ignores, for files every issue touches."),
-	k("round.scopeOverlap", "warn", false, TypeEnum, "Rounds: What a clash on declared scopes (the ## Touches section, else Subsystem) does to the overlap check. warn: reported, the item stays ready. block: fails the check like a shared path; --accept-overlap skips it.", "warn", "block"),
+	k("round.scopeOverlap", ScopeOverlapWarn, false, TypeEnum, "Rounds: What a clash on declared scopes (the ## Touches section, else Subsystem) does to the overlap check. warn: reported, the item stays ready. block: fails the check like a shared path; --accept-overlap skips it.", ScopeOverlapWarn, ScopeOverlapBlock),
 	k("round.adoptPattern", "", false, TypeString, "Rounds: Glob over branch names (codex/*, claude/*). rota round reconcile reports a matching branch that no slot holds and that is not merged as unregistered-branch; --apply adopts those whose name carries an issue number. Empty turns the check off."),
 	k("round.support", "", false, TypeString, "Rounds: Name of the support machine (e.g. mac). Non-empty enables a support orchestrator on that machine, and is the prefix of its roster names. Needs an issue tracker."),
 	k("round.role", "main", false, TypeEnum, "Rounds: This machine's role, set in .rota/config.local.json only. support builds site:support issues and opens PRs but never merges or writes tracked .rota/ content.", "main", "support"),
