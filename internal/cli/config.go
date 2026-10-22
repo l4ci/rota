@@ -200,7 +200,7 @@ func configSaveGlobal(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Resolution("%v", err)
 		}
-		saved, am, err := config.SaveGlobal(root, dir)
+		saved, changed, am, err := config.SaveGlobal(root, dir)
 		if errors.Is(err, config.ErrCorrupt) || errors.Is(err, fsio.ErrUnreadable) {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
@@ -208,7 +208,7 @@ func configSaveGlobal(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		path := config.GlobalPath(dir)
-		data := jsonObj("path", path, "saved", strSlice(saved))
+		data := jsonObj("path", path, "saved", strSlice(saved), "changed", changed)
 		text := fmt.Sprintf("saved %d keys to %s", len(saved), path)
 		if lines := autonomyLines(am); len(lines) > 0 {
 			data.Set("autonomy", jsonObj("rewrote", true))
