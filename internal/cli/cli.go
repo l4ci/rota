@@ -354,8 +354,8 @@ func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stde
 			return fail(c, stdout, Resolution("cannot use -C %s: %v", g.cwd, unwrapPathErr(err)))
 		}
 	}
-	physicalCwd(c.deps().Getwd)
-	if err := legacyStateStop(c.Path, c.deps().Getwd); err != nil {
+	physicalCwd(c)
+	if err := legacyStateStop(c); err != nil {
 		return fail(c, stdout, err)
 	}
 	if res, err := roundKeysStop(c); err != nil {
@@ -590,10 +590,11 @@ func hasHelp(args []string) bool {
 // physicalCwd makes the working directory its symlink-free path, as Python's
 // os.getcwd() is. Go's os.Getwd returns $PWD while it still names the cwd, so
 // from a symlinked directory (link -> umb/web) every walk-up and sub-repo
-// match would see the link instead. Setting PWD too keeps later os.Getwd
-// calls, in every verb, on the physical path.
-func physicalCwd(getwd func() (string, error)) {
-	wd, err := getwd()
+// match would see the link instead. The chdir and the PWD update keep the
+// process on the physical path, so every later Deps.Getwd read (which wraps
+// os.Getwd) returns it too.
+func physicalCwd(c *Ctx) {
+	wd, err := c.deps().Getwd()
 	if err != nil {
 		return
 	}
