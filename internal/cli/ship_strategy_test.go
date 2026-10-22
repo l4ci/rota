@@ -2,7 +2,34 @@ package cli
 
 import (
 	"testing"
+
+	"github.com/l4ci/rota/internal/jsonx"
 )
+
+func TestShipStrategyReadsConfigOnce(t *testing.T) {
+	root := trackerProject(t, "")
+	cfg, err := jsonx.Decode([]byte(`{"issues":{"source":"file"},"work":{"mergeStrategy":"direct"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := originDeps("git@github.com:o/r.git")
+	d.Getwd = func() (string, error) { return root, nil }
+	reads := 0
+	d.Config = func(string) any {
+		reads++
+		return cfg
+	}
+	res, err := shipStrategy(nil)(&Ctx{Deps: d}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := res.Data.(*jsonx.Object).Get("strategy"); got != "direct" {
+		t.Errorf("strategy = %v, want direct from config", got)
+	}
+	if reads != 1 {
+		t.Errorf("config reads = %d, want one config snapshot per strategy call", reads)
+	}
+}
 
 // rota ship strategy wires the backend, the resolved forge and work.mergeStrategy
 // into ship.Strategy, which owns the rule (see its tests). These cases cover the
