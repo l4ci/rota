@@ -56,8 +56,19 @@ func TestResolveKindModel(t *testing.T) {
 		{"", "", "", "codex", "codex", KindFromSlot},
 		{"", "", "", "", "claude", KindFromDefault},
 	} {
-		if got, src := resolveKind(c.flag, c.label, c.project, c.slot); got != c.want || src != c.src {
+		if got, src := resolveKind(c.flag, c.label, c.project, c.slot, false); got != c.want || src != c.src {
 			t.Errorf("resolveKind(%q,%q,%q,%q) = %q from %q, want %q from %q", c.flag, c.label, c.project, c.slot, got, src, c.want, c.src)
+		}
+	}
+	// resuming: flag > label > slot > project
+	for _, c := range []struct{ flag, label, project, slot, want, src string }{
+		{"", "", "claude", "codex", "codex", KindFromSlotResume},
+		{"", "claude", "claude", "codex", "claude", KindFromLabel},
+		{"claude", "", "claude", "codex", "claude", KindFromFlag},
+		{"", "", "claude", "", "claude", KindFromConfig},
+	} {
+		if got, src := resolveKind(c.flag, c.label, c.project, c.slot, true); got != c.want || src != c.src {
+			t.Errorf("resuming resolveKind(%q,%q,%q,%q) = %q from %q, want %q from %q", c.flag, c.label, c.project, c.slot, got, src, c.want, c.src)
 		}
 	}
 	// model: --model > label > tier map

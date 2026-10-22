@@ -146,7 +146,10 @@ const (
 	// default when round.workerKind is unset.
 	KindFromHarnesses = "round.harnesses"
 	KindFromSlot      = "slot"
-	KindFromDefault   = "default"
+	// KindFromSlotResume is the slot's kind kept because it resumes its own
+	// issue, ahead of the project default.
+	KindFromSlotResume = "slot (resume)"
+	KindFromDefault    = "default"
 	// KindFromFallback is a kind another harness's cooling accounts handed
 	// over to (round.harnesses).
 	KindFromFallback = "quota fallback"
@@ -154,7 +157,11 @@ const (
 
 // resolveKind is the harness and where it came from: --kind, else the item's
 // label, else round.workerKind, else the slot's recorded kind, else claude.
-func resolveKind(flag, label, project, slot string) (kind, source string) {
+// A slot resuming its own issue keeps its kind ahead of the project default.
+func resolveKind(flag, label, project, slot string, resuming bool) (kind, source string) {
+	if resuming && flag == "" && label == "" && slot != "" {
+		return slot, KindFromSlotResume
+	}
 	for _, c := range []struct{ k, src string }{
 		{flag, KindFromFlag}, {label, KindFromLabel}, {project, KindFromConfig}, {slot, KindFromSlot},
 	} {
