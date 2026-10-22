@@ -12,7 +12,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/hook"
@@ -21,7 +20,6 @@ import (
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/rotastate"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -178,7 +176,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 		PickAccount: func(ctx context.Context, kind, exclude string) (string, bool) {
 			if h := harness.Resolve(kind); !h.UsageMeter() {
 				var logins []string
-				for _, a := range h.Accounts(config.Load(rotatree.Config(root))).Entries {
+				for _, a := range h.Accounts(c.deps().Config(root)).Entries {
 					logins = append(logins, a.Name)
 				}
 				return limits.LoggedPick(root, h.Kind(), logins, exclude, c.deps().Now())
@@ -295,7 +293,7 @@ func limitWatch(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		cfg := config.Load(rotatree.Config(root))
+		cfg := c.deps().Config(root)
 		set, err := limits.LoadSettings(cfg)
 		if err != nil {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error(), Hint: "fix the limits.* key with: rota config set"}

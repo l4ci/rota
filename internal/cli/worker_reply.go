@@ -4,10 +4,8 @@ import (
 	"flag"
 	"strings"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/marker"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -52,7 +50,7 @@ func workerReply(fs *flag.FlagSet) RunFunc {
 			return Result{}, Resolution("slot '%s' has no PR to reply on", slot)
 		}
 		ctx := c.Context()
-		fg, err := c.deps().forge(ctx, config.Load(rotatree.Config(root)), "", root)
+		fg, err := c.deps().forge(ctx, c.deps().Config(root), "", root)
 		if err != nil {
 			return Result{}, trackerErr(err)
 		}

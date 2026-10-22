@@ -88,13 +88,13 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		in.LegacyDir, _ = legacystate.LegacyState(in.Dir)
 	}
 	root, _ := rotatree.Find(in.Dir)
-	in.Skills = doctorSkills(d.Getenv, in.Home, root, d.Toplevel(ctx))
+	in.Skills = doctorSkills(d, d.Getenv, in.Home, root, d.Toplevel(ctx))
 	if root == "" {
 		in.RoundHost = worker.ResolveHost("", nil, d.Getenv, doctorLookErr(in.Look))
 		doctorDiskInput(ctx, &in, nil, "", d.Git, d.Now(), d.DoctorDisk, d.Getenv)
 		return in
 	}
-	cfg := config.Load(rotatree.Config(root))
+	cfg := d.Config(root)
 	in.Dispatch = config.Dispatch(cfg)
 	in.RegistrySolo = worker.IsSolo(root)
 	in.RoundHost = worker.ResolveHost(root, cfg, d.Getenv, doctorLookErr(in.Look))
@@ -122,7 +122,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	if raw, err := os.ReadFile(filepath.Join(root, ".gitignore")); err == nil {
 		in.GitignoreMissing = initproj.MissingIgnoreLines(string(raw))
 	}
-	if issue, err := issueBackend(root); err == nil && issue {
+	if issue, err := issueBackend(d, root); err == nil && issue {
 		in.StaleMilestoneFiles, _ = migrate.StaleMilestoneFiles(root)
 	}
 	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now(), d.DoctorDisk, d.Getenv)
@@ -150,12 +150,12 @@ func staleBinary(ctx context.Context, run git.Runner, dir string) (stalebin.Find
 
 // doctorSkills reads the skill roots in both scopes; nil when the embedded set
 // or the roots cannot be resolved (the check then skips).
-func doctorSkills(getenv func(string) string, home, root, top string) *skills.Report {
+func doctorSkills(d *Deps, getenv func(string) string, home, root, top string) *skills.Report {
 	set, err := skills.Embedded()
 	if err != nil {
 		return nil
 	}
-	dirs, _ := skillsClaudeDirs(getenv, home, root)
+	dirs, _ := skillsClaudeDirs(d, getenv, home, root)
 	roots, err := skills.RootsFor("", "all", home, dirs, top)
 	if err != nil {
 		return nil

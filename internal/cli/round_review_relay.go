@@ -8,11 +8,9 @@ import (
 	"github.com/l4ci/rota/internal/stamp"
 	"strings"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/strutil"
@@ -54,7 +52,7 @@ func roundReviewRelay(fs *flag.FlagSet) RunFunc {
 // escalation path.
 func reviewOpts(c *Ctx, root string, set roundcfg.Settings, slot string) (round.ReviewOpts, error) {
 	ctx := c.Context()
-	cfg := config.Load(rotatree.Config(root))
+	cfg := c.deps().Config(root)
 	fg, err := c.deps().forge(ctx, cfg, "", root)
 	if err != nil {
 		return round.ReviewOpts{}, trackerErr(err)

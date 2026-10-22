@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/pystr"
-	"github.com/l4ci/rota/internal/rotatree"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -153,7 +152,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			return Result{}, Usage("--slots must be a positive integer")
 		}
 		ctx := c.Context()
-		cfg := config.Load(rotatree.Config(root))
+		cfg := c.deps().Config(root)
 		env := c.deps().RoundEnv(ctx, root)
 		st, err := env.Start(ctx, root, round.StartOpts{
 			Scope: sc, Items: pystr.SplitCSV(*items), Slots: *slots, Base: *base, HolderPID: *pid,

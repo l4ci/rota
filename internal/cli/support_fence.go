@@ -172,12 +172,12 @@ func supportRoleStop(c *Ctx) (Result, error) {
 	if err != nil {
 		return Result{}, nil
 	}
-	return supportRefusal(root, c.Path)
+	return supportRefusal(c, root, c.Path)
 }
 
 // supportRefusal is the exit-4 refusal of what on a support machine, or of any
 // fenced verb when round.role cannot be read; nil on main.
-func supportRefusal(root, what string) (Result, error) {
+func supportRefusal(c *Ctx, root, what string) (Result, error) {
 	unknown := func(why, hint string) (Result, error) {
 		d := jsonObj("blockedBy", "config", "key", "round.role", "changed", false)
 		return Result{Data: d}, Refused("%s needs to know this machine's role: %s", what, why).WithHint(hint)
@@ -191,7 +191,7 @@ func supportRefusal(root, what string) (Result, error) {
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return unknown(".rota/config.local.json cannot be read: "+err.Error(), "make .rota/config.local.json readable")
 	}
-	role, err := roundcfg.MachineRole(config.Load(rotatree.Config(root)))
+	role, err := roundcfg.MachineRole(c.deps().Config(root))
 	if err != nil {
 		return unknown(err.Error(), "set round.role to main or support: rota config set round.role main")
 	}
@@ -220,7 +220,7 @@ func supportRoundStartStop(c *Ctx, root string, set roundcfg.Settings) (Result, 
 	if set.Support == "" && set.Role != roundcfg.RoleSupport {
 		return Result{}, nil
 	}
-	issue, err := issueBackend(root)
+	issue, err := issueBackend(c.deps(), root)
 	if err != nil {
 		return Result{}, err
 	}
