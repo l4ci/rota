@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -184,13 +185,14 @@ func Label(cfg any, role string) string {
 	return s
 }
 
-// jsonText shows a decoded JSON value as compact JSON, for the invalid-value
-// errors: a string comes quoted, a number, list or object as it was written.
+// jsonText shows a decoded JSON value for the invalid-value errors: a string
+// comes quoted with its printable runes intact, a number, list or object as
+// compact JSON. Decoded values always encode, so the error is dropped.
 func jsonText(v any) string {
-	raw, err := jsonx.MarshalCompact(v)
-	if err != nil {
-		return fmt.Sprint(v)
+	if s, ok := v.(string); ok {
+		return strconv.Quote(s)
 	}
+	raw, _ := jsonx.MarshalCompact(v)
 	return string(raw)
 }
 
