@@ -383,12 +383,12 @@ func TestConfigScreenWritesTheSameFilesAsConfigSet(t *testing.T) {
 		t.Helper()
 		m, _ = play(m, cat([]string{"/"}, typedKeys(filter), []string{"enter"}, keys, []string{"esc"}))
 	}
-	pick("ship.qa", "enter", " ", "enter") // toggle on
-	pick("round.dispatch", "enter", "right", "enter")
+	pick("ship.qa", "enter", " ", "enter")            // toggle on
+	pick("round.dispatch", "enter", "right", "enter") // a machine key: config.local.json
 	pick("round.slots", "l", "backspace", "7", "enter")
 	pick("work.mergeStrategy", "r") // drops the local override and the project value
 	cfg := readConfig(t, root)
-	for _, want := range []string{`"qa": true`, `"dispatch": "tmux"`} {
+	for _, want := range []string{`"qa": true`} {
 		if !strings.Contains(cfg, want) {
 			t.Errorf("config.json lacks %s:\n%s", want, cfg)
 		}
@@ -397,7 +397,7 @@ func TestConfigScreenWritesTheSameFilesAsConfigSet(t *testing.T) {
 		t.Errorf("config.json holds the local write, or the reset taste key:\n%s", cfg)
 	}
 	lb, _ := os.ReadFile(local)
-	if !strings.Contains(string(lb), `"slots": 7`) || strings.Contains(string(lb), "mergeStrategy") {
+	if !strings.Contains(string(lb), `"slots": 7`) || !strings.Contains(string(lb), `"dispatch": "tmux"`) || strings.Contains(string(lb), "mergeStrategy") {
 		t.Errorf("config.local.json = %s", lb)
 	}
 	rows, _ = store.Rows()

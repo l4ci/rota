@@ -97,6 +97,7 @@ func configView(c *Ctx, res Result) (tui.Model, error) {
 // cfgRow is one key as the screen shows it, read from a `config show` entry.
 type cfgRow struct {
 	Key, Source, Type, Group, Desc string
+	Scope                          string // the key's scope; a machine key edits config.local.json
 	Value, Default                 any
 	Global                         any // what the global config holds, when HasGlobal
 	HasGlobal                      bool
@@ -118,7 +119,7 @@ func rowsFromData(data any) ([]cfgRow, error) {
 			continue
 		}
 		str := func(k string) string { v, _ := o.Get(k); s, _ := v.(string); return s }
-		r := cfgRow{Key: str("key"), Source: str("source"), Type: str("type"), Group: str("group"), Desc: str("desc")}
+		r := cfgRow{Key: str("key"), Source: str("source"), Type: str("type"), Group: str("group"), Desc: str("desc"), Scope: str("scope")}
 		r.Value, _ = o.Get("value")
 		r.Default, _ = o.Get("default")
 		r.Global, r.HasGlobal = o.Get("global")
@@ -423,7 +424,8 @@ func (m configScreen) updateList(k tui.Key) (tui.Model, tui.Cmd) {
 			if line.row < 0 {
 				return m.toggleGroup(line.group, !m.collapsed[line.group]), tui.Cmd{}
 			}
-			return m.startEdit(line.row, false), tui.Cmd{}
+			// A machine key belongs in config.local.json, where config set writes it.
+			return m.startEdit(line.row, !m.store.Global() && m.rows[line.row].Scope == string(config.ScopeMachine)), tui.Cmd{}
 		case k.Is('l') && onLine && line.row >= 0:
 			return m.startEdit(line.row, true), tui.Cmd{}
 		case k.Is('r') && onLine && line.row >= 0:

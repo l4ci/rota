@@ -14,13 +14,20 @@ trap 'rm -rf "$CFG_TMP"' EXIT
   echo "$OUT" | jget data.previous >/dev/null && { echo "FAIL: previous must be absent for an unset key: $OUT"; exit 1; }
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d == {'ship':{'review':True}}, d" || { echo "FAIL: ship.review true"; exit 1; }
 
+  # --- A machine key goes to config.local.json unless --project (#1786) ---
+  OUT=$(hvj config set round.slots 2) || { echo "FAIL: machine key set"; exit 1; }
+  [ "$(echo "$OUT" | jget data.scope)" = "local" ] || { echo "FAIL: a machine key should write the local layer: $OUT"; exit 1; }
+  python3 -c "import json; d=json.load(open('.rota/config.local.json')); assert d == {'round':{'slots':2}}, d" || { echo "FAIL: round.slots in config.local.json"; exit 1; }
+  python3 -c "import json; d=json.load(open('.rota/config.json')); assert 'round' not in d, d" || { echo "FAIL: a machine key reached config.json"; exit 1; }
+  rm .rota/config.local.json
+
   # --- Nested dotted path (creates intermediate dicts) ---
-  hvj config set models.orchestrator opus >/dev/null || { echo "FAIL: nested set"; exit 1; }
+  hvj config set --project models.orchestrator opus >/dev/null 2>&1 || { echo "FAIL: nested set"; exit 1; }
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['models']['orchestrator']=='opus', d" || { echo "FAIL: nested models.orchestrator"; exit 1; }
 
   # --- Idempotency: set same value twice, file unchanged, changed false ---
   before=$(cat .rota/config.json)
-  OUT=$(hvj config set models.orchestrator opus) || { echo "FAIL: re-set"; exit 1; }
+  OUT=$(hvj config set --project models.orchestrator opus 2>/dev/null) || { echo "FAIL: re-set"; exit 1; }
   after=$(cat .rota/config.json)
   [ "$before" = "$after" ] || { echo "FAIL: idempotent re-set changed file"; exit 1; }
   [ "$(echo "$OUT" | jget data.changed)" = "false" ] || { echo "FAIL: idempotent re-set should report changed false: $OUT"; exit 1; }
@@ -37,14 +44,14 @@ assert d['learn']['verify'] is True, d
 " || { echo "FAIL: preservation"; exit 1; }
 
   # --- JSON value types: number, false, array, string ---
-  hvj config set round.slots 42 >/dev/null || { echo "FAIL: number"; exit 1; }
+  hvj config set --project round.slots 42 >/dev/null 2>&1 || { echo "FAIL: number"; exit 1; }
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['round']['slots'] == 42 and isinstance(d['round']['slots'], int)" || { echo "FAIL: int parsing"; exit 1; }
 
   OUT=$(hvj config set ship.review false) || { echo "FAIL: false"; exit 1; }
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['ship']['review'] is False" || { echo "FAIL: false parsing"; exit 1; }
   [ "$(echo "$OUT" | jget data.previous)" = "true" ] || { echo "FAIL: false should report previous true: $OUT"; exit 1; }
 
-  hvj config set round.accounts '["a","b"]' >/dev/null || { echo "FAIL: array"; exit 1; }
+  hvj config set --project round.accounts '["a","b"]' >/dev/null 2>&1 || { echo "FAIL: array"; exit 1; }
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['round']['accounts'] == ['a','b'], d" || { echo "FAIL: array parsing"; exit 1; }
 
   # --- Bare identifier falls back to string ---
@@ -52,11 +59,11 @@ assert d['learn']['verify'] is True, d
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['autonomy']['level'] == 'auto'" || { echo "FAIL: string-auto"; exit 1; }
 
   # --- A string that looks like JSON needs shell quoting to stay a string ---
-  hvj config set round.workerCommand '"true"' >/dev/null || { echo "FAIL: quoted string"; exit 1; }
+  hvj config set --project round.workerCommand '"true"' >/dev/null 2>&1 || { echo "FAIL: quoted string"; exit 1; }
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['round']['workerCommand'] == 'true', d" || { echo "FAIL: quoted string value"; exit 1; }
 
   # --- Empty string is a valid value ---
-  hvj config set round.workerCommand '' >/dev/null || { echo "FAIL: empty value"; exit 1; }
+  hvj config set --project round.workerCommand '' >/dev/null 2>&1 || { echo "FAIL: empty value"; exit 1; }
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['round']['workerCommand'] == '', d" || { echo "FAIL: empty value stored"; exit 1; }
 
   # --- Bad inputs exit 2 and leave the file alone ---
@@ -99,7 +106,8 @@ trap 'rm -rf "$CFG_F78"' EXIT
 mkdir -p "$CFG_F78/.rota"
 python3 - "$CFG_F78/.rota/config.json" <<'PYEOF'
 import json, sys
-# A pre-F78 config: complete for its era, missing only the round.* keys rota init now writes.
+# A pre-F78 config: complete for its era, missing the test.* keys rota init now writes.
+# The round.* keys it lacks are machine keys, never required (#1786).
 json.dump({
     "models": {"orchestrator": "opus", "worker": "sonnet"},
     "work": {"isolation": "branch", "mergeStrategy": "direct"},
@@ -122,9 +130,10 @@ rc=0; VERDICT=$( cd "$CFG_F78" && hvj config check 2>/dev/null ) || rc=$?
 echo "$VERDICT" | python3 -c '
 import json, sys
 missing = json.load(sys.stdin)["data"]["missing"]
-for want in ("round.dispatch", "round.slots"):
+for want in ("test.fast", "test.full"):
     assert want in missing, (want, missing)
-' || fail "F78: stale verdict omits round.dispatch or round.slots: '$VERDICT'"
+assert "round.dispatch" not in missing, missing
+' || fail "F78: stale verdict omits test.fast or test.full, or names a machine key: '$VERDICT'"
 # A fully populated config is up to date and exits 0.
 python3 - "$CFG_F78/.rota/config.json" <<'PYEOF'
 import json, sys

@@ -1,52 +1,18 @@
 # Configuration
 
-All settings live in [`.rota/config.json`](../reference/rota-folder.md). Run `rota config show` to list every key with its value and source, `rota config edit` (or `rota config --ui`) to change keys on [a screen](#the-config-screen) (terminal only; it is also the Config entry of the bare-`rota` menu), and `rota config set <key> <value>` to change one from a script (positional arguments; see [config options](../reference/config-options.md)). `rota init` fills any missing key with its default. Don't hand-edit the file. `rota config save-global` merges this project's `config.json` keys (not `config.local.json`; without `rota.version`, `git.baseBranch` and `umbrella.enabled`) into `config.json` in the rota config dir, keeping the global keys the project does not set (see [the global config dir](#the-global-config-dir)), beside `connections.json`. The global file is a runtime layer: values resolve as schema default < global < `.rota/config.json` < `.rota/config.local.json`, so a value set once applies to every project that does not set that key, and `rota config show` reports `global` as its source (a key the project overrides also carries the global value in `--json`, as `global`). `rota config show --global`, `set --global` and `edit --global` read and write the global file itself, from any directory and with no project; in your home directory (no `.rota/` there or above) they do so without `--global`, and `config set` says `global:` in its output. A project-owned key is refused there. Bare `rota` in your home directory is a launcher whose Config entry opens the global config. On the config screen, `g` switches a key between inheriting the global value and overriding it in this project. The project-owned keys (`rota.version`, `git.baseBranch`, `umbrella.enabled`) are never read from it. A missing file changes nothing; a corrupt one warns and is skipped (every write to it, `set --global`, `save-global` and setup's save offer included, refuses with exit 70 and leaves the file as it is), and `rota config fill` then writes no defaults (so they are not pinned over the repaired global) while `rota config check` names the corrupt global. `rota init` and `rota setup` do not copy global values into the new `config.json`; the project inherits them, and `rota setup` offers each as the question's default. Interactive `rota setup` ends by offering to save its answers there: all of them when no global file exists yet, later only those that differ from it, merged into the file. `--yes`, `--set` and runs without a terminal never ask; `rota setup --save-global` saves the same answers without asking.
+All settings live in [`.rota/config.json`](../reference/rota-folder.md). Run `rota config show` to list every key with its value and source, `rota config edit` (or `rota config --ui`) to change keys on [a screen](#the-config-screen) (terminal only; it is also the Config entry of the bare-`rota` menu), and `rota config set <key> <value>` to change one from a script (positional arguments; see [config options](../reference/config-options.md)). `rota init` fills any missing required project key with its default (see [Scopes](#scopes-which-file-a-key-belongs-in)). Don't hand-edit the file. `rota config save-global` merges this project's `config.json` keys (not `config.local.json`; without `rota.version`, `git.baseBranch` and `umbrella.enabled`) into `config.json` in the rota config dir, keeping the global keys the project does not set (see [the global config dir](#the-global-config-dir)), beside `connections.json`. The global file is a runtime layer: values resolve as schema default < global < `.rota/config.json` < `.rota/config.local.json`, so a value set once applies to every project that does not set that key, and `rota config show` reports `global` as its source (a key the project overrides also carries the global value in `--json`, as `global`). `rota config show --global`, `set --global` and `edit --global` read and write the global file itself, from any directory and with no project; in your home directory (no `.rota/` there or above) they do so without `--global`, and `config set` says `global:` in its output. A project-owned key is refused there. Bare `rota` in your home directory is a launcher whose Config entry opens the global config. On the config screen, `g` switches a key between inheriting the global value and overriding it in this project. The project-owned keys (`rota.version`, `git.baseBranch`, `umbrella.enabled`) are never read from it. A missing file changes nothing; a corrupt one warns and is skipped (every write to it, `set --global`, `save-global` and setup's save offer included, refuses with exit 70 and leaves the file as it is), and `rota config fill` then writes no defaults (so they are not pinned over the repaired global) while `rota config check` names the corrupt global. `rota init` and `rota setup` do not copy global values into the new `config.json`; the project inherits them, and `rota setup` offers each as the question's default. Interactive `rota setup` ends by offering to save its answers there: all of them when no global file exists yet, later only those that differ from it, merged into the file. `--yes`, `--set` and runs without a terminal never ask; `rota setup --save-global` saves the same answers without asking.
 
 For the allowed values and option labels of each key, see [Configuration options](../reference/config-options.md).
 
-Default config (what `rota init --no-blocks` writes in a fresh repo):
+Default config (what `rota init --no-blocks` writes in a fresh repo; `rota.version` is stamped with the release that wrote it):
 
 ```json
 {
-  "models": {
-    "orchestrator": "opus",
-    "worker": "sonnet"
-  },
-  "work": {
-    "isolation": "branch",
-    "mergeStrategy": "direct"
-  },
-  "round": {
-    "dispatch": "subagent",
-    "slots": 3,
-    "workerCommand": "",
-    "accounts": [],
-    "operatorCommand": ""
-  },
-  "refactor": {
-    "confirmBeforeExecute": true
-  },
   "learn": {
-    "verify": false,
     "promoteThreshold": 3
   },
-  "ship": {
-    "review": true,
-    "secondOpinion": false,
-    "secondOpinionRunner": "subagent",
-    "qa": false
-  },
-  "qa": {
-    "gate": "advisory",
-    "afterWork": false
-  },
-  "autonomy": {
-    "level": "off"
-  },
   "docs": {
-    "path": "docs",
-    "autoCreate": false,
-    "afterWork": false
+    "path": "docs"
   },
   "git": {
     "baseBranch": ""
@@ -54,12 +20,13 @@ Default config (what `rota init --no-blocks` writes in a fresh repo):
   "umbrella": {
     "enabled": false
   },
-  "issues": {
-    "label": "in-progress",
-    "autoCreateLabel": true
-  },
   "rota": {
     "version": ""
+  },
+  "issues": {
+    "label": "in-progress",
+    "autoCreateLabel": true,
+    "source": "file"
   },
   "test": {
     "fast": [],
@@ -68,6 +35,33 @@ Default config (what `rota init --no-blocks` writes in a fresh repo):
   }
 }
 ```
+
+Every other key reads from the global config, else its default, until you set it.
+
+## Scopes: which file a key belongs in
+
+Each key has a scope, which `rota config show` prints beside the source (`(source: default, scope: machine)`, and `scope` in `--json`). The [options reference](../reference/config-options.md) lists it per key.
+
+| Scope | What it describes | `rota config set` writes it to | `rota init`, `setup`, `fill` |
+|-------|-------------------|--------------------------------|------------------------------|
+| `project` | the repo: issues, tests, forge, base branch, release, shared paths | `.rota/config.json` (tracked) | write the required ones |
+| `machine` | one developer's machine: accounts, dispatch, slots, worker commands, harnesses, tiers, models, ports, the orchestrator and limits keys | `.rota/config.local.json` (this machine only) | never |
+| `taste` | a working preference: isolation, merge strategy, autonomy, review, QA | `.rota/config.json`, as a deliberate team pin | never at the default |
+
+`rota config set` picks the file from the scope and says so: a machine key prints `wrote .rota/config.local.json (machine key; ...)`. `--local` sends any key to `config.local.json`, `--global` to the global config, and `--project` to `.rota/config.json` (on a machine key it warns that the tracked value shadows every developer's global config). `rota config show --local` lists `config.local.json`'s own values. On the config screen, Enter edits a machine key in `config.local.json`.
+
+`rota setup` writes a project answer to `.rota/config.json`, a machine answer to `config.local.json`, and a taste answer to `.rota/config.json` only when it differs from what the project would inherit, so `rota setup --yes` pins no taste key. `rota config check` warns, without failing, about a machine key in `.rota/config.json` and about a taste key pinned there at its default, and fails on a key the schema does not know.
+
+### Moving keys to their layer
+
+A config written before scopes can hold machine keys in the tracked file, where they shadow the global config (an empty `round.accounts` hides the global accounts). `rota migrate config` lists what it would change, with each key's effective value before and after, and writes nothing:
+
+- a machine key that `config.local.json` already holds is deleted (the local value wins);
+- a machine key equal to the global value or to its default is deleted;
+- any other machine key moves to `config.local.json` with its value;
+- a taste key pinned at its default is deleted.
+
+`rota migrate config --apply` writes exactly that, `config.local.json` first (created when missing, holding only the moved keys), then `.rota/config.json`; a second run finds nothing. `--keep <key>` (repeatable, or comma-separated) leaves a key where it is.
 
 Keys split by flow. `work.*` keys apply to `/rota-work` and other solo cycles: `work.isolation`, `work.mergeStrategy`, `work.tdd` and `work.contextGuard`. `round.*` keys apply only to parallel rounds (`rota round`, `rota worker`, `rota orchestrate`). The round-only keys that used to sit under `work.*` now live under `round.*`; see [Moving old `work.*` names](#moving-old-work-names-to-round).
 
@@ -506,7 +500,7 @@ Fourteen keys moved out of `work.*` into `round.*` because only rounds read them
 
 `work.isolation`, `work.mergeStrategy`, `work.tdd` and `work.contextGuard` stay under `work`.
 
-`rota migrate config` shows what it would change and writes nothing. `rota migrate config --apply` moves each old name to its new name in both `.rota/config.json` and `.rota/config.local.json`, with the value unchanged. If an old name and its new name are both set to different values, it refuses with exit 4 and writes nothing. Resolve that pair by hand with `rota config set`, then run it again. `rota config fill` and `rota init` run the same migration.
+`rota migrate config` shows what it would change and writes nothing. `rota migrate config --apply` moves each old name to its new name in both `.rota/config.json` and `.rota/config.local.json`, with the value unchanged. If an old name and its new name are both set to different values, it refuses with exit 4 and writes nothing. Resolve that pair by hand with `rota config set`, then run it again. `rota config fill` and `rota init` run the same migration. The same verb then runs the scope step from [Moving keys to their layer](#moving-keys-to-their-layer).
 
 While a config still holds an old name, these verbs exit 4 with `blockedBy: config migration` and list the old keys: `rota round ...`, `rota worker ...`, `rota doctor`, `rota orchestrate`, `rota keepalive`, `rota layout`, `rota limit` and bare `rota`. Other verbs only print a warning. `rota config check` lists an old name as `unknown`.
 
