@@ -964,3 +964,24 @@ func (b *Issues) Status(ref string) (*Status, error) {
 	}
 	return st, nil
 }
+
+// SetDetail replaces the body text of an open issue and keeps its fields block.
+func (b *Issues) SetDetail(ref, text string) error {
+	tr, err := b.tracker()
+	if err != nil {
+		return err
+	}
+	is, found, err := b.lookup(ref)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return errf(ErrNotFound, "[%s] is not an open item on the issue tracker (unknown)", ref)
+	}
+	if is.State != "open" {
+		return refused("closed item", ErrClosed, "[%s] is closed on the issue tracker", ref)
+	}
+	_, block, order := ParseFieldsBlock(is.Body)
+	body := RenderFieldsBlock(strings.Trim(text, "\n"), order, block)
+	return tr.Edit(b.ctx(), is.Key, tracker.IssueEdit{Body: &body})
+}

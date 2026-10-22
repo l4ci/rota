@@ -110,7 +110,7 @@ Your decision, per PR:
   rota round review-relay <slot>
   ```
 
-  Only blocking findings count as a bounce. File the rest as new items with `rota verdict add --file-deferred --pr <pr-ref>` instead of relaying them.
+  Only blocking findings count as a bounce. File the rest in one follow-up item per PR (floor: `review.fileDeferred`) with `rota verdict add --file-deferred --pr <pr-ref>` instead of relaying them.
 - **Fix it yourself** when the gap is one line and a round trip costs more than the fix. A fix you push still needs an independent reviewer.
 - **Dispute the ticket** when the worker is right that the issue is wrong. Edit the issue, not the worker.
 
