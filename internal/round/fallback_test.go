@@ -167,7 +167,7 @@ func TestHarnessStepWritesTheFieldOnTheFileBackend(t *testing.T) {
 		t.Fatal("a backend with SetHarness records the pick")
 	}
 	st := harnessStep(bg, e, b, &backlog.Item{ID: "B02"}, &Fallback{From: "claude", To: "codex"})
-	if err := st.do(); err != nil || b.harness["B02"] != "codex" {
+	if err := st.do(); err != nil || b.harness["B02"] != harness.Codex {
 		t.Fatalf("do: %v %v", err, b.harness)
 	}
 	if err := st.undo(); err != nil || b.harness["B02"] != "" {

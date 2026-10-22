@@ -42,7 +42,7 @@ func TestRoundStatusShowsTheFallback(t *testing.T) {
 	spendLogin(t, root, resets)
 	_, out, _ = rotaInWith(t, deps, root, "--json", "round", "status")
 	fb, _ := data(t, out)["fallback"].(map[string]any)
-	if fb == nil || fb["from"] != "codex" || fb["to"] != "claude" || fb["resetsAt"] != resets.Format(time.RFC3339) {
+	if fb == nil || fb["from"] != harness.Codex || fb["to"] != harness.Claude || fb["resetsAt"] != resets.Format(time.RFC3339) {
 		t.Fatalf("fallback = %v", fb)
 	}
 	_, text, _ := rotaInWith(t, deps, root, "round", "status")
@@ -69,7 +69,7 @@ func TestRoundCandidatesShowTheFallback(t *testing.T) {
 		t.Fatalf("candidates: %d %s %s", code, out, errOut)
 	}
 	fb, _ := data(t, out)["fallback"].(map[string]any)
-	if fb == nil || fb["from"] != "codex" || fb["to"] != "claude" || fb["resetsAt"] != resets.Format(time.RFC3339) {
+	if fb == nil || fb["from"] != harness.Codex || fb["to"] != harness.Claude || fb["resetsAt"] != resets.Format(time.RFC3339) {
 		t.Fatalf("fallback = %v", fb)
 	}
 	_, text, _ := rotaInWith(t, deps, root, "round", "candidates")
