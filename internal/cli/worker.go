@@ -708,6 +708,7 @@ func noVerifyRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
 type gateRunOpts struct {
 	Slot, Base                 string
 	CheckOnly, NoVerify, Prune bool
+	FinalSlice                 bool
 	Confirm                    gate.Confirm
 	Approval                   approvalReq
 }
@@ -759,7 +760,7 @@ func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
 	}
 	ctx, stop := workerContext()
 	defer stop()
-	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, Prune: o.Prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block, CheckReviews: true, ItemBody: lazyItemBody(c, root)})
+	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Prune: o.Prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block, CheckReviews: true, ItemBody: lazyItemBody(c, root)})
 	run := gateRun{Result: r, Err: err, Issue: r.Issue, Refused: r.Refused(err)}
 	if run.Refused || err != nil || o.CheckOnly {
 		return run
@@ -773,6 +774,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 	check := fs.Bool("check-only", false, "judge freshness, PR identity and provenance; merge nothing")
 	noVerify := fs.Bool("no-verify", false, "merge without running test.full; required when test.full is empty")
 	prune := fs.Bool("prune", false, "when an adopted slot's PR merges, also delete its worktree and branch")
+	final := fs.Bool("final-slice", false, "this PR is the last slice of a partial-slice issue and may close it")
 	confirm := approvalFlags(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		slot, err := oneArg(args, "slot")
@@ -790,7 +792,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		run := runGate(c, root, gateRunOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Prune: *prune, Confirm: conf, Approval: req})
+		run := runGate(c, root, gateRunOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Prune: *prune, FinalSlice: *final, Confirm: conf, Approval: req})
 		r, err := run.Result, run.Err
 		if run.Refused {
 			return verdictRefusal(r.Verdict, r.Refusal, err, r.Err, r.Hint, gateData(r))

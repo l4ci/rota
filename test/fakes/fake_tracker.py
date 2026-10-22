@@ -520,6 +520,14 @@ def ms_by_number(db, n):
 
 def gh_api(db, args):
     path, method, fields, opts = parse_api(args, {"--input": "input"})
+    if path == "graphql" and "closingIssuesReferences" in fields.get("query", ""):
+        # closingIssuesReferences: none by default; db["closing_refs"] maps a PR
+        # number to the issue numbers the forge says merging it closes.
+        n = int(fields["n"])
+        if not any(p["number"] == n for p in db.get("prs", [])):
+            return emit({"data": {"repository": {"pullRequest": None}}})
+        nodes = [{"number": i} for i in db.get("closing_refs", {}).get(str(n), [])]
+        return emit({"data": {"repository": {"pullRequest": {"closingIssuesReferences": {"nodes": nodes}}}}})
     method = (method or ("POST" if fields else "GET")).upper()
     m = re.match(r"^repos/[^/]+/[^/]+/(.+)$", path)
     if not m:
