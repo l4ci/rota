@@ -129,6 +129,8 @@ type Env struct {
 	HolderPID int
 	// NeedsHuman is issues.labels.needsHuman; "" means DefaultNeedsHuman.
 	NeedsHuman string
+	// SupportLabel is issues.labels.support; "" means DefaultSupportLabel.
+	SupportLabel string
 }
 
 // WithAccounts is the env with account picking on, reading the meters through

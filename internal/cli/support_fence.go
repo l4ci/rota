@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"errors"
+	"io/fs"
+	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
@@ -35,6 +38,8 @@ var supportFenced = []string{
 	"rota migrate config", "rota migrate hv", "rota migrate issues", "rota migrate milestone-files", "rota migrate milestones", "rota migrate source",
 	// Tracked instruction and agent files, which main regenerates and commits.
 	"rota block", "rota instructions init", "rota agents write",
+	// Main only: the work split.
+	"rota round support offer",
 	// Release.
 	"rota release bump", "rota release changelog", "rota release close-milestone", "rota release publish", "rota release push",
 }
@@ -168,11 +173,22 @@ func supportRoleStop(c *Ctx) (Result, error) {
 // supportRefusal is the exit-4 refusal of what on a support machine, or of any
 // fenced verb when round.role cannot be read; nil on main.
 func supportRefusal(root, what string) (Result, error) {
+	unknown := func(why, hint string) (Result, error) {
+		d := jsonObj("blockedBy", "config", "key", "round.role", "changed", false)
+		return Result{Data: d}, Refused("%s needs to know this machine's role: %s", what, why).WithHint(hint)
+	}
+	// config.Load skips a local layer it cannot read or decode, which would
+	// read as role main and open the fence.
+	if raw, err := os.ReadFile(rotatree.ConfigLocal(root)); err == nil {
+		if _, err := jsonx.Decode(raw); err != nil {
+			return unknown(".rota/config.local.json does not decode: "+err.Error(), "fix the JSON in .rota/config.local.json, or remove the file on the main machine")
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return unknown(".rota/config.local.json cannot be read: "+err.Error(), "make .rota/config.local.json readable")
+	}
 	role, err := roundcfg.MachineRole(config.Load(rotatree.Config(root)))
 	if err != nil {
-		d := jsonObj("blockedBy", "config", "key", "round.role", "changed", false)
-		return Result{Data: d}, Refused("%s needs to know this machine's role: %v", what, err).
-			WithHint("set round.role to main or support: rota config set round.role main")
+		return unknown(err.Error(), "set round.role to main or support: rota config set round.role main")
 	}
 	if role != roundcfg.RoleSupport {
 		return Result{}, nil
