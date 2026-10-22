@@ -363,9 +363,9 @@ func TestCheckVerdicts(t *testing.T) {
 	}
 }
 
-func TestCheckIgnoresLocalFile(t *testing.T) {
+func TestCheckCountsLocalFile(t *testing.T) {
 	root := project(t, "{}", `{"models": {"orchestrator": "x"}}`)
-	if st, m := Check(root); st != Stale || m[0] != "models.orchestrator" {
+	if st, m := Check(root); st != Stale || m[0] != "models.worker" {
 		t.Errorf("%s %v", st, m)
 	}
 }

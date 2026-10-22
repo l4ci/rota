@@ -104,6 +104,7 @@ func loadLayers(configPath string) (merged any, l layers) {
 		project: fsio.LoadJSON(configPath, jsonx.NewObject()),
 		local:   fsio.LoadJSON(filepath.Join(filepath.Dir(configPath), "config.local.json"), nil),
 	}
+	dropEmptyShadows(&l)
 	merged = l.project
 	if l.global != nil {
 		merged = Merge(l.global, merged)
@@ -112,6 +113,29 @@ func loadLayers(configPath string) (merged any, l layers) {
 		merged = Merge(merged, l.local)
 	}
 	return merged, l
+}
+
+// dropEmptyShadows removes an empty list from the project and local layers for
+// each EmptyUnset key the global layer holds a non-empty list for, so the empty
+// value reads as unset and the global shows through (#1766).
+func dropEmptyShadows(l *layers) {
+	for _, key := range Keys {
+		if !key.EmptyUnset {
+			continue
+		}
+		if g, ok := walk(l.global, key.Name); !ok || len(asList(g)) == 0 {
+			continue
+		}
+		for _, layer := range []any{l.project, l.local} {
+			obj, ok := layer.(*jsonx.Object)
+			if !ok {
+				continue
+			}
+			if v, ok := walk(obj, key.Name); ok && len(asList(v)) == 0 {
+				deleteIn(obj, strings.Split(key.Name, "."))
+			}
+		}
+	}
 }
 
 // Merge returns base with override merged in; neither input is modified.
