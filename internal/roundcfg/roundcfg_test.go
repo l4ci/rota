@@ -444,3 +444,28 @@ func TestSupportKeys(t *testing.T) {
 		t.Fatalf("Support %q Role %q", s.Support, s.Role)
 	}
 }
+
+// #1598 AC-4: the support machine prefixes every roster name with its own
+// name, and main refuses a roster name a support slot could carry.
+func TestSupportPrefixesRoster(t *testing.T) {
+	s, err := Load(project(t, `{"round":{"support":"mac","role":"support","roster":["ben","dana"]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(s.Roster, []string{"mac-ben", "mac-dana"}) {
+		t.Errorf("support roster = %v", s.Roster)
+	}
+	s, err = Load(project(t, `{"round":{"support":"mac","roster":["ben","dana"]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(s.Roster, []string{"ben", "dana"}) {
+		t.Errorf("main roster = %v", s.Roster)
+	}
+	if _, err := Load(project(t, `{"round":{"support":"mac","roster":["ben","mac-kit"]}}`)); err == nil || !strings.Contains(err.Error(), `"mac-kit"`) {
+		t.Errorf("main roster with the support prefix: %v", err)
+	}
+	if _, err := Load(project(t, `{"round":{"support":"Mac Book"}}`)); err == nil || !strings.Contains(err.Error(), "round.support") {
+		t.Errorf("a support name unusable in a branch: %v", err)
+	}
+}
