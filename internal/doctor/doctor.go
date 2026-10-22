@@ -84,7 +84,7 @@ type Input struct {
 
 	// From the project config when .rota/ exists; zero values otherwise.
 	Dispatch     string           // round.dispatch
-	RegistryHost host.Kind        // the host `round start` recorded, "" when no round is in flight
+	RegistrySolo bool             // the recorded round runs on the solo host (worker.IsSolo)
 	RoundHost    host.Kind        // the host the round's verbs drive (worker.ResolveHost), resolved with no project too
 	Tracker      tracker.Settings // tracker.SettingsFromConfig over the project config
 	// Tracker.Source is issues.source, "" outside a rota project (an unmigrated
@@ -332,7 +332,7 @@ func (d *runner) host() Check {
 		}
 		return pass("host", "tmux on PATH")
 	default:
-		if d.in.RegistryHost == host.Solo {
+		if d.in.RegistrySolo {
 			return skip("host", "the recorded round is solo: workers are subagents, no terminal host needed")
 		}
 		name := d.in.Dispatch
