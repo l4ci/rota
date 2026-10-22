@@ -110,6 +110,10 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 					want[i] = recordedCommand([]string{cmd}, strings.Join(quoted, " "))
 				}
 			}
+			tierForms := []string{
+				recordedCommand([]string{worker.FastTierCheck}, ""),
+				recordedCommand(strings.Fields(worker.FastTierCheck), ""),
+			}
 			// A bundle is one change: every issue it closes needs its own proof.
 			for _, bid := range openBundleIssues(c, root, sl) {
 				_, st, _, err := openProof(c, bid)
@@ -120,7 +124,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 				if err != nil {
 					return failAny(err)
 				}
-				missing := worker.MissingFastProof(rows, head, want)
+				missing := worker.MissingFastProof(rows, head, tierForms, want)
 				if len(missing) > 0 {
 					d.Set("head", head)
 					d.Set("missing", strList(missing))

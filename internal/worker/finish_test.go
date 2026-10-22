@@ -12,21 +12,22 @@ func TestMissingFastProofLatestRowWins(t *testing.T) {
 	const head = "abc1234def5678"
 	pass := proof.Row{Check: FastTierCheck, Result: "PASS", Sha: "abc1234"}
 	fail := proof.Row{Check: FastTierCheck, Result: "FAIL", Sha: "abc1234"}
+	tier := []string{FastTierCheck, "'rota' 'test' 'run' 'fast'"}
 	want := []string{"go test ./..."}
-	if got := MissingFastProof([]proof.Row{pass}, head, want); got != nil {
+	if got := MissingFastProof([]proof.Row{pass}, head, tier, want); got != nil {
 		t.Errorf("PASS at head: missing = %v", got)
 	}
-	if got := MissingFastProof([]proof.Row{pass, fail}, head, want); len(got) != 1 {
+	if got := MissingFastProof([]proof.Row{pass, fail}, head, tier, want); len(got) != 1 {
 		t.Errorf("PASS then FAIL at head must be unproven, missing = %v", got)
 	}
-	if got := MissingFastProof([]proof.Row{{Check: "'rota' 'test' 'run' 'fast'", Result: "PASS", Sha: "abc1234"}}, head, want); got != nil {
+	if got := MissingFastProof([]proof.Row{{Check: "'rota' 'test' 'run' 'fast'", Result: "PASS", Sha: "abc1234"}}, head, tier, want); got != nil {
 		t.Errorf("quoted tier form must prove the tier, missing = %v", got)
 	}
 	own := proof.Row{Check: "go test ./...", Result: "PASS", Sha: "abc1234"}
-	if got := MissingFastProof([]proof.Row{own}, head, want); got != nil {
+	if got := MissingFastProof([]proof.Row{own}, head, tier, want); got != nil {
 		t.Errorf("own PASS row: missing = %v", got)
 	}
-	if got := MissingFastProof([]proof.Row{{Check: "go test ./...", Result: "PASS", Sha: "other00"}}, head, want); len(got) != 1 {
+	if got := MissingFastProof([]proof.Row{{Check: "go test ./...", Result: "PASS", Sha: "other00"}}, head, tier, want); len(got) != 1 {
 		t.Errorf("PASS at another sha proves nothing, missing = %v", got)
 	}
 }

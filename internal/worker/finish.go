@@ -2,11 +2,9 @@ package worker
 
 import (
 	"slices"
-	"strings"
 
 	"github.com/l4ci/rota/internal/gopath"
 	"github.com/l4ci/rota/internal/proof"
-	"github.com/l4ci/rota/internal/shlex"
 )
 
 // FastTierCheck is the check `rota proof record <ID> -- rota test run fast`
@@ -14,19 +12,18 @@ import (
 const FastTierCheck = "rota test run fast"
 
 // MissingFastProof lists what the PASS rows at head leave unproven: nothing
-// when a row ran the whole tier (`rota test run fast`), else each test.fast
+// when a row ran the whole tier (any of tierForms), else each test.fast
 // command without a PASS row of its own. The latest row for a check at head
 // decides (proof.Proves): a FAIL after a PASS, or a row at another sha, proves
-// nothing.
-func MissingFastProof(rows []proof.Row, head string, want []string) (missing []string) {
-	// `proof record -- rota test run fast` stores the quoted multi-arg form;
-	// `-- "rota test run fast"` stores the plain one. Both prove the tier.
-	quoted := make([]string, 0, 4)
-	for _, f := range strings.Fields(FastTierCheck) {
-		quoted = append(quoted, shlex.QuoteAlways(f))
-	}
-	if proof.Proves(rows, head, FastTierCheck) || proof.Proves(rows, head, strings.Join(quoted, " ")) {
-		return nil
+// nothing. The caller supplies tierForms because only it knows how
+// `proof record` stores a command (the cli's recordedCommand): `-- rota test
+// run fast` stores the quoted multi-arg form, `-- "rota test run fast"` the
+// plain one.
+func MissingFastProof(rows []proof.Row, head string, tierForms, want []string) (missing []string) {
+	for _, f := range tierForms {
+		if proof.Proves(rows, head, f) {
+			return nil
+		}
 	}
 	for _, w := range want {
 		if !proof.Proves(rows, head, w) {
