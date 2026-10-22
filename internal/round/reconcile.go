@@ -157,7 +157,7 @@ func (e Env) parkMerged(ctx context.Context, root, name string) error {
 	if s == nil {
 		return fmt.Errorf("slot %s is not in the registry", name)
 	}
-	if st := s.State(); st != "done" && st != "idle" && st != "dead" && st != "blocked" {
+	if st := s.State(); !worker.Reclaimable(st) {
 		return fmt.Errorf("slot %s is %s, not done, idle, dead or blocked", name, strutil.FirstNonEmpty(st, "busy"))
 	}
 	dirty, err := e.dirtyPaths(ctx, s.Worktree())

@@ -91,7 +91,7 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 	if !ok {
 		return out, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot '%s' has no PR to read review input from", o.Slot)}
 	}
-	if st := strings.ToLower(s.State()); st != "done" {
+	if st := strings.ToLower(s.State()); !worker.IsDone(st) {
 		return out, &exitcode.Error{Exit: exitcode.ExitRefused, Message: fmt.Sprintf("slot '%s' is %s, not done: it has not handed its PR back yet", o.Slot, st),
 			Data: worker.BlockData{BlockedBy: "state"}}
 	}
