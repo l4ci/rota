@@ -8,6 +8,8 @@ import (
 	"unicode"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/verdict"
 )
 
@@ -157,6 +159,19 @@ func addFollowUps(body string, fs []followUp) (out string, ok bool) {
 		tail += "\n" // an empty section: keep the blank line before the first criterion
 	}
 	return head + "\n" + blocks.String() + tail + "\n" + acs.String(), true
+}
+
+// fileFollowUpsLocked is fileFollowUps under a lock keyed by the PR: two
+// verdicts for one PR can be recorded together, and the read-modify-write of
+// its follow-up item must not interleave.
+func fileFollowUpsLocked(be backlog.Backend, root string, fs []followUp, pr string) (id string, added int, err error) {
+	lock := rotatree.File(root, "followup-"+prKey(pr))
+	err = fsio.Locked(lock, fsio.LockTimeout, func() error {
+		var e error
+		id, added, e = fileFollowUps(be, fs, pr)
+		return e
+	})
+	return id, added, err
 }
 
 // fileFollowUps adds the findings to the PR's open follow-up item, or files it
