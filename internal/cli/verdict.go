@@ -240,8 +240,8 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		if err := sameVerdict(b, *v); err != nil {
 			return Result{}, err
 		}
-		var deferred []followUp
-		floor := floorMinor
+		var deferred []verdict.Finding
+		floor := verdict.FloorMinor
 		var fileRoot string
 		if *fileDeferred {
 			// Resolved before the record is written: a config the floor cannot
@@ -252,12 +252,10 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 			if f := config.StringIfSet(config.Load(rotatree.Config(fileRoot)), "review.fileDeferred"); f != "" {
 				floor = f
 			}
-			if floor != floorMinor && floor != floorMajor && floor != floorOff {
+			if floor != verdict.FloorMinor && floor != verdict.FloorMajor && floor != verdict.FloorOff {
 				return Result{}, Usage("review.fileDeferred is %q: want minor, major or off", floor)
 			}
-			for _, f := range deferredAbove(b.Findings, floor) {
-				deferred = append(deferred, newFollowUp(f, strings.TrimSpace(*pr), *kind, *v))
-			}
+			deferred = verdict.DeferredAbove(b.Findings, floor)
 		}
 		t, err := resolveVerdictBranch(c, args)
 		if err != nil {
@@ -289,7 +287,7 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 			d.Set("filed", []any{})
 			d.Set("appended", 0)
 		}
-		if *fileDeferred && floor == floorOff {
+		if *fileDeferred && floor == verdict.FloorOff {
 			why := "review.fileDeferred is off: no deferred finding is filed"
 			d.Set("filedWhy", why)
 			text += " (" + why + ")"
@@ -301,7 +299,7 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 			var added int
 			_, err = withBackend(c, fileRoot, false, "", func(be backlog.Backend) (Result, error) {
 				var ferr error
-				if id, added, ferr = fileFollowUpsLocked(be, fileRoot, deferred, strings.TrimSpace(*pr)); ferr != nil {
+				if id, added, ferr = verdict.FileFollowUps(be, fileRoot, deferred, strings.TrimSpace(*pr), *kind, *v); ferr != nil {
 					return backlogFail(ferr)
 				}
 				return Result{}, nil
