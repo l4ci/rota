@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"crypto/sha256"
 	"flag"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/plan"
 	"github.com/l4ci/rota/internal/proof"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // Glue for the proof group and plan uncertain, which read items through
@@ -89,13 +91,16 @@ func proofRecord(fs *flag.FlagSet) RunFunc {
 		command := expanded[0]
 		ctx, stop := workerContext()
 		defer stop()
-		out, code := workerEnvCtx(c, ctx).RunShell(ctx, root, command)
+		run, err := runProofCommand(c, ctx, root, root, command, "proof record")
+		if err != nil {
+			return Result{}, err
+		}
+		code := run.code
 		result := "PASS"
 		if code != 0 {
 			result = "FAIL"
 		}
-		evidence := fmt.Sprintf("exit=%d output-sha256=%x", code, sha256.Sum256([]byte(out)))
-		row, changed, err := proof.Add(st, root, id, c.deps().Today(), proof.AddOpts{Check: command, Result: result, Evidence: evidence})
+		row, changed, err := proof.Add(st, root, id, c.deps().Today(), proof.AddOpts{Check: command, Result: result, Evidence: run.evidence()})
 		if err != nil {
 			return failAny(err)
 		}
@@ -105,6 +110,7 @@ func proofRecord(fs *flag.FlagSet) RunFunc {
 		d.Set("sha", row.Sha)
 		d.Set("evidence", row.Evidence)
 		d.Set("exitCode", code)
+		d.Set("niced", run.niced)
 		d.Set("changed", changed)
 		res := Result{Data: d, Text: row.Result + ": " + row.Check}
 		if code != 0 {
@@ -186,4 +192,42 @@ func uncertainResult(id, typ string, reasons []string) (Result, error) {
 		return Result{Data: d}, Failed("%s is certain", id)
 	}
 	return Result{Data: d, Text: strings.Join(reasons, "\n")}, nil
+}
+
+// proofRun is one measured proof command: what it printed, how it ended and
+// whether it ran at lowered priority.
+type proofRun struct {
+	out      string
+	code     int
+	niced    bool
+	targeted bool
+}
+
+// evidence is the proof row's evidence: the exit code and an output hash, then
+// the marks (niced, targeted) of how the command ran, so the row says so.
+func (r proofRun) evidence() string {
+	ev := fmt.Sprintf("exit=%d output-sha256=%x", r.code, sha256.Sum256([]byte(r.out)))
+	if r.niced {
+		ev += " niced=true"
+	}
+	if r.targeted {
+		ev += " targeted=true"
+	}
+	return ev
+}
+
+// runProofCommand runs a worker's proof command in dir holding a test slot, at
+// lowered priority (nice -n 10, ionice -c3 when present) so the orchestrator's
+// gate wins the scheduler. The command's descendants inherit the priority, and
+// ROTA_TEST_LOCK_HELD keeps a `rota test run` inside it from queueing behind
+// the slot its parent holds.
+func runProofCommand(c *Ctx, ctx context.Context, root, dir, command, verb string) (proofRun, error) {
+	run := proofRun{}
+	wrapped, niced := worker.NiceCommand(command, c.deps().lookPath())
+	run.niced = niced
+	err := withTestLock(c, ctx, root, c.deps().workerEnv().GateConfig(root), verb, func() error {
+		run.out, run.code = workerEnvCtx(c, ctx).RunShell(ctx, dir, "export "+testLockHeldEnv+"=1; "+wrapped)
+		return nil
+	})
+	return run, err
 }

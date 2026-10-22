@@ -51,6 +51,8 @@ type GateConfig struct {
 	testsErr   error // a malformed test.fast or test.full
 	isolate    bool
 	isolateErr error
+	slots      int
+	slotsErr   error
 }
 
 // GateConfig reads root's config once, through Env.Config.
@@ -78,6 +80,7 @@ func ParseGateConfig(cfg any) GateConfig {
 	c.review, c.reviewErr = config.ReviewPolicyOf(cfg)
 	c.cross, c.crossErr = roundcfg.ParseCrossReview(cfg)
 	c.isolate, c.isolateErr = config.Bool(cfg, "test.isolate")
+	c.slots, c.slotsErr = config.Int(cfg, "test.slots", 1, 64)
 	return c
 }
 
@@ -147,6 +150,10 @@ func (c GateConfig) TDDEnabled() (bool, error) { return c.TDD, c.tddErr }
 // as empty; loadGateInput refuses the gate and the train with it, before the
 // empty test.full check can blame a key that is set.
 func (c GateConfig) TestsErr() error { return c.testsErr }
+
+// TestSlots is test.slots: how many heavy test runs may hold the test lock at
+// once. A bad value is the error, so a typo never widens the lock silently.
+func (c GateConfig) TestSlots() (int, error) { return c.slots, c.slotsErr }
 
 // IsolateEnabled is test.isolate, or the error of a non-boolean value.
 func (c GateConfig) IsolateEnabled() (bool, error) { return c.isolate, c.isolateErr }
