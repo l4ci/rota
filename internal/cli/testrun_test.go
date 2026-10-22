@@ -144,3 +144,13 @@ func TestTestRunIsolatesByDefault(t *testing.T) {
 		t.Errorf("HERDR_PANE_ID = %q survived the default", got["herdr"])
 	}
 }
+
+func TestTestRunMarksTheLockHeldForItsCommands(t *testing.T) {
+	for _, isolate := range []bool{true, false} {
+		cfg := fmt.Sprintf(`{"test":{"fast":["test \"$ROTA_TEST_LOCK_HELD\" = 1"],"slots":1,"isolate":%v}}`, isolate)
+		root := tierProject(t, cfg)
+		if o := trRun(t, root, "", "test", "run", "fast"); o.code != 0 {
+			t.Errorf("isolate=%v: a command did not see ROTA_TEST_LOCK_HELD=1: exit %d\n%s%s", isolate, o.code, o.stdout, o.stderr)
+		}
+	}
+}
