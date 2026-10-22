@@ -608,6 +608,7 @@ type assignRun struct {
 	bo                *bestOfRun
 	slot              *worker.Slot
 	members           []*backlog.Item // the bundle's, none for one issue
+	from              string          // the start point the branch is cut from; "" for the slot's base
 }
 
 // assignOne is one slot's assignment of it; bo is set for an attempt of a
@@ -693,6 +694,9 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	}
 	if err := e.refuseWhileGateRuns(ctx, root, "assign"); err != nil {
 		return run, false, err
+	}
+	if why := e.offSite(set.Support, set.Role, *it); why != "" {
+		return run, false, blocked(BlockSite, "%s", why)
 	}
 
 	// 2. The slot: the named one, else the first idle roster slot, else the
@@ -860,10 +864,18 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		return run, true, nil
 	}
 
+	// 6. A support branch starts from the main the main machine last pushed.
+	from := ""
+	if set.Role == roundcfg.RoleSupport {
+		if from, err = e.freshBase(ctx, root, slot, res.Branch, resuming); err != nil {
+			return run, false, err
+		}
+	}
+
 	res.SmokeSection = e.reserveSmokeSection(ctx, root, be, reg, set.Roster, id, agent)
 	return assignRun{id: id, agent: agent, branch: res.Branch, resuming: resuming, queue: queue,
 		kind: pf.Kind, kindSource: pf.KindSource, model: pf.Model, tier: tier, reason: reason,
-		pick: pf.Pick, decision: pf.Decision, decisions: decisions, brief: brief, bo: bo, slot: slot, members: members}, false, nil
+		pick: pf.Pick, decision: pf.Decision, decisions: decisions, brief: brief, bo: bo, slot: slot, members: members, from: from}, false, nil
 }
 
 // notReadyBy is the blockedBy of a failed readiness: overlap when only the
@@ -1038,7 +1050,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 	steps = append(steps, []step{
 		// 7. The slot onto its issue branch.
 		{name: "reset the slot onto its branch", do: func() error {
-			if _, err := w.ResetTo(root, agent, id, res.Branch, false); err != nil {
+			if _, err := w.ResetFrom(root, agent, id, res.Branch, run.from, false); err != nil {
 				var we *exitcode.Error
 				if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
 					return blocked(BlockSlotBusy, "%s", we.Message)

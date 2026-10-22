@@ -291,6 +291,9 @@ func FromConfig(cfg any) (Settings, error) {
 	if s.Role, err = MachineRole(cfg); err != nil {
 		return s, err
 	}
+	if err := s.supportRoster(); err != nil {
+		return s, err
+	}
 	if s.WorkerKind, err = loadWorkerKind(cfg); err != nil {
 		return s, err
 	}
@@ -525,4 +528,27 @@ func MachineRole(cfg any) (string, error) {
 		return r, nil
 	}
 	return "", fmt.Errorf("round.role must be %s or %s, not %v", RoleMain, RoleSupport, v)
+}
+
+// supportRoster applies round.support to the roster (#1598): the support
+// machine provisions every name as `<support>-<name>`, so its slots, branches,
+// claims and workspaces never match main's, and main refuses a name that
+// starts with that prefix. Off when round.support is empty.
+func (s *Settings) supportRoster() error {
+	if s.Support == "" {
+		return nil
+	}
+	if !agentRe.MatchString(s.Support) {
+		return fmt.Errorf("round.support: %q is not a lowercase name usable in a branch (letters, digits, -)", s.Support)
+	}
+	prefix := s.Support + "-"
+	for i, n := range s.Roster {
+		switch {
+		case s.Role == RoleSupport:
+			s.Roster[i] = prefix + n
+		case strings.HasPrefix(n, prefix):
+			return fmt.Errorf("round.roster: %q starts with %q, the support machine's prefix (round.support), so it could match a support slot", n, prefix)
+		}
+	}
+	return nil
 }

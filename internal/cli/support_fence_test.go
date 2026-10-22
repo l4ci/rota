@@ -195,3 +195,52 @@ func TestSupportConfigSetTrackedKeyRefused(t *testing.T) {
 		t.Errorf("--global: exit %d: %v", code, env)
 	}
 }
+
+// A config.local.json that does not decode must not read as role main: the
+// fence refuses instead of opening.
+func TestSupportFenceRefusesMalformedLocalConfig(t *testing.T) {
+	root := trackerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`+"\n")
+	writeLocalConfig(t, root, `{"round":{"role":"support"`+"\n")
+	code, env, _ := rotaRun(t, "--json", "-C", root, "worker", "gate", "ben")
+	if code != ExitRefused {
+		t.Fatalf("exit %d, want %d: %v", code, ExitRefused, env)
+	}
+	if got := envObj(env, "data")["blockedBy"]; got != "config" {
+		t.Errorf("blockedBy = %v", got)
+	}
+	msg, _ := envObj(env, "error")["message"].(string)
+	if !strings.Contains(msg, "config.local.json") {
+		t.Errorf("message = %q", msg)
+	}
+}
+
+// #1598 AC-2: only main splits the work; the support side cannot offer.
+func TestRoundSupportOfferRefusedOnSupport(t *testing.T) {
+	root := supportProject(t)
+	code, env, _ := rotaRun(t, "--json", "-C", root, "round", "support", "offer", "12")
+	if code != ExitRefused {
+		t.Fatalf("exit %d, want %d: %v", code, ExitRefused, env)
+	}
+	if got := envObj(env, "data")["blockedBy"]; got != "role" {
+		t.Errorf("blockedBy = %v", got)
+	}
+}
+
+// The work split needs a tracker: file mode refuses it (D3).
+func TestRoundSupportOfferRefusedInFileMode(t *testing.T) {
+	root := trackerProject(t, `{"round":{"support":"mac"}}`+"\n")
+	code, env, _ := rotaRun(t, "--json", "-C", root, "round", "support", "offer", "B01")
+	if code != ExitRefused {
+		t.Fatalf("exit %d, want %d: %v", code, ExitRefused, env)
+	}
+	if got := envObj(env, "data")["blockedBy"]; got != "backend" {
+		t.Errorf("blockedBy = %v", got)
+	}
+}
+
+func TestRoundSupportOfferUsage(t *testing.T) {
+	root := trackerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`+"\n")
+	if code, env, _ := rotaRun(t, "--json", "-C", root, "round", "support", "offer"); code != ExitUsage {
+		t.Errorf("no IDs: exit %d: %v", code, env)
+	}
+}

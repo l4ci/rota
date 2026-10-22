@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -169,13 +170,22 @@ func (f remoteForge) AddLabels(_ context.Context, key tracker.IssueKey, labels [
 		f.labels = map[int][]string{}
 	}
 	f.labels[n] = append(f.labels[n], labels...)
+	if it := f.items[strconv.Itoa(n)]; it != nil {
+		it.Labels = append(it.Labels, labels...)
+	}
 	return nil
 }
 
-func (f remoteForge) RemoveLabels(_ context.Context, key tracker.IssueKey, _ []string) error {
+func (f remoteForge) RemoveLabels(_ context.Context, key tracker.IssueKey, labels []string) error {
 	n, _ := key.Number()
 	f.removed = append(f.removed, n)
-	return f.removeErr
+	if f.removeErr != nil {
+		return f.removeErr
+	}
+	if it := f.items[strconv.Itoa(n)]; it != nil {
+		it.Labels = slices.DeleteFunc(it.Labels, func(l string) bool { return slices.Contains(labels, l) })
+	}
+	return nil
 }
 
 // --- Board: backlog.Backend ---
