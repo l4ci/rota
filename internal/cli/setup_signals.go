@@ -112,7 +112,7 @@ func issuesSourceSignal(c *Ctx, dir string, run func(...string) (string, bool), 
 	switch {
 	case host == "github.com":
 		forge, cli = "github", "gh"
-	case strings.Contains(host, "gitlab"):
+	case host == "gitlab.com" || strings.HasPrefix(host, "gitlab."):
 		forge, cli = "gitlab", "glab"
 	default:
 		return setupSignal{}, false
