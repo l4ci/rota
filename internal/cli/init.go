@@ -230,7 +230,7 @@ func initConfig(c *Ctx, root string) (initConfigResult, error) {
 		return r, err
 	}
 	if v := c.deps().InstalledVersion(); v != "" {
-		stamped := config.StampedVersion(config.Load(rotatree.Config(root)))
+		stamped := config.StampedVersion(c.deps().Config(root))
 		if stamped != v && !config.LowersGatedStamp(stamped, v) {
 			if _, err := config.Set(root, config.VersionKey, v); err != nil {
 				return r, err
@@ -294,7 +294,7 @@ func initCheck(c *Ctx, args []string) (Result, error) {
 // linear are never detected. A config that still carries the legacy keys, or
 // already names a source, is left alone.
 func initIssueSource(c *Ctx, root string) error {
-	cfg := config.Load(rotatree.Config(root))
+	cfg := c.deps().Config(root)
 	if _, set := config.Lookup(cfg, "issues.source"); set || len(config.Legacy(root)) > 0 {
 		return nil
 	}

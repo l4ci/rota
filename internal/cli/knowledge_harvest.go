@@ -28,11 +28,11 @@ func knHarvest(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if *mark != "" {
-			if res, err := supportRefusal(root, "rota knowledge harvest --mark"); err != nil {
+			if res, err := supportRefusal(c, root, "rota knowledge harvest --mark"); err != nil {
 				return res, err
 			}
 		}
-		if issue, err := issueBackend(root); err != nil {
+		if issue, err := issueBackend(c.deps(), root); err != nil {
 			return Result{}, err
 		} else if !issue {
 			return refuseHarvest(*mark != "", "backend", Refused("rota knowledge harvest reads issue comments (issues.source is file)"))

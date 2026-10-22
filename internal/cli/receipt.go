@@ -11,10 +11,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/receipt"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -342,7 +340,7 @@ func targetHead(c *Ctx, root string, t worker.GateTarget) string {
 	if !t.External || !ok {
 		return ""
 	}
-	fg, err := c.deps().forge(c.Context(), config.Load(rotatree.Config(root)), "", root)
+	fg, err := c.deps().forge(c.Context(), c.deps().Config(root), "", root)
 	if err != nil {
 		return ""
 	}

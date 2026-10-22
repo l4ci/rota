@@ -8,7 +8,6 @@ import (
 	"github.com/l4ci/rota/internal/acceptance"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/plan"
-	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // runPlanCheck is read-only: it holds the plan's tasks against the item's
@@ -73,7 +72,7 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 		decLines = append(decLines, fmt.Sprintf("%s: %s", id, first))
 	}
 	r := plan.Check(body, ids, decs)
-	cfg := config.Load(rotatree.Config(root))
+	cfg := c.deps().Config(root)
 	var lim plan.Limits
 	if lim.MaxTasks, err = config.Int(cfg, "plan.maxTasks", 0, config.MaxInt); err != nil {
 		return Result{}, Failed("%v", err)

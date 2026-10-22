@@ -5,7 +5,6 @@ import (
 	"flag"
 
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/ship"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -27,8 +26,8 @@ func shipStrategy(*flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		cfg := config.Load(rotatree.Config(root))
-		backend, _, err := backendMode(root)
+		cfg := c.deps().Config(root)
+		backend, _, err := backendMode(c.deps(), root)
 		if err != nil {
 			return Result{}, err
 		}

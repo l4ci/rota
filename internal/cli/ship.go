@@ -17,7 +17,6 @@ import (
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/ship"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
@@ -102,7 +101,7 @@ func shipVerdict(c *Ctx, dir, root string) ship.VerdictCheck {
 			repo = r.Name
 		}
 	}
-	cfg := config.Load(rotatree.Config(root))
+	cfg := c.deps().Config(root)
 	return ship.VerdictCheck{
 		Git:      shipGitRunner{c, dir},
 		Store:    verdict.Load(root),
@@ -215,7 +214,7 @@ func shipBody(c *Ctx, args []string) (Result, error) {
 // tracker in issue mode (an unresolvable ID has none), else through the file
 // corpus.
 func shipTitles(c *Ctx, root string) (func(id string) (line, title string, ok bool), error) {
-	issue, err := issueBackend(root)
+	issue, err := issueBackend(c.deps(), root)
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +261,7 @@ func shipPR(fs *flag.FlagSet) RunFunc {
 		}
 		ctx := c.Context()
 		root := shipRoot(dir)
-		cfg := config.Load(rotatree.Config(root))
+		cfg := c.deps().Config(root)
 
 		cl, err := c.deps().forgeOrGitHub(ctx, cfg, "", dir)
 		if err != nil {
@@ -306,7 +305,7 @@ func shipClosesLines(c *Ctx, root string, cfg any, ids []string) (string, error)
 	if len(ids) == 0 {
 		return "", nil
 	}
-	name, _, err := backendMode(root)
+	name, _, err := backendMode(c.deps(), root)
 	if err != nil {
 		return "", err
 	}

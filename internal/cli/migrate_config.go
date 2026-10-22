@@ -7,7 +7,6 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotatree"
 )
 
 func configMigrateCommand() *Command {
@@ -120,7 +119,7 @@ func roundKeysStop(c *Ctx) (Result, error) {
 	if err != nil {
 		return Result{}, nil
 	}
-	old := config.LegacyRoundKeys(config.Load(rotatree.Config(root)))
+	old := config.LegacyRoundKeys(c.deps().Config(root))
 	if len(old) == 0 {
 		return Result{}, nil
 	}

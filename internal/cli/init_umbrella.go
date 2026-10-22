@@ -7,7 +7,6 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/initproj"
-	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // seedProject is the base seeding `rota init` does; `init umbrella` runs it
@@ -66,7 +65,7 @@ func initUmbrella(fs *flag.FlagSet) RunFunc {
 		}
 		enabled := false
 		if len(res.Registered) > 0 {
-			if cur, _ := config.Lookup(config.Load(rotatree.Config(root)), "umbrella.enabled"); cur != true {
+			if cur, _ := config.Lookup(c.deps().Config(root), "umbrella.enabled"); cur != true {
 				if _, err := config.Set(root, "umbrella.enabled", "true"); err != nil {
 					return Result{}, err
 				}

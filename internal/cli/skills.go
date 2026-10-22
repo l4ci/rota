@@ -10,7 +10,6 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
@@ -122,7 +121,7 @@ func skillsDirs(c *Ctx, a skillsArgs) (home string, claudeDirs, skipped []string
 	if !a.currentAccount {
 		root, _ = c.Root()
 	}
-	claudeDirs, skipped = skillsClaudeDirs(c.deps().Getenv, home, root)
+	claudeDirs, skipped = skillsClaudeDirs(c.deps(), c.deps().Getenv, home, root)
 	return home, claudeDirs, skipped
 }
 
@@ -148,14 +147,14 @@ func skillsPluginRoots(getenv func(string) string, claudeDirs []string, scope, a
 // configDir of the project at root ("" for none), de-duplicated with
 // worker.SameConfigDir. An account dir that does not exist is returned in
 // skipped, never created.
-func skillsClaudeDirs(getenv func(string) string, home, root string) (dirs, skipped []string) {
+func skillsClaudeDirs(deps *Deps, getenv func(string) string, home, root string) (dirs, skipped []string) {
 	if cur := skills.ClaudeDir(getenv, home); cur != "" {
 		dirs = append(dirs, cur)
 	}
 	if root == "" {
 		return dirs, nil
 	}
-	for _, ac := range config.Accounts(config.Load(rotatree.Config(root))) {
+	for _, ac := range config.Accounts(deps.Config(root)) {
 		if ac.ConfigDir == "" {
 			continue
 		}
