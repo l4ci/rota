@@ -87,7 +87,7 @@ func TestNoWarningWhenCurrentOrNoGoChange(t *testing.T) {
 		"rev-parse HEAD":                                {Stdout: head + "\n"},
 		"rev-parse --verify -q aaaaaaa^{commit}":        {Stdout: "aaaaaaa0\n"},
 		"rev-list --count aaaaaaa..HEAD":                {Stdout: "2\n"},
-		"diff --name-only aaaaaaa HEAD -- cmd internal": {Stdout: "internal/cli/README.md\ninternal/cli/gate_test.go\n"},
+		"diff --name-only aaaaaaa HEAD -- cmd internal": {Stdout: "internal/cli/README.md\ninternal/cli/gate_test.go\ntestdata/x.go\ninternal/x/testdata/y.go\n"},
 	})
 	if _, ok := Check(context.Background(), docsOnly, top, "aaaaaaa"); ok {
 		t.Error("only docs and test files changed: the binary is not behind")
