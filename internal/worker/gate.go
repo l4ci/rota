@@ -472,6 +472,9 @@ func (e Env) loadGateInput(root string) (gateInput, error) {
 	if _, err = in.cfg.Where(); err != nil {
 		return in, err
 	}
+	if err = in.cfg.TestsErr(); err != nil {
+		return in, err
+	}
 	in.ledger, err = LoadLedger(root)
 	return in, err
 }
