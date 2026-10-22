@@ -57,10 +57,15 @@ func dispatchSetting(cfg any) host.Kind { return host.KindOf(config.Dispatch(cfg
 // talk to and cannot refuse; the verbs that write the registry refuse it.
 func RegistryHost(root string) host.Kind { return LoadRegistryTolerant(root).Host() }
 
-// IsSolo reports whether root's recorded round runs on the solo host: workers
-// are in-harness subagents and no verb drives a pane. It is the one place a
-// registry host is compared to host.Solo.
-func IsSolo(root string) bool { return RegistryHost(root) == host.Solo }
+// IsSoloHost reports whether k, a recorded round host, is the solo host:
+// workers are in-harness subagents and no verb drives a pane. It is the one
+// place a registry host is compared to host.Solo; a caller that already holds
+// the host (one registry read) asks here instead of comparing.
+func IsSoloHost(k host.Kind) bool { return k == host.Solo }
+
+// IsSolo is IsSoloHost over root's recorded host. A missing or corrupt
+// registry reads as no host, so not solo (RegistryHost tolerates both).
+func IsSolo(root string) bool { return IsSoloHost(RegistryHost(root)) }
 
 // ResolveHost is the host the project's round runs on: host.Resolve over the
 // round's recorded host, round.dispatch and the environment. Every verb that

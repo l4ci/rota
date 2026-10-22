@@ -96,7 +96,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	}
 	cfg := config.Load(rotatree.Config(root))
 	in.Dispatch = config.Dispatch(cfg)
-	in.RegistryHost = worker.RegistryHost(root)
+	in.RegistrySolo = worker.IsSolo(root)
 	in.RoundHost = worker.ResolveHost(root, cfg, d.Getenv, doctorLookErr(in.Look))
 	in.SourceProblem = doctorSourceProblem(cfg)
 	in.Tracker = tracker.SettingsFromConfig(cfg)

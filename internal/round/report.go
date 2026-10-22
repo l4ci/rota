@@ -79,7 +79,7 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 		res.Issues = refs
 	}
 	switch h := worker.RegistryHost(root); {
-	case worker.IsSolo(root) || o.Event != "":
+	case worker.IsSoloHost(h) || o.Event != "":
 	case h == "":
 		return res, &exitcode.Error{Exit: exitcode.ExitUsage, Message: "no round host is recorded: run rota round start first",
 			Hint: "round report is for solo rounds; under herdr or tmux, rota worker poll records the state"}

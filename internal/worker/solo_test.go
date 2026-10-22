@@ -2,6 +2,7 @@ package worker
 
 import (
 	"github.com/l4ci/rota/internal/exitcode"
+	"os"
 	"strings"
 	"testing"
 
@@ -85,6 +86,13 @@ func TestSoloRefusalIsNilWithoutASoloHost(t *testing.T) {
 		if err := SoloRefusal(dir, "x"); err != nil {
 			t.Errorf("host %q: %v", h, err)
 		}
+	}
+	p := RegistryPath(dir)
+	if err := os.WriteFile(p, []byte(`{"slots": [{"name": "ben"`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if IsSolo(dir) {
+		t.Error("a corrupt registry must read as not solo (tolerant load)")
 	}
 }
 
