@@ -226,7 +226,10 @@ never into `KNOWLEDGE.md`, and does not restamp the contract docs. A learning wi
 filed upstream with `/rota-bugreport` or `/rota-capture`. Main's `/rota-learn` runs
 `rota knowledge harvest` (learning comments on issues merged in the round, not yet marked),
 folds each in with `rota knowledge add` and marks it with `rota knowledge harvest --mark
-<commentId>`. `--mark` is refused on a support machine; listing is allowed. Knowledge hits from
+<commentId>`. `--mark` is refused on a support machine; listing is allowed. Only comments by
+authors with write access count, so a stranger's `learning` comment never reaches
+`KNOWLEDGE.md`; a forge that cannot say who may write (GitLab) is refused with `blockedBy: forge`,
+and so is `round start` with `round.support` set. Knowledge hits from
 support machines are not harvested.
 
 Set `round.support` between rounds: flipping it mid-round switches the bounce store and bounce

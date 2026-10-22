@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"strings"
@@ -46,14 +47,23 @@ func knHarvest(fs *flag.FlagSet) RunFunc {
 			n = currentRound(c, root, entries)
 		}
 		issues := mergedIssues(entries, n)
+		// A learning ends up in KNOWLEDGE.md, which agents read as instructions:
+		// only a comment by someone with write access counts, and so does a mark.
+		trust, err := c.deps().workerEnv().WriterTrust(root)
+		if errors.Is(err, worker.ErrNoPushTrust) {
+			d := jsonObj("blockedBy", "forge", "changed", false)
+			return Result{Data: d}, Refused("%s", err.Error()).WithHint("harvest needs GitHub: only GitHub can say whose learning comments to trust")
+		} else if err != nil {
+			return Result{}, err
+		}
 		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
 			var rows []harvestRow
 			for _, issue := range issues {
-				learnings, err := be.Comments(issue, "learning")
+				learnings, err := writtenBy(be, trust, issue, "learning")
 				if err != nil {
 					return Result{}, err
 				}
-				marks, err := be.Comments(issue, "harvested")
+				marks, err := writtenBy(be, trust, issue, "harvested")
 				if err != nil {
 					return Result{}, err
 				}
@@ -84,6 +94,23 @@ func knHarvest(fs *flag.FlagSet) RunFunc {
 			return Result{Data: jsonObj("round", n, "learnings", list), Text: text}, nil
 		})
 	}
+}
+
+// writtenBy is the issue's comments of kind by authors the forge says can push.
+func writtenBy(be backlog.Backend, trust *worker.MarkerTrust, issue, kind string) ([]backlog.Comment, error) {
+	all, err := be.Comments(issue, kind)
+	if err != nil {
+		return nil, err
+	}
+	var out []backlog.Comment
+	for _, cm := range all {
+		if ok, err := trust.Writer(cm.Who); err != nil {
+			return nil, err
+		} else if ok {
+			out = append(out, cm)
+		}
+	}
+	return out, nil
 }
 
 type harvestRow struct {

@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -21,6 +22,8 @@ type fakeComments struct {
 	// machine's comment first; deleteErr fails every DeleteComment.
 	beforeAdd func()
 	deleteErr error
+	// readErr fails every Comments, addErr every AddComment.
+	readErr, addErr error
 }
 
 // CanPush is true for every login but "mallory", a stranger.
@@ -35,12 +38,18 @@ func (f *fakeComments) post(key tracker.IssueKey, author, body string) {
 }
 
 func (f *fakeComments) Comments(_ context.Context, key tracker.IssueKey) ([]tracker.Comment, error) {
+	if f.readErr != nil {
+		return nil, f.readErr
+	}
 	return append([]tracker.Comment(nil), f.by[key]...), nil
 }
 
 func (f *fakeComments) AddComment(_ context.Context, key tracker.IssueKey, body string) (string, error) {
 	if f.beforeAdd != nil {
 		f.beforeAdd()
+	}
+	if f.addErr != nil {
+		return "", f.addErr
 	}
 	f.next++
 	id := strconv.Itoa(f.next)
@@ -315,3 +324,58 @@ func TestPostReviewBounceIsIdempotentPerHead(t *testing.T) {
 		t.Errorf("a new head posts: %v", nf.notes)
 	}
 }
+
+// A tracker that fails to read or to write never moves the count: a read error
+// is an error (not a zero), a failed AddComment records nothing, and once the
+// tracker answers again the bounce counts once.
+func TestBounceStoreFailuresDoNotCount(t *testing.T) {
+	root := bounceRoot(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
+	fc := &fakeComments{by: map[tracker.IssueKey][]tracker.Comment{}}
+	st := storeOver(t, root, fc)
+
+	fc.readErr = errors.New("forge down")
+	if _, _, err := st.Count("7"); err == nil {
+		t.Error("Count over a failing Comments returned no error")
+	}
+	if rec, err := st.Record(nil, "7", "ben", "abc1234", 3); err == nil || rec.Counted || rec.N != 0 {
+		t.Errorf("Record over a failing Comments: %+v, %v", rec, err)
+	}
+	if len(fc.by[tracker.NumKey(7)]) != 0 {
+		t.Errorf("a failed read still wrote: %v", fc.by)
+	}
+
+	fc.readErr, fc.addErr = nil, errors.New("forge refused the comment")
+	rec, err := st.Record(nil, "7", "ben", "abc1234", 3)
+	if err == nil || rec.Counted || rec.N != 0 {
+		t.Errorf("Record over a failing AddComment: %+v, %v", rec, err)
+	}
+	if n, _, err := st.Count("7"); err != nil || n != 0 {
+		t.Errorf("count after a failed write = %d, %v", n, err)
+	}
+
+	fc.addErr = nil
+	if rec, err := st.Record(nil, "7", "ben", "abc1234", 3); err != nil || !rec.Counted || rec.N != 1 {
+		t.Errorf("Record after recovery: %+v, %v", rec, err)
+	}
+}
+
+// A tracker that cannot say who has write access cannot keep bounces on the
+// issue: the store refuses with ErrNoPushTrust, which round start turns into a
+// refusal instead of trusting nobody.
+func TestBounceStoreWithoutPushTrustIsRefused(t *testing.T) {
+	root := bounceRoot(t, `{"issues":{"source":"gitlab"},"round":{"support":"mac"}}`)
+	e := Env{IssueComments: func(string, tracker.Settings) (IssueComments, error) { return noTrustComments{}, nil }}
+	if _, err := e.BounceStore(root); !errors.Is(err, ErrNoPushTrust) {
+		t.Errorf("err = %v, want ErrNoPushTrust", err)
+	}
+}
+
+type noTrustComments struct{}
+
+func (noTrustComments) Comments(context.Context, tracker.IssueKey) ([]tracker.Comment, error) {
+	return nil, nil
+}
+func (noTrustComments) AddComment(context.Context, tracker.IssueKey, string) (string, error) {
+	return "1", nil
+}
+func (noTrustComments) DeleteComment(context.Context, tracker.IssueKey, string) error { return nil }
