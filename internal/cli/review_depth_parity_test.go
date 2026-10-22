@@ -28,6 +28,8 @@ func TestGateAndReviewDepthPrintTheSameReason(t *testing.T) {
 		case strings.HasPrefix(line, "pr view"):
 			b, _ := json.Marshal(map[string]any{"headRefName": "nia/6-x", "headRefOid": headSHA, "baseRefName": "main", "state": "OPEN", "title": "t", "body": prBody})
 			return b, nil, 0, nil
+		case strings.HasPrefix(line, "api graphql"):
+			return []byte(`{"data":{"repository":{"pullRequest":{"closingIssuesReferences":{"nodes":[]}}}}}`), nil, 0, nil
 		case strings.HasPrefix(line, "issue view"):
 			b, _ := json.Marshal(map[string]any{"number": 6, "title": "t", "state": "OPEN", "body": issueBody})
 			return b, nil, 0, nil

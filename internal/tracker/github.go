@@ -789,6 +789,39 @@ func (g *GitHub) PRView(ctx context.Context, pr int) (PRInfo, error) {
 	return info, nil
 }
 
+// ClosingRefs lists the issue numbers merging the PR closes, as the forge
+// resolves them (closingIssuesReferences): a closing keyword anywhere in the
+// body counts. `gh pr view --json` has no such field in older gh releases, so it
+// goes through GraphQL.
+func (g *GitHub) ClosingRefs(ctx context.Context, pr int) ([]int, bool, error) {
+	const q = `query($owner:String!,$repo:String!,$n:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$n){closingIssuesReferences(first:50){nodes{number}}}}}`
+	var d struct {
+		Data struct {
+			Repository struct {
+				PullRequest *struct {
+					Closing struct {
+						Nodes []struct {
+							Number int `json:"number"`
+						} `json:"nodes"`
+					} `json:"closingIssuesReferences"`
+				} `json:"pullRequest"`
+			} `json:"repository"`
+		} `json:"data"`
+	}
+	args := []string{"api", "graphql", "-f", "query=" + q, "-F", "owner={owner}", "-F", "repo={repo}", "-F", "n=" + strconv.Itoa(pr)}
+	if err := g.json(ctx, args, &d); err != nil {
+		return nil, false, err
+	}
+	if d.Data.Repository.PullRequest == nil {
+		return nil, false, failed("cannot read PR %d", pr)
+	}
+	var out []int
+	for _, n := range d.Data.Repository.PullRequest.Closing.Nodes {
+		out = append(out, n.Number)
+	}
+	return out, true, nil
+}
+
 // PRMergeable reads `mergeable` (MERGEABLE, CONFLICTING or UNKNOWN while GitHub
 // computes it); mergeStateStatus names the reason.
 func (g *GitHub) PRMergeable(ctx context.Context, pr int) (Mergeability, error) {

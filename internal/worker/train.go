@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/testledger"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -60,6 +61,9 @@ type TrainOpts struct {
 	// NoVerify lets the train run with an empty test.full (it is refused
 	// otherwise); a set test.full is still run.
 	NoVerify bool
+	// FinalSlice names the targets that are the last slice of their
+	// partial-slice issue (GateOpts.FinalSlice, per member).
+	FinalSlice []string
 	// Approve is GateOpts.Approve for the whole train: files lists the union of
 	// the paths the members change.
 	Approve func(files func() ([]string, error)) (*exitcode.Refusal, error)
@@ -249,7 +253,7 @@ func (t *trainRun) plan() (bool, error) {
 
 	// 1. Check every member.
 	for _, tg := range o.Targets {
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, CheckOnly: true, Verdict: o.Verdict, CheckReviews: o.CheckReviews})
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, tg), Verdict: o.Verdict, CheckReviews: o.CheckReviews})
 		if err != nil {
 			if gr.Verdict == GateVerdictBlocked {
 				res.Verdict, res.Culprit = gr.Verdict, tg
@@ -540,7 +544,7 @@ func (t *trainRun) behaviourStage() (bool, error) {
 		if _, code := e.git(t.scratch, "checkout", "-q", "-f", "--detach", t.tips[i+1]); code != 0 {
 			return t.broke("git checkout " + t.tips[i+1] + " failed in the scratch tree")
 		}
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, CheckOnly: true, Verdict: o.Verdict, CheckReviews: o.CheckReviews,
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), Verdict: o.Verdict, CheckReviews: o.CheckReviews,
 			ItemBody: o.ItemBody, BehaviourDir: t.scratch})
 		if err != nil {
 			return true, err
@@ -604,7 +608,7 @@ func (t *trainRun) land() (TrainResult, error) {
 			}
 		}
 		t.gated[m.Target] = true
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, LandVerified: true, HoldsLandLock: true, Round: o.Round})
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, LandVerified: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), HoldsLandLock: true, Round: o.Round})
 		res.Notes = append(res.Notes, gr.Notes...)
 		res.Changed = res.Changed || gr.Changed
 		if gr.Changed && gr.Verdict != GatePass { // the PR is on the base but the gate could not finish (merged-remotely)

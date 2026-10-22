@@ -1106,6 +1106,49 @@ func TestGateRefusesAPRThatDoesNotCloseItsIssue(t *testing.T) {
 	}
 }
 
+// A partial-slice issue is closed by no slice but the last: a PR the forge says
+// closes it (a keyword in prose counts) is refused unless FinalSlice is set, and
+// a forge that cannot report closing references skips the check and says so.
+func TestGateRefusesASlicePRTheForgeSaysClosesItsIssue(t *testing.T) {
+	cases := []struct {
+		name, refs string
+		final      bool
+		verdict    string
+		note       bool
+	}{
+		{name: "forge says it closes", refs: "5", verdict: GateNotClosing},
+		{name: "forge lists another issue", refs: "6", verdict: GatePass},
+		{name: "forge lists none", refs: "none", verdict: GatePass},
+		{name: "final slice may close", refs: "5", final: true, verdict: GatePass},
+		{name: "forge cannot report", refs: "", verdict: GatePass, note: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
+			w.forge("body", "Refs #5\n\nD=T8 learnings (Closes #5)\n")
+			w.forge("issueLabels", "in-progress,"+PartialSliceLabel)
+			w.forge("closingRefs", c.refs)
+			res, err := w.gate(false, GateOpts{FinalSlice: c.final})
+			if err != nil || res.Verdict != c.verdict {
+				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.verdict, res)
+			}
+			if c.verdict == GateNotClosing {
+				if res.Changed || w.onMain("work.txt") {
+					t.Errorf("nothing may land: %+v", res)
+				}
+				if !strings.Contains(res.Hint, "closing keyword") || !strings.Contains(res.Hint, "--final-slice") {
+					t.Errorf("hint must name the keyword to drop and the flag: %q", res.Hint)
+				}
+			}
+			if got := strings.Count(strings.Join(res.Notes, "\n"), "CLOSING-REFS-UNKNOWN"); got != map[bool]int{true: 1, false: 0}[c.note] {
+				t.Errorf("CLOSING-REFS-UNKNOWN notes = %d, notes %q", got, res.Notes)
+			}
+		})
+	}
+}
+
 // A PR no slot or review record owns (a fix-forward PR, a PR after wind-down)
 // is gated by number like a round PR: it lands when fresh and is refused STALE
 // when its merge with the base conflicts.

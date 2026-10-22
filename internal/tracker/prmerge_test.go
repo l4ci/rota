@@ -91,3 +91,25 @@ func TestPRViewNormalizesBothForges(t *testing.T) {
 		}
 	}
 }
+
+// ClosingRefs reads what GitHub says merging the PR closes through GraphQL, and
+// fails on a PR the forge does not know.
+func TestGitHubClosingRefs(t *testing.T) {
+	s := &scripted{answer: func(string, []string) (string, string, int) {
+		return `{"data":{"repository":{"pullRequest":{"closingIssuesReferences":{"nodes":[{"number":5},{"number":9}]}}}}}`, "", 0
+	}}
+	nums, known, err := newAdapter(t, "github", s).(interface {
+		ClosingRefs(context.Context, int) ([]int, bool, error)
+	}).ClosingRefs(context.Background(), 7)
+	if err != nil || !known || len(nums) != 2 || nums[0] != 5 || nums[1] != 9 {
+		t.Errorf("got %v %v %v", nums, known, err)
+	}
+	s = &scripted{answer: func(string, []string) (string, string, int) {
+		return `{"data":{"repository":{"pullRequest":null}}}`, "", 0
+	}}
+	if _, _, err := newAdapter(t, "github", s).(interface {
+		ClosingRefs(context.Context, int) ([]int, bool, error)
+	}).ClosingRefs(context.Background(), 7); !IsKind(err, KindFailed) {
+		t.Errorf("an unknown PR must fail, got %v", err)
+	}
+}

@@ -53,6 +53,7 @@ type trainRunOpts struct {
 	Base                string
 	Order               []string
 	LandGreen, NoVerify bool
+	FinalSlice          []string
 	Confirm             gate.Confirm
 	Approval            approvalReq
 }
@@ -89,7 +90,7 @@ func runTrain(c *Ctx, root string, o trainRunOpts) trainRun {
 		}
 	}
 	round := &worker.RoundMemo{}
-	r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: o.Targets, Base: o.Base, Order: o.Order, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, NoVerify: o.NoVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block, CheckReviews: true, Round: round, ItemBody: lazyItemBody(c, root)})
+	r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: o.Targets, Base: o.Base, Order: o.Order, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, Verdict: shipVerdict(c, root, root).Block, CheckReviews: true, Round: round, ItemBody: lazyItemBody(c, root)})
 	run := trainRun{Result: r, Err: err, Refused: r.Refused(err)}
 	if run.Refused || err != nil {
 		return run
@@ -103,6 +104,8 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 	landGreen := fs.Bool("land-green", false, "when verification fails, still land the verified members before the culprit")
 	noVerify := fs.Bool("no-verify", false, "allow an empty test.full (the train is refused otherwise)")
 	order := fs.String("order", "", "merge order as comma-separated PR numbers (or slots); replaces the computed order and must name every member once")
+	var final stringList
+	fs.Var(&final, "final-slice", "a train member (slot or PR) that is the last slice of a partial-slice issue and may close it; repeatable")
 	confirm := approvalFlags(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) == 0 {
@@ -131,7 +134,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 				override = append(override, t)
 			}
 		}
-		run := runTrain(c, root, trainRunOpts{Targets: args, Base: *base, Order: override, LandGreen: *landGreen, NoVerify: *noVerify, Confirm: conf, Approval: req})
+		run := runTrain(c, root, trainRunOpts{Targets: args, Base: *base, Order: override, LandGreen: *landGreen, NoVerify: *noVerify, FinalSlice: final, Confirm: conf, Approval: req})
 		r, err := run.Result, run.Err
 		if run.Refused {
 			res, rerr := verdictRefusal(r.Verdict, r.Refusal, err, r.Err, r.Hint, trainData(r))
