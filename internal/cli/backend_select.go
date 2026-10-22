@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
@@ -92,7 +91,7 @@ func openBacklog(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backe
 		return nil, &backlog.RefusedError{BlockedBy: "backend", Hint: hint, Err: backlog.ErrWrongBackend,
 			Msg: `not available when issues.source is a tracker`}
 	}
-	cwd, _ := os.Getwd()
+	cwd, _ := c.deps().Getwd()
 	return backlog.Open(c.Context(), root, cfg, backlog.Options{
 		Scope:      c.Repo,
 		Cwd:        cwd,
@@ -142,7 +141,7 @@ func openIssueBackend(c *Ctx, hint string, perRepo bool) (backlog.IssueBackend, 
 	if perRepo && c.Repo == "" && repos.Umbrella(root) {
 		// Scope S: inside a sub-repo the verb acts on it; only the umbrella
 		// root itself needs --repo.
-		if cwd, err := os.Getwd(); err != nil || backlog.CwdSubRepo(cwd, repos.Load(root)) == "" {
+		if cwd, err := c.deps().Getwd(); err != nil || backlog.CwdSubRepo(cwd, repos.Load(root)) == "" {
 			return nil, Usage("%s from the umbrella root needs --repo <name>", c.Path)
 		}
 	}

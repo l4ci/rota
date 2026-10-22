@@ -8,7 +8,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -32,10 +31,10 @@ func migrateHv(fs *flag.FlagSet) RunFunc {
 		if err := knNoArgs(args); err != nil {
 			return Result{}, err
 		}
-		cwd, _ := os.Getwd()
+		cwd, _ := c.deps().Getwd()
 		home := c.deps().Getenv("HOME")
 		if home == "" {
-			home, _ = os.UserHomeDir()
+			home, _ = c.deps().UserHomeDir()
 		}
 		o := hvmigrate.HvOptions{Apply: *apply, Verbose: *verbose, SkipSkills: *skip, Cwd: cwd,
 			Home: home, ClaudeDir: skills.ClaudeDir(c.deps().Getenv, home), Version: version.Get().Version, InstalledVersion: c.deps().InstalledVersion, Now: c.deps().Now}
@@ -178,13 +177,13 @@ var legacyStateExempt = []string{"rota migrate hv", "rota doctor", "rota version
 // legacyStateStop is the one hard stop for an un-migrated project (#236):
 // rota looks for .rota/ only, so with .hv/ at the nearest state directory
 // every verb but the exempt ones stops and says how to migrate.
-func legacyStateStop(path string) error {
+func legacyStateStop(path string, getwd func() (string, error)) error {
 	for _, e := range legacyStateExempt {
 		if path == e || strings.HasPrefix(path, e+" ") {
 			return nil
 		}
 	}
-	cwd, err := os.Getwd()
+	cwd, err := getwd()
 	if err != nil {
 		return nil
 	}

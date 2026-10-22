@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -69,5 +70,29 @@ func TestDefaultRoundEnvLabelsComeFromConfig(t *testing.T) {
 		if c.got != c.want {
 			t.Errorf("issues.labels.%s = %q, want the configured %q", role, c.got, c.want)
 		}
+	}
+}
+
+// Ctx.Root walks up from Deps.Getwd, not the process cwd, so a test resolves a
+// root without a Chdir.
+func TestCtxRootReadsDepsGetwd(t *testing.T) {
+	root := t.TempDir()
+	deep := filepath.Join(root, "a", "b")
+	if err := os.MkdirAll(deep, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	d := defaultDeps()
+	d.Getwd = func() (string, error) { return deep, nil }
+	c := &Ctx{Deps: d}
+	got, err := c.Root()
+	if err != nil {
+		t.Fatalf("Root: %v", err)
+	}
+	want, _ := filepath.EvalSymlinks(root)
+	if g, _ := filepath.EvalSymlinks(got); g != want {
+		t.Errorf("Root = %q, want %q", got, root)
 	}
 }

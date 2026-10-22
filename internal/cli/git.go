@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
@@ -66,7 +65,7 @@ func gitDir(c *Ctx) (string, error) {
 	if err != nil || dir != "" {
 		return dir, err
 	}
-	cwd, err := os.Getwd()
+	cwd, err := c.deps().Getwd()
 	if err != nil {
 		return "", err
 	}
@@ -133,7 +132,7 @@ func gitGuardClean(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if dir == "" {
-			if dir, err = os.Getwd(); err != nil {
+			if dir, err = c.deps().Getwd(); err != nil {
 				return Result{}, err
 			}
 		}
@@ -312,7 +311,7 @@ func gitWorktreePath(c *Ctx, args []string) (Result, error) {
 	if _, err := c.RepoPath(); err != nil {
 		return Result{}, err
 	}
-	cwd, err := os.Getwd()
+	cwd, err := c.deps().Getwd()
 	if err != nil {
 		return Result{}, err
 	}

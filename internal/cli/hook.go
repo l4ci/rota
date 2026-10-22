@@ -59,7 +59,7 @@ func readInput(c *Ctx) []byte {
 
 // payloadCwd is the cwd a hook or statusline payload names, else the process
 // working directory.
-func payloadCwd(m map[string]any) string {
+func payloadCwd(c *Ctx, m map[string]any) string {
 	if s, _ := m["cwd"].(string); s != "" {
 		return s
 	}
@@ -68,7 +68,7 @@ func payloadCwd(m map[string]any) string {
 			return s
 		}
 	}
-	d, _ := os.Getwd()
+	d, _ := c.deps().Getwd()
 	return d
 }
 
@@ -81,7 +81,7 @@ func statuslineDump(fs *flag.FlagSet) RunFunc {
 		}
 		debug := c.deps().Getenv("ROTA_STATUSLINE_DEBUG") != ""
 		input := readInput(c)
-		if err := dumpState(input, c.deps().Now()); err != nil && debug {
+		if err := dumpState(c, input, c.deps().Now()); err != nil && debug {
 			fmt.Fprintf(c.Stderr, "rota statusline dump: %v\n", err)
 		}
 		if *then != "" {
@@ -99,7 +99,7 @@ func statuslineDump(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-func dumpState(input []byte, now time.Time) (err error) {
+func dumpState(c *Ctx, input []byte, now time.Time) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic: %v", r)
@@ -109,7 +109,7 @@ func dumpState(input []byte, now time.Time) (err error) {
 	if json.Unmarshal(input, &m) != nil || m == nil {
 		return fmt.Errorf("input is not a JSON object")
 	}
-	cd, err := rotastate.CommonDir(payloadCwd(m))
+	cd, err := rotastate.CommonDir(payloadCwd(c, m))
 	if err != nil {
 		return err
 	}
@@ -155,7 +155,7 @@ func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bo
 	if json.Unmarshal(readInput(c), &hc.payload) != nil || hc.payload == nil {
 		return hc, false
 	}
-	cwd := payloadCwd(hc.payload)
+	cwd := payloadCwd(c, hc.payload)
 	cd, err := rotastate.CommonDir(cwd)
 	if err != nil {
 		return hc, false
@@ -482,7 +482,7 @@ func hookGuard(c *Ctx, args []string) (res Result, _ error) {
 		}
 		return strings.TrimSpace(r.Stdout), nil
 	}
-	wd, _ := os.Getwd()
+	wd, _ := c.deps().Getwd()
 	if reason := hook.DecideGuard(hook.GuardRequest{Payload: readInput(c), Slot: slot, DefaultCwd: wd, Git: gitOut}); reason != "" {
 		return Result{}, &Error{Exit: ExitUsage, Message: "rota guard: " + reason}
 	}
