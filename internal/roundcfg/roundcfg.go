@@ -185,10 +185,10 @@ func Load(root string) (Settings, error) {
 // config, for a caller that holds one.
 func FromConfig(cfg any) (Settings, error) {
 	var s Settings
-	s.Scope = config.String(cfg, "round.scope")
-	if err := config.CheckEnum("round.scope", s.Scope); err != nil {
+	if err := checkEnum(cfg, "round.scope"); err != nil {
 		return s, err
 	}
+	s.Scope = config.String(cfg, "round.scope")
 	var err error
 	if s.Roster, err = list(cfg, "round.roster"); err != nil {
 		return s, err
@@ -213,11 +213,10 @@ func FromConfig(cfg any) (Settings, error) {
 	if s.SharedPaths, err = list(cfg, "round.sharedPaths"); err != nil {
 		return s, err
 	}
-	overlap := config.String(cfg, "round.scopeOverlap")
-	if err := config.CheckEnum("round.scopeOverlap", overlap); err != nil {
+	if err := checkEnum(cfg, "round.scopeOverlap"); err != nil {
 		return s, err
 	}
-	s.BlockScopeOverlap = overlap == config.ScopeOverlapBlock
+	s.BlockScopeOverlap = config.String(cfg, "round.scopeOverlap") == config.ScopeOverlapBlock
 	if s.StallMinutes, err = config.Int(cfg, "round.stallMinutes", 0, config.MaxInt); err != nil {
 		return s, err
 	}
@@ -255,9 +254,10 @@ func FromConfig(cfg any) (Settings, error) {
 	if s.BundleMax, err = config.Int(cfg, "round.bundleMax", 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.ReviewLoop = config.String(cfg, "round.reviewLoop"); s.ReviewLoop != ReviewLoopManual && s.ReviewLoop != ReviewLoopAuto {
-		return s, fmt.Errorf("round.reviewLoop must be %s or %s (got %v)", ReviewLoopManual, ReviewLoopAuto, s.ReviewLoop)
+	if err := checkEnum(cfg, "round.reviewLoop"); err != nil {
+		return s, err
 	}
+	s.ReviewLoop = config.String(cfg, "round.reviewLoop")
 	s.AdoptPattern = strings.TrimSpace(config.String(cfg, "round.adoptPattern"))
 	if _, err := path.Match(s.AdoptPattern, ""); err != nil {
 		return s, fmt.Errorf("round.adoptPattern %q: %v", s.AdoptPattern, err)
@@ -282,6 +282,17 @@ func FromConfig(cfg any) (Settings, error) {
 		return s, err
 	}
 	return s, loadRoles(cfg, &s)
+}
+
+// checkEnum validates an enum key against its schema choices. It reads the raw
+// value, so the error names a number, bool or null that config.String would
+// collapse to "".
+func checkEnum(cfg any, key string) error {
+	v, err := config.Value(cfg, key)
+	if err != nil {
+		return err
+	}
+	return config.CheckEnum(key, v)
 }
 
 // loadRoles reads roles.<role>.tier and .effort. The effort is checked against
@@ -441,12 +452,7 @@ var ProfileNames = []string{"quality", "balanced", "budget", ProfileInherit}
 
 // profileOf reads round.profile: "" when unset, an error for an unknown name.
 func profileOf(cfg any) (string, error) {
-	v, err := config.Value(cfg, "round.profile")
-	if err != nil {
-		return "", err
-	}
-	p, _ := v.(string)
-	p = strings.TrimSpace(p)
+	p := strings.TrimSpace(config.String(cfg, "round.profile"))
 	if _, ok := Profiles[p]; p != "" && !ok {
 		return "", fmt.Errorf("round.profile must be %s, or unset (got %q)", strings.Join(ProfileNames, ", "), p)
 	}
@@ -473,10 +479,8 @@ func Effective(cfg any, kind, tier string) (model, source string) {
 		}
 	}
 	if fb := harness.Resolve(kind).Tiers().StandardFallback; fb != "" && tier == TierStandard {
-		if v, err := config.Value(cfg, fb); err == nil {
-			if m, _ := v.(string); strings.TrimSpace(m) != "" {
-				return strings.TrimSpace(m), SourceModelsWorker
-			}
+		if m := strings.TrimSpace(config.String(cfg, fb)); m != "" {
+			return m, SourceModelsWorker
 		}
 	}
 	if _, set := config.Lookup(cfg, key); set {
@@ -484,10 +488,8 @@ func Effective(cfg any, kind, tier string) (model, source string) {
 		// loadTiers refuses it for a claude tier.
 		return "", SourceHarnessDefault
 	}
-	if v, err := config.Value(cfg, key); err == nil {
-		if m, _ := v.(string); strings.TrimSpace(m) != "" {
-			return strings.TrimSpace(m), SourceDefault
-		}
+	if m := strings.TrimSpace(config.String(cfg, key)); m != "" {
+		return m, SourceDefault
 	}
 	return "", SourceHarnessDefault
 }
@@ -495,9 +497,7 @@ func Effective(cfg any, kind, tier string) (model, source string) {
 // SupportName is round.support read alone, trimmed: "" when unset or not a
 // string. The bounce store reads it to pick the registry or the issue.
 func SupportName(cfg any) string {
-	v, _ := config.Value(cfg, "round.support")
-	s, _ := v.(string)
-	return strings.TrimSpace(s)
+	return strings.TrimSpace(config.String(cfg, "round.support"))
 }
 
 // MachineRole is round.role read alone, so a bad value in another round.* key cannot
