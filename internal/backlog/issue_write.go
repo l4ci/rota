@@ -616,7 +616,7 @@ func commentRows(comments []tracker.Comment, kind string) []Comment {
 			continue
 		}
 		if kind == "" || kind == k {
-			rows = append(rows, Comment{Who: c.Author, Kind: k, Text: strings.Trim(rest, "\n")})
+			rows = append(rows, Comment{ID: c.ID, Who: c.Author, Kind: k, Text: strings.Trim(rest, "\n")})
 		}
 	}
 	return rows

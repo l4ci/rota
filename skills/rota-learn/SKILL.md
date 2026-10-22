@@ -23,7 +23,14 @@ Copy this checklist and track your progress:
 - `--retro [<session-id|path>]`: retrospective mode. Skip Steps 2 to 8 and follow *`--retro`* in [`references/learn-rare-modes.md`](references/learn-rare-modes.md), then exit.
 - `--term <name>`, `--promote <topic> "<title>"`, `--deprecate <topic> "<title>"`, `--amend <topic> "<title>"`, `--remove <topic> "<title>"`: manual modes. Skip Steps 2 to 8 and follow the matching section of [`references/learn-rare-modes.md`](references/learn-rare-modes.md), then exit.
 
-With none of those, run the normal flow (Step 2 onward).
+With none of those, run the normal flow (Step 2 onward), after the role check below.
+
+### Role check (`round.role`)
+
+Run `rota config show round.role` first.
+
+- **`support`** (a support machine): never write `.rota/KNOWLEDGE.md`, never run `rota knowledge add` or `tier fold` (both exit 4 `blockedBy: role`). Post each learning on the issue it came from: `rota item comment add <ID> --kind learning --body-file <f>`. A learning with no issue goes upstream, not into a file: a rota defect to `/rota-bugreport`, anything else to `/rota-capture`. Stop after posting; main harvests.
+- **main** (the default): first harvest what support machines posted. `rota knowledge harvest --json` lists unharvested `learning` comments on issues merged in the round. Fold each into `KNOWLEDGE.md` through Steps 3 to 6 (`rota knowledge add`), then `rota knowledge harvest --mark <commentId>` so it never lists again. Then run the normal scan. On the file backend `harvest` exits 4 `blockedBy: backend`; skip it.
 
 ## Step 2 — Scan the Session for Learnings
 

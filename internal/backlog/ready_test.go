@@ -60,9 +60,9 @@ func TestComments(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []Comment{
-		{"2026-09-01", "question", "Why?\nmore\n\ntail"},
-		{"2026-09-02", "answer", "Because."},
-		{"2026-09-03", "decision", "Ship."},
+		{Who: "2026-09-01", Kind: "question", Text: "Why?\nmore\n\ntail"},
+		{Who: "2026-09-02", Kind: "answer", Text: "Because."},
+		{Who: "2026-09-03", Kind: "decision", Text: "Ship."},
 	}
 	if !reflect.DeepEqual(all, want) {
 		t.Errorf("all = %#v", all)

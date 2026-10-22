@@ -23,6 +23,7 @@ func knowledgeCommands() *Command {
 		{Name: "replace", Summary: "replace text inside one bullet", Repo: true, Verb: knReplace},
 		{Name: "rm", Summary: "delete one bullet and its tier entry", Repo: true, Verb: knRm},
 		{Name: "rename-topic", Summary: "rename a topic or move one bullet", Repo: true, Verb: knRename},
+		{Name: "harvest", Summary: "list (or --mark) learning comments on merged issues", Verb: knHarvest},
 		{Name: "hit", Summary: "register a consulted bullet", Repo: true, Verb: knHit},
 		{Name: "tier", Summary: "read and write bullet tiers", Subs: []*Command{
 			{Name: "get", Summary: "show one bullet's tier", Repo: true, Verb: knTierGet},

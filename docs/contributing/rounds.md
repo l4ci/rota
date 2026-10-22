@@ -212,6 +212,27 @@ The maintainer checked both in the herdr sidebar (round 4, #79). Workspace ids a
 Tools that walk the tree without reading `.gitignore` see a second copy of every file
 under `.worktrees/`; none of this repo's verbs or tests do (smoke section 70 pins it).
 
+## Support role
+
+A second machine can build `site:support` issues beside main with no connection between the
+two: GitHub is the only shared state. `round.support` (tracked) names the machine and its
+roster prefix; `round.role` (local only, `.rota/config.local.json`) turns a machine into the
+support side. A support machine never merges and never writes tracked `.rota/` content; those
+verbs exit 4 `blockedBy: role` (the tables live in `internal/cli/support_fence.go`).
+
+Knowledge travels through the tracker. A support worker posts each learning as a `learning`
+comment on the issue it came from (`rota item comment add <ID> --kind learning --body-file <f>`),
+never into `KNOWLEDGE.md`, and does not restamp the contract docs. A learning with no issue is
+filed upstream with `/rota-bugreport` or `/rota-capture`. Main's `/rota-learn` runs
+`rota knowledge harvest` (learning comments on issues merged in the round, not yet marked),
+folds each in with `rota knowledge add` and marks it with `rota knowledge harvest --mark
+<commentId>`. `--mark` is refused on a support machine; listing is allowed. Knowledge hits from
+support machines are not harvested.
+
+Set `round.support` between rounds: flipping it mid-round switches the bounce store and bounce
+counts are not carried over. At the bounce cap the item parks `needs-human` and no review-bounce
+is posted.
+
 ## Maintainer answers typed into a pane
 
 Prefix a direct answer with `m:` to make it citable without a confirmation round-trip. The

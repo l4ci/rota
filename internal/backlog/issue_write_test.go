@@ -252,7 +252,7 @@ func TestIssuesComments(t *testing.T) {
 	tr.Issues[0].Comments = append(tr.Issues[0].Comments,
 		tracker.Comment{ID: "9", Body: "plain chatter"}, tracker.Comment{ID: "10", Body: "<!-- rota:comment answer -->\n\nA\n\n", Author: "bob"})
 	rows, err := b.Comments("1", "")
-	if err != nil || len(rows) != 2 || rows[0] != (Comment{"fake-user", "question", "Why?\nBecause."}) || rows[1] != (Comment{"bob", "answer", "A"}) {
+	if err != nil || len(rows) != 2 || rows[0] != (Comment{ID: rows[0].ID, Who: "fake-user", Kind: "question", Text: "Why?\nBecause."}) || rows[1] != (Comment{ID: rows[1].ID, Who: "bob", Kind: "answer", Text: "A"}) {
 		t.Fatalf("%+v, %v", rows, err)
 	}
 	if rows, _ = b.Comments("1", "answer"); len(rows) != 1 {
@@ -416,7 +416,7 @@ func TestIssuesStatus(t *testing.T) {
 	}
 	want := Status{ID: "4", Type: "F", Title: "Do it", Status: "open", State: "in-progress,blocked", Claim: "b", Claims: []string{"b"},
 		Assignees: []string{"alice"}, Milestone: "M07", Notes: []string{"design", "plan"},
-		Comments: []Comment{{"eve", "feedback", "nice"}}}
+		Comments: []Comment{{Who: "eve", Kind: "feedback", Text: "nice"}}}
 	if a, w := mustJSON(st), mustJSON(want); a != w {
 		t.Fatalf("\n got %s\nwant %s", a, w)
 	}

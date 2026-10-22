@@ -5,7 +5,6 @@ import (
 
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/ledger"
-	"github.com/l4ci/rota/internal/roundlease"
 )
 
 // roundSummaryVerb folds a round's ledger and the gate audit log into the table the
@@ -31,13 +30,7 @@ func roundSummaryVerb(fs *flag.FlagSet) RunFunc {
 		}
 		n := *want
 		if n < 0 {
-			for _, e := range entries {
-				n = max(n, e.Round)
-			}
-			env := c.deps().baseRoundEnv()
-			if l, st, err := env.ReadLease(c.Context(), root); err == nil && (st == roundlease.Live || st == roundlease.Foreign) {
-				n = l.Round
-			}
+			n = currentRound(c, root, entries)
 		}
 		known := false
 		for _, e := range entries {
