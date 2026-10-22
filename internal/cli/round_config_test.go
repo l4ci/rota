@@ -3,14 +3,15 @@ package cli
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
 )
 
-// One Config seam covers strict and tolerant callers and the exit exceptions
-// promised by the verb contracts, without repeating bad-config tests per verb.
+// The Config seam covers strict loading, tolerance and contract exceptions.
+// Representative verb tests separately pin the policy chosen at each exit class.
 func TestRoundSettings(t *testing.T) {
 	const badStall = `round.stallMinutes must be an integer (got soon)`
 	const badBounces = `round.maxBounces must be an integer (got many)`
@@ -69,5 +70,31 @@ func TestRoundSettings(t *testing.T) {
 				t.Fatalf("bad config returned partial settings: %+v", set)
 			}
 		})
+	}
+}
+
+// roundConfigRun injects config through the same Deps boundary as the loader
+// seam, while leaving the verb and its policy selection real.
+func roundConfigRun(t *testing.T, raw string, args ...string) (int, string, string) {
+	t.Helper()
+	root := gitRepo(t)
+	cfg, err := jsonx.Decode([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	deps := testDeps()
+	deps.Config = func(got string) any {
+		if got != root {
+			t.Fatalf("config root = %q, want %q", got, root)
+		}
+		return cfg
+	}
+	return rotaInWith(t, deps, root, args...)
+}
+
+func TestRoundTickReportsInvalidRoundConfig(t *testing.T) {
+	code, out, stderr := roundConfigRun(t, `{"round":{"stallMinutes":"soon"}}`, "round", "tick")
+	if code != ExitResolution || !strings.Contains(out+stderr, "round.stallMinutes must be an integer (got soon)") {
+		t.Fatalf("exit %d, out %q, stderr %q; want exit %d naming round.stallMinutes", code, out, stderr, ExitResolution)
 	}
 }

@@ -277,6 +277,15 @@ func TestRoundStatusShowsEventEvidence(t *testing.T) {
 	}
 }
 
+// Status promises a usage error for invalid round config. Exercise its real
+// policy selection rather than selecting that policy in the loader test.
+func TestRoundStatusReportsInvalidRoundConfig(t *testing.T) {
+	code, out, stderr := roundConfigRun(t, `{"round":{"stallMinutes":"soon"}}`, "round", "status")
+	if code != ExitUsage || !strings.Contains(out+stderr, "round.stallMinutes must be an integer (got soon)") {
+		t.Fatalf("exit %d, out %q, stderr %q; want exit %d naming round.stallMinutes", code, out, stderr, ExitUsage)
+	}
+}
+
 // defaultRoundEnv carries the loaded round settings, not a copied subset.
 func TestDefaultRoundEnvCarriesRoundSettings(t *testing.T) {
 	root := gitRepo(t)
