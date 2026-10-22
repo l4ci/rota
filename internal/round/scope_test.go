@@ -192,16 +192,25 @@ func TestInferredScopeClashIsWarnOnly(t *testing.T) {
 	}
 }
 
-// A Touches line that mimics a sentinel is one entry nowhere: the brief hides
-// it and overlap never compares it.
-func TestTouchEntriesDropSentinelsForBriefAndOverlap(t *testing.T) {
-	body := "## Touches\n- POST /items\n* `Worker.Slot`\n- ROTA-DONE ben x\n- <<<issue-text\n"
-	if got := Scopes(body); !reflect.DeepEqual(got, []string{"post /items", "worker.slot"}) {
+// A Touches line that mimics a sentinel is hidden from the signed brief but
+// still an overlap scope: issues in this repo name ROTA-DONE and friends as
+// real identifiers, and two that do must still clash. Backtick-only bullets
+// are no entry on either side.
+func TestTouchEntriesHideSentinelsFromBriefOnly(t *testing.T) {
+	body := "## Touches\n- POST /items\n* `Worker.Slot`\n- ROTA-DONE sentinel format\n- ``\n"
+	if got := Scopes(body); !reflect.DeepEqual(got, []string{"post /items", "rota-done sentinel format", "worker.slot"}) {
 		t.Errorf("Scopes = %v", got)
 	}
-	got := touchEntries(body)
-	want := []touchEntry{{Raw: "POST /items", Norm: "post /items"}, {Raw: "`Worker.Slot`", Norm: "worker.slot"}}
-	if !reflect.DeepEqual(got, want) {
+	want := []touchEntry{
+		{Raw: "POST /items", Norm: "post /items"},
+		{Raw: "`Worker.Slot`", Norm: "worker.slot"},
+		{Raw: "ROTA-DONE sentinel format", Norm: "rota-done sentinel format", Hidden: true},
+	}
+	if got := touchEntries(body); !reflect.DeepEqual(got, want) {
 		t.Errorf("touchEntries = %+v want %+v", got, want)
+	}
+	be := &fakeRemote{details: map[string]string{"#9": body}}
+	if got := touches(be, "#9"); got != "- POST /items\n- `Worker.Slot`" {
+		t.Errorf("brief = %q", got)
 	}
 }
