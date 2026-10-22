@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -99,5 +100,22 @@ func TestAutopilotTickLeaseCheckReadsInjectedEnv(t *testing.T) {
 	}
 	if !sawKey(*keys, "TMUX_PANE") {
 		t.Errorf("injected Getenv not consulted for the pane, saw %v", *keys)
+	}
+}
+
+// A lease lookup error is the guard's own unavailable error, not a "no lease" refusal.
+func TestLimitWatchGuardLookupErrorIsUnavailable(t *testing.T) {
+	c, root, cd, _ := heldLeaseDeps(t)
+	p := roundlease.Path(cd)
+	if err := os.Remove(p); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(p, 0o755); err != nil { // a directory where the file belongs: ReadFile fails
+		t.Fatal(err)
+	}
+	_, err := limitWatchGuard(c, root, cd)
+	var ce *Error
+	if !errors.As(err, &ce) || ce.Exit != ExitUnavailable {
+		t.Fatalf("lookup error: want ExitUnavailable, got %v", err)
 	}
 }
