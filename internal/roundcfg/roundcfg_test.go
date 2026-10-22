@@ -487,3 +487,20 @@ func TestScopesAreSchemaChoices(t *testing.T) {
 	}
 	t.Fatal("round.scope key not found")
 }
+
+// An invalid enum value is named in the error, whatever its JSON type (#1713, #1720).
+func TestEnumErrorNamesOffendingValue(t *testing.T) {
+	for cfg, want := range map[string]string{
+		`{"round":{"scope":"all"}}`:          "got all",
+		`{"round":{"scope":5}}`:              "got 5",
+		`{"round":{"scopeOverlap":"maybe"}}`: "got maybe",
+		`{"round":{"scopeOverlap":true}}`:    "got true",
+		`{"round":{"reviewLoop":"always"}}`:  "got always",
+		`{"round":{"reviewLoop":5}}`:         "got 5",
+		`{"round":{"reviewLoop":true}}`:      "got true",
+	} {
+		if _, err := Load(project(t, cfg)); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: want error containing %q, got %v", cfg, want, err)
+		}
+	}
+}
