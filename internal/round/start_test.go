@@ -48,14 +48,14 @@ func ids(cs []Candidate) []string {
 
 func TestDependencies(t *testing.T) {
 	body := "## Goal\nx\n\n## Depends on\n\n- #57 (C1)\n- #58\n- owner/repo#9\n- https://example.com/x/1\n- B07\n\n## Acceptance\n- #99 is not a dependency\n"
-	refs, bad := Dependencies(body)
+	refs, bad := dependencies(body, "")
 	if !reflect.DeepEqual(refs, []string{"57", "58", "B07"}) {
 		t.Errorf("refs %v", refs)
 	}
 	if !reflect.DeepEqual(bad, []string{"owner/repo#9", "https://example.com/x/1"}) {
 		t.Errorf("unverifiable %v", bad)
 	}
-	if r, b := Dependencies("no section here #5"); r != nil || b != nil {
+	if r, b := dependencies("no section here #5", ""); r != nil || b != nil {
 		t.Errorf("no section means no dependencies: %v %v", r, b)
 	}
 }
@@ -486,7 +486,7 @@ func TestItemBodyRoundTrip(t *testing.T) {
 	body := []byte("## Goal\nx\n\n### Depends on is not a dependency here\n")
 	body = itembody.AppendDependsOn(body, []string{"#57", "B07"})
 	body = itembody.AppendFiles(body, []string{"internal/cli/item.go", "internal/new/*.go"})
-	refs, bad := Dependencies(string(body))
+	refs, bad := dependencies(string(body), "")
 	if !reflect.DeepEqual(refs, []string{"57", "B07"}) || bad != nil {
 		t.Errorf("depends read back %v %v", refs, bad)
 	}
