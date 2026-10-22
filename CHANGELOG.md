@@ -1,13 +1,39 @@
 # Changelog
 
-## Unreleased
+## v0.22.0 — 2026-10-22
+
+Bundles of small issues for one worker, one follow-up item per PR for deferred review findings, and milestones seeded from a concept doc.
+
+### New
+
+- **Bundles.** `rota round assign <lead> --bundle <id>,<id>` hands one slot a lead issue plus up to `round.bundleMax` (default 3) related issues. They ship in one branch and one PR. `worker done`, `review depth` and the gate's closes check cover every issue in the bundle, and a bounce counts once on the lead. `round status` shows the bundle as `1559 (+#1563, +#1564)`. A member leaves the bundle by transfer to the human or by closing (#1592).
+- **One follow-up per PR.** `rota verdict add --file-deferred` now collects a PR's deferred findings in one item, "Review follow-ups from PR #N". Later verdicts on the same PR add to it, under a per-PR lock. The new `review.fileDeferred` key (`minor` by default, or `major` or `off`) sets which findings get filed (#1599).
+- **Concept docs seed milestones.** `/rota-vision` finds a concept or brief document in the repo and splits it into milestones. Each seeded milestone carries a `Source: <path>#<heading>` line, so later runs know which parts are covered (#1587).
+- Deferred follow-up items wait until their source PR merges or is closed, so they never reach a worker ahead of the code they review.
 
 ### Changed
 
-- `rota verdict add --file-deferred` files one follow-up item per PR ("Review follow-ups from PR #N") instead of one per finding; a later verdict on the same PR appends to it. `review.fileDeferred` (`minor` default, `major`, `off`) sets the severity floor. `data.filed` names the item, `data.appended` counts the new lines. The `skipped` field is gone from the verdict add JSON (#1599).
-- File-mode proof rows move from the tracked detail file to a gitignored `.rota/<bugs|features|tasks>/<ID>.proof` sidecar (#1547), so `rota proof record` no longer dirties the worktree and `worker done` is not refused by its own proof. Rows already in a detail file are still read and seed the sidecar on first write. Re-run `rota init` to add the `.rota/**/*.proof` ignore rule; until then the sidecar shows as untracked, and the doctor warns about the missing line. File-mode proof is no longer committed with the item.
+- File-mode proof rows move to a gitignored `.rota/<kind>/<ID>.proof` sidecar, so `rota proof record` no longer dirties the worktree. Run `rota init` again to add the ignore rule (#1547).
+- `rota item create --milestone` and `item field set --name milestone` refuse an unknown milestone with exit 3 on the file backend too. This used to be a silent write (#1588).
+- `rota worker done` refuses a dirty or unpushed branch and reports done only after the PR exists.
+- The train nudge leaves out merged PRs, bounced PRs and PRs with blocking findings. `review depth` reports when the depth rose after the last review, and `verdict add` says when that leaves a verdict missing.
+- `verdict add` JSON: `skipped` is gone, and `filed`, `appended` and `filedWhy` describe the follow-up item.
 
-- `rota item create --milestone` and `rota item field set --name milestone` now refuse an unknown milestone ID with exit 3 on the file backend too (was a silent write). Trackers keep exit 3 with a clearer message. Both errors name the ID and point at `rota milestone list`. Clearing the field still needs no milestone (#1588).
+### Fixed
+
+- A gate verdict's request receipt is settled, so a same-id retry replays the verdict instead of hanging pending. Retry hints no longer suggest a retry that would be refused.
+- `config set` (and the TUI config screen) report an autonomy rewrite even when the set after it fails.
+- Contradiction timestamps, design, spike, plan and knowledge-hit stamps all come from one clock.
+
+### Internal
+
+- Config is read through injected seams in round, escalation, gate, knowledge, agents and postgate. The pane classifier moved out of `worker/poll.go`. Contributor contract docs were re-verified against the code and restamped.
+- A new smoke section covers bundles end to end.
+
+## Stats
+98 commits, 163 files changed, +6123 −2293 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.21.0...v0.22.0
 
 ## v0.21.0 — 2026-10-21
 
