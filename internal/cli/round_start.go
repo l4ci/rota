@@ -155,7 +155,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Usage("%s", err.Error())
 		}
-		if res, err := supportRoundStartStop(root, set); err != nil {
+		if res, err := supportRoundStartStop(c, root, set); err != nil {
 			return res, err
 		}
 		// Empty when --scope was not given: Start keeps a renewed round's scope.
