@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/overlap"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -73,6 +74,19 @@ func TestFootprint(t *testing.T) {
 	got = Footprint(explicit, tracked, []string{"docs/contributing/contract/README.md"})
 	if !reflect.DeepEqual(got, []string{"internal/new/*.go", "internal/worker/pool.go"}) {
 		t.Errorf("explicit %v", got)
+	}
+}
+
+// TestFootprintStripsDotSlash: a `./` entry in ## Files must come out in the
+// same shape as an inferred one, or it misses a real clash in overlap.Paths.
+func TestFootprintStripsDotSlash(t *testing.T) {
+	got := Footprint("## Files\n- `./internal/cli/round.go`\n- ././internal/worker/\n- ./\n", tracked, nil)
+	want := []string{"internal/cli/round.go", "internal/worker/"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v want %v", got, want)
+	}
+	if hit := overlap.Paths(got, []string{"internal/cli/round.go"}); len(hit) != 1 {
+		t.Errorf("./ entry must clash with the open PR file: %v", hit)
 	}
 }
 
