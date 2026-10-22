@@ -302,7 +302,7 @@ func (e Env) openPRs(ctx context.Context, root string) (prs []tracker.PR, ok boo
 		return nil, false
 	}
 	cfg := e.GateConfig(root)
-	provider := e.detectProvider(ctx, root, "", cfg.Tracker.Provider)
+	provider, _ := e.detectProvider(ctx, root, "", cfg.Tracker.Provider, tracker.ForgeReader) // a reader never fails
 	if provider == tracker.ProviderLocal {
 		return nil, false
 	}
@@ -363,7 +363,7 @@ func (e Env) prMerged(ctx context.Context, root string, s *Slot) bool {
 		return false
 	}
 	cfg := e.GateConfig(root)
-	provider := e.detectProvider(ctx, root, "", cfg.Tracker.Provider)
+	provider, _ := e.detectProvider(ctx, root, "", cfg.Tracker.Provider, tracker.ForgeReader) // a reader never fails
 	if provider == tracker.ProviderLocal {
 		return false
 	}

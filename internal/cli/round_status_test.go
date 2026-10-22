@@ -277,16 +277,12 @@ func TestRoundStatusShowsEventEvidence(t *testing.T) {
 	}
 }
 
-// A bad round.* key reaches the user: status and reconcile fail with a usage
-// error (exit 2) naming the key, instead of running with zero values.
-func TestRoundStatusAndReconcileReportInvalidRoundConfig(t *testing.T) {
-	root := gitRepo(t)
-	write(t, filepath.Join(root, ".rota", "config.json"), `{"round":{"stallMinutes":"soon"}}`)
-	for _, verb := range []string{"status", "reconcile"} {
-		code, out, errOut := rotaInWith(t, testDeps(), root, "round", verb)
-		if code != ExitUsage || !strings.Contains(out+errOut, "round.stallMinutes") {
-			t.Errorf("%s: exit %d, out %q, err %q; want exit %d naming round.stallMinutes", verb, code, out, errOut, ExitUsage)
-		}
+// Status promises a usage error for invalid round config. Exercise its real
+// policy selection rather than selecting that policy in the loader test.
+func TestRoundStatusReportsInvalidRoundConfig(t *testing.T) {
+	code, out, stderr := roundConfigRun(t, `{"round":{"stallMinutes":"soon"}}`, "round", "status")
+	if code != ExitUsage || !strings.Contains(out+stderr, "round.stallMinutes must be an integer (got soon)") {
+		t.Fatalf("exit %d, out %q, stderr %q; want exit %d naming round.stallMinutes", code, out, stderr, ExitUsage)
 	}
 }
 

@@ -374,6 +374,13 @@ func TestReleaseHostParity(t *testing.T) {
 			gitT(t, dir, "remote", "add", "origin", url)
 		}
 		o := trRun(t, dir, "", "release", "host", "--json")
+		if o.code == ExitRefused { // an actor refuses an origin naming no forge
+			if d, _ := envelope(t, o.stdout)["data"].(map[string]any); d["blockedBy"] != "forge" {
+				t.Errorf("%q: refusal %v", url, o.stdout)
+			}
+			got = append(got, "refused: blockedBy forge")
+			continue
+		}
 		if o.code != 0 {
 			t.Errorf("%q: exit %d %v", url, o.code, o.stdout)
 		}

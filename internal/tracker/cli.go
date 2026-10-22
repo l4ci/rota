@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os/exec"
 	"regexp"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/connections"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/projects"
 )
@@ -87,46 +89,117 @@ func osExec(ctx context.Context, dir, name string, args []string, stdin []byte) 
 	return []byte(res.Stdout), []byte(res.Stderr), res.ExitCode, nil
 }
 
-// ResolveProvider picks the forge: want (a --provider value) unless it is ""
-// or "auto", then configured (forge.provider) on the same terms, then
-// origin-URL detection in dir. The answer is "github", "gitlab" or "local": a
-// local forge is chosen by configuration, or by auto with no origin remote at
-// all. An origin that names no forge is KindUnavailable (set forge.provider).
-func ResolveProvider(ctx context.Context, want, configured, dir string, x Exec) (string, error) {
-	c := &CLI{Dir: dir, Exec: x}
-	return c.resolveForge(ctx, want, configured)
+// ForgeKind is who asks which forge a directory uses. It decides one case
+// alone, an origin remote that names no forge; see ResolveProvider.
+type ForgeKind int
+
+const (
+	// ForgeActor is a verb that must act on a real forge: worker gate, worker
+	// train, ship pr and release.
+	ForgeActor ForgeKind = iota
+	// ForgeReader is a read-only or display path: doctor, issues provider
+	// and the round poll's best-effort PR reads.
+	ForgeReader
+)
+
+// How a Resolution found its provider.
+const (
+	HowFlag     = "flag"      // the want argument, a --provider value
+	HowConfig   = "config"    // forge.provider
+	HowOrigin   = "origin"    // the origin host names the forge
+	HowNoOrigin = "no-origin" // no origin remote: the local forge
+	HowAssumed  = "assumed"   // a reader's github for an origin naming no forge
+)
+
+// Resolution is the forge a directory uses and how it was found.
+type Resolution struct {
+	// Provider is "github", "gitlab" or "local".
+	Provider string
+	// How is one of the How* constants.
+	How string
+	// Origin is the origin URL read, "" when a named provider decided or
+	// there is no origin.
+	Origin string
 }
 
-// resolve is resolveForge for a caller that needs a forge CLI: a local forge
+// ErrUnknownForge is what an UnknownForgeError Is: an origin naming no forge,
+// met by a ForgeActor.
+var ErrUnknownForge = errors.New("the origin names no forge")
+
+// UnknownForgeHint is the one fix for an UnknownForgeError.
+const UnknownForgeHint = "set forge.provider to github, gitlab or local"
+
+// UnknownForgeError is ResolveProvider's refusal for an actor whose origin
+// names no forge. The CLI exits 4 with it, blockedBy forge (exitmap).
+type UnknownForgeError struct {
+	// Origin is the origin URL that names no forge.
+	Origin string
+}
+
+func (e *UnknownForgeError) Error() string {
+	return "cannot determine the forge from origin " + e.Origin + " (set forge.provider)"
+}
+
+// Is makes errors.Is(err, ErrUnknownForge) true.
+func (e *UnknownForgeError) Is(target error) bool { return target == ErrUnknownForge }
+
+// Note is the one line a reader prints when it assumed github, "" otherwise.
+func (r Resolution) Note() string {
+	if r.How != HowAssumed {
+		return ""
+	}
+	return "origin " + r.Origin + " names no forge; assumed github (set forge.provider)"
+}
+
+// ResolveProvider is the one answer to "which forge does dir use". want (a
+// --provider value) decides unless it is "" or "auto", then configured
+// (forge.provider) on the same terms, then the origin host: one naming github
+// or gitlab is that forge. The fallback rule, per caller kind:
+//
+//   - no origin remote at all is the local forge, for both kinds;
+//   - an origin naming no forge is an *UnknownForgeError for a ForgeActor
+//     (the message names the origin; the CLI refuses with exit 4, blockedBy
+//     forge), and github for a ForgeReader, with How HowAssumed so the verb
+//     prints Note.
+func ResolveProvider(ctx context.Context, kind ForgeKind, want, configured, dir string, x Exec) (Resolution, error) {
+	c := &CLI{Dir: dir, Exec: x}
+	return c.resolveForge(ctx, kind, want, configured)
+}
+
+// resolve is resolveForge for an actor that needs a forge CLI: a local forge
 // is ErrLocalForge.
 func (c *CLI) resolve(ctx context.Context, want, configured string) (string, error) {
-	p, err := c.resolveForge(ctx, want, configured)
+	r, err := c.resolveForge(ctx, ForgeActor, want, configured)
 	if err != nil {
 		return "", err
 	}
-	if p == "local" {
+	if r.Provider == ProviderLocal {
 		return "", ErrLocalForge
 	}
-	return p, nil
+	return r.Provider, nil
 }
 
-func (c *CLI) resolveForge(ctx context.Context, want, configured string) (string, error) {
-	p := want
-	if p == "" || p == "auto" {
-		p = configured
-	}
-	switch p {
-	case "github", "gitlab", "local":
-		return p, nil
+func (c *CLI) resolveForge(ctx context.Context, kind ForgeKind, want, configured string) (Resolution, error) {
+	for _, n := range []struct{ p, how string }{{want, HowFlag}, {configured, HowConfig}} {
+		switch n.p {
+		case "github", "gitlab", ProviderLocal:
+			return Resolution{Provider: n.p, How: n.how}, nil
+		}
+		if n.p != "" && n.p != "auto" {
+			break // an unknown value is not a choice: detect from origin
+		}
 	}
 	origin := c.originURL(ctx)
-	if p = ProviderFromURL(origin); p == ProviderUnknown {
-		if origin == "" {
-			return "local", nil
-		}
-		return "", unavailable("cannot determine the forge from origin %s (set forge.provider)", origin)
+	if p := ProviderFromURL(origin); p != ProviderUnknown {
+		return Resolution{Provider: p, How: HowOrigin, Origin: origin}, nil
 	}
-	return p, nil
+	if origin == "" {
+		return Resolution{Provider: ProviderLocal, How: HowNoOrigin}, nil
+	}
+	if kind == ForgeReader {
+		return Resolution{Provider: "github", How: HowAssumed, Origin: origin}, nil
+	}
+	return Resolution{}, &UnknownForgeError{Origin: origin}
 }
 
 // resolveIssues picks the provider of an issue tracker: want unless it is
@@ -147,9 +220,8 @@ func (c *CLI) resolveIssues(ctx context.Context, want, configured string) (strin
 	return p, nil
 }
 
-// ProviderUnknown is the one answer for a remote naming no forge. Callers
-// pick their own policy for it: skip (doctor), fall back to github (the gate),
-// or report it (rota issues provider).
+// ProviderUnknown is ProviderFromURL's answer for a remote naming no forge.
+// What a caller does with it is ResolveProvider's rule, not the caller's.
 const ProviderUnknown = "unknown"
 
 // ProviderLocal is the answer for a forge with no remote: forge.provider local,
@@ -168,6 +240,22 @@ func RemoteHost(url string) string {
 	return strings.ToLower(host)
 }
 
+// GitExec is r as an Exec, for a caller whose origin read goes through its own
+// git seam (a git.Runner a test fakes) rather than the forge executor. It runs
+// git only.
+func GitExec(r git.Runner) Exec {
+	return func(ctx context.Context, dir, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
+		if name != "git" {
+			return nil, nil, 0, fmt.Errorf("tracker: GitExec runs git, not %s", name)
+		}
+		res, err := r(ctx, dir, args...)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		return []byte(res.Stdout), []byte(res.Stderr), res.ExitCode, nil
+	}
+}
+
 // OriginURL is dir's origin remote URL, "" when git fails or has no origin.
 func OriginURL(ctx context.Context, dir string, x Exec) string {
 	c := &CLI{Dir: dir, Exec: x}
@@ -182,19 +270,6 @@ func (c *CLI) originURL(ctx context.Context) string {
 		return ""
 	}
 	return strings.TrimRight(string(out), "\n")
-}
-
-// ProviderFromOrigin classifies origin and falls back to configured
-// (forge.provider) when origin is empty or names no forge. The origin host
-// decides, as in hv-issues-provider. ProviderUnknown when neither resolves.
-func ProviderFromOrigin(origin, configured string) string {
-	if p := ProviderFromURL(origin); p != ProviderUnknown {
-		return p
-	}
-	if configured == "github" || configured == "gitlab" {
-		return configured
-	}
-	return ProviderUnknown
 }
 
 // CLIName is the forge CLI binary for provider: glab for "gitlab", gh otherwise.
