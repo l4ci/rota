@@ -447,6 +447,32 @@ func TestCodexCheckTiersSet(t *testing.T) {
 	}
 }
 
+// With no tier set, the note names the models a worker starts with: the
+// shipped defaults, or Codex's own default once all three are emptied (#1602).
+func TestCodexCheckUnsetTiersNamesEffectiveModels(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		models []string
+		want   string
+		not    string
+	}{
+		{"shipped defaults", []string{"light=gpt-6-luna", "standard=gpt-6.1-sol", "heavy=gpt-6-astra"}, "workers use light=gpt-6-luna, standard=gpt-6.1-sol, heavy=gpt-6-astra", "default model"},
+		{"emptied", nil, "workers use Codex's default model", "gpt-6"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &codexFake{fake: fake{have: map[string]bool{"codex": true}, reply: map[string]Result{"codex --version": {Stdout: "codex-cli 0.159.2\n"}}}}
+			in := codexIn([]Home{{}}, false)
+			k := in[harness.Codex]
+			k.Models = tc.models
+			in[harness.Codex] = k
+			c := statusOf(Run(context.Background(), Input{Kinds: in, Exec: f.exec, Look: f.look}), "codex")
+			if c.Status != Pass || !strings.Contains(c.Detail, tc.want) || strings.Contains(c.Detail, tc.not) {
+				t.Errorf("%+v", c)
+			}
+		})
+	}
+}
+
 // codexFake records the CODEX_HOME each call ran with.
 type codexFake struct {
 	fake
