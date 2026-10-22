@@ -63,7 +63,7 @@ func PickOf(caps backlog.Capabilities, it backlog.Item) (Pick, error) {
 		}
 		return p, nil
 	}
-	hs, ms := labelsWith(it.Labels, "harness:"), labelsWith(it.Labels, "model:")
+	hs, ms := labelsWith(it.Labels, harness.LabelPrefix), labelsWith(it.Labels, "model:")
 	if len(hs) > 1 {
 		return p, blocked(BlockHarnessLabel, "%s has more than one harness: label (%s): keep one", it.ID, strings.Join(hs, ", "))
 	}
@@ -71,8 +71,8 @@ func PickOf(caps backlog.Capabilities, it backlog.Item) (Pick, error) {
 		return p, blocked(BlockModelLabel, "%s has more than one model: label (%s): keep one", it.ID, strings.Join(ms, ", "))
 	}
 	if len(hs) == 1 {
-		v := strings.TrimPrefix(hs[0], "harness:")
-		if !harness.Valid(v) {
+		v := harness.FromLabels(hs)
+		if v == "" {
 			return p, blocked(BlockHarnessLabel, "%s has label %s: harness must be one of %s", it.ID, hs[0], strings.Join(harness.Kinds(), ", "))
 		}
 		p.Harness = v
