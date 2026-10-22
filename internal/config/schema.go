@@ -166,7 +166,9 @@ func Backend(cfg any) (string, error) {
 // as "inProgress" or "types.bug". The "inProgress" role falls back to the
 // legacy issues.label when issues.labels.inProgress is unset. A non-string
 // setting or an unknown role yields "", which no tracker label equals; Python
-// would hand back the raw value or raise KeyError there.
+// would hand back the raw value or raise KeyError there. An explicit "" is
+// returned as is: it does not fall back to the default, and callers do not
+// substitute one.
 func Label(cfg any, role string) string {
 	if role == "inProgress" {
 		if _, ok := walk(cfg, "issues.labels.inProgress"); !ok {
