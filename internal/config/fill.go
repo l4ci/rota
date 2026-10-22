@@ -198,10 +198,12 @@ func migrateLegacyVerify(cfg *jsonx.Object) (*jsonx.Object, bool, bool) {
 // RemovedKeys are keys older `rota init` runs seeded that nothing reads any
 // more. `config check` names them and `config fill` deletes them.
 // round.autopilot went with #1101: autonomy.level auto turns the tick on.
-var RemovedKeys = []string{"issues.filterMineOnly", "issues.providers.github", "issues.providers.gitlab", "round.autopilot"}
+// debug.competingHypotheses was never read (CHANGELOG).
+var RemovedKeys = []string{"issues.filterMineOnly", "issues.providers.github", "issues.providers.gitlab", "round.autopilot", "debug.competingHypotheses"}
 
 // stripRemoved deletes every RemovedKeys entry present in cfg, drops a parent
-// object that ends up empty (issues.providers) and returns the keys it removed.
+// object that ends up empty (issues.providers, debug) and returns the keys it
+// removed.
 func stripRemoved(cfg *jsonx.Object) []string {
 	var out []string
 	for _, k := range RemovedKeys {
@@ -220,6 +222,9 @@ func stripRemoved(cfg *jsonx.Object) []string {
 		}
 		parent.Delete(segs[len(segs)-1])
 		out = append(out, k)
+	}
+	if d, ok := getObject(cfg, "debug"); ok && len(d.Keys()) == 0 {
+		cfg.Delete("debug")
 	}
 	if issues, ok := getObject(cfg, "issues"); ok {
 		if p, ok := getObject(issues, "providers"); ok && len(p.Keys()) == 0 {

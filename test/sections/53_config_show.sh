@@ -42,8 +42,9 @@ RC=0; V=$( cd "$CS" && hvj config check 2>/dev/null ) || RC=$?
 echo "$V" | python3 -c '
 import json, sys
 missing = json.load(sys.stdin)["data"]["missing"]
-for want in ("round.dispatch", "ship.secondOpinionRunner"):
+for want in ("learn.promoteThreshold", "docs.path"):
     assert want in missing, (want, missing)
+assert "round.dispatch" not in missing, ("machine key required", missing)
 for k in missing:
     assert not k.startswith("release.") and k != "issues.label", ("non-required key leaked", k)
 ' || fail "T118: config check missing list should name required table keys, got: $V"

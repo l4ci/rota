@@ -89,13 +89,29 @@ func globalDir(c *Ctx) (string, error) {
 
 func configShow(fs *flag.FlagSet) RunFunc {
 	global := fs.Bool("global", false, "show the global config's own values instead of the project's")
+	local := fs.Bool("local", false, "show .rota/config.local.json's own values instead of the merged ones")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := argCount(c, args, 0, 1, "config show takes at most one key"); err != nil {
 			return Result{}, err
 		}
+		if *global && *local {
+			return Result{}, Usage("--global and --local are separate layers: pass one")
+		}
 		key := ""
 		if len(args) == 1 {
 			key = args[0]
+		}
+		if *local {
+			root, err := backlogScope(c)
+			if err != nil {
+				return Result{}, err
+			}
+			entries, err := config.ShowLocal(root, key, len(args) == 1)
+			if err != nil {
+				return Result{}, Resolution("unknown config key '%s'", key)
+			}
+			rows, lines := showRows(entries)
+			return Result{Data: jsonObj("scope", "local", "entries", rows), Text: strings.Join(lines, "\n")}, nil
 		}
 		if *global || atHome(c) {
 			dir, err := globalDir(c)
@@ -136,6 +152,7 @@ func showRows(entries []config.Entry) (rows []any, lines []string) {
 			row.Set("global", e.Global)
 		}
 		if sk := e.Schema; sk != nil {
+			row.Set("scope", string(sk.Scope))
 			row.Set("default", config.Default(*sk))
 			row.Set("type", string(sk.Type))
 			row.Set("group", sk.Group)
@@ -214,15 +231,23 @@ func configSaveGlobal(fs *flag.FlagSet) RunFunc {
 }
 
 func configSet(fs *flag.FlagSet) RunFunc {
-	global := fs.Bool("global", false, "write the global config instead of .rota/config.json")
+	global := fs.Bool("global", false, "write the global config")
+	local := fs.Bool("local", false, "write .rota/config.local.json, this machine only (the default for a machine key)")
+	project := fs.Bool("project", false, "write the tracked .rota/config.json (the default for a project or taste key)")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := argCount(c, args, 2, 2, "config set takes a key and a value"); err != nil {
 			return Result{}, err
 		}
+		if (*global && *local) || (*global && *project) || (*local && *project) {
+			return Result{}, Usage("--global, --local and --project each name one layer: pass at most one")
+		}
 		var res config.SetResult
 		var err error
 		scope := "project"
-		if *global || atHome(c) {
+		keyScope := config.ScopeOf(args[0])
+		routed := false // a machine key sent to the local file by its scope, not by --local
+		pinned := false // a machine key pinned in the tracked file by --project
+		if *global || (atHome(c) && !*local && !*project) {
 			scope = "global"
 			var dir string
 			if dir, err = globalDir(c); err != nil {
@@ -234,7 +259,11 @@ func configSet(fs *flag.FlagSet) RunFunc {
 			if root, err = backlogScope(c); err != nil {
 				return Result{}, err
 			}
-			if args[0] != "round.role" {
+			if args[0] == "round.role" && *project {
+				return Result{}, Usage("round.role belongs to one machine: set it without --project")
+			}
+			layer := config.LayerFor(args[0], *project, *local)
+			if layer == config.LayerProject {
 				// A tracked key goes to main through config.json; a support machine writes none.
 				if res, err := supportRefusal(c, root, "rota config set "+args[0]); err != nil {
 					return res, err
@@ -249,13 +278,13 @@ func configSet(fs *flag.FlagSet) RunFunc {
 					return supportFileModeStop()
 				}
 			}
-			if args[0] == "round.role" {
-				// The role belongs to one machine: config.local.json only.
+			if layer == config.LayerLocal {
 				scope = "local"
-				res, err = config.SetIn(root, args[0], args[1], config.LayerLocal)
-			} else {
-				res, err = config.Set(root, args[0], args[1])
+				routed = !*local
+			} else if keyScope == config.ScopeMachine {
+				pinned = true
 			}
+			res, err = config.SetIn(root, args[0], args[1], layer)
 		}
 		if err != nil {
 			// A failed set may follow a rewrite that already hit disk (#1524).
@@ -265,6 +294,9 @@ func configSet(fs *flag.FlagSet) RunFunc {
 		}
 		switch {
 		case err == nil:
+			if pinned {
+				c.Warn("%s is a machine key: --project pinned it in the tracked .rota/config.json, where it shadows every developer's global config", args[0])
+			}
 		case errors.Is(err, config.ErrMalformedKey), errors.Is(err, config.ErrNotSchemaKey), errors.Is(err, config.ErrBadValue), errors.Is(err, config.ErrProjectOwned):
 			return Result{}, Usage("%s", err.Error())
 		case errors.Is(err, config.ErrNotObject), errors.Is(err, config.ErrGlobalNotObject), errors.Is(err, fsio.ErrUnreadable):
@@ -277,11 +309,18 @@ func configSet(fs *flag.FlagSet) RunFunc {
 			data.Set("previous", res.Previous)
 		}
 		data.Set("changed", res.Changed)
+		if keyScope != "" {
+			data.Set("keyScope", string(keyScope))
+		}
 		b, _ := jsonx.MarshalCompact(res.Value)
 		text := args[0] + " = " + string(b)
 		if scope == "local" {
 			data.Set("scope", "local")
-			text = "local: " + text + " (.rota/config.local.json, this machine only)"
+			if routed {
+				text = "local: " + text + " (.rota/config.local.json: a machine key, this machine only; --project writes the tracked config)"
+			} else {
+				text = "local: " + text + " (.rota/config.local.json, this machine only)"
+			}
 		}
 		if scope == "global" {
 			data.Set("scope", "global")
@@ -322,7 +361,8 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		if len(removed) > 0 {
 			res.Text += "\nREMOVED: " + strings.Join(removed, ", ") + " (nothing reads them; run: rota config fill)"
 		}
-		if old := config.LegacyRoundKeys(c.deps().Config(root)); len(old) > 0 {
+		old := config.LegacyRoundKeys(c.deps().Config(root))
+		if len(old) > 0 {
 			data.Set("unknown", anySlice(old))
 			var names []string
 			for _, k := range old {
@@ -330,9 +370,21 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 			}
 			res.Text += "\nUNKNOWN: " + strings.Join(names, ", ") + " (nothing reads the old names; run: rota migrate config --apply, or rota config fill)"
 		}
+		unknown := append(old, config.Unknown(root)...)
+		if len(unknown) > len(old) {
+			data.Set("unknown", anySlice(unknown))
+			for _, k := range unknown[len(old):] {
+				res.Text += "\nunknown: " + k + " (not a config key; nothing reads it)"
+			}
+		}
 		if legacy := config.Legacy(root); len(legacy) > 0 {
 			data.Set("legacy", anySlice(legacy))
 			res.Text += "\nLEGACY: " + strings.Join(legacy, ", ") + " (replaced by issues.source and forge.provider; run: rota migrate source --apply, or rota config fill)"
+		}
+		warnings := config.Warnings(root)
+		data.Set("warnings", anySlice(warnings))
+		for _, w := range warnings {
+			res.Text += "\nwarn: " + w
 		}
 		if gerr := config.GlobalError(); gerr != nil && status == config.Stale {
 			data.Set("globalCorrupt", gerr.Error())
@@ -347,6 +399,10 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		}
 		switch status {
 		case config.UpToDate:
+			// The old work.* round names are a known rename, reported but not failed.
+			if fresh := unknown[len(old):]; len(fresh) > 0 {
+				return res, Failed("config holds %d unknown keys: %s", len(fresh), strings.Join(fresh, ", "))
+			}
 			return res, nil
 		case config.Stale:
 			return res, Failed("config is stale: %d required keys missing", len(missing))

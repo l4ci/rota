@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
@@ -10,16 +11,20 @@ import (
 )
 
 func configMigrateCommand() *Command {
-	return &Command{Name: "config", Summary: "move the round-only work.* keys to round.* in config.json and config.local.json (preview unless --apply)", Verb: migrateConfig}
+	return &Command{Name: "config", Summary: "move the round-only work.* keys to round.*, and machine and default taste keys out of config.json (preview unless --apply)", Verb: migrateConfig}
 }
 
 // migrateConfig is `rota migrate config` (#1097): every round-only key under
 // work.* moves to its round.* name in both config layers, value unchanged.
 // An old and a new name with different values refuse (exit 4) and nothing is
 // written. It is idempotent. `rota config fill` and `rota init` run the
-// same migration.
+// same migration. Then the scope step (#1786, config.MigrateScopeFiles) moves
+// machine keys out of config.json and drops taste keys pinned at their
+// default; --keep names keys it leaves in place.
 func migrateConfig(fs *flag.FlagSet) RunFunc {
 	apply := fs.Bool("apply", false, "write the changes; without it only report them")
+	var keep setAnswersList
+	fs.Var(&keep, "keep", "leave this key in .rota/config.json (repeatable, or comma-separated)")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := knNoArgs(args); err != nil {
 			return Result{}, err
@@ -32,10 +37,15 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return roundMigrationFail(err)
 		}
-		data := knObj("changed", m.Changed() && *apply, "planned", m.Changed(), "applied", *apply,
-			"config", renameList(m.Config), "local", renameList(m.Local))
-		if !m.Changed() {
-			return Result{Data: data, Text: "nothing to migrate: no round keys under work.*"}, nil
+		sm, err := config.MigrateScopeFiles(root, *apply, keep)
+		if err != nil {
+			return roundMigrationFail(err)
+		}
+		planned := m.Changed() || sm.Changed()
+		data := knObj("changed", planned && *apply, "planned", planned, "applied", *apply,
+			"config", renameList(m.Config), "local", renameList(m.Local), "scope", scopeList(sm))
+		if !planned {
+			return Result{Data: data, Text: "nothing to migrate: no round keys under work.*, no machine or default taste keys in .rota/config.json"}, nil
 		}
 		var lines []string
 		for _, l := range []struct {
@@ -46,12 +56,47 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 				lines = append(lines, l.file+"\t"+r.Old+" -> "+r.New)
 			}
 		}
+		for _, ch := range sm.Changes {
+			lines = append(lines, scopeLine(ch))
+		}
 		if !*apply {
 			c.Warn("preview only; pass --apply")
-			return Result{Data: data, Text: "would move:\n" + strings.Join(lines, "\n")}, nil
+			return Result{Data: data, Text: "would change:\n" + strings.Join(lines, "\n")}, nil
 		}
-		return Result{Data: data, Text: "moved:\n" + strings.Join(lines, "\n")}, nil
+		return Result{Data: data, Text: "changed:\n" + strings.Join(lines, "\n")}, nil
 	}
+}
+
+// setAnswersList is a repeatable flag whose values may also be comma-separated.
+type setAnswersList []string
+
+func (l *setAnswersList) String() string { return strings.Join(*l, ",") }
+func (l *setAnswersList) Set(v string) error {
+	for _, k := range strings.Split(v, ",") {
+		if k = strings.TrimSpace(k); k != "" {
+			*l = append(*l, k)
+		}
+	}
+	return nil
+}
+
+func scopeList(sm config.ScopeMigration) []any {
+	out := []any{}
+	for _, c := range sm.Changes {
+		out = append(out, knObj("key", c.Key, "action", c.Action, "reason", c.Reason, "before", c.Before, "after", c.After))
+	}
+	return out
+}
+
+// scopeLine is one scope change as text: `delete <key> (<reason>; <before> -> <after>)`
+// or `move <key> -> config.local.json (<before> -> <after>)`.
+func scopeLine(c config.ScopeChange) string {
+	b, _ := jsonx.MarshalCompact(c.Before)
+	a, _ := jsonx.MarshalCompact(c.After)
+	if c.Action == config.ScopeMove {
+		return fmt.Sprintf("move %s -> config.local.json (%s -> %s)", c.Key, b, a)
+	}
+	return fmt.Sprintf("delete %s (%s; %s -> %s)", c.Key, c.Reason, b, a)
 }
 
 func renameList(rs []config.Rename) []any {

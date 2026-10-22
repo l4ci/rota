@@ -170,11 +170,28 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 				out.Set(p.Key, config.Coerce(v))
 				continue
 			}
-			if _, err := config.Set(dir, p.Key, v); err != nil {
+			// A machine or taste answer at the value the project inherits pins
+			// nothing; one that differs goes where its scope says (#1786). A
+			// taste key reaches the tracked config only as a deliberate pin: a
+			// --set value, or a typed answer other than the suggestion. A signal
+			// or default taken by --yes or Enter stays a suggestion.
+			scope := config.ScopeOf(p.Key)
+			_, set := given[p.Key]
+			deliberate := set || (interactive && v != defs[p.Key])
+			_, has := globalVals[p.Key]
+			if (!has && scope != config.ScopeProject && v == p.DefaultChoice()) || (scope == config.ScopeTaste && !deliberate) {
+				out.Set(p.Key, config.Coerce(v))
+				continue
+			}
+			layer, where := config.LayerFor(p.Key, false, false), ""
+			if layer == config.LayerLocal {
+				where = " (config.local.json, this machine only)"
+			}
+			if _, err := config.SetIn(dir, p.Key, v, layer); err != nil {
 				return Result{}, err
 			}
 			out.Set(p.Key, config.Coerce(v))
-			lines = append(lines, fmt.Sprintf("set %s = %s", p.Key, v))
+			lines = append(lines, fmt.Sprintf("set %s = %s%s", p.Key, v, where))
 		}
 		root.Set("answers", out)
 		// A broken global file was already warned about; offering to save into it would fail.
