@@ -290,6 +290,7 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 | `test.fullWhere` | project (tracked) | enum | `"local"` | `local`, `ci` | Where the gate and train run the full tier: here, or by pushing the merge result and waiting for the forge's checks (needs test.ciChecks). |
 | `test.ciTimeoutMinutes` | project (tracked) | int | `60` |  | How long a ci run waits for its checks, 1 to 1440 minutes. ROTA_CI_TIMEOUT (seconds) overrides it for one run. |
 | `test.ciChecks` | project (tracked) | list | `[]` |  | Check names that must all succeed on the pushed commit under test.fullWhere ci: GitHub check-run names or commit-status contexts, GitLab job names. |
+| `test.slots` | machine (local) | int | `1` |  | How many heavy test runs may hold the machine-wide test lock at once, 1 or more. The merge gate, rota test run and rota proof record queue on it; a run that finds every slot taken waits and says so on stderr. |
 | `test.isolate` | project (tracked) | bool | `true` |  | Whether rota test run scrubs HERDR_*, TMUX*, ssh-agent variables and pins HOME and XDG_* to a temp root. The merge gate and train do not read it. |
 
 ### forge
@@ -374,7 +375,7 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 
 | Key | Scope | Type | Default | Values | Description |
 |-----|-------|------|---------|--------|-------------|
-| `gate.smokeShards` | machine (local) | int | `4` |  | Concurrent shards bash test/gate.sh splits the smoke suite into, 1 or more. ROTA_SMOKE_SHARDS overrides it for one run. |
+| `gate.smokeShards` | machine (local) | int | `4` |  | Concurrent shards bash test/gate.sh splits the smoke suite into, 1 or more. ROTA_SMOKE_SHARDS overrides it for one run. Unset, the gate uses one shard per two cores, at most four. |
 
 ### doctor
 
