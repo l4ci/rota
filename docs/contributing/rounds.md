@@ -220,6 +220,17 @@ roster prefix; `round.role` (local only, `.rota/config.local.json`) turns a mach
 support side. A support machine never merges and never writes tracked `.rota/` content; those
 verbs exit 4 `blockedBy: role` (the tables live in `internal/cli/support_fence.go`).
 
+Setting one up takes two steps and no hand edits:
+
+1. On main, `rota round support enable <name>` writes `round.support` to the tracked
+   `.rota/config.json`. Commit and push it. `rota round support disable` removes it.
+2. On the second machine, clone or pull the repo and run `rota setup`. Answer `support` to the
+   first question (or pass `--set round.role=support`). Setup checks that the tracked config names
+   a support machine and a tracker, asks only the machine-local questions (dispatch, autonomy,
+   worker and orchestrator harness), writes them with `round.role: support` to
+   `.rota/config.local.json` and ends with the doctor's first failing check, or `doctor: pass`.
+   Run it again to change an answer; it starts from the values already there.
+
 Knowledge travels through the tracker. A support worker posts each learning as a `learning`
 comment on the issue it came from (`rota item comment add <ID> --kind learning --body-file <f>`),
 never into `KNOWLEDGE.md`, and does not restamp the contract docs. A learning with no issue is

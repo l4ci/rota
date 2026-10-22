@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -40,9 +41,9 @@ func cfgValue(t *testing.T, dir, key string) any {
 
 func TestSetupInteractiveAppliesAnswers(t *testing.T) {
 	dir := t.TempDir()
-	// 1 file backend (by number), worktree by name, pr by number, default dispatch,
+	// main role, 1 file backend (by number), worktree by name, pr by number, default dispatch,
 	// default autonomy, review none, qa true, worker and orchestrator harness unset
-	in := "1\nworktree\n2\n\n\nnone\n2\n\n\n\n\n\n"
+	in := "\n1\nworktree\n2\n\n\nnone\n2\n\n\n\n\n\n"
 	code, _, errOut := setupRun(t, dir, in, true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
@@ -67,7 +68,7 @@ func TestSetupInteractiveAppliesAnswers(t *testing.T) {
 // unset, an answer writes it.
 func TestSetupHarnessQuestionsWriteOnlyAnswers(t *testing.T) {
 	skipped := t.TempDir()
-	if code, _, errOut := setupRun(t, skipped, "\n\n\n\n\n\n\n\n\n\n\n\n", true); code != 0 {
+	if code, _, errOut := setupRun(t, skipped, "\n\n\n\n\n\n\n\n\n\n\n\n\n", true); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
 	raw, err := os.ReadFile(filepath.Join(skipped, ".rota", "config.json"))
@@ -78,7 +79,7 @@ func TestSetupHarnessQuestionsWriteOnlyAnswers(t *testing.T) {
 		t.Errorf("an unanswered harness question wrote a key:\n%s", raw)
 	}
 	chosen := t.TempDir()
-	if code, _, errOut := setupRun(t, chosen, "\n\n\n\n\n\n\ncodex\n4\n\n\n\n", true); code != 0 {
+	if code, _, errOut := setupRun(t, chosen, "\n\n\n\n\n\n\n\ncodex\n4\n\n\n\n", true); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
 	if got := cfgValue(t, chosen, "round.workerKind"); got != harness.Codex {
@@ -100,7 +101,7 @@ func TestSetupHarnessQuestionsWriteOnlyAnswers(t *testing.T) {
 func TestSetupIssueSourceNamesTheTracker(t *testing.T) {
 	dir := t.TempDir()
 	// issues.source gitlab (3rd choice), then defaults for the rest
-	code, _, errOut := setupRun(t, dir, "3\n\n\n\n\n\n\n\n\n\n\n\n", true)
+	code, _, errOut := setupRun(t, dir, "\n3\n\n\n\n\n\n\n\n\n\n\n\n", true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
@@ -114,7 +115,7 @@ func TestSetupIssueSourceNamesTheTracker(t *testing.T) {
 
 func TestSetupRepromptsOnBadAnswer(t *testing.T) {
 	dir := t.TempDir()
-	code, _, errOut := setupRun(t, dir, "nope\n9\n\n\n\n\n\n\n\n\n\n\n\n\n", true)
+	code, _, errOut := setupRun(t, dir, "\nnope\n9\n\n\n\n\n\n\n\n\n\n\n\n\n", true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
@@ -125,7 +126,7 @@ func TestSetupRepromptsOnBadAnswer(t *testing.T) {
 
 func TestSetupEndOfInputWritesNothing(t *testing.T) {
 	dir := t.TempDir()
-	code, _, errOut := setupRun(t, dir, "1\n", true)
+	code, _, errOut := setupRun(t, dir, "\n1\n", true)
 	if code != ExitUsage {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
@@ -264,7 +265,7 @@ func globalFile(t *testing.T, gdir string) string {
 func TestSetupOffersSaveGlobalOnFirstUse(t *testing.T) {
 	gdir := isolateGlobal(t)
 	dir := t.TempDir()
-	in := "1\nworktree\n2\n\n\nnone\n2\n\n\n\n\n\ny\n"
+	in := "\n1\nworktree\n2\n\n\nnone\n2\n\n\n\n\n\ny\n"
 	code, _, errOut := setupRun(t, dir, in, true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
@@ -292,7 +293,7 @@ func TestSetupOffersSaveGlobalOnFirstUse(t *testing.T) {
 
 func TestSetupSaveGlobalDeclinedWritesNothing(t *testing.T) {
 	gdir := isolateGlobal(t)
-	in := "1\nworktree\n2\n\n\nnone\n2\n\n\n\n\n\nn\n"
+	in := "\n1\nworktree\n2\n\n\nnone\n2\n\n\n\n\n\nn\n"
 	if code, _, e := setupRun(t, t.TempDir(), in, true); code != 0 {
 		t.Fatalf("exit %d: %s", code, e)
 	}
@@ -307,7 +308,7 @@ func TestSetupOffersOnlyDifferingAnswers(t *testing.T) {
 	writeFile(t, config.GlobalPath(gdir), `{"work":{"isolation":"worktree"},"issues":{"source":"file"},"ship":{"qa":false}}`)
 	dir := t.TempDir()
 	// issues.source file (same), isolation worktree (default, same), pr, rest default, qa true (differs)
-	in := "\n\n2\n\n\nnone\n2\n\n\n\n\n\ny\n"
+	in := "\n\n\n2\n\n\nnone\n2\n\n\n\n\n\ny\n"
 	code, _, errOut := setupRun(t, dir, in, true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
@@ -351,7 +352,7 @@ func TestSetupSaveGlobalNonInteractive(t *testing.T) {
 func TestSetupCorruptGlobalSkipsOffer(t *testing.T) {
 	gdir := isolateGlobal(t)
 	writeFile(t, config.GlobalPath(gdir), `not json`)
-	in := "1\nworktree\n2\n\n\nnone\n2\n\n\n\n\n\ny\n"
+	in := "\n1\nworktree\n2\n\n\nnone\n2\n\n\n\n\n\ny\n"
 	code, _, errOut := setupRun(t, t.TempDir(), in, true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
@@ -380,4 +381,325 @@ func TestSetupYesMapsStaleGlobalAutoToRoundtrip(t *testing.T) {
 	if got := cfgValue(t, dir, "autonomy.level"); got != "roundtrip" {
 		t.Errorf("project autonomy.level = %v, want roundtrip", got)
 	}
+}
+
+// supportClone is a cloned project main has set up for a support machine:
+// a tracker and round.support in the tracked config.
+func supportClone(t *testing.T) (dir string, tracked []byte) {
+	t.Helper()
+	dir = trackerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`+"\n")
+	tracked, err := os.ReadFile(filepath.Join(dir, ".rota", "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir, tracked
+}
+
+func localConfig(t *testing.T, dir string) *jsonx.Object {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(dir, ".rota", "config.local.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := jsonx.Decode(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v.(*jsonx.Object)
+}
+
+// setupData is the data object of a --json envelope.
+func setupData(t *testing.T, out string) *jsonx.Object {
+	t.Helper()
+	v, err := jsonx.Decode([]byte(out))
+	if err != nil {
+		t.Fatalf("not JSON: %v: %s", err, out)
+	}
+	d, _ := v.(*jsonx.Object).Get("data")
+	o, ok := d.(*jsonx.Object)
+	if !ok {
+		t.Fatalf("no data object: %s", out)
+	}
+	return o
+}
+
+func assertTrackedUntouched(t *testing.T, dir string, tracked []byte) {
+	t.Helper()
+	if raw, _ := os.ReadFile(filepath.Join(dir, ".rota", "config.json")); !bytes.Equal(raw, tracked) {
+		t.Errorf("config.json changed:\n%s", raw)
+	}
+}
+
+// #1774 AC-2, AC-3: role support writes only config.local.json and asks only
+// the machine-local questions.
+func TestSetupSupportPath(t *testing.T) {
+	t.Run("set and yes", func(t *testing.T) {
+		dir, tracked := supportClone(t)
+		writeLocalConfig(t, dir, `{"keep":true}`+"\n")
+		code, out, errOut := setupRun(t, dir, "", false, "--json", "--yes", "--set", "round.role=support", "--set", "round.dispatch=tmux")
+		if code != 0 {
+			t.Fatalf("exit %d: %s", code, errOut)
+		}
+		assertTrackedUntouched(t, dir, tracked)
+		local := localConfig(t, dir)
+		for k, want := range map[string]any{"round.role": "support", "round.dispatch": "tmux", "autonomy.level": "off", "keep": true} {
+			if got, _ := config.Lookup(local, k); got != want {
+				t.Errorf("local %s = %v, want %v", k, got, want)
+			}
+		}
+		for _, k := range []string{"issues.source", "work.isolation", "ship.review", "round.workerKind"} {
+			if _, ok := config.Lookup(local, k); ok {
+				t.Errorf("local holds %s", k)
+			}
+		}
+		if role, _ := setupData(t, out).Get("role"); role != "support" {
+			t.Errorf("data.role = %v in %s", role, out)
+		}
+	})
+	t.Run("interactive", func(t *testing.T) {
+		isolateGlobal(t)
+		dir, tracked := supportClone(t)
+		// role support (2), then dispatch, autonomy, workerKind codex, harness.
+		code, _, errOut := setupRun(t, dir, "2\n\n\ncodex\n\n", true)
+		if code != 0 {
+			t.Fatalf("exit %d: %s", code, errOut)
+		}
+		assertTrackedUntouched(t, dir, tracked)
+		if got, _ := config.Lookup(localConfig(t, dir), "round.workerKind"); got != harness.Codex {
+			t.Errorf("local round.workerKind = %v", got)
+		}
+		for _, q := range []string{"Where do the issues live?", "How deep a review", "Which branch do the skills merge into?", "Save as global defaults?"} {
+			if strings.Contains(errOut, q) {
+				t.Errorf("support path asked %q:\n%s", q, errOut)
+			}
+		}
+	})
+	t.Run("main-only set refused", func(t *testing.T) {
+		dir, tracked := supportClone(t)
+		code, _, errOut := setupRun(t, dir, "", false, "--yes", "--set", "round.role=support", "--set", "issues.source=gitlab")
+		if code != ExitUsage || !strings.Contains(errOut, "issues.source") {
+			t.Errorf("exit %d: %s", code, errOut)
+		}
+		assertTrackedUntouched(t, dir, tracked)
+	})
+}
+
+// #1774 AC-4: the support path refuses before asking when main has not named
+// the support machine or the project has no tracker.
+func TestSetupSupportPathRefuses(t *testing.T) {
+	for _, tc := range []struct{ name, cfg, blockedBy, names string }{
+		{"no support name", `{"issues":{"source":"github"}}`, "config", "round.support"},
+		{"file backend", `{"round":{"support":"mac"}}`, "backend", "issues.source"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := trackerProject(t, tc.cfg+"\n")
+			code, out, errOut := setupRun(t, dir, "", false, "--json", "--set", "round.role=support")
+			if code != ExitRefused {
+				t.Fatalf("exit %d: %s %s", code, out, errOut)
+			}
+			if got, _ := setupData(t, out).Get("blockedBy"); got != tc.blockedBy {
+				t.Errorf("blockedBy = %v", got)
+			}
+			if !strings.Contains(out, tc.names) {
+				t.Errorf("refusal does not name %s: %s", tc.names, out)
+			}
+			if _, err := os.Stat(filepath.Join(dir, ".rota", "config.local.json")); err == nil {
+				t.Error("refused setup wrote config.local.json")
+			}
+		})
+	}
+	// Outside a clone there is no tracked round.support either.
+	empty := t.TempDir()
+	if code, _, errOut := setupRun(t, empty, "", false, "--set", "round.role=support"); code != ExitRefused || !strings.Contains(errOut, "round.support") {
+		t.Errorf("empty dir: exit %d: %s", code, errOut)
+	}
+	if _, err := os.Stat(filepath.Join(empty, ".rota")); err == nil {
+		t.Error("refused support setup ran init")
+	}
+}
+
+// The main path keeps round.role out of both config files: main is the
+// default, and the tracked config may not hold the key.
+func TestSetupMainPathWritesNoRole(t *testing.T) {
+	dir := t.TempDir()
+	if code, _, errOut := setupRun(t, dir, "", false, "--yes", "--set", "round.role=main"); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	raw, _ := os.ReadFile(filepath.Join(dir, ".rota", "config.json"))
+	if strings.Contains(string(raw), `"role"`) {
+		t.Errorf("config.json holds round.role:\n%s", raw)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".rota", "config.local.json")); err == nil {
+		t.Error("main path wrote config.local.json")
+	}
+}
+
+// AC-3: --list says which role each question serves.
+func TestSetupListRoles(t *testing.T) {
+	code, out, errOut := setupRun(t, t.TempDir(), "", false, "--list", "--json")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	list, _ := setupData(t, out).Get("questions")
+	roles := map[string]string{}
+	for _, q := range list.([]any) {
+		o := q.(*jsonx.Object)
+		k, _ := o.Get("key")
+		r, _ := o.Get("roles")
+		roles[k.(string)] = fmt.Sprint(r)
+	}
+	for k, want := range map[string]string{
+		"round.role": "[main support]", "round.dispatch": "[main support]", "autonomy.level": "[main support]",
+		"round.workerKind": "[main support]", "orchestrator.harness": "[main support]",
+		"issues.source": "[main]", "ship.review": "[main]", "test.fast": "[main]",
+	} {
+		if roles[k] != want {
+			t.Errorf("%s roles = %q, want %q", k, roles[k], want)
+		}
+	}
+	if first, _ := list.([]any)[0].(*jsonx.Object).Get("key"); first != "round.role" {
+		t.Errorf("first question = %v, want round.role", first)
+	}
+	_, text, _ := setupRun(t, t.TempDir(), "", false, "--list")
+	for _, line := range strings.Split(text, "\n") {
+		key, _, _ := strings.Cut(line, " ")
+		want := map[string]string{"round.role": "roles: both", "round.dispatch": "roles: both", "issues.source": "roles: main"}[key]
+		if want != "" && !strings.Contains(line, want) {
+			t.Errorf("--list line lacks %q: %s", want, line)
+		}
+	}
+}
+
+// #1774 T3: on a machine already set up as support, setup is not fenced: it
+// re-enters the support path, starts from the local answers and keeps them.
+func TestSetupRerunsOnSupportMachine(t *testing.T) {
+	dir, tracked := supportClone(t)
+	writeLocalConfig(t, dir, `{"round":{"role":"support","dispatch":"tmux"},"keep":true}`+"\n")
+	code, out, errOut := setupRun(t, dir, "", false, "--json", "--yes")
+	if code != 0 {
+		t.Fatalf("exit %d: %s %s", code, out, errOut)
+	}
+	assertTrackedUntouched(t, dir, tracked)
+	if role, _ := setupData(t, out).Get("role"); role != "support" {
+		t.Errorf("data.role = %v", role)
+	}
+	local := localConfig(t, dir)
+	for k, want := range map[string]any{"round.role": "support", "round.dispatch": "tmux", "keep": true} {
+		if got, _ := config.Lookup(local, k); got != want {
+			t.Errorf("local %s = %v, want %v", k, got, want)
+		}
+	}
+	// The main path stays refused on the initialized clone.
+	if code, _, errOut := setupRun(t, dir, "", false, "--yes", "--set", "round.role=main"); code != ExitRefused {
+		t.Errorf("main path on a clone: exit %d: %s", code, errOut)
+	}
+}
+
+// #1774 T3: the support path ends with the doctor's verdict, so the operator
+// sees what still blocks a support round.
+func TestSetupSupportPathRunsDoctor(t *testing.T) {
+	dir, _ := supportClone(t)
+	code, out, errOut := setupRun(t, dir, "", false, "--yes", "--set", "round.role=support")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	last := out[strings.LastIndex(strings.TrimRight(out, "\n"), "\n")+1:]
+	if !strings.HasPrefix(last, "doctor: ") {
+		t.Errorf("last line = %q, want a doctor: line:\n%s", last, out)
+	}
+	code, out, errOut = setupRun(t, dir, "", false, "--json", "--yes")
+	if code != 0 {
+		t.Fatalf("json: exit %d: %s", code, errOut)
+	}
+	doc, _ := setupData(t, out).Get("doctor")
+	o, ok := doc.(*jsonx.Object)
+	if !ok {
+		t.Fatalf("data.doctor = %v", doc)
+	}
+	pass, has := o.Get("ok")
+	if _, isBool := pass.(bool); !has || !isBool {
+		t.Fatalf("data.doctor.ok = %v (present %v)", pass, has)
+	}
+	if pass == false {
+		for _, k := range []string{"check", "hint"} {
+			if v, _ := o.Get(k); v == nil || v == "" {
+				t.Errorf("a failing doctor has empty %s: %v", k, o)
+			}
+		}
+	}
+}
+
+// A question the support path takes the default for starts from main's
+// tracked value, so the local answer never overrides it with the schema's.
+func TestSetupSupportPathDefaultsFromTrackedConfig(t *testing.T) {
+	dir := trackerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac","dispatch":"herdr"},"autonomy":{"level":"auto"}}`+"\n")
+	if code, _, errOut := setupRun(t, dir, "", false, "--yes", "--set", "round.role=support"); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	local := localConfig(t, dir)
+	for k, want := range map[string]any{"autonomy.level": "auto", "round.dispatch": "herdr"} {
+		if got, _ := config.Lookup(local, k); got != want {
+			t.Errorf("local %s = %v, want %v", k, got, want)
+		}
+	}
+}
+
+// Relay 1 on #1830: setup run from a subdirectory of a support clone acts on
+// the enclosing project. The main path is refused there as `rota init` is,
+// before anything is written; the support path writes the root's local file.
+func TestSetupFromSubdirOfSupportClone(t *testing.T) {
+	dir, tracked := supportClone(t)
+	writeLocalConfig(t, dir, `{"round":{"role":"support"}}`+"\n")
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errOut := setupRun(t, sub, "", false, "--json", "--yes", "--set", "round.role=main")
+	if code != ExitRefused {
+		t.Fatalf("main path: exit %d: %s %s", code, out, errOut)
+	}
+	if got, _ := setupData(t, out).Get("blockedBy"); got != "role" {
+		t.Errorf("blockedBy = %v", got)
+	}
+	for _, f := range []string{".rota", "AGENTS.md", "CLAUDE.md", ".claude"} {
+		if _, err := os.Stat(filepath.Join(sub, f)); err == nil {
+			t.Errorf("refused setup wrote sub/%s", f)
+		}
+	}
+	assertTrackedUntouched(t, dir, tracked)
+
+	code, out, errOut = setupRun(t, sub, "", false, "--json", "--yes")
+	if code != 0 {
+		t.Fatalf("support path: exit %d: %s %s", code, out, errOut)
+	}
+	if role, _ := setupData(t, out).Get("role"); role != "support" {
+		t.Errorf("data.role = %v", role)
+	}
+	if _, err := os.Stat(filepath.Join(sub, ".rota")); err == nil {
+		t.Error("support path wrote sub/.rota")
+	}
+	if got, _ := config.Lookup(localConfig(t, dir), "round.dispatch"); got != "subagent" {
+		t.Errorf("root local round.dispatch = %v", got)
+	}
+	assertTrackedUntouched(t, dir, tracked)
+}
+
+// Relay 1 on #1830: the support checks read the enclosing project's tracked
+// config, so a subdirectory of an enabled clone is not refused.
+func TestSetupSupportPathFromSubdirOfEnabledClone(t *testing.T) {
+	dir, tracked := supportClone(t)
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errOut := setupRun(t, sub, "", false, "--yes", "--set", "round.role=support"); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if got, _ := config.Lookup(localConfig(t, dir), "round.role"); got != "support" {
+		t.Errorf("root local round.role = %v", got)
+	}
+	if _, err := os.Stat(filepath.Join(sub, ".rota")); err == nil {
+		t.Error("support path wrote sub/.rota")
+	}
+	assertTrackedUntouched(t, dir, tracked)
 }
