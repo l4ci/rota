@@ -12,7 +12,6 @@ import (
 	"github.com/l4ci/rota/internal/receipt"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
-	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
 )
 
@@ -68,9 +67,9 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		set, err := roundcfg.FromConfig(c.deps().Config(root))
+		set, err := c.deps().roundSettings(root, roundConfigUsage)
 		if err != nil {
-			return Result{}, Usage("%s", err.Error())
+			return Result{}, err
 		}
 		ctx, stop := workerContext()
 		defer stop()
