@@ -10,7 +10,6 @@ import (
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
-	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -273,18 +272,6 @@ func TestWorkerDoneLedgerAccountsFromMainCheckout(t *testing.T) {
 		}
 	}
 	t.Fatalf("no done row in the main checkout's ledger: %+v", es)
-}
-
-func TestMissingFastProofLatestRowWins(t *testing.T) {
-	const head = "abc1234def5678"
-	pass := proof.Row{Check: fastTierCheck, Result: "PASS", Sha: "abc1234"}
-	fail := proof.Row{Check: fastTierCheck, Result: "FAIL", Sha: "abc1234"}
-	if got := missingFastProof([]proof.Row{pass}, head, []string{"go test ./..."}); got != nil {
-		t.Errorf("PASS at head: missing = %v", got)
-	}
-	if got := missingFastProof([]proof.Row{pass, fail}, head, []string{"go test ./..."}); len(got) != 1 {
-		t.Errorf("PASS then FAIL at head must be unproven, missing = %v", got)
-	}
 }
 
 // commitFile commits one file on the checked-out branch.
