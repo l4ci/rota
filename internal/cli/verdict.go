@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -345,19 +344,13 @@ func raisedDepthNote(c *Ctx, args []string, t verdictBranch, head, kind string) 
 	if err != nil {
 		return ""
 	}
-	_, hasSpec := worker.BranchIssue(t.branch)
-	have := verdict.Recorded(t.root, t.branch, head)
-	var missing []string
-	for _, k := range worker.ReviewKinds(res.Depth, hasSpec) {
-		if !slices.Contains(have, k) {
-			missing = append(missing, k)
-		}
-	}
+	hasSpec := worker.BranchHasSpec(t.branch)
+	missing := verdict.MissingReviews(res.Depth, hasSpec, verdict.Recorded(t.root, t.branch, head))
 	if len(missing) == 0 {
 		return ""
 	}
 	return fmt.Sprintf("review depth %s -> %s (%s): still needs %s at head, or the gate refuses review-missing",
-		worker.CoveredDepth(verdict.LastReviewSet(t.root, t.branch), hasSpec), res.Depth, why, strings.Join(missing, " and "))
+		verdict.CoveredDepth(verdict.LastReviewSet(t.root, t.branch), hasSpec), res.Depth, why, strings.Join(missing, " and "))
 }
 
 func verdictShow(c *Ctx, args []string) (Result, error) {
