@@ -66,8 +66,22 @@ func (s *Slot) KindSource() string { return jsonx.Str(s.o, "kindSource") }
 func (s *Slot) Tier() string       { return jsonx.Str(s.o, "tier") }
 func (s *Slot) Model() string      { return jsonx.Str(s.o, "model") }
 func (s *Slot) TierReason() string { return jsonx.Str(s.o, "tierReason") }
-func (s *Slot) PR() string         { return jsonx.Str(s.o, "pr") }
-func (s *Slot) Account() string    { return jsonx.Str(s.o, "account") }
+
+// BriefDecisions and BriefSiblings preserve context supplied only at assignment.
+func (s *Slot) BriefDecisions() string  { return jsonx.Str(s.o, "briefDecisions") }
+func (s *Slot) BriefSiblings() []string { return strList(s.o, "briefSiblings") }
+
+func (s *Slot) SetBriefContext(decisions string, siblings []string) {
+	if decisions == "" {
+		s.o.Delete("briefDecisions")
+	} else {
+		s.o.Set("briefDecisions", decisions)
+	}
+	setStrList(s.o, "briefSiblings", siblings)
+}
+
+func (s *Slot) PR() string      { return jsonx.Str(s.o, "pr") }
+func (s *Slot) Account() string { return jsonx.Str(s.o, "account") }
 
 // Attempt is the id minted for the slot's current assignment, "" for none. A
 // worker's done and report carry the id from its brief; one that does not match
@@ -335,6 +349,7 @@ type Binding struct {
 
 // Bind records the issue the slot works on. Empty optional fields stay unset.
 func (s *Slot) Bind(b Binding) {
+	s.SetBriefContext("", nil)
 	s.o.Set("task", b.Task)
 	for _, f := range []struct{ k, v string }{
 		{"claimId", b.ClaimID}, {"kind", b.Kind}, {"kindSource", b.KindSource}, {"tier", b.Tier},
@@ -361,6 +376,7 @@ func smokeStr(n int) string {
 // PR read null, the optional binding fields (claim, kind, tier, model, tier
 // reason) are removed so a freed slot reports nothing of the last issue.
 func (s *Slot) Unbind() {
+	s.SetBriefContext("", nil)
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
 	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "bundle", "issues", "reviewSeen", "event", "heartbeatAt", "outcome", "inbox", "finding"} {

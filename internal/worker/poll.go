@@ -473,6 +473,7 @@ type pollTarget struct {
 	relayMarker  bool      // set by classify: the last capture shows the line
 	relays       int
 	turnSeq      int
+	unsent       bool // a task whose brief the host never acknowledged
 	// ev is the slot's standing worker event with the stamps Decide weighs it
 	// against. evSeq is set by classify to the event's seq when the event, not
 	// the pane, decided the row.
@@ -482,7 +483,7 @@ type pollTarget struct {
 }
 
 func slotTarget(s *Slot) pollTarget {
-	return pollTarget{name: s.Name(), kind: s.HarnessKind(), handle: s.PaneHandle(), prev: s.State(), seen: s.Seen(), turnSeq: s.TurnSeq(),
+	return pollTarget{name: s.Name(), kind: s.HarnessKind(), handle: s.PaneHandle(), prev: s.State(), seen: s.Seen(), turnSeq: s.TurnSeq(), unsent: s.Unsent(),
 		relayPending: s.RelayPending(), relaySeen: s.RelayMarkerSeen(), relaySentAt: s.RelaySentAt(), relayEvSeq: s.RelayEventSeq(), relays: len(s.Relays()),
 		ev: s.Event(), lastChange: parseStamp(s.ActiveAt())}
 }
@@ -558,6 +559,10 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		slept = true
 	}
 	for i, t := range targets {
+		if t.unsent && t.relayPending == 0 {
+			rows = append(rows, PollRow{t.name, StateBlocked, "dispatch: brief was not submitted; retry the task dispatch"})
+			continue
+		}
 		// push appends the row after the slot's own event had its say.
 		push := func(row PollRow) {
 			row, used := decide(t.ev, row, t.lastChange)

@@ -6,7 +6,7 @@ refs:
 
 # `rota` verb contract
 
-This directory defines every `rota` verb's arguments, flags, `--json` data and exit codes. The black-box smoke suite (A2, #46) tests against it, and the Go port (A3 to A9) implements it. Global flags, the JSON envelope, stderr format, the exit-code table, write rules and config loading are fixed by the [CLI conventions](cli-conventions.md) (A3, #47). Nothing here overrides them: failure `data` on exit 1 and 4, exit 4 for mutating verbs only, and `changed` in failure data all come from the conventions.
+This directory defines every `rota` verb's arguments, flags, `--json` data and exit codes. The black-box smoke suite (A2, #46) tests against it, and the Go port (A3 to A9) implements it. Global flags, the JSON envelope, stderr format, the exit-code table, write rules and config loading are fixed by the [CLI conventions](cli-conventions.md) (A3, #47). They define failure `data` on exit 1 and 4 (plus `round assign`’s exit-5 dispatch exception), exit 4 for mutating verbs only, and `changed` in failure data all come from the conventions.
 
 Status: **reviewed by the maintainer on 2026-10-02, who signed off on the defaults pending the changes now applied** (quote: "Defaults + you verify"). Arguments were redesigned on purpose (maintainer, 2026-10-02: "Redesign arguments now"), so many verbs differ from the helper they replace. During the port, `test/hv-shim` translates each new-shape call into the old helper call. The `old:` line under each verb is the shim's mapping.
 
