@@ -270,6 +270,9 @@ issue to read and dispute, the item's `## Out of scope` section when it has one,
 - **Open PR.** An issue an open PR already resolves (head branch `<agent>/<issue>-*` or `Closes #N`)
   is `not ready: open PR #M` in `round candidates`, and `assign` refuses it. `--accept-open-pr`
   assigns it again for a deliberate redo.
+- **Deferred follow-up.** A follow-up item filed by `rota verdict add --file-deferred` is
+  `not ready: depends on PR #N` while its source PR is open. It turns ready when that PR merges
+  or is closed without merging.
 - **Batch.** `round.batch` N (default `0`, no limit) caps the items open at once: assigned or
   queued as a PR, and not yet merged, closed or handed to the human. At N, `assign` exits 4 with
   `blockedBy: batch` until one lands or parks; `--accept-batch` overrides it for one call. Use it to
@@ -323,7 +326,9 @@ When a returned slot is `done` with a PR and a candidate is ready, `round wait` 
 `assign before you gate` line with the candidate and its `rota round assign` command (`assignNudge` in
 JSON), so the slot works while you review. When two or more reviewed PRs wait on one base they add a
 `nudge train` line with the PR numbers and the `rota worker train` command (`trainNudge` in JSON). A PR
-with a recorded FAIL review or second-opinion verdict is left out. The autopilot assigns by itself, so
+is left out when it has a recorded FAIL review or second-opinion verdict, when its review has a
+blocking finding, when the gate sent it back at its current head (a push clears that), or when
+it is already merged or closed. The autopilot assigns by itself, so
 a watch running with `--autopilot` skips the assign line but still prints the train line.
 
 `rota worker dispatch` and `--relay` check what is on the prompt line before they type. A typed human
