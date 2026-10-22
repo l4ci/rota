@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 )
 
@@ -49,5 +50,16 @@ func TestDepsRepoRunsThroughGit(t *testing.T) {
 	}
 	if _, err := d.Repo(t.TempDir()).Run(context.Background(), "status"); err == nil || err.Error() != "fake git" {
 		t.Fatalf("err = %v, want fake git", err)
+	}
+}
+
+// With no label keys set, the round environment carries the schema defaults
+// from internal/config: round holds no copy of them.
+func TestDefaultRoundEnvLabelsComeFromConfig(t *testing.T) {
+	e := defaultRoundEnv(context.Background(), t.TempDir(), defaultDeps(), false)
+	for role, got := range map[string]string{"inProgress": e.Label, "needsHuman": e.NeedsHuman, "needsReview": e.NeedsReview, "support": e.SupportLabel} {
+		if want := config.Label(nil, role); got == "" || got != want {
+			t.Errorf("issues.labels.%s = %q, want the config default %q", role, got, want)
+		}
 	}
 }

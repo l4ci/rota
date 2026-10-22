@@ -134,9 +134,6 @@ func NewJira(c connections.Connection, secret, project, notPlannedLabel string) 
 	site := strings.TrimRight(c.Site, "/")
 	cloud := c.WithDefaults().Deployment != connections.DeploymentDataCenter
 	j := &Jira{site: site, project: strings.ToUpper(project), cloud: cloud, notPlanned: notPlannedLabel}
-	if j.notPlanned == "" {
-		j.notPlanned = "not-planned"
-	}
 	version, auth := "2", "Bearer "+secret
 	if j.cloud {
 		version = "3"

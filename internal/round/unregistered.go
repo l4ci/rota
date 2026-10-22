@@ -95,7 +95,7 @@ func (e Env) findSupportBranches(ctx context.Context, rep *Report, held map[stri
 	if len(cands) == 0 {
 		return
 	}
-	label := strutil.FirstNonEmpty(e.NeedsReview, DefaultNeedsReview)
+	label := e.NeedsReview
 	issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{label}})
 	if err != nil {
 		rep.Warnings = append(rep.Warnings, fmt.Sprintf("support PRs not checked: listing the %s issues failed: %v", label, err))

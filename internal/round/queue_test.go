@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/config"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -378,7 +379,7 @@ func TestTransferFromAQueuedRecordToHuman(t *testing.T) {
 	if len(f.queued()) != 0 || f.be.claims["12"] != "" || f.be.bstates["12"] != "" {
 		t.Errorf("record %v claims %v states %v", f.queued(), f.be.claims, f.be.bstates)
 	}
-	if got := f.forge.labels[12]; len(got) != 1 || got[0] != DefaultNeedsHuman {
+	if got := f.forge.labels[12]; len(got) != 1 || got[0] != config.Label(nil, "needsHuman") {
 		t.Errorf("labels: %v", f.forge.labels)
 	}
 	if f.slot("ben").Task() != "13" {
