@@ -925,6 +925,26 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-21"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Check closing references on slice PRs": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-22"
+    },
+    "Build & Tooling: Git & isolation::zsh does not split unquoted variables": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-22"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes::Contract data lines decide read-only verbs": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-22"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::Packages before -run in review test commands": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-22"
     }
   }
 }
