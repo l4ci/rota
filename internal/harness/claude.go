@@ -145,6 +145,8 @@ func (claude) Accounts(cfg any) AccountList {
 // UsageMeter: Anthropic's usage endpoint reads an account's headroom.
 func (claude) UsageMeter() bool { return true }
 
+func (claude) CrossReviewer() bool { return true }
+
 func (claude) LimitPhrases() []string { return SharedLimitPhrases() }
 
 // A turn in flight (a running command or monitor) shows `esc to interrupt` on

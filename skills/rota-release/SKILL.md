@@ -87,13 +87,15 @@ If `Breaking` commits were found but the user chose `patch` or `minor`, ask befo
 
 Before showing the draft, silently apply `references/humanizing-prose.md` to all model-written prose.
 
+**Cross-harness review.** Then read [`release-review.md`](release-review.md) and follow it: one read-only run on another harness over the range since `<prev_tag>`, checking only cross-cutting risks the notes may miss. Its findings are shown with the draft in Step 6 for the maintainer to weigh; they never stop the release on their own.
+
 ## Step 6 — Review Notes
 
-Show the full draft, then ask: header `"Notes"`, *"Release `v<new_version>` — notes look good? Yes pushes the tag and publishes the release."*, options `Looks good (Recommended)` / `Edit` (replacement text via Other replaces the draft verbatim; re-display it, one edit pass, no second prompt) / `Abort release` (*"Release aborted. Nothing written."*).
+Show the full draft, then the `## Cross-harness review` block from Step 5 under it (or its one `unavailable` line), then ask: header `"Notes"`, *"Release `v<new_version>` — notes look good? Yes pushes the tag and publishes the release."*, options `Looks good (Recommended)` / `Edit` (replacement text via Other replaces the draft verbatim; re-display it, one edit pass, no second prompt) / `Abort release` (*"Release aborted. Nothing written."*).
 
 This answer is the human approval for Steps 10 and 11. Keep it verbatim as `$APPROVAL` (the option label, or the replacement text's first line after Edit) for `--confirm-note`. Never auto-pick this question in any autonomy mode.
 
-Write the approved notes to `NOTES_FILE=$(mktemp /tmp/rota-release-notes.XXXXXX.md)`.
+Write the approved notes to `NOTES_FILE=$(mktemp /tmp/rota-release-notes.XXXXXX.md)`. The cross-harness block is for the maintainer, not the published notes: leave it out unless the maintainer's replacement text kept part of it.
 
 ## Step 7 — Write Version File and CHANGELOG
 
@@ -180,6 +182,7 @@ List skipped checklist items under `Skipped checklist items:`. In `--dry-run`, p
 
 - [`unpushed-commits.md`](unpushed-commits.md): Step 1 handling of unpushed HEAD commits.
 - [`milestone-gate.md`](milestone-gate.md): Issue-mode milestone gate, close-out and umbrella repos (Steps 3, 12).
+- [`release-review.md`](release-review.md): Cross-harness review of the range since the last tag (Step 5).
 - [`publish-failures.md`](publish-failures.md): Push/publish failure handling and edge cases (Steps 10-11b).
 - [`upstream-issues.md`](upstream-issues.md): Close shipped upstream issues (Step 13).
 - [`docs-nudge.md`](docs-nudge.md): After-work docs nudge (Step 14).

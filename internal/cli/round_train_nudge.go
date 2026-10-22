@@ -173,6 +173,9 @@ func trainBlocked(store verdict.Store, branch string, s verdict.Settings) bool {
 	if _, blocked := verdict.Blocking(list, s); blocked {
 		return true
 	}
+	if r, ok := verdict.Latest(list, verdict.ReviewCross); ok && r.Failing() {
+		return true
+	}
 	r, ok := verdict.EffectiveReview(list)
 	return ok && r.Failing()
 }

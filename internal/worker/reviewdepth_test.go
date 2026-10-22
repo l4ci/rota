@@ -7,11 +7,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -210,4 +213,71 @@ func TestReviewDepthBundleTakesHighest(t *testing.T) {
 	if _, err = ResolveReviewDepth(context.Background(), src); !errors.As(err, &de) || de.Stage != "issue" || !strings.Contains(de.Msg, member.Ref()) {
 		t.Fatalf("unreadable member must fail naming it: %v", err)
 	}
+}
+
+// The cross-harness requirement (#1612) resolves from the trigger labels, the
+// review:<h> and review:none labels, the author's harness and round.harnesses.
+func TestReviewDepthCross(t *testing.T) {
+	on := roundcfg.CrossReview{Labels: []string{"size:Major", "risk:high"}, Harnesses: []string{"claude", "codex"}}
+	for _, c := range []struct {
+		name   string
+		cfg    roundcfg.CrossReview
+		labels []string
+		author string
+		cross  string
+		why    string
+	}{
+		{"major, claude author", on, []string{"size:Major"}, "claude", "codex", "label size:Major"},
+		{"risk:high, codex author", on, []string{"risk:high"}, "codex", "claude", "other than the author's codex"},
+		{"unknown author takes the default kind", on, []string{"size:Major"}, "", "codex", "author's claude"},
+		{"harness label names the author", on, []string{"size:Major", "harness:codex"}, "", "claude", "author's codex"},
+		{"review label picks", on, []string{"size:Major", "review:claude"}, "claude", "claude", "label review:claude"},
+		{"review:none skips", on, []string{"size:Major", "review:none"}, "claude", "none", "label review:none"},
+		{"review:none beats review:codex", on, []string{"size:Major", "review:codex", "review:none"}, "claude", "none", "label review:none"},
+		{"no other harness listed", roundcfg.CrossReview{Labels: on.Labels, Harnesses: []string{"claude"}}, []string{"size:Major"}, "claude", "none", "no reviewer harness other than the author's claude"},
+		{"opencode is no reviewer", roundcfg.CrossReview{Labels: on.Labels, Harnesses: []string{"claude", "opencode"}}, []string{"size:Major"}, "claude", "none", "no reviewer harness"},
+		{"minor has no requirement", on, []string{"size:Minor"}, "claude", "", ""},
+		{"review label alone does not trigger", on, []string{"review:codex"}, "claude", "none", "no label in review.crossLabels"},
+		{"an unknown review label is ignored", on, []string{"review:later"}, "claude", "", ""},
+		{"unset harnesses turns it off", roundcfg.CrossReview{Labels: on.Labels}, []string{"size:Major"}, "claude", "", ""},
+		{"empty trigger list turns it off", roundcfg.CrossReview{Harnesses: on.Harnesses}, []string{"size:Major"}, "claude", "", ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir := depthRepo(t)
+			pol, err := config.ParseReviewPolicy(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			src := ReviewSources{Policy: pol, Git: git.Exec, Dir: dir, Span: "main...feat", Cross: c.cfg, Author: c.author,
+				Issue: tracker.NumKey(5), Issues: fakeIssueGet{is: tracker.Issue{Labels: c.labels}}}
+			got, err := ResolveReviewDepth(context.Background(), src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Cross != c.cross || !strings.Contains(got.CrossWhy, c.why) {
+				t.Errorf("cross = %q (%q), want %q (%q)", got.Cross, got.CrossWhy, c.cross, c.why)
+			}
+		})
+	}
+}
+
+// In a bundle, a member that needs a cross review makes the branch need one.
+func TestReviewDepthCrossBundle(t *testing.T) {
+	dir := depthRepo(t)
+	pol, _ := config.ParseReviewPolicy(nil)
+	src := ReviewSources{Policy: pol, Git: git.Exec, Dir: dir, Span: "main...feat", Author: "claude",
+		Cross: roundcfg.CrossReview{Labels: []string{"size:Major"}, Harnesses: []string{"claude", "codex"}},
+		Issue: tracker.NumKey(5), Members: []tracker.IssueKey{tracker.NumKey(6)},
+		Issues: issueMap{5: {Labels: []string{"size:Minor"}}, 6: {Labels: []string{"size:Major"}}}}
+	got, err := ResolveReviewDepth(context.Background(), src)
+	if err != nil || got.Cross != harness.Codex {
+		t.Fatalf("cross = %q (%v)", got.Cross, err)
+	}
+}
+
+type issueMap map[int]tracker.Issue
+
+func (m issueMap) Get(_ context.Context, key tracker.IssueKey, _ bool) (tracker.Issue, error) {
+	n, _ := strconv.Atoi(strings.TrimPrefix(key.Ref(), "#"))
+	return m[n], nil
 }
