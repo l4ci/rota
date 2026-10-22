@@ -258,6 +258,9 @@ type GateTarget struct {
 	// Outcome is the partial or failed outcome the worker reported and nobody
 	// has answered, "" otherwise.
 	Outcome string
+	// Kind is the harness the slot ran, the PR's author for the cross-harness
+	// review; "" for a queued record or an external PR.
+	Kind string
 }
 
 // openOutcome is the slot's reported outcome when it is partial or failed.
@@ -274,7 +277,7 @@ func gateSlot(s *Slot) GateTarget {
 	if s.IsExternal() {
 		return GateTarget{External: true, Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name())}
 	}
-	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name()), Bundle: s.Bundle(), relays: s.Relays(), Attempt: s.Attempt(), AttemptBase: s.AttemptBase(), Outcome: openOutcome(s)}
+	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name()), Bundle: s.Bundle(), relays: s.Relays(), Attempt: s.Attempt(), AttemptBase: s.AttemptBase(), Outcome: openOutcome(s), Kind: s.HarnessKind()}
 }
 
 func gateQueued(q QueuedPR) GateTarget {
@@ -1139,6 +1142,12 @@ func ReviewKinds(d config.ReviewDepth, hasSpec bool) []string {
 	return nil
 }
 
+// NeedsCross reports whether a branch at depth needs a review-cross verdict:
+// its cross requirement names a harness and the depth reviews anything.
+func NeedsCross(res ReviewDepth, depth config.ReviewDepth) bool {
+	return res.Cross != "" && res.Cross != CrossNone && depth != config.DepthNone
+}
+
 // CoveredDepth is the highest depth whose ReviewKinds are all in have: what the
 // verdicts recorded at head already satisfy.
 func CoveredDepth(have []string, hasSpec bool) config.ReviewDepth {
@@ -1167,7 +1176,11 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	if err != nil {
 		return g.broke(fmt.Sprintf("%v; run rota config check", err))
 	}
-	src := ReviewSources{Policy: policy, Git: g.e.Git, Dir: g.root, Span: g.baseRef + "..." + g.headRef}
+	cross, err := g.in.cfg.CrossReview()
+	if err != nil {
+		return g.broke(fmt.Sprintf("%v; run rota config check", err))
+	}
+	src := ReviewSources{Policy: policy, Git: g.e.Git, Dir: g.root, Span: g.baseRef + "..." + g.headRef, Cross: cross, Author: g.target.Kind}
 	hasSpec := false
 	if key, ok := tracker.ParseKey(g.target.Issue); ok {
 		hasSpec = true
@@ -1189,6 +1202,9 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	}
 	depth, why := res.Depth, res.Why
 	g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", g.o.Slot, depth, why))
+	if res.Cross != "" {
+		g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-CROSS %s — %s (%s)", g.o.Slot, res.Cross, res.CrossWhy))
+	}
 	if !g.o.CheckReviews {
 		return false, nil
 	}
@@ -1207,12 +1223,27 @@ func (g *gate) stepReviewDepth() (bool, error) {
 			missing = append(missing, k)
 		}
 	}
-	if len(missing) == 0 {
+	// A depth of none reviews nothing, so it asks for no cross review either.
+	crossMissing := ""
+	if NeedsCross(res, depth) {
+		if r, ok := verdict.CrossAt(g.root, g.branch, strings.TrimSpace(head)); !ok || r.Harness != res.Cross {
+			crossMissing = fmt.Sprintf("%s verdict from %s (%s)", verdict.ReviewCross, res.Cross, res.CrossWhy)
+		}
+	}
+	if len(missing) == 0 && crossMissing == "" {
 		return false, nil
 	}
 	g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
-	g.verdict(GateReviewMissing, fmt.Sprintf("GATE %s refused — review depth %s (%s) needs a recorded %s verdict; nothing landed", g.o.Slot, depth, why, strings.Join(missing, " and ")),
-		fmt.Sprintf("run /rota-review on %s (it records the verdicts), or loosen ship.review", g.branch))
+	var needs []string
+	if len(missing) > 0 {
+		needs = append(needs, fmt.Sprintf("review depth %s (%s) needs a recorded %s verdict", depth, why, strings.Join(missing, " and ")))
+	}
+	hint := fmt.Sprintf("run /rota-review on %s (it records the verdicts), or loosen ship.review", g.branch)
+	if crossMissing != "" {
+		needs = append(needs, "the cross-harness review needs a recorded "+crossMissing)
+		hint = fmt.Sprintf("run /rota-review on %s (it records the verdicts and runs the cross-harness reviewer), or add the review:none label to the issue to skip the cross-harness review", g.branch)
+	}
+	g.verdict(GateReviewMissing, fmt.Sprintf("GATE %s refused — %s; nothing landed", g.o.Slot, strings.Join(needs, ", and ")), hint)
 	return true, nil
 }
 

@@ -25,6 +25,10 @@ import (
 const (
 	ReviewSpec    = "review-spec"
 	ReviewQuality = "review-quality"
+	// ReviewCross is the cross-harness review of a size:Major or risk:high
+	// issue's PR (#1612): one read-only run on a harness other than the
+	// author's. Its record names that harness and model.
+	ReviewCross   = "review-cross"
 	SecondOpinion = "second-opinion"
 	QA            = "qa"
 	DebugFix      = "debug-fix"
@@ -49,11 +53,12 @@ const (
 
 // BranchKinds are the kinds recorded against a branch, in the order
 // `verdict show` lists them.
-var BranchKinds = []string{ReviewSpec, ReviewQuality, SecondOpinion, QA, Behaviour}
+var BranchKinds = []string{ReviewSpec, ReviewQuality, ReviewCross, SecondOpinion, QA, Behaviour}
 
 var kindVerdicts = map[string][]string{
 	ReviewSpec:    {Pass, Concerns, Fail},
 	ReviewQuality: {Pass, Concerns, Fail},
+	ReviewCross:   {Pass, Concerns, Fail},
 	SecondOpinion: {Pass, Concerns, Fail},
 	QA:            {Pass, Concerns, Fail, InfraFail},
 	DebugFix:      {Pass, Fail},
@@ -315,6 +320,10 @@ type Record struct {
 	Declined   []Declined    `json:"declined,omitempty"`
 	// Transcript is the path of a behaviour run's transcript.
 	Transcript string `json:"transcript,omitempty"`
+	// Harness and Model are the reviewer's harness and model, when the
+	// recorder named them (a review-cross record always does).
+	Harness string `json:"harness,omitempty"`
+	Model   string `json:"model,omitempty"`
 }
 
 // NewRecord stamps a record with now in UTC.
@@ -491,6 +500,20 @@ func Recorded(root, branch, head string) []string {
 	return kinds
 }
 
+// CrossAt is the branch's newest review-cross record when it was recorded at
+// head; a record on another commit is stale and does not count.
+func CrossAt(root, branch, head string) (Record, bool) {
+	r, ok := Latest(Load(root).Branches[BranchKey("", branch)], ReviewCross)
+	return r, ok && AtHead(r, head)
+}
+
+// CrossFail is the branch's newest review-cross record when it is FAIL: a
+// cross-harness review that blocks and is relayed like a review FAIL.
+func CrossFail(list []Record) (Record, bool) {
+	r, ok := Latest(list, ReviewCross)
+	return r, ok && r.Verdict == Fail
+}
+
 // LastReviewSet lists the review kinds recorded at the commit of the branch's
 // newest review verdict, whatever head that was: the review set the branch last
 // had, which a later push has made stale. It is nil when no review was recorded.
@@ -557,12 +580,16 @@ func (r Record) Failing() bool {
 }
 
 // Blocking is the record that blocks a ship (B3): the effective review
-// verdict when it is FAIL, else the latest second-opinion record when it is
-// FAIL and the runner is not the advisory codex fallback. A stale record
+// verdict when it is FAIL, else the latest review-cross record when it is
+// FAIL, else the latest second-opinion record when it is FAIL and the runner
+// is not the advisory codex fallback. A stale record
 // still blocks; only a newer record of the same kind clears it. CONCERNS and
 // QA never block.
 func Blocking(list []Record, s Settings) (Record, bool) {
 	if r, ok := EffectiveFail(list); ok {
+		return r, true
+	}
+	if r, ok := CrossFail(list); ok {
 		return r, true
 	}
 	if r, ok := Latest(list, SecondOpinion); ok && r.Verdict == Fail && s.Runner != "codex" {

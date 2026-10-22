@@ -411,3 +411,16 @@ func TestFailingVersusEffectiveFail(t *testing.T) {
 		t.Error("no records must not fail")
 	}
 }
+
+// A review-cross FAIL blocks a ship like a review FAIL until a newer
+// review-cross record clears it (#1612).
+func TestBlockingReviewCross(t *testing.T) {
+	list := []Record{{Kind: ReviewQuality, Verdict: Pass, Combined: Pass, Sha: "a"}, {Kind: ReviewCross, Verdict: Fail, Sha: "a", Harness: "codex"}}
+	if r, ok := Blocking(list, Settings{}); !ok || r.Kind != ReviewCross {
+		t.Fatalf("cross FAIL must block: %+v %v", r, ok)
+	}
+	list = append(list, Record{Kind: ReviewCross, Verdict: Pass, Sha: "b", Harness: "codex"})
+	if r, ok := Blocking(list, Settings{}); ok {
+		t.Fatalf("a newer cross PASS clears it: %+v", r)
+	}
+}

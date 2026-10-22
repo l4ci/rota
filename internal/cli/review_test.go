@@ -13,6 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/golden"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -823,5 +824,46 @@ func TestReviewScopeManualCommits(t *testing.T) {
 	}
 	if !reflect.DeepEqual(d["intents"], []any{}) {
 		t.Errorf("intents %#v, want []", d["intents"])
+	}
+}
+
+// AC-2 (#1612): with round.harnesses set, `review depth --json` reads the
+// issue's labels for the cross-harness review even when ship.review has no
+// labels map, and prints cross and crossWhy; a Minor issue prints neither.
+func TestReviewDepthShowsTheCrossHarnessReview(t *testing.T) {
+	root := newRepo(t, t.TempDir(), "proj", "main")
+	gitT(t, root, "checkout", "-q", "-b", "nia/6-small")
+	write(t, filepath.Join(root, "x.txt"), "x\n")
+	gitT(t, root, "add", "x.txt")
+	gitT(t, root, "commit", "-q", "-m", "small change")
+	labels := ""
+	deps := testDeps()
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
+		if len(args) > 2 && args[0] == "issue" && args[1] == "view" && args[2] == "6" {
+			return []byte(`{"number":6,"title":"t","state":"OPEN","labels":[` + labels + `]}`), nil, 0, nil
+		}
+		return []byte("[]"), nil, 0, nil
+	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	write(t, filepath.Join(root, ".rota", "config.json"),
+		`{"forge": {"provider": "github"}, "issues": {"source": "github"}, "round": {"harnesses": ["claude", "codex"]}}`)
+	run := func() map[string]any {
+		o := trRunWith(t, deps, root, "", "review", "depth", "nia/6-small", "--json")
+		if o.code != 0 {
+			t.Fatalf("exit %d: %s %s", o.code, o.stdout, o.stderr)
+		}
+		d, _ := envelope(t, o.stdout)["data"].(map[string]any)
+		return d
+	}
+	labels = `{"name":"size:Major"}`
+	if d := run(); d["cross"] != harness.Codex || !strings.Contains(d["crossWhy"].(string), "label size:Major") {
+		t.Errorf("major: %v", d)
+	}
+	labels = `{"name":"size:Major"},{"name":"review:none"}`
+	if d := run(); d["cross"] != "none" || d["crossWhy"] != "label review:none" {
+		t.Errorf("review:none: %v", d)
+	}
+	labels = `{"name":"size:Minor"}`
+	if d := run(); d["cross"] != nil || d["crossWhy"] != nil {
+		t.Errorf("a Minor issue prints no cross field: %v", d)
 	}
 }

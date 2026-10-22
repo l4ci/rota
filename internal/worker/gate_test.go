@@ -1666,3 +1666,78 @@ func TestGatePRHeadLagHintNamesTheRerun(t *testing.T) {
 		t.Errorf("hint = %q, want it to say the re-run takes no --request-id", res.Hint)
 	}
 }
+
+// recordCross records a review-cross verdict at sha (HEAD when "") from harness.
+func (w *world) recordCross(branch, sha, harness string) {
+	w.t.Helper()
+	if sha == "" {
+		sha = gitq(w.t, w.worker, "rev-parse", "HEAD")
+	}
+	if _, err := verdict.AddBranch(w.dir, branch, verdict.Record{Kind: verdict.ReviewCross, Verdict: verdict.Pass, Sha: sha, Harness: harness, Model: "m"}); err != nil {
+		w.t.Fatal(err)
+	}
+}
+
+// A size:Major or risk:high issue needs a review-cross verdict at head from a
+// harness other than the author's (#1612); review:<h> picks it, review:none
+// skips it, and a Minor issue or an unset round.harnesses is gated as before.
+func TestGateRequiresCrossReview(t *testing.T) {
+	const on = `{"round":{"harnesses":["claude","codex"]},"test":{"full":["true"]}}`
+	spec, quality := verdict.ReviewSpec, verdict.ReviewQuality
+	for _, c := range []struct {
+		name, cfg, kind, labels string
+		cross                   string // harness of a review-cross record at head, "" none
+		stale                   bool   // the review-cross record is on an older commit
+		refused                 string // what the refusal names; "" passes
+		note                    string
+	}{
+		{name: "major without a cross verdict is refused", cfg: on, kind: "claude", labels: "size:Major", refused: "review-cross verdict from codex", note: "REVIEW-CROSS w1 — codex"},
+		{name: "risk:high without a cross verdict is refused", cfg: on, kind: "claude", labels: "risk:high", refused: "review-cross verdict from codex"},
+		{name: "major with a codex verdict passes", cfg: on, kind: "claude", labels: "size:Major", cross: "codex"},
+		{name: "a cross verdict from the author's harness is refused", cfg: on, kind: "claude", labels: "size:Major", cross: "claude", refused: "review-cross verdict from codex"},
+		{name: "a stale cross verdict is refused", cfg: on, kind: "claude", labels: "size:Major", cross: "codex", stale: true, refused: "review-cross verdict from codex"},
+		{name: "a codex author needs claude", cfg: on, kind: "codex", labels: "size:Major", cross: "codex", refused: "review-cross verdict from claude", note: "REVIEW-CROSS w1 — claude"},
+		{name: "review:claude overrides the default", cfg: on, kind: "codex", labels: "size:Major,review:claude", cross: "claude"},
+		{name: "review:none skips it", cfg: on, kind: "claude", labels: "size:Major,review:none", note: "REVIEW-CROSS w1 — none (label review:none)"},
+		{name: "minor needs no cross verdict", cfg: on, kind: "claude", labels: "size:Minor"},
+		{name: "unset round.harnesses needs none", cfg: `{"test":{"full":["true"]}}`, kind: "claude", labels: "size:Major"},
+		{name: "empty review.crossLabels turns it off", cfg: `{"round":{"harnesses":["claude","codex"]},"review":{"crossLabels":[]},"test":{"full":["true"]}}`, kind: "claude", labels: "size:Major"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.setConfig(c.cfg)
+			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","kind":%q,"pr":%q}]}`, c.kind, ghURL)), 0o644)
+			w.forge("body", "Closes #5\n")
+			w.forge("issueLabels", "in-progress,"+c.labels)
+			w.record("w1", "", spec, quality)
+			if c.cross != "" {
+				sha := ""
+				if c.stale {
+					sha = gitq(t, w.worker, "rev-parse", "HEAD~1")
+				}
+				w.recordCross("w1", sha, c.cross)
+			}
+			res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.refused == "" {
+				if res.Verdict != GateFresh {
+					t.Fatalf("%+v", res)
+				}
+			} else if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, c.refused) || res.Changed {
+				t.Fatalf("verdict %s (%s), want review-missing naming %s", res.Verdict, res.Err, c.refused)
+			}
+			notes := strings.Join(res.Notes, "\n")
+			if c.note != "" && !strings.Contains(notes, c.note) {
+				t.Errorf("notes %q lack %q", notes, c.note)
+			}
+			if c.labels == "size:Minor" || !strings.Contains(c.cfg, "harnesses") {
+				if strings.Contains(notes, "REVIEW-CROSS") {
+					t.Errorf("a PR without a cross requirement must note nothing new: %q", notes)
+				}
+			}
+		})
+	}
+}

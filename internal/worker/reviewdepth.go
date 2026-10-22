@@ -8,6 +8,8 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -31,6 +33,11 @@ type ReviewSources struct {
 	}
 	// PRBody reads the PR description for its Door line; nil when there is no PR.
 	PRBody func() (string, error)
+	// Cross is the cross-harness review requirement's settings (#1612); its
+	// zero value turns the requirement off. Author is the harness of the slot
+	// holding the branch, "" when no slot does.
+	Cross  roundcfg.CrossReview
+	Author string
 }
 
 // ReviewDepth is a resolved depth with the inputs it was read from.
@@ -38,6 +45,10 @@ type ReviewDepth struct {
 	config.ReviewDecision
 	Changed int
 	Labels  []string
+	// Cross is the harness that must record a review-cross verdict, CrossNone
+	// when the requirement is skipped, "" when it does not apply. CrossWhy says
+	// which label and setting decided it.
+	Cross, CrossWhy string
 }
 
 // ReviewDepthError says which read failed. Guessing a depth could pass a risky
@@ -77,7 +88,10 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	}
 	in := config.ReviewInput{Changed: changed, Files: files, Labels: slices.Clone(s.Labels)}
 	decide := s.Policy.Decide
-	if s.Issues != nil && s.Issue != "" && s.Policy.NeedsIssue() {
+	// Each issue's own labels decide its cross requirement, as they do its
+	// depth: one issue's review:none must not skip another's.
+	labelSets := [][]string{in.Labels}
+	if s.Issues != nil && s.Issue != "" && (s.Policy.NeedsIssue() || s.Cross.Active()) {
 		keys := append([]tracker.IssueKey{s.Issue}, s.Members...)
 		var got []tracker.Issue
 		var bodies []string
@@ -95,6 +109,10 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 			}
 		}
 		in.IssueBody = strings.Join(bodies, "\n\n")
+		labelSets = labelSets[:0]
+		for _, is := range got {
+			labelSets = append(labelSets, append(slices.Clone(s.Labels), is.Labels...))
+		}
 		if len(got) > 1 {
 			// One decision per bundled issue, the highest wins: a union of
 			// labels would let a `none` on one issue beat another's default.
@@ -124,7 +142,89 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 		}
 		in.PRBody = body
 	}
-	return ReviewDepth{decide(in), changed, in.Labels}, nil
+	out := ReviewDepth{ReviewDecision: decide(in), Changed: changed, Labels: in.Labels}
+	author := s.Author
+	if author == "" {
+		author = harnessLabel(labelSets[0])
+	}
+	if author == "" {
+		author = s.Cross.DefaultKind
+	}
+	if author == "" {
+		author = harness.Default
+	}
+	for _, labels := range labelSets {
+		if c, why := resolveCross(s.Cross, labels, author); crossRank(c) > crossRank(out.Cross) {
+			out.Cross, out.CrossWhy = c, why
+		}
+	}
+	return out, nil
+}
+
+// CrossNone is ReviewDepth.Cross when a PR that would need a cross-harness
+// review gets none: review:none, or no other harness to run it.
+const CrossNone = "none"
+
+// crossReviewer reports whether kind can run a cross-harness review.
+func crossReviewer(kind string) bool {
+	return harness.Valid(kind) && harness.Resolve(kind).CrossReviewer()
+}
+
+// crossRank orders cross results for a bundle: a harness beats none beats "".
+func crossRank(c string) int {
+	switch c {
+	case "":
+		return 0
+	case CrossNone:
+		return 1
+	}
+	return 2
+}
+
+// harnessLabel is the kind a harness:<kind> label names, "" when none does.
+func harnessLabel(labels []string) string {
+	for _, l := range labels {
+		if k, ok := strings.CutPrefix(l, "harness:"); ok && harness.Valid(k) {
+			return k
+		}
+	}
+	return ""
+}
+
+// resolveCross is one issue's cross-harness requirement (#1612): the reviewer
+// harness, CrossNone, or "" when none applies. A label in review.crossLabels
+// triggers it; review:none skips it and beats review:<harness>, which picks the
+// reviewer; otherwise it is the first reviewer in round.harnesses that is not
+// the author's harness. A review:<x> naming no reviewer is not a routing label.
+func resolveCross(c roundcfg.CrossReview, labels []string, author string) (string, string) {
+	if !c.Active() {
+		return "", ""
+	}
+	var trigger, route string
+	for _, l := range labels {
+		if trigger == "" && slices.Contains(c.Labels, l) {
+			trigger = l
+		}
+		if v, ok := strings.CutPrefix(l, "review:"); ok && route != CrossNone && (v == CrossNone || crossReviewer(v)) {
+			route = v
+		}
+	}
+	switch {
+	case trigger == "" && route == "":
+		return "", ""
+	case trigger == "":
+		return CrossNone, fmt.Sprintf("label review:%s, but the issue has no label in review.crossLabels (%s)", route, strings.Join(c.Labels, ", "))
+	case route == CrossNone:
+		return CrossNone, "label review:none"
+	case route != "":
+		return route, fmt.Sprintf("label %s; label review:%s", trigger, route)
+	}
+	for _, k := range c.Harnesses {
+		if k != author && crossReviewer(k) {
+			return k, fmt.Sprintf("label %s; first of round.harnesses other than the author's %s", trigger, author)
+		}
+	}
+	return CrossNone, fmt.Sprintf("label %s, but round.harnesses lists no reviewer harness other than the author's %s", trigger, author)
 }
 
 // DoorNote explains why a depth below full has not seen the PR's Door line: there
