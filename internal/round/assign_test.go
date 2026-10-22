@@ -39,6 +39,7 @@ type hostFake struct {
 	swept []string // worktrees whose shell panes were swept
 	// sendErr, when set, is what Send returns after recording the brief.
 	sendErr error
+	capture string
 }
 
 func (h *hostFake) Kind() host.Kind {
@@ -64,7 +65,7 @@ func (h *hostFake) Send(_ context.Context, slot, handle, file string) error {
 	h.sents = append(h.sents, h.sent)
 	return h.sendErr
 }
-func (h *hostFake) Capture(context.Context, string, string, int) string { return "" }
+func (h *hostFake) Capture(context.Context, string, string, int) string { return h.capture }
 func (h *hostFake) Status(context.Context, string, string) string       { return "" }
 func (h *hostFake) Kill(context.Context, string, string) error          { return nil }
 func (h *hostFake) Notify(context.Context, string, string)              {}
@@ -1434,5 +1435,32 @@ func TestAssignRefusesQuotaNamingEveryExhaustedAccount(t *testing.T) {
 	}
 	if len(f.host.spawned) != 0 {
 		t.Errorf("dispatched into an exhausted account: %v", f.host.spawned)
+	}
+}
+
+func TestAssignCodexUnsentDispatchIsBlocked(t *testing.T) {
+	f := newAssignFixture(t)
+	f.config(t, codexCfg)
+	(&codexRig{loggedIn: true}).install(f)
+	f.host.name, f.host.sendErr = host.Herdr, host.ErrNotSubmitted
+	_, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex" })
+	var we *exitcode.Error
+	bd, ok := exitcode.DataOf[worker.BlockData](err)
+	if !errors.As(err, &we) || we.Exit != exitcode.ExitUnavailable || !ok || bd.BlockedBy != "dispatch" || !strings.Contains(err.Error(), "ben") {
+		t.Fatalf("unsent assignment must exit 5 blockedBy dispatch naming ben: %v (%+v)", err, bd)
+	}
+	se := stageOf(t, err)
+	if se.Stage != "dispatch" || !slices.Contains(se.Residual, "claim") || !slices.Contains(se.Residual, "comment") || !slices.Contains(se.Residual, "in-progress") {
+		t.Fatalf("retained marks must be reported: %+v", se)
+	}
+	s := worker.LoadRegistryTolerant(f.root).Slot("ben")
+	if !s.Unsent() || s.State() != "idle" {
+		t.Fatalf("unsent assignment: %+v", s.Raw())
+	}
+	// Even an old done sentinel must not promote an unsent task.
+	f.host.capture = "ROTA-DONE ben https://github.com/o/r/pull/1\n"
+	rows, err := f.env.Worker.Poll(bg, f.root, worker.PollOpts{Slot: "ben"})
+	if err != nil || len(rows.Slots) == 0 || rows.Slots[0].State != worker.StateBlocked || !strings.Contains(rows.Slots[0].Evidence, "not submitted") {
+		t.Fatalf("poll unsent assignment: %+v, %v", rows, err)
 	}
 }

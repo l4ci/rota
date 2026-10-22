@@ -645,6 +645,13 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	res.Account, res.Host, res.Brief, res.Worktree = d.Account, d.Host, d.BriefText, d.Worktree
 	res.Dispatched = res.Dispatched || d.Dispatched
 	res.Changed = res.Changed || d.Changed
+	var se *StageError
+	var dispatchErr *exitcode.Error
+	if errors.As(err, &se) && se.Stage == "dispatch" && errors.As(err, &dispatchErr) && dispatchErr.Exit == exitcode.ExitRetry {
+		res.Changed = true
+		err = &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: dispatchErr.Message,
+			Data: worker.BlockData{BlockedBy: "dispatch", Changed: true}, Cause: err}
+	}
 	if err == nil && !run.resuming {
 		if lerr := worker.LedgerAppendErr(e.workerEnv(), root, ledger.Entry{Kind: ledger.KindAssign, Issue: run.id, Slot: run.agent, Account: res.Account, Harness: run.kind,
 			Detail: ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts, root, run.kind, res.Account), "bundle", strings.Join(res.Bundle, ","), "fallbackFrom", run.fallback.from(), "fallbackWhy", run.fallback.why())}); lerr != nil {
@@ -1072,6 +1079,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 		{name: "bind the slot", do: func() error {
 			if err := editSlot(root, agent, func(s *worker.Slot) error {
 				s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: run.kind, KindSource: run.kindSource, Tier: run.tier, Model: res.Model, TierReason: run.reason, SmokeSection: res.SmokeSection, Attempt: attempt, AttemptBase: attemptBase, Bundle: res.Bundle})
+				s.SetBriefContext(run.decisions, o.Siblings)
 				return nil
 			}); err != nil {
 				return err
@@ -1090,20 +1098,9 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 	set := o.Settings
 	d := &delivery{Slot: agent, Task: id, Branch: func() string { return res.Branch }, Kind: run.kind, Model: res.Model, Round: rnd,
 		Brief: func() string {
-			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
-			var bundle []bundleIssue
-			if len(run.members) > 0 {
-				ids := []string{id}
-				for _, m := range run.members {
-					ids = append(ids, m.ID)
-				}
-				bundle = bundleBrief(be, ids)
-			}
-			text := pointerBrief(agent, id, res.Branch, run.brief, o.Siblings, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, bundle, tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, FullOnly: set.FullOnly, TDD: set.TDD, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()})
-			if hb := latestHandoffBranch(be, id); hb != "" {
-				text += fmt.Sprintf("\nAn earlier worker handed this issue back: read the latest `rota:handoff` comment on it. Its work is pushed on branch %s (origin/%s); fetch it before you start over.\n", hb, hb)
-			}
-			return text
+			return e.taskBrief(ctx, root, be, taskBriefSpec{agent: agent, id: id, branch: res.Branch, contract: run.brief,
+				decisions: run.decisions, siblings: o.Siblings, bundle: res.Bundle,
+				tier: tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, FullOnly: set.FullOnly, TDD: set.TDD, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()}})
 		}}
 	// 8-9. The account, the pointer brief and the hand-off.
 	ds, err := d.steps(ctx, e, root)

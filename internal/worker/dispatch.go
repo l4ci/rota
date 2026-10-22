@@ -435,8 +435,13 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	}
 	// Remember a stall so the next relay checks the prompt line first. Written
 	// only on a change: a clean send leaves the registry untouched.
-	if unsent := errors.Is(sendErr, host.ErrNotSubmitted); unsent != s.Unsent() {
-		UpdateSlot(root, o.Slot, func(s *Slot) { s.SetUnsent(unsent) })
+	if unsent := errors.Is(sendErr, host.ErrNotSubmitted); unsent || s.Unsent() {
+		UpdateSlot(root, o.Slot, func(s *Slot) {
+			s.SetUnsent(unsent)
+			if unsent && !o.Relay {
+				s.MarkState("idle", "")
+			}
+		})
 	}
 	if o.Relay && (errors.Is(sendErr, host.ErrDialogOpen) || errors.Is(sendErr, host.ErrDraftOnPrompt)) {
 		UpdateSlot(root, o.Slot, func(s *Slot) { s.ClearRelayPending() }) // nothing went out
@@ -478,7 +483,7 @@ func resetRefusal(err error, changed bool) error {
 	return err
 }
 
-// BlockData is the failure data of an exit-4 refusal: what blocked it and
+// BlockData is the failure data of a refusal (also assign’s exit-5 dispatch): what blocked it and
 // whether the verb changed state on the way (contract: exit 4 data).
 type BlockData struct {
 	BlockedBy string
