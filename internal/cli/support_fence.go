@@ -24,6 +24,8 @@ var supportFenced = []string{
 	// Merge.
 	"rota worker gate", "rota worker train",
 	"rota ship merge", "rota ship pr-merge", "rota ship undo",
+	// Runs an arbitrary command.
+	"rota test lock",
 	// Tracked .rota/ writes.
 	"rota knowledge add", "rota knowledge amend", "rota knowledge rename-topic", "rota knowledge replace", "rota knowledge rm",
 	"rota knowledge tier fold", "rota knowledge tier set",
