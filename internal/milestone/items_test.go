@@ -1,9 +1,13 @@
 package milestone
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/l4ci/rota/internal/fsio"
 )
 
 func itemsProject(t *testing.T) string {
@@ -77,4 +81,19 @@ func TestSyncItems(t *testing.T) {
 			t.Fatalf("err = %v", err)
 		}
 	})
+}
+
+func TestSyncItemsWithReadsUnderLock(t *testing.T) {
+	root := itemsProject(t)
+	var lockErr error
+	_, err := SyncItemsWith(root, "M01", func() ([]ItemRef, error) {
+		lockErr = fsio.Locked(detailPath(root, "M01"), 100*time.Millisecond, func() error { return nil })
+		return []ItemRef{{ID: "B02", Title: "Second"}}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(lockErr, fsio.ErrLockTimeout) {
+		t.Fatalf("items callback ran outside the milestone lock: %v", lockErr)
+	}
 }
