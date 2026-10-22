@@ -43,7 +43,7 @@ func Gate(env worker.Env, root, issue string, r worker.GateResult, park Park) (O
 	}
 	switch m := worker.ClassifyVerdict(r.Verdict); {
 	case r.OK():
-		return Outcome{}, landed(root, issue)
+		return Outcome{}, landed(env, root, issue)
 	case m.Bounce:
 		return bounce(env, root, issue, r, park)
 	}
@@ -58,7 +58,7 @@ func Train(env worker.Env, round *worker.RoundMemo, root string, issues map[stri
 	var fails []Failure
 	for _, m := range r.Members {
 		if issue := issues[m.Target]; m.Landed && issue != "" {
-			if err := landed(root, issue); err != nil {
+			if err := landed(env, root, issue); err != nil {
 				fails = append(fails, Failure{m.Target, err})
 			}
 		}
@@ -75,14 +75,18 @@ func Train(env worker.Env, round *worker.RoundMemo, root string, issues map[stri
 
 // landed ends an item whose PR landed: its wall-clock (round.itemTimeoutMinutes),
 // its best-of record and its bounce count.
-func landed(root, issue string) error {
+func landed(env worker.Env, root, issue string) error {
 	if err := worker.ClearItemStart(root, issue); err != nil {
 		return err
 	}
 	if err := worker.ClearBestOf(root, issue); err != nil {
 		return err
 	}
-	return worker.ClearBounces(root, issue)
+	store, err := env.BounceStore(root)
+	if err != nil {
+		return err
+	}
+	return store.Clear(issue)
 }
 
 // bounce counts one bounce for the item and parks it at round.maxBounces. A
@@ -94,10 +98,15 @@ func bounce(env worker.Env, root, issue string, r worker.GateResult, park Park) 
 	if err != nil {
 		return Outcome{}, err
 	}
-	n, _, _, err := worker.RecordBounceCapped(env, r.Round, root, issue, r.TargetSlot, r.SHA, set.MaxBounces)
+	store, err := env.BounceStore(root)
 	if err != nil {
 		return Outcome{}, err
 	}
+	rec, err := store.Record(r.Round, issue, r.TargetSlot, r.SHA, set.MaxBounces)
+	if err != nil {
+		return Outcome{}, err
+	}
+	n := rec.N
 	if set.MaxBounces == 0 || n < set.MaxBounces {
 		return Outcome{Bounces: n}, nil
 	}
@@ -110,5 +119,5 @@ func bounce(env worker.Env, root, issue string, r worker.GateResult, park Park) 
 	if err := park(issue, note, set); err != nil {
 		return Outcome{Bounces: n}, fmt.Errorf("could not park %s as needs-human: %w", issue, err)
 	}
-	return Outcome{Bounces: n, Parked: true}, worker.ClearBounces(root, issue)
+	return Outcome{Bounces: n, Parked: true}, store.Clear(issue)
 }

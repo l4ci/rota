@@ -1,13 +1,19 @@
 package postgate
 
 import (
+	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -167,5 +173,56 @@ func TestBounceReadsMaxBouncesFromTheInjectedConfig(t *testing.T) {
 	}
 	if o.Bounces != 1 || !o.Parked || len(p.issues) != 1 {
 		t.Fatalf("maxBounces 1 from the injected config must park on the first bounce: %+v, parked %v", o, p.issues)
+	}
+}
+
+// issueComments is one tracker's comments, for the issue bounce store.
+type issueComments struct{ bodies []string }
+
+func (c *issueComments) Comments(context.Context, tracker.IssueKey) ([]tracker.Comment, error) {
+	out := make([]tracker.Comment, len(c.bodies))
+	for i, b := range c.bodies {
+		out[i] = tracker.Comment{ID: strconv.Itoa(i), Body: b}
+	}
+	return out, nil
+}
+
+func (c *issueComments) AddComment(_ context.Context, _ tracker.IssueKey, body string) (string, error) {
+	c.bodies = append(c.bodies, body)
+	return strconv.Itoa(len(c.bodies) - 1), nil
+}
+
+func (c *issueComments) DeleteComment(context.Context, tracker.IssueKey, string) error { return nil }
+
+// #1598 AC-7: with round.support set the gate counts and parks from the issue,
+// never the registry, and parking posts the reset.
+func TestGateBouncesOnTheIssueWithSupport(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"issues":{"source":"github"},"round":{"support":"mac"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ic := &issueComments{}
+	env := worker.Env{IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return ic, nil }}
+	p := &parked{}
+	for i, sha := range []string{"a1", "a1", "b2", "c3"} {
+		o, err := Gate(env, root, "7", worker.GateResult{Verdict: worker.GateStale, Slot: "w1", SHA: sha}, p.park)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := max(i, 1); o.Bounces != want || o.Parked != (i == 3) {
+			t.Fatalf("gate %d at %s: %+v", i, sha, o)
+		}
+	}
+	if len(p.issues) != 1 || bounces(root, "7") != 0 {
+		t.Fatalf("parked %v, registry count %d", p.issues, bounces(root, "7"))
+	}
+	if n := len(ic.bodies); n != 4 || !strings.HasPrefix(ic.bodies[3], "<!-- rota:bounce reset -->") {
+		t.Fatalf("issue comments %q", ic.bodies)
+	}
+	if _, err := Gate(env, root, "7", worker.GateResult{Verdict: worker.GatePass}, nil); err != nil || len(ic.bodies) != 4 {
+		t.Errorf("a pass with no bounces posts nothing: %v %q", err, ic.bodies)
 	}
 }

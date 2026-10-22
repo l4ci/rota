@@ -310,6 +310,13 @@ func (d *Deps) workerEnv() worker.Env {
 			return it, nil
 		}
 	}
+	if e.IssueComments == nil {
+		// The bounce store reads its count back after writing it, so it skips
+		// the read cache, as the gate's forge does.
+		e.IssueComments = func(dir string, s tracker.Settings) (worker.IssueComments, error) {
+			return tracker.NewIssueTracker(context.Background(), s, "", dir, d.trackerBase()...)
+		}
+	}
 	if e.Forge == nil {
 		// and so does its forge, but only the executor swap: never the read
 		// cache. The gate re-reads the forge in loops that need a fresh answer

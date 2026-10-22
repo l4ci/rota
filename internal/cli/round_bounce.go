@@ -134,8 +134,8 @@ func noBlockingFindings(c *Ctx, root, issue, slot, head string) error {
 }
 
 // recordBounce counts one bounce unless the item is already at max (0 = no
-// cap); the cap is enforced by the registry write. capped reports the refusal;
-// n is then the unchanged count. A slot that
+// cap); the cap is enforced by the bounce store's write. capped reports the
+// refusal; n is then the unchanged count. A slot that
 // is not in the pool is refused before anything is written.
 func recordBounce(env worker.Env, root, issue, slot, head string, max int) (n int, capped bool, err error) {
 	reg, err := worker.LoadRegistry(root)
@@ -146,8 +146,12 @@ func recordBounce(env worker.Env, root, issue, slot, head string, max int) (n in
 		return 0, false, &Error{Exit: ExitRefused, Message: fmt.Sprintf("unknown slot %q: not in the worker pool", slot),
 			Hint: "see `rota worker pool list` for the slot names"}
 	}
-	n, _, capped, err = worker.RecordBounceCapped(env, nil, root, issue, slot, head, max)
-	return n, capped, err
+	store, err := env.BounceStore(root)
+	if err != nil {
+		return 0, false, err
+	}
+	rec, err := store.Record(nil, issue, slot, head, max)
+	return rec.N, rec.Capped, err
 }
 
 func maxText(max int) string {
