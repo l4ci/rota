@@ -44,6 +44,11 @@ const (
 	KindRelease = "release"
 	KindHandoff = "handoff"
 	KindFields  = "fields"
+	// KindBounce is one bounce counted on an issue, or the reset that zeroes
+	// the count (#1598). KindReviewBounce is a bounce posted on the PR for the
+	// machine whose worker holds it.
+	KindBounce       = "bounce"
+	KindReviewBounce = "review-bounce"
 )
 
 // opener matches `<!-- ` plus either prefix's name, up to the kind.
@@ -53,6 +58,7 @@ var (
 	noteRe    = regexp.MustCompile(opener + `(proof|design|acceptance|plan(?::S\p{Nd}+)?)(?: (\p{Nd}+)/(\p{Nd}+))? -->(?:\n|\z)`)
 	commentRe = regexp.MustCompile(opener + `comment ([\p{L}\p{N}_]+) -->(?:\n|\z)`)
 	claimRe   = regexp.MustCompile(opener + `(claim|release) ([^` + pystr.SpaceClass + `]+) -->`)
+	bounceRe  = regexp.MustCompile(opener + `(bounce|review-bounce)(?: (reset|head=[0-9a-fA-F]*))? -->`)
 	fieldsRe  = regexp.MustCompile(`(?s)\n*<!-- (?:rota|hv):fields\n(.*?)\n?-->[ \t]*\n*\z`)
 )
 
@@ -143,4 +149,25 @@ func SplitFields(body string) (text, lines string, ok bool) {
 		return body, "", false
 	}
 	return body[:loc[0]], body[loc[2]:loc[3]], true
+}
+
+// Bounce renders the marker of one bounce at PR head (head "" when the head is
+// not known); BounceReset the one that zeroes an issue's count; ReviewBounce
+// the marker of a bounce posted on the PR itself.
+func Bounce(head string) string       { return Line(KindBounce, "head="+head) }
+func BounceReset() string             { return Line(KindBounce, "reset") }
+func ReviewBounce(head string) string { return Line(KindReviewBounce, "head="+head) }
+
+// ParseBounce reads a comment that opens with a bounce or review-bounce marker: kind is
+// KindBounce or KindReviewBounce, reset reports a reset, head the sha after
+// head= ("" for a reset or an unknown head).
+func ParseBounce(body string) (kind, head string, reset, ok bool) {
+	m := bounceRe.FindStringSubmatch(strings.ReplaceAll(body, "\r\n", "\n"))
+	if m == nil {
+		return "", "", false, false
+	}
+	if m[2] == "reset" {
+		return m[1], "", true, true
+	}
+	return m[1], strings.TrimPrefix(m[2], "head="), false, true
 }

@@ -40,7 +40,8 @@ type fakeRemote struct {
 	added          []int // AddLabels targets, in call order
 	removed        []int // RemoveLabels targets, in call order
 	openPRCalls    int
-	closedLists    int // List calls that asked for closed issues
+	prNotes        map[int][]tracker.Comment // MRNotes answers by PR number
+	closedLists    int                       // List calls that asked for closed issues
 
 	// Board side.
 	items     map[string]*backlog.Item
@@ -92,6 +93,17 @@ func (f *fakeRemote) asForge() Forge { return remoteForge{f} }
 func (f remoteForge) OpenPRs(context.Context) ([]tracker.PR, error) {
 	f.openPRCalls++
 	return f.prs, f.prsErr
+}
+
+func (f remoteForge) MRNotes(_ context.Context, n int) ([]tracker.Comment, error) {
+	return f.prNotes[n], nil
+}
+
+func (f remoteForge) Reviews(context.Context, int) ([]tracker.Review, error) { return nil, nil }
+
+// CanPush is true for every login but "mallory", a stranger.
+func (f remoteForge) CanPush(_ context.Context, login string) (bool, error) {
+	return login != "mallory", nil
 }
 
 func (f remoteForge) MergedPRs(_ context.Context, branch string) ([]tracker.PR, error) {

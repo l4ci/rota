@@ -29,6 +29,9 @@ const (
 	BlockFetch = "fetch"
 	// BlockConflict: a resumed support branch does not merge origin/<base>.
 	BlockConflict = "conflict"
+	// BlockDirty: a resumed support branch has uncommitted changes, so it is
+	// not merged with origin/<base> at all.
+	BlockDirty = "dirty"
 	// BlockConfig: the verb needs a config key that is not set.
 	BlockConfig = "config"
 )
@@ -117,7 +120,8 @@ func (e Env) OfferSupport(ctx context.Context, root string, be Board, ids []stri
 // origin/<base> and returns it, so a support branch is cut from the main the
 // main machine last pushed, never from this machine's stale local base. A slot
 // resuming its issue on its branch merges it first; a merge that fails is
-// aborted and refused (BlockConflict) before the brief goes out.
+// aborted and refused (BlockConflict) before the brief goes out, and a dirty
+// worktree is refused (BlockDirty) before any merge runs.
 func (e Env) freshBase(ctx context.Context, root string, slot *worker.Slot, branch string, resuming bool) (string, error) {
 	base := strutil.FirstNonEmpty(slot.Base(), e.Base)
 	res, err := e.Git(ctx, root, "fetch", "-q", "origin", base)
@@ -131,6 +135,11 @@ func (e Env) freshBase(ctx context.Context, root string, slot *worker.Slot, bran
 	wt := slot.Worktree()
 	if cur, err := e.Git(ctx, wt, "symbolic-ref", "--short", "-q", "HEAD"); err != nil || strings.TrimSpace(cur.Stdout) != branch {
 		return from, nil // not on the branch: the reset cuts it fresh from origin
+	}
+	// Uncommitted work is the slot's to keep: no merge touches it, and the
+	// refusal says dirty, never conflict.
+	if st, err := e.Git(ctx, wt, "status", "--porcelain"); err != nil || st.ExitCode != 0 || strings.TrimSpace(st.Stdout) != "" {
+		return "", blocked(BlockDirty, "%s has uncommitted changes in %s: commit or discard them before %s is merged in and the slot resumes", branch, wt, from)
 	}
 	m, err := e.Git(ctx, wt, "merge", "--no-edit", "-q", from)
 	if err == nil && m.ExitCode == 0 {

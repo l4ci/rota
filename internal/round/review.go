@@ -113,12 +113,18 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		return out, nil
 	}
 	issue := s.HeldID()
-	out.Bounces = reg.Bounces(issue)
+	store, err := e.workerEnv().BounceStore(root)
+	if err != nil {
+		return out, err
+	}
+	if out.Bounces, _, err = store.Count(issue); err != nil {
+		return out, err
+	}
 	if o.MaxBounces > 0 && out.Bounces >= o.MaxBounces {
 		return e.reviewCap(ctx, root, o, batch, number, issue, out)
 	}
 	if o.FreshAt > 0 && out.Bounces+1 == o.FreshAt {
-		moved, err := e.reviewFresh(ctx, root, o, reg, s, batch, pr.HeadSHA, issue, &out)
+		moved, err := e.reviewFresh(ctx, root, o, reg, store, s, batch, pr.HeadSHA, issue, &out)
 		if moved || err != nil {
 			return out, err
 		}
@@ -143,22 +149,23 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 	// that fails afterwards cannot leave a relayed batch unconsumed, which the
 	// next pass would send again. A dispatch that fails puts both back.
 	prevSeen := s.ReviewSeen()
-	// A bounce RecordBounce deduped on the same head was not counted here and
+	// A bounce the store deduped on the same head was not counted here and
 	// is not this dispatch's to undo.
-	// The cap is enforced by the locked write: the snapshot check above only
-	// spares the work, and a bounce that landed since then refuses here.
-	var counted, capped bool
-	if out.Bounces, counted, capped, err = worker.RecordBounceCapped(e.workerEnv(), nil, root, issue, o.Slot, pr.HeadSHA, o.MaxBounces); err != nil {
+	// The snapshot check above only spares the work. The registry store holds
+	// the cap under its lock; the issue store, across machines, re-reads after
+	// its comment and takes it back when another machine's landed first.
+	rec, err := store.Record(nil, issue, o.Slot, pr.HeadSHA, o.MaxBounces)
+	if err != nil {
 		return out, err
 	}
-	if capped {
+	out.Bounces = rec.N
+	if rec.Capped {
 		return e.reviewCap(ctx, root, o, batch, number, issue, out)
 	}
-	unrecord := func() error {
-		if !counted {
-			return nil
-		}
-		return worker.UnrecordBounce(root, issue, pr.HeadSHA, reg)
+	// recount is the count after a rollback; the store was read above.
+	recount := func() int {
+		n, _, _ := store.Count(issue)
+		return n
 	}
 	// The cursor goes back only while it is still the one written here.
 	unseen := func() error {
@@ -170,22 +177,22 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		return err
 	}
 	if _, err = worker.UpdateSlot(root, o.Slot, func(s *worker.Slot) { s.SetReviewSeen(batch.Cursor) }); err != nil {
-		rerr := unrecord()
-		out.Bounces = worker.LoadRegistryTolerant(root).Bounces(issue) // rollback path: the registry was read strictly above
+		rerr := rec.Undo()
+		out.Bounces = recount()
 		return out, errors.Join(err, rollbackErr(rerr))
 	}
 	// The same text goes to the slot's inbox first: the pane copy can cross the
 	// worker's ROTA-DONE, and `worker done` refuses while mail is unread.
 	mail, err := worker.PostMail(root, o.Slot, worker.MailReview, ReviewRelayText(batch), e.Worker.Now())
 	if err != nil {
-		rerr, serr := unrecord(), unseen()
-		out.Bounces = worker.LoadRegistryTolerant(root).Bounces(issue)
+		rerr, serr := rec.Undo(), unseen()
+		out.Bounces = recount()
 		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr))
 	}
 	if _, err := e.workerEnv().Dispatch(ctx, root, worker.DispatchOpts{Slot: o.Slot, BodyFile: body.Name(), Relay: true}); err != nil {
-		rerr, serr := unrecord(), unseen()
+		rerr, serr := rec.Undo(), unseen()
 		merr := worker.RetractMail(root, o.Slot, mail.Seq)
-		out.Bounces = worker.LoadRegistryTolerant(root).Bounces(issue) // rollback path: the registry was read strictly above
+		out.Bounces = recount()
 		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr), rollbackErr(merr))
 	}
 	return out, nil
@@ -209,7 +216,7 @@ func freshBrief(pr string, findings []string) string {
 // as the bounce. moved is false when the transfer was skipped (no free slot,
 // nothing open to carry, the transfer refused) and the caller relays in place;
 // out.FreshSkipped says why.
-func (e Env) reviewFresh(ctx context.Context, root string, o ReviewOpts, reg worker.Registry, s *worker.Slot, batch worker.ReviewBatch, head, issue string, out *Relayed) (moved bool, err error) {
+func (e Env) reviewFresh(ctx context.Context, root string, o ReviewOpts, reg worker.Registry, store worker.BounceStore, s *worker.Slot, batch worker.ReviewBatch, head, issue string, out *Relayed) (moved bool, err error) {
 	skip := func(format string, a ...any) (bool, error) {
 		out.FreshSkipped = fmt.Sprintf(format, a...)
 		return false, nil
@@ -231,11 +238,12 @@ func (e Env) reviewFresh(ctx context.Context, root string, o ReviewOpts, reg wor
 		return skip("no free slot to transfer to")
 	}
 	prev := out.Bounces
-	bounces, counted, capped, err := worker.RecordBounceCapped(e.workerEnv(), nil, root, issue, o.Slot, head, o.MaxBounces)
+	rec, err := store.Record(nil, issue, o.Slot, head, o.MaxBounces)
 	if err != nil {
 		return false, err
 	}
-	if capped {
+	bounces := rec.N
+	if rec.Capped {
 		// Another bounce reached the cap meanwhile: the relay that follows
 		// refuses it through the same check and escalates.
 		out.Bounces = bounces
@@ -251,10 +259,7 @@ func (e Env) reviewFresh(ctx context.Context, root string, o ReviewOpts, reg wor
 	})
 	if terr != nil && !res.Changed {
 		var blk *BlockedError
-		var rerr error
-		if counted {
-			rerr = worker.UnrecordBounce(root, issue, head, reg)
-		}
+		rerr := rec.Undo()
 		out.Bounces = prev
 		if errors.As(terr, &blk) {
 			return skip("transfer to %s refused: %s", to, blk.Error())
