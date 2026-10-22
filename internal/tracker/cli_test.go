@@ -291,9 +291,9 @@ func TestResolveProvider(t *testing.T) {
 	} {
 		r, err := ResolveProvider(context.Background(), c.kind, c.want, c.configured, "/repo", c.x)
 		if c.out == "" {
-			var te *Error
-			if !IsKind(err, KindUnavailable) || !strings.Contains(err.Error(), "cannot determine the forge from origin https://example.com/o/r (set forge.provider)") ||
-				!errors.As(err, &te) || te.Code != 3 {
+			var ufe *UnknownForgeError
+			if !errors.Is(err, ErrUnknownForge) || !strings.Contains(err.Error(), "cannot determine the forge from origin https://example.com/o/r (set forge.provider)") ||
+				!errors.As(err, &ufe) || ufe.Origin != "https://example.com/o/r" {
 				t.Errorf("%+v: %+v, %v", c, r, err)
 			}
 			continue
@@ -457,6 +457,44 @@ func TestNewForgeAndNewIssueTracker(t *testing.T) {
 	// a file backlog with a github forge still has a forge.
 	if f, err := NewForge(ctx, Settings{Source: "file", Provider: "github"}, "", "/repo", origin("", 2)); err != nil || f.Provider() != "github" {
 		t.Errorf("file source, github forge: %v, %v", f, err)
+	}
+}
+
+// issues.source forge on an origin naming no forge: the tracker reads as a
+// ForgeReader (an announced github) and refuses every write as an actor, with
+// the origin in the reason (#889).
+func TestForgeIssueTrackerReadsAssumedGitHubAndRefusesWrites(t *testing.T) {
+	ctx := context.Background()
+	var calls []string
+	x := func(_ context.Context, _, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
+		if name == "git" {
+			return []byte("https://git.example.com/o/r.git\n"), nil, 0, nil
+		}
+		calls = append(calls, name+" "+strings.Join(args, " "))
+		return []byte("[]"), nil, 0, nil
+	}
+	it, err := NewIssueTracker(ctx, Settings{Source: "forge", Provider: "auto"}, "", "/repo", WithExec(x, func(string) (string, error) { return "/fake", nil }))
+	if err != nil || it.Provider() != "github" {
+		t.Fatalf("forge source, unknown origin: %v, %v", it, err)
+	}
+	if want := "origin https://git.example.com/o/r.git names no forge; assumed github (set forge.provider)"; AssumedNote(it) != want {
+		t.Errorf("note = %q, want %q", AssumedNote(it), want)
+	}
+	if _, err := it.List(ctx, ListFilter{}); err != nil || len(calls) != 1 {
+		t.Errorf("a read goes through: %v %q", err, calls)
+	}
+	_, err = it.AddComment(ctx, NumKey(1), "hi")
+	var ufe *UnknownForgeError
+	if !errors.As(err, &ufe) || !errors.Is(err, ErrUnknownForge) || ufe.Origin != "https://git.example.com/o/r.git" ||
+		!strings.Contains(err.Error(), "cannot determine the forge from origin https://git.example.com/o/r.git") || len(calls) != 1 {
+		t.Errorf("a write is refused before the CLI runs: %v %q", err, calls)
+	}
+	if err := it.Close(ctx, NumKey(1), "", ""); !errors.Is(err, ErrUnknownForge) {
+		t.Errorf("close: %v", err)
+	}
+	gh, _ := NewIssueTracker(ctx, Settings{Source: "github"}, "", "/repo", WithExec(x, func(string) (string, error) { return "/fake", nil }))
+	if AssumedNote(gh) != "" {
+		t.Errorf("a named tracker assumed nothing: %q", AssumedNote(gh))
 	}
 }
 

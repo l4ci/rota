@@ -79,6 +79,8 @@ func TestTranslateTable(t *testing.T) {
 		{"round unclassified is 5", errors.New("git"), roundOpts, 5, ""},
 		{"round exitcode error passes", exitcode.Errf(4, "x"), roundOpts, 4, ""},
 
+		{"tracker unknown forge is the forge refusal", fmt.Errorf("w: %w", &tracker.UnknownForgeError{Origin: "https://x.example/r"}), trackerOpts, 4, `{"blockedBy": "forge", "changed": false}`},
+		{"backlog unknown forge is the forge refusal", &tracker.UnknownForgeError{Origin: "https://x.example/r"}, backlogOpts, 4, `{"blockedBy": "forge", "changed": false}`},
 		{"tracker kind", trk(tracker.KindNotFound), trackerOpts, 3, ""},
 		{"tracker unclassified is 70", errors.New("boom"), trackerOpts, 70, ""},
 		{"tracker ignores backlog not found", backlog.ErrNotFound, trackerOpts, 70, ""},

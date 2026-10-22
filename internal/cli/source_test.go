@@ -215,3 +215,33 @@ func TestInvalidForgeProviderExits70(t *testing.T) {
 		t.Fatalf("%d %s", code, stderr)
 	}
 }
+
+// issues.source forge on an origin naming no forge: a backlog read takes the
+// reader's github and says so on stderr; a write is the actor refusal, exit 4
+// blockedBy forge, with the origin and the hint (#889).
+func TestForgeSourceUnknownOriginReadsAndRefusesWrites(t *testing.T) {
+	root := trackerProject(t, `{"issues":{"source":"forge","retryWaitSeconds":0}}`)
+	f := &forge{answer: func(name string, args []string) (string, string, int) {
+		if name == "git" {
+			return "https://git.example.com/o/r.git\n", "", 0
+		}
+		return "[]", "", 0
+	}}
+	deps := useForge(t, f)
+	code, _, stderr := rotaRunWith(t, deps, "--json", "-C", root, "backlog", "list")
+	if code != 0 || !strings.Contains(stderr, "origin https://git.example.com/o/r.git names no forge; assumed github") {
+		t.Fatalf("read: %d %s", code, stderr)
+	}
+	before := len(f.calls)
+	code, env, stderr := rotaRunWith(t, deps, "--json", "-C", root, "item", "create", "--kind", "bugs", "--title", "T", "--body-file", "-")
+	if code != ExitRefused || get(dataOf(env), "blockedBy") != "forge" ||
+		!strings.Contains(stderr, "cannot determine the forge from origin https://git.example.com/o/r.git") ||
+		!strings.Contains(stderr, "set forge.provider to github, gitlab or local") {
+		t.Fatalf("write: %d %v %s", code, env, stderr)
+	}
+	for _, c := range f.calls[before:] {
+		if !strings.HasPrefix(c, "git ") {
+			t.Errorf("the refused write ran %q", c)
+		}
+	}
+}

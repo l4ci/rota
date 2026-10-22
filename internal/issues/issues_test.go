@@ -131,10 +131,16 @@ func TestLabelGitLab(t *testing.T) {
 	if _, err := Label(ctx, f.env(t), "", tracker.NumKey(3), "x", true, false); err != nil || f.did("glab label create") {
 		t.Errorf("no creation: %v %q", err, f.calls)
 	}
-	// unknown provider
+	// no origin: the forge is local, there is no tracker host
 	f = &forge{}
-	if _, err := Label(ctx, f.env(t), "", tracker.NumKey(3), "x", true, true); !errors.Is(err, ErrNoProvider) {
-		t.Errorf("unknown provider: %v", err)
+	if _, err := Label(ctx, f.env(t), "", tracker.NumKey(3), "x", true, true); !errors.Is(err, ErrNoProvider) || !strings.Contains(err.Error(), "the forge is local") {
+		t.Errorf("local forge: %v", err)
+	}
+	// an origin naming no forge: a write is the actor refusal, naming the origin
+	f = &forge{origin: "https://git.example.com/o/r.git"}
+	if _, err := Label(ctx, f.env(t), "", tracker.NumKey(3), "x", true, true); !errors.Is(err, tracker.ErrUnknownForge) ||
+		!strings.Contains(err.Error(), "cannot label upstream issue: cannot determine the forge from origin https://git.example.com/o/r.git") || len(f.calls) != 0 {
+		t.Errorf("unknown origin: %v %q", err, f.calls)
 	}
 	// a missing issue is not found, any other forge failure is not
 	f = &forge{origin: gh, reply: map[string]reply{"api -X DELETE": {code: 1, err: "HTTP 404: Not Found"}, "api -X POST": {code: 1, err: "HTTP 404: Not Found"}, "api repos/{owner}/{repo}/issues/99": {code: 1, err: "HTTP 404: Not Found"}}}

@@ -23,8 +23,8 @@ import (
 // ErrCommitNotFound: the commit is not in the repository (exit 3).
 var ErrCommitNotFound = errors.New("commit not found")
 
-// ErrNoProvider: neither issues.source, the origin remote nor forge.provider
-// names a tracker host (exit 3).
+// ErrNoProvider: issues.source names no tracker and the forge is local, so
+// there is no tracker host (exit 3).
 var ErrNoProvider = errors.New("no issue provider")
 
 // Env is what every call runs with.
@@ -60,7 +60,7 @@ func Provider(ctx context.Context, env Env, kind tracker.ForgeKind, dir string) 
 }
 
 func noProvider(verb string) error {
-	return fmt.Errorf("%w: cannot %s (issues.source does not name a tracker, no origin remote names github or gitlab, and forge.provider is not set)", ErrNoProvider, verb)
+	return fmt.Errorf("%w: cannot %s (issues.source does not name a tracker, and the forge is local: no origin remote, or forge.provider local)", ErrNoProvider, verb)
 }
 
 // execOf is the executor the env's options install, or nil for the real one.
@@ -94,7 +94,10 @@ func (e Env) tracker(ctx context.Context, verb, dir string) (Forge, error) {
 		return tracker.NewIssueTracker(ctx, s, "", dir, e.Opts...)
 	}
 	r, err := Provider(ctx, e, tracker.ForgeActor, dir)
-	if err != nil || r.Provider == tracker.ProviderLocal {
+	if err != nil {
+		return nil, fmt.Errorf("cannot %s: %w", verb, err) // the origin names no forge
+	}
+	if r.Provider == tracker.ProviderLocal {
 		return nil, noProvider(verb)
 	}
 	return e.adapter(ctx, r.Provider, dir)

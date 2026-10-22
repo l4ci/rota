@@ -495,11 +495,18 @@ func actorForge(c *Ctx, cfg any, dir string) (string, error) {
 	}
 	r, err := tracker.ResolveProvider(c.Context(), tracker.ForgeActor, "", tracker.SettingsFromConfig(cfg).Provider, dir, tracker.GitExec(c.deps().Git))
 	if err != nil {
-		e := Refused("%s", err.Error())
-		e.Data = jsonObj("blockedBy", "forge", "changed", false)
-		return "", e
+		return "", forgeRefusal(err)
 	}
 	return r.Provider, nil
+}
+
+// forgeRefusal is the exit-4 refusal of err, a tracker.UnknownForgeError an
+// actor met: blockedBy forge, the origin in the message, the fix as the hint.
+func forgeRefusal(err error) *Error {
+	e := Refused("%s", err.Error()).WithHint(tracker.UnknownForgeHint)
+	e.Data = jsonObj("blockedBy", "forge", "changed", false)
+	e.Cause = err
+	return e
 }
 
 // failData is the Result carrying the failure data err holds, if any.
