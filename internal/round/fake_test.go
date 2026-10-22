@@ -41,7 +41,7 @@ type fakeRemote struct {
 	removed        []int // RemoveLabels targets, in call order
 	openPRCalls    int
 	prNotes        map[int][]tracker.Comment // MRNotes answers by PR number
-	closedLists    int // List calls that asked for closed issues
+	closedLists    int                       // List calls that asked for closed issues
 
 	// Board side.
 	items     map[string]*backlog.Item

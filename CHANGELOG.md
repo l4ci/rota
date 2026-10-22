@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+- **Support orchestrator, first three slices (#1598).** A second machine can build issues for the same repo and tracker while one machine keeps every merge. The machines never connect; the tracker is the only shared state.
+  - Keys: `round.support` (tracked) names the support machine and turns the feature on. `round.role: support` goes in that machine's `config.local.json`, and is refused in the tracked config. Both need an issue tracker: with `issues.source: file`, setting either key or starting a round with one set exits 4 with `blockedBy: backend`.
+  - Fences: on the support machine, `worker gate`, `worker train`, `ship merge`, the gate step of `round tick` and every verb that writes tracked `.rota/` files exit 4 with `blockedBy: role`.
+  - Work split: main labels issues for the support machine with `rota round support offer <ID>...` (`--withdraw` takes them back). Each side lists and assigns only its own issues; assigning the other side's, a bundle member included, exits 4 with `blockedBy: site`.
+  - Names and base: support slots, branches, claims and workspaces carry the machine name as a prefix (`mac-ben/1588-...`), and main refuses a roster name with that prefix. Every support branch is cut from a freshly fetched `origin/<base>`, and a resumed one merges it first (`blockedBy: fetch`, `conflict` or `dirty` when that cannot happen).
+  - Handoff: main's `round reconcile` lists a support PR once its issue is `needs-review`, read from the forge, and `--apply` adopts it as a hostless slot. A support branch still in flight is never listed.
+  - Bounces: with `round.support` set, bounce counts live on the issue as marked comments (distinct PR heads since the last reset), so both machines read one count and one cap. Main's bounce of a support PR is also posted on the PR, where the support machine's review poll relays it to the worker; its reconcile reports a queued PR still at the bounced head as `bounced`.
+  - Still to come: learnings posted to the issue for main to fold into knowledge.
+
 ## v0.22.0 — 2026-10-22
 
 Bundles of small issues for one worker, one follow-up item per PR for deferred review findings, and milestones seeded from a concept doc.
