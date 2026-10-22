@@ -435,5 +435,6 @@ func (f *File) Remove(ids []string, scrubArchive, apply bool) (RmResult, error) 
 	for _, it := range res.Items {
 		tagged = tagged || bulletTagged(it.Bullet)
 	}
-	return res, f.syncMilestonesIf(res.Applied && tagged)
+	f.syncMilestonesIf(res.Applied && tagged)
+	return res, nil
 }

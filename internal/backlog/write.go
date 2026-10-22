@@ -187,7 +187,8 @@ func (f *File) Append(sec, line string) error {
 	if err != nil {
 		return err
 	}
-	return f.syncMilestonesIf(bulletTagged(line))
+	f.syncMilestonesIf(bulletTagged(line))
+	return nil
 }
 
 // checkCreate is _check_create: the cleaned title and fields, or ErrInvalid.
@@ -367,7 +368,8 @@ func (f *File) SetField(ref, field, value string) (bool, error) {
 	if err != nil {
 		return changed, err
 	}
-	return changed, f.syncMilestonesIf(changed && field == "milestone")
+	f.syncMilestonesIf(changed && field == "milestone")
+	return changed, nil
 }
 
 // isFile is Path(rel).is_file(), tried against the project root first (the
@@ -434,9 +436,7 @@ func (f *File) Complete(ref string, in CompleteInput) (bool, error) {
 	if err != nil || !moved {
 		return false, err
 	}
-	if err := f.syncMilestonesIf(tagged); err != nil {
-		return true, err
-	}
+	f.syncMilestonesIf(tagged)
 	if ref != "" && strings.Contains("BF", ref[:1]) {
 		if key := detailDir(ref); key != "" && !f.isRefactor(in.Commit) {
 			if err := f.bumpSinceRefactor(key, 1); err != nil {
@@ -599,9 +599,7 @@ func (f *File) Reopen(ref string) (bool, error) {
 	if err != nil || !restored {
 		return false, err
 	}
-	if err := f.syncMilestonesIf(tagged); err != nil {
-		return true, err
-	}
+	f.syncMilestonesIf(tagged)
 	// Mirror Complete's bump in reverse; tasks and refactor commits carry no
 	// count, and a hash git cannot resolve is skipped.
 	if dirName != "tasks" {
