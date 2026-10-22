@@ -107,15 +107,6 @@ func testRun(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-// shellLines wraps each command as the single-argument form expandFiles takes.
-func shellLines(cmds []string) [][]string {
-	out := make([][]string, len(cmds))
-	for i, cmd := range cmds {
-		out[i] = []string{cmd}
-	}
-	return out
-}
-
 // remoteBase prefers origin/<base> over a local base it is strictly ahead of,
 // so a lagging local branch does not pull upstream commits into {files}. It
 // returns base when there is no such remote ref or local is not behind it.
