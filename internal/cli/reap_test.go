@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/skills"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -37,6 +38,16 @@ func reapProject(t *testing.T, ops reap.HostOps, hostUp bool) (string, *Deps) {
 		t.Fatal(err)
 	}
 	d := testDeps()
+	// reap resolves the skill cache through Deps.Getenv: keep it under the temp
+	// root so no test lists or removes the developer's real ~/.cache/rota/skills.
+	cache := t.TempDir()
+	real := d.Getenv
+	d.Getenv = func(k string) string {
+		if k == "ROTA_CACHE_DIR" {
+			return cache
+		}
+		return real(k)
+	}
 	d.ReapEnv = func(context.Context, string) (round.Env, reap.HostOps) {
 		e := round.Env{Git: git.Exec, Base: "feat/x", HostName: "herdr"}
 		if hostUp {
@@ -62,6 +73,14 @@ func candIDs(d map[string]any) []string {
 		out = append(out, s)
 	}
 	return out
+}
+
+func TestReapSkillCacheStaysUnderTempRoot(t *testing.T) {
+	_, deps := reapProject(t, nil, true)
+	got := skills.CacheDir(deps.Getenv)
+	if tmp := os.TempDir(); got == "" || !strings.HasPrefix(got, tmp+string(filepath.Separator)) {
+		t.Fatalf("skill cache %q is not under the temp root %q", got, tmp)
+	}
 }
 
 func TestReapPreviewThenApply(t *testing.T) {
