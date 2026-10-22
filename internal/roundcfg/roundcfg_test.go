@@ -10,6 +10,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
@@ -394,19 +395,55 @@ func TestProfileNamesMatchConfigChoices(t *testing.T) {
 	t.Fatal("round.profile key missing")
 }
 
-func TestFullOnly(t *testing.T) {
-	for cfg, want := range map[string]bool{
-		`{"test":{"full":["go test ./..."]}}`:                            true,
-		`{"test":{"fast":["go test {files}"],"full":["go test ./..."]}}`: false,
-		``: false,
+func TestParseTests(t *testing.T) {
+	for _, c := range []struct {
+		cfg      string
+		full     []string
+		legacy   bool
+		fullOnly bool
+		bad      bool
+	}{
+		{cfg: `{"test":{"full":["go test ./..."]}}`, full: []string{"go test ./..."}, fullOnly: true},
+		{cfg: `{"test":{"fast":["go test {files}"],"full":["go test ./..."]}}`, full: []string{"go test ./..."}},
+		{cfg: `{}`},
+		// Only the legacy key: the same answer the gate gives.
+		{cfg: `{"refactor":{"verifyCommands":["old"]}}`, full: []string{"old"}, legacy: true, fullOnly: true},
+		{cfg: `{"refactor":{"verifyCommands":["old"]},"test":{"full":["new"]}}`, full: []string{"new"}, fullOnly: true},
+		{cfg: `{"test":{"fast":"go test","full":["x"]}}`, bad: true},
+		{cfg: `{"test":{"fast":[1],"full":["x"]}}`, bad: true},
 	} {
-		s, err := Load(project(t, cfg))
+		v, err := jsonx.Decode([]byte(c.cfg))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if s.FullOnly != want {
-			t.Errorf("%s: FullOnly = %v, want %v", cfg, s.FullOnly, want)
+		got := ParseTests(v)
+		if (got.Err != nil) != c.bad {
+			t.Errorf("%s: Err = %v, want error %v", c.cfg, got.Err, c.bad)
 		}
+		if c.bad {
+			continue
+		}
+		if !reflect.DeepEqual(got.Full, c.full) || got.Legacy != c.legacy || got.FullOnly() != c.fullOnly {
+			t.Errorf("%s: full %v legacy %v fullOnly %v", c.cfg, got.Full, got.Legacy, got.FullOnly())
+		}
+	}
+}
+
+// Load reports a malformed test list and a non-boolean work.tdd instead of
+// reading them as empty.
+func TestLoadReportsBadTests(t *testing.T) {
+	for _, cfg := range []string{
+		`{"test":{"fast":"go test"}}`,
+		`{"test":{"full":[1]}}`,
+		`{"work":{"tdd":"yes"}}`,
+	} {
+		if _, err := Load(project(t, cfg)); err == nil {
+			t.Errorf("%s: Load accepted it", cfg)
+		}
+	}
+	s, err := Load(project(t, `{"refactor":{"verifyCommands":["old"]}}`))
+	if err != nil || !s.FullOnly {
+		t.Errorf("legacy key only: FullOnly = %v, err %v", s.FullOnly, err)
 	}
 }
 
