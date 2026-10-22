@@ -257,7 +257,7 @@ type GateTarget struct {
 
 // openOutcome is the slot's reported outcome when it is partial or failed.
 func openOutcome(s *Slot) string {
-	if k, _ := s.Outcome(); k == OutcomePartial || k == OutcomeFailed {
+	if k, _ := s.Outcome(); OutcomeOpen(k) {
 		return k
 	}
 	return ""
