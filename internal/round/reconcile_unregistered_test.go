@@ -2,7 +2,6 @@ package round
 
 import (
 	"errors"
-	"github.com/l4ci/rota/internal/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,7 +32,7 @@ func unregFixture(t *testing.T, branches ...string) (string, Env, *fakeRemote) {
 	fb.add("613", "Other", "M01", false, "## Acceptance\n- [ ] ok\n\n## Files\n- docs/other.md\n")
 	e := env(nil, fb.asForge())
 	e.Board, e.Worker.Getenv, e.Round.AdoptPattern = fb, noEnv, "codex/*"
-	e.Label, e.NeedsHuman, e.NeedsReview, e.SupportLabel = config.Label(nil, "inProgress"), config.Label(nil, "needsHuman"), config.Label(nil, "needsReview"), config.Label(nil, "support")
+	e.Label, e.NeedsHuman, e.NeedsReview, e.SupportLabel = configLabels()
 	return root, e, fb
 }
 
