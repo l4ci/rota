@@ -641,7 +641,7 @@ func bugreportStopOffer(c *Ctx, root, sid string) string {
 	if sid == "" {
 		sid = "-"
 	}
-	open, err := bugreport.Open(root)
+	open, err := bugreport.Open(c.Context(), c.deps().Git, root)
 	if err != nil {
 		return ""
 	}
@@ -655,7 +655,7 @@ func bugreportStopOffer(c *Ctx, root, sid string) string {
 		return ""
 	}
 	for _, r := range fresh {
-		_, _ = bugreport.Update(root, r.ID, func(r *bugreport.Record) { r.OfferedSession = sid })
+		_, _ = bugreport.Update(c.Context(), c.deps().Git, root, r.ID, func(r *bugreport.Record) { r.OfferedSession = sid })
 	}
 	return bugreportOffer(fresh)
 }

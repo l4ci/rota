@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
-	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
 )
 
@@ -50,13 +50,11 @@ func fakeLeaseEnv(alive ...int) roundlease.Env {
 }
 
 func TestLedgerRoundIsTheHeldLease(t *testing.T) {
-	dir := ledgerProject(t, "")
-	cd, err := rotastate.CommonDir(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	dir, cd := t.TempDir(), t.TempDir()
 	env := fakeLeaseEnv(100)
-	le := Env{Lease: func() roundlease.Env { return env }}
+	le := Env{Lease: func() roundlease.Env { return env }, Git: func(context.Context, string, ...string) (git.Result, error) {
+		return git.Result{Stdout: cd}, nil
+	}}
 	if n := LedgerRound(le, dir); n != 0 {
 		t.Errorf("no lease: round %d, want 0", n)
 	}
@@ -72,6 +70,9 @@ func TestLedgerRoundIsTheHeldLease(t *testing.T) {
 		t.Errorf("stale lease: round %d, want 0", n)
 	}
 	// A registry round without a lease no longer counts.
+	if err := os.MkdirAll(filepath.Join(dir, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	os.WriteFile(filepath.Join(dir, ".rota", "workers.json"), []byte(`{"round":4,"slots":[]}`), 0o644)
 	if n := LedgerRound(le, dir); n != 0 {
 		t.Errorf("registry round leaked into the ledger: %d", n)
@@ -232,18 +233,34 @@ func TestTrainLedgerStampsTheVerdictOnTheCulpritOnly(t *testing.T) {
 }
 
 func TestLedgerRoundSaysWhenTheLeaseCannotBeRead(t *testing.T) {
-	dir := ledgerProject(t, "")
-	cd, err := rotastate.CommonDir(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	dir, cd := t.TempDir(), t.TempDir()
 	if err := os.MkdirAll(roundlease.Path(cd), 0o755); err != nil { // a directory where the lease belongs: unreadable
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	n := LedgerRound(Env{Stderr: &out}, dir)
+	n := LedgerRound(Env{Stderr: &out, Git: func(context.Context, string, ...string) (git.Result, error) {
+		return git.Result{Stdout: cd}, nil
+	}}, dir)
 	if n != 0 || !strings.Contains(out.String(), "round lease") || strings.Count(out.String(), "\n") != 1 {
 		t.Errorf("round %d, stderr %q, want 0 and one line naming the round lease", n, out.String())
+	}
+}
+
+func TestLedgerRoundHonorsCancellation(t *testing.T) {
+	root, common := t.TempDir(), t.TempDir()
+	lease := fakeLeaseEnv(100)
+	if _, _, _, err := lease.Acquire(common, root, roundlease.Holder{PID: 100}, 7); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var out bytes.Buffer
+	env := Env{Ctx: ctx, Stderr: &out, Lease: func() roundlease.Env { return lease },
+		Git: func(ctx context.Context, _ string, _ ...string) (git.Result, error) {
+			return git.Result{Stdout: common}, ctx.Err()
+		}}
+	if n := LedgerRound(env, root); n != 0 || !strings.Contains(out.String(), "context canceled") {
+		t.Fatalf("round %d, stderr %q; want round 0 with cancellation warning", n, out.String())
 	}
 }
 

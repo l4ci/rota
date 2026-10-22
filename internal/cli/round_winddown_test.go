@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/bugreport"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
 )
@@ -80,7 +82,7 @@ func TestWindDownOffersBugreports(t *testing.T) {
 		le.Alive = func(p int) bool { return p == os.Getpid() }
 		le.StartTime = func(p int) (uint64, bool) { return 1, p == os.Getpid() }
 		for i := 0; i < records; i++ {
-			if _, err := bugreport.Add(dir, bugreport.Record{Source: bugreport.SourceAgent, Summary: "mistake " + strconv.Itoa(i)}, time.Now()); err != nil {
+			if _, err := bugreport.Add(context.Background(), git.Exec, dir, bugreport.Record{Source: bugreport.SourceAgent, Summary: "mistake " + strconv.Itoa(i)}, time.Now()); err != nil {
 				t.Fatal(err)
 			}
 		}
