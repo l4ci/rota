@@ -166,7 +166,9 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 const CrossNone = "none"
 
 // crossReviewer reports whether kind can run a cross-harness review.
-func crossReviewer(kind string) bool { return harness.Valid(kind) && harness.Resolve(kind).CrossReviewer() }
+func crossReviewer(kind string) bool {
+	return harness.Valid(kind) && harness.Resolve(kind).CrossReviewer()
+}
 
 // crossRank orders cross results for a bundle: a harness beats none beats "".
 func crossRank(c string) int {
