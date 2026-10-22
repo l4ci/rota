@@ -98,7 +98,7 @@ func TestAssignBundleRefusals(t *testing.T) {
 			if _, err := f.assign("30", "dana", nil); err != nil {
 				t.Fatal(err)
 			}
-		}, "12", func(o *AssignOpts) { o.Bundle = []string{"15", "31"}; o.Settings.ScopeOverlap = "block" }, BlockOverlap, "31"},
+		}, "12", func(o *AssignOpts) { o.Bundle = []string{"15", "31"}; o.Settings.BlockScopeOverlap = true }, BlockOverlap, "31"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -191,13 +191,13 @@ func TestAssignBundleResume(t *testing.T) {
 	// The lead and a member declare the same scope: the bundle never overlaps itself.
 	f.be.add("40", "Lead", "M01", false, "## Acceptance\n- [ ] x\n\n## Touches\n- POST /items\n")
 	f.be.add("41", "Member", "M01", false, "## Acceptance\n- [ ] x\n\n## Touches\n- POST /items\n")
-	block := func(o *AssignOpts) { o.Settings.ScopeOverlap = "block"; o.Bundle = []string{"41"} }
+	block := func(o *AssignOpts) { o.Settings.BlockScopeOverlap = true; o.Bundle = []string{"41"} }
 	if _, err := f.assign("40", "ben", block); err != nil {
 		t.Fatalf("a bundle's own scopes do not clash: %v", err)
 	}
 	notes := len(f.be.notes)
 	// Again with the same bundle, and with none: the recorded bundle stays.
-	for _, mod := range []func(*AssignOpts){block, func(o *AssignOpts) { o.Settings.ScopeOverlap = "block" }} {
+	for _, mod := range []func(*AssignOpts){block, func(o *AssignOpts) { o.Settings.BlockScopeOverlap = true }} {
 		res, err := f.assign("40", "ben", mod)
 		if err != nil || !reflect.DeepEqual(res.Bundle, []string{"41"}) {
 			t.Fatalf("resume: %v %+v", err, res)
@@ -232,7 +232,7 @@ func TestInFlightItemsIncludeBundleMembers(t *testing.T) {
 	}
 	// A member carries its own scope, so another assign clashing on it is refused.
 	f.be.add("32", "Clasher", "M01", false, "## Acceptance\n- [ ] x\n\n## Touches\n- get /thing-15\n")
-	_, err := f.assign("32", "dana", func(o *AssignOpts) { o.Settings.ScopeOverlap = "block" })
+	_, err := f.assign("32", "dana", func(o *AssignOpts) { o.Settings.BlockScopeOverlap = true })
 	if by := blockedBy(t, err); by != BlockOverlap {
 		t.Errorf("a member's scope blocks another slot: %v", err)
 	}

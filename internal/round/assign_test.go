@@ -257,7 +257,7 @@ func TestAssignScopeOverlapBlock(t *testing.T) {
 	if err != nil || !res.Ready() || len(res.Overlaps) != 1 {
 		t.Fatalf("warn lists the clash and stays ready: %v %+v", err, res)
 	}
-	block := func(o *AssignOpts) { o.Settings.ScopeOverlap = "block" }
+	block := func(o *AssignOpts) { o.Settings.BlockScopeOverlap = true }
 	_, err = f.assign("31", "dana", block)
 	if by := blockedBy(t, err); by != BlockOverlap {
 		t.Fatalf("block mode refuses a scope-only clash: %v", err)

@@ -584,3 +584,13 @@ func TestSoftcapSubsystemsIsDeclared(t *testing.T) {
 		t.Errorf("map.softcap_subsystems=7: %v", err)
 	}
 }
+
+func TestSetScopeOverlapRefusesNonChoices(t *testing.T) {
+	root := project(t, "", "")
+	if _, err := Set(root, "round.scopeOverlap", "off"); !errors.Is(err, ErrBadValue) {
+		t.Errorf("off: err = %v, want ErrBadValue", err)
+	}
+	if _, err := Set(root, "round.scopeOverlap", ScopeOverlapBlock); err != nil {
+		t.Errorf("block: %v", err)
+	}
+}
