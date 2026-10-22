@@ -247,3 +247,19 @@ func TestTransferDoesNotFallBack(t *testing.T) {
 		t.Errorf("label written: %v", ls)
 	}
 }
+
+// A workerKind outside round.harnesses has no place in the list, so the
+// fallback walks all of it and lands on harnesses[0].
+func TestFallbackFromAnUnlistedKindTakesTheFirstHarness(t *testing.T) {
+	f := fallbackRig(t, strings.Replace(
+		strings.Replace(fallbackCfg, `"harnesses":["claude","codex"]`, `"harnesses":["codex"]`, 1),
+		`"harnesses"`, `"workerKind":"claude","harnesses"`, 1))
+	st := f.env.Fallback(bg, f.root, f.set)
+	if !st.Active || st.From != harness.Claude || st.To != harness.Codex {
+		t.Fatalf("fallback %+v", st)
+	}
+	res, err := f.assign("12", "ben", nil)
+	if err != nil || res.Fallback == nil || res.Fallback.To != harness.Codex {
+		t.Fatalf("assign: %v %+v", err, res)
+	}
+}

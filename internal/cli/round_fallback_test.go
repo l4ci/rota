@@ -115,3 +115,11 @@ func TestTickAssignsOnTheFallbackHarness(t *testing.T) {
 		t.Fatalf("assigned %d, capped %q", assigned, r.Capped)
 	}
 }
+
+// The tick says which harness an assign moved to, and why.
+func TestTickFallbackLine(t *testing.T) {
+	got := fallbackLine("12", &round.Fallback{From: "claude", To: "codex", Why: "claude accounts are cooling down"})
+	if want := "fallback\t#12: claude -> codex: claude accounts are cooling down"; got != want {
+		t.Errorf("line %q, want %q", got, want)
+	}
+}
