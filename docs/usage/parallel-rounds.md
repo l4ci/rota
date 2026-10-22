@@ -277,7 +277,7 @@ issue to read and dispute, the item's `## Out of scope` section when it has one,
 - **Overlap.** `--accept-overlap` skips the file-overlap check only. Say which PR merges first in
   the second worker's brief.
 - **Open PR.** An issue an open PR already resolves (head branch `<agent>/<issue>-*` or `Closes #N`)
-  is `not ready: open PR #M` in `round candidates`, and `assign` refuses it. `--accept-open-pr`
+  is `not ready: waiting on open PR #M` in `round candidates`, and `assign` refuses it. `--accept-open-pr`
   assigns it again for a deliberate redo.
 - **Deferred follow-up.** A follow-up item filed by `rota verdict add --file-deferred` is
   `not ready: depends on PR #N` while its source PR is open. It turns ready when that PR merges
