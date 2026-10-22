@@ -388,8 +388,51 @@ func milestoneCheck(fs *flag.FlagSet) RunFunc {
 			return backlogFail(err)
 		}
 		r := ms.Check(body, kids, *strict)
-		return milestoneCheckResult(id, r)
+		res, err := milestoneCheckResult(id, r)
+		return withChildSync(c, id, res), err
 	}
+}
+
+// withChildSync regenerates the tracking issue's child list under the tracker
+// backend and adds what it found to the check result: a `children` object and,
+// on drift, a line naming the refs the list gained and lost. A failure to
+// regenerate is a warning; the check's own verdict stands.
+func withChildSync(c *Ctx, id string, res Result) Result {
+	be, err := openIssueBackend(c, "", false)
+	if err != nil {
+		return res
+	}
+	sy, ok := be.(interface {
+		SyncMilestoneChildren(string) (backlog.ChildSync, error)
+	})
+	if !ok {
+		return res
+	}
+	sync, err := sy.SyncMilestoneChildren(id)
+	if err != nil {
+		c.Warn("could not regenerate the child list of %s: %v", id, err)
+		return res
+	}
+	d, _ := res.Data.(*jsonx.Object)
+	if d != nil {
+		d.Set("children", jsonObj("changed", sync.Changed, "count", sync.Count, "added", strs(sync.Added), "removed", strs(sync.Removed)))
+	}
+	if sync.Changed {
+		line := fmt.Sprintf("children: list regenerated (added %s; removed %s)", refList(sync.Added), refList(sync.Removed))
+		if res.Text == "ok" {
+			res.Text = line
+		} else {
+			res.Text += "\n" + line
+		}
+	}
+	return res
+}
+
+func refList(refs []string) string {
+	if len(refs) == 0 {
+		return "none"
+	}
+	return strings.Join(refs, ", ")
 }
 
 // milestoneChildren is the milestone's backlog items as ms.Check reads them:
