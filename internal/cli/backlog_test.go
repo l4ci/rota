@@ -137,13 +137,18 @@ func TestBacklogUsageErrors(t *testing.T) {
 
 func TestBacklogStaleBadTodayEnv(t *testing.T) {
 	root := trackerProject(t, "")
-	t.Setenv("ROTA_TEST_TODAY", "tomorrow")
+	t.Setenv("ROTA_TEST_TODAY", "tomorrow") // the env parse edge: envClock reports it as Usage
 	if code, _, stderr := rotaRun(t, "--json", "-C", root, "backlog", "stale", "--kind", "todo"); code != ExitUsage || !strings.Contains(stderr, "ROTA_TEST_TODAY") {
 		t.Errorf("exit %d, stderr %s", code, stderr)
 	}
-	t.Setenv("ROTA_TEST_TODAY", "2999-01-01")
+}
+
+func TestBacklogStaleTodoUsesPinnedToday(t *testing.T) {
+	root := trackerProject(t, "")
+	d := testDeps()
+	pinDay(d, "2999-01-01")
 	os.WriteFile(filepath.Join(root, ".rota", "BACKLOG.md"), []byte("## Bugs\n- **[B01] [P1] a.** x Captured: 2026-01-01\n"), 0o644)
-	code, env, _ := rotaRun(t, "--json", "-C", root, "backlog", "stale", "--kind", "todo", "--days", "90")
+	code, env, _ := rotaRunWith(t, d, "--json", "-C", root, "backlog", "stale", "--kind", "todo", "--days", "90")
 	entries := get(dataOf(env), "entries").([]any)
 	if code != 0 || len(entries) != 1 || get(entries[0], "name") != "B01" || get(entries[0], "date") != "2026-01-01" {
 		t.Errorf("stale todo: %d %v", code, env)
@@ -153,15 +158,16 @@ func TestBacklogStaleBadTodayEnv(t *testing.T) {
 func TestBacklogArchiveHonoursTestToday(t *testing.T) {
 	root := trackerProject(t, "")
 	os.WriteFile(filepath.Join(root, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Completed\n- ~~**[B01] [P1] a.** x~~ Done 2026-01-10 [`abc1234`]\n"), 0o644)
-	t.Setenv("ROTA_TEST_TODAY", "2026-01-12")
-	if code, env, _ := rotaRun(t, "--json", "-C", root, "backlog", "archive"); code != 0 || fmt.Sprint(get(dataOf(env), "moved")) != "0" {
+	d := testDeps()
+	pinDay(d, "2026-01-12")
+	if code, env, _ := rotaRunWith(t, d, "--json", "-C", root, "backlog", "archive"); code != 0 || fmt.Sprint(get(dataOf(env), "moved")) != "0" {
 		t.Fatalf("2 days old moved: %d %v", code, env)
 	}
-	t.Setenv("ROTA_TEST_TODAY", "2026-01-20")
-	if code, env, _ := rotaRun(t, "--json", "-C", root, "backlog", "archive"); code != 0 || fmt.Sprint(get(dataOf(env), "moved")) != "1" {
+	pinDay(d, "2026-01-20")
+	if code, env, _ := rotaRunWith(t, d, "--json", "-C", root, "backlog", "archive"); code != 0 || fmt.Sprint(get(dataOf(env), "moved")) != "1" {
 		t.Fatalf("10 days old not moved: %d %v", code, env)
 	}
-	t.Setenv("ROTA_TEST_TODAY", "soon")
+	t.Setenv("ROTA_TEST_TODAY", "soon") // the env parse edge again, on archive
 	if code, _, stderr := rotaRun(t, "--json", "-C", root, "backlog", "archive"); code != ExitUsage || !strings.Contains(stderr, "ROTA_TEST_TODAY") {
 		t.Errorf("bad ROTA_TEST_TODAY: exit %d, stderr %s", code, stderr)
 	}

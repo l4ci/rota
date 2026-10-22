@@ -536,11 +536,10 @@ func TestWorkerResetRefusesAnAdoptedSlotAsExternal(t *testing.T) {
 	}
 }
 
-// ROTA_TEST_NOW pins the ledger rows a real `worker gate` and `worker train`
-// write: it reaches them through Deps.workerEnv, not a hand-built Env.
-func TestWorkerGateAndTrainLedgerRowsTakeROTA_TEST_NOW(t *testing.T) {
+// A pinned Deps.Now stamps the ledger rows a real `worker gate` and `worker
+// train` write: it reaches them through Deps.workerEnv, not a hand-built Env.
+func TestWorkerGateAndTrainLedgerRowsTakeDepsNow(t *testing.T) {
 	const pinned = "2026-10-03T12:00:00Z"
-	t.Setenv("ROTA_TEST_NOW", pinned)
 	rowTimes := func(dir string) map[string][]string {
 		t.Helper()
 		es, err := ledger.Load(dir)
@@ -555,6 +554,7 @@ func TestWorkerGateAndTrainLedgerRowsTakeROTA_TEST_NOW(t *testing.T) {
 	}
 	setup := func(verify, file string) string {
 		dir := workerProject(t, `{"ship":{"review":"none"},"test":{"full":["`+verify+`"]}}`)
+		pinDir(t, dir, func(d *Deps) { pinNow(d, pinned) })
 		rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 		wt := filepath.Join(dir, ".worktrees", "w1")
 		write(t, filepath.Join(wt, file), "f")
@@ -595,10 +595,10 @@ func TestWorkerGateAndTrainLedgerRowsTakeROTA_TEST_NOW(t *testing.T) {
 }
 
 // The merge-approval audit line a confirmed `worker gate` writes is stamped
-// from ROTA_TEST_NOW, beside the gate's own ledger rows.
-func TestMergeApprovalAuditLineTakesROTA_TEST_NOW(t *testing.T) {
-	t.Setenv("ROTA_TEST_NOW", "2026-10-03T12:00:00Z")
+// from Deps.Now, beside the gate's own ledger rows.
+func TestMergeApprovalAuditLineTakesDepsNow(t *testing.T) {
 	dir := workerProject(t, gateConfig(t, `{"test":{"full":["true"]}}`, "off", map[string]any{"mergeApproval": "all"}))
+	pinDir(t, dir, func(d *Deps) { pinNow(d, "2026-10-03T12:00:00Z") })
 	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	write(t, filepath.Join(wt, "feature.txt"), "f")

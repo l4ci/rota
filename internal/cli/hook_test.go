@@ -19,14 +19,13 @@ import (
 )
 
 // orchProject is a git project with .rota/ where this test process holds the
-// round lease, and ROTA_TEST_HOLDER_PID names it as the hook's ancestor.
+// round lease, and the dir's pins name it as the hook's ancestor (Deps.HolderPID).
 func orchProject(t *testing.T, lease bool) string {
 	t.Helper()
 	dir := gitRepo(t)
 	os.MkdirAll(filepath.Join(dir, ".rota"), 0o755)
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"git":{"baseBranch":"feat/x"}}`), 0o644)
-	t.Setenv("ROTA_TEST_HOLDER_PID", strconv.Itoa(os.Getpid()))
-	t.Setenv("ROTA_TEST_NOW", "2026-10-03T12:00:00Z")
+	pinDir(t, dir, func(d *Deps) { pinHolder(d, os.Getpid()); pinNow(d, "2026-10-03T12:00:00Z") })
 	if lease {
 		cd, err := rotastate.CommonDir(dir)
 		if err != nil {
@@ -339,7 +338,7 @@ func TestWorkerPromptCheck(t *testing.T) {
 // knows pid 4242 makes it the orchestrator with no real process behind it.
 func TestHookStopUsesInjectedLeaseEnv(t *testing.T) {
 	dir := orchProject(t, false)
-	t.Setenv("ROTA_TEST_HOLDER_PID", "4242")
+	pinDir(t, dir, func(d *Deps) { pinHolder(d, 4242) })
 	le := roundlease.DefaultEnv()
 	le.Alive = func(p int) bool { return p == 4242 }
 	le.StartTime = func(p int) (uint64, bool) { return 99, p == 4242 }
@@ -361,10 +360,10 @@ func TestHookStopUsesInjectedLeaseEnv(t *testing.T) {
 		}
 		return so.String()
 	}
-	if out := run(testDeps()); out != "" {
+	if out := run(depsIn(dir)); out != "" {
 		t.Errorf("real process table: pid 4242 holds nothing, got %q", out)
 	}
-	d := testDeps()
+	d := depsIn(dir)
 	d.LeaseEnv = func() roundlease.Env { return le }
 	if out := run(d); !strings.Contains(out, `"decision":"block"`) {
 		t.Errorf("injected lease env: want a block, got %q", out)
@@ -483,7 +482,7 @@ func TestHookContextGuardSilentCases(t *testing.T) {
 	}
 	dir := guardProject(t, "warn")
 	dumpAt(t, dir, 95)
-	t.Setenv("ROTA_TEST_NOW", "2026-10-03T12:10:00Z") // reading is 10 minutes old
+	pinDir(t, dir, func(d *Deps) { pinNow(d, "2026-10-03T12:10:00Z") }) // reading is 10 minutes old
 	if out := promptOut(t, dir); out != "" {
 		t.Errorf("stale reading: %q", out)
 	}

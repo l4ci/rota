@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/skills"
+	"github.com/l4ci/rota/internal/update"
 )
 
 // skillsRun runs rota in dir with HOME pointed at home and CLAUDE_CONFIG_DIR unset.
@@ -20,6 +21,12 @@ func skillsRun(t *testing.T, home, dir string, args ...string) (int, map[string]
 // skillsRunCfg also sets CLAUDE_CONFIG_DIR to cfg ("" leaves it unset).
 func skillsRunCfg(t *testing.T, home, cfg, dir string, args ...string) (int, map[string]any, string) {
 	t.Helper()
+	return skillsRunDeps(t, testDeps(), home, cfg, dir, args...)
+}
+
+// skillsRunDeps is skillsRunCfg with the given deps.
+func skillsRunDeps(t *testing.T, d *Deps, home, cfg, dir string, args ...string) (int, map[string]any, string) {
+	t.Helper()
 	t.Setenv("HOME", home)
 	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
 	old, _ := os.Getwd()
@@ -27,7 +34,7 @@ func skillsRunCfg(t *testing.T, home, cfg, dir string, args ...string) (int, map
 		t.Fatal(err)
 	}
 	defer os.Chdir(old)
-	code, out, errOut := runMain(append(args, "--json")...)
+	code, out, errOut := runMainWith(d, append(args, "--json")...)
 	var env map[string]any
 	if strings.TrimSpace(out) != "" {
 		if err := json.Unmarshal([]byte(out), &env); err != nil {
@@ -468,10 +475,16 @@ func TestSkillsModeFlags(t *testing.T) {
 
 func TestUpdateCommandSkipsSkillsUpdateForCurrentStubs(t *testing.T) {
 	home, work := t.TempDir(), t.TempDir()
-	t.Setenv("ROTA_TEST_LATEST_VERSION", "99.0.0")
+	d := testDeps()
+	updateEnv := d.UpdateEnv
+	d.UpdateEnv = func() update.Env {
+		e := updateEnv()
+		e.Latest = func() string { return "99.0.0" }
+		return e
+	}
 	cmd := func() string {
 		t.Helper()
-		code, env, errOut := skillsRun(t, home, work, "update")
+		code, env, errOut := skillsRunDeps(t, d, home, "", work, "update")
 		if code != 0 {
 			t.Fatalf("update %d %s", code, errOut)
 		}
@@ -481,11 +494,11 @@ func TestUpdateCommandSkipsSkillsUpdateForCurrentStubs(t *testing.T) {
 	if c := cmd(); !strings.Contains(c, "rota skills update") {
 		t.Errorf("no roots installed: %q", c)
 	}
-	skillsRun(t, home, work, "skills", "install", "--agent", "codex")
+	skillsRunDeps(t, d, home, "", work, "skills", "install", "--agent", "codex")
 	if c := cmd(); c == "" || strings.Contains(c, "rota skills update") {
 		t.Errorf("current stub root: %q", c)
 	}
-	skillsRun(t, home, work, "skills", "install", "--agent", "codex", "--full")
+	skillsRunDeps(t, d, home, "", work, "skills", "install", "--agent", "codex", "--full")
 	if c := cmd(); !strings.Contains(c, "rota skills update") {
 		t.Errorf("full root: %q", c)
 	}

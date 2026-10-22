@@ -13,7 +13,6 @@ import (
 // TestMain clears the version overrides: rota update must never reach the
 // network from a test, and the release read has only the runner seam.
 func TestMain(m *testing.M) {
-	os.Unsetenv("ROTA_TEST_LATEST_VERSION")
 	os.Unsetenv("ROTA_LATEST_VERSION")
 	os.Exit(m.Run())
 }
@@ -75,18 +74,6 @@ func TestStatuses(t *testing.T) {
 	}
 }
 
-func TestLatestFromTestVariable(t *testing.T) {
-	getenv := func(k string) string {
-		if k == "ROTA_TEST_LATEST_VERSION" {
-			return "7.8.9"
-		}
-		return ""
-	}
-	if got := ghLatest(getenv, nil); got != "7.8.9" {
-		t.Errorf("ghLatest = %q", got)
-	}
-}
-
 // The default release read goes through the runner it is given: one seam
 // swaps the process, and the tag it prints is compared like any other version.
 func TestLatestThroughRunner(t *testing.T) {
@@ -95,7 +82,7 @@ func TestLatestThroughRunner(t *testing.T) {
 		got = c
 		return proc.Result{Stdout: "v5.1.0\n"}, nil
 	}
-	e := DefaultEnv("5.0.0", func(string) string { return "" }, run)
+	e := DefaultEnv("5.0.0", run)
 	r := Check(Env{ExeDir: "/home/u/.local/bin", Current: e.Current, Latest: e.Latest})
 	if got.Name != "gh" || strings.Join(got.Args, " ") != "api repos/"+Repo+"/releases/latest --jq .tag_name" {
 		t.Errorf("command = %s %v", got.Name, got.Args)
@@ -106,14 +93,13 @@ func TestLatestThroughRunner(t *testing.T) {
 }
 
 func TestLatestRunnerFailuresAreUnknown(t *testing.T) {
-	getenv := func(string) string { return "" }
 	for name, run := range map[string]proc.Runner{
 		"missing gh": func(context.Context, proc.Cmd) (proc.Result, error) { return proc.Result{}, exec.ErrNotFound },
 		"exit 1": func(context.Context, proc.Cmd) (proc.Result, error) {
 			return proc.Result{ExitCode: 1, Stdout: "v9.9.9"}, nil
 		},
 	} {
-		if got := ghLatest(getenv, run); got != "" {
+		if got := ghLatest(run); got != "" {
 			t.Errorf("%s: latest = %q", name, got)
 		}
 	}

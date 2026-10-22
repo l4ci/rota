@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/l4ci/rota/internal/gopath"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proof"
@@ -249,7 +250,7 @@ func missingRed(c *Ctx, root string, sl *worker.Slot, base string) (noRed bool, 
 	if derr != nil {
 		return false, derr, nil
 	}
-	if !slices.ContainsFunc(files, isProdGo) {
+	if !slices.ContainsFunc(files, gopath.IsProdGo) {
 		return false, nil, nil
 	}
 	// A bundle is one change: a red-first run on any of its issues is enough.
@@ -294,12 +295,6 @@ func openBundleIssues(c *Ctx, root string, sl *worker.Slot) ([]string, error) {
 		out = append(out, id)
 	}
 	return out, nil
-}
-
-// isProdGo is a Go file a test does not own: not *_test.go, not under testdata.
-func isProdGo(f string) bool {
-	return strings.HasSuffix(f, ".go") && !strings.HasSuffix(f, "_test.go") &&
-		!slices.Contains(strings.Split(f, "/"), "testdata")
 }
 
 // unreadMailRefusal is the exit-4 refusal of a done while the slot's inbox

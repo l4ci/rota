@@ -582,10 +582,10 @@ func TestWorkerGateAppliesReviewDepth(t *testing.T) {
 	}
 }
 
-// ROTA_TEST_NOW reaches the manual-gate audit line, not only Env.Now.
-func TestGateAuditLineTakesROTA_TEST_NOW(t *testing.T) {
-	t.Setenv("ROTA_TEST_NOW", "2026-10-03T12:00:00Z")
+// Deps.Now reaches the manual-gate audit line, not only Env.Now.
+func TestGateAuditLineTakesDepsNow(t *testing.T) {
 	dir := gitRepo(t)
+	pinDir(t, dir, func(d *Deps) { pinNow(d, "2026-10-03T12:00:00Z") })
 	b3Fails(t, dir, "B07", 3)
 	if code, out, errs := rotaIn(t, dir, "debug", "reset", "B07", "--reason", "r", "--confirm", "--confirm-note", "go", "--json"); code != 0 {
 		t.Fatalf("reset: %d %s %s", code, out, errs)
