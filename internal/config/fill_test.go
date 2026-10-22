@@ -406,3 +406,23 @@ func TestRemovedNamesLocalOnlyKeys(t *testing.T) {
 		t.Errorf("config.local.json after fill:\n%s", local)
 	}
 }
+
+// The invalid-value errors show the offending value as compact JSON, so a
+// string is quoted and a number, list or object reads as it was written.
+func TestInvalidValueErrorsNameTheValue(t *testing.T) {
+	for _, tc := range []struct{ cfg, want string }{
+		{`{"issues":{"source":"svn"}}`, `invalid issues.source "svn" (expected `},
+		{`{"issues":{"source":3}}`, `invalid issues.source 3 (expected `},
+		{`{"issues":{"source":["a",null]}}`, `invalid issues.source ["a", null] (expected `},
+		{`{"backlog":{"backend":"git"}}`, `invalid backlog.backend "git" (expected file|issues)`},
+	} {
+		cfg, _ := jsonx.Decode([]byte(tc.cfg))
+		if _, err := IssueSource(cfg); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v, want %q", tc.cfg, err, tc.want)
+		}
+	}
+	cfg, _ := jsonx.Decode([]byte(`{"forge":{"provider":false}}`))
+	if _, err := ForgeProvider(cfg); err == nil || !strings.Contains(err.Error(), "invalid forge.provider false (expected ") {
+		t.Errorf("err = %v", err)
+	}
+}
