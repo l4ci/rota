@@ -9,6 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/overlap"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/strutil"
@@ -1165,6 +1166,23 @@ func DepthRose(from, to config.ReviewDepth) bool {
 	return from != "" && rank[to] > rank[from]
 }
 
+// assignedHarness is the harness of the latest assign ledger entry for issue,
+// the author of a PR whose slot moved on; "" when the ledger has none, so the
+// caller falls back to the issue's label and the configured default.
+func assignedHarness(root, issue string) string {
+	if issue == "" {
+		return ""
+	}
+	es, _ := ledger.Load(root)
+	for i := len(es) - 1; i >= 0; i-- {
+		e := es[i]
+		if e.Kind == ledger.KindAssign && e.Harness != "" && NormID(e.Issue) == NormID(issue) {
+			return e.Harness
+		}
+	}
+	return ""
+}
+
 // stepReviewDepth applies ship.review: it resolves the depth for this branch
 // from the diff size against the base and the labels of the slot's issue, notes
 // it, and refuses a branch that lacks the recorded verdicts that depth needs.
@@ -1181,6 +1199,9 @@ func (g *gate) stepReviewDepth() (bool, error) {
 		return g.broke(fmt.Sprintf("%v; run rota config check", err))
 	}
 	src := ReviewSources{Policy: policy, Git: g.e.Git, Dir: g.root, Span: g.baseRef + "..." + g.headRef, Cross: cross, Author: g.target.Kind}
+	if src.Author == "" {
+		src.Author = assignedHarness(g.root, g.target.Issue)
+	}
 	hasSpec := false
 	if key, ok := tracker.ParseKey(g.target.Issue); ok {
 		hasSpec = true

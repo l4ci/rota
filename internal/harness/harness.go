@@ -34,6 +34,21 @@ const (
 // kinds is the worker harness kinds, in the order messages list them.
 var kinds = []string{Claude, Codex, OpenCode}
 
+// LabelPrefix starts a label that names the harness an issue runs on.
+const LabelPrefix = "harness:"
+
+// FromLabels is the kind the first valid harness:<kind> label names, "" when
+// none does. Worker picking and the review depth both read labels through it,
+// so they agree on what counts as a harness label.
+func FromLabels(labels []string) string {
+	for _, l := range labels {
+		if k, ok := strings.CutPrefix(l, LabelPrefix); ok && Valid(k) {
+			return k
+		}
+	}
+	return ""
+}
+
 // Kinds lists the worker harness kinds. Every list of kinds outside this
 // package (the round.workerKind enum, the harness: label check, herdr's
 // binary-to-kind map, usage errors) reads it.

@@ -7,6 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/verdict"
 )
 
 // setQueued writes a registry whose only slot, w2, moved on from PR 7: the PR
@@ -120,4 +124,44 @@ func TestGateDropsMergedQueuedPR(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A queued PR's slot moved on, so the author kind comes from the issue's latest
+// assign ledger entry: a Codex-built PR needs a claude cross review, not codex.
+func TestGateQueuedPRAuthorFromAssignLedger(t *testing.T) {
+	run := func(t *testing.T, entries ...ledger.Entry) GateResult {
+		t.Helper()
+		w := newWorld(t, "")
+		w.setConfig(`{"round":{"harnesses":["claude","codex"]},"test":{"full":["true"]}}`)
+		w.setQueued()
+		w.forge("body", "Closes #5\n")
+		w.forge("issueLabels", "in-progress,size:Major")
+		w.record("w1", "", verdict.ReviewSpec, verdict.ReviewQuality)
+		for _, e := range entries {
+			e.TS = time.Now()
+			if err := ledger.Append(w.dir, e); err != nil {
+				t.Fatal(err)
+			}
+		}
+		res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "#7", Base: "main", CheckOnly: true, CheckReviews: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+	t.Run("latest assign entry names the author", func(t *testing.T) {
+		res := run(t,
+			ledger.Entry{Kind: ledger.KindAssign, Issue: "5", Slot: "ben", Harness: "claude"},
+			ledger.Entry{Kind: ledger.KindAssign, Issue: "9", Slot: "kit", Harness: "claude"},
+			ledger.Entry{Kind: ledger.KindAssign, Issue: "5", Slot: "w2", Harness: "codex"})
+		if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from claude") {
+			t.Fatalf("%s (%s), want review-missing naming claude", res.Verdict, res.Err)
+		}
+	})
+	t.Run("no entry falls back to the default order", func(t *testing.T) {
+		res := run(t)
+		if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "review-cross verdict from codex") {
+			t.Fatalf("%s (%s), want review-missing naming codex", res.Verdict, res.Err)
+		}
+	})
 }
