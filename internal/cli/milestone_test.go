@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -116,5 +118,36 @@ func TestMilestoneAddKindDecision(t *testing.T) {
 	body, _ := d["body"].(string)
 	if d["kind"] != "decision" || !strings.Contains(body, "kind: decision\n") || !strings.Contains(body, "## Decisions\n") || !strings.Contains(body, "## Not yet specified\n") {
 		t.Errorf("decision milestone: %s", out)
+	}
+}
+
+func TestMilestoneItemsSectionFileMode(t *testing.T) {
+	dir := gitRepo(t)
+	os.WriteFile(filepath.Join(dir, ".rota/BACKLOG.md"), []byte("# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n"), 0o644)
+	rotaIn(t, dir, "milestone", "add", "--title", "First", "--summary", "S")
+	if code, out, errOut := rotaIn(t, dir, "item", "create", "--kind", "bugs", "--title", "Crash", "--tag", "P2", "--milestone", "M01"); code != 0 {
+		t.Fatalf("item create: %d %s %s", code, out, errOut)
+	}
+	_, shown, _ := rotaIn(t, dir, "milestone", "show", "M01")
+	if !strings.Contains(shown, "## Items\n") || !strings.Contains(shown, "[B01] Crash") {
+		t.Fatalf("create did not list the item:\n%s", shown)
+	}
+	// A redraft through put carries no Items section; put regenerates it.
+	stub := strings.SplitN(shown, "\n## Items", 2)[0] + "\n\nhand-written\n"
+	if code, _, _ := rotaStdin(t, dir, stub, "milestone", "put", "M01", "--body-file", "-"); code != 0 {
+		t.Fatalf("put: %d", code)
+	}
+	_, shown, _ = rotaIn(t, dir, "milestone", "show", "M01")
+	if !strings.Contains(shown, "[B01] Crash") || !strings.Contains(shown, "hand-written\n") {
+		t.Fatalf("put dropped the section or lost text:\n%s", shown)
+	}
+	// Drift by hand: check restores the section and says so.
+	os.WriteFile(filepath.Join(dir, ".rota/milestones/M01.md"), []byte(stub), 0o644)
+	code, out, _ := rotaIn(t, dir, "milestone", "check", "M01", "--json")
+	if d := data(t, out); code != 0 || d["itemsRegenerated"] != true {
+		t.Fatalf("first check: %d %s", code, out)
+	}
+	if _, out, _ = rotaIn(t, dir, "milestone", "check", "M01", "--json"); data(t, out)["itemsRegenerated"] != nil {
+		t.Errorf("second check reports drift: %s", out)
 	}
 }

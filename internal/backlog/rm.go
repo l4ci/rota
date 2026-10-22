@@ -428,6 +428,12 @@ func (f *File) Remove(ids []string, scrubArchive, apply bool) (RmResult, error) 
 		err = run(docs)
 		return res, err
 	}
-	err := f.withDocuments(run)
-	return res, err
+	if err := f.withDocuments(run); err != nil {
+		return res, err
+	}
+	tagged := false
+	for _, it := range res.Items {
+		tagged = tagged || bulletTagged(it.Bullet)
+	}
+	return res, f.syncMilestonesIf(res.Applied && tagged)
 }
