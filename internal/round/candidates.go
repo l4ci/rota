@@ -53,6 +53,9 @@ type CandidateOpts struct {
 	Shared []string
 	// ScopeOverlap is round.scopeOverlap: "block" fails the overlap check on a scope clash.
 	ScopeOverlap string
+	// Support and Role are round.support and round.role: with Support set,
+	// each side lists only its own issues of the split (offSite).
+	Support, Role string
 }
 
 // ScopeOf is the scope and slate the round's candidates are drawn from: an
@@ -75,7 +78,7 @@ func ScopeOf(root string, set roundcfg.Settings, override string) (scope string,
 // explicit scope override ("" for none).
 func (e Env) RoundCandidates(ctx context.Context, root string, be backlog.Backend, set roundcfg.Settings, override string) ([]Candidate, error) {
 	scope, slate := ScopeOf(root, set, override)
-	return e.Candidates(ctx, root, be, CandidateOpts{Scope: scope, Slate: slate, Shared: set.SharedPaths, ScopeOverlap: set.ScopeOverlap})
+	return e.Candidates(ctx, root, be, CandidateOpts{Scope: scope, Slate: slate, Shared: set.SharedPaths, ScopeOverlap: set.ScopeOverlap, Support: set.Support, Role: set.Role})
 }
 
 // Candidates lists the open items the scope allows that no slot holds, in
@@ -124,6 +127,9 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 			continue
 		}
 		if taken != nil && taken(it) {
+			continue
+		}
+		if e.offSite(o.Support, o.Role, it) != "" {
 			continue
 		}
 		r, err := AssessScoped(be, it.ID, tracked, o.Shared, inFlight, false, "", o.ScopeOverlap == "block")

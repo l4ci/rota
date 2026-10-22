@@ -42,6 +42,13 @@ func (e Env) Reset(root, slot, task string, checkOnly bool) (ResetResult, error)
 // ResetTo is Reset onto an explicit branch: a round slot works on
 // `<agent>/<issue>-<slug>` and parks on `park/<agent>`, not rota-worker/….
 func (e Env) ResetTo(root, slot, task, newBranch string, checkOnly bool) (ResetResult, error) {
+	return e.ResetFrom(root, slot, task, newBranch, "", checkOnly)
+}
+
+// ResetFrom is ResetTo with an explicit start point in place of the slot's
+// base ("" keeps the base): the support machine cuts from origin/<base>, which
+// it has just fetched, and checks for unmerged work against it too.
+func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool) (ResetResult, error) {
 	e = e.WithDefaults()
 	res := ResetResult{Slot: slot}
 	reg, err := LoadRegistry(root)
@@ -59,6 +66,9 @@ func (e Env) ResetTo(root, slot, task, newBranch string, checkOnly bool) (ResetR
 		return res, ExternalRefusal(slot, "reset")
 	}
 	worktree, base, oldBranch, oldTask := s.Worktree(), s.Base(), s.Branch(), s.Task()
+	if from != "" {
+		base = from
+	}
 	if !fsio.IsDir(worktree) {
 		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' worktree missing: %s", slot, worktree))
 	}
