@@ -71,7 +71,8 @@ type Deps struct {
 	// Getenv is the one environment reader; the clock overrides, the worker
 	// env, the accounts and every cli env read go through it. A test swaps it.
 	// defaultDeps also reads the remaining ROTA_TEST_* hooks once, at this
-	// edge, into PollFixture, PollStatus, DoctorPath and DoctorDisk.
+	// edge, into PollFixture, PollStatus, DoctorPath and DoctorDisk, and
+	// ROTA_TEST_LATEST_VERSION into UpdateEnv.
 	Getenv  func(string) string
 	Environ func() []string
 	// RecordMistakes makes an internal error or panic write a record to the
@@ -175,7 +176,16 @@ func defaultDeps() *Deps {
 	d.PollKind = d.Getenv("ROTA_TEST_POLL_KIND")
 	d.DoctorPath = d.Getenv("ROTA_TEST_DOCTOR_PATH")
 	d.DoctorDisk = doctorDisk(d.Getenv("ROTA_TEST_DOCTOR_DISK"))
-	d.UpdateEnv = func() update.Env { return update.DefaultEnv(version.Get().Version, d.Getenv, d.Proc) }
+	// ROTA_TEST_LATEST_VERSION (no network) stands in for the release read; a
+	// smoke test cannot reach the update package any other way.
+	latest := d.Getenv("ROTA_TEST_LATEST_VERSION")
+	d.UpdateEnv = func() update.Env {
+		e := update.DefaultEnv(version.Get().Version, d.Proc)
+		if latest != "" {
+			e.Latest = func() string { return latest }
+		}
+		return e
+	}
 	d.OrchestrateEnv = func() orchestrate.Env { return defaultOrchestrateEnv(d) }
 	d.WorkerAccounts = func() *worker.Accounts {
 		env := worker.Env{Now: d.Now, Getenv: d.Getenv, Home: d.UserHomeDir, Config: d.Config}

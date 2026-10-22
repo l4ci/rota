@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gopath"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -94,10 +96,5 @@ func ownModule(top string) bool {
 
 // hasGoChange: a test file does not change the binary.
 func hasGoChange(files string) bool {
-	for _, f := range strings.Split(files, "\n") {
-		if strings.HasSuffix(f, ".go") && !strings.HasSuffix(f, "_test.go") {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(strings.Split(files, "\n"), gopath.IsProdGo)
 }
