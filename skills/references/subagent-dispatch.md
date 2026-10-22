@@ -50,7 +50,7 @@ Skills size a subagent by **tier**, never by model name. Three tiers, lightest f
 
 `rota round assign --tier` picks the tier of a round worker from the same table; Codex maps tiers through `round.tiers.codex.*` (see `docs/usage/configuration.md`, *Round keys*). The tier is chosen per subagent call; the main session's model is `models.orchestrator`, not a tier. A skill that names a subagent model says `light`, `standard` or `heavy`; the model comes from this table. Where the harness's dispatch interface takes a literal `model`, resolve the tier through the config key. Haiku usage is opportunistic: declared inline in the brief, not in config.
 
-A read-only critic may run on another harness (`plan.criticHarness`, `references/plan-critic.md`, *Another harness*) instead of a subagent; that is the only cross-harness dispatch a skill does.
+A read-only critic may run on another harness (`plan.criticHarness`, `references/plan-critic.md`, *Another harness*) instead of a subagent, and `/rota-review` and `/rota-release` run one cross-harness reviewer (`references/cross-harness-run.md`); those are the only cross-harness dispatches a skill does.
 
 ## Parallel fan-out pattern
 

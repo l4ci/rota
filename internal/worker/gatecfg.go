@@ -45,6 +45,8 @@ type GateConfig struct {
 	sourceErr  error // an invalid forge.provider or issues.source: a corrupt config
 	review     config.ReviewPolicy
 	reviewErr  error
+	cross      roundcfg.CrossReview
+	crossErr   error
 	tddErr     error
 	testsErr   error // a malformed test.fast or test.full
 	isolate    bool
@@ -74,6 +76,7 @@ func ParseGateConfig(cfg any) GateConfig {
 	c.sourceErr = tracker.ValidateConfig(cfg)
 	c.ciMinutes, c.ciErr = config.Int(cfg, "test.ciTimeoutMinutes", 1, 24*60)
 	c.review, c.reviewErr = config.ReviewPolicyOf(cfg)
+	c.cross, c.crossErr = roundcfg.ParseCrossReview(cfg)
 	c.isolate, c.isolateErr = config.Bool(cfg, "test.isolate")
 	return c
 }
@@ -132,6 +135,10 @@ func (c GateConfig) HasVerifyCommands() bool { return len(c.Full) > 0 }
 
 // ReviewPolicy is ship.review, or the error of a malformed one.
 func (c GateConfig) ReviewPolicy() (config.ReviewPolicy, error) { return c.review, c.reviewErr }
+
+// CrossReview is the cross-harness review settings, or the error of a
+// malformed review.crossLabels, round.harnesses or round.workerKind.
+func (c GateConfig) CrossReview() (roundcfg.CrossReview, error) { return c.cross, c.crossErr }
 
 // TDDEnabled is work.tdd, or the error of a non-boolean value.
 func (c GateConfig) TDDEnabled() (bool, error) { return c.TDD, c.tddErr }

@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/debugctr"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/verdict"
@@ -205,11 +206,13 @@ func checkVerdict(kind, v string) error {
 }
 
 func verdictAdd(fs *flag.FlagSet) RunFunc {
-	kind := fs.String("kind", "", "review-spec, review-quality, second-opinion, qa or behaviour")
+	kind := fs.String("kind", "", "review-spec, review-quality, review-cross, second-opinion, qa or behaviour")
 	v := fs.String("verdict", "", "PASS, CONCERNS or FAIL (qa also INFRA-FAIL; behaviour takes PASS or FAIL)")
 	transcript := fs.String("transcript", "", "path of the run's transcript (behaviour only)")
 	fileDeferred := fs.Bool("file-deferred", false, "add each deferred (non-blocking, non-info) finding at or above review.fileDeferred to the one follow-up item for --pr")
 	pr := fs.String("pr", "", "the PR the deferred items cite in --related (with --file-deferred)")
+	reviewer := fs.String("harness", "", "the reviewer's harness: "+harness.KindList()+" (required for review-cross)")
+	model := fs.String("model", "", "the reviewer's model (required for review-cross)")
 	sha := fs.String("sha", "", "the reviewed commit: record it, refusing unless it is the head of origin/<branch>, or the local branch when it is not pushed")
 	body := bodyFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
@@ -221,6 +224,13 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		}
 		if err := checkVerdict(*kind, *v); err != nil {
 			return Result{}, err
+		}
+		*reviewer, *model = strings.TrimSpace(*reviewer), strings.TrimSpace(*model)
+		if *reviewer != "" && !harness.Valid(*reviewer) {
+			return Result{}, Usage("--harness must be one of %s", harness.KindList())
+		}
+		if *kind == verdict.ReviewCross && (*reviewer == "" || *model == "") {
+			return Result{}, Usage("--kind %s needs --harness and --model: the record names who reviewed", verdict.ReviewCross)
 		}
 		if *transcript != "" && *kind != verdict.Behaviour {
 			return Result{}, Usage("--transcript is only for --kind %s", verdict.Behaviour)
@@ -266,6 +276,7 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		r := verdict.NewRecord(*kind, *v, head, b, c.deps().Now())
 		r.Branch, r.Repo = t.branch, t.repo
 		r.Transcript = *transcript
+		r.Harness, r.Model = *reviewer, *model
 		if r, err = verdict.AddBranch(t.root, t.key, r); err != nil {
 			return Result{}, err
 		}
@@ -365,7 +376,11 @@ func verdictShow(c *Ctx, args []string) (Result, error) {
 		o := r.Object()
 		o.Set("stale", !verdict.AtHead(r, t.head))
 		records = append(records, o)
-		lines = append(lines, kind+" "+r.Verdict+" @ "+r.Sha)
+		line := kind + " " + r.Verdict + " @ " + r.Sha
+		if who := strings.TrimSpace(r.Harness + " " + r.Model); who != "" {
+			line += " (" + who + ")"
+		}
+		lines = append(lines, line)
 	}
 	d := jsonx.NewObject()
 	d.Set("branch", t.branch)

@@ -186,15 +186,7 @@ func (e Env) Fallback(ctx context.Context, root string, set roundcfg.Settings) F
 
 // DefaultKind is the harness an issue with no pick resolves to: round.workerKind,
 // else the first of round.harnesses, else ""; the slot's kind and claude decide.
-func DefaultKind(set roundcfg.Settings) string {
-	if set.WorkerKind != "" {
-		return set.WorkerKind
-	}
-	if len(set.Harnesses) > 0 {
-		return set.Harnesses[0]
-	}
-	return ""
-}
+func DefaultKind(set roundcfg.Settings) string { return set.DefaultKind() }
 
 // laterHarnesses is the harnesses after kind in round.harnesses, or all of
 // them when kind is not listed.

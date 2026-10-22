@@ -352,6 +352,52 @@ func loadWorkerKind(cfg any) (string, error) {
 	return k, nil
 }
 
+// CrossReview is what the cross-harness review requirement reads (#1612):
+// review.crossLabels, the labels that trigger it; round.harnesses, the
+// reviewers to pick from; and DefaultKind, the author's harness when no slot
+// or harness: label names one.
+type CrossReview struct {
+	Labels, Harnesses []string
+	DefaultKind       string
+}
+
+// ParseCrossReview reads the cross-harness review settings. A malformed
+// review.crossLabels, round.harnesses or round.workerKind is an error: the
+// gate must not guess that a Major PR needs no cross review.
+func ParseCrossReview(cfg any) (CrossReview, error) {
+	var c CrossReview
+	var err error
+	if c.Labels, err = list(cfg, "review.crossLabels"); err != nil {
+		return CrossReview{}, err
+	}
+	s := Settings{}
+	if s.WorkerKind, err = loadWorkerKind(cfg); err != nil {
+		return CrossReview{}, err
+	}
+	if s.Harnesses, err = loadHarnesses(cfg); err != nil {
+		return CrossReview{}, err
+	}
+	c.Harnesses, c.DefaultKind = s.Harnesses, s.DefaultKind()
+	return c, nil
+}
+
+// Active reports whether any PR can need a cross-harness review: a trigger
+// label and a harness list to pick the reviewer from are both set.
+func (c CrossReview) Active() bool { return len(c.Labels) > 0 && len(c.Harnesses) > 0 }
+
+// DefaultKind is the harness an issue with no pick resolves to:
+// round.workerKind, else the first of round.harnesses, else ""; the slot's
+// kind and claude decide.
+func (s Settings) DefaultKind() string {
+	if s.WorkerKind != "" {
+		return s.WorkerKind
+	}
+	if len(s.Harnesses) > 0 {
+		return s.Harnesses[0]
+	}
+	return ""
+}
+
 // loadHarnesses reads round.harnesses: harness kinds in fallback order, none
 // twice. A bad entry is an error, never skipped.
 func loadHarnesses(cfg any) ([]string, error) {
