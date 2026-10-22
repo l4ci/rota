@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/pystr"
@@ -32,6 +33,8 @@ type Umbrella struct {
 	// use, so a sub-repo whose forge is down fails only the verbs that reach it.
 	NewTracker func(dir string) (Tracker, error)
 	Ctx        context.Context // for every tracker call; nil is context.Background()
+	// Today is the day clock of milestone created dates; nil is time.Now.
+	Today func() time.Time
 	// Scope narrows reads and bare-reference resolution to one sub-repo (the
 	// global --repo). Qualified references still resolve anywhere, and IDs
 	// keep their "<repo>:" spelling.

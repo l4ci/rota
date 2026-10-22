@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func exitOf(err error) int {
@@ -19,6 +20,8 @@ func exitOf(err error) int {
 	}
 	return 0
 }
+
+const testDay = "2026-03-04"
 
 var created = regexp.MustCompile(`(?m)^created: \d{4}-\d{2}-\d{2}$`)
 
@@ -85,7 +88,7 @@ func TestMatchesOldHelpers(t *testing.T) {
 		{"Second", "Needs the first.", "M01", "M02"},
 		{"Third", "Needs both.", "M01, M02", "M03"},
 	} {
-		id, err := Add(root, a.title, a.summary, a.deps)
+		id, err := Add(root, a.title, a.summary, a.deps, testDay)
 		if err != nil || id != a.id {
 			t.Fatalf("add %d: %q %v", i, id, err)
 		}
@@ -121,7 +124,7 @@ func TestMatchesOldHelpers(t *testing.T) {
 
 func TestStatusAndIndexChanged(t *testing.T) {
 	root := project(t)
-	Add(root, "A", "a", "")
+	Add(root, "A", "a", "", testDay)
 	if changed, err := SetStatus(root, "M01", "active"); err != nil || !changed {
 		t.Fatalf("first status: %v %v", changed, err)
 	}
@@ -144,7 +147,7 @@ func TestStatusAndIndexChanged(t *testing.T) {
 
 func TestExits(t *testing.T) {
 	root := project(t)
-	Add(root, "A", "a", "")
+	Add(root, "A", "a", "", testDay)
 	for _, id := range []string{"m01", "M1", "X01", "../x"} {
 		if _, err := Show(root, id); exitOf(err) != 2 {
 			t.Errorf("Show(%q) = %v", id, err)
@@ -205,7 +208,7 @@ func TestAddWithoutOverviewAndConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			id, err := Add(root, "T", "s", "")
+			id, err := Add(root, "T", "s", "", testDay)
 			if err != nil {
 				t.Error(err)
 				return
@@ -292,7 +295,7 @@ func TestIDGrammarUnicodeDigits(t *testing.T) {
 // text: Put validates frontmatter only.
 func TestPutAcceptsOptionalPlanSections(t *testing.T) {
 	root := t.TempDir()
-	if _, err := Add(root, "First", "Summary line.", ""); err != nil {
+	if _, err := Add(root, "First", "Summary line.", "", testDay); err != nil {
 		t.Fatal(err)
 	}
 	text := "---\nid: M01\nstatus: planned\n---\n\n## Goal\n\ng\n\n## Not yet specified\n\n- sync engine\n\n## Out of scope\n\n- SSO: ruled out, no demand\n"
@@ -344,5 +347,19 @@ func TestIndexFromIssueModeVisionBlock(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestFileStoreStampsTheInjectedDay: the created date is the store's clock, not
+// the wall clock.
+func TestFileStoreStampsTheInjectedDay(t *testing.T) {
+	root := t.TempDir()
+	day := func() time.Time { return time.Date(2031, 7, 9, 23, 59, 0, 0, time.UTC) }
+	id, err := FileStore{Root: root, Today: day}.Add("T", "s", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(root, ".rota/milestones", id+".md")); !strings.Contains(got, "\ncreated: 2031-07-09\n") {
+		t.Fatalf("created date not stamped from the clock:\n%s", got)
 	}
 }

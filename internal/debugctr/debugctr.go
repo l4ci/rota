@@ -24,11 +24,13 @@ import (
 type Counter struct {
 	Session string
 	Path    string
+	// Now stamps started_at and ended_at; nil is the wall clock.
+	Now func() time.Time
 }
 
 // Open derives the session from the current branch of the git repository
 // at root and returns its Counter. Not being in a git repository is exit 5.
-func Open(root string) (*Counter, error) {
+func Open(root string, now func() time.Time) (*Counter, error) {
 	res, err := git.Repo{Dir: root}.Run(context.Background(), "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil || res.ExitCode != 0 {
 		return nil, exitcode.Errf(exitcode.ExitUnavailable, "not in a git repository (a debug session is keyed by the current branch)")
@@ -38,11 +40,15 @@ func Open(root string) (*Counter, error) {
 		return nil, exitcode.Errf(exitcode.ExitUnavailable, "could not determine current git branch")
 	}
 	session := strings.ReplaceAll(branch, "/", "-")
-	return &Counter{Session: session, Path: rotatree.File(root, rotatree.DebugDir, session+".json")}, nil
+	return &Counter{Session: session, Path: rotatree.File(root, rotatree.DebugDir, session+".json"), Now: now}, nil
 }
 
-func nowISO() string {
-	t := time.Now().UTC()
+func (c *Counter) nowISO() string {
+	now := c.Now
+	if now == nil {
+		now = time.Now
+	}
+	t := now().UTC()
 	if t.Nanosecond()/1000 == 0 {
 		return t.Format("2006-01-02T15:04:05") + "+00:00"
 	}
@@ -101,7 +107,7 @@ func (c *Counter) Init(bugID string) (created bool, err error) {
 		}
 		o := c.def()
 		o.Set("bug_id", bugID)
-		o.Set("started_at", nowISO())
+		o.Set("started_at", c.nowISO())
 		if err := fsio.WriteJSONAtomic(c.Path, o); err != nil {
 			return err
 		}
@@ -132,7 +138,7 @@ func (c *Counter) RecordAttempt(hypothesis, commit string) (int, error) {
 		n = len(list) + 1
 		a := jsonx.NewObject()
 		a.Set("n", n)
-		a.Set("started_at", nowISO())
+		a.Set("started_at", c.nowISO())
 		a.Set("hypothesis", hypothesis)
 		a.Set("commit", commit)
 		a.Set("outcome", "pending")
@@ -158,7 +164,7 @@ func (c *Counter) closeLast(outcome string, mutate func(o *jsonx.Object)) (attem
 			return exitcode.Errf(exitcode.ExitRefused, "last attempt outcome is '%s', not 'pending'", s)
 		}
 		last.Set("outcome", outcome)
-		last.Set("ended_at", nowISO())
+		last.Set("ended_at", c.nowISO())
 		mutate(o)
 		attempt = intOf(mustGet(last, "n"))
 		failed = intOf(mustGet(o, "failed_fixes"))

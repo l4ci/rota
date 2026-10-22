@@ -17,7 +17,7 @@ func DecisionRef(id string) string {
 
 // MilestoneStore is the file backend's milestone store: detail files under
 // .rota/milestones.
-func (f *File) MilestoneStore() ms.Store { return ms.FileStore{Root: f.Root} }
+func (f *File) MilestoneStore() ms.Store { return ms.FileStore{Root: f.Root, Today: f.Today} }
 
 // LogDecision appends `- <ref>: <gist>` to the "## Decisions" list of the
 // item's milestone (the first it names) and returns that milestone's ID. It is

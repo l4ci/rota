@@ -1,5 +1,7 @@
 package milestone
 
+import "time"
+
 // Store is where milestones live. FileStore keeps them under .rota/milestones;
 // the issue and umbrella adapters live in package backlog, which imports this
 // package and so can satisfy Store without a cycle. Minting an ID is part of
@@ -24,13 +26,17 @@ type Store interface {
 }
 
 // FileStore is the Store of file mode: detail files under root/.rota/milestones.
-type FileStore struct{ Root string }
+type FileStore struct {
+	Root string
+	// Today is the clock of the created date; nil is the wall clock.
+	Today func() time.Time
+}
 
 var _ Store = FileStore{}
 
 // Add writes the detail file and appends the entry to MILESTONES.md.
 func (s FileStore) Add(title, summary string, depends []string) (string, error) {
-	return addFile(s.Root, title, summary, depends)
+	return addFile(s.Root, title, summary, depends, Day(s.Today))
 }
 
 // List reads the detail files; see List.
