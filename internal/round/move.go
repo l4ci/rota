@@ -205,6 +205,10 @@ type slotRelease struct {
 	claimID              string
 	sweep, gone          bool
 	tolerate             func(step string, err error) error
+	// members are the bundle's issues beside id, released with it; tolerateOf is
+	// the tolerate of one of them (nil: tolerate, the lead's, serves every one).
+	members    []string
+	tolerateOf func(id string) func(step string, err error) error
 }
 
 // released is what the sequence did, filled in as its steps run.
@@ -218,56 +222,81 @@ type released struct {
 // comment have no undo: the branch is pushed and the comment is deduplicated, so
 // a repeated call finishes the rest. A later failure gives the claim back and
 // restores the in-progress state, so the registry (which still binds the issue
-// until the last step) and the tracker agree.
+// until the last step) and the tracker agree. A bundle's members (read from the
+// slot before the park unbinds them) are released with the lead, each with the
+// lead's comment, claim id and undo, in the same step order.
 func (e Env) releaseSteps(ctx context.Context, r slotRelease, out *released) []step {
-	stateCleared := false
-	return []step{
-		{name: "park", do: func() (err error) {
-			out.Park, err = e.Park(ctx, r.root, r.slot, r.verb)
-			return wrap(err)
-		}},
-		{name: "handoff comment", do: func() error {
+	ids := append([]string{r.id}, r.members...)
+	tol := func(id string) func(string, error) error {
+		if id != r.id && r.tolerateOf != nil {
+			return r.tolerateOf(id)
+		}
+		return r.tolerate
+	}
+	label := func(name, id string) string {
+		if id == r.id {
+			return name
+		}
+		return name + " of " + id
+	}
+	steps := []step{{name: "park", do: func() (err error) {
+		out.Park, err = e.Park(ctx, r.root, r.slot, r.verb)
+		return wrap(err)
+	}}}
+	for _, id := range ids {
+		steps = append(steps, step{name: label("handoff comment", id), do: func() error {
 			h := handoff{verb: r.verb, from: r.slot, round: r.round, branch: out.Park.Branch, head: out.Park.Head,
 				salvaged: out.Park.Salvaged, reason: r.reason, note: r.note}
-			cid, _, err := h.post(r.be, r.id)
-			if err = r.tolerate("handoff comment", err); err != nil {
+			cid, _, err := h.post(r.be, id)
+			if err = tol(id)("handoff comment", err); err != nil {
 				return wrap(err)
 			}
-			out.CommentID = cid
+			if id == r.id {
+				out.CommentID = cid
+			}
 			return nil
-		}},
-		{name: "release the claim", do: func() (err error) {
-			out.Released, err = releaseClaims(r.be, r.id, r.slot, r.claimID, r.sweep)
-			return wrap(r.tolerate("claim release", err))
+		}})
+	}
+	for _, id := range ids {
+		got := false
+		steps = append(steps, step{name: label("release the claim", id), do: func() (err error) {
+			got, err = releaseClaims(r.be, id, r.slot, r.claimID, r.sweep)
+			if id == r.id {
+				out.Released = got
+			}
+			return wrap(tol(id)("claim release", err))
 		}, undo: func() error {
 			// Only the recorded claim can be taken back; a swept claim the registry
 			// never knew has no id to restore.
-			if !out.Released || r.claimID == "" {
+			if !got || r.claimID == "" {
 				return nil
 			}
-			_, _, err := r.be.Claim(r.id, r.claimID)
+			_, _, err := r.be.Claim(id, r.claimID)
 			return err
-		}},
-		{name: "reset the state", do: func() (err error) {
-			stateCleared, err = clearState(r.root, r.be, r.id, r.slot)
-			return wrap(r.tolerate("state reset", err))
-		}, undo: func() error {
-			if !stateCleared {
-				return nil
-			}
-			_, err := r.be.SetState(r.id, "in-progress")
-			return err
-		}},
-		{name: "free the slot", do: func() error {
-			return wrap(editSlot(r.root, r.slot, func(s *worker.Slot) error {
-				s.Park(r.gone)
-				if r.gone {
-					s.ReleasePort()
-				}
-				return nil
-			}))
-		}},
+		}})
 	}
+	for _, id := range ids {
+		cleared := false
+		steps = append(steps, step{name: label("reset the state", id), do: func() (err error) {
+			cleared, err = clearState(r.root, r.be, id, r.slot)
+			return wrap(tol(id)("state reset", err))
+		}, undo: func() error {
+			if !cleared {
+				return nil
+			}
+			_, err := r.be.SetState(id, "in-progress")
+			return err
+		}})
+	}
+	return append(steps, step{name: "free the slot", do: func() error {
+		return wrap(editSlot(r.root, r.slot, func(s *worker.Slot) error {
+			s.Park(r.gone)
+			if r.gone {
+				s.ReleasePort()
+			}
+			return nil
+		}))
+	}})
 }
 
 // ---- return -----------------------------------------------------------------
@@ -335,7 +364,8 @@ func (e Env) Return(ctx context.Context, root string, be Board, o ReturnOpts) (r
 		root: root, be: be, slot: o.Slot, id: id, verb: "return", round: rnd,
 		reason: o.Reason, note: o.Note,
 		claimID:  strutil.FirstNonEmpty(s.ClaimID(), o.Slot+"@"+strconv.Itoa(rnd)),
-		tolerate: tolerate,
+		tolerate: tolerate, members: s.Bundle(),
+		tolerateOf: func(id string) func(string, error) error { return tolerateMissing(&res.Warnings, id) },
 	}, &out))
 	res.Branch, res.Head, res.Salvaged = out.Park.Branch, out.Park.Head, out.Park.Salvaged
 	res.CommentID, res.Released = out.CommentID, out.Released
@@ -521,7 +551,8 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 		root: root, be: be, slot: o.Slot, id: h.Issue, verb: "reclaim", round: rnd,
 		reason: "reclaimed, " + reason, note: o.Note,
 		claimID: s.ClaimID(), sweep: true, gone: true,
-		tolerate: tolerateMissing(&res.Warnings, h.Issue),
+		tolerate: tolerateMissing(&res.Warnings, h.Issue), members: s.Bundle(),
+		tolerateOf: func(id string) func(string, error) error { return tolerateMissing(&res.Warnings, id) },
 	}, &out))
 	res.Branch, res.Head, res.Salvaged, res.Parked = out.Park.Branch, out.Park.Head, out.Park.Salvaged, out.Park.Moved
 	res.Released = out.Released
@@ -574,12 +605,18 @@ type transferRun struct {
 	queueTo           bool // the receiver holds a PR that can wait in the queue
 	sender, receiver  *worker.Slot
 	rec               *worker.QueuedPR // no slot holds the issue but a queued PR does
-	to                *worker.Slot
-	kind, kindSource  string
-	model, tier       string // model is the applied one
-	reason            string
-	decisions, brief  string
-	rnd               int
+	// member: the issue is a bundle member, not a lead (transfer to the human
+	// only). lead is its bundle's lead, holder the slot (or queued record) with it.
+	member           bool
+	lead             string
+	holder           *worker.Slot
+	holderRec        *worker.QueuedPR
+	to               *worker.Slot
+	kind, kindSource string
+	model, tier      string // model is the applied one
+	reason           string
+	decisions, brief string
+	rnd              int
 
 	branch, oldClaim string
 	parked           Parked
@@ -608,6 +645,13 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	// The moves run as steps (saga.go). Transfer only goes forward: once the
 	// sender is parked and its claim released there is nothing to give back, so
 	// no step but a failed dispatch compensates, and a repeated call resumes.
+	if run.member {
+		if err := runSteps(e.transferMemberSteps(ctx, root, be, run, &res)); err != nil {
+			return res, err
+		}
+		res.Changed = true
+		return res, nil
+	}
 	if run.toHuman {
 		if err := runSteps(e.transferToHumanSteps(ctx, root, be, o, run, &res)); err != nil {
 			return res, err
@@ -699,6 +743,24 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	if err != nil {
 		return nil, err
 	}
+	// A bundle member leaves only to the human, on its own; it is no slot's task,
+	// so it is looked up before "no slot holds".
+	if hs, hr := reg.BundleHolder(id); hs != nil || hr != nil {
+		if !toHuman {
+			return nil, blocked(BlockBundle, "%s is bundled: a member leaves a bundle only to the human (--to %s)", id, HumanTarget)
+		}
+		if !e.forgeOn(be) {
+			return nil, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, strutil.FirstNonEmpty(e.NeedsHuman, DefaultNeedsHuman))
+		}
+		run.member, run.holder, run.holderRec = true, hs, hr
+		if hs != nil {
+			run.lead, run.from = hs.HeldID(), hs.Name()
+		} else {
+			run.lead, run.from = hr.Issue, hr.From
+		}
+		res.From = run.from
+		return run, nil
+	}
 	// Two attempts of a best-of:2 issue still holding it: transfer cannot
 	// choose one. After a pick, return or reclaim one holder is left.
 	if b := reg.BestOf(id); b != nil {
@@ -736,6 +798,23 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	// a transfer from it was left half done).
 	if sender == nil {
 		run.rec = reg.QueuedIssue(id)
+	}
+	// A bundle's lead cannot move alone, and moving the whole bundle to another
+	// slot is not built: its members go to the human first, or the slot is
+	// returned or reclaimed.
+	var bundle []string
+	switch {
+	case sender != nil:
+		bundle = sender.Bundle()
+	case run.rec != nil:
+		bundle = run.rec.Bundle
+	}
+	if len(bundle) > 0 {
+		refs := make([]string, len(bundle))
+		for i, m := range bundle {
+			refs[i] = tracker.RefOf(m)
+		}
+		return nil, blocked(BlockBundle, "%s leads a bundle with %s: transfer each member to the human first, or return/reclaim the slot to release the whole bundle", tracker.RefOf(id), strings.Join(refs, ", "))
 	}
 	switch {
 	case resuming:
@@ -906,6 +985,50 @@ func (e Env) transferToHumanSteps(ctx context.Context, root string, be Board, o 
 		}})
 }
 
+// transferMemberSteps is `--to human` for a bundle member: a note on the
+// member, its claim and state given back, the needs-human label, and the member
+// dropped from the bundle. The lead keeps its slot, branch and session; nothing
+// is parked or dispatched. Forward only, like the other transfers.
+func (e Env) transferMemberSteps(ctx context.Context, root string, be Board, run *transferRun, res *Transferred) []step {
+	id, from := run.id, run.from
+	tolerate := tolerateMissing(&res.Warnings, id)
+	claim := from + "@" + strconv.Itoa(run.rnd)
+	branch, head := "", ""
+	if s := run.holder; s != nil {
+		claim = strutil.FirstNonEmpty(s.ClaimID(), claim)
+		branch, head = s.Branch(), e.headLine(ctx, s.Worktree(), "HEAD")
+	} else {
+		claim = strutil.FirstNonEmpty(run.holderRec.ClaimID, claim)
+		branch = run.holderRec.Branch
+		head = e.queuedHead(ctx, root, branch)
+	}
+	return []step{
+		{name: "handoff comment", do: func() error {
+			h := handoff{verb: "transfer", from: from, round: run.rnd, branch: branch, head: head,
+				reason: fmt.Sprintf("left the bundle of %s on slot %s: transferred to the human", tracker.RefOf(run.lead), from)}
+			_, _, err := h.post(be, id)
+			return wrap(tolerate("handoff comment", err))
+		}},
+		{name: "release the claim", do: func() error {
+			_, err := releaseClaims(be, id, from, claim, false)
+			return wrap(tolerate("claim release", err))
+		}},
+		{name: "reset the state", do: func() error {
+			_, err := clearState(root, be, id, from)
+			return wrap(tolerate("state reset", err))
+		}},
+		{name: "needs-human label", skip: func() bool { return run.it.Closed }, do: func() error {
+			return wrap(e.Forge.AddLabels(ctx, run.it.IssueKey(), []string{strutil.FirstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}, true))
+		}},
+		{name: "leave the bundle", do: func() error {
+			return wrap(worker.DropBundleMember(root, id))
+		}},
+		{name: "stop the item clock", do: func() error {
+			return wrap(worker.ClearItemStart(root, worker.NormID(id)))
+		}},
+	}
+}
+
 // transferToSlotSteps is the sequence for a receiver slot: the head, the new
 // claim, the sender freed, the branch checked out and the receiver bound, then
 // the delivery (its cleanup is the caller's) and the adoption of a queued PR.
@@ -944,7 +1067,7 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return run.branch }, Round: rnd, Kind: run.kind, Model: run.model, Wrap: wrap, LogRelay: true,
 		Brief: func() string {
 			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
-			text := pointerBrief(o.To, id, run.branch, run.brief, nil, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, tierBrief{Kind: run.kind, Tier: run.tier, Model: run.model, Default: o.Settings.Tier, Reason: run.reason, Table: o.Settings.Models[run.kind], Attempt: attempt, FullOnly: o.Settings.FullOnly, TDD: o.Settings.TDD})
+			text := pointerBrief(o.To, id, run.branch, run.brief, nil, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, nil, tierBrief{Kind: run.kind, Tier: run.tier, Model: run.model, Default: o.Settings.Tier, Reason: run.reason, Table: o.Settings.Models[run.kind], Attempt: attempt, FullOnly: o.Settings.FullOnly, TDD: o.Settings.TDD})
 			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `%s` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
 				res.From, marker.Handoff(res.From, rnd), run.branch)
 			if rec != nil {

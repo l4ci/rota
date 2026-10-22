@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
@@ -469,6 +470,18 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		depth := res.Depth
 		data := gitObj("branch", t.Branch, "base", t.Base, "depth", string(depth), "signal", res.Signal, "why", why, "changedLines", res.Changed, "labels", res.Labels)
 		text := fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", t.Branch, depth, why)
+		// A bundled branch closes more than its lead: the reviewer checks every
+		// bundled issue's acceptance.
+		if root, err := backlogScope(c); err == nil {
+			if members := branchBundle(c, root, t.Branch); len(members) > 0 {
+				refs := make([]string, len(members))
+				for i, m := range members {
+					refs[i] = m.Ref()
+				}
+				data.Set("bundle", refs)
+				text += " bundle: " + strings.Join(refs, ", ")
+			}
+		}
 		// The depth can rise after the review ran (a bounce fix outside the
 		// issue's files); the newest review set on record is the old depth.
 		if root, err := backlogScope(c); err == nil {
@@ -485,6 +498,49 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: data, Text: text}, nil
 	}
+}
+
+// branchBundle is the member issues of the bundle behind branch: the bundle of
+// the slot holding the branch, else of the review record queued for it. The
+// registry lives in the main checkout, so a worktree falls back to that one.
+// Nil when the branch is no bundle's or the registry is unreadable.
+func branchBundle(c *Ctx, root, branch string) []tracker.IssueKey {
+	lead, ok := worker.BranchIssue(branch)
+	if !ok {
+		return nil
+	}
+	reg := worker.LoadRegistryTolerant(root)
+	if !reg.Exists {
+		common, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
+		if err != nil {
+			return nil
+		}
+		if main, ok := rotastate.MainCheckout(common); ok && main != root {
+			reg = worker.LoadRegistryTolerant(main)
+		}
+	}
+	var ids []string
+	for _, sl := range reg.Slots() {
+		if held, ok := tracker.ParseKey(sl.HeldID()); ok && held == lead && sl.Branch() == branch {
+			ids = sl.Bundle()
+			break
+		}
+	}
+	if len(ids) == 0 {
+		for _, q := range reg.PRs() {
+			if q.Branch == branch {
+				ids = q.Bundle
+				break
+			}
+		}
+	}
+	var keys []tracker.IssueKey
+	for _, id := range ids {
+		if k, ok := tracker.ParseKey(id); ok {
+			keys = append(keys, k)
+		}
+	}
+	return keys
 }
 
 // branchReviewDepth resolves the depth ship.review picks for t, from its diff
@@ -512,6 +568,7 @@ func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDep
 		}
 		if _, none := it.(tracker.NoIssues); !none { // the file source has no issues to read
 			src.Issue, src.Issues = n, it
+			src.Members = branchBundle(c, root, t.Branch)
 		}
 	}
 	// The branch's open PR carries the Door line. Like the gate, an unreadable

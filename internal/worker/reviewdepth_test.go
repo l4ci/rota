@@ -168,3 +168,46 @@ func TestDoorNote(t *testing.T) {
 		}
 	}
 }
+
+// byKeyIssues serves a different issue per key.
+type byKeyIssues map[tracker.IssueKey]tracker.Issue
+
+func (m byKeyIssues) Get(_ context.Context, k tracker.IssueKey, _ bool) (tracker.Issue, error) {
+	is, ok := m[k]
+	if !ok {
+		return tracker.Issue{}, errors.New("no issue " + k.Ref())
+	}
+	return is, nil
+}
+
+// A bundle takes the highest depth any bundled issue requires: a `none` label
+// on one issue must not win over another issue's default.
+func TestReviewDepthBundleTakesHighest(t *testing.T) {
+	dir := depthRepo(t)
+	pol := config.ReviewPolicy{Default: config.DepthLight, Labels: map[string]config.ReviewDepth{"risk:high": config.DepthFull, "partial-slice": config.DepthNone}}
+	lead, member := tracker.NumKey(5), tracker.NumKey(6)
+	src := ReviewSources{Policy: pol, Git: git.Exec, Dir: dir, Span: "main...feat", Issue: lead, Members: []tracker.IssueKey{member}}
+
+	src.Issues = byKeyIssues{lead: {Body: "## Files\n\n- x.txt\n"}, member: {Labels: []string{"risk:high"}, Body: "## Files\n\n- x.txt\n"}}
+	got, err := ResolveReviewDepth(context.Background(), src)
+	if err != nil || got.Depth != config.DepthFull || !slices.Contains(got.Labels, "risk:high") {
+		t.Fatalf("member risk:high: %+v %v", got, err)
+	}
+
+	src.Issues = byKeyIssues{lead: {Labels: []string{"partial-slice"}, Body: "## Files\n\n- x.txt\n"}, member: {Body: "## Files\n\n- x.txt\n"}}
+	if got, err = ResolveReviewDepth(context.Background(), src); err != nil || got.Depth != config.DepthLight {
+		t.Fatalf("none lead, default member: %+v %v", got, err)
+	}
+
+	// a file named by any bundled issue is not scope drift
+	src.Issues = byKeyIssues{lead: {Body: "## Files\n\n- y.txt\n"}, member: {Body: "## Files\n\n- x.txt\n"}}
+	if got, err = ResolveReviewDepth(context.Background(), src); err != nil || got.Signal == config.SignalScopeDrift {
+		t.Fatalf("member's file is drift: %+v %v", got, err)
+	}
+
+	src.Issues = byKeyIssues{lead: {}}
+	var de *ReviewDepthError
+	if _, err = ResolveReviewDepth(context.Background(), src); !errors.As(err, &de) || de.Stage != "issue" || !strings.Contains(de.Msg, member.Ref()) {
+		t.Fatalf("unreadable member must fail naming it: %v", err)
+	}
+}
