@@ -176,7 +176,9 @@ func footprint(body, extra string, tracked, shared []string) []string {
 				continue
 			}
 			tok := strings.Fields(line)[0]
-			out = append(out, strings.Trim(tok, "`,;"))
+			if tok = overlap.Clean(strings.Trim(tok, "`,;")); tok != "" {
+				out = append(out, tok)
+			}
 		}
 	} else {
 		files := map[string]bool{}
