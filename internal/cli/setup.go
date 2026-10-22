@@ -72,8 +72,8 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
-			sigs := readSetupSignals(c, dir)
-			return setupList(setupDefaults(c, sigs), sigs), nil
+			defs, sigs := setupSuggestions(c, dir, nil)
+			return setupList(defs, sigs), nil
 		}
 		if err := refuseHomeInit(c, "setup", *force); err != nil {
 			return Result{}, err
@@ -106,8 +106,8 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 				WithHint("run: rota setup --list to see the questions, rota setup --yes for the defaults")
 		}
 		in := bufio.NewReader(c.Stdin)
-		sigs := readSetupSignals(c, dir)
-		answers, err := resolveAnswers(c, in, given, interactive, setupDefaults(c, sigs), sigs)
+		defs, sigs := setupSuggestions(c, dir, given)
+		answers, err := resolveAnswers(c, in, given, interactive, defs, sigs)
 		if err != nil {
 			return Result{}, err
 		}
@@ -259,7 +259,10 @@ func askFree(in *bufio.Reader, out io.Writer, p config.Prompt, def string) (stri
 // values already JSON pass through.
 func setupValue(p config.Prompt, raw string) string {
 	k, ok := config.SchemaKey(p.Key)
-	if !p.Free || !ok || k.Type != config.TypeList || strings.HasPrefix(strings.TrimSpace(raw), "[") {
+	if !p.Free || !ok || k.Type != config.TypeList {
+		return raw
+	}
+	if _, isList := config.Coerce(raw).([]any); isList {
 		return raw
 	}
 	b, err := jsonx.MarshalCompact([]any{raw})
@@ -269,40 +272,62 @@ func setupValue(p config.Prompt, raw string) string {
 	return string(b)
 }
 
-// setupDefaults is each question's default: the value read from the project
-// when there is one (sigs), else the global config's value when it is one of
-// the question's choices (a hand-edited bad value is ignored), else the schema
-// default. A broken global file warns and falls back to the schema.
-func setupDefaults(c *Ctx, sigs map[string]setupSignal) map[string]string {
-	defs := map[string]string{}
+// setupSuggestions settles what each question starts from. Precedence per
+// question: --set (given), then the global config's value when it is one of
+// the question's choices (a hand-edited bad value is ignored), then the value
+// read from the project, then the schema default. defs is the starting value;
+// sigs is what the prompt and --list show beside it: the project's signal, or
+// the global value with the differing signal noted. A broken global file warns
+// and counts as empty.
+func setupSuggestions(c *Ctx, dir string, given map[string]string) (defs map[string]string, sigs map[string]setupSignal) {
+	defs = map[string]string{}
 	for _, p := range config.Prompts {
 		defs[p.Key] = p.DefaultChoice()
 	}
-	defer func() {
-		for k, sig := range sigs {
-			defs[k] = sig.Value
-		}
-	}()
-	dir, err := projects.Dir(c.deps().projectsEnv())
+	globals := map[string]string{}
+	gdir, err := projects.Dir(c.deps().projectsEnv())
 	var vals map[string]any
 	if err == nil {
-		vals, err = config.LoadGlobal(dir)
+		vals, err = config.LoadGlobal(gdir)
 	}
 	if err != nil {
 		c.Warn("ignoring the global config: %v", err)
-		return defs
-	}
-	// runInit migrates the global after the answers are taken, so a pre-0.21
-	// auto must default to the roundtrip it is about to become.
-	if config.GlobalAutoStale(dir, vals) {
-		vals["autonomy.level"] = "roundtrip"
-	}
-	for _, p := range config.Prompts {
-		if v, ok := vals[p.Key]; ok && p.Valid(fmt.Sprint(v)) {
-			defs[p.Key] = fmt.Sprint(v)
+	} else {
+		// runInit migrates the global after the answers are taken, so a pre-0.21
+		// auto must default to the roundtrip it is about to become.
+		if config.GlobalAutoStale(gdir, vals) {
+			vals["autonomy.level"] = "roundtrip"
+		}
+		for _, p := range config.Prompts {
+			if v, ok := vals[p.Key]; ok && p.Valid(fmt.Sprint(v)) {
+				globals[p.Key] = fmt.Sprint(v)
+			}
 		}
 	}
-	return defs
+	answered := map[string]bool{}
+	for k := range given {
+		answered[k] = true
+	}
+	for k := range globals {
+		answered[k] = true
+	}
+	sigs = readSetupSignals(c, dir, answered)
+	for _, p := range config.Prompts {
+		sig, hasSig := sigs[p.Key]
+		g, hasGlobal := globals[p.Key]
+		switch {
+		case hasGlobal:
+			defs[p.Key] = g
+			if hasSig && sig.Value != g {
+				sigs[p.Key] = setupSignal{g, fmt.Sprintf("global config; project suggests %s: %s", sig.Value, sig.Evidence)}
+			} else {
+				delete(sigs, p.Key)
+			}
+		case hasSig:
+			defs[p.Key] = sig.Value
+		}
+	}
+	return defs, sigs
 }
 
 // loadGlobalValues is the global config's values. ok is false when the dir or
@@ -403,6 +428,6 @@ func setupList(defs map[string]string, sigs map[string]setupSignal) Result {
 		qs = append(qs, q)
 		lines = append(lines, line)
 	}
-	lines = append(lines, "", "answer with: rota setup --set <key>=<value> (repeatable); rota setup --yes takes the defaults")
+	lines = append(lines, "", "answer with: rota setup --set <key>=<value> (repeatable); rota setup --yes takes the suggestions, else the defaults")
 	return Result{Data: knObj("questions", qs), Text: strings.Join(lines, "\n")}
 }
