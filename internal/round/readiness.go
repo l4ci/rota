@@ -216,61 +216,6 @@ func footprint(body, extra string, tracked, shared []string) []string {
 	return kept
 }
 
-// Overlaps lists the paths two footprints share: equal paths, a path matching
-// the other's glob, or a file under the other's directory.
-func Overlaps(a, b []string) []string {
-	hit := map[string]bool{}
-	for _, x := range a {
-		for _, y := range b {
-			switch {
-			case x == y:
-				hit[x] = true
-			case strings.HasSuffix(x, "/") && strings.HasPrefix(y, x):
-				hit[y] = true
-			case strings.HasSuffix(y, "/") && strings.HasPrefix(x, y):
-				hit[x] = true
-			default:
-				if ok, _ := path.Match(x, y); ok {
-					hit[y] = true
-				} else if ok, _ := path.Match(y, x); ok {
-					hit[x] = true
-				}
-			}
-		}
-	}
-	var out []string
-	for p := range hit {
-		out = append(out, p)
-	}
-	sort.Strings(out)
-	return out
-}
-
-// OverlapDirs lists the directory entries (trailing slash) that made a and b
-// overlap by matching a different path, not an identical directory. A clash
-// that comes from one of these is a vague pointer, not two issues editing the
-// same file.
-func OverlapDirs(a, b []string) []string {
-	hit := map[string]bool{}
-	for _, x := range a {
-		for _, y := range b {
-			switch {
-			case x == y:
-			case strings.HasSuffix(x, "/") && strings.HasPrefix(y, x):
-				hit[x] = true
-			case strings.HasSuffix(y, "/") && strings.HasPrefix(x, y):
-				hit[y] = true
-			}
-		}
-	}
-	var out []string
-	for d := range hit {
-		out = append(out, d)
-	}
-	sort.Strings(out)
-	return out
-}
-
 // itemParts is an item's body and, separately, the text of its comments, each
 // comment on its own line.
 func itemParts(be backlog.Backend, id string) (body, comments string) {
@@ -365,12 +310,12 @@ func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFli
 		if it, err := be.Get(f.Issue); err == nil && it.Closed {
 			continue
 		}
-		paths, scopes := Overlaps(mine, f.Paths), ScopeOverlaps(myScopes, f.Scopes)
+		paths, scopes := overlap.Paths(mine, f.Paths), ScopeOverlaps(myScopes, f.Scopes)
 		if len(paths) == 0 && len(scopes) == 0 {
 			continue
 		}
 		inferred := len(scopes) > 0 && (myScopeSrc == SourceInferred || f.ScopeSource == SourceInferred)
-		dirs := OverlapDirs(mine, f.Paths)
+		dirs := overlap.Dirs(mine, f.Paths)
 		r.Overlaps = append(r.Overlaps, Overlap{With: f.Issue, Slot: f.Slot, Paths: paths, Dirs: dirs, Scopes: scopes, Inferred: inferred})
 		detail := overlapDetail(f.Issue, f.Slot, paths, scopes, inferred)
 		if len(dirs) > 0 {
