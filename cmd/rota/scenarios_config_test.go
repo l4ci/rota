@@ -390,7 +390,7 @@ func suiteConfig(t *testing.T) {
 		chk("stale-false-is-present", fx{config: fullConfig("ship.qa")}, 1, "stale", "ship.qa"),
 		chk("stale-parent-scalar", fx{config: strings.Replace(fullConfig(), "\"models\": {", "\"models\": 5, \"zzz\": {", 1)}, 1, "stale", "models.orchestrator", "models.worker"),
 		chk("stale-parent-null", fx{config: `{"models": null}`}, 1, "stale", allReq...),
-		chk("stale-ignores-local-file", withFx(fx{config: "{}"}, func(f *fx) { f.files = map[string]string{".rota/config.local.json": fullConfig()} }), 1, "stale", allReq...),
+		chk("up-to-date-local-supplies-keys", withFx(fx{config: "{}"}, func(f *fx) { f.files = map[string]string{".rota/config.local.json": fullConfig()} }), 0, "upToDate"),
 		chk("stale-optional-keys-never-count", fx{config: fullConfig("docs.afterWork")}, 1, "stale", "docs.afterWork"),
 		chk("corrupt-invalid-json", fx{config: `{oops`}, 1, "corrupt"),
 		chk("corrupt-list", fx{config: `[1, 2]`}, 1, "corrupt"),
