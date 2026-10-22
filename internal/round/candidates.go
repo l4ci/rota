@@ -417,3 +417,40 @@ func (e Env) labelled(ctx context.Context, be backlog.Backend, label string) (ma
 	}
 	return out, nil
 }
+
+// NotReady is why the candidate cannot be assigned yet, in one order: the
+// open PR, the PR it depends on, the file overlap with an in-flight item,
+// each failed check (with its detail), a refused pick, then BlockedBy. Empty
+// for a ready candidate.
+func (c Candidate) NotReady() []string {
+	if c.Ready() {
+		return nil
+	}
+	var why []string
+	if c.OpenPR != 0 {
+		why = append(why, fmt.Sprintf("waiting on open PR #%d", c.OpenPR))
+	}
+	if c.DependsOnPR != 0 {
+		why = append(why, fmt.Sprintf("depends on PR #%d", c.DependsOnPR))
+	}
+	for _, o := range c.Overlaps {
+		why = append(why, o.String())
+	}
+	for _, ch := range c.Checks {
+		if ch.OK {
+			continue
+		}
+		w := ch.Name
+		if len(ch.Detail) > 0 {
+			w += ": " + strings.Join(ch.Detail, "; ")
+		}
+		why = append(why, w)
+	}
+	if c.PickErr != "" {
+		why = append(why, c.PickErr)
+	}
+	if c.BlockedBy != "" {
+		why = append(why, c.BlockedBy)
+	}
+	return why
+}

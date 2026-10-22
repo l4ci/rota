@@ -35,23 +35,6 @@ func overlapList(os []round.Overlap) []any {
 	return out
 }
 
-// overlapText is one overlap as text: the holder, then the declared scopes
-// the two share ("overlaps #12 (ben): scopes post /items").
-func overlapText(o round.Overlap) string {
-	w := "overlaps #" + strings.TrimPrefix(o.With, "#")
-	if o.Slot != "" {
-		w += " (" + o.Slot + ")"
-	}
-	if len(o.Scopes) > 0 {
-		label := ": scopes "
-		if o.Inferred {
-			label = ": inferred scopes "
-		}
-		w += label + strings.Join(o.Scopes, ", ")
-	}
-	return w
-}
-
 func roundAssign(fs *flag.FlagSet) RunFunc {
 	agent := fs.String("agent", "", "roster name to assign to (default: the first idle slot)")
 	body := fs.String("body-file", "", "decisions already settled, passed verbatim to the worker (- for stdin)")
@@ -140,7 +123,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 			return Result{Data: f}, ferr
 		}
 		for _, o := range res.Overlaps {
-			c.Warn("%s", overlapText(o))
+			c.Warn("%s", o.String())
 		}
 		d.Set("agent", res.Agent)
 		d.Set("branch", res.Branch)

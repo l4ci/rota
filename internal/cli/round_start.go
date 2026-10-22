@@ -68,30 +68,16 @@ func candidateLines(cs []round.Candidate) []string {
 	var lines []string
 	for _, c := range cs {
 		state := "ready"
-		if c.OpenPR != 0 {
-			state = fmt.Sprintf("not ready: open PR #%d", c.OpenPR)
-		} else if c.DependsOnPR != 0 {
-			state = fmt.Sprintf("not ready: depends on PR #%d", c.DependsOnPR)
-		} else if !c.Ready() {
-			var bad []string
-			for _, ch := range c.Checks {
-				if !ch.OK {
-					bad = append(bad, ch.Name)
-				}
-			}
-			state = "not ready: " + strings.Join(bad, ",")
-		}
-		if c.PickErr != "" {
-			state = "not ready: " + c.PickErr
-		}
-		if c.BlockedBy != "" {
-			state = "not ready: " + c.BlockedBy
+		if why := c.NotReady(); len(why) > 0 {
+			state = "not ready: " + strings.Join(why, "; ")
 		}
 		if p := c.Pick.String(); p != "" {
 			state += " [" + p + "]"
 		}
-		for _, o := range c.Overlaps {
-			state += "; " + overlapText(o)
+		if c.Ready() {
+			for _, o := range c.Overlaps {
+				state += "; " + o.String()
+			}
 		}
 		lines = append(lines, fmt.Sprintf("%s\t%s\t%s", c.ID, state, c.Title))
 	}
