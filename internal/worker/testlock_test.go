@@ -49,6 +49,11 @@ func TestTestLockWaitsAndSaysSo(t *testing.T) {
 		t.Fatal("second run entered while the only slot was held")
 	case <-time.After(400 * time.Millisecond):
 	}
+	// The line may lag under load: poll for it rather than assume it is there.
+	deadline := time.Now().Add(10 * time.Second)
+	for !strings.Contains(errBuf.String(), "waiting for the test lock (held by ") && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
 	if got := errBuf.String(); !strings.Contains(got, "waiting for the test lock (held by ") || !strings.Contains(got, "test run") {
 		t.Fatalf("stderr = %q; want the waiting line naming the holder's pid and verb", got)
 	}
@@ -73,17 +78,22 @@ func TestTestLockWidthAllowsConcurrentHolders(t *testing.T) {
 	env := Env{}.WithDefaults()
 	repo := gittest.NewRepo(t, "main")
 	holding, release := make(chan struct{}), make(chan struct{})
-	go env.WithTestLock(bg, repo, 2, "test run", &syncBuf{}, func() error {
-		close(holding)
-		<-release
-		return nil
-	})
+	holderDone, secondDone := make(chan error, 1), make(chan error, 1)
+	go func() {
+		holderDone <- env.WithTestLock(bg, repo, 2, "test run", &syncBuf{}, func() error {
+			close(holding)
+			<-release
+			return nil
+		})
+	}()
 	<-holding
-	defer close(release)
+	defer func() { close(release); <-holderDone; <-secondDone }()
 
 	var errBuf syncBuf
 	entered := make(chan struct{})
-	go env.WithTestLock(bg, repo, 2, "test run", &errBuf, func() error { close(entered); return nil })
+	go func() {
+		secondDone <- env.WithTestLock(bg, repo, 2, "test run", &errBuf, func() error { close(entered); return nil })
+	}()
 	select {
 	case <-entered:
 	case <-time.After(2 * time.Second):
@@ -98,9 +108,12 @@ func TestTestLockWaiterStopsWithContext(t *testing.T) {
 	env := Env{}.WithDefaults()
 	repo := gittest.NewRepo(t, "main")
 	holding, release := make(chan struct{}), make(chan struct{})
-	go env.WithTestLock(bg, repo, 1, "test run", &syncBuf{}, func() error { close(holding); <-release; return nil })
+	holderDone := make(chan error, 1)
+	go func() {
+		holderDone <- env.WithTestLock(bg, repo, 1, "test run", &syncBuf{}, func() error { close(holding); <-release; return nil })
+	}()
 	<-holding
-	defer close(release)
+	defer func() { close(release); <-holderDone }()
 	ctx, cancel := context.WithTimeout(bg, 300*time.Millisecond)
 	defer cancel()
 	err := env.WithTestLock(ctx, repo, 1, "test run", &syncBuf{}, func() error { t.Error("entered"); return nil })

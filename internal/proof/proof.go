@@ -172,3 +172,34 @@ func Proves(rows []Row, head, check string) bool {
 	r, ok := Latest(rows, head, check)
 	return ok && r.Result == "PASS"
 }
+
+// Mark appends mark to the evidence of the latest PASS row for check at sha, so
+// the row records how it was taken (targeted, say). It reports whether a row
+// was found; a row that already carries the mark is left as it is.
+func Mark(s Store, id, sha, check, mark string) (found bool, err error) {
+	sha, check = one(sha), one(check)
+	err = s.Update(id, func(content string) (string, bool, error) {
+		lines := strings.Split(content, "\n")
+		for i := len(lines) - 1; i >= 0; i-- {
+			l := lines[i]
+			if !strings.HasPrefix(l, "- ") {
+				continue
+			}
+			p := strings.SplitN(l[2:], sep, 5)
+			if len(p) < 5 || one(p[1]) != check || p[2] != "PASS" || len(p[3]) < minSha {
+				continue
+			}
+			if !strings.HasPrefix(sha, p[3]) && !strings.HasPrefix(p[3], sha) {
+				continue
+			}
+			found = true
+			if strings.Contains(" "+p[4]+" ", " "+mark+" ") {
+				return content, false, nil
+			}
+			lines[i] = l + " " + mark
+			return strings.Join(lines, "\n"), true, nil
+		}
+		return content, false, nil
+	})
+	return found, err
+}
