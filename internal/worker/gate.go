@@ -1024,7 +1024,7 @@ func (g *gate) stepCloses() (bool, error) {
 // stepNoSliceClose refuses a PR the forge says closes an issue labelled
 // PartialSliceLabel: merging it would close the parent with slices to come. A
 // closing keyword in prose is enough, so the forge's own list is read, not the
-// body. FinalSlice exempts the last slice. A forge that cannot report closing
+// body, and every issue on it is checked, not only the slot's own. FinalSlice exempts the last slice. A forge that cannot report closing
 // references skips the check, noted once.
 func (g *gate) stepNoSliceClose(keys []tracker.IssueKey) (bool, error) {
 	if g.o.FinalSlice {
@@ -1045,11 +1045,20 @@ func (g *gate) stepNoSliceClose(keys []tracker.IssueKey) (bool, error) {
 			g.closingErr = err
 		}
 	}
+	// With the forge's list in hand, judge every issue it says the PR closes: a
+	// sub-issue slice can close its partial-slice parent without naming it in
+	// the slot. Without the list, only the slot's own keys can be judged.
+	cands := keys
+	if known {
+		cands = make([]tracker.IssueKey, len(nums))
+		for i, n := range nums {
+			cands[i] = tracker.NumKey(n)
+		}
+	}
 	var leaks []tracker.IssueKey
 	partial := false
-	for _, key := range keys {
-		num, numbered := key.Number()
-		if !numbered || (known && !slices.Contains(nums, num)) {
+	for _, key := range cands {
+		if _, numbered := key.Number(); !numbered {
 			continue
 		}
 		is, err := g.issues.Get(g.ctx, key, false)
