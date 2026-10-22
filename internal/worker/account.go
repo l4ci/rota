@@ -107,12 +107,18 @@ func (a *Accounts) login() Credentials {
 
 type acct struct{ name, configDir string }
 
-// Configured returns round.accounts of the project config.
+// Configured returns round.accounts of the project config, each configDir
+// expanded: the path a slot caches and CLAUDE_CONFIG_DIR carries is absolute.
+// An unset configDir stays "" (the entry has none).
 func (a *Accounts) Configured(root string) []acct {
 	cfg := a.Env.WithDefaults().Config(root)
 	var out []acct
-	for _, a := range config.Accounts(cfg) {
-		out = append(out, acct{a.Name, a.ConfigDir})
+	for _, ac := range config.Accounts(cfg) {
+		dir := ac.ConfigDir
+		if dir != "" {
+			dir = a.expand(dir)
+		}
+		out = append(out, acct{ac.Name, dir})
 	}
 	return out
 }

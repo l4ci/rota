@@ -101,7 +101,8 @@ func (e Env) Preflight(ctx context.Context, root, kind, slot, model string) (har
 	var accts []harness.HomeAccount
 	load := map[string]int{}
 	if !h.WorkAccounts() {
-		for _, a := range h.Accounts(e.Config(root)).Entries {
+		home, _ := e.Home()
+		for _, a := range h.Accounts(e.Config(root)).In(home).Entries {
 			accts = append(accts, harness.HomeAccount{Name: a.Name, Home: a.Dir})
 		}
 		for _, s := range reg.Slots() {

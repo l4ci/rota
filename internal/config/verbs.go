@@ -469,7 +469,7 @@ const (
 // Check is hv-config-schema-check: the state of .rota/config.json against the
 // required schema keys. Missing lists, in schema order, the required keys that
 // are absent or null, then LegacyVerifyKey when it still holds commands that
-// test.full does not; it is non-empty only for Stale. A key the global config supplies is not missing.
+// test.full does not; it is non-empty only for Stale. A key the local overlay or the global config supplies is not missing.
 func Check(root string) (status string, missing []string) {
 	missing = []string{}
 	raw, err := os.ReadFile(configPath(root))
@@ -484,8 +484,9 @@ func Check(root string) (status string, missing []string) {
 		return Corrupt, missing
 	}
 	global := globalLayer()
+	local := fsio.LoadJSON(localPath(root), nil)
 	for _, k := range Keys {
-		if _, ok := walk(doc, k.Name); k.Required && !ok && !globalSupplies(global, k.Name) {
+		if _, ok := walk(doc, k.Name); k.Required && !ok && !globalSupplies(global, k.Name) && !globalSupplies(local, k.Name) {
 			missing = append(missing, k.Name)
 		}
 	}
@@ -514,7 +515,8 @@ func legacyVerifyPending(doc *jsonx.Object) bool {
 // `config check` fails on them rather than let a skill quietly ignore the
 // value. autonomy.level takes only off, roundtrip and auto: "loop" went with
 // loop autonomy (#70), and anything else is no level. It also holds a
-// malformed ship.review policy, which would otherwise read as the default.
+// malformed ship.review policy, which would otherwise read as the default, and
+// an account dir that is neither absolute nor ~-prefixed.
 func Retired(root string) []string {
 	out := []string{}
 	if v, _ := Value(Load(configPath(root)), "autonomy.level"); validateEnum("autonomy.level", v) != nil {
@@ -530,6 +532,7 @@ func Retired(root string) []string {
 			out = append(out, err.Error())
 		}
 	}
+	out = append(out, AccountDirProblems(Load(configPath(root)))...)
 	return out
 }
 

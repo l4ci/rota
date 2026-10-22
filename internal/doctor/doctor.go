@@ -496,6 +496,11 @@ func (d *runner) accounts() Check {
 			if hint == "" {
 				hint = "set configDir for account " + a.Name + " in round.accounts"
 			}
+		} else if p := config.DirProblem("configDir", a.ConfigDir); p != "" {
+			why = p
+			if hint == "" {
+				hint = "set configDir for account " + a.Name + " to an absolute path or ~/..."
+			}
 		} else if dir = worker.ExpandConfigDirIn(a.ConfigDir, d.in.Home); !fsio.IsDir(dir) {
 			why = "configDir " + dir + " does not exist"
 		} else if p := d.in.Credentials.Problem(dir); p != "" {

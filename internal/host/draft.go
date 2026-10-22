@@ -71,8 +71,12 @@ func promptLine(pane string) string {
 	return line
 }
 
+// themeOption is a row of Claude Code's first-run theme picker, whose
+// highlighted choice sits after the prompt glyph like input would.
+var themeOption = regexp.MustCompile(`^(?:Dark|Light) mode\b|^Auto \(match terminal\)`)
+
 func isDialog(line, rest string) bool {
-	return dialogOption.MatchString(line) || dialogFooter.MatchString(rest)
+	return themeOption.MatchString(line) || dialogOption.MatchString(line) || dialogFooter.MatchString(rest)
 }
 
 // DialogError is ErrDialogOpen with the dialog's first line, for the refusal message.

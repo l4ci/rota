@@ -1,6 +1,12 @@
 package config
 
-import "github.com/l4ci/rota/internal/jsonx"
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	"github.com/l4ci/rota/internal/jsonx"
+)
 
 // Account is one entry of round.accounts.
 type Account struct{ Name, ConfigDir string }
@@ -92,6 +98,40 @@ func OpencodeAccounts(cfg any) []OpencodeAccount {
 			}
 			out = append(out, a)
 		}
+	}
+	return out
+}
+
+// DirProblem is why a configured account dir cannot name one directory:
+// "" for an empty dir (the kind's default), an absolute path, "~" or a "~/"
+// path; otherwise the rule it breaks. Anything else would resolve against
+// whatever directory the launch happens to run in. field is the key written
+// in the message ("configDir", "codexHome").
+func DirProblem(field, dir string) string {
+	if dir == "" || filepath.IsAbs(dir) || dir == "~" || strings.HasPrefix(dir, "~/") {
+		return ""
+	}
+	return field + " must be absolute or start with ~"
+}
+
+// AccountDirProblems lists, in config order, every account dir of round.accounts,
+// round.codexAccounts and round.opencodeAccounts that DirProblem refuses, each
+// naming its key and entry.
+func AccountDirProblems(cfg any) []string {
+	var out []string
+	add := func(key, name, field, dir string) {
+		if p := DirProblem(field, dir); p != "" {
+			out = append(out, fmt.Sprintf("%s %q %s %q: %s", key, name, field, dir, p))
+		}
+	}
+	for _, a := range Accounts(cfg) {
+		add("round.accounts", a.Name, "configDir", a.ConfigDir)
+	}
+	for _, a := range CodexAccounts(cfg) {
+		add("round.codexAccounts", a.Name, "codexHome", a.CodexHome)
+	}
+	for _, a := range OpencodeAccounts(cfg) {
+		add("round.opencodeAccounts", a.Name, "configDir", a.ConfigDir)
 	}
 	return out
 }
