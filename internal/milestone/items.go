@@ -20,6 +20,8 @@ type ItemRef struct {
 	ID, Title string
 	// Detail is the root-relative path of the item's detail file, "" when it has none.
 	Detail string
+	// Closed is the closure reason of a completed item ("done", "dropped", ...), "" while it is open.
+	Closed string
 }
 
 var linkEscaper = strings.NewReplacer(`[`, `\[`, `]`, `\]`)
@@ -34,12 +36,16 @@ func itemsBody(items []ItemRef) string {
 	}
 	for _, it := range items {
 		text := "[" + it.ID + "] " + linkEscaper.Replace(it.Title)
+		mark := ""
+		if it.Closed != "" {
+			mark = " (" + it.Closed + ")"
+		}
 		if it.Detail == "" {
-			b.WriteString("- " + text + "\n")
+			b.WriteString("- " + text + mark + "\n")
 			continue
 		}
 		rel := path.Join("..", strings.TrimPrefix(it.Detail, rotatree.DirName+"/"))
-		b.WriteString("- [" + text + "](" + rel + ")\n")
+		b.WriteString("- [" + text + "](" + rel + ")" + mark + "\n")
 	}
 	return b.String()
 }

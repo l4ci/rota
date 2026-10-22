@@ -132,18 +132,20 @@ func TestMilestoneItemsSectionFileMode(t *testing.T) {
 	if !strings.Contains(shown, "## Items\n") || !strings.Contains(shown, "[B01] Crash") {
 		t.Fatalf("create did not list the item:\n%s", shown)
 	}
-	// A rewrite through put drops the generated section; check restores it and says so.
+	// A redraft through put carries no Items section; put regenerates it.
 	stub := strings.SplitN(shown, "\n## Items", 2)[0] + "\n\nhand-written\n"
 	if code, _, _ := rotaStdin(t, dir, stub, "milestone", "put", "M01", "--body-file", "-"); code != 0 {
 		t.Fatalf("put: %d", code)
 	}
+	_, shown, _ = rotaIn(t, dir, "milestone", "show", "M01")
+	if !strings.Contains(shown, "[B01] Crash") || !strings.Contains(shown, "hand-written\n") {
+		t.Fatalf("put dropped the section or lost text:\n%s", shown)
+	}
+	// Drift by hand: check restores the section and says so.
+	os.WriteFile(filepath.Join(dir, ".rota/milestones/M01.md"), []byte(stub), 0o644)
 	code, out, _ := rotaIn(t, dir, "milestone", "check", "M01", "--json")
 	if d := data(t, out); code != 0 || d["itemsRegenerated"] != true {
 		t.Fatalf("first check: %d %s", code, out)
-	}
-	_, shown, _ = rotaIn(t, dir, "milestone", "show", "M01")
-	if !strings.Contains(shown, "[B01] Crash") || !strings.Contains(shown, "hand-written\n") {
-		t.Fatalf("section not restored or text lost:\n%s", shown)
 	}
 	if _, out, _ = rotaIn(t, dir, "milestone", "check", "M01", "--json"); data(t, out)["itemsRegenerated"] != nil {
 		t.Errorf("second check reports drift: %s", out)

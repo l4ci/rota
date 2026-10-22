@@ -167,7 +167,7 @@ func (f *File) Append(sec, line string) error {
 		return err
 	}
 	path := f.backlogPath()
-	return fsio.Locked(path, fsio.LockTimeout, func() error {
+	err := fsio.Locked(path, fsio.LockTimeout, func() error {
 		content, err := fsio.ReadText(path)
 		if err != nil {
 			return err
@@ -183,6 +183,10 @@ func (f *File) Append(sec, line string) error {
 		content = strings.TrimRight(content[:end], "\n") + "\n" + line + "\n" + tail
 		return fsio.WriteFileAtomic(path, []byte(content))
 	})
+	if err != nil {
+		return err
+	}
+	return f.syncMilestonesIf(bulletTagged(line))
 }
 
 // checkCreate is _check_create: the cleaned title and fields, or ErrInvalid.
@@ -285,11 +289,6 @@ func (f *File) Create(in CreateInput) (CreateResult, error) {
 			return CreateResult{}, err
 		}
 		res.Detail = rel
-	}
-	for _, fv := range fields {
-		if fv.Name == "Milestone" {
-			return res, f.syncMilestonesIf(true)
-		}
 	}
 	return res, nil
 }
