@@ -57,11 +57,19 @@ func (e Env) leaseFinding(ctx context.Context, root string, rep *Report) {
 	rep.add(Finding{Kind: LeaseStale, Detail: "the round lease is held by " + who + ", which is gone; `rota round start` reclaims it, `rota reap` clears it"})
 }
 
+// LeaseProbe is who is asking: the lease env, the pid to match (0 walks up to
+// the nearest non-shell ancestor) and the env reader for the holder's pane.
+type LeaseProbe struct {
+	Env       roundlease.Env
+	HolderPID int
+	Getenv    func(string) string
+}
+
 // HoldsLease is the one rule for "this process is the orchestrator the round
-// lease names". Callers map held=false and a lookup error onto their own refusal.
-func HoldsLease(le roundlease.Env, commonDir string, holderPID int, getenv func(string) string) (Lease, LeaseState, bool, error) {
-	l, st, held, err := le.Holds(commonDir, holderPID, getenv)
-	return l, st, held, err
+// lease names". Held implies the lease is Live and err is nil; callers map
+// held=false and a lookup error onto their own refusal.
+func HoldsLease(p LeaseProbe, commonDir string) (Lease, LeaseState, bool, error) {
+	return p.Env.Holds(commonDir, p.HolderPID, p.Getenv)
 }
 
 // heldLease is HoldsLease for the Env's own lease, keyed off the repo at root.
@@ -70,6 +78,6 @@ func (e Env) heldLease(ctx context.Context, root string, pid int) (Lease, bool, 
 	if err != nil {
 		return Lease{}, false, err
 	}
-	l, _, held, err := HoldsLease(e.Lease, cd, pid, e.getenv())
+	l, _, held, err := HoldsLease(LeaseProbe{Env: e.Lease, HolderPID: pid, Getenv: e.getenv()}, cd)
 	return l, held, err
 }

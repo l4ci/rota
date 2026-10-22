@@ -77,8 +77,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	if err != nil {
 		return res, err
 	}
-	le := e.Lease
-	lease, _, held, err := HoldsLease(le, cd, o.HolderPID, e.getenv())
+	lease, _, held, err := HoldsLease(LeaseProbe{Env: e.Lease, HolderPID: o.HolderPID, Getenv: e.getenv()}, cd)
 	if err != nil {
 		return res, err
 	}
@@ -255,7 +254,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	// 3. Release the lease only when the base is green and every slot is parked.
 	if res.Verdict != VerdictVerifyFailed && !res.Retained {
 		res.Verdict = VerdictClean
-		if _, err := le.Release(cd, le.Discover(o.HolderPID, e.getenv())); err != nil {
+		if _, err := e.Lease.Release(cd, e.Lease.Discover(o.HolderPID, e.getenv())); err != nil {
 			return res, err
 		}
 		// The round is over, so its host goes with the lease: the worker verbs

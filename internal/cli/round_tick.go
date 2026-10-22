@@ -74,12 +74,11 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 // every tick: wind-down or a takeover ends the autopilot cleanly.
 func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride string, pid int) (roundtick.Result, error) {
 	c.deps().freshReads()
-	le := c.deps().LeaseEnv()
 	cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
 	if err != nil {
 		return roundtick.Result{}, Resolution("%v", err)
 	}
-	lease, _, held, err := round.HoldsLease(le, cd, pid, c.deps().Getenv)
+	lease, _, held, err := round.HoldsLease(round.LeaseProbe{Env: c.deps().LeaseEnv(), HolderPID: pid, Getenv: c.deps().Getenv}, cd)
 	if err != nil {
 		return roundtick.Result{}, err
 	}
