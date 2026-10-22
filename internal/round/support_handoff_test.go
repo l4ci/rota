@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -108,5 +109,55 @@ func TestReconcileApplyAdoptsSupportPR(t *testing.T) {
 	tg, err := worker.LoadRegistryTolerant(root).GateTarget(s.Name())
 	if err != nil || !tg.External || tg.Branch != "mac-ben/612-thing" || tg.PR != s.PR() {
 		t.Errorf("the gate does not resolve the adopted slot: %+v %v", tg, err)
+	}
+}
+
+// #1598 AC-8 (T7): on the support machine, a queued PR main sent back with a
+// review-bounce at its current head is reported as bounced, for the
+// orchestrator to resume on a free slot; once the branch moved past that head,
+// or on main, it is not.
+func TestReconcileSupportBounced(t *testing.T) {
+	root := newRepo(t, nil)
+	fb := &fakeRemote{states: map[int]string{}}
+	fb.add("12", "Thing", "M01", false, filesBody)
+	if err := worker.Update(root, func(d *worker.Doc) {
+		d.QueuePR(worker.QueuedPR{Issue: "12", PR: "https://github.com/o/r/pull/70", Branch: "mac-ben/12-thing", From: "mac-ben"})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fb.prs = []tracker.PR{{Number: 70, Branch: "mac-ben/12-thing", URL: "https://github.com/o/r/pull/70"}}
+	fb.prViews = map[int]tracker.PRInfo{70: {Head: "mac-ben/12-thing", HeadSHA: "abc1234567", State: "OPEN"}}
+	fb.prNotes = map[int][]tracker.Comment{70: {
+		{ID: "1", Body: marker.ReviewBounce("abc1234") + "\nFix the nil map."},
+	}}
+	e := env(nil, fb.asForge())
+	e.Board, e.Worker.Getenv = fb, noEnv
+	e.Round.Support, e.Round.Role = "mac", roundcfg.RoleSupport
+	bounced := func() []Finding {
+		t.Helper()
+		out, err := e.Reconcile(bg, root, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []Finding
+		for _, f := range out.Drift {
+			if f.Kind == Bounced {
+				got = append(got, f)
+			}
+		}
+		return got
+	}
+	got := bounced()
+	if len(got) != 1 || got[0].Issue != "12" || got[0].Repair != "" || !strings.Contains(got[0].Detail, "rota round transfer 12") {
+		t.Fatalf("want one bounced finding for 12, got %+v", got)
+	}
+	fb.prViews[70] = tracker.PRInfo{Head: "mac-ben/12-thing", HeadSHA: "def0000000", State: "OPEN"}
+	if got := bounced(); len(got) != 0 {
+		t.Errorf("a branch pushed past the bounce is answered: %+v", got)
+	}
+	fb.prViews[70] = tracker.PRInfo{Head: "mac-ben/12-thing", HeadSHA: "abc1234567", State: "OPEN"}
+	e.Round.Role = ""
+	if got := bounced(); len(got) != 0 {
+		t.Errorf("main reports no bounced support PR: %+v", got)
 	}
 }

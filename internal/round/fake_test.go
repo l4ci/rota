@@ -40,6 +40,7 @@ type fakeRemote struct {
 	added          []int // AddLabels targets, in call order
 	removed        []int // RemoveLabels targets, in call order
 	openPRCalls    int
+	prNotes        map[int][]tracker.Comment // MRNotes answers by PR number
 	closedLists    int // List calls that asked for closed issues
 
 	// Board side.
@@ -93,6 +94,12 @@ func (f remoteForge) OpenPRs(context.Context) ([]tracker.PR, error) {
 	f.openPRCalls++
 	return f.prs, f.prsErr
 }
+
+func (f remoteForge) MRNotes(_ context.Context, n int) ([]tracker.Comment, error) {
+	return f.prNotes[n], nil
+}
+
+func (f remoteForge) Reviews(context.Context, int) ([]tracker.Review, error) { return nil, nil }
 
 func (f remoteForge) MergedPRs(_ context.Context, branch string) ([]tracker.PR, error) {
 	return f.mergedPRs[branch], f.mergedErr

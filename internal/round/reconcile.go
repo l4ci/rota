@@ -40,6 +40,7 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 		return Outcome{}, err
 	}
 	e.findUnregisteredBranches(ctx, root, rep, reg) // a branch scan: reconcile and the tick, not every status
+	e.findSupportBounced(ctx, rep, reg)
 	out := Outcome{Report: rep}
 	for _, f := range rep.Findings {
 		if !apply || f.Repair == "" {

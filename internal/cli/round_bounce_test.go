@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"context"
+	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -101,5 +104,75 @@ func TestRoundBounceBundleMember(t *testing.T) {
 	}
 	if n := worker.LoadRegistryTolerant(dir).Bounces("31"); n != 1 {
 		t.Errorf("lead bounces %d", n)
+	}
+}
+
+// bounceFakes are the tracker sides of a bounce on main with round.support set:
+// the issue's comments and the PR's.
+type bounceFakes struct {
+	issue []string
+	pr    map[int][]string
+}
+
+func (f *bounceFakes) Comments(context.Context, tracker.IssueKey) ([]tracker.Comment, error) {
+	out := make([]tracker.Comment, len(f.issue))
+	for i, b := range f.issue {
+		out[i] = tracker.Comment{ID: fmt.Sprint(i), Body: b}
+	}
+	return out, nil
+}
+
+func (f *bounceFakes) AddComment(_ context.Context, _ tracker.IssueKey, body string) (string, error) {
+	f.issue = append(f.issue, body)
+	return fmt.Sprint(len(f.issue) - 1), nil
+}
+
+func (f *bounceFakes) DeleteComment(context.Context, tracker.IssueKey, string) error { return nil }
+
+type bounceNotes struct {
+	worker.Forge
+	f *bounceFakes
+}
+
+func (n bounceNotes) AddMRNote(_ context.Context, pr int, body string) (string, error) {
+	n.f.pr[pr] = append(n.f.pr[pr], body)
+	return "1", nil
+}
+
+// #1598 AC-7/AC-8: on main with round.support set, `round bounce` counts on the
+// issue and, for the support machine's PR, posts the bounce on the PR.
+func TestRoundBounceSupportPRPostsOnThePR(t *testing.T) {
+	deps := testDeps()
+	fk := &bounceFakes{pr: map[int][]string{}}
+	deps.WorkerEnv = func() worker.Env {
+		return worker.Env{
+			IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return fk, nil },
+			Forge:         func(string, string, tracker.Settings) (worker.Forge, error) { return bounceNotes{f: fk}, nil },
+		}
+	}
+	dir := workerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac","maxBounces":3}}`)
+	if err := worker.RegisterExternal(dir, "ext-1", "mac-ben/31-thing", "", "main", "31", "https://github.com/o/r/pull/70"); err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.RegisterExternal(dir, "ext-2", "codex/32-other", "", "main", "32", "https://github.com/o/r/pull/71"); err != nil {
+		t.Fatal(err)
+	}
+	if code, out, errOut := rotaInWith(t, deps, dir, "round", "bounce", "31", "--head", "abc", "--force", "--json"); code != 0 || data(t, out)["bounces"] != float64(1) {
+		t.Fatalf("bounce: %d %s %s", code, out, errOut)
+	}
+	if code, _, errOut := rotaInWith(t, deps, dir, "round", "bounce", "32", "--head", "def", "--force"); code != 0 {
+		t.Fatalf("bounce of a main PR: %d %s", code, errOut)
+	}
+	if len(fk.issue) != 2 || !strings.HasPrefix(fk.issue[0], "<!-- rota:bounce head=abc -->") {
+		t.Errorf("issue comments %q", fk.issue)
+	}
+	if n := worker.LoadRegistryTolerant(dir).Bounces("31"); n != 0 {
+		t.Errorf("the registry counted %d", n)
+	}
+	if got := fk.pr[70]; len(got) != 1 || !strings.HasPrefix(got[0], "<!-- rota:review-bounce head=abc -->") {
+		t.Errorf("support PR comments %q", got)
+	}
+	if got := fk.pr[71]; len(got) != 0 {
+		t.Errorf("a main PR got the support bounce: %q", got)
 	}
 }

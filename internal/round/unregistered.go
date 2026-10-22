@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
@@ -137,4 +138,49 @@ func (e Env) adoptBranch(ctx context.Context, root string, f Finding) error {
 	}
 	_, err := e.Adopt(ctx, root, e.Board, AdoptOpts{Ref: f.branch, Issue: f.Issue, PR: f.pr, Shared: e.Round.SharedPaths})
 	return err
+}
+
+// findSupportBounced reports, on the support machine, each queued PR main sent
+// back (#1598 AC-8): the PR's last review-bounce comment names its current
+// head, so no fix was pushed since. A slot still holding its PR hears of the
+// bounce through the review poll; a queued PR has no worker, so the
+// orchestrator resumes it on a free slot. It is reported, never repaired.
+func (e Env) findSupportBounced(ctx context.Context, rep *Report, reg worker.Registry) {
+	if e.Round.Support == "" || e.Round.Role != roundcfg.RoleSupport || e.Forge == nil {
+		return
+	}
+	rf, ok := e.Forge.(worker.ReviewForge)
+	if !ok {
+		return
+	}
+	for _, q := range reg.PRs() {
+		n, ok := worker.PRRefNumber(q.PR)
+		if !ok {
+			continue
+		}
+		notes, err := rf.MRNotes(ctx, n)
+		if err != nil {
+			rep.Warnings = append(rep.Warnings, fmt.Sprintf("bounces on %s not read: %v", q.PR, err))
+			continue
+		}
+		head := ""
+		for _, c := range notes {
+			if kind, h, _, ok := marker.ParseBounce(c.Body); ok && kind == marker.KindReviewBounce {
+				head = h
+			}
+		}
+		if head == "" {
+			continue
+		}
+		info, err := e.Forge.PRView(ctx, n)
+		if err != nil {
+			rep.Warnings = append(rep.Warnings, fmt.Sprintf("bounce on %s not checked: %v", q.PR, err))
+			continue
+		}
+		if !strings.EqualFold(info.State, "OPEN") || info.HeadSHA == "" || !(strings.HasPrefix(info.HeadSHA, head) || strings.HasPrefix(head, info.HeadSHA)) {
+			continue
+		}
+		rep.add(Finding{Kind: Bounced, Issue: q.Issue, pr: q.PR, branch: q.Branch,
+			Detail: fmt.Sprintf("main sent %s back at %s and %s has not moved since: rota round transfer %s --to <free slot> resumes it on its branch", q.PR, strutil.ShortSHA(head), q.Branch, q.Issue)})
+	}
 }

@@ -44,7 +44,10 @@ func (b ReviewBatch) Empty() bool { return len(b.Items) == 0 && b.Verdict == "" 
 //   - comments carrying a rota marker (the worker's `worker reply`, escalation
 //     comments, claim and feedback notes). The marker, not the author, tells the
 //     worker's voice apart: a solo maintainer runs the worker and reviews under
-//     one forge login;
+//     one forge login. The one marked comment kept is main's bounce of a
+//     support PR (`rota:review-bounce`, #1598): it is review input for the
+//     support slot that built the PR, and main's own echo on the adopted
+//     (external) slot, which has no worker to relay it to;
 //   - approvals, and entries with no text.
 //
 // It reads and never writes: the cursor moves only when the batch is consumed
@@ -97,7 +100,7 @@ func PendingReview(ctx context.Context, f ReviewForge, s *Slot, v *ReviewVerdict
 		r := e.r
 		bodyless := strings.TrimSpace(r.Body) == ""
 		switch {
-		case r.State == tracker.ReviewApproved, marker.Has(r.Body):
+		case r.State == tracker.ReviewApproved, marker.Has(r.Body) && !(isReviewBounce(r.Body) && !s.IsExternal()):
 			continue
 		case bodyless && r.State != tracker.ReviewChangesRequested:
 			continue
@@ -182,4 +185,10 @@ func (s *Slot) BaselineReview(now time.Time) {
 	if s.ReviewSeen() == "" {
 		s.SetReviewSeen(formatCursor(now.Truncate(time.Second).Add(time.Second), nil))
 	}
+}
+
+// isReviewBounce reports whether body is main's bounce of a support PR.
+func isReviewBounce(body string) bool {
+	kind, _, _, ok := marker.ParseBounce(body)
+	return ok && kind == marker.KindReviewBounce
 }

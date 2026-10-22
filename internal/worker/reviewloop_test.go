@@ -165,3 +165,26 @@ func TestPendingReviewUndatedItemCursorIsInjectedNow(t *testing.T) {
 		t.Fatalf("cursor = %q, want %q", b.Cursor, want)
 	}
 }
+
+// #1598 AC-8 (T7): main's bounce of a support PR is a rota-marked comment, and
+// it is the one marked comment the review poll takes as review input.
+func TestReviewBatchAcceptsReviewBounce(t *testing.T) {
+	f := fakeReviewForge{notes: []tracker.Comment{
+		{ID: "1", Author: "me", Body: marker.Bounce("abc") + "\ncounted on the issue", CreatedAt: at(1)},
+		{ID: "2", Author: "me", Body: marker.ReviewBounce("abc") + "\nFix the nil map in Count.", CreatedAt: at(2)},
+		{ID: "3", Author: "me", Body: "Fixed in def\n" + marker.Line("worker-reply", "nia"), CreatedAt: at(3)},
+	}}
+	b, err := PendingReview(context.Background(), f, reviewSlot(), nil, testNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(b.Items) != 1 || b.Items[0].ID != "2" {
+		t.Fatalf("items %+v", b.Items)
+	}
+	// Main's adopted slot holds the same PR with no worker behind it.
+	ext := reviewSlot()
+	ext.Raw().Set("kind", KindExternal)
+	if b, err := PendingReview(context.Background(), f, ext, nil, testNow); err != nil || !b.Empty() {
+		t.Errorf("main's own bounce is review input on its adopted slot: %+v %v", b.Items, err)
+	}
+}

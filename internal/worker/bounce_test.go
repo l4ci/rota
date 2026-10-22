@@ -146,3 +146,50 @@ func TestBounceStoreRegistryWithoutSupport(t *testing.T) {
 		t.Errorf("after undo %d", n)
 	}
 }
+
+// noteForge records the PR comments posted through it.
+type noteForge struct {
+	Forge
+	notes map[int][]string
+}
+
+func (f *noteForge) AddMRNote(_ context.Context, n int, body string) (string, error) {
+	f.notes[n] = append(f.notes[n], body)
+	return "1", nil
+}
+
+// #1598 AC-8 (T7): on main, a bounce of a PR on a support branch is posted on
+// the PR, marked with the head it was sent back at; any other branch, the
+// support machine itself, and a repo without round.support post nothing.
+func TestPostReviewBounce(t *testing.T) {
+	nf := &noteForge{notes: map[int][]string{}}
+	post := func(cfg, local, branch string) bool {
+		t.Helper()
+		root := bounceRoot(t, cfg)
+		if local != "" {
+			if err := os.WriteFile(filepath.Join(root, ".rota", "config.local.json"), []byte(local), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		e := Env{Forge: func(string, string, tracker.Settings) (Forge, error) { return nf, nil }}
+		posted, err := e.PostReviewBounce(root, branch, "https://github.com/o/r/pull/70", "abc123", "stale: the PR head moved")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return posted
+	}
+	support := `{"issues":{"source":"github"},"round":{"support":"mac"}}`
+	if !post(support, "", "mac-ben/12-thing") || len(nf.notes[70]) != 1 {
+		t.Fatalf("a support PR bounce was not posted: %v", nf.notes)
+	}
+	body := nf.notes[70][0]
+	if kind, head, _, ok := marker.ParseBounce(body); !ok || kind != marker.KindReviewBounce || head != "abc123" || !strings.Contains(body, "stale: the PR head moved") {
+		t.Errorf("review-bounce comment %q", body)
+	}
+	if post(support, "", "ben/12-thing") || post(support, `{"round":{"role":"support"}}`, "mac-ben/12-thing") || post(`{"issues":{"source":"github"}}`, "", "mac-ben/12-thing") {
+		t.Error("posted where no support machine waits for it")
+	}
+	if len(nf.notes[70]) != 1 {
+		t.Errorf("notes %v", nf.notes)
+	}
+}

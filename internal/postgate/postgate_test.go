@@ -205,10 +205,15 @@ func TestGateBouncesOnTheIssueWithSupport(t *testing.T) {
 		t.Fatal(err)
 	}
 	ic := &issueComments{}
-	env := worker.Env{IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return ic, nil }}
+	nf := &noteForge{}
+	env := worker.Env{
+		IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return ic, nil },
+		Forge:         func(string, string, tracker.Settings) (worker.Forge, error) { return nf, nil },
+	}
 	p := &parked{}
 	for i, sha := range []string{"a1", "a1", "b2", "c3"} {
-		o, err := Gate(env, root, "7", worker.GateResult{Verdict: worker.GateStale, Slot: "w1", SHA: sha}, p.park)
+		o, err := Gate(env, root, "7", worker.GateResult{Verdict: worker.GateStale, Slot: "ext-1", SHA: sha,
+			Branch: "mac-ben/7-thing", PR: "https://github.com/o/r/pull/70", Err: "stale: the PR head moved"}, p.park)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -225,4 +230,20 @@ func TestGateBouncesOnTheIssueWithSupport(t *testing.T) {
 	if _, err := Gate(env, root, "7", worker.GateResult{Verdict: worker.GatePass}, nil); err != nil || len(ic.bodies) != 4 {
 		t.Errorf("a pass with no bounces posts nothing: %v %q", err, ic.bodies)
 	}
+	// Each counted bounce short of the cap reaches the support worker on the
+	// PR; the deduped re-gate and the parking one do not.
+	if len(nf.bodies) != 2 || !strings.HasPrefix(nf.bodies[0], "<!-- rota:review-bounce head=a1 -->") || !strings.HasPrefix(nf.bodies[1], "<!-- rota:review-bounce head=b2 -->") {
+		t.Errorf("PR comments %q", nf.bodies)
+	}
+}
+
+// noteForge records the PR comments posted through it.
+type noteForge struct {
+	worker.Forge
+	bodies []string
+}
+
+func (f *noteForge) AddMRNote(_ context.Context, _ int, body string) (string, error) {
+	f.bodies = append(f.bodies, body)
+	return "1", nil
 }
