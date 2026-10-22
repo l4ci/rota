@@ -23,9 +23,9 @@ type CheckResult struct {
 }
 
 // Check is hv-preflight without its helper-mirror half, which 5.0 drops. It
-// acts on root, with no walk-up. drift is the version-drift line (what `rota
+// acts on root, with no walk-up. cfg is the loaded project config. drift is the version-drift line (what `rota
 // version --drift` reports), or nil.
-func Check(root string, drift func() string) CheckResult {
+func Check(root string, cfg any, drift func() string) CheckResult {
 	res := CheckResult{Missing: []string{}, Warnings: []string{}}
 	rota := rotatree.Dir(root)
 	if fi, err := os.Stat(rota); err != nil || !fi.IsDir() {
@@ -45,7 +45,7 @@ func Check(root string, drift func() string) CheckResult {
 	// The umbrella flag is informational; the registry is the truth
 	// (DECISIONS.md, "Persistence-trio scoping under umbrella mode"). A flag
 	// with no registered repos is a warning, never a failure.
-	if jsonx.Truthy(umbrellaFlag(rota)) && !repos.Umbrella(root) {
+	if jsonx.Truthy(umbrellaFlag(cfg)) && !repos.Umbrella(root) {
 		if _, err := os.Stat(filepath.Join(rota, "repos.json")); err != nil {
 			res.Warnings = append(res.Warnings, "umbrella.enabled=true but .rota/repos.json missing — run `rota init umbrella` from the umbrella root to register, or set umbrella.enabled=false")
 		} else {
@@ -60,7 +60,7 @@ func Check(root string, drift func() string) CheckResult {
 	return res
 }
 
-func umbrellaFlag(rota string) any {
-	v, _ := config.Lookup(config.Load(filepath.Join(rota, "config.json")), "umbrella.enabled")
+func umbrellaFlag(cfg any) any {
+	v, _ := config.Lookup(cfg, "umbrella.enabled")
 	return v
 }

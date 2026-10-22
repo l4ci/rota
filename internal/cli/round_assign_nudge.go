@@ -52,7 +52,7 @@ func assignNudgeFor(c *Ctx, root, slot string) *assignNudge {
 	if s == nil || s.PR() == "" || !worker.IsDone(s.State()) {
 		return nil
 	}
-	set, err := roundcfg.Load(root)
+	set, err := roundcfg.FromConfig(c.deps().Config(root))
 	if err != nil {
 		return nil
 	}

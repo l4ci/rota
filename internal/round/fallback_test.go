@@ -3,6 +3,8 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 	"slices"
@@ -228,13 +230,13 @@ func TestTransferDoesNotFallBack(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(f.root, ".rota", "config.json"), []byte(fallbackCfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	set, err := roundcfg.Load(f.root)
+	set, err := roundcfg.FromConfig(config.Load(rotatree.Config(f.root)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.set = set
 	f.env.Worker.Now = func() time.Time { return quotaNow }
-	f.env.Worker.Accounts = &worker.Accounts{Env: worker.Env{Now: func() time.Time { return quotaNow }},
+	f.env.Worker.Accounts = &worker.Accounts{Env: worker.Env{Config: diskConfig, Now: func() time.Time { return quotaNow }},
 		Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
 			v, _ := jsonx.Decode([]byte(fmt.Sprintf(`{"five_hour":{"utilization":100,"resets_at":"%s"}}`, quotaNow.Add(time.Hour).Format(time.RFC3339))))
 			return v.(*jsonx.Object), ""

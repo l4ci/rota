@@ -131,7 +131,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		d.Set("limits", lim)
 		d.Set("review", queuedRows(rep.Queued))
 		var lines []string
-		if set, err := roundcfg.Load(root); err == nil {
+		if set, err := roundcfg.FromConfig(c.deps().Config(root)); err == nil {
 			// Status ran without accounts; the quota read gets its own accounted env.
 			qc := accountedRoundEnv(c, ctx, root).QuotaCap(ctx, root, set) // one meter read serves the fallback and the cap
 			if st := qc.Fallback(set); st.Active {

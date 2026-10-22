@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/exitmap"
 	"os"
@@ -19,7 +18,6 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/marker"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -68,7 +66,7 @@ type Env struct {
 	Forge func(ctx context.Context, root string) (Forge, error)
 	// Host returns the herdr host (never tmux, which has no notifications).
 	Host func() host.Host
-	// Config returns the merged project config; nil loads .rota/config.json.
+	// Config returns the merged project config; nil is no config (the schema defaults).
 	Config func(root string) any
 }
 
@@ -77,7 +75,7 @@ func (e Env) config(root string) any {
 	if e.Config != nil {
 		return e.Config(root)
 	}
-	return config.Load(rotatree.Config(root))
+	return nil
 }
 
 func (e Env) withDefaults() Env {
