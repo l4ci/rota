@@ -11,6 +11,7 @@ func TestOutcomeOpen(t *testing.T) {
 		{OutcomePartial, true},
 		{OutcomeFailed, true},
 		{"", false},
+		{"bogus", false},
 	} {
 		if got := OutcomeOpen(tc.kind); got != tc.want {
 			t.Errorf("OutcomeOpen(%q) = %v, want %v", tc.kind, got, tc.want)
