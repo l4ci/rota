@@ -1,9 +1,13 @@
 package backlog
 
 import (
+	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/l4ci/rota/internal/fsio"
 	ms "github.com/l4ci/rota/internal/milestone"
 )
 
@@ -117,5 +121,60 @@ func TestSyncFailureAfterWriteIsAWarning(t *testing.T) {
 	}
 	if len(warned) != 1 || !strings.Contains(warned[0], "M07") {
 		t.Errorf("warnings = %q", warned)
+	}
+}
+
+// lockHeld reports whether another holder owns path's lock right now.
+func lockHeld(path string) bool {
+	return errors.Is(fsio.Locked(path, 0, func() error { return nil }), fsio.ErrLockTimeout)
+}
+
+// TestSyncMilestonesLockNesting pins the order milestone, BACKLOG, ARCHIVE: with
+// ARCHIVE held elsewhere the sync stalls at ARCHIVE, so it must already own the
+// BACKLOG lock (milestoneItems takes BACKLOG first) and, through the callback
+// form of SyncItemsWith, the milestone lock (the rows are read inside it).
+func TestSyncMilestonesLockNesting(t *testing.T) {
+	f, _ := proj(t, rotaFiles(nil))
+	if _, err := f.Rows(); err != nil {
+		t.Fatal(err)
+	}
+	milestone := filepath.Join(f.Root, ".rota", "milestones", "M01.md")
+	held, release, lockDone := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	go func() {
+		lockDone <- fsio.Locked(f.archivePath(), fsio.LockTimeout, func() error { close(held); <-release; return nil })
+	}()
+	<-held
+	released := false
+	releaseArchive := func() {
+		if !released {
+			released = true
+			close(release)
+		}
+	}
+	defer func() {
+		releaseArchive()
+		if err := <-lockDone; err != nil {
+			t.Error(err)
+		}
+	}()
+	synced := make(chan error, 1)
+	go func() { _, err := f.SyncMilestones(); synced <- err }()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for !(lockHeld(f.backlogPath()) && lockHeld(milestone)) {
+		select {
+		case err := <-synced:
+			t.Fatalf("sync returned while ARCHIVE was held: %v", err)
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("sync waiting on ARCHIVE does not hold BACKLOG (%v) and the milestone lock (%v)",
+				lockHeld(f.backlogPath()), lockHeld(milestone))
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	releaseArchive()
+	if err := <-synced; err != nil {
+		t.Fatal(err)
 	}
 }
