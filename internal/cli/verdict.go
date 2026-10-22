@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"slices"
@@ -300,16 +299,9 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 			// filed and leaves the rest to a by-hand `item create`.
 			var id string
 			var added int
-			// Two verdicts for one PR can be recorded together: the read-modify-write
-			// of its follow-up item runs under a lock keyed by the PR.
-			lock := rotatree.File(fileRoot, "followup-"+prKey(*pr))
 			_, err = withBackend(c, fileRoot, false, "", func(be backlog.Backend) (Result, error) {
-				ferr := fsio.Locked(lock, fsio.LockTimeout, func() error {
-					var e error
-					id, added, e = fileFollowUps(be, deferred, strings.TrimSpace(*pr))
-					return e
-				})
-				if ferr != nil {
+				var ferr error
+				if id, added, ferr = fileFollowUpsLocked(be, fileRoot, deferred, strings.TrimSpace(*pr)); ferr != nil {
 					return backlogFail(ferr)
 				}
 				return Result{}, nil

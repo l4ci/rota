@@ -223,17 +223,17 @@ func TestFileDeferredBrokenFollowUpReportsItem(t *testing.T) {
 }
 
 // #1599 relay 6: verdicts recorded together for one PR still end in one item holding every finding.
-func TestFileDeferredConcurrentVerdicts(t *testing.T) {
+func TestFileFollowUpsConcurrentVerdicts(t *testing.T) {
 	dir := fileDeferredRepo(t)
+	be := &backlog.File{Root: dir}
 	var wg sync.WaitGroup
 	names := []string{"alpha", "beta", "gamma", "delta"}
 	for _, n := range names {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			body := writeBody(t, t.TempDir(), `{"findings":[{"severity":"minor","title":"`+n+`"}]}`)
-			if code, _, errOut := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", "FAIL", "--body-file", body, "--file-deferred", "--pr", "#77"); code != 0 {
-				t.Errorf("%s: %d %s", n, code, errOut)
+			if _, _, err := fileFollowUpsLocked(be, dir, testFollowUps(n), "#77"); err != nil {
+				t.Errorf("%s: %v", n, err)
 			}
 		}()
 	}
