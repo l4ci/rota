@@ -59,6 +59,10 @@ func (r BounceRecord) Undo() error {
 	return r.undo()
 }
 
+// ErrNoPushTrust is BounceStore's refusal when the issue tracker cannot say who
+// has write access (a forge without PushTrust, GitLab today).
+var ErrNoPushTrust = errors.New("round.support keeps bounces on the issue, and this issue tracker cannot say who has write access to trust them")
+
 // PushTrust says whether a login holds write access on the repository
 // (tracker.GitHub.CanPush).
 type PushTrust interface {
@@ -133,9 +137,27 @@ func (e Env) BounceStore(root string) (BounceStore, error) {
 		return nil, err
 	}
 	if _, ok := it.(PushTrust); !ok {
-		return nil, fmt.Errorf("round.support keeps bounces on the issue, and this issue tracker cannot say who has write access to trust them")
+		return nil, ErrNoPushTrust
 	}
 	return issueBounces{e: e, root: root, it: it}, nil
+}
+
+// WriterTrust is the write-access check for root's issue tracker, for readers
+// of rota-marked comments that steer an agent (bounce markers, learnings). A
+// tracker that cannot say is ErrNoPushTrust.
+func (e Env) WriterTrust(root string) (*MarkerTrust, error) {
+	e = e.WithDefaults()
+	it, err := e.IssueComments(root, tracker.SettingsFromConfig(e.Config(root)))
+	if errors.Is(err, tracker.ErrNoIssueTracker) || (err == nil && it == nil) {
+		return nil, fmt.Errorf("issues.source has no issue tracker")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := it.(PushTrust); !ok {
+		return nil, ErrNoPushTrust
+	}
+	return NewMarkerTrust(e.Ctx, it), nil
 }
 
 // registryBounces is the store with round.support empty: the registry, as

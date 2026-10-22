@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // The support tables classify every verb of the tree (a test walks it): a
@@ -209,8 +210,10 @@ func supportFencedPath(path string) bool {
 }
 
 // supportRoundStartStop refuses `round start` for a support configuration that
-// cannot run: file mode (D3), or role support without a support name.
-func supportRoundStartStop(root string, set roundcfg.Settings) (Result, error) {
+// cannot run: file mode (D3), role support without a support name, or a forge
+// that cannot say who has write access (bounces on the issue trust only
+// writers' markers).
+func supportRoundStartStop(c *Ctx, root string, set roundcfg.Settings) (Result, error) {
 	if set.Support == "" && set.Role != roundcfg.RoleSupport {
 		return Result{}, nil
 	}
@@ -224,6 +227,12 @@ func supportRoundStartStop(root string, set roundcfg.Settings) (Result, error) {
 	if set.Role == roundcfg.RoleSupport && set.Support == "" {
 		d := jsonObj("blockedBy", "config", "changed", false)
 		return Result{Data: d}, Refused("round.role is support but round.support is empty").WithHint("set round.support to this machine's name")
+	}
+	if set.Support != "" {
+		if _, err := c.deps().workerEnv().BounceStore(root); errors.Is(err, worker.ErrNoPushTrust) {
+			d := jsonObj("blockedBy", "forge", "changed", false)
+			return Result{Data: d}, Refused("%s", err.Error()).WithHint("a support round needs GitHub: only GitHub can say who has write access, which the bounce markers rely on")
+		}
 	}
 	return Result{}, nil
 }

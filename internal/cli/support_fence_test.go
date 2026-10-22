@@ -1,10 +1,14 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 func writeLocalConfig(t *testing.T, root, body string) {
@@ -242,5 +246,36 @@ func TestRoundSupportOfferUsage(t *testing.T) {
 	root := trackerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`+"\n")
 	if code, env, _ := rotaRun(t, "--json", "-C", root, "round", "support", "offer"); code != ExitUsage {
 		t.Errorf("no IDs: exit %d: %v", code, env)
+	}
+}
+
+type noTrustIssues struct{}
+
+func (noTrustIssues) Comments(context.Context, tracker.IssueKey) ([]tracker.Comment, error) {
+	return nil, nil
+}
+func (noTrustIssues) AddComment(context.Context, tracker.IssueKey, string) (string, error) {
+	return "1", nil
+}
+func (noTrustIssues) DeleteComment(context.Context, tracker.IssueKey, string) error { return nil }
+
+// A forge that cannot say who has write access (GitLab) cannot back a support
+// round: round start refuses with blockedBy forge and names GitHub.
+func TestRoundStartSupportNeedsPushTrust(t *testing.T) {
+	root := trackerProject(t, `{"issues":{"source":"gitlab"},"round":{"support":"mac"}}`+"\n")
+	deps := testDeps()
+	deps.WorkerEnv = func() worker.Env {
+		return worker.Env{IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return noTrustIssues{}, nil }}
+	}
+	code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "round", "start")
+	if code != ExitRefused {
+		t.Fatalf("exit %d: %v", code, env)
+	}
+	if got := envObj(env, "data")["blockedBy"]; got != "forge" {
+		t.Errorf("blockedBy = %v", got)
+	}
+	hint, _ := envObj(env, "error")["hint"].(string)
+	if !strings.Contains(hint, "GitHub") {
+		t.Errorf("hint = %q", hint)
 	}
 }
