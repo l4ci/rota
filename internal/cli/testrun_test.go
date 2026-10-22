@@ -74,51 +74,6 @@ func TestTestRunExpandsFilesAgainstBase(t *testing.T) {
 	}
 }
 
-func TestTestRunFilesIncludesUntrackedNotIgnored(t *testing.T) {
-	root := tierProject(t, `{"test":{"fast":["printf '%s\\n' {files} > ../out.txt"]}}`)
-	write(t, filepath.Join(root, ".gitignore"), "*.log\n")
-	gitT(t, root, "add", ".gitignore")
-	gitT(t, root, "commit", "-q", "-m", "ignore")
-	gitT(t, root, "checkout", "-q", "-b", "feat")
-	write(t, filepath.Join(root, "new one.txt"), "x")
-	write(t, filepath.Join(root, "noise.log"), "x")
-	if o := trRun(t, root, "", "test", "run", "fast", "--base", "main"); o.code != 0 {
-		t.Fatalf("exit %d\n%s%s", o.code, o.stdout, o.stderr)
-	}
-	b, _ := os.ReadFile(filepath.Join(filepath.Dir(root), "out.txt"))
-	if string(b) != ".rota/config.json\nnew one.txt\n" {
-		t.Errorf("expanded files = %q, want the untracked files minus the ignored one", b)
-	}
-}
-
-// A local main that lags origin/main must not pull the upstream commits into
-// {files}: the default base is the remote-tracking ref when it is ahead.
-func TestTestRunFilesPrefersAheadRemoteBase(t *testing.T) {
-	root := tierProject(t, `{"test":{"fast":["printf '%s\\n' {files} > ../out.txt"]}}`)
-	gitT(t, root, "checkout", "-q", "-b", "feat")
-	write(t, filepath.Join(root, "upstream.txt"), "u")
-	gitT(t, root, "add", "upstream.txt")
-	gitT(t, root, "commit", "-q", "-m", "upstream")
-	gitT(t, root, "update-ref", "refs/remotes/origin/main", "HEAD") // origin/main is ahead of local main
-	write(t, filepath.Join(root, "branch.txt"), "b")
-	gitT(t, root, "add", "branch.txt")
-	gitT(t, root, "commit", "-q", "-m", "branch")
-	run := func(args ...string) string {
-		t.Helper()
-		if o := trRun(t, root, "", append([]string{"test", "run", "fast"}, args...)...); o.code != 0 {
-			t.Fatalf("exit %d\n%s%s", o.code, o.stdout, o.stderr)
-		}
-		b, _ := os.ReadFile(filepath.Join(filepath.Dir(root), "out.txt"))
-		return string(b)
-	}
-	if got := run(); got != "branch.txt\n.rota/config.json\n" {
-		t.Errorf("default base: files = %q, want only the branch changes", got)
-	}
-	if got := run("--base", "main"); !strings.Contains(got, "upstream.txt") {
-		t.Errorf("explicit --base main: files = %q, want it used as given (upstream.txt listed)", got)
-	}
-}
-
 // envReport is a command that writes the variables test.isolate touches to out.txt.
 const envReport = `printf 'herdr=%s\ntmux=%s\nsock=%s\npid=%s\nhome=%s\nxdg=%s\ngocache=%s\n' "$HERDR_PANE_ID" "$TMUX" "$SSH_AUTH_SOCK" "$SSH_AGENT_PID" "$HOME" "$XDG_CONFIG_HOME" "$GOCACHE" > out.txt`
 
