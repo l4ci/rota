@@ -59,11 +59,17 @@ func TestExpandFilesPrefersAheadRemoteBase(t *testing.T) {
 	write(t, filepath.Join(root, "branch.txt"), "b")
 	gitT(t, root, "add", "branch.txt")
 	gitT(t, root, "commit", "-q", "-m", "branch")
-	got, _ := expandFiles(expandCtx(), root, "", []string{"t {files}"})
+	got, err := expandFiles(expandCtx(), root, "", []string{"t {files}"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 1 || strings.Contains(got[0], "upstream.txt") || !strings.Contains(got[0], "branch.txt") {
 		t.Errorf("default base: %q, want only the branch changes", got)
 	}
-	got, _ = expandFiles(expandCtx(), root, "main", []string{"t {files}"})
+	got, err = expandFiles(expandCtx(), root, "main", []string{"t {files}"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 1 || !strings.Contains(got[0], "upstream.txt") {
 		t.Errorf("explicit base main: %q, want it used as given", got)
 	}
@@ -84,5 +90,19 @@ func TestExpandFilesMultiArgAndNoPlaceholder(t *testing.T) {
 	// Without {files}, git is never consulted, so a bad base is no error.
 	if got, err := expandFiles(expandCtx(), root, "no-such-ref", []string{"echo hi"}); err != nil || got[0] != "echo hi" {
 		t.Errorf("without {files}: %q, %v", got, err)
+	}
+}
+
+// A base git cannot resolve is an error when a command uses {files}, and
+// harmless when none does: git is not asked at all.
+func TestExpandFilesBadBaseErrors(t *testing.T) {
+	root := tierProject(t, `{}`)
+	gitT(t, root, "checkout", "-q", "-b", "feat")
+	if _, err := expandFiles(expandCtx(), root, "no-such-ref", []string{"t {files}"}); err == nil {
+		t.Error("bad base with {files}: want an error, got nil")
+	}
+	got, err := expandFiles(expandCtx(), root, "no-such-ref", []string{"t plain"})
+	if err != nil || len(got) != 1 || got[0] != "t plain" {
+		t.Errorf("bad base without {files}: got %q, %v, want the command untouched", got, err)
 	}
 }
