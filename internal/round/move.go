@@ -7,6 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/exitmap"
+	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"path/filepath"
@@ -879,7 +880,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	// Checks before anything moves: the brief, the receiver's launch, the
 	// overlap, the receiver's guard.
 	if !toHuman {
-		if run.brief, ok = briefPath(root, set, e.getenv()); !ok {
+		if run.brief, ok = briefPath(root, set, e.getenv(), skills.CacheDir(e.getenv())); !ok {
 			return nil, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
 		}
 		// The receiver is refused as assign would refuse it, before anything moves.

@@ -21,6 +21,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
 )
@@ -614,4 +615,28 @@ func ISOFormat(t time.Time) string {
 		s += fmt.Sprintf(".%06d", us)
 	}
 	return s + t.Format("-07:00")
+}
+
+// accountLimited says why the round.accounts account behind configDir cannot
+// take a new session: its meter is cooling, the verdict the quota fallback
+// uses. "" when it can, when the harness has no config-dir accounts, when
+// configDir is no configured account or when no meter reader is set.
+func (e Env) accountLimited(ctx context.Context, root string, hz harness.Harness, configDir string) string {
+	if e.Accounts == nil || !hz.WorkAccounts() || configDir == "" {
+		return ""
+	}
+	name := e.Accounts.AccountOf(root, configDir)
+	if name == "" {
+		return ""
+	}
+	for _, m := range e.Accounts.Meters(ctx, root) {
+		if m.Name == name && m.Verdict == VerdictCooling {
+			why := "account " + name + " is at its usage limit"
+			if m.ResetsAt != nil {
+				why += "; it resets at " + ISOFormat(*m.ResetsAt)
+			}
+			return why
+		}
+	}
+	return ""
 }
