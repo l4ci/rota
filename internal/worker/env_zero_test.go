@@ -35,6 +35,7 @@ func TestZeroEnvVerbEntriesDoNotPanic(t *testing.T) {
 		"RunShell":        func() { e.RunShell(ctx, dir, "true") },
 		"LedgerRound":     func() { LedgerRound(e, dir) },
 		"Accounts":        func() { (&Accounts{}).Meters(ctx, dir) },
+		"BounceRecord":    func() { recordBounceVia(e, dir, "1", "w1", "head") },
 	} {
 		func() {
 			defer func() {
