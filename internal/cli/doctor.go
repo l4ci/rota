@@ -100,7 +100,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.RoundHost = worker.ResolveHost(root, cfg, d.Getenv, doctorLookErr(in.Look))
 	in.SourceProblem = doctorSourceProblem(cfg)
 	in.Tracker = tracker.SettingsFromConfig(cfg)
-	in.Kinds = doctorKinds(cfg)
+	in.Kinds = doctorKinds(cfg, in.Home)
 	for _, a := range config.Accounts(cfg) {
 		if a.Name != "" {
 			in.Accounts = append(in.Accounts, a)
@@ -203,14 +203,14 @@ func doctorExec(run proc.Runner) doctor.Exec {
 
 // doctorKinds is what each worker harness with a doctor check has configured:
 // its accounts as homes (else the default home) and whether a tier map is set.
-func doctorKinds(cfg any) map[string]doctor.KindInput {
+func doctorKinds(cfg any, home string) map[string]doctor.KindInput {
 	out := map[string]doctor.KindInput{}
 	for _, k := range harness.Kinds() {
 		h := harness.Resolve(k)
 		if h.Doctor().Check == "" {
 			continue
 		}
-		accts := h.Accounts(cfg)
+		accts := h.Accounts(cfg).In(home)
 		in := doctor.KindInput{AccountsKey: accts.Key}
 		for _, a := range accts.Entries {
 			if a.Name != "" {
