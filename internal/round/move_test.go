@@ -3,7 +3,6 @@ package round
 import (
 	"context"
 	"errors"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
@@ -86,7 +85,7 @@ func newMoveFx(t *testing.T) *moveFx {
 	milestoneDoc(t, f.root, "M01", "active")
 
 	f.env = Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100), Round: roundcfg.Settings{StallMinutes: 30}, Forge: f.forge.asForge()}
-	f.env.Label, f.env.NeedsHuman, f.env.NeedsReview, f.env.SupportLabel = config.Label(nil, "inProgress"), config.Label(nil, "needsHuman"), config.Label(nil, "needsReview"), config.Label(nil, "support")
+	f.env.Label, f.env.NeedsHuman, f.env.NeedsReview, f.env.SupportLabel = configLabels()
 	f.env.Worker = worker.Env{Git: git.Exec, Getenv: noEnv, Now: func() time.Time { return f.now }, Sleep: func(time.Duration) {},
 		NewHost: func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }}
 
