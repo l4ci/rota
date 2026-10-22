@@ -290,6 +290,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `test.fullWhere` | enum | `"local"` | `local`, `ci` | Where the gate and train run the full tier: here, or by pushing the merge result and waiting for the forge's checks (needs test.ciChecks). |
 | `test.ciTimeoutMinutes` | int | `60` |  | How long a ci run waits for its checks, 1 to 1440 minutes. ROTA_CI_TIMEOUT (seconds) overrides it for one run. |
 | `test.ciChecks` | list | `[]` |  | Check names that must all succeed on the pushed commit under test.fullWhere ci: GitHub check-run names or commit-status contexts, GitLab job names. |
+| `test.slots` | int | `1` |  | How many heavy test runs may hold the machine-wide test lock at once, 1 or more. The merge gate, rota test run and rota proof record queue on it; a run that finds every slot taken waits and says so on stderr. |
 | `test.isolate` | bool | `true` |  | Whether rota test run scrubs HERDR_*, TMUX*, ssh-agent variables and pins HOME and XDG_* to a temp root. The merge gate and train do not read it. |
 
 ### forge
