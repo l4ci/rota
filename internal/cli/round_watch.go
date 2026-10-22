@@ -50,9 +50,9 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 			return Result{}, &Error{Exit: ExitUnavailable, Message: "a solo round has no panes to watch",
 				Hint: "solo workers report through rota round report; call rota round wait"}
 		}
-		set, err := roundcfg.FromConfig(c.deps().Config(root))
+		set, err := c.deps().roundSettings(root, roundConfigUsage)
 		if err != nil {
-			return Result{}, Usage("%s", err.Error())
+			return Result{}, err
 		}
 		if *autopilot && !set.Autopilot {
 			return Result{}, Refused("the autopilot runs only under autonomy.level auto").WithHint("rota config set autonomy.level auto")
@@ -140,7 +140,7 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 			}
 		}
 	}
-	set, err := roundcfg.FromConfig(c.deps().Config(root))
+	set, err := c.deps().roundSettings(root, roundConfigUsage)
 	if err != nil {
 		if !c.reviewSkipNoted {
 			c.reviewSkipNoted = true

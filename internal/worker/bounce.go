@@ -348,7 +348,11 @@ func (e Env) PostReviewBounce(root, branch, pr, head, why string) (posted bool, 
 		return false, fmt.Errorf("%s is the support machine's branch, but its PR %q has no number to post the bounce on", branch, pr)
 	}
 	gc := e.GateConfig(root)
-	forge, err := e.Forge(e.detectProvider(e.Ctx, root, pr, gc.Tracker.Provider), root, gc.Tracker)
+	provider, err := e.detectProvider(e.Ctx, root, pr, gc.Tracker.Provider, tracker.ForgeActor)
+	if err != nil {
+		return false, err
+	}
+	forge, err := e.Forge(provider, root, gc.Tracker)
 	if err != nil {
 		return false, err
 	}

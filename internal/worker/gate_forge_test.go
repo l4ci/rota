@@ -67,7 +67,6 @@ func TestGateFileSourceStillGatesPRsOnTheConfiguredForge(t *testing.T) {
 	for _, c := range []struct{ name, cfg, want string }{
 		{"explicit gitlab, origin names no forge", `{"issues":{"source":"file"},"forge":{"provider":"gitlab"},"test":{"full":["true"]}}`, "gitlab"},
 		{"explicit github", `{"issues":{"source":"file"},"forge":{"provider":"github"},"test":{"full":["true"]}}`, "github"},
-		{"auto, origin names no forge, falls back to github", `{"issues":{"source":"file"},"test":{"full":["true"]}}`, "github"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, "7")
@@ -90,33 +89,45 @@ func TestGateFileSourceStillGatesPRsOnTheConfiguredForge(t *testing.T) {
 	}
 }
 
+// An origin naming no forge, with forge.provider auto, is the actor refusal:
+// exit 4, blockedBy forge, nothing landed and no forge built.
+func TestGateUnknownOriginRefusesBlockedByForge(t *testing.T) {
+	w := newWorld(t, "7")
+	w.setConfig(`{"issues":{"source":"file"},"test":{"full":["true"]}}`)
+	const odd = "https://git.example.com/o/r.git"
+	gitq(t, w.dir, "remote", "set-url", "origin", odd)
+	e := w.env(false)
+	e.Forge = func(provider, dir string, _ tracker.Settings) (Forge, error) {
+		t.Errorf("the gate built a %s forge for an origin naming none", provider)
+		return nil, nil
+	}
+	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+	if err != nil || res.Verdict != GateForge || !res.Refused(err) || ClassifyVerdict(res.Verdict).BlockedBy != "forge" ||
+		!strings.Contains(res.Err, "cannot determine the forge from origin "+odd) || w.onMain("work.txt") {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+// detectProvider adds one rule to tracker.ResolveProvider, a PR URL names its
+// own forge, and reads origin through Env.Git for the kind it is given.
 func TestDetectProvider(t *testing.T) {
 	w := newWorld(t, "")
+	gitq(t, w.dir, "remote", "set-url", "origin", "https://git.example.com/o/r.git")
 	e := w.env(false).WithDefaults()
 	ctx := context.Background()
-	set := func(url string) {
-		if url == "" {
-			gitq(t, w.dir, "remote", "remove", "origin")
-			return
-		}
-		gitq(t, w.dir, "remote", "set-url", "origin", url)
-	}
-	for _, c := range []struct{ origin, pr, configured, want string }{
-		{w.origin, "", "auto", "github"}, // an origin naming no forge: the gate's old assumption
-		{"git@gitlab.com:o/r.git", "", "auto", "gitlab"},
-		{"git@gitlab.com:o/r.git", "", "github", "github"}, // forge.provider beats the host
-		{w.origin, "", "gitlab", "gitlab"},
-		{w.origin, "", "local", "local"},
-		{w.origin, glURL, "local", "gitlab"}, // a PR URL names its own forge
-		{"", "", "auto", "local"},            // no remote
-		{"", "", "gitlab", "gitlab"},
+	for _, c := range []struct {
+		pr, configured string
+		kind           tracker.ForgeKind
+		want           string
+	}{
+		{glURL, "local", tracker.ForgeActor, "gitlab"}, // a PR URL names its own forge
+		{"7", "github", tracker.ForgeActor, "github"},  // a bare number names none
+		{"", "auto", tracker.ForgeReader, "github"},    // the origin names no forge
+		{"", "auto", tracker.ForgeActor, ""},
 	} {
-		set(c.origin)
-		if got := e.detectProvider(ctx, w.dir, c.pr, c.configured); got != c.want {
-			t.Errorf("origin %q pr %q configured %q: %q, want %q", c.origin, c.pr, c.configured, got, c.want)
-		}
-		if c.origin == "" {
-			gitq(t, w.dir, "remote", "add", "origin", w.origin)
+		got, err := e.detectProvider(ctx, w.dir, c.pr, c.configured, c.kind)
+		if got != c.want || (err != nil) != (c.want == "") {
+			t.Errorf("pr %q configured %q kind %d: %q, %v; want %q", c.pr, c.configured, c.kind, got, err, c.want)
 		}
 	}
 }

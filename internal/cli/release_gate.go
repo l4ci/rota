@@ -68,8 +68,16 @@ func releasePush(fs *flag.FlagSet) RunFunc {
 		}
 		plan, err := release.PlanPush(c.Context(), release.PushPorts{
 			Git: releaseGit{c, dir},
-			Forge: func(provider string) (release.Forge, error) {
-				cl, err := c.deps().forge(c.Context(), c.deps().Config(dir), provider, dir)
+			Forge: func() (release.Forge, error) {
+				cfg := c.deps().Config(dir)
+				provider, err := actorForge(c, cfg, dir)
+				if err != nil {
+					return nil, err
+				}
+				if provider == tracker.ProviderLocal {
+					return nil, nil
+				}
+				cl, err := c.deps().forge(c.Context(), cfg, provider, dir)
 				if err != nil {
 					return nil, trackerErr(err)
 				}
@@ -77,7 +85,7 @@ func releasePush(fs *flag.FlagSet) RunFunc {
 			},
 		}, release.PushRequest{Dir: dir, Tag: tag, Branch: *branchFlag, Mode: mode})
 		if err != nil {
-			return Result{}, err
+			return failData(err), err
 		}
 		if res, err := clearGate(c, gate.TagPush, tag, conf, nil, nil); err != nil {
 			return res, err
@@ -122,17 +130,21 @@ func releasePublish(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		host := release.Host(url)
+		cfg := c.deps().Config(dir)
+		provider, err := actorForge(c, cfg, dir)
+		if err != nil {
+			return failData(err), err
+		}
+		host := release.Host(provider, url)
 		data := func(url string, changed bool) any {
 			return gitObj("tag", tag, "host", host, "url", url, "draft", *draft, "changed", changed)
 		}
-		provider := release.RemoteForge(url)
-		if provider == "" {
+		if provider == tracker.ProviderLocal {
 			c.Warn("no recognized remote; nothing published")
 			return Result{Data: data("", false)}, nil
 		}
 		ctx := c.Context()
-		cl, err := c.deps().forge(ctx, c.deps().Config(dir), provider, dir)
+		cl, err := c.deps().forge(ctx, cfg, provider, dir)
 		if err != nil {
 			return Result{}, trackerErr(err)
 		}
