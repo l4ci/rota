@@ -555,7 +555,7 @@ A gated verb refuses with exit 4 (`blockedBy: "manual gate"`) at every autonomy 
 | `rota connect list` | connections with the store holding each secret (`keychain`, `file`, `none`) and whether `ROTA_<NAME>_TOKEN` overrides it; never the secret |
 | `rota connect test <name>` | one authenticated read through the connection; exit 1 on an unknown name, no secret or a failed read; exit 5 when this build has no test read for the connection's kind yet |
 | `rota connect remove <name>` | drop the connection and clear its secret from every store |
-| `rota setup [--force] [--yes] [--set <key>=<value>]... [--save-global] \| --list` | `rota init` plus the main config choices, asked on a terminal; `--yes` takes defaults, `--list` prints the questions; on a terminal it ends by offering to save the answers (all on first use, else those that differ) as the global defaults, and `--save-global` does that without asking; refuses in your home directory like `rota init`, `--force` overrides |
+| `rota setup [--force] [--yes] [--set <key>=<value>]... [--save-global] \| --list` | `rota init` plus the main config choices, asked on a terminal; `--yes` takes the value read from the project (go.mod, CI files, the origin host, harnesses on PATH) where there is one, else the default; `--list` prints the questions with each suggestion and its evidence; on a terminal it ends by offering to save the answers (all on first use, else those that differ) as the global defaults, and `--save-global` does that without asking; refuses in your home directory like `rota init`, `--force` overrides |
 | `rota init check` | is `.rota/` initialized (exit 1 when not) |
 | `rota init umbrella (--repos <csv> \| --all \| --list)` | register sub-repos and make this directory an umbrella |
 

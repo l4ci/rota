@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -21,6 +22,8 @@ func setupRun(t *testing.T, dir, stdin string, tty bool, args ...string) (int, s
 	t.Cleanup(func() { os.Chdir(wd) })
 	d := testDeps()
 	d.SetupIsTTY = func(io.Reader) bool { return tty }
+	// No harness or host on PATH, so the project signals do not depend on the machine.
+	d.LookPath = func(string) (string, error) { return "", exec.ErrNotFound }
 	var so, se bytes.Buffer
 	code := mainWith(d, append([]string{"-C", dir, "setup"}, args...), strings.NewReader(stdin), &so, &se)
 	return code, so.String(), se.String()
@@ -39,7 +42,7 @@ func TestSetupInteractiveAppliesAnswers(t *testing.T) {
 	dir := t.TempDir()
 	// 1 file backend (by number), worktree by name, pr by number, default dispatch,
 	// default autonomy, review none, qa true, worker and orchestrator harness unset
-	in := "1\nworktree\n2\n\n\nnone\n2\n\n\n"
+	in := "1\nworktree\n2\n\n\nnone\n2\n\n\n\n\n\n"
 	code, _, errOut := setupRun(t, dir, in, true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
@@ -64,7 +67,7 @@ func TestSetupInteractiveAppliesAnswers(t *testing.T) {
 // unset, an answer writes it.
 func TestSetupHarnessQuestionsWriteOnlyAnswers(t *testing.T) {
 	skipped := t.TempDir()
-	if code, _, errOut := setupRun(t, skipped, "\n\n\n\n\n\n\n\n\n", true); code != 0 {
+	if code, _, errOut := setupRun(t, skipped, "\n\n\n\n\n\n\n\n\n\n\n\n", true); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
 	raw, err := os.ReadFile(filepath.Join(skipped, ".rota", "config.json"))
@@ -75,7 +78,7 @@ func TestSetupHarnessQuestionsWriteOnlyAnswers(t *testing.T) {
 		t.Errorf("an unanswered harness question wrote a key:\n%s", raw)
 	}
 	chosen := t.TempDir()
-	if code, _, errOut := setupRun(t, chosen, "\n\n\n\n\n\n\ncodex\n4\n", true); code != 0 {
+	if code, _, errOut := setupRun(t, chosen, "\n\n\n\n\n\n\ncodex\n4\n\n\n\n", true); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
 	if got := cfgValue(t, chosen, "round.workerKind"); got != harness.Codex {
@@ -97,7 +100,7 @@ func TestSetupHarnessQuestionsWriteOnlyAnswers(t *testing.T) {
 func TestSetupIssueSourceNamesTheTracker(t *testing.T) {
 	dir := t.TempDir()
 	// issues.source gitlab (3rd choice), then defaults for the rest
-	code, _, errOut := setupRun(t, dir, "3\n\n\n\n\n\n\n\n\n", true)
+	code, _, errOut := setupRun(t, dir, "3\n\n\n\n\n\n\n\n\n\n\n\n", true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
@@ -111,7 +114,7 @@ func TestSetupIssueSourceNamesTheTracker(t *testing.T) {
 
 func TestSetupRepromptsOnBadAnswer(t *testing.T) {
 	dir := t.TempDir()
-	code, _, errOut := setupRun(t, dir, "nope\n9\n\n\n\n\n\n\n\n\n\n", true)
+	code, _, errOut := setupRun(t, dir, "nope\n9\n\n\n\n\n\n\n\n\n\n\n\n\n", true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
@@ -261,7 +264,7 @@ func globalFile(t *testing.T, gdir string) string {
 func TestSetupOffersSaveGlobalOnFirstUse(t *testing.T) {
 	gdir := isolateGlobal(t)
 	dir := t.TempDir()
-	in := "1\nworktree\n2\n\n\nnone\n2\n\n\ny\n"
+	in := "1\nworktree\n2\n\n\nnone\n2\n\n\n\n\n\ny\n"
 	code, _, errOut := setupRun(t, dir, in, true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
@@ -289,7 +292,7 @@ func TestSetupOffersSaveGlobalOnFirstUse(t *testing.T) {
 
 func TestSetupSaveGlobalDeclinedWritesNothing(t *testing.T) {
 	gdir := isolateGlobal(t)
-	in := "1\nworktree\n2\n\n\nnone\n2\n\n\nn\n"
+	in := "1\nworktree\n2\n\n\nnone\n2\n\n\n\n\n\nn\n"
 	if code, _, e := setupRun(t, t.TempDir(), in, true); code != 0 {
 		t.Fatalf("exit %d: %s", code, e)
 	}
@@ -304,7 +307,7 @@ func TestSetupOffersOnlyDifferingAnswers(t *testing.T) {
 	writeFile(t, config.GlobalPath(gdir), `{"work":{"isolation":"worktree"},"issues":{"source":"file"},"ship":{"qa":false}}`)
 	dir := t.TempDir()
 	// issues.source file (same), isolation worktree (default, same), pr, rest default, qa true (differs)
-	in := "\n\n2\n\n\nnone\n2\n\n\ny\n"
+	in := "\n\n2\n\n\nnone\n2\n\n\n\n\n\ny\n"
 	code, _, errOut := setupRun(t, dir, in, true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
@@ -348,7 +351,7 @@ func TestSetupSaveGlobalNonInteractive(t *testing.T) {
 func TestSetupCorruptGlobalSkipsOffer(t *testing.T) {
 	gdir := isolateGlobal(t)
 	writeFile(t, config.GlobalPath(gdir), `not json`)
-	in := "1\nworktree\n2\n\n\nnone\n2\n\n\ny\n"
+	in := "1\nworktree\n2\n\n\nnone\n2\n\n\n\n\n\ny\n"
 	code, _, errOut := setupRun(t, t.TempDir(), in, true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
