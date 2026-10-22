@@ -69,7 +69,14 @@ func (f *File) SyncMilestones() ([]string, error) {
 	var errs []error
 	for _, m := range list {
 		// The rows are read inside the milestone's lock, so a writer that landed
-		// between two milestones cannot leave a later one with stale rows.
+		// between two milestones cannot leave a later one with stale rows. The
+		// price is latency: the milestone lock is held while milestoneItems waits
+		// on the BACKLOG and ARCHIVE locks (up to fsio.LockTimeout each) and
+		// re-reads both files once per milestone, so heavy contention can surface
+		// ErrLockTimeout to a milestone writer. It cannot deadlock: the order is
+		// milestone, BACKLOG, ARCHIVE, and no backlog writer holds its lock while
+		// syncing (syncMilestonesIf runs after the write committed). The order is
+		// pinned by TestSyncMilestonesLockNesting.
 		ok, err := ms.SyncItemsWith(f.Root, m.ID, func() ([]ms.ItemRef, error) { return f.milestoneItems(m.ID) })
 		if err != nil {
 			errs = append(errs, err)
