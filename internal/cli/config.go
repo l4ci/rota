@@ -121,7 +121,7 @@ func configShow(fs *flag.FlagSet) RunFunc {
 			return Result{}, Resolution("unknown config key '%s'", key)
 		}
 		rows, lines := showRows(entries)
-		annotateTierModels(roundcfgOf(c, root), entries, rows, lines)
+		annotateTierModels(c.deps().Config(root), entries, rows, lines)
 		return Result{Data: jsonObj("entries", rows), Text: strings.Join(lines, "\n")}, nil
 	}
 }
@@ -149,9 +149,6 @@ func showRows(entries []config.Entry) (rows []any, lines []string) {
 	}
 	return rows, lines
 }
-
-// roundcfgOf is the merged project config, for resolving tier models.
-func roundcfgOf(c *Ctx, root string) any { return c.deps().Config(root) }
 
 // annotateTierModels adds the effective model and its source to every
 // round.tiers.<kind>.<tier> row: after the profile and the models.worker
