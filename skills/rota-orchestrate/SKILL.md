@@ -35,6 +35,8 @@ Run `rota doctor`. Fix every `fail` with its hint first. Then `rota round start`
 
 One orchestrator per repo. If `start` exits 4 on the lease, someone else holds it. Do not clear their lease; ask.
 
+When `rota round start` reports an empty backlog with the `/rota-vision` hint, stop: tell the maintainer the repo holds a concept but no milestones and point to `/rota-vision` (maintainer-invoked); never start a round on items captured from a concept without asking.
+
 ## 2. Choose the slate
 
 `rota round candidates` says what is ready, not what is wise. You decide:
