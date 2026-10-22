@@ -16,14 +16,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/rotastate"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -163,7 +161,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		cfg := config.Load(rotatree.Config(root))
+		cfg := c.deps().Config(root)
 		set, err := keepalive.LoadSettings(cfg)
 		if err != nil {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error(), Hint: "fix the orchestrator.* key with: rota config set"}

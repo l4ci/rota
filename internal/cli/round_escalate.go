@@ -9,11 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -22,7 +20,7 @@ import (
 // swaps the executor there.
 func escalationForge(c *Ctx) func(ctx context.Context, root string) (escalation.Forge, error) {
 	return func(ctx context.Context, root string) (escalation.Forge, error) {
-		cfg := config.Load(rotatree.Config(root))
+		cfg := c.deps().Config(root)
 		return c.deps().forgeAndIssues(ctx, cfg, root)
 	}
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
-	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // gitCommands is the `rota git` group (#52).
@@ -86,18 +85,18 @@ func registeredRels(root string) []string {
 
 // configuredBase is git.baseBranch of the project that holds dir, or ""
 // when there is none or a stray sub-repo .rota/ masks it (hv-base-branch).
-func configuredBase(dir string) string {
+func configuredBase(d *Deps, dir string) string {
 	root, err := git.FindRoot(dir, registeredRels)
 	if err != nil {
 		return ""
 	}
-	v, _ := config.Lookup(config.Load(rotatree.Config(root)), "git.baseBranch")
+	v, _ := config.Lookup(d.Config(root), "git.baseBranch")
 	s, _ := v.(string)
 	return s
 }
 
 func resolveBase(ctx context.Context, d *Deps, dir string) (string, bool, error) {
-	base, ok, err := d.Repo(dir).Base(ctx, configuredBase(dir))
+	base, ok, err := d.Repo(dir).Base(ctx, configuredBase(d, dir))
 	return base, ok, gitErr(err)
 }
 

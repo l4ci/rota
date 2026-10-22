@@ -8,7 +8,6 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/repos"
-	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Backend selection: the one place in cli that reads issues.source, builds a
@@ -23,8 +22,8 @@ import (
 // backendMode reads issues.source of the project at root: the mode name
 // ("file", or "issues" for any tracker) and the loaded config. An invalid value is a corrupt
 // config (contract, shared definitions): exit 70, never a quiet fall back.
-func backendMode(root string) (name string, cfg any, err error) {
-	cfg = config.Load(rotatree.Config(root))
+func backendMode(d *Deps, root string) (name string, cfg any, err error) {
+	cfg = d.Config(root)
 	name, err = config.Backend(cfg)
 	if err == nil {
 		_, err = config.ForgeProvider(cfg)
@@ -36,8 +35,8 @@ func backendMode(root string) (name string, cfg any, err error) {
 }
 
 // issueBackend reports whether issues.source is a tracker.
-func issueBackend(root string) (bool, error) {
-	name, _, err := backendMode(root)
+func issueBackend(d *Deps, root string) (bool, error) {
+	name, _, err := backendMode(d, root)
 	if err != nil {
 		return false, err
 	}
@@ -50,7 +49,7 @@ func modeRoot(c *Ctx) (root string, issue bool, err error) {
 	if err != nil {
 		return "", false, err
 	}
-	issue, err = issueBackend(root)
+	issue, err = issueBackend(c.deps(), root)
 	if err != nil {
 		return "", false, err
 	}
@@ -83,7 +82,7 @@ func backlogScope(c *Ctx) (string, error) {
 // capture target, and a capture with none goes to the sub-repo the working
 // directory is in.
 func openBacklog(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backend, error) {
-	name, cfg, err := backendMode(root)
+	name, cfg, err := backendMode(c.deps(), root)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +129,7 @@ func openIssueBackend(c *Ctx, hint string, perRepo bool) (backlog.IssueBackend, 
 	if err != nil {
 		return nil, err
 	}
-	name, _, err := backendMode(root)
+	name, _, err := backendMode(c.deps(), root)
 	if err != nil {
 		return nil, err
 	}

@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/rotatree"
 	"slices"
 	"strconv"
 	"strings"
@@ -248,7 +247,7 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 			if fileRoot, err = backlogScope(c); err != nil {
 				return Result{}, err
 			}
-			if f := config.StringIfSet(config.Load(rotatree.Config(fileRoot)), "review.fileDeferred"); f != "" {
+			if f := config.StringIfSet(c.deps().Config(fileRoot), "review.fileDeferred"); f != "" {
 				floor = f
 			}
 			if floor != verdict.FloorMinor && floor != verdict.FloorMajor && floor != verdict.FloorOff {
@@ -397,7 +396,7 @@ func verdictRoute(fs *flag.FlagSet) RunFunc {
 			return Result{}, Resolution("no verdict recorded for %s that %s reads", t.branch, *consumer).
 				WithHint("record one with: rota verdict add")
 		}
-		cfg := config.Load(rotatree.Config(t.root))
+		cfg := c.deps().Config(t.root)
 		s := verdict.Settings{
 			QAGate: config.String(cfg, "qa.gate"),
 			Runner: config.String(cfg, "ship.secondOpinionRunner"),
