@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"reflect"
 	"testing"
 )
 
@@ -48,11 +49,18 @@ func TestZeroEnvVerbEntriesDoNotPanic(t *testing.T) {
 	}
 }
 
-// Every seam is non-nil after WithDefaults, Config and Issues included.
-func TestWithDefaultsFillsConfigAndIssues(t *testing.T) {
-	e := Env{}.WithDefaults()
-	if e.Config == nil || e.Issues == nil || e.NewHost == nil || e.Lease == nil || e.Ctx == nil {
-		t.Fatalf("seam left nil: Config=%v Issues=%v NewHost=%v Lease=%v Ctx=%v",
-			e.Config != nil, e.Issues != nil, e.NewHost != nil, e.Lease != nil, e.Ctx != nil)
+// Every seam is non-nil after WithDefaults, except Accounts (nil records no
+// usage meters) and IssueComments (nil keeps the bounce store off the tracker),
+// which are optional on purpose.
+func TestWithDefaultsFillsEverySeam(t *testing.T) {
+	v := reflect.ValueOf(Env{}.WithDefaults())
+	for i := 0; i < v.NumField(); i++ {
+		f, name := v.Field(i), v.Type().Field(i).Name
+		switch f.Kind() {
+		case reflect.Func, reflect.Interface, reflect.Ptr:
+			if name != "Accounts" && name != "IssueComments" && f.IsNil() {
+				t.Errorf("seam %s left nil", name)
+			}
+		}
 	}
 }

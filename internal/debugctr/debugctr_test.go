@@ -7,9 +7,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func repo(t *testing.T) string {
@@ -39,7 +41,7 @@ var ts = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{6})?\+00:0
 // The state file is shared with older plugin versions, so its bytes are pinned:
 // key order, two-space indent, \u escapes, trailing newline, ISO timestamps.
 func TestStateFileBytes(t *testing.T) {
-	c, err := Open(repo(t))
+	c, err := Open(repo(t), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +92,7 @@ func TestStateFileBytes(t *testing.T) {
 }
 
 func TestSummaryBytes(t *testing.T) {
-	c, _ := Open(repo(t))
+	c, _ := Open(repo(t), nil)
 	c.Init("B07")
 	long := ""
 	for i := 0; i < 130; i++ {
@@ -114,7 +116,7 @@ func TestSummaryBytes(t *testing.T) {
 }
 
 func TestMissingSessionIsExit3(t *testing.T) {
-	c, _ := Open(repo(t))
+	c, _ := Open(repo(t), nil)
 	if _, err := c.RecordAttempt("h", "c"); exitOf(err) != 3 {
 		t.Errorf("record-attempt: %v", err)
 	}
@@ -134,14 +136,14 @@ func TestMissingSessionIsExit3(t *testing.T) {
 
 func TestOpenOutsideGitIsExit5(t *testing.T) {
 	dir, _ := filepath.EvalSymlinks(t.TempDir())
-	if _, err := Open(dir); exitOf(err) != 5 {
+	if _, err := Open(dir, nil); exitOf(err) != 5 {
 		t.Errorf("got %v", err)
 	}
 }
 
 // Two concurrent inits: exactly one may report created.
 func TestInitConcurrent(t *testing.T) {
-	c, _ := Open(repo(t))
+	c, _ := Open(repo(t), nil)
 	var created atomic.Int32
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {
@@ -158,5 +160,30 @@ func TestInitConcurrent(t *testing.T) {
 	wg.Wait()
 	if created.Load() != 1 {
 		t.Fatalf("%d inits reported created, want 1", created.Load())
+	}
+}
+
+// TestTimestampsComeFromTheInjectedClock fixes the clock and asserts the
+// stamped bytes, with and without microseconds.
+func TestTimestampsComeFromTheInjectedClock(t *testing.T) {
+	c, err := Open(repo(t), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Now = func() time.Time { return time.Date(2031, 7, 9, 23, 59, 1, 0, time.UTC) }
+	if got := c.nowISO(); got != "2031-07-09T23:59:01+00:00" {
+		t.Errorf("whole second: %q", got)
+	}
+	c.Now = func() time.Time { return time.Date(2031, 7, 9, 23, 59, 1, 5000, time.UTC) }
+	if got := c.nowISO(); got != "2031-07-09T23:59:01.000005+00:00" {
+		t.Errorf("microseconds: %q", got)
+	}
+	c.Now = func() time.Time { return time.Date(2031, 7, 9, 23, 59, 1, 0, time.UTC) }
+	if _, err := c.Init("B07"); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(c.Path)
+	if !strings.Contains(string(raw), `"started_at": "2031-07-09T23:59:01+00:00"`) {
+		t.Errorf("init did not stamp the clock:\n%s", raw)
 	}
 }

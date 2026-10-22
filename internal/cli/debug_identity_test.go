@@ -31,7 +31,7 @@ func TestDebugIssueAliases(t *testing.T) {
 	}
 	deps := withTracker(t, issueFixture())
 	debugIssueRun(t, deps, root, 0, "counter", "init", "#9")
-	ctr, err := debugctr.Open(root)
+	ctr, err := debugctr.Open(root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestDebugLegacyAliases(t *testing.T) {
 		t.Fatal(err)
 	}
 	deps := withTracker(t, issueFixture())
-	ctr, err := debugctr.Open(root)
+	ctr, err := debugctr.Open(root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

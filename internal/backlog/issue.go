@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/config"
@@ -82,6 +83,8 @@ type Issues struct {
 	// NoteLimit is the ROTA_NOTE_LIMIT value as the caller read it; "" is the
 	// default. The cli edge reads the environment and passes it in.
 	NoteLimit string
+	// Today is the day clock of milestone created dates; nil is time.Now.
+	Today func() time.Time
 }
 
 func (b *Issues) ctx() context.Context {

@@ -18,17 +18,20 @@ type milestoneOps interface {
 }
 
 // MilestoneStore is the ms.Store of one repo's tracker.
-func (b *Issues) MilestoneStore() ms.Store { return trackerMilestones{b} }
+func (b *Issues) MilestoneStore() ms.Store { return trackerMilestones{b, b.Today} }
 
 // MilestoneStore is the ms.Store of an umbrella: the plan lives on the
 // home sub-repo, IDs are minted and status aggregated over every sub-repo.
-func (u *Umbrella) MilestoneStore() ms.Store { return trackerMilestones{u} }
+func (u *Umbrella) MilestoneStore() ms.Store { return trackerMilestones{u, u.Today} }
 
 // trackerMilestones adapts milestoneOps to ms.Store.
-type trackerMilestones struct{ ops milestoneOps }
+type trackerMilestones struct {
+	ops   milestoneOps
+	today func() time.Time // the created date's clock; nil is the wall clock
+}
 
 func (t trackerMilestones) Add(title, summary string, depends []string) (string, error) {
-	return t.ops.MilestoneAdd("", title, summary, depends, time.Now().Format("2006-01-02"))
+	return t.ops.MilestoneAdd("", title, summary, depends, ms.Day(t.today))
 }
 
 func (t trackerMilestones) List() ([]ms.Entry, error) { return t.ops.MilestoneList() }

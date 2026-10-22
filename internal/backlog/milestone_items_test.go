@@ -103,7 +103,7 @@ func TestMilestoneItemsSection(t *testing.T) {
 
 func TestSyncFailureAfterWriteIsAWarning(t *testing.T) {
 	// M00.md claims id M07, so syncing M07 fails; it sorts before M01.
-	files := rotaFiles(map[string]string{".rota/milestones/M00.md": ms.Stub("M07", "Wrong id", "s", nil)})
+	files := rotaFiles(map[string]string{".rota/milestones/M00.md": ms.StubOn("M07", "Wrong id", "s", nil, "2026-01-02")})
 	f, _ := proj(t, files)
 	var warned []string
 	f.Warn = func(msg string) { warned = append(warned, msg) }

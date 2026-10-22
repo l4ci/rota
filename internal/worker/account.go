@@ -289,13 +289,14 @@ type Credentials struct {
 	Run  proc.Runner
 	Now  func() time.Time
 	// Home is whose ~/.claude is the unsuffixed Keychain service; nil means
-	// none is, and SystemCredentials sets os.UserHomeDir.
+	// none is. SystemCredentials takes it from its caller; nothing defaults it.
 	Home func() (string, error)
 }
 
-// SystemCredentials is Credentials on this machine, running tools through run.
-func SystemCredentials(run proc.Runner) Credentials {
-	return Credentials{GOOS: runtime.GOOS, Run: run, Now: time.Now, Home: os.UserHomeDir}
+// SystemCredentials is Credentials on this machine, running tools through run
+// and reading the home through home. Now stays nil: Problem defaults it.
+func SystemCredentials(run proc.Runner, home func() (string, error)) Credentials {
+	return Credentials{GOOS: runtime.GOOS, Run: run, Home: home}
 }
 
 // Problem reports why the account whose config dir is dir (already expanded)

@@ -92,13 +92,17 @@ func notFound(id string) *exitcode.Error {
 	return exitcode.Errf(exitcode.ExitResolution, "milestone %s not found (.rota/milestones/%s.md)", id, id)
 }
 
-// Stub is the starter text of a milestone detail file (milestone_stub); the
-// issue-mode tracking issue body shares it. It is dated today.
-func Stub(id, title, summary string, depends []string) string {
-	return StubOn(id, title, summary, depends, time.Now().Format("2006-01-02"))
+// Day is the created date a milestone is stamped with: now's day, the wall
+// clock's when now is nil.
+func Day(now func() time.Time) string {
+	if now == nil {
+		now = time.Now
+	}
+	return now().Format("2006-01-02")
 }
 
-// StubOn is Stub with an explicit created date.
+// StubOn is the starter text of a milestone detail file (milestone_stub); the
+// issue-mode tracking issue body shares it. today is the created date.
 func StubOn(id, title, summary string, depends []string, today string) string {
 	return "---\nid: " + id + "\ntitle: " + title + "\nstatus: planned\ndepends: [" + strings.Join(depends, ", ") + "]\ncreated: " + today + "\n---\n\n" +
 		"# " + id + " — " + title + "\n\n## Goal\n\n" + summary + "\n\n## Capabilities\n\n- _(one contract per bullet: a verb, endpoint, schema or config key, tagged (new), (modified) or (removed))_\n\n" +
@@ -109,11 +113,12 @@ func StubOn(id, title, summary string, depends []string, today string) string {
 
 // Add mints the next milestone ID, writes its detail file and appends its
 // entry to MILESTONES.md. depends is a comma list; its IDs are not validated.
-func Add(root, title, summary, depends string) (string, error) {
-	return addFile(root, title, summary, artifact.SplitCSV(depends))
+// today is the created date.
+func Add(root, title, summary, depends, today string) (string, error) {
+	return addFile(root, title, summary, artifact.SplitCSV(depends), today)
 }
 
-func addFile(root, title, summary string, deps []string) (string, error) {
+func addFile(root, title, summary string, deps []string, today string) (string, error) {
 	id, err := counter.Next(root, "milestones")
 	if err != nil {
 		return "", err
@@ -122,7 +127,7 @@ func addFile(root, title, summary string, deps []string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(detail), 0o777); err != nil {
 		return "", err
 	}
-	if err := fsio.WriteFileAtomic(detail, []byte(Stub(id, title, summary, deps))); err != nil {
+	if err := fsio.WriteFileAtomic(detail, []byte(StubOn(id, title, summary, deps, today))); err != nil {
 		return "", err
 	}
 	overview := "—"

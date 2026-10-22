@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/hook"
@@ -237,12 +238,16 @@ func TestRunHvApplyIsCompleteAndIdempotent(t *testing.T) {
 	write(t, filepath.Join(home, ".claude", "settings.json"), hvSettings)
 	o := hvOpts(t, dir, home)
 	o.Apply = true
+	o.Now = func() time.Time { return time.Date(2031, 7, 9, 23, 59, 1, 0, time.Local) }
 	rep, err := RunHv(o)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".hv")); err == nil {
 		t.Error(".hv/ still there")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".rota", "migrate-backup", "20310709T235901")); err != nil {
+		t.Errorf("backup folder is not named from the injected clock: %v", err)
 	}
 	ag := read(t, filepath.Join(dir, "AGENTS.md"))
 	if strings.Contains(ag, "hv-knowledge") || strings.Contains(ag, "hv:decisions") || strings.Contains(ag, "hv-skills-") || strings.Contains(ag, "## hv\n") || !strings.Contains(ag, "<!-- rota-skills-start -->") || !strings.Contains(ag, "## rota") || !strings.Contains(ag, ".rota/KNOWLEDGE.md") {
