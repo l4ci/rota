@@ -103,9 +103,15 @@ func TestKnowledgeHarvestListsAndMarks(t *testing.T) {
 
 func TestKnowledgeHarvestFileBackendRefused(t *testing.T) {
 	root := trackerProject(t, "")
-	d := runOK(t, root, ExitRefused, "knowledge", "harvest")
+	// The listing is read-only, so the conventions forbid exit 4: it answers 1.
+	d := runOK(t, root, ExitFailed, "knowledge", "harvest")
 	if get(d, "blockedBy") != "backend" {
 		t.Errorf("data %v", d)
+	}
+	// --mark writes, so it keeps the refusal exit.
+	d = runOK(t, root, ExitRefused, "knowledge", "harvest", "--mark", "1")
+	if get(d, "blockedBy") != "backend" || get(d, "changed") != false {
+		t.Errorf("mark data %v", d)
 	}
 }
 
@@ -150,7 +156,11 @@ func TestKnowledgeHarvestNeedsPushTrust(t *testing.T) {
 	root := trackerProject(t, issuesConfig)
 	deps := trustedDeps(t, issueFixture(), noTrustIssues{})
 	code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "knowledge", "harvest")
-	if code != ExitRefused || envObj(env, "data")["blockedBy"] != "forge" {
+	if code != ExitFailed || envObj(env, "data")["blockedBy"] != "forge" {
 		t.Fatalf("exit %d: %v", code, env)
+	}
+	code, env, _ = rotaRunWith(t, deps, "--json", "-C", root, "knowledge", "harvest", "--mark", "1")
+	if code != ExitRefused || envObj(env, "data")["blockedBy"] != "forge" {
+		t.Fatalf("mark: exit %d: %v", code, env)
 	}
 }
