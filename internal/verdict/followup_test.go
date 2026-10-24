@@ -76,6 +76,25 @@ func TestFollowUpBodyShape(t *testing.T) {
 	}
 }
 
+// A deferred finding's ready diff rides into the filed item, fenced after the
+// deferred line, so the work is an apply rather than a rewrite.
+func TestFollowUpCarriesPatch(t *testing.T) {
+	patch := "--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\n"
+	fs := []Finding{{Severity: "minor", Title: "typo", File: "a.go", Fix: "fix it", Patch: patch}}
+	be, tr := followUpIssues()
+	if _, added, err := FileFollowUps(be, t.TempDir(), fs, "#9", "review-spec", "FAIL"); err != nil || added != 1 {
+		t.Fatalf("%d %v", added, err)
+	}
+	body := tr.Issues[0].Body
+	want := "Deferred minor finding from the review-spec FAIL verdict on #9.\n\nPatch:\n\n```diff\n" + patch + "```\n"
+	if !strings.Contains(body, want) {
+		t.Errorf("body lacks the fenced patch %q:\n%s", want, body)
+	}
+	if !strings.Contains(body, "- [ ] AC-1: fix it\n") {
+		t.Errorf("criterion lost:\n%s", body)
+	}
+}
+
 // Dedup keys on title+file: the same title in another file is a new finding.
 func TestFileFollowUpsDedupSameTitleDifferentFile(t *testing.T) {
 	be, tr := followUpIssues()
