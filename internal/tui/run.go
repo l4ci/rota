@@ -57,8 +57,8 @@ type Cmd struct {
 	Quit bool
 	// Async runs in the background while the screen keeps taking keys; its
 	// error comes back to Update as Done. Its context ends when Run returns, so
-	// a read still in flight stops when the screen is left. It must not touch
-	// the terminal. Delivery is polled every asyncPoll while a Tick is set,
+	// a read still in flight stops when the screen is left. It leaves the
+	// terminal alone. Delivery is polled every asyncPoll while a Tick is set,
 	// else it waits for the next key.
 	Async func(ctx context.Context) error
 	// Tag is echoed in the Done of this Cmd's Exec or Async.
