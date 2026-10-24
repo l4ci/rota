@@ -188,6 +188,28 @@ func TestProviderIsSourceThenForge(t *testing.T) {
 	}
 }
 
+// TestInvalidConfigIsNotDefaulted: an invalid issues.source or forge.provider
+// fails Provider and the verbs built on it with ValidateConfig's error instead
+// of resolving as the default.
+func TestInvalidConfigIsNotDefaulted(t *testing.T) {
+	ctx := context.Background()
+	for _, raw := range []string{`{"issues":{"source":"svn"}}`, `{"forge":{"provider":"bitbucket"}}`} {
+		cfg, err := jsonx.Decode([]byte(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		f := &forge{origin: gh}
+		env := f.env(t)
+		env.Config = cfg
+		if _, err := Provider(ctx, env, tracker.ForgeActor, ""); !tracker.IsKind(err, tracker.KindInternal) {
+			t.Errorf("%s: Provider err = %v, want KindInternal", raw, err)
+		}
+		if _, err := Label(ctx, env, "", tracker.NumKey(99), "x", true, false); !tracker.IsKind(err, tracker.KindInternal) {
+			t.Errorf("%s: Label err = %v, want KindInternal", raw, err)
+		}
+	}
+}
+
 // gitProject is a repo with one commit, for the commit checks of Close.
 func gitProject(t *testing.T) (dir, sha string) {
 	t.Helper()
