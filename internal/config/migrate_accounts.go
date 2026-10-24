@@ -54,7 +54,8 @@ func (e *AccountConflictError) Error() string {
 // returns the resulting object with the keys it folded. below is what the
 // layers under doc supply: a kind doc defines nothing for is copied from it,
 // because the old per-kind keys layered one by one and a wholesale
-// round.accounts would otherwise drop the lower layer's entries. Two entries
+// round.accounts would otherwise drop the lower layer's entries (the caller
+// passes none for the tracked config.json). Two entries
 // with one name and different dirs are a conflict, and doc is returned
 // untouched. Running it on its own output changes nothing.
 func migrateAccountsDoc(doc *jsonx.Object, below []Account) (*jsonx.Object, []string, []AccountConflict) {
@@ -241,7 +242,13 @@ func migrateAccountsPlan(files []*accountFile, m *AccountsMigration, apply bool)
 			// The renamed view, as the scope step plans on.
 			f.doc, _, _ = MigrateRoundKeys(f.doc)
 		}
-		out, from, c := migrateAccountsDoc(f.doc, below)
+		// The tracked file is shared with the team: it gets only its own
+		// entries, never a login copied up from the global or another layer.
+		under := below
+		if f.name == "config.json" {
+			under = nil
+		}
+		out, from, c := migrateAccountsDoc(f.doc, under)
 		for _, x := range c {
 			x.File = f.name
 			conflicts = append(conflicts, x)

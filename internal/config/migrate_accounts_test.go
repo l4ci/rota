@@ -141,7 +141,7 @@ func TestMigrateAccountsFilesRewritesEveryLayer(t *testing.T) {
 	}
 	for path, want := range map[string]string{
 		GlobalPath(r.gdir): `{"round":{"accounts":[{"kind":"codex","name":"g","dir":"/g"}]}}`,
-		cfgPath:            `{"round":{"accounts":[{"kind":"codex","name":"g","dir":"/g"},{"kind":"opencode","name":"p","dir":"/p"}]}}`,
+		cfgPath:            `{"round":{"accounts":[{"kind":"opencode","name":"p","dir":"/p"}]}}`,
 		locPath:            `{"round":{"accounts":[{"kind":"claude","name":"l","dir":"/l"},{"kind":"codex","name":"g","dir":"/g"},{"kind":"opencode","name":"p","dir":"/p"}]}}`,
 	} {
 		if got := r.read(t, path); got != compact(t, decodeCfg(t, want)) {
@@ -194,5 +194,30 @@ func TestFillMigratesAccountsBeforeStripping(t *testing.T) {
 	got := Accounts(Load(filepath.Join(r.root, ".rota", "config.json")))
 	if want := []Account{{KindCodex, "c", "/c"}}; !reflect.DeepEqual(got, want) {
 		t.Errorf("accounts after fill = %v, want %v", got, want)
+	}
+}
+
+// The tracked config.json is shared: neither verb may copy a machine-scope
+// login from the global layer into it.
+func TestAccountsStepKeepsOtherLayersOutOfTrackedConfig(t *testing.T) {
+	const (
+		global  = `{"round":{"accounts":[{"kind":"claude","name":"a1","dir":"~/.claude-a1"}]}}`
+		project = `{"round":{"codexAccounts":[{"name":"c1","codexHome":"/c1"}]}}`
+	)
+	want := compact(t, decodeCfg(t, `{"round":{"accounts":[{"kind":"codex","name":"c1","dir":"/c1"}]}}`))
+	for name, run := range map[string]func(r acctRig) error{
+		"migrate": func(r acctRig) error { _, err := MigrateAccountsFiles(r.root, r.gdir, true); return err },
+		"fill":    func(r acctRig) error { _, err := Fill(r.root); return err },
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := newAcctRig(t, global, project, "")
+			if err := run(r); err != nil {
+				t.Fatal(err)
+			}
+			got := r.read(t, filepath.Join(r.root, ".rota", "config.json"))
+			if !strings.Contains(got, `"c1"`) || strings.Contains(got, "a1") {
+				t.Errorf("tracked config.json = %s, want only c1 (%s)", got, want)
+			}
+		})
 	}
 }
