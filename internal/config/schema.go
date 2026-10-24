@@ -263,6 +263,7 @@ var Prompts = []Prompt{
 		"false": "no",
 		"true":  "yes, run /rota-qa",
 	}},
+	{Key: "round.harnesses", Title: "Which harnesses may round workers use? The first is the default (claude, codex, opencode; one name or a JSON list)", Optional: true, Free: true},
 	{Key: "orchestrator.harness", Title: "Which harness runs the round orchestrator?", Optional: true, Help: map[string]string{
 		"claude":   "Claude Code",
 		"codex":    "Codex",
