@@ -12,8 +12,10 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -890,6 +892,7 @@ func itemReady(fs *flag.FlagSet) RunFunc {
 func itemCommentAdd(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", strings.Join(backlog.CommentKinds, "|"))
 	bodyFile := fs.String("body-file", "", "comment text, path or - for stdin")
+	relayRound := fs.Int("round", -1, "relay only: the round to carry (default the round state's)")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := argCount(c, args, 1, 1, "item comment add takes one item ID"); err != nil {
 			return Result{}, err
@@ -918,6 +921,28 @@ func itemCommentAdd(fs *flag.FlagSet) RunFunc {
 		text := decodeText(raw)
 		if pystr.Strip(text) == "" {
 			return Result{}, Usage("empty comment body")
+		}
+		if *relayRound >= 0 && *kind != "relay" {
+			return Result{}, Usage("--round only goes with --kind relay")
+		}
+		if *kind == "relay" {
+			// A relay is the orchestrator's word: a worker (ROTA_SLOT set) never posts one.
+			if c.deps().Getenv("ROTA_SLOT") != "" {
+				return Result{}, Refused("--kind relay is the orchestrator's: a worker slot (ROTA_SLOT set) cannot post one")
+			}
+			n := *relayRound
+			if n < 0 {
+				n = worker.RoundOf(root)
+			}
+			text = marker.RelayLine(n) + "\n" + text
+		} else if *kind != "harvested" {
+			// With the support split active the other machine's watch has to tell
+			// whose comment this is (#1827).
+			cfg := c.deps().Config(root)
+			if roundcfg.SupportName(cfg) != "" {
+				role, _ := roundcfg.MachineRole(cfg)
+				text = marker.FromLine(role) + "\n" + text
+			}
 		}
 		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
 			return withItem(be, args[0], func(id, typ string) (Result, error) {

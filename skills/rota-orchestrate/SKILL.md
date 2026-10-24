@@ -123,6 +123,8 @@ When the slate is done or the maintainer calls the round: `rota round wind-down`
 
 A second machine can run rounds beside main without any link between them (`round.support` names it, `round.role: support` is set locally per machine; see `docs/contributing/rounds.md`). On a support machine you never merge and never write tracked `.rota/` content: those verbs exit 4 `blockedBy: role`. Workers there post learnings as `learning` comments (`rota item comment add <ID> --kind learning`), skip the contract-doc restamp, and leave knowledge to main, which runs `/rota-learn` at wind-down and harvests them. Set `round.support` between rounds: bounce counts are not carried over when the key flips. At the bounce cap the item parks `needs-human` and no review-bounce is posted.
 
+Round trip with main (full rules in `docs/contributing/rounds.md`): hand an offered issue back at once with `rota round support return <ID> --reason-file <f>` when it cannot be worked, never idle on it. The issue thread is the index: notes go on the issue as comments (`rota item comment add <ID> --kind relay|feedback`), and bounce, pick and the review relay leave a pointer comment there. Main's `round watch` wakes on a support PR head change, a PR opened for a `site:support` issue and a support comment; the support watch wakes on main's comments on held issues. A relay you send is also an issue comment, which main's gate reads for provenance; the offer comment is the assignment approval. Workers never post `--kind relay`.
+
 ## Solo mode
 
 Read when `rota round status` reports solo (no herdr or tmux host): `solo-and-autopilot.md` (section Solo mode). Workers are subagents you launch; gates, merge policy and wind-down are unchanged.
