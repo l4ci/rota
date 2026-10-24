@@ -39,7 +39,7 @@ trap 'rm -rf "$CFG_TMP"' EXIT
 import json
 d = json.load(open('.rota/config.json'))
 assert d['ship']['review'] is True, d
-assert d['models']['orchestrator'] == 'opus', d
+assert d['orchestrator']['model'] == 'opus', d
 assert d['learn']['verify'] is True, d
 " || { echo "FAIL: preservation"; exit 1; }
 

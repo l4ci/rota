@@ -114,6 +114,9 @@ export ROTA_BIN
 # The fake tmux reacts at once, so the 1 to 3 s pauses rota leaves after a paste
 # (for Claude Code to take it) only cost time here: scale them down (#84).
 export ROTA_HOST_SETTLE_PCT=5
+# Tracker retry pause and bulk-migrate pacing are constants now; these env seams zero them for the smoke run.
+export ROTA_ISSUES_RETRY_WAIT_SECONDS=0
+export ROTA_ISSUES_BULK_PACE_MS=0
 export ROTA_POISON_BIN="$ROTA_STAGE/poison"  # sections that reset PATH keep this first
 ROTA_POISON_LOG="$ROTA_STAGE/poison.log"
 mkdir -p "$ROTA_POISON_BIN" && : > "$ROTA_POISON_LOG"
