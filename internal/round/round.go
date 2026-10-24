@@ -352,6 +352,9 @@ type Report struct {
 type QueuedPR struct {
 	Issue, PR, Branch, From string
 	Bundle                  []string // the member issues beside Issue
+	// State is the PR's forge state (open, merged, closed), "" when it was not
+	// read. Only the --ui overview shows it.
+	State string
 }
 
 // view is a row plus what repairs need.
@@ -532,6 +535,9 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 		if n, ok := worker.PRRefNumber(q.PR); ok && forgeOK {
 			st, err := e.Forge.PRState(ctx, n)
+			if err == nil {
+				rep.Queued[len(rep.Queued)-1].State = st
+			}
 			switch {
 			case err != nil:
 				rep.Warnings = append(rep.Warnings, fmt.Sprintf("PR #%d state: %v", n, err))

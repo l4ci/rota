@@ -3,8 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"github.com/l4ci/rota/internal/strutil"
-	"github.com/l4ci/rota/internal/tracker"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +36,11 @@ type roundSnap struct {
 	CandsErr    string
 	Host        string
 	Notes       []string // unavailable sources and status warnings
+	// Support is the support machine's queue; SupportLoaded is true once a pass
+	// read it, and SupportErr is why it could not be (never an empty queue).
+	Support       []round.SupportItem
+	SupportLoaded bool
+	SupportErr    string
 }
 
 // roundCand is a queued candidate. Why is empty for a ready one.
@@ -105,12 +108,32 @@ func loadRoundSnap(ctx context.Context, c *Ctx, root string) (roundSnap, error) 
 	cands, err := env.RoundCandidates(ctx, root, be, set, "")
 	if err != nil {
 		s.CandsErr = err.Error()
-		return s, nil
 	}
 	for _, cd := range cands {
 		s.Cands = append(s.Cands, roundCand{ID: cd.ID, Title: cd.Title, Ready: cd.Ready(), Why: cd.NotReady()})
 	}
+	// The support queue is read on its own: a failure there says so and
+	// never reads as an empty queue.
+	if set.Support != "" {
+		if items, err := env.SupportQueue(ctx, be, set.Support); err != nil {
+			s.SupportErr = err.Error()
+		} else {
+			s.Support, s.SupportLoaded = items, true
+		}
+	}
 	return s, nil
+}
+
+// keepStale carries the last good candidates and support queue over a pass that
+// could not read them: old rows beat a queue that looks empty. The error stays
+// set, so the screen still says the data is old.
+func (s *roundSnap) keepStale(old roundSnap) {
+	if s.CandsErr != "" && old.CandsLoaded && old.CandsErr == "" {
+		s.Cands = old.Cands
+	}
+	if s.SupportErr != "" && old.SupportLoaded {
+		s.Support, s.SupportLoaded = old.Support, true
+	}
 }
 
 // fillBurn sets Row.Burn for every slot holding an issue: the quota it has
@@ -223,116 +246,7 @@ func (m *roundScreen) Init() tui.Cmd {
 	return m.pass()
 }
 
-// entry is one selectable row.
-type entry struct {
-	key     string
-	section int // 0 slots, 1 review, 2 candidates
-	line    string
-	title   string
-	body    string
-}
-
-const (
-	secSlots = iota
-	secReview
-	secCands
-)
-
-func (m *roundScreen) entries() []entry {
-	var out []entry
-	for _, r := range m.snap.Slots {
-		out = append(out, slotEntry(r))
-	}
-	for _, q := range m.snap.Review {
-		out = append(out, reviewEntry(q))
-	}
-	for _, c := range m.snap.Cands {
-		out = append(out, candEntry(c))
-	}
-	return out
-}
-
-func prLabel(pr, state string) string {
-	if pr == "" {
-		return "-"
-	}
-	s := pr
-	if n, ok := worker.PRRefNumber(pr); ok {
-		s = fmt.Sprintf("#%d", n)
-	}
-	if state != "" {
-		s += " " + state
-	}
-	return s
-}
-
-// hostLabel is the host column: an adopted slot shows its derived state after
-// "external", since no host reports one.
-func hostLabel(r round.Row) string {
-	if r.State != "" {
-		return r.HostState + "/" + r.State
-	}
-	return r.HostState
-}
-
-func tierModel(r round.Row) string {
-	s := strings.Trim(strings.Join([]string{r.Tier, r.Model}, " "), " ")
-	if s == "" {
-		s = strings.TrimSuffix(r.Kind+"/"+r.Model, "/")
-	}
-	return dash(s)
-}
-
-func slotEntry(r round.Row) entry {
-	issue := dash(r.Issue)
-	if r.Issue != "" {
-		issue = tracker.RefOf(r.Issue)
-	}
-	line := fmt.Sprintf("%-8s %-7s %-10s %-14s %-18s %-7s %s", r.Name, issue, dash(hostLabel(r)), prLabel(r.PR, r.PRState), tierModel(r), bounceLabel(r.Bounces), burnLabel(r))
-	var b []string
-	b = append(b, "PR: "+strutil.FirstNonEmpty(r.PRTitle, "no title known"))
-	b = append(b, "branch: "+dash(r.Branch))
-	if r.PR != "" {
-		b = append(b, "url: "+r.PR)
-	}
-	b = append(b, "evidence: "+strutil.FirstNonEmpty(r.Evidence, "none recorded"))
-	if r.TierReason != "" {
-		b = append(b, "tier: "+r.TierReason)
-	}
-	if len(r.Drift) > 0 {
-		b = append(b, "drift: "+strings.Join(r.Drift, ", "))
-	}
-	if r.BestOf != "" {
-		b = append(b, "best-of with "+r.BestOf)
-	}
-	return entry{key: "slot " + r.Name, section: secSlots, line: tui.Sanitize(line, false), title: tui.Sanitize(r.Name+" · "+issue, false), body: tui.Sanitize(strings.Join(b, "\n"), true)}
-}
-
-func bounceLabel(n int) string {
-	if n == 0 {
-		return "-"
-	}
-	return fmt.Sprint(n)
-}
-
-func reviewEntry(q round.QueuedPR) entry {
-	line := fmt.Sprintf("#%-7s %-14s %-30s %s", q.Issue, prLabel(q.PR, ""), dash(q.Branch), dash(q.From))
-	body := "PR: " + dash(q.PR) + "\nbranch: " + dash(q.Branch) + "\nfrom: " + dash(q.From)
-	return entry{key: "review " + q.Issue + " " + q.PR, section: secReview, line: tui.Sanitize(line, false), title: tui.Sanitize("review · #"+q.Issue, false), body: tui.Sanitize(body, true)}
-}
-
-func candEntry(c roundCand) entry {
-	state := "ready"
-	if !c.Ready {
-		state = "blocked: " + strings.Join(c.Why, "; ")
-	}
-	line := fmt.Sprintf("#%-7s %s — %s", strings.TrimPrefix(c.ID, "#"), c.Title, state)
-	body := c.Title + "\n" + state
-	if !c.Ready {
-		body = c.Title + "\nblocked:\n- " + strings.Join(c.Why, "\n- ")
-	}
-	return entry{key: "cand " + c.ID, section: secCands, line: tui.Sanitize(line, false), title: tui.Sanitize("candidate · #"+strings.TrimPrefix(c.ID, "#"), false), body: tui.Sanitize(body, true)}
-}
+func (m *roundScreen) entries() []entry { return m.snap.entries() }
 
 func (m *roundScreen) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 	n := *m
@@ -353,6 +267,7 @@ func (m *roundScreen) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 		}
 		n.updated = n.now()
 		n.err = ""
+		snap.keepStale(n.snap)
 		n.snap = snap
 		n.refresh++
 		n.keepSelection()
@@ -436,12 +351,6 @@ func (m *roundScreen) keepSelection() {
 	m.top = 0
 }
 
-var roundSections = [...]struct{ title, cols string }{
-	secSlots:  {"SLOTS", fmt.Sprintf("%-8s %-7s %-10s %-14s %-18s %-7s %s", "name", "issue", "state", "PR", "tier model", "bounces", "burn")},
-	secReview: {"REVIEW QUEUE", fmt.Sprintf("%-8s %-14s %-30s %s", "issue", "PR", "branch", "from")},
-	secCands:  {"CANDIDATES", ""},
-}
-
 const detailRows = 8
 
 func (m *roundScreen) Render(w, h int, st tui.Style) string {
@@ -472,33 +381,49 @@ func (m *roundScreen) Render(w, h int, st tui.Style) string {
 	}
 	var lines []bl
 	add := func(t string, e int) { lines = append(lines, bl{t, e}) }
+	for _, t := range m.snap.totals() {
+		add(st.Dim(tui.Fit(t, w)), -1)
+	}
+	cols := overviewCols(w)
 	next := 0
-	for sec := range roundSections {
-		s := roundSections[sec]
-		var inSec []entry
+	for g := range groupTitles {
+		if !m.snap.showsGroup(g) {
+			continue
+		}
+		var inGroup []entry
 		for _, e := range es {
-			if e.section == sec {
-				inSec = append(inSec, e)
+			if e.group == g {
+				inGroup = append(inGroup, e)
 			}
 		}
-		add(st.Bold(s.title)+st.Dim(fmt.Sprintf(" (%d)", len(inSec))), -1)
-		if s.cols != "" && len(inSec) > 0 {
-			add(st.Dim("  "+tui.Fit(s.cols, w-2)), -1)
+		count := fmt.Sprint(len(inGroup))
+		if g == grpSupport && m.snap.SupportErr != "" && !m.snap.SupportLoaded {
+			count = "?"
 		}
-		for _, e := range inSec {
-			mark, text := "  ", tui.Fit(e.line, w-2)
+		add(st.Bold(groupTitles[g])+st.Dim(" ("+count+")"), -1)
+		if len(inGroup) > 0 {
+			add(st.Dim("  "+cols.header()), -1)
+		}
+		for _, e := range inGroup {
+			mark, text := "  ", cols.row(e, st)
 			if next == sel {
-				mark, text = "▸ ", st.Bold(text)
+				mark, text = st.Cyan("› "), st.Bold(cols.row(e, tui.Style{}))
 			}
 			add(mark+text, next)
 			next++
 		}
 		switch {
-		case len(inSec) == 0 && sec == secCands && !m.snap.CandsLoaded:
+		case g == grpSupport && m.snap.SupportErr != "":
+			why := "support queue unavailable: " + m.snap.SupportErr
+			if m.snap.SupportLoaded {
+				why += " (rows are from the last read)"
+			}
+			add(st.Yellow("  "+tui.Fit(tui.Sanitize(why, false), w-2)), -1)
+		case g == grpUpcoming && len(inGroup) == 0 && !m.snap.CandsLoaded:
 			add(st.Dim("  loading…"), -1)
-		case len(inSec) == 0 && sec == secCands && m.snap.CandsErr != "":
-			add(st.Yellow("  "+tui.Fit(tui.Sanitize("candidates: "+m.snap.CandsErr, false), w-2)), -1)
-		case len(inSec) == 0:
+		case g == grpUpcoming && m.snap.CandsErr != "":
+			add(st.Yellow("  "+tui.Fit(tui.Sanitize("candidates unavailable: "+m.snap.CandsErr, false), w-2)), -1)
+		case len(inGroup) == 0:
 			add(st.Dim("  none"), -1)
 		}
 	}
@@ -535,7 +460,7 @@ func (m *roundScreen) Render(w, h int, st tui.Style) string {
 	var dt tui.Detail
 	if len(es) > 0 {
 		e := es[sel]
-		dt = tui.Detail{Title: e.title, Body: e.body, Top: m.top}
+		dt = tui.Detail{Title: e.label, Body: e.body, Top: m.top}
 	} else {
 		dt = tui.Detail{Body: "nothing in the round yet"}
 	}
