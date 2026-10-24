@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -244,5 +245,63 @@ func TestMigrateConfigPreviewMatchesApplyWithRename(t *testing.T) {
 	scope, _ := get(dataOf(pre), "scope").([]any)
 	if len(scope) != 2 {
 		t.Errorf("preview scope = %v, want round.dispatch deleted and round.slots moved", scope)
+	}
+}
+
+// #1824: migrate config folds the codex and opencode account keys into
+// round.accounts in the global, tracked and local files; the preview lists
+// each file without writing, --apply writes, a re-run plans nothing.
+func TestMigrateConfigAccounts(t *testing.T) {
+	gdir := isolateGlobal(t)
+	writeFile(t, config.GlobalPath(gdir), `{"round":{"codexAccounts":[{"name":"g","codexHome":"/g"}]}}`)
+	root := trackerProject(t, `{"round":{"opencodeAccounts":[{"name":"p","configDir":"/p"}]}}`+"\n")
+	local := filepath.Join(root, ".rota", "config.local.json")
+	writeFile(t, local, `{"round":{"accounts":[{"name":"l","configDir":"/l"}]}}`+"\n")
+
+	code, out := textRun(t, "-C", root, "migrate", "config")
+	for _, want := range []string{
+		"global config.json\tround.codexAccounts -> round.accounts (1 entries)",
+		"config.json\tround.opencodeAccounts -> round.accounts (2 entries)",
+		"config.local.json\tround.accounts -> round.accounts (3 entries)",
+	} {
+		if code != 0 || !strings.Contains(out, want) {
+			t.Errorf("preview lacks %q: %d %q", want, code, out)
+		}
+	}
+	if b, _ := os.ReadFile(config.GlobalPath(gdir)); !strings.Contains(string(b), "codexAccounts") {
+		t.Errorf("preview rewrote the global config: %s", b)
+	}
+
+	if code, out := textRun(t, "-C", root, "migrate", "config", "--apply"); code != 0 {
+		t.Fatalf("apply: %d %q", code, out)
+	}
+	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	want := []config.Account{{Kind: "claude", Name: "l", Dir: "/l"}, {Kind: "codex", Name: "g", Dir: "/g"}, {Kind: "opencode", Name: "p", Dir: "/p"}}
+	if got := config.Accounts(cfg); !reflect.DeepEqual(got, want) {
+		t.Errorf("accounts after apply = %v, want %v", got, want)
+	}
+	if b, _ := os.ReadFile(config.GlobalPath(gdir)); strings.Contains(string(b), "codexAccounts") {
+		t.Errorf("global config still holds the old key: %s", b)
+	}
+	if code, out := textRun(t, "-C", root, "migrate", "config", "--apply"); code != 0 || !strings.Contains(out, "nothing to migrate") {
+		t.Errorf("re-run: %d %q", code, out)
+	}
+}
+
+// Two old keys naming one account with different dirs refuse with exit 4 and
+// write nothing.
+func TestMigrateConfigAccountsConflictRefuses(t *testing.T) {
+	isolateGlobal(t)
+	body := `{"round":{"codexAccounts":[{"name":"x","codexHome":"/c"}],"opencodeAccounts":[{"name":"x","configDir":"/o"}]}}` + "\n"
+	root := trackerProject(t, body)
+	code, env, _ := rotaRun(t, "--json", "-C", root, "migrate", "config", "--apply")
+	if code != ExitRefused {
+		t.Fatalf("exit %d, want %d: %v", code, ExitRefused, env)
+	}
+	if d := envObj(env, "data"); d["blockedBy"] != "account conflict" {
+		t.Errorf("blockedBy = %v", d["blockedBy"])
+	}
+	if readConfig(t, root) != body {
+		t.Errorf("config written despite the conflict: %s", readConfig(t, root))
 	}
 }

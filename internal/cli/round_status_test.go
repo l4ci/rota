@@ -226,7 +226,7 @@ func TestRoundStatusShowsTheBundle(t *testing.T) {
 // shows the effective cap and why; with headroom it adds nothing.
 func TestRoundStatusShowsTheEffectiveCapWhenBelowTheRoster(t *testing.T) {
 	root, deps := roundFixture(t, []host.Agent{})
-	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"round":{"codexAccounts":[{"name":"c1","codexHome":"/h1"}],"workerKind":"codex"}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"round":{"accounts":[{"kind":"codex","name":"c1","dir":"/h1"}],"workerKind":"codex"}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, out, _ := rotaInWith(t, deps, root, "--json", "round", "status")
@@ -237,7 +237,7 @@ func TestRoundStatusShowsTheEffectiveCapWhenBelowTheRoster(t *testing.T) {
 		DetectedAt: limits.Time(time.Now()), ResetsAt: limits.Time(time.Now().Add(time.Hour)), Action: limits.ActionSleep, Status: limits.StatusWaiting})
 	_, out, _ = rotaInWith(t, deps, root, "--json", "round", "status")
 	cp, _ := data(t, out)["cap"].(map[string]any)
-	if cp == nil || cp["effective"] != float64(0) || cp["roster"].(float64) < 1 || !strings.Contains(cp["reason"].(string), "round.codexAccounts account is cooling down") {
+	if cp == nil || cp["effective"] != float64(0) || cp["roster"].(float64) < 1 || !strings.Contains(cp["reason"].(string), "round.accounts account is cooling down") {
 		t.Fatalf("cap = %v", cp)
 	}
 	_, text, _ := rotaInWith(t, deps, root, "round", "status")

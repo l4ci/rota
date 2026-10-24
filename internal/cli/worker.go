@@ -266,6 +266,7 @@ func workerReset(fs *flag.FlagSet) RunFunc {
 
 func accountObject(m worker.Meter) *jsonx.Object {
 	o := jsonx.NewObject()
+	o.Set("kind", config.KindClaude) // the meter reads Anthropic's usage, so only claude entries are listed
 	o.Set("name", m.Name)
 	o.Set("configDir", m.ConfigDir)
 	o.Set("verdict", m.Verdict)
@@ -313,7 +314,7 @@ func runAccountList(c *Ctx, args []string) (Result, error) {
 		if note == "" && m.ResetsAt != nil {
 			note = worker.ISOFormat(*m.ResetsAt)
 		}
-		lines = append(lines, fmt.Sprintf("%-12s %-9s 5h=%-5s 7d=%-5s %s", m.Name, m.Verdict, pct(m.FiveHour), pct(m.SevenDay), note))
+		lines = append(lines, fmt.Sprintf("%-12s %-8s %-9s 5h=%-5s 7d=%-5s %s", m.Name, config.KindClaude, m.Verdict, pct(m.FiveHour), pct(m.SevenDay), note))
 	}
 	if len(rows) == 0 {
 		lines = []string{"no accounts configured (slots inherit the ambient CLAUDE_CONFIG_DIR)"}
@@ -381,8 +382,9 @@ func accountAssign(fs *flag.FlagSet) RunFunc {
 		d := jsonx.NewObject()
 		d.Set("slot", slot)
 		d.Set("account", name)
+		d.Set("kind", config.KindClaude) // assign picks among the claude entries of round.accounts
 		d.Set("changed", changed)
-		return Result{Data: d, Text: fmt.Sprintf("assigned: %s -> %s", slot, name)}, nil
+		return Result{Data: d, Text: fmt.Sprintf("assigned: %s -> %s (%s)", slot, name, config.KindClaude)}, nil
 	}
 }
 

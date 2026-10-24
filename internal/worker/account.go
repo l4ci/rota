@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/fsio"
 	"io"
 	"math"
 	"net/http"
@@ -114,8 +113,8 @@ type acct struct{ name, configDir string }
 func (a *Accounts) Configured(root string) []acct {
 	cfg := a.Env.WithDefaults().Config(root)
 	var out []acct
-	for _, ac := range config.Accounts(cfg) {
-		dir := ac.ConfigDir
+	for _, ac := range config.AccountsOf(cfg, config.KindClaude) {
+		dir := ac.Dir
 		if dir != "" {
 			dir = a.expand(dir)
 		}
@@ -498,7 +497,7 @@ func ExpandConfigDirIn(d, home string) string {
 	if d == "" {
 		d = "~/.claude"
 	}
-	return filepath.Clean(fsio.ExpandHome(d, home))
+	return config.ExpandDir(d, home)
 }
 
 // ConfigDirMismatch is the warning for an orchestrator running under
@@ -511,7 +510,7 @@ func ConfigDirMismatch(orchDir string, accts []config.Account, home string) stri
 		return ""
 	}
 	for _, a := range accts {
-		if a.ConfigDir != "" && SameConfigDirIn(a.ConfigDir, orchDir, home) {
+		if a.Dir != "" && SameConfigDirIn(a.Dir, orchDir, home) {
 			return ""
 		}
 	}

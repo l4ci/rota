@@ -194,7 +194,7 @@ func TestHarnessStepWritesTheFieldOnTheFileBackend(t *testing.T) {
 // A cooling codex with workerKind=codex does not fall back to claude: only a
 // LATER harness in round.harnesses can take the issue.
 func TestFallbackGoesOnlyToALaterHarness(t *testing.T) {
-	cfg := `{"round":{"dispatch":"herdr","workerKind":"codex","harnesses":["claude","codex"],"codexAccounts":[{"name":"c1","codexHome":"/h1"}],"tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`
+	cfg := `{"round":{"dispatch":"herdr","workerKind":"codex","harnesses":["claude","codex"],"accounts":[{"kind":"codex","name":"c1","dir":"/h1"}],"tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`
 	f := newAssignFixture(t)
 	f.config(t, cfg)
 	f.env.Forge = f.be.asForge()

@@ -8,17 +8,20 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 func configMigrateCommand() *Command {
-	return &Command{Name: "config", Summary: "move the round-only work.* keys to round.*, and machine and default taste keys out of config.json (preview unless --apply)", Verb: migrateConfig}
+	return &Command{Name: "config", Summary: "move the round-only work.* keys to round.*, fold the codex and opencode account keys into round.accounts, and move machine and default taste keys out of config.json (preview unless --apply)", Verb: migrateConfig}
 }
 
 // migrateConfig is `rota migrate config` (#1097): every round-only key under
 // work.* moves to its round.* name in both config layers, value unchanged.
 // An old and a new name with different values refuse (exit 4) and nothing is
 // written. It is idempotent. `rota config fill` and `rota init` run the
-// same migration. Then the scope step (#1786, config.MigrateScopeFiles) moves
+// same migration. Then the accounts step (#1824, migrateAccounts) folds
+// round.codexAccounts and round.opencodeAccounts into one round.accounts list
+// in the global, tracked and local files. Then the scope step (#1786, config.MigrateScopeFiles) moves
 // machine keys out of config.json and drops taste keys pinned at their
 // default; --keep names keys it leaves in place.
 func migrateConfig(fs *flag.FlagSet) RunFunc {
@@ -37,15 +40,19 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return roundMigrationFail(err)
 		}
+		am, err := migrateAccounts(c, root, *apply)
+		if err != nil {
+			return roundMigrationFail(err)
+		}
 		sm, err := config.MigrateScopeFiles(root, *apply, keep)
 		if err != nil {
 			return roundMigrationFail(err)
 		}
-		planned := m.Changed() || sm.Changed()
+		planned := m.Changed() || am.Changed() || sm.Changed()
 		data := knObj("changed", planned && *apply, "planned", planned, "applied", *apply,
-			"config", renameList(m.Config), "local", renameList(m.Local), "scope", scopeList(sm))
+			"config", renameList(m.Config), "local", renameList(m.Local), "accounts", accountList(am), "scope", scopeList(sm))
 		if !planned {
-			return Result{Data: data, Text: "nothing to migrate: no round keys under work.*, no machine or default taste keys in .rota/config.json"}, nil
+			return Result{Data: data, Text: "nothing to migrate: no round keys under work.*, no per-harness account keys, no machine or default taste keys in .rota/config.json"}, nil
 		}
 		var lines []string
 		for _, l := range []struct {
@@ -56,6 +63,9 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 				lines = append(lines, l.file+"\t"+r.Old+" -> "+r.New)
 			}
 		}
+		for _, ch := range am.Changes {
+			lines = append(lines, ch.File+"\t"+strings.Join(ch.From, ", ")+" -> round.accounts ("+fmt.Sprint(ch.N)+" entries)")
+		}
 		for _, ch := range sm.Changes {
 			lines = append(lines, scopeLine(ch))
 		}
@@ -65,6 +75,26 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: data, Text: "changed:\n" + strings.Join(lines, "\n")}, nil
 	}
+}
+
+// migrateAccounts is the accounts step of `rota migrate config`: its own call
+// beside the round-key and scope steps, so a sibling step can be added next to
+// it without reshaping this one. The global config it rewrites is the rota
+// config dir's.
+func migrateAccounts(c *Ctx, root string, apply bool) (config.AccountsMigration, error) {
+	gdir, err := projects.Dir(c.deps().projectsEnv())
+	if err != nil {
+		gdir = ""
+	}
+	return config.MigrateAccountsFiles(root, gdir, apply)
+}
+
+func accountList(am config.AccountsMigration) []any {
+	out := []any{}
+	for _, ch := range am.Changes {
+		out = append(out, knObj("file", ch.File, "from", anySlice(ch.From), "entries", ch.N))
+	}
+	return out
 }
 
 // setAnswersList is a repeatable flag whose values may also be comma-separated.
@@ -112,7 +142,15 @@ func renameList(rs []config.Rename) []any {
 // exit 70 naming the file.
 func roundMigrationFail(err error) (Result, error) {
 	var ce *config.ConflictError
+	var ae *config.AccountConflictError
 	switch {
+	case errors.As(err, &ae):
+		list := []any{}
+		for _, x := range ae.Conflicts {
+			list = append(list, knObj("file", x.File, "name", x.Name, "dirs", anySlice([]string{x.A, x.B})))
+		}
+		d := knObj("blockedBy", "account conflict", "conflicts", list, "changed", false)
+		return Result{Data: d}, Refused("%s", err.Error())
 	case errors.As(err, &ce):
 		list := []any{}
 		for _, x := range ce.Conflicts {

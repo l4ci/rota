@@ -32,7 +32,7 @@ const BlockCodexFlags = "codex flags"
 const hookTrustFlag = "--dangerously-bypass-hook-trust"
 
 // codex is the Codex CLI. Its account is the default Codex home, or a named
-// home of round.codexAccounts, and every payload sent to it is signed: Codex follows unsigned text typed into its
+// home of a codex entry of round.accounts, and every payload sent to it is signed: Codex follows unsigned text typed into its
 // pane, so a UserPromptSubmit hook blocks anything without the signature.
 type codex struct{}
 
@@ -142,9 +142,9 @@ func (codex) AmbientAccount(getenv func(string) string) Account {
 }
 
 func (codex) Accounts(cfg any) AccountList {
-	l := AccountList{Key: "round.codexAccounts"}
-	for _, a := range config.CodexAccounts(cfg) {
-		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.CodexHome})
+	l := AccountList{Key: "round.accounts"}
+	for _, a := range config.AccountsOf(cfg, config.KindCodex) {
+		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.Dir})
 	}
 	return l
 }
@@ -380,7 +380,7 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 	acct, _ := PickCodexAccount(o.Accounts, o.Account, o.Load)
 	home := acct.Home
 	if acct.Name != "" && home == "" {
-		return set, refuse(Usage, "round.codexAccounts account '%s' has no codexHome", acct.Name)
+		return set, refuse(Usage, "round.accounts codex account '%s' has no dir", acct.Name)
 	}
 	set.Home, set.Account = home, acct.Name
 	who := "Codex"

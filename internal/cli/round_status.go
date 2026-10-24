@@ -295,6 +295,10 @@ func rowList(rows []round.Row) []any {
 		o.Set("escalations", strs(r.Escalations))
 		setIf(o, "kind", r.Kind)
 		setIf(o, "kindSource", r.KindSource)
+		setIf(o, "account", r.Account)
+		if r.Account != "" {
+			o.Set("accountKind", r.AccountKind)
+		}
 		setIf(o, "tier", r.Tier)
 		setIf(o, "model", r.Model)
 		setIf(o, "tierReason", r.TierReason)
