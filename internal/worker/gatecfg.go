@@ -31,6 +31,10 @@ type GateConfig struct {
 	Tracker tracker.Settings
 	// InProgressLabel is issues.labels.inProgress (or the legacy issues.label).
 	InProgressLabel string
+	// Support is round.support and SupportLabel issues.labels.support: an issue
+	// carrying the label under a set Support belongs to the support machine,
+	// and its relays travel as issue comments (#1827).
+	Support, SupportLabel string
 	// SharedPaths is round.sharedPaths.
 	SharedPaths []string
 	// TDD is work.tdd: a behavior change needs a recorded red-first run.
@@ -69,6 +73,8 @@ func ParseGateConfig(cfg any) GateConfig {
 		Tracker:         tracker.SettingsFromConfig(cfg),
 		InProgressLabel: config.Label(cfg, "inProgress"),
 		SharedPaths:     roundcfg.SharedPaths(cfg),
+		Support:         roundcfg.SupportName(cfg),
+		SupportLabel:    config.Label(cfg, "support"),
 	}
 	t := roundcfg.ParseTests(cfg)
 	c.Full, c.Fast, c.legacy, c.testsErr = t.Full, t.Fast, t.Legacy, t.Err

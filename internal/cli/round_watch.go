@@ -2,15 +2,18 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/escalation"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -102,6 +105,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 			Local: func() map[string]string { return roundwatch.LocalSnapshot(root) },
 			Forge: func(ctx context.Context) map[string]string { return watchForge(ctx, c, root) },
 		}
+		env.Seen, env.Mark = watchSeen(cd)
 		opts := roundwatch.Opts{Heartbeat: secs(*heartbeat), Poll: secs(*poll), ForgeEvery: secs(*forgePoll)}
 		if !*autopilot {
 			res, err := roundwatch.Run(ctx, env, opts)
@@ -133,7 +137,8 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 			out[roundwatch.EscalationStatusKey(r.Entry.ID)] = r.Status
 		}
 	}
-	if rep, err := c.deps().RoundEnv(ctx, root).Status(ctx, root); err == nil { // a bad round.* key is noted once by the config load below
+	renv := c.deps().RoundEnv(ctx, root)
+	if rep, err := renv.Status(ctx, root); err == nil { // a bad round.* key is noted once by the config load below
 		for _, r := range rep.Rows {
 			if r.PR != "" && r.PRState != "" {
 				out[roundwatch.PRStateKey(r.Name)] = r.PRState
@@ -156,6 +161,9 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 		if o := reviewStep(c, root, set, s.Name()); o.Pending {
 			out[roundwatch.ReviewKey(s.Name())] = o.Detail
 		}
+	}
+	for k, v := range supportSnapshot(ctx, renv, root) {
+		out[k] = v
 	}
 	return out
 }
@@ -183,6 +191,13 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 		o.Set("key", ch.Key)
 		o.Set("from", ch.From)
 		o.Set("to", ch.To)
+		if id, kind, to, ok := roundwatch.SupportChange(ch); ok {
+			o.Set("issue", id)
+			o.Set("kind", kind)
+			changes = append(changes, o)
+			text = append(text, fmt.Sprintf("support: %s %s %s", id, kind, to))
+			continue
+		}
 		changes = append(changes, o)
 		text = append(text, fmt.Sprintf("change\t%s\t%s -> %s", ch.Key, dash(ch.From), dash(ch.To)))
 	}
@@ -262,5 +277,33 @@ func autopilotWatch(c *Ctx, ctx context.Context, env roundwatch.Env, opts roundw
 		// A slot the orchestrator already knows about wakes Run at once: the
 		// pause keeps the loop from spinning on it.
 		env.Sleep(ctx, poll)
+	}
+}
+
+// watchSeenFile keeps what the support entries said when a watch last
+// returned them (roundwatch.Env.Seen); it lives beside the watch marker.
+const watchSeenFile = "round-watch-seen.json"
+
+// watchSeen reads and extends the seen record of the support entries under
+// the common dir cd. Mark merges, never drops: an entry that vanishes for a
+// poll and comes back unchanged is not news.
+func watchSeen(cd string) (seen func() map[string]string, mark func(map[string]string)) {
+	path := rotastate.File(cd, watchSeenFile)
+	load := func() map[string]string {
+		out := map[string]string{}
+		if b, err := os.ReadFile(path); err == nil {
+			_ = json.Unmarshal(b, &out)
+		}
+		return out
+	}
+	return load, func(m map[string]string) {
+		cur := load()
+		for k, v := range m {
+			cur[k] = v
+		}
+		// A failed write only repeats a wake.
+		if b, err := json.Marshal(cur); err == nil && os.MkdirAll(filepath.Dir(path), 0o755) == nil {
+			_ = fsio.WriteFileAtomic(path, append(b, '\n'))
+		}
 	}
 }
