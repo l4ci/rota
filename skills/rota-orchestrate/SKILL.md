@@ -111,6 +111,10 @@ Bounce when the work is wrong in a way the worker can learn from: it misread the
 
 Fix it yourself when the gap is small and mechanical: a stale doc line, a missing test for a case the worker covered in code, a merge conflict with a PR you just merged. Push the fix as a separate commit so the PR shows what you changed.
 
+A blocking review finding that carries a `patch` (a reviewer-attached unified diff for a few-line mechanical fix) is this case: apply it (`git apply`) and push it as a separate commit instead of relaying the finding. A reviewer never applies it, and the independent re-review of an orchestrator commit still holds. A finding without a `patch` routes as before, and the bounce count and blocking rules are unchanged.
+
+A conflict with the base that a worker leaves behind is not this case if the worker could have settled it: workers merge the moved base into their branch before the final proof and after every relay fix (see the worker contract), so a conflict reaching the gate means the worker raised it or the base moved after `worker done`; the second is yours to fix.
+
 A reviewer's comment on a `done` slot's PR reaches the watch as a `review/<slot>` change (and a tick lists a `review` item). Under `round.reviewLoop: manual` (the default) run `rota round review-relay <slot>`: it counts the bounce itself, relays the comments to the worker as a `REVIEW` relay and marks the slot busy, so do not also run `round bounce`. At the cap it exits 4 and escalates on the PR: go to the cap options in [`bounce-cap.md`](bounce-cap.md). Under `auto` the watch does this itself and you hear about it only at the cap. The loop never merges: gate the PR once the worker is `done` again. Under `manual` the autopilot tick still gates a done PR beside the `review` item, so relay first if the review matters.
 
 When you bounce by hand, run `rota round bounce <issue> --head <pr-head-sha> --slot <slot>` first and read [`bounce-cap.md`](bounce-cap.md): the cap, what to do at it, and re-review.
