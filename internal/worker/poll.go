@@ -302,7 +302,7 @@ func (e Env) openPRs(ctx context.Context, root string) (prs []tracker.PR, ok boo
 		return nil, false
 	}
 	cfg := e.GateConfig(root)
-	provider := e.detectProvider(ctx, root, "", cfg.Tracker.Provider)
+	provider, _ := e.detectProvider(ctx, root, "", cfg.Tracker.Provider, tracker.ForgeReader) // a reader never fails
 	if provider == tracker.ProviderLocal {
 		return nil, false
 	}
@@ -363,7 +363,7 @@ func (e Env) prMerged(ctx context.Context, root string, s *Slot) bool {
 		return false
 	}
 	cfg := e.GateConfig(root)
-	provider := e.detectProvider(ctx, root, "", cfg.Tracker.Provider)
+	provider, _ := e.detectProvider(ctx, root, "", cfg.Tracker.Provider, tracker.ForgeReader) // a reader never fails
 	if provider == tracker.ProviderLocal {
 		return false
 	}
@@ -424,6 +424,12 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 		s.ClearSeen()
 	}
 	if r.State == StateDone && r.Evidence != relayEchoEvidence {
+		if t.relayPending > 0 {
+			// A reply past the pending relay's echo proves that even a send
+			// which timed out was accepted. Do not leave its unsent mark to
+			// block the next reply once relayPending is cleared.
+			s.SetUnsent(false)
+		}
 		s.ClearRelayPending()
 	}
 	if r.State == StateUnverifiable {
@@ -473,6 +479,7 @@ type pollTarget struct {
 	relayMarker  bool      // set by classify: the last capture shows the line
 	relays       int
 	turnSeq      int
+	unsent       bool // a task whose brief the host never acknowledged
 	// ev is the slot's standing worker event with the stamps Decide weighs it
 	// against. evSeq is set by classify to the event's seq when the event, not
 	// the pane, decided the row.
@@ -482,7 +489,7 @@ type pollTarget struct {
 }
 
 func slotTarget(s *Slot) pollTarget {
-	return pollTarget{name: s.Name(), kind: s.HarnessKind(), handle: s.PaneHandle(), prev: s.State(), seen: s.Seen(), turnSeq: s.TurnSeq(),
+	return pollTarget{name: s.Name(), kind: s.HarnessKind(), handle: s.PaneHandle(), prev: s.State(), seen: s.Seen(), turnSeq: s.TurnSeq(), unsent: s.Unsent(),
 		relayPending: s.RelayPending(), relaySeen: s.RelayMarkerSeen(), relaySentAt: s.RelaySentAt(), relayEvSeq: s.RelayEventSeq(), relays: len(s.Relays()),
 		ev: s.Event(), lastChange: parseStamp(s.ActiveAt())}
 }
@@ -507,6 +514,7 @@ func refreshEvents(reg Registry, targets []pollTarget) {
 	for i := range targets {
 		if s := reg.Slot(targets[i].name); s != nil {
 			targets[i].ev, targets[i].lastChange, targets[i].prev = s.Event(), parseStamp(s.ActiveAt()), s.State()
+			targets[i].unsent = s.Unsent()
 		}
 		targets[i].evSeq = 0
 	}
@@ -558,6 +566,10 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		slept = true
 	}
 	for i, t := range targets {
+		if t.unsent && t.relayPending == 0 {
+			rows = append(rows, PollRow{t.name, StateBlocked, "dispatch: brief was not submitted; retry the task dispatch"})
+			continue
+		}
 		// push appends the row after the slot's own event had its say.
 		push := func(row PollRow) {
 			row, used := decide(t.ev, row, t.lastChange)

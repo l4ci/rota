@@ -12,20 +12,21 @@ RC=0; ( cd "$CF" && hvj config fill >/dev/null 2>&1 ) || RC=$?
 printf '{\n  "issues": {\n    "label": "in-progress",\n    "autoCreateLabel": true\n  }\n}\n' > "$CF/.rota/config.json"
 OUT=$( cd "$CF" && hvj config fill ) || vfail
 [ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "fill on the seed should report changed: $OUT"
-[ "$(echo "$OUT" | jget 'data.filled[0]')" = "models.orchestrator" ] \
+[ "$(echo "$OUT" | jget 'data.filled[0]')" = "learn.promoteThreshold" ] \
   || fail "filled should list keys in schema order: $OUT"
 python3 - "$CF/.rota/config.json" <<'PY' || fail "filled seed is not in schema order"
 import json, sys
 cfg = json.load(open(sys.argv[1]))
-want = ["models", "work", "round", "refactor", "learn", "ship", "qa", "autonomy", "docs", "git", "umbrella", "rota", "issues", "test"]
+# Only project keys are filled; machine and taste keys stay with the global
+# config or the defaults (#1786).
+want = ["learn", "docs", "git", "umbrella", "rota", "issues", "test"]
 assert list(cfg) == want, list(cfg)
 assert list(cfg["issues"]) == ["label", "autoCreateLabel"], list(cfg["issues"])
-assert cfg["work"]["isolation"] == "branch" and cfg["round"]["accounts"] == [], cfg["round"]
 PY
 pass "config fill completes a fresh and a seeded config in schema order"
 
 # Present values are kept, a second fill writes nothing.
-( cd "$CF" && "$ROTA_BIN" config set models.worker haiku >/dev/null )
+( cd "$CF" && "$ROTA_BIN" config set docs.path manual >/dev/null )
 BEFORE="$(cat "$CF/.rota/config.json")"
 OUT=$( cd "$CF" && hvj config fill ) || vfail
 [ "$(echo "$OUT" | jget data.changed)" = "false" ] || fail "second fill should not change anything: $OUT"

@@ -46,6 +46,8 @@ chmod +x "$FK/bin/herdr" "$FK/bin/gh"
 
 # doctor's tool lookup: its own PATH, so only these fakes (and real git) exist.
 ln -s "$(command -v git)" "$FK/doctor/git"; printf '#!/bin/sh\nexit 0\n' > "$FK/doctor/jq"; chmod +x "$FK/doctor/jq"
+# The bare origin names no forge, so doctor (a reader) assumes github and asks gh (#889).
+printf '#!/bin/sh\nexit 0\n' > "$FK/doctor/gh"; chmod +x "$FK/doctor/gh"
 cat > "$FK/doctor/herdr" <<'SH'
 #!/bin/sh
 case "$1 $2" in

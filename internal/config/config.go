@@ -104,15 +104,21 @@ func loadLayers(configPath string) (merged any, l layers) {
 		project: fsio.LoadJSON(configPath, jsonx.NewObject()),
 		local:   fsio.LoadJSON(filepath.Join(filepath.Dir(configPath), "config.local.json"), nil),
 	}
-	dropEmptyShadows(&l)
-	merged = l.project
+	return mergeLayers(&l), l
+}
+
+// mergeLayers is the runtime config of l (schema default < global < project <
+// local), after dropping the empty shadows from l.
+func mergeLayers(l *layers) any {
+	dropEmptyShadows(l)
+	merged := l.project
 	if l.global != nil {
 		merged = Merge(l.global, merged)
 	}
 	if l.local != nil {
 		merged = Merge(merged, l.local)
 	}
-	return merged, l
+	return merged
 }
 
 // dropEmptyShadows removes an empty list from the project and local layers for

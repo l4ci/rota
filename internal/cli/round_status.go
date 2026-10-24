@@ -55,7 +55,7 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) 
 	e.Label = config.Label(cfg, "inProgress")
 	e.SupportLabel = config.Label(cfg, "support")
 	e.NeedsReview = config.Label(cfg, "needsReview")
-	e.Round, e.RoundErr = roundcfg.FromConfig(cfg)
+	e.Round, e.RoundErr = d.roundSettings(root, roundConfigUsage)
 	if !withForge {
 		return e
 	}
@@ -131,7 +131,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		d.Set("limits", lim)
 		d.Set("review", queuedRows(rep.Queued))
 		var lines []string
-		if set, err := roundcfg.FromConfig(c.deps().Config(root)); err == nil {
+		if set, ok := c.deps().tolerantRoundSettings(root); ok {
 			// Status ran without accounts; the quota read gets its own accounted env.
 			qc := accountedRoundEnv(c, ctx, root).QuotaCap(ctx, root, set) // one meter read serves the fallback and the cap
 			if st := qc.Fallback(set); st.Active {

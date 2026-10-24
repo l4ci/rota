@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/shlex"
@@ -430,7 +431,22 @@ func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 	r := h.herdr(ctx, "agent", "prompt", name, text,
 		"--wait", "--until", "working", "--until", "blocked", "--timeout", "60000")
 	if r.ExitCode == 0 {
-		return nil
+		status, kind := jget(r.Stdout, "result.agent.agent_status"), jget(r.Stdout, "result.agent.agent")
+		if hz, known := harness.Lookup(kind); known && kind != "" && !hz.PromptAcknowledgement().RequireEcho && (status == "working" || status == "blocked") {
+			return nil
+		}
+		pane := h.promptPane(ctx, name)
+		// A harness can remain at its empty startup prompt even when herdr's
+		// prompt RPC reports success (including a transient working status).
+		// Only an echo above the input line acknowledges a finished turn.
+		output := pane
+		if i := strings.LastIndexAny(pane, promptMarkers); i >= 0 {
+			output = pane[:i]
+		}
+		ack := briefTail(text) != "" && strings.Contains(squeeze(output), briefTail(text))
+		if ack || ((status == "working" || status == "blocked") && !harness.RequiresPromptEcho(kind, pane)) {
+			return nil
+		}
 	}
 	if jget(r.Stderr, "error.code") == "agent_blocked" {
 		return ErrDialogOpen
@@ -468,11 +484,12 @@ var pastePlaceholder = regexp.MustCompile(`\[Pasted text #\d+( \+\d+ lines)?\]`)
 // wraps do not matter.
 func (h *herdr) briefOnPrompt(ctx context.Context, name, text string) bool {
 	pane := h.promptPane(ctx, name)
-	i := strings.LastIndex(pane, promptMarker)
+	i := strings.LastIndexAny(pane, promptMarkers)
 	if i < 0 {
 		return false
 	}
-	prompt := pane[i+len(promptMarker):]
+	_, size := utf8.DecodeRuneInString(pane[i:])
+	prompt := pane[i+size:]
 	if pastePlaceholder.MatchString(prompt) {
 		return true
 	}
@@ -503,8 +520,6 @@ func (h *herdr) Draft(ctx context.Context, slot, handle, file string) string {
 	text, _ := readFile(file)
 	return humanDraft(h.draftPane(ctx, AgentName(slot, handle)), strings.TrimRight(text, "\n"))
 }
-
-const promptMarker = "\u276f"
 
 func squeeze(s string) string {
 	return strings.Join(strings.Fields(s), "")

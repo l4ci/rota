@@ -9,17 +9,17 @@ import (
 // (#1765): check reads the layers `config show` does.
 func TestCheckCountsLocalAndGlobalLayers(t *testing.T) {
 	root := layerRig(t,
-		`{"work":{"mergeStrategy":"pr"}}`,
-		`{"models":{"orchestrator":"opus"}}`,
-		`{"work":{"isolation":"worktree"}}`)
+		`{"docs":{"path":"doc"}}`,
+		`{"test":{"fast":[]}}`,
+		`{"learn":{"promoteThreshold":2}}`)
 	_, missing := Check(root)
-	for _, key := range []string{"work.isolation", "work.mergeStrategy"} {
+	for _, key := range []string{"learn.promoteThreshold", "docs.path"} {
 		if contains(missing, key) {
 			t.Errorf("%s reported missing though a layer sets it: %v", key, missing)
 		}
 	}
-	if !contains(missing, "models.worker") {
-		t.Errorf("models.worker set nowhere must stay missing: %v", missing)
+	if !contains(missing, "test.full") {
+		t.Errorf("test.full set nowhere must stay missing: %v", missing)
 	}
 }
 

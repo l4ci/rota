@@ -122,8 +122,10 @@ func TestSetupOffersGlobalAsDefault(t *testing.T) {
 	if v := cfgValue(t, dir, "work.mergeStrategy"); v != "pr" {
 		t.Errorf("work.mergeStrategy = %v, want global pr", v)
 	}
-	if v := cfgValue(t, dir, "work.isolation"); v != "branch" {
-		t.Errorf("work.isolation = %v, want schema default branch", v)
+	// --yes pins no taste key (#1786): the project inherits the global value,
+	// even an invalid one, rather than setup writing the fallback over it.
+	if raw := readConfig(t, dir); strings.Contains(raw, "isolation") {
+		t.Errorf("--yes pinned work.isolation:\n%s", raw)
 	}
 	_, out, _ := setupRun(t, t.TempDir(), "", false, "--list")
 	if !strings.Contains(out, "work.mergeStrategy") || !strings.Contains(out, "default pr") {
@@ -169,7 +171,7 @@ func TestSaveGlobalKeepsInheritedKeys(t *testing.T) {
 
 func TestConfigCheckNamesACorruptGlobal(t *testing.T) {
 	gdir := isolateGlobal(t)
-	writeFile(t, config.GlobalPath(gdir), `{"work":{"isolation":"worktree"}}`)
+	writeFile(t, config.GlobalPath(gdir), `{"docs":{"path":"manual"}}`)
 	dir := t.TempDir()
 	if code, _, e := initRun(t, dir, "init"); code != 0 {
 		t.Fatalf("init: %d %s", code, e)
@@ -188,7 +190,7 @@ func TestConfigCheckNamesACorruptGlobal(t *testing.T) {
 		t.Errorf("fill must name the corrupt global, not claim up to date: %q", fout)
 	}
 	raw, _ := os.ReadFile(filepath.Join(dir, ".rota", "config.json"))
-	if strings.Contains(string(raw), "isolation") {
+	if strings.Contains(string(raw), `"path"`) {
 		t.Errorf("fill pinned a default under a corrupt global:\n%s", raw)
 	}
 }

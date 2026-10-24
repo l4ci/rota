@@ -343,7 +343,7 @@ func TestCheckVerdicts(t *testing.T) {
 	}
 	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte("{}"), 0o644)
 	st, m := Check(root)
-	if st != Stale || len(m) == 0 || m[0] != "models.orchestrator" {
+	if st != Stale || len(m) == 0 || m[0] != "learn.promoteThreshold" {
 		t.Errorf("stale: %s %v", st, m)
 	}
 	cfg := fullConfig()
@@ -364,8 +364,8 @@ func TestCheckVerdicts(t *testing.T) {
 }
 
 func TestCheckCountsLocalFile(t *testing.T) {
-	root := project(t, "{}", `{"models": {"orchestrator": "x"}}`)
-	if st, m := Check(root); st != Stale || m[0] != "models.worker" {
+	root := project(t, "{}", `{"learn": {"promoteThreshold": 1}}`)
+	if st, m := Check(root); st != Stale || m[0] != "docs.path" {
 		t.Errorf("%s %v", st, m)
 	}
 }

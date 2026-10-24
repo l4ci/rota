@@ -416,6 +416,13 @@ git init -q --bare -b main "$TMP_WD/.rota/origin.git"
 W3_BRANCH="$(python3 -c 'import json,sys; print([s for s in json.load(open(sys.argv[1]))["slots"] if s["name"]=="w3"][0]["branch"])' "$TMP_WD/.rota/workers.json")"
 ( cd "$TMP_WD" && git remote add origin "$TMP_WD/.rota/origin.git" && git push -q origin main "$W3_BRANCH" ) \
   || fail "could not push the provenance fixture to its origin"
+# The bare origin's path names no forge: name the fake gh's forge (#889).
+python3 - "$TMP_WD/.rota/config.json" <<'PYEOF' || fail "could not set forge.provider"
+import json, sys
+d = json.load(open(sys.argv[1]))
+d["forge"] = {"provider": "github"}
+json.dump(d, open(sys.argv[1], "w"))
+PYEOF
 FAKE_PR_HEAD="$W3_BRANCH"; FAKE_PR_SHA="$(git -C "$TMP_WD" rev-parse "$W3_BRANCH")"
 set_relays() {
   python3 - "$TMP_WD/.rota/workers.json" "$1" <<'PYEOF' || fail "could not write relays fixture"

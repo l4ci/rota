@@ -65,22 +65,24 @@ func TestFillKeepsPresentAndUnknownKeys(t *testing.T) {
 	o := doc.(*jsonx.Object)
 	// present keys keep their order; added ones go before the first later sibling
 	// work.dispatch is migrated to round.dispatch first (#1097).
-	want := []string{"zzz", "work", "models", "round", "refactor", "learn", "ship", "qa", "autonomy", "docs", "git", "umbrella", "hvSkills", "rota", "test"}
+	// Only project keys are filled: models, work.isolation and the round keys
+	// are machine or taste keys (#1786).
+	want := []string{"zzz", "work", "models", "round", "learn", "docs", "git", "umbrella", "hvSkills", "rota", "test"}
 	if got := o.Keys(); !reflect.DeepEqual(got, want) {
 		t.Errorf("top keys %v", got)
 	}
 	models, _ := getObject(o, "models")
-	if !reflect.DeepEqual(models.Keys(), []string{"orchestrator", "worker"}) {
+	if !reflect.DeepEqual(models.Keys(), []string{"worker"}) {
 		t.Errorf("models keys %v", models.Keys())
 	}
 	if v, _ := Value(o, "models.worker"); v != "haiku" {
 		t.Errorf("present key overwritten: %v", v)
 	}
-	if v, _ := Value(o, "models.orchestrator"); v != "opus" {
-		t.Errorf("local layer leaked into config.json: %v", v)
+	if _, ok := walk(o, "models.orchestrator"); ok {
+		t.Errorf("local layer leaked into config.json: %v", o)
 	}
 	work, _ := getObject(o, "work")
-	if k := work.Keys(); !reflect.DeepEqual(k, []string{"custom", "isolation", "mergeStrategy"}) {
+	if k := work.Keys(); !reflect.DeepEqual(k, []string{"custom"}) {
 		t.Errorf("work keys %v", k)
 	}
 	if v, _ := Value(o, "round.dispatch"); v != "herdr" {
@@ -423,5 +425,38 @@ func TestInvalidValueErrorsNameTheValue(t *testing.T) {
 		if _, err := ForgeProvider(cfg); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: err = %v, want %q", tc.cfg, err, tc.want)
 		}
+	}
+}
+
+// #1786: fill writes the required project keys only; a machine or taste key
+// stays with the global config or the defaults.
+func TestFillWritesOnlyProjectKeys(t *testing.T) {
+	root := project(t, "", "")
+	filled, err := Fill(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range filled {
+		if ScopeOf(k) != ScopeProject {
+			t.Errorf("fill wrote the %s key %s", ScopeOf(k), k)
+		}
+	}
+	if raw := read(t, root); strings.Contains(raw, "accounts") || strings.Contains(raw, "isolation") {
+		t.Errorf("config.json:\n%s", raw)
+	}
+}
+
+// debug.competingHypotheses is removed (CHANGELOG): fill deletes it and the
+// debug object it leaves empty.
+func TestFillStripsCompetingHypotheses(t *testing.T) {
+	root := project(t, `{"debug": {"competingHypotheses": true}}`, "")
+	if got := Removed(root); !reflect.DeepEqual(got, []string{"debug.competingHypotheses"}) {
+		t.Fatalf("Removed before fill: %v", got)
+	}
+	if _, err := Fill(root); err != nil {
+		t.Fatal(err)
+	}
+	if raw := read(t, root); strings.Contains(raw, "debug") {
+		t.Errorf("fill left debug behind:\n%s", raw)
 	}
 }

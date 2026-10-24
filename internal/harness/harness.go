@@ -215,6 +215,31 @@ type PaneVocab struct {
 	Gutter bool
 }
 
+// PromptAcknowledgement describes the evidence a harness needs after a send.
+// Some TUIs can report activity while their prompt still holds no brief.
+type PromptAcknowledgement struct {
+	RequireEcho bool
+	EmptyPrompt string
+}
+
+// RequiresPromptEcho applies the known harness's policy. If an older host
+// omits its kind, a harness's empty-prompt text still identifies an unsent
+// brief without teaching the host any harness names or UI vocabulary.
+func RequiresPromptEcho(kind, pane string) bool {
+	if kind != "" {
+		if h, ok := Lookup(kind); ok {
+			return h.PromptAcknowledgement().RequireEcho
+		}
+	}
+	for _, k := range Kinds() {
+		p := Resolve(k).PromptAcknowledgement()
+		if p.RequireEcho && p.EmptyPrompt != "" && strings.Contains(pane, p.EmptyPrompt) {
+			return true
+		}
+	}
+	return false
+}
+
 // TierRule is how a kind's round.tiers.<kind> map is read.
 type TierRule struct {
 	// Required: the tier map must be configured (a kind that has no model of
@@ -341,6 +366,9 @@ type Harness interface {
 	// its line feeds as they are: tmux pastes a CR for each, which the TUI
 	// drops and the brief arrives as one line.
 	RawPaste() bool
+	// PromptAcknowledgement is the evidence required before a host may
+	// report that a submitted brief was accepted.
+	PromptAcknowledgement() PromptAcknowledgement
 	// AccountEnv is the environment that selects the slot's account.
 	AccountEnv(a Account) []string
 	// AmbientAccount is the account the orchestrator's own environment
