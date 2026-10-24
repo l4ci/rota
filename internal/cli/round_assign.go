@@ -4,13 +4,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/pystr"
 	"strings"
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
-	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -61,9 +61,9 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		set, err := roundcfg.FromConfig(c.deps().Config(root))
+		set, err := c.deps().roundSettings(root, roundConfigUsage)
 		if err != nil {
-			return Result{}, Usage("%s", err.Error())
+			return Result{}, err
 		}
 		ctx, stop := workerContext()
 		defer stop()
@@ -120,6 +120,10 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 			_, ferr := backlogFail(err)
 			f := jsonx.NewObject()
 			f.Set("changed", res.Changed)
+			if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && bd.BlockedBy == "dispatch" {
+				f.Set("blockedBy", bd.BlockedBy)
+				f.Set("slot", res.Agent)
+			}
 			return Result{Data: f}, ferr
 		}
 		for _, o := range res.Overlaps {

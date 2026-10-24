@@ -23,9 +23,6 @@
   "autonomy": {
     "level": "auto"
   },
-  "debug": {
-    "competingHypotheses": false
-  },
   "docs": {
     "path": "docs",
     "autoCreate": true,
@@ -42,17 +39,10 @@
     "afterWork": false
   },
   "issues": {
-    "providers": {
-      "github": true,
-      "gitlab": true
-    },
-    "provider": "github"
+    "source": "github"
   },
   "rota": {
     "version": "0.21.0"
-  },
-  "backlog": {
-    "backend": "issues"
   },
   "test": {
     "fast": [

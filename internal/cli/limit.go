@@ -21,7 +21,6 @@ import (
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
-	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -184,8 +183,8 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 			return accounts().Pick(ctx, root, []string{exclude})
 		},
 		IdleSlot: func(ctx context.Context, kind, account string) (string, bool) {
-			rc, err := roundcfg.FromConfig(c.deps().Config(root))
-			if err != nil {
+			rc, ok := c.deps().tolerantRoundSettings(root)
+			if !ok {
 				return "", false
 			}
 			// Tolerant: no idle slot is found in a corrupt registry (callback, no error return).
@@ -195,7 +194,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 			return round.IdleSlot(reg, active, kind, account)
 		},
 		Transfer: func(ctx context.Context, issue, to string) error {
-			rc, err := roundcfg.FromConfig(c.deps().Config(root))
+			rc, err := c.deps().roundSettings(root, roundConfigRequired)
 			if err != nil {
 				return err
 			}

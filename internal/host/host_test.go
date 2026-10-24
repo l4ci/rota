@@ -1434,7 +1434,7 @@ func ghostPaneFake(styled string, send func(a []string)) *fake {
 		if send != nil {
 			send(a)
 		}
-		if a[0] == "agent" && a[1] == "get" {
+		if a[0] == "agent" && (a[1] == "get" || a[1] == "prompt") {
 			return Result{Stdout: agentJSON("working")}
 		}
 		if a[0] == "capture-pane" || (a[0] == "agent" && a[1] == "read") {
@@ -1788,5 +1788,56 @@ func TestTmuxSendDismissesAutocompactPicker(t *testing.T) {
 	}
 	if f.count("tmux send-keys -t rota:w1 Escape") != 1 {
 		t.Errorf("want one Escape:\n%s", f.log())
+	}
+}
+
+// A successful RPC is not acknowledgement: Codex may still be at its empty
+// startup prompt when herdr reports the prompt call completed.
+func TestHerdrCodexSendRequiresAcknowledgement(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "brief.md")
+	os.WriteFile(file, []byte("--- ORCHESTRATOR (round 35) ---\nbuild issue 1800\n--- ROTA-SIG abc ---\n"), 0o600)
+	for _, status := range []string{"idle", "done", "working"} {
+		t.Run(status, func(t *testing.T) {
+			f := &fake{handler: func(_ string, a []string) Result {
+				switch a[1] {
+				case "read":
+					return Result{Stdout: "OpenAI Codex\n› Ask Codex to do anything\n"}
+				case "prompt":
+					return Result{Stdout: strings.Replace(agentJSON(status), `"agent_status":`, `"agent":"codex","agent_status":`, 1)}
+				}
+				return Result{}
+			}}
+			if err := New("herdr", deps(f, herdrEnv, &clock{})).Send(bg, "sam", "w9:t7", file); err != ErrNotSubmitted {
+				t.Fatalf("empty Codex prompt: Send = %v, want ErrNotSubmitted", err)
+			}
+		})
+	}
+}
+
+func TestHerdrCodexSendAcknowledgesFastCompletion(t *testing.T) {
+	text := "--- ORCHESTRATOR (round 35) ---\nbuild issue 1800\n--- ROTA-SIG abc ---\n"
+	file := filepath.Join(t.TempDir(), "brief.md")
+	os.WriteFile(file, []byte(text), 0o600)
+	for _, status := range []string{"working", "done", "idle"} {
+		t.Run(status, func(t *testing.T) {
+			sent := false
+			f := &fake{handler: func(_ string, a []string) Result {
+				switch a[1] {
+				case "read":
+					pane := "› Ask Codex to do anything\n"
+					if sent {
+						pane = "› " + text + "finished\n" + pane
+					}
+					return Result{Stdout: pane}
+				case "prompt":
+					sent = true
+					return Result{Stdout: strings.Replace(agentJSON(status), `"agent_status":`, `"agent":"codex","agent_status":`, 1)}
+				}
+				return Result{}
+			}}
+			if err := New("herdr", deps(f, herdrEnv, &clock{})).Send(bg, "sam", "w9:t7", file); err != nil {
+				t.Fatalf("acknowledged prompt: %v", err)
+			}
+		})
 	}
 }

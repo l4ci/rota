@@ -49,11 +49,13 @@ func issuesForge(t *testing.T, deps *Deps, origin string, reply map[string]strin
 }
 
 func TestIssuesProvider(t *testing.T) {
-	for origin, want := range map[string]string{"https://github.com/o/r.git": "github", "git@gitlab.com:o/r.git": "gitlab", "https://example.org/r.git": "unknown"} {
+	// a reader: an origin naming no forge is github, and the verb says so
+	for origin, want := range map[string]string{"https://github.com/o/r.git": "github", "git@gitlab.com:o/r.git": "gitlab", "https://example.org/r.git": "github"} {
 		root := issuesRepo(t, origin)
-		code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "provider")
-		if code != 0 || get(dataOf(env), "provider") != want {
-			t.Errorf("%s: %d %v", origin, code, env)
+		code, env, stderr := rotaRun(t, "--json", "-C", root, "issues", "provider")
+		assumed := strings.Contains(stderr, "origin https://example.org/r.git names no forge; assumed github")
+		if code != 0 || get(dataOf(env), "provider") != want || assumed != strings.Contains(origin, "example") {
+			t.Errorf("%s: %d %v %q", origin, code, env, stderr)
 		}
 	}
 	code, _, _ := rotaRun(t, "--json", "-C", t.TempDir(), "issues", "provider")
@@ -232,7 +234,7 @@ func TestIssuesScopeFollowsWorkingDirectory(t *testing.T) {
 		argv []string
 		want string
 	}{
-		{[]string{"-C", root, "issues", "provider"}, "unknown"},
+		{[]string{"-C", root, "issues", "provider"}, "local"}, // the umbrella has no origin
 		{[]string{"-C", filepath.Join(root, "web", "src"), "issues", "provider"}, "github"},
 		{[]string{"-C", filepath.Join(root, "web"), "issues", "provider", "--repo", "api"}, "gitlab"},
 		{[]string{"-C", root, "issues", "provider", "--repo", "web"}, "github"},

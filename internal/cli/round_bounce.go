@@ -8,7 +8,6 @@ import (
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
-	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
@@ -31,9 +30,9 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		set, err := roundcfg.FromConfig(c.deps().Config(root))
+		set, err := c.deps().roundSettings(root, roundConfigBounce)
 		if err != nil {
-			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
+			return Result{}, err
 		}
 		issue := worker.NormID(args[0])
 		if slotName, lead := bundleHolder(root, issue); lead != "" {

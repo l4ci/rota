@@ -21,10 +21,13 @@ import (
 // GlobalPath is the global config file under dir, the rota config dir.
 func GlobalPath(dir string) string { return filepath.Join(dir, "config.json") }
 
-// notGlobal are the keys a project owns: the version stamp, the base branch
-// and the umbrella switch describe one checkout, so saving or layering them
-// would misconfigure the next project.
-var notGlobal = map[string]bool{VersionKey: true, "git.baseBranch": true, "umbrella.enabled": true}
+// notGlobal is whether key is ProjectOwned in the schema: the version stamp,
+// the base branch and the umbrella switch describe one checkout, so saving or
+// layering them would misconfigure the next project.
+func notGlobal(key string) bool {
+	k, ok := SchemaKey(key)
+	return ok && k.ProjectOwned
+}
 
 // SaveGlobal merges the schema keys set in root's .rota/config.json (never
 // config.local.json) into the global config under dir. Keys the project does
@@ -87,7 +90,7 @@ func LoadGlobal(dir string) (map[string]any, error) {
 	}
 	vals := map[string]any{}
 	for _, k := range Keys {
-		if v, ok := walk(cfg, k.Name); ok && !notGlobal[k.Name] {
+		if v, ok := walk(cfg, k.Name); ok && !notGlobal(k.Name) {
 			vals[k.Name] = v
 		}
 	}
@@ -146,7 +149,7 @@ func MergeGlobal(dir string, vals map[string]any) ([]string, error) {
 		}
 		saved = saved[:0]
 		for _, k := range Keys {
-			if v, ok := vals[k.Name]; ok && !notGlobal[k.Name] {
+			if v, ok := vals[k.Name]; ok && !notGlobal(k.Name) {
 				cfg = fillKey(cfg, "", strings.Split(k.Name, "."), v)
 				saved = append(saved, k.Name)
 			}
@@ -164,7 +167,7 @@ var ErrGlobalNotObject = errors.New("the global config is not a JSON object")
 var ErrProjectOwned = errors.New("project-owned key, not a global one")
 
 // IsProjectOwned is whether key belongs to one project and never to the global config.
-func IsProjectOwned(key string) bool { return notGlobal[key] }
+func IsProjectOwned(key string) bool { return notGlobal(key) }
 
 // ShowGlobal lists the global config's own values, not the merged runtime
 // ones: every schema key in schema order, or the one key given. A key the
@@ -177,7 +180,7 @@ func ShowGlobal(dir, key string, one bool) ([]Entry, error) {
 	}
 	var out []Entry
 	for _, k := range Keys {
-		if notGlobal[k.Name] || (one && k.Name != key) {
+		if notGlobal(k.Name) || (one && k.Name != key) {
 			continue
 		}
 		e := Entry{Key: k.Name, Value: Default(k), Source: "default", Schema: &k}
@@ -195,7 +198,7 @@ func ShowGlobal(dir, key string, one bool) ([]Entry, error) {
 // SetGlobal is Set on the global config under dir, with the same validation. A
 // project-owned key is refused.
 func SetGlobal(dir, key, raw string) (SetResult, error) {
-	if notGlobal[key] {
+	if notGlobal(key) {
 		return SetResult{}, fmt.Errorf("%w %q", ErrProjectOwned, key)
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {

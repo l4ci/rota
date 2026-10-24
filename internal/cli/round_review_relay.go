@@ -33,9 +33,9 @@ func roundReviewRelay(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		set, err := roundcfg.FromConfig(c.deps().Config(root))
+		set, err := c.deps().roundSettings(root, roundConfigRequired)
 		if err != nil {
-			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
+			return Result{}, err
 		}
 		ctx, stop := workerContext()
 		defer stop()

@@ -453,6 +453,11 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 		opts.BodyFile = path
 		ctx, stop := workerContext()
 		defer stop()
+		opts, cleanTask, err := assignedTaskDispatch(c, ctx, root, opts)
+		if err != nil {
+			return Result{}, err
+		}
+		defer cleanTask()
 		res, err := workerEnvCtx(c, ctx).Dispatch(ctx, root, opts)
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)

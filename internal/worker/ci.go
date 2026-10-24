@@ -323,7 +323,10 @@ func (e Env) fullTier(ctx context.Context, root, name string, in gateInput) (ver
 			return e.RunVerifyWith(ctx, cfg.Full, dir, in.ledger)
 		}, false, "", nil
 	}
-	provider := e.detectProvider(ctx, root, "", cfg.Tracker.Provider)
+	provider, perr := e.detectProvider(ctx, root, "", cfg.Tracker.Provider, tracker.ForgeActor)
+	if perr != nil {
+		return nil, true, "test.fullWhere is ci, but " + perr.Error(), nil
+	}
 	if provider == tracker.ProviderLocal {
 		return nil, true, "test.fullWhere is ci, but the forge is local (forge.provider is local, or auto with no origin remote): there are no CI checks to read", nil
 	}

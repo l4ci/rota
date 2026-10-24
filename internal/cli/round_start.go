@@ -136,9 +136,9 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		set, err := roundcfg.FromConfig(c.deps().Config(root))
+		set, err := c.deps().roundSettings(root, roundConfigUsage)
 		if err != nil {
-			return Result{}, Usage("%s", err.Error())
+			return Result{}, err
 		}
 		if res, err := supportRoundStartStop(c, root, set); err != nil {
 			return res, err
@@ -270,9 +270,9 @@ func roundCandidates(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		set, err := roundcfg.FromConfig(c.deps().Config(root))
+		set, err := c.deps().roundSettings(root, roundConfigRequired)
 		if err != nil {
-			return Result{}, Usage("%s", err.Error())
+			return Result{}, err
 		}
 		sc, slate := round.ScopeOf(root, set, *scope)
 		if !roundcfg.ValidScope(sc) {
