@@ -210,16 +210,31 @@ def check_flag_consistency(skill_files, issues):
     if listed != flagged:
         issues.append(f"{conv.as_posix()}: flagged-skill list {sorted(listed)} differs from the "
                       f"disable-model-invocation flags set {sorted(flagged)}")
-    # A model-run step ("read and follow", "invoke", "dispatch") chaining into a flagged skill
-    # cannot run it; offering it for the user to type is fine.
-    chain = re.compile(r"(?i)\b(invoke|invokes|dispatch|dispatches|chain into|read and follow|hand off to|runs?)\b[^\n]{0,60}?`/?(%s)`" % "|".join(sorted(flagged)))
-    offer = re.compile(r"(?i)\b(offer|nudge|suggest|type|typed|manual|maintainer|user|print|tell|ask|never|when you want)")
-    for path in sorted(Path("skills").glob("*/*.md")):
-        own = path.relative_to("skills").parts[0]
-        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            hit = chain.search(line)
-            if hit and hit.group(2) != own and not offer.search(line):
-                issues.append(f"{path.as_posix()}:{n}: chains into flagged skill {hit.group(2)} (manual-only; offer it instead)")
+    # Another skill's text must not tell a model to run a flagged skill: it cannot. The only
+    # allowed form is an explicit offer for the user to type it. For each mention, the nearest
+    # verb before it decides: run-ish is a chain, "type"/"offer" is an offer.
+    if not flagged:
+        return
+    names = "|".join(sorted(flagged))
+    mention = re.compile(r"`/?(%s)\b" % names)
+    verbs = re.compile(r"(?i)(?<!-)\b(invoke[sd]?|invoking|dispatch(?:es|ed)?|chain(?:s|ed)? into|read and follow|hand(?:s)? off to|runs?|running|"
+                       r"start(?:s|ed)?|launch(?:es|ed)?|type|offer(?:s|ed)?)\b")
+    seen = set()
+    root = Path("skills").resolve()
+    files = [*Path("skills").glob("*/*.md"), *Path("skills").glob("*/*/*.md"), *Path("skills").glob("*/*/*/*.md")]
+    for path in sorted(files):
+        real = path.resolve()
+        if real in seen:
+            continue
+        seen.add(real)
+        own = real.relative_to(root).parts[0]
+        for n, line in enumerate(real.read_text(encoding="utf-8").splitlines(), 1):
+            for hit in mention.finditer(line):
+                clause = re.split(r"[.;:!?](?:\s|$)|[()\u2014]|\*\"", line[:hit.start()])[-1]
+                prior = [v.group(1).lower() for v in verbs.finditer(clause)]
+                if hit.group(1) != own and prior and prior[-1] not in ("type", "offer", "offers", "offered"):
+                    issues.append(f"{real.relative_to(root.parent).as_posix()}:{n}: chains into flagged skill {hit.group(1)} "
+                                  "(manual-only; tell the user to type it instead)")
 
 
 def check_pending_spec(skill_files, issues):
