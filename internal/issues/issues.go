@@ -52,7 +52,10 @@ type Forge interface {
 // takes dir's forge as kind resolves it (tracker.ResolveProvider), which can be
 // the local forge.
 func Provider(ctx context.Context, env Env, kind tracker.ForgeKind, dir string) (tracker.Resolution, error) {
-	s := tracker.SettingsFromConfig(env.Config)
+	s, err := tracker.ReadSettings(env.Config)
+	if err != nil {
+		return tracker.Resolution{}, err
+	}
 	if s.Source == "github" || s.Source == "gitlab" {
 		return tracker.Resolution{Provider: s.Source, How: tracker.HowConfig}, nil
 	}
@@ -87,7 +90,11 @@ func (e Env) adapter(ctx context.Context, provider, dir string) (Forge, error) {
 // tracker is what label and close act on: issues.source's own tracker when it
 // is not a forge (jira, linear, itsaplan), else the forge adapter of the resolved provider.
 func (e Env) tracker(ctx context.Context, verb, dir string) (Forge, error) {
-	if s := tracker.SettingsFromConfig(e.Config); s.Source == config.SourceJira || s.Source == config.SourceLinear || s.Source == config.SourceItsaplan {
+	s, err := tracker.ReadSettings(e.Config)
+	if err != nil {
+		return nil, err
+	}
+	if s.Source == config.SourceJira || s.Source == config.SourceLinear || s.Source == config.SourceItsaplan {
 		if e.Forge != nil {
 			return e.Forge(ctx, s.Source, dir)
 		}
