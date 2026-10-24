@@ -165,6 +165,14 @@ Affects rounds only. Free text, silent default `""` (nothing runs). `rota worker
 rota config set round.envSetup "npm ci"
 ```
 
+## round.sharedDirs: share dependency directories across worker worktrees
+
+Affects rounds only. List of paths relative to the repo root, silent default `[]` (nothing shared). `rota worker pool init` symlinks each from the main checkout into a new slot worktree and adds it to the repo's `info/exclude`, so the link does not show in `git status`. `rota round assign` re-applies it on a task dispatch into a parked slot: a link that vanished is made again, and a slot whose branch changed the lockfile (any of `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `uv.lock`, `poetry.lock`, `requirements*.txt`, `go.sum`, `Cargo.lock`, `bun.lockb`) stops sharing. Sharing is all or nothing per slot: when a lockfile differs from main's, a directory is missing in main or the slot holds a real one, rota removes the links it made and runs `round.envSetup` so the slot installs its own, and with sharing on `envSetup` runs only then. Both verbs report what happened in a `shared` array in `--json` (`slot`, `dir`, `action` of `linked`, `kept`, `unlinked` or `skipped`, and a `reason` for the last two). Go needs no entry: `GOMODCACHE` and `GOCACHE` are per user. For cargo, set `CARGO_TARGET_DIR` instead of linking `target/`.
+
+```bash
+rota config set round.sharedDirs '["node_modules"]'
+```
+
 ## round.portBase and round.portBlock: a port range per worker slot
 
 Affects rounds only. Integers, silent defaults `20000` and `100`. Each slot reserves one block of `round.portBlock` ports starting at the lowest range from `round.portBase` that no other slot's range overlaps; `pool init` records it as `portBase` and `portBlock` on the slot in `.rota/workers.json`. The slot keeps its block until `rota worker pool reap` or `rota round reclaim` drops it (the next dispatch picks a new one), and two live slots never share a port. A range that would pass 65535 is refused. Every slot's agent, and `round.envSetup` in its worktree, get four variables:

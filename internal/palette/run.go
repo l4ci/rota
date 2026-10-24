@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/tui"
 )
@@ -77,6 +78,11 @@ func RunDefault(cfg Config) error {
 	return nil
 }
 
+// childTick is how often an open screen hears a Tick. A screen that loads in
+// the background needs the driver's read deadline to learn its load finished;
+// a screen that refreshes itself chooses its own pace inside it.
+const childTick = 5 * time.Second
+
 // Run shows the palette until the person quits or an Ends entry has run.
 // internal/tui's driver owns the terminal and restores it on every way out.
 // An action runs on a cooked terminal so it can prompt; a terminal that
@@ -86,7 +92,7 @@ func Run(cfg Config) error {
 		return runLines(cfg)
 	}
 	t := tui.Terminal{
-		In: cfg.In, Out: cfg.Out, MakeRaw: cfg.MakeRaw, Style: tui.Style{Color: cfg.Color},
+		In: cfg.In, Out: cfg.Out, MakeRaw: cfg.MakeRaw, Style: tui.Style{Color: cfg.Color, Links: true}, Tick: childTick,
 		Signals: cfg.Signals, Exit: cfg.Exit,
 	}
 	if cfg.Width != nil {
@@ -120,6 +126,14 @@ func (m model) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 	if d, ok := msg.(tui.Done); ok {
 		if m.opening && d.Err == nil && *m.built != nil {
 			m.child, *m.built = *m.built, nil
+			m.opening = false
+			m.s = m.s.refresh()
+			// The driver starts only the root model, so the palette starts the
+			// screen it installs.
+			if st, ok := m.child.(tui.Starter); ok {
+				return m, st.Init()
+			}
+			return m, tui.Cmd{}
 		} else if d.Err != nil && m.opening {
 			m.msg = d.Err.Error()
 		}

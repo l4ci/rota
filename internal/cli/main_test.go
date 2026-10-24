@@ -74,6 +74,7 @@ func TestMain(m *testing.M) {
 func testDeps() *Deps {
 	d := defaultDeps()
 	d.RecordMistakes = false
+	d.OpenURL = func(string) error { return errors.New("no browser in tests") }
 	pinDay(d, goldenDay)
 	// doctor's disk check reads the real volume: pin a healthy one so a full
 	// developer disk does not add a line to every doctor golden (#85).

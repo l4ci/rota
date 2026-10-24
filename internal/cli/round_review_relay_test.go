@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/tracker"
@@ -241,5 +242,39 @@ func TestFailVerdictIgnoresAnUnparseableTimestamp(t *testing.T) {
 	}
 	if v := failVerdict(dir, "nia/577-x"); v != nil {
 		t.Fatalf("%+v", v)
+	}
+}
+
+// review-relay reads the round settings once, from the round env: a faked
+// Deps.RoundEnv decides the cap the verb reports, not a second config load.
+func TestRoundReviewRelayTakesSettingsFromRoundEnv(t *testing.T) {
+	dir := workerProject(t, ghCfg)
+	doneSlot(t, dir)
+	deps := useReviewForge(&reviewForge{})
+	base := deps.RoundEnv
+	deps.RoundEnv = func(ctx context.Context, root string) round.Env {
+		e := base(ctx, root)
+		e.Round.MaxBounces = 7
+		return e
+	}
+	code, out, errOut := rotaInWith(t, deps, dir, "round", "review-relay", "nia", "--json")
+	if d := data(t, out); code != 0 || d["max"] != 7.0 {
+		t.Fatalf("%d %v %s", code, d, errOut)
+	}
+}
+
+// An invalid round.* key keeps the verb's documented exit 3 (resolution).
+func TestRoundReviewRelayBadRoundConfigExits3(t *testing.T) {
+	dir := workerProject(t, ghCfg)
+	doneSlot(t, dir)
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"round":{"maxBounces":"many"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := roundcfg.FromConfig(config.Load(rotatree.Config(dir))); err == nil {
+		t.Skip("config still loads")
+	}
+	code, _, errOut := rotaInWith(t, useReviewForge(&reviewForge{}), dir, "round", "review-relay", "nia")
+	if code != 3 || !strings.Contains(errOut, "round.maxBounces") {
+		t.Fatalf("%d %s", code, errOut)
 	}
 }
