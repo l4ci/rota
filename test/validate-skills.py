@@ -196,6 +196,32 @@ def check_manual_only(path, text, issues):
         issues.append(f"{yaml_path.as_posix()}: needs policy.allow_implicit_invocation: false")
 
 
+def check_flag_consistency(skill_files, issues):
+    """The flagged set matches authoring-conventions, and no skill chains into a flagged one (#1897)."""
+    flagged = {s.parent.name for s in skill_files
+               if (spec_fields(s.read_text(encoding="utf-8")) or {}).get("disable-model-invocation") == "true"}
+    conv = Path("skills/references/authoring-conventions.md")
+    m = re.search(r"The set is (.+?)\. ", conv.read_text(encoding="utf-8")) if conv.is_file() else None
+    if not m:
+        issues.append(f"{conv.as_posix()}: no 'The set is ...' sentence naming the flagged skills")
+        listed = set()
+    else:
+        listed = set(re.findall(r"`(rota-[a-z]+)`", m.group(1)))
+    if listed != flagged:
+        issues.append(f"{conv.as_posix()}: flagged-skill list {sorted(listed)} differs from the "
+                      f"disable-model-invocation flags set {sorted(flagged)}")
+    # A model-run step ("read and follow", "invoke", "dispatch") chaining into a flagged skill
+    # cannot run it; offering it for the user to type is fine.
+    chain = re.compile(r"(?i)\b(invoke|invokes|dispatch|dispatches|chain into|read and follow|hand off to|runs?)\b[^\n]{0,60}?`/?(%s)`" % "|".join(sorted(flagged)))
+    offer = re.compile(r"(?i)\b(offer|nudge|suggest|type|typed|manual|maintainer|user|print|tell|ask|never|when you want)")
+    for path in sorted(Path("skills").glob("*/*.md")):
+        own = path.relative_to("skills").parts[0]
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            hit = chain.search(line)
+            if hit and hit.group(2) != own and not offer.search(line):
+                issues.append(f"{path.as_posix()}:{n}: chains into flagged skill {hit.group(2)} (manual-only; offer it instead)")
+
+
 def check_pending_spec(skill_files, issues):
     """A pending entry nothing uses any more must be deleted."""
     pending_keys, pending_long = pending_spec()
@@ -496,6 +522,7 @@ def main():
         check_checklist(skill_path, text, issues)
 
     check_pending_spec(skill_files, issues)
+    check_flag_consistency(skill_files, issues)
     check_reference_toc(issues)
     check_prose(issues)
 

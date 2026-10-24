@@ -1,12 +1,11 @@
 ---
 name: rota-docs
 description: Use on "update docs", "scaffold the docs", "sync the docs with recent changes", "restructure the docs", or "/rota-docs".
-disable-model-invocation: true
 ---
 
 # rota-docs — Maintain Public Docs
 
-Public-docs maintainer: first-run scaffold, after-work updates, restructure. Called by hand, by `/rota-ship` Step 8.6 (after-work, inline) and by `/rota-release`'s docs nudge. In a round it runs once, after wind-down, with no branch being shipped. `/rota-ship --docs` is a deprecated alias for this skill.
+Public-docs maintainer: first-run scaffold, after-work updates, restructure. Called by hand, by `/rota-ship` Step 8.6 (after-work, inline) and by `/rota-release`'s docs nudge. In a round each worker runs after-work in its own PR (`/rota-ship` Step 8.6); scaffold and restructure escalate to the maintainer there. `/rota-ship --docs` is a deprecated alias for this skill.
 
 Step labels D1–D6 and D-A1–D-A6 are cited elsewhere: keep them.
 
@@ -18,6 +17,8 @@ Step labels D1–D6 and D-A1–D-A6 are cited elsewhere: keep them.
 | Post-cycle, from `/rota-work` or Step 8.6 | After-work (propose updates) |
 | `/rota-refactor`, or `/rota-docs restructure` | Restructure (audit + reorganize) |
 | Manual invoke, no signal | First-run if missing; else after-work in manual mode (trigger gate bypassed, Step D1) |
+
+**Who may run which mode.** After-work runs anywhere, for any agent, including a round worker. First-run scaffold and restructure follow `autonomy.level` ([`references/autonomy.md`](references/autonomy.md)): `"off"` asks the user first; `"roundtrip"` and `"auto"` run them. In a round (a worker slot or the orchestrator), either mode escalates to the maintainer instead of running (`ROTA-BLOCKED` for a worker): a docs tree or a reorganisation is the maintainer's call.
 
 Shared three-mode skeleton with `/rota-qa`: `references/three-mode-skill-shape.md`.
 
@@ -73,7 +74,7 @@ Entered from Step 8.6 or manually per Step D1.
 
 **D-A4 — Map to pages and draft.** Per doc-relevant change pick an existing page or `*needs new page*` with a proposed path and one-line rationale (never auto-create in propose mode). Draft a unified-diff-shaped before/after fragment per page, anchored to a real H2. If no concrete edit is possible, mark it "*needs prose — author yourself*" and leave it out of the apply set. Before showing, run the self-audit in `references/humanizing-prose.md` on every `+` line (not `-` lines) and show the post-audit drafts.
 
-**D-A5 — Approval gate.** Show all drafts in one batch, then ask (header `"Docs"`, *"Apply these doc updates?"*): `"Apply all (Recommended)"` / `"Apply selectively"` (free text: page paths) / `"Skip"` (write nothing, don't advance the `docs:` marker) / `"Cancel"` (same as Skip for now). `docs.autoCreate: true` skips this gate and commits directly.
+**D-A5 — Approval gate.** In a round worker's PR there is no picker: apply every draft that has a concrete edit and list the pages touched under the PR body's Rulings. Otherwise show all drafts in one batch, then ask (header `"Docs"`, *"Apply these doc updates?"*): `"Apply all (Recommended)"` / `"Apply selectively"` (free text: page paths) / `"Skip"` (write nothing, don't advance the `docs:` marker) / `"Cancel"` (same as Skip for now). `docs.autoCreate: true` skips this gate and commits directly.
 
 **D-A6 — Commit.** Write the chosen edits without overwriting unrelated content, then one commit:
 
