@@ -832,6 +832,15 @@ assign in a `burn` column: the headroom the assign recorded minus the meter now,
 It reads the meters once per refresh for all accounts, and shows `n/a` for codex slots and accounts
 with no reading.
 
+## Two machines: main and support
+
+With `round.support` set, main labels issues for the support machine (`rota round support offer`)
+and the two orchestrators talk through the issue thread. The support machine hands back an issue
+it cannot work with `rota round support return <ID> --reason-file <f>`. Both `round watch` runs
+wake on the other machine's PR changes and comments, and main's merge gate accepts a support PR's
+approvals from relays the support orchestrator posted as issue comments. See
+`docs/contributing/rounds.md` (Support role) for the rules.
+
 ## Winding down
 
 ```sh
