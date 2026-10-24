@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/palette"
 	"github.com/l4ci/rota/internal/round"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -182,46 +183,92 @@ func TestRoundOverviewRefreshLifecycle(t *testing.T) {
 }
 
 // The palette installs a screen without being its root model: it must still
-// start the screen's first pass, and the result must reach the screen with no
-// further key.
+// start the screen's first pass, the pass must read the tracker under a context
+// that outlives the palette's own run() (paletteView returns before the screen
+// is shown), and the result must reach the screen with no further key. This
+// goes through the real entry: paletteVerb -> paletteView -> roundStatusView.
 func TestRoundOverviewFromPalette(t *testing.T) {
+	r := newPerfRig(t)
+	t.Setenv("TERM", "xterm")
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	os.Chdir(r.root)
 	pr, pw, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer pr.Close()
 	defer pw.Close()
-	local := roundSnap{Slots: []round.Row{{Name: "ben", Issue: "101", Branch: "ben/101-work"}}}
-	full := roundSnap{CandsLoaded: true, Host: "herdr", Slots: []round.Row{{Name: "ben", Issue: "101", Branch: "ben/101-work", HostState: "working"}},
-		IssueURLs: map[string]string{"101": "https://github.com/acme/project/issues/101"}}
-	load := func(context.Context) (roundSnap, error) { return full, nil }
+	c := &Ctx{Deps: r.deps, Stdin: pr, Stdout: io.Discard, Stderr: io.Discard}
+	entry := paletteVerb(c, Tree(), "Round status", "", palette.Always, "round", "status")
+	if entry.View == nil {
+		t.Fatal("round status has no palette view")
+	}
 	out := &syncBuf{}
 	done := make(chan error, 1)
 	go func() {
 		done <- palette.Run(palette.Config{
-			Entries: []palette.Entry{{Label: "Round status", Scope: palette.Always, View: func() (tui.Model, error) {
-				return openingScreen(newRoundScreen(local, load, time.Now, roundRefresh)), nil
-			}}},
-			InProject: true, In: pr, Out: out, Color: true,
+			Entries: []palette.Entry{entry}, InProject: true, In: pr, Out: out, Color: true,
 			MakeRaw: func() (func(), error) { return func() {}, nil },
 			Signals: make(chan os.Signal), Exit: func(int) {},
 		})
 	}()
 	pw.WriteString("1") // open the entry; no other key follows
-	deadline := time.After(5 * time.Second)
-	for !strings.Contains(out.String(), "updated ") {
+	deadline := time.After(10 * time.Second)
+	for !strings.Contains(tui.Strip(out.String()), "Support queue (3)") {
 		select {
 		case <-deadline:
 			t.Fatalf("the palette-hosted screen never loaded:\n%s", tui.Strip(out.String()))
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
-	if !strings.Contains(out.String(), "\x1b]8;;https://github.com/acme/project/issues/101\x1b\\") {
-		t.Errorf("palette frames lack the issue hyperlink: %q", out.String())
+	frame := out.String()
+	if strings.Contains(tui.Strip(frame[strings.LastIndex(frame, tui.ClearScreen):]), "context canceled") {
+		t.Errorf("a read ran under a cancelled context:\n%s", tui.Strip(frame))
+	}
+	if !strings.Contains(frame, "\x1b]8;;https://github.com/acme/project/issues/") {
+		t.Errorf("palette frames lack the issue hyperlinks: %q", frame)
 	}
 	pw.WriteString("qq")
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A Done from a screen that was closed must not reach the one opened after it,
+// and closing a screen cancels its pass.
+func TestRoundOverviewReopenDropsOldPass(t *testing.T) {
+	local := roundSnap{Slots: []round.Row{{Name: "ben", Issue: "101", Branch: "ben/101-work"}}}
+	cancelled := make(chan struct{})
+	load := func(ctx context.Context) (roundSnap, error) {
+		<-ctx.Done()
+		close(cancelled)
+		return roundSnap{}, ctx.Err()
+	}
+	first := openingScreen(newRoundScreen(local, load, time.Now, roundRefresh))
+	cmd := first.Init()
+	finished := make(chan error, 1)
+	go func() { finished <- cmd.Async(context.Background()) }()
+	for first.box.cancelSet() == false {
+		time.Sleep(time.Millisecond)
+	}
+	if _, q := press(first, "q"); !q.Quit {
+		t.Fatal("q did not leave")
+	}
+	select {
+	case <-cancelled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("leaving did not cancel the pass")
+	}
+	<-finished
+	second := openingScreen(newRoundScreen(local, load, time.Now, roundRefresh))
+	second2, _ := second.Update(tui.Done{Tag: cmd.Tag}) // the old pass reports in
+	out := tui.Strip(second2.Render(100, 20, tui.Style{}))
+	if !strings.Contains(out, "loading…") || strings.Contains(out, "updated ") {
+		t.Errorf("an old pass's Done reached the new screen:\n%s", out)
+	}
+	if _, again := press(second2, "r"); again.Async != nil {
+		t.Error("r on a screen whose first pass is running started a second")
 	}
 }
 
