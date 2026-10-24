@@ -131,3 +131,17 @@ func TestProvenanceOfferCiteOnlyOnSupportPR(t *testing.T) {
 		t.Errorf("a support PR citing an offer nobody posted: %s", res.Verdict)
 	}
 }
+
+// #1883: an offer citation the gate could not verify because the issue read
+// failed fails, naming the read error; the local relay log cannot hold an offer.
+func TestProvenanceUnverifiableOfferCiteFails(t *testing.T) {
+	broken := func(w *world) { w.forge("issueErr", "rate limited") }
+	body := "## Approvals\n- round support offer: main offered #7 to mac, the maintainer's call\n"
+	res := supportGateWith(t, true, body, broken)
+	if res.Verdict != GateProvenanceFail {
+		t.Fatalf("an unverifiable offer citation must fail: %s %s", res.Verdict, res.Err)
+	}
+	if !strings.Contains(res.Err, "rate limited") {
+		t.Errorf("the failure must name the read error: %s", res.Err)
+	}
+}

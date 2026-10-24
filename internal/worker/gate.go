@@ -1839,10 +1839,17 @@ func (g *gate) checkProvenance() (failMsg, brokeMsg string) {
 	}
 	relays, offered, support, err := g.supportApprovals()
 	if err != nil {
-		// Skip and note, never fail closed: the local relay log still checks
-		// every relay citation, and the offer citation is left unchecked.
+		// Relay citations fall back to the local relay log with a skip note.
+		// An offer citation cannot: the local log never holds one, so it
+		// fails, naming the read error (#1883).
 		g.res.Notes = append(g.res.Notes, fmt.Sprintf("PROVENANCE-SKIP %s — could not read the issue comments of %s (%v); checked against the local relay log only", g.o.Slot, g.pr, err))
-		relays, support = g.target.relays, false
+		if msg := CheckApprovals(body, g.target.relays); msg != "" {
+			return fmt.Sprintf("PROVENANCE-FAIL %s: %s", g.o.Slot, msg), ""
+		}
+		if msg := CheckApprovalsOffer(body, g.target.relays, false); msg != "" {
+			return fmt.Sprintf("PROVENANCE-FAIL %s: %s (issue read failed: %v)", g.o.Slot, msg, err), ""
+		}
+		return "", ""
 	}
 	check := CheckApprovals
 	if support {

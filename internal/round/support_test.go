@@ -298,6 +298,50 @@ func TestOfferSupport(t *testing.T) {
 	}
 }
 
+// The overview's support projection: labelled issues are waiting until a claim
+// from the support machine appears, and an unreadable claim never reads as
+// waiting.
+func TestSupportQueueGroupsWaitingActiveAndUnknown(t *testing.T) {
+	be := &fakeRemote{}
+	label := config.Label(nil, "support")
+	for _, id := range []string{"1", "2", "3", "4"} {
+		be.add(id, "work "+id, "", false, "")
+	}
+	for _, id := range []string{"1", "2", "3"} {
+		be.items[id].Labels = []string{label}
+	}
+	be.claims = map[string]string{"2": "mac-ben", "3": "main-kit"}
+	be.gone = map[string]bool{}
+	e := Env{SupportLabel: label}
+	got, err := e.SupportQueue(bg, be, "mac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []string
+	for _, s := range got {
+		state := "waiting"
+		switch {
+		case s.Unknown:
+			state = "unknown"
+		case s.Active():
+			state = "active " + s.Claim
+		}
+		lines = append(lines, s.ID+" "+state)
+	}
+	want := []string{"1 waiting", "2 active mac-ben", "3 waiting"}
+	if !reflect.DeepEqual(lines, want) {
+		t.Errorf("queue %v, want %v (a main claim is not support activity; unlabelled 4 is absent)", lines, want)
+	}
+	if got, _ := e.SupportQueue(bg, be, ""); got != nil {
+		t.Errorf("round.support empty must list nothing: %v", got)
+	}
+	be.gone["1"] = true
+	got, _ = e.SupportQueue(bg, be, "mac")
+	if len(got) == 0 || !got[0].Unknown || got[0].Active() {
+		t.Errorf("an unreadable claim must be unknown, not waiting: %+v", got)
+	}
+}
+
 // #1827 AC-1: the support machine hands an issue back with a reason comment
 // and loses the label; main and a held issue are refused.
 func TestReturnSupport(t *testing.T) {

@@ -85,7 +85,7 @@ func press(m tui.Model, names ...string) (tui.Model, tui.Cmd) {
 
 func TestRoundStatusScreenGolden(t *testing.T) {
 	clk := newClock()
-	load := func() (roundSnap, error) { return fixedSnap(), nil }
+	load := func(context.Context) (roundSnap, error) { return fixedSnap(), nil }
 	for _, keys := range [][]string{nil, {"j", "j", "j", "j"}, {"j", "j", "j", "j", "j", "j"}, {"j", "j", "j", "j", "j", "j", "j"}} {
 		m, _ := press(newRoundScreen(fixedSnap(), load, clk.now, roundRefresh), keys...)
 		golden.Check(t, roundGoldenIn{keys, rw, rh}, roundFrame(t, m))
@@ -115,14 +115,17 @@ func runCmd(m tui.Model, cmd tui.Cmd) tui.Model {
 	if cmd.Exec != nil {
 		err = cmd.Exec()
 	}
-	m, _ = m.Update(tui.Done{Err: err})
+	if cmd.Async != nil {
+		err = cmd.Async(context.Background())
+	}
+	m, _ = m.Update(tui.Done{Err: err, Tag: cmd.Tag})
 	return m
 }
 
 func TestRoundStatusScreenRefresh(t *testing.T) {
 	clk := newClock()
 	passes := 0
-	load := func() (roundSnap, error) {
+	load := func(context.Context) (roundSnap, error) {
 		passes++
 		s := fixedSnap()
 		s.Slots[1].HostState = "working"
@@ -131,17 +134,24 @@ func TestRoundStatusScreenRefresh(t *testing.T) {
 	var m tui.Model = newRoundScreen(fixedSnap(), load, clk.now, roundRefresh)
 
 	// A Tick right after the screen opened does nothing.
-	if _, cmd := m.Update(tui.Tick{}); cmd.Exec != nil {
+	if _, cmd := m.Update(tui.Tick{}); cmd.Async != nil {
 		t.Fatal("a Tick at t+0 refreshed")
 	}
 	// A Tick one interval later refreshes.
 	clk.advance(roundRefresh)
 	m2, cmd := m.Update(tui.Tick{})
-	if cmd.Exec == nil {
+	if cmd.Async == nil {
 		t.Fatal("a Tick after the interval did not refresh")
 	}
 	if !strings.Contains(tui.Strip(m2.Render(rw, rh, tui.Style{})), "refreshing…") {
 		t.Error("header does not say refreshing")
+	}
+	// r and a Tick while the pass runs start no second one.
+	if _, again := press(m2, "r"); again.Async != nil {
+		t.Fatal("r during a pass started an overlapping one")
+	}
+	if _, again := m2.Update(tui.Tick{}); again.Async != nil {
+		t.Fatal("a Tick during a pass started an overlapping one")
 	}
 	clk.advance(5 * time.Second) // the pass took as long as the interval
 	m = runCmd(m2, cmd)
@@ -152,11 +162,11 @@ func TestRoundStatusScreenRefresh(t *testing.T) {
 		t.Errorf("header not stamped with the clock:\n%s", tui.Strip(m.Render(rw, rh, tui.Style{})))
 	}
 	// The Tick that fell due while the pass ran must not start another at once.
-	if _, cmd := m.Update(tui.Tick{}); cmd.Exec != nil {
+	if _, cmd := m.Update(tui.Tick{}); cmd.Async != nil {
 		t.Fatal("a Tick right after a pass chased it")
 	}
 	// r refreshes whenever asked.
-	if _, cmd := press(m, "r"); cmd.Exec == nil {
+	if _, cmd := press(m, "r"); cmd.Async == nil {
 		t.Fatal("r did not refresh")
 	}
 }
@@ -164,7 +174,7 @@ func TestRoundStatusScreenRefresh(t *testing.T) {
 func TestRoundStatusScreenRefreshKeepsSelectionAndShowsFailure(t *testing.T) {
 	clk := newClock()
 	fail := false
-	load := func() (roundSnap, error) {
+	load := func(context.Context) (roundSnap, error) {
 		if fail {
 			return roundSnap{}, errors.New("forge: boom")
 		}
@@ -175,8 +185,8 @@ func TestRoundStatusScreenRefreshKeepsSelectionAndShowsFailure(t *testing.T) {
 	m, _ := press(newRoundScreen(fixedSnap(), load, clk.now, roundRefresh), "j") // dana
 	m2, cmd := press(m, "r")
 	m = runCmd(m2, cmd)
-	if out := tui.Strip(m.Render(rw, rh, tui.Style{})); !strings.Contains(out, "▸ dana") {
-		t.Errorf("selection moved off dana:\n%s", out)
+	if out := tui.Strip(m.Render(rw, rh, tui.Style{})); !strings.Contains(out, "› #543") {
+		t.Errorf("selection moved off dana (#543):\n%s", out)
 	}
 	fail = true
 	m2, cmd = press(m, "r")
@@ -184,6 +194,9 @@ func TestRoundStatusScreenRefreshKeepsSelectionAndShowsFailure(t *testing.T) {
 	out := tui.Strip(m.Render(rw, rh, tui.Style{}))
 	if !strings.Contains(out, "refresh failed: forge: boom") || !strings.Contains(out, "amy") {
 		t.Errorf("a failed refresh must keep the old rows and say so:\n%s", out)
+	}
+	if !strings.Contains(out, "updated 12:00:00") {
+		t.Errorf("a failed refresh must not restamp the data as fresh:\n%s", out)
 	}
 }
 
@@ -228,8 +241,11 @@ func TestRoundScreenBurnColumn(t *testing.T) {
 	s.Slots[0].Burn = &h
 	m := newRoundScreen(s, nil, newClock().now, roundRefresh)
 	out := strings.Join(roundFrame(t, m), "\n")
-	if !strings.Contains(out, "burn") || !strings.Contains(out, "62%") || !strings.Contains(out, "n/a") {
-		t.Errorf("burn column missing:\n%s", out)
+	if !strings.Contains(out, "burn: 62%") {
+		t.Errorf("burn missing from the selected row's detail:\n%s", out)
+	}
+	if out = tui.Strip(slotEntry(round.Row{Name: "dana", Issue: "9"}, nil).body); !strings.Contains(out, "burn: n/a") {
+		t.Errorf("unknown burn must read n/a:\n%s", out)
 	}
 }
 
@@ -256,7 +272,7 @@ func TestFillBurnFromLedger(t *testing.T) {
 		}}
 	}
 	rows := []round.Row{{Name: "ben", Issue: "12"}, {Name: "dana", Issue: "13"}, {Name: "nia", Issue: "14"}, {Name: "kit", Issue: "15"}, {Name: "ada"}}
-	fillBurn(&Ctx{Deps: d}, dir, rows)
+	fillBurn(context.Background(), &Ctx{Deps: d}, dir, rows)
 	// headroom now is 60: ben burned 80-60; nia's reset window floors at 0; a
 	// codex slot, an assign with no reading and an idle slot are n/a.
 	if rows[0].Burn == nil || *rows[0].Burn != 20 || rows[1].Burn != nil || rows[2].Burn == nil || *rows[2].Burn != 0 || rows[3].Burn != nil || rows[4].Burn != nil {
@@ -269,8 +285,8 @@ func TestFillBurnFromLedger(t *testing.T) {
 
 func TestStatusExternalRowShowsDerivedState(t *testing.T) {
 	r := round.Row{Name: "ext-1", Issue: "12", Branch: "codex/12-x", HostState: round.ExternalHost, State: "done"}
-	if line := tui.Strip(slotEntry(r).line); !strings.Contains(line, "external/done") {
-		t.Errorf("view line = %q", line)
+	if status := slotEntry(r, nil).status; !strings.Contains(status, "external/done") {
+		t.Errorf("view status = %q", status)
 	}
 	if got := jsonx.Str(rowList([]round.Row{r})[0].(*jsonx.Object), "state"); got != "done" {
 		t.Errorf("json state = %q", got)
