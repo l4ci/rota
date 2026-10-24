@@ -13,7 +13,7 @@ mkdir -p "$BNPROJ/.rota"
     && git remote add origin "$TMP_BN/origin.git" && git push -q origin main
 ) || fail "bundle fixture repo setup failed"
 printf 'stub worker contract\n' > "$TMP_BN/contract.md"
-printf '{"issues":{"source":"github","retryWaitSeconds":0},"round":{"dispatch":"tmux","brief":"%s","bundleMax":2},"test":{"fast":["echo fast"]}}\n' "$TMP_BN/contract.md" > "$BNPROJ/.rota/config.json"
+printf '{"issues":{"source":"github"},"round":{"dispatch":"tmux","brief":"%s","bundleMax":2},"test":{"fast":["echo fast"]}}\n' "$TMP_BN/contract.md" > "$BNPROJ/.rota/config.json"
 printf 'Welcome to Claude Code\n' > "$FKN/tmux/pane"
 : > "$FKN/tmux/log"
 

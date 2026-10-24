@@ -76,7 +76,7 @@ func shipFixture(t *testing.T, cfg string) string {
 	gitT(t, base, "init", "-q", "--bare", origin)
 	gitT(t, base, "init", "-q", "-b", "main", work)
 	if cfg == "" {
-		cfg = `{"forge": {"provider": "github"}, "issues": {"source": "file","retryWaitSeconds":0}}`
+		cfg = `{"forge": {"provider": "github"}, "issues": {"source": "file"}}`
 	}
 	write(t, filepath.Join(work, ".rota", "config.json"), cfg+"\n")
 	write(t, filepath.Join(work, ".rota", "BACKLOG.md"), `# TODO
@@ -200,7 +200,7 @@ func TestShipBody(t *testing.T) {
 // corpus; an ID the tracker does not know is listed bare.
 func TestShipBodyIssueMode(t *testing.T) {
 	shipDeterministic(t)
-	cfg := `{"forge": {"provider": "github"}, "issues": {"source": "github","retryWaitSeconds":0}}`
+	cfg := `{"forge": {"provider": "github"}, "issues": {"source": "github"}}`
 	work := shipFixture(t, cfg)
 	shipBranchOf(t, work, "feat/t",
 		[3]string{"a.txt", "feat: export [F07]", ""},
@@ -308,7 +308,7 @@ func TestShipPRFileMode(t *testing.T) {
 		{"gitlab", "https://gitlab.com/fake/repo/-/merge_requests/1"},
 	} {
 		t.Run(tc.prov, func(t *testing.T) {
-			cfg := `{"forge":{"provider":"` + tc.prov + `"},"issues":{"source":"file","retryWaitSeconds":0}}`
+			cfg := `{"forge":{"provider":"` + tc.prov + `"},"issues":{"source":"file"}}`
 			work := shipFixture(t, cfg)
 			shipBranchOf(t, work, "feat/x", [3]string{"x.txt", "work", ""})
 			f := shipPRForge(tc.url)
@@ -445,7 +445,7 @@ func TestShipPRIssueMode(t *testing.T) {
 	shipDeterministic(t)
 	for _, prov := range []string{"github", "gitlab"} {
 		t.Run(prov, func(t *testing.T) {
-			cfg := `{"forge": {"provider": "` + prov + `"}, "issues": {"source": "` + prov + `","retryWaitSeconds":0}}`
+			cfg := `{"forge": {"provider": "` + prov + `"}, "issues": {"source": "` + prov + `"}}`
 			work := shipFixture(t, cfg)
 			shipBranchOf(t, work, "feat/i", [3]string{"i.txt", "work", ""})
 			f := shipPRForge("https://x.test/pr/5")

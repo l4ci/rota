@@ -1121,7 +1121,7 @@ func TestTransferBriefCarriesTheTDDLine(t *testing.T) {
 // worker is refused before the sender is parked or the claim moves.
 func TestTransferPreflightRefusesBeforeMoving(t *testing.T) {
 	f := newMoveFx(t)
-	if err := os.WriteFile(filepath.Join(f.root, ".rota", "config.json"), []byte(`{"round":{"workerCommand":"claude \"oops"}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(f.root, ".rota", "config.json"), []byte(`{"round":{"commands":{"claude":"claude \"oops"}}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	branch := f.slot("ben").Branch()

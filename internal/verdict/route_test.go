@@ -41,8 +41,7 @@ func TestDebugNext(t *testing.T) {
 
 // TestRouteTable is the contract's routing table, row by row.
 func TestRouteTable(t *testing.T) {
-	off := Settings{QAGate: "advisory", Runner: "subagent"}
-	codex := Settings{Runner: "codex"}
+	off := Settings{QAGate: "advisory"}
 	blocking := Settings{QAGate: "blocking"}
 	unset := Settings{}
 	cases := []struct {
@@ -56,9 +55,6 @@ func TestRouteTable(t *testing.T) {
 
 		{"ship-second-opinion", off, Pass, NextContinue},
 		{"ship-second-opinion", off, Concerns, NextAsk},
-		{"ship-second-opinion", codex, Pass, NextContinue},
-		{"ship-second-opinion", codex, Concerns, NextSurface},
-		{"ship-second-opinion", codex, Fail, NextSurface},
 
 		{"ship-qa", off, Pass, NextContinue},
 		{"ship-qa", off, Concerns, NextSurface},
@@ -80,11 +76,11 @@ func TestRouteTable(t *testing.T) {
 }
 
 func TestAdvisory(t *testing.T) {
-	if Advisory("ship-review", Settings{Runner: "codex", QAGate: "advisory"}) {
+	if Advisory("ship-review", Settings{QAGate: "advisory"}) {
 		t.Error("ship-review is never advisory")
 	}
-	if !Advisory("ship-second-opinion", Settings{Runner: "codex"}) || Advisory("ship-second-opinion", Settings{Runner: "subagent"}) {
-		t.Error("second opinion is advisory only under the codex runner")
+	if Advisory("ship-second-opinion", Settings{}) {
+		t.Error("second opinion is never advisory")
 	}
 	if !Advisory("ship-qa", Settings{QAGate: "advisory"}) || Advisory("ship-qa", Settings{QAGate: "blocking"}) {
 		t.Error("qa is advisory unless qa.gate is blocking")

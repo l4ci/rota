@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/rotastate"
 )
 
@@ -127,17 +126,11 @@ func DefaultSmokeShards(cpus int) int {
 }
 
 // SmokeShards is the shard count test/gate.sh would use and where it came
-// from, in the gate's override order: ROTA_SMOKE_SHARDS (envVal), then
-// gate.smokeShards when the config sets it, else DefaultSmokeShards. A value
-// the gate would reject falls through to the next source.
-func SmokeShards(cfg any, envVal string, cpus int) (int, string) {
+// from, in the gate's override order: ROTA_SMOKE_SHARDS (envVal), else
+// DefaultSmokeShards. A value the gate would reject falls through.
+func SmokeShards(envVal string, cpus int) (int, string) {
 	if n, err := strconv.Atoi(envVal); err == nil && n >= 1 {
 		return n, "ROTA_SMOKE_SHARDS"
-	}
-	if _, ok := config.Lookup(cfg, "gate.smokeShards"); ok {
-		if n, err := config.Int(cfg, "gate.smokeShards", 1, 1<<20); err == nil {
-			return n, "gate.smokeShards"
-		}
 	}
 	return DefaultSmokeShards(cpus), fmt.Sprintf("default for %d cores", cpus)
 }

@@ -57,7 +57,7 @@ func TestSessionEnsureHerdrOutsideIsRefusedNotHandedOff(t *testing.T) {
 }
 
 func TestSessionEnsureOpensTheOperatorWindow(t *testing.T) {
-	dir := newProject(t, `{"models":{"orchestrator":"fable"}}`)
+	dir := newProject(t, `{"orchestrator":{"model":"fable"}}`)
 	instr := writeBrief(t, "go\n")
 	oh := &operatorHost{fakeHost: &fakeHost{name: "tmux"}}
 	st, err := (Env{NewHost: func(host.Kind) host.Host { return oh }}).SessionEnsure(bg, dir, SessionOpts{Session: "ops", BodyFile: instr, BootTimeout: 9})
@@ -70,7 +70,7 @@ func TestSessionEnsureOpensTheOperatorWindow(t *testing.T) {
 	}
 	// default session and command
 	oh2 := &operatorHost{fakeHost: &fakeHost{name: "tmux"}}
-	dir2 := newProject(t, `{"round":{"operatorCommand":"my-claude"}}`)
+	dir2 := newProject(t, `{"orchestrator":{"command":"my-claude"}}`)
 	(Env{NewHost: func(host.Kind) host.Host { return oh2 }}).SessionEnsure(bg, dir2, SessionOpts{})
 	if oh2.opts.Session != "rota" || oh2.opts.Command != "my-claude" || oh2.opts.BootTimeout != 60 {
 		t.Errorf("opts = %+v", oh2.opts)
@@ -112,7 +112,7 @@ func (o *operatorHost) Capabilities() host.Capabilities { return host.Capabiliti
 
 func TestOperatorCommandModelFollowsKeyDefault(t *testing.T) {
 	for i := range config.Keys {
-		if config.Keys[i].Name == "models.orchestrator" {
+		if config.Keys[i].Name == "orchestrator.model" {
 			defer func(d any) { config.Keys[i].Default = d }(config.Keys[i].Default)
 			config.Keys[i].Default = "orch-default"
 		}

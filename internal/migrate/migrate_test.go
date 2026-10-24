@@ -169,7 +169,7 @@ func TestMigratePace(t *testing.T) {
 	root := migProject(t, nil)
 	f := &trackertest.MS{Fake: &trackertest.Fake{}}
 	o, _, sleeps := newMig(t, root, true, f)
-	o.Cfg = migCfg(t, `{"issues": {"bulkPaceMs": 250}}`)
+	t.Setenv(BulkPaceEnv, "250")
 	res, err := Run(o)
 	if err != nil {
 		t.Fatal(err)
@@ -193,16 +193,14 @@ func TestMigratePace(t *testing.T) {
 		}
 	}
 	// no pace, no pause; a preview never pauses
-	for _, cfg := range []string{`{"issues": {"bulkPaceMs": 0}}`, `{"issues": {"bulkPaceMs": -5}}`} {
-		root = migProject(t, nil)
-		o, _, sleeps = newMig(t, root, true, &trackertest.MS{Fake: &trackertest.Fake{}})
-		o.Cfg = migCfg(t, cfg)
-		if _, err := Run(o); err != nil || len(*sleeps) != 0 {
-			t.Errorf("%s: %v, %d pauses", cfg, err, len(*sleeps))
-		}
+	t.Setenv(BulkPaceEnv, "0")
+	root = migProject(t, nil)
+	o, _, sleeps = newMig(t, root, true, &trackertest.MS{Fake: &trackertest.Fake{}})
+	if _, err := Run(o); err != nil || len(*sleeps) != 0 {
+		t.Errorf("pace 0: %v, %d pauses", err, len(*sleeps))
 	}
+	t.Setenv(BulkPaceEnv, "250")
 	o, _, sleeps = newMig(t, migProject(t, nil), false, nil)
-	o.Cfg = migCfg(t, `{"issues": {"bulkPaceMs": 250}}`)
 	if _, err := Run(o); err != nil || len(*sleeps) != 0 {
 		t.Errorf("preview paused %d times", len(*sleeps))
 	}

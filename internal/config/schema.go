@@ -161,21 +161,11 @@ func Backend(cfg any) (string, error) {
 }
 
 // Label returns the tracker label name for a role under issues.labels, such
-// as "inProgress" or "types.bug". The "inProgress" role falls back to the
-// legacy issues.label when issues.labels.inProgress is unset. A non-string
-// setting or an unknown role yields "", which no tracker label equals; Python
+// as "inProgress" or "types.bug". A non-string setting or an unknown role yields "", which no tracker label equals; Python
 // would hand back the raw value or raise KeyError there. An explicit "" is
 // returned as is: it does not fall back to the default, and callers do not
 // substitute one.
 func Label(cfg any, role string) string {
-	if role == "inProgress" {
-		if _, ok := walk(cfg, "issues.labels.inProgress"); !ok {
-			if legacy, ok := walk(cfg, "issues.label"); ok {
-				s, _ := legacy.(string)
-				return s
-			}
-		}
-	}
 	v, err := Value(cfg, "issues.labels."+role)
 	if err != nil {
 		return ""
@@ -272,11 +262,6 @@ var Prompts = []Prompt{
 	{Key: "ship.qa", Title: "Run QA before shipping?", Roles: mainOnly, Help: map[string]string{
 		"false": "no",
 		"true":  "yes, run /rota-qa",
-	}},
-	{Key: "round.workerKind", Title: "Which harness do round workers run on?", Optional: true, Help: map[string]string{
-		"claude":   "Claude Code",
-		"codex":    "Codex",
-		"opencode": "OpenCode",
 	}},
 	{Key: "orchestrator.harness", Title: "Which harness runs the round orchestrator?", Optional: true, Help: map[string]string{
 		"claude":   "Claude Code",

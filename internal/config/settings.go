@@ -91,10 +91,9 @@ func EscalateIssue(cfg any) (string, error) {
 	return strconv.Itoa(n), nil
 }
 
-// HandoffMaxAgeSeconds is orchestrator.handoffMaxAgeSeconds.
-func HandoffMaxAgeSeconds(cfg any) (int, error) {
-	return Int(cfg, "orchestrator.handoffMaxAgeSeconds", 1, MaxInt)
-}
+// HandoffMaxAgeSeconds is how old a handoff file may be and still be delivered
+// to a fresh session (the D1 hook and keepalive share it).
+const HandoffMaxAgeSeconds = 900
 
 // SwitchOnUsage is orchestrator.switchOnUsage.
 func SwitchOnUsage(cfg any) (bool, error) {
@@ -106,14 +105,13 @@ func UsageThreshold(cfg any) (int, error) {
 	return Int(cfg, "orchestrator.usageThreshold", 1, 100)
 }
 
-// FallbackSleepSeconds is limits.fallbackSleepSeconds.
-func FallbackSleepSeconds(cfg any) (int, error) {
-	return Int(cfg, "limits.fallbackSleepSeconds", 1, MaxInt)
-}
+// FallbackSleepSeconds is the hold when a limit message names no reset time
+// (limits and keepalive share it).
+const FallbackSleepSeconds = 1800
 
 // StringOrDefault returns a string key as written, or its schema default when
 // it is absent, null or empty. For keys whose empty string means "use the
-// default", such as models.worker.
+// default", such as round.tiers.claude.standard.
 func StringOrDefault(cfg any, key string) string {
 	if s := StringIfSet(cfg, key); s != "" {
 		return s

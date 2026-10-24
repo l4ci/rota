@@ -516,7 +516,7 @@ func TestHookStopContextGuardAutoBlocksUpToMax(t *testing.T) {
 		t.Fatalf("below the threshold: %d %q", code, out)
 	}
 	dumpAt(t, dir, 80)
-	for i := 0; i < 2; i++ { // orchestrator.handoffMaxBlocks defaults to 2
+	for i := 0; i < 2; i++ { // hook.HandoffMaxBlocks is 2
 		_, out, _ := rotaStdin(t, dir, stopPayload(dir, i > 0), "hook", "stop")
 		var m map[string]string
 		if err := json.Unmarshal([]byte(out), &m); err != nil || m["decision"] != "block" || !strings.Contains(m["reason"], "/rota-pause") || !strings.Contains(m["reason"], "task boundary") {

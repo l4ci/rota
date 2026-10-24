@@ -348,9 +348,9 @@ func TestSettingsFromConfig(t *testing.T) {
 	}{
 		{nil, def},
 		{parse(`{}`), def},
-		{parse(`{"forge":{"provider":null},"issues":{"source":null,"retryWaitSeconds":null}}`), def},
-		{parse(`{"forge":{"provider":"gitlab"},"issues":{"source":"jira","retryWaitSeconds":0.5,"labels":{"notPlanned":"wontfix"}}}`),
-			Settings{Provider: "gitlab", Source: "jira", RetryWait: 500 * time.Millisecond, NotPlannedLabel: "wontfix"}},
+		{parse(`{"forge":{"provider":null},"issues":{"source":null}}`), def},
+		{parse(`{"forge":{"provider":"gitlab"},"issues":{"source":"jira","labels":{"notPlanned":"wontfix"}}}`),
+			Settings{Provider: "gitlab", Source: "jira", RetryWait: 60 * time.Second, NotPlannedLabel: "wontfix"}},
 		// an unmigrated legacy config keeps deciding
 		{parse(`{"backlog":{"backend":"issues"},"issues":{"provider":"gitlab"}}`),
 			Settings{Provider: "gitlab", Source: "gitlab", RetryWait: 60 * time.Second, NotPlannedLabel: "not-planned"}},

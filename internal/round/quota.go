@@ -108,14 +108,14 @@ func (e Env) Headroom(ctx context.Context, root, kind string) string {
 
 // QuotaCap reads the account headroom behind the roster. The cap drops to the
 // slots already holding an issue when no pool a worker could run under has
-// headroom. A pool counts when its kind is the worker kind (round.workerKind,
+// headroom. A pool counts when its kind is the worker kind (the first round.harnesses entry,
 // else the default) or listed in round.harnesses; a kind without a usage meter
 // counts too once it has configured accounts.
 func (e Env) QuotaCap(ctx context.Context, root string, set roundcfg.Settings) Cap {
 	reg := worker.LoadRegistryTolerant(root) // no error return: a cap is advisory, the assign verb reads the registry strictly
 	active, _ := Members(reg, set)
 	c := Cap{Roster: len(active), Effective: len(active), why: map[string]string{}, resets: map[string]time.Time{}}
-	wk := set.WorkerKind
+	wk := set.DefaultKind()
 	if wk == "" {
 		wk = harness.Default
 	}
@@ -188,8 +188,8 @@ func (e Env) Fallback(ctx context.Context, root string, set roundcfg.Settings) F
 	return e.QuotaCap(ctx, root, set).Fallback(set)
 }
 
-// DefaultKind is the harness an issue with no pick resolves to: round.workerKind,
-// else the first of round.harnesses, else ""; the slot's kind and claude decide.
+// DefaultKind is the harness an issue with no pick resolves to: the first
+// of round.harnesses, else ""; the slot's kind and claude decide.
 func DefaultKind(set roundcfg.Settings) string { return set.DefaultKind() }
 
 // laterHarnesses is the harnesses after kind in round.harnesses, or all of

@@ -9,7 +9,7 @@ rota orchestrate --dry-run     # shows the command and first prompt
 
 | Harness | Command the launcher runs | First prompt | Skills load from |
 |---|---|---|---|
-| `claude` | `claude --model <models.orchestrator> --permission-mode auto` (or `round.operatorCommand`) | `/rota-orchestrate` | `.claude/skills`, `~/.claude/skills` |
+| `claude` | `claude --model <orchestrator.model> --permission-mode auto` (or `orchestrator.command`) | `/rota-orchestrate` | `.claude/skills`, `~/.claude/skills` |
 | `codex` | `codex` | `$rota-orchestrate` | `.agents/skills`, `~/.agents/skills` |
 | `hermes` | `hermes chat -s rota-orchestrate -q` | plain sentence naming the skill | `.agents/skills` and `.hermes/skills` after `hermes skills trust`; `~/.hermes/skills` |
 | `opencode` | `opencode --prompt` | plain sentence naming the skill | `.agents/skills`, `.claude/skills`, `.opencode/skills` and their `~/` twins |

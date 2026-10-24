@@ -127,7 +127,7 @@ func ubThree() []ubRepo {
 // hosts (web on GitHub, api on GitLab) leaves each tracker to its own repo's
 // forge (#797). It names web the home repo (milestone tracking issues): the fixture
 // registry is sorted by name, so the default home would be api.
-const ubCfg = `{"issues": {"source": "forge", "retryWaitSeconds": 0, "homeRepo": "web"}}`
+const ubCfg = `{"issues": {"source": "forge", "homeRepo": "web"}}`
 
 // ubcase is one scenario against an issue-backend umbrella.
 type ubcase struct {
@@ -434,9 +434,9 @@ func suiteUmbrella(t *testing.T) {
 				t.Errorf("web milestones %q", got)
 			}
 		}})
-	add(ubcase{name: "fieldset/home-repo-config", cfg: `{"issues": {"source": "forge", "retryWaitSeconds": 0, "homeRepo": "web"}}`,
+	add(ubcase{name: "fieldset/home-repo-config", cfg: `{"issues": {"source": "forge", "homeRepo": "web"}}`,
 		argv: j("item", "field", "set", "api:F1", "--name", "milestone", "--value", "M07"), want: 0, changed: yes()})
-	add(ubcase{name: "fieldset/home-repo-unregistered", cfg: `{"issues": {"source": "forge", "retryWaitSeconds": 0, "homeRepo": "ghost"}}`,
+	add(ubcase{name: "fieldset/home-repo-unregistered", cfg: `{"issues": {"source": "forge", "homeRepo": "ghost"}}`,
 		argv: j("item", "field", "set", "api:F1", "--name", "milestone", "--value", "M07"), want: 3})
 
 	// ---- create

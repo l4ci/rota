@@ -521,13 +521,13 @@ func TestAssignDefaultTierStartsTheWorkerOnItsModel(t *testing.T) {
 
 func TestAssignStandardTierFollowsModelsWorker(t *testing.T) {
 	f := newAssignFixture(t)
-	f.config(t, `{"models":{"worker":"haiku-ish"}}`)
+	f.config(t, `{"round":{"tiers":{"claude":{"standard":"haiku-ish"}}}}`)
 	res, err := f.assign("12", "ben", nil)
 	if err != nil || res.Model != "haiku-ish" || !strings.Contains(f.host.launch, "--model haiku-ish") {
 		t.Fatalf("one knob governs the standard model: %v %+v %q", err, res, f.host.launch)
 	}
 	g := newAssignFixture(t)
-	g.config(t, `{"models":{"worker":"haiku-ish"},"round":{"tiers":{"claude":{"standard":"explicit"}}}}`)
+	g.config(t, `{"round":{"tiers":{"claude":{"standard":"explicit"}}}}`)
 	if res, err := g.assign("12", "ben", nil); err != nil || res.Model != "explicit" {
 		t.Fatalf("an explicit tier value wins: %v %+v", err, res)
 	}
@@ -662,14 +662,14 @@ func TestAssignCodexResolvesAndStarts(t *testing.T) {
 	}
 }
 
-// round.workerKind is the project default: it beats a slot's stale kind,
+// the first round.harnesses entry is the project default: it beats a slot's stale kind,
 // loses to --kind, and is what autopilot (which passes no kind) gets.
 func TestAssignProjectWorkerKind(t *testing.T) {
 	f := newAssignFixture(t)
-	f.config(t, `{"round":{"dispatch":"herdr","workerKind":"codex","tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`)
+	f.config(t, `{"round":{"dispatch":"herdr","harnesses":["codex"],"tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`)
 	worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.Raw().Set("kind", "claude") })
 	res, err := f.assign("12", "ben", func(o *AssignOpts) { o.CheckOnly = true })
-	if err != nil || res.Kind != harness.Codex || res.KindSource != KindFromConfig || res.Model != "c-s" {
+	if err != nil || res.Kind != harness.Codex || res.KindSource != KindFromHarnesses || res.Model != "c-s" {
 		t.Fatalf("the project default beats the slot's stale kind: %v %+v", err, res)
 	}
 	res, err = f.assign("12", "ben", func(o *AssignOpts) { o.CheckOnly = true; o.Kind = "claude" })
@@ -679,7 +679,7 @@ func TestAssignProjectWorkerKind(t *testing.T) {
 }
 
 // An all-empty codex tier map is no model, not a refusal (#68): the default
-// command drops --model and Codex picks its own. A custom round.codexCommand
+// command drops --model and Codex picks its own. A custom round.commands.codex
 // holding {model} has nothing to fill in, so it is refused before the claim.
 // The unset map is no longer empty: it ships defaults (#953).
 func TestAssignCodexWithoutTierMap(t *testing.T) {
@@ -697,7 +697,7 @@ func TestAssignCodexWithoutTierMap(t *testing.T) {
 	}
 
 	g := newAssignFixture(t)
-	g.config(t, `{"round":{"dispatch":"herdr","codexCommand":"codex -m {model}","tiers":{"codex":{"light":"","standard":"","heavy":""}}}}`)
+	g.config(t, `{"round":{"dispatch":"herdr","commands":{"codex":"codex -m {model}"},"tiers":{"codex":{"light":"","standard":"","heavy":""}}}}`)
 	gr := &codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}
 	gr.install(g)
 	g.host.name = "herdr"
@@ -784,7 +784,7 @@ func TestAssignCodexSkipsAccounts(t *testing.T) {
 
 func TestAssignCustomWorkerCommandModelPlaceholder(t *testing.T) {
 	f := newAssignFixture(t)
-	f.config(t, `{"round":{"workerCommand":"mywrap --dangerously-skip-permissions"}}`)
+	f.config(t, `{"round":{"commands":{"claude":"mywrap --dangerously-skip-permissions"}}}`)
 	res, err := f.assign("12", "ben", nil)
 	if err != nil || res.Model != "" || res.Tier != "standard" || len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "{model}") {
 		t.Fatalf("a command without the placeholder warns and records the tier: %v %+v", err, res)
@@ -797,7 +797,7 @@ func TestAssignCustomWorkerCommandModelPlaceholder(t *testing.T) {
 	}
 
 	g := newAssignFixture(t)
-	g.config(t, `{"round":{"workerCommand":"mywrap --m {model} --dangerously-skip-permissions"}}`)
+	g.config(t, `{"round":{"commands":{"claude":"mywrap --m {model} --dangerously-skip-permissions"}}}`)
 	res, err = g.assign("12", "ben", func(o *AssignOpts) { o.Tier = "light" })
 	if err != nil || res.Model != "haiku" || len(res.Warnings) != 0 || g.host.launch != "mywrap --m haiku --dangerously-skip-permissions" {
 		t.Fatalf("placeholder filled: %v %+v %q", err, res, g.host.launch)

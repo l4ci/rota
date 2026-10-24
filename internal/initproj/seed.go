@@ -45,7 +45,9 @@ const reposSeed = `{"repos":[]}` + "\n"
 // prints.
 const configSeed = `{
   "issues": {
-    "label": "in-progress",
+    "labels": {
+      "inProgress": "in-progress"
+    },
     "autoCreateLabel": true
   }
 }

@@ -280,9 +280,7 @@ func TestBlocking(t *testing.T) {
 		{"spec fail newer than quality pass", []Record{q, rec(ReviewSpec, Fail, "a")}, "", ReviewSpec},
 		{"quality pass newer than spec fail, other sha", []Record{rec(ReviewSpec, Fail, "a"), q}, "", ""},
 		{"second opinion fail", []Record{rec(SecondOpinion, Fail, "a")}, "", SecondOpinion},
-		{"second opinion fail, codex advisory", []Record{rec(SecondOpinion, Fail, "a")}, "codex", ""},
 		{"review fail beats second opinion", []Record{rec(SecondOpinion, Fail, "a"), rec(ReviewSpec, Fail, "a")}, "", ReviewSpec},
-		{"review fail blocks under codex", []Record{rec(ReviewSpec, Fail, "a")}, "codex", ReviewSpec},
 		{"concerns", []Record{rec(ReviewQuality, Concerns, "a"), rec(SecondOpinion, Concerns, "a")}, "", ""},
 		{"qa never", []Record{rec(QA, Fail, "a"), rec(QA, InfraFail, "a")}, "", ""},
 		{"stale fail still blocks", []Record{rec(ReviewQuality, Fail, "old")}, "", ReviewQuality},
@@ -290,7 +288,7 @@ func TestBlocking(t *testing.T) {
 		{"newer second opinion pass clears", []Record{rec(SecondOpinion, Fail, "a"), rec(SecondOpinion, Pass, "b")}, "", ""},
 	}
 	for _, c := range cases {
-		r, ok := Blocking(c.list, Settings{Runner: c.runner})
+		r, ok := Blocking(c.list, Settings{})
 		if ok != (c.kind != "") || r.Kind != c.kind {
 			t.Errorf("%s: got %q %v, want %q", c.name, r.Kind, ok, c.kind)
 		}

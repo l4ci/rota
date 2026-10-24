@@ -255,45 +255,26 @@ func TestOrchestratorsAreAWiderSetThanWorkers(t *testing.T) {
 
 func TestClaudeOrchestratorCommand(t *testing.T) {
 	for doc, want := range map[string]string{
-		``:                                     "claude --model opus --permission-mode auto",
-		`{"models":{"orchestrator":"sonnet"}}`: "claude --model sonnet --permission-mode auto",
-		`{"round":{"operatorCommand":"wrap claude -x"}}`: "wrap claude -x",
+		``:                                    "claude --model opus --permission-mode auto",
+		`{"orchestrator":{"model":"sonnet"}}`: "claude --model sonnet --permission-mode auto",
+		`{"orchestrator":{"command":"wrap claude -x"}}`: "wrap claude -x",
 	} {
 		argv, err := (claude{}).Command(cfgOf(t, doc))
 		if err != nil || strings.Join(argv, " ") != want {
 			t.Errorf("%s: %q, %v want %q", doc, argv, err, want)
 		}
 	}
-	if _, err := (claude{}).Command(cfgOf(t, `{"round":{"operatorCommand":"wrap \"oops"}}`)); err == nil {
-		t.Error("an unbalanced operatorCommand must be an error")
+	if _, err := (claude{}).Command(cfgOf(t, `{"orchestrator":{"command":"wrap \"oops"}}`)); err == nil {
+		t.Error("an unbalanced orchestrator.command must be an error")
 	}
 }
 
 // The config table cannot import this package (harness imports config), so
-// the round.workerKind enum lists the kinds by hand. It must stay Kinds(), and
-// each kind needs a line in the setup prompt.
+// the plan.criticHarness enum lists the kinds by hand. It must stay Kinds().
 func TestWorkerKindEnumIsKinds(t *testing.T) {
-	var got []string
-	for _, k := range config.Keys {
-		if k.Name == "round.workerKind" {
-			got = k.Choices
-		}
-	}
-	if !slices.Equal(got, Kinds()) {
-		t.Errorf("round.workerKind enum %v, want %v", got, Kinds())
-	}
 	for _, k := range config.Keys {
 		if k.Name == "plan.criticHarness" && !slices.Equal(k.Choices, Kinds()) {
 			t.Errorf("plan.criticHarness enum %v, want %v", k.Choices, Kinds())
-		}
-	}
-	if p := config.PromptFor("round.workerKind"); p == nil {
-		t.Error("no setup prompt for round.workerKind")
-	} else {
-		for _, c := range p.Choices {
-			if c.Desc == "" {
-				t.Errorf("setup prompt: no help line for kind %s", c.Value)
-			}
 		}
 	}
 }

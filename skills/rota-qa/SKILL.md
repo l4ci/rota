@@ -11,7 +11,7 @@ description: Use on "/rota-qa", "run QA", "test the feature", "validate the buil
 
 Read `.rota/config.json`:
 
-- `models.orchestrator` — model dispatching the runners (default `opus`).
+- `orchestrator.model` — model dispatching the runners (default `opus`).
 - `qa.gate`, `qa.afterWork`, `ship.qa`, `ship.uat` — gate and hook flags, all off or advisory by default. When a caller or flag decides whether QA runs, read [`gates-and-modes.md`](gates-and-modes.md).
 
 ## When NOT to Use

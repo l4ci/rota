@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
 )
@@ -48,19 +47,6 @@ func readSetupSignals(c *Ctx, dir string, answered map[string]bool) map[string]s
 	if sig, ok := testSignals(dir); ok {
 		sigs["test.fast"] = sig[0]
 		sigs["test.full"] = sig[1]
-	}
-	var kinds []string
-	for _, k := range harness.Kinds() { // each kind is also its CLI's name
-		if onPath(k) {
-			kinds = append(kinds, k)
-		}
-	}
-	if len(kinds) > 0 {
-		ev := kinds[0] + " is on PATH"
-		if len(kinds) > 1 {
-			ev = strings.Join(kinds, ", ") + " are on PATH; first taken"
-		}
-		sigs["round.workerKind"] = setupSignal{kinds[0], ev}
 	}
 	if out, ok := run("worktree", "list", "--porcelain"); ok && strings.Count(out, "worktree ") > 1 {
 		sigs["work.isolation"] = setupSignal{"worktree", "the repo has linked worktrees (git worktree list)"}

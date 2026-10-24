@@ -30,12 +30,12 @@ func TestRequiredOnlyOnProjectKeys(t *testing.T) {
 // The audit's anchors: a key from each scope lands where #1786 puts it.
 func TestScopeOf(t *testing.T) {
 	for key, want := range map[string]Scope{
-		"round.accounts":   ScopeMachine,
-		"models.worker":    ScopeMachine,
-		"work.isolation":   ScopeTaste,
-		"issues.source":    ScopeProject,
-		"git.baseBranch":   ScopeProject,
-		"not.a.schema.key": "",
+		"round.accounts":     ScopeMachine,
+		"orchestrator.model": ScopeMachine,
+		"work.isolation":     ScopeTaste,
+		"issues.source":      ScopeProject,
+		"git.baseBranch":     ScopeProject,
+		"not.a.schema.key":   "",
 	} {
 		if got := ScopeOf(key); got != want {
 			t.Errorf("ScopeOf(%s) = %q, want %q", key, got, want)
@@ -73,8 +73,8 @@ func TestCheckReadsMergedConfig(t *testing.T) {
 func TestWarningsAndUnknown(t *testing.T) {
 	// debug.competingHypotheses is a removed key, not an unknown one; an
 	// unknown key in the global config warns, as the tracked file's fail.
-	root := layerRig(t, `{"models":{"worker":"opus"},"zzg":{"a":1}}`,
-		`{"round":{"slots":3},"work":{"isolation":"branch","mergeStrategy":"pr"},"ship":{"review":{"default":"full"}},"backlog":{"backend":"file"},"debug":{"competingHypotheses":true},"legacy":{"x":1},"models":5}`,
+	root := layerRig(t, `{"orchestrator":{"model":"opus"},"zzg":{"a":1}}`,
+		`{"round":{"slots":3},"work":{"isolation":"branch","mergeStrategy":"pr"},"ship":{"review":{"default":"full"}},"backlog":{"backend":"file"},"debug":{"competingHypotheses":true},"legacy":{"x":1},"orchestrator":5}`,
 		`{"work":{"workerSlots":2},"zzz":{}}`)
 	want := []string{"work.isolation is pinned at its default in .rota/config.json", "round.slots is a machine key in .rota/config.json", "zzg.a in the global config is not a config key (nothing reads it)"}
 	if got := Warnings(root); !reflect.DeepEqual(got, want) {

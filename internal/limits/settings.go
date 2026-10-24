@@ -15,12 +15,20 @@ const (
 	ModeSleep  = "sleep"
 )
 
+// DefaultMargin is how long past a reset time a resume waits, and
+// DefaultMaxResumes how many resumes one session gets before the failure
+// escalates.
+const (
+	DefaultMargin     = 60 * time.Second
+	DefaultMaxResumes = 3
+)
+
 // Settings are the limits.* keys plus the issue the failure escalates on.
 type Settings struct {
 	Mode          string           // limits.mode
-	Margin        time.Duration    // limits.resumeMarginSeconds, 0 or more
-	Fallback      time.Duration    // limits.fallbackSleepSeconds, 1 or more
-	MaxResumes    int              // limits.maxResumes, 1 or more
+	Margin        time.Duration    // DefaultMargin
+	Fallback      time.Duration    // config.FallbackSleepSeconds
+	MaxResumes    int              // DefaultMaxResumes
 	Prompt        string           // limits.resumePrompt
 	EscalateIssue tracker.IssueKey // orchestrator.escalateIssue (D2), empty means unset
 }
@@ -38,19 +46,7 @@ func LoadSettings(cfg any) (Settings, error) {
 		return s, fmt.Errorf("limits.mode must be switch or sleep (got %v)", v)
 	}
 	s.Mode = mode
-	margin, err := config.Int(cfg, "limits.resumeMarginSeconds", 0, config.MaxInt)
-	if err != nil {
-		return s, err
-	}
-	s.Margin = time.Duration(margin) * time.Second
-	fb, err := config.FallbackSleepSeconds(cfg)
-	if err != nil {
-		return s, err
-	}
-	s.Fallback = time.Duration(fb) * time.Second
-	if s.MaxResumes, err = config.Int(cfg, "limits.maxResumes", 1, config.MaxInt); err != nil {
-		return s, err
-	}
+	s.Margin, s.Fallback, s.MaxResumes = DefaultMargin, config.FallbackSleepSeconds*time.Second, DefaultMaxResumes
 	raw, err := config.EscalateIssue(cfg)
 	if err != nil {
 		return s, err

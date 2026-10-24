@@ -407,7 +407,6 @@ func verdictRoute(fs *flag.FlagSet) RunFunc {
 		cfg := c.deps().Config(t.root)
 		s := verdict.Settings{
 			QAGate: config.String(cfg, "qa.gate"),
-			Runner: config.String(cfg, "ship.secondOpinionRunner"),
 		}
 		next := verdict.Route(*consumer, r.Verdict, s)
 		d := jsonx.NewObject()

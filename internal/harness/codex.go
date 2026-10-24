@@ -37,9 +37,9 @@ const hookTrustFlag = "--dangerously-bypass-hook-trust"
 type codex struct{}
 
 func (codex) Kind() string       { return Codex }
-func (codex) CommandKey() string { return "round.codexCommand" }
+func (codex) CommandKey() string { return "round.commands.codex" }
 
-// Launch is round.codexCommand, else the default launch line. A model fills
+// Launch is round.commands.codex, else the default launch line. A model fills
 // {model}. The default without a model drops its `--model {model}` pair and
 // Codex picks its own; a custom command that still holds {model} then has
 // nothing to put there, which is a usage error. A custom command without the
@@ -52,7 +52,7 @@ func (c codex) Launch(cfg any, model string) (string, error) {
 	if model == "" {
 		if custom {
 			if strings.Contains(cmd, ModelPlaceholder) {
-				return "", refuse(Usage, "round.codexCommand holds {model} but no model was chosen: pass a tier model (round assign) or drop the placeholder")
+				return "", refuse(Usage, "round.commands.codex holds {model} but no model was chosen: pass a tier model (round assign) or drop the placeholder")
 			}
 			return cmd, nil
 		}
@@ -61,7 +61,7 @@ func (c codex) Launch(cfg any, model string) (string, error) {
 	return strings.ReplaceAll(cmd, ModelPlaceholder, model), nil
 }
 
-// NeedsModel: only a custom round.codexCommand that holds {model} does (Launch
+// NeedsModel: only a custom round.commands.codex that holds {model} does (Launch
 // refuses it with none).
 func (c codex) NeedsModel(cfg any) bool {
 	_, err := c.Launch(cfg, "")
@@ -164,9 +164,9 @@ func (codex) PaneVocab() PaneVocab { return PaneVocab{} }
 func (codex) Tiers() TierRule { return TierRule{} }
 
 // Configured is whether the project uses Codex at all: a Codex tier map, a
-// named Codex home, a custom Codex command or Codex as the default worker kind.
+// named Codex home, a custom Codex command or Codex as the first round.harnesses entry.
 func (c codex) Configured(cfg any) bool {
-	if config.StringIfSet(cfg, "round.workerKind") == Codex {
+	if ProjectKind(cfg) == Codex {
 		return true
 	}
 	if TierMapSet(cfg, Codex) {
@@ -403,7 +403,7 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 		for i, m := range miss {
 			names[i] = m.Flag
 		}
-		r := refuse(Refused, "codex --help does not list %s, which the launch line uses; update codex or change round.codexCommand", strings.Join(names, ", "))
+		r := refuse(Refused, "codex --help does not list %s, which the launch line uses; update codex or change round.commands.codex", strings.Join(names, ", "))
 		r.BlockedBy = BlockCodexFlags
 		return set, r
 	}

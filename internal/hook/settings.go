@@ -22,13 +22,21 @@ import (
 // Settings are the orchestrator.* config keys (the contract's Config section).
 type Settings struct {
 	Threshold      int // handoffThreshold, percent 1..100
-	StateMaxAge    int // stateMaxAgeSeconds
-	HandoffMaxAge  int // handoffMaxAgeSeconds
-	HandoffMaxBlks int // handoffMaxBlocks
+	StateMaxAge    int // StateMaxAgeSeconds
+	HandoffMaxAge  int // config.HandoffMaxAgeSeconds
+	HandoffMaxBlks int // HandoffMaxBlocks
 
 	SwitchOnUsage  bool // switchOnUsage (D4, #206)
 	UsageThreshold int  // usageThreshold, percent 1..100
 }
+
+// StateMaxAgeSeconds is how old the statusline state file may be and still
+// count as current.
+const StateMaxAgeSeconds = 120
+
+// HandoffMaxBlocks is how many times the Stop hook blocks a stop to ask for a
+// handoff before it lets the session end.
+const HandoffMaxBlocks = 2
 
 // LoadSettings reads and validates the orchestrator.* keys from a merged
 // config. The hooks treat an error as a pass; doctor and verbs report it.
@@ -39,15 +47,7 @@ func LoadSettings(cfg any) (Settings, error) {
 	if s.Threshold, err = get("orchestrator.handoffThreshold", 1, 100); err != nil {
 		return s, err
 	}
-	if s.StateMaxAge, err = get("orchestrator.stateMaxAgeSeconds", 1, config.MaxInt); err != nil {
-		return s, err
-	}
-	if s.HandoffMaxAge, err = config.HandoffMaxAgeSeconds(cfg); err != nil {
-		return s, err
-	}
-	if s.HandoffMaxBlks, err = get("orchestrator.handoffMaxBlocks", 0, 1000); err != nil {
-		return s, err
-	}
+	s.StateMaxAge, s.HandoffMaxAge, s.HandoffMaxBlks = StateMaxAgeSeconds, config.HandoffMaxAgeSeconds, HandoffMaxBlocks
 	if s.SwitchOnUsage, err = config.SwitchOnUsage(cfg); err != nil {
 		return s, err
 	}

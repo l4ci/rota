@@ -196,7 +196,7 @@ Drop a JSON file at `.rota/config.local.json` to override any setting from `.rot
 }
 ```
 
-This overrides `autonomy.level` and `models.worker` while inheriting every other key (including `models.orchestrator`) from the shared `config.json`. Typical uses: per-developer autonomy preferences, model selection for cost or latency, or experimenting with a setting before committing it to the team default.
+This overrides `autonomy.level` and `round.tiers.claude.standard` while inheriting every other key (including `orchestrator.model`) from the shared `config.json`. Typical uses: per-developer autonomy preferences, model selection for cost or latency, or experimenting with a setting before committing it to the team default.
 
 ### Opting out: fully private backlog
 

@@ -17,28 +17,28 @@ import (
 type claude struct{}
 
 func (claude) Kind() string       { return Claude }
-func (claude) CommandKey() string { return "round.workerCommand" }
+func (claude) CommandKey() string { return "round.commands.claude" }
 
-// Launch is round.workerCommand, else the default launch line. Workers run with
+// Launch is round.commands.claude, else the default launch line. Workers run with
 // permissions skipped: the contract asks them to git add, git commit, gh pr
 // create and run tests, every one of which prompts under a narrower mode with
 // nobody in the pane to answer. Scope, not gating, bounds a worker: it owns a
 // throwaway branch in its own worktree, and the gate re-verifies the merged
 // tree before anything reaches the cycle branch. Override via
-// round.workerCommand to narrow it; NEEDS-PERMISSION stays in the classifier
+// round.commands.claude to narrow it; NEEDS-PERMISSION stays in the classifier
 // for exactly that case, so a narrowed mode stalls loudly.
 //
-// A model chosen for the dispatch (a round's tier, C9) replaces models.worker
+// A model chosen for the dispatch (a round's tier, C9) replaces round.tiers.claude.standard
 // in the default command and fills the {model} placeholder of a custom one; a
 // custom command without the placeholder runs as written (ModelApplies).
 func (claude) Launch(cfg any, chosen string) (string, error) {
-	model := config.StringOrDefault(cfg, "models.worker")
+	model := config.StringOrDefault(cfg, TierKey(Claude, "standard"))
 	if chosen != "" {
 		model = chosen
 	} else if inheritsModel(cfg) {
 		model = ""
 	}
-	if s := config.StringIfSet(cfg, "round.workerCommand"); s != "" {
+	if s := config.StringIfSet(cfg, "round.commands.claude"); s != "" {
 		if model == "" {
 			// Stripping the flag leaves a gap; collapse it on this path only.
 			s = strings.Join(strings.Fields(modelFlag.ReplaceAllString(s, "")), " ")
@@ -65,7 +65,7 @@ func inheritsModel(cfg any) bool {
 func (claude) NeedsModel(cfg any) bool { return !inheritsModel(cfg) }
 
 // ModelApplies: the default command always takes the model, a custom
-// round.workerCommand only through the {model} placeholder.
+// round.commands.claude only through the {model} placeholder.
 func (c claude) ModelApplies(cfg any) bool { return placeholderApplies(cfg, c.CommandKey()) }
 
 func placeholderApplies(cfg any, key string) bool {
@@ -165,10 +165,10 @@ func (claude) PaneVocab() PaneVocab {
 	}
 }
 
-// Tiers: claude must name every tier, and an unset standard tier takes
-// models.worker, so that one knob governs the standard model.
+// Tiers: claude must name every tier; round.tiers.claude.standard defaults to
+// sonnet, so an unset tier map still launches a model.
 func (claude) Tiers() TierRule {
-	return TierRule{Required: true, StandardFallback: "models.worker", Profile: true}
+	return TierRule{Required: true, Profile: true}
 }
 
 // Configured: Claude is every project's baseline worker.
@@ -218,20 +218,20 @@ func (claude) RelayKey(func() (string, error), string) ([]byte, error) { return 
 
 func (claude) Sign(_ []byte, payload string) string { return payload }
 
-// The orchestrator facet: a fresh session on models.orchestrator in `auto`
+// The orchestrator facet: a fresh session on orchestrator.model in `auto`
 // mode (the orchestrator merges and talks to the user, so it keeps a gate the
-// workers do not), or round.operatorCommand when set.
+// workers do not), or orchestrator.command when set.
 func (claude) Name() string   { return Claude }
 func (claude) Prompt() string { return "/rota-orchestrate" }
 func (claude) Command(cfg any) ([]string, error) {
-	if s := config.StringIfSet(cfg, "round.operatorCommand"); s != "" {
+	if s := config.StringIfSet(cfg, "orchestrator.command"); s != "" {
 		argv, err := shlex.Split(s)
 		if err != nil || len(argv) == 0 {
-			return nil, fmt.Errorf("round.operatorCommand is not a command line: %q", s)
+			return nil, fmt.Errorf("orchestrator.command is not a command line: %q", s)
 		}
 		return argv, nil
 	}
-	model := config.StringOrDefault(cfg, "models.orchestrator")
+	model := config.StringOrDefault(cfg, "orchestrator.model")
 	return []string{"claude", "--model", model, "--permission-mode", "auto"}, nil
 }
 

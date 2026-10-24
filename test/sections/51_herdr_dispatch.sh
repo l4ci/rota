@@ -191,21 +191,21 @@ RC=0
 [ "$RC" = "5" ] || fail "herdr dispatch from outside a herdr pane should exit 5 (host not usable), got $RC"
 
 cp "$TMP_HD/repo/.rota/config.json" "$TMP_HD/config.bak"
-printf '{"round":{"dispatch":"herdr","workerCommand":"FOO=1 claude --model haiku --settings s.json"}}\n' \
+printf '{"round":{"dispatch":"herdr","commands":{"claude":"FOO=1 claude --model haiku --settings s.json"}}}\n' \
   > "$TMP_HD/repo/.rota/config.json"
 : >"$FAKE/log"
 hd "$ROTA_BIN" worker dispatch w1 --body-file "$TMP_HD/brief.md" >/dev/null \
-  || fail "dispatch with a custom workerCommand failed"
+  || fail "dispatch with a custom round.commands.claude failed"
 grep -q -- '--env FOO=1 --env CLAUDE_CONFIG_DIR=/acct/one --env ROTA_SLOT=w1 --env ROTA_PORT_BASE=[0-9]* --env ROTA_PORT_BLOCK=[0-9]* --env ROTA_DB_SUFFIX=_w1$' "$FAKE/log" \
-  || fail "leading env assignments in workerCommand must become tab --env; log: $(cat "$FAKE/log")"
+  || fail "leading env assignments in round.commands.claude must become tab --env; log: $(cat "$FAKE/log")"
 grep -q -- '-- --model haiku --settings s.json$' "$FAKE/log" \
-  || fail "workerCommand args must pass through to agent start; log: $(cat "$FAKE/log")"
-printf '{"round":{"dispatch":"herdr","workerCommand":"my-wrapper --x"}}\n' > "$TMP_HD/repo/.rota/config.json"
+  || fail "round.commands.claude args must pass through to agent start; log: $(cat "$FAKE/log")"
+printf '{"round":{"dispatch":"herdr","commands":{"claude":"my-wrapper --x"}}}\n' > "$TMP_HD/repo/.rota/config.json"
 RC=0
 hd "$ROTA_BIN" worker dispatch w1 --body-file "$TMP_HD/brief.md" >/dev/null 2>&1 || RC=$?
-[ "$RC" = "5" ] || fail "a workerCommand that does not run claude should exit 5 under herdr, got $RC"
+[ "$RC" = "5" ] || fail "a round.commands.claude that does not run claude should exit 5 under herdr, got $RC"
 cp "$TMP_HD/config.bak" "$TMP_HD/repo/.rota/config.json"
-pass "worker dispatch: outside herdr refused; workerCommand env + args map onto tab/agent start"
+pass "worker dispatch: outside herdr refused; round.commands.claude env + args map onto tab/agent start"
 
 # ── (c) startup dialogs ─────────────────────────────────────────────────────
 # Bypass Permissions puts "No, exit" first; folder trust puts "Yes" first. A

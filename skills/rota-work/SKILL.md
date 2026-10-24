@@ -13,8 +13,8 @@ Main-session-driven implementation with per-task verification and commits. Subag
 
 Read `.rota/config.json`:
 
-- `models.orchestrator`: main session model: planning and verification (Claude default `opus`)
-- `models.worker`: the `standard` tier: implementation subagents (Claude default `sonnet`; Codex uses `round.tiers.codex.standard` or its harness default)
+- `orchestrator.model`: main session model: planning and verification (Claude default `opus`)
+- `round.tiers.claude.standard`: the `standard` tier: implementation subagents (Claude default `sonnet`; Codex uses `round.tiers.codex.standard` or its harness default)
 - `work.isolation`: `"branch"` (default) or `"worktree"`
 - `work.mergeStrategy`: `"direct"` (default) or `"pr"`
 

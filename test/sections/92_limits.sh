@@ -40,7 +40,7 @@ for a in cfg-a cfg-b; do
   echo '{"claudeAiOauth":{"accessToken":"t"}}' > "$TMP_LM/$a/.credentials.json"
 done
 lm_cfg() { # lm_cfg [<extra top-level json members, with a leading comma>]
-  printf '{"forge":{"provider":"github"},"issues":{"source":"github","retryWaitSeconds":0},"round":{"dispatch":"tmux","accounts":[{"name":"a","configDir":"%s/cfg-a"},{"name":"b","configDir":"%s/cfg-b"}],"brief":"%s"}%s}\n' \
+  printf '{"forge":{"provider":"github"},"issues":{"source":"github"},"round":{"dispatch":"tmux","accounts":[{"name":"a","configDir":"%s/cfg-a"},{"name":"b","configDir":"%s/cfg-b"}],"brief":"%s"}%s}\n' \
     "$TMP_LM" "$TMP_LM" "$TMP_LM/contract.md" "${1:-}" > "$PROJ/.rota/config.json"
 }
 lm_cfg
@@ -167,36 +167,40 @@ case "$(lim l1 note)" in *"No usable account"*) ;; *) fail "D3: the entry must s
 [ "$(reg dana task)" = "1" ] && [ "$(reg ben task)" = "2" ] || fail "D3: nothing must move"
 pass "D3: with no idle slot on the second account, or no usable account, the same limit sleeps and the entry says why"
 
-# --- text with no data: a parsed reset, a fallback, and maxResumes ---------------------
+# --- text with no data: a parsed reset, a fallback, and the resume cap (3) ---------------------
 rm -f "$FK/usage/a.json" "$FK/usage/b.json" # no meter at all
 reset_log
 set_slot dana handle null # one session only
-lm_cfg ',"limits":{"mode":"sleep","maxResumes":2},"orchestrator":{"escalateIssue":3}'
+lm_cfg ',"limits":{"mode":"sleep"},"orchestrator":{"escalateIssue":3}'
 pane "$PLAIN_MSG"
 watch_ >/dev/null || true
-[ "$(lim l1 session)" = "ben" ] && [ "$(lim l1 source)" = "text" ] && [ "$(lim l1 window)" = "unknown" ] && [ "$(lim l1 resetsAt)" = "2026-10-03T12:30:00Z" ] || fail "D3: text without a time falls back to limits.fallbackSleepSeconds: $(cat "$REG")"
+[ "$(lim l1 session)" = "ben" ] && [ "$(lim l1 source)" = "text" ] && [ "$(lim l1 window)" = "unknown" ] && [ "$(lim l1 resetsAt)" = "2026-10-03T12:30:00Z" ] || fail "D3: text without a time falls back to the fixed 1800 s sleep: $(cat "$REG")"
 : > "$FK/tmux/log"
 LMNOW="2026-10-03T12:31:30Z" watch_ >/dev/null || true
 [ "$(sent)" = "1" ] && [ "$(lim l1 cycles)" = "1" ] && [ "$(lim l1 status)" = "waiting" ] || fail "D3: the static pane is still limited after the prompt, so a new cycle starts: $(cat "$REG")"
 [ "$(lim l1 resetsAt)" = "2026-10-03T13:01:30Z" ] || fail "D3: the next cycle sleeps the fallback again: $(cat "$REG")"
-LMNOW="2026-10-03T13:03:00Z"
+LMNOW="2026-10-03T13:03:00Z" watch_ >/dev/null || true
+[ "$(sent)" = "2" ] && [ "$(lim l1 cycles)" = "2" ] && [ "$(lim l1 status)" = "waiting" ] || fail "D3: a second cycle after the second prompt: $(cat "$REG")"
+LMNOW="2026-10-03T13:34:30Z"
 RC=0; OUT="$(watch_)" || RC=$?
-[ "$RC" = "1" ] && [ "$(jget data.failed <<<"$OUT")" = "1" ] || fail "D3: past maxResumes the run must exit 1 with a failed entry, rc=$RC: $OUT"
-[ "$(sent)" = "2" ] && [ "$(lim l1 status)" = "failed" ] && [ "$(lim l1 cycles)" = "2" ] || fail "D3: failed entry after two prompts: $(cat "$REG")"
-case "$(lim l1 note)" in *"still limited after 2 resume"*"Escalation e1"*) ;; *) fail "D3: the note must name the failure and the escalation: $(lim l1 note)" ;; esac
+[ "$RC" = "1" ] && [ "$(jget data.failed <<<"$OUT")" = "1" ] || fail "D3: past the resume cap the run must exit 1 with a failed entry, rc=$RC: $OUT"
+[ "$(sent)" = "3" ] && [ "$(lim l1 status)" = "failed" ] && [ "$(lim l1 cycles)" = "3" ] || fail "D3: failed entry after three prompts: $(cat "$REG")"
+case "$(lim l1 note)" in *"still limited after 3 resume"*"Escalation e1"*) ;; *) fail "D3: the note must name the failure and the escalation: $(lim l1 note)" ;; esac
 case "$(dbq 3)" in *"Usage limit not resolved: ben"*"rota:escalation e1"*) ;; *) fail "D3: the escalation comment is missing on issue 3: $(dbq 3)" ;; esac
-RC=0; OUT="$(LMNOW="2026-10-03T13:04:00Z" watch_)" || RC=$?
+RC=0; OUT="$(LMNOW="2026-10-03T13:40:00Z" watch_)" || RC=$?
 [ "$RC" = "0" ] && [ "$(nlim)" = "1" ] || fail "D3: a failed session is left alone, rc=$RC $(cat "$REG")"
 unset LMNOW
 # the same with no thread to post on: a host notification only, and a warning
-reset_log; lm_cfg ',"limits":{"mode":"sleep","maxResumes":1}'
+reset_log; lm_cfg ',"limits":{"mode":"sleep"}'
 pane "$PLAIN_MSG"
 watch_ >/dev/null || true
-RC=0; OUT="$(LMNOW="2026-10-03T12:31:30Z" watch_)" || RC=$?
-[ "$RC" = "1" ] && [ "$(lim l1 status)" = "failed" ] || fail "D3: maxResumes 1 fails after one prompt: rc=$RC $(cat "$REG")"
+LMNOW="2026-10-03T12:31:30Z" watch_ >/dev/null || true
+LMNOW="2026-10-03T13:03:00Z" watch_ >/dev/null || true
+RC=0; OUT="$(LMNOW="2026-10-03T13:34:30Z" watch_)" || RC=$?
+[ "$RC" = "1" ] && [ "$(lim l1 status)" = "failed" ] || fail "D3: the resume cap fails the entry after three prompts: rc=$RC $(cat "$REG")"
 case "$OUT" in *"escalateIssue is unset"*) ;; *) fail "D3: the unset thread must raise a warning: $OUT" ;; esac
 [ "$(dbq 3 | grep -c -F 'rota:escalation')" = "1" ] || fail "D3: no second escalation comment without escalateIssue: $(dbq 3)"
-pass "D3: a text-only limit sleeps the fallback, maxResumes fails the entry and escalates, or warns when escalateIssue is unset"
+pass "D3: a text-only limit sleeps the fallback, the resume cap fails the entry and escalates, or warns when escalateIssue is unset"
 
 # --- the orchestrator: data first, never switches, then text -----------------------------
 reset_log; lm_cfg

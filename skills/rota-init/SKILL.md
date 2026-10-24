@@ -25,11 +25,11 @@ Copy this checklist and track your progress:
 
 ## Step 1 — Read signals
 
-Run `rota setup --list --json` from the project root. `data.questions[]` carries, per question, `suggestion` and `evidence` when the repo gave a signal (`git.baseBranch`, `issues.source`, `test.fast`, `test.full`, `round.workerKind`, `round.dispatch`, `work.isolation`). A question without them has no signal: it keeps the schema default, and the report says so. The verb reads `go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml`, the Makefile, CI files, the origin host, PATH and `git worktree list`; do not re-read them to second-guess it ([`references/authoring-conventions.md`](references/authoring-conventions.md), *Don't ask what the code can answer*).
+Run `rota setup --list --json` from the project root. `data.questions[]` carries, per question, `suggestion` and `evidence` when the repo gave a signal (`git.baseBranch`, `issues.source`, `test.fast`, `test.full`, `round.harnesses`, `round.dispatch`, `work.isolation`). A question without them has no signal: it keeps the schema default, and the report says so. The verb reads `go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml`, the Makefile, CI files, the origin host, PATH and `git worktree list`; do not re-read them to second-guess it ([`references/authoring-conventions.md`](references/authoring-conventions.md), *Don't ask what the code can answer*).
 
 Add only judgement the verb cannot make:
 
-- `round.workerKind`: the verb takes the first harness CLI on `PATH`. When the evidence lists several, recommend the one running this session.
+- `round.harnesses`: the verb takes the first harness CLI on `PATH`. When the evidence lists several, recommend the one running this session.
 - `test.fast`: the verb proposes the manifest's whole-suite command. When a narrower command that takes changed files exists (a `package.json` `lint` or `test` script, a Makefile `check` target, `pytest` or `ruff` config), propose it with its evidence; `{files}` expands to the changed files, single-quoted, after `--`.
 - `test.full`: when the verb proposes the manifest command and a CI file runs more, say so.
 - `issues.source`: a `.jira` or `.linear` config is a hint, not a proof: say so.
@@ -57,7 +57,7 @@ Silence, an unavailable picker or an unclear reply is never a yes. Ask once more
 
 Only confirmed values, only through rota verbs; never edit `.rota/config.json`.
 
-- **No `.rota/` yet:** one `rota setup --set key=value` per answer to a key `rota setup --list` offers (`issues.source`, `work.isolation`, `round.dispatch`, `round.workerKind`, `git.baseBranch`, ...). If no answer is one of those, `rota init` first.
+- **No `.rota/` yet:** one `rota setup --set key=value` per answer to a key `rota setup --list` offers (`issues.source`, `work.isolation`, `round.dispatch`, `round.harnesses`, `git.baseBranch`, ...). If no answer is one of those, `rota init` first.
 - **Everything else, and every key on an initialized project:** `rota config set <key> <value>`. List values are JSON (`rota config set test.fast '["go test ./..."]'`).
 
 Run `rota config check` after the writes. Fix what it flags, re-run, and continue only when it is clean.

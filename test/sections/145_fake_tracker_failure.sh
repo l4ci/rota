@@ -9,7 +9,7 @@ trap 'rm -rf "$TMP_FFAIL"' EXIT
   cd "$TMP_FFAIL"
   git init -q --object-format=sha1
   mkdir .rota
-  echo '{"issues":{"retryWaitSeconds":0}}' > .rota/config.json
+  echo '{"issues":{}}' > .rota/config.json
   git mktree </dev/null >/dev/null
   # Fixed raw commit: e404b45..., independent of clock, load or git identity.
   sha=$(git hash-object -t commit -w --stdin <<'EOF'
