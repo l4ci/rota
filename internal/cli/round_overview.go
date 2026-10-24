@@ -115,7 +115,7 @@ func awaitingReview(r round.Row) bool {
 	if r.PR == "" || r.PRState == "merged" || r.PRState == "closed" {
 		return false
 	}
-	return (r.Event != nil && r.Event.Kind == worker.EventDone) || r.State == "done" || r.HostState == "done"
+	return (r.Event != nil && r.Event.Kind == worker.EventDone) || worker.IsDone(r.State) || worker.IsDone(r.HostState)
 }
 
 // totals are the lines above the table: the known local workers and, when the
