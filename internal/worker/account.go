@@ -96,11 +96,14 @@ func (a *Accounts) expand(d string) string { return ExpandConfigDirIn(d, a.home(
 // same is SameConfigDir against Env's home.
 func (a *Accounts) same(x, y string) bool { return a.expand(x) == a.expand(y) }
 
-// login is Login with Env's home unless Login names its own.
+// login is Login with Env's home and clock unless Login names its own.
 func (a *Accounts) login() Credentials {
 	c := a.Login
 	if c.Home == nil {
 		c.Home = a.Env.WithDefaults().Home
+	}
+	if c.Now == nil {
+		c.Now = a.now
 	}
 	return c
 }
@@ -290,7 +293,8 @@ func (a *Accounts) defaultFetch(ctx context.Context, name, configDir string) (*j
 // Credentials reads an account's login. GOOS and Run are the platform seams:
 // on darwin the login Keychain is consulted through Run (the one `security`
 // read, connections.SecurityRead), elsewhere never. The zero value reads files
-// only. Now defaults to time.Now.
+// only. Now is the clock the expiry check reads; nil means none, so no token
+// reads as expired.
 type Credentials struct {
 	GOOS string
 	Run  proc.Runner
@@ -300,10 +304,10 @@ type Credentials struct {
 	Home func() (string, error)
 }
 
-// SystemCredentials is Credentials on this machine, running tools through run
-// and reading the home through home. Now stays nil: Problem defaults it.
-func SystemCredentials(run proc.Runner, home func() (string, error)) Credentials {
-	return Credentials{GOOS: runtime.GOOS, Run: run, Home: home}
+// SystemCredentials is Credentials on this machine, running tools through run,
+// reading the home through home and the time through now.
+func SystemCredentials(run proc.Runner, home func() (string, error), now func() time.Time) Credentials {
+	return Credentials{GOOS: runtime.GOOS, Run: run, Home: home, Now: now}
 }
 
 // Problem reports why the account whose config dir is dir (already expanded)
@@ -311,11 +315,11 @@ func SystemCredentials(run proc.Runner, home func() (string, error)) Credentials
 // unreadable, or no access token. "" means usable. Expiry is not checked:
 // Claude Code refreshes a stale token itself, and this code never does.
 func (c Credentials) Problem(dir string) string {
-	now := time.Now
+	var now time.Time
 	if c.Now != nil {
-		now = c.Now
+		now = c.Now()
 	}
-	_, _, why := c.read(dir, now())
+	_, _, why := c.read(dir, now)
 	return why
 }
 
