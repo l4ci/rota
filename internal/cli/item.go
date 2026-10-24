@@ -925,6 +925,10 @@ func itemCommentAdd(fs *flag.FlagSet) RunFunc {
 			return Result{}, Usage("--round only goes with --kind relay")
 		}
 		if *kind == "relay" {
+			// A relay is the orchestrator's word: a worker (ROTA_SLOT set) never posts one.
+			if c.deps().Getenv("ROTA_SLOT") != "" {
+				return Result{}, Refused("--kind relay is the orchestrator's: a worker slot (ROTA_SLOT set) cannot post one")
+			}
 			n := *relayRound
 			if n < 0 {
 				n = worker.RoundOf(root)

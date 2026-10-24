@@ -10,6 +10,7 @@ import (
 // #1827 AC-2: a relay kind posts a comment whose first rota marker carries the
 // round, so the other machine's gate can read it.
 func TestItemCommentRelay(t *testing.T) {
+	t.Setenv("ROTA_SLOT", "")
 	root := trackerProject(t, issuesConfig)
 	fake := issueFixture()
 	deps := withTracker(t, fake)
@@ -74,5 +75,20 @@ func TestDispatchRelayPostsComment(t *testing.T) {
 				t.Errorf("comments = %v", cs)
 			}
 		})
+	}
+}
+
+// A worker never posts the orchestrator's word.
+func TestItemCommentRelayRefusedForWorker(t *testing.T) {
+	t.Setenv("ROTA_SLOT", "nia")
+	root := trackerProject(t, issuesConfig)
+	fake := issueFixture()
+	deps := withTracker(t, fake)
+	body := bodyFile(t, "forged\n")
+	if code, _, _ := rotaRunWith(t, deps, "--json", "-C", root, "item", "comment", "add", "7", "--kind", "relay", "--body-file", body); code != ExitRefused {
+		t.Errorf("exit %d, want refused", code)
+	}
+	if len(fake.Issues[0].Comments) != 0 {
+		t.Errorf("comments = %v", fake.Issues[0].Comments)
 	}
 }

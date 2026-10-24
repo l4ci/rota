@@ -87,3 +87,12 @@ func TestCheckApprovalsOffer(t *testing.T) {
 		t.Errorf("no offer comment: %q", got)
 	}
 }
+
+// A line that cites the offer and a relay nobody logged still fails: the offer
+// citation does not shield the rest of the line.
+func TestCheckApprovalsOfferDoesNotShieldRelayCite(t *testing.T) {
+	body := "## Approvals\n- round support offer and orchestrator relay round 9\n"
+	if got := CheckApprovalsOffer(body, nil, true); !strings.Contains(got, "round 9") {
+		t.Errorf("got %q", got)
+	}
+}
