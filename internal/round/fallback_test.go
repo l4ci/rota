@@ -234,7 +234,7 @@ func TestTransferDoesNotFallBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.set = set
+	f.set, f.env.Round = set, set
 	f.env.Worker.Now = func() time.Time { return quotaNow }
 	f.env.Worker.Accounts = &worker.Accounts{Env: worker.Env{Config: diskConfig, Now: func() time.Time { return quotaNow }},
 		Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
