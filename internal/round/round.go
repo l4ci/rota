@@ -10,6 +10,7 @@
 package round
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
@@ -21,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
@@ -176,6 +178,9 @@ type Row struct {
 	// Draining marks a roster slot past the round's slot count that still
 	// holds work: it takes nothing new (Members).
 	Draining bool
+	// Account is the round.accounts entry the slot last ran under ("" when it
+	// has none) and AccountKind that entry's kind (claude, codex or opencode).
+	Account, AccountKind string
 	// NoLogin is why the slot's account has no usable Claude login ("" when it
 	// has one): assign skips the slot and refuses to name it.
 	NoLogin string
@@ -705,6 +710,8 @@ func (e Env) readRows(wts []worktree, reg worker.Registry, rep *Report) ([]*Row,
 		}
 		r.Outcome, _ = s.Outcome()
 		r.Kind, r.KindSource, r.Tier, r.Model, r.TierReason = s.HarnessKind(), s.KindSource(), s.Tier(), s.Model(), s.TierReason()
+		kind, acct := SlotAccount(s)
+		r.Account, r.AccountKind = acct, cmp.Or(kind, config.KindClaude)
 		if r.Issue != "" {
 			r.Bounces = reg.Bounces(r.Issue)
 			if b := reg.BestOf(r.Issue); b != nil && b.Attempt(name) != nil {

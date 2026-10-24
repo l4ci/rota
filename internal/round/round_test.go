@@ -13,6 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
@@ -436,5 +437,29 @@ func TestInWorktreeRoot(t *testing.T) {
 		if got := inWorktreeRoot(root, tc.cwd); got != tc.want {
 			t.Errorf("%s: inWorktreeRoot(%q) = %v, want %v", name, tc.cwd, got, tc.want)
 		}
+	}
+}
+
+// A row names the account its slot ran under and that account's kind (#1824):
+// a claude slot's round.accounts entry, a codex slot's home entry, none for a
+// slot that never ran under one.
+func TestRowsShowTheAccountKind(t *testing.T) {
+	root := newRepo(t, map[string]string{"ben": "park/ben", "dana": "park/dana", "kit": "park/kit"})
+	writeRegistry(t, root,
+		slot(root, "ben", "park/ben", func(s *jsonx.Object) { s.Set("account", "work") }),
+		slot(root, "dana", "park/dana", func(s *jsonx.Object) { s.Set("kind", harness.Codex); s.Set("codexAccount", "cx") }),
+		slot(root, "kit", "park/kit", nil),
+	)
+	rep, err := env([]host.Agent{}, (&fakeRemote{}).asForge()).Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string][2]string{}
+	for _, r := range rep.Rows {
+		got[r.Name] = [2]string{r.Account, r.AccountKind}
+	}
+	want := map[string][2]string{"ben": {"work", "claude"}, "dana": {"cx", "codex"}, "kit": {"", "claude"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("account, kind per row = %v, want %v", got, want)
 	}
 }

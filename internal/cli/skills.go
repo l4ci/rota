@@ -154,11 +154,11 @@ func skillsClaudeDirs(d *Deps, getenv func(string) string, home, root string) (d
 	if root == "" {
 		return dirs, nil
 	}
-	for _, ac := range config.Accounts(d.Config(root)) {
-		if ac.ConfigDir == "" {
+	for _, ac := range config.AccountsOf(d.Config(root), config.KindClaude) {
+		if ac.Dir == "" {
 			continue
 		}
-		dir := worker.ExpandConfigDirIn(ac.ConfigDir, home)
+		dir := worker.ExpandConfigDirIn(ac.Dir, home)
 		dup := false
 		for _, d := range append(append([]string{}, dirs...), skipped...) {
 			dup = dup || worker.SameConfigDirIn(d, dir, home)

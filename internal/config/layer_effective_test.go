@@ -35,8 +35,8 @@ func contains(list []string, s string) bool {
 // An empty list in the project or local file is unset for the machine-specific
 // list keys, so it does not shadow the global (#1766).
 func TestEmptyAccountListFallsBackToGlobal(t *testing.T) {
-	accounts := `[{"name":"a","configDir":"/x"}]`
-	for _, key := range []string{"round.accounts", "round.codexAccounts", "round.opencodeAccounts"} {
+	accounts := `[{"kind":"claude","name":"a","dir":"/x"}]`
+	for _, key := range []string{"round.accounts"} {
 		leaf := key[len("round."):]
 		for _, layer := range []string{"project", "local"} {
 			project, local := `{"round":{"`+leaf+`":[]}}`, ""

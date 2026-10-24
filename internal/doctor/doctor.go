@@ -463,7 +463,7 @@ func (d *runner) expand(dir string) string { return worker.ExpandConfigDirIn(dir
 
 func (d *runner) accounts() Check {
 	if w := worker.ConfigDirMismatch(d.in.OrchestratorConfigDir, d.in.Accounts, d.in.Home); w != "" {
-		return Check{Name: "accounts", Status: Warn, Detail: w, Hint: "add that configDir to round.accounts in .rota/config.local.json, or start the orchestrator under a listed one"}
+		return Check{Name: "accounts", Status: Warn, Detail: w, Hint: "add that dir to round.accounts in .rota/config.local.json, or start the orchestrator under a listed one"}
 	}
 	if len(d.in.Accounts) == 0 {
 		return skip("accounts", "no accounts in round.accounts")
@@ -472,25 +472,25 @@ func (d *runner) accounts() Check {
 	var hint string
 	for _, a := range d.in.Accounts {
 		var dir, why string
-		if a.ConfigDir == "" {
-			why = "no configDir"
+		if a.Dir == "" {
+			why = "no dir"
 			if hint == "" {
-				hint = "set configDir for account " + a.Name + " in round.accounts"
+				hint = "set dir for account " + a.Name + " in round.accounts"
 			}
-		} else if p := config.DirProblem("configDir", a.ConfigDir); p != "" {
+		} else if p := config.DirProblem("dir", a.Dir); p != "" {
 			why = p
 			if hint == "" {
-				hint = "set configDir for account " + a.Name + " to an absolute path or ~/..."
+				hint = "set dir for account " + a.Name + " to an absolute path or ~/..."
 			}
-		} else if dir = worker.ExpandConfigDirIn(a.ConfigDir, d.in.Home); !fsio.IsDir(dir) {
-			why = "configDir " + dir + " does not exist"
+		} else if dir = worker.ExpandConfigDirIn(a.Dir, d.in.Home); !fsio.IsDir(dir) {
+			why = "dir " + dir + " does not exist"
 		} else if p := d.in.Credentials.Problem(dir); p != "" {
 			why = p + " in " + dir
 		}
 		if why != "" {
 			bad = append(bad, a.Name+": "+why)
 			if hint == "" {
-				hint = "CLAUDE_CONFIG_DIR=" + a.ConfigDir + " claude /login"
+				hint = "CLAUDE_CONFIG_DIR=" + a.Dir + " claude /login"
 				if strings.Contains(why, "Keychain") {
 					hint += " (on macOS the login is stored in the Keychain, not a file)"
 				}
@@ -519,7 +519,7 @@ func (d *runner) hook() Check {
 	var parts []string
 	failed := false
 	for _, a := range d.in.Accounts {
-		r, ran := d.run(bin, []string{"integration", "status"}, []string{"CLAUDE_CONFIG_DIR=" + d.expand(a.ConfigDir)})
+		r, ran := d.run(bin, []string{"integration", "status"}, []string{"CLAUDE_CONFIG_DIR=" + d.expand(a.Dir)})
 		if !ran || r.ExitCode != 0 {
 			failed = true
 			parts = append(parts, a.Name+": herdr integration status failed")
@@ -678,12 +678,12 @@ func (d *runner) switchCheck() Check {
 	}
 	var with []string
 	for _, a := range d.in.Accounts {
-		if a.ConfigDir != "" {
+		if a.Dir != "" {
 			with = append(with, a.Name)
 		}
 	}
 	if len(with) < 2 {
-		return fail(name, fmt.Sprintf("%d account with a configDir in round.accounts, need 2 to move between", len(with)),
+		return fail(name, fmt.Sprintf("%d account with a dir in round.accounts, need 2 to move between", len(with)),
 			"add a second account to round.accounts")
 	}
 	if h := d.stopHook(); h.Status != Pass {

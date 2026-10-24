@@ -145,14 +145,14 @@ func (e Env) Resolve(root string, cfg any) (Plan, error) {
 // round.accounts entry with the most headroom, else the first one configured.
 // No accounts: both empty, and the agent keeps the default account.
 func (e Env) account(root string, cfg any) (name, dir string) {
-	accts := config.Accounts(cfg)
+	accts := config.AccountsOf(cfg, config.KindClaude)
 	home := ""
 	if e.Home != nil {
 		home, _ = e.Home()
 	}
 	if d := e.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
 		for _, a := range accts {
-			if a.ConfigDir != "" && worker.SameConfigDirIn(a.ConfigDir, d, home) {
+			if a.Dir != "" && worker.SameConfigDirIn(a.Dir, d, home) {
 				return a.Name, d
 			}
 		}
@@ -160,7 +160,7 @@ func (e Env) account(root string, cfg any) (name, dir string) {
 	}
 	var usable []config.Account
 	for _, a := range accts {
-		if a.Name != "" && a.ConfigDir != "" {
+		if a.Name != "" && a.Dir != "" {
 			usable = append(usable, a)
 		}
 	}
@@ -177,7 +177,7 @@ func (e Env) account(root string, cfg any) (name, dir string) {
 			}
 		}
 	}
-	return pick.Name, worker.ExpandConfigDirIn(pick.ConfigDir, home)
+	return pick.Name, worker.ExpandConfigDirIn(pick.Dir, home)
 }
 
 // sessionName is the tmux session for a project: tmux rejects '.' and ':'.

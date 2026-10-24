@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
@@ -106,6 +107,12 @@ func (e Env) OfferSupport(ctx context.Context, root string, be Board, ids []stri
 		if err != nil {
 			return changed, fmt.Errorf("%s: %w", tracker.RefOf(it.ID), err)
 		}
+		if !withdraw {
+			// The comment is the assignment approval the support PR cites.
+			if _, err := be.AddComment(it.ID, "feedback", marker.SupportOfferLine()+"\n"+fmt.Sprintf("Offered to the support machine %s by main.", support)); err != nil {
+				return changed, fmt.Errorf("%s: %w", tracker.RefOf(it.ID), err)
+			}
+		}
 		changed = append(changed, it.ID)
 	}
 	return changed, nil
@@ -152,4 +159,57 @@ func gitWhy(out string, err error) string {
 		return strings.ReplaceAll(s, "\n", "; ")
 	}
 	return "git failed"
+}
+
+// SupportReturnMarker is the first line of the comment `round support return`
+// posts on an issue it hands back to main.
+const SupportReturnMarker = "<!-- rota:support-return -->"
+
+// BlockRole: the verb belongs to the other machine's role.
+const BlockRole = "role"
+
+// SupportReturned is what ReturnSupport did.
+type SupportReturned struct {
+	ID      string
+	Comment string // id of the posted comment; "" when nothing was posted
+	Changed bool
+}
+
+// ReturnSupport is the support machine's hand-back (#1827): it posts reason
+// on the issue under SupportReturnMarker and removes the support label, so
+// main's candidates list the issue again. It refuses on main (BlockRole), with
+// round.support empty or no tracker (BlockConfig) and while a slot still holds
+// the issue (BlockClaimed). An issue that no longer carries the label is
+// already main's: nothing is posted and Changed is false.
+func (e Env) ReturnSupport(ctx context.Context, root string, be Board, id, reason string) (SupportReturned, error) {
+	switch {
+	case e.Round.Support == "":
+		return SupportReturned{}, blocked(BlockConfig, "round.support is empty: set it to the support machine's name first (rota config set round.support <name>)")
+	case !e.forgeOn(be):
+		return SupportReturned{}, blocked(BlockConfig, "handing an issue back needs an issue tracker with labels")
+	case e.Round.Role != roundcfg.RoleSupport:
+		return SupportReturned{}, blocked(BlockRole, "round support return runs on the support machine (round.role support); main takes an offer back with: rota round support offer --withdraw")
+	}
+	it, err := be.Get(id)
+	if err != nil {
+		return SupportReturned{}, err
+	}
+	if it.Closed {
+		return SupportReturned{}, fmt.Errorf("%w: %s is closed", backlog.ErrNotFound, id)
+	}
+	if heldIDs(root)[worker.NormID(it.ID)] {
+		return SupportReturned{}, blocked(BlockClaimed, "%s is held by a slot of this round: return or reclaim that slot first", it.ID)
+	}
+	out := SupportReturned{ID: it.ID}
+	if !slices.Contains(it.Labels, e.SupportLabel) {
+		return out, nil
+	}
+	if out.Comment, err = be.AddComment(it.ID, "feedback", SupportReturnMarker+"\n"+strings.TrimSpace(reason)); err != nil {
+		return out, err
+	}
+	if err := e.Forge.RemoveLabels(ctx, it.IssueKey(), []string{e.SupportLabel}); err != nil {
+		return out, fmt.Errorf("%s: %w", tracker.RefOf(it.ID), err)
+	}
+	out.Changed = true
+	return out, nil
 }

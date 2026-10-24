@@ -11,6 +11,8 @@ Loaded by `SKILL.md` when the branch is a round worker's (`<agent>/<issue>-<slug
 - **Step 8 (file mode):** a round worker skips it (workers never edit tracked `.rota/`); the orchestrator completes the items when it merges the PR.
 - **Steps 8.5 and 8.6:** skipped; the orchestrator runs learn and `/rota-docs` once per round.
 
+- **Before the push (Step 6a):** merge the moved base first (`git fetch origin <base>`; when the base is past your merge base, `git merge origin/<base>`, never a rebase), resolve conflicts, re-run the targeted checks and record proof at the merged head. The same holds before every relay-fix push (`skills/references/worker-contract.md`).
+
 ## Issue backend
 
 - **Step 5:** there is no question: go to Step 6a, never direct-merge. If `work.mergeStrategy` is `"direct"`, say so in one line (*"`work.mergeStrategy` is `direct` but the issue backend always opens a PR; ignoring it."*) so the mismatch is visible, then go on.
