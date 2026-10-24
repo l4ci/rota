@@ -144,7 +144,8 @@ func checkApprovals(body string, relayLog []any, offered bool) string {
 			if !offered {
 				problems = append(problems, fmt.Sprintf("cites the round support offer but no trusted support-offer comment is on the issue: %s", strings.TrimSpace(line)))
 			}
-		} else if m := reRelayCite.FindStringSubmatch(low); m != nil {
+		}
+		if m := reRelayCite.FindStringSubmatch(low); m != nil {
 			if n := m[1]; n != "" {
 				i, _ := strconv.Atoi(n)
 				if !rounds[i] {
