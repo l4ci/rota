@@ -287,6 +287,8 @@ var Prompts = []Prompt{
 	{Key: "git.baseBranch", Title: "Which branch do the skills merge into?", Optional: true, Free: true, Roles: mainOnly},
 	{Key: "test.fast", Title: "Which command is the quick per-task check?", Optional: true, Free: true, Roles: mainOnly},
 	{Key: "test.full", Title: "Which command runs the full suite?", Optional: true, Free: true, Roles: mainOnly},
+	{Key: "round.envSetup", Title: "Which command installs dependencies in a new worker worktree?", Optional: true, Free: true, Roles: mainOnly},
+	{Key: "round.sharedDirs", Title: "Which dependency directories do worker worktrees share with the main checkout?", Optional: true, Free: true, Roles: mainOnly},
 }
 
 func init() {
