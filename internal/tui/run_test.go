@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -619,4 +620,79 @@ func TestRunTickWithoutDeadlineSupportStillTakesKeys(t *testing.T) {
 		t.Errorf("trace %q", got)
 	}
 	checkRestored(t, "tick without deadline", ft, 1)
+}
+
+// starter is a Model whose Init starts an Async that waits on gate.
+type starter struct {
+	tm
+	cmd Cmd
+}
+
+func (s starter) Init() Cmd { return s.cmd }
+
+func (s starter) Update(msg Msg) (Model, Cmd) {
+	m, c := s.tm.Update(msg)
+	s.tm = m.(tm)
+	return s, c
+}
+
+// An Async started by Init leaves keys flowing; a key can quit while it is
+// still running, and Run's return cancels its context.
+func TestRunAsyncDoesNotBlockKeysAndEndsWithRun(t *testing.T) {
+	started, cancelled := make(chan struct{}), make(chan struct{})
+	ft := script("a", "q")
+	r := &rec{on: byRune(map[rune]Cmd{'q': quit})}
+	err := Run(ft.term(), starter{tm: tm{r: r}, cmd: Cmd{Async: func(ctx context.Context) error {
+		close(started)
+		<-ctx.Done()
+		close(cancelled)
+		return ctx.Err()
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := r.trace(); got != "aq" {
+		t.Errorf("trace %q: keys must arrive while the Async runs", got)
+	}
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Init's Async never started")
+	}
+	select {
+	case <-cancelled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("leaving did not cancel the Async")
+	}
+}
+
+// asyncIn delivers its first read timeout only once the Async has run and had
+// time to report, so the test does not race the goroutine.
+type asyncIn struct {
+	*tickIn
+	ran <-chan struct{}
+}
+
+func (a asyncIn) Read(p []byte) (int, error) {
+	<-a.ran
+	time.Sleep(20 * time.Millisecond)
+	return a.tickIn.Read(p)
+}
+
+// A finished Async reaches Update as Done even when no key is typed, once the
+// read times out.
+func TestRunAsyncDoneArrivesWithoutAKey(t *testing.T) {
+	boom, ran := errors.New("boom"), make(chan struct{})
+	ti := newTickIn("tick", "q")
+	in := asyncIn{ti, ran}
+	tc := ti.fakeTerm.term()
+	tc.In, tc.Out, tc.MakeRaw = in, &ti.fakeTerm, ti.makeRaw
+	tc.Tick = time.Hour
+	r := &rec{on: byRune(map[rune]Cmd{'q': quit})}
+	if err := Run(tc, starter{tm: tm{r: r}, cmd: Cmd{Async: func(context.Context) error { close(ran); return boom }}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.trace(); !strings.Contains(got, "D!boom") {
+		t.Errorf("trace %q lacks the Async's Done", got)
+	}
 }
