@@ -185,8 +185,8 @@ func TestRoundStatusScreenRefreshKeepsSelectionAndShowsFailure(t *testing.T) {
 	m, _ := press(newRoundScreen(fixedSnap(), load, clk.now, roundRefresh), "j") // dana
 	m2, cmd := press(m, "r")
 	m = runCmd(m2, cmd)
-	if out := tui.Strip(m.Render(rw, rh, tui.Style{})); !strings.Contains(out, "▸ dana") {
-		t.Errorf("selection moved off dana:\n%s", out)
+	if out := tui.Strip(m.Render(rw, rh, tui.Style{})); !strings.Contains(out, "› #543") {
+		t.Errorf("selection moved off dana (#543):\n%s", out)
 	}
 	fail = true
 	m2, cmd = press(m, "r")
@@ -241,8 +241,11 @@ func TestRoundScreenBurnColumn(t *testing.T) {
 	s.Slots[0].Burn = &h
 	m := newRoundScreen(s, nil, newClock().now, roundRefresh)
 	out := strings.Join(roundFrame(t, m), "\n")
-	if !strings.Contains(out, "burn") || !strings.Contains(out, "62%") || !strings.Contains(out, "n/a") {
-		t.Errorf("burn column missing:\n%s", out)
+	if !strings.Contains(out, "burn: 62%") {
+		t.Errorf("burn missing from the selected row's detail:\n%s", out)
+	}
+	if out = tui.Strip(slotEntry(round.Row{Name: "dana", Issue: "9"}).body); !strings.Contains(out, "burn: n/a") {
+		t.Errorf("unknown burn must read n/a:\n%s", out)
 	}
 }
 
@@ -282,8 +285,8 @@ func TestFillBurnFromLedger(t *testing.T) {
 
 func TestStatusExternalRowShowsDerivedState(t *testing.T) {
 	r := round.Row{Name: "ext-1", Issue: "12", Branch: "codex/12-x", HostState: round.ExternalHost, State: "done"}
-	if line := tui.Strip(slotEntry(r).line); !strings.Contains(line, "external/done") {
-		t.Errorf("view line = %q", line)
+	if status := slotEntry(r).status; !strings.Contains(status, "external/done") {
+		t.Errorf("view status = %q", status)
 	}
 	if got := jsonx.Str(rowList([]round.Row{r})[0].(*jsonx.Object), "state"); got != "done" {
 		t.Errorf("json state = %q", got)
