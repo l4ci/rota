@@ -79,11 +79,11 @@ note: the state moves from a second positional to `--to`, the one spelling for s
 rota item comment add <ID> --kind <question|answer|decision|feedback|scope|finding|learning|harvested|relay> [--round <n>] --body-file <path|->
 repo: scoped
 data: {"id": string, "type": "B"|"F"|"T", "kind": string, "commentId"?: string, "changed": bool}
-exit: 2 for an empty body or an invalid kind; 3 item unknown; 4 for `--kind harvested` on a support machine (`round.role` support: `blockedBy` `role`, the mark is `knowledge harvest --mark`'s to post, #1631); tracker
+exit: 2 for an empty body or an invalid kind; 3 item unknown; 4 for `--kind relay` from a worker slot (`ROTA_SLOT` set; `blockedBy` is not `role`), and for `--kind harvested` on a support machine (`round.role` support: `blockedBy` `role`, the mark is `knowledge harvest --mark`'s to post, #1631); tracker
 old: hv-item-comment <ID> --kind <kind> --body-file <path|->
 shim: `commentId` is the printed id (issue mode only), `changed` true.
 note: split from the old `--list` mode, because read and write have different data.
-note: (#1827) `--kind relay` puts `<!-- rota:relay round=<n> -->` on the first line of the text (after the tracker's own comment header), `<n>` being `--round` or the round state's; `--round` with another kind is exit 2. The support split's gate reads these comments as the orchestrator's relays (see `worker gate`).
+note: (#1827) `--kind relay` puts `<!-- rota:relay round=<n> -->` on the first line of the text (after the tracker's own comment header), `<n>` being `--round` or the round state's; `--round` with another kind is exit 2. The support split's gate reads these comments as the orchestrator's relays (see `worker gate`). With the support split active (#1827, #1869) a comment of any kind except `harvested` carries a `<!-- rota:from ... -->` stamp for the machine's role: first line for ordinary kinds, last line for `relay` so the relay marker stays first.
 
 ### rota item comment list
 rota item comment list <ID> [--kind <question|answer|decision|feedback|scope|finding|learning|harvested|relay>]

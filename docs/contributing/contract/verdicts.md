@@ -49,12 +49,11 @@ note: `next` is the consumer's next step, from the verdict, `autonomy.level`, an
 |---|---|---|---|---|
 | `ship-review` | `continue` | `ask` | `stop` | |
 | `ship-second-opinion` | `continue` | `ask` | `stop` | |
-| `ship-second-opinion`, runner `codex` (advisory) | `continue` | `surface` | `surface` | |
 | `ship-qa`, `qa.gate` `advisory` | `continue` | `surface` | `surface` | `surface` |
 | `ship-qa`, `qa.gate` `blocking` | `continue` | `ask` | `stop` | `surface` |
 | `queue` | `ask` | `request-changes` | `request-changes` | |
 
-note: `INFRA-FAIL` surfaces under either gate, as `/rota-ship` already treated it: QA could not run, so the product was not judged and a dev server that happened to be down does not block a ship. `advisory` is true in the two advisory rows. A leftover `ship.secondOpinionRunner` key is ignored (removed; `rota config check` names it); `qa.gate` defaults to `advisory`.
+note: `INFRA-FAIL` surfaces under either gate, as `/rota-ship` already treated it: QA could not run, so the product was not judged and a dev server that happened to be down does not block a ship. `advisory` is true in the advisory `ship-qa` row. A leftover `ship.secondOpinionRunner` key is ignored (removed; `rota config check` names it); `qa.gate` defaults to `advisory`.
 
 ### rota debug verdict
 rota debug verdict <bugId> --verdict <PASS|FAIL> [--body-file <path|->]
