@@ -114,6 +114,9 @@ func poolInit(fs *flag.FlagSet) RunFunc {
 		d.Set("base", res.Base)
 		d.Set("slots", slotList(res.Slots))
 		d.Set("changed", res.Changed)
+		if len(res.Shared) > 0 {
+			d.Set("shared", worker.SharedList(res.Shared))
+		}
 		var lines []string
 		for _, s := range res.Slots {
 			lines = append(lines, slotLine(s))

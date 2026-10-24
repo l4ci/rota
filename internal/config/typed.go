@@ -135,3 +135,17 @@ func AccountDirProblems(cfg any) []string {
 	}
 	return out
 }
+
+// SharedDirs returns the string entries of round.sharedDirs in order, blanks
+// dropped.
+func SharedDirs(cfg any) []string {
+	v, _ := Value(cfg, "round.sharedDirs")
+	list, _ := v.([]any)
+	var out []string
+	for _, e := range list {
+		if s, ok := e.(string); ok && strings.TrimSpace(s) != "" {
+			out = append(out, strings.TrimSpace(s))
+		}
+	}
+	return out
+}
