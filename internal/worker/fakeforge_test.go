@@ -126,7 +126,7 @@ func (f *fakeForge) ClosesIssue(key tracker.IssueKey, c tracker.ClosingSource) b
 	return ok && slices.Contains(f.ClosedNumbers(c.Body), n)
 }
 
-func (f *fakeForge) Get(_ context.Context, n tracker.IssueKey, _ bool) (tracker.Issue, error) {
+func (f *fakeForge) Get(_ context.Context, n tracker.IssueKey, withComments bool) (tracker.Issue, error) {
 	f.logf("Get %s", n)
 	if msg := f.w.forgeWord("issueErr"); msg != "" {
 		return tracker.Issue{}, errors.New(msg)
@@ -142,6 +142,16 @@ func (f *fakeForge) Get(_ context.Context, n tracker.IssueKey, _ bool) (tracker.
 	}
 	if l != "" {
 		is.Labels = strings.Split(l, ",")
+	}
+	// "issueComments" is a JSON list of {author, body}, served when asked for.
+	if raw := f.w.forgeWord("issueComments"); raw != "" && withComments {
+		var cs []struct{ Author, Body string }
+		if err := jsonUnmarshal([]byte(raw), &cs); err != nil {
+			return tracker.Issue{}, err
+		}
+		for i, c := range cs {
+			is.Comments = append(is.Comments, tracker.Comment{ID: strconv.Itoa(i + 1), Author: c.Author, Body: c.Body})
+		}
 	}
 	return is, nil
 }

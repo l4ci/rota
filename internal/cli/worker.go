@@ -471,6 +471,15 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			}
 			return Result{}, err
 		}
+		if res.Relay {
+			n := worker.RoundOf(root)
+			if opts.Round != nil {
+				n = *opts.Round
+			}
+			if err := postSupportRelay(c, root, slot, path, n); err != nil {
+				c.Warn("the relay was sent but not posted on the issue (the main gate cannot see it): %v", err)
+			}
+		}
 		d := jsonx.NewObject()
 		d.Set("slot", res.Slot)
 		d.Set("handle", res.Handle)
