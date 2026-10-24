@@ -100,6 +100,7 @@ func newMoveFx(t *testing.T) *moveFx {
 		it.Number = n
 	}
 	f.set, _ = roundcfg.FromConfig(config.Load(rotatree.Config(os.TempDir())))
+	f.env.Round, f.env.HolderPID = f.set, 100
 
 	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
 		t.Fatal(err)
@@ -124,7 +125,7 @@ func (f *moveFx) commit(t *testing.T, slot, file string) {
 }
 
 func (f *moveFx) assign(id, agent string) (Assigned, error) {
-	return f.env.Assign(bg, f.root, f.be, AssignOpts{ID: id, Agent: agent, HolderPID: 100, Settings: f.set})
+	return f.env.Assign(bg, f.root, f.be, AssignOpts{ID: id, Agent: agent})
 }
 
 func (f *moveFx) ret(slot, reason string, mod func(*ReturnOpts)) (Returned, error) {
@@ -136,7 +137,7 @@ func (f *moveFx) ret(slot, reason string, mod func(*ReturnOpts)) (Returned, erro
 }
 
 func (f *moveFx) transfer(id, to string, mod func(*TransferOpts)) (Transferred, error) {
-	o := TransferOpts{Issue: id, To: to, HolderPID: 100, Settings: f.set}
+	o := TransferOpts{Issue: id, To: to}
 	if mod != nil {
 		mod(&o)
 	}
@@ -685,15 +686,19 @@ func TestTransferRefusals(t *testing.T) {
 	if _, err := f.transfer("13", "dana", nil); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("no slot holds 13: %v", err)
 	}
-	if _, err := f.transfer("12", "dana", func(o *TransferOpts) { o.HolderPID = 999 }); blockedBy(t, err) != BlockNoRound {
+	f.env.HolderPID = 999
+	if _, err := f.transfer("12", "dana", nil); blockedBy(t, err) != BlockNoRound {
 		t.Errorf("no lease: %v", err)
 	}
+	f.env.HolderPID = 100
 	if _, err := f.transfer("12", "ben", nil); blockedBy(t, err) != BlockSameSlot {
 		t.Errorf("same slot: %v", err)
 	}
-	if _, err := f.transfer("12", "dana", func(o *TransferOpts) { o.Settings.Brief = filepath.Join(f.root, "nope.md") }); blockedBy(t, err) != BlockBriefMissing {
+	f.env.Round.Brief = filepath.Join(f.root, "nope.md")
+	if _, err := f.transfer("12", "dana", nil); blockedBy(t, err) != BlockBriefMissing {
 		t.Errorf("brief: %v", err)
 	}
+	f.env.Round = f.set
 	if _, err := f.assign("13", "dana"); err != nil {
 		t.Fatal(err)
 	}
@@ -1077,8 +1082,8 @@ func TestReclaimDeadSlotSweepsItsLeftoverShellPane(t *testing.T) {
 
 func TestTransferTierBindsTheReceiverAndNeedsAReason(t *testing.T) {
 	f := newMoveFx(t)
-	f.set.Models = map[string]map[string]string{"claude": {"light": "haiku", "standard": "sonnet", "heavy": "opus"}}
-	f.set.Tier = "standard"
+	f.env.Round.Models = map[string]map[string]string{"claude": {"light": "haiku", "standard": "sonnet", "heavy": "opus"}}
+	f.env.Round.Tier = "standard"
 	if _, err := f.transfer("12", "dana", func(o *TransferOpts) { o.Tier = "heavy" }); err == nil || !strings.Contains(err.Error(), "--tier-reason") {
 		t.Fatalf("a tier above the default needs a reason, got %v", err)
 	}
@@ -1101,7 +1106,7 @@ func TestTransferBriefCarriesTheTDDLine(t *testing.T) {
 	const line = "work.tdd is on: for a behavior change, show a failing test first."
 	for _, tdd := range []bool{true, false} {
 		f := newMoveFx(t)
-		f.set.TDD = tdd
+		f.env.Round.TDD = tdd
 		f.host.sent = ""
 		if _, err := f.transfer("12", "dana", nil); err != nil {
 			t.Fatal(err)
@@ -1345,8 +1350,8 @@ func TestTransferCapReasonIsValidatedAndLedgered(t *testing.T) {
 
 func TestTransferTierCapReasonLandsInTheLedgerForASlot(t *testing.T) {
 	f := newMoveFx(t)
-	f.set.Models = map[string]map[string]string{"claude": {"light": "haiku", "standard": "sonnet", "heavy": "opus"}}
-	f.set.Tier = "standard"
+	f.env.Round.Models = map[string]map[string]string{"claude": {"light": "haiku", "standard": "sonnet", "heavy": "opus"}}
+	f.env.Round.Tier = "standard"
 	if _, err := f.transfer("12", "dana", func(o *TransferOpts) { o.Tier = "heavy"; o.TierReason = "bounced 3 times"; o.CapReason = "tier" }); err != nil {
 		t.Fatal(err)
 	}
@@ -1359,5 +1364,23 @@ func TestTransferTierCapReasonLandsInTheLedgerForASlot(t *testing.T) {
 	}
 	if got != "tier" {
 		t.Errorf("capReason = %q, want tier; rows %+v", got, es)
+	}
+}
+
+// Transfer reads the round settings and the lease holder from the Env alone:
+// the opts carry intent only, so a caller cannot fill one half and forget the other.
+func TestTransferTakesSettingsAndHolderFromEnv(t *testing.T) {
+	f := newMoveFx(t)
+	f.env.Round, f.env.HolderPID = f.set, 100
+	res, err := f.env.Transfer(bg, f.root, f.be, TransferOpts{Issue: "12", To: "dana"})
+	if err != nil {
+		t.Fatalf("transfer with only the env populated: %v", err)
+	}
+	if res.To != "dana" {
+		t.Errorf("moved to %q, want dana", res.To)
+	}
+	f.env.HolderPID = 999
+	if _, err := f.env.Transfer(bg, f.root, f.be, TransferOpts{Issue: "12", To: "ben"}); blockedBy(t, err) != BlockNoRound {
+		t.Errorf("a holder pid that holds no lease must refuse: %v", err)
 	}
 }
