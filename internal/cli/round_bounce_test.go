@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -162,14 +164,9 @@ func (n bounceNotes) AddMRNote(_ context.Context, pr int, body string) (string, 
 // #1598 AC-7/AC-8: on main with round.support set, `round bounce` counts on the
 // issue and, for the support machine's PR, posts the bounce on the PR.
 func TestRoundBounceSupportPRPostsOnThePR(t *testing.T) {
-	deps := testDeps()
 	fk := &bounceFakes{pr: map[int][]string{}}
-	deps.WorkerEnv = func() worker.Env {
-		return worker.Env{
-			IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return fk, nil },
-			Forge:         func(string, string, tracker.Settings) (worker.Forge, error) { return bounceNotes{f: fk}, nil },
-		}
-	}
+	deps := supportBounceDeps(fk, &trackertest.Fake{Issues: []backlog.Issue{
+		{Key: tracker.NumKey(31), Title: "thing", State: "open"}, {Key: tracker.NumKey(32), Title: "other", State: "open"}}})
 	dir := workerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac","maxBounces":3}}`)
 	if err := worker.RegisterExternal(dir, "ext-1", "mac-ben/31-thing", "", "main", "31", "https://github.com/o/r/pull/70"); err != nil {
 		t.Fatal(err)

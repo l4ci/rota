@@ -64,6 +64,9 @@ type Relayed struct {
 	// Fresh is the slot the branch was transferred to at round.freshAt; "" for
 	// a plain relay. FreshSkipped says why a due fresh transfer fell back.
 	Fresh, FreshSkipped string
+	// PointerErr says why the support pointer comment was not posted; the
+	// relay itself went out.
+	PointerErr string
 }
 
 // itemLimit truncates one relayed item; the rest is on the PR.
@@ -194,6 +197,13 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		merr := worker.RetractMail(root, o.Slot, mail.Seq)
 		out.Bounces = recount()
 		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr), rollbackErr(merr))
+	}
+	// The relay stays on the PR; with the support split active the issue thread
+	// gets the pointer the other machine's watch reads (#1827).
+	if o.Board != nil && issue != "" {
+		if _, err := e.PostPointer(ctx, o.Board, issue, "review", s.PR()); err != nil {
+			out.PointerErr = err.Error()
+		}
 	}
 	return out, nil
 }
