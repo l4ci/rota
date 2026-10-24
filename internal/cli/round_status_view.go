@@ -1,11 +1,11 @@
 package cli
 
 import (
+	"context"
 	"fmt"
-	"github.com/l4ci/rota/internal/strutil"
-	"github.com/l4ci/rota/internal/tracker"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/l4ci/rota/internal/harness"
@@ -37,6 +37,14 @@ type roundSnap struct {
 	CandsErr    string
 	Host        string
 	Notes       []string // unavailable sources and status warnings
+	// Support is the support machine's queue; SupportLoaded is true once a pass
+	// read it, and SupportErr is why it could not be (never an empty queue).
+	Support       []round.SupportItem
+	SupportLoaded bool
+	SupportErr    string
+	// IssueURLs maps an issue id (without "#") to its tracker page, as the
+	// last pass read them; empty on the registry-only first frame.
+	IssueURLs map[string]string
 }
 
 // roundCand is a queued candidate. Why is empty for a ready one.
@@ -48,22 +56,25 @@ type roundCand struct {
 
 // roundLoader reads a fresh snapshot. The real one starts every pass with an
 // empty forge read cache, as `round watch` does.
-type roundLoader func() (roundSnap, error)
+type roundLoader func(ctx context.Context) (roundSnap, error)
 
-// roundStatusView is round status's ViewFunc.
-func roundStatusView(c *Ctx, res Result) (tui.Model, error) {
-	rep, ok := res.Source.(*round.Report)
-	if !ok {
-		return nil, &Error{Exit: ExitInternal, Message: "round status result carries no report"}
-	}
+// roundStatusView is round status's ViewFunc (UIFirst, so the verb has not
+// run). It opens on the registry alone and starts the first full pass in the
+// background: host, login, forge and quota reads come after the first frame.
+func roundStatusView(c *Ctx, _ Result) (tui.Model, error) {
 	root, err := c.Root()
 	if err != nil {
 		return nil, err
 	}
-	load := func() (roundSnap, error) { return loadRoundSnap(c, root) }
-	snap := snapFromReport(rep)
-	fillBurn(c, root, snap.Slots)
-	return newRoundScreen(snap, load, time.Now, roundRefresh), nil
+	load := func(ctx context.Context) (roundSnap, error) { return loadRoundSnap(ctx, c, root) }
+	rep, err := round.LocalReport(root)
+	if err != nil {
+		return nil, err
+	}
+	m := newRoundScreen(snapFromReport(rep), load, time.Now, roundRefresh)
+	m.open = c.deps().OpenURL
+	m.loading = true // Init starts the first pass
+	return m, nil
 }
 
 // snapFromReport is the snapshot of a status pass, without candidates. Every
@@ -79,8 +90,13 @@ func snapFromReport(rep *round.Report) roundSnap {
 
 // loadRoundSnap is one full pass: status, then the candidates. Nothing prints:
 // a warning on stderr would tear the screen, so warnings become Notes.
-func loadRoundSnap(c *Ctx, root string) (roundSnap, error) {
-	ctx := c.Context()
+func loadRoundSnap(ctx context.Context, c *Ctx, root string) (roundSnap, error) {
+	// Every read below goes through c.Context(). The pass's own ctx outlives
+	// the command that built c (a palette entry's run has returned by now) and
+	// ends with the screen.
+	cc := *c
+	cc.ctx = ctx
+	c = &cc
 	c.deps().freshReads()
 	env := c.deps().RoundEnv(ctx, root)
 	rep, err := env.Status(ctx, root)
@@ -89,7 +105,7 @@ func loadRoundSnap(c *Ctx, root string) (roundSnap, error) {
 	}
 	s := snapFromReport(rep)
 	s.CandsLoaded = true
-	fillBurn(c, root, s.Slots)
+	fillBurn(ctx, c, root, s.Slots)
 	set, err := c.deps().roundSettings(root, roundConfigRequired)
 	if err != nil {
 		s.CandsErr = err.Error()
@@ -100,15 +116,43 @@ func loadRoundSnap(c *Ctx, root string) (roundSnap, error) {
 		s.CandsErr = err.Error()
 		return s, nil
 	}
+	if items, err := be.List(false); err == nil { // answered from the pass's read cache
+		s.IssueURLs = map[string]string{}
+		for _, it := range items {
+			if it.URL != "" {
+				s.IssueURLs[strings.TrimPrefix(it.ID, "#")] = it.URL
+			}
+		}
+	}
 	cands, err := env.RoundCandidates(ctx, root, be, set, "")
 	if err != nil {
 		s.CandsErr = err.Error()
-		return s, nil
 	}
 	for _, cd := range cands {
 		s.Cands = append(s.Cands, roundCand{ID: cd.ID, Title: cd.Title, Ready: cd.Ready(), Why: cd.NotReady()})
 	}
+	// The support queue is read on its own: a failure there says so and
+	// never reads as an empty queue.
+	if set.Support != "" {
+		if items, err := env.SupportQueue(ctx, be, set.Support); err != nil {
+			s.SupportErr = err.Error()
+		} else {
+			s.Support, s.SupportLoaded = items, true
+		}
+	}
 	return s, nil
+}
+
+// keepStale carries the last good candidates and support queue over a pass that
+// could not read them: old rows beat a queue that looks empty. The error stays
+// set, so the screen still says the data is old.
+func (s *roundSnap) keepStale(old roundSnap) {
+	if s.CandsErr != "" && old.CandsLoaded && old.CandsErr == "" {
+		s.Cands = old.Cands
+	}
+	if s.SupportErr != "" && old.SupportLoaded {
+		s.Support, s.SupportLoaded = old.Support, true
+	}
 }
 
 // fillBurn sets Row.Burn for every slot holding an issue: the quota it has
@@ -119,7 +163,7 @@ func loadRoundSnap(c *Ctx, root string) (roundSnap, error) {
 // slots with no assign entry stay nil (n/a). The meters are fetched once, for
 // all accounts, however many slots there are; the --ui screen is the only
 // caller, so plain and --json status never fetch.
-func fillBurn(c *Ctx, root string, rows []round.Row) {
+func fillBurn(ctx context.Context, c *Ctx, root string, rows []round.Row) {
 	entries, _ := ledger.Load(root)
 	if len(entries) == 0 {
 		return
@@ -150,7 +194,7 @@ func fillBurn(c *Ctx, root string, rows []round.Row) {
 			continue
 		}
 		if !fetched {
-			meters, fetched = c.deps().WorkerAccounts().Meters(c.Context(), root), true
+			meters, fetched = c.deps().WorkerAccounts().Meters(ctx, root), true
 		}
 		if now := worker.HeadroomOf(meters, last.Account); now != nil {
 			burn := max(start-*now, 0)
@@ -171,9 +215,25 @@ func burnLabel(r round.Row) string {
 
 // loadBox carries a refresh's result from Exec back to Update, which is pure.
 type loadBox struct {
-	mu   sync.Mutex
-	snap roundSnap
-	err  error
+	mu     sync.Mutex
+	snap   roundSnap
+	err    error
+	cancel context.CancelFunc // of the pass in flight
+}
+
+func (b *loadBox) cancelSet() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.cancel != nil
+}
+
+// stop cancels the pass in flight, when there is one: the screen is closing.
+func (b *loadBox) stop() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.cancel != nil {
+		b.cancel()
+	}
 }
 
 func (b *loadBox) put(s roundSnap, err error) {
@@ -188,7 +248,12 @@ func (b *loadBox) take() (roundSnap, error) {
 	return b.snap, b.err
 }
 
+// screens numbers the screens opened in this process, so a Done can be told
+// from a previous screen's.
+var screens atomic.Uint64
+
 type roundScreen struct {
+	tag     string // marks this screen's passes; a Done with another tag is not ours
 	snap    roundSnap
 	sel     string // key of the selected entry, so a refresh keeps the cursor
 	load    roundLoader
@@ -200,10 +265,12 @@ type roundScreen struct {
 	top     int // detail pane scroll
 	refresh int // refreshes finished, for the header
 	loading bool
+	open    func(url string) error // opens a link in the browser; nil without one
+	note    string                 // outcome of the last open-link key
 }
 
 func newRoundScreen(s roundSnap, load roundLoader, now func() time.Time, every time.Duration) *roundScreen {
-	m := &roundScreen{snap: s, load: load, box: &loadBox{}, now: now, every: every, updated: now()}
+	m := &roundScreen{tag: fmt.Sprintf("load-%d", screens.Add(1)), snap: s, load: load, box: &loadBox{}, now: now, every: every, updated: now()}
 	if es := m.entries(); len(es) > 0 {
 		m.sel = es[0].key
 	}
@@ -213,141 +280,58 @@ func newRoundScreen(s roundSnap, load roundLoader, now func() time.Time, every t
 // TickEvery asks runView for a Tick that often.
 func (m *roundScreen) TickEvery() time.Duration { return m.every }
 
-// entry is one selectable row.
-type entry struct {
-	key     string
-	section int // 0 slots, 1 review, 2 candidates
-	line    string
-	title   string
-	body    string
+// Init starts the first full pass when the screen opened on registry data alone.
+func (m *roundScreen) Init() tui.Cmd {
+	if !m.loading {
+		return tui.Cmd{}
+	}
+	return m.pass()
 }
 
-const (
-	secSlots = iota
-	secReview
-	secCands
-)
-
-func (m *roundScreen) entries() []entry {
-	var out []entry
-	for _, r := range m.snap.Slots {
-		out = append(out, slotEntry(r))
-	}
-	for _, q := range m.snap.Review {
-		out = append(out, reviewEntry(q))
-	}
-	for _, c := range m.snap.Cands {
-		out = append(out, candEntry(c))
-	}
-	return out
-}
-
-func prLabel(pr, state string) string {
-	if pr == "" {
-		return "-"
-	}
-	s := pr
-	if n, ok := worker.PRRefNumber(pr); ok {
-		s = fmt.Sprintf("#%d", n)
-	}
-	if state != "" {
-		s += " " + state
-	}
-	return s
-}
-
-// hostLabel is the host column: an adopted slot shows its derived state after
-// "external", since no host reports one.
-func hostLabel(r round.Row) string {
-	if r.State != "" {
-		return r.HostState + "/" + r.State
-	}
-	return r.HostState
-}
-
-func tierModel(r round.Row) string {
-	s := strings.Trim(strings.Join([]string{r.Tier, r.Model}, " "), " ")
-	if s == "" {
-		s = strings.TrimSuffix(r.Kind+"/"+r.Model, "/")
-	}
-	return dash(s)
-}
-
-func slotEntry(r round.Row) entry {
-	issue := dash(r.Issue)
-	if r.Issue != "" {
-		issue = tracker.RefOf(r.Issue)
-	}
-	line := fmt.Sprintf("%-8s %-7s %-10s %-14s %-18s %-7s %s", r.Name, issue, dash(hostLabel(r)), prLabel(r.PR, r.PRState), tierModel(r), bounceLabel(r.Bounces), burnLabel(r))
-	var b []string
-	b = append(b, "PR: "+strutil.FirstNonEmpty(r.PRTitle, "no title known"))
-	b = append(b, "branch: "+dash(r.Branch))
-	if r.PR != "" {
-		b = append(b, "url: "+r.PR)
-	}
-	b = append(b, "evidence: "+strutil.FirstNonEmpty(r.Evidence, "none recorded"))
-	if r.TierReason != "" {
-		b = append(b, "tier: "+r.TierReason)
-	}
-	if len(r.Drift) > 0 {
-		b = append(b, "drift: "+strings.Join(r.Drift, ", "))
-	}
-	if r.BestOf != "" {
-		b = append(b, "best-of with "+r.BestOf)
-	}
-	return entry{key: "slot " + r.Name, section: secSlots, line: tui.Sanitize(line, false), title: tui.Sanitize(r.Name+" · "+issue, false), body: tui.Sanitize(strings.Join(b, "\n"), true)}
-}
-
-func bounceLabel(n int) string {
-	if n == 0 {
-		return "-"
-	}
-	return fmt.Sprint(n)
-}
-
-func reviewEntry(q round.QueuedPR) entry {
-	line := fmt.Sprintf("#%-7s %-14s %-30s %s", q.Issue, prLabel(q.PR, ""), dash(q.Branch), dash(q.From))
-	body := "PR: " + dash(q.PR) + "\nbranch: " + dash(q.Branch) + "\nfrom: " + dash(q.From)
-	return entry{key: "review " + q.Issue + " " + q.PR, section: secReview, line: tui.Sanitize(line, false), title: tui.Sanitize("review · #"+q.Issue, false), body: tui.Sanitize(body, true)}
-}
-
-func candEntry(c roundCand) entry {
-	state := "ready"
-	if !c.Ready {
-		state = "blocked: " + strings.Join(c.Why, "; ")
-	}
-	line := fmt.Sprintf("#%-7s %s — %s", strings.TrimPrefix(c.ID, "#"), c.Title, state)
-	body := c.Title + "\n" + state
-	if !c.Ready {
-		body = c.Title + "\nblocked:\n- " + strings.Join(c.Why, "\n- ")
-	}
-	return entry{key: "cand " + c.ID, section: secCands, line: tui.Sanitize(line, false), title: tui.Sanitize("candidate · #"+strings.TrimPrefix(c.ID, "#"), false), body: tui.Sanitize(body, true)}
-}
+func (m *roundScreen) entries() []entry { return m.snap.entries() }
 
 func (m *roundScreen) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 	n := *m
 	switch t := msg.(type) {
 	case tui.Tick:
 		if n.loading || n.now().Sub(n.updated) < n.every/2 {
-			return &n, tui.Cmd{} // a pass just finished: do not chase it
+			return &n, tui.Cmd{} // a pass is running or just finished: do not chase it
 		}
 		return n.startRefresh()
 	case tui.Done:
+		if t.Tag != n.tag && t.Tag != tagOpen {
+			return &n, tui.Cmd{} // a pass of a screen that was closed
+		}
+		if t.Tag == tagOpen {
+			if t.Err != nil {
+				n.note = tui.Sanitize(t.Err.Error(), false)
+			}
+			return &n, tui.Cmd{}
+		}
 		n.loading = false
 		snap, err := n.box.take()
-		n.updated = n.now()
 		if err != nil {
+			// The last good snapshot and its time stay: only a pass that
+			// worked makes the data fresh.
 			n.err = err.Error()
 			return &n, tui.Cmd{}
 		}
+		n.updated = n.now()
 		n.err = ""
+		snap.keepStale(n.snap)
 		n.snap = snap
 		n.refresh++
 		n.keepSelection()
 		return &n, tui.Cmd{}
 	case tui.Key:
+		n.note = ""
 		switch {
+		case t.Is('i'):
+			return n.openLink("issue")
+		case t.Is('p'):
+			return n.openLink("PR")
 		case t.Kind == tui.KeyEsc || t.Is('q') || t.Kind == tui.KeyCtrlC:
+			n.box.stop()
 			return &n, tui.Cmd{Quit: true}
 		case t.Is('r'):
 			return n.startRefresh()
@@ -364,12 +348,62 @@ func (m *roundScreen) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 	return &n, tui.Cmd{}
 }
 
+// tagOpen marks the Done of an open-link Cmd, so it is not taken for a pass.
+const tagOpen = "open"
+
+// openLink opens the selected row's issue or PR page. The URL is taken from the
+// row at the key press, so a refresh that reorders rows cannot redirect it.
+func (m *roundScreen) openLink(kind string) (tui.Model, tui.Cmd) {
+	n := *m
+	es := n.entries()
+	if len(es) == 0 {
+		return &n, tui.Cmd{}
+	}
+	e := es[n.index(es)]
+	url := e.issueURL
+	if kind == "PR" {
+		url = e.prURL
+	}
+	switch {
+	case url == "":
+		n.note = "no " + kind + " link for this row"
+	case n.open == nil:
+		n.note = "no browser available: " + url
+	default:
+		open := n.open
+		n.note = "opening " + url
+		return &n, tui.Cmd{Tag: tagOpen, Exec: func() error {
+			if err := open(url); err != nil {
+				return fmt.Errorf("could not open %s: %w", url, err)
+			}
+			return nil
+		}}
+	}
+	return &n, tui.Cmd{}
+}
+
+// startRefresh begins a pass in the background unless one is running: a second
+// request while loading is dropped, so passes never overlap.
 func (m *roundScreen) startRefresh() (tui.Model, tui.Cmd) {
 	n := *m
+	if n.loading {
+		return &n, tui.Cmd{}
+	}
 	n.loading = true
-	box, load := n.box, n.load
-	return &n, tui.Cmd{Exec: func() error {
-		s, err := load()
+	return &n, n.pass()
+}
+
+// pass is the background read; keys keep working while it runs, and leaving the
+// screen cancels its context.
+func (m *roundScreen) pass() tui.Cmd {
+	box, load := m.box, m.load
+	return tui.Cmd{Tag: m.tag, Async: func(ctx context.Context) error {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		box.mu.Lock()
+		box.cancel = cancel
+		box.mu.Unlock()
+		s, err := load(ctx)
 		box.put(s, err)
 		return nil
 	}}
@@ -413,12 +447,6 @@ func (m *roundScreen) keepSelection() {
 	m.top = 0
 }
 
-var roundSections = [...]struct{ title, cols string }{
-	secSlots:  {"SLOTS", fmt.Sprintf("%-8s %-7s %-10s %-14s %-18s %-7s %s", "name", "issue", "state", "PR", "tier model", "bounces", "burn")},
-	secReview: {"REVIEW QUEUE", fmt.Sprintf("%-8s %-14s %-30s %s", "issue", "PR", "branch", "from")},
-	secCands:  {"CANDIDATES", ""},
-}
-
 const detailRows = 8
 
 func (m *roundScreen) Render(w, h int, st tui.Style) string {
@@ -428,14 +456,22 @@ func (m *roundScreen) Render(w, h int, st tui.Style) string {
 	es := m.entries()
 	sel := m.index(es)
 	status := "updated " + m.updated.Format("15:04:05")
-	if m.loading {
-		status = "refreshing…"
+	switch {
+	case m.loading && !m.snap.CandsLoaded:
+		status = "loading…"
+	case m.loading:
+		status += " · refreshing…"
+	case m.err != "" && !m.snap.CandsLoaded:
+		status = "not loaded"
 	}
 	head := st.Bold("Round status")
 	if m.snap.Host != "" {
 		head += st.Dim(" · " + tui.Sanitize(m.snap.Host, false))
 	}
 	head += st.Dim(" · " + status)
+	if m.note != "" {
+		head += " · " + st.Yellow(tui.Fit(tui.Sanitize(m.note, false), max(w-len(status)-30, 20)))
+	}
 
 	// Body lines, each remembering the entry it shows (-1 for a heading).
 	type bl struct {
@@ -444,33 +480,49 @@ func (m *roundScreen) Render(w, h int, st tui.Style) string {
 	}
 	var lines []bl
 	add := func(t string, e int) { lines = append(lines, bl{t, e}) }
+	for _, t := range m.snap.totals() {
+		add(st.Dim(tui.Fit(t, w)), -1)
+	}
+	cols := overviewCols(w)
 	next := 0
-	for sec := range roundSections {
-		s := roundSections[sec]
-		var inSec []entry
+	for g := range groupTitles {
+		if !m.snap.showsGroup(g) {
+			continue
+		}
+		var inGroup []entry
 		for _, e := range es {
-			if e.section == sec {
-				inSec = append(inSec, e)
+			if e.group == g {
+				inGroup = append(inGroup, e)
 			}
 		}
-		add(st.Bold(s.title)+st.Dim(fmt.Sprintf(" (%d)", len(inSec))), -1)
-		if s.cols != "" && len(inSec) > 0 {
-			add(st.Dim("  "+tui.Fit(s.cols, w-2)), -1)
+		count := fmt.Sprint(len(inGroup))
+		if g == grpSupport && m.snap.SupportErr != "" && !m.snap.SupportLoaded {
+			count = "?"
 		}
-		for _, e := range inSec {
-			mark, text := "  ", tui.Fit(e.line, w-2)
+		add(st.Bold(groupTitles[g])+st.Dim(" ("+count+")"), -1)
+		if len(inGroup) > 0 {
+			add(st.Dim("  "+cols.header()), -1)
+		}
+		for _, e := range inGroup {
+			mark, text := "  ", cols.row(e, st)
 			if next == sel {
-				mark, text = "▸ ", st.Bold(text)
+				mark, text = st.Cyan("› "), st.Bold(cols.row(e, tui.Style{Links: st.Links}))
 			}
 			add(mark+text, next)
 			next++
 		}
 		switch {
-		case len(inSec) == 0 && sec == secCands && !m.snap.CandsLoaded:
+		case g == grpSupport && m.snap.SupportErr != "":
+			why := "support queue unavailable: " + m.snap.SupportErr
+			if m.snap.SupportLoaded {
+				why += " (rows are from the last read)"
+			}
+			add(st.Yellow("  "+tui.Fit(tui.Sanitize(why, false), w-2)), -1)
+		case g == grpUpcoming && len(inGroup) == 0 && !m.snap.CandsLoaded:
 			add(st.Dim("  loading…"), -1)
-		case len(inSec) == 0 && sec == secCands && m.snap.CandsErr != "":
-			add(st.Yellow("  "+tui.Fit(tui.Sanitize("candidates: "+m.snap.CandsErr, false), w-2)), -1)
-		case len(inSec) == 0:
+		case g == grpUpcoming && m.snap.CandsErr != "":
+			add(st.Yellow("  "+tui.Fit(tui.Sanitize("candidates unavailable: "+m.snap.CandsErr, false), w-2)), -1)
+		case len(inGroup) == 0:
 			add(st.Dim("  none"), -1)
 		}
 	}
@@ -507,11 +559,11 @@ func (m *roundScreen) Render(w, h int, st tui.Style) string {
 	var dt tui.Detail
 	if len(es) > 0 {
 		e := es[sel]
-		dt = tui.Detail{Title: e.title, Body: e.body, Top: m.top}
+		dt = tui.Detail{Title: e.label, Body: e.body, Top: m.top}
 	} else {
 		dt = tui.Detail{Body: "nothing in the round yet"}
 	}
 	body = append(body, dt.Render(w, detailRows, st))
-	bar := tui.Hints([]tui.Hint{{Key: "↑/↓", Desc: "select"}, {Key: "PgUp/PgDn", Desc: "scroll"}, {Key: "r", Desc: "refresh"}, {Key: "q", Desc: "back"}}, w, st)
+	bar := tui.Hints([]tui.Hint{{Key: "↑/↓", Desc: "select"}, {Key: "PgUp/PgDn", Desc: "scroll"}, {Key: "i", Desc: "issue link"}, {Key: "p", Desc: "PR link"}, {Key: "r", Desc: "refresh"}, {Key: "q", Desc: "back"}}, w, st)
 	return tui.Frame(strings.Join(body, "\n"), bar, h)
 }
