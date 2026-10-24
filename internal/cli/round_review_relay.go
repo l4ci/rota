@@ -61,7 +61,7 @@ func reviewOpts(c *Ctx, root string, set roundcfg.Settings, slot string) (round.
 	if err != nil {
 		return round.ReviewOpts{}, trackerErr(err)
 	}
-	o := round.ReviewOpts{Slot: slot, Forge: fg, MaxBounces: set.MaxBounces, FreshAt: set.FreshAt, Settings: set}
+	o := round.ReviewOpts{Slot: slot, Forge: fg, MaxBounces: set.MaxBounces, FreshAt: set.FreshAt}
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
 		return round.ReviewOpts{}, err

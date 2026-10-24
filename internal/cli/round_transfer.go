@@ -25,9 +25,6 @@ func roundTransfer(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if _, err := c.deps().roundSettings(root, roundConfigRequired); err != nil {
-			return Result{}, err
-		}
 		if *to == "" {
 			return Result{}, Usage("--to is required: a roster slot or human")
 		}
