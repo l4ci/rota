@@ -267,9 +267,9 @@ func (d *Deps) resolvePaneHost(root string, cfg any) host.Kind {
 	return worker.ResolvePaneHost(root, cfg, d.Getenv, d.LookPath)
 }
 
-// credentials is worker.SystemCredentials with the home read off Deps.
+// credentials is worker.SystemCredentials with the home and clock read off Deps.
 func (d *Deps) credentials() worker.Credentials {
-	return worker.SystemCredentials(d.Proc, d.UserHomeDir)
+	return worker.SystemCredentials(d.Proc, d.UserHomeDir, d.Now)
 }
 
 // homeOf reads a home seam; "" when it has none or fails.
@@ -314,11 +314,15 @@ func (d *Deps) workerEnv() worker.Env {
 	if e.Accounts == nil && d.WorkerAccounts != nil {
 		e.Accounts = d.WorkerAccounts()
 	}
+	issueCtx := e.Ctx
+	if issueCtx == nil {
+		issueCtx = context.Background()
+	}
 	if e.Issues == nil {
 		// the gate's issue source gets the TrackerOptions too (a jira or
 		// linear test points its connection at a fake site).
 		e.Issues = func(dir string, s tracker.Settings) (worker.Issues, error) {
-			it, err := tracker.NewIssueTracker(context.Background(), s, "", dir, d.trackerOptions()...)
+			it, err := tracker.NewIssueTracker(issueCtx, s, "", dir, d.trackerOptions()...)
 			if err != nil {
 				return nil, err
 			}
@@ -329,7 +333,7 @@ func (d *Deps) workerEnv() worker.Env {
 		// The bounce store reads its count back after writing it, so it skips
 		// the read cache, as the gate's forge does.
 		e.IssueComments = func(dir string, s tracker.Settings) (worker.IssueComments, error) {
-			return tracker.NewIssueTracker(context.Background(), s, "", dir, d.trackerBase()...)
+			return tracker.NewIssueTracker(issueCtx, s, "", dir, d.trackerBase()...)
 		}
 	}
 	if e.Forge == nil {
@@ -337,12 +341,8 @@ func (d *Deps) workerEnv() worker.Env {
 		// cache. The gate re-reads the forge in loops that need a fresh answer
 		// each time (PRMergeable retries, CommitChecks polls, PRView after a
 		// push), and nothing in a gate run calls freshReads.
-		ctx := e.Ctx
-		if ctx == nil {
-			ctx = context.Background()
-		}
 		e.Forge = func(provider, dir string, s tracker.Settings) (worker.Forge, error) {
-			return tracker.NewForge(ctx, s, provider, dir, d.trackerBase()...)
+			return tracker.NewForge(issueCtx, s, provider, dir, d.trackerBase()...)
 		}
 	}
 	return e

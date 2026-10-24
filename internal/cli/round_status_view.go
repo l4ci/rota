@@ -71,7 +71,7 @@ func roundStatusView(c *Ctx, _ Result) (tui.Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	m := newRoundScreen(snapFromReport(rep), load, time.Now, roundRefresh)
+	m := newRoundScreen(snapFromReport(rep), load, c.deps().Now, roundRefresh)
 	m.open = c.deps().OpenURL
 	m.loading = true // Init starts the first pass
 	return m, nil
