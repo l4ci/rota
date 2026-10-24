@@ -76,16 +76,17 @@ shim: `state` echoes the argument (`none` becomes null); `changed` is false for 
 note: the state moves from a second positional to `--to`, the one spelling for setting a state (`milestone status --to`, rule 1).
 
 ### rota item comment add
-rota item comment add <ID> --kind <question|answer|decision|feedback|scope|finding|learning|harvested> --body-file <path|->
+rota item comment add <ID> --kind <question|answer|decision|feedback|scope|finding|learning|harvested|relay> [--round <n>] --body-file <path|->
 repo: scoped
 data: {"id": string, "type": "B"|"F"|"T", "kind": string, "commentId"?: string, "changed": bool}
 exit: 2 for an empty body or an invalid kind; 3 item unknown; 4 for `--kind harvested` on a support machine (`round.role` support: `blockedBy` `role`, the mark is `knowledge harvest --mark`'s to post, #1631); tracker
 old: hv-item-comment <ID> --kind <kind> --body-file <path|->
 shim: `commentId` is the printed id (issue mode only), `changed` true.
 note: split from the old `--list` mode, because read and write have different data.
+note: (#1827) `--kind relay` puts `<!-- rota:relay round=<n> -->` on the first line of the text (after the tracker's own comment header), `<n>` being `--round` or the round state's; `--round` with another kind is exit 2. The support split's gate reads these comments as the orchestrator's relays (see `worker gate`).
 
 ### rota item comment list
-rota item comment list <ID> [--kind <question|answer|decision|feedback|scope|finding|learning|harvested>]
+rota item comment list <ID> [--kind <question|answer|decision|feedback|scope|finding|learning|harvested|relay>]
 repo: scoped
 data: {"id": string, "type": "B"|"F"|"T", "comments": [{"who": string, "kind": string, "text": string}]}
 exit: 2 for an invalid kind; 3 item unknown; tracker

@@ -61,8 +61,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		set, err := c.deps().roundSettings(root, roundConfigUsage)
-		if err != nil {
+		if _, err := c.deps().roundSettings(root, roundConfigUsage); err != nil {
 			return Result{}, err
 		}
 		ctx, stop := workerContext()
@@ -86,11 +85,11 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 			return backlogFail(err)
 		}
 		env := accountedRoundEnv(c, ctx, root)
+		env.HolderPID = *pid
 		res, err := env.Assign(ctx, root, be, round.AssignOpts{
 			ID: id, Agent: *agent, Decisions: decisions, Siblings: pystr.SplitCSV(*siblings), Bundle: bundleArg(*bundle),
-			CheckOnly: *checkOnly, AcceptOverlap: *accept, AcceptOpenPR: *acceptOpenPR, AcceptBatch: *acceptBatch, HolderPID: *pid,
+			CheckOnly: *checkOnly, AcceptOverlap: *accept, AcceptOpenPR: *acceptOpenPR, AcceptBatch: *acceptBatch,
 			Tier: *tier, TierReason: *tierReason, Kind: *kind, Model: *model,
-			Settings: set,
 		})
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)

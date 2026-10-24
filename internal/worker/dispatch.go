@@ -127,6 +127,9 @@ func recordDispatch(root, slot, handle, task, kind string, round *int, turnSeq i
 	})
 }
 
+// RoundOf is the registry's round, else 1: the round a relay is signed with.
+func RoundOf(root string) int { return roundOf(root) }
+
 // roundOf is the registry's round, else 1.
 func roundOf(root string) int {
 	if n, ok := LoadRegistryTolerant(root).Round(); ok && n != 0 {

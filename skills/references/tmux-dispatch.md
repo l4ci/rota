@@ -74,7 +74,7 @@ The two roles run at different trust levels, on purpose:
 
 ## Accounts
 
-`round.accounts` maps slots to independent `CLAUDE_CONFIG_DIR`s; empty means every slot inherits the ambient config dir. Use `rota worker account list` (per-account headroom and verdict), `account pick [--exclude <names>]` and `account assign <slot> --account <name>`; `rota worker pool init` assigns at creation. Contract: A7.
+`round.accounts` entries with `kind: "claude"` (`{kind, name, dir}`) map slots to independent `CLAUDE_CONFIG_DIR`s; none means every slot inherits the ambient config dir. Use `rota worker account list` (per-account headroom and verdict), `account pick [--exclude <names>]` and `account assign <slot> --account <name>`; `rota worker pool init` assigns at creation. Contract: A7.
 
 **`rota` never refreshes credentials.** An expired token reports `unknown` and falls through to rotation. Refreshing would mutate state a live Claude Code session owns, and racing it risks logging the user out.
 

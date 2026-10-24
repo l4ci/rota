@@ -58,19 +58,19 @@ longer points Codex at them.
 
 ### Several Codex accounts
 
-To spread Codex workers over more than one login, list named Codex homes in `round.codexAccounts`, the
-counterpart of `round.accounts`:
+To spread Codex workers over more than one login, list named Codex homes as `round.accounts` entries
+with `"kind": "codex"`:
 
 ```json
-{ "round": { "codexAccounts": [
-  { "name": "personal", "codexHome": "/home/me/.codex-personal" },
-  { "name": "team",     "codexHome": "/home/me/.codex-team" }
+{ "round": { "accounts": [
+  { "kind": "codex", "name": "personal", "dir": "/home/me/.codex-personal" },
+  { "kind": "codex", "name": "team",     "dir": "/home/me/.codex-team" }
 ] } }
 ```
 
 Paths are machine-specific, so put the array in the gitignored `.rota/config.local.json`. A slot keeps its
 account while it stays configured; a new Codex slot takes the account holding the fewest other Codex slots
-(ties go in config order). `rota round status` and `rota worker pool list` show it as `codexAccount`. The
+(ties go in config order). `rota round status` and `rota worker pool list` show it as `codexAccount`; `round status` also gives `account` and `accountKind`. The
 pane gets that account's `CODEX_HOME`, and login is checked in each home you configured:
 
 ```sh
@@ -128,18 +128,18 @@ brief.
 
 ## A Codex plan critic
 
-Codex can also review plans without being a worker. With `plan.criticHarness` set to `codex`, the level-4 critic of `/rota-plan` runs `codex exec --sandbox read-only --ephemeral` on the item and the saved proposal, and reads the last message back as findings. It uses the first `round.codexAccounts` home when any is set, else the default Codex home. It never gets a flag that lifts the sandbox or approvals, and its output is read as untrusted text, not instructions. If `codex` is missing or the run fails, `/rota-plan` falls back to the same-harness critic and prints one line. See [plans](vision-and-plans.md#a-critic-from-another-model).
+Codex can also review plans without being a worker. With `plan.criticHarness` set to `codex`, the level-4 critic of `/rota-plan` runs `codex exec --sandbox read-only --ephemeral` on the item and the saved proposal, and reads the last message back as findings. It uses the first `codex` entry's `dir` in `round.accounts` when any is set, else the default Codex home. It never gets a flag that lifts the sandbox or approvals, and its output is read as untrusted text, not instructions. If `codex` is missing or the run fails, `/rota-plan` falls back to the same-harness critic and prints one line. See [plans](vision-and-plans.md#a-critic-from-another-model).
 
 The same one-shot run reviews code. With `round.harnesses` set, a `size:Major` or `risk:high` PR written by a Claude worker gets a read-only Codex review from `/rota-review`, in a scratch extract of the PR head, recorded as a `review-cross` verdict the merge gate requires. See [review and ship](review-and-ship.md#cross-harness-review).
 
 ## Limits
 
 - **herdr only.** No tmux, no solo mode, no Codex subagents.
-- **No usage meter.** `round.accounts` and its headroom meter are Anthropic's, and a Codex slot is skipped
-  by them. `round.codexAccounts` spreads slots but cannot measure headroom. `rota limit watch` reads only the
+- **No usage meter.** The headroom meter covers only the `claude` entries of `round.accounts`, and a Codex slot is skipped
+  by them. The `codex` entries spread slots but cannot measure headroom. `rota limit watch` reads only the
   limit message in the pane (the wording, something like `You've hit your usage limit ... try again at 3:42 PM`, is recalled, not captured from a real Codex run), then parks the slot. It
   moves the issue to an idle slot on another Codex login that has no limit waiting, or sleeps until the
-  reset when there is none. With every login in `round.codexAccounts` waiting, the round stops filling Codex
+  reset when there is none. With every `codex` login in `round.accounts` waiting, the round stops filling Codex
   slots (see [usage limits](unattended-rounds.md#-usage-limits)).
 - **A Codex update can still break a flag.** If a release renames or drops a launch flag, `assign` refuses
   and names it. Fix `round.codexCommand`, or wait for rota to follow.
@@ -148,8 +148,8 @@ The same one-shot run reviews code. With `round.harnesses` set, a `size:Major` o
 
 ## Check it
 
-`rota doctor` has a `codex` check. It skips when Codex isn't installed and no `round.codexAccounts` are
-configured. Otherwise it fails when Codex is missing, `codex --version` can't be run (there is no supported version range), or a
+`rota doctor` has a `codex` check. It skips when Codex isn't installed and no `codex` entry is in
+`round.accounts`. Otherwise it fails when Codex is missing, `codex --version` can't be run (there is no supported version range), or a
 configured account isn't logged in or (under herdr) lacks the integration, each with the command that fixes
 it. With no accounts it checks the default home and only notes a missing login or integration, since a project
 that never runs Codex workers has no reason to log in. See

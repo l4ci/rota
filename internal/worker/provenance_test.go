@@ -74,3 +74,25 @@ func TestNewRelayEntry(t *testing.T) {
 		t.Errorf("round = %v", v)
 	}
 }
+
+func TestCheckApprovalsOffer(t *testing.T) {
+	line := "## Approvals\n- round support offer: #7 offered to mac, the maintainer's call\n"
+	if got := CheckApprovalsOffer(line, nil, true); got != "" {
+		t.Errorf("offered: %q", got)
+	}
+	if got := CheckApprovalsOffer(line, relayLog(3, "use the shared cache for the lookup"), true); got != "" {
+		t.Errorf("offered with relays: %q", got)
+	}
+	if got := CheckApprovalsOffer(line, nil, false); !strings.Contains(got, "support offer") {
+		t.Errorf("no offer comment: %q", got)
+	}
+}
+
+// A line that cites the offer and a relay nobody logged still fails: the offer
+// citation does not shield the rest of the line.
+func TestCheckApprovalsOfferDoesNotShieldRelayCite(t *testing.T) {
+	body := "## Approvals\n- round support offer and orchestrator relay round 9\n"
+	if got := CheckApprovalsOffer(body, nil, true); !strings.Contains(got, "round 9") {
+		t.Errorf("got %q", got)
+	}
+}

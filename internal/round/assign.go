@@ -101,9 +101,7 @@ type AssignOpts struct {
 	AcceptBatch bool
 	// Bundle is --bundle: the member issues handed to the slot beside ID, the
 	// lead. One branch and one PR close them all.
-	Bundle    []string
-	HolderPID int
-	Settings  roundcfg.Settings
+	Bundle []string
 	// Tier, TierReason and Kind are C9: "" means round.tier, no reason, and
 	// the slot's recorded kind, else claude.
 	Tier, TierReason, Kind string
@@ -550,16 +548,16 @@ func (e Env) workerEnv() worker.Env {
 }
 
 // checkAgent refuses an --agent that is not on the roster.
-func (o AssignOpts) checkAgent() error {
-	if o.Agent != "" && !slices.Contains(o.Settings.Roster, o.Agent) {
-		return usage("--agent %s is not in round.roster (%s)", o.Agent, strings.Join(o.Settings.Roster, ", "))
+func (o AssignOpts) checkAgent(roster []string) error {
+	if o.Agent != "" && !slices.Contains(roster, o.Agent) {
+		return usage("--agent %s is not in round.roster (%s)", o.Agent, strings.Join(roster, ", "))
 	}
 	return nil
 }
 
 // requireLease refuses unless this process holds the round's lease.
 func (e Env) requireLease(ctx context.Context, root string, o AssignOpts) error {
-	_, held, err := e.heldLease(ctx, root, o.HolderPID)
+	_, held, err := e.heldLease(ctx, root, e.HolderPID)
 	if err != nil {
 		return err
 	}
@@ -577,6 +575,9 @@ func (e Env) requireLease(ctx context.Context, root string, o AssignOpts) error 
 // because the pane may already hold the brief. An issue labelled best-of:2
 // goes to two slots at once (assignBestOf).
 func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (res Assigned, err error) {
+	if err := e.roundCfgErr(); err != nil {
+		return res, err
+	}
 	it, err := be.Get(o.ID)
 	if err != nil {
 		return res, err
@@ -621,7 +622,7 @@ type assignRun struct {
 // and runs the planned steps.
 func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts, it *backlog.Item, bo *bestOfRun) (res Assigned, err error) {
 	res.ID, res.Type = it.ID, it.Type
-	tier, reason, err := o.checkFlags(o.Settings)
+	tier, reason, err := o.checkFlags(e.Round)
 	if err != nil {
 		return res, err
 	}
@@ -666,7 +667,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 // checkFlags validates the flags that need no board or registry and returns the
 // tier the worker starts on and its reason.
 func (o AssignOpts) checkFlags(set roundcfg.Settings) (tier, reason string, err error) {
-	if err := o.checkAgent(); err != nil {
+	if err := o.checkAgent(set.Roster); err != nil {
 		return "", "", err
 	}
 	if _, err := o.bundleIDs(); err != nil {
@@ -696,7 +697,7 @@ func (o AssignOpts) checkFlags(set roundcfg.Settings) (tier, reason string, err 
 // fills res as far as it got. stop reports a plan that ends without marks: a
 // readiness check (--check-only) or a best-of preflight.
 func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts, it *backlog.Item, bo *bestOfRun, tier, reason string, res *Assigned) (run assignRun, stop bool, err error) {
-	set := o.Settings
+	set := e.Round
 	id := it.ID
 
 	// 1. This process holds the round's lease.
@@ -945,7 +946,7 @@ func (e Env) bundleMembers(be Board, o AssignOpts, lead *backlog.Item, slot *wor
 		} else if !sameSet(ids, rec) {
 			return nil, blocked(BlockBundle, "slot %s already holds %s with %s; a member leaves only by `rota round transfer <member> --to human`", slot.Name(), lead.ID, bundleText(rec))
 		}
-	} else if n := o.Settings.BundleMax; n > 0 && len(ids) > n {
+	} else if n := e.Round.BundleMax; n > 0 && len(ids) > n {
 		return nil, blocked(BlockBundle, "%d members is more than round.bundleMax %d", len(ids), n)
 	}
 	var out []*backlog.Item
@@ -1097,7 +1098,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 			return worker.RecordItemStart(root, worker.NormID(id), e.now())
 		}},
 	}...)
-	set := o.Settings
+	set := e.Round
 	d := &delivery{Slot: agent, Task: id, Branch: func() string { return res.Branch }, Kind: run.kind, Model: res.Model, Round: rnd,
 		Brief: func() string {
 			return e.taskBrief(ctx, root, be, taskBriefSpec{agent: agent, id: id, branch: res.Branch, contract: run.brief,

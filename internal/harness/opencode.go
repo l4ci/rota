@@ -135,9 +135,9 @@ func (opencode) AmbientAccount(getenv func(string) string) Account {
 }
 
 func (opencode) Accounts(cfg any) AccountList {
-	l := AccountList{Key: "round.opencodeAccounts"}
-	for _, a := range config.OpencodeAccounts(cfg) {
-		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.ConfigDir})
+	l := AccountList{Key: "round.accounts"}
+	for _, a := range config.AccountsOf(cfg, config.KindOpencode) {
+		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.Dir})
 	}
 	return l
 }
@@ -330,7 +330,7 @@ func (o opencode) Preflight(ctx context.Context, p Probe, po PreflightOpts) (Set
 	set.Worktree = po.Worktree
 	acct, _ := PickCodexAccount(po.Accounts, po.Account, po.Load)
 	if acct.Name != "" && acct.Home == "" {
-		return set, refuse(Usage, "round.opencodeAccounts account '%s' has no configDir", acct.Name)
+		return set, refuse(Usage, "round.accounts opencode account '%s' has no dir", acct.Name)
 	}
 	set.Home, set.Account = acct.Home, acct.Name
 	if err := os.MkdirAll(set.StateDir, 0o700); err != nil {

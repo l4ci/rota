@@ -155,7 +155,7 @@ func TestAssignOntoDoneSlotWithNoOpenPRNamesBranchAndReconcile(t *testing.T) {
 func TestAssignRefusalMovesNothingBeforeTheClaim(t *testing.T) {
 	f := newMoveFx(t)
 	f.finish(t, "ben", pr7)
-	f.set.Brief = filepath.Join(f.root, "nope.md")
+	f.env.Round.Brief = filepath.Join(f.root, "nope.md")
 	if _, err := f.assign("13", "ben"); blockedBy(t, err) != BlockBriefMissing {
 		t.Fatalf("%v", err)
 	}
@@ -163,8 +163,8 @@ func TestAssignRefusalMovesNothingBeforeTheClaim(t *testing.T) {
 		t.Errorf("a refused assign parks nothing: %v", f.queued())
 	}
 	// CheckOnly never parks either.
-	f.set.Brief = ""
-	if _, err := f.env.Assign(bg, f.root, f.be, AssignOpts{ID: "13", Agent: "ben", HolderPID: 100, Settings: f.set, CheckOnly: true}); err != nil {
+	f.env.Round.Brief = ""
+	if _, err := f.env.Assign(bg, f.root, f.be, AssignOpts{ID: "13", Agent: "ben", CheckOnly: true}); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.queued()) != 0 || f.slot("ben").Task() != "12" {

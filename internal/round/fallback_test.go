@@ -194,7 +194,7 @@ func TestHarnessStepWritesTheFieldOnTheFileBackend(t *testing.T) {
 // A cooling codex with workerKind=codex does not fall back to claude: only a
 // LATER harness in round.harnesses can take the issue.
 func TestFallbackGoesOnlyToALaterHarness(t *testing.T) {
-	cfg := `{"round":{"dispatch":"herdr","workerKind":"codex","harnesses":["claude","codex"],"codexAccounts":[{"name":"c1","codexHome":"/h1"}],"tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`
+	cfg := `{"round":{"dispatch":"herdr","workerKind":"codex","harnesses":["claude","codex"],"accounts":[{"kind":"codex","name":"c1","dir":"/h1"}],"tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`
 	f := newAssignFixture(t)
 	f.config(t, cfg)
 	f.env.Forge = f.be.asForge()
@@ -234,7 +234,7 @@ func TestTransferDoesNotFallBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.set = set
+	f.set, f.env.Round = set, set
 	f.env.Worker.Now = func() time.Time { return quotaNow }
 	f.env.Worker.Accounts = &worker.Accounts{Env: worker.Env{Config: diskConfig, Now: func() time.Time { return quotaNow }},
 		Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
