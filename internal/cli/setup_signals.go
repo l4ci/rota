@@ -49,6 +49,10 @@ func readSetupSignals(c *Ctx, dir string, answered map[string]bool) map[string]s
 		sigs["test.fast"] = sig[0]
 		sigs["test.full"] = sig[1]
 	}
+	if setup, shared, ok := depSignals(dir); ok {
+		sigs["round.envSetup"] = setup
+		sigs["round.sharedDirs"] = shared
+	}
 	var kinds []string
 	for _, k := range harness.Kinds() { // each kind is also its CLI's name
 		if onPath(k) {
@@ -256,4 +260,33 @@ func fileHasLine(path string, re *regexp.Regexp) bool {
 		}
 	}
 	return false
+}
+
+// depSignals is [round.envSetup, round.sharedDirs] read from the dependency
+// manifests: the first manifest that installs into a directory in the tree
+// wins. Cargo.toml gives none: cargo builds into target/, which one
+// CARGO_TARGET_DIR shares better than a link (docs/contributing/rounds.md).
+func depSignals(dir string) (setup, shared setupSignal, ok bool) {
+	if exists(dir, "package.json") {
+		cmd, ev := "npm install", "package.json"
+		switch {
+		case exists(dir, "pnpm-lock.yaml"):
+			cmd, ev = "pnpm install --frozen-lockfile", "pnpm-lock.yaml"
+		case exists(dir, "yarn.lock"):
+			cmd, ev = "yarn install --frozen-lockfile", "yarn.lock"
+		case exists(dir, "package-lock.json"):
+			cmd, ev = "npm ci", "package-lock.json"
+		}
+		b, _ := jsonx.MarshalCompact([]any{"node_modules"})
+		return setupSignal{cmd, ev}, setupSignal{string(b), ev + " installs into node_modules (a slot with another lockfile installs its own)"}, true
+	}
+	if exists(dir, "pyproject.toml") {
+		b, _ := jsonx.MarshalCompact([]any{".venv"})
+		ev := "pyproject.toml"
+		if exists(dir, "uv.lock") {
+			ev = "pyproject.toml and uv.lock"
+		}
+		return setupSignal{"uv sync", ev}, setupSignal{string(b), ev + " installs into .venv (a slot with another lockfile installs its own)"}, true
+	}
+	return setupSignal{}, setupSignal{}, false
 }

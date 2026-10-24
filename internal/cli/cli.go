@@ -35,6 +35,10 @@ type Command struct {
 	// View, when set, opens the verb's terminal screen under --ui: it builds
 	// the screen from the verb's own Result. Nil means --ui is refused.
 	View ViewFunc
+	// UIFirst makes --ui open View without running the verb: the screen reads
+	// its own data after it is up, so a slow source never delays the first
+	// frame. View then gets a zero Result.
+	UIFirst bool
 	// UISub, on a group, names the verb that `rota <group> --ui` runs.
 	UISub string
 	Subs  []*Command
@@ -373,6 +377,9 @@ func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stde
 		if _, err := c.RepoPath(); err != nil {
 			return fail(c, stdout, err)
 		}
+	}
+	if g.ui && cmd.UIFirst {
+		return uiFinish(c, stdout, cmd, Result{})
 	}
 	res, err := runVerb(c, positional)
 	if err != nil {

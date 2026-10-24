@@ -220,3 +220,35 @@ func TestSanitize(t *testing.T) {
 		}
 	}
 }
+
+func TestTerminalLink(t *testing.T) {
+	st := Style{Links: true}
+	const url = "https://gitlab.example.com/group/sub/project/-/merge_requests/7"
+	got := st.Link(url, "!7")
+	if want := "\x1b]8;;" + url + "\x1b\\!7\x1b]8;;\x1b\\"; got != want {
+		t.Errorf("Link = %q, want %q", got, want)
+	}
+	if Strip(got) != "!7" || Width(got) != 2 {
+		t.Errorf("Strip %q width %d: the link must be invisible to layout", Strip(got), Width(got))
+	}
+	for name, s := range map[string]Style{"links off": {}, "colour only": {Color: true}} {
+		if out := s.Link(url, "!7"); out != "!7" {
+			t.Errorf("%s: %q", name, out)
+		}
+	}
+	for _, bad := range []string{"", "javascript:alert(1)", "file:///etc/passwd", "https://a.b/x y", "https://a.b/\x1b]0;x\x07", "https://a.b/\n", "ftp://a.b/"} {
+		if out := st.Link(bad, "x"); out != "x" {
+			t.Errorf("unsafe %q produced %q", bad, out)
+		}
+		if SafeURL(bad) {
+			t.Errorf("SafeURL(%q)", bad)
+		}
+	}
+	// Untrusted text cannot smuggle its own link or title.
+	if out := Sanitize("a\x1b]8;;https://evil.example\x1b\\click\x1b]8;;\x1b\\ b", false); out != "aclick b" {
+		t.Errorf("Sanitize kept a hyperlink: %q", out)
+	}
+	if !SafeURL("http://127.0.0.1:8080/a?b=c#d") || !SafeURL("https://github.com/acme/project/issues/1") {
+		t.Error("ordinary forge URLs must be safe")
+	}
+}

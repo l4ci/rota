@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -21,8 +22,12 @@ type Tick struct{}
 
 func (Tick) msg() {}
 
-// Done carries what a Cmd's Exec returned.
-type Done struct{ Err error }
+// Done carries what a Cmd's Exec or Async returned, with the Cmd's Tag so a
+// screen that starts several kinds of work can tell them apart.
+type Done struct {
+	Err error
+	Tag string
+}
 
 func (Done) msg() {}
 
@@ -50,9 +55,24 @@ type Cmd struct {
 	// Quit leaves the screen, after Exec when there is one; Run returns
 	// Exec's error.
 	Quit bool
+	// Async runs in the background while the screen keeps taking keys; its
+	// error comes back to Update as Done. Its context ends when Run returns, so
+	// a read still in flight stops when the screen is left. It leaves the
+	// terminal alone. Delivery is polled every asyncPoll while a Tick is set,
+	// else it waits for the next key.
+	Async func(ctx context.Context) error
+	// Tag is echoed in the Done of this Cmd's Exec or Async.
+	Tag string
 }
 
-func (c Cmd) zero() bool { return c.Exec == nil && !c.Quit }
+func (c Cmd) zero() bool { return c.Exec == nil && !c.Quit && c.Async == nil }
+
+// Starter is a Model that wants a Cmd run before the first key, such as a first
+// background load.
+type Starter interface{ Init() Cmd }
+
+// asyncPoll is how often Run looks for a finished Async while it waits for a key.
+const asyncPoll = 25 * time.Millisecond
 
 // Terminal is what Run touches outside its own memory; NewTerminal fills it
 // from the process and tests fill it with fakes. In and Out are required.
@@ -132,26 +152,67 @@ func Run(t Terminal, m Model) error {
 	in, dl, closeIn := d.input()
 	defer closeIn()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	type result struct {
+		tag string
+		err error
+	}
+	finished := make(chan result, 16)
+	pending := 0
+	start := func(cmd Cmd) {
+		if cmd.Async == nil {
+			return
+		}
+		pending++
+		go func() { finished <- result{cmd.Tag, cmd.Async(ctx)} }()
+	}
+
 	buf := make([]byte, 64)
 	next := time.Now().Add(t.Tick)
-	for {
-		d.draw()
-		if dl != nil {
-			dl.SetReadDeadline(next)
+	var cmd Cmd
+	if s, ok := m.(Starter); ok {
+		cmd = s.Init()
+	}
+	for first, dirty := true, true; ; first = false {
+		if dirty {
+			d.set(m)
+			d.draw()
 		}
-		n, rerr := in.Read(buf)
 		var msgs []Msg
-		switch {
-		case dl != nil && errors.Is(rerr, os.ErrDeadlineExceeded):
-			msgs, next = []Msg{Tick{}}, time.Now().Add(t.Tick)
-		case n == 0 && rerr != nil:
-			return nil
-		default:
-			for _, k := range DecodeKeys(buf[:n]) {
-				msgs = append(msgs, k)
+		if !first {
+			if dl != nil {
+				at := next
+				if p := time.Now().Add(asyncPoll); pending > 0 && p.Before(at) {
+					at = p
+				}
+				dl.SetReadDeadline(at)
 			}
+			n, rerr := in.Read(buf)
+			switch {
+			case dl != nil && errors.Is(rerr, os.ErrDeadlineExceeded):
+				if pending == 0 || !time.Now().Before(next) {
+					msgs, next = []Msg{Tick{}}, time.Now().Add(t.Tick)
+				}
+			case n == 0 && rerr != nil:
+				return nil
+			default:
+				for _, k := range DecodeKeys(buf[:n]) {
+					msgs = append(msgs, k)
+				}
+			}
+			for ; pending > 0; pending-- {
+				select {
+				case r := <-finished:
+					msgs = append([]Msg{Done{Err: r.err, Tag: r.tag}}, msgs...)
+					continue
+				default:
+				}
+				break
+			}
+			cmd = Cmd{}
 		}
-		var cmd Cmd
+		dirty = len(msgs) > 0 || (first && !cmd.zero())
 		for _, msg := range msgs {
 			m, cmd = m.Update(msg)
 			if !cmd.zero() {
@@ -160,8 +221,12 @@ func Run(t Terminal, m Model) error {
 		}
 		for !cmd.zero() {
 			d.set(m)
+			start(cmd)
 			if cmd.Exec == nil {
-				return nil
+				if cmd.Quit {
+					return nil
+				}
+				break
 			}
 			var err error
 			if cmd.Cooked {
@@ -175,9 +240,8 @@ func Run(t Terminal, m Model) error {
 			} else if err = cmd.Exec(); cmd.Quit {
 				return err
 			}
-			m, cmd = m.Update(Done{Err: err})
+			m, cmd = m.Update(Done{Err: err, Tag: cmd.Tag})
 		}
-		d.set(m)
 	}
 }
 
