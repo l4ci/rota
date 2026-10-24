@@ -15,7 +15,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"regexp"
 	"slices"
 	"strconv"
@@ -480,21 +479,12 @@ func ReadSettings(cfg any) (Settings, error) {
 	return SettingsFromConfig(cfg), nil
 }
 
-// defaultRetryWait is the pause before a rate-limited tracker call is retried.
-const defaultRetryWait = 60 * time.Second
+// RetryPause is the pause before a rate-limited tracker call is retried. It
+// is a variable only so tests can zero it; the rotatest build tag
+// (test/runner.sh) also reads ROTA_ISSUES_RETRY_WAIT_SECONDS.
+var RetryPause = 60 * time.Second
 
-// RetryWaitEnv is a test seam: ROTA_ISSUES_RETRY_WAIT_SECONDS (fractions
-// allowed, 0 for none) replaces the retry pause. It is not a config key.
-const RetryWaitEnv = "ROTA_ISSUES_RETRY_WAIT_SECONDS"
-
-// retryWait is the retry pause: defaultRetryWait, or RetryWaitEnv when it holds
-// a number of at least 0.
-func retryWait() time.Duration {
-	if f, err := strconv.ParseFloat(os.Getenv(RetryWaitEnv), 64); err == nil && f >= 0 {
-		return time.Duration(f * float64(time.Second))
-	}
-	return defaultRetryWait
-}
+func retryWait() time.Duration { return RetryPause }
 
 // ValidateConfig is the corrupt-config check of the keys SettingsFromConfig
 // reads: an invalid forge.provider or issues.source is a KindInternal error

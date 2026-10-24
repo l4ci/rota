@@ -63,16 +63,33 @@ func migrateScopePlan(path, local string, keep []string, m *ScopeMigration, appl
 	if err != nil {
 		return err
 	}
-	// The renamed view; under apply the rename already ran, so this is a no-op.
+	// The view the earlier steps leave: the work.* rename and the merges step.
+	// Under apply they already ran, so this is a no-op; in a preview it makes
+	// the plan the one --apply writes. A merges conflict leaves a file as it is:
+	// the merges step reports it.
+	global := globalLayer()
+	var below []any
+	if h, ok := walk(global, "round.harnesses"); ok {
+		below = asList(h)
+	}
 	cfg, _, _ = MigrateRoundKeys(cfg)
-	l := layers{global: globalLayer(), project: cloneObject(cfg)}
+	if out, _, c := migrateMergesDoc(cfg, below); len(c) == 0 {
+		cfg = out
+	}
+	if h, _ := lookupPresent(cfg, []string{"round", "harnesses"}); len(asList(h)) > 0 {
+		below = asList(h)
+	}
+	l := layers{global: global, project: cloneObject(cfg)}
 	if loc != nil {
 		loc, _, _ = MigrateRoundKeys(loc)
+		if out, _, c := migrateMergesDoc(loc, below); len(c) == 0 {
+			loc = out
+		}
 		l.local = cloneObject(loc)
 	}
 	merged := mergeLayers(&l)
 	moves := false
-	for _, k := range Keys {
+	for _, k := range scopeRows(cfg) {
 		v, ok := walk(cfg, k.Name)
 		if !ok || slices.Contains(keep, k.Name) || k.Scope == ScopeProject {
 			continue
@@ -132,6 +149,32 @@ func migrateScopePlan(path, local string, keep []string, m *ScopeMigration, appl
 		deleteIn(cfg, strings.Split(c.Key, "."))
 	}
 	return fsio.WriteJSONAtomic(path, cfg)
+}
+
+// scopeRows is the schema rows the scope step walks. An object-valued row
+// (round.commands) is replaced by one row per entry the tracked file holds, so
+// the object moves entry by entry: an entry config.local.json lacks moves, one
+// it holds is dropped, and the others survive beside it.
+func scopeRows(cfg *jsonx.Object) []Key {
+	var rows []Key
+	for _, k := range Keys {
+		if k.Type != TypeObject {
+			rows = append(rows, k)
+			continue
+		}
+		obj, ok := walk(cfg, k.Name)
+		o, isObj := obj.(*jsonx.Object)
+		if !ok || !isObj {
+			rows = append(rows, k)
+			continue
+		}
+		for _, name := range o.Keys() {
+			e := k
+			e.Name, e.Type, e.Default = k.Name+"."+name, TypeString, ""
+			rows = append(rows, e)
+		}
+	}
+	return rows
 }
 
 // cloneObject is a deep copy of o, for mergeLayers to edit without touching

@@ -178,7 +178,7 @@ func TestSetupSetAloneNeedsNoYes(t *testing.T) {
 func TestSetupRejectsBadSetBeforeWriting(t *testing.T) {
 	for _, args := range [][]string{
 		{"--yes", "--set", "work.isolation=sideways"},
-		{"--yes", "--set", "models.worker=opus"},
+		{"--yes", "--set", "learn.verify=true"},
 		{"--yes", "--set", "nokey"},
 		{"--yes", "--set", "issues.provider=github"}, // replaced by issues.source
 	} {
