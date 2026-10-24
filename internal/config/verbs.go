@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -52,14 +53,24 @@ func configPath(root string) string { return rotatree.Config(root) }
 
 func localPath(root string) string { return rotatree.ConfigLocal(root) }
 
-// IsSchemaKey is whether name is a row of Keys.
+// CommandsKey is the object row holding one worker command per harness kind.
+const CommandsKey = "round.commands"
+
+// IsCommandKey is whether name is round.commands.<kind> for a harness kind.
+func IsCommandKey(name string) bool {
+	kind, ok := strings.CutPrefix(name, CommandsKey+".")
+	return ok && slices.Contains(AccountKinds, kind)
+}
+
+// IsSchemaKey is whether name is a row of Keys, or one entry of an object row
+// (round.commands.<kind>).
 func IsSchemaKey(name string) bool {
 	for _, k := range Keys {
 		if k.Name == name {
 			return true
 		}
 	}
-	return false
+	return IsCommandKey(name)
 }
 
 // Show lists the effective value of every schema key in schema order, or of
@@ -101,6 +112,9 @@ func Show(root string, key string, one bool) ([]Entry, error) {
 	}
 	if v, ok := walk(merged, key); ok {
 		return []Entry{{Key: key, Value: v, Source: source(key)}}, nil
+	}
+	if IsCommandKey(key) {
+		return []Entry{{Key: key, Value: "", Source: "default"}}, nil
 	}
 	return nil, fmt.Errorf("%w %q", ErrUnknownKey, key)
 }
@@ -266,7 +280,14 @@ func Reset(root string, env projects.Env, key string) error {
 		_, err := Unset(root, key, LayerProject)
 		return err
 	}
-	return Validate(key, "")
+	if err := Validate(key, ""); err != nil {
+		return err
+	}
+	if IsCommandKey(key) {
+		_, err := Unset(root, key, LayerProject)
+		return err
+	}
+	return nil
 }
 
 // Unset removes key from the layer's file, and the objects it leaves empty. It
@@ -410,6 +431,12 @@ func validateEnum(key string, value any) error {
 // takes an integer of 0 or more. A project path key takes a relative path that
 // stays inside the project, or "" to clear it.
 func validateValue(key string, value any) error {
+	if IsCommandKey(key) {
+		if _, ok := value.(string); !ok {
+			return fmt.Errorf("%w for %s: want a command string", ErrBadValue, key)
+		}
+		return nil
+	}
 	if nonNegativeIntKeys[key] {
 		if n, ok := value.(json.Number); !ok || !isNonNegInt(n) {
 			return fmt.Errorf("%w for %s: want an integer of 0 or more", ErrBadValue, key)

@@ -51,9 +51,9 @@ func no() *bool  { b := false; return &b }
 
 // issueCfgLegacy is the unmigrated form of issueCfg: issues on the tracker, the
 // provider left to the origin remote (#797).
-const issueCfgLegacy = `{"backlog": {"backend": "issues"}, "issues": {"retryWaitSeconds": 0}}`
+const issueCfgLegacy = `{"backlog": {"backend": "issues"}, "issues": {}}`
 
-const issueCfg = `{"forge": {"provider": "github"}, "issues": {"source": "github", "retryWaitSeconds": 0}}`
+const issueCfg = `{"forge": {"provider": "github"}, "issues": {"source": "github"}}`
 
 func cm(id int, body string) map[string]any {
 	return map[string]any{"id": id, "body": body, "author": "fake-user"}
@@ -301,7 +301,7 @@ func suiteItemIssue(t *testing.T) {
 				eq(t, e, "data.id", "12")
 				eq(t, e, "data.type", "T")
 			}},
-		isc{name: "create/custom-labels", cfg: `{"forge": {"provider": "github"}, "issues": {"source": "github", "retryWaitSeconds":0,"labels":{"types":{"bug":"kind/bug","feature":"kind/feature","task":"kind/task"},"priorityPrefix":"prio-","sizePrefix":"effort:"}}}`,
+		isc{name: "create/custom-labels", cfg: `{"forge": {"provider": "github"}, "issues": {"source": "github", "labels":{"types":{"bug":"kind/bug","feature":"kind/feature","task":"kind/task"},"priorityPrefix":"prio-","sizePrefix":"effort:"}}}`,
 			argv: j("item", "create", "--kind", "bugs", "--title", "Custom", "--tag", "P1"), want: 0, changed: yes()},
 	)
 	both(cr("gitlab-feature", 0, "--kind", "features", "--title", "New thing", "--tag", "Minor", "--milestone", "M07"))

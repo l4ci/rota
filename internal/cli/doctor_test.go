@@ -497,8 +497,14 @@ func TestDoctorTestLine(t *testing.T) {
 		t.Fatalf("default: %v", c)
 	}
 	rotaInWith(t, d, dir, "config", "set", "test.slots", "3")
-	rotaInWith(t, d, dir, "config", "set", "gate.smokeShards", "2")
-	if c := line(); !strings.Contains(c["detail"].(string), "width 3; smoke shards 2 (gate.smokeShards)") {
+	env := d.Getenv
+	d.Getenv = func(k string) string {
+		if k == "ROTA_SMOKE_SHARDS" {
+			return "2"
+		}
+		return env(k)
+	}
+	if c := line(); !strings.Contains(c["detail"].(string), "width 3; smoke shards 2 (ROTA_SMOKE_SHARDS)") {
 		t.Errorf("configured: %v", c)
 	}
 }

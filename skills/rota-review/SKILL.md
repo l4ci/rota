@@ -9,8 +9,8 @@ description: Use on "review this", "check before I ship", "look over the branch"
 
 Read `.rota/config.json`:
 
-- `models.orchestrator` — model for the Spec reviewer at `full` depth (default `opus`)
-- `round.tiers.claude.standard` — model for the Standards reviewer, and for the Spec reviewer at `light` depth (the `standard` tier; silent default `models.worker`). No review-specific key.
+- `orchestrator.model` — model for the Spec reviewer at `full` depth (default `opus`)
+- `round.tiers.claude.standard` — model for the Standards reviewer, and for the Spec reviewer at `light` depth (the `standard` tier; silent default `sonnet`). No review-specific key.
 
 ## When to Use
 

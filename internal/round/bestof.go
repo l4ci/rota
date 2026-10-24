@@ -125,7 +125,7 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 		return res, err
 	}
 	kinds, sources := [2]string{}, [2]string{}
-	kinds[0], sources[0] = resolveKind(o.Kind, pick.Harness, set.WorkerKind, slots[0].HarnessKind(), false)
+	kinds[0], sources[0] = resolveKind(o.Kind, pick.Harness, set.DefaultKind(), slots[0].HarnessKind(), false)
 	kinds[1], sources[1] = kinds[0], sources[0]
 	pinned := o.Kind != "" || pick.Harness != ""
 	if !pinned {

@@ -135,7 +135,7 @@ A round runs in your terminal, not in a cloud dashboard. Start the orchestrator 
 > [!TIP]
 > On a wide screen, `rota layout split` folds the workers into the orchestrator's tab as one grid (as in the demo above); `rota layout tabs` gives each its own tab again. In the `rota` palette, one View entry switches between them.
 
-Workers can be Claude Code, Codex or [OpenCode](docs/usage/opencode-workers.md), mixed in one round: a `harness:codex` or `harness:opencode` label, or `round.workerKind`, picks per issue or per project.
+Workers can be Claude Code, Codex or [OpenCode](docs/usage/opencode-workers.md), mixed in one round: a `harness:codex` or `harness:opencode` label, or the first entry of `round.harnesses`, picks per issue or per project.
 
 ## 🔀 Several accounts, balanced
 

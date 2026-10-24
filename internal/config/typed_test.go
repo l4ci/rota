@@ -113,17 +113,17 @@ func TestBool(t *testing.T) {
 }
 
 func TestStrings(t *testing.T) {
-	cfg := decode(t, `{"models":{"worker":null},"qa":{"gate":5}}`)
-	if got := String(cfg, "models.worker"); got != "sonnet" {
+	cfg := decode(t, `{"round":{"tiers":{"claude":{"standard":null}}},"qa":{"gate":5}}`)
+	if got := String(cfg, "round.tiers.claude.standard"); got != "sonnet" {
 		t.Errorf("String default = %q, want sonnet", got)
 	}
 	if got := String(cfg, "qa.gate"); got != "" {
 		t.Errorf("String non-string = %q, want empty", got)
 	}
-	if got := StringIfSet(decode(t, `{}`), "models.worker"); got != "" {
+	if got := StringIfSet(decode(t, `{}`), "round.tiers.claude.standard"); got != "" {
 		t.Errorf("StringIfSet unset = %q, want empty", got)
 	}
-	if got := StringIfSet(decode(t, `{"models":{"worker":"haiku"}}`), "models.worker"); got != "haiku" {
+	if got := StringIfSet(decode(t, `{"orchestrator":{"model":"haiku"}}`), "orchestrator.model"); got != "haiku" {
 		t.Errorf("StringIfSet = %q, want haiku", got)
 	}
 }
@@ -137,9 +137,7 @@ func TestSharedRanges(t *testing.T) {
 		ok   string
 		want int
 	}{
-		{"handoffMaxAge", "orchestrator.handoffMaxAgeSeconds", HandoffMaxAgeSeconds, []string{"0"}, "30", 30},
 		{"usageThreshold", "orchestrator.usageThreshold", UsageThreshold, []string{"0", "101"}, "100", 100},
-		{"fallbackSleep", "limits.fallbackSleepSeconds", FallbackSleepSeconds, []string{"0"}, "5", 5},
 	}
 	build := func(key, v string) any {
 		parts := strings.Split(key, ".")
@@ -176,12 +174,12 @@ func TestEscalateIssueReadsNumbersAndKeys(t *testing.T) {
 func TestStringOrDefault(t *testing.T) {
 	cases := []struct{ cfg, want string }{
 		{`{}`, "sonnet"},
-		{`{"models":{"worker":null}}`, "sonnet"},
-		{`{"models":{"worker":""}}`, "sonnet"},
-		{`{"models":{"worker":"haiku"}}`, "haiku"},
+		{`{"round":{"tiers":{"claude":{"standard":null}}}}`, "sonnet"},
+		{`{"round":{"tiers":{"claude":{"standard":""}}}}`, "sonnet"},
+		{`{"round":{"tiers":{"claude":{"standard":"haiku"}}}}`, "haiku"},
 	}
 	for _, c := range cases {
-		if got := StringOrDefault(decode(t, c.cfg), "models.worker"); got != c.want {
+		if got := StringOrDefault(decode(t, c.cfg), "round.tiers.claude.standard"); got != c.want {
 			t.Errorf("StringOrDefault(%s) = %q, want %q", c.cfg, got, c.want)
 		}
 	}

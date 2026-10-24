@@ -40,14 +40,14 @@ func TestFillCreatesMissingFileInSchemaOrder(t *testing.T) {
 // The seed rota init writes (issues-only keys in schema order) filled out is
 // byte-identical to a full config written in schema order (G7).
 func TestFillCompletesTheSeedInSchemaOrder(t *testing.T) {
-	seed := `{"issues": {"label": "in-progress", "autoCreateLabel": true}}`
+	seed := `{"issues": {"labels": {"inProgress": "in-progress"}, "autoCreateLabel": true}}`
 	root := project(t, seed, "")
 	filled, err := Fill(root)
 	if err != nil || len(filled) != len(requiredNames()) {
 		t.Fatalf("filled %v, err %v", filled, err)
 	}
 	full := fullConfig()
-	full = fillKey(full, "", []string{"issues", "label"}, "in-progress")
+	full = fillKey(full, "", []string{"issues", "labels", "inProgress"}, "in-progress")
 	full = fillKey(full, "", []string{"issues", "autoCreateLabel"}, true)
 	want, _ := jsonx.Marshal(full)
 	if got := read(t, root); got != string(want)+"\n" {
@@ -65,20 +65,19 @@ func TestFillKeepsPresentAndUnknownKeys(t *testing.T) {
 	o := doc.(*jsonx.Object)
 	// present keys keep their order; added ones go before the first later sibling
 	// work.dispatch is migrated to round.dispatch first (#1097).
-	// Only project keys are filled: models, work.isolation and the round keys
-	// are machine or taste keys (#1786).
-	want := []string{"zzz", "work", "models", "round", "learn", "docs", "git", "umbrella", "hvSkills", "rota", "test"}
+	// Only project keys are filled: work.isolation and the round keys are
+	// machine or taste keys (#1786). models.worker moves to round.tiers (#1825).
+	want := []string{"zzz", "work", "round", "learn", "docs", "git", "umbrella", "hvSkills", "rota", "test"}
 	if got := o.Keys(); !reflect.DeepEqual(got, want) {
 		t.Errorf("top keys %v", got)
 	}
-	models, _ := getObject(o, "models")
-	if !reflect.DeepEqual(models.Keys(), []string{"worker"}) {
-		t.Errorf("models keys %v", models.Keys())
+	if _, ok := walk(o, "models"); ok {
+		t.Errorf("models left behind: %v", o)
 	}
-	if v, _ := Value(o, "models.worker"); v != "haiku" {
-		t.Errorf("present key overwritten: %v", v)
+	if v, _ := Value(o, "round.tiers.claude.standard"); v != "haiku" {
+		t.Errorf("models.worker not carried over: %v", v)
 	}
-	if _, ok := walk(o, "models.orchestrator"); ok {
+	if _, ok := walk(o, "orchestrator.model"); ok {
 		t.Errorf("local layer leaked into config.json: %v", o)
 	}
 	work, _ := getObject(o, "work")
@@ -288,7 +287,7 @@ func TestFillKeepsNonEmptyTestFull(t *testing.T) {
 // them without failing, fill deletes them (and the emptied providers object)
 // and keeps the rest.
 func TestFillStripsRemovedKeys(t *testing.T) {
-	old := `{"issues": {"providers": {"github": true, "gitlab": true}, "label": "mine", "autoCreateLabel": true, "filterMineOnly": true}}`
+	old := `{"issues": {"providers": {"github": true, "gitlab": true}, "autoCreateLabel": true, "filterMineOnly": true}}`
 	root := project(t, old, "")
 	want := []string{"issues.filterMineOnly", "issues.providers.github", "issues.providers.gitlab"}
 	if got := Removed(root); !reflect.DeepEqual(got, want) {
@@ -302,11 +301,8 @@ func TestFillStripsRemovedKeys(t *testing.T) {
 	}
 	doc, _ := jsonx.Decode([]byte(read(t, root)))
 	issues, _ := getObject(doc.(*jsonx.Object), "issues")
-	if got := issues.Keys(); !reflect.DeepEqual(got, []string{"label", "autoCreateLabel"}) {
+	if got := issues.Keys(); !reflect.DeepEqual(got, []string{"autoCreateLabel"}) {
 		t.Errorf("issues keys %v", got)
-	}
-	if v, _ := issues.Get("label"); v != "mine" {
-		t.Errorf("label %v", v)
 	}
 }
 
@@ -381,8 +377,8 @@ func TestLegacyKeysStillDecide(t *testing.T) {
 // config.json: check names it, marked local, and fill deletes it from the
 // local file.
 func TestRemovedNamesLocalOnlyKeys(t *testing.T) {
-	root := project(t, `{"issues": {"label": "mine"}}`,
-		`{"round": {"autopilot": true}, "issues": {"filterMineOnly": true, "label": "x"}}`)
+	root := project(t, `{"issues": {"autoCreateLabel": true}}`,
+		`{"round": {"autopilot": true}, "issues": {"filterMineOnly": true, "autoCreateLabel": false}}`)
 	want := []string{"issues.filterMineOnly (config.local.json)", "round.autopilot (config.local.json)"}
 	if got := Removed(root); !reflect.DeepEqual(got, want) {
 		t.Fatalf("Removed before fill: %v, want %v", got, want)
@@ -394,7 +390,7 @@ func TestRemovedNamesLocalOnlyKeys(t *testing.T) {
 		t.Errorf("Removed after fill: %v", got)
 	}
 	local := readLocal(t, root)
-	if strings.Contains(local, "filterMineOnly") || strings.Contains(local, "autopilot") || !strings.Contains(local, `"label"`) {
+	if strings.Contains(local, "filterMineOnly") || strings.Contains(local, "autopilot") || !strings.Contains(local, `"autoCreateLabel"`) {
 		t.Errorf("config.local.json after fill:\n%s", local)
 	}
 }

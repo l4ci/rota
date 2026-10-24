@@ -282,19 +282,18 @@ issue to read and dispute, the item's `## Out of scope` section when it has one,
   | `inherit` | empty | empty | empty |
 
   `inherit` launches workers without `--model`, so they run on whatever model the session's provider
-  picks (a non-Anthropic provider, say). Precedence per Claude tier: explicit key, profile, then
-  `models.worker` (standard only), then the default.
+  picks (a non-Anthropic provider, say). Precedence per Claude tier: explicit key, profile, then the default.
 - **Kind.** `--kind codex` starts a Codex worker instead of a Claude one; see
   [Codex workers](codex-workers.md). An issue can ask for its own harness and model: label it
   `harness:claude` or `harness:codex`, and optionally `model:<id>` (file backend: end the bullet with
-  `Harness: codex Model: <id>`). Harness: `--kind`, then the label, then `round.workerKind` (the project default), then the
+  `Harness: codex Model: <id>`). Harness: `--kind`, then the label, then the first entry of `round.harnesses` (the project default), then the
   slot's kind, else `claude` (a slot resuming its own issue keeps its kind ahead of the project default); `kindSource` in `round status` and `assign --check-only` names the winner. Model: `--model <id>`, then the label, then the tier map, else the harness default.
   An unknown harness, two labels of one key, or a model id with anything beyond letters, digits and
   `. _ : / @ -` refuses with exit 4 (`blockedBy` `harness label` or `model label`). A model named by
   flag or label needs a `{model}` placeholder in the harness's command. `round candidates` and
   `round status` show the choice.
   **Quota fallback.** List the harnesses a round may use in `round.harnesses` (`[claude, codex]`);
-  the first is the project default when `round.workerKind` is unset. When every account of an
+  the first is the project default. When every account of an
   issue's harness is cooling down and a later entry has headroom, `assign` and the tick give the
   issue to that harness (`kindSource` `quota fallback`), label it `harness:<kind>` (file backend:
   the `Harness:` field) and record `fallbackFrom` in the ledger. The label makes the pick explicit

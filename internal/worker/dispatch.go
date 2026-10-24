@@ -24,8 +24,8 @@ type DispatchOpts struct {
 	Relay       bool
 	Round       *int
 	BootTimeout int // seconds; 0 means 60
-	// Model is the model this worker starts with ("" keeps models.worker, or
-	// launches without --model under round.profile=inherit); see workerCommand.
+	// Model is the model this worker starts with ("" keeps round.tiers.claude.standard, or
+	// launches without --model under round.profile=inherit); see round.commands.claude.
 	Model string
 	// Branch is the per-task branch the reset guard cuts; "" means
 	// rota-worker/<slot>-<task>. A round slot works on <agent>/<issue>-<slug>.
@@ -150,7 +150,7 @@ func roundOf(root string) int {
 // A task dispatch also guards the slot (the reset guard: refuse when the
 // worktree holds uncommitted or unmerged work, else cut a fresh per-task branch
 // from the cycle branch) and refuses to spawn unless the old session is
-// provably gone. A round.workerCommand that resumes a previous conversation is
+// provably gone. A round.commands.claude that resumes a previous conversation is
 // rejected.
 //
 // Provenance: every payload, brief or relay, is signed with a first line
@@ -161,12 +161,12 @@ func roundOf(root string) int {
 // (rotated on every task dispatch), and the codex launch carries a
 // UserPromptSubmit hook (`rota worker prompt-check`) that blocks any input
 // without a valid trailer, bar a maintainer's `m:` answer. A codex task
-// dispatch is refused (5) when round.codexCommand lacks
+// dispatch is refused (5) when round.commands.codex lacks
 // --dangerously-bypass-hook-trust, without which Codex skips the hook; a
 // codex relay is refused (5) when the key is gone.
 //
-// Exit mapping: 2 unparseable workerCommand; 3 missing pool, slot, worktree,
-// body file or relay session; 4 the slot holds work or workerCommand resumes
+// Exit mapping: 2 unparseable round.commands.<kind>; 3 missing pool, slot, worktree,
+// body file or relay session; 4 the slot holds work or round.commands.<kind> resumes
 // a conversation; 5 host unavailable, old session will not close, or a dialog
 // refused input; 6 the brief was never submitted (safe to resend).
 func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (DispatchResult, error) {

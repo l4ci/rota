@@ -424,7 +424,7 @@ func TestLoadSettings(t *testing.T) {
 	if _, err := LoadSettings(cfg(`{"orchestrator":{"switchOnUsage":true,"usageThreshold":0}}`)); err == nil {
 		t.Error("usageThreshold 0 with switching on must be an error")
 	}
-	for _, bad := range []string{`{"orchestrator":{"handoffThreshold":0}}`, `{"orchestrator":{"handoffThreshold":101}}`, `{"orchestrator":{"handoffThreshold":"x"}}`, `{"orchestrator":{"handoffMaxBlocks":-1}}`, `{"orchestrator":{"stateMaxAgeSeconds":0}}`} {
+	for _, bad := range []string{`{"orchestrator":{"handoffThreshold":0}}`, `{"orchestrator":{"handoffThreshold":101}}`, `{"orchestrator":{"handoffThreshold":"x"}}`} {
 		if _, err := LoadSettings(cfg(bad)); err == nil {
 			t.Errorf("%s should fail", bad)
 		}

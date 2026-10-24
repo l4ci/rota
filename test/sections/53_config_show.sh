@@ -19,8 +19,8 @@ OUT=$(show autonomy.level)
   || fail "T118: config.local.json should win: $OUT"
 [ "$(echo "$OUT" | jget 'data.entries[0].source')" = "local" ] \
   || fail "T118: config.local.json should report source local: $OUT"
-OUT=$(show ship.secondOpinionRunner)
-[ "$(echo "$OUT" | jget 'data.entries[0].value')" = "subagent" ] \
+OUT=$(show qa.gate)
+[ "$(echo "$OUT" | jget 'data.entries[0].value')" = "advisory" ] \
   || fail "T118: unset key should report the default: $OUT"
 [ "$(echo "$OUT" | jget 'data.entries[0].source')" = "default" ] \
   || fail "T118: unset key should report source default: $OUT"
@@ -46,7 +46,7 @@ for want in ("learn.promoteThreshold", "docs.path"):
     assert want in missing, (want, missing)
 assert "round.dispatch" not in missing, ("machine key required", missing)
 for k in missing:
-    assert not k.startswith("release.") and k != "issues.label", ("non-required key leaked", k)
+    assert not k.startswith("release."), ("non-required key leaked", k)
 ' || fail "T118: config check missing list should name required table keys, got: $V"
 pass "T118: config check names the required keys of the same table"
 
@@ -68,8 +68,8 @@ case "$( cd "$CS" && "$ROTA_BIN" config show )" in *"$(printf '\033')"*) fail "p
 [ "$(cat "$CS/.rota/config.json")" = "{}" ] || fail "a refused screen wrote config.json"
 pass "config edit and config --ui refuse off a terminal and write nothing; plain show carries no ANSI"
 
-# Tier rows carry the effective model and its source (profile, explicit, models.worker, default, harness default).
-printf '{"models":{"worker":"opus"},"round":{"profile":"budget","tiers":{"claude":{"heavy":"fable"}}}}\n' > "$CS/.rota/config.json"
+# Tier rows carry the effective model and its source (profile, explicit, default, harness default).
+printf '{"round":{"profile":"budget","tiers":{"claude":{"heavy":"fable"}}}}\n' > "$CS/.rota/config.json"
 rm -f "$CS/.rota/config.local.json"
 OUT=$(show round.tiers.claude.light)
 [ "$(echo "$OUT" | jget 'data.entries[0].effective')" = "haiku" ] && [ "$(echo "$OUT" | jget 'data.entries[0].effectiveSource')" = "profile" ] \

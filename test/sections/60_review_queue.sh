@@ -7,7 +7,7 @@ for prov in github gitlab; do
   P="$TMP_RQ/$prov"; mkdir -p "$P"
   git init -q --bare "$P/origin.git"
   git clone -q "$P/origin.git" "$P/work" 2>/dev/null; mkdir -p "$P/work/.rota"
-  printf '{"issues":{"source":"%s","retryWaitSeconds":0}}\n' "$prov" > "$P/work/.rota/config.json"
+  printf '{"issues":{"source":"%s"}}\n' "$prov" > "$P/work/.rota/config.json"
   (
     cd "$P/work"
     git config user.email t@t; git config user.name t

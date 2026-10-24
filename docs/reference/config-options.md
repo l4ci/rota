@@ -4,7 +4,7 @@ This page lists every config key with its type, default, allowed values and desc
 
 The key tables are generated from the schema in `internal/config/keys.go` (`go generate ./internal/config`); do not edit them here. Four verbs cover configuration:
 
-- **`rota setup`** asks the machine role first (`round.role`; `support` takes the support path, see [Support role](../contributing/rounds.md#support-role)). On main it runs `rota init`, then asks the main choices on a terminal (where the issues live, isolation, merge strategy, dispatch, autonomy, review, QA), then optional ones: the worker harness (`round.workerKind`), the orchestrator harness (`orchestrator.harness`), the base branch (`git.baseBranch`) and the test commands (`test.fast`, `test.full`). Skip one and the key stays unset. Where the repo gives a signal (go.mod, CI files, the origin host, harnesses on PATH), the question suggests that value and shows where it was read. `--yes` takes the suggestion, else the default; `--list` prints the questions with each suggestion and its evidence.
+- **`rota setup`** asks the machine role first (`round.role`; `support` takes the support path, see [Support role](../contributing/rounds.md#support-role)). On main it runs `rota init`, then asks the main choices on a terminal (where the issues live, isolation, merge strategy, dispatch, autonomy, review, QA), then optional ones: the worker harness (`round.harnesses`), the orchestrator harness (`orchestrator.harness`), the base branch (`git.baseBranch`) and the test commands (`test.fast`, `test.full`). Skip one and the key stays unset. Where the repo gives a signal (go.mod, CI files, the origin host, harnesses on PATH), the question suggests that value and shows where it was read. `--yes` takes the suggestion, else the default; `--list` prints the questions with each suggestion and its evidence.
 - **`rota init`** writes `.rota/config.json` on first setup, fills any missing required project keys with their defaults on later runs, and stamps `rota.version`. It writes no machine or taste key, so those come from the global config or the defaults. It never overwrites a value you set.
 - **`rota config show`** and **`rota config set`** read and change keys later. `rota config show --json` adds each key's `type`, `group`, `desc` and `choices`.
 - **`rota config edit`** opens the config screen in a terminal (also `rota config --ui`): keys grouped by section with a detail pane, booleans toggle, enum keys pick from their choices, the rest take a typed value checked as `config set` checks it. See [configuration](../usage/configuration.md#the-config-screen).
@@ -109,12 +109,18 @@ Each Q1–Q5 option maps to a single `key.path: value` in `.rota/config.json`:
 
 Every key, by group. Scope is the layer the key belongs in, with the file `rota config set` writes it to by default; Default is what a missing key reads as; Values lists the allowed values of an enum key.
 
-### models
+### orchestrator
 
 | Key | Scope | Type | Default | Values | Description |
 |-----|-------|------|---------|--------|-------------|
-| `models.orchestrator` | machine (local) | string | `"opus"` |  | Model for planning, exploration, verification and design. Usually opus, sonnet or haiku. |
-| `models.worker` | machine (local) | string | `"sonnet"` |  | Model for implementation sub-tasks and round workers. Usually opus, sonnet or haiku. |
+| `orchestrator.model` | machine (local) | string | `"opus"` |  | Model for planning, exploration, verification and design. Usually opus, sonnet or haiku. |
+| `orchestrator.command` | machine (local) | string | unset |  | Rounds: Command that starts the orchestrator. Empty builds claude --model <orchestrator.model> --permission-mode auto (with --continue for rota worker session ensure). |
+| `orchestrator.handoffThreshold` | machine (local) | int | `75` |  | Context percentage, 1 to 100, at which the Stop hook blocks until the orchestrator writes a handoff. |
+| `orchestrator.restartPrompt` | machine (local) | string | `"Continue as orchestrator: read the handoff injected at session start, run rota round status, and resume the round."` |  | Text appended as the last argument of a restart. Must not be empty. |
+| `orchestrator.escalateIssue` | machine (local) | int | `0` |  | Issue number, or key like PROJ-123 on a key-based tracker, the breaker's escalation comment goes on. 0 leaves it unset: a host notification and a warning only. |
+| `orchestrator.harness` | machine (local) | enum | `"claude"` | `claude`, `codex`, `hermes`, `opencode` | Which agent rota orchestrate, and bare rota in an initialized project, starts as the orchestrator. |
+| `orchestrator.switchOnUsage` | machine (local) | bool | `false` |  | Opt-in: block the Stop hook for a handoff when usage reaches orchestrator.usageThreshold, so the supervisor restarts under another account. |
+| `orchestrator.usageThreshold` | machine (local) | int | `90` |  | Percent of the 5-hour or weekly limit, 1 to 100, at which orchestrator.switchOnUsage triggers. |
 
 ### work
 
@@ -123,7 +129,7 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 | `work.isolation` | taste (tracked) | enum | `"branch"` | `branch`, `worktree` | /rota-work: How a cycle isolates changes from main: a feature branch in this checkout, or a separate git worktree. |
 | `work.mergeStrategy` | taste (tracked) | enum | `"direct"` | `direct`, `pr` | /rota-work: How finished work lands: merged straight into the base branch with --no-ff, or through a pull request. Ignored when issues.source is a tracker (always pr) or the forge is local (always direct); rota ship strategy prints the answer. |
 | `work.tdd` | project (tracked) | bool | `true` |  | /rota-work: Whether a cycle needs a recorded red-first run before a behavior change; round workers follow it too. Off skips the RED requirement. |
-| `work.contextGuard` | taste (tracked) | enum | `"warn"` | `warn`, `off`, `auto` | /rota-work: What a session that is not an orchestrator does at orchestrator.handoffThreshold, where rota hooks are installed. warn adds one line to the next prompt recommending /rota-pause; auto also has the Stop hook ask for /rota-pause at the next task boundary, up to orchestrator.handoffMaxBlocks times; off does nothing. |
+| `work.contextGuard` | taste (tracked) | enum | `"warn"` | `warn`, `off`, `auto` | /rota-work: What a session that is not an orchestrator does at orchestrator.handoffThreshold, where rota hooks are installed. warn adds one line to the next prompt recommending /rota-pause; auto also has the Stop hook ask for /rota-pause at the next task boundary, a couple of times; off does nothing. |
 
 ### round
 
@@ -131,9 +137,8 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 |-----|-------|------|---------|--------|-------------|
 | `round.dispatch` | machine (local) | enum | `"subagent"` | `subagent`, `tmux`, `herdr` | Rounds: Where round workers run. subagent means detect: herdr in a herdr pane, tmux in tmux, else in-harness subagents. /rota-work ignores it. |
 | `round.slots` | machine (local) | int | `3` |  | Rounds: Number of worker slots rota round start provisions (at least 1). --slots overrides it for one round. |
-| `round.workerCommand` | machine (local) | string | unset |  | Rounds: Command that starts a worker session in its tmux window. Empty builds claude --model <models.worker> --dangerously-skip-permissions; {model} receives the tier's model. |
+| `round.commands` | machine (local) | object | `{}` |  | Rounds: Command that starts a worker session, per harness kind (claude, codex or opencode), as round.commands.<kind>. Empty or unset builds the default command for the kind, with --model from the tier; {model} receives the tier's model. An unknown kind is an error. |
 | `round.accounts` | machine (local) | list | `[]` |  | Rounds: Logins for worker slots, as {kind, name, dir} objects. kind is claude, codex or opencode and dir the harness's config home (CLAUDE_CONFIG_DIR, CODEX_HOME, OPENCODE_CONFIG_DIR); a leading ~ expands to the home directory. Names are unique across kinds. Empty: every slot uses the orchestrator's login (Claude) or the harness's default home. Machine-specific, so set it in the global config or config.local.json. An empty list in the project or local file counts as unset, so the global value applies. |
-| `round.operatorCommand` | machine (local) | string | unset |  | Rounds: Command that starts the orchestrator. Empty builds claude --model <models.orchestrator> --permission-mode auto (with --continue for rota worker session ensure). |
 | `round.scope` | project (tracked) | enum | `"milestone"` | `milestone`, `slate`, `next`, `open` | Rounds: Which issues a round may take. slate: only those named at rota round start --items. milestone: the active milestones. next: also the next ready milestone. open: every open item no slot holds. |
 | `round.roster` | project (tracked) | list | `["ben", "dana", "nia", "kit"]` |  | Rounds: Agent names slots are provisioned under, one slot each. Lowercase letters, digits and -, no duplicates. |
 | `round.brief` | machine (local) | path | unset |  | Rounds: Path of the standing worker contract the assignment pointer names. Empty means skills/references/worker-contract.md in the checkout, else the installed copy. |
@@ -143,11 +148,10 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 | `round.support` | project (tracked) | string | unset |  | Rounds: Name of the support machine (e.g. mac). Non-empty enables a support orchestrator on that machine, and is the prefix of its roster names. Needs an issue tracker. |
 | `round.role` | machine (local) | enum | `"main"` | `main`, `support` | Rounds: This machine's role, set in .rota/config.local.json only. support builds site:support issues and opens PRs but never merges or writes tracked .rota/ content. |
 | `round.tier` | taste (tracked) | enum | `"standard"` | `light`, `standard`, `heavy` | Rounds: Default worker tier for rota round assign: light for reading, standard for code and tests, heavy for hard reasoning. |
-| `round.workerKind` | machine (local) | enum | unset | `claude`, `codex`, `opencode` | Rounds: Project default worker harness. Empty: the slot's recorded kind, else claude. --kind and an issue's harness: label beat it. |
-| `round.harnesses` | machine (local) | list | `[]` |  | Rounds: Worker harnesses a round may use, in quota-fallback order, e.g. [claude, codex]. When every account of an issue's harness is cooling down, the next harness with headroom takes it, labelled harness:<kind> (file backend: the Harness: field). --kind, a harness: label and a model: label or --model never fall back. Empty: only the default harness. |
+| `round.harnesses` | machine (local) | list | `[]` |  | Rounds: Worker harnesses a round may use, in quota-fallback order, e.g. [claude, codex]. The first entry is the default kind; --kind and an issue's harness: label beat it. When every account of an issue's harness is cooling down, the next harness with headroom takes it, labelled harness:<kind> (file backend: the Harness: field). --kind, a harness: label and a model: label or --model never fall back. Empty: the slot's recorded kind, else claude. |
 | `round.profile` | machine (local) | enum | unset | `quality`, `balanced`, `budget`, `inherit` | Rounds: Named model profile that fills round.tiers.claude.* (light/standard/heavy). quality: sonnet/opus/opus. balanced: haiku/sonnet/opus. budget: haiku/haiku/sonnet. inherit: no model, workers launch without --model. Empty keeps the tier defaults. An explicit round.tiers.claude.<tier> beats the profile; Codex and OpenCode tiers are not touched. |
 | `round.tiers.claude.light` | machine (local) | string | `"haiku"` |  | Rounds: Model a light-tier Claude worker starts with. |
-| `round.tiers.claude.standard` | machine (local) | string | unset |  | Rounds: Model a standard-tier Claude worker starts with. Empty follows models.worker. |
+| `round.tiers.claude.standard` | machine (local) | string | `"sonnet"` |  | Rounds: Model a standard-tier Claude worker starts with. An explicit value beats round.profile. |
 | `round.tiers.claude.heavy` | machine (local) | string | `"opus"` |  | Rounds: Model a heavy-tier Claude worker starts with. |
 | `round.tiers.codex.light` | machine (local) | string | `"gpt-6-luna"` |  | Rounds: Model a light-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three. |
 | `round.tiers.codex.standard` | machine (local) | string | `"gpt-6.1-sol"` |  | Rounds: Model a standard-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three. |
@@ -167,8 +171,6 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 | `round.batch` | project (tracked) | int | `0` |  | Rounds: Most items a round may have assigned and not yet landed or parked at once. rota round assign refuses the next one past it and rota round tick assigns none. 0 means no limit. |
 | `round.bundleMax` | project (tracked) | int | `3` |  | Rounds: Most member issues rota round assign --bundle may hand one slot beside the lead issue. It refuses a bundle past it. 0 means no limit. |
 | `round.reviewLoop` | taste (tracked) | enum | `"manual"` | `manual`, `auto` | Rounds: What happens when a reviewer comments on a finished worker's PR. manual reports it and leaves rota round review-relay to the orchestrator; auto relays it to the worker as a counted bounce (round.maxBounces) from rota round watch and rota round tick. |
-| `round.codexCommand` | machine (local) | string | unset |  | Rounds: Command that starts a Codex worker session. Empty builds the default codex command, with --model from the tier when one is chosen; {model} receives it. |
-| `round.opencodeCommand` | machine (local) | string | unset |  | Rounds: Command that starts an OpenCode worker session. Empty builds the default opencode command, with --model from the tier when one is chosen; {model} receives it. |
 | `round.envSetup` | project (tracked) | string | unset |  | Rounds: Shell command rota worker pool init runs in each new slot worktree, for example npm ci. Empty: no setup. |
 | `round.sharedDirs` | project (tracked) | list | `[]` |  | Rounds: Dependency directories, relative to the repo root, that rota symlinks from the main checkout into each slot worktree, for example node_modules or .venv. rota worker pool init links them and rota round assign re-links them on a parked slot. When the slot's lockfile differs from main's, or a directory is missing in main, no directory is linked and round.envSetup installs the slot's own. List the directories in .gitignore. Empty: no sharing. |
 | `round.portBase` | machine (local) | int | `20000` |  | Rounds: First port of the range rota hands out to worker slots. A new slot takes the lowest range of portBlock ports from here that no other slot holds, exported as ROTA_PORT_BASE; a slot keeps its range until it is reaped or reclaimed. |
@@ -195,7 +197,6 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 |-----|-------|------|---------|--------|-------------|
 | `ship.review` | taste (tracked) | enum | `"full"` | `full`, `light`, `none` | How deep a review /rota-ship runs first: full, light (the Spec reviewer only, on the standard tier; the Standards reviewer when the branch references no issue) or none. FAIL blocks, CONCERNS ask, PASS flows through. An object {default, lightBelow, labels, paths, scopeDrift, supportPaths} picks the depth by diff size, label and path, and lifts light to full on a Door: one-way PR or a diff outside the issue's files (docs, tests and golden records beside them don't count); true and false still mean full and none. |
 | `ship.secondOpinion` | taste (tracked) | bool | `false` |  | Opt-in fresh-eyes adversarial gate in /rota-ship Step 3.5. |
-| `ship.secondOpinionRunner` | taste (tracked) | enum | `"subagent"` | `subagent` | Who runs the /rota-ship second-opinion gate. The codex value was removed in 5.0: /rota-ship notes it and runs the subagent in advisory mode. |
 | `ship.qa` | taste (tracked) | bool | `false` |  | Opt-in product-QA gate: /rota-ship runs /rota-qa run after review and before merge or PR. |
 | `ship.uat` | taste (tracked) | bool | `false` |  | Opt-in human acceptance walk-through: /rota-ship runs /rota-qa uat after review and before merge or PR. Never part of the round merge gate. |
 | `ship.mergeApproval` | project (tracked) | enum | `"none"` | `none`, `all`, `paths` | Which merges need a human: none, all, or only those touching ship.mergeApprovalPaths. The merge verbs enforce it at every autonomy level. |
@@ -244,9 +245,6 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 
 | Key | Scope | Type | Default | Values | Description |
 |-----|-------|------|---------|--------|-------------|
-| `issues.label` | project (tracked) | string | `"in-progress"` |  | Legacy alias of issues.labels.inProgress, read only when the new key is unset. |
-| `issues.retryWaitSeconds` | project (tracked) | int | `60` |  | Seconds to wait before the single retry after a primary rate limit. |
-| `issues.bulkPaceMs` | project (tracked) | int | `1000` |  | Milliseconds rota migrate issues waits between tracker writes, to stay under secondary rate limits. 0 disables the pause. |
 | `issues.labels.inProgress` | project (tracked) | string | `"in-progress"` |  | Tracker label for an item a worker holds. |
 | `issues.labels.needsReview` | project (tracked) | string | `"needs-review"` |  | Tracker label for an item whose work awaits review. |
 | `issues.labels.changesRequested` | project (tracked) | string | `"changes-requested"` |  | Tracker label for an item sent back with review feedback. |
@@ -343,38 +341,12 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 |-----|-------|------|---------|--------|-------------|
 | `research.packageCheck` | taste (tracked) | bool | `false` |  | Opt-in registry check in /rota-spike Step 2 and /rota-plan Step 2: each new package they would recommend is looked up on its registry (npm, PyPI, crates.io, Go proxy); missing ones are dropped, suspect ones need a user answer. Makes network calls. Off makes no registry call. |
 
-### orchestrator
-
-| Key | Scope | Type | Default | Values | Description |
-|-----|-------|------|---------|--------|-------------|
-| `orchestrator.handoffThreshold` | machine (local) | int | `75` |  | Context percentage, 1 to 100, at which the Stop hook blocks until the orchestrator writes a handoff. |
-| `orchestrator.stateMaxAgeSeconds` | machine (local) | int | `120` |  | How old the statusline reading may be before the hooks ignore it. |
-| `orchestrator.handoffMaxAgeSeconds` | machine (local) | int | `900` |  | How long a handoff counts as fresh. |
-| `orchestrator.handoffMaxBlocks` | machine (local) | int | `2` |  | How many times the Stop hook re-blocks a session that still has no handoff before it gives up. |
-| `orchestrator.keepaliveMaxRestarts` | machine (local) | int | `10` |  | Restarts rota keepalive run makes before it gives up. 0 stops at the first handoff exit. |
-| `orchestrator.keepaliveBreaker` | machine (local) | int | `3` |  | How many restarts in a row may leave no new handoff before the breaker trips. 1 or more. |
-| `orchestrator.keepaliveBackoffSeconds` | machine (local) | int | `5` |  | Seconds rota keepalive run waits before a restart. 0 or more. |
-| `orchestrator.restartPrompt` | machine (local) | string | `"Continue as orchestrator: read the handoff injected at session start, run rota round status, and resume the round."` |  | Text appended as the last argument of a restart. Must not be empty. |
-| `orchestrator.escalateIssue` | machine (local) | int | `0` |  | Issue number, or key like PROJ-123 on a key-based tracker, the breaker's escalation comment goes on. 0 leaves it unset: a host notification and a warning only. |
-| `orchestrator.harness` | machine (local) | enum | `"claude"` | `claude`, `codex`, `hermes`, `opencode` | Which agent rota orchestrate, and bare rota in an initialized project, starts as the orchestrator. |
-| `orchestrator.switchOnUsage` | machine (local) | bool | `false` |  | Opt-in: block the Stop hook for a handoff when usage reaches orchestrator.usageThreshold, so the supervisor restarts under another account. |
-| `orchestrator.usageThreshold` | machine (local) | int | `90` |  | Percent of the 5-hour or weekly limit, 1 to 100, at which orchestrator.switchOnUsage triggers. |
-
 ### limits
 
 | Key | Scope | Type | Default | Values | Description |
 |-----|-------|------|---------|--------|-------------|
 | `limits.mode` | machine (local) | enum | `"switch"` | `switch`, `sleep` | How the usage-limit watcher reacts to a limit. switch moves a worker's issue to an idle slot on an account with headroom, else sleeps. sleep always waits for the reset. |
-| `limits.resumeMarginSeconds` | machine (local) | int | `60` |  | Seconds to wait after the reset before the resume prompt is typed. 0 or more. |
-| `limits.fallbackSleepSeconds` | machine (local) | int | `1800` |  | Seconds to sleep on a limit with no known reset time. 1 or more. |
-| `limits.maxResumes` | machine (local) | int | `3` |  | Resume prompts one limit gets before the entry is marked failed and escalated. 1 or more. |
 | `limits.resumePrompt` | machine (local) | string | `"The usage limit has reset. Continue where you left off."` |  | Text typed into the limited pane to resume it. Must not be empty. |
-
-### gate
-
-| Key | Scope | Type | Default | Values | Description |
-|-----|-------|------|---------|--------|-------------|
-| `gate.smokeShards` | machine (local) | int | `4` |  | Concurrent shards bash test/gate.sh splits the smoke suite into, 1 or more. ROTA_SMOKE_SHARDS overrides it for one run. Unset, the gate uses one shard per two cores, at most four. |
 
 ### doctor
 

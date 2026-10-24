@@ -57,7 +57,7 @@ pass "detail[empty]: a backticks-only path is rejected, backlog untouched"
 TMP_SDI="$(mktemp -d)"
 trap 'rm -rf "$TMP_SD" "$TMP_SDI"' EXIT
 mkdir -p "$TMP_SDI/.rota"
-echo '{"issues":{"source":"github","retryWaitSeconds":0}}' > "$TMP_SDI/.rota/config.json"
+echo '{"issues":{"source":"github"}}' > "$TMP_SDI/.rota/config.json"
 (
   cd "$TMP_SDI"
   git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m seed

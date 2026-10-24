@@ -60,20 +60,20 @@ ocrc round assign F01 --agent ben --kind opencode --check-only --holder-pid "$HO
 [ "$RC" = "0" ] || fail "check-only on the opencode kind should pass, got $RC: $OUT $ERR"
 [ "$(echo "$OUT" | jget data.kind)" = "opencode" ] || fail "data.kind should be opencode: $OUT"
 [ "$(echo "$OUT" | jget data.model)" = "oc-go/std" ] || fail "data.model should be the opencode standard tier: $OUT"
-occ config set round.workerKind opencode >/dev/null || fail "round.workerKind should accept opencode"
-occ config set round.workerKind "" >/dev/null
-pass "round assign --kind opencode resolves the tier model; round.workerKind accepts opencode"
+occ config set round.harnesses '["opencode"]' >/dev/null || fail "round.harnesses should accept opencode"
+occ config set round.harnesses '[]' >/dev/null
+pass "round assign --kind opencode resolves the tier model; round.harnesses accepts opencode"
 
 # A launch flag missing from `opencode --help` is exit 4 / blockedBy "opencode flags".
 # The version is never consulted. A flag no opencode lists keeps this check
 # true against the real binary too (ROTA_SMOKE_HARNESS=opencode).
-occ config set round.opencodeCommand "opencode --model {model} --rota-no-such-flag" >/dev/null
+occ config set round.commands.opencode "opencode --model {model} --rota-no-such-flag" >/dev/null
 ocrc round assign F01 --agent ben --kind opencode --holder-pid "$HOLDER"
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "opencode flags" ] || fail "a missing flag should be refused: $RC $OUT"
 case "$ERR$OUT" in *"--rota-no-such-flag"*) ;; *) fail "the refusal should name the flag: $ERR $OUT" ;; esac
 [ "$(echo "$OUT" | jget data.changed)" = "false" ] || fail "the flag refusal must not change anything: $OUT"
 parked ben || fail "the flag refusal must leave ben parked"
-occ config set round.opencodeCommand "" >/dev/null
+occ config set round.commands.opencode "" >/dev/null
 if [ "${ROTA_SMOKE_HARNESS:-}" != opencode ]; then
   ROTA_FAKE_OPENCODE_LACKS=--model ocrc round assign F01 --agent ben --kind opencode --holder-pid "$HOLDER"
   [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "opencode flags" ] || fail "a flag the fake lacks should be refused: $RC $OUT"
@@ -125,18 +125,18 @@ GUARD
 fi
 pass "an opencode assignment starts --kind opencode with the tier model, the guard as inline config and a signed brief"
 
-# A resume flag in round.opencodeCommand is refused before anything is touched.
-occ config set round.opencodeCommand "opencode --continue" >/dev/null
+# A resume flag in round.commands.opencode is refused before anything is touched.
+occ config set round.commands.opencode "opencode --continue" >/dev/null
 : > "$FH/log"
 ocrc worker dispatch dana --body-file "$OC/contract.md" --task F02 --kind opencode
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "resume flag" ] || fail "opencode --continue should be refused: $RC $OUT"
 [ ! -s "$FH/log" ] || fail "a refused command must not reach herdr: $(cat "$FH/log")"
-occ config set round.opencodeCommand "opencode --pure" >/dev/null
+occ config set round.commands.opencode "opencode --pure" >/dev/null
 ocrc worker dispatch dana --body-file "$OC/contract.md" --task F02 --kind opencode
 [ "$RC" = "5" ] || fail "a --pure launch would keep the guard out and is refused: $RC $OUT"
 [ ! -s "$FH/log" ] || fail "a refused command must not reach herdr: $(cat "$FH/log")"
-occ config set round.opencodeCommand "" >/dev/null
-pass "a resume flag or --pure in round.opencodeCommand is refused before herdr is touched"
+occ config set round.commands.opencode "" >/dev/null
+pass "a resume flag or --pure in round.commands.opencode is refused before herdr is touched"
 
 # round.accounts: the account's config dir reaches the tab.
 mkdir -p "$TMP_OC/acct-a"

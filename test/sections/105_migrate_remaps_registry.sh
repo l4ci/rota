@@ -5,7 +5,7 @@ trap 'rm -rf "$TMP_MR"' EXIT
 
 P="$TMP_MR/proj"
 mkdir -p "$P/.rota"
-printf '{"forge":{"provider":"github"},"issues":{"retryWaitSeconds":0,"bulkPaceMs":0}}\n' > "$P/.rota/config.json"
+printf '{"forge":{"provider":"github"},"issues":{}}\n' > "$P/.rota/config.json"
 cat > "$P/.rota/BACKLOG.md" <<'BL'
 # TODO
 

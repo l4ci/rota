@@ -5,7 +5,7 @@ trap 'rm -rf "$TMP_TA"' EXIT
 
 for prov in github gitlab; do
   P="$TMP_TA/$prov"; mkdir -p "$P/.rota"
-  echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{\"retryWaitSeconds\":0}}" > "$P/.rota/config.json"
+  echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{}}" > "$P/.rota/config.json"
   (
     cd "$P"
     export PATH="$TESTDIR/fakes:$PATH" FAKE_TRACKER_DB="$P/db.json" FAKE_TRACKER_LOG="$P/log"

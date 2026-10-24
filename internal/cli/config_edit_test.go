@@ -104,7 +104,7 @@ func fxRow(key, typ, src string, val, def any, desc string, choices ...string) c
 func fxRows() []cfgRow {
 	return []cfgRow{
 		fxRow("models.orchestrator", "string", "default", "opus", "opus", "Model for planning, exploration, verification and design. Usually opus, sonnet or haiku."),
-		fxRow("models.worker", "string", "project", "haiku", "sonnet", "Model for implementation sub-tasks and round workers."),
+		fxRow("git.baseBranch", "string", "project", "haiku", "sonnet", "Model for implementation sub-tasks and round workers."),
 		fxRow("work.isolation", "enum", "default", "branch", "branch", "How /rota-work isolates changes from main: a feature branch in this checkout, or a separate git worktree.", "branch", "worktree"),
 		fxRow("work.mergeStrategy", "enum", "local", "pr", "direct", "How finished work lands: merged straight into the base branch, or through a pull request.", "direct", "pr"),
 		fxRow("round.slots", "int", "project", json.Number("5"), json.Number("3"), "Number of worker slots rota round start provisions (at least 1)."),
@@ -291,14 +291,14 @@ func TestConfigScreenWritesThroughTheStore(t *testing.T) {
 		t.Helper()
 		m, _ = play(m, cat([]string{"/"}, typedKeys(filter), []string{"enter"}, keys, []string{"esc"}))
 	}
-	do("models.worker", cat([]string{"enter"}, rep("backspace", 5), typedKeys("sonnet"), []string{"enter"})) // text, project
-	do("ship.review", []string{"enter", " ", "enter"})                                                       // bool toggled on
-	do("work.isolation", []string{"enter", "right", "enter"})                                                // enum -> worktree
-	do("round.slots", cat([]string{"l"}, rep("backspace", 1), typedKeys("8"), []string{"enter"}))            // local write
-	do("work.mergeStrategy", []string{"r"})                                                                  // reset
-	do("ship.qa", []string{"r"})                                                                             // already default: no call
+	do("git.baseBranch", cat([]string{"enter"}, rep("backspace", 5), typedKeys("sonnet"), []string{"enter"})) // text, project
+	do("ship.review", []string{"enter", " ", "enter"})                                                        // bool toggled on
+	do("work.isolation", []string{"enter", "right", "enter"})                                                 // enum -> worktree
+	do("round.slots", cat([]string{"l"}, rep("backspace", 1), typedKeys("8"), []string{"enter"}))             // local write
+	do("work.mergeStrategy", []string{"r"})                                                                   // reset
+	do("ship.qa", []string{"r"})                                                                              // already default: no call
 	want := []string{
-		`set models.worker sonnet local=false`,
+		`set git.baseBranch sonnet local=false`,
 		`set ship.review true local=false`,
 		`set work.isolation worktree local=false`,
 		`set round.slots 8 local=true`,
@@ -307,7 +307,7 @@ func TestConfigScreenWritesThroughTheStore(t *testing.T) {
 	if strings.Join(store.calls, "\n") != strings.Join(want, "\n") {
 		t.Errorf("writes:\n%s\nwant:\n%s", strings.Join(store.calls, "\n"), strings.Join(want, "\n"))
 	}
-	if strings.Join(changed, ",") != "models.worker,ship.review,work.isolation,round.slots,work.mergeStrategy" {
+	if strings.Join(changed, ",") != "git.baseBranch,ship.review,work.isolation,round.slots,work.mergeStrategy" {
 		t.Errorf("changed = %v", changed)
 	}
 }

@@ -448,13 +448,13 @@ type Settings struct {
 }
 
 // SettingsFromConfig reads forge.provider, issues.source,
-// issues.retryWaitSeconds, issues.labels.notPlanned, issues.connection,
+// issues.labels.notPlanned, issues.connection,
 // issues.jira.project, issues.linear.team and issues.itsaplan.project, with the schema
 // defaults for absent or null keys. An invalid forge.provider or issues.source
 // reads as its default here; ValidateConfig, ReadSettings (and the *FromConfig
 // constructors) fail on it instead.
 func SettingsFromConfig(cfg any) Settings {
-	s := Settings{Provider: config.ForgeAuto, Source: config.SourceFile, RetryWait: retryWait(cfg), NotPlannedLabel: config.Label(cfg, "notPlanned")}
+	s := Settings{Provider: config.ForgeAuto, Source: config.SourceFile, RetryWait: retryWait(), NotPlannedLabel: config.Label(cfg, "notPlanned")}
 	if p, err := config.ForgeProvider(cfg); err == nil {
 		s.Provider = p
 	}
@@ -479,17 +479,12 @@ func ReadSettings(cfg any) (Settings, error) {
 	return SettingsFromConfig(cfg), nil
 }
 
-// retryWait is issues.retryWaitSeconds, fractions allowed. A value that is not
-// a number reads as the schema default.
-func retryWait(cfg any) time.Duration {
-	v, _ := config.Value(cfg, "issues.retryWaitSeconds")
-	f, err := strconv.ParseFloat(fmt.Sprint(v), 64)
-	if err != nil {
-		k, _ := config.SchemaKey("issues.retryWaitSeconds")
-		f, _ = strconv.ParseFloat(fmt.Sprint(config.Default(k)), 64)
-	}
-	return time.Duration(f * float64(time.Second))
-}
+// RetryPause is the pause before a rate-limited tracker call is retried. It
+// is a variable only so tests can zero it; the rotatest build tag
+// (test/runner.sh) also reads ROTA_ISSUES_RETRY_WAIT_SECONDS.
+var RetryPause = 60 * time.Second
+
+func retryWait() time.Duration { return RetryPause }
 
 // ValidateConfig is the corrupt-config check of the keys SettingsFromConfig
 // reads: an invalid forge.provider or issues.source is a KindInternal error

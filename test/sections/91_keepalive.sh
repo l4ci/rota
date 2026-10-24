@@ -16,7 +16,7 @@ mkdir -p "$FK/bin" "$P/.rota/milestones"
 printf '#!/usr/bin/env bash\nexec bash "%s/fakes/gh" "$@"\n' "$TESTDIR" > "$FK/bin/gh"
 printf '#!/bin/sh\necho "no server running" >&2\nexit 1\n' > "$FK/bin/tmux"
 chmod +x "$FK/bin/gh" "$FK/bin/tmux"
-KA_BASE='{"git":{"baseBranch":"main"},"forge":{"provider":"github"},"issues":{"source":"github","retryWaitSeconds":0},"orchestrator":{"keepaliveBackoffSeconds":0%s}}'
+KA_BASE='{"git":{"baseBranch":"main"},"forge":{"provider":"github"},"issues":{"source":"github"},"orchestrator":{"handoffThreshold":75%s}}'
 ka_cfg() { printf "$KA_BASE\n" "${1:-}" > "$P/.rota/config.json"; } # ka_cfg [',"escalateIssue":1']
 (
   cd "$P" && git init -q -b main . && git -c user.email=a@b -c user.name=n commit -q --allow-empty -m init \
@@ -67,13 +67,13 @@ waitfor() { local i=0; while [ ! -e "$1" ] && [ "$i" -lt 150 ]; do sleep 0.1; i=
 [ "$(ka sh -c 'command -v tmux')" = "$FK/bin/tmux" ] || fail "D2: tmux must resolve to the stand-in"
 
 # --- usage and status before ---------------------------------------------------
-RC=0; ka "$ROTA_BIN" keepalive run claude >/dev/null 2>&1 || RC=$?
+RC=0; ka "$ROTA_BIN" keepalive run --backoff 0 claude >/dev/null 2>&1 || RC=$?
 [ "$RC" = "2" ] || fail "D2: run without -- must exit 2, got $RC"
-RC=0; ka "$ROTA_BIN" keepalive run -- >/dev/null 2>&1 || RC=$?
+RC=0; ka "$ROTA_BIN" keepalive run --backoff 0 -- >/dev/null 2>&1 || RC=$?
 [ "$RC" = "2" ] || fail "D2: run without a command must exit 2, got $RC"
-RC=0; ka "$ROTA_BIN" keepalive run --breaker 0 -- true >/dev/null 2>&1 || RC=$?
+RC=0; ka "$ROTA_BIN" keepalive run --backoff 0 --breaker 0 -- true >/dev/null 2>&1 || RC=$?
 [ "$RC" = "2" ] || fail "D2: an invalid number flag must exit 2, got $RC"
-RC=0; (cd "$TMP_KA" && "$ROTA_BIN" keepalive run -- true >/dev/null 2>&1) || RC=$?
+RC=0; (cd "$TMP_KA" && "$ROTA_BIN" keepalive run --backoff 0 -- true >/dev/null 2>&1) || RC=$?
 [ "$RC" = "3" ] || fail "D2: run outside a project must exit 3, got $RC"
 OUT="$(ka "$ROTA_BIN" --json keepalive status)"
 [ "$(jget data.running <<<"$OUT")" = "false" ] && [ "$(jget data.lease.state <<<"$OUT")" = "none" ] || fail "D2: status before any run: $OUT"
@@ -82,7 +82,7 @@ pass "D2: usage errors exit 2 or 3, and status before any run reports nothing"
 
 # --- restart on a fresh handoff, prompt last on restarts only -----------------------
 KD="$(newkd)"; rm -f "$HANDOFF"
-RC=0; ka "$ROTA_BIN" --json keepalive run --prompt "$PROMPT" -- bash "$CHILD" once "$KD" >"$KD/out.json" 2>"$KD/err.log" || RC=$?
+RC=0; ka "$ROTA_BIN" --json keepalive run --backoff 0 --prompt "$PROMPT" -- bash "$CHILD" once "$KD" >"$KD/out.json" 2>"$KD/err.log" || RC=$?
 [ "$RC" = "0" ] || fail "D2: restart run must exit 0, got $RC: $(cat "$KD/out.json") $(cat "$KD/err.log")"
 OUT="$(cat "$KD/out.json")"
 [ "$(jget data.stopReason <<<"$OUT")" = "no-handoff" ] && [ "$(jget data.restarts <<<"$OUT")" = "1" ] && [ "$(jget data.changed <<<"$OUT")" = "true" ] || fail "D2: restart data: $OUT"
@@ -98,7 +98,7 @@ pass "D2: a fresh handoff restarts the child with the prompt last, and the first
 
 # --- no handoff, no restart -----------------------------------------------------------
 KD="$(newkd)"; rm -f "$HANDOFF"
-RC=0; ka "$ROTA_BIN" --json keepalive run -- bash "$CHILD" none "$KD" >"$KD/out.json" 2>/dev/null || RC=$?
+RC=0; ka "$ROTA_BIN" --json keepalive run --backoff 0 -- bash "$CHILD" none "$KD" >"$KD/out.json" 2>/dev/null || RC=$?
 OUT="$(cat "$KD/out.json")"
 [ "$RC" = "0" ] && [ "$(jget data.stopReason <<<"$OUT")" = "no-handoff" ] && [ "$(jget data.restarts <<<"$OUT")" = "0" ] || fail "D2: no handoff must stop, rc=$RC: $OUT"
 [ "$(cat "$KD/count")" = "1" ] || fail "D2: one start only without a handoff, starts=$(cat "$KD/count")"
@@ -108,14 +108,14 @@ pass "D2: an exit without a fresh handoff does not restart: no-handoff, exit 0, 
 # --- the lock: a second run, a hand-run round start, a child's round start -------------
 KD="$(newkd)"; rm -f "$HANDOFF"
 ( cd "$P" && exec env -u HERDR_PANE_ID -u TMUX_PANE -u HERDR_ENV PATH="$FK/bin:$PATH" FAKE_TRACKER_DB="$TMP_KA/gh.json" KA_HANDOFF="$HANDOFF" \
-    "$ROTA_BIN" --json keepalive run -- bash "$CHILD" wait "$KD" ) >"$KD/out.json" 2>"$KD/err.log" &
+    "$ROTA_BIN" --json keepalive run --backoff 0 -- bash "$CHILD" wait "$KD" ) >"$KD/out.json" 2>"$KD/err.log" &
 SUP=$!
 waitfor "$KD/ready"
 OUT="$(ka "$ROTA_BIN" --json keepalive status)"
 [ "$(jget data.running <<<"$OUT")" = "true" ] && [ "$(jget data.lease.state <<<"$OUT")" = "live" ] || fail "D2: status during a run: $OUT"
 [ "$(jget data.lease.holderPid <<<"$OUT")" = "$SUP" ] || fail "D2: the supervisor must hold the lease (pid $SUP): $OUT"
 [ "$(jget data.lease.round <<<"$OUT")" = "0" ] && [ "$(jget data.keepalive.status <<<"$OUT")" = "running" ] || fail "D2: an unnumbered lease and a running state: $OUT"
-RC=0; OUT="$(ka "$ROTA_BIN" --json keepalive run -- bash "$CHILD" none "$(newkd)" 2>/dev/null)" || RC=$?
+RC=0; OUT="$(ka "$ROTA_BIN" --json keepalive run --backoff 0 -- bash "$CHILD" none "$(newkd)" 2>/dev/null)" || RC=$?
 [ "$RC" = "4" ] && [ "$(jget data.blockedBy <<<"$OUT")" = "lease held" ] && [ "$(jget data.changed <<<"$OUT")" = "false" ] || fail "D2: a second run must exit 4 lease held, rc=$RC: $OUT"
 RC=0; OUT="$(ka "$ROTA_BIN" --json round start --slots 1 2>/dev/null)" || RC=$?
 [ "$RC" = "4" ] && [ "$(jget data.blockedBy <<<"$OUT")" = "lease held" ] || fail "D2: a hand-run round start must be refused as in C3, rc=$RC: $OUT"
@@ -137,7 +137,7 @@ pass "D2: SIGINT is forwarded to the child; no restart, lease released, handoff 
 
 # --- a child's round start under ROTA_ROUND_HOLDER_PID renews and numbers the lease ------
 KD="$(newkd)"; rm -f "$HANDOFF"
-RC=0; ka "$ROTA_BIN" --json keepalive run -- bash "$CHILD" renew "$KD" >"$KD/out.json" 2>"$KD/err.log" || RC=$?
+RC=0; ka "$ROTA_BIN" --json keepalive run --backoff 0 -- bash "$CHILD" renew "$KD" >"$KD/out.json" 2>"$KD/err.log" || RC=$?
 [ "$RC" = "0" ] || fail "D2: renew run exit $RC: $(cat "$KD/out.json") $(cat "$KD/err.log")"
 [ "$(cat "$KD/rs.1.rc")" = "0" ] && [ "$(cat "$KD/rs.2.rc")" = "0" ] || fail "D2: round start under the supervisor must succeed: $(cat "$KD/rs.1.err") $(cat "$KD/rs.2.err")"
 [ "$(jget data.round <"$KD/rs.1.json")" = "1" ] || fail "D2: the first round start must number the lease 1: $(cat "$KD/rs.1.json")"
@@ -201,7 +201,7 @@ pass "D2: progress (a new handoff each run) resets the counter, so --breaker 2 n
 # --- SIGKILL leaves a stale lease that a new run reclaims -----------------------------
 KD="$(newkd)"; rm -f "$HANDOFF"
 ( cd "$P" && exec env -u HERDR_PANE_ID -u TMUX_PANE -u HERDR_ENV PATH="$FK/bin:$PATH" FAKE_TRACKER_DB="$TMP_KA/gh.json" KA_HANDOFF="$HANDOFF" \
-    "$ROTA_BIN" --json keepalive run -- bash "$CHILD" wait "$KD" ) >"$KD/out.json" 2>"$KD/err.log" &
+    "$ROTA_BIN" --json keepalive run --backoff 0 -- bash "$CHILD" wait "$KD" ) >"$KD/out.json" 2>"$KD/err.log" &
 SUP=$!
 waitfor "$KD/ready"
 kill -KILL "$SUP"
@@ -212,7 +212,7 @@ kill "$(cat "$KD/childpid")" 2>/dev/null || true # the orphaned fake orchestrato
 OUT="$(ka "$ROTA_BIN" --json keepalive status)"
 [ "$(jget data.lease.state <<<"$OUT")" = "stale" ] && [ "$(jget data.running <<<"$OUT")" = "false" ] && [ "$(jget data.keepalive.status <<<"$OUT")" = "running" ] || fail "D2: status after SIGKILL must say stale and not running: $OUT"
 rm -f "$HANDOFF"; KD="$(newkd)"
-RC=0; ka "$ROTA_BIN" --json keepalive run -- bash "$CHILD" none "$KD" >"$KD/out.json" 2>"$KD/err.log" || RC=$?
+RC=0; ka "$ROTA_BIN" --json keepalive run --backoff 0 -- bash "$CHILD" none "$KD" >"$KD/out.json" 2>"$KD/err.log" || RC=$?
 OUT="$(cat "$KD/out.json")"
 [ "$RC" = "0" ] && [ "$(jget data.stopReason <<<"$OUT")" = "no-handoff" ] || fail "D2: a new run must reclaim the stale lease, rc=$RC: $OUT $(cat "$KD/err.log")"
 grep -q 'reclaimed stale lease' <<<"$OUT" || fail "D2: the reclaim warning is missing: $OUT"

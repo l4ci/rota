@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+## Upgrade notes
+
+- **Removed, merged and renamed config keys.** `rota migrate config --apply` (and `rota config fill`) moves the values: `models.orchestrator` to `orchestrator.model`, `round.operatorCommand` to `orchestrator.command`, `models.worker` to `round.tiers.claude.standard` (default `sonnet`; precedence is the explicit tier key, then `round.profile`, then the default), `round.workerCommand` / `round.codexCommand` / `round.opencodeCommand` to `round.commands.claude` / `.codex` / `.opencode`, and `round.workerKind` to the first entry of `round.harnesses`. `issues.label` moves to `issues.labels.inProgress` when that is unset. An old key and its new key that disagree in one file stop the migration with exit 4. See [Upgrading from the old keys](docs/usage/configuration.md#upgrading-from-the-old-keys).
+- **Dropped keys.** `ship.secondOpinionRunner` (the second-opinion gate always runs the subagent) and `gate.smokeShards` (use `ROTA_SMOKE_SHARDS`).
+- **Fixed constants.** These keys are no longer read: `orchestrator.stateMaxAgeSeconds` (120), `handoffMaxAgeSeconds` (900), `handoffMaxBlocks` (2), `keepaliveMaxRestarts` (10), `keepaliveBreaker` (3), `keepaliveBackoffSeconds` (5), `limits.resumeMarginSeconds` (60), `fallbackSleepSeconds` (1800), `maxResumes` (3), `issues.retryWaitSeconds` (60), `issues.bulkPaceMs` (1000).
+
 ## v0.24.0 — 2026-10-22
 
 Config keys gain scopes, rounds get a test lock and a support role, and one rule decides the forge.

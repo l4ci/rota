@@ -12,7 +12,7 @@ import (
 )
 
 func configMigrateCommand() *Command {
-	return &Command{Name: "config", Summary: "move the round-only work.* keys to round.*, fold the codex and opencode account keys into round.accounts, and move machine and default taste keys out of config.json (preview unless --apply)", Verb: migrateConfig}
+	return &Command{Name: "config", Summary: "move the round-only work.* keys to round.*, fold the codex and opencode account keys into round.accounts, merge and rename the keys #1825 folded together (models.*, the *Command keys, round.workerKind, issues.label), and move machine and default taste keys out of config.json (preview unless --apply)", Verb: migrateConfig}
 }
 
 // migrateConfig is `rota migrate config` (#1097): every round-only key under
@@ -21,7 +21,10 @@ func configMigrateCommand() *Command {
 // written. It is idempotent. `rota config fill` and `rota init` run the
 // same migration. Then the accounts step (#1824, migrateAccounts) folds
 // round.codexAccounts and round.opencodeAccounts into one round.accounts list
-// in the global, tracked and local files. Then the scope step (#1786, config.MigrateScopeFiles) moves
+// in the global, tracked and local files. Then the merges step (#1825,
+// migrateMerges) moves the merged and renamed keys (models.orchestrator,
+// round.codexCommand, round.workerKind ...) to their new names; an old and a
+// new key with different values refuse (exit 4). Then the scope step (#1786, config.MigrateScopeFiles) moves
 // machine keys out of config.json and drops taste keys pinned at their
 // default; --keep names keys it leaves in place.
 func migrateConfig(fs *flag.FlagSet) RunFunc {
@@ -36,6 +39,12 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		if *apply {
+			// A refusal must come before any step writes: plan them all first.
+			if err := migrateConfigPlan(c, root, keep); err != nil {
+				return roundMigrationFail(err)
+			}
+		}
 		m, err := config.MigrateRoundKeysFiles(root, *apply)
 		if err != nil {
 			return roundMigrationFail(err)
@@ -44,15 +53,19 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return roundMigrationFail(err)
 		}
+		mm, err := migrateMerges(c, root, *apply)
+		if err != nil {
+			return roundMigrationFail(err)
+		}
 		sm, err := config.MigrateScopeFiles(root, *apply, keep)
 		if err != nil {
 			return roundMigrationFail(err)
 		}
-		planned := m.Changed() || am.Changed() || sm.Changed()
+		planned := m.Changed() || am.Changed() || mm.Changed() || sm.Changed()
 		data := knObj("changed", planned && *apply, "planned", planned, "applied", *apply,
-			"config", renameList(m.Config), "local", renameList(m.Local), "accounts", accountList(am), "scope", scopeList(sm))
+			"config", renameList(m.Config), "local", renameList(m.Local), "accounts", accountList(am), "merges", mergeList(mm), "scope", scopeList(sm))
 		if !planned {
-			return Result{Data: data, Text: "nothing to migrate: no round keys under work.*, no per-harness account keys, no machine or default taste keys in .rota/config.json"}, nil
+			return Result{Data: data, Text: "nothing to migrate: no round keys under work.*, no per-harness account keys, no merged or renamed keys, no machine or default taste keys in .rota/config.json"}, nil
 		}
 		var lines []string
 		for _, l := range []struct {
@@ -66,6 +79,9 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 		for _, ch := range am.Changes {
 			lines = append(lines, ch.File+"\t"+strings.Join(ch.From, ", ")+" -> round.accounts ("+fmt.Sprint(ch.N)+" entries)")
 		}
+		for _, ch := range mm.Changes {
+			lines = append(lines, ch.File+"\t"+strings.Join(ch.From, ", ")+" -> merged into the new keys")
+		}
 		for _, ch := range sm.Changes {
 			lines = append(lines, scopeLine(ch))
 		}
@@ -75,6 +91,22 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: data, Text: "changed:\n" + strings.Join(lines, "\n")}, nil
 	}
+}
+
+// migrateConfigPlan runs every refusing step as a preview, so an --apply that
+// one of them would refuse writes nothing from the others.
+func migrateConfigPlan(c *Ctx, root string, keep []string) error {
+	if _, err := config.MigrateRoundKeysFiles(root, false); err != nil {
+		return err
+	}
+	if _, err := migrateAccounts(c, root, false); err != nil {
+		return err
+	}
+	if _, err := migrateMerges(c, root, false); err != nil {
+		return err
+	}
+	_, err := config.MigrateScopeFiles(root, false, keep)
+	return err
 }
 
 // migrateAccounts is the accounts step of `rota migrate config`: its own call
@@ -87,6 +119,24 @@ func migrateAccounts(c *Ctx, root string, apply bool) (config.AccountsMigration,
 		gdir = ""
 	}
 	return config.MigrateAccountsFiles(root, gdir, apply)
+}
+
+// migrateMerges is the merges step of `rota migrate config` (#1825), a call of
+// its own beside the accounts step.
+func migrateMerges(c *Ctx, root string, apply bool) (config.MergesMigration, error) {
+	gdir, err := projects.Dir(c.deps().projectsEnv())
+	if err != nil {
+		gdir = ""
+	}
+	return config.MigrateMergesFiles(root, gdir, apply)
+}
+
+func mergeList(mm config.MergesMigration) []any {
+	out := []any{}
+	for _, ch := range mm.Changes {
+		out = append(out, knObj("file", ch.File, "from", anySlice(ch.From)))
+	}
+	return out
 }
 
 func accountList(am config.AccountsMigration) []any {
@@ -143,7 +193,15 @@ func renameList(rs []config.Rename) []any {
 func roundMigrationFail(err error) (Result, error) {
 	var ce *config.ConflictError
 	var ae *config.AccountConflictError
+	var me *config.MergeConflictError
 	switch {
+	case errors.As(err, &me):
+		list := []any{}
+		for _, x := range me.Conflicts {
+			list = append(list, knObj("file", x.File, "old", x.Old, "new", x.New))
+		}
+		d := knObj("blockedBy", "merge conflict", "conflicts", list, "changed", false)
+		return Result{Data: d}, Refused("%s", err.Error())
 	case errors.As(err, &ae):
 		list := []any{}
 		for _, x := range ae.Conflicts {

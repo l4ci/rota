@@ -3,6 +3,8 @@ package config
 import (
 	"encoding/json"
 	"strings"
+
+	"github.com/l4ci/rota/internal/jsonx"
 )
 
 // Type is the kind of value a key holds, for editors and the reference page.
@@ -96,21 +98,19 @@ func num(s string) json.Number { return json.Number(s) }
 // else from the code that reads the key; docs/reference/config-options.md is
 // generated from this table (go generate ./internal/config).
 var Keys = []Key{
-	k("models.orchestrator", ScopeMachine, "opus", false, TypeString, "Model for planning, exploration, verification and design. Usually opus, sonnet or haiku."),
-	k("models.worker", ScopeMachine, "sonnet", false, TypeString, "Model for implementation sub-tasks and round workers. Usually opus, sonnet or haiku."),
+	k("orchestrator.model", ScopeMachine, "opus", false, TypeString, "Model for planning, exploration, verification and design. Usually opus, sonnet or haiku."),
+	k("orchestrator.command", ScopeMachine, "", false, TypeString, "Rounds: Command that starts the orchestrator. Empty builds claude --model <orchestrator.model> --permission-mode auto (with --continue for rota worker session ensure)."),
 	k("work.isolation", ScopeTaste, "branch", false, TypeEnum, "/rota-work: How a cycle isolates changes from main: a feature branch in this checkout, or a separate git worktree.", "branch", "worktree"),
 	k("work.mergeStrategy", ScopeTaste, "direct", false, TypeEnum, "/rota-work: How finished work lands: merged straight into the base branch with --no-ff, or through a pull request. Ignored when issues.source is a tracker (always pr) or the forge is local (always direct); rota ship strategy prints the answer.", "direct", "pr"),
 	k("round.dispatch", ScopeMachine, "subagent", false, TypeEnum, "Rounds: Where round workers run. subagent means detect: herdr in a herdr pane, tmux in tmux, else in-harness subagents. /rota-work ignores it.", "subagent", "tmux", "herdr"),
 	k("round.slots", ScopeMachine, num("3"), false, TypeInt, "Rounds: Number of worker slots rota round start provisions (at least 1). --slots overrides it for one round."),
-	k("round.workerCommand", ScopeMachine, "", false, TypeString, "Rounds: Command that starts a worker session in its tmux window. Empty builds claude --model <models.worker> --dangerously-skip-permissions; {model} receives the tier's model."),
+	k("round.commands", ScopeMachine, jsonx.NewObject(), false, TypeObject, "Rounds: Command that starts a worker session, per harness kind (claude, codex or opencode), as round.commands.<kind>. Empty or unset builds the default command for the kind, with --model from the tier; {model} receives the tier's model. An unknown kind is an error."),
 	emptyUnset(k("round.accounts", ScopeMachine, []any{}, false, TypeList, "Rounds: Logins for worker slots, as {kind, name, dir} objects. kind is claude, codex or opencode and dir the harness's config home (CLAUDE_CONFIG_DIR, CODEX_HOME, OPENCODE_CONFIG_DIR); a leading ~ expands to the home directory. Names are unique across kinds. Empty: every slot uses the orchestrator's login (Claude) or the harness's default home. Machine-specific, so set it in the global config or config.local.json. An empty list in the project or local file counts as unset, so the global value applies.")),
-	k("round.operatorCommand", ScopeMachine, "", false, TypeString, "Rounds: Command that starts the orchestrator. Empty builds claude --model <models.orchestrator> --permission-mode auto (with --continue for rota worker session ensure)."),
 	k("refactor.confirmBeforeExecute", ScopeTaste, true, false, TypeBool, "Whether /rota-refactor --fix confirms the candidate list before implementing it. Off means no pause."),
 	k("learn.verify", ScopeTaste, false, false, TypeBool, "Whether /rota-learn always runs a fresh-context verifier on the entries it just wrote."),
 	k("learn.promoteThreshold", ScopeProject, num("3"), true, TypeInt, "Confidence threshold at which the knowledge lifecycle auto-promotes an entry. Integer, 0 or more."),
 	k("ship.review", ScopeTaste, "full", false, TypeEnum, "How deep a review /rota-ship runs first: full, light (the Spec reviewer only, on the standard tier; the Standards reviewer when the branch references no issue) or none. FAIL blocks, CONCERNS ask, PASS flows through. An object {default, lightBelow, labels, paths, scopeDrift, supportPaths} picks the depth by diff size, label and path, and lifts light to full on a Door: one-way PR or a diff outside the issue's files (docs, tests and golden records beside them don't count); true and false still mean full and none.", "full", "light", "none"),
 	k("ship.secondOpinion", ScopeTaste, false, false, TypeBool, "Opt-in fresh-eyes adversarial gate in /rota-ship Step 3.5."),
-	k("ship.secondOpinionRunner", ScopeTaste, "subagent", false, TypeEnum, "Who runs the /rota-ship second-opinion gate. The codex value was removed in 5.0: /rota-ship notes it and runs the subagent in advisory mode.", "subagent"),
 	k("ship.qa", ScopeTaste, false, false, TypeBool, "Opt-in product-QA gate: /rota-ship runs /rota-qa run after review and before merge or PR."),
 	k("ship.uat", ScopeTaste, false, false, TypeBool, "Opt-in human acceptance walk-through: /rota-ship runs /rota-qa uat after review and before merge or PR. Never part of the round merge gate."),
 	k("qa.gate", ScopeTaste, "advisory", false, TypeEnum, "How /rota-ship treats a /rota-qa verdict. advisory surfaces findings and never blocks; blocking halts the ship on FAIL.", "advisory", "blocking"),
@@ -122,9 +122,6 @@ var Keys = []Key{
 	projectOwned(k("git.baseBranch", ScopeProject, "", true, TypeString, "Base branch the skills merge into and diff against. Empty auto-detects it.")),
 	projectOwned(k("umbrella.enabled", ScopeProject, false, true, TypeBool, "Umbrella mode: .rota/ stays at the umbrella and verbs operate per registered sub-repo. Turning it off keeps .rota/repos.json.")),
 	projectOwned(k(VersionKey, ScopeProject, "", true, TypeString, "Release of rota that wrote this config. Managed by rota init and rota update; do not set it by hand.")),
-	k("issues.label", ScopeProject, "in-progress", false, TypeString, "Legacy alias of issues.labels.inProgress, read only when the new key is unset."),
-	k("issues.retryWaitSeconds", ScopeProject, num("60"), false, TypeInt, "Seconds to wait before the single retry after a primary rate limit."),
-	k("issues.bulkPaceMs", ScopeProject, num("1000"), false, TypeInt, "Milliseconds rota migrate issues waits between tracker writes, to stay under secondary rate limits. 0 disables the pause."),
 	k("issues.labels.inProgress", ScopeProject, "in-progress", false, TypeString, "Tracker label for an item a worker holds."),
 	k("issues.labels.needsReview", ScopeProject, "needs-review", false, TypeString, "Tracker label for an item whose work awaits review."),
 	k("issues.labels.changesRequested", ScopeProject, "changes-requested", false, TypeString, "Tracker label for an item sent back with review feedback."),
@@ -168,11 +165,10 @@ var Keys = []Key{
 	k("round.support", ScopeProject, "", false, TypeString, "Rounds: Name of the support machine (e.g. mac). Non-empty enables a support orchestrator on that machine, and is the prefix of its roster names. Needs an issue tracker."),
 	k("round.role", ScopeMachine, "main", false, TypeEnum, "Rounds: This machine's role, set in .rota/config.local.json only. support builds site:support issues and opens PRs but never merges or writes tracked .rota/ content.", "main", "support"),
 	k("round.tier", ScopeTaste, "standard", false, TypeEnum, "Rounds: Default worker tier for rota round assign: light for reading, standard for code and tests, heavy for hard reasoning.", "light", "standard", "heavy"),
-	k("round.workerKind", ScopeMachine, "", false, TypeEnum, "Rounds: Project default worker harness. Empty: the slot's recorded kind, else claude. --kind and an issue's harness: label beat it.", "claude", "codex", "opencode"),
-	k("round.harnesses", ScopeMachine, []any{}, false, TypeList, "Rounds: Worker harnesses a round may use, in quota-fallback order, e.g. [claude, codex]. When every account of an issue's harness is cooling down, the next harness with headroom takes it, labelled harness:<kind> (file backend: the Harness: field). --kind, a harness: label and a model: label or --model never fall back. Empty: only the default harness."),
+	k("round.harnesses", ScopeMachine, []any{}, false, TypeList, "Rounds: Worker harnesses a round may use, in quota-fallback order, e.g. [claude, codex]. The first entry is the default kind; --kind and an issue's harness: label beat it. When every account of an issue's harness is cooling down, the next harness with headroom takes it, labelled harness:<kind> (file backend: the Harness: field). --kind, a harness: label and a model: label or --model never fall back. Empty: the slot's recorded kind, else claude."),
 	k("round.profile", ScopeMachine, "", false, TypeEnum, "Rounds: Named model profile that fills round.tiers.claude.* (light/standard/heavy). quality: sonnet/opus/opus. balanced: haiku/sonnet/opus. budget: haiku/haiku/sonnet. inherit: no model, workers launch without --model. Empty keeps the tier defaults. An explicit round.tiers.claude.<tier> beats the profile; Codex and OpenCode tiers are not touched.", "quality", "balanced", "budget", "inherit"),
 	k("round.tiers.claude.light", ScopeMachine, "haiku", false, TypeString, "Rounds: Model a light-tier Claude worker starts with."),
-	k("round.tiers.claude.standard", ScopeMachine, "", false, TypeString, "Rounds: Model a standard-tier Claude worker starts with. Empty follows models.worker."),
+	k("round.tiers.claude.standard", ScopeMachine, "sonnet", false, TypeString, "Rounds: Model a standard-tier Claude worker starts with. An explicit value beats round.profile."),
 	k("round.tiers.claude.heavy", ScopeMachine, "opus", false, TypeString, "Rounds: Model a heavy-tier Claude worker starts with."),
 	k("round.tiers.codex.light", ScopeMachine, "gpt-6-luna", false, TypeString, "Rounds: Model a light-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three."),
 	k("round.tiers.codex.standard", ScopeMachine, "gpt-6.1-sol", false, TypeString, "Rounds: Model a standard-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three."),
@@ -207,8 +203,6 @@ var Keys = []Key{
 	k("round.reviewLoop", ScopeTaste, "manual", false, TypeEnum, "Rounds: What happens when a reviewer comments on a finished worker's PR. manual reports it and leaves rota round review-relay to the orchestrator; auto relays it to the worker as a counted bounce (round.maxBounces) from rota round watch and rota round tick.", "manual", "auto"),
 	k("issues.labels.needsHuman", ScopeProject, "needs-human", false, TypeString, "Label rota round transfer --to human puts on an issue handed to the human. rota round candidates skips an issue that carries it."),
 	k("issues.labels.support", ScopeProject, "site:support", false, TypeString, "Tracker label for an issue main offers to the support machine (round.support). Main's round skips it; the support round takes only these."),
-	k("round.codexCommand", ScopeMachine, "", false, TypeString, "Rounds: Command that starts a Codex worker session. Empty builds the default codex command, with --model from the tier when one is chosen; {model} receives it."),
-	k("round.opencodeCommand", ScopeMachine, "", false, TypeString, "Rounds: Command that starts an OpenCode worker session. Empty builds the default opencode command, with --model from the tier when one is chosen; {model} receives it."),
 	k("round.envSetup", ScopeProject, "", false, TypeString, "Rounds: Shell command rota worker pool init runs in each new slot worktree, for example npm ci. Empty: no setup."),
 	k("round.sharedDirs", ScopeProject, []any{}, false, TypeList, "Rounds: Dependency directories, relative to the repo root, that rota symlinks from the main checkout into each slot worktree, for example node_modules or .venv. rota worker pool init links them and rota round assign re-links them on a parked slot. When the slot's lockfile differs from main's, or a directory is missing in main, no directory is linked and round.envSetup installs the slot's own. List the directories in .gitignore. Empty: no sharing."),
 	k("round.portBase", ScopeMachine, num("20000"), false, TypeInt, "Rounds: First port of the range rota hands out to worker slots. A new slot takes the lowest range of portBlock ports from here that no other slot holds, exported as ROTA_PORT_BASE; a slot keeps its range until it is reaped or reclaimed."),
@@ -217,16 +211,9 @@ var Keys = []Key{
 	k("work.tdd", ScopeProject, true, false, TypeBool, "/rota-work: Whether a cycle needs a recorded red-first run before a behavior change; round workers follow it too. Off skips the RED requirement."),
 	k("brainstorm.edgeProbe", ScopeTaste, false, false, TypeBool, "Opt-in edge and prohibition probe in /rota-brainstorm Step 3: walks eight edge categories, records each as covered or dismissed, asks what the change must never do and writes each answer as a negative acceptance criterion. Off leaves /rota-brainstorm unchanged."),
 	k("research.packageCheck", ScopeTaste, false, false, TypeBool, "Opt-in registry check in /rota-spike Step 2 and /rota-plan Step 2: each new package they would recommend is looked up on its registry (npm, PyPI, crates.io, Go proxy); missing ones are dropped, suspect ones need a user answer. Makes network calls. Off makes no registry call."),
-	k("work.contextGuard", ScopeTaste, "warn", false, TypeEnum, "/rota-work: What a session that is not an orchestrator does at orchestrator.handoffThreshold, where rota hooks are installed. warn adds one line to the next prompt recommending /rota-pause; auto also has the Stop hook ask for /rota-pause at the next task boundary, up to orchestrator.handoffMaxBlocks times; off does nothing.", "warn", "off", "auto"),
+	k("work.contextGuard", ScopeTaste, "warn", false, TypeEnum, "/rota-work: What a session that is not an orchestrator does at orchestrator.handoffThreshold, where rota hooks are installed. warn adds one line to the next prompt recommending /rota-pause; auto also has the Stop hook ask for /rota-pause at the next task boundary, a couple of times; off does nothing.", "warn", "off", "auto"),
 
 	k("orchestrator.handoffThreshold", ScopeMachine, num("75"), false, TypeInt, "Context percentage, 1 to 100, at which the Stop hook blocks until the orchestrator writes a handoff."),
-	k("orchestrator.stateMaxAgeSeconds", ScopeMachine, num("120"), false, TypeInt, "How old the statusline reading may be before the hooks ignore it."),
-	k("orchestrator.handoffMaxAgeSeconds", ScopeMachine, num("900"), false, TypeInt, "How long a handoff counts as fresh."),
-	k("orchestrator.handoffMaxBlocks", ScopeMachine, num("2"), false, TypeInt, "How many times the Stop hook re-blocks a session that still has no handoff before it gives up."),
-	// D2 keepalive keys: silent defaults, read by `rota keepalive run`.
-	k("orchestrator.keepaliveMaxRestarts", ScopeMachine, num("10"), false, TypeInt, "Restarts rota keepalive run makes before it gives up. 0 stops at the first handoff exit."),
-	k("orchestrator.keepaliveBreaker", ScopeMachine, num("3"), false, TypeInt, "How many restarts in a row may leave no new handoff before the breaker trips. 1 or more."),
-	k("orchestrator.keepaliveBackoffSeconds", ScopeMachine, num("5"), false, TypeInt, "Seconds rota keepalive run waits before a restart. 0 or more."),
 	k("orchestrator.restartPrompt", ScopeMachine, "Continue as orchestrator: read the handoff injected at session start, run rota round status, and resume the round.", false, TypeString, "Text appended as the last argument of a restart. Must not be empty."),
 	k("orchestrator.escalateIssue", ScopeMachine, num("0"), false, TypeInt, "Issue number, or key like PROJ-123 on a key-based tracker, the breaker's escalation comment goes on. 0 leaves it unset: a host notification and a warning only."),
 	// #19 launcher key: read by `rota orchestrate` and bare `rota`.
@@ -237,12 +224,7 @@ var Keys = []Key{
 	// D3 usage-limit keys: silent defaults, read by `rota limit watch` and the
 	// watcher inside `rota keepalive run`.
 	k("limits.mode", ScopeMachine, "switch", false, TypeEnum, "How the usage-limit watcher reacts to a limit. switch moves a worker's issue to an idle slot on an account with headroom, else sleeps. sleep always waits for the reset.", "switch", "sleep"),
-	k("limits.resumeMarginSeconds", ScopeMachine, num("60"), false, TypeInt, "Seconds to wait after the reset before the resume prompt is typed. 0 or more."),
-	k("limits.fallbackSleepSeconds", ScopeMachine, num("1800"), false, TypeInt, "Seconds to sleep on a limit with no known reset time. 1 or more."),
-	k("limits.maxResumes", ScopeMachine, num("3"), false, TypeInt, "Resume prompts one limit gets before the entry is marked failed and escalated. 1 or more."),
 	k("limits.resumePrompt", ScopeMachine, "The usage limit has reset. Continue where you left off.", false, TypeString, "Text typed into the limited pane to resume it. Must not be empty."),
-	// #82 gate key: smoke shard count read by test/gate.sh (ROTA_SMOKE_SHARDS overrides).
-	k("gate.smokeShards", ScopeMachine, num("4"), false, TypeInt, "Concurrent shards bash test/gate.sh splits the smoke suite into, 1 or more. ROTA_SMOKE_SHARDS overrides it for one run. Unset, the gate uses one shard per two cores, at most four."),
 	// #85 doctor key: rota doctor warns when the free share of the disk is below this percent; 0 turns it off.
 	k("doctor.minFreeDiskPercent", ScopeMachine, num("10"), false, TypeInt, "rota doctor warns when the free share of the disk falls below this percent, 0 to 100. 0 turns the check off. The same threshold drives the go-cache-disk warning for the volume holding GOCACHE."),
 	k("round.itemTimeoutMinutes", ScopeProject, num("0"), false, TypeInt, "Rounds: Minutes one item may run from its first assignment before rota round reconcile reports it as timed out and --apply parks it as needs-human. 0 means no cap."),
@@ -268,6 +250,9 @@ func init() {
 func ScopeOf(key string) Scope {
 	if k, ok := SchemaKey(key); ok {
 		return k.Scope
+	}
+	if IsCommandKey(key) {
+		return ScopeMachine
 	}
 	return ""
 }

@@ -14,7 +14,7 @@ rota round assign 59 --kind codex --check-only    # readiness, and the model it 
 rota round assign 59 --kind codex
 ```
 
-`--kind` is `claude` or `codex`. Without it, the issue's `harness:` label applies (file backend: a `Harness:` field), then the project default `round.workerKind`, then the slot's recorded kind, else `claude`. A Codex-first project sets `rota config set round.workerKind codex` once; autopilot, `rota round architecture` and `rota round transfer` then start Codex workers too. `rota round status` shows each slot's kind and where it came from. To pick a model per issue, add a `model:<id>` label or pass `--model <id>`; see [assigning](parallel-rounds.md#assigning-an-issue).
+`--kind` is `claude` or `codex`. Without it, the issue's `harness:` label applies (file backend: a `Harness:` field), then the project default (the first entry of `round.harnesses`), then the slot's recorded kind, else `claude`. A Codex-first project sets `rota config set round.harnesses '["codex"]'` once; autopilot, `rota round architecture` and `rota round transfer` then start Codex workers too. `rota round status` shows each slot's kind and where it came from. To pick a model per issue, add a `model:<id>` label or pass `--model <id>`; see [assigning](parallel-rounds.md#assigning-an-issue).
 
 A `best-of:2` issue gets one Claude and one Codex attempt when both `round.tiers.claude` and `round.tiers.codex` are set and neither `--kind` nor a `harness:` label pins a harness. See [best-of](parallel-rounds.md#best-of-two-workers-on-one-issue).
 
@@ -93,7 +93,7 @@ Claude and Codex both ship a tier map:
 Override any tier and the others keep their defaults. Set all three to empty and the worker runs on
 Codex's own default model, and the launch command drops `--model`; one empty tier beside a set one is refused. `rota round assign --kind codex --check-only` prints the model it would use.
 
-The launch command is `round.codexCommand`. Its default is `codex --model {model}
+The launch command is `round.commands.codex`. Its default is `codex --model {model}
 --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen`.
 The bypass flags are there because nobody answers prompts in a worker pane: scope, not prompting,
 bounds the worker. A custom command receives the tier's model only through a `{model}` placeholder.
@@ -142,7 +142,7 @@ The same one-shot run reviews code. With `round.harnesses` set, a `size:Major` o
   reset when there is none. With every `codex` login in `round.accounts` waiting, the round stops filling Codex
   slots (see [usage limits](unattended-rounds.md#-usage-limits)).
 - **A Codex update can still break a flag.** If a release renames or drops a launch flag, `assign` refuses
-  and names it. Fix `round.codexCommand`, or wait for rota to follow.
+  and names it. Fix `round.commands.codex`, or wait for rota to follow.
 - **The prompt check was verified on 0.159.2.** rota does not gate on the version, so it cannot tell a Codex
   that ignores `-c features.hooks=true`. Unsigned pane text could then reach the worker.
 

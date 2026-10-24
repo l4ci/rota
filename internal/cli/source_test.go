@@ -220,7 +220,7 @@ func TestInvalidForgeProviderExits70(t *testing.T) {
 // reader's github and says so on stderr; a write is the actor refusal, exit 4
 // blockedBy forge, with the origin and the hint (#889).
 func TestForgeSourceUnknownOriginReadsAndRefusesWrites(t *testing.T) {
-	root := trackerProject(t, `{"issues":{"source":"forge","retryWaitSeconds":0}}`)
+	root := trackerProject(t, `{"issues":{"source":"forge"}}`)
 	f := &forge{answer: func(name string, args []string) (string, string, int) {
 		if name == "git" {
 			return "https://git.example.com/o/r.git\n", "", 0

@@ -60,18 +60,18 @@ type SessionOpts struct {
 	BootTimeout int    // default 60
 }
 
-// operatorCommand is round.operatorCommand, else a resumed opus session. The
+// operatorCommand is orchestrator.command, else a resumed opus session. The
 // operator runs in `auto`, not the workers' skip-permissions mode: it is the
 // process that merges into the cycle branch and talks to the user, and the one
 // window a human is actually watching, so it keeps a gate the workers do not.
 func (e Env) operatorCommand(root string) string {
 	cfg := e.Config(root)
-	if v, ok := config.Lookup(cfg, "round.operatorCommand"); ok {
+	if v, ok := config.Lookup(cfg, "orchestrator.command"); ok {
 		if s, _ := v.(string); s != "" {
 			return s
 		}
 	}
-	model := config.StringOrDefault(cfg, "models.orchestrator")
+	model := config.StringOrDefault(cfg, "orchestrator.model")
 	return "claude --continue --model " + model + " --permission-mode auto"
 }
 

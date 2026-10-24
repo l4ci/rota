@@ -77,6 +77,9 @@ func FillDetect(root string, detect func() string) ([]string, SourceMigration, R
 	if _, err := MigrateAccountsFiles(root, globalConfigDir(), true); err != nil {
 		return nil, sm, rm, err
 	}
+	if _, err := MigrateMergesFiles(root, globalConfigDir(), true); err != nil {
+		return nil, sm, rm, err
+	}
 	path := configPath(root)
 	err = fsio.Locked(path, fsio.LockTimeout, func() error {
 		cfg := jsonx.NewObject()
@@ -205,7 +208,21 @@ func migrateLegacyVerify(cfg *jsonx.Object) (*jsonx.Object, bool, bool) {
 // holds every kind, and the accounts step of `rota migrate config` (which fill
 // runs before it strips) carries their entries over.
 // debug.competingHypotheses was never read (CHANGELOG).
-var RemovedKeys = []string{"issues.filterMineOnly", "issues.providers.github", "issues.providers.gitlab", "round.autopilot", "round.codexAccounts", "round.opencodeAccounts", "debug.competingHypotheses"}
+// The #1825 keys: ship.secondOpinionRunner and gate.smokeShards were dropped;
+// eleven tuning knobs became constants in the code that reads them; and
+// models.orchestrator, round.operatorCommand, models.worker, round.workerCommand,
+// round.codexCommand, round.opencodeCommand, round.workerKind and issues.label
+// moved to orchestrator.model, orchestrator.command, round.tiers.claude.standard,
+// round.commands.<kind>, round.harnesses and issues.labels.inProgress, which the
+// merges step of `rota migrate config` (run before the strip) carries over.
+var RemovedKeys = []string{"issues.filterMineOnly", "issues.providers.github", "issues.providers.gitlab", "round.autopilot", "round.codexAccounts", "round.opencodeAccounts", "debug.competingHypotheses",
+	"ship.secondOpinionRunner", "gate.smokeShards", "issues.label",
+	"orchestrator.stateMaxAgeSeconds", "orchestrator.handoffMaxAgeSeconds", "orchestrator.handoffMaxBlocks",
+	"orchestrator.keepaliveMaxRestarts", "orchestrator.keepaliveBreaker", "orchestrator.keepaliveBackoffSeconds",
+	"limits.resumeMarginSeconds", "limits.fallbackSleepSeconds", "limits.maxResumes",
+	"issues.retryWaitSeconds", "issues.bulkPaceMs",
+	"models.orchestrator", "round.operatorCommand", "models.worker",
+	"round.workerCommand", "round.codexCommand", "round.opencodeCommand", "round.workerKind"}
 
 // stripRemoved deletes every RemovedKeys entry present in cfg, drops a parent
 // object that ends up empty (issues.providers, debug) and returns the keys it
@@ -217,16 +234,7 @@ func stripRemoved(cfg *jsonx.Object) []string {
 		if _, ok := lookupPresent(cfg, segs); !ok {
 			continue
 		}
-		parent, ok := getObject(cfg, segs[0])
-		for _, s := range segs[1 : len(segs)-1] {
-			if parent, ok = getObject(parent, s); !ok {
-				break
-			}
-		}
-		if !ok {
-			continue
-		}
-		parent.Delete(segs[len(segs)-1])
+		deletePath(cfg, segs)
 		out = append(out, k)
 	}
 	if d, ok := getObject(cfg, "debug"); ok && len(d.Keys()) == 0 {

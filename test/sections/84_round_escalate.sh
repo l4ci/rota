@@ -24,7 +24,7 @@ done
 PROJ="$TMP_ES/proj"
 mkdir -p "$PROJ/.rota"
 git -C "$PROJ" init -q -b main
-echo '{"forge":{"provider":"github"},"issues":{"source":"github","retryWaitSeconds":0}}' > "$PROJ/.rota/config.json"
+echo '{"forge":{"provider":"github"},"issues":{"source":"github"}}' > "$PROJ/.rota/config.json"
 printf 'Which of the two options do you want?\n' > "$TMP_ES/body.md"
 OPTS=(--options "option one" --options "option two" --recommend 2 --cost-if-wrong "a revert")
 

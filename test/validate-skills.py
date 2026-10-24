@@ -416,11 +416,11 @@ def prose_rules():
           has("docs/reference/config-options.md", "positional", "missing positional-args mention"),
           has("docs/usage/configuration.md", r"positional|<key>=<value>", "missing positional-args mention", True),
           has("docs/usage/configuration.md", "round.dispatch", "does not explain round.dispatch")]
-    for key in ("models.orchestrator models.worker work.isolation work.mergeStrategy ship.review learn.verify "
+    for key in ("orchestrator.model round.tiers.claude.standard work.isolation work.mergeStrategy ship.review learn.verify "
                 "refactor.confirmBeforeExecute autonomy.level docs.path docs.autoCreate "
-                "docs.afterWork git.baseBranch umbrella.enabled round.dispatch round.slots round.workerCommand").split():
+                "docs.afterWork git.baseBranch umbrella.enabled round.dispatch round.slots round.commands").split():
         r.append(has("docs/reference/config-options.md", key, f"does not document {key}"))
-    for key in ("round.dispatch", "round.slots", "round.workerCommand"):
+    for key in ("round.dispatch", "round.slots", "round.commands"):
         r.append(has("docs/reference/config-options.md", key, f"does not document {key}"))
     # multi-repo flow (M03)
     r += [has("skills/rota-capture/umbrella-tagging.md", "**Selection:** multiple", "Step 4.6 must allow multiple selections for the Repos question"),

@@ -3,7 +3,7 @@ echo "Acceptance ids: create numbers criteria, plan pass needs a PASS proof row 
 TMP_AC="$(mktemp -d "$TMP/accept.XXXXXX")"
 (
   P="$TMP_AC/proj"; mkdir -p "$P/.rota"
-  echo '{"issues":{"source":"github","retryWaitSeconds":0}}' > "$P/.rota/config.json"
+  echo '{"issues":{"source":"github"}}' > "$P/.rota/config.json"
   cd "$P"
   git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m seed
   export PATH="$TESTDIR/fakes:$PATH" FAKE_TRACKER_DB="$P/db.json" FAKE_TRACKER_LOG="$P/log"

@@ -17,15 +17,12 @@ RC=0; OUT=$( cd "$IL" && printf 'merge: f\n' | hvj ship merge feat/f --body-file
 git -C "$IL" rev-parse -q --verify refs/heads/feat/f >/dev/null || fail "a refused merge deleted the branch"
 pass "ship merge refuses after a recorded review FAIL"
 
-# A newer PASS clears it; a second-opinion FAIL blocks again unless the runner is codex.
+# A newer PASS clears it; a second-opinion FAIL blocks again.
 ( cd "$IL" && hvj verdict add feat/f --kind review-spec --verdict PASS >/dev/null ) || fail "spec PASS add failed"
 ( cd "$IL" && hvj verdict add feat/f --kind second-opinion --verdict FAIL >/dev/null ) || fail "second-opinion add failed"
 RC=0; ( cd "$IL" && printf 'merge: f\n' | hvj ship merge feat/f --body-file - >/dev/null 2>&1 ) || RC=$?
 [ "$RC" = "4" ] || fail "a second-opinion FAIL should refuse the merge, got $RC"
-printf '{"ship": {"secondOpinionRunner": "codex"}}\n' > "$IL/.rota/config.json"
-OUT=$( cd "$IL" && printf 'merge: f\n' | hvj ship merge feat/f --body-file - ) || fail "advisory codex FAIL should not refuse: $OUT"
-[ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "the advisory merge should land: $OUT"
-pass "a second-opinion FAIL refuses unless the runner is the advisory codex fallback"
+pass "a second-opinion FAIL refuses the merge"
 
 # Three failed fixes on an item refuse a fourth attempt, on any branch.
 for _ in 1 2 3; do

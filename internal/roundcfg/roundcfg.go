@@ -77,11 +77,9 @@ type Settings struct {
 	Profile string
 	Models  map[string]map[string]string
 	Tiered  map[string]bool
-	// WorkerKind is round.workerKind: the project's default worker harness,
-	// "" when unset (the slot's recorded kind, else claude, decides).
-	WorkerKind string
 	// Harnesses is round.harnesses: the kinds a round may use, in quota-fallback
-	// order; empty means only the default harness.
+	// order; the first is the project's default worker harness. Empty means the
+	// slot's recorded kind, else claude, decides.
 	Harnesses []string
 	// FullOnly is true when test.fast is empty but test.full is set: workers
 	// have no fast tier to prove against, so their brief says to run test.full.
@@ -271,9 +269,6 @@ func FromConfig(cfg any) (Settings, error) {
 	if err := s.supportRoster(); err != nil {
 		return s, err
 	}
-	if s.WorkerKind, err = loadWorkerKind(cfg); err != nil {
-		return s, err
-	}
 	if s.Harnesses, err = loadHarnesses(cfg); err != nil {
 		return s, err
 	}
@@ -336,20 +331,6 @@ func loadRoles(cfg any, s *Settings) error {
 	return nil
 }
 
-// loadWorkerKind reads round.workerKind: a harness kind, or "" for unset. A
-// bad value is an error, never a silent fallback to claude.
-func loadWorkerKind(cfg any) (string, error) {
-	v, err := config.Value(cfg, "round.workerKind")
-	if err != nil {
-		return "", err
-	}
-	k, ok := v.(string)
-	if !ok || (k != "" && !harness.Valid(k)) {
-		return "", fmt.Errorf("round.workerKind must be %s (got %v)", harness.KindList(), v)
-	}
-	return k, nil
-}
-
 // CrossReview is what the cross-harness review requirement reads (#1612):
 // review.crossLabels, the labels that trigger it; round.harnesses, the
 // reviewers to pick from; and DefaultKind, the author's harness when no slot
@@ -360,7 +341,7 @@ type CrossReview struct {
 }
 
 // ParseCrossReview reads the cross-harness review settings. A malformed
-// review.crossLabels, round.harnesses or round.workerKind is an error: the
+// review.crossLabels or round.harnesses is an error: the
 // gate must not guess that a Major PR needs no cross review.
 func ParseCrossReview(cfg any) (CrossReview, error) {
 	var c CrossReview
@@ -369,9 +350,6 @@ func ParseCrossReview(cfg any) (CrossReview, error) {
 		return CrossReview{}, err
 	}
 	s := Settings{}
-	if s.WorkerKind, err = loadWorkerKind(cfg); err != nil {
-		return CrossReview{}, err
-	}
 	if s.Harnesses, err = loadHarnesses(cfg); err != nil {
 		return CrossReview{}, err
 	}
@@ -384,12 +362,8 @@ func ParseCrossReview(cfg any) (CrossReview, error) {
 func (c CrossReview) Active() bool { return len(c.Labels) > 0 && len(c.Harnesses) > 0 }
 
 // DefaultKind is the harness an issue with no pick resolves to:
-// round.workerKind, else the first of round.harnesses, else ""; the slot's
-// kind and claude decide.
+// the first of round.harnesses, else ""; the slot's kind and claude decide.
 func (s Settings) DefaultKind() string {
-	if s.WorkerKind != "" {
-		return s.WorkerKind
-	}
 	if len(s.Harnesses) > 0 {
 		return s.Harnesses[0]
 	}
@@ -417,7 +391,7 @@ func loadHarnesses(cfg any) ([]string, error) {
 }
 
 // loadTiers reads round.tier and round.tiers.<kind>.<tier>. The claude standard
-// tier falls back to models.worker, so one knob governs the standard model.
+// tier defaults to sonnet (round.tiers.claude.standard).
 // claude must be configured; a configured kind must name all three tiers.
 func loadTiers(cfg any, s *Settings) error {
 	v, err := config.Value(cfg, "round.tier")
@@ -546,7 +520,6 @@ func SharedPaths(cfg any) []string {
 const (
 	SourceExplicit       = "explicit"
 	SourceProfile        = "profile"
-	SourceModelsWorker   = "models.worker"
 	SourceDefault        = "default"
 	SourceHarnessDefault = "harness default"
 )
@@ -576,8 +549,7 @@ func profileOf(cfg any) (string, error) {
 }
 
 // Effective is the model a kind's tier launches with, and where it came from:
-// explicit (the tier key is set), profile (Claude only), models.worker (the
-// standard fallback), default (the key's schema default) or harness default
+// explicit (the tier key is set), profile (Claude only), default (the key's schema default) or harness default
 // (no model, so the harness picks).
 func Effective(cfg any, kind, tier string) (model, source string) {
 	key := harness.TierKey(kind, tier)
@@ -592,11 +564,6 @@ func Effective(cfg any, kind, tier string) (model, source string) {
 				return m, SourceProfile
 			}
 			return "", SourceHarnessDefault
-		}
-	}
-	if fb := harness.Resolve(kind).Tiers().StandardFallback; fb != "" && tier == TierStandard {
-		if m := strings.TrimSpace(config.String(cfg, fb)); m != "" {
-			return m, SourceModelsWorker
 		}
 	}
 	if _, set := config.Lookup(cfg, key); set {

@@ -554,7 +554,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 		return StateBusy, "pane changed between captures"
 	}
 	if native == "blocked" {
-		return StateNeedsPermission, "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen round.workerCommand"
+		return StateNeedsPermission, "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen round.commands.claude"
 	}
 	if native == "gone" {
 		return StateDead, "herdr: no agent in the slot's tab — the session exited"
@@ -568,7 +568,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	}
 	for _, re := range permissionPatterns {
 		if re.MatchString(tail) {
-			return StateNeedsPermission, "stopped at a permission prompt — approve in the pane, or widen round.workerCommand"
+			return StateNeedsPermission, "stopped at a permission prompt — approve in the pane, or widen round.commands.claude"
 		}
 	}
 	if native == "unknown" {

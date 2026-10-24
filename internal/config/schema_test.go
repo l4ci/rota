@@ -15,6 +15,67 @@ import (
 // pythonKeys is how many leading rows of Keys are CONFIG_KEYS.
 const pythonKeys = 46
 
+// frozenPythonKeys is the table the recorded schema inputs were generated
+// from: CONFIG_KEYS plus the keys removed since, in the order the old Keys had
+// them. It is a fixed list, not a slice of Keys, so a key renamed or dropped
+// later (#1825) leaves the recorded inputs alone.
+var frozenPythonKeys = []string{
+	"models.orchestrator",
+	"models.worker",
+	"work.isolation",
+	"work.mergeStrategy",
+	"round.dispatch",
+	"round.slots",
+	"round.workerCommand",
+	"round.accounts",
+	"round.operatorCommand",
+	"refactor.confirmBeforeExecute",
+	"refactor.verifyCommands",
+	"learn.verify",
+	"learn.promoteThreshold",
+	"ship.review",
+	"ship.secondOpinion",
+	"ship.secondOpinionRunner",
+	"ship.qa",
+	"ship.uat",
+	"qa.gate",
+	"qa.afterWork",
+	"debug.competingHypotheses",
+	"autonomy.level",
+	"docs.path",
+	"docs.autoCreate",
+	"docs.afterWork",
+	"git.baseBranch",
+	"issues.providers.github",
+	"issues.providers.gitlab",
+	"umbrella.enabled",
+	"loop.webResearch",
+	"rota.version",
+	"backlog.backend",
+	"issues.provider",
+	"issues.label",
+	"issues.retryWaitSeconds",
+	"issues.bulkPaceMs",
+	"issues.labels.inProgress",
+	"issues.labels.needsReview",
+	"issues.labels.changesRequested",
+	"issues.labels.released",
+	"issues.labels.notPlanned",
+	"issues.labels.blocked",
+	"issues.labels.milestoneTracker",
+	"issues.labels.types.bug",
+	"issues.labels.types.feature",
+	"issues.labels.types.task",
+	"issues.labels.priorityPrefix",
+	"issues.labels.sizePrefix",
+	"issues.filterMineOnly",
+	"issues.autoCreateLabel",
+	"issues.homeRepo",
+	"release.checklistPath",
+	"release.confirmLargePushCommits",
+	"release.nudgeAfterCommits",
+}
+
 type schemaCase struct {
 	Cfg string `json:"cfg"` // JSON text; both sides decode it themselves
 	Key string `json:"key"`
@@ -99,21 +160,9 @@ func TestSchemaMatchesPython(t *testing.T) {
 	// recorded inputs line up, and skip those keys. The same goes for the
 	// three seeded keys removed in #501.
 	var py []Key
-	py = append(py, Keys[:10]...)
-	py = append(py, Key{Name: "refactor.verifyCommands"}) // moved to test.full
-	py = append(py, Keys[10:19]...)
-	py = append(py, Key{Name: "debug.competingHypotheses"})
-	py = append(py, Keys[19:24]...)
-	py = append(py, Key{Name: "issues.providers.github"}, Key{Name: "issues.providers.gitlab"})
-	py = append(py, Keys[24:25]...)
-	py = append(py, Key{Name: "loop.webResearch"})
-	// backlog.backend and issues.provider are gone from the schema (#797) but
-	// their recorded cases stay, as the legacy keys IssueSource still reads.
-	py = append(py, Keys[25:26]...)
-	py = append(py, Key{Name: "backlog.backend"}, Key{Name: "issues.provider"})
-	py = append(py, Keys[26:41]...)
-	py = append(py, Key{Name: "issues.filterMineOnly"})
-	py = append(py, Keys[41:pythonKeys]...)
+	for _, n := range frozenPythonKeys {
+		py = append(py, Key{Name: n})
+	}
 	add = func(add func(map[string]any, string)) func(map[string]any, string) {
 		return func(tree map[string]any, key string) {
 			switch key {
@@ -225,6 +274,8 @@ func TestKeysMetadata(t *testing.T) {
 			_, ok = k.Default.(json.Number)
 		case TypeList:
 			_, ok = k.Default.([]any)
+		case TypeObject:
+			_, ok = k.Default.(*jsonx.Object)
 		case TypeString, TypePath, TypeEnum:
 			_, ok = k.Default.(string)
 		}

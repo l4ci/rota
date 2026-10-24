@@ -48,14 +48,14 @@ func TestShowAllKeysInSchemaOrder(t *testing.T) {
 
 func TestShowSources(t *testing.T) {
 	root := project(t,
-		`{"models": {"worker": "haiku", "orchestrator": null}, "work": {"isolation": "worktree"}}`,
+		`{"orchestrator": {"model": "haiku", "harness": null}, "work": {"isolation": "worktree"}}`,
 		`{"work": {"isolation": "branch"}, "docs": {"path": "d"}}`)
 	for key, want := range map[string]Entry{
-		"work.isolation":      {"work.isolation", "branch", "local", nil, nil, false},
-		"models.worker":       {"models.worker", "haiku", "project", nil, nil, false},
-		"models.orchestrator": {"models.orchestrator", "opus", "default", nil, nil, false}, // null counts as unset
-		"docs.path":           {"docs.path", "d", "local", nil, nil, false},
-		"docs.afterWork":      {"docs.afterWork", false, "default", nil, nil, false},
+		"work.isolation":       {"work.isolation", "branch", "local", nil, nil, false},
+		"orchestrator.model":   {"orchestrator.model", "haiku", "project", nil, nil, false},
+		"orchestrator.harness": {"orchestrator.harness", "claude", "default", nil, nil, false}, // null counts as unset
+		"docs.path":            {"docs.path", "d", "local", nil, nil, false},
+		"docs.afterWork":       {"docs.afterWork", false, "default", nil, nil, false},
 	} {
 		es, err := Show(root, key, true)
 		if err == nil && len(es) == 1 {
@@ -192,7 +192,7 @@ func TestSetCoercions(t *testing.T) {
 		"opus": `"opus"`, "": `""`, "1.50": "1.5", "True": `"True"`, " 7 ": "7",
 	} {
 		root := project(t, "", "")
-		res, err := Set(root, "models.worker", raw)
+		res, err := Set(root, "orchestrator.model", raw)
 		if err != nil {
 			t.Fatalf("%q: %v", raw, err)
 		}
@@ -204,19 +204,19 @@ func TestSetCoercions(t *testing.T) {
 }
 
 func TestSetWritesCanonicalAndReportsPrevious(t *testing.T) {
-	root := project(t, `{"models":{"worker":"sonnet","orchestrator":"opus"},"keep":[1]}`, `{"models":{"worker":"local"}}`)
-	res, err := Set(root, "models.worker", "opus")
+	root := project(t, `{"orchestrator":{"model":"sonnet","harness":"codex"},"keep":[1]}`, `{"orchestrator":{"model":"local"}}`)
+	res, err := Set(root, "orchestrator.model", "opus")
 	if err != nil || !res.Changed || !res.HadPrevious || res.Previous != "sonnet" {
 		t.Fatalf("%+v %v", res, err)
 	}
-	want := "{\n  \"models\": {\n    \"worker\": \"opus\",\n    \"orchestrator\": \"opus\"\n  },\n  \"keep\": [\n    1\n  ]\n}\n"
+	want := "{\n  \"orchestrator\": {\n    \"model\": \"opus\",\n    \"harness\": \"codex\"\n  },\n  \"keep\": [\n    1\n  ]\n}\n"
 	if got := read(t, root); got != want {
 		t.Errorf("file:\n%s", got)
 	}
-	if b, _ := os.ReadFile(filepath.Join(root, ".rota", "config.local.json")); string(b) != `{"models":{"worker":"local"}}` {
+	if b, _ := os.ReadFile(filepath.Join(root, ".rota", "config.local.json")); string(b) != `{"orchestrator":{"model":"local"}}` {
 		t.Errorf("config.local.json was touched: %s", b)
 	}
-	res, err = Set(root, "models.worker", "opus")
+	res, err = Set(root, "orchestrator.model", "opus")
 	if err != nil || res.Changed || res.Previous != "opus" {
 		t.Errorf("idempotent set: %+v %v", res, err)
 	}
@@ -255,14 +255,14 @@ func TestSetRefusals(t *testing.T) {
 			t.Errorf("%q: %v", key, err)
 		}
 	}
-	for _, key := range []string{"nope", "models", "models.worker.extra"} {
+	for _, key := range []string{"nope", "gate", "orchestrator.model.extra"} {
 		if _, err := Set(root, key, "1"); !errors.Is(err, ErrNotSchemaKey) {
 			t.Errorf("%q: %v", key, err)
 		}
 	}
 	for _, body := range []string{"[1]", "null", `"s"`, "7"} {
 		root = project(t, body, "")
-		if _, err := Set(root, "models.worker", "x"); !errors.Is(err, ErrNotObject) {
+		if _, err := Set(root, "orchestrator.model", "x"); !errors.Is(err, ErrNotObject) {
 			t.Errorf("%s: %v", body, err)
 		}
 		if read(t, root) != body {

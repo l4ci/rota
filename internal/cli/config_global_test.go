@@ -290,7 +290,7 @@ func TestGlobalWritesRefuseATruncatedGlobal(t *testing.T) {
 	}
 	path := config.GlobalPath(gdir)
 	for name, args := range map[string][]string{
-		"set --global":   {"config", "set", "--global", "models.worker", "haiku"},
+		"set --global":   {"config", "set", "--global", "round.tiers.claude.standard", "haiku"},
 		"unset via edit": nil,
 		"save-global":    {"config", "save-global"},
 	} {

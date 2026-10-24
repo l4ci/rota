@@ -120,7 +120,7 @@ for i in 1 2; do
   [ "$(stop_in true | oh "$ORCH" hook stop | jget decision)" = "block" ] || fail "D1: reblock $i without a handoff"
 done
 OUT="$(stop_in true | oh "$ORCH" hook stop)"
-[ -z "$OUT" ] || fail "D1: past handoffMaxBlocks the hook must pass: $OUT"
+[ -z "$OUT" ] || fail "D1: past the block cap (2) the hook must pass: $OUT"
 [ "$(sj handoffFailed)" = "True" ] || fail "D1: handoffFailed should be recorded"
 OUT="$(stop_in false | oh "$ORCH" hook stop)"
 [ -z "$OUT" ] || fail "D1: a failed session must not be held again: $OUT"
@@ -238,8 +238,8 @@ guard_prompt >/dev/null
 for a in false true; do
   OUT="$(guard_stop "$a")"; grep -q '"decision": *"block"' <<<"$OUT" || fail "guard: auto did not block (active=$a)"
 done
-[ -z "$(guard_stop true)" ] || fail "guard: auto blocked past handoffMaxBlocks"
-pass "guard: auto blocks handoffMaxBlocks times, then passes"
+[ -z "$(guard_stop true)" ] || fail "guard: auto blocked past the block cap"
+pass "guard: auto blocks twice (the block cap), then passes"
 # a work session on a feature branch in a worktree: /rota-pause writes
 # .rota/handoff/<branch>.md under the worktree, and a fresh note ends the blocks
 W="$OH/wt"; git -C "$P" worktree add -q -b feat/guard "$W" >/dev/null 2>&1 || fail "guard: worktree setup failed"
