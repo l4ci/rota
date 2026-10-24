@@ -322,3 +322,33 @@ func TestDepsTrackersUseTrackerOptions(t *testing.T) {
 		t.Fatalf("MigrateTracker ignored TrackerOptions: calls=%d err=%v", calls, err)
 	}
 }
+
+// An invalid issues.source is a corrupt config: the tracker verbs exit 70
+// rather than quietly reading it as file.
+func TestTrackerVerbsInvalidSourceExit70(t *testing.T) {
+	root := issuesRepo(t, "https://github.com/o/r.git")
+	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"issues": {"source": "isssues"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, argv := range [][]string{
+		{"tracker", "call", "--", "issue", "list"},
+		{"issues", "provider"},
+	} {
+		code, env, stderr := rotaRun(t, append([]string{"--json", "-C", root}, argv...)...)
+		if code != ExitInternal || env["ok"] != false || !strings.Contains(stderr, "invalid issues.source") {
+			t.Errorf("%v: code=%d env=%v stderr=%s", argv, code, env, stderr)
+		}
+	}
+}
+
+// MigrateTracker acts on forge.provider and issues.source, so it fails on an
+// invalid one instead of defaulting it.
+func TestMigrateTrackerInvalidConfig(t *testing.T) {
+	d := defaultDeps()
+	for _, raw := range []string{`{"issues":{"source":"isssues"}}`, `{"forge":{"provider":"bitbucket"}}`} {
+		cfg, _ := jsonx.Decode([]byte(raw))
+		if _, err := d.MigrateTracker(context.Background(), t.TempDir(), cfg); !tracker.IsKind(err, tracker.KindInternal) {
+			t.Errorf("%s: err = %v, want KindInternal", raw, err)
+		}
+	}
+}

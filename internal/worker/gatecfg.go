@@ -65,7 +65,9 @@ func (e Env) GateConfig(root string) GateConfig {
 }
 
 // ParseGateConfig is Env.GateConfig on a config tree already read. It is the
-// one place that knows the key names.
+// one place that knows the key names. Tracker is read leniently on purpose: an
+// invalid forge.provider or issues.source reads as its default here, and rota
+// doctor reports it (tracker.ValidateConfig).
 func ParseGateConfig(cfg any) GateConfig {
 	c := GateConfig{
 		E2E:             commandList(cfg, "test.e2e"),

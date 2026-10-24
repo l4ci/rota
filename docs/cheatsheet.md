@@ -33,7 +33,7 @@ What each `/rota-*` skill does, one line each. For details: [`reference/slash-co
 
 ## Maintenance
 - **`/rota-release`**: cut a release.
-- **`/rota-docs`**: scaffold, update or restructure the public docs. Manual only.
+- **`/rota-docs`**: scaffold, update or restructure the public docs. After-work runs anywhere, including in a round worker's PR; scaffold and restructure are the maintainer's.
 
 ## Verbs, not skills
 - **`rota`** (bare, in a terminal): opens a palette. Enter on the preselected entry runs `rota setup` in a directory without `.rota/` and launches the orchestrator in an initialized project. Outside a terminal it prints usage.

@@ -22,6 +22,30 @@ echo "doclint: skills and references pass the validator; the prose lint catches 
 OUT="$(cd "$REPO" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || fail "validate-skills fails on the repo: $OUT"
 pass "skills and references pass the doclint"
 
+# ── the chain lint can fail (#1897) ─────────────────────────────────────────
+# A line that tells a model to run a manual-only skill must fail the validator, even
+# with "ask the user" or "never" nearby and in a nested reference file; a line that
+# tells the user to type it passes.
+CL="$TMP/chain"; mkdir -p "$CL"
+cp -R "$REPO/skills" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$CL/"
+mkdir -p "$CL/skills/rota-plan/nested"
+printf 'Ask the user, then invoke `rota-decide` and never skip it.\n' > "$CL/skills/rota-plan/nested/chain.md"
+RC=0; OUT="$(cd "$CL" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
+[ "$RC" = 1 ] && grep -qF "skills/rota-plan/nested/chain.md:1: chains into flagged skill rota-decide" <<<"$OUT" \
+  || fail "chain lint missed a chaining line (rc $RC): $OUT"
+printf 'When a rule needs recording, tell the user to type `/rota-decide`.\n' > "$CL/skills/rota-plan/nested/chain.md"
+RC=0; OUT="$(cd "$CL" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
+[ "$RC" = 0 ] || fail "chain lint rejected an explicit offer (rc $RC): $OUT"
+pass "the chain lint fails a line that runs a flagged skill, in nested files too, and passes an explicit offer"
+
+# A minimal skill tree has no authoring-conventions.md: the flagged-list check skips it
+# (section 94 lints such a fixture). It stays strict when the file exists (below).
+rm -f "$CL/skills/rota-plan/nested/chain.md" "$CL/skills/references/authoring-conventions.md"
+RC=0; OUT="$(cd "$CL" && ROTA_DOCLINT_PROSE=off python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
+grep -qF "authoring-conventions.md: no 'The set is" <<<"$OUT" \
+  && fail "flagged-list check failed a tree without authoring-conventions.md (rc $RC): $OUT"
+pass "the flagged-list check skips a tree without authoring-conventions.md"
+
 # ── the behavioural eval case files are well-formed (#279) ──────────────────
 # Offline only: no model call. Live runs are `python3 test/evals/run.py triggers|scenarios`.
 OUT="$(python3 "$TESTDIR/evals/run.py" --check 2>&1)" || fail "eval case files are malformed: $OUT"
