@@ -341,3 +341,11 @@ func TestFromLabels(t *testing.T) {
 		}
 	}
 }
+
+// config names the kinds of round.accounts entries itself (import cycle), so
+// its list must stay Kinds().
+func TestAccountKindsAreKinds(t *testing.T) {
+	if !slices.Equal(config.AccountKinds, Kinds()) {
+		t.Errorf("config.AccountKinds %v, want %v", config.AccountKinds, Kinds())
+	}
+}

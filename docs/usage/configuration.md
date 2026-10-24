@@ -63,6 +63,14 @@ A config written before scopes can hold machine keys in the tracked file, where 
 
 `rota migrate config --apply` writes exactly that, `config.local.json` first (created when missing, holding only the moved keys), then `.rota/config.json`; a second run finds nothing. `--keep <key>` (repeatable, or comma-separated) leaves a key where it is.
 
+### Folding the account keys
+
+`round.accounts` holds every worker account in one list of `{ "kind", "name", "dir" }` entries. `round.codexAccounts` (`{name, codexHome}`) and `round.opencodeAccounts` (`{name, configDir}`) are removed keys: `rota config check` names them as removed, and `rota config fill` migrates them, then deletes them. A Claude entry written the old way, `{ "name", "configDir" }` with no `kind`, still reads as `kind: "claude"`.
+
+`rota migrate config` runs an accounts step after the `work.*` rename and before the scope step. It previews unless `--apply`. It rewrites the global config, `.rota/config.json` and `.rota/config.local.json`, lowest layer first: it folds `round.codexAccounts` and `round.opencodeAccounts` into `round.accounts` and rewrites legacy Claude entries to the new shape. A kind that a file defines nothing for is copied from the layers below it, so no layer's accounts vanish. If one file holds two entries with the same name and different dirs, it refuses with exit 4 (`blockedBy: "account conflict"`, `data.conflicts` lists the file, name and dirs) and writes nothing. Fix the names by hand, then run it again. Its `--json` data has an `accounts` list of `{file, from, entries}`.
+
+Worker slots cached under the old keys keep working: the registry stores the account name and its expanded dir, and neither changes.
+
 Keys split by flow. `work.*` keys apply to `/rota-work` and other solo cycles: `work.isolation`, `work.mergeStrategy`, `work.tdd` and `work.contextGuard`. `round.*` keys apply only to parallel rounds (`rota round`, `rota worker`, `rota orchestrate`). The round-only keys that used to sit under `work.*` now live under `round.*`; see [Moving old `work.*` names](#moving-old-work-names-to-round).
 
 ## models: orchestrator and worker
@@ -120,7 +128,7 @@ Two things behave differently under `tmux` and `herdr` than in `/rota-work`:
 - **`work.isolation` stops applying.** Every slot has its own worktree, so its own git index, by construction.
 - **Workers commit.** The orchestrator's per-task commit step is skipped; integration happens through the merge gate instead, which re-verifies the *merged* tree. Two workers can each be honestly green and still break the cycle branch together — a signature one widens while another adds a caller, a constant one stops emitting while another starts reading it. Nothing about a clean merge rules that out, which is why the gate runs `test.full` after every merge rather than trusting the branches.
 
-Related keys: `round.slots` (pool size, default `3`), `round.workerCommand` (default builds `claude --model <models.worker> --dangerously-skip-permissions`), `round.codexAccounts` (named Codex homes for Codex workers, the counterpart of `round.accounts`; unset, they use the default Codex home), `round.opencodeAccounts` (named OpenCode config dirs, each a slot's `OPENCODE_CONFIG_DIR`; unset, OpenCode's default config) and `round.opencodeCommand` (the same for OpenCode workers; default builds `opencode --model <model>`), `round.codexCommand` (the same for Codex workers; default builds `codex --model <model> --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen`), `round.operatorCommand` (starts the orchestrator for `rota orchestrate` and `rota worker session ensure`; default builds `claude --model <models.orchestrator> --permission-mode auto`, with `--continue` added for `session ensure`; `rota keepalive run` restarts it), and `round.accounts`.
+Related keys: `round.slots` (pool size, default `3`), `round.workerCommand` (default builds `claude --model <models.worker> --dangerously-skip-permissions`), `round.opencodeCommand` (the same for OpenCode workers; default builds `opencode --model <model>`), `round.codexCommand` (the same for Codex workers; default builds `codex --model <model> --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen`), `round.operatorCommand` (starts the orchestrator for `rota orchestrate` and `rota worker session ensure`; default builds `claude --model <models.orchestrator> --permission-mode auto`, with `--continue` added for `session ensure`; `rota keepalive run` restarts it), and `round.accounts` (the named worker accounts of every harness, a list of `{ "kind", "name", "dir" }`: `kind` is `claude`, `codex` or `opencode`, and `dir` is that harness's config home, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `OPENCODE_CONFIG_DIR`; a leading `~` or `~/` in `dir` expands to the home directory; names are unique across kinds; with no entry of a kind, workers of that kind use the harness's default home).
 
 **Workers run with permissions skipped; the operator does not.** A worker is briefed to commit, open a PR and run tests with nobody in its pane to answer a prompt, so a narrower mode just stalls it. What bounds a worker is scope rather than gating — a throwaway branch in its own worktree, with `rota worker gate` verifying a scratch merge before anything reaches the cycle branch. The operator keeps `auto` because it performs the merges and it is the window a human is actually watching. Narrow either via its config key; a worker that then stops on a prompt reports `NEEDS-PERMISSION` rather than hanging.
 
@@ -496,9 +504,9 @@ Fourteen keys moved out of `work.*` into `round.*` because only rounds read them
 | `work.workerCommand` | `round.workerCommand` |
 | `work.operatorCommand` | `round.operatorCommand` |
 | `work.accounts` | `round.accounts` |
-| `work.codexAccounts` | `round.codexAccounts` |
+| `work.codexAccounts` | `round.codexAccounts`, then folded into `round.accounts` (see [Folding the account keys](#folding-the-account-keys)) |
 | `work.codexCommand` | `round.codexCommand` |
-| `work.opencodeAccounts` | `round.opencodeAccounts` |
+| `work.opencodeAccounts` | `round.opencodeAccounts`, then folded into `round.accounts` |
 | `work.opencodeCommand` | `round.opencodeCommand` |
 | `work.envSetup` | `round.envSetup` |
 | `work.portBase` | `round.portBase` |
@@ -508,7 +516,7 @@ Fourteen keys moved out of `work.*` into `round.*` because only rounds read them
 
 `work.isolation`, `work.mergeStrategy`, `work.tdd` and `work.contextGuard` stay under `work`.
 
-`rota migrate config` shows what it would change and writes nothing. `rota migrate config --apply` moves each old name to its new name in both `.rota/config.json` and `.rota/config.local.json`, with the value unchanged. If an old name and its new name are both set to different values, it refuses with exit 4 and writes nothing. Resolve that pair by hand with `rota config set`, then run it again. `rota config fill` and `rota init` run the same migration. The same verb then runs the scope step from [Moving keys to their layer](#moving-keys-to-their-layer).
+`rota migrate config` shows what it would change and writes nothing. `rota migrate config --apply` moves each old name to its new name in both `.rota/config.json` and `.rota/config.local.json`, with the value unchanged. If an old name and its new name are both set to different values, it refuses with exit 4 and writes nothing. Resolve that pair by hand with `rota config set`, then run it again. `rota config fill` and `rota init` run the same migration. The same verb then runs the accounts step from [Folding the account keys](#folding-the-account-keys) and the scope step from [Moving keys to their layer](#moving-keys-to-their-layer).
 
 While a config still holds an old name, these verbs exit 4 with `blockedBy: config migration` and list the old keys: `rota round ...`, `rota worker ...`, `rota doctor`, `rota orchestrate`, `rota keepalive`, `rota layout`, `rota limit` and bare `rota`. Other verbs only print a warning. `rota config check` lists an old name as `unknown`.
 
@@ -539,7 +547,7 @@ rota agents write            # write or refresh the files
 rota agents write --check    # report drift, write nothing, exit 1 on drift
 ```
 
-It writes `.claude/agents/rota-<role>.md` (frontmatter `name`, `description`, `model`, `effort` when set, and `tools: Read, Grep, Glob, Bash` for the explorer only) and, when OpenCode is configured, `.opencode/agents/rota-<role>.md` (frontmatter `description`, `mode: subagent`, `model` when the tier map is set, and `permission: edit: deny, bash: deny` for the explorer; OpenCode has no effort field) and, when Codex is configured, `.codex/agents/rota-<role>.toml` (`name`, `description`, `model`, `model_reasoning_effort` when set, `developer_instructions`, and `sandbox_mode = "read-only"` for the explorer). Codex counts as configured when any `round.tiers.codex.*` is set, `round.codexAccounts` or `round.codexCommand` is non-empty, or `round.workerKind` is `codex`. With no Codex tier map the Codex files omit `model` and Codex picks its own. The explorer keeps `Bash`, so on Claude it is read-mostly, not strictly read-only.
+It writes `.claude/agents/rota-<role>.md` (frontmatter `name`, `description`, `model`, `effort` when set, and `tools: Read, Grep, Glob, Bash` for the explorer only) and, when OpenCode is configured, `.opencode/agents/rota-<role>.md` (frontmatter `description`, `mode: subagent`, `model` when the tier map is set, and `permission: edit: deny, bash: deny` for the explorer; OpenCode has no effort field) and, when Codex is configured, `.codex/agents/rota-<role>.toml` (`name`, `description`, `model`, `model_reasoning_effort` when set, `developer_instructions`, and `sandbox_mode = "read-only"` for the explorer). Codex counts as configured when any `round.tiers.codex.*` is set, `round.codexCommand` is non-empty, `round.accounts` has a `codex` entry, or `round.workerKind` is `codex`. With no Codex tier map the Codex files omit `model` and Codex picks its own. The explorer keeps `Bash`, so on Claude it is read-mostly, not strictly read-only.
 
 Each file starts with a "generated by rota, do not edit" header. The verb never overwrites a same-named file without it. Commit the files like other project config. `rota init` runs the verb once (skipped under `--no-blocks`, and a refusal there only warns); `rota skills update` does not, so rerun it after changing a role or a tier map. `rota doctor` warns on a missing or drifted file and names the verb. The [worker contract](../../skills/references/worker-contract.md) tells workers to use these agents and to fall back to the tier table when the files are absent.
 

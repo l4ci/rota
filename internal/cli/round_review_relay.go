@@ -45,6 +45,9 @@ func roundReviewRelay(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		res, err := reviewEnv(c, ctx, root, o).ReviewRelay(ctx, root, o)
+		if res.PointerErr != "" {
+			c.Warn("pointer comment not posted: %s", res.PointerErr)
+		}
 		return reviewRelayResult(res, set, err)
 	}
 }
@@ -67,13 +70,14 @@ func reviewOpts(c *Ctx, root string, set roundcfg.Settings, slot string) (round.
 		o.Verdict = failVerdict(root, s.Branch())
 		o.OpenFindings = openFindings(root, s.Branch())
 	}
-	if set.FreshAt > 0 {
-		// The backlog is only opened when a fresh transfer can happen; one that
-		// cannot be opened leaves the relay to resume the worker in place.
+	if set.FreshAt > 0 || set.Support != "" {
+		// The backlog is only opened when a fresh transfer can happen or the
+		// support split wants its pointer comment; one that cannot be opened
+		// leaves the relay to resume the worker in place without either.
 		if _, be, err := moveEnv(c, root); err == nil {
 			o.Board = be
 		} else {
-			c.Warn("round.freshAt skipped: %v", err)
+			c.Warn("round.freshAt and the support pointer skipped: %v", err)
 		}
 	}
 	o.Escalate = func(ctx context.Context, number int, slot, title, body string) error {

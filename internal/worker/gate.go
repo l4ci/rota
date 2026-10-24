@@ -1837,10 +1837,37 @@ func (g *gate) checkProvenance() (failMsg, brokeMsg string) {
 		}
 		return "", fmt.Sprintf("could not read the body of %s to check its approvals: %v", g.pr, err)
 	}
-	if msg := CheckApprovals(body, g.target.relays); msg != "" {
+	relays, offered, err := g.supportApprovals()
+	if err != nil {
+		return "", fmt.Sprintf("could not read the issue comments of %s to check its approvals: %v", g.pr, err)
+	}
+	if msg := CheckApprovalsOffer(body, relays, offered); msg != "" {
 		return fmt.Sprintf("PROVENANCE-FAIL %s: %s", g.o.Slot, msg), ""
 	}
 	return "", ""
+}
+
+// supportApprovals is the slot's local relay log plus, for a PR whose issue
+// carries the support label under round.support, the relays and the offer the
+// other machine left as issue comments (#1827). Only writer-trusted authors
+// count. Anything else returns the local log alone, with no extra read.
+func (g *gate) supportApprovals() (relays []any, offered bool, err error) {
+	relays = g.target.relays
+	cfg := g.in.cfg
+	key, ok := tracker.ParseKey(g.target.Issue)
+	if cfg.Support == "" || cfg.SupportLabel == "" || g.issues == nil || !ok {
+		return relays, false, nil
+	}
+	is, err := g.issues.Get(g.ctx, key, true)
+	if err != nil {
+		return nil, false, err
+	}
+	if !slices.Contains(is.Labels, cfg.SupportLabel) {
+		return relays, false, nil
+	}
+	trust := NewMarkerTrust(g.ctx, g.issues)
+	relays = append(slices.Clone(relays), RelaysFromComments(g.ctx, trust, is.Comments)...)
+	return relays, HasSupportOffer(trust, is.Comments), nil
 }
 
 // mergeRemote merges through the forge and confirms it landed. done is true

@@ -64,6 +64,9 @@ type Relayed struct {
 	// Fresh is the slot the branch was transferred to at round.freshAt; "" for
 	// a plain relay. FreshSkipped says why a due fresh transfer fell back.
 	Fresh, FreshSkipped string
+	// PointerErr says why the support pointer comment was not posted; the
+	// relay itself went out.
+	PointerErr string
 }
 
 // itemLimit truncates one relayed item; the rest is on the PR.
@@ -195,6 +198,13 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		out.Bounces = recount()
 		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr), rollbackErr(merr))
 	}
+	// The relay stays on the PR; with the support split active the issue thread
+	// gets the pointer the other machine's watch reads (#1827).
+	if o.Board != nil && issue != "" {
+		if _, err := e.PostPointer(ctx, o.Board, issue, "review", s.PR()); err != nil {
+			out.PointerErr = err.Error()
+		}
+	}
 	return out, nil
 }
 
@@ -250,12 +260,15 @@ func (e Env) reviewFresh(ctx context.Context, root string, o ReviewOpts, reg wor
 		return false, nil
 	}
 	out.Bounces = bounces
-	res, terr := e.Transfer(ctx, root, o.Board, TransferOpts{
-		Issue: issue, To: to, Decisions: freshBrief(out.PR, o.OpenFindings), Settings: o.Settings,
+	// ReviewOpts still carries the settings and pid: hand them to the transfer through the env.
+	te := e
+	te.Round, te.HolderPID = o.Settings, o.HolderPID
+	res, terr := te.Transfer(ctx, root, o.Board, TransferOpts{
+		Issue: issue, To: to, Decisions: freshBrief(out.PR, o.OpenFindings),
 		Note:       fmt.Sprintf("bounce %d of round.freshAt %d: review input on %s moves to a fresh context", bounces, o.FreshAt, prLabel(out.PR)),
 		Tier:       s.Tier(),
 		TierReason: strutil.FirstNonEmpty(s.TierReason(), "kept from "+o.Slot),
-		CapReason:  ledger.CapFresh, HolderPID: o.HolderPID,
+		CapReason:  ledger.CapFresh,
 	})
 	if terr != nil && !res.Changed {
 		var blk *BlockedError

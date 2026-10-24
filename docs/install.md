@@ -77,7 +77,7 @@ Common route: `npx skills add l4ci/rota` installs the skills with the [`skills` 
 
 If both exist, Claude Code uses the user copy of a skill over the project copy with the same name, so a stale user install hides a newer project one. Keep one scope per machine, or run `rota skills update` after every upgrade that `rota skills status` reports stale. `rota skills status` lists every root it finds.
 
-User scope is per Claude Code config directory: rota writes to `$CLAUDE_CONFIG_DIR/skills` when that is set, else `~/.claude/skills`. Inside a rota project, user scope also covers every `round.accounts` `configDir` (install, update, uninstall and status each print one line per root). A configured dir that does not exist is reported and skipped, not created. Pass `--current-account` to touch only the current dir. Project scope is unchanged: one copy serves every account.
+User scope is per Claude Code config directory: rota writes to `$CLAUDE_CONFIG_DIR/skills` when that is set, else `~/.claude/skills`. Inside a rota project, user scope also covers every `round.accounts` `dir` (install, update, uninstall and status each print one line per root). A configured dir that does not exist is reported and skipped, not created. Pass `--current-account` to touch only the current dir. Project scope is unchanged: one copy serves every account.
 
 ## 🔌 Plugin marketplace
 

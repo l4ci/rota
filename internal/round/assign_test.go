@@ -108,6 +108,7 @@ func newAssignFixture(t *testing.T) *assignFixture {
 	fb.ready = map[string][]string{"14": {"no acceptance criteria in the issue body", "no design or plan note"}}
 	f.be = fb
 	f.set, _ = roundcfg.FromConfig(config.Load(rotatree.Config(os.TempDir())))
+	f.env.Round, f.env.HolderPID = f.set, 100
 	if _, err := f.env.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +116,7 @@ func newAssignFixture(t *testing.T) *assignFixture {
 }
 
 func (f *assignFixture) assign(id, agent string, mod func(*AssignOpts)) (Assigned, error) {
-	o := AssignOpts{ID: id, Agent: agent, HolderPID: 100, Settings: f.set}
+	o := AssignOpts{ID: id, Agent: agent}
 	if mod != nil {
 		mod(&o)
 	}
@@ -173,17 +174,21 @@ func TestAssignRefusals(t *testing.T) {
 		t.Fatalf("a refused assign must touch nothing: %+v %+v %v", f.be.claims, f.be.bstates, f.host.spawned)
 	}
 
-	if _, err := f.assign("12", "ben", func(o *AssignOpts) { o.Settings.Roster = []string{"zed"} }); err == nil {
+	f.env.Round.Roster = []string{"zed"}
+	if _, err := f.assign("12", "ben", nil); err == nil {
 		t.Error("an agent outside the roster must be refused")
 	}
+	f.env.Round = f.set
 	var we *exitcode.Error
 	if _, err := f.assign("12", "zed", nil); !errors.As(err, &we) || we.Exit != exitcode.ExitUsage {
 		t.Errorf("--agent outside the roster is usage: %v", err)
 	}
 
-	if _, err := f.assign("12", "ben", func(o *AssignOpts) { o.HolderPID = 999 }); blockedBy(t, err) != BlockNoRound {
+	f.env.HolderPID = 999
+	if _, err := f.assign("12", "ben", nil); blockedBy(t, err) != BlockNoRound {
 		t.Errorf("a process without the lease: %v", err)
 	}
+	f.env.HolderPID = 100
 
 	f.be.claimedBy = "dana@1"
 	if _, err := f.assign("12", "ben", nil); blockedBy(t, err) != BlockClaimed || !strings.Contains(err.Error(), "dana@1") {
@@ -191,10 +196,11 @@ func TestAssignRefusals(t *testing.T) {
 	}
 	f.be.claimedBy = ""
 
-	noBrief := func(o *AssignOpts) { o.Settings.Brief = filepath.Join(f.root, "nope.md") }
-	if _, err := f.assign("12", "ben", noBrief); blockedBy(t, err) != BlockBriefMissing {
+	f.env.Round.Brief = filepath.Join(f.root, "nope.md")
+	if _, err := f.assign("12", "ben", nil); blockedBy(t, err) != BlockBriefMissing {
 		t.Errorf("missing brief: %v", err)
 	}
+	f.env.Round = f.set
 	if len(f.be.claims) != 0 || len(f.be.bstates) != 0 {
 		t.Fatalf("brief check comes before any marking: %+v", f.be.claims)
 	}
@@ -268,8 +274,8 @@ func TestAssignScopeOverlapBlock(t *testing.T) {
 	if err != nil || !res.Ready() || len(res.Overlaps) != 1 {
 		t.Fatalf("warn lists the clash and stays ready: %v %+v", err, res)
 	}
-	block := func(o *AssignOpts) { o.Settings.BlockScopeOverlap = true }
-	_, err = f.assign("31", "dana", block)
+	f.env.Round.BlockScopeOverlap = true
+	_, err = f.assign("31", "dana", nil)
 	if by := blockedBy(t, err); by != BlockOverlap {
 		t.Fatalf("block mode refuses a scope-only clash: %v", err)
 	}
@@ -278,7 +284,7 @@ func TestAssignScopeOverlapBlock(t *testing.T) {
 	if len(b.Readiness.Overlaps) != 1 || len(b.Readiness.Overlaps[0].Scopes) != 1 || len(b.Readiness.Overlaps[0].Paths) != 0 {
 		t.Errorf("scope-only overlap: %+v", b.Readiness.Overlaps)
 	}
-	res, err = f.assign("31", "dana", func(o *AssignOpts) { block(o); o.AcceptOverlap = true })
+	res, err = f.assign("31", "dana", func(o *AssignOpts) { o.AcceptOverlap = true })
 	if err != nil || !res.Dispatched {
 		t.Fatalf("--accept-overlap skips the scope clash: %v %+v", err, res)
 	}
@@ -306,7 +312,8 @@ func TestAssignSlotBusyAndFreeSlot(t *testing.T) {
 func TestAssignBatchCap(t *testing.T) {
 	f := newAssignFixture(t)
 	f.be.add("15", "Third", "M01", false, "## Acceptance\n- [ ] x")
-	batch := func(o *AssignOpts) { o.Settings.Batch = 1; o.AcceptOverlap = true }
+	f.env.Round.Batch = 1
+	batch := func(o *AssignOpts) { o.AcceptOverlap = true }
 	if _, err := f.assign("12", "ben", batch); err != nil {
 		t.Fatalf("under the cap: %v", err)
 	}
@@ -323,6 +330,7 @@ func TestAssignBatchCap(t *testing.T) {
 		t.Fatalf("--accept-batch overrides one call: %v", err)
 	}
 	// Unset is no limit.
+	f.env.Round = f.set
 	if _, err := f.assign("15", "", func(o *AssignOpts) { o.AcceptOverlap = true }); blockedBy(t, err) == BlockBatch {
 		t.Errorf("batch 0 never refuses: %v", err)
 	}
@@ -330,7 +338,8 @@ func TestAssignBatchCap(t *testing.T) {
 
 func TestAssignBatchNeverRefusesAResume(t *testing.T) {
 	f := newAssignFixture(t)
-	batch := func(o *AssignOpts) { o.Settings.Batch = 1; o.AcceptOverlap = true }
+	f.env.Round.Batch = 1
+	batch := func(o *AssignOpts) { o.AcceptOverlap = true }
 	if _, err := f.assign("12", "ben", batch); err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +360,8 @@ func TestAssignBatchNeverRefusesAResume(t *testing.T) {
 
 func TestAssignBatchIgnoresLandedItems(t *testing.T) {
 	f := newAssignFixture(t)
-	batch := func(o *AssignOpts) { o.Settings.Batch = 1; o.AcceptOverlap = true }
+	f.env.Round.Batch = 1
+	batch := func(o *AssignOpts) { o.AcceptOverlap = true }
 	if _, err := f.assign("12", "ben", batch); err != nil {
 		t.Fatal(err)
 	}
@@ -469,7 +479,7 @@ func (f *assignFixture) config(t *testing.T, cfg string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.set = set
+	f.set, f.env.Round = set, set
 	// The round recorded its host at start, before this config; the registry
 	// wins, so a config that names a host re-records it, as a new round would.
 	if dv, _ := config.Lookup(config.Load(filepath.Join(f.root, ".rota", "config.json")), "round.dispatch"); dv == "herdr" || dv == "tmux" {

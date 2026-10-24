@@ -176,7 +176,7 @@ Slots are provisioned once and reused: `.worktrees/<agent>`, parked on `park/<ag
 on `<agent>/<issue>-<slug>`. `round.roster` sets the names; the default is `ben`, `dana`, `nia`,
 `kit`. A longer round adds names with `rota config set round.roster '[...]'`.
 
-Each slot's account (`CLAUDE_CONFIG_DIR`) comes from `round.accounts`. Those are paths on one
+Each slot's account (`CLAUDE_CONFIG_DIR`) comes from the `claude` entries of `round.accounts` (`{kind, name, dir}`). Those are paths on one
 machine, so they live in the developer's gitignored `.rota/config.local.json`, not in tracked files.
 `rota worker account list` shows what each slot would use.
 
@@ -257,6 +257,30 @@ support machines are not harvested.
 Set `round.support` between rounds: flipping it mid-round switches the bounce store and bounce
 counts are not carried over. At the bounce cap the item parks `needs-human` and no review-bounce
 is posted.
+
+### The round trip between the machines
+
+- **Hand back by default.** When an offered issue cannot be worked (not ready, wrong premise,
+  collides with main's work, the maintainer holds it), the support machine runs
+  `rota round support return <ID> --reason-file <f>` at once and never idles on it. The reason
+  goes on the issue as a signed comment and the support label comes off, so main's next
+  `round candidates` lists the issue again. It is refused on main (`blockedBy: role`) and while a
+  support slot holds the issue (`blockedBy: claimed`).
+- **The issue thread is the index.** Every note one orchestrator posts for the other is an issue
+  comment (`rota item comment add <ID> --kind relay|feedback`). Bounce, pick and the review relay
+  also leave a one-line `rota:pr-pointer` comment on the issue linking the PR post. Comments carry
+  a `rota:from <role>` stamp; only comments by authors with write access count.
+- **What each watch wakes on.** Main's `round watch` exits on a changed PR head for an offered or
+  adopted issue, a PR opened for a `site:support` issue, and a new comment from the support
+  machine on an offered or held issue. The support machine's watch exits on a new comment from
+  main on the issues its slots hold. Anything not yet reported wakes the watch once, so a PR that
+  was already open when the watch started is not swallowed. Only the offered-or-held set is read,
+  once per forge poll.
+- **How approvals travel.** A relay the support orchestrator sends is also posted on the issue
+  as a `rota:relay round=<n>` comment (`worker dispatch --relay` does it on a support machine).
+  Main's gate accepts a support PR's `## Approvals` citing that relay without a local relay log
+  entry, and the `round support offer` comment counts as the assignment approval. A cited relay no
+  trusted comment holds still fails PROVENANCE-FAIL. A worker cannot post `--kind relay`.
 
 ## Maintainer answers typed into a pane
 

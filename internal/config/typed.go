@@ -5,14 +5,26 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
-// Account is one entry of round.accounts.
-type Account struct{ Name, ConfigDir string }
+// Account kinds: the harness an entry of round.accounts belongs to.
+const (
+	KindClaude   = "claude"
+	KindCodex    = "codex"
+	KindOpencode = "opencode"
+)
 
-// CodexAccount is one entry of round.codexAccounts: a named CODEX_HOME.
-type CodexAccount struct{ Name, CodexHome string }
+// AccountKinds lists the kinds in the order a migrated round.accounts list
+// holds them. config cannot import harness, so the names are repeated here;
+// harness's TestAccountKindsAreKinds pins them to harness.Kinds().
+var AccountKinds = []string{KindClaude, KindCodex, KindOpencode}
+
+// Account is one entry of round.accounts: a named login of one harness kind.
+// Dir is that harness's config home as written (a Claude config dir, a Codex
+// home, an OpenCode config dir).
+type Account struct{ Kind, Name, Dir string }
 
 // Dispatch returns round.dispatch: "subagent", "tmux" or "herdr". A missing or
 // null key gives the schema default; a non-string value gives "".
@@ -34,79 +46,71 @@ func ContextGuard(cfg any) string {
 	return "off"
 }
 
-// Accounts returns the object entries of round.accounts in order, name and
-// configDir as written ("" when absent or not a string). Entries that are not
+// Accounts returns the object entries of round.accounts in order, of every
+// kind. Kind defaults to claude, and a claude entry still written with the old
+// configDir (before `rota migrate config` rewrote it) reads as its dir. Name
+// and dir are as written ("" when absent or not a string). Entries that are not
 // objects are skipped; callers drop nameless ones where a name is required.
 func Accounts(cfg any) []Account {
 	v, _ := Value(cfg, "round.accounts")
+	return accountEntries(v)
+}
+
+// AccountsOf is Accounts narrowed to one kind.
+func AccountsOf(cfg any, kind string) []Account {
+	var out []Account
+	for _, a := range Accounts(cfg) {
+		if a.Kind == kind {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+func accountEntries(v any) []Account {
 	list, _ := v.([]any)
 	var out []Account
 	for _, e := range list {
-		if o, ok := e.(*jsonx.Object); ok {
-			a := Account{}
-			if n, ok := o.Get("name"); ok {
-				a.Name, _ = n.(string)
-			}
-			if d, ok := o.Get("configDir"); ok {
-				a.ConfigDir, _ = d.(string)
-			}
-			out = append(out, a)
+		o, ok := e.(*jsonx.Object)
+		if !ok {
+			continue
 		}
+		a := Account{Kind: KindClaude}
+		if k, ok := o.Get("kind"); ok {
+			if s, _ := k.(string); s != "" {
+				a.Kind = s
+			}
+		}
+		if n, ok := o.Get("name"); ok {
+			a.Name, _ = n.(string)
+		}
+		field := "dir"
+		if _, ok := o.Get("dir"); !ok {
+			field = "configDir"
+		}
+		if d, ok := o.Get(field); ok {
+			a.Dir, _ = d.(string)
+		}
+		out = append(out, a)
 	}
 	return out
 }
 
-// CodexAccounts returns the object entries of round.codexAccounts in order.
-// Entries that are not objects are skipped; callers drop nameless ones.
-func CodexAccounts(cfg any) []CodexAccount {
-	v, _ := Value(cfg, "round.codexAccounts")
-	list, _ := v.([]any)
-	var out []CodexAccount
-	for _, e := range list {
-		if o, ok := e.(*jsonx.Object); ok {
-			a := CodexAccount{}
-			if n, ok := o.Get("name"); ok {
-				a.Name, _ = n.(string)
-			}
-			if d, ok := o.Get("codexHome"); ok {
-				a.CodexHome, _ = d.(string)
-			}
-			out = append(out, a)
-		}
+// ExpandDir is the cleaned absolute form of an account dir of any kind: a
+// leading ~ or ~/ becomes home, which leaves a ~ path as written when empty.
+// The one place round.accounts dirs expand; "" stays "" (the kind's default).
+func ExpandDir(dir, home string) string {
+	if dir == "" {
+		return ""
 	}
-	return out
-}
-
-// OpencodeAccount is one entry of round.opencodeAccounts: a named
-// OPENCODE_CONFIG_DIR.
-type OpencodeAccount struct{ Name, ConfigDir string }
-
-// OpencodeAccounts returns the object entries of round.opencodeAccounts in
-// order. Entries that are not objects are skipped; callers drop nameless ones.
-func OpencodeAccounts(cfg any) []OpencodeAccount {
-	v, _ := Value(cfg, "round.opencodeAccounts")
-	list, _ := v.([]any)
-	var out []OpencodeAccount
-	for _, e := range list {
-		if o, ok := e.(*jsonx.Object); ok {
-			a := OpencodeAccount{}
-			if n, ok := o.Get("name"); ok {
-				a.Name, _ = n.(string)
-			}
-			if d, ok := o.Get("configDir"); ok {
-				a.ConfigDir, _ = d.(string)
-			}
-			out = append(out, a)
-		}
-	}
-	return out
+	return filepath.Clean(fsio.ExpandHome(dir, home))
 }
 
 // DirProblem is why a configured account dir cannot name one directory:
 // "" for an empty dir (the kind's default), an absolute path, "~" or a "~/"
 // path; otherwise the rule it breaks. Anything else would resolve against
 // whatever directory the launch happens to run in. field is the key written
-// in the message ("configDir", "codexHome").
+// in the message ("dir").
 func DirProblem(field, dir string) string {
 	if dir == "" || filepath.IsAbs(dir) || dir == "~" || strings.HasPrefix(dir, "~/") {
 		return ""
@@ -114,24 +118,21 @@ func DirProblem(field, dir string) string {
 	return field + " must be absolute or start with ~"
 }
 
-// AccountDirProblems lists, in config order, every account dir of round.accounts,
-// round.codexAccounts and round.opencodeAccounts that DirProblem refuses, each
-// naming its key and entry.
+// AccountDirProblems lists, in config order, every round.accounts entry whose
+// kind is not a harness or whose dir DirProblem refuses, each naming the key
+// and the entry.
 func AccountDirProblems(cfg any) []string {
 	var out []string
-	add := func(key, name, field, dir string) {
-		if p := DirProblem(field, dir); p != "" {
-			out = append(out, fmt.Sprintf("%s %q %s %q: %s", key, name, field, dir, p))
-		}
-	}
 	for _, a := range Accounts(cfg) {
-		add("round.accounts", a.Name, "configDir", a.ConfigDir)
-	}
-	for _, a := range CodexAccounts(cfg) {
-		add("round.codexAccounts", a.Name, "codexHome", a.CodexHome)
-	}
-	for _, a := range OpencodeAccounts(cfg) {
-		add("round.opencodeAccounts", a.Name, "configDir", a.ConfigDir)
+		switch a.Kind {
+		case KindClaude, KindCodex, KindOpencode:
+		default:
+			out = append(out, fmt.Sprintf("round.accounts %q kind %q: must be claude, codex or opencode", a.Name, a.Kind))
+			continue
+		}
+		if p := DirProblem("dir", a.Dir); p != "" {
+			out = append(out, fmt.Sprintf("round.accounts %q dir %q: %s", a.Name, a.Dir, p))
+		}
 	}
 	return out
 }

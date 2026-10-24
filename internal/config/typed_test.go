@@ -33,15 +33,46 @@ func TestDispatch(t *testing.T) {
 }
 
 func TestAccounts(t *testing.T) {
-	cfg := decode(t, `{"round":{"accounts":[{"name":"a","configDir":"/x"},"junk",{"name":"b"},{"configDir":7}]}}`)
-	want := []Account{{"a", "/x"}, {"b", ""}, {"", ""}}
+	cfg := decode(t, `{"round":{"accounts":[{"kind":"codex","name":"c","dir":"/c"},"junk",{"kind":"opencode","name":"o","dir":"/o"},`+
+		`{"name":"legacy","configDir":"/l"},{"kind":"claude","name":"a","dir":"/a","configDir":"/ignored"},{"kind":"claude"},{"dir":7}]}}`)
+	want := []Account{
+		{KindCodex, "c", "/c"}, {KindOpencode, "o", "/o"}, {KindClaude, "legacy", "/l"},
+		{KindClaude, "a", "/a"}, {KindClaude, "", ""}, {KindClaude, "", ""},
+	}
 	if got := Accounts(cfg); !reflect.DeepEqual(got, want) {
 		t.Errorf("Accounts = %v, want %v", got, want)
+	}
+	if got := AccountsOf(cfg, KindCodex); !reflect.DeepEqual(got, want[:1]) {
+		t.Errorf("AccountsOf(codex) = %v, want %v", got, want[:1])
+	}
+	if got := AccountsOf(cfg, KindClaude); len(got) != 4 {
+		t.Errorf("AccountsOf(claude) = %v, want the four claude entries", got)
 	}
 	for _, in := range []string{`{}`, `{"round":{"accounts":null}}`} {
 		if got := Accounts(decode(t, in)); len(got) != 0 {
 			t.Errorf("Accounts(%s) = %v, want none", in, got)
 		}
+	}
+}
+
+func TestAccountDirProblemsCoverEveryKind(t *testing.T) {
+	good := `{"round":{"accounts":[{"kind":"claude","name":"a","dir":"~/.claude-a"},{"kind":"codex","name":"c","dir":"~"},{"kind":"opencode","name":"o","dir":"/abs"}]}}`
+	if got := AccountDirProblems(decode(t, good)); len(got) != 0 {
+		t.Errorf("valid dirs flagged: %v", got)
+	}
+	bad := `{"round":{"accounts":[{"kind":"claude","name":"a","dir":".claude-a"},{"kind":"codex","name":"c","dir":"$HOME/.codex"},` +
+		`{"kind":"opencode","name":"o","dir":"~bob/x"},{"kind":"gemini","name":"g","dir":"/g"}]}}`
+	got := AccountDirProblems(decode(t, bad))
+	if len(got) != 4 {
+		t.Fatalf("want 4 problems, got %v", got)
+	}
+	for i, name := range []string{`"a"`, `"c"`, `"o"`} {
+		if !strings.Contains(got[i], "round.accounts") || !strings.Contains(got[i], name) || !strings.Contains(got[i], "dir must be absolute or start with ~") {
+			t.Errorf("problem %d does not name round.accounts, %s and the rule: %q", i, name, got[i])
+		}
+	}
+	if !strings.Contains(got[3], `kind "gemini"`) || !strings.Contains(got[3], "claude, codex or opencode") {
+		t.Errorf("unknown kind not named: %q", got[3])
 	}
 }
 

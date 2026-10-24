@@ -1,6 +1,7 @@
 package verdict
 
 import (
+	"encoding/json"
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
@@ -423,4 +424,27 @@ func TestBlockingReviewCross(t *testing.T) {
 	if r, ok := Blocking(list, Settings{}); ok {
 		t.Fatalf("a newer cross PASS clears it: %+v", r)
 	}
+}
+
+func TestParseBodyPatch(t *testing.T) {
+	diff := "--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-x\n+y\n"
+	in := `{"findings": [{"severity": "minor", "title": "t", "patch": ` + jsonString(diff) + `}, {"severity": "info", "title": "u"}]}`
+	b, err := ParseBody(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.Findings[0].Patch != diff {
+		t.Errorf("patch = %q, want %q", b.Findings[0].Patch, diff)
+	}
+	if b.Findings[1].Patch != "" {
+		t.Errorf("finding without patch got %q", b.Findings[1].Patch)
+	}
+	if _, err := ParseBody(`{"findings": [{"severity": "minor", "title": "t", "patch": 3}]}`); err == nil {
+		t.Error("non-string patch accepted")
+	}
+}
+
+func jsonString(s string) string {
+	out, _ := json.Marshal(s)
+	return string(out)
 }

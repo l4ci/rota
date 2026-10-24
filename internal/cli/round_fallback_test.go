@@ -23,7 +23,7 @@ import (
 
 // codexFirst is a config whose first harness (codex) has one login and whose
 // second (claude) has no pool, so a spent login makes claude the fallback.
-const codexFirst = `{"round":{"harnesses":["codex","claude"],"codexAccounts":[{"name":"c1","codexHome":"/h1"}]}}`
+const codexFirst = `{"round":{"harnesses":["codex","claude"],"accounts":[{"kind":"codex","name":"c1","dir":"/h1"}]}}`
 
 func spendLogin(t *testing.T, root string, resets time.Time) {
 	t.Helper()

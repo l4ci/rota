@@ -8,10 +8,10 @@ import (
 
 func homeAt(h string) func() (string, error) { return func() (string, error) { return h, nil } }
 
-// round.accounts configDir "~/..." is expanded before it is cached on the slot
+// round.accounts dir "~/..." is expanded before it is cached on the slot
 // and before it reaches the pane's CLAUDE_CONFIG_DIR (#1777).
 func TestAccountAssignCachesTheExpandedConfigDir(t *testing.T) {
-	dir := newProject(t, `{"round":{"accounts":[{"name":"a","configDir":"~/.claude-personal"}]}}`)
+	dir := newProject(t, `{"round":{"accounts":[{"kind":"claude","name":"a","dir":"~/.claude-personal"}]}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	acc := &Accounts{Env: Env{Home: homeAt("/home/u"), Getenv: func(string) string { return t.TempDir() }}}
 	if _, _, err := acc.Assign(bg, dir, "w1", "a"); err != nil {
@@ -48,9 +48,9 @@ func TestDispatchExpandsACachedTildeConfigDir(t *testing.T) {
 	}
 }
 
-// round.codexAccounts codexHome "~/.codex" reaches CODEX_HOME expanded (#1757).
+// a codex entry of round.accounts with dir "~/.codex" reaches CODEX_HOME expanded (#1757).
 func TestDispatchCodexAccountExpandsATildeHome(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr","codexAccounts":[{"name":"a","codexHome":"~/.codex"}]}}`)
+	dir := newProject(t, `{"round":{"dispatch":"herdr","accounts":[{"kind":"codex","name":"a","dir":"~/.codex"}]}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	rig := &codexRig{loggedIn: true, installed: true}
 	f := herdrFake()

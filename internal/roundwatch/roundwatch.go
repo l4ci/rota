@@ -98,6 +98,7 @@ const (
 	changeKeySlotPR  = "pr/"         // snapshot key prefixes
 	changeKeyEscalat = "escalation/" //
 	changeKeyReview  = "review/"     //
+	changeKeySupport = "support/"    //
 )
 
 // SlotNews is what the slot wait found.
@@ -135,6 +136,14 @@ type Env struct {
 	// Forge refreshes what only the forge can say (escalation answers, PR
 	// states) and returns its snapshot entries. It runs every ForgeEvery.
 	Forge func(ctx context.Context) map[string]string
+	// Seen is what the orchestrator last saw of the support entries, and Mark
+	// records the ones a returned watch just reported. The support entries'
+	// baseline is Seen, not the first poll: a support PR or comment that is
+	// already there when the watch starts and was never reported is news (the
+	// 2026-10 report: a start-time baseline swallowed two open support PRs).
+	// Both nil: the first poll is the baseline, as for every other entry.
+	Seen func() map[string]string
+	Mark func(map[string]string)
 }
 
 // Opts are the intervals of a watch.
@@ -156,6 +165,12 @@ func Run(ctx context.Context, env Env, o Opts) (Result, error) {
 		base = merge(base, env.Forge(ctx))
 	}
 	lastForge := start
+	if env.Seen != nil {
+		for k := range supportOnly(base) {
+			delete(base, k)
+		}
+		base = merge(base, env.Seen())
+	}
 	for {
 		elapsed := env.Now().Sub(start)
 		if elapsed >= o.Heartbeat {
@@ -180,10 +195,30 @@ func Run(ctx context.Context, env Env, o Opts) (Result, error) {
 		} else {
 			cur = merge(cur, carry(base))
 		}
-		if ch := Diff(base, cur); len(ch) > 0 {
+		if ch := supportNews(Diff(base, cur), env.Seen != nil); len(ch) > 0 {
+			if env.Mark != nil {
+				env.Mark(supportOnly(cur))
+			}
 			return Result{Reason: ReasonChange, Changes: ch, Waited: env.Now().Sub(start)}, nil
 		}
 	}
+}
+
+// supportNews drops the support entries that vanished: a forge read that
+// failed or an issue handed back is nothing new. It applies only when the
+// baseline is the seen record, whose entries outlive the poll that made them.
+func supportNews(ch []Change, seen bool) []Change {
+	if !seen {
+		return ch
+	}
+	out := ch[:0:0]
+	for _, c := range ch {
+		if _, _, _, ok := SupportChange(c); ok && c.To == "" {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 // carry keeps the forge-owned entries of the baseline, so a tick that did not
@@ -191,7 +226,7 @@ func Run(ctx context.Context, env Env, o Opts) (Result, error) {
 func carry(base map[string]string) map[string]string {
 	out := map[string]string{}
 	for k, v := range base {
-		if strings.HasPrefix(k, changeKeySlotPR+"state/") || strings.HasPrefix(k, changeKeyEscalat+"status/") || strings.HasPrefix(k, changeKeyReview) {
+		if strings.HasPrefix(k, changeKeySlotPR+"state/") || strings.HasPrefix(k, changeKeyEscalat+"status/") || strings.HasPrefix(k, changeKeyReview) || strings.HasPrefix(k, changeKeySupport) {
 			out[k] = v
 		}
 	}
@@ -258,6 +293,48 @@ func PRStateKey(slot string) string { return changeKeySlotPR + "state/" + slot }
 // PR; its value says how much and from whom. It moves when a new batch arrives
 // and when the batch is consumed.
 func ReviewKey(slot string) string { return changeKeyReview + slot }
+
+// Support entry kinds (#1827): the PR head of an offered or adopted issue, a
+// PR that exists for a support issue, and the newest comment the other
+// machine left on an offered or held issue.
+const (
+	SupportPRHead   = "pr-head"
+	SupportPROpened = "pr-opened"
+	SupportComment  = "comment"
+)
+
+// SupportKey is the snapshot key of one support entry of issue id.
+func SupportKey(id, kind string) string { return changeKeySupport + id + "/" + kind }
+
+// SupportChange reads a support entry back out of a change: the issue, the
+// kind and the text for the change line. A comment's value is
+// `<author>#<comment id>` and reads as the author. ok is false for any other
+// key.
+func SupportChange(ch Change) (id, kind, to string, ok bool) {
+	rest, found := strings.CutPrefix(ch.Key, changeKeySupport)
+	if !found {
+		return "", "", "", false
+	}
+	id, kind, found = strings.Cut(rest, "/")
+	if !found {
+		return "", "", "", false
+	}
+	to = ch.To
+	if kind == SupportComment {
+		to, _, _ = strings.Cut(to, "#")
+	}
+	return id, kind, to, true
+}
+
+func supportOnly(m map[string]string) map[string]string {
+	out := map[string]string{}
+	for k, v := range m {
+		if strings.HasPrefix(k, changeKeySupport) {
+			out[k] = v
+		}
+	}
+	return out
+}
 
 // EscalationStatusKey is the snapshot key of the forge-checked escalation status.
 func EscalationStatusKey(id string) string { return changeKeyEscalat + "status/" + id }

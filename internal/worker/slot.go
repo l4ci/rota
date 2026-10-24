@@ -130,7 +130,7 @@ func (s *Slot) SmokeSection() int {
 }
 func (s *Slot) ConfigDir() string { return jsonx.Str(s.o, "configDir") }
 
-// HomeAccount is the account entry (round.codexAccounts, round.opencodeAccounts)
+// HomeAccount is the account entry (a codex or opencode entry of round.accounts)
 // the slot last ran a worker under ("" on the kind's default home). The JSON
 // key stays codexAccount so existing registries read.
 func (s *Slot) HomeAccount() string { return jsonx.Str(s.o, "codexAccount") }

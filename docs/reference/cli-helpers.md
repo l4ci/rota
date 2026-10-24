@@ -95,7 +95,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota item release <ID> --as <claim-id>` | give a claimed item back |
 | `rota item ready <ID>` | is the item specified well enough to start |
 | `rota item state <ID> --to <in-progress\|needs-review\|changes-requested\|none>` | set the workflow state label of an item |
-| `rota item comment add <ID> --kind <question\|answer\|decision\|feedback> --body-file <path\|->` | append a comment |
+| `rota item comment add <ID> --kind <question\|answer\|decision\|feedback\|relay> --body-file <path\|->` | append a comment |
 | `rota item comment list <ID> [--kind <question\|answer\|decision\|feedback>]` | list comments |
 | `rota item note add <ID> --kind <proof\|design\|plan> --body-file <path\|->` | write a note |
 | `rota item note show <ID> --kind <proof\|design\|plan>` | print a note |
