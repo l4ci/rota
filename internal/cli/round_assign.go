@@ -162,6 +162,9 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 			d.Set("brief", res.Brief)
 			d.Set("worktree", res.Worktree)
 		}
+		if len(res.Shared) > 0 {
+			d.Set("shared", worker.SharedList(res.Shared))
+		}
 		d.Set("dispatched", res.Dispatched)
 		d.Set("changed", res.Changed)
 		if len(res.BestOf) > 0 {

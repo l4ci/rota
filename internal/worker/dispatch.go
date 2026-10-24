@@ -45,6 +45,8 @@ type DispatchResult struct {
 	// Kind is the harness the session runs; "" for a relay, which ignores it.
 	Kind     string
 	Warnings []string
+	// Shared is what round.sharedDirs did for the slot's worktree.
+	Shared []SharedDir
 }
 
 // dispatchSetting is round.dispatch from cfg, "" when unset.
@@ -327,6 +329,14 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		portBase, width, err := EnsurePortBase(root, o.Slot, portStart, portBlock)
 		if err != nil {
 			return res, fail(exitcode.ExitUnavailable, err.Error())
+		}
+		// A parked slot reused for a task: re-apply round.sharedDirs, the
+		// branch switch may have changed the lockfile or the link may be gone.
+		shared, err := e.slotDeps(ctx, root, o.Slot, worktree, cfg, portBase, width)
+		res.Shared = shared
+		if err != nil {
+			clearHandle(root, o.Slot)
+			return res, err
 		}
 		var linked bool
 		handle, err = h.Spawn(ctx, host.SpawnOpts{Slot: o.Slot, Session: session, Cwd: worktree, LinkWorkspace: group, Linked: &linked,

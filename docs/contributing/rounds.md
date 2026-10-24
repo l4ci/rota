@@ -125,6 +125,17 @@ for each flagged path, read the doc against that diff and fix what drifted, then
 - **`work.mergeStrategy: direct` is ignored in issue mode.** `/rota-ship` always opens a PR there and
   says so; a round never direct-merges.
 
+## Dependency directories across slot worktrees
+
+Every slot is its own worktree, so a node, python or rust repo would install or build once per slot. rota decides this at slot creation (`worker pool init`) and on a task dispatch into a parked slot (`round assign`), never the worker:
+
+- **Go**: nothing. `GOMODCACHE` and `GOCACHE` are per user, so every worktree shares one download and one compile cache.
+- **node (`node_modules`), python (`.venv`)**: `round.sharedDirs` symlinks the directory from the main checkout. A link points at main's install, so it is only right while the slot's lockfile equals main's. The guard: when any lockfile differs, a directory is missing in main or the slot holds its own, rota links nothing, removes the links it made and runs `round.envSetup` for the slot. Without `sharedDirs`, `envSetup` installs per slot as before.
+- **rust (`target/`)**: no link. Set `CARGO_TARGET_DIR` (for example to a directory under `.worktrees/`) in the environment the workers start in; cargo locks the directory itself. `rota setup` suggests nothing for `Cargo.toml`.
+- **pnpm, uv**: a content-addressed store hard-links per worktree already; prefer `envSetup` (`pnpm install --frozen-lockfile`, `uv sync`) over a link.
+
+`rota setup` proposes `round.envSetup` and `round.sharedDirs` from `package.json` (and its lockfile) and `pyproject.toml`, with the manifest as evidence.
+
 ## Repo rules that bind workers
 
 - Edit canonical sources only: `cmd/`, `internal/`, `skills/` (`rota-*/SKILL.md`, `references/`), `docs/`, `test/`.
