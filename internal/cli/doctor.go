@@ -102,7 +102,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.SourceProblem = doctorSourceProblem(cfg)
 	in.Tracker = tracker.SettingsFromConfig(cfg)
 	in.Kinds = doctorKinds(cfg, in.Home)
-	for _, a := range config.Accounts(cfg) {
+	for _, a := range config.AccountsOf(cfg, config.KindClaude) {
 		if a.Name != "" {
 			in.Accounts = append(in.Accounts, a)
 		}
@@ -135,8 +135,8 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		in.SwitchOnUsage = on
 	}
 	for _, a := range in.Accounts {
-		if a.ConfigDir != "" {
-			in.ConfigDirs = append(in.ConfigDirs, a.ConfigDir)
+		if a.Dir != "" {
+			in.ConfigDirs = append(in.ConfigDirs, a.Dir)
 		}
 	}
 	if len(in.ConfigDirs) == 0 {

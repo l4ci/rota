@@ -66,9 +66,9 @@ func (d *runner) harnessCheck(kind string, plan harness.Doctor) Check {
 	homes := in.Homes
 	if !have {
 		if !hasAccounts(homes) {
-			return skip(name, plan.Binary+" not on PATH and no "+in.AccountsKey+" configured")
+			return skip(name, plan.Binary+" not on PATH and no "+plan.Binary+" account in "+in.AccountsKey)
 		}
-		return fail(name, plan.Binary+" not found on PATH, but "+in.AccountsKey+" is configured: "+homeNames(homes), plan.InstallHint)
+		return fail(name, plan.Binary+" not found on PATH, but "+in.AccountsKey+" has "+plan.Binary+" accounts: "+homeNames(homes), plan.InstallHint)
 	}
 	p := harness.Probe{Look: look, Run: func(ctx context.Context, bin string, args, env []string) (harness.Result, error) {
 		r, err := d.in.Exec(ctx, bin, args, env, d.in.Dir)

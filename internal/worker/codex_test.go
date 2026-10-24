@@ -137,7 +137,7 @@ func TestCodexPreflightSkipsAnInstalledIntegration(t *testing.T) {
 	}
 }
 
-const codexAcctCfg = `{"round":{"dispatch":"herdr","codexAccounts":[{"name":"a","codexHome":"/h/a"},{"name":"b","codexHome":"/h/b"}]}}`
+const codexAcctCfg = `{"round":{"dispatch":"herdr","accounts":[{"kind":"codex","name":"a","dir":"/h/a"},{"kind":"codex","name":"b","dir":"/h/b"}]}}`
 
 // Configured accounts are spread over the codex slots, the slot keeps its own
 // while it is configured, and login is checked in the account's home.

@@ -138,8 +138,8 @@ func (claude) AmbientAccount(getenv func(string) string) Account {
 
 func (claude) Accounts(cfg any) AccountList {
 	l := AccountList{Key: "round.accounts"}
-	for _, a := range config.Accounts(cfg) {
-		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.ConfigDir})
+	for _, a := range config.AccountsOf(cfg, config.KindClaude) {
+		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.Dir})
 	}
 	return l
 }
