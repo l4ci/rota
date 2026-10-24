@@ -108,7 +108,7 @@ pass "doctor: healthy on the fixture, exit 1 and ok false once herdr is gone"
 # ── 2. start ────────────────────────────────────────────────────────────────
 # The issue goes in before start so start lists it; the config now also names the
 # forge and the merge policy the later steps need.
-printf '{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]},"test":{"full":["true"]},"forge":{"provider":"github"},"issues":{"retryWaitSeconds":0},"autonomy":{"level":"auto"},"ship":{"mergeApproval":"all","review":"none"}}\n' "$TMP_DY/acct" > "$DY/.rota/config.json"
+printf '{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]},"test":{"full":["true"]},"forge":{"provider":"github"},"issues":{},"autonomy":{"level":"auto"},"ship":{"mergeApproval":"all","review":"none"}}\n' "$TMP_DY/acct" > "$DY/.rota/config.json"
 dyj item create --kind features --title First --milestone M01 --body-file - <<<$'## Acceptance\n- [ ] works\nTouches internal/a.go\n\n## Touches\n- POST /items' >/dev/null \
   || fail "dry round: item create failed"
 printf '{"id":"cli","result":{"snapshot":{"agents":[]}}}\n' > "$FK/snapshot.json"

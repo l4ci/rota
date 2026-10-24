@@ -13,9 +13,8 @@ func TestTrainBlockedSecondOpinionAndStaleFail(t *testing.T) {
 		runner string
 		want   bool
 	}{
-		"second opinion fail":                 {[]verdict.Record{rec(verdict.SecondOpinion, verdict.Fail, "bbbbbbb")}, "claude", true},
-		"second opinion fail, codex advisory": {[]verdict.Record{rec(verdict.SecondOpinion, verdict.Fail, "bbbbbbb")}, "codex", false},
-		"second opinion pass":                 {[]verdict.Record{rec(verdict.SecondOpinion, verdict.Pass, "bbbbbbb")}, "claude", false},
+		"second opinion fail": {[]verdict.Record{rec(verdict.SecondOpinion, verdict.Fail, "bbbbbbb")}, "claude", true},
+		"second opinion pass": {[]verdict.Record{rec(verdict.SecondOpinion, verdict.Pass, "bbbbbbb")}, "claude", false},
 		"stale review fail still blocks": {[]verdict.Record{
 			rec(verdict.ReviewSpec, verdict.Fail, "aaaaaaa"),
 			rec(verdict.SecondOpinion, verdict.Pass, "bbbbbbb"),
@@ -35,7 +34,7 @@ func TestTrainBlockedSecondOpinionAndStaleFail(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if got := trainBlocked(verdict.Load(root), "w1", verdict.Settings{Runner: tc.runner}); got != tc.want {
+		if got := trainBlocked(verdict.Load(root), "w1", verdict.Settings{}); got != tc.want {
 			t.Errorf("%s: blocked %v want %v", name, got, tc.want)
 		}
 	}

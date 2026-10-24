@@ -66,7 +66,7 @@ This path is the orchestrator's. Every other session gets the lighter `work.cont
 2. When the orchestrator tries to stop and the state shows `orchestrator.handoffThreshold` percent
    (default 75) or more, the Stop hook blocks. It tells the orchestrator to write
    `.rota/handoff/<base>.md` and run `/exit`.
-3. If it blocked again `orchestrator.handoffMaxBlocks` (2) more times after the first block and still
+3. If it blocked again 2 more times after the first block and still
    found no handoff, the hook gives up and records `handoffFailed` in the
    state, so a session that cannot write a handoff is not held forever.
 
@@ -113,9 +113,9 @@ of the pane. The cost: an orchestrator not started under `run` is not restarted.
 ### When it restarts
 
 On every exit it looks for a fresh handoff, `.rota/handoff/<base>.md` no older than
-`orchestrator.handoffMaxAgeSeconds`.
+900 seconds.
 
-- **With one:** it waits `orchestrator.keepaliveBackoffSeconds` (5) and starts the command again with
+- **With one:** it waits 5 seconds and starts the command again with
   `orchestrator.restartPrompt` appended as the last argument. The first start never gets the prompt.
 - **Without one:** it stops. That is how `/exit` from you ends the loop.
 
@@ -138,8 +138,8 @@ A restarted orchestrator that dies before it reads the handoff (bad auth, a hook
 file behind. `run` counts a restart as progress only when the handoff changed: a new write with different
 content.
 
-- After `orchestrator.keepaliveBreaker` (3) restarts in a row without progress, it stops.
-- After `orchestrator.keepaliveMaxRestarts` (10) restarts in total, it stops regardless.
+- After 3 restarts in a row without progress, it stops.
+- After 10 restarts in total, it stops regardless.
 
 Both stops post an escalation comment on issue `orchestrator.escalateIssue` through
 `rota round escalate send` and raise the herdr notification. With `escalateIssue` unset, which is the
@@ -194,7 +194,7 @@ another watcher.
   the pane, the block above the input box. A limit phrase quoted in a reply, a diff or a tool listing
   starts nothing.
 - **No data behind a message:** the reset time comes from the text (`resets at 3pm` reads as the next 3pm
-  in your time zone, within 8 days). Otherwise it sleeps `limits.fallbackSleepSeconds`.
+  in your time zone, within 8 days). Otherwise it sleeps 30 minutes.
 
 "Approaching your usage limit" is a warning and starts nothing.
 
@@ -223,13 +223,13 @@ already working keep going. Slots fill again by themselves once an account's win
 A Claude account is cooling when its meter shows a spent window with a reset ahead (`round.accounts`). A Codex
 login is cooling while the limit log holds a waiting entry for it (a `codex` entry in `round.accounts`). An unconfigured pool
 never counts as cooling, an account whose usage cannot be read counts as free, and the Claude pool is left out
-when `round.workerKind` is `codex`.
+when the first entry of `round.harnesses` is `codex`.
 
 ### Resuming
 
-At the reset plus `limits.resumeMarginSeconds` (60) the loop types `limits.resumePrompt` into the pane and
-keeps watching it. A pane still limited after the prompt starts another cycle, up to `limits.maxResumes`
-(3) for one limit. Past that the entry is `failed` and the loop posts an escalation on issue
+At the reset plus 60 seconds the loop types `limits.resumePrompt` into the pane and
+keeps watching it. A pane still limited after the prompt starts another cycle, up to 3 times
+for one limit. Past that the entry is `failed` and the loop posts an escalation on issue
 `orchestrator.escalateIssue`, or raises a host notification when that is unset.
 
 Stop the watcher with Ctrl-C or SIGTERM. The waiting entries stay waiting, and the next watcher resumes
@@ -249,9 +249,8 @@ Nothing prunes resolved ones.
 
 ### Config
 
-Five keys under `limits`, all silent defaults: `mode` (`switch`), `resumeMarginSeconds` (60),
-`fallbackSleepSeconds` (1800), `maxResumes` (3) and `resumePrompt` (`The usage limit has reset. Continue
-where you left off.`). See [configuration](configuration.md#limits-keys).
+Two keys under `limits`, both silent defaults: `mode` (`switch`) and `resumePrompt` (`The usage limit has reset. Continue
+where you left off.`). The resume margin (60 s), fallback sleep (1800 s) and resume cap (3) are fixed. See [configuration](configuration.md#limits-keys).
 
 ## Switching the orchestrator's account
 
@@ -292,18 +291,18 @@ one. The target is the account that:
 
 The restarted `claude` runs with `CLAUDE_CONFIG_DIR` set to that account, and every later restart of the same
 run keeps it. It reads its handoff through the SessionStart hook as after any restart. The switch counts as a
-restart against `orchestrator.keepaliveMaxRestarts`.
+restart against the cap of 10 restarts.
 
 ### With no usable account
 
 The supervisor restarts at once on the same account and holds the switch until the window's reset
-(`switchHold` in `keepalive.json`; `limits.fallbackSleepSeconds` when there is no reset time).
+(`switchHold` in `keepalive.json`; 30 minutes when there is no reset time).
 
 - While the hold lasts, the hook passes on usage, so the session works on and the in-session limit sleep
   handles the real limit at 100 percent.
 - A context handoff is not held.
-- A hold with no reset time lasts `limits.fallbackSleepSeconds` (30 minutes by default). While usage stays
-  at or above the threshold, handoffs repeat after each hold until `orchestrator.keepaliveMaxRestarts` stops
+- A hold with no reset time lasts 30 minutes. While usage stays
+  at or above the threshold, handoffs repeat after each hold until the cap of 10 restarts stops
   the supervisor.
 
 ### The figure is not a limit

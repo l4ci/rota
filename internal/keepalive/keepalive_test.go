@@ -455,13 +455,10 @@ func TestLoadSettingsDefaultsAndRanges(t *testing.T) {
 	if err != nil || s.MaxRestarts != 10 || s.Breaker != 3 || s.Backoff != 5*time.Second || s.Prompt != DefaultPrompt || s.EscalateIssue != "" || s.HandoffMaxAge != 900*time.Second {
 		t.Fatalf("defaults: %v %+v", err, s)
 	}
-	if s, err := load(`{"orchestrator":{"keepaliveMaxRestarts":0,"keepaliveBackoffSeconds":0,"escalateIssue":12,"restartPrompt":"go"}}`); err != nil || s.MaxRestarts != 0 || s.Backoff != 0 || s.EscalateIssue != "12" || s.Prompt != "go" {
+	if s, err := load(`{"orchestrator":{"escalateIssue":12,"restartPrompt":"go"}}`); err != nil || s.EscalateIssue != "12" || s.Prompt != "go" {
 		t.Fatalf("explicit: %v %+v", err, s)
 	}
 	for _, bad := range []string{
-		`{"orchestrator":{"keepaliveBreaker":0}}`,
-		`{"orchestrator":{"keepaliveMaxRestarts":-1}}`,
-		`{"orchestrator":{"keepaliveBackoffSeconds":"x"}}`,
 		`{"orchestrator":{"escalateIssue":-3}}`,
 		`{"orchestrator":{"restartPrompt":""}}`,
 		`{"orchestrator":{"restartPrompt":4}}`,

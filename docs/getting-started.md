@@ -26,7 +26,7 @@ and writes your answers. Press Enter to keep the value it suggests. Where the re
 - **Autonomy** (`autonomy.level`). How much rota may chain on its own: `off`, `roundtrip` or `auto`.
 - **Review depth** (`ship.review`). How thorough the review before shipping is: `full`, `light` or `none`.
 - **QA** (`ship.qa`). Whether `/rota-ship` runs QA first.
-- **Worker harness** (`round.workerKind`). Which harness round workers run on: `claude`, `codex` or `opencode`.
+- **Worker harness** (`round.harnesses`). Which harnesses round workers run on, the first being the default: `claude`, `codex` or `opencode`.
 - **Orchestrator harness** (`orchestrator.harness`). Which harness runs the round orchestrator.
 - **Base branch** (`git.baseBranch`). The branch the skills merge into. Free text; leave it empty to auto-detect.
 - **Quick test command** (`test.fast`). The per-task check, such as `go test ./...`. Type one command or a JSON list; empty leaves it unset.

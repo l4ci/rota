@@ -3,7 +3,7 @@ echo "tracker call"
 TMP_TC="$(mktemp -d)"
 trap 'rm -rf "$TMP_TC"' EXIT
 mkdir -p "$TMP_TC/proj/.rota" "$TMP_TC/fake"
-echo '{"forge":{"provider":"github"},"issues":{"retryWaitSeconds":0}}' > "$TMP_TC/proj/.rota/config.json"
+echo '{"forge":{"provider":"github"},"issues":{}}' > "$TMP_TC/proj/.rota/config.json"
 
 # Fake gh/glab: log argv (+ cwd, stdin) per call; behavior from FAKE_MODE.
 for cli in gh glab; do

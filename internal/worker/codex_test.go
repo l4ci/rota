@@ -321,12 +321,12 @@ func TestDispatchCodexRefusalsTouchNothing(t *testing.T) {
 		exit    int
 		by, msg string
 	}{
-		"resume":                    {cfg: `{"round":{"dispatch":"herdr","codexCommand":"codex resume --last"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitRefused, by: "resume flag", msg: "subcommand 'resume'"},
-		"fork":                      {cfg: `{"round":{"dispatch":"herdr","codexCommand":"codex --model x fork"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitRefused, by: "resume flag", msg: "'fork'"},
-		"unparseable":               {cfg: `{"round":{"dispatch":"herdr","codexCommand":"codex \"oops"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUsage, msg: "round.codexCommand cannot be parsed"},
-		"model needed":              {cfg: `{"round":{"dispatch":"herdr","codexCommand":"codex -m {model}"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUsage, msg: "{model}"},
-		"wrong binary":              {cfg: `{"round":{"dispatch":"herdr","codexCommand":"claude --x"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUnavailable, msg: "does not run codex"},
-		"claude kind, codex binary": {cfg: `{"round":{"dispatch":"herdr","workerCommand":"codex --x"}}`, rig: codexRig{loggedIn: true}, kind: "claude", exit: exitcode.ExitUnavailable, msg: "does not run claude"},
+		"resume":                    {cfg: `{"round":{"dispatch":"herdr","commands":{"codex":"codex resume --last"}}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitRefused, by: "resume flag", msg: "subcommand 'resume'"},
+		"fork":                      {cfg: `{"round":{"dispatch":"herdr","commands":{"codex":"codex --model x fork"}}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitRefused, by: "resume flag", msg: "'fork'"},
+		"unparseable":               {cfg: `{"round":{"dispatch":"herdr","commands":{"codex":"codex \"oops"}}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUsage, msg: "round.commands.codex cannot be parsed"},
+		"model needed":              {cfg: `{"round":{"dispatch":"herdr","commands":{"codex":"codex -m {model}"}}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUsage, msg: "{model}"},
+		"wrong binary":              {cfg: `{"round":{"dispatch":"herdr","commands":{"codex":"claude --x"}}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUnavailable, msg: "does not run codex"},
+		"claude kind, codex binary": {cfg: `{"round":{"dispatch":"herdr","commands":{"claude":"codex --x"}}}`, rig: codexRig{loggedIn: true}, kind: "claude", exit: exitcode.ExitUnavailable, msg: "does not run claude"},
 		"flag":                      {cfg: `{"round":{"dispatch":"herdr"}}`, rig: codexRig{noFlag: "--no-daemon", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex flags", msg: "--no-daemon"},
 		"login":                     {cfg: `{"round":{"dispatch":"herdr"}}`, rig: codexRig{}, exit: exitcode.ExitUnavailable, msg: "not logged in"},
 		"bad kind":                  {cfg: `{"round":{"dispatch":"herdr"}}`, rig: codexRig{loggedIn: true}, kind: "gemini", exit: exitcode.ExitUsage, msg: "claude, codex or opencode"},
@@ -378,7 +378,7 @@ func TestDispatchCodexCustomCommandProbesItsFlags(t *testing.T) {
 		"unlisted flag":     {cmd: "codex --dangerously-bypass-hook-trust --made-up=1", by: "codex flags"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			dir := newProject(t, `{"round":{"dispatch":"herdr","codexCommand":"`+c.cmd+`"}}`)
+			dir := newProject(t, `{"round":{"dispatch":"herdr","commands":{"codex":"`+c.cmd+`"}}}`)
 			goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 			_, err := (&codexRig{noFlag: "--no-daemon", loggedIn: true}).env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", "")
 			if c.by == "" {
@@ -486,7 +486,7 @@ func TestDispatchCodexRelayWithoutKeyFailsBeforeSending(t *testing.T) {
 }
 
 func TestDispatchCodexNeedsTheHookTrustFlag(t *testing.T) {
-	dir := newProject(t, `{"round":{"dispatch":"herdr","codexCommand":"codex --yolo"}}`)
+	dir := newProject(t, `{"round":{"dispatch":"herdr","commands":{"codex":"codex --yolo"}}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	rig := &codexRig{loggedIn: true}
 	f := herdrFake()

@@ -101,13 +101,13 @@ func TestNonClaudeTierOverrides(t *testing.T) {
 	}
 }
 
-func TestStandardTierFollowsModelsWorkerUnlessExplicit(t *testing.T) {
-	s, err := Load(project(t, `{"models":{"worker":"opus"}}`))
-	if err != nil || s.Model(harness.Claude, TierStandard) != "opus" {
-		t.Fatalf("one knob: %v %v", err, s.Models)
-	}
-	s, err = Load(project(t, `{"models":{"worker":"opus"},"round":{"tiers":{"claude":{"standard":"sonnet"}}}}`))
+func TestStandardTierDefaultsToSonnetUnlessExplicit(t *testing.T) {
+	s, err := Load(project(t, ``))
 	if err != nil || s.Model(harness.Claude, TierStandard) != "sonnet" {
+		t.Fatalf("default: %v %v", err, s.Models)
+	}
+	s, err = Load(project(t, `{"round":{"tiers":{"claude":{"standard":"opus"}}}}`))
+	if err != nil || s.Model(harness.Claude, TierStandard) != "opus" {
 		t.Fatalf("explicit wins: %v %v", err, s.Models)
 	}
 }
@@ -225,18 +225,18 @@ func TestItemTimeoutMinutes(t *testing.T) {
 	}
 }
 
-func TestWorkerKind(t *testing.T) {
-	if s, err := Load(project(t, "")); err != nil || s.WorkerKind != "" {
-		t.Fatalf("unset is empty: %v %q", err, s.WorkerKind)
+func TestDefaultKindIsFirstHarness(t *testing.T) {
+	if s, err := Load(project(t, "")); err != nil || s.DefaultKind() != "" {
+		t.Fatalf("unset is empty: %v %q", err, s.DefaultKind())
 	}
 	for _, k := range []string{"claude", "codex"} {
-		if s, err := Load(project(t, `{"round":{"workerKind":"`+k+`"}}`)); err != nil || s.WorkerKind != k {
-			t.Fatalf("%s: %v %q", k, err, s.WorkerKind)
+		if s, err := Load(project(t, `{"round":{"harnesses":["`+k+`"]}}`)); err != nil || s.DefaultKind() != k {
+			t.Fatalf("%s: %v %q", k, err, s.DefaultKind())
 		}
 	}
-	for _, cfg := range []string{`{"round":{"workerKind":"gemini"}}`, `{"round":{"workerKind":7}}`} {
-		if _, err := Load(project(t, cfg)); err == nil || !strings.Contains(err.Error(), "round.workerKind") {
-			t.Errorf("%s: want a round.workerKind error, got %v", cfg, err)
+	for _, cfg := range []string{`{"round":{"harnesses":["gemini"]}}`, `{"round":{"harnesses":[7]}}`} {
+		if _, err := Load(project(t, cfg)); err == nil || !strings.Contains(err.Error(), "round.harnesses") {
+			t.Errorf("%s: want a round.harnesses error, got %v", cfg, err)
 		}
 	}
 }
@@ -303,7 +303,7 @@ func TestProfileFillsClaudeTiers(t *testing.T) {
 		"budget":   {"light": "haiku", "standard": "haiku", "heavy": "sonnet"},
 		"inherit":  {"light": "", "standard": "", "heavy": ""},
 	} {
-		s, err := Load(project(t, `{"models":{"worker":"opus"},"round":{"profile":"`+profile+`"}}`))
+		s, err := Load(project(t, `{"round":{"profile":"`+profile+`"}}`))
 		if err != nil {
 			t.Fatalf("%s: %v", profile, err)
 		}
@@ -353,7 +353,7 @@ func TestEffectiveModelAndSource(t *testing.T) {
 		want                  row
 	}{
 		{"default light", ``, "claude", "light", row{"haiku", "default"}},
-		{"standard follows models.worker", `{"models":{"worker":"opus"}}`, "claude", "standard", row{"opus", "models.worker"}},
+		{"standard defaults to sonnet", ``, "claude", "standard", row{"sonnet", "default"}},
 		{"explicit", `{"round":{"tiers":{"claude":{"heavy":"fable"}}}}`, "claude", "heavy", row{"fable", "explicit"}},
 		{"profile", `{"round":{"profile":"budget"}}`, "claude", "heavy", row{"sonnet", "profile"}},
 		{"explicit beats profile", `{"round":{"profile":"budget","tiers":{"claude":{"light":"opus"}}}}`, "claude", "light", row{"opus", "explicit"}},

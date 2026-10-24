@@ -13,10 +13,10 @@ Surface architectural friction and file each finding as an issue. The default ru
 
 Read `.rota/config.json`:
 
-- `models.orchestrator`: main session model: exploration and ranking (Claude default `opus`)
+- `orchestrator.model`: main session model: exploration and ranking (Claude default `opus`)
 - `map.softcap_subsystems`: `--map` only: the most subsystems the map names (default 20)
 
-`--fix` also reads `models.worker`, `test.full` and `refactor.confirmBeforeExecute`; [`fix-path.md`](fix-path.md) lists them.
+`--fix` also reads `round.tiers.claude.standard`, `test.full` and `refactor.confirmBeforeExecute`; [`fix-path.md`](fix-path.md) lists them.
 
 ## Args
 
@@ -78,7 +78,7 @@ Use the glossary's names for domain concepts. Do not re-suggest what a recorded 
 
 ### Step 2 — Explore
 
-Dispatch one exploration subagent on `models.orchestrator` (`light` is enough for a small area), scoped to the area. With an `<area>`, rank files by inbound imports, then size, then recent change. With none, rank by churn first (`git log --since=90.days --name-only --pretty=format: | sort | uniq -c | sort -rn`), then inbound imports, then size; read the top fifth in full plus one hop of callers and importers; sample the rest. Stop at 8 to 12 findings, or after 30+ files with no new kind of friction in the last 5. Do not pad.
+Dispatch one exploration subagent on `orchestrator.model` (`light` is enough for a small area), scoped to the area. With an `<area>`, rank files by inbound imports, then size, then recent change. With none, rank by churn first (`git log --since=90.days --name-only --pretty=format: | sort | uniq -c | sort -rn`), then inbound imports, then size; read the top fifth in full plus one hop of callers and importers; sample the rest. Stop at 8 to 12 findings, or after 30+ files with no new kind of friction in the last 5. Do not pad.
 
 Per finding it reports files with line ranges, the friction in vocabulary terms, the deletion-test result, what is hard to test today and the dependency category (Step 3). No interface proposals.
 

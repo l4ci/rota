@@ -599,7 +599,7 @@ func Blocking(list []Record, s Settings) (Record, bool) {
 	if r, ok := CrossFail(list); ok {
 		return r, true
 	}
-	if r, ok := Latest(list, SecondOpinion); ok && r.Verdict == Fail && s.Runner != "codex" {
+	if r, ok := Latest(list, SecondOpinion); ok && r.Verdict == Fail {
 		return r, true
 	}
 	return Record{}, false

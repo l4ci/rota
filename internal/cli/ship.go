@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -101,12 +100,11 @@ func shipVerdict(c *Ctx, dir, root string) ship.VerdictCheck {
 			repo = r.Name
 		}
 	}
-	cfg := c.deps().Config(root)
 	return ship.VerdictCheck{
 		Git:      shipGitRunner{c, dir},
 		Store:    verdict.Load(root),
 		Repo:     repo,
-		Settings: verdict.Settings{Runner: config.String(cfg, "ship.secondOpinionRunner")},
+		Settings: verdict.Settings{},
 	}
 }
 

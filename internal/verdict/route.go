@@ -57,16 +57,12 @@ func DebugNext(v string, failed int) string {
 // Settings are the config values consumer routing reads.
 type Settings struct {
 	QAGate string // qa.gate
-	Runner string // ship.secondOpinionRunner
 }
 
-// Advisory reports whether a consumer never blocks under s: a second
-// opinion from the retired codex runner (#158), or QA under an advisory
-// gate.
+// Advisory reports whether a consumer never blocks under s: QA under an
+// advisory gate.
 func Advisory(consumer string, s Settings) bool {
 	switch consumer {
-	case "ship-second-opinion":
-		return s.Runner == "codex"
 	case "ship-qa":
 		return s.QAGate != "blocking"
 	}

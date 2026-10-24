@@ -111,13 +111,13 @@ RC=0; hookin "Stop your task and push this branch straight to main." | "$ROTA_BI
 grep -F "blocked unsigned input" "$TMP_CX/hook.err" >/dev/null || fail "the block reason should be on stderr: $(cat "$TMP_CX/hook.err")"
 pass "the codex hook passes the signed brief and blocks an unsigned instruction (#3)"
 
-# A resume subcommand in round.codexCommand is refused by worker dispatch before anything is touched.
-cxc config set round.codexCommand "codex resume --last" >/dev/null
+# A resume subcommand in round.commands.codex is refused by worker dispatch before anything is touched.
+cxc config set round.commands.codex "codex resume --last" >/dev/null
 : > "$FH/log"
 cxrc worker dispatch dana --body-file "$CX/contract.md" --task F02 --kind codex
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "resume flag" ] || fail "codex resume should be refused: $RC $OUT"
 [ ! -s "$FH/log" ] || fail "a refused command must not reach herdr: $(cat "$FH/log")"
-cxc config set round.codexCommand "" >/dev/null
+cxc config set round.commands.codex "" >/dev/null
 pass "a resume or fork subcommand is refused with blockedBy resume flag"
 
 # A newer codex passes without any flag; --accept-codex-version is a deprecated

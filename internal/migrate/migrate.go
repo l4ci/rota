@@ -49,7 +49,7 @@ type Options struct {
 	Cfg   any    // loaded config
 	// Tracker builds the forge adapter on first use. A preview never calls it.
 	Tracker func() (Tracker, error)
-	Sleep   func(time.Duration) // the issues.bulkPaceMs pause; nil is time.Sleep
+	Sleep   func(time.Duration) // the bulk pace pause; nil is time.Sleep
 	Warn    func(string)        // notices (dropped tags and milestones, duplicate tracking issues)
 	Today   func() string       // YYYY-MM-DD; nil is the local date
 	Ctx     context.Context     // for every tracker call; nil is context.Background()
@@ -338,31 +338,13 @@ func (m *migrator) op(desc string, fn func() error) error {
 	return fn()
 }
 
-// pace is issues.bulkPaceMs as a duration: int() of the value, at least 0.
-func (m *migrator) pace() time.Duration {
-	v, _ := config.Value(m.o.Cfg, "issues.bulkPaceMs")
-	var ms float64
-	switch t := v.(type) {
-	case bool:
-		if t {
-			ms = 1
-		}
-	case string:
-		f, err := strconv.ParseFloat(pystr.Strip(t), 64)
-		if err == nil {
-			ms = f
-		}
-	case interface{ String() string }:
-		f, err := strconv.ParseFloat(t.String(), 64)
-		if err == nil {
-			ms = f
-		}
-	}
-	if ms < 1 {
-		return 0
-	}
-	return time.Duration(int64(ms)) * time.Millisecond
-}
+// BulkPace is the pause between bulk tracker writes, to stay under the
+// forges' secondary rate limits. It is a variable only so tests can zero it;
+// the rotatest build tag (test/runner.sh) also reads ROTA_ISSUES_BULK_PACE_MS.
+var BulkPace = time.Second
+
+// pace is the pause between bulk writes.
+func (m *migrator) pace() time.Duration { return BulkPace }
 
 // backend is the issue backend over the lazily built tracker.
 func (m *migrator) backend() (*backlog.Issues, error) {

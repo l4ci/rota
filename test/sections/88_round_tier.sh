@@ -25,18 +25,18 @@ HOLDER=$$
 rt config set round.dispatch tmux >/dev/null
 rt round start --holder-pid "$HOLDER" --slots 1 >/dev/null
 
-# Default tier: standard, on the claude map; standard follows models.worker.
+# Default tier: standard, on the claude map; the explicit standard key sets its model.
 OUT=$(rt round assign F01 --check-only --holder-pid "$HOLDER")
 [ "$(echo "$OUT" | jget data.tier)" = "standard" ] || fail "default tier should be standard: $OUT"
 [ "$(echo "$OUT" | jget data.kind)" = "claude" ] || fail "default kind should be claude: $OUT"
 [ "$(echo "$OUT" | jget data.model)" = "sonnet" ] || fail "standard should be sonnet by default: $OUT"
-rt config set models.worker opus >/dev/null
+rt config set round.tiers.claude.standard opus >/dev/null
 OUT=$(rt round assign F01 --check-only --holder-pid "$HOLDER")
-[ "$(echo "$OUT" | jget data.model)" = "opus" ] || fail "standard should follow models.worker: $OUT"
+[ "$(echo "$OUT" | jget data.model)" = "opus" ] || fail "standard should follow round.tiers.claude.standard: $OUT"
 rt config set round.tiers.claude.standard sonnet >/dev/null
 OUT=$(rt round assign F01 --check-only --holder-pid "$HOLDER")
 [ "$(echo "$OUT" | jget data.model)" = "sonnet" ] || fail "an explicit tiers value should win: $OUT"
-pass "the default tier resolves on the claude map and standard follows models.worker"
+pass "the default tier resolves on the claude map and standard follows round.tiers.claude.standard"
 
 # round.profile fills the claude tiers; an explicit tier (standard, set above) wins;
 # inherit names no model, so the claude launch carries no --model.
@@ -71,10 +71,10 @@ OUT=$(rt round assign F01 --check-only --kind codex --holder-pid "$HOLDER")
 for t in light standard heavy; do rt config set "round.tiers.codex.$t" '' >/dev/null; done
 rtrc round assign F01 --check-only --kind codex --holder-pid "$HOLDER"
 [ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.kind)" = "codex" ] && ! echo "$OUT" | jget data.model >/dev/null || fail "all-empty codex should resolve to no model: $RC $OUT"
-rt config set round.codexCommand 'codex -m {model}' >/dev/null
+rt config set round.commands.codex 'codex -m {model}' >/dev/null
 rtrc round assign F01 --check-only --kind codex --holder-pid "$HOLDER"
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "no tier map" ] || fail "a {model} command with no map should be refused: $RC $OUT"
-rt config set round.codexCommand '' >/dev/null
+rt config set round.commands.codex '' >/dev/null
 rt config set round.tiers.codex.light c-light >/dev/null
 rtrc round assign F01 --check-only --kind codex --holder-pid "$HOLDER"
 [ "$RC" = "2" ] || fail "a partial codex map is a config error (2), got $RC: $OUT"

@@ -99,7 +99,7 @@ TMP="$(cd "$d" && pwd -P)" || exit 1
 ROTA_STAGE="$(mktemp -d)" || exit 1
 if [ -z "${ROTA_BIN:-}" ]; then
   ROTA_VERSION="$(tr -d '[:space:]' < "$REPO/VERSION")"
-  (cd "$REPO" && go build -ldflags "-X github.com/l4ci/rota/internal/version.Version=$ROTA_VERSION" \
+  (cd "$REPO" && go build -tags rotatest -ldflags "-X github.com/l4ci/rota/internal/version.Version=$ROTA_VERSION" \
     -o "$ROTA_STAGE/rota" ./cmd/rota) || { echo "runner: go build ./cmd/rota failed" >&2; exit 2; }
   ROTA_BIN="$ROTA_STAGE/rota"
 fi
@@ -114,6 +114,9 @@ export ROTA_BIN
 # The fake tmux reacts at once, so the 1 to 3 s pauses rota leaves after a paste
 # (for Claude Code to take it) only cost time here: scale them down (#84).
 export ROTA_HOST_SETTLE_PCT=5
+# Tracker retry pause and bulk-migrate pacing are constants; the rotatest build below reads these to zero them.
+export ROTA_ISSUES_RETRY_WAIT_SECONDS=0
+export ROTA_ISSUES_BULK_PACE_MS=0
 export ROTA_POISON_BIN="$ROTA_STAGE/poison"  # sections that reset PATH keep this first
 ROTA_POISON_LOG="$ROTA_STAGE/poison.log"
 mkdir -p "$ROTA_POISON_BIN" && : > "$ROTA_POISON_LOG"

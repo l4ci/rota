@@ -131,13 +131,13 @@ func TestDefaultSmokeShards(t *testing.T) {
 }
 
 func TestSmokeShardsOverrideOrder(t *testing.T) {
-	if n, src := SmokeShards(nil, "", 8); n != 4 || !strings.Contains(src, "default") {
+	if n, src := SmokeShards("", 8); n != 4 || !strings.Contains(src, "default") {
 		t.Errorf("default = %d (%s)", n, src)
 	}
-	if n, src := SmokeShards(nil, "3", 8); n != 3 || src != "ROTA_SMOKE_SHARDS" {
+	if n, src := SmokeShards("3", 8); n != 3 || src != "ROTA_SMOKE_SHARDS" {
 		t.Errorf("env = %d (%s)", n, src)
 	}
-	if n, _ := SmokeShards(nil, "0", 8); n != 4 {
+	if n, _ := SmokeShards("0", 8); n != 4 {
 		t.Errorf("a bad env value should fall through, got %d", n)
 	}
 }

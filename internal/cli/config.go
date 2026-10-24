@@ -168,8 +168,8 @@ func showRows(entries []config.Entry) (rows []any, lines []string) {
 }
 
 // annotateTierModels adds the effective model and its source to every
-// round.tiers.<kind>.<tier> row: after the profile and the models.worker
-// fallback, so an empty raw value no longer hides what a worker launches with.
+// round.tiers.<kind>.<tier> row: after the profile and the tier default,
+// so an empty raw value no longer hides what a worker launches with.
 func annotateTierModels(cfg any, entries []config.Entry, rows []any, lines []string) {
 	for i, e := range entries {
 		kind, tier, ok := tierKeyParts(e.Key)

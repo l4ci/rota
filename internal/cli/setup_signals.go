@@ -64,7 +64,8 @@ func readSetupSignals(c *Ctx, dir string, answered map[string]bool) map[string]s
 		if len(kinds) > 1 {
 			ev = strings.Join(kinds, ", ") + " are on PATH; first taken"
 		}
-		sigs["round.workerKind"] = setupSignal{kinds[0], ev}
+		list, _ := jsonx.MarshalCompact(anySlice(kinds[:1]))
+		sigs["round.harnesses"] = setupSignal{string(list), ev}
 	}
 	if out, ok := run("worktree", "list", "--porcelain"); ok && strings.Count(out, "worktree ") > 1 {
 		sigs["work.isolation"] = setupSignal{"worktree", "the repo has linked worktrees (git worktree list)"}

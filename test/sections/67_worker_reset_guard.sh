@@ -2,7 +2,7 @@ echo "worker reset — slot reset guard, provable session close, resume-flag rej
 # Covers #38. A slot is reused across tasks; dispatch must (a) refuse a slot
 # holding uncommitted or unmerged work, (b) otherwise cut a fresh per-task
 # branch from the cycle branch, (c) refuse to spawn when the old session cannot
-# be confirmed closed, (d) reject a workerCommand that resumes a conversation.
+# be confirmed closed, (d) reject a round.commands.claude that resumes a conversation.
 # A slot holding work and a resume flag are refusals (exit 4); a session that
 # will not close is the host failing (exit 5).
 # Hosts are FAKES on PATH: herdr with a stateful tab, tmux with a stateful window.
@@ -67,7 +67,7 @@ slot_field() {
   python3 -c 'import json,sys; s=[s for s in json.load(open(sys.argv[1]))["slots"] if s["name"]==sys.argv[2]][0]; print(s.get(sys.argv[3]))' \
     "$TMP_RG/repo/.rota/workers.json" "$1" "$2"
 }
-cfg() { printf '{"round":{"dispatch":"%s"%s}}\n' "$1" "${2:+,\"workerCommand\":\"$2\"}" > "$TMP_RG/repo/.rota/config.json"; }
+cfg() { local extra=""; [ -n "${2:-}" ] && extra=",\"commands\":{\"claude\":\"$2\"}"; printf '{"round":{"dispatch":"%s"%s}}\n' "$1" "$extra" > "$TMP_RG/repo/.rota/config.json"; }
 
 rg hvj worker pool init --slots 1 --base main >/dev/null 2>&1 || fail "pool init failed"
 WT="$(slot_field w1 worktree)"
@@ -160,12 +160,12 @@ kill "$SLEEPER" 2>/dev/null || true; wait "$SLEEPER" 2>/dev/null || true
 pass "dispatch exits 5 and spawns nothing when the old tab/window (or its pids) is not confirmed gone"
 
 # ── (d) resume flags and unparseable commands ───────────────────────────────
-cfgj() { python3 -c 'import json,sys; print(json.dumps({"round":{"dispatch":"herdr","workerCommand":sys.argv[1]}}))' "$1" > "$TMP_RG/repo/.rota/config.json"; }
+cfgj() { python3 -c 'import json,sys; print(json.dumps({"round":{"dispatch":"herdr","commands":{"claude":sys.argv[1]}}}))' "$1" > "$TMP_RG/repo/.rota/config.json"; }
 dispatch_rc() { RC=0; OUT="$(rgh hvj worker dispatch w1 --body-file "$TMP_RG/brief.md" --task T5 2>/dev/null)" || RC=$?; }
 for CMD in "claude --model sonnet --continue" "claude -r" "claude -c" "claude --resume" "claude --resume=abc" \
            "claude --continue=1" "claude -cr" 'sh -c "claude -c"' "env X=1 claude -c" "X=1 claude --resume abc"; do
   cfgj "$CMD"; dispatch_rc
-  [ "$RC" = "4" ] || fail "workerCommand '$CMD' must be refused (exit 4), got $RC: $OUT"
+  [ "$RC" = "4" ] || fail "round.commands.claude '$CMD' must be refused (exit 4), got $RC: $OUT"
   [ "$(jget data.changed <<<"$OUT")" = "false" ] || fail "refusing '$CMD' changes nothing: $OUT"
 done
 cfgj 'claude --model "sonnet'; dispatch_rc

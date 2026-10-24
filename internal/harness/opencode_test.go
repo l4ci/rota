@@ -15,11 +15,11 @@ func TestOpenCodeLaunch(t *testing.T) {
 	}{
 		{``, "opencode-go/qwen3.8-flash", "opencode --model opencode-go/qwen3.8-flash", false},
 		{``, "", "opencode", false},
-		{`{"round":{"opencodeCommand":"wrap opencode -m {model}"}}`, "p/m", "wrap opencode -m p/m", false},
-		{`{"round":{"opencodeCommand":"wrap opencode -m {model}"}}`, "", "", true},
-		{`{"round":{"opencodeCommand":"opencode --agent build"}}`, "p/m", "opencode --agent build", false},
-		{`{"round":{"opencodeCommand":"opencode --agent build"}}`, "", "opencode --agent build", false},
-		{`{"round":{"codexCommand":"codex -x"}}`, "", "opencode", false},
+		{`{"round":{"commands":{"opencode":"wrap opencode -m {model}"}}}`, "p/m", "wrap opencode -m p/m", false},
+		{`{"round":{"commands":{"opencode":"wrap opencode -m {model}"}}}`, "", "", true},
+		{`{"round":{"commands":{"opencode":"opencode --agent build"}}}`, "p/m", "opencode --agent build", false},
+		{`{"round":{"commands":{"opencode":"opencode --agent build"}}}`, "", "opencode --agent build", false},
+		{`{"round":{"commands":{"codex":"codex -x"}}}`, "", "opencode", false},
 	}
 	for _, c := range cases {
 		got, err := (opencode{}).Launch(cfgOf(t, c.cfg), c.model)
@@ -36,7 +36,7 @@ func TestOpenCodeLaunch(t *testing.T) {
 }
 
 func TestOpenCodeModelApplies(t *testing.T) {
-	for cfg, want := range map[string]bool{``: true, `{"round":{"opencodeCommand":"opencode -x"}}`: false, `{"round":{"opencodeCommand":"opencode -m {model}"}}`: true} {
+	for cfg, want := range map[string]bool{``: true, `{"round":{"commands":{"opencode":"opencode -x"}}}`: false, `{"round":{"commands":{"opencode":"opencode -m {model}"}}}`: true} {
 		if got := (opencode{}).ModelApplies(cfgOf(t, cfg)); got != want {
 			t.Errorf("%s: %v want %v", cfg, got, want)
 		}
@@ -80,10 +80,10 @@ func TestOpenCodeKinds(t *testing.T) {
 		t.Error("opencode: no round.accounts, no usage meter, optional tier map")
 	}
 	for cfg, want := range map[string]bool{
-		``:                                    false,
-		`{"round":{"workerKind":"opencode"}}`: true,
+		``:                                     false,
+		`{"round":{"harnesses":["opencode"]}}`: true,
 		`{"round":{"tiers":{"opencode":{"light":"p/m"}}}}`:                   true,
-		`{"round":{"opencodeCommand":"opencode"}}`:                           true,
+		`{"round":{"commands":{"opencode":"opencode"}}}`:                     true,
 		`{"round":{"accounts":[{"kind":"opencode","name":"a","dir":"/x"}]}}`: true,
 	} {
 		if got := h.Configured(cfgOf(t, cfg)); got != want {

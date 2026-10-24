@@ -103,7 +103,7 @@ func TestDispatchOpenCodeRefusals(t *testing.T) {
 	}{
 		"binary missing": {`{"round":{"dispatch":"tmux"}}`, opencodeRig{missing: map[string]bool{"opencode": true}}, harness.BlockOpencodeBinary, exitcode.ExitRefused},
 		"flag missing":   {`{"round":{"dispatch":"tmux"}}`, opencodeRig{help: "  --prompt\n"}, harness.BlockOpencodeFlags, exitcode.ExitRefused},
-		"pure launch":    {`{"round":{"dispatch":"tmux","opencodeCommand":"opencode --pure"}}`, opencodeRig{}, "", exitcode.ExitUnavailable},
+		"pure launch":    {`{"round":{"dispatch":"tmux","commands":{"opencode":"opencode --pure"}}}`, opencodeRig{}, "", exitcode.ExitUnavailable},
 	} {
 		dir := opencodeProject(t, c.cfg)
 		rig := c.rig

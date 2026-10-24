@@ -31,8 +31,6 @@ Older configs used `backlog.backend` (`file` or `issues`) and `issues.provider`.
 | `issues.labels.*` | `in-progress`, `needs-review`, `changes-requested`, `released`, `not-planned`, `blocked`, `milestone-tracker`, `type:bug` / `type:feature` / `type:task`, prefix `p`, prefix `size:` | Rename any label role. |
 | `issues.autoCreateLabel` | `true` | Create a missing label on first use. When off, a missing label is an error. |
 | `issues.homeRepo` | `""` | Umbrella only: sub-repo holding milestone tracking issues; empty is the first registered sub-repo. |
-| `issues.bulkPaceMs` | `1000` | Pause between writes in `rota migrate issues`. |
-| `issues.retryWaitSeconds` | `60` | Seconds to wait before the one retry after a primary rate limit. |
 
 ## Jira
 
@@ -155,7 +153,7 @@ Each sub-repo's items stay on that sub-repo's own tracker; the provider is detec
 
 ## Rate limits
 
-Exit 5 means the tracker is unavailable; exit 6 means rate-limited. Both stop the run and report. On a primary rate limit `rota` waits `issues.retryWaitSeconds` and retries the call once, then stops with exit 6. A secondary rate limit stops at once, and other failures are not retried. There is no retry loop; wait, then re-run.
+Exit 5 means the tracker is unavailable; exit 6 means rate-limited. Both stop the run and report. On a primary rate limit `rota` waits 60 seconds and retries the call once, then stops with exit 6. A secondary rate limit stops at once, and other failures are not retried. There is no retry loop; wait, then re-run.
 
 ## Migrating a file backlog
 
@@ -167,7 +165,7 @@ rota config set issues.source github   # or gitlab
 
 Open items, their detail files, proof rows, design and plan artifacts, and planned/active milestones with their slice plans move to the tracker. Completed items, `ARCHIVE.md` and shipped/archived milestones stay in the files as history, so after the flip `rota milestone list` shows only the planned and active milestones. `Related:` fields and old IDs in migrated text are rewritten to the new IDs after every item exists; `Related:` IDs that are not migrated (completed items) are dropped from the field and listed in the issue body as `Related before migration (not migrated): F79, F80`. A bullet's `Since:` anchor is kept in the issue's fields block.
 
-The run is resumable: `.rota/issue-map.json` records each old ID, its new ID and URL. Commit it. A rate limit (exit 6) stops the run with the map saved; wait and re-run. `--limit N` creates at most N items per run. Writes are paced by `issues.bulkPaceMs`.
+The run is resumable: `.rota/issue-map.json` records each old ID, its new ID and URL. Commit it. A rate limit (exit 6) stops the run with the map saved; wait and re-run. `--limit N` creates at most N items per run. Writes are paced at a fixed one second.
 
 On a tracker with no milestones (It's a Plan) a milestone is reported as skipped and its items migrate without a `Milestone` field. A forge is found from `origin`; It's a Plan is not one, so set `issues.source itsaplan`, `issues.connection` and `issues.itsaplan.project` before the run.
 

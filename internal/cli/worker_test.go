@@ -419,7 +419,7 @@ func TestWorkerGateVerb(t *testing.T) {
 
 func TestWorkerDispatchRefusalEnvelopeCarriesData(t *testing.T) {
 	deps := testDeps()
-	dir := workerProject(t, `{"round":{"workerCommand":"claude --resume"}}`)
+	dir := workerProject(t, `{"round":{"commands":{"claude":"claude --resume"}}}`)
 	rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	useHost(deps, &cliHost{inSession: true})
 	brief := filepath.Join(t.TempDir(), "b.md")

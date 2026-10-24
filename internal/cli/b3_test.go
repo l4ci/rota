@@ -61,23 +61,6 @@ func TestShipPRRefusedByVerdict(t *testing.T) {
 	}
 }
 
-func TestShipPRSecondOpinionAdvisoryUnderCodex(t *testing.T) {
-	shipDeterministic(t)
-	cfg := `{"forge": {"provider": "github"}, "issues": {"source": "file","retryWaitSeconds":0},"ship":{"secondOpinionRunner":"codex"}}`
-	work := shipFixture(t, cfg)
-	shipBranchOf(t, work, "feat/x", [3]string{"x.txt", "work", ""})
-	deps := useForge(t, shipPRForge("https://github.com/fake/repo/pull/1"))
-	b3Record(t, work, "feat/x", verdict.SecondOpinion, verdict.Fail, "abc1234")
-	if o, _ := b3ShipPRWith(t, deps, work); o.code != 0 {
-		t.Fatalf("codex advisory must not refuse: exit %d\n%s%s", o.code, o.stdout, o.stderr)
-	}
-	// A review FAIL still blocks under codex.
-	b3Record(t, work, "feat/x", verdict.ReviewSpec, verdict.Fail, "abc1234")
-	if o, _ := b3ShipPRWith(t, deps, work); o.code != 4 {
-		t.Fatalf("review FAIL under codex: exit %d", o.code)
-	}
-}
-
 func TestShipMergeRefusedByVerdict(t *testing.T) {
 	shipDeterministic(t)
 	work := shipFixture(t, "")

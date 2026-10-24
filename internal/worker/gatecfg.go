@@ -29,7 +29,7 @@ type GateConfig struct {
 	CIChecks []string
 	// Tracker is the forge adapter settings (issues.*).
 	Tracker tracker.Settings
-	// InProgressLabel is issues.labels.inProgress (or the legacy issues.label).
+	// InProgressLabel is issues.labels.inProgress.
 	InProgressLabel string
 	// Support is round.support and SupportLabel issues.labels.support: an issue
 	// carrying the label under a set Support belongs to the support machine,
@@ -148,7 +148,7 @@ func (c GateConfig) HasVerifyCommands() bool { return len(c.Full) > 0 }
 func (c GateConfig) ReviewPolicy() (config.ReviewPolicy, error) { return c.review, c.reviewErr }
 
 // CrossReview is the cross-harness review settings, or the error of a
-// malformed review.crossLabels, round.harnesses or round.workerKind.
+// malformed review.crossLabels or round.harnesses.
 func (c GateConfig) CrossReview() (roundcfg.CrossReview, error) { return c.cross, c.crossErr }
 
 // TDDEnabled is work.tdd, or the error of a non-boolean value.

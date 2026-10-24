@@ -32,9 +32,9 @@ const DefaultOpencodeCommand = "opencode --model {model}"
 type opencode struct{}
 
 func (opencode) Kind() string       { return OpenCode }
-func (opencode) CommandKey() string { return "round.opencodeCommand" }
+func (opencode) CommandKey() string { return "round.commands.opencode" }
 
-// Launch is round.opencodeCommand, else the default launch line. A model fills
+// Launch is round.commands.opencode, else the default launch line. A model fills
 // {model}. The default without a model drops its `--model {model}` pair; a
 // custom command that still holds {model} then has nothing to put there, which
 // is a usage error. A custom command without the placeholder runs as written.
@@ -46,7 +46,7 @@ func (o opencode) Launch(cfg any, model string) (string, error) {
 	if model == "" {
 		if custom {
 			if strings.Contains(cmd, ModelPlaceholder) {
-				return "", refuse(Usage, "round.opencodeCommand holds {model} but no model was chosen: pass a tier model (round assign) or drop the placeholder")
+				return "", refuse(Usage, "round.commands.opencode holds {model} but no model was chosen: pass a tier model (round assign) or drop the placeholder")
 			}
 			return cmd, nil
 		}
@@ -55,7 +55,7 @@ func (o opencode) Launch(cfg any, model string) (string, error) {
 	return strings.ReplaceAll(cmd, ModelPlaceholder, model), nil
 }
 
-// NeedsModel: only a custom round.opencodeCommand that holds {model} does.
+// NeedsModel: only a custom round.commands.opencode that holds {model} does.
 func (o opencode) NeedsModel(cfg any) bool {
 	_, err := o.Launch(cfg, "")
 	return err != nil
@@ -180,7 +180,7 @@ func (opencode) Tiers() TierRule { return TierRule{} }
 // Configured is whether the project uses OpenCode as a worker: an opencode
 // tier map, a named account, a custom command or it as the default kind.
 func (o opencode) Configured(cfg any) bool {
-	if config.StringIfSet(cfg, "round.workerKind") == OpenCode {
+	if ProjectKind(cfg) == OpenCode {
 		return true
 	}
 	if TierMapSet(cfg, OpenCode) {
@@ -350,7 +350,7 @@ func (o opencode) Preflight(ctx context.Context, p Probe, po PreflightOpts) (Set
 		for i, m := range miss {
 			names[i] = m.Flag
 		}
-		r := refuse(Refused, "opencode --help does not list %s, which the launch line uses; update opencode or change round.opencodeCommand", strings.Join(names, ", "))
+		r := refuse(Refused, "opencode --help does not list %s, which the launch line uses; update opencode or change round.commands.opencode", strings.Join(names, ", "))
 		r.BlockedBy = BlockOpencodeFlags
 		return set, r
 	}

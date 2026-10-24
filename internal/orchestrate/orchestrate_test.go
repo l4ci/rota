@@ -138,9 +138,9 @@ func TestSupervisorWrapsTheAgentAndPassesThePromptFirstOnly(t *testing.T) {
 	}{
 		{"claude by default", nil,
 			[]string{"/bin/rota", "keepalive", "run", "--first-prompt", "/rota-orchestrate", "--", "claude", "--model", "opus", "--permission-mode", "auto"}},
-		{"claude on models.orchestrator", map[string]any{"models.orchestrator": "sonnet"},
+		{"claude on orchestrator.model", map[string]any{"orchestrator.model": "sonnet"},
 			[]string{"/bin/rota", "keepalive", "run", "--first-prompt", "/rota-orchestrate", "--", "claude", "--model", "sonnet", "--permission-mode", "auto"}},
-		{"round.operatorCommand wins for claude", map[string]any{"round.operatorCommand": "claude --model fable"},
+		{"orchestrator.command wins for claude", map[string]any{"orchestrator.command": "claude --model fable"},
 			[]string{"/bin/rota", "keepalive", "run", "--first-prompt", "/rota-orchestrate", "--", "claude", "--model", "fable"}},
 		{"codex", map[string]any{"orchestrator.harness": "codex"},
 			[]string{"/bin/rota", "keepalive", "run", "--first-prompt", "$rota-orchestrate", "--", "codex"}},

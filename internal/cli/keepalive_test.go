@@ -13,12 +13,12 @@ import (
 	"github.com/l4ci/rota/internal/roundlease"
 )
 
-// kaProject is a git project whose config zeroes the backoff.
+// kaProject is a git project; runs pass --backoff 0 (the default wait is 5s).
 func kaProject(t *testing.T, cfg string) string {
 	t.Helper()
 	dir := gitRepo(t)
 	if cfg == "" {
-		cfg = `{"git":{"baseBranch":"feat/x"},"orchestrator":{"keepaliveBackoffSeconds":0}}`
+		cfg = `{"git":{"baseBranch":"feat/x"},"orchestrator":{}}`
 	}
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(cfg), 0o644)
 	return dir
@@ -66,7 +66,7 @@ func TestKeepaliveRunUsageErrors(t *testing.T) {
 func TestKeepaliveRunRestartsOnFreshHandoff(t *testing.T) {
 	dir := kaProject(t, "")
 	child := kaChild(t, dir)
-	code, out, errOut := rotaIn(t, dir, append([]string{"keepalive", "run", "--prompt", "go on", "--json", "--"}, child...)...)
+	code, out, errOut := rotaIn(t, dir, append([]string{"keepalive", "run", "--backoff", "0", "--prompt", "go on", "--json", "--"}, child...)...)
 	if code != 0 {
 		t.Fatalf("exit %d: %s %s", code, out, errOut)
 	}
@@ -101,11 +101,11 @@ func TestKeepaliveRunRestartsOnFreshHandoff(t *testing.T) {
 }
 
 func TestKeepaliveRunBreakerExitsOneWithoutEscalateIssue(t *testing.T) {
-	dir := kaProject(t, `{"git":{"baseBranch":"feat/x"},"orchestrator":{"keepaliveBackoffSeconds":0,"keepaliveBreaker":2}}`)
+	dir := kaProject(t, `{"git":{"baseBranch":"feat/x"}}`)
 	h := kaHandoff(dir)
 	os.MkdirAll(filepath.Dir(h), 0o755)
 	os.WriteFile(h, []byte("x"), 0o644)
-	code, out, errOut := rotaIn(t, dir, "keepalive", "run", "--json", "--", "true")
+	code, out, errOut := rotaIn(t, dir, "keepalive", "run", "--backoff", "0", "--breaker", "2", "--json", "--", "true")
 	if code != 1 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
@@ -153,7 +153,7 @@ func TestKeepaliveRunsTheLimitsLoopUnlessTold(t *testing.T) {
 		out := filepath.Join(t.TempDir(), "seen")
 		// the child waits for the loop's record to appear, or gives up
 		script := `i=0; while [ ! -e "$1" ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done; if [ -e "$1" ]; then echo yes > "$2"; else echo no > "$2"; fi`
-		argv := []string{"keepalive", "run", "--json"}
+		argv := []string{"keepalive", "run", "--backoff", "0", "--json"}
 		if noLimits {
 			argv = append(argv, "--no-limits")
 		}
@@ -173,7 +173,7 @@ func TestKeepaliveRunsTheLimitsLoopUnlessTold(t *testing.T) {
 			t.Errorf("--no-limits=%v: the record must be gone after the run", noLimits)
 		}
 	}
-	dir := kaProject(t, `{"git":{"baseBranch":"feat/x"},"limits":{"maxResumes":0}}`)
+	dir := kaProject(t, `{"git":{"baseBranch":"feat/x"},"limits":{"mode":"wait"}}`)
 	if code, _, _ := rotaIn(t, dir, "keepalive", "run", "--", "true"); code != 70 {
 		t.Errorf("a bad limits key must exit 70, got %d", code)
 	}

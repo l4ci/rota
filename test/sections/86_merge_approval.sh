@@ -7,7 +7,7 @@ TMP_MA="$(mktemp -d "$TMP/mergeapproval.XXXXXX")"
   P="$TMP_MA/gh"; mkdir -p "$P"
   git init -q --bare "$P/origin.git"
   git clone -q "$P/origin.git" "$P/work" 2>/dev/null; mkdir -p "$P/work/.rota"
-  printf '{"forge":{"provider":"github"},"issues":{"source":"github","retryWaitSeconds":0},"autonomy":{"level":"auto"},"ship":{"mergeApproval":"all"}}\n' > "$P/work/.rota/config.json"
+  printf '{"forge":{"provider":"github"},"issues":{"source":"github"},"autonomy":{"level":"auto"},"ship":{"mergeApproval":"all"}}\n' > "$P/work/.rota/config.json"
   cd "$P/work"
   git config user.email t@t; git config user.name t
   git checkout -q -b main && git commit -q --allow-empty -m seed && git push -q origin main

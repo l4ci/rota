@@ -139,11 +139,9 @@ func (p Pick) String() string {
 
 // Where a worker's kind came from, as resolveKind reports it.
 const (
-	KindFromFlag   = "--kind"
-	KindFromLabel  = "harness label"
-	KindFromConfig = "round.workerKind"
-	// KindFromHarnesses is the first entry of round.harnesses, the project
-	// default when round.workerKind is unset.
+	KindFromFlag  = "--kind"
+	KindFromLabel = "harness label"
+	// KindFromHarnesses is the first entry of round.harnesses, the project default.
 	KindFromHarnesses = "round.harnesses"
 	KindFromSlot      = "slot"
 	// KindFromSlotResume is the slot's kind kept because it resumes its own
@@ -156,14 +154,14 @@ const (
 )
 
 // resolveKind is the harness and where it came from: --kind, else the item's
-// label, else round.workerKind, else the slot's recorded kind, else claude.
+// label, else the first round.harnesses entry, else the slot's recorded kind, else claude.
 // A slot resuming its own issue keeps its kind ahead of the project default.
 func resolveKind(flag, label, project, slot string, resuming bool) (kind, source string) {
 	if resuming && flag == "" && label == "" && slot != "" {
 		return slot, KindFromSlotResume
 	}
 	for _, c := range []struct{ k, src string }{
-		{flag, KindFromFlag}, {label, KindFromLabel}, {project, KindFromConfig}, {slot, KindFromSlot},
+		{flag, KindFromFlag}, {label, KindFromLabel}, {project, KindFromHarnesses}, {slot, KindFromSlot},
 	} {
 		if c.k != "" {
 			return c.k, c.src

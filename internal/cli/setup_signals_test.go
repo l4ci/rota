@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -120,12 +121,12 @@ func TestSetupListCarriesSuggestionAndEvidence(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, out)
 	}
 	for key, want := range map[string][2]string{
-		"issues.source":    {"github", "github.com"},
-		"git.baseBranch":   {"main", "main"},
-		"test.fast":        {`["go test ./..."]`, "go.mod"},
-		"test.full":        {`["go test ./..."]`, "go.mod"},
-		"round.workerKind": {"claude", "claude"},
-		"round.dispatch":   {"herdr", "herdr"},
+		"issues.source":   {"github", "github.com"},
+		"git.baseBranch":  {"main", "main"},
+		"test.fast":       {`["go test ./..."]`, "go.mod"},
+		"test.full":       {`["go test ./..."]`, "go.mod"},
+		"round.harnesses": {`["claude"]`, "claude"},
+		"round.dispatch":  {"herdr", "herdr"},
 	} {
 		q := listQuestion(t, out, key)
 		if got := str(q, "suggestion"); got != want[0] {
@@ -151,7 +152,7 @@ func TestSetupNoSignalKeepsSchemaDefault(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
-	for _, key := range []string{"issues.source", "test.fast", "git.baseBranch", "round.workerKind"} {
+	for _, key := range []string{"issues.source", "test.fast", "git.baseBranch", "round.harnesses"} {
 		q := listQuestion(t, out, key)
 		if _, has := q.Get("suggestion"); has {
 			t.Errorf("%s has a suggestion without a signal", key)
@@ -168,8 +169,8 @@ func TestSetupYesTakesSuggestions(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
-	for k, want := range map[string]any{"issues.source": "gitlab", "git.baseBranch": "main", "round.workerKind": "codex"} {
-		if got := cfgValue(t, dir, k); got != want {
+	for k, want := range map[string]any{"issues.source": "gitlab", "git.baseBranch": "main", "round.harnesses": []any{"codex"}} {
+		if got := cfgValue(t, dir, k); !reflect.DeepEqual(got, want) {
 			t.Errorf("%s = %v, want %v", k, got, want)
 		}
 	}

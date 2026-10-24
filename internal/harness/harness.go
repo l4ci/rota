@@ -52,7 +52,7 @@ func FromLabels(labels []string) string {
 }
 
 // Kinds lists the worker harness kinds. Every list of kinds outside this
-// package (the round.workerKind enum, the harness: label check, herdr's
+// package (the first round.harnesses entry, the harness: label check, herdr's
 // binary-to-kind map, usage errors) reads it.
 func Kinds() []string { return append([]string(nil), kinds...) }
 
@@ -242,9 +242,6 @@ type TierRule struct {
 	// Required: the tier map must be configured (a kind that has no model of
 	// its own to fall back on).
 	Required bool
-	// StandardFallback is the config key whose model fills an unset standard
-	// tier, "" for none.
-	StandardFallback string
 	// Profile: round.profile fills this kind's tier map (Claude only).
 	Profile bool
 }

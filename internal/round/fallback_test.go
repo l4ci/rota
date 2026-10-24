@@ -146,10 +146,10 @@ func TestFallbackState(t *testing.T) {
 	}
 }
 
-// A claude-only workerKind with every Claude account cooling must not stop
-// the tick: the cap stays open while a later harness has headroom.
+// With every Claude account cooling the tick must not stop: the cap stays open
+// while a later harness has headroom.
 func TestQuotaCapStaysOpenWithAFallbackHarness(t *testing.T) {
-	f := fallbackRig(t, strings.Replace(fallbackCfg, `"harnesses"`, `"workerKind":"claude","harnesses"`, 1))
+	f := fallbackRig(t, fallbackCfg)
 	if c := f.env.QuotaCap(bg, f.root, f.set); c.Reduced() {
 		t.Fatalf("cap %+v", c)
 	}
@@ -191,10 +191,10 @@ func TestHarnessStepWritesTheFieldOnTheFileBackend(t *testing.T) {
 	}
 }
 
-// A cooling codex with workerKind=codex does not fall back to claude: only a
+// A cooling codex that is the first harness does not fall back to claude: only a
 // LATER harness in round.harnesses can take the issue.
 func TestFallbackGoesOnlyToALaterHarness(t *testing.T) {
-	cfg := `{"round":{"dispatch":"herdr","workerKind":"codex","harnesses":["claude","codex"],"accounts":[{"kind":"codex","name":"c1","dir":"/h1"}],"tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`
+	cfg := `{"round":{"dispatch":"herdr","harnesses":["codex"],"accounts":[{"kind":"codex","name":"c1","dir":"/h1"}],"tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`
 	f := newAssignFixture(t)
 	f.config(t, cfg)
 	f.env.Forge = f.be.asForge()
@@ -212,15 +212,6 @@ func TestFallbackGoesOnlyToALaterHarness(t *testing.T) {
 	// status derives from the resolved default (codex), which has no later harness
 	if st := f.env.Fallback(bg, f.root, f.set); st.Active {
 		t.Fatalf("fallback %+v", st)
-	}
-}
-
-// With workerKind naming another harness than harnesses[0], the state follows
-// the resolved default.
-func TestFallbackStateFollowsTheResolvedDefault(t *testing.T) {
-	f := fallbackRig(t, strings.Replace(fallbackCfg, `"harnesses"`, `"workerKind":"codex","harnesses"`, 1))
-	if st := f.env.Fallback(bg, f.root, f.set); st.Active {
-		t.Fatalf("codex is the default and has headroom: %+v", st)
 	}
 }
 
@@ -247,22 +238,6 @@ func TestTransferDoesNotFallBack(t *testing.T) {
 	}
 	if ls := f.be.items["12"].Labels; slices.Contains(ls, "harness:codex") {
 		t.Errorf("label written: %v", ls)
-	}
-}
-
-// A workerKind outside round.harnesses has no place in the list, so the
-// fallback walks all of it and lands on harnesses[0].
-func TestFallbackFromAnUnlistedKindTakesTheFirstHarness(t *testing.T) {
-	f := fallbackRig(t, strings.Replace(
-		strings.Replace(fallbackCfg, `"harnesses":["claude","codex"]`, `"harnesses":["codex"]`, 1),
-		`"harnesses"`, `"workerKind":"claude","harnesses"`, 1))
-	st := f.env.Fallback(bg, f.root, f.set)
-	if !st.Active || st.From != harness.Claude || st.To != harness.Codex {
-		t.Fatalf("fallback %+v", st)
-	}
-	res, err := f.assign("12", "ben", nil)
-	if err != nil || res.Fallback == nil || res.Fallback.To != harness.Codex {
-		t.Fatalf("assign: %v %+v", err, res)
 	}
 }
 

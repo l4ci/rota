@@ -122,7 +122,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.NothingToVerify = d.workerEnv().NothingToVerify(root)
 	if slots, err := d.workerEnv().GateConfig(root).TestSlots(); err == nil {
 		in.TestSlots = slots
-		in.SmokeShards, in.SmokeShardsSource = worker.SmokeShards(cfg, d.Getenv("ROTA_SMOKE_SHARDS"), runtime.NumCPU())
+		in.SmokeShards, in.SmokeShardsSource = worker.SmokeShards(d.Getenv("ROTA_SMOKE_SHARDS"), runtime.NumCPU())
 	}
 	in.AgentProblems = agents.Problems(root, cfg)
 	// No .gitignore at all is not an older project's drift: init creates it.

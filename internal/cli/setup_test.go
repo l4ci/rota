@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -75,15 +76,15 @@ func TestSetupHarnessQuestionsWriteOnlyAnswers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(raw), "workerKind") || strings.Contains(string(raw), "harness") {
+	if strings.Contains(string(raw), "harness") {
 		t.Errorf("an unanswered harness question wrote a key:\n%s", raw)
 	}
 	chosen := t.TempDir()
 	if code, _, errOut := setupRun(t, chosen, "\n\n\n\n\n\n\n\ncodex\n4\n\n\n\n\n\n", true); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
-	if got := cfgValue(t, chosen, "round.workerKind"); got != harness.Codex {
-		t.Errorf("round.workerKind = %v", got)
+	if got := cfgValue(t, chosen, "round.harnesses"); !reflect.DeepEqual(got, []any{harness.Codex}) {
+		t.Errorf("round.harnesses = %v", got)
 	}
 	if got := cfgValue(t, chosen, "orchestrator.harness"); got != "opencode" {
 		t.Errorf("orchestrator.harness = %v", got)
@@ -93,8 +94,8 @@ func TestSetupHarnessQuestionsWriteOnlyAnswers(t *testing.T) {
 	if code, _, errOut := setupRun(t, yes, "", false, "--yes"); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
-	if raw, _ := os.ReadFile(filepath.Join(yes, ".rota", "config.json")); strings.Contains(string(raw), "workerKind") {
-		t.Errorf("--yes wrote round.workerKind:\n%s", raw)
+	if raw, _ := os.ReadFile(filepath.Join(yes, ".rota", "config.json")); strings.Contains(string(raw), "harnesses") {
+		t.Errorf("--yes wrote round.harnesses:\n%s", raw)
 	}
 }
 
@@ -177,7 +178,7 @@ func TestSetupSetAloneNeedsNoYes(t *testing.T) {
 func TestSetupRejectsBadSetBeforeWriting(t *testing.T) {
 	for _, args := range [][]string{
 		{"--yes", "--set", "work.isolation=sideways"},
-		{"--yes", "--set", "models.worker=opus"},
+		{"--yes", "--set", "learn.verify=true"},
 		{"--yes", "--set", "nokey"},
 		{"--yes", "--set", "issues.provider=github"}, // replaced by issues.source
 	} {
@@ -447,7 +448,7 @@ func TestSetupSupportPath(t *testing.T) {
 				t.Errorf("local %s = %v, want %v", k, got, want)
 			}
 		}
-		for _, k := range []string{"issues.source", "work.isolation", "ship.review", "round.workerKind"} {
+		for _, k := range []string{"issues.source", "work.isolation", "ship.review", "round.harnesses"} {
 			if _, ok := config.Lookup(local, k); ok {
 				t.Errorf("local holds %s", k)
 			}
@@ -459,14 +460,14 @@ func TestSetupSupportPath(t *testing.T) {
 	t.Run("interactive", func(t *testing.T) {
 		isolateGlobal(t)
 		dir, tracked := supportClone(t)
-		// role support (2), then dispatch, autonomy, workerKind codex, harness.
+		// role support (2), then dispatch, autonomy, harnesses codex, harness.
 		code, _, errOut := setupRun(t, dir, "2\n\n\ncodex\n\n", true)
 		if code != 0 {
 			t.Fatalf("exit %d: %s", code, errOut)
 		}
 		assertTrackedUntouched(t, dir, tracked)
-		if got, _ := config.Lookup(localConfig(t, dir), "round.workerKind"); got != harness.Codex {
-			t.Errorf("local round.workerKind = %v", got)
+		if got, _ := config.Lookup(localConfig(t, dir), "round.harnesses"); !reflect.DeepEqual(got, []any{harness.Codex}) {
+			t.Errorf("local round.harnesses = %v", got)
 		}
 		for _, q := range []string{"Where do the issues live?", "How deep a review", "Which branch do the skills merge into?", "Save as global defaults?"} {
 			if strings.Contains(errOut, q) {
@@ -550,7 +551,7 @@ func TestSetupListRoles(t *testing.T) {
 	}
 	for k, want := range map[string]string{
 		"round.role": "[main support]", "round.dispatch": "[main support]", "autonomy.level": "[main support]",
-		"round.workerKind": "[main support]", "orchestrator.harness": "[main support]",
+		"round.harnesses": "[main support]", "orchestrator.harness": "[main support]",
 		"issues.source": "[main]", "ship.review": "[main]", "test.fast": "[main]",
 	} {
 		if roles[k] != want {
@@ -710,12 +711,12 @@ func TestSetupSupportPathFromSubdirOfEnabledClone(t *testing.T) {
 func TestSetupRoutesAnswersByScope(t *testing.T) {
 	isolateGlobal(t)
 	dir := t.TempDir()
-	code, _, errOut := setupRun(t, dir, "", false, "--yes", "--set", "round.dispatch=tmux", "--set", "round.workerKind=codex", "--set", "work.isolation=worktree", "--set", "issues.source=file")
+	code, _, errOut := setupRun(t, dir, "", false, "--yes", "--set", "round.dispatch=tmux", "--set", "round.harnesses=codex", "--set", "work.isolation=worktree", "--set", "issues.source=file")
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
 	tracked := readConfig(t, dir)
-	for _, k := range []string{`"dispatch"`, `"workerKind"`} {
+	for _, k := range []string{`"dispatch"`, `"harnesses"`} {
 		if strings.Contains(tracked, k) {
 			t.Errorf("a machine answer reached config.json (%s):\n%s", k, tracked)
 		}
@@ -724,7 +725,7 @@ func TestSetupRoutesAnswersByScope(t *testing.T) {
 		t.Errorf("config.json lacks the taste or project answer:\n%s", tracked)
 	}
 	lb, _ := os.ReadFile(filepath.Join(dir, ".rota", "config.local.json"))
-	if !strings.Contains(string(lb), `"dispatch": "tmux"`) || !strings.Contains(string(lb), `"workerKind": "codex"`) {
+	if !strings.Contains(string(lb), `"dispatch": "tmux"`) || !strings.Contains(string(lb), `"harnesses": [`) {
 		t.Errorf("config.local.json = %s", lb)
 	}
 }

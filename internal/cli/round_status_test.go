@@ -226,7 +226,7 @@ func TestRoundStatusShowsTheBundle(t *testing.T) {
 // shows the effective cap and why; with headroom it adds nothing.
 func TestRoundStatusShowsTheEffectiveCapWhenBelowTheRoster(t *testing.T) {
 	root, deps := roundFixture(t, []host.Agent{})
-	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"round":{"accounts":[{"kind":"codex","name":"c1","dir":"/h1"}],"workerKind":"codex"}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"round":{"accounts":[{"kind":"codex","name":"c1","dir":"/h1"}],"harnesses":["codex"]}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, out, _ := rotaInWith(t, deps, root, "--json", "round", "status")

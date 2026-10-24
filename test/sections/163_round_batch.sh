@@ -13,7 +13,7 @@ mkdir -p "$RBPROJ/.rota"
     && git remote add origin "$TMP_RB/origin.git" && git push -q origin main
 ) || fail "batch fixture repo setup failed"
 printf 'stub worker contract\n' > "$TMP_RB/contract.md"
-printf '{"issues":{"source":"github","retryWaitSeconds":0},"round":{"dispatch":"tmux","brief":"%s"}}\n' "$TMP_RB/contract.md" > "$RBPROJ/.rota/config.json"
+printf '{"issues":{"source":"github"},"round":{"dispatch":"tmux","brief":"%s"}}\n' "$TMP_RB/contract.md" > "$RBPROJ/.rota/config.json"
 printf 'Welcome to Claude Code\n' > "$FKB/tmux/pane"
 : > "$FKB/tmux/log"
 

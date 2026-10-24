@@ -22,12 +22,12 @@ trap 'rm -rf "$CFG_TMP"' EXIT
   rm .rota/config.local.json
 
   # --- Nested dotted path (creates intermediate dicts) ---
-  hvj config set --project models.orchestrator opus >/dev/null 2>&1 || { echo "FAIL: nested set"; exit 1; }
-  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['models']['orchestrator']=='opus', d" || { echo "FAIL: nested models.orchestrator"; exit 1; }
+  hvj config set --project orchestrator.model opus >/dev/null 2>&1 || { echo "FAIL: nested set"; exit 1; }
+  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['orchestrator']['model']=='opus', d" || { echo "FAIL: nested orchestrator.model"; exit 1; }
 
   # --- Idempotency: set same value twice, file unchanged, changed false ---
   before=$(cat .rota/config.json)
-  OUT=$(hvj config set --project models.orchestrator opus 2>/dev/null) || { echo "FAIL: re-set"; exit 1; }
+  OUT=$(hvj config set --project orchestrator.model opus 2>/dev/null) || { echo "FAIL: re-set"; exit 1; }
   after=$(cat .rota/config.json)
   [ "$before" = "$after" ] || { echo "FAIL: idempotent re-set changed file"; exit 1; }
   [ "$(echo "$OUT" | jget data.changed)" = "false" ] || { echo "FAIL: idempotent re-set should report changed false: $OUT"; exit 1; }
@@ -39,7 +39,7 @@ trap 'rm -rf "$CFG_TMP"' EXIT
 import json
 d = json.load(open('.rota/config.json'))
 assert d['ship']['review'] is True, d
-assert d['models']['orchestrator'] == 'opus', d
+assert d['orchestrator']['model'] == 'opus', d
 assert d['learn']['verify'] is True, d
 " || { echo "FAIL: preservation"; exit 1; }
 
@@ -59,12 +59,12 @@ assert d['learn']['verify'] is True, d
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['autonomy']['level'] == 'auto'" || { echo "FAIL: string-auto"; exit 1; }
 
   # --- A string that looks like JSON needs shell quoting to stay a string ---
-  hvj config set --project round.workerCommand '"true"' >/dev/null 2>&1 || { echo "FAIL: quoted string"; exit 1; }
-  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['round']['workerCommand'] == 'true', d" || { echo "FAIL: quoted string value"; exit 1; }
+  hvj config set --project round.commands.claude '"true"' >/dev/null 2>&1 || { echo "FAIL: quoted string"; exit 1; }
+  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['round']['commands']['claude'] == 'true', d" || { echo "FAIL: quoted string value"; exit 1; }
 
   # --- Empty string is a valid value ---
-  hvj config set --project round.workerCommand '' >/dev/null 2>&1 || { echo "FAIL: empty value"; exit 1; }
-  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['round']['workerCommand'] == '', d" || { echo "FAIL: empty value stored"; exit 1; }
+  hvj config set --project round.commands.claude '' >/dev/null 2>&1 || { echo "FAIL: empty value"; exit 1; }
+  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['round']['commands']['claude'] == '', d" || { echo "FAIL: empty value stored"; exit 1; }
 
   # --- Bad inputs exit 2 and leave the file alone ---
   before=$(cat .rota/config.json)
@@ -109,7 +109,7 @@ import json, sys
 # A pre-F78 config: complete for its era, missing the test.* keys rota init now writes.
 # The round.* keys it lacks are machine keys, never required (#1786).
 json.dump({
-    "models": {"orchestrator": "opus", "worker": "sonnet"},
+    "orchestrator": {"model": "opus"},
     "work": {"isolation": "branch", "mergeStrategy": "direct"},
     "refactor": {"confirmBeforeExecute": True, "verifyCommands": []},
     "learn": {"verify": True, "promoteThreshold": 3},
@@ -139,9 +139,8 @@ python3 - "$CFG_F78/.rota/config.json" <<'PYEOF'
 import json, sys
 p = sys.argv[1]
 cfg = json.load(open(p))
-cfg.setdefault("round", {}).update({"dispatch": "subagent", "slots": 3, "workerCommand": "",
-                                   "accounts": [], "operatorCommand": ""})
-cfg["ship"]["secondOpinionRunner"] = "subagent"
+cfg.setdefault("round", {}).update({"dispatch": "subagent", "slots": 3,
+                                   "accounts": []})
 cfg["ship"]["uat"] = False
 cfg["test"] = {"fast": [], "full": [], "e2e": []}
 json.dump(cfg, open(p, "w"))

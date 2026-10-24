@@ -14,7 +14,7 @@ Any approach that violates a decision is disqualified before the design phase. I
 
 ## Agent dispatch
 
-For each structural finding, spawn 3+ sub-agents in parallel on the main session's model (`models.orchestrator`). Each agent gets the same technical brief (file paths, coupling details, which seam, what the module would hide) but a different design constraint:
+For each structural finding, spawn 3+ sub-agents in parallel on the main session's model (`orchestrator.model`). Each agent gets the same technical brief (file paths, coupling details, which seam, what the module would hide) but a different design constraint:
 
 - **Agent 1**: "Minimize the interface — aim for 1-3 entry points max"
 - **Agent 2**: "Maximize flexibility — support many use cases and extension"
