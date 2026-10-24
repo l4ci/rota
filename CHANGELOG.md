@@ -1,12 +1,36 @@
 # Changelog
 
-## Unreleased
+## v0.25.0 — 2026-10-24
+
+Config shrinks from 142 keys to 124, the round status screen is fast and grouped by issue, and worker slots can share dependency directories.
 
 ## Upgrade notes
 
-- **Removed, merged and renamed config keys.** `rota migrate config --apply` (and `rota config fill`) moves the values: `models.orchestrator` to `orchestrator.model`, `round.operatorCommand` to `orchestrator.command`, `models.worker` to `round.tiers.claude.standard` (default `sonnet`; precedence is the explicit tier key, then `round.profile`, then the default), `round.workerCommand` / `round.codexCommand` / `round.opencodeCommand` to `round.commands.claude` / `.codex` / `.opencode`, and `round.workerKind` to the first entry of `round.harnesses`. `issues.label` moves to `issues.labels.inProgress` when that is unset. An old key and its new key that disagree in one file stop the migration with exit 4. See [Upgrading from the old keys](docs/usage/configuration.md#upgrading-from-the-old-keys).
+- **Removed, merged and renamed config keys.** `rota migrate config --apply` (and `rota config fill`) moves the values: `models.orchestrator` to `orchestrator.model`, `round.operatorCommand` to `orchestrator.command`, `models.worker` to `round.tiers.claude.standard` (default `sonnet`; the explicit tier key wins over `round.profile`), `round.workerCommand` / `round.codexCommand` / `round.opencodeCommand` to `round.commands.claude` / `.codex` / `.opencode`, and `round.workerKind` to the first entry of `round.harnesses`. `issues.label` moves to `issues.labels.inProgress` when that is unset. The preview lists exactly what `--apply` writes, and an old key and its new key that disagree in one file stop the migration with exit 4 before anything is written. See [Upgrading from the old keys](docs/usage/configuration.md#upgrading-from-the-old-keys).
+- **One account list.** `round.accounts` now holds every worker login as `{kind, name, dir}` objects (`kind` is `claude`, `codex` or `opencode`). `round.codexAccounts` and `round.opencodeAccounts` are gone, and `rota migrate config` folds them in. A `round.accounts` in `.rota/config.local.json` replaces the global list rather than merging with it.
 - **Dropped keys.** `ship.secondOpinionRunner` (the second-opinion gate always runs the subagent) and `gate.smokeShards` (use `ROTA_SMOKE_SHARDS`).
 - **Fixed constants.** These keys are no longer read: `orchestrator.stateMaxAgeSeconds` (120), `handoffMaxAgeSeconds` (900), `handoffMaxBlocks` (2), `keepaliveMaxRestarts` (10), `keepaliveBreaker` (3), `keepaliveBackoffSeconds` (5), `limits.resumeMarginSeconds` (60), `fallbackSleepSeconds` (1800), `maxResumes` (3), `issues.retryWaitSeconds` (60), `issues.bulkPaceMs` (1000).
+- **Invalid tracker settings refuse.** An invalid `forge.provider` or `issues.source` used to fall back to the default. `rota tracker call`, `rota issues provider`, `rota issues migrate` and the gate's bounce and provenance checks now exit 70 and name the bad value.
+
+## New
+
+- **Round status screen.** `rota round status --ui` opens at once on the slot registry and loads the host, tracker and quota in the background, so keys keep working while a read is slow. Issues are grouped into Active, PR review, Support queue and Upcoming, and link to their issue and PR.
+- **Shared dependency directories.** `round.sharedDirs` lists directories such as `node_modules` or `.venv` that rota symlinks from the main checkout into each slot worktree, so workers skip the install.
+- **Support hand-back.** A support machine returns an offered issue with `rota round support return <ID> --reason-file <path>`. Relays travel as issue comments stamped with their machine, PR events post a pointer on the issue, and the watches on both machines wake for them.
+- **Workers update docs.** `/rota-docs` is no longer manual-only: round workers run its after-work step in their own PR. Scaffold and restructure still follow `autonomy.level` and go to the maintainer in a round. A lint fails when a skill tells the agent to run a manual-only skill.
+- **Moved base and ready patches.** Workers merge a moved base branch into theirs before the final proof and on every fix push. A review finding can carry a ready patch, which the orchestrator applies as its own commit instead of relaying it, and a deferred finding's patch goes into the filed follow-up item.
+
+## Fixed
+
+- The merge gate fails an offer citation it cannot verify because the issue read failed, and refuses relay comments written by a worker.
+- `rota round review-relay` loads round settings once, and a bad key exits 3.
+- Credential expiry and the status screen use the injected clock, and the gate's issue trackers use the run's context, so a cancelled run stops them.
+- Round settings have one owner (`round.Env`), and the round tick takes `round.Candidate` directly (refactors from the architecture review).
+
+## Stats
+74 commits, 327 files changed, +7771 −2267 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.24.0...v0.25.0
 
 ## v0.24.0 — 2026-10-22
 
