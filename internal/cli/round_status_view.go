@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
@@ -48,22 +49,24 @@ type roundCand struct {
 
 // roundLoader reads a fresh snapshot. The real one starts every pass with an
 // empty forge read cache, as `round watch` does.
-type roundLoader func() (roundSnap, error)
+type roundLoader func(ctx context.Context) (roundSnap, error)
 
-// roundStatusView is round status's ViewFunc.
-func roundStatusView(c *Ctx, res Result) (tui.Model, error) {
-	rep, ok := res.Source.(*round.Report)
-	if !ok {
-		return nil, &Error{Exit: ExitInternal, Message: "round status result carries no report"}
-	}
+// roundStatusView is round status's ViewFunc (UIFirst, so the verb has not
+// run). It opens on the registry alone and starts the first full pass in the
+// background: host, login, forge and quota reads come after the first frame.
+func roundStatusView(c *Ctx, _ Result) (tui.Model, error) {
 	root, err := c.Root()
 	if err != nil {
 		return nil, err
 	}
-	load := func() (roundSnap, error) { return loadRoundSnap(c, root) }
-	snap := snapFromReport(rep)
-	fillBurn(c, root, snap.Slots)
-	return newRoundScreen(snap, load, time.Now, roundRefresh), nil
+	load := func(ctx context.Context) (roundSnap, error) { return loadRoundSnap(ctx, c, root) }
+	rep, err := round.LocalReport(root)
+	if err != nil {
+		return nil, err
+	}
+	m := newRoundScreen(snapFromReport(rep), load, time.Now, roundRefresh)
+	m.loading = true // Init starts the first pass
+	return m, nil
 }
 
 // snapFromReport is the snapshot of a status pass, without candidates. Every
@@ -79,8 +82,7 @@ func snapFromReport(rep *round.Report) roundSnap {
 
 // loadRoundSnap is one full pass: status, then the candidates. Nothing prints:
 // a warning on stderr would tear the screen, so warnings become Notes.
-func loadRoundSnap(c *Ctx, root string) (roundSnap, error) {
-	ctx := c.Context()
+func loadRoundSnap(ctx context.Context, c *Ctx, root string) (roundSnap, error) {
 	c.deps().freshReads()
 	env := c.deps().RoundEnv(ctx, root)
 	rep, err := env.Status(ctx, root)
@@ -89,7 +91,7 @@ func loadRoundSnap(c *Ctx, root string) (roundSnap, error) {
 	}
 	s := snapFromReport(rep)
 	s.CandsLoaded = true
-	fillBurn(c, root, s.Slots)
+	fillBurn(ctx, c, root, s.Slots)
 	set, err := c.deps().roundSettings(root, roundConfigRequired)
 	if err != nil {
 		s.CandsErr = err.Error()
@@ -119,7 +121,7 @@ func loadRoundSnap(c *Ctx, root string) (roundSnap, error) {
 // slots with no assign entry stay nil (n/a). The meters are fetched once, for
 // all accounts, however many slots there are; the --ui screen is the only
 // caller, so plain and --json status never fetch.
-func fillBurn(c *Ctx, root string, rows []round.Row) {
+func fillBurn(ctx context.Context, c *Ctx, root string, rows []round.Row) {
 	entries, _ := ledger.Load(root)
 	if len(entries) == 0 {
 		return
@@ -150,7 +152,7 @@ func fillBurn(c *Ctx, root string, rows []round.Row) {
 			continue
 		}
 		if !fetched {
-			meters, fetched = c.deps().WorkerAccounts().Meters(c.Context(), root), true
+			meters, fetched = c.deps().WorkerAccounts().Meters(ctx, root), true
 		}
 		if now := worker.HeadroomOf(meters, last.Account); now != nil {
 			burn := max(start-*now, 0)
@@ -212,6 +214,14 @@ func newRoundScreen(s roundSnap, load roundLoader, now func() time.Time, every t
 
 // TickEvery asks runView for a Tick that often.
 func (m *roundScreen) TickEvery() time.Duration { return m.every }
+
+// Init starts the first full pass when the screen opened on registry data alone.
+func (m *roundScreen) Init() tui.Cmd {
+	if !m.loading {
+		return tui.Cmd{}
+	}
+	return m.pass()
+}
 
 // entry is one selectable row.
 type entry struct {
@@ -329,17 +339,19 @@ func (m *roundScreen) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 	switch t := msg.(type) {
 	case tui.Tick:
 		if n.loading || n.now().Sub(n.updated) < n.every/2 {
-			return &n, tui.Cmd{} // a pass just finished: do not chase it
+			return &n, tui.Cmd{} // a pass is running or just finished: do not chase it
 		}
 		return n.startRefresh()
 	case tui.Done:
 		n.loading = false
 		snap, err := n.box.take()
-		n.updated = n.now()
 		if err != nil {
+			// The last good snapshot and its time stay: only a pass that
+			// worked makes the data fresh.
 			n.err = err.Error()
 			return &n, tui.Cmd{}
 		}
+		n.updated = n.now()
 		n.err = ""
 		n.snap = snap
 		n.refresh++
@@ -364,12 +376,23 @@ func (m *roundScreen) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 	return &n, tui.Cmd{}
 }
 
+// startRefresh begins a pass in the background unless one is running: a second
+// request while loading is dropped, so passes never overlap.
 func (m *roundScreen) startRefresh() (tui.Model, tui.Cmd) {
 	n := *m
+	if n.loading {
+		return &n, tui.Cmd{}
+	}
 	n.loading = true
-	box, load := n.box, n.load
-	return &n, tui.Cmd{Exec: func() error {
-		s, err := load()
+	return &n, n.pass()
+}
+
+// pass is the background read; keys keep working while it runs, and leaving the
+// screen cancels its context.
+func (m *roundScreen) pass() tui.Cmd {
+	box, load := m.box, m.load
+	return tui.Cmd{Async: func(ctx context.Context) error {
+		s, err := load(ctx)
 		box.put(s, err)
 		return nil
 	}}
@@ -428,8 +451,13 @@ func (m *roundScreen) Render(w, h int, st tui.Style) string {
 	es := m.entries()
 	sel := m.index(es)
 	status := "updated " + m.updated.Format("15:04:05")
-	if m.loading {
-		status = "refreshing…"
+	switch {
+	case m.loading && !m.snap.CandsLoaded:
+		status = "loading…"
+	case m.loading:
+		status += " · refreshing…"
+	case m.err != "" && !m.snap.CandsLoaded:
+		status = "not loaded"
 	}
 	head := st.Bold("Round status")
 	if m.snap.Host != "" {
