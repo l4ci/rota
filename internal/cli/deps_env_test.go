@@ -10,7 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // TestFakeGitReachesWorkerAndRoundEnv pins the one Git source: a faked
@@ -162,5 +165,50 @@ func TestDepsConfigReachesEveryConfigReader(t *testing.T) {
 	d.resolveHost(root)
 	if reads != before+1 {
 		t.Error("resolveHost did not read Deps.Config")
+	}
+}
+
+// One clock reaches every credential read: the account picker, slot health,
+// doctor and the status screen all take Deps.Now, not the wall clock.
+func TestCredentialReadsUseDepsClock(t *testing.T) {
+	d := testDeps()
+	pinNow(d, "2031-05-06T07:08:09Z")
+	want := d.Now()
+	for name, c := range map[string]worker.Credentials{
+		"credentials":   d.credentials(),
+		"round env":     d.baseRoundEnv().Login,
+		"worker accts":  d.WorkerAccounts().Login,
+		"gate-free env": d.RoundEnv(context.Background(), t.TempDir()).Login,
+	} {
+		if c.Now == nil || !c.Now().Equal(want) {
+			t.Errorf("%s: Now does not read Deps.Now", name)
+		}
+	}
+}
+
+// The gate's issue tracker and the bounce store's comment tracker are built
+// under the worker env's context, as its forge is, so an interrupt reaches the
+// connection lookup they start with.
+func TestGateIssueTrackersCarryEnvCtx(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var seen []error
+	d := testDeps()
+	d.TrackerOptions = []tracker.Option{tracker.WithConnections(func(c context.Context, _ string) (connections.Connection, string, error) {
+		seen = append(seen, c.Err())
+		return connections.Connection{}, "", c.Err()
+	})}
+	d.WorkerEnv = func() worker.Env { return worker.Env{Ctx: ctx} }
+	e := d.workerEnv()
+	s := tracker.Settings{Source: "jira", Connection: "c", JiraProject: "P"}
+	e.Issues(t.TempDir(), s)
+	e.IssueComments(t.TempDir(), s)
+	if len(seen) != 2 {
+		t.Fatalf("connection lookups = %d, want one per tracker", len(seen))
+	}
+	for i, err := range seen {
+		if err == nil {
+			t.Errorf("lookup %d ran under a live context, want the cancelled Env.Ctx", i)
+		}
 	}
 }
