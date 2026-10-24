@@ -204,7 +204,10 @@ func defaultDeps() *Deps {
 	// is no forge, so it cannot be told from the origin: that project sets
 	// issues.source itsaplan (and its connection) first, and the run fills it.
 	d.MigrateTracker = func(ctx context.Context, root string, cfg any) (migrate.Tracker, error) {
-		s := tracker.SettingsFromConfig(cfg)
+		s, err := tracker.ReadSettings(cfg)
+		if err != nil {
+			return nil, err
+		}
 		if s.Source == config.SourceItsaplan {
 			return tracker.NewIssueTracker(ctx, s, config.SourceItsaplan, root, d.trackerOptions()...)
 		}
@@ -494,10 +497,11 @@ func (d *Deps) trackerOptions() []tracker.Option {
 // is the exit-4 refusal whose data is blockedBy forge (failData lifts it into
 // the Result); a corrupt config is exit 70, as in every forge constructor.
 func actorForge(c *Ctx, cfg any, dir string) (string, error) {
-	if err := tracker.ValidateConfig(cfg); err != nil {
+	s, err := tracker.ReadSettings(cfg)
+	if err != nil {
 		return "", trackerErr(err)
 	}
-	r, err := tracker.ResolveProvider(c.Context(), tracker.ForgeActor, "", tracker.SettingsFromConfig(cfg).Provider, dir, tracker.GitExec(c.deps().Git))
+	r, err := tracker.ResolveProvider(c.Context(), tracker.ForgeActor, "", s.Provider, dir, tracker.GitExec(c.deps().Git))
 	if err != nil {
 		return "", forgeRefusal(err)
 	}
