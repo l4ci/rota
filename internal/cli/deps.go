@@ -142,6 +142,9 @@ type Deps struct {
 	Palette func(palette.Config) error
 	// RunView runs a --ui screen on the process terminal; a test swaps in a fake.
 	RunView func(c *Ctx, m tui.Model) error
+	// OpenURL hands a link to the browser, for a --ui screen's open-link keys;
+	// a test swaps in a fake and no test launches a real browser.
+	OpenURL func(url string) error
 }
 
 // defaultDeps is the real machine: git, the forge CLIs, tmux or herdr.
@@ -165,6 +168,7 @@ func defaultDeps() *Deps {
 		BareSetup:        defaultBareSetup,
 		Palette:          palette.RunTerminal,
 		RunView:          runView,
+		OpenURL:          openBrowser,
 		ReadCache:        tracker.NewReadCache(),
 		Config:           func(root string) any { return config.Load(rotatree.Config(root)) },
 		RecordMistakes:   true,

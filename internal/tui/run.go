@@ -22,8 +22,12 @@ type Tick struct{}
 
 func (Tick) msg() {}
 
-// Done carries what a Cmd's Exec or Async returned.
-type Done struct{ Err error }
+// Done carries what a Cmd's Exec or Async returned, with the Cmd's Tag so a
+// screen that starts several kinds of work can tell them apart.
+type Done struct {
+	Err error
+	Tag string
+}
 
 func (Done) msg() {}
 
@@ -57,6 +61,8 @@ type Cmd struct {
 	// the terminal. Delivery is polled every asyncPoll while a Tick is set,
 	// else it waits for the next key.
 	Async func(ctx context.Context) error
+	// Tag is echoed in the Done of this Cmd's Exec or Async.
+	Tag string
 }
 
 func (c Cmd) zero() bool { return c.Exec == nil && !c.Quit && c.Async == nil }
@@ -148,14 +154,18 @@ func Run(t Terminal, m Model) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	finished := make(chan error, 16)
+	type result struct {
+		tag string
+		err error
+	}
+	finished := make(chan result, 16)
 	pending := 0
 	start := func(cmd Cmd) {
 		if cmd.Async == nil {
 			return
 		}
 		pending++
-		go func() { finished <- cmd.Async(ctx) }()
+		go func() { finished <- result{cmd.Tag, cmd.Async(ctx)} }()
 	}
 
 	buf := make([]byte, 64)
@@ -193,8 +203,8 @@ func Run(t Terminal, m Model) error {
 			}
 			for ; pending > 0; pending-- {
 				select {
-				case err := <-finished:
-					msgs = append([]Msg{Done{Err: err}}, msgs...)
+				case r := <-finished:
+					msgs = append([]Msg{Done{Err: r.err, Tag: r.tag}}, msgs...)
 					continue
 				default:
 				}
@@ -230,7 +240,7 @@ func Run(t Terminal, m Model) error {
 			} else if err = cmd.Exec(); cmd.Quit {
 				return err
 			}
-			m, cmd = m.Update(Done{Err: err})
+			m, cmd = m.Update(Done{Err: err, Tag: cmd.Tag})
 		}
 	}
 }

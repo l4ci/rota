@@ -9,11 +9,18 @@ import (
 // Style draws text with SGR escapes, or leaves it plain when Color is off.
 // A screen styles through it and never writes an escape itself, so the plain
 // frame a test compares is the styled one with Strip applied.
-type Style struct{ Color bool }
+type Style struct {
+	Color bool
+	// Links turns Link into terminal hyperlinks (OSC 8). It is independent of
+	// Color: NO_COLOR asks for no colour, not for no links.
+	Links bool
+}
 
 // EnvStyle is the style the environment asks for: no colour under NO_COLOR
-// or a dumb or unset TERM.
-func EnvStyle() Style { return Style{Color: !Dumb() && os.Getenv("NO_COLOR") == ""} }
+// or a dumb or unset TERM, hyperlinks unless the terminal is dumb.
+func EnvStyle() Style {
+	return Style{Color: !Dumb() && os.Getenv("NO_COLOR") == "", Links: !Dumb()}
+}
 
 // Dumb reports a TERM that cannot take escapes: unset or "dumb".
 func Dumb() bool {
@@ -35,6 +42,48 @@ func (s Style) Green(t string) string  { return s.sgr("32", t) }
 func (s Style) Yellow(t string) string { return s.sgr("33", t) }
 func (s Style) Cyan(t string) string   { return s.sgr("36", t) }
 
+// SafeURL reports whether u may be written into a terminal hyperlink or handed
+// to a browser: http or https, no spaces or control characters.
+func SafeURL(u string) bool {
+	if len(u) > 2048 || !(strings.HasPrefix(u, "https://") || strings.HasPrefix(u, "http://")) {
+		return false
+	}
+	for _, r := range u {
+		if r <= 0x20 || (r >= 0x7f && r < 0xa0) {
+			return false
+		}
+	}
+	return true
+}
+
+// Link wraps text in a terminal hyperlink to url. Without Links, or for an
+// unsafe url, it is just text. Pad and Width see through the escapes; Fit
+// first, then Link.
+func (s Style) Link(url, text string) string {
+	if !s.Links || text == "" || !SafeURL(url) {
+		return text
+	}
+	return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\"
+}
+
+// LinkEnd reports where the hyperlink escape (OSC 8) starting at s[i] ends,
+// past its BEL or ESC \ terminator (len(s) when unterminated), or -1 when s[i:]
+// does not start one. Other OSC sequences are not touched here.
+func LinkEnd(s string, i int) int {
+	if s[i] != 0x1b || !strings.HasPrefix(s[i:], "\x1b]8;") {
+		return -1
+	}
+	for j := i + 2; j < len(s); j++ {
+		switch {
+		case s[j] == 0x07:
+			return j + 1
+		case s[j] == 0x1b && j+1 < len(s) && s[j+1] == '\\':
+			return j + 2
+		}
+	}
+	return len(s)
+}
+
 // CSIEnd reports where the CSI escape starting at s[i] ends: the index just
 // past its final byte (0x40-0x7e), or len(s) when it is unterminated. It
 // returns -1 when s[i:] does not start a CSI sequence. Every terminal-safe
@@ -53,15 +102,20 @@ func CSIEnd(s string, i int) int {
 	return j
 }
 
-// Strip removes every CSI escape sequence: the SGR Style writes and any other
-// (cursor moves, erases) that text from outside could carry.
+// Strip removes every CSI escape sequence and every hyperlink: the SGR and links
+// Style writes and any other CSI (cursor moves, erases) that text from outside
+// could carry.
 func Strip(s string) string {
-	if !strings.Contains(s, "\x1b[") {
+	if !strings.Contains(s, "\x1b[") && !strings.Contains(s, "\x1b]8;") {
 		return s
 	}
 	var b strings.Builder
 	for i := 0; i < len(s); {
 		if end := CSIEnd(s, i); end >= 0 {
+			i = end
+			continue
+		}
+		if end := LinkEnd(s, i); end >= 0 {
 			i = end
 			continue
 		}

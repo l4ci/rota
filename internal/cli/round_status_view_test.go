@@ -244,7 +244,7 @@ func TestRoundScreenBurnColumn(t *testing.T) {
 	if !strings.Contains(out, "burn: 62%") {
 		t.Errorf("burn missing from the selected row's detail:\n%s", out)
 	}
-	if out = tui.Strip(slotEntry(round.Row{Name: "dana", Issue: "9"}).body); !strings.Contains(out, "burn: n/a") {
+	if out = tui.Strip(slotEntry(round.Row{Name: "dana", Issue: "9"}, nil).body); !strings.Contains(out, "burn: n/a") {
 		t.Errorf("unknown burn must read n/a:\n%s", out)
 	}
 }
@@ -285,7 +285,7 @@ func TestFillBurnFromLedger(t *testing.T) {
 
 func TestStatusExternalRowShowsDerivedState(t *testing.T) {
 	r := round.Row{Name: "ext-1", Issue: "12", Branch: "codex/12-x", HostState: round.ExternalHost, State: "done"}
-	if status := slotEntry(r).status; !strings.Contains(status, "external/done") {
+	if status := slotEntry(r, nil).status; !strings.Contains(status, "external/done") {
 		t.Errorf("view status = %q", status)
 	}
 	if got := jsonx.Str(rowList([]round.Row{r})[0].(*jsonx.Object), "state"); got != "done" {
