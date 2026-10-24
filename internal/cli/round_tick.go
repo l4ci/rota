@@ -120,16 +120,12 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		}
 		return targetBase(root, target, renv.Base)
 	}
-	if set.Role == roundcfg.RoleSupport {
-		// A support machine never gates; main adopts and merges its PRs.
-		e.NoMerge = true
-	} else {
-		e.Gate = func(_ context.Context, target, base string) roundtick.GateOutcome {
-			return gateTarget(c, root, target, base)
-		}
-		e.Train = func(_ context.Context, targets []string, base string) roundtick.TrainOutcome {
-			return trainTargets(c, root, targets, base)
-		}
+	e.Role = set.Role
+	e.Gate = func(_ context.Context, target, base string) roundtick.GateOutcome {
+		return gateTarget(c, root, target, base)
+	}
+	e.Train = func(_ context.Context, targets []string, base string) roundtick.TrainOutcome {
+		return trainTargets(c, root, targets, base)
 	}
 	be, err := openBacklog(c, root, false, "")
 	if err != nil {
@@ -141,16 +137,8 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		return roundtick.Result{}, &Error{Exit: ExitInternal, Message: "the backlog backend has no workflow"}
 	}
 	e.OpenItems = func(context.Context) int { return round.OpenItems(root, board) }
-	e.Candidates = func(ctx context.Context) ([]roundtick.Candidate, error) {
-		cs, err := renv.RoundCandidates(ctx, root, be, set, "")
-		if err != nil {
-			return nil, err
-		}
-		var out []roundtick.Candidate
-		for _, cd := range cs {
-			out = append(out, roundtick.Candidate{ID: cd.ID, Ready: cd.Ready()})
-		}
-		return out, nil
+	e.Candidates = func(ctx context.Context) ([]round.Candidate, error) {
+		return renv.RoundCandidates(ctx, root, be, set, "")
 	}
 	e.Review = reviewAdapter{c: c, root: root, set: set, renv: renv, board: board}
 	// Assign takes no tier, no kind and never accepts overlap: the round's
@@ -227,7 +215,7 @@ func gateTarget(c *Ctx, root, target, base string) roundtick.GateOutcome {
 		}
 		return roundtick.GateOutcome{Verdict: run.Result.Verdict, Detail: strutil.FirstLine(run.Result.Err)}
 	}
-	return roundtick.GateOutcome{Verdict: failedVerdict(run.Result.Verdict, run.Err, run.Refused), Detail: failureDetail(run.Err, run.Result.Err)}
+	return roundtick.GateOutcome{Verdict: roundtick.FailedVerdict(run.Result.Verdict, run.Err, run.Refused), Detail: roundtick.FailureDetail(run.Err, run.Result.Err)}
 }
 
 // trainTargets lands several targets for the tick through the same run
@@ -243,7 +231,7 @@ func trainTargets(c *Ctx, root string, targets []string, base string) roundtick.
 			return roundtick.TrainOutcome{Done: true}
 		}
 	}
-	out := roundtick.TrainOutcome{Verdict: failedVerdict(r.Verdict, run.Err, run.Refused), Detail: failureDetail(run.Err, r.Err)}
+	out := roundtick.TrainOutcome{Verdict: roundtick.FailedVerdict(r.Verdict, run.Err, run.Refused), Detail: roundtick.FailureDetail(run.Err, r.Err)}
 	if run.Err != nil && !run.Refused {
 		return out // died on an error: nothing of the result is reported
 	}
@@ -254,23 +242,6 @@ func trainTargets(c *Ctx, root string, targets []string, base string) roundtick.
 		}
 	}
 	return out
-}
-
-// failedVerdict is the verdict a failed gate or train reports to the tick: the
-// run's own, unless it died with an error that is no refusal.
-func failedVerdict(verdict string, err error, refused bool) string {
-	if err != nil && !refused {
-		return ""
-	}
-	return verdict
-}
-
-// failureDetail is the first line of why a gate or train failed.
-func failureDetail(err error, msg string) string {
-	if err != nil {
-		return strutil.FirstLine(err.Error())
-	}
-	return strutil.FirstLine(msg)
 }
 
 func tickData(r roundtick.Result) *jsonx.Object {
