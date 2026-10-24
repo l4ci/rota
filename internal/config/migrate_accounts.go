@@ -116,6 +116,19 @@ func migrateAccountsDoc(doc *jsonx.Object, below []Account) (*jsonx.Object, []st
 	return doc, from, nil
 }
 
+// withAccounts sets doc's round.accounts to list.
+func withAccounts(doc *jsonx.Object, list []Account) *jsonx.Object {
+	var out []any
+	for _, a := range list {
+		e := jsonx.NewObject()
+		e.Set("kind", a.Kind)
+		e.Set("name", a.Name)
+		e.Set("dir", a.Dir)
+		out = append(out, e)
+	}
+	return fillKey(doc, "", []string{"round", "accounts"}, out)
+}
+
 // legacyAccountShape is whether a round.accounts list holds an entry the new
 // shape would change: no kind, or the old configDir.
 func legacyAccountShape(list []any) bool {
@@ -234,9 +247,16 @@ func migrateAccountsPlan(files []*accountFile, m *AccountsMigration, apply bool)
 	}
 	var conflicts []AccountConflict
 	var below []Account
+	// hidden is set when the tracked list, now holding only its own kinds,
+	// shadows a kind a lower layer supplies: config.local.json then carries the
+	// whole effective list, or that login would stop resolving.
+	hidden := false
 	for _, f := range files {
-		if f.doc == nil {
+		if f.doc == nil && !(hidden && f.name == "config.local.json") {
 			continue
+		}
+		if f.doc == nil {
+			f.doc = jsonx.NewObject()
 		}
 		if f.name != globalAccountsFile {
 			// The renamed view, as the scope step plans on.
@@ -252,6 +272,17 @@ func migrateAccountsPlan(files []*accountFile, m *AccountsMigration, apply bool)
 		for _, x := range c {
 			x.File = f.name
 			conflicts = append(conflicts, x)
+		}
+		if len(from) == 0 && hidden && f.name == "config.local.json" {
+			if _, own := lookupPresent(f.doc, []string{"round", "accounts"}); !own {
+				out, from = withAccounts(f.doc, overlayAccounts(below, nil)), []string{"round.accounts"}
+			}
+		}
+		if f.name == "config.json" && len(from) > 0 {
+			for _, b := range below {
+				hidden = hidden || !hasKind(Accounts(out), b.Kind)
+			}
+			hidden = hidden && len(Accounts(out)) > 0
 		}
 		if len(from) > 0 {
 			f.doc, f.changed = out, true
