@@ -250,12 +250,15 @@ func (e Env) reviewFresh(ctx context.Context, root string, o ReviewOpts, reg wor
 		return false, nil
 	}
 	out.Bounces = bounces
-	res, terr := e.Transfer(ctx, root, o.Board, TransferOpts{
-		Issue: issue, To: to, Decisions: freshBrief(out.PR, o.OpenFindings), Settings: o.Settings,
+	// ReviewOpts still carries the settings and pid: hand them to the transfer through the env.
+	te := e
+	te.Round, te.HolderPID = o.Settings, o.HolderPID
+	res, terr := te.Transfer(ctx, root, o.Board, TransferOpts{
+		Issue: issue, To: to, Decisions: freshBrief(out.PR, o.OpenFindings),
 		Note:       fmt.Sprintf("bounce %d of round.freshAt %d: review input on %s moves to a fresh context", bounces, o.FreshAt, prLabel(out.PR)),
 		Tier:       s.Tier(),
 		TierReason: strutil.FirstNonEmpty(s.TierReason(), "kept from "+o.Slot),
-		CapReason:  ledger.CapFresh, HolderPID: o.HolderPID,
+		CapReason:  ledger.CapFresh,
 	})
 	if terr != nil && !res.Changed {
 		var blk *BlockedError

@@ -146,7 +146,7 @@ func TestAssignUnderSoloReturnsTheBriefAndDispatchesNothing(t *testing.T) {
 
 func TestAssignUnderSoloRefusesACodexWorker(t *testing.T) {
 	f := soloAssign(t)
-	f.set.Models = map[string]map[string]string{harness.Codex: {"light": "c-l", "standard": "c-s", "heavy": "c-h"}}
+	f.env.Round.Models = map[string]map[string]string{harness.Codex: {"light": "c-l", "standard": "c-s", "heavy": "c-h"}}
 	_, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = harness.Codex })
 	var we *exitcode.Error
 	if !errors.As(err, &we) || we.Exit != exitcode.ExitUsage || !strings.Contains(we.Message, "Claude subagents") {

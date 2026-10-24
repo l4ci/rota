@@ -76,13 +76,13 @@ func inReview(reg worker.Registry, id string, bo *bestOfRun) *worker.QueuedPR {
 // nothing; the registry record goes in before the first attempt, so a crash in
 // between leaves something `round pick` and the gate can read.
 func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOpts, it *backlog.Item) (res Assigned, err error) {
-	set := o.Settings
+	set := e.Round
 	id := it.ID
 	res.ID, res.Type = id, it.Type
 	if _, ok := be.(backlog.SharedClaimer); !ok {
 		return res, usage("%s is best-of:2, but this backlog cannot hold two claims", id)
 	}
-	if err := o.checkAgent(); err != nil {
+	if err := o.checkAgent(e.Round.Roster); err != nil {
 		return res, err
 	}
 	if err := e.requireLease(ctx, root, o); err != nil {

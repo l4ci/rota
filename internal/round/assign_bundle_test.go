@@ -77,7 +77,7 @@ func TestAssignBundleRefusals(t *testing.T) {
 		by     string
 		inText string
 	}{
-		{"oversize", nil, "12", func(o *AssignOpts) { o.Bundle = []string{"15", "16"}; o.Settings.BundleMax = 1 }, BlockBundle, "round.bundleMax"},
+		{"oversize", func(f *assignFixture) { f.env.Round.BundleMax = 1 }, "12", bundleOf("15", "16"), BlockBundle, "round.bundleMax"},
 		{"member held by another slot", func(f *assignFixture) {
 			if _, err := f.assign("15", "dana", nil); err != nil {
 				t.Fatal(err)
@@ -93,12 +93,13 @@ func TestAssignBundleRefusals(t *testing.T) {
 		{"best-of member", func(f *assignFixture) { f.labelled("15", BestOfLabel) }, "12", bundleOf("15"), BlockBundle, "best-of:2"},
 		{"best-of lead", func(f *assignFixture) { f.labelled("12", BestOfLabel) }, "12", bundleOf("15"), BlockBundle, "best-of:2"},
 		{"member overlaps another slot", func(f *assignFixture) {
+			f.env.Round.BlockScopeOverlap = true
 			f.be.add("30", "Holder", "M01", false, "## Acceptance\n- [ ] x\n\n## Touches\n- POST /items\n")
 			f.be.add("31", "Clasher", "M01", false, "## Acceptance\n- [ ] x\n\n## Touches\n- post /items\n")
 			if _, err := f.assign("30", "dana", nil); err != nil {
 				t.Fatal(err)
 			}
-		}, "12", func(o *AssignOpts) { o.Bundle = []string{"15", "31"}; o.Settings.BlockScopeOverlap = true }, BlockOverlap, "31"},
+		}, "12", bundleOf("15", "31"), BlockOverlap, "31"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -123,7 +124,8 @@ func TestAssignBundleRefusals(t *testing.T) {
 
 func TestAssignBundleMaxZeroIsNoLimit(t *testing.T) {
 	f := bundleFixture(t)
-	res, err := f.assign("12", "ben", func(o *AssignOpts) { o.Bundle = []string{"15", "16", "17", "18"}; o.Settings.BundleMax = 0 })
+	f.env.Round.BundleMax = 0
+	res, err := f.assign("12", "ben", bundleOf("15", "16", "17", "18"))
 	if err != nil || len(res.Bundle) != 4 {
 		t.Fatalf("%v %+v", err, res)
 	}
@@ -191,13 +193,14 @@ func TestAssignBundleResume(t *testing.T) {
 	// The lead and a member declare the same scope: the bundle never overlaps itself.
 	f.be.add("40", "Lead", "M01", false, "## Acceptance\n- [ ] x\n\n## Touches\n- POST /items\n")
 	f.be.add("41", "Member", "M01", false, "## Acceptance\n- [ ] x\n\n## Touches\n- POST /items\n")
-	block := func(o *AssignOpts) { o.Settings.BlockScopeOverlap = true; o.Bundle = []string{"41"} }
+	f.env.Round.BlockScopeOverlap = true
+	block := bundleOf("41")
 	if _, err := f.assign("40", "ben", block); err != nil {
 		t.Fatalf("a bundle's own scopes do not clash: %v", err)
 	}
 	notes := len(f.be.notes)
 	// Again with the same bundle, and with none: the recorded bundle stays.
-	for _, mod := range []func(*AssignOpts){block, func(o *AssignOpts) { o.Settings.BlockScopeOverlap = true }} {
+	for _, mod := range []func(*AssignOpts){block, nil} {
 		res, err := f.assign("40", "ben", mod)
 		if err != nil || !reflect.DeepEqual(res.Bundle, []string{"41"}) {
 			t.Fatalf("resume: %v %+v", err, res)
@@ -232,7 +235,8 @@ func TestInFlightItemsIncludeBundleMembers(t *testing.T) {
 	}
 	// A member carries its own scope, so another assign clashing on it is refused.
 	f.be.add("32", "Clasher", "M01", false, "## Acceptance\n- [ ] x\n\n## Touches\n- get /thing-15\n")
-	_, err := f.assign("32", "dana", func(o *AssignOpts) { o.Settings.BlockScopeOverlap = true })
+	f.env.Round.BlockScopeOverlap = true
+	_, err := f.assign("32", "dana", nil)
 	if by := blockedBy(t, err); by != BlockOverlap {
 		t.Errorf("a member's scope blocks another slot: %v", err)
 	}
