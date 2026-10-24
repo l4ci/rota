@@ -154,7 +154,7 @@ Already-completed IDs are a no-op; an unknown ID exits 3. When it exits 4 with `
 
 ## Step 8.5 — Learn (Nudge or Auto-Invoke)
 
-Round workers skip Steps 8.5 and 8.6 (`round-worker-and-issue-mode.md`). Otherwise run `references/post-cycle-trigger-gate.md` with:
+Round workers skip Step 8.5 (`round-worker-and-issue-mode.md`). Otherwise run `references/post-cycle-trigger-gate.md` with:
 
 - **Nudge (`"off"`):** append to the Step 9 report *"Capture learnings before context fades? Run `/rota-learn` — this cycle has the fresh session context."*
 - **Target (`"roundtrip"` or `"auto"`):** dispatch `rota-learn` by reading and following its instructions immediately, no prompt.
@@ -162,7 +162,7 @@ Round workers skip Steps 8.5 and 8.6 (`round-worker-and-issue-mode.md`). Otherwi
 
 ## Step 8.6 — Docs After-Work (inline)
 
-Skipped for round workers (see Step 8.5). Run `references/post-cycle-trigger-gate.md`, inline variant, with config flag `docs.afterWork` (default `false`; enable with `rota config set docs.afterWork true` or by running `/rota-docs` once). On trigger, read [`../rota-docs/SKILL.md`](../rota-docs/SKILL.md) and run its after-work flow (Steps D-A1 to D-A6) in this session, with the resolved IDs and touched files as context. No `autonomy.level` branch: Step D-A5's approval is the checkpoint.
+Round workers run it too (`round-worker-and-issue-mode.md`), before the push, so the docs edit lands in the PR. Run `references/post-cycle-trigger-gate.md`, inline variant, with config flag `docs.afterWork` (default `false`; enable with `rota config set docs.afterWork true` or by running `/rota-docs` once). On trigger, read [`../rota-docs/SKILL.md`](../rota-docs/SKILL.md) and run its after-work flow (Steps D-A1 to D-A6) in this session, with the resolved IDs and touched files as context. No `autonomy.level` branch: Step D-A5's approval is the checkpoint.
 
 ## Step 9 — Report to User
 

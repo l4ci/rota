@@ -161,8 +161,6 @@ rota reap            # preview; --apply removes what holds no work
 
 `/rota-learn` writes the reusable lessons of the round into `.rota/KNOWLEDGE.md`: a gate trap, a worker mistake that bounced twice, a decision you made once and should not make again. Run it once for the whole round, since workers skip it per PR. Your decision: which of the proposed entries are durable. Drop the ones that only describe this round.
 
-Last, run `/rota-docs` once to bring the public docs in line with what merged. A PR that changes a command or a skill should carry its own doc edit; this pass is for what no single PR owned, such as an index or a cross-reference.
-
 Commit the knowledge entries straight to the base branch: bookkeeping needs no PR.
 
 ### Skip this stage when

@@ -45,7 +45,7 @@ rota spike finish <name>
 
 It sets `status: done` and `finished: <date>` (a repeat call is a no-op). The branch stays as-is, never merged.
 
-**Promotion nudge.** For a `viable`, `not viable` or `depends-on-X` decision, print one line and move on: *"Run `/rota-decide --from-spike <name>` to promote this to a hard boundary."* Say nothing for `inconclusive` or empty. Don't ask, don't dispatch.
+**Promotion nudge.** For a `viable`, `not viable` or `depends-on-X` decision, print one line and move on: *"Type `/rota-decide --from-spike <name>` to promote this to a hard boundary."* Say nothing for `inconclusive` or empty. Don't ask, don't dispatch.
 
 ## Step 7 (Finish mode) — Optional Follow-Up
 

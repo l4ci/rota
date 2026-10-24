@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
 	"slices"
@@ -29,13 +30,6 @@ const DefaultCap = 3
 
 // Slot is the registry's view of one roster slot.
 type Slot struct{ Name, State, Issue, PR string }
-
-// Candidate is an item the round's scope allows. Ready is every readiness
-// check, the file-overlap one included.
-type Candidate struct {
-	ID    string
-	Ready bool
-}
 
 // GateOutcome is what the gate adapter reports for one target. An empty
 // Verdict on a failure reads as "gate-error".
@@ -104,9 +98,9 @@ type Env struct {
 	// MergeApproval is ship.mergeApproval: any mode but none (empty
 	// included) asks for a person, and the autopilot then merges nothing.
 	MergeApproval string
-	// NoMerge is a support machine (round.role support): the tick merges
-	// nothing and calls neither Gate nor Train. The queued PRs are main's.
-	NoMerge bool
+	// Role is round.role. A support machine merges nothing and calls neither
+	// Gate nor Train: the queued PRs are main's.
+	Role string
 	// Slots lists the roster from the registry; Queued the PR refs waiting in
 	// its review queue.
 	Slots  func() []Slot
@@ -124,7 +118,7 @@ type Env struct {
 	Gate  func(ctx context.Context, target, base string) GateOutcome
 	Train func(ctx context.Context, targets []string, base string) TrainOutcome
 	// Candidates are the assignable items in backlog order.
-	Candidates func(ctx context.Context) ([]Candidate, error)
+	Candidates func(ctx context.Context) ([]round.Candidate, error)
 	// Assign hands an item to the first idle slot and returns the slot names
 	// (two for a best-of:2 issue). A *round.BlockedError (not ready after all,
 	// no slot) is a refusal, not a failure; "no round" is a failure.
@@ -289,7 +283,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 	if len(targets) == 0 {
 		return nil
 	}
-	if e.NoMerge {
+	if e.Role == roundcfg.RoleSupport {
 		return nil
 	}
 	if e.humanMerge() {
@@ -444,30 +438,25 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 	}
 	// The minted reviews go first: they are the reason the tick minted them.
 	// One that is refused stays a candidate for a later tick.
-	queue := make([]Candidate, 0, len(minted))
-	for _, id := range minted {
-		queue = append(queue, Candidate{ID: id, Ready: true})
-	}
+	queue := make([]string, 0, len(minted))
+	queue = append(queue, minted...)
 	cands, err := e.Candidates(ctx)
 	if err != nil {
 		return err
 	}
 	for _, c := range cands {
-		if !slices.Contains(minted, c.ID) {
-			queue = append(queue, c)
+		if c.Ready() && !slices.Contains(minted, c.ID) {
+			queue = append(queue, c.ID)
 		}
 	}
-	for _, c := range queue {
+	for _, id := range queue {
 		if n == 0 {
 			break
 		}
-		if !c.Ready {
-			continue
-		}
-		agents, err := e.Assign(ctx, c.ID)
+		agents, err := e.Assign(ctx, id)
 		switch {
 		case err == nil:
-			e.audit(r, Action{"assign", c.ID, "to " + strings.Join(agents, " and ")})
+			e.audit(r, Action{"assign", id, "to " + strings.Join(agents, " and ")})
 			n--
 		case isRefusal(err):
 			// Not ready after all, or every slot filled meanwhile: try the next.
@@ -483,7 +472,7 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 				return nil
 			}
 		default:
-			return fmt.Errorf("assign %s: %w", c.ID, err)
+			return fmt.Errorf("assign %s: %w", id, err)
 		}
 	}
 	return nil
@@ -495,4 +484,21 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 func isRefusal(err error) bool {
 	var blk *round.BlockedError
 	return errors.As(err, &blk) && blk.By != round.BlockNoRound
+}
+
+// FailedVerdict is the verdict a failed gate or train reports to the tick: the
+// run's own, unless it died with an error that is no refusal.
+func FailedVerdict(verdict string, err error, refused bool) string {
+	if err != nil && !refused {
+		return ""
+	}
+	return verdict
+}
+
+// FailureDetail is the first line of why a gate or train failed.
+func FailureDetail(err error, msg string) string {
+	if err != nil {
+		return strutil.FirstLine(err.Error())
+	}
+	return strutil.FirstLine(msg)
 }
