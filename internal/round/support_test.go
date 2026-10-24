@@ -349,3 +349,31 @@ func TestReturnSupport(t *testing.T) {
 		t.Errorf("second return: %+v %v %q", again, err, f.be.comments["12"])
 	}
 }
+
+// #1827 AC-4: an offer leaves a support-offer comment on each issue it newly
+// labels, which the support side's gate reads as the assignment approval.
+func TestOfferSupportPostsComment(t *testing.T) {
+	f := newAssignFixture(t)
+	f.env.Forge = f.be.asForge()
+	f.env.Round = f.set
+	f.env.Round.Support = "mac"
+	if _, err := f.env.OfferSupport(bg, f.root, f.be, []string{"12", "13"}, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"12", "13"} {
+		c := f.be.comments[id]
+		if len(c) != 1 || !strings.Contains(c[0], "<!-- rota:support-offer -->") {
+			t.Errorf("%s comments = %v", id, c)
+		}
+	}
+	// Offering again changes nothing and posts nothing; a withdraw posts none.
+	if _, err := f.env.OfferSupport(bg, f.root, f.be, []string{"12"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.env.OfferSupport(bg, f.root, f.be, []string{"13"}, true); err != nil {
+		t.Fatal(err)
+	}
+	if n, m := len(f.be.comments["12"]), len(f.be.comments["13"]); n != 1 || m != 1 {
+		t.Errorf("comments after re-offer and withdraw: %d %d", n, m)
+	}
+}
