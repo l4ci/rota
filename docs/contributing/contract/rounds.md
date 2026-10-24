@@ -427,6 +427,14 @@ exit: 2 when `enable` gets no name, more than one, or a name that is not lowerca
 old: none (new in #1774; before it the operator set `round.support` by hand)
 note: the main machine's one step to turn the support orchestrator on (#1774). `enable` writes `round.support: "<name>"` to the tracked `.rota/config.json`, never to `config.local.json`, so the name reaches the support machine with the commit; the text names the file and says to commit it. `disable` removes the key from the tracked config; `name` is the value it removed, `""` when none was set. Writing the value already there, or removing an absent key, is `changed: false` with a `noop:` line. The second step runs on the support machine: `rota setup` with `round.role` support (see `rota setup`).
 
+### rota round support return
+rota round support return <ID> --reason-file <path|->
+repo: none
+data: {"id": string, "comment": string, "changed": bool}
+exit: 2 when the ID or `--reason-file` is missing or the reason is empty; 3 when the item is unknown or closed; 4 with `blockedBy` `role` on main (the verb runs on the support machine, `round.role` support), `config` when `round.support` is empty or there is no issue tracker with labels (also `backend` in file mode), `claimed` while a slot of this round still holds the issue
+old: none (new in #1827; before it a support machine had no way to give an offered issue back)
+note: the support machine's hand-back (#1827 AC-1) when an offered issue cannot be worked (not ready, wrong premise, collides with main's work, held by the maintainer). It posts the reason as a `feedback` comment on the issue whose body carries `<!-- rota:support-return -->` on the line after the tracker's own kind marker, then removes the support label, so main's `round candidates --scope open` lists the issue again. Prints `returned <ID>`. An issue that no longer carries the label is already main's: `changed: false`, a `noop:` line and nothing posted. Unlike `support offer`, `return` is not in the support fence: main is refused inside the verb (`blockedBy` `role`), since main takes an offer back with `support offer --withdraw`.
+
 ### C11: launch the orchestrator
 
 #19 gives the orchestrator what `round assign` gives a worker: one command that opens its session. Bare `rota` routes to it. The skill still chooses the slate; the launcher never runs `round start`.

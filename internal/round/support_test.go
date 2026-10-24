@@ -297,3 +297,55 @@ func TestOfferSupport(t *testing.T) {
 		t.Errorf("offer with round.support unset: %v", err)
 	}
 }
+
+// #1827 AC-1: the support machine hands an issue back with a reason comment
+// and loses the label; main and a held issue are refused.
+func TestReturnSupport(t *testing.T) {
+	f := newAssignFixture(t)
+	f.env.Forge = f.be.asForge()
+	f.env.Round = f.set
+	f.env.Round.Support = "mac"
+	f.env.Round.Role = roundcfg.RoleSupport
+	label := config.Label(nil, "support")
+	f.be.items["12"].Labels = []string{label}
+	f.be.items["13"].Labels = []string{label}
+
+	f.env.Round.Role = roundcfg.RoleMain
+	if _, err := f.env.ReturnSupport(bg, f.root, f.be, "12", "why"); blockedBy(t, err) != BlockRole {
+		t.Errorf("return on main: %v", err)
+	}
+	f.env.Round.Role = roundcfg.RoleSupport
+
+	if err := worker.RegisterExternal(f.root, "ext-1", "mac-ben/12-x", "", "main", "13", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.env.ReturnSupport(bg, f.root, f.be, "13", "why"); blockedBy(t, err) != BlockClaimed {
+		t.Errorf("return of a held issue: %v", err)
+	}
+	if len(f.be.removed) != 0 || len(f.be.comments["13"]) != 0 {
+		t.Errorf("a refused return writes nothing: %v %v", f.be.removed, f.be.comments)
+	}
+	f.env.Round.Support = ""
+	if _, err := f.env.ReturnSupport(bg, f.root, f.be, "12", "why"); blockedBy(t, err) != BlockConfig {
+		t.Errorf("return with round.support unset: %v", err)
+	}
+	f.env.Round.Support = "mac"
+
+	got, err := f.env.ReturnSupport(bg, f.root, f.be, "12", "premise is wrong")
+	if err != nil || got.ID != "12" || !got.Changed || got.Comment == "" {
+		t.Fatalf("return: %+v %v", got, err)
+	}
+	cs := f.be.comments["12"]
+	if len(cs) != 1 || !strings.HasPrefix(cs[0], SupportReturnMarker+"\n") || !strings.Contains(cs[0], "premise is wrong") || f.be.kinds["12"][0] != "feedback" {
+		t.Errorf("comment %q kinds %v", cs, f.be.kinds["12"])
+	}
+	if slices.Contains(f.be.items["12"].Labels, label) || !reflect.DeepEqual(f.be.removed, []int{12}) {
+		t.Errorf("label not removed: %v %v", f.be.items["12"].Labels, f.be.removed)
+	}
+
+	// An issue main already has back is a no-op.
+	again, err := f.env.ReturnSupport(bg, f.root, f.be, "12", "again")
+	if err != nil || again.Changed || len(f.be.comments["12"]) != 1 {
+		t.Errorf("second return: %+v %v %q", again, err, f.be.comments["12"])
+	}
+}
