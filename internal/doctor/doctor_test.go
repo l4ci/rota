@@ -946,7 +946,7 @@ func TestAccountsFailsOnARelativeConfigDir(t *testing.T) {
 	f := &fake{}
 	in := Input{Home: t.TempDir(), Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: ".claude-a"}}, Exec: f.exec, Look: f.look}
 	c := statusOf(Run(context.Background(), in), "accounts")
-	if c.Status != Fail || !strings.Contains(c.Detail, "configDir must be absolute or start with ~") || !strings.Contains(c.Detail, "a:") {
+	if c.Status != Fail || !strings.Contains(c.Detail, "dir must be absolute or start with ~") || !strings.Contains(c.Detail, "a:") {
 		t.Fatalf("%+v", c)
 	}
 }
