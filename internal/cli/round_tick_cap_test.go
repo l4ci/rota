@@ -43,8 +43,8 @@ func TestTickWithEveryAccountCoolingFillsNothingAndSaysWhy(t *testing.T) {
 		Cap:       1,
 		Reconcile: func(context.Context) ([]string, []string, error) { return nil, nil, nil },
 		Slots:     func() []roundtick.Slot { return []roundtick.Slot{{Name: "ben", State: "idle"}} },
-		Candidates: func(context.Context) ([]roundtick.Candidate, error) {
-			return []roundtick.Candidate{{ID: "#1", Ready: true}}, nil
+		Candidates: func(context.Context) ([]round.Candidate, error) {
+			return []round.Candidate{{ID: "#1"}}, nil
 		},
 		Assign: func(context.Context, string) ([]string, error) { assigned++; return []string{"ben"}, nil },
 		Capped: quotaCapped(renv, root, set),

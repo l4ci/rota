@@ -8,15 +8,25 @@ import (
 
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
+
+// cand is a candidate that is ready, or not: an open PR on the item blocks it.
+func cand(id string, ready bool) round.Candidate {
+	c := round.Candidate{ID: id}
+	if !ready {
+		c.OpenPR = 1
+	}
+	return c
+}
 
 type fake struct {
 	slots    []Slot
 	queued   []string
 	repaired []string
 	drift    []string
-	cands    []Candidate
+	cands    []round.Candidate
 	gated    []string
 	trained  [][]string
 	assigned []string
@@ -55,7 +65,7 @@ func (f *fake) env() Env {
 			}
 			return TrainOutcome{Done: true}
 		},
-		Candidates: func(context.Context) ([]Candidate, error) { return f.cands, nil },
+		Candidates: func(context.Context) ([]round.Candidate, error) { return f.cands, nil },
 		Assign: func(_ context.Context, id string) ([]string, error) {
 			if f.assignFn != nil {
 				return f.assignFn(id)
@@ -70,7 +80,7 @@ func (f *fake) env() Env {
 func TestAssignsReadyToIdleSlots(t *testing.T) {
 	f := &fake{
 		slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "idle"}, {Name: "nia", State: "working", Issue: "#3"}},
-		cands: []Candidate{{"#1", false}, {"#2", true}, {"#4", true}, {"#5", true}},
+		cands: []round.Candidate{cand("#1", false), cand("#2", true), cand("#4", true), cand("#5", true)},
 	}
 	r, err := Run(context.Background(), f.env())
 	if err != nil {
@@ -89,7 +99,7 @@ func TestTickNeverAssignsDrainingSlot(t *testing.T) {
 	// kit (parked outside the round) are idle but take nothing new.
 	f := &fake{
 		slots: []Slot{{Name: "ben", State: "working", Issue: "#3"}, {Name: "dana", State: "idle"}, {Name: "kit", State: "idle"}},
-		cands: []Candidate{{"#1", true}, {"#2", true}},
+		cands: []round.Candidate{cand("#1", true), cand("#2", true)},
 	}
 	e := f.env()
 	e.Active = func() []string { return []string{"ben"} }
@@ -102,7 +112,7 @@ func TestTickNeverAssignsDrainingSlot(t *testing.T) {
 	// An idle active slot is the whole budget, whatever idles outside.
 	f = &fake{
 		slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "idle"}, {Name: "kit", State: "idle"}},
-		cands: []Candidate{{"#1", true}, {"#2", true}},
+		cands: []round.Candidate{cand("#1", true), cand("#2", true)},
 	}
 	e = f.env()
 	e.Active = func() []string { return []string{"ben"} }
@@ -117,7 +127,7 @@ func TestTickNeverAssignsDrainingSlot(t *testing.T) {
 func TestCapLimitsAssignsAndMerges(t *testing.T) {
 	f := &fake{
 		slots: []Slot{{Name: "a", State: "idle"}, {Name: "b", State: "idle"}, {Name: "c", State: "done", PR: "#1"}, {Name: "d", State: "done", PR: "#2"}},
-		cands: []Candidate{{"#1", true}, {"#2", true}, {"#3", true}},
+		cands: []round.Candidate{cand("#1", true), cand("#2", true), cand("#3", true)},
 	}
 	e := f.env()
 	e.Cap = 1
@@ -248,7 +258,7 @@ func TestNewReportsEachItemOnce(t *testing.T) {
 }
 
 func TestAssignRefusalSkipsToNextCandidate(t *testing.T) {
-	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}, {"#2", true}}}
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#1", true), cand("#2", true)}}
 	f.assignFn = func(id string) ([]string, error) {
 		if id == "#1" {
 			return nil, &round.BlockedError{By: round.BlockNotReady, Msg: "overlap"}
@@ -263,7 +273,7 @@ func TestAssignRefusalSkipsToNextCandidate(t *testing.T) {
 }
 
 func TestAssignFailureStopsTheTick(t *testing.T) {
-	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}}}
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#1", true)}}
 	f.assignFn = func(string) ([]string, error) { return nil, errors.New("forge down") }
 	if _, err := Run(context.Background(), f.env()); err == nil {
 		t.Fatal("an unexpected assign failure must surface")
@@ -286,7 +296,7 @@ func TestReviewMintsAreAuditedAndAssignedFirst(t *testing.T) {
 		t.Run(trigger, func(t *testing.T) {
 			f := &fake{
 				slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "idle"}, {Name: "nia", State: "idle"}},
-				cands: []Candidate{{"#1", true}, {"#9", true}},
+				cands: []round.Candidate{cand("#1", true), cand("#9", true)},
 			}
 			if trigger == "queue-empty" {
 				f.cands = nil
@@ -310,7 +320,7 @@ func TestReviewMintsAreAuditedAndAssignedFirst(t *testing.T) {
 }
 
 func TestNoReviewHookOrNothingDueMintsNothing(t *testing.T) {
-	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}}}
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#1", true)}}
 	e := f.env()
 	if _, err := Run(context.Background(), e); err != nil || !reflect.DeepEqual(f.audit, []string{"assign #1"}) {
 		t.Fatalf("no hook: %v %v", f.audit, err)
@@ -323,7 +333,7 @@ func TestNoReviewHookOrNothingDueMintsNothing(t *testing.T) {
 }
 
 func TestReviewFailureIsEscalatedAndTickGoesOn(t *testing.T) {
-	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}}}
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#1", true)}}
 	e := f.env()
 	e.Review = fakeReview{due: true, mint: func() ([]string, error) { return nil, errors.New("tracker down\nmore") }}
 	r, err := Run(context.Background(), e)
@@ -419,7 +429,7 @@ func TestGateWithoutVerdictIsAGateErrorAndHeld(t *testing.T) {
 }
 
 func TestBestOfAssignNamesBothSlots(t *testing.T) {
-	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "idle"}}, cands: []Candidate{{"#1", true}}}
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "idle"}}, cands: []round.Candidate{cand("#1", true)}}
 	f.assignFn = func(string) ([]string, error) { return []string{"ben", "dana"}, nil }
 	r, err := Run(context.Background(), f.env())
 	if err != nil || len(r.Did) != 1 || r.Did[0].Detail != "to ben and dana" {
@@ -428,7 +438,7 @@ func TestBestOfAssignNamesBothSlots(t *testing.T) {
 }
 
 func TestBlockedByNoRoundIsAFailureNotARefusal(t *testing.T) {
-	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}}}
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#1", true)}}
 	f.assignFn = func(string) ([]string, error) {
 		return nil, &round.BlockedError{By: round.BlockNoRound, Msg: "no round"}
 	}
@@ -446,7 +456,7 @@ func TestHoldableSkipsAnUnpickedBestOf(t *testing.T) {
 func TestCappedTickFillsNoSlotAndSaysWhy(t *testing.T) {
 	f := &fake{
 		slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "idle"}},
-		cands: []Candidate{{"#1", true}, {"#2", true}},
+		cands: []round.Candidate{cand("#1", true), cand("#2", true)},
 	}
 	why := "every round.accounts account is cooling down; slots fill again at 13:00 UTC"
 	e := f.env()
@@ -471,7 +481,7 @@ func TestCappedTickFillsNoSlotAndSaysWhy(t *testing.T) {
 func TestBatchFullTickAssignsNothingAndSaysSo(t *testing.T) {
 	f := &fake{
 		slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "idle"}},
-		cands: []Candidate{{"#1", true}, {"#2", true}},
+		cands: []round.Candidate{cand("#1", true), cand("#2", true)},
 	}
 	e := f.env()
 	open := 2
@@ -494,7 +504,7 @@ func TestBatchFullTickAssignsNothingAndSaysSo(t *testing.T) {
 func TestBatchRefusalMidTickStopsAssigning(t *testing.T) {
 	f := &fake{
 		slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "idle"}},
-		cands: []Candidate{{"#1", true}, {"#2", true}, {"#3", true}},
+		cands: []round.Candidate{cand("#1", true), cand("#2", true), cand("#3", true)},
 	}
 	calls := 0
 	f.assignFn = func(string) ([]string, error) {
@@ -511,7 +521,7 @@ func TestBatchRefusalMidTickStopsAssigning(t *testing.T) {
 // Claude pool running dry shows up as a quota refusal from Assign. The tick
 // must say so, not report "nothing to do".
 func TestQuotaRefusalIsReportedAsCapped(t *testing.T) {
-	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}, {"#2", true}}}
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#1", true), cand("#2", true)}}
 	why := "every round.accounts account is cooling down; slots fill again at 13:00 UTC"
 	f.assignFn = func(string) ([]string, error) {
 		return nil, &round.BlockedError{By: round.BlockQuota, Msg: why}
@@ -530,7 +540,7 @@ func TestQuotaRefusalIsReportedAsCapped(t *testing.T) {
 }
 
 func TestReviewNotDueMintsNothing(t *testing.T) {
-	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}}}
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#1", true)}}
 	e := f.env()
 	minted := 0
 	e.Review = fakeReview{due: false, mint: func() ([]string, error) { minted++; return []string{"#9"}, nil }}
@@ -541,7 +551,7 @@ func TestReviewNotDueMintsNothing(t *testing.T) {
 }
 
 func TestReviewDueErrorIsNeedsYou(t *testing.T) {
-	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}}}
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#1", true)}}
 	e := f.env()
 	e.Review = fakeReview{factsErr: errors.New("tracker down\nmore"), mint: func() ([]string, error) { t.Fatal("minted"); return nil, nil }}
 	r, err := Run(context.Background(), e)
@@ -618,10 +628,10 @@ func TestNoMergeTickNeverGates(t *testing.T) {
 	f := &fake{
 		slots:  []Slot{{Name: "ben", State: "done", Issue: "#1", PR: "#10"}, {Name: "dana", State: "done", Issue: "#2", PR: "#12"}},
 		queued: []string{"#11"},
-		cands:  []Candidate{{ID: "#3", Ready: true}},
+		cands:  []round.Candidate{cand("#3", true)},
 	}
 	e := f.env()
-	e.NoMerge = true
+	e.Role = roundcfg.RoleSupport
 	r, err := Run(context.Background(), e)
 	if err != nil {
 		t.Fatal(err)
@@ -631,5 +641,43 @@ func TestNoMergeTickNeverGates(t *testing.T) {
 	}
 	if len(r.NeedsYou) != 0 {
 		t.Errorf("a no-merge tick reports merges: %+v", r.NeedsYou)
+	}
+}
+
+func TestFailedVerdict(t *testing.T) {
+	boom := errors.New("boom")
+	for _, c := range []struct {
+		name    string
+		verdict string
+		err     error
+		refused bool
+		want    string
+	}{
+		{"clean failure keeps the verdict", "red", nil, false, "red"},
+		{"refusal keeps the verdict", "stale", boom, true, "stale"},
+		{"error that is no refusal drops it", "red", boom, false, ""},
+	} {
+		if got := FailedVerdict(c.verdict, c.err, c.refused); got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestFailureDetail(t *testing.T) {
+	if got := FailureDetail(errors.New("first\nsecond"), "msg"); got != "first" {
+		t.Errorf("an error wins and is cut to its first line: %q", got)
+	}
+	if got := FailureDetail(nil, "line one\nline two"); got != "line one" {
+		t.Errorf("no error: the message's first line: %q", got)
+	}
+}
+
+func TestNotReadyCandidateIsNotAssigned(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#1", false), cand("#2", true)}}
+	if _, err := Run(context.Background(), f.env()); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(f.assigned, []string{"#2"}) {
+		t.Errorf("assigned %v, want [#2]", f.assigned)
 	}
 }
