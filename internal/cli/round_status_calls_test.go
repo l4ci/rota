@@ -3,7 +3,9 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/round"
 	"os"
 	"path/filepath"
 	"strings"
@@ -135,5 +137,45 @@ func TestRoundStatusReadsTheForgeOnce(t *testing.T) {
 	}
 	if len(calls) > 10 {
 		t.Errorf("%d forge calls, want at most 10:\n%s", len(calls), strings.Join(calls, "\n"))
+	}
+}
+
+// The screen opens on registry rows, starts its first pass from Init, and keeps
+// that data (stamped honestly) when the pass fails; a second request during a
+// pass is dropped.
+func TestRoundOverviewRefreshLifecycle(t *testing.T) {
+	clk := newClock()
+	local := roundSnap{Slots: []round.Row{{Name: "ben", Issue: "101", Branch: "ben/101-work"}}}
+	gate, fail := make(chan struct{}), errors.New("forge: down")
+	passes := 0
+	load := func(ctx context.Context) (roundSnap, error) {
+		passes++
+		select {
+		case <-gate:
+		case <-ctx.Done():
+			return roundSnap{}, ctx.Err()
+		}
+		return roundSnap{}, fail
+	}
+	m := newRoundScreen(local, load, clk.now, roundRefresh)
+	m.loading = true
+	cmd := m.Init()
+	if cmd.Async == nil {
+		t.Fatal("Init did not start the first pass")
+	}
+	if out := tui.Strip(m.Render(100, 20, tui.Style{})); !strings.Contains(out, "loading…") || !strings.Contains(out, "ben") {
+		t.Errorf("first frame:\n%s", out)
+	}
+	if _, again := press(m, "r"); again.Async != nil {
+		t.Error("r during the first pass started a second")
+	}
+	close(gate)
+	done := runCmd(m, cmd)
+	out := tui.Strip(done.Render(100, 20, tui.Style{}))
+	if !strings.Contains(out, "refresh failed: forge: down") || !strings.Contains(out, "ben") || !strings.Contains(out, "not loaded") {
+		t.Errorf("failed first pass must keep the local rows and say the data is not loaded:\n%s", out)
+	}
+	if passes != 1 {
+		t.Errorf("passes = %d", passes)
 	}
 }

@@ -184,7 +184,7 @@ func TestScopeOverlapReachesStatusViewSnapshot(t *testing.T) {
 	ready := func(overlap string) bool {
 		f := newScopeFx(t, overlap, "")
 		c := &Ctx{Deps: f.deps, ctx: context.Background()}
-		s, err := loadRoundSnap(c, f.root)
+		s, err := loadRoundSnap(context.Background(), c, f.root)
 		if err != nil || s.CandsErr != "" {
 			t.Fatalf("snapshot: %v %q", err, s.CandsErr)
 		}

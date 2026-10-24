@@ -887,3 +887,21 @@ func (e Env) issueClosed(ctx context.Context, rep *Report, n tracker.IssueKey) b
 	}
 	return is.State == "closed"
 }
+
+// LocalReport is the registry-only report: slot rows and the review queue, with
+// no git, host, login or forge read. A screen shows it while Status loads.
+func LocalReport(root string) (*Report, error) {
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return nil, err
+	}
+	rep := &Report{views: map[string]*view{}}
+	rows, _ := Env{}.readRows(nil, reg, rep)
+	for _, r := range rows {
+		rep.Rows = append(rep.Rows, *r)
+	}
+	for _, q := range reg.PRs() {
+		rep.Queued = append(rep.Queued, QueuedPR{Issue: q.Issue, PR: q.PR, Branch: q.Branch, From: q.From, Bundle: q.Bundle})
+	}
+	return rep, nil
+}
