@@ -1020,6 +1020,36 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-22"
+    },
+    "Rounds: Orchestration: Workers & relays::An assignment brief is not a relay": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-24"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::Reviewer binary probes run in a scratch HOME": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-24"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::A key rename must grep test/sections for the old key": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-24"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::Skill lints must accept a minimal skill tree": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-24"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::rota verdict add body rules": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-24"
+    },
+    "Build & Tooling: Helpers & migrations::A local array key replaces the global one whole": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-24"
     }
   }
 }
