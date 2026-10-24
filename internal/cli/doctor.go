@@ -99,7 +99,9 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.Dispatch = config.Dispatch(cfg)
 	in.RegistrySolo = worker.IsSolo(root)
 	in.RoundHost = worker.ResolveHost(root, cfg, d.Getenv, doctorLookErr(in.Look))
-	in.SourceProblem = doctorSourceProblem(cfg)
+	if err := tracker.ValidateConfig(cfg); err != nil {
+		in.SourceProblem = err.Error()
+	}
 	in.Tracker = tracker.SettingsFromConfig(cfg)
 	in.Kinds = doctorKinds(cfg, in.Home)
 	for _, a := range config.Accounts(cfg) {
@@ -286,19 +288,6 @@ func procCwdOf(ctx context.Context, run proc.Runner, pid int) string {
 		return ""
 	}
 	return doctor.ParseLsofCwd(res.Stdout)
-}
-
-// doctorSourceProblem is the reason forge.provider or issues.source holds an
-// invalid value, "" when both are valid. The tracker check reports it instead
-// of reading the invalid value as a default.
-func doctorSourceProblem(cfg any) string {
-	if _, err := config.ForgeProvider(cfg); err != nil {
-		return err.Error()
-	}
-	if _, err := config.IssueSource(cfg); err != nil {
-		return err.Error()
-	}
-	return ""
 }
 
 // doctorLookErr adapts doctor's Look to the lookPath worker.ResolveHost takes.

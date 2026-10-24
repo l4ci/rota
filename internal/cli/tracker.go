@@ -23,13 +23,13 @@ func trackerCommands() *Command {
 }
 
 // trackerSettings reads the issues.* config of the project, or the defaults
-// outside one.
-func trackerSettings(c *Ctx) tracker.Settings {
+// outside one. An invalid forge.provider or issues.source is a tracker error.
+func trackerSettings(c *Ctx) (tracker.Settings, error) {
 	root, err := c.Root()
 	if err != nil {
-		return tracker.SettingsFromConfig(nil)
+		return tracker.SettingsFromConfig(nil), nil
 	}
-	return tracker.SettingsFromConfig(c.deps().Config(root))
+	return tracker.ReadSettings(c.deps().Config(root))
 }
 
 // trackerErr maps a tracker failure onto the exit table through its kind.
@@ -54,7 +54,11 @@ func trCall(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		ctx := c.Context()
-		cl, err := tracker.NewCLI(ctx, trackerSettings(c), *provider, dir, c.deps().trackerBase()...)
+		s, err := trackerSettings(c)
+		if err != nil {
+			return Result{}, trackerErr(err)
+		}
+		cl, err := tracker.NewCLI(ctx, s, *provider, dir, c.deps().trackerBase()...)
 		if err != nil {
 			return Result{}, trackerErr(err)
 		}
@@ -143,7 +147,11 @@ func trSuggest(fs *flag.FlagSet) RunFunc {
 // hint when it is not available.
 func upstreamCLI(c *Ctx, manual string) (*tracker.CLI, error) {
 	ctx := c.Context()
-	cl, err := tracker.NewCLI(ctx, trackerSettings(c), "github", "", c.deps().trackerBase()...)
+	s, err := trackerSettings(c)
+	if err != nil {
+		return nil, trackerErr(err).WithHint(manual)
+	}
+	cl, err := tracker.NewCLI(ctx, s, "github", "", c.deps().trackerBase()...)
 	if err != nil {
 		return nil, trackerErr(err).WithHint(manual)
 	}
