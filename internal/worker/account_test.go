@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/proc"
@@ -497,5 +498,18 @@ func TestAccountAssignAllLoginlessNamesLogin(t *testing.T) {
 	}
 	if msg := err.Error(); !strings.Contains(msg, "no login") || !strings.Contains(msg, "alpha") || strings.Contains(msg, "every configured account is cooling down") {
 		t.Errorf("Assign error = %q, want the login problem and account named, not 'cooling down'", msg)
+	}
+}
+
+// Accounts hands its Env clock to the credential reads: a file that is live by
+// the wall clock but expired by Env.Now yields to the Keychain.
+func TestAccountsLoginReadsWithEnvClock(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"old","expiresAt":2000000000000}}`), 0o600)
+	kc, reads := fakeKeychain("darwin", map[string]string{keychainService(dir, ""): `{"claudeAiOauth":{"accessToken":"kc"}}`})
+	later := time.UnixMilli(2000000000000).Add(time.Hour)
+	acc := &Accounts{Login: kc, Env: Env{Now: func() time.Time { return later }}}
+	if why := acc.login().Problem(dir); why != "" || *reads != 1 {
+		t.Errorf("Problem = %q after %d Keychain reads, want usable through one read", why, *reads)
 	}
 }

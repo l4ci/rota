@@ -282,3 +282,19 @@ type syncBuf struct {
 
 func (s *syncBuf) Write(p []byte) (int, error) { s.mu.Lock(); defer s.mu.Unlock(); return s.b.Write(p) }
 func (s *syncBuf) String() string              { s.mu.Lock(); defer s.mu.Unlock(); return s.b.String() }
+
+// The status screen reads Deps.Now, so a pinned clock reaches its age labels.
+func TestRoundStatusViewUsesDepsClock(t *testing.T) {
+	r := newPerfRig(t)
+	pinNow(r.deps, "2031-05-06T07:08:09Z")
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	os.Chdir(r.root)
+	m, err := roundStatusView(&Ctx{Deps: r.deps}, Result{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := m.(*roundScreen).now(), r.deps.Now(); !got.Equal(want) {
+		t.Errorf("screen clock = %v, want Deps.Now %v", got, want)
+	}
+}
