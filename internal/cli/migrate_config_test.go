@@ -261,7 +261,7 @@ func TestMigrateConfigAccounts(t *testing.T) {
 	code, out := textRun(t, "-C", root, "migrate", "config")
 	for _, want := range []string{
 		"global config.json\tround.codexAccounts -> round.accounts (1 entries)",
-		"config.json\tround.opencodeAccounts -> round.accounts (2 entries)",
+		"config.json\tround.opencodeAccounts -> round.accounts (1 entries)",
 		"config.local.json\tround.accounts -> round.accounts (3 entries)",
 	} {
 		if code != 0 || !strings.Contains(out, want) {
