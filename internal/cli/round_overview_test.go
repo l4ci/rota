@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -168,5 +169,127 @@ func TestRoundOverviewStripsControlCharacters(t *testing.T) {
 		if out := m2.Render(120, 40, tui.Style{}); strings.ContainsRune(out, 0x1b) || strings.ContainsRune(out, 0x07) {
 			t.Fatalf("a control character reached the frame: %q", out)
 		}
+	}
+}
+
+const (
+	ghIssue = "https://github.com/acme/project/issues/101"
+	ghPR    = "https://github.com/acme/project/pull/202"
+	glIssue = "https://gitlab.example.com/group/sub/project/-/issues/9"
+	glMR    = "https://gitlab.example.com/group/sub/project/-/merge_requests/7"
+)
+
+func linked(url string) string { return "\x1b]8;;" + url + "\x1b\\" }
+
+func linksFixture() roundSnap {
+	s := overviewFixture()
+	s.IssueURLs = map[string]string{"101": ghIssue, "102": "https://github.com/acme/project/issues/102", "201": glIssue}
+	return s
+}
+
+func TestRoundOverviewLinks(t *testing.T) {
+	m := newRoundScreen(linksFixture(), nil, newClock().now, roundRefresh)
+	linkStyle := tui.Style{Color: true, Links: true}
+	out := m.Render(140, 40, linkStyle)
+	// The issue and the PR are separate links with separate destinations.
+	for _, url := range []string{ghIssue, ghPR, glIssue} {
+		if !strings.Contains(out, linked(url)) {
+			t.Errorf("no hyperlink to %s in %q", url, out)
+		}
+	}
+	if strings.Count(out, linked(ghPR)) != 1 {
+		t.Errorf("PR link must appear once, on its own cell: %q", out)
+	}
+	// Links change no layout: the stripped frame equals the link-free one.
+	if plain := m.Render(140, 40, tui.Style{Color: true}); tui.Strip(out) != tui.Strip(plain) {
+		t.Errorf("links changed the text:\n%s\nvs\n%s", tui.Strip(out), tui.Strip(plain))
+	}
+	// Narrow terminals still clip every line.
+	for _, line := range strings.Split(m.Render(60, 30, linkStyle), "\n") {
+		if n := tui.Width(line); n > 60 {
+			t.Errorf("line is %d cells wide at width 60: %q", n, tui.Strip(line))
+		}
+	}
+	// The detail pane carries the full URLs for terminals that render no links.
+	sel, _ := press(m, "j", "j") // #102 in review
+	if body := tui.Strip(sel.Render(140, 40, tui.Style{})); !strings.Contains(body, "issue: https://github.com/acme/project/issues/102") || !strings.Contains(body, "PR: "+ghPR) {
+		t.Errorf("detail lacks the URLs:\n%s", body)
+	}
+}
+
+func TestRoundOverviewLinksGitLabAndUnsafe(t *testing.T) {
+	s := overviewFixture()
+	s.Slots[0].PR, s.Slots[0].PRState = glMR, "open"
+	s.IssueURLs = map[string]string{"101": glIssue, "103": "javascript:alert(1)"}
+	out := newRoundScreen(s, nil, newClock().now, roundRefresh).Render(140, 40, tui.Style{Color: true, Links: true})
+	if !strings.Contains(out, linked(glIssue)) || !strings.Contains(out, linked(glMR)) {
+		t.Errorf("nested GitLab group URLs not linked: %q", out)
+	}
+	if strings.Contains(out, "javascript:") {
+		t.Errorf("an unsafe issue URL reached the frame: %q", out)
+	}
+}
+
+func TestRoundOverviewOpen(t *testing.T) {
+	var opened []string
+	fake := func(u string) error { opened = append(opened, u); return nil }
+	run := func(m tui.Model, keys ...string) (tui.Model, tui.Cmd) {
+		return press(m, keys...)
+	}
+	m := newRoundScreen(linksFixture(), nil, newClock().now, roundRefresh)
+	m.open = fake
+	// #101 is selected and has an issue URL but no PR.
+	_, cmd := run(m, "i")
+	if cmd.Exec == nil {
+		t.Fatal("i started nothing")
+	}
+	_ = cmd.Exec()
+	m2, cmd := run(m, "p")
+	if cmd.Exec != nil {
+		t.Error("p on a row without a PR started an open")
+	}
+	if out := tui.Strip(m2.Render(120, 40, tui.Style{})); !strings.Contains(out, "no PR link for this row") {
+		t.Errorf("p without a PR must say so:\n%s", out)
+	}
+	// #102 (review) has both, and they are different pages.
+	m3, _ := run(m, "j", "j")
+	_, ci := run(m3, "i")
+	_, cp := run(m3, "p")
+	_ = ci.Exec()
+	_ = cp.Exec()
+	want := []string{ghIssue, "https://github.com/acme/project/issues/102", ghPR}
+	if strings.Join(opened, " ") != strings.Join(want, " ") {
+		t.Errorf("opened %v, want %v", opened, want)
+	}
+}
+
+func TestRoundOverviewOpenFailureAndRefresh(t *testing.T) {
+	m := newRoundScreen(linksFixture(), nil, newClock().now, roundRefresh)
+	m.open = func(string) error { return errors.New("xdg-open: not found") }
+	m1, cmd := press(m, "i")
+	// The selection changes under a background refresh while the open runs: the
+	// opener still gets the link the key was pressed on.
+	rm := m1.(*roundScreen)
+	next := linksFixture()
+	next.Slots = next.Slots[1:]
+	rm.box.put(next, nil)
+	m2, _ := m1.Update(tui.Done{})
+	err := cmd.Exec()
+	if err == nil {
+		t.Fatal("opener failure was swallowed")
+	}
+	m3, _ := m2.Update(tui.Done{Err: err, Tag: cmd.Tag})
+	out := tui.Strip(m3.Render(140, 40, tui.Style{}))
+	if !strings.Contains(out, "could not open "+ghIssue+": xdg-open: not found") {
+		t.Errorf("open failure not shown:\n%s", out)
+	}
+	if strings.Contains(out, "refresh failed") {
+		t.Errorf("an open failure must not read as a failed refresh:\n%s", out)
+	}
+	// Without an opener the key says so instead of doing nothing.
+	m.open = nil
+	m4, c := press(m, "i")
+	if c.Exec != nil || !strings.Contains(tui.Strip(m4.Render(120, 40, tui.Style{})), "no browser") {
+		t.Error("a screen without an opener must say so")
 	}
 }

@@ -60,7 +60,9 @@ type entry struct {
 	model  string
 	pr     string
 	label  string // detail pane title
-	body   string
+	// issueURL and prURL are the row's browser pages, "" when unknown.
+	issueURL, prURL string
+	body            string
 }
 
 // entries are the rows in table order: Active, PR review, Support queue, Upcoming.
@@ -72,7 +74,7 @@ func (s roundSnap) entries() []entry {
 		if r.Issue == "" {
 			continue // parked: counted in the totals, not a row
 		}
-		e := slotEntry(r)
+		e := slotEntry(r, s.IssueURLs)
 		if !s.CandsLoaded && r.HostState == "" {
 			e.status = "checking"
 		}
@@ -86,13 +88,13 @@ func (s roundSnap) entries() []entry {
 		if q.State == "merged" || q.State == "closed" || inReview[q.PR] {
 			continue
 		}
-		add(reviewEntry(q))
+		add(reviewEntry(q, s.IssueURLs))
 	}
 	for _, it := range s.Support {
-		add(supportEntry(it))
+		add(supportEntry(it, s.IssueURLs))
 	}
 	for _, c := range s.Cands {
-		add(candEntry(c))
+		add(candEntry(c, s.IssueURLs))
 	}
 	var out []entry
 	for _, g := range by {
@@ -188,12 +190,12 @@ func harnessModel(r round.Row) string {
 	return strutil.FirstNonEmpty(r.Model, r.Kind, strings.TrimSpace(r.Tier), "-")
 }
 
-func slotEntry(r round.Row) entry {
+func slotEntry(r round.Row, urls map[string]string) entry {
 	e := entry{
 		key: "slot " + r.Name, group: grpActive, issue: issueCell(r.Issue, r.Bundle),
 		title: strutil.FirstNonEmpty(r.PRTitle, r.Branch), worker: r.Name, status: dash(hostLabel(r)),
 		model: harnessModel(r), pr: prLabel(r.PR, r.PRState),
-		label: r.Name + " · " + tracker.RefOf(r.Issue),
+		label: r.Name + " · " + tracker.RefOf(r.Issue), issueURL: issueLink(urls, r.Issue), prURL: prLink(r.PR),
 	}
 	switch {
 	case awaitingReview(r):
@@ -208,8 +210,9 @@ func slotEntry(r round.Row) entry {
 	var b []string
 	b = append(b, "PR: "+strutil.FirstNonEmpty(r.PRTitle, "no title known"))
 	b = append(b, "branch: "+dash(r.Branch))
-	if r.PR != "" {
-		b = append(b, "url: "+r.PR)
+	b = append(b, linkLines(e)...)
+	if r.PR != "" && e.prURL == "" {
+		b = append(b, "PR ref: "+r.PR)
 	}
 	b = append(b, fmt.Sprintf("bounces: %s · burn: %s", bounceLabel(r.Bounces), burnLabel(r)))
 	b = append(b, "evidence: "+strutil.FirstNonEmpty(r.Evidence, "none recorded"))
@@ -225,21 +228,22 @@ func slotEntry(r round.Row) entry {
 	return clean(e, b)
 }
 
-func reviewEntry(q round.QueuedPR) entry {
+func reviewEntry(q round.QueuedPR, urls map[string]string) entry {
 	e := entry{
 		key: "review " + q.Issue + " " + q.PR, group: grpReview, issue: issueCell(q.Issue, q.Bundle),
 		title: strutil.FirstNonEmpty(q.Branch, "-"), worker: "moved on", status: "ready for review", tone: toneOK,
 		model: "-", pr: prLabel(q.PR, q.State), label: "review · " + tracker.RefOf(q.Issue),
+		issueURL: issueLink(urls, q.Issue), prURL: prLink(q.PR),
 	}
-	return clean(e, []string{"PR: " + dash(q.PR), "branch: " + dash(q.Branch), "worker: moved on (was " + dash(q.From) + ")"})
+	return clean(e, append([]string{"PR ref: " + dash(q.PR), "branch: " + dash(q.Branch), "worker: moved on (was " + dash(q.From) + ")"}, linkLines(e)...))
 }
 
-func supportEntry(it round.SupportItem) entry {
+func supportEntry(it round.SupportItem, urls map[string]string) entry {
 	e := entry{
 		key: "support " + it.ID, group: grpSupport, issue: tracker.RefOf(it.ID), title: it.Title,
-		worker: "-", status: "waiting", tone: toneWarn, model: "unknown", pr: "-", label: "support · " + tracker.RefOf(it.ID),
+		worker: "-", status: "waiting", tone: toneWarn, model: "unknown", pr: "-", label: "support · " + tracker.RefOf(it.ID), issueURL: issueLink(urls, it.ID),
 	}
-	b := []string{it.Title}
+	b := append([]string{it.Title}, linkLines(e)...)
 	switch {
 	case it.Unknown:
 		e.status, e.tone = "unknown", toneBad
@@ -254,17 +258,48 @@ func supportEntry(it round.SupportItem) entry {
 	return clean(e, b)
 }
 
-func candEntry(c roundCand) entry {
+func candEntry(c roundCand, urls map[string]string) entry {
 	e := entry{
 		key: "cand " + c.ID, group: grpUpcoming, issue: tracker.RefOf(c.ID), title: c.Title,
-		worker: "-", status: "ready", tone: toneOK, model: "-", pr: "-", label: "upcoming · " + tracker.RefOf(c.ID),
+		worker: "-", status: "ready", tone: toneOK, model: "-", pr: "-", label: "upcoming · " + tracker.RefOf(c.ID), issueURL: issueLink(urls, c.ID),
 	}
-	b := []string{c.Title}
+	b := append([]string{c.Title}, linkLines(e)...)
 	if !c.Ready {
 		e.status, e.tone = "blocked", toneWarn
 		b = append(b, "blocked:", "- "+strings.Join(c.Why, "\n- "))
 	}
 	return clean(e, b)
+}
+
+// issueLink is the tracker page of issue id, "" when unknown or not a plain
+// http(s) URL.
+func issueLink(urls map[string]string, id string) string {
+	u := urls[strings.TrimPrefix(strings.TrimSpace(id), "#")]
+	if tui.SafeURL(u) {
+		return u
+	}
+	return ""
+}
+
+// prLink is a PR reference as a URL; a bare number or other spelling is "".
+func prLink(pr string) string {
+	if tui.SafeURL(pr) {
+		return pr
+	}
+	return ""
+}
+
+// linkLines are the detail lines that spell the row's URLs out, for a
+// terminal that renders no hyperlinks.
+func linkLines(e entry) []string {
+	var out []string
+	if e.issueURL != "" {
+		out = append(out, "issue: "+e.issueURL)
+	}
+	if e.prURL != "" {
+		out = append(out, "PR: "+e.prURL)
+	}
+	return out
 }
 
 // clean sanitizes every field a screen draws: they come from the tracker and
@@ -328,7 +363,7 @@ func (c cols) join(cells [6]string, paint func(i int, s string) string) string {
 		if widths[i] == 0 {
 			continue
 		}
-		parts = append(parts, paint(i, tui.Pad(tui.Fit(cell, widths[i]), widths[i])))
+		parts = append(parts, tui.Pad(paint(i, tui.Fit(cell, widths[i])), widths[i]))
 	}
 	return strings.TrimRight(strings.Join(parts, " "), " ")
 }
@@ -340,8 +375,13 @@ func (c cols) header() string {
 // row draws one entry; the status cell takes its tone's colour.
 func (c cols) row(e entry, st tui.Style) string {
 	return c.join([6]string{e.issue, e.title, e.worker, e.status, e.model, e.pr}, func(i int, s string) string {
-		if i == 3 {
+		switch i {
+		case 0:
+			return st.Link(e.issueURL, s)
+		case 3:
 			return e.tone.paint(st, s)
+		case 5:
+			return st.Link(e.prURL, s)
 		}
 		return s
 	})

@@ -41,6 +41,9 @@ type roundSnap struct {
 	Support       []round.SupportItem
 	SupportLoaded bool
 	SupportErr    string
+	// IssueURLs maps an issue id (without "#") to its tracker page, as the
+	// last pass read them; empty on the registry-only first frame.
+	IssueURLs map[string]string
 }
 
 // roundCand is a queued candidate. Why is empty for a ready one.
@@ -68,6 +71,7 @@ func roundStatusView(c *Ctx, _ Result) (tui.Model, error) {
 		return nil, err
 	}
 	m := newRoundScreen(snapFromReport(rep), load, time.Now, roundRefresh)
+	m.open = c.deps().OpenURL
 	m.loading = true // Init starts the first pass
 	return m, nil
 }
@@ -104,6 +108,14 @@ func loadRoundSnap(ctx context.Context, c *Ctx, root string) (roundSnap, error) 
 	if err != nil {
 		s.CandsErr = err.Error()
 		return s, nil
+	}
+	if items, err := be.List(false); err == nil { // answered from the pass's read cache
+		s.IssueURLs = map[string]string{}
+		for _, it := range items {
+			if it.URL != "" {
+				s.IssueURLs[strings.TrimPrefix(it.ID, "#")] = it.URL
+			}
+		}
 	}
 	cands, err := env.RoundCandidates(ctx, root, be, set, "")
 	if err != nil {
@@ -225,6 +237,8 @@ type roundScreen struct {
 	top     int // detail pane scroll
 	refresh int // refreshes finished, for the header
 	loading bool
+	open    func(url string) error // opens a link in the browser; nil without one
+	note    string                 // outcome of the last open-link key
 }
 
 func newRoundScreen(s roundSnap, load roundLoader, now func() time.Time, every time.Duration) *roundScreen {
@@ -257,6 +271,12 @@ func (m *roundScreen) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 		}
 		return n.startRefresh()
 	case tui.Done:
+		if t.Tag == tagOpen {
+			if t.Err != nil {
+				n.note = tui.Sanitize(t.Err.Error(), false)
+			}
+			return &n, tui.Cmd{}
+		}
 		n.loading = false
 		snap, err := n.box.take()
 		if err != nil {
@@ -273,7 +293,12 @@ func (m *roundScreen) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 		n.keepSelection()
 		return &n, tui.Cmd{}
 	case tui.Key:
+		n.note = ""
 		switch {
+		case t.Is('i'):
+			return n.openLink("issue")
+		case t.Is('p'):
+			return n.openLink("PR")
 		case t.Kind == tui.KeyEsc || t.Is('q') || t.Kind == tui.KeyCtrlC:
 			return &n, tui.Cmd{Quit: true}
 		case t.Is('r'):
@@ -287,6 +312,40 @@ func (m *roundScreen) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 		case t.Kind == tui.KeyPgDn:
 			n.top += 5
 		}
+	}
+	return &n, tui.Cmd{}
+}
+
+// tagOpen marks the Done of an open-link Cmd, so it is not taken for a pass.
+const tagOpen = "open"
+
+// openLink opens the selected row's issue or PR page. The URL is taken from the
+// row at the key press, so a refresh that reorders rows cannot redirect it.
+func (m *roundScreen) openLink(kind string) (tui.Model, tui.Cmd) {
+	n := *m
+	es := n.entries()
+	if len(es) == 0 {
+		return &n, tui.Cmd{}
+	}
+	e := es[n.index(es)]
+	url := e.issueURL
+	if kind == "PR" {
+		url = e.prURL
+	}
+	switch {
+	case url == "":
+		n.note = "no " + kind + " link for this row"
+	case n.open == nil:
+		n.note = "no browser available: " + url
+	default:
+		open := n.open
+		n.note = "opening " + url
+		return &n, tui.Cmd{Tag: tagOpen, Exec: func() error {
+			if err := open(url); err != nil {
+				return fmt.Errorf("could not open %s: %w", url, err)
+			}
+			return nil
+		}}
 	}
 	return &n, tui.Cmd{}
 }
@@ -373,6 +432,9 @@ func (m *roundScreen) Render(w, h int, st tui.Style) string {
 		head += st.Dim(" · " + tui.Sanitize(m.snap.Host, false))
 	}
 	head += st.Dim(" · " + status)
+	if m.note != "" {
+		head += " · " + st.Yellow(tui.Fit(tui.Sanitize(m.note, false), max(w-len(status)-30, 20)))
+	}
 
 	// Body lines, each remembering the entry it shows (-1 for a heading).
 	type bl struct {
@@ -407,7 +469,7 @@ func (m *roundScreen) Render(w, h int, st tui.Style) string {
 		for _, e := range inGroup {
 			mark, text := "  ", cols.row(e, st)
 			if next == sel {
-				mark, text = st.Cyan("› "), st.Bold(cols.row(e, tui.Style{}))
+				mark, text = st.Cyan("› "), st.Bold(cols.row(e, tui.Style{Links: st.Links}))
 			}
 			add(mark+text, next)
 			next++
@@ -465,6 +527,6 @@ func (m *roundScreen) Render(w, h int, st tui.Style) string {
 		dt = tui.Detail{Body: "nothing in the round yet"}
 	}
 	body = append(body, dt.Render(w, detailRows, st))
-	bar := tui.Hints([]tui.Hint{{Key: "↑/↓", Desc: "select"}, {Key: "PgUp/PgDn", Desc: "scroll"}, {Key: "r", Desc: "refresh"}, {Key: "q", Desc: "back"}}, w, st)
+	bar := tui.Hints([]tui.Hint{{Key: "↑/↓", Desc: "select"}, {Key: "PgUp/PgDn", Desc: "scroll"}, {Key: "i", Desc: "issue link"}, {Key: "p", Desc: "PR link"}, {Key: "r", Desc: "refresh"}, {Key: "q", Desc: "back"}}, w, st)
 	return tui.Frame(strings.Join(body, "\n"), bar, h)
 }

@@ -160,6 +160,34 @@ slot `wait` named, or gate a PR in review by number (`rota worker gate 61 --base
 Each verb's arguments, data and exit codes are in `docs/contributing/contract/`. Every verb
 takes `--json` for a machine-readable envelope.
 
+## The status screen
+
+`rota round status --ui` (also Round status in the palette) is a read-only overview of the round, so you can watch it
+without keeping the issue tracker open. It opens at once on the slots in the registry, then loads the host, tracker and
+quota in the background; keys, scrolling and `q` work while a read is slow, and leaving the screen cancels it. It
+refreshes about every five seconds, one read at a time. The header says `loading…` until the first read finishes, then
+`updated HH:MM:SS`, plus `refreshing…` while a pass runs. A pass that fails keeps the last good rows and their
+time, and shows `refresh failed` beneath them.
+
+One table groups the issues:
+
+| Group | What is in it |
+|---|---|
+| Active | an issue a slot holds and is still working, idle or unavailable |
+| PR review | a PR ready for you: its worker reported done and the PR is open, or the worker moved on (`moved on`). Merged and closed PRs leave |
+| Support queue | issues offered to the support machine (`round.support` set): `waiting` until it claims one, `active` with its claim, `unknown` when the claim could not be read. Remote workers and models are `unknown`, never guessed from the local roster |
+| Upcoming | the candidates, `ready` or `blocked` with the reason in the detail pane |
+
+Above the table, `workers N known` counts this machine's slots (working, in review, idle, parked, unavailable) and the
+`support:` line counts the queue. Remote workers are not counted. Columns are issue, title, worker, status,
+harness/model and PR. Selection is the cyan `›` of the main menu, and the status text carries the state in green, yellow
+or red; every state has a text label, so `NO_COLOR` loses nothing.
+
+Issue and PR cells are separate terminal hyperlinks: use your terminal's usual Ctrl/Cmd-click. Without hyperlink
+support, `i` opens the selected issue and `p` its PR in the browser, and the detail pane shows both full URLs. GitHub and
+GitLab (including nested groups and self-hosted) work the same. The screen never assigns, edits issues, changes
+workers or reconciles; opening a link changes nothing in the round.
+
 ## Starting a round
 
 `rota round start` takes the orchestrator lease, provisions the roster slots and lists the
