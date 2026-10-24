@@ -196,6 +196,48 @@ def check_manual_only(path, text, issues):
         issues.append(f"{yaml_path.as_posix()}: needs policy.allow_implicit_invocation: false")
 
 
+def check_flag_consistency(skill_files, issues):
+    """The flagged set matches authoring-conventions, and no skill chains into a flagged one (#1897)."""
+    flagged = {s.parent.name for s in skill_files
+               if (spec_fields(s.read_text(encoding="utf-8")) or {}).get("disable-model-invocation") == "true"}
+    conv = Path("skills/references/authoring-conventions.md")
+    if not conv.is_file():
+        listed = flagged  # a minimal tree has no conventions doc: nothing to compare
+    else:
+        m = re.search(r"The set is (.+?)\. ", conv.read_text(encoding="utf-8"))
+        if not m:
+            issues.append(f"{conv.as_posix()}: no 'The set is ...' sentence naming the flagged skills")
+        listed = set(re.findall(r"`(rota-[a-z]+)`", m.group(1))) if m else set()
+    if listed != flagged:
+        issues.append(f"{conv.as_posix()}: flagged-skill list {sorted(listed)} differs from the "
+                      f"disable-model-invocation flags set {sorted(flagged)}")
+    # Another skill's text must not tell a model to run a flagged skill: it cannot. The only
+    # allowed form is an explicit offer for the user to type it. For each mention, the nearest
+    # verb before it decides: run-ish is a chain, "type"/"offer" is an offer.
+    if not flagged:
+        return
+    names = "|".join(sorted(flagged))
+    mention = re.compile(r"`/?(%s)\b" % names)
+    verbs = re.compile(r"(?i)(?<!-)\b(invoke[sd]?|invoking|dispatch(?:es|ed)?|chain(?:s|ed)? into|read and follow|hand(?:s)? off to|runs?|running|"
+                       r"start(?:s|ed)?|launch(?:es|ed)?|type|offer(?:s|ed)?)\b")
+    seen = set()
+    root = Path("skills").resolve()
+    files = [*Path("skills").glob("*/*.md"), *Path("skills").glob("*/*/*.md"), *Path("skills").glob("*/*/*/*.md")]
+    for path in sorted(files):
+        real = path.resolve()
+        if real in seen:
+            continue
+        seen.add(real)
+        own = real.relative_to(root).parts[0]
+        for n, line in enumerate(real.read_text(encoding="utf-8").splitlines(), 1):
+            for hit in mention.finditer(line):
+                clause = re.split(r"[.;:!?](?:\s|$)|[()\u2014]|\*\"", line[:hit.start()])[-1]
+                prior = [v.group(1).lower() for v in verbs.finditer(clause)]
+                if hit.group(1) != own and prior and prior[-1] not in ("type", "offer", "offers", "offered"):
+                    issues.append(f"{real.relative_to(root.parent).as_posix()}:{n}: chains into flagged skill {hit.group(1)} "
+                                  "(manual-only; tell the user to type it instead)")
+
+
 def check_pending_spec(skill_files, issues):
     """A pending entry nothing uses any more must be deleted."""
     pending_keys, pending_long = pending_spec()
@@ -496,6 +538,7 @@ def main():
         check_checklist(skill_path, text, issues)
 
     check_pending_spec(skill_files, issues)
+    check_flag_consistency(skill_files, issues)
     check_reference_toc(issues)
     check_prose(issues)
 
