@@ -567,7 +567,6 @@ type TransferOpts struct {
 	Note          string // the text of --note-file
 	Decisions     string // decisions already settled, passed verbatim; "" for none
 	AcceptOverlap bool
-	HolderPID     int
 	// Tier and TierReason are the receiver's tier ("" is round.tier); one above
 	// the default needs a reason, as in assign. Unused when To is the human.
 	Tier, TierReason string
@@ -576,7 +575,6 @@ type TransferOpts struct {
 	// worker) or ledger.CapFresh (to a fresh context at round.freshAt, below
 	// the cap). "" is a transfer that is not a cap decision.
 	CapReason string
-	Settings  roundcfg.Settings
 }
 
 // Transferred is what Transfer did.
@@ -626,6 +624,9 @@ type transferRun struct {
 // label goes on. If the dispatch fails the claim and branch stay with the
 // receiver and the same call resumes it.
 func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts) (res Transferred, err error) {
+	if err := e.roundCfgErr(); err != nil {
+		return res, err
+	}
 	defer func() {
 		if err == nil && res.Changed {
 			if lerr := worker.LedgerAppendErr(e.workerEnv(), root, ledger.Entry{Kind: ledger.KindTransfer, Issue: res.Issue, Slot: res.To,
@@ -669,8 +670,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 
 // checkFlags validates the flags that need no board or registry and returns
 // whether the issue goes to the human and the tier reason.
-func (o TransferOpts) checkFlags() (toHuman bool, reason string, err error) {
-	set := o.Settings
+func (o TransferOpts) checkFlags(set roundcfg.Settings) (toHuman bool, reason string, err error) {
 	toHuman = o.To == HumanTarget
 	if o.To == "" || (!toHuman && !slices.Contains(set.Roster, o.To)) {
 		return false, "", usage("--to must be %s or a roster slot (%s)", HumanTarget, strings.Join(set.Roster, ", "))
@@ -699,8 +699,8 @@ func (o TransferOpts) checkFlags() (toHuman bool, reason string, err error) {
 // planTransfer makes every refusal Transfer can make before it moves anything
 // and fills res as far as it got.
 func (e Env) planTransfer(ctx context.Context, root string, be Board, o TransferOpts, res *Transferred) (*transferRun, error) {
-	set := o.Settings
-	toHuman, reason, err := o.checkFlags()
+	set := e.Round
+	toHuman, reason, err := o.checkFlags(set)
 	if err != nil {
 		return nil, err
 	}
@@ -723,7 +723,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	}
 	id := it.ID
 	res.Issue, res.To = id, o.To
-	ok, err := e.holdsLease(ctx, root, o.HolderPID)
+	ok, err := e.holdsLease(ctx, root, e.HolderPID)
 	if err != nil {
 		return nil, wrap(err)
 	}
@@ -860,7 +860,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	// from the item's label, else round.workerKind, else the receiver's
 	// recorded kind, else claude; the model from the item's label, else the
 	// tier map. Headroom and scope are not asked of a receiver that resumes.
-	run.kind, run.tier = harness.Default, strutil.FirstNonEmpty(o.Tier, o.Settings.Tier)
+	run.kind, run.tier = harness.Default, strutil.FirstNonEmpty(o.Tier, e.Round.Tier)
 	var model string
 	if !toHuman {
 		pf, err := e.preflight(ctx, root, be, preflightIn{Item: it, Settings: set, Tier: run.tier,
@@ -1063,7 +1063,7 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return run.branch }, Round: rnd, Kind: run.kind, Model: run.model, Wrap: wrap, LogRelay: true,
 		Brief: func() string {
 			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
-			text := pointerBrief(o.To, id, run.branch, run.brief, nil, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, nil, tierBrief{Kind: run.kind, Tier: run.tier, Model: run.model, Default: o.Settings.Tier, Reason: run.reason, Table: o.Settings.Models[run.kind], Attempt: attempt, FullOnly: o.Settings.FullOnly, TDD: o.Settings.TDD})
+			text := pointerBrief(o.To, id, run.branch, run.brief, nil, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, nil, tierBrief{Kind: run.kind, Tier: run.tier, Model: run.model, Default: e.Round.Tier, Reason: run.reason, Table: e.Round.Models[run.kind], Attempt: attempt, FullOnly: e.Round.FullOnly, TDD: e.Round.TDD})
 			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `%s` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
 				res.From, marker.Handoff(res.From, rnd), run.branch)
 			if rec != nil {
