@@ -148,11 +148,11 @@ func TestWatchWakesOnOtherMachineComment(t *testing.T) {
 	if got := supportKeys(pass())[roundwatch.SupportKey("7", "comment")]; got != "ann#13" {
 		t.Fatalf("relay by the support machine: key = %q", got)
 	}
-	f.comment(7, "14", "ann", "<!-- rota:comment note -->\n<!-- rota:from support -->\nneed a decision")
+	f.comment(7, "14", "ann", "<!-- rota:comment feedback -->\n<!-- rota:from support -->\nneed a decision")
 	if got := supportKeys(pass())[roundwatch.SupportKey("7", "comment")]; got != "ann#14" {
 		t.Fatalf("stamped note by the support machine: key = %q", got)
 	}
-	f.comment(7, "15", "ann", "<!-- rota:comment note -->\n<!-- rota:from main -->\nmain talking")
+	f.comment(7, "15", "ann", "<!-- rota:comment feedback -->\n<!-- rota:from main -->\nmain talking")
 	if got := supportKeys(pass())[roundwatch.SupportKey("7", "comment")]; got != "ann#14" {
 		t.Fatalf("main's own note must not move the key: %q", got)
 	}
@@ -164,7 +164,7 @@ func TestWatchSupportMachineWakesOnMainComment(t *testing.T) {
 	f := &swForge{writers: map[string]bool{"ann": true}}
 	f.issue(31, swLabel)
 	f.issue(32, swLabel)
-	f.comment(31, "5", "ann", "<!-- rota:comment note -->\n<!-- rota:from main -->\nuse the other API")
+	f.comment(31, "5", "ann", "<!-- rota:comment feedback -->\n<!-- rota:from main -->\nuse the other API")
 	f.comment(31, "6", "ann", "<!-- rota:support-return -->\nmine")
 	f.comment(32, "7", "ann", "<!-- rota:support-offer -->\nnot held")
 	pass := swWatch(t, f, roundcfg.RoleSupport, `{"slots":[{"name":"mac-ben","state":"busy","task":"31"}]}`)
