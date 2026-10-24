@@ -465,7 +465,7 @@ func freshFx(t *testing.T) (*moveFx, ReviewOpts) {
 	if _, err := recordBounceVia(worker.Env{Config: diskConfig}, f.root, "12", "", ""); err != nil {
 		t.Fatal(err)
 	}
-	o.FreshAt, o.Board, o.Settings, o.HolderPID = 2, f.be, f.set, 100
+	o.FreshAt, o.Board = 2, f.be
 	o.OpenFindings = []string{"[high] rename x (a.go:3)"}
 	return f, o
 }

@@ -1384,3 +1384,17 @@ func TestTransferTakesSettingsAndHolderFromEnv(t *testing.T) {
 		t.Errorf("a holder pid that holds no lease must refuse: %v", err)
 	}
 }
+
+// A round.* key that failed to load refuses Transfer as a usage error before
+// any slot, claim or branch moves.
+func TestTransferRefusesOnRoundErr(t *testing.T) {
+	f := newMoveFx(t)
+	f.env.RoundErr = errors.New(`round.stallMinutes must be an integer (got "soon")`)
+	_, err := f.env.Transfer(bg, f.root, f.be, TransferOpts{Issue: "12", To: "dana"})
+	if exitOf(err) != exitcode.ExitUsage {
+		t.Fatalf("exit %d for %v, want usage", exitOf(err), err)
+	}
+	if got := worker.LoadRegistryTolerant(f.root).Slot("ben").Task(); got != "12" {
+		t.Errorf("ben holds %q after the refusal, want 12 untouched", got)
+	}
+}
