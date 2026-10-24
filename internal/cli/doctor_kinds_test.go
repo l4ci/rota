@@ -30,7 +30,7 @@ func TestDoctorKindsTiersFollowTheTierMap(t *testing.T) {
 // dispatch launches with (#1757).
 func TestDoctorKindsExpandsAccountHomes(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "config.json")
-	doc := `{"round":{"codexAccounts":[{"name":"c","codexHome":"~/.codex"}]}}`
+	doc := `{"round":{"accounts":[{"kind":"codex","name":"c","dir":"~/.codex"}]}}`
 	if err := os.WriteFile(p, []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}

@@ -49,6 +49,15 @@ const (
 	// machine whose worker holds it.
 	KindBounce       = "bounce"
 	KindReviewBounce = "review-bounce"
+	// KindRelay is an orchestrator relay carried to the issue thread (#1827);
+	// KindSupportOffer is the comment `round support offer` leaves.
+	KindRelay        = "relay"
+	KindSupportOffer = "support-offer"
+	// KindPRPointer is the issue comment that points at a PR post (#1827);
+	// KindFrom stamps the posting machine's role on a comment.
+	KindPRPointer     = "pr-pointer"
+	KindFrom          = "from"
+	KindSupportReturn = "support-return"
 )
 
 // opener matches `<!-- ` plus either prefix's name, up to the kind.
@@ -171,3 +180,68 @@ func ParseBounce(body string) (kind, head string, reset, ok bool) {
 	}
 	return m[1], strings.TrimPrefix(m[2], "head="), false, true
 }
+
+var (
+	// relayRe finds the relay marker on the first or second line: the tracker
+	// puts its own `<!-- rota:comment <kind> -->` line ahead of the text.
+	relayRe = regexp.MustCompile(`\A(?:<!-- (?:rota|hv):comment [\p{L}\p{N}_]+ -->\n)?<!-- (?:rota|hv):relay round=(\p{Nd}+) -->(?:\n|\z)`)
+	offerRe = regexp.MustCompile(`\A(?:<!-- (?:rota|hv):comment [\p{L}\p{N}_]+ -->\n)?<!-- (?:rota|hv):support-offer -->(?:\n|\z)`)
+)
+
+// RelayLine renders `<!-- rota:relay round=<n> -->`.
+func RelayLine(round int) string { return Line(KindRelay, "round="+strconv.Itoa(round)) }
+
+// SupportOfferLine renders `<!-- rota:support-offer -->`.
+func SupportOfferLine() string { return Line(KindSupportOffer) }
+
+// ParseRelay reads a relay comment: its round and the relayed text after the
+// marker line.
+func ParseRelay(body string) (round int, text string, ok bool) {
+	body = strings.ReplaceAll(body, "\r\n", "\n")
+	m := relayRe.FindStringSubmatchIndex(body)
+	if m == nil {
+		return 0, "", false
+	}
+	n, err := strconv.Atoi(body[m[2]:m[3]])
+	if err != nil {
+		return 0, "", false
+	}
+	return n, body[m[1]:], true
+}
+
+// IsSupportOffer reports whether body is a support-offer comment.
+func IsSupportOffer(body string) bool {
+	return offerRe.MatchString(strings.ReplaceAll(body, "\r\n", "\n"))
+}
+
+// PointerLine renders `<!-- rota:pr-pointer <kind> -->`.
+func PointerLine(kind string) string { return Line(KindPRPointer, kind) }
+
+// FromLine renders `<!-- rota:from <role> -->`, the machine role (main or
+// support) that posted the comment it sits in.
+func FromLine(role string) string { return Line(KindFrom, role) }
+
+var fromRe = regexp.MustCompile(`(?m)^<!-- (?:rota|hv):from (main|support) -->[ \t]*$`)
+
+// SideOf says which machine posted a comment, "main", "support" or "" when
+// the body does not say. The stamp is the `rota:from` line; the comments only
+// one machine posts name it by kind: the support-offer comment is main's,
+// the support-return and relay comments the support machine's.
+func SideOf(body string) string {
+	body = strings.ReplaceAll(body, "\r\n", "\n")
+	if m := fromRe.FindStringSubmatch(body); m != nil {
+		return m[1]
+	}
+	switch {
+	case IsSupportOffer(body):
+		return "main"
+	case supportReturnRe.MatchString(body):
+		return "support"
+	}
+	if _, _, ok := ParseRelay(body); ok {
+		return "support"
+	}
+	return ""
+}
+
+var supportReturnRe = regexp.MustCompile(`\A(?:<!-- (?:rota|hv):comment [\p{L}\p{N}_]+ -->\n)?<!-- (?:rota|hv):support-return -->(?:\n|\z)`)

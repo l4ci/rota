@@ -16,7 +16,7 @@ import (
 
 // Park sends an item to a human: the move `round transfer --to human` makes.
 // note is the comment it leaves on the item.
-type Park func(issue, note string, set roundcfg.Settings) error
+type Park func(issue, note string) error
 
 // Outcome is what the bookkeeping did for one item. Bounces is the item's
 // count after a bounce (0 when the verdict was no bounce), Parked whether the
@@ -127,7 +127,7 @@ func bounce(env worker.Env, root, issue string, r worker.GateResult, park Park) 
 		what = "branch " + r.Branch
 	}
 	note := fmt.Sprintf("The merge gate sent %s back %d time(s) (round.maxBounces is %d), so it is parked for a human instead of going back to a worker. Last refusal: %s", what, n, set.MaxBounces, why)
-	if err := park(issue, note, set); err != nil {
+	if err := park(issue, note); err != nil {
 		return Outcome{Bounces: n}, fmt.Errorf("could not park %s as needs-human: %w", issue, err)
 	}
 	return Outcome{Bounces: n, Parked: true}, store.Clear(issue)

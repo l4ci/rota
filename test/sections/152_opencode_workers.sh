@@ -138,16 +138,16 @@ ocrc worker dispatch dana --body-file "$OC/contract.md" --task F02 --kind openco
 occ config set round.opencodeCommand "" >/dev/null
 pass "a resume flag or --pure in round.opencodeCommand is refused before herdr is touched"
 
-# round.opencodeAccounts: the account's config dir reaches the tab.
+# round.accounts: the account's config dir reaches the tab.
 mkdir -p "$TMP_OC/acct-a"
-occ config set round.opencodeAccounts "[{\"name\":\"a\",\"configDir\":\"$TMP_OC/acct-a\"}]" >/dev/null || fail "config set round.opencodeAccounts failed"
+occ config set round.accounts "[{\"kind\":\"opencode\",\"name\":\"a\",\"dir\":\"$TMP_OC/acct-a\"}]" >/dev/null || fail "config set round.accounts failed"
 : > "$FH/log"
 ocrc worker dispatch dana --body-file "$OC/contract.md" --task F02 --kind opencode
 [ "$RC" = "0" ] || fail "dana should dispatch on account a, got $RC: $OUT $ERR"
 grep -qF -- "--env OPENCODE_CONFIG_DIR=$TMP_OC/acct-a" "$FH/log" || fail "the tab should carry the account's OPENCODE_CONFIG_DIR: $(cat "$FH/log")"
 case "$(cat "$FH/log")" in *CLAUDE_CONFIG_DIR*|*CODEX_HOME*) fail "no other kind's account variable: $(cat "$FH/log")" ;; esac
-pass "round.opencodeAccounts sets OPENCODE_CONFIG_DIR on the tab"
-occ config set round.opencodeAccounts "[]" >/dev/null
+pass "round.accounts sets OPENCODE_CONFIG_DIR on the tab"
+occ config set round.accounts "[]" >/dev/null
 
 # Pane states: the worker poll classifier on OpenCode 1.17 pane text.
 PANES="$TESTDIR/../internal/worker/testdata/panes"

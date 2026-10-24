@@ -58,6 +58,8 @@ var supportInVerb = []string{"rota config set", "rota config edit", "rota knowle
 // supportAllowed run on a support machine. Each writer here writes the
 // tracker, gitignored per-machine state or files outside the repo.
 var supportAllowed = []string{
+	// The support machine's hand-back; main is refused inside the verb.
+	"rota round support return",
 	// Reads.
 	"rota backlog drift", "rota backlog ids", "rota backlog list", "rota backlog milestones", "rota backlog stale",
 	"rota config check", "rota config show",

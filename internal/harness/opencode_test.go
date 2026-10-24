@@ -82,16 +82,16 @@ func TestOpenCodeKinds(t *testing.T) {
 	for cfg, want := range map[string]bool{
 		``:                                    false,
 		`{"round":{"workerKind":"opencode"}}`: true,
-		`{"round":{"tiers":{"opencode":{"light":"p/m"}}}}`:               true,
-		`{"round":{"opencodeCommand":"opencode"}}`:                       true,
-		`{"round":{"opencodeAccounts":[{"name":"a","configDir":"/x"}]}}`: true,
+		`{"round":{"tiers":{"opencode":{"light":"p/m"}}}}`:                   true,
+		`{"round":{"opencodeCommand":"opencode"}}`:                           true,
+		`{"round":{"accounts":[{"kind":"opencode","name":"a","dir":"/x"}]}}`: true,
 	} {
 		if got := h.Configured(cfgOf(t, cfg)); got != want {
 			t.Errorf("Configured(%s) = %v, want %v", cfg, got, want)
 		}
 	}
-	l := h.Accounts(cfgOf(t, `{"round":{"opencodeAccounts":[{"name":"a","configDir":"/x"}]}}`))
-	if l.Key != "round.opencodeAccounts" || len(l.Entries) != 1 || l.Entries[0] != (AccountEntry{Name: "a", Dir: "/x"}) {
+	l := h.Accounts(cfgOf(t, `{"round":{"accounts":[{"kind":"claude","name":"c","dir":"/c"},{"kind":"opencode","name":"a","dir":"/x"}]}}`))
+	if l.Key != "round.accounts" || len(l.Entries) != 1 || l.Entries[0] != (AccountEntry{Name: "a", Dir: "/x"}) {
 		t.Errorf("Accounts = %+v", l)
 	}
 }

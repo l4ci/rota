@@ -52,7 +52,7 @@ A [parallel round](../usage/parallel-rounds.md) keeps its per-repo state in the 
 
 The lease is what makes a session "the orchestrator". The Stop and SessionStart hooks act only for the session that holds it, so installing them wide leaves workers alone. Under `rota keepalive run` the supervisor holds the lease for its whole life, across restarts, and hands the pid to the orchestrator it starts through `ROTA_ROUND_HOLDER_PID`.
 
-The slot state directories sit outside `.worktrees/`, so `rota reap` never sees them. Codex workers log in through the default Codex home (or a `round.codexAccounts` home), never a per-slot one.
+The slot state directories sit outside `.worktrees/`, so `rota reap` never sees them. Codex workers log in through the default Codex home (or a Codex home from `round.accounts`), never a per-slot one.
 
 The registry the round writes inside the project is `.rota/workers.json`: see [`.rota/` folder](rota-folder.md#workersjson-round-state). The orchestrator's handoff is `.rota/handoff/<base>.md`, delivered to the next session by the SessionStart hook.
 

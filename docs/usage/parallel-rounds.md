@@ -39,7 +39,7 @@ a round is the same idea with the assignment, waiting and merging done by verbs.
    [solo mode](#solo-mode).
 2. **A backlog.** With `issues.source` set to `github` or `gitlab`, rounds take GitHub (`gh`) or GitLab (`glab`) issues, authenticated. On the file backend (the default) they take `.rota/BACKLOG.md` items and the orchestrator completes them at merge. Either way, workers open a PR against the base and the merge gate merges through the forge, so a project with an `origin` remote needs `gh` or `glab` installed and logged in on the file backend too (`rota doctor` checks it). With `forge.provider: local` (or no `origin` remote under `auto`) there is no PR: workers merge directly (`rota ship strategy` answers `direct`) and the gate never looks for one. See [issue backend](issue-backend.md).
 3. **Accounts, if you have more than one.** `round.accounts` maps slots to separate
-   `CLAUDE_CONFIG_DIR`s, so workers draw on different usage limits and `rota round assign` can avoid a
+   config homes (`kind: "claude"` entries set `CLAUDE_CONFIG_DIR`), so workers draw on different usage limits and `rota round assign` can avoid a
    cooling account. The entries are paths on your machine, so they go in `.rota/config.local.json`
    (per developer, gitignored, merged over `.rota/config.json`), not in the tracked file.
    `rota config set` writes the tracked file, so edit this one by hand:
@@ -48,14 +48,14 @@ a round is the same idea with the assignment, waiting and merging done by verbs.
    {
      "round": {
        "accounts": [
-         { "name": "a", "configDir": "/path/to/claude-a" },
-         { "name": "b", "configDir": "/path/to/claude-b" }
+         { "kind": "claude", "name": "a", "dir": "/path/to/claude-a" },
+         { "kind": "claude", "name": "b", "dir": "/path/to/claude-b" }
        ]
      }
    }
    ```
 
-   `rota worker account list` then shows each account with its usage verdict.
+   `rota worker account list` then shows each Claude account (`kind` is always `claude`: only those have a usage meter) with its usage verdict.
 
 4. **Issues a worker can pick up.** A candidate needs acceptance criteria or a design or plan note,
    closed dependencies and no file overlap with work in flight (see [Picking issues](#picking-issues)).
@@ -859,6 +859,15 @@ On a herdr or tmux round the done reading is taken when the pane reports done (`
 assign in a `burn` column: the headroom the assign recorded minus the meter now, never below 0.
 It reads the meters once per refresh for all accounts, and shows `n/a` for codex slots and accounts
 with no reading.
+
+## Two machines: main and support
+
+With `round.support` set, main labels issues for the support machine (`rota round support offer`)
+and the two orchestrators talk through the issue thread. The support machine hands back an issue
+it cannot work with `rota round support return <ID> --reason-file <f>`. Both `round watch` runs
+wake on the other machine's PR changes and comments, and main's merge gate accepts a support PR's
+approvals from relays the support orchestrator posted as issue comments. See
+`docs/contributing/rounds.md` (Support role) for the rules.
 
 ## Winding down
 

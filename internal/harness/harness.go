@@ -17,10 +17,9 @@ package harness
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 
-	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/config"
 )
 
 // Harness kinds of a worker.
@@ -182,9 +181,7 @@ type AccountList struct {
 func (l AccountList) In(home string) AccountList {
 	out := AccountList{Key: l.Key, Entries: make([]AccountEntry, len(l.Entries))}
 	for i, e := range l.Entries {
-		if e.Dir != "" {
-			e.Dir = filepath.Clean(fsio.ExpandHome(e.Dir, home))
-		}
+		e.Dir = config.ExpandDir(e.Dir, home)
 		out.Entries[i] = e
 	}
 	return out
@@ -313,8 +310,8 @@ type PreflightOpts struct {
 	// CommonDir is the git common dir, asked for only by a harness that keeps
 	// per-slot state beside it.
 	CommonDir func() (string, error)
-	// Accounts are the kind's configured homes (round.codexAccounts,
-	// round.opencodeAccounts); none means the default home. Account is the one
+	// Accounts are the kind's configured homes (the codex or opencode
+	// entries of round.accounts); none means the default home. Account is the one
 	// the slot ran under last, Load how many other slots of the kind hold each.
 	Accounts []HomeAccount
 	Account  string
@@ -322,7 +319,7 @@ type PreflightOpts struct {
 }
 
 // HomeAccount is one named account home of a kind: a CODEX_HOME of
-// round.codexAccounts, an OPENCODE_CONFIG_DIR of round.opencodeAccounts.
+// a codex entry of round.accounts, an OPENCODE_CONFIG_DIR of an opencode one.
 type HomeAccount struct{ Name, Home string }
 
 // Setup is what a passed preflight leaves for the dispatch. A non-empty Home
@@ -377,7 +374,7 @@ type Harness interface {
 	// herdr server's environment, not the orchestrator's.
 	AmbientAccount(getenv func(string) string) Account
 	// Accounts is the kind's configured accounts and the config key they come
-	// from (round.accounts, round.codexAccounts).
+	// from (the entries of round.accounts).
 	Accounts(cfg any) AccountList
 	// UsageMeter reports whether the kind's accounts expose a usage reading.
 	// One that does not is balanced from the limits the watcher logged.

@@ -223,6 +223,9 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 		return res, wrap(err)
 	}
 	res.Changed = true
+	if _, err := e.PostPointer(ctx, be, id, "pick", res.Winner.PR); err != nil {
+		res.Warnings = append(res.Warnings, fmt.Sprintf("pointer comment on %s not posted: %v", tracker.RefOf(id), err))
+	}
 	return res, nil
 }
 

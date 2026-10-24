@@ -12,7 +12,6 @@ import (
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/ledger"
-	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -34,14 +33,11 @@ type ReviewOpts struct {
 	MaxBounces int
 	// FreshAt is round.freshAt; 0 turns the fresh transfer off.
 	FreshAt int
-	// Board, Settings and OpenFindings feed the fresh transfer: the backlog it
-	// moves the claim on, the round settings, and the last review's findings
-	// still open (NOT ADDRESSED), one line each.
+	// Board and OpenFindings feed the fresh transfer: the backlog it moves the
+	// claim on, and the last review's findings still open (NOT ADDRESSED), one
+	// line each. The round settings and holder pid come from the Env.
 	Board        Board
-	Settings     roundcfg.Settings
 	OpenFindings []string
-	// HolderPID is the orchestrator pid for the fresh transfer's lease check.
-	HolderPID int
 	// Escalate posts the cap escalation on PR number.
 	Escalate func(ctx context.Context, number int, slot, title, body string) error
 }
@@ -64,6 +60,9 @@ type Relayed struct {
 	// Fresh is the slot the branch was transferred to at round.freshAt; "" for
 	// a plain relay. FreshSkipped says why a due fresh transfer fell back.
 	Fresh, FreshSkipped string
+	// PointerErr says why the support pointer comment was not posted; the
+	// relay itself went out.
+	PointerErr string
 }
 
 // itemLimit truncates one relayed item; the rest is on the PR.
@@ -195,6 +194,13 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		out.Bounces = recount()
 		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr), rollbackErr(merr))
 	}
+	// The relay stays on the PR; with the support split active the issue thread
+	// gets the pointer the other machine's watch reads (#1827).
+	if o.Board != nil && issue != "" {
+		if _, err := e.PostPointer(ctx, o.Board, issue, "review", s.PR()); err != nil {
+			out.PointerErr = err.Error()
+		}
+	}
 	return out, nil
 }
 
@@ -228,7 +234,7 @@ func (e Env) reviewFresh(ctx context.Context, root string, o ReviewOpts, reg wor
 		return skip("no backlog to move the claim on")
 	}
 	to := ""
-	for _, name := range o.Settings.Roster {
+	for _, name := range e.Round.Roster {
 		if t := reg.Slot(name); name != o.Slot && SlotIdle(t) {
 			to = name
 			break
@@ -250,10 +256,7 @@ func (e Env) reviewFresh(ctx context.Context, root string, o ReviewOpts, reg wor
 		return false, nil
 	}
 	out.Bounces = bounces
-	// ReviewOpts still carries the settings and pid: hand them to the transfer through the env.
-	te := e
-	te.Round, te.HolderPID = o.Settings, o.HolderPID
-	res, terr := te.Transfer(ctx, root, o.Board, TransferOpts{
+	res, terr := e.Transfer(ctx, root, o.Board, TransferOpts{
 		Issue: issue, To: to, Decisions: freshBrief(out.PR, o.OpenFindings),
 		Note:       fmt.Sprintf("bounce %d of round.freshAt %d: review input on %s moves to a fresh context", bounces, o.FreshAt, prLabel(out.PR)),
 		Tier:       s.Tier(),

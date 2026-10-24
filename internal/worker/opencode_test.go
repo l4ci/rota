@@ -62,7 +62,7 @@ func opencodeProject(t *testing.T, cfg string) string {
 // carries the plugin as inline config, the key sits in the slot's state dir
 // and the brief is signed with it.
 func TestDispatchOpenCodeGuardsTheSession(t *testing.T) {
-	dir := opencodeProject(t, `{"round":{"dispatch":"herdr","opencodeAccounts":[{"name":"a","configDir":"/cfg/a"}]}}`)
+	dir := opencodeProject(t, `{"round":{"dispatch":"herdr","accounts":[{"kind":"opencode","name":"a","dir":"/cfg/a"}]}}`)
 	rig := &opencodeRig{}
 	f := herdrFake()
 	res, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1", Kind: "opencode", Model: "p/m"})

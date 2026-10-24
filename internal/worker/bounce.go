@@ -129,7 +129,11 @@ func (e Env) BounceStore(root string) (BounceStore, error) {
 			return tracker.NewIssueTracker(e.Ctx, s, "", dir, machineOption())
 		}
 	}
-	it, err := build(root, tracker.SettingsFromConfig(cfg))
+	s, err := tracker.ReadSettings(cfg)
+	if err != nil {
+		return nil, err
+	}
+	it, err := build(root, s)
 	if errors.Is(err, tracker.ErrNoIssueTracker) || (err == nil && it == nil) {
 		return nil, fmt.Errorf("round.support keeps bounces on the issue, and issues.source has no issue tracker")
 	}
@@ -147,7 +151,11 @@ func (e Env) BounceStore(root string) (BounceStore, error) {
 // tracker that cannot say is ErrNoPushTrust.
 func (e Env) WriterTrust(root string) (*MarkerTrust, error) {
 	e = e.WithDefaults()
-	it, err := e.IssueComments(root, tracker.SettingsFromConfig(e.Config(root)))
+	s, err := tracker.ReadSettings(e.Config(root))
+	if err != nil {
+		return nil, err
+	}
+	it, err := e.IssueComments(root, s)
 	if errors.Is(err, tracker.ErrNoIssueTracker) || (err == nil && it == nil) {
 		return nil, fmt.Errorf("issues.source has no issue tracker")
 	}

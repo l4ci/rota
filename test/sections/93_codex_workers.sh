@@ -130,7 +130,7 @@ pass "a newer codex assigns; --accept-codex-version warns and does nothing"
 
 # Configured Codex accounts: spread over slots, each login checked in its own home.
 mkdir -p "$HOME_A" "$HOME_B"
-cxc config set round.codexAccounts "[{\"name\":\"a\",\"codexHome\":\"$HOME_A\"},{\"name\":\"b\",\"codexHome\":\"$HOME_B\"}]" >/dev/null || fail "config set round.codexAccounts failed"
+cxc config set round.accounts "[{\"kind\":\"codex\",\"name\":\"a\",\"dir\":\"$HOME_A\"},{\"kind\":\"codex\",\"name\":\"b\",\"dir\":\"$HOME_B\"}]" >/dev/null || fail "config set round.accounts failed"
 BR="$TMP_CX/brief.md"; printf 'x\n' > "$BR"
 cxrc worker dispatch ben --body-file "$BR" --task F01 --kind codex
 [ "$RC" = "5" ] || fail "an unlogged account should exit 5, got $RC: $OUT"
@@ -144,8 +144,8 @@ grep -qF -- "--env CODEX_HOME=$HOME_A" "$FH/log" || fail "ben's tab should carry
 cxrc worker dispatch dana --body-file "$BR" --task F02 --kind codex
 [ "$RC" = "0" ] || fail "dana should dispatch, got $RC: $OUT $ERR"
 grep -qF -- "--env CODEX_HOME=$HOME_B" "$FH/log" || fail "dana's tab should carry account b's CODEX_HOME (spread): $(cat "$FH/log")"
-pass "round.codexAccounts spreads slots over homes and checks each login"
-cxc config set round.codexAccounts "[]" >/dev/null
+pass "round.accounts spreads slots over homes and checks each login"
+cxc config set round.accounts "[]" >/dev/null
 
 # doctor: the codex check passes on the default home, then fails on an account that lost its login.
 DRB="$TMP_CX/drbin"
@@ -160,7 +160,7 @@ dr
 case "$(drf detail)" in *"codex 0.159.2"*"default home"*) ;; *) fail "doctor detail should name the version and the default home: $(drf detail)" ;; esac
 case "$(echo "$OUT" | python3 -c 'import json,sys; print(",".join(c["name"] for c in json.load(sys.stdin)["data"]["checks"]))')" in
   *",skills,codex,opencode,config dir,agents"*) ;; *) fail "codex should come after skills, before agents: $OUT" ;; esac
-cxc config set round.codexAccounts "[{\"name\":\"a\",\"codexHome\":\"$HOME_A\"},{\"name\":\"b\",\"codexHome\":\"$HOME_B\"}]" >/dev/null
+cxc config set round.accounts "[{\"kind\":\"codex\",\"name\":\"a\",\"dir\":\"$HOME_A\"},{\"kind\":\"codex\",\"name\":\"b\",\"dir\":\"$HOME_B\"}]" >/dev/null
 dr
 case "$(drf detail)" in *"a, b"*) ;; *) fail "doctor detail should name the accounts: $(drf detail)" ;; esac
 rm "$HOME_A/.fake-logged-in"

@@ -61,9 +61,6 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if _, err := c.deps().roundSettings(root, roundConfigUsage); err != nil {
-			return Result{}, err
-		}
 		ctx, stop := workerContext()
 		defer stop()
 		var decisions string
