@@ -91,6 +91,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	}
 	ctx := c.Context()
 	renv := withBoard(c, root, accountedRoundEnv(c, ctx, root))
+	renv.HolderPID = pid
 
 	e := roundtick.Env{Cap: set.AutopilotCap, MergeApproval: policy.Mode, Batch: set.Batch}
 	e.Capped = quotaCapped(renv, root, set)
@@ -155,7 +156,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	// Assign takes no tier, no kind and never accepts overlap: the round's
 	// defaults, and only a candidate that is ready as it stands.
 	e.Assign = func(ctx context.Context, id string) ([]string, error) {
-		res, err := renv.Assign(ctx, root, board, round.AssignOpts{ID: id, HolderPID: pid, Settings: set})
+		res, err := renv.Assign(ctx, root, board, round.AssignOpts{ID: id})
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)
 		}

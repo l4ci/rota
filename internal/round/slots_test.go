@@ -53,14 +53,14 @@ func TestIdleSlotNeverPicksASlotTransferRefuses(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	f.set.Roster = []string{"zed", "ben", "dana"}
+	f.env.Round.Roster = []string{"zed", "ben", "dana"}
 
 	if _, err := f.transfer("12", "zed", nil); blockedBy(t, err) != BlockExternal {
 		t.Fatalf("the fixture's external slot should be refused: %v", err)
 	}
 	// The watcher offers only the round's active slots (cli buildLimits).
 	reg := worker.LoadRegistryTolerant(f.root)
-	active, _ := Members(reg, f.set)
+	active, _ := Members(reg, f.env.Round)
 	name, ok := IdleSlot(reg, active, "", "")
 	if !ok || name != "dana" {
 		t.Fatalf("idle receiver = %q, %v; want dana (zed is external, ben holds 12)", name, ok)
