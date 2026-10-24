@@ -256,8 +256,9 @@ is posted.
   `round candidates` lists the issue again. It is refused on main (`blockedBy: role`) and while a
   support slot holds the issue (`blockedBy: claimed`).
 - **The issue thread is the index.** Every note one orchestrator posts for the other is an issue
-  comment (`rota item comment add <ID> --kind relay|feedback`). Bounce, pick and the review relay
-  also leave a one-line `rota:pr-pointer` comment on the issue linking the PR post. Comments carry
+  comment: `--kind feedback` for a plain note, `--kind relay` for a relayed instruction
+  (`rota item comment add <ID> --kind feedback|relay`; there is no `note` kind). Bounce, pick and the review relay
+  also leave a one-line `rota:pr-pointer` comment on the issue linking the PR post. Comments, relays included, carry
   a `rota:from <role>` stamp; only comments by authors with write access count.
 - **What each watch wakes on.** Main's `round watch` exits on a changed PR head for an offered or
   adopted issue, a PR opened for a `site:support` issue, and a new comment from the support

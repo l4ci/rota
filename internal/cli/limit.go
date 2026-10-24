@@ -194,9 +194,6 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 			return round.IdleSlot(reg, active, kind, account)
 		},
 		Transfer: func(ctx context.Context, issue, to string) error {
-			if _, err := c.deps().roundSettings(root, roundConfigRequired); err != nil {
-				return err
-			}
 			env, be, err := moveEnv(c, root)
 			if err != nil {
 				return err

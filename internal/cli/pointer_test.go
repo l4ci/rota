@@ -14,9 +14,6 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// #1827 AC-2: a bounce posted on the support machine's PR leaves one pointer
-// comment on the issue thread; a main PR's bounce posts no PR comment and no
-// pointer.
 // supportBounceDeps is main's side of a bounce with round.support set: the
 // issue tracker over fake, and the worker env's issue and PR comment fakes.
 func supportBounceDeps(fk *bounceFakes, fake *trackertest.Fake) *Deps {
@@ -36,6 +33,9 @@ func supportBounceDeps(fk *bounceFakes, fake *trackertest.Fake) *Deps {
 	return deps
 }
 
+// #1827 AC-2: a bounce posted on the support machine's PR leaves one pointer
+// comment on the issue thread; a main PR's bounce posts no PR comment and no
+// pointer.
 func TestBouncePostsPointer(t *testing.T) {
 	fk := &bounceFakes{pr: map[int][]string{}}
 	fake := &trackertest.Fake{Issues: []backlog.Issue{
