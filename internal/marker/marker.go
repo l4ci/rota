@@ -49,6 +49,10 @@ const (
 	// machine whose worker holds it.
 	KindBounce       = "bounce"
 	KindReviewBounce = "review-bounce"
+	// KindRelay is an orchestrator relay carried to the issue thread (#1827);
+	// KindSupportOffer is the comment `round support offer` leaves.
+	KindRelay        = "relay"
+	KindSupportOffer = "support-offer"
 )
 
 // opener matches `<!-- ` plus either prefix's name, up to the kind.
@@ -170,4 +174,37 @@ func ParseBounce(body string) (kind, head string, reset, ok bool) {
 		return m[1], "", true, true
 	}
 	return m[1], strings.TrimPrefix(m[2], "head="), false, true
+}
+
+var (
+	// relayRe finds the relay marker on the first or second line: the tracker
+	// puts its own `<!-- rota:comment <kind> -->` line ahead of the text.
+	relayRe = regexp.MustCompile(`\A(?:<!-- (?:rota|hv):comment [\p{L}\p{N}_]+ -->\n)?<!-- (?:rota|hv):relay round=(\p{Nd}+) -->(?:\n|\z)`)
+	offerRe = regexp.MustCompile(`\A(?:<!-- (?:rota|hv):comment [\p{L}\p{N}_]+ -->\n)?<!-- (?:rota|hv):support-offer -->(?:\n|\z)`)
+)
+
+// RelayLine renders `<!-- rota:relay round=<n> -->`.
+func RelayLine(round int) string { return Line(KindRelay, "round="+strconv.Itoa(round)) }
+
+// SupportOfferLine renders `<!-- rota:support-offer -->`.
+func SupportOfferLine() string { return Line(KindSupportOffer) }
+
+// ParseRelay reads a relay comment: its round and the relayed text after the
+// marker line.
+func ParseRelay(body string) (round int, text string, ok bool) {
+	body = strings.ReplaceAll(body, "\r\n", "\n")
+	m := relayRe.FindStringSubmatchIndex(body)
+	if m == nil {
+		return 0, "", false
+	}
+	n, err := strconv.Atoi(body[m[2]:m[3]])
+	if err != nil {
+		return 0, "", false
+	}
+	return n, body[m[1]:], true
+}
+
+// IsSupportOffer reports whether body is a support-offer comment.
+func IsSupportOffer(body string) bool {
+	return offerRe.MatchString(strings.ReplaceAll(body, "\r\n", "\n"))
 }

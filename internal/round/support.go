@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
@@ -105,6 +106,12 @@ func (e Env) OfferSupport(ctx context.Context, root string, be Board, ids []stri
 		}
 		if err != nil {
 			return changed, fmt.Errorf("%s: %w", tracker.RefOf(it.ID), err)
+		}
+		if !withdraw {
+			// The comment is the assignment approval the support PR cites.
+			if _, err := be.AddComment(it.ID, "feedback", marker.SupportOfferLine()+"\n"+fmt.Sprintf("Offered to the support machine %s by main.", support)); err != nil {
+				return changed, fmt.Errorf("%s: %w", tracker.RefOf(it.ID), err)
+			}
 		}
 		changed = append(changed, it.ID)
 	}

@@ -74,3 +74,16 @@ func TestNewRelayEntry(t *testing.T) {
 		t.Errorf("round = %v", v)
 	}
 }
+
+func TestCheckApprovalsOffer(t *testing.T) {
+	line := "## Approvals\n- round support offer: #7 offered to mac, the maintainer's call\n"
+	if got := CheckApprovalsOffer(line, nil, true); got != "" {
+		t.Errorf("offered: %q", got)
+	}
+	if got := CheckApprovalsOffer(line, relayLog(3, "use the shared cache for the lookup"), true); got != "" {
+		t.Errorf("offered with relays: %q", got)
+	}
+	if got := CheckApprovalsOffer(line, nil, false); !strings.Contains(got, "support offer") {
+		t.Errorf("no offer comment: %q", got)
+	}
+}

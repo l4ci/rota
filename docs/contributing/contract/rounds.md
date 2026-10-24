@@ -434,6 +434,7 @@ data: {"id": string, "comment": string, "changed": bool}
 exit: 2 when the ID or `--reason-file` is missing or the reason is empty; 3 when the item is unknown or closed; 4 with `blockedBy` `role` on main (the verb runs on the support machine, `round.role` support), `config` when `round.support` is empty or there is no issue tracker with labels (also `backend` in file mode), `claimed` while a slot of this round still holds the issue
 old: none (new in #1827; before it a support machine had no way to give an offered issue back)
 note: the support machine's hand-back (#1827 AC-1) when an offered issue cannot be worked (not ready, wrong premise, collides with main's work, held by the maintainer). It posts the reason as a `feedback` comment on the issue whose body carries `<!-- rota:support-return -->` on the line after the tracker's own kind marker, then removes the support label, so main's `round candidates --scope open` lists the issue again. Prints `returned <ID>`. An issue that no longer carries the label is already main's: `changed: false`, a `noop:` line and nothing posted. Unlike `support offer`, `return` is not in the support fence: main is refused inside the verb (`blockedBy` `role`), since main takes an offer back with `support offer --withdraw`.
+note: (#1827) `round support offer` posts a `<!-- rota:support-offer -->` comment on each issue it newly labels (not on a repeat or a `--withdraw`). The merge gate reads it as the assignment approval of a support PR (see `worker gate`).
 
 ### C11: launch the orchestrator
 
