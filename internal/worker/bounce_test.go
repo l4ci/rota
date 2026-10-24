@@ -370,6 +370,20 @@ func TestBounceStoreWithoutPushTrustIsRefused(t *testing.T) {
 	}
 }
 
+func TestIssueTrackerReadsRefuseInvalidSource(t *testing.T) {
+	root := bounceRoot(t, `{"issues":{"source":"svn"},"round":{"support":"mac"}}`)
+	e := Env{IssueComments: func(string, tracker.Settings) (IssueComments, error) {
+		t.Error("tracker built over an invalid issues.source")
+		return noTrustComments{}, nil
+	}}
+	if _, err := e.BounceStore(root); !tracker.IsKind(err, tracker.KindInternal) {
+		t.Errorf("BounceStore err = %v, want KindInternal", err)
+	}
+	if _, err := e.WriterTrust(root); !tracker.IsKind(err, tracker.KindInternal) {
+		t.Errorf("WriterTrust err = %v, want KindInternal", err)
+	}
+}
+
 type noTrustComments struct{}
 
 func (noTrustComments) Comments(context.Context, tracker.IssueKey) ([]tracker.Comment, error) {

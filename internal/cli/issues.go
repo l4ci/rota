@@ -114,7 +114,10 @@ func issuesProvider(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		r, _ := issues.Provider(c.Context(), env, tracker.ForgeReader, dir) // a reader never fails
+		r, err := issues.Provider(c.Context(), env, tracker.ForgeReader, dir)
+		if tracker.IsKind(err, tracker.KindInternal) { // a corrupt config; a reader otherwise never fails
+			return Result{}, trackerErr(err)
+		}
 		if note := r.Note(); note != "" {
 			c.Warn("%s", note)
 		}
