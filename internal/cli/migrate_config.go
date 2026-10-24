@@ -39,6 +39,12 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		if *apply {
+			// A refusal must come before any step writes: plan them all first.
+			if err := migrateConfigPlan(c, root, keep); err != nil {
+				return roundMigrationFail(err)
+			}
+		}
 		m, err := config.MigrateRoundKeysFiles(root, *apply)
 		if err != nil {
 			return roundMigrationFail(err)
@@ -85,6 +91,22 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: data, Text: "changed:\n" + strings.Join(lines, "\n")}, nil
 	}
+}
+
+// migrateConfigPlan runs every refusing step as a preview, so an --apply that
+// one of them would refuse writes nothing from the others.
+func migrateConfigPlan(c *Ctx, root string, keep []string) error {
+	if _, err := config.MigrateRoundKeysFiles(root, false); err != nil {
+		return err
+	}
+	if _, err := migrateAccounts(c, root, false); err != nil {
+		return err
+	}
+	if _, err := migrateMerges(c, root, false); err != nil {
+		return err
+	}
+	_, err := config.MigrateScopeFiles(root, false, keep)
+	return err
 }
 
 // migrateAccounts is the accounts step of `rota migrate config`: its own call

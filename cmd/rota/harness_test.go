@@ -75,7 +75,7 @@ func runMain(m *testing.M) int {
 	}
 	os.Setenv("TMPDIR", childTmp)
 	rotaBin = filepath.Join(harnessTmp, "rota")
-	build := exec.Command("go", "build", "-o", rotaBin, ".")
+	build := exec.Command("go", "build", "-tags", "rotatest", "-o", rotaBin, ".")
 	build.Dir = filepath.Join(repoDir, "cmd", "rota")
 	if out, err := build.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "go build: %v\n%s", err, out)
@@ -87,7 +87,7 @@ func runMain(m *testing.M) int {
 		"ROTA_TEST_DOCTOR_DISK=50:100", // a healthy disk: the real one must not change the goldens (#85)
 		"FAKE_TRACKER_DB=" + filepath.Join(harnessTmp, "tracker.json"),
 		"LC_ALL=C.UTF-8",
-		// No retry or bulk-write pauses: the tracker's test seams (formerly the
+		// No retry or bulk-write pauses: the rotatest build's seams (formerly the
 		// issues.retryWaitSeconds and issues.bulkPaceMs keys).
 		"ROTA_ISSUES_RETRY_WAIT_SECONDS=0", "ROTA_ISSUES_BULK_PACE_MS=0",
 		// No detached housekeeping in any repo a scenario touches: the fixture

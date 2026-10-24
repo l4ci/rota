@@ -338,22 +338,13 @@ func (m *migrator) op(desc string, fn func() error) error {
 	return fn()
 }
 
-// bulkPace is the pause between bulk tracker writes, to stay under the
-// forges' secondary rate limits.
-const bulkPace = time.Second
+// BulkPace is the pause between bulk tracker writes, to stay under the
+// forges' secondary rate limits. It is a variable only so tests can zero it;
+// the rotatest build tag (test/runner.sh) also reads ROTA_ISSUES_BULK_PACE_MS.
+var BulkPace = time.Second
 
-// BulkPaceEnv is a test seam: ROTA_ISSUES_BULK_PACE_MS (whole milliseconds, 0
-// for none) replaces the pause. It is not a config key.
-const BulkPaceEnv = "ROTA_ISSUES_BULK_PACE_MS"
-
-// pace is the pause between bulk writes: bulkPace, or BulkPaceEnv when it
-// holds a number of at least 0.
-func (m *migrator) pace() time.Duration {
-	if ms, err := strconv.ParseInt(os.Getenv(BulkPaceEnv), 10, 64); err == nil && ms >= 0 {
-		return time.Duration(ms) * time.Millisecond
-	}
-	return bulkPace
-}
+// pace is the pause between bulk writes.
+func (m *migrator) pace() time.Duration { return BulkPace }
 
 // backend is the issue backend over the lazily built tracker.
 func (m *migrator) backend() (*backlog.Issues, error) {

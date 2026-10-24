@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -303,5 +304,60 @@ func TestMigrateConfigAccountsConflictRefuses(t *testing.T) {
 	}
 	if readConfig(t, root) != body {
 		t.Errorf("config written despite the conflict: %s", readConfig(t, root))
+	}
+}
+
+// A tracked round.commands object and a local one merge entry by entry: the
+// scope step must not delete the tracked entries because the local file
+// "already holds" the object (#1825 review).
+func TestMigrateConfigKeepsEveryCommandEntry(t *testing.T) {
+	isolateGlobal(t)
+	root := trackerProject(t, `{"round":{"workerCommand":"claude --x","codexCommand":"codex -y"},"docs":{"path":"docs"}}`+"\n")
+	local := filepath.Join(root, ".rota", "config.local.json")
+	writeFile(t, local, `{"round":{"opencodeCommand":"oc"}}`+"\n")
+	if code, out := textRun(t, "-C", root, "migrate", "config", "--apply"); code != 0 {
+		t.Fatalf("apply: %d %q", code, out)
+	}
+	for kind, want := range map[string]string{"claude": "claude --x", "codex": "codex -y", "opencode": "oc"} {
+		if got, _ := config.Lookup(localConfig(t, root), "round.commands."+kind); got != want {
+			t.Errorf("round.commands.%s = %v, want %q", kind, got, want)
+		}
+	}
+	if code, out := textRun(t, "-C", root, "migrate", "config"); code != 0 || !strings.Contains(out, "nothing to migrate") {
+		t.Errorf("second run: %d %q", code, out)
+	}
+}
+
+// The preview plans exactly what --apply writes, scope lines included, on a
+// config that needs both the merges and the scope step.
+func TestMigrateConfigPreviewMatchesApply(t *testing.T) {
+	isolateGlobal(t)
+	root := trackerProject(t, `{"round":{"workerCommand":"claude --x","slots":4},"models":{"orchestrator":"sonnet"},"docs":{"path":"docs"}}`+"\n")
+	_, preview := textRun(t, "-C", root, "migrate", "config")
+	_, applied := textRun(t, "-C", root, "migrate", "config", "--apply")
+	strip := func(s string) string {
+		s = strings.TrimPrefix(s, "would change:\n")
+		return strings.TrimPrefix(s, "changed:\n")
+	}
+	pl, al := strings.Split(strings.TrimSpace(strip(preview)), "\n"), strings.Split(strings.TrimSpace(strip(applied)), "\n")
+	sort.Strings(pl)
+	sort.Strings(al)
+	if !reflect.DeepEqual(pl, al) || len(pl) < 3 {
+		t.Errorf("preview != apply\npreview:\n%s\napply:\n%s", preview, applied)
+	}
+}
+
+// A merges conflict under --apply writes nothing, not even the round-key and
+// accounts steps that run before it.
+func TestMigrateConfigConflictWritesNothingEarlier(t *testing.T) {
+	isolateGlobal(t)
+	root := trackerProject(t, `{"work":{"workerSlots":4},"models":{"worker":"opus"},"round":{"tiers":{"claude":{"standard":"haiku"}}},"docs":{"path":"docs"}}`+"\n")
+	before := readConfig(t, root)
+	code, _ := textRun(t, "-C", root, "migrate", "config", "--apply")
+	if code != 4 {
+		t.Errorf("exit = %d, want 4", code)
+	}
+	if readConfig(t, root) != before {
+		t.Errorf("a refused --apply changed config.json:\n%s", readConfig(t, root))
 	}
 }

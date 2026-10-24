@@ -169,7 +169,7 @@ func TestMigratePace(t *testing.T) {
 	root := migProject(t, nil)
 	f := &trackertest.MS{Fake: &trackertest.Fake{}}
 	o, _, sleeps := newMig(t, root, true, f)
-	t.Setenv(BulkPaceEnv, "250")
+	setPace(t, 250*time.Millisecond)
 	res, err := Run(o)
 	if err != nil {
 		t.Fatal(err)
@@ -193,13 +193,13 @@ func TestMigratePace(t *testing.T) {
 		}
 	}
 	// no pace, no pause; a preview never pauses
-	t.Setenv(BulkPaceEnv, "0")
+	setPace(t, 0*time.Millisecond)
 	root = migProject(t, nil)
 	o, _, sleeps = newMig(t, root, true, &trackertest.MS{Fake: &trackertest.Fake{}})
 	if _, err := Run(o); err != nil || len(*sleeps) != 0 {
 		t.Errorf("pace 0: %v, %d pauses", err, len(*sleeps))
 	}
-	t.Setenv(BulkPaceEnv, "250")
+	setPace(t, 250*time.Millisecond)
 	o, _, sleeps = newMig(t, migProject(t, nil), false, nil)
 	if _, err := Run(o); err != nil || len(*sleeps) != 0 {
 		t.Errorf("preview paused %d times", len(*sleeps))
@@ -557,4 +557,12 @@ func TestPlanItemsFallsBackToTheDetailFileProof(t *testing.T) {
 		return
 	}
 	t.Fatal("F01 not planned")
+}
+
+// setPace sets the bulk pace for the test and restores it after.
+func setPace(t *testing.T, d time.Duration) {
+	t.Helper()
+	old := BulkPace
+	BulkPace = d
+	t.Cleanup(func() { BulkPace = old })
 }
