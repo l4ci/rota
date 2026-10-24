@@ -118,7 +118,7 @@ func runCmd(m tui.Model, cmd tui.Cmd) tui.Model {
 	if cmd.Async != nil {
 		err = cmd.Async(context.Background())
 	}
-	m, _ = m.Update(tui.Done{Err: err})
+	m, _ = m.Update(tui.Done{Err: err, Tag: cmd.Tag})
 	return m
 }
 

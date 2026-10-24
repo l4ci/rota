@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/l4ci/rota/internal/harness"
@@ -90,6 +91,12 @@ func snapFromReport(rep *round.Report) roundSnap {
 // loadRoundSnap is one full pass: status, then the candidates. Nothing prints:
 // a warning on stderr would tear the screen, so warnings become Notes.
 func loadRoundSnap(ctx context.Context, c *Ctx, root string) (roundSnap, error) {
+	// Every read below goes through c.Context(). The pass's own ctx outlives
+	// the command that built c (a palette entry's run has returned by now) and
+	// ends with the screen.
+	cc := *c
+	cc.ctx = ctx
+	c = &cc
 	c.deps().freshReads()
 	env := c.deps().RoundEnv(ctx, root)
 	rep, err := env.Status(ctx, root)
@@ -208,9 +215,25 @@ func burnLabel(r round.Row) string {
 
 // loadBox carries a refresh's result from Exec back to Update, which is pure.
 type loadBox struct {
-	mu   sync.Mutex
-	snap roundSnap
-	err  error
+	mu     sync.Mutex
+	snap   roundSnap
+	err    error
+	cancel context.CancelFunc // of the pass in flight
+}
+
+func (b *loadBox) cancelSet() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.cancel != nil
+}
+
+// stop cancels the pass in flight, when there is one: the screen is closing.
+func (b *loadBox) stop() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.cancel != nil {
+		b.cancel()
+	}
 }
 
 func (b *loadBox) put(s roundSnap, err error) {
@@ -225,7 +248,12 @@ func (b *loadBox) take() (roundSnap, error) {
 	return b.snap, b.err
 }
 
+// screens numbers the screens opened in this process, so a Done can be told
+// from a previous screen's.
+var screens atomic.Uint64
+
 type roundScreen struct {
+	tag     string // marks this screen's passes; a Done with another tag is not ours
 	snap    roundSnap
 	sel     string // key of the selected entry, so a refresh keeps the cursor
 	load    roundLoader
@@ -242,7 +270,7 @@ type roundScreen struct {
 }
 
 func newRoundScreen(s roundSnap, load roundLoader, now func() time.Time, every time.Duration) *roundScreen {
-	m := &roundScreen{snap: s, load: load, box: &loadBox{}, now: now, every: every, updated: now()}
+	m := &roundScreen{tag: fmt.Sprintf("load-%d", screens.Add(1)), snap: s, load: load, box: &loadBox{}, now: now, every: every, updated: now()}
 	if es := m.entries(); len(es) > 0 {
 		m.sel = es[0].key
 	}
@@ -271,6 +299,9 @@ func (m *roundScreen) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 		}
 		return n.startRefresh()
 	case tui.Done:
+		if t.Tag != n.tag && t.Tag != tagOpen {
+			return &n, tui.Cmd{} // a pass of a screen that was closed
+		}
 		if t.Tag == tagOpen {
 			if t.Err != nil {
 				n.note = tui.Sanitize(t.Err.Error(), false)
@@ -300,6 +331,7 @@ func (m *roundScreen) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 		case t.Is('p'):
 			return n.openLink("PR")
 		case t.Kind == tui.KeyEsc || t.Is('q') || t.Kind == tui.KeyCtrlC:
+			n.box.stop()
 			return &n, tui.Cmd{Quit: true}
 		case t.Is('r'):
 			return n.startRefresh()
@@ -365,7 +397,12 @@ func (m *roundScreen) startRefresh() (tui.Model, tui.Cmd) {
 // screen cancels its context.
 func (m *roundScreen) pass() tui.Cmd {
 	box, load := m.box, m.load
-	return tui.Cmd{Async: func(ctx context.Context) error {
+	return tui.Cmd{Tag: m.tag, Async: func(ctx context.Context) error {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		box.mu.Lock()
+		box.cancel = cancel
+		box.mu.Unlock()
 		s, err := load(ctx)
 		box.put(s, err)
 		return nil

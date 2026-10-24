@@ -115,7 +115,7 @@ func TestRoundOverviewSelection(t *testing.T) {
 	s.Slots[0].Event = &worker.Event{Kind: worker.EventDone} // #101 moves to review, above #102 in the list
 	rm := m.(*roundScreen)
 	rm.box.put(s, nil)
-	m, _ = m.Update(tui.Done{})
+	m, _ = m.Update(tui.Done{Tag: m.(*roundScreen).tag})
 	if out := tui.Strip(m.Render(120, 40, tui.Style{})); !strings.Contains(out, "› #102") {
 		t.Errorf("cursor left #102 when #101 changed groups:\n%s", out)
 	}
@@ -147,7 +147,7 @@ func TestRoundOverviewPartialFailureKeepsLastRead(t *testing.T) {
 	rm := m
 	rm.box.put(bad, nil)
 	var next tui.Model
-	next, _ = rm.Update(tui.Done{})
+	next, _ = rm.Update(tui.Done{Tag: rm.tag})
 	out := tui.Strip(next.Render(120, 40, tui.Style{}))
 	for _, want := range []string{"Support queue (3)", "#201", "support queue unavailable: forge: down (rows are from the last read)", "#301", "candidates unavailable: forge: down"} {
 		if !strings.Contains(out, want) {
@@ -273,7 +273,7 @@ func TestRoundOverviewOpenFailureAndRefresh(t *testing.T) {
 	next := linksFixture()
 	next.Slots = next.Slots[1:]
 	rm.box.put(next, nil)
-	m2, _ := m1.Update(tui.Done{})
+	m2, _ := m1.Update(tui.Done{Tag: rm.tag})
 	err := cmd.Exec()
 	if err == nil {
 		t.Fatal("opener failure was swallowed")
