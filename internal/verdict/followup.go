@@ -93,6 +93,13 @@ func newFollowUp(f Finding, pr, kind, v string) followUp {
 	}
 	// The line backlog's deferredDependency keys on: keep its wording.
 	fmt.Fprintf(&b, "\nDeferred %s finding from the %s %s verdict on %s.\n", f.Severity, kind, v, pr)
+	if patch := strings.TrimRight(f.Patch, "\n"); patch != "" {
+		fence := "```"
+		for strings.Contains(patch, fence) {
+			fence += "`"
+		}
+		fmt.Fprintf(&b, "\nPatch:\n\n%sdiff\n%s\n%s\n", fence, patch, fence)
+	}
 	ac := neutralAC
 	if fix := strings.TrimSpace(f.Fix); fix != "" {
 		ac = fix
