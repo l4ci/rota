@@ -14,14 +14,13 @@ import (
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
-	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
 type parked struct{ issues []string }
 
-func (p *parked) park(issue, _ string, _ roundcfg.Settings) error {
+func (p *parked) park(issue, _ string) error {
 	p.issues = append(p.issues, issue)
 	return nil
 }
@@ -77,7 +76,7 @@ func TestParkFailureIsReportedAndTheCountStands(t *testing.T) {
 	root := t.TempDir()
 	recordBounceCappedVia(worker.Env{Config: diskConfig}, nil, root, "7", "w1", "a", 0)
 	recordBounceCappedVia(worker.Env{Config: diskConfig}, nil, root, "7", "w1", "b", 0)
-	o, err := Gate(worker.Env{Config: diskConfig}, root, "7", worker.GateResult{Verdict: worker.GateProvenanceFail, SHA: "c"}, func(string, string, roundcfg.Settings) error { return errors.New("no lease") })
+	o, err := Gate(worker.Env{Config: diskConfig}, root, "7", worker.GateResult{Verdict: worker.GateProvenanceFail, SHA: "c"}, func(string, string) error { return errors.New("no lease") })
 	if err == nil || o.Parked || o.Bounces != 3 {
 		t.Fatalf("%+v %v", o, err)
 	}

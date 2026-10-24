@@ -1474,3 +1474,17 @@ func TestAssignCodexUnsentDispatchIsBlocked(t *testing.T) {
 		t.Fatalf("poll unsent assignment: %+v, %v", rows, err)
 	}
 }
+
+// A round.* key that failed to load refuses Assign as a usage error before the
+// item is claimed or a slot touched.
+func TestAssignRefusesOnRoundErr(t *testing.T) {
+	f := newAssignFixture(t)
+	f.env.RoundErr = errors.New(`round.stallMinutes must be an integer (got "soon")`)
+	_, err := f.assign("12", "ben", nil)
+	if exitOf(err) != exitcode.ExitUsage {
+		t.Fatalf("exit %d for %v, want usage", exitOf(err), err)
+	}
+	if got := worker.LoadRegistryTolerant(f.root).Slot("ben").Task(); got != "" {
+		t.Errorf("ben holds %q after the refusal, want none", got)
+	}
+}

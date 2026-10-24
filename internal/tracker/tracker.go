@@ -452,8 +452,8 @@ type Settings struct {
 // issues.labels.notPlanned, issues.connection,
 // issues.jira.project, issues.linear.team and issues.itsaplan.project, with the schema
 // defaults for absent or null keys. An invalid forge.provider or issues.source
-// reads as its default here; ValidateConfig (and the *FromConfig constructors)
-// fail on it instead.
+// reads as its default here; ValidateConfig, ReadSettings (and the *FromConfig
+// constructors) fail on it instead.
 func SettingsFromConfig(cfg any) Settings {
 	s := Settings{Provider: config.ForgeAuto, Source: config.SourceFile, RetryWait: retryWait(), NotPlannedLabel: config.Label(cfg, "notPlanned")}
 	if p, err := config.ForgeProvider(cfg); err == nil {
@@ -468,6 +468,16 @@ func SettingsFromConfig(cfg any) Settings {
 		}
 	}
 	return s
+}
+
+// ReadSettings is SettingsFromConfig for a caller that acts on the result: it
+// fails with ValidateConfig's error instead of defaulting an invalid
+// forge.provider or issues.source.
+func ReadSettings(cfg any) (Settings, error) {
+	if err := ValidateConfig(cfg); err != nil {
+		return Settings{}, err
+	}
+	return SettingsFromConfig(cfg), nil
 }
 
 // defaultRetryWait is the pause before a rate-limited tracker call is retried.

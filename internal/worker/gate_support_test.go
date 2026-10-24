@@ -21,6 +21,12 @@ func supportComment(author, kind, marker, text string) map[string]string {
 // supportGate runs the provenance step over a PR of issue 7 held by slot w1.
 func supportGate(t *testing.T, support bool, body string, comments ...map[string]string) GateResult {
 	t.Helper()
+	return supportGateWith(t, support, body, nil, comments...)
+}
+
+// supportGateWith is supportGate with a hook on the fake forge's word list.
+func supportGateWith(t *testing.T, support bool, body string, setup func(*world), comments ...map[string]string) GateResult {
+	t.Helper()
 	w := newWorld(t, ghURL)
 	cfg := `{"issues":{"source":"github"},"test":{"full":["true"]}}`
 	if support {
@@ -35,6 +41,9 @@ func supportGate(t *testing.T, support bool, body string, comments ...map[string
 	if len(comments) > 0 {
 		raw, _ := json.Marshal(comments)
 		w.forge("issueComments", string(raw))
+	}
+	if setup != nil {
+		setup(w)
 	}
 	res, err := w.gate(false, GateOpts{CheckOnly: true})
 	if err != nil {
@@ -87,5 +96,38 @@ func TestProvenanceOfferCountsAsApproval(t *testing.T) {
 	forged := supportComment("mallory", "feedback", "<!-- rota:support-offer -->", "offered")
 	if res := supportGate(t, true, body, forged); res.Verdict != GateProvenanceFail {
 		t.Errorf("a non-writer's offer: %s", res.Verdict)
+	}
+}
+
+// #1869 AC-4: a failed issue read falls back to the local relay log with one
+// skip note; a citation the log cannot satisfy still fails.
+func TestProvenanceIssueReadErrorFallsBackToLocalLog(t *testing.T) {
+	broken := func(w *world) { w.forge("issueErr", "rate limited") }
+	res := supportGateWith(t, true, "## Approvals\nNone\n", broken)
+	if res.Verdict != GateFresh {
+		t.Fatalf("a failed issue read must not fail closed: %s %s", res.Verdict, res.Err)
+	}
+	skips := 0
+	for _, n := range res.Notes {
+		if strings.Contains(n, "PROVENANCE-SKIP") {
+			skips++
+		}
+	}
+	if skips != 1 {
+		t.Errorf("want one PROVENANCE-SKIP note, got %d in %v", skips, res.Notes)
+	}
+	if res := supportGateWith(t, true, relayCite, broken); res.Verdict != GateProvenanceFail {
+		t.Errorf("a relay the local log lacks must still fail: %s %s", res.Verdict, res.Err)
+	}
+}
+
+// #1869 AC-5: the offer citation is enforced on a support PR only.
+func TestProvenanceOfferCiteOnlyOnSupportPR(t *testing.T) {
+	body := "## Approvals\n- maintainer: the support offer verb should post a comment\n"
+	if res := supportGate(t, false, body); res.Verdict != GateFresh {
+		t.Errorf("a non-support PR may mention the support offer: %s %s", res.Verdict, res.Err)
+	}
+	if res := supportGate(t, true, body); res.Verdict != GateProvenanceFail {
+		t.Errorf("a support PR citing an offer nobody posted: %s", res.Verdict)
 	}
 }

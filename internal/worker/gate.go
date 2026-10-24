@@ -1837,11 +1837,18 @@ func (g *gate) checkProvenance() (failMsg, brokeMsg string) {
 		}
 		return "", fmt.Sprintf("could not read the body of %s to check its approvals: %v", g.pr, err)
 	}
-	relays, offered, err := g.supportApprovals()
+	relays, offered, support, err := g.supportApprovals()
 	if err != nil {
-		return "", fmt.Sprintf("could not read the issue comments of %s to check its approvals: %v", g.pr, err)
+		// Skip and note, never fail closed: the local relay log still checks
+		// every relay citation, and the offer citation is left unchecked.
+		g.res.Notes = append(g.res.Notes, fmt.Sprintf("PROVENANCE-SKIP %s — could not read the issue comments of %s (%v); checked against the local relay log only", g.o.Slot, g.pr, err))
+		relays, support = g.target.relays, false
 	}
-	if msg := CheckApprovalsOffer(body, relays, offered); msg != "" {
+	check := CheckApprovals
+	if support {
+		check = func(body string, relays []any) string { return CheckApprovalsOffer(body, relays, offered) }
+	}
+	if msg := check(body, relays); msg != "" {
 		return fmt.Sprintf("PROVENANCE-FAIL %s: %s", g.o.Slot, msg), ""
 	}
 	return "", ""
@@ -1850,24 +1857,25 @@ func (g *gate) checkProvenance() (failMsg, brokeMsg string) {
 // supportApprovals is the slot's local relay log plus, for a PR whose issue
 // carries the support label under round.support, the relays and the offer the
 // other machine left as issue comments (#1827). Only writer-trusted authors
-// count. Anything else returns the local log alone, with no extra read.
-func (g *gate) supportApprovals() (relays []any, offered bool, err error) {
+// count. support says the PR is one, so the offer citation is enforced; any
+// other PR returns the local log alone, with no extra read.
+func (g *gate) supportApprovals() (relays []any, offered, support bool, err error) {
 	relays = g.target.relays
 	cfg := g.in.cfg
 	key, ok := tracker.ParseKey(g.target.Issue)
 	if cfg.Support == "" || cfg.SupportLabel == "" || g.issues == nil || !ok {
-		return relays, false, nil
+		return relays, false, false, nil
 	}
 	is, err := g.issues.Get(g.ctx, key, true)
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 	if !slices.Contains(is.Labels, cfg.SupportLabel) {
-		return relays, false, nil
+		return relays, false, false, nil
 	}
 	trust := NewMarkerTrust(g.ctx, g.issues)
 	relays = append(slices.Clone(relays), RelaysFromComments(g.ctx, trust, is.Comments)...)
-	return relays, HasSupportOffer(trust, is.Comments), nil
+	return relays, HasSupportOffer(trust, is.Comments), true, nil
 }
 
 // mergeRemote merges through the forge and confirms it landed. done is true

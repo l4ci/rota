@@ -361,6 +361,29 @@ func TestSettingsFromConfig(t *testing.T) {
 	}
 }
 
+// TestReadSettingsRefusesInvalidKeys: where SettingsFromConfig defaults an
+// invalid forge.provider or issues.source, ReadSettings fails with the one
+// ValidateConfig error instead.
+func TestReadSettingsRefusesInvalidKeys(t *testing.T) {
+	for _, raw := range []string{`{"issues":{"source":"svn"}}`, `{"forge":{"provider":"bitbucket"}}`} {
+		cfg, err := jsonx.Decode([]byte(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := ValidateConfig(cfg)
+		if want == nil {
+			t.Fatalf("%s: ValidateConfig accepts it", raw)
+		}
+		if _, err := ReadSettings(cfg); err == nil || err.Error() != want.Error() || !IsKind(err, KindInternal) {
+			t.Errorf("%s: ReadSettings err = %v, want %v", raw, err, want)
+		}
+	}
+	cfg, _ := jsonx.Decode([]byte(`{"issues":{"source":"jira"}}`))
+	if s, err := ReadSettings(cfg); err != nil || s != SettingsFromConfig(cfg) {
+		t.Errorf("valid config: %+v, %v", s, err)
+	}
+}
+
 func TestAdapterParseErrors(t *testing.T) {
 	answers := map[string]string{
 		"issue view":   "not json",
