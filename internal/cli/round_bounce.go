@@ -8,6 +8,7 @@ import (
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
@@ -63,8 +64,12 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 			// Idempotent per head, so a head the store deduped posts too: a
 			// failed post whose undo failed leaves the head counted, and the
 			// retry must still reach the support worker.
-			if err := postSupportBounce(env, root, issue, *slot, *head); err != nil {
+			posted, pr, err := postSupportBounce(env, root, issue, *slot, *head)
+			if err != nil {
 				return Result{}, errors.Join(err, rec.Undo())
+			}
+			if posted {
+				postSupportPointer(c, root, issue, "bounce", pr)
 			}
 		}
 		d := jsonx.NewObject()
@@ -166,9 +171,9 @@ func recordBounce(env worker.Env, root, issue, slot, head string, max int) (work
 // built it (#1598 AC-8), with the open findings of the branch's review verdict
 // as the reason. The PR is the named slot's, else the one of the slot or the
 // queued record holding the issue; any other PR posts nothing.
-func postSupportBounce(env worker.Env, root, issue, slot, head string) error {
+func postSupportBounce(env worker.Env, root, issue, slot, head string) (posted bool, pr string, err error) {
 	reg := worker.LoadRegistryTolerant(root)
-	var branch, pr string
+	var branch string
 	for _, s := range reg.Slots() {
 		if (slot != "" && s.Name() == slot) || (slot == "" && s.HeldID() == issue) {
 			branch, pr = s.Branch(), s.PR()
@@ -182,8 +187,24 @@ func postSupportBounce(env worker.Env, root, issue, slot, head string) error {
 	if fs := openFindings(root, branch); len(fs) > 0 {
 		why = "Open findings:\n- " + strings.Join(fs, "\n- ")
 	}
-	_, err := env.PostReviewBounce(root, branch, pr, head, why)
-	return err
+	posted, err = env.PostReviewBounce(root, branch, pr, head, why)
+	return posted, pr, err
+}
+
+// postSupportPointer leaves the pointer comment on the issue after a post on
+// its PR (#1827), with the support split active only. The post on the PR
+// already went out, so a failure here is a warning.
+func postSupportPointer(c *Ctx, root, issue, kind, url string) {
+	if roundcfg.SupportName(c.deps().Config(root)) == "" {
+		return
+	}
+	env, be, err := moveEnv(c, root)
+	if err == nil {
+		_, err = env.PostPointer(c.Context(), be, issue, kind, url)
+	}
+	if err != nil {
+		c.Warn("pointer comment on %s not posted: %v", tracker.RefOf(issue), err)
+	}
 }
 
 func maxText(max int) string {

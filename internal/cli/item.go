@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -934,6 +935,14 @@ func itemCommentAdd(fs *flag.FlagSet) RunFunc {
 				n = worker.RoundOf(root)
 			}
 			text = marker.RelayLine(n) + "\n" + text
+		} else if *kind != "harvested" {
+			// With the support split active the other machine's watch has to tell
+			// whose comment this is (#1827).
+			cfg := c.deps().Config(root)
+			if roundcfg.SupportName(cfg) != "" {
+				role, _ := roundcfg.MachineRole(cfg)
+				text = marker.FromLine(role) + "\n" + text
+			}
 		}
 		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
 			return withItem(be, args[0], func(id, typ string) (Result, error) {
