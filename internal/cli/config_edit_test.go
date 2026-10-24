@@ -292,11 +292,11 @@ func TestConfigScreenWritesThroughTheStore(t *testing.T) {
 		m, _ = play(m, cat([]string{"/"}, typedKeys(filter), []string{"enter"}, keys, []string{"esc"}))
 	}
 	do("git.baseBranch", cat([]string{"enter"}, rep("backspace", 5), typedKeys("sonnet"), []string{"enter"})) // text, project
-	do("ship.review", []string{"enter", " ", "enter"})                                                       // bool toggled on
-	do("work.isolation", []string{"enter", "right", "enter"})                                                // enum -> worktree
-	do("round.slots", cat([]string{"l"}, rep("backspace", 1), typedKeys("8"), []string{"enter"}))            // local write
-	do("work.mergeStrategy", []string{"r"})                                                                  // reset
-	do("ship.qa", []string{"r"})                                                                             // already default: no call
+	do("ship.review", []string{"enter", " ", "enter"})                                                        // bool toggled on
+	do("work.isolation", []string{"enter", "right", "enter"})                                                 // enum -> worktree
+	do("round.slots", cat([]string{"l"}, rep("backspace", 1), typedKeys("8"), []string{"enter"}))             // local write
+	do("work.mergeStrategy", []string{"r"})                                                                   // reset
+	do("ship.qa", []string{"r"})                                                                              // already default: no call
 	want := []string{
 		`set git.baseBranch sonnet local=false`,
 		`set ship.review true local=false`,
