@@ -201,12 +201,13 @@ def check_flag_consistency(skill_files, issues):
     flagged = {s.parent.name for s in skill_files
                if (spec_fields(s.read_text(encoding="utf-8")) or {}).get("disable-model-invocation") == "true"}
     conv = Path("skills/references/authoring-conventions.md")
-    m = re.search(r"The set is (.+?)\. ", conv.read_text(encoding="utf-8")) if conv.is_file() else None
-    if not m:
-        issues.append(f"{conv.as_posix()}: no 'The set is ...' sentence naming the flagged skills")
-        listed = set()
+    if not conv.is_file():
+        listed = flagged  # a minimal tree has no conventions doc: nothing to compare
     else:
-        listed = set(re.findall(r"`(rota-[a-z]+)`", m.group(1)))
+        m = re.search(r"The set is (.+?)\. ", conv.read_text(encoding="utf-8"))
+        if not m:
+            issues.append(f"{conv.as_posix()}: no 'The set is ...' sentence naming the flagged skills")
+        listed = set(re.findall(r"`(rota-[a-z]+)`", m.group(1))) if m else set()
     if listed != flagged:
         issues.append(f"{conv.as_posix()}: flagged-skill list {sorted(listed)} differs from the "
                       f"disable-model-invocation flags set {sorted(flagged)}")

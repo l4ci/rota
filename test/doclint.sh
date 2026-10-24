@@ -38,6 +38,14 @@ RC=0; OUT="$(cd "$CL" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
 [ "$RC" = 0 ] || fail "chain lint rejected an explicit offer (rc $RC): $OUT"
 pass "the chain lint fails a line that runs a flagged skill, in nested files too, and passes an explicit offer"
 
+# A minimal skill tree has no authoring-conventions.md: the flagged-list check skips it
+# (section 94 lints such a fixture). It stays strict when the file exists (below).
+rm -f "$CL/skills/rota-plan/nested/chain.md" "$CL/skills/references/authoring-conventions.md"
+RC=0; OUT="$(cd "$CL" && ROTA_DOCLINT_PROSE=off python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
+grep -qF "authoring-conventions.md: no 'The set is" <<<"$OUT" \
+  && fail "flagged-list check failed a tree without authoring-conventions.md (rc $RC): $OUT"
+pass "the flagged-list check skips a tree without authoring-conventions.md"
+
 # ── the behavioural eval case files are well-formed (#279) ──────────────────
 # Offline only: no model call. Live runs are `python3 test/evals/run.py triggers|scenarios`.
 OUT="$(python3 "$TESTDIR/evals/run.py" --check 2>&1)" || fail "eval case files are malformed: $OUT"
