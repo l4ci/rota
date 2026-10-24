@@ -12,7 +12,7 @@ Setup, config, update and migration are `rota` verbs, not skills: `rota init` (a
 | `/rota-capture --remove` | Remove a captured backlog item and clean up its dependencies. Dry-run preview by default, asks before applying |
 | `/rota-pause` | Gracefully stop mid-session; writes a handoff note (next step, hypothesis, mid-edit files) for the next session's `/rota-work` (no argument) |
 | `/rota-plan` | Write an implementation plan for a milestone slice or item (`M01-S01`, `M01-B07`): task decomposition with verifiable outcomes, named assumptions, open questions; `/rota-work` consults if present |
-| `/rota-docs` | Public-docs maintainer: scaffolds `<docs.path>/` on first run, proposes doc updates in after-work mode, or audits and reorganizes (`restructure`). Manual only; `/rota-ship --docs` is a deprecated alias |
+| `/rota-docs` | Public-docs maintainer: scaffolds `<docs.path>/` on first run, proposes doc updates in after-work mode, or audits and reorganizes (`restructure`). After-work runs in any agent; scaffold and restructure follow `autonomy.level` and escalate to the maintainer in a round; `/rota-ship --docs` is a deprecated alias |
 | `/rota-bugreport` | File rota's own mistakes (a verb that exited 70, a wrong refusal, a contradicting skill step) as issues on the rota repo. Reads the local `.rota/bugreports.jsonl`, shows a redacted draft with version, OS, harness and model, checks for a duplicate, and files only on your explicit yes (`bugreport-file` manual gate) |
 | `/rota-spike` | Throwaway feasibility experiment on a `spike/<name>` branch. Branch never merges, only findings come back as `.rota/spikes/<name>.md` |
 | `/rota-work` | Orchestrated parallel implementation with per-task commits. With no item argument it reconciles the backlog against git state and suggests the next item; consults `KNOWLEDGE.md` and `.rota/plans/<key>.md` if present. Pass `--preview <ID>` for a read-only peek of the intended approach (files, tests, assumptions, unknowns) that gates high-stakes work without writing anything |
@@ -110,7 +110,7 @@ One mode folded in via a flag:
 
 ## /rota-docs
 
-Manual-invocation skill, the public-docs maintainer. Scaffolds `<docs.path>/` on first run (discovery + tailored tree + interactive approval), proposes doc updates in after-work mode, or audits and reorganizes in restructure mode (`/rota-docs restructure`). Runs inline at ship time when `docs.afterWork: true` and the post-cycle trigger condition matches.
+The public-docs maintainer. After-work mode may run in any agent, including a round worker's PR; scaffold and restructure follow `autonomy.level` and escalate to the maintainer in a round. Scaffolds `<docs.path>/` on first run (discovery + tailored tree + interactive approval), proposes doc updates in after-work mode, or audits and reorganizes in restructure mode (`/rota-docs restructure`). Runs inline at ship time when `docs.afterWork: true` and the post-cycle trigger condition matches.
 
 `/rota-ship --docs` still works for one release as a deprecated alias: it prints a one-line pointer to `/rota-docs` and runs it.
 
