@@ -15,11 +15,13 @@ import (
 )
 
 // The support split (#1598): main labels the issues the support machine may
-// take. The verb is fenced on a support machine (supportFenced), so it runs on
-// main only.
+// take. offer, enable and disable are fenced on a support machine
+// (supportFenced), so they run on main only; return is the support machine's
+// and refuses main inside the verb.
 func roundSupport() *Command {
 	return &Command{Name: "support", Summary: "split work with the support machine (round.support)", Subs: []*Command{
 		{Name: "offer", Summary: "label issues for the support machine; --withdraw takes them back", Verb: roundSupportOffer},
+		{Name: "return", Summary: "hand an offered issue back to main, with a reason (support machine)", Verb: roundSupportReturn},
 		{Name: "enable", Summary: "name the support machine in the tracked config (round.support)", Verb: roundSupportEnable},
 		{Name: "disable", Summary: "remove round.support from the tracked config", Verb: roundSupportDisable},
 	}}
@@ -129,5 +131,47 @@ func roundSupportOffer(fs *flag.FlagSet) RunFunc {
 			text = fmt.Sprintf("%s %s", strings.Join(refs, ", "), verb)
 		}
 		return Result{Data: jsonObj("ids", append([]string{}, changed...), "withdraw", *withdraw, "changed", len(changed) > 0), Text: text}, nil
+	}
+}
+
+// roundSupportReturn is the support machine's hand-back (#1827): the reason
+// goes on the issue and the support label comes off.
+func roundSupportReturn(fs *flag.FlagSet) RunFunc {
+	reason := fs.String("reason-file", "", "why the issue goes back; posted on it (- for stdin)")
+	return func(c *Ctx, args []string) (Result, error) {
+		if len(args) != 1 {
+			return Result{}, Usage("round support return takes one item ID")
+		}
+		if *reason == "" {
+			return Result{}, Usage("--reason-file is required: say why the issue goes back")
+		}
+		root, issue, err := modeRoot(c)
+		if err != nil {
+			return Result{}, err
+		}
+		if !issue {
+			return supportFileModeStop()
+		}
+		text, err := roundNote(c, "reason-file", *reason)
+		if err != nil {
+			return Result{}, err
+		}
+		env, be, err := moveEnv(c, root)
+		if err != nil {
+			return Result{}, err
+		}
+		id, _, err := resolveItem(be, args[0])
+		if err != nil {
+			return backlogFail(err)
+		}
+		res, err := env.ReturnSupport(c.Context(), root, be, id, text)
+		if err != nil {
+			return moveFailure(err, res.Changed)
+		}
+		out := fmt.Sprintf("noop: %s is not labelled for the support machine", tracker.RefOf(res.ID))
+		if res.Changed {
+			out = "returned " + tracker.RefOf(res.ID)
+		}
+		return Result{Data: jsonObj("id", res.ID, "comment", res.Comment, "changed", res.Changed), Text: out}, nil
 	}
 }
