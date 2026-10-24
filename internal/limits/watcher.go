@@ -36,7 +36,7 @@ type Target struct {
 	Pane         string
 	Orchestrator bool
 	// Account is the slot's account, "" when none is configured. For a Codex
-	// slot it is the round.codexAccounts entry.
+	// slot it is the codex entry of round.accounts.
 	Account string
 	// Kind is the slot's harness kind, "" for Claude.
 	Kind string
@@ -81,7 +81,7 @@ type Deps struct {
 	Meter func(ctx context.Context, account string) Reading
 	// PickAccount is `worker account pick --exclude <account>`: the account
 	// with the most headroom that is not cooling.
-	// For a Codex slot (kind "codex") it picks among round.codexAccounts.
+	// For a Codex slot (kind "codex") it picks among the codex entries of round.accounts.
 	PickAccount func(ctx context.Context, kind, exclude string) (string, bool)
 	// IdleSlot finds an idle slot of the harness kind on the account.
 	IdleSlot func(ctx context.Context, kind, account string) (string, bool)

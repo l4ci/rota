@@ -99,8 +99,8 @@ func TestRunTable(t *testing.T) {
 		}
 		return m
 	}
-	herdrIn := Input{Dispatch: "herdr", RoundHost: host.Herdr, Accounts: []config.Account{{Name: "a", ConfigDir: good}}}
-	inHerdr := Input{Dispatch: "subagent", RoundHost: host.Herdr, Accounts: []config.Account{{Name: "a", ConfigDir: good}}}
+	herdrIn := Input{Dispatch: "herdr", RoundHost: host.Herdr, Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: good}}}
+	inHerdr := Input{Dispatch: "subagent", RoundHost: host.Herdr, Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: good}}}
 
 	for _, tc := range []struct {
 		name   string
@@ -169,19 +169,19 @@ func TestRunTable(t *testing.T) {
 		{"tracker outside a project says the forge", Input{}, all, with(noRemote), "tracker", Skip, "forge local", ""},
 
 		{"accounts none", Input{}, all, with(nil), "accounts", Skip, "no accounts", ""},
-		{"accounts ok", Input{Accounts: []config.Account{{Name: "a", ConfigDir: good}}}, all, with(nil), "accounts", Pass, "1 accounts", ""},
-		{"accounts tilde", Input{Home: home, Accounts: []config.Account{{Name: "a", ConfigDir: "~/good"}}}, all, with(nil), "accounts", Pass, "", ""},
-		{"accounts no dir", Input{Accounts: []config.Account{{Name: "a", ConfigDir: filepath.Join(home, "gone")}}}, all, with(nil), "accounts", Fail, "does not exist", "claude /login"},
-		{"accounts no creds", Input{Accounts: []config.Account{{Name: "a", ConfigDir: nocred}}}, all, with(nil), "accounts", Fail, "no credentials file", "CLAUDE_CONFIG_DIR="},
-		{"accounts no access token", Input{Accounts: []config.Account{{Name: "a", ConfigDir: notoken}}}, all, with(nil), "accounts", Fail, "no access token", "CLAUDE_CONFIG_DIR="},
-		{"accounts no configDir", Input{Accounts: []config.Account{{Name: "a", ConfigDir: ""}}}, all, with(nil), "accounts", Fail, "no configDir", "round.accounts"},
+		{"accounts ok", Input{Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: good}}}, all, with(nil), "accounts", Pass, "1 accounts", ""},
+		{"accounts tilde", Input{Home: home, Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: "~/good"}}}, all, with(nil), "accounts", Pass, "", ""},
+		{"accounts no dir", Input{Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: filepath.Join(home, "gone")}}}, all, with(nil), "accounts", Fail, "does not exist", "claude /login"},
+		{"accounts no creds", Input{Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: nocred}}}, all, with(nil), "accounts", Fail, "no credentials file", "CLAUDE_CONFIG_DIR="},
+		{"accounts no access token", Input{Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: notoken}}}, all, with(nil), "accounts", Fail, "no access token", "CLAUDE_CONFIG_DIR="},
+		{"accounts no configDir", Input{Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: ""}}}, all, with(nil), "accounts", Fail, "no dir", "round.accounts"},
 
 		{"hook ok", herdrIn, all, with(nil), "hook", Pass, "a: current", ""},
 		{"hook not installed", herdrIn, all, with(map[string]Result{"herdr integration status": {Stdout: miss}}), "hook", Fail, "a: not installed", "herdr integration install claude"},
 		{"hook status errors", herdrIn, all, with(map[string]Result{"herdr integration status": {ExitCode: 1}}), "hook", Fail, "status failed", "herdr integration install claude"},
 		{"hook runs for a detected herdr pane", inHerdr, all, with(nil), "hook", Pass, "a: current", ""},
-		{"hook skips for detected tmux", Input{Dispatch: "subagent", RoundHost: host.Tmux, Accounts: []config.Account{{Name: "a", ConfigDir: good}}}, all, with(nil), "hook", Skip, "not herdr", ""},
-		{"hook skips off herdr", Input{Dispatch: "tmux", Accounts: []config.Account{{Name: "a", ConfigDir: good}}}, all, with(nil), "hook", Skip, "not herdr", ""},
+		{"hook skips for detected tmux", Input{Dispatch: "subagent", RoundHost: host.Tmux, Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: good}}}, all, with(nil), "hook", Skip, "not herdr", ""},
+		{"hook skips off herdr", Input{Dispatch: "tmux", Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: good}}}, all, with(nil), "hook", Skip, "not herdr", ""},
 		{"hook skips without accounts", Input{Dispatch: "herdr", RoundHost: host.Herdr}, all, with(nil), "hook", Skip, "no accounts", ""},
 		{"hook skips without herdr", herdrIn, without("herdr"), with(nil), "hook", Skip, "see host", ""},
 	} {
@@ -211,7 +211,7 @@ func TestHookRunsPerAccountWithItsConfigDir(t *testing.T) {
 	f := &fake{have: map[string]bool{"herdr": true}, reply: map[string]Result{
 		"herdr integration status": {Stdout: fixture(t, "integration_status_current.txt")},
 	}}
-	in := Input{Dispatch: "herdr", RoundHost: host.Herdr, Home: d, Accounts: []config.Account{{Name: "a", ConfigDir: "~/one"}, {Name: "b", ConfigDir: "/two"}}, Exec: f.exec, Look: f.look}
+	in := Input{Dispatch: "herdr", RoundHost: host.Herdr, Home: d, Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: "~/one"}, {Kind: config.KindClaude, Name: "b", Dir: "/two"}}, Exec: f.exec, Look: f.look}
 	c := statusOf(Run(context.Background(), in), "hook")
 	if c.Status != Pass {
 		t.Fatalf("%+v", c)
@@ -224,7 +224,7 @@ func TestHookRunsPerAccountWithItsConfigDir(t *testing.T) {
 
 func TestAccountsWarnsWhenTheOrchestratorDirIsNotListed(t *testing.T) {
 	f := &fake{}
-	in := Input{Home: t.TempDir(), OrchestratorConfigDir: "/orch", Accounts: []config.Account{{Name: "a", ConfigDir: "/two"}}, Exec: f.exec, Look: f.look}
+	in := Input{Home: t.TempDir(), OrchestratorConfigDir: "/orch", Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: "/two"}}, Exec: f.exec, Look: f.look}
 	c := statusOf(Run(context.Background(), in), "accounts")
 	if c.Status != Warn || !strings.Contains(c.Detail, "/orch") {
 		t.Fatalf("%+v", c)
@@ -396,7 +396,7 @@ func TestCodexCheck(t *testing.T) {
 		detail   string // substring
 		hint     string
 	}{
-		{"skip: no codex, default home", nil, "herdr", []Home{{}}, nil, Skip, "no round.codexAccounts configured", ""},
+		{"skip: no codex, default home", nil, "herdr", []Home{{}}, nil, Skip, "no codex account in round.accounts", ""},
 		{"pass: codex alone", []string{"codex"}, "", nil, map[string]Result{"codex --version": ver}, Pass, "codex 0.159.2; round.tiers.codex unset (optional)", ""},
 		{"pass: default home logged in", []string{"codex", "herdr"}, "herdr", []Home{{}},
 			map[string]Result{"codex --version": ver, "codex login status": {}, "herdr integration status": {Stdout: codexCur}},
@@ -677,14 +677,14 @@ func TestSwitchCheck(t *testing.T) {
 		r := Run(context.Background(), Input{Exec: f.exec, Look: f.look, ProjectRoot: o.root, ConfigDirs: []string{o.a, o.b}, SwitchOnUsage: on, Accounts: accts})
 		return statusOf(r, "switch")
 	}
-	two := []config.Account{{Name: "a", ConfigDir: o.a}, {Name: "b", ConfigDir: o.b}}
+	two := []config.Account{{Kind: config.KindClaude, Name: "a", Dir: o.a}, {Kind: config.KindClaude, Name: "b", Dir: o.b}}
 	if c := run(false, nil, nil); c.Status != Skip {
 		t.Fatalf("off: %+v", c)
 	}
 	if c := run(true, one(two), map[string]bool{"rota": true}); c.Status != Fail || c.Hint != "add a second account to round.accounts" {
 		t.Fatalf("one account: %+v", c)
 	}
-	if c := run(true, []config.Account{{Name: "a", ConfigDir: o.a}, {Name: "b", ConfigDir: ""}}, nil); c.Status != Fail {
+	if c := run(true, []config.Account{{Kind: config.KindClaude, Name: "a", Dir: o.a}, {Kind: config.KindClaude, Name: "b", Dir: ""}}, nil); c.Status != Fail {
 		t.Fatalf("no configDir does not count: %+v", c)
 	}
 	if c := run(true, two, map[string]bool{"rota": true}); c.Status != Fail || c.Hint != "rota hook install" {
@@ -843,7 +843,7 @@ func TestPortsUsesEachSlotsOwnBlockWidth(t *testing.T) {
 
 // codexIn is the doctor input of a project that configures Codex.
 func codexIn(homes []Home, tiers bool) map[string]KindInput {
-	return map[string]KindInput{harness.Codex: {AccountsKey: "round.codexAccounts", Homes: homes, Tiers: tiers}}
+	return map[string]KindInput{harness.Codex: {AccountsKey: "round.accounts", Homes: homes, Tiers: tiers}}
 }
 
 // A hook command with a slash resolves through Input.Look alone, after ~ is
@@ -904,7 +904,7 @@ func TestConfigDirCheck(t *testing.T) {
 func TestAccountsKeychainThroughInjectedRunner(t *testing.T) {
 	dir := t.TempDir()
 	var asked []string
-	in := Input{Home: t.TempDir(), Accounts: []config.Account{{Name: "a", ConfigDir: dir}},
+	in := Input{Home: t.TempDir(), Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: dir}},
 		Credentials: worker.Credentials{GOOS: "darwin", Run: func(_ context.Context, c proc.Cmd) (proc.Result, error) {
 			asked = append(asked, c.Name)
 			return proc.Result{Stdout: `{"claudeAiOauth":{"accessToken":"kc"}}`}, nil
@@ -944,7 +944,7 @@ func TestStaleMilestoneFilesWarn(t *testing.T) {
 // (#1777), instead of being looked up under the current directory.
 func TestAccountsFailsOnARelativeConfigDir(t *testing.T) {
 	f := &fake{}
-	in := Input{Home: t.TempDir(), Accounts: []config.Account{{Name: "a", ConfigDir: ".claude-a"}}, Exec: f.exec, Look: f.look}
+	in := Input{Home: t.TempDir(), Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: ".claude-a"}}, Exec: f.exec, Look: f.look}
 	c := statusOf(Run(context.Background(), in), "accounts")
 	if c.Status != Fail || !strings.Contains(c.Detail, "configDir must be absolute or start with ~") || !strings.Contains(c.Detail, "a:") {
 		t.Fatalf("%+v", c)

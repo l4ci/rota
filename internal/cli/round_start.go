@@ -161,7 +161,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		for _, w := range st.Warnings {
 			c.Warn("%s", w)
 		}
-		if w := worker.ConfigDirMismatch(c.deps().Getenv("CLAUDE_CONFIG_DIR"), config.Accounts(cfg), homeOf(c.deps().UserHomeDir)); w != "" {
+		if w := worker.ConfigDirMismatch(c.deps().Getenv("CLAUDE_CONFIG_DIR"), config.AccountsOf(cfg, config.KindClaude), homeOf(c.deps().UserHomeDir)); w != "" {
 			c.Warn("%s", w)
 		}
 		if err != nil {

@@ -598,20 +598,18 @@ func TestSetScopeOverlapRefusesNonChoices(t *testing.T) {
 // An account dir that is neither absolute nor ~-prefixed would resolve against
 // whatever directory the launch runs in, so config check fails on it (#1777).
 func TestRetiredRejectsRelativeAccountDirs(t *testing.T) {
-	good := `{"round":{"accounts":[{"name":"a","configDir":"~/.claude-a"},{"name":"b","configDir":"/abs/b"}],` +
-		`"codexAccounts":[{"name":"c","codexHome":"~"}],"opencodeAccounts":[{"name":"o","configDir":"~/.oc"}]}}`
+	good := `{"round":{"accounts":[{"kind":"claude","name":"a","dir":"~/.claude-a"},{"kind":"codex","name":"c","dir":"~"},{"kind":"opencode","name":"o","dir":"~/.oc"}]}}`
 	if got := Retired(project(t, good, "")); len(got) != 0 {
 		t.Errorf("valid dirs flagged: %v", got)
 	}
-	bad := `{"round":{"accounts":[{"name":"a","configDir":".claude-a"}],` +
-		`"codexAccounts":[{"name":"c","codexHome":"$HOME/.codex"}],"opencodeAccounts":[{"name":"o","configDir":"~bob/x"}]}}`
+	bad := `{"round":{"accounts":[{"kind":"claude","name":"a","dir":".claude-a"},{"kind":"codex","name":"c","dir":"$HOME/.codex"},{"kind":"opencode","name":"o","dir":"~bob/x"}]}}`
 	got := Retired(project(t, bad, ""))
 	if len(got) != 3 {
 		t.Fatalf("want 3 problems, got %v", got)
 	}
-	for i, key := range []string{"round.accounts", "round.codexAccounts", "round.opencodeAccounts"} {
-		if !strings.Contains(got[i], key) || !strings.Contains(got[i], "must be absolute or start with ~") {
-			t.Errorf("problem %d does not name %s and the rule: %q", i, key, got[i])
+	for i, name := range []string{`"a"`, `"c"`, `"o"`} {
+		if !strings.Contains(got[i], "round.accounts") || !strings.Contains(got[i], name) || !strings.Contains(got[i], "must be absolute or start with ~") {
+			t.Errorf("problem %d does not name round.accounts, %s and the rule: %q", i, name, got[i])
 		}
 	}
 }

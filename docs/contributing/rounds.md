@@ -165,7 +165,7 @@ Slots are provisioned once and reused: `.worktrees/<agent>`, parked on `park/<ag
 on `<agent>/<issue>-<slug>`. `round.roster` sets the names; the default is `ben`, `dana`, `nia`,
 `kit`. A longer round adds names with `rota config set round.roster '[...]'`.
 
-Each slot's account (`CLAUDE_CONFIG_DIR`) comes from `round.accounts`. Those are paths on one
+Each slot's account (`CLAUDE_CONFIG_DIR`) comes from the `claude` entries of `round.accounts` (`{kind, name, dir}`). Those are paths on one
 machine, so they live in the developer's gitignored `.rota/config.local.json`, not in tracked files.
 `rota worker account list` shows what each slot would use.
 

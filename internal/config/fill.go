@@ -74,6 +74,9 @@ func FillDetect(root string, detect func() string) ([]string, SourceMigration, R
 	if err != nil {
 		return nil, sm, rm, err
 	}
+	if _, err := MigrateAccountsFiles(root, globalConfigDir(), true); err != nil {
+		return nil, sm, rm, err
+	}
 	path := configPath(root)
 	err = fsio.Locked(path, fsio.LockTimeout, func() error {
 		cfg := jsonx.NewObject()
@@ -198,8 +201,11 @@ func migrateLegacyVerify(cfg *jsonx.Object) (*jsonx.Object, bool, bool) {
 // RemovedKeys are keys older `rota init` runs seeded that nothing reads any
 // more. `config check` names them and `config fill` deletes them.
 // round.autopilot went with #1101: autonomy.level auto turns the tick on.
+// round.codexAccounts and round.opencodeAccounts went with #1824: round.accounts
+// holds every kind, and the accounts step of `rota migrate config` (which fill
+// runs before it strips) carries their entries over.
 // debug.competingHypotheses was never read (CHANGELOG).
-var RemovedKeys = []string{"issues.filterMineOnly", "issues.providers.github", "issues.providers.gitlab", "round.autopilot", "debug.competingHypotheses"}
+var RemovedKeys = []string{"issues.filterMineOnly", "issues.providers.github", "issues.providers.gitlab", "round.autopilot", "round.codexAccounts", "round.opencodeAccounts", "debug.competingHypotheses"}
 
 // stripRemoved deletes every RemovedKeys entry present in cfg, drops a parent
 // object that ends up empty (issues.providers, debug) and returns the keys it

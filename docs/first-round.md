@@ -72,8 +72,8 @@ Account paths are machine-specific, so they go in `.rota/config.local.json` (git
 {
   "round": {
     "accounts": [
-      { "name": "main", "configDir": "/home/you/.claude" },
-      { "name": "b", "configDir": "/home/you/.claude-b" }
+      { "kind": "claude", "name": "main", "dir": "/home/you/.claude" },
+      { "kind": "claude", "name": "b", "dir": "/home/you/.claude-b" }
     ]
   }
 }

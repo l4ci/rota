@@ -159,7 +159,7 @@ func TestWorkerAccountVerbs(t *testing.T) {
 		os.MkdirAll(filepath.Join(logins, n), 0o755)
 		os.WriteFile(filepath.Join(logins, n, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"t"}}`), 0o600)
 	}
-	cfg := `{"round":{"accounts":[{"name":"alpha","configDir":"` + filepath.Join(logins, "a") + `"},{"name":"beta","configDir":"` + filepath.Join(logins, "b") + `"}]}}`
+	cfg := `{"round":{"accounts":[{"kind":"claude","name":"alpha","dir":"` + filepath.Join(logins, "a") + `"},{"kind":"claude","name":"beta","dir":"` + filepath.Join(logins, "b") + `"},{"kind":"codex","name":"cx","dir":"/h/cx"}]}}`
 	dir := workerProject(t, cfg)
 	usage := t.TempDir()
 	os.WriteFile(filepath.Join(usage, "alpha.json"), []byte(`{"five_hour":{"utilization":90,"resets_at":null},"seven_day":{"utilization":10,"resets_at":null}}`), 0o644)
@@ -172,11 +172,14 @@ func TestWorkerAccountVerbs(t *testing.T) {
 	if code != 0 || len(rows) != 2 || rows[0].(map[string]any)["headroom"] != 10.0 || rows[1].(map[string]any)["verdict"] != "free" {
 		t.Fatalf("list: %d %v", code, d)
 	}
+	if rows[0].(map[string]any)["kind"] != harness.Claude || rows[1].(map[string]any)["kind"] != harness.Claude {
+		t.Errorf("list rows do not show the account kind: %v", rows)
+	}
 	if _, has := rows[0].(map[string]any)["resetsAt"]; has {
 		t.Error("null fields must be absent")
 	}
 	code, out, _ = rotaIn(t, dir, "worker", "account", "list")
-	if code != 0 || !strings.Contains(out, "alpha        free      5h=90%   7d=10%") {
+	if code != 0 || !strings.Contains(out, "alpha        claude   free      5h=90%   7d=10%") {
 		t.Errorf("list text: %q", out)
 	}
 
@@ -191,12 +194,15 @@ func TestWorkerAccountVerbs(t *testing.T) {
 
 	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	code, out, _ = rotaIn(t, dir, "worker", "account", "assign", "w1", "--account", "alpha", "--json")
-	if d = data(t, out); code != 0 || d["account"] != "alpha" || d["changed"] != true {
+	if d = data(t, out); code != 0 || d["account"] != "alpha" || d["kind"] != harness.Claude || d["changed"] != true {
 		t.Errorf("assign: %d %v", code, d)
 	}
 	code, out, _ = rotaIn(t, dir, "worker", "account", "assign", "w1", "--account", "alpha", "--json")
 	if d = data(t, out); code != 0 || d["changed"] != false {
 		t.Errorf("assign again: %d %v", code, d)
+	}
+	if code, _, _ := rotaIn(t, dir, "worker", "account", "assign", "w1", "--account", "cx"); code != 3 {
+		t.Errorf("a codex entry is not a Claude slot account: %d", code)
 	}
 	if code, _, _ := rotaIn(t, dir, "worker", "account", "assign", "w1", "--account", "ghost"); code != 3 {
 		t.Errorf("unknown account: %d", code)
