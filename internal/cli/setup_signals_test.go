@@ -181,8 +181,8 @@ func TestSetupYesTakesSuggestions(t *testing.T) {
 
 func TestSetupInteractiveFreeTextWrapsBareCommand(t *testing.T) {
 	dir := t.TempDir()
-	// ten choice questions (the role first) at their defaults, then base branch, test.fast typed, test.full unset
-	in := strings.Repeat("\n", 10) + "trunk\nmake check\n\n"
+	// ten choice questions (the role first) at their defaults, then base branch, test.fast typed, test.full, envSetup and sharedDirs unset
+	in := strings.Repeat("\n", 10) + "trunk\nmake check\n\n\n\n"
 	if code, _, errOut := setupRun(t, dir, in, true); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
@@ -364,5 +364,34 @@ func TestSetupFreeTextValidation(t *testing.T) {
 	}
 	if got, _ := cfgValue(t, dir, "test.full").([]any); len(got) != 2 {
 		t.Errorf("test.full = %v", got)
+	}
+}
+
+func TestSetupDepSignalsPerManifest(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		files []string
+		setup string
+		dirs  string
+	}{
+		{"npm lock", []string{"package.json", "package-lock.json"}, "npm ci", `["node_modules"]`},
+		{"pnpm lock", []string{"package.json", "pnpm-lock.yaml"}, "pnpm install --frozen-lockfile", `["node_modules"]`},
+		{"yarn lock", []string{"package.json", "yarn.lock"}, "yarn install --frozen-lockfile", `["node_modules"]`},
+		{"no lock", []string{"package.json"}, "npm install", `["node_modules"]`},
+		{"python", []string{"pyproject.toml", "uv.lock"}, "uv sync", `[".venv"]`},
+		{"cargo", []string{"Cargo.toml"}, "", ""},
+		{"go", []string{"go.mod"}, "", ""},
+	} {
+		dir := t.TempDir()
+		for _, f := range tc.files {
+			os.WriteFile(filepath.Join(dir, f), []byte("{}"), 0o644)
+		}
+		setup, shared, ok := depSignals(dir)
+		if (tc.setup != "") != ok || setup.Value != tc.setup || shared.Value != tc.dirs {
+			t.Errorf("%s: got %q %q ok=%v, want %q %q", tc.name, setup.Value, shared.Value, ok, tc.setup, tc.dirs)
+		}
+		if ok && (setup.Evidence == "" || shared.Evidence == "") {
+			t.Errorf("%s: a signal carries no evidence", tc.name)
+		}
 	}
 }

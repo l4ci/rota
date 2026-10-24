@@ -64,6 +64,7 @@ type delivery struct {
 	// Out: filled as the steps run.
 	Host                         host.Kind
 	Account, BriefText, Worktree string
+	Shared                       []worker.SharedDir
 	Dispatched, Changed          bool
 
 	tmpName string
@@ -129,8 +130,10 @@ func (d *delivery) steps(ctx context.Context, e Env, root string) ([]step, error
 	// was not delivered and resumes it.
 	return append(steps, step{name: "dispatch", keep: true, do: func() error {
 		rnd := d.Round
-		if _, err := e.workerEnv().Dispatch(ctx, root, worker.DispatchOpts{Slot: d.Slot, BodyFile: d.tmpName, Task: d.Task, Round: &rnd,
-			Branch: d.Branch(), Model: d.Model, Kind: d.Kind}); err != nil {
+		dr, err := e.workerEnv().Dispatch(ctx, root, worker.DispatchOpts{Slot: d.Slot, BodyFile: d.tmpName, Task: d.Task, Round: &rnd,
+			Branch: d.Branch(), Model: d.Model, Kind: d.Kind})
+		d.Shared = dr.Shared
+		if err != nil {
 			editSlot(root, d.Slot, func(s *worker.Slot) error { return s.MarkState("idle", "") })
 			return err
 		}

@@ -119,7 +119,9 @@ type Assigned struct {
 	// the brief to launch the subagent with, and its absolute working directory.
 	Host            host.Kind
 	Brief, Worktree string
-	Changed         bool
+	// Shared is what round.sharedDirs did for the slot on a task dispatch.
+	Shared  []worker.SharedDir
+	Changed bool
 	// Kind, Tier and Model are what the worker starts with; Model is "" when a
 	// custom round.workerCommand has no {model} placeholder.
 	Kind, Tier, Model, TierReason string
@@ -643,7 +645,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	}
 	err = runSteps(steps)
 	d.cleanup()
-	res.Account, res.Host, res.Brief, res.Worktree = d.Account, d.Host, d.BriefText, d.Worktree
+	res.Account, res.Host, res.Brief, res.Worktree, res.Shared = d.Account, d.Host, d.BriefText, d.Worktree, d.Shared
 	res.Dispatched = res.Dispatched || d.Dispatched
 	res.Changed = res.Changed || d.Changed
 	var se *StageError

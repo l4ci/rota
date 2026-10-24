@@ -51,6 +51,8 @@ type InitResult struct {
 	Slots    []*jsonx.Object
 	Changed  bool
 	Warnings []string
+	// Shared is what round.sharedDirs did, one row per slot and directory.
+	Shared []SharedDir
 }
 
 // PoolInit creates the slots' worktrees and registers them, then runs
@@ -93,7 +95,6 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 	cfg := e.Config(root)
 	dispatch := host.KindOf(config.Dispatch(cfg))
 
-	envSetup := config.String(cfg, "round.envSetup")
 	portStart, portBlock := PortRange(cfg)
 
 	names, branchOf := o.slotNames()
@@ -170,10 +171,10 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 		if err != nil {
 			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
-		if strings.TrimSpace(envSetup) != "" {
-			if _, err := e.envSetup(ctx, name, abs, envSetup, portBase, width); err != nil {
-				return res, err
-			}
+		rows, err := e.slotDeps(ctx, root, name, abs, cfg, portBase, width, true)
+		res.Shared = append(res.Shared, rows...)
+		if err != nil {
+			return res, err
 		}
 	}
 
