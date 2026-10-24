@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/palette"
 	"github.com/l4ci/rota/internal/round"
 	"os"
 	"path/filepath"
@@ -179,3 +180,58 @@ func TestRoundOverviewRefreshLifecycle(t *testing.T) {
 		t.Errorf("passes = %d", passes)
 	}
 }
+
+// The palette installs a screen without being its root model: it must still
+// start the screen's first pass, and the result must reach the screen with no
+// further key.
+func TestRoundOverviewFromPalette(t *testing.T) {
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pr.Close()
+	defer pw.Close()
+	local := roundSnap{Slots: []round.Row{{Name: "ben", Issue: "101", Branch: "ben/101-work"}}}
+	full := roundSnap{CandsLoaded: true, Host: "herdr", Slots: []round.Row{{Name: "ben", Issue: "101", Branch: "ben/101-work", HostState: "working"}},
+		IssueURLs: map[string]string{"101": "https://github.com/acme/project/issues/101"}}
+	load := func(context.Context) (roundSnap, error) { return full, nil }
+	out := &syncBuf{}
+	done := make(chan error, 1)
+	go func() {
+		done <- palette.Run(palette.Config{
+			Entries: []palette.Entry{{Label: "Round status", Scope: palette.Always, View: func() (tui.Model, error) {
+				return openingScreen(newRoundScreen(local, load, time.Now, roundRefresh)), nil
+			}}},
+			InProject: true, In: pr, Out: out, Color: true,
+			MakeRaw: func() (func(), error) { return func() {}, nil },
+			Signals: make(chan os.Signal), Exit: func(int) {},
+		})
+	}()
+	pw.WriteString("1") // open the entry; no other key follows
+	deadline := time.After(5 * time.Second)
+	for !strings.Contains(out.String(), "updated ") {
+		select {
+		case <-deadline:
+			t.Fatalf("the palette-hosted screen never loaded:\n%s", tui.Strip(out.String()))
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	if !strings.Contains(out.String(), "\x1b]8;;https://github.com/acme/project/issues/101\x1b\\") {
+		t.Errorf("palette frames lack the issue hyperlink: %q", out.String())
+	}
+	pw.WriteString("qq")
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// openingScreen is a screen opened from a palette: loading until Init runs.
+func openingScreen(m *roundScreen) *roundScreen { m.loading = true; return m }
+
+type syncBuf struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuf) Write(p []byte) (int, error) { s.mu.Lock(); defer s.mu.Unlock(); return s.b.Write(p) }
+func (s *syncBuf) String() string              { s.mu.Lock(); defer s.mu.Unlock(); return s.b.String() }
