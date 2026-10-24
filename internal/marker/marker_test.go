@@ -151,11 +151,11 @@ func TestParseBounce(t *testing.T) {
 
 func TestSideOf(t *testing.T) {
 	cases := map[string]string{
-		"<!-- rota:comment feedback -->\n<!-- rota:support-offer -->\nOffered.":    "main",
-		"<!-- rota:comment feedback -->\n<!-- rota:support-return -->\nnot ready":  "support",
-		"<!-- rota:comment relay -->\n<!-- rota:relay round=2 -->\ncontinue":       "support",
-		"<!-- rota:comment note -->\n<!-- rota:from main -->\nuse the other API":   "main",
-		"<!-- rota:pr-pointer bounce -->\n<!-- rota:from support -->\nhttps://x/9": "support",
+		"<!-- rota:comment feedback -->\n<!-- rota:support-offer -->\nOffered.":      "main",
+		"<!-- rota:comment feedback -->\n<!-- rota:support-return -->\nnot ready":    "support",
+		"<!-- rota:comment relay -->\n<!-- rota:relay round=2 -->\ncontinue":         "support",
+		"<!-- rota:comment feedback -->\n<!-- rota:from main -->\nuse the other API": "main",
+		"<!-- rota:pr-pointer bounce -->\n<!-- rota:from support -->\nhttps://x/9":   "support",
 		"just a human":                    "",
 		"quoting <!-- rota:from main -->": "",
 	}

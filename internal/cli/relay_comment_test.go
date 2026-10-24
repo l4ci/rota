@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/l4ci/rota/internal/marker"
 	"os"
 	"path/filepath"
 	"strings"
@@ -90,5 +91,31 @@ func TestItemCommentRelayRefusedForWorker(t *testing.T) {
 	}
 	if len(fake.Issues[0].Comments) != 0 {
 		t.Errorf("comments = %v", fake.Issues[0].Comments)
+	}
+}
+
+// #1869 AC-1: with the support split on, a relay carries the posting
+// machine's rota:from stamp, so a relay main posts reads as main's and the
+// support watch wakes on it.
+func TestItemCommentRelayStampsSide(t *testing.T) {
+	t.Setenv("ROTA_SLOT", "")
+	for _, role := range []string{"main", "support"} {
+		t.Run(role, func(t *testing.T) {
+			root := trackerProject(t, `{"forge": {"provider": "github"}, "issues": {"source": "github"}, "round": {"support": "mac"}}`)
+			writeLocalConfig(t, root, `{"round":{"role":"`+role+`"}}`+"\n")
+			fake := issueFixture()
+			deps := withTracker(t, fake)
+			body := bodyFile(t, "use the shared cache for the lookup\n")
+			if code, _, stderr := rotaRunWith(t, deps, "--json", "-C", root, "item", "comment", "add", "7", "--kind", "relay", "--body-file", body); code != ExitOK {
+				t.Fatalf("exit %d: %s", code, stderr)
+			}
+			got := fake.Issues[0].Comments[0].Body
+			if side := marker.SideOf(got); side != role {
+				t.Errorf("SideOf = %q, want %q in %q", side, role, got)
+			}
+			if _, text, ok := marker.ParseRelay(got); !ok || !strings.HasPrefix(text, "use the shared cache") {
+				t.Errorf("relay no longer parses with the stamp: %q", got)
+			}
+		})
 	}
 }

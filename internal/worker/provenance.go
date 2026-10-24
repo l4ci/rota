@@ -102,7 +102,7 @@ func trusted(trust *MarkerTrust, author string) bool {
 // CheckApprovalsOffer is CheckApprovals with the issue's offer known: a line
 // citing the round support offer passes only when offered is true.
 func CheckApprovalsOffer(body string, relayLog []any, offered bool) string {
-	return checkApprovals(body, relayLog, offered)
+	return checkApprovals(body, relayLog, true, offered)
 }
 
 // CheckApprovals cross-checks a PR body's `## Approvals` section against the
@@ -110,10 +110,12 @@ func CheckApprovalsOffer(body string, relayLog []any, offered bool) string {
 // section while relays exist, a cited relay round that was never sent, or the
 // maintainer cited for text the orchestrator relayed.
 func CheckApprovals(body string, relayLog []any) string {
-	return checkApprovals(body, relayLog, false)
+	return checkApprovals(body, relayLog, false, false)
 }
 
-func checkApprovals(body string, relayLog []any, offered bool) string {
+// checkApprovals enforces the offer citation only when offerRequired: a PR
+// that is not a support PR may mention a support offer freely (#1869).
+func checkApprovals(body string, relayLog []any, offerRequired, offered bool) string {
 	var relays []*jsonx.Object
 	for _, r := range relayLog {
 		if o, ok := r.(*jsonx.Object); ok {
@@ -140,7 +142,7 @@ func checkApprovals(body string, relayLog []any, offered bool) string {
 			continue
 		}
 		low := norm(line)
-		if reOfferCite.MatchString(low) {
+		if offerRequired && reOfferCite.MatchString(low) {
 			if !offered {
 				problems = append(problems, fmt.Sprintf("cites the round support offer but no trusted support-offer comment is on the issue: %s", strings.TrimSpace(line)))
 			}
