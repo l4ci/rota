@@ -172,7 +172,7 @@ func TestSeedConfigKeepsSchemaOrder(t *testing.T) {
 	for i, k := range config.Keys {
 		schema[k.Name] = i
 	}
-	seed := []string{"issues.label", "issues.autoCreateLabel"}
+	seed := []string{"issues.labels.inProgress", "issues.autoCreateLabel"}
 	prevSchema, prevText := -1, -1
 	for _, name := range seed {
 		i, ok := schema[name]

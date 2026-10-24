@@ -19,7 +19,7 @@ SWHANDOFF="$SWP/.rota/handoff/main.md"
 sw_cfg() { # sw_cfg <true|false|unset>
   local on=""
   [ "$1" != unset ] && on=",\"switchOnUsage\":$1"
-  printf '{"git":{"baseBranch":"main"},"round":{"accounts":[{"name":"a","configDir":"%s/cfg-a"},{"name":"b","configDir":"%s/cfg-b"}]},"orchestrator":{"keepaliveBackoffSeconds":0%s}}\n' \
+  printf '{"git":{"baseBranch":"main"},"round":{"accounts":[{"name":"a","configDir":"%s/cfg-a"},{"name":"b","configDir":"%s/cfg-b"}]},"orchestrator":{"handoffThreshold":75%s}}\n' \
     "$TMP_SW" "$TMP_SW" "$on" > "$SWP/.rota/config.json"
 }
 sw_usage() { # sw_usage <b's five_hour utilization>
@@ -44,7 +44,7 @@ CH
 sw_run() { # sw_run <scratch dir>: the supervisor starts under account a
   ( cd "$SWP" && env -u HERDR_PANE_ID -u TMUX_PANE -u HERDR_ENV PATH="$ROTA_POISON_BIN:$PATH" \
       ROTA_ACCOUNT_USAGE_DIR="$TMP_SW/usage" CLAUDE_CONFIG_DIR="$TMP_SW/cfg-a" SW_PROJ="$SWP" SW_HANDOFF="$SWHANDOFF" \
-      "$ROTA_BIN" --json keepalive run --no-limits -- bash "$SWCHILD" "$1" )
+      "$ROTA_BIN" --json keepalive run --backoff 0 --no-limits -- bash "$SWCHILD" "$1" )
 }
 swlim() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(eval(sys.argv[2]))' "$SWREG" "$1"; }
 swks() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(eval(sys.argv[2]))' "$SWSTATE" "$1"; }

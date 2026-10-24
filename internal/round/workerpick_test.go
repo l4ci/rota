@@ -48,11 +48,11 @@ func TestPickOf(t *testing.T) {
 }
 
 func TestResolveKindModel(t *testing.T) {
-	// harness: --kind > label > round.workerKind > slot kind > claude
+	// harness: --kind > label > round.harnesses[0] > slot kind > claude
 	for _, c := range []struct{ flag, label, project, slot, want, src string }{
 		{"codex", "claude", "claude", "claude", "codex", KindFromFlag},
 		{"", "codex", "claude", "claude", "codex", KindFromLabel},
-		{"", "", "codex", "claude", "codex", KindFromConfig},
+		{"", "", "codex", "claude", "codex", KindFromHarnesses},
 		{"", "", "", "codex", "codex", KindFromSlot},
 		{"", "", "", "", "claude", KindFromDefault},
 	} {
@@ -65,7 +65,7 @@ func TestResolveKindModel(t *testing.T) {
 		{"", "", "claude", "codex", "codex", KindFromSlotResume},
 		{"", "claude", "claude", "codex", "claude", KindFromLabel},
 		{"claude", "", "claude", "codex", "claude", KindFromFlag},
-		{"", "", "claude", "", "claude", KindFromConfig},
+		{"", "", "claude", "", "claude", KindFromHarnesses},
 	} {
 		if got, src := resolveKind(c.flag, c.label, c.project, c.slot, true); got != c.want || src != c.src {
 			t.Errorf("resuming resolveKind(%q,%q,%q,%q) = %q from %q, want %q from %q", c.flag, c.label, c.project, c.slot, got, src, c.want, c.src)

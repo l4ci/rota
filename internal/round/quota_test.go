@@ -91,7 +91,7 @@ func TestAssignResumesAtTheReset(t *testing.T) {
 
 func TestQuotaCapCodexLoginsCoolByTheirLimitLog(t *testing.T) {
 	f := newAssignFixture(t)
-	f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"kind":"codex","name":"c1","dir":"/h1"},{"kind":"codex","name":"c2","dir":"/h2"}],"workerKind":"codex"}}`)
+	f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"kind":"codex","name":"c1","dir":"/h1"},{"kind":"codex","name":"c2","dir":"/h2"}],"harnesses":["codex"]}}`)
 	f.env.Worker.Now = func() time.Time { return quotaNow }
 	spent := func(session, login string) {
 		t.Helper()
@@ -126,7 +126,7 @@ func TestQuotaCapClaudePoolDoesNotCloseCodex(t *testing.T) {
 // meets the cooling pool as a quota refusal: the tick reports that one.
 func TestMixedConfigClaudeAssignIsRefusedByQuota(t *testing.T) {
 	f := newAssignFixture(t)
-	f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"kind":"claude","name":"a","dir":"/nowhere"},{"kind":"codex","name":"c1","dir":"/h1"}],"workerKind":"claude"}}`)
+	f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"kind":"claude","name":"a","dir":"/nowhere"},{"kind":"codex","name":"c1","dir":"/h1"}],"harnesses":["claude"]}}`)
 	f.meters(t, map[string]bool{"a": true})
 	if c := f.env.QuotaCap(bg, f.root, f.set); c.Reduced() {
 		t.Fatalf("cap %+v", c)

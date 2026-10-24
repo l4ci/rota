@@ -164,7 +164,7 @@ func TestMigrateConfigConflictRefuses(t *testing.T) {
 func TestMigrateConfigScope(t *testing.T) {
 	gdir := isolateGlobal(t)
 	writeFile(t, config.GlobalPath(gdir), `{"round":{"accounts":[{"name":"g","configDir":"/g"}],"dispatch":"tmux"}}`)
-	root := trackerProject(t, `{"round":{"accounts":[],"dispatch":"tmux","slots":3,"portBase":21000},"models":{"worker":"opus"},"work":{"isolation":"branch","mergeStrategy":"pr"},"docs":{"path":"docs"}}`+"\n")
+	root := trackerProject(t, `{"round":{"accounts":[],"dispatch":"tmux","slots":3,"portBase":21000},"orchestrator":{"model":"opus"},"work":{"isolation":"branch","mergeStrategy":"pr"},"docs":{"path":"docs"}}`+"\n")
 	local := filepath.Join(root, ".rota", "config.local.json")
 	writeFile(t, local, `{"round":{"slots":2}}`+"\n")
 	before := readConfig(t, root)
@@ -174,7 +174,7 @@ func TestMigrateConfigScope(t *testing.T) {
 		`delete round.accounts (equals default; [{"name": "g", "configDir": "/g"}] -> [{"name": "g", "configDir": "/g"}])`,
 		`delete round.slots (config.local.json already holds 2; 2 -> 2)`,
 		`move round.portBase -> config.local.json (21000 -> 21000)`,
-		`move models.worker -> config.local.json ("opus" -> "opus")`,
+		`move orchestrator.model -> config.local.json ("opus" -> "opus")`,
 		`delete work.isolation (pinned at its default; "branch" -> "branch")`,
 	} {
 		if code != 0 || !strings.Contains(out, want) {
@@ -191,7 +191,7 @@ func TestMigrateConfigScope(t *testing.T) {
 		t.Fatalf("apply: %d %q", code, out)
 	}
 	cfg := readConfig(t, root)
-	for _, gone := range []string{`"round"`, `"models"`, "isolation"} {
+	for _, gone := range []string{`"round"`, `"orchestrator"`, "isolation"} {
 		if strings.Contains(cfg, gone) {
 			t.Errorf("config.json still holds %s:\n%s", gone, cfg)
 		}
@@ -200,7 +200,7 @@ func TestMigrateConfigScope(t *testing.T) {
 		t.Errorf("apply dropped a key that stays:\n%s", cfg)
 	}
 	lb, _ := os.ReadFile(local)
-	for _, want := range []string{`"slots": 2`, `"portBase": 21000`, `"worker": "opus"`} {
+	for _, want := range []string{`"slots": 2`, `"portBase": 21000`, `"model": "opus"`} {
 		if !strings.Contains(string(lb), want) {
 			t.Errorf("config.local.json lacks %s: %s", want, lb)
 		}

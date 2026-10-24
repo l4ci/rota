@@ -13,12 +13,12 @@ func TestWorkerCommandModel(t *testing.T) {
 		applies           bool
 	}{
 		{``, "", "claude --model sonnet --dangerously-skip-permissions", true},
-		{`{"models":{"worker":"opus"}}`, "", "claude --model opus --dangerously-skip-permissions", true},
-		{`{"models":{"worker":"opus"}}`, "haiku", "claude --model haiku --dangerously-skip-permissions", true},
-		{`{"round":{"workerCommand":"wrap -x"}}`, "haiku", "wrap -x", false},
-		{`{"round":{"workerCommand":"wrap -m {model}"}}`, "haiku", "wrap -m haiku", true},
-		{`{"round":{"workerCommand":"wrap -m {model}"},"models":{"worker":"opus"}}`, "", "wrap -m opus", true},
-		{`{"round":{"workerCommand":"sh -c \"a  b\" -m {model}"}}`, "haiku", `sh -c "a  b" -m haiku`, true},
+		{`{"round":{"tiers":{"claude":{"standard":"opus"}}}}`, "", "claude --model opus --dangerously-skip-permissions", true},
+		{`{"round":{"tiers":{"claude":{"standard":"opus"}}}}`, "haiku", "claude --model haiku --dangerously-skip-permissions", true},
+		{`{"round":{"commands":{"claude":"wrap -x"}}}`, "haiku", "wrap -x", false},
+		{`{"round":{"commands":{"claude":"wrap -m {model}"}}}`, "haiku", "wrap -m haiku", true},
+		{`{"round":{"commands":{"claude":"wrap -m {model}"},"tiers":{"claude":{"standard":"opus"}}}}`, "", "wrap -m opus", true},
+		{`{"round":{"commands":{"claude":"sh -c \"a  b\" -m {model}"}}}`, "haiku", `sh -c "a  b" -m haiku`, true},
 	}
 	for _, c := range cases {
 		cfg := cfgOf(t, c.cfg)
@@ -35,7 +35,7 @@ func TestInheritProfileLaunchesWithoutModel(t *testing.T) {
 	cases := []struct{ cfg, chosen, want string }{
 		{`{"round":{"profile":"inherit"}}`, "", "claude --dangerously-skip-permissions"},
 		{`{"round":{"profile":"inherit"}}`, "haiku", "claude --model haiku --dangerously-skip-permissions"},
-		{`{"round":{"profile":"inherit","workerCommand":"wrap --model {model} -x"}}`, "", "wrap -x"},
+		{`{"round":{"profile":"inherit","commands":{"claude":"wrap --model {model} -x"}}}`, "", "wrap -x"},
 		{`{"round":{"profile":"budget"}}`, "", "claude --model sonnet --dangerously-skip-permissions"},
 	}
 	for _, c := range cases {
@@ -86,10 +86,10 @@ func TestResumeFlag(t *testing.T) {
 func TestModelFallbacksFollowKeyDefaults(t *testing.T) {
 	for i := range config.Keys {
 		switch config.Keys[i].Name {
-		case "models.worker":
+		case "round.tiers.claude.standard":
 			defer func(d any) { config.Keys[i].Default = d }(config.Keys[i].Default)
 			config.Keys[i].Default = "worker-default"
-		case "models.orchestrator":
+		case "orchestrator.model":
 			defer func(d any) { config.Keys[i].Default = d }(config.Keys[i].Default)
 			config.Keys[i].Default = "orch-default"
 		}

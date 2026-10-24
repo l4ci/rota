@@ -79,10 +79,10 @@ A clean commit is enough when the work sits at a natural stopping point: a passi
 Where `rota hook install` has run, a session that is not an orchestrator gets a nudge when its context reaches `orchestrator.handoffThreshold` (default 75). `work.contextGuard` picks what happens:
 
 - `warn` (default): the next prompt carries one line recommending `/rota-pause`. It appears once per crossing and never blocks. `/rota-work` runs `/rota-pause` between tasks when it sees it.
-- `auto`: the Stop hook also blocks, at most `orchestrator.handoffMaxBlocks` times, asking the session to run `/rota-pause` at the next task boundary.
+- `auto`: the Stop hook also blocks, at most 2 times, asking the session to run `/rota-pause` at the next task boundary.
 - `off`: nothing.
 
-Only a fresh statusline reading counts (younger than `orchestrator.stateMaxAgeSeconds`), and only in Claude Code: Codex and OpenCode have no reading.
+Only a fresh statusline reading counts (younger than 120 seconds), and only in Claude Code: Codex and OpenCode have no reading.
 
 ```bash
 rota config set work.contextGuard auto

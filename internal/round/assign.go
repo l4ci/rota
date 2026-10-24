@@ -121,10 +121,10 @@ type Assigned struct {
 	Brief, Worktree string
 	Changed         bool
 	// Kind, Tier and Model are what the worker starts with; Model is "" when a
-	// custom round.workerCommand has no {model} placeholder.
+	// custom round.commands.claude has no {model} placeholder.
 	Kind, Tier, Model, TierReason string
 	// KindSource is where Kind came from: --kind, harness label,
-	// round.workerKind, slot or default.
+	// the first round.harnesses entry, slot or default.
 	KindSource string
 	// Pick is what the item's labels (or file fields) ask for.
 	Pick Pick

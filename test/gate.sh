@@ -8,8 +8,8 @@
 #                 the doc lints too: they run in the Skill Format workflow
 #   --random      deal the sections to shards at random, so a section
 #                 that quietly needs another's state fails (shard-safety guard)
-#   --shards N    shard count; default ROTA_SMOKE_SHARDS, else config
-#                 gate.smokeShards, else one per two cores (nproc/2, 1 to 4)
+#   --shards N    shard count; default ROTA_SMOKE_SHARDS, else one per
+#                 two cores (nproc/2, 1 to 4)
 # Env: ROTA_GATE_LOGS=<dir> keeps the per-check logs there (else a tmp dir that
 #      is kept only when a check fails); ROTA_GATE_LOCK=<path> moves the lock.
 #
@@ -46,28 +46,10 @@ while [ $# -gt 0 ]; do
 done
 
 if [ -z "$SHARDS" ]; then
-  SHARDS="$(python3 - "$REPO" <<'PY' 2>/dev/null
-import json, sys
-def merge(a, b):
-    for k, v in b.items():
-        a[k] = merge(a[k], v) if isinstance(v, dict) and isinstance(a.get(k), dict) else v
-    return a
-cfg = {}
-for name in ("config.json", "config.local.json"):  # local overrides, as rota resolves them
-    try:
-        merge(cfg, json.load(open(sys.argv[1] + "/.rota/" + name)))
-    except Exception:
-        pass
-v = cfg.get("gate", {}).get("smokeShards")
-print(v if isinstance(v, int) and not isinstance(v, bool) and v >= 1 else "")
-PY
-)"
-  if [ -z "$SHARDS" ]; then
-    # Nothing set it: one shard per two cores, at least one, at most four, so a
-    # gate takes about half the machine (the same sum as worker.DefaultSmokeShards).
-    CORES="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
-    SHARDS=$((CORES / 2)); [ "$SHARDS" -ge 1 ] || SHARDS=1; [ "$SHARDS" -le 4 ] || SHARDS=4
-  fi
+  # Nothing set it: one shard per two cores, at least one, at most four, so a
+  # gate takes about half the machine (the same sum as worker.DefaultSmokeShards).
+  CORES="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
+  SHARDS=$((CORES / 2)); [ "$SHARDS" -ge 1 ] || SHARDS=1; [ "$SHARDS" -le 4 ] || SHARDS=4
 fi
 case "$SHARDS" in ''|*[!0-9]*|0) echo "gate: shard count must be an integer >= 1, got: $SHARDS" >&2; exit 2 ;; esac
 

@@ -857,7 +857,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 
 	// A transferred worker starts on the default tier unless --tier says higher.
 	// The preflight is assign's, without --kind or --model: the kind resolves
-	// from the item's label, else round.workerKind, else the receiver's
+	// from the item's label, else the first round.harnesses entry, else the receiver's
 	// recorded kind, else claude; the model from the item's label, else the
 	// tier map. Headroom and scope are not asked of a receiver that resumes.
 	run.kind, run.tier = harness.Default, strutil.FirstNonEmpty(o.Tier, e.Round.Tier)

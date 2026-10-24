@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"regexp"
 	"slices"
 	"strconv"
@@ -448,13 +449,13 @@ type Settings struct {
 }
 
 // SettingsFromConfig reads forge.provider, issues.source,
-// issues.retryWaitSeconds, issues.labels.notPlanned, issues.connection,
+// issues.labels.notPlanned, issues.connection,
 // issues.jira.project, issues.linear.team and issues.itsaplan.project, with the schema
 // defaults for absent or null keys. An invalid forge.provider or issues.source
 // reads as its default here; ValidateConfig (and the *FromConfig constructors)
 // fail on it instead.
 func SettingsFromConfig(cfg any) Settings {
-	s := Settings{Provider: config.ForgeAuto, Source: config.SourceFile, RetryWait: retryWait(cfg), NotPlannedLabel: config.Label(cfg, "notPlanned")}
+	s := Settings{Provider: config.ForgeAuto, Source: config.SourceFile, RetryWait: retryWait(), NotPlannedLabel: config.Label(cfg, "notPlanned")}
 	if p, err := config.ForgeProvider(cfg); err == nil {
 		s.Provider = p
 	}
@@ -469,16 +470,20 @@ func SettingsFromConfig(cfg any) Settings {
 	return s
 }
 
-// retryWait is issues.retryWaitSeconds, fractions allowed. A value that is not
-// a number reads as the schema default.
-func retryWait(cfg any) time.Duration {
-	v, _ := config.Value(cfg, "issues.retryWaitSeconds")
-	f, err := strconv.ParseFloat(fmt.Sprint(v), 64)
-	if err != nil {
-		k, _ := config.SchemaKey("issues.retryWaitSeconds")
-		f, _ = strconv.ParseFloat(fmt.Sprint(config.Default(k)), 64)
+// defaultRetryWait is the pause before a rate-limited tracker call is retried.
+const defaultRetryWait = 60 * time.Second
+
+// RetryWaitEnv is a test seam: ROTA_ISSUES_RETRY_WAIT_SECONDS (fractions
+// allowed, 0 for none) replaces the retry pause. It is not a config key.
+const RetryWaitEnv = "ROTA_ISSUES_RETRY_WAIT_SECONDS"
+
+// retryWait is the retry pause: defaultRetryWait, or RetryWaitEnv when it holds
+// a number of at least 0.
+func retryWait() time.Duration {
+	if f, err := strconv.ParseFloat(os.Getenv(RetryWaitEnv), 64); err == nil && f >= 0 {
+		return time.Duration(f * float64(time.Second))
 	}
-	return time.Duration(f * float64(time.Second))
+	return defaultRetryWait
 }
 
 // ValidateConfig is the corrupt-config check of the keys SettingsFromConfig

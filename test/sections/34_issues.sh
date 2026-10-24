@@ -176,7 +176,7 @@ trap 'rm -rf "$TMP_IV"; trap '"'"'rm -rf "$TMP"'"'"' EXIT' EXIT
 
 for prov in github gitlab; do
   P="$TMP_IV/$prov"; mkdir -p "$P/.rota"
-  echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{\"retryWaitSeconds\":0}}" > "$P/.rota/config.json"
+  echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{}}" > "$P/.rota/config.json"
   (
     cd "$P"
     git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m seed
@@ -248,7 +248,7 @@ rcv() { local rc=0; (cd "$1" && shift && env PATH="$TESTDIR/fakes:$PATH" FAKE_TR
 # A missing issue is not_found (exit 3) on both forges, not a forge failure (5).
 for prov in github gitlab; do
   P="$TMP_EX/$prov"
-  mkexit "$P" "https://$prov.com/o/r.git" '{"issues":{"retryWaitSeconds":0}}'
+  mkexit "$P" "https://$prov.com/o/r.git" '{"issues":{}}'
   rc=$(rcv "$P" issues label 99 --remove bug)
   [ "$rc" = "3" ] || fail "$prov issues label on a missing issue should exit 3, got $rc: $(cat "$TMP_EX/out")"
   rc=$(rcv "$P" issues label 99 --add bug)
@@ -266,7 +266,7 @@ done
 
 # No origin and no issues.source or forge.provider: exit 3 with a message, never a silent [].
 P="$TMP_EX/none"
-mkexit "$P" "" '{"issues":{"retryWaitSeconds":0}}'
+mkexit "$P" "" '{"issues":{}}'
 for argv in "issues label 1 --add bug" "issues close 1 --commit HEAD"; do
   rc=$(rcv "$P" $argv)
   [ "$rc" = "3" ] || fail "no provider: rota $argv should exit 3, got $rc: $(cat "$TMP_EX/out")"
@@ -275,7 +275,7 @@ done
 
 # forge.provider stands in when origin names no forge, and beats one that does (#889).
 P="$TMP_EX/fallback"
-mkexit "$P" "" '{"forge":{"provider":"github"},"issues":{"retryWaitSeconds":0}}'
+mkexit "$P" "" '{"forge":{"provider":"github"},"issues":{}}'
 [ "$(cd "$P" && "$ROTA_BIN" --json issues provider | jget data.provider)" = "github" ] || fail "issues provider should answer from forge.provider with no origin"
 git -C "$P" remote add origin "https://gitlab.com/o/r.git"
 [ "$(cd "$P" && "$ROTA_BIN" --json issues provider | jget data.provider)" = "github" ] || fail "forge.provider should beat an origin naming a forge"

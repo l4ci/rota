@@ -14,7 +14,7 @@ Run `rota item rm <IDS>` and show stdout verbatim. If an item has `activeBranch`
 
 > Removing the `in-progress` label upstream is externally visible. The item delete proceeds either way.
 
-Run `rota issues imported --json`, keep `data.entries` whose `itemId` is in the removal set. Label: `rota config show --json issues.label` (default `in-progress`). No matches: skip to Step R4.
+Run `rota issues imported --json`, keep `data.entries` whose `itemId` is in the removal set. Label: `rota config show --json issues.labels.inProgress` (default `in-progress`). No matches: skip to Step R4.
 
 Otherwise ask:
 

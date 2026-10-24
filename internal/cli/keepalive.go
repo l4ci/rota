@@ -125,9 +125,9 @@ func keepaliveInt(name, val string, min int) (n int, given bool, err error) {
 }
 
 func keepaliveRun(fs *flag.FlagSet) RunFunc {
-	maxRestarts := fs.String("max-restarts", "", "restarts before giving up (default orchestrator.keepaliveMaxRestarts)")
-	breaker := fs.String("breaker", "", "restarts without a new handoff before the breaker trips (default orchestrator.keepaliveBreaker)")
-	backoff := fs.String("backoff", "", "seconds to wait before a restart (default orchestrator.keepaliveBackoffSeconds)")
+	maxRestarts := fs.String("max-restarts", "", "restarts before giving up (default 10)")
+	breaker := fs.String("breaker", "", "restarts without a new handoff before the breaker trips (default 3)")
+	backoff := fs.String("backoff", "", "seconds to wait before a restart (default 5)")
 	noLimits := fs.Bool("no-limits", false, "do not run the usage-limit watcher (rota limit watch) beside the command")
 	prompt := fs.String("prompt", "", "restart prompt, appended as the last argument on restarts (default orchestrator.restartPrompt)")
 	first := fs.String("first-prompt", "", "prompt appended as the last argument of the first start only (default none)")

@@ -16,7 +16,7 @@ import (
 // issuesRepo is a project that is a git repo with the origin remote.
 func issuesRepo(t *testing.T, origin string) string {
 	t.Helper()
-	root := trackerProject(t, `{"issues": {"bulkPaceMs": 0}}`)
+	root := trackerProject(t, `{}`)
 	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"remote", "add", "origin", origin}} {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = root

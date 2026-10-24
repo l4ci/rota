@@ -7,7 +7,7 @@ trap 'rm -rf "$TMP_MI"' EXIT
 MAKE_MI() {
   local P="$1" prov="$2"
   mkdir -p "$P/.rota/bugs" "$P/.rota/features" "$P/.rota/tasks" "$P/.rota/designs" "$P/.rota/plans" "$P/.rota/milestones"
-  printf '{"forge":{"provider":"%s"},"issues":{"retryWaitSeconds":0,"bulkPaceMs":0}}\n' "$prov" > "$P/.rota/config.json"
+  printf '{"forge":{"provider":"%s"},"issues":{}}\n' "$prov" > "$P/.rota/config.json"
   cat > "$P/.rota/BACKLOG.md" <<'BL'
 # TODO
 

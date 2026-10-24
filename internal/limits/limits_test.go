@@ -530,7 +530,7 @@ func TestLoadSettings(t *testing.T) {
 	}
 	dir := t.TempDir()
 	for key, val := range map[string]string{
-		"mode": `"wait"`, "resumeMarginSeconds": `-1`, "fallbackSleepSeconds": `0`, "maxResumes": `0`, "resumePrompt": `"  "`,
+		"mode": `"wait"`, "resumePrompt": `"  "`,
 	} {
 		p := filepath.Join(dir, key+".json")
 		os.WriteFile(p, []byte(`{"limits":{"`+key+`":`+val+`}}`), 0o666)
@@ -539,9 +539,9 @@ func TestLoadSettings(t *testing.T) {
 		}
 	}
 	p := filepath.Join(dir, "ok.json")
-	os.WriteFile(p, []byte(`{"limits":{"mode":"sleep","maxResumes":5},"orchestrator":{"escalateIssue":9}}`), 0o666)
+	os.WriteFile(p, []byte(`{"limits":{"mode":"sleep"},"orchestrator":{"escalateIssue":9}}`), 0o666)
 	s, err = LoadSettings(config.Load(p))
-	if err != nil || s.Mode != ModeSleep || s.MaxResumes != 5 || s.EscalateIssue != "9" {
+	if err != nil || s.Mode != ModeSleep || s.MaxResumes != 3 || s.EscalateIssue != "9" {
 		t.Fatalf("%+v %v", s, err)
 	}
 }

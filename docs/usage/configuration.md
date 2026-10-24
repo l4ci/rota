@@ -24,7 +24,6 @@ Default config (what `rota init --no-blocks` writes in a fresh repo; `rota.versi
     "version": ""
   },
   "issues": {
-    "label": "in-progress",
     "autoCreateLabel": true,
     "source": "file"
   },
@@ -73,17 +72,15 @@ Worker slots cached under the old keys keep working: the registry stores the acc
 
 Keys split by flow. `work.*` keys apply to `/rota-work` and other solo cycles: `work.isolation`, `work.mergeStrategy`, `work.tdd` and `work.contextGuard`. `round.*` keys apply only to parallel rounds (`rota round`, `rota worker`, `rota orchestrate`). The round-only keys that used to sit under `work.*` now live under `round.*`; see [Moving old `work.*` names](#moving-old-work-names-to-round).
 
-## models: orchestrator and worker
+## Models: orchestrator.model and round.tiers.claude.standard
 
-`models.orchestrator` drives planning, exploration, verification, and design. `models.worker` handles implementation sub-tasks. Set them independently to trade off quality against cost and speed.
+`orchestrator.model` (default `opus`) drives planning, exploration, verification and design. `round.tiers.claude.standard` (default `sonnet`) is the model of implementation subagents and of standard-tier round workers; `/rota-work` and rounds read the same key. Set them independently to trade off quality against cost and speed. `round.profile` fills the Claude tiers when `round.tiers.claude.standard` is unset (see [round keys](#round-keys)).
 
 | Value | Best for |
 |-------|----------|
 | `"opus"` | Deep reasoning: planning, exploration, verification, design |
 | `"sonnet"` | Fast execution of well-specified tasks |
 | `"haiku"` | Quick, cheap fixes and small tasks |
-
-`rota init` writes the Balanced profile. The four profiles (Balanced, Premium, Fast, Minimal) are listed in [config options](../reference/config-options.md); set both keys to switch.
 
 ## work.isolation: branch or worktree
 
@@ -128,7 +125,7 @@ Two things behave differently under `tmux` and `herdr` than in `/rota-work`:
 - **`work.isolation` stops applying.** Every slot has its own worktree, so its own git index, by construction.
 - **Workers commit.** The orchestrator's per-task commit step is skipped; integration happens through the merge gate instead, which re-verifies the *merged* tree. Two workers can each be honestly green and still break the cycle branch together — a signature one widens while another adds a caller, a constant one stops emitting while another starts reading it. Nothing about a clean merge rules that out, which is why the gate runs `test.full` after every merge rather than trusting the branches.
 
-Related keys: `round.slots` (pool size, default `3`), `round.workerCommand` (default builds `claude --model <models.worker> --dangerously-skip-permissions`), `round.opencodeCommand` (the same for OpenCode workers; default builds `opencode --model <model>`), `round.codexCommand` (the same for Codex workers; default builds `codex --model <model> --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen`), `round.operatorCommand` (starts the orchestrator for `rota orchestrate` and `rota worker session ensure`; default builds `claude --model <models.orchestrator> --permission-mode auto`, with `--continue` added for `session ensure`; `rota keepalive run` restarts it), and `round.accounts` (the named worker accounts of every harness, a list of `{ "kind", "name", "dir" }`: `kind` is `claude`, `codex` or `opencode`, and `dir` is that harness's config home, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `OPENCODE_CONFIG_DIR`; a leading `~` or `~/` in `dir` expands to the home directory; names are unique across kinds; with no entry of a kind, workers of that kind use the harness's default home).
+Related keys: `round.slots` (pool size, default `3`), `round.commands` (the launch command per harness: `round.commands.claude` defaults to `claude --model <round.tiers.claude.standard> --dangerously-skip-permissions`, `round.commands.opencode` to `opencode --model <model>`, `round.commands.codex` to `codex --model <model> --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen`), `orchestrator.command` (starts the orchestrator for `rota orchestrate` and `rota worker session ensure`; the default builds `claude --model <orchestrator.model> --permission-mode auto`, with `--continue` added for `session ensure`; `rota keepalive run` restarts it), and `round.accounts` (the named worker accounts of every harness, a list of `{ "kind", "name", "dir" }`: `kind` is `claude`, `codex` or `opencode`, and `dir` is that harness's config home, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `OPENCODE_CONFIG_DIR`; a leading `~` or `~/` in `dir` expands to the home directory; names are unique across kinds; with no entry of a kind, workers of that kind use the harness's default home).
 
 **Workers run with permissions skipped; the operator does not.** A worker is briefed to commit, open a PR and run tests with nobody in its pane to answer a prompt, so a narrower mode just stalls it. What bounds a worker is scope rather than gating — a throwaway branch in its own worktree, with `rota worker gate` verifying a scratch merge before anything reaches the cycle branch. The operator keeps `auto` because it performs the merges and it is the window a human is actually watching. Narrow either via its config key; a worker that then stops on a prompt reports `NEEDS-PERMISSION` rather than hanging.
 
@@ -222,7 +219,7 @@ rota config set plan.maxTasks 5
 
 ## work.contextGuard: warn or pause a long session
 
-Affects `/rota-work` and other solo sessions. `warn` (default), `auto` or `off`. Acts only where `rota hook install` has run, on a session that is not the orchestrator, when its fresh statusline reading is at or above `orchestrator.handoffThreshold`. `warn` adds one line to the next prompt recommending `/rota-pause`, once per crossing. `auto` also lets the Stop hook block up to `orchestrator.handoffMaxBlocks` times, asking for `/rota-pause` at the next task boundary. See [pausing and resuming](pausing-and-resuming.md#context-guard).
+Affects `/rota-work` and other solo sessions. `warn` (default), `auto` or `off`. Acts only where `rota hook install` has run, on a session that is not the orchestrator, when its fresh statusline reading is at or above `orchestrator.handoffThreshold`. `warn` adds one line to the next prompt recommending `/rota-pause`, once per crossing. `auto` also lets the Stop hook block up to 2 times, asking for `/rota-pause` at the next task boundary. See [pausing and resuming](pausing-and-resuming.md#context-guard).
 
 ```bash
 rota config set work.contextGuard auto
@@ -269,7 +266,7 @@ Example for a Python project using ruff + pytest:
 }
 ```
 
-Commands run from the repo root (or, in umbrella mode, the sub-repo's root), one after the other. To use several cores, put the concurrency in one command: this repo sets the list to `["bash test/gate.sh"]`, which runs validate, `go vet`, `go test -race` and the smoke suite together (smoke split into [`gate.smokeShards`](#gatesmokeshards) shards, the sharded gate takes about 2–3 minutes, serial smoke is several times slower). Set via `rota config set` (which parses argv[2] as JSON):
+Commands run from the repo root (or, in umbrella mode, the sub-repo's root), one after the other. To use several cores, put the concurrency in one command: this repo sets the list to `["bash test/gate.sh"]`, which runs validate, `go vet`, `go test -race` and the smoke suite together (smoke split into [`ROTA_SMOKE_SHARDS`](#smoke-shards) shards, the sharded gate takes about 2–3 minutes, serial smoke is several times slower). Set via `rota config set` (which parses argv[2] as JSON):
 
 ```bash
 rota config set test.full '["uv run ruff check .","uv run ruff format --check ."]'
@@ -316,12 +313,12 @@ Trade-off: a CI queue can be slower than a 2-3 minute local gate, so `local` sta
 
 Not covered: the `rota round wind-down` base re-verify and `rota test run full` still run `test.full` locally. Tuning, in seconds: `ROTA_CI_POLL` (default 20), `ROTA_CI_START_WAIT` (300), `ROTA_CI_TIMEOUT` (overrides the config timeout).
 
-## gate.smokeShards
+## Smoke shards
 
-Number of concurrent shards `bash test/gate.sh` splits the smoke suite into. Integer ≥ 1, default `4`; `ROTA_SMOKE_SHARDS=<N>` overrides it for one run. Each shard is its own `test/runner.sh` run with its own temp root and its own log (the gate prints the log directory, and keeps it on a failure). A shard that ends without a summary line is reported with its exit code and last output. Shards only help while sections stay independent: `bash test/gate.sh --smoke-only --random` deals the sections out at random, and a scheduled CI job runs it on `main` to catch a section that needs another's state. Only one gate runs per machine at a time; a second waits on `/tmp/rota-gate.lock`.
+`bash test/gate.sh` splits the smoke suite into concurrent shards: `ROTA_SMOKE_SHARDS=<N>` (integer >= 1) for one run, else one per two cores (1 to 4). The old `gate.smokeShards` key is removed. Each shard is its own `test/runner.sh` run with its own temp root and its own log (the gate prints the log directory, and keeps it on a failure). A shard that ends without a summary line is reported with its exit code and last output. Shards only help while sections stay independent: `bash test/gate.sh --smoke-only --random` deals the sections out at random, and a scheduled CI job runs it on `main` to catch a section that needs another's state. Only one gate runs per machine at a time; a second waits on `/tmp/rota-gate.lock`.
 
 ```bash
-rota config set gate.smokeShards 6
+ROTA_SMOKE_SHARDS=6 bash test/gate.sh
 ```
 
 ## doctor.minFreeDiskPercent
@@ -407,16 +404,6 @@ Same-model-fresh-context is the cheap MVP; cross-model second-opinions (Codex/Ge
 
 See [review and ship](review-and-ship.md) for the full `/rota-ship` workflow.
 
-## ship.secondOpinionRunner
-
-Picks who runs the [`ship.secondOpinion`](#shipsecondopinion) gate. Has no effect while `ship.secondOpinion` is `false`.
-
-| Value | Behavior |
-|-------|----------|
-| `"subagent"` (default) | A fresh Sonnet subagent reviews the goal + diff brief. |
-
-5.0 removed the `"codex"` runner, which ran Codex headlessly. 5.0 has no headless sessions. A config that still says `"codex"` keeps working: `/rota-ship` prints a one-line note and runs the subagent in advisory mode, as the Codex runner did. A FAIL is surfaced and the ship continues. With `"subagent"` (the default) a FAIL stops the ship, routed like `/rota-review`.
-
 ## ship.qa
 
 Controls whether `/rota-ship` invokes [`/rota-qa run`](qa.md) between `/rota-review` (and the optional second-opinion gate) and the merge/PR step. `/rota-review` answers *"does this diff make sense"*. `/rota-qa` answers *"does the product actually work"* by executing the per-target strategy in `.rota/qa/<target>.md`.
@@ -474,14 +461,15 @@ Settings for `rota round` (parallel rounds; see [the rounds guide](parallel-roun
 | `round.batch` | `0` | The most items a round may have assigned and not yet merged, closed or parked at once. `rota round assign` refuses the next one (exit 4, `blockedBy: batch`; `--accept-batch` overrides one call) and `rota round tick` assigns none (`batchFull`). `0` means no limit. See [Batch](parallel-rounds.md#assigning-an-issue). |
 | `round.freshAt` | `2` | The bounce at which `rota round review-relay` stops resuming the worker and instead runs `round transfer` to a free slot at the same tier, with a brief of the findings still NOT ADDRESSED in the last review plus the review link (no relay history). The transfer counts as that bounce and is ledgered with `--cap-reason fresh`. With no free slot, no open findings or a refused transfer the relay goes to the same worker and says why. Only acts below `round.maxBounces`. `0` turns it off. |
 | `round.reviewLoop` | `"manual"` | What happens when a reviewer comments on a finished worker's PR. `manual` reports it (`review/<slot>` change in `rota round watch`, a `review` item in `rota round tick`) and leaves `rota round review-relay <slot>` to the orchestrator. `auto` relays it to the worker as a counted bounce from `round watch` and `round tick`; at `round.maxBounces` it escalates on the PR instead. See [Review loop](parallel-rounds.md#review-loop). |
-| `round.workerKind` | unset | Default worker harness, `claude`, `codex` or `opencode`. Order: `--kind`, the issue's `harness:` label, `round.workerKind`, the slot's recorded kind, else `claude`. A slot resuming its own issue keeps its kind ahead of `round.workerKind` and `round.harnesses` (`kindSource` `slot (resume)`). Autopilot, `round architecture` and `round transfer` follow it, so a Codex-first project needs no flag or label. Any other value is a config error. `rota round status` and `assign --check-only` show where the kind came from (`kindSource`). `rota setup` asks for it and for `orchestrator.harness`; Enter leaves each unset. |
+| `round.harnesses` | `[]` | Harnesses a round may use, `claude`, `codex` or `opencode`, in quota-fallback order. The first entry is the default worker harness. Order: `--kind`, the issue's `harness:` label, the first entry, the slot's recorded kind, else `claude`. A slot resuming its own issue keeps its kind ahead of the first entry (`kindSource` `slot (resume)`). Autopilot, `round architecture` and `round transfer` follow it, so a Codex-first project (`["codex"]`) needs no flag or label. Any other value is a config error. `rota round status` and `assign --check-only` show where the kind came from (`kindSource`). `rota setup` asks for the worker harness and for `orchestrator.harness`; Enter leaves each unset. |
+| `round.commands` | `{}` | Launch command per harness kind (`claude`, `codex`, `opencode`), set one at a time: `rota config set round.commands.codex '...'`. Unset kinds use the built-in command. See below. |
 | `round.tier` | `"standard"` | Default worker tier: `light` (reading, searching), `standard` (code and tests) or `heavy` (hard reasoning). `rota round assign --tier heavy --tier-reason "…"` goes above it; a tier above the default needs the reason, which lands on the slot. |
-| `round.profile` | unset | A named model profile that fills the three Claude tiers (light / standard / heavy): `quality` sonnet / opus / opus, `balanced` haiku / sonnet / opus, `budget` haiku / haiku / sonnet, `inherit` empty / empty / empty (Claude workers and subagents launch without `--model`). Unset keeps the tier defaults below. Precedence per Claude tier: an explicit `round.tiers.claude.<tier>`, then the profile, then (standard only) `models.worker`, then the default. Codex and OpenCode tiers are not touched. `rota config show` prints each tier's effective model and its source (`explicit`, `profile`, `models.worker`, `default`, or `harness default` when empty), for Claude, Codex and OpenCode. |
-| `round.tiers.claude.light` / `.standard` / `.heavy` | `haiku` / `models.worker` / `opus` | The model each tier starts a Claude worker with. `standard` follows `models.worker` (so `/rota-work` and rounds agree) until set explicitly. |
-| `round.tiers.codex.light` / `.standard` / `.heavy` | `gpt-6-luna` / `gpt-6.1-sol` / `gpt-6-astra` | The same for Codex, lighter to heavier. Set all three to empty and a Codex worker runs on Codex's own default model (the default `round.codexCommand` drops `--model`). Overriding one tier leaves the other two on their defaults; setting one tier empty beside a model on another is refused. `assign --kind codex --check-only` shows the model it would use. |
-| `round.tiers.opencode.light` / `.standard` / `.heavy` | `opencode/claude-haiku-5-5` / `opencode/claude-sonnet-5-5` / `opencode/claude-opus-5-5` | The same for OpenCode, with `provider/model` ids from `opencode models`; the defaults need the built-in `opencode` provider, so set your own ids when `opencode models` does not list them. Set all three to empty and OpenCode picks its own model (the default `round.opencodeCommand` drops `--model`). See [OpenCode workers](opencode-workers.md). |
+| `round.profile` | unset | A named model profile that fills the three Claude tiers (light / standard / heavy): `quality` sonnet / opus / opus, `balanced` haiku / sonnet / opus, `budget` haiku / haiku / sonnet, `inherit` empty / empty / empty (Claude workers and subagents launch without `--model`). Unset keeps the tier defaults below. Precedence per Claude tier: an explicit `round.tiers.claude.<tier>`, then the profile, then the default. Codex and OpenCode tiers are not touched. `rota config show` prints each tier's effective model and its source (`explicit`, `profile`, `default`, or `harness default` when empty), for Claude, Codex and OpenCode. |
+| `round.tiers.claude.light` / `.standard` / `.heavy` | `haiku` / `sonnet` / `opus` | The model each tier starts a Claude worker with. `standard` is also the model of `/rota-work`'s implementation subagents, so the two agree. |
+| `round.tiers.codex.light` / `.standard` / `.heavy` | `gpt-6-luna` / `gpt-6.1-sol` / `gpt-6-astra` | The same for Codex, lighter to heavier. Set all three to empty and a Codex worker runs on Codex's own default model (the default `round.commands.codex` drops `--model`). Overriding one tier leaves the other two on their defaults; setting one tier empty beside a model on another is refused. `assign --kind codex --check-only` shows the model it would use. |
+| `round.tiers.opencode.light` / `.standard` / `.heavy` | `opencode/claude-haiku-5-5` / `opencode/claude-sonnet-5-5` / `opencode/claude-opus-5-5` | The same for OpenCode, with `provider/model` ids from `opencode models`; the defaults need the built-in `opencode` provider, so set your own ids when `opencode models` does not list them. Set all three to empty and OpenCode picks its own model (the default `round.commands.opencode` drops `--model`). See [OpenCode workers](opencode-workers.md). |
 
-A custom `round.workerCommand` receives the tier's model only through a `{model}` placeholder in the command; without one, `rota round assign` warns and records the tier but not a model. `round.codexCommand` and `round.opencodeCommand` work the same way for Codex and OpenCode workers.
+A custom `round.commands.claude` receives the tier's model only through a `{model}` placeholder in the command; without one, `rota round assign` warns and records the tier but not a model. `round.commands.codex` and `round.commands.opencode` work the same way for Codex and OpenCode workers. `round.commands` is one key holding one command per harness kind; set a single entry with `rota config set round.commands.codex '...'`. An unknown kind under it is an error.
 
 `autonomy.level: auto` turns on the round autopilot; `round.scope` says which issues a round may take. Set with `rota config set round.scope slate`.
 
@@ -493,13 +481,13 @@ Fourteen keys moved out of `work.*` into `round.*` because only rounds read them
 |----------|----------|
 | `work.workerSlots` | `round.slots` |
 | `work.dispatch` | `round.dispatch` |
-| `work.workerCommand` | `round.workerCommand` |
-| `work.operatorCommand` | `round.operatorCommand` |
+| `work.workerCommand` | `round.commands.claude` |
+| `work.operatorCommand` | `orchestrator.command` |
 | `work.accounts` | `round.accounts` |
 | `work.codexAccounts` | `round.codexAccounts`, then folded into `round.accounts` (see [Folding the account keys](#folding-the-account-keys)) |
-| `work.codexCommand` | `round.codexCommand` |
+| `work.codexCommand` | `round.commands.codex` |
 | `work.opencodeAccounts` | `round.opencodeAccounts`, then folded into `round.accounts` |
-| `work.opencodeCommand` | `round.opencodeCommand` |
+| `work.opencodeCommand` | `round.commands.opencode` |
 | `work.envSetup` | `round.envSetup` |
 | `work.portBase` | `round.portBase` |
 | `work.portBlock` | `round.portBlock` |
@@ -539,7 +527,7 @@ rota agents write            # write or refresh the files
 rota agents write --check    # report drift, write nothing, exit 1 on drift
 ```
 
-It writes `.claude/agents/rota-<role>.md` (frontmatter `name`, `description`, `model`, `effort` when set, and `tools: Read, Grep, Glob, Bash` for the explorer only) and, when OpenCode is configured, `.opencode/agents/rota-<role>.md` (frontmatter `description`, `mode: subagent`, `model` when the tier map is set, and `permission: edit: deny, bash: deny` for the explorer; OpenCode has no effort field) and, when Codex is configured, `.codex/agents/rota-<role>.toml` (`name`, `description`, `model`, `model_reasoning_effort` when set, `developer_instructions`, and `sandbox_mode = "read-only"` for the explorer). Codex counts as configured when any `round.tiers.codex.*` is set, `round.codexCommand` is non-empty, `round.accounts` has a `codex` entry, or `round.workerKind` is `codex`. With no Codex tier map the Codex files omit `model` and Codex picks its own. The explorer keeps `Bash`, so on Claude it is read-mostly, not strictly read-only.
+It writes `.claude/agents/rota-<role>.md` (frontmatter `name`, `description`, `model`, `effort` when set, and `tools: Read, Grep, Glob, Bash` for the explorer only) and, when OpenCode is configured, `.opencode/agents/rota-<role>.md` (frontmatter `description`, `mode: subagent`, `model` when the tier map is set, and `permission: edit: deny, bash: deny` for the explorer; OpenCode has no effort field) and, when Codex is configured, `.codex/agents/rota-<role>.toml` (`name`, `description`, `model`, `model_reasoning_effort` when set, `developer_instructions`, and `sandbox_mode = "read-only"` for the explorer). Codex counts as configured when any `round.tiers.codex.*` is set, `round.commands.codex` is non-empty, `round.accounts` has a `codex` entry, or the first entry of `round.harnesses` is `codex`. With no Codex tier map the Codex files omit `model` and Codex picks its own. The explorer keeps `Bash`, so on Claude it is read-mostly, not strictly read-only.
 
 Each file starts with a "generated by rota, do not edit" header. The verb never overwrites a same-named file without it. Commit the files like other project config. `rota init` runs the verb once (skipped under `--no-blocks`, and a refusal there only warns); `rota skills update` does not, so rerun it after changing a role or a tier map. `rota doctor` warns on a missing or drifted file and names the verb. The [worker contract](../../skills/references/worker-contract.md) tells workers to use these agents and to fall back to the tier table when the files are absent.
 
@@ -550,19 +538,15 @@ Settings for the orchestrator handoff (`rota hook stop`, `rota hook session-star
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `orchestrator.handoffThreshold` | `75` | Context percentage (integer, 1 to 100) at which the Stop hook blocks the orchestrator until it has written a handoff. |
-| `orchestrator.stateMaxAgeSeconds` | `120` | A statusline reading older than this is not acted on. |
-| `orchestrator.handoffMaxAgeSeconds` | `900` | A handoff younger than this counts as fresh: the Stop hook passes, and the SessionStart fallback injects it. |
-| `orchestrator.handoffMaxBlocks` | `2` | Times the hook re-blocks a session that still has no handoff, then passes and records `handoffFailed` in the session state. `0` blocks once. |
-| `orchestrator.keepaliveMaxRestarts` | `10` | Restarts `rota keepalive run` makes before it stops with `max-restarts` (integer, 0 or more; `0` stops at the first handoff exit). |
-| `orchestrator.keepaliveBreaker` | `3` | Restarts in a row that leave no new handoff before the breaker stops the loop (integer, 1 or more). |
-| `orchestrator.keepaliveBackoffSeconds` | `5` | Seconds to wait before a restart (integer, 0 or more). |
+| `orchestrator.model` | `opus` | Model of the orchestrator session and of planning, exploration and verification subagents. |
+| `orchestrator.command` | unset | Command `rota orchestrate` and `rota worker session ensure` start for a Claude orchestrator. Unset builds `claude --model <orchestrator.model> --permission-mode auto`. |
 | `orchestrator.restartPrompt` | `Continue as orchestrator: read the handoff injected at session start, run rota round status, and resume the round.` | Appended as the last argument of a restart, never of the first start (non-empty string). |
 | `orchestrator.harness` | `claude` | The agent `rota orchestrate` starts as the orchestrator: `claude`, `codex`, `hermes` or `opencode`. It runs under `rota keepalive run` with the orchestrate skill as its first prompt. See [parallel rounds](parallel-rounds.md#-your-first-round) and [orchestrator harnesses](orchestrator-harnesses.md). |
 | `orchestrator.switchOnUsage` | `false` | Opt in to moving the orchestrator to another account before a usage limit: the Stop hook then also blocks for a handoff at `usageThreshold`, and `rota keepalive run` restarts under another account (boolean). See [unattended rounds](unattended-rounds.md). |
 | `orchestrator.usageThreshold` | `90` | Percent (integer, 1 to 100) of the 5-hour or weekly window at which the Stop hook asks for that handoff. Read only when `switchOnUsage` is `true`. |
 | `orchestrator.escalateIssue` | `0` | Issue number, or a key like `PROJ-123` on a key-based tracker, the breaker's escalation comment goes on (integer or string). `0` or empty is unset: the breaker raises a host notification and a warning only. |
 
-An out-of-range value exits 70 in a verb that reads it (`rota keepalive run` included); the hooks treat it as a pass and never block.
+An out-of-range value exits 70 in a verb that reads it (`rota keepalive run` included); the hooks treat it as a pass and never block. The state age limit (120 s), handoff age limit (900 s), block cap (2), restart cap (10), breaker (3) and backoff (5 s) are fixed; see [Upgrading from the old keys](#upgrading-from-the-old-keys).
 
 ## limits keys
 
@@ -571,9 +555,6 @@ Settings for the usage-limit watcher (`rota limit watch`, and the loop inside `r
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `limits.mode` | `switch` | `switch` moves a limited worker's issue to an idle slot on another account with headroom, and sleeps when there is none. `sleep` always waits for the reset. The orchestrator always sleeps. |
-| `limits.resumeMarginSeconds` | `60` | Seconds after the reset before the resume prompt is typed (integer, 0 or more). |
-| `limits.fallbackSleepSeconds` | `1800` | Sleep for a limit whose reset time is unknown (integer, 1 or more). |
-| `limits.maxResumes` | `3` | Resume prompts one limit gets before the entry is `failed` and escalated (integer, 1 or more). |
 | `limits.resumePrompt` | `The usage limit has reset. Continue where you left off.` | Typed into the limited pane at the reset (non-empty string). |
 
 An out-of-range value exits 70 in a verb that reads it.
@@ -726,7 +707,7 @@ Skills that use the base branch (including `/rota-ship`, `/rota-review` and `/ro
 
 ## Issues backend keys
 
-- **Keys:** `issues.source`, `forge.provider`, `issues.retryWaitSeconds`, `issues.bulkPaceMs`, `issues.homeRepo`, `issues.labels.*`
+- **Keys:** `issues.source`, `forge.provider`, `issues.homeRepo`, `issues.labels.*`
 - **Required:** no. Existing configs stay valid without them.
 - **Legacy keys:** `backlog.backend` and `issues.provider` were replaced by `issues.source` and `forge.provider`. Run `rota migrate source --apply` (or `rota config fill`) to convert; until then the old keys keep deciding.
 
@@ -734,8 +715,6 @@ Skills that use the base branch (including `/rota-ship`, `/rota-review` and `/ro
 |-----|---------|--------|
 | `issues.source` | `"file"` | Where the issues live: `"file"`, `"github"`, `"gitlab"`, `"forge"`, `"jira"`, `"linear"` or `"itsaplan"`. `github` and `gitlab` put the backlog on the tracker and must match the forge; `forge` puts each sub-repo of an umbrella on its own forge (mixed hosts); see [issue backend](issue-backend.md). |
 | `forge.provider` | `"auto"` | Where code lands: `"auto"` (from `origin`; no remote is `local`), `"github"`, `"gitlab"` or `"local"`. `local` means direct merge: no PR, the gate never looks for one, and `rota ship strategy` answers `direct`. |
-| `issues.retryWaitSeconds` | `60` | Seconds to wait before the single retry after a primary rate limit. |
-| `issues.bulkPaceMs` | `1000` | Milliseconds `rota migrate issues` waits between tracker writes. `0` disables the pause. |
 | `issues.homeRepo` | `""` | Umbrella mode only: sub-repo holding milestone tracking issues. Empty means the first registered sub-repo. |
 | `issues.connection` | `""` | Name of the machine-wide tracker connection (Jira, Linear, It's a Plan) added with `rota connect add`. A name only, never a secret. A teammate whose connection has another name overrides it in `config.local.json`. See [Tracker connections](#tracker-connections). |
 | `issues.jira.project` | `""` | Jira project key the connection reads from and writes to. |
@@ -769,7 +748,7 @@ The secret goes to the OS keychain (`security` on macOS, `secret-tool` on Linux)
 
 `rota doctor` checks the project's `issues.connection`: it fails with a hint when the connection is unknown, has no secret, or its test read fails. A kind with no test read yet in your build shows as a warning.
 
-`issues.label` is the legacy alias of `issues.labels.inProgress`. It is used when the new key is unset. `rota config show` lists all of these keys with their effective value and source.
+`issues.label`, the legacy alias of `issues.labels.inProgress`, is removed; see [Upgrading from the old keys](#upgrading-from-the-old-keys). `rota config show` lists all of these keys with their effective value and source.
 
 ### Where rota keeps machine files
 
@@ -797,11 +776,55 @@ Re-running `rota init` re-stamps `rota.version`; there are no project files to r
 
 When `rota version --drift` reports drift, re-run `rota init` after an upgrade to clear it.
 
+## Upgrading from the old keys
+
+Some keys were removed, merged or renamed. `rota config check` names a leftover as removed, `rota config fill` deletes it, and `rota migrate config` moves the value of a merged or renamed key. The merges step runs after the accounts step and before the scope step. It previews unless `--apply`, and works on the global config, `.rota/config.json` and `.rota/config.local.json`, lowest layer first. Idempotent; emptied parent objects (`models`) are removed.
+
+Merged and renamed (the value moves unchanged):
+
+| Old key | New key |
+|---------|---------|
+| `models.orchestrator` | `orchestrator.model` |
+| `round.operatorCommand` | `orchestrator.command` |
+| `models.worker` | `round.tiers.claude.standard` |
+| `round.workerCommand` | `round.commands.claude` |
+| `round.codexCommand` | `round.commands.codex` |
+| `round.opencodeCommand` | `round.commands.opencode` |
+| `round.workerKind` | first entry of `round.harnesses` |
+
+`round.workerKind` becomes the head of `round.harnesses`. When a file sets `workerKind` but not `harnesses`, the migration writes `harnesses = [workerKind, ...the harnesses of the layers below, minus workerKind]`. When both are set and agree, `workerKind` is dropped.
+
+Two keys in one file that disagree are a conflict: `round.workerKind` against `round.harnesses[0]`, and `models.worker` against `round.tiers.claude.standard`. The verb writes nothing and exits 4, as the other steps do. Resolve the pair with `rota config set`, then run it again. `issues.label` is the one special case: it moves to `issues.labels.inProgress` when that key is unset in the same file, and is simply dropped when it is set (never a conflict).
+
+Removed (no migration):
+
+| Old key | What happened |
+|---------|---------------|
+| `ship.secondOpinionRunner` | The second-opinion gate always runs the subagent. A leftover `"codex"` no longer selects advisory mode. |
+| `gate.smokeShards` | Use `ROTA_SMOKE_SHARDS` for one run; the default is one shard per two cores (1 to 4). |
+| `issues.label` | Merged into `issues.labels.inProgress`, see above. |
+
+Fixed constants (no longer configurable; a leftover value is ignored):
+
+| Old key | Fixed value |
+|---------|-------------|
+| `orchestrator.stateMaxAgeSeconds` | 120 |
+| `orchestrator.handoffMaxAgeSeconds` | 900 |
+| `orchestrator.handoffMaxBlocks` | 2 |
+| `orchestrator.keepaliveMaxRestarts` | 10 |
+| `orchestrator.keepaliveBreaker` | 3 |
+| `orchestrator.keepaliveBackoffSeconds` | 5 |
+| `limits.resumeMarginSeconds` | 60 |
+| `limits.fallbackSleepSeconds` | 1800 |
+| `limits.maxResumes` | 3 |
+| `issues.retryWaitSeconds` | 60 |
+| `issues.bulkPaceMs` | 1000 |
+
 ## The config screen
 
 `rota config edit`, `rota config --ui`, `rota config show --ui` and the Config entry of the bare-`rota` menu open the same screen. It needs a terminal that can take raw mode: off a terminal, with `--json` or under `TERM=dumb`, the verb refuses and points at `rota config set <key> <value>`. There is no line-prompt fallback.
 
-Keys sit under their section (`models`, `work`, `ship`, `round`, ...). Each row reads `key  value  [source]`, where the source is `default`, `project` (`.rota/config.json`) or `local` (`.rota/config.local.json`). A value that differs from the schema default is highlighted, and the group header counts how many do. The pane on the right shows the key's description, type, default, current value, where it is set and, for enum keys, the choices.
+Keys sit under their section (`orchestrator`, `work`, `ship`, `round`, ...). Each row reads `key  value  [source]`, where the source is `default`, `project` (`.rota/config.json`) or `local` (`.rota/config.local.json`). A value that differs from the schema default is highlighted, and the group header counts how many do. The pane on the right shows the key's description, type, default, current value, where it is set and, for enum keys, the choices.
 
 | Key | Does |
 | --- | --- |

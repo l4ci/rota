@@ -56,7 +56,7 @@ func TestAgentsWriteRefusals(t *testing.T) {
 		t.Fatal("foreign file overwritten")
 	}
 
-	dir = agentsProject(t, `{"round":{"codexCommand":"codex"},"roles":{"reasoner":{"effort":"max"}}}`)
+	dir = agentsProject(t, `{"round":{"commands":{"codex":"codex"}},"roles":{"reasoner":{"effort":"max"}}}`)
 	if code, _, errOut := rotaIn(t, dir, "agents", "write"); code != 4 || !strings.Contains(errOut, "roles.reasoner.effort") {
 		t.Fatalf("codex effort: %d %s", code, errOut)
 	}

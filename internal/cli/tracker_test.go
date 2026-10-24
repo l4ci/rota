@@ -131,7 +131,7 @@ func TestTrackerCallPassthrough(t *testing.T) {
 }
 
 func TestTrackerCallFailures(t *testing.T) {
-	dir := trProject(t, `{"forge":{"provider":"github","retryWaitSeconds":0}}`)
+	dir := trProject(t, `{"forge":{"provider":"github"}}`)
 	cases := []struct {
 		name   string
 		answer func(string, []string) (string, string, int)

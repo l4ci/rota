@@ -252,7 +252,7 @@ trap 'rm -rf "$TMP_BK" "$TMP_GB" "$TMP_CU" "$TMP_IB"' EXIT
 
 for prov in github gitlab; do
   P="$TMP_IB/$prov"; mkdir -p "$P/.rota"
-  echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{\"source\":\"$prov\",\"retryWaitSeconds\":0}}" > "$P/.rota/config.json"
+  echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{\"source\":\"$prov\"}}" > "$P/.rota/config.json"
   (
     cd "$P"
     git init -q && git config user.email t@t && git config user.name t
@@ -443,7 +443,7 @@ pass "item create validates tag/fields/title/body-file without writing"
 # --- issue mode -------------------------------------------------------------
 for prov in github gitlab; do
   P="$TMP_IC/$prov"; mkdir -p "$P/.rota"
-  CFG() { echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{\"source\":\"$prov\",\"retryWaitSeconds\":0$1}}" > "$P/.rota/config.json"; }
+  CFG() { echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{\"source\":\"$prov\"$1}}" > "$P/.rota/config.json"; }
   CFG ""
   (
     cd "$P"
@@ -538,7 +538,7 @@ TMP_IL="$(mktemp -d)"
 trap 'rm -rf "$TMP_BK" "$TMP_GB" "$TMP_CU" "$TMP_IB" "$TMP_IC" "$TMP_IL"' EXIT
 for prov in github gitlab; do
   P="$TMP_IL/$prov"; mkdir -p "$P/.rota"
-  echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{\"source\":\"$prov\",\"retryWaitSeconds\":0}}" > "$P/.rota/config.json"
+  echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{\"source\":\"$prov\"}}" > "$P/.rota/config.json"
   (
     cd "$P"
     git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m seed
@@ -627,7 +627,7 @@ print(",".join(c["body"].rsplit("\n", 1)[-1] for c in i["comments"] if not c["bo
     eq "recomplete" "closed|completed|type:task|Done in \`abc1234\` // Done in \`def5678\`" "$(IV 1)"
 
     # custom blocked label name
-    echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{\"source\":\"$prov\",\"retryWaitSeconds\":0,\"labels\":{\"blocked\":\"stuck\"}}}" > "$P/.rota/config.json"
+    echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{\"source\":\"$prov\",\"labels\":{\"blocked\":\"stuck\"}}}" > "$P/.rota/config.json"
     DONE T6 --commit abc1234 --reason blocked >/dev/null
     eq "custom blocked label" "open||in-progress,stuck,type:task|Blocked // Blocked" "$(IV 6)"
     pass "$prov: item complete / reopen close reasons, labels, gate, idempotency"

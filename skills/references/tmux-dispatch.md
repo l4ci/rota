@@ -10,7 +10,7 @@ herdr runs the same workers in tabs; [`herdr-dispatch.md`](herdr-dispatch.md) co
 
 ## Being inside tmux is a precondition
 
-A worker's value is that it can idle on a question and a human can answer in its pane. Outside tmux the windows land in a **detached session nobody is attached to**, every escalation goes unanswered, and the host degrades into a slower subagent mode. Detection is `$TMUX` (`rota worker session check`: exit 0 inside, 1 outside); `tmux has-session` is the wrong test, since it says whether a session *exists*, not whether *we are in it*. Outside tmux, `rota worker session ensure --body-file <path>` creates the session and an `operator` window running `round.operatorCommand` (`claude --continue --model <orchestrator>` by default). The caller **must stop after a successful `ensure`**: two orchestrators on one pool dispatch the same task twice. It is idempotent on the operator window.
+A worker's value is that it can idle on a question and a human can answer in its pane. Outside tmux the windows land in a **detached session nobody is attached to**, every escalation goes unanswered, and the host degrades into a slower subagent mode. Detection is `$TMUX` (`rota worker session check`: exit 0 inside, 1 outside); `tmux has-session` is the wrong test, since it says whether a session *exists*, not whether *we are in it*. Outside tmux, `rota worker session ensure --body-file <path>` creates the session and an `operator` window running `orchestrator.command` (`claude --continue --model <orchestrator>` by default). The caller **must stop after a successful `ensure`**: two orchestrators on one pool dispatch the same task twice. It is idempotent on the operator window.
 
 ## Polling
 
@@ -64,9 +64,9 @@ The two roles run at different trust levels, on purpose:
 
 **The operator keeps `auto`** because its blast radius is different: it merges into the branch the cycle ships from, and a human is watching that window, so a prompt there gets answered rather than stranding the run.
 
-**`needs-permission` stays in the classifier** even though the default should never trigger it. It covers the case where `round.workerCommand` has been narrowed: a stalled worker then reports the stall instead of looking idle. One slot stalling is a prompt to approve; every slot stalling means the mode is too narrow for the briefs.
+**`needs-permission` stays in the classifier** even though the default should never trigger it. It covers the case where `round.commands.claude` has been narrowed: a stalled worker then reports the stall instead of looking idle. One slot stalling is a prompt to approve; every slot stalling means the mode is too narrow for the briefs.
 
-**Narrowing it.** Point `round.workerCommand` at a settings file that allowlists just what the contract needs (`claude --settings <file>` with `permissions.allow` covering `git add`, `git commit`, `gh pr create`, and the project's test runner). Workers get autonomy for the operations they were briefed to perform and nothing else, at the cost of maintaining the list.
+**Narrowing it.** Point `round.commands.claude` at a settings file that allowlists just what the contract needs (`claude --settings <file>` with `permissions.allow` covering `git add`, `git commit`, `gh pr create`, and the project's test runner). Workers get autonomy for the operations they were briefed to perform and nothing else, at the cost of maintaining the list.
 
 **Slot environment.** The launch line typed into the window starts with `ROTA_SLOT=<slot> ROTA_PORT_BASE=<n> ROTA_PORT_BLOCK=<w> ROTA_DB_SUFFIX=_<slot>`, so the agent and every process it starts see the slot's port block and database suffix (`round.portBase`, `round.portBlock`). herdr passes the same four as `--env` on `tab create`.
 

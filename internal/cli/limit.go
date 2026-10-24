@@ -54,7 +54,7 @@ func escalateFunc(ctx context.Context, c *Ctx, root string) func(issue tracker.I
 
 // orchestratorData reads the orchestrator's rate limits from the D1 session
 // files: the newest one whose cwd is the project root (not a slot's worktree).
-// A file older than orchestrator.stateMaxAgeSeconds that shows no limit is not
+// A file older than hook.StateMaxAgeSeconds that shows no limit is not
 // evidence, so it reads as unknown.
 func orchestratorData(commonDir, root string, maxAge time.Duration) func(now time.Time) limits.Data {
 	return func(now time.Time) limits.Data {

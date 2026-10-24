@@ -62,16 +62,9 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 	if out.Decision == DecisionGrilling {
 		return out, blocked(BlockHumanDecision, "%s is a grilling decision: the human resolves it, one per session; run /rota-brainstorm %s", id, id)
 	}
-	project, projectSource := set.WorkerKind, KindFromConfig
-	if project == "" && len(set.Harnesses) > 0 {
-		// The first harness is the project default, ahead of the slot's kind:
-		// a slot that once ran a fallback must not carry it to the next issue.
-		project, projectSource = set.Harnesses[0], KindFromHarnesses
-	}
-	kind, kindSource := resolveKind(in.FlagKind, out.Pick.Harness, project, in.SlotKind, in.Resuming)
-	if kindSource == KindFromConfig {
-		kindSource = projectSource
-	}
+	// The first harness is the project default, ahead of the slot's kind:
+	// a slot that once ran a fallback must not carry it to the next issue.
+	kind, kindSource := resolveKind(in.FlagKind, out.Pick.Harness, set.DefaultKind(), in.SlotKind, in.Resuming)
 	if in.Fixed != nil {
 		kind, kindSource = in.Fixed.kind, in.Fixed.kindSource
 	}
@@ -82,7 +75,7 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 	kind = hz.Kind()
 	out.Kind, out.KindSource = kind, kindSource
 	// An unset codex tier map is allowed: the default codex command drops
-	// --model and Codex picks its own. A custom round.codexCommand holding
+	// --model and Codex picks its own. A custom round.commands.codex holding
 	// {model} would fail at dispatch, after the claim, so it is refused here.
 	model := resolveModel(in.FlagModel, out.Pick.Model, set.Model(kind, in.Tier))
 	if model == "" && e.workerEnv().NeedsModel(root, kind) {

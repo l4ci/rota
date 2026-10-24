@@ -45,6 +45,9 @@ func TestMain(m *testing.M) {
 	for _, k := range []string{"TMUX", "TMUX_PANE", "HERDR_ENV", "HERDR_PANE_ID", "HERDR_WORKSPACE_ID", "HERDR_SOCKET_PATH", "ROTA_TEST_LOCK_HELD"} {
 		os.Unsetenv(k)
 	}
+	// Retry and bulk-write pauses would only slow the tests down.
+	os.Setenv("ROTA_ISSUES_RETRY_WAIT_SECONDS", "0")
+	os.Setenv("ROTA_ISSUES_BULK_PACE_MS", "0")
 	// `rota init` registers the project in the global registry (#24): no test
 	// may write the developer's real ~/.local/state/rota.
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "xdg"))
