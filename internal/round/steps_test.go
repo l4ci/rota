@@ -27,7 +27,7 @@ func (f *moveFx) assignPlan(t *testing.T, id, agent string) []step {
 	if err != nil {
 		t.Fatal(err)
 	}
-	o := AssignOpts{ID: id, Agent: agent, HolderPID: 100, Settings: f.set}
+	o := AssignOpts{ID: id, Agent: agent}
 	res := &Assigned{ID: it.ID, Type: it.Type}
 	run, stop, err := f.env.planAssign(bg, f.root, f.be, o, it, nil, f.set.Tier, "", res)
 	if err != nil || stop {
@@ -43,7 +43,7 @@ func (f *moveFx) assignPlan(t *testing.T, id, agent string) []step {
 // transferPlan is the plan and steps of moving id to the slot or the human.
 func (f *moveFx) transferPlan(t *testing.T, id, to string) (*transferRun, []step) {
 	t.Helper()
-	o := TransferOpts{Issue: id, To: to, HolderPID: 100, Settings: f.set}
+	o := TransferOpts{Issue: id, To: to}
 	res := &Transferred{}
 	run, err := f.env.planTransfer(bg, f.root, f.be, o, res)
 	if err != nil {

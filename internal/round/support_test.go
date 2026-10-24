@@ -147,7 +147,7 @@ func TestSupportAssignRefusesTheOtherSite(t *testing.T) {
 	}
 
 	m := newAssignFixture(t)
-	m.set.Support = "mac"
+	m.env.Round.Support = "mac"
 	m.be.items["12"].Labels = []string{config.Label(nil, "support")}
 	if _, err := m.assign("12", "", nil); blockedBy(t, err) != BlockSite || !strings.Contains(err.Error(), "--withdraw") {
 		t.Errorf("main assign of a support issue: %v", err)
