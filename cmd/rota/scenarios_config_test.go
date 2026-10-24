@@ -236,15 +236,15 @@ func suiteConfig(t *testing.T) {
 		show("all/std", stdFx, n),
 		show("all/no-config-file", withFx(stdFx, func(f *fx) { f.after = noConfigFile }), n),
 		show("all/mixed-layers", fx{config: nest(allProj), files: map[string]string{".rota/config.local.json": nest(allLoc)}}, n),
-		show("all/null-counts-as-unset", fx{config: `{"models": {"worker": null, "orchestrator": "o"}}`}, n),
-		show("all/null-in-local-falls-to-default", fx{config: `{"models": {"worker": "p"}}`, files: map[string]string{".rota/config.local.json": `{"models": {"worker": null}}`}}, n),
-		show("all/parent-is-scalar", fx{config: `{"models": "x", "work": 3}`}, n),
+		show("all/null-counts-as-unset", fx{config: `{"orchestrator": {"model": null, "command": "o"}}`}, n),
+		show("all/null-in-local-falls-to-default", fx{config: `{"orchestrator": {"model": "p"}}`, files: map[string]string{".rota/config.local.json": `{"orchestrator": {"model": null}}`}}, n),
+		show("all/parent-is-scalar", fx{config: `{"orchestrator": "x", "work": 3}`}, n),
 		show("all/config-is-list", fx{config: `[1]`}, n),
 		show("all/config-corrupt", fx{config: `{oops`}, n),
 		show("all/local-list-replaces-project", fx{config: `{"ship":{"qa":true}}`, files: map[string]string{".rota/config.local.json": `[1]`}}, n),
 		show("all/local-corrupt", fx{files: map[string]string{".rota/config.local.json": `{`}}, n),
 		show("all/nested-object-values", fx{config: `{"round": {"accounts": [{"a": 1}, "b"], "workerCommand": "kü \"q\""}}`}, n),
-		show("all/number-forms", fx{config: `{"round": {"slots": 1.50}, "learn": {"promoteThreshold": 1e2}, "issues": {"bulkPaceMs": 12345678901234567890}}`}, n),
+		show("all/number-forms", fx{config: `{"round": {"slots": 1.50}, "learn": {"promoteThreshold": 1e2}, "release": {"nudgeAfterDays": 12345678901234567890}}`}, n),
 		show("all/unicode-and-escapes", fx{config: `{"docs": {"path": "dé😀\n\t/"}}`}, n),
 		show("all/from-subdir", withFile("sub/x.txt", "x\n"), n),
 		show("one/from-subdir", withFile("sub/x.txt", "x\n"), 1, "docs.path"),
@@ -266,8 +266,8 @@ func suiteConfig(t *testing.T) {
 			fx: fx{config: `{"custom": 1}`, files: map[string]string{".rota/config.local.json": `{"custom": 2}`}}, argv: j("config", "show", "custom"),
 			check: both(eqCheck("data.entries.0.value", float64(2)), eqCheck("data.entries.0.source", "local"))},
 		scn{name: "config-show/hand-edited-parent-object", want: 0,
-			fx: fx{config: `{"models": {"worker": "w"}}`}, argv: j("config", "show", "models"),
-			check: eqCheck("data.entries.0.value", map[string]any{"worker": "w"})},
+			fx: fx{config: `{"orchestrator": {"model": "w"}}`}, argv: j("config", "show", "orchestrator"),
+			check: eqCheck("data.entries.0.value", map[string]any{"model": "w"})},
 	)
 
 	// ---- config set
@@ -299,46 +299,46 @@ func suiteConfig(t *testing.T) {
 		{"escaped-newline", `"a\nb"`, "a\nb"}, {"empty-object", "{}", map[string]any{}}, {"empty-array", "[]", []any{}},
 		{"surrogate-pair-escape", `"😀"`, "\U0001F600"}, {"null", "null", nil},
 	} {
-		s := set("coerce/"+c.name, stdFx, "models.worker", c.raw, func(t *testing.T, e envl) {
+		s := set("coerce/"+c.name, stdFx, "orchestrator.model", c.raw, func(t *testing.T, e envl) {
 			t.Helper()
 			eq(t, e, "data.value", c.want)
 			eq(t, e, "data.changed", true)
 		})
 		if strings.HasPrefix(c.raw, "-") {
 			// a value that starts with - is a flag until -- (conventions, rule 7)
-			s.argv = setArgv("models.worker", "--", c.raw)
+			s.argv = setArgv("orchestrator.model", "--", c.raw)
 		}
 		add(s)
 	}
 	add(
-		set("key/models.orchestrator", stdFx, "models.orchestrator", "haiku", eqCheck("data.key", "models.orchestrator")),
+		set("key/orchestrator.command", stdFx, "orchestrator.command", "haiku", eqCheck("data.key", "orchestrator.command")),
 		set("key/four-segments", stdFx, "issues.labels.types.bug", "defect", eqCheck("data.key", "issues.labels.types.bug")),
 		set("key/three-segments", stdFx, "issues.labels.inProgress", "x", eqCheck("data.value", "x")),
 		set("key/rota.version", stdFx, "rota.version", "5.0.0", eqCheck("data.value", "5.0.0")),
-		set("previous/scalar", fx{config: `{"models": {"worker": "sonnet"}}`}, "models.worker", "opus",
+		set("previous/scalar", fx{config: `{"orchestrator": {"model": "sonnet"}}`}, "orchestrator.model", "opus",
 			both(eqCheck("data.previous", "sonnet"), eqCheck("data.changed", true))),
 		set("previous/object", fx{config: `{"round": {"accounts": ["a"]}}`}, "round.accounts", `["b"]`, eqCheck("data.previous", []any{"a"})),
-		set("previous/null-is-present", fx{config: `{"models": {"worker": null}}`}, "models.worker", "x", eqCheck("data.previous", nil)),
-		set("previous/same-value-is-a-no-op", fx{config: "{\n  \"models\": {\n    \"worker\": \"opus\"\n  }\n}\n"}, "models.worker", "opus",
+		set("previous/null-is-present", fx{config: `{"orchestrator": {"model": null}}`}, "orchestrator.model", "x", eqCheck("data.previous", nil)),
+		set("previous/same-value-is-a-no-op", fx{config: "{\n  \"orchestrator\": {\n    \"model\": \"opus\"\n  }\n}\n"}, "orchestrator.model", "opus",
 			both(eqCheck("data.changed", false), eqCheck("data.previous", "opus"))),
-		set("previous/same-value-compact-file-is-reformatted", fx{config: `{"models":{"worker":"opus"}}`}, "models.worker", "opus", eqCheck("data.changed", false)),
+		set("previous/same-value-compact-file-is-reformatted", fx{config: `{"orchestrator":{"model":"opus"}}`}, "orchestrator.model", "opus", eqCheck("data.changed", false)),
 		set("previous/int-vs-float-differs", fx{config: `{"round": {"slots": 3}}`}, "round.slots", "3.0", eqCheck("data.changed", true)),
 		set("parent/created", fx{config: `{"issues": {"source": "file"}}`}, "docs.path", "d", eqCheck("data.changed", true)),
 		set("parent/scalar-replaced", fx{config: `{"round": "scalar"}`}, "round.dispatch", "tmux", eqCheck("data.previous", nil)),
 		set("parent/list-replaced", fx{config: `{"round": [1, 2]}`}, "round.dispatch", "tmux", nil),
 		set("parent/null-replaced", fx{config: `{"round": null}`}, "round.dispatch", "tmux", nil),
 		set("parent/sibling-keys-kept", fx{config: `{"round": {"scope": "open", "extra": [1]}, "keep": true}`}, "round.dispatch", "tmux", nil),
-		set("order/replace-keeps-position", fx{config: `{"z": 1, "models": {"b": 1, "worker": "a", "a": 2}, "a": 0}`}, "models.worker", "b", nil),
-		set("order/new-key-is-last", fx{config: `{"z": 1, "models": {"b": 1}, "a": 0}`}, "models.worker", "b", nil),
-		set("order/duplicate-keys-collapse", fx{config: `{"models": {"worker": "a", "orchestrator": "o", "worker": "b"}}`}, "models.worker", "c", nil),
+		set("order/replace-keeps-position", fx{config: `{"z": 1, "orchestrator": {"b": 1, "model": "a", "a": 2}, "a": 0}`}, "orchestrator.model", "b", nil),
+		set("order/new-key-is-last", fx{config: `{"z": 1, "orchestrator": {"b": 1}, "a": 0}`}, "orchestrator.model", "b", nil),
+		set("order/duplicate-keys-collapse", fx{config: `{"orchestrator": {"model": "a", "command": "o", "model": "b"}}`}, "orchestrator.model", "c", nil),
 		set("file/missing-is-created", withFx(stdFx, func(f *fx) { f.after = noConfigFile }), "ship.qa", "true", eqCheck("data.changed", true)),
 		set("file/empty", fx{config: " "}, "ship.qa", "true", nil),
 		set("file/corrupt-counts-as-empty", fx{config: `{oops`}, "ship.qa", "true", nil),
 		set("file/unicode-kept-escaped", fx{config: `{"note": "kü😀", "x": "café"}`}, "ship.qa", "true", nil),
 		set("file/numbers-normalised", fx{config: `{"a": 1.50, "b": 1e2, "c": 10000000000000000000000, "d": -0}`}, "ship.qa", "true", nil),
 		set("file/deeply-nested-kept", fx{config: `{"x": {"y": {"z": [1, {"w": null}]}}}`}, "ship.qa", "true", nil),
-		set("file/local-is-never-touched", fx{files: map[string]string{".rota/config.local.json": `{"models":{"worker":"local"}}`}}, "models.worker", "opus", nil),
-		set("file/set-in-config-even-when-local-overrides", fx{files: map[string]string{".rota/config.local.json": `{"models":{"worker":"local"}}`}, config: `{"models": {"worker": "p"}}`}, "models.worker", "q", eqCheck("data.previous", "p")),
+		set("file/local-is-never-touched", fx{files: map[string]string{".rota/config.local.json": `{"orchestrator":{"model":"local"}}`}}, "orchestrator.model", "opus", nil),
+		set("file/set-in-config-even-when-local-overrides", fx{files: map[string]string{".rota/config.local.json": `{"orchestrator":{"model":"local"}}`}, config: `{"orchestrator": {"model": "p"}}`}, "orchestrator.model", "q", eqCheck("data.previous", "p")),
 		set("from-subdir", withFile("sub/x.txt", "x\n"), "docs.path", "d", nil),
 		// #1786: with no flag a machine key lands in config.local.json.
 		scn{name: "config-set/route/machine-key-writes-local", fx: stdFx, argv: j("config", "set", "round.slots", "4"),
@@ -349,7 +349,7 @@ func suiteConfig(t *testing.T) {
 	)
 	for _, body := range []string{"[1]", "null", `"s"`, "7", "true"} {
 		body := body
-		add(scn{name: "config-set/not-an-object/" + body, fx: fx{config: body}, argv: setArgv("models.worker", "x"),
+		add(scn{name: "config-set/not-an-object/" + body, fx: fx{config: body}, argv: setArgv("orchestrator.model", "x"),
 			want: 70})
 	}
 	for _, key := range []string{"", ".a", "a.", "a..b", "."} {
@@ -358,14 +358,14 @@ func suiteConfig(t *testing.T) {
 			want: 2})
 	}
 	add(
-		scn{name: "config-set/missing-value", argv: j("config", "set", "models.worker"), want: 2},
+		scn{name: "config-set/missing-value", argv: j("config", "set", "orchestrator.model"), want: 2},
 		scn{name: "config-set/missing-both", argv: j("config", "set"), want: 2},
-		scn{name: "config-set/no-hv", fx: fx{noHV: true}, argv: j("config", "set", "models.worker", "x"), want: 3},
+		scn{name: "config-set/no-hv", fx: fx{noHV: true}, argv: j("config", "set", "orchestrator.model", "x"), want: 3},
 		scn{name: "config-set/umbrella-repo-flag-writes-the-root-config", fx: umbFx, argv: j("config", "set", "--repo", "web", "docs.path", "d"),
 			want: 0, check: eqCheck("data.changed", true)},
 		scn{name: "config-set/repo-flag-unregistered", goOnly: true, want: 3, fx: umbFx, argv: j("config", "set", "--repo", "nope", "docs.path", "d")},
 		scn{name: "config-set/repo-flag-outside-umbrella", goOnly: true, want: 3, argv: j("config", "set", "--repo", "web", "docs.path", "d")},
-		scn{name: "config-set/value-with-leading-dash-without-double-dash-is-a-flag", goOnly: true, want: 2, argv: j("config", "set", "models.worker", "-5")},
+		scn{name: "config-set/value-with-leading-dash-without-double-dash-is-a-flag", goOnly: true, want: 2, argv: j("config", "set", "orchestrator.model", "-5")},
 		scn{name: "config-set/key-outside-schema-is-refused", goOnly: true, want: 2, argv: j("config", "set", "nope.key", "1"),
 			check: func(t *testing.T, e envl) {
 				b, _ := os.ReadFile(filepath.Join(goDirOf(e), ".rota", "config.json"))
@@ -373,9 +373,9 @@ func suiteConfig(t *testing.T) {
 					t.Errorf("config.json changed: %s", b)
 				}
 			}},
-		scn{name: "config-set/parent-key-outside-schema-is-refused", goOnly: true, want: 2, argv: j("config", "set", "models", `{"worker": "x"}`)},
-		scn{name: "config-set/key-below-a-leaf-is-refused", goOnly: true, want: 2, argv: j("config", "set", "models.worker.deep", "1")},
-		scn{name: "config-set/three-positionals", goOnly: true, want: 2, argv: j("config", "set", "models.worker", "a", "b")},
+		scn{name: "config-set/parent-key-outside-schema-is-refused", goOnly: true, want: 2, argv: j("config", "set", "orchestrator", `{"model": "x"}`)},
+		scn{name: "config-set/key-below-a-leaf-is-refused", goOnly: true, want: 2, argv: j("config", "set", "orchestrator.model.deep", "1")},
+		scn{name: "config-set/three-positionals", goOnly: true, want: 2, argv: j("config", "set", "orchestrator.model", "a", "b")},
 		scn{name: "config-set/empty-string-value-is-stored", goOnly: true, want: 0, argv: j("config", "set", "git.baseBranch", ""),
 			check: both(eqCheck("data.value", ""), eqCheck("data.changed", true))},
 	)
@@ -405,7 +405,7 @@ func suiteConfig(t *testing.T) {
 		chk("stale-null-value", fx{config: strings.Replace(fullConfig(), `"enabled": false`, `"enabled": null`, 1)}, 1, "stale", "umbrella.enabled"),
 		chk("stale-false-is-present", fx{config: fullConfig("test.e2e")}, 1, "stale", "test.e2e"),
 		chk("stale-parent-scalar", fx{config: strings.Replace(fullConfig(), "\"learn\": {", "\"learn\": 5, \"zzz\": {", 1)}, 1, "stale", "learn.promoteThreshold"),
-		chk("stale-parent-null", fx{config: `{"models": null}`}, 1, "stale", allReq...),
+		chk("stale-parent-null", fx{config: `{"orchestrator": null}`}, 1, "stale", allReq...),
 		chk("up-to-date-local-supplies-keys", withFx(fx{config: "{}"}, func(f *fx) { f.files = map[string]string{".rota/config.local.json": fullConfig()} }), 0, "upToDate"),
 		// docs.afterWork is a taste key, so it is not required (#1786).
 		chk("stale-optional-keys-never-count", fx{config: fullConfig("docs.afterWork")}, 0, "upToDate"),
