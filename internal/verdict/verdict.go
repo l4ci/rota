@@ -102,6 +102,9 @@ type Finding struct {
 	// Fix is the expected behaviour: the acceptance criterion of the item a
 	// deferred finding is filed as. Optional.
 	Fix string `json:"fix,omitempty"`
+	// Patch is an optional unified diff for a small, mechanical fix. The
+	// reviewer only attaches it; the orchestrator applies it as its own commit.
+	Patch string `json:"patch,omitempty"`
 	// Blocking is whether a bounce relays this finding. ParseBody always sets
 	// it (explicit value, else from the severity); a record stored before the
 	// field existed has none and IsBlocking falls back to the severity.
@@ -171,6 +174,7 @@ type rawBody struct {
 		Line     *int    `json:"line"`
 		Detail   *string `json:"detail"`
 		Fix      *string `json:"fix"`
+		Patch    *string `json:"patch"`
 		Blocking *bool   `json:"blocking"`
 	} `json:"findings"`
 	Items []struct {
@@ -242,6 +246,9 @@ func ParseBody(text string) (Body, error) {
 		}
 		if f.Fix != nil {
 			out.Fix = strings.TrimSpace(*f.Fix)
+		}
+		if f.Patch != nil {
+			out.Patch = *f.Patch
 		}
 		b.Findings = append(b.Findings, out)
 	}
