@@ -141,7 +141,7 @@ See [../usage/pausing-and-resuming.md](../usage/pausing-and-resuming.md) for the
 
 | Key | Holds |
 |---|---|
-| `slots` | one entry per roster slot: `name`, `branch`, `worktree`, `base`, `state`, the issue it holds (`task`) and its claim (`claimId`), `pr`, the host handle, the account (`configDir`, `account`), the tier and the harness kind |
+| `slots` | one entry per roster slot: `name`, `branch`, `worktree`, `base`, `state`, the issue it holds (`task`) and its claim (`claimId`), `pr`, the host handle, the account (`account` is its name, `configDir` its expanded dir), the tier and the harness kind |
 | `escalations` | questions put to you with `rota round escalate send`: id (`e1`, `e2`, ...), the issue or PR thread, `pending` or `answered`, and the answer |
 | `limits` | the usage-limit log: one entry per limit, with the session, the reset time, whether it sleeps or switches, and its status |
 | `host` | `herdr`, `tmux` or `solo`, fixed by `rota round start` for the life of the round |

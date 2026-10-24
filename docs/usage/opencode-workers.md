@@ -35,12 +35,12 @@ The launch command is `round.opencodeCommand`, default `opencode --model {model}
 
 ## Accounts
 
-`round.opencodeAccounts` lists named config dirs, the counterpart of `round.codexAccounts`:
+`round.accounts` entries with `"kind": "opencode"` list named config dirs:
 
 ```json
-{ "round": { "opencodeAccounts": [
-  { "name": "work",     "configDir": "/home/me/.config/opencode-work" },
-  { "name": "personal", "configDir": "/home/me/.config/opencode-personal" }
+{ "round": { "accounts": [
+  { "kind": "opencode", "name": "work",     "dir": "/home/me/.config/opencode-work" },
+  { "kind": "opencode", "name": "personal", "dir": "/home/me/.config/opencode-personal" }
 ] } }
 ```
 
@@ -72,7 +72,7 @@ Known edges:
 
 ## Agent files
 
-`rota agents write` emits `.opencode/agents/rota-explorer.md`, `rota-implementer.md` and `rota-reasoner.md` once OpenCode is configured (any `round.tiers.opencode.*`, `round.opencodeAccounts` or `round.opencodeCommand` set, or `round.workerKind` is `opencode`). Each has `mode: subagent`, the tier model when the map is set, and the role text. The explorer gets `edit: deny` and `bash: deny`. OpenCode has no effort setting, so `roles.<role>.effort` is not written.
+`rota agents write` emits `.opencode/agents/rota-explorer.md`, `rota-implementer.md` and `rota-reasoner.md` once OpenCode is configured (any `round.tiers.opencode.*`, an `opencode` entry in `round.accounts` or `round.opencodeCommand` set, or `round.workerKind` is `opencode`). Each has `mode: subagent`, the tier model when the map is set, and the role text. The explorer gets `edit: deny` and `bash: deny`. OpenCode has no effort setting, so `roles.<role>.effort` is not written.
 
 ## Check it
 

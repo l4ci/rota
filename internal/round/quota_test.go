@@ -91,7 +91,7 @@ func TestAssignResumesAtTheReset(t *testing.T) {
 
 func TestQuotaCapCodexLoginsCoolByTheirLimitLog(t *testing.T) {
 	f := newAssignFixture(t)
-	f.config(t, `{"round":{"dispatch":"herdr","codexAccounts":[{"name":"c1","codexHome":"/h1"},{"name":"c2","codexHome":"/h2"}],"workerKind":"codex"}}`)
+	f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"kind":"codex","name":"c1","dir":"/h1"},{"kind":"codex","name":"c2","dir":"/h2"}],"workerKind":"codex"}}`)
 	f.env.Worker.Now = func() time.Time { return quotaNow }
 	spent := func(session, login string) {
 		t.Helper()
@@ -106,7 +106,7 @@ func TestQuotaCapCodexLoginsCoolByTheirLimitLog(t *testing.T) {
 	}
 	spent("dana", "c2")
 	c := f.env.QuotaCap(bg, f.root, f.set)
-	if !c.Reduced() || !strings.Contains(c.Reason, "round.codexAccounts") || c.Closed("codex") == "" {
+	if !c.Reduced() || !strings.Contains(c.Reason, "round.accounts") || c.Closed("codex") == "" {
 		t.Fatalf("every login spent, cap %+v", c)
 	}
 }
@@ -114,7 +114,7 @@ func TestQuotaCapCodexLoginsCoolByTheirLimitLog(t *testing.T) {
 // A cooling Claude pool does not stop Codex work: round.accounts is Anthropic's.
 func TestQuotaCapClaudePoolDoesNotCloseCodex(t *testing.T) {
 	f := newAssignFixture(t)
-	f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}],"codexAccounts":[{"name":"c1","codexHome":"/h1"}]}}`)
+	f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"kind":"claude","name":"a","dir":"/nowhere"},{"kind":"codex","name":"c1","dir":"/h1"}]}}`)
 	f.meters(t, map[string]bool{"a": true})
 	c := f.env.QuotaCap(bg, f.root, f.set)
 	if c.Reduced() || c.Closed("claude") == "" || c.Closed("codex") != "" {
@@ -126,7 +126,7 @@ func TestQuotaCapClaudePoolDoesNotCloseCodex(t *testing.T) {
 // meets the cooling pool as a quota refusal: the tick reports that one.
 func TestMixedConfigClaudeAssignIsRefusedByQuota(t *testing.T) {
 	f := newAssignFixture(t)
-	f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}],"codexAccounts":[{"name":"c1","codexHome":"/h1"}],"workerKind":"claude"}}`)
+	f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"kind":"claude","name":"a","dir":"/nowhere"},{"kind":"codex","name":"c1","dir":"/h1"}],"workerKind":"claude"}}`)
 	f.meters(t, map[string]bool{"a": true})
 	if c := f.env.QuotaCap(bg, f.root, f.set); c.Reduced() {
 		t.Fatalf("cap %+v", c)
@@ -140,7 +140,7 @@ func TestMixedConfigClaudeAssignIsRefusedByQuota(t *testing.T) {
 // The account pool is read through Worker.Config: no .rota/config.json exists.
 func TestHeadroomReadsAccountsFromTheInjectedConfig(t *testing.T) {
 	f := newAssignFixture(t)
-	v, err := jsonx.Decode([]byte(`{"round":{"codexAccounts":[{"name":"c1","codexHome":"/h1"}]}}`))
+	v, err := jsonx.Decode([]byte(`{"round":{"accounts":[{"kind":"codex","name":"c1","dir":"/h1"}]}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestHeadroomReadsAccountsFromTheInjectedConfig(t *testing.T) {
 		ResetsAt: limits.Time(quotaNow.Add(30 * time.Minute))}); err != nil {
 		t.Fatal(err)
 	}
-	if why := f.env.Headroom(bg, f.root, harness.Codex); !strings.Contains(why, "round.codexAccounts") {
+	if why := f.env.Headroom(bg, f.root, harness.Codex); !strings.Contains(why, "round.accounts") {
 		t.Fatalf("headroom %q", why)
 	}
 }

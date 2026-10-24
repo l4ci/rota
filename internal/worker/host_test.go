@@ -256,7 +256,7 @@ func TestDispatchInheritsTheOrchestratorConfigDirWithoutAccounts(t *testing.T) {
 }
 
 func TestConfigDirMismatch(t *testing.T) {
-	accts := []config.Account{{Name: "a", ConfigDir: "/acct/a"}}
+	accts := []config.Account{{Kind: config.KindClaude, Name: "a", Dir: "/acct/a"}}
 	for _, c := range []struct {
 		name, dir string
 		accts     []config.Account

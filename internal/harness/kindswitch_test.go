@@ -47,6 +47,7 @@ var notKinds = []struct {
 	{"internal/cli/init.go", regexp.MustCompile(`fs\.Bool\("codex"`), "the removed --codex flag"},
 	{"internal/rotastate/rotastate.go", regexp.MustCompile(`func CodexDir`), "the on-disk directory name of the codex slot state"},
 	{"internal/config/keys.go", regexp.MustCompile(`k\("(round\.workerKind|orchestrator\.harness|plan\.criticHarness)"`), "enum rows config cannot build from harness (import cycle); TestWorkerKindEnumIsKinds pins them"},
+	{"internal/config/typed.go", regexp.MustCompile(`^\s*Kind(Claude|Codex)\s+= "`), "the kind names round.accounts entries carry; config cannot import harness (import cycle); TestAccountKindsAreKinds pins them"},
 	{"internal/config/schema.go", regexp.MustCompile(`^\s*"(claude|codex)":\s+"`), "the setup prompt's help lines; TestWorkerKindEnumIsKinds checks each kind has one"},
 }
 
