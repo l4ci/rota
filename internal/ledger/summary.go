@@ -44,6 +44,16 @@ type IssueRow struct {
 	QuotaShare *float64
 }
 
+// QuotaBurn returns the headroom points spent between two readings. A missing
+// reading or rising headroom (a quota window reset) leaves the burn unknown.
+func QuotaBurn(start, current *float64) *float64 {
+	if start == nil || current == nil || *current > *start {
+		return nil
+	}
+	burn := *start - *current
+	return &burn
+}
+
 // Total sums rows by slot or by account.
 type Total struct {
 	Name        string
@@ -251,10 +261,7 @@ func Fold(entries []Entry, audit []*jsonx.Object, round int) Summary {
 			w := int(end.Sub(*r.AssignedAt).Seconds())
 			r.WallSeconds = &w
 		}
-		if r.HeadroomStart != nil && r.HeadroomEnd != nil && *r.HeadroomEnd <= *r.HeadroomStart {
-			d := *r.HeadroomStart - *r.HeadroomEnd
-			r.QuotaShare = &d
-		}
+		r.QuotaShare = QuotaBurn(r.HeadroomStart, r.HeadroomEnd)
 		s.Issues = append(s.Issues, *r)
 	}
 	s.Slots = totals(s.Issues, func(r IssueRow) string { return r.Slot })
