@@ -124,7 +124,13 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		in.TestSlots = slots
 		in.SmokeShards, in.SmokeShardsSource = worker.SmokeShards(d.Getenv("ROTA_SMOKE_SHARDS"), runtime.NumCPU())
 	}
-	in.AgentProblems = agents.Problems(root, cfg)
+	// A support machine writes only the gitignored .codex files, so the tracked
+	// ones are not its drift and `rota agents write` could not fix them.
+	var keep func(string) bool
+	if role, err := roundcfg.MachineRole(cfg); err == nil && role == roundcfg.RoleSupport {
+		keep = agents.Untracked
+	}
+	in.AgentProblems = agents.ProblemsOnly(root, cfg, keep)
 	// No .gitignore at all is not an older project's drift: init creates it.
 	if raw, err := os.ReadFile(filepath.Join(root, ".gitignore")); err == nil {
 		in.GitignoreMissing = initproj.MissingIgnoreLines(string(raw))
