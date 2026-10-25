@@ -23,6 +23,10 @@ import (
 //     (one label query); on the support machine it is the issues its slots hold;
 //   - comment: the newest comment on such an issue that the OTHER machine posted
 //     and a writer-trusted author wrote (see otherSide);
+//   - support only (#1911): the held issues include those of the queued
+//     review-list PRs, and every open PR of this machine, held or queued, that
+//     the forge reports as conflicting with its base adds a conflict entry
+//     (the PR's head sha, so it wakes once per head);
 //   - main only, for every open PR from the support machine (branch prefix
 //     `<round.support>-`), offered or not (#1918): pr-opened ("#N") and pr-head
 //     (the PR's head sha); and for a support branch on origin with no open PR,
@@ -38,11 +42,23 @@ func supportSnapshot(ctx context.Context, env round.Env, root string) map[string
 	var ids []string
 	if onSupport {
 		seen := map[string]bool{}
-		for _, s := range worker.LoadRegistryTolerant(root).Slots() {
-			if id := worker.NormID(s.HeldID()); id != "" && !seen[id] {
+		add := func(raw string) {
+			if id := worker.NormID(raw); id != "" && !seen[id] {
 				seen[id] = true
 				ids = append(ids, id)
 			}
+		}
+		reg := worker.LoadRegistryTolerant(root)
+		for _, s := range reg.Slots() {
+			add(s.HeldID())
+		}
+		for _, q := range reg.PRs() {
+			for _, id := range q.Issues() {
+				add(id)
+			}
+		}
+		for id, v := range supportConflicts(ctx, env, reg) {
+			out[roundwatch.SupportKey(id, roundwatch.SupportConflict)] = v
 		}
 	} else {
 		offered, err := env.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{env.SupportLabel}})
@@ -86,6 +102,47 @@ func supportSnapshot(ctx context.Context, env round.Env, root string) map[string
 		if !hasPR[branch] {
 			out[roundwatch.SupportKey(roundwatch.SupportBranchID(branch), roundwatch.SupportBranchHead)] = sha
 		}
+	}
+	return out
+}
+
+// prMergeability is the forge's mergeability read, which round.Forge leaves
+// out: the real forges have it, fakes need not.
+type prMergeability interface {
+	PRMergeable(ctx context.Context, pr int) (tracker.Mergeability, error)
+}
+
+// supportConflicts maps the issue of each open PR this machine holds or has
+// queued to the PR's head sha when the forge says it conflicts with its base.
+// A forge without the read, a closed PR, an unknown answer and a failed read
+// all leave the PR out: no news.
+func supportConflicts(ctx context.Context, env round.Env, reg worker.Registry) map[string]string {
+	out := map[string]string{}
+	m, ok := env.Forge.(prMergeability)
+	if !ok {
+		return out
+	}
+	check := func(id, pr string) {
+		n, ok := worker.PRRefNumber(pr)
+		id = worker.NormID(id)
+		if !ok || id == "" {
+			return
+		}
+		v, err := env.Forge.PRView(ctx, n)
+		if err != nil || !strings.EqualFold(v.State, "open") || v.HeadSHA == "" {
+			return
+		}
+		if mg, err := m.PRMergeable(ctx, n); err == nil && mg.State == tracker.MergeConflict {
+			out[id] = v.HeadSHA
+		}
+	}
+	for _, s := range reg.Slots() {
+		if s.PR() != "" {
+			check(s.HeldID(), s.PR())
+		}
+	}
+	for _, q := range reg.PRs() {
+		check(q.Issue, q.PR)
 	}
 	return out
 }
