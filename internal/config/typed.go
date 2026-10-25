@@ -120,10 +120,17 @@ func DirProblem(field, dir string) string {
 
 // AccountDirProblems lists, in config order, every round.accounts entry whose
 // kind is not a harness or whose dir DirProblem refuses, each naming the key
-// and the entry.
+// and the entry, and every name that stands for two dirs (a name may repeat
+// across kinds only with one dir, so name-keyed lookups stay unambiguous).
 func AccountDirProblems(cfg any) []string {
 	var out []string
+	dirOf := map[string]string{}
 	for _, a := range Accounts(cfg) {
+		if first, seen := dirOf[a.Name]; !seen {
+			dirOf[a.Name] = a.Dir
+		} else if a.Name != "" && first != a.Dir {
+			out = append(out, fmt.Sprintf("round.accounts %q dirs %q and %q: one name needs one dir", a.Name, first, a.Dir))
+		}
 		switch a.Kind {
 		case KindClaude, KindCodex, KindOpencode:
 		default:
