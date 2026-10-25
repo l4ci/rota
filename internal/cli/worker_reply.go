@@ -33,7 +33,7 @@ func workerReply(fs *flag.FlagSet) RunFunc {
 		if text == "" {
 			return Result{}, Usage("the reply is empty")
 		}
-		root, err := c.Root()
+		root, err := returnRoot(c, slot)
 		if err != nil {
 			return Result{}, err
 		}
