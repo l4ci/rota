@@ -301,7 +301,14 @@ const (
 	SupportPRHead   = "pr-head"
 	SupportPROpened = "pr-opened"
 	SupportComment  = "comment"
+	// SupportBranchHead is the head of a support branch with no open PR (#1918).
+	SupportBranchHead = "branch-head"
 )
+
+// SupportBranchID is the id slot of a branch-keyed support entry: the branch
+// with "/" as "~", which a ref name cannot contain, so the key still splits
+// into id and kind at its first "/".
+func SupportBranchID(branch string) string { return strings.ReplaceAll(branch, "/", "~") }
 
 // SupportKey is the snapshot key of one support entry of issue id.
 func SupportKey(id, kind string) string { return changeKeySupport + id + "/" + kind }
@@ -322,6 +329,9 @@ func SupportChange(ch Change) (id, kind, to string, ok bool) {
 	to = ch.To
 	if kind == SupportComment {
 		to, _, _ = strings.Cut(to, "#")
+	}
+	if kind == SupportBranchHead {
+		id = strings.ReplaceAll(id, "~", "/")
 	}
 	return id, kind, to, true
 }
