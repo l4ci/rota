@@ -66,6 +66,17 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 			// failed post whose undo failed leaves the head counted, and the
 			// retry must still reach the support worker.
 			posted, pr, err := postSupportBounce(env, root, issue, *slot, *head)
+			var noPR *worker.NoSupportPRError
+			if errors.As(err, &noPR) {
+				if undoErr := rec.Undo(); undoErr != nil {
+					return Result{}, errors.Join(err, undoErr)
+				}
+				d := jsonx.NewObject()
+				d.Set("issue", issue)
+				d.Set("branch", noPR.Branch)
+				return blockedRefusal(d, blockedby.NoPRRecorded, fmt.Sprintf("%s is the support machine's PR but the slot records none, so the bounce has no PR to land on (nothing counted)", noPR.Branch),
+					fmt.Sprintf("record it with `rota round report <slot> --state done --pr <url>`, then run `rota round bounce %s` again", issue))
+			}
 			if err != nil {
 				return Result{}, errors.Join(err, rec.Undo())
 			}

@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -191,5 +192,41 @@ func TestRoundBounceSupportPRPostsOnThePR(t *testing.T) {
 	}
 	if got := fk.pr[71]; len(got) != 0 {
 		t.Errorf("a main PR got the support bounce: %q", got)
+	}
+}
+
+// A support-machine PR adopted with `worker adopt` bounces like a registered
+// one: on the PR it recorded, or a refusal that names the way out when the
+// adoption recorded none (#1850).
+func TestRoundBounceAdoptedSupportSlot(t *testing.T) {
+	fk := &bounceFakes{pr: map[int][]string{}}
+	deps := supportBounceDeps(fk, &trackertest.Fake{Issues: []backlog.Issue{
+		{Key: tracker.NumKey(31), Title: "thing", State: "open"}, {Key: tracker.NumKey(32), Title: "other", State: "open"}}})
+	dir := workerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac","maxBounces":3}}`)
+	for _, b := range []string{"mac-kit/31-thing", "mac-kit/32-other"} {
+		c := exec.Command("git", "branch", b)
+		c.Dir = dir
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("%v %s", err, out)
+		}
+	}
+	if err := worker.RegisterExternal(dir, "ext-1", "mac-kit/31-thing", "", "main", "31", "https://github.com/o/r/pull/70"); err != nil {
+		t.Fatal(err)
+	}
+	if code, out, errOut := rotaInWith(t, deps, dir, "worker", "adopt", "mac-kit/32-other", "--issue", "32", "--name", "ext-2", "--accept-overlap"); code != 0 {
+		t.Fatalf("adopt without a PR: %d %s %s", code, out, errOut)
+	}
+	if code, out, errOut := rotaInWith(t, deps, dir, "round", "bounce", "31", "--head", "abc", "--slot", "ext-1", "--force", "--json"); code != 0 || data(t, out)["bounces"] != float64(1) {
+		t.Fatalf("bounce with a recorded PR: %d %s %s", code, out, errOut)
+	}
+	if got := fk.pr[70]; len(got) != 1 || !strings.HasPrefix(got[0], "<!-- rota:review-bounce head=abc -->") {
+		t.Errorf("support PR comments %q", got)
+	}
+	code, out, errOut := rotaInWith(t, deps, dir, "round", "bounce", "32", "--head", "def", "--slot", "ext-2", "--force", "--json")
+	if d := data(t, out); code != 4 || d["blockedBy"] != "no PR recorded" || d["changed"] != false {
+		t.Errorf("bounce with no PR: %d %s %s", code, out, errOut)
+	}
+	if strings.Contains(out+errOut, "bug in rota") {
+		t.Errorf("a refusal reads as a rota bug: %s %s", out, errOut)
 	}
 }
