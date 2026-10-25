@@ -156,16 +156,25 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 }
 
 // reviewItem returns the item a slot holds when it is an architecture-review
-// item this round minted, and a "needs a PR" refusal otherwise. Only such an
+// item a round minted, and a "needs a PR" refusal otherwise. Only such an
 // item closes without a PR, so a worker cannot close an arbitrary issue by
-// naming issues in its done line.
-func reviewItem(root string, be Board, name, id, did string) (*backlog.Item, error) {
+// naming issues in its done line. A review-titled item no registry knows is
+// refused for its own reason (BlockReviewNotMinted), so a support machine
+// sees why main's review was not recognised.
+func (e Env) reviewItem(ctx context.Context, root string, be Board, name, id, did string) (*backlog.Item, error) {
 	it, err := be.Get(id)
 	if err != nil {
 		return it, wrap(err)
 	}
-	if !IsReviewTitle(it.Title) || !MintedReviews(root)[worker.NormID(it.ID)] {
+	if !IsReviewTitle(it.Title) {
 		return it, blocked(BlockSlotBusy, "%s", busyMsg(name, id, did+", but it is not an architecture review item; it needs a PR"))
+	}
+	minted, err := e.mintedReview(ctx, root, be, it)
+	if err != nil {
+		return it, err
+	}
+	if !minted {
+		return it, blocked(BlockReviewNotMinted, "%s", busyMsg(name, id, did+", but it was not minted by main: it has no rota review-minted comment from a user with write access"))
 	}
 	return it, nil
 }
@@ -174,7 +183,7 @@ func reviewItem(root string, be Board, name, id, did string) (*backlog.Item, err
 // the issues it filed (`ROTA-DONE <slot> issues:#a,#b`): the item is closed
 // with a note listing them and the slot is freed. Any other held item is refused.
 func (e Env) closeReview(ctx context.Context, root string, be Board, s *worker.Slot) error {
-	it, err := reviewItem(root, be, s.Name(), s.HeldID(), "reported issues")
+	it, err := e.reviewItem(ctx, root, be, s.Name(), s.HeldID(), "reported issues")
 	if err != nil {
 		return err
 	}

@@ -442,7 +442,7 @@ func TestReportedIssuesOnAnOrdinaryItemDoNotFreeTheSlot(t *testing.T) {
 	}
 	// a title alone is not trusted either: the registry must have minted it
 	f.be.items["12"].Title = ReviewTitle("cli")
-	if _, err := f.assign("13", "ben"); blockedBy(t, err) != BlockSlotBusy || f.be.items["12"].Closed {
+	if _, err := f.assign("13", "ben"); blockedBy(t, err) != BlockReviewNotMinted || f.be.items["12"].Closed {
 		t.Errorf("unminted review title: %v", err)
 	}
 }
