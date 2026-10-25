@@ -155,6 +155,7 @@ func (returnForge) OpenPRs(context.Context) ([]tracker.PR, error)           { re
 func (returnForge) MergedPRs(context.Context, string) ([]tracker.PR, error) { return nil, nil }
 func (returnForge) PRState(context.Context, int) (string, error)            { return "", nil }
 func (returnForge) PRView(context.Context, int) (tracker.PRInfo, error)     { return tracker.PRInfo{}, nil }
+func (returnForge) PRSetBase(context.Context, int, string) error            { return nil }
 func (returnForge) ClosedNumbers(string) []int                              { return nil }
 func (returnForge) List(context.Context, tracker.ListFilter) ([]tracker.Issue, error) {
 	return nil, nil

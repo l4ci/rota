@@ -78,3 +78,6 @@ func Reindex(root string, s Store) (changed bool, err error) {
 	}
 	return IndexFrom(root, items, s.OnTracker())
 }
+
+// Branch is the long-lived branch the work of milestone id merges into.
+func Branch(id string) string { return "milestone/" + id }

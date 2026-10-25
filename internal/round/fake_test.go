@@ -44,6 +44,7 @@ type fakeRemote struct {
 	openPRCalls    int
 	prNotes        map[int][]tracker.Comment // MRNotes answers by PR number
 	closedLists    int                       // List calls that asked for closed issues
+	retargeted     map[int]string            // PR number -> the base PRSetBase moved it onto
 
 	// Board side.
 	items      map[string]*backlog.Item
@@ -112,6 +113,14 @@ func (f remoteForge) CanPush(_ context.Context, login string) (bool, error) {
 
 func (f remoteForge) MergedPRs(_ context.Context, branch string) ([]tracker.PR, error) {
 	return f.mergedPRs[branch], f.mergedErr
+}
+
+func (f remoteForge) PRSetBase(_ context.Context, n int, base string) error {
+	if f.retargeted == nil {
+		f.retargeted = map[int]string{}
+	}
+	f.retargeted[n] = base
+	return nil
 }
 
 func (f remoteForge) PRView(_ context.Context, n int) (tracker.PRInfo, error) {

@@ -532,6 +532,11 @@ func (g *GitLab) PRMergeable(ctx context.Context, pr int) (Mergeability, error) 
 }
 
 // PRRequestMerge runs `glab mr merge` with auto-merge off.
+func (g *GitLab) PRSetBase(ctx context.Context, pr int, base string) error {
+	_, err := g.run(ctx, []string{"mr", "update", strconv.Itoa(pr), "--target-branch", base}, "")
+	return err
+}
+
 func (g *GitLab) PRRequestMerge(ctx context.Context, pr int, o MergeOpts) error {
 	args := []string{"mr", "merge", strconv.Itoa(pr), "--yes"}
 	if o.DeleteBranch {
