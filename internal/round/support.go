@@ -150,8 +150,8 @@ func (e Env) OfferSupport(ctx context.Context, root string, be Board, ids []stri
 // resuming its issue on its branch merges it first; a merge that fails is
 // aborted and refused (BlockConflict) before the brief goes out, and a dirty
 // worktree is refused (BlockDirty) before any merge runs.
-func (e Env) freshBase(ctx context.Context, root string, slot *worker.Slot, branch string, resuming bool) (string, error) {
-	base := strutil.FirstNonEmpty(slot.Base(), e.Base)
+func (e Env) freshBase(ctx context.Context, root string, slot *worker.Slot, branch string, resuming bool, target string) (string, error) {
+	base := strutil.FirstNonEmpty(target, e.Base)
 	res, err := e.Git(ctx, root, "fetch", "-q", "origin", base)
 	if err != nil || res.ExitCode != 0 {
 		return "", blocked(BlockFetch, "could not fetch origin/%s to cut the support branch from (%s): a support machine never cuts from its local %s", base, gitWhy(res.Stderr, err), base)

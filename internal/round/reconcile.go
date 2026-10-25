@@ -45,6 +45,7 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 	}
 	e.findUnregisteredBranches(ctx, root, rep, reg) // a branch scan: reconcile and the tick, not every status
 	e.findSupportBounced(ctx, rep, reg)
+	e.findBaseDrift(ctx, root, rep, reg)
 	if e.SweepClosedClaims {
 		e.findClosedClaimLabels(ctx, rep)
 	}
@@ -114,7 +115,7 @@ func unreadSource(rep *Report, kind string) string {
 	switch kind {
 	case DeadTab:
 		need = SourceHost
-	case PRUnrecorded, MergedExternal, PRStale, LabelMissing, LabelStale, ClaimLabelDrift:
+	case PRUnrecorded, MergedExternal, PRStale, BaseDrift, LabelMissing, LabelStale, ClaimLabelDrift:
 		need = SourceForge
 	}
 	for _, u := range rep.Unavailable {
@@ -149,6 +150,8 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 		return registerSlot(root, row, v)
 	case UnregisteredBranch:
 		return e.adoptBranch(ctx, root, f)
+	case BaseDrift:
+		return e.retarget(ctx, root, f)
 	case MergedExternal:
 		return e.Worker.ReleaseExternal(root, f.Slot, false)
 	case PRStale:

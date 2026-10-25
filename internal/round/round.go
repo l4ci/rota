@@ -51,8 +51,10 @@ const (
 	ClaimLabelDrift      = "claim-label-drift"
 	UnregisteredBranch   = "unregistered-branch"
 	// Bounced: on the support machine, a queued PR main sent back (#1598).
-	Bounced              = "bounced"
-	MergedExternal       = "merged-external"
+	Bounced        = "bounced"
+	MergedExternal = "merged-external"
+	// BaseDrift: a waiting PR targets a base its issue's milestone no longer routes it to.
+	BaseDrift            = "base-drift"
 	QueuedBranchMismatch = "queued-branch-mismatch"
 	// LeaseStale is declared in lease.go.
 )
@@ -74,6 +76,7 @@ type Forge interface {
 	MergedPRs(ctx context.Context, branch string) ([]tracker.PR, error)
 	PRState(ctx context.Context, pr int) (string, error)
 	PRView(ctx context.Context, pr int) (tracker.PRInfo, error)
+	PRSetBase(ctx context.Context, pr int, base string) error
 	ClosedNumbers(body string) []int
 	List(ctx context.Context, f tracker.ListFilter) ([]tracker.Issue, error)
 	Get(ctx context.Context, key tracker.IssueKey, withComments bool) (tracker.Issue, error)
@@ -345,6 +348,11 @@ type Finding struct {
 	// support marks an unregistered-branch finding of the support machine's
 	// (#1598): its pr is the open PR to adopt with, and adopting fetches it.
 	support bool
+	// to is the base a base-drift finding retargets the PR onto: the milestone
+	// branch, or "" for the slot's registered base.
+	to string
+	// tag is the issue's milestone tag the repair records on the slot.
+	tag string
 }
 
 // Key names what the finding is about, for a caller that tells findings apart:

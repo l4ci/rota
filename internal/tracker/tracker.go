@@ -390,6 +390,8 @@ type Forge interface {
 	// does that itself). Auto-merge is off on GitLab, which would otherwise
 	// schedule a merge, report success and merge nothing.
 	PRRequestMerge(ctx context.Context, pr int, o MergeOpts) error
+	// PRSetBase retargets PR pr onto branch base; its head and diff stay.
+	PRSetBase(ctx context.Context, pr int, base string) error
 	// PRMerge is PRRequestMerge plus the confirmation: it returns the merge
 	// commit sha, or fails when nothing landed.
 	PRMerge(ctx context.Context, pr int, o MergeOpts) (string, error)
