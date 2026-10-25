@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // #1774 AC-1: one verb on main turns the support orchestrator on with a
@@ -120,7 +121,7 @@ func supportReturnDeps(fake *trackertest.Fake) *Deps {
 	deps := testDeps()
 	deps.NewTracker = func(context.Context, string, any) (backlog.Tracker, error) { return fake, nil }
 	deps.RoundEnv = func(context.Context, string) round.Env {
-		return round.Env{Git: git.Exec, Base: "main", Forge: returnForge{fake}, SupportLabel: config.Label(nil, "support"),
+		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "main", Forge: returnForge{fake}, SupportLabel: config.Label(nil, "support"),
 			Round: roundcfg.Settings{Support: "mac", Role: roundcfg.RoleSupport}}
 	}
 	return deps

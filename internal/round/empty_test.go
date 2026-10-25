@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 func TestWhyEmptyConceptHint(t *testing.T) {
@@ -57,7 +58,7 @@ func TestWhyEmptyConceptHint(t *testing.T) {
 			if tt.tracker {
 				be = storeBoard{Board: remote, st: milestone.FileStore{Root: milestoneRoot}}
 			}
-			e := Env{Git: git.Exec, Base: "main"}
+			e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{})}
 			got, err := e.WhyEmpty(bg, root, be, roundcfg.ScopeOpen, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -85,7 +86,7 @@ func TestMilestoneScopeFallsBackWithoutUnfinishedMilestones(t *testing.T) {
 	be := &fakeRemote{}
 	be.add("1", "open one", "", false, "")
 	be.add("2", "open two", "", false, "")
-	e := Env{Git: git.Exec, Base: "main"}
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{})}
 	for _, sc := range []string{roundcfg.ScopeMilestone, roundcfg.ScopeNext} {
 		cs, err := e.Candidates(bg, root, be, CandidateOpts{Scope: sc})
 		if err != nil || len(cs) != 2 {
@@ -115,7 +116,7 @@ func TestMilestoneScopeFallsBackWithoutUnfinishedMilestones(t *testing.T) {
 
 func TestWhyEmptyNamesReasonAndNextCommand(t *testing.T) {
 	root := newRepo(t, nil)
-	e := Env{Git: git.Exec, Base: "main"}
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{})}
 	be := &fakeRemote{}
 	why := func(scope string, slate ...string) Empty {
 		t.Helper()

@@ -237,7 +237,7 @@ func (e Env) closeNoPR(ctx context.Context, root string, be Board, s *worker.Slo
 	if _, err := e.Park(ctx, root, name, "assign"); err != nil {
 		return err
 	}
-	now := e.Worker.WithDefaults().Now
+	now := e.Worker.Now
 	// The close note is dropped by the file backend, so it also goes in a comment.
 	if _, err := be.AddComment(it.ID, "feedback", did+note+"."); err != nil {
 		return wrap(err)

@@ -353,7 +353,7 @@ func (d *Deps) workerEnv() worker.Env {
 // baseRoundEnv is the round.Env every round verb starts from: the one Git, the
 // lease and the worker env, all read off Deps so a swapped fake reaches them.
 func (d *Deps) baseRoundEnv() round.Env {
-	return round.Env{Git: d.Git, Lease: d.LeaseEnv(), Worker: d.workerEnv(), Login: d.credentials()}
+	return round.Env{Git: d.Git, Lease: d.LeaseEnv(), Worker: round.FromWorkerEnv(d.workerEnv()), Login: d.credentials()}
 }
 
 // escalationEnv is the EscalationEnv hook with its host (always herdr, the

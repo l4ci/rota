@@ -40,7 +40,7 @@ func (e Env) SlotLoginProblem(s *worker.Slot) string {
 	if s == nil || s.ConfigDir() == "" || !harness.Resolve(s.Kind()).UsageMeter() {
 		return ""
 	}
-	home, _ := e.Worker.WithDefaults().Home()
+	home, _ := e.Worker.Home()
 	return e.Login.Problem(worker.ExpandConfigDirIn(s.ConfigDir(), home))
 }
 

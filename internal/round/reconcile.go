@@ -108,7 +108,7 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 	case UnregisteredBranch:
 		return e.adoptBranch(ctx, root, f)
 	case MergedExternal:
-		return e.workerEnv().ReleaseExternal(root, f.Slot, false)
+		return e.Worker.ReleaseExternal(root, f.Slot, false)
 	case PRStale:
 		if f.Slot != "" {
 			return e.parkMerged(ctx, root, f.Slot)
