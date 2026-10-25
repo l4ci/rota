@@ -16,7 +16,7 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 	d := jsonx.NewObject()
 	d.Set("base", r.Base)
 	d.Set("verdict", r.Verdict)
-	var ms []any
+	ms := []any{}
 	for _, m := range r.Members {
 		o := jsonx.NewObject()
 		o.Set("target", m.Target)
@@ -52,7 +52,7 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 
 func planData(p *worker.TrainPlan) *jsonx.Object {
 	o := jsonx.NewObject()
-	var cs []any
+	cs := []any{}
 	for _, c := range p.Conflicts {
 		co := jsonx.NewObject()
 		co.Set("a", c.A)
@@ -62,7 +62,7 @@ func planData(p *worker.TrainPlan) *jsonx.Object {
 	}
 	o.Set("conflicts", cs)
 	o.Set("landable", strList(p.Landable))
-	var bs []any
+	bs := []any{}
 	for _, b := range p.Blocked {
 		bo := jsonx.NewObject()
 		bo.Set("target", b.Target)
@@ -71,6 +71,7 @@ func planData(p *worker.TrainPlan) *jsonx.Object {
 	}
 	o.Set("orderBlocked", bs)
 	o.Set("command", p.Command)
+	o.Set("noVerify", p.NoVerify)
 	return o
 }
 
@@ -173,6 +174,9 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		if *plan && *order != "" {
+			return Result{}, Usage("--plan previews the computed order; it cannot be combined with --order")
+		}
 		var override []string
 		if *order != "" {
 			seenTok := map[string]bool{}
@@ -204,6 +208,10 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+f.Target+" — "+f.Err.Error())
 		}
 		res := Result{Data: trainData(r)}
+		if r.Plan != nil {
+			res.Text = planText(r.Plan)
+			return res, nil
+		}
 		if r.OK() {
 			res.Text = fmt.Sprintf("pass: train of %d -> %s (%s): %s", len(r.Landed), r.Base, r.SHA, strings.Join(r.Landed, ", "))
 			return res, nil

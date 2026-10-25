@@ -49,6 +49,10 @@ const GateBaseMoved = "base-moved"
 // exits 4 with it, blockedBy order. Nothing was pushed.
 const GateOrder = "order"
 
+// GatePlan: the verdict of a --plan answer. Nothing was verified or landed;
+// the CLI exits 0 with the conflict map.
+const GatePlan = "plan"
+
 // TrainOpts are the flags of `rota worker train`.
 type TrainOpts struct {
 	Targets []string // slot names or PR refs, in merge order
@@ -138,6 +142,8 @@ type TrainPlan struct {
 	Blocked  []TrainBlocked
 	// Command is the train line that lands exactly Landable.
 	Command string
+	// NoVerify: test.full is empty, so Command carries --no-verify to be runnable.
+	NoVerify bool
 }
 
 // TrainConflict is a pair of members whose merge conflicts.
@@ -452,9 +458,6 @@ func (t *trainRun) plan() (bool, error) {
 	return false, nil
 }
 
-// planned is the verdict of a --plan answer: nothing was verified or landed.
-const planned = "plan"
-
 // preview answers --plan: the pairs of members that really conflict, the
 // largest conflict-free subset in merge order and the members left out. It runs
 // no tests and touches no ref. Only pairs sharing a path are merge-tried, with
@@ -519,8 +522,11 @@ func (t *trainRun) preview() (bool, error) {
 	}
 	if len(plan.Landable) > 0 {
 		plan.Command = fmt.Sprintf("rota worker train --base %s --order %s %s", t.o.Base, strings.Join(plan.Landable, ","), strings.Join(plan.Landable, " "))
+		if plan.NoVerify = t.in.cfg.where == WhereLocal && len(t.in.cfg.Full) == 0 && !t.o.NoVerify; plan.NoVerify {
+			plan.Command += " --no-verify"
+		}
 	}
-	res.Plan, res.Verdict = plan, planned
+	res.Plan, res.Verdict = plan, GatePlan
 	return true, nil
 }
 
