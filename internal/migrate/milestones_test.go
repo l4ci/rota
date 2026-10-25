@@ -55,7 +55,7 @@ func TestRunMilestones(t *testing.T) {
 		t.Fatal(err)
 	}
 	st := ms.FileStore{Root: root}
-	id, err := st.Add("Title", "Summary.", nil)
+	id, err := st.Add("Title", "Summary.", nil, "delivery")
 	if err != nil {
 		t.Fatal(err)
 	}

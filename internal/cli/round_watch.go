@@ -138,12 +138,15 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 		}
 	}
 	renv := c.deps().RoundEnv(ctx, root)
+	merged := map[string]bool{}
 	if rep, err := renv.Status(ctx, root); err == nil { // a bad round.* key is noted once by the config load below
 		for _, r := range rep.Rows {
 			if r.PR != "" && r.PRState != "" {
 				out[roundwatch.PRStateKey(r.Name)] = r.PRState
+				merged[r.Name] = r.PRState == "merged"
 			}
 		}
+		markMergedDone(root, merged)
 	}
 	set, err := c.deps().roundSettings(root, roundConfigUsage)
 	if err != nil {
@@ -166,6 +169,23 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 		out[k] = v
 	}
 	return out
+}
+
+// markMergedDone records on each done slot whether the forge shows its PR
+// merged, so the prompt digest and the Stop hook stop asking for a slot that
+// waits on nothing (#1843). A slot absent from merged is left as it is.
+func markMergedDone(root string, merged map[string]bool) {
+	for _, s := range worker.LoadRegistryTolerant(root).Slots() {
+		m, ok := merged[s.Name()]
+		if !ok || !worker.IsDone(s.State()) || s.PRMerged() == m {
+			continue
+		}
+		_, _ = worker.UpdateSlot(root, s.Name(), func(s *worker.Slot) {
+			if worker.IsDone(s.State()) {
+				s.SetPRMerged(m)
+			}
+		})
+	}
 }
 
 func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Result, tick *roundtick.Result, stopped string) Result {

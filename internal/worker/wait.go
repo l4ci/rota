@@ -203,7 +203,19 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		m, asked := merged[r.Name]
 		if !asked {
 			s := LoadRegistryTolerant(root).Slot(r.Name) // Wait read the registry strictly up front; the closure cannot fail
-			m = s != nil && e.prMerged(ctx, root, s)
+			if s == nil {
+				return false
+			}
+			var known bool
+			m, known = e.prMergedKnown(ctx, root, s)
+			if ctx.Err() != nil {
+				// The deadline cut the lookup: it says nothing about the PR, and
+				// the wait ends as timed out on the next pass (#1843).
+				return true
+			}
+			if !known {
+				return false // a failed lookup is asked again next pass
+			}
 			merged[r.Name] = m
 		}
 		return m
