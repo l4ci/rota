@@ -79,7 +79,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 			return res, err
 		}
 	} else if recScope == "" {
-		if err := checkScope(set.Scope); err != nil {
+		if err := checkScope(resolveScope("", "", set.Scope)); err != nil {
 			return res, err
 		}
 	}
@@ -135,9 +135,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 	case keep:
 		scope, slate = recScope, recSlate
 	default:
-		if scope == "" {
-			scope = set.Scope
-		}
+		scope = resolveScope(scope, "", set.Scope)
 		if err := checkScope(scope); err != nil {
 			return res, err
 		}
