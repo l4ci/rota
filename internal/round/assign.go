@@ -846,23 +846,18 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		}
 	}
 
-	// The maintainer decides a tie to another active milestone, before the
-	// readiness check names it as an unmet dependency.
+	// Cross-milestone ties need a maintainer decision even when a closed
+	// dependency would otherwise pass the readiness check.
 	if !o.AcceptCrossMilestone && !resuming {
-		active, err := activeMilestoneIDs(root, be)
-		if err != nil {
-			return run, false, err
-		}
-		open, err := be.List(false)
-		if err != nil {
-			return run, false, err
-		}
-		flags, err := e.crossMilestone(be, active, *it, open)
-		if err != nil {
-			return run, false, err
-		}
-		if len(flags) > 0 {
-			return run, false, blocked(BlockCrossMilestone, "%s: %s; --accept-cross-milestone assigns it anyway", id, strings.Join(flags, "; "))
+		cross := crossMilestones{root: root, be: be}
+		for _, item := range append([]*backlog.Item{it}, members...) {
+			flags, err := cross.check(*item)
+			if err != nil {
+				return run, false, err
+			}
+			if len(flags) > 0 {
+				return run, false, blocked(BlockCrossMilestone, "%s: %s; --accept-cross-milestone assigns it anyway", item.ID, strings.Join(flags, "; "))
+			}
 		}
 	}
 

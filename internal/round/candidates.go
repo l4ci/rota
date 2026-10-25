@@ -167,10 +167,8 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 	}
 	tracked := e.trackedFiles(ctx, root)
 	inFlight := e.InFlightItems(ctx, root, be, tracked, o.Shared)
-	// The milestone store is read on the first item that carries a tag, so a
-	// project without milestones pays no tracker call for the cross-milestone flag.
-	var activeMs []string
-	activeRead := false
+	// Reuse the board snapshot and read milestones only for relevant tags or labels.
+	cross := crossMilestones{root: root, be: be, open: items, openRead: true}
 	var out []Candidate
 	for _, it := range chosen {
 		if handed[it.IssueKey()] {
@@ -220,16 +218,8 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		if len(ms) > 0 {
 			c.Milestone = strings.Join(ms, ",")
 		}
-		if len(ms) > 0 {
-			if !activeRead {
-				if activeMs, err = activeMilestoneIDs(root, be); err != nil {
-					return nil, err
-				}
-				activeRead = true
-			}
-			if c.CrossMilestone, err = e.crossMilestone(be, activeMs, it, items); err != nil {
-				return nil, err
-			}
+		if c.CrossMilestone, err = cross.check(it); err != nil {
+			return nil, err
 		}
 		if len(c.CrossMilestone) > 0 {
 			if c.BlockedBy == "" {
