@@ -174,8 +174,12 @@ func (d ghIssue) norm() Issue {
 	if d.Milestone != nil {
 		is.Milestone = d.Milestone.Title
 	}
-	if strings.ToUpper(d.State) == "CLOSED" {
+	// `gh issue view` also answers for a pull request number, with state MERGED.
+	switch strings.ToUpper(d.State) {
+	case "CLOSED":
 		is.State = "closed"
+	case "MERGED":
+		is.State, is.StateReason = "closed", CloseCompleted
 	}
 	switch strings.ToUpper(d.StateReason) {
 	case "COMPLETED":
