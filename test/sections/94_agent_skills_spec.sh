@@ -74,6 +74,27 @@ RC=0; OUT="$(sp_run "$SPEC_TMP/ok" "skills/rota-a/$SK")" || RC=$?
 [ "$RC" = 1 ] && grep -qF "remove it from PENDING_LONG" <<<"$OUT" || fail "E2[c]: an unused PENDING_LONG entry passed (rc $RC): $OUT"
 pass "E2[c]: pending entries excuse only what they name, and a stale entry fails"
 
+# (c2) chain lint: an imperative clause that runs a flagged skill fails; prose references and offers pass (#1900)
+sp_chain() { # sp_chain <dir> <line>: a flagged rota-b and a rota-a whose body is <line>
+  mkdir -p "$1/skills/rota-a" "$1/skills/rota-b/agents" "$1/skills/references"
+  printf -- 'policy:\n  allow_implicit_invocation: false\n' > "$1/skills/rota-b/agents/openai.yaml"
+  printf -- '---\nname: rota-a\ndescription: Does a thing.\n---\n\n%s\n' "$2" > "$1/skills/rota-a/$SK"
+  printf -- '---\nname: rota-b\ndescription: Does b.\ndisable-model-invocation: true\n---\n\nbody\n' > "$1/skills/rota-b/$SK"
+}
+n=0
+for line in 'Now use `rota-b` to record it.' 'Next step: `/rota-b`.' 'Hand the result to `rota-b`.' \
+            'Ask the user whether to type `/rota-b`, else run it.' 'Type `/rota-b`, then run it.'; do
+  n=$((n+1)); sp_chain "$SPEC_TMP/chain$n" "$line"
+  RC=0; OUT="$(sp_run "$SPEC_TMP/chain$n")" || RC=$?
+  [ "$RC" != 0 ] && case "$OUT" in *"chains into flagged skill rota-b"*) ;; *) RC=0 ;; esac
+  [ "$RC" != 0 ] || fail "E2[c2]: imperative chain passed the lint: $line => $OUT"
+done
+for line in 'See `/rota-b` for the gate.' 'Works like `/rota-b` does.' 'Type `/rota-b` to promote it.' 'Offer `/rota-b` in prose.'; do
+  n=$((n+1)); sp_chain "$SPEC_TMP/chain$n" "$line"
+  OUT="$(sp_run "$SPEC_TMP/chain$n")" || fail "E2[c2]: prose reference or offer failed the lint: $line => $OUT"
+done
+pass "E2[c2]: imperative chains into a flagged skill fail; prose references and offers pass"
+
 # hs <home> <dir> <args...> runs `rota skills` in <dir> with HOME=<home> and
 # CLAUDE_CONFIG_DIR=$HS_CFG (unset when empty); RC and OUT
 # hold the exit code and the --json envelope.
