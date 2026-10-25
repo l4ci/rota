@@ -8,6 +8,10 @@
 - **Named machine pins.** `machine:<name>` replaces `site:support`: main is named `main`, support uses `round.support`. On main, preview with `rota migrate labels`, then run `rota migrate labels --apply` to relabel open issues and retire `issues.labels.support` (including a custom label value). `config fill` preserves that key until migration succeeds. Candidates show pins to other machines as blocked; unpinned issues remain available to main.
 - **Fewer filed follow-ups.** `review.fileDeferred` now defaults to `major`: minor deferred findings stay in the verdict record and `verdict add` lists them as `kept`. A PR whose issue is itself a deferred-findings item files none. Set `minor` to get the old behavior.
 
+### New
+
+- **External knowledge base.** `knowledge.external` (global) points at a cloned git repo of markdown topics shared by every project, and `knowledge.externalTTL` sets how long a fetch stays fresh. `rota knowledge query|topics|add|amend --external` read and write it, `add --external --hook` names the index line of a new topic, and `rota doctor` checks the clone. Writes land by the repo's `rota-knowledge.json` (`push` or `pr`); exit 3 when the key is unset, 4 for a dirty or diverged clone or a multi-match, 5 when the remote is offline. See [external knowledge](docs/usage/external-knowledge.md).
+
 ## v0.25.0 — 2026-10-24
 
 Config shrinks from 142 keys to 124, the round status screen is fast and grouped by issue, and worker slots can share dependency directories.

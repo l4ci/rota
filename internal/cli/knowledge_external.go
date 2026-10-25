@@ -89,9 +89,11 @@ func extErr(err error) error {
 		return nil
 	case errors.Is(err, extknowledge.ErrNotFound), errors.Is(err, extknowledge.ErrPolicy):
 		return Resolution("%s", err)
-	case errors.Is(err, extknowledge.ErrDirty), errors.Is(err, extknowledge.ErrDiverged), errors.Is(err, extknowledge.ErrMultiMatch):
+	case errors.Is(err, extknowledge.ErrDirty), errors.Is(err, extknowledge.ErrDiverged), errors.Is(err, extknowledge.ErrMultiMatch), errors.Is(err, extknowledge.ErrContent):
 		return Refused("%s", err)
-	case errors.Is(err, extknowledge.ErrOffline), errors.Is(err, extknowledge.ErrPush):
+	case errors.Is(err, extknowledge.ErrOffline):
+		return Unavailable("%s", err)
+	case errors.Is(err, extknowledge.ErrPush):
 		return Failed("%s", err)
 	}
 	return err

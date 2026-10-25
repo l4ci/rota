@@ -103,7 +103,7 @@ func (c Clone) Query(want []string) (text string, missing []string, err error) {
 		}
 	}
 	if len(parts) > 0 {
-		text = strings.Join(parts, "\n") + ""
+		text = strings.Join(parts, "\n")
 	}
 	return text, missing, nil
 }
@@ -122,12 +122,13 @@ func sectionBody(file string) string {
 // spaces or shell-ish characters.
 var branchRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
 
-// Policy reads rota-knowledge.json. A missing file is the default, push to
-// main, with Defaulted set so the caller can say so.
+// Policy reads rota-knowledge.json. A missing file is the default, push, with
+// Defaulted set so the caller can say so. Branch stays empty when the policy
+// omits it: a write then targets the clone's own branch.
 func (c Clone) Policy() (Policy, error) {
 	raw, err := c.readRegular(filepath.Join(c.Dir, PolicyFile))
 	if errors.Is(err, os.ErrNotExist) {
-		return Policy{Write: "push", Branch: "main", Defaulted: true}, nil
+		return Policy{Write: "push", Defaulted: true}, nil
 	}
 	if err != nil {
 		return Policy{}, err
@@ -145,10 +146,7 @@ func (c Clone) Policy() (Policy, error) {
 	if p.Write != "push" && p.Write != "pr" {
 		return Policy{}, fmt.Errorf("%w: %s: write must be push or pr, got %q", ErrPolicy, PolicyFile, p.Write)
 	}
-	if p.Branch == "" {
-		p.Branch = "main"
-	}
-	if !branchRe.MatchString(p.Branch) || strings.Contains(p.Branch, "..") {
+	if p.Branch != "" && (!branchRe.MatchString(p.Branch) || strings.Contains(p.Branch, "..")) {
 		return Policy{}, fmt.Errorf("%w: %s: branch %q is not a plain branch name", ErrPolicy, PolicyFile, p.Branch)
 	}
 	return Policy{Write: p.Write, Branch: p.Branch}, nil
