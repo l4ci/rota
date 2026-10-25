@@ -66,6 +66,17 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 			// failed post whose undo failed leaves the head counted, and the
 			// retry must still reach the support worker.
 			posted, pr, err := postSupportBounce(env, root, issue, *slot, *head)
+			var noPR *worker.NoSupportPRError
+			if errors.As(err, &noPR) {
+				if undoErr := rec.Undo(); undoErr != nil {
+					return Result{}, errors.Join(err, undoErr)
+				}
+				d := jsonx.NewObject()
+				d.Set("issue", issue)
+				d.Set("branch", noPR.Branch)
+				return blockedRefusal(d, blockedby.NoPRRecorded, fmt.Sprintf("%s is the support machine's PR but the slot records none, so the bounce has no PR to land on (nothing counted)", noPR.Branch),
+					noPRHint(root, issue, *slot, *head))
+			}
 			if err != nil {
 				return Result{}, errors.Join(err, rec.Undo())
 			}
@@ -190,6 +201,28 @@ func postSupportBounce(env worker.Env, root, issue, slot, head string) (posted b
 	}
 	posted, err = env.PostReviewBounce(root, branch, pr, head, why)
 	return posted, pr, err
+}
+
+// noPRHint is the remedy of a bounce refused as "no PR recorded": reconcile
+// records the open PR of the slot's branch under any round host, and the retry
+// repeats the flags of this run with the slot filled in.
+func noPRHint(root, issue, slot, head string) string {
+	if slot == "" {
+		for _, s := range worker.LoadRegistryTolerant(root).Slots() {
+			if s.HeldID() == issue {
+				slot = s.Name()
+				break
+			}
+		}
+	}
+	retry := "rota round bounce " + issue
+	if head != "" {
+		retry += " --head " + head
+	}
+	if slot != "" {
+		retry += " --slot " + slot
+	}
+	return fmt.Sprintf("run `rota round reconcile --apply` to record the branch's open PR on the slot, then `%s`", retry)
 }
 
 // postSupportPointer leaves the pointer comment on the issue after a post on
