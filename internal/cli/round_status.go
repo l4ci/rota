@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 	"strings"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/limits"
@@ -34,7 +35,9 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) 
 	e := d.baseRoundEnv()
 	e.Worker, e.AccountPicking = e.Worker.WithAccounts(nil), false
 	e.Base = "main"
-	if b, ok, err := d.Repo(root).Base(ctx, ""); err == nil && ok {
+	configured, _ := config.Lookup(cfg, "git.baseBranch")
+	baseCfg, _ := configured.(string)
+	if b, ok, err := d.Repo(root).Base(ctx, baseCfg); err == nil && ok {
 		e.Base = b
 	}
 	// A round started by hand (`herdr worktree create`) has no recorded host and
