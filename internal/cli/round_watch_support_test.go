@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/proc"
@@ -189,6 +190,68 @@ func TestWatchSupportBranchQuiet(t *testing.T) {
 	pass := swWatchGit(t, f, roundcfg.RoleMain, "", lsRemote("ccc333\trefs/heads/mac-ben/7-export\n"))
 	if ch := roundwatch.Diff(supportKeys(pass()), supportKeys(pass())); len(ch) != 0 {
 		t.Fatalf("changes = %v", ch)
+	}
+}
+
+// A stalled origin read is bounded, produces no branch news, and does not
+// prevent the next poll from reporting a push.
+func TestWatchSupportBranchTimeout(t *testing.T) {
+	f := &swForge{}
+	stall := false
+	head := "aaa111"
+	runGit := func(ctx context.Context, _ string, args ...string) (proc.Result, error) {
+		if len(args) == 0 || args[0] != "ls-remote" {
+			return proc.Result{}, nil
+		}
+		if stall {
+			deadline, ok := ctx.Deadline()
+			if !ok || time.Until(deadline) > 5*time.Second {
+				t.Fatal("support branch read must have a deadline within five seconds")
+			}
+			<-ctx.Done()
+			return proc.Result{Stdout: "partial\trefs/heads/mac-ben/7-export\n"}, ctx.Err()
+		}
+		return proc.Result{Stdout: head + "\trefs/heads/mac-ben/7-export\n"}, nil
+	}
+	pass := swWatchGit(t, f, roundcfg.RoleMain, "", runGit)
+	seen := supportKeys(pass())
+	const key = "support/mac-ben~7-export/branch-head"
+	if seen[key] != "aaa111" || len(seen) != 1 {
+		t.Fatalf("successful snapshot = %v", seen)
+	}
+	stall = true
+	timedOut := supportKeys(pass())
+	if len(timedOut) != 0 {
+		t.Fatalf("timed-out read must omit partial branch output: %v", timedOut)
+	}
+	// Exercise the watch's saved-baseline comparison: omitted branch keys
+	// must remain quiet rather than report the old head as removed.
+	now := time.Unix(0, 0)
+	watchEnv := roundwatch.Env{
+		Now:   func() time.Time { return now },
+		Local: func() map[string]string { return map[string]string{} },
+		Forge: func(context.Context) map[string]string { return timedOut },
+		Seen:  func() map[string]string { return seen },
+		Wait: func(_ context.Context, d time.Duration) (*roundwatch.SlotNews, error) {
+			now = now.Add(d)
+			return nil, nil
+		},
+	}
+	opts := roundwatch.Opts{Heartbeat: 2 * time.Second, Poll: time.Second, ForgeEvery: time.Second}
+	quiet, err := roundwatch.Run(context.Background(), watchEnv, opts)
+	if err != nil || quiet.Reason != roundwatch.ReasonHeartbeat || len(quiet.Changes) != 0 {
+		t.Fatalf("timeout must be no news: %+v, %v", quiet, err)
+	}
+	stall, head = false, "bbb222"
+	recovered := supportKeys(pass())
+	if recovered[key] != "bbb222" || len(recovered) != 1 {
+		t.Fatalf("recovered snapshot = %v", recovered)
+	}
+	watchEnv.Forge = func(context.Context) map[string]string { return recovered }
+	news, err := roundwatch.Run(context.Background(), watchEnv, opts)
+	want := []roundwatch.Change{{Key: key, From: "aaa111", To: "bbb222"}}
+	if err != nil || news.Reason != roundwatch.ReasonChange || !slices.Equal(news.Changes, want) {
+		t.Fatalf("recovery must report the pushed head: %+v, %v; want %v", news, err, want)
 	}
 }
 
