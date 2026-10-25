@@ -235,7 +235,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 // slot or branch, else an open forge PR from the branch.
 func (e Env) resolveAttempt(root string, reg worker.Registry, id string, a worker.BestOfAttempt, forgeOpen func() ([]tracker.PR, error)) (pickView, error) {
 	v := pickView{PickAttempt: PickAttempt{Slot: a.Slot, Branch: a.Branch}, claimID: a.ClaimID}
-	if s, _ := reg.BranchHolder(a.Branch); s != nil && s.Name() == a.Slot && s.HeldID() == worker.NormID(id) {
+	if s := reg.Slot(a.Slot); s != nil && s.HeldID() == worker.NormID(id) && s.Branch() == a.Branch {
 		v.slot = s
 		v.claimID = strutil.FirstNonEmpty(a.ClaimID, s.ClaimID())
 		if n, ok := worker.PRRefNumber(s.PR()); ok {

@@ -364,23 +364,26 @@ func (r Registry) LoggedRelays(ref string) []any {
 	return nil
 }
 
-// BranchHolder finds who holds branch: the slot on it, else the queued record
-// for it. Both are nil when nothing holds it.
-func (r Registry) BranchHolder(branch string) (*Slot, *QueuedPR) {
+// BranchHolder finds who holds branch: the slot on it and the queued record
+// for it, each nil when absent. Both can hold it at once: a same-agent fix
+// round reuses the branch name and assign never drops the queued record.
+func (r Registry) BranchHolder(branch string) (s *Slot, q *QueuedPR) {
 	if branch == "" {
 		return nil, nil
 	}
-	for _, s := range r.Slots() {
-		if s.Branch() == branch {
-			return s, nil
+	for _, x := range r.Slots() {
+		if x.Branch() == branch {
+			s = x
+			break
 		}
 	}
-	for _, q := range r.PRs() {
-		if q.Branch == branch {
-			return nil, &q
+	for _, x := range r.PRs() {
+		if x.Branch == branch {
+			q = &x
+			break
 		}
 	}
-	return nil, nil
+	return s, q
 }
 
 // BundleHolder finds who holds id as a bundle member (not as a lead): the slot

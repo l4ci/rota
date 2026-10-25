@@ -29,11 +29,11 @@ func TestBranchHolder(t *testing.T) {
 	}
 }
 
-func TestBranchHolderSlotWinsOverQueued(t *testing.T) {
+func TestBranchHolderReturnsSlotAndQueuedIndependently(t *testing.T) {
 	d := holderDoc()
 	d.QueuePR(QueuedPR{Issue: "#7", Branch: "ben/7-x", PR: "#70"})
 	s, q := d.BranchHolder("ben/7-x")
-	if s == nil || q != nil {
-		t.Fatalf("slot must win: slot=%v queued=%v", s, q)
+	if s == nil || q == nil || s.Name() != "ben" || q.PR != "#70" {
+		t.Fatalf("want both: slot=%v queued=%v", s, q)
 	}
 }

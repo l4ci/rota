@@ -518,9 +518,11 @@ func branchBundle(c *Ctx, root, branch string) []tracker.IssueKey {
 	}
 	reg := branchRegistry(c, root)
 	var ids []string
-	if sl, q := reg.BranchHolder(branch); sl != nil {
+	sl, q := reg.BranchHolder(branch)
+	if sl != nil {
 		ids = sl.Bundle()
-	} else if q != nil {
+	}
+	if len(ids) == 0 && q != nil {
 		ids = q.Bundle
 	}
 	var keys []tracker.IssueKey
