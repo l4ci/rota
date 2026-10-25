@@ -63,6 +63,39 @@ func TestDetect(t *testing.T) {
 	}
 }
 
+// A checkout build stamped by stalebin.Rebuild carries a release-shaped version
+// and the full commit; goreleaser stamps git's short abbreviation (8 chars here).
+func TestStampedCheckoutBuildIsDev(t *testing.T) {
+	full := "0123456789abcdef0123456789abcdef01234567"
+	for _, c := range []struct{ name, exeDir, commit, kind string }{
+		{"checkout", "/home/u/.local/bin", full, Dev},
+		{"script short", "/home/u/.local/bin", "5cc79df4", Script},
+		{"script no commit", "/home/u/.local/bin", "", Script},
+		{"brew keeps brew", "/opt/homebrew/bin", full, Brew},
+	} {
+		e := env(c.exeDir, "5.0.0", "9.0.0")
+		e.Commit = c.commit
+		r := Check(e)
+		if r.InstallType != c.kind {
+			t.Errorf("%s: %+v", c.name, r)
+		}
+		if c.kind == Dev && r.UpdateCommand != "git pull && go build -o <where rota lives> ./cmd/rota && rota skills update" {
+			t.Errorf("%s: hint %q", c.name, r.UpdateCommand)
+		}
+	}
+}
+
+func TestUnstampedBuildIsUnknown(t *testing.T) {
+	for _, v := range []string{"dev", "(devel)", ""} {
+		if r := Check(env("/tmp/x", v, "9.0.0")); r.Status != "unknown" {
+			t.Errorf("version %q: %+v", v, r)
+		}
+	}
+	if r := Check(env("/tmp/x", "5.0.0-dev", "9.0.0")); r.Status != "behind" {
+		t.Errorf("-dev suffix is stamped: %+v", r)
+	}
+}
+
 func TestStatuses(t *testing.T) {
 	for latest, want := range map[string]string{"5.1.0": "behind", "5.0.0": "current", "4.9.0": "ahead", "": "unknown"} {
 		if r := Check(env("/home/u/.local/bin", "5.0.0", latest)); r.Status != want {
