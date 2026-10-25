@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -113,6 +114,20 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		return nil, err
 	}
 
+	// Prefer support's pins, preserving backlog order within each group. Scope
+	// selection happens first: a pin never widens the configured round scope.
+	if o.Support != "" && o.Role == roundcfg.RoleSupport {
+		slices.SortStableFunc(chosen, func(a, b backlog.Item) int {
+			pinned := func(it backlog.Item) int {
+				if slices.Contains(roundcfg.PinsOf(it.Labels), o.Support) {
+					return 0
+				}
+				return 1
+			}
+			return pinned(a) - pinned(b)
+		})
+	}
+
 	handed, err := e.handedToHuman(ctx, be)
 	if err != nil {
 		return nil, err
@@ -121,11 +136,9 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 	if err != nil {
 		return nil, err
 	}
-	var taken func(backlog.Item) bool
-	if o.Scope == roundcfg.ScopeOpen {
-		if taken, err = e.takenOutside(ctx, be); err != nil {
-			return nil, err
-		}
+	taken, err := e.takenOutside(ctx, be)
+	if err != nil {
+		return nil, err
 	}
 	prs, err := e.listOpenPRs(ctx, be)
 	if err != nil {
@@ -460,11 +473,10 @@ func InScope(root string, be backlog.Backend, scope string, slate []string, id s
 }
 
 // takenOutside says whether an item someone outside the round has taken: it
-// carries the in-progress or claimed label, or an open comment claim, while no slot or PR in
-// review holds it (scopeSet already dropped those). Scope open offers every
-// open item, so without this a hand-worked issue reads as ready and assign
-// refuses it as claimed. Keep the comment-claim fallback for legacy or drifted
-// labels. File mode has neither labels nor claims.
+// carries the in-progress or claimed label, or an open comment claim, while
+// no slot or PR in review holds it (scopeSet already dropped those). Every
+// scope excludes externally held issues. Keep the comment-claim fallback for
+// legacy or drifted labels. File mode has neither labels nor claims.
 func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog.Item) bool, error) {
 	if !e.forgeOn(be) {
 		return nil, nil
