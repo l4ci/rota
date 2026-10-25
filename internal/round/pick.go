@@ -202,14 +202,14 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 	if err := worker.SetBestOfPick(root, id, fmt.Sprintf("#%d", want)); err != nil {
 		return res, wrap(err)
 	}
-	store, err := e.workerEnv().BounceStore(root)
+	store, err := e.Worker.BounceStore(root)
 	if err != nil {
 		return res, wrap(err)
 	}
 	if err := store.Clear(o.ID); err != nil {
 		return res, wrap(err)
 	}
-	worker.LedgerNote(e.workerEnv(), root, ledger.Entry{Kind: ledger.KindPick, Issue: id, Slot: res.Winner.Slot, PR: fmt.Sprintf("#%d", want),
+	e.Worker.LedgerNote(root, ledger.Entry{Kind: ledger.KindPick, Issue: id, Slot: res.Winner.Slot, PR: fmt.Sprintf("#%d", want),
 		Detail: ledger.Detail("loser", lv.Slot)})
 	note := fmt.Sprintf("Best-of pick: #%d (%s)", want, res.Winner.Slot)
 	if loser >= 0 {

@@ -145,7 +145,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 	}
 	res.Scope = scope
 
-	pool, err := e.workerEnv().PoolInit(ctx, root, worker.InitOpts{
+	pool, err := e.Worker.PoolInit(ctx, root, worker.InitOpts{
 		Base: base, Session: "rota", Names: set.Roster[:n], BranchPrefix: worker.ParkPrefix,
 	}, nil)
 	if err != nil {

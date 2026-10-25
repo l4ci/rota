@@ -120,8 +120,8 @@ func TestTransferPreflightMatchesAssign(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(f.root, ".rota", "config.json"), []byte(twoAccounts), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		f.env.Worker.Now = func() time.Time { return quotaNow }
-		f.env.Worker.Accounts = &worker.Accounts{Env: worker.Env{Config: diskConfig, Now: func() time.Time { return quotaNow }},
+		wenv(&f.env).Now = func() time.Time { return quotaNow }
+		wenv(&f.env).Accounts = &worker.Accounts{Env: worker.Env{Config: diskConfig, Now: func() time.Time { return quotaNow }},
 			Fetch: func(_ context.Context, _, _ string) (*jsonx.Object, string) {
 				v, err := jsonx.Decode([]byte(`{"five_hour":{"utilization":100,"resets_at":"` + quotaNow.Add(time.Hour).Format(time.RFC3339) + `"}}`))
 				if err != nil {

@@ -3,7 +3,9 @@ package round
 import (
 	"fmt"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/worker"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,8 +38,26 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// noEnv is an empty process environment for Env.Worker.Getenv.
+// noEnv is an empty process environment for wenv(&Env).Getenv.
 func noEnv(string) string { return "" }
 
 // diskConfig reads the .rota/config.json a test wrote, as cli's Deps.Config does.
 func diskConfig(root string) any { return config.Load(rotatree.Config(root)) }
+
+// wk adapts w as an Env.Worker, defaulting its Git to the real runner the way
+// the tests' Env literals do.
+func wk(w worker.Env) Worker {
+	if w.Git == nil {
+		w.Git = git.Exec
+	}
+	return FromWorkerEnv(w)
+}
+
+// wenv is the worker.Env behind e.Worker, for a test that swaps one of its
+// seams after the Env is built.
+func wenv(e *Env) *worker.Env {
+	if e.Worker == nil {
+		e.Worker = wk(worker.Env{})
+	}
+	return &e.Worker.(*envWorker).Env
+}

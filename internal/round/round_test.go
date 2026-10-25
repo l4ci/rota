@@ -72,7 +72,7 @@ func slot(root, name, branch string, mod func(*jsonx.Object)) *worker.Slot {
 }
 
 func env(agents []host.Agent, forge Forge) Env {
-	e := Env{Git: git.Exec, Base: "main", Forge: forge, HostName: "herdr"}
+	e := Env{Git: git.Exec, Base: "main", Forge: forge, HostName: "herdr", Worker: wk(worker.Env{})}
 	if agents != nil {
 		e.Snapshot = func(context.Context) ([]host.Agent, error) { return agents, nil }
 	}
@@ -189,7 +189,7 @@ func TestEmptyRegistryDerivesRowsFromWorktrees(t *testing.T) {
 
 func TestUnavailableSourcesSkipTheirKinds(t *testing.T) {
 	root, _, _ := fixture(t)
-	rep, err := Env{Git: git.Exec, Base: "main"}.Status(bg, root)
+	rep, err := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{})}.Status(bg, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +311,7 @@ func TestOpenEscalationsAreReported(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	e.Worker.Now = func() time.Time { return time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC) }
+	wenv(&e).Now = func() time.Time { return time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC) }
 	out, err := e.Reconcile(bg, root, false)
 	if err != nil {
 		t.Fatal(err)
