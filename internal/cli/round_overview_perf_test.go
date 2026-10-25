@@ -48,7 +48,7 @@ func newPerfRig(t *testing.T) *perfRig {
 	for n := 1; n <= 12; n++ {
 		labels := "[]"
 		if n >= 10 { // 10, 11 wait; 12 is claimed by the support machine
-			labels = `[{"name":"site:support"}]`
+			labels = `[{"name":"machine:mac"}]`
 		}
 		issues = append(issues, fmt.Sprintf(`{"number":%d,"title":"item %d","body":"## Acceptance\n- [ ] x","labels":%s,"state":"OPEN","url":"https://github.com/acme/project/issues/%d"}`, n, n, labels, n))
 	}

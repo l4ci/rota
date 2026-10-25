@@ -39,8 +39,8 @@ func TestLabelsOf(t *testing.T) {
 		name, cfg string
 		want      Labels
 	}{
-		{"defaults", `{}`, Labels{InProgress: "in-progress", NeedsHuman: "needs-human", NeedsReview: "needs-review", Support: "site:support"}},
-		{"configured", `{"issues":{"labels":{"inProgress":"wip-x","needsHuman":"human-x","needsReview":"review-x","support":"support-x"}}}`, Labels{InProgress: "wip-x", NeedsHuman: "human-x", NeedsReview: "review-x", Support: "support-x"}},
+		{"defaults", `{}`, Labels{InProgress: "in-progress", NeedsHuman: "needs-human", NeedsReview: "needs-review"}},
+		{"configured", `{"issues":{"labels":{"inProgress":"wip-x","needsHuman":"human-x","needsReview":"review-x","support":"support-x"}}}`, Labels{InProgress: "wip-x", NeedsHuman: "human-x", NeedsReview: "review-x"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg, err := jsonx.Decode([]byte(tc.cfg))
@@ -66,6 +66,7 @@ func TestOverrides(t *testing.T) {
 
 func TestInvalid(t *testing.T) {
 	for cfg, want := range map[string]string{
+		`{"round":{"role":"support"}}`:   "round.support",
 		`{"round":{"scope":"all"}}`:      "round.scope",
 		`{"round":{"roster":["a","a"]}}`: "twice",
 		`{"round":{"roster":["Ann"]}}`:   "branch",
@@ -539,6 +540,15 @@ func TestSupportPrefixesRoster(t *testing.T) {
 	}
 }
 
+func TestSettingsReserveMainForMainMachine(t *testing.T) {
+	for _, role := range []string{"main", "support"} {
+		_, err := Load(project(t, `{"round":{"support":"main","role":"`+role+`"}}`))
+		if err == nil || !strings.Contains(err.Error(), "reserved") {
+			t.Errorf("role %s: settings error = %v, want reserved name", role, err)
+		}
+	}
+}
+
 func TestScopesAreSchemaChoices(t *testing.T) {
 	for _, k := range config.Keys {
 		if k.Name != "round.scope" {
@@ -603,4 +613,25 @@ func TestHarnessesInvalid(t *testing.T) {
 // Load reads the round.* keys from the config on disk under root.
 func Load(root string) (Settings, error) {
 	return FromConfig(config.Load(rotatree.Config(root)))
+}
+
+func TestMachineName(t *testing.T) {
+	for _, tc := range []struct{ support, role, want string }{
+		{"", "", "main"}, {"", RoleMain, "main"}, {"mac", RoleMain, "main"}, {"mac", RoleSupport, "mac"},
+	} {
+		s := Settings{Support: tc.support, Role: tc.role}
+		if got := s.MachineName(); got != tc.want {
+			t.Errorf("%+v name = %q, want %q", s, got, tc.want)
+		}
+	}
+	if MachineLabel("") != "" || MachineLabel("mac") != "machine:mac" {
+		t.Fatal("machine label must derive from the machine name")
+	}
+}
+
+func TestPinsOf(t *testing.T) {
+	got := PinsOf([]string{"machinery:x", "Machine:mac", "machine:", "machine:mac", "machine:main", "bug"})
+	if !reflect.DeepEqual(got, []string{"mac", "main"}) {
+		t.Fatalf("pins = %v", got)
+	}
 }

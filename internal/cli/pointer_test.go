@@ -7,7 +7,6 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
@@ -39,7 +38,7 @@ func supportBounceDeps(fk *bounceFakes, fake *trackertest.Fake) *Deps {
 func TestBouncePostsPointer(t *testing.T) {
 	fk := &bounceFakes{pr: map[int][]string{}}
 	fake := &trackertest.Fake{Issues: []backlog.Issue{
-		{Key: tracker.NumKey(31), Title: "thing", Labels: []string{config.Label(nil, "support")}, State: "open"},
+		{Key: tracker.NumKey(31), Title: "thing", Labels: []string{"machine:mac"}, State: "open"},
 		{Key: tracker.NumKey(32), Title: "other", State: "open"},
 	}}
 	deps := supportBounceDeps(fk, fake)

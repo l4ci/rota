@@ -58,7 +58,7 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) 
 		}
 	}
 	labels := roundcfg.LabelsOf(cfg)
-	e.NeedsHuman, e.Label, e.SupportLabel, e.NeedsReview = labels.NeedsHuman, labels.InProgress, labels.Support, labels.NeedsReview
+	e.NeedsHuman, e.Label, e.SupportLabel, e.NeedsReview = labels.NeedsHuman, labels.InProgress, roundcfg.MachineLabel(roundcfg.SupportName(cfg)), labels.NeedsReview
 	e.Round, e.RoundErr = d.roundSettings(root, roundConfigUsage)
 	if !withForge {
 		return e

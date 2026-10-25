@@ -2,6 +2,9 @@ package cli
 
 import (
 	"errors"
+	"fmt"
+	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -96,5 +99,14 @@ func TestRoundTickReportsInvalidRoundConfig(t *testing.T) {
 	code, out, stderr := roundConfigRun(t, `{"round":{"stallMinutes":"soon"}}`, "round", "tick")
 	if code != ExitResolution || !strings.Contains(out+stderr, "round.stallMinutes must be an integer (got soon)") {
 		t.Fatalf("exit %d, out %q, stderr %q; want exit %d naming round.stallMinutes", code, out, stderr, ExitResolution)
+	}
+}
+
+func TestSupportRoleWithoutNameRefuses(t *testing.T) {
+	root := trackerProject(t, `{"issues":{"source":"github"},"round":{"scope":"open"}}`)
+	write(t, filepath.Join(root, ".rota", "config.local.json"), `{"round":{"role":"support"}}`)
+	code, env, stderr := rotaRunWith(t, supportReturnDeps(&trackertest.Fake{}), "--json", "-C", root, "round", "candidates")
+	if code != ExitRefused || envObj(env, "data")["blockedBy"] != "config" || !strings.Contains(fmt.Sprint(env)+stderr, "round.support") {
+		t.Fatalf("support without name: exit %d output %v %s; want blockedBy config", code, env, stderr)
 	}
 }
