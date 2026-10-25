@@ -411,7 +411,7 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 		}
 		defer release()
 	}
-	err := e.withLandLock(ctx, root, func(waited bool) (err error) {
+	err := e.withLandLock(ctx, root, o.Slot, func(waited bool) (err error) {
 		o.waited = waited
 		res, err = e.gate(ctx, root, o)
 		return err

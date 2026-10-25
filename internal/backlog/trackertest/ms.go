@@ -20,6 +20,9 @@ type MS struct {
 	lagged []tracker.IssueKey
 }
 
+// Settle ends the lag: issues created under Lag show in List from now on.
+func (f *MS) Settle() { f.Lag, f.lagged = false, nil }
+
 // Create adds the issue and, under Lag, hides it from List.
 func (f *MS) Create(ctx context.Context, title, body string, labels []string, milestone string) (tracker.IssueKey, error) {
 	key, err := f.Fake.Create(ctx, title, body, labels, milestone)
