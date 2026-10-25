@@ -139,7 +139,9 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	}
 	e.OpenItems = func(context.Context) int { return round.OpenItems(root, board) }
 	e.Candidates = func(ctx context.Context) ([]round.Candidate, error) {
-		return renv.RoundCandidates(ctx, root, be, set, "")
+		candidates, err := renv.RoundCandidates(ctx, root, be, set, "")
+		warnCandidateMigrations(c, candidates)
+		return candidates, err
 	}
 	e.Review = reviewAdapter{c: c, root: root, set: set, renv: renv, board: board}
 	// Assign takes no tier, no kind and never accepts overlap: the round's

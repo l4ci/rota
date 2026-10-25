@@ -35,9 +35,12 @@ const (
 
 // offSite is why it belongs to the other side of the split ("" when this
 // machine may take it, and always with round.support empty).
-func (e Env) offSite(support, role string, it backlog.Item) string {
+func (e Env) offSite(support, role, legacy string, it backlog.Item) string {
 	if support == "" {
 		return ""
+	}
+	if why := legacySupportWarning(support, legacy, it); why != "" {
+		return why
 	}
 	pins := roundcfg.PinsOf(it.Labels)
 	if len(pins) == 0 {
@@ -47,6 +50,17 @@ func (e Env) offSite(support, role string, it backlog.Item) string {
 		}
 	} else if !slices.Contains(pins, roundcfg.MachineName(support, role)) {
 		return fmt.Sprintf("%s is pinned %s elsewhere: remove the pin to move it; on main, rota round support offer --withdraw %s takes a %s issue back", it.ID, strings.Join(pinLabels(pins), ", "), it.ID, roundcfg.MachineLabel(support))
+	}
+	return ""
+}
+
+// Block legacy offers on both machines until the explicit migration completes.
+func legacySupportWarning(support, legacy string, it backlog.Item) string {
+	if legacy == "" {
+		legacy = "site:support"
+	}
+	if support != "" && slices.Contains(it.Labels, legacy) {
+		return fmt.Sprintf("%s still carries retired label %s: run rota migrate labels --apply before assigning it", it.ID, legacy)
 	}
 	return ""
 }

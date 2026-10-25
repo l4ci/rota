@@ -56,8 +56,10 @@ func roundMachineStop(c *Ctx) (Result, error) {
 	}
 	cfg := c.deps().Config(root)
 	role, err := roundcfg.MachineRole(cfg)
-	if err == nil && role == roundcfg.RoleSupport && roundcfg.SupportName(cfg) == "" {
-		return blockedRefusal(nil, blockedby.Config, "round.role is support but round.support is empty", "set round.support to this machine's name on main, then pull it here")
+	if err == nil && role == roundcfg.RoleSupport {
+		if err := roundcfg.CheckMachineName(roundcfg.SupportName(cfg), role); err != nil {
+			return blockedRefusal(nil, blockedby.Config, err.Error(), "set round.support to this machine's name on main, then pull it here")
+		}
 	}
 	return Result{}, nil
 }

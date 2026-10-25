@@ -36,6 +36,8 @@ type Candidate struct {
 	// Decision is the item's decision type ("" for an ordinary item); BlockedBy
 	// names why a ready-looking item is still not assignable.
 	Decision, BlockedBy string
+	// Warnings are upgrade actions the candidate-listing verbs must surface.
+	Warnings []string
 	// ScopeSource is where the item's scope came from: touches, subsystem,
 	// inferred or none. A none candidate wants a scout before it is assigned.
 	ScopeSource string
@@ -58,6 +60,8 @@ type CandidateOpts struct {
 	// Support and Role are round.support and round.role: with Support set,
 	// pins on other machines remain visible but blocked (offSite).
 	Support, Role string
+	// LegacySupportLabel is the retired key's value, defaulting to site:support.
+	LegacySupportLabel string
 }
 
 // ScopeOf is the scope and slate the round's candidates are drawn from: an
@@ -87,7 +91,7 @@ func resolveScope(override, recorded, def string) string {
 // explicit scope override ("" for none).
 func (e Env) RoundCandidates(ctx context.Context, root string, be backlog.Backend, set roundcfg.Settings, override string) ([]Candidate, error) {
 	scope, slate := ScopeOf(root, set, override)
-	return e.Candidates(ctx, root, be, CandidateOpts{Scope: scope, Slate: slate, Shared: set.SharedPaths, BlockScopeOverlap: set.BlockScopeOverlap, Support: set.Support, Role: set.Role})
+	return e.Candidates(ctx, root, be, CandidateOpts{Scope: scope, Slate: slate, Shared: set.SharedPaths, BlockScopeOverlap: set.BlockScopeOverlap, Support: set.Support, Role: set.Role, LegacySupportLabel: set.LegacySupportLabel})
 }
 
 // Candidates lists the open items the scope allows that no slot holds, in
@@ -158,8 +162,13 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		if _, err := BestOfOf(be.Capabilities(), it); err != nil && c.PickErr == "" {
 			c.PickErr = err.Error()
 		}
-		if why := e.offSite(o.Support, o.Role, it); why != "" {
-			c.BlockedBy = BlockSite
+		if warning := legacySupportWarning(o.Support, o.LegacySupportLabel, it); warning != "" {
+			c.Warnings = append(c.Warnings, warning)
+		}
+		if why := e.offSite(o.Support, o.Role, o.LegacySupportLabel, it); why != "" {
+			if c.BlockedBy == "" {
+				c.BlockedBy = BlockSite
+			}
 			c.Checks = append(c.Checks, Check{Name: BlockSite, Detail: []string{why}})
 		}
 		if unclear[it.IssueKey()] {

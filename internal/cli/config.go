@@ -403,8 +403,8 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		if roleErr != nil {
 			return blockedRefusal(data, blockedby.Config, roleErr.Error(), "set round.role to main or support")
 		}
-		if role == roundcfg.RoleSupport && roundcfg.SupportName(cfg) == "" {
-			return blockedRefusal(data, blockedby.Config, "round.role is support but round.support is empty", "set round.support to this machine's name")
+		if err := roundcfg.CheckMachineName(roundcfg.SupportName(cfg), role); err != nil {
+			return blockedRefusal(data, blockedby.Config, err.Error(), "set round.support to this machine's name")
 		}
 		switch status {
 		case config.UpToDate:

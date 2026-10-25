@@ -4,12 +4,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 func labelsMigrateCommand() *Command {
@@ -25,13 +27,16 @@ func migrateLabels(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		cfg := c.deps().Config(root)
-		support := config.String(cfg, "round.support")
-		if support == "" || !roundcfg.ValidName(support) {
-			return blockedRefusal(nil, blockedby.Config, "round.support must name the support machine before migrating labels", "")
-		}
 		if !issue {
 			return supportFileModeStop()
+		}
+		cfg := c.deps().Config(root)
+		support := roundcfg.SupportName(cfg)
+		if err := roundcfg.CheckMachineName(support, roundcfg.RoleMain); err != nil {
+			return blockedRefusal(nil, blockedby.Config, err.Error(), "set round.support before migrating labels")
+		}
+		if support == "" && !*apply {
+			return blockedRefusal(nil, blockedby.Config, "round.support must name the support machine before migrating labels", "")
 		}
 		from := "site:support"
 		if v, ok := config.Lookup(cfg, "issues.labels.support"); ok {
@@ -45,7 +50,23 @@ func migrateLabels(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		changes, merr := migrate.RelabelSupport(c.Context(), tr, from, roundcfg.MachineLabel(support), *apply)
+		changes := []migrate.Relabel{}
+		var merr error
+		if support == "" {
+			// No destination is needed to retire an unused key. Prove that no open
+			// issue still needs relabelling before removing it.
+			issues, err := tr.List(c.Context(), tracker.ListFilter{State: "open", Labels: []string{from}})
+			if err != nil {
+				return backlogFail(err)
+			}
+			for _, issue := range issues {
+				if issue.State == "open" && slices.Contains(issue.Labels, from) {
+					return blockedRefusal(nil, blockedby.Config, "round.support must name the support machine before migrating labels", "open issues still carry "+from)
+				}
+			}
+		} else {
+			changes, merr = migrate.RelabelSupport(c.Context(), tr, from, roundcfg.MachineLabel(support), *apply)
+		}
 		rows := []any{}
 		lines := []string{}
 		changed := false
