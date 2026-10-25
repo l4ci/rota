@@ -363,27 +363,34 @@ func (e Env) prMerged(ctx context.Context, root string, s *Slot) bool {
 // cut short (the Wait deadline, an interrupt) or that failed is unknown, not
 // "open": a caller that must not act on a guess tells the two apart.
 func (e Env) prMergedKnown(ctx context.Context, root string, s *Slot) (merged, known bool) {
+	info, known := e.prInfoKnown(ctx, root, s)
+	return strings.EqualFold(info.State, "MERGED"), known
+}
+
+// prInfoKnown is the forge's view of the slot's recorded PR plus whether the
+// forge answered. A slot with no PR or no origin answers with an empty view.
+func (e Env) prInfoKnown(ctx context.Context, root string, s *Slot) (info tracker.PRInfo, known bool) {
 	n, ok := PRRefNumber(s.PR())
 	if !ok {
-		return false, true
+		return info, true
 	}
 	if _, code := e.git(root, "remote", "get-url", "origin"); code != 0 {
-		return false, true
+		return info, true
 	}
 	cfg := e.GateConfig(root)
 	provider, _ := e.detectProvider(ctx, root, "", cfg.Tracker.Provider, tracker.ForgeReader) // a reader never fails
 	if provider == tracker.ProviderLocal {
-		return false, ctx.Err() == nil
+		return info, ctx.Err() == nil
 	}
 	f, err := e.Forge(provider, root, cfg.Tracker)
 	if err != nil {
-		return false, false
+		return info, false
 	}
-	info, err := f.PRView(ctx, n)
+	info, err = f.PRView(ctx, n)
 	if err != nil || ctx.Err() != nil {
-		return false, false
+		return tracker.PRInfo{}, false
 	}
-	return strings.EqualFold(info.State, "MERGED"), true
+	return info, true
 }
 
 // seenKey is what `round wait` remembers of a slot it returned: the state and
