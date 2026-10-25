@@ -1,7 +1,9 @@
 package milestone
 
 import (
+	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -15,6 +17,15 @@ const (
 
 // Kinds are the legal kinds.
 var Kinds = []string{KindDelivery, KindDecision}
+
+// CheckKind is nil for a kind in Kinds. The store adapters call it so an
+// unknown kind never reaches WithKind, which would silently make it delivery.
+func CheckKind(kind string) error {
+	if !slices.Contains(Kinds, kind) {
+		return fmt.Errorf("unknown milestone kind %q: use %s", kind, strings.Join(Kinds, " or "))
+	}
+	return nil
+}
 
 var fmKind = regexp.MustCompile(`(?m)^kind:[ \t]*(\S+)`)
 

@@ -9,7 +9,7 @@ import "time"
 // native milestone, so a bare NextID would not mean one thing across stores.
 type Store interface {
 	// Add mints the next milestone ID and creates the milestone as planned,
-	// born with the given kind (one of Kinds).
+	// born with the given kind. A kind outside Kinds is refused.
 	Add(title, summary string, depends []string, kind string) (id string, err error)
 	// List is every milestone in ID order, with Ready set from its depends.
 	List() ([]Entry, error)

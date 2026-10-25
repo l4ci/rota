@@ -240,7 +240,14 @@ func TestIssueModeMilestoneAddKindDecisionWithLaggingListing(t *testing.T) {
 	if d := ddata(t, env); d["id"] != "M03" {
 		t.Fatalf("add: %v", env)
 	}
-	fake.Lag = false
+	fake.Settle()
+	code, env, stderr = issueRunWith(t, deps, root, "milestone", "show", "M03")
+	if code != 0 {
+		t.Fatalf("show M03: %d %s", code, stderr)
+	}
+	if d := ddata(t, env); d["kind"] != "decision" {
+		t.Errorf("show M03 kind = %v, want decision: %v", d["kind"], env)
+	}
 	for i := range fake.Issues {
 		if fake.Issues[i].Title == "M03 — Third" {
 			if !strings.Contains(fake.Issues[i].Body, "kind: decision") {
