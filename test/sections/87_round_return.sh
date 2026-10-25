@@ -75,7 +75,7 @@ RC=0; OUT=$(rrin "$PROJ/.worktrees/ben" round return ben) || RC=$?
 [ "$RC" = "2" ] || fail "return without --reason is a usage error, got $RC: $OUT"
 RC=0; OUT=$(rrin "$PROJ/.worktrees/ben" round return dana --reason x) || RC=$?
 [ "$RC" = "3" ] || fail "return of a slot holding no issue is exit 3, got $RC: $OUT"
-[ "$(dbq labels 1)" = "in-progress,type:task" ] || fail "refusals must not touch the tracker: $(dbq labels 1)"
+[ "$(dbq labels 1)" = "claimed:ben@main,in-progress,type:task" ] || fail "refusals must not touch the tracker: $(dbq labels 1)"
 
 OUT=$(rrin "$PROJ/.worktrees/ben" round return ben --reason "wrong premise: the ticket asks for the old format" --note-file "$TMP_RR/note.md") \
   || fail "return from inside the worktree failed: $OUT"
@@ -122,7 +122,7 @@ OUT=$(rr round transfer 1 --to ben --holder-pid "$HOLDER" --note-file "$TMP_RR/n
 [ -f "$PROJ/.worktrees/ben/step.txt" ] || fail "the receiver starts from the pushed work"
 [ "$(branch_of dana)" = "park/dana" ] || fail "the sender is parked, on $(branch_of dana)"
 [ "$(reg ben task)" = "1" ] && [ "$(reg ben claimId)" = "ben@1" ] && [ -z "$(reg dana task)" ] || fail "registry after the transfer: $(cat "$PROJ/.rota/workers.json")"
-[ "$(dbq labels 1)" = "in-progress,type:task" ] || fail "in-progress stays on across a transfer: $(dbq labels 1)"
+[ "$(dbq labels 1)" = "claimed:ben@main,in-progress,type:task" ] || fail "in-progress stays on across a transfer: $(dbq labels 1)"
 case "$(dbq comments 1)" in *"(transfer, from dana)"*"<!-- rota:release dana@1 -->"*"<!-- rota:claim ben@1 -->"*) ;; *) fail "transfer comment and claim order: $(dbq comments 1)" ;; esac
 case "$(cat "$FK/tmux/payload")" in *"handed to you by dana"*) ;; *) fail "the receiver's brief names the handoff: $(cat "$FK/tmux/payload")" ;; esac
 pass "transfer to a slot parks the sender, moves the claim and checks the existing branch out in the receiver"
@@ -156,7 +156,7 @@ mkdir -p "$FK/down"
 printf '#!/bin/sh\necho "no server running" >&2\nexit 1\n' > "$FK/down/tmux"; chmod +x "$FK/down/tmux"
 RC=0; OUT=$( cd "$PROJ" && PATH="$FK/down:$FAKES" FAKE_TMUX="$FK/tmux" FAKE_TRACKER_DB="$TMP_RR/db.json" "$ROTA_BIN" --json round reclaim dana --force --holder-pid "$HOLDER" 2>/dev/null ) || RC=$?
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "live agent" ] || fail "no host: a live agent cannot be proved gone: $RC $OUT"
-[ "$(branch_of dana)" = "dana/2-second-thing" ] && [ "$(dbq labels 2)" = "in-progress,type:task" ] || fail "refusals change nothing"
+[ "$(branch_of dana)" = "dana/2-second-thing" ] && [ "$(dbq labels 2)" = "claimed:dana@main,in-progress,type:task" ] || fail "refusals change nothing"
 if grep -q 'kill-window' "$FK/tmux/log"; then fail "a refused reclaim must not kill anything"; fi
 
 # Contact loss is not death (#820): a poll that could not reach the host leaves
@@ -185,7 +185,7 @@ RC=0; OUT=$(down_rota round reclaim dana --force --holder-pid "$HOLDER") || RC=$
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "live agent" ] || fail "--force still needs a host to kill through: $RC $OUT"
 OUT=$(down_rota round status) || fail "round status failed: $OUT"
 echo "$OUT" | python3 -c 'import json,sys; r=[x for x in json.load(sys.stdin)["data"]["slots"] if x["name"]=="dana"][0]; sys.exit(0 if (r.get("hostState"), r.get("evidence")) == ("unverifiable", "host-unreachable") else 1)' || fail "status must show unverifiable and its reason: $OUT"
-[ "$(branch_of dana)" = "dana/2-second-thing" ] && [ "$(dbq labels 2)" = "in-progress,type:task" ] || fail "an unverifiable refusal changes nothing"
+[ "$(branch_of dana)" = "dana/2-second-thing" ] && [ "$(dbq labels 2)" = "claimed:dana@main,in-progress,type:task" ] || fail "an unverifiable refusal changes nothing"
 dana_seed "$PREV_DANA_STATE" ""
 pass "an unverifiable slot shows its reason in status, reclaim exits 4 without --force and --force still refuses when the host cannot be asked"
 
@@ -259,7 +259,7 @@ RC=0; OUT=$(rrsnap round assign 3 --agent dana --holder-pid "$HOLDER" --request-
 # Same id, same arguments, gh healthy: the retry resumes and finishes the assignment.
 OUT=$(rrsnap round assign 3 --agent ben --holder-pid "$HOLDER" --request-id req-smoke-1) || fail "the retry after the gh failure failed: $OUT"
 [ "$(echo "$OUT" | jget data.requestId)" = "req-smoke-1" ] && [ "$(echo "$OUT" | jget data.branch)" = "ben/3-third-thing" ] && [ -n "$(echo "$OUT" | jget data.resumedFrom)" ] || fail "retry result: $OUT"
-[ "$(branch_of ben)" = "ben/3-third-thing" ] && [ "$(dbq labels 3)" = "in-progress,type:task" ] || fail "the retry must finish the assignment: $(dbq labels 3)"
+[ "$(branch_of ben)" = "ben/3-third-thing" ] && [ "$(dbq labels 3)" = "claimed:ben@main,in-progress,type:task" ] || fail "the retry must finish the assignment: $(dbq labels 3)"
 # A third call is a replay: the first success comes back and nothing re-applies.
 BEFORE=$(dbq comments 3)
 OUT=$(rrsnap round assign 3 --agent ben --holder-pid "$HOLDER" --request-id req-smoke-1) || fail "replay failed: $OUT"

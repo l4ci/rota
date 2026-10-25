@@ -3,8 +3,11 @@ package round
 import (
 	"context"
 	"fmt"
-	"github.com/l4ci/rota/internal/strutil"
+	"slices"
+	"strings"
 
+	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -22,7 +25,8 @@ func (o Outcome) Clean() bool { return len(o.Drift) == 0 && len(o.Repaired) == 0
 
 // Reconcile assembles the round and, with apply, makes the safe repairs: it
 // clears the handle of a dead tab, registers an unregistered worktree,
-// records an unrecorded PR, adds a missing in-progress label, removes it from a closed issue and clears a
+// records an unrecorded PR, adds a missing in-progress label, removes claim labels from a closed issue,
+// syncs visible claim labels from comment claims and clears a
 // claimId whose claim is gone from the tracker (never the tracker's side) and
 // drops a queued PR record whose PR is merged or closed, parks a slot whose PR is merged and releases an adopted slot whose PR is merged (worktree and branch kept). Every other
 // kind is only reported (a tab may be a live worker; opening a PR is the
@@ -41,6 +45,9 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 	}
 	e.findUnregisteredBranches(ctx, root, rep, reg) // a branch scan: reconcile and the tick, not every status
 	e.findSupportBounced(ctx, rep, reg)
+	if e.SweepClosedClaims {
+		e.findClosedClaimLabels(ctx, rep)
+	}
 	out := Outcome{Report: rep}
 	for _, f := range rep.Findings {
 		if !apply || f.Repair == "" {
@@ -64,6 +71,41 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 	return out, nil
 }
 
+// findClosedClaimLabels sweeps for closed issues whose only claim marker is a
+// claimed: label. Keep this broad read out of Status and its polling callers:
+// only `round reconcile` opts in (SweepClosedClaims). A failed list is a warning,
+// not an unavailable forge, so the other forge repairs in the pass still run.
+func (e Env) findClosedClaimLabels(ctx context.Context, rep *Report) {
+	if e.Forge == nil || slices.Contains(rep.Unavailable, SourceForge) {
+		return
+	}
+	closed, err := e.Forge.List(ctx, tracker.ListFilter{State: "closed"})
+	if err != nil {
+		rep.Warnings = append(rep.Warnings, fmt.Sprintf("closed claim-label sweep skipped: %v", err))
+		return
+	}
+	seen := map[string]bool{}
+	for _, finding := range rep.Findings {
+		if finding.Kind == LabelStale {
+			seen[finding.Issue] = true
+		}
+	}
+	var keys []tracker.IssueKey
+	for _, is := range closed {
+		if is.State != "closed" || seen[is.Key.String()] {
+			continue
+		}
+		if slices.ContainsFunc(is.Labels, func(label string) bool { return strings.HasPrefix(label, backlog.ClaimLabelPrefix) }) {
+			keys = append(keys, is.Key)
+			seen[is.Key.String()] = true
+		}
+	}
+	tracker.SortKeys(keys)
+	for _, key := range keys {
+		rep.add(Finding{Kind: LabelStale, Issue: key.String(), Detail: fmt.Sprintf("%s is closed and still has claimed: labels", key.Ref()), Repair: "remove claim labels"})
+	}
+}
+
 // unreadSource names the source a repair of kind depends on when the report
 // could not read it: the host for a tab-derived finding, the forge for the
 // PR, merge and label ones. "" when the source answered or the kind needs none.
@@ -72,7 +114,7 @@ func unreadSource(rep *Report, kind string) string {
 	switch kind {
 	case DeadTab:
 		need = SourceHost
-	case PRUnrecorded, MergedExternal, PRStale, LabelMissing, LabelStale:
+	case PRUnrecorded, MergedExternal, PRStale, LabelMissing, LabelStale, ClaimLabelDrift:
 		need = SourceForge
 	}
 	for _, u := range rep.Unavailable {
@@ -127,6 +169,13 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 		return err
 	case ClaimMismatch:
 		return editSlot(root, f.Slot, func(s *worker.Slot) error { s.SetClaimID(""); return nil })
+	case ClaimLabelDrift:
+		syncer, ok := e.Board.(backlog.ClaimLabelSyncer)
+		if !ok {
+			return fmt.Errorf("backlog cannot sync claim labels")
+		}
+		_, err := syncer.SyncClaimLabels(f.Issue)
+		return err
 	case LabelMissing:
 		n, ok := tracker.ParseKey(f.Issue)
 		if !ok {
@@ -138,7 +187,23 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 		if !ok {
 			return fmt.Errorf("%s is not an issue key", f.Issue)
 		}
-		return e.Forge.RemoveLabels(ctx, n, []string{e.Label})
+		is, err := e.Forge.Get(ctx, n, false)
+		if err != nil {
+			return err
+		}
+		if is.State != "closed" {
+			return nil
+		}
+		var drop []string
+		for _, l := range is.Labels {
+			if l == e.Label || strings.HasPrefix(l, backlog.ClaimLabelPrefix) {
+				drop = append(drop, l)
+			}
+		}
+		if len(drop) == 0 {
+			return nil
+		}
+		return e.Forge.RemoveLabels(ctx, n, drop)
 	}
 	return fmt.Errorf("%s has no safe repair", f.Kind)
 }

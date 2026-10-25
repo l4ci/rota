@@ -41,6 +41,18 @@ type SharedClaimer interface {
 	ClaimShared(ref, claimID string, holders int) (won bool, holder string, err error)
 }
 
+// ClaimLabelSyncer repairs only the visible labels derived from tracker claims.
+// The comment claims remain the source of truth; file mode has no labels.
+type ClaimLabelSyncer interface {
+	ClaimLabelDrift(ref string) (add, remove []string, err error)
+	SyncClaimLabels(ref string) (changed bool, err error)
+}
+
+var (
+	_ ClaimLabelSyncer = (*Issues)(nil)
+	_ ClaimLabelSyncer = (*Umbrella)(nil)
+)
+
 var (
 	_ Workflow      = (*File)(nil)
 	_ Workflow      = (*Issues)(nil)

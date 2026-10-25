@@ -380,6 +380,7 @@ func TestMatchAgentFindsAMovedPaneByAgentName(t *testing.T) {
 
 func TestReconcileClearsTheLabelOfClosedIssues(t *testing.T) {
 	root, e, forge := fixture(t)
+	e.Label = "in-progress"
 	forge.closedLabelled = []int{211, 5}
 
 	out, err := e.Reconcile(bg, root, false)

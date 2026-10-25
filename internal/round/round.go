@@ -13,8 +13,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/strutil"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -22,13 +20,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -47,6 +48,7 @@ const (
 	StalledSlot          = "stalled"
 	ItemTimeout          = "item-timeout"
 	ClaimMismatch        = "claim-mismatch"
+	ClaimLabelDrift      = "claim-label-drift"
 	UnregisteredBranch   = "unregistered-branch"
 	// Bounced: on the support machine, a queued PR main sent back (#1598).
 	Bounced              = "bounced"
@@ -88,6 +90,10 @@ type Env struct {
 	Snapshot func(ctx context.Context) ([]host.Agent, error)
 	HostName host.Kind
 	Forge    Forge
+	// SweepClosedClaims lets Reconcile list every closed issue for stray claim
+	// labels. Only `round reconcile` sets it; status, watch and the autopilot
+	// tick stay on label-filtered closed reads.
+	SweepClosedClaims bool
 	// Base is the branch slots are cut from when a slot records none.
 	Base  string
 	Label string
@@ -597,7 +603,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	}
 	tracker.SortKeys(stale)
 	for _, n := range stale {
-		rep.add(Finding{Kind: LabelStale, Issue: n.String(), Detail: fmt.Sprintf("%s is closed and still has %s", n.Ref(), e.Label), Repair: "remove " + e.Label})
+		rep.add(Finding{Kind: LabelStale, Issue: n.String(), Detail: fmt.Sprintf("%s is closed and still has %s or claimed: labels", n.Ref(), e.Label), Repair: "remove claim labels"})
 	}
 	if labelsOK {
 		var orphans []tracker.IssueKey
@@ -650,7 +656,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			}
 		}
 	}
-	e.claimFindings(ctx, rep, reg, rows, slotObj, reg.PRs(), labelled, labelsOK)
+	e.claimFindings(ctx, rep, reg, rows, slotObj, reg.PRs(), labelled, fs.claimLabelled, labelsOK)
 
 	e.leaseFinding(ctx, root, rep)
 
@@ -791,12 +797,13 @@ func (e Env) readHost(ctx context.Context, rep *Report) (agents []host.Agent, ok
 	return agents, ok
 }
 
-// forgeState is what the forge source answered: open PRs by head branch, the
-// open issues carrying the round label, and the closed ones still carrying it.
+// forgeState is what the forge source answered: open PRs by head branch, open
+// issues carrying the round or claimed labels, and closed issues with the round label.
 type forgeState struct {
-	prs      map[string]*tracker.PR
-	labelled map[tracker.IssueKey]bool
-	stale    []tracker.IssueKey
+	prs           map[string]*tracker.PR
+	labelled      map[tracker.IssueKey]bool
+	claimLabelled map[tracker.IssueKey]bool
+	stale         []tracker.IssueKey
 	// ok says the PR list was read; labelsOK says the label lists were too.
 	ok, labelsOK bool
 }
@@ -804,7 +811,7 @@ type forgeState struct {
 // readForge is the forge source. An unavailable forge is recorded on rep and
 // leaves ok false; nothing else in Status needs it to answer.
 func (e Env) readForge(ctx context.Context, rep *Report) forgeState {
-	fs := forgeState{prs: map[string]*tracker.PR{}, labelled: map[tracker.IssueKey]bool{}, ok: e.Forge != nil}
+	fs := forgeState{prs: map[string]*tracker.PR{}, labelled: map[tracker.IssueKey]bool{}, claimLabelled: map[tracker.IssueKey]bool{}, ok: e.Forge != nil}
 	if !fs.ok {
 		rep.unavailable(SourceForge, strutil.FirstNonEmpty(e.ForgeErr, "no forge available"))
 	} else if list, err := e.Forge.OpenPRs(ctx); err != nil {
@@ -819,7 +826,12 @@ func (e Env) readForge(ctx context.Context, rep *Report) forgeState {
 		// Read the whole open list first: the claim and backlog reads below make
 		// this same call, and the forge's read cache answers the label-filtered
 		// list from it. The error surfaces on the filtered list.
-		_, _ = e.Forge.List(ctx, tracker.ListFilter{State: "open"})
+		open, _ := e.Forge.List(ctx, tracker.ListFilter{State: "open"})
+		for _, is := range open {
+			if slices.ContainsFunc(is.Labels, func(label string) bool { return strings.HasPrefix(label, backlog.ClaimLabelPrefix) }) {
+				fs.claimLabelled[is.Key] = true
+			}
+		}
 		if issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{e.Label}}); err != nil {
 			rep.unavailable(SourceForge, err.Error())
 		} else {
@@ -831,7 +843,7 @@ func (e Env) readForge(ctx context.Context, rep *Report) forgeState {
 				rep.unavailable(SourceForge, err.Error())
 			} else {
 				for _, is := range closed {
-					if is.State == "closed" {
+					if is.State == "closed" && slices.Contains(is.Labels, e.Label) {
 						fs.stale = append(fs.stale, is.Key)
 					}
 				}
