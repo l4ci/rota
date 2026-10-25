@@ -2093,13 +2093,16 @@ func (g *gate) ffFailureCause(mergeOut string) string {
 	return "merge refused, cause not found: no overlapping local changes, not ahead of " + g.baseRef
 }
 
-// closeMerged closes the slot's issue (and each bundle member the PR names) on a tracker a merge does not close
-// (tracker.MergeCloser: Jira, Linear) when the merged PR names it, so it is not left
+// closeMerged closes linked milestone issues, or the slot's issue and bundle
+// on a tracker a merge does not close (tracker.MergeCloser: Jira, Linear), so it is not left
 // open, in progress and claimed. A partial slice stays open. It reports false
 // when the close failed: the merge has landed either way, so the failure is a
 // warning on the result, and the caller keeps the claim label so
 // `rota round reconcile` lists the issue.
 func (g *gate) closeMerged(src tracker.ClosingSource) bool {
+	if id, ok := strings.CutPrefix(g.o.Base, "milestone/"); ok && id != "" && g.issues != nil {
+		return g.closeOnMilestone(src, "on-milestone/"+id)
+	}
 	mc, ok := g.issues.(tracker.MergeCloser)
 	if !ok {
 		return true
