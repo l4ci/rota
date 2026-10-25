@@ -132,7 +132,7 @@ func slotMilestoneBase(c *Ctx) string {
 		return ""
 	}
 	s := worker.LoadRegistryTolerant(root).Slot(slot)
-	if s == nil || !strings.HasPrefix(s.Base(), "milestone/") {
+	if s == nil || s.HomeBase() == "" {
 		return ""
 	}
 	return s.Base()

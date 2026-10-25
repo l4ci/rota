@@ -351,6 +351,8 @@ type Finding struct {
 	// to is the base a base-drift finding retargets the PR onto: the milestone
 	// branch, or "" for the slot's registered base.
 	to string
+	// tag is the issue's milestone tag the repair records on the slot.
+	tag string
 }
 
 // Key names what the finding is about, for a caller that tells findings apart:

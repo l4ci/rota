@@ -636,6 +636,7 @@ type assignRun struct {
 	members           []*backlog.Item // the bundle's, none for one issue
 	from              string          // the start point the branch is cut from; "" for the slot's base
 	base              string          // the milestone branch the issue targets; "" for the round base
+	tag               string          // the issue's milestone tag when it was routed
 	fallback          *Fallback       // set when the kind took over from a harness without headroom
 }
 
@@ -927,7 +928,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	res.SmokeSection = e.reserveSmokeSection(ctx, root, be, reg, set.Roster, id, agent)
 	return assignRun{id: id, agent: agent, branch: res.Branch, resuming: resuming, queue: queue,
 		kind: pf.Kind, kindSource: pf.KindSource, model: pf.Model, tier: tier, reason: reason,
-		pick: pf.Pick, decision: pf.Decision, decisions: decisions, brief: brief, bo: bo, slot: slot, members: members, from: from, base: msBase, fallback: pf.Fallback}, false, nil
+		pick: pf.Pick, decision: pf.Decision, decisions: decisions, brief: brief, bo: bo, slot: slot, members: members, from: from, base: msBase, tag: it.Fields.Get("milestone"), fallback: pf.Fallback}, false, nil
 }
 
 // notReadyBy is the blockedBy of a failed readiness: overlap when only the
@@ -1107,7 +1108,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 		// 7. The slot onto its issue branch.
 		{name: "reset the slot onto its branch", do: func() error {
 			// The base first: the reset and every later verb read the slot's.
-			if err := editSlot(root, agent, func(s *worker.Slot) error { s.RouteBase(run.base); return nil }); err != nil {
+			if err := editSlot(root, agent, func(s *worker.Slot) error { s.RouteBase(run.base); s.SetRoutedTag(run.tag); return nil }); err != nil {
 				return err
 			}
 			if _, err := w.ResetFrom(root, agent, id, res.Branch, run.from, false); err != nil {
