@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/tracker"
 	"strings"
 	"time"
 )
@@ -107,6 +108,19 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 			unmerged = append(unmerged, l[2:])
 		}
 	}
+	// A squash merge leaves the slot's commits unmerged by patch. A done slot
+	// whose merged PR has the slot's HEAD as its head proves they landed.
+	var info tracker.PRInfo
+	var infoAsked bool
+	if len(unmerged) > 0 && dirty == "" && IsDone(s.State()) {
+		infoAsked = true
+		var known bool
+		if info, known = e.prInfoKnown(context.Background(), root, s); known && strings.EqualFold(info.State, "MERGED") && info.HeadSHA != "" {
+			if head, code := e.git(worktree, "rev-parse", "HEAD"); code == 0 && head == info.HeadSHA {
+				unmerged = nil
+			}
+		}
+	}
 	if retry && (dirty != "" || len(unmerged) > 0) {
 		res.Retained, res.Branch = true, newBranch
 		return res, nil
@@ -155,12 +169,16 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 	// have re-bound the slot since, so the slot is re-checked as still done on
 	// the same PR before it is wiped.
 	seenPR := s.PR()
-	endDone := IsDone(s.State()) && e.prMerged(context.Background(), root, s)
+	endDone := IsDone(s.State())
+	if endDone && infoAsked {
+		endDone = strings.EqualFold(info.State, "MERGED")
+	} else if endDone {
+		endDone = e.prMerged(context.Background(), root, s)
+	}
 	if _, err := UpdateSlot(root, slot, func(s *Slot) {
 		s.SetBranch(newBranch)
 		if endDone && IsDone(s.State()) && s.PR() == seenPR {
-			s.SetPR("")
-			s.SetPRMerged(false)
+			s.Unbind()
 			_ = s.MarkState("idle", e.Now().UTC().Format(time.RFC3339))
 		}
 	}); err != nil {

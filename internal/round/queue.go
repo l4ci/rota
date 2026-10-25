@@ -102,7 +102,7 @@ func (e Env) branchPR(ctx context.Context, root, branch, base string) string {
 	if e.Forge == nil || branch == "" {
 		return ""
 	}
-	if url := e.openBranchPR(ctx, branch); url != "" {
+	if url, _ := e.openBranchPR(ctx, branch); url != "" {
 		return url
 	}
 	if m, _ := e.mergedBranchPR(ctx, root, branch, base); m != nil {
@@ -112,17 +112,18 @@ func (e Env) branchPR(ctx context.Context, root, branch, base string) string {
 }
 
 // openBranchPR is the URL of the open PR headed by branch, "" when none.
-func (e Env) openBranchPR(ctx context.Context, branch string) string {
+// A forge failure is returned separately so adoption can warn while proceeding.
+func (e Env) openBranchPR(ctx context.Context, branch string) (string, error) {
 	prs, err := e.Forge.OpenPRs(ctx)
 	if err != nil {
-		return ""
+		return "", err
 	}
 	for _, p := range prs {
 		if p.Branch == branch && p.URL != "" {
-			return p.URL
+			return p.URL, nil
 		}
 	}
-	return ""
+	return "", nil
 }
 
 // mergedBranchPR is the merged PR headed by branch that the branch owns, nil
