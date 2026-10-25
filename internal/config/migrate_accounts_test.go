@@ -10,44 +10,34 @@ import (
 )
 
 func TestMigrateAccountsDoc(t *testing.T) {
-	belowCodex := []Account{{KindCodex, "g", "/g"}}
 	cases := []struct {
 		name, in, want string
-		below          []Account
 		from           []string
 	}{
 		{"folds all three keys, claude first",
 			`{"round":{"opencodeAccounts":[{"name":"o","configDir":"/o"}],"codexAccounts":[{"name":"c","codexHome":"/c"}],"accounts":[{"name":"a","configDir":"/a"}]}}`,
 			`{"round":{"accounts":[{"kind":"claude","name":"a","dir":"/a"},{"kind":"codex","name":"c","dir":"/c"},{"kind":"opencode","name":"o","dir":"/o"}]}}`,
-			nil, []string{"round.accounts", "round.codexAccounts", "round.opencodeAccounts"}},
+			[]string{"round.accounts", "round.codexAccounts", "round.opencodeAccounts"}},
 		{"legacy claude entries alone are rewritten in place",
 			`{"round":{"slots":2,"accounts":[{"name":"a","configDir":"~/.claude-a"}]}}`,
 			`{"round":{"slots":2,"accounts":[{"kind":"claude","name":"a","dir":"~/.claude-a"}]}}`,
-			nil, []string{"round.accounts"}},
+			[]string{"round.accounts"}},
 		{"codex key alone creates round.accounts",
 			`{"round":{"slots":2,"codexAccounts":[{"name":"c","codexHome":"~/.codex"}]}}`,
 			`{"round":{"slots":2,"accounts":[{"kind":"codex","name":"c","dir":"~/.codex"}]}}`,
-			nil, []string{"round.codexAccounts"}},
+			[]string{"round.codexAccounts"}},
 		{"an empty old key is just dropped",
 			`{"round":{"slots":2,"codexAccounts":[]}}`,
 			`{"round":{"slots":2}}`,
-			nil, []string{"round.codexAccounts"}},
-		{"kinds this file lacks come from the layers below",
-			`{"round":{"accounts":[{"name":"a","configDir":"/a"}]}}`,
-			`{"round":{"accounts":[{"kind":"claude","name":"a","dir":"/a"},{"kind":"codex","name":"g","dir":"/g"}]}}`,
-			belowCodex, []string{"round.accounts"}},
-		{"a kind this file defines replaces the one below, as the old key did",
-			`{"round":{"codexAccounts":[{"name":"c","codexHome":"/c"}]}}`,
-			`{"round":{"accounts":[{"kind":"codex","name":"c","dir":"/c"}]}}`,
-			belowCodex, []string{"round.codexAccounts"}},
+			[]string{"round.codexAccounts"}},
 		{"already migrated is a no-op",
 			`{"round":{"accounts":[{"kind":"codex","name":"c","dir":"/c"}]}}`,
 			`{"round":{"accounts":[{"kind":"codex","name":"c","dir":"/c"}]}}`,
-			belowCodex, nil},
+			nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, from, conflicts := migrateAccountsDoc(decodeCfg(t, tc.in), tc.below)
+			got, from, conflicts := migrateAccountsDoc(decodeCfg(t, tc.in))
 			if len(conflicts) > 0 {
 				t.Fatalf("conflicts: %v", conflicts)
 			}
@@ -57,7 +47,7 @@ func TestMigrateAccountsDoc(t *testing.T) {
 			if !reflect.DeepEqual(from, tc.from) {
 				t.Errorf("from = %v, want %v", from, tc.from)
 			}
-			again, f2, _ := migrateAccountsDoc(got, tc.below)
+			again, f2, _ := migrateAccountsDoc(got)
 			if s := compact(t, again); s != compact(t, got) || len(f2) > 0 {
 				t.Errorf("second run changed the config: %s %v", s, f2)
 			}
@@ -68,7 +58,7 @@ func TestMigrateAccountsDoc(t *testing.T) {
 func TestMigrateAccountsDocConflict(t *testing.T) {
 	in := `{"round":{"codexAccounts":[{"name":"x","codexHome":"/c"}],"opencodeAccounts":[{"name":"x","configDir":"/o"}]}}`
 	doc := decodeCfg(t, in)
-	got, from, conflicts := migrateAccountsDoc(doc, nil)
+	got, from, conflicts := migrateAccountsDoc(doc)
 	if len(conflicts) != 1 || conflicts[0].Name != "x" || conflicts[0].A != "/c" || conflicts[0].B != "/o" {
 		t.Fatalf("conflicts = %+v, want one on x (/c vs /o)", conflicts)
 	}
@@ -77,7 +67,7 @@ func TestMigrateAccountsDocConflict(t *testing.T) {
 	}
 	// The same name at the same dir under two kinds is no disagreement.
 	ok := `{"round":{"codexAccounts":[{"name":"x","codexHome":"/h"}],"opencodeAccounts":[{"name":"x","configDir":"/h"}]}}`
-	if _, _, c := migrateAccountsDoc(decodeCfg(t, ok), nil); len(c) != 0 {
+	if _, _, c := migrateAccountsDoc(decodeCfg(t, ok)); len(c) != 0 {
 		t.Errorf("same name and dir flagged: %v", c)
 	}
 }
@@ -142,7 +132,7 @@ func TestMigrateAccountsFilesRewritesEveryLayer(t *testing.T) {
 	for path, want := range map[string]string{
 		GlobalPath(r.gdir): `{"round":{"accounts":[{"kind":"codex","name":"g","dir":"/g"}]}}`,
 		cfgPath:            `{"round":{"accounts":[{"kind":"opencode","name":"p","dir":"/p"}]}}`,
-		locPath:            `{"round":{"accounts":[{"kind":"claude","name":"l","dir":"/l"},{"kind":"codex","name":"g","dir":"/g"},{"kind":"opencode","name":"p","dir":"/p"}]}}`,
+		locPath:            `{"round":{"accounts":[{"kind":"claude","name":"l","dir":"/l"}]}}`,
 	} {
 		if got := r.read(t, path); got != compact(t, decodeCfg(t, want)) {
 			t.Errorf("%s:\n got  %s\n want %s", path, got, want)
@@ -221,12 +211,41 @@ func TestAccountsStepKeepsOtherLayersOutOfTrackedConfig(t *testing.T) {
 				t.Fatal(err)
 			}
 			cfgPath := filepath.Join(r.root, ".rota", "config.json")
-			if got := r.read(t, cfgPath); strings.Contains(got, "a1") {
-				t.Errorf("tracked config.json holds the global login: %s", got)
+			own := []Account{{KindCodex, "c1", "/c1"}}
+			fileAccounts := func(path string) []Account {
+				b, err := os.ReadFile(path)
+				if err != nil {
+					return nil
+				}
+				return Accounts(decodeCfg(t, string(b)))
+			}
+			// fill keeps the login in the tracked file; migrate moves it to local.
+			trackedWant, localWant := own, []Account(nil)
+			if name == "migrate" {
+				trackedWant, localWant = nil, own
+			}
+			if got := fileAccounts(cfgPath); !reflect.DeepEqual(got, trackedWant) {
+				t.Errorf("tracked config.json accounts = %v, want %v", got, trackedWant)
+			}
+			if got := fileAccounts(filepath.Join(r.root, ".rota", "config.local.json")); !reflect.DeepEqual(got, localWant) {
+				t.Errorf("config.local.json accounts = %v, want %v", got, localWant)
 			}
 			if got := Accounts(Load(cfgPath)); !reflect.DeepEqual(got, want) {
 				t.Errorf("effective accounts = %v, want %v", got, want)
 			}
 		})
+	}
+}
+
+// config fill rewrites the project files only: the user's global config is
+// left to `rota migrate config`, which reports what it changes (#1861).
+func TestFillLeavesGlobalConfigToMigrate(t *testing.T) {
+	const global = `{"round":{"accounts":[{"name":"g","configDir":"/g"}]}}`
+	r := newAcctRig(t, global, `{"round":{"codexAccounts":[{"name":"c","codexHome":"/c"}]}}`, "")
+	if _, err := Fill(r.root); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.read(t, GlobalPath(r.gdir)); got != compact(t, decodeCfg(t, global)) {
+		t.Errorf("fill rewrote the global config: %s", got)
 	}
 }

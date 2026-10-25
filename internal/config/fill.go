@@ -74,7 +74,9 @@ func FillDetect(root string, detect func() string) ([]string, SourceMigration, R
 	if err != nil {
 		return nil, sm, rm, err
 	}
-	if _, err := MigrateAccountsFiles(root, globalConfigDir(), true); err != nil {
+	// The global config is the user's own file: `rota migrate config` rewrites
+	// it and says so, fill leaves it alone.
+	if _, err := MigrateAccountsFiles(root, "", true); err != nil {
 		return nil, sm, rm, err
 	}
 	if _, err := MigrateMergesFiles(root, globalConfigDir(), true); err != nil {
