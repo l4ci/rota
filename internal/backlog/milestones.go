@@ -168,7 +168,7 @@ func (b *Issues) NextMilestoneID() (string, error) {
 
 // MilestoneAdd creates the native milestone and its tracking issue and
 // returns the ID. An empty mid mints the next one.
-func (b *Issues) MilestoneAdd(mid, title, summary string, depends []string, today string) (string, error) {
+func (b *Issues) MilestoneAdd(mid, title, summary string, depends []string, kind, today string) (string, error) {
 	mt, err := b.milestoneTracker()
 	if err != nil {
 		return "", err
@@ -186,7 +186,7 @@ func (b *Issues) MilestoneAdd(mid, title, summary string, depends []string, toda
 	if _, err := mt.CreateMilestone(b.ctx(), native, oneLine(summary)); err != nil {
 		return "", err
 	}
-	body := RenderFieldsBlock(ms.StubOn(mid, title, summary, depends, today),
+	body := RenderFieldsBlock(ms.WithKind(ms.StubOn(mid, title, summary, depends, today), kind),
 		[]string{"Depends"}, map[string]string{"Depends": strings.Join(depends, ", ")})
 	if _, err := mt.Create(b.ctx(), native, body, labels, native); err != nil {
 		return "", err

@@ -233,7 +233,7 @@ func TestFileStoreRoundTrip(t *testing.T) {
 	if st.OnTracker() {
 		t.Fatal("file store reports OnTracker")
 	}
-	id, err := st.Add("Title", "Summary.", []string{"M09"})
+	id, err := st.Add("Title", "Summary.", []string{"M09"}, KindDelivery)
 	if err != nil || id != "M01" {
 		t.Fatalf("add = %q %v", id, err)
 	}
@@ -355,7 +355,7 @@ func TestIndexFromIssueModeVisionBlock(t *testing.T) {
 func TestFileStoreStampsTheInjectedDay(t *testing.T) {
 	root := t.TempDir()
 	day := func() time.Time { return time.Date(2031, 7, 9, 23, 59, 0, 0, time.UTC) }
-	id, err := FileStore{Root: root, Today: day}.Add("T", "s", nil)
+	id, err := FileStore{Root: root, Today: day}.Add("T", "s", nil, "delivery")
 	if err != nil {
 		t.Fatal(err)
 	}

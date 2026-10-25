@@ -30,7 +30,7 @@ func TestUmbrellaMilestoneAddMintsOverAllSubRepos(t *testing.T) {
 	u, fakes := msUmbrella(t,
 		[]tracker.Milestone{{Number: 1, Title: "M02 — a", State: "open"}},
 		[]tracker.Milestone{{Number: 1, Title: "M04 — Legacy", State: "open"}})
-	id, err := u.MilestoneAdd("", "Alpha", "First", nil, "2026-10-02")
+	id, err := u.MilestoneAdd("", "Alpha", "First", nil, "delivery", "2026-10-02")
 	if err != nil || id != "M05" {
 		t.Fatalf("add = %q %v", id, err)
 	}
@@ -47,7 +47,7 @@ func TestUmbrellaMilestoneAddMintsOverAllSubRepos(t *testing.T) {
 
 func TestUmbrellaMilestoneStatusSyncsEverySubRepo(t *testing.T) {
 	u, fakes := msUmbrella(t, nil, nil)
-	if _, err := u.MilestoneAdd("", "Alpha", "First", nil, "2026-10-02"); err != nil {
+	if _, err := u.MilestoneAdd("", "Alpha", "First", nil, "delivery", "2026-10-02"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := fakes["api"].CreateMilestone(nil, "M01 — Alpha", ""); err != nil {
@@ -91,10 +91,10 @@ func TestUmbrellaMilestoneStatusSyncsEverySubRepo(t *testing.T) {
 
 func TestUmbrellaMilestoneListReadyFollowsAggregatedStatus(t *testing.T) {
 	u, fakes := msUmbrella(t, nil, nil)
-	if _, err := u.MilestoneAdd("", "One", "s", nil, "2026-10-02"); err != nil {
+	if _, err := u.MilestoneAdd("", "One", "s", nil, "delivery", "2026-10-02"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := u.MilestoneAdd("", "Two", "s", []string{"M01"}, "2026-10-02"); err != nil {
+	if _, err := u.MilestoneAdd("", "Two", "s", []string{"M01"}, "delivery", "2026-10-02"); err != nil {
 		t.Fatal(err)
 	}
 	fakes["api"].CreateMilestone(nil, "M01 — One", "")

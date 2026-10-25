@@ -42,7 +42,7 @@ func TestNextMilestoneIDAndAdd(t *testing.T) {
 	if id, err := b.NextMilestoneID(); err != nil || id != "M08" {
 		t.Fatalf("next = %q %v", id, err)
 	}
-	id, err := b.MilestoneAdd("", "Title", "Sum  mary.", []string{"M01"}, "2026-10-02")
+	id, err := b.MilestoneAdd("", "Title", "Sum  mary.", []string{"M01"}, ms.KindDelivery, "2026-10-02")
 	if err != nil || id != "M08" {
 		t.Fatalf("add = %q %v", id, err)
 	}
@@ -61,13 +61,13 @@ func TestNextMilestoneIDAndAdd(t *testing.T) {
 func TestNextMilestoneIDCountsGapsAndClosed(t *testing.T) {
 	f := &trackertest.MS{Fake: &trackertest.Fake{}}
 	b := msIssues(f)
-	if _, err := b.MilestoneAdd("M05", "gap", "", nil, "2026-10-02"); err != nil {
+	if _, err := b.MilestoneAdd("M05", "gap", "", nil, ms.KindDelivery, "2026-10-02"); err != nil {
 		t.Fatal(err)
 	}
 	if id, err := b.NextMilestoneID(); err != nil || id != "M06" {
 		t.Fatalf("after M05 (gap below it): %q %v", id, err)
 	}
-	if _, err := b.MilestoneAdd("M09", "closed holder", "", nil, "2026-10-02"); err != nil {
+	if _, err := b.MilestoneAdd("M09", "closed holder", "", nil, ms.KindDelivery, "2026-10-02"); err != nil {
 		t.Fatal(err)
 	}
 	closed := "closed"
@@ -77,7 +77,7 @@ func TestNextMilestoneIDCountsGapsAndClosed(t *testing.T) {
 	if got := f.Native[len(f.Native)-1]; got.Title != "M09 — closed holder" || got.State != "closed" {
 		t.Fatalf("native = %+v", got)
 	}
-	id, err := b.MilestoneAdd("", "Tenth", "Skips ahead", nil, "2026-10-02")
+	id, err := b.MilestoneAdd("", "Tenth", "Skips ahead", nil, ms.KindDelivery, "2026-10-02")
 	if err != nil || id != "M10" {
 		t.Fatalf("add after gap and closed max = %q %v", id, err)
 	}
@@ -222,7 +222,7 @@ func childFixture() (*trackertest.MS, *Issues) {
 	f.Fake.Milestones = []string{"M01 — a", "M02 — b"}
 	b := msIssues(f)
 	for _, id := range []string{"M01", "M02"} {
-		if _, err := b.MilestoneAdd(id, map[string]string{"M01": "a", "M02": "b"}[id], "sum", nil, "2026-10-02"); err != nil {
+		if _, err := b.MilestoneAdd(id, map[string]string{"M01": "a", "M02": "b"}[id], "sum", nil, ms.KindDelivery, "2026-10-02"); err != nil {
 			panic(err)
 		}
 	}
