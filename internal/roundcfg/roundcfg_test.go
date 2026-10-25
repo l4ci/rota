@@ -635,3 +635,18 @@ func TestPinsOf(t *testing.T) {
 		t.Fatalf("pins = %v", got)
 	}
 }
+
+// round.harnesses and round.profile come from the harness readers; the strict
+// side trims, drops blanks and refuses what the tolerant launch helpers skip.
+func TestSharedReadersStrictBoundary(t *testing.T) {
+	s, err := Load(project(t, `{"round":{"harnesses":[" codex ","","claude"],"profile":" budget "}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(s.Harnesses, []string{harness.Codex, harness.Claude}) || s.Profile != "budget" || s.DefaultKind() != harness.Codex {
+		t.Errorf("Harnesses %q Profile %q default %q", s.Harnesses, s.Profile, s.DefaultKind())
+	}
+	if _, err := Load(project(t, `{"round":{"harnesses":["codex",1]}}`)); err == nil || !strings.Contains(err.Error(), "round.harnesses must be a list of strings") {
+		t.Errorf("mixed list: %v", err)
+	}
+}
