@@ -1,0 +1,84 @@
+# External knowledge
+
+Some learnings hold in every project that uses a tool: how Go tests behave, how git worktrees share state, a GitHub Actions quirk. `.rota/KNOWLEDGE.md` keeps them in one project. The external knowledge base keeps them in a separate git repo of markdown files, cloned once on your machine and shared by every project.
+
+It is off until you set one key. With the key unset nothing changes.
+
+## Set it up
+
+1. Create a git repo for the knowledge, with a remote (GitHub, GitLab, any host your git credentials reach). The sample under [`docs/examples/knowledge-repo/`](../examples/knowledge-repo/) is the layout to start from:
+
+   ```bash
+   cp -R docs/examples/knowledge-repo ~/knowledge
+   cd ~/knowledge
+   git init -b main && git add . && git commit -m "Start the knowledge base"
+   git remote add origin <url> && git push -u origin main
+   ```
+
+2. Tell rota where the clone is. The key is machine-wide, so set it in the global config:
+
+   ```bash
+   rota config set knowledge.external ~/knowledge --global
+   ```
+
+3. Check it:
+
+   ```bash
+   rota doctor        # the "external knowledge" line
+   rota knowledge topics --external
+   ```
+
+On another machine, clone the same repo and set the key there.
+
+## Layout
+
+| File | Holds |
+|------|-------|
+| `INDEX.md` | One line per topic: `- [Go](topics/go.md) — hook`. The name is the topic, the hook says what is in it. |
+| `topics/<slug>.md` | The topic's bullets, in the same shape as `KNOWLEDGE.md`: `- **Title** — body <!-- 2026-10-12 source:rota -->`. `source:` names the project the learning came from. |
+| `rota-knowledge.json` | How writes land (below). Optional. |
+
+Topic names are technology names (Go, git, GitHub Actions), not project names. External bullets have no tier or hit lifecycle: they are written by a learn pass that already judged them.
+
+## Read it
+
+```bash
+rota knowledge query --external Go "GitHub Actions"
+rota knowledge topics --external
+```
+
+Before it reads, rota makes sure the clone is current. It fetches at most once per `knowledge.externalTTL` minutes (default 10; the stamp lives in the rota state dir), then fast-forwards when the remote is ahead. It never resets anything:
+
+- A clone with uncommitted changes, or one that has diverged from its remote, is read as-is, with a one-line warning.
+- An unreachable remote prints `reading stale copy` and reads the local files.
+
+Skills use the same call: [`/rota-learn`](learning.md) and the knowledge consult step of `/rota-debug`, `/rota-review`, `/rota-refactor` and `/rota-work` query the external base alongside the project's when the key is set.
+
+## Write it
+
+```bash
+printf '%s' "$BODY" | rota knowledge add --external --topic Go --title "Per-case test names" --body-file -
+rota knowledge amend --external --topic Go --fragment "Per-case test names" --mode append --body-file -
+```
+
+A write needs a clean clone. It pulls (fast-forward only), writes the bullet to `topics/<slug>.md`, adds the topic and its `INDEX.md` line when the topic is new (`--hook` sets the line, default the bullet title), commits and then follows the repo's policy in `rota-knowledge.json`:
+
+```json
+{"write": "push", "branch": "main"}
+```
+
+| `write` | What happens |
+|---------|--------------|
+| `push` | `git push` to `branch`. A rejected push gets one `git pull --rebase` and a retry. |
+| `pr` | Pushes a `rota-knowledge/<topic>-<time>` branch and runs `gh pr create` against `branch`. No confirmation gate; the clone returns to its branch. |
+
+Without a `rota-knowledge.json` the repo is treated as `{"write": "push"}`, and the verb says so in its output. `rota doctor` warns about the missing file.
+
+## Settings
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| [`knowledge.external`](../reference/config-options.md) | empty | Path of the local clone. Empty turns the feature off. |
+| [`knowledge.externalTTL`](../reference/config-options.md) | `10` | Minutes a fetch stays fresh. `0` fetches on every read. |
+
+`--external` with the key unset exits 3 and names `knowledge.external`.
