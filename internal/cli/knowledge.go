@@ -4,10 +4,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
 	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/knowledge"
 )

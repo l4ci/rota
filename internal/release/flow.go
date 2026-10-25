@@ -2,11 +2,11 @@ package release
 
 import (
 	"context"
-	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"

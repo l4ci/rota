@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
-	gitx "github.com/l4ci/rota/internal/git"
-	ms "github.com/l4ci/rota/internal/milestone"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -16,8 +13,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/fsio"
+	gitx "github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	ms "github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
 )

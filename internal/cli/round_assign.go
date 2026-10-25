@@ -4,13 +4,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
-	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/pystr"
 	"strings"
 
+	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/worker"
 )

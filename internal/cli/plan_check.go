@@ -2,11 +2,11 @@ package cli
 
 import (
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 	"unicode"
 
 	"github.com/l4ci/rota/internal/acceptance"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/plan"
 )

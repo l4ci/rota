@@ -2,8 +2,8 @@ package worker
 
 import (
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 )
 

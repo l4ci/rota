@@ -7,7 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -17,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"

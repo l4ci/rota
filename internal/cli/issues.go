@@ -4,12 +4,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/issues"
 	"github.com/l4ci/rota/internal/migrate"

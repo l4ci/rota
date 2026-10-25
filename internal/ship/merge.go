@@ -3,9 +3,9 @@ package ship
 import (
 	"context"
 	"errors"
-	"github.com/l4ci/rota/internal/blockedby"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"

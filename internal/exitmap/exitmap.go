@@ -7,9 +7,9 @@ package exitmap
 
 import (
 	"errors"
-	"github.com/l4ci/rota/internal/blockedby"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"

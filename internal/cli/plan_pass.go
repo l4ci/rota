@@ -3,12 +3,12 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
 	"regexp"
 	"strings"
 
 	"github.com/l4ci/rota/internal/acceptance"
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/plan"
 	"github.com/l4ci/rota/internal/proof"
 )
