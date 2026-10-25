@@ -355,24 +355,35 @@ func (e Env) openPRsByHead(ctx context.Context, root string, reg Registry, polle
 // prMerged says whether the forge shows the slot's recorded PR merged. A slot
 // with no PR, a project with no origin or a forge that cannot answer is not.
 func (e Env) prMerged(ctx context.Context, root string, s *Slot) bool {
+	merged, _ := e.prMergedKnown(ctx, root, s)
+	return merged
+}
+
+// prMergedKnown is prMerged plus whether the forge answered. A lookup that ctx
+// cut short (the Wait deadline, an interrupt) or that failed is unknown, not
+// "open": a caller that must not act on a guess tells the two apart.
+func (e Env) prMergedKnown(ctx context.Context, root string, s *Slot) (merged, known bool) {
 	n, ok := PRRefNumber(s.PR())
 	if !ok {
-		return false
+		return false, true
 	}
 	if _, code := e.git(root, "remote", "get-url", "origin"); code != 0 {
-		return false
+		return false, true
 	}
 	cfg := e.GateConfig(root)
 	provider, _ := e.detectProvider(ctx, root, "", cfg.Tracker.Provider, tracker.ForgeReader) // a reader never fails
 	if provider == tracker.ProviderLocal {
-		return false
+		return false, ctx.Err() == nil
 	}
 	f, err := e.Forge(provider, root, cfg.Tracker)
 	if err != nil {
-		return false
+		return false, false
 	}
 	info, err := f.PRView(ctx, n)
-	return err == nil && strings.EqualFold(info.State, "MERGED")
+	if err != nil || ctx.Err() != nil {
+		return false, false
+	}
+	return strings.EqualFold(info.State, "MERGED"), true
 }
 
 // seenKey is what `round wait` remembers of a slot it returned: the state and
