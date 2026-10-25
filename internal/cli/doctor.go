@@ -295,14 +295,7 @@ func doctorKinds(cfg any, home string) map[string]doctor.KindInput {
 		if len(in.Homes) == 0 {
 			in.Homes = []doctor.Home{{}}
 		}
-		in.Tiers = harness.TierMapSet(cfg, k)
-		if !in.Tiers {
-			for _, tier := range harness.Tiers {
-				if m, _ := roundcfg.Effective(cfg, k, tier); m != "" {
-					in.Models = append(in.Models, tier+"="+m)
-				}
-			}
-		}
+		in.Tiers, in.Models = roundcfg.TierSet(cfg, k)
 		out[k] = in
 	}
 	return out

@@ -671,3 +671,20 @@ func TestClaimStaleMinutes(t *testing.T) {
 		}
 	}
 }
+
+func TestTierSetDecision(t *testing.T) {
+	for _, c := range []struct {
+		name, cfg  string
+		wantSet    bool
+		wantModels []string
+	}{
+		{"map set names no fallback models", `{"round":{"tiers":{"codex":{"heavy":"m"}}}}`, true, nil},
+		{"blank map falls back to defaults", `{"round":{"tiers":{"codex":{"light":"  "}}}}`, false, []string{"standard=gpt-6.1-sol", "heavy=gpt-6-astra"}},
+	} {
+		cfg := config.Load(rotatree.Config(project(t, c.cfg)))
+		set, models := TierSet(cfg, "codex")
+		if set != c.wantSet || (c.wantModels != nil && !slices.Equal(models, c.wantModels)) || (c.wantModels == nil && len(models) != 0) {
+			t.Errorf("%s: TierSet = %v, %v; want %v, %v", c.name, set, models, c.wantSet, c.wantModels)
+		}
+	}
+}

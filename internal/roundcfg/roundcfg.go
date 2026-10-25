@@ -608,6 +608,20 @@ func Effective(cfg any, kind, tier string) (model, source string) {
 	return "", SourceHarnessDefault
 }
 
+// TierSet is the tier-set decision for one kind: whether its round.tiers map
+// names a model, else the "tier=model" pairs a worker starts with.
+func TierSet(cfg any, kind string) (set bool, models []string) {
+	if harness.TierMapSet(cfg, kind) {
+		return true, nil
+	}
+	for _, tier := range harness.Tiers {
+		if m, _ := Effective(cfg, kind, tier); m != "" {
+			models = append(models, tier+"="+m)
+		}
+	}
+	return false, models
+}
+
 // SupportName is round.support read alone, trimmed: "" when unset or not a
 // string. The bounce store reads it to pick the registry or the issue.
 func SupportName(cfg any) string {
