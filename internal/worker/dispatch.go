@@ -648,7 +648,7 @@ func LiveWorkers(ctx context.Context, h host.Layouter, reg Registry) []layout.Wo
 // workspace of its own. It is on only for a host that can group (herdr); on
 // any other host the default being true must not record workspaces.
 func GroupSlots(cfg any, caps host.Capabilities) (bool, error) {
-	on, err := config.Bool(cfg, "round.herdrGroupSlots")
+	on, err := config.Bool(cfg, config.RoundHerdrGroupSlotsKey)
 	return on && caps.CanGroup(), err
 }
 
