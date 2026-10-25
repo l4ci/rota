@@ -116,3 +116,17 @@ func TestIssuesClaimLabelFailureWarns(t *testing.T) {
 		t.Fatalf("status=%+v err=%v warnings=%v", st, err, warnings)
 	}
 }
+
+func TestIssuesCompleteDropsClaimLabel(t *testing.T) {
+	for _, reason := range []string{"done", "dropped", "handed-off"} {
+		t.Run(reason, func(t *testing.T) {
+			b, tr := newIssues(t, `{}`, open(1, "in-progress", "claimed:dana@main", "claimed:ben@mac", "keep"))
+			if changed, err := b.Complete("1", CompleteInput{Reason: reason, NoProof: true, Commit: "abc"}); err != nil || !changed {
+				t.Fatalf("complete: changed=%v err=%v", changed, err)
+			}
+			if got := tr.Issues[0]; got.State != "closed" || !slices.Equal(got.Labels, []string{"keep"}) {
+				t.Fatalf("after complete: state=%s labels=%v want closed [keep]", got.State, got.Labels)
+			}
+		})
+	}
+}

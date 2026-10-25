@@ -142,7 +142,7 @@ func (f remoteForge) List(_ context.Context, fl tracker.ListFilter) ([]tracker.I
 		f.closedLists++
 		out := append([]tracker.Issue(nil), f.closedIssues...)
 		for _, n := range f.closedLabelled {
-			out = append(out, tracker.Issue{Key: tracker.NumKey(n), State: "closed"})
+			out = append(out, tracker.Issue{Key: tracker.NumKey(n), State: "closed", Labels: []string{"in-progress"}})
 		}
 		return out, nil
 	}
@@ -167,10 +167,14 @@ func (f remoteForge) List(_ context.Context, fl tracker.ListFilter) ([]tracker.I
 
 func (f remoteForge) Get(_ context.Context, key tracker.IssueKey, _ bool) (tracker.Issue, error) {
 	n, _ := key.Number()
-	if it := f.items[strconv.Itoa(n)]; f.closed[n] || (it != nil && it.Closed) {
-		return tracker.Issue{Key: tracker.NumKey(n), State: "closed"}, nil
+	labels := f.labels[n]
+	if slices.Contains(f.closedLabelled, n) && !slices.Contains(labels, "in-progress") {
+		labels = append(slices.Clone(labels), "in-progress")
 	}
-	return tracker.Issue{Key: tracker.NumKey(n), State: "open"}, nil
+	if it := f.items[strconv.Itoa(n)]; f.closed[n] || slices.Contains(f.closedLabelled, n) || (it != nil && it.Closed) {
+		return tracker.Issue{Key: tracker.NumKey(n), State: "closed", Labels: labels}, nil
+	}
+	return tracker.Issue{Key: tracker.NumKey(n), State: "open", Labels: labels}, nil
 }
 
 func (f remoteForge) AddLabels(_ context.Context, key tracker.IssueKey, labels []string, _ bool) error {

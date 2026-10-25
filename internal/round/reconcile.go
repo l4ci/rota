@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/strutil"
+	"strings"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -138,7 +140,23 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 		if !ok {
 			return fmt.Errorf("%s is not an issue key", f.Issue)
 		}
-		return e.Forge.RemoveLabels(ctx, n, []string{e.Label})
+		is, err := e.Forge.Get(ctx, n, false)
+		if err != nil {
+			return err
+		}
+		if is.State != "closed" {
+			return nil
+		}
+		var drop []string
+		for _, l := range is.Labels {
+			if l == e.Label || strings.HasPrefix(l, backlog.ClaimLabelPrefix) {
+				drop = append(drop, l)
+			}
+		}
+		if len(drop) == 0 {
+			return nil
+		}
+		return e.Forge.RemoveLabels(ctx, n, drop)
 	}
 	return fmt.Errorf("%s has no safe repair", f.Kind)
 }

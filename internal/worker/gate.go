@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
@@ -2054,7 +2055,7 @@ func (g *gate) closeMerged(src tracker.ClosingSource) bool {
 	return closed
 }
 
-// releaseClaimLabels drops the in-progress label from every issue the merged PR
+// releaseClaimLabels drops in-progress and claimed:<agent>@<machine> labels from every issue the merged PR
 // closes. The forge closes them but leaves the label, so the label would stop
 // meaning "being worked on". An issue still open (the PR landed on a branch
 // other than the default, or the forge has not closed it yet) keeps its label.
@@ -2080,10 +2081,19 @@ func (g *gate) releaseClaimLabels(src tracker.ClosingSource) {
 			g.res.Notes = append(g.res.Notes, fmt.Sprintf("LABEL-KEPT %s — cannot read %s to release %s: %v", g.o.Slot, key.Ref(), g.label, err))
 			continue
 		}
-		if is.State != "closed" || !slices.Contains(is.Labels, g.label) {
+		if is.State != "closed" {
 			continue
 		}
-		if err := g.issues.RemoveLabels(g.ctx, key, []string{g.label}); err != nil {
+		var drop []string
+		for _, label := range is.Labels {
+			if label == g.label || strings.HasPrefix(label, backlog.ClaimLabelPrefix) {
+				drop = append(drop, label)
+			}
+		}
+		if len(drop) == 0 {
+			continue
+		}
+		if err := g.issues.RemoveLabels(g.ctx, key, drop); err != nil {
 			g.res.Notes = append(g.res.Notes, fmt.Sprintf("LABEL-KEPT %s — cannot remove %s from %s: %v", g.o.Slot, g.label, key.Ref(), err))
 		}
 	}
