@@ -396,3 +396,18 @@ func TestSetupDepSignalsPerManifest(t *testing.T) {
 		}
 	}
 }
+
+// Cargo.toml suggests neither dependency question: CARGO_TARGET_DIR is an
+// environment variable, not a config key, so setup leaves it to the docs (#1872).
+func TestSetupCargoTomlSuggestsNoDepKeys(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Cargo.toml"), []byte("[package]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, out, _ := signalRunWith(t, dir, signalOpts{}, "--list", "--json")
+	for _, key := range []string{"round.envSetup", "round.sharedDirs"} {
+		if _, _, has := sugg(t, out, key); has {
+			t.Errorf("Cargo.toml produced a %s suggestion", key)
+		}
+	}
+}
