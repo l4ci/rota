@@ -165,6 +165,9 @@ func roundStatus(*flag.FlagSet) RunFunc {
 				}
 				cols = append(cols, col)
 			}
+			if r.Account != "" {
+				cols = append(cols, "account "+r.Account+" ("+r.AccountKind+")")
+			}
 			if r.State != "" {
 				cols = append(cols, "state "+r.State)
 			}

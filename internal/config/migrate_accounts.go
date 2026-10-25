@@ -51,14 +51,12 @@ func (e *AccountConflictError) Error() string {
 
 // migrateAccountsDoc folds doc's old account keys, and the Claude-shape
 // entries of its round.accounts, into one new-shape round.accounts list, and
-// returns the resulting object with the keys it folded. below is what the
-// layers under doc supply: a kind doc defines nothing for is copied from it,
-// because the old per-kind keys layered one by one and a wholesale
-// round.accounts would otherwise drop the lower layer's entries (the caller
-// passes none for the tracked config.json). Two entries
-// with one name and different dirs are a conflict, and doc is returned
-// untouched. Running it on its own output changes nothing.
-func migrateAccountsDoc(doc *jsonx.Object, below []Account) (*jsonx.Object, []string, []AccountConflict) {
+// returns the resulting object with the keys it folded. Layers merge
+// round.accounts by kind (mergeAccounts), as the old per-kind keys layered, so
+// doc carries only its own entries. Two entries with one name and different
+// dirs are a conflict, and doc is returned untouched. Running it on its own
+// output changes nothing.
+func migrateAccountsDoc(doc *jsonx.Object) (*jsonx.Object, []string, []AccountConflict) {
 	var from []string
 	var own []Account
 	raw, present := lookupPresent(doc, []string{"round", "accounts"})
@@ -95,12 +93,8 @@ func migrateAccountsDoc(doc *jsonx.Object, below []Account) (*jsonx.Object, []st
 		return doc, nil, c
 	}
 	var list []any
-	for _, a := range overlayAccounts(below, own) {
-		e := jsonx.NewObject()
-		e.Set("kind", a.Kind)
-		e.Set("name", a.Name)
-		e.Set("dir", a.Dir)
-		list = append(list, e)
+	for _, a := range own {
+		list = append(list, accountObject(a))
 	}
 	round, _ := getObject(doc, "round")
 	if _, ok := round.Get("accounts"); ok || len(list) > 0 {
@@ -116,17 +110,12 @@ func migrateAccountsDoc(doc *jsonx.Object, below []Account) (*jsonx.Object, []st
 	return doc, from, nil
 }
 
-// withAccounts sets doc's round.accounts to list.
-func withAccounts(doc *jsonx.Object, list []Account) *jsonx.Object {
-	var out []any
-	for _, a := range list {
-		e := jsonx.NewObject()
-		e.Set("kind", a.Kind)
-		e.Set("name", a.Name)
-		e.Set("dir", a.Dir)
-		out = append(out, e)
-	}
-	return fillKey(doc, "", []string{"round", "accounts"}, out)
+func accountObject(a Account) *jsonx.Object {
+	e := jsonx.NewObject()
+	e.Set("kind", a.Kind)
+	e.Set("name", a.Name)
+	e.Set("dir", a.Dir)
+	return e
 }
 
 // legacyAccountShape is whether a round.accounts list holds an entry the new
@@ -161,46 +150,6 @@ func accountConflicts(own []Account) []AccountConflict {
 	return out
 }
 
-// overlayAccounts is own with every kind own defines nothing for taken from
-// below, kinds in AccountKinds order; an entry of another kind stays last.
-func overlayAccounts(below, own []Account) []Account {
-	var out []Account
-	for _, k := range AccountKinds {
-		src := own
-		if !hasKind(own, k) {
-			src = below
-		}
-		for _, a := range src {
-			if a.Kind == k {
-				out = append(out, a)
-			}
-		}
-	}
-	for _, a := range own {
-		if !hasKind(AccountKindsAsAccounts(), a.Kind) {
-			out = append(out, a)
-		}
-	}
-	return out
-}
-
-func AccountKindsAsAccounts() []Account {
-	out := make([]Account, len(AccountKinds))
-	for i, k := range AccountKinds {
-		out[i] = Account{Kind: k}
-	}
-	return out
-}
-
-func hasKind(list []Account, kind string) bool {
-	for _, a := range list {
-		if a.Kind == kind {
-			return true
-		}
-	}
-	return false
-}
-
 const globalAccountsFile = "global config.json"
 
 // accountFile is one config layer the step reads, lowest layer first.
@@ -212,9 +161,8 @@ type accountFile struct {
 
 // MigrateAccountsFiles runs the accounts step on the global config under
 // globalDir ("" for none), root's .rota/config.json and its
-// .rota/config.local.json, lowest layer first so each file sees what the ones
-// under it supply. With apply it writes the files that changed, under their
-// locks, in that order. All three are read and planned before any is written:
+// .rota/config.local.json. With apply it writes the files that changed, under
+// their locks, lowest layer first. All three are read and planned before any is written:
 // a malformed file or a conflict (*AccountConflictError) writes nothing. A
 // missing file has nothing to migrate.
 func MigrateAccountsFiles(root, globalDir string, apply bool) (AccountsMigration, error) {
@@ -246,49 +194,23 @@ func migrateAccountsPlan(files []*accountFile, m *AccountsMigration, apply bool)
 		f.doc = doc
 	}
 	var conflicts []AccountConflict
-	var below []Account
-	// hidden is set when the tracked list, now holding only its own kinds,
-	// shadows a kind a lower layer supplies: config.local.json then carries the
-	// whole effective list, or that login would stop resolving.
-	hidden := false
 	for _, f := range files {
-		if f.doc == nil && !(hidden && f.name == "config.local.json") {
-			continue
-		}
 		if f.doc == nil {
-			f.doc = jsonx.NewObject()
+			continue
 		}
 		if f.name != globalAccountsFile {
 			// The renamed view, as the scope step plans on.
 			f.doc, _, _ = MigrateRoundKeys(f.doc)
 		}
-		// The tracked file is shared with the team: it gets only its own
-		// entries, never a login copied up from the global or another layer.
-		under := below
-		if f.name == "config.json" {
-			under = nil
-		}
-		out, from, c := migrateAccountsDoc(f.doc, under)
+		out, from, c := migrateAccountsDoc(f.doc)
 		for _, x := range c {
 			x.File = f.name
 			conflicts = append(conflicts, x)
-		}
-		if len(from) == 0 && hidden && f.name == "config.local.json" {
-			if _, own := lookupPresent(f.doc, []string{"round", "accounts"}); !own {
-				out, from = withAccounts(f.doc, overlayAccounts(below, nil)), []string{"round.accounts"}
-			}
-		}
-		if f.name == "config.json" && len(from) > 0 {
-			for _, b := range below {
-				hidden = hidden || !hasKind(Accounts(out), b.Kind)
-			}
-			hidden = hidden && len(Accounts(out)) > 0
 		}
 		if len(from) > 0 {
 			f.doc, f.changed = out, true
 			m.Changes = append(m.Changes, AccountChange{File: f.name, From: from, N: len(Accounts(f.doc))})
 		}
-		below = overlayAccounts(below, Accounts(f.doc))
 	}
 	if len(conflicts) > 0 {
 		*m = AccountsMigration{}
