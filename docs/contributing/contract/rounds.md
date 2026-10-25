@@ -73,7 +73,7 @@ note: no `ROTA_TEST_*` hooks. The smoke section (114) uses the gh and tmux fakes
 ### rota round status
 rota round status
 repo: none
-data: {"slots": []row, "drift": number, "unavailable": []string, "host"?: string, "escalations": []escalationRow, "limits": []limit, "review": []reviewRow, "cap"?: {"effective": number, "roster": number, "reason": string, "resumesAt": string}}
+data: {"slots": []row, "staleClaims"?: []finding, "drift": number, "unavailable": []string, "host"?: string, "escalations": []escalationRow, "limits": []limit, "review": []reviewRow, "cap"?: {"effective": number, "roster": number, "reason": string, "resumesAt": string}}
 exit: 2 when a `round.*` key (or `round.itemTimeoutMinutes`) is invalid (the message names the key; nothing is reported or repaired); 3 when there is no project root; 5 when git fails. Also 3 when `git.baseBranch` is set and does not resolve (the message names the key; never replaced by a conventional name).
 old: none (new in C2)
 note: `row` is `{"name": string, "agent"?: string, "issue"?: string, "branch": string, "pr"?: string, "prState"?: string, "hostState"?: string, "evidence"?: string, "state"?: string, "tab"?: string, "registered": bool, "drift": []string, "escalations": []string, "kind"?: string, "kindSource"?: string, "tier"?: string, "model"?: string, "tierReason"?: string, "bounces": number, "bundle"?: []string, "bestOf"?: string, "outcome"?: string, "event"?: {"seq": number, "kind": string, "body"?: string, "ts": string}, "draining"?: true, "noLogin"?: string, "account"?: string, "accountKind"?: string}`; `bounces` is how often the slot's issue was sent back (0 when never; see `round bounce`); `account` and `accountKind` (#1824) are the slot's account name and its kind (`claude`, `codex` or `opencode`), `account` absent when the slot never ran under one; `kind`, `tier`, `model` and `tierReason` are the slot's C9 fields, absent on a slot that was never assigned; `escalations` holds the ids of the slot's open escalations (C4). `agent` is the host agent's name, `hostState` its `agent_status` (absent when the host is unavailable or the row has no live agent), `drift` the kinds above. Unclaimed tabs are rows with `registered: false` and no `name` match, listed after the slots.
@@ -177,6 +177,15 @@ note: (#1097) `--slots` (else `round.slots`) is the round's slot count, recorded
 note: `noFast` is true when `test.fast` is empty and `test.full` is set: start warns on stderr that workers run `test.full` before `worker done` and record no proof rows, so acceptance shows unproven. `staleBinary` is set (and a warning printed with the rebuild command) when the installed `rota` is behind the source checkout the verb runs in.
 note: `dependsOnPr` (int, present when non-zero, on a `candidate` here and in `round candidates`) is the open PR a `verdict add --file-deferred` item was filed from: the item's body says it holds a deferred finding and its `Related` names the PR (`N`, `#N` or a PR or MR URL). The item is `ready: false` and listed as `not ready: depends on PR #N` until that PR leaves the open list, merged or closed unmerged alike, since its fix builds on code only that PR adds. An item that merely relates to an open PR is not held back.
 
+Remote claims older than `round.claimStaleMinutes` (240 minutes), or
+`round.claimStaleMinutesMajor` (480 minutes for Major features), are report-only
+`stale-claim` findings in status and reconcile. A class set to 0 is disabled. Activity is
+the newest open claim server time, matching open PR server update time, and origin branch
+tip committer date (clamped to now). Branch reads occur only after server signals are old.
+Unknown claim times or failed activity reads prevent reclaim; locally held items are skipped.
+Doctor reports each stale holder and last activity as a `stale claims` warning, with a
+five-second bounded best-effort scan and no rows when reads fail or in file mode.
+
 ### rota round candidates
 rota round candidates [--scope <slate|milestone|next|open>]
 repo: none
@@ -184,6 +193,9 @@ data: {"scope": string, "candidates": []candidate}  (a candidate carries `scopeS
 exit: 2 when `--scope` is not a scope; 3 when there is no project root or the round config is invalid (the message names the key)
 old: none (new in C3)
 note: read-only, writes nothing, no `changed`. Same `candidate` shape (plus `harness`, `model` and `pickError`, #347) and the same readiness checks as `start`, with no lease needed, so the orchestrator re-reads the board as slots free up and a test can pin each scope's set. `--scope` overrides the round's recorded scope for the call, defaulting to it, then to `round.scope`. An item already held by a slot (`task`, or the number leading its `<agent>/<issue>-<slug>` branch) is not a candidate. A claim by another holder is not read here (the backend has no claim listing); it surfaces at `assign` as `claimed`. Order is backlog order; for `next`, active-milestone items come before the next milestone's. When the project has no unfinished milestone (none written, or all shipped or archived), `milestone` and `next` offer every open item as `open` does, and `data.fellBack` is true; a project with a planned milestone keeps the strict scope. An empty list carries `data.empty` `{reason, next}`: the backlog is empty, the scope selects nothing, or everything it selects is held, in review, taken or handed to a human; `next` is the command to run. With no open items or milestones, `empty.next` names `/rota-vision` and the evidence path when the repo holds a concept: a README (`README`, `README.md`, `README.rst`, any case) with at least ten non-empty lines, any `*.md` under `docs/`, or any file under `.rota/designs/`, `.rota/plans/` or `.rota/spikes/`; otherwise the empty-backlog hint still names `/rota-capture`. `empty.reason` stays the same, and `round start` shares this hint. `assign --body-file` text that states acceptance criteria (an `## Acceptance` heading or a checkbox line) satisfies the `criteria` check, so a round needs no design or plan note committed first.
+
+note: stale claimed candidates remain listed with `blockedBy: stale-claim`,
+`staleHolder` and RFC3339 `lastActivity`, instead of being hidden as taken.
 
 ### rota round scope
 rota round scope <ID> --body-file <path|->
@@ -231,6 +243,16 @@ note: (#404) an issue labelled `best-of:2` is built by two slots at once. `assig
 note: (#899) the pointer brief quotes the item's `## Try it` steps only when `worker.TrustedTryIt` vouches for them, the decision the merge gate makes: the source is `issues.source` of the config, the trust check is the `Forge`'s optional `IssueTrust` (absent for a nil forge or a tracker that cannot say, which withholds), and a file source reads its body with `Backend.Detail`. When the steps would be skipped, or the trust read fails (that never fails the assign), the brief says `Try it: the issue has a ## Try it section, but its steps are withheld from this brief (<why>). Do not run them; the merge gate skips them for the same reason.` An item with no `## Try it` section adds nothing to the brief. `round transfer` briefs the same way.
 note: the item is marked in progress before the worker starts, as the stray skill requires: it is the only thing that stops a second round taking the same item.
 
+note: `--reclaim-stale <claim-id>` requires the orchestrator to obtain maintainer
+approval first. It rechecks the exact current holder's activity during preflight and
+again at the claim step, then releases the old claim through `Board.Release` (marker
+and claim label) and claims for the new worker in the same step. A fresh, missing, different or unverifiable
+holder, or disabled threshold, exits 4 with `blockedBy: not-stale` without releasing it.
+Other readiness checks still apply, including `--accept-open-pr` for an existing PR.
+Undo releases only the new claim; the old claim remains released. Plain assign, the tick
+and reconcile never reclaim automatically. The gate refuses `claim-lost` while another
+claim holds the issue; adopt refuses `claimed` for another branch agent's claim.
+
 ### rota round wind-down
 rota round wind-down [--no-verify] [--prune]
 repo: none
@@ -251,7 +273,7 @@ note: `merged` is true when the slot's PR is merged, and `issue` and `pr` come f
 ### rota doctor
 rota doctor
 repo: none
-data: {"ok": bool, "checks": [{"name": string, "status": "pass" | "fail" | "skip", "detail": string, "hint"?: string}]}
+data: {"ok": bool, "checks": [{"name": string, "status": "pass" | "fail" | "skip" | "warn", "detail": string, "hint"?: string}]}
 exit: 1 when any check is `fail` (the same `data`, so a `--json` caller reads `ok`); 5 never: a missing tool is a failed check, not an unavailable dependency
 old: none (new in C6)
 note: a check verb (rule 7): exit 0 when every check passes or skips. Read-only, no `changed`, no network write, and it runs without `.rota/` (it reads config when present and falls back to defaults, like `init check`).

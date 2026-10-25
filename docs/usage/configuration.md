@@ -203,6 +203,18 @@ Closing the orchestrator's workspace by hand now needs `herdr workspace close --
 rota config set round.herdrGroupSlots false
 ```
 
+## round.claimStaleMinutes: remote claim activity
+
+`round.claimStaleMinutes` defaults to `240` for bugs, tasks and Minor/Cosmetic features.
+`round.claimStaleMinutesMajor` defaults to `480` for Major features. Both are project keys;
+`0` disables stale detection for that class.
+
+A remote claim is stale only when its claim time, open PR activity and origin branch tip
+are all older than the threshold. Unknown claim times and failed activity reads do not
+permit reclaim. `round status`, `round candidates` and `doctor` show the holder and last
+activity. Reclaim requires maintainer approval followed by
+`rota round assign <ID> --reclaim-stale <claim-id>`; see [parallel rounds](parallel-rounds.md).
+
 ## work.tdd: red-first on or off
 
 Affects `/rota-work` (solo) and the worker contract. `true` (default): a behavior change needs a recorded red run, a FAIL proof row from a test that failed on an assertion, before its PASS row. A FAIL whose evidence is a build, compile or setup failure (missing import, typo, undefined symbol) is not a red run; the task gets a fix dispatch. `false`: `/rota-work` Step 7 and the worker contract require no RED row. PASS rows are still recorded.
