@@ -100,7 +100,7 @@ func TestAcceptRefusals(t *testing.T) {
 		f := newMoveFx(t)
 		f.be.items["12"].Title = ReviewTitle("cli")
 		f.reportIssues(t, "ben", "#139")
-		if _, err := f.accept("12", nil); blockedBy(t, err) != BlockSlotBusy || f.be.items["12"].Closed {
+		if _, err := f.accept("12", nil); blockedBy(t, err) != BlockReviewNotMinted || f.be.items["12"].Closed {
 			t.Fatalf("%v", err)
 		}
 	})

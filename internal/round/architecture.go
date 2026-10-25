@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/strutil"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/mapqa"
+	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -280,6 +282,35 @@ func MintedReviews(root string) map[string]bool {
 	return out
 }
 
+// mintedReview says whether a round minted review item it: the registry
+// records it (main), or the item carries main's review-minted comment from an
+// author with write access (a support machine, whose registry never saw it).
+// The title alone is never trusted. A failed trust lookup is an error, not a
+// refusal.
+func (e Env) mintedReview(ctx context.Context, root string, be Board, it *backlog.Item) (bool, error) {
+	if MintedReviews(root)[worker.NormID(it.ID)] {
+		return true, nil
+	}
+	cs, err := be.Comments(it.ID, "")
+	if err != nil {
+		return false, wrap(err)
+	}
+	trust := worker.NewMarkerTrust(ctx, e.Forge)
+	for _, c := range cs {
+		if !marker.IsReviewMinted(c.Text) {
+			continue
+		}
+		ok, err := trust.Writer(c.Who)
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // ReviewSince is the time the last review was minted, "" when none was.
 func ReviewSince(root string) string {
 	return worker.LoadRegistryTolerant(root).Review().At // display; Architecture reads the registry strictly right after
@@ -313,6 +344,11 @@ func (e Env) MintReview(ctx context.Context, root string, be backlog.Backend, a 
 			return fail(err)
 		}
 		ids = append(ids, res.ID)
+		// The registry is main's alone: this comment is how a support machine
+		// learns the title is not a lookalike.
+		if _, err := be.AddComment(res.ID, "feedback", marker.ReviewMintedLine(round)+"\nMinted by main in round "+strconv.Itoa(round)+": architecture review of "+area+"."); err != nil {
+			return fail(err)
+		}
 		if n := issueNumber(be, res.ID); n != "" && e.Forge != nil {
 			if err := e.Forge.AddLabels(ctx, n, []string{RefactorLabel}, true); err != nil {
 				return fail(err)
