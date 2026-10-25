@@ -421,6 +421,7 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 	task := fs.String("task", "", "task id: recreates the slot's session and cuts its branch")
 	relay := fs.Bool("relay", false, "inject into the running session as an orchestrator relay")
 	round := fs.String("round", "", "orchestrator round for the signature")
+	through := fs.String("review-through", "", "with --relay: RFC 3339 time the relayed review input was read; input dated before it counts as seen")
 	boot := fs.Int("boot-timeout", 60, "seconds to wait for the session to boot")
 	kind := fs.String("kind", "", "harness kind: "+harness.KindList()+" (default the slot's, else claude)")
 	acceptCodex := fs.Bool("accept-codex-version", false, "deprecated and ignored: rota no longer checks the Codex version")
@@ -446,6 +447,17 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 				return Result{}, Usage("--round must be a number")
 			}
 			opts.Round = &n
+		}
+		var reviewThrough *time.Time
+		if *through != "" {
+			if !*relay {
+				return Result{}, Usage("--review-through needs --relay")
+			}
+			t, err := time.Parse(time.RFC3339, *through)
+			if err != nil {
+				return Result{}, Usage("--review-through must be an RFC 3339 time, such as 2026-10-25T08:30:00Z")
+			}
+			reviewThrough = &t
 		}
 		root, err := c.Root()
 		if err != nil {
@@ -485,8 +497,10 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			if err := postSupportRelay(c, root, slot, path, n); err != nil {
 				c.Warn("the relay was sent but not posted on the issue (the main gate cannot see it): %v", err)
 			}
-			if err := consumeReviewRelay(c, ctx, root, slot, path); err != nil {
-				c.Warn("the relay was sent but its review input stays pending, so the watch may report it again: %v", err)
+			if reviewThrough != nil {
+				if err := consumeReviewRelay(c, ctx, root, slot, *reviewThrough); err != nil {
+					c.Warn("the relay was sent but its review input stays pending, so the watch may report it again: %v", err)
+				}
 			}
 		}
 		d := jsonx.NewObject()
@@ -505,29 +519,21 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-// consumeReviewRelay moves the slot's review cursor past the review input a
-// hand-sent `REVIEW <pr-url>` relay carried, as `round review-relay` does for
-// its own, so the watch does not report comments the worker already has
-// (#1866). No bounce is counted: that stays review-relay's. Any other relay
-// text leaves the cursor alone.
-func consumeReviewRelay(c *Ctx, ctx context.Context, root, slot, path string) error {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	text := string(raw)
-	if first, rest, _ := strings.Cut(text, "\n"); strings.HasPrefix(first, "--- ORCHESTRATOR (round ") {
-		text = rest
-	}
+// consumeReviewRelay moves the slot's review cursor past the review input dated
+// before through, what a hand-sent relay carried, as `round review-relay` does
+// for its own (#1866). The second `through` falls in is left pending, since a
+// forge dates to the second: a repeat report is safe, a lost comment is not. No
+// bounce is counted: that stays review-relay's.
+func consumeReviewRelay(c *Ctx, ctx context.Context, root, slot string, through time.Time) error {
 	s := worker.LoadRegistryTolerant(root).Slot(slot)
-	if s == nil || s.PR() == "" || !strings.HasPrefix(text, "REVIEW "+s.PR()+" ") {
-		return nil
+	if s == nil || s.PR() == "" {
+		return Resolution("slot '%s' has no PR whose review input a relay could carry", slot)
 	}
 	fg, err := c.deps().forge(ctx, c.deps().Config(root), "", root)
 	if err != nil {
 		return err
 	}
-	b, err := worker.PendingReview(ctx, fg, s, failVerdict(root, s.Branch()), c.deps().Now())
+	b, err := worker.PendingReviewBefore(ctx, fg, s, failVerdict(root, s.Branch()), c.deps().Now(), through.Truncate(time.Second))
 	if err != nil || b.Empty() {
 		return err
 	}

@@ -279,17 +279,26 @@ func TestRoundReviewRelayBadRoundConfigExits3(t *testing.T) {
 	}
 }
 
-// A REVIEW batch handed to a done slot by `worker dispatch --relay` consumes
-// the review input it carried: the next watch poll does not report it again,
-// and a comment that lands afterwards is reported (#1866).
-func TestWorkerDispatchRelayConsumesTheReviewBatch(t *testing.T) {
-	f := &reviewForge{comments: []string{"please rename x"}}
+// relaySlot seeds w1 as a done slot with PR 9 and a session, and returns the
+// relay brief path.
+func relaySlot(t *testing.T, f *reviewForge) (*Ctx, string, string) {
+	t.Helper()
 	deps := useReviewForge(f)
-	h := &cliHost{inSession: true}
-	useHost(deps, h)
+	useHost(deps, &cliHost{inSession: true})
 	dir := workerProject(t, ghCfg)
 	rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--task", "577", "--body-file", filepath.Join(dir, "go.mod"))
+	handBack(t, dir)
+	brief := filepath.Join(t.TempDir(), "relay.md")
+	if err := os.WriteFile(brief, []byte("REVIEW "+prURL+" (1 items)\nItem 1: please rename x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return &Ctx{Deps: deps, ctx: context.Background(), Stderr: io.Discard}, dir, brief
+}
+
+// handBack marks w1 done on PR 9: the worker handed the PR back.
+func handBack(t *testing.T, dir string) {
+	t.Helper()
 	if err := worker.Update(dir, func(d *worker.Doc) {
 		s := d.Slot("w1")
 		s.SetPR(prURL)
@@ -297,27 +306,53 @@ func TestWorkerDispatchRelayConsumesTheReviewBatch(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	c := &Ctx{Deps: deps, ctx: context.Background(), Stderr: io.Discard}
+}
+
+// `worker dispatch --relay --review-through` consumes the review input the
+// relay carried: the next watch poll does not report it again, and a comment
+// that landed after the read is reported (#1866).
+func TestWorkerDispatchRelayConsumesWhatItCarried(t *testing.T) {
+	f := &reviewForge{comments: []string{"please rename x"}} // dated 10:00:00
+	c, dir, brief := relaySlot(t, f)
 	key := roundwatch.ReviewKey("w1")
 	if got := watchForge(context.Background(), c, dir)[key]; got == "" {
 		t.Fatal("setup: the comment should be pending")
 	}
-	brief := filepath.Join(t.TempDir(), "relay.md")
-	if err := os.WriteFile(brief, []byte("REVIEW "+prURL+" (1 items)\nItem 1: please rename x\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if code, _, errOut := rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay"); code != 0 {
+	// A second comment lands after the orchestrator's read (10:00:30) and before the relay.
+	f.comments = append(f.comments, "and the other thing") // dated 10:01:00
+	if code, _, errOut := rotaInWith(t, c.Deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--review-through", "2026-10-08T10:00:30Z"); code != 0 {
 		t.Fatalf("relay: %d %s", code, errOut)
 	}
-	// The worker reworks and hands the PR back.
-	if err := worker.Update(dir, func(d *worker.Doc) { _ = d.Slot("w1").MarkState("done", "") }); err != nil {
-		t.Fatal(err)
+	handBack(t, dir) // the worker reworks and hands the PR back
+	if got := watchForge(context.Background(), c, dir)[key]; got != "1 from rev "+prURL {
+		t.Fatalf("only the later comment is pending: %q", got)
 	}
+	// Re-arming without a further comment reports the same single item, not a second one.
+	f.comments = f.comments[:1]
 	if got, ok := watchForge(context.Background(), c, dir)[key]; ok {
 		t.Fatalf("relayed batch reported again: %q", got)
 	}
-	f.comments = append(f.comments, "and the other thing")
-	if got := watchForge(context.Background(), c, dir)[key]; got != "1 from rev "+prURL {
-		t.Fatalf("new comment after the relay: %q", got)
+}
+
+// A relay without --review-through leaves the cursor alone, whatever its text.
+func TestWorkerDispatchRelayWithoutFlagLeavesTheCursor(t *testing.T) {
+	f := &reviewForge{comments: []string{"please rename x"}}
+	c, dir, brief := relaySlot(t, f)
+	if code, _, errOut := rotaInWith(t, c.Deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay"); code != 0 {
+		t.Fatalf("relay: %d %s", code, errOut)
+	}
+	handBack(t, dir)
+	if got := watchForge(context.Background(), c, dir)[roundwatch.ReviewKey("w1")]; got == "" {
+		t.Fatal("a plain relay consumed the review input")
+	}
+}
+
+func TestWorkerDispatchReviewThroughNeedsRelayAndATime(t *testing.T) {
+	c, dir, brief := relaySlot(t, &reviewForge{})
+	if code, _, _ := rotaInWith(t, c.Deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--review-through", "2026-10-08T10:00:30Z"); code != 2 {
+		t.Errorf("without --relay: %d, want 2", code)
+	}
+	if code, _, _ := rotaInWith(t, c.Deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--review-through", "yesterday"); code != 2 {
+		t.Errorf("bad time: %d, want 2", code)
 	}
 }

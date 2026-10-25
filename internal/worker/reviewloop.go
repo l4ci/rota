@@ -55,6 +55,15 @@ func (b ReviewBatch) Empty() bool { return len(b.Items) == 0 && b.Verdict == "" 
 // A slot with no PR has nothing to read.
 // now stamps the cursor when the forge dates nothing.
 func PendingReview(ctx context.Context, f ReviewForge, s *Slot, v *ReviewVerdict, now time.Time) (ReviewBatch, error) {
+	return PendingReviewBefore(ctx, f, s, v, now, time.Time{})
+}
+
+// PendingReviewBefore is PendingReview limited to input dated before until
+// (zero: no limit). A relay sent by hand carries what the orchestrator read at
+// some moment; input that landed after it has not reached the worker and stays
+// pending. A forge that dates nothing cannot be bounded, so undated input stays
+// pending too.
+func PendingReviewBefore(ctx context.Context, f ReviewForge, s *Slot, v *ReviewVerdict, now, until time.Time) (ReviewBatch, error) {
 	b := ReviewBatch{Slot: s.Name(), PR: s.PR()}
 	n, ok := PRRefNumber(s.PR())
 	if !ok {
@@ -121,11 +130,13 @@ func PendingReview(ctx context.Context, f ReviewForge, s *Slot, v *ReviewVerdict
 			continue
 		case r.CreatedAt.IsZero() && !after.IsZero():
 			continue
+		case !until.IsZero() && !r.CreatedAt.Before(until):
+			continue
 		}
 		b.Items = append(b.Items, r)
 		take(r.CreatedAt, e.key)
 	}
-	if v != nil && v.Text != "" && (after.IsZero() || v.At.After(after)) {
+	if v != nil && v.Text != "" && (after.IsZero() || v.At.After(after)) && (until.IsZero() || v.At.Before(until)) {
 		b.Verdict = v.Text
 		take(v.At, "")
 	}
