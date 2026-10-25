@@ -40,6 +40,9 @@ type Candidate struct {
 	// Decision is the item's decision type ("" for an ordinary item); BlockedBy
 	// names why a ready-looking item is still not assignable.
 	Decision, BlockedBy string
+	// CrossMilestone names each dependency on another active milestone, one
+	// line each; the maintainer decides, so it blocks until assign overrides it.
+	CrossMilestone []string
 	// Warnings are upgrade actions the candidate-listing verbs must surface.
 	Warnings []string
 	// ScopeSource is where the item's scope came from: touches, subsystem,
@@ -164,6 +167,8 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 	}
 	tracked := e.trackedFiles(ctx, root)
 	inFlight := e.InFlightItems(ctx, root, be, tracked, o.Shared)
+	// Reuse the board snapshot and read milestones only for relevant tags or labels.
+	cross := crossMilestones{root: root, be: be, open: items, openRead: true}
 	var out []Candidate
 	for _, it := range chosen {
 		if handed[it.IssueKey()] {
@@ -212,6 +217,15 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		}
 		if len(ms) > 0 {
 			c.Milestone = strings.Join(ms, ",")
+		}
+		if c.CrossMilestone, err = cross.check(it); err != nil {
+			return nil, err
+		}
+		if len(c.CrossMilestone) > 0 {
+			if c.BlockedBy == "" {
+				c.BlockedBy = BlockCrossMilestone
+			}
+			c.Checks = append(c.Checks, Check{Name: BlockCrossMilestone, Detail: c.CrossMilestone})
 		}
 		out = append(out, c)
 	}
