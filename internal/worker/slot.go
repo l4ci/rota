@@ -41,6 +41,18 @@ func (s *Slot) Worktree() string { return jsonx.Str(s.o, "worktree") }
 func (s *Slot) Base() string     { return jsonx.Str(s.o, "base") }
 func (s *Slot) Handle() string   { return jsonx.Str(s.o, "handle") }
 
+// RoutedTag is the issue's milestone tag as assign read it when it routed the
+// slot (possibly ""), and ok false for a slot assigned before the tag was
+// recorded. Drift is the tag changing since, never a milestone going active.
+func (s *Slot) RoutedTag() (tag string, ok bool) {
+	v, ok := s.o.Get("routedTag")
+	str, _ := v.(string)
+	return str, ok
+}
+
+// SetRoutedTag records the issue's milestone tag at assignment.
+func (s *Slot) SetRoutedTag(tag string) { s.o.Set("routedTag", tag) }
+
 // HomeBase is the base RouteBase remembered, "" when the slot is not routed.
 func (s *Slot) HomeBase() string { return jsonx.Str(s.o, "homeBase") }
 
@@ -271,6 +283,7 @@ func (s *Slot) Reregister(branch, worktree, base, handle string) {
 	legacy := s.Window()
 	s.o.Delete("window")
 	s.o.Delete("homeBase")
+	s.o.Delete("routedTag")
 	s.o.Set("branch", branch)
 	s.o.Set("worktree", worktree)
 	s.o.Set("base", base)

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Milestone branches
+
+- **Issues of an active milestone route to its branch.** `rota round assign` cuts the worker branch from `origin/milestone/<id>`, records it as the slot's base and names it in the brief; the worker's PR, `rota git base` and `rota ship` follow. Untagged issues, issues of a milestone that is not active, projects without `origin` and milestones whose branch is not on origin keep the round base. `rota round reconcile --apply` repairs a new `base-drift`: when an issue's milestone tag changes after assign, the PR is retargeted, the slot rerouted and held until the worker merges the new base. A milestone going active under an unchanged tag is not drift. Milestone PRs are not gated by the tick yet (train sync is a sibling issue).
+
 ### Upgrade notes
 
 - **Visible claim labels.** After upgrading, run `rota round reconcile --apply` once to backfill `claimed:<agent>@<machine>` labels for in-flight comment claims and repair stale labels. Comment claims remain authoritative. Reverting this change leaves `claimed:*` labels already written to the tracker; remove those labels by hand.

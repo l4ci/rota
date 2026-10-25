@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -28,19 +30,46 @@ func (e Env) findBaseDrift(ctx context.Context, root string, rep *Report, reg wo
 		if err != nil || it == nil || it.Closed {
 			continue
 		}
-		to, _, err := e.milestoneBase(ctx, root, e.Board, it)
+		// Drift is the issue's milestone tag changing since assign routed the
+		// slot: a milestone going active under an unchanged tag is not (a slot
+		// assigned while it was planned keeps its base). A slot assigned before
+		// the tag was recorded is not judged.
+		tag := it.Fields.Get("milestone")
+		if was, ok := s.RoutedTag(); !ok || was == tag {
+			continue
+		}
+		// Local comparison first; origin is asked only when it differs.
+		id, err := e.milestoneTarget(root, e.Board, it)
 		if err != nil {
 			rep.Warnings = append(rep.Warnings, fmt.Sprintf("base of %s not read: %v", s.Task(), err))
 			continue
 		}
-		have, want := s.Base(), to
-		if want == "" {
-			want = s.HomeBase()
+		have, want := s.Base(), ""
+		if id != "" {
+			want = milestone.Branch(id)
+		} else if want = s.HomeBase(); want == "" {
+			want = have
 		}
-		if want == "" || have == want {
+		if have == want {
 			continue
 		}
-		rep.add(Finding{Kind: BaseDrift, Slot: s.Name(), Issue: s.Task(), to: to,
+		to := ""
+		if id != "" {
+			var warn string
+			if to, warn, err = e.milestoneBase(ctx, root, e.Board, it); err != nil {
+				rep.Warnings = append(rep.Warnings, fmt.Sprintf("base of %s not read: %v", s.Task(), err))
+				continue
+			}
+			if warn != "" {
+				rep.Warnings = append(rep.Warnings, warn)
+				continue
+			}
+			if to == "" { // no origin: nothing to retarget onto
+				continue
+			}
+			want = to
+		}
+		rep.add(Finding{Kind: BaseDrift, Slot: s.Name(), Issue: s.Task(), to: to, tag: tag,
 			Detail: fmt.Sprintf("PR %s targets %s, but %s now belongs on %s", s.PR(), have, s.Task(), want),
 			Repair: "retarget the PR and tell the worker to merge " + want})
 	}
@@ -76,7 +105,14 @@ func (e Env) retarget(ctx context.Context, root string, f Finding) error {
 	if err := e.Forge.PRSetBase(ctx, n, want); err != nil {
 		return fmt.Errorf("could not retarget PR #%d onto %s: %w", n, want, err)
 	}
-	if err := editSlot(root, f.Slot, func(s *worker.Slot) error { s.RouteBase(f.to); return nil }); err != nil {
+	// The slot leaves the gate set until its next `worker done`: the tick
+	// gates done slots only, and the worker must merge the new base first.
+	at := e.Worker.Now().UTC().Format(time.RFC3339)
+	if err := editSlot(root, f.Slot, func(s *worker.Slot) error {
+		s.RouteBase(f.to)
+		s.SetRoutedTag(f.tag)
+		return s.MarkState("busy", at)
+	}); err != nil {
 		return err
 	}
 	text := fmt.Sprintf("BASE %s\nThe base of your PR changed: it now targets %s. Before the PR merges: `git fetch origin %s`, then `git merge origin/%s` into your branch (a merge, never a rebase), resolve every conflict, re-run your targeted checks, record proof at the merged head, push and run `rota worker done %s` again.\n",

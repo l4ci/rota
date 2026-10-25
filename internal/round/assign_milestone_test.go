@@ -3,6 +3,7 @@ package round
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -174,4 +175,88 @@ func countKind(fs []Finding, kind string) int {
 		}
 	}
 	return n
+}
+
+// doneWithPR parks slot ben as done on a PR for the branch it was assigned.
+func doneWithPR(t *testing.T, f *assignFixture, branch string, n int) {
+	t.Helper()
+	url := "https://github.com/o/r/pull/" + strconv.Itoa(n)
+	if err := editSlot(f.root, "ben", func(s *worker.Slot) error {
+		s.SetPR(url)
+		return s.MarkState("done", "")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	f.be.prs = []tracker.PR{{Number: n, Branch: branch, URL: url}}
+	f.env.Forge = f.be.asForge()
+	f.env.Board = f.be
+}
+
+func TestReconcileIgnoresAMilestoneGoingActiveUnderAnUnchangedTag(t *testing.T) {
+	f, _ := milestoneFixture(t)
+	milestoneDoc(t, f.root, "M02", "planned")
+	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeOpen, 100)); err != nil {
+		t.Fatal(err)
+	}
+	f.be.add("16", "Planned milestone issue", "M02", false, "## Acceptance\n- [ ] ok\n\nedits b.go")
+	res, err := f.assign("16", "ben", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doneWithPR(t, f, res.Branch, 9)
+	milestoneDoc(t, f.root, "M02", "active")
+	pushMilestoneBranch(t, f, "M02")
+
+	for i := 0; i < 2; i++ {
+		out, err := f.env.Reconcile(bg, f.root, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n := countKind(out.Repaired, BaseDrift) + countKind(out.Drift, BaseDrift); n != 0 {
+			t.Fatalf("activation alone is not drift: %+v", out)
+		}
+	}
+	if len(f.be.retargeted) != 0 {
+		t.Errorf("PR retargeted: %v", f.be.retargeted)
+	}
+}
+
+func TestReconcileHoldsTheSlotOutOfTheGateAfterARetarget(t *testing.T) {
+	f, _ := milestoneFixture(t)
+	res, err := f.assign("12", "ben", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doneWithPR(t, f, res.Branch, 7)
+	milestoneDoc(t, f.root, "M02", "active")
+	pushMilestoneBranch(t, f, "M02")
+	f.be.items["12"].Fields.Milestone = "M02"
+	if _, err := f.env.Reconcile(bg, f.root, true); err != nil {
+		t.Fatal(err)
+	}
+	// The tick gates done slots with a PR only (roundtick/tick.go).
+	if st := worker.LoadRegistryTolerant(f.root).Slot("ben").State(); worker.IsDone(st) {
+		t.Errorf("slot is %q: the tick would gate it before the worker merges the new base", st)
+	}
+}
+
+func TestReconcileSkipsARetargetWhoseBranchIsMissing(t *testing.T) {
+	f, _ := milestoneFixture(t)
+	res, err := f.assign("12", "ben", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doneWithPR(t, f, res.Branch, 7)
+	milestoneDoc(t, f.root, "M02", "active") // no milestone/M02 on origin
+	f.be.items["12"].Fields.Milestone = "M02"
+	out, err := f.env.Reconcile(bg, f.root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.be.retargeted) != 0 {
+		t.Errorf("must not retarget onto main: %v", f.be.retargeted)
+	}
+	if !strings.Contains(strings.Join(out.Report.Warnings, "\n"), "milestone/M02") {
+		t.Errorf("want a warning naming the missing branch: %v", out.Report.Warnings)
+	}
 }
