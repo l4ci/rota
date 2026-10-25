@@ -738,6 +738,11 @@ func (b *Issues) ClaimShared(ref, claimID string, holders int) (won bool, holder
 			return false, "", err
 		}
 	}
+	if label, ok := ClaimLabel(b.Cfg, claimID); ok && !slices.Contains(is.Labels, label) {
+		if err := tr.AddLabels(b.ctx(), n, []string{label}, b.AutoCreate()); err != nil {
+			b.warn("claim label for " + claimID + ": " + err.Error())
+		}
+	}
 	return true, claimID, nil
 }
 
@@ -792,6 +797,11 @@ func (b *Issues) Release(ref, claimID string) (bool, error) {
 	}
 	if err := b.dropClaim(is.Key, claimID); err != nil {
 		return false, err
+	}
+	if label, ok := ClaimLabel(b.Cfg, claimID); ok && slices.Contains(is.Labels, label) {
+		if err := tr.RemoveLabels(b.ctx(), is.Key, []string{label}); err != nil {
+			b.warn("release claim label for " + claimID + ": " + err.Error())
+		}
 	}
 	if len(held) == 1 {
 		if label := config.Label(b.Cfg, "inProgress"); slices.Contains(is.Labels, label) {
