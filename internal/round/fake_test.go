@@ -37,6 +37,7 @@ type fakeRemote struct {
 	prsErr         error
 	stateErrs      map[int]error // PR number -> PRState failure
 	addErr         error
+	commentErr     error // AddComment fails with it
 	removeErr      error
 	added          []int // AddLabels targets, in call order
 	removed        []int // RemoveLabels targets, in call order
@@ -351,6 +352,9 @@ func (f *fakeRemote) Status(ref string) (*backlog.Status, error) {
 }
 
 func (f *fakeRemote) AddComment(ref, kind, text string) (string, error) {
+	if f.commentErr != nil {
+		return "", f.commentErr
+	}
 	if err := f.notFound(ref); err != nil {
 		return "", err
 	}
