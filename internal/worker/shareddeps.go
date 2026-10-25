@@ -161,7 +161,7 @@ func (e Env) excludeLink(wt, rel string) {
 // what the sharing did. With nothing configured to share it only runs
 // envSetup when runSetup is set (pool init), never on a dispatch.
 func (e Env) slotDeps(ctx context.Context, root, slot, wt string, cfg any, portBase, width int, runSetup ...bool) ([]SharedDir, error) {
-	setup := strings.TrimSpace(config.String(cfg, "round.envSetup"))
+	setup := strings.TrimSpace(config.String(cfg, config.RoundEnvSetupKey))
 	dirs := config.SharedDirs(cfg)
 	var rows []SharedDir
 	shared := false
