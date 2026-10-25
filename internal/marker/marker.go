@@ -58,6 +58,9 @@ const (
 	KindPRPointer     = "pr-pointer"
 	KindFrom          = "from"
 	KindSupportReturn = "support-return"
+	// KindReviewMinted is the comment main leaves on an architecture-review
+	// item it minted, so a support machine can tell it from a lookalike title.
+	KindReviewMinted = "review-minted"
 )
 
 // opener matches `<!-- ` plus either prefix's name, up to the kind.
@@ -184,8 +187,9 @@ func ParseBounce(body string) (kind, head string, reset, ok bool) {
 var (
 	// relayRe finds the relay marker on the first or second line: the tracker
 	// puts its own `<!-- rota:comment <kind> -->` line ahead of the text.
-	relayRe = regexp.MustCompile(`\A(?:<!-- (?:rota|hv):comment [\p{L}\p{N}_]+ -->\n)?<!-- (?:rota|hv):relay round=(\p{Nd}+) -->(?:\n|\z)`)
-	offerRe = regexp.MustCompile(`\A(?:<!-- (?:rota|hv):comment [\p{L}\p{N}_]+ -->\n)?<!-- (?:rota|hv):support-offer -->(?:\n|\z)`)
+	relayRe        = regexp.MustCompile(`\A(?:<!-- (?:rota|hv):comment [\p{L}\p{N}_]+ -->\n)?<!-- (?:rota|hv):relay round=(\p{Nd}+) -->(?:\n|\z)`)
+	reviewMintedRe = regexp.MustCompile(`\A(?:<!-- (?:rota|hv):comment [\p{L}\p{N}_]+ -->\n)?<!-- (?:rota|hv):review-minted round=\p{Nd}+ -->(?:\n|\z)`)
+	offerRe        = regexp.MustCompile(`\A(?:<!-- (?:rota|hv):comment [\p{L}\p{N}_]+ -->\n)?<!-- (?:rota|hv):support-offer -->(?:\n|\z)`)
 )
 
 // RelayLine renders `<!-- rota:relay round=<n> -->`.
@@ -212,6 +216,16 @@ func ParseRelay(body string) (round int, text string, ok bool) {
 // IsSupportOffer reports whether body is a support-offer comment.
 func IsSupportOffer(body string) bool {
 	return offerRe.MatchString(strings.ReplaceAll(body, "\r\n", "\n"))
+}
+
+// ReviewMintedLine renders `<!-- rota:review-minted round=<n> -->`.
+func ReviewMintedLine(round int) string {
+	return Line(KindReviewMinted, "round="+strconv.Itoa(round))
+}
+
+// IsReviewMinted reports whether body is a review-minted comment.
+func IsReviewMinted(body string) bool {
+	return reviewMintedRe.MatchString(strings.ReplaceAll(body, "\r\n", "\n"))
 }
 
 // PointerLine renders `<!-- rota:pr-pointer <kind> -->`.
