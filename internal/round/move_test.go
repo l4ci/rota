@@ -1095,6 +1095,7 @@ func TestOpenScopeSkipsItemsTakenOutsideTheRound(t *testing.T) {
 	f := newMoveFx(t)
 	f.forge.labels = map[int][]string{12: {"in-progress"}, 13: {"in-progress"}}
 	f.be.claims["14"] = "kit@9"
+	f.be.items["14"].Labels = []string{"claimed:kit@main"}
 	cands, err := f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeOpen})
 	if err != nil {
 		t.Fatal(err)
@@ -1107,6 +1108,7 @@ func TestOpenScopeSkipsItemsTakenOutsideTheRound(t *testing.T) {
 	}
 	f.forge.labels[13] = nil
 	delete(f.be.claims, "14")
+	f.be.items["14"].Labels = nil
 	cands, _ = f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeOpen})
 	if got := ids(cands); len(got) != 2 {
 		t.Errorf("released items are offered again: %v", got)

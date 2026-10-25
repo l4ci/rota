@@ -120,7 +120,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		}
 	}
 	in.Slots, in.CwdOf = doctorSlotBlocks(root), procCwd(ctx, d.Proc)
-	in.StaleClaims = doctorStaleClaims(ctx, d, root)
+	in.StaleClaims, in.StaleClaimWarnings = doctorStaleClaims(ctx, d, root)
 	in.NothingToVerify = d.workerEnv().NothingToVerify(root)
 	if slots, err := d.workerEnv().GateConfig(root).TestSlots(); err == nil {
 		in.TestSlots = slots
@@ -157,18 +157,28 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	return in
 }
 
-// doctorStaleClaims is a best-effort remote check with one deadline for the
-// entire scan. An unavailable tracker or forge adds no stale-claim rows.
-func doctorStaleClaims(ctx context.Context, d *Deps, root string) []doctor.StaleClaim {
+// doctorStaleClaims bounds the entire remote scan. Confirmed findings survive
+// partial failures; warnings keep an incomplete scan distinct from a clean one.
+func doctorStaleClaims(ctx context.Context, d *Deps, root string) ([]doctor.StaleClaim, []string) {
 	issue, err := issueBackend(d, root)
-	if err != nil || !issue {
-		return nil
+	if err != nil {
+		return nil, []string{err.Error()}
+	}
+	if !issue {
+		return nil, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	env := d.RoundEnv(ctx, root)
-	if env.RoundErr != nil || env.Forge == nil {
-		return nil
+	if env.RoundErr != nil {
+		return nil, []string{env.RoundErr.Error()}
+	}
+	if env.Forge == nil {
+		reason := env.ForgeErr
+		if reason == "" {
+			reason = "forge unavailable"
+		}
+		return nil, []string{reason}
 	}
 	board := env.Board
 	if board == nil {
@@ -176,23 +186,33 @@ func doctorStaleClaims(ctx context.Context, d *Deps, root string) []doctor.Stale
 		cfg := d.Config(root)
 		be, err := backlog.Open(ctx, root, cfg, backlog.Options{Cwd: cwd, Today: d.Today, NewTracker: func(ctx context.Context, dir string) (backlog.Tracker, error) { return d.NewTracker(ctx, dir, cfg) }})
 		if err != nil {
-			return nil
+			return nil, []string{err.Error()}
 		}
 		var ok bool
 		board, ok = round.BoardOf(be)
 		if !ok {
-			return nil
+			return nil, []string{"tracker does not support claims"}
 		}
 	}
 	claims, warnings := env.StaleClaims(ctx, root, board, nil)
-	if len(warnings) > 0 || ctx.Err() != nil {
-		return nil
+	if err := ctx.Err(); err != nil {
+		reason := err.Error()
+		found := false
+		for _, warning := range warnings {
+			if strings.Contains(warning, reason) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			warnings = append(warnings, reason)
+		}
 	}
 	var out []doctor.StaleClaim
 	for _, claim := range claims {
 		out = append(out, doctor.StaleClaim{Issue: claim.Issue, Holder: claim.Holder, Last: claim.Last})
 	}
-	return out
+	return out, warnings
 }
 
 // staleBinary asks whether the running rota is behind the rota source checkout

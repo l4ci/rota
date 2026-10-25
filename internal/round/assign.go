@@ -1091,7 +1091,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 	// A bundle's members are claimed and marked like the lead, each with its own
 	// undo; a resume finds them done.
 	for _, m := range run.members {
-		claim := claimStep(be, m.ID, claimID, 1, func() error { return nil })
+		claim := claimStep(be, m.ID, claimID, 1, func() error { return nil }, nil)
 		claim.name, claim.skip = "claim "+m.ID, func() bool { return resuming }
 		state := stateStep(root, be, m.ID, agent, resuming, new(bool))
 		state.name = "in-progress " + m.ID
@@ -1150,12 +1150,12 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 // for an attempt of a best-of:2 issue); its undo gives the claim back and
 // clears the slot's binding. A lost claim is a refusal and leaves nothing to
 // undo.
-func claimStep(be Board, id, claimID string, holders int, unbind func() error, reclaim ...func() error) step {
+func claimStep(be Board, id, claimID string, holders int, unbind func() error, reclaim func() error) step {
 	return step{name: "claim", do: func() error {
 		// Reclaim before claiming: shared claims may still have a free holder slot,
 		// so winning a new claim does not prove the approved stale one was released.
-		if len(reclaim) > 0 && reclaim[0] != nil {
-			if err := reclaim[0](); err != nil {
+		if reclaim != nil {
+			if err := reclaim(); err != nil {
 				return err
 			}
 		}

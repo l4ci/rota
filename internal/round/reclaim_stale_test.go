@@ -14,6 +14,7 @@ func TestAssignReclaimStale(t *testing.T) {
 	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 	f.be.claims = map[string]string{"12": "mac-ben@3"}
 	f.be.claimTimes = map[string]map[string]time.Time{"12": {"mac-ben@3": now.Add(-5 * time.Hour)}}
+	f.be.items["12"].Labels = append(f.be.items["12"].Labels, "claimed:mac-ben@mac")
 	f.env.Forge = f.be.asForge()
 	f.wire(func(w *worker.Env) { w.Now = func() time.Time { return now } })
 	f.env.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
@@ -43,6 +44,7 @@ func TestAssignReclaimStaleRefusals(t *testing.T) {
 			at := now.Add(-5 * time.Hour)
 			f.be.claims = map[string]string{"12": holder}
 			f.be.claimTimes = map[string]map[string]time.Time{"12": {holder: at}}
+			f.be.items["12"].Labels = append(f.be.items["12"].Labels, "claimed:mac-ben@mac")
 			f.env.Forge = f.be.asForge()
 			f.wire(func(w *worker.Env) { w.Now = func() time.Time { return now } })
 			f.env.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
@@ -101,6 +103,7 @@ func TestAssignReclaimStaleRechecksAtClaim(t *testing.T) {
 	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 	f.be.claims = map[string]string{"12": "mac-ben@3"}
 	f.be.claimTimes = map[string]map[string]time.Time{"12": {"mac-ben@3": now.Add(-5 * time.Hour)}}
+	f.be.items["12"].Labels = append(f.be.items["12"].Labels, "claimed:mac-ben@mac")
 	forge := &wakingClaimForge{remoteForge: remoteForge{f.be}, now: now}
 	f.env.Forge = forge
 	f.wire(func(w *worker.Env) { w.Now = func() time.Time { return now } })
@@ -124,6 +127,7 @@ func TestAssignReclaimStaleBestOf(t *testing.T) {
 	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 	f.be.claims = map[string]string{"12": "mac-ben@3"}
 	f.be.claimTimes = map[string]map[string]time.Time{"12": {"mac-ben@3": now.Add(-5 * time.Hour)}}
+	f.be.items["12"].Labels = append(f.be.items["12"].Labels, "claimed:mac-ben@mac")
 	f.env.Forge = f.be.asForge()
 	f.wire(func(w *worker.Env) { w.Now = func() time.Time { return now } })
 	f.env.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
