@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Review lenses.** `review.lenses` maps `security`, `perf` and `ux` to path globs and issue labels. `rota review depth --json` lists the triggered lenses as `lenses`, `/rota-review` runs one focused reviewer per lens at `full` and `light` and records `review-security`, `review-perf` or `review-ux`, and `rota worker gate` refuses `review-missing` until each triggered lens has a record at head. The default is empty, so nothing changes until a lens is configured.
 - **Assign before landing.** Train nudges name an assignment to run first when a free slot has a ready candidate. `rota worker gate` and `rota worker train` warn on stderr and in JSON `warnings` about the same opportunity; `--no-assign-check` skips the check for scripted runs.
 
 ### Support pull

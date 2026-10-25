@@ -38,6 +38,9 @@ type ReviewSources struct {
 	// holding the branch, "" when no slot does.
 	Cross  roundcfg.CrossReview
 	Author string
+	// Lenses is review.lenses (#2064): the focused reviewers a branch triggers
+	// by the files it touches and its issues' labels. Empty triggers none.
+	Lenses config.Lenses
 }
 
 // ReviewDepth is a resolved depth with the inputs it was read from.
@@ -49,6 +52,9 @@ type ReviewDepth struct {
 	// when the requirement is skipped, "" when it does not apply. CrossWhy says
 	// which label and setting decided it.
 	Cross, CrossWhy string
+	// Lenses are the review lenses the branch triggers, each with the path or
+	// label that did it. None when the depth is none.
+	Lenses []config.LensHit
 }
 
 // ReviewDepthError says which read failed. Guessing a depth could pass a risky
@@ -91,7 +97,7 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	// Each issue's own labels decide its cross requirement, as they do its
 	// depth: one issue's review:none must not skip another's.
 	labelSets := [][]string{in.Labels}
-	if s.Issues != nil && s.Issue != "" && (s.Policy.NeedsIssue() || s.Cross.Active()) {
+	if s.Issues != nil && s.Issue != "" && (s.Policy.NeedsIssue() || s.Cross.Active() || s.Lenses.UsesLabels()) {
 		keys := append([]tracker.IssueKey{s.Issue}, s.Members...)
 		var got []tracker.Issue
 		var bodies []string
@@ -143,6 +149,11 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 		in.PRBody = body
 	}
 	out := ReviewDepth{ReviewDecision: decide(in), Changed: changed, Labels: in.Labels}
+	// A depth of none reviews nothing, so no lens runs either. in.Labels is the
+	// union of the lead's and every member's, so any bundled issue can trigger.
+	if out.Depth != config.DepthNone {
+		out.Lenses = s.Lenses.Match(files, in.Labels)
+	}
 	author := s.Author
 	if author == "" && len(labelSets) > 0 {
 		author = harness.FromLabels(labelSets[0])

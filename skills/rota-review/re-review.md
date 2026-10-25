@@ -10,3 +10,4 @@ After a bounce the worker pushes a fix. Review the fix, not the whole branch. `<
 - Only the fix gets the rubric. Anything noticed outside the fix goes to a `**Deferred:**` list in the report: never a finding, never moves the verdict.
 - The verdict block carries each `NOT ADDRESSED` finding again, plus any new finding the fix introduced. `ADDRESSED` ones appear only in `summary`, as a count. `PASS` needs every earlier finding `ADDRESSED` and no new finding in the fix.
 - Relay the `**Deferred:**` list to the caller beside the verdict. File it with `/rota-capture` if the caller wants; never fold it into this branch.
+- When `rota review depth <branch> --json` lists `lenses`, every triggered lens runs again on the fix range only (`lens-briefs.md`): the latest `review-<lens>` record's blocking findings are its `**Earlier findings:**`, and it reports majors only (`blocker` and `major`), no minor or info. A fix push makes its record stale like the others.

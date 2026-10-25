@@ -1780,3 +1780,63 @@ func TestGateRequiresCrossReview(t *testing.T) {
 		})
 	}
 }
+
+// A triggered review lens (#2064) needs its review-<lens> verdict at head: a
+// missing or stale record is refused naming the lens and why,
+// and a lens that no path or label triggers is not asked. A lens FAIL blocks
+// through verdict.Blocking (the gate's Verdict hook), tested in internal/verdict.
+func TestGateRequiresLensReview(t *testing.T) {
+	const lenses = `{"review":{"lenses":{"security":{"paths":["work.txt"]},"ux":{"labels":["ux"]},"perf":{"paths":["nothing/**"]}}},"test":{"full":["true"]}}`
+	spec, quality := verdict.ReviewSpec, verdict.ReviewQuality
+	type rec struct {
+		kind, verdict string
+		stale         bool
+	}
+	for _, c := range []struct {
+		name, cfg, labels string
+		recs              []rec
+		refused           string // what the refusal names; "" passes
+		note              string
+	}{
+		{name: "path-triggered lens without a record is refused", cfg: lenses, refused: "review-security verdict (path work.txt)", note: "REVIEW-LENS w1 — security (path work.txt)"},
+		{name: "a record at head passes", cfg: lenses, recs: []rec{{verdict.ReviewSecurity, verdict.Pass, false}}},
+		{name: "a stale record is refused", cfg: lenses, recs: []rec{{verdict.ReviewSecurity, verdict.Pass, true}}, refused: "review-security verdict (path work.txt)"},
+		{name: "a label-triggered lens is refused too", cfg: lenses, labels: "ux", recs: []rec{{verdict.ReviewSecurity, verdict.Pass, false}}, refused: "review-ux verdict (label ux)"},
+		{name: "every triggered lens is named", cfg: lenses, labels: "ux", refused: "review-security verdict (path work.txt) and review-ux verdict (label ux)"},
+		{name: "an untriggered lens is not asked", cfg: lenses, labels: "ux", recs: []rec{{verdict.ReviewSecurity, verdict.Concerns, false}, {verdict.ReviewUX, verdict.Pass, false}}},
+		{name: "no lenses configured asks nothing", cfg: `{"test":{"full":["true"]}}`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.setConfig(c.cfg)
+			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","kind":"claude","pr":%q}]}`, ghURL)), 0o644)
+			w.forge("body", "Closes #5\n")
+			w.forge("issueLabels", "in-progress,"+c.labels)
+			w.record("w1", "", spec, quality)
+			for _, r := range c.recs {
+				sha := gitq(t, w.worker, "rev-parse", "HEAD")
+				if r.stale {
+					sha = gitq(t, w.worker, "rev-parse", "HEAD~1")
+				}
+				if _, err := verdict.AddBranch(w.dir, "w1", verdict.Record{Kind: r.kind, Verdict: r.verdict, Sha: sha}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.refused == "" {
+				if res.Verdict != GateFresh {
+					t.Fatalf("%+v", res)
+				}
+			} else if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, c.refused) || res.Changed {
+				t.Fatalf("verdict %s (%s), want review-missing naming %s", res.Verdict, res.Err, c.refused)
+			}
+			if notes := strings.Join(res.Notes, "\n"); c.note != "" && !strings.Contains(notes, c.note) {
+				t.Errorf("notes %q lack %q", notes, c.note)
+			}
+		})
+	}
+}

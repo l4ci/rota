@@ -74,5 +74,28 @@
   },
   "release": {
     "versionFile": "VERSION"
+  },
+  "review": {
+    "lenses": {
+      "security": {
+        "paths": [
+          "internal/git/**",
+          "internal/proc/**",
+          "internal/fsio/**",
+          "internal/roundlease/**",
+          "internal/hook/**",
+          "internal/connections/**",
+          "internal/harness/**"
+        ],
+        "labels": [
+          "risk:security"
+        ]
+      },
+      "ux": {
+        "paths": [
+          "internal/cli/**"
+        ]
+      }
+    }
   }
 }

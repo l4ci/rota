@@ -478,6 +478,13 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 			data.Set("crossWhy", res.CrossWhy)
 			text += fmt.Sprintf("\nREVIEW-CROSS %s — %s (%s)", t.Branch, res.Cross, res.CrossWhy)
 		}
+		// Always present, so a caller reads "none" as an empty list, not a missing key.
+		lenses := make([]any, 0, len(res.Lenses))
+		for _, l := range res.Lenses {
+			lenses = append(lenses, jsonObj("name", l.Name, "why", l.Why))
+			text += fmt.Sprintf("\nREVIEW-LENS %s — %s (%s)", t.Branch, l.Name, l.Why)
+		}
+		data.Set("lenses", lenses)
 		// A bundled branch closes more than its lead: the reviewer checks every
 		// bundled issue's acceptance.
 		if root, err := backlogScope(c); err == nil {
@@ -577,12 +584,16 @@ func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDep
 	if err != nil {
 		return worker.ReviewDepth{}, "", Failed("%v; run rota config check", err)
 	}
+	lenses, err := config.LensesOf(cfg)
+	if err != nil {
+		return worker.ReviewDepth{}, "", Failed("%v; run rota config check", err)
+	}
 	src := worker.ReviewSources{Policy: policy, Git: c.deps().Git, Dir: t.Dir, Span: t.Base + "..." + t.Branch, Labels: extra,
-		Cross: cross, Author: branchAuthor(c, root, t.Branch)}
+		Cross: cross, Author: branchAuthor(c, root, t.Branch), Lenses: lenses}
 	// The issue behind a `<agent>/<issue>-<slug>` branch is read, as the worker
 	// gate does, when the policy can use it (a label to match or a file set to
 	// drift from) or a cross-harness review may be required.
-	if n, ok := worker.BranchIssue(t.Branch); ok && (policy.NeedsIssue() || cross.Active()) {
+	if n, ok := worker.BranchIssue(t.Branch); ok && (policy.NeedsIssue() || cross.Active() || lenses.UsesLabels()) {
 		it, err := c.deps().issuesOrNone(c.Context(), cfg, root)
 		if err != nil {
 			return worker.ReviewDepth{}, "", trackerErr(err)

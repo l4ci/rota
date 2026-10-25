@@ -867,3 +867,47 @@ func TestReviewDepthShowsTheCrossHarnessReview(t *testing.T) {
 		t.Errorf("a Minor issue prints no cross field: %v", d)
 	}
 }
+
+// AC-2 (#2064): `review depth --json` lists each triggered lens with the path
+// or label that did it; a branch that triggers none lists an empty array.
+func TestReviewDepthListsLenses(t *testing.T) {
+	root := newRepo(t, t.TempDir(), "proj", "main")
+	gitT(t, root, "checkout", "-q", "-b", "nia/6-small")
+	write(t, filepath.Join(root, "x.txt"), "x\n")
+	gitT(t, root, "add", "x.txt")
+	gitT(t, root, "commit", "-q", "-m", "small change")
+	labels := ""
+	deps := testDeps()
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
+		if len(args) > 2 && args[0] == "issue" && args[1] == "view" && args[2] == "6" {
+			return []byte(`{"number":6,"title":"t","state":"OPEN","labels":[` + labels + `]}`), nil, 0, nil
+		}
+		return []byte("[]"), nil, 0, nil
+	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	write(t, filepath.Join(root, ".rota", "config.json"),
+		`{"forge": {"provider": "github"}, "issues": {"source": "github"}, "review": {"lenses": {"security": {"paths": ["x.txt"]}, "ux": {"labels": ["ux"]}}}}`)
+	run := func() map[string]any {
+		o := trRunWith(t, deps, root, "", "review", "depth", "nia/6-small", "--json")
+		if o.code != 0 {
+			t.Fatalf("exit %d: %s %s", o.code, o.stdout, o.stderr)
+		}
+		d, _ := envelope(t, o.stdout)["data"].(map[string]any)
+		return d
+	}
+	labels = `{"name":"ux"}`
+	got, _ := run()["lenses"].([]any)
+	if len(got) != 2 || got[0].(map[string]any)["name"] != "security" || got[0].(map[string]any)["why"] != "path x.txt" ||
+		got[1].(map[string]any)["name"] != "ux" || got[1].(map[string]any)["why"] != "label ux" {
+		t.Errorf("lenses = %v", got)
+	}
+	write(t, filepath.Join(root, ".rota", "config.json"),
+		`{"forge": {"provider": "github"}, "issues": {"source": "github"}, "review": {"lenses": {"perf": {"paths": ["nothing/**"]}}}}`)
+	if got, ok := run()["lenses"].([]any); !ok || len(got) != 0 {
+		t.Errorf("no trigger must list an empty array, got %v", run()["lenses"])
+	}
+	write(t, filepath.Join(root, ".rota", "config.json"),
+		`{"forge": {"provider": "github"}, "issues": {"source": "github"}, "review": {"lenses": {"security": {"paths": ["x.txt"]}, "bogus": {}}}}`)
+	if o := trRunWith(t, deps, root, "", "review", "depth", "nia/6-small", "--json"); o.code == 0 || !strings.Contains(o.stdout+o.stderr, "review.lenses") {
+		t.Errorf("an unknown lens must fail naming the key: %d %s %s", o.code, o.stdout, o.stderr)
+	}
+}

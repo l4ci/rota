@@ -35,6 +35,8 @@ Add only judgement the verb cannot make:
 - `issues.source`: a `.jira` or `.linear` config is a hint, not a proof: say so.
 - `forge.provider` is not a setup question; read `git remote get-url origin` (github.com → `github`, a GitLab host → `gitlab`, no remote → `local`) when you want to propose it.
 
+- `review.lenses`: not a `rota setup` question. Propose a trigger per lens only from the project layout, with the matching paths as evidence: `security` for the packages or directories that shell out, call git, write files or handle tokens (grep for `exec.Command`, `subprocess`, `child_process`, `os.WriteFile`, `fs.writeFile`), `perf` for hot loops or bulk-I/O packages only when the layout makes them obvious, `ux` for the CLI verb or UI directory (`cmd/`, `internal/cli/`, `src/components/`). Also propose a label such as `risk:security` for `security` when the repo already uses it. Skip a lens with no matching path. Globs allow `*` within a segment and a trailing `/**` for a directory. Each lens is its own question; the value is JSON (`rota config set review.lenses '{"security": {"paths": ["internal/git/**"], "labels": ["risk:security"]}}'`, merging in lenses already set).
+
 `work.*` keys affect `/rota-work` and other solo cycles. `round.*` keys affect parallel rounds (`rota round`, `rota worker`). Say which one each proposal affects when you ask.
 
 Never run a test command to prove it works: the evidence is where the verb read it.
