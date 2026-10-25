@@ -18,7 +18,7 @@ The skills land in the Claude Code and Codex skill directories. Options, upgradi
 Run `rota setup` once at the project root. It asks the main config questions, scaffolds `.rota/`
 and writes your answers. Press Enter to keep the value it suggests. Where the repo gives a signal (your `go.mod` or `package.json`, CI files, the `origin` host, the harnesses on your `PATH`), setup suggests that value and says where it read it, for example `suggested: github (origin is github.com, gh is authenticated)`. A value you saved in your global config wins over the repo's signal, which is then shown as a note. Each question decides one thing:
 
-- **Machine role** (`round.role`). `main` (default) sets the project up. `support` is for a second machine that builds `site:support` issues beside main: see the support machine tip below.
+- **Machine role** (`round.role`). `main` (default) sets the project up. `support` is for a second machine that builds issues pinned `machine:<round.support>` beside main: see the support machine tip below.
 - **Issue source** (`issues.source`). Where the backlog lives. `file` (default) keeps it in `.rota/BACKLOG.md`. `github`, `gitlab`, `forge`, `jira`, `linear` or `itsaplan` make that tracker the backlog. See the [issue backend](usage/issue-backend.md).
 - **Isolation** (`work.isolation`). `worktree` (default) keeps `main` untouched while agents run and allows parallel `/rota-work` sessions. `branch` is fine for solo work.
 - **Merge strategy** (`work.mergeStrategy`). `direct` merges finished work straight into the base branch. `pr` opens a PR for review (the issue backend always opens a PR).

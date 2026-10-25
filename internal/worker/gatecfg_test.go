@@ -104,8 +104,9 @@ func TestGateConfigFullOnlyFollowsExportedFields(t *testing.T) {
 
 func TestGateConfigLabels(t *testing.T) {
 	for _, tc := range []struct{ cfg, inProgress, support string }{
-		{`{}`, "in-progress", "site:support"},
-		{`{"issues":{"labels":{"inProgress":"wip-x","support":"support-x"}}}`, "wip-x", "support-x"},
+		{`{}`, "in-progress", ""},
+		{`{"issues":{"labels":{"inProgress":"wip-x","support":"support-x"}}}`, "wip-x", ""},
+		{`{"round":{"support":"mac"},"issues":{"labels":{"inProgress":"wip-x","support":"support-x"}}}`, "wip-x", "machine:mac"},
 	} {
 		got := ParseGateConfig(parseCfg(tc.cfg))
 		if got.InProgressLabel != tc.inProgress || got.SupportLabel != tc.support {

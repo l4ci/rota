@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
@@ -102,6 +102,27 @@ func TestRoundSupportEnableBadName(t *testing.T) {
 	}
 }
 
+// Both CLI entry points must reserve main for the main machine.
+func TestSupportNameMainReserved(t *testing.T) {
+	for _, args := range [][]string{{"round", "support", "enable", "main"}, {"config", "set", "round.support", "main"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			root := trackerProject(t, `{"issues":{"source":"github"}}`)
+			before, err := os.ReadFile(filepath.Join(root, ".rota", "config.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			code, env, stderr := rotaRun(t, append([]string{"--json", "-C", root}, args...)...)
+			if code != ExitUsage || !strings.Contains(fmt.Sprint(env)+stderr, "reserved") {
+				t.Fatalf("reserved name: exit %d env=%v stderr=%s", code, env, stderr)
+			}
+			after, err := os.ReadFile(filepath.Join(root, ".rota", "config.json"))
+			if err != nil || string(after) != string(before) {
+				t.Fatalf("reserved name changed config: %s, %v", after, err)
+			}
+		})
+	}
+}
+
 // Only main names the support machine: the support side is fenced.
 func TestRoundSupportEnableRefusedOnSupport(t *testing.T) {
 	root := supportProject(t)
@@ -121,7 +142,7 @@ func supportReturnDeps(fake *trackertest.Fake) *Deps {
 	deps := testDeps()
 	deps.NewTracker = func(context.Context, string, any) (backlog.Tracker, error) { return fake, nil }
 	deps.RoundEnv = func(context.Context, string) round.Env {
-		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "main", Forge: returnForge{fake}, SupportLabel: config.Label(nil, "support"),
+		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "main", Forge: returnForge{fake}, SupportLabel: "machine:mac",
 			Round: roundcfg.Settings{Support: "mac", Role: roundcfg.RoleSupport}}
 	}
 	return deps
@@ -148,7 +169,7 @@ func TestRoundSupportReturn(t *testing.T) {
 		t.Fatal(err)
 	}
 	fake := &trackertest.Fake{Issues: []backlog.Issue{
-		{Key: tracker.NumKey(7), Title: "Add export", Labels: []string{"type:feature", config.Label(nil, "support")}, State: "open"},
+		{Key: tracker.NumKey(7), Title: "Add export", Labels: []string{"type:feature", "machine:mac"}, State: "open"},
 	}}
 	deps := supportReturnDeps(fake)
 
@@ -161,7 +182,7 @@ func TestRoundSupportReturn(t *testing.T) {
 		t.Errorf("data = %v", d)
 	}
 	is, _ := fake.Get(context.Background(), tracker.NumKey(7), true)
-	if slices.Contains(is.Labels, config.Label(nil, "support")) {
+	if slices.Contains(is.Labels, "machine:mac") {
 		t.Errorf("labels = %v", is.Labels)
 	}
 	if len(is.Comments) != 1 || !strings.Contains(is.Comments[0].Body, "\n<!-- rota:support-return -->\nnot ready") || !strings.Contains(is.Comments[0].Body, "the premise is wrong") {
@@ -194,5 +215,35 @@ func TestRoundSupportReturnRefusals(t *testing.T) {
 	}
 	if code, _, _ := rotaRunWith(t, supportReturnDeps(fake), "--json", "-C", root, "round", "support", "return", "--reason-file", reason); code != ExitUsage {
 		t.Errorf("no id: exit %d", code)
+	}
+}
+
+func TestRoundCandidatesWarnLegacySupport(t *testing.T) {
+	for _, tc := range []struct{ name, label, issues string }{
+		{"default", "site:support", `"issues":{"source":"github"}`},
+		{"custom", "remote", `"issues":{"source":"github","labels":{"support":"remote"}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := trackerProject(t, `{`+tc.issues+`,"round":{"support":"mac","scope":"open"}}`)
+			fake := &trackertest.Fake{Issues: []tracker.Issue{{Key: tracker.NumKey(7), Title: "Legacy offer", State: "open", Labels: []string{tc.label}}}}
+			code, env, stderr := rotaRunWith(t, supportReturnDeps(fake), "--json", "-C", root, "round", "candidates")
+			if code != ExitOK {
+				t.Fatalf("exit %d: %v %s", code, env, stderr)
+			}
+			if !strings.Contains(stderr, "rota migrate labels --apply") || !strings.Contains(stderr, tc.label) || env["warnings"] == nil {
+				t.Errorf("missing migration warning: env=%v stderr=%s", env, stderr)
+			}
+			candidates, _ := envObj(env, "data")["candidates"].([]any)
+			if len(candidates) != 1 {
+				t.Fatalf("candidates = %v", candidates)
+			}
+			c := candidates[0].(*jsonx.Object)
+			if v, _ := c.Get("blockedBy"); v != "site" {
+				t.Errorf("candidate = %v", c)
+			}
+			if v, _ := c.Get("ready"); v != false {
+				t.Errorf("candidate ready = %v", v)
+			}
+		})
 	}
 }

@@ -225,10 +225,13 @@ under `.worktrees/`; none of this repo's verbs or tests do (smoke section 70 pin
 
 ## Support role
 
-A second machine can build `site:support` issues beside main with no connection between the
+A second machine can build issues pinned `machine:<round.support>` beside main with no connection between the
 two: GitHub is the only shared state. `round.support` (tracked) names the machine and its
 roster prefix; `round.role` (local only, `.rota/config.local.json`) turns a machine into the
-support side. A support machine never merges and never writes tracked `.rota/` content; those
+support side. Main is named `main`; support takes its name from `round.support`.
+With support enabled, `machine:<name>` pins an issue to that machine; candidates on other
+machines show it as blocked. Unpinned issues are available to main; support still takes only
+issues pinned to it. Use `machine:main` to keep an issue on main. A support machine never merges and never writes tracked `.rota/` content; those
 verbs exit 4 `blockedBy: role` (the tables live in `internal/cli/support_fence.go`).
 
 Setting one up takes two steps and no hand edits:
@@ -264,7 +267,7 @@ is posted.
 - **Hand back by default.** When an offered issue cannot be worked (not ready, wrong premise,
   collides with main's work, the maintainer holds it), the support machine runs
   `rota round support return <ID> --reason-file <f>` at once and never idles on it. The reason
-  goes on the issue as a signed comment and the support label comes off, so main's next
+  goes on the issue as a signed comment and the `machine:<round.support>` pin comes off, so main's next
   `round candidates` lists the issue again. It is refused on main (`blockedBy: role`) and while a
   support slot holds the issue (`blockedBy: claimed`).
 - **The issue thread is the index.** Every note one orchestrator posts for the other is an issue
@@ -273,7 +276,7 @@ is posted.
   also leave a one-line `rota:pr-pointer` comment on the issue linking the PR post. Comments, relays included, carry
   a `rota:from <role>` stamp; only comments by authors with write access count.
 - **What each watch wakes on.** Main's `round watch` exits on a changed PR head for an offered or
-  adopted issue, a PR opened for a `site:support` issue, and a new comment from the support
+  adopted issue, a PR opened for an issue pinned `machine:<round.support>`, and a new comment from the support
   machine on an offered or held issue. The support machine's watch exits on a new comment from
   main on the issues its slots hold. Anything not yet reported wakes the watch once, so a PR that
   was already open when the watch started is not swallowed. Only the offered-or-held set is read,

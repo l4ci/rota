@@ -39,7 +39,7 @@ var supportFenced = []string{
 	"rota id next", "rota refactor reset",
 	"rota spike add", "rota spike finish",
 	"rota init", "rota init umbrella", "rota update",
-	"rota migrate config", "rota migrate hv", "rota migrate issues", "rota migrate milestone-files", "rota migrate milestones", "rota migrate source",
+	"rota migrate labels", "rota migrate config", "rota migrate hv", "rota migrate issues", "rota migrate milestone-files", "rota migrate milestones", "rota migrate source",
 	// Tracked instruction files, which main regenerates and commits.
 	"rota block", "rota instructions init",
 	// Main only: the work split.
