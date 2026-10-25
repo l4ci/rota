@@ -21,8 +21,9 @@ type waitingPR struct {
 // trainNudge is a base with two or more reviewed PRs waiting: one train lands
 // them in a single verify where a gate per PR would run one full verify each.
 type trainNudge struct {
-	Base string
-	PRs  []string
+	Base   string
+	PRs    []string
+	Assign *assignNudge
 }
 
 // Command is the train to run, the PR numbers as `rota worker train` takes them.
@@ -36,8 +37,23 @@ func (n trainNudge) Command() string {
 
 // Text is the nudge line `round wait` and `round watch` print.
 func (n trainNudge) Text() string {
+	command := n.Command()
+	if n.Assign != nil {
+		command = n.Assign.First() + "; then " + command
+	}
 	return fmt.Sprintf("nudge\ttrain\t%d reviewed PRs wait on %s (%s)\t%s",
-		len(n.PRs), dash(n.Base), strings.Join(prHashes(n.PRs), " "), n.Command())
+		len(n.PRs), dash(n.Base), strings.Join(prHashes(n.PRs), " "), command)
+}
+
+func readyTrainNudges(c *Ctx, root string) []trainNudge {
+	ns := trainNudges(waitingPRs(c, root))
+	if len(ns) > 0 {
+		n := freeSlotAssignment(c, root)
+		for i := range ns {
+			ns[i].Assign = n
+		}
+	}
+	return ns
 }
 
 func prHashes(prs []string) []string {
@@ -191,6 +207,11 @@ func trainNudgeData(ns []trainNudge) []any {
 		o.Set("base", n.Base)
 		o.Set("prs", strList(n.PRs))
 		o.Set("command", n.Command())
+		if n.Assign != nil {
+			a := n.Assign.data()
+			a.Set("command", n.Assign.Command()+" --agent "+n.Assign.Slot)
+			o.Set("assignFirst", a)
+		}
 		rows = append(rows, o)
 	}
 	return rows
@@ -210,7 +231,7 @@ func trainNudgeLines(ns []trainNudge) []string {
 // by `round watch` and `round tick` (`round wait` builds its own): a tick that merged nothing
 // still leaves the nudge, since PRs the autopilot held or has not reached wait.
 func addTrainNudge(c *Ctx, root string, d *jsonx.Object, text []string) []string {
-	nudges := trainNudges(waitingPRs(c, root))
+	nudges := readyTrainNudges(c, root)
 	rows := trainNudgeData(nudges)
 	if rows == nil {
 		return text

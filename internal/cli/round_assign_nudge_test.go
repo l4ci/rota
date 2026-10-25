@@ -73,6 +73,58 @@ func TestWatchNudgesToAssignBeforeGating(t *testing.T) {
 	}
 }
 
+func TestTrainNudgeAssignsFreeSlotFirst(t *testing.T) {
+	for _, withCandidate := range []bool{true, false} {
+		t.Run(map[bool]string{true: "ready candidate", false: "no candidate"}[withCandidate], func(t *testing.T) {
+			dir := assignNudgeRepo(t, withCandidate)
+			write(t, filepath.Join(dir, ".rota", "config.json"), `{"round":{"roster":["w1","w2"],"slots":2,"scope":"open"}}`)
+			// The train wake has no returning slot: w1 was already free.
+			write(t, filepath.Join(dir, ".rota", "workers.json"), `{"slots":[{"name":"w1","state":"idle"},{"name":"w2","state":"busy"}]}`)
+			addRegistryRows(t, dir, map[string][]map[string]any{"prs": {
+				{"pr": "#11", "branch": "a/1-x", "base": "main"},
+				{"pr": "#12", "branch": "b/2-x", "base": "main"},
+			}})
+			for _, branch := range []string{"a/1-x", "b/2-x"} {
+				gitIn(t, dir, "branch", branch)
+				if code, _, errOut := rotaIn(t, dir, "verdict", "add", branch, "--kind", "review-spec", "--verdict", "PASS"); code != 0 {
+					t.Fatalf("review: %d %s", code, errOut)
+				}
+			}
+			c := &Ctx{Deps: testDeps(), ctx: context.Background()}
+			cd, err := rotastate.CommonDir(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res := watchResult(c, dir, cd, roundlease.DefaultEnv(), roundwatch.Result{Reason: roundwatch.ReasonChange}, nil, "")
+			trainAt := strings.Index(res.Text, "rota worker train 11 12 --base main")
+			if trainAt < 0 {
+				t.Fatalf("missing train: %s", res.Text)
+			}
+			assignAt := strings.Index(res.Text, "assign first: rota round assign T01 --agent w1")
+			if withCandidate && (assignAt < 0 || assignAt > trainAt) {
+				t.Errorf("assignment must precede train: %s", res.Text)
+			}
+			if !withCandidate && strings.Contains(res.Text, "assign first:") {
+				t.Errorf("unexpected assignment: %s", res.Text)
+			}
+			rows, _ := res.Data.(*jsonx.Object).Get("trainNudge")
+			row := rows.([]any)[0].(*jsonx.Object)
+			assignment, has := row.Get("assignFirst")
+			if has != withCandidate {
+				t.Fatalf("JSON assignFirst present = %v, want %v", has, withCandidate)
+			}
+			if has {
+				cmd, _ := assignment.(*jsonx.Object).Get("command")
+				if cmd != "rota round assign T01 --agent w1" {
+					t.Errorf("JSON assignment command = %v", cmd)
+				}
+			} else if res.Text != "nudge\ttrain\t2 reviewed PRs wait on main (#11 #12)\trota worker train 11 12 --base main" {
+				t.Errorf("no-candidate nudge changed: %s", res.Text)
+			}
+		})
+	}
+}
+
 // AC-1 (#1077): round wait carries the same assign nudge as the watch, in text
 // and in data, and only while a candidate is ready.
 func TestRoundWaitNudgesToAssignBeforeGating(t *testing.T) {
