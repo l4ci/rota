@@ -1460,3 +1460,26 @@ func TestTransferBriefCarriesThePreflightLine(t *testing.T) {
 		}
 	}
 }
+
+// #2058: a slot whose latest event is a done report is waiting on the
+// orchestrator; it is not stalled however long the review takes.
+func TestReconcileDoneEventIsNotStalled(t *testing.T) {
+	f := newMoveFx(t)
+	f.agents("ben")
+	at := f.now.Add(-45 * time.Minute).UTC().Format(time.RFC3339)
+	rawSlot(f.root, "ben", func(s *jsonx.Object) {
+		s.Set("handle", "w1:ben")
+		s.Set("activeAt", at)
+	})
+	f.now = f.now.Add(2 * time.Hour)
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetEvent(worker.EventDone, "done", at) }); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := f.env.Status(bg, f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasKind(kinds(rep.Findings)["ben"], StalledSlot) {
+		t.Errorf("a slot that reported done is not stalled: %+v", rep.Findings)
+	}
+}
