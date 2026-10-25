@@ -269,11 +269,12 @@ func (e Env) adoptedPRNumber(ctx context.Context, root string, rep *Report, v *v
 
 // unrecordedMergedPR is the merged PR a registered, finished slot holding an
 // issue should record but does not, nil when the slot records one or the forge
-// shows none. The forge is asked only for a branch ahead of base on a done or
-// idle slot (a working slot's missing PR is the normal state); a failed lookup
+// shows none. The forge is asked only of a done or idle slot (a working slot's
+// missing PR is the normal state). A merge commit leaves the branch tip inside
+// base, so how far ahead the branch is cannot gate the lookup; a failed lookup
 // warns and sets v.prErr, so --apply skips the repair.
-func (e Env) unrecordedMergedPR(ctx context.Context, root string, rep *Report, v *view, r *Row, ahead int, so *worker.Slot) *tracker.PR {
-	if !r.Registered || so == nil || r.Issue == "" || r.PR != "" || ahead == 0 || !worker.Parkable(strutil.FirstNonEmpty(r.HostState, so.State())) {
+func (e Env) unrecordedMergedPR(ctx context.Context, root string, rep *Report, v *view, r *Row, so *worker.Slot) *tracker.PR {
+	if !r.Registered || so == nil || r.Issue == "" || r.PR != "" || !worker.Parkable(strutil.FirstNonEmpty(r.HostState, so.State())) {
 		return nil
 	}
 	m, err := e.mergedBranchPR(ctx, root, r.Branch, v.base)
@@ -540,7 +541,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 				}
 			} else {
 				ahead := e.ahead(ctx, root, v.base, r.Branch)
-				if m := e.unrecordedMergedPR(ctx, root, rep, v, r, ahead, slotObj[r.Name]); m != nil {
+				if m := e.unrecordedMergedPR(ctx, root, rep, v, r, slotObj[r.Name]); m != nil {
 					v.mergedPR = m
 					r.PR = m.URL
 					rep.add(Finding{Kind: PRUnrecorded, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("merged PR #%d has branch %s as head, slot records none", m.Number, r.Branch), Repair: "record pr"})

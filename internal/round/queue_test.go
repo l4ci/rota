@@ -713,3 +713,37 @@ func TestMergedBranchPRIsRecordedByAssignAndReconcile(t *testing.T) {
 		}
 	})
 }
+
+// A merge commit leaves the branch tip an ancestor of base, so the branch is
+// not ahead of it; reconcile --apply must still record the merged PR, which
+// transfer onto the finished slot needs (#1852).
+func TestMergeCommitPRIsRecordedByReconcileAndUnblocksTransfer(t *testing.T) {
+	f := newMoveFx(t)
+	branch := f.slot("ben").Branch()
+	if _, err := f.assign("13", "dana"); err != nil {
+		t.Fatal(err)
+	}
+	f.finish(t, "ben", "")
+	tip := gitIn(t, f.wt("ben"), "rev-parse", "HEAD")
+	sh(t, f.wt("ben"), "push", "-q", "origin", branch)
+	sh(t, f.root, "merge", "-q", "--no-ff", "-m", "Merge "+branch, branch)
+	sh(t, f.root, "push", "-q", "origin", "main")
+	sh(t, f.root, "fetch", "-q", "origin")
+	if n := f.env.ahead(bg, f.root, "main", branch); n != 0 {
+		t.Fatalf("fixture: merged branch is %d ahead of main, want 0", n)
+	}
+	f.forge.mergedPRs = map[string][]tracker.PR{branch: {{Number: 7, Branch: branch, URL: pr7, HeadSHA: tip}}}
+
+	if _, err := f.transfer("13", "ben", nil); err == nil {
+		t.Fatal("transfer onto a slot with no recorded PR should refuse before reconcile")
+	}
+	if _, err := f.env.Reconcile(bg, f.root, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.slot("ben").PR(); got != pr7 {
+		t.Fatalf("slot records %q, want the merged PR", got)
+	}
+	if _, err := f.transfer("13", "ben", nil); err != nil {
+		t.Errorf("transfer still refuses after reconcile: %v", err)
+	}
+}
