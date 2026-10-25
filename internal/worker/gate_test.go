@@ -939,6 +939,30 @@ func TestGateReleasesTheClaimLabelOfClosedIssues(t *testing.T) {
 	}
 }
 
+func TestGateMergeDropsClaimLabel(t *testing.T) {
+	for _, labels := range []string{"in-progress,claimed:dana@main,claimed:ben@mac,type:bug", "claimed:dana@main,type:bug"} {
+		for _, state := range []string{"open", "closed"} {
+			t.Run(labels+state, func(t *testing.T) {
+				w := newWorld(t, ghURL)
+				w.forge("body", "Closes #5\n")
+				w.forge("issueState", state)
+				w.forge("issueLabels", labels)
+				res, err := w.gate(false, GateOpts{})
+				if err != nil || res.Verdict != GatePass {
+					t.Fatalf("gate: %+v %v", res, err)
+				}
+				want := labels
+				if state == "closed" {
+					want = "type:bug"
+				}
+				if got := w.forgeWord("issueLabels"); got != want {
+					t.Fatalf("labels after merge: %q want %q", got, want)
+				}
+			})
+		}
+	}
+}
+
 func TestGateLocalMergeReportsFailedRecovery(t *testing.T) {
 	w := newWorld(t, "")
 	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")

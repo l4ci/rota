@@ -793,8 +793,20 @@ in `<!-- rota:handoff <slot>@<round> -->`.
 
 `rota round status` lists the round's slots with host, PR and drift. `rota round reconcile` reports
 drift between the registry, the host, git and the forge, including `stalled` (never repaired),
-`lease-stale`, `claim-mismatch` and `unregistered-branch`; `--apply` makes the safe repairs, and never
-edits the tracker. A repair whose evidence could not be read this run (the host for a `dead-tab`, the
+`lease-stale`, `claim-mismatch`, `claim-label-drift` and `unregistered-branch`.
+Each won round claim has a visible `claimed:<agent>@<machine>` label: `claimed:ben@main` on main,
+or `claimed:ben@mac` for support slot `mac-ben` when `round.support` is `mac`. Comment claims
+decide ownership; labels follow them. `--apply` repairs missing or stale claim labels without
+editing the comment claims. Release removes that claim's label; completion and the merge gate
+remove all claim labels from closed issues. Reconcile also cleans closed issues that retain them.
+
+After upgrading, run `rota round reconcile --apply` once to backfill the visible labels for
+in-flight comment claims. It also repairs stray claim labels on open issues with no remaining
+claim. Only `round reconcile` sweeps closed issues for claim labels; status, watch and the
+autopilot tick all stay on filtered closed-issue reads. Reverting the change leaves `claimed:*` labels already written to
+the tracker; remove those labels by hand.
+
+A repair whose evidence could not be read this run (the host for a `dead-tab`, the
 forge for a PR, merge or label finding) is skipped with a warning and stays in `drift`; run it again once
 the host or forge answers. A slot whose PR has merged is parked, even one already marked `dead` because its
 tab is gone; a slot whose worktree has uncommitted changes is left alone.

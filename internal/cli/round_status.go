@@ -242,7 +242,9 @@ func roundReconcile(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		ctx := c.Context()
-		out, err := withBoard(c, root, c.deps().RoundEnv(ctx, root)).Reconcile(ctx, root, *apply)
+		renv := withBoard(c, root, c.deps().RoundEnv(ctx, root))
+		renv.SweepClosedClaims = true
+		out, err := renv.Reconcile(ctx, root, *apply)
 		if err != nil {
 			return Result{}, err
 		}

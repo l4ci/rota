@@ -332,6 +332,11 @@ func (b *Issues) Complete(ref string, in CompleteInput) (bool, error) {
 			stale = append(stale, l)
 		}
 	}
+	for _, l := range is.Labels {
+		if strings.HasPrefix(l, ClaimLabelPrefix) {
+			stale = append(stale, l)
+		}
+	}
 	if len(stale) > 0 {
 		if err := tr.RemoveLabels(b.ctx(), n, stale); err != nil {
 			return false, err
@@ -686,7 +691,8 @@ func (b *Issues) applyState(is Issue, want string) (bool, error) {
 // claim record), re-reads the claims, and the earliest open claim wins
 // (IssueBackend.claim). A loser posts its release
 // marker and changes no labels; the winner gets the in-progress label and the
-// assignment. An unknown or closed item wraps ErrNotFound.
+// assignment plus its derived claimed:<agent>@<machine> label (best effort).
+// An unknown or closed item wraps ErrNotFound.
 func (b *Issues) Claim(ref, claimID string) (won bool, holder string, err error) {
 	return b.ClaimShared(ref, claimID, 1)
 }
@@ -738,6 +744,11 @@ func (b *Issues) ClaimShared(ref, claimID string, holders int) (won bool, holder
 			return false, "", err
 		}
 	}
+	if label, ok := ClaimLabel(b.Cfg, claimID); ok && !slices.Contains(is.Labels, label) {
+		if err := tr.AddLabels(b.ctx(), n, []string{label}, b.AutoCreate()); err != nil {
+			b.warn("claim label for " + claimID + ": " + err.Error())
+		}
+	}
 	return true, claimID, nil
 }
 
@@ -771,7 +782,8 @@ func (b *Issues) dropClaim(n tracker.IssueKey, claimID string) error {
 }
 
 // Release posts the release marker (on a tracker.ClaimStore, drops its claim
-// record) and drops the in-progress label when no
+// record), removes its derived claim label when no other claim maps to it
+// (best effort) and drops the in-progress label when no
 // claim remains. It writes nothing and returns false when claimID holds no open
 // claim.
 func (b *Issues) Release(ref, claimID string) (bool, error) {
@@ -792,6 +804,17 @@ func (b *Issues) Release(ref, claimID string) (bool, error) {
 	}
 	if err := b.dropClaim(is.Key, claimID); err != nil {
 		return false, err
+	}
+	if label, ok := ClaimLabel(b.Cfg, claimID); ok && slices.Contains(is.Labels, label) {
+		shared := slices.ContainsFunc(held, func(other string) bool {
+			otherLabel, ok := ClaimLabel(b.Cfg, other)
+			return other != claimID && ok && otherLabel == label
+		})
+		if !shared {
+			if err := tr.RemoveLabels(b.ctx(), is.Key, []string{label}); err != nil {
+				b.warn("release claim label for " + claimID + ": " + err.Error())
+			}
+		}
 	}
 	if len(held) == 1 {
 		if label := config.Label(b.Cfg, "inProgress"); slices.Contains(is.Labels, label) {

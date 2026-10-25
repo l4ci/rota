@@ -64,15 +64,15 @@ func TestReadForgeAnswersAndFailsAlone(t *testing.T) {
 	}
 }
 
-// listFailForge fails the labelled list of one state; every other call goes to
-// the embedded forge.
+// listFailForge fails label discovery for one state, including reconcile's
+// broad closed sweep as well as Status's filtered closed list.
 type listFailForge struct {
 	Forge
 	state string
 }
 
 func (f listFailForge) List(ctx context.Context, fl tracker.ListFilter) ([]tracker.Issue, error) {
-	if fl.State == f.state && len(fl.Labels) > 0 {
+	if fl.State == f.state && (fl.State == "closed" || len(fl.Labels) > 0) {
 		return nil, errors.New("list " + f.state + " failed")
 	}
 	return f.Forge.List(ctx, fl)

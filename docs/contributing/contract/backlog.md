@@ -49,6 +49,7 @@ data: {"id": string, "type": "B"|"F"|"T", "claimId": string, "changed": bool}
 exit: 3 item unknown or closed; 4 when another claim holds the item (old rc 5; the message names the holder; failure `data` has `changed: true`, because the losing claim was posted and then released on the issue); tracker
 old: hv-item-claim <ID> --as <claim-id>
 shim: `changed` is false for the file backend (silent no-op), true when stdout printed `claimed ...`. The file backend is a success no-op, not `backend`. `--as` must be non-empty with no whitespace and no `-->` (else 2).
+note: won round claims (`<agent>@<digits>`) also add `claimed:<agent>@<machine>`, created on demand when `issues.autoCreateLabel` permits it. Main slots use machine `main`; support slots strip the committed `round.support` prefix from the agent and use that value as machine (`mac-ben@3` becomes `claimed:ben@mac`). Legacy ids and labels longer than 50 characters are skipped. Losing claims add no label. Label failures warn without undoing the comment claim; comments remain authoritative. `round reconcile --apply` repairs visible label drift.
 
 ### rota item release
 rota item release <ID> --as <claim-id>
@@ -57,6 +58,7 @@ data: {"id": string, "type": "B"|"F"|"T", "claimId": string, "changed": bool}
 exit: 3 item unknown; tracker
 old: hv-item-release <ID> --as <claim-id>
 shim: old prints nothing, so `changed` is true when the backend is issues and rc 0, false for file backend; the Go port reports false when no open claim matched.
+note: release removes that claim's `claimed:` label (best effort) once no remaining claim maps to it; two rounds held by the same agent share one label. Closing an item through `item complete` removes every `claimed:` label beside its state labels.
 
 ### rota item ready
 rota item ready <ID>
