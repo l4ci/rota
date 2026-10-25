@@ -139,6 +139,8 @@ type Settings struct {
 	// Support is round.support: the support machine's name and roster prefix;
 	// "" leaves the support orchestrator off.
 	Support string
+	// LegacySupportLabel preserves retired support offers until the label migration.
+	LegacySupportLabel string
 	// Role is round.role: RoleMain or RoleSupport, per machine.
 	Role string
 	// Roles is roles.<role>.tier and .effort for every name in Roles.
@@ -263,6 +265,7 @@ func FromConfig(cfg any) (Settings, error) {
 		return s, fmt.Errorf("round.adoptPattern %q: %v", s.AdoptPattern, err)
 	}
 	s.Support = SupportName(cfg)
+	s.LegacySupportLabel = LegacySupportLabel(cfg)
 	if s.Role, err = MachineRole(cfg); err != nil {
 		return s, err
 	}
@@ -523,7 +526,7 @@ func sharedPaths(cfg any) ([]string, error) { return list(cfg, "round.sharedPath
 // Labels are the issues.labels roles a round and the gate act on, with the
 // schema defaults config.Label supplies.
 type Labels struct {
-	InProgress, NeedsHuman, NeedsReview, Support string
+	InProgress, NeedsHuman, NeedsReview string
 }
 
 // LabelsOf reads issue labels for round and gate consumers from a loaded config.
@@ -533,7 +536,6 @@ func LabelsOf(cfg any) Labels {
 		InProgress:  config.Label(cfg, "inProgress"),
 		NeedsHuman:  config.Label(cfg, "needsHuman"),
 		NeedsReview: config.Label(cfg, "needsReview"),
-		Support:     config.Label(cfg, "support"),
 	}
 }
 
@@ -604,6 +606,17 @@ func SupportName(cfg any) string {
 	return strings.TrimSpace(config.String(cfg, "round.support"))
 }
 
+// LegacySupportLabel reads the retired key while upgrades still need its value.
+// Repos that used the default never wrote the key.
+func LegacySupportLabel(cfg any) string {
+	if v, ok := config.Lookup(cfg, "issues.labels.support"); ok {
+		if label, ok := v.(string); ok && strings.TrimSpace(label) != "" {
+			return label
+		}
+	}
+	return "site:support"
+}
+
 // MachineRole is round.role read alone, so a bad value in another round.* key cannot
 // hide it: the support fence reads it before anything else.
 func MachineRole(cfg any) (string, error) {
@@ -617,16 +630,34 @@ func MachineRole(cfg any) (string, error) {
 	return "", fmt.Errorf("round.role must be %s or %s, not %v", RoleMain, RoleSupport, v)
 }
 
+// CheckMachineName validates the derived names shared by config and round entry.
+// A main-only repo may leave support empty; a support role must have its own name.
+func CheckMachineName(support, role string) error {
+	if role == RoleSupport && support == "" {
+		return fmt.Errorf("round.role is support but round.support is empty: set round.support to this machine's name")
+	}
+	if support == "" {
+		return nil
+	}
+	if support == RoleMain {
+		return fmt.Errorf("round.support: main is reserved for the main machine")
+	}
+	if !agentRe.MatchString(support) {
+		return fmt.Errorf("round.support: %q is not a lowercase name usable in a branch (letters, digits, -)", support)
+	}
+	return nil
+}
+
 // supportRoster applies round.support to the roster (#1598): the support
 // machine provisions every name as `<support>-<name>`, so its slots, branches,
 // claims and workspaces never match main's, and main refuses a name that
 // starts with that prefix. Off when round.support is empty.
 func (s *Settings) supportRoster() error {
+	if err := CheckMachineName(s.Support, s.Role); err != nil {
+		return err
+	}
 	if s.Support == "" {
 		return nil
-	}
-	if !agentRe.MatchString(s.Support) {
-		return fmt.Errorf("round.support: %q is not a lowercase name usable in a branch (letters, digits, -)", s.Support)
 	}
 	prefix := s.Support + "-"
 	for i, n := range s.Roster {
@@ -638,4 +669,37 @@ func (s *Settings) supportRoster() error {
 		}
 	}
 	return nil
+}
+
+// MachinePrefix is the fixed prefix of labels pinning issues to a machine.
+const MachinePrefix = "machine:"
+
+// MachineLabel is the pin for name, or empty when support is disabled.
+func MachineLabel(name string) string {
+	if name == "" {
+		return ""
+	}
+	return MachinePrefix + name
+}
+
+// MachineName derives the local name without a second config key.
+func MachineName(support, role string) string {
+	if role == RoleSupport {
+		return support
+	}
+	return RoleMain
+}
+
+// MachineName is this machine's derived name.
+func (s Settings) MachineName() string { return MachineName(s.Support, s.Role) }
+
+// PinsOf returns nonempty machine names, preserving label order.
+func PinsOf(labels []string) []string {
+	var pins []string
+	for _, label := range labels {
+		if name, ok := strings.CutPrefix(label, MachinePrefix); ok && name != "" {
+			pins = append(pins, name)
+		}
+	}
+	return pins
 }

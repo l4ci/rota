@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Upgrade notes
+
+- **Named machine pins.** `machine:<name>` replaces `site:support`: main is named `main`, support uses `round.support`. On main, preview with `rota migrate labels`, then run `rota migrate labels --apply` to relabel open issues and retire `issues.labels.support` (including a custom label value). `config fill` preserves that key until migration succeeds. Candidates show pins to other machines as blocked; unpinned issues remain available to main.
+
 ## v0.25.0 — 2026-10-24
 
 Config shrinks from 142 keys to 124, the round status screen is fast and grouped by issue, and worker slots can share dependency directories.
