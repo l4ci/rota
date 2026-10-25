@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -164,24 +163,6 @@ type PollResult struct {
 	Slots   []PollRow
 	Notes   map[string]string // slot -> why its state was not read from a sentinel
 	Changed bool
-}
-
-// PollFixture classifies a pane text file instead of talking to a host. It
-// exists so the classifier is testable without a live session. It writes
-// nothing.
-func PollFixture(path, slot, kind, status string, lines int) (PollResult, error) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return PollResult{}, fail(exitcode.ExitUsage, "fixture not found: "+path)
-	}
-	if slot == "" {
-		slot = "fixture"
-	}
-	if lines <= 0 {
-		lines = 60
-	}
-	st, ev := ClassifyFor(kind, string(b), false, lines, status)
-	return PollResult{Slots: []PollRow{{slot, st, ev}}}, nil
 }
 
 // Poll classifies the worker slots through the host and records each slot's
