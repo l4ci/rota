@@ -21,7 +21,7 @@ func TestLandLockHeld(t *testing.T) {
 		repo := gittest.NewRepo(t, "main")
 		var during bool
 		var duringErr error
-		err := env.withLandLock(bg, repo, func(bool) error {
+		err := env.withLandLock(bg, repo, "", func(bool) error {
 			during, duringErr = env.LandLockHeld(bg, repo)
 			return nil
 		})
@@ -46,4 +46,26 @@ func TestLandLockHeld(t *testing.T) {
 			t.Fatal("LandLockHeld on error returned held=true")
 		}
 	})
+}
+
+func TestLandLockHolder(t *testing.T) {
+	env := Env{}.WithDefaults()
+	repo := gittest.NewRepo(t, "main")
+	if got := env.LandLockHolder(bg, repo); got != "" {
+		t.Fatalf("holder with a free lock = %q, want empty", got)
+	}
+	var during string
+	err := env.withLandLock(bg, repo, "ben", func(bool) error {
+		during = env.LandLockHolder(bg, repo)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if during != "ben" {
+		t.Errorf("holder under the lock = %q, want ben", during)
+	}
+	if got := env.LandLockHolder(bg, repo); got != "" {
+		t.Errorf("holder after release = %q, want empty", got)
+	}
 }

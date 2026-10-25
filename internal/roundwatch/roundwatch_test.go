@@ -9,7 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 func testEnv(now *time.Time, alive map[int]bool) roundlease.Env {
@@ -228,5 +232,70 @@ func TestMergedDoneSlotNeedsNoWake(t *testing.T) {
 	}
 	if _, attn := NeedsWatch(root); len(attn) != 0 {
 		t.Fatalf("attn %v", attn)
+	}
+}
+
+// A gate or train holding the land lock is part of the snapshot, so its release
+// reads as a change and wakes a watch whose assign was refused.
+func TestLocalSnapshotReportsTheLandLock(t *testing.T) {
+	repo := gittest.NewRepo(t, "main")
+	cd, err := rotastate.CommonDir(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := rotastate.File(cd, "land")
+	var during, after map[string]string
+	err = fsio.Locked(path, 0, func() error {
+		if err := os.WriteFile(path+worker.LandHolderSuffix, []byte("#1900"), 0o644); err != nil {
+			return err
+		}
+		defer os.Remove(path + ".holder")
+		during = LocalSnapshot(repo)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	after = LocalSnapshot(repo)
+	if during[GateKey] != "#1900" {
+		t.Errorf("snapshot under the lock = %v, want %s=#1900", during, GateKey)
+	}
+	if _, ok := after[GateKey]; ok {
+		t.Errorf("snapshot after release = %v, want no %s", after, GateKey)
+	}
+	ch := Diff(during, after)
+	if len(ch) != 1 || ch[0].Key != GateKey || ch[0].From != "#1900" || ch[0].To != "" {
+		t.Errorf("release change = %+v, want %s #1900 -> gone", ch, GateKey)
+	}
+}
+
+// A lock taken while the watch runs is not news; its release is.
+func TestRunWakesOnGateReleaseOnly(t *testing.T) {
+	snaps := []map[string]string{
+		{},
+		{GateKey: "#1900"},
+		{GateKey: "ben"},
+		{},
+	}
+	i := 0
+	env := Env{
+		Local: func() map[string]string { s := snaps[min(i, len(snaps)-1)]; return s },
+		Forge: func(context.Context) map[string]string { return nil },
+		Wait: func(context.Context, time.Duration) (*SlotNews, error) {
+			i++
+			return nil, nil
+		},
+		Now:   func() time.Time { return time.Unix(0, 0) },
+		Sleep: func(context.Context, time.Duration) {},
+	}
+	res, err := Run(context.Background(), env, Opts{Heartbeat: time.Hour, Poll: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Reason != ReasonChange || i != 3 {
+		t.Fatalf("woke %q after %d waits, want a change at the release (3)", res.Reason, i)
+	}
+	if len(res.Changes) != 1 || res.Changes[0].Key != GateKey || res.Changes[0].From != "ben" || res.Changes[0].To != "" {
+		t.Errorf("changes = %+v, want %s ben -> gone", res.Changes, GateKey)
 	}
 }
