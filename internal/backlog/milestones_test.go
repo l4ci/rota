@@ -326,3 +326,14 @@ func TestMilestonePutKeepsChildrenAndSyncKeepsPlan(t *testing.T) {
 		t.Fatalf("after sync:\n%s", body)
 	}
 }
+
+func TestIssuesMilestoneAddRejectsUnknownKind(t *testing.T) {
+	fake := &trackertest.MS{Fake: &trackertest.Fake{}}
+	b := msIssues(fake)
+	if _, err := b.MilestoneAdd("", "Odd", "s", nil, "bogus", "2026-10-02"); err == nil {
+		t.Error("unknown kind accepted")
+	}
+	if len(fake.Issues) != 0 {
+		t.Errorf("nothing may be created: %+v", fake.Issues)
+	}
+}
