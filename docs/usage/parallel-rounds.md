@@ -265,6 +265,8 @@ branch `<agent>/<issue>-<slug>`, picks the account and dispatches a short signed
 pointer to the standing contract (`round.brief`, else `skills/references/worker-contract.md`), the
 issue to read and dispute, the item's `## Out of scope` section when it has one, the siblings and the decisions from `--body-file`.
 
+- **Milestone base.** An issue tagged to an active milestone is cut from `origin/milestone/<id>`
+  and its PR targets that branch; see [milestone branches](vision-and-plans.md#milestone-branches).
 - **Tier.** `--tier light|standard|heavy` picks the worker's model tier (default `round.tier`); a
   tier above the default needs `--tier-reason`. The tier and its model are recorded on the slot,
   shown by `rota round status`, and named in the brief with the tier table for the worker's own
@@ -880,7 +882,7 @@ with no reading, or when headroom rose because the quota window reset.
 With `round.support` set, main labels issues for the support machine (`rota round support offer`)
 and the two orchestrators talk through the issue thread. The support machine hands back an issue
 it cannot work with `rota round support return <ID> --reason-file <f>`. Both `round watch` runs
-wake on the other machine's PR changes and comments, and main's merge gate accepts a support PR's
+wake on the other machine's PR changes and comments (the support machine's also on main's comments on the issue of a PR parked for review, and on a PR of its own that turns conflicting with its base), and main's merge gate accepts a support PR's
 approvals from relays the support orchestrator posted as issue comments. See
 `docs/contributing/rounds.md` (Support role) for the rules.
 
@@ -951,3 +953,42 @@ minutes (`BASH_DEFAULT_TIMEOUT_MS`) and is capped at 10 minutes (`BASH_MAX_TIMEO
 - [Parallel work](parallel-work.md): several `/rota-work` sessions without an orchestrator.
 - [Autonomy levels](autonomy.md): how far a run goes before it stops, solo or in a round; `auto` turns on the autopilot.
 - [Contributing: rounds](../contributing/rounds.md): this repo's gate, repo rules and roster.
+
+## Stale claims on another machine
+
+`rota round status` reports a `stale-claim` finding when a remote holder has no recent
+claim, PR update or origin branch activity. `rota round candidates` keeps that item
+visible with `blockedBy: stale-claim`, `staleHolder` and `lastActivity`; `rota doctor`
+adds a warning with the same holder and time. Local held items use the existing stalled
+and claim-mismatch checks instead.
+
+The default threshold is four hours for bugs, tasks and Minor/Cosmetic features, eight
+hours for Major features. Configure `round.claimStaleMinutes` and
+`round.claimStaleMinutesMajor`; `0` disables the corresponding class. PR comments and
+reviews count through the forge's PR update time. Branch committer dates are clamped to
+now. Claims without a known server timestamp are never stale. Automatic stale scans only read details
+for items carrying `claimed:*` or the in-progress label. Explicit reclaim checks also
+read unlabelled comment claims directly. Open-scope candidates still treat an open
+comment claim as taken when its label is missing. Activity follows any resolving
+PR and branch, including a transfer's original branch and a bundle lead's PR. Status,
+candidates and doctor may fetch origin tips into local git objects and fetch metadata (including `FETCH_HEAD` and applicable remote-tracking refs);
+they do not change project files or claims. An incomplete doctor scan keeps confirmed
+findings and adds a warning with the reason.
+
+Ask the maintainer before reclaiming: name the holder, last activity, and that the old
+claim marker and claim label will be released and replaced. Record the yes as the
+maintainer's own answer, then run:
+
+```bash
+rota round assign 7 --agent dana --reclaim-stale mac-ben@3
+```
+
+Assign rechecks activity before releasing anything. Recent activity, a different holder,
+a disabled threshold or an unavailable activity read returns `blockedBy: not-stale`.
+Existing readiness checks still apply; an open PR also needs an explicit
+`--accept-open-pr` decision. Plain assign, the autopilot tick and `reconcile --apply`
+never reclaim stale claims. The gate refuses an old holder's recorded `claimId` with
+`claim-lost` while another claim holds the issue. PRs with no recorded claim are exempt.
+Adopt refuses `claimed` only if the current holder is stale or authoritative claim history
+shows that the branch's former claim was released and replaced. Fresh different holders
+without that evidence do not prevent adoption; unreadable history is warned and skipped.

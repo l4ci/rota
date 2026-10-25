@@ -3,6 +3,8 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/roundcfg"
 )
 
 // treeLeaves is every verb path in the command tree, without the leading
@@ -17,7 +19,7 @@ func treeLeaves() map[string]bool {
 
 func TestSupportFencedVerbsRefuseOnSupport(t *testing.T) {
 	root := supportProject(t)
-	for _, path := range supportFenced {
+	for _, path := range roundcfg.SupportActions(roundcfg.FenceRefused) {
 		t.Run(path, func(t *testing.T) {
 			code, env, _ := rotaRun(t, append([]string{"--json", "-C", root}, strings.Fields(path)[1:]...)...)
 			if code != ExitRefused {
@@ -47,32 +49,21 @@ func TestSupportAllowedVerbsPassTheFence(t *testing.T) {
 	}
 }
 
-// Every verb is classified: a new verb has to land in supportFenced,
-// supportInVerb or supportAllowed, so it cannot ship unfenced.
+// Every verb is classified: a new verb has to land in a roundcfg support
+// table, so it cannot ship unfenced. Disjointness and the fenced set are
+// tested in roundcfg without the tree.
 func TestSupportTablesClassifyEveryVerb(t *testing.T) {
-	seen := map[string]string{}
-	for name, table := range map[string][]string{"supportFenced": supportFenced, "supportInVerb": supportInVerb, "supportAllowed": supportAllowed} {
-		for _, p := range table {
-			if other, dup := seen[p]; dup {
-				t.Errorf("%s is in both %s and %s", p, other, name)
-			}
-			seen[p] = name
-		}
-	}
 	leaves := treeLeaves()
 	for leaf := range leaves {
-		if seen[leaf] == "" {
+		if roundcfg.SupportClass(leaf) == roundcfg.FenceUnclassified {
 			t.Errorf("%s is in no support table", leaf)
 		}
 	}
-	for p, table := range seen {
-		if !leaves[p] {
-			t.Errorf("%s names %s, which is not a verb", table, p)
-		}
-	}
-	for _, p := range []string{"rota worker gate", "rota worker train", "rota spike add", "rota init", "rota update", "rota migrate config", "rota config fill"} {
-		if seen[p] != "supportFenced" {
-			t.Errorf("%s is not fenced", p)
+	for _, class := range []roundcfg.FenceClass{roundcfg.FenceRefused, roundcfg.FenceInVerb, roundcfg.FenceAllowed} {
+		for _, p := range roundcfg.SupportActions(class) {
+			if !leaves[p] {
+				t.Errorf("%s is in a support table but is not a verb", p)
+			}
 		}
 	}
 }

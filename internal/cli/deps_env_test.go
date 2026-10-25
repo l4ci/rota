@@ -269,6 +269,9 @@ func TestDoctorAccountsUseDepsClock(t *testing.T) {
 				t.Fatal(err)
 			}
 			d := testDeps()
+			// Keep this account-only check outside the developer project: doctor
+			// must not discover its tracker or scan its remote claims.
+			d.Getwd = func() (string, error) { return dir, nil }
 			pinNow(d, tc.now)
 			in := doctorInput(context.Background(), d)
 			// only the accounts check matters: no host env, no tool lookups.

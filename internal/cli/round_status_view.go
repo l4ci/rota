@@ -85,6 +85,11 @@ func snapFromReport(rep *round.Report) roundSnap {
 		s.Notes = append(s.Notes, u+" unavailable")
 	}
 	s.Notes = append(s.Notes, rep.Warnings...)
+	for _, finding := range rep.Findings {
+		if finding.Kind == round.StaleClaimKind {
+			s.Notes = append(s.Notes, round.StaleClaimKind+": "+finding.Detail)
+		}
+	}
 	return s
 }
 
@@ -98,7 +103,7 @@ func loadRoundSnap(ctx context.Context, c *Ctx, root string) (roundSnap, error) 
 	cc.ctx = ctx
 	c = &cc
 	c.deps().freshReads()
-	env := c.deps().RoundEnv(ctx, root)
+	env := withBoard(c, root, c.deps().RoundEnv(ctx, root))
 	rep, err := env.Status(ctx, root)
 	if err != nil {
 		return roundSnap{}, err

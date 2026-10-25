@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/l4ci/rota/internal/strutil"
 )
@@ -435,18 +436,19 @@ func (g *GitLab) username(ctx context.Context) (string, error) {
 
 func (g *GitLab) OpenPRs(ctx context.Context) ([]PR, error) {
 	var raw []struct {
-		IID          int    `json:"iid"`
-		Title        string `json:"title"`
-		Description  string `json:"description"`
-		SourceBranch string `json:"source_branch"`
-		WebURL       string `json:"web_url"`
+		UpdatedAt    time.Time `json:"updated_at"`
+		IID          int       `json:"iid"`
+		Title        string    `json:"title"`
+		Description  string    `json:"description"`
+		SourceBranch string    `json:"source_branch"`
+		WebURL       string    `json:"web_url"`
 	}
 	if err := g.list(ctx, []string{"mr", "list", "--output", "json"}, glPerPage, glPaging, &raw); err != nil {
 		return nil, err
 	}
 	out := []PR{}
 	for _, d := range raw {
-		out = append(out, PR{Number: d.IID, Title: d.Title, Branch: d.SourceBranch, URL: d.WebURL, Body: d.Description})
+		out = append(out, PR{Number: d.IID, Title: d.Title, Branch: d.SourceBranch, URL: d.WebURL, UpdatedAt: d.UpdatedAt, Body: d.Description})
 	}
 	return out, nil
 }
@@ -530,6 +532,11 @@ func (g *GitLab) PRMergeable(ctx context.Context, pr int) (Mergeability, error) 
 }
 
 // PRRequestMerge runs `glab mr merge` with auto-merge off.
+func (g *GitLab) PRSetBase(ctx context.Context, pr int, base string) error {
+	_, err := g.run(ctx, []string{"mr", "update", strconv.Itoa(pr), "--target-branch", base}, "")
+	return err
+}
+
 func (g *GitLab) PRRequestMerge(ctx context.Context, pr int, o MergeOpts) error {
 	args := []string{"mr", "merge", strconv.Itoa(pr), "--yes"}
 	if o.DeleteBranch {

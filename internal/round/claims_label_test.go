@@ -280,3 +280,5 @@ func (c closedUnfilteredFails) List(ctx context.Context, f tracker.ListFilter) (
 	}
 	return c.Forge.List(ctx, f)
 }
+
+func (claimLabelRemote) PRSetBase(context.Context, int, string) error { return nil }

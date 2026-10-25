@@ -2,10 +2,21 @@
 
 ## Unreleased
 
+### Support pull
+
+- Support fills free slots from its pinned issues, then unpinned issues within `round.scope`. Both machines use the shared claim; support pins a won issue so main can track its queue, comments and PR approvals. A failed assignment before dispatch removes the pin it added. `round support return` releases support's claims and removes the pin.
+
+### Milestone branches
+
+- **Issues of an active milestone route to its branch.** `rota round assign` cuts the worker branch from `origin/milestone/<id>`, records it as the slot's base and names it in the brief; the worker's PR, `rota git base` and `rota ship` follow. Untagged issues, issues of a milestone that is not active, projects without `origin` and milestones whose branch is not on origin keep the round base. `rota round reconcile --apply` repairs a new `base-drift`: when an issue's milestone tag changes after assign, the PR is retargeted, the slot rerouted and held until the worker merges the new base. A milestone going active under an unchanged tag is not drift. Milestone PRs are not gated by the tick yet (train sync is a sibling issue).
+- **A train onto a milestone branch syncs the project base first.** `rota worker train --base milestone/<id>` merges the project base branch (`git.baseBranch`, else main) into the milestone in the scratch tree before the members, runs `test.full` once on base + milestone + members, and pushes the sync merge to `origin/milestone/<id>` only on green, ahead of the first landing. A sync conflict ends the train with `merge-failed`, naming the milestone and the conflicting paths, and pushes nothing. Trains on the base branch are unchanged.
+
 ### Upgrade notes
 
+- **Reclaim stale claims.** Status, candidates and doctor mark inactive remote claims as `stale-claim`. `round.claimStaleMinutes` defaults to 240 for bugs, tasks and Minor/Cosmetic features; `round.claimStaleMinutesMajor` defaults to 480 for Major features. Set either to `0` to disable that class. After maintainer approval, `rota round assign <ID> --reclaim-stale <claim-id>` rechecks activity and transfers the claim. A former holder's recorded claim is refused with `claim-lost` at the merge gate; adoption refuses `claimed` with positive stale/reclaimed evidence. PRs without a recorded claim remain gateable.
+
 - **Visible claim labels.** After upgrading, run `rota round reconcile --apply` once to backfill `claimed:<agent>@<machine>` labels for in-flight comment claims and repair stale labels. Comment claims remain authoritative. Reverting this change leaves `claimed:*` labels already written to the tracker; remove those labels by hand.
-- **Named machine pins.** `machine:<name>` replaces `site:support`: main is named `main`, support uses `round.support`. On main, preview with `rota migrate labels`, then run `rota migrate labels --apply` to relabel open issues and retire `issues.labels.support` (including a custom label value). `config fill` preserves that key until migration succeeds. Candidates show pins to other machines as blocked; unpinned issues remain available to main.
+- **Named machine pins.** `machine:<name>` replaces `site:support`: main is named `main`, support uses `round.support`. On main, preview with `rota migrate labels`, then run `rota migrate labels --apply` to relabel open issues and retire `issues.labels.support` (including a custom label value). `config fill` preserves that key until migration succeeds. Candidates show pins to other machines as blocked; unpinned issues are available to both machines, with support preferring its pins.
 - **Fewer filed follow-ups.** `review.fileDeferred` now defaults to `major`: minor deferred findings stay in the verdict record and `verdict add` lists them as `kept`. A PR whose issue is itself a deferred-findings item files none. Set `minor` to get the old behavior.
 
 ### New

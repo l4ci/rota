@@ -41,6 +41,39 @@ func (s *Slot) Worktree() string { return jsonx.Str(s.o, "worktree") }
 func (s *Slot) Base() string     { return jsonx.Str(s.o, "base") }
 func (s *Slot) Handle() string   { return jsonx.Str(s.o, "handle") }
 
+// RoutedTag is the issue's milestone tag as assign read it when it routed the
+// slot (possibly ""), and ok false for a slot assigned before the tag was
+// recorded. Drift is the tag changing since, never a milestone going active.
+func (s *Slot) RoutedTag() (tag string, ok bool) {
+	v, ok := s.o.Get("routedTag")
+	str, _ := v.(string)
+	return str, ok
+}
+
+// SetRoutedTag records the issue's milestone tag at assignment.
+func (s *Slot) SetRoutedTag(tag string) { s.o.Set("routedTag", tag) }
+
+// HomeBase is the base RouteBase remembered, "" when the slot is not routed.
+func (s *Slot) HomeBase() string { return jsonx.Str(s.o, "homeBase") }
+
+// RouteBase points the slot at target, the milestone branch of the issue it is
+// given, remembering the base it was registered with; "" routes it back to
+// that base. The registered base is what every verb reads when the slot is on
+// no milestone, so nothing else changes.
+func (s *Slot) RouteBase(target string) {
+	home := jsonx.Str(s.o, "homeBase")
+	switch {
+	case target == "" && home != "":
+		s.o.Set("base", home)
+		s.o.Delete("homeBase")
+	case target != "":
+		if home == "" {
+			s.o.Set("homeBase", s.Base())
+		}
+		s.o.Set("base", target)
+	}
+}
+
 // WorkspaceID is the linked herdr workspace the slot's session was opened in
 // (round.herdrGroupSlots), "" when it runs in the orchestrator's own workspace.
 func (s *Slot) WorkspaceID() string { return jsonx.Str(s.o, "workspaceId") }
@@ -249,6 +282,8 @@ func NewSlot(name, branch, worktree, base, handle string) *Slot {
 func (s *Slot) Reregister(branch, worktree, base, handle string) {
 	legacy := s.Window()
 	s.o.Delete("window")
+	s.o.Delete("homeBase")
+	s.o.Delete("routedTag")
 	s.o.Set("branch", branch)
 	s.o.Set("worktree", worktree)
 	s.o.Set("base", base)

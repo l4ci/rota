@@ -31,8 +31,8 @@ type fake struct {
 	trained  [][]string
 	assigned []string
 	audit    []string
-	gateOut  func(target string) GateOutcome
-	trainOut func(targets []string) TrainOutcome
+	gateOut  func(target string) GateRun
+	trainOut func(targets []string) TrainRun
 	baseOf   func(target string) string
 	assignFn func(id string) ([]string, error)
 }
@@ -45,25 +45,26 @@ func (f *fake) env() Env {
 		Reconcile: func(context.Context) ([]string, []string, error) {
 			return f.repaired, f.drift, nil
 		},
-		BaseOf: func(t string) string {
+		Base: "main",
+		Target: func(t string) (worker.GateTarget, error) {
 			if f.baseOf != nil {
-				return f.baseOf(t)
+				return worker.GateTarget{Base: f.baseOf(t)}, nil
 			}
-			return "main"
+			return worker.GateTarget{Base: "main"}, nil
 		},
-		Gate: func(_ context.Context, t, base string) GateOutcome {
+		RunGate: func(_ context.Context, t, base string) GateRun {
 			f.gated = append(f.gated, base+":"+t)
 			if f.gateOut != nil {
 				return f.gateOut(t)
 			}
-			return GateOutcome{Landed: true}
+			return GateRun{Result: worker.GateResult{Verdict: worker.GatePass}}
 		},
-		Train: func(_ context.Context, t []string, base string) TrainOutcome {
+		RunTrain: func(_ context.Context, t []string, base string) TrainRun {
 			f.trained = append(f.trained, append([]string{base}, t...))
 			if f.trainOut != nil {
 				return f.trainOut(t)
 			}
-			return TrainOutcome{Done: true}
+			return TrainRun{Result: worker.TrainResult{Verdict: worker.GatePass}}
 		},
 		Candidates: func(context.Context) ([]round.Candidate, error) { return f.cands, nil },
 		Assign: func(_ context.Context, id string) ([]string, error) {
@@ -207,11 +208,11 @@ func TestEscalatesAttentionStatesAndDriftWithoutActing(t *testing.T) {
 func TestFailedGateIsEscalatedAndVerifyFailureHeld(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "done", PR: "#10"}, {Name: "dana", State: "done", PR: "#11"}}}
 	f.baseOf = func(t string) string { return "base-" + t } // two gates, not a train
-	f.gateOut = func(t string) GateOutcome {
+	f.gateOut = func(t string) GateRun {
 		if t == "ben" {
-			return GateOutcome{Verdict: "verify-failed", Detail: "tests red"}
+			return GateRun{Result: worker.GateResult{Verdict: "verify-failed", Err: "tests red"}}
 		}
-		return GateOutcome{Verdict: "stale", Detail: "behind main"}
+		return GateRun{Result: worker.GateResult{Verdict: "stale", Err: "behind main"}}
 	}
 	r, err := Run(context.Background(), f.env())
 	if err != nil {
@@ -383,8 +384,8 @@ func TestTrainFailureLandsSkipsAndHolds(t *testing.T) {
 	f := &fake{slots: []Slot{
 		{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"},
 		{Name: "c", State: "done", PR: "#3"}}}
-	f.trainOut = func([]string) TrainOutcome {
-		return TrainOutcome{Landed: []string{"a"}, Culprit: "b", Verdict: "verify-failed", Detail: "red"}
+	f.trainOut = func([]string) TrainRun {
+		return TrainRun{Result: worker.TrainResult{Members: []worker.TrainMember{{Target: "a", Landed: true}}, Culprit: "b", Verdict: "verify-failed", Err: "red"}}
 	}
 	r, err := Run(context.Background(), f.env())
 	if err != nil {
@@ -401,7 +402,7 @@ func TestTrainFailureLandsSkipsAndHolds(t *testing.T) {
 
 func TestTrainBaseMovedSkipsEveryone(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"}}}
-	f.trainOut = func([]string) TrainOutcome { return TrainOutcome{Verdict: "base-moved"} }
+	f.trainOut = func([]string) TrainRun { return TrainRun{Result: worker.TrainResult{Verdict: "base-moved"}} }
 	r, err := Run(context.Background(), f.env())
 	if err != nil || len(r.Did) != 0 || len(r.NeedsYou) != 0 {
 		t.Fatalf("%v %+v", err, r)
@@ -411,7 +412,7 @@ func TestTrainBaseMovedSkipsEveryone(t *testing.T) {
 func TestStaleAndProvenanceFailuresAreNotHeld(t *testing.T) {
 	for _, v := range []string{worker.GateStale, worker.GateProvenanceFail, worker.GateBestOfUnpicked} {
 		f := &fake{slots: []Slot{{Name: "a", State: "done", PR: "#1"}}}
-		f.gateOut = func(string) GateOutcome { return GateOutcome{Verdict: v, Detail: "x"} }
+		f.gateOut = func(string) GateRun { return GateRun{Result: worker.GateResult{Verdict: v, Err: "x"}} }
 		r, _ := Run(context.Background(), f.env())
 		if len(r.NeedsYou) != 1 || len(r.Held) != 0 {
 			t.Fatalf("%s: needsYou %+v held %v", v, r.NeedsYou, r.Held)
@@ -421,7 +422,7 @@ func TestStaleAndProvenanceFailuresAreNotHeld(t *testing.T) {
 
 func TestGateWithoutVerdictIsAGateErrorAndHeld(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "a", State: "done", PR: "#1"}}}
-	f.gateOut = func(string) GateOutcome { return GateOutcome{Detail: "boom"} }
+	f.gateOut = func(string) GateRun { return GateRun{Err: errors.New("boom")} }
 	r, _ := Run(context.Background(), f.env())
 	if len(r.NeedsYou) != 1 || r.NeedsYou[0].Why != "gate-error: boom" || r.Held["a"] == "" {
 		t.Fatalf("needsYou %+v held %v", r.NeedsYou, r.Held)
@@ -641,34 +642,6 @@ func TestSupportRoleTickNeverGates(t *testing.T) {
 	}
 	if len(r.NeedsYou) != 0 {
 		t.Errorf("a support-role tick reports merges: %+v", r.NeedsYou)
-	}
-}
-
-func TestFailedVerdict(t *testing.T) {
-	boom := errors.New("boom")
-	for _, c := range []struct {
-		name    string
-		verdict string
-		err     error
-		refused bool
-		want    string
-	}{
-		{"clean failure keeps the verdict", "red", nil, false, "red"},
-		{"refusal keeps the verdict", "stale", boom, true, "stale"},
-		{"error that is no refusal drops it", "red", boom, false, ""},
-	} {
-		if got := FailedVerdict(c.verdict, c.err, c.refused); got != c.want {
-			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
-		}
-	}
-}
-
-func TestFailureDetail(t *testing.T) {
-	if got := FailureDetail(errors.New("first\nsecond"), "msg"); got != "first" {
-		t.Errorf("an error wins and is cut to its first line: %q", got)
-	}
-	if got := FailureDetail(nil, "line one\nline two"); got != "line one" {
-		t.Errorf("no error: the message's first line: %q", got)
 	}
 }
 

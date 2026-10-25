@@ -56,7 +56,7 @@ func resolveBranch(c *Ctx, args []string) (branchTarget, error) {
 			return branchTarget{}, Resolution("no branch given and HEAD is not on a branch")
 		}
 	}
-	base, ok, err := resolveBase(ctx, c.deps(), t.Dir)
+	base, ok, err := resolveBaseFor(c, t.Dir)
 	if err != nil {
 		return branchTarget{}, err
 	}

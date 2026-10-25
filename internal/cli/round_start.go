@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
@@ -48,6 +49,10 @@ func candidateList(cs []round.Candidate) []any {
 		setIf(o, "pickError", c.PickErr)
 		setIf(o, "decision", c.Decision)
 		setIf(o, "blockedBy", c.BlockedBy)
+		if c.StaleHolder != "" {
+			o.Set("staleHolder", c.StaleHolder)
+			o.Set("lastActivity", c.LastActivity.Format(time.RFC3339))
+		}
 		o.Set("ready", c.Ready())
 		o.Set("scopeSource", c.ScopeSource)
 		if c.OpenPR != 0 {
