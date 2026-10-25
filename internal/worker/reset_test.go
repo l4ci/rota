@@ -315,3 +315,56 @@ func TestResetParksADoneSlotWhoseRecordedPRIsMerged(t *testing.T) {
 		t.Errorf("state %q pr %q, want idle and no PR", s.State(), s.PR())
 	}
 }
+
+// rebindForge answers MERGED and, as it does, lets a concurrent assign re-bind
+// the slot.
+type rebindForge struct {
+	Forge
+	rebind func()
+}
+
+func (f rebindForge) PRView(context.Context, int) (tracker.PRInfo, error) {
+	f.rebind()
+	return tracker.PRInfo{State: "MERGED"}, nil
+}
+
+// #1843: an assign that re-binds the slot between the PR lookup and the write
+// must not be wiped by the done-state reset.
+func TestResetKeepsASlotReboundDuringTheLookup(t *testing.T) {
+	b := slotProject(t)
+	gittest.Run(t, b, "remote", "add", "origin", "https://github.com/o/r.git")
+	if _, err := UpdateSlot(b, "w1", func(s *Slot) {
+		s.SetPR("https://github.com/o/r/pull/9")
+		_ = s.MarkState("done", "")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	e := Env{}
+	e.Forge = func(string, string, tracker.Settings) (Forge, error) {
+		return rebindForge{rebind: func() {
+			if _, err := UpdateSlot(b, "w1", func(s *Slot) {
+				s.SetPR("https://github.com/o/r/pull/10")
+				_ = s.MarkState("busy", "")
+			}); err != nil {
+				t.Error(err)
+			}
+		}}, nil
+	}
+	realGit := git.Exec
+	e.Git = func(ctx context.Context, d string, args ...string) (git.Result, error) {
+		if len(args) >= 2 && args[0] == "remote" && args[1] == "get-url" {
+			return git.Result{Stdout: "https://github.com/o/r.git\n"}, nil
+		}
+		return realGit(ctx, d, args...)
+	}
+	if _, err := e.Reset(b, "w1", "T-8", false); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := LoadRegistry(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := reg.Slot("w1"); strings.ToLower(s.State()) != "busy" || s.PR() != "https://github.com/o/r/pull/10" {
+		t.Errorf("state %q pr %q, want the re-bound busy slot on pull/10", s.State(), s.PR())
+	}
+}
