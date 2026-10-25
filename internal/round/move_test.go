@@ -539,9 +539,9 @@ func TestReturnParksCommentsReleasesAndFreesTheSlot(t *testing.T) {
 	}
 }
 
-// A returned slot's PR keeps its relay log: the gate reads it from the queued
-// record, since the freed slot no longer records the PR (#1853).
-func TestReturnQueuesTheRecordedPRWithItsRelays(t *testing.T) {
+// A returned slot's PR keeps its relay log for the gate, but holds nothing:
+// the issue stays a candidate and assigns again (#1853).
+func TestReturnKeepsTheRelayLogWithoutHoldingTheIssue(t *testing.T) {
 	f := newMoveFx(t)
 	rawSlot(f.root, "ben", func(s *jsonx.Object) {
 		s.Set("pr", "https://github.com/o/r/pull/77")
@@ -554,9 +554,32 @@ func TestReturnQueuesTheRecordedPRWithItsRelays(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	q := reg.QueuedPR("#77")
-	if q == nil || len(q.Relays) != 1 {
-		t.Errorf("the returned slot's PR must queue with its relays: %+v", q)
+	tg, err := reg.GateTargetAny("77")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if msg := worker.CheckApprovals("## Approvals\n- orchestrator relay round 3\n", tg.Relays()); msg != "" {
+		t.Errorf("a relay that was sent must stay citable after return: %s", msg)
+	}
+	if msg := worker.CheckApprovals("## Approvals\n- orchestrator relay round 9\n", tg.Relays()); msg == "" {
+		t.Error("a relay round that was never sent must still fail")
+	}
+	if q := reg.QueuedPR("#77"); q != nil {
+		t.Errorf("a returned PR must not be queued for review: %+v", q)
+	}
+	cands, err := f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeMilestone})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := false
+	for _, c := range cands {
+		listed = listed || c.ID == "12"
+	}
+	if !listed {
+		t.Fatalf("a returned issue is a candidate again: %v", ids(cands))
+	}
+	if res, err := f.assign("12", "dana"); err != nil || !res.Dispatched {
+		t.Fatalf("assign after return: %v %+v", err, res)
 	}
 }
 

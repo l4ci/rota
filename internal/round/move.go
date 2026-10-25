@@ -287,20 +287,14 @@ func (e Env) releaseSteps(ctx context.Context, r slotRelease, out *released) []s
 	}
 	return append(steps, step{name: "free the slot", do: func() error {
 		// The freed slot forgets its PR and relay log, so the gate would read the
-		// PR as external and fail a cited relay. Queue the record first, like
-		// queuePR does (#1853).
+		// PR as external and fail a cited relay. Keep the log where only the gate
+		// reads it; the issue is released, so no queued record holds it (#1853).
 		return wrap(worker.Update(r.root, func(doc *worker.Doc) {
 			s := doc.Slot(r.slot)
 			if s == nil {
 				return
 			}
-			if pr := s.PR(); pr != "" {
-				doc.QueuePR(worker.QueuedPR{
-					Issue: s.HeldID(), Branch: strutil.FirstNonEmpty(out.Park.Branch, s.Branch()), PR: pr,
-					Base: strutil.FirstNonEmpty(s.Base(), e.Base), From: r.slot, ClaimID: s.ClaimID(),
-					Round: r.round, Relays: s.Relays(), Bundle: s.Bundle(),
-				})
-			}
+			doc.LogRelays(s.PR(), s.Relays())
 			s.Park(r.gone)
 			if r.gone {
 				s.ReleasePort()
