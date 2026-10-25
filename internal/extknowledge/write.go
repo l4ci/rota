@@ -248,6 +248,9 @@ func (c Clone) land(ctx context.Context, pol Policy, p *plan) (res WriteResult, 
 			return res, fmt.Errorf("%w: %s is on a detached HEAD and the policy names no branch", ErrPolicy, c.Dir)
 		}
 		pol.Branch = c.startBranch(ctx, cur)
+		if !branchRe.MatchString(pol.Branch) || strings.Contains(pol.Branch, "..") {
+			return res, fmt.Errorf("%w: branch %q is not a plain branch name", ErrPolicy, pol.Branch)
+		}
 	} else if pol.Write == "push" && cur != pol.Branch {
 		return res, fmt.Errorf("%w: %s is on %q but the policy branch is %q; switch it first", ErrPolicy, c.Dir, cur, pol.Branch)
 	}
