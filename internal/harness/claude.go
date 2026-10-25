@@ -57,7 +57,7 @@ var modelFlag = regexp.MustCompile(`--model[ =]` + regexp.QuoteMeta(ModelPlaceho
 
 // inheritsModel is whether round.profile is inherit: no tier names a model.
 func inheritsModel(cfg any) bool {
-	return strings.TrimSpace(config.StringIfSet(cfg, "round.profile")) == ProfileInherit
+	return RoundProfile(cfg) == ProfileInherit
 }
 
 // NeedsModel: a claude launch takes its model from the tier map, except under
