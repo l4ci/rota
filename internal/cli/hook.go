@@ -204,10 +204,6 @@ func branchHandoffFile(d *Deps, root, cwd string) string {
 	return filepath.Join(root, filepath.FromSlash(rel))
 }
 
-// handoffFile is the absolute `.rota/handoff/<base>.md`, the path
-// `rota status handoff <base> --canonical` returns. It is "" when no base
-// resolves, so a caller reads no note rather than one filed under a guessed
-// branch.
 // noHandoffBaseMsg says why handoffFile found no path: the named key when
 // git.baseBranch is set but missing, else the shared candidate list.
 func noHandoffBaseMsg(cfg any) string {
@@ -219,6 +215,10 @@ func noHandoffBaseMsg(cfg any) string {
 	return noBaseMsg
 }
 
+// handoffFile is the absolute `.rota/handoff/<base>.md`, the path
+// `rota status handoff <base> --canonical` returns. It is "" when no base
+// resolves, so a caller reads no note rather than one filed under a guessed
+// branch.
 func handoffFile(d *Deps, root string, cfg any) string {
 	configured := ""
 	if v, err := config.Value(cfg, "git.baseBranch"); err == nil {
