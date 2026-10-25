@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"path/filepath"
 	"slices"
@@ -27,7 +28,7 @@ const DefaultCodexCommand = "codex --model {model} --dangerously-bypass-approval
 
 // BlockCodexFlags is the blockedBy of a codex worker whose launch line uses a
 // flag `codex --help` does not list.
-const BlockCodexFlags = "codex flags"
+const BlockCodexFlags = blockedby.CodexFlags
 
 const hookTrustFlag = "--dangerously-bypass-hook-trust"
 

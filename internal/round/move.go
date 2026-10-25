@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/skills"
@@ -33,13 +34,13 @@ import (
 
 // Blocked reasons of return, transfer and reclaim (exit 4, `blockedBy`).
 const (
-	BlockNotYourSlot = "not your slot"
-	BlockSameSlot    = "same slot"
-	BlockHealthy     = "healthy"
-	BlockLiveAgent   = "live agent"
+	BlockNotYourSlot = blockedby.NotYourSlot
+	BlockSameSlot    = blockedby.SameSlot
+	BlockHealthy     = blockedby.Healthy
+	BlockLiveAgent   = blockedby.LiveAgent
 	// BlockUnverifiable: the host could not vouch for the slot, which is not
 	// proof the agent is gone (#820).
-	BlockUnverifiable = "unverifiable"
+	BlockUnverifiable = blockedby.Unverifiable
 )
 
 // Slot health, as reclaim reports it.

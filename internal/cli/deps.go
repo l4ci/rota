@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/issues"
 	"io"
 	"os"
@@ -512,7 +513,7 @@ func actorForge(c *Ctx, cfg any, dir string) (string, error) {
 // actor met: blockedBy forge, the origin in the message, the fix as the hint.
 func forgeRefusal(err error) *Error {
 	e := Refused("%s", err.Error()).WithHint(tracker.UnknownForgeHint)
-	e.Data = jsonObj("blockedBy", "forge", "changed", false)
+	e.Data = jsonObj("blockedBy", blockedby.Forge, "changed", false)
 	e.Cause = err
 	return e
 }

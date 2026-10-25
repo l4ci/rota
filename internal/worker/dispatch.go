@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/stamp"
@@ -181,7 +182,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	}
 	if s := pre.Slot(o.Slot); s != nil && s.IsExternal() {
 		e := fail(exitcode.ExitRefused, "external slot has no host")
-		e.Data = BlockData{BlockedBy: "host"}
+		e.Data = BlockData{BlockedBy: blockedby.Host}
 		return res, e
 	}
 	brief, err := os.ReadFile(o.BodyFile)
@@ -248,7 +249,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		}
 		if hit.Token != "" {
 			e := fail(exitcode.ExitRefused, fmt.Sprintf("%s contains %s'%s', which reopens the previous conversation; a task dispatch must start a fresh session. Remove it.", key, hit.Noun, hit.Token))
-			e.Data = BlockData{BlockedBy: "resume flag"}
+			e.Data = BlockData{BlockedBy: blockedby.ResumeFlag}
 			return res, e
 		}
 		// Under herdr the launch binary decides `agent start --kind`, so it
@@ -273,7 +274,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		// A session started into an account at its limit stops on its first turn.
 		if why := e.accountLimited(ctx, root, hz, configDir); why != "" {
 			le := fail(exitcode.ExitRefused, why)
-			le.Data = BlockData{BlockedBy: "limited"}
+			le.Data = BlockData{BlockedBy: blockedby.Limited}
 			return res, le
 		}
 		if !hz.WorkAccounts() {
@@ -477,7 +478,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		if errors.As(sendErr, &de) {
 			first = " (" + de.First + ")"
 		}
-		return res, &exitcode.Error{Exit: exitcode.ExitUnavailable, Data: BlockData{BlockedBy: "dialog"},
+		return res, &exitcode.Error{Exit: exitcode.ExitUnavailable, Data: BlockData{BlockedBy: blockedby.Dialog},
 			Message: fmt.Sprintf("slot '%s' has a dialog open%s and refused input — inspect it before resending", o.Slot, first)}
 	case errors.Is(sendErr, host.ErrDraftOnPrompt):
 		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s' has a human draft on its prompt line and nothing was sent — resend once it is submitted or cleared", o.Slot))
@@ -491,7 +492,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 func resetRefusal(err error, changed bool) error {
 	var we *exitcode.Error
 	if errors.As(err, &we) && we.Data != nil {
-		return &exitcode.Error{Exit: exitcode.ExitRefused, Message: we.Message, Data: BlockData{BlockedBy: "reset guard", Changed: changed}}
+		return &exitcode.Error{Exit: exitcode.ExitRefused, Message: we.Message, Data: BlockData{BlockedBy: blockedby.ResetGuard, Changed: changed}}
 	}
 	return err
 }

@@ -1,5 +1,7 @@
 package worker
 
+import "github.com/l4ci/rota/internal/blockedby"
+
 // VerdictMeaning is what one gate or train verdict means to a caller: whether
 // it succeeds, whether the CLI turns it into an exit-4 refusal (and which
 // blockedBy it names), whether it sends the PR back to its worker as a bounce,
@@ -24,7 +26,7 @@ type VerdictMeaning struct {
 
 // BlockedByVerdict is the blockedBy key the CLI treats specially when it builds a
 // refusal envelope; the other special key, no-verify, is the GateNoVerify verdict.
-const BlockedByVerdict = "verdict"
+const BlockedByVerdict = blockedby.Verdict
 
 // verdictMeanings classifies every gate and train verdict. A verdict missing
 // here fails TestVerdictsAreClassified.
@@ -46,16 +48,16 @@ var verdictMeanings = map[string]VerdictMeaning{
 	GateBaseMoved:        {Hold: true},
 	GateApprovalRequired: {Refusal: true, ViaError: true, Hold: true},
 	GateVerdictBlocked:   {Refusal: true, ViaError: true, BlockedBy: BlockedByVerdict, Hold: true},
-	GateNoVerify:         {Refusal: true, BlockedBy: GateNoVerify, Hold: true},
-	GateNotClosing:       {Refusal: true, BlockedBy: GateNotClosing, Hold: true},
-	GateBestOfUnpicked:   {Refusal: true, BlockedBy: GateBestOfUnpicked},
-	GateReviewMissing:    {Refusal: true, BlockedBy: GateReviewMissing, Hold: true},
-	GateStaleAttempt:     {Refusal: true, BlockedBy: GateStaleAttempt, Hold: true},
-	GateOutcomeOpen:      {Refusal: true, BlockedBy: GateOutcomeOpen, Hold: true},
-	GateRunning:          {Refusal: true, BlockedBy: GateRunning, Hold: true},
-	GateForge:            {Refusal: true, BlockedBy: GateForge, Hold: true},
+	GateNoVerify:         {Refusal: true, BlockedBy: blockedby.NoVerify, Hold: true},
+	GateNotClosing:       {Refusal: true, BlockedBy: blockedby.Closes, Hold: true},
+	GateBestOfUnpicked:   {Refusal: true, BlockedBy: blockedby.BestOfUnpicked},
+	GateReviewMissing:    {Refusal: true, BlockedBy: blockedby.ReviewMissing, Hold: true},
+	GateStaleAttempt:     {Refusal: true, BlockedBy: blockedby.StaleAttempt, Hold: true},
+	GateOutcomeOpen:      {Refusal: true, BlockedBy: blockedby.OutcomeOpen, Hold: true},
+	GateRunning:          {Refusal: true, BlockedBy: blockedby.GateRunning, Hold: true},
+	GateForge:            {Refusal: true, BlockedBy: blockedby.Forge, Hold: true},
 	GateAlreadyMerged:    {Success: true},
-	GateOrder:            {Refusal: true, BlockedBy: GateOrder, Hold: true},
+	GateOrder:            {Refusal: true, BlockedBy: blockedby.Order, Hold: true},
 }
 
 // ClassifyVerdict says what a verdict means. A verdict nobody classified is a

@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/blockedby"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -90,5 +91,25 @@ func TestVerdictMeaningsAreCoherent(t *testing.T) {
 	}
 	if m := ClassifyVerdict("unheard-of"); m.Success || m.Refusal || m.Bounce || !m.Hold {
 		t.Errorf("an unclassified verdict should be a plain held failure, got %+v", m)
+	}
+}
+
+// A refusal's blockedBy is a declared value, and equals its verdict except for
+// the verdict-blocked refusal, which names the shorter key the CLI special-cases.
+func TestVerdictRefusalsNameDeclaredBlockedBy(t *testing.T) {
+	declared := map[string]bool{}
+	for _, v := range blockedby.All() {
+		declared[v] = true
+	}
+	for v, m := range verdictMeanings {
+		if m.BlockedBy == "" {
+			continue
+		}
+		if !declared[m.BlockedBy] {
+			t.Errorf("%q names blockedBy %q, which blockedby.All() does not declare", v, m.BlockedBy)
+		}
+		if v != GateVerdictBlocked && m.BlockedBy != v {
+			t.Errorf("%q names blockedBy %q: a refusal verdict and its blockedBy share a spelling", v, m.BlockedBy)
+		}
 	}
 }

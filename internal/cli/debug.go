@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"flag"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"strconv"
 	"strings"
@@ -188,7 +189,7 @@ func ironLaw(c *Ctx, bug string) (Result, error) {
 		return Result{}, nil
 	}
 	d := jsonx.NewObject()
-	d.Set("blockedBy", "iron law")
+	d.Set("blockedBy", blockedby.IronLaw)
 	d.Set("bugId", bug)
 	d.Set("failedFixes", failed)
 	d.Set("changed", false)
@@ -268,7 +269,7 @@ func counterRefusal(err error) (Result, error) {
 	var ae *exitcode.Error
 	if errors.As(err, &ae) && ae.Exit == exitcode.ExitRefused {
 		d := jsonx.NewObject()
-		d.Set("blockedBy", "attempt")
+		d.Set("blockedBy", blockedby.Attempt)
 		d.Set("changed", false)
 		return Result{Data: d}, err
 	}

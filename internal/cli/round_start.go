@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/pystr"
 	"strings"
@@ -169,7 +170,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
 				if held, ok := we.Data.(*roundlease.HeldError); ok {
 					d := jsonx.NewObject()
-					d.Set("blockedBy", "lease held")
+					d.Set("blockedBy", blockedby.LeaseHeld)
 					d.Set("lease", leaseData(held.Lease, held.State))
 					d.Set("changed", false)
 					return Result{Data: d}, &Error{Exit: ExitRefused, Message: we.Message}
