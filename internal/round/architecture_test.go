@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -217,6 +218,25 @@ func TestMintReviewRecordsCreatedItemsOnError(t *testing.T) {
 	}
 	if a, _ = e.Architecture(ctx, root, be, set, nil); len(a.Pending) != 1 || a.Due {
 		t.Fatalf("the created item should show as a review in flight, not be re-minted: %+v", a)
+	}
+}
+
+// A review minted without its comment is refused by a support machine for good,
+// so the error names the manual recovery.
+func TestMintReviewCommentFailureNamesRecovery(t *testing.T) {
+	root, e, be, set := archFixture(t, 1, []tracker.Issue{closedIssue(1, "a", "2026-10-01T00:00:00Z")})
+	seedReview(t, root)
+	ctx := context.Background()
+	a, _ := e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}})
+	be.commentErr = fmt.Errorf("comment boom")
+	_, err := e.MintReview(ctx, root, be, a, 7)
+	if err == nil {
+		t.Fatal("want the comment error")
+	}
+	for _, want := range []string{"comment boom", "101", "post a comment", marker.ReviewMintedLine(7)} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q lacks %q", err, want)
+		}
 	}
 }
 
