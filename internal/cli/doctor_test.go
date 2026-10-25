@@ -280,6 +280,20 @@ func TestDoctorAgentsCheck(t *testing.T) {
 	}
 }
 
+// On a support machine the tracked .claude files are main's, so the agents
+// check stays quiet about them instead of hinting a verb that skips them.
+func TestDoctorAgentsCheckSupportSkipsTracked(t *testing.T) {
+	d := doctorDeps(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`})
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	os.MkdirAll(filepath.Join(dir, ".rota"), 0o755)
+	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"round":{"support":"mac"}}`), 0o644)
+	writeLocalConfig(t, dir, `{"round":{"role":"support"}}`+"\n")
+	_, out, _ := rotaInWith(t, d, dir, "doctor", "--json")
+	if _, c := doctorData(t, out); c["agents"] != nil {
+		t.Fatalf("support machine told to write tracked files: %v", c["agents"])
+	}
+}
+
 // The verify check warns, never fails, while test.full and test.e2e are both
 // empty, and disappears once either is set (#493).
 func TestDoctorVerifyCheck(t *testing.T) {
