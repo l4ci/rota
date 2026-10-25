@@ -192,7 +192,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 
 		handoffPath := handoffFile(c.deps(), root, cfg)
 		if handoffPath == "" {
-			c.Warn("%s: the orchestrator handoff is not watched", noBaseMsg)
+			c.Warn("%s: the orchestrator handoff is not watched", noHandoffBaseMsg(cfg))
 		}
 		env := keepalive.Env{
 			Spawn:    keepaliveSpawn(c, *configDir),

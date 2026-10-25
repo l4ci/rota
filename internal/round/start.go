@@ -87,6 +87,9 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 	}
 	base := o.Base
 	if base == "" {
+		if err := e.baseCfgErr(); err != nil {
+			return res, err
+		}
 		base = e.Base
 	}
 	res.Base = base

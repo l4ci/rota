@@ -402,8 +402,14 @@ func (e Env) roundCfgErr() error {
 	if e.RoundErr != nil {
 		return &exitcode.Error{Exit: exitcode.ExitUsage, Message: e.RoundErr.Error()}
 	}
+	return e.baseCfgErr()
+}
+
+// baseCfgErr refuses a set git.baseBranch that does not resolve, with exit 3
+// like `git base`; nil when the base resolved or the key is unset.
+func (e Env) baseCfgErr() error {
 	if e.BaseErr != "" {
-		return &exitcode.Error{Exit: exitcode.ExitUsage, Message: e.BaseErr}
+		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: e.BaseErr}
 	}
 	return nil
 }
