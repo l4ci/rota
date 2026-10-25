@@ -22,8 +22,10 @@ import (
 //     (one label query); on the support machine it is the issues its slots hold;
 //   - comment: the newest comment on such an issue that the OTHER machine posted
 //     and a writer-trusted author wrote (see otherSide);
-//   - main only, for an offered issue with an open PR from the support machine:
-//     pr-opened ("#N") and pr-head (the PR's head sha).
+//   - main only, for every open PR from the support machine (branch prefix
+//     `<round.support>-`), offered or not (#1918): pr-opened ("#N") and pr-head
+//     (the PR's head sha); and for a support branch on origin with no open PR,
+//     branch-head (the branch's sha).
 //
 // A read that fails leaves its entries out, which the watch reads as no news.
 func supportSnapshot(ctx context.Context, env round.Env, root string) map[string]string {
@@ -50,14 +52,13 @@ func supportSnapshot(ctx context.Context, env round.Env, root string) map[string
 			ids = append(ids, worker.NormID(is.Key.String()))
 		}
 	}
-	if len(ids) == 0 {
-		return out
-	}
-	trust := worker.NewMarkerTrust(ctx, env.Forge)
-	for _, id := range ids {
-		if is, err := env.Forge.Get(ctx, tracker.IssueKey(id), true); err == nil {
-			if c, ok := otherSide(trust, onSupport, is.Comments); ok {
-				out[roundwatch.SupportKey(id, roundwatch.SupportComment)] = c.Author + "#" + c.ID
+	if len(ids) > 0 {
+		trust := worker.NewMarkerTrust(ctx, env.Forge)
+		for _, id := range ids {
+			if is, err := env.Forge.Get(ctx, tracker.IssueKey(id), true); err == nil {
+				if c, ok := otherSide(trust, onSupport, is.Comments); ok {
+					out[roundwatch.SupportKey(id, roundwatch.SupportComment)] = c.Author + "#" + c.ID
+				}
 			}
 		}
 	}
@@ -68,14 +69,42 @@ func supportSnapshot(ctx context.Context, env round.Env, root string) map[string
 	if err != nil {
 		return out
 	}
-	for _, id := range ids {
-		pr, ok := supportPRFor(env, prs, id)
-		if !ok {
+	hasPR := map[string]bool{}
+	for _, pr := range prs {
+		if !strings.HasPrefix(pr.Branch, env.Round.Support+"-") {
 			continue
 		}
+		hasPR[pr.Branch] = true
+		id := supportPRID(env, pr)
 		out[roundwatch.SupportKey(id, roundwatch.SupportPROpened)] = "#" + strconv.Itoa(pr.Number)
 		if v, err := env.Forge.PRView(ctx, pr.Number); err == nil && v.HeadSHA != "" {
 			out[roundwatch.SupportKey(id, roundwatch.SupportPRHead)] = v.HeadSHA
+		}
+	}
+	for branch, sha := range supportBranchHeads(ctx, env, root) {
+		if !hasPR[branch] {
+			out[roundwatch.SupportKey(roundwatch.SupportBranchID(branch), roundwatch.SupportBranchHead)] = sha
+		}
+	}
+	return out
+}
+
+// supportBranchHeads maps each `<round.support>-*` branch on origin to its head
+// sha: the pushes of a branch that has no PR yet, which the forge cannot show.
+// A failed read is no news.
+func supportBranchHeads(ctx context.Context, env round.Env, root string) map[string]string {
+	out := map[string]string{}
+	if env.Git == nil {
+		return out
+	}
+	res, err := env.Git(ctx, root, "ls-remote", "--heads", "origin", "refs/heads/"+env.Round.Support+"-*")
+	if err != nil || res.ExitCode != 0 {
+		return out
+	}
+	for _, line := range strings.Split(res.Stdout, "\n") {
+		sha, ref, ok := strings.Cut(strings.TrimSpace(line), "\t")
+		if branch, found := strings.CutPrefix(ref, "refs/heads/"); ok && found && sha != "" {
+			out[branch] = sha
 		}
 	}
 	return out
@@ -108,25 +137,15 @@ func otherSide(trust *worker.MarkerTrust, onSupport bool, comments []tracker.Com
 
 var branchIssue = regexp.MustCompile(`/(\d+)-`)
 
-// supportPRFor finds the open PR the support machine built for issue id: its
-// branch is `<round.support>-<agent>/<id>-<slug>`, or it closes the issue.
-func supportPRFor(env round.Env, prs []tracker.PR, id string) (tracker.PR, bool) {
-	n, err := strconv.Atoi(id)
-	if err != nil {
-		return tracker.PR{}, false
+// supportPRID names a support PR's entries: the issue its branch
+// `<round.support>-<agent>/<id>-<slug>` carries, else the first issue it
+// closes, else the encoded branch.
+func supportPRID(env round.Env, pr tracker.PR) string {
+	if m := branchIssue.FindStringSubmatch(pr.Branch); m != nil {
+		return m[1]
 	}
-	for _, pr := range prs {
-		if !strings.HasPrefix(pr.Branch, env.Round.Support+"-") {
-			continue
-		}
-		if m := branchIssue.FindStringSubmatch(pr.Branch); m != nil && m[1] == id {
-			return pr, true
-		}
-		for _, c := range env.Forge.ClosedNumbers(pr.Body) {
-			if c == n {
-				return pr, true
-			}
-		}
+	if c := env.Forge.ClosedNumbers(pr.Body); len(c) > 0 {
+		return strconv.Itoa(c[0])
 	}
-	return tracker.PR{}, false
+	return roundwatch.SupportBranchID(pr.Branch)
 }
