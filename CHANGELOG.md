@@ -5,6 +5,7 @@
 ### Milestone branches
 
 - **Issues of an active milestone route to its branch.** `rota round assign` cuts the worker branch from `origin/milestone/<id>`, records it as the slot's base and names it in the brief; the worker's PR, `rota git base` and `rota ship` follow. Untagged issues, issues of a milestone that is not active, projects without `origin` and milestones whose branch is not on origin keep the round base. `rota round reconcile --apply` repairs a new `base-drift`: when an issue's milestone tag changes after assign, the PR is retargeted, the slot rerouted and held until the worker merges the new base. A milestone going active under an unchanged tag is not drift. Milestone PRs are not gated by the tick yet (train sync is a sibling issue).
+- **A train onto a milestone branch syncs the project base first.** `rota worker train --base milestone/<id>` merges the project base branch (`git.baseBranch`, else main) into the milestone in the scratch tree before the members, runs `test.full` once on base + milestone + members, and pushes the sync merge to `origin/milestone/<id>` only on green, ahead of the first landing. A sync conflict ends the train with `merge-failed`, naming the milestone and the conflicting paths, and pushes nothing. Trains on the base branch are unchanged.
 
 ### Upgrade notes
 
