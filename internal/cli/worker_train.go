@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/postgate"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -141,13 +143,33 @@ func runTrain(c *Ctx, root string, o trainRunOpts) trainRun {
 		}
 	}
 	round := &worker.RoundMemo{}
-	r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: o.Targets, Base: o.Base, Order: o.Order, Plan: o.Plan, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, Verdict: shipVerdict(c, root, root).Block, CheckReviews: true, Round: round, ItemBody: lazyItemBody(c, root)})
+	syncBase, err := milestoneSyncBase(c, ctx, root, o.Base)
+	if err != nil {
+		return trainRun{Err: err}
+	}
+	r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: o.Targets, Base: o.Base, SyncBase: syncBase, Order: o.Order, Plan: o.Plan, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, Verdict: shipVerdict(c, root, root).Block, CheckReviews: true, Round: round, ItemBody: lazyItemBody(c, root)})
 	run := trainRun{Result: r, Err: err, Refused: r.Refused(err)}
 	if run.Refused || err != nil || o.Plan {
 		return run
 	}
 	run.Book = postgate.Train(workerEnvCtx(c, ctx), round, root, issues, r, parkNeedsHuman(c, root))
 	return run
+}
+
+// milestoneSyncBase is the project base branch a train onto milestone/<id>
+// merges into the milestone first, "" for a train on any other base.
+func milestoneSyncBase(c *Ctx, ctx context.Context, root, base string) (string, error) {
+	if !strings.HasPrefix(base, milestone.Branch("")) {
+		return "", nil
+	}
+	b, ok, err := resolveBase(ctx, c.deps(), root)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", Resolution("%s", noBaseMsg)
+	}
+	return b, nil
 }
 
 func workerTrain(fs *flag.FlagSet) RunFunc {
