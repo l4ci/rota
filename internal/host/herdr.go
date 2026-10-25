@@ -447,10 +447,11 @@ func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 		if ack || ((status == "working" || status == "blocked") && !harness.RequiresPromptEcho(kind, pane)) {
 			return nil
 		}
-		// A busy agent queues the relay, and the queue preview sits above an
-		// empty composer, often cut short of the brief's tail. The relay's own
-		// marker in the pane shows it arrived (#1862).
-		if (status == "working" || status == "blocked") && relayQueued(pane, text) {
+		// A busy agent queues the relay in a preview above the composer, which
+		// can be cut short of the brief's tail. The relay's own marker above
+		// the prompt line shows it arrived (#1862); on the prompt line it is a
+		// brief whose Enter was lost, and falls through to the resubmit.
+		if (status == "working" || status == "blocked") && relayQueued(output, text) {
 			return nil
 		}
 	}
@@ -467,10 +468,10 @@ func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 // unique within the slot, so an earlier relay's echo does not match.
 var relayMarker = regexp.MustCompile(`(?m)^\[relay \d+\]$`)
 
-// relayQueued reports whether the pane shows this relay anywhere, not only
-// above the prompt line: its `[relay K]` marker, or the brief's tail.
-func relayQueued(pane, text string) bool {
-	flat := squeeze(pane)
+// relayQueued reports whether output, the pane text above the prompt line,
+// shows this relay: its `[relay K]` marker, or the brief's tail.
+func relayQueued(output, text string) bool {
+	flat := squeeze(output)
 	if m := relayMarker.FindString(text); m != "" && strings.Contains(flat, squeeze(m)) {
 		return true
 	}
