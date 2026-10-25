@@ -1,7 +1,6 @@
 package config
 
 import (
-	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -36,7 +35,7 @@ func (m ScopeMigration) Changed() bool { return len(m.Changes) > 0 }
 // when config.local.json already holds the key (the local value wins), when it
 // equals the global value or when it equals the schema default; otherwise it
 // moves to config.local.json with its value. Every taste key the tracked file
-// pins at its schema default is deleted. A key named in keep stays where it
+// pins at its schema default is deleted. A key named in keep, or under a named object key, stays where it
 // is. Under apply config.local.json is written first (created holding only the
 // moved keys when it is missing), then config.json, so a run cut short is
 // finished by the next; a second run plans nothing. A malformed file is
@@ -91,7 +90,7 @@ func migrateScopePlan(path, local string, keep []string, m *ScopeMigration, appl
 	moves := false
 	for _, k := range scopeRows(cfg) {
 		v, ok := walk(cfg, k.Name)
-		if !ok || slices.Contains(keep, k.Name) || k.Scope == ScopeProject {
+		if !ok || keptKey(keep, k.Name) || k.Scope == ScopeProject {
 			continue
 		}
 		before, _ := effectiveValue(merged, k)
@@ -149,6 +148,17 @@ func migrateScopePlan(path, local string, keep []string, m *ScopeMigration, appl
 		deleteIn(cfg, strings.Split(c.Key, "."))
 	}
 	return fsio.WriteJSONAtomic(path, cfg)
+}
+
+// keptKey reports whether keep names the key or an object key above it, so
+// --keep round.commands holds every round.commands.<kind> entry.
+func keptKey(keep []string, name string) bool {
+	for _, k := range keep {
+		if name == k || strings.HasPrefix(name, k+".") {
+			return true
+		}
+	}
+	return false
 }
 
 // scopeRows is the schema rows the scope step walks. An object-valued row
