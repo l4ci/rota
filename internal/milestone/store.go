@@ -8,8 +8,9 @@ import "time"
 // Add: file mode bumps a persistent counter, issue mode reads the highest
 // native milestone, so a bare NextID would not mean one thing across stores.
 type Store interface {
-	// Add mints the next milestone ID and creates the milestone as planned.
-	Add(title, summary string, depends []string) (id string, err error)
+	// Add mints the next milestone ID and creates the milestone as planned,
+	// born with the given kind (one of Kinds).
+	Add(title, summary string, depends []string, kind string) (id string, err error)
 	// List is every milestone in ID order, with Ready set from its depends.
 	List() ([]Entry, error)
 	// Show is the stored milestone text.
@@ -35,8 +36,8 @@ type FileStore struct {
 var _ Store = FileStore{}
 
 // Add writes the detail file and appends the entry to MILESTONES.md.
-func (s FileStore) Add(title, summary string, depends []string) (string, error) {
-	return addFile(s.Root, title, summary, depends, Day(s.Today))
+func (s FileStore) Add(title, summary string, depends []string, kind string) (string, error) {
+	return addFile(s.Root, title, summary, depends, kind, Day(s.Today))
 }
 
 // List reads the detail files; see List.

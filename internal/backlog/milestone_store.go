@@ -10,7 +10,7 @@ import (
 // repo, or an umbrella that mints IDs and aggregates status over every
 // sub-repo's native milestones.
 type milestoneOps interface {
-	MilestoneAdd(mid, title, summary string, depends []string, today string) (string, error)
+	MilestoneAdd(mid, title, summary string, depends []string, kind, today string) (string, error)
 	MilestoneList() ([]ms.Entry, error)
 	MilestoneShow(mid string) (string, error)
 	MilestonePut(mid, text string) error
@@ -30,8 +30,8 @@ type trackerMilestones struct {
 	today func() time.Time // the created date's clock; nil is the wall clock
 }
 
-func (t trackerMilestones) Add(title, summary string, depends []string) (string, error) {
-	return t.ops.MilestoneAdd("", title, summary, depends, ms.Day(t.today))
+func (t trackerMilestones) Add(title, summary string, depends []string, kind string) (string, error) {
+	return t.ops.MilestoneAdd("", title, summary, depends, kind, ms.Day(t.today))
 }
 
 func (t trackerMilestones) List() ([]ms.Entry, error) { return t.ops.MilestoneList() }
