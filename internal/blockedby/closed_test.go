@@ -37,23 +37,24 @@ func TestBlockedByIsClosed(t *testing.T) {
 		t.Fatalf("no contract docs found: %v", err)
 	}
 	// The forms the contract docs and skills use: `blockedBy: "x"`, `"blockedBy": "x"`, `blockedBy: x`
-	// and a backticked key followed by a backticked value (`blockedBy` `x`).
-	quoted := regexp.MustCompile("blockedBy\"?`?:\\s*(?:\"([^\"]+)\"|`([^`]+)`)")
+	// and a backticked key followed by a backticked value (`blockedBy` `x`). A value may be followed
+	// by alternatives ("x" or "y"), each of which is a value too.
+	q := "(?:\"[^\"]+\"|`[^`]+`)"
+	chain := regexp.MustCompile("blockedBy(?:\"?`?:\\s*|`\\s+)(" + q + "(?:\\s+or\\s+" + q + ")*)")
+	each := regexp.MustCompile(q)
 	bare := regexp.MustCompile("blockedBy\"?`?:\\s*([A-Za-z][A-Za-z-]*)")
-	spaced := regexp.MustCompile("blockedBy`\\s+`([^`]+)`")
 	for _, f := range files {
 		raw, err := os.ReadFile(f)
 		if err != nil {
 			t.Fatal(err)
 		}
 		var got []string
-		for _, m := range quoted.FindAllStringSubmatch(string(raw), -1) {
-			got = append(got, m[1]+m[2])
+		for _, m := range chain.FindAllStringSubmatch(string(raw), -1) {
+			for _, v := range each.FindAllString(m[1], -1) {
+				got = append(got, v[1:len(v)-1])
+			}
 		}
 		for _, m := range bare.FindAllStringSubmatch(string(raw), -1) {
-			got = append(got, m[1])
-		}
-		for _, m := range spaced.FindAllStringSubmatch(string(raw), -1) {
 			got = append(got, m[1])
 		}
 		for _, v := range got {
@@ -61,6 +62,41 @@ func TestBlockedByIsClosed(t *testing.T) {
 				t.Errorf("%s quotes blockedBy %q, which blockedby.All() does not declare", filepath.Base(f), v)
 			}
 		}
+	}
+}
+
+// TestAllListsEveryConst holds All() against blockedby.go itself: a string
+// const declared there but left out of All() would go unseen by the doc scan
+// until some doc happened to quote it.
+func TestAllListsEveryConst(t *testing.T) {
+	f, err := parser.ParseFile(token.NewFileSet(), "blockedby.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	set := declared(t)
+	n := 0
+	ast.Inspect(f, func(node ast.Node) bool {
+		gd, ok := node.(*ast.GenDecl)
+		if !ok || gd.Tok != token.CONST {
+			return true
+		}
+		for _, spec := range gd.Specs {
+			vs := spec.(*ast.ValueSpec)
+			for i, name := range vs.Names {
+				b, ok := vs.Values[i].(*ast.BasicLit)
+				if !ok || b.Kind != token.STRING {
+					continue
+				}
+				n++
+				if v, _ := strconv.Unquote(b.Value); !set[v] {
+					t.Errorf("const %s = %s is not listed in All()", name.Name, b.Value)
+				}
+			}
+		}
+		return false
+	})
+	if n != len(set) {
+		t.Errorf("blockedby.go declares %d string consts, All() lists %d", n, len(set))
 	}
 }
 
@@ -85,8 +121,9 @@ func isBlockedByOperand(e ast.Expr) bool {
 // TestNoBareBlockedByLiteral fails on a string literal in blockedBy position
 // outside this package: a data key written as "blockedBy", a BlockedBy / By
 // field, the first argument of a blocked/refuse constructor, the by argument of
-// refuseHarvest/blockedRefusal/blocked, or a comparison or switch case against a
-// blockedBy value.
+// refuseHarvest/blockedRefusal/blocked, the by argument of milestoneFail, a map
+// literal keyed "blockedBy", or a comparison or switch case against a blockedBy
+// value. It also fails on a Block* const declared outside this package.
 func TestNoBareBlockedByLiteral(t *testing.T) {
 	root := "../"
 	var found []string
@@ -123,6 +160,12 @@ func TestNoBareBlockedByLiteral(t *testing.T) {
 						report(x.Args[0])
 					}
 				}
+				// An empty by passes "no refusal".
+				if id, ok := x.Fun.(*ast.Ident); ok && id.Name == "milestoneFail" && len(x.Args) > 1 && lit(x.Args[1]) {
+					if b := x.Args[1].(*ast.BasicLit); b.Value != `""` {
+						report(b)
+					}
+				}
 				// Helpers whose second parameter is the by value.
 				if id, ok := x.Fun.(*ast.Ident); ok && (id.Name == "refuseHarvest" || id.Name == "blockedRefusal" || (id.Name == "blocked" && inCLI)) {
 					if len(x.Args) > 1 && lit(x.Args[1]) {
@@ -156,6 +199,25 @@ func TestNoBareBlockedByLiteral(t *testing.T) {
 			case *ast.KeyValueExpr:
 				if id, ok := x.Key.(*ast.Ident); ok && (id.Name == "BlockedBy" || id.Name == "Blocked" || id.Name == "By") && lit(x.Value) {
 					report(x.Value)
+				}
+				if k, ok := x.Key.(*ast.BasicLit); ok && k.Kind == token.STRING && lit(x.Value) {
+					if s, _ := strconv.Unquote(k.Value); s == "blockedBy" {
+						report(x.Value)
+					}
+				}
+			case *ast.GenDecl:
+				// A package-local const holding a literal would bypass the closed
+				// set; an alias of a blockedby constant is the intended form.
+				if x.Tok != token.CONST {
+					break
+				}
+				for _, spec := range x.Specs {
+					vs := spec.(*ast.ValueSpec)
+					for i, name := range vs.Names {
+						if strings.HasPrefix(name.Name, "Block") && i < len(vs.Values) && lit(vs.Values[i]) {
+							report(name)
+						}
+					}
 				}
 			case *ast.AssignStmt:
 				for i, l := range x.Lhs {

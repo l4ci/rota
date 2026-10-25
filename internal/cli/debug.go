@@ -3,13 +3,13 @@ package cli
 import (
 	"errors"
 	"flag"
-	"github.com/l4ci/rota/internal/blockedby"
-	"github.com/l4ci/rota/internal/exitcode"
 	"strconv"
 	"strings"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/debugctr"
 	"github.com/l4ci/rota/internal/debugsession"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/spike"
 	"github.com/l4ci/rota/internal/verdict"

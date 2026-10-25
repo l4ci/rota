@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"github.com/l4ci/rota/internal/blockedby"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -9,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/blockedby"
 )
 
 // gateVerdictConsts reads the package's own source for every string constant
