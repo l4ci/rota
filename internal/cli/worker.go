@@ -457,6 +457,9 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, Usage("--review-through must be an RFC 3339 time, such as 2026-10-25T08:30:00Z")
 			}
+			if t.After(c.deps().Now()) {
+				return Result{}, Usage("--review-through is in the future: pass the time you read the comments")
+			}
 			reviewThrough = &t
 		}
 		root, err := c.Root()
@@ -468,6 +471,11 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		defer cleanup()
+		if reviewThrough != nil {
+			if s := worker.LoadRegistryTolerant(root).Slot(slot); s != nil && s.PR() == "" {
+				return Result{}, Resolution("slot '%s' has no PR whose review input a relay could carry: --review-through needs one", slot)
+			}
+		}
 		opts.BodyFile = path
 		ctx, stop := workerContext()
 		defer stop()

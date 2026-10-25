@@ -27,7 +27,9 @@ type reviewForge struct {
 	calls    []string
 	// failReads makes the thread read fail.
 	failReads bool
-	prState   string // the PR's state; "" is OPEN
+	// undated serves the comments without a created_at.
+	undated bool
+	prState string // the PR's state; "" is OPEN
 }
 
 func (f *reviewForge) exec(_ context.Context, _ string, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
@@ -56,7 +58,11 @@ func (f *reviewForge) exec(_ context.Context, _ string, name string, args []stri
 		for i, b := range f.comments {
 			bj := strings.ReplaceAll(strings.ReplaceAll(b, `\`, `\\`), "\n", `\n`)
 			bj = strings.ReplaceAll(bj, `"`, `\"`)
-			rows = append(rows, `{"id":`+string(rune('1'+i))+`,"body":"`+bj+`","user":{"login":"rev"},"created_at":"2026-10-08T10:0`+string(rune('0'+i))+`:00Z"}`)
+			at := `,"created_at":"2026-10-08T10:0` + string(rune('0'+i)) + `:00Z"`
+			if f.undated {
+				at = ""
+			}
+			rows = append(rows, `{"id":`+string(rune('1'+i))+`,"body":"`+bj+`","user":{"login":"rev"}`+at+`}`)
 		}
 		return []byte("[" + strings.Join(rows, ",") + "]"), nil, 0, nil
 	case strings.Contains(line, "pulls/9/reviews"), strings.Contains(line, "pulls/9/comments"):
@@ -327,7 +333,7 @@ func TestWorkerDispatchRelayConsumesWhatItCarried(t *testing.T) {
 	if got := watchForge(context.Background(), c, dir)[key]; got != "1 from rev "+prURL {
 		t.Fatalf("only the later comment is pending: %q", got)
 	}
-	// Re-arming without a further comment reports the same single item, not a second one.
+	// With the later comment gone, nothing is pending: the relayed one was consumed.
 	f.comments = f.comments[:1]
 	if got, ok := watchForge(context.Background(), c, dir)[key]; ok {
 		t.Fatalf("relayed batch reported again: %q", got)
@@ -354,5 +360,36 @@ func TestWorkerDispatchReviewThroughNeedsRelayAndATime(t *testing.T) {
 	}
 	if code, _, _ := rotaInWith(t, c.Deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--review-through", "yesterday"); code != 2 {
 		t.Errorf("bad time: %d, want 2", code)
+	}
+}
+
+// Input the forge dates nothing for cannot be shown to predate the read, so it
+// stays pending after --review-through.
+func TestWorkerDispatchReviewThroughLeavesUndatedInputPending(t *testing.T) {
+	f := &reviewForge{comments: []string{"please rename x"}, undated: true}
+	c, dir, brief := relaySlot(t, f)
+	key := roundwatch.ReviewKey("w1")
+	if code, _, errOut := rotaInWith(t, c.Deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--review-through", "2026-10-08T10:00:30Z"); code != 0 {
+		t.Fatalf("relay: %d %s", code, errOut)
+	}
+	handBack(t, dir)
+	if got := watchForge(context.Background(), c, dir)[key]; got != "1 from rev "+prURL {
+		t.Fatalf("undated input consumed: %q", got)
+	}
+	if got := worker.LoadRegistryTolerant(dir).Slot("w1").ReviewSeen(); got != "" {
+		t.Errorf("cursor moved to %q", got)
+	}
+}
+
+func TestWorkerDispatchReviewThroughRefusesTheFutureAndAMissingPR(t *testing.T) {
+	c, dir, brief := relaySlot(t, &reviewForge{})
+	if code, _, _ := rotaInWith(t, c.Deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--review-through", "2999-01-01T00:00:00Z"); code != 2 {
+		t.Errorf("future time: %d, want 2", code)
+	}
+	if err := worker.Update(dir, func(d *worker.Doc) { d.Slot("w1").SetPR("") }); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, _ := rotaInWith(t, c.Deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--review-through", "2026-10-08T10:00:30Z"); code != 3 {
+		t.Errorf("no PR: %d, want 3", code)
 	}
 }

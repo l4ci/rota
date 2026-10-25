@@ -128,7 +128,7 @@ func PendingReviewBefore(ctx context.Context, f ReviewForge, s *Slot, v *ReviewV
 			continue
 		case !after.IsZero() && r.CreatedAt.Equal(after) && slices.Contains(seen, e.key):
 			continue
-		case r.CreatedAt.IsZero() && !after.IsZero():
+		case r.CreatedAt.IsZero() && (!after.IsZero() || !until.IsZero()):
 			continue
 		case !until.IsZero() && !r.CreatedAt.Before(until):
 			continue
@@ -136,7 +136,7 @@ func PendingReviewBefore(ctx context.Context, f ReviewForge, s *Slot, v *ReviewV
 		b.Items = append(b.Items, r)
 		take(r.CreatedAt, e.key)
 	}
-	if v != nil && v.Text != "" && (after.IsZero() || v.At.After(after)) && (until.IsZero() || v.At.Before(until)) {
+	if v != nil && v.Text != "" && (after.IsZero() || v.At.After(after)) && (until.IsZero() || (!v.At.IsZero() && v.At.Before(until))) {
 		b.Verdict = v.Text
 		take(v.At, "")
 	}
