@@ -27,7 +27,7 @@ func TestCompleteAppendsDecision(t *testing.T) {
 	stores := map[string]func(t *testing.T) (ms.Store, string){
 		"file": func(t *testing.T) (ms.Store, string) {
 			st := ms.FileStore{Root: t.TempDir()}
-			id, err := st.Add("Fog", "Find out.", nil)
+			id, err := st.Add("Fog", "Find out.", nil, "delivery")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -36,7 +36,7 @@ func TestCompleteAppendsDecision(t *testing.T) {
 		"issues": func(t *testing.T) (ms.Store, string) {
 			f := &trackertest.MS{Fake: &trackertest.Fake{}, Native: []tracker.Milestone{}}
 			st := msIssues(f).MilestoneStore()
-			id, err := st.Add("Fog", "Find out.", nil)
+			id, err := st.Add("Fog", "Find out.", nil, "delivery")
 			if err != nil {
 				t.Fatal(err)
 			}

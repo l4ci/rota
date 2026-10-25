@@ -114,7 +114,7 @@ func TestAcceptResearchLogsTheDecision(t *testing.T) {
 	f := newMoveFx(t)
 	f.researchDone(t, true, false)
 	st := ms.FileStore{Root: t.TempDir()}
-	mid, err := st.Add("Fog", "Find out.", nil)
+	mid, err := st.Add("Fog", "Find out.", nil, "delivery")
 	if err != nil {
 		t.Fatal(err)
 	}

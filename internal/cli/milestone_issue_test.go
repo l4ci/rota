@@ -224,3 +224,30 @@ func TestMilestoneCheckRegeneratesChildList(t *testing.T) {
 		t.Errorf("show leaks the list: %q", body)
 	}
 }
+
+// --kind is applied to the tracking issue as it is created, so the add never
+// re-reads a tracker listing that may not yet hold the new issue.
+func TestIssueModeMilestoneAddKindDecisionWithLaggingListing(t *testing.T) {
+	root := trackerProject(t, issuesConfig)
+	fake := msFixture()
+	fake.Lag = true
+	deps := withTracker(t, fake)
+
+	code, env, stderr := issueRunWith(t, deps, root, "milestone", "add", "--title", "Third", "--summary", "S3.", "--kind", "decision")
+	if code != 0 {
+		t.Fatalf("add --kind decision: %d %s", code, stderr)
+	}
+	if d := ddata(t, env); d["id"] != "M03" {
+		t.Fatalf("add: %v", env)
+	}
+	fake.Lag = false
+	for i := range fake.Issues {
+		if fake.Issues[i].Title == "M03 — Third" {
+			if !strings.Contains(fake.Issues[i].Body, "kind: decision") {
+				t.Errorf("tracking issue body lacks kind: decision:\n%s", fake.Issues[i].Body)
+			}
+			return
+		}
+	}
+	t.Fatal("tracking issue M03 not created")
+}

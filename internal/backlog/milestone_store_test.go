@@ -21,7 +21,7 @@ func TestTrackerStoreRoundTrip(t *testing.T) {
 	if !st.OnTracker() {
 		t.Fatal("tracker store reports OnTracker false")
 	}
-	id, err := st.Add("Title", "Summary.", []string{"M01"})
+	id, err := st.Add("Title", "Summary.", []string{"M01"}, "delivery")
 	if err != nil || id != "M01" {
 		t.Fatalf("add = %q %v", id, err)
 	}

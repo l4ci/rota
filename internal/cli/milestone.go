@@ -107,19 +107,9 @@ func milestoneAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		id, err := st.Add(*title, *summary, artifact.SplitCSV(*depends))
+		id, err := st.Add(*title, *summary, artifact.SplitCSV(*depends), *kind)
 		if err != nil {
 			return milestoneFail(err, "")
-		}
-		if *kind != ms.KindDelivery {
-			// The stub is the same for every store; the kind reshapes it once minted.
-			text, err := st.Show(id)
-			if err == nil {
-				_, err = st.Put(id, ms.WithKind(text, *kind))
-			}
-			if err != nil {
-				return milestoneFail(err, "")
-			}
 		}
 		d := jsonx.NewObject()
 		d.Set("id", id)
