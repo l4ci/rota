@@ -34,6 +34,26 @@ func TestDefaults(t *testing.T) {
 	}
 }
 
+func TestLabelsOf(t *testing.T) {
+	for _, tc := range []struct {
+		name, cfg string
+		want      Labels
+	}{
+		{"defaults", `{}`, Labels{InProgress: "in-progress", NeedsHuman: "needs-human", NeedsReview: "needs-review", Support: "site:support"}},
+		{"configured", `{"issues":{"labels":{"inProgress":"wip-x","needsHuman":"human-x","needsReview":"review-x","support":"support-x"}}}`, Labels{InProgress: "wip-x", NeedsHuman: "human-x", NeedsReview: "review-x", Support: "support-x"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := jsonx.Decode([]byte(tc.cfg))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := LabelsOf(cfg); got != tc.want {
+				t.Errorf("LabelsOf() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestOverrides(t *testing.T) {
 	s, err := Load(project(t, `{"round":{"scope":"slate","roster":["ann","bo"],"brief":"docs/b.md","sharedPaths":["docs/*.md"]}}`))
 	if err != nil {
