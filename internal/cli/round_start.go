@@ -233,7 +233,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		if noVerify {
 			c.Warn("%s", noVerifyWarning)
 		}
-		if gc := c.deps().workerEnv().GateConfig(root); len(gc.Fast) == 0 && len(gc.Full) > 0 {
+		if c.deps().workerEnv().GateConfig(root).FullOnly() {
 			d.Set("noFast", true)
 			c.Warn("%s", noFastWarning)
 		}

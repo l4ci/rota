@@ -210,7 +210,7 @@ func FromConfig(cfg any) (Settings, error) {
 		return s, err
 	}
 	s.Brief = config.String(cfg, "round.brief")
-	if s.SharedPaths, err = list(cfg, "round.sharedPaths"); err != nil {
+	if s.SharedPaths, err = sharedPaths(cfg); err != nil {
 		return s, err
 	}
 	if err := checkEnum(cfg, "round.scopeOverlap"); err != nil {
@@ -262,7 +262,7 @@ func FromConfig(cfg any) (Settings, error) {
 	if _, err := path.Match(s.AdoptPattern, ""); err != nil {
 		return s, fmt.Errorf("round.adoptPattern %q: %v", s.AdoptPattern, err)
 	}
-	s.Support = strings.TrimSpace(config.String(cfg, "round.support"))
+	s.Support = SupportName(cfg)
 	if s.Role, err = MachineRole(cfg); err != nil {
 		return s, err
 	}
@@ -512,8 +512,29 @@ func (t Tests) FullOnly() bool { return len(t.Fast) == 0 && len(t.Full) > 0 }
 // yields none, so a caller that only filters (the merge gate) is not blocked by
 // a config error that Load reports elsewhere.
 func SharedPaths(cfg any) []string {
-	paths, _ := list(cfg, "round.sharedPaths")
+	paths, _ := sharedPaths(cfg)
 	return paths
+}
+
+// sharedPaths is the one reader of round.sharedPaths: Load reports its error,
+// SharedPaths drops it.
+func sharedPaths(cfg any) ([]string, error) { return list(cfg, "round.sharedPaths") }
+
+// Labels are the issues.labels roles a round and the gate act on, with the
+// schema defaults config.Label supplies.
+type Labels struct {
+	InProgress, NeedsHuman, NeedsReview, Support string
+}
+
+// LabelsOf reads the round's issue labels from a loaded config: the one place
+// that knows their key names.
+func LabelsOf(cfg any) Labels {
+	return Labels{
+		InProgress:  config.Label(cfg, "inProgress"),
+		NeedsHuman:  config.Label(cfg, "needsHuman"),
+		NeedsReview: config.Label(cfg, "needsReview"),
+		Support:     config.Label(cfg, "support"),
+	}
 }
 
 // Sources of an effective tier model.
