@@ -34,9 +34,14 @@ type fixture struct {
 
 func newFixture(t *testing.T, policy string) *fixture {
 	t.Helper()
+	return newFixtureOn(t, policy, "main")
+}
+
+func newFixtureOn(t *testing.T, policy, branch string) *fixture {
+	t.Helper()
 	root := gittest.TempDir(t)
 	seed := filepath.Join(root, "seed")
-	gittest.Init(t, seed, "main")
+	gittest.Init(t, seed, branch)
 	gittest.Write(t, seed, IndexFile, seedIndex)
 	gittest.Write(t, seed, "topics/go.md", seedGo)
 	if policy != "" {
@@ -222,7 +227,7 @@ func TestQueryPrintsTopicSectionsAndListsMissing(t *testing.T) {
 func TestPolicyDefaultsToPushWhenFileMissing(t *testing.T) {
 	f := newFixture(t, "")
 	p, err := f.clone().Policy()
-	if err != nil || p.Write != "push" || !p.Defaulted || p.Branch != "main" {
+	if err != nil || p.Write != "push" || !p.Defaulted || p.Branch != "" {
 		t.Fatalf("policy = %+v err=%v", p, err)
 	}
 	f2 := newFixture(t, `{"write":"pr","branch":"trunk"}`)
@@ -381,6 +386,99 @@ func TestPolicyRejectsOptionLikeBranch(t *testing.T) {
 		f := newFixture(t, `{"write":"push","branch":"`+b+`"}`)
 		if _, err := f.clone().Policy(); err == nil {
 			t.Fatalf("branch %q must be refused", b)
+		}
+	}
+}
+
+func TestAddPushesToTheClonesBranchWithoutPolicy(t *testing.T) {
+	f := newFixtureOn(t, "", "master")
+	res, err := f.clone().Add(context.Background(), AddIn{Topic: "Go", Title: "On master", Body: "b", Date: "2026-10-25", Source: "rota"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Pushed {
+		t.Fatalf("res = %+v", res)
+	}
+	if gittest.Run(t, f.remote, "branch", "--list", "main") != "" {
+		t.Fatal("a stray main branch was created on the remote")
+	}
+	if !strings.Contains(gittest.Run(t, f.remote, "show", "master:topics/go.md"), "On master") {
+		t.Fatal("remote master did not receive the bullet")
+	}
+	if strings.Contains(gittest.Run(t, f.a, "status", "-sb"), "ahead") {
+		t.Fatal("clone is ahead of its upstream")
+	}
+}
+
+func TestAddRefusesPushWhenNotOnPolicyBranch(t *testing.T) {
+	f := newFixture(t, `{"write":"push","branch":"main"}`)
+	gittest.Run(t, f.a, "switch", "-q", "-c", "side")
+	_, err := f.clone().Add(context.Background(), AddIn{Topic: "Go", Title: "T", Body: "b", Date: "2026-10-25", Source: "rota"})
+	if !errorsIs(err, ErrPolicy) {
+		t.Fatalf("err = %v", err)
+	}
+	if gittest.Run(t, f.a, "status", "--porcelain") != "" {
+		t.Fatal("clone must stay clean")
+	}
+}
+
+func TestAddRefusesSymlinkedTopicFile(t *testing.T) {
+	f := newFixture(t, "")
+	outside := filepath.Join(filepath.Dir(f.a), "outside.txt")
+	if err := os.WriteFile(outside, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(f.a, "topics/git.md")); err != nil {
+		t.Fatal(err)
+	}
+	gittest.Run(t, f.a, "add", "-A")
+	gittest.Run(t, f.a, "commit", "-q", "-m", "link")
+	gittest.Run(t, f.a, "push", "-q")
+	_, err := f.clone().Add(context.Background(), AddIn{Topic: "Git", Title: "T", Body: "b", Date: "2026-10-25", Source: "rota"})
+	if err == nil {
+		t.Fatal("a symlinked topic must be refused")
+	}
+	if b, _ := os.ReadFile(outside); string(b) != "keep" {
+		t.Fatalf("outside file overwritten: %q", b)
+	}
+}
+
+func TestPRModeFailedWriteReturnsToStartBranch(t *testing.T) {
+	f := newFixture(t, `{"write":"pr","branch":"main"}`)
+	// A new topic needs topics/<slug>.md; make its directory unwritable by
+	// replacing topics/ with a file on disk after the switch.
+	f.hook = func(args []string) {
+		if len(args) > 0 && args[0] == "switch" {
+			_ = os.RemoveAll(filepath.Join(f.a, TopicsDir))
+			_ = os.WriteFile(filepath.Join(f.a, TopicsDir), []byte("x"), 0o644)
+		}
+	}
+	_, err := f.clone().Add(context.Background(), AddIn{Topic: "Git", Title: "T", Body: "b", Date: "2026-10-25", Source: "rota"})
+	if err == nil {
+		t.Fatal("write must fail")
+	}
+	if got := gittest.Run(t, f.a, "rev-parse", "--abbrev-ref", "HEAD"); got != "main" {
+		t.Fatalf("clone left on %q", got)
+	}
+}
+
+func TestBulletContentIsRejected(t *testing.T) {
+	f := newFixture(t, "")
+	c := f.clone()
+	ctx := context.Background()
+	for _, in := range []AddIn{
+		{Topic: "Go", Title: "a*b", Body: "b"},
+		{Topic: "Go", Title: "t\nx", Body: "b"},
+		{Topic: "Go", Title: "t", Body: "x --> y"},
+		{Topic: "Go", Title: "t", Body: "l1\nl2"},
+	} {
+		if _, err := c.Add(ctx, in); !errorsIs(err, ErrContent) {
+			t.Fatalf("add %+v: err = %v", in, err)
+		}
+	}
+	for _, text := range []string{"x --> y", "a\nb"} {
+		if _, err := c.Amend(ctx, AmendIn{Topic: "Go", Fragment: "Table tests", Text: text}); !errorsIs(err, ErrContent) {
+			t.Fatalf("amend %q: err = %v", text, err)
 		}
 	}
 }

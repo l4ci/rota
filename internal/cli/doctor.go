@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/doctor"
+	"github.com/l4ci/rota/internal/extknowledge"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/initproj"
@@ -326,7 +327,7 @@ func doctorExternalKnowledge(ctx context.Context, d *Deps, cwd, home string) doc
 	if res, err := d.Git(ctx, path, "remote"); err == nil && res.ExitCode == 0 && strings.TrimSpace(res.Stdout) != "" {
 		k.HasRemote = true
 	}
-	_, err := os.Stat(filepath.Join(path, "rota-knowledge.json"))
+	_, err := os.Stat(filepath.Join(path, extknowledge.PolicyFile))
 	k.HasPolicy = err == nil
 	return k
 }

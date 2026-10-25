@@ -8,8 +8,11 @@ refs:
 
 Every verb that rewrites S's KNOWLEDGE.md (`knowledge add`, `amend`, `replace`, `rm`, `rename-topic`, `glossary write`, `glossary import`) holds the advisory lock on the sibling `KNOWLEDGE.md.lock` for its whole read-modify-write, and takes the `knowledge-tier.json.lock` inside it, never the reverse. `rename-topic`, `replace`, `rm` and `tier set` fold the buffered hits (see `knowledge hit`) under the `KNOWLEDGE.md` lock before they touch the sidecar. N concurrent calls each land their own change (the parallel rename batch in `rota-learn/topic-size.md` relies on it), and the temp file each write renames over the target is unique per call (`<path>.<pid>.<n>.tmp`), per the Writes rule in `cli-conventions.md`. The empty `.lock` stays behind, so a golden that records a writer's changed files lists it. (#895)
 
+### External knowledge (`--external`)
+note: `--external` on `query`, `topics`, `add` and `amend` reads or writes the external knowledge clone named by `knowledge.external` instead of `.rota/KNOWLEDGE.md`; `--hook <line>` (add only, needs `--external`) sets the `INDEX.md` line of a new topic. Exit codes: 3 when `knowledge.external` is unset, the topic or fragment is not found or the repo policy is invalid; 4 when the clone is dirty or diverged, a fragment matches several bullets, or the title, body or amend text is not a single line without `*` (title) or `-->`; 5 when the remote is unreachable on a write; 1 when a push or `gh pr create` fails. Without a policy `branch`, a push write lands on the clone's upstream branch. See [external-knowledge](../../usage/external-knowledge.md).
+
 ### rota knowledge query
-rota knowledge query <topic>… [--tier provisional|confirmed|deprecated] [--include-deprecated]
+rota knowledge query <topic>… [--tier provisional|confirmed|deprecated] [--include-deprecated] [--external]
 repo: scoped (scope S). Umbrella scope reads `.rota/KNOWLEDGE.md`. A sub-repo scope reads umbrella then sub-repo, grouped per topic with `> from:` lines, as the old helper did.
 data: text-read, with `missing` always present
 exit: 2 when no topic is given or `--tier` is not one of the three values
@@ -30,7 +33,7 @@ note: the old helper reads only the umbrella file, so the verb has no repo scope
 note: `--ui` opens a read-only topic list over this data; Enter reads the topic. See cli-conventions.md.
 
 ### rota knowledge topics
-rota knowledge topics
+rota knowledge topics [--external]
 repo: none (umbrella `.rota/KNOWLEDGE.md`, like `stats`)
 data: {"topics": [{"name": string, "bullets": number}]}
 exit: 2 on an argument. A missing file gives `{"topics": []}`.
@@ -38,7 +41,7 @@ old: none (new)
 note: text is one `<heading>: <n> bullets` line per topic, in document order. `decisions topics` is the same over `.rota/DECISIONS.md`. Use it to find the heading text to pass to `query`. It is `stats` without the byte sizes.
 
 ### rota knowledge add
-rota knowledge add --topic <T> --title <S> --body-file <path|-> [--date YYYY-MM-DD] [--sha <hex>]
+rota knowledge add --topic <T> --title <S> --body-file <path|-> [--date YYYY-MM-DD] [--sha <hex>] [--external [--hook <line>]]
 repo: scoped (scope S)
 data: {"topic": string, "title": string, "changed": bool}
 exit: 2 when `--topic`, `--title` or `--body-file` is missing, or `--sha` is not 7 to 40 hex digits; 3 when the `## <T>` heading does not exist in S's KNOWLEDGE.md
@@ -47,7 +50,7 @@ shim: stderr `wrote:` gives `changed: true`; `noop: … (title already present)`
 note: the old inline `--body` and the TTY-blocking stdin fallback are dropped. Dedup is by case-insensitive title, so a repeated title is `changed: false`. A successful add also initializes the bullet's tier entry as provisional. The missing-topic exit moves from 1 to 3. `--sha` is new (not in the old helper): it stores the commit the bullet's claim about code was true at beside the date, as `<!-- YYYY-MM-DD sha:<hex> -->` (lowercased). `rota knowledge query` prints the bullet line as stored, so the sha shows, and still tier-filters it; entries without a sha render as before.
 
 ### rota knowledge amend
-rota knowledge amend --topic <T> --fragment <F> --mode append --body-file <path|->
+rota knowledge amend --topic <T> --fragment <F> --mode append --body-file <path|-> [--external]
 repo: scoped (scope S)
 data: {"topic": string, "changed": bool}
 exit: 2 when a flag is missing, `--mode` is not `append`, or when no `--repo` is given and the fragment matches in both the umbrella and the resolved sub-repo (hint: pass `--repo`); 3 when the topic or fragment is not found

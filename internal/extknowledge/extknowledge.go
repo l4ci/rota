@@ -28,6 +28,7 @@ var (
 	ErrMultiMatch = errors.New("matches several bullets")
 	ErrPush       = errors.New("push failed")
 	ErrPolicy     = errors.New("invalid policy")
+	ErrContent    = errors.New("invalid bullet text")
 )
 
 // Env is everything the package reaches outside its own memory.
@@ -56,8 +57,8 @@ type Topic struct {
 // Policy says how writes land.
 type Policy struct {
 	Write     string // "push" or "pr"
-	Branch    string
-	Defaulted bool // no policy file: the default applies
+	Branch    string // empty: the clone's own branch
+	Defaulted bool   // no policy file: the default applies
 }
 
 // WriteResult reports Add and Amend.

@@ -72,6 +72,8 @@ A write needs a clean clone. It pulls (fast-forward only), writes the bullet to 
 | `push` | `git push` to `branch`. A rejected push gets one `git pull --rebase` and a retry. |
 | `pr` | Pushes a `rota-knowledge/<topic>-<time>` branch and runs `gh pr create` against `branch`. No confirmation gate; the clone returns to its branch. |
 
+`branch` is optional. Without it, a push lands on the branch the clone tracks (its upstream, else its current branch), so a repo whose default branch is `master` works. A `push` policy refuses to write when the clone is on a different branch than `branch`. Titles may not contain `*`; titles, bodies and amend text must be one line and may not contain `-->`. Rota refuses (exit 4) rather than write through a symlink or over an untracked file.
+
 Without a `rota-knowledge.json` the repo is treated as `{"write": "push"}`, and the verb says so in its output. `rota doctor` warns about the missing file.
 
 ## Settings
