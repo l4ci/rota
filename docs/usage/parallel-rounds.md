@@ -951,3 +951,32 @@ minutes (`BASH_DEFAULT_TIMEOUT_MS`) and is capped at 10 minutes (`BASH_MAX_TIMEO
 - [Parallel work](parallel-work.md): several `/rota-work` sessions without an orchestrator.
 - [Autonomy levels](autonomy.md): how far a run goes before it stops, solo or in a round; `auto` turns on the autopilot.
 - [Contributing: rounds](../contributing/rounds.md): this repo's gate, repo rules and roster.
+
+## Stale claims on another machine
+
+`rota round status` reports a `stale-claim` finding when a remote holder has no recent
+claim, PR update or origin branch activity. `rota round candidates` keeps that item
+visible with `blockedBy: stale-claim`, `staleHolder` and `lastActivity`; `rota doctor`
+adds a warning with the same holder and time. Local held items use the existing stalled
+and claim-mismatch checks instead.
+
+The default threshold is four hours for bugs, tasks and Minor/Cosmetic features, eight
+hours for Major features. Configure `round.claimStaleMinutes` and
+`round.claimStaleMinutesMajor`; `0` disables the corresponding class. PR comments and
+reviews count through the forge's PR update time. Branch committer dates are clamped to
+now. Claims without a known server timestamp are never stale.
+
+Ask the maintainer before reclaiming: name the holder, last activity, and that the old
+claim marker and claim label will be released and replaced. Record the yes as the
+maintainer's own answer, then run:
+
+```bash
+rota round assign 7 --agent dana --reclaim-stale mac-ben@3
+```
+
+Assign rechecks activity before releasing anything. Recent activity, a different holder,
+a disabled threshold or an unavailable activity read returns `blockedBy: not-stale`.
+Existing readiness checks still apply; an open PR also needs an explicit
+`--accept-open-pr` decision. Plain assign, the autopilot tick and `reconcile --apply`
+never reclaim stale claims. The gate refuses an old holder's PR with `claim-lost` while
+another claim holds the issue; adopt refuses it as `claimed`.
