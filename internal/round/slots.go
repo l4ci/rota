@@ -132,7 +132,7 @@ func (e Env) pickSlots(ctx context.Context, reg worker.Registry, set roundcfg.Se
 		add(s)
 	}
 	for _, name := range roster {
-		if s := reg.Slot(name); s != nil && s.HeldID() == held {
+		if s := reg.Slot(name); held != "" && s != nil && s.HeldID() == held {
 			add(s)
 		}
 	}
@@ -159,6 +159,17 @@ func (e Env) pickSlots(ctx context.Context, reg worker.Registry, set roundcfg.Se
 		}
 	}
 	return out, skipped
+}
+
+// FreeSlot previews the slot a new assignment would select, without
+// parking or dispatching it. Advice uses the same active-slot, login and clean
+// worktree checks as assign rather than treating every done slot as free.
+func (e Env) FreeSlot(ctx context.Context, reg worker.Registry, set roundcfg.Settings) (string, bool) {
+	slots, _ := e.pickSlots(ctx, reg, set, "", 1)
+	if len(slots) == 0 {
+		return "", false
+	}
+	return slots[0].Name(), true
 }
 
 // checkActive refuses new work for a roster slot past the round's slot count:

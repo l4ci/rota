@@ -120,9 +120,9 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 		defs, sigs := setupSuggestions(c, dir, proj, given)
 		// The role picks the path. Off a terminal it is known now, so an
 		// initialized main project is refused before anything else.
-		role, roleKnown := given["round.role"], true
+		role, roleKnown := given[config.RoundRoleKey], true
 		if role == "" {
-			role, roleKnown = defs["round.role"], !interactive
+			role, roleKnown = defs[config.RoundRoleKey], !interactive
 		}
 		if roleKnown && role != roundcfg.RoleSupport {
 			if res, err := mainStop(); err != nil {
@@ -138,7 +138,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			fmt.Fprintln(c.Stderr, "rota setup: Enter takes the default [in brackets]; Ctrl-C aborts before anything is written.")
 		}
 		if !roleKnown {
-			if role, err = setupAnswer(c, in, *config.PromptFor("round.role"), given, interactive, defs, sigs); err != nil {
+			if role, err = setupAnswer(c, in, *config.PromptFor(config.RoundRoleKey), given, interactive, defs, sigs); err != nil {
 				return Result{}, err
 			}
 		}
@@ -163,7 +163,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 		for _, p := range config.Prompts {
 			v, ok := answers[p.Key]
 			// Main is round.role's default, and the tracked config may not hold the key.
-			if !ok || (p.Optional && v == "") || p.Key == "round.role" {
+			if !ok || (p.Optional && v == "") || p.Key == config.RoundRoleKey {
 				continue
 			}
 			if g, has := globalVals[p.Key]; has && fmt.Sprint(g) == v {
@@ -219,9 +219,9 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 // else the default. A question whose condition does not hold, or that role
 // does not ask, is skipped, and --set naming it is a usage error.
 func resolveAnswers(c *Ctx, in *bufio.Reader, given map[string]string, interactive bool, defs map[string]string, sigs map[string]setupSignal, role string) (map[string]string, error) {
-	answers := map[string]string{"round.role": role}
+	answers := map[string]string{config.RoundRoleKey: role}
 	for _, p := range config.Prompts {
-		if p.Key == "round.role" {
+		if p.Key == config.RoundRoleKey {
 			continue
 		}
 		_, ok := given[p.Key]
@@ -326,7 +326,7 @@ func setupDoctor(c *Ctx) (*jsonx.Object, string) {
 func supportSetupStop(c *Ctx, dir string) (Result, error) {
 	tracked := fsio.LoadJSON(rotatree.Config(dir), jsonx.NewObject())
 	if roundcfg.SupportName(tracked) == "" {
-		d := jsonObj("blockedBy", blockedby.Config, "key", "round.support", "changed", false)
+		d := jsonObj("blockedBy", blockedby.Config, "key", config.RoundSupportKey, "changed", false)
 		return Result{Data: d}, Refused("the support path needs round.support in the tracked .rota/config.json, and it is empty").
 			WithHint("on the main machine run: rota round support enable <name>, commit and push; then pull here and run rota setup again")
 	}
@@ -528,7 +528,7 @@ func globalCandidates(answers map[string]string, global map[string]any) []config
 	for _, p := range config.Prompts {
 		v, ok := answers[p.Key]
 		// The role belongs to one machine and one project, never the global config.
-		if !ok || p.Free || (p.Optional && v == "") || p.Key == "round.role" {
+		if !ok || p.Free || (p.Optional && v == "") || p.Key == config.RoundRoleKey {
 			continue
 		}
 		if g, has := global[p.Key]; len(global) > 0 && has && fmt.Sprint(g) == v {
