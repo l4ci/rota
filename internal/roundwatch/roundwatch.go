@@ -372,7 +372,7 @@ func Digest(root string, round int, armed bool) string {
 	// Tolerant: a hook digest cannot refuse; a corrupt registry reads as no slots.
 	for _, s := range worker.LoadRegistryTolerant(root).Slots() {
 		st := strings.ToLower(s.State())
-		if st == "" || st == "idle" {
+		if worker.IsIdle(st) {
 			continue
 		}
 		p := s.Name() + " " + st
@@ -428,7 +428,7 @@ func NeedsWatch(root string) (bool, []string) {
 	// Tolerant: a hook digest cannot refuse; a corrupt registry reads as no slots.
 	for _, s := range worker.LoadRegistryTolerant(root).Slots() {
 		st := strings.ToLower(s.State())
-		if st == "" || st == "idle" {
+		if worker.IsIdle(st) {
 			continue
 		}
 		need = true
