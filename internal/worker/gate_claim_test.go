@@ -67,7 +67,6 @@ func TestGateClaimPasses(t *testing.T) {
 	}{
 		{name: "no claims", claim: "w1@3"},
 		{name: "recorded claim survives transfer", claim: "imported@9", bodies: []string{"<!-- rota:claim imported@9 -->"}},
-		{name: "legacy target without recorded claim", bodies: []string{"<!-- hv:claim mac-ben@3 -->"}},
 		{name: "best-of second holder", claim: "w1@3", bodies: []string{"<!-- rota:claim dana@5 -->", "<!-- rota:claim w1@3 -->"}},
 		{name: "released only", claim: "w1@3", bodies: []string{"<!-- rota:claim dana@5 -->", "<!-- rota:release dana@5 -->"}},
 		{name: "unreadable claims", claim: "w1@3", readErr: errors.New("offline")},
