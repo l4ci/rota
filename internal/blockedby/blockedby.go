@@ -13,6 +13,9 @@ const (
 	NotReady        = "not ready"
 	Overlap         = "overlap"
 	Claimed         = "claimed"
+	ClaimLost       = "claim-lost"
+	NotStale        = "not-stale"
+	StaleClaim      = "stale-claim"
 	OpenPR          = "open PR"
 	Batch           = "batch"
 	Bundle          = "bundle"
@@ -138,7 +141,7 @@ const (
 // All is every declared blockedBy value, each once.
 func All() []string {
 	return []string{
-		NoRound, OutOfScope, NotReady, Overlap, Claimed, OpenPR, Batch, Bundle, SlotBusy, NoFreeSlot, NoLogin,
+		NoRound, OutOfScope, NotReady, Overlap, Claimed, NotStale, StaleClaim, ClaimLost, OpenPR, Batch, Bundle, SlotBusy, NoFreeSlot, NoLogin,
 		Draining, Quota, BriefMissing, NoTierMap, HumanDecision, Registered, Held, External, NoPRRecorded, Site, Fetch,
 		Conflict, Dirty, Role, NoSlotHolds, NoIssues, FindingMissing, NoGist, ReviewNotMinted, NotYourSlot, SameSlot, Healthy,
 		LiveAgent, Unverifiable,

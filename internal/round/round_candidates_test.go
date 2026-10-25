@@ -180,3 +180,32 @@ func TestCandidateDeferredRelatedForms(t *testing.T) {
 		})
 	}
 }
+
+// Cross-machine claims exclude work from every scope, including comment-only
+// claims whose derived label could not be written.
+func TestMainCandidatesSkipSupportClaimedAnyScope(t *testing.T) {
+	for _, scope := range []string{roundcfg.ScopeOpen, roundcfg.ScopeMilestone, roundcfg.ScopeNext, roundcfg.ScopeSlate} {
+		for _, signal := range []string{"label", "comment"} {
+			t.Run(scope+"/"+signal, func(t *testing.T) {
+				root := newRepo(t, nil)
+				milestoneDoc(t, root, "M01", "active")
+				be := &fakeRemote{}
+				be.add("12", "support holds this", "M01", false, "")
+				be.add("13", "free", "M01", false, "")
+				if signal == "label" {
+					be.items["12"].Labels = []string{"claimed:ben@mac"}
+				} else {
+					be.claims = map[string]string{"12": "mac-ben@1"}
+				}
+				e := Env{Git: git.Exec, Forge: be.asForge(), Label: "in-progress", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig})}
+				cs, err := e.Candidates(bg, root, be, CandidateOpts{Scope: scope, Slate: []string{"12", "13"}, Support: "mac", Role: roundcfg.RoleMain})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(ids(cs), []string{"13"}) {
+					t.Fatalf("candidates %v want [13]", ids(cs))
+				}
+			})
+		}
+	}
+}

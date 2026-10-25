@@ -88,7 +88,9 @@ type Settings struct {
 	TDD bool
 	// StallMinutes is round.stallMinutes: how long a slot may make no progress
 	// before `round reconcile` calls it stalled; 0 turns the check off.
-	StallMinutes int
+	StallMinutes           int
+	ClaimStaleMinutes      int
+	ClaimStaleMinutesMajor int
 	// MaxBounces is round.maxBounces: how often `rota worker gate` may send one
 	// item's PR back to its worker before parking the item as needs-human; 0
 	// turns the cap off.
@@ -220,6 +222,12 @@ func FromConfig(cfg any) (Settings, error) {
 	}
 	s.BlockScopeOverlap = config.String(cfg, "round.scopeOverlap") == config.ScopeOverlapBlock
 	if s.StallMinutes, err = config.Int(cfg, "round.stallMinutes", 0, config.MaxInt); err != nil {
+		return s, err
+	}
+	if s.ClaimStaleMinutes, err = config.Int(cfg, "round.claimStaleMinutes", 0, config.MaxInt); err != nil {
+		return s, err
+	}
+	if s.ClaimStaleMinutesMajor, err = config.Int(cfg, "round.claimStaleMinutesMajor", 0, config.MaxInt); err != nil {
 		return s, err
 	}
 	if s.MaxBounces, err = config.Int(cfg, "round.maxBounces", 0, config.MaxInt); err != nil {

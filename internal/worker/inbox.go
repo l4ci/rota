@@ -12,6 +12,10 @@ import (
 // MailReview is the kind of a REVIEW relay (`round review-relay`).
 const MailReview = "review"
 
+// MailBase is the kind of a relay telling the worker its PR's base moved
+// (`round reconcile --apply` retargeting a re-tagged issue).
+const MailBase = "base"
+
 // Mail is one relay in a slot's durable inbox: the orchestrator writes it, the
 // worker reads it with `worker inbox` and `--ack` marks it read. The pane copy
 // can cross a ROTA-DONE; this one cannot, because `worker done` refuses while

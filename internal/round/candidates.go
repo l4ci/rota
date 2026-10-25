@@ -8,7 +8,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/fsio"
@@ -22,6 +24,8 @@ import (
 // Candidate is an item a round could assign, with its readiness.
 type Candidate struct {
 	ID, Title, Milestone string
+	StaleHolder          string
+	LastActivity         time.Time
 	// OpenPR is the open PR that already resolves the item, 0 for none: the
 	// item is not ready while one is open.
 	OpenPR int
@@ -90,6 +94,7 @@ func resolveScope(override, recorded, def string) string {
 // ScopeOf, the shared paths and overlap mode from set. Callers pass only an
 // explicit scope override ("" for none).
 func (e Env) RoundCandidates(ctx context.Context, root string, be backlog.Backend, set roundcfg.Settings, override string) ([]Candidate, error) {
+	e.Round = set
 	scope, slate := ScopeOf(root, set, override)
 	return e.Candidates(ctx, root, be, CandidateOpts{Scope: scope, Slate: slate, Shared: set.SharedPaths, BlockScopeOverlap: set.BlockScopeOverlap, Support: set.Support, Role: set.Role, LegacySupportLabel: set.LegacySupportLabel})
 }
@@ -109,6 +114,20 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		return nil, err
 	}
 
+	// Prefer support's pins, preserving backlog order within each group. Scope
+	// selection happens first: a pin never widens the configured round scope.
+	if o.Support != "" && o.Role == roundcfg.RoleSupport {
+		slices.SortStableFunc(chosen, func(a, b backlog.Item) int {
+			pinned := func(it backlog.Item) int {
+				if slices.Contains(roundcfg.PinsOf(it.Labels), o.Support) {
+					return 0
+				}
+				return 1
+			}
+			return pinned(a) - pinned(b)
+		})
+	}
+
 	handed, err := e.handedToHuman(ctx, be)
 	if err != nil {
 		return nil, err
@@ -118,7 +137,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		return nil, err
 	}
 	var taken func(backlog.Item) bool
-	if o.Scope == roundcfg.ScopeOpen {
+	if o.Scope == roundcfg.ScopeOpen || o.Support != "" {
 		if taken, err = e.takenOutside(ctx, be); err != nil {
 			return nil, err
 		}
@@ -126,6 +145,17 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 	prs, err := e.listOpenPRs(ctx, be)
 	if err != nil {
 		return nil, err
+	}
+	stale := map[string]StaleClaim{}
+	var staleWarnings []string
+	if board, ok := BoardOf(be); ok {
+		claims, warnings := e.staleClaims(ctx, root, board, e.claimedItems(chosen), prs)
+		staleWarnings = warnings
+		for _, c := range claims {
+			if _, exists := stale[c.Issue]; !exists {
+				stale[c.Issue] = c
+			}
+		}
 	}
 	openPR := e.issuesOfPRs(prs, "")
 	openNums := map[int]bool{}
@@ -139,7 +169,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		if handed[it.IssueKey()] {
 			continue
 		}
-		if taken != nil && taken(it) {
+		if taken != nil && stale[it.ID].Holder == "" && taken(it) {
 			continue
 		}
 		r, err := AssessScoped(be, it.ID, tracked, o.Shared, inFlight, false, "", o.BlockScopeOverlap)
@@ -148,7 +178,13 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		}
 		ms := backlog.ParseMilestones(it.Fields.Get("milestone"))
 		_, src := ItemScopeSource(be, it.ID)
-		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()], DependsOnPR: deferredDependency(be, it, openNums), ScopeSource: src, Readiness: r}
+		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()], DependsOnPR: deferredDependency(be, it, openNums), ScopeSource: src, Readiness: r, Warnings: append([]string{}, staleWarnings...)}
+		if st := stale[it.ID]; st.Holder != "" {
+			c.BlockedBy = StaleClaimKind
+			c.StaleHolder = st.Holder
+			c.LastActivity = st.Last
+			c.Checks = append(c.Checks, Check{Name: StaleClaimKind, Detail: []string{fmt.Sprintf("claim %s has had no branch or PR activity since %s", st.Holder, st.Last.Format(time.RFC3339))}})
+		}
 		if p, err := PickOf(be.Capabilities(), it); err != nil {
 			c.PickErr = err.Error()
 		} else {
@@ -439,10 +475,11 @@ func InScope(root string, be backlog.Backend, scope string, slate []string, id s
 }
 
 // takenOutside says whether an item someone outside the round has taken: it
-// carries the in-progress label or an open claim while no slot or PR in
-// review holds it (scopeSet already dropped those). Scope open offers every
-// open item, so without this a hand-worked issue reads as ready and assign
-// refuses it as claimed. File mode has neither labels nor claims.
+// carries the in-progress or claimed label, or an open comment claim, while
+// no slot or PR in review holds it (scopeSet already dropped those). Every
+// scope in a support split excludes externally held issues; without support,
+// only open scope does. Keep the comment-claim fallback for
+// legacy or drifted labels. File mode has neither labels nor claims.
 func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog.Item) bool, error) {
 	if !e.forgeOn(be) {
 		return nil, nil
@@ -457,14 +494,14 @@ func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog
 	}
 	wf, _ := backlog.WorkflowOf(be)
 	return func(it backlog.Item) bool {
-		if labelled[it.IssueKey()] {
+		if labelled[it.IssueKey()] || e.hasClaimSignal(it) {
 			return true
 		}
 		if wf == nil {
 			return false
 		}
-		s, err := wf.Status(it.ID)
-		return err == nil && s != nil && s.Claim != ""
+		st, err := wf.Status(it.ID)
+		return err == nil && st != nil && st.Claim != ""
 	}, nil
 }
 

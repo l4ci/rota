@@ -29,6 +29,22 @@ type swForge struct {
 	writers map[string]bool
 	gets    []string
 	lists   [][]string
+	// conflict is the PR numbers the forge reports as not mergeable; mergeErr
+	// makes the mergeability read fail; merges counts the reads.
+	conflict map[int]bool
+	mergeErr bool
+	merges   int
+}
+
+func (f *swForge) PRMergeable(_ context.Context, n int) (tracker.Mergeability, error) {
+	f.merges++
+	if f.mergeErr {
+		return tracker.Mergeability{}, fmt.Errorf("forge down")
+	}
+	if f.conflict[n] {
+		return tracker.Mergeability{State: tracker.MergeConflict}, nil
+	}
+	return tracker.Mergeability{State: tracker.MergeClean}, nil
 }
 
 func (f *swForge) List(_ context.Context, fl tracker.ListFilter) ([]tracker.Issue, error) {
@@ -347,7 +363,7 @@ func TestWatchSupportOffWithoutRoundSupport(t *testing.T) {
 		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "main", HostName: "solo", Forge: f, SupportLabel: swLabel}
 	}
 	c := &Ctx{Deps: deps, ctx: context.Background()}
-	if k := supportKeys(watchForge(context.Background(), c, root)); len(k) != 0 || len(f.gets) != 0 || f.labelLists() != 0 {
+	if k := supportKeys(watchForge(context.Background(), c, root)); len(k) != 0 || len(f.gets) != 0 || f.labelLists() != 0 || f.merges != 0 {
 		t.Fatalf("keys %v gets %v lists %v", k, f.gets, f.lists)
 	}
 }
@@ -367,5 +383,71 @@ func TestWatchSeenPersistsAcrossWatches(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(cd, "rota")); err != nil {
 		t.Errorf("seen file not under the rota state dir: %v", err)
+	}
+}
+
+func (*swForge) PRSetBase(context.Context, int, string) error { return nil }
+
+const swQueued = `{"slots":[{"name":"mac-ben","state":"busy","task":"40","pr":"https://github.com/o/r/pull/50"}],` +
+	`"prs":[{"issue":"31","pr":"https://github.com/o/r/pull/5","branch":"mac-nia/31-x","from":"mac-nia"}]}`
+
+// #1911 AC-1: main's comment on the issue of a queued (review-list) PR wakes
+// the support machine, though no slot holds the issue any more.
+func TestWatchSupportMachineWakesOnQueuedPRComment(t *testing.T) {
+	f := &swForge{writers: map[string]bool{"ann": true}}
+	f.issue(31, swLabel)
+	f.issue(40, swLabel)
+	f.comment(31, "5", "ann", "<!-- rota:comment feedback -->\n<!-- rota:from main -->\nREVIEW BOUNCE for PR 5")
+	pass := swWatch(t, f, roundcfg.RoleSupport, swQueued)
+	if got := supportKeys(pass())[roundwatch.SupportKey("31", "comment")]; got != "ann#5" {
+		t.Fatalf("queued PR's issue comment key = %q", got)
+	}
+}
+
+// #1911 AC-2: an open support PR, held or queued, that turns CONFLICTING wakes
+// once per head; a mergeable PR stays quiet.
+func TestWatchSupportMachineWakesOnConflict(t *testing.T) {
+	f := &swForge{writers: map[string]bool{"ann": true}, heads: map[int]string{5: "aaa111", 50: "bbb222"}}
+	f.issue(31, swLabel)
+	f.issue(40, swLabel)
+	pass := swWatch(t, f, roundcfg.RoleSupport, swQueued)
+	first := supportKeys(pass())
+	if len(first) != 0 {
+		t.Fatalf("mergeable PRs must stay quiet: %v", first)
+	}
+	f.conflict = map[int]bool{5: true, 50: true}
+	second := supportKeys(pass())
+	if second[roundwatch.SupportKey("31", "conflict")] != "aaa111" || second[roundwatch.SupportKey("40", "conflict")] != "bbb222" {
+		t.Fatalf("conflicting PRs not reported: %v", second)
+	}
+	third := supportKeys(pass())
+	if ch := roundwatch.Diff(second, third); len(ch) != 0 {
+		t.Fatalf("same head woke again: %v", ch)
+	}
+	f.heads[5] = "ccc333"
+	var got []string
+	for _, ch := range roundwatch.Diff(third, supportKeys(pass())) {
+		got = append(got, ch.Key+"|"+ch.From+"|"+ch.To)
+	}
+	if want := []string{"support/31/conflict|aaa111|ccc333"}; !slices.Equal(got, want) {
+		t.Fatalf("new head on a conflicting PR: %q, want %q", got, want)
+	}
+}
+
+// #1911 AC-3: a failed mergeability read is no news; main's watch does not
+// read mergeability at all.
+func TestWatchSupportConflictReadFailureAndMain(t *testing.T) {
+	f := &swForge{writers: map[string]bool{"ann": true}, heads: map[int]string{5: "aaa111", 50: "bbb222"}, conflict: map[int]bool{5: true}, mergeErr: true}
+	f.issue(31, swLabel)
+	f.issue(40, swLabel)
+	pass := swWatch(t, f, roundcfg.RoleSupport, swQueued)
+	if k := supportKeys(pass()); len(k) != 0 {
+		t.Fatalf("failed read must be no news: %v", k)
+	}
+	g := &swForge{writers: map[string]bool{"ann": true}, heads: map[int]string{}, conflict: map[int]bool{5: true}}
+	g.issue(31, swLabel)
+	swWatch(t, g, roundcfg.RoleMain, swQueued)()
+	if g.merges != 0 {
+		t.Fatalf("main read mergeability %d times", g.merges)
 	}
 }

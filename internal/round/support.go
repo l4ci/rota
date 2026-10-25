@@ -43,15 +43,40 @@ func (e Env) offSite(support, role, legacy string, it backlog.Item) string {
 		return why
 	}
 	pins := roundcfg.PinsOf(it.Labels)
-	if len(pins) == 0 {
-		// Until #1975, support still takes only issues explicitly offered to it.
-		if role == roundcfg.RoleSupport {
-			return fmt.Sprintf("%s is not pinned %s: the support machine takes only the issues main offers it", it.ID, roundcfg.MachineLabel(support))
-		}
-	} else if !slices.Contains(pins, roundcfg.MachineName(support, role)) {
+	if len(pins) > 0 && !slices.Contains(pins, roundcfg.MachineName(support, role)) {
 		return fmt.Sprintf("%s is pinned %s elsewhere: remove the pin to move it; on main, rota round support offer --withdraw %s takes a %s issue back", it.ID, strings.Join(pinLabels(pins), ", "), it.ID, roundcfg.MachineLabel(support))
 	}
 	return ""
+}
+
+// supportPinStep makes pulled work visible to the existing pin-based queue,
+// watch, provenance and return paths. Only this assignment's new pin is undone;
+// a pre-existing pin belongs to the operator, including on a resumed assign.
+func (e Env) supportPinStep(ctx context.Context, be Board, it *backlog.Item) step {
+	label := roundcfg.MachineLabel(e.Round.Support)
+	added := false
+	return step{
+		name: "pin to support " + it.ID,
+		skip: func() bool {
+			return e.Round.Role != roundcfg.RoleSupport || e.Round.Support == "" || slices.Contains(it.Labels, label)
+		},
+		do: func() error {
+			if !e.forgeOn(be) {
+				return blocked(BlockConfig, "pinning support work needs an issue tracker with labels")
+			}
+			if err := e.Forge.AddLabels(ctx, it.IssueKey(), []string{label}, true); err != nil {
+				return err
+			}
+			added = true
+			return nil
+		},
+		undo: func() error {
+			if !added {
+				return nil
+			}
+			return e.Forge.RemoveLabels(ctx, it.IssueKey(), []string{label})
+		},
+	}
 }
 
 // Block legacy offers on both machines until the explicit migration completes.
@@ -73,8 +98,8 @@ func pinLabels(names []string) []string {
 	return labels
 }
 
-// OfferSupport labels ids for the support side, or with withdraw removes the
-// label, and returns the ids it changed. Every id is checked before any label
+// OfferSupport pins ids to the support side, or with withdraw removes the
+// pin, and returns the ids it changed. Support can also pull unpinned work. Every id is checked before any label
 // moves: an issue a main slot or claim holds is not offered, and one a support
 // claim holds is not withdrawn (BlockClaimed). It needs round.support
 // (BlockConfig) and a tracker.
@@ -150,8 +175,8 @@ func (e Env) OfferSupport(ctx context.Context, root string, be Board, ids []stri
 // resuming its issue on its branch merges it first; a merge that fails is
 // aborted and refused (BlockConflict) before the brief goes out, and a dirty
 // worktree is refused (BlockDirty) before any merge runs.
-func (e Env) freshBase(ctx context.Context, root string, slot *worker.Slot, branch string, resuming bool) (string, error) {
-	base := strutil.FirstNonEmpty(slot.Base(), e.Base)
+func (e Env) freshBase(ctx context.Context, root string, slot *worker.Slot, branch string, resuming bool, target string) (string, error) {
+	base := strutil.FirstNonEmpty(target, e.Base)
 	res, err := e.Git(ctx, root, "fetch", "-q", "origin", base)
 	if err != nil || res.ExitCode != 0 {
 		return "", blocked(BlockFetch, "could not fetch origin/%s to cut the support branch from (%s): a support machine never cuts from its local %s", base, gitWhy(res.Stderr, err), base)
@@ -201,9 +226,9 @@ type SupportReturned struct {
 	Changed bool
 }
 
-// ReturnSupport is the support machine's hand-back (#1827): it posts reason
-// on the issue under SupportReturnMarker and removes the support label, so
-// main's candidates list the issue again. It refuses on main (BlockRole), with
+// ReturnSupport is the support machine's hand-back: it posts reason on the
+// issue under SupportReturnMarker, releases support's claims and removes the
+// support pin, so main's candidates can list the issue again. It refuses on main (BlockRole), with
 // round.support empty or no tracker (BlockConfig) and while a slot still holds
 // the issue (BlockClaimed). An issue that no longer carries the label is
 // already main's: nothing is posted and Changed is false.
@@ -230,8 +255,22 @@ func (e Env) ReturnSupport(ctx context.Context, root string, be Board, id, reaso
 	if !slices.Contains(it.Labels, e.SupportLabel) {
 		return out, nil
 	}
+	st, err := be.Status(it.ID)
+	if err != nil {
+		return out, err
+	}
 	if out.Comment, err = be.AddComment(it.ID, "feedback", SupportReturnMarker+"\n"+strings.TrimSpace(reason)); err != nil {
 		return out, err
+	}
+	if st != nil {
+		for _, claim := range openClaimsOf(st) {
+			if !strings.HasPrefix(claim, e.Round.Support+"-") {
+				continue
+			}
+			if _, err := be.Release(it.ID, claim); err != nil {
+				return out, fmt.Errorf("%s: release %s: %w", tracker.RefOf(it.ID), claim, err)
+			}
+		}
 	}
 	if err := e.Forge.RemoveLabels(ctx, it.IssueKey(), []string{e.SupportLabel}); err != nil {
 		return out, fmt.Errorf("%s: %w", tracker.RefOf(it.ID), err)

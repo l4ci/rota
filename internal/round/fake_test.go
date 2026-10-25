@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/tracker"
@@ -36,29 +37,32 @@ type fakeRemote struct {
 	prsErr         error
 	stateErrs      map[int]error // PR number -> PRState failure
 	addErr         error
+	commentErr     error // AddComment fails with it
 	removeErr      error
 	added          []int // AddLabels targets, in call order
 	removed        []int // RemoveLabels targets, in call order
 	openPRCalls    int
 	prNotes        map[int][]tracker.Comment // MRNotes answers by PR number
 	closedLists    int                       // List calls that asked for closed issues
+	retargeted     map[int]string            // PR number -> the base PRSetBase moved it onto
 
 	// Board side.
-	items     map[string]*backlog.Item
-	order     []string
-	details   map[string]string
-	comments  map[string][]string
-	kinds     map[string][]string
-	authors   map[string][]string // comment authors by ref, parallel to comments; absent is ""
-	ready     map[string][]string // reasons; absent means ready
-	claims    map[string]string   // id -> earliest claim holder
-	more      map[string][]string // id -> later claims of a shared (best-of) item
-	claimedBy string              // when set, Claim loses to this holder
-	bstates   map[string]string
-	notes     []string        // "<ref>: <text>" per AddComment
-	gone      map[string]bool // issues the tracker answers 404 for
-	failState error           // fails the next SetState once
-	made      []backlog.CreateInput
+	items      map[string]*backlog.Item
+	order      []string
+	details    map[string]string
+	comments   map[string][]string
+	kinds      map[string][]string
+	authors    map[string][]string // comment authors by ref, parallel to comments; absent is ""
+	ready      map[string][]string // reasons; absent means ready
+	claimTimes map[string]map[string]time.Time
+	claims     map[string]string   // id -> earliest claim holder
+	more       map[string][]string // id -> later claims of a shared (best-of) item
+	claimedBy  string              // when set, Claim loses to this holder
+	bstates    map[string]string
+	notes      []string        // "<ref>: <text>" per AddComment
+	gone       map[string]bool // issues the tracker answers 404 for
+	failState  error           // fails the next SetState once
+	made       []backlog.CreateInput
 }
 
 var (
@@ -109,6 +113,14 @@ func (f remoteForge) CanPush(_ context.Context, login string) (bool, error) {
 
 func (f remoteForge) MergedPRs(_ context.Context, branch string) ([]tracker.PR, error) {
 	return f.mergedPRs[branch], f.mergedErr
+}
+
+func (f remoteForge) PRSetBase(_ context.Context, n int, base string) error {
+	if f.retargeted == nil {
+		f.retargeted = map[int]string{}
+	}
+	f.retargeted[n] = base
+	return nil
 }
 
 func (f remoteForge) PRView(_ context.Context, n int) (tracker.PRInfo, error) {
@@ -345,10 +357,13 @@ func (f *fakeRemote) Status(ref string) (*backlog.Status, error) {
 	if err := f.notFound(ref); err != nil {
 		return nil, err
 	}
-	return &backlog.Status{ID: ref, Claim: f.claims[ref], Claims: f.held(ref), State: f.bstates[ref]}, nil
+	return &backlog.Status{ID: ref, Claim: f.claims[ref], Claims: f.held(ref), ClaimedAt: f.claimTimes[ref], State: f.bstates[ref]}, nil
 }
 
 func (f *fakeRemote) AddComment(ref, kind, text string) (string, error) {
+	if f.commentErr != nil {
+		return "", f.commentErr
+	}
 	if err := f.notFound(ref); err != nil {
 		return "", err
 	}

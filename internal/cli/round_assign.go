@@ -47,6 +47,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 	model := fs.String("model", "", "model id (default the issue's model: label, then the tier map)")
 	acceptCodex := fs.Bool("accept-codex-version", false, "deprecated and ignored: rota no longer checks the Codex version")
 	accept := fs.Bool("accept-overlap", false, "skip the file and scope overlap checks")
+	reclaimStale := fs.String("reclaim-stale", "", "reclaim this exact stale claim after maintainer approval")
 	acceptOpenPR := fs.Bool("accept-open-pr", false, "assign an issue an open PR already resolves, for a deliberate redo")
 	bundle := fs.String("bundle", "", "member issues handed to the same slot beside the lead, comma-separated: one branch, one PR that closes them all (at most round.bundleMax)")
 	acceptBatch := fs.Bool("accept-batch", false, "assign past a full round.batch for this one call")
@@ -86,7 +87,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		env.HolderPID = *pid
 		res, err := env.Assign(ctx, root, be, round.AssignOpts{
 			ID: id, Agent: *agent, Decisions: decisions, Siblings: pystr.SplitCSV(*siblings), Bundle: bundleArg(*bundle),
-			CheckOnly: *checkOnly, AcceptOverlap: *accept, AcceptOpenPR: *acceptOpenPR, AcceptBatch: *acceptBatch,
+			ReclaimStale: *reclaimStale, CheckOnly: *checkOnly, AcceptOverlap: *accept, AcceptOpenPR: *acceptOpenPR, AcceptBatch: *acceptBatch,
 			Tier: *tier, TierReason: *tierReason, Kind: *kind, Model: *model,
 		})
 		for _, w := range res.Warnings {

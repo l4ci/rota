@@ -256,37 +256,24 @@ func approvalEscalation(c *Ctx, p gate.MergePolicy) *worker.ApprovalEscalation {
 // asks the human when the gate refuses. A refusal comes back as a value; the
 // error is a step that could not run.
 func clearMerge(c *Ctx, p gate.MergePolicy, target string, conf gate.Confirm, req approvalReq, files func() ([]string, error), extra *jsonx.Object) (*exitcode.Refusal, error) {
-	var changed []string
-	if p.NeedsFiles() {
-		var err error
-		if changed, err = files(); err != nil {
-			return nil, err
-		}
-	}
-	covered, hit := p.Covers(changed)
-	if !covered {
-		return nil, nil
-	}
-	var th worker.ApprovalThread
-	if req.ID != "" || req.Escalate {
-		var err error
-		if th, err = req.Thread(); err != nil {
-			return nil, err
-		}
-	}
-	if req.ID != "" {
-		var res Result
-		var err error
-		if conf, res, err = approvalConfirm(c, req.ID, th, extra); err != nil {
+	return mergeApproval(c, p, conf, req, extra).Check(target, files, req.Thread)
+}
+
+// mergeApproval supplies the CLI adapters for the worker-owned sequence.
+func mergeApproval(c *Ctx, p gate.MergePolicy, conf gate.Confirm, req approvalReq, extra *jsonx.Object) *worker.MergeApproval {
+	return &worker.MergeApproval{
+		Policy: p, Confirm: conf, ID: req.ID, Escalate: req.Escalate,
+		Resolve: func(id string, th worker.ApprovalThread) (gate.Confirm, *exitcode.Refusal, error) {
+			conf, res, err := approvalConfirm(c, id, th, extra)
+			ref, err := refusalOf(res, err)
+			return conf, ref, err
+		},
+		Clear: func(target string, conf gate.Confirm, paths []string) (*exitcode.Refusal, error) {
+			res, err := clearGate(c, gate.MergeApproval, target, conf, paths, extra)
 			return refusalOf(res, err)
-		}
+		},
+		Escalation: approvalEscalation(c, p),
 	}
-	res, err := clearGate(c, gate.MergeApproval, target, conf, hit, extra)
-	ref, err := refusalOf(res, err)
-	if ref != nil && req.Escalate {
-		approvalEscalation(c, p).Attach(ref, hit, th)
-	}
-	return ref, err
 }
 
 // refusalOf is the result of a gate step as a value: an exit-coded err is the

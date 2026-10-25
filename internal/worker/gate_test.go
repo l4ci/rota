@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	gatepolicy "github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/roundlease"
 	"os"
@@ -812,18 +813,24 @@ func TestGateFindsTheOpenPROfAnUnrecordedSlot(t *testing.T) {
 	}
 }
 
-// Approve is handed the PR the gate adopted, so the approval thread is the
-// PR's, not the issue's.
-func TestGateApproveSeesTheAdoptedPR(t *testing.T) {
+// Confirmation reads the PR the gate adopted, rather than the slot's issue.
+func TestGateApprovalSeesTheAdoptedPR(t *testing.T) {
 	w := newWorld(t, "")
 	w.forge("listed", "1")
-	var got GateTarget
-	res, err := w.gate(false, GateOpts{Approve: func(t GateTarget, _ func() ([]string, error)) (*exitcode.Refusal, error) { got = t; return nil, nil }})
+	var got ApprovalThread
+	res, err := w.gate(false, GateOpts{Approval: &MergeApproval{
+		Policy: gatepolicy.MergePolicy{Mode: gatepolicy.MergeAll}, ID: "e1",
+		Resolve: func(id string, th ApprovalThread) (gatepolicy.Confirm, *exitcode.Refusal, error) {
+			got = th
+			return gatepolicy.Confirm{Given: true, Note: "yes"}, nil, nil
+		},
+		Clear: func(string, gatepolicy.Confirm, []string) (*exitcode.Refusal, error) { return nil, nil },
+	}})
 	if err != nil || res.Verdict != GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
-	if got.PR != ghURL {
-		t.Errorf("Approve saw PR %q, want the adopted %q", got.PR, ghURL)
+	if got.Kind != "pr" || got.Number != 7 {
+		t.Errorf("confirmation thread = %+v, want the adopted PR #7", got)
 	}
 }
 
@@ -1030,20 +1037,6 @@ func TestGateSkipsE2EWhenFullRed(t *testing.T) {
 	}
 	if _, err := os.Stat(ran); err == nil {
 		t.Error("e2e ran after a red test.full")
-	}
-}
-
-// A refused Approve reaches the caller as a typed refusal on the result, data
-// intact, for the gate and (in train_test.go) the train.
-func TestGateApprovalRefusalIsTyped(t *testing.T) {
-	w := newWorld(t, ghURL)
-	want := &exitcode.Refusal{Err: &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate"}, Data: BlockData{BlockedBy: "manual gate"}}
-	res, err := w.gate(false, GateOpts{Approve: func(GateTarget, func() ([]string, error)) (*exitcode.Refusal, error) { return want, nil }})
-	if res.Verdict != GateApprovalRequired {
-		t.Fatalf("verdict %q", res.Verdict)
-	}
-	if res.Refusal != want || err != want.Err || !res.Refused(err) {
-		t.Errorf("refusal = %+v, err %v, refused %v", res.Refusal, err, res.Refused(err))
 	}
 }
 

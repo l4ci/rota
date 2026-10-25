@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -86,6 +88,16 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 			return res, blocked(BlockHeld, "slot %s already holds %s", s.Name(), res.Issue)
 		}
 	}
+	// A fresh claim by another worker can coexist with an orchestrator's
+	// fix-forward. Refuse only positive evidence of stale or reclaimed work.
+	if board, ok := BoardOf(be); ok && be.Capabilities().ClaimWrites {
+		warnings, err := e.checkAdoptClaim(ctx, root, board, branch, res.Issue)
+		res.Warnings = append(res.Warnings, warnings...)
+		if err != nil {
+			return res, err
+		}
+	}
+
 	name := o.Name
 	if name == "" {
 		for n := 1; ; n++ {
@@ -248,4 +260,77 @@ func realPath(p string) string {
 		return a
 	}
 	return p
+}
+
+// checkAdoptClaim protects reclaimed work without inferring ownership from a
+// branch name alone. Raw marker history comes from the issue source, which can
+// differ from the PR forge. An unavailable history cannot prove a takeover.
+func (e Env) checkAdoptClaim(ctx context.Context, root string, be Board, branch, issue string) ([]string, error) {
+	st, err := be.Status(issue)
+	if err != nil {
+		return []string{fmt.Sprintf("adopt claim check on %s skipped: %v", issue, err)}, nil
+	}
+	if st == nil {
+		return nil, nil
+	}
+	held := openClaimsOf(st)
+	if len(held) == 0 {
+		return nil, nil
+	}
+	agent, _, _ := strings.Cut(branch, "/")
+	for _, id := range held {
+		holder, _, _ := strings.Cut(id, "@")
+		if agent != "" && holder == agent {
+			return nil, nil
+		}
+	}
+	key, ok := tracker.ParseKey(issue)
+	if !ok {
+		return nil, nil
+	}
+	stale, warnings := e.StaleClaims(ctx, root, be, []tracker.IssueKey{key})
+	for _, claim := range stale {
+		if slices.Contains(held, claim.Holder) {
+			return warnings, blocked(BlockClaimed, "%s has stale claim %s; branch %s cannot be adopted without reclaiming it", issue, claim.Holder, branch)
+		}
+	}
+	source, ok := be.(*backlog.Issues)
+	if !ok || source.Tracker == nil {
+		return append(warnings, fmt.Sprintf("adopt claim history on %s unavailable; reclaimed-branch check skipped", issue)), nil
+	}
+	comments, err := source.Tracker.Comments(ctx, key)
+	if err != nil {
+		return append(warnings, fmt.Sprintf("adopt claim history on %s skipped: %v", issue, err)), nil
+	}
+	if reclaimedBranchClaim(comments, agent, held) {
+		return warnings, blocked(BlockClaimed, "%s was reclaimed from %s and is claimed by %s; branch %s cannot be adopted", issue, agent, strings.Join(held, ", "), branch)
+	}
+	return warnings, nil
+}
+
+// reclaimedBranchClaim requires a branch-agent claim, its release, then a
+// different still-open claim, in that order. A bare release or an existing
+// best-of peer is not evidence that the branch was reclaimed.
+func reclaimedBranchClaim(comments []tracker.Comment, agent string, held []string) bool {
+	claimed := map[string]bool{}
+	released := false
+	for _, comment := range comments {
+		verb, id, ok := marker.ParseClaim(comment.Body)
+		if !ok {
+			continue
+		}
+		holder, _, _ := strings.Cut(id, "@")
+		if holder == agent && agent != "" {
+			if verb == marker.KindClaim {
+				claimed[id] = true
+			}
+			if verb == marker.KindRelease && claimed[id] {
+				delete(claimed, id)
+				released = true
+			}
+		} else if verb == marker.KindClaim && released && slices.Contains(held, id) {
+			return true
+		}
+	}
+	return false
 }

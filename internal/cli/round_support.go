@@ -14,14 +14,13 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 )
 
-// The support split (#1598): main labels the issues the support machine may
-// take. offer, enable and disable are fenced on a support machine
-// (supportFenced), so they run on main only; return is the support machine's
-// and refuses main inside the verb.
+// Main can pin issues to support; support also pulls unpinned work. The
+// support fence keeps offer, enable and disable on main; return runs on
+// support and refuses main inside the verb.
 func roundSupport() *Command {
 	return &Command{Name: "support", Summary: "split work with the support machine (round.support)", Subs: []*Command{
-		{Name: "offer", Summary: "label issues for the support machine; --withdraw takes them back", Verb: roundSupportOffer},
-		{Name: "return", Summary: "hand an offered issue back to main, with a reason (support machine)", Verb: roundSupportReturn},
+		{Name: "offer", Summary: "pin issues to the support machine; --withdraw removes the pin", Verb: roundSupportOffer},
+		{Name: "return", Summary: "release a pinned support issue, with a reason (support machine)", Verb: roundSupportReturn},
 		{Name: "enable", Summary: "name the support machine in the tracked config (round.support)", Verb: roundSupportEnable},
 		{Name: "disable", Summary: "remove round.support from the tracked config", Verb: roundSupportDisable},
 	}}
@@ -93,7 +92,7 @@ func supportConfigData(name string, changed bool) *jsonx.Object {
 }
 
 func roundSupportOffer(fs *flag.FlagSet) RunFunc {
-	withdraw := fs.Bool("withdraw", false, "remove the support label instead of adding it")
+	withdraw := fs.Bool("withdraw", false, "remove the support pin instead of adding it")
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) == 0 {
 			return Result{}, Usage("round support offer takes one or more item IDs")
@@ -138,7 +137,7 @@ func roundSupportOffer(fs *flag.FlagSet) RunFunc {
 }
 
 // roundSupportReturn is the support machine's hand-back (#1827): the reason
-// goes on the issue and the support label comes off.
+// goes on the issue, its support claims are released and the pin comes off.
 func roundSupportReturn(fs *flag.FlagSet) RunFunc {
 	reason := fs.String("reason-file", "", "why the issue goes back; posted on it (- for stdin)")
 	return func(c *Ctx, args []string) (Result, error) {

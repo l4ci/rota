@@ -20,6 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/roundcfg"
 	secpkg "github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/skills"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
@@ -52,6 +53,7 @@ const (
 	BlockOverlap    = blockedby.Overlap
 	BlockClaimed    = blockedby.Claimed
 	BlockOpenPR     = blockedby.OpenPR
+	BlockNotStale   = blockedby.NotStale
 	// BlockBatch: round.batch items are already assigned and not landed or parked.
 	BlockBatch = blockedby.Batch
 	// BlockBundle: the --bundle members are too many, repeat a slot's recorded
@@ -89,6 +91,7 @@ func (e *BlockedError) Error() string { return e.Msg }
 
 // AssignOpts are the flags of `rota round assign`, with the config read.
 type AssignOpts struct {
+	ReclaimStale  string // exact stale holder approved by the maintainer
 	ID            string
 	Agent         string
 	Decisions     string // answered decisions, verbatim; "" for none
@@ -216,6 +219,9 @@ func pointerBrief(agent, id, branch, brief string, siblings []string, decisions,
 		fmt.Fprintf(&b, "This assignment is a bundle of %s. Read each issue and its whole thread and dispute each one the same way. Build them all on this one branch and open ONE PR whose body has a `Closes #N` line for every one of them. Record proof for each issue id (`rota proof record <ID> -- <test command>`, once per id): `rota worker done` refuses while any of them lacks its PASS row at HEAD. A bundle lands or bounces as a unit.\n\n", strings.Join(refs, ", "))
 	}
 	fmt.Fprintf(&b, "Your branch is %s; your worktree is already on it.\n", branch)
+	if t.Base != "" {
+		fmt.Fprintf(&b, "Your base branch is %s, not the round base: the issue belongs to an active milestone. Open your PR against %s, and wherever the contract says to merge the moved base, merge origin/%s.\n", t.Base, t.Base, t.Base)
+	}
 	if len(siblings) > 0 {
 		fmt.Fprintf(&b, "Sibling issues running now: %s.\n", strings.Join(siblings, ", "))
 	}
@@ -432,6 +438,8 @@ type tierBrief struct {
 	FullOnly bool
 	// TDD: work.tdd is on, so the brief repeats the red-first rule.
 	TDD bool
+	// Base is the milestone branch the issue targets, "" for the round base.
+	Base string
 }
 
 func (t tierBrief) text() string {
@@ -629,6 +637,8 @@ type assignRun struct {
 	slot              *worker.Slot
 	members           []*backlog.Item // the bundle's, none for one issue
 	from              string          // the start point the branch is cut from; "" for the slot's base
+	base              string          // the milestone branch the issue targets; "" for the round base
+	tag               string          // the issue's milestone tag when it was routed
 	fallback          *Fallback       // set when the kind took over from a harness without headroom
 }
 
@@ -812,6 +822,11 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		return run, false, blocked(BlockClaimed, "%s has PR %s in review (from %s): rota round transfer %s --to <slot> picks it up", id, q.PR, q.From, id)
 	}
 
+	if o.ReclaimStale != "" {
+		if err := e.checkStaleClaim(ctx, root, be, it.IssueKey(), o.ReclaimStale); err != nil {
+			return run, false, err
+		}
+	}
 	if !resuming && !o.AcceptOpenPR {
 		// An attempt of a best-of:2 issue ignores the PR of its sibling's branch.
 		openPR, err := e.openPRIssuesExcept(ctx, be, bo.otherBranch())
@@ -898,8 +913,21 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 
 	// 6. A support branch starts from the main the main machine last pushed.
 	from := ""
-	if set.Role == roundcfg.RoleSupport {
-		if from, err = e.freshBase(ctx, root, slot, res.Branch, resuming); err != nil {
+	msBase, warn, err := e.milestoneBase(ctx, root, be, it)
+	if err != nil {
+		return run, false, err
+	}
+	if warn != "" {
+		res.Warnings = append(res.Warnings, warn)
+	}
+	switch {
+	case set.Role == roundcfg.RoleSupport:
+		if from, err = e.freshBase(ctx, root, slot, res.Branch, resuming, strutil.FirstNonEmpty(msBase, slot.Base())); err != nil {
+			return run, false, err
+		}
+	case msBase != "":
+		// An issue of an active milestone is cut from the milestone branch.
+		if from, err = e.fetchBase(ctx, root, msBase); err != nil {
 			return run, false, err
 		}
 	}
@@ -907,7 +935,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	res.SmokeSection = e.reserveSmokeSection(ctx, root, be, reg, set.Roster, id, agent)
 	return assignRun{id: id, agent: agent, branch: res.Branch, resuming: resuming, queue: queue,
 		kind: pf.Kind, kindSource: pf.KindSource, model: pf.Model, tier: tier, reason: reason,
-		pick: pf.Pick, decision: pf.Decision, decisions: decisions, brief: brief, bo: bo, slot: slot, members: members, from: from, fallback: pf.Fallback}, false, nil
+		pick: pf.Pick, decision: pf.Decision, decisions: decisions, brief: brief, bo: bo, slot: slot, members: members, from: from, base: msBase, tag: it.Fields.Get("milestone"), fallback: pf.Fallback}, false, nil
 }
 
 // notReadyBy is the blockedBy of a failed readiness: overlap when only the
@@ -1053,6 +1081,16 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 	if bo != nil {
 		holders = 2
 	}
+	var reclaim func() error
+	if o.ReclaimStale != "" {
+		reclaim = func() error {
+			if err := e.checkStaleClaim(ctx, root, be, it.IssueKey(), o.ReclaimStale); err != nil {
+				return err
+			}
+			_, err := be.Release(id, o.ReclaimStale)
+			return err
+		}
+	}
 	w := e.Worker
 	steps := []step{
 		{name: "queue the slot's PR", skip: func() bool { return !run.queue }, do: func() error {
@@ -1060,25 +1098,36 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 		}},
 		claimStep(be, id, claimID, holders, func() error {
 			return editSlot(root, agent, func(s *worker.Slot) error { s.Unbind(); return nil })
-		}),
+		}, reclaim),
 		stateStep(root, be, id, agent, resuming, &res.Changed),
 		{name: "comment", skip: func() bool { return resuming }, do: func() error {
 			_, err := be.AddComment(id, "feedback", assignNote(agent, res.Branch))
 			return err
 		}},
 	}
+	afterClaim := 2
+	supportPull := e.Round.Role == roundcfg.RoleSupport && e.Round.Support != ""
+	if supportPull {
+		steps = slices.Insert(steps, afterClaim, e.supportPinStep(ctx, be, it))
+		afterClaim++
+	}
+
 	if run.fallback != nil {
-		// Right after the claim: a failure before dispatch gives the pick back.
-		steps = slices.Insert(steps, 2, harnessStep(ctx, e, be, it, run.fallback))
+		// After claiming and pinning: a failure before dispatch gives the pick back.
+		steps = slices.Insert(steps, afterClaim, harnessStep(ctx, e, be, it, run.fallback))
 	}
 	// A bundle's members are claimed and marked like the lead, each with its own
 	// undo; a resume finds them done.
 	for _, m := range run.members {
-		claim := claimStep(be, m.ID, claimID, 1, func() error { return nil })
+		claim := claimStep(be, m.ID, claimID, 1, func() error { return nil }, nil)
 		claim.name, claim.skip = "claim "+m.ID, func() bool { return resuming }
 		state := stateStep(root, be, m.ID, agent, resuming, new(bool))
 		state.name = "in-progress " + m.ID
-		steps = append(steps, claim, state, step{name: "comment " + m.ID, skip: func() bool { return resuming }, do: func() error {
+		steps = append(steps, claim)
+		if supportPull {
+			steps = append(steps, e.supportPinStep(ctx, be, m))
+		}
+		steps = append(steps, state, step{name: "comment " + m.ID, skip: func() bool { return resuming }, do: func() error {
 			_, err := be.AddComment(m.ID, "feedback", bundleNote(agent, res.Branch, id))
 			return err
 		}})
@@ -1086,6 +1135,10 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 	steps = append(steps, []step{
 		// 7. The slot onto its issue branch.
 		{name: "reset the slot onto its branch", do: func() error {
+			// The base first: the reset and every later verb read the slot's.
+			if err := editSlot(root, agent, func(s *worker.Slot) error { s.RouteBase(run.base); s.SetRoutedTag(run.tag); return nil }); err != nil {
+				return err
+			}
 			if _, err := w.ResetFrom(root, agent, id, res.Branch, run.from, false); err != nil {
 				var we *exitcode.Error
 				if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
@@ -1119,7 +1172,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 		Brief: func() string {
 			return e.taskBrief(ctx, root, be, taskBriefSpec{agent: agent, id: id, branch: res.Branch, contract: run.brief,
 				decisions: run.decisions, siblings: o.Siblings, bundle: res.Bundle,
-				tier: tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, FullOnly: set.FullOnly, TDD: set.TDD, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()}})
+				tier: tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, Base: run.base, FullOnly: set.FullOnly, TDD: set.TDD, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()}})
 		}}
 	// 8-9. The account, the pointer brief and the hand-off.
 	ds, err := d.steps(ctx, e, root)
@@ -1133,8 +1186,15 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 // for an attempt of a best-of:2 issue); its undo gives the claim back and
 // clears the slot's binding. A lost claim is a refusal and leaves nothing to
 // undo.
-func claimStep(be Board, id, claimID string, holders int, unbind func() error) step {
+func claimStep(be Board, id, claimID string, holders int, unbind func() error, reclaim func() error) step {
 	return step{name: "claim", do: func() error {
+		// Reclaim before claiming: shared claims may still have a free holder slot,
+		// so winning a new claim does not prove the approved stale one was released.
+		if reclaim != nil {
+			if err := reclaim(); err != nil {
+				return err
+			}
+		}
 		var (
 			won    bool
 			holder string
@@ -1152,6 +1212,7 @@ func claimStep(be Board, id, claimID string, holders int, unbind func() error) s
 		if err != nil {
 			return err
 		}
+
 		if !won {
 			return blocked(BlockClaimed, "%s is claimed by %s", id, holder)
 		}
