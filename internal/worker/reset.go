@@ -151,10 +151,14 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 	}
 	// A done slot whose PR merged waits on nothing: ending it here keeps it
 	// from reading as needing the orchestrator for good (#1843).
+	// The lookup and the switch ran outside the lock: a concurrent assign may
+	// have re-bound the slot since, so the slot is re-checked as still done on
+	// the same PR before it is wiped.
+	seenPR := s.PR()
 	endDone := IsDone(s.State()) && e.prMerged(context.Background(), root, s)
 	if _, err := UpdateSlot(root, slot, func(s *Slot) {
 		s.SetBranch(newBranch)
-		if endDone {
+		if endDone && IsDone(s.State()) && s.PR() == seenPR {
 			s.SetPR("")
 			s.SetPRMerged(false)
 			_ = s.MarkState("idle", e.Now().UTC().Format(time.RFC3339))
