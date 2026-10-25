@@ -189,12 +189,12 @@ func ValidScope(s string) bool {
 // config, for a caller that holds one.
 func FromConfig(cfg any) (Settings, error) {
 	var s Settings
-	if err := checkEnum(cfg, "round.scope"); err != nil {
+	if err := checkEnum(cfg, config.RoundScopeKey); err != nil {
 		return s, err
 	}
-	s.Scope = config.String(cfg, "round.scope")
+	s.Scope = config.String(cfg, config.RoundScopeKey)
 	var err error
-	if s.Roster, err = list(cfg, "round.roster"); err != nil {
+	if s.Roster, err = list(cfg, config.RoundRosterKey); err != nil {
 		return s, err
 	}
 	seen := map[string]bool{}
@@ -210,65 +210,65 @@ func FromConfig(cfg any) (Settings, error) {
 	if len(s.Roster) == 0 {
 		return s, fmt.Errorf("round.roster is empty")
 	}
-	if s.Slots, err = config.Int(cfg, "round.slots", 1, config.MaxInt); err != nil {
+	if s.Slots, err = config.Int(cfg, config.RoundSlotsKey, 1, config.MaxInt); err != nil {
 		return s, err
 	}
-	s.Brief = config.String(cfg, "round.brief")
+	s.Brief = config.String(cfg, config.RoundBriefKey)
 	if s.SharedPaths, err = sharedPaths(cfg); err != nil {
 		return s, err
 	}
-	if err := checkEnum(cfg, "round.scopeOverlap"); err != nil {
+	if err := checkEnum(cfg, config.RoundScopeOverlapKey); err != nil {
 		return s, err
 	}
-	s.BlockScopeOverlap = config.String(cfg, "round.scopeOverlap") == config.ScopeOverlapBlock
-	if s.StallMinutes, err = config.Int(cfg, "round.stallMinutes", 0, config.MaxInt); err != nil {
+	s.BlockScopeOverlap = config.String(cfg, config.RoundScopeOverlapKey) == config.ScopeOverlapBlock
+	if s.StallMinutes, err = config.Int(cfg, config.RoundStallMinutesKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.ClaimStaleMinutes, err = config.Int(cfg, "round.claimStaleMinutes", 0, config.MaxInt); err != nil {
+	if s.ClaimStaleMinutes, err = config.Int(cfg, config.RoundClaimStaleMinutesKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.ClaimStaleMinutesMajor, err = config.Int(cfg, "round.claimStaleMinutesMajor", 0, config.MaxInt); err != nil {
+	if s.ClaimStaleMinutesMajor, err = config.Int(cfg, config.RoundClaimStaleMinutesMajorKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.MaxBounces, err = config.Int(cfg, "round.maxBounces", 0, config.MaxInt); err != nil {
+	if s.MaxBounces, err = config.Int(cfg, config.RoundMaxBouncesKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.FreshAt, err = config.Int(cfg, "round.freshAt", 0, config.MaxInt); err != nil {
+	if s.FreshAt, err = config.Int(cfg, config.RoundFreshAtKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.LedgerKeep, err = config.Int(cfg, "round.ledgerKeep", 0, config.MaxInt); err != nil {
+	if s.LedgerKeep, err = config.Int(cfg, config.RoundLedgerKeepKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.ItemTimeoutMinutes, err = config.Int(cfg, "round.itemTimeoutMinutes", 0, config.MaxInt); err != nil {
+	if s.ItemTimeoutMinutes, err = config.Int(cfg, config.RoundItemTimeoutMinutesKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.ArchitectureEvery, err = config.Int(cfg, "round.architectureEvery", 0, config.MaxInt); err != nil {
+	if s.ArchitectureEvery, err = config.Int(cfg, config.RoundArchitectureEveryKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.ArchitectureAreas, err = list(cfg, "round.architectureAreas"); err != nil {
+	if s.ArchitectureAreas, err = list(cfg, config.RoundArchitectureAreasKey); err != nil {
 		return s, err
 	}
-	if s.ArchitectureIdleMinItems, err = config.Int(cfg, "round.architectureIdleMinItems", 0, config.MaxInt); err != nil {
+	if s.ArchitectureIdleMinItems, err = config.Int(cfg, config.RoundArchitectureIdleMinItemsKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.ArchitectureIdleMinHours, err = config.Int(cfg, "round.architectureIdleMinHours", 0, config.MaxInt); err != nil {
+	if s.ArchitectureIdleMinHours, err = config.Int(cfg, config.RoundArchitectureIdleMinHoursKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
 	s.Autopilot = config.String(cfg, "autonomy.level") == "auto"
-	if s.AutopilotCap, err = config.Int(cfg, "round.autopilotCap", 0, config.MaxInt); err != nil {
+	if s.AutopilotCap, err = config.Int(cfg, config.RoundAutopilotCapKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.Batch, err = config.Int(cfg, "round.batch", 0, config.MaxInt); err != nil {
+	if s.Batch, err = config.Int(cfg, config.RoundBatchKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.BundleMax, err = config.Int(cfg, "round.bundleMax", 0, config.MaxInt); err != nil {
+	if s.BundleMax, err = config.Int(cfg, config.RoundBundleMaxKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if err := checkEnum(cfg, "round.reviewLoop"); err != nil {
+	if err := checkEnum(cfg, config.RoundReviewLoopKey); err != nil {
 		return s, err
 	}
-	s.ReviewLoop = config.String(cfg, "round.reviewLoop")
-	s.AdoptPattern = strings.TrimSpace(config.String(cfg, "round.adoptPattern"))
+	s.ReviewLoop = config.String(cfg, config.RoundReviewLoopKey)
+	s.AdoptPattern = strings.TrimSpace(config.String(cfg, config.RoundAdoptPatternKey))
 	if _, err := path.Match(s.AdoptPattern, ""); err != nil {
 		return s, fmt.Errorf("round.adoptPattern %q: %v", s.AdoptPattern, err)
 	}
@@ -405,7 +405,7 @@ func loadHarnesses(cfg any) ([]string, error) {
 // tier defaults to sonnet (round.tiers.claude.standard).
 // claude must be configured; a configured kind must name all three tiers.
 func loadTiers(cfg any, s *Settings) error {
-	v, err := config.Value(cfg, "round.tier")
+	v, err := config.Value(cfg, config.RoundTierKey)
 	if err != nil {
 		return err
 	}
@@ -529,7 +529,7 @@ func SharedPaths(cfg any) []string {
 
 // sharedPaths is the one reader of round.sharedPaths: Load reports its error,
 // SharedPaths drops it.
-func sharedPaths(cfg any) ([]string, error) { return list(cfg, "round.sharedPaths") }
+func sharedPaths(cfg any) ([]string, error) { return list(cfg, config.RoundSharedPathsKey) }
 
 // Labels are the issues.labels roles a round and the gate act on, with the
 // schema defaults config.Label supplies.
@@ -611,7 +611,7 @@ func Effective(cfg any, kind, tier string) (model, source string) {
 // SupportName is round.support read alone, trimmed: "" when unset or not a
 // string. The bounce store reads it to pick the registry or the issue.
 func SupportName(cfg any) string {
-	return strings.TrimSpace(config.String(cfg, "round.support"))
+	return strings.TrimSpace(config.String(cfg, config.RoundSupportKey))
 }
 
 // LegacySupportLabel reads the retired key while upgrades still need its value.
@@ -628,7 +628,7 @@ func LegacySupportLabel(cfg any) string {
 // MachineRole is round.role read alone, so a bad value in another round.* key cannot
 // hide it: the support fence reads it before anything else.
 func MachineRole(cfg any) (string, error) {
-	v, err := config.Value(cfg, "round.role")
+	v, err := config.Value(cfg, config.RoundRoleKey)
 	if err != nil {
 		return "", err
 	}
