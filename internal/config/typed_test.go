@@ -76,6 +76,20 @@ func TestAccountDirProblemsCoverEveryKind(t *testing.T) {
 	}
 }
 
+// One name is one dir (#1861): the same name under two dirs is flagged, the
+// same name and dir under two kinds is not.
+func TestAccountDirProblemsFlagsNameWithTwoDirs(t *testing.T) {
+	same := `{"round":{"accounts":[{"kind":"claude","name":"a","dir":"/x"},{"kind":"codex","name":"a","dir":"/x"}]}}`
+	if got := AccountDirProblems(decode(t, same)); len(got) != 0 {
+		t.Errorf("same name and dir flagged: %v", got)
+	}
+	split := `{"round":{"accounts":[{"kind":"claude","name":"a","dir":"/x"},{"kind":"opencode","name":"a","dir":"/y"}]}}`
+	got := AccountDirProblems(decode(t, split))
+	if len(got) != 1 || !strings.Contains(got[0], `"a"`) || !strings.Contains(got[0], "/x") || !strings.Contains(got[0], "/y") {
+		t.Errorf("name with two dirs = %v, want one problem naming a, /x and /y", got)
+	}
+}
+
 func TestIntRange(t *testing.T) {
 	for _, tc := range []struct {
 		cfg     string

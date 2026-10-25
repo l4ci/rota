@@ -174,10 +174,15 @@ func scopeList(sm config.ScopeMigration) []any {
 func scopeLine(c config.ScopeChange) string {
 	b, _ := jsonx.MarshalCompact(c.Before)
 	a, _ := jsonx.MarshalCompact(c.After)
-	if c.Action == config.ScopeMove {
-		return fmt.Sprintf("move %s -> config.local.json (%s -> %s)", c.Key, b, a)
+	// The effective value usually stays put: say so once instead of b -> b.
+	change := fmt.Sprintf("%s -> %s", b, a)
+	if string(b) == string(a) {
+		change = "stays " + string(a)
 	}
-	return fmt.Sprintf("delete %s (%s; %s -> %s)", c.Key, c.Reason, b, a)
+	if c.Action == config.ScopeMove {
+		return fmt.Sprintf("move %s -> config.local.json (%s)", c.Key, change)
+	}
+	return fmt.Sprintf("delete %s (%s; %s)", c.Key, c.Reason, change)
 }
 
 func renameList(rs []config.Rename) []any {

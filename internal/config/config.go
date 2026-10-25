@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -118,7 +119,29 @@ func mergeLayers(l *layers) any {
 	if l.local != nil {
 		merged = Merge(merged, l.local)
 	}
-	return merged
+	return mergeAccounts(merged, l)
+}
+
+// mergeAccounts sets round.accounts of merged to the layers' lists merged by
+// kind: a layer that lists a kind replaces the lower layers' entries of that
+// kind and inherits the rest, so a project login for one harness does not hide
+// the global ones for another, and a later edit to the global list still
+// reaches the project. With fewer than two lists the plain merge stands.
+func mergeAccounts(merged any, l *layers) any {
+	var lists [][]any
+	for _, layer := range []any{l.global, l.project, l.local} {
+		if v, ok := walk(layer, "round.accounts"); ok {
+			if list := asList(v); len(list) > 0 {
+				lists = append(lists, list)
+			}
+		}
+	}
+	obj, ok := merged.(*jsonx.Object)
+	if !ok || len(lists) < 2 {
+		return merged
+	}
+	out := mergeByKind(lists)
+	return fillKey(cloneObject(obj), "", []string{"round", "accounts"}, out)
 }
 
 // dropEmptyShadows removes an empty list from the project and local layers for
@@ -183,4 +206,39 @@ func Lookup(cfg any, dotted string) (any, bool) {
 		}
 	}
 	return cur, true
+}
+
+// mergeByKind is lists merged by account kind, lowest layer first: a list
+// that holds a kind replaces the entries of that kind below it. Kinds come out
+// in AccountKinds order, any other kind after them in first-seen order.
+func mergeByKind(lists [][]any) []any {
+	kindOf := func(e any) string {
+		if o, ok := e.(*jsonx.Object); ok {
+			if k, ok := o.Get("kind"); ok {
+				if s, _ := k.(string); s != "" {
+					return s
+				}
+			}
+		}
+		return KindClaude
+	}
+	byKind := map[string][]any{}
+	var other []string
+	for _, list := range lists {
+		fresh := map[string][]any{}
+		for _, e := range list {
+			fresh[kindOf(e)] = append(fresh[kindOf(e)], e)
+		}
+		for k, es := range fresh {
+			if _, seen := byKind[k]; !seen && !slices.Contains(AccountKinds, k) {
+				other = append(other, k)
+			}
+			byKind[k] = es
+		}
+	}
+	out := []any{}
+	for _, k := range append(slices.Clone(AccountKinds), other...) {
+		out = append(out, byKind[k]...)
+	}
+	return out
 }

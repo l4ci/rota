@@ -171,12 +171,12 @@ func TestMigrateConfigScope(t *testing.T) {
 	before := readConfig(t, root)
 	code, out := textRun(t, "-C", root, "migrate", "config")
 	for _, want := range []string{
-		`delete round.dispatch (equals global; "tmux" -> "tmux")`,
-		`delete round.accounts (equals default; [{"name": "g", "configDir": "/g"}] -> [{"name": "g", "configDir": "/g"}])`,
-		`delete round.slots (config.local.json already holds 2; 2 -> 2)`,
-		`move round.portBase -> config.local.json (21000 -> 21000)`,
-		`move orchestrator.model -> config.local.json ("sonnet" -> "sonnet")`,
-		`delete work.isolation (pinned at its default; "branch" -> "branch")`,
+		`delete round.dispatch (equals global; stays "tmux")`,
+		`delete round.accounts (equals default; stays [{"name": "g", "configDir": "/g"}])`,
+		`delete round.slots (config.local.json already holds it; stays 2)`,
+		`move round.portBase -> config.local.json (stays 21000)`,
+		`move orchestrator.model -> config.local.json (stays "sonnet")`,
+		`delete work.isolation (pinned at its default; stays "branch")`,
 	} {
 		if code != 0 || !strings.Contains(out, want) {
 			t.Errorf("preview lacks %q: %d %q", want, code, out)
@@ -263,7 +263,7 @@ func TestMigrateConfigAccounts(t *testing.T) {
 	for _, want := range []string{
 		"global config.json\tround.codexAccounts -> round.accounts (1 entries)",
 		"config.json\tround.opencodeAccounts -> round.accounts (1 entries)",
-		"config.local.json\tround.accounts -> round.accounts (3 entries)",
+		"config.local.json\tround.accounts -> round.accounts (1 entries)",
 	} {
 		if code != 0 || !strings.Contains(out, want) {
 			t.Errorf("preview lacks %q: %d %q", want, code, out)

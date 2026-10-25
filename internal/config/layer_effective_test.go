@@ -36,25 +36,41 @@ func contains(list []string, s string) bool {
 // list keys, so it does not shadow the global (#1766).
 func TestEmptyAccountListFallsBackToGlobal(t *testing.T) {
 	accounts := `[{"kind":"claude","name":"a","dir":"/x"}]`
-	for _, key := range []string{"round.accounts"} {
-		leaf := key[len("round."):]
-		for _, layer := range []string{"project", "local"} {
-			project, local := `{"round":{"`+leaf+`":[]}}`, ""
-			if layer == "local" {
-				project, local = "", project
-			}
-			root := layerRig(t, `{"round":{"`+leaf+`":`+accounts+`}}`, project, local)
-			e := showOne(t, root, key)
-			if e.Source != "global" {
-				t.Errorf("%s empty in %s: source = %s, want global", key, layer, e.Source)
-			}
-			if list, _ := e.Value.([]any); len(list) != 1 {
-				t.Errorf("%s empty in %s: value = %v, want the global list", key, layer, e.Value)
-			}
-			if v, _ := Lookup(Load(configPath(root)), key); !reflect.DeepEqual(v, e.Value) {
-				t.Errorf("%s empty in %s: Load = %v, show = %v", key, layer, v, e.Value)
-			}
+	const key = "round.accounts"
+	for _, layer := range []string{"project", "local"} {
+		project, local := `{"round":{"accounts":[]}}`, ""
+		if layer == "local" {
+			project, local = "", project
 		}
+		root := layerRig(t, `{"round":{"accounts":`+accounts+`}}`, project, local)
+		e := showOne(t, root, key)
+		if e.Source != "global" {
+			t.Errorf("%s empty in %s: source = %s, want global", key, layer, e.Source)
+		}
+		if list, _ := e.Value.([]any); len(list) != 1 {
+			t.Errorf("%s empty in %s: value = %v, want the global list", key, layer, e.Value)
+		}
+		if v, _ := Lookup(Load(configPath(root)), key); !reflect.DeepEqual(v, e.Value) {
+			t.Errorf("%s empty in %s: Load = %v, show = %v", key, layer, v, e.Value)
+		}
+	}
+}
+
+// Layers merge round.accounts by kind (#1861): a layer that lists a kind
+// replaces the lower layers' entries of that kind and inherits the other
+// kinds, so a later edit to the global list still reaches the project.
+func TestAccountsMergeByKind(t *testing.T) {
+	root := layerRig(t,
+		`{"round":{"accounts":[{"kind":"claude","name":"a1","dir":"/a1"},{"kind":"codex","name":"g","dir":"/g"}]}}`,
+		`{"round":{"accounts":[{"kind":"codex","name":"c1","dir":"/c1"}]}}`,
+		`{"round":{"accounts":[{"kind":"opencode","name":"o1","dir":"/o1"}]}}`)
+	want := []Account{{KindClaude, "a1", "/a1"}, {KindCodex, "c1", "/c1"}, {KindOpencode, "o1", "/o1"}}
+	if got := Accounts(Load(configPath(root))); !reflect.DeepEqual(got, want) {
+		t.Errorf("effective accounts = %v, want %v", got, want)
+	}
+	e := showOne(t, root, "round.accounts")
+	if list, _ := e.Value.([]any); len(list) != 3 {
+		t.Errorf("show value = %v, want the merged three", e.Value)
 	}
 }
 

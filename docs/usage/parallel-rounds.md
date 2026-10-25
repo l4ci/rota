@@ -817,7 +817,9 @@ rota worker adopt ../thing-wt --issue 612 --name ext-1 --pr https://github.com/o
 The argument is a local branch or a worktree of this repo. Adopt runs the overlap check `round assign`
 runs. It exits 4 with `blockedBy` `overlap` (`--accept-overlap` skips only that), `registered` (a slot
 holds the branch) or `held` (a slot holds the issue). The new slot is `ext-<n>` unless you pass
-`--name`. It is `external`: no session handle, so `worker dispatch` refuses it (`blockedBy: host`),
+`--name`. Without `--pr`, adopt records the open PR the branch heads, so the gate and the train read it at
+once; if the forge fails or no PR is open yet, the slot starts with none and `round reconcile --apply`
+records it later. It is `external`: no session handle, so `worker dispatch` refuses it (`blockedBy: host`),
 `round wait` and `worker poll` never read a pane, and `reconcile` reports no dead tab or stall for it.
 
 `round status` shows it as `external/<state>`, worked out from the forge and git: `done` with an open

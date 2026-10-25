@@ -204,3 +204,26 @@ func TestAdoptPRForgeFailurePaths(t *testing.T) {
 		})
 	}
 }
+
+// Nothing but worker poll recorded a slot's PR (#1852): an adoption without
+// --pr on a branch an open PR heads left pr-unrecorded drift, so train refused.
+func TestAdoptWithoutPRRecordsTheBranchsOpenPR(t *testing.T) {
+	root, e, be := adoptFixture(t)
+	fr := &fakeRemote{prs: []tracker.PR{
+		{Number: 3, Branch: "someone/else", URL: "https://x/pull/3"},
+		{Number: 7, Branch: "codex/12-thing", URL: "https://x/pull/7"},
+	}}
+	e.Forge = fr.asForge()
+	res, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := worker.LoadRegistryTolerant(root).Slot(res.Slot).PR(); got != "https://x/pull/7" || res.PR != got {
+		t.Errorf("slot records %q, result %q: want the open PR", got, res.PR)
+	}
+	// AC2: the gate and train read the slot's PR at once, without a reconcile.
+	tgt, err := worker.LoadRegistryTolerant(root).GateTarget(res.Slot)
+	if err != nil || tgt.PR != "https://x/pull/7" {
+		t.Errorf("gate target = %+v, %v: want the adopted PR resolved right after adopt", tgt, err)
+	}
+}
