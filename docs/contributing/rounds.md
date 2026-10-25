@@ -232,7 +232,7 @@ support side. Main is named `main`; support takes its name from `round.support`.
 With support enabled, `machine:<name>` pins an issue to that machine; candidates on other
 machines show it as blocked. Unpinned issues are available to main; support still takes only
 issues pinned to it. Use `machine:main` to keep an issue on main. A support machine never merges and never writes tracked `.rota/` content; those
-verbs exit 4 `blockedBy: role` (the tables live in `internal/cli/support_fence.go`).
+verbs exit 4 `blockedBy: role` (the tables live in `internal/roundcfg/support_fence.go`).
 
 Setting one up takes two steps and no hand edits:
 
