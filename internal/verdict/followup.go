@@ -54,6 +54,12 @@ func followUpTitle(pr string) string {
 	return "Review follow-ups from PR " + prKey(pr)
 }
 
+// IsFollowUpTitle is whether an item title names a deferred-findings item, the
+// kind FileFollowUps files. A PR that closes one files no further follow-ups.
+func IsFollowUpTitle(title string) bool {
+	return strings.HasPrefix(strings.TrimSpace(title), "Review follow-ups from PR")
+}
+
 // DeferredAbove is the deferred findings at or above the floor, in order. The
 // floor off keeps none.
 func DeferredAbove(findings []Finding, floor string) []Finding {
