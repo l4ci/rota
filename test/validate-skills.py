@@ -223,7 +223,10 @@ def check_flag_consistency(skill_files, issues):
     mention = re.compile(r"`/?(%s)\b" % names)
     verbs = re.compile(r"(?i)(?<!-)\b(invoke[sd]?|invoking|dispatch(?:es|ed)?|chain(?:s|ed)? into|read and follow|"
                        r"hand(?:s|ed)?(?: \w+){0,3} (?:off )?to|pass(?:es|ed)?(?: \w+){0,3} to|uses?|using|runs?|running|"
-                       r"start(?:s|ed)?|launch(?:es|ed)?|type|offer(?:s|ed)?|next step)\b")
+                       r"start(?:s|ed)?|launch(?:es|ed)?|call(?:s|ed)?|execut(?:e|es|ed|ing)|"
+                       r"(?:switch(?:es|ed)?|delegat(?:e|es|ed)|proceed(?:s|ed)?|go(?:es)?) to|"
+                       r"continue[sd]? with|follow(?:s|ed)? up with|follow(?:s|ed)?|"
+                       r"type|offer(?:s|ed)?|next step)\b")
     trailing = re.compile(r"(?i)^[^.;!?]*?\b(?:then|else|and|or|just|to)\s+(?:run|invoke|start|launch|use)\s+it\b")
     seen = set()
     root = Path("skills").resolve()
@@ -244,6 +247,9 @@ def check_flag_consistency(skill_files, issues):
                 # "Next step: `/x`" has its colon split off the clause: look at the whole line head.
                 if re.search(r"(?i)\bnext step\W*$", before):
                     prior = ["next step"]
+                # A sentence-initial bare "Then `/x`" is a command with its verb elided.
+                if not prior and re.fullmatch(r"(?i)\s*(?:and\s+)?then\s*", clause):
+                    prior = ["then"]
                 offer = bool(prior) and prior[-1] in ("type", "offer", "offers", "offered")
                 chained = bool(prior) and not offer
                 if offer and trailing.search(line[hit.end():]):
