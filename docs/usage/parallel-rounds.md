@@ -800,6 +800,12 @@ decide ownership; labels follow them. `--apply` repairs missing or stale claim l
 editing the comment claims. Release removes that claim's label; completion and the merge gate
 remove all claim labels from closed issues. Reconcile also cleans closed issues that retain them.
 
+After upgrading, run `rota round reconcile --apply` once to backfill the visible labels for
+in-flight comment claims. It also repairs stray claim labels on open issues with no remaining
+claim. The broad closed-issue sweep runs only under reconcile; status and watch polls retain
+filtered closed-issue reads. Reverting the change leaves `claimed:*` labels already written to
+the tracker; remove those labels by hand.
+
 A repair whose evidence could not be read this run (the host for a `dead-tab`, the
 forge for a PR, merge or label finding) is skipped with a warning and stays in `drift`; run it again once
 the host or forge answers. A slot whose PR has merged is parked, even one already marked `dead` because its

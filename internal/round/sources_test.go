@@ -64,8 +64,8 @@ func TestReadForgeAnswersAndFailsAlone(t *testing.T) {
 	}
 }
 
-// listFailForge fails the label-discovery list of one state. Open discovery is
-// label-filtered; closed discovery scans all labels to find claimed-only drift.
+// listFailForge fails label discovery for one state, including reconcile's
+// broad closed sweep as well as Status's filtered closed list.
 type listFailForge struct {
 	Forge
 	state string

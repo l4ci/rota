@@ -782,7 +782,8 @@ func (b *Issues) dropClaim(n tracker.IssueKey, claimID string) error {
 }
 
 // Release posts the release marker (on a tracker.ClaimStore, drops its claim
-// record), removes its derived claim label (best effort) and drops the in-progress label when no
+// record), removes its derived claim label when no other claim maps to it
+// (best effort) and drops the in-progress label when no
 // claim remains. It writes nothing and returns false when claimID holds no open
 // claim.
 func (b *Issues) Release(ref, claimID string) (bool, error) {
@@ -805,8 +806,14 @@ func (b *Issues) Release(ref, claimID string) (bool, error) {
 		return false, err
 	}
 	if label, ok := ClaimLabel(b.Cfg, claimID); ok && slices.Contains(is.Labels, label) {
-		if err := tr.RemoveLabels(b.ctx(), is.Key, []string{label}); err != nil {
-			b.warn("release claim label for " + claimID + ": " + err.Error())
+		shared := slices.ContainsFunc(held, func(other string) bool {
+			otherLabel, ok := ClaimLabel(b.Cfg, other)
+			return other != claimID && ok && otherLabel == label
+		})
+		if !shared {
+			if err := tr.RemoveLabels(b.ctx(), is.Key, []string{label}); err != nil {
+				b.warn("release claim label for " + claimID + ": " + err.Error())
+			}
 		}
 	}
 	if len(held) == 1 {

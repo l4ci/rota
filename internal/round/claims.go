@@ -16,7 +16,9 @@ import (
 // reClaimID is a claim `assign` takes: `<agent>@<round>`.
 var reClaimID = regexp.MustCompile(`^([a-z][a-z0-9-]*)@\d+$`)
 
-// claimFindings adds claim-mismatch drift: the tracker and the registry
+// claimFindings adds claim-label-drift from the authoritative claims for held
+// issues and open issues carrying in-progress or claimed labels. It also adds
+// claim-mismatch drift: the tracker and the registry
 // disagree about who holds an issue. Two shapes: a slot's claimId is not the
 // issue's earliest open claim (gone, or another holds it), and an open claim
 // `<agent>@<round>` on an in-progress issue names a registry slot that does not
@@ -26,7 +28,7 @@ var reClaimID = regexp.MustCompile(`^([a-z][a-z0-9-]*)@\d+$`)
 // issue's first two. A bundle's members count as held by its lead's slot (or
 // queued PR); their claims are not compared. Needs the Board and, for the second shape, the labelled
 // issues; file mode has no claims to read.
-func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry, rows []*Row, slotObj map[string]*worker.Slot, queued []worker.QueuedPR, labelled map[tracker.IssueKey]bool, labelsOK bool) {
+func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry, rows []*Row, slotObj map[string]*worker.Slot, queued []worker.QueuedPR, labelled, claimLabelled map[tracker.IssueKey]bool, labelsOK bool) {
 	if e.Board == nil {
 		return
 	}
@@ -112,6 +114,9 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 			refs[id] = true
 		}
 		for key := range labelled {
+			refs[key.String()] = true
+		}
+		for key := range claimLabelled {
 			refs[key.String()] = true
 		}
 		var sorted []string
