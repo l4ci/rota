@@ -3,6 +3,8 @@ package harness
 import (
 	"slices"
 	"testing"
+
+	"github.com/l4ci/rota/internal/config"
 )
 
 func TestTierKey(t *testing.T) {
@@ -11,6 +13,27 @@ func TestTierKey(t *testing.T) {
 	}
 	if !slices.Equal(Tiers, []string{"light", "standard", "heavy"}) {
 		t.Errorf("Tiers = %v", Tiers)
+	}
+}
+
+// Dynamic keys escape the literal-key scan in config. Every registered worker
+// kind must have schema entries before readers such as doctor use its defaults.
+func TestHarnessKeysExistInSchema(t *testing.T) {
+	for _, kind := range Kinds() {
+		t.Run(kind, func(t *testing.T) {
+			h, ok := Lookup(kind)
+			if !ok {
+				t.Fatalf("no adapter for %s", kind)
+			}
+			if key := h.CommandKey(); !config.IsSchemaKey(key) {
+				t.Errorf("CommandKey %q is not a schema key", key)
+			}
+			for _, tier := range Tiers {
+				if key := TierKey(kind, tier); !config.IsSchemaKey(key) {
+					t.Errorf("TierKey(%q, %q) = %q is not a schema key", kind, tier, key)
+				}
+			}
+		})
 	}
 }
 
