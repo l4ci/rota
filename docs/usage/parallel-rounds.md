@@ -964,8 +964,10 @@ The default threshold is four hours for bugs, tasks and Minor/Cosmetic features,
 hours for Major features. Configure `round.claimStaleMinutes` and
 `round.claimStaleMinutesMajor`; `0` disables the corresponding class. PR comments and
 reviews count through the forge's PR update time. Branch committer dates are clamped to
-now. Claims without a known server timestamp are never stale. Scans only read details
-for items carrying `claimed:*` or the in-progress label. Activity follows any resolving
+now. Claims without a known server timestamp are never stale. Automatic stale scans only read details
+for items carrying `claimed:*` or the in-progress label. Explicit reclaim checks also
+read unlabelled comment claims directly. Open-scope candidates still treat an open
+comment claim as taken when its label is missing. Activity follows any resolving
 PR and branch, including a transfer's original branch and a bundle lead's PR. Status,
 candidates and doctor may fetch origin tips into local git objects and fetch metadata (including `FETCH_HEAD` and applicable remote-tracking refs);
 they do not change project files or claims. An incomplete doctor scan keeps confirmed
