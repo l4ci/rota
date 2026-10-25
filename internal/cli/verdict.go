@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -248,8 +249,9 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		var deferred []verdict.Finding
-		floor := verdict.FloorMinor
+		floor := verdict.FloorMajor
 		var fileRoot string
+		var followUpPR bool
 		if *fileDeferred {
 			// Resolved before the record is written: a config the floor cannot
 			// be read from stops the call instead of guessing the default.
@@ -267,6 +269,9 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		t, err := resolveVerdictBranch(c, args)
 		if err != nil {
 			return Result{}, err
+		}
+		if *fileDeferred && len(deferred) > 0 {
+			followUpPR = branchIsFollowUp(c, fileRoot, t.branch)
 		}
 		head, err := bindVerdictHead(c, t, strings.TrimSpace(*sha))
 		if err != nil {
@@ -300,6 +305,26 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 			d.Set("filedWhy", why)
 			text += " (" + why + ")"
 		}
+		if *fileDeferred {
+			var kept []string
+			for _, f := range verdict.DeferredAbove(b.Findings, verdict.FloorMinor) {
+				if followUpPR || !slices.ContainsFunc(deferred, func(g verdict.Finding) bool { return g.Title == f.Title && g.File == f.File }) {
+					kept = append(kept, f.Title)
+				}
+			}
+			if len(kept) > 0 {
+				d.Set("kept", kept)
+				if floor != verdict.FloorOff {
+					text += fmt.Sprintf(" (kept in the record, not filed: %s)", strings.Join(kept, "; "))
+				}
+			}
+		}
+		if followUpPR {
+			why := "this PR closes a deferred-findings item: no follow-up is filed from it"
+			d.Set("filedWhy", why)
+			text += " (" + why + ")"
+			deferred = nil
+		}
 		if len(deferred) > 0 {
 			// The record is already written, so a failure here reports what was
 			// filed and leaves the rest to a by-hand `item create`.
@@ -325,6 +350,23 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: d, Text: text + " -> " + next}, nil
 	}
+}
+
+// branchIsFollowUp is whether the issue leading the branch is a deferred-findings
+// item. Any lookup failure reads as no: the finding is then filed as before.
+func branchIsFollowUp(c *Ctx, root, branch string) bool {
+	ref := backlog.BranchIssueRef(branch)
+	if ref == "" {
+		return false
+	}
+	var yes bool
+	withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
+		if it, err := be.Get(ref); err == nil {
+			yes = verdict.IsFollowUpTitle(it.Title)
+		}
+		return Result{}, nil
+	})
+	return yes
 }
 
 // raisedDepthNote tells a reviewer's verdict add when the branch's review depth

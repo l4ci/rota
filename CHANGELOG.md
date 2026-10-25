@@ -5,6 +5,7 @@
 ### Upgrade notes
 
 - **Named machine pins.** `machine:<name>` replaces `site:support`: main is named `main`, support uses `round.support`. On main, preview with `rota migrate labels`, then run `rota migrate labels --apply` to relabel open issues and retire `issues.labels.support` (including a custom label value). `config fill` preserves that key until migration succeeds. Candidates show pins to other machines as blocked; unpinned issues remain available to main.
+- **Fewer filed follow-ups.** `review.fileDeferred` now defaults to `major`: minor deferred findings stay in the verdict record and `verdict add` lists them as `kept`. A PR whose issue is itself a deferred-findings item files none. Set `minor` to get the old behavior.
 
 ## v0.25.0 — 2026-10-24
 

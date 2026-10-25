@@ -29,7 +29,7 @@ The report ends with one verdict (`PASS` / `CONCERNS` / `FAIL`) with file:line e
 | `CONCERNS` | Issues found, but not blocking. You can proceed or fix first. |
 | `FAIL` | Integration is blocked. |
 
-Each finding is blocking or not. By default `blocker` and `major` findings block and `minor` and `info` do not. Only blocking findings are relayed to a round worker and count toward a bounce. Non-blocking findings above `info` are deferred: `rota verdict add --file-deferred --pr <ref>` collects them in one follow-up task item per PR, related to it, instead of relaying them. A later verdict on the same PR adds to that item. `review.fileDeferred` sets the floor: `minor` (default), `major` (minor findings stay in the verdict record) or `off`.
+Each finding is blocking or not. By default `blocker` and `major` findings block and `minor` and `info` do not. Only blocking findings are relayed to a round worker and count toward a bounce. Non-blocking findings above `info` are deferred: `rota verdict add --file-deferred --pr <ref>` collects them in one follow-up task item per PR, related to it, instead of relaying them. A later verdict on the same PR adds to that item. `review.fileDeferred` sets the floor: `major` (default; minor findings stay in the verdict record and the output lists them as kept), `minor` or `off`. A PR whose issue is itself a deferred-findings item files nothing.
 
 You can run `/rota-review` at any time on a branch, not only before shipping. On the [issue backend](issue-backend.md), `/rota-review --queue` reviews the PRs waiting on `needs-review` items and merges the ones that pass.
 

@@ -109,6 +109,7 @@ func TestRoundBounceIgnoresAStaleVerdict(t *testing.T) {
 // AC-3: --file-deferred files each non-blocking finding as an item related to the PR.
 func TestVerdictAddFilesDeferredFindings(t *testing.T) {
 	dir := verdictRepo(t)
+	floorMinor(t, dir)
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Tasks\n\n## Completed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -143,6 +144,7 @@ func TestVerdictAddFilesDeferredFindings(t *testing.T) {
 // AC-1 (#1019): a deferred item carries an Acceptance checkbox derived from the finding.
 func TestVerdictAddFileDeferredWritesAcceptance(t *testing.T) {
 	dir := verdictRepo(t)
+	floorMinor(t, dir)
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Tasks\n\n## Completed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -172,6 +174,7 @@ func TestVerdictAddFileDeferredProblemAndFix(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := verdictRepo(t)
+			floorMinor(t, dir)
 			for f, c := range map[string]string{"BACKLOG.md": "# TODO\n\n## Tasks\n\n## Completed\n", "counters.json": "{}\n"} {
 				if err := os.WriteFile(filepath.Join(dir, ".rota", f), []byte(c), 0o644); err != nil {
 					t.Fatal(err)
@@ -198,6 +201,7 @@ func TestVerdictAddFileDeferredProblemAndFix(t *testing.T) {
 // A retry of the same recording files nothing new.
 func TestVerdictAddFileDeferredIsIdempotent(t *testing.T) {
 	dir := verdictRepo(t)
+	floorMinor(t, dir)
 	for f, c := range map[string]string{"BACKLOG.md": "# TODO\n\n## Tasks\n\n## Completed\n", "counters.json": "{}\n"} {
 		if err := os.WriteFile(filepath.Join(dir, ".rota", f), []byte(c), 0o644); err != nil {
 			t.Fatal(err)
@@ -238,6 +242,7 @@ func TestRoundBounceCountsAFailWithoutFindings(t *testing.T) {
 // AC-2 (#1019): a freshly filed deferred item passes the criteria check.
 func TestVerdictAddFileDeferredItemIsReady(t *testing.T) {
 	dir := verdictRepo(t)
+	floorMinor(t, dir)
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Tasks\n\n## Completed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -255,5 +260,13 @@ func TestVerdictAddFileDeferredItemIsReady(t *testing.T) {
 	cs, _ := data(t, out)["candidates"].([]any)
 	if len(cs) != 1 || cs[0].(map[string]any)["ready"] != true {
 		t.Errorf("candidates = %s, want the filed item ready", out)
+	}
+}
+
+// floorMinor sets review.fileDeferred to minor: the default files only major.
+func floorMinor(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"review":{"fileDeferred":"minor"}}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

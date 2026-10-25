@@ -25,6 +25,7 @@ func assignNudgeRepo(t *testing.T, withCandidate bool) string {
 		}
 	}
 	if withCandidate {
+		floorMinor(t, dir)
 		body := writeBody(t, t.TempDir(), `{"findings":[{"severity":"minor","title":"rename the helper"}]}`)
 		if code, _, errOut := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", "FAIL", "--body-file", body, "--file-deferred", "--pr", "#77"); code != 0 {
 			t.Fatalf("file candidate: %d %s", code, errOut)
@@ -97,6 +98,7 @@ func TestRoundWaitNudgesToAssignBeforeGating(t *testing.T) {
 				}
 			}
 			if tc.withCandidate {
+				floorMinor(t, dir)
 				body := writeBody(t, t.TempDir(), `{"findings":[{"severity":"minor","title":"rename the helper"}]}`)
 				if code, _, errOut := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", "FAIL", "--body-file", body, "--file-deferred", "--pr", "#77"); code != 0 {
 					t.Fatalf("file candidate: %d %s", code, errOut)
