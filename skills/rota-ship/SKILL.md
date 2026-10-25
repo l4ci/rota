@@ -154,7 +154,7 @@ Already-completed IDs are a no-op; an unknown ID exits 3. When it exits 4 with `
 
 ## Step 8.5 — Learn (Nudge or Auto-Invoke)
 
-Round workers skip Step 8.5 (`round-worker-and-issue-mode.md`). Otherwise run `references/post-cycle-trigger-gate.md` with:
+Round workers run the post-to-issue learning pass at Step 4 instead (`round-worker-and-issue-mode.md`). Otherwise run `references/post-cycle-trigger-gate.md` with:
 
 - **Nudge (`"off"`):** append to the Step 9 report *"Capture learnings before context fades? Run `/rota-learn` — this cycle has the fresh session context."*
 - **Target (`"roundtrip"` or `"auto"`):** dispatch `rota-learn` by reading and following its instructions immediately, no prompt.
