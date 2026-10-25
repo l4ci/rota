@@ -1,13 +1,64 @@
 package cli
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
+
+type adoptLookupForge struct {
+	round.Forge
+	err error
+}
+
+func (f adoptLookupForge) OpenPRs(context.Context) ([]tracker.PR, error) {
+	return nil, f.err
+}
+
+func TestAdoptWarnsWhenOpenPRLookupFails(t *testing.T) {
+	for _, asJSON := range []bool{false, true} {
+		t.Run(strconv.FormatBool(asJSON), func(t *testing.T) {
+			dir, deps := adoptProject(t)
+			base := deps.RoundEnv
+			deps.RoundEnv = func(ctx context.Context, root string) round.Env {
+				e := base(ctx, root)
+				e.Forge = adoptLookupForge{err: errors.New("forge connection refused")}
+				return e
+			}
+			args := []string{"worker", "adopt", "codex/b01-a", "--issue", "B01"}
+			if asJSON {
+				args = append(args, "--json")
+			}
+			code, out, errOut := rotaInWith(t, deps, dir, args...)
+			if code != 0 {
+				t.Fatalf("adopt failed: %d %s %s", code, out, errOut)
+			}
+			if !strings.Contains(errOut, "open PRs of codex/b01-a") || !strings.Contains(errOut, "forge connection refused") || !strings.Contains(errOut, "rota round reconcile --apply") {
+				t.Errorf("missing lookup warning: %q", errOut)
+			}
+			if asJSON {
+				var envelope struct{ Warnings []string }
+				if err := json.Unmarshal([]byte(out), &envelope); err != nil || len(envelope.Warnings) != 1 || !strings.Contains(envelope.Warnings[0], "forge connection refused") {
+					t.Errorf("missing JSON lookup warning: %s (decode: %v)", out, err)
+				}
+			}
+			s := worker.LoadRegistryTolerant(dir).Slot("ext-1")
+			if s == nil || s.PR() != "" || s.Task() != "B01" {
+				t.Fatalf("failed lookup should still adopt without a PR: %v", s)
+			}
+		})
+	}
+}
 
 func adoptProject(t *testing.T) (string, *Deps) {
 	t.Helper()
