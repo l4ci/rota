@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"slices"
 	"strings"
 
@@ -238,7 +239,7 @@ func milestoneOverview(fs *flag.FlagSet) RunFunc {
 		}
 		changed, err := ms.SetOverview(root, text)
 		if err != nil {
-			return Result{Data: blocked(err, "heading in body"), Text: ""}, err
+			return Result{Data: blocked(err, blockedby.HeadingInBody), Text: ""}, err
 		}
 		d := jsonx.NewObject()
 		d.Set("changed", changed)
@@ -317,7 +318,7 @@ func milestoneShipAudit(c *Ctx, st ms.Store, id string) (Result, error) {
 		return Result{}, nil
 	}
 	d := jsonx.NewObject()
-	d.Set("blockedBy", "unfinished milestone")
+	d.Set("blockedBy", blockedby.UnfinishedMilestone)
 	d.Set("changed", false)
 	d.Set("open", strs(f.Open))
 	d.Set("unticked", strs(f.Unticked))

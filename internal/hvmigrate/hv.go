@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -572,7 +573,7 @@ func accountDirs(raw string) []string {
 // checkProject is the refusal set of one project, before any write.
 func checkProject(dir, state string, hasRepos bool) error {
 	if fsio.IsDir(filepath.Join(dir, legacyDir)) && fsio.IsDir(filepath.Join(dir, stateDir)) {
-		return refuse("both-dirs", "%s holds both .hv/ and .rota/: that is ambiguous and rota does not merge them.\nKeep the one that is current and remove the other (or move it away), then re-run rota migrate hv.", dir)
+		return refuse(blockedby.BothDirs, "%s holds both .hv/ and .rota/: that is ambiguous and rota does not merge them.\nKeep the one that is current and remove the other (or move it away), then re-run rota migrate hv.", dir)
 	}
 	if err := gitClean(dir, hasRepos); err != nil {
 		return err
@@ -614,7 +615,7 @@ func gitClean(dir string, umbrella bool) error {
 		}
 	}
 	if len(dirty) > 0 {
-		return refuse("dirty-tree", "uncommitted changes outside .hv/ and .rota/ in %s:\n  %s\nCommit or stash these before running rota migrate hv.", dir, strings.Join(dirty, "\n  "))
+		return refuse(blockedby.DirtyTree, "uncommitted changes outside .hv/ and .rota/ in %s:\n  %s\nCommit or stash these before running rota migrate hv.", dir, strings.Join(dirty, "\n  "))
 	}
 	return nil
 }
@@ -651,7 +652,7 @@ func heldLock(root string) error {
 		return nil
 	})
 	if held != "" {
-		return refuse("lock-held", "%s is held by a running rota or hv verb.\nWait for it to finish, then re-run rota migrate hv.", held)
+		return refuse(blockedby.LockHeld, "%s is held by a running rota or hv verb.\nWait for it to finish, then re-run rota migrate hv.", held)
 	}
 	return nil
 }
@@ -672,7 +673,7 @@ func RunHv(o HvOptions) (*HvReport, error) {
 	}
 	for _, d := range []string{legacyDir, stateDir} {
 		if strings.Contains(cwd+"/", "/"+d+"/migrate-backup/") {
-			return nil, refuse("backup-dir", "cwd is inside %s/migrate-backup/. Run from project root.", d)
+			return nil, refuse(blockedby.BackupDir, "cwd is inside %s/migrate-backup/. Run from project root.", d)
 		}
 	}
 	rootDir, ok := legacystate.FindState(cwd)

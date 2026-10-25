@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/tracker"
 	"strings"
 
@@ -319,7 +320,7 @@ func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundti
 	src.Relay = func(ctx context.Context) (roundtick.RelayResult, error) {
 		res, err := reviewEnv(c, ctx, root, o).ReviewRelay(ctx, root, o)
 		out := roundtick.RelayResult{Nothing: res.Nothing, Items: res.Items, Bounces: res.Bounces}
-		if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && bd.BlockedBy == "maxBounces" {
+		if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && bd.BlockedBy == blockedby.MaxBounces {
 			out.AtCap = true
 		}
 		return out, err

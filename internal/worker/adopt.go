@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 
 	"github.com/l4ci/rota/internal/exitcode"
 )
@@ -54,7 +55,7 @@ func RegisterExternal(root, name, branch, worktree, base, task, pr string) error
 
 // BlockExternal is the blockedBy of a destructive verb pointed at an adopted
 // slot: its worktree and branch are not rota's to move, reset or delete.
-const BlockExternal = "external"
+const BlockExternal = blockedby.External
 
 // ExternalMessage is the one sentence every external-slot fence refuses with;
 // what finishes "<verb> would ..." and names the part of the checkout at stake.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
@@ -99,7 +100,7 @@ func (e Env) SessionEnsure(ctx context.Context, root string, o SessionOpts) (Ses
 	if h.Kind() == host.Herdr {
 		cwd, _ := e.Getwd()
 		err := fail(exitcode.ExitRefused, "round.dispatch=herdr needs /rota-work to run inside a herdr pane")
-		err.Data = BlockData{BlockedBy: "outside herdr"}
+		err.Data = BlockData{BlockedBy: blockedby.OutsideHerdr}
 		err.Hint = fmt.Sprintf("open herdr, start Claude Code in a pane at %s, and run /rota-work there; worker tabs then open in that workspace, beside the orchestrator", cwd)
 		return SessionState{}, err
 	}

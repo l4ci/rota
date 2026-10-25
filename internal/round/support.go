@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"slices"
 	"strings"
 
@@ -22,16 +23,16 @@ import (
 // Blocked reasons of the support split and the support side's fresh base.
 const (
 	// BlockSite: the issue belongs to the other machine's side of the split.
-	BlockSite = "site"
+	BlockSite = blockedby.Site
 	// BlockFetch: the support side could not fetch origin/<base> to cut from.
-	BlockFetch = "fetch"
+	BlockFetch = blockedby.Fetch
 	// BlockConflict: a resumed support branch does not merge origin/<base>.
-	BlockConflict = "conflict"
+	BlockConflict = blockedby.Conflict
 	// BlockDirty: a resumed support branch has uncommitted changes, so it is
 	// not merged with origin/<base> at all.
-	BlockDirty = "dirty"
+	BlockDirty = blockedby.Dirty
 	// BlockConfig: the verb needs a config key that is not set.
-	BlockConfig = "config"
+	BlockConfig = blockedby.Config
 )
 
 // offSite is why it belongs to the other side of the split ("" when this
@@ -166,7 +167,7 @@ func gitWhy(out string, err error) string {
 const SupportReturnMarker = "<!-- rota:support-return -->"
 
 // BlockRole: the verb belongs to the other machine's role.
-const BlockRole = "role"
+const BlockRole = blockedby.Role
 
 // SupportReturned is what ReturnSupport did.
 type SupportReturned struct {

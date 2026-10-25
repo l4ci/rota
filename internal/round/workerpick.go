@@ -1,6 +1,7 @@
 package round
 
 import (
+	"github.com/l4ci/rota/internal/blockedby"
 	"regexp"
 	"strings"
 
@@ -10,10 +11,10 @@ import (
 
 // Blocked reasons of a bad harness: or model: label (exit 4, `blockedBy`).
 const (
-	BlockHarnessLabel = "harness label"
-	BlockModelLabel   = "model label"
+	BlockHarnessLabel = blockedby.HarnessLabel
+	BlockModelLabel   = blockedby.ModelLabel
 	// BlockDecisionLabel: a bad decision: label.
-	BlockDecisionLabel = "decision label"
+	BlockDecisionLabel = blockedby.DecisionLabel
 )
 
 // Decision types of a decision item (a `decision:<type>` label, a `Decision:`
