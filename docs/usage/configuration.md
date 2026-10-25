@@ -446,6 +446,26 @@ Whether a merge needs a human. The merge verbs (`rota ship merge`, `rota ship pr
 
 `ship.mergeApprovalPaths` is a list of repo-relative entries. A changed file matches an entry when it equals it, lies under it (`"skills/rota-release"` matches `skills/rota-release/SKILL.md`), or matches it as a glob against the whole path (`"*.md"` matches top-level Markdown only). Set them with `rota config set ship.mergeApproval paths` and `rota config set ship.mergeApprovalPaths '["migrations", "*.lock"]'`. Every approval lands in `.rota/gate-audit.jsonl`; see [`references/manual-gates.md`](../../skills/references/manual-gates.md).
 
+## Machine pins and the retired support label
+
+With `round.support` enabled, main is named `main` and the support machine takes the name
+in `round.support`. `machine:<name>` pins an issue to that machine. Unpinned issues are
+available to main; support still takes only issues pinned to it. Candidates show an issue
+pinned elsewhere as blocked, and assignment refuses it. `round.role: support` requires a
+nonempty `round.support`.
+
+`rota round support offer <ID>` adds `machine:<round.support>`; `--withdraw` removes it.
+An offer refuses an issue pinned only to another machine until that pin is removed.
+The support machine hands an issue back with `rota round support return`.
+
+To upgrade existing `site:support` issues, run `rota migrate labels` on main to preview,
+then `rota migrate labels --apply`. The migration reads the configured `issues.labels.support`
+value when present, otherwise `site:support`, and relabels only open issues. A conflicting
+machine pin leaves that issue untouched and keeps the old key; tracker errors also keep
+it, so applying again resumes. Only a fully successful apply removes the old key from
+`.rota/config.json`. `rota config check` reports the deprecation; `rota config fill` keeps
+the value until migration finishes. Closed issues keep their labels.
+
 ## round keys
 
 Settings for `rota round` (parallel rounds; see [the rounds guide](parallel-rounds.md), [`rota round` verbs](../reference/cli-helpers.md#rota-round) and [`rota doctor`](../reference/preflight.md#rota-doctor)). All are silent defaults; none is written by `rota init`.
