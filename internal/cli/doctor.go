@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/doctor"
+	"github.com/l4ci/rota/internal/extknowledge"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/initproj"
@@ -81,6 +82,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		in.ConfigDir, in.ConfigDirSource, in.ConfigDirWarning = dir, src, warn
 	}
 	in.StateDir, _ = projects.StateDir(d.projectsEnv())
+	in.ExternalKnowledge = doctorExternalKnowledge(ctx, d, in.Dir, in.Home)
 	if f, ok := staleBinary(ctx, d.Git, in.Dir); ok {
 		in.StaleBinary = &f
 	}
@@ -364,4 +366,28 @@ func doctorLookErr(look func(string) (string, bool)) func(string) (string, error
 		}
 		return "", os.ErrNotExist
 	}
+}
+
+// doctorExternalKnowledge probes the clone knowledge.external points at.
+func doctorExternalKnowledge(ctx context.Context, d *Deps, cwd, home string) doctor.ExternalKnowledge {
+	path, _ := externalSettings(d, cwd)
+	if path == "" {
+		return doctor.ExternalKnowledge{}
+	}
+	path = config.ExpandDir(path, home)
+	k := doctor.ExternalKnowledge{Path: path}
+	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
+		return k
+	}
+	k.Exists = true
+	if res, err := d.Git(ctx, path, "rev-parse", "--is-inside-work-tree"); err != nil || res.ExitCode != 0 || strings.TrimSpace(res.Stdout) != "true" {
+		return k
+	}
+	k.IsGit = true
+	if res, err := d.Git(ctx, path, "remote"); err == nil && res.ExitCode == 0 && strings.TrimSpace(res.Stdout) != "" {
+		k.HasRemote = true
+	}
+	_, err := os.Stat(filepath.Join(path, extknowledge.PolicyFile))
+	k.HasPolicy = err == nil
+	return k
 }

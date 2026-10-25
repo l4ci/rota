@@ -66,6 +66,7 @@ The checks, in the order they run:
 | `milestones` | with milestones on the tracker, `.rota/milestones/` holds no files left from file mode | nothing to report: the line appears only as a `warn`, when stale files exist (fix: `rota migrate milestone-files --apply`) |
 | `config dir` | nothing to fail: the line shows the global config dir in use and where it came from (`ROTA_CONFIG_DIR` override, `XDG_CONFIG_HOME` or the default). Warns when a relative `ROTA_CONFIG_DIR` was ignored | never |
 | `state dir` | nothing to fail: the line shows the state dir that holds the project registry | never |
+| `external knowledge` | the path in `knowledge.external` is a git clone with a remote and a `rota-knowledge.json`. Fails when the path is missing, not a git repository or has no remote; warns when the policy file is missing (writes then default to push). See [External knowledge](../usage/external-knowledge.md) | nothing to report: the line appears only when `knowledge.external` is set |
 | `test` | nothing to fail: the line shows the test lock width (`test.slots`) and the smoke shard count `bash test/gate.sh` would use here: `ROTA_SMOKE_SHARDS`, else one shard per two cores, at most four | never; the line appears only inside a project |
 | `verify` | `test.full` or `test.e2e` is set, so the merge gate has something to run | nothing to report: the line appears only as a `warn`, when both are empty under a local verify (fix: `rota config set test.full '[...]'`) |
 
