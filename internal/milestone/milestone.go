@@ -119,6 +119,9 @@ func Add(root, title, summary, depends, today string) (string, error) {
 }
 
 func addFile(root, title, summary string, deps []string, kind, today string) (string, error) {
+	if err := CheckKind(kind); err != nil {
+		return "", err
+	}
 	id, err := counter.Next(root, "milestones")
 	if err != nil {
 		return "", err
