@@ -180,11 +180,11 @@ func TestReportHeadroomUsesInjectedAccountsAndContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	var seen any
-	wenv(&f.env).Accounts = &worker.Accounts{Env: worker.Env{Config: diskConfig}, Fetch: func(ctx context.Context, _, _ string) (*jsonx.Object, string) {
+	f.env.Worker = f.env.Worker.WithAccounts(&worker.Accounts{Env: worker.Env{Config: diskConfig}, Fetch: func(ctx context.Context, _, _ string) (*jsonx.Object, string) {
 		seen = ctx.Value(ctxKey{})
 		v, _ := jsonx.Decode([]byte(`{"five_hour":{"utilization":25,"resets_at":null},"seven_day":{"utilization":5,"resets_at":null}}`))
 		return v.(*jsonx.Object), ""
-	}}
+	}})
 	ctx := context.WithValue(bg, ctxKey{}, "caller")
 	if _, err := f.env.ReportSlot(ctx, f.root, ReportOpts{Slot: "ben", State: "done", PR: "https://github.com/o/r/pull/9"}); err != nil {
 		t.Fatal(err)

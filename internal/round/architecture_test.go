@@ -24,7 +24,7 @@ func archFixture(t *testing.T, every int, closed []tracker.Issue) (string, Env, 
 	writeRegistry(t, root, slot(root, "ben", "park/ben", nil))
 	r := &fakeRemote{closedIssues: closed}
 	e := env(nil, r.asForge())
-	wenv(&e).Now = func() time.Time { return time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC) }
+	withNow(&e, func() time.Time { return time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC) })
 	set := roundcfg.Settings{Roster: []string{"ben"}, ArchitectureEvery: every, ArchitectureAreas: []string{"cli", "worker"}}
 	return root, e, r, set
 }
@@ -95,7 +95,7 @@ func TestArchitectureThresholdMintsPerAreaAndRestartsCount(t *testing.T) {
 	}
 	// Once the review items close, only items closed after it count.
 	be.items, be.order = nil, nil
-	wenv(&e).Now = func() time.Time { return time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC) } // past the cache
+	withNow(&e, func() time.Time { return time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC) }) // past the cache
 	be.closedIssues = append(closed, closedIssue(3, "c", "2026-10-05T00:00:00Z"))
 	a, _ = e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}})
 	if a.Count != 1 || a.Due {
@@ -123,7 +123,7 @@ func TestArchitectureQueueEmptyNeedsIdleSlotNoReadyCandidateAndNewWork(t *testin
 	// Nothing closed since the last review: an empty queue has nothing to review.
 	writeRegistry(t, root, slot(root, "ben", "park/ben", nil))
 	be.closedIssues = nil
-	wenv(&e).Now = func() time.Time { return time.Date(2026, 10, 4, 13, 0, 0, 0, time.UTC) } // past the cache
+	withNow(&e, func() time.Time { return time.Date(2026, 10, 4, 13, 0, 0, 0, time.UTC) }) // past the cache
 	if a, _ = e.Architecture(ctx, root, be, set, nil); a.Due {
 		t.Fatal("an empty queue with no new closed work must not loop reviews")
 	}
@@ -196,7 +196,7 @@ func TestArchitectureCachesClosedCount(t *testing.T) {
 	if be.closedLists != 1 {
 		t.Fatalf("closed issues fetched %d times, want 1", be.closedLists)
 	}
-	wenv(&e).Now = func() time.Time { return time.Date(2026, 10, 4, 12, 10, 0, 0, time.UTC) }
+	withNow(&e, func() time.Time { return time.Date(2026, 10, 4, 12, 10, 0, 0, time.UTC) })
 	e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}})
 	if be.closedLists != 2 {
 		t.Fatalf("an expired cache should refetch, fetched %d times", be.closedLists)
@@ -255,7 +255,7 @@ func TestArchitectureQueueEmptyRateLimit(t *testing.T) {
 
 	// Right after a review: due is false whatever has closed since.
 	set.ArchitectureIdleMinItems = 1
-	wenv(&e).Now = func() time.Time { return time.Date(2026, 10, 1, 6, 0, 0, 0, time.UTC) } // 6h before the first close
+	withNow(&e, func() time.Time { return time.Date(2026, 10, 1, 6, 0, 0, 0, time.UTC) }) // 6h before the first close
 	if err := worker.Update(root, func(d *worker.Doc) { d.StartReview("2026-10-01T00:00:00Z", 2, "test", nil) }); err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +263,7 @@ func TestArchitectureQueueEmptyRateLimit(t *testing.T) {
 	if a, _ := e.Architecture(ctx, root, be, set, notReady); a.Due || !a.Cooling {
 		t.Fatalf("a review younger than the minimum hours must not retrigger: %+v", a)
 	}
-	wenv(&e).Now = func() time.Time { return time.Date(2026, 10, 3, 6, 0, 0, 0, time.UTC) } // 30h on, past the cache
+	withNow(&e, func() time.Time { return time.Date(2026, 10, 3, 6, 0, 0, 0, time.UTC) }) // 30h on, past the cache
 	if a, _ := e.Architecture(ctx, root, be, set, notReady); !a.Due || a.Trigger != TriggerQueueEmpty {
 		t.Fatalf("after the minimum hours: %+v", a)
 	}
@@ -302,7 +302,7 @@ func TestArchitectureZeroHoursNeverCools(t *testing.T) {
 		t.Fatalf("0 hours drops the condition, a fresh review must not cool: %+v", a)
 	}
 	set.ArchitectureIdleMinHours = 24
-	wenv(&e).Now = func() time.Time { return time.Date(2026, 10, 4, 12, 30, 0, 0, time.UTC) } // past the closed-count cache
+	withNow(&e, func() time.Time { return time.Date(2026, 10, 4, 12, 30, 0, 0, time.UTC) }) // past the closed-count cache
 	if a, _ := e.Architecture(ctx, root, be, set, notReady); !a.Cooling || a.Due {
 		t.Fatalf("control: 24 hours must cool the same review: %+v", a)
 	}

@@ -136,7 +136,9 @@ func TestWindDownRefusesWhileASlotHoldsWork(t *testing.T) {
 	wt := filepath.Join(f.root, ".worktrees", "ben")
 	os.WriteFile(filepath.Join(wt, "wip.txt"), []byte("x"), 0o644)
 	var killed []string
-	wenv(&f.env).NewHost = func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &killed} }
+	f.wire(func(w *worker.Env) {
+		w.NewHost = func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &killed} }
+	})
 	res, err := f.windDown(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -207,7 +209,9 @@ func TestWindDownEndsAParkedSlotsSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	var killed []string
-	wenv(&f.env).NewHost = func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &killed} }
+	f.wire(func(w *worker.Env) {
+		w.NewHost = func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &killed} }
+	})
 	f.verifyWith(t, `["true"]`)
 	if _, err := f.windDown(nil); err != nil {
 		t.Fatal(err)
@@ -228,7 +232,7 @@ func TestWindDownKeepsHandleWhenTheKillIsNotProved(t *testing.T) {
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatal(err)
 	}
-	wenv(&f.env).NewHost = func(host.Kind) host.Host { return deadKillHost{f.host} }
+	f.wire(func(w *worker.Env) { w.NewHost = func(host.Kind) host.Host { return deadKillHost{f.host} } })
 	f.verifyWith(t, `["true"]`)
 	res, err := f.windDown(nil)
 	if err != nil || res.Verdict != VerdictClean || outcomes(res)["ben"] != OutcomeParked {

@@ -15,7 +15,8 @@ import (
 // reaches.
 type Worker interface {
 	// The clock, environment reader, home directory and project config a round
-	// reads for itself.
+	// reads for itself. Config returns the merged project config in the untyped
+	// form the config package reads everywhere (config.Label, config.Load).
 	Now() time.Time
 	Getenv(key string) string
 	Home() (string, error)

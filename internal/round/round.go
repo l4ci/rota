@@ -100,7 +100,8 @@ type Env struct {
 	// of the clock (Now, which dates timed-out escalations), the environment
 	// reader (Getenv, for the lease, host and brief lookups) and Accounts, the
 	// meter reader that quota and the ledger read; picking an account is
-	// AccountPicking's job. Nil is not usable: build it with FromWorkerEnv.
+	// AccountPicking's job. Nil is not usable: every verb panics on it, so build
+	// it with FromWorkerEnv (the zero Env is not a working one).
 	Worker Worker
 	// Login reads a slot account's Claude login for the no-login check
 	// (SlotLoginProblem). The zero value reads credentials files only, never the

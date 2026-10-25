@@ -131,7 +131,8 @@ func TestReconcileSupportBounced(t *testing.T) {
 		{ID: "1", Author: "me", Body: marker.ReviewBounce("abc1234") + "\nFix the nil map."},
 	}}
 	e := env(nil, fb.asForge())
-	e.Board, wenv(&e).Getenv = fb, noEnv
+	e.Board = fb
+	withGetenv(&e, noEnv)
 	e.Round.Support, e.Round.Role = "mac", roundcfg.RoleSupport
 	bounced := func() []Finding {
 		t.Helper()
