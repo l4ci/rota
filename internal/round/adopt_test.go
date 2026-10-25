@@ -227,3 +227,31 @@ func TestAdoptWithoutPRRecordsTheBranchsOpenPR(t *testing.T) {
 		t.Errorf("gate target = %+v, %v: want the adopted PR resolved right after adopt", tgt, err)
 	}
 }
+
+func TestAdoptRefusesClaimedByOther(t *testing.T) {
+	root, e, be := adoptFixture(t)
+	be.claims = map[string]string{"12": "dana@5"}
+	_, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"})
+	if err == nil {
+		t.Fatal("adopted, want blocked claimed")
+	}
+	if got := blockedBy(t, err); got != BlockClaimed {
+		t.Fatalf("blockedBy %q, want claimed", got)
+	}
+	if len(worker.LoadRegistryTolerant(root).Slots()) != 0 {
+		t.Fatal("refused adoption registered slot")
+	}
+}
+
+func TestAdoptAcceptsBranchAgentsOpenClaim(t *testing.T) {
+	root, e, be := adoptFixture(t)
+	be.claims = map[string]string{"12": "dana@5"}
+	be.more = map[string][]string{"12": {"codex@3"}}
+	res, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"})
+	if err != nil || res.Slot != "ext-1" {
+		t.Fatalf("matching second claim refused: %+v %v", res, err)
+	}
+	if got := be.held("12"); len(got) != 2 || got[0] != "dana@5" || got[1] != "codex@3" {
+		t.Fatalf("adopt changed claims: %v", got)
+	}
+}

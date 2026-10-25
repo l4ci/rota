@@ -650,3 +650,24 @@ func TestSharedReadersStrictBoundary(t *testing.T) {
 		t.Errorf("mixed list: %v", err)
 	}
 }
+
+func TestClaimStaleMinutes(t *testing.T) {
+	for _, tc := range []struct {
+		cfg         string
+		base, major int
+	}{
+		{"", 240, 480},
+		{`{"round":{"claimStaleMinutes":0,"claimStaleMinutesMajor":0}}`, 0, 0},
+		{`{"round":{"claimStaleMinutes":60,"claimStaleMinutesMajor":90}}`, 60, 90},
+	} {
+		s, err := Load(project(t, tc.cfg))
+		if err != nil || s.ClaimStaleMinutes != tc.base || s.ClaimStaleMinutesMajor != tc.major {
+			t.Fatalf("config %s: settings %+v err %v", tc.cfg, s, err)
+		}
+	}
+	for _, cfg := range []string{`{"round":{"claimStaleMinutes":-1}}`, `{"round":{"claimStaleMinutesMajor":-1}}`} {
+		if _, err := Load(project(t, cfg)); err == nil {
+			t.Fatalf("accepted %s", cfg)
+		}
+	}
+}

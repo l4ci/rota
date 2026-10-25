@@ -1,6 +1,7 @@
 package marker
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -163,5 +164,23 @@ func TestSideOf(t *testing.T) {
 		if got := SideOf(body); got != want {
 			t.Errorf("SideOf(%q) = %q, want %q", body, got, want)
 		}
+	}
+}
+
+func TestOpenClaims(t *testing.T) {
+	for _, c := range []struct {
+		name         string
+		bodies, want []string
+	}{
+		{name: "none", bodies: []string{"plain comment", "<!-- rota:release absent@1 -->"}},
+		{name: "ordered unique", bodies: []string{"<!-- rota:claim ben@3 -->", "<!-- rota:claim dana@5 -->", "<!-- rota:claim ben@3 -->"}, want: []string{"ben@3", "dana@5"}},
+		{name: "release and reclaim", bodies: []string{"<!-- hv:claim ben@3 -->", "<!-- rota:claim dana@5 -->", "<!-- hv:release ben@3 -->", "<!-- rota:claim ben@3 -->"}, want: []string{"dana@5", "ben@3"}},
+		{name: "released", bodies: []string{"<!-- rota:claim ben@3 -->", "<!-- rota:release ben@3 -->"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := OpenClaims(c.bodies); !slices.Equal(got, c.want) {
+				t.Fatalf("claims %v, want %v", got, c.want)
+			}
+		})
 	}
 }

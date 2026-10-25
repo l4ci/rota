@@ -85,6 +85,31 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 			return res, blocked(BlockHeld, "slot %s already holds %s", s.Name(), res.Issue)
 		}
 	}
+	// An external branch cannot revive a claim another worker now holds.
+	if board, ok := BoardOf(be); ok && be.Capabilities().ClaimWrites {
+		st, err := board.Status(res.Issue)
+		if err != nil {
+			return res, fmt.Errorf("could not read claims on %s: %w", res.Issue, err)
+		}
+		if st != nil {
+			held := st.Claims
+			if len(held) == 0 && st.Claim != "" {
+				held = []string{st.Claim}
+			}
+			agent, _, _ := strings.Cut(branch, "/")
+			matches := false
+			for _, id := range held {
+				holder, _, _ := strings.Cut(id, "@")
+				if agent != "" && holder == agent {
+					matches = true
+					break
+				}
+			}
+			if len(held) > 0 && !matches {
+				return res, blocked(BlockClaimed, "%s is claimed by %s; branch %s cannot be adopted", res.Issue, strings.Join(held, ", "), branch)
+			}
+		}
+	}
 	name := o.Name
 	if name == "" {
 		for n := 1; ; n++ {

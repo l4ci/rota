@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
@@ -77,8 +78,17 @@ type Result = proc.Result
 // with ExitCode set and a nil error; err means it could not run at all.
 type Exec func(ctx context.Context, bin string, args []string, extraEnv []string, dir string) (Result, error)
 
+// StaleClaim is a remote claim with no recent branch or PR activity.
+type StaleClaim struct {
+	Issue, Holder string
+	Last          time.Time
+}
+
 // Input is everything Run needs from the outside.
 type Input struct {
+	// StaleClaims are remote claims past their activity threshold; empty adds no rows.
+	StaleClaims []StaleClaim
+
 	Dir  string // working directory: where git runs
 	Home string // expands a leading "~/" in a configDir
 
@@ -210,6 +220,9 @@ func Run(ctx context.Context, in Input) Report {
 	}
 	if len(in.GitignoreMissing) > 0 {
 		checks = append(checks, Check{Name: "gitignore", Status: Warn, Detail: "missing from .gitignore: " + strings.Join(in.GitignoreMissing, ", "), Hint: "run: rota init"})
+	}
+	for _, claim := range in.StaleClaims {
+		checks = append(checks, Check{Name: "stale claims", Status: Warn, Detail: fmt.Sprintf("claim %s on %s has had no push or PR activity since %s", claim.Holder, tracker.RefOf(claim.Issue), claim.Last.UTC().Format(time.RFC3339)), Hint: fmt.Sprintf("ask the maintainer before reclaiming with rota round assign %s --reclaim-stale %s", claim.Issue, claim.Holder)})
 	}
 	if len(in.StaleMilestoneFiles) > 0 {
 		checks = append(checks, Check{Name: "milestones", Status: Warn, Detail: "milestones live on the tracker, but .rota/milestones still holds " + strings.Join(in.StaleMilestoneFiles, ", ") + ": no verb reads them", Hint: "run: rota migrate milestone-files --apply"})

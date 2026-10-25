@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/agents"
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/doctor"
@@ -119,6 +120,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		}
 	}
 	in.Slots, in.CwdOf = doctorSlotBlocks(root), procCwd(ctx, d.Proc)
+	in.StaleClaims = doctorStaleClaims(ctx, d, root)
 	in.NothingToVerify = d.workerEnv().NothingToVerify(root)
 	if slots, err := d.workerEnv().GateConfig(root).TestSlots(); err == nil {
 		in.TestSlots = slots
@@ -153,6 +155,44 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		}
 	}
 	return in
+}
+
+// doctorStaleClaims is a best-effort remote check with one deadline for the
+// entire scan. An unavailable tracker or forge adds no stale-claim rows.
+func doctorStaleClaims(ctx context.Context, d *Deps, root string) []doctor.StaleClaim {
+	issue, err := issueBackend(d, root)
+	if err != nil || !issue {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	env := d.RoundEnv(ctx, root)
+	if env.RoundErr != nil || env.Forge == nil {
+		return nil
+	}
+	board := env.Board
+	if board == nil {
+		cwd, _ := d.Getwd()
+		cfg := d.Config(root)
+		be, err := backlog.Open(ctx, root, cfg, backlog.Options{Cwd: cwd, Today: d.Today, NewTracker: func(ctx context.Context, dir string) (backlog.Tracker, error) { return d.NewTracker(ctx, dir, cfg) }})
+		if err != nil {
+			return nil
+		}
+		var ok bool
+		board, ok = round.BoardOf(be)
+		if !ok {
+			return nil
+		}
+	}
+	claims, warnings := env.StaleClaims(ctx, root, board, nil)
+	if len(warnings) > 0 || ctx.Err() != nil {
+		return nil
+	}
+	var out []doctor.StaleClaim
+	for _, claim := range claims {
+		out = append(out, doctor.StaleClaim{Issue: claim.Issue, Holder: claim.Holder, Last: claim.Last})
+	}
+	return out
 }
 
 // staleBinary asks whether the running rota is behind the rota source checkout

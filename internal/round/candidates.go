@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/fsio"
@@ -22,6 +23,8 @@ import (
 // Candidate is an item a round could assign, with its readiness.
 type Candidate struct {
 	ID, Title, Milestone string
+	StaleHolder          string
+	LastActivity         time.Time
 	// OpenPR is the open PR that already resolves the item, 0 for none: the
 	// item is not ready while one is open.
 	OpenPR int
@@ -90,6 +93,7 @@ func resolveScope(override, recorded, def string) string {
 // ScopeOf, the shared paths and overlap mode from set. Callers pass only an
 // explicit scope override ("" for none).
 func (e Env) RoundCandidates(ctx context.Context, root string, be backlog.Backend, set roundcfg.Settings, override string) ([]Candidate, error) {
+	e.Round = set
 	scope, slate := ScopeOf(root, set, override)
 	return e.Candidates(ctx, root, be, CandidateOpts{Scope: scope, Slate: slate, Shared: set.SharedPaths, BlockScopeOverlap: set.BlockScopeOverlap, Support: set.Support, Role: set.Role, LegacySupportLabel: set.LegacySupportLabel})
 }
@@ -127,6 +131,21 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 	if err != nil {
 		return nil, err
 	}
+	stale := map[string]StaleClaim{}
+	var staleWarnings []string
+	if board, ok := BoardOf(be); ok {
+		keys := make([]tracker.IssueKey, 0, len(chosen))
+		for _, it := range chosen {
+			keys = append(keys, it.IssueKey())
+		}
+		claims, warnings := e.StaleClaims(ctx, root, board, keys)
+		staleWarnings = warnings
+		for _, c := range claims {
+			if _, exists := stale[c.Issue]; !exists {
+				stale[c.Issue] = c
+			}
+		}
+	}
 	openPR := e.issuesOfPRs(prs, "")
 	openNums := map[int]bool{}
 	for _, p := range prs {
@@ -139,7 +158,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		if handed[it.IssueKey()] {
 			continue
 		}
-		if taken != nil && taken(it) {
+		if taken != nil && taken(it) && stale[it.ID].Holder == "" {
 			continue
 		}
 		r, err := AssessScoped(be, it.ID, tracked, o.Shared, inFlight, false, "", o.BlockScopeOverlap)
@@ -148,7 +167,13 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		}
 		ms := backlog.ParseMilestones(it.Fields.Get("milestone"))
 		_, src := ItemScopeSource(be, it.ID)
-		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()], DependsOnPR: deferredDependency(be, it, openNums), ScopeSource: src, Readiness: r}
+		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()], DependsOnPR: deferredDependency(be, it, openNums), ScopeSource: src, Readiness: r, Warnings: append([]string{}, staleWarnings...)}
+		if st := stale[it.ID]; st.Holder != "" {
+			c.BlockedBy = StaleClaimKind
+			c.StaleHolder = st.Holder
+			c.LastActivity = st.Last
+			c.Checks = append(c.Checks, Check{Name: StaleClaimKind, Detail: []string{fmt.Sprintf("claim %s has had no branch or PR activity since %s", st.Holder, st.Last.Format(time.RFC3339))}})
+		}
 		if p, err := PickOf(be.Capabilities(), it); err != nil {
 			c.PickErr = err.Error()
 		} else {

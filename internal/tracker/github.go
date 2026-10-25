@@ -724,18 +724,19 @@ func (g *GitHub) AssignSelf(ctx context.Context, key IssueKey) error {
 
 func (g *GitHub) OpenPRs(ctx context.Context) ([]PR, error) {
 	var raw []struct {
-		Number      int    `json:"number"`
-		Title       string `json:"title"`
-		Body        string `json:"body"`
-		HeadRefName string `json:"headRefName"`
-		URL         string `json:"url"`
+		UpdatedAt   time.Time `json:"updatedAt"`
+		Number      int       `json:"number"`
+		Title       string    `json:"title"`
+		Body        string    `json:"body"`
+		HeadRefName string    `json:"headRefName"`
+		URL         string    `json:"url"`
 	}
-	if err := g.list(ctx, []string{"pr", "list", "--state", "open", "--json", "number,title,body,headRefName,url"}, ghLimit, ghPaging, &raw); err != nil {
+	if err := g.list(ctx, []string{"pr", "list", "--state", "open", "--json", "number,title,body,headRefName,url,updatedAt"}, ghLimit, ghPaging, &raw); err != nil {
 		return nil, err
 	}
 	out := []PR{}
 	for _, d := range raw {
-		out = append(out, PR{Number: d.Number, Title: d.Title, Branch: d.HeadRefName, URL: d.URL, Body: d.Body})
+		out = append(out, PR{Number: d.Number, Title: d.Title, Branch: d.HeadRefName, URL: d.URL, UpdatedAt: d.UpdatedAt, Body: d.Body})
 	}
 	return out, nil
 }
