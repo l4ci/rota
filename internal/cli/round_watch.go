@@ -146,7 +146,10 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 				merged[r.Name] = r.PRState == "merged"
 			}
 		}
-		markMergedDone(root, merged)
+		if err := markMergedDone(root, merged); err != nil && !c.mergedMarkNoted {
+			c.mergedMarkNoted = true
+			c.Warn("merged-PR mark skipped: registry write failed: %v", err)
+		}
 	}
 	set, err := c.deps().roundSettings(root, roundConfigUsage)
 	if err != nil {
@@ -174,18 +177,22 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 // markMergedDone records on each done slot whether the forge shows its PR
 // merged, so the prompt digest and the Stop hook stop asking for a slot that
 // waits on nothing (#1843). A slot absent from merged is left as it is.
-func markMergedDone(root string, merged map[string]bool) {
+func markMergedDone(root string, merged map[string]bool) error {
+	var first error
 	for _, s := range worker.LoadRegistryTolerant(root).Slots() {
 		m, ok := merged[s.Name()]
 		if !ok || !worker.IsDone(s.State()) || s.PRMerged() == m {
 			continue
 		}
-		_, _ = worker.UpdateSlot(root, s.Name(), func(s *worker.Slot) {
+		if _, err := worker.UpdateSlot(root, s.Name(), func(s *worker.Slot) {
 			if worker.IsDone(s.State()) {
 				s.SetPRMerged(m)
 			}
-		})
+		}); err != nil && first == nil {
+			first = err
+		}
 	}
+	return first
 }
 
 func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Result, tick *roundtick.Result, stopped string) Result {

@@ -817,3 +817,41 @@ func TestSoloWaitReturnsEachBlockedEventOnce(t *testing.T) {
 		t.Fatalf("second event: %+v %v", res, err)
 	}
 }
+
+// errForge fails every PR lookup, as an auth or rate-limit error does.
+type errForge struct{ Forge }
+
+func (errForge) PRView(context.Context, int) (tracker.PRInfo, error) {
+	return tracker.PRInfo{}, errors.New("rate limited")
+}
+
+// A lookup that fails with ctx alive says nothing about the PR: the done slot
+// is not reported on that guess.
+func TestWaitDoesNotReportADoneSlotWhenTheForgeErrors(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	gittest.Run(t, dir, "remote", "add", "origin", "https://github.com/o/r.git")
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetPR("https://github.com/o/r/pull/9") }); err != nil {
+		t.Fatal(err)
+	}
+	h := newWaitHost("herdr")
+	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/9\n", "done")
+	e := envWith(watcherHost{h})
+	e.Forge = func(string, string, tracker.Settings) (Forge, error) { return errForge{}, nil }
+	realGit := e.Git
+	if realGit == nil {
+		realGit = git.Exec
+	}
+	e.Git = func(ctx context.Context, d string, args ...string) (git.Result, error) {
+		if len(args) >= 2 && args[0] == "remote" && args[1] == "get-url" {
+			return git.Result{Stdout: "https://github.com/o/r.git\n"}, nil
+		}
+		return realGit(ctx, d, args...)
+	}
+	res, err := e.Wait(bg, dir, WaitOpts{Timeout: 100 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.TimedOut {
+		t.Errorf("a failed lookup returned the slot as news: %+v", res)
+	}
+}
