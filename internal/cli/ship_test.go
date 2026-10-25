@@ -301,6 +301,24 @@ func shipPRForge(url string) *forge {
 	}}
 }
 
+func TestShipPRGitHubConfiguredBase(t *testing.T) {
+	shipDeterministic(t)
+	cfg := `{"forge":{"provider":"github"},"issues":{"source":"file"},"git":{"baseBranch":"develop"}}`
+	work := shipFixture(t, cfg)
+	gitT(t, work, "branch", "develop", "main")
+	shipBranchOf(t, work, "feat/x", [3]string{"x.txt", "work", ""})
+	f := shipPRForge("https://github.com/fake/repo/pull/1")
+	deps := useForge(t, f)
+
+	n := trRunWith(t, deps, work, "Summary line\n", "ship", "pr", "feat/x", "--title", "My title", "--body-file", "-", "--json")
+	if n.code != 0 {
+		t.Fatalf("exit %d\n%s%s", n.code, n.stdout, n.stderr)
+	}
+	if len(f.calls) != 1 || f.calls[0] != "gh pr create --title My title --body-file - --base develop" {
+		t.Errorf("gh call %q", f.calls)
+	}
+}
+
 func TestShipPRFileMode(t *testing.T) {
 	shipDeterministic(t)
 	for _, tc := range []struct{ prov, url string }{
@@ -326,7 +344,7 @@ func TestShipPRFileMode(t *testing.T) {
 				t.Errorf("data %v", d)
 			}
 			if tc.prov == "github" {
-				if len(f.calls) != 1 || f.calls[0] != "gh pr create --title My title --body-file -" || f.stdins[0] != "Summary line" {
+				if len(f.calls) != 1 || f.calls[0] != "gh pr create --title My title --body-file - --base main" || f.stdins[0] != "Summary line" {
 					t.Errorf("gh call %q stdin %q", f.calls, f.stdins)
 				}
 			} else if len(f.calls) != 1 || f.calls[0] != "glab mr create --title My title --description Summary line --source-branch feat/x --target-branch main --yes" {
