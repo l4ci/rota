@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -31,7 +32,7 @@ func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string)
 	case s.PR() == "" && len(s.Issues()) == 0 && s.Finding() != "":
 		return false, "its finding awaits `rota round accept`"
 	case s.PR() == "" && len(s.Issues()) == 0:
-		return false, fmt.Sprintf("no PR recorded for branch %s; check the forge and run `rota round reconcile`", strutil.FirstNonEmpty(s.Branch(), "(none)"))
+		return false, fmt.Sprintf("no PR recorded for branch %s; check the forge and run `rota round reconcile --apply`", strutil.FirstNonEmpty(s.Branch(), "(none)"))
 	}
 	// A relay can leave a slot blocked after its PR merged: the merged PR frees it.
 	if worker.IsBlocked(s.State()) && e.prMerged(ctx, s.PR()) {
@@ -84,22 +85,59 @@ func (e Env) adoptBranchPR(ctx context.Context, root string, s *worker.Slot, per
 	if !worker.Parkable(s.State()) {
 		return
 	}
+	url := e.branchPR(ctx, root, s.Branch(), strutil.FirstNonEmpty(s.Base(), e.Base))
+	if url == "" {
+		return
+	}
+	if persist && editSlot(root, s.Name(), func(w *worker.Slot) error { w.SetPR(url); return nil }) != nil {
+		return
+	}
+	s.SetPR(url)
+}
+
+// branchPR is the URL of the PR headed by branch: the open one, else the merged
+// one the branch owns (it opened and merged between two looks at the open
+// list). "" when the forge has none or cannot answer.
+func (e Env) branchPR(ctx context.Context, root, branch, base string) string {
+	if e.Forge == nil || branch == "" {
+		return ""
+	}
+	if url := e.openBranchPR(ctx, branch); url != "" {
+		return url
+	}
+	if m := e.mergedBranchPR(ctx, root, branch, base); m != nil {
+		return m.URL
+	}
+	return ""
+}
+
+// openBranchPR is the URL of the open PR headed by branch, "" when none.
+func (e Env) openBranchPR(ctx context.Context, branch string) string {
 	prs, err := e.Forge.OpenPRs(ctx)
 	if err != nil {
-		return
+		return ""
 	}
 	for _, p := range prs {
-		if p.Branch != s.Branch() || p.URL == "" {
-			continue
+		if p.Branch == branch && p.URL != "" {
+			return p.URL
 		}
-		if persist {
-			if editSlot(root, s.Name(), func(w *worker.Slot) error { w.SetPR(p.URL); return nil }) != nil {
-				return
-			}
-		}
-		s.SetPR(p.URL)
-		return
 	}
+	return ""
+}
+
+// mergedBranchPR is the merged PR headed by branch that the branch owns, nil
+// when none.
+func (e Env) mergedBranchPR(ctx context.Context, root, branch, base string) *tracker.PR {
+	merged, err := e.Forge.MergedPRs(ctx, branch)
+	if err != nil {
+		return nil
+	}
+	for i := range merged {
+		if merged[i].URL != "" && e.ownsMergedPR(ctx, root, merged[i].HeadSHA, base, branch) {
+			return &merged[i]
+		}
+	}
+	return nil
 }
 
 // busyMsg is the refusal text for a slot that holds an issue and cannot park.

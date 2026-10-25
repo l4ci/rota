@@ -641,3 +641,41 @@ func TestAssignSkipsParkableSlotWithoutLogin(t *testing.T) {
 		t.Errorf("a skipped slot parks nothing: %v", f.queued())
 	}
 }
+
+// A slot's PR can open and merge between two looks at the open list (#1852).
+// Assign records it from the merged list instead of refusing, and so does
+// reconcile --apply, which the refusal hint names.
+func TestMergedBranchPRIsRecordedByAssignAndReconcile(t *testing.T) {
+	setup := func(t *testing.T) (*moveFx, string) {
+		f := newMoveFx(t)
+		branch := f.slot("ben").Branch()
+		f.commit(t, "ben", "work.txt")
+		f.finish(t, "ben", "")
+		tip := strings.TrimSpace(gitIn(t, f.wt("ben"), "rev-parse", "HEAD"))
+		f.forge.mergedPRs = map[string][]tracker.PR{branch: {{Number: 7, Branch: branch, URL: pr7, HeadSHA: tip}}}
+		return f, branch
+	}
+	t.Run("reconcile --apply", func(t *testing.T) {
+		f, _ := setup(t)
+		if _, err := f.env.Reconcile(bg, f.root, true); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.slot("ben").PR(); got != pr7 {
+			t.Errorf("slot records %q, want the merged PR", got)
+		}
+	})
+	t.Run("assign", func(t *testing.T) {
+		f, _ := setup(t)
+		if _, err := f.assign("13", "ben"); err != nil {
+			t.Fatalf("assign refused a slot whose PR merged: %v", err)
+		}
+	})
+	t.Run("hint", func(t *testing.T) {
+		f := newMoveFx(t)
+		f.finish(t, "ben", "")
+		_, err := f.assign("13", "ben")
+		if err == nil || !strings.Contains(err.Error(), "round reconcile --apply") {
+			t.Errorf("refusal should name the recording verb: %v", err)
+		}
+	})
+}

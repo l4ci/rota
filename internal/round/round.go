@@ -267,6 +267,15 @@ func (e Env) adoptedPRNumber(ctx context.Context, root string, rep *Report, v *v
 	return 0, false
 }
 
+// unrecordedMergedPR is the merged PR a registered slot holding an issue should
+// record but does not, nil when the slot records one or the forge shows none.
+func (e Env) unrecordedMergedPR(ctx context.Context, root string, v *view, r *Row) *tracker.PR {
+	if !r.Registered || r.Issue == "" || r.PR != "" {
+		return nil
+	}
+	return e.mergedBranchPR(ctx, root, r.Branch, v.base)
+}
+
 // ownsMergedPR says whether a merged PR is this slot's: the forge matches a
 // head branch by name alone, so an older PR from a reused name (or a fork's
 // same-named branch) is told apart by its commits. Being reachable from the
@@ -367,7 +376,8 @@ type view struct {
 	worktree string
 	base     string
 	openPR   *tracker.PR
-	prErr    bool // reading the slot's PR state failed
+	mergedPR *tracker.PR // merged PR the branch owns, for a slot that records none
+	prErr    bool        // reading the slot's PR state failed
 }
 
 var ()
@@ -520,6 +530,10 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 						rep.add(f)
 					}
 				}
+			} else if m := e.unrecordedMergedPR(ctx, root, v, r); m != nil {
+				v.mergedPR = m
+				r.PR = m.URL
+				rep.add(Finding{Kind: PRUnrecorded, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("merged PR #%d has branch %s as head, slot records none", m.Number, r.Branch), Repair: "record pr"})
 			} else if ahead := e.ahead(ctx, root, v.base, r.Branch); ahead > 0 {
 				rep.add(Finding{Kind: BranchNoPR, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("%s is %d commit(s) ahead of %s with no PR", r.Branch, ahead, v.base)})
 			}
@@ -917,4 +931,16 @@ func LocalReport(root string) (*Report, error) {
 		rep.Queued = append(rep.Queued, QueuedPR{Issue: q.Issue, PR: q.PR, Branch: q.Branch, From: q.From, Bundle: q.Bundle})
 	}
 	return rep, nil
+}
+
+// recordablePR is the PR a pr-unrecorded repair writes to the slot: the open
+// one, else the merged one. nil for no view or neither.
+func (v *view) recordablePR() *tracker.PR {
+	switch {
+	case v == nil:
+		return nil
+	case v.openPR != nil:
+		return v.openPR
+	}
+	return v.mergedPR
 }
