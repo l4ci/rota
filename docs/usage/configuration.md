@@ -462,8 +462,9 @@ Whether a merge needs a human. The merge verbs (`rota ship merge`, `rota ship pr
 
 With `round.support` enabled, main is named `main` and the support machine takes the name
 in `round.support`. `machine:<name>` pins an issue to that machine. Unpinned issues are
-available to main; support still takes only issues pinned to it. Candidates show an issue
-pinned elsewhere as blocked, and assignment refuses it. `round.role: support` requires a
+available to both machines. Support prefers its pinned issues, then unpinned work within
+its configured `round.scope`. The shared claim decides which machine takes an issue.
+Candidates show an issue pinned elsewhere as blocked, and assignment refuses it. `round.role: support` requires a
 nonempty `round.support`; `main` is reserved for the main machine.
 
 `rota round support offer <ID>` adds `machine:<round.support>`; `--withdraw` removes it.
