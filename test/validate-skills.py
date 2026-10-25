@@ -211,15 +211,23 @@ def check_flag_consistency(skill_files, issues):
     if listed != flagged:
         issues.append(f"{conv.as_posix()}: flagged-skill list {sorted(listed)} differs from the "
                       f"disable-model-invocation flags set {sorted(flagged)}")
-    # Another skill's text must not tell a model to run a flagged skill: it cannot. The only
-    # allowed form is an explicit offer for the user to type it. For each mention, the nearest
-    # verb before it decides: run-ish is a chain, "type"/"offer" is an offer.
+    # Another skill's text must not tell a model to run a flagged skill: it cannot. Only
+    # imperative clauses are flagged (a command to run it, or a command whose object it is);
+    # prose references ("see", "like ... does", tables) pass, and so does an explicit offer
+    # for the user to type it. Before the mention, the nearest verb decides: run-ish is a
+    # chain, "type"/"offer" is an offer. After it, a trailing "then/else run it" is a chain
+    # even behind an offer.
     if not flagged:
         return
     names = "|".join(sorted(flagged))
     mention = re.compile(r"`/?(%s)\b" % names)
-    verbs = re.compile(r"(?i)(?<!-)\b(invoke[sd]?|invoking|dispatch(?:es|ed)?|chain(?:s|ed)? into|read and follow|hand(?:s)? off to|runs?|running|"
-                       r"start(?:s|ed)?|launch(?:es|ed)?|type|offer(?:s|ed)?)\b")
+    verbs = re.compile(r"(?i)(?<!-)\b(invoke[sd]?|invoking|dispatch(?:es|ed)?|chain(?:s|ed)? into|read and follow|"
+                       r"hand(?:s|ed)?(?: \w+){0,3} (?:off )?to|pass(?:es|ed)?(?: \w+){0,3} to|uses?|using|runs?|running|"
+                       r"start(?:s|ed)?|launch(?:es|ed)?|call(?:s|ed)?|execut(?:e|es|ed|ing)|"
+                       r"(?:switch(?:es|ed)?|delegat(?:e|es|ed)|proceed(?:s|ed)?|go(?:es)?) to|"
+                       r"continue[sd]? with|follow(?:s|ed)? up with|follow(?:s|ed)?|"
+                       r"type|offer(?:s|ed)?|next step)\b")
+    trailing = re.compile(r"(?i)^[^.;!?]*?\b(?:then|else|and|or|just|to)\s+(?:run|invoke|start|launch|use)\s+it\b")
     seen = set()
     root = Path("skills").resolve()
     files = [*Path("skills").glob("*/*.md"), *Path("skills").glob("*/*/*.md"), *Path("skills").glob("*/*/*/*.md")]
@@ -231,9 +239,22 @@ def check_flag_consistency(skill_files, issues):
         own = real.relative_to(root).parts[0]
         for n, line in enumerate(real.read_text(encoding="utf-8").splitlines(), 1):
             for hit in mention.finditer(line):
-                clause = re.split(r"[.;:!?](?:\s|$)|[()\u2014]|\*\"", line[:hit.start()])[-1]
+                if hit.group(1) == own:
+                    continue
+                before = line[:hit.start()]
+                clause = re.split(r"[.;!?](?:\s|$)|[()\u2014]|\*\"", before)[-1]
                 prior = [v.group(1).lower() for v in verbs.finditer(clause)]
-                if hit.group(1) != own and prior and prior[-1] not in ("type", "offer", "offers", "offered"):
+                # "Next step: `/x`" has its colon split off the clause: look at the whole line head.
+                if re.search(r"(?i)\bnext step\W*$", before):
+                    prior = ["next step"]
+                # A sentence-initial bare "Then `/x`" is a command with its verb elided.
+                if not prior and re.fullmatch(r"(?i)\s*(?:and\s+)?then\s*", clause):
+                    prior = ["then"]
+                offer = bool(prior) and prior[-1] in ("type", "offer", "offers", "offered")
+                chained = bool(prior) and not offer
+                if offer and trailing.search(line[hit.end():]):
+                    chained = True
+                if chained:
                     issues.append(f"{real.relative_to(root.parent).as_posix()}:{n}: chains into flagged skill {hit.group(1)} "
                                   "(manual-only; tell the user to type it instead)")
 
