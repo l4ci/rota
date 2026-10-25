@@ -334,6 +334,15 @@ func atHead(head string) string {
 	return " at " + strings.TrimSpace(head)
 }
 
+// NoSupportPRError is PostReviewBounce's refusal when the support machine's
+// branch has no PR number to post the bounce on, as with a slot `worker adopt`
+// registered without --pr (#1850).
+type NoSupportPRError struct{ Branch, PR string }
+
+func (e *NoSupportPRError) Error() string {
+	return fmt.Sprintf("%s is the support machine's branch, but its PR %q has no number to post the bounce on", e.Branch, e.PR)
+}
+
 // PostReviewBounce tells the support machine that main sent its PR back
 // (#1598 AC-8): on main with round.support set, a PR headed by a
 // `<round.support>-` branch gets a comment marked `rota:review-bounce
@@ -353,7 +362,7 @@ func (e Env) PostReviewBounce(root, branch, pr, head, why string) (posted bool, 
 	}
 	n, ok := PRRefNumber(pr)
 	if !ok {
-		return false, fmt.Errorf("%s is the support machine's branch, but its PR %q has no number to post the bounce on", branch, pr)
+		return false, &NoSupportPRError{Branch: branch, PR: pr}
 	}
 	gc := e.GateConfig(root)
 	provider, err := e.detectProvider(e.Ctx, root, pr, gc.Tracker.Provider, tracker.ForgeActor)
