@@ -1449,7 +1449,7 @@ func TestTransferBriefCarriesThePreflightLine(t *testing.T) {
 	if _, err := f.transfer("12", "dana", nil); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Pre-flight before `rota worker done`:", "base and on your branch", "report `partial`", "not run: merge-only by rule"} {
+	for _, want := range []string{"Pre-flight before `rota worker done`:", "base and on your branch", "--outcome partial", "not run: merge-only by rule"} {
 		if !strings.Contains(f.host.sent, want) {
 			t.Errorf("brief lacks %q:\n%s", want, f.host.sent)
 		}

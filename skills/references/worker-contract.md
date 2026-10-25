@@ -120,7 +120,7 @@ Work only this task, then stop.
   it twice.
 - Merge the moved base. Before the final proof record, on the first PR push and on every relay-fix push, run `git fetch origin <base-branch>`. When the base has moved past your merge base (`git merge-base HEAD origin/<base-branch>` differs from `git rev-parse origin/<base-branch>`), merge it into your branch: `git merge origin/<base-branch>`, a merge and never a rebase, because the branch may already be pushed. Resolve every conflict yourself, then re-run your targeted checks on the merged result; the proof record binds to the post-merge head. A conflict you cannot settle without a design call (both sides changed the same behavior) is `ROTA-BLOCKED` naming the conflicting files, never a guess. When the base has not moved, do nothing. This ends at `worker done`: a PR waiting in review is kept current by the gate, the train and the orchestrator.
 - Learnings. Before `rota worker done`, run a learning pass over what you found while building (a gotcha in a package, a test seam, a wrong assumption in the issue). Post each as its own comment on the issue you worked: `rota item comment add <ID> --kind learning --body-file <f>`, never into `.rota/KNOWLEDGE.md` and never via `rota knowledge add` (the orchestrator decides at wind-down; `/rota-learn` harvests these). Support and main workers alike. Put the marker in the PR body: `Learnings: none` when you post nothing, `Learnings: <n> posted` otherwise, so "none" reads differently from "skipped". `/rota-ship` Step 4 runs this pass before it opens the PR. Skip what the code or README already says.
-- Done is the last action. Order: merge the moved base, final commit, proof record at HEAD, learning pass (before the PR opens, so its body carries the marker), push and open the PR (`/rota-ship`), `rota worker inbox <slot>`, `rota worker done <slot>`, then print `ROTA-DONE`. `worker done` refuses (exit 4) a dirty worktree, a branch never pushed or a HEAD that differs from `origin/<branch>`. Make no commit, push or edit after it, because a review or the gate binds to the head it recorded. A fix after done means another push and another `rota worker done`.
+- Done is the last action. Order: merge the moved base, final commit, proof record at HEAD, pre-flight, learning pass (before the PR opens, so its body carries the marker), push and open the PR (`/rota-ship`), `rota worker inbox <slot>`, `rota worker done <slot>`, then print `ROTA-DONE`. `worker done` refuses (exit 4) a dirty worktree, a branch never pushed or a HEAD that differs from `origin/<branch>`. Make no commit, push or edit after it, because a review or the gate binds to the head it recorded. A fix after done means another push and another `rota worker done`.
 - After every relay fix, from any relay and not only a `REVIEW` one, even a one-line
   fix, run `rota worker done <slot>`: the done event it records is what the watch trusts
   when the relay echo has scrolled out of the pane between polls.
@@ -153,15 +153,17 @@ Work only this task, then stop.
      that lands only part of the issue says `Refs #<issue>` instead, and the issue
      carries the `partial-slice` label (ask the orchestrator to set it). Its outcome is `done`
      (see *Outcome*), so it lands without a relay.
-- Pre-flight. Before `rota worker done`, run the targeted tier the round configures for
-  workers: `rota test run fast` (recorded at HEAD, step 4 above) plus any command an
-  acceptance bullet names. Never the full gate (`test.full`, `test.e2e`, `bash test/gate.sh`):
-  it runs at merge only, so the PR lists it as `not run: merge-only by rule`. For every
+- Pre-flight. After the proof record and before `rota worker done`, run the tier your brief
+  assigns you: `rota test run fast` (recorded at HEAD, step 4 above), or `rota test run full`
+  when `test.fast` is empty, plus any command an acceptance bullet names. When `test.fast` is
+  set, never the full gate (`test.full`, `test.e2e`, `bash test/gate.sh`): it runs at merge
+  only, so the PR lists it as `not run: merge-only by rule`. For every
   acceptance bullet that states a number, ratio, size or percentage, measure it on the base
   and on your branch with a targeted command and paste both values in the PR body (one line:
   criterion, base value, branch value). If a numeric criterion cannot be measured, or a
-  pre-flight check fails and you cannot fix it, report `--outcome partial` naming the
-  criterion on the summary's third line instead of printing a clean `ROTA-DONE`.
+  pre-flight check fails and you cannot fix it, run `rota worker done` with
+  `--outcome partial`, name the criterion on the summary's third line, and still print
+  `ROTA-DONE <slot> <pr-url>` last.
 - Second PR of a split issue. When the issue lands as stacked PRs, open the second from
   a new branch named `<agent>/<issue>-<slug>` (same agent and issue number as the first),
   with `Closes #<issue>`; the first says `Refs #<issue>`. Each reports `done` for its own slice. Print `ROTA-DONE <slot> <pr-url>`
