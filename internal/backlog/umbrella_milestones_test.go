@@ -45,6 +45,27 @@ func TestUmbrellaMilestoneAddMintsOverAllSubRepos(t *testing.T) {
 	}
 }
 
+func TestUmbrellaMilestoneAddForwardsKind(t *testing.T) {
+	u, fakes := msUmbrella(t, nil, nil)
+	if _, err := u.MilestoneAdd("", "Fog", "Unsliced.", nil, "decision", "2026-10-02"); err != nil {
+		t.Fatal(err)
+	}
+	issues := fakes["web"].Issues
+	if len(issues) != 1 || !strings.Contains(issues[0].Body, "kind: decision") || !strings.Contains(issues[0].Body, "## Not yet specified") {
+		t.Errorf("tracking body lacks the decision kind: %+v", issues)
+	}
+}
+
+func TestUmbrellaMilestoneAddRejectsUnknownKind(t *testing.T) {
+	u, fakes := msUmbrella(t, nil, nil)
+	if _, err := u.MilestoneAdd("", "Odd", "s", nil, "bogus", "2026-10-02"); err == nil {
+		t.Error("unknown kind accepted")
+	}
+	if len(fakes["web"].Issues) != 0 {
+		t.Errorf("nothing may be created: %+v", fakes["web"].Issues)
+	}
+}
+
 func TestUmbrellaMilestoneStatusSyncsEverySubRepo(t *testing.T) {
 	u, fakes := msUmbrella(t, nil, nil)
 	if _, err := u.MilestoneAdd("", "Alpha", "First", nil, "delivery", "2026-10-02"); err != nil {

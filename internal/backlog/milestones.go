@@ -169,6 +169,9 @@ func (b *Issues) NextMilestoneID() (string, error) {
 // MilestoneAdd creates the native milestone and its tracking issue and
 // returns the ID. An empty mid mints the next one.
 func (b *Issues) MilestoneAdd(mid, title, summary string, depends []string, kind, today string) (string, error) {
+	if err := ms.CheckKind(kind); err != nil {
+		return "", err
+	}
 	mt, err := b.milestoneTracker()
 	if err != nil {
 		return "", err

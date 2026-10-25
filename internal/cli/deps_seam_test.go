@@ -74,6 +74,13 @@ func TestDefaultRoundEnvLabelsComeFromConfig(t *testing.T) {
 	}
 }
 
+func TestDefaultRoundEnvDefaultLabels(t *testing.T) {
+	e := defaultRoundEnv(context.Background(), t.TempDir(), defaultDeps(), false)
+	if e.Label != "in-progress" || e.NeedsHuman != "needs-human" || e.NeedsReview != "needs-review" || e.SupportLabel != "site:support" {
+		t.Errorf("default labels = %q, %q, %q, %q", e.Label, e.NeedsHuman, e.NeedsReview, e.SupportLabel)
+	}
+}
+
 // Ctx.Root walks up from Deps.Getwd, not the process cwd, so a test resolves a
 // root without a Chdir.
 func TestCtxRootReadsDepsGetwd(t *testing.T) {

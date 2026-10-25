@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"reflect"
 	"testing"
@@ -34,6 +35,39 @@ func TestMigrateScopePreviewAndApply(t *testing.T) {
 	// is a project key, ship.review a taste key off its default.
 	if got := readFile(t, configPath(root)); got != "{\n  \"round\": {\n    \"roster\": [\n      \"a\"\n    ]\n  },\n  \"ship\": {\n    \"review\": \"light\"\n  }\n}\n" {
 		t.Errorf("config = %q", got)
+	}
+	if m, _ := MigrateScopeFiles(root, false, nil); m.Changed() {
+		t.Errorf("a second run plans %+v", m.Changes)
+	}
+}
+
+// round.accounts merge by kind: when config.local.json already holds a list,
+// the tracked kinds it lacks move into it and the local kinds stay.
+func TestMigrateScopeAccountsMergeByKind(t *testing.T) {
+	root := layerRig(t, ``,
+		`{"round":{"accounts":[{"kind":"codex","name":"c1","dir":"/c1"}]}}`,
+		`{"round":{"accounts":[{"kind":"claude","name":"a1","dir":"/a1"}]}}`)
+	m, err := MigrateScopeFiles(root, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Changes) != 1 || m.Changes[0].Key != "round.accounts" || m.Changes[0].Action != ScopeMove {
+		t.Fatalf("plan %+v", m.Changes)
+	}
+	if _, err := MigrateScopeFiles(root, true, nil); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Round struct {
+			Accounts []struct{ Kind, Name string }
+		}
+	}
+	if err := json.Unmarshal([]byte(readFile(t, localPath(root))), &got); err != nil {
+		t.Fatal(err)
+	}
+	want := []struct{ Kind, Name string }{{"claude", "a1"}, {"codex", "c1"}}
+	if !reflect.DeepEqual(got.Round.Accounts, want) {
+		t.Errorf("local accounts = %+v, want %+v", got.Round.Accounts, want)
 	}
 	if m, _ := MigrateScopeFiles(root, false, nil); m.Changed() {
 		t.Errorf("a second run plans %+v", m.Changes)
