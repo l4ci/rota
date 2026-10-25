@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -82,6 +83,56 @@ func TestRoundOverviewCounts(t *testing.T) {
 	}
 }
 
+// #1873 AC-2: a bundled slot is one row (its members ride in the issue cell),
+// and an issue held by two attempts stays two rows with their own workers. The
+// queued PR that a slot already shows drops out; a different PR for the same
+// issue stays. Worker totals count slots, never queue entries or members.
+func TestRoundOverviewBundlesAndAttempts(t *testing.T) {
+	const pr208 = "https://github.com/acme/project/pull/208"
+	s := roundSnap{
+		Host: "herdr",
+		Slots: []round.Row{
+			{Name: "ben", Issue: "101", Bundle: []string{"106", "107"}, Branch: "ben/101-bundle", HostState: "working"},
+			{Name: "dana", Issue: "108", Branch: "dana/108-first", HostState: "idle", PR: pr208, PRState: "open", Event: &worker.Event{Kind: worker.EventDone}},
+			{Name: "nia", Issue: "108", Branch: "nia/108-second", HostState: "working"},
+		},
+		Review: []round.QueuedPR{
+			{Issue: "108", PR: pr208, From: "dana"},
+			{Issue: "108", PR: "https://github.com/acme/project/pull/209", From: "kit"},
+		},
+		CandsLoaded: true,
+	}
+	byWorker := map[string]int{}
+	for _, e := range s.entries() {
+		byWorker[e.worker]++
+		if e.issue == "#101 +2" && e.worker != "ben" {
+			t.Errorf("bundle row belongs to %q", e.worker)
+		}
+	}
+	for w, want := range map[string]int{"ben": 1, "dana": 1, "nia": 1, "moved on": 1} {
+		if byWorker[w] != want {
+			t.Errorf("%d rows for %q, want %d: %v", byWorker[w], w, want, byWorker)
+		}
+	}
+	out := overviewText(t, s)
+	for _, want := range []string{"#101 +2", "Active (2)", "PR review (2)", "workers 3 known: 2 working · 1 in review"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q:\n%s", want, out)
+		}
+	}
+	for _, id := range []string{"#106", "#107"} {
+		if strings.Contains(out, id) {
+			t.Errorf("bundle member %s got a row of its own:\n%s", id, out)
+		}
+	}
+	if n := strings.Count(out, "#209"); n != 1 {
+		t.Errorf("the second PR of #108 shows %d times, want 1:\n%s", n, out)
+	}
+	if n := strings.Count(out, "#208"); n != 1 {
+		t.Errorf("a PR a slot already shows must not repeat as moved on (%d rows):\n%s", n, out)
+	}
+}
+
 func TestRoundOverviewSupport(t *testing.T) {
 	out := overviewText(t, overviewFixture())
 	for _, want := range []string{"waiting", "active", "mac-ben", "unknown"} {
@@ -99,7 +150,7 @@ func TestRoundOverviewSupport(t *testing.T) {
 	// Not asked for at all (round.support empty): the group is absent.
 	s = overviewFixture()
 	s.Support, s.SupportLoaded = nil, false
-	if out = overviewText(t, s); strings.Contains(out, "Support queue") && !strings.Contains(out, "loading") {
+	if out = overviewText(t, s); strings.Contains(out, "Support queue") {
 		t.Errorf("support group without a support machine:\n%s", out)
 	}
 }
@@ -107,15 +158,17 @@ func TestRoundOverviewSupport(t *testing.T) {
 // The cursor follows an issue when its group changes underneath it.
 func TestRoundOverviewSelection(t *testing.T) {
 	s := overviewFixture()
-	m, _ := press(newRoundScreen(s, nil, newClock().now, roundRefresh), "j", "j") // #101, #103, then #102 in PR review
+	next := overviewFixture()
+	next.Slots[0].PR, next.Slots[0].PRState = "https://github.com/acme/project/pull/201", "open"
+	next.Slots[0].Event = &worker.Event{Kind: worker.EventDone} // #101 moves to review, above #102 in the list
+	load := func(context.Context) (roundSnap, error) { return next, nil }
+	rs := openingScreen(newRoundScreen(s, load, newClock().now, roundRefresh))
+	cmd := rs.Init()
+	m, _ := press(rs, "j", "j") // #101, #103, then #102 in PR review
 	if out := tui.Strip(m.Render(120, 40, tui.Style{})); !strings.Contains(out, "› #102") {
 		t.Fatalf("expected the cursor on #102:\n%s", out)
 	}
-	s.Slots[0].PR, s.Slots[0].PRState = "https://github.com/acme/project/pull/201", "open"
-	s.Slots[0].Event = &worker.Event{Kind: worker.EventDone} // #101 moves to review, above #102 in the list
-	rm := m.(*roundScreen)
-	rm.box.put(s, nil)
-	m, _ = m.Update(tui.Done{Tag: m.(*roundScreen).tag})
+	m = runCmd(m, cmd) // the refresh lands while the cursor sits on #102
 	if out := tui.Strip(m.Render(120, 40, tui.Style{})); !strings.Contains(out, "› #102") {
 		t.Errorf("cursor left #102 when #101 changed groups:\n%s", out)
 	}
@@ -139,15 +192,12 @@ func TestRoundOverviewNoColorKeepsLabels(t *testing.T) {
 // A pass that cannot read the support queue keeps the last rows and says they
 // are old; it never replaces them with an empty queue.
 func TestRoundOverviewPartialFailureKeepsLastRead(t *testing.T) {
-	old := overviewFixture()
-	m := newRoundScreen(old, nil, newClock().now, roundRefresh)
 	bad := overviewFixture()
 	bad.Support, bad.SupportLoaded, bad.SupportErr = nil, false, "forge: down"
 	bad.Cands, bad.CandsErr = nil, "forge: down"
-	rm := m
-	rm.box.put(bad, nil)
-	var next tui.Model
-	next, _ = rm.Update(tui.Done{Tag: rm.tag})
+	load := func(context.Context) (roundSnap, error) { return bad, nil }
+	m := openingScreen(newRoundScreen(overviewFixture(), load, newClock().now, roundRefresh))
+	next := runCmd(m, m.Init())
 	out := tui.Strip(next.Render(120, 40, tui.Style{}))
 	for _, want := range []string{"Support queue (3)", "#201", "support queue unavailable: forge: down (rows are from the last read)", "#301", "candidates unavailable: forge: down"} {
 		if !strings.Contains(out, want) {
@@ -266,14 +316,15 @@ func TestRoundOverviewOpen(t *testing.T) {
 func TestRoundOverviewOpenFailureAndRefresh(t *testing.T) {
 	m := newRoundScreen(linksFixture(), nil, newClock().now, roundRefresh)
 	m.open = func(string) error { return errors.New("xdg-open: not found") }
+	next := linksFixture()
+	next.Slots = next.Slots[1:]
+	m.load = func(context.Context) (roundSnap, error) { return next, nil }
+	m.loading = true
+	refresh := m.Init()
 	m1, cmd := press(m, "i")
 	// The selection changes under a background refresh while the open runs: the
 	// opener still gets the link the key was pressed on.
-	rm := m1.(*roundScreen)
-	next := linksFixture()
-	next.Slots = next.Slots[1:]
-	rm.box.put(next, nil)
-	m2, _ := m1.Update(tui.Done{Tag: rm.tag})
+	m2 := runCmd(m1, refresh)
 	err := cmd.Exec()
 	if err == nil {
 		t.Fatal("opener failure was swallowed")
