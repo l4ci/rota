@@ -242,18 +242,18 @@ Setting one up takes two steps and no hand edits:
    `.rota/config.local.json` and ends with the doctor's first failing check, or `doctor: pass`.
    Run it again to change an answer; it starts from the values already there.
 
-Knowledge travels through the tracker. Every round worker, main or support, posts each learning as a `learning`
-comment on the issue it came from (`rota item comment add <ID> --kind learning --body-file <f>`)
-before `worker done` (none: it posts nothing and the PR body says `Learnings: none`),
-never into `KNOWLEDGE.md`; a support worker also does not restamp the contract docs. A learning with no issue is
-filed upstream with `/rota-bugreport` or `/rota-capture`. Main's `/rota-learn` runs
-`rota knowledge harvest` (learning comments on issues merged in the round, not yet marked),
-folds each in with `rota knowledge add` and marks it with `rota knowledge harvest --mark
-<commentId>`. `--mark` is refused on a support machine; listing is allowed. Only comments by
-authors with write access count, so a stranger's `learning` comment never reaches
-`KNOWLEDGE.md`; a forge that cannot say who may write (GitLab) is refused with `blockedBy: forge`,
-and so is `round start` with `round.support` set. Knowledge hits from
-support machines are not harvested.
+Knowledge travels through the tracker. Every round worker, main or support, posts each learning
+as a `learning` comment on the issue it came from (`rota item comment add <ID> --kind learning
+--body-file <f>`) before `worker done`, never into `KNOWLEDGE.md`, and puts `Learnings: none` or
+`Learnings: <n> posted` in the PR body. A support worker also does not restamp the contract docs.
+A learning with no issue is filed upstream with `/rota-bugreport` or `/rota-capture`. Main's
+`/rota-learn` runs `rota knowledge harvest` (learning comments on issues merged in the round, not
+yet marked) and the orchestrator decides per comment: fold it in with `rota knowledge add`, or
+reject it. Either way it runs `rota knowledge harvest --mark <commentId>`. `--mark` is refused on a
+support machine; listing is allowed. Only comments by authors with write access count, so a
+stranger's `learning` comment never reaches `KNOWLEDGE.md`; a forge that cannot say who may write
+(GitLab) is refused with `blockedBy: forge`, and so is `round start` with `round.support` set.
+Knowledge hits from support machines are not harvested.
 
 Set `round.support` between rounds: flipping it mid-round switches the bounce store and bounce
 counts are not carried over. At the bounce cap the item parks `needs-human` and no review-bounce
