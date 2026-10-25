@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundwatch"
@@ -85,6 +86,11 @@ func (f *swForge) comment(n int, id, author, body string) {
 
 func swWatch(t *testing.T, f *swForge, role string, workers string) func() map[string]string {
 	t.Helper()
+	return swWatchGit(t, f, role, workers, git.Exec)
+}
+
+func swWatchGit(t *testing.T, f *swForge, role string, workers string, g git.Runner) func() map[string]string {
+	t.Helper()
 	root := gitRepo(t)
 	write(t, filepath.Join(root, ".rota", "config.json"), `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
 	if workers != "" {
@@ -92,7 +98,7 @@ func swWatch(t *testing.T, f *swForge, role string, workers string) func() map[s
 	}
 	deps := testDeps()
 	deps.RoundEnv = func(context.Context, string) round.Env {
-		return round.Env{Git: git.Exec, Base: "main", HostName: "solo", Forge: f, SupportLabel: swLabel,
+		return round.Env{Git: g, Base: "main", HostName: "solo", Forge: f, SupportLabel: swLabel,
 			Round: roundcfg.Settings{Support: "mac", Role: role}}
 	}
 	c := &Ctx{Deps: deps, ctx: context.Background()}
@@ -128,6 +134,60 @@ func TestWatchWakesOnSupportPRHead(t *testing.T) {
 	}
 	if want := []string{"support/7/pr-head|aaa111|bbb222"}; !slices.Equal(got, want) {
 		t.Fatalf("changes = %q, want %q", got, want)
+	}
+}
+
+// #1918 AC-1: a support PR whose issue lost the support label still wakes the
+// watch on a push.
+func TestWatchWakesOnSupportPRHeadWithoutLabel(t *testing.T) {
+	f := &swForge{heads: map[int]string{9: "aaa111"}, writers: map[string]bool{"ann": true}}
+	f.issue(7, "type:bug")
+	f.prs = []tracker.PR{{Number: 9, Branch: "mac-ben/7-export", Body: "Closes #7"}, {Number: 10, Branch: "ben/8-other", Body: "Closes #8"}}
+	pass := swWatch(t, f, roundcfg.RoleMain, "")
+	first := supportKeys(pass())
+	if first[roundwatch.SupportKey("7", "pr-head")] != "aaa111" || first[roundwatch.SupportKey("7", "pr-opened")] != "#9" || len(first) != 2 {
+		t.Fatalf("first pass = %v", first)
+	}
+	f.heads[9] = "bbb222"
+	if got := supportKeys(pass())[roundwatch.SupportKey("7", "pr-head")]; got != "bbb222" {
+		t.Fatalf("moved head = %q", got)
+	}
+}
+
+func lsRemote(out string) git.Runner {
+	return func(_ context.Context, _ string, args ...string) (proc.Result, error) {
+		if len(args) > 0 && args[0] == "ls-remote" {
+			return proc.Result{Stdout: out}, nil
+		}
+		return proc.Result{}, nil
+	}
+}
+
+// #1918 AC-2: a pushed support branch with no PR yet is named by the watch,
+// and stops being a branch entry once it has a PR.
+func TestWatchWakesOnSupportBranchWithoutPR(t *testing.T) {
+	f := &swForge{heads: map[int]string{}, writers: map[string]bool{"ann": true}}
+	out := "ccc333\trefs/heads/mac-ben/7-export\nddd444\trefs/heads/mac-nia/8-other\n"
+	pass := swWatchGit(t, f, roundcfg.RoleMain, "", lsRemote(out))
+	first := supportKeys(pass())
+	key := roundwatch.SupportKey("mac-ben~7-export", "branch-head")
+	if first[key] != "ccc333" || len(first) != 2 {
+		t.Fatalf("first pass = %v", first)
+	}
+	f.prs = []tracker.PR{{Number: 9, Branch: "mac-ben/7-export", Body: "Closes #7"}}
+	f.heads[9] = "ccc333"
+	second := supportKeys(pass())
+	if _, ok := second[key]; ok || second[roundwatch.SupportKey("7", "pr-opened")] != "#9" {
+		t.Fatalf("branch with a PR must be reported as the PR: %v", second)
+	}
+}
+
+// #1918 AC-3: no head change, no change.
+func TestWatchSupportBranchQuiet(t *testing.T) {
+	f := &swForge{heads: map[int]string{}, writers: map[string]bool{"ann": true}}
+	pass := swWatchGit(t, f, roundcfg.RoleMain, "", lsRemote("ccc333\trefs/heads/mac-ben/7-export\n"))
+	if ch := roundwatch.Diff(supportKeys(pass()), supportKeys(pass())); len(ch) != 0 {
+		t.Fatalf("changes = %v", ch)
 	}
 }
 
