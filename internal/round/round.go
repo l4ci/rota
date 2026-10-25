@@ -29,6 +29,7 @@ import (
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -640,6 +641,11 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			if s == nil || r.Issue == "" || !alive[r.Name] {
 				continue
 			}
+			// A done report that is not older than the last state change is the
+			// worker waiting on the orchestrator, not a worker that stopped.
+			if ev := s.Event(); ev != nil && ev.Kind == worker.EventDone && !evBefore(ev.TS, s.ActiveAt()) {
+				continue
+			}
 			v := rep.views[r.Name]
 			st := e.Stalled(ctx, StallInput{
 				Worktree: v.worktree, Base: v.base, Holds: true, Alive: true,
@@ -1012,4 +1018,15 @@ func (v *view) recordablePR() *tracker.PR {
 		return v.openPR
 	}
 	return v.mergedPR
+}
+
+// evBefore reports whether the event stamp ts is older than the state-change
+// stamp at. A stamp that does not parse counts as older: it proves nothing.
+func evBefore(ts, at string) bool {
+	t, err := stamp.Parse(ts)
+	if err != nil {
+		return true
+	}
+	a, err := stamp.Parse(at)
+	return err == nil && t.Before(a)
 }

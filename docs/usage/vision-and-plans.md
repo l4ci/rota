@@ -44,6 +44,8 @@ In a [round](parallel-rounds.md), the milestone's issues go to that branch:
 
 Land milestone PRs with `rota worker gate <PR> --base milestone/<id>` or `rota worker train <PRs> --base milestone/<id>`. A train on a milestone base first merges the project base into the milestone and tests the result with the members. It pushes that sync merge only when the train passes, and a conflict stops the train with nothing pushed.
 
+After a PR merges into `milestone/<id>`, rota labels its linked issues `on-milestone/<id>` and closes them, since GitHub only auto-closes on the default branch. Closed issues leave the candidate list and satisfy dependencies for the milestone's remaining issues. A partial slice stays open until its final slice merges. If labelling or closing fails, the landed PR still passes with a warning that names the manual label and close commands. The failed issue keeps its claim; each successfully closed issue releases its claim labels independently.
+
 ## Breaking a milestone into issues
 
 When a milestone or Major feature splits into three or more issues, the pieces need a shared shape, or they drift apart. The milestone's `## Capabilities` lists the contracts it changes, one short name per bullet, tagged `(new)`, `(modified)` or `(removed)`. Its `## Acceptance` criteria are checkboxes, numbered `AC-1`, `AC-2` and so on.

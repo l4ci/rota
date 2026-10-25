@@ -58,7 +58,10 @@ func decide(ev *Event, row PollRow, lastChange time.Time) (PollRow, bool) {
 		return PollRow{row.Name, StateBlocked, ev.Body}, true
 	case StateDone:
 		if row.State == StateDone {
-			return row, false // the sentinel says the same, with the PR
+			// The sentinel says the same, with the PR. The event still keys the
+			// row: a second done for the same PR reads the same sentinel, and
+			// without the seq `round wait` would take it for the one it returned.
+			return row, true
 		}
 		evidence := ev.Body
 		if evidence == "" {
