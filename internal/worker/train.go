@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/overlap"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/testledger"
+	"math/bits"
 	"os"
 	"slices"
 	"sort"
@@ -48,6 +49,10 @@ const GateBaseMoved = "base-moved"
 // exits 4 with it, blockedBy order. Nothing was pushed.
 const GateOrder = "order"
 
+// GatePlan: the verdict of a --plan answer. Nothing was verified or landed;
+// the CLI exits 0 with the conflict map.
+const GatePlan = "plan"
+
 // TrainOpts are the flags of `rota worker train`.
 type TrainOpts struct {
 	Targets []string // slot names or PR refs, in merge order
@@ -75,6 +80,10 @@ type TrainOpts struct {
 	Order []string
 	// Say receives each line of the order report before the scratch merge.
 	Say func(string)
+	// Plan previews the train: it checks the members and maps their conflicts,
+	// then answers with TrainResult.Plan. No tests run, nothing is pushed and the
+	// land lock is not taken.
+	Plan bool
 	// ItemBody is GateOpts.ItemBody for every member's behaviour run (#915);
 	// nil leaves the run out.
 	ItemBody func(issue string) (body string, found bool, err error)
@@ -120,6 +129,34 @@ type TrainResult struct {
 	// Excluded lists the test-ledger entries that excused a failing command;
 	// Expired the entries past their expiry, which fail the train.
 	Excluded, Expired []testledger.Entry
+	// Plan is the conflict map of a --plan run; nil otherwise.
+	Plan *TrainPlan
+}
+
+// TrainPlan is a train's dry-run answer: which member pairs conflict, the
+// largest conflict-free subset in merge order and the members left out.
+type TrainPlan struct {
+	Conflicts []TrainConflict
+	// Landable lists the targets of the largest conflict-free subset, in merge order.
+	Landable []string
+	Blocked  []TrainBlocked
+	// Command is the train line that lands exactly Landable.
+	Command string
+	// NoVerify: test.full is empty, so Command carries --no-verify to be runnable.
+	NoVerify bool
+}
+
+// TrainConflict is a pair of members whose merge conflicts.
+type TrainConflict struct {
+	A, B  string // targets
+	Paths []string
+}
+
+// TrainBlocked is a member left out of the landable subset, with the landable
+// members it conflicts with.
+type TrainBlocked struct {
+	Target string
+	By     []string // targets
 }
 
 // OK reports a train that verified and landed whole.
@@ -132,6 +169,9 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		o.Round = &RoundMemo{}
 	}
 	var res TrainResult
+	if o.Plan { // a preview changes nothing, so it does not queue behind a landing
+		return e.train(ctx, root, o, nil, nil)
+	}
 	err := e.withLandLock(ctx, root, func(bool) (err error) {
 		cache := loadTrainCache(root)
 		gated := map[string]bool{}
@@ -268,14 +308,6 @@ func (t *trainRun) plan() (bool, error) {
 		res.Members = append(res.Members, TrainMember{Target: tg, Branch: gr.Branch, PR: gr.PR})
 		t.remote = t.remote || gr.PR != ""
 	}
-	verify, onCI, brokeMsg, err := e.fullTier(ctx, root, "train", in)
-	if err != nil {
-		return true, err
-	}
-	if brokeMsg != "" {
-		return t.broke(brokeMsg)
-	}
-	t.verify, t.onCI = verify, onCI
 	t.baseRef = o.Base
 	if t.remote {
 		t.baseRef = "origin/" + o.Base
@@ -287,6 +319,17 @@ func (t *trainRun) plan() (bool, error) {
 		return m.Branch
 	}
 	baseRef, headRef := t.baseRef, t.headRef
+	if o.Plan {
+		return t.preview()
+	}
+	verify, onCI, brokeMsg, err := e.fullTier(ctx, root, "train", in)
+	if err != nil {
+		return true, err
+	}
+	if brokeMsg != "" {
+		return t.broke(brokeMsg)
+	}
+	t.verify, t.onCI = verify, onCI
 
 	// Order the members to minimise predicted conflicts, or take --order.
 	foots, err := e.trainFootprints(root, baseRef, res.Members, headRef)
@@ -413,6 +456,122 @@ func (t *trainRun) plan() (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// preview answers --plan: the pairs of members that really conflict, the
+// largest conflict-free subset in merge order and the members left out. It runs
+// no tests and touches no ref. Only pairs sharing a path are merge-tried, with
+// git merge-tree; three-way interactions between members are not looked for.
+func (t *trainRun) preview() (bool, error) {
+	e, root, res := t.e, t.root, &t.res
+	foots, err := e.trainFootprints(root, t.baseRef, res.Members, t.headRef)
+	if err != nil {
+		return t.broke(err.Error())
+	}
+	n := len(res.Members)
+	clash := make([][]bool, n)
+	for i := range clash {
+		clash[i] = make([]bool, n)
+	}
+	plan := &TrainPlan{}
+	for i := 0; i < n; i++ {
+		for j := i + 1; j < n; j++ {
+			both := overlap.Both(foots[i].paths, foots[j].paths, nil)
+			if len(both) == 0 {
+				continue
+			}
+			_, code := e.git(root, "merge-tree", "--write-tree", "--no-messages", t.headRef(res.Members[i]), t.headRef(res.Members[j]))
+			switch code {
+			case 0:
+			case 1:
+				clash[i][j], clash[j][i] = true, true
+				plan.Conflicts = append(plan.Conflicts, TrainConflict{A: res.Members[i].Target, B: res.Members[j].Target, Paths: both})
+			default:
+				return t.broke(fmt.Sprintf("git merge-tree of %s and %s exited %d", memberLabel(res.Members[i]), memberLabel(res.Members[j]), code))
+			}
+		}
+	}
+	keep := largestFree(clash)
+	var sub []TrainMember
+	var subFoots []trainFoot
+	for _, i := range keep {
+		sub, subFoots = append(sub, res.Members[i]), append(subFoots, foots[i])
+	}
+	perm, _, _, err := orderTrain(sub, subFoots, nil)
+	if err != nil {
+		return true, err
+	}
+	inSub := map[int]bool{}
+	for _, i := range keep {
+		inSub[i] = true
+	}
+	for _, j := range perm {
+		plan.Landable = append(plan.Landable, sub[j].Target)
+	}
+	for i, m := range res.Members {
+		if inSub[i] {
+			continue
+		}
+		b := TrainBlocked{Target: m.Target}
+		for _, k := range keep {
+			if clash[i][k] {
+				b.By = append(b.By, res.Members[k].Target)
+			}
+		}
+		plan.Blocked = append(plan.Blocked, b)
+	}
+	if len(plan.Landable) > 0 {
+		plan.Command = fmt.Sprintf("rota worker train --base %s --order %s %s", t.o.Base, strings.Join(plan.Landable, ","), strings.Join(plan.Landable, " "))
+		if plan.NoVerify = t.in.cfg.where == WhereLocal && len(t.in.cfg.Full) == 0 && !t.o.NoVerify; plan.NoVerify {
+			plan.Command += " --no-verify"
+		}
+	}
+	res.Plan, res.Verdict = plan, GatePlan
+	return true, nil
+}
+
+// largestFree returns the indices of a largest set of members no two of which
+// clash, the earliest such set when several tie. Exhaustive up to 20 members,
+// greedy (fewest clashes first) beyond that.
+func largestFree(clash [][]bool) []int {
+	n := len(clash)
+	if n > 20 {
+		var keep []int
+		for i := 0; i < n; i++ {
+			ok := true
+			for _, k := range keep {
+				ok = ok && !clash[i][k]
+			}
+			if ok {
+				keep = append(keep, i)
+			}
+		}
+		return keep
+	}
+	best, bestN := uint32(0), -1
+	for mask := uint32(0); mask < 1<<n; mask++ {
+		if c := bits.OnesCount32(mask); c > bestN && free(clash, mask) {
+			best, bestN = mask, c
+		}
+	}
+	var keep []int
+	for i := 0; i < n; i++ {
+		if best&(1<<i) != 0 {
+			keep = append(keep, i)
+		}
+	}
+	return keep
+}
+
+func free(clash [][]bool, mask uint32) bool {
+	for i := range clash {
+		for j := i + 1; j < len(clash); j++ {
+			if mask&(1<<i) != 0 && mask&(1<<j) != 0 && clash[i][j] {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // verifyStage is stage 4: test.full, then test.e2e on the same tree, with a

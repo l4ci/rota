@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // trainWorld is a gate checkout on main with local branches b1..bN, each adding
@@ -820,5 +821,79 @@ func TestTrainNotesClosingRefsUnknownOnce(t *testing.T) {
 	}
 	if got := strings.Count(strings.Join(res.Notes, "\n"), "CLOSING-REFS-UNKNOWN"); got != 1 {
 		t.Errorf("CLOSING-REFS-UNKNOWN notes = %d, want 1: %q", got, res.Notes)
+	}
+}
+
+// planWorld is trainWorld whose verify fails if it ever runs: a plan runs no tests.
+// b1 and b2 both write clash.txt (a real conflict); b3 touches only its own file.
+func planWorld(t *testing.T) *world {
+	t.Helper()
+	w := trainWorld(t, "false", "b1", "b2", "b3")
+	for _, b := range []string{"b1", "b2"} {
+		gitq(t, w.dir, "checkout", "-q", b)
+		trainWrite(t, w, "clash.txt", b)
+		gitq(t, w.dir, "checkout", "-q", "main")
+	}
+	return w
+}
+
+func TestTrainPlanNamesLargestConflictFreeSubset(t *testing.T) {
+	w := planWorld(t)
+	before := gitq(t, w.dir, "rev-parse", "main")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, Plan: true})
+	if err != nil || res.Plan == nil || res.Changed || len(res.Landed) != 0 {
+		t.Fatalf("%+v %v", res, err)
+	}
+	p := res.Plan
+	if len(p.Conflicts) != 1 || p.Conflicts[0].A != "b1" || p.Conflicts[0].B != "b2" || strings.Join(p.Conflicts[0].Paths, ",") != "clash.txt" {
+		t.Errorf("conflicts: %+v", p.Conflicts)
+	}
+	if strings.Join(p.Landable, ",") != "b1,b3" {
+		t.Errorf("landable: %v", p.Landable)
+	}
+	if len(p.Blocked) != 1 || p.Blocked[0].Target != "b2" || strings.Join(p.Blocked[0].By, ",") != "b1" {
+		t.Errorf("blocked: %+v", p.Blocked)
+	}
+	if want := "rota worker train --base main --order b1,b3 b1 b3"; p.Command != want {
+		t.Errorf("command %q, want %q", p.Command, want)
+	}
+	if after := gitq(t, w.dir, "rev-parse", "main"); after != before || w.onMain("b3.txt") {
+		t.Error("a plan must push and land nothing")
+	}
+}
+
+func TestTrainPlanTakesNoLandLock(t *testing.T) {
+	w := planWorld(t)
+	var res TrainResult
+	var perr error
+	lockErr := w.env(false).WithDefaults().withLandLock(bg, w.dir, func(bool) error { // would block a train that tried the lock
+		ctx, cancel := context.WithTimeout(bg, 10*time.Second)
+		defer cancel()
+		res, perr = w.env(false).Train(ctx, w.dir, TrainOpts{Base: "main", Targets: []string{"b1", "b2", "b3"}, Plan: true})
+		return nil
+	})
+	if lockErr != nil || perr != nil || res.Plan == nil {
+		t.Fatalf("%+v %v %v", res, perr, lockErr)
+	}
+}
+
+func TestTrainPlanWithoutConflictsLandsWholeTrain(t *testing.T) {
+	w := orderWorld(t) // b1 and b2 share a path but merge cleanly
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, Plan: true})
+	if err != nil || res.Plan == nil {
+		t.Fatalf("%+v %v", res, err)
+	}
+	p := res.Plan
+	if len(p.Conflicts) != 0 || len(p.Blocked) != 0 || strings.Join(p.Landable, ",") != "b3,b2,b1" {
+		t.Errorf("plan: %+v", p)
+	}
+}
+
+func TestTrainWithoutPlanStillStopsOnOrderConflict(t *testing.T) {
+	w := planWorld(t)
+	w.setConfig(`{"test":{"full":["true"]}}`)
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
+	if err != nil || res.Verdict != GateOrder || res.Plan != nil || res.Changed {
+		t.Fatalf("%+v %v", res, err)
 	}
 }
