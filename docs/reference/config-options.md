@@ -227,7 +227,7 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 
 | Key | Scope | Type | Default | Values | Description |
 |-----|-------|------|---------|--------|-------------|
-| `git.baseBranch` | project (tracked) | string | unset |  | Base branch the skills merge into and diff against. Empty auto-detects it; a set branch that does not exist is an error (exit 3). |
+| `git.baseBranch` | project (tracked) | string | unset |  | Base branch the skills merge into and diff against. Empty auto-detects it. |
 
 ### umbrella
 
