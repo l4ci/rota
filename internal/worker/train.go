@@ -869,6 +869,7 @@ func (t *trainRun) land() (TrainResult, error) {
 		t.gated[m.Target] = true
 		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, LandVerified: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), HoldsLandLock: true, Round: o.Round})
 		res.Notes = appendNew(res.Notes, gr.Notes...)
+		res.Notes = appendNew(res.Notes, gr.Warnings...)
 		res.Changed = res.Changed || gr.Changed
 		if gr.Changed && gr.Verdict != GatePass { // the PR is on the base but the gate could not finish (merged-remotely)
 			res.Landed = append(res.Landed, m.Target)
