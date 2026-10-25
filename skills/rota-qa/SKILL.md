@@ -54,7 +54,7 @@ No strategy file for the scope: halt, tell the user to run `/rota-qa first-run`.
 
 #### Step 2 — Load Strategies
 
-`rota qa query <target>` per target. Parse the five body sections. A strategy missing `Executable checks` or `Infra requirements` is a config error: route to `restructure`.
+`rota qa query <target>` per target. Parse the five body sections. The strategy's `pillar-globs` frontmatter (optional map of pillar to globs) is read from `.rota/qa/<target>.md` directly; `rota qa query` returns only the body. A strategy missing `Executable checks` or `Infra requirements` is a config error: route to `restructure`.
 
 #### Step 3 — Infra Preflight
 
@@ -67,6 +67,8 @@ Verify everything under `Infra requirements`:
 Anything missing: record an `INFRA-FAIL` verdict (Step 6's `rota verdict add`, missing items as `info` findings) and halt. Tell the user exactly what to start or install.
 
 #### Step 4 — Execute Checks
+
+**Filter pillars.** Only when invoked by `qa.afterWork` or `ship.qa` (see [`gates-and-modes.md`](gates-and-modes.md)) and the strategy has `pillar-globs`: match its globs against the touched files from `rota review scope --json`. Run pillars that match and pillars with no entry; skip the rest and note each skipped pillar with its globs. A manual run skips nothing. If every pillar is skipped, record PASS with summary `no pillar matched`, not INFRA-FAIL.
 
 Dispatch one subagent per check group (per pillar per target) in parallel through the current harness; see `references/subagent-dispatch.md`. The orchestrator does not run checks itself. Each subagent:
 
@@ -106,7 +108,7 @@ rota verdict add <branch> --kind qa --verdict <PASS|CONCERNS|FAIL|INFRA-FAIL> --
 
 ```json
 {
-  "summary": "<one line: what ran and the result>",
+  "summary": "<one line: what ran and the result; when any pillar was skipped, name the pillars that ran>",
   "findings": [
     {"severity": "blocker|major|minor|info", "title": "<failed check or audit finding>",
      "file": "<path, optional>", "line": 12, "detail": "<command and evidence, optional>"}
@@ -126,6 +128,9 @@ Targets:
     Executable checks: <n passed> / <n total>
     Audit findings: <n P0>, <n P1>, <n P2>, <n P3>
   ...
+
+Skipped pillars (filtered run only):
+  - <target>/<pillar> — globs: <globs>
 
 Failed executable checks:
   - <name> — <command> — <evidence>
