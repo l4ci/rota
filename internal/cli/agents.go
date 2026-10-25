@@ -83,7 +83,7 @@ func agentsReport(es []agents.Entry, mode string) (*jsonx.Object, string, bool) 
 			case agents.StatusDrift:
 				status = "updated"
 			}
-		} else if status != agents.StatusCurrent {
+		} else if status != agents.StatusCurrent && status != agents.StatusSkipped {
 			bad = true
 		}
 		files = append(files, jsonObj("path", e.Path, "status", status))
