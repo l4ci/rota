@@ -178,12 +178,12 @@ type GateOpts struct {
 	// its resolved review depth needs, read with verdict.Recorded at the
 	// checked tip (the full sha). Unset skips that check.
 	CheckReviews bool
-	// Approve is the merge-approval gate (B1), run after provenance and right
-	// before the merge, never under CheckOnly. files lists the paths the merge
-	// changes; t is the resolved target. A refusal or an error stops the gate
-	// with verdict approval-required; the refusal lands in GateResult.Refusal
-	// and its error, or the callback's own, is returned as is.
-	Approve func(t GateTarget, files func() ([]string, error)) (*exitcode.Refusal, error)
+	// Approval is the merge-approval gate (B1), run after provenance and right
+	// before the merge, never under CheckOnly. Its thread comes from the
+	// resolved target. A refusal or an error stops the gate with verdict
+	// approval-required; the refusal lands in GateResult.Refusal
+	// and its error, or an adapter's own, is returned as is. Nil skips approval.
+	Approval *MergeApproval
 	// ItemBody reads the body of an item (#899), whose `## Try it` steps the
 	// gate runs on the scratch merge after test.full and test.e2e. found is
 	// false for an item the backend does not know. nil leaves the behaviour
@@ -1315,8 +1315,12 @@ func (g *gate) stepPremerge() (bool, error) {
 			return g.e.ciDiffFiles(g.ctx, g.root, g.baseRef, g.verified)
 		}
 	}
-	if g.o.Approve != nil {
-		run.Approve = func(files func() ([]string, error)) (*exitcode.Refusal, error) { return g.o.Approve(g.target, files) }
+	if g.o.Approval != nil {
+		run.Approve = func(files func() ([]string, error)) (*exitcode.Refusal, error) {
+			return g.o.Approval.Check(g.o.Slot+" into "+g.o.Base, files, func() (ApprovalThread, error) {
+				return TargetApprovalThread(g.target)
+			})
+		}
 	}
 	r, approval, ref, err := run.run()
 	switch {
