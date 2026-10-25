@@ -319,6 +319,9 @@ const (
 	SupportComment  = "comment"
 	// SupportBranchHead is the head of a support branch with no open PR (#1918).
 	SupportBranchHead = "branch-head"
+	// SupportConflict is the head sha of a support PR the forge reports as
+	// conflicting with its base (#1911); it wakes once per head.
+	SupportConflict = "conflict"
 )
 
 // SupportBranchID is the id slot of a branch-keyed support entry: the branch
