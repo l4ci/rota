@@ -86,7 +86,7 @@ func (u *Umbrella) NextMilestoneID() (string, error) {
 
 // MilestoneAdd creates the milestone on the home sub-repo with an ID minted
 // over all sub-repos (mid "" mints).
-func (u *Umbrella) MilestoneAdd(mid, title, summary string, depends []string, today string) (string, error) {
+func (u *Umbrella) MilestoneAdd(mid, title, summary string, depends []string, kind, today string) (string, error) {
 	return viaHome(u, func(home *Issues) (string, error) {
 		if mid == "" {
 			var err error
@@ -94,7 +94,7 @@ func (u *Umbrella) MilestoneAdd(mid, title, summary string, depends []string, to
 				return "", err
 			}
 		}
-		return home.MilestoneAdd(mid, title, summary, depends, today)
+		return home.MilestoneAdd(mid, title, summary, depends, kind, today)
 	})
 }
 
