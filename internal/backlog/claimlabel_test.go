@@ -82,6 +82,31 @@ func TestIssuesClaimLabelShared(t *testing.T) {
 	}
 }
 
+func TestIssuesClaimLabelSharedBySameAgent(t *testing.T) {
+	b, tr := newIssues(t, `{}`, open(1, "keep"))
+	for _, claim := range []string{"ben@3", "ben@4"} {
+		if won, _, err := b.ClaimShared("1", claim, 2); err != nil || !won {
+			t.Fatalf("claim %s: won=%v err=%v", claim, won, err)
+		}
+	}
+	if changed, err := b.Release("1", "ben@3"); err != nil || !changed {
+		t.Fatalf("release: changed=%v err=%v", changed, err)
+	}
+	if got := tr.Issues[0].Labels; !slices.Equal(got, []string{"keep", "in-progress", "claimed:ben@main"}) {
+		t.Fatalf("labels with ben@4 still held: %v want [keep in-progress claimed:ben@main]", got)
+	}
+	st, err := b.Status("1")
+	if err != nil || st.Claim != "ben@4" {
+		t.Fatalf("remaining claim: %+v %v", st, err)
+	}
+	if changed, err := b.Release("1", "ben@4"); err != nil || !changed {
+		t.Fatalf("last release: changed=%v err=%v", changed, err)
+	}
+	if got := tr.Issues[0].Labels; !slices.Equal(got, []string{"keep"}) {
+		t.Fatalf("labels after last release: %v want [keep]", got)
+	}
+}
+
 func TestIssuesClaimLabelFailureWarns(t *testing.T) {
 	for _, cfg := range []string{`{}`, `{"issues":{"autoCreateLabel":false}}`} {
 		b, tr := newIssues(t, cfg, open(1))

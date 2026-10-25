@@ -58,7 +58,7 @@ data: {"id": string, "type": "B"|"F"|"T", "claimId": string, "changed": bool}
 exit: 3 item unknown; tracker
 old: hv-item-release <ID> --as <claim-id>
 shim: old prints nothing, so `changed` is true when the backend is issues and rc 0, false for file backend; the Go port reports false when no open claim matched.
-note: release removes that claim's `claimed:` label (best effort); other claims keep theirs. Closing an item through `item complete` removes every `claimed:` label beside its state labels.
+note: release removes that claim's `claimed:` label (best effort) once no remaining claim maps to it; two rounds held by the same agent share one label. Closing an item through `item complete` removes every `claimed:` label beside its state labels.
 
 ### rota item ready
 rota item ready <ID>

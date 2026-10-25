@@ -3,10 +3,11 @@ package round
 import (
 	"context"
 	"fmt"
-	"github.com/l4ci/rota/internal/strutil"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -44,6 +45,7 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 	}
 	e.findUnregisteredBranches(ctx, root, rep, reg) // a branch scan: reconcile and the tick, not every status
 	e.findSupportBounced(ctx, rep, reg)
+	e.findClosedClaimLabels(ctx, rep)
 	out := Outcome{Report: rep}
 	for _, f := range rep.Findings {
 		if !apply || f.Repair == "" {
@@ -65,6 +67,39 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 		out.Repaired = append(out.Repaired, f)
 	}
 	return out, nil
+}
+
+// findClosedClaimLabels sweeps for closed issues whose only claim marker is a
+// claimed: label. Keep this broad read out of Status and its polling callers.
+func (e Env) findClosedClaimLabels(ctx context.Context, rep *Report) {
+	if e.Forge == nil || slices.Contains(rep.Unavailable, SourceForge) {
+		return
+	}
+	closed, err := e.Forge.List(ctx, tracker.ListFilter{State: "closed"})
+	if err != nil {
+		rep.unavailable(SourceForge, err.Error())
+		return
+	}
+	seen := map[string]bool{}
+	for _, finding := range rep.Findings {
+		if finding.Kind == LabelStale {
+			seen[finding.Issue] = true
+		}
+	}
+	var keys []tracker.IssueKey
+	for _, is := range closed {
+		if is.State != "closed" || seen[is.Key.String()] {
+			continue
+		}
+		if slices.ContainsFunc(is.Labels, func(label string) bool { return strings.HasPrefix(label, backlog.ClaimLabelPrefix) }) {
+			keys = append(keys, is.Key)
+			seen[is.Key.String()] = true
+		}
+	}
+	tracker.SortKeys(keys)
+	for _, key := range keys {
+		rep.add(Finding{Kind: LabelStale, Issue: key.String(), Detail: fmt.Sprintf("%s is closed and still has claimed: labels", key.Ref()), Repair: "remove claim labels"})
+	}
 }
 
 // unreadSource names the source a repair of kind depends on when the report

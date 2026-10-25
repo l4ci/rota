@@ -4,6 +4,7 @@
 
 ### Upgrade notes
 
+- **Visible claim labels.** After upgrading, run `rota round reconcile --apply` once to backfill `claimed:<agent>@<machine>` labels for in-flight comment claims and repair stale labels. Comment claims remain authoritative. Reverting this change leaves `claimed:*` labels already written to the tracker; remove those labels by hand.
 - **Named machine pins.** `machine:<name>` replaces `site:support`: main is named `main`, support uses `round.support`. On main, preview with `rota migrate labels`, then run `rota migrate labels --apply` to relabel open issues and retire `issues.labels.support` (including a custom label value). `config fill` preserves that key until migration succeeds. Candidates show pins to other machines as blocked; unpinned issues remain available to main.
 
 ## v0.25.0 — 2026-10-24
