@@ -102,8 +102,12 @@ func TestSupportFileModeRefused(t *testing.T) {
 		if code != ExitRefused {
 			t.Fatalf("%s: exit %d: %v", cfg, code, env)
 		}
-		if got := envObj(env, "data")["blockedBy"]; got != "backend" {
-			t.Errorf("%s: blockedBy = %v", cfg, got)
+		want := "backend"
+		if cfg == `{}` {
+			want = "config"
+		} // An unnamed support role refuses before round setup.
+		if got := envObj(env, "data")["blockedBy"]; got != want {
+			t.Errorf("%s: blockedBy = %v, want %s", cfg, got, want)
 		}
 	}
 }

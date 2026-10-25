@@ -64,6 +64,14 @@ func candidateList(cs []round.Candidate) []any {
 	return out
 }
 
+func warnCandidateMigrations(c *Ctx, candidates []round.Candidate) {
+	for _, candidate := range candidates {
+		for _, warning := range candidate.Warnings {
+			c.Warn("%s", warning)
+		}
+	}
+}
+
 func candidateLines(cs []round.Candidate) []string {
 	var lines []string
 	for _, c := range cs {
@@ -186,6 +194,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			return backlogFail(err)
 		}
 		cands, err := env.RoundCandidates(ctx, root, be, set, "")
+		warnCandidateMigrations(c, cands)
 		if err != nil {
 			return backlogFail(err)
 		}
@@ -289,6 +298,7 @@ func roundCandidates(fs *flag.FlagSet) RunFunc {
 		}
 		env := c.deps().RoundEnv(ctx, root)
 		cands, err := env.RoundCandidates(ctx, root, be, set, *scope)
+		warnCandidateMigrations(c, cands)
 		if err != nil {
 			return backlogFail(err)
 		}

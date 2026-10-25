@@ -7,7 +7,6 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
-	"github.com/l4ci/rota/internal/overlap"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/testledger"
 	"math/bits"
@@ -142,7 +141,8 @@ type TrainPlan struct {
 	Blocked  []TrainBlocked
 	// Command is the train line that lands exactly Landable.
 	Command string
-	// NoVerify: test.full is empty, so Command carries --no-verify to be runnable.
+	// NoVerify mirrors the no-verify refusal: local verification with both
+	// test.full and test.e2e empty. Command carries --no-verify when it is true.
 	NoVerify bool
 }
 
@@ -476,18 +476,17 @@ func (t *trainRun) preview() (bool, error) {
 	plan := &TrainPlan{}
 	for i := 0; i < n; i++ {
 		for j := i + 1; j < n; j++ {
-			both := overlap.Both(foots[i].paths, foots[j].paths, nil)
+			both := pairwisePaths(foots[i].paths, foots[j].paths, nil)
 			if len(both) == 0 {
 				continue
 			}
-			_, code := e.git(root, "merge-tree", "--write-tree", "--no-messages", t.headRef(res.Members[i]), t.headRef(res.Members[j]))
-			switch code {
-			case 0:
-			case 1:
+			conflict, _, code := pairwiseMergeConflict(e.git, root, t.headRef(res.Members[i]), t.headRef(res.Members[j]))
+			if code != 0 {
+				return t.broke(fmt.Sprintf("git merge-tree of %s and %s exited %d", memberLabel(res.Members[i]), memberLabel(res.Members[j]), code))
+			}
+			if conflict {
 				clash[i][j], clash[j][i] = true, true
 				plan.Conflicts = append(plan.Conflicts, TrainConflict{A: res.Members[i].Target, B: res.Members[j].Target, Paths: both})
-			default:
-				return t.broke(fmt.Sprintf("git merge-tree of %s and %s exited %d", memberLabel(res.Members[i]), memberLabel(res.Members[j]), code))
 			}
 		}
 	}
@@ -522,7 +521,7 @@ func (t *trainRun) preview() (bool, error) {
 	}
 	if len(plan.Landable) > 0 {
 		plan.Command = fmt.Sprintf("rota worker train --base %s --order %s %s", t.o.Base, strings.Join(plan.Landable, ","), strings.Join(plan.Landable, " "))
-		if plan.NoVerify = t.in.cfg.where == WhereLocal && len(t.in.cfg.Full) == 0 && !t.o.NoVerify; plan.NoVerify {
+		if plan.NoVerify = noVerifyRule(t.in.cfg.where, t.in.cfg.Full, t.in.cfg.E2E); plan.NoVerify {
 			plan.Command += " --no-verify"
 		}
 	}
@@ -974,7 +973,7 @@ func orderTrain(ms []TrainMember, foots []trainFoot, override []string) (perm []
 			if j == i {
 				continue
 			}
-			both := overlap.Both(foots[i].paths, foots[j].paths, nil)
+			both := pairwisePaths(foots[i].paths, foots[j].paths, nil)
 			if len(both) > 0 {
 				peers = append(peers, memberLabel(ms[j]))
 				for _, p := range both {
@@ -1038,7 +1037,7 @@ func orderTrain(ms []TrainMember, foots []trainFoot, override []string) (perm []
 // path with, the likeliest cause of its conflict.
 func conflictPair(ms []TrainMember, foots []trainFoot, failed int) string {
 	for k := 0; k < failed; k++ {
-		if len(overlap.Both(foots[failed].paths, foots[k].paths, nil)) > 0 {
+		if len(pairwisePaths(foots[failed].paths, foots[k].paths, nil)) > 0 {
 			return fmt.Sprintf("%s conflicts with %s", memberLabel(ms[failed]), memberLabel(ms[k]))
 		}
 	}

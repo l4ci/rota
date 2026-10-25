@@ -69,7 +69,7 @@ func (f *swForge) CanPush(_ context.Context, login string) (bool, error) {
 	return f.writers[login], nil
 }
 
-const swLabel = "site:support"
+const swLabel = "machine:mac"
 
 func (f *swForge) issue(n int, labels ...string) *tracker.Issue {
 	if f.issues == nil {
