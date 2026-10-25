@@ -201,6 +201,9 @@ func (f *fakeForge) PRRequestMerge(_ context.Context, pr int, o tracker.MergeOpt
 		w.originCommit(f)
 	}
 	g("clone", "-q", w.forgeWord("origin"), ".")
+	if target != "main" && w.mode != "elsewhere" { // a milestone base: merge onto it, not the clone's default branch
+		g("checkout", "-q", "-B", target, "origin/"+target)
+	}
 	if w.mode == "elsewhere" {
 		target = "stack"
 		g("checkout", "-q", "-b", "stack", "origin/"+w.forgeWord("base"))
