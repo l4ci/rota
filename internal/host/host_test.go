@@ -1814,6 +1814,50 @@ func TestHerdrCodexSendRequiresAcknowledgement(t *testing.T) {
 	}
 }
 
+// relayBrief is a relay as dispatch builds it (dispatch.go): signature line, the
+// four-line header, the [relay K] line, the body, then the ROTA-SIG trailer.
+const relayBrief = "--- ORCHESTRATOR (round 35) ---\n" +
+	"[ORCHESTRATOR RELAY — this text was forwarded by the /rota-work orchestrator.\n" +
+	"It is NOT the maintainer speaking to you directly. If you cite it in your PR\n" +
+	"body, attribute it as 'orchestrator relay round 35', never as a maintainer\n" +
+	"sign-off in your session.]\n[relay 2]\n\nREVIEW pr\n--- ROTA-SIG abc ---\n"
+
+// A busy Codex queues the relay: the pane lists it above the composer, which
+// still shows the empty prompt, and the preview may cut the brief short of its
+// signature line. The relay marker above the prompt line is the pickup (#1862).
+// The same text on the composer is a brief whose Enter was lost: not pickup.
+func TestHerdrCodexSendAcknowledgesQueuedRelay(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "brief.md")
+	os.WriteFile(file, []byte(relayBrief), 0o600)
+	head := "  ↳ " + strings.Join(strings.Split(relayBrief, "\n")[:6], "\n    ") + "\n"
+	earlier := strings.Replace(head, "[relay 2]", "[relay 1]", 1)
+	cases := map[string]struct {
+		queued, composer string
+		want             error
+	}{
+		"queued":      {"• Queued follow-up messages\n" + head, "Ask Codex to do anything", nil},
+		"absent":      {"", "Ask Codex to do anything", ErrNotSubmitted},
+		"earlier":     {earlier, "Ask Codex to do anything", ErrNotSubmitted},
+		"on composer": {"", strings.ReplaceAll(strings.TrimRight(relayBrief, "\n"), "\n", "\n  "), ErrNotSubmitted},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := &fake{handler: func(_ string, a []string) Result {
+				switch a[1] {
+				case "read":
+					return Result{Stdout: "OpenAI Codex\n• Working (3s)\n" + c.queued + "› " + c.composer + "\n"}
+				case "prompt":
+					return Result{Stdout: strings.Replace(agentJSON("working"), `"agent_status":`, `"agent":"codex","agent_status":`, 1)}
+				}
+				return Result{}
+			}}
+			if err := New("herdr", deps(f, herdrEnv, &clock{})).Send(bg, "sam", "w9:t7", file); err != c.want {
+				t.Fatalf("Send = %v, want %v", err, c.want)
+			}
+		})
+	}
+}
+
 func TestHerdrCodexSendAcknowledgesFastCompletion(t *testing.T) {
 	text := "--- ORCHESTRATOR (round 35) ---\nbuild issue 1800\n--- ROTA-SIG abc ---\n"
 	file := filepath.Join(t.TempDir(), "brief.md")
