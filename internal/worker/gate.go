@@ -285,6 +285,9 @@ func gateSlot(s *Slot) GateTarget {
 	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name()), Bundle: s.Bundle(), relays: s.Relays(), Attempt: s.Attempt(), AttemptBase: s.AttemptBase(), Outcome: openOutcome(s), Kind: s.HarnessKind()}
 }
 
+// Relays is the relay log the gate checks the PR body's approvals against.
+func (t GateTarget) Relays() []any { return t.relays }
+
 func gateQueued(q QueuedPR) GateTarget {
 	return GateTarget{Queued: true, Issue: q.Issue, Bundle: q.Bundle, Branch: q.Branch, PR: q.PR, Base: q.Base, relays: q.Relays}
 }
@@ -333,7 +336,8 @@ func (r Registry) GateTargetAny(arg string) (GateTarget, error) {
 	}
 	var ee *exitcode.Error
 	if _, ok := PRRefNumber(arg); ok && errors.As(err, &ee) && ee.Exit == exitcode.ExitResolution {
-		return GateTarget{External: true, PR: arg}, nil
+		// A returned slot's PR is external to the pool but keeps its relay log.
+		return GateTarget{External: true, PR: arg, relays: r.LoggedRelays(arg)}, nil
 	}
 	return t, err
 }
