@@ -189,6 +189,17 @@ func roundStatus(*flag.FlagSet) RunFunc {
 			}
 			lines = append(lines, strings.Join(cols, "\t"))
 		}
+
+		var staleClaims []round.Finding
+		for _, finding := range rep.Findings {
+			if finding.Kind == round.StaleClaimKind {
+				staleClaims = append(staleClaims, finding)
+				lines = append(lines, round.StaleClaimKind+"\t"+finding.Detail)
+			}
+		}
+		if len(staleClaims) > 0 {
+			d.Set("staleClaims", findingList(staleClaims))
+		}
 		for _, q := range rep.Queued {
 			lines = append(lines, fmt.Sprintf("review\t%s\t%s\t%s\tfrom %s", tracker.RefOf(q.Issue)+bundleSuffix(q.Bundle), dash(q.PR), dash(q.Branch), dash(q.From)))
 		}

@@ -52,6 +52,7 @@ const (
 	BlockOverlap    = blockedby.Overlap
 	BlockClaimed    = blockedby.Claimed
 	BlockOpenPR     = blockedby.OpenPR
+	BlockNotStale   = blockedby.NotStale
 	// BlockBatch: round.batch items are already assigned and not landed or parked.
 	BlockBatch = blockedby.Batch
 	// BlockBundle: the --bundle members are too many, repeat a slot's recorded
@@ -89,6 +90,7 @@ func (e *BlockedError) Error() string { return e.Msg }
 
 // AssignOpts are the flags of `rota round assign`, with the config read.
 type AssignOpts struct {
+	ReclaimStale  string // exact stale holder approved by the maintainer
 	ID            string
 	Agent         string
 	Decisions     string // answered decisions, verbatim; "" for none
@@ -812,6 +814,11 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		return run, false, blocked(BlockClaimed, "%s has PR %s in review (from %s): rota round transfer %s --to <slot> picks it up", id, q.PR, q.From, id)
 	}
 
+	if o.ReclaimStale != "" {
+		if err := e.checkStaleClaim(ctx, root, be, it.IssueKey(), o.ReclaimStale); err != nil {
+			return run, false, err
+		}
+	}
 	if !resuming && !o.AcceptOpenPR {
 		// An attempt of a best-of:2 issue ignores the PR of its sibling's branch.
 		openPR, err := e.openPRIssuesExcept(ctx, be, bo.otherBranch())
@@ -1053,6 +1060,16 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 	if bo != nil {
 		holders = 2
 	}
+	var reclaim func() error
+	if o.ReclaimStale != "" {
+		reclaim = func() error {
+			if err := e.checkStaleClaim(ctx, root, be, it.IssueKey(), o.ReclaimStale); err != nil {
+				return err
+			}
+			_, err := be.Release(id, o.ReclaimStale)
+			return err
+		}
+	}
 	w := e.Worker
 	steps := []step{
 		{name: "queue the slot's PR", skip: func() bool { return !run.queue }, do: func() error {
@@ -1060,7 +1077,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 		}},
 		claimStep(be, id, claimID, holders, func() error {
 			return editSlot(root, agent, func(s *worker.Slot) error { s.Unbind(); return nil })
-		}),
+		}, reclaim),
 		stateStep(root, be, id, agent, resuming, &res.Changed),
 		{name: "comment", skip: func() bool { return resuming }, do: func() error {
 			_, err := be.AddComment(id, "feedback", assignNote(agent, res.Branch))
@@ -1133,8 +1150,15 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 // for an attempt of a best-of:2 issue); its undo gives the claim back and
 // clears the slot's binding. A lost claim is a refusal and leaves nothing to
 // undo.
-func claimStep(be Board, id, claimID string, holders int, unbind func() error) step {
+func claimStep(be Board, id, claimID string, holders int, unbind func() error, reclaim ...func() error) step {
 	return step{name: "claim", do: func() error {
+		// Reclaim before claiming: shared claims may still have a free holder slot,
+		// so winning a new claim does not prove the approved stale one was released.
+		if len(reclaim) > 0 && reclaim[0] != nil {
+			if err := reclaim[0](); err != nil {
+				return err
+			}
+		}
 		var (
 			won    bool
 			holder string
@@ -1152,6 +1176,7 @@ func claimStep(be Board, id, claimID string, holders int, unbind func() error) s
 		if err != nil {
 			return err
 		}
+
 		if !won {
 			return blocked(BlockClaimed, "%s is claimed by %s", id, holder)
 		}

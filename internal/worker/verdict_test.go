@@ -114,3 +114,14 @@ func TestVerdictRefusalsNameDeclaredBlockedBy(t *testing.T) {
 		}
 	}
 }
+
+func TestClaimLostIsHeldRefusal(t *testing.T) {
+	got := ClassifyVerdict(GateClaimLost)
+	want := VerdictMeaning{Refusal: true, BlockedBy: "claim-lost", Hold: true}
+	if got != want {
+		t.Fatalf("claim-lost meaning %+v, want %+v", got, want)
+	}
+	if !(GateResult{Verdict: GateClaimLost}).Refused(nil) {
+		t.Fatal("claim-lost must be an exit-4 refusal")
+	}
+}

@@ -657,6 +657,17 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 	}
 	e.claimFindings(ctx, rep, reg, rows, slotObj, reg.PRs(), labelled, fs.claimLabelled, labelsOK)
+	if e.Board != nil {
+		staleClaims, warnings := e.StaleClaims(ctx, root, e.Board, nil)
+		rep.Warnings = append(rep.Warnings, warnings...)
+		for _, claim := range staleClaims {
+			detail := fmt.Sprintf("claim %s on %s has had no push or PR activity since %s", claim.Holder, tracker.RefOf(claim.Issue), claim.Last.UTC().Format(time.RFC3339))
+			if it, err := e.Board.Get(claim.Issue); err == nil {
+				detail += fmt.Sprintf(" (%s > %s)", e.now().Sub(claim.Last).Truncate(time.Minute), staleThreshold(*it, e.Round))
+			}
+			rep.add(Finding{Kind: StaleClaimKind, Issue: claim.Issue, Detail: detail})
+		}
+	}
 
 	e.leaseFinding(ctx, root, rep)
 

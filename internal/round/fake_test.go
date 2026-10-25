@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/tracker"
@@ -44,21 +45,22 @@ type fakeRemote struct {
 	closedLists    int                       // List calls that asked for closed issues
 
 	// Board side.
-	items     map[string]*backlog.Item
-	order     []string
-	details   map[string]string
-	comments  map[string][]string
-	kinds     map[string][]string
-	authors   map[string][]string // comment authors by ref, parallel to comments; absent is ""
-	ready     map[string][]string // reasons; absent means ready
-	claims    map[string]string   // id -> earliest claim holder
-	more      map[string][]string // id -> later claims of a shared (best-of) item
-	claimedBy string              // when set, Claim loses to this holder
-	bstates   map[string]string
-	notes     []string        // "<ref>: <text>" per AddComment
-	gone      map[string]bool // issues the tracker answers 404 for
-	failState error           // fails the next SetState once
-	made      []backlog.CreateInput
+	items      map[string]*backlog.Item
+	order      []string
+	details    map[string]string
+	comments   map[string][]string
+	kinds      map[string][]string
+	authors    map[string][]string // comment authors by ref, parallel to comments; absent is ""
+	ready      map[string][]string // reasons; absent means ready
+	claimTimes map[string]map[string]time.Time
+	claims     map[string]string   // id -> earliest claim holder
+	more       map[string][]string // id -> later claims of a shared (best-of) item
+	claimedBy  string              // when set, Claim loses to this holder
+	bstates    map[string]string
+	notes      []string        // "<ref>: <text>" per AddComment
+	gone       map[string]bool // issues the tracker answers 404 for
+	failState  error           // fails the next SetState once
+	made       []backlog.CreateInput
 }
 
 var (
@@ -345,7 +347,7 @@ func (f *fakeRemote) Status(ref string) (*backlog.Status, error) {
 	if err := f.notFound(ref); err != nil {
 		return nil, err
 	}
-	return &backlog.Status{ID: ref, Claim: f.claims[ref], Claims: f.held(ref), State: f.bstates[ref]}, nil
+	return &backlog.Status{ID: ref, Claim: f.claims[ref], Claims: f.held(ref), ClaimedAt: f.claimTimes[ref], State: f.bstates[ref]}, nil
 }
 
 func (f *fakeRemote) AddComment(ref, kind, text string) (string, error) {
