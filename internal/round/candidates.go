@@ -136,9 +136,11 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 	if err != nil {
 		return nil, err
 	}
-	taken, err := e.takenOutside(ctx, be)
-	if err != nil {
-		return nil, err
+	var taken func(backlog.Item) bool
+	if o.Scope == roundcfg.ScopeOpen || o.Support != "" {
+		if taken, err = e.takenOutside(ctx, be); err != nil {
+			return nil, err
+		}
 	}
 	prs, err := e.listOpenPRs(ctx, be)
 	if err != nil {
@@ -475,7 +477,8 @@ func InScope(root string, be backlog.Backend, scope string, slate []string, id s
 // takenOutside says whether an item someone outside the round has taken: it
 // carries the in-progress or claimed label, or an open comment claim, while
 // no slot or PR in review holds it (scopeSet already dropped those). Every
-// scope excludes externally held issues. Keep the comment-claim fallback for
+// scope in a support split excludes externally held issues; without support,
+// only open scope does. Keep the comment-claim fallback for
 // legacy or drifted labels. File mode has neither labels nor claims.
 func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog.Item) bool, error) {
 	if !e.forgeOn(be) {
