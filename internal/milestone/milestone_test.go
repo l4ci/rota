@@ -363,3 +363,13 @@ func TestFileStoreStampsTheInjectedDay(t *testing.T) {
 		t.Fatalf("created date not stamped from the clock:\n%s", got)
 	}
 }
+
+func TestFileStoreAddRejectsUnknownKind(t *testing.T) {
+	root := t.TempDir()
+	if _, err := (FileStore{Root: root}).Add("T", "s", nil, "bogus"); err == nil {
+		t.Fatal("unknown kind accepted")
+	}
+	if entries, _ := os.ReadDir(filepath.Join(root, ".rota", "milestones")); len(entries) != 0 {
+		t.Errorf("nothing may be written: %v", entries)
+	}
+}
