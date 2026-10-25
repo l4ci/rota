@@ -375,3 +375,12 @@ func TestAmendAppendsToOneBullet(t *testing.T) {
 }
 
 func errorsIs(err, target error) bool { return errors.Is(err, target) }
+
+func TestPolicyRejectsOptionLikeBranch(t *testing.T) {
+	for _, b := range []string{"--upload-pack=x", "-f", "a..b", "a b"} {
+		f := newFixture(t, `{"write":"push","branch":"`+b+`"}`)
+		if _, err := f.clone().Policy(); err == nil {
+			t.Fatalf("branch %q must be refused", b)
+		}
+	}
+}
