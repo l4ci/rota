@@ -1,10 +1,12 @@
 package round
 
 import (
+	"errors"
 	"github.com/l4ci/rota/internal/config"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -639,5 +641,109 @@ func TestAssignSkipsParkableSlotWithoutLogin(t *testing.T) {
 	}
 	if len(f.queued()) != 0 || f.slot("ben").Task() != "12" {
 		t.Errorf("a skipped slot parks nothing: %v", f.queued())
+	}
+}
+
+// A slot's PR can open and merge between two looks at the open list (#1852).
+// Assign records it from the merged list instead of refusing, and so does
+// reconcile --apply, which the refusal hint names.
+func TestMergedBranchPRIsRecordedByAssignAndReconcile(t *testing.T) {
+	setup := func(t *testing.T) (*moveFx, string) {
+		f := newMoveFx(t)
+		branch := f.slot("ben").Branch()
+		f.commit(t, "ben", "work.txt")
+		f.finish(t, "ben", "")
+		tip := strings.TrimSpace(gitIn(t, f.wt("ben"), "rev-parse", "HEAD"))
+		f.forge.mergedPRs = map[string][]tracker.PR{branch: {{Number: 7, Branch: branch, URL: pr7, HeadSHA: tip}}}
+		return f, branch
+	}
+	t.Run("reconcile --apply", func(t *testing.T) {
+		f, _ := setup(t)
+		if _, err := f.env.Reconcile(bg, f.root, true); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.slot("ben").PR(); got != pr7 {
+			t.Errorf("slot records %q, want the merged PR", got)
+		}
+	})
+	t.Run("assign", func(t *testing.T) {
+		f, _ := setup(t)
+		if _, err := f.assign("13", "ben"); err != nil {
+			t.Fatalf("assign refused a slot whose PR merged: %v", err)
+		}
+		if q := f.queued(); len(q) != 1 || q[0].PR != pr7 {
+			t.Errorf("queued records %+v, want one carrying %s", q, pr7)
+		}
+	})
+	t.Run("a failed merged lookup warns and records nothing", func(t *testing.T) {
+		f, _ := setup(t)
+		f.forge.mergedErr = errors.New("forge flaked")
+		out, err := f.env.Reconcile(bg, f.root, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := f.slot("ben").PR(); got != "" {
+			t.Errorf("slot records %q on an unreadable forge, want none", got)
+		}
+		if !slices.ContainsFunc(out.Report.Warnings, func(w string) bool { return strings.Contains(w, "merged PRs of") && strings.Contains(w, "flaked") }) {
+			t.Errorf("want a merged-lookup warning: %v", out.Report.Warnings)
+		}
+		if slices.Contains(kinds(out.Drift)["ben"], PRUnrecorded) {
+			t.Errorf("no pr-unrecorded finding without a merged PR: %v", out.Drift)
+		}
+	})
+	t.Run("a working slot costs no merged lookup", func(t *testing.T) {
+		f, _ := setup(t)
+		f.agents("ben") // a live, working agent
+		f.forge.mergedErr = errors.New("must not be asked")
+		rep, err := f.env.Status(bg, f.root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if slices.ContainsFunc(rep.Warnings, func(w string) bool { return strings.Contains(w, "merged PRs of") }) {
+			t.Errorf("a busy slot asked the forge for merged PRs: %v", rep.Warnings)
+		}
+	})
+	t.Run("hint", func(t *testing.T) {
+		f := newMoveFx(t)
+		f.finish(t, "ben", "")
+		_, err := f.assign("13", "ben")
+		if err == nil || !strings.Contains(err.Error(), "round reconcile --apply") {
+			t.Errorf("refusal should name the recording verb: %v", err)
+		}
+	})
+}
+
+// A merge commit leaves the branch tip an ancestor of base, so the branch is
+// not ahead of it; reconcile --apply must still record the merged PR, which
+// transfer onto the finished slot needs (#1852).
+func TestMergeCommitPRIsRecordedByReconcileAndUnblocksTransfer(t *testing.T) {
+	f := newMoveFx(t)
+	branch := f.slot("ben").Branch()
+	if _, err := f.assign("13", "dana"); err != nil {
+		t.Fatal(err)
+	}
+	f.finish(t, "ben", "")
+	tip := gitIn(t, f.wt("ben"), "rev-parse", "HEAD")
+	sh(t, f.wt("ben"), "push", "-q", "origin", branch)
+	sh(t, f.root, "merge", "-q", "--no-ff", "-m", "Merge "+branch, branch)
+	sh(t, f.root, "push", "-q", "origin", "main")
+	sh(t, f.root, "fetch", "-q", "origin")
+	if n := f.env.ahead(bg, f.root, "main", branch); n != 0 {
+		t.Fatalf("fixture: merged branch is %d ahead of main, want 0", n)
+	}
+	f.forge.mergedPRs = map[string][]tracker.PR{branch: {{Number: 7, Branch: branch, URL: pr7, HeadSHA: tip}}}
+
+	if _, err := f.transfer("13", "ben", nil); err == nil {
+		t.Fatal("transfer onto a slot with no recorded PR should refuse before reconcile")
+	}
+	if _, err := f.env.Reconcile(bg, f.root, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.slot("ben").PR(); got != pr7 {
+		t.Fatalf("slot records %q, want the merged PR", got)
+	}
+	if _, err := f.transfer("13", "ben", nil); err != nil {
+		t.Errorf("transfer still refuses after reconcile: %v", err)
 	}
 }
