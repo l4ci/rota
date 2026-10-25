@@ -950,3 +950,39 @@ func TestAccountsFailsOnARelativeConfigDir(t *testing.T) {
 		t.Fatalf("%+v", c)
 	}
 }
+
+func TestExternalKnowledgeCheck(t *testing.T) {
+	ok := ExternalKnowledge{Path: "/kb", Exists: true, IsGit: true, HasRemote: true, HasPolicy: true}
+	for _, tc := range []struct {
+		name   string
+		in     ExternalKnowledge
+		status string
+		detail string
+	}{
+		{"unset", ExternalKnowledge{}, Skip, "not set"},
+		{"missing", ExternalKnowledge{Path: "/kb"}, Fail, "does not exist"},
+		{"not git", ExternalKnowledge{Path: "/kb", Exists: true}, Fail, "not a git repository"},
+		{"no remote", ExternalKnowledge{Path: "/kb", Exists: true, IsGit: true, HasPolicy: true}, Fail, "no git remote"},
+		{"no policy", ExternalKnowledge{Path: "/kb", Exists: true, IsGit: true, HasRemote: true}, Warn, "default to push"},
+		{"ok", ok, Pass, "/kb"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fake{have: map[string]bool{}, reply: map[string]Result{}}
+			r := Run(context.Background(), Input{Exec: f.exec, Look: f.look, ExternalKnowledge: tc.in})
+			c := statusOf(r, "external knowledge")
+			if tc.status == Skip {
+				// Run leaves the unset line out; the check itself says skip.
+				if c.Name != "" {
+					t.Fatalf("an unset key adds no line, got %+v", c)
+				}
+				c = (&runner{in: Input{ExternalKnowledge: tc.in}}).externalKnowledge()
+			}
+			if c.Status != tc.status || !strings.Contains(c.Detail, tc.detail) {
+				t.Fatalf("check = %+v", c)
+			}
+			if (tc.status == Fail || tc.status == Warn) && c.Hint == "" {
+				t.Fatal("a finding needs a hint")
+			}
+		})
+	}
+}
