@@ -322,6 +322,48 @@ func RemoveQueuedPR(root, ref string) error {
 	})
 }
 
+// LogRelays keeps the relays of a PR whose slot was freed without queuing it
+// (round return, reclaim), under the registry's `relayLog`. Only the gate reads
+// it: unlike a queued record it holds no issue, so candidates, claims,
+// readiness and the autopilot ignore it (#1853). A repeated call for the same
+// PR replaces the entry.
+func (d *Doc) LogRelays(pr string, relays []any) {
+	n, ok := PRRefNumber(pr)
+	if !ok || len(relays) == 0 {
+		return
+	}
+	var keep []any
+	for _, e := range d.list("relayLog") {
+		if o, ok := e.(*jsonx.Object); ok {
+			if m, ok := PRRefNumber(jsonx.Str(o, "pr")); ok && m == n {
+				continue
+			}
+		}
+		keep = append(keep, e)
+	}
+	o := jsonx.NewObject()
+	o.Set("pr", pr)
+	o.Set("relays", slices.Clone(relays))
+	d.doc.Set("relayLog", append(keep, o))
+}
+
+// ClearRelayLog drops every kept relay log, at wind-down.
+func (d *Doc) ClearRelayLog() { d.doc.Delete("relayLog") }
+
+// LoggedRelays is the relay log kept for a PR ref by LogRelays, nil when none.
+func (r Registry) LoggedRelays(ref string) []any {
+	n, ok := PRRefNumber(ref)
+	if !ok {
+		return nil
+	}
+	for _, o := range r.objects("relayLog") {
+		if m, ok := PRRefNumber(jsonx.Str(o, "pr")); ok && m == n {
+			return listOf(o, "relays")
+		}
+	}
+	return nil
+}
+
 // BundleHolder finds who holds id as a bundle member (not as a lead): the slot
 // whose bundle lists it, else the queued record whose bundle does. Both are nil
 // when id is no member.
