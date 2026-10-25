@@ -855,3 +855,75 @@ func TestWaitDoesNotReportADoneSlotWhenTheForgeErrors(t *testing.T) {
 		t.Errorf("a failed lookup returned the slot as news: %+v", res)
 	}
 }
+
+// #2058: a second done from the same slot for the same PR, after a bounce, is
+// news even when no wait saw the slot busy in between and the pane still shows
+// the first sentinel.
+func TestWaitReturnsASecondDoneEventForTheSamePR(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	h := newWaitHost("herdr")
+	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/7\n", "done")
+	e := envWith(watcherHost{h})
+	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil || res.State != StateDone {
+		t.Fatalf("first: %+v %v", res, err)
+	}
+	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond}); err != nil || !res.TimedOut {
+		t.Fatalf("quiet: %+v %v, want a timeout", res, err)
+	}
+	// The worker reports done again (bounce, fix, done) while the pane is unchanged.
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
+		s.SetEvent(EventDone, "done again", time.Now().UTC().Add(time.Minute).Format("2006-01-02T15:04:05Z"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second})
+	if err != nil || res.TimedOut || res.State != StateDone {
+		t.Fatalf("second done: %+v %v, want it returned", res, err)
+	}
+	if res, err = e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond}); err != nil || !res.TimedOut {
+		t.Fatalf("third: %+v %v, want it reported once", res, err)
+	}
+}
+
+// #2058: the done lands before any wait starts and nothing was seen yet: the
+// first wait reports it.
+func TestWaitReportsADoneRecordedBeforeTheWaitStarted(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	h := newWaitHost("herdr")
+	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/7\n", "done")
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
+		s.SetEvent(EventDone, "done", time.Now().UTC().Add(time.Minute).Format("2006-01-02T15:04:05Z"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second})
+	if err != nil || res.State != StateDone {
+		t.Fatalf("%+v %v, want done", res, err)
+	}
+}
+
+// #2058: a brief marked unsent (a Codex submit that was only slow) must not
+// hide a done the worker recorded after the dispatch.
+func TestWaitReportsDoneOverAStaleUnsentAlarm(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	h := newWaitHost("herdr")
+	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/7\n", "done")
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
+		s.SetUnsent(true)
+		s.SetEvent(EventDone, "done", time.Now().UTC().Add(time.Minute).Format("2006-01-02T15:04:05Z"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second})
+	if err != nil || res.State != StateDone {
+		t.Fatalf("%+v %v, want done over the unsent alarm", res, err)
+	}
+	if UnsentOf(t, dir) {
+		t.Errorf("unsent still set after the worker reported")
+	}
+}
+
+func UnsentOf(t *testing.T, dir string) bool {
+	t.Helper()
+	return LoadRegistryTolerant(dir).Slot("w1").Unsent()
+}
