@@ -520,6 +520,15 @@ func TestSupportPrefixesRoster(t *testing.T) {
 	}
 }
 
+func TestSettingsReserveMainForMainMachine(t *testing.T) {
+	for _, role := range []string{"main", "support"} {
+		_, err := Load(project(t, `{"round":{"support":"main","role":"`+role+`"}}`))
+		if err == nil || !strings.Contains(err.Error(), "reserved") {
+			t.Errorf("role %s: settings error = %v, want reserved name", role, err)
+		}
+	}
+}
+
 func TestScopesAreSchemaChoices(t *testing.T) {
 	for _, k := range config.Keys {
 		if k.Name != "round.scope" {

@@ -40,6 +40,9 @@ func roundSupportEnable(fs *flag.FlagSet) RunFunc {
 		if !roundcfg.ValidName(name) {
 			return Result{}, Usage("round support enable: %q is not a lowercase name usable in a branch (letters, digits, -)", name)
 		}
+		if err := config.Validate("round.support", strconv.Quote(name)); err != nil {
+			return Result{}, Usage("%s", err)
+		}
 		root, issue, err := modeRoot(c)
 		if err != nil {
 			return Result{}, err

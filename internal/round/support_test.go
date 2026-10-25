@@ -68,6 +68,25 @@ func TestCandidatesPinnedElsewhereShown(t *testing.T) {
 	}
 }
 
+// Default-config upgrades must not turn legacy support offers into free work.
+func TestCandidatesLegacySupportBlocked(t *testing.T) {
+	root := newRepo(t, nil)
+	be := &fakeRemote{}
+	be.add("1", "work", "", false, "")
+	be.items["1"].Labels = []string{"site:support"}
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig})}
+	cs, err := e.RoundCandidates(bg, root, be, roundcfg.Settings{Scope: roundcfg.ScopeOpen, Support: "mac", Role: roundcfg.RoleMain}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cs) != 1 || cs[0].Ready() || cs[0].BlockedBy != BlockSite {
+		t.Fatalf("legacy support issue must stay blocked until migration: %+v", cs)
+	}
+	if why := fmt.Sprint(cs[0].Checks); !strings.Contains(why, "rota migrate labels --apply") {
+		t.Fatalf("missing migration warning: %s", why)
+	}
+}
+
 func TestAssignRefusesPinnedElsewhere(t *testing.T) {
 	for _, bundle := range []bool{false, true} {
 		t.Run(fmt.Sprint(bundle), func(t *testing.T) {
@@ -94,6 +113,37 @@ func TestAssignRefusesPinnedElsewhere(t *testing.T) {
 				t.Errorf("refused assign claims: %v", f.be.claims)
 			}
 		})
+	}
+}
+
+func TestAssignRefusesLegacySupport(t *testing.T) {
+	for _, label := range []string{"site:support", "remote"} {
+		for _, bundle := range []bool{false, true} {
+			t.Run(fmt.Sprint(label, bundle), func(t *testing.T) {
+				f := newAssignFixture(t)
+				f.env.Round.Support = "mac"
+				if label == "remote" {
+					f.env.Round.LegacySupportLabel = "remote"
+				}
+				id := "12"
+				if bundle {
+					id = "13"
+				}
+				f.be.items[id].Labels = []string{label}
+				_, err := f.assign("12", "", func(o *AssignOpts) {
+					if bundle {
+						o.Bundle = []string{"13"}
+					}
+				})
+				var refusal *BlockedError
+				if !errors.As(err, &refusal) || refusal.By != BlockSite || !strings.Contains(err.Error(), "rota migrate labels --apply") {
+					t.Fatalf("assign err = %v, want migration refusal", err)
+				}
+				if len(f.be.claims) != 0 {
+					t.Errorf("refused assign claims: %v", f.be.claims)
+				}
+			})
+		}
 	}
 }
 

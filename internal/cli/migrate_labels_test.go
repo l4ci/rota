@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"fmt"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
@@ -91,4 +92,58 @@ func TestConfigCheckRemovedSupportHint(t *testing.T) {
 		t.Fatalf("config check output=%q", stdout)
 	}
 
+}
+
+func TestConfigCheckReservedSupportName(t *testing.T) {
+	root := trackerProject(t, `{"issues":{"source":"github"},"round":{"support":"main"}}`)
+	code, env, stderr := rotaRun(t, "--json", "-C", root, "config", "check")
+	if code != ExitFailed || envObj(env, "data")["blockedBy"] != "config" || !strings.Contains(fmt.Sprint(env)+stderr, "reserved") {
+		t.Fatalf("exit %d: env=%v stderr=%s", code, env, stderr)
+	}
+}
+
+func TestMigrateLabelsFileModeBeforeSupport(t *testing.T) {
+	root := trackerProject(t, `{}`)
+	code, env, _ := rotaRun(t, "--json", "-C", root, "migrate", "labels")
+	if code != ExitRefused || envObj(env, "data")["blockedBy"] != "backend" {
+		t.Fatalf("exit %d: env=%v", code, env)
+	}
+}
+
+func TestMigrateLabelsClearsUnusedKeyWithoutSupport(t *testing.T) {
+	for _, tc := range []struct {
+		name, state, label string
+		blocked            bool
+	}{
+		{name: "no issues"},
+		{name: "closed legacy", state: "closed", label: "remote"},
+		{name: "unrelated open", state: "open", label: "other"},
+		{name: "open legacy", state: "open", label: "remote", blocked: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := trackerProject(t, `{"issues":{"source":"github","labels":{"support":"remote"}}}`)
+			fake := &trackertest.Fake{}
+			if tc.state != "" {
+				fake.Issues = []tracker.Issue{{Key: tracker.NumKey(7), State: tc.state, Labels: []string{tc.label}}}
+			}
+			code, env, stderr := rotaRunWith(t, supportReturnDeps(fake), "--json", "-C", root, "migrate", "labels", "--apply")
+			want := ExitOK
+			if tc.blocked {
+				want = ExitRefused
+			}
+			if code != want {
+				t.Fatalf("exit %d want %d: %v %s", code, want, env, stderr)
+			}
+			raw, err := os.ReadFile(filepath.Join(root, ".rota/config.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(raw), "remote") != tc.blocked {
+				t.Fatalf("key retention = %s", raw)
+			}
+			if tc.blocked && !slices.Equal(fake.Issues[0].Labels, []string{"remote"}) {
+				t.Fatalf("legacy labels changed: %v", fake.Issues)
+			}
+		})
+	}
 }
