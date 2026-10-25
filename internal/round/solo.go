@@ -26,7 +26,7 @@ func soloBrief(text string, round int) string {
 // launches the subagent with the one as its prompt and the other as its
 // working directory.
 func (e Env) soloHandOff(root, agent, text string, round int) (brief, worktree string, err error) {
-	now := e.Worker.WithDefaults().Now
+	now := e.Worker.Now
 	at := stamp.Format(now())
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {

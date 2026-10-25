@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // TestWatchForgeSeesAChangeBetweenPasses: the read cache lives for the whole
@@ -35,7 +36,7 @@ func TestWatchForgeSeesAChangeBetweenPasses(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return round.Env{Git: git.Exec, Base: "feat/x", HostName: "solo", Forge: f}
+		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "feat/x", HostName: "solo", Forge: f}
 	}
 	c := &Ctx{Deps: deps, ctx: context.Background()}
 	pass := func() string { return watchForge(context.Background(), c, root)[roundwatch.PRStateKey("dana")] }

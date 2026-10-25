@@ -94,7 +94,7 @@ func TestCandidatesGrillingNotReady(t *testing.T) {
 	be.add("12", "research", "M01", false, "")
 	be.items["11"].Labels = []string{"decision:grilling"}
 	be.items["12"].Labels = []string{"decision:research"}
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
 	cs, err := e.RoundCandidates(bg, root, be, roundcfg.Settings{Scope: roundcfg.ScopeMilestone}, "")
 	if err != nil {
 		t.Fatal(err)

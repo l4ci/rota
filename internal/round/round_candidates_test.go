@@ -19,7 +19,7 @@ func TestRoundCandidatesScopeFallback(t *testing.T) {
 	be.add("10", "in M01", "M01", false, "")
 	be.add("12", "untagged a", "", false, "")
 	be.add("13", "untagged b", "", false, "")
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
 	get := func(set roundcfg.Settings, override string) []string {
 		t.Helper()
 		cs, err := e.RoundCandidates(bg, root, be, set, override)
@@ -73,7 +73,7 @@ func TestCandidateScopeSource(t *testing.T) {
 	if _, err := RecordInferred(be, "3", []string{"x"}); err != nil {
 		t.Fatal(err)
 	}
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
 	cs, err := e.RoundCandidates(bg, root, be, roundcfg.Settings{Scope: roundcfg.ScopeOpen}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +98,7 @@ func TestCandidateDeferredFromOpenPRWaits(t *testing.T) {
 	be.items["20"].Fields.Related = "#77"
 	be.add("21", "plain, relates to #77", "", false, "## Acceptance\n\n- [ ] AC-1: fixed\n")
 	be.items["21"].Fields.Related = "#77"
-	e := Env{Git: git.Exec, Base: "main", Forge: be.asForge(), Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Forge: be.asForge(), Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
 	get := func() map[string]Candidate {
 		t.Helper()
 		cs, err := e.RoundCandidates(bg, root, be, roundcfg.Settings{Scope: roundcfg.ScopeOpen}, "")
@@ -133,7 +133,7 @@ func TestCandidateDeferredReleasedWhenSourcePRClosedUnmerged(t *testing.T) {
 	deferred := "## Problem\n\nx\n\nDeferred minor finding from the review-spec FAIL verdict on #77.\n\n## Acceptance\n\n- [ ] AC-1: fixed\n"
 	be.add("20", "deferred from #77", "", false, deferred)
 	be.items["20"].Fields.Related = "#77"
-	e := Env{Git: git.Exec, Base: "main", Forge: be.asForge(), Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Forge: be.asForge(), Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
 	be.prs = []tracker.PR{{Number: 88, Branch: "ben/9-other"}} // #77 was closed, not merged
 	cs, err := e.RoundCandidates(bg, root, be, roundcfg.Settings{Scope: roundcfg.ScopeOpen}, "")
 	if err != nil {
@@ -167,7 +167,7 @@ func TestCandidateDeferredRelatedForms(t *testing.T) {
 			be.add("20", "deferred", "", false, body)
 			be.items["20"].Fields.Related = tc.related
 			be.prs = []tracker.PR{{Number: 1541, Branch: "ben/9-other"}}
-			e := Env{Git: git.Exec, Base: "main", Forge: be.asForge(), Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
+			e := Env{Git: git.Exec, Base: "main", Forge: be.asForge(), Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
 			cs, err := e.RoundCandidates(bg, root, be, roundcfg.Settings{Scope: roundcfg.ScopeOpen}, "")
 			if err != nil {
 				t.Fatal(err)

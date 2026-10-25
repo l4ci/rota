@@ -46,7 +46,7 @@ func holdTask(t *testing.T, root, name, task string) {
 
 func TestStartUsesExactlyConfiguredSlots(t *testing.T) {
 	root := newRepo(t, nil)
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
 	startN(t, e, root, 5)
 	st := startN(t, e, root, 3)
 	if names, _ := slotNames(st); !reflect.DeepEqual(names, []string{"ben", "dana", "nia"}) {
@@ -66,7 +66,7 @@ func TestStartUsesExactlyConfiguredSlots(t *testing.T) {
 
 func TestStartSlotsFlagProvisionsFive(t *testing.T) {
 	root := newRepo(t, nil)
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
 	startN(t, e, root, 3)
 	st := startN(t, e, root, 5)
 	if names, _ := slotNames(st); !reflect.DeepEqual(names, fiveRoster) {
@@ -76,7 +76,7 @@ func TestStartSlotsFlagProvisionsFive(t *testing.T) {
 
 func TestStartKeepsBusyExtraSlotDraining(t *testing.T) {
 	root := newRepo(t, nil)
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
 	startN(t, e, root, 5)
 	holdTask(t, root, "kit", "41")
 	st := startN(t, e, root, 3)
@@ -88,7 +88,7 @@ func TestStartKeepsBusyExtraSlotDraining(t *testing.T) {
 
 func TestDrainedSlotLeavesRoundAfterMerge(t *testing.T) {
 	root := newRepo(t, nil)
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
 	startN(t, e, root, 5)
 	holdTask(t, root, "kit", "41")
 	startN(t, e, root, 3)

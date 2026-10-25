@@ -79,7 +79,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 			board, _ = round.BoardOf(raw)
 		}
 		env := c.deps().RoundEnv(ctx, root)
-		env.Worker = workerEnvCtx(c, ctx)
+		env.Worker = round.FromWorkerEnv(workerEnvCtx(c, ctx))
 		// An autopilot watch must not assign or merge while the base is being
 		// re-verified; a kept lease lets it resume.
 		var cd string

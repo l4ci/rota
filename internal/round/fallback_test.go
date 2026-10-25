@@ -172,7 +172,7 @@ func (b *fileBoard) SetHarness(ref, kind string) (bool, error) {
 
 func TestHarnessStepWritesTheFieldOnTheFileBackend(t *testing.T) {
 	b := &fileBoard{fakeRemote: &fakeRemote{}, harness: map[string]string{}}
-	e := Env{}
+	e := Env{Worker: wk(worker.Env{})}
 	if !e.canRecordHarness(b) {
 		t.Fatal("a backend with SetHarness records the pick")
 	}
@@ -200,7 +200,7 @@ func TestFallbackGoesOnlyToALaterHarness(t *testing.T) {
 	f.env.Forge = f.be.asForge()
 	(&codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}).install(f)
 	f.host.name = "herdr"
-	f.env.Worker.Now = func() time.Time { return quotaNow }
+	withNow(&f.env, func() time.Time { return quotaNow })
 	if _, err := limits.Append(f.root, limits.Entry{Session: "ben", Kind: harness.Codex, Account: "c1", Status: limits.StatusWaiting,
 		ResetsAt: limits.Time(quotaNow.Add(30 * time.Minute))}); err != nil {
 		t.Fatal(err)
@@ -226,12 +226,12 @@ func TestTransferDoesNotFallBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.set, f.env.Round = set, set
-	f.env.Worker.Now = func() time.Time { return quotaNow }
-	f.env.Worker.Accounts = &worker.Accounts{Env: worker.Env{Config: diskConfig, Now: func() time.Time { return quotaNow }},
+	withNow(&f.env, func() time.Time { return quotaNow })
+	f.env.Worker = f.env.Worker.WithAccounts(&worker.Accounts{Env: worker.Env{Config: diskConfig, Now: func() time.Time { return quotaNow }},
 		Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
 			v, _ := jsonx.Decode([]byte(fmt.Sprintf(`{"five_hour":{"utilization":100,"resets_at":"%s"}}`, quotaNow.Add(time.Hour).Format(time.RFC3339))))
 			return v.(*jsonx.Object), ""
-		}}
+		}})
 	_, err = f.transfer("12", "dana", nil)
 	if by := blockedBy(t, err); by != BlockQuota {
 		t.Fatalf("err %v", err)

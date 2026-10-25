@@ -510,7 +510,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 	if !ok {
 		return res, blocked(BlockNoRound, "this process holds no round lease: run rota round start first")
 	}
-	now := e.Worker.WithDefaults().Now
+	now := e.Worker.Now
 	h := e.Health(ctx, root, s, now())
 	res.Health, res.Issue = h.Health, h.Issue
 	if h.Health == HealthIdle {
@@ -532,7 +532,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 	// A live pane must be gone before its worktree moves under it. A dead
 	// slot's agent is gone, but its pane may linger as a bare shell.
 	if h.Health == HealthDead {
-		e.workerEnv().SweepSlot(ctx, root, o.Slot)
+		e.Worker.SweepSlot(ctx, root, o.Slot)
 	} else {
 		switch {
 		case e.HostName == host.Solo: // a subagent has no pane to close
@@ -544,7 +544,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 			}
 			return res, blocked(BlockLiveAgent, "the host cannot be asked, so slot %s's agent cannot be proved gone%s; start the host or close its pane", o.Slot, why)
 		default:
-			if err := e.workerEnv().KillSlot(ctx, root, o.Slot); err != nil {
+			if err := e.Worker.KillSlot(ctx, root, o.Slot); err != nil {
 				return res, wrap(err)
 			}
 		}
@@ -637,7 +637,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	}
 	defer func() {
 		if err == nil && res.Changed {
-			if lerr := worker.LedgerAppendErr(e.workerEnv(), root, ledger.Entry{Kind: ledger.KindTransfer, Issue: res.Issue, Slot: res.To,
+			if lerr := e.Worker.LedgerAppendErr(root, ledger.Entry{Kind: ledger.KindTransfer, Issue: res.Issue, Slot: res.To,
 				Detail: ledger.Detail("from", res.From, "capReason", o.CapReason)}); lerr != nil {
 				err = fmt.Errorf("%s is transferred to %s, but the round ledger row was not written: %w", res.Issue, res.To, lerr)
 			}
@@ -906,7 +906,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 			// A receiver about to be queued holds unmerged work the guard would
 			// refuse; parking it clears that.
 			if !run.queueTo {
-				if _, err := e.workerEnv().ResetTo(root, o.To, id, worker.BranchName(o.To, id, it.Title), true); err != nil {
+				if _, err := e.Worker.ResetTo(root, o.To, id, worker.BranchName(o.To, id, it.Title), true); err != nil {
 					var we *exitcode.Error
 					if errors.As(err, &we) && we.Data != nil { // the reset guard's refusal
 						return nil, blocked(BlockSlotBusy, "%s", we.Message)
@@ -1192,10 +1192,10 @@ func (e Env) checkout(ctx context.Context, root string, to *worker.Slot, id, tit
 	name, wt := to.Name(), to.Worktree()
 	if *branch == "" || worker.IsPark(*branch) || *branch == to.Base() {
 		*branch = worker.BranchName(name, id, title)
-		_, err := e.workerEnv().ResetTo(root, name, id, *branch, false)
+		_, err := e.Worker.ResetTo(root, name, id, *branch, false)
 		return err
 	}
-	if _, err := e.workerEnv().ResetTo(root, name, id, *branch, true); err != nil {
+	if _, err := e.Worker.ResetTo(root, name, id, *branch, true); err != nil {
 		return err
 	}
 	if cur, _, _ := e.gitOut(ctx, wt, "symbolic-ref", "--short", "-q", "HEAD"); cur == *branch {
