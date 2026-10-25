@@ -48,12 +48,14 @@ func scriptedAdapter(t *testing.T, provider string, calls ...scriptedCall) Adapt
 
 func TestPRCreate(t *testing.T) {
 	spec := PRSpec{Title: "My title", Body: "Summary", Head: "feat/x", Base: "main"}
-	gh := scriptedAdapter(t, "github", scriptedCall{name: "gh", argv: []string{"pr", "create", "--title", "My title", "--body-file", "-"},
+	ghSpec := spec
+	ghSpec.Base = "develop"
+	gh := scriptedAdapter(t, "github", scriptedCall{name: "gh", argv: []string{"pr", "create", "--title", "My title", "--body-file", "-", "--base", "develop"},
 		stdin: "Summary", stdout: "warning\nhttps://github.com/o/r/pull/3\n"})
-	if gh.PRNeedsBase() {
-		t.Error("github PRs take no base")
+	if !gh.PRNeedsBase() {
+		t.Error("github PRs need a base")
 	}
-	if url, err := gh.PRCreate(context.Background(), spec); err != nil || url != "https://github.com/o/r/pull/3" {
+	if url, err := gh.PRCreate(context.Background(), ghSpec); err != nil || url != "https://github.com/o/r/pull/3" {
 		t.Errorf("github: %q %v", url, err)
 	}
 
