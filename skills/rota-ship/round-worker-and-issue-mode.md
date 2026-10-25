@@ -9,9 +9,10 @@ Loaded by `SKILL.md` when the branch is a round worker's (`<agent>/<issue>-<slug
 - **Step 3.75 (QA):** skipped; `test.e2e` runs on the merged tree at the gate (`rota worker gate`, or once per `rota worker train`), not per branch.
 - **Step 3.8 (UAT):** skipped; round PRs stay unattended and `rota worker gate` never runs it.
 - **Step 8 (file mode):** a round worker skips it (workers never edit tracked `.rota/`); the orchestrator completes the items when it merges the PR.
-- **Step 8.5:** skipped; the orchestrator runs learn once per round.
+- **Step 8.5:** skipped; the learning pass runs at Step 4 instead (below).
 - **Step 8.6 (docs after-work):** runs, commits its edits on the worker branch and ships them in the same PR (`/rota-docs` D-A5 applies the drafts without a picker). Scaffold and restructure never run here.
 
+- **Step 4 (PR body):** run the learning pass of `skills/references/worker-contract.md` first (post each learning with `--kind learning`), then end the body with `Learnings: none` or `Learnings: <n> posted`. This is before Step 6a, so the PR opens with the line already in it.
 - **Before the push (Step 6a):** merge the moved base first (`git fetch origin <base>`; when the base is past your merge base, `git merge origin/<base>`, never a rebase), resolve conflicts, re-run the targeted checks and record proof at the merged head. The same holds before every relay-fix push (`skills/references/worker-contract.md`).
 
 ## Issue backend

@@ -2,6 +2,7 @@ package rota
 
 import (
 	"errors"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -65,4 +66,24 @@ func TestSkillsHarnessNeutral(t *testing.T) {
 		}
 	}
 	t.Logf("skill grep: %d matching lines, %d unqualified tool lines", matched, violations)
+}
+
+// Round workers post learnings as issue comments and mark the PR body; the
+// contract, rota-learn and the ship round-worker reference must all say so.
+func TestRoundWorkerLearningAligned(t *testing.T) {
+	for _, f := range []string{
+		"skills/references/worker-contract.md",
+		"skills/rota-learn/SKILL.md",
+		"skills/rota-ship/round-worker-and-issue-mode.md",
+	} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{"--kind learning", "Learnings: none"} {
+			if !strings.Contains(string(b), want) {
+				t.Errorf("%s lacks %q", f, want)
+			}
+		}
+	}
 }
