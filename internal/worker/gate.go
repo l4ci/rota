@@ -1628,6 +1628,29 @@ func (g *gate) redTier(landed bool) func(string, VerifyResult) (bool, error) {
 	}
 }
 
+// pairwisePaths is the shared footprint check for train ordering, conflict
+// attribution, preview pruning and stale-merge notes. Only the gate filters
+// round.sharedPaths; the train passes nil so it sees every shared path.
+func pairwisePaths(a, b, shared []string) []string {
+	return overlap.Both(a, b, shared)
+}
+
+// pairwiseMergeConflict distinguishes a real conflict from a broken git probe.
+// A non-zero failedCode means the probe failed; output is kept for diagnostics.
+// Callers choose whether to prune disjoint paths first: the gate probes even
+// disjoint footprints, since renames can conflict without a shared path.
+func pairwiseMergeConflict(runGit func(string, ...string) (string, int), root, a, b string) (conflict bool, output string, failedCode int) {
+	out, code := runGit(root, "merge-tree", "--write-tree", "--no-messages", a, b)
+	switch code {
+	case 0:
+		return false, "", 0
+	case 1:
+		return true, "", 0
+	default:
+		return false, out, code
+	}
+}
+
 // staleReason says why a branch behind the base must go back to its worker:
 // "" when the merge is clean, so the gate merges it itself and verifies the
 // merged tree. A conflict needs the worker's context. A shared file changed on
@@ -1641,12 +1664,12 @@ func (g *gate) staleReason() (why string, shared []string, brokeMsg string) {
 	if _, code := g.git(root, "merge-base", "--is-ancestor", g.headRef, g.baseRef); code == 0 {
 		return fmt.Sprintf("its work is already on %s, nothing to merge", g.o.Base), nil, ""
 	}
-	switch out, code := g.git(root, "merge-tree", "--write-tree", "--no-messages", g.baseRef, g.headRef); code {
-	case 0:
-	case 1:
-		return "the merge conflicts", nil, ""
-	default:
+	conflict, out, code := pairwiseMergeConflict(g.git, root, g.baseRef, g.headRef)
+	if code != 0 {
 		return "", nil, fmt.Sprintf("git merge-tree %s %s exited %d: %s", g.baseRef, g.headRef, code, out)
+	}
+	if conflict {
+		return "the merge conflicts", nil, ""
 	}
 	mb, code := g.git(root, "merge-base", g.baseRef, g.headRef)
 	if code != 0 || mb == "" {
@@ -1664,7 +1687,7 @@ func (g *gate) staleReason() (why string, shared []string, brokeMsg string) {
 	if !ok1 || !ok2 {
 		return "", nil, fmt.Sprintf("git diff --name-only against %s failed", mb)
 	}
-	return "", overlap.Both(onBase, onHead, g.in.cfg.SharedPaths), ""
+	return "", pairwisePaths(onBase, onHead, g.in.cfg.SharedPaths), ""
 }
 
 func appendFile(path, text string) {
