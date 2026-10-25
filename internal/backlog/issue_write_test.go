@@ -542,7 +542,7 @@ func TestIssuesClaimByTrackerKey(t *testing.T) {
 		t.Fatal(won, holder, err)
 	}
 	wantCalls(t, tr, `get["PROJ-123"] get["PROJ-123"] comments["PROJ-123"] add_comment["PROJ-123","<!-- rota:claim ben@18 -->\nClaimed by ben@18"] comments["PROJ-123"] `+
-		`ensure_labels[["in-progress"],true] edit["PROJ-123",{"add_labels":["in-progress"]}] assign_self["PROJ-123"]`)
+		`ensure_labels[["in-progress"],true] edit["PROJ-123",{"add_labels":["in-progress"]}] assign_self["PROJ-123"] add_labels["PROJ-123",["claimed:ben@main"],true]`)
 	if st, err := b.Status("PROJ-123"); err != nil || st.Claim != "ben@18" {
 		t.Errorf("status: %+v %v", st, err)
 	}
