@@ -430,3 +430,27 @@ func TestWorkerDoneBundleRedFromAnyIssue(t *testing.T) {
 		t.Fatalf("member FAIL row: exit %d: %s %s", code, out, errOut)
 	}
 }
+
+// TestWorkerDoneAcceptsDocumentedFastProof pins the contract's done gate end to
+// end: `rota proof record <ID> -- rota test run fast` (a stub rota on PATH
+// stands in for the nested run) leaves the test.fast receipt that
+// `rota worker done` reads back.
+func TestWorkerDoneAcceptsDocumentedFastProof(t *testing.T) {
+	stub := t.TempDir()
+	if err := os.WriteFile(filepath.Join(stub, "rota"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", stub+string(os.PathListSeparator)+os.Getenv("PATH"))
+	dir := doneProject(t, "go test ./...")
+	if code, out, errOut := rotaIn(t, dir, "proof", "record", "B07", "--", "rota", "test", "run", "fast"); code != 0 {
+		t.Fatalf("record: %d %s %s", code, out, errOut)
+	}
+	code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json")
+	d := data(t, out)
+	if code != 0 || d["changed"] != true || d["missing"] != nil {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if slotState(t, dir) != "done" {
+		t.Error("slot not marked done")
+	}
+}
