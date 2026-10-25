@@ -2093,12 +2093,11 @@ func (g *gate) ffFailureCause(mergeOut string) string {
 	return "merge refused, cause not found: no overlapping local changes, not ahead of " + g.baseRef
 }
 
-// closeMerged closes linked milestone issues, or the slot's issue and bundle
-// on a tracker a merge does not close (tracker.MergeCloser: Jira, Linear), so it is not left
-// open, in progress and claimed. A partial slice stays open. It reports false
-// when the close failed: the merge has landed either way, so the failure is a
-// warning on the result, and the caller keeps the claim label so
-// `rota round reconcile` lists the issue.
+// closeMerged closes linked milestone issues. On other bases, it closes the
+// slot's issue and bundle on trackers implementing MergeCloser (Jira, Linear).
+// A failed close is a warning because the PR has already landed. It returns
+// whether every close succeeded, allowing the caller to sweep claim labels;
+// milestone closes also release each successful issue's labels independently.
 func (g *gate) closeMerged(src tracker.ClosingSource) bool {
 	if id, ok := strings.CutPrefix(g.o.Base, "milestone/"); ok && id != "" && g.issues != nil {
 		return g.closeOnMilestone(src, "on-milestone/"+id)
@@ -2156,18 +2155,26 @@ func (g *gate) releaseClaimLabels(src tracker.ClosingSource) {
 		if is.State != "closed" {
 			continue
 		}
-		var drop []string
-		for _, label := range is.Labels {
-			if label == g.label || strings.HasPrefix(label, backlog.ClaimLabelPrefix) {
-				drop = append(drop, label)
-			}
+		g.releaseClaimLabel(key, is.Labels)
+	}
+}
+
+// releaseClaimLabel drops only workflow labels from an issue known to be closed.
+func (g *gate) releaseClaimLabel(key tracker.IssueKey, labels []string) {
+	if g.label == "" || g.issues == nil {
+		return
+	}
+	var drop []string
+	for _, label := range labels {
+		if label == g.label || strings.HasPrefix(label, backlog.ClaimLabelPrefix) {
+			drop = append(drop, label)
 		}
-		if len(drop) == 0 {
-			continue
-		}
-		if err := g.issues.RemoveLabels(g.ctx, key, drop); err != nil {
-			g.res.Notes = append(g.res.Notes, fmt.Sprintf("LABEL-KEPT %s — cannot remove %s from %s: %v", g.o.Slot, strings.Join(drop, ", "), key.Ref(), err))
-		}
+	}
+	if len(drop) == 0 {
+		return
+	}
+	if err := g.issues.RemoveLabels(g.ctx, key, drop); err != nil {
+		g.res.Notes = append(g.res.Notes, fmt.Sprintf("LABEL-KEPT %s — cannot remove %s from %s: %v", g.o.Slot, strings.Join(drop, ", "), key.Ref(), err))
 	}
 }
 
