@@ -73,7 +73,8 @@ const (
 	BlockNoTierMap    = blockedby.NoTierMap
 	// BlockHumanDecision: a decision:grilling item is resolved by the human in
 	// /rota-brainstorm, never by a worker.
-	BlockHumanDecision = blockedby.HumanDecision
+	BlockHumanDecision  = blockedby.HumanDecision
+	BlockCrossMilestone = blockedby.CrossMilestone
 	// BlockCodexFlags: `codex --help` does not list a flag the launch line uses.
 	BlockCodexFlags = blockedby.CodexFlags
 )
@@ -100,6 +101,8 @@ type AssignOpts struct {
 	AcceptOverlap bool
 	// AcceptOpenPR lets a deliberate redo through an issue an open PR resolves.
 	AcceptOpenPR bool
+	// AcceptCrossMilestone lets the maintainer assign an issue that depends on another active milestone.
+	AcceptCrossMilestone bool
 	// AcceptBatch lets one assignment through a full round.batch.
 	AcceptBatch bool
 	// Bundle is --bundle: the member issues handed to the slot beside ID, the
@@ -840,6 +843,26 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 			if n := openPR[m.IssueKey()]; n != 0 {
 				return run, false, blocked(BlockOpenPR, "bundle member %s has open PR #%d: not ready; --accept-open-pr assigns it again for a deliberate redo", m.ID, n)
 			}
+		}
+	}
+
+	// The maintainer decides a tie to another active milestone, before the
+	// readiness check names it as an unmet dependency.
+	if !o.AcceptCrossMilestone && !resuming {
+		active, err := activeMilestoneIDs(root, be)
+		if err != nil {
+			return run, false, err
+		}
+		open, err := be.List(false)
+		if err != nil {
+			return run, false, err
+		}
+		flags, err := e.crossMilestone(be, active, *it, open)
+		if err != nil {
+			return run, false, err
+		}
+		if len(flags) > 0 {
+			return run, false, blocked(BlockCrossMilestone, "%s: %s; --accept-cross-milestone assigns it anyway", id, strings.Join(flags, "; "))
 		}
 	}
 
