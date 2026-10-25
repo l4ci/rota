@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/tracker"
@@ -60,6 +60,9 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 	}
 	if strings.TrimSpace(o.Ref) == "" {
 		return res, usage("adopt takes a branch or a worktree path")
+	}
+	if err := e.baseCfgErr(); err != nil {
+		return res, err
 	}
 	branch, wt, err := e.resolveAdoptRef(ctx, root, o.Ref)
 	if err != nil {

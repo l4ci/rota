@@ -4,12 +4,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
 	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/jsonx"
 	ms "github.com/l4ci/rota/internal/milestone"
@@ -198,7 +198,7 @@ func milestonePut(fs *flag.FlagSet) RunFunc {
 		}
 		changed, err := st.Put(id, text)
 		if err != nil {
-			return milestoneFail(err, "id mismatch")
+			return milestoneFail(err, blockedby.IDMismatch)
 		}
 		// A redraft carries no generated Items section; put it back so the list still agrees with the items.
 		if _, err := syncMilestoneItems(c, id); err != nil {

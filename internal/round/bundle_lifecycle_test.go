@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -229,5 +230,35 @@ func TestBundleMembersAreNotClaimDrift(t *testing.T) {
 	}
 	if !stray {
 		t.Errorf("a non-member claim naming a slot that does not hold it is drift: %+v", rep.Findings)
+	}
+}
+
+// A lead slot that no longer holds its bundle (released or transferred) holds
+// no members either: each member's claim naming that slot is drift again.
+func TestReleasedBundleMembersAreClaimDrift(t *testing.T) {
+	f := newMoveFx(t)
+	f.env.Board = f.be
+	f.bundled(t, "15", "16")
+	f.forge.labels = map[int][]string{15: {"in-progress"}, 16: {"in-progress"}}
+	f.forge.labelled = nil
+	// Released: the slot names no task, branch or issue, though a stale bundle
+	// list may linger.
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Delete("issue"); s.Delete("task") })
+	gittest.Run(t, filepath.Join(f.root, ".worktrees", "ben"), "checkout", "-q", "park/ben")
+
+	rep, err := f.env.Status(bg, f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, fd := range rep.Findings {
+		if fd.Kind == ClaimMismatch && fd.Slot == "ben" {
+			got[fd.Issue] = true
+		}
+	}
+	for _, id := range []string{"15", "16"} {
+		if !got[id] {
+			t.Errorf("member %s of a released bundle must be reported: %+v", id, rep.Findings)
+		}
 	}
 }

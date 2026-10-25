@@ -4,17 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
-	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/stamp"
 	"os"
 	"strings"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/layout"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // DispatchOpts are the flags of `rota worker dispatch`.

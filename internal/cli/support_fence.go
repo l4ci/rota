@@ -2,11 +2,11 @@ package cli
 
 import (
 	"errors"
-	"github.com/l4ci/rota/internal/blockedby"
 	"io/fs"
 	"os"
 	"strings"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"

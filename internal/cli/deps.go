@@ -3,8 +3,6 @@ package cli
 import (
 	"context"
 	"errors"
-	"github.com/l4ci/rota/internal/blockedby"
-	"github.com/l4ci/rota/internal/issues"
 	"io"
 	"os"
 	"os/exec"
@@ -14,12 +12,14 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/issues"
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/orchestrate"
 	"github.com/l4ci/rota/internal/palette"

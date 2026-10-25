@@ -5,15 +5,15 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
-	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/pystr"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -208,6 +208,9 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		}
 		d.Set("candidates", candidateList(cands))
 		notePath := handoffFile(c.deps(), root, cfg)
+		if notePath == "" {
+			c.Warn("%s: the orchestrator handoff note was not read", noHandoffBaseMsg(cfg))
+		}
 		note, noteWarn := hook.ReadOrchestratorNote(notePath, *consume)
 		if noteWarn != "" {
 			c.Warn("%s", noteWarn)

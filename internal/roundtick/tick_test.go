@@ -624,7 +624,7 @@ func TestReviewDecisionIsMadeInTheTick(t *testing.T) {
 	}
 }
 
-func TestNoMergeTickNeverGates(t *testing.T) {
+func TestSupportRoleTickNeverGates(t *testing.T) {
 	f := &fake{
 		slots:  []Slot{{Name: "ben", State: "done", Issue: "#1", PR: "#10"}, {Name: "dana", State: "done", Issue: "#2", PR: "#12"}},
 		queued: []string{"#11"},
@@ -637,10 +637,10 @@ func TestNoMergeTickNeverGates(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(f.gated) != 0 || len(f.trained) != 0 {
-		t.Fatalf("a no-merge tick gated %v trained %v", f.gated, f.trained)
+		t.Fatalf("a support-role tick gated %v trained %v", f.gated, f.trained)
 	}
 	if len(r.NeedsYou) != 0 {
-		t.Errorf("a no-merge tick reports merges: %+v", r.NeedsYou)
+		t.Errorf("a support-role tick reports merges: %+v", r.NeedsYou)
 	}
 }
 

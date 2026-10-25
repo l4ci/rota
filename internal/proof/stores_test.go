@@ -2,6 +2,7 @@ package proof
 
 import (
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/artifact/artifacttest"
+	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 // Both stores keep rows the same way: same idempotence, same row format, no
@@ -106,5 +109,41 @@ func TestConcurrentAddsKeepEveryRow(t *testing.T) {
 }
 
 func newTestNotes(root string, n artifact.Notes) Store {
-	return NewNotes(root, func() (artifact.Notes, error) { return n, nil })
+	return NewNotes(filepath.Join(root, ".rota"), func() (artifact.Notes, error) { return n, nil })
+}
+
+// Two checkouts of one repository (the main one and a linked worktree) share
+// the issue note, so their appends must share a lock too.
+func TestConcurrentAddsAcrossWorktreesKeepEveryRow(t *testing.T) {
+	repo := gittest.NewRepo(t, "main")
+	wt := filepath.Join(t.TempDir(), "wt")
+	gittest.Run(t, repo, "worktree", "add", "-q", wt, "-b", "other")
+	notes := &slowNotes{Notes: artifacttest.NewNotes()}
+	stores := map[string]Store{}
+	for _, root := range []string{repo, wt} {
+		cd, err := rotastate.CommonDir(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stores[root] = NewNotes(rotastate.Dir(cd), func() (artifact.Notes, error) { return notes, nil })
+	}
+	const n = 3
+	var wg sync.WaitGroup
+	for root, st := range stores {
+		for i := 0; i < n; i++ {
+			wg.Add(1)
+			go func(root string, st Store, i int) {
+				defer wg.Done()
+				o := AddOpts{Check: fmt.Sprintf("check %d in %s", i, filepath.Base(root)), Result: "PASS", Evidence: "ok", Sha: "abc1234"}
+				if _, _, err := Add(st, root, "7", proofDay, o); err != nil {
+					t.Errorf("add %d: %v", i, err)
+				}
+			}(root, st, i)
+		}
+	}
+	wg.Wait()
+	rows, _, err := Show(stores[repo], "7")
+	if want := n * len(stores); err != nil || len(rows) != want {
+		t.Errorf("rows = %d, want %d (err %v): %+v", len(rows), want, err, rows)
+	}
 }
