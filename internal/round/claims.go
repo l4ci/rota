@@ -23,7 +23,8 @@ var reClaimID = regexp.MustCompile(`^([a-z][a-z0-9-]*)@\d+$`)
 // hold that issue. Only a claim that is gone has a repair (clear the claimId);
 // the tracker is the source of truth and is never edited. The two attempts of a
 // best-of:2 issue each hold a claim: either is fine while it is among the
-// issue's first two. Needs the Board and, for the second shape, the labelled
+// issue's first two. A bundle's members count as held by its lead's slot (or
+// queued PR); their claims are not compared. Needs the Board and, for the second shape, the labelled
 // issues; file mode has no claims to read.
 func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry, rows []*Row, slotObj map[string]*worker.Slot, queued []worker.QueuedPR, labelled map[tracker.IssueKey]bool, labelsOK bool) {
 	if e.Board == nil {
@@ -52,6 +53,9 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 			continue
 		}
 		held[worker.NormID(r.Issue)] = true
+		for _, m := range s.Bundle() {
+			held[worker.NormID(m)] = true
+		}
 		want := s.ClaimID()
 		if want == "" {
 			continue // adopted or pre-C3 slot: no claim to compare
@@ -78,6 +82,9 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 			continue
 		}
 		held[worker.NormID(id)] = true
+		for _, m := range q.Bundle {
+			held[worker.NormID(m)] = true
+		}
 		want := q.ClaimID
 		if want == "" {
 			continue

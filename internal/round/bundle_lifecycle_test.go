@@ -193,3 +193,41 @@ func TestWindDownRetainsBundleWithUnmergedWork(t *testing.T) {
 		t.Errorf("slot: %v", s)
 	}
 }
+
+func TestBundleMembersAreNotClaimDrift(t *testing.T) {
+	f := newMoveFx(t)
+	f.env.Board = f.be
+	f.bundled(t, "15", "16")
+	f.forge.labels = map[int][]string{12: {"in-progress"}, 15: {"in-progress"}, 16: {"in-progress"}}
+	f.forge.labelled = nil
+
+	rep, err := f.env.Status(bg, f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fd := range rep.Findings {
+		if fd.Kind == ClaimMismatch {
+			t.Errorf("a slot holding a bundle holds its members: %+v", fd)
+		}
+	}
+
+	// A non-member claimed by the same slot is still drift.
+	f.be.add("17", "Stray", "M01", false, "## Acceptance\n- [ ] ok\n")
+	if ok, _, err := f.be.Claim("17", "ben@1"); err != nil || !ok {
+		t.Fatalf("claim 17: %v %v", ok, err)
+	}
+	f.forge.labels[17] = []string{"in-progress"}
+	rep, _ = f.env.Status(bg, f.root)
+	stray := false
+	for _, fd := range rep.Findings {
+		if fd.Kind == ClaimMismatch {
+			stray = stray || fd.Issue == "17"
+			if fd.Issue == "15" || fd.Issue == "16" {
+				t.Errorf("member reported: %+v", fd)
+			}
+		}
+	}
+	if !stray {
+		t.Errorf("a non-member claim naming a slot that does not hold it is drift: %+v", rep.Findings)
+	}
+}
