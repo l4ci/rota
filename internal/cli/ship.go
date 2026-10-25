@@ -174,7 +174,7 @@ func shipExistingBranch(c *Ctx, branch string) (string, error) {
 
 // shipBase is the base branch of dir; none resolving is exit 3.
 func shipBase(c *Ctx, dir string) (string, error) {
-	base, ok, err := resolveBase(c.Context(), c.deps(), dir)
+	base, ok, err := resolveBaseFor(c, dir)
 	if err != nil {
 		return "", err
 	}

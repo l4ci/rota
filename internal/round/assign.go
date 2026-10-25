@@ -20,6 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/roundcfg"
 	secpkg "github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/skills"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
@@ -216,6 +217,9 @@ func pointerBrief(agent, id, branch, brief string, siblings []string, decisions,
 		fmt.Fprintf(&b, "This assignment is a bundle of %s. Read each issue and its whole thread and dispute each one the same way. Build them all on this one branch and open ONE PR whose body has a `Closes #N` line for every one of them. Record proof for each issue id (`rota proof record <ID> -- <test command>`, once per id): `rota worker done` refuses while any of them lacks its PASS row at HEAD. A bundle lands or bounces as a unit.\n\n", strings.Join(refs, ", "))
 	}
 	fmt.Fprintf(&b, "Your branch is %s; your worktree is already on it.\n", branch)
+	if t.Base != "" {
+		fmt.Fprintf(&b, "Your base branch is %s, not the round base: the issue belongs to an active milestone. Open your PR against %s, and wherever the contract says to merge the moved base, merge origin/%s.\n", t.Base, t.Base, t.Base)
+	}
 	if len(siblings) > 0 {
 		fmt.Fprintf(&b, "Sibling issues running now: %s.\n", strings.Join(siblings, ", "))
 	}
@@ -432,6 +436,8 @@ type tierBrief struct {
 	FullOnly bool
 	// TDD: work.tdd is on, so the brief repeats the red-first rule.
 	TDD bool
+	// Base is the milestone branch the issue targets, "" for the round base.
+	Base string
 }
 
 func (t tierBrief) text() string {
@@ -629,6 +635,7 @@ type assignRun struct {
 	slot              *worker.Slot
 	members           []*backlog.Item // the bundle's, none for one issue
 	from              string          // the start point the branch is cut from; "" for the slot's base
+	base              string          // the milestone branch the issue targets; "" for the round base
 	fallback          *Fallback       // set when the kind took over from a harness without headroom
 }
 
@@ -898,8 +905,21 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 
 	// 6. A support branch starts from the main the main machine last pushed.
 	from := ""
-	if set.Role == roundcfg.RoleSupport {
-		if from, err = e.freshBase(ctx, root, slot, res.Branch, resuming); err != nil {
+	msBase, warn, err := e.milestoneBase(ctx, root, be, it)
+	if err != nil {
+		return run, false, err
+	}
+	if warn != "" {
+		res.Warnings = append(res.Warnings, warn)
+	}
+	switch {
+	case set.Role == roundcfg.RoleSupport:
+		if from, err = e.freshBase(ctx, root, slot, res.Branch, resuming, strutil.FirstNonEmpty(msBase, slot.Base())); err != nil {
+			return run, false, err
+		}
+	case msBase != "":
+		// An issue of an active milestone is cut from the milestone branch.
+		if from, err = e.fetchBase(ctx, root, msBase); err != nil {
 			return run, false, err
 		}
 	}
@@ -907,7 +927,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	res.SmokeSection = e.reserveSmokeSection(ctx, root, be, reg, set.Roster, id, agent)
 	return assignRun{id: id, agent: agent, branch: res.Branch, resuming: resuming, queue: queue,
 		kind: pf.Kind, kindSource: pf.KindSource, model: pf.Model, tier: tier, reason: reason,
-		pick: pf.Pick, decision: pf.Decision, decisions: decisions, brief: brief, bo: bo, slot: slot, members: members, from: from, fallback: pf.Fallback}, false, nil
+		pick: pf.Pick, decision: pf.Decision, decisions: decisions, brief: brief, bo: bo, slot: slot, members: members, from: from, base: msBase, fallback: pf.Fallback}, false, nil
 }
 
 // notReadyBy is the blockedBy of a failed readiness: overlap when only the
@@ -1086,6 +1106,10 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 	steps = append(steps, []step{
 		// 7. The slot onto its issue branch.
 		{name: "reset the slot onto its branch", do: func() error {
+			// The base first: the reset and every later verb read the slot's.
+			if err := editSlot(root, agent, func(s *worker.Slot) error { s.RouteBase(run.base); return nil }); err != nil {
+				return err
+			}
 			if _, err := w.ResetFrom(root, agent, id, res.Branch, run.from, false); err != nil {
 				var we *exitcode.Error
 				if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
@@ -1119,7 +1143,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 		Brief: func() string {
 			return e.taskBrief(ctx, root, be, taskBriefSpec{agent: agent, id: id, branch: res.Branch, contract: run.brief,
 				decisions: run.decisions, siblings: o.Siblings, bundle: res.Bundle,
-				tier: tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, FullOnly: set.FullOnly, TDD: set.TDD, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()}})
+				tier: tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, Base: run.base, FullOnly: set.FullOnly, TDD: set.TDD, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()}})
 		}}
 	// 8-9. The account, the pointer brief and the hand-off.
 	ds, err := d.steps(ctx, e, root)

@@ -10,7 +10,7 @@ import (
 )
 
 // milestoneBranch is the long-lived branch a milestone's work merges into.
-func milestoneBranch(id string) string { return "milestone/" + id }
+func milestoneBranch(id string) string { return ms.Branch(id) }
 
 // milestoneArchiveBranch is where a kept milestone branch goes on archive.
 func milestoneArchiveBranch(id string) string { return "archive/milestone/" + id }
