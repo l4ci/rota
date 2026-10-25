@@ -264,8 +264,10 @@ func fileHasLine(path string, re *regexp.Regexp) bool {
 
 // depSignals is [round.envSetup, round.sharedDirs] read from the dependency
 // manifests: the first manifest that installs into a directory in the tree
-// wins. Cargo.toml gives none: cargo builds into target/, which one
-// CARGO_TARGET_DIR shares better than a link (docs/contributing/rounds.md).
+// wins. Cargo.toml gives none, on purpose: setup only suggests config keys,
+// and the cargo choice is the CARGO_TARGET_DIR environment variable, which
+// has no key. It is documented in docs/contributing/rounds.md and
+// docs/usage/configuration.md, not surfaced by setup (#1872).
 func depSignals(dir string) (setup, shared setupSignal, ok bool) {
 	if exists(dir, "package.json") {
 		cmd, ev := "npm install", "package.json"
