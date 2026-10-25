@@ -78,6 +78,9 @@ type Ctx struct {
 	// reviewSkipNoted is set once `round watch` has said its review poll is
 	// skipped (the round config does not load), so the note is not repeated.
 	reviewSkipNoted bool
+	// mergedMarkNoted is set once `round watch` has warned that it could not
+	// write the merged-PR mark to the registry.
+	mergedMarkNoted bool
 
 	// dashAt is how many positional arguments came before a bare "--", -1
 	// when there was none. Verbs that run a command after "--" need to tell.
