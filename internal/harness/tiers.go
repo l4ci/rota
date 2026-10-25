@@ -36,11 +36,9 @@ func TierMapSet(cfg any, kind string) bool {
 // ProjectKind is the project's default worker harness: the first entry of
 // round.harnesses, "" when the list is unset or empty.
 func ProjectKind(cfg any) string {
-	v, _ := config.Lookup(cfg, "round.harnesses")
-	list, _ := v.([]any)
-	if len(list) == 0 {
+	kinds, _ := RoundHarnesses(cfg)
+	if len(kinds) == 0 {
 		return ""
 	}
-	s, _ := list[0].(string)
-	return strings.TrimSpace(s)
+	return kinds[0]
 }

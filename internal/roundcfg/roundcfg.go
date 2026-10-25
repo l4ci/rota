@@ -376,7 +376,7 @@ func (s Settings) DefaultKind() string {
 // loadHarnesses reads round.harnesses: harness kinds in fallback order, none
 // twice. A bad entry is an error, never skipped.
 func loadHarnesses(cfg any) ([]string, error) {
-	kinds, err := list(cfg, "round.harnesses")
+	kinds, err := harness.RoundHarnesses(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -564,7 +564,7 @@ var ProfileNames = []string{"quality", "balanced", "budget", ProfileInherit}
 
 // profileOf reads round.profile: "" when unset, an error for an unknown name.
 func profileOf(cfg any) (string, error) {
-	p := strings.TrimSpace(config.String(cfg, "round.profile"))
+	p := harness.RoundProfile(cfg)
 	if _, ok := Profiles[p]; p != "" && !ok {
 		return "", fmt.Errorf("round.profile must be %s, or unset (got %q)", strings.Join(ProfileNames, ", "), p)
 	}
