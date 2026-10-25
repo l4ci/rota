@@ -474,6 +474,7 @@ func (t tierBrief) text() string {
 	if t.TDD {
 		b.WriteString("work.tdd is on: for a behavior change, show a failing test first. Run the new test before the production change and see it fail on an assertion, recording the run with `rota proof record <ID> -- <test command>`, then record the PASS row the same way after. `rota worker done` warns when non-test Go changed and no row is a FAIL.\n")
 	}
+	b.WriteString("Pre-flight before `rota worker done`: run the targeted/fast checks (`rota test run fast`) plus any per-AC command; never the full gate, so say `not run: merge-only by rule` in the PR. For every acceptance bullet that states a number, ratio, size or percentage, measure it on the base and on your branch and paste both values in the PR body. If a numeric criterion cannot be measured or a check fails, report `partial` naming the criterion instead of ROTA-DONE.\n")
 	fmt.Fprintf(&b, "Put `Worker tier: %s` in your PR body.\n", own)
 	return b.String()
 }

@@ -1442,3 +1442,16 @@ func TestTransferRefusesOnRoundErr(t *testing.T) {
 		t.Errorf("ben holds %q after the refusal, want 12 untouched", got)
 	}
 }
+
+func TestTransferBriefCarriesThePreflightLine(t *testing.T) {
+	f := newMoveFx(t)
+	f.host.sent = ""
+	if _, err := f.transfer("12", "dana", nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Pre-flight before `rota worker done`:", "base and on your branch", "report `partial`", "not run: merge-only by rule"} {
+		if !strings.Contains(f.host.sent, want) {
+			t.Errorf("brief lacks %q:\n%s", want, f.host.sent)
+		}
+	}
+}

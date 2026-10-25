@@ -153,6 +153,15 @@ Work only this task, then stop.
      that lands only part of the issue says `Refs #<issue>` instead, and the issue
      carries the `partial-slice` label (ask the orchestrator to set it). Its outcome is `done`
      (see *Outcome*), so it lands without a relay.
+- Pre-flight. Before `rota worker done`, run the targeted tier the round configures for
+  workers: `rota test run fast` (recorded at HEAD, step 4 above) plus any command an
+  acceptance bullet names. Never the full gate (`test.full`, `test.e2e`, `bash test/gate.sh`):
+  it runs at merge only, so the PR lists it as `not run: merge-only by rule`. For every
+  acceptance bullet that states a number, ratio, size or percentage, measure it on the base
+  and on your branch with a targeted command and paste both values in the PR body (one line:
+  criterion, base value, branch value). If a numeric criterion cannot be measured, or a
+  pre-flight check fails and you cannot fix it, report `--outcome partial` naming the
+  criterion on the summary's third line instead of printing a clean `ROTA-DONE`.
 - Second PR of a split issue. When the issue lands as stacked PRs, open the second from
   a new branch named `<agent>/<issue>-<slug>` (same agent and issue number as the first),
   with `Closes #<issue>`; the first says `Refs #<issue>`. Each reports `done` for its own slice. Print `ROTA-DONE <slot> <pr-url>`
