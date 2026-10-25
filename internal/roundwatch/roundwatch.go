@@ -197,6 +197,11 @@ func Run(ctx context.Context, env Env, o Opts) (Result, error) {
 		} else {
 			cur = merge(cur, carry(base))
 		}
+		// A lock taken or handed on mid-watch is no news: fold it into the
+		// baseline so only its release wakes the watch.
+		if v, ok := cur[changeKeyGate]; ok {
+			base[changeKeyGate] = v
+		}
 		if ch := supportNews(Diff(base, cur), env.Seen != nil); len(ch) > 0 {
 			if env.Mark != nil {
 				env.Mark(supportOnly(cur))

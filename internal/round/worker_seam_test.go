@@ -105,3 +105,28 @@ func TestEnvClockAndAccountsComeFromTheWorker(t *testing.T) {
 		t.Error("WithAccounts(nil) left picking on")
 	}
 }
+
+// A slot-named holder reads as the slot's PR; a train's targets resolve one by
+// one; anything unknown stays as recorded.
+func TestRefuseWhileGateRunsNamesThePR(t *testing.T) {
+	root := t.TempDir()
+	err := worker.Update(root, func(d *worker.Doc) {
+		s := worker.NewSlot("ben", "ben/1-x", "/w/ben", "main", "h")
+		s.SetPR("https://github.com/l4ci/rota/pull/1987")
+		d.AppendSlot(s)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct{ holder, want string }{
+		{"ben", "#1987"},
+		{"ben, #2001", "#1987, #2001"},
+		{"dana", "dana"},
+	}
+	for _, tc := range cases {
+		err := Env{Worker: &fakeWorker{locked: true, holder: tc.holder}}.refuseWhileGateRuns(bg, root, "assign")
+		if err == nil || !strings.Contains(err.Error(), "for "+tc.want+" ") {
+			t.Errorf("holder %q: refusal %v lacks %q", tc.holder, err, "for "+tc.want)
+		}
+	}
+}

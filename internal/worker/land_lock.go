@@ -11,6 +11,9 @@ import (
 	"github.com/l4ci/rota/internal/rotastate"
 )
 
+// LandHolderSuffix is appended to the land lock path for the file naming its holder.
+const LandHolderSuffix = ".holder"
+
 // landLockTimeout bounds the wait for another gate or train on the same
 // repository. A verify (or a CI wait) held under the lock can run for many
 // minutes, so the bound is generous: it exists to surface a wedged holder.
@@ -36,8 +39,12 @@ func (e Env) withLandLock(ctx context.Context, root, holder string, fn func(wait
 	// truth, so a stale holder file only matters while the lock is held.
 	held := func(waited bool) func() error {
 		return func() error {
-			os.WriteFile(path+".holder", []byte(holder), 0o644) // best effort: the holder only sharpens a refusal
-			defer os.Remove(path + ".holder")
+			// best effort: the holder only sharpens a refusal. WriteFile truncates;
+			// a failed write drops the file so a previous holder's name never lingers.
+			if os.WriteFile(path+LandHolderSuffix, []byte(holder), 0o644) != nil {
+				os.Remove(path + LandHolderSuffix)
+			}
+			defer os.Remove(path + LandHolderSuffix)
 			return fn(waited)
 		}
 	}
@@ -73,7 +80,7 @@ func (e Env) LandLockHolder(ctx context.Context, root string) string {
 	if err != nil {
 		return ""
 	}
-	b, err := os.ReadFile(rotastate.File(common, "land") + ".holder")
+	b, err := os.ReadFile(rotastate.File(common, "land") + LandHolderSuffix)
 	if err != nil {
 		return ""
 	}
