@@ -15,7 +15,7 @@ var indexRe = regexp.MustCompile(`^- \[([^\]]+)\]\(topics/([^)/]+)\.md\)(?:\s+â€
 
 // Topics lists the INDEX.md entries, with each topic file's bullet count.
 func (c Clone) Topics() ([]Topic, error) {
-	raw, err := readRegular(filepath.Join(c.Dir, IndexFile))
+	raw, err := c.readRegular(filepath.Join(c.Dir, IndexFile))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("%w: %s has no %s", ErrNotFound, c.Dir, IndexFile)
@@ -29,7 +29,7 @@ func (c Clone) Topics() ([]Topic, error) {
 			continue
 		}
 		t := Topic{Name: strings.TrimSpace(m[1]), Slug: m[2], Hook: strings.TrimSpace(m[3])}
-		if body, err := readRegular(c.topicPath(t.Slug)); err == nil {
+		if body, err := c.readRegular(c.topicPath(t.Slug)); err == nil {
 			t.Bullets = len(bulletLines(string(body)))
 		}
 		out = append(out, t)
@@ -92,7 +92,7 @@ func (c Clone) Query(want []string) (text string, missing []string, err error) {
 				continue
 			}
 			printed[t.Slug] = true
-			body, err := readRegular(c.topicPath(t.Slug))
+			body, err := c.readRegular(c.topicPath(t.Slug))
 			if err != nil {
 				if errors.Is(err, os.ErrNotExist) {
 					continue // indexed but not written yet: nothing to print
@@ -125,7 +125,7 @@ var branchRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
 // Policy reads rota-knowledge.json. A missing file is the default, push to
 // main, with Defaulted set so the caller can say so.
 func (c Clone) Policy() (Policy, error) {
-	raw, err := readRegular(filepath.Join(c.Dir, PolicyFile))
+	raw, err := c.readRegular(filepath.Join(c.Dir, PolicyFile))
 	if errors.Is(err, os.ErrNotExist) {
 		return Policy{Write: "push", Branch: "main", Defaulted: true}, nil
 	}
@@ -154,9 +154,10 @@ func (c Clone) Policy() (Policy, error) {
 	return Policy{Write: p.Write, Branch: p.Branch}, nil
 }
 
-// readRegular reads a clone file, refusing a symlink or other non-regular file
-// so a hostile knowledge repo cannot point a topic at a file outside the clone.
-func readRegular(p string) ([]byte, error) {
+// readRegular reads a clone file, refusing a non-regular file and any path
+// whose symlinks resolve outside the clone, so a hostile knowledge repo cannot
+// point a topic (or the topics directory) at a file elsewhere.
+func (c Clone) readRegular(p string) ([]byte, error) {
 	fi, err := os.Lstat(p)
 	if err != nil {
 		return nil, err
@@ -164,5 +165,32 @@ func readRegular(p string) ([]byte, error) {
 	if !fi.Mode().IsRegular() {
 		return nil, fmt.Errorf("%s is not a regular file", p)
 	}
+	root, err := filepath.EvalSymlinks(c.Dir)
+	if err != nil {
+		return nil, err
+	}
+	real, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return nil, err
+	}
+	if rel, err := filepath.Rel(root, real); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("%s resolves outside the knowledge clone", p)
+	}
 	return os.ReadFile(p)
+}
+
+// insideClone refuses a directory whose symlinks resolve outside the clone.
+func (c Clone) insideClone(dir string) error {
+	root, err := filepath.EvalSymlinks(c.Dir)
+	if err != nil {
+		return err
+	}
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return err
+	}
+	if rel, err := filepath.Rel(root, real); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("%s resolves outside the knowledge clone", dir)
+	}
+	return nil
 }
