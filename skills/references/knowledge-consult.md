@@ -2,28 +2,31 @@
 
 Used by `/rota-debug` Step 3+3.5, `/rota-refactor` (Orient step), `/rota-review` Step 4, and indirectly by `references/context-load-protocol.md` (which composes this pattern into a wider load list for `/rota-plan`, `/rota-vision`, `/rota-work`, including `/rota-work --preview`).
 
-The pattern is one pair of `rota` calls plus carrier semantics, kept here so call-site logic lives in one place.
+The pattern is one pair of `rota` calls (a third when an external knowledge base is configured) plus carrier semantics, kept here so call-site logic lives in one place.
 
 ## Verbs
 
 ```bash
 rota knowledge query "Topic A" "Topic B"
 rota decisions query "Topic A" "Topic B"
+rota knowledge query --external "Go" "git"   # only when knowledge.external is set
 ```
 
 Topic selection: read the `rota-knowledge` and `rota-decisions` managed blocks in `CLAUDE.md`, infer which topics plausibly touch the work (e.g., a backend refactor might pull `Architecture`), and pass those names as arguments. Pass several when in doubt; both verbs filter, so extras cost nothing.
+
+The third call runs only when `rota config show knowledge.external` prints a path. Its topics are the technologies the work touches (Go, git, herdr, GitHub Actions, Postgres), not the project's topic names; `rota knowledge topics --external` lists what exists. It freshens the clone first (at most one fetch per `knowledge.externalTTL` minutes) and warns on stderr when it reads a stale, dirty or diverged copy: pass that warning on, do not treat it as failure. With the key unset skip the call; the pattern is unchanged.
 
 Both verbs are lookups: they exit 0 with empty `text` when no topic matches (`knowledge query` also lists the unmatched names in `data.missing`). Do not wrap them with `2>/dev/null` or treat empty output as failure: that hides real errors and contradicts the lookup-vs-resolve contract in `.rota/DECISIONS.md`.
 
 ## Parallelism
 
-The two queries are independent and disk-bound. Dispatch both as parallel tool calls in the same response.
+The queries are independent and disk-bound. Dispatch all of them as parallel tool calls in the same response.
 
 ## Carrier semantics
 
 The two verbs return different *kinds* of content; handle them differently.
 
-**KNOWLEDGE bullets are gotchas / hints.** Surface relevant ones into whatever brief the calling skill is building: debug hypothesis, reviewer brief, refactor sub-agent prompt, worker brief. The label varies; the role is the same: prior art that informs but does not constrain.
+**KNOWLEDGE bullets are gotchas / hints.** External bullets (`query --external`) count as KNOWLEDGE bullets here: carry the relevant ones into the brief the same way. They have no tier, so skip them in the hit-register step below. Surface relevant ones into whatever brief the calling skill is building: debug hypothesis, reviewer brief, refactor sub-agent prompt, worker brief. The label varies; the role is the same: prior art that informs but does not constrain.
 
 **DECISIONS entries are hard boundaries.** Pass the FULL entry to the consumer (rule, *Why*, **Forbids**, **Permits**), not just the title. The calling skill MUST treat them as constraints, not suggestions. If the planned action would violate a decision, stop and surface it to the user first. Do not reword or scope a violation away.
 

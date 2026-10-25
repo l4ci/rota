@@ -33,6 +33,7 @@ never exits 5.
 | `skills` | every installed skills root (user and project, Claude and Codex) matches the binary's skill set, and has no missing or edited files | no root has a `.rota-manifest.json` (run `rota skills install`) |
 | `config dir` | the global config dir in use and where it came from (`ROTA_CONFIG_DIR` override, `XDG_CONFIG_HOME` or the default). Warns when a relative `ROTA_CONFIG_DIR` was ignored | never |
 | `state dir` | the state dir that holds the project registry (`projects.json`) | never |
+| `external knowledge` | the path in `knowledge.external` is a git clone with a remote and a `rota-knowledge.json`. Fails when the path is missing, not a git repository or has no remote; warns when the policy file is missing (writes then default to push). See [External knowledge](external-knowledge.md) | nothing to report: the line appears only when `knowledge.external` is set |
 | `codex` | `codex` runs, the default Codex home (or each `codex` account in `round.accounts`) logged in, herdr integration per home | `codex` is not on `PATH` and no `codex` account is in `round.accounts` |
 
 `verify` also appears only when something is wrong: it warns when `test.full` and `test.e2e` are both empty under a local verify (`test.fullWhere` is `local`), because the merge gate refuses to merge then (`blockedBy: no-verify`). The hint is `run: rota config set test.full '[...]'`. It never fails the run. `rota init` and `rota round start` print the same warning.

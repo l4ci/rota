@@ -234,6 +234,8 @@ var Keys = []Key{
 	k("issues.jira.project", ScopeProject, "", false, TypeString, "Jira project key, such as ROTA, that issues.connection reads from and writes to."),
 	k("issues.linear.team", ScopeProject, "", false, TypeString, "Linear team key, such as ROT, that issues.connection reads from and writes to."),
 	k("issues.itsaplan.project", ScopeProject, "", false, TypeString, "It's a Plan project key, such as MKT, that issues.connection reads from and writes to."),
+	k("knowledge.external", ScopeMachine, "", false, TypePath, "Local path of the cloned external knowledge repo (INDEX.md, topics/, rota-knowledge.json) that rota knowledge --external reads and writes, and that /rota-learn and the knowledge consult also use. Machine-specific, so set it in the global config. Empty means the feature is off."),
+	k("knowledge.externalTTL", ScopeMachine, num("10"), false, TypeInt, "Minutes a fetch of the external knowledge clone stays fresh. A read inside the window uses the local copy; past it, rota fetches and fast-forwards first. 0 fetches on every read."),
 }
 
 func init() {

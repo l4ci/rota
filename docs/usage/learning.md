@@ -11,6 +11,8 @@ updates the managed `rota-knowledge` block in the project instructions file (`AG
 in sync. [`/rota-work`](running-work.md) reads that index to decide when the current task should
 consult `KNOWLEDGE.md`.
 
+With an [external knowledge base](external-knowledge.md) configured, `/rota-learn` also sorts each learning: project-specific ones stay in `KNOWLEDGE.md`, general platform or technology ones go to the shared repo. It states the call per learning in one line. Without the `knowledge.external` key it behaves as described here.
+
 ## What gets captured (and what doesn't)
 
 **Captured:**
