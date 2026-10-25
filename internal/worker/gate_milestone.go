@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/l4ci/rota/internal/shlex"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -16,8 +17,8 @@ type milestoneCloser interface {
 }
 
 // closeOnMilestone labels before closing: a label failure leaves the issue
-// open and claimed for reconciliation. A landed PR still passes the gate,
-// with a warning if either tracker write failed.
+// open and claimed until manually recovered. Each successful close releases
+// its claim labels. A landed PR still passes with a warning for failed writes.
 func (g *gate) closeOnMilestone(src tracker.ClosingSource, label string) bool {
 	keys := g.bundleKeys()
 	for _, n := range g.forge.ClosedNumbers(src.Body) {
@@ -49,9 +50,13 @@ func (g *gate) closeOnMilestone(src tracker.ClosingSource, label string) bool {
 			}
 		}
 		if err != nil {
-			g.res.Warnings = append(g.res.Warnings, fmt.Sprintf("ISSUE-OPEN %s — %s merged but %s could not be labelled and closed on %s, so it keeps its claim for `rota round reconcile`: %v", g.o.Slot, g.pr, key.Ref(), g.o.Base, err))
+			add := "rota issues label " + shlex.Quote(string(key)) + " --add " + shlex.Quote(label)
+			close := "rota issues close " + shlex.Quote(string(key)) + " --commit " + shlex.Quote(g.verified)
+			g.res.Warnings = append(g.res.Warnings, fmt.Sprintf("ISSUE-OPEN %s — %s merged but %s could not be labelled and closed on %s, so it keeps its claim: %v; recover manually with `%s`, then `%s`", g.o.Slot, g.pr, key.Ref(), g.o.Base, err, add, close))
 			closed = false
+			continue
 		}
+		g.releaseClaimLabel(key, is.Labels)
 	}
 	return closed
 }

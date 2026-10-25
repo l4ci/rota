@@ -54,6 +54,14 @@ func (m *milestoneIssues) AddLabels(ctx context.Context, key tracker.IssueKey, l
 	return nil
 }
 
+func (m *milestoneIssues) RemoveLabels(ctx context.Context, key tracker.IssueKey, labels []string) error {
+	if other := m.others[key]; other != nil {
+		return other.RemoveLabels(ctx, key, labels)
+	}
+	m.labels = slices.DeleteFunc(m.labels, func(l string) bool { return slices.Contains(labels, l) })
+	return nil
+}
+
 func TestMilestoneMergeFailuresKeepTheClaim(t *testing.T) {
 	for _, failure := range []string{"label", "close", "verify", "merge"} {
 		t.Run(failure, func(t *testing.T) {
@@ -89,8 +97,14 @@ func TestMilestoneMergeFailuresKeepTheClaim(t *testing.T) {
 				t.Fatalf("state=%s labels=%v", m.state, m.labels)
 			}
 			if failure == "label" || failure == "close" {
-				if !strings.Contains(strings.Join(res.Notes, "\n"), "ISSUE-OPEN") {
+				warning := strings.Join(res.Notes, "\n")
+				if !strings.Contains(warning, "ISSUE-OPEN") {
 					t.Fatalf("missing tracker warning: %+v", res)
+				}
+				add := strings.Index(warning, "rota issues label 5 --add")
+				close := strings.Index(warning, "rota issues close 5 --commit "+w.forgeWord("sha"))
+				if add < 0 || close < add || !strings.Contains(warning, "on-milestone/M01") {
+					t.Fatalf("warning must give label then close commands: %s", warning)
 				}
 			} else if slices.Contains(m.labels, "on-milestone/M01") {
 				t.Fatalf("unmerged issue labelled: %v", m.labels)
@@ -105,7 +119,7 @@ func TestGateMilestonePartialSliceAndDefaultBranch(t *testing.T) {
 		partial, final, closed bool
 	}{
 		{"default branch keeps auto-close", "main", "Closes #5", false, false, false},
-		{"partial slice stays open", "milestone/M01", "Refs #5", true, false, false},
+		{"partial slice stays open", "milestone/M01", "Closes #5", true, false, false},
 		{"final slice closes", "milestone/M01", "Closes #5", true, true, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -133,12 +147,51 @@ func TestGateMilestonePartialSliceAndDefaultBranch(t *testing.T) {
 	}
 }
 
-func (m *milestoneIssues) RemoveLabels(ctx context.Context, key tracker.IssueKey, labels []string) error {
-	if other := m.others[key]; other != nil {
-		return other.RemoveLabels(ctx, key, labels)
+func TestGateMilestoneMixedFailureReleasesClosedClaims(t *testing.T) {
+	for _, failure := range []string{"label", "close"} {
+		t.Run(failure, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.forge("base", "milestone/M01")
+			w.forge("body", "Closes #5\nCloses #6\nCloses #7")
+			gitq(t, w.dir, "push", "-q", "origin", "main:refs/heads/milestone/M01")
+			gitq(t, w.dir, "checkout", "-q", "-b", "milestone/M01")
+			if err := os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q,"bundle":["#6","#7"]}]}`, ghURL)), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			f := &fakeForge{w: w, provider: "github"}
+			m := &milestoneIssues{fakeForge: f, state: "open", labels: []string{"in-progress", "claimed:nia@main"}, others: map[tracker.IssueKey]*milestoneIssues{}}
+			for _, key := range []tracker.IssueKey{"6", "7"} {
+				m.others[key] = &milestoneIssues{fakeForge: f, state: "open", labels: []string{"in-progress", "claimed:nia@main"}}
+			}
+			if failure == "label" {
+				m.others["6"].labelErr = errors.New("no label access")
+			} else {
+				m.others["6"].closeErr = errors.New("no close access")
+			}
+			e := w.env(false)
+			e.Forge = func(string, string, tracker.Settings) (Forge, error) { return m, nil }
+			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "milestone/M01"})
+			if err != nil || res.Verdict != GatePass {
+				t.Fatalf("gate: %+v %v", res, err)
+			}
+			for _, key := range []tracker.IssueKey{"5", "6", "7"} {
+				is, err := m.Get(bg, key, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if key == "6" {
+					if is.State != "open" || !slices.Contains(is.Labels, "in-progress") || !slices.Contains(is.Labels, "claimed:nia@main") {
+						t.Errorf("failed member lost claim: %+v", is)
+					}
+				} else if is.State != "closed" || !slices.Equal(is.Labels, []string{"on-milestone/M01"}) {
+					t.Errorf("closed member still claimed: %+v", is)
+				}
+			}
+			if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "#6") {
+				t.Fatalf("want warning naming failed member: %v", res.Warnings)
+			}
+		})
 	}
-	m.labels = slices.DeleteFunc(m.labels, func(l string) bool { return slices.Contains(labels, l) })
-	return nil
 }
 
 func TestGateMilestoneClosesBundleAndOtherLinkedIssues(t *testing.T) {
