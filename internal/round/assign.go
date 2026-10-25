@@ -1105,9 +1105,16 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 			return err
 		}},
 	}
+	afterClaim := 2
+	supportPull := e.Round.Role == roundcfg.RoleSupport && e.Round.Support != ""
+	if supportPull {
+		steps = slices.Insert(steps, afterClaim, e.supportPinStep(ctx, be, it))
+		afterClaim++
+	}
+
 	if run.fallback != nil {
-		// Right after the claim: a failure before dispatch gives the pick back.
-		steps = slices.Insert(steps, 2, harnessStep(ctx, e, be, it, run.fallback))
+		// After claiming and pinning: a failure before dispatch gives the pick back.
+		steps = slices.Insert(steps, afterClaim, harnessStep(ctx, e, be, it, run.fallback))
 	}
 	// A bundle's members are claimed and marked like the lead, each with its own
 	// undo; a resume finds them done.
@@ -1116,7 +1123,11 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 		claim.name, claim.skip = "claim "+m.ID, func() bool { return resuming }
 		state := stateStep(root, be, m.ID, agent, resuming, new(bool))
 		state.name = "in-progress " + m.ID
-		steps = append(steps, claim, state, step{name: "comment " + m.ID, skip: func() bool { return resuming }, do: func() error {
+		steps = append(steps, claim)
+		if supportPull {
+			steps = append(steps, e.supportPinStep(ctx, be, m))
+		}
+		steps = append(steps, state, step{name: "comment " + m.ID, skip: func() bool { return resuming }, do: func() error {
 			_, err := be.AddComment(m.ID, "feedback", bundleNote(agent, res.Branch, id))
 			return err
 		}})

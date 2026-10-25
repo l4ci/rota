@@ -265,6 +265,8 @@ branch `<agent>/<issue>-<slug>`, picks the account and dispatches a short signed
 pointer to the standing contract (`round.brief`, else `skills/references/worker-contract.md`), the
 issue to read and dispute, the item's `## Out of scope` section when it has one, the siblings and the decisions from `--body-file`.
 
+- **Milestone base.** An issue tagged to an active milestone is cut from `origin/milestone/<id>`
+  and its PR targets that branch; see [milestone branches](vision-and-plans.md#milestone-branches).
 - **Tier.** `--tier light|standard|heavy` picks the worker's model tier (default `round.tier`); a
   tier above the default needs `--tier-reason`. The tier and its model are recorded on the slot,
   shown by `rota round status`, and named in the brief with the tier table for the worker's own
@@ -888,7 +890,7 @@ with no reading, or when headroom rose because the quota window reset.
 With `round.support` set, main labels issues for the support machine (`rota round support offer`)
 and the two orchestrators talk through the issue thread. The support machine hands back an issue
 it cannot work with `rota round support return <ID> --reason-file <f>`. Both `round watch` runs
-wake on the other machine's PR changes and comments, and main's merge gate accepts a support PR's
+wake on the other machine's PR changes and comments (the support machine's also on main's comments on the issue of a PR parked for review, and on a PR of its own that turns conflicting with its base), and main's merge gate accepts a support PR's
 approvals from relays the support orchestrator posted as issue comments. See
 `docs/contributing/rounds.md` (Support role) for the rules.
 

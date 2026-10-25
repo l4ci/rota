@@ -65,3 +65,24 @@ func TestHasSpec(t *testing.T) {
 		}
 	}
 }
+
+func TestDepthRose(t *testing.T) {
+	none, light, full := config.DepthNone, config.DepthLight, config.DepthFull
+	for _, c := range []struct {
+		name              string
+		covered, required config.ReviewDepth
+		want              bool
+	}{
+		{"none to light", none, light, true},
+		{"none to full", none, full, true},
+		{"light to full", light, full, true},
+		{"same", light, light, false},
+		{"full to light", full, light, false},
+		{"light to none", light, none, false},
+		{"unknown covered", "", full, false},
+	} {
+		if got := DepthRose(c.covered, c.required); got != c.want {
+			t.Errorf("%s: DepthRose(%q, %q) = %v, want %v", c.name, c.covered, c.required, got, c.want)
+		}
+	}
+}
