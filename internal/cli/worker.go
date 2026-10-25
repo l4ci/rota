@@ -485,6 +485,9 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			if err := postSupportRelay(c, root, slot, path, n); err != nil {
 				c.Warn("the relay was sent but not posted on the issue (the main gate cannot see it): %v", err)
 			}
+			if err := consumeReviewRelay(c, ctx, root, slot, path); err != nil {
+				c.Warn("the relay was sent but its review input stays pending, so the watch may report it again: %v", err)
+			}
 		}
 		d := jsonx.NewObject()
 		d.Set("slot", res.Slot)
@@ -500,6 +503,36 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 		d.Set("changed", true)
 		return Result{Data: d, Text: fmt.Sprintf("dispatched: %s (%s)", res.Slot, res.Handle)}, nil
 	}
+}
+
+// consumeReviewRelay moves the slot's review cursor past the review input a
+// hand-sent `REVIEW <pr-url>` relay carried, as `round review-relay` does for
+// its own, so the watch does not report comments the worker already has
+// (#1866). No bounce is counted: that stays review-relay's. Any other relay
+// text leaves the cursor alone.
+func consumeReviewRelay(c *Ctx, ctx context.Context, root, slot, path string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	text := string(raw)
+	if first, rest, _ := strings.Cut(text, "\n"); strings.HasPrefix(first, "--- ORCHESTRATOR (round ") {
+		text = rest
+	}
+	s := worker.LoadRegistryTolerant(root).Slot(slot)
+	if s == nil || s.PR() == "" || !strings.HasPrefix(text, "REVIEW "+s.PR()+" ") {
+		return nil
+	}
+	fg, err := c.deps().forge(ctx, c.deps().Config(root), "", root)
+	if err != nil {
+		return err
+	}
+	b, err := worker.PendingReview(ctx, fg, s, failVerdict(root, s.Branch()), c.deps().Now())
+	if err != nil || b.Empty() {
+		return err
+	}
+	_, err = worker.UpdateSlot(root, slot, func(s *worker.Slot) { s.SetReviewSeen(b.Cursor) })
+	return err
 }
 
 // workerPromptCheck is the Codex UserPromptSubmit hook of a codex worker (#3).

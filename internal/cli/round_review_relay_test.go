@@ -278,3 +278,46 @@ func TestRoundReviewRelayBadRoundConfigExits3(t *testing.T) {
 		t.Fatalf("%d %s", code, errOut)
 	}
 }
+
+// A REVIEW batch handed to a done slot by `worker dispatch --relay` consumes
+// the review input it carried: the next watch poll does not report it again,
+// and a comment that lands afterwards is reported (#1866).
+func TestWorkerDispatchRelayConsumesTheReviewBatch(t *testing.T) {
+	f := &reviewForge{comments: []string{"please rename x"}}
+	deps := useReviewForge(f)
+	h := &cliHost{inSession: true}
+	useHost(deps, h)
+	dir := workerProject(t, ghCfg)
+	rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+	rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--task", "577", "--body-file", filepath.Join(dir, "go.mod"))
+	if err := worker.Update(dir, func(d *worker.Doc) {
+		s := d.Slot("w1")
+		s.SetPR(prURL)
+		_ = s.MarkState("done", "")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c := &Ctx{Deps: deps, ctx: context.Background(), Stderr: io.Discard}
+	key := roundwatch.ReviewKey("w1")
+	if got := watchForge(context.Background(), c, dir)[key]; got == "" {
+		t.Fatal("setup: the comment should be pending")
+	}
+	brief := filepath.Join(t.TempDir(), "relay.md")
+	if err := os.WriteFile(brief, []byte("REVIEW "+prURL+" (1 items)\nItem 1: please rename x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errOut := rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay"); code != 0 {
+		t.Fatalf("relay: %d %s", code, errOut)
+	}
+	// The worker reworks and hands the PR back.
+	if err := worker.Update(dir, func(d *worker.Doc) { _ = d.Slot("w1").MarkState("done", "") }); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := watchForge(context.Background(), c, dir)[key]; ok {
+		t.Fatalf("relayed batch reported again: %q", got)
+	}
+	f.comments = append(f.comments, "and the other thing")
+	if got := watchForge(context.Background(), c, dir)[key]; got != "1 from rev "+prURL {
+		t.Fatalf("new comment after the relay: %q", got)
+	}
+}
