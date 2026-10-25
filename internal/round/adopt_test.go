@@ -221,4 +221,9 @@ func TestAdoptWithoutPRRecordsTheBranchsOpenPR(t *testing.T) {
 	if got := worker.LoadRegistryTolerant(root).Slot(res.Slot).PR(); got != "https://x/pull/7" || res.PR != got {
 		t.Errorf("slot records %q, result %q: want the open PR", got, res.PR)
 	}
+	// AC2: the gate and train read the slot's PR at once, without a reconcile.
+	tgt, err := worker.LoadRegistryTolerant(root).GateTarget(res.Slot)
+	if err != nil || tgt.PR != "https://x/pull/7" {
+		t.Errorf("gate target = %+v, %v: want the adopted PR resolved right after adopt", tgt, err)
+	}
 }

@@ -105,7 +105,7 @@ func (e Env) branchPR(ctx context.Context, root, branch, base string) string {
 	if url := e.openBranchPR(ctx, branch); url != "" {
 		return url
 	}
-	if m := e.mergedBranchPR(ctx, root, branch, base); m != nil {
+	if m, _ := e.mergedBranchPR(ctx, root, branch, base); m != nil {
 		return m.URL
 	}
 	return ""
@@ -126,18 +126,18 @@ func (e Env) openBranchPR(ctx context.Context, branch string) string {
 }
 
 // mergedBranchPR is the merged PR headed by branch that the branch owns, nil
-// when none.
-func (e Env) mergedBranchPR(ctx context.Context, root, branch, base string) *tracker.PR {
+// when none. The error is the forge's: callers that act on the answer report it.
+func (e Env) mergedBranchPR(ctx context.Context, root, branch, base string) (*tracker.PR, error) {
 	merged, err := e.Forge.MergedPRs(ctx, branch)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	for i := range merged {
 		if merged[i].URL != "" && e.ownsMergedPR(ctx, root, merged[i].HeadSHA, base, branch) {
-			return &merged[i]
+			return &merged[i], nil
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 // busyMsg is the refusal text for a slot that holds an issue and cannot park.
