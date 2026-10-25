@@ -25,6 +25,38 @@ func row(t *testing.T, s Summary, issue, slot string) IssueRow {
 	return IssueRow{}
 }
 
+func TestQuotaBurn(t *testing.T) {
+	point := func(v float64) *float64 { return &v }
+	for _, tc := range []struct {
+		name                 string
+		start, current, want *float64
+	}{
+		{name: "headroom fell", start: point(80), current: point(60), want: point(20)},
+		{name: "unchanged", start: point(60), current: point(60), want: point(0)},
+		{name: "window reset", start: point(30), current: point(60)},
+		{name: "missing start", current: point(60)},
+		{name: "missing current", start: point(80)},
+		{name: "both missing"},
+		{name: "no headroom left", start: point(80), current: point(0), want: point(80)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := QuotaBurn(tc.start, tc.current)
+			if tc.want == nil {
+				if got != nil {
+					t.Fatalf("burn = %v, want unknown", *got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("burn is unknown, want %v", *tc.want)
+			}
+			if *got != *tc.want {
+				t.Errorf("burn = %v, want %v", *got, *tc.want)
+			}
+		})
+	}
+}
+
 func TestSummaryRowAndTotals(t *testing.T) {
 	es := []Entry{
 		{TS: at(0), Kind: KindAssign, Round: 2, Issue: "12", Slot: "ben", Account: "work", Harness: "claude", Detail: hr(80)},

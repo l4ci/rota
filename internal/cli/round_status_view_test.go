@@ -273,10 +273,13 @@ func TestFillBurnFromLedger(t *testing.T) {
 	}
 	rows := []round.Row{{Name: "ben", Issue: "12"}, {Name: "dana", Issue: "13"}, {Name: "nia", Issue: "14"}, {Name: "kit", Issue: "15"}, {Name: "ada"}}
 	fillBurn(context.Background(), &Ctx{Deps: d}, dir, rows)
-	// headroom now is 60: ben burned 80-60; nia's reset window floors at 0; a
-	// codex slot, an assign with no reading and an idle slot are n/a.
-	if rows[0].Burn == nil || *rows[0].Burn != 20 || rows[1].Burn != nil || rows[2].Burn == nil || *rows[2].Burn != 0 || rows[3].Burn != nil || rows[4].Burn != nil {
+	// Headroom now is 60: ben burned 20; a codex slot, a reset window,
+	// an assign with no reading and an idle slot are n/a.
+	if rows[0].Burn == nil || *rows[0].Burn != 20 || rows[1].Burn != nil || rows[3].Burn != nil || rows[4].Burn != nil {
 		t.Errorf("burn = %v %v %v %v %v", rows[0].Burn, rows[1].Burn, rows[2].Burn, rows[3].Burn, rows[4].Burn)
+	}
+	if got := burnLabel(rows[2]); got != "n/a" {
+		t.Errorf("reset window burn = %q, want n/a", got)
 	}
 	if fetches != 1 {
 		t.Errorf("%d meter fetches for one refresh over three slots, want 1", fetches)
