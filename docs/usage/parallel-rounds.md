@@ -802,8 +802,8 @@ remove all claim labels from closed issues. Reconcile also cleans closed issues 
 
 After upgrading, run `rota round reconcile --apply` once to backfill the visible labels for
 in-flight comment claims. It also repairs stray claim labels on open issues with no remaining
-claim. The broad closed-issue sweep runs only under reconcile; status and watch polls retain
-filtered closed-issue reads. Reverting the change leaves `claimed:*` labels already written to
+claim. Only `round reconcile` sweeps closed issues for claim labels; status, watch and the
+autopilot tick all stay on filtered closed-issue reads. Reverting the change leaves `claimed:*` labels already written to
 the tracker; remove those labels by hand.
 
 A repair whose evidence could not be read this run (the host for a `dead-tab`, the
