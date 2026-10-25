@@ -107,7 +107,7 @@ func TestGitBase(t *testing.T) {
 		{name: "main", dir: main, args: []string{"git", "base"}, data: b("main")},
 		{name: "master", dir: master, args: []string{"git", "base"}, data: b("master")},
 		{name: "configured", dir: dev, args: []string{"git", "base"}, data: b("dev")},
-		{name: "configured missing", dir: stale, args: []string{"git", "base"}, data: b("main")},
+		{name: "configured missing", dir: stale, args: []string{"git", "base"}, code: 3},
 		{name: "origin/HEAD", dir: remote, args: []string{"git", "base"}, data: b("develop")},
 		{name: "none", dir: fresh, args: []string{"git", "base"}, code: 3},
 		{name: "umbrella root", dir: u, args: []string{"git", "base"}, code: 2},

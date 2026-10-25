@@ -93,6 +93,9 @@ type Env struct {
 	Label string
 	// HostErr and ForgeErr say why Snapshot or Forge is nil.
 	HostErr, ForgeErr string
+	// BaseErr is why Base is unusable: git.baseBranch is set but does not
+	// resolve. The verbs that cut or compare against Base refuse on it.
+	BaseErr string
 	// Lease reads the orchestrator lease; the zero value is the real process
 	// table and host name.
 	Lease roundlease.Env
@@ -397,10 +400,19 @@ type worktree struct{ path, name, branch string }
 // roundCfgErr is RoundErr as a usage error, so a bad round.* key is the user's
 // to fix and never reads as a rota bug; nil when the settings loaded.
 func (e Env) roundCfgErr() error {
-	if e.RoundErr == nil {
-		return nil
+	if e.RoundErr != nil {
+		return &exitcode.Error{Exit: exitcode.ExitUsage, Message: e.RoundErr.Error()}
 	}
-	return &exitcode.Error{Exit: exitcode.ExitUsage, Message: e.RoundErr.Error()}
+	return e.baseCfgErr()
+}
+
+// baseCfgErr refuses a set git.baseBranch that does not resolve, with exit 3
+// like `git base`; nil when the base resolved or the key is unset.
+func (e Env) baseCfgErr() error {
+	if e.BaseErr != "" {
+		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: e.BaseErr}
+	}
+	return nil
 }
 
 // Status assembles the round. It fails when git does, and with a usage error
