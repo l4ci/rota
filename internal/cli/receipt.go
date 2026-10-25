@@ -33,7 +33,7 @@ func receipted(verb string, inner func(*flag.FlagSet) RunFunc, inputs ...inputsF
 		rid := fs.String("request-id", "", "idempotency key: a retry with the same id returns the first result and applies nothing (default: minted and printed)")
 		run := inner(fs)
 		return func(c *Ctx, args []string) (Result, error) {
-			if checkOnly(fs) {
+			if checkOnly(fs) || previewOnly(fs) {
 				return run(c, args)
 			}
 			root, err := c.Root()
@@ -182,6 +182,12 @@ func replay(c *Ctx, e receipt.Entry) (Result, error) {
 		return res, &Error{Exit: e.Exit, Message: e.Message}
 	}
 	return res, nil
+}
+
+// previewOnly is a --plan run: it changes nothing, so it leaves no receipt.
+func previewOnly(fs *flag.FlagSet) bool {
+	f := fs.Lookup("plan")
+	return f != nil && f.Value.String() == "true"
 }
 
 func checkOnly(fs *flag.FlagSet) bool {
