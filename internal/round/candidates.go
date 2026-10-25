@@ -138,7 +138,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		for _, it := range chosen {
 			keys = append(keys, it.IssueKey())
 		}
-		claims, warnings := e.StaleClaims(ctx, root, board, keys)
+		claims, warnings := e.staleClaims(ctx, root, board, keys, prs)
 		staleWarnings = warnings
 		for _, c := range claims {
 			if _, exists := stale[c.Issue]; !exists {
