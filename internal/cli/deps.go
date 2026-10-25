@@ -185,6 +185,7 @@ func defaultDeps() *Deps {
 	latest := d.Getenv("ROTA_TEST_LATEST_VERSION")
 	d.UpdateEnv = func() update.Env {
 		e := update.DefaultEnv(version.Get().Version, d.Proc)
+		e.Commit = version.Commit // raw: Get shortens it, which hides a checkout build
 		if latest != "" {
 			e.Latest = func() string { return latest }
 		}
