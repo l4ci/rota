@@ -243,7 +243,9 @@ func TestReleasedBundleMembersAreClaimDrift(t *testing.T) {
 	f.forge.labelled = nil
 	// Released: the slot names no task, branch or issue, though a stale bundle
 	// list may linger.
-	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Delete("issue"); s.Delete("task") })
+	if err := rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Delete("issue"); s.Delete("task") }); err != nil {
+		t.Fatal(err)
+	}
 	gittest.Run(t, filepath.Join(f.root, ".worktrees", "ben"), "checkout", "-q", "park/ben")
 
 	rep, err := f.env.Status(bg, f.root)
