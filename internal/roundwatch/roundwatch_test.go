@@ -3,6 +3,7 @@ package roundwatch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -173,26 +174,38 @@ func writeRegistry(t *testing.T, root, body string) {
 
 func TestNeedsWatchAndDigest(t *testing.T) {
 	root := t.TempDir()
-	writeRegistry(t, root, `{"slots":[{"name":"ben","state":"idle"},{"name":"dana","state":"busy","task":"31"}]}`)
-	need, attn := NeedsWatch(root)
-	if !need || len(attn) != 0 {
-		t.Fatalf("busy slot needs a watch, nothing waits on the orchestrator: %v %v", need, attn)
-	}
-	d := Digest(root, 2, false)
-	if !strings.Contains(d, "dana busy #31") || !strings.Contains(d, "round 2") || !strings.Contains(d, "NO WATCH ARMED") || strings.Contains(d, "ben") {
-		t.Fatalf("digest %q", d)
+	for _, tc := range []struct {
+		state  string
+		active bool
+	}{
+		{"busy", true},
+		{"", true}, // unrecorded is not proof that a worker is idle
+		{"idle", false},
+		{"IDLE", false},
+		{"IdLe", false},
+	} {
+		t.Run(fmt.Sprintf("state=%q", tc.state), func(t *testing.T) {
+			writeRegistry(t, root, fmt.Sprintf(`{"slots":[{"name":"ben","state":"idle"},{"name":"dana","state":%q,"task":"31"}]}`, tc.state))
+			need, attn := NeedsWatch(root)
+			if need != tc.active || len(attn) != 0 {
+				t.Errorf("NeedsWatch = %v %v, want %v and no attention", need, attn, tc.active)
+			}
+			d := Digest(root, 2, false)
+			if strings.Contains(d, "dana") != tc.active || strings.Contains(d, "#31") != tc.active || strings.Contains(d, "ben") {
+				t.Errorf("digest slot visibility: %q", d)
+			}
+			if !strings.Contains(d, "round 2") || !strings.Contains(d, "NO WATCH ARMED") {
+				t.Errorf("digest round/watch status: %q", d)
+			}
+		})
 	}
 	writeRegistry(t, root, `{"slots":[{"name":"ben","state":"done","pr":"https://x/pull/7"}]}`)
-	need, attn = NeedsWatch(root)
+	need, attn := NeedsWatch(root)
 	if !need || len(attn) != 1 || attn[0] != "ben done" {
 		t.Fatalf("%v %v", need, attn)
 	}
 	if d := Digest(root, 0, true); !strings.Contains(d, "needs you") || !strings.HasSuffix(d, "Watch armed.") {
 		t.Fatalf("digest %q", d)
-	}
-	writeRegistry(t, root, `{"slots":[{"name":"ben","state":"idle"}]}`)
-	if need, _ := NeedsWatch(root); need {
-		t.Fatal("an all-idle round has nothing to watch")
 	}
 }
 

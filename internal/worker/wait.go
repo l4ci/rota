@@ -383,7 +383,7 @@ func soloWait(root string, o WaitOpts) (WaitResult, error) {
 		}
 	} else {
 		for _, s := range reg.Slots() {
-			if !s.IsExternal() && strings.ToLower(s.State()) != "idle" {
+			if !s.IsExternal() && !IsIdle(s.State()) {
 				watched = append(watched, s)
 			}
 		}
@@ -445,7 +445,7 @@ func waitTargets(reg Registry, names []string) ([]pollTarget, error) {
 		}
 	} else {
 		for _, s := range reg.Slots() {
-			if t := slotTarget(s); t.handle != "" && strings.ToLower(t.prev) != "idle" {
+			if t := slotTarget(s); t.handle != "" && !IsIdle(t.prev) {
 				targets = append(targets, t)
 			}
 		}
