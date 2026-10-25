@@ -32,6 +32,18 @@ When an active milestone has no open items remaining, `/rota-work` (no argument)
 
 Marking a milestone `shipped` immediately unblocks anything that depended on it. Marking it `archived` does not. Use `archived` for milestones you are intentionally dropping, not for ones that finished.
 
+## Milestone branches
+
+On a project with an `origin` remote, each active milestone has its own branch, `milestone/<id>`, where its work collects until the milestone ships. `rota milestone status <MID> --to active` cuts it from the base branch and pushes it, and `--to shipped` deletes it. When the branch exists on origin, `--to archived --branch keep|delete` renames it to `archive/milestone/<id>` or removes it, and `--to planned` deletes it unless it holds commits not on the base.
+
+In a [round](parallel-rounds.md), the milestone's issues go to that branch:
+
+- `rota round assign` cuts the worker's branch from `origin/milestone/<id>` and names the base in the brief. The worker's PR targets the milestone branch, and `rota git base` and `rota ship` follow it.
+- Untagged issues, issues of a milestone that is not active, and projects without an `origin` keep the round's base. So does an active milestone whose branch is missing on origin, with a warning that names it.
+- If an issue's milestone tag changes after it was assigned, `rota round reconcile --apply` retargets its PR to the new base and tells the worker to merge that base before the PR merges. A milestone that goes active does not move issues already assigned under the same tag.
+
+Land milestone PRs with `rota worker gate <PR> --base milestone/<id>` or `rota worker train <PRs> --base milestone/<id>`. A train on a milestone base first merges the project base into the milestone and tests the result with the members. It pushes that sync merge only when the train passes, and a conflict stops the train with nothing pushed.
+
 ## Breaking a milestone into issues
 
 When a milestone or Major feature splits into three or more issues, the pieces need a shared shape, or they drift apart. The milestone's `## Capabilities` lists the contracts it changes, one short name per bullet, tagged `(new)`, `(modified)` or `(removed)`. Its `## Acceptance` criteria are checkboxes, numbered `AC-1`, `AC-2` and so on.
