@@ -85,7 +85,8 @@ func stateIs(state string, names ...string) bool {
 // IsDone: the worker handed its work back.
 func IsDone(state string) bool { return stateIs(state, "done") }
 
-// IsIdle: the worker is up and holds nothing running.
+// IsIdle: the worker is up and holds nothing running. An empty, unrecorded
+// state is not idle: keep watching it, as Building treats it as still working.
 func IsIdle(state string) bool { return stateIs(state, "idle") }
 
 // IsBlocked: the worker asked a question and waits.
