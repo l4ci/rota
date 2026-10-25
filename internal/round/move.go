@@ -286,12 +286,19 @@ func (e Env) releaseSteps(ctx context.Context, r slotRelease, out *released) []s
 		}})
 	}
 	return append(steps, step{name: "free the slot", do: func() error {
-		return wrap(editSlot(r.root, r.slot, func(s *worker.Slot) error {
+		// The freed slot forgets its PR and relay log, so the gate would read the
+		// PR as external and fail a cited relay. Keep the log where only the gate
+		// reads it; the issue is released, so no queued record holds it (#1853).
+		return wrap(worker.Update(r.root, func(doc *worker.Doc) {
+			s := doc.Slot(r.slot)
+			if s == nil {
+				return
+			}
+			doc.LogRelays(s.PR(), s.Relays())
 			s.Park(r.gone)
 			if r.gone {
 				s.ReleasePort()
 			}
-			return nil
 		}))
 	}})
 }

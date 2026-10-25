@@ -447,6 +447,13 @@ func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 		if ack || ((status == "working" || status == "blocked") && !harness.RequiresPromptEcho(kind, pane)) {
 			return nil
 		}
+		// A busy agent queues the relay in a preview above the composer, which
+		// can be cut short of the brief's tail. The relay's own marker above
+		// the prompt line shows it arrived (#1862); on the prompt line it is a
+		// brief whose Enter was lost, and falls through to the resubmit.
+		if (status == "working" || status == "blocked") && relayQueued(output, text) {
+			return nil
+		}
 	}
 	if jget(r.Stderr, "error.code") == "agent_blocked" {
 		return ErrDialogOpen
@@ -455,6 +462,21 @@ func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 		return h.submitTyped(ctx, name)
 	}
 	return ErrNotSubmitted
+}
+
+// relayMarker is the `[relay K]` line dispatch puts in every relay; K is
+// unique within the slot, so an earlier relay's echo does not match.
+var relayMarker = regexp.MustCompile(`(?m)^\[relay \d+\]$`)
+
+// relayQueued reports whether output, the pane text above the prompt line,
+// shows this relay: its `[relay K]` marker, or the brief's tail.
+func relayQueued(output, text string) bool {
+	flat := squeeze(output)
+	if m := relayMarker.FindString(text); m != "" && strings.Contains(flat, squeeze(m)) {
+		return true
+	}
+	tail := briefTail(text)
+	return tail != "" && strings.Contains(flat, tail)
 }
 
 // SubmitPending is the resend path: when the file's text is already on the

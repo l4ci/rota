@@ -259,7 +259,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		}
 		// The round is over, so its host goes with the lease: the worker verbs
 		// read round.dispatch again.
-		if err := worker.Update(root, func(doc *worker.Doc) { doc.ClearHost() }); err != nil {
+		if err := worker.Update(root, func(doc *worker.Doc) { doc.ClearHost(); doc.ClearRelayLog() }); err != nil {
 			return res, err
 		}
 		res.Changed = true
