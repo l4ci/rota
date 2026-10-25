@@ -311,7 +311,7 @@ func TestOpenEscalationsAreReported(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	wenv(&e).Now = func() time.Time { return time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC) }
+	withNow(&e, func() time.Time { return time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC) })
 	out, err := e.Reconcile(bg, root, false)
 	if err != nil {
 		t.Fatal(err)

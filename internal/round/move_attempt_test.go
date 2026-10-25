@@ -48,7 +48,7 @@ func TestTransferRecordsTheInheritedTipAndTheGateKeepsTheReceiversPR(t *testing.
 	benAttempt := f.slot("ben").Attempt()
 	f.stamped(t, "ben", "stamped.txt", benAttempt)
 	f.queueBensPR(t)
-	wenv(&f.env).NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} }
+	f.wire(func(w *worker.Env) { w.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} } })
 	if _, err := f.transfer("12", "dana", nil); err == nil {
 		t.Fatal("the dispatch must fail")
 	}
@@ -58,13 +58,15 @@ func TestTransferRecordsTheInheritedTipAndTheGateKeepsTheReceiversPR(t *testing.
 		t.Fatalf("dana attempt %q base %q, want a new attempt and base %s", dana.Attempt(), dana.AttemptBase(), tip)
 	}
 	gate := func() worker.GateResult {
-		res, _ := wenv(&f.env).Gate(bg, f.root, worker.GateOpts{Slot: "dana", Base: "main", CheckOnly: true})
+		res, _ := f.ws.Gate(bg, f.root, worker.GateOpts{Slot: "dana", Base: "main", CheckOnly: true})
 		return res
 	}
 	if res := gate(); res.Verdict == worker.GateStaleAttempt {
 		t.Fatalf("dispatch half done, the receiver's PR is refused: %+v", res)
 	}
-	wenv(&f.env).NewHost = func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }
+	f.wire(func(w *worker.Env) {
+		w.NewHost = func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }
+	})
 	if _, err := f.transfer("12", "dana", nil); err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +156,7 @@ func TestFreshRelayKeepsTheReceiversPR(t *testing.T) {
 		t.Fatalf("attempt %q base %q", dana.Attempt(), dana.AttemptBase())
 	}
 	gate := func() worker.GateResult {
-		res, _ := wenv(&f.env).Gate(bg, f.root, worker.GateOpts{Slot: "dana", Base: "main", CheckOnly: true})
+		res, _ := f.ws.Gate(bg, f.root, worker.GateOpts{Slot: "dana", Base: "main", CheckOnly: true})
 		return res
 	}
 	if res := gate(); res.Verdict == worker.GateStaleAttempt {
@@ -209,7 +211,7 @@ func TestTransferThatSendsNoBriefLogsNoRelay(t *testing.T) {
 		fails bool
 	}{
 		"failed dispatch": {"dana", func(f *moveFx) {
-			wenv(&f.env).NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} }
+			f.wire(func(w *worker.Env) { w.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} } })
 		}, true},
 		"solo":     {"dana", func(f *moveFx) { setHost(t, f.root, host.Solo) }, false},
 		"to human": {HumanTarget, func(*moveFx) {}, false},

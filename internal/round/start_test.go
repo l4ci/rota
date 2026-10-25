@@ -473,12 +473,12 @@ func TestStartNumbersALeaseTakenUnnumberedByTheSameHolder(t *testing.T) {
 	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: le}
 	// Its child runs `round start` with ROTA_ROUND_HOLDER_PID, no --holder-pid.
 	o := startOpts(roundcfg.ScopeMilestone, 0)
-	wenv(&e).Getenv = func(k string) string {
+	withGetenv(&e, func(k string) string {
 		if k == roundlease.HolderPIDEnv {
 			return "100"
 		}
 		return ""
-	}
+	})
 	st, err := e.Start(bg, root, o)
 	if err != nil || st.Outcome != roundlease.Numbered || st.Round != 1 || !st.Changed {
 		t.Fatalf("first start under the supervisor must number the lease: %v %+v", err, st)

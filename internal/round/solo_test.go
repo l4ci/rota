@@ -19,12 +19,14 @@ func registryHost(root string) host.Kind { return worker.RegistryHost(root) }
 
 // noHost makes any host construction fail the test: under solo a round verb
 // must not build, ask or drive a host.
-func noHost(t *testing.T, e *Env) {
+func noHost(t *testing.T, wire func(func(*worker.Env)), e *Env) {
 	t.Helper()
-	wenv(e).NewHost = func(d host.Kind) host.Host {
-		t.Fatalf("solo round reached host.New(%q)", d)
-		return nil
-	}
+	wire(func(w *worker.Env) {
+		w.NewHost = func(d host.Kind) host.Host {
+			t.Fatalf("solo round reached host.New(%q)", d)
+			return nil
+		}
+	})
 	e.Snapshot = func(context.Context) ([]host.Agent, error) {
 		t.Fatal("solo round asked the host for a snapshot")
 		return nil, nil
@@ -71,12 +73,12 @@ func TestStartRecordsTheResolvedHostAndKeepsItForTheRound(t *testing.T) {
 	}
 	// And honours the environment: herdr in a herdr pane with the binary.
 	f.windDown(nil)
-	wenv(&f.env).Getenv = func(k string) string {
+	withGetenv(&f.env, func(k string) string {
 		if k == "HERDR_ENV" {
 			return "1"
 		}
 		return ""
-	}
+	})
 	o.LookPath = func(string) (string, error) { return "/bin/herdr", nil }
 	if st, err = f.env.Start(bg, f.root, o); err != nil || st.Host != "herdr" {
 		t.Errorf("herdr pane: %q %v", st.Host, err)
@@ -98,10 +100,12 @@ func soloAssign(t *testing.T) *assignFixture {
 	t.Helper()
 	f := newAssignFixture(t)
 	setHost(t, f.root, host.Solo)
-	wenv(&f.env).NewHost = func(d host.Kind) host.Host {
-		t.Fatalf("solo assign reached host.New(%q)", d)
-		return nil
-	}
+	f.wire(func(w *worker.Env) {
+		w.NewHost = func(d host.Kind) host.Host {
+			t.Fatalf("solo assign reached host.New(%q)", d)
+			return nil
+		}
+	})
 	return f
 }
 
@@ -276,7 +280,7 @@ func TestStatusAndReconcileUnderSoloAreQuietAboutTheHost(t *testing.T) {
 func TestReturnTransferReclaimUnderSoloNeverTouchTheHost(t *testing.T) {
 	f := newMoveFx(t)
 	setHost(t, f.root, host.Solo)
-	noHost(t, &f.env)
+	noHost(t, f.wire, &f.env)
 	f.env.HostName, f.env.Snapshot = host.Solo, nil
 
 	// transfer to a slot: the receiver is marked busy, the brief comes back.
@@ -302,7 +306,7 @@ func TestReturnTransferReclaimUnderSoloNeverTouchTheHost(t *testing.T) {
 func TestReclaimUnderSoloParksAStalledSlotWithoutAKill(t *testing.T) {
 	f := newMoveFx(t)
 	setHost(t, f.root, host.Solo)
-	noHost(t, &f.env)
+	noHost(t, f.wire, &f.env)
 	f.env.HostName, f.env.Snapshot = host.Solo, nil
 	f.now = f.now.Add(40 * time.Minute)
 	res, err := f.reclaim("ben", nil)

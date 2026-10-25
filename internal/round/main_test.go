@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// noEnv is an empty process environment for wenv(&Env).Getenv.
+// noEnv is an empty process environment for Env.Worker.Getenv.
 func noEnv(string) string { return "" }
 
 // diskConfig reads the .rota/config.json a test wrote, as cli's Deps.Config does.
@@ -51,13 +51,4 @@ func wk(w worker.Env) Worker {
 		w.Git = git.Exec
 	}
 	return FromWorkerEnv(w)
-}
-
-// wenv is the worker.Env behind e.Worker, for a test that swaps one of its
-// seams after the Env is built.
-func wenv(e *Env) *worker.Env {
-	if e.Worker == nil {
-		e.Worker = wk(worker.Env{})
-	}
-	return &e.Worker.(*envWorker).Env
 }

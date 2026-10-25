@@ -142,7 +142,7 @@ func TestReviewRelayAtCapEscalates(t *testing.T) {
 
 func TestReviewRelayRefusedDispatchCountsNothing(t *testing.T) {
 	f, _, o := reviewFx(t)
-	wenv(&f.env).NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} }
+	f.wire(func(w *worker.Env) { w.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} } })
 	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
 		t.Fatal("want the dispatch failure")
 	}
@@ -263,7 +263,7 @@ func TestReviewRelayCodexSigned(t *testing.T) {
 	if err := rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("kind", "codex") }); err != nil {
 		t.Fatal(err)
 	}
-	cd, err := worker.CommonDir(bg, wenv(&f.env).Git, f.root)
+	cd, err := worker.CommonDir(bg, f.ws.Git, f.root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,13 +302,15 @@ func (h *sendHook) Send(context.Context, string, string, string) error {
 // registry as it is then, not a snapshot from before the dispatch.
 func TestReviewRelayRollbackKeepsAConcurrentBounce(t *testing.T) {
 	f, _, o := reviewFx(t)
-	wenv(&f.env).NewHost = func(host.Kind) host.Host {
-		return &sendHook{hostFake: f.host, hook: func() {
-			if _, err := recordBounceVia(worker.Env{Config: diskConfig}, f.root, "12", "", ""); err != nil {
-				t.Error(err)
-			}
-		}}
-	}
+	f.wire(func(w *worker.Env) {
+		w.NewHost = func(host.Kind) host.Host {
+			return &sendHook{hostFake: f.host, hook: func() {
+				if _, err := recordBounceVia(worker.Env{Config: diskConfig}, f.root, "12", "", ""); err != nil {
+					t.Error(err)
+				}
+			}}
+		}
+	})
 	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
 		t.Fatal("want the dispatch failure")
 	}
@@ -320,17 +322,19 @@ func TestReviewRelayRollbackKeepsAConcurrentBounce(t *testing.T) {
 // A rollback that cannot be written is reported, not dropped.
 func TestReviewRelayReportsARollbackError(t *testing.T) {
 	f, _, o := reviewFx(t)
-	wenv(&f.env).NewHost = func(host.Kind) host.Host {
-		return &sendHook{hostFake: f.host, hook: func() {
-			path := worker.RegistryPath(f.root)
-			if err := os.Remove(path); err != nil {
-				t.Error(err)
-			}
-			if err := os.Mkdir(path, 0o755); err != nil {
-				t.Error(err)
-			}
-		}}
-	}
+	f.wire(func(w *worker.Env) {
+		w.NewHost = func(host.Kind) host.Host {
+			return &sendHook{hostFake: f.host, hook: func() {
+				path := worker.RegistryPath(f.root)
+				if err := os.Remove(path); err != nil {
+					t.Error(err)
+				}
+				if err := os.Mkdir(path, 0o755); err != nil {
+					t.Error(err)
+				}
+			}}
+		}
+	})
 	_, err := f.env.ReviewRelay(bg, f.root, o)
 	if err == nil || !strings.Contains(err.Error(), "rollback of the relay failed") {
 		t.Fatalf("want the rollback error, got %v", err)
@@ -346,13 +350,15 @@ func TestReviewRelayReportsARollbackError(t *testing.T) {
 // The cursor goes back only while it is still the one this relay wrote.
 func TestReviewRelayRollbackKeepsAConcurrentCursor(t *testing.T) {
 	f, _, o := reviewFx(t)
-	wenv(&f.env).NewHost = func(host.Kind) host.Host {
-		return &sendHook{hostFake: f.host, hook: func() {
-			if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetReviewSeen("2099-01-01T00:00:00Z") }); err != nil {
-				t.Error(err)
-			}
-		}}
-	}
+	f.wire(func(w *worker.Env) {
+		w.NewHost = func(host.Kind) host.Host {
+			return &sendHook{hostFake: f.host, hook: func() {
+				if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetReviewSeen("2099-01-01T00:00:00Z") }); err != nil {
+					t.Error(err)
+				}
+			}}
+		}
+	})
 	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
 		t.Fatal("want the dispatch failure")
 	}
@@ -368,13 +374,15 @@ func TestReviewRelayRollbackLeavesABounceItDidNotCount(t *testing.T) {
 	if _, err := recordBounceVia(worker.Env{Config: diskConfig}, f.root, "12", "", "abc123"); err != nil {
 		t.Fatal(err)
 	}
-	wenv(&f.env).NewHost = func(host.Kind) host.Host {
-		return &sendHook{hostFake: f.host, hook: func() {
-			if _, err := recordBounceVia(worker.Env{Config: diskConfig}, f.root, "12", "", ""); err != nil {
-				t.Error(err)
-			}
-		}}
-	}
+	f.wire(func(w *worker.Env) {
+		w.NewHost = func(host.Kind) host.Host {
+			return &sendHook{hostFake: f.host, hook: func() {
+				if _, err := recordBounceVia(worker.Env{Config: diskConfig}, f.root, "12", "", ""); err != nil {
+					t.Error(err)
+				}
+			}}
+		}
+	})
 	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
 		t.Fatal("want the dispatch failure")
 	}
@@ -386,13 +394,15 @@ func TestReviewRelayRollbackLeavesABounceItDidNotCount(t *testing.T) {
 // The bounce head goes back only while it is the one this relay recorded.
 func TestReviewRelayRollbackKeepsAConcurrentBounceHead(t *testing.T) {
 	f, _, o := reviewFx(t)
-	wenv(&f.env).NewHost = func(host.Kind) host.Host {
-		return &sendHook{hostFake: f.host, hook: func() {
-			if _, err := recordBounceVia(worker.Env{Config: diskConfig}, f.root, "12", "", "newer"); err != nil {
-				t.Error(err)
-			}
-		}}
-	}
+	f.wire(func(w *worker.Env) {
+		w.NewHost = func(host.Kind) host.Host {
+			return &sendHook{hostFake: f.host, hook: func() {
+				if _, err := recordBounceVia(worker.Env{Config: diskConfig}, f.root, "12", "", "newer"); err != nil {
+					t.Error(err)
+				}
+			}}
+		}
+	})
 	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
 		t.Fatal("want the dispatch failure")
 	}
@@ -444,9 +454,11 @@ func TestReviewRelayRollbackLeavesABounceCountedAfterTheSnapshot(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	wenv(&f.env).NewHost = func(host.Kind) host.Host {
-		return &sendHook{hostFake: f.host, hook: func() {}}
-	}
+	f.wire(func(w *worker.Env) {
+		w.NewHost = func(host.Kind) host.Host {
+			return &sendHook{hostFake: f.host, hook: func() {}}
+		}
+	})
 	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
 		t.Fatal("want the dispatch failure")
 	}
