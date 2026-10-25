@@ -172,7 +172,7 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	if o.Plan { // a preview changes nothing, so it does not queue behind a landing
 		return e.train(ctx, root, o, nil, nil)
 	}
-	err := e.withLandLock(ctx, root, func(bool) (err error) {
+	err := e.withLandLock(ctx, root, strings.Join(o.Targets, ", "), func(bool) (err error) {
 		cache := loadTrainCache(root)
 		gated := map[string]bool{}
 		res, err = e.train(ctx, root, o, cache, gated)
