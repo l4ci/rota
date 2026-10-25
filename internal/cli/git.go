@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // gitCommands is the `rota git` group (#52).
@@ -108,6 +109,35 @@ func resolveBase(ctx context.Context, d *Deps, dir string) (string, bool, error)
 	return base, ok, gitErr(err)
 }
 
+// resolveBaseFor is resolveBase for a verb that runs in c: a worker slot
+// (ROTA_SLOT) the round routed to a milestone branch has that branch as its
+// base, so the PR it opens, the diff it reviews and `git base` agree with the
+// brief. Every other caller gets resolveBase.
+func resolveBaseFor(c *Ctx, dir string) (string, bool, error) {
+	if b := slotMilestoneBase(c); b != "" {
+		return b, true, nil
+	}
+	return resolveBase(c.Context(), c.deps(), dir)
+}
+
+// slotMilestoneBase is the milestone branch the calling worker slot is routed
+// to, "" when there is none (not a slot, no registry, or on the round base).
+func slotMilestoneBase(c *Ctx) string {
+	slot := c.deps().Getenv("ROTA_SLOT")
+	if slot == "" {
+		return ""
+	}
+	root, err := returnRoot(c, slot)
+	if err != nil {
+		return ""
+	}
+	s := worker.LoadRegistryTolerant(root).Slot(slot)
+	if s == nil || !strings.HasPrefix(s.Base(), "milestone/") {
+		return ""
+	}
+	return s.Base()
+}
+
 func gitBase(c *Ctx, args []string) (Result, error) {
 	if len(args) > 0 {
 		return Result{}, Usage("unexpected argument %q", args[0])
@@ -116,7 +146,7 @@ func gitBase(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	base, ok, err := resolveBase(c.Context(), c.deps(), dir)
+	base, ok, err := resolveBaseFor(c, dir)
 	if err != nil {
 		return Result{}, err
 	}

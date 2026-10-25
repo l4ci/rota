@@ -369,3 +369,5 @@ func TestWatchSeenPersistsAcrossWatches(t *testing.T) {
 		t.Errorf("seen file not under the rota state dir: %v", err)
 	}
 }
+
+func (*swForge) PRSetBase(context.Context, int, string) error { return nil }

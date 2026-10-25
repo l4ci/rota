@@ -858,6 +858,11 @@ func (g *GitHub) PRRequestMerge(ctx context.Context, pr int, o MergeOpts) error 
 	return err
 }
 
+func (g *GitHub) PRSetBase(ctx context.Context, pr int, base string) error {
+	_, err := g.run(ctx, []string{"pr", "edit", strconv.Itoa(pr), "--base", base}, "")
+	return err
+}
+
 func (g *GitHub) PRMerge(ctx context.Context, pr int, o MergeOpts) (string, error) {
 	if err := g.PRRequestMerge(ctx, pr, o); err != nil {
 		return "", err
