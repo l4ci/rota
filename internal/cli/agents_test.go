@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/jsonx"
 )
 
 func agentsProject(t *testing.T, cfg string) string {
@@ -114,8 +116,11 @@ func TestAgentsCheckOnSupportIgnoresSkippedFiles(t *testing.T) {
 	}
 	var got string
 	for _, f := range envObj(env, "data")["files"].([]any) {
-		if m, ok := f.(map[string]any); ok && m["path"] == ".claude/agents/rota-explorer.md" {
-			got, _ = m["status"].(string)
+		if o, ok := f.(*jsonx.Object); ok {
+			if p, _ := o.Get("path"); p == ".claude/agents/rota-explorer.md" {
+				st, _ := o.Get("status")
+				got, _ = st.(string)
+			}
 		}
 	}
 	if got != "skipped" {
