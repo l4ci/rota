@@ -267,13 +267,21 @@ func (e Env) adoptedPRNumber(ctx context.Context, root string, rep *Report, v *v
 	return 0, false
 }
 
-// unrecordedMergedPR is the merged PR a registered slot holding an issue should
-// record but does not, nil when the slot records one or the forge shows none.
-func (e Env) unrecordedMergedPR(ctx context.Context, root string, v *view, r *Row) *tracker.PR {
-	if !r.Registered || r.Issue == "" || r.PR != "" {
+// unrecordedMergedPR is the merged PR a registered, finished slot holding an
+// issue should record but does not, nil when the slot records one or the forge
+// shows none. The forge is asked only for a branch ahead of base on a done or
+// idle slot (a working slot's missing PR is the normal state); a failed lookup
+// warns and sets v.prErr, so --apply skips the repair.
+func (e Env) unrecordedMergedPR(ctx context.Context, root string, rep *Report, v *view, r *Row, ahead int, so *worker.Slot) *tracker.PR {
+	if !r.Registered || so == nil || r.Issue == "" || r.PR != "" || ahead == 0 || !worker.Parkable(strutil.FirstNonEmpty(r.HostState, so.State())) {
 		return nil
 	}
-	return e.mergedBranchPR(ctx, root, r.Branch, v.base)
+	m, err := e.mergedBranchPR(ctx, root, r.Branch, v.base)
+	if err != nil {
+		rep.Warnings = append(rep.Warnings, fmt.Sprintf("merged PRs of %s: %v", r.Branch, err))
+		v.prErr = true
+	}
+	return m
 }
 
 // ownsMergedPR says whether a merged PR is this slot's: the forge matches a
@@ -530,12 +538,15 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 						rep.add(f)
 					}
 				}
-			} else if m := e.unrecordedMergedPR(ctx, root, v, r); m != nil {
-				v.mergedPR = m
-				r.PR = m.URL
-				rep.add(Finding{Kind: PRUnrecorded, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("merged PR #%d has branch %s as head, slot records none", m.Number, r.Branch), Repair: "record pr"})
-			} else if ahead := e.ahead(ctx, root, v.base, r.Branch); ahead > 0 {
-				rep.add(Finding{Kind: BranchNoPR, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("%s is %d commit(s) ahead of %s with no PR", r.Branch, ahead, v.base)})
+			} else {
+				ahead := e.ahead(ctx, root, v.base, r.Branch)
+				if m := e.unrecordedMergedPR(ctx, root, rep, v, r, ahead, slotObj[r.Name]); m != nil {
+					v.mergedPR = m
+					r.PR = m.URL
+					rep.add(Finding{Kind: PRUnrecorded, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("merged PR #%d has branch %s as head, slot records none", m.Number, r.Branch), Repair: "record pr"})
+				} else if ahead > 0 {
+					rep.add(Finding{Kind: BranchNoPR, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("%s is %d commit(s) ahead of %s with no PR", r.Branch, ahead, v.base)})
+				}
 			}
 		}
 		if labelsOK && !parked && r.Issue != "" && r.PRState != "merged" && r.PRState != "closed" {

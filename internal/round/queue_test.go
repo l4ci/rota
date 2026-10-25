@@ -1,10 +1,12 @@
 package round
 
 import (
+	"errors"
 	"github.com/l4ci/rota/internal/config"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -668,6 +670,38 @@ func TestMergedBranchPRIsRecordedByAssignAndReconcile(t *testing.T) {
 		f, _ := setup(t)
 		if _, err := f.assign("13", "ben"); err != nil {
 			t.Fatalf("assign refused a slot whose PR merged: %v", err)
+		}
+		if q := f.queued(); len(q) != 1 || q[0].PR != pr7 {
+			t.Errorf("queued records %+v, want one carrying %s", q, pr7)
+		}
+	})
+	t.Run("a failed merged lookup warns and records nothing", func(t *testing.T) {
+		f, _ := setup(t)
+		f.forge.mergedErr = errors.New("forge flaked")
+		out, err := f.env.Reconcile(bg, f.root, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := f.slot("ben").PR(); got != "" {
+			t.Errorf("slot records %q on an unreadable forge, want none", got)
+		}
+		if !slices.ContainsFunc(out.Report.Warnings, func(w string) bool { return strings.Contains(w, "merged PRs of") && strings.Contains(w, "flaked") }) {
+			t.Errorf("want a merged-lookup warning: %v", out.Report.Warnings)
+		}
+		if slices.Contains(kinds(out.Drift)["ben"], PRUnrecorded) {
+			t.Errorf("no pr-unrecorded finding without a merged PR: %v", out.Drift)
+		}
+	})
+	t.Run("a working slot costs no merged lookup", func(t *testing.T) {
+		f, _ := setup(t)
+		f.agents("ben") // a live, working agent
+		f.forge.mergedErr = errors.New("must not be asked")
+		rep, err := f.env.Status(bg, f.root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if slices.ContainsFunc(rep.Warnings, func(w string) bool { return strings.Contains(w, "merged PRs of") }) {
+			t.Errorf("a busy slot asked the forge for merged PRs: %v", rep.Warnings)
 		}
 	})
 	t.Run("hint", func(t *testing.T) {
