@@ -31,26 +31,6 @@ const DefaultCap = 3
 // Slot is the registry's view of one roster slot.
 type Slot struct{ Name, State, Issue, PR string }
 
-// GateOutcome is what the gate adapter reports for one target. An empty
-// Verdict on a failure reads as "gate-error".
-type GateOutcome struct {
-	Landed  bool
-	Verdict string
-	Detail  string
-}
-
-// TrainOutcome is what the train adapter reports for several targets. Landed
-// are the members that merged, Culprit the member that broke the train, if
-// the train names one.
-type TrainOutcome struct {
-	Landed  []string
-	Culprit string
-	Verdict string
-	Detail  string
-	// Done is true when the whole train landed.
-	Done bool
-}
-
 // Merged is what the merge step reports for one target.
 type Merged struct {
 	Target string
@@ -93,13 +73,24 @@ type Reviewer interface {
 
 // Env is the outside world of a tick.
 type Env struct {
+	// BaseOverride wins over a recorded target base; Base is the fallback
+	// when the target has none or its registry lookup fails.
+	Base, BaseOverride string
+	// Target reads a registry target without choosing its base.
+	Target func(string) (worker.GateTarget, error)
+	// RunGate and RunTrain execute the shared gate/train runs, including
+	// bookkeeping; the tick interprets their results and reports diagnostics.
+	RunGate  func(context.Context, string, string) GateRun
+	RunTrain func(context.Context, []string, string) TrainRun
+	// Say writes a bookkeeping diagnostic, without a trailing newline.
+	Say func(string)
 	// Cap bounds assigns and merges per tick; <= 0 means DefaultCap.
 	Cap int
 	// MergeApproval is ship.mergeApproval: any mode but none (empty
 	// included) asks for a person, and the autopilot then merges nothing.
 	MergeApproval string
 	// Role is round.role. A support machine merges nothing and calls neither
-	// Gate nor Train: the queued PRs are main's.
+	// RunGate nor RunTrain: the queued PRs are main's.
 	Role string
 	// Slots lists the roster from the registry; Queued the PR refs waiting in
 	// its review queue.
@@ -111,12 +102,6 @@ type Env struct {
 	// Reconcile applies the safe repairs and returns what it repaired and the
 	// drift it leaves.
 	Reconcile func(ctx context.Context) (repaired, drift []string, err error)
-	// BaseOf names the branch a target (a slot or PR ref) merges into. Targets
-	// sharing a base are gated together: one is a gate, several a train.
-	BaseOf func(target string) string
-	// Gate lands one target into base; Train lands several, in order.
-	Gate  func(ctx context.Context, target, base string) GateOutcome
-	Train func(ctx context.Context, targets []string, base string) TrainOutcome
 	// Candidates are the assignable items in backlog order.
 	Candidates func(ctx context.Context) ([]round.Candidate, error)
 	// Assign hands an item to the first idle slot and returns the slot names
@@ -340,7 +325,7 @@ func (e Env) mergeAll(ctx context.Context, targets []string) []Merged {
 	var order []string
 	groups := map[string][]string{}
 	for _, t := range targets {
-		b := e.BaseOf(t)
+		b := e.targetBase(t)
 		if _, ok := groups[b]; !ok {
 			order = append(order, b)
 		}
@@ -358,7 +343,7 @@ func (e Env) mergeAll(ctx context.Context, targets []string) []Merged {
 }
 
 func (e Env) gate(ctx context.Context, target, base string) Merged {
-	g := e.Gate(ctx, target, base)
+	g := e.gateTarget(ctx, target, base)
 	if g.Landed {
 		return Merged{Target: target, Landed: true, Detail: "into " + base}
 	}
@@ -370,7 +355,7 @@ func (e Env) gate(ctx context.Context, target, base string) Merged {
 }
 
 func (e Env) train(ctx context.Context, targets []string, base string) []Merged {
-	tr := e.Train(ctx, targets, base)
+	tr := e.trainTargets(ctx, targets, base)
 	out := make([]Merged, 0, len(targets))
 	if tr.Done {
 		for _, t := range targets {
@@ -494,21 +479,4 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 func isRefusal(err error) bool {
 	var blk *round.BlockedError
 	return errors.As(err, &blk) && blk.By != round.BlockNoRound
-}
-
-// FailedVerdict is the verdict a failed gate or train reports to the tick: the
-// run's own, unless it died with an error that is no refusal.
-func FailedVerdict(verdict string, err error, refused bool) string {
-	if err != nil && !refused {
-		return ""
-	}
-	return verdict
-}
-
-// FailureDetail is the first line of why a gate or train failed.
-func FailureDetail(err error, msg string) string {
-	if err != nil {
-		return strutil.FirstLine(err.Error())
-	}
-	return strutil.FirstLine(msg)
 }
