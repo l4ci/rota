@@ -332,6 +332,11 @@ func (b *Issues) Complete(ref string, in CompleteInput) (bool, error) {
 			stale = append(stale, l)
 		}
 	}
+	for _, l := range is.Labels {
+		if strings.HasPrefix(l, ClaimLabelPrefix) {
+			stale = append(stale, l)
+		}
+	}
 	if len(stale) > 0 {
 		if err := tr.RemoveLabels(b.ctx(), n, stale); err != nil {
 			return false, err

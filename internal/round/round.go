@@ -13,6 +13,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/strutil"
 	"path/filepath"
@@ -827,11 +828,13 @@ func (e Env) readForge(ctx context.Context, rep *Report) forgeState {
 			for _, is := range issues {
 				fs.labelled[is.Key] = true
 			}
-			if closed, err := e.Forge.List(ctx, tracker.ListFilter{State: "closed", Labels: []string{e.Label}}); err != nil {
+			if closed, err := e.Forge.List(ctx, tracker.ListFilter{State: "closed"}); err != nil {
 				rep.unavailable(SourceForge, err.Error())
 			} else {
 				for _, is := range closed {
-					if is.State == "closed" {
+					if is.State == "closed" && slices.ContainsFunc(is.Labels, func(l string) bool {
+						return l == e.Label || strings.HasPrefix(l, backlog.ClaimLabelPrefix)
+					}) {
 						fs.stale = append(fs.stale, is.Key)
 					}
 				}
