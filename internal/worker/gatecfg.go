@@ -31,7 +31,7 @@ type GateConfig struct {
 	Tracker tracker.Settings
 	// InProgressLabel is issues.labels.inProgress.
 	InProgressLabel string
-	// Support is round.support and SupportLabel issues.labels.support: an issue
+	// Support is round.support and SupportLabel the derived machine pin: an issue
 	// carrying the label under a set Support belongs to the support machine,
 	// and its relays travel as issue comments (#1827).
 	Support, SupportLabel string
@@ -77,7 +77,7 @@ func ParseGateConfig(cfg any) GateConfig {
 		InProgressLabel: labels.InProgress,
 		SharedPaths:     roundcfg.SharedPaths(cfg),
 		Support:         roundcfg.SupportName(cfg),
-		SupportLabel:    labels.Support,
+		SupportLabel:    roundcfg.MachineLabel(roundcfg.SupportName(cfg)),
 	}
 	t := roundcfg.ParseTests(cfg)
 	c.Full, c.Fast, c.legacy, c.testsErr = t.Full, t.Fast, t.Legacy, t.Err

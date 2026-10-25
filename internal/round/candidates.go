@@ -56,7 +56,7 @@ type CandidateOpts struct {
 	// BlockScopeOverlap is round.scopeOverlap == block: true fails the overlap check on a scope clash.
 	BlockScopeOverlap bool
 	// Support and Role are round.support and round.role: with Support set,
-	// each side lists only its own issues of the split (offSite).
+	// pins on other machines remain visible but blocked (offSite).
 	Support, Role string
 }
 
@@ -138,9 +138,6 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		if taken != nil && taken(it) {
 			continue
 		}
-		if e.offSite(o.Support, o.Role, it) != "" {
-			continue
-		}
 		r, err := AssessScoped(be, it.ID, tracked, o.Shared, inFlight, false, "", o.BlockScopeOverlap)
 		if err != nil {
 			return nil, err
@@ -160,6 +157,10 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		}
 		if _, err := BestOfOf(be.Capabilities(), it); err != nil && c.PickErr == "" {
 			c.PickErr = err.Error()
+		}
+		if why := e.offSite(o.Support, o.Role, it); why != "" {
+			c.BlockedBy = BlockSite
+			c.Checks = append(c.Checks, Check{Name: BlockSite, Detail: []string{why}})
 		}
 		if unclear[it.IssueKey()] {
 			c.Checks = append(c.Checks, Check{Name: NeedsInfoLabel, Detail: []string{"labelled " + NeedsInfoLabel + ": triage found it unclear, so it waits for the reporter"}})

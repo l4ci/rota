@@ -523,7 +523,7 @@ func sharedPaths(cfg any) ([]string, error) { return list(cfg, "round.sharedPath
 // Labels are the issues.labels roles a round and the gate act on, with the
 // schema defaults config.Label supplies.
 type Labels struct {
-	InProgress, NeedsHuman, NeedsReview, Support string
+	InProgress, NeedsHuman, NeedsReview string
 }
 
 // LabelsOf reads the round's issue labels from a loaded config: the one place
@@ -533,7 +533,6 @@ func LabelsOf(cfg any) Labels {
 		InProgress:  config.Label(cfg, "inProgress"),
 		NeedsHuman:  config.Label(cfg, "needsHuman"),
 		NeedsReview: config.Label(cfg, "needsReview"),
-		Support:     config.Label(cfg, "support"),
 	}
 }
 
@@ -622,6 +621,9 @@ func MachineRole(cfg any) (string, error) {
 // claims and workspaces never match main's, and main refuses a name that
 // starts with that prefix. Off when round.support is empty.
 func (s *Settings) supportRoster() error {
+	if s.Role == RoleSupport && s.Support == "" {
+		return fmt.Errorf("round.role is support but round.support is empty: set round.support to this machine’s name")
+	}
 	if s.Support == "" {
 		return nil
 	}
@@ -638,4 +640,37 @@ func (s *Settings) supportRoster() error {
 		}
 	}
 	return nil
+}
+
+// MachinePrefix is the fixed prefix of labels pinning issues to a machine.
+const MachinePrefix = "machine:"
+
+// MachineLabel is the pin for name, or empty when support is disabled.
+func MachineLabel(name string) string {
+	if name == "" {
+		return ""
+	}
+	return MachinePrefix + name
+}
+
+// MachineName derives the local name without a second config key.
+func MachineName(support, role string) string {
+	if role == RoleSupport {
+		return support
+	}
+	return RoleMain
+}
+
+// MachineName is this machine's derived name.
+func (s Settings) MachineName() string { return MachineName(s.Support, s.Role) }
+
+// PinsOf returns nonempty machine names, preserving label order.
+func PinsOf(labels []string) []string {
+	var pins []string
+	for _, label := range labels {
+		if name, ok := strings.CutPrefix(label, MachinePrefix); ok && name != "" {
+			pins = append(pins, name)
+		}
+	}
+	return pins
 }

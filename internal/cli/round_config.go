@@ -3,6 +3,7 @@ package cli
 import (
 	"strings"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/roundcfg"
 )
 
@@ -41,4 +42,22 @@ func (d *Deps) roundSettings(root string, policy roundConfigPolicy) (roundcfg.Se
 func (d *Deps) tolerantRoundSettings(root string) (roundcfg.Settings, bool) {
 	set, err := d.roundSettings(root, roundConfigRequired)
 	return set, err == nil
+}
+
+// roundMachineStop refuses an unnamed support machine before any round verb
+// can read or claim issues. Config verbs remain usable to repair the name.
+func roundMachineStop(c *Ctx) (Result, error) {
+	if !pathUnder(c.Path, []string{"rota round"}) {
+		return Result{}, nil
+	}
+	root, err := c.Root()
+	if err != nil {
+		return Result{}, nil
+	}
+	cfg := c.deps().Config(root)
+	role, err := roundcfg.MachineRole(cfg)
+	if err == nil && role == roundcfg.RoleSupport && roundcfg.SupportName(cfg) == "" {
+		return blockedRefusal(nil, blockedby.Config, "round.role is support but round.support is empty", "set round.support to this machine's name on main, then pull it here")
+	}
+	return Result{}, nil
 }

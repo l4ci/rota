@@ -10,7 +10,6 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
@@ -121,7 +120,7 @@ func supportReturnDeps(fake *trackertest.Fake) *Deps {
 	deps := testDeps()
 	deps.NewTracker = func(context.Context, string, any) (backlog.Tracker, error) { return fake, nil }
 	deps.RoundEnv = func(context.Context, string) round.Env {
-		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "main", Forge: returnForge{fake}, SupportLabel: config.Label(nil, "support"),
+		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "main", Forge: returnForge{fake}, SupportLabel: "machine:mac",
 			Round: roundcfg.Settings{Support: "mac", Role: roundcfg.RoleSupport}}
 	}
 	return deps
@@ -148,7 +147,7 @@ func TestRoundSupportReturn(t *testing.T) {
 		t.Fatal(err)
 	}
 	fake := &trackertest.Fake{Issues: []backlog.Issue{
-		{Key: tracker.NumKey(7), Title: "Add export", Labels: []string{"type:feature", config.Label(nil, "support")}, State: "open"},
+		{Key: tracker.NumKey(7), Title: "Add export", Labels: []string{"type:feature", "machine:mac"}, State: "open"},
 	}}
 	deps := supportReturnDeps(fake)
 
@@ -161,7 +160,7 @@ func TestRoundSupportReturn(t *testing.T) {
 		t.Errorf("data = %v", d)
 	}
 	is, _ := fake.Get(context.Background(), tracker.NumKey(7), true)
-	if slices.Contains(is.Labels, config.Label(nil, "support")) {
+	if slices.Contains(is.Labels, "machine:mac") {
 		t.Errorf("labels = %v", is.Labels)
 	}
 	if len(is.Comments) != 1 || !strings.Contains(is.Comments[0].Body, "\n<!-- rota:support-return -->\nnot ready") || !strings.Contains(is.Comments[0].Body, "the premise is wrong") {

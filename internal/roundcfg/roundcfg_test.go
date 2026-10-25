@@ -46,6 +46,7 @@ func TestOverrides(t *testing.T) {
 
 func TestInvalid(t *testing.T) {
 	for cfg, want := range map[string]string{
+		`{"round":{"role":"support"}}`:   "round.support",
 		`{"round":{"scope":"all"}}`:      "round.scope",
 		`{"round":{"roster":["a","a"]}}`: "twice",
 		`{"round":{"roster":["Ann"]}}`:   "branch",
@@ -583,4 +584,25 @@ func TestHarnessesInvalid(t *testing.T) {
 // Load reads the round.* keys from the config on disk under root.
 func Load(root string) (Settings, error) {
 	return FromConfig(config.Load(rotatree.Config(root)))
+}
+
+func TestMachineName(t *testing.T) {
+	for _, tc := range []struct{ support, role, want string }{
+		{"", "", "main"}, {"", RoleMain, "main"}, {"mac", RoleMain, "main"}, {"mac", RoleSupport, "mac"},
+	} {
+		s := Settings{Support: tc.support, Role: tc.role}
+		if got := s.MachineName(); got != tc.want {
+			t.Errorf("%+v name = %q, want %q", s, got, tc.want)
+		}
+	}
+	if MachineLabel("") != "" || MachineLabel("mac") != "machine:mac" {
+		t.Fatal("machine label must derive from the machine name")
+	}
+}
+
+func TestPinsOf(t *testing.T) {
+	got := PinsOf([]string{"machinery:x", "Machine:mac", "machine:", "machine:mac", "machine:main", "bug"})
+	if !reflect.DeepEqual(got, []string{"mac", "main"}) {
+		t.Fatalf("pins = %v", got)
+	}
 }

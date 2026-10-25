@@ -60,13 +60,13 @@ func TestDepsRepoRunsThroughGit(t *testing.T) {
 // equals, so a hardcoded label fails.
 func TestDefaultRoundEnvLabelsComeFromConfig(t *testing.T) {
 	root := t.TempDir()
-	write(t, filepath.Join(root, ".rota", "config.json"), `{"issues": {"labels": {"inProgress": "wip-x", "needsHuman": "human-x", "needsReview": "review-x", "support": "support-x"}}}`)
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"round":{"support":"mac"},"issues": {"labels": {"inProgress": "wip-x", "needsHuman": "human-x", "needsReview": "review-x", "support": "legacy-x"}}}`)
 	e := defaultRoundEnv(context.Background(), root, defaultDeps(), false)
 	for role, c := range map[string]struct{ got, want string }{
 		"inProgress":  {e.Label, "wip-x"},
 		"needsHuman":  {e.NeedsHuman, "human-x"},
 		"needsReview": {e.NeedsReview, "review-x"},
-		"support":     {e.SupportLabel, "support-x"},
+		"support":     {e.SupportLabel, "machine:mac"},
 	} {
 		if c.got != c.want {
 			t.Errorf("issues.labels.%s = %q, want the configured %q", role, c.got, c.want)

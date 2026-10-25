@@ -58,3 +58,40 @@ OUT=$(mm migrate milestones --apply) || rc=$?
 rm -rf "$TMP_MM"
 trap 'rm -rf "$TMP"' EXIT
 pass "migrate milestones previews, applies and is idempotent"
+
+# Exercise the label migration through the CLI and the fake tracker boundary.
+(
+  ML="$(mktemp -d)"
+  trap 'rm -rf "$ML"' EXIT
+  mkdir -p "$ML/.rota"
+  printf '{"forge":{"provider":"github"},"issues":{"source":"github","labels":{"support":"remote"}},"round":{"support":"mac"}}\n' > "$ML/.rota/config.json"
+  cd "$ML"
+  git init -q
+  git remote add origin https://github.com/fake/repo.git
+  export PATH="$TESTDIR/fakes:$PATH" FAKE_TRACKER_DB="$ML/db.json"
+  gh label create remote
+  gh issue create --title 'Open legacy issue' --label remote >/dev/null
+  gh issue create --title 'Closed legacy issue' --label remote >/dev/null
+  gh issue close 2 >/dev/null
+  cp "$ML/db.json" "$ML/before.json"
+  OUT=$(hvj migrate labels) || vfail
+  [ "$(echo "$OUT" | jget 'data.changed')" = "false" ] || fail "label preview changed state: $OUT"
+  [ "$(echo "$OUT" | jget 'data.issues[0].id')" = "1" ] || fail "preview must list the open legacy issue: $OUT"
+  cmp "$ML/db.json" "$ML/before.json" || fail "label preview wrote to the tracker"
+  OUT=$(hvj migrate labels --apply) || vfail
+  [ "$(echo "$OUT" | jget 'data.changed')" = "true" ] || fail "label apply did not report a change: $OUT"
+  python3 - "$ML" <<'PY' || fail "label migration did not preserve closed issues and retire the key"
+import json, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+db = json.loads((root / 'db.json').read_text())
+issues = {i['number']: i for i in db['issues']}
+assert issues[1]['labels'] == ['machine:mac'], issues[1]
+assert issues[2]['labels'] == ['remote'], issues[2]
+cfg = json.loads((root / '.rota/config.json').read_text())
+assert 'support' not in cfg.get('issues', {}).get('labels', {}), cfg
+PY
+  OUT=$(hvj migrate labels --apply) || vfail
+  [ "$(echo "$OUT" | jget 'data.changed')" = "false" ] || fail "second label apply must be a no-op: $OUT"
+)
+pass "migrate labels previews, applies the configured label to open issues only, and is idempotent"

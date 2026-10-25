@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -359,7 +360,7 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		data.Set("removed", anySlice(removed))
 		res := Result{Data: data, Text: token}
 		if len(removed) > 0 {
-			res.Text += "\nREMOVED: " + strings.Join(removed, ", ") + " (nothing reads them; run: rota config fill)"
+			res.Text += "\nREMOVED: " + strings.Join(removed, ", ") + removedKeysHint(removed)
 		}
 		old := config.LegacyRoundKeys(c.deps().Config(root))
 		if len(old) > 0 {
@@ -397,6 +398,14 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 				return res, Failed("%s", retired[0])
 			}
 		}
+		cfg := c.deps().Config(root)
+		role, roleErr := roundcfg.MachineRole(cfg)
+		if roleErr != nil {
+			return blockedRefusal(data, blockedby.Config, roleErr.Error(), "set round.role to main or support")
+		}
+		if role == roundcfg.RoleSupport && roundcfg.SupportName(cfg) == "" {
+			return blockedRefusal(data, blockedby.Config, "round.role is support but round.support is empty", "set round.support to this machine's name")
+		}
 		switch status {
 		case config.UpToDate:
 			// The old work.* round names are a known rename, reported but not failed.
@@ -425,6 +434,13 @@ func configFill(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		removed := config.Removed(root)
+		var stripping []string
+		for _, key := range removed {
+			if strings.TrimSuffix(key, config.LocalMark) != "issues.labels.support" {
+				stripping = append(stripping, key)
+			}
+		}
+		removed = stripping
 		am := config.AutonomyPending(root)
 		// Same condition as `config check`: STALE with an unreadable global.
 		var corrupt error
@@ -583,4 +599,14 @@ func repoUmbrella(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: jsonObj("umbrella", false), Text: "no"}, Failed("not an umbrella project")
 	}
+}
+
+// removedKeysHint keeps the legacy source label available until tracker migration succeeds.
+func removedKeysHint(keys []string) string {
+	for _, key := range keys {
+		if strings.TrimSuffix(key, config.LocalMark) == "issues.labels.support" {
+			return " (run: rota migrate labels --apply for issues.labels.support; rota config fill for other removed keys)"
+		}
+	}
+	return " (nothing reads them; run: rota config fill)"
 }
