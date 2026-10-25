@@ -13,7 +13,7 @@ import (
 // (roundcfg) refuse on the error; tolerant ones (ProjectKind, the launch
 // helpers) use what came back.
 func RoundHarnesses(cfg any) ([]string, error) {
-	const key = "round.harnesses"
+	const key = config.RoundHarnessesKey
 	v, err := config.Value(cfg, key)
 	if err != nil {
 		return nil, err
@@ -39,5 +39,5 @@ func RoundHarnesses(cfg any) ([]string, error) {
 // not a string. It does not check the name; roundcfg validates it, and the
 // launch helpers only compare it to ProfileInherit.
 func RoundProfile(cfg any) string {
-	return strings.TrimSpace(config.StringIfSet(cfg, "round.profile"))
+	return strings.TrimSpace(config.StringIfSet(cfg, config.RoundProfileKey))
 }

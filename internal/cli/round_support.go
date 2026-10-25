@@ -39,7 +39,7 @@ func roundSupportEnable(fs *flag.FlagSet) RunFunc {
 		if !roundcfg.ValidName(name) {
 			return Result{}, Usage("round support enable: %q is not a lowercase name usable in a branch (letters, digits, -)", name)
 		}
-		if err := config.Validate("round.support", strconv.Quote(name)); err != nil {
+		if err := config.Validate(config.RoundSupportKey, strconv.Quote(name)); err != nil {
 			return Result{}, Usage("%s", err)
 		}
 		root, issue, err := modeRoot(c)
@@ -50,7 +50,7 @@ func roundSupportEnable(fs *flag.FlagSet) RunFunc {
 			return supportFileModeStop()
 		}
 		// Quoted, so a name such as "true" stays a string.
-		res, err := config.Set(root, "round.support", strconv.Quote(name))
+		res, err := config.Set(root, config.RoundSupportKey, strconv.Quote(name))
 		if err != nil {
 			return Result{}, err
 		}
@@ -75,7 +75,7 @@ func roundSupportDisable(fs *flag.FlagSet) RunFunc {
 			return supportFileModeStop()
 		}
 		name := roundcfg.SupportName(fsio.LoadJSON(rotatree.Config(root), jsonx.NewObject()))
-		removed, err := config.Unset(root, "round.support", config.LayerProject)
+		removed, err := config.Unset(root, config.RoundSupportKey, config.LayerProject)
 		if err != nil {
 			return Result{}, err
 		}
