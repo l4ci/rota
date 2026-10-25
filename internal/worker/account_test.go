@@ -412,6 +412,21 @@ func TestExpiredFileWithoutKeychainStaysExpired(t *testing.T) {
 	}
 }
 
+// A Credentials with no clock is a no-expiry read: an expired file token is
+// taken as is and the Keychain is not consulted. The clock turns expiry on.
+func TestNilNowReadsWithoutExpiry(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"old","expiresAt":1000}}`), 0o600)
+	kc, reads := fakeKeychain("darwin", map[string]string{keychainService(dir, ""): `{"claudeAiOauth":{"accessToken":"kc"}}`})
+	if got := kc.Problem(dir); got != "" || *reads != 0 {
+		t.Errorf("no clock: Problem = %q, Keychain reads = %d, want usable with none", got, *reads)
+	}
+	kc.Now = func() time.Time { return time.UnixMilli(2000) }
+	if got := kc.Problem(dir); got != "" || *reads != 1 {
+		t.Errorf("with clock: Problem = %q, Keychain reads = %d, want one read for the expired file", got, *reads)
+	}
+}
+
 func TestValidFileWinsAndSkipsKeychain(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"file"}}`), 0o600)
