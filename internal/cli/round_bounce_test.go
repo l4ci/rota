@@ -252,13 +252,13 @@ func TestRoundBounceAdoptedSupportSlot(t *testing.T) {
 		t.Errorf("support PR comments %q", got)
 	}
 	code, out, errOut := rotaInWith(t, deps, dir, "round", "bounce", "32", "--head", "def", "--slot", "ext-2", "--force", "--json")
-	if d := data(t, out); code != 4 || d["blockedBy"] != "no PR recorded" || d["changed"] != false || d["issue"] != "32" || d["branch"] != "mac-kit/32-other" {
+	if d := data(t, out); code != 4 || d["blockedBy"] != "no PR recorded" || d["changed"] != false || d["issue"] != "32" || d["branch"] != "mac-kit/32-other" || d["slot"] != "ext-2" {
 		t.Errorf("bounce with no PR: %d %s %s", code, out, errOut)
 	}
 	if strings.Contains(out+errOut, "bug in rota") {
 		t.Errorf("a refusal reads as a rota bug: %s %s", out, errOut)
 	}
-	if !strings.Contains(out, "rota round reconcile --apply") || !strings.Contains(out, "rota round bounce 32 --head def --slot ext-2") {
+	if !strings.Contains(out, "rota round reconcile --apply") || !strings.Contains(out, "rota round bounce 32 --head def --slot ext-2 --force") {
 		t.Errorf("the refusal does not name the remedy: %s", out)
 	}
 	if n := fk.bounces(); n != 1 { // issue 31's only
