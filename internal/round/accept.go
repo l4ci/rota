@@ -25,6 +25,10 @@ const BlockFindingMissing = blockedby.FindingMissing
 // decision log.
 const BlockNoGist = blockedby.NoGist
 
+// BlockReviewNotMinted: the held item has an architecture-review title but no
+// trusted proof that a round minted it.
+const BlockReviewNotMinted = blockedby.ReviewNotMinted
+
 // AcceptInput is the flags of `rota round accept`.
 type AcceptInput struct {
 	ID string
@@ -69,8 +73,12 @@ func (e Env) Accept(ctx context.Context, root string, be Board, in AcceptInput) 
 		if err != nil {
 			return res, wrap(err)
 		}
-		if it.Closed && IsReviewTitle(it.Title) && MintedReviews(root)[worker.NormID(it.ID)] {
-			return res, nil
+		if it.Closed && IsReviewTitle(it.Title) {
+			if minted, err := e.mintedReview(ctx, root, be, it); err != nil {
+				return res, err
+			} else if minted {
+				return res, nil
+			}
 		}
 		if d, _ := DecisionOf(be.Capabilities(), *it); it.Closed && d == DecisionResearch {
 			return res, nil
@@ -89,7 +97,7 @@ func (e Env) Accept(ctx context.Context, root string, be Board, in AcceptInput) 
 	if dec == DecisionResearch {
 		return e.acceptResearch(ctx, root, be, s, it, in, res)
 	}
-	if it, err = reviewItem(root, be, s.Name(), id, "accept needs an architecture review or a research item"); err != nil {
+	if it, err = e.reviewItem(ctx, root, be, s.Name(), id, "accept needs an architecture review or a research item"); err != nil {
 		return res, err
 	}
 	if ok, why := e.settled(ctx, s, worker.Settled); !ok {

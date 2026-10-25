@@ -49,6 +49,7 @@ type fakeRemote struct {
 	details   map[string]string
 	comments  map[string][]string
 	kinds     map[string][]string
+	authors   map[string][]string // comment authors by ref, parallel to comments; absent is ""
 	ready     map[string][]string // reasons; absent means ready
 	claims    map[string]string   // id -> earliest claim holder
 	more      map[string][]string // id -> later claims of a shared (best-of) item
@@ -367,7 +368,11 @@ func (f *fakeRemote) Comments(ref, kind string) ([]backlog.Comment, error) {
 			k = f.kinds[ref][i]
 		}
 		if kind == "" || kind == k {
-			out = append(out, backlog.Comment{Kind: k, Text: t})
+			who := ""
+			if i < len(f.authors[ref]) {
+				who = f.authors[ref][i]
+			}
+			out = append(out, backlog.Comment{Who: who, Kind: k, Text: t})
 		}
 	}
 	return out, nil
