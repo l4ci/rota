@@ -61,6 +61,9 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 	if strings.TrimSpace(o.Ref) == "" {
 		return res, usage("adopt takes a branch or a worktree path")
 	}
+	if err := e.baseCfgErr(); err != nil {
+		return res, err
+	}
 	branch, wt, err := e.resolveAdoptRef(ctx, root, o.Ref)
 	if err != nil {
 		return res, err

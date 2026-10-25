@@ -354,7 +354,7 @@ func scaffoldScan(diff string) []scaffoldFinding {
 }
 
 func reviewScaffolding(fs *flag.FlagSet) RunFunc {
-	baseFlag := fs.String("base", "", "base branch to diff against (default: the resolved base, else main)")
+	baseFlag := fs.String("base", "", "base branch to diff against (default: the resolved base)")
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) > 1 {
 			return Result{}, Usage("unexpected argument %q", args[1])
@@ -371,9 +371,10 @@ func reviewScaffolding(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
-			if base = b; !ok {
-				base = "main"
+			if !ok {
+				return Result{}, Resolution(noBaseMsg).WithHint("pass --base <ref>")
 			}
+			base = b
 		}
 		var branch string
 		if len(args) == 1 && args[0] != "" {
