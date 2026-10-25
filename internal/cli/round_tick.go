@@ -15,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
-	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -115,19 +114,24 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		repaired, drift := roundtick.ReconcileLines(out)
 		return repaired, drift, nil
 	}
-	e.BaseOf = func(target string) string {
-		if baseOverride != "" {
-			return baseOverride
+	e.Base, e.BaseOverride = renv.Base, baseOverride
+	e.Target = func(target string) (worker.GateTarget, error) {
+		reg, err := worker.LoadRegistry(root)
+		if err != nil {
+			return worker.GateTarget{}, err
 		}
-		return targetBase(root, target, renv.Base)
+		return reg.GateTarget(target)
 	}
 	e.Role = set.Role
-	e.Gate = func(_ context.Context, target, base string) roundtick.GateOutcome {
-		return gateTarget(c, root, target, base)
+	e.RunGate = func(_ context.Context, target, base string) roundtick.GateRun {
+		run := runGate(c, root, gateRunOpts{Slot: target, Base: base})
+		return roundtick.GateRun{Result: run.Result, Err: run.Err, Refused: run.Refused, BookErr: run.BookErr}
 	}
-	e.Train = func(_ context.Context, targets []string, base string) roundtick.TrainOutcome {
-		return trainTargets(c, root, targets, base)
+	e.RunTrain = func(_ context.Context, targets []string, base string) roundtick.TrainRun {
+		run := runTrain(c, root, trainRunOpts{Targets: targets, Base: base})
+		return roundtick.TrainRun{Result: run.Result, Err: run.Err, Refused: run.Refused, Book: run.Book}
 	}
+	e.Say = func(line string) { fmt.Fprintln(c.Stderr, line) }
 	be, err := openBacklog(c, root, false, "")
 	if err != nil {
 		_, ferr := backlogFail(err)
@@ -188,63 +192,6 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 // quotaCapped is the tick's cap hook: why no slot may fill, "" when one may.
 func quotaCapped(renv round.Env, root string, set roundcfg.Settings) func(context.Context) string {
 	return func(ctx context.Context) string { return renv.QuotaCap(ctx, root, set).Reason }
-}
-
-func targetBase(root, target, def string) string {
-	reg, err := worker.LoadRegistry(root)
-	if err != nil {
-		return def // the gate refuses a corrupt registry itself; this only picks a base for it
-	}
-	t, err := reg.GateTarget(target)
-	if err != nil {
-		return def
-	}
-	if t.Base != "" {
-		return t.Base
-	}
-	return def
-}
-
-// gateTarget gates one target for the tick through the same run `worker gate`
-// does, bookkeeping included, and reads the verdict off the result.
-func gateTarget(c *Ctx, root, target, base string) roundtick.GateOutcome {
-	run := runGate(c, root, gateRunOpts{Slot: target, Base: base})
-	if run.Err == nil && !run.Refused {
-		if run.BookErr != nil {
-			fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+target+" — "+run.BookErr.Error())
-		}
-		if run.Result.OK() {
-			return roundtick.GateOutcome{Landed: true}
-		}
-		return roundtick.GateOutcome{Verdict: run.Result.Verdict, Detail: strutil.FirstLine(run.Result.Err)}
-	}
-	return roundtick.GateOutcome{Verdict: roundtick.FailedVerdict(run.Result.Verdict, run.Err, run.Refused), Detail: roundtick.FailureDetail(run.Err, run.Result.Err)}
-}
-
-// trainTargets lands several targets for the tick through the same run
-// `worker train` does, bookkeeping included.
-func trainTargets(c *Ctx, root string, targets []string, base string) roundtick.TrainOutcome {
-	run := runTrain(c, root, trainRunOpts{Targets: targets, Base: base})
-	r := run.Result
-	if run.Err == nil && !run.Refused {
-		for _, f := range run.Book {
-			fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+f.Target+" — "+f.Err.Error())
-		}
-		if r.OK() {
-			return roundtick.TrainOutcome{Done: true}
-		}
-	}
-	out := roundtick.TrainOutcome{Verdict: roundtick.FailedVerdict(r.Verdict, run.Err, run.Refused), Detail: roundtick.FailureDetail(run.Err, r.Err)}
-	if run.Err != nil && !run.Refused {
-		return out // died on an error: nothing of the result is reported
-	}
-	out.Culprit = r.Culprit
-	for _, m := range r.Members {
-		if m.Landed {
-			out.Landed = append(out.Landed, m.Target)
-		}
-	}
-	return out
 }
 
 func tickData(r roundtick.Result) *jsonx.Object {
