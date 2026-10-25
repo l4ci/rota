@@ -3,6 +3,8 @@ package worker
 import (
 	"reflect"
 	"testing"
+
+	"github.com/l4ci/rota/internal/roundcfg"
 )
 
 // A bad value is held until the step that needs it asks, so a config the old
@@ -44,5 +46,28 @@ func TestParseGateConfigTestsErr(t *testing.T) {
 	c = ParseGateConfig(parseCfg(`{"work":{"tdd":"yes"}}`))
 	if c.TestsErr() != nil {
 		t.Errorf("bad work.tdd leaked into TestsErr: %v", c.TestsErr())
+	}
+}
+
+// The gate and round load read round.sharedPaths, round.support and the
+// full-only state through roundcfg, so the two views cannot drift apart.
+func TestGateConfigAgreesWithRoundSettings(t *testing.T) {
+	for _, js := range []string{
+		`{"test":{"full":["go test ./..."]},"round":{"sharedPaths":["docs/*.md"],"support":" mac "}}`,
+		`{"test":{"fast":["f"],"full":["go test ./..."]}}`,
+		`{"refactor":{"verifyCommands":["old"]}}`,
+	} {
+		cfg := parseCfg(js)
+		set, err := roundcfg.FromConfig(cfg)
+		if err != nil {
+			t.Fatalf("%s: %v", js, err)
+		}
+		g := ParseGateConfig(cfg)
+		if !reflect.DeepEqual(g.SharedPaths, set.SharedPaths) || g.Support != set.Support || g.FullOnly() != set.FullOnly {
+			t.Errorf("%s: gate shared %v support %q fullOnly %v, round %v %q %v", js, g.SharedPaths, g.Support, g.FullOnly(), set.SharedPaths, set.Support, set.FullOnly)
+		}
+	}
+	if g := ParseGateConfig(parseCfg(`{"round":{"support":" mac "}}`)); g.Support != "mac" {
+		t.Errorf("support %q, want trimmed mac", g.Support)
 	}
 }

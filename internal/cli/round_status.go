@@ -8,7 +8,6 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 	"strings"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/limits"
@@ -51,10 +50,8 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) 
 			e.Snapshot, e.HostName = s.Snapshot, h.Kind()
 		}
 	}
-	e.NeedsHuman = config.Label(cfg, "needsHuman")
-	e.Label = config.Label(cfg, "inProgress")
-	e.SupportLabel = config.Label(cfg, "support")
-	e.NeedsReview = config.Label(cfg, "needsReview")
+	labels := roundcfg.LabelsOf(cfg)
+	e.NeedsHuman, e.Label, e.SupportLabel, e.NeedsReview = labels.NeedsHuman, labels.InProgress, labels.Support, labels.NeedsReview
 	e.Round, e.RoundErr = d.roundSettings(root, roundConfigUsage)
 	if !withForge {
 		return e
