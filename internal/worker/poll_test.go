@@ -6,28 +6,12 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/stamp"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/harness"
 	"time"
 )
-
-func TestPollFixtureMode(t *testing.T) {
-	fx := filepath.Join(t.TempDir(), "p.txt")
-	os.WriteFile(fx, []byte("ROTA-BLOCKED w1: ?\n"), 0o644)
-	res, err := PollFixture(fx, "", "", "", 0)
-	if err != nil || len(res.Slots) != 1 || res.Slots[0].Name != "fixture" || res.Slots[0].State != StateBlocked || res.Changed {
-		t.Errorf("%+v %v", res, err)
-	}
-	if res, _ = PollFixture(fx, "w3", "", "", 0); res.Slots[0].Name != "w3" {
-		t.Errorf("name = %s", res.Slots[0].Name)
-	}
-	if _, err = PollFixture("/no/such/file", "", "", "", 0); exitOf(err) != exitcode.ExitUsage {
-		t.Errorf("missing fixture: %v", err)
-	}
-}
 
 func pollRegistry(t *testing.T, kind host.Kind) (string, *fakeHost) {
 	dir := newProject(t, `{}`)

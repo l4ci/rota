@@ -595,22 +595,14 @@ func workerPoll(fs *flag.FlagSet) RunFunc {
 		if len(args) == 1 {
 			slot = args[0]
 		}
-		var res worker.PollResult
-		var err error
-		// Deps.PollFixture classifies a file as a static pane: no host, no
-		// registry writes. A test hook, not part of the CLI.
-		if fx := c.deps().PollFixture; fx != "" {
-			res, err = worker.PollFixture(fx, slot, c.deps().PollKind, c.deps().PollStatus, *lines)
-		} else {
-			var root string
-			if root, err = c.Root(); err != nil {
-				return Result{}, err
-			}
-			ctx, stop := workerContext()
-			defer stop()
-			res, err = workerEnvCtx(c, ctx).Poll(ctx, root, worker.PollOpts{
-				Slot: slot, Settle: time.Duration(*settle * float64(time.Second)), Lines: *lines})
+		root, err := c.Root()
+		if err != nil {
+			return Result{}, err
 		}
+		ctx, stop := workerContext()
+		defer stop()
+		res, err := c.deps().WorkerPoll(ctx, root, worker.PollOpts{
+			Slot: slot, Settle: time.Duration(*settle * float64(time.Second)), Lines: *lines})
 		if err != nil {
 			return Result{}, err
 		}

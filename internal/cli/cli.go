@@ -249,7 +249,7 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		return ExitOK
 	}
-	return run(Tree(), defaultDeps(), args, stdin, stdout, stderr)
+	return run(Tree(), invocationDeps(), args, stdin, stdout, stderr)
 }
 
 func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stderr io.Writer) (code int) {

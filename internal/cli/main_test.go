@@ -78,7 +78,7 @@ func testDeps() *Deps {
 	pinDay(d, goldenDay)
 	// doctor's disk check reads the real volume: pin a healthy one so a full
 	// developer disk does not add a line to every doctor golden (#85).
-	d.DoctorDisk = doctorDisk("50:100")
+	d.DiskUsage = fixedDisk(50, 100)
 	d.Host = func(kind host.Kind) host.Host {
 		if kind == "herdr" {
 			return &absentHerdr{}

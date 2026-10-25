@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -18,7 +19,7 @@ import (
 )
 
 // doctorFakes writes fake tools into a fresh dir and gives the test an empty
-// HOME, returning the dir. A Deps takes the dir as DoctorPath (see doctorDeps).
+// HOME, returning the dir. Tests inject its lookup through Deps.LookPath.
 func doctorFakes(t *testing.T, tools map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -41,8 +42,17 @@ func doctorFakes(t *testing.T, tools map[string]string) string {
 func doctorDeps(t *testing.T, tools map[string]string) *Deps {
 	t.Helper()
 	d := testDeps()
-	d.DoctorPath = doctorFakes(t, tools)
+	d.LookPath = fakeToolLookup(doctorFakes(t, tools))
 	return d
+}
+
+func fakeToolLookup(dir string) func(string) (string, error) {
+	return func(name string) (string, error) {
+		if !strings.ContainsRune(name, os.PathSeparator) {
+			name = filepath.Join(dir, name)
+		}
+		return exec.LookPath(name)
+	}
 }
 
 func doctorData(t *testing.T, out string) (bool, map[string]map[string]any) {
@@ -446,13 +456,14 @@ func TestDoctorInputKeepsConnectionWithSourceProblem(t *testing.T) {
 	}
 }
 
-// doctorInput hands worker.ResolveHost its own Getenv and DoctorPath-aware Look:
-// a herdr pane resolves herdr only when herdr is found on DoctorPath.
-func TestDoctorInputHostUsesGetenvAndDoctorPath(t *testing.T) {
+// Doctor and the host decision must share the injected PATH lookup even when
+// a caller inherited the former smoke-test override.
+func TestDoctorInputUsesInjectedLookPath(t *testing.T) {
 	cwd, _ := filepath.EvalSymlinks(t.TempDir())
 	os.MkdirAll(filepath.Join(cwd, ".rota"), 0o755)
 	os.WriteFile(filepath.Join(cwd, ".rota", "config.json"), []byte(`{}`), 0o644)
-	for path, want := range map[string]host.Kind{"/missing": host.Solo, "/found": host.Herdr} {
+	t.Setenv("ROTA_TEST_DOCTOR_PATH", "/ignored")
+	for _, found := range []bool{false, true} {
 		d := defaultDeps()
 		d.Getwd = func() (string, error) { return cwd, nil }
 		d.Getenv = func(k string) string {
@@ -462,15 +473,32 @@ func TestDoctorInputHostUsesGetenvAndDoctorPath(t *testing.T) {
 			return ""
 		}
 		d.LookPath = func(n string) (string, error) {
-			if n == "/found/herdr" {
-				return n, nil
+			if found && n == "herdr" {
+				return "/injected/herdr", nil
 			}
 			return "", errors.New("not found")
 		}
-		d.DoctorPath = path
-		if got := doctorInput(context.Background(), d).RoundHost; got != want {
-			t.Errorf("DoctorPath %s: round host %q, want %q", path, got, want)
+		in := doctorInput(context.Background(), d)
+		want := host.Solo
+		if found {
+			want = host.Herdr
 		}
+		if in.RoundHost != want {
+			t.Errorf("found=%v: round host %q, want %q", found, in.RoundHost, want)
+		}
+		if p, ok := in.Look("herdr"); ok != found || found && p != "/injected/herdr" {
+			t.Errorf("found=%v: doctor lookup = %q, %v", found, p, ok)
+		}
+	}
+}
+
+func TestDoctorInputIgnoresDiskFixtureEnv(t *testing.T) {
+	t.Setenv("ROTA_TEST_DOCTOR_DISK", "1:123")
+	d := defaultDeps()
+	d.Getwd = func() (string, error) { return t.TempDir(), nil }
+	in := doctorInput(context.Background(), d)
+	if in.Disk == nil || in.Disk.Total == 123 {
+		t.Fatalf("doctor must read the real volume, got %+v", in.Disk)
 	}
 }
 

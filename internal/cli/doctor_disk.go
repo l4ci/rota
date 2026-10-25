@@ -19,23 +19,6 @@ import (
 // that is still going owns a younger one.
 const leakAge = time.Hour
 
-// doctorDisk is the disk reader: it reads the free space of the volume holding
-// dir. A non-empty override ("<free>:<total>" bytes, from ROTA_TEST_DOCTOR_DISK
-// at the defaultDeps edge) replaces the read (a test hook, like
-// ROTA_TEST_DOCTOR_PATH, not part of the CLI).
-func doctorDisk(override string) func(dir string) *doctor.Disk {
-	if override == "" {
-		return statDisk
-	}
-	return func(dir string) *doctor.Disk {
-		var free, total uint64
-		if _, err := fmt.Sscanf(override, "%d:%d", &free, &total); err != nil {
-			return nil
-		}
-		return &doctor.Disk{Path: dir, Free: free, Total: total}
-	}
-}
-
 func statDisk(dir string) *doctor.Disk {
 	var st syscall.Statfs_t
 	if err := syscall.Statfs(dir, &st); err != nil {
