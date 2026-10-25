@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	gatepolicy "github.com/l4ci/rota/internal/gate"
 )
 
 // The gate and the train share one pre-merge policy: the same input is refused
@@ -32,7 +33,7 @@ func TestGateAndTrainRefuseTheSameInput(t *testing.T) {
 			topts := TrainOpts{Targets: []string{"b1"}}
 			errApprove := errors.New("approval declined")
 			if c.approve {
-				gopts.Approve = func(GateTarget, func() ([]string, error)) (*exitcode.Refusal, error) { return nil, errApprove }
+				gopts.Approval = &MergeApproval{Policy: gatepolicy.MergePolicy{Mode: gatepolicy.MergeAll}, Clear: func(string, gatepolicy.Confirm, []string) (*exitcode.Refusal, error) { return nil, errApprove }}
 				topts.Approve = func(func() ([]string, error)) (*exitcode.Refusal, error) { return nil, errApprove }
 			}
 			g, gerr := w.env(false).Gate(bg, w.dir, gopts)
