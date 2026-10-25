@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -77,6 +78,9 @@ func TestArchitectureThresholdMintsPerAreaAndRestartsCount(t *testing.T) {
 	}
 	if be.made[0].Title != "arch(cli): architecture review" || be.made[1].Title != "arch(worker): architecture review" {
 		t.Fatalf("titles %q %q", be.made[0].Title, be.made[1].Title)
+	}
+	if c := be.comments[ids[0]]; len(c) != 1 || !strings.Contains(c[0], "<!-- rota:review-minted round=3 -->") {
+		t.Fatalf("a minted review should carry main's marker comment: %v", c)
 	}
 	if len(be.labels) != 2 || be.labels[101][0] != RefactorLabel {
 		t.Fatalf("review items should carry the refactor label: %v", be.labels)
