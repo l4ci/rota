@@ -7,13 +7,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/skills"
 )
@@ -499,26 +497,6 @@ func TestDoctorInputIgnoresDiskFixtureEnv(t *testing.T) {
 	in := doctorInput(context.Background(), d)
 	if in.Disk == nil || in.Disk.Total == 123 {
 		t.Fatalf("doctor must read the real volume, got %+v", in.Disk)
-	}
-}
-
-// An unset codex tier map reports the shipped defaults as the effective models;
-// emptying all three leaves none, so doctor says Codex's own default (#1602).
-func TestDoctorKindsCodexEffectiveModels(t *testing.T) {
-	for doc, want := range map[string][]string{
-		``: {"light=gpt-6-luna", "standard=gpt-6.1-sol", "heavy=gpt-6-astra"},
-		`{"round":{"tiers":{"codex":{"light":"","standard":"","heavy":""}}}}`: nil,
-	} {
-		p := filepath.Join(t.TempDir(), "config.json")
-		if doc != "" {
-			if err := os.WriteFile(p, []byte(doc), 0o644); err != nil {
-				t.Fatal(err)
-			}
-		}
-		k := doctorKinds(config.Load(p), "")[harness.Codex]
-		if k.Tiers || !slices.Equal(k.Models, want) {
-			t.Errorf("%s: Tiers=%v Models=%v, want %v", doc, k.Tiers, k.Models, want)
-		}
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/repos"
@@ -173,7 +174,7 @@ func showRows(entries []config.Entry) (rows []any, lines []string) {
 // so an empty raw value no longer hides what a worker launches with.
 func annotateTierModels(cfg any, entries []config.Entry, rows []any, lines []string) {
 	for i, e := range entries {
-		kind, tier, ok := tierKeyParts(e.Key)
+		kind, tier, ok := harness.ParseTierKey(e.Key)
 		if !ok {
 			continue
 		}
@@ -186,16 +187,6 @@ func annotateTierModels(cfg any, entries []config.Entry, rows []any, lines []str
 		}
 		lines[i] += fmt.Sprintf("  effective %s (%s)", shown, source)
 	}
-}
-
-// tierKeyParts splits round.tiers.<kind>.<tier>.
-func tierKeyParts(key string) (kind, tier string, ok bool) {
-	rest, found := strings.CutPrefix(key, config.RoundTiersPrefix)
-	if !found {
-		return "", "", false
-	}
-	kind, tier, found = strings.Cut(rest, ".")
-	return kind, tier, found && roundcfg.ValidTier(tier)
 }
 
 // configSaveGlobal merges the project's config.json keys (not config.local.json)
