@@ -218,3 +218,15 @@ func TestDigestShowsWhyASlotIsUnverifiable(t *testing.T) {
 		t.Errorf("digest = %q", got)
 	}
 }
+
+// #1843: a done slot whose PR merged is not news for the orchestrator.
+func TestMergedDoneSlotNeedsNoWake(t *testing.T) {
+	root := t.TempDir()
+	writeRegistry(t, root, `{"slots":[{"name":"dana","state":"done","pr":"https://x/pull/225","prMerged":true}]}`)
+	if d := Digest(root, 1, true); strings.Contains(d, "needs you") {
+		t.Fatalf("digest %q", d)
+	}
+	if _, attn := NeedsWatch(root); len(attn) != 0 {
+		t.Fatalf("attn %v", attn)
+	}
+}

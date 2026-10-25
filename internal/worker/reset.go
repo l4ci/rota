@@ -1,10 +1,12 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
 	"strings"
+	"time"
 )
 
 // ResetResult is the outcome of the slot reset guard.
@@ -147,7 +149,17 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 	if strings.HasPrefix(oldBranch, "rota-worker/") && oldBranch != newBranch {
 		e.git(root, "branch", "-D", oldBranch)
 	}
-	if _, err := UpdateSlot(root, slot, func(s *Slot) { s.SetBranch(newBranch) }); err != nil {
+	// A done slot whose PR merged waits on nothing: ending it here keeps it
+	// from reading as needing the orchestrator for good (#1843).
+	endDone := IsDone(s.State()) && e.prMerged(context.Background(), root, s)
+	if _, err := UpdateSlot(root, slot, func(s *Slot) {
+		s.SetBranch(newBranch)
+		if endDone {
+			s.SetPR("")
+			s.SetPRMerged(false)
+			_ = s.MarkState("idle", e.Now().UTC().Format(time.RFC3339))
+		}
+	}); err != nil {
 		return res, err
 	}
 	res.Branch, res.Changed = newBranch, true
