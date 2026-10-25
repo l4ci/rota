@@ -230,9 +230,14 @@ two: GitHub is the only shared state. `round.support` (tracked) names the machin
 roster prefix; `round.role` (local only, `.rota/config.local.json`) turns a machine into the
 support side. Main is named `main`; support takes its name from `round.support`.
 With support enabled, `machine:<name>` pins an issue to that machine; candidates on other
-machines show it as blocked. Unpinned issues are available to main; support still takes only
-issues pinned to it. Use `machine:main` to keep an issue on main. A support machine never merges and never writes tracked `.rota/` content; those
-verbs exit 4 `blockedBy: role` (the tables live in `internal/roundcfg/support_fence.go`).
+machines show it as blocked. Unpinned issues are available to both machines. Support prefers
+issues pinned to it, then pulls unpinned issues within its configured `round.scope`. The shared
+tracker claim decides which machine takes an issue; neither machine reserves its slate against
+the other. After winning a claim, support pins the issue so main can track it through the queue,
+watch and provenance checks; a pre-dispatch failure removes only that assignment's new pin.
+Use `machine:main` to keep an issue on main. A support machine never merges and
+never writes tracked `.rota/` content; those verbs exit 4 `blockedBy: role` (the tables live in
+`internal/roundcfg/support_fence.go`).
 
 Setting one up takes two steps and no hand edits:
 
@@ -267,8 +272,9 @@ is posted.
 - **Hand back by default.** When an offered issue cannot be worked (not ready, wrong premise,
   collides with main's work, the maintainer holds it), the support machine runs
   `rota round support return <ID> --reason-file <f>` at once and never idles on it. The reason
-  goes on the issue as a signed comment and the `machine:<round.support>` pin comes off, so main's next
-  `round candidates` lists the issue again. It is refused on main (`blockedBy: role`) and while a
+  goes on the issue as a signed comment. The support claims are released and the
+  `machine:<round.support>` pin comes off, so main's next `round candidates` can list the issue
+  again within its scope. It is refused on main (`blockedBy: role`) and while a
   support slot holds the issue (`blockedBy: claimed`).
 - **The issue thread is the index.** Every note one orchestrator posts for the other is an issue
   comment: `--kind feedback` for a plain note, `--kind relay` for a relayed instruction

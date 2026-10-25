@@ -1088,9 +1088,8 @@ func TestLatestHandoffBranchReadsLegacyMarker(t *testing.T) {
 	}
 }
 
-// Scope open offers every open item, so one taken outside the round (the
-// in-progress label or an open claim, no slot holding it) is not offered (#29
-// review). Other scopes keep their behaviour.
+// Without a support machine, only open scope filters outside claims. Other
+// scopes still list those issues and leave the refusal to assignment.
 func TestOpenScopeSkipsItemsTakenOutsideTheRound(t *testing.T) {
 	f := newMoveFx(t)
 	f.forge.labels = map[int][]string{12: {"in-progress"}, 13: {"in-progress"}}

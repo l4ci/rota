@@ -248,3 +248,48 @@ func TestRoundCandidatesWarnLegacySupport(t *testing.T) {
 		})
 	}
 }
+
+// Returning a pinned issue releases the support machine's authoritative claim
+// and derived label as well as its pin, without changing tracked .rota files.
+func TestRoundSupportReturnReleasesClaimAndPin(t *testing.T) {
+	root := supportProject(t)
+	tracked := filepath.Join(root, ".rota", "config.json")
+	before, err := os.ReadFile(tracked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reason := filepath.Join(t.TempDir(), "reason.md")
+	if err := os.WriteFile(reason, []byte("premise is wrong\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fake := &trackertest.Fake{Issues: []backlog.Issue{{Key: tracker.NumKey(7), Title: "Add export", State: "open",
+		Labels:   []string{"machine:mac", "in-progress", "claimed:ben@mac", "keep"},
+		Comments: []tracker.Comment{{ID: "old", Body: "<!-- rota:claim mac-ben@3 -->"}},
+	}}}
+	deps := supportReturnDeps(fake)
+	code, env, stderr := rotaRunWith(t, deps, "--json", "-C", root, "round", "support", "return", "7", "--reason-file", reason)
+	if code != ExitOK || issueGet(issueData(t, env), "changed") != true {
+		t.Fatalf("return: %d %v %s", code, env, stderr)
+	}
+	is, _ := fake.Get(context.Background(), tracker.NumKey(7), true)
+	if !slices.Equal(is.Labels, []string{"keep"}) {
+		t.Errorf("labels after return %v want [keep]", is.Labels)
+	}
+	released, returned := false, false
+	for _, c := range is.Comments {
+		released = released || strings.Contains(c.Body, "<!-- rota:release mac-ben@3 -->")
+		returned = returned || strings.Contains(c.Body, "<!-- rota:support-return -->\npremise is wrong")
+	}
+	if !released || !returned {
+		t.Errorf("missing release or reason: %+v", is.Comments)
+	}
+	after, err := os.ReadFile(tracked)
+	if err != nil || string(before) != string(after) {
+		t.Fatal("return changed tracked config")
+	}
+	n := len(is.Comments)
+	code, env, stderr = rotaRunWith(t, deps, "--json", "-C", root, "round", "support", "return", "7", "--reason-file", reason)
+	if code != ExitOK || issueGet(issueData(t, env), "changed") != false || len(fake.Issues[0].Comments) != n {
+		t.Fatalf("repeat return: %d %v %s", code, env, stderr)
+	}
+}
