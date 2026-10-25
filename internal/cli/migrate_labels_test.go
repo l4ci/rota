@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"errors"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/tracker"
@@ -87,10 +86,9 @@ func TestConfigCheckRemovedSupportHint(t *testing.T) {
 	if !slices.ContainsFunc(envObj(env, "data")["removed"].([]any), func(v any) bool { return v == "issues.labels.support" }) {
 		t.Fatalf("removed=%v", env)
 	}
-	var stdout, stderr bytes.Buffer
-	mainWith(testDeps(), []string{"-C", root, "config", "check"}, strings.NewReader(""), &stdout, &stderr)
-	if !strings.Contains(stdout.String(), "REMOVED: issues.labels.support") || !strings.Contains(stdout.String(), "rota migrate labels") {
-		t.Fatalf("config check output=%q", stdout.String())
+	_, stdout, _ := rotaIn(t, root, "config", "check")
+	if !strings.Contains(stdout, "REMOVED: issues.labels.support") || !strings.Contains(stdout, "rota migrate labels") {
+		t.Fatalf("config check output=%q", stdout)
 	}
 
 }
