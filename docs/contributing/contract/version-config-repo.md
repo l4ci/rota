@@ -23,11 +23,11 @@ note: old `hv-version-check` exited 0 silently without `.rota/`, where 5.0 exits
 rota update
 repo: none
 data: {"installType": "brew"|"script"|"dev"|"unknown", "installRoot": string, "currentVersion": string, "latestVersion": string, "status": "behind"|"current"|"ahead"|"unknown", "updateCommand": string}
-exit: implied only. A missing `gh`, a network failure or an unresolved install gives `latestVersion` or `currentVersion` empty and `status: "unknown"`, as old. Read-only: never runs the update.
+exit: implied only. A missing `gh`, a network failure or an unresolved install gives `latestVersion` or `currentVersion` empty and `status: "unknown"`, as old; an unstamped build (version empty, `dev` or `(devel)`) also reports `status: "unknown"`. Read-only: never runs the update.
 old: hv-update-check (no args). Env: `HV_INSTALL_ROOT` stays as the real override (`installType: "override"`, not a test hook); `ROTA_TEST_LATEST_VERSION` is the test hook, for old `HV_LATEST_VERSION` (rule 10).
 shim: old stdout is already this JSON; pass it through unchanged and export `HV_LATEST_VERSION="$HV_TEST_LATEST_VERSION"` when set.
 note: strings may be empty rather than absent, as in the old helper.
-note: F6b (#230) replaced the plugin-era detection. `currentVersion` is the running binary's version and `installRoot` is the directory holding the binary (symlinks resolved). `installType` is `brew` for a path under a Homebrew prefix (`/Cellar/`, `/homebrew/`, `/linuxbrew/`), `dev` for an unstamped or `-dev` build, `unknown` when the binary path does not resolve, otherwise `script`. `updateCommand` is `brew update && brew upgrade rota`, the `install.sh` pipe, or a rebuild, each followed by `&& rota skills update`. `HV_INSTALL_ROOT` and `CLAUDE_PLUGIN_ROOT` are no longer read.
+note: F6b (#230) replaced the plugin-era detection. `currentVersion` is the running binary's version and `installRoot` is the directory holding the binary (symlinks resolved). `installType` is `brew` for a path under a Homebrew prefix (`/Cellar/`, `/homebrew/`, `/linuxbrew/`), `dev` for an unstamped or `-dev` build or one stamped with a full-length (40-char) commit SHA, which only a checkout rebuild writes (goreleaser stamps a short abbreviation), `unknown` when the binary path does not resolve, otherwise `script`. `updateCommand` is `brew update && brew upgrade rota`, the `install.sh` pipe, or a rebuild, each followed by `&& rota skills update`. `HV_INSTALL_ROOT` and `CLAUDE_PLUGIN_ROOT` are no longer read.
 
 ### rota config show
 rota config show [--global|--local] [<key>]
