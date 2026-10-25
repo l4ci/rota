@@ -17,7 +17,7 @@ import (
 type claude struct{}
 
 func (claude) Kind() string       { return Claude }
-func (claude) CommandKey() string { return "round.commands.claude" }
+func (claude) CommandKey() string { return config.RoundCommandsClaudeKey }
 
 // Launch is round.commands.claude, else the default launch line. Workers run with
 // permissions skipped: the contract asks them to git add, git commit, gh pr
@@ -38,7 +38,7 @@ func (claude) Launch(cfg any, chosen string) (string, error) {
 	} else if inheritsModel(cfg) {
 		model = ""
 	}
-	if s := config.StringIfSet(cfg, "round.commands.claude"); s != "" {
+	if s := config.StringIfSet(cfg, config.RoundCommandsClaudeKey); s != "" {
 		if model == "" {
 			// Stripping the flag leaves a gap; collapse it on this path only.
 			s = strings.Join(strings.Fields(modelFlag.ReplaceAllString(s, "")), " ")
@@ -137,7 +137,7 @@ func (claude) AmbientAccount(getenv func(string) string) Account {
 }
 
 func (claude) Accounts(cfg any) AccountList {
-	l := AccountList{Key: "round.accounts"}
+	l := AccountList{Key: config.RoundAccountsKey}
 	for _, a := range config.AccountsOf(cfg, config.KindClaude) {
 		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.Dir})
 	}

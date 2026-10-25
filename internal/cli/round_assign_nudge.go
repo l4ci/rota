@@ -18,6 +18,11 @@ type assignNudge struct {
 // Command is the assignment to run.
 func (n assignNudge) Command() string { return "rota round assign " + n.ID }
 
+// First names the slot explicitly: a gate/train wake may have no returning slot.
+func (n assignNudge) First() string {
+	return "assign first: " + n.Command() + " --agent " + n.Slot
+}
+
 // Text is the nudge line `round wait` and `round watch` print.
 func (n assignNudge) Text() string {
 	return fmt.Sprintf("nudge\tassign\tassign before you gate: %s is done, next candidate %s %s\t%s",
@@ -68,4 +73,42 @@ func assignNudgeFor(c *Ctx, root, slot string) *assignNudge {
 		return nil
 	}
 	return &assignNudge{Slot: slot, ID: cd.ID, Title: cd.Title}
+}
+
+// freeSlotAssignment is advisory: unreadable settings, candidates or registry
+// suppress the suggestion and never change a gate's verdict.
+func freeSlotAssignment(c *Ctx, root string) *assignNudge {
+	set, ok := c.deps().tolerantRoundSettings(root)
+	if !ok {
+		return nil
+	}
+	reg := worker.LoadRegistryTolerant(root)
+	if len(reg.Slots()) == 0 {
+		return nil
+	}
+	env := c.deps().RoundEnv(c.Context(), root)
+	// Avoid reading the tracker when every slot is busy.
+	slot, ok := env.FreeSlot(c.Context(), reg, set)
+	if !ok {
+		return nil
+	}
+	be, err := openBacklog(c, root, false, "")
+	if err != nil {
+		return nil
+	}
+	cs, err := env.RoundCandidates(c.Context(), root, be, set, "")
+	if err != nil {
+		return nil
+	}
+	cd, ok := nextReady(cs)
+	if !ok {
+		return nil
+	}
+	return &assignNudge{Slot: slot, ID: cd.ID, Title: cd.Title}
+}
+
+func warnAssignFirst(c *Ctx, root string) {
+	if n := freeSlotAssignment(c, root); n != nil {
+		c.Warn("%s; slot %s can take ready candidate %s before the gate or train holds the land lock", n.First(), n.Slot, n.ID)
+	}
 }

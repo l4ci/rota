@@ -2,9 +2,12 @@
 
 ## Unreleased
 
+- **Assign before landing.** Train nudges name an assignment to run first when a free slot has a ready candidate. `rota worker gate` and `rota worker train` warn on stderr and in JSON `warnings` about the same opportunity; `--no-assign-check` skips the check for scripted runs.
+
 ### Support pull
 
 - Support fills free slots from its pinned issues, then unpinned issues within `round.scope`. Both machines use the shared claim; support pins a won issue so main can track its queue, comments and PR approvals. A failed assignment before dispatch removes the pin it added. `round support return` releases support's claims and removes the pin.
+
 
 ### Milestone branches
 
