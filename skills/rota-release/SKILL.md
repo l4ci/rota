@@ -70,7 +70,7 @@ When `issues.source` is `github` or `gitlab` or `rota repo umbrella` exits 0, re
 
 ## Step 3b — Merge the Milestone Branch
 
-When Step 3 picked a milestone and `milestone/<MNN>` exists on origin, read [`milestone-branch.md`](milestone-branch.md), *Step 3b*, and follow it: sync the base into the branch, gate, open a PR to the base, merge it `--no-ff` once CI is green. A red gate or red CI stops the release before anything merges. No milestone, or no branch: skip; the release runs as before.
+When Step 3 picked a milestone and `milestone/<MNN>` exists on origin, read [`milestone-branch.md`](milestone-branch.md), *Step 3b*, and follow it: sync the base into the branch, gate, open a PR to the base, merge it with a merge commit, pinned to the gated head, once CI is green. A red gate or red CI stops the release before anything merges. No milestone, or no branch: skip; the release runs as before.
 
 ## Step 4 — Version and Bump Level
 
@@ -157,7 +157,7 @@ In issue mode, read [`milestone-gate.md`](milestone-gate.md), *Step 12*, after S
 
 ## Step 12b — Clean Up the Milestone Branch
 
-When Step 3b merged a milestone branch, read [`milestone-branch.md`](milestone-branch.md), *Step 12b*: remove the `on-milestone/<MNN>` labels, delete the branch, mark the milestone shipped. Otherwise skip. Skipped in `--dry-run`.
+When `milestone/<MNN>` still exists on origin or issues still carry `on-milestone/<MNN>` (also on a resumed release), read [`milestone-branch.md`](milestone-branch.md), *Step 12b*: remove the labels, delete the branch, mark the milestone shipped. Otherwise skip. Skipped in `--dry-run`.
 
 ## Step 13 — Close Upstream Issues
 
