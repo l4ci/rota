@@ -10,7 +10,7 @@ Loaded by `skills/rota-qa/SKILL.md` when `.rota/qa/` is empty for the active sco
    - `lib/` or `src/` with no entry point + tests dir → library (unit + contract only)
    - Mixed → multiple targets, one strategy file each
 2. **Detect existing test infra.** `find` for `playwright.config.*`, `cypress.config.*`, `pytest.ini`, `jest.config.*`, `vitest.config.*`, `*XCTest*`, `*.smoke.sh`, `tests/`, `test/`, `__tests__/`, CI workflow files. Note what's wired; missing tooling stays a note, not a proposal.
-3. **Offer the surface menu.** For each detected surface, read [`surface-cli.md`](surface-cli.md), [`surface-web.md`](surface-web.md), [`surface-api.md`](surface-api.md) or [`surface-lib.md`](surface-lib.md) ( no file for other surfaces: fall back to probing Lighthouse, axe-core / pa11y, semgrep, dependency audits and contract tests). Probe each entry's tool with `command -v`, and mark the entry `installed` or `not installed`. Installed entries are preselected; not-installed ones are offered unselected. Never install anything.
+3. **Offer the surface menu.** For each detected surface, read `surface-cli.md`, `surface-web.md`, `surface-api.md` or `surface-lib.md` ( no file for other surfaces: fall back to probing Lighthouse, axe-core / pa11y, semgrep, dependency audits and contract tests). Probe each entry's tool with `command -v`, and mark the entry `installed` or `not installed`. Installed entries are preselected; not-installed ones are offered unselected. Never install anything.
 4. **Propose strategy.** Per target, draft a one-screen strategy and show the user before writing:
    - **Surface** — web, API, CLI, mobile or lib
    - **Watch globs** — paths whose changes trigger after-work QA

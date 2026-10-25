@@ -1,6 +1,6 @@
 # Web surface menu
 
-Loaded by [`first-run.md`](first-run.md) step 3 for a web UI target. Entries are examples: `name · command · pass criterion · tool`. The user edits them before approving. Probe each tool with `command -v` (or `npx --no-install <tool> --version`); mark it `installed` or `not installed`. Offer not-installed entries unselected; never install.
+Loaded by `first-run.md` step 3 for a web UI target. Entries are examples: `name · command · pass criterion · tool`. The user edits them before approving. Probe each tool with `command -v` (or `npx --no-install <tool> --version`); mark it `installed` or `not installed`. Offer not-installed entries unselected; never install.
 
 Pillar keys: `functional`, `security`, `performance`, `ui-a11y`.
 
