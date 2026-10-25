@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
-	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/host"
 )
 

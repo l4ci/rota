@@ -2,10 +2,10 @@ package ship
 
 import (
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
 	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/status"
