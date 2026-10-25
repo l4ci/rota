@@ -111,6 +111,14 @@ for each flagged path, read the doc against that diff and fix what drifted, then
 
 ## Review, merge and completion
 
+Before starting a gate or train, pull main and assign every free slot with a ready
+candidate (`rota round candidates`, then `rota round assign <id> --agent <slot>`).
+Assign first, then land: `round assign` and `round transfer` refuse while the land
+lock is held. The train nudge names an `assign first` step when one is ready;
+`worker gate` and `worker train` also warn on stderr and in JSON `warnings` at
+startup. The warning never changes the verdict. `--no-assign-check` suppresses
+the check for scripted runs; `gate --check-only` and `train --plan` skip it.
+
 - **One merge owner: the orchestrator.** Workers open PRs and stop. The orchestrator merges each
   through `rota worker gate`, which reviews the merged tree. `/rota-ship` never merges in issue mode
   and `/rota-review --queue` is for a session outside a round, not for round PRs.
