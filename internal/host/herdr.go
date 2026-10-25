@@ -464,19 +464,21 @@ func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 	return ErrNotSubmitted
 }
 
-// relayMarker is the `[relay K]` line dispatch puts in every relay; K is
-// unique within the slot, so an earlier relay's echo does not match.
-var relayMarker = regexp.MustCompile(`(?m)^\[relay \d+\]$`)
-
 // relayQueued reports whether output, the pane text above the prompt line,
 // shows this relay: its `[relay K]` marker, or the brief's tail.
 func relayQueued(output, text string) bool {
-	flat := squeeze(output)
-	if m := relayMarker.FindString(text); m != "" && strings.Contains(flat, squeeze(m)) {
-		return true
+	for _, line := range strings.Split(text, "\n") {
+		if seq := harness.RelaySequence(line); seq != "" {
+			for _, echoed := range strings.Split(output, "\n") {
+				if harness.RelaySequence(echoed) == seq {
+					return true
+				}
+			}
+			break // only this relay's marker can acknowledge pickup
+		}
 	}
 	tail := briefTail(text)
-	return tail != "" && strings.Contains(flat, tail)
+	return tail != "" && strings.Contains(squeeze(output), tail)
 }
 
 // SubmitPending is the resend path: when the file's text is already on the

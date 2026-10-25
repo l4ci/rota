@@ -586,9 +586,6 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	return StateIdle, "static pane, no sentinel"
 }
 
-// reRelaySeq is the `[relay K]` line every relay carries under its header.
-var reRelaySeq = regexp.MustCompile(`^\s*(?:[┃❯]\s*)?\[relay (\d+)\]\s*$`)
-
 // relayMarkerVisible: the pane capture holds pending relay k's `[relay k]` line.
 func relayMarkerVisible(text string, lines, k int) bool {
 	all := splitLines(text)
@@ -596,7 +593,7 @@ func relayMarkerVisible(text string, lines, k int) bool {
 		all = all[len(all)-lines:]
 	}
 	for _, l := range all {
-		if m := reRelaySeq.FindStringSubmatch(l); m != nil && m[1] == strconv.Itoa(k) {
+		if harness.RelaySequence(l) == strconv.Itoa(k) {
 			return true
 		}
 	}
@@ -618,7 +615,7 @@ func doneAfterRelay(kind, text string, lines, k int) bool {
 	}
 	mark := -1
 	for i, l := range all {
-		if m := reRelaySeq.FindStringSubmatch(l); m != nil && m[1] == strconv.Itoa(k) {
+		if harness.RelaySequence(l) == strconv.Itoa(k) {
 			mark = i
 		}
 	}
