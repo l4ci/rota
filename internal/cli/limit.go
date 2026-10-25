@@ -118,7 +118,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 	if hs, err := hook.LoadSettings(cfg); err == nil {
 		maxAge = time.Duration(hs.StateMaxAge) * time.Second
 	}
-	accounts := c.deps().WorkerAccounts
+	src := accountSource{c: c, root: root}
 	orchPane := host.CurrentPane(kind, c.deps().Getenv)
 
 	var mu sync.Mutex
@@ -165,23 +165,10 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 		},
 		OrchestratorData: gapped(gap, orchestratorData(cd, root, maxAge)),
 		Meter: func(ctx context.Context, account string) limits.Reading {
-			for _, m := range accounts().Meters(ctx, root) {
-				if m.Name != account {
-					continue
-				}
-				return limits.ReadingOf(m)
-			}
-			return limits.Reading{}
+			return limits.MeterReading(ctx, src, account)
 		},
 		PickAccount: func(ctx context.Context, kind, exclude string) (string, bool) {
-			if h := harness.Resolve(kind); !h.UsageMeter() {
-				var logins []string
-				for _, a := range h.Accounts(c.deps().Config(root)).Entries {
-					logins = append(logins, a.Name)
-				}
-				return limits.LoggedPick(root, h.Kind(), logins, exclude, c.deps().Now())
-			}
-			return accounts().Pick(ctx, root, []string{exclude})
+			return limits.PickAccount(ctx, src, root, kind, exclude, c.deps().Now())
 		},
 		IdleSlot: func(ctx context.Context, kind, account string) (string, bool) {
 			rc, ok := c.deps().tolerantRoundSettings(root)
@@ -189,10 +176,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 				return "", false
 			}
 			// Tolerant: no idle slot is found in a corrupt registry (callback, no error return).
-			// Only the round's active slots take a moved issue (#1097).
-			reg := worker.LoadRegistryTolerant(root)
-			active, _ := round.Members(reg, rc)
-			return round.IdleSlot(reg, active, kind, account)
+			return round.IdleSlotInRound(worker.LoadRegistryTolerant(root), rc, kind, account)
 		},
 		Transfer: func(ctx context.Context, issue, to string) error {
 			env, be, err := moveEnv(c, root)
@@ -246,6 +230,29 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 		feed.Start()
 	}
 	return rig, nil
+}
+
+// accountSource adapts the worker accounts and the harness config to
+// limits.AccountSource.
+type accountSource struct {
+	c    *Ctx
+	root string
+}
+
+func (a accountSource) Logins(kind string) []string {
+	var logins []string
+	for _, e := range harness.Resolve(kind).Accounts(a.c.deps().Config(a.root)).Entries {
+		logins = append(logins, e.Name)
+	}
+	return logins
+}
+
+func (a accountSource) Meters(ctx context.Context) []worker.Meter {
+	return a.c.deps().WorkerAccounts().Meters(ctx, a.root)
+}
+
+func (a accountSource) Pick(ctx context.Context, exclude []string) (string, bool) {
+	return a.c.deps().WorkerAccounts().Pick(ctx, a.root, exclude)
 }
 
 // limitsLoop is the loop the supervisor runs beside its child. Failures are
