@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/pystr"
 	"strings"
@@ -116,7 +117,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 			_, ferr := backlogFail(err)
 			f := jsonx.NewObject()
 			f.Set("changed", res.Changed)
-			if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && bd.BlockedBy == "dispatch" {
+			if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && bd.BlockedBy == blockedby.Dispatch {
 				f.Set("blockedBy", bd.BlockedBy)
 				f.Set("slot", res.Agent)
 			}

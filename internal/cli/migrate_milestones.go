@@ -4,6 +4,7 @@ import (
 	"flag"
 	"strings"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/migrate"
 )
 
@@ -73,7 +74,7 @@ func migrateMilestoneFiles(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if !issue {
-			return blockedRefusal(nil, "backend", "milestones live in .rota/milestones (issues.source is file): nothing is stale", "")
+			return blockedRefusal(nil, blockedby.Backend, "milestones live in .rota/milestones (issues.source is file): nothing is stale", "")
 		}
 		names, err := migrate.ArchiveMilestoneFiles(root, *apply)
 		if err != nil {

@@ -239,7 +239,7 @@ func milestoneOverview(fs *flag.FlagSet) RunFunc {
 		}
 		changed, err := ms.SetOverview(root, text)
 		if err != nil {
-			return Result{Data: blocked(err, "heading in body"), Text: ""}, err
+			return Result{Data: blocked(err, blockedby.HeadingInBody), Text: ""}, err
 		}
 		d := jsonx.NewObject()
 		d.Set("changed", changed)
