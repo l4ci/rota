@@ -52,7 +52,7 @@ func openProof(c *Ctx, id string) (root string, st proof.Store, w *who, err erro
 	}
 	w = &who{ID: id, Type: backlog.ItemType(id)}
 	if issue {
-		return root, proof.NewNotes(itemNotes(c, id, w)), w, nil
+		return root, proof.NewNotes(root, itemNotes(c, id, w)), w, nil
 	}
 	return root, proof.Files(root), w, nil
 }
