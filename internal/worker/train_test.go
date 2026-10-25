@@ -889,11 +889,79 @@ func TestTrainPlanWithoutConflictsLandsWholeTrain(t *testing.T) {
 	}
 }
 
+func TestTrainPlanNoVerifyMirrorsRefusal(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		config   string
+		noVerify bool
+		want     bool
+	}{
+		{"empty local", `{"test":{"full":[],"e2e":[]}}`, false, true},
+		{"e2e only", `{"test":{"full":[],"e2e":["false"]}}`, false, false},
+		{"full only", `{"test":{"full":["false"],"e2e":[]}}`, false, false},
+		{"CI", `{"test":{"fullWhere":"ci","ciChecks":["test"],"full":[],"e2e":[]}}`, false, false},
+		{"explicit override", `{"test":{"full":[],"e2e":[]}}`, true, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := trainWorld(t, "false", "b1")
+			w.setConfig(c.config)
+			res, err := w.train(TrainOpts{Targets: []string{"b1"}, Plan: true, NoVerify: c.noVerify})
+			if err != nil || res.Verdict != GatePlan || res.Plan == nil {
+				t.Fatalf("%+v %v", res, err)
+			}
+			if res.Plan.NoVerify != c.want {
+				t.Errorf("plan.noVerify = %v, want %v", res.Plan.NoVerify, c.want)
+			}
+			if got := strings.HasSuffix(res.Plan.Command, " --no-verify"); got != c.want {
+				t.Errorf("command = %q, want --no-verify suffix: %v", res.Plan.Command, c.want)
+			}
+		})
+	}
+}
+
 func TestTrainWithoutPlanStillStopsOnOrderConflict(t *testing.T) {
 	w := planWorld(t)
 	w.setConfig(`{"test":{"full":["true"]}}`)
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
 	if err != nil || res.Verdict != GateOrder || res.Plan != nil || res.Changed {
 		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+func TestPairwiseMergeFailureIsCheckBroke(t *testing.T) {
+	for _, plan := range []bool{true, false} {
+		t.Run(fmt.Sprintf("plan=%v", plan), func(t *testing.T) {
+			w := planWorld(t)
+			if !plan {
+				trainWrite(t, w, "main-only.txt", "main advanced")
+			}
+			e := w.env(false).WithDefaults()
+			realGit := e.Git
+			e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+				if len(args) > 0 && args[0] == "merge-tree" {
+					return git.Result{ExitCode: 128, Stdout: "injected failure"}, nil
+				}
+				return realGit(ctx, dir, args...)
+			}
+			before := gitq(t, w.dir, "rev-parse", "main")
+			var verdict, message string
+			var changed bool
+			var err error
+			wantMessage := "git merge-tree main b1 exited 128: injected failure"
+			if plan {
+				res, runErr := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"b1", "b2"}, Plan: true})
+				verdict, message, changed, err = res.Verdict, res.Err, res.Changed, runErr
+				wantMessage = "git merge-tree of b1 and b2 exited 128"
+			} else {
+				res, runErr := e.Gate(bg, w.dir, GateOpts{Base: "main", Slot: "b1", CheckOnly: true})
+				verdict, message, changed, err = res.Verdict, res.Err, res.Changed, runErr
+			}
+			if err != nil || verdict != GateCheckBroke || changed || !strings.Contains(message, wantMessage) {
+				t.Fatalf("verdict=%s changed=%v message=%q err=%v", verdict, changed, message, err)
+			}
+			if after := gitq(t, w.dir, "rev-parse", "main"); after != before {
+				t.Errorf("main moved: %s -> %s", before, after)
+			}
+		})
 	}
 }
