@@ -205,7 +205,20 @@ func branchHandoffFile(d *Deps, root, cwd string) string {
 }
 
 // handoffFile is the absolute `.rota/handoff/<base>.md`, the path
-// `rota status handoff <base> --canonical` returns.
+// `rota status handoff <base> --canonical` returns. It is "" when no base
+// resolves, so a caller reads no note rather than one filed under a guessed
+// branch.
+// noHandoffBaseMsg says why handoffFile found no path: the named key when
+// git.baseBranch is set but missing, else the shared candidate list.
+func noHandoffBaseMsg(cfg any) string {
+	if v, err := config.Value(cfg, "git.baseBranch"); err == nil {
+		if configured, _ := v.(string); configured != "" {
+			return fmt.Sprintf("git.baseBranch %q does not resolve to a branch", configured)
+		}
+	}
+	return noBaseMsg
+}
+
 func handoffFile(d *Deps, root string, cfg any) string {
 	configured := ""
 	if v, err := config.Value(cfg, "git.baseBranch"); err == nil {
@@ -213,14 +226,11 @@ func handoffFile(d *Deps, root string, cfg any) string {
 	}
 	base, ok, _ := d.Repo(root).Base(context.Background(), configured)
 	if !ok || base == "" {
-		base = configured
-		if base == "" {
-			base = "main"
-		}
+		return ""
 	}
 	rel, err := status.HandoffPath(base, "")
 	if err != nil {
-		rel = ".rota/handoff/main.md"
+		return ""
 	}
 	return filepath.Join(root, filepath.FromSlash(rel))
 }
@@ -264,6 +274,9 @@ func hookStop(c *Ctx, args []string) (res Result, _ error) {
 // stopHandoff is the context-threshold decision (D1, D4). ok is false when the
 // session has no readable state, so there is no decision to take.
 func stopHandoff(hc hookContext, sid string, active bool) (d hook.StopDecision, ok bool) {
+	if hc.handoff == "" {
+		return d, false // no resolvable base: nowhere to ask for a note
+	}
 	path, err := hook.StatePath(hc.commonDir, sid)
 	if err != nil {
 		return d, false
