@@ -45,7 +45,9 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 	}
 	e.findUnregisteredBranches(ctx, root, rep, reg) // a branch scan: reconcile and the tick, not every status
 	e.findSupportBounced(ctx, rep, reg)
-	e.findClosedClaimLabels(ctx, rep)
+	if e.SweepClosedClaims {
+		e.findClosedClaimLabels(ctx, rep)
+	}
 	out := Outcome{Report: rep}
 	for _, f := range rep.Findings {
 		if !apply || f.Repair == "" {
@@ -70,14 +72,16 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 }
 
 // findClosedClaimLabels sweeps for closed issues whose only claim marker is a
-// claimed: label. Keep this broad read out of Status and its polling callers.
+// claimed: label. Keep this broad read out of Status and its polling callers:
+// only `round reconcile` opts in (SweepClosedClaims). A failed list is a warning,
+// not an unavailable forge, so the other forge repairs in the pass still run.
 func (e Env) findClosedClaimLabels(ctx context.Context, rep *Report) {
 	if e.Forge == nil || slices.Contains(rep.Unavailable, SourceForge) {
 		return
 	}
 	closed, err := e.Forge.List(ctx, tracker.ListFilter{State: "closed"})
 	if err != nil {
-		rep.unavailable(SourceForge, err.Error())
+		rep.Warnings = append(rep.Warnings, fmt.Sprintf("closed claim-label sweep skipped: %v", err))
 		return
 	}
 	seen := map[string]bool{}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -72,6 +73,16 @@ func TestStatusClosedListsStayFiltered(t *testing.T) {
 		t.Fatal("Status did not check closed in-progress issues")
 	}
 	probe.lists = nil
+	if _, err := e.Reconcile(bg, root, true); err != nil {
+		t.Fatal(err)
+	}
+	for _, list := range probe.lists {
+		if list.State == "closed" && len(list.Labels) == 0 {
+			t.Fatal("Reconcile without SweepClosedClaims listed closed issues without a label filter (the autopilot tick path)")
+		}
+	}
+	probe.lists = nil
+	e.SweepClosedClaims = true
 	if _, err := e.Reconcile(bg, root, false); err != nil {
 		t.Fatal(err)
 	}
@@ -224,6 +235,7 @@ func TestReconcileDropsClaimLabelFromClosed(t *testing.T) {
 	}
 	e := env([]host.Agent{}, f.asForge())
 	e.Label = "in-progress"
+	e.SweepClosedClaims = true
 	if _, err := e.Reconcile(bg, root, false); err != nil || len(f.removed) != 0 {
 		t.Fatalf("read only: removed=%v err=%v", f.removed, err)
 	}
@@ -238,4 +250,33 @@ func TestReconcileDropsClaimLabelFromClosed(t *testing.T) {
 	if got := f.items["3"].Labels; !slices.Equal(got, []string{"claimed:kit@main", "in-progress"}) {
 		t.Errorf("open issue labels changed: %v", got)
 	}
+}
+
+// A failed closed sweep warns and stops; it must not mark the forge unavailable,
+// which would skip every other forge repair in the pass.
+func TestClosedClaimSweepFailureKeepsForgeAvailable(t *testing.T) {
+	root := newRepo(t, nil)
+	e := env([]host.Agent{}, closedUnfilteredFails{claimLabelRemote{&trackertest.Fake{}}})
+	e.Label = "in-progress"
+	e.SweepClosedClaims = true
+	out, err := e.Reconcile(bg, root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(out.Report.Unavailable, SourceForge) {
+		t.Fatalf("sweep failure marked the forge unavailable: %v", out.Report.Unavailable)
+	}
+	if !slices.ContainsFunc(out.Report.Warnings, func(w string) bool { return strings.Contains(w, "closed sweep flaked") }) {
+		t.Fatalf("sweep failure not warned: %v", out.Report.Warnings)
+	}
+}
+
+// closedUnfilteredFails fails only the unfiltered closed list (the sweep).
+type closedUnfilteredFails struct{ Forge }
+
+func (c closedUnfilteredFails) List(ctx context.Context, f tracker.ListFilter) ([]tracker.Issue, error) {
+	if f.State == "closed" && len(f.Labels) == 0 {
+		return nil, errors.New("closed sweep flaked")
+	}
+	return c.Forge.List(ctx, f)
 }

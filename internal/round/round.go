@@ -90,6 +90,10 @@ type Env struct {
 	Snapshot func(ctx context.Context) ([]host.Agent, error)
 	HostName host.Kind
 	Forge    Forge
+	// SweepClosedClaims lets Reconcile list every closed issue for stray claim
+	// labels. Only `round reconcile` sets it; status, watch and the autopilot
+	// tick stay on label-filtered closed reads.
+	SweepClosedClaims bool
 	// Base is the branch slots are cut from when a slot records none.
 	Base  string
 	Label string
