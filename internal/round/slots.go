@@ -175,3 +175,10 @@ func checkActive(reg worker.Registry, set roundcfg.Settings, name string, resumi
 	}
 	return blocked(BlockDraining, "slot %s %s and takes no new work; the round uses its first %d roster slots (round.slots or --slots)", name, why, len(active))
 }
+
+// IdleSlotInRound is IdleSlot over the round's active slots: a slot draining
+// past the slot count takes no moved issue (#1097).
+func IdleSlotInRound(reg worker.Registry, set roundcfg.Settings, kind, account string) (string, bool) {
+	active, _ := Members(reg, set)
+	return IdleSlot(reg, active, kind, account)
+}
