@@ -280,8 +280,8 @@ old: none (new in #387)
 note: reads `.rota/test-ledger.json`, a tracked JSON list of `{"test": string, "owner": string, "receipt": string, "expires": string}`: the test name (the top-level go test name; its subtests are covered), who owns the fix, the issue or PR that tracks it, and the day the exclusion lapses. `expires` is `YYYY-MM-DD` (valid through the end of that day, UTC) or an RFC 3339 time. Every field is required. A missing file or `[]` means no exclusions, and the file does not exist until someone creates it by hand for the first entry. The verb runs nothing; it is the check `rota worker gate` and `rota worker train` apply, without a merge.
 
 The gate checks open issue claims after reading origin refs and the PR's closing keywords,
-including under `--check-only`. A recorded slot or queued `claimId` must remain open;
-legacy slots match the branch agent against open claim holders. Another holder causes
+including under `--check-only`. Only a recorded slot or queued `claimId` is fenced;
+legacy, adopted and external targets without a recorded claim are skipped. Another holder causes
 exit 4, `blockedBy: claim-lost`, and nothing lands. No open claims, no remote PR, or an
 unreadable claim source skips this check (read errors add a `CLAIMS-UNKNOWN` note).
 Bundle members are checked with their lead. This fences PRs from holders whose stale

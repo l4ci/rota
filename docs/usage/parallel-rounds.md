@@ -964,7 +964,12 @@ The default threshold is four hours for bugs, tasks and Minor/Cosmetic features,
 hours for Major features. Configure `round.claimStaleMinutes` and
 `round.claimStaleMinutesMajor`; `0` disables the corresponding class. PR comments and
 reviews count through the forge's PR update time. Branch committer dates are clamped to
-now. Claims without a known server timestamp are never stale.
+now. Claims without a known server timestamp are never stale. Scans only read details
+for items carrying `claimed:*` or the in-progress label. Activity follows any resolving
+PR and branch, including a transfer's original branch and a bundle lead's PR. Status,
+candidates and doctor may fetch origin tips into local git objects and fetch metadata (including `FETCH_HEAD` and applicable remote-tracking refs);
+they do not change project files or claims. An incomplete doctor scan keeps confirmed
+findings and adds a warning with the reason.
 
 Ask the maintainer before reclaiming: name the holder, last activity, and that the old
 claim marker and claim label will be released and replaced. Record the yes as the
@@ -978,5 +983,8 @@ Assign rechecks activity before releasing anything. Recent activity, a different
 a disabled threshold or an unavailable activity read returns `blockedBy: not-stale`.
 Existing readiness checks still apply; an open PR also needs an explicit
 `--accept-open-pr` decision. Plain assign, the autopilot tick and `reconcile --apply`
-never reclaim stale claims. The gate refuses an old holder's PR with `claim-lost` while
-another claim holds the issue; adopt refuses it as `claimed`.
+never reclaim stale claims. The gate refuses an old holder's recorded `claimId` with
+`claim-lost` while another claim holds the issue. PRs with no recorded claim are exempt.
+Adopt refuses `claimed` only if the current holder is stale or authoritative claim history
+shows that the branch's former claim was released and replaced. Fresh different holders
+without that evidence do not prevent adoption; unreadable history is warned and skipped.
