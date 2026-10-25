@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"regexp"
 	"strings"
 
@@ -55,7 +56,7 @@ func planPass(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if !issue {
-			return Result{Data: jsonObj("blockedBy", "backend", "changed", false)},
+			return Result{Data: jsonObj("blockedBy", blockedby.Backend, "changed", false)},
 				Refused("%s needs item notes, which only the issue backend has (issues.source is file)", c.Path)
 		}
 		_, wf, id, _, err := itemFlow(c, ref)
@@ -95,7 +96,7 @@ func planPass(fs *flag.FlagSet) RunFunc {
 			if ok {
 				why = "the latest proof row for that sha and check is " + row.Result
 			}
-			return Result{Data: jsonObj("blockedBy", "proof", "changed", false)},
+			return Result{Data: jsonObj("blockedBy", blockedby.Proof, "changed", false)},
 				Refused("cannot mark %s met: %s (see `rota proof show %s`)", ac, why, id)
 		}
 

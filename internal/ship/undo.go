@@ -5,6 +5,7 @@ package ship
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 
 	"github.com/l4ci/rota/internal/git"
@@ -78,10 +79,10 @@ func PlanUndo(g Git, base, cur string, dirty bool, o UndoOpts) (UndoPlan, error)
 		if cur == "" {
 			cur = "(detached HEAD)"
 		}
-		return UndoPlan{}, &Refusal{By: "not on base branch", Msg: fmt.Sprintf("must run on the base branch (%s), currently on %s", base, cur)}
+		return UndoPlan{}, &Refusal{By: blockedby.NotOnBaseBranch, Msg: fmt.Sprintf("must run on the base branch (%s), currently on %s", base, cur)}
 	}
 	if dirty {
-		return UndoPlan{}, &Refusal{By: "dirty tree", Msg: "uncommitted changes: stash (`git stash`) or commit before running ship undo"}
+		return UndoPlan{}, &Refusal{By: blockedby.DirtyTreeShip, Msg: "uncommitted changes: stash (`git stash`) or commit before running ship undo"}
 	}
 
 	// With no cycle, HEAD itself must be the merge.
@@ -93,10 +94,10 @@ func PlanUndo(g Git, base, cur string, dirty bool, o UndoOpts) (UndoPlan, error)
 		switch n := len(strings.Fields(parents)); n {
 		case 3:
 		case 2:
-			return UndoPlan{}, &Refusal{By: "not a merge", Msg: "HEAD is not a merge commit; undo is not supported for this shape",
+			return UndoPlan{}, &Refusal{By: blockedby.NotAMerge, Msg: "HEAD is not a merge commit; undo is not supported for this shape",
 				Hint: "revert it instead: git revert HEAD (squash- and rebase-merges leave one parent)"}
 		default:
-			return UndoPlan{}, &Refusal{By: "not a merge", Msg: fmt.Sprintf("unexpected HEAD shape (%d parents); manual investigation required", n-1)}
+			return UndoPlan{}, &Refusal{By: blockedby.NotAMerge, Msg: fmt.Sprintf("unexpected HEAD shape (%d parents); manual investigation required", n-1)}
 		}
 	}
 
@@ -115,7 +116,7 @@ func PlanUndo(g Git, base, cur string, dirty bool, o UndoOpts) (UndoPlan, error)
 			return UndoPlan{}, err
 		}
 		if len(strings.Fields(parents)) < 3 {
-			return UndoPlan{}, &Refusal{By: "not a merge", Msg: fmt.Sprintf("--cycle commit %s is not a merge commit", o.Cycle)}
+			return UndoPlan{}, &Refusal{By: blockedby.NotAMerge, Msg: fmt.Sprintf("--cycle commit %s is not a merge commit", o.Cycle)}
 		}
 	} else {
 		var err error
@@ -132,9 +133,9 @@ func PlanUndo(g Git, base, cur string, dirty bool, o UndoOpts) (UndoPlan, error)
 	}
 	if !strings.HasPrefix(subject, "merge: ") {
 		if o.Cycle != "" {
-			return UndoPlan{}, &Refusal{By: "merge subject", Msg: fmt.Sprintf("--cycle commit %s has subject not matching '^merge: ' (subject: %s)", o.Cycle, subject)}
+			return UndoPlan{}, &Refusal{By: blockedby.MergeSubject, Msg: fmt.Sprintf("--cycle commit %s has subject not matching '^merge: ' (subject: %s)", o.Cycle, subject)}
 		}
-		return UndoPlan{}, &Refusal{By: "merge subject", Msg: fmt.Sprintf("most recent merge on %s is not a rota cycle merge (subject: %s)", base, subject)}
+		return UndoPlan{}, &Refusal{By: blockedby.MergeSubject, Msg: fmt.Sprintf("most recent merge on %s is not a rota cycle merge (subject: %s)", base, subject)}
 	}
 
 	p := UndoPlan{Base: base, Merge: merge, Subject: subject}
@@ -157,13 +158,13 @@ func PlanUndo(g Git, base, cur string, dirty bool, o UndoOpts) (UndoPlan, error)
 		p.PostCount = len(strings.Split(post, "\n"))
 	}
 	if p.PostCount > 0 && !o.AllowPost {
-		return UndoPlan{}, &Refusal{By: "post-merge commits", Msg: fmt.Sprintf("%d commit(s) on %s after the cycle merge", p.PostCount, base),
+		return UndoPlan{}, &Refusal{By: blockedby.PostMergeCommits, Msg: fmt.Sprintf("%d commit(s) on %s after the cycle merge", p.PostCount, base),
 			Hint: "pass --allow-post-merge to discard them, or reset manually first"}
 	}
 
 	// A remote ref at the cycle tip means the cycle went through a PR.
 	if refs, _ := out(g, "for-each-ref", "--format=%(refname:short)", "--points-at", tip, "refs/remotes/"); refs != "" {
-		return UndoPlan{}, &Refusal{By: "pr mode", Msg: fmt.Sprintf("PR-mode cycle: rolling back upstream PRs is manual (gh pr close / git revert); remote ref(s) at the cycle tip: %s",
+		return UndoPlan{}, &Refusal{By: blockedby.PRMode, Msg: fmt.Sprintf("PR-mode cycle: rolling back upstream PRs is manual (gh pr close / git revert); remote ref(s) at the cycle tip: %s",
 			strings.Join(strings.Split(refs, "\n"), ", "))}
 	}
 

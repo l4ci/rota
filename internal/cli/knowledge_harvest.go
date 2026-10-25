@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
@@ -35,7 +36,7 @@ func knHarvest(fs *flag.FlagSet) RunFunc {
 		if issue, err := issueBackend(c.deps(), root); err != nil {
 			return Result{}, err
 		} else if !issue {
-			return refuseHarvest(*mark != "", "backend", Refused("rota knowledge harvest reads issue comments (issues.source is file)"))
+			return refuseHarvest(*mark != "", blockedby.Backend, Refused("rota knowledge harvest reads issue comments (issues.source is file)"))
 		}
 		entries, err := ledger.Load(root)
 		if err != nil {
@@ -50,7 +51,7 @@ func knHarvest(fs *flag.FlagSet) RunFunc {
 		// only a comment by someone with write access counts, and so does a mark.
 		trust, err := c.deps().workerEnv().WriterTrust(root)
 		if errors.Is(err, worker.ErrNoPushTrust) {
-			return refuseHarvest(*mark != "", "forge", Refused("%s", err.Error()).WithHint("harvest needs GitHub: only GitHub can say whose learning comments to trust"))
+			return refuseHarvest(*mark != "", blockedby.Forge, Refused("%s", err.Error()).WithHint("harvest needs GitHub: only GitHub can say whose learning comments to trust"))
 		} else if err != nil {
 			return Result{}, err
 		}

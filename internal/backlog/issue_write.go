@@ -2,6 +2,7 @@ package backlog
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/blockedby"
 	ms "github.com/l4ci/rota/internal/milestone"
 	"regexp"
 	"slices"
@@ -227,7 +228,7 @@ func (b *Issues) SetField(ref, field, value string) (bool, error) {
 		return false, errf(ErrNotFound, "[%s] is not an open item on the issue tracker (unknown)", ref)
 	}
 	if is.State != "open" {
-		return false, refused("closed item", ErrClosed, "[%s] is closed on the issue tracker", ref)
+		return false, refused(blockedby.ClosedItem, ErrClosed, "[%s] is closed on the issue tracker", ref)
 	}
 	value = pystr.Strip(value)
 	n := is.Key
@@ -882,7 +883,7 @@ func (b *Issues) SetSection(ref, name, content string) (bool, error) {
 		return false, err
 	}
 	if is.State != "open" {
-		return false, refused("closed item", ErrClosed, "[%s] is closed on the issue tracker", ref)
+		return false, refused(blockedby.ClosedItem, ErrClosed, "[%s] is closed on the issue tracker", ref)
 	}
 	old := strings.ReplaceAll(is.Body, "\r\n", "\n")
 	text, _, _ := marker.SplitFields(old)
@@ -988,7 +989,7 @@ func (b *Issues) SetDetail(ref, text string) error {
 		return errf(ErrNotFound, "[%s] is not an open item on the issue tracker (unknown)", ref)
 	}
 	if is.State != "open" {
-		return refused("closed item", ErrClosed, "[%s] is closed on the issue tracker", ref)
+		return refused(blockedby.ClosedItem, ErrClosed, "[%s] is closed on the issue tracker", ref)
 	}
 	_, block, order := ParseFieldsBlock(is.Body)
 	body := RenderFieldsBlock(strings.Trim(text, "\n"), order, block)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -49,7 +50,7 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 			if refused := noBlockingFindings(c, root, issue, *slot, *head); refused != nil {
 				d := jsonx.NewObject()
 				d.Set("issue", issue)
-				d.Set("blockedBy", "no blocking findings")
+				d.Set("blockedBy", blockedby.NoBlockingFinds)
 				d.Set("changed", false)
 				return Result{Data: d}, refused
 			}

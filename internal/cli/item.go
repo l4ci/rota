@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"slices"
 	"strings"
 
@@ -567,7 +568,7 @@ func itemSectionSet(fs *flag.FlagSet) RunFunc {
 		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
 			ed, ok := be.(backlog.SectionEditor)
 			if !ok {
-				return Result{}, &backlog.RefusedError{BlockedBy: "backend", Err: backlog.ErrWrongBackend,
+				return Result{}, &backlog.RefusedError{BlockedBy: blockedby.Backend, Err: backlog.ErrWrongBackend,
 					Hint: "in file mode edit the item's detail file under .rota/ directly",
 					Msg:  "item section set is not available when issues.source is file"}
 			}

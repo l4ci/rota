@@ -1,6 +1,10 @@
 package backlog
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/l4ci/rota/internal/blockedby"
+)
 
 // Workflow is the part of a backlog that coordinates workers on an item: the
 // claim lock, the state label, the status read-back and the durable notes.
@@ -53,7 +57,7 @@ const (
 )
 
 func fileIssueOnly(what, hint string) error {
-	return &RefusedError{BlockedBy: "backend", Err: ErrWrongBackend, Hint: hint,
+	return &RefusedError{BlockedBy: blockedby.Backend, Err: ErrWrongBackend, Hint: hint,
 		Msg: what + ` is not available when issues.source is file`}
 }
 

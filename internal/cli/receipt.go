@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"sort"
 	"strings"
 
@@ -85,7 +86,7 @@ func receipted(verb string, inner func(*flag.FlagSet) RunFunc, inputs ...inputsF
 			switch {
 			case errors.As(err, &mm):
 				d := jsonx.NewObject()
-				d.Set("blockedBy", "request-id")
+				d.Set("blockedBy", blockedby.RequestID)
 				d.Set("requestId", id)
 				d.Set("changed", false)
 				return Result{Data: d}, Refused("%s", err)

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/harness"
@@ -245,7 +246,7 @@ func workerReset(fs *flag.FlagSet) RunFunc {
 			var we *exitcode.Error
 			if errors.As(err, &we) && we.Data != nil {
 				if we.Exit == ExitRefused { // exit 4 failure data names what blocked it
-					by := "slot holds work"
+					by := blockedby.SlotHoldsWork
 					if bd, ok := we.Data.(worker.BlockData); ok && bd.BlockedBy != "" {
 						by = bd.BlockedBy // a fence, not the dirty-slot guard
 					}
