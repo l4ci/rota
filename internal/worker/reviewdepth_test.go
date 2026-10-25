@@ -263,3 +263,61 @@ func (m issueMap) Get(_ context.Context, key tracker.IssueKey, _ bool) (tracker.
 	n, _ := strconv.Atoi(strings.TrimPrefix(key.Ref(), "#"))
 	return m[n], nil
 }
+
+// review.lenses (#2064) triggers a lens by a changed path or an issue label,
+// reports why, and triggers none at depth none.
+func TestReviewDepthLenses(t *testing.T) {
+	lenses := config.Lenses{
+		"security": {Paths: []string{"*.txt"}, Labels: []string{"risk:security"}},
+		"ux":       {Labels: []string{"ux"}},
+		"perf":     {Paths: []string{"internal/hot/**"}},
+	}
+	for _, c := range []struct {
+		name   string
+		lenses config.Lenses
+		labels []string
+		policy string
+		want   []config.LensHit
+	}{
+		{"path triggers", lenses, nil, "", []config.LensHit{{Name: "security", Why: "path x.txt"}}},
+		{"label triggers beside a path", lenses, []string{"ux"}, "", []config.LensHit{{Name: "security", Why: "path x.txt"}, {Name: "ux", Why: "label ux"}}},
+		{"no match lists none", config.Lenses{"perf": lenses["perf"]}, []string{"p1"}, "", nil},
+		{"empty config lists none", nil, []string{"ux"}, "", nil},
+		{"depth none lists none", lenses, []string{"ux"}, "none", nil},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir := depthRepo(t)
+			pol, err := config.ParseReviewPolicy(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.policy != "" {
+				pol.Default = config.DepthNone
+			}
+			src := ReviewSources{Policy: pol, Git: git.Exec, Dir: dir, Span: "main...feat", Lenses: c.lenses,
+				Issue: tracker.NumKey(5), Issues: fakeIssueGet{is: tracker.Issue{Labels: c.labels}}}
+			got, err := ResolveReviewDepth(context.Background(), src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(got.Lenses, c.want) {
+				t.Errorf("lenses = %v, want %v", got.Lenses, c.want)
+			}
+		})
+	}
+}
+
+// In a bundle a lens triggers when any member issue's labels match.
+func TestReviewDepthLensesBundle(t *testing.T) {
+	dir := depthRepo(t)
+	pol, _ := config.ParseReviewPolicy(nil)
+	src := ReviewSources{Policy: pol, Git: git.Exec, Dir: dir, Span: "main...feat",
+		Lenses: config.Lenses{"security": {Labels: []string{"risk:security"}}},
+		Issue:  tracker.NumKey(5), Members: []tracker.IssueKey{tracker.NumKey(6)},
+		Issues: issueMap{5: {Labels: []string{"p1"}}, 6: {Labels: []string{"risk:security"}}}}
+	got, err := ResolveReviewDepth(context.Background(), src)
+	want := []config.LensHit{{Name: "security", Why: "label risk:security"}}
+	if err != nil || !slices.Equal(got.Lenses, want) {
+		t.Fatalf("lenses = %v (%v), want %v", got.Lenses, err, want)
+	}
+}

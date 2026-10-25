@@ -1225,7 +1225,11 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	if err != nil {
 		return g.broke(fmt.Sprintf("%v; run rota config check", err))
 	}
-	src := ReviewSources{Policy: policy, Git: g.e.Git, Dir: g.root, Span: g.baseRef + "..." + g.headRef, Cross: cross, Author: g.target.Kind}
+	lenses, err := g.in.cfg.Lenses()
+	if err != nil {
+		return g.broke(fmt.Sprintf("%v; run rota config check", err))
+	}
+	src := ReviewSources{Policy: policy, Git: g.e.Git, Dir: g.root, Span: g.baseRef + "..." + g.headRef, Cross: cross, Author: g.target.Kind, Lenses: lenses}
 	if src.Author == "" {
 		src.Author = assignedHarness(g.root, g.target.Issue)
 	}
@@ -1252,6 +1256,9 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	if res.Cross != "" {
 		g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-CROSS %s — %s (%s)", g.o.Slot, res.Cross, res.CrossWhy))
 	}
+	for _, l := range res.Lenses {
+		g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-LENS %s — %s (%s)", g.o.Slot, l.Name, l.Why))
+	}
 	if !g.o.CheckReviews {
 		return false, nil
 	}
@@ -1272,7 +1279,15 @@ func (g *gate) stepReviewDepth() (bool, error) {
 			crossMissing = fmt.Sprintf("%s verdict from %s (%s)", verdict.ReviewCross, res.Cross, res.CrossWhy)
 		}
 	}
-	if len(missing) == 0 && crossMissing == "" {
+	// Each triggered lens needs its own record at head (depth none triggers none).
+	var lensMissing []string
+	for _, l := range res.Lenses {
+		kind := verdict.LensKind(l.Name)
+		if _, ok := verdict.LensAt(g.root, g.branch, kind, strings.TrimSpace(head)); !ok {
+			lensMissing = append(lensMissing, fmt.Sprintf("%s verdict (%s)", kind, l.Why))
+		}
+	}
+	if len(missing) == 0 && crossMissing == "" && len(lensMissing) == 0 {
 		return false, nil
 	}
 	g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
@@ -1284,6 +1299,10 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	if crossMissing != "" {
 		needs = append(needs, "the cross-harness review needs a recorded "+crossMissing)
 		hint = fmt.Sprintf("run /rota-review on %s (it records the verdicts and runs the cross-harness reviewer), or add the review:none label to the issue to skip the cross-harness review", g.branch)
+	}
+	if len(lensMissing) > 0 {
+		needs = append(needs, "the review lenses need a recorded "+strings.Join(lensMissing, " and "))
+		hint = fmt.Sprintf("run /rota-review on %s (it runs a reviewer per triggered lens and records the verdicts), or loosen review.lenses", g.branch)
 	}
 	g.verdict(GateReviewMissing, fmt.Sprintf("GATE %s refused — %s; nothing landed", g.o.Slot, strings.Join(needs, ", and ")), hint)
 	return true, nil
