@@ -9,6 +9,8 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -140,7 +142,33 @@ func (f *bounceFakes) AddComment(_ context.Context, _ tracker.IssueKey, body str
 
 func (f *bounceFakes) CanPush(context.Context, string) (bool, error) { return true, nil }
 
-func (f *bounceFakes) DeleteComment(context.Context, tracker.IssueKey, string) error { return nil }
+func (f *bounceFakes) DeleteComment(_ context.Context, _ tracker.IssueKey, id string) error {
+	for i := range f.issue {
+		if fmt.Sprint(i) == id {
+			f.issue[i] = "" // a taken-back comment no longer parses as a bounce
+		}
+	}
+	return nil
+}
+
+// bounces is the number of bounce comments left on the issue thread.
+func (f *bounceFakes) bounces() int {
+	n := 0
+	for _, b := range f.issue {
+		if strings.HasPrefix(b, "<!-- rota:bounce head=") {
+			n++
+		}
+	}
+	return n
+}
+
+// branchPRForge reports one open PR, as the forge does once a worker opened it.
+type branchPRForge struct {
+	returnForge
+	pr tracker.PR
+}
+
+func (f branchPRForge) OpenPRs(context.Context) ([]tracker.PR, error) { return []tracker.PR{f.pr}, nil }
 
 type bounceNotes struct {
 	worker.Forge
@@ -200,8 +228,9 @@ func TestRoundBounceSupportPRPostsOnThePR(t *testing.T) {
 // adoption recorded none (#1850).
 func TestRoundBounceAdoptedSupportSlot(t *testing.T) {
 	fk := &bounceFakes{pr: map[int][]string{}}
-	deps := supportBounceDeps(fk, &trackertest.Fake{Issues: []backlog.Issue{
-		{Key: tracker.NumKey(31), Title: "thing", State: "open"}, {Key: tracker.NumKey(32), Title: "other", State: "open"}}})
+	fake := &trackertest.Fake{Issues: []backlog.Issue{
+		{Key: tracker.NumKey(31), Title: "thing", State: "open"}, {Key: tracker.NumKey(32), Title: "other", State: "open"}}}
+	deps := supportBounceDeps(fk, fake)
 	dir := workerProject(t, `{"issues":{"source":"github"},"round":{"support":"mac","maxBounces":3}}`)
 	for _, b := range []string{"mac-kit/31-thing", "mac-kit/32-other"} {
 		c := exec.Command("git", "branch", b)
@@ -223,10 +252,41 @@ func TestRoundBounceAdoptedSupportSlot(t *testing.T) {
 		t.Errorf("support PR comments %q", got)
 	}
 	code, out, errOut := rotaInWith(t, deps, dir, "round", "bounce", "32", "--head", "def", "--slot", "ext-2", "--force", "--json")
-	if d := data(t, out); code != 4 || d["blockedBy"] != "no PR recorded" || d["changed"] != false {
+	if d := data(t, out); code != 4 || d["blockedBy"] != "no PR recorded" || d["changed"] != false || d["issue"] != "32" || d["branch"] != "mac-kit/32-other" {
 		t.Errorf("bounce with no PR: %d %s %s", code, out, errOut)
 	}
 	if strings.Contains(out+errOut, "bug in rota") {
 		t.Errorf("a refusal reads as a rota bug: %s %s", out, errOut)
+	}
+	if !strings.Contains(out, "rota round reconcile --apply") || !strings.Contains(out, "rota round bounce 32 --head def --slot ext-2") {
+		t.Errorf("the refusal does not name the remedy: %s", out)
+	}
+	if n := fk.bounces(); n != 1 { // issue 31's only
+		t.Errorf("the refused bounce stayed counted: %d bounce comments %q", n, fk.issue)
+	}
+
+	// The remedy works under a herdr/tmux round, where `round report` is refused.
+	if err := worker.Update(dir, func(d *worker.Doc) { d.SetHost(host.Tmux) }); err != nil {
+		t.Fatal(err)
+	}
+	re := deps.RoundEnv
+	deps.RoundEnv = func(ctx context.Context, r string) round.Env {
+		e := re(ctx, r)
+		e.HostName = host.Tmux
+		e.Snapshot = func(context.Context) ([]host.Agent, error) { return nil, nil }
+		e.Forge = branchPRForge{returnForge{fake}, tracker.PR{Number: 71, Branch: "mac-kit/32-other", URL: "https://github.com/o/r/pull/71"}}
+		return e
+	}
+	if code, out, errOut := rotaInWith(t, deps, dir, "round", "reconcile", "--apply"); code != 0 {
+		t.Fatalf("reconcile: %d %s %s", code, out, errOut)
+	}
+	if got := worker.LoadRegistryTolerant(dir).Slot("ext-2").PR(); got != "https://github.com/o/r/pull/71" {
+		t.Fatalf("reconcile recorded PR %q", got)
+	}
+	if code, out, errOut := rotaInWith(t, deps, dir, "round", "bounce", "32", "--head", "def", "--slot", "ext-2", "--force", "--json"); code != 0 { // the fake thread is shared by both issues, so the count reads 2
+		t.Fatalf("bounce after the remedy: %d %s %s", code, out, errOut)
+	}
+	if got := fk.pr[71]; len(got) != 1 || !strings.HasPrefix(got[0], "<!-- rota:review-bounce head=def -->") {
+		t.Errorf("support PR comments %q", got)
 	}
 }
