@@ -40,7 +40,6 @@ type GateConfig struct {
 	// TDD is work.tdd: a behavior change needs a recorded red-first run.
 	TDD bool
 
-	tests      roundcfg.Tests
 	legacy     bool       // Full came from refactor.verifyCommands
 	legacyOnce *sync.Once // shared by copies, so the warning prints once per read
 	where      string
@@ -81,7 +80,6 @@ func ParseGateConfig(cfg any) GateConfig {
 		SupportLabel:    labels.Support,
 	}
 	t := roundcfg.ParseTests(cfg)
-	c.tests = t
 	c.Full, c.Fast, c.legacy, c.testsErr = t.Full, t.Fast, t.Legacy, t.Err
 	c.legacyOnce = new(sync.Once)
 	c.TDD, c.tddErr = t.TDD, t.TDDErr
@@ -145,7 +143,7 @@ func (c GateConfig) WarnLegacy(w io.Writer) {
 }
 
 // FullOnly is true when test.fast is empty but a full command is set.
-func (c GateConfig) FullOnly() bool { return c.tests.FullOnly() }
+func (c GateConfig) FullOnly() bool { return roundcfg.Tests{Full: c.Full, Fast: c.Fast}.FullOnly() }
 
 // HasVerifyCommands reports whether Verify has anything to run.
 func (c GateConfig) HasVerifyCommands() bool { return len(c.Full) > 0 }
