@@ -34,16 +34,17 @@ func TestCandidatesPinnedElsewhereShown(t *testing.T) {
 	for _, tc := range []struct {
 		role    string
 		blocked []string
+		order   []string
 	}{
-		{roundcfg.RoleMain, []string{"2", "4"}},
-		{roundcfg.RoleSupport, []string{"1", "3", "5"}},
+		{roundcfg.RoleMain, []string{"2", "4"}, []string{"1", "2", "3", "4", "5"}},
+		{roundcfg.RoleSupport, []string{"3", "5"}, []string{"2", "4", "1", "3", "5"}},
 	} {
 		t.Run(tc.role, func(t *testing.T) {
 			cs, err := e.RoundCandidates(bg, root, be, roundcfg.Settings{Scope: roundcfg.ScopeOpen, Support: "mac", Role: tc.role}, "")
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(ids(cs), []string{"1", "2", "3", "4", "5"}) {
+			if !reflect.DeepEqual(ids(cs), tc.order) {
 				t.Fatalf("candidates = %v; pinned issues must remain visible", ids(cs))
 			}
 			for _, c := range cs {
@@ -65,6 +66,42 @@ func TestCandidatesPinnedElsewhereShown(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Support pulls unpinned work itself, preferring its pins without changing main's order.
+func TestSupportCandidatesPinnedFirstThenUnpinned(t *testing.T) {
+	root := newRepo(t, nil)
+	be := &fakeRemote{}
+	for _, id := range []string{"1", "2", "3", "4"} {
+		be.add(id, "work", "", false, "")
+	}
+	be.items["2"].Labels = []string{"machine:mac"}
+	be.items["3"].Labels = []string{"machine:main"}
+	be.items["4"].Labels = []string{"machine:mac"}
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig})}
+	for _, tc := range []struct {
+		role string
+		want []string
+	}{
+		{roundcfg.RoleSupport, []string{"2", "4", "1", "3"}},
+		{roundcfg.RoleMain, []string{"1", "2", "3", "4"}},
+	} {
+		cs, err := e.RoundCandidates(bg, root, be, roundcfg.Settings{Scope: roundcfg.ScopeOpen, Support: "mac", Role: tc.role}, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(ids(cs), tc.want) {
+			t.Errorf("%s: %v want %v", tc.role, ids(cs), tc.want)
+		}
+		for _, c := range cs {
+			if c.ID == "1" && !c.Ready() {
+				t.Errorf("%s: unpinned issue must be ready: %+v", tc.role, c)
+			}
+			if tc.role == roundcfg.RoleSupport && c.ID == "3" && c.BlockedBy != BlockSite {
+				t.Errorf("pinned elsewhere must stay blocked: %+v", c)
+			}
+		}
 	}
 }
 
@@ -230,13 +267,12 @@ func TestSupportAssignPrefixesAndCutsFromFreshOrigin(t *testing.T) {
 	}
 }
 
-// #1598 AC-3: support assigns only labelled issues; main, with the split on,
-// leaves them alone.
+// Both machines refuse issues pinned to the other machine.
 func TestSupportAssignRefusesTheOtherSite(t *testing.T) {
 	f, _ := supportFixture(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
-	f.be.items["13"].Labels = nil
+	f.be.items["13"].Labels = []string{"machine:main"}
 	if _, err := f.assign("13", "", nil); blockedBy(t, err) != BlockSite {
-		t.Errorf("support assign of an unlabelled issue: %v", err)
+		t.Errorf("support assign of an issue pinned to main: %v", err)
 	}
 	if len(f.be.claims) != 0 {
 		t.Errorf("a refused assign claims nothing: %v", f.be.claims)
@@ -346,10 +382,10 @@ func TestSupportResumeRefusesDirtyWorktree(t *testing.T) {
 // of the split, not only the lead.
 func TestSupportAssignRefusesOffSiteBundleMember(t *testing.T) {
 	f, _ := supportFixture(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
-	f.be.items["13"].Labels = nil
+	f.be.items["13"].Labels = []string{"machine:main"}
 	_, err := f.assign("12", "", func(o *AssignOpts) { o.Bundle = []string{"13"} })
 	if blockedBy(t, err) != BlockSite || !strings.Contains(err.Error(), "13") {
-		t.Fatalf("support bundle with an unlabelled member: %v", err)
+		t.Fatalf("support bundle with a member pinned to main: %v", err)
 	}
 	if len(f.be.claims) != 0 {
 		t.Errorf("a refused assign claims nothing: %v", f.be.claims)
@@ -574,5 +610,206 @@ func TestOfferRefusesIssuePinnedElsewhere(t *testing.T) {
 				t.Errorf("refused offer wrote: %v %v %v", f.be.labels, f.be.removed, f.be.comments)
 			}
 		})
+	}
+}
+
+func TestSupportCandidatesFollowRoundScope(t *testing.T) {
+	root := newRepo(t, nil)
+	milestoneDoc(t, root, "M01", "active")
+	be := &fakeRemote{}
+	be.add("1", "unpinned in scope", "M01", false, "")
+	be.add("2", "pinned in scope", "M01", false, "")
+	be.add("3", "unpinned outside", "", false, "")
+	be.add("4", "pinned outside", "", false, "")
+	be.items["2"].Labels = []string{"machine:mac"}
+	be.items["4"].Labels = []string{"machine:mac"}
+	e := Env{Git: git.Exec, Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig})}
+	cs, err := e.RoundCandidates(bg, root, be, roundcfg.Settings{Scope: roundcfg.ScopeMilestone, Support: "mac", Role: roundcfg.RoleSupport}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ids(cs), []string{"2", "1"}) {
+		t.Fatalf("candidates %v want [2 1]", ids(cs))
+	}
+	for _, c := range cs {
+		if !c.Ready() {
+			t.Errorf("in-scope work must be ready: %+v", c)
+		}
+	}
+}
+
+func TestSupportAssignUnpinned(t *testing.T) {
+	f, _ := supportFixture(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
+	f.env.Forge = f.be.asForge()
+	f.be.items["12"].Labels = nil
+	if _, err := f.assign("12", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if f.be.claims["12"] != "mac-ben@1" {
+		t.Fatalf("support did not take shared claim: %v", f.be.claims)
+	}
+	if !slices.Contains(f.be.items["12"].Labels, "machine:mac") {
+		t.Fatalf("support claim is invisible to pin-based paths: %v", f.be.items["12"].Labels)
+	}
+	queue, err := f.env.SupportQueue(bg, f.be, "mac")
+	if err != nil || len(queue) != 2 || queue[0].ID != "12" || queue[0].Claim != "mac-ben@1" {
+		t.Fatalf("support queue after claim: %+v, %v", queue, err)
+	}
+}
+
+// Whichever machine assigns first holds the shared claim. The loser leaves
+// its registry, worktrees and dispatched workers alone.
+func TestSupportAndMainClaimSameIssueOneWins(t *testing.T) {
+	for _, supportFirst := range []bool{false, true} {
+		t.Run(fmt.Sprint(supportFirst), func(t *testing.T) {
+			main := newAssignFixture(t)
+			main.env.Round.Support = "mac"
+			support, _ := supportFixture(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
+			support.be = main.be
+			support.env.Forge = support.be.asForge()
+			first, second := main, support
+			if supportFirst {
+				first, second = support, main
+			}
+			before, err := os.ReadFile(worker.RegistryPath(second.root))
+			if err != nil {
+				t.Fatal(err)
+			}
+			won, err := first.assign("12", "", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := BlockClaimed
+			if supportFirst {
+				want = BlockSite
+			} // support's winning claim now pins the issue
+			if _, err := second.assign("12", "", nil); blockedBy(t, err) != want {
+				t.Fatalf("lost claim: %v", err)
+			}
+			if got := main.be.held("12"); !slices.Equal(got, []string{won.Agent + "@1"}) {
+				t.Fatalf("claims %v", got)
+			}
+			after, err := os.ReadFile(worker.RegistryPath(second.root))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(before) != string(after) {
+				t.Fatal("losing assign changed its registry")
+			}
+			if len(second.host.spawned) != 0 || len(second.host.sents) != 0 {
+				t.Fatal("losing assign dispatched a worker")
+			}
+		})
+	}
+}
+
+// Hand-back releases every support claim, including later best-of holders,
+// while preserving another machine's claim if the tracker contains one.
+func TestReturnSupportReleasesOnlySupportClaims(t *testing.T) {
+	f := newAssignFixture(t)
+	f.env.Forge = f.be.asForge()
+	f.env.Round.Support = "mac"
+	f.env.Round.Role = roundcfg.RoleSupport
+	f.be.items["12"].Labels = []string{"machine:mac"}
+	f.be.claims = map[string]string{"12": "ben@1"}
+	f.be.more = map[string][]string{"12": {"mac-ben@3", "mac-dana@3", "macbook-kit@3"}}
+	got, err := f.env.ReturnSupport(bg, f.root, f.be, "12", "why")
+	if err != nil || !got.Changed {
+		t.Fatalf("return: %+v %v", got, err)
+	}
+	if claims := f.be.held("12"); !slices.Equal(claims, []string{"ben@1", "macbook-kit@3"}) {
+		t.Fatalf("claims after return: %v", claims)
+	}
+}
+
+func TestSupportAssignPinRollback(t *testing.T) {
+	for _, pinned := range []bool{false, true} {
+		t.Run(fmt.Sprint(pinned), func(t *testing.T) {
+			f, _ := supportFixture(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
+			f.env.Forge = f.be.asForge()
+			labels := []string{"keep"}
+			if pinned {
+				labels = append(labels, "machine:mac")
+			}
+			f.be.items["12"].Labels = slices.Clone(labels)
+			boom := errors.New("tracker state write failed")
+			f.be.failState = boom
+			if _, err := f.assign("12", "", nil); !errors.Is(err, boom) {
+				t.Fatalf("assign: %v", err)
+			}
+			if got := f.be.items["12"].Labels; !slices.Equal(got, labels) {
+				t.Fatalf("rollback labels %v want %v", got, labels)
+			}
+			if len(f.be.held("12")) != 0 || len(f.host.spawned) != 0 || len(f.host.sents) != 0 {
+				t.Fatalf("failed assignment left a claim or dispatched a worker")
+			}
+		})
+	}
+}
+
+func TestSupportAssignPinsUnpinnedBundle(t *testing.T) {
+	f, _ := supportFixture(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
+	f.env.Forge = f.be.asForge()
+	f.be.items["12"].Labels, f.be.items["13"].Labels = nil, nil
+	if _, err := f.assign("12", "", func(o *AssignOpts) { o.Bundle = []string{"13"} }); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"12", "13"} {
+		if f.be.claims[id] != "mac-ben@1" || !slices.Contains(f.be.items[id].Labels, "machine:mac") {
+			t.Fatalf("bundle member %s lacks its support claim or pin: %+v %v", id, f.be.items[id], f.be.claims)
+		}
+	}
+}
+
+func TestSupportAssignLostClaimAddsNoPin(t *testing.T) {
+	f, _ := supportFixture(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
+	f.env.Forge = f.be.asForge()
+	f.be.items["12"].Labels = nil
+	f.be.claimedBy = "dana@1"
+	if _, err := f.assign("12", "", nil); blockedBy(t, err) != BlockClaimed {
+		t.Fatalf("assign: %v", err)
+	}
+	if len(f.be.items["12"].Labels) != 0 || len(f.be.added) != 0 {
+		t.Fatalf("lost claim pinned the issue: %+v", f.be.items["12"])
+	}
+}
+
+func TestSupportAssignPinWriteFailureReleasesClaim(t *testing.T) {
+	f, _ := supportFixture(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
+	f.env.Forge = f.be.asForge()
+	f.be.items["12"].Labels = nil
+	boom := errors.New("pin write failed")
+	f.be.addErr = boom
+	if _, err := f.assign("12", "", nil); !errors.Is(err, boom) {
+		t.Fatalf("assign: %v", err)
+	}
+	if len(f.be.held("12")) != 0 || len(f.host.spawned) != 0 || len(f.be.items["12"].Labels) != 0 {
+		t.Fatal("failed pin write left a claim, pin or dispatched worker")
+	}
+}
+
+func TestSupportAssignBundlePinRollback(t *testing.T) {
+	f, _ := supportFixture(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
+	f.env.Forge = f.be.asForge()
+	f.be.items["12"].Labels, f.be.items["13"].Labels = nil, nil
+	f.wire(func(ws *worker.Env) {
+		ws.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+			if len(args) > 0 && args[0] == "switch" {
+				return git.Result{ExitCode: 1}, nil
+			}
+			return git.Exec(ctx, dir, args...)
+		}
+	})
+	_, err := f.assign("12", "", func(o *AssignOpts) { o.Bundle = []string{"13"} })
+	if err == nil || !strings.Contains(err.Error(), "could not cut") {
+		t.Fatalf("expected branch setup failure: %v", err)
+	}
+	for _, id := range []string{"12", "13"} {
+		if len(f.be.held(id)) != 0 || len(f.be.items[id].Labels) != 0 || f.be.bstates[id] != "" {
+			t.Fatalf("bundle rollback left claim, pin or state on %s: %+v %v %v", id, f.be.items[id], f.be.claims, f.be.bstates)
+		}
+	}
+	if len(f.host.spawned) != 0 || len(f.host.sents) != 0 {
+		t.Fatal("failed branch setup dispatched a worker")
 	}
 }
