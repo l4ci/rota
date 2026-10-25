@@ -671,3 +671,23 @@ func TestClaimStaleMinutes(t *testing.T) {
 		}
 	}
 }
+
+func TestTierSetDecision(t *testing.T) {
+	for _, c := range []struct {
+		name, cfg  string
+		wantSet    bool
+		wantModels []string
+	}{
+		{"missing config falls back to defaults", "", false, []string{"light=gpt-6-luna", "standard=gpt-6.1-sol", "heavy=gpt-6-astra"}},
+		{"unset map falls back to defaults", `{}`, false, []string{"light=gpt-6-luna", "standard=gpt-6.1-sol", "heavy=gpt-6-astra"}},
+		{"empty tiers leave no models", `{"round":{"tiers":{"codex":{"light":"","standard":"","heavy":""}}}}`, false, nil},
+		{"map set names no fallback models", `{"round":{"tiers":{"codex":{"heavy":"m"}}}}`, true, nil},
+		{"blank map falls back to defaults", `{"round":{"tiers":{"codex":{"light":"  "}}}}`, false, []string{"standard=gpt-6.1-sol", "heavy=gpt-6-astra"}},
+	} {
+		cfg := config.Load(rotatree.Config(project(t, c.cfg)))
+		set, models := TierSet(cfg, "codex")
+		if set != c.wantSet || !slices.Equal(models, c.wantModels) {
+			t.Errorf("%s: TierSet = %v, %v; want %v, %v", c.name, set, models, c.wantSet, c.wantModels)
+		}
+	}
+}
