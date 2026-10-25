@@ -39,8 +39,8 @@ func TestLabelsOf(t *testing.T) {
 		name, cfg string
 		want      Labels
 	}{
-		{"defaults", `{}`, Labels{InProgress: "in-progress", NeedsHuman: "needs-human", NeedsReview: "needs-review", Support: "site:support"}},
-		{"configured", `{"issues":{"labels":{"inProgress":"wip-x","needsHuman":"human-x","needsReview":"review-x","support":"support-x"}}}`, Labels{InProgress: "wip-x", NeedsHuman: "human-x", NeedsReview: "review-x", Support: "support-x"}},
+		{"defaults", `{}`, Labels{InProgress: "in-progress", NeedsHuman: "needs-human", NeedsReview: "needs-review"}},
+		{"configured", `{"issues":{"labels":{"inProgress":"wip-x","needsHuman":"human-x","needsReview":"review-x","support":"support-x"}}}`, Labels{InProgress: "wip-x", NeedsHuman: "human-x", NeedsReview: "review-x"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg, err := jsonx.Decode([]byte(tc.cfg))
