@@ -67,7 +67,7 @@ func TestRunStepsSkippedStepIsStillUndone(t *testing.T) {
 func TestClaimStepUndoReleasesAndUnbinds(t *testing.T) {
 	be := &fakeRemote{}
 	unbound := false
-	s := claimStep(be, "12", "ben@1", 1, func() error { unbound = true; return nil })
+	s := claimStep(be, "12", "ben@1", 1, func() error { unbound = true; return nil }, nil)
 	if err := s.do(); err != nil || be.claims["12"] != "ben@1" {
 		t.Fatalf("claim: %v %v", err, be.claims)
 	}
@@ -79,7 +79,7 @@ func TestClaimStepUndoReleasesAndUnbinds(t *testing.T) {
 
 func TestClaimStepLostClaimIsBlockedAndUndoesNothingElse(t *testing.T) {
 	be := &fakeRemote{claimedBy: "dana@1"}
-	steps := []step{claimStep(be, "12", "ben@1", 1, func() error { t.Error("unbind without a claim"); return nil })}
+	steps := []step{claimStep(be, "12", "ben@1", 1, func() error { t.Error("unbind without a claim"); return nil }, nil)}
 	err := runSteps(steps)
 	if blockedBy(t, err) != BlockClaimed {
 		t.Fatalf("got %v", err)

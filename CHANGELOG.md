@@ -4,6 +4,8 @@
 
 ### Upgrade notes
 
+- **Reclaim stale claims.** Status, candidates and doctor mark inactive remote claims as `stale-claim`. `round.claimStaleMinutes` defaults to 240 for bugs, tasks and Minor/Cosmetic features; `round.claimStaleMinutesMajor` defaults to 480 for Major features. Set either to `0` to disable that class. After maintainer approval, `rota round assign <ID> --reclaim-stale <claim-id>` rechecks activity and transfers the claim. A former holder's recorded claim is refused with `claim-lost` at the merge gate; adoption refuses `claimed` with positive stale/reclaimed evidence. PRs without a recorded claim remain gateable.
+
 - **Visible claim labels.** After upgrading, run `rota round reconcile --apply` once to backfill `claimed:<agent>@<machine>` labels for in-flight comment claims and repair stale labels. Comment claims remain authoritative. Reverting this change leaves `claimed:*` labels already written to the tracker; remove those labels by hand.
 - **Named machine pins.** `machine:<name>` replaces `site:support`: main is named `main`, support uses `round.support`. On main, preview with `rota migrate labels`, then run `rota migrate labels --apply` to relabel open issues and retire `issues.labels.support` (including a custom label value). `config fill` preserves that key until migration succeeds. Candidates show pins to other machines as blocked; unpinned issues remain available to main.
 - **Fewer filed follow-ups.** `review.fileDeferred` now defaults to `major`: minor deferred findings stay in the verdict record and `verdict add` lists them as `kept`. A PR whose issue is itself a deferred-findings item files none. Set `minor` to get the old behavior.
