@@ -393,3 +393,50 @@ func TestWorkerDispatchReviewThroughRefusesTheFutureAndAMissingPR(t *testing.T) 
 		t.Errorf("no PR: %d, want 3", code)
 	}
 }
+
+// --review-through bounds consumption, not the relay text: a signed REVIEW
+// brief, a plain note and a REVIEW for another PR consume the same batch.
+func TestWorkerDispatchReviewThroughIgnoresTheRelayText(t *testing.T) {
+	bodies := map[string]string{
+		"signed REVIEW": "--- ORCHESTRATOR (round 3) ---\nREVIEW " + prURL + " (1 items)\nItem 1: please rename x\n--- ROTA-SIG abc123 ---\n",
+		"gap note":      "no review here, just a note\n",
+		"other PR":      "REVIEW https://github.com/o/r/pull/10 (1 items)\nItem 1: other\n",
+	}
+	for name, body := range bodies {
+		t.Run(name, func(t *testing.T) {
+			f := &reviewForge{comments: []string{"please rename x"}} // dated 10:00:00
+			c, dir, _ := relaySlot(t, f)
+			brief := filepath.Join(t.TempDir(), "relay.md")
+			if err := os.WriteFile(brief, []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if code, _, errOut := rotaInWith(t, c.Deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--review-through", "2026-10-08T10:00:30Z"); code != 0 {
+				t.Fatalf("relay: %d %s", code, errOut)
+			}
+			handBack(t, dir)
+			if got, ok := watchForge(context.Background(), c, dir)[roundwatch.ReviewKey("w1")]; ok {
+				t.Errorf("batch still pending: %q", got)
+			}
+			if got := worker.LoadRegistryTolerant(dir).Slot("w1").ReviewSeen(); got == "" {
+				t.Error("cursor not moved")
+			}
+		})
+	}
+}
+
+// A forge failure while consuming does not undo the relay: it is sent, the
+// verb exits 0, warns that the input stays pending, and the cursor stays put.
+func TestWorkerDispatchReviewThroughForgeFailureWarnsAndExits0(t *testing.T) {
+	f := &reviewForge{comments: []string{"please rename x"}, failReads: true}
+	c, dir, brief := relaySlot(t, f)
+	code, _, errOut := rotaInWith(t, c.Deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--review-through", "2026-10-08T10:00:30Z")
+	if code != 0 {
+		t.Fatalf("relay: %d %s", code, errOut)
+	}
+	if !strings.Contains(errOut, "review input stays pending") {
+		t.Errorf("no warning: %q", errOut)
+	}
+	if got := worker.LoadRegistryTolerant(dir).Slot("w1").ReviewSeen(); got != "" {
+		t.Errorf("cursor moved to %q", got)
+	}
+}
