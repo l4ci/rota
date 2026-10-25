@@ -28,10 +28,21 @@ func agentsWrite(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		// A support machine owns only the gitignored .codex/ files; the tracked
+		// .claude and .opencode files stay main's.
+		var keep func(string) bool
+		if support, res, err := supportMachine(c, root, "rota agents write"); err != nil {
+			return res, err
+		} else if support {
+			keep = agents.Untracked
+		}
 		if *check {
 			es, err := agents.Compare(root, c.deps().Config(root))
 			if err != nil {
 				return Result{}, agentsErr(err)
+			}
+			if keep != nil {
+				es = agents.Restrict(es, keep)
 			}
 			data, text, bad := agentsReport(es, "")
 			if bad {
@@ -39,7 +50,7 @@ func agentsWrite(fs *flag.FlagSet) RunFunc {
 			}
 			return Result{Data: data, Text: text}, nil
 		}
-		es, err := agents.Write(root, c.deps().Config(root))
+		es, err := agents.WriteOnly(root, c.deps().Config(root), keep)
 		if err != nil {
 			return Result{}, agentsErr(err)
 		}
@@ -72,10 +83,13 @@ func agentsReport(es []agents.Entry, mode string) (*jsonx.Object, string, bool) 
 			case agents.StatusDrift:
 				status = "updated"
 			}
-		} else if status != agents.StatusCurrent {
+		} else if status != agents.StatusCurrent && status != agents.StatusSkipped {
 			bad = true
 		}
 		files = append(files, jsonObj("path", e.Path, "status", status))
+		if status == agents.StatusSkipped {
+			status += " (main-only)"
+		}
 		lines = append(lines, status+": "+e.Path)
 	}
 	return jsonObj("files", files), strings.Join(lines, "\n"), bad

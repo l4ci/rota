@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/jsonx"
 )
 
 func agentsProject(t *testing.T, cfg string) string {
@@ -66,5 +68,62 @@ func TestAgentsBadRoleConfigIsAnError(t *testing.T) {
 	dir := agentsProject(t, `{"roles":{"explorer":{"tier":"giant"}}}`)
 	if code, _, errOut := rotaIn(t, dir, "agents", "write"); code == 0 || !strings.Contains(errOut, "roles.explorer.tier") {
 		t.Fatalf("%d %s", code, errOut)
+	}
+}
+
+func TestAgentsWriteOnSupportWritesCodexOnly(t *testing.T) {
+	dir := agentsProject(t, `{"round":{"commands":{"codex":"codex"}}}`)
+	writeLocalConfig(t, dir, `{"round":{"role":"support"}}`+"\n")
+	code, out, errOut := rotaIn(t, dir, "agents", "write")
+	if code != 0 {
+		t.Fatalf("write on support: %d %s %s", code, out, errOut)
+	}
+	if !strings.Contains(out, "created: .codex/agents/rota-explorer.toml") {
+		t.Errorf("codex file not written: %s", out)
+	}
+	if !strings.Contains(out, "skipped (main-only): .claude/agents/rota-explorer.md") {
+		t.Errorf("claude file not reported skipped: %s", out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".codex/agents/rota-explorer.toml")); err != nil {
+		t.Errorf("codex file missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".claude")); err == nil {
+		t.Error("support wrote .claude/agents")
+	}
+	// The same project on main still writes both sets.
+	writeLocalConfig(t, dir, `{}`+"\n")
+	if code, out, _ := rotaIn(t, dir, "agents", "write"); code != 0 || !strings.Contains(out, "created: .claude/agents/rota-explorer.md") {
+		t.Fatalf("write on main: %d %s", code, out)
+	}
+}
+
+func TestAgentsCheckOnSupportIgnoresSkippedFiles(t *testing.T) {
+	dir := agentsProject(t, `{"round":{"commands":{"codex":"codex"}}}`)
+	writeLocalConfig(t, dir, `{"round":{"role":"support"}}`+"\n")
+	if code, _, _ := rotaIn(t, dir, "agents", "write", "--check"); code != 1 {
+		t.Fatalf("check with .codex missing: %d, want 1", code)
+	}
+	if code, out, errOut := rotaIn(t, dir, "agents", "write"); code != 0 {
+		t.Fatalf("write: %d %s %s", code, out, errOut)
+	}
+	code, out, errOut := rotaIn(t, dir, "agents", "write", "--check")
+	if code != 0 || !strings.Contains(out, "skipped (main-only): .claude/agents/rota-explorer.md") {
+		t.Fatalf("check after write: %d %s %s", code, out, errOut)
+	}
+	code, env, _ := rotaRun(t, "--json", "-C", dir, "agents", "write", "--check")
+	if code != 0 {
+		t.Fatalf("json check: %d", code)
+	}
+	var got string
+	for _, f := range envObj(env, "data")["files"].([]any) {
+		if o, ok := f.(*jsonx.Object); ok {
+			if p, _ := o.Get("path"); p == ".claude/agents/rota-explorer.md" {
+				st, _ := o.Get("status")
+				got, _ = st.(string)
+			}
+		}
+	}
+	if got != "skipped" {
+		t.Errorf("status = %q, want skipped", got)
 	}
 }
