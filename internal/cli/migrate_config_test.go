@@ -328,6 +328,20 @@ func TestMigrateConfigKeepsEveryCommandEntry(t *testing.T) {
 	}
 }
 
+// --keep on the object key leaves every entry in config.json: the per-entry
+// split must not make the key name stop matching (#1902).
+func TestMigrateConfigKeepObjectKey(t *testing.T) {
+	isolateGlobal(t)
+	root := trackerProject(t, `{"round":{"workerCommand":"claude --x","codexCommand":"codex -y"},"docs":{"path":"docs"}}`+"\n")
+	if code, out := textRun(t, "-C", root, "migrate", "config", "--apply", "--keep", "round.commands"); code != 0 {
+		t.Fatalf("--keep round.commands: %d %q", code, out)
+	}
+	cfg := readConfig(t, root)
+	if !strings.Contains(cfg, "claude --x") || !strings.Contains(cfg, "codex -y") {
+		t.Errorf("--keep round.commands moved entries out of config.json:\n%s", cfg)
+	}
+}
+
 // The preview plans exactly what --apply writes, scope lines included, on a
 // config that needs both the merges and the scope step.
 func TestMigrateConfigPreviewMatchesApply(t *testing.T) {

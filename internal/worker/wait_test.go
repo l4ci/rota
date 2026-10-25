@@ -576,6 +576,47 @@ func TestWaitIgnoresADoneSlotWhoseRecordedPRIsMerged(t *testing.T) {
 	}
 }
 
+// slowForge answers a PR lookup only when its context ends, as a forge that
+// outlasts the Wait deadline does.
+type slowForge struct{ Forge }
+
+func (slowForge) PRView(ctx context.Context, _ int) (tracker.PRInfo, error) {
+	<-ctx.Done()
+	return tracker.PRInfo{}, ctx.Err()
+}
+
+// #1843: a lookup the Wait deadline cut short says nothing about the PR. The
+// slot recorded its PR as "#225"; reading the cut lookup as "not merged" made
+// the done slot news on every watch that happened to have a slow forge.
+func TestWaitDoesNotReadADeadlineCutLookupAsAnOpenPR(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	gittest.Run(t, dir, "remote", "add", "origin", "https://github.com/o/r.git")
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetPR("#225") }); err != nil {
+		t.Fatal(err)
+	}
+	h := newWaitHost("herdr")
+	h.set("w1", "ROTA-DONE w1 #225\n", "done")
+	e := envWith(watcherHost{h})
+	e.Forge = func(string, string, tracker.Settings) (Forge, error) { return slowForge{}, nil }
+	realGit := e.Git
+	if realGit == nil {
+		realGit = git.Exec
+	}
+	e.Git = func(ctx context.Context, d string, args ...string) (git.Result, error) {
+		if len(args) >= 2 && args[0] == "remote" && args[1] == "get-url" {
+			return git.Result{Stdout: "https://github.com/o/r.git\n"}, nil
+		}
+		return realGit(ctx, d, args...)
+	}
+	res, err := e.Wait(bg, dir, WaitOpts{Timeout: 100 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.TimedOut {
+		t.Errorf("a lookup cut by the deadline returned the slot as news: %+v", res)
+	}
+}
+
 // lostWatch is a subscription whose first Next reports the loss.
 type lostWatch struct {
 	err   error

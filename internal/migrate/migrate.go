@@ -842,7 +842,7 @@ func (m *migrator) milestoneAdd(mid string, ms *migMilestone) error {
 	if err != nil {
 		return err
 	}
-	_, err = be.MilestoneAdd(mid, ms.title, ms.summary, ms.depends, m.o.Today())
+	_, err = be.MilestoneAdd(mid, ms.title, ms.summary, ms.depends, "delivery", m.o.Today())
 	return err
 }
 
