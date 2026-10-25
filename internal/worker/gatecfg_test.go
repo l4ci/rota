@@ -71,3 +71,19 @@ func TestGateConfigAgreesWithRoundSettings(t *testing.T) {
 		t.Errorf("support %q, want trimmed mac", g.Support)
 	}
 }
+
+func TestGateConfigFullOnlyFollowsExportedFields(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		g    GateConfig
+		want bool
+	}{
+		{"full only literal", GateConfig{Full: []string{"go test ./..."}}, true},
+		{"fast and full", GateConfig{Fast: []string{"f"}, Full: []string{"go test ./..."}}, false},
+		{"neither", GateConfig{}, false},
+	} {
+		if got := c.g.FullOnly(); got != c.want {
+			t.Errorf("%s: FullOnly() = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
