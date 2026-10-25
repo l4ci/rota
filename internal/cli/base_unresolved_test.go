@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -109,7 +110,48 @@ func TestRoundStartWarnsWhenNoBaseResolves(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"git":{"baseBranch":"gone"}}`), 0o644)
 	os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n"), 0o644)
 	code, out, errOut := rotaStdin(t, dir, "", "round", "start", "--holder-pid", strconv.Itoa(os.Getpid()), "--base", "feat/x")
-	if code != 0 || !strings.Contains(errOut, "could not determine base branch") {
-		t.Errorf("code=%d out=%q err=%q; want the shared no-base warning", code, out, errOut)
+	if code != 0 || !strings.Contains(errOut, `git.baseBranch "gone" does not resolve`) {
+		t.Errorf("code=%d out=%q err=%q; want the warning naming the set key", code, out, errOut)
+	}
+}
+
+// missingBaseProject is a master-only repo whose git.baseBranch names a branch
+// that does not exist.
+func missingBaseProject(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	gittest.Init(t, dir, "master")
+	gitT(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
+	os.MkdirAll(filepath.Join(dir, ".rota"), 0o755)
+	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"git":{"baseBranch":"gone"}}`), 0o644)
+	os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n"), 0o644)
+	return dir
+}
+
+func TestRoundStartRefusesConfiguredBaseMissing(t *testing.T) {
+	dir := missingBaseProject(t)
+	code, out, errOut := rotaStdin(t, dir, "", "round", "start", "--holder-pid", strconv.Itoa(os.Getpid()))
+	if code != 3 || !strings.Contains(errOut, "git.baseBranch") {
+		t.Fatalf("code=%d out=%q err=%q; want exit 3 naming git.baseBranch", code, out, errOut)
+	}
+	parks, _ := exec.Command("git", "-C", dir, "branch", "--list", "park/*").Output()
+	if strings.TrimSpace(string(parks)) != "" {
+		t.Errorf("refused start still cut park branches: %q", parks)
+	}
+}
+
+func TestRoundAdoptRefusesConfiguredBaseMissing(t *testing.T) {
+	dir := missingBaseProject(t)
+	code, out, errOut := rotaStdin(t, dir, "", "worker", "adopt", "some/branch", "--issue", "1")
+	if code != 3 || !strings.Contains(errOut, "git.baseBranch") {
+		t.Fatalf("code=%d out=%q err=%q; want exit 3 naming git.baseBranch", code, out, errOut)
+	}
+}
+
+func TestKeepaliveWarnsNamingMissingConfiguredBase(t *testing.T) {
+	dir := kaProject(t, `{"git":{"baseBranch":"gone"}}`)
+	_, _, errOut := rotaIn(t, dir, "keepalive", "run", "--backoff", "0", "--breaker", "1", "--max-restarts", "0", "--", "true")
+	if !strings.Contains(errOut, `git.baseBranch "gone" does not resolve`) || !strings.Contains(errOut, "handoff is not watched") {
+		t.Errorf("err=%q; want the empty-handoff warning naming the set key", errOut)
 	}
 }

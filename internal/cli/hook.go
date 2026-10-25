@@ -208,6 +208,17 @@ func branchHandoffFile(d *Deps, root, cwd string) string {
 // `rota status handoff <base> --canonical` returns. It is "" when no base
 // resolves, so a caller reads no note rather than one filed under a guessed
 // branch.
+// noHandoffBaseMsg says why handoffFile found no path: the named key when
+// git.baseBranch is set but missing, else the shared candidate list.
+func noHandoffBaseMsg(cfg any) string {
+	if v, err := config.Value(cfg, "git.baseBranch"); err == nil {
+		if configured, _ := v.(string); configured != "" {
+			return fmt.Sprintf("git.baseBranch %q does not resolve to a branch", configured)
+		}
+	}
+	return noBaseMsg
+}
+
 func handoffFile(d *Deps, root string, cfg any) string {
 	configured := ""
 	if v, err := config.Value(cfg, "git.baseBranch"); err == nil {
