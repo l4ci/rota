@@ -160,10 +160,10 @@ func (s *roundSnap) keepStale(old roundSnap) {
 // fillBurn sets Row.Burn for every slot holding an issue: the quota it has
 // consumed, in percentage points of its account's headroom. That is the
 // headroom the slot's latest assign entry recorded minus the headroom the
-// meter reads now, floored at 0 (a window that reset in between reads as
-// nothing consumed). Codex slots, accounts with no reading at either end and
-// slots with no assign entry stay nil (n/a). The meters are fetched once, for
-// all accounts, however many slots there are; the --ui screen is the only
+// meter reads now. A quota window reset (headroom rose), codex slots, accounts
+// with no reading at either end and slots with no assign entry stay nil (n/a).
+// The meters are fetched once for all accounts, however many slots there are;
+// the --ui screen is the only
 // caller, so plain and --json status never fetch.
 func fillBurn(ctx context.Context, c *Ctx, root string, rows []round.Row) {
 	entries, _ := ledger.Load(root)
@@ -198,10 +198,7 @@ func fillBurn(ctx context.Context, c *Ctx, root string, rows []round.Row) {
 		if !fetched {
 			meters, fetched = c.deps().WorkerAccounts().Meters(ctx, root), true
 		}
-		if now := worker.HeadroomOf(meters, last.Account); now != nil {
-			burn := max(start-*now, 0)
-			r.Burn = &burn
-		}
+		r.Burn = ledger.QuotaBurn(&start, worker.HeadroomOf(meters, last.Account))
 	}
 }
 

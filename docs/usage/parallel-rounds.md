@@ -859,9 +859,9 @@ Codex slots and accounts with no meter reading show `n/a`: unknown is never prin
 On a herdr or tmux round the done reading is taken when the pane reports done (`rota worker done`,
 `worker poll` or `round wait`); under solo it is taken by `rota round report`.
 `rota round status --ui` shows the quota each slot's account has lost since the slot's latest
-assign in a `burn` column: the headroom the assign recorded minus the meter now, never below 0.
+assign in a `burn` column: the headroom the assign recorded minus the meter now.
 It reads the meters once per refresh for all accounts, and shows `n/a` for codex slots and accounts
-with no reading.
+with no reading, or when headroom rose because the quota window reset.
 
 ## Two machines: main and support
 
