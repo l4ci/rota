@@ -59,6 +59,9 @@ type TrainOpts struct {
 	// one when nil, so the whole train reads the lease once.
 	Round *RoundMemo
 	Base  string
+	// SyncBase is the project base branch to merge into Base before the
+	// members, when Base is a milestone branch; "" for a train on the base.
+	SyncBase string
 	// LandGreen lands the verified prefix before the culprit when the train
 	// fails verification.
 	LandGreen bool
@@ -205,6 +208,9 @@ type trainRun struct {
 	verify  func(dir string) (VerifyResult, error) // test.full on dir, local or on CI
 	baseRef string
 	baseSHA string
+	// syncSHA is the scratch tip after the project base was merged into a
+	// milestone Base; "" when there was nothing to merge.
+	syncSHA string
 	headRef func(TrainMember) string
 	heads   []string // each member's head sha, in merge order
 	tips    []string // tips[i] is the scratch tree with the first i members merged
@@ -412,6 +418,11 @@ func (t *trainRun) plan() (bool, error) {
 	}
 
 	// 3. Merge in order in a scratch worktree.
+	if o.SyncBase != "" && t.remote {
+		if _, code := e.git(root, "fetch", "origin", "-q"); code != 0 {
+			return t.broke("git fetch origin failed before syncing " + o.SyncBase)
+		}
+	}
 	baseSHA, code := e.git(root, "rev-parse", baseRef)
 	if code != 0 {
 		return t.broke(fmt.Sprintf("git rev-parse %s exited %d", baseRef, code))
@@ -429,6 +440,11 @@ func (t *trainRun) plan() (bool, error) {
 		return t.broke(err.Error())
 	}
 	t.scratch, t.cleanup = scratch, cleanup
+	if o.SyncBase != "" {
+		if done, err := t.syncBase(); done || err != nil {
+			return done, err
+		}
+	}
 	tips, failed, merr, brokeMsg := e.mergeTrain(ctx, scratch, o.Base, res.Members, t.heads)
 	t.tips = tips
 	if brokeMsg != "" {
@@ -456,6 +472,83 @@ func (t *trainRun) plan() (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// syncBase merges the project base into the milestone Base in the scratch tree,
+// before the members, so the verify runs on base + milestone + members. A
+// conflict ends the train with merge-failed naming the milestone and the
+// paths; nothing has been pushed at this point.
+func (t *trainRun) syncBase() (bool, error) {
+	e, ctx, o, res := t.e, t.ctx, t.o, &t.res
+	from := o.SyncBase
+	if t.remote {
+		from = "origin/" + o.SyncBase
+	}
+	sha, code := e.git(t.root, "rev-parse", from)
+	if code != 0 {
+		return t.broke(fmt.Sprintf("git rev-parse %s exited %d", from, code))
+	}
+	run := func(args ...string) (git.Result, error) { return e.Git(ctx, t.scratch, args...) }
+	if err := land.MergeLocal(run, sha, fmt.Sprintf("sync %s into %s", o.SyncBase, o.Base), land.RecoveryGit(ctx, e.Git, t.scratch)); err != nil {
+		var ce *land.ConflictError
+		if errors.As(err, &ce) {
+			res.Verdict = GateMergeFailed
+			res.Err = fmt.Sprintf("TRAIN-FAIL sync — merging %s into %s conflicts in: %s; nothing pushed", o.SyncBase, o.Base, strings.Join(conflictPaths(ce.Out), ", "))
+			res.Hint = fmt.Sprintf("merge %s into %s by hand, or file a fix issue tagged to the milestone, then re-run the train", o.SyncBase, o.Base)
+			return true, nil
+		}
+		res.Verdict = GateMergeFailed
+		res.Err, res.Hint = mergeRefusal(err, mergeWords{Failed: fmt.Sprintf("TRAIN-FAIL sync — merging %s into %s in the scratch tree failed", o.SyncBase, o.Base)})
+		return true, nil
+	}
+	tip, code := e.git(t.scratch, "rev-parse", "HEAD")
+	if code != 0 {
+		return t.broke("git rev-parse HEAD failed in the scratch tree")
+	}
+	if tip != t.baseSHA {
+		t.syncSHA = tip
+		t.cache.retainBase(tip)
+	}
+	return false, nil
+}
+
+// conflictPaths lists the paths git named in a merge's "CONFLICT (...)" lines.
+func conflictPaths(out string) []string {
+	var paths []string
+	for _, l := range strings.Split(out, "\n") {
+		if !strings.HasPrefix(l, "CONFLICT") {
+			continue
+		}
+		if i := strings.LastIndex(l, " in "); i >= 0 && strings.Contains(l, "Merge conflict") {
+			paths = append(paths, strings.TrimSpace(l[i+4:]))
+		} else if i := strings.Index(l, "): "); i >= 0 { // modify/delete, rename and add/add forms
+			paths = append(paths, strings.TrimSpace(l[i+3:]))
+		}
+	}
+	if len(paths) == 0 {
+		return []string{"(see git merge output)"}
+	}
+	return paths
+}
+
+// pushSync lands the verified sync merge on the milestone Base ahead of the
+// first member: a fast-forward push to origin for a PR train, a ff-only merge
+// of the checked-out Base for a slot train.
+func (t *trainRun) pushSync() error {
+	e, root, o := t.e, t.root, t.o
+	if t.remote {
+		if out, code := e.runGit(t.ctx, root, "push", "-q", "origin", t.syncSHA+":refs/heads/"+o.Base); code != 0 {
+			return fmt.Errorf("git push of the sync merge to origin/%s failed: %s", o.Base, strings.TrimSpace(out))
+		}
+		if _, code := e.git(root, "fetch", "origin", "-q"); code != 0 {
+			return errors.New("git fetch origin failed after pushing the sync merge")
+		}
+		return nil
+	}
+	if out, code := e.runGit(t.ctx, root, "merge", "--ff-only", "-q", t.syncSHA); code != 0 {
+		return fmt.Errorf("fast-forwarding %s to the sync merge failed: %s", o.Base, strings.TrimSpace(out))
+	}
+	return nil
 }
 
 // preview answers --plan: the pairs of members that really conflict, the
@@ -579,6 +672,9 @@ func free(clash [][]bool, mask uint32) bool {
 func (t *trainRun) verifyStage() (bool, error) {
 	e, ctx, o, res, scratch, tips, heads := t.e, t.ctx, t.o, &t.res, t.scratch, t.tips, t.heads
 	cache, baseSHA := t.cache, t.baseSHA
+	if t.syncSHA != "" { // the verified tree includes the sync merge
+		baseSHA = t.syncSHA
+	}
 	n := len(res.Members)
 	passing := n
 	t.passing = n
@@ -750,6 +846,11 @@ func (t *trainRun) land() (TrainResult, error) {
 	for i := 0; i < passing; i++ {
 		if cur, _ := e.git(root, "rev-parse", headRef(res.Members[i])); cur != heads[i] {
 			return e.trainMoved(res, res.Members[i].Target, fmt.Sprintf("%s moved from %s to %s while the train verified", headRef(res.Members[i]), strutil.ShortSHA(heads[i]), strutil.ShortSHA(cur)))
+		}
+	}
+	if passing > 0 && t.syncSHA != "" {
+		if err := t.pushSync(); err != nil {
+			return e.trainMoved(res, "", err.Error())
 		}
 	}
 	for i := 0; i < passing; i++ {
