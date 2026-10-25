@@ -64,12 +64,12 @@ func TestDetect(t *testing.T) {
 }
 
 // A checkout build stamped by stalebin.Rebuild carries a release-shaped version
-// and the full commit; goreleaser stamps the 7-char short commit.
+// and the full commit; goreleaser stamps git's short abbreviation (8 chars here).
 func TestStampedCheckoutBuildIsDev(t *testing.T) {
 	full := "0123456789abcdef0123456789abcdef01234567"
 	for _, c := range []struct{ name, exeDir, commit, kind string }{
 		{"checkout", "/home/u/.local/bin", full, Dev},
-		{"script short", "/home/u/.local/bin", "0123456", Script},
+		{"script short", "/home/u/.local/bin", "5cc79df4", Script},
 		{"script no commit", "/home/u/.local/bin", "", Script},
 		{"brew keeps brew", "/opt/homebrew/bin", full, Brew},
 	} {

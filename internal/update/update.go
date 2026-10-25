@@ -122,9 +122,10 @@ func stamped(v string) bool {
 	return v != "" && v != "dev" && v != "(devel)"
 }
 
-// releaseCommitLen is the width goreleaser stamps ({{ .ShortCommit }}); the
-// checkout rebuild (stalebin.Rebuild) stamps the full `git rev-parse HEAD`.
-const releaseCommitLen = 7
+// fullCommitLen is the width of the SHA the checkout rebuild (stalebin.Rebuild)
+// stamps via `git rev-parse HEAD`. goreleaser's {{ .ShortCommit }} is git's
+// auto-abbreviation (7 to 12 chars by repo size), so only a full SHA is a signal.
+const fullCommitLen = 40
 
 // detect: a binary under a Homebrew prefix is brew; a version that is empty,
 // "dev", "(devel)" or carries a -dev suffix is a checkout build, and so is one
@@ -142,7 +143,7 @@ func detect(e Env) string {
 	if v := e.Current; v == "" || v == "dev" || v == "(devel)" || strings.HasSuffix(v, "-dev") {
 		return Dev
 	}
-	if len(e.Commit) > releaseCommitLen {
+	if len(e.Commit) >= fullCommitLen {
 		return Dev
 	}
 	return Script
