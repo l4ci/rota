@@ -443,3 +443,26 @@ func NeedsWatch(root string) (bool, []string) {
 	}
 	return need, attn
 }
+
+// StopBlock refuses an idle orchestrator with active workers and no live
+// watch: nothing would wake it when a worker finishes. Solo rounds have no
+// panes to watch. The caller has established that this is the orchestrator
+// and that this is the first stop in the turn, so a refused watch cannot loop.
+func StopBlock(env roundlease.Env, root, commonDir string) (reason string, block bool) {
+	if worker.IsSolo(root) {
+		return "", false
+	}
+	need, attn := NeedsWatch(root)
+	if !need {
+		return "", false
+	}
+	if _, armed := Armed(env, commonDir); armed {
+		return "", false
+	}
+	reason = "No `rota round watch` is running, and workers are active: nothing would wake you when one finishes. " +
+		"Start `rota round watch` as a background command now (one at a time; it exits with JSON when a slot, PR or escalation changes, or at its heartbeat), then stop."
+	if len(attn) > 0 {
+		reason += " Waiting on you already: " + strings.Join(attn, ", ") + "."
+	}
+	return reason, true
+}

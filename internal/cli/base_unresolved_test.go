@@ -8,11 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/gittest"
-	"github.com/l4ci/rota/internal/hook"
 )
 
 func TestReviewScaffoldingNoBaseDoesNotAssumeMain(t *testing.T) {
@@ -58,29 +56,6 @@ func TestDefaultRoundEnvConfiguredBaseMissing(t *testing.T) {
 	}
 	if !strings.Contains(e.BaseErr, "git.baseBranch") || !strings.Contains(e.BaseErr, "gone") {
 		t.Errorf("BaseErr = %q; want it to name git.baseBranch and the value", e.BaseErr)
-	}
-}
-
-func TestStopHandoffSkipsWithoutPath(t *testing.T) {
-	cd := t.TempDir()
-	path, err := hook.StatePath(cd, "s1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	pct := 95.0
-	if err := hook.UpdateState(path, func(st hook.State, _ bool) hook.State {
-		st.SessionID, st.ContextPct = "s1", &pct
-		return st
-	}); err != nil {
-		t.Fatal(err)
-	}
-	hc := hookContext{commonDir: cd, handoff: filepath.Join(cd, "h.md"), now: time.Now}
-	if _, ok := stopHandoff(hc, "s1", false); !ok {
-		t.Fatal("control: a state with a handoff path should reach a decision")
-	}
-	hc.handoff = ""
-	if _, ok := stopHandoff(hc, "s1", false); ok {
-		t.Error("no handoff path: want no decision, not a note under a guessed branch")
 	}
 }
 

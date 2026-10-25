@@ -264,123 +264,40 @@ func hookStop(c *Ctx, args []string) (res Result, _ error) {
 	}
 	// A second stop in the same turn passes, so a refused watch cannot loop.
 	if !active {
-		if reason, block := watchBlock(hc); block {
+		if reason, block := roundwatch.StopBlock(hc.lease, hc.root, hc.commonDir); block {
 			return hookPrint(hook.StopOutput(reason)), nil
 		}
 	}
 	return Result{}, nil
 }
 
-// stopHandoff is the context-threshold decision (D1, D4). ok is false when the
-// session has no readable state, so there is no decision to take.
-func stopHandoff(hc hookContext, sid string, active bool) (d hook.StopDecision, ok bool) {
-	if hc.handoff == "" {
-		return d, false // no resolvable base: nowhere to ask for a note
-	}
-	path, err := hook.StatePath(hc.commonDir, sid)
-	if err != nil {
-		return d, false
-	}
-	st, found, err := hook.ReadState(path)
-	if err != nil || !found {
-		return d, false
-	}
-	now := hc.now()
+// stopHandoff applies the orchestrator's context/usage handoff rule.
+func stopHandoff(hc hookContext, sid string, active bool) (hook.SessionDecision, bool) {
 	in := hook.StopIn{StopHookActive: active}
 	if hc.set.SwitchOnUsage {
 		in.Supervised, in.HoldUntil = supervisedHold(hc.lease, hc.commonDir, hc.now())
 	}
-	d = hook.DecideStop(in, st, hc.set, hook.StatHandoff(hc.handoff), hc.handoff, now)
-	if d.Persist {
-		// Only the counters: a statusline refresh may have landed meanwhile.
-		_ = hook.UpdateState(path, func(cur hook.State, found bool) hook.State {
-			if !found {
-				cur = st
-			}
-			cur.HandoffBlocks, cur.BlockedAt, cur.HandoffFailed = d.State.HandoffBlocks, d.State.BlockedAt, d.State.HandoffFailed
-			cur.UsageHandoff = d.State.UsageHandoff
-			return cur
-		})
-	}
-	return d, true
+	return hook.ApplySession(hook.SessionIn{Action: hook.StopHandoff, CommonDir: hc.commonDir, SessionID: sid,
+		Settings: hc.set, HandoffPath: hc.handoff, Stop: in, Now: hc.now})
 }
 
-// guardStop is the work.contextGuard=auto decision for a session that is not
-// the orchestrator. ok is false when the guard is not on auto or the session
-// has no readable state.
-func guardStop(hc hookContext, sid string) (d hook.StopDecision, ok bool) {
+// guardStop applies the auto context guard to a non-orchestrator session.
+func guardStop(hc hookContext, sid string) (hook.SessionDecision, bool) {
 	if config.ContextGuard(hc.cfg) != hook.GuardAuto {
-		return d, false
+		return hook.SessionDecision{}, false
 	}
-	path, err := hook.StatePath(hc.commonDir, sid)
-	if err != nil {
-		return d, false
-	}
-	st, found, err := hook.ReadState(path)
-	if err != nil || !found {
-		return d, false
-	}
-	d = hook.DecideGuardStop(st, hc.set, hook.StatHandoff(hc.handoff), hc.now())
-	if d.Persist {
-		_ = hook.UpdateState(path, func(cur hook.State, found bool) hook.State {
-			if !found {
-				cur = st
-			}
-			cur.HandoffBlocks, cur.BlockedAt, cur.HandoffFailed = d.State.HandoffBlocks, d.State.BlockedAt, d.State.HandoffFailed
-			return cur
-		})
-	}
-	return d, true
+	return hook.ApplySession(hook.SessionIn{Action: hook.GuardStop, CommonDir: hc.commonDir, SessionID: sid,
+		Settings: hc.set, HandoffPath: hc.handoff, Now: hc.now})
 }
 
-// guardPrompt is the work.contextGuard=warn line for a session that is not the
-// orchestrator, "" when there is nothing to say.
+// guardPrompt applies the warn context guard to a non-orchestrator session.
 func guardPrompt(hc hookContext, sid string) string {
 	if config.ContextGuard(hc.cfg) != hook.GuardWarn {
 		return ""
 	}
-	path, err := hook.StatePath(hc.commonDir, sid)
-	if err != nil {
-		return ""
-	}
-	st, found, err := hook.ReadState(path)
-	if err != nil || !found {
-		return ""
-	}
-	d := hook.DecideGuardPrompt(st, hc.set, hc.now())
-	if d.Persist {
-		_ = hook.UpdateState(path, func(cur hook.State, found bool) hook.State {
-			if !found {
-				cur = st
-			}
-			cur.GuardWarned = d.State.GuardWarned
-			return cur
-		})
-	}
+	d, _ := hook.ApplySession(hook.SessionIn{Action: hook.GuardPrompt, CommonDir: hc.commonDir, SessionID: sid,
+		Settings: hc.set, Now: hc.now})
 	return d.Line
-}
-
-// watchBlock is the #81 rule: an orchestrator that holds the lease, has
-// workers to wait for and no `rota round watch` running must not go idle,
-// because nothing would wake it when a worker finishes. A solo round has no
-// panes to watch.
-func watchBlock(hc hookContext) (reason string, block bool) {
-	if worker.IsSolo(hc.root) {
-		return "", false
-	}
-	need, attn := roundwatch.NeedsWatch(hc.root)
-	if !need {
-		return "", false
-	}
-	if _, armed := roundwatch.Armed(hc.lease, hc.commonDir); armed {
-		return "", false
-	}
-	reason = "No `rota round watch` is running, and workers are active: nothing would wake you when one finishes. " +
-		"Start `rota round watch` as a background command now (one at a time; it exits with JSON when a slot, PR or escalation changes, or at its heartbeat), then stop."
-	if len(attn) > 0 {
-		reason += " Waiting on you already: " + strings.Join(attn, ", ") + "."
-	}
-	return reason, true
 }
 
 // hookPrompt is the UserPromptSubmit hook: a one-line round digest on every
