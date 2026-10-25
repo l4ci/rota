@@ -539,6 +539,27 @@ func TestReturnParksCommentsReleasesAndFreesTheSlot(t *testing.T) {
 	}
 }
 
+// A returned slot's PR keeps its relay log: the gate reads it from the queued
+// record, since the freed slot no longer records the PR (#1853).
+func TestReturnQueuesTheRecordedPRWithItsRelays(t *testing.T) {
+	f := newMoveFx(t)
+	rawSlot(f.root, "ben", func(s *jsonx.Object) {
+		s.Set("pr", "https://github.com/o/r/pull/77")
+		s.Set("relays", []any{map[string]any{"round": 3, "summary": "go ahead"}})
+	})
+	if _, err := f.ret("ben", "parked", nil); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := worker.LoadRegistry(f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := reg.QueuedPR("#77")
+	if q == nil || len(q.Relays) != 1 {
+		t.Errorf("the returned slot's PR must queue with its relays: %+v", q)
+	}
+}
+
 func TestReturnThenAssignPicksTheItemUpAgain(t *testing.T) {
 	f := newMoveFx(t)
 	branch := f.slot("ben").Branch()
