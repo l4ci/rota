@@ -208,6 +208,9 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		}
 		d.Set("candidates", candidateList(cands))
 		notePath := handoffFile(c.deps(), root, cfg)
+		if notePath == "" {
+			c.Warn("%s: the orchestrator handoff note was not read", noHandoffBaseMsg(cfg))
+		}
 		note, noteWarn := hook.ReadOrchestratorNote(notePath, *consume)
 		if noteWarn != "" {
 			c.Warn("%s", noteWarn)

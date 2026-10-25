@@ -32,10 +32,10 @@ note: the old stdout fallback (title and body echo) is dropped because the calle
 rota git base
 repo: scoped
 data: {"base": string}
-exit: 2 at an umbrella root without --repo; 3 when no base branch resolves
+exit: 2 at an umbrella root without --repo; 3 when no base branch resolves, or when `git.baseBranch` is set and does not resolve
 old: hv-base-branch
 shim: runs in the repo's directory; `base` is the stdout line. Old exit 1 with `umbrella` in stderr becomes 2; other old exit 1 becomes 3.
-note: resolution order is unchanged: `git.baseBranch` if it exists, then main, master, trunk, origin/HEAD.
+note: `git.baseBranch` if set, then main, master, trunk, origin/HEAD when it is empty. A set `git.baseBranch` that does not exist is an error (exit 3), never replaced by a conventional name.
 
 ### rota git guard clean
 rota git guard clean [--context <text>]
@@ -104,9 +104,9 @@ note: (#1612) `cross` is the cross-harness review requirement, present only when
 rota review scaffolding [<branch>] [--base <branch>]
 repo: scoped
 data: {"findings": [{"file": string, "line": number, "text": string}]}
-exit: 2 at an umbrella root without --repo; 3 when a named branch or base does not exist; 5 when git fails
+exit: 2 at an umbrella root without --repo; 3 when a named branch or base does not exist, or when no base resolves and `--base` is not given (hint: pass `--base <ref>`); 5 when git fails
 old: hv-review-scaffolding [--repo <repo>] <base> <branch>
-shim: passes `--base`, else `hv-base-branch` (else `main`), and `<branch>`, else the current branch, as the old two positionals. Each stdout line `<file>:<line>:<text>` becomes one finding; empty output gives `{"findings": []}`.
+shim: passes `--base`, else `hv-base-branch` (no `main` fallback), and `<branch>`, else the current branch, as the old two positionals. Each stdout line `<file>:<line>:<text>` becomes one finding; empty output gives `{"findings": []}`.
 note: findings are added diff lines matching `Task N`, `in flight`, `placeholder`, `added later` or `not yet wired`. Finding nothing is exit 0, as before.
 
 ### rota review package
