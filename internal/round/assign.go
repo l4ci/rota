@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"path/filepath"
 	"slices"
@@ -46,34 +47,34 @@ func (e Env) forgeOn(be backlog.Backend) bool {
 
 // Blocked reasons of an assignment (exit 4, `blockedBy`).
 const (
-	BlockNoRound    = "no round"
-	BlockOutOfScope = "out of scope"
-	BlockNotReady   = "not ready"
-	BlockOverlap    = "overlap"
-	BlockClaimed    = "claimed"
-	BlockOpenPR     = "open PR"
+	BlockNoRound    = blockedby.NoRound
+	BlockOutOfScope = blockedby.OutOfScope
+	BlockNotReady   = blockedby.NotReady
+	BlockOverlap    = blockedby.Overlap
+	BlockClaimed    = blockedby.Claimed
+	BlockOpenPR     = blockedby.OpenPR
 	// BlockBatch: round.batch items are already assigned and not landed or parked.
-	BlockBatch = "batch"
+	BlockBatch = blockedby.Batch
 	// BlockBundle: the --bundle members are too many, repeat a slot's recorded
 	// bundle differently, are closed, or cannot be bundled (best-of:2).
-	BlockBundle     = "bundle"
-	BlockSlotBusy   = "slot busy"
-	BlockNoFreeSlot = "no free slot"
+	BlockBundle     = blockedby.Bundle
+	BlockSlotBusy   = blockedby.SlotBusy
+	BlockNoFreeSlot = blockedby.NoFreeSlot
 	// BlockNoLogin: the slot's account has no usable Claude login, so a session
 	// there would stall at a login prompt.
-	BlockNoLogin = "no login"
+	BlockNoLogin = blockedby.NoLogin
 	// BlockDraining: the slot is past the round's slot count (round.slots,
 	// --slots); it finishes the work it holds and takes nothing new.
-	BlockDraining = "draining"
+	BlockDraining = blockedby.Draining
 	// BlockQuota: every account the worker kind could run under is cooling down.
-	BlockQuota        = "quota"
-	BlockBriefMissing = "brief missing"
-	BlockNoTierMap    = "no tier map"
+	BlockQuota        = blockedby.Quota
+	BlockBriefMissing = blockedby.BriefMissing
+	BlockNoTierMap    = blockedby.NoTierMap
 	// BlockHumanDecision: a decision:grilling item is resolved by the human in
 	// /rota-brainstorm, never by a worker.
-	BlockHumanDecision = "human decision"
+	BlockHumanDecision = blockedby.HumanDecision
 	// BlockCodexFlags: `codex --help` does not list a flag the launch line uses.
-	BlockCodexFlags = harness.BlockCodexFlags
+	BlockCodexFlags = blockedby.CodexFlags
 )
 
 // BlockedError is an assignment refused before anything was marked or sent.
@@ -653,7 +654,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	if errors.As(err, &se) && se.Stage == "dispatch" && errors.As(err, &dispatchErr) && dispatchErr.Exit == exitcode.ExitRetry {
 		res.Changed = true
 		err = &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: dispatchErr.Message,
-			Data: worker.BlockData{BlockedBy: "dispatch", Changed: true}, Cause: err}
+			Data: worker.BlockData{BlockedBy: blockedby.Dispatch, Changed: true}, Cause: err}
 	}
 	if err == nil && !run.resuming {
 		if lerr := worker.LedgerAppendErr(e.workerEnv(), root, ledger.Entry{Kind: ledger.KindAssign, Issue: run.id, Slot: run.agent, Account: res.Account, Harness: run.kind,

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"strings"
 	"time"
@@ -82,7 +83,7 @@ func clearGate(c *Ctx, name, target string, conf gate.Confirm, paths []string, e
 		if d == nil {
 			d = jsonx.NewObject()
 		}
-		d.Set("blockedBy", "manual gate")
+		d.Set("blockedBy", blockedby.ManualGate)
 		d.Set("gate", r.Gate)
 		if name == gate.MergeApproval {
 			d.Set("paths", strList(r.Paths))
@@ -190,7 +191,7 @@ func approvalConfirm(c *Ctx, id string, th worker.ApprovalThread, extra *jsonx.O
 	case e.Status != escalation.StatusAnswered:
 		status := e.Derived(approvalNow(c))
 		res, err := approvalFail(extra, fmt.Sprintf("escalation %s is %s; no approval yet", id, status),
-			"blockedBy", "approval pending", "escalation", id, "status", status)
+			"blockedBy", blockedby.ApprovalPending, "escalation", id, "status", status)
 		return gate.Confirm{}, res, err
 	}
 	body := ""
@@ -199,7 +200,7 @@ func approvalConfirm(c *Ctx, id string, th worker.ApprovalThread, extra *jsonx.O
 	}
 	if !escalation.Approves(body) {
 		res, err := approvalFail(extra, fmt.Sprintf("escalation %s was answered without approving the merge", id),
-			"blockedBy", "approval declined", "escalation", id, "answer", body)
+			"blockedBy", blockedby.ApprovalDeclined, "escalation", id, "answer", body)
 		return gate.Confirm{}, res, err
 	}
 	return gate.Confirm{Given: true, Note: body, Escalation: id}, Result{}, nil

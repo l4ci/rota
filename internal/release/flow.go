@@ -2,6 +2,7 @@ package release
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"path/filepath"
 	"strings"
@@ -143,7 +144,7 @@ func CheckPushMode(dir string, mode PushMode) error {
 	e := exitcode.Errf(exitcode.ExitRefused, "%s builds releases here, so the branch must not be pushed with the tag", cfg).
 		WithHint("push the tag with --tag-only, wait for the release workflow and publish, then push with --branch-only")
 	o := jsonx.NewObject()
-	o.Set("blockedBy", "release order")
+	o.Set("blockedBy", blockedby.ReleaseOrder)
 	o.Set("changed", false)
 	e.Data = o
 	return e

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 	"unicode"
 
@@ -28,7 +29,7 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 		return Result{}, err
 	}
 	if !issue {
-		return Result{Data: jsonObj("blockedBy", "backend", "changed", false)},
+		return Result{Data: jsonObj("blockedBy", blockedby.Backend, "changed", false)},
 			Failed("%s needs item criteria, which only the issue backend has (issues.source is file)", c.Path)
 	}
 	_, st, err := openPlans(c)

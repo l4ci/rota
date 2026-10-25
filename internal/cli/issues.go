@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -303,7 +304,7 @@ func migrateIssuesFail(res *migrate.Result, err error) (Result, error) {
 	case errors.Is(err, migrate.ErrNothingToMigrate):
 		return Result{}, Resolution("%s", strings.TrimPrefix(err.Error(), migrate.ErrNothingToMigrate.Error()+": ")+" (nothing to migrate)")
 	case errors.Is(err, migrate.ErrUmbrellaMigrate):
-		return Result{Data: jsonObj("blockedBy", "umbrella", "changed", false)},
+		return Result{Data: jsonObj("blockedBy", blockedby.Umbrella, "changed", false)},
 			Refused("%s", err.Error()).WithHint("run rota migrate issues inside each sub-repo")
 	case errors.Is(err, migrate.ErrBadMap):
 		return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}

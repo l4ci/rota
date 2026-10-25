@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/strutil"
 	"os"
 	"strings"
@@ -92,7 +93,7 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 	}
 	if st := strings.ToLower(s.State()); !worker.IsDone(st) {
 		return out, &exitcode.Error{Exit: exitcode.ExitRefused, Message: fmt.Sprintf("slot '%s' is %s, not done: it has not handed its PR back yet", o.Slot, st),
-			Data: worker.BlockData{BlockedBy: "state"}}
+			Data: worker.BlockData{BlockedBy: blockedby.State}}
 	}
 	pr, err := o.Forge.PRView(ctx, number)
 	if err != nil {
@@ -130,7 +131,7 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 	}
 	if s.PaneHandle() == "" {
 		return out, &exitcode.Error{Exit: exitcode.ExitRefused, Message: fmt.Sprintf("slot '%s' has no session to relay into", o.Slot),
-			Hint: "the pane is gone: re-dispatch the task or transfer the item", Data: worker.BlockData{BlockedBy: "handle"}}
+			Hint: "the pane is gone: re-dispatch the task or transfer the item", Data: worker.BlockData{BlockedBy: blockedby.Handle}}
 	}
 	body, err := os.CreateTemp("", "rota-review-relay-*")
 	if err != nil {
@@ -291,7 +292,7 @@ func rollbackErr(err error) error {
 // so the slot stays done with its batch pending (the autopilot does not merge
 // a PR with review input waiting) and the human is asked once on the PR.
 func (e Env) reviewCap(ctx context.Context, root string, o ReviewOpts, batch worker.ReviewBatch, number int, issue string, out Relayed) (Relayed, error) {
-	data := worker.BlockData{BlockedBy: "maxBounces"}
+	data := worker.BlockData{BlockedBy: blockedby.MaxBounces}
 	msg := fmt.Sprintf("%s was already sent back %d time(s) (round.maxBounces is %d)", issue, out.Bounces, o.MaxBounces)
 	for _, en := range escalation.Load(root) {
 		if en.Slot == o.Slot && en.Number == number && en.Status == escalation.StatusPending {

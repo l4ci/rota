@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"strings"
 
@@ -326,7 +327,7 @@ func skillsUninstall(c *Ctx, a skillsArgs) (Result, error) {
 	data := knObj("roots", rootsData, "changed", changed)
 	out := Result{Data: data, Text: strings.Join(text, "\n")}
 	if keptAny {
-		data.Set("blockedBy", "edited")
+		data.Set("blockedBy", blockedby.Edited)
 		return withSkipped(out, skipped), Refused("edited files were kept").WithHint("run: rota skills uninstall --overwrite")
 	}
 	return withSkipped(out, skipped), nil

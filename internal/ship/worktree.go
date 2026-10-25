@@ -2,6 +2,7 @@ package ship
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"path/filepath"
 	"strings"
 
@@ -36,7 +37,7 @@ func ClearWorktree(g Git, branch string, at Checkout) error {
 		return nil
 	}
 	if worker.PathContains(wt, at.Cwd) {
-		return &Refusal{By: "worktree", Msg: "worktree contains the current directory: " + wt, Hint: "run ship merge from outside this worktree"}
+		return &Refusal{By: blockedby.Worktree, Msg: "worktree contains the current directory: " + wt, Hint: "run ship merge from outside this worktree"}
 	}
 	if err := checkOwnership(res.Stdout, at, branch, wt); err != nil {
 		return err
@@ -51,7 +52,7 @@ func ClearWorktree(g Git, branch string, at Checkout) error {
 		return &GitError{Msg: "git status " + wt + ": " + strutil.FirstLine(dirty.Stderr)}
 	}
 	if strings.TrimSpace(dirty.Stdout) != "" {
-		return &Refusal{By: "worktree", Msg: "worktree has uncommitted or ignored files: " + wt, Hint: "preserve the files before retrying ship merge"}
+		return &Refusal{By: blockedby.Worktree, Msg: "worktree has uncommitted or ignored files: " + wt, Hint: "preserve the files before retrying ship merge"}
 	}
 	rm, err := g.Run("worktree", "remove", wt)
 	if err != nil {
@@ -82,7 +83,7 @@ func checkOwnership(listing string, at Checkout, branch, wt string) error {
 		}
 		for _, slot := range reg.Slots() {
 			if path := slot.Worktree(); path != "" && worker.PathContains(resolve(root, path), wt) {
-				return &Refusal{By: "worktree", Msg: "worktree belongs to round slot " + slot.Name() + ": " + wt, Hint: "leave slot cleanup to the round orchestrator"}
+				return &Refusal{By: blockedby.Worktree, Msg: "worktree belongs to round slot " + slot.Name() + ": " + wt, Hint: "leave slot cleanup to the round orchestrator"}
 			}
 		}
 	}
@@ -103,7 +104,7 @@ func checkOwnership(listing string, at Checkout, branch, wt string) error {
 			}
 		}
 	}
-	return &Refusal{By: "worktree", Msg: "worktree is not registered as cycle work: " + wt, Hint: "preserve this worktree; use the owning workflow to manage it"}
+	return &Refusal{By: blockedby.Worktree, Msg: "worktree is not registered as cycle work: " + wt, Hint: "preserve this worktree; use the owning workflow to manage it"}
 }
 
 // projectRoot is the project whose .rota/ holds the state of the checkout in
