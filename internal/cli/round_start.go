@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -67,6 +68,10 @@ func candidateList(cs []round.Candidate) []any {
 func warnCandidateMigrations(c *Ctx, candidates []round.Candidate) {
 	for _, candidate := range candidates {
 		for _, warning := range candidate.Warnings {
+			// A watch reuses its context across ticks; warn once per message.
+			if slices.Contains(c.warnings, warning) {
+				continue
+			}
 			c.Warn("%s", warning)
 		}
 	}
