@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/git"
 	ms "github.com/l4ci/rota/internal/milestone"
 )
 
@@ -32,10 +34,10 @@ func planMilestoneBranch(c *Ctx, st ms.Store, id, to, choice string) (milestoneB
 	ctx := c.Context()
 	r := c.deps().Repo(dir)
 	if in, err := r.IsRepo(ctx); err != nil || !in {
-		return milestoneBranchSteps{}, gitErr(err)
+		return milestoneBranchSteps{}, noGitIsNoBranch(err)
 	}
 	if ok, err := r.Ok(ctx, "remote", "get-url", "origin"); err != nil || !ok {
-		return milestoneBranchSteps{}, gitErr(err)
+		return milestoneBranchSteps{}, noGitIsNoBranch(err)
 	}
 	branch := milestoneBranch(id)
 	exists := func() (bool, error) {
@@ -93,6 +95,7 @@ func planMilestoneBranch(c *Ctx, st ms.Store, id, to, choice string) (milestoneB
 		if !ok {
 			return milestoneBranchSteps{}, Resolution(noBaseMsg)
 		}
+		base = r.RemoteBase(ctx, base)
 		return milestoneBranchSteps{before: func() error {
 			if has, err := exists(); err != nil || has {
 				return err
@@ -140,6 +143,7 @@ func planMilestoneBranch(c *Ctx, st ms.Store, id, to, choice string) (milestoneB
 		if !ok {
 			return milestoneBranchSteps{}, Resolution(noBaseMsg)
 		}
+		base = r.RemoteBase(ctx, base)
 		return milestoneBranchSteps{before: func() error {
 			if err := fetch(); err != nil {
 				return err
@@ -151,8 +155,8 @@ func planMilestoneBranch(c *Ctx, st ms.Store, id, to, choice string) (milestoneB
 			if n := strings.TrimSpace(res.Stdout); res.ExitCode != 0 || n != "0" {
 				return Refused("%s holds commits that are not on %s (%s); merge or drop them before moving %s back to planned", branch, base, n, id)
 			}
-			return nil
-		}, after: remove}, nil
+			return remove()
+		}}, nil
 	}
 	return milestoneBranchSteps{}, nil
 }
@@ -204,4 +208,13 @@ func untagMilestone(c *Ctx, id string) error {
 		}
 	}
 	return nil
+}
+
+// noGitIsNoBranch maps a probe error: a missing git binary means no
+// repository to manage, like a project outside one; any other error stands.
+func noGitIsNoBranch(err error) error {
+	if errors.Is(err, git.ErrNoGit) {
+		return nil
+	}
+	return gitErr(err)
 }

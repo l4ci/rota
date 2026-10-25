@@ -153,3 +153,59 @@ func TestMilestonePlannedFromActive(t *testing.T) {
 		t.Error("milestone/M01 still on origin")
 	}
 }
+
+// behindRepo leaves origin/main one commit ahead of the local main.
+func behindRepo(t *testing.T) (dir, origin string) {
+	t.Helper()
+	dir, origin = branchRepo(t)
+	branchGit(t, dir, "commit", "-q", "--allow-empty", "-m", "merged upstream")
+	branchGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/main")
+	branchGit(t, dir, "fetch", "-q", "origin")
+	return dir, origin
+}
+
+func TestMilestoneActivateCutsFromOriginBase(t *testing.T) {
+	dir, origin := behindRepo(t)
+	if code, out, errOut := rotaIn(t, dir, "milestone", "status", "M01", "--to", "active"); code != 0 {
+		t.Fatalf("activate: %d %s %s", code, out, errOut)
+	}
+	if got, want := strings.TrimSpace(branchGit(t, origin, "rev-parse", "milestone/M01")), strings.TrimSpace(branchGit(t, origin, "rev-parse", "main")); got != want {
+		t.Errorf("branch at %s, origin base at %s", got, want)
+	}
+}
+
+func TestMilestonePlannedMeasuresAgainstOriginBase(t *testing.T) {
+	dir, origin := branchRepo(t)
+	rotaIn(t, dir, "milestone", "status", "M01", "--to", "active")
+	branchGit(t, dir, "commit", "-q", "--allow-empty", "-m", "milestone work")
+	branchGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/milestone/M01")
+	// The work reached origin/main, while the local main stays behind.
+	branchGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/main")
+	branchGit(t, dir, "fetch", "-q", "origin")
+	if code, out, errOut := rotaIn(t, dir, "milestone", "status", "M01", "--to", "planned"); code != 0 {
+		t.Fatalf("planned: %d %s %s", code, out, errOut)
+	}
+	if remoteHas(t, origin, "milestone/M01") {
+		t.Error("milestone/M01 still on origin")
+	}
+}
+
+func TestMilestonePlannedRerunAfterFailedDelete(t *testing.T) {
+	dir, origin := branchRepo(t)
+	rotaIn(t, dir, "milestone", "status", "M01", "--to", "active")
+	flag := filepath.Join(origin, "failed-once")
+	hook := "#!/bin/sh\nif [ ! -e " + flag + " ]; then touch " + flag + "; echo deletes closed >&2; exit 1; fi\n"
+	os.WriteFile(filepath.Join(origin, "hooks", "pre-receive"), []byte(hook), 0o755)
+	if code, _, _ := rotaIn(t, dir, "milestone", "status", "M01", "--to", "planned"); code == 0 {
+		t.Fatal("planned succeeded despite a rejected delete")
+	}
+	if s := milestoneStatusOf(t, dir, "M01"); s != "active" {
+		t.Fatalf("status %q after failed delete, want active", s)
+	}
+	if code, out, errOut := rotaIn(t, dir, "milestone", "status", "M01", "--to", "planned"); code != 0 {
+		t.Fatalf("rerun: %d %s %s", code, out, errOut)
+	}
+	if remoteHas(t, origin, "milestone/M01") {
+		t.Error("milestone/M01 still on origin after rerun")
+	}
+}
