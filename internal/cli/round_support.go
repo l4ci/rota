@@ -16,7 +16,7 @@ import (
 
 // The support split (#1598): main labels the issues the support machine may
 // take. offer, enable and disable are fenced on a support machine
-// (supportFenced), so they run on main only; return is the support machine's
+// (roundcfg support fence), so they run on main only; return is the support machine's
 // and refuses main inside the verb.
 func roundSupport() *Command {
 	return &Command{Name: "support", Summary: "split work with the support machine (round.support)", Subs: []*Command{
