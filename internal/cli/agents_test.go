@@ -68,3 +68,29 @@ func TestAgentsBadRoleConfigIsAnError(t *testing.T) {
 		t.Fatalf("%d %s", code, errOut)
 	}
 }
+
+func TestAgentsWriteOnSupportWritesCodexOnly(t *testing.T) {
+	dir := agentsProject(t, `{"round":{"commands":{"codex":"codex"}}}`)
+	writeLocalConfig(t, dir, `{"round":{"role":"support"}}`+"\n")
+	code, out, errOut := rotaIn(t, dir, "agents", "write")
+	if code != 0 {
+		t.Fatalf("write on support: %d %s %s", code, out, errOut)
+	}
+	if !strings.Contains(out, "created: .codex/agents/rota-explorer.toml") {
+		t.Errorf("codex file not written: %s", out)
+	}
+	if !strings.Contains(out, "skipped (main-only): .claude/agents/rota-explorer.md") {
+		t.Errorf("claude file not reported skipped: %s", out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".codex/agents/rota-explorer.toml")); err != nil {
+		t.Errorf("codex file missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".claude")); err == nil {
+		t.Error("support wrote .claude/agents")
+	}
+	// The same project on main still writes both sets.
+	writeLocalConfig(t, dir, `{}`+"\n")
+	if code, out, _ := rotaIn(t, dir, "agents", "write"); code != 0 || !strings.Contains(out, "created: .claude/agents/rota-explorer.md") {
+		t.Fatalf("write on main: %d %s", code, out)
+	}
+}
