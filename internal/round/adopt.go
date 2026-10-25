@@ -47,6 +47,7 @@ type AdoptOpts struct {
 type Adopted struct {
 	Slot, Branch, Worktree, Issue, PR string
 	Overlaps                          []Overlap
+	Warnings                          []string
 }
 
 // Adopt registers work another tool started as a hostless slot. It runs the
@@ -111,7 +112,10 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 
 	base := e.Base
 	if res.PR == "" && e.Forge != nil { // record the branch's open PR now: train reads the slot, not the forge
-		res.PR = e.openBranchPR(ctx, branch)
+		res.PR, err = e.openBranchPR(ctx, branch)
+		if err != nil {
+			res.Warnings = append(res.Warnings, fmt.Sprintf("open PRs of %s: %v; adopted without a PR, retry with `rota round reconcile --apply`", branch, err))
+		}
 	}
 	if err := worker.RegisterExternal(root, name, branch, wt, base, res.Issue, res.PR); err != nil {
 		var rc *worker.RegisterConflict
