@@ -396,6 +396,13 @@ func TestStartRenewKeepsRecordedScope(t *testing.T) {
 	if err != nil || st.Scope != roundcfg.ScopeSlate || !reflect.DeepEqual(st.Slate, []string{"12", "13"}) {
 		t.Fatalf("items alone make a slate: %v %+v", err, st)
 	}
+	// A new round without --scope or --items takes the round.scope default.
+	fresh := newRepo(t, nil)
+	opts := startOpts("", 100)
+	opts.Settings.Scope = roundcfg.ScopeOpen
+	if st, err := e.Start(bg, fresh, opts); err != nil || st.Scope != roundcfg.ScopeOpen {
+		t.Fatalf("config default: %v %+v", err, st)
+	}
 	// A renewal without --scope keeps scope and slate.
 	st, err = e.Start(bg, root, startOpts("", 100))
 	if err != nil || st.Scope != roundcfg.ScopeSlate || !reflect.DeepEqual(st.Slate, []string{"12", "13"}) {
