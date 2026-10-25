@@ -242,9 +242,10 @@ Setting one up takes two steps and no hand edits:
    `.rota/config.local.json` and ends with the doctor's first failing check, or `doctor: pass`.
    Run it again to change an answer; it starts from the values already there.
 
-Knowledge travels through the tracker. A support worker posts each learning as a `learning`
-comment on the issue it came from (`rota item comment add <ID> --kind learning --body-file <f>`),
-never into `KNOWLEDGE.md`, and does not restamp the contract docs. A learning with no issue is
+Knowledge travels through the tracker. Every round worker, main or support, posts each learning as a `learning`
+comment on the issue it came from (`rota item comment add <ID> --kind learning --body-file <f>`)
+before `worker done` (none: it posts nothing and the PR body says `Learnings: none`),
+never into `KNOWLEDGE.md`; a support worker also does not restamp the contract docs. A learning with no issue is
 filed upstream with `/rota-bugreport` or `/rota-capture`. Main's `/rota-learn` runs
 `rota knowledge harvest` (learning comments on issues merged in the round, not yet marked),
 folds each in with `rota knowledge add` and marks it with `rota knowledge harvest --mark
