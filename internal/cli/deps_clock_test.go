@@ -59,8 +59,8 @@ func TestRoundEnvClockAndGetenvDriveAccountMeters(t *testing.T) {
 			return ""
 		}
 		renv := d.RoundEnvLocal(context.Background(), root)
-		renv.Worker.Accounts = d.WorkerAccounts()
-		ms := renv.Worker.Accounts.Meters(context.Background(), root)
+		renv = renv.WithAccounts(d.WorkerAccounts())
+		ms := renv.Worker.Accounts().Meters(context.Background(), root)
 		if len(ms) != 1 {
 			t.Fatalf("meters = %+v", ms)
 		}

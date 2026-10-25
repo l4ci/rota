@@ -43,6 +43,7 @@ func (k *killHost) Kill(_ context.Context, slot, _ string) error {
 type moveFx struct {
 	root, origin string
 	env          Env
+	ws           worker.Env // what env.Worker was built from; change it with wire
 	be           *fakeRemote
 	host         *hostFake
 	killed       []string
@@ -86,10 +87,11 @@ func newMoveFx(t *testing.T) *moveFx {
 	sh(t, f.root, "push", "-q", "origin", "main")
 	milestoneDoc(t, f.root, "M01", "active")
 
-	f.env = Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100), Round: roundcfg.Settings{StallMinutes: 30}, Forge: f.forge.asForge()}
+	f.env = Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100), Round: roundcfg.Settings{StallMinutes: 30}, Forge: f.forge.asForge()}
 	f.env.Label, f.env.NeedsHuman, f.env.NeedsReview, f.env.SupportLabel = configLabels()
-	f.env.Worker = worker.Env{Config: diskConfig, Git: git.Exec, Getenv: noEnv, Now: func() time.Time { return f.now }, Sleep: func(time.Duration) {},
+	f.ws = worker.Env{Config: diskConfig, Git: git.Exec, Getenv: noEnv, Now: func() time.Time { return f.now }, Sleep: func(time.Duration) {},
 		NewHost: func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }}
+	f.env.Worker = wk(f.ws)
 
 	fb := f.be
 	fb.add("12", "Add the round assign verb now please", "M01", false, "## Acceptance\n- [ ] works\n\nedits internal/cli/round.go")
@@ -788,7 +790,7 @@ func TestTransferOverlapIsCheckedForTheReceiverAgainstOtherSlots(t *testing.T) {
 func TestTransferDispatchFailureKeepsTheMoveAndResumes(t *testing.T) {
 	f := newMoveFx(t)
 	branch := f.slot("ben").Branch()
-	f.env.Worker.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} }
+	f.wire(func(w *worker.Env) { w.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} } })
 	res, err := f.transfer("12", "dana", nil)
 	if err == nil || res.Dispatched || !res.Changed || res.ClaimID != "dana@1" {
 		t.Fatalf("the move is reported though the dispatch failed: %v %+v", err, res)
@@ -799,7 +801,9 @@ func TestTransferDispatchFailureKeepsTheMoveAndResumes(t *testing.T) {
 	if st := f.slot("dana").State(); st != "idle" {
 		t.Errorf("slot state after a failed dispatch: %q", st)
 	}
-	f.env.Worker.NewHost = func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }
+	f.wire(func(w *worker.Env) {
+		w.NewHost = func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }
+	})
 	res, err = f.transfer("12", "dana", nil)
 	if err != nil || !res.Dispatched {
 		t.Fatalf("the same call resumes: %v %+v", err, res)
@@ -1198,9 +1202,11 @@ func (l labelKillHost) LabelWorkspace(context.Context, string) {}
 func TestParkClearsTheLabelWhenTheWorktreeMoves(t *testing.T) {
 	f := newMoveFx(t)
 	var titles []string
-	f.env.Worker.NewHost = func(host.Kind) host.Host {
-		return labelKillHost{&killHost{hostFake: f.host, killed: &f.killed}, &titles}
-	}
+	f.wire(func(w *worker.Env) {
+		w.NewHost = func(host.Kind) host.Host {
+			return labelKillHost{&killHost{hostFake: f.host, killed: &f.killed}, &titles}
+		}
+	})
 	p, err := f.env.Park(bg, f.root, "ben", "return")
 	if err != nil || !p.Moved {
 		t.Fatalf("%+v %v", p, err)

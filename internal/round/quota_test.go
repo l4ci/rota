@@ -23,8 +23,8 @@ const twoAccounts = `{"round":{"dispatch":"herdr","accounts":[{"name":"a","confi
 // with a reset an hour ahead, or free.
 func (f *assignFixture) meters(t *testing.T, spent map[string]bool) {
 	t.Helper()
-	f.env.Worker.Now = func() time.Time { return quotaNow }
-	f.env.Worker.Accounts = &worker.Accounts{Env: worker.Env{Config: diskConfig, Now: func() time.Time { return quotaNow }},
+	withNow(&f.env, func() time.Time { return quotaNow })
+	f.env.Worker = f.env.Worker.WithAccounts(&worker.Accounts{Env: worker.Env{Config: diskConfig, Now: func() time.Time { return quotaNow }},
 		Fetch: func(_ context.Context, name, _ string) (*jsonx.Object, string) {
 			util, reset := 10, "null"
 			if spent[name] {
@@ -35,7 +35,7 @@ func (f *assignFixture) meters(t *testing.T, spent map[string]bool) {
 				t.Fatal(err)
 			}
 			return v.(*jsonx.Object), ""
-		}}
+		}})
 }
 
 func TestQuotaCapIsTheRosterWhileAnAccountHasHeadroom(t *testing.T) {
@@ -92,7 +92,7 @@ func TestAssignResumesAtTheReset(t *testing.T) {
 func TestQuotaCapCodexLoginsCoolByTheirLimitLog(t *testing.T) {
 	f := newAssignFixture(t)
 	f.config(t, `{"round":{"dispatch":"herdr","accounts":[{"kind":"codex","name":"c1","dir":"/h1"},{"kind":"codex","name":"c2","dir":"/h2"}],"harnesses":["codex"]}}`)
-	f.env.Worker.Now = func() time.Time { return quotaNow }
+	withNow(&f.env, func() time.Time { return quotaNow })
 	spent := func(session, login string) {
 		t.Helper()
 		if _, err := limits.Append(f.root, limits.Entry{Session: session, Kind: harness.Codex, Account: login, Status: limits.StatusWaiting,
@@ -147,8 +147,8 @@ func TestHeadroomReadsAccountsFromTheInjectedConfig(t *testing.T) {
 	if err := os.Remove(filepath.Join(f.root, ".rota", "config.json")); err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
-	f.env.Worker.Config = func(string) any { return v }
-	f.env.Worker.Now = func() time.Time { return quotaNow }
+	withConfig(&f.env, func(string) any { return v })
+	withNow(&f.env, func() time.Time { return quotaNow })
 	if _, err := limits.Append(f.root, limits.Entry{Session: "ben", Kind: harness.Codex, Account: "c1", Status: limits.StatusWaiting,
 		ResetsAt: limits.Time(quotaNow.Add(30 * time.Minute))}); err != nil {
 		t.Fatal(err)

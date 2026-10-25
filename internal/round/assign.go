@@ -18,7 +18,6 @@ import (
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/roundlease"
 	secpkg "github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/tracker"
@@ -340,7 +339,7 @@ func touches(be backlog.Backend, id string) string {
 func (e Env) tryItBrief(ctx context.Context, root string, be backlog.Backend, id string) (steps, withheld string) {
 	// The source is the one the gate reads (issues.source of the config), not a
 	// guess from the backend: the gate decides on it.
-	src := e.workerEnv().GateConfig(root).Tracker.Source
+	src := e.Worker.GateConfig(root).Tracker.Source
 	var trust worker.IssueTrust
 	if e.Forge != nil {
 		trust, _ = e.Forge.(worker.IssueTrust)
@@ -529,7 +528,7 @@ func blocked(by, format string, a ...any) *BlockedError {
 // slot worktree's branch while a gate or train holds the land lock: the gate's
 // checkout guard would see the change and turn the merge red.
 func (e Env) refuseWhileGateRuns(ctx context.Context, root, verb string) error {
-	held, err := e.workerEnv().LandLockHeld(ctx, root)
+	held, err := e.Worker.LandLockHeld(ctx, root)
 	if err != nil {
 		return err
 	}
@@ -541,21 +540,6 @@ func (e Env) refuseWhileGateRuns(ctx context.Context, root, verb string) error {
 
 func usage(format string, a ...any) error {
 	return &exitcode.Error{Exit: exitcode.ExitUsage, Message: fmt.Sprintf(format, a...)}
-}
-
-// workerEnv is the one place the worker env is derived from the round env:
-// Git and Lease come from e unless the configured Worker already sets them, so
-// a fake on Env.Worker applies on every path and no verb patches fields itself.
-func (e Env) workerEnv() worker.Env {
-	w := e.Worker
-	if w.Git == nil {
-		w.Git = e.Git
-	}
-	if w.Lease == nil {
-		le := e.Lease
-		w.Lease = func() roundlease.Env { return le }
-	}
-	return w
 }
 
 // checkAgent refuses an --agent that is not on the roster.
@@ -667,8 +651,8 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 			Data: worker.BlockData{BlockedBy: blockedby.Dispatch, Changed: true}, Cause: err}
 	}
 	if err == nil && !run.resuming {
-		if lerr := worker.LedgerAppendErr(e.workerEnv(), root, ledger.Entry{Kind: ledger.KindAssign, Issue: run.id, Slot: run.agent, Account: res.Account, Harness: run.kind,
-			Detail: ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts, root, run.kind, res.Account), "bundle", strings.Join(res.Bundle, ","), "fallbackFrom", run.fallback.from(), "fallbackWhy", run.fallback.why())}); lerr != nil {
+		if lerr := e.Worker.LedgerAppendErr(root, ledger.Entry{Kind: ledger.KindAssign, Issue: run.id, Slot: run.agent, Account: res.Account, Harness: run.kind,
+			Detail: ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts(), root, run.kind, res.Account), "bundle", strings.Join(res.Bundle, ","), "fallbackFrom", run.fallback.from(), "fallbackWhy", run.fallback.why())}); lerr != nil {
 			return res, fmt.Errorf("%s is assigned to %s, but the round ledger row was not written: %w", run.id, run.agent, lerr)
 		}
 	}
@@ -1048,7 +1032,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 	if bo != nil {
 		holders = 2
 	}
-	w := e.workerEnv()
+	w := e.Worker
 	steps := []step{
 		{name: "queue the slot's PR", skip: func() bool { return !run.queue }, do: func() error {
 			return wrap(e.queuePR(ctx, root, be, agent))
@@ -1218,20 +1202,20 @@ func (e Env) pickAccount(ctx context.Context, root, agent string) (string, error
 		cur = s.Account()
 	}
 	if cur != "" {
-		for _, m := range e.Worker.Accounts.Meters(ctx, root) {
+		for _, m := range e.Worker.Accounts().Meters(ctx, root) {
 			if m.Name == cur && m.Verdict != worker.VerdictCooling {
 				return cur, nil
 			}
 		}
 	}
-	name, ok := e.Worker.Accounts.Pick(ctx, root, nil)
+	name, ok := e.Worker.Accounts().Pick(ctx, root, nil)
 	if !ok {
-		if why := e.Worker.Accounts.NoPickReason(ctx, root, nil); why != "" {
+		if why := e.Worker.Accounts().NoPickReason(ctx, root, nil); why != "" {
 			return "", &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "no round.accounts account is usable: " + why}
 		}
 		return "", &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "no round.accounts account has headroom: every configured account is cooling down"}
 	}
-	if _, _, err := e.Worker.Accounts.Assign(ctx, root, agent, name); err != nil {
+	if _, _, err := e.Worker.Accounts().Assign(ctx, root, agent, name); err != nil {
 		return "", err
 	}
 	return name, nil

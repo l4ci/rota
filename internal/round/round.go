@@ -96,12 +96,13 @@ type Env struct {
 	// Lease reads the orchestrator lease; the zero value is the real process
 	// table and host name.
 	Lease roundlease.Env
-	// Worker is the worker env assign resets and dispatches with; the zero
-	// value is a Git-only env. It is the one owner of the clock (Now, which
-	// dates timed-out escalations), the environment reader (Getenv, for the
-	// lease, host and brief lookups) and Accounts, the meter reader that quota
-	// and the ledger read; picking an account is AccountPicking's job.
-	Worker worker.Env
+	// Worker is every worker operation the round performs. It is the one owner
+	// of the clock (Now, which dates timed-out escalations), the environment
+	// reader (Getenv, for the lease, host and brief lookups) and Accounts, the
+	// meter reader that quota and the ledger read; picking an account is
+	// AccountPicking's job. Nil is not usable: every verb panics on it, so build
+	// it with FromWorkerEnv (the zero Env is not a working one).
+	Worker Worker
 	// Login reads a slot account's Claude login for the no-login check
 	// (SlotLoginProblem). The zero value reads credentials files only, never the
 	// macOS Keychain; baseRoundEnv sets the system one.
@@ -140,16 +141,16 @@ type Env struct {
 // never flip it afterwards. A nil a leaves picking off, since the pick would
 // have no meters to read.
 func (e Env) WithAccounts(a *worker.Accounts) Env {
-	e.Worker.Accounts = a
+	e.Worker = e.Worker.WithAccounts(a)
 	e.AccountPicking = a != nil
 	return e
 }
 
 // getenv is the env's environment reader, from the worker env.
-func (e Env) getenv() func(string) string { return e.Worker.WithDefaults().Getenv }
+func (e Env) getenv() func(string) string { return e.Worker.Getenv }
 
 // now is the env's clock, from the worker env.
-func (e Env) now() time.Time { return e.Worker.WithDefaults().Now() }
+func (e Env) now() time.Time { return e.Worker.Now() }
 
 // Row is one line of `rota round status`.
 type Row struct {
@@ -599,7 +600,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 	}
 
-	now := e.Worker.WithDefaults().Now
+	now := e.Worker.Now
 	waiting := map[string]bool{}
 	for _, x := range escalation.Load(root) {
 		if x.Status == escalation.StatusPending && x.Slot != "" {
@@ -677,7 +678,7 @@ func (e Env) issueBounces(root string, rows []*Row, rep *Report) {
 	if e.Round.Support == "" {
 		return
 	}
-	store, err := e.workerEnv().BounceStore(root)
+	store, err := e.Worker.BounceStore(root)
 	for _, r := range rows {
 		if err != nil {
 			break

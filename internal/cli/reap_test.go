@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 type reapTestHost struct{ tabs []host.Tab }
@@ -49,7 +50,7 @@ func reapProject(t *testing.T, ops reap.HostOps, hostUp bool) (string, *Deps) {
 		return real(k)
 	}
 	d.ReapEnv = func(context.Context, string) (round.Env, reap.HostOps) {
-		e := round.Env{Git: git.Exec, Base: "feat/x", HostName: "herdr"}
+		e := round.Env{Git: git.Exec, Base: "feat/x", HostName: "herdr", Worker: round.FromWorkerEnv(worker.Env{})}
 		if hostUp {
 			e.Snapshot = func(context.Context) ([]host.Agent, error) {
 				return []host.Agent{{Tab: "w3:t1", Name: "live", Cwd: filepath.Join(root, ".worktrees", "live"), Status: "working"}}, nil
@@ -211,11 +212,10 @@ func TestDepsHostFactoryFeedsEveryHook(t *testing.T) {
 	d.Host = func(kind host.Kind) host.Host { asked = append(asked, kind); return fake }
 	if d.workerEnv().NewHost("tmux") != host.Host(fake) ||
 		d.escalationEnv().Host() != host.Host(fake) ||
-		d.orchestrateEnv().Host("herdr") != host.Host(fake) ||
-		d.RoundEnv(context.Background(), t.TempDir()).Worker.NewHost("tmux") != host.Host(fake) {
+		d.orchestrateEnv().Host("herdr") != host.Host(fake) {
 		t.Fatal("a hook built its own host instead of asking Deps.Host")
 	}
-	if want := []host.Kind{host.Tmux, host.Herdr, host.Herdr, host.Tmux}; !reflect.DeepEqual(asked[:4], want) {
+	if want := []host.Kind{host.Tmux, host.Herdr, host.Herdr}; !reflect.DeepEqual(asked[:3], want) {
 		t.Errorf("asked = %v, want prefix %v", asked, want)
 	}
 }

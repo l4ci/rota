@@ -66,7 +66,7 @@ func (e Env) RebuildTaskBrief(ctx context.Context, root string, be Board, o work
 	if o.Model == "" {
 		o.Model = resolveModel(s.Model(), pick.Model, set.Model(o.Kind, s.Tier()))
 	}
-	if pick.Model != "" && !e.workerEnv().ModelAppliesTo(root, o.Kind) {
+	if pick.Model != "" && !e.Worker.ModelAppliesTo(root, o.Kind) {
 		return "", o, blocked(BlockModelLabel, "model:%s cannot apply: the launch command has no {model} placeholder", pick.Model)
 	}
 	o.Task, o.Branch = s.Task(), s.Branch()

@@ -102,7 +102,7 @@ func reviewEnv(c *Ctx, ctx context.Context, root string, o round.ReviewOpts) rou
 
 // reviewEnvFrom is reviewEnv over a round env the caller already built.
 func reviewEnvFrom(c *Ctx, ctx context.Context, env round.Env, o round.ReviewOpts) round.Env {
-	env.Worker = workerEnvCtx(c, ctx)
+	env.Worker = round.FromWorkerEnv(workerEnvCtx(c, ctx))
 	if o.Board != nil {
 		env.Board = o.Board
 	}

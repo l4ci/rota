@@ -33,7 +33,7 @@ import (
 func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) round.Env {
 	cfg := d.Config(root)
 	e := d.baseRoundEnv()
-	e.Worker.Accounts, e.AccountPicking = nil, false
+	e.Worker, e.AccountPicking = e.Worker.WithAccounts(nil), false
 	e.Base = "main"
 	configured, _ := config.Lookup(cfg, "git.baseBranch")
 	baseCfg, _ := configured.(string)
@@ -74,7 +74,7 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) 
 // Git, host and clock match baseRoundEnv.
 func accountedRoundEnv(c *Ctx, ctx context.Context, root string) round.Env {
 	env := c.deps().RoundEnv(ctx, root)
-	env.Worker = workerEnvCtx(c, ctx)
+	env.Worker = round.FromWorkerEnv(workerEnvCtx(c, ctx))
 	return env.WithAccounts(c.deps().WorkerAccounts())
 }
 
