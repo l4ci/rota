@@ -533,7 +533,11 @@ func (e Env) refuseWhileGateRuns(ctx context.Context, root, verb string) error {
 		return err
 	}
 	if held {
-		return blocked(worker.GateRunning, "a gate or train holds the land lock and %s would switch a worktree's branch under it: rerun once it exits", verb)
+		forHolder := ""
+		if h := e.Worker.LandLockHolder(ctx, root); h != "" {
+			forHolder = " for " + h
+		}
+		return blocked(worker.GateRunning, "a gate or train holds the land lock%s and %s would switch a worktree's branch under it: nothing was changed, safe to retry once it exits", forHolder, verb)
 	}
 	return nil
 }

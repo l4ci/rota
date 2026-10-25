@@ -27,7 +27,7 @@ func TestGateWaitedOnLockFindsPRMerged(t *testing.T) {
 		err error
 	}
 	done := make(chan out, 1)
-	err := env.withLandLock(bg, w.dir, func(bool) error {
+	err := env.withLandLock(bg, w.dir, "", func(bool) error {
 		go func() {
 			res, err := w.gate(false, GateOpts{})
 			done <- out{res, err}
@@ -67,7 +67,7 @@ func TestGateRefusesWhileAnotherGateRunsTheSamePR(t *testing.T) {
 		t.Fatal(err)
 	}
 	var held bool
-	lockErr := env.withLandLock(bg, w.dir, func(bool) error { // would block a gate that tried the lock
+	lockErr := env.withLandLock(bg, w.dir, "", func(bool) error { // would block a gate that tried the lock
 		held = true
 		res, err := w.gate(false, GateOpts{})
 		if err != nil || res.Verdict != GateRunning || res.Changed {

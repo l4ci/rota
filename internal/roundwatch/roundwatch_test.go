@@ -9,6 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
 )
 
@@ -228,5 +231,39 @@ func TestMergedDoneSlotNeedsNoWake(t *testing.T) {
 	}
 	if _, attn := NeedsWatch(root); len(attn) != 0 {
 		t.Fatalf("attn %v", attn)
+	}
+}
+
+// A gate or train holding the land lock is part of the snapshot, so its release
+// reads as a change and wakes a watch whose assign was refused.
+func TestLocalSnapshotReportsTheLandLock(t *testing.T) {
+	repo := gittest.NewRepo(t, "main")
+	cd, err := rotastate.CommonDir(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := rotastate.File(cd, "land")
+	var during, after map[string]string
+	err = fsio.Locked(path, 0, func() error {
+		if err := os.WriteFile(path+".holder", []byte("#1900"), 0o644); err != nil {
+			return err
+		}
+		defer os.Remove(path + ".holder")
+		during = LocalSnapshot(repo)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	after = LocalSnapshot(repo)
+	if during[GateKey] != "#1900" {
+		t.Errorf("snapshot under the lock = %v, want %s=#1900", during, GateKey)
+	}
+	if _, ok := after[GateKey]; ok {
+		t.Errorf("snapshot after release = %v, want no %s", after, GateKey)
+	}
+	ch := Diff(during, after)
+	if len(ch) != 1 || ch[0].Key != GateKey || ch[0].From != "#1900" || ch[0].To != "" {
+		t.Errorf("release change = %+v, want %s #1900 -> gone", ch, GateKey)
 	}
 }

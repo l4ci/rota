@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ type fakeWorker struct {
 	now      time.Time
 	locked   bool
 	lockErr  error
+	holder   string
 	accounts *worker.Accounts
 }
 
@@ -29,6 +31,25 @@ func (f *fakeWorker) WithAccounts(a *worker.Accounts) Worker {
 }
 func (f *fakeWorker) LandLockHeld(context.Context, string) (bool, error) {
 	return f.locked, f.lockErr
+}
+
+func (f *fakeWorker) LandLockHolder(context.Context, string) string { return f.holder }
+
+// The refusal names what the gate holds the lock for and says a retry is safe.
+func TestRefuseWhileGateRunsNamesTheHolder(t *testing.T) {
+	err := Env{Worker: &fakeWorker{locked: true, holder: "#1900"}}.refuseWhileGateRuns(bg, t.TempDir(), "assign")
+	if err == nil {
+		t.Fatal("want a gate-running refusal")
+	}
+	for _, want := range []string{"#1900", "safe to retry"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal %q lacks %q", err, want)
+		}
+	}
+	err = Env{Worker: &fakeWorker{locked: true}}.refuseWhileGateRuns(bg, t.TempDir(), "assign")
+	if err == nil || !strings.Contains(err.Error(), "safe to retry") {
+		t.Errorf("refusal without a holder = %v, want the retry hint", err)
+	}
 }
 
 // A verb that switches a worktree's branch refuses while a gate holds the land
