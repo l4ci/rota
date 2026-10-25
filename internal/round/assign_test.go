@@ -74,7 +74,7 @@ func (h *hostFake) Notify(context.Context, string, string)              {}
 // defaults, as defaultRoundEnv loads them, in Label, NeedsHuman, NeedsReview,
 // SupportLabel order.
 func configLabels() (label, needsHuman, needsReview, support string) {
-	return config.Label(nil, "inProgress"), config.Label(nil, "needsHuman"), config.Label(nil, "needsReview"), config.Label(nil, "support")
+	return config.Label(nil, "inProgress"), config.Label(nil, "needsHuman"), config.Label(nil, "needsReview"), "machine:mac"
 }
 
 type assignFixture struct {

@@ -369,6 +369,9 @@ func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stde
 	if res, err := roleInTrackedConfigStop(c); err != nil {
 		return failWith(c, stdout, err, res)
 	}
+	if res, err := roundMachineStop(c); err != nil {
+		return failWith(c, stdout, err, res)
+	}
 	if res, err := supportRoleStop(c); err != nil {
 		return failWith(c, stdout, err, res)
 	}

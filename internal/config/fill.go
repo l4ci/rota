@@ -204,7 +204,8 @@ func migrateLegacyVerify(cfg *jsonx.Object) (*jsonx.Object, bool, bool) {
 }
 
 // RemovedKeys are keys older `rota init` runs seeded that nothing reads any
-// more. `config check` names them and `config fill` deletes them.
+// more. `config check` names them and `config fill` deletes them, except
+// issues.labels.support: migrate labels --apply removes it only after relabelling.
 // round.autopilot went with #1101: autonomy.level auto turns the tick on.
 // round.codexAccounts and round.opencodeAccounts went with #1824: round.accounts
 // holds every kind, and the accounts step of `rota migrate config` (which fill
@@ -217,7 +218,7 @@ func migrateLegacyVerify(cfg *jsonx.Object) (*jsonx.Object, bool, bool) {
 // moved to orchestrator.model, orchestrator.command, round.tiers.claude.standard,
 // round.commands.<kind>, round.harnesses and issues.labels.inProgress, which the
 // merges step of `rota migrate config` (run before the strip) carries over.
-var RemovedKeys = []string{"issues.filterMineOnly", "issues.providers.github", "issues.providers.gitlab", "round.autopilot", "round.codexAccounts", "round.opencodeAccounts", "debug.competingHypotheses",
+var RemovedKeys = []string{"issues.labels.support", "issues.filterMineOnly", "issues.providers.github", "issues.providers.gitlab", "round.autopilot", "round.codexAccounts", "round.opencodeAccounts", "debug.competingHypotheses",
 	"ship.secondOpinionRunner", "gate.smokeShards", "issues.label",
 	"orchestrator.stateMaxAgeSeconds", "orchestrator.handoffMaxAgeSeconds", "orchestrator.handoffMaxBlocks",
 	"orchestrator.keepaliveMaxRestarts", "orchestrator.keepaliveBreaker", "orchestrator.keepaliveBackoffSeconds",
@@ -232,6 +233,10 @@ var RemovedKeys = []string{"issues.filterMineOnly", "issues.providers.github", "
 func stripRemoved(cfg *jsonx.Object) []string {
 	var out []string
 	for _, k := range RemovedKeys {
+		// Only migrate labels --apply may retire the configured source label.
+		if k == "issues.labels.support" {
+			continue
+		}
 		segs := strings.Split(k, ".")
 		if _, ok := lookupPresent(cfg, segs); !ok {
 			continue
