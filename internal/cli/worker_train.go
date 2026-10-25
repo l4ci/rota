@@ -176,6 +176,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "the cycle branch the PRs merge into")
 	landGreen := fs.Bool("land-green", false, "when verification fails, still land the verified members before the culprit")
 	noVerify := fs.Bool("no-verify", false, "allow an empty test.full (the train is refused otherwise)")
+	noAssignCheck := fs.Bool("no-assign-check", false, "skip the advisory check for free slots with ready candidates")
 	order := fs.String("order", "", "merge order as comma-separated PR numbers (or slots); replaces the computed order and must name every member once")
 	plan := fs.Bool("plan", false, "preview the train: map member conflicts and name the largest conflict-free subset; runs no tests, pushes nothing")
 	var final stringList
@@ -210,6 +211,9 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 				seenTok[t] = true
 				override = append(override, t)
 			}
+		}
+		if !*plan && !*noAssignCheck {
+			warnAssignFirst(c, root)
 		}
 		run := runTrain(c, root, trainRunOpts{Targets: args, Base: *base, Order: override, Plan: *plan, LandGreen: *landGreen, NoVerify: *noVerify, FinalSlice: final, Confirm: conf, Approval: req})
 		r, err := run.Result, run.Err

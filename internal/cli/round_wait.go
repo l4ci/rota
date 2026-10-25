@@ -40,7 +40,7 @@ func roundWait(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		d := jsonx.NewObject()
-		nudges := trainNudges(waitingPRs(c, root))
+		nudges := readyTrainNudges(c, root)
 		if rows := trainNudgeData(nudges); rows != nil {
 			d.Set("trainNudge", rows)
 		}

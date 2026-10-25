@@ -6,6 +6,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 )
 
@@ -143,7 +144,7 @@ const (
 	KindFromFlag  = "--kind"
 	KindFromLabel = "harness label"
 	// KindFromHarnesses is the first entry of round.harnesses, the project default.
-	KindFromHarnesses = "round.harnesses"
+	KindFromHarnesses = config.RoundHarnessesKey
 	KindFromSlot      = "slot"
 	// KindFromSlotResume is the slot's kind kept because it resumes its own
 	// issue, ahead of the project default.

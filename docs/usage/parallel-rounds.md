@@ -628,6 +628,14 @@ a GitHub App token instead.
 
 ### Merge train
 
+Before starting a gate or train, pull main and fill every free slot with a ready
+candidate: `rota round candidates`, then `rota round assign <id> --agent <slot>`.
+Train nudges name an `assign first` step when work is ready (JSON
+`trainNudge[].assignFirst`). Both verbs also warn on stderr and in JSON `warnings`
+at startup, naming the slot and assignment command. The warning is advisory;
+`--no-assign-check` skips the lookup for scripted runs. Previews (`gate --check-only`
+and `train --plan`) skip it.
+
 With two or more reviewed PRs waiting on one base, `rota worker train <slot|PR>... --base <branch>` is the
 default way to land them; a single `gate` is for exactly one waiting PR. The train gates them together and
 pays for the verify once instead of once per PR. A train can go red, but the culprit handling below keeps
