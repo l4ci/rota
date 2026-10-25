@@ -196,6 +196,51 @@ func TestNeedsWatchAndDigest(t *testing.T) {
 	}
 }
 
+func TestStopBlock(t *testing.T) {
+	for _, tc := range []struct {
+		name, registry      string
+		armed, alive, block bool
+		attention           string
+	}{
+		{name: "missing registry"},
+		{name: "idle", registry: `{"slots":[{"name":"ben","state":"idle"}]}`},
+		{name: "busy unarmed", registry: `{"slots":[{"name":"ben","state":"busy"}]}`, block: true},
+		{name: "already waiting", registry: `{"slots":[{"name":"ben","state":"done"}]}`, block: true, attention: "Waiting on you already: ben done."},
+		{name: "live watch", registry: `{"slots":[{"name":"ben","state":"busy"}]}`, armed: true, alive: true},
+		{name: "dead watch", registry: `{"slots":[{"name":"ben","state":"busy"}]}`, armed: true, block: true},
+		{name: "solo", registry: `{"host":"solo","slots":[{"name":"ben","state":"busy"}]}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, cd := t.TempDir(), t.TempDir()
+			if tc.registry != "" {
+				writeRegistry(t, root, tc.registry)
+			}
+			now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+			alive := map[int]bool{10: true}
+			env := testEnv(&now, alive)
+			if tc.armed {
+				release, err := Arm(env, cd, 10, time.Minute)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer release()
+				alive[10] = tc.alive
+			}
+			reason, block := StopBlock(env, root, cd)
+			if block != tc.block {
+				t.Fatalf("block=%v, reason=%q", block, reason)
+			}
+			if block {
+				if !strings.Contains(reason, "Start `rota round watch` as a background command now") || !strings.Contains(reason, tc.attention) {
+					t.Fatalf("reason=%q", reason)
+				}
+			} else if reason != "" {
+				t.Fatalf("passing hook returned reason %q", reason)
+			}
+		})
+	}
+}
+
 // With every slot idle there is nothing to wait on, and the watch holds until
 // the heartbeat instead of returning at once (#327).
 func TestRunNothingToWatchHoldsUntilHeartbeat(t *testing.T) {
