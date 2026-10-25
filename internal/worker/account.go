@@ -312,8 +312,10 @@ func SystemCredentials(run proc.Runner, home func() (string, error), now func() 
 
 // Problem reports why the account whose config dir is dir (already expanded)
 // has no usable credentials: no file (or, on macOS, Keychain entry),
-// unreadable, or no access token. "" means usable. Expiry is not checked:
-// Claude Code refreshes a stale token itself, and this code never does.
+// unreadable, or no access token. "" means usable. An expired token is not a
+// problem: Claude Code refreshes it itself, and this code never does. The clock
+// only decides whether an expired file yields to the Keychain first; with a nil
+// Now (the zero time) nothing is expired, so the file is read as is.
 func (c Credentials) Problem(dir string) string {
 	var now time.Time
 	if c.Now != nil {

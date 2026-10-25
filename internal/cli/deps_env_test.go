@@ -2,16 +2,23 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
+	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -210,5 +217,97 @@ func TestGateIssueTrackersCarryEnvCtx(t *testing.T) {
 		if err == nil {
 			t.Errorf("lookup %d ran under a live context, want the cancelled Env.Ctx", i)
 		}
+	}
+}
+
+// The call-level half: a tracker the worker env built under a live context
+// still returns the context error from a read and a write once Env.Ctx is
+// cancelled, and neither reaches the site.
+func TestGateIssueTrackerCallsAbortOnEnvCtx(t *testing.T) {
+	var hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hits++ }))
+	defer srv.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	d := testDeps()
+	d.TrackerOptions = []tracker.Option{tracker.WithConnections(func(context.Context, string) (connections.Connection, string, error) {
+		return connections.Connection{Name: "c", Kind: connections.KindJira, Site: srv.URL, User: "u@example.com", Deployment: connections.DeploymentDataCenter}, "secret", nil
+	})}
+	d.WorkerEnv = func() worker.Env { return worker.Env{Ctx: ctx} }
+	e := d.workerEnv()
+	s := tracker.Settings{Source: "jira", Connection: "c", JiraProject: "P"}
+	issues, err := e.Issues(t.TempDir(), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	comments, err := e.IssueComments(t.TempDir(), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	if _, err := issues.Get(e.Ctx, "P-1", false); !canceled(err) {
+		t.Errorf("Issues.Get after cancel = %v, want the context error", err)
+	}
+	if _, err := comments.AddComment(e.Ctx, "P-1", "body"); !canceled(err) {
+		t.Errorf("IssueComments.AddComment after cancel = %v, want the context error", err)
+	}
+	if hits != 0 {
+		t.Errorf("site was reached %d times after cancel, want 0", hits)
+	}
+}
+
+// the rest client formats the transport error without wrapping it, so the
+// context error is matched by its text.
+func canceled(err error) bool {
+	return err != nil && strings.Contains(err.Error(), context.Canceled.Error())
+}
+
+// Doctor's account check reads credentials with the Deps clock: a file token
+// that expired at the pinned time falls back to the Keychain, one that has
+// not expired stays put.
+func TestDoctorAccountsUseDepsClock(t *testing.T) {
+	const expiresAt = "2031-05-06T07:00:00Z"
+	exp, _ := time.Parse(time.RFC3339, expiresAt)
+	for name, tc := range map[string]struct {
+		now      string
+		keychain int
+	}{
+		"after expiry":  {"2031-05-06T08:00:00Z", 1},
+		"before expiry": {"2031-05-06T06:00:00Z", 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			blob := fmt.Sprintf(`{"claudeAiOauth":{"accessToken":"file","expiresAt":%d}}`, exp.UnixMilli())
+			if err := os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(blob), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			d := testDeps()
+			pinNow(d, tc.now)
+			in := doctorInput(context.Background(), d)
+			// only the accounts check matters: no host env, no tool lookups.
+			in.OrchestratorConfigDir = ""
+			in.Exec = func(context.Context, string, []string, []string, string) (doctor.Result, error) {
+				return doctor.Result{}, nil
+			}
+			in.Look = func(string) (string, bool) { return "", false }
+			in.Accounts = []config.Account{{Kind: config.KindClaude, Name: "a", Dir: dir}}
+			in.Credentials.GOOS = "darwin"
+			var asked int
+			in.Credentials.Run = func(context.Context, proc.Cmd) (proc.Result, error) {
+				asked++
+				return proc.Result{Stdout: `{"claudeAiOauth":{"accessToken":"kc"}}`}, nil
+			}
+			var got *doctor.Check
+			for _, c := range doctor.Run(context.Background(), in).Checks {
+				if c.Name == "accounts" {
+					got = &c
+				}
+			}
+			if got == nil || got.Status != doctor.Pass {
+				t.Fatalf("accounts check = %+v, want a pass", got)
+			}
+			if asked != tc.keychain {
+				t.Errorf("Keychain reads = %d at %s, want %d", asked, tc.now, tc.keychain)
+			}
+		})
 	}
 }
