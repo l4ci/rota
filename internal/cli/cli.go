@@ -16,6 +16,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -471,7 +472,7 @@ func failWith(c *Ctx, stdout io.Writer, err error, res Result) int {
 	keepDispatch := false
 	if e.Exit == ExitUnavailable && c.Path == "rota round assign" {
 		if d, ok := res.Data.(*jsonx.Object); ok {
-			keepDispatch = jsonx.Str(d, "blockedBy") == "dispatch"
+			keepDispatch = jsonx.Str(d, "blockedBy") == blockedby.Dispatch
 		}
 	}
 	if e.Exit != ExitFailed && e.Exit != ExitRefused && !keepDispatch {

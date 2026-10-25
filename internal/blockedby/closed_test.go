@@ -64,9 +64,29 @@ func TestBlockedByIsClosed(t *testing.T) {
 	}
 }
 
+// isBlockedByOperand reports whether e reads a blockedBy value: a BlockedBy
+// field or a lookup keyed by "blockedBy" (jsonx.Str(d, "blockedBy")).
+func isBlockedByOperand(e ast.Expr) bool {
+	switch x := e.(type) {
+	case *ast.SelectorExpr:
+		return x.Sel.Name == "BlockedBy"
+	case *ast.CallExpr:
+		for _, a := range x.Args {
+			if b, ok := a.(*ast.BasicLit); ok && b.Kind == token.STRING {
+				if s, _ := strconv.Unquote(b.Value); s == "blockedBy" {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // TestNoBareBlockedByLiteral fails on a string literal in blockedBy position
 // outside this package: a data key written as "blockedBy", a BlockedBy / By
-// field, or the first argument of a blocked/refuse constructor.
+// field, the first argument of a blocked/refuse constructor, the by argument of
+// refuseHarvest/blockedRefusal/blocked, or a comparison or switch case against a
+// blockedBy value.
 func TestNoBareBlockedByLiteral(t *testing.T) {
 	root := "../"
 	var found []string
@@ -82,6 +102,7 @@ func TestNoBareBlockedByLiteral(t *testing.T) {
 		if err != nil {
 			return err
 		}
+		inCLI := strings.HasPrefix(filepath.ToSlash(p), "../cli/")
 		lit := func(e ast.Expr) bool {
 			b, ok := e.(*ast.BasicLit)
 			return ok && b.Kind == token.STRING
@@ -100,6 +121,36 @@ func TestNoBareBlockedByLiteral(t *testing.T) {
 				if id, ok := x.Fun.(*ast.Ident); ok && (id.Name == "blocked" || id.Name == "refuse" || id.Name == "refused") {
 					if len(x.Args) > 0 && lit(x.Args[0]) {
 						report(x.Args[0])
+					}
+				}
+				// Helpers whose second parameter is the by value.
+				if id, ok := x.Fun.(*ast.Ident); ok && (id.Name == "refuseHarvest" || id.Name == "blockedRefusal" || (id.Name == "blocked" && inCLI)) {
+					if len(x.Args) > 1 && lit(x.Args[1]) {
+						report(x.Args[1])
+					}
+				}
+			case *ast.BinaryExpr:
+				// An empty string tests "no refusal", not a value.
+				nonEmpty := func(e ast.Expr) bool {
+					b, ok := e.(*ast.BasicLit)
+					return ok && b.Kind == token.STRING && b.Value != `""`
+				}
+				if x.Op == token.EQL || x.Op == token.NEQ {
+					if nonEmpty(x.Y) && isBlockedByOperand(x.X) {
+						report(x.Y)
+					}
+					if nonEmpty(x.X) && isBlockedByOperand(x.Y) {
+						report(x.X)
+					}
+				}
+			case *ast.SwitchStmt:
+				if x.Tag != nil && isBlockedByOperand(x.Tag) {
+					for _, c := range x.Body.List {
+						for _, e := range c.(*ast.CaseClause).List {
+							if lit(e) {
+								report(e)
+							}
+						}
 					}
 				}
 			case *ast.KeyValueExpr:
