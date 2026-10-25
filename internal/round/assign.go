@@ -533,9 +533,30 @@ func (e Env) refuseWhileGateRuns(ctx context.Context, root, verb string) error {
 		return err
 	}
 	if held {
-		return blocked(worker.GateRunning, "a gate or train holds the land lock and %s would switch a worktree's branch under it: rerun once it exits", verb)
+		forHolder := ""
+		if h := e.Worker.LandLockHolder(ctx, root); h != "" {
+			forHolder = " for " + holderPRs(root, h)
+		}
+		return blocked(worker.GateRunning, "a gate or train holds the land lock%s and %s would switch a worktree's branch under it: nothing was changed, safe to retry once it exits", forHolder, verb)
 	}
 	return nil
+}
+
+// holderPRs rewrites each comma-separated holder that names a slot with a
+// recorded PR as `#<PR>`; any other token stays as recorded.
+func holderPRs(root, holder string) string {
+	reg := worker.LoadRegistryTolerant(root)
+	parts := strings.Split(holder, ",")
+	for i, p := range parts {
+		p = strings.TrimSpace(p)
+		if s := reg.Slot(p); s != nil {
+			if n, ok := worker.PRRefNumber(s.PR()); ok {
+				p = "#" + strconv.Itoa(n)
+			}
+		}
+		parts[i] = p
+	}
+	return strings.Join(parts, ", ")
 }
 
 func usage(format string, a ...any) error {

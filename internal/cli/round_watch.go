@@ -219,6 +219,10 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 			continue
 		}
 		changes = append(changes, o)
+		if ch.Key == roundwatch.GateKey && ch.To == "" {
+			text = append(text, fmt.Sprintf("gate cleared (was %s): assign now", ch.From))
+			continue
+		}
 		text = append(text, fmt.Sprintf("change\t%s\t%s -> %s", ch.Key, dash(ch.From), dash(ch.To)))
 	}
 	d.Set("changes", changes)

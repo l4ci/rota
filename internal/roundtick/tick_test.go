@@ -681,3 +681,27 @@ func TestNotReadyCandidateIsNotAssigned(t *testing.T) {
 		t.Errorf("assigned %v, want [#2]", f.assigned)
 	}
 }
+
+// A gate or train holding the land lock refuses every assign alike: the tick
+// asks once, reports the assign as deferred and leaves the rest for the next.
+func TestGateRunningRefusalDefersTheAssign(t *testing.T) {
+	f := &fake{
+		slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "idle"}},
+		cands: []round.Candidate{cand("#1", true), cand("#2", true)},
+	}
+	calls := 0
+	f.assignFn = func(string) ([]string, error) {
+		calls++
+		return nil, &round.BlockedError{By: worker.GateRunning, Msg: "a gate or train holds the land lock for #1900"}
+	}
+	r, err := Run(context.Background(), f.env())
+	if err != nil || calls != 1 {
+		t.Fatalf("err %v calls %d, want nil and one assign attempt", err, calls)
+	}
+	if want := "gate running, deferred: a gate or train holds the land lock for #1900"; r.Deferred != want {
+		t.Errorf("Deferred = %q, want %q", r.Deferred, want)
+	}
+	if len(r.Did) != 0 || len(r.NeedsYou) != 0 {
+		t.Errorf("a deferred assign did %v and needs-you %v, want neither", r.Did, r.NeedsYou)
+	}
+}
