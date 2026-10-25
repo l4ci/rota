@@ -49,26 +49,37 @@ func TestParseGateConfigTestsErr(t *testing.T) {
 	}
 }
 
-// The gate and round load read round.sharedPaths, round.support and the
-// full-only state through roundcfg, so the two views cannot drift apart.
-func TestGateConfigAgreesWithRoundSettings(t *testing.T) {
-	for _, js := range []string{
-		`{"test":{"full":["go test ./..."]},"round":{"sharedPaths":["docs/*.md"],"support":" mac "}}`,
-		`{"test":{"fast":["f"],"full":["go test ./..."]}}`,
-		`{"refactor":{"verifyCommands":["old"]}}`,
+// Pin both consumers to literal expectations: agreement alone would also pass
+// if their shared parser returned the same wrong value to each.
+func TestGateConfigAndRoundSettingsValues(t *testing.T) {
+	for _, tc := range []struct {
+		cfg      string
+		shared   []string
+		support  string
+		fullOnly bool
+	}{
+		{`{"test":{"full":["go test ./..."]},"round":{"sharedPaths":[" docs/*.md "," "],"support":" mac "}}`, []string{"docs/*.md"}, "mac", true},
+		{`{"test":{"fast":["f"],"full":["go test ./..."]}}`, nil, "", false},
+		{`{"refactor":{"verifyCommands":["old"]}}`, nil, "", true},
 	} {
-		cfg := parseCfg(js)
+		cfg := parseCfg(tc.cfg)
 		set, err := roundcfg.FromConfig(cfg)
 		if err != nil {
-			t.Fatalf("%s: %v", js, err)
+			t.Fatalf("%s: %v", tc.cfg, err)
 		}
 		g := ParseGateConfig(cfg)
-		if !reflect.DeepEqual(g.SharedPaths, set.SharedPaths) || g.Support != set.Support || g.FullOnly() != set.FullOnly {
-			t.Errorf("%s: gate shared %v support %q fullOnly %v, round %v %q %v", js, g.SharedPaths, g.Support, g.FullOnly(), set.SharedPaths, set.Support, set.FullOnly)
+		for name, got := range map[string]struct {
+			shared   []string
+			support  string
+			fullOnly bool
+		}{
+			"gate":  {g.SharedPaths, g.Support, g.FullOnly()},
+			"round": {set.SharedPaths, set.Support, set.FullOnly},
+		} {
+			if !reflect.DeepEqual(got.shared, tc.shared) || got.support != tc.support || got.fullOnly != tc.fullOnly {
+				t.Errorf("%s %s: got %+v, want shared %v support %q fullOnly %v", tc.cfg, name, got, tc.shared, tc.support, tc.fullOnly)
+			}
 		}
-	}
-	if g := ParseGateConfig(parseCfg(`{"round":{"support":" mac "}}`)); g.Support != "mac" {
-		t.Errorf("support %q, want trimmed mac", g.Support)
 	}
 }
 
@@ -78,12 +89,27 @@ func TestGateConfigFullOnlyFollowsExportedFields(t *testing.T) {
 		g    GateConfig
 		want bool
 	}{
+		{"full only parsed", ParseGateConfig(parseCfg(`{"test":{"fast":[],"full":["go test ./..."]}}`)), true},
+		{"fast and full parsed", ParseGateConfig(parseCfg(`{"test":{"fast":["f"],"full":["go test ./..."]}}`)), false},
+		{"neither parsed", ParseGateConfig(parseCfg(`{}`)), false},
 		{"full only literal", GateConfig{Full: []string{"go test ./..."}}, true},
 		{"fast and full", GateConfig{Fast: []string{"f"}, Full: []string{"go test ./..."}}, false},
 		{"neither", GateConfig{}, false},
 	} {
 		if got := c.g.FullOnly(); got != c.want {
 			t.Errorf("%s: FullOnly() = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestGateConfigLabels(t *testing.T) {
+	for _, tc := range []struct{ cfg, inProgress, support string }{
+		{`{}`, "in-progress", "site:support"},
+		{`{"issues":{"labels":{"inProgress":"wip-x","support":"support-x"}}}`, "wip-x", "support-x"},
+	} {
+		got := ParseGateConfig(parseCfg(tc.cfg))
+		if got.InProgressLabel != tc.inProgress || got.SupportLabel != tc.support {
+			t.Errorf("%s: labels = %q, %q; want %q, %q", tc.cfg, got.InProgressLabel, got.SupportLabel, tc.inProgress, tc.support)
 		}
 	}
 }

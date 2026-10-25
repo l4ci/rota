@@ -526,8 +526,8 @@ type Labels struct {
 	InProgress, NeedsHuman, NeedsReview, Support string
 }
 
-// LabelsOf reads the round's issue labels from a loaded config: the one place
-// that knows their key names.
+// LabelsOf reads issue labels for round and gate consumers from a loaded config.
+// Other consumers, such as backlog operations, may read these roles directly.
 func LabelsOf(cfg any) Labels {
 	return Labels{
 		InProgress:  config.Label(cfg, "inProgress"),
