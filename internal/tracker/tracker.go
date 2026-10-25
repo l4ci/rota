@@ -185,11 +185,12 @@ type Milestone struct {
 
 // PR is an open pull request (GitLab: merge request).
 type PR struct {
-	Number int
-	Title  string
-	Branch string
-	URL    string
-	Body   string
+	UpdatedAt time.Time // server time of the most recent PR activity
+	Number    int
+	Title     string
+	Branch    string
+	URL       string
+	Body      string
 	// HeadSHA is the PR's head commit; set by MergedPRs, which callers use to
 	// tell a branch's own PR from an older one that reused the name.
 	HeadSHA string

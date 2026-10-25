@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/overlap"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/strutil"
@@ -100,6 +101,8 @@ const (
 	// blockedBy closes. An issue labelled PartialSliceLabel is exempt, but a PR
 	// the forge says closes one is refused with the same verdict (FinalSlice).
 	GateNotClosing = "closes"
+	// GateClaimLost fences a holder whose issue was reclaimed elsewhere.
+	GateClaimLost = "claim-lost"
 	// GateBestOfUnpicked: the PR is an attempt of a best-of:2 issue and no
 	// `rota round pick` names it; the CLI exits 4 with it, blockedBy best-of-unpicked.
 	GateBestOfUnpicked = "best-of-unpicked"
@@ -253,6 +256,8 @@ func (r GateResult) OK() bool { return r.Verdict == GateFresh || r.Verdict == Ga
 type GateTarget struct {
 	Queued, External                    bool
 	Name, Branch, PR, Base, Task, Issue string
+	// ClaimID is the claim recorded when the slot or queued PR was assigned.
+	ClaimID string
 	// Bundle is the member issues the PR closes beside Issue (the lead), from
 	// the slot or the queued record. An external or adopted PR has none.
 	Bundle []string
@@ -281,16 +286,16 @@ func gateSlot(s *Slot) GateTarget {
 	// An adopted slot is gated like an unrecorded PR: no relays are expected,
 	// and the PR's head branch is read from the forge.
 	if s.IsExternal() {
-		return GateTarget{External: true, Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name())}
+		return GateTarget{External: true, Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), ClaimID: s.ClaimID(), Issue: HeldID(s.Task(), s.Branch(), s.Name())}
 	}
-	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name()), Bundle: s.Bundle(), relays: s.Relays(), Attempt: s.Attempt(), AttemptBase: s.AttemptBase(), Outcome: openOutcome(s), Kind: s.HarnessKind()}
+	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), ClaimID: s.ClaimID(), Issue: HeldID(s.Task(), s.Branch(), s.Name()), Bundle: s.Bundle(), relays: s.Relays(), Attempt: s.Attempt(), AttemptBase: s.AttemptBase(), Outcome: openOutcome(s), Kind: s.HarnessKind()}
 }
 
 // Relays is the relay log the gate checks the PR body's approvals against.
 func (t GateTarget) Relays() []any { return t.relays }
 
 func gateQueued(q QueuedPR) GateTarget {
-	return GateTarget{Queued: true, Issue: q.Issue, Bundle: q.Bundle, Branch: q.Branch, PR: q.PR, Base: q.Base, relays: q.Relays}
+	return GateTarget{Queued: true, ClaimID: q.ClaimID, Issue: q.Issue, Bundle: q.Bundle, Branch: q.Branch, PR: q.PR, Base: q.Base, relays: q.Relays}
 }
 
 // GateTarget resolves the argument of `rota worker gate`: a slot name, or a PR (`#N`, `N`
@@ -512,6 +517,7 @@ var gateSteps = []gateStep{
 	(*gate).stepPRMatches,
 	(*gate).stepProvenance,
 	(*gate).stepCloses,
+	(*gate).stepClaim,
 	(*gate).stepVerdict,
 	(*gate).stepReviewDepth,
 	(*gate).stepCheckOnly,
@@ -1039,6 +1045,48 @@ func (g *gate) stepCloses() (bool, error) {
 			fmt.Sprintf("put %s in the PR title or branch, or label %s %s if this PR lands only part of %s", refs, refs, PartialSliceLabel, them))
 	}
 	return true, nil
+}
+
+// stepClaim fences a PR after another machine reclaimed its issue. A recorded
+// claim must still be open; a target with no recorded claim has no fence.
+// Unknown claims pass with a note, like other optional forge reads.
+func (g *gate) stepClaim() (bool, error) {
+	if !g.remote || g.issues == nil || g.target.ClaimID == "" {
+		return false, nil
+	}
+	for _, key := range g.bundleKeys() {
+		var held []string
+		var err error
+		if cs, ok := g.issues.(tracker.ClaimStore); ok {
+			held, err = cs.Claims(g.ctx, key)
+		} else {
+			var is tracker.Issue
+			is, err = g.issues.Get(g.ctx, key, true)
+			if err == nil {
+				bodies := make([]string, len(is.Comments))
+				for i, c := range is.Comments {
+					bodies[i] = c.Body
+				}
+				held = marker.OpenClaims(bodies)
+			}
+		}
+		if err != nil {
+			g.res.Notes = append(g.res.Notes, fmt.Sprintf("CLAIMS-UNKNOWN %s — could not read claims on %s: %v; the claim check is skipped", g.o.Slot, key.Ref(), err))
+			continue
+		}
+		if len(held) == 0 {
+			continue
+		}
+		claim := g.target.ClaimID
+		matches := slices.Contains(held, claim)
+
+		if !matches {
+			g.verdict(GateClaimLost, fmt.Sprintf("GATE %s refused — claim %s no longer holds %s; %s does; nothing landed", g.o.Slot, claim, key.Ref(), strings.Join(held, ", ")),
+				"the issue was reclaimed: stop the old holder and use the current holder's PR")
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // stepNoSliceClose refuses a PR the forge says closes an issue labelled

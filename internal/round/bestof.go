@@ -190,6 +190,11 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 	for i := range runs {
 		runs[i].preflight = false
 		ao := o
+		// The first attempt releases the approved stale holder. The second joins
+		// the new claim rather than trying to reclaim that holder a second time.
+		if i > 0 {
+			ao.ReclaimStale = ""
+		}
 		ao.Agent = slots[i].Name()
 		done[i], err = e.assignOne(ctx, root, be, ao, it, runs[i])
 		if err == nil {

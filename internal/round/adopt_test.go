@@ -1,11 +1,16 @@
 package round
 
 import (
+	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
@@ -225,5 +230,97 @@ func TestAdoptWithoutPRRecordsTheBranchsOpenPR(t *testing.T) {
 	tgt, err := worker.LoadRegistryTolerant(root).GateTarget(res.Slot)
 	if err != nil || tgt.PR != "https://x/pull/7" {
 		t.Errorf("gate target = %+v, %v: want the adopted PR resolved right after adopt", tgt, err)
+	}
+}
+
+func TestAdoptAllowsFreshClaimedFixForward(t *testing.T) {
+	root, e, be := adoptFixture(t)
+	be.claims = map[string]string{"12": "dana@5"}
+	res, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"})
+	if err != nil || res.Slot != "ext-1" {
+		t.Fatalf("fresh fix-forward refused: %+v %v", res, err)
+	}
+	if len(res.Warnings) == 0 || !strings.Contains(res.Warnings[0], "history") {
+		t.Fatalf("missing history silently skipped: %+v", res)
+	}
+}
+
+func adoptClaimHistoryFixture(t *testing.T, comments []tracker.Comment) (string, Env, *backlog.Issues, claimLabelRemote) {
+	t.Helper()
+	root, e, _ := adoptFixture(t)
+	remote := claimLabelRemote{&trackertest.Fake{Issues: []tracker.Issue{{Key: tracker.NumKey(12), Title: "Thing", State: "open", Body: filesBody, Labels: []string{"claimed:dana@main"}, Comments: comments}}}}
+	return root, e, &backlog.Issues{Tracker: remote, Cfg: map[string]any{}}, remote
+}
+
+func TestAdoptRefusesReclaimedBranch(t *testing.T) {
+	root, e, be, _ := adoptClaimHistoryFixture(t, []tracker.Comment{
+		{Body: "<!-- rota:claim codex@3 -->"},
+		{Body: "<!-- rota:release codex@3 -->"},
+		{Body: "<!-- rota:claim dana@5 -->"},
+	})
+	_, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"})
+	if err == nil {
+		t.Fatal("adopted reclaimed branch, want blocked claimed")
+	}
+	if got := blockedBy(t, err); got != BlockClaimed {
+		t.Fatalf("blockedBy %q, want claimed", got)
+	}
+	if len(worker.LoadRegistryTolerant(root).Slots()) != 0 {
+		t.Fatal("refused adoption registered slot")
+	}
+}
+
+func TestAdoptFreshClaimWithoutReclaimedHistory(t *testing.T) {
+	for _, comments := range [][]tracker.Comment{
+		{{Body: "<!-- rota:claim dana@5 -->"}},
+		{{Body: "<!-- rota:release codex@3 -->"}, {Body: "<!-- rota:claim dana@5 -->"}},
+		{{Body: "<!-- rota:claim codex@3 -->"}, {Body: "<!-- rota:claim dana@5 -->"}, {Body: "<!-- rota:release codex@3 -->"}},
+	} {
+		now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+		for i := range comments {
+			comments[i].CreatedAt = now.Add(-10 * time.Minute)
+		}
+		root, e, be, remote := adoptClaimHistoryFixture(t, comments)
+		e.Forge = remote
+		e.Round = roundcfg.Settings{ClaimStaleMinutes: 240, ClaimStaleMinutesMajor: 480}
+		e.Worker = wk(worker.Env{Getenv: noEnv, Config: diskConfig, Now: func() time.Time { return now }})
+		res, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"})
+		if err != nil || res.Slot != "ext-1" {
+			t.Fatalf("no reclaimed evidence, adoption refused: %+v %v", res, err)
+		}
+	}
+}
+
+func TestAdoptRefusesStaleOtherHolder(t *testing.T) {
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	root, e, be, remote := adoptClaimHistoryFixture(t, []tracker.Comment{{Body: "<!-- rota:claim dana@5 -->", CreatedAt: now.Add(-5 * time.Hour)}})
+	e.Forge = remote
+	e.Round = roundcfg.Settings{ClaimStaleMinutes: 240, ClaimStaleMinutesMajor: 480}
+	e.Worker = wk(worker.Env{Getenv: noEnv, Config: diskConfig, Now: func() time.Time { return now }})
+	e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		if len(args) > 0 && args[0] == "ls-remote" {
+			return git.Result{}, nil
+		}
+		return git.Exec(ctx, dir, args...)
+	}
+	_, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"})
+	if err == nil {
+		t.Fatal("adopted despite stale holder")
+	}
+	if got := blockedBy(t, err); got != BlockClaimed {
+		t.Fatalf("blockedBy %q, want claimed", got)
+	}
+}
+
+func TestAdoptAcceptsBranchAgentsOpenClaim(t *testing.T) {
+	root, e, be := adoptFixture(t)
+	be.claims = map[string]string{"12": "dana@5"}
+	be.more = map[string][]string{"12": {"codex@3"}}
+	res, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"})
+	if err != nil || res.Slot != "ext-1" {
+		t.Fatalf("matching second claim refused: %+v %v", res, err)
+	}
+	if got := be.held("12"); len(got) != 2 || got[0] != "dana@5" || got[1] != "codex@3" {
+		t.Fatalf("adopt changed claims: %v", got)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/acceptance"
 	"github.com/l4ci/rota/internal/blockedby"
@@ -633,21 +634,11 @@ func commentRows(comments []tracker.Comment, kind string) []Comment {
 // openClaims is the claim ids with no later release, in claim order; the
 // earliest holds (_open_claims).
 func openClaims(comments []tracker.Comment) []string {
-	var held []string
+	bodies := make([]string, 0, len(comments))
 	for _, c := range comments {
-		verb, id, ok := marker.ParseClaim(c.Body)
-		if !ok {
-			continue
-		}
-		if verb == marker.KindClaim {
-			if !slices.Contains(held, id) {
-				held = append(held, id)
-			}
-		} else if i := indexOf(held, id); i >= 0 {
-			held = append(held[:i], held[i+1:]...)
-		}
+		bodies = append(bodies, c.Body)
 	}
-	return held
+	return marker.OpenClaims(bodies)
 }
 
 func indexOf(list []string, s string) int {
@@ -938,10 +929,11 @@ type Status struct {
 	ID        string // the issue number
 	Type      string // B | F | T
 	Title     string
-	Status    string   // open | closed
-	State     string   // state labels, comma-joined; "" when none
-	Claim     string   // earliest open claim; "" when none
-	Claims    []string // every open claim, in claim order; Claim is Claims[0]
+	Status    string               // open | closed
+	State     string               // state labels, comma-joined; "" when none
+	Claim     string               // earliest open claim; "" when none
+	ClaimedAt map[string]time.Time `json:",omitempty"` // server time of each open comment claim
+	Claims    []string             // every open claim, in claim order; Claim is Claims[0]
 	Assignees []string
 	Milestone string
 	Body      string   // the issue body, fields block included
@@ -986,7 +978,32 @@ func (b *Issues) Status(ref string) (*Status, error) {
 	if title == "" {
 		title = "(untitled)"
 	}
-	st := &Status{
+	var claimedAt map[string]time.Time
+	if _, stored := b.Tracker.(tracker.ClaimStore); !stored {
+		for _, c := range comments {
+			verb, id, ok := marker.ParseClaim(c.Body)
+			if !ok {
+				continue
+			}
+			if verb == marker.KindClaim {
+				if claimedAt == nil {
+					claimedAt = map[string]time.Time{}
+				}
+				if _, exists := claimedAt[id]; !exists {
+					claimedAt[id] = c.CreatedAt
+				}
+			} else {
+				delete(claimedAt, id)
+			}
+		}
+	}
+	// Unknown timestamps carry no activity evidence and keep legacy output stable.
+	for id, at := range claimedAt {
+		if at.IsZero() {
+			delete(claimedAt, id)
+		}
+	}
+	st := &Status{ClaimedAt: claimedAt,
 		ID: is.Key.String(), Type: b.Letter(is), Title: title, Status: is.State,
 		State: strings.Join(state, ","), Assignees: append([]string{}, is.Assignees...),
 		Milestone: milestone(is, block), Body: is.Body, Notes: notes, Comments: commentRows(comments, ""),
