@@ -51,6 +51,9 @@ func workerAdopt(fs *flag.FlagSet) RunFunc {
 		res, err := env.Adopt(ctx, root, be, round.AdoptOpts{
 			Ref: args[0], Issue: id, Name: *name, PR: *pr, AcceptOverlap: *accept, Shared: set.SharedPaths,
 		})
+		for _, w := range res.Warnings {
+			c.Warn("%s", w)
+		}
 		var blk *round.BlockedError
 		var xe *Error
 		switch {
