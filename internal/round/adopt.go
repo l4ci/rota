@@ -77,10 +77,8 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 	if err != nil {
 		return res, err
 	}
-	for _, s := range reg.Slots() {
-		if s.Branch() == branch {
-			return res, blocked(BlockRegistered, "slot %s already holds %s", s.Name(), branch)
-		}
+	if s, _ := reg.BranchHolder(branch); s != nil {
+		return res, blocked(BlockRegistered, "slot %s already holds %s", s.Name(), branch)
 	}
 	for _, s := range reg.Slots() {
 		if s.HeldID() == worker.NormID(res.Issue) {

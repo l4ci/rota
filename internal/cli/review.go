@@ -512,25 +512,18 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 // registry lives in the main checkout, so a worktree falls back to that one.
 // Nil when the branch is no bundle's or the registry is unreadable.
 func branchBundle(c *Ctx, root, branch string) []tracker.IssueKey {
-	lead, ok := worker.BranchIssue(branch)
+	_, ok := worker.BranchIssue(branch)
 	if !ok {
 		return nil
 	}
 	reg := branchRegistry(c, root)
 	var ids []string
-	for _, sl := range reg.Slots() {
-		if held, ok := tracker.ParseKey(sl.HeldID()); ok && held == lead && sl.Branch() == branch {
-			ids = sl.Bundle()
-			break
-		}
+	sl, q := reg.BranchHolder(branch)
+	if sl != nil {
+		ids = sl.Bundle()
 	}
-	if len(ids) == 0 {
-		for _, q := range reg.PRs() {
-			if q.Branch == branch {
-				ids = q.Bundle
-				break
-			}
-		}
+	if len(ids) == 0 && q != nil {
+		ids = q.Bundle
 	}
 	var keys []tracker.IssueKey
 	for _, id := range ids {
@@ -560,10 +553,8 @@ func branchRegistry(c *Ctx, root string) worker.Registry {
 // branchAuthor is the harness of the slot holding branch, the PR's author for
 // the cross-harness review; "" when no slot holds it.
 func branchAuthor(c *Ctx, root, branch string) string {
-	for _, sl := range branchRegistry(c, root).Slots() {
-		if sl.Branch() == branch {
-			return sl.HarnessKind()
-		}
+	if sl, _ := branchRegistry(c, root).BranchHolder(branch); sl != nil {
+		return sl.HarnessKind()
 	}
 	return ""
 }

@@ -29,11 +29,12 @@ func (c *RegisterConflict) Error() string {
 func RegisterExternal(root, name, branch, worktree, base, task, pr string) error {
 	var conflict *RegisterConflict
 	err := Update(root, func(d *Doc) {
+		byBranch, _ := d.BranchHolder(branch)
 		for _, x := range d.Slots() {
 			switch {
 			case x.Name() == name:
 				conflict = &RegisterConflict{ConflictName, x.Name()}
-			case x.Branch() == branch:
+			case byBranch != nil && x.Name() == byBranch.Name():
 				conflict = &RegisterConflict{ConflictBranch, x.Name()}
 			case task != "" && x.HeldID() == NormID(task):
 				conflict = &RegisterConflict{ConflictIssue, x.Name()}
