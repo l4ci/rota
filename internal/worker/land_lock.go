@@ -3,6 +3,8 @@ package worker
 import (
 	"context"
 	"errors"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -21,18 +23,28 @@ const landLockTimeout = 4 * time.Hour
 // second one queues instead of changing the worktree list under the first's
 // verify or landing inside the first's verify-to-land window. The lock is
 // taken outside test/gate.sh's machine-wide lock, never the reverse, so the
-// two cannot deadlock. A train's own landing steps run under the lock it
+// two cannot deadlock. holder names what the lock is held for (a PR, a slot or
+// a train's targets), readable through LandLockHolder while it is held. A train's own landing steps run under the lock it
 // already holds (GateOpts.HoldsLandLock) and do not retake it.
-func (e Env) withLandLock(ctx context.Context, root string, fn func(waited bool) error) error {
+func (e Env) withLandLock(ctx context.Context, root, holder string, fn func(waited bool) error) error {
 	common, err := rotastate.CommonDirVia(ctx, e.Git, root)
 	if err != nil {
 		return err
 	}
 	path := rotastate.File(common, "land")
+	// held records who holds the lock for LandLockHolder; the lock is the
+	// truth, so a stale holder file only matters while the lock is held.
+	held := func(waited bool) func() error {
+		return func() error {
+			os.WriteFile(path+".holder", []byte(holder), 0o644) // best effort: the holder only sharpens a refusal
+			defer os.Remove(path + ".holder")
+			return fn(waited)
+		}
+	}
 	// waited: the lock was busy, so what fn is about to judge may have changed.
-	err = fsio.Locked(path, 0, func() error { return fn(false) })
+	err = fsio.Locked(path, 0, held(false))
 	if errors.Is(err, fsio.ErrLockTimeout) {
-		return fsio.Locked(path, landLockTimeout, func() error { return fn(true) })
+		return fsio.Locked(path, landLockTimeout, held(true))
 	}
 	return err
 }
@@ -51,4 +63,19 @@ func (e Env) LandLockHeld(ctx context.Context, root string) (bool, error) {
 		return true, nil
 	}
 	return false, err
+}
+
+// LandLockHolder names what holds the land lock: the PR or slot a gate was
+// given, or the train's targets. "" when nothing recorded a holder (no lock, or
+// a holder from an older rota).
+func (e Env) LandLockHolder(ctx context.Context, root string) string {
+	common, err := rotastate.CommonDirVia(ctx, e.Git, root)
+	if err != nil {
+		return ""
+	}
+	b, err := os.ReadFile(rotastate.File(common, "land") + ".holder")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }
