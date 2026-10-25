@@ -435,8 +435,8 @@ func TestAddRefusesSymlinkedTopicFile(t *testing.T) {
 	gittest.Run(t, f.a, "commit", "-q", "-m", "link")
 	gittest.Run(t, f.a, "push", "-q")
 	_, err := f.clone().Add(context.Background(), AddIn{Topic: "Git", Title: "T", Body: "b", Date: "2026-10-25", Source: "rota"})
-	if err == nil {
-		t.Fatal("a symlinked topic must be refused")
+	if !errorsIs(err, ErrDirty) {
+		t.Fatalf("a symlinked topic must be refused with ErrDirty, got %v", err)
 	}
 	if b, _ := os.ReadFile(outside); string(b) != "keep" {
 		t.Fatalf("outside file overwritten: %q", b)

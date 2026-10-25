@@ -3,11 +3,14 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/extknowledge"
 	"github.com/l4ci/rota/internal/gittest"
 )
 
@@ -133,5 +136,22 @@ func TestDoctorInputReadsExternalKnowledgeState(t *testing.T) {
 	}
 	if got := doctorInput(context.Background(), testDeps()).ExternalKnowledge; got.Path != "" {
 		t.Fatalf("unset: %+v", got)
+	}
+}
+
+func TestExtErrExitCodes(t *testing.T) {
+	cases := []struct {
+		err  error
+		want int
+	}{
+		{extknowledge.ErrOffline, ExitUnavailable},
+		{extknowledge.ErrPush, ExitFailed},
+		{extknowledge.ErrDirty, ExitRefused},
+	}
+	for _, tc := range cases {
+		var e *Error
+		if !errors.As(extErr(fmt.Errorf("%w: x", tc.err)), &e) || e.Exit != tc.want {
+			t.Fatalf("%v: got %+v, want exit %d", tc.err, e, tc.want)
+		}
 	}
 }

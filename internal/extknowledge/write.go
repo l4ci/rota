@@ -224,7 +224,7 @@ func (c Clone) writable(ctx context.Context, rel, dst string) error {
 		return err
 	}
 	if !fi.Mode().IsRegular() {
-		return fmt.Errorf("%s is not a regular file; refusing to write through it", rel)
+		return fmt.Errorf("%w: %s is not a regular file; refusing to write through it", ErrDirty, rel)
 	}
 	if _, err := c.out(ctx, "ls-files", "--error-unmatch", "--", rel); err != nil {
 		return fmt.Errorf("%w: untracked %s would be overwritten", ErrDirty, rel)
