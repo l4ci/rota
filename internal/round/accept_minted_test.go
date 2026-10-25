@@ -51,3 +51,16 @@ func TestAcceptRefusesReviewWithoutTrustedMintComment(t *testing.T) {
 		})
 	}
 }
+
+// noTrustForge hides the forge's CanPush, as on GitLab or in file mode.
+type noTrustForge struct{ Forge }
+
+func TestAcceptRefusalSaysWriteAccessUncheckableWithoutTrust(t *testing.T) {
+	f := newMoveFx(t)
+	f.holdMainMinted(t, "maintainer")
+	f.env.Forge = noTrustForge{f.env.Forge}
+	_, err := f.accept("12", nil)
+	if blockedBy(t, err) != BlockReviewNotMinted || !strings.Contains(err.Error(), "write access cannot be checked") {
+		t.Fatalf("%v", err)
+	}
+}
