@@ -234,14 +234,17 @@ func symlinkIn(root, rel string) string {
 
 // Problems lists the files that are missing or have drifted, as one line each
 // for `rota doctor`; a config or render error is one line too.
-func Problems(root string, cfg any) []string {
+func Problems(root string, cfg any) []string { return ProblemsOnly(root, cfg, nil) }
+
+// ProblemsOnly is Problems limited to the paths keep accepts (all when keep is nil).
+func ProblemsOnly(root string, cfg any, keep func(path string) bool) []string {
 	es, err := Compare(root, cfg)
 	if err != nil {
 		return []string{err.Error()}
 	}
 	var out []string
 	for _, e := range es {
-		if e.Status != StatusCurrent {
+		if e.Status != StatusCurrent && (keep == nil || keep(e.Path)) {
 			out = append(out, e.Path+": "+e.Status)
 		}
 	}

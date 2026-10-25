@@ -195,3 +195,22 @@ func TestFromConfigNeedsNoOnDiskConfig(t *testing.T) {
 		t.Fatalf("effort %q kinds %v", effort, sp.Kinds)
 	}
 }
+
+func TestProblemsOnlyListsKeptPaths(t *testing.T) {
+	cfg := `{"round":{"tiers":{"codex":{"light":"gpt-lo","standard":"gpt-mid","heavy":"gpt-hi"}}}}`
+	root := project(t, cfg)
+	c := config.Load(rotatree.Config(root))
+	all := Problems(root, c)
+	if len(all) != 6 {
+		t.Fatalf("unrestricted problems: %v", all)
+	}
+	got := ProblemsOnly(root, c, Untracked)
+	if len(got) != 3 {
+		t.Fatalf("want the 3 .codex files, got %v", got)
+	}
+	for _, p := range got {
+		if !strings.HasPrefix(p, ".codex/") {
+			t.Errorf("tracked path listed: %s", p)
+		}
+	}
+}
