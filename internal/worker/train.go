@@ -68,8 +68,8 @@ type TrainOpts struct {
 	// FinalSlice names the targets that are the last slice of their
 	// partial-slice issue (GateOpts.FinalSlice, per member).
 	FinalSlice []string
-	// Approve is GateOpts.Approve for the whole train: files lists the union of
-	// the paths the members change.
+	// Approve is the merge-approval check for the whole train: files lists the
+	// union of the paths the members change.
 	Approve func(files func() ([]string, error)) (*exitcode.Refusal, error)
 	// Verdict is GateOpts.Verdict, run for every member's check.
 	Verdict func(branch string) error

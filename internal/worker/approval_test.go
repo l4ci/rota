@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -11,6 +12,142 @@ import (
 	gatepolicy "github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
 )
+
+type orderedEscalator struct {
+	fakeEscalator
+	steps *[]string
+}
+
+func (f *orderedEscalator) Pending(th ApprovalThread) (any, bool, error) {
+	*f.steps = append(*f.steps, "pending "+th.Ref())
+	return f.fakeEscalator.Pending(th)
+}
+
+func (f *orderedEscalator) Send(th ApprovalThread, body string) (any, []string, error) {
+	*f.steps = append(*f.steps, "send "+th.Ref())
+	return f.fakeEscalator.Send(th, body)
+}
+
+func TestGateMergeApprovalSequence(t *testing.T) {
+	w := newWorld(t, ghURL)
+	var steps []string
+	esc := &orderedEscalator{steps: &steps}
+	ref := refusalWithData()
+	policy := gatepolicy.MergePolicy{Mode: gatepolicy.MergePaths, Paths: []string{"*.txt"}}
+	res, err := w.gate(false, GateOpts{Approval: &MergeApproval{
+		Policy: policy, Escalate: true,
+		Clear: func(target string, conf gatepolicy.Confirm, paths []string) (*exitcode.Refusal, error) {
+			steps = append(steps, "clear")
+			if target != "w1 into main" || conf.Given || !reflect.DeepEqual(paths, []string{"work.txt"}) {
+				t.Errorf("approval inputs: target=%q confirm=%+v paths=%v", target, conf, paths)
+			}
+			return ref, nil
+		},
+		Escalation: &ApprovalEscalation{Esc: esc, Policy: policy, Warn: t.Errorf},
+	}})
+	if res.Verdict != GateApprovalRequired || res.Refusal != ref || err != ref.Err || !res.Refused(err) {
+		t.Fatalf("approval did not hold the merge: %+v, %v", res, err)
+	}
+	if !reflect.DeepEqual(steps, []string{"clear", "pending #7", "send #7"}) {
+		t.Errorf("approval order = %v", steps)
+	}
+	if got, _ := ref.Data.(*jsonx.Object).Get("escalation"); got != "entry-#7" {
+		t.Errorf("escalation on refusal: %v", got)
+	}
+	if len(esc.bodies) != 1 || !strings.Contains(esc.bodies[0], "- work.txt\n") {
+		t.Errorf("request bodies: %q", esc.bodies)
+	}
+	if strings.Contains(w.logText(), "PRRequestMerge") {
+		t.Error("refused approval merged the PR")
+	}
+}
+
+func TestGateMergeApprovalResolvesBeforeAudit(t *testing.T) {
+	for _, outcome := range []string{"approved", "pending", "unavailable"} {
+		t.Run(outcome, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			var steps []string
+			ref := refusalWithData()
+			boom := errors.New("registry unavailable")
+			res, err := w.gate(false, GateOpts{Approval: &MergeApproval{
+				Policy: gatepolicy.MergePolicy{Mode: gatepolicy.MergeAll}, ID: "e1",
+				Resolve: func(id string, th ApprovalThread) (gatepolicy.Confirm, *exitcode.Refusal, error) {
+					steps = append(steps, "resolve "+id+" "+th.Ref())
+					switch outcome {
+					case "pending":
+						return gatepolicy.Confirm{}, ref, nil
+					case "unavailable":
+						return gatepolicy.Confirm{}, nil, boom
+					}
+					return gatepolicy.Confirm{Given: true, Note: "yes", Escalation: "e1"}, nil, nil
+				},
+				Clear: func(_ string, conf gatepolicy.Confirm, _ []string) (*exitcode.Refusal, error) {
+					steps = append(steps, "audit "+conf.Note)
+					if !conf.Given || conf.Escalation != "e1" {
+						t.Errorf("resolved confirmation lost: %+v", conf)
+					}
+					return nil, nil
+				},
+			}})
+			want := []string{"resolve e1 #7"}
+			switch outcome {
+			case "approved":
+				want = append(want, "audit yes")
+				if err != nil || res.Verdict != GatePass || !res.Changed {
+					t.Errorf("approved merge: %+v %v", res, err)
+				}
+			case "pending":
+				if err != ref.Err || res.Refusal != ref || res.Verdict != GateApprovalRequired || res.Changed {
+					t.Errorf("pending approval: %+v %v", res, err)
+				}
+			case "unavailable":
+				if !errors.Is(err, boom) || res.Refusal != nil || res.Verdict != GateApprovalRequired || res.Changed {
+					t.Errorf("unavailable registry: %+v %v", res, err)
+				}
+			}
+			if !reflect.DeepEqual(steps, want) {
+				t.Errorf("approval order = %v, want %v", steps, want)
+			}
+			if outcome != "approved" && strings.Contains(w.logText(), "PRRequestMerge") {
+				t.Error("unapproved PR merged")
+			}
+		})
+	}
+}
+
+func TestGateMergeApprovalSkipsUnusedAdapters(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		policy    gatepolicy.MergePolicy
+		checkOnly bool
+	}{
+		{name: "none", policy: gatepolicy.MergePolicy{Mode: gatepolicy.MergeNone}},
+		{name: "unmatched paths", policy: gatepolicy.MergePolicy{Mode: gatepolicy.MergePaths, Paths: []string{"*.md"}}},
+		{name: "check only", policy: gatepolicy.MergePolicy{Mode: gatepolicy.MergeAll}, checkOnly: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			res, err := w.gate(false, GateOpts{CheckOnly: tc.checkOnly, Approval: &MergeApproval{
+				Policy: tc.policy, ID: "e1",
+				Resolve: func(string, ApprovalThread) (gatepolicy.Confirm, *exitcode.Refusal, error) {
+					t.Error("unused approval resolved")
+					return gatepolicy.Confirm{}, nil, errors.New("unused adapter")
+				},
+				Clear: func(string, gatepolicy.Confirm, []string) (*exitcode.Refusal, error) {
+					t.Error("unused approval audited")
+					return nil, errors.New("unused adapter")
+				},
+			}})
+			want := GatePass
+			if tc.checkOnly {
+				want = GateFresh
+			}
+			if err != nil || res.Verdict != want {
+				t.Errorf("unused approval blocked merge: %+v %v", res, err)
+			}
+		})
+	}
+}
 
 // fakeEscalator is the in-memory forge seam: it records what is sent.
 type fakeEscalator struct {
@@ -38,42 +175,6 @@ func (*fakeEscalator) ReplyWords() []string { return []string{"approve", "yes", 
 
 func refusalWithData() *exitcode.Refusal {
 	return &exitcode.Refusal{Err: &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate"}, Data: jsonx.NewObject()}
-}
-
-// Attach sends the request on the thread, naming the files the refusal was
-// judged on, and puts the entry on the refusal's data. It lists no files itself.
-func TestAttachSendsOnPathsPolicy(t *testing.T) {
-	esc := &fakeEscalator{}
-	var warned []string
-	ref := refusalWithData()
-	a := ApprovalEscalation{Esc: esc, Policy: gatepolicy.MergePolicy{Mode: gatepolicy.MergePaths, Paths: []string{"work.txt"}},
-		Warn: func(f string, a ...any) { warned = append(warned, f) }}
-	a.Attach(ref, []string{"work.txt"}, ApprovalThread{Kind: "pr", Number: 7})
-	if len(esc.sent) != 1 || esc.sent[0].Kind != "pr" || esc.sent[0].Number != 7 {
-		t.Fatalf("sent %+v", esc.sent)
-	}
-	if b := esc.bodies[0]; !strings.Contains(b, "Merge policy `paths`") || !strings.Contains(b, "- work.txt") || !strings.Contains(b, "`ship it`") {
-		t.Errorf("body %q", b)
-	}
-	if got, _ := ref.Data.(*jsonx.Object).Get("escalation"); got != "entry-#7" {
-		t.Errorf("escalation on data: %v", got)
-	}
-	if len(warned) != 0 {
-		t.Errorf("warned %v", warned)
-	}
-}
-
-// A gate refusal carries no escalation: the gate itself sends nothing.
-func TestGateRefusalSendsNothing(t *testing.T) {
-	w := newWorld(t, ghURL)
-	ref := refusalWithData()
-	res, _ := w.gate(false, GateOpts{Approve: func(GateTarget, func() ([]string, error)) (*exitcode.Refusal, error) { return ref, nil }})
-	if res.Verdict != GateApprovalRequired {
-		t.Fatalf("verdict %q", res.Verdict)
-	}
-	if _, ok := ref.Data.(*jsonx.Object).Get("escalation"); ok {
-		t.Error("escalation set by the gate")
-	}
 }
 
 func TestEscalateApprovalReusesPendingAndWarnsOnFailure(t *testing.T) {

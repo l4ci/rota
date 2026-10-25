@@ -20,6 +20,59 @@ type ApprovalThread struct {
 	Title  string
 }
 
+// MergeApproval holds the merge policy and the adapters needed to enforce it.
+// Worker owns the order; callers supply confirmation, audit and forge I/O.
+type MergeApproval struct {
+	Policy   gatepolicy.MergePolicy
+	Confirm  gatepolicy.Confirm
+	ID       string
+	Escalate bool
+	// Resolve reads an answered escalation. Required only with ID.
+	Resolve func(id string, th ApprovalThread) (gatepolicy.Confirm, *exitcode.Refusal, error)
+	// Clear checks and audits confirmation. Required when the policy covers
+	// the merge; a refusal is a value, an error is a step that could not run.
+	Clear func(target string, conf gatepolicy.Confirm, paths []string) (*exitcode.Refusal, error)
+	// Escalation supplies thread I/O. Required only with Escalate.
+	Escalation *ApprovalEscalation
+}
+
+// Check applies the policy before resolving a thread or approval, then clears
+// the gate and escalates a refusal when requested. Files and thread stay lazy:
+// an uncovered merge performs no approval I/O and writes no audit entry.
+func (a MergeApproval) Check(target string, files func() ([]string, error), thread func() (ApprovalThread, error)) (*exitcode.Refusal, error) {
+	var changed []string
+	if a.Policy.NeedsFiles() {
+		var err error
+		if changed, err = files(); err != nil {
+			return nil, err
+		}
+	}
+	covered, hit := a.Policy.Covers(changed)
+	if !covered {
+		return nil, nil
+	}
+	var th ApprovalThread
+	if a.ID != "" || a.Escalate {
+		var err error
+		if th, err = thread(); err != nil {
+			return nil, err
+		}
+	}
+	conf := a.Confirm
+	if a.ID != "" {
+		var ref *exitcode.Refusal
+		var err error
+		if conf, ref, err = a.Resolve(a.ID, th); ref != nil || err != nil {
+			return ref, err
+		}
+	}
+	ref, err := a.Clear(target, conf, hit)
+	if ref != nil && a.Escalate {
+		a.Escalation.Attach(ref, hit, th)
+	}
+	return ref, err
+}
+
 // Ref is the thread's number as users read it: `#12`, or the key PROJ-123.
 func (t ApprovalThread) Ref() string {
 	if t.Key != "" {
