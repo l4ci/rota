@@ -1193,12 +1193,6 @@ func NeedsCross(res ReviewDepth, depth config.ReviewDepth) bool {
 	return res.Cross != "" && res.Cross != CrossNone && depth != config.DepthNone
 }
 
-// DepthRose reports whether to ranks above from, both known depths.
-func DepthRose(from, to config.ReviewDepth) bool {
-	rank := map[config.ReviewDepth]int{config.DepthNone: 0, config.DepthLight: 1, config.DepthFull: 2}
-	return from != "" && rank[to] > rank[from]
-}
-
 // assignedHarness is the harness of the latest assign ledger entry for issue,
 // the author of a PR whose slot moved on; "" when the ledger has none, so the
 // caller falls back to the issue's label and the configured default.

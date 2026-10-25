@@ -53,3 +53,10 @@ func HasSpec(issue string) bool {
 	_, ok := tracker.ParseKey(issue)
 	return ok
 }
+
+// DepthRose reports whether required ranks above covered: the depth went up
+// after the review ran, so the verdicts on record no longer satisfy it. An
+// unknown covered depth ("") never counts as a rise.
+func DepthRose(covered, required config.ReviewDepth) bool {
+	return covered != "" && required.Outranks(covered)
+}
