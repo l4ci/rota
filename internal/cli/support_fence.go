@@ -38,10 +38,10 @@ func roleInTrackedConfigStop(c *Ctx) (Result, error) {
 		return Result{}, nil
 	}
 	project := fsio.LoadJSON(rotatree.Config(root), jsonx.NewObject())
-	if _, ok := config.Lookup(project, "round.role"); !ok {
+	if _, ok := config.Lookup(project, config.RoundRoleKey); !ok {
 		return Result{}, nil
 	}
-	d := jsonObj("blockedBy", blockedby.Config, "key", "round.role", "changed", false)
+	d := jsonObj("blockedBy", blockedby.Config, "key", config.RoundRoleKey, "changed", false)
 	return Result{Data: d}, Refused("round.role is set in .rota/config.json, which every machine shares").
 		WithHint("remove it from .rota/config.json, then run: rota config set round.role <value>, which writes .rota/config.local.json")
 }
@@ -76,7 +76,7 @@ func supportRefusal(c *Ctx, root, what string) (Result, error) {
 // cannot read is the exit-4 refusal, so a verb never runs on a guess.
 func supportMachine(c *Ctx, root, what string) (bool, Result, error) {
 	unknown := func(why, hint string) (bool, Result, error) {
-		d := jsonObj("blockedBy", blockedby.Config, "key", "round.role", "changed", false)
+		d := jsonObj("blockedBy", blockedby.Config, "key", config.RoundRoleKey, "changed", false)
 		return false, Result{Data: d}, Refused("%s needs to know this machine's role: %s", what, why).WithHint(hint)
 	}
 	// Reads the layer from disk on purpose, not through Deps.Config.
@@ -131,9 +131,9 @@ func supportRoundStartStop(c *Ctx, root string, set roundcfg.Settings) (Result, 
 func supportKeyNonDefault(key, raw string) bool {
 	s, _ := config.Coerce(raw).(string)
 	switch key {
-	case "round.support":
+	case config.RoundSupportKey:
 		return strings.TrimSpace(s) != ""
-	case "round.role":
+	case config.RoundRoleKey:
 		return s != roundcfg.RoleMain
 	}
 	return false
