@@ -3,9 +3,9 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/bugreport"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"

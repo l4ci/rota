@@ -27,7 +27,8 @@ func (s SupportItem) Active() bool { return s.Claim != "" }
 // their claim state, in backlog order. It is empty when round.support is
 // empty. Claims on the support side carry the support name as a prefix
 // (OfferSupport), and a failed claim read leaves the item Unknown instead of
-// waiting.
+// waiting. A cancelled ctx ends the pass at once: each claim read is a tracker
+// call, and the screen that asked is gone.
 func (e Env) SupportQueue(ctx context.Context, be backlog.Backend, support string) ([]SupportItem, error) {
 	if support == "" || e.SupportLabel == "" {
 		return nil, nil
@@ -41,6 +42,9 @@ func (e Env) SupportQueue(ctx context.Context, be backlog.Backend, support strin
 	for _, it := range items {
 		if it.Closed || !slices.Contains(it.Labels, e.SupportLabel) {
 			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
 		si := SupportItem{ID: it.ID, Title: it.Title}
 		if !hasWorkflow {

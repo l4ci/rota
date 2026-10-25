@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/fsio"
 )
 
@@ -31,8 +32,8 @@ const (
 	Unchanged = "unchanged"
 	Removed   = "removed"
 	Replaced  = "replaced"
-	Edited    = "edited"
-	Unmanaged = "unmanaged"
+	Edited    = blockedby.Edited
+	Unmanaged = blockedby.Unmanaged
 )
 
 // Install modes, as the manifest records them. A manifest without a mode is full.

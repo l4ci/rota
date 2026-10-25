@@ -39,6 +39,10 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) 
 	baseCfg, _ := configured.(string)
 	if b, ok, err := d.Repo(root).Base(ctx, baseCfg); err == nil && ok {
 		e.Base = b
+	} else if err == nil && baseCfg != "" {
+		// A set but missing base is not replaced by main: the verbs refuse.
+		e.Base = ""
+		e.BaseErr = fmt.Sprintf("git.baseBranch %q does not resolve to a branch (fix or unset it in .rota/config.json)", baseCfg)
 	}
 	// A round started by hand (`herdr worktree create`) has no recorded host and
 	// resolves from the environment like every other verb.

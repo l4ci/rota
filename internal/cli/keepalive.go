@@ -7,7 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -17,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -190,19 +190,23 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 		signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
 		defer signal.Stop(sigs)
 
+		handoffPath := handoffFile(c.deps(), root, cfg)
+		if handoffPath == "" {
+			c.Warn("%s: the orchestrator handoff is not watched", noHandoffBaseMsg(cfg))
+		}
 		env := keepalive.Env{
 			Spawn:    keepaliveSpawn(c, *configDir),
 			Signals:  sigs,
 			Lease:    le,
 			Holder:   le.Discover(os.Getpid(), c.deps().Getenv),
-			Handoff:  func() keepalive.HandoffRead { return readHandoff(handoffFile(c.deps(), root, cfg)) },
+			Handoff:  func() keepalive.HandoffRead { return readHandoff(handoffPath) },
 			Escalate: escalateFunc(ctx, c, root),
 			Notify:   func(title, body string) { keepaliveNotify(context.WithoutCancel(ctx), c, root, title, body) },
 		}
 		gap := keepaliveGap(set.SwitchOnUsage)
 		env.Gap = gap
 		opts := keepalive.Options{
-			Command: args, Root: root, CommonDir: cd, HandoffPath: handoffFile(c.deps(), root, cfg),
+			Command: args, Root: root, CommonDir: cd, HandoffPath: handoffPath,
 			HandoffMaxAge: set.HandoffMaxAge, MaxRestarts: set.MaxRestarts, Breaker: set.Breaker,
 			Backoff: set.Backoff, Prompt: set.Prompt, FirstPrompt: *first, EscalateIssue: set.EscalateIssue,
 		}

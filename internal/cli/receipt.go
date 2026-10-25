@@ -8,10 +8,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
 	"sort"
 	"strings"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/receipt"
 	"github.com/l4ci/rota/internal/round"
