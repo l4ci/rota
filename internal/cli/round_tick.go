@@ -260,6 +260,7 @@ func tickData(r roundtick.Result) *jsonx.Object {
 	if r.BatchFull {
 		d.Set("batchFull", true)
 	}
+	setIf(d, "deferred", r.Deferred)
 	items := func(l []roundtick.Item) []any {
 		out := make([]any, 0, len(l))
 		for _, it := range l {
@@ -289,6 +290,9 @@ func tickLines(r roundtick.Result) string {
 	}
 	if r.BatchFull {
 		lines = append(lines, "batch-full")
+	}
+	if r.Deferred != "" {
+		lines = append(lines, "deferred\t"+r.Deferred)
 	}
 	if len(lines) == 0 {
 		return "nothing to do"

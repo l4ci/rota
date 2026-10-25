@@ -169,8 +169,12 @@ type Result struct {
 	// BatchFull is true when round.batch items are open: the tick assigned
 	// nothing more, and minted no review.
 	BatchFull bool
-	NeedsYou  []Item
-	New       []Item
+	// Deferred is set when a gate or train held the land lock, so the assign
+	// was refused for now: the tick stopped, and the next one tries again. It
+	// names the holder where the refusal did.
+	Deferred string
+	NeedsYou []Item
+	New      []Item
 	// Held and Reported are the state the next tick starts from.
 	Held     map[string]string
 	Reported map[string]bool
@@ -465,6 +469,12 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 			var blk *round.BlockedError
 			if errors.As(err, &blk) && blk.By == round.BlockQuota && r.Capped == "" {
 				r.Capped = blk.Msg
+			}
+			// A gate or train holds the land lock: every later assign is refused
+			// the same way, so defer them to the next tick.
+			if errors.As(err, &blk) && blk.By == worker.GateRunning {
+				r.Deferred = "gate running, deferred: " + blk.Msg
+				return nil
 			}
 			// The batch filled during this tick: no later candidate fits either.
 			if errors.As(err, &blk) && blk.By == round.BlockBatch {

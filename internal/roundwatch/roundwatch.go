@@ -24,6 +24,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -98,6 +99,7 @@ const (
 	changeKeySlotPR  = "pr/"         // snapshot key prefixes
 	changeKeyEscalat = "escalation/" //
 	changeKeyReview  = "review/"     //
+	changeKeyGate    = "gate/land"   //
 	changeKeySupport = "support/"    //
 )
 
@@ -195,6 +197,11 @@ func Run(ctx context.Context, env Env, o Opts) (Result, error) {
 		} else {
 			cur = merge(cur, carry(base))
 		}
+		// A lock taken or handed on mid-watch is no news: fold it into the
+		// baseline so only its release wakes the watch.
+		if v, ok := cur[changeKeyGate]; ok {
+			base[changeKeyGate] = v
+		}
 		if ch := supportNews(Diff(base, cur), env.Seen != nil); len(ch) > 0 {
 			if env.Mark != nil {
 				env.Mark(supportOnly(cur))
@@ -283,8 +290,17 @@ func LocalSnapshot(root string) map[string]string {
 	for _, e := range escalation.Load(root) {
 		out[changeKeyEscalat+e.ID] = e.Status
 	}
+	we := worker.Env{}.WithDefaults()
+	if held, err := we.LandLockHeld(context.Background(), root); err == nil && held {
+		out[changeKeyGate] = strutil.FirstNonEmpty(we.LandLockHolder(context.Background(), root), "held")
+	}
 	return out
 }
+
+// GateKey is the snapshot key of the land lock: present while a gate or train
+// holds it, its value the holder. Its disappearing is the "gate cleared" change
+// that tells an orchestrator whose assign was refused to assign now.
+const GateKey = changeKeyGate
 
 // PRStateKey is the snapshot key of a slot's PR state, which only the forge knows.
 func PRStateKey(slot string) string { return changeKeySlotPR + "state/" + slot }
