@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ const StaleClaimKind = blockedby.StaleClaim
 type StaleClaim struct {
 	Issue, Holder string
 	Last          time.Time
+	Threshold     time.Duration
 }
 
 func staleThreshold(it backlog.Item, s roundcfg.Settings) time.Duration {
@@ -31,48 +33,71 @@ func staleThreshold(it backlog.Item, s roundcfg.Settings) time.Duration {
 
 // StaleClaims conservatively reads activity for claims outside this machine's
 // registry. Unknown timestamps or failed activity reads never permit reclaim.
-// A nil key set scans all open items; an explicit set bounds an assign recheck.
+// A nil key set scans labelled open items; explicit keys bound an assign recheck.
 func (e Env) StaleClaims(ctx context.Context, root string, be Board, keys []tracker.IssueKey) ([]StaleClaim, []string) {
 	if !e.forgeOn(be) || e.Round.ClaimStaleMinutes <= 0 && e.Round.ClaimStaleMinutesMajor <= 0 {
+		return nil, nil
+	}
+	all, err := be.List(false)
+	if err != nil {
+		return nil, []string{fmt.Sprintf("stale claims: %v", err)}
+	}
+	items := e.claimedItems(all)
+	if keys != nil {
+		items = slices.DeleteFunc(items, func(it backlog.Item) bool { return !slices.Contains(keys, it.IssueKey()) })
+	}
+	if len(items) == 0 {
 		return nil, nil
 	}
 	prs, err := e.Forge.OpenPRs(ctx)
 	if err != nil {
 		return nil, []string{fmt.Sprintf("stale claims: %v", err)}
 	}
-	return e.staleClaims(ctx, root, be, keys, prs)
+	return e.staleClaims(ctx, root, be, items, prs)
 }
 
-// staleClaims shares an already-read PR snapshot with candidates and status.
-func (e Env) staleClaims(ctx context.Context, root string, be Board, keys []tracker.IssueKey, prs []tracker.PR) ([]StaleClaim, []string) {
+func (e Env) hasClaimSignal(it backlog.Item) bool {
+	label := e.Label
+	if label == "" {
+		label = "in-progress"
+	}
+	return slices.ContainsFunc(it.Labels, func(l string) bool { return l == label || strings.HasPrefix(l, backlog.ClaimLabelPrefix) })
+}
+func (e Env) claimedItems(items []backlog.Item) []backlog.Item {
+	var out []backlog.Item
+	for _, it := range items {
+		if !it.Closed && e.hasClaimSignal(it) {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// staleClaims shares already-read items and PRs with candidates and status.
+func (e Env) staleClaims(ctx context.Context, root string, be Board, items []backlog.Item, prs []tracker.PR) ([]StaleClaim, []string) {
 	if !e.forgeOn(be) || e.Round.ClaimStaleMinutes <= 0 && e.Round.ClaimStaleMinutesMajor <= 0 {
 		return nil, nil
 	}
-	if keys == nil {
-		items, err := be.List(false)
-		if err != nil {
-			return nil, []string{fmt.Sprintf("stale claims: %v", err)}
-		}
-		for _, it := range items {
-			if !it.Closed {
-				keys = append(keys, it.IssueKey())
+	activity := map[tracker.IssueKey]time.Time{}
+	branches := map[tracker.IssueKey][]string{}
+	for _, pr := range prs {
+		for key := range e.issuesOfPRs([]tracker.PR{pr}, "") {
+			if pr.UpdatedAt.After(activity[key]) {
+				activity[key] = pr.UpdatedAt
 			}
+			branches[key] = append(branches[key], pr.Branch)
 		}
 	}
 	held := heldIDs(root)
 	now := e.now()
 	var out []StaleClaim
 	var warnings []string
-	for _, key := range keys {
+	for _, it := range items {
+		key := it.IssueKey()
 		if held[worker.NormID(key.String())] {
 			continue
 		}
-		it, err := be.Get(key.String())
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("stale claim %s: %v", key.Ref(), err))
-			continue
-		}
-		threshold := staleThreshold(*it, e.Round)
+		threshold := staleThreshold(it, e.Round)
 		if threshold <= 0 {
 			continue
 		}
@@ -89,20 +114,13 @@ func (e Env) staleClaims(ctx context.Context, root string, be Board, keys []trac
 			if last.IsZero() {
 				continue
 			}
-			m := reClaimID.FindStringSubmatch(holder)
-			if m == nil {
-				continue
-			}
-			prefix := m[1] + "/" + key.String() + "-"
-			for _, pr := range prs {
-				if strings.HasPrefix(pr.Branch, prefix) && pr.UpdatedAt.After(last) {
-					last = pr.UpdatedAt
-				}
+			if activity[key].After(last) {
+				last = activity[key]
 			}
 			if now.Sub(last) <= threshold {
 				continue
 			}
-			branchLast, err := e.claimBranchActivity(ctx, root, prefix, now)
+			branchLast, err := e.claimBranchActivity(ctx, root, key, branches[key], now)
 			if err != nil {
 				warnings = append(warnings, fmt.Sprintf("stale claim %s (%s): %v", key.Ref(), holder, err))
 				continue
@@ -111,19 +129,23 @@ func (e Env) staleClaims(ctx context.Context, root string, be Board, keys []trac
 				last = branchLast
 			}
 			if now.Sub(last) > threshold {
-				out = append(out, StaleClaim{Issue: key.String(), Holder: holder, Last: last})
+				out = append(out, StaleClaim{Issue: key.String(), Holder: holder, Last: last, Threshold: threshold})
 			}
 		}
 	}
 	return out, warnings
 }
 
-func (e Env) claimBranchActivity(ctx context.Context, root, prefix string, now time.Time) (time.Time, error) {
+func (e Env) claimBranchActivity(ctx context.Context, root string, key tracker.IssueKey, prBranches []string, now time.Time) (time.Time, error) {
 	run := e.Git
 	if run == nil {
 		run = git.Exec
 	}
-	res, err := run(ctx, root, "ls-remote", "--heads", "origin", "refs/heads/"+prefix+"*")
+	args := []string{"ls-remote", "--heads", "origin", "refs/heads/*/" + key.String() + "-*"}
+	for _, branch := range prBranches {
+		args = append(args, "refs/heads/"+branch)
+	}
+	res, err := run(ctx, root, args...)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -137,7 +159,7 @@ func (e Env) claimBranchActivity(ctx context.Context, root, prefix string, now t
 			continue
 		}
 		branch := strings.TrimPrefix(fields[1], "refs/heads/")
-		if !strings.HasPrefix(branch, prefix) {
+		if branchKey, ok := worker.BranchIssue(branch); (!ok || branchKey != key) && !slices.Contains(prBranches, branch) {
 			continue
 		}
 		res, err = run(ctx, root, "fetch", "--no-tags", "origin", fields[1])

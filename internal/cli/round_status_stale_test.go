@@ -21,7 +21,7 @@ func staleStatusDeps(t *testing.T) (string, *Deps) {
 	t.Helper()
 	root := trackerProject(t, `{"issues":{"source":"github"}}`)
 	now := time.Date(2026, 10, 25, 11, 0, 0, 0, time.UTC)
-	fake := &trackertest.Fake{Issues: []tracker.Issue{{Key: tracker.NumKey(7), Title: "Abandoned", State: "open", Labels: []string{"type:task"}, Comments: []tracker.Comment{{Body: "<!-- rota:claim mac-ben@3 -->\nClaimed by mac-ben@3", CreatedAt: now.Add(-26 * time.Hour)}}}}}
+	fake := &trackertest.Fake{Issues: []tracker.Issue{{Key: tracker.NumKey(7), Title: "Abandoned", State: "open", Labels: []string{"type:task", "claimed:mac-ben@mac"}, Comments: []tracker.Comment{{Body: "<!-- rota:claim mac-ben@3 -->\nClaimed by mac-ben@3", CreatedAt: now.Add(-26 * time.Hour)}}}}}
 	d := testDeps()
 	d.NewTracker = func(context.Context, string, any) (backlog.Tracker, error) { return fake, nil }
 	d.RoundEnv = func(context.Context, string) round.Env {

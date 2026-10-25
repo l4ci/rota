@@ -38,10 +38,7 @@ func TestGateClaimLost(t *testing.T) {
 		t.Run(fmt.Sprint(check), func(t *testing.T) {
 			w := newWorld(t, ghURL)
 			w.setConfig(`{"issues":{"source":"gitlab"},"test":{"full":["true"]}}`)
-			claimID := ""
-			if check {
-				claimID = "w1@3"
-			}
+			claimID := "w1@3"
 			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","claimId":%q,"pr":%q}]}`, claimID, ghURL)), 0600)
 			w.forge("body", "Closes #5")
 			e := w.env(false)
@@ -68,12 +65,12 @@ func TestGateClaimPasses(t *testing.T) {
 		bodies      []string
 		readErr     error
 	}{
-		{name: "no claims"},
+		{name: "no claims", claim: "w1@3"},
 		{name: "recorded claim survives transfer", claim: "imported@9", bodies: []string{"<!-- rota:claim imported@9 -->"}},
-		{name: "legacy branch agent", bodies: []string{"<!-- hv:claim mac-ben@3 -->"}},
+		{name: "legacy target without recorded claim", bodies: []string{"<!-- hv:claim mac-ben@3 -->"}},
 		{name: "best-of second holder", claim: "w1@3", bodies: []string{"<!-- rota:claim dana@5 -->", "<!-- rota:claim w1@3 -->"}},
-		{name: "released only", bodies: []string{"<!-- rota:claim dana@5 -->", "<!-- rota:release dana@5 -->"}},
-		{name: "unreadable claims", readErr: errors.New("offline")},
+		{name: "released only", claim: "w1@3", bodies: []string{"<!-- rota:claim dana@5 -->", "<!-- rota:release dana@5 -->"}},
+		{name: "unreadable claims", claim: "w1@3", readErr: errors.New("offline")},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
@@ -192,5 +189,37 @@ func TestGateClaimSkipsWithoutPR(t *testing.T) {
 	}
 	if err != nil || res.Verdict != GateFresh || res.PR != "" {
 		t.Fatalf("local gate should pass: %+v %v", res, err)
+	}
+}
+
+func TestGateClaimSkipsUnrecordedClaim(t *testing.T) {
+	for _, c := range []struct{ name, kind, arg string }{
+		{name: "legacy slot", arg: "w1"},
+		{name: "adopted slot", kind: "external", arg: "w1"},
+		{name: "unrecorded external PR", arg: "7"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			branch := "fixforward/5-work"
+			gitq(t, w.worker, "push", "-q", "origin", "w1:refs/heads/"+branch)
+			w.forge("head", branch)
+			w.forge("body", "Closes #5")
+			w.setConfig(`{"issues":{"source":"gitlab"},"test":{"full":["true"]}}`)
+			record := fmt.Sprintf(`{"slots":[{"name":"w1","branch":%q,"task":"5","kind":%q,"pr":%q}]}`, branch, c.kind, ghURL)
+			if c.arg == "7" {
+				record = `{"slots":[]}`
+			}
+			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(record), 0600)
+			src := &claimIssues{bodies: []string{"<!-- rota:claim dana@5 -->"}}
+			e := w.env(false)
+			e.Issues = func(string, tracker.Settings) (Issues, error) { return src, nil }
+			res, err := e.Gate(bg, w.dir, GateOpts{Slot: c.arg, Base: "main", CheckOnly: true})
+			if err != nil || res.Verdict != GateFresh {
+				t.Fatalf("unrecorded claim was fenced: %+v %v", res, err)
+			}
+			if src.commentReads != 0 {
+				t.Fatalf("read claims without recorded claim id %d times", src.commentReads)
+			}
+		})
 	}
 }

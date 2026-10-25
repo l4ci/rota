@@ -657,18 +657,27 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 	}
 	e.claimFindings(ctx, rep, reg, rows, slotObj, reg.PRs(), labelled, fs.claimLabelled, labelsOK)
-	if e.Board != nil && forgeOK {
+	if e.Board != nil && forgeOK && (e.Round.ClaimStaleMinutes > 0 || e.Round.ClaimStaleMinutesMajor > 0) {
 		snapshot := make([]tracker.PR, 0, len(prs))
 		for _, pr := range prs {
 			snapshot = append(snapshot, *pr)
 		}
-		staleClaims, warnings := e.staleClaims(ctx, root, e.Board, nil, snapshot)
+		items, err := e.Board.List(false)
+		if err != nil {
+			rep.Warnings = append(rep.Warnings, fmt.Sprintf("stale claims: %v", err))
+			items = nil
+		}
+		var claimedItems []backlog.Item
+		for _, it := range items {
+			if !it.Closed && (fs.claimLabelled[it.IssueKey()] || labelled[it.IssueKey()] || e.hasClaimSignal(it)) {
+				claimedItems = append(claimedItems, it)
+			}
+		}
+		staleClaims, warnings := e.staleClaims(ctx, root, e.Board, claimedItems, snapshot)
 		rep.Warnings = append(rep.Warnings, warnings...)
 		for _, claim := range staleClaims {
 			detail := fmt.Sprintf("claim %s on %s has had no push or PR activity since %s", claim.Holder, tracker.RefOf(claim.Issue), claim.Last.UTC().Format(time.RFC3339))
-			if it, err := e.Board.Get(claim.Issue); err == nil {
-				detail += fmt.Sprintf(" (%s > %s)", e.now().Sub(claim.Last).Truncate(time.Minute), staleThreshold(*it, e.Round))
-			}
+			detail += fmt.Sprintf(" (%s > %s)", e.now().Sub(claim.Last).Truncate(time.Minute), claim.Threshold)
 			rep.add(Finding{Kind: StaleClaimKind, Issue: claim.Issue, Detail: detail})
 		}
 	}

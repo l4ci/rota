@@ -15,6 +15,7 @@ func TestCandidatesStaleClaimListed(t *testing.T) {
 	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 	be := &fakeRemote{claims: map[string]string{"7": "mac-ben@3"}, claimTimes: map[string]map[string]time.Time{"7": {"mac-ben@3": now.Add(-5 * time.Hour)}}}
 	be.add("7", "Abandoned task", "", false, "")
+	be.items["7"].Labels = []string{"claimed:mac-ben@mac"}
 	e := Env{Git: func(ctx context.Context, dir string, args ...string) (git.Result, error) {
 		if args[0] == "ls-remote" {
 			return git.Result{}, nil
@@ -63,6 +64,7 @@ func TestStaleClaimsActivity(t *testing.T) {
 			be := &fakeRemote{claims: map[string]string{"7": "mac-ben@3"}, claimTimes: map[string]map[string]time.Time{"7": {"mac-ben@3": at}}}
 			be.add("7", "Work", "", false, "")
 			be.items["7"].Tag = tc.tag
+			be.items["7"].Labels = []string{"claimed:mac-ben@mac"}
 			if tc.prAge != 0 {
 				be.prs = []tracker.PR{{Branch: "mac-ben/7-work", UpdatedAt: now.Add(-tc.prAge)}}
 			}

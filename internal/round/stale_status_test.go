@@ -24,6 +24,7 @@ func TestStatusReportsStaleClaim(t *testing.T) {
 			now := time.Date(2026, 10, 25, 11, 0, 0, 0, time.UTC)
 			f := &fakeRemote{claims: map[string]string{"7": "mac-ben@3"}, claimTimes: map[string]map[string]time.Time{"7": {"mac-ben@3": now.Add(-tc.age)}}}
 			f.add("7", "old claim", "", false, "")
+			f.items["7"].Labels = []string{"claimed:mac-ben@mac"}
 			e := env(nil, f.asForge())
 			e.Board = f
 			originalGit := e.Git

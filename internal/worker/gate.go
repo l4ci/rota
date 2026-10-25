@@ -1048,10 +1048,10 @@ func (g *gate) stepCloses() (bool, error) {
 }
 
 // stepClaim fences a PR after another machine reclaimed its issue. A recorded
-// claim must still be open; legacy targets match the agent in the head branch.
+// claim must still be open; a target with no recorded claim has no fence.
 // Unknown claims pass with a note, like other optional forge reads.
 func (g *gate) stepClaim() (bool, error) {
-	if !g.remote || g.issues == nil {
+	if !g.remote || g.issues == nil || g.target.ClaimID == "" {
 		return false, nil
 	}
 	for _, key := range g.bundleKeys() {
@@ -1079,17 +1079,7 @@ func (g *gate) stepClaim() (bool, error) {
 		}
 		claim := g.target.ClaimID
 		matches := slices.Contains(held, claim)
-		if claim == "" {
-			agent, _, _ := strings.Cut(g.branch, "/")
-			claim = agent
-			for _, id := range held {
-				holder, _, _ := strings.Cut(id, "@")
-				if agent != "" && holder == agent {
-					matches = true
-					break
-				}
-			}
-		}
+
 		if !matches {
 			g.verdict(GateClaimLost, fmt.Sprintf("GATE %s refused — claim %s no longer holds %s; %s does; nothing landed", g.o.Slot, claim, key.Ref(), strings.Join(held, ", ")),
 				"the issue was reclaimed: stop the old holder and use the current holder's PR")

@@ -134,11 +134,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 	stale := map[string]StaleClaim{}
 	var staleWarnings []string
 	if board, ok := BoardOf(be); ok {
-		keys := make([]tracker.IssueKey, 0, len(chosen))
-		for _, it := range chosen {
-			keys = append(keys, it.IssueKey())
-		}
-		claims, warnings := e.staleClaims(ctx, root, board, keys, prs)
+		claims, warnings := e.staleClaims(ctx, root, board, e.claimedItems(chosen), prs)
 		staleWarnings = warnings
 		for _, c := range claims {
 			if _, exists := stale[c.Issue]; !exists {
@@ -158,7 +154,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		if handed[it.IssueKey()] {
 			continue
 		}
-		if taken != nil && taken(it) && stale[it.ID].Holder == "" {
+		if taken != nil && stale[it.ID].Holder == "" && taken(it) {
 			continue
 		}
 		r, err := AssessScoped(be, it.ID, tracked, o.Shared, inFlight, false, "", o.BlockScopeOverlap)
@@ -464,10 +460,11 @@ func InScope(root string, be backlog.Backend, scope string, slate []string, id s
 }
 
 // takenOutside says whether an item someone outside the round has taken: it
-// carries the in-progress label or an open claim while no slot or PR in
+// carries the in-progress or claimed label while no slot or PR in
 // review holds it (scopeSet already dropped those). Scope open offers every
 // open item, so without this a hand-worked issue reads as ready and assign
-// refuses it as claimed. File mode has neither labels nor claims.
+// refuses it as claimed. Claim details are read only for labelled stale scans;
+// unlabelled items need no per-item comments request. File mode has neither.
 func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog.Item) bool, error) {
 	if !e.forgeOn(be) {
 		return nil, nil
@@ -480,17 +477,7 @@ func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog
 	for _, is := range issues {
 		labelled[is.Key] = true
 	}
-	wf, _ := backlog.WorkflowOf(be)
-	return func(it backlog.Item) bool {
-		if labelled[it.IssueKey()] {
-			return true
-		}
-		if wf == nil {
-			return false
-		}
-		s, err := wf.Status(it.ID)
-		return err == nil && s != nil && s.Claim != ""
-	}, nil
+	return func(it backlog.Item) bool { return labelled[it.IssueKey()] || e.hasClaimSignal(it) }, nil
 }
 
 // handedToHuman is the open issues carrying the needs-human label (C10): the
