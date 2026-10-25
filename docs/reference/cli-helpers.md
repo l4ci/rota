@@ -239,7 +239,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota milestone show <id>` | print a milestone |
 | `rota milestone put <id> --body-file <path\|->` | replace a milestone's text |
 | `rota milestone overview --body-file <path\|->` | replace the MILESTONES.md overview text |
-| `rota milestone status <id> --to <planned\|active\|shipped\|archived>` | change a milestone's status |
+| `rota milestone status <id> --to <planned\|active\|shipped\|archived> [--branch keep\|delete]` | change a milestone's status and create or retire `milestone/<id>` |
 | `rota milestone active` | IDs of active milestones |
 | `rota milestone check <MNN> [--strict]` | check a milestone's feature issues against its capabilities and acceptance criteria (--strict fails on uncovered criteria; on a tracker it also regenerates the tracking issue's child list and reports drift; on the file backend it regenerates the milestone files' `## Items` sections) |
 | `rota milestone index` | regenerate the overview and vision block |
