@@ -1088,9 +1088,9 @@ func TestLatestHandoffBranchReadsLegacyMarker(t *testing.T) {
 	}
 }
 
-// Every scope skips work taken outside the round (an in-progress label or
-// open claim without a local slot). Releasing it makes it available again.
-func TestScopesSkipItemsTakenOutsideTheRound(t *testing.T) {
+// Without a support machine, only open scope filters outside claims. Other
+// scopes still list those issues and leave the refusal to assignment.
+func TestOpenScopeSkipsItemsTakenOutsideTheRound(t *testing.T) {
 	f := newMoveFx(t)
 	f.forge.labels = map[int][]string{12: {"in-progress"}, 13: {"in-progress"}}
 	f.be.claims["14"] = "kit@9"
@@ -1101,8 +1101,8 @@ func TestScopesSkipItemsTakenOutsideTheRound(t *testing.T) {
 	if len(cands) != 0 {
 		t.Fatalf("labelled 13 and claimed 14 are taken outside the round: %v", ids(cands))
 	}
-	if cands, _ = f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeMilestone}); len(cands) != 0 {
-		t.Errorf("milestone scope must also exclude taken issues: %v", ids(cands))
+	if cands, _ = f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeMilestone}); len(cands) != 2 {
+		t.Errorf("milestone scope is unchanged: %v", ids(cands))
 	}
 	f.forge.labels[13] = nil
 	delete(f.be.claims, "14")

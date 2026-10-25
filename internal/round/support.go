@@ -49,6 +49,36 @@ func (e Env) offSite(support, role, legacy string, it backlog.Item) string {
 	return ""
 }
 
+// supportPinStep makes pulled work visible to the existing pin-based queue,
+// watch, provenance and return paths. Only this assignment's new pin is undone;
+// a pre-existing pin belongs to the operator, including on a resumed assign.
+func (e Env) supportPinStep(ctx context.Context, be Board, it *backlog.Item) step {
+	label := roundcfg.MachineLabel(e.Round.Support)
+	added := false
+	return step{
+		name: "pin to support " + it.ID,
+		skip: func() bool {
+			return e.Round.Role != roundcfg.RoleSupport || e.Round.Support == "" || slices.Contains(it.Labels, label)
+		},
+		do: func() error {
+			if !e.forgeOn(be) {
+				return blocked(BlockConfig, "pinning support work needs an issue tracker with labels")
+			}
+			if err := e.Forge.AddLabels(ctx, it.IssueKey(), []string{label}, true); err != nil {
+				return err
+			}
+			added = true
+			return nil
+		},
+		undo: func() error {
+			if !added {
+				return nil
+			}
+			return e.Forge.RemoveLabels(ctx, it.IssueKey(), []string{label})
+		},
+	}
+}
+
 // Block legacy offers on both machines until the explicit migration completes.
 func legacySupportWarning(support, legacy string, it backlog.Item) string {
 	if legacy == "" {

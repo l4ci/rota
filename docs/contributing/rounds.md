@@ -233,7 +233,9 @@ With support enabled, `machine:<name>` pins an issue to that machine; candidates
 machines show it as blocked. Unpinned issues are available to both machines. Support prefers
 issues pinned to it, then pulls unpinned issues within its configured `round.scope`. The shared
 tracker claim decides which machine takes an issue; neither machine reserves its slate against
-the other. Use `machine:main` to keep an issue on main. A support machine never merges and
+the other. After winning a claim, support pins the issue so main can track it through the queue,
+watch and provenance checks; a pre-dispatch failure removes only that assignment's new pin.
+Use `machine:main` to keep an issue on main. A support machine never merges and
 never writes tracked `.rota/` content; those verbs exit 4 `blockedBy: role` (the tables live in
 `internal/roundcfg/support_fence.go`).
 
