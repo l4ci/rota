@@ -26,6 +26,7 @@ var ignoreLines = []string{
 	".rota/**/knowledge-hits.jsonl*",
 	".rota/**/*.lock",
 	".rota/**/*.proof",
+	".codex/",
 }
 
 const worktreesBlock = "\n# Worker worktrees (rota worker pool, parallel rounds)\n.worktrees/\n"

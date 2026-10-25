@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -310,5 +311,11 @@ func TestInitIgnoresClaimedHitBuffer(t *testing.T) {
 		if out, err := exec.Command("git", "-C", dir, "check-ignore", "-q", p).CombinedOutput(); err != nil {
 			t.Errorf("%s is not gitignored: %v %s", p, err, out)
 		}
+	}
+}
+
+func TestIgnoreLinesCoverCodexAgents(t *testing.T) {
+	if missing := MissingIgnoreLines(".rota/status.json\n"); !slices.Contains(missing, ".codex/") {
+		t.Fatalf(".codex/ not managed: missing = %v", missing)
 	}
 }
