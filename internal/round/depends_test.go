@@ -54,3 +54,20 @@ func TestTrailingDependsOnReadyOnceClosed(t *testing.T) {
 		t.Errorf("closed dep still blocks: %v", c.Detail)
 	}
 }
+
+// AC-1: a dependency on a merged PR (the tracker reports it closed) reaches
+// the ready result, while an open dependency still reads "<ref> is not done".
+func TestMergedPRDependencyFlowsThroughReadiness(t *testing.T) {
+	be := &fakeRemote{}
+	be.add("5", "x", "", false, "## Depends on\n- #8\n")
+	be.add("8", "merged PR", "", true, "")
+	if c := depCheck(t, be, "5"); !c.OK {
+		t.Errorf("merged-PR dependency still blocks: %v", c.Detail)
+	}
+	be.add("9", "open dep", "", false, "")
+	be.add("6", "y", "", false, "## Depends on\n- #8\n- #9\n")
+	c := depCheck(t, be, "6")
+	if c.OK || strings.Join(c.Detail, ";") != "9 is not done" {
+		t.Errorf("want only \"9 is not done\", got ok=%v %v", c.OK, c.Detail)
+	}
+}
