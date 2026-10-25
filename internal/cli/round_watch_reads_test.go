@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"os"
 
 	"path/filepath"
 	"strings"
@@ -46,5 +47,29 @@ func TestWatchForgeSeesAChangeBetweenPasses(t *testing.T) {
 	state = "MERGED"
 	if got := pass(); !strings.EqualFold(got, "merged") {
 		t.Fatalf("second pass still sees %q after the PR merged", got)
+	}
+}
+
+// A registry write that fails is warned about once, not dropped silently.
+func TestMarkMergedDoneReportsAFailedWrite(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	root := gitRepo(t)
+	write(t, filepath.Join(root, ".rota", "workers.json"), `{"slots":[{"name":"dana","state":"done","pr":"https://github.com/o/r/pull/42"}]}`)
+	if err := markMergedDone(root, map[string]bool{"dana": true}); err != nil {
+		t.Fatalf("a writable registry failed: %v", err)
+	}
+	if !worker.LoadRegistryTolerant(root).Slot("dana").PRMerged() {
+		t.Fatal("merged done slot not marked")
+	}
+	write(t, filepath.Join(root, ".rota", "workers.json"), `{"slots":[{"name":"dana","state":"done","pr":"https://github.com/o/r/pull/42"}]}`)
+	dir := filepath.Join(root, ".rota")
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(dir, 0o755)
+	if err := markMergedDone(root, map[string]bool{"dana": true}); err == nil {
+		t.Fatal("a failed write returned nil")
 	}
 }

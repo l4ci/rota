@@ -214,7 +214,9 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 				return true
 			}
 			if !known {
-				return false // a failed lookup is asked again next pass
+				// A failed lookup (forge error, auth, rate limit) is no news on
+				// a guess: the slot is held back this pass and asked again next.
+				return true
 			}
 			merged[r.Name] = m
 		}
