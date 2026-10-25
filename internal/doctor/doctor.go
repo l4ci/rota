@@ -190,10 +190,44 @@ type Input struct {
 	Slots []SlotBlock
 	CwdOf func(pid int) string
 
+	// ExternalKnowledge is the state of the configured external knowledge
+	// clone (knowledge.external); the zero value, no Path, is the feature off.
+	ExternalKnowledge ExternalKnowledge
+
 	Exec Exec
 	// Look resolves a tool name, or a path with a slash, to an executable path, or
 	// false when it is not found. It is the only filesystem and PATH read for tools.
 	Look func(name string) (string, bool)
+}
+
+// ExternalKnowledge is what was found at the knowledge.external path. Path is
+// "" when the key is unset; the other fields are only read when it is set.
+type ExternalKnowledge struct {
+	Path      string
+	Exists    bool // the path exists and is a directory
+	IsGit     bool // it is a git work tree
+	HasRemote bool // the clone has a remote to fetch from and push to
+	HasPolicy bool // rota-knowledge.json is at its root
+}
+
+// externalKnowledge reports the state of the external knowledge clone: unset
+// (skip), missing, not a git repo, no remote, no policy file (warn) or ok.
+func (d *runner) externalKnowledge() Check {
+	const name = "external knowledge"
+	k := d.in.ExternalKnowledge
+	switch {
+	case k.Path == "":
+		return skip(name, "knowledge.external is not set")
+	case !k.Exists:
+		return fail(name, k.Path+" does not exist", "clone the knowledge repo there, or run: rota config set knowledge.external <path> --global")
+	case !k.IsGit:
+		return fail(name, k.Path+" is not a git repository", "run git clone <url> "+k.Path+", or point knowledge.external at the clone")
+	case !k.HasRemote:
+		return fail(name, k.Path+" has no git remote", "run: git -C "+k.Path+" remote add origin <url>")
+	case !k.HasPolicy:
+		return Check{Name: name, Status: Warn, Detail: k.Path + " has no rota-knowledge.json: writes default to push", Hint: `add {"write":"push"} or {"write":"pr"} to rota-knowledge.json at the repo root`}
+	}
+	return pass(name, k.Path)
 }
 
 // Run executes every check in the contract's order.
@@ -205,6 +239,10 @@ func Run(ctx context.Context, in Input) Report {
 	checks = append(checks, d.harnessChecks()...)
 	if c, ok := d.connection(); ok {
 		checks = append(checks, c)
+	}
+	if in.ExternalKnowledge.Path != "" {
+		// Unset adds no line: the feature is off, like a healthy disk.
+		checks = append(checks, d.externalKnowledge())
 	}
 	if c, ok := d.disk(); ok {
 		// Only a volume below the threshold adds a line: a healthy one stays

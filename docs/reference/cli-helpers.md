@@ -167,11 +167,11 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 
 | Usage | What it does |
 |---|---|
-| `rota knowledge query <topic>… [--tier provisional\|confirmed\|deprecated] [--include-deprecated]` | print topic sections, tier-aware |
+| `rota knowledge query <topic>… [--tier provisional\|confirmed\|deprecated] [--include-deprecated] [--external]` | print topic sections, tier-aware; `--external` reads the [external knowledge base](../usage/external-knowledge.md) instead (fetched and fast-forwarded first; no tiers) |
 | `rota knowledge stats` | bullet count and size per topic |
-| `rota knowledge topics` | list topic headings with bullet counts |
-| `rota knowledge add --topic <T> --title <S> --body-file <path\|-> [--date YYYY-MM-DD] [--sha <hex>]` | add a bullet under a topic |
-| `rota knowledge amend --topic <T> --fragment <F> --mode append --body-file <path\|->` | append text to an existing bullet |
+| `rota knowledge topics [--external]` | list topic headings with bullet counts; `--external` lists the external base's `INDEX.md` |
+| `rota knowledge add --topic <T> --title <S> --body-file <path\|-> [--date YYYY-MM-DD] [--sha <hex>] [--external [--hook <text>]]` | add a bullet under a topic; `--external` writes to the external base (new topic: file and `INDEX.md` line), then pushes or opens a PR by its `rota-knowledge.json` policy |
+| `rota knowledge amend --topic <T> --fragment <F> --mode append --body-file <path\|-> [--external]` | append text to an existing bullet; `--external` amends the external base |
 | `rota knowledge replace --topic <T> --old <text> --new <text>` | replace text inside the one bullet that contains it |
 | `rota knowledge rm --topic <T> --title <title>` | delete one bullet and its tier entry |
 | `rota knowledge rename-topic --from <X> --to <Y> [--title <T>]` | rename a topic or move one bullet |

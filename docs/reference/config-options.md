@@ -355,6 +355,13 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 |-----|-------|------|---------|--------|-------------|
 | `doctor.minFreeDiskPercent` | machine (local) | int | `10` |  | rota doctor warns when the free share of the disk falls below this percent, 0 to 100. 0 turns the check off. The same threshold drives the go-cache-disk warning for the volume holding GOCACHE. |
 
+### knowledge
+
+| Key | Scope | Type | Default | Values | Description |
+|-----|-------|------|---------|--------|-------------|
+| `knowledge.external` | machine (local) | path | unset |  | Local path of the cloned external knowledge repo (INDEX.md, topics/, rota-knowledge.json) that rota knowledge --external reads and writes, and that /rota-learn and the knowledge consult also use. Machine-specific, so set it in the global config. Empty means the feature is off. |
+| `knowledge.externalTTL` | machine (local) | int | `10` |  | Minutes a fetch of the external knowledge clone stays fresh. A read inside the window uses the local copy; past it, rota fetches and fast-forwards first. 0 fetches on every read. |
+
 ## Removed keys
 
 `issues.filterMineOnly`, `issues.providers.github` and `issues.providers.gitlab` were seeded by older `rota init` runs but nothing ever read them (use `issues.source` and `forge.provider`). `round.autopilot` was retired in 0.21.0: `autonomy.level: "auto"` turns the round autopilot on, and `rota config fill` deletes the key from `.rota/config.json` and `.rota/config.local.json`, saying so when it was `true`. `rota config check` lists any still in `.rota/config.json` as `removed` with a hint and does not fail on them; `rota config fill` deletes them. `rota config set` refuses them as unknown keys.

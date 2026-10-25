@@ -45,6 +45,24 @@ If nothing qualifies, say so and stop. Don't manufacture learnings.
 
 Reuse existing `## Topic` headings in `.rota/KNOWLEDGE.md`; new topic only if nothing fits, never one per learning.
 
+### Route each learning: project or external
+
+Run `rota config show knowledge.external`. Empty means no external base: every learning is project knowledge and this subsection changes nothing.
+
+With a path set, decide per learning. **Project:** it names this repo's files, verbs, config or conventions. **External:** it holds in any repo that uses the tool (Go, git, herdr, GitHub Actions, Postgres). State each call in one line, for example `-> external (Go): t.Run needs a case name`. When `autonomy.level` is `auto` you decide; otherwise ask once for the whole batch, with your calls as the default answer.
+
+Project learnings continue through Steps 4 to 6. For each external one:
+
+1. Reuse a topic from `rota knowledge topics --external` before minting one (technology names, not project names).
+2. Dedupe: run `rota knowledge query --external "<topic>"`. A bullet that already says it is skipped; a sharper version is `rota knowledge amend --external`.
+3. Write it:
+
+```bash
+printf '%s' "$BODY" | rota knowledge add --external --topic "<Technology>" --title "<Short rule title>" --body-file -
+```
+
+The verb pulls, writes `topics/<slug>.md` (and the `INDEX.md` line for a new topic), commits, then pushes or opens a PR by the repo's own policy, and prints which. It exits 4 on a dirty or diverged clone: report that in Step 8 and keep the learning for a rerun. External bullets carry no sha, no tier and no managed block, so Steps 5 and 6 do not apply to them.
+
 ## Step 4 — Auto-Write
 
 Skip approval prompts for what you chose to keep (the per-comment fold-or-reject call in Step 1 is yours, not a prompt). Proceed to Step 5 (merge into `KNOWLEDGE.md`) and Step 6 (update the topic index).
@@ -114,6 +132,8 @@ Captured 3 learnings into .rota/KNOWLEDGE.md:
 
 Updated the topic index in <AGENTS.md|CLAUDE.md> — /rota-work will consult these on relevant tasks.
 ```
+
+With an external base configured, add one line per destination: `Pushed 1 learning to the external base (Go)` or `Opened PR <url> for 1 learning (Go)`.
 
 **Topic-size handling.** Run `rota knowledge stats --json`. When any topic in `data.topics` has `bullets >= 25` OR `bytes >= 10240`, read [`topic-size.md`](topic-size.md) (nudge or auto-split by `autonomy.level`, see [`references/autonomy.md`](references/autonomy.md)).
 

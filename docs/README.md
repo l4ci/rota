@@ -50,6 +50,7 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 - [Product QA](usage/qa.md): `/rota-qa` per-target strategy files and the `ship.qa` gate
 - [Rolling back a cycle](usage/undo.md): `/rota-ship --undo` guided rollback, dry-run preview, manual confirmation
 - [Learning](usage/learning.md): `/rota-learn` and `KNOWLEDGE.md`, including `--term <name>` for the project Glossary
+- [External knowledge](usage/external-knowledge.md): a shared git repo of platform and technology learnings, read and written by every project
 - [Decisions](usage/decisions.md): `/rota-decide` and hard-boundary commitments in `DECISIONS.md`
 
 ### Vision and planning
