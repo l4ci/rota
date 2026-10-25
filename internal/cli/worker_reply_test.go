@@ -43,3 +43,25 @@ func TestWorkerReplyRefusals(t *testing.T) {
 		t.Errorf("unknown slot: %d, want 3", code)
 	}
 }
+
+// A worker runs reply from its own worktree, whose .rota/ holds no registry:
+// the slot lives in the main checkout's pool (#1876).
+func TestWorkerReplyFromSlotWorktree(t *testing.T) {
+	main := workerProject(t, ghCfg)
+	doneSlot(t, main)
+	wt := filepath.Join(main, ".worktrees", "nia")
+	gitT(t, main, "worktree", "add", "-q", "-b", "nia/577-x", wt)
+	if err := os.MkdirAll(filepath.Join(wt, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(wt, ".rota", "config.json"), []byte(ghCfg), 0o644)
+	os.WriteFile(filepath.Join(wt, "reply.md"), []byte("Fixed in abc1234.\n"), 0o644)
+	f := &reviewForge{}
+	code, out, errOut := rotaInWith(t, useReviewForge(f), wt, "worker", "reply", "nia", "--body-file", "reply.md", "--json")
+	if d := data(t, out); code != 0 || d["commentId"] != "77" {
+		t.Fatalf("%d %v %s", code, d, errOut)
+	}
+	if code, _, _ := rotaInWith(t, useReviewForge(f), wt, "worker", "reply", "zed", "--body-file", "reply.md"); code != 3 {
+		t.Errorf("unknown slot: %d, want 3", code)
+	}
+}
