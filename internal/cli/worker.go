@@ -835,6 +835,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "the cycle branch the slot merges into")
 	check := fs.Bool("check-only", false, "judge freshness, PR identity and provenance; merge nothing")
 	noVerify := fs.Bool("no-verify", false, "merge without running test.full; required when test.full is empty")
+	noAssignCheck := fs.Bool("no-assign-check", false, "skip the advisory check for free slots with ready candidates")
 	prune := fs.Bool("prune", false, "when an adopted slot's PR merges, also delete its worktree and branch")
 	final := fs.Bool("final-slice", false, "this PR is the last slice of a partial-slice issue and may close it")
 	confirm := approvalFlags(fs)
@@ -853,6 +854,9 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		root, err := c.Root()
 		if err != nil {
 			return Result{}, err
+		}
+		if !*check && !*noAssignCheck {
+			warnAssignFirst(c, root)
 		}
 		run := runGate(c, root, gateRunOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Prune: *prune, FinalSlice: *final, Confirm: conf, Approval: req})
 		r, err := run.Result, run.Err

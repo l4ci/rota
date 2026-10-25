@@ -17,7 +17,7 @@ func knowledgeCommands() *Command {
 	return &Command{Name: "knowledge", Summary: "read and write .rota/KNOWLEDGE.md", Subs: []*Command{
 		{Name: "query", Summary: "print topic sections, tier-aware", Repo: true, Verb: knQuery},
 		{Name: "stats", Summary: "bullet count and size per topic", Verb: noFlags(knStats), View: knowledgeView},
-		{Name: "topics", Summary: "list topic headings with bullet counts", Verb: noFlags(knTopics)},
+		{Name: "topics", Summary: "list topic headings with bullet counts", Verb: knTopics},
 		{Name: "add", Summary: "add a bullet under a topic", Repo: true, Verb: knAdd},
 		{Name: "amend", Summary: "append text to an existing bullet", Repo: true, Verb: knAmend},
 		{Name: "replace", Summary: "replace text inside one bullet", Repo: true, Verb: knReplace},
@@ -116,9 +116,16 @@ func knNoArgs(args []string) error {
 func knQuery(fs *flag.FlagSet) RunFunc {
 	tier := fs.String("tier", "", "only bullets on this `tier` (provisional|confirmed|deprecated)")
 	incl := fs.Bool("include-deprecated", false, "also print deprecated bullets")
+	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) == 0 {
 			return Result{}, Usage("name at least one topic")
+		}
+		if *ext {
+			if *tier != "" || *incl {
+				return Result{}, Usage("--tier and --include-deprecated do not apply to --external: the external base has no tiers")
+			}
+			return knExtQuery(c, args)
 		}
 		if *tier != "" && !knowledge.ValidTier(*tier) {
 			return Result{}, Usage("--tier must be one of: provisional, confirmed, deprecated")
@@ -157,19 +164,25 @@ func knStats(c *Ctx, args []string) (Result, error) {
 	return statsResult(stats), nil
 }
 
-func knTopics(c *Ctx, args []string) (Result, error) {
-	if err := knNoArgs(args); err != nil {
-		return Result{}, err
+func knTopics(fs *flag.FlagSet) RunFunc {
+	ext := externalFlag(fs)
+	return func(c *Ctx, args []string) (Result, error) {
+		if err := knNoArgs(args); err != nil {
+			return Result{}, err
+		}
+		if *ext {
+			return knExtTopics(c)
+		}
+		st, _, err := knStore(c)
+		if err != nil {
+			return Result{}, err
+		}
+		stats, err := st.Stats()
+		if err != nil {
+			return knFail(err)
+		}
+		return topicsResult(stats), nil
 	}
-	st, _, err := knStore(c)
-	if err != nil {
-		return Result{}, err
-	}
-	stats, err := st.Stats()
-	if err != nil {
-		return knFail(err)
-	}
-	return topicsResult(stats), nil
 }
 
 // topicsResult is the heading list of knowledge topics and decisions topics.
@@ -200,12 +213,20 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 	bodyFile := fs.String("body-file", "", "bullet body: a `path`, or - for stdin")
 	date := fs.String("date", "", "bullet `date` (YYYY-MM-DD), default today")
 	sha := fs.String("sha", "", "commit `sha` (7 to 40 hex digits) the bullet's claim about code was true at")
+	hook := fs.String("hook", "", "with --external: one-line `hook` for the INDEX.md entry of a new topic, default the bullet title")
+	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := knNoArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "title": *title, "body-file": *bodyFile}, "topic", "title", "body-file"); err != nil {
 			return Result{}, err
+		}
+		if *hook != "" && !*ext {
+			return Result{}, Usage("--hook needs --external")
+		}
+		if *ext && *sha != "" {
+			return Result{}, Usage("--sha does not apply to --external")
 		}
 		normSha, err := knowledge.NormalizeSha(*sha)
 		if err != nil {
@@ -214,6 +235,9 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 		body, err := readBodyText(c, "body-file", *bodyFile, ExitResolution)
 		if err != nil {
 			return Result{}, err
+		}
+		if *ext {
+			return knExtAdd(c, *topic, *title, body, *date, *hook)
 		}
 		st, scope, err := knStore(c)
 		if err != nil {
@@ -236,6 +260,7 @@ func knAmend(fs *flag.FlagSet) RunFunc {
 	fragment := fs.String("fragment", "", "`text` the bullet contains (case-sensitive)")
 	mode := fs.String("mode", "", "how to amend: append")
 	bodyFile := fs.String("body-file", "", "text to add: a `path`, or - for stdin")
+	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := knNoArgs(args); err != nil {
 			return Result{}, err
@@ -253,6 +278,9 @@ func knAmend(fs *flag.FlagSet) RunFunc {
 		body = strings.TrimRight(body, "\n")
 		if strings.TrimSpace(body) == "" {
 			return Result{}, Usage("--body-file is empty; nothing to append")
+		}
+		if *ext {
+			return knExtAmend(c, *topic, *fragment, body)
 		}
 		st, scope, err := knStore(c)
 		if err != nil {

@@ -38,7 +38,7 @@ const hookTrustFlag = "--dangerously-bypass-hook-trust"
 type codex struct{}
 
 func (codex) Kind() string       { return Codex }
-func (codex) CommandKey() string { return "round.commands.codex" }
+func (codex) CommandKey() string { return config.RoundCommandsCodexKey }
 
 // Launch is round.commands.codex, else the default launch line. A model fills
 // {model}. The default without a model drops its `--model {model}` pair and
@@ -143,7 +143,7 @@ func (codex) AmbientAccount(getenv func(string) string) Account {
 }
 
 func (codex) Accounts(cfg any) AccountList {
-	l := AccountList{Key: "round.accounts"}
+	l := AccountList{Key: config.RoundAccountsKey}
 	for _, a := range config.AccountsOf(cfg, config.KindCodex) {
 		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.Dir})
 	}

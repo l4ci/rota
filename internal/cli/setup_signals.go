@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proc"
@@ -50,8 +51,8 @@ func readSetupSignals(c *Ctx, dir string, answered map[string]bool) map[string]s
 		sigs["test.full"] = sig[1]
 	}
 	if setup, shared, ok := depSignals(dir); ok {
-		sigs["round.envSetup"] = setup
-		sigs["round.sharedDirs"] = shared
+		sigs[config.RoundEnvSetupKey] = setup
+		sigs[config.RoundSharedDirsKey] = shared
 	}
 	var kinds []string
 	for _, k := range harness.Kinds() { // each kind is also its CLI's name
@@ -65,7 +66,7 @@ func readSetupSignals(c *Ctx, dir string, answered map[string]bool) map[string]s
 			ev = strings.Join(kinds, ", ") + " are on PATH; first taken"
 		}
 		list, _ := jsonx.MarshalCompact(anySlice(kinds[:1]))
-		sigs["round.harnesses"] = setupSignal{string(list), ev}
+		sigs[config.RoundHarnessesKey] = setupSignal{string(list), ev}
 	}
 	if out, ok := run("worktree", "list", "--porcelain"); ok && strings.Count(out, "worktree ") > 1 {
 		sigs["work.isolation"] = setupSignal{"worktree", "the repo has linked worktrees (git worktree list)"}
@@ -74,9 +75,9 @@ func readSetupSignals(c *Ctx, dir string, answered map[string]bool) map[string]s
 	}
 	switch {
 	case onPath("herdr"):
-		sigs["round.dispatch"] = setupSignal{"herdr", "herdr is on PATH"}
+		sigs[config.RoundDispatchKey] = setupSignal{"herdr", "herdr is on PATH"}
 	case onPath("tmux") && d.Getenv("TMUX") != "":
-		sigs["round.dispatch"] = setupSignal{"tmux", "tmux is on PATH and $TMUX is set"}
+		sigs[config.RoundDispatchKey] = setupSignal{"tmux", "tmux is on PATH and $TMUX is set"}
 	}
 	return sigs
 }
