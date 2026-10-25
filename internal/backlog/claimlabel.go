@@ -2,6 +2,7 @@ package backlog
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -32,4 +33,67 @@ func ClaimLabel(cfg any, claimID string) (string, bool) {
 		return "", false
 	}
 	return label, true
+}
+
+// ClaimLabelDrift compares labels with open claims, never the worker registry.
+// Closed issues should carry no claim labels, even if old comment claims remain.
+func (b *Issues) ClaimLabelDrift(ref string) (add, remove []string, err error) {
+	if _, err = b.tracker(); err != nil {
+		return
+	}
+	is, _, err := b.require(ref)
+	if err != nil {
+		return nil, nil, err
+	}
+	want := map[string]bool{}
+	if is.State == "open" {
+		held, err := b.heldClaims(is.Key)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, id := range held {
+			if label, ok := ClaimLabel(b.Cfg, id); ok {
+				want[label] = true
+			}
+		}
+	}
+	for label := range want {
+		if !slices.Contains(is.Labels, label) {
+			add = append(add, label)
+		}
+	}
+	for _, label := range is.Labels {
+		if strings.HasPrefix(label, ClaimLabelPrefix) && !want[label] {
+			remove = append(remove, label)
+		}
+	}
+	slices.Sort(add)
+	slices.Sort(remove)
+	return add, remove, nil
+}
+
+// SyncClaimLabels re-reads the claims and repairs their labels. Errors are
+// returned so reconcile can leave drift visible and report a failed repair.
+func (b *Issues) SyncClaimLabels(ref string) (changed bool, err error) {
+	add, remove, err := b.ClaimLabelDrift(ref)
+	if err != nil || len(add)+len(remove) == 0 {
+		return false, err
+	}
+	is, _, err := b.require(ref)
+	if err != nil {
+		return false, err
+	}
+	if len(add) > 0 {
+		if err := b.Tracker.AddLabels(b.ctx(), is.Key, add, b.AutoCreate()); err != nil {
+			return false, err
+		}
+		changed = true
+	}
+	if len(remove) > 0 {
+		if err := b.Tracker.RemoveLabels(b.ctx(), is.Key, remove); err != nil {
+			return changed, err
+		}
+		changed = true
+	}
+	return changed, nil
 }

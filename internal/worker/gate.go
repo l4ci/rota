@@ -2094,7 +2094,7 @@ func (g *gate) releaseClaimLabels(src tracker.ClosingSource) {
 			continue
 		}
 		if err := g.issues.RemoveLabels(g.ctx, key, drop); err != nil {
-			g.res.Notes = append(g.res.Notes, fmt.Sprintf("LABEL-KEPT %s — cannot remove %s from %s: %v", g.o.Slot, g.label, key.Ref(), err))
+			g.res.Notes = append(g.res.Notes, fmt.Sprintf("LABEL-KEPT %s — cannot remove %s from %s: %v", g.o.Slot, strings.Join(drop, ", "), key.Ref(), err))
 		}
 	}
 }

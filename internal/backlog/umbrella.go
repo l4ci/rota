@@ -450,6 +450,20 @@ func (u *Umbrella) Release(ref, claimID string) (bool, error) {
 	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.Release(plain, claimID) })
 }
 
+// ClaimLabelDrift reads the owning tracker's derived claim labels.
+func (u *Umbrella) ClaimLabelDrift(ref string) (add, remove []string, err error) {
+	err = u.onOwner(ref, func(s *Issues, plain string) (e error) {
+		add, remove, e = s.ClaimLabelDrift(plain)
+		return
+	})
+	return
+}
+
+// SyncClaimLabels repairs only the owning tracker's visible claim labels.
+func (u *Umbrella) SyncClaimLabels(ref string) (bool, error) {
+	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.SyncClaimLabels(plain) })
+}
+
 // SetState sets the item's state label.
 func (u *Umbrella) SetState(ref, state string) (bool, error) {
 	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.SetState(plain, state) })
