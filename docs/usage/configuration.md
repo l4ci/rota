@@ -452,7 +452,7 @@ With `round.support` enabled, main is named `main` and the support machine takes
 in `round.support`. `machine:<name>` pins an issue to that machine. Unpinned issues are
 available to main; support still takes only issues pinned to it. Candidates show an issue
 pinned elsewhere as blocked, and assignment refuses it. `round.role: support` requires a
-nonempty `round.support`.
+nonempty `round.support`; `main` is reserved for the main machine.
 
 `rota round support offer <ID>` adds `machine:<round.support>`; `--withdraw` removes it.
 An offer refuses an issue pinned only to another machine until that pin is removed.
@@ -464,7 +464,11 @@ value when present, otherwise `site:support`, and relabels only open issues. A c
 machine pin leaves that issue untouched and keeps the old key; tracker errors also keep
 it, so applying again resumes. Only a fully successful apply removes the old key from
 `.rota/config.json`. `rota config check` reports the deprecation; `rota config fill` keeps
-the value until migration finishes. Closed issues keep their labels.
+the value until migration finishes. The migration removes the key only from the tracked
+config; a value in `.rota/config.local.json` remains and is still reported by `config check`.
+Without `round.support`, apply can still retire the tracked key when no open issue uses
+the legacy label. Closed issues keep their labels. Until migration, start, candidates and tick warn about
+legacy-labelled issues and keep them blocked so main cannot assign them as unpinned work.
 
 ## round keys
 

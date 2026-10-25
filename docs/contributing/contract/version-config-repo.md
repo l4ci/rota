@@ -116,9 +116,9 @@ note: without `--apply` it only reports (`planned` true, `changed` false; text `
 rota migrate labels [--apply]
 repo: scoped
 data: {"applied": bool, "issues": [{"id": string, "changed": bool}], "changed": bool}
-exit: 4 with `blockedBy` `config` without `round.support`, `role` on support, or `site` when a legacy-labelled issue has another machine's pin; tracker errors stop the migration.
+exit: 4 with `blockedBy` `config` without `round.support` (except apply with no open legacy-labelled issues), `role` on support, or `site` when a legacy-labelled issue has another machine's pin; tracker errors stop the migration.
 old: none (#1973)
-note: main only. Preview writes nothing. Relabels open issues carrying the configured legacy `issues.labels.support` value (default `site:support`) to `machine:<round.support>`, ensuring the new label, adding it before removing the old one. Closed issues are untouched. A different machine pin is a conflict: leave that issue untouched, process other issues, then refuse and keep the config key. Tracker errors keep the key so a rerun resumes. Successful `--apply` removes the retired key from `.rota/config.json`; `config fill` leaves it in place until then. A second run has nothing to migrate.
+note: main only. Preview writes nothing. Relabels open issues carrying the configured legacy `issues.labels.support` value (default `site:support`) to `machine:<round.support>`, ensuring the new label, adding it before removing the old one. Closed issues are untouched. A different machine pin is a conflict: leave that issue untouched, process other issues, then refuse and keep the config key. Tracker errors keep the key so a rerun resumes. Successful `--apply` removes the retired key from `.rota/config.json`; local config is left untouched. Without `round.support`, apply may retire the key only when no open issue carries the legacy label. `config fill` leaves it in place until then. A second run has nothing to migrate.
 
 ### rota repo which
 rota repo which
