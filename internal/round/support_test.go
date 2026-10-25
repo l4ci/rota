@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -18,39 +19,131 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// #1598 AC-2/AC-3: with round.support set, main's candidates drop the issues
-// labelled for the support side, and the support side offers only those.
-func TestCandidatesSupportSplit(t *testing.T) {
+// Machine pins stay visible on both machines, with an actionable refusal.
+func TestCandidatesPinnedElsewhereShown(t *testing.T) {
 	root := newRepo(t, nil)
 	be := &fakeRemote{}
-	be.add("1", "main work", "", false, "")
-	be.add("2", "support work", "", false, "")
-	be.items["2"].Labels = []string{config.Label(nil, "support")}
+	for _, id := range []string{"1", "2", "3", "4", "5"} {
+		be.add(id, "work", "", false, "")
+	}
+	be.items["2"].Labels = []string{"machine:mac"}
+	be.items["3"].Labels = []string{"machine:main"}
+	be.items["4"].Labels = []string{"machine:other", "machine:mac"}
+	be.items["5"].Labels = []string{"machine:other", "machine:main"}
 	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
-	e.SupportLabel = config.Label(nil, "support")
-	get := func(set roundcfg.Settings) []string {
-		t.Helper()
-		set.Scope = roundcfg.ScopeOpen
-		cs, err := e.RoundCandidates(bg, root, be, set, "")
-		if err != nil {
-			t.Fatal(err)
+	for _, tc := range []struct {
+		role    string
+		blocked []string
+	}{
+		{roundcfg.RoleMain, []string{"2", "4"}},
+		{roundcfg.RoleSupport, []string{"1", "3", "5"}},
+	} {
+		t.Run(tc.role, func(t *testing.T) {
+			cs, err := e.RoundCandidates(bg, root, be, roundcfg.Settings{Scope: roundcfg.ScopeOpen, Support: "mac", Role: tc.role}, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(ids(cs), []string{"1", "2", "3", "4", "5"}) {
+				t.Fatalf("candidates = %v; pinned issues must remain visible", ids(cs))
+			}
+			for _, c := range cs {
+				wantBlocked := slices.Contains(tc.blocked, c.ID)
+				if (c.BlockedBy == BlockSite) != wantBlocked {
+					t.Errorf("%s blockedBy = %q, want site = %v", c.ID, c.BlockedBy, wantBlocked)
+				}
+				if !wantBlocked && !c.Ready() {
+					t.Errorf("local or unpinned issue %s must be ready: %+v", c.ID, c)
+				}
+				if wantBlocked {
+					detail := fmt.Sprint(c.Checks)
+					if !strings.Contains(detail, "machine:") {
+						t.Errorf("missing machine pin in refusal: %s", detail)
+					}
+					if c.Ready() {
+						t.Errorf("pinned elsewhere issue %s is ready", c.ID)
+					}
+				}
+			}
+		})
+	}
+}
+
+// Default-config upgrades must not turn legacy support offers into free work.
+func TestCandidatesLegacySupportBlocked(t *testing.T) {
+	root := newRepo(t, nil)
+	be := &fakeRemote{}
+	be.add("1", "work", "", false, "")
+	be.items["1"].Labels = []string{"site:support"}
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig})}
+	cs, err := e.RoundCandidates(bg, root, be, roundcfg.Settings{Scope: roundcfg.ScopeOpen, Support: "mac", Role: roundcfg.RoleMain}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cs) != 1 || cs[0].Ready() || cs[0].BlockedBy != BlockSite {
+		t.Fatalf("legacy support issue must stay blocked until migration: %+v", cs)
+	}
+	if why := fmt.Sprint(cs[0].Checks); !strings.Contains(why, "rota migrate labels --apply") {
+		t.Fatalf("missing migration warning: %s", why)
+	}
+}
+
+func TestAssignRefusesPinnedElsewhere(t *testing.T) {
+	for _, bundle := range []bool{false, true} {
+		t.Run(fmt.Sprint(bundle), func(t *testing.T) {
+			f := newAssignFixture(t)
+			f.env.Round.Support = "mac"
+			id := "12"
+			if bundle {
+				id = "13"
+			}
+			f.be.items[id].Labels = []string{"machine:mac"}
+			_, err := f.assign("12", "", func(o *AssignOpts) {
+				if bundle {
+					o.Bundle = []string{"13"}
+				}
+			})
+			var refusal *BlockedError
+			if !errors.As(err, &refusal) || refusal.By != BlockSite {
+				t.Fatalf("assign err = %v, want blockedBy site", err)
+			}
+			if !strings.Contains(err.Error(), "machine:mac") || !strings.Contains(err.Error(), "--withdraw") {
+				t.Errorf("refusal = %v", err)
+			}
+			if len(f.be.claims) != 0 {
+				t.Errorf("refused assign claims: %v", f.be.claims)
+			}
+		})
+	}
+}
+
+func TestAssignRefusesLegacySupport(t *testing.T) {
+	for _, label := range []string{"site:support", "remote"} {
+		for _, bundle := range []bool{false, true} {
+			t.Run(fmt.Sprint(label, bundle), func(t *testing.T) {
+				f := newAssignFixture(t)
+				f.env.Round.Support = "mac"
+				if label == "remote" {
+					f.env.Round.LegacySupportLabel = "remote"
+				}
+				id := "12"
+				if bundle {
+					id = "13"
+				}
+				f.be.items[id].Labels = []string{label}
+				_, err := f.assign("12", "", func(o *AssignOpts) {
+					if bundle {
+						o.Bundle = []string{"13"}
+					}
+				})
+				var refusal *BlockedError
+				if !errors.As(err, &refusal) || refusal.By != BlockSite || !strings.Contains(err.Error(), "rota migrate labels --apply") {
+					t.Fatalf("assign err = %v, want migration refusal", err)
+				}
+				if len(f.be.claims) != 0 {
+					t.Errorf("refused assign claims: %v", f.be.claims)
+				}
+			})
 		}
-		return ids(cs)
-	}
-	if got := get(roundcfg.Settings{Role: roundcfg.RoleMain}); !reflect.DeepEqual(got, []string{"1", "2"}) {
-		t.Errorf("support off: %v", got)
-	}
-	if got := get(roundcfg.Settings{Support: "mac", Role: roundcfg.RoleMain}); !reflect.DeepEqual(got, []string{"1"}) {
-		t.Errorf("main with support on: %v", got)
-	}
-	if got := get(roundcfg.Settings{Support: "mac", Role: roundcfg.RoleSupport}); !reflect.DeepEqual(got, []string{"2"}) {
-		t.Errorf("support: %v", got)
-	}
-	// issues.labels.support renames the label.
-	e.SupportLabel = "remote"
-	be.items["1"].Labels = []string{"remote"}
-	if got := get(roundcfg.Settings{Support: "mac", Role: roundcfg.RoleSupport}); !reflect.DeepEqual(got, []string{"1"}) {
-		t.Errorf("support with a renamed label: %v", got)
 	}
 }
 
@@ -78,7 +171,7 @@ func supportFixture(t *testing.T, cfg string) (*assignFixture, string) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"12", "13"} {
-		f.be.items[id].Labels = []string{config.Label(nil, "support")}
+		f.be.items[id].Labels = []string{"machine:mac"}
 	}
 	return f, origin
 }
@@ -151,7 +244,7 @@ func TestSupportAssignRefusesTheOtherSite(t *testing.T) {
 
 	m := newAssignFixture(t)
 	m.env.Round.Support = "mac"
-	m.be.items["12"].Labels = []string{config.Label(nil, "support")}
+	m.be.items["12"].Labels = []string{"machine:mac"}
 	if _, err := m.assign("12", "", nil); blockedBy(t, err) != BlockSite || !strings.Contains(err.Error(), "--withdraw") {
 		t.Errorf("main assign of a support issue: %v", err)
 	}
@@ -275,7 +368,7 @@ func TestOfferSupport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(offered, []string{"12", "13"}) || !slices.Contains(f.be.labels[12], config.Label(nil, "support")) || !slices.Contains(f.be.labels[13], config.Label(nil, "support")) {
+	if !reflect.DeepEqual(offered, []string{"12", "13"}) || !slices.Contains(f.be.labels[12], "machine:mac") || !slices.Contains(f.be.labels[13], "machine:mac") {
 		t.Fatalf("offered %v, labels %v", offered, f.be.labels)
 	}
 
@@ -306,7 +399,7 @@ func TestOfferSupport(t *testing.T) {
 // waiting.
 func TestSupportQueueGroupsWaitingActiveAndUnknown(t *testing.T) {
 	be := &fakeRemote{}
-	label := config.Label(nil, "support")
+	label := "machine:mac"
 	for _, id := range []string{"1", "2", "3", "4"} {
 		be.add(id, "work "+id, "", false, "")
 	}
@@ -348,7 +441,7 @@ func TestSupportQueueGroupsWaitingActiveAndUnknown(t *testing.T) {
 // A cancelled pass stops reading claims: the screen that asked for the queue
 // is gone, so no further tracker call is made for it (#1873 AC-4).
 func TestSupportQueueStopsWhenCancelled(t *testing.T) {
-	label := config.Label(nil, "support")
+	label := "machine:mac"
 	be := &countingStatus{fakeRemote: &fakeRemote{}}
 	for _, id := range []string{"1", "2", "3"} {
 		be.add(id, "work "+id, "", false, "")
@@ -389,7 +482,7 @@ func TestReturnSupport(t *testing.T) {
 	f.env.Round = f.set
 	f.env.Round.Support = "mac"
 	f.env.Round.Role = roundcfg.RoleSupport
-	label := config.Label(nil, "support")
+	label := "machine:mac"
 	f.be.items["12"].Labels = []string{label}
 	f.be.items["13"].Labels = []string{label}
 
@@ -458,5 +551,28 @@ func TestOfferSupportPostsComment(t *testing.T) {
 	}
 	if n, m := len(f.be.comments["12"]), len(f.be.comments["13"]); n != 1 || m != 1 {
 		t.Errorf("comments after re-offer and withdraw: %d %d", n, m)
+	}
+}
+
+func TestOfferRefusesIssuePinnedElsewhere(t *testing.T) {
+	for _, pin := range []string{"machine:main", "machine:other"} {
+		t.Run(pin, func(t *testing.T) {
+			f := newAssignFixture(t)
+			f.env.Forge = f.be.asForge()
+			f.env.Round = f.set
+			f.env.Round.Support = "mac"
+			f.be.items["13"].Labels = []string{pin}
+			_, err := f.env.OfferSupport(bg, f.root, f.be, []string{"12", "13"}, false)
+			var refusal *BlockedError
+			if !errors.As(err, &refusal) || refusal.By != BlockSite {
+				t.Fatalf("offer err = %v, want blockedBy site", err)
+			}
+			if !strings.Contains(err.Error(), pin) || !strings.Contains(err.Error(), "remove") {
+				t.Errorf("refusal = %v", err)
+			}
+			if len(f.be.labels) != 0 || len(f.be.removed) != 0 || len(f.be.comments) != 0 {
+				t.Errorf("refused offer wrote: %v %v %v", f.be.labels, f.be.removed, f.be.comments)
+			}
+		})
 	}
 }
