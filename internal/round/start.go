@@ -79,6 +79,8 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 			return res, err
 		}
 	} else if recScope == "" {
+		// Nothing recorded and no flags: only the round.scope default can apply, so
+		// it is the one value checked before the lease.
 		if err := checkScope(set.Scope); err != nil {
 			return res, err
 		}
@@ -127,17 +129,18 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 		}
 	}
 
-	// A renewed start without --scope keeps the recorded scope and slate; a new
-	// round falls back to round.scope.
-	keep := scope == "" && out == roundlease.Renewed && recScope != ""
+	// A renewed start without --scope or --items honours the recorded scope; a
+	// new round does not inherit a stale one. resolveScope owns the order.
+	honoured := ""
+	if scope == "" && out == roundlease.Renewed {
+		honoured = recScope
+	}
+	fromRecorded := scope == "" && honoured != ""
+	scope = resolveScope(scope, honoured, set.Scope)
 	var slate []string
-	switch {
-	case keep:
-		scope, slate = recScope, recSlate
-	default:
-		if scope == "" {
-			scope = set.Scope
-		}
+	if fromRecorded {
+		slate = recSlate
+	} else {
 		if err := checkScope(scope); err != nil {
 			return res, err
 		}

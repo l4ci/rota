@@ -404,7 +404,7 @@ type Forge interface {
 	// PRState is "open", "merged" or "closed".
 	PRState(ctx context.Context, pr int) (string, error)
 
-	// PRNeedsBase reports whether PRCreate needs PRSpec.Base (GitLab does).
+	// PRNeedsBase reports whether PRCreate needs PRSpec.Base (both forges do).
 	PRNeedsBase() bool
 	// PRCreate opens a PR/MR from s.Head and returns its URL.
 	PRCreate(ctx context.Context, s PRSpec) (string, error)

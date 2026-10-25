@@ -653,6 +653,8 @@ Nothing lands unless you pass `--land-green`, which lands the verified members b
 member that conflicts with the base plus the ones before it is `merge-failed` with that member named.
 One merge approval covers the whole train. Bounces are not counted.
 
+To find the members that can go together before a train refuses, run `rota worker train <members> --base <branch> --plan`. It runs no tests and pushes nothing. It lists the member pairs that conflict, names the largest conflict-free subset in merge order, lists the rest as order-blocked with the member each conflicts with, and prints the `rota worker train ... --order ...` line that lands that subset. It exits 0 with or without conflicts.
+
 The train remembers what it has verified. Each passing `test.full` or `test.e2e` run is recorded in
 `.rota/train-cache.json` (per developer, gitignored) under the tier, the base commit and the ordered
 member heads. A re-run of the same train, or a bisect step that repeats a combination, reuses the pass

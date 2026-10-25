@@ -16,7 +16,7 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 	d := jsonx.NewObject()
 	d.Set("base", r.Base)
 	d.Set("verdict", r.Verdict)
-	var ms []any
+	ms := []any{}
 	for _, m := range r.Members {
 		o := jsonx.NewObject()
 		o.Set("target", m.Target)
@@ -44,7 +44,57 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 	if r.SHA != "" {
 		d.Set("sha", r.SHA)
 	}
+	if r.Plan != nil {
+		d.Set("plan", planData(r.Plan))
+	}
 	return d
+}
+
+func planData(p *worker.TrainPlan) *jsonx.Object {
+	o := jsonx.NewObject()
+	cs := []any{}
+	for _, c := range p.Conflicts {
+		co := jsonx.NewObject()
+		co.Set("a", c.A)
+		co.Set("b", c.B)
+		co.Set("paths", strList(c.Paths))
+		cs = append(cs, co)
+	}
+	o.Set("conflicts", cs)
+	o.Set("landable", strList(p.Landable))
+	bs := []any{}
+	for _, b := range p.Blocked {
+		bo := jsonx.NewObject()
+		bo.Set("target", b.Target)
+		bo.Set("conflictsWith", strList(b.By))
+		bs = append(bs, bo)
+	}
+	o.Set("orderBlocked", bs)
+	o.Set("command", p.Command)
+	o.Set("noVerify", p.NoVerify)
+	return o
+}
+
+// planText is the human plan: the conflicting pairs, the subset, the rest, and
+// the line that lands the subset.
+func planText(p *worker.TrainPlan) string {
+	var b strings.Builder
+	if len(p.Conflicts) == 0 {
+		b.WriteString("plan: no member pair conflicts; the whole train is landable")
+	} else {
+		b.WriteString("plan: conflicts")
+		for _, c := range p.Conflicts {
+			fmt.Fprintf(&b, "\n  %s x %s (%s)", c.A, c.B, strings.Join(c.Paths, ", "))
+		}
+	}
+	fmt.Fprintf(&b, "\nlandable, in merge order: %s", strings.Join(p.Landable, ", "))
+	for _, bl := range p.Blocked {
+		fmt.Fprintf(&b, "\norder-blocked: %s (conflicts with %s)", bl.Target, strings.Join(bl.By, ", "))
+	}
+	if p.Command != "" {
+		fmt.Fprintf(&b, "\nrun: %s", p.Command)
+	}
+	return b.String()
 }
 
 // trainRunOpts is what one merge train needs: the verb's flags, without the verb.
@@ -52,6 +102,7 @@ type trainRunOpts struct {
 	Targets             []string
 	Base                string
 	Order               []string
+	Plan                bool
 	LandGreen, NoVerify bool
 	FinalSlice          []string
 	Confirm             gate.Confirm
@@ -90,9 +141,9 @@ func runTrain(c *Ctx, root string, o trainRunOpts) trainRun {
 		}
 	}
 	round := &worker.RoundMemo{}
-	r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: o.Targets, Base: o.Base, Order: o.Order, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, Verdict: shipVerdict(c, root, root).Block, CheckReviews: true, Round: round, ItemBody: lazyItemBody(c, root)})
+	r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: o.Targets, Base: o.Base, Order: o.Order, Plan: o.Plan, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, Verdict: shipVerdict(c, root, root).Block, CheckReviews: true, Round: round, ItemBody: lazyItemBody(c, root)})
 	run := trainRun{Result: r, Err: err, Refused: r.Refused(err)}
-	if run.Refused || err != nil {
+	if run.Refused || err != nil || o.Plan {
 		return run
 	}
 	run.Book = postgate.Train(workerEnvCtx(c, ctx), round, root, issues, r, parkNeedsHuman(c, root))
@@ -104,6 +155,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 	landGreen := fs.Bool("land-green", false, "when verification fails, still land the verified members before the culprit")
 	noVerify := fs.Bool("no-verify", false, "allow an empty test.full (the train is refused otherwise)")
 	order := fs.String("order", "", "merge order as comma-separated PR numbers (or slots); replaces the computed order and must name every member once")
+	plan := fs.Bool("plan", false, "preview the train: map member conflicts and name the largest conflict-free subset; runs no tests, pushes nothing")
 	var final stringList
 	fs.Var(&final, "final-slice", "a train member (slot or PR) that is the last slice of a partial-slice issue and may close it; repeatable")
 	confirm := approvalFlags(fs)
@@ -122,6 +174,9 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		if *plan && *order != "" {
+			return Result{}, Usage("--plan previews the computed order; it cannot be combined with --order")
+		}
 		var override []string
 		if *order != "" {
 			seenTok := map[string]bool{}
@@ -134,7 +189,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 				override = append(override, t)
 			}
 		}
-		run := runTrain(c, root, trainRunOpts{Targets: args, Base: *base, Order: override, LandGreen: *landGreen, NoVerify: *noVerify, FinalSlice: final, Confirm: conf, Approval: req})
+		run := runTrain(c, root, trainRunOpts{Targets: args, Base: *base, Order: override, Plan: *plan, LandGreen: *landGreen, NoVerify: *noVerify, FinalSlice: final, Confirm: conf, Approval: req})
 		r, err := run.Result, run.Err
 		if run.Refused {
 			res, rerr := verdictRefusal(r.Verdict, r.Refusal, err, r.Err, r.Hint, trainData(r))
@@ -153,6 +208,10 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+f.Target+" — "+f.Err.Error())
 		}
 		res := Result{Data: trainData(r)}
+		if r.Plan != nil {
+			res.Text = planText(r.Plan)
+			return res, nil
+		}
 		if r.OK() {
 			res.Text = fmt.Sprintf("pass: train of %d -> %s (%s): %s", len(r.Landed), r.Base, r.SHA, strings.Join(r.Landed, ", "))
 			return res, nil

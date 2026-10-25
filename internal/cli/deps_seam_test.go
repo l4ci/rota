@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -94,5 +95,27 @@ func TestCtxRootReadsDepsGetwd(t *testing.T) {
 	want, _ := filepath.EvalSymlinks(root)
 	if g, _ := filepath.EvalSymlinks(got); g != want {
 		t.Errorf("Root = %q, want %q", got, root)
+	}
+}
+
+// The round environment's base is git.baseBranch when it resolves, even in a
+// repo that also has main.
+func TestDefaultRoundEnvBaseHonoursConfiguredBranch(t *testing.T) {
+	root := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q", "-b", "main"},
+		{"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"},
+		{"branch", "develop"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"git": {"baseBranch": "develop"}}`)
+	e := defaultRoundEnv(context.Background(), root, defaultDeps(), false)
+	if e.Base != "develop" {
+		t.Errorf("Base = %q, want the configured develop", e.Base)
 	}
 }
