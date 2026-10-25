@@ -97,14 +97,16 @@ func (r Repo) Verify(ctx context.Context, ref string) (bool, error) {
 	return r.Ok(ctx, "rev-parse", "--verify", "-q", ref)
 }
 
-// Base resolves the base branch: configured when it exists, then main,
-// master, trunk, then origin/HEAD. ok is false when none resolves.
+// Base resolves the base branch: the configured one when set, else main,
+// master, trunk, then origin/HEAD. A configured branch that does not exist is
+// not replaced by a conventional name: it comes back as (configured, false),
+// so a typo in git.baseBranch surfaces. ok is false when none resolves.
 func (r Repo) Base(ctx context.Context, configured string) (base string, ok bool, err error) {
-	cands := []string{"main", "master", "trunk"}
 	if configured != "" {
-		cands = append([]string{configured}, cands...)
+		found, err := r.Verify(ctx, configured)
+		return configured, found, err
 	}
-	for _, b := range cands {
+	for _, b := range []string{"main", "master", "trunk"} {
 		if found, err := r.Verify(ctx, b); err != nil || found {
 			return b, found, err
 		}

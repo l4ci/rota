@@ -96,7 +96,12 @@ func configuredBase(d *Deps, dir string) string {
 }
 
 func resolveBase(ctx context.Context, d *Deps, dir string) (string, bool, error) {
-	base, ok, err := d.Repo(dir).Base(ctx, configuredBase(d, dir))
+	configured := configuredBase(d, dir)
+	base, ok, err := d.Repo(dir).Base(ctx, configured)
+	if err == nil && !ok && configured != "" {
+		return "", false, Resolution("git.baseBranch %q does not resolve to a branch", configured).
+			WithHint("fix or unset git.baseBranch in .rota/config.json")
+	}
 	return base, ok, gitErr(err)
 }
 

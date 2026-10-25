@@ -208,6 +208,9 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		}
 		d.Set("candidates", candidateList(cands))
 		notePath := handoffFile(c.deps(), root, cfg)
+		if notePath == "" {
+			c.Warn("no base branch resolves (git.baseBranch, main, master, trunk, origin/HEAD): the orchestrator handoff note was not read")
+		}
 		note, noteWarn := hook.ReadOrchestratorNote(notePath, *consume)
 		if noteWarn != "" {
 			c.Warn("%s", noteWarn)
