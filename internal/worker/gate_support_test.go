@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/l4ci/rota/internal/config"
 )
 
 // supportComment is one issue comment as the fake forge serves it: the tracker
@@ -31,7 +29,7 @@ func supportGateWith(t *testing.T, support bool, body string, setup func(*world)
 	cfg := `{"issues":{"source":"github"},"test":{"full":["true"]}}`
 	if support {
 		cfg = `{"issues":{"source":"github"},"round":{"support":"mac"},"test":{"full":["true"]}}`
-		w.forge("issueLabels", config.Label(nil, "support"))
+		w.forge("issueLabels", "machine:mac")
 	}
 	w.setConfig(cfg)
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),

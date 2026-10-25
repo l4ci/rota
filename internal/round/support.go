@@ -15,10 +15,8 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// The support split of #1598: with round.support set, an issue labelled
-// issues.labels.support belongs to the support machine and every other issue
-// to main. Main offers and withdraws the label; each side offers and assigns
-// only its own issues. With round.support empty nothing here applies.
+// With round.support set, machine:<name> pins an issue to that machine.
+// With support disabled the pins do not restrict a single-machine round.
 
 // Blocked reasons of the support split and the support side's fresh base.
 const (
@@ -37,18 +35,42 @@ const (
 
 // offSite is why it belongs to the other side of the split ("" when this
 // machine may take it, and always with round.support empty).
-func (e Env) offSite(support, role string, it backlog.Item) string {
+func (e Env) offSite(support, role, legacy string, it backlog.Item) string {
 	if support == "" {
 		return ""
 	}
-	labelled := slices.Contains(it.Labels, e.SupportLabel)
-	switch {
-	case role == roundcfg.RoleSupport && !labelled:
-		return fmt.Sprintf("%s is not labelled %s: the support machine (round.role support) takes only the issues main offers it", it.ID, e.SupportLabel)
-	case role != roundcfg.RoleSupport && labelled:
-		return fmt.Sprintf("%s is labelled %s and belongs to the support machine %s: rota round support offer --withdraw %s takes it back", it.ID, e.SupportLabel, support, it.ID)
+	if why := legacySupportWarning(support, legacy, it); why != "" {
+		return why
+	}
+	pins := roundcfg.PinsOf(it.Labels)
+	if len(pins) == 0 {
+		// Until #1975, support still takes only issues explicitly offered to it.
+		if role == roundcfg.RoleSupport {
+			return fmt.Sprintf("%s is not pinned %s: the support machine takes only the issues main offers it", it.ID, roundcfg.MachineLabel(support))
+		}
+	} else if !slices.Contains(pins, roundcfg.MachineName(support, role)) {
+		return fmt.Sprintf("%s is pinned %s elsewhere: remove the pin to move it; on main, rota round support offer --withdraw %s takes a %s issue back", it.ID, strings.Join(pinLabels(pins), ", "), it.ID, roundcfg.MachineLabel(support))
 	}
 	return ""
+}
+
+// Block legacy offers on both machines until the explicit migration completes.
+func legacySupportWarning(support, legacy string, it backlog.Item) string {
+	if legacy == "" {
+		legacy = "site:support"
+	}
+	if support != "" && slices.Contains(it.Labels, legacy) {
+		return fmt.Sprintf("%s still carries retired label %s: run rota migrate labels --apply before assigning it", it.ID, legacy)
+	}
+	return ""
+}
+
+func pinLabels(names []string) []string {
+	labels := make([]string, len(names))
+	for i, name := range names {
+		labels[i] = roundcfg.MachineLabel(name)
+	}
+	return labels
 }
 
 // OfferSupport labels ids for the support side, or with withdraw removes the
@@ -74,6 +96,9 @@ func (e Env) OfferSupport(ctx context.Context, root string, be Board, ids []stri
 		}
 		if it.Closed {
 			return nil, fmt.Errorf("%w: %s is closed", backlog.ErrNotFound, id)
+		}
+		if pins := roundcfg.PinsOf(it.Labels); !withdraw && len(pins) > 0 && !slices.Contains(pins, support) {
+			return nil, blocked(BlockSite, "%s is pinned %s: remove that label before offering it to %s", it.ID, strings.Join(pinLabels(pins), ", "), roundcfg.MachineLabel(support))
 		}
 		st, err := be.Status(it.ID)
 		if err != nil {

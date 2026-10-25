@@ -6,6 +6,7 @@ import "github.com/l4ci/rota/internal/version"
 func migrateCommands() *Command {
 	return &Command{Name: "migrate", Summary: "one-shot project migrations", Subs: []*Command{
 		hvMigrateCommand(),
+		labelsMigrateCommand(),
 		sourceMigrateCommand(),
 		configMigrateCommand(),
 		milestonesMigrateCommand(),

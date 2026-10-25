@@ -431,6 +431,9 @@ func validateEnum(key string, value any) error {
 // takes an integer of 0 or more. A project path key takes a relative path that
 // stays inside the project, or "" to clear it.
 func validateValue(key string, value any) error {
+	if name, ok := value.(string); key == "round.support" && ok && strings.TrimSpace(name) == "main" {
+		return fmt.Errorf("%w for round.support: main is reserved for the main machine", ErrBadValue)
+	}
 	if IsCommandKey(key) {
 		if _, ok := value.(string); !ok {
 			return fmt.Errorf("%w for %s: want a command string", ErrBadValue, key)

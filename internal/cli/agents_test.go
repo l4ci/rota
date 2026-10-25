@@ -72,7 +72,7 @@ func TestAgentsBadRoleConfigIsAnError(t *testing.T) {
 }
 
 func TestAgentsWriteOnSupportWritesCodexOnly(t *testing.T) {
-	dir := agentsProject(t, `{"round":{"commands":{"codex":"codex"}}}`)
+	dir := agentsProject(t, `{"round":{"support":"mac","commands":{"codex":"codex"}}}`)
 	writeLocalConfig(t, dir, `{"round":{"role":"support"}}`+"\n")
 	code, out, errOut := rotaIn(t, dir, "agents", "write")
 	if code != 0 {
@@ -98,7 +98,7 @@ func TestAgentsWriteOnSupportWritesCodexOnly(t *testing.T) {
 }
 
 func TestAgentsCheckOnSupportIgnoresSkippedFiles(t *testing.T) {
-	dir := agentsProject(t, `{"round":{"commands":{"codex":"codex"}}}`)
+	dir := agentsProject(t, `{"round":{"support":"mac","commands":{"codex":"codex"}}}`)
 	writeLocalConfig(t, dir, `{"round":{"role":"support"}}`+"\n")
 	if code, _, _ := rotaIn(t, dir, "agents", "write", "--check"); code != 1 {
 		t.Fatalf("check with .codex missing: %d, want 1", code)
