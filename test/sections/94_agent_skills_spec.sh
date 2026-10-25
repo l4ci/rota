@@ -83,13 +83,17 @@ sp_chain() { # sp_chain <dir> <line>: a flagged rota-b and a rota-a whose body i
 }
 n=0
 for line in 'Now use `rota-b` to record it.' 'Next step: `/rota-b`.' 'Hand the result to `rota-b`.' \
-            'Ask the user whether to type `/rota-b`, else run it.' 'Type `/rota-b`, then run it.'; do
+            'Ask the user whether to type `/rota-b`, else run it.' 'Type `/rota-b`, then run it.' \
+            'Then call `/rota-b` to finish.' 'Execute `/rota-b` next.' 'Switch to `/rota-b`.' 'Delegate to `/rota-b`.' \
+            'Proceed to `/rota-b`.' 'Continue with `/rota-b`.' 'Follow up with `/rota-b`.' 'Go to `/rota-b`.' \
+            'Follow `/rota-b`.' 'Then `/rota-b`.'; do
   n=$((n+1)); sp_chain "$SPEC_TMP/chain$n" "$line"
   RC=0; OUT="$(sp_run "$SPEC_TMP/chain$n")" || RC=$?
   [ "$RC" != 0 ] && case "$OUT" in *"chains into flagged skill rota-b"*) ;; *) RC=0 ;; esac
   [ "$RC" != 0 ] || fail "E2[c2]: imperative chain passed the lint: $line => $OUT"
 done
-for line in 'See `/rota-b` for the gate.' 'Works like `/rota-b` does.' 'Type `/rota-b` to promote it.' 'Offer `/rota-b` in prose.'; do
+for line in 'See `/rota-b` for the gate.' 'Works like `/rota-b` does.' 'Type `/rota-b` to promote it.' 'Offer `/rota-b` in prose.' \
+            '- `/rota-b` to ship.'; do
   n=$((n+1)); sp_chain "$SPEC_TMP/chain$n" "$line"
   OUT="$(sp_run "$SPEC_TMP/chain$n")" || fail "E2[c2]: prose reference or offer failed the lint: $line => $OUT"
 done
