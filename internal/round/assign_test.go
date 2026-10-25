@@ -1488,3 +1488,28 @@ func TestAssignRefusesOnRoundErr(t *testing.T) {
 		t.Errorf("ben holds %q after the refusal, want none", got)
 	}
 }
+
+// The pre-flight line names the tier the brief assigns, keeps the sentinel, and
+// is absent from a research brief (no PR).
+func TestPointerBriefPreflight(t *testing.T) {
+	brief := func(tb tierBrief) string {
+		tb.Kind, tb.Tier = "claude", "standard"
+		return pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", nil, tb)
+	}
+	fast := brief(tierBrief{})
+	for _, want := range []string{"Pre-flight before `rota worker done`", "base and on your branch", "--outcome partial", "third line", "still print `ROTA-DONE", "not run: merge-only by rule"} {
+		if !strings.Contains(fast, want) {
+			t.Errorf("fast brief lacks %q:\n%s", want, fast)
+		}
+	}
+	full := brief(tierBrief{FullOnly: true})
+	if !strings.Contains(full, "Pre-flight before `rota worker done`") || strings.Contains(full, "merge-only by rule") {
+		t.Errorf("FullOnly brief keeps the merge-only wording or lacks the pre-flight:\n%s", full)
+	}
+	if !strings.Contains(full, "`rota test run full`") {
+		t.Errorf("FullOnly brief lacks test run full:\n%s", full)
+	}
+	if r := brief(tierBrief{Decision: DecisionResearch}); strings.Contains(r, "Pre-flight") {
+		t.Errorf("research brief carries the pre-flight:\n%s", r)
+	}
+}

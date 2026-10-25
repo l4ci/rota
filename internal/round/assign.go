@@ -474,6 +474,16 @@ func (t tierBrief) text() string {
 	if t.TDD {
 		b.WriteString("work.tdd is on: for a behavior change, show a failing test first. Run the new test before the production change and see it fail on an assertion, recording the run with `rota proof record <ID> -- <test command>`, then record the PASS row the same way after. `rota worker done` warns when non-test Go changed and no row is a FAIL.\n")
 	}
+	if t.Decision != DecisionResearch {
+		b.WriteString("Pre-flight before `rota worker done`: run the tier this brief assigns you")
+		if t.FullOnly {
+			b.WriteString(" (`rota test run full`), plus any per-AC command.\n")
+		} else {
+			b.WriteString(" (`rota test run fast`), plus any per-AC command. Never the full gate: say `not run: merge-only by rule` in the PR.\n")
+		}
+		b.WriteString("For every acceptance bullet that states a number, ratio, size or percentage, measure it on the base and on your branch and paste both values in the PR body.\n")
+		b.WriteString("If a numeric criterion cannot be measured or a check fails, run `rota worker done` with `--outcome partial` naming that criterion on the summary's third line, and still print `ROTA-DONE` last.\n")
+	}
 	fmt.Fprintf(&b, "Put `Worker tier: %s` in your PR body.\n", own)
 	return b.String()
 }
