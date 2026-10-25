@@ -5,9 +5,9 @@ package ship
 
 import (
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/strutil"

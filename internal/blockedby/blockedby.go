@@ -100,6 +100,8 @@ const (
 	Ambiguous           = "ambiguous"
 	AliasCollision      = "alias-collision"
 	Edited              = "edited"
+	Unmanaged           = "unmanaged"
+	IDMismatch          = "id mismatch"
 	RequestID           = "request-id"
 	LeaseHeld           = "lease held"
 	Supervised          = "supervised"
@@ -145,7 +147,7 @@ func All() []string {
 		CodexFlags, OpencodeFlags, OpencodeBinary, OutsideHerdr, Host, ResumeFlag, Limited, Dialog, ResetGuard,
 		Dispatch, MaxBounces, State, Handle,
 		Verdict, NoVerify, Closes, BestOfUnpicked, ReviewMissing, StaleAttempt, OutcomeOpen, GateRunning, Forge, Order,
-		Backend, Config, Active, Umbrella, Proof, ProofMissing, ClosedItem, Exists, Ambiguous, AliasCollision, Edited, RequestID, LeaseHeld,
+		Backend, Config, Active, Umbrella, Proof, ProofMissing, ClosedItem, Exists, Ambiguous, AliasCollision, Edited, Unmanaged, IDMismatch, RequestID, LeaseHeld,
 		Supervised, Watching, SlotHoldsWork, ManualGate, ApprovalPending, ApprovalDeclined, IronLaw,
 		StatuslineExists, ReleaseOrder, NotGreater, UnfinishedMilestone, HeadingInBody, MergeConflict,
 		AccountConflict, ConfigConflict, ConfigMigration, BothDirs, DirtyTree, LockHeld, BackupDir, Worktree,

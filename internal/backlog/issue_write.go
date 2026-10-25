@@ -2,8 +2,6 @@ package backlog
 
 import (
 	"errors"
-	"github.com/l4ci/rota/internal/blockedby"
-	ms "github.com/l4ci/rota/internal/milestone"
 	"regexp"
 	"slices"
 	"sort"
@@ -11,9 +9,11 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/acceptance"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/marker"
+	ms "github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/notechunk"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"

@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -22,6 +21,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/hook"

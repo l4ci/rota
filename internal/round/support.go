@@ -3,11 +3,11 @@ package round
 import (
 	"context"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
 	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/strutil"
