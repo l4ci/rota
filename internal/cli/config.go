@@ -190,7 +190,7 @@ func annotateTierModels(cfg any, entries []config.Entry, rows []any, lines []str
 
 // tierKeyParts splits round.tiers.<kind>.<tier>.
 func tierKeyParts(key string) (kind, tier string, ok bool) {
-	rest, found := strings.CutPrefix(key, "round.tiers.")
+	rest, found := strings.CutPrefix(key, config.RoundTiersPrefix)
 	if !found {
 		return "", "", false
 	}
@@ -260,7 +260,7 @@ func configSet(fs *flag.FlagSet) RunFunc {
 			if root, err = backlogScope(c); err != nil {
 				return Result{}, err
 			}
-			if args[0] == "round.role" && *project {
+			if args[0] == config.RoundRoleKey && *project {
 				return Result{}, Usage("round.role belongs to one machine: set it without --project")
 			}
 			layer := config.LayerFor(args[0], *project, *local)

@@ -20,6 +20,63 @@ const (
 	TypeObject Type = "object"
 )
 
+// Round config key names are shared by the schema and its callers.
+// Keep the names here so callers do not silently drift from the keys table.
+const (
+	RoundDispatchKey                 = "round.dispatch"
+	RoundSlotsKey                    = "round.slots"
+	RoundCommandsKey                 = "round.commands"
+	RoundAccountsKey                 = "round.accounts"
+	RoundScopeKey                    = "round.scope"
+	RoundRosterKey                   = "round.roster"
+	RoundBriefKey                    = "round.brief"
+	RoundSharedPathsKey              = "round.sharedPaths"
+	RoundScopeOverlapKey             = "round.scopeOverlap"
+	RoundAdoptPatternKey             = "round.adoptPattern"
+	RoundSupportKey                  = "round.support"
+	RoundRoleKey                     = "round.role"
+	RoundTierKey                     = "round.tier"
+	RoundHarnessesKey                = "round.harnesses"
+	RoundProfileKey                  = "round.profile"
+	RoundTiersClaudeLightKey         = RoundTiersPrefix + "claude.light"
+	RoundTiersClaudeStandardKey      = RoundTiersPrefix + "claude.standard"
+	RoundTiersClaudeHeavyKey         = RoundTiersPrefix + "claude.heavy"
+	RoundTiersCodexLightKey          = RoundTiersPrefix + "codex.light"
+	RoundTiersCodexStandardKey       = RoundTiersPrefix + "codex.standard"
+	RoundTiersCodexHeavyKey          = RoundTiersPrefix + "codex.heavy"
+	RoundTiersOpencodeLightKey       = RoundTiersPrefix + "opencode.light"
+	RoundTiersOpencodeStandardKey    = RoundTiersPrefix + "opencode.standard"
+	RoundTiersOpencodeHeavyKey       = RoundTiersPrefix + "opencode.heavy"
+	RoundClaimStaleMinutesKey        = "round.claimStaleMinutes"
+	RoundClaimStaleMinutesMajorKey   = "round.claimStaleMinutesMajor"
+	RoundStallMinutesKey             = "round.stallMinutes"
+	RoundMaxBouncesKey               = "round.maxBounces"
+	RoundFreshAtKey                  = "round.freshAt"
+	RoundLedgerKeepKey               = "round.ledgerKeep"
+	RoundArchitectureEveryKey        = "round.architectureEvery"
+	RoundArchitectureAreasKey        = "round.architectureAreas"
+	RoundArchitectureIdleMinItemsKey = "round.architectureIdleMinItems"
+	RoundArchitectureIdleMinHoursKey = "round.architectureIdleMinHours"
+	RoundAutopilotCapKey             = "round.autopilotCap"
+	RoundBatchKey                    = "round.batch"
+	RoundBundleMaxKey                = "round.bundleMax"
+	RoundReviewLoopKey               = "round.reviewLoop"
+	RoundEnvSetupKey                 = "round.envSetup"
+	RoundSharedDirsKey               = "round.sharedDirs"
+	RoundPortBaseKey                 = "round.portBase"
+	RoundPortBlockKey                = "round.portBlock"
+	RoundHerdrGroupSlotsKey          = "round.herdrGroupSlots"
+	RoundItemTimeoutMinutesKey       = "round.itemTimeoutMinutes"
+
+	// RoundTiersPrefix builds the per-harness, per-tier leaf keys.
+	RoundTiersPrefix = "round.tiers."
+
+	// Commands are children of the object-valued round.commands key.
+	RoundCommandsClaudeKey   = RoundCommandsKey + ".claude"
+	RoundCommandsCodexKey    = RoundCommandsKey + ".codex"
+	RoundCommandsOpencodeKey = RoundCommandsKey + ".opencode"
+)
+
 // The values of round.scope: which issues a round may take.
 const (
 	ScopeSlate     = "slate"
@@ -102,10 +159,10 @@ var Keys = []Key{
 	k("orchestrator.command", ScopeMachine, "", false, TypeString, "Rounds: Command that starts the orchestrator. Empty builds claude --model <orchestrator.model> --permission-mode auto (with --continue for rota worker session ensure)."),
 	k("work.isolation", ScopeTaste, "branch", false, TypeEnum, "/rota-work: How a cycle isolates changes from main: a feature branch in this checkout, or a separate git worktree.", "branch", "worktree"),
 	k("work.mergeStrategy", ScopeTaste, "direct", false, TypeEnum, "/rota-work: How finished work lands: merged straight into the base branch with --no-ff, or through a pull request. Ignored when issues.source is a tracker (always pr) or the forge is local (always direct); rota ship strategy prints the answer.", "direct", "pr"),
-	k("round.dispatch", ScopeMachine, "subagent", false, TypeEnum, "Rounds: Where round workers run. subagent means detect: herdr in a herdr pane, tmux in tmux, else in-harness subagents. /rota-work ignores it.", "subagent", "tmux", "herdr"),
-	k("round.slots", ScopeMachine, num("3"), false, TypeInt, "Rounds: Number of worker slots rota round start provisions (at least 1). --slots overrides it for one round."),
-	k("round.commands", ScopeMachine, jsonx.NewObject(), false, TypeObject, "Rounds: Command that starts a worker session, per harness kind (claude, codex or opencode), as round.commands.<kind>. Empty or unset builds the default command for the kind, with --model from the tier; {model} receives the tier's model. An unknown kind is an error."),
-	emptyUnset(k("round.accounts", ScopeMachine, []any{}, false, TypeList, "Rounds: Logins for worker slots, as {kind, name, dir} objects. kind is claude, codex or opencode and dir the harness's config home (CLAUDE_CONFIG_DIR, CODEX_HOME, OPENCODE_CONFIG_DIR); a leading ~ expands to the home directory. A name stands for one dir: it may repeat across kinds only with the same dir. Layers merge by kind: a layer that lists a kind replaces the lower layers' entries of that kind and inherits the others. Empty: every slot uses the orchestrator's login (Claude) or the harness's default home. Machine-specific, so set it in the global config or config.local.json. An empty list in the project or local file counts as unset, so the global value applies.")),
+	k(RoundDispatchKey, ScopeMachine, "subagent", false, TypeEnum, "Rounds: Where round workers run. subagent means detect: herdr in a herdr pane, tmux in tmux, else in-harness subagents. /rota-work ignores it.", "subagent", "tmux", "herdr"),
+	k(RoundSlotsKey, ScopeMachine, num("3"), false, TypeInt, "Rounds: Number of worker slots rota round start provisions (at least 1). --slots overrides it for one round."),
+	k(RoundCommandsKey, ScopeMachine, jsonx.NewObject(), false, TypeObject, "Rounds: Command that starts a worker session, per harness kind (claude, codex or opencode), as round.commands.<kind>. Empty or unset builds the default command for the kind, with --model from the tier; {model} receives the tier's model. An unknown kind is an error."),
+	emptyUnset(k(RoundAccountsKey, ScopeMachine, []any{}, false, TypeList, "Rounds: Logins for worker slots, as {kind, name, dir} objects. kind is claude, codex or opencode and dir the harness's config home (CLAUDE_CONFIG_DIR, CODEX_HOME, OPENCODE_CONFIG_DIR); a leading ~ expands to the home directory. A name stands for one dir: it may repeat across kinds only with the same dir. Layers merge by kind: a layer that lists a kind replaces the lower layers' entries of that kind and inherits the others. Empty: every slot uses the orchestrator's login (Claude) or the harness's default home. Machine-specific, so set it in the global config or config.local.json. An empty list in the project or local file counts as unset, so the global value applies.")),
 	k("refactor.confirmBeforeExecute", ScopeTaste, true, false, TypeBool, "Whether /rota-refactor --fix confirms the candidate list before implementing it. Off means no pause."),
 	k("learn.verify", ScopeTaste, false, false, TypeBool, "Whether /rota-learn always runs a fresh-context verifier on the entries it just wrote."),
 	k("learn.promoteThreshold", ScopeProject, num("3"), true, TypeInt, "Confidence threshold at which the knowledge lifecycle auto-promotes an entry. Integer, 0 or more."),
@@ -156,26 +213,26 @@ var Keys = []Key{
 	k("ship.mergeApprovalPaths", ScopeProject, []any{}, false, TypeList, "Repo-relative paths or globs that need human approval when ship.mergeApproval is paths."),
 	k("review.fileDeferred", ScopeTaste, "major", false, TypeEnum, "Which deferred review findings rota verdict add --file-deferred files, as one follow-up item per PR. minor: minor and major. major: only major (minor stays in the verdict record). off: none. A PR that closes a deferred-findings item files none.", "minor", "major", "off"),
 	k("review.crossLabels", ScopeProject, []any{"size:Major", "risk:high"}, false, TypeList, "Issue labels that make a PR need a cross-harness review: one read-only review on a harness other than the author's, recorded as a review-cross verdict the merge gate requires. Applies only when round.harnesses is set. A review:<harness> label (claude or codex) picks the reviewer, review:none skips it. Empty: no PR needs one."),
-	k("round.scope", ScopeProject, ScopeMilestone, false, TypeEnum, "Rounds: Which issues a round may take. slate: only those named at rota round start --items. milestone: the active milestones. next: also the next ready milestone. open: every open item no slot holds.", ScopeMilestone, ScopeSlate, ScopeNext, ScopeOpen),
-	k("round.roster", ScopeProject, []any{"ben", "dana", "nia", "kit"}, false, TypeList, "Rounds: Agent names slots are provisioned under, one slot each. Lowercase letters, digits and -, no duplicates."),
-	k("round.brief", ScopeMachine, "", false, TypePath, "Rounds: Path of the standing worker contract the assignment pointer names. Empty means skills/references/worker-contract.md in the checkout, else the installed copy."),
-	k("round.sharedPaths", ScopeProject, []any{}, false, TypeList, "Rounds: Repo-relative globs the file-overlap readiness check ignores, for files every issue touches."),
-	k("round.scopeOverlap", ScopeProject, ScopeOverlapWarn, false, TypeEnum, "Rounds: What a clash on declared scopes (the ## Touches section, else Subsystem) does to the overlap check. warn: reported, the item stays ready. block: fails the check like a shared path; --accept-overlap skips it.", ScopeOverlapWarn, ScopeOverlapBlock),
-	k("round.adoptPattern", ScopeProject, "", false, TypeString, "Rounds: Glob over branch names (codex/*, claude/*). rota round reconcile reports a matching branch that no slot holds and that is not merged as unregistered-branch; --apply adopts those whose name carries an issue number. Empty turns the check off."),
-	k("round.support", ScopeProject, "", false, TypeString, "Rounds: Name of the support machine (e.g. mac). Non-empty enables a support orchestrator on that machine, and is the prefix of its roster names. Needs an issue tracker."),
-	k("round.role", ScopeMachine, "main", false, TypeEnum, "Rounds: This machine's role, set in .rota/config.local.json only. support builds machine:<name> issues and opens PRs but never merges or writes tracked .rota/ content.", "main", "support"),
-	k("round.tier", ScopeTaste, "standard", false, TypeEnum, "Rounds: Default worker tier for rota round assign: light for reading, standard for code and tests, heavy for hard reasoning.", "light", "standard", "heavy"),
-	k("round.harnesses", ScopeMachine, []any{}, false, TypeList, "Rounds: Worker harnesses a round may use, in quota-fallback order, e.g. [claude, codex]. The first entry is the default kind; --kind and an issue's harness: label beat it. When every account of an issue's harness is cooling down, the next harness with headroom takes it, labelled harness:<kind> (file backend: the Harness: field). --kind, a harness: label and a model: label or --model never fall back. Empty: the slot's recorded kind, else claude."),
-	k("round.profile", ScopeMachine, "", false, TypeEnum, "Rounds: Named model profile that fills round.tiers.claude.* (light/standard/heavy). quality: sonnet/opus/opus. balanced: haiku/sonnet/opus. budget: haiku/haiku/sonnet. inherit: no model, workers launch without --model. Empty keeps the tier defaults. An explicit round.tiers.claude.<tier> beats the profile; Codex and OpenCode tiers are not touched.", "quality", "balanced", "budget", "inherit"),
-	k("round.tiers.claude.light", ScopeMachine, "haiku", false, TypeString, "Rounds: Model a light-tier Claude worker starts with."),
-	k("round.tiers.claude.standard", ScopeMachine, "sonnet", false, TypeString, "Rounds: Model a standard-tier Claude worker starts with. An explicit value beats round.profile."),
-	k("round.tiers.claude.heavy", ScopeMachine, "opus", false, TypeString, "Rounds: Model a heavy-tier Claude worker starts with."),
-	k("round.tiers.codex.light", ScopeMachine, "gpt-6-luna", false, TypeString, "Rounds: Model a light-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three."),
-	k("round.tiers.codex.standard", ScopeMachine, "gpt-6.1-sol", false, TypeString, "Rounds: Model a standard-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three."),
-	k("round.tiers.codex.heavy", ScopeMachine, "gpt-6-astra", false, TypeString, "Rounds: Model a heavy-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three."),
-	k("round.tiers.opencode.light", ScopeMachine, "opencode/claude-haiku-5-5", false, TypeString, "Rounds: Model a light-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three."),
-	k("round.tiers.opencode.standard", ScopeMachine, "opencode/claude-sonnet-5-5", false, TypeString, "Rounds: Model a standard-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three."),
-	k("round.tiers.opencode.heavy", ScopeMachine, "opencode/claude-opus-5-5", false, TypeString, "Rounds: Model a heavy-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three."),
+	k(RoundScopeKey, ScopeProject, ScopeMilestone, false, TypeEnum, "Rounds: Which issues a round may take. slate: only those named at rota round start --items. milestone: the active milestones. next: also the next ready milestone. open: every open item no slot holds.", ScopeMilestone, ScopeSlate, ScopeNext, ScopeOpen),
+	k(RoundRosterKey, ScopeProject, []any{"ben", "dana", "nia", "kit"}, false, TypeList, "Rounds: Agent names slots are provisioned under, one slot each. Lowercase letters, digits and -, no duplicates."),
+	k(RoundBriefKey, ScopeMachine, "", false, TypePath, "Rounds: Path of the standing worker contract the assignment pointer names. Empty means skills/references/worker-contract.md in the checkout, else the installed copy."),
+	k(RoundSharedPathsKey, ScopeProject, []any{}, false, TypeList, "Rounds: Repo-relative globs the file-overlap readiness check ignores, for files every issue touches."),
+	k(RoundScopeOverlapKey, ScopeProject, ScopeOverlapWarn, false, TypeEnum, "Rounds: What a clash on declared scopes (the ## Touches section, else Subsystem) does to the overlap check. warn: reported, the item stays ready. block: fails the check like a shared path; --accept-overlap skips it.", ScopeOverlapWarn, ScopeOverlapBlock),
+	k(RoundAdoptPatternKey, ScopeProject, "", false, TypeString, "Rounds: Glob over branch names (codex/*, claude/*). rota round reconcile reports a matching branch that no slot holds and that is not merged as unregistered-branch; --apply adopts those whose name carries an issue number. Empty turns the check off."),
+	k(RoundSupportKey, ScopeProject, "", false, TypeString, "Rounds: Name of the support machine (e.g. mac). Non-empty enables a support orchestrator on that machine, and is the prefix of its roster names. Needs an issue tracker."),
+	k(RoundRoleKey, ScopeMachine, "main", false, TypeEnum, "Rounds: This machine's role, set in .rota/config.local.json only. support builds machine:<name> issues and opens PRs but never merges or writes tracked .rota/ content.", "main", "support"),
+	k(RoundTierKey, ScopeTaste, "standard", false, TypeEnum, "Rounds: Default worker tier for rota round assign: light for reading, standard for code and tests, heavy for hard reasoning.", "light", "standard", "heavy"),
+	k(RoundHarnessesKey, ScopeMachine, []any{}, false, TypeList, "Rounds: Worker harnesses a round may use, in quota-fallback order, e.g. [claude, codex]. The first entry is the default kind; --kind and an issue's harness: label beat it. When every account of an issue's harness is cooling down, the next harness with headroom takes it, labelled harness:<kind> (file backend: the Harness: field). --kind, a harness: label and a model: label or --model never fall back. Empty: the slot's recorded kind, else claude."),
+	k(RoundProfileKey, ScopeMachine, "", false, TypeEnum, "Rounds: Named model profile that fills round.tiers.claude.* (light/standard/heavy). quality: sonnet/opus/opus. balanced: haiku/sonnet/opus. budget: haiku/haiku/sonnet. inherit: no model, workers launch without --model. Empty keeps the tier defaults. An explicit round.tiers.claude.<tier> beats the profile; Codex and OpenCode tiers are not touched.", "quality", "balanced", "budget", "inherit"),
+	k(RoundTiersClaudeLightKey, ScopeMachine, "haiku", false, TypeString, "Rounds: Model a light-tier Claude worker starts with."),
+	k(RoundTiersClaudeStandardKey, ScopeMachine, "sonnet", false, TypeString, "Rounds: Model a standard-tier Claude worker starts with. An explicit value beats round.profile."),
+	k(RoundTiersClaudeHeavyKey, ScopeMachine, "opus", false, TypeString, "Rounds: Model a heavy-tier Claude worker starts with."),
+	k(RoundTiersCodexLightKey, ScopeMachine, "gpt-6-luna", false, TypeString, "Rounds: Model a light-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three."),
+	k(RoundTiersCodexStandardKey, ScopeMachine, "gpt-6.1-sol", false, TypeString, "Rounds: Model a standard-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three."),
+	k(RoundTiersCodexHeavyKey, ScopeMachine, "gpt-6-astra", false, TypeString, "Rounds: Model a heavy-tier Codex worker starts with. Set all three to empty for Codex's own default; a kind with any tier set must set all three."),
+	k(RoundTiersOpencodeLightKey, ScopeMachine, "opencode/claude-haiku-5-5", false, TypeString, "Rounds: Model a light-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three."),
+	k(RoundTiersOpencodeStandardKey, ScopeMachine, "opencode/claude-sonnet-5-5", false, TypeString, "Rounds: Model a standard-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three."),
+	k(RoundTiersOpencodeHeavyKey, ScopeMachine, "opencode/claude-opus-5-5", false, TypeString, "Rounds: Model a heavy-tier OpenCode worker starts with, as a provider/model id from opencode models. Set all three to empty for OpenCode's own default; a kind with any tier set must set all three."),
 	// Agent roles (#405): the tier and effort of the three subagent definitions
 	// `rota agents write` emits. An empty effort leaves the harness default.
 	k("roles.explorer.tier", ScopeMachine, "light", false, TypeEnum, "Tier of the rota-explorer agent, which picks its model from round.tiers.", "light", "standard", "heavy"),
@@ -189,26 +246,26 @@ var Keys = []Key{
 	k("plan.criticHarness", ScopeMachine, "", false, TypeEnum, "Harness that runs the /rota-plan level-4 critic, read-only, with the same brief as the same-harness subagent. Empty: the planning harness runs it. A harness that is not installed, or a failed run, falls back to the same-harness critic with one printed line. Levels 1-3 never read it.", "claude", "codex", "opencode"),
 	k("map.staleCommits", ScopeProject, num("50"), false, TypeInt, "Commits HEAD may be past a map file's last_mapped_commit before rota map stats warns that the subsystem is stale. Advisory: the verb still exits 0. 0 turns the warning off."),
 	k("map.softcap_subsystems", ScopeProject, num("20"), false, TypeInt, "Subsystems the project map may name before rota decisions check --cap and /rota-refactor --map nudge to merge or retire stale entries. An integer of 1 or more."),
-	k("round.claimStaleMinutes", ScopeProject, num("240"), false, TypeInt, "Rounds: Minutes without branch or PR activity before a bug, task or Minor/Cosmetic feature claim is stale. 0 disables stale detection for this class."),
-	k("round.claimStaleMinutesMajor", ScopeProject, num("480"), false, TypeInt, "Rounds: Minutes without branch or PR activity before a Major feature claim is stale. 0 disables stale detection for this class."),
-	k("round.stallMinutes", ScopeProject, num("30"), false, TypeInt, "Rounds: Minutes a slot with a live agent may show no commit, edit or state change before rota round reconcile reports it stalled. 0 turns the check off."),
-	k("round.maxBounces", ScopeProject, num("3"), false, TypeInt, "Rounds: How often rota worker gate may send one item's PR back before it parks the item as needs-human. 0 turns the cap off."),
-	k("round.freshAt", ScopeProject, num("2"), false, TypeInt, "Rounds: Bounce count at which rota round review-relay stops resuming the worker and transfers the branch to a free slot at the same tier, with a brief of the open findings only. Must stay below round.maxBounces to act. 0 turns it off."),
-	k("round.ledgerKeep", ScopeProject, num("0"), false, TypeInt, "Rounds: Rounds of the round ledger (.rota/ledger.jsonl) to keep. A new round trims the entries of older rounds. 0 keeps everything."),
-	k("round.architectureEvery", ScopeProject, num("20"), false, TypeInt, "Rounds: Closed non-refactor items between automatic architecture reviews. 0 turns them off."),
-	k("round.architectureAreas", ScopeProject, []any{}, false, TypeList, "Rounds: Areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review."),
-	k("round.architectureIdleMinItems", ScopeProject, num("5"), false, TypeInt, "Rounds: Closed non-refactor items since the last review before an idle slot with no ready candidate (queue-empty) triggers one. 0 drops the condition. A slate round never fires queue-empty."),
-	k("round.architectureIdleMinHours", ScopeProject, num("24"), false, TypeInt, "Rounds: Hours since the last review before the queue-empty trigger may fire again. 0 drops the condition. Applies only where a review time is recorded (issue mode); file mode records none, so the floor never holds a review back there."),
-	k("round.autopilotCap", ScopeTaste, num("3"), false, TypeInt, "Rounds: Most assigns, and most merges, one autopilot tick does. 0 means the default."),
-	k("round.batch", ScopeProject, num("0"), false, TypeInt, "Rounds: Most items a round may have assigned and not yet landed or parked at once. rota round assign refuses the next one past it and rota round tick assigns none. 0 means no limit."),
-	k("round.bundleMax", ScopeProject, num("3"), false, TypeInt, "Rounds: Most member issues rota round assign --bundle may hand one slot beside the lead issue. It refuses a bundle past it. 0 means no limit."),
-	k("round.reviewLoop", ScopeTaste, "manual", false, TypeEnum, "Rounds: What happens when a reviewer comments on a finished worker's PR. manual reports it and leaves rota round review-relay to the orchestrator; auto relays it to the worker as a counted bounce (round.maxBounces) from rota round watch and rota round tick.", "manual", "auto"),
+	k(RoundClaimStaleMinutesKey, ScopeProject, num("240"), false, TypeInt, "Rounds: Minutes without branch or PR activity before a bug, task or Minor/Cosmetic feature claim is stale. 0 disables stale detection for this class."),
+	k(RoundClaimStaleMinutesMajorKey, ScopeProject, num("480"), false, TypeInt, "Rounds: Minutes without branch or PR activity before a Major feature claim is stale. 0 disables stale detection for this class."),
+	k(RoundStallMinutesKey, ScopeProject, num("30"), false, TypeInt, "Rounds: Minutes a slot with a live agent may show no commit, edit or state change before rota round reconcile reports it stalled. 0 turns the check off."),
+	k(RoundMaxBouncesKey, ScopeProject, num("3"), false, TypeInt, "Rounds: How often rota worker gate may send one item's PR back before it parks the item as needs-human. 0 turns the cap off."),
+	k(RoundFreshAtKey, ScopeProject, num("2"), false, TypeInt, "Rounds: Bounce count at which rota round review-relay stops resuming the worker and transfers the branch to a free slot at the same tier, with a brief of the open findings only. Must stay below round.maxBounces to act. 0 turns it off."),
+	k(RoundLedgerKeepKey, ScopeProject, num("0"), false, TypeInt, "Rounds: Rounds of the round ledger (.rota/ledger.jsonl) to keep. A new round trims the entries of older rounds. 0 keeps everything."),
+	k(RoundArchitectureEveryKey, ScopeProject, num("20"), false, TypeInt, "Rounds: Closed non-refactor items between automatic architecture reviews. 0 turns them off."),
+	k(RoundArchitectureAreasKey, ScopeProject, []any{}, false, TypeList, "Rounds: Areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review."),
+	k(RoundArchitectureIdleMinItemsKey, ScopeProject, num("5"), false, TypeInt, "Rounds: Closed non-refactor items since the last review before an idle slot with no ready candidate (queue-empty) triggers one. 0 drops the condition. A slate round never fires queue-empty."),
+	k(RoundArchitectureIdleMinHoursKey, ScopeProject, num("24"), false, TypeInt, "Rounds: Hours since the last review before the queue-empty trigger may fire again. 0 drops the condition. Applies only where a review time is recorded (issue mode); file mode records none, so the floor never holds a review back there."),
+	k(RoundAutopilotCapKey, ScopeTaste, num("3"), false, TypeInt, "Rounds: Most assigns, and most merges, one autopilot tick does. 0 means the default."),
+	k(RoundBatchKey, ScopeProject, num("0"), false, TypeInt, "Rounds: Most items a round may have assigned and not yet landed or parked at once. rota round assign refuses the next one past it and rota round tick assigns none. 0 means no limit."),
+	k(RoundBundleMaxKey, ScopeProject, num("3"), false, TypeInt, "Rounds: Most member issues rota round assign --bundle may hand one slot beside the lead issue. It refuses a bundle past it. 0 means no limit."),
+	k(RoundReviewLoopKey, ScopeTaste, "manual", false, TypeEnum, "Rounds: What happens when a reviewer comments on a finished worker's PR. manual reports it and leaves rota round review-relay to the orchestrator; auto relays it to the worker as a counted bounce (round.maxBounces) from rota round watch and rota round tick.", "manual", "auto"),
 	k("issues.labels.needsHuman", ScopeProject, "needs-human", false, TypeString, "Label rota round transfer --to human puts on an issue handed to the human. rota round candidates skips an issue that carries it."),
-	k("round.envSetup", ScopeProject, "", false, TypeString, "Rounds: Shell command rota worker pool init runs in each new slot worktree, for example npm ci. Empty: no setup."),
-	k("round.sharedDirs", ScopeProject, []any{}, false, TypeList, "Rounds: Dependency directories, relative to the repo root, that rota symlinks from the main checkout into each slot worktree, for example node_modules or .venv. rota worker pool init links them and rota round assign re-links them on a parked slot. When the slot's lockfile differs from main's, or a directory is missing in main, no directory is linked and round.envSetup installs the slot's own. List the directories in .gitignore. Empty: no sharing."),
-	k("round.portBase", ScopeMachine, num("20000"), false, TypeInt, "Rounds: First port of the range rota hands out to worker slots. A new slot takes the lowest range of portBlock ports from here that no other slot holds, exported as ROTA_PORT_BASE; a slot keeps its range until it is reaped or reclaimed."),
-	k("round.portBlock", ScopeMachine, num("100"), false, TypeInt, "Rounds: Ports reserved per worker slot, so servers started by two slots never collide. A slot's block is exported as ROTA_PORT_BASE."),
-	k("round.herdrGroupSlots", ScopeMachine, true, false, TypeBool, "Rounds: herdr only, on by default: open each worker slot's worktree as a workspace linked to the orchestrator's, so herdr groups the slots under their project; false keeps each slot as a tab in the orchestrator's workspace. `rota layout tabs` puts the slots back in their workspaces."),
+	k(RoundEnvSetupKey, ScopeProject, "", false, TypeString, "Rounds: Shell command rota worker pool init runs in each new slot worktree, for example npm ci. Empty: no setup."),
+	k(RoundSharedDirsKey, ScopeProject, []any{}, false, TypeList, "Rounds: Dependency directories, relative to the repo root, that rota symlinks from the main checkout into each slot worktree, for example node_modules or .venv. rota worker pool init links them and rota round assign re-links them on a parked slot. When the slot's lockfile differs from main's, or a directory is missing in main, no directory is linked and round.envSetup installs the slot's own. List the directories in .gitignore. Empty: no sharing."),
+	k(RoundPortBaseKey, ScopeMachine, num("20000"), false, TypeInt, "Rounds: First port of the range rota hands out to worker slots. A new slot takes the lowest range of portBlock ports from here that no other slot holds, exported as ROTA_PORT_BASE; a slot keeps its range until it is reaped or reclaimed."),
+	k(RoundPortBlockKey, ScopeMachine, num("100"), false, TypeInt, "Rounds: Ports reserved per worker slot, so servers started by two slots never collide. A slot's block is exported as ROTA_PORT_BASE."),
+	k(RoundHerdrGroupSlotsKey, ScopeMachine, true, false, TypeBool, "Rounds: herdr only, on by default: open each worker slot's worktree as a workspace linked to the orchestrator's, so herdr groups the slots under their project; false keeps each slot as a tab in the orchestrator's workspace. `rota layout tabs` puts the slots back in their workspaces."),
 	k("work.tdd", ScopeProject, true, false, TypeBool, "/rota-work: Whether a cycle needs a recorded red-first run before a behavior change; round workers follow it too. Off skips the RED requirement."),
 	k("brainstorm.edgeProbe", ScopeTaste, false, false, TypeBool, "Opt-in edge and prohibition probe in /rota-brainstorm Step 3: walks eight edge categories, records each as covered or dismissed, asks what the change must never do and writes each answer as a negative acceptance criterion. Off leaves /rota-brainstorm unchanged."),
 	k("research.packageCheck", ScopeTaste, false, false, TypeBool, "Opt-in registry check in /rota-spike Step 2 and /rota-plan Step 2: each new package they would recommend is looked up on its registry (npm, PyPI, crates.io, Go proxy); missing ones are dropped, suspect ones need a user answer. Makes network calls. Off makes no registry call."),
@@ -228,7 +285,7 @@ var Keys = []Key{
 	k("limits.resumePrompt", ScopeMachine, "The usage limit has reset. Continue where you left off.", false, TypeString, "Text typed into the limited pane to resume it. Must not be empty."),
 	// #85 doctor key: rota doctor warns when the free share of the disk is below this percent; 0 turns it off.
 	k("doctor.minFreeDiskPercent", ScopeMachine, num("10"), false, TypeInt, "rota doctor warns when the free share of the disk falls below this percent, 0 to 100. 0 turns the check off. The same threshold drives the go-cache-disk warning for the volume holding GOCACHE."),
-	k("round.itemTimeoutMinutes", ScopeProject, num("0"), false, TypeInt, "Rounds: Minutes one item may run from its first assignment before rota round reconcile reports it as timed out and --apply parks it as needs-human. 0 means no cap."),
+	k(RoundItemTimeoutMinutesKey, ScopeProject, num("0"), false, TypeInt, "Rounds: Minutes one item may run from its first assignment before rota round reconcile reports it as timed out and --apply parks it as needs-human. 0 means no cap."),
 	k("test.slots", ScopeMachine, num("1"), false, TypeInt, "How many heavy test runs may hold the machine-wide test lock at once, 1 or more. The merge gate, rota test run and rota proof record queue on it; a run that finds every slot taken waits and says so on stderr."),
 	k("test.isolate", ScopeProject, true, false, TypeBool, "Whether rota test run scrubs HERDR_*, TMUX*, ssh-agent variables and pins HOME and XDG_* to a temp root. The merge gate and train do not read it."),
 	k("release.versionFile", ScopeProject, "", false, TypePath, "Project-relative file /rota-release and rota release version read and bump. Empty auto-detects; a path outside the project is refused."),

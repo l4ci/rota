@@ -33,7 +33,7 @@ const DefaultOpencodeCommand = "opencode --model {model}"
 type opencode struct{}
 
 func (opencode) Kind() string       { return OpenCode }
-func (opencode) CommandKey() string { return "round.commands.opencode" }
+func (opencode) CommandKey() string { return config.RoundCommandsOpencodeKey }
 
 // Launch is round.commands.opencode, else the default launch line. A model fills
 // {model}. The default without a model drops its `--model {model}` pair; a
@@ -136,7 +136,7 @@ func (opencode) AmbientAccount(getenv func(string) string) Account {
 }
 
 func (opencode) Accounts(cfg any) AccountList {
-	l := AccountList{Key: "round.accounts"}
+	l := AccountList{Key: config.RoundAccountsKey}
 	for _, a := range config.AccountsOf(cfg, config.KindOpencode) {
 		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.Dir})
 	}
