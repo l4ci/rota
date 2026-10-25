@@ -15,7 +15,7 @@ var indexRe = regexp.MustCompile(`^- \[([^\]]+)\]\(topics/([^)/]+)\.md\)(?:\s+â€
 
 // Topics lists the INDEX.md entries, with each topic file's bullet count.
 func (c Clone) Topics() ([]Topic, error) {
-	raw, err := os.ReadFile(filepath.Join(c.Dir, IndexFile))
+	raw, err := readRegular(filepath.Join(c.Dir, IndexFile))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("%w: %s has no %s", ErrNotFound, c.Dir, IndexFile)
@@ -29,7 +29,7 @@ func (c Clone) Topics() ([]Topic, error) {
 			continue
 		}
 		t := Topic{Name: strings.TrimSpace(m[1]), Slug: m[2], Hook: strings.TrimSpace(m[3])}
-		if body, err := os.ReadFile(c.topicPath(t.Slug)); err == nil {
+		if body, err := readRegular(c.topicPath(t.Slug)); err == nil {
 			t.Bullets = len(bulletLines(string(body)))
 		}
 		out = append(out, t)
@@ -92,7 +92,7 @@ func (c Clone) Query(want []string) (text string, missing []string, err error) {
 				continue
 			}
 			printed[t.Slug] = true
-			body, err := os.ReadFile(c.topicPath(t.Slug))
+			body, err := readRegular(c.topicPath(t.Slug))
 			if err != nil {
 				if errors.Is(err, os.ErrNotExist) {
 					continue // indexed but not written yet: nothing to print
@@ -118,10 +118,14 @@ func sectionBody(file string) string {
 	return strings.TrimRight(strings.Join(lines, "\n"), " \t\r\n") + "\n"
 }
 
+// branchRe admits plain branch names only: no leading dash (a git option), no
+// spaces or shell-ish characters.
+var branchRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
+
 // Policy reads rota-knowledge.json. A missing file is the default, push to
 // main, with Defaulted set so the caller can say so.
 func (c Clone) Policy() (Policy, error) {
-	raw, err := os.ReadFile(filepath.Join(c.Dir, PolicyFile))
+	raw, err := readRegular(filepath.Join(c.Dir, PolicyFile))
 	if errors.Is(err, os.ErrNotExist) {
 		return Policy{Write: "push", Branch: "main", Defaulted: true}, nil
 	}
@@ -144,5 +148,21 @@ func (c Clone) Policy() (Policy, error) {
 	if p.Branch == "" {
 		p.Branch = "main"
 	}
+	if !branchRe.MatchString(p.Branch) || strings.Contains(p.Branch, "..") {
+		return Policy{}, fmt.Errorf("%w: %s: branch %q is not a plain branch name", ErrPolicy, PolicyFile, p.Branch)
+	}
 	return Policy{Write: p.Write, Branch: p.Branch}, nil
+}
+
+// readRegular reads a clone file, refusing a symlink or other non-regular file
+// so a hostile knowledge repo cannot point a topic at a file outside the clone.
+func readRegular(p string) ([]byte, error) {
+	fi, err := os.Lstat(p)
+	if err != nil {
+		return nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", p)
+	}
+	return os.ReadFile(p)
 }

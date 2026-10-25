@@ -80,7 +80,7 @@ func (c Clone) Add(ctx context.Context, in AddIn) (WriteResult, error) {
 
 	p := &plan{}
 	if t, ok := exact(in.Topic, topics); ok {
-		raw, err := os.ReadFile(c.topicPath(t.Slug))
+		raw, err := readRegular(c.topicPath(t.Slug))
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return WriteResult{}, err
 		}
@@ -105,7 +105,7 @@ func (c Clone) Add(ctx context.Context, in AddIn) (WriteResult, error) {
 		if hook == "" {
 			hook = in.Title
 		}
-		idx, err := os.ReadFile(filepath.Join(c.Dir, IndexFile))
+		idx, err := readRegular(filepath.Join(c.Dir, IndexFile))
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return WriteResult{}, err
 		}
@@ -153,7 +153,7 @@ func (c Clone) Amend(ctx context.Context, in AmendIn) (WriteResult, error) {
 	if !ok {
 		return WriteResult{}, fmt.Errorf("%w: topic %q is not in %s", ErrNotFound, in.Topic, IndexFile)
 	}
-	raw, err := os.ReadFile(c.topicPath(t.Slug))
+	raw, err := readRegular(c.topicPath(t.Slug))
 	if err != nil {
 		return WriteResult{}, fmt.Errorf("%w: topic file %s/%s.md: %v", ErrNotFound, TopicsDir, t.Slug, err)
 	}
