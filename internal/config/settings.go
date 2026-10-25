@@ -53,7 +53,7 @@ func Bool(cfg any, key string) (bool, error) {
 }
 
 // String returns a string key, or its schema default when unset. A value that
-// is not a string, gives "". An unknown key is a coding error and panics, so a
+// is not a string gives "". An unknown key is a coding error and panics, so a
 // typo cannot read as unset; TestReadKeysExistInSchema catches literal ones.
 func String(cfg any, key string) string {
 	v, err := Value(cfg, key)
@@ -115,7 +115,8 @@ const FallbackSleepSeconds = 1800
 
 // StringOrDefault returns a string key as written, or its schema default when
 // it is absent, null or empty. For keys whose empty string means "use the
-// default", such as round.tiers.claude.standard.
+// default", such as round.tiers.claude.standard. Looking up a schema default
+// for an unknown key panics, as in String.
 func StringOrDefault(cfg any, key string) string {
 	if s := StringIfSet(cfg, key); s != "" {
 		return s
