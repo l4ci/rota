@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -77,5 +78,50 @@ func TestRoundStartWarnsEmptyFast(t *testing.T) {
 	}
 	if n := strings.Count(errOut, "test.fast is empty"); n != 1 {
 		t.Errorf("warning count = %d, want 1:\n%s", n, errOut)
+	}
+}
+
+// The worker's gate config drives noFast, even when the round's config has a
+// fast command. Cover both sides so an unconditional warning cannot pass.
+func TestRoundStartNoFastFromWorkerConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name, cfg string
+		want      bool
+	}{
+		{"full only", `{"test":{"fast":[],"full":["true"]}}`, true},
+		{"fast and full", `{"test":{"fast":["fast"],"full":["true"]}}`, false},
+		{"neither", `{}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := orchProject(t, false)
+			write(t, filepath.Join(dir, ".rota", "config.json"), `{"git":{"baseBranch":"feat/x"},"test":{"fast":["round-fast"],"full":["true"]}}`)
+			write(t, filepath.Join(dir, ".rota", "BACKLOG.md"), "# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n")
+			cfg, err := jsonx.Decode([]byte(tc.cfg))
+			if err != nil {
+				t.Fatal(err)
+			}
+			deps := depsIn(dir)
+			workerEnv := deps.WorkerEnv
+			deps.WorkerEnv = func() worker.Env {
+				e := workerEnv()
+				e.Config = func(string) any { return cfg }
+				return e
+			}
+			code, out, errOut := rotaInWith(t, deps, dir, "--json", "round", "start", "--holder-pid", strconv.Itoa(os.Getpid()), "--base", "feat/x")
+			if code != 0 {
+				t.Fatalf("round start: %d %s %s", code, out, errOut)
+			}
+			got, present := data(t, out)["noFast"]
+			if tc.want && got != true || !tc.want && present {
+				t.Errorf("noFast = %v (present %v), want true iff %v", got, present, tc.want)
+			}
+			wantWarnings := 0
+			if tc.want {
+				wantWarnings = 1
+			}
+			if n := strings.Count(errOut, "test.fast is empty"); n != wantWarnings {
+				t.Errorf("warning count = %d, want %d: %s", n, wantWarnings, errOut)
+			}
+		})
 	}
 }
