@@ -1838,21 +1838,44 @@ func TestHerdrCodexSendAcknowledgesQueuedRelay(t *testing.T) {
 		"queued":      {"• Queued follow-up messages\n" + head, "Ask Codex to do anything", nil},
 		"absent":      {"", "Ask Codex to do anything", ErrNotSubmitted},
 		"earlier":     {earlier, "Ask Codex to do anything", ErrNotSubmitted},
+		"quoted":      {"The previous response mentioned [relay 2] in prose.\n", "Ask Codex to do anything", ErrNotSubmitted},
 		"on composer": {"", strings.ReplaceAll(strings.TrimRight(relayBrief, "\n"), "\n", "\n  "), ErrNotSubmitted},
 	}
-	for name, c := range cases {
-		t.Run(name, func(t *testing.T) {
-			f := &fake{handler: func(_ string, a []string) Result {
-				switch a[1] {
-				case "read":
-					return Result{Stdout: "OpenAI Codex\n• Working (3s)\n" + c.queued + "› " + c.composer + "\n"}
-				case "prompt":
-					return Result{Stdout: strings.Replace(agentJSON("working"), `"agent_status":`, `"agent":"codex","agent_status":`, 1)}
+	for _, status := range []string{"working", "blocked"} {
+		for name, c := range cases {
+			t.Run(status+"/"+name, func(t *testing.T) {
+				f := &fake{handler: func(_ string, a []string) Result {
+					switch a[1] {
+					case "read":
+						return Result{Stdout: "OpenAI Codex\n• Working (3s)\n" + c.queued + "› " + c.composer + "\n"}
+					case "prompt":
+						return Result{Stdout: strings.Replace(agentJSON(status), `"agent_status":`, `"agent":"codex","agent_status":`, 1)}
+					}
+					return Result{}
+				}}
+				if err := New("herdr", deps(f, herdrEnv, &clock{})).Send(bg, "sam", "w9:t7", file); err != c.want {
+					t.Fatalf("Send = %v, want %v", err, c.want)
 				}
-				return Result{}
-			}}
-			if err := New("herdr", deps(f, herdrEnv, &clock{})).Send(bg, "sam", "w9:t7", file); err != c.want {
-				t.Fatalf("Send = %v, want %v", err, c.want)
+			})
+		}
+	}
+}
+
+func TestRelayQueuedTail(t *testing.T) {
+	for _, c := range []struct {
+		name, output, brief string
+		want                bool
+	}{
+		{"relay tail without marker", "finished\n--- ROTA-SIG abc ---\n", relayBrief, true},
+		{"wrapped tail", "--- ROTA-SIG\n  abc ---\n", relayBrief, true},
+		{"plain brief tail", "last line\n", "task\nlast line\n", true},
+		{"wrong tail", "--- ROTA-SIG def ---\n", relayBrief, false},
+		{"empty brief", "working\n", "", false},
+		{"empty pane", "", relayBrief, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := relayQueued(c.output, c.brief); got != c.want {
+				t.Fatalf("relayQueued = %v, want %v", got, c.want)
 			}
 		})
 	}
