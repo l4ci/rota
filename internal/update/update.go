@@ -41,6 +41,7 @@ type Result struct {
 type Env struct {
 	ExeDir  string // the directory of the running binary, symlinks resolved; "" when unknown
 	Current string // the running binary's version
+	Commit  string // the commit stamped at link time, as stamped (not shortened); "" when none
 	// Latest returns the latest release version, or "" when it cannot be found.
 	Latest func() string
 	// SkillsNeedUpdate says whether a skill root needs `rota skills update`:
@@ -84,7 +85,7 @@ func Check(e Env) Result {
 		r.LatestVersion = e.Latest()
 	}
 	r.Status = "unknown"
-	if r.CurrentVersion != "" && r.LatestVersion != "" {
+	if r.LatestVersion != "" && stamped(r.CurrentVersion) {
 		switch c := Compare(r.CurrentVersion, r.LatestVersion); {
 		case c < 0:
 			r.Status = "behind"
@@ -115,8 +116,20 @@ func command(kind string) string {
 	return "curl -fsSL https://raw.githubusercontent.com/" + Repo + "/main/install.sh | sh" + refresh
 }
 
+// stamped says whether v is a real version. An unstamped build ("", "dev",
+// "(devel)") has nothing to compare, so its status stays unknown.
+func stamped(v string) bool {
+	return v != "" && v != "dev" && v != "(devel)"
+}
+
+// fullCommitLen is the width of the SHA the checkout rebuild (stalebin.Rebuild)
+// stamps via `git rev-parse HEAD`. goreleaser's {{ .ShortCommit }} is git's
+// auto-abbreviation (7 to 12 chars by repo size), so only a full SHA is a signal.
+const fullCommitLen = 40
+
 // detect: a binary under a Homebrew prefix is brew; a version that is empty,
-// "dev", "(devel)" or carries a -dev suffix is a checkout build; anything else is a
+// "dev", "(devel)" or carries a -dev suffix is a checkout build, and so is one
+// stamped with a full-length commit (stalebin.Rebuild); anything else is a
 // release binary somebody copied there, which install.sh also is.
 func detect(e Env) string {
 	if e.ExeDir == "" {
@@ -128,6 +141,9 @@ func detect(e Env) string {
 		}
 	}
 	if v := e.Current; v == "" || v == "dev" || v == "(devel)" || strings.HasSuffix(v, "-dev") {
+		return Dev
+	}
+	if len(e.Commit) >= fullCommitLen {
 		return Dev
 	}
 	return Script
