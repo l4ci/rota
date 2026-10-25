@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/round"
@@ -97,6 +98,8 @@ func supportBranchHeads(ctx context.Context, env round.Env, root string) map[str
 	if env.Git == nil {
 		return out
 	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	res, err := env.Git(ctx, root, "ls-remote", "--heads", "origin", "refs/heads/"+env.Round.Support+"-*")
 	if err != nil || res.ExitCode != 0 {
 		return out
