@@ -251,6 +251,7 @@ func blocked(err error, by string) any {
 func milestoneStatus(fs *flag.FlagSet) RunFunc {
 	to := fs.String("to", "", "planned, active, shipped or archived")
 	force := fs.Bool("force", false, "ship without checking open items and unticked criteria")
+	branch := fs.String("branch", "", "with --to archived: keep (rename to archive/milestone/<id>) or delete the milestone branch")
 	return func(c *Ctx, args []string) (Result, error) {
 		id, err := oneArg(args, "milestone ID")
 		if err != nil {
@@ -262,6 +263,9 @@ func milestoneStatus(fs *flag.FlagSet) RunFunc {
 		if !ms.ValidID(id) {
 			return Result{}, Usage("milestone ID must match M\\d{2,} (e.g. M01, M03), got %q", id)
 		}
+		if *branch != "" && *branch != "keep" && *branch != "delete" {
+			return Result{}, Usage("--branch must be keep or delete, got %q", *branch)
+		}
 		st, err := openStore(c)
 		if err != nil {
 			return Result{}, err
@@ -272,12 +276,31 @@ func milestoneStatus(fs *flag.FlagSet) RunFunc {
 				return res, err
 			}
 		}
+		steps, err := planMilestoneBranch(c, st, id, *to, *branch)
+		if err != nil {
+			return Result{}, err
+		}
+		if steps.before != nil {
+			if err := steps.before(); err != nil {
+				return Result{}, err
+			}
+		}
 		changed, err := st.SetStatus(id, *to)
 		if err != nil {
 			return milestoneFail(err, "")
 		}
 		if _, err := reindex(c, st); err != nil {
 			return milestoneFail(err, "")
+		}
+		if steps.after != nil {
+			if err := steps.after(); err != nil {
+				return Result{}, err
+			}
+		}
+		if *to == "archived" {
+			if err := untagMilestone(c, id); err != nil {
+				return backlogFail(err)
+			}
 		}
 		d := jsonx.NewObject()
 		d.Set("id", id)
