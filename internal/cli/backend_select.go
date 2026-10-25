@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
@@ -88,7 +89,7 @@ func openBacklog(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backe
 		return nil, err
 	}
 	if name != "file" && fileOnly {
-		return nil, &backlog.RefusedError{BlockedBy: "backend", Hint: hint, Err: backlog.ErrWrongBackend,
+		return nil, &backlog.RefusedError{BlockedBy: blockedby.Backend, Hint: hint, Err: backlog.ErrWrongBackend,
 			Msg: `not available when issues.source is a tracker`}
 	}
 	cwd, _ := c.deps().Getwd()
@@ -141,7 +142,7 @@ func openIssueBackend(c *Ctx, hint string, perRepo bool) (backlog.IssueBackend, 
 		return nil, err
 	}
 	if name == "file" {
-		return nil, &backlog.RefusedError{BlockedBy: "backend", Hint: hint, Err: backlog.ErrWrongBackend,
+		return nil, &backlog.RefusedError{BlockedBy: blockedby.Backend, Hint: hint, Err: backlog.ErrWrongBackend,
 			Msg: c.Path + ` is not available when issues.source is file`}
 	}
 	if perRepo && c.Repo == "" && repos.Umbrella(root) {

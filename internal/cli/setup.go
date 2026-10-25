@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"io"
 	"os"
 	"strconv"
@@ -325,7 +326,7 @@ func setupDoctor(c *Ctx) (*jsonx.Object, string) {
 func supportSetupStop(c *Ctx, dir string) (Result, error) {
 	tracked := fsio.LoadJSON(rotatree.Config(dir), jsonx.NewObject())
 	if roundcfg.SupportName(tracked) == "" {
-		d := jsonObj("blockedBy", "config", "key", "round.support", "changed", false)
+		d := jsonObj("blockedBy", blockedby.Config, "key", "round.support", "changed", false)
 		return Result{Data: d}, Refused("the support path needs round.support in the tracked .rota/config.json, and it is empty").
 			WithHint("on the main machine run: rota round support enable <name>, commit and push; then pull here and run rota setup again")
 	}

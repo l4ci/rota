@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"strconv"
 	"strings"
 
@@ -17,9 +18,9 @@ const BestOfLabel = "best-of:2"
 
 // Blocked reasons of a best-of:2 issue (exit 4, `blockedBy`).
 const (
-	BlockBestOfLabel = "best-of label"
-	BlockBestOfSlots = "best-of-slots"
-	BlockBestOf      = "best-of"
+	BlockBestOfLabel = blockedby.BestOfLabel
+	BlockBestOfSlots = blockedby.BestOfSlots
+	BlockBestOf      = blockedby.BestOf
 )
 
 // KindFromBestOf is the kind source of a best-of:2 attempt that took the

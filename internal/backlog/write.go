@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	gitx "github.com/l4ci/rota/internal/git"
 	ms "github.com/l4ci/rota/internal/milestone"
 	"io/fs"
@@ -373,7 +374,7 @@ func (f *File) SetField(ref, field, value string) (bool, error) {
 		m := re.FindStringIndex(content)
 		if m == nil {
 			if _, gerr := f.Get(ref); gerr == nil {
-				return refused("closed item", ErrClosed,
+				return refused(blockedby.ClosedItem, ErrClosed,
 					"[%s] has no open bullet in .rota/BACKLOG.md (completed or archived)", ref)
 			}
 			return errf(ErrNotFound, "[%s] has no open bullet in .rota/BACKLOG.md (unknown, completed, or archived)", ref)

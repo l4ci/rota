@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"path/filepath"
 	"strings"
 
@@ -604,11 +605,11 @@ func knFail(err error) (Result, error) {
 	e := knErr(err)
 	switch {
 	case errors.Is(err, knowledge.ErrAliasCollision):
-		return Result{Data: knObj("blockedBy", "alias-collision", "changed", false)}, e
+		return Result{Data: knObj("blockedBy", blockedby.AliasCollision, "changed", false)}, e
 	case errors.Is(err, knowledge.ErrExists):
-		return Result{Data: knObj("blockedBy", "exists", "changed", false)}, e
+		return Result{Data: knObj("blockedBy", blockedby.Exists, "changed", false)}, e
 	case errors.Is(err, knowledge.ErrMultiMatch):
-		return Result{Data: knObj("blockedBy", "ambiguous", "changed", false)}, e
+		return Result{Data: knObj("blockedBy", blockedby.Ambiguous, "changed", false)}, e
 	}
 	return Result{}, e
 }

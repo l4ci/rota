@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"io"
 	"os"
 	"os/exec"
@@ -567,7 +568,7 @@ func hookInstall(fs *flag.FlagSet) RunFunc {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
 		if out.Blocked {
-			d := knObj("blockedBy", "statusline exists", "scope", string(scope), "settingsPath", path, "changed", false)
+			d := knObj("blockedBy", blockedby.StatuslineExists, "scope", string(scope), "settingsPath", path, "changed", false)
 			return Result{Data: d}, Refused("a statusline is already configured and would be replaced").
 				WithHint("run: rota hook install --wrap-statusline (keeps it, runs it after the dump)")
 		}

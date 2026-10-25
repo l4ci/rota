@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"slices"
 	"strings"
 
@@ -198,7 +199,7 @@ func itemClaim(fs *flag.FlagSet) RunFunc {
 		if !won {
 			// The loser posted its claim and then its release on the issue, so
 			// it did change state on the way to the refusal (contract: changed true).
-			return Result{Data: jsonObj("blockedBy", "claimed", "changed", true)},
+			return Result{Data: jsonObj("blockedBy", blockedby.Claimed, "changed", true)},
 				Refused("%s is claimed by %s", id, holder)
 		}
 		issue := be.Capabilities().ClaimWrites

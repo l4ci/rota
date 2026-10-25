@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 
 	"github.com/l4ci/rota/internal/bugreport"
@@ -113,7 +114,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		}
 		d := jsonx.NewObject()
 		if res.Retained && res.Verdict == round.VerdictHoldsWork {
-			d.Set("blockedBy", "slot holds work")
+			d.Set("blockedBy", blockedby.SlotHoldsWork)
 		}
 		d.Set("round", res.Round)
 		d.Set("base", res.Base)

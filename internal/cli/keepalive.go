@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -233,7 +234,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 			switch {
 			case errors.As(err, &held):
 				d := jsonx.NewObject()
-				d.Set("blockedBy", "lease held")
+				d.Set("blockedBy", blockedby.LeaseHeld)
 				d.Set("lease", leaseData(held.Lease, held.State))
 				d.Set("changed", false)
 				return Result{Data: d}, &Error{Exit: ExitRefused, Message: held.Error(),

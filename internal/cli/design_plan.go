@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"strings"
 
@@ -57,7 +58,7 @@ func fileRoot(c *Ctx, readOnly bool) (string, Result, error) {
 		return root, Result{}, nil
 	}
 	d := jsonx.NewObject()
-	d.Set("blockedBy", "backend")
+	d.Set("blockedBy", blockedby.Backend)
 	d.Set("changed", false)
 	msg := "%s works on the file backend only (issues.source is a tracker)"
 	if readOnly {
@@ -126,7 +127,7 @@ func designAdd(fs *flag.FlagSet) RunFunc {
 func refusal(err error) any {
 	if ae, ok := err.(*exitcode.Error); ok && ae.Exit == exitcode.ExitRefused {
 		d := jsonx.NewObject()
-		d.Set("blockedBy", "exists")
+		d.Set("blockedBy", blockedby.Exists)
 		d.Set("changed", false)
 		return d
 	}
