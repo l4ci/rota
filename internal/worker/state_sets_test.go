@@ -2,10 +2,14 @@ package worker
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -64,6 +68,30 @@ func TestNoRetypedStateSets(t *testing.T) {
 			if re.MatchString(line) {
 				hits = append(hits, fmt.Sprintf("%s:%d: %s", p, i+1, strings.TrimSpace(line)))
 			}
+		}
+		// Watch/wait also compare local aliases and normalised expressions.
+		// Parse comparisons so wrapping a line or reversing its operands cannot
+		// hide another copy of the idle rule (#2019).
+		if filepath.Dir(p) == filepath.Join(root, "roundwatch") || p == filepath.Join(root, "worker", "wait.go") {
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, p, b, 0)
+			if err != nil {
+				return err
+			}
+			ast.Inspect(f, func(n ast.Node) bool {
+				cmp, ok := n.(*ast.BinaryExpr)
+				if !ok || (cmp.Op != token.EQL && cmp.Op != token.NEQ) {
+					return true
+				}
+				for _, operand := range []ast.Expr{cmp.X, cmp.Y} {
+					if lit, ok := operand.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+						if value, err := strconv.Unquote(lit.Value); err == nil && strings.EqualFold(value, "idle") {
+							hits = append(hits, fmt.Sprintf("%s: literal idle compare", fset.Position(cmp.Pos())))
+						}
+					}
+				}
+				return true
+			})
 		}
 		return nil
 	})
