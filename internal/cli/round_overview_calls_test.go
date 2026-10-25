@@ -16,6 +16,23 @@ import (
 // mutation (or an unreviewed read) and fails the test that made it.
 var readOnlyCall = regexp.MustCompile(`^(issue (list|view) |pr (list|view|status|checks) |api [^ ]*(issues|pulls)/[0-9]+(/comments)?( |$)|repo view |auth status)`)
 
+// apiWriteFlag matches gh api's body, method and input flags in their spaced,
+// =-joined and short-glued forms (-fk=v, -XPOST).
+var apiWriteFlag = regexp.MustCompile(`(^| )(-[fFX]|--(field|raw-field|method|input))( |=|$)|(^| )-[fFX][^ -]`)
+
+// isReadOnlyCall applies readOnlyCall, then rejects an api call carrying a flag
+// that makes gh send a write: a body field, a method override or an input file
+// turns the comments GET into a POST or PATCH.
+func isReadOnlyCall(call string) bool {
+	if !readOnlyCall.MatchString(call) {
+		return false
+	}
+	if !strings.HasPrefix(call, "api ") {
+		return true
+	}
+	return !apiWriteFlag.MatchString(call)
+}
+
 // snapshotTree reads every file under dir, so a test can prove none changed.
 func snapshotTree(t *testing.T, dir string) map[string]string {
 	t.Helper()
@@ -32,6 +49,30 @@ func snapshotTree(t *testing.T, dir string) map[string]string {
 		t.Fatal(err)
 	}
 	return out
+}
+
+// #1982 AC-1: the allow-list rejects an api call carrying a write flag, and
+// still admits the plain reads a monitoring pass makes.
+func TestReadOnlyCallRejectsWriteShapedAPI(t *testing.T) {
+	const path = "api repos/{owner}/{repo}/issues/10/comments"
+	for _, c := range []string{
+		path + " --paginate",
+		path,
+		"issue view 10 --json body",
+	} {
+		if !isReadOnlyCall(c) {
+			t.Errorf("plain read rejected: %s", c)
+		}
+	}
+	for _, flags := range []string{
+		"-f body=x", "-F body=x", "--field body=x", "--raw-field body=x",
+		"-X POST", "-XPOST", "--method PATCH", "--method=PATCH", "--input f.json",
+		"--paginate -f body=x", "-fbody=x",
+	} {
+		if c := path + " " + flags; isReadOnlyCall(c) {
+			t.Errorf("write-shaped api call passed: %s", c)
+		}
+	}
 }
 
 // #1873 AC-1: a full overview pass, then the i and p keys, write nothing: every
@@ -69,7 +110,7 @@ func TestRoundOverviewMonitoringIsReadOnly(t *testing.T) {
 		t.Error("i/p opened nothing: the fixture no longer exercises the open path")
 	}
 	for _, c := range r.callList() {
-		if !readOnlyCall.MatchString(strings.TrimPrefix(c, "gh ")) {
+		if !isReadOnlyCall(strings.TrimPrefix(c, "gh ")) {
 			t.Errorf("a monitoring path made a call that is not a plain read: %s", c)
 		}
 	}
@@ -122,8 +163,10 @@ func TestRoundOverviewPassCallCount(t *testing.T) {
 			t.Errorf("claims of support issue %s read %d times in one pass, want 1", id, n)
 		}
 	}
+	// An equality: when the count drops, lower pinned to match so the pin
+	// keeps catching growth from the new floor.
 	const pinned = 21
-	if len(calls) > pinned {
+	if len(calls) != pinned {
 		t.Errorf("%d forge calls in one pass, pinned at %d:\n%s", len(calls), pinned, strings.Join(calls, "\n"))
 	}
 }
