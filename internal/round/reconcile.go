@@ -92,10 +92,11 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 			return s.MarkState("dead", "")
 		})
 	case PRUnrecorded:
-		if v == nil || v.openPR == nil {
-			return fmt.Errorf("no open PR to record")
+		pr := v.recordablePR()
+		if pr == nil {
+			return fmt.Errorf("no PR to record")
 		}
-		return editSlot(root, f.Slot, func(s *worker.Slot) error { s.SetPR(v.openPR.URL); return nil })
+		return editSlot(root, f.Slot, func(s *worker.Slot) error { s.SetPR(pr.URL); return nil })
 	case UnregisteredWorktree:
 		var row Row
 		for _, r := range rep.Rows {

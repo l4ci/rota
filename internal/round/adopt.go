@@ -109,7 +109,10 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 	}
 
 	base := e.Base
-	if err := worker.RegisterExternal(root, name, branch, wt, base, res.Issue, o.PR); err != nil {
+	if res.PR == "" && e.Forge != nil { // record the branch's open PR now: train reads the slot, not the forge
+		res.PR = e.openBranchPR(ctx, branch)
+	}
+	if err := worker.RegisterExternal(root, name, branch, wt, base, res.Issue, res.PR); err != nil {
 		var rc *worker.RegisterConflict
 		if errors.As(err, &rc) { // lost a race: the registry changed since the checks above
 			switch rc.Kind {
@@ -122,7 +125,7 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 		}
 		return res, err
 	}
-	worker.LedgerNote(e.workerEnv(), root, ledger.Entry{Kind: ledger.KindAdopt, Issue: res.Issue, Slot: name, PR: o.PR, Detail: ledger.Detail("branch", branch)})
+	worker.LedgerNote(e.workerEnv(), root, ledger.Entry{Kind: ledger.KindAdopt, Issue: res.Issue, Slot: name, PR: res.PR, Detail: ledger.Detail("branch", branch)})
 	return res, nil
 }
 
