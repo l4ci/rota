@@ -95,6 +95,9 @@ func configuredBase(d *Deps, dir string) string {
 	return s
 }
 
+// noBaseMsg is the one "nothing resolved" message for every verb that needs a base.
+const noBaseMsg = "could not determine base branch (tried git.baseBranch, main, master, trunk, origin/HEAD)"
+
 func resolveBase(ctx context.Context, d *Deps, dir string) (string, bool, error) {
 	configured := configuredBase(d, dir)
 	base, ok, err := d.Repo(dir).Base(ctx, configured)
@@ -118,7 +121,7 @@ func gitBase(c *Ctx, args []string) (Result, error) {
 		return Result{}, err
 	}
 	if !ok {
-		return Result{}, Resolution("could not determine base branch (tried git.baseBranch, main, master, trunk, origin/HEAD)")
+		return Result{}, Resolution(noBaseMsg)
 	}
 	return Result{Data: gitObj("base", base), Text: base}, nil
 }

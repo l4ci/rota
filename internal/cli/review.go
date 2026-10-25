@@ -372,7 +372,7 @@ func reviewScaffolding(fs *flag.FlagSet) RunFunc {
 				return Result{}, err
 			}
 			if !ok {
-				return Result{}, Resolution("could not determine base branch (tried git.baseBranch, main, master, trunk, origin/HEAD)").WithHint("pass --base <ref>")
+				return Result{}, Resolution(noBaseMsg).WithHint("pass --base <ref>")
 			}
 			base = b
 		}

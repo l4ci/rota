@@ -705,7 +705,7 @@ Companion to `release.nudgeAfterCommits`. The release nudge fires when EITHER th
 - **Type:** string
 - **Default:** `""` (auto-detect)
 
-Override the base branch that `rota git base` resolves to. When empty (the default), `rota` auto-detects by probing `main`, `master`, `trunk`, then `origin/HEAD` in that order. Set this explicitly when your project uses a non-default base branch such as `develop` (gitflow), `release`, or any other name that won't be found by auto-detection.
+Override the base branch that `rota git base` resolves to. When empty (the default), `rota` auto-detects by probing `main`, `master`, `trunk`, then `origin/HEAD` in that order. A set branch that does not exist is an error (`rota git base` exits 3), never replaced by one of those names. Set this explicitly when your project uses a non-default base branch such as `develop` (gitflow), `release`, or any other name that won't be found by auto-detection.
 
 ```json
 { "git": { "baseBranch": "develop" } }
