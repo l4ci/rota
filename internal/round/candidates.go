@@ -460,11 +460,11 @@ func InScope(root string, be backlog.Backend, scope string, slate []string, id s
 }
 
 // takenOutside says whether an item someone outside the round has taken: it
-// carries the in-progress or claimed label while no slot or PR in
+// carries the in-progress or claimed label, or an open comment claim, while no slot or PR in
 // review holds it (scopeSet already dropped those). Scope open offers every
 // open item, so without this a hand-worked issue reads as ready and assign
-// refuses it as claimed. Claim details are read only for labelled stale scans;
-// unlabelled items need no per-item comments request. File mode has neither.
+// refuses it as claimed. Keep the comment-claim fallback for legacy or drifted
+// labels. File mode has neither labels nor claims.
 func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog.Item) bool, error) {
 	if !e.forgeOn(be) {
 		return nil, nil
@@ -477,7 +477,17 @@ func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog
 	for _, is := range issues {
 		labelled[is.Key] = true
 	}
-	return func(it backlog.Item) bool { return labelled[it.IssueKey()] || e.hasClaimSignal(it) }, nil
+	wf, _ := backlog.WorkflowOf(be)
+	return func(it backlog.Item) bool {
+		if labelled[it.IssueKey()] || e.hasClaimSignal(it) {
+			return true
+		}
+		if wf == nil {
+			return false
+		}
+		st, err := wf.Status(it.ID)
+		return err == nil && st != nil && st.Claim != ""
+	}, nil
 }
 
 // handedToHuman is the open issues carrying the needs-human label (C10): the

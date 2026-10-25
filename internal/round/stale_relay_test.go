@@ -49,7 +49,12 @@ func TestStaleClaimsTransferredAndBundledActivity(t *testing.T) {
 
 type staleReadBoard struct {
 	*fakeRemote
-	gets, statuses int
+	gets, statuses, lists int
+}
+
+func (b *staleReadBoard) List(closed bool) ([]backlog.Item, error) {
+	b.lists++
+	return b.fakeRemote.List(closed)
 }
 
 func (b *staleReadBoard) Get(id string) (*backlog.Item, error) { b.gets++; return b.fakeRemote.Get(id) }
@@ -72,5 +77,20 @@ func TestStaleClaimsOnlyReadsLabelledItems(t *testing.T) {
 	}
 	if be.gets != 0 || be.statuses != 1 {
 		t.Fatalf("Get=%d Status=%d want Get=0 Status=1 for labelled claim only", be.gets, be.statuses)
+	}
+}
+
+func TestStaleClaimsExplicitUnlabelledKey(t *testing.T) {
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	remote := &fakeRemote{claims: map[string]string{"7": "ben@3"}, claimTimes: map[string]map[string]time.Time{"7": {"ben@3": now.Add(-8 * time.Hour)}}}
+	remote.add("7", "Unlabelled claim", "", false, "")
+	be := &staleReadBoard{fakeRemote: remote}
+	e := Env{Forge: remote.asForge(), Round: roundcfg.Settings{ClaimStaleMinutes: 240}, Worker: wk(worker.Env{Now: func() time.Time { return now }}), Git: func(context.Context, string, ...string) (git.Result, error) { return git.Result{}, nil }}
+	got, warnings := e.StaleClaims(bg, t.TempDir(), be, []tracker.IssueKey{tracker.NumKey(7)})
+	if len(got) != 1 || got[0].Holder != "ben@3" || len(warnings) != 0 {
+		t.Fatalf("explicit unlabelled stale claim=%+v warnings=%v", got, warnings)
+	}
+	if be.gets != 1 || be.statuses != 1 || be.lists != 0 {
+		t.Fatalf("Get=%d Status=%d List=%d, want 1/1/0 for one explicit key", be.gets, be.statuses, be.lists)
 	}
 }

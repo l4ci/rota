@@ -33,27 +33,43 @@ func staleThreshold(it backlog.Item, s roundcfg.Settings) time.Duration {
 
 // StaleClaims conservatively reads activity for claims outside this machine's
 // registry. Unknown timestamps or failed activity reads never permit reclaim.
-// A nil key set scans labelled open items; explicit keys bound an assign recheck.
+// A nil key set scans labelled open items; explicit keys read those items
+// directly and include comment claims whose derived label is absent.
 func (e Env) StaleClaims(ctx context.Context, root string, be Board, keys []tracker.IssueKey) ([]StaleClaim, []string) {
 	if !e.forgeOn(be) || e.Round.ClaimStaleMinutes <= 0 && e.Round.ClaimStaleMinutesMajor <= 0 {
 		return nil, nil
 	}
-	all, err := be.List(false)
-	if err != nil {
-		return nil, []string{fmt.Sprintf("stale claims: %v", err)}
-	}
-	items := e.claimedItems(all)
-	if keys != nil {
-		items = slices.DeleteFunc(items, func(it backlog.Item) bool { return !slices.Contains(keys, it.IssueKey()) })
+	var items []backlog.Item
+	var warnings []string
+	if keys == nil {
+		all, err := be.List(false)
+		if err != nil {
+			return nil, []string{fmt.Sprintf("stale claims: %v", err)}
+		}
+		items = e.claimedItems(all)
+	} else {
+		// Explicit checks must see authoritative comment claims even if their
+		// derived label is absent, and need not list unrelated board items.
+		for _, key := range keys {
+			it, err := be.Get(key.String())
+			if err != nil {
+				warnings = append(warnings, fmt.Sprintf("stale claim %s: %v", key.Ref(), err))
+				continue
+			}
+			if it != nil && !it.Closed {
+				items = append(items, *it)
+			}
+		}
 	}
 	if len(items) == 0 {
-		return nil, nil
+		return nil, warnings
 	}
 	prs, err := e.Forge.OpenPRs(ctx)
 	if err != nil {
-		return nil, []string{fmt.Sprintf("stale claims: %v", err)}
+		return nil, append(warnings, fmt.Sprintf("stale claims: %v", err))
 	}
-	return e.staleClaims(ctx, root, be, items, prs)
+	claims, scanWarnings := e.staleClaims(ctx, root, be, items, prs)
+	return claims, append(warnings, scanWarnings...)
 }
 
 func (e Env) hasClaimSignal(it backlog.Item) bool {
