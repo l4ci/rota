@@ -249,7 +249,7 @@ func TestLocalSnapshotReportsTheLandLock(t *testing.T) {
 		if err := os.WriteFile(path+worker.LandHolderSuffix, []byte("#1900"), 0o644); err != nil {
 			return err
 		}
-		defer os.Remove(path + ".holder")
+		defer os.Remove(path + worker.LandHolderSuffix)
 		during = LocalSnapshot(repo)
 		return nil
 	})
