@@ -23,6 +23,10 @@ __pycache__/
 .claude/*
 !.claude/agents/
 
+# Codex subagent definitions (rota agents write): per-machine, a support
+# machine writes them too.
+.codex/
+
 # ── rota ──
 .rota/bin/
 .rota/status.json

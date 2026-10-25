@@ -40,8 +40,8 @@ var supportFenced = []string{
 	"rota spike add", "rota spike finish",
 	"rota init", "rota init umbrella", "rota update",
 	"rota migrate config", "rota migrate hv", "rota migrate issues", "rota migrate milestone-files", "rota migrate milestones", "rota migrate source",
-	// Tracked instruction and agent files, which main regenerates and commits.
-	"rota block", "rota instructions init", "rota agents write",
+	// Tracked instruction files, which main regenerates and commits.
+	"rota block", "rota instructions init",
 	// Main only: the work split.
 	"rota round support offer", "rota round support enable", "rota round support disable",
 	// Release.
@@ -50,11 +50,13 @@ var supportFenced = []string{
 
 // supportInVerb are fenced inside the verb, which knows what it writes:
 // config set and config edit refuse a tracked key on a support machine and
-// allow --global and round.role (config.local.json); knowledge harvest lists
+// allow --global and round.role (config.local.json); agents write skips the
+// tracked .claude and .opencode files and writes the gitignored .codex ones;
+// knowledge harvest lists
 // freely and refuses --mark, which writes a tracker comment main owns; setup's
 // support path writes config.local.json only, and its main path refuses the
 // initialized clone a support machine runs in (#1774).
-var supportInVerb = []string{"rota config set", "rota config edit", "rota knowledge harvest", "rota setup"}
+var supportInVerb = []string{"rota config set", "rota config edit", "rota knowledge harvest", "rota setup", "rota agents write"}
 
 // supportAllowed run on a support machine. Each writer here writes the
 // tracker, gitignored per-machine state or files outside the repo.
@@ -185,9 +187,21 @@ func supportRoleStop(c *Ctx) (Result, error) {
 // supportRefusal is the exit-4 refusal of what on a support machine, or of any
 // fenced verb when round.role cannot be read; nil on main.
 func supportRefusal(c *Ctx, root, what string) (Result, error) {
-	unknown := func(why, hint string) (Result, error) {
+	support, res, err := supportMachine(c, root, what)
+	if err != nil || !support {
+		return res, err
+	}
+	d := jsonObj("blockedBy", blockedby.Role, "role", roundcfg.RoleSupport, "changed", false)
+	return Result{Data: d}, Refused("%s is refused on a support machine (round.role support): only the main orchestrator merges and writes tracked .rota/ content", what).
+		WithHint("run this on the main machine, or unset round.role in .rota/config.local.json")
+}
+
+// supportMachine is whether this machine's round.role is support. A role it
+// cannot read is the exit-4 refusal, so a verb never runs on a guess.
+func supportMachine(c *Ctx, root, what string) (bool, Result, error) {
+	unknown := func(why, hint string) (bool, Result, error) {
 		d := jsonObj("blockedBy", blockedby.Config, "key", "round.role", "changed", false)
-		return Result{Data: d}, Refused("%s needs to know this machine's role: %s", what, why).WithHint(hint)
+		return false, Result{Data: d}, Refused("%s needs to know this machine's role: %s", what, why).WithHint(hint)
 	}
 	// Reads the layer from disk on purpose, not through Deps.Config.
 	// config.Load skips a local layer it cannot read or decode, which would
@@ -203,12 +217,7 @@ func supportRefusal(c *Ctx, root, what string) (Result, error) {
 	if err != nil {
 		return unknown(err.Error(), "set round.role to main or support: rota config set round.role main")
 	}
-	if role != roundcfg.RoleSupport {
-		return Result{}, nil
-	}
-	d := jsonObj("blockedBy", blockedby.Role, "role", roundcfg.RoleSupport, "changed", false)
-	return Result{Data: d}, Refused("%s is refused on a support machine (round.role support): only the main orchestrator merges and writes tracked .rota/ content", what).
-		WithHint("run this on the main machine, or unset round.role in .rota/config.local.json")
+	return role == roundcfg.RoleSupport, Result{}, nil
 }
 
 func supportFencedPath(path string) bool {
