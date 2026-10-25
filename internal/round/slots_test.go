@@ -163,3 +163,22 @@ func TestSlotLoginProblemReadsThroughEnvLogin(t *testing.T) {
 		t.Errorf("keychain miss: %q, want it to name the Keychain", why)
 	}
 }
+
+// Only the round's active slots take a moved issue (#1097): a drained slot
+// past the configured slot count is idle but not a receiver.
+func TestIdleSlotInRoundSkipsSlotsPastTheSlotCount(t *testing.T) {
+	root := t.TempDir()
+	writeRegistry(t, root,
+		slot(root, "ben", "park/ben", func(o *jsonx.Object) { o.Set("account", "b") }),
+		slot(root, "dana", "park/dana", func(o *jsonx.Object) { o.Set("account", "b") }),
+	)
+	reg := worker.LoadRegistryTolerant(root)
+	set := roundcfg.Settings{Slots: 1, Roster: []string{"ben", "dana"}}
+	if got, ok := IdleSlotInRound(reg, set, "", "b"); !ok || got != "ben" {
+		t.Fatalf("got %q %v, want ben", got, ok)
+	}
+	set.Roster = []string{"dana", "ben"}
+	if got, ok := IdleSlotInRound(reg, set, "", "b"); !ok || got != "dana" {
+		t.Fatalf("got %q %v, want dana", got, ok)
+	}
+}
