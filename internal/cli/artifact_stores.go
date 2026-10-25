@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"path/filepath"
+
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/design"
 	"github.com/l4ci/rota/internal/plan"
 	"github.com/l4ci/rota/internal/proof"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 // The one place the design, plan and proof verbs meet issues.source: each
@@ -52,9 +55,19 @@ func openProof(c *Ctx, id string) (root string, st proof.Store, w *who, err erro
 	}
 	w = &who{ID: id, Type: backlog.ItemType(id)}
 	if issue {
-		return root, proof.NewNotes(root, itemNotes(c, id, w)), w, nil
+		return root, proof.NewNotes(proofLockDir(c, root), itemNotes(c, id, w)), w, nil
 	}
 	return root, proof.Files(root), w, nil
+}
+
+// proofLockDir is where the proof-note lockfiles live: the rota state dir under
+// the git common dir, so the main checkout and every linked worktree lock the
+// same file. Outside a repository it falls back to the project's .rota.
+func proofLockDir(c *Ctx, root string) string {
+	if cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root); err == nil {
+		return rotastate.Dir(cd)
+	}
+	return filepath.Join(root, ".rota")
 }
 
 // openPlans is the plan store: item plans resolve their item, slice plans
