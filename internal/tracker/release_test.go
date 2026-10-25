@@ -59,6 +59,16 @@ func TestPRCreate(t *testing.T) {
 		t.Errorf("github: %q %v", url, err)
 	}
 
+	t.Run("github-empty-base", func(t *testing.T) {
+		emptyBaseSpec := spec
+		emptyBaseSpec.Base = ""
+		gh := scriptedAdapter(t, "github", scriptedCall{name: "gh", argv: []string{"pr", "create", "--title", "My title", "--body-file", "-"},
+			stdin: "Summary", stdout: "https://github.com/o/r/pull/4\n"})
+		if url, err := gh.PRCreate(context.Background(), emptyBaseSpec); err != nil || url != "https://github.com/o/r/pull/4" {
+			t.Errorf("github: %q %v", url, err)
+		}
+	})
+
 	gl := scriptedAdapter(t, "gitlab", scriptedCall{name: "glab", argv: []string{"mr", "create", "--title", "My title", "--description", "Summary",
 		"--source-branch", "feat/x", "--target-branch", "main", "--yes"}, stdout: "https://gitlab.com/o/r/-/merge_requests/3\n"})
 	if !gl.PRNeedsBase() {
