@@ -115,7 +115,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 
 	// 1. Re-verify the base in the project root.
 	if !o.NoVerify {
-		gc := e.workerEnv().GateConfig(root)
+		gc := e.Worker.GateConfig(root)
 		if !gc.HasVerifyCommands() {
 			res.VerifySkipped = true
 			res.Warnings = append(res.Warnings, "NO-VERIFY: test.full is empty; the base was NOT checked by a command")
@@ -123,7 +123,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 			if err := e.requireBase(ctx, root); err != nil {
 				return res, err
 			}
-			vr, err := e.workerEnv().Verify(ctx, gc, root, root)
+			vr, err := e.Worker.Verify(ctx, gc, root, root)
 			if err != nil {
 				return res, err
 			}
@@ -144,7 +144,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	}
 
 	// 2. Park every registered roster slot.
-	w := e.workerEnv()
+	w := e.Worker
 	want := map[string]bool{}
 	for _, n := range o.Settings.Roster {
 		want[n] = true
@@ -204,7 +204,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 				return res, err
 			}
 			if !wasParked {
-				worker.LedgerNote(e.workerEnv(), root, ledger.Entry{Kind: ledger.KindPark, Round: res.Round, Issue: so.Issue, Slot: name, PR: so.PR,
+				e.Worker.LedgerNote(root, ledger.Entry{Kind: ledger.KindPark, Round: res.Round, Issue: so.Issue, Slot: name, PR: so.PR,
 					Detail: ledger.Detail("merged", so.Merged)})
 			}
 			if claim != "" && issue != "" && be != nil {

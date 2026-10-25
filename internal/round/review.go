@@ -113,7 +113,7 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		return out, nil
 	}
 	issue := s.HeldID()
-	store, err := e.workerEnv().BounceStore(root)
+	store, err := e.Worker.BounceStore(root)
 	if err != nil {
 		return out, err
 	}
@@ -189,7 +189,7 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		out.Bounces = recount()
 		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr))
 	}
-	if _, err := e.workerEnv().Dispatch(ctx, root, worker.DispatchOpts{Slot: o.Slot, BodyFile: body.Name(), Relay: true}); err != nil {
+	if _, err := e.Worker.Dispatch(ctx, root, worker.DispatchOpts{Slot: o.Slot, BodyFile: body.Name(), Relay: true}); err != nil {
 		rerr, serr := rec.Undo(), unseen()
 		merr := worker.RetractMail(root, o.Slot, mail.Seq)
 		out.Bounces = recount()

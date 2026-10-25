@@ -83,6 +83,14 @@ type assignFixture struct {
 	be   *fakeRemote
 	host *hostFake
 	set  roundcfg.Settings
+	ws   worker.Env // what env.Worker was built from; change it with wire
+}
+
+// wire changes a seam of the worker the fixture's env runs against by building
+// a new Worker from the changed worker.Env, never by reaching into the old one.
+func (f *assignFixture) wire(mod func(*worker.Env)) {
+	mod(&f.ws)
+	f.env.Worker = wk(f.ws)
 }
 
 func newAssignFixture(t *testing.T) *assignFixture {
@@ -97,10 +105,11 @@ func newAssignFixture(t *testing.T) *assignFixture {
 	}
 	h := &hostFake{}
 	f := &assignFixture{root: root, host: h}
-	f.env = Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
+	f.env = Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
 	f.env.Label, f.env.NeedsHuman, f.env.NeedsReview, f.env.SupportLabel = configLabels()
-	f.env.Worker = worker.Env{Config: diskConfig, Git: git.Exec, NewHost: func(host.Kind) host.Host { return h },
+	f.ws = worker.Env{Config: diskConfig, Git: git.Exec, NewHost: func(host.Kind) host.Host { return h },
 		Sleep: func(time.Duration) {}, Now: time.Now, Getenv: noEnv}
+	f.env.Worker = wk(f.ws)
 	fb := &fakeRemote{}
 	fb.add("12", "Add the round assign verb now please", "M01", false, "## Acceptance\n- [ ] works\n\nedits internal/cli/round.go")
 	fb.add("13", "Second issue", "M01", false, "## Acceptance\n- [ ] ok\n\nalso edits internal/cli/round.go")
@@ -402,7 +411,7 @@ func TestAssignResumesWithoutDuplicatingTheComment(t *testing.T) {
 
 func TestAssignDispatchFailureKeepsTheMarks(t *testing.T) {
 	f := newAssignFixture(t)
-	f.env.Worker.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} }
+	f.wire(func(w *worker.Env) { w.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} } })
 	_, err := f.assign("12", "ben", nil)
 	if err == nil {
 		t.Fatal("dispatch failure must surface")
@@ -416,7 +425,7 @@ func TestAssignDispatchFailureKeepsTheMarks(t *testing.T) {
 // even when the registry round moved on in between (the claim id carries it).
 func TestAssignRetryAfterDispatchFailureResumesItsOwnClaim(t *testing.T) {
 	f := newAssignFixture(t)
-	f.env.Worker.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} }
+	f.wire(func(w *worker.Env) { w.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} } })
 	if _, err := f.assign("12", "ben", nil); err == nil {
 		t.Fatal("dispatch failure must surface")
 	}
@@ -424,7 +433,7 @@ func TestAssignRetryAfterDispatchFailureResumesItsOwnClaim(t *testing.T) {
 	if err := worker.Update(f.root, func(d *worker.Doc) { d.SetRound(7) }); err != nil {
 		t.Fatal(err)
 	}
-	f.env.Worker.NewHost = func(host.Kind) host.Host { return f.host }
+	f.wire(func(w *worker.Env) { w.NewHost = func(host.Kind) host.Host { return f.host } })
 	res, err := f.assign("12", "ben", nil)
 	if err != nil || !res.Dispatched {
 		t.Fatalf("retry must resume its own claim: %v %+v", err, res)
@@ -438,7 +447,7 @@ func TestAssignRetryAfterDispatchFailureResumesItsOwnClaim(t *testing.T) {
 // the same), so the repeated call knows nothing was delivered.
 func TestAssignDispatchFailureMarksTheSlotIdle(t *testing.T) {
 	f := newAssignFixture(t)
-	f.env.Worker.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} }
+	f.wire(func(w *worker.Env) { w.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} } })
 	if _, err := f.assign("12", "ben", nil); err == nil {
 		t.Fatal("dispatch failure must surface")
 	}
@@ -597,29 +606,33 @@ Options:
 `
 
 func (c *codexRig) install(f *assignFixture) {
-	f.env.Worker.LookPath = func(n string) (string, error) {
-		if n == harness.Codex && c.noCodex {
-			return "", errors.New("not found")
-		}
-		return "/fake/" + n, nil
-	}
-	f.env.Worker.Run = func(_ context.Context, name string, args, env []string) (host.Result, error) {
-		c.calls = append(c.calls, strings.TrimPrefix(name, "/fake/")+" "+strings.Join(args, " ")+" | "+strings.Join(env, " "))
-		switch strings.TrimPrefix(name, "/fake/") + " " + strings.Join(args, " ") {
-		case "codex --version":
-			return host.Result{Stdout: c.version}, nil
-		case "codex --help":
-			return host.Result{Stdout: strings.ReplaceAll(codexHelp, c.noFlag+"\n", "\n")}, nil
-		case "codex login status":
-			if c.loggedIn {
-				return host.Result{}, nil
+	f.wire(func(w *worker.Env) {
+		w.LookPath = func(n string) (string, error) {
+			if n == harness.Codex && c.noCodex {
+				return "", errors.New("not found")
 			}
-			return host.Result{Stderr: "Not logged in", ExitCode: 1}, nil
-		case "herdr integration status":
-			return host.Result{Stdout: "codex: not installed (/x)\n"}, nil
+			return "/fake/" + n, nil
 		}
-		return host.Result{}, nil
-	}
+	})
+	f.wire(func(w *worker.Env) {
+		w.Run = func(_ context.Context, name string, args, env []string) (host.Result, error) {
+			c.calls = append(c.calls, strings.TrimPrefix(name, "/fake/")+" "+strings.Join(args, " ")+" | "+strings.Join(env, " "))
+			switch strings.TrimPrefix(name, "/fake/") + " " + strings.Join(args, " ") {
+			case "codex --version":
+				return host.Result{Stdout: c.version}, nil
+			case "codex --help":
+				return host.Result{Stdout: strings.ReplaceAll(codexHelp, c.noFlag+"\n", "\n")}, nil
+			case "codex login status":
+				if c.loggedIn {
+					return host.Result{}, nil
+				}
+				return host.Result{Stderr: "Not logged in", ExitCode: 1}, nil
+			case "herdr integration status":
+				return host.Result{Stdout: "codex: not installed (/x)\n"}, nil
+			}
+			return host.Result{}, nil
+		}
+	})
 }
 
 const codexCfg = `{"round":{"dispatch":"herdr","tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`
@@ -1130,7 +1143,7 @@ func TestAssignAccountStepFollowsAccountPicking(t *testing.T) {
 			if tc.picking {
 				f.env = f.env.WithAccounts(acc)
 			} else {
-				f.env.Worker.Accounts = acc
+				f.env.Worker = f.env.Worker.WithAccounts(acc)
 			}
 			res, err := f.assign("12", "ben", nil)
 			if err != nil || !res.Dispatched || res.Account != tc.wantAcct {
@@ -1187,7 +1200,7 @@ func TestTryItBriefFollowsTheGatesTrustDecision(t *testing.T) {
 		"vouched body":     {source: "github", forge: trustingForge{a: tracker.Authorship{Author: "ann", Body: "## Try it\n- echo vouched\n"}}, steps: "- `echo vouched`"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			steps, why := Env{Forge: tc.forge, Worker: worker.Env{Config: diskConfig}}.tryItBrief(bg, tryItRoot(t, tc.source), be, "9")
+			steps, why := Env{Forge: tc.forge, Worker: wk(worker.Env{Config: diskConfig})}.tryItBrief(bg, tryItRoot(t, tc.source), be, "9")
 			if steps != tc.steps || !strings.Contains(why, tc.whyContains) || (tc.whyContains == "" && why != "") {
 				t.Errorf("steps %q why %q", steps, why)
 			}
@@ -1469,7 +1482,7 @@ func TestAssignCodexUnsentDispatchIsBlocked(t *testing.T) {
 	}
 	// Even an old done sentinel must not promote an unsent task.
 	f.host.capture = "ROTA-DONE ben https://github.com/o/r/pull/1\n"
-	rows, err := f.env.Worker.Poll(bg, f.root, worker.PollOpts{Slot: "ben"})
+	rows, err := f.ws.Poll(bg, f.root, worker.PollOpts{Slot: "ben"})
 	if err != nil || len(rows.Slots) == 0 || rows.Slots[0].State != worker.StateBlocked || !strings.Contains(rows.Slots[0].Evidence, "not submitted") {
 		t.Fatalf("poll unsent assignment: %+v, %v", rows, err)
 	}

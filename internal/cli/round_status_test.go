@@ -32,7 +32,7 @@ func roundFixture(t *testing.T, agents []host.Agent) (string, *Deps) {
 	}
 	d := testDeps()
 	d.RoundEnv = func(context.Context, string) round.Env {
-		e := round.Env{Git: git.Exec, Base: "feat/x", ForgeErr: "fake: no forge"}
+		e := round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "feat/x", ForgeErr: "fake: no forge"}
 		if agents != nil {
 			e.Snapshot = func(context.Context) ([]host.Agent, error) { return agents, nil }
 			e.HostName = "herdr"
@@ -46,7 +46,7 @@ func TestRoundStatusAndReconcile(t *testing.T) {
 	root, deps := roundFixture(t, []host.Agent{})
 	// Re-point the fake at the real worktree path now that root is known.
 	deps.RoundEnv = func(context.Context, string) round.Env {
-		return round.Env{Git: git.Exec, Base: "feat/x", HostName: "herdr", ForgeErr: "fake: no forge",
+		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "feat/x", HostName: "herdr", ForgeErr: "fake: no forge",
 			Snapshot: func(context.Context) ([]host.Agent, error) {
 				return []host.Agent{{Tab: "w1:t1", Name: "dana", Cwd: filepath.Join(root, ".worktrees", "dana"), Status: "working"}}, nil
 			}}

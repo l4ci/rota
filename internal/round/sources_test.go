@@ -105,7 +105,7 @@ func TestReadRowsRegistryFirstThenUnregisteredWorktrees(t *testing.T) {
 		slot(root, "ben", "stale/branch", func(s *jsonx.Object) { s.Set("handle", "w1:t1"); s.Set("task", "5") }),
 		slot(root, "gone", "gone/1-z", nil),
 	)
-	e := Env{Git: git.Exec, Base: "main"}
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{})}
 	wts, err := e.worktrees(bg, root)
 	if err != nil {
 		t.Fatal(err)
