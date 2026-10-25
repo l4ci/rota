@@ -677,9 +677,9 @@ func suiteConfig(t *testing.T) {
 		scn{name: "update/runs-from-a-subdirectory", fx: withFile("sub/x.txt", "x\n"), cwd: "sub", argv: j("update"), want: 0, bin: upd.bin,
 			env:   []string{"HOME=" + upd.homeNone, "ROTA_TEST_LATEST_VERSION=1.2.4"},
 			check: checkUpdate("script", "behind")},
-		scn{name: "update/dev-build-compares-as-zero", fx: fx{noHV: true}, argv: j("update"), goOnly: true, want: 0,
+		scn{name: "update/dev-build-has-no-version-to-compare", fx: fx{noHV: true}, argv: j("update"), goOnly: true, want: 0,
 			env:   []string{"HOME=" + upd.homeNone, "ROTA_TEST_LATEST_VERSION=0.0.0"},
-			check: both(eqCheck("data.currentVersion", "dev"), eqCheck("data.status", "current"), eqCheck("data.installType", "dev"))},
+			check: both(eqCheck("data.currentVersion", "dev"), eqCheck("data.status", "unknown"), eqCheck("data.installType", "dev"))},
 		scn{name: "update/without-the-test-variable-only-the-fake-gh-runs", fx: fx{noHV: true}, argv: j("update"), want: 0, bin: upd.bin,
 			env: []string{"HOME=" + upd.homeNone, "FAKE_TRACKER_LOG=" + filepath.Join(harnessTmp, "update-gh.log")},
 			check: func(t *testing.T, e envl) {
