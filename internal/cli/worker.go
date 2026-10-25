@@ -820,14 +820,9 @@ func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
 	if err != nil {
 		return gateRun{Err: err}
 	}
-	approve := func(t worker.GateTarget, files func() ([]string, error)) (*exitcode.Refusal, error) {
-		req := o.Approval
-		req.Thread = func() (worker.ApprovalThread, error) { return worker.TargetApprovalThread(t) }
-		return clearMerge(c, policy, o.Slot+" into "+o.Base, o.Confirm, req, files, nil)
-	}
 	ctx, stop := workerContext()
 	defer stop()
-	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Prune: o.Prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block, CheckReviews: true, ItemBody: lazyItemBody(c, root)})
+	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Prune: o.Prune, Approval: mergeApproval(c, policy, o.Confirm, o.Approval, nil), Verdict: shipVerdict(c, root, root).Block, CheckReviews: true, ItemBody: lazyItemBody(c, root)})
 	run := gateRun{Result: r, Err: err, Issue: r.Issue, Refused: r.Refused(err)}
 	if run.Refused || err != nil || o.CheckOnly {
 		return run
