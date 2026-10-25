@@ -140,7 +140,7 @@ func detect(e Env) string {
 			return Brew
 		}
 	}
-	if v := e.Current; v == "" || v == "dev" || v == "(devel)" || strings.HasSuffix(v, "-dev") {
+	if v := e.Current; !stamped(v) || strings.HasSuffix(v, "-dev") {
 		return Dev
 	}
 	if len(e.Commit) >= fullCommitLen {
