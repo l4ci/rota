@@ -40,6 +40,14 @@ func (e Env) StaleClaims(ctx context.Context, root string, be Board, keys []trac
 	if err != nil {
 		return nil, []string{fmt.Sprintf("stale claims: %v", err)}
 	}
+	return e.staleClaims(ctx, root, be, keys, prs)
+}
+
+// staleClaims shares an already-read PR snapshot with candidates and status.
+func (e Env) staleClaims(ctx context.Context, root string, be Board, keys []tracker.IssueKey, prs []tracker.PR) ([]StaleClaim, []string) {
+	if !e.forgeOn(be) || e.Round.ClaimStaleMinutes <= 0 && e.Round.ClaimStaleMinutesMajor <= 0 {
+		return nil, nil
+	}
 	if keys == nil {
 		items, err := be.List(false)
 		if err != nil {

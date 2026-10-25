@@ -253,6 +253,16 @@ var pyNotFound = regexp.MustCompile(`(?i)not found|could not resolve|404`)
 // glab merges with auto-merge off, so a pipeline can't turn the merge into a
 // scheduled one that merges nothing.
 func divergeArgv(provider, op string, argv []string) []string {
+	if provider == "github" && op == "open_prs" {
+		// Stale-claim detection additionally requests server activity timestamps.
+		out := append([]string(nil), argv...)
+		for i := 0; i+1 < len(out); i++ {
+			if out[i] == "--json" {
+				out[i+1] += ",updatedAt"
+			}
+		}
+		return out
+	}
 	if provider == "github" && len(argv) > 1 && argv[0] == "issue" && argv[1] == "list" {
 		// the adapter's `issue list` also reads the author, for `rota issues list`;
 		// a raw `tracker call` is untouched.

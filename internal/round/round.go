@@ -657,8 +657,12 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 	}
 	e.claimFindings(ctx, rep, reg, rows, slotObj, reg.PRs(), labelled, fs.claimLabelled, labelsOK)
-	if e.Board != nil {
-		staleClaims, warnings := e.StaleClaims(ctx, root, e.Board, nil)
+	if e.Board != nil && forgeOK {
+		snapshot := make([]tracker.PR, 0, len(prs))
+		for _, pr := range prs {
+			snapshot = append(snapshot, *pr)
+		}
+		staleClaims, warnings := e.staleClaims(ctx, root, e.Board, nil, snapshot)
 		rep.Warnings = append(rep.Warnings, warnings...)
 		for _, claim := range staleClaims {
 			detail := fmt.Sprintf("claim %s on %s has had no push or PR activity since %s", claim.Holder, tracker.RefOf(claim.Issue), claim.Last.UTC().Format(time.RFC3339))

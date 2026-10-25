@@ -997,6 +997,12 @@ func (b *Issues) Status(ref string) (*Status, error) {
 			}
 		}
 	}
+	// Unknown timestamps carry no activity evidence and keep legacy output stable.
+	for id, at := range claimedAt {
+		if at.IsZero() {
+			delete(claimedAt, id)
+		}
+	}
 	st := &Status{ClaimedAt: claimedAt,
 		ID: is.Key.String(), Type: b.Letter(is), Title: title, Status: is.State,
 		State: strings.Join(state, ","), Assignees: append([]string{}, is.Assignees...),
