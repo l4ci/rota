@@ -965,3 +965,67 @@ func TestPairwiseMergeFailureIsCheckBroke(t *testing.T) {
 		})
 	}
 }
+
+// syncWorld is trainWorld with a milestone branch cut from main and checked
+// out, then main moved on by one commit: the shape a milestone train meets
+// when the project base advanced after the milestone was cut.
+func syncWorld(t *testing.T, verify string, branches ...string) *world {
+	t.Helper()
+	w := trainWorld(t, verify, branches...)
+	gitq(t, w.dir, "branch", "milestone/M01", "main")
+	trainWrite(t, w, "main2.txt", "main2")
+	gitq(t, w.dir, "checkout", "-q", "milestone/M01")
+	return w
+}
+
+func (w *world) milestoneTrain(o TrainOpts) (TrainResult, error) {
+	o.Base, o.SyncBase = "milestone/M01", "main"
+	return w.env(false).Train(bg, w.dir, o)
+}
+
+func TestTrainSyncsTheBaseIntoTheMilestone(t *testing.T) {
+	w := syncWorld(t, "test -f main2.txt && test -f b1.txt", "b1")
+	res, err := w.milestoneTrain(TrainOpts{Targets: []string{"b1"}})
+	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	for _, f := range []string{"main2.txt", "b1.txt"} {
+		if !w.onMain(f) { // the checkout is on the milestone branch
+			t.Errorf("%s is not on the milestone", f)
+		}
+	}
+	if out := gitq(t, w.dir, "log", "--merges", "--format=%s", "milestone/M01"); !strings.Contains(out, "sync main into milestone/M01") {
+		t.Errorf("no sync merge on the milestone:\n%s", out)
+	}
+}
+
+func TestTrainSyncRedLeavesTheMilestoneUnchanged(t *testing.T) {
+	w := syncWorld(t, "false", "b1")
+	before := gitq(t, w.dir, "rev-parse", "milestone/M01")
+	res, err := w.milestoneTrain(TrainOpts{Targets: []string{"b1"}})
+	if err != nil || res.Verdict != GateVerifyFailed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if after := gitq(t, w.dir, "rev-parse", "milestone/M01"); after != before {
+		t.Errorf("milestone moved on a red train: %s -> %s", before, after)
+	}
+}
+
+func TestTrainSyncConflictNamesMilestoneAndPaths(t *testing.T) {
+	w := syncWorld(t, "true", "b1")
+	trainWrite(t, w, "seed.txt", "milestone side")
+	gitq(t, w.dir, "checkout", "-q", "main")
+	trainWrite(t, w, "seed.txt", "main side")
+	gitq(t, w.dir, "checkout", "-q", "milestone/M01")
+	before := gitq(t, w.dir, "rev-parse", "milestone/M01")
+	res, err := w.milestoneTrain(TrainOpts{Targets: []string{"b1"}})
+	if err != nil || res.Verdict != GateMergeFailed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !strings.Contains(res.Err, "milestone/M01") || !strings.Contains(res.Err, "seed.txt") || !strings.Contains(res.Err, "main") {
+		t.Errorf("error should name the milestone, the base and the conflicting path: %s", res.Err)
+	}
+	if after := gitq(t, w.dir, "rev-parse", "milestone/M01"); after != before || w.onMain("b1.txt") {
+		t.Errorf("a sync conflict must push nothing")
+	}
+}
