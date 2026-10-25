@@ -1,6 +1,7 @@
 package backlog
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"slices"
@@ -227,4 +228,56 @@ func TestUmbrellaClaimLabelDrift(t *testing.T) {
 	if !slices.Equal(remotes["web"].Issues[0].Labels, []string{"claimed:dana@main"}) || !slices.Equal(remotes["api"].Issues[0].Labels, []string{"claimed:kit@main"}) {
 		t.Fatal("repair reached wrong tracker")
 	}
+}
+
+// Overlap both claims before either has observed a winner: the first call is
+// paused at its marker write while the other machine completes its claim.
+// The resumed call must re-read the winner and release its own losing marker.
+func TestSupportAndMainOverlappingClaimsOneLabel(t *testing.T) {
+	for _, first := range []string{"ben@3", "mac-dana@3"} {
+		t.Run(first, func(t *testing.T) {
+			b, tr := newIssues(t, `{"round":{"support":"mac"}}`, open(1))
+			other := &Issues{Cfg: b.Cfg, Tracker: tr}
+			rival := "mac-dana@3"
+			label := "claimed:dana@mac"
+			if first == rival {
+				rival = "ben@3"
+				label = "claimed:ben@main"
+			}
+			b.Tracker = &overlappingClaimTracker{fakeTracker: tr, beforeClaim: func() {
+				if won, holder, err := other.ClaimShared("1", rival, 1); err != nil || !won || holder != rival {
+					t.Fatalf("rival won=%v holder=%s err=%v", won, holder, err)
+				}
+			}}
+			if won, holder, err := b.ClaimShared("1", first, 1); err != nil || won || holder != rival {
+				t.Fatalf("first won=%v holder=%s err=%v", won, holder, err)
+			}
+			st, err := b.Status("1")
+			if err != nil || !slices.Equal(st.Claims, []string{rival}) {
+				t.Fatalf("claims %+v err=%v", st, err)
+			}
+			if !slices.Equal(tr.Issues[0].Labels, []string{"in-progress", label}) {
+				t.Fatalf("race left labels %v", tr.Issues[0].Labels)
+			}
+			if !slices.ContainsFunc(tr.Issues[0].Comments, func(c tracker.Comment) bool {
+				return strings.Contains(c.Body, "<!-- rota:release "+first+" -->")
+			}) {
+				t.Fatalf("loser did not release its marker: %v", tr.Issues[0].Comments)
+			}
+		})
+	}
+}
+
+type overlappingClaimTracker struct {
+	*fakeTracker
+	beforeClaim func()
+}
+
+func (tr *overlappingClaimTracker) AddComment(ctx context.Context, key tracker.IssueKey, body string) (string, error) {
+	if tr.beforeClaim != nil && strings.HasPrefix(body, "<!-- rota:claim ") {
+		run := tr.beforeClaim
+		tr.beforeClaim = nil
+		run()
+	}
+	return tr.fakeTracker.AddComment(ctx, key, body)
 }

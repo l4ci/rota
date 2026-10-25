@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -963,5 +964,137 @@ func TestPairwiseMergeFailureIsCheckBroke(t *testing.T) {
 				t.Errorf("main moved: %s -> %s", before, after)
 			}
 		})
+	}
+}
+
+// syncWorld is trainWorld with a milestone branch cut from main and checked
+// out, then main moved on by one commit: the shape a milestone train meets
+// when the project base advanced after the milestone was cut.
+func syncWorld(t *testing.T, verify string, branches ...string) *world {
+	t.Helper()
+	w := trainWorld(t, verify, branches...)
+	gitq(t, w.dir, "branch", "milestone/M01", "main")
+	trainWrite(t, w, "main2.txt", "main2")
+	gitq(t, w.dir, "checkout", "-q", "milestone/M01")
+	return w
+}
+
+func (w *world) milestoneTrain(o TrainOpts) (TrainResult, error) {
+	o.Base, o.SyncBase = "milestone/M01", "main"
+	return w.env(false).Train(bg, w.dir, o)
+}
+
+func TestTrainSyncsTheBaseIntoTheMilestone(t *testing.T) {
+	w := syncWorld(t, "test -f main2.txt && test -f b1.txt", "b1")
+	res, err := w.milestoneTrain(TrainOpts{Targets: []string{"b1"}})
+	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	for _, f := range []string{"main2.txt", "b1.txt"} {
+		if !w.onMain(f) { // the checkout is on the milestone branch
+			t.Errorf("%s is not on the milestone", f)
+		}
+	}
+	if out := gitq(t, w.dir, "log", "--merges", "--format=%s", "milestone/M01"); !strings.Contains(out, "sync main into milestone/M01") {
+		t.Errorf("no sync merge on the milestone:\n%s", out)
+	}
+}
+
+func TestTrainSyncRedLeavesTheMilestoneUnchanged(t *testing.T) {
+	w := syncWorld(t, "false", "b1")
+	before := gitq(t, w.dir, "rev-parse", "milestone/M01")
+	res, err := w.milestoneTrain(TrainOpts{Targets: []string{"b1"}})
+	if err != nil || res.Verdict != GateVerifyFailed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if after := gitq(t, w.dir, "rev-parse", "milestone/M01"); after != before {
+		t.Errorf("milestone moved on a red train: %s -> %s", before, after)
+	}
+}
+
+func TestTrainSyncConflictNamesMilestoneAndPaths(t *testing.T) {
+	w := syncWorld(t, "true", "b1")
+	trainWrite(t, w, "seed.txt", "milestone side")
+	gitq(t, w.dir, "checkout", "-q", "main")
+	trainWrite(t, w, "seed.txt", "main side")
+	gitq(t, w.dir, "checkout", "-q", "milestone/M01")
+	before := gitq(t, w.dir, "rev-parse", "milestone/M01")
+	res, err := w.milestoneTrain(TrainOpts{Targets: []string{"b1"}})
+	if err != nil || res.Verdict != GateMergeFailed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !strings.Contains(res.Err, "milestone/M01") || !strings.Contains(res.Err, "seed.txt") || !strings.Contains(res.Err, "main") {
+		t.Errorf("error should name the milestone, the base and the conflicting path: %s", res.Err)
+	}
+	if after := gitq(t, w.dir, "rev-parse", "milestone/M01"); after != before || w.onMain("b1.txt") {
+		t.Errorf("a sync conflict must push nothing")
+	}
+}
+
+// syncPRWorld is a queued PR train (#7 on w1) onto milestone/M01 on the bare
+// origin, with origin/main moved on after the milestone was cut: the sync must
+// fetch both, merge origin/main in the scratch tree and push to origin.
+func syncPRWorld(t *testing.T, verify string) *world {
+	t.Helper()
+	w := newWorld(t, "")
+	w.setQueued()
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q]}}`, verify))
+	w.forge("body", "Closes #5\n")
+	w.forge("base", "milestone/M01")
+	gitq(t, w.dir, "push", "-q", "origin", "main:refs/heads/milestone/M01")
+	os.WriteFile(filepath.Join(w.worker, "main2.txt"), []byte("main2\n"), 0o644)
+	gitq(t, w.worker, "checkout", "-q", "-b", "advance", "origin/main")
+	gitq(t, w.worker, "add", "main2.txt")
+	gitq(t, w.worker, "commit", "-q", "-m", "main2")
+	gitq(t, w.worker, "push", "-q", "origin", "advance:main")
+	gitq(t, w.dir, "fetch", "-q", "origin")
+	gitq(t, w.dir, "checkout", "-q", "-b", "milestone/M01", "origin/milestone/M01")
+	return w
+}
+
+func (w *world) originRev(ref string) string {
+	return gitq(w.t, w.origin, "rev-parse", ref)
+}
+
+func (w *world) originHas(ref, file string) bool {
+	out := gitq(w.t, w.origin, "ls-tree", "--name-only", ref)
+	return slices.Contains(strings.Fields(out), file)
+}
+
+func TestTrainSyncPushesTheBaseIntoOriginMilestoneForPRs(t *testing.T) {
+	w := syncPRWorld(t, "test -f main2.txt && test -f work.txt")
+	res, err := w.milestoneTrain(TrainOpts{Targets: []string{"#7"}})
+	if err != nil || res.Verdict != GatePass || !res.Changed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !w.originHas("milestone/M01", "main2.txt") {
+		t.Error("the sync merge never reached origin/milestone/M01")
+	}
+	if out := gitq(t, w.origin, "log", "--merges", "--format=%s", "milestone/M01"); !strings.Contains(out, "sync main into milestone/M01") {
+		t.Errorf("no sync merge on origin's milestone:\n%s", out)
+	}
+}
+
+func TestTrainSyncRedPushesNothingToOriginForPRs(t *testing.T) {
+	w := syncPRWorld(t, "false")
+	before := w.originRev("milestone/M01")
+	res, err := w.milestoneTrain(TrainOpts{Targets: []string{"#7"}})
+	if err != nil || res.Verdict != GateVerifyFailed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if after := w.originRev("milestone/M01"); after != before {
+		t.Errorf("origin milestone moved on a red train: %s -> %s", before, after)
+	}
+}
+
+func TestTrainSyncPlanReadsOriginBase(t *testing.T) {
+	w := syncPRWorld(t, "false")
+	before := w.originRev("milestone/M01")
+	res, err := w.milestoneTrain(TrainOpts{Targets: []string{"#7"}, Plan: true})
+	if err != nil || res.Plan == nil || res.Changed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if after := w.originRev("milestone/M01"); after != before {
+		t.Errorf("a plan must push nothing: %s -> %s", before, after)
 	}
 }
