@@ -46,12 +46,21 @@ func relatesTo(related, pr string) bool {
 	return false
 }
 
+// followUpPrefix starts every follow-up item title; IsFollowUpTitle matches it.
+const followUpPrefix = "Review follow-ups from PR"
+
 // followUpTitle names the one item that collects a PR's deferred findings.
 func followUpTitle(pr string) string {
 	if k := prKey(pr); prNumberRe.MatchString(k) {
-		return "Review follow-ups from PR #" + k
+		return followUpPrefix + " #" + k
 	}
-	return "Review follow-ups from PR " + prKey(pr)
+	return followUpPrefix + " " + prKey(pr)
+}
+
+// IsFollowUpTitle is whether an item title names a deferred-findings item, the
+// kind FileFollowUps files. A PR that closes one files no further follow-ups.
+func IsFollowUpTitle(title string) bool {
+	return strings.HasPrefix(strings.TrimSpace(title), followUpPrefix)
 }
 
 // DeferredAbove is the deferred findings at or above the floor, in order. The

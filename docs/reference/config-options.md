@@ -299,7 +299,7 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 
 | Key | Scope | Type | Default | Values | Description |
 |-----|-------|------|---------|--------|-------------|
-| `review.fileDeferred` | taste (tracked) | enum | `"minor"` | `minor`, `major`, `off` | Which deferred review findings rota verdict add --file-deferred files, as one follow-up item per PR. minor: minor and major. major: only major (minor stays in the verdict record). off: none. |
+| `review.fileDeferred` | taste (tracked) | enum | `"major"` | `minor`, `major`, `off` | Which deferred review findings rota verdict add --file-deferred files, as one follow-up item per PR. minor: minor and major. major: only major (minor stays in the verdict record). off: none. A PR that closes a deferred-findings item files none. |
 | `review.crossLabels` | project (tracked) | list | `["size:Major", "risk:high"]` |  | Issue labels that make a PR need a cross-harness review: one read-only review on a harness other than the author's, recorded as a review-cross verdict the merge gate requires. Applies only when round.harnesses is set. A review:<harness> label (claude or codex) picks the reviewer, review:none skips it. Empty: no PR needs one. |
 
 ### roles
