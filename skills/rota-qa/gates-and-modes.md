@@ -12,7 +12,9 @@ Loaded by `SKILL.md` when a caller or config flag decides whether `/rota-qa` run
 
 ## Pillar filtering
 
-A run invoked by `qa.afterWork` or `ship.qa` runs only the pillars whose strategy `pillar-globs` entry matches a touched file (`rota review scope --json`), plus every pillar with no entry. A strategy without `pillar-globs` runs every pillar. A manual `/rota-qa run` ignores `pillar-globs` and runs every pillar.
+`qa.afterWork` and `ship.qa` call `/rota-qa run --gate`; only that run filters pillars, by the rule in `SKILL.md` Step 4. A manual `/rota-qa run` runs every pillar.
+
+Pillar keys are lowercase: `functional`, `security`, `performance`, `ui-a11y`. Globs are root-relative paths matched against the touched files; `*` stays within a segment and `**` spans directories. The caller passes the touched-file set it matched on; absent that, the run reads `rota review scope --json`. On main that set is empty, so every pillar with globs would be skipped and the run would record PASS: do not use `--gate` there.
 
 ## Modes
 

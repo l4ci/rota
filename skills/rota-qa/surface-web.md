@@ -1,22 +1,24 @@
 # Web surface menu
 
-Loaded by `first-run.md` step 3 for a web UI target. Entries are examples: `name · command · pass criterion · tool`. The user edits them before approving. Probe each tool with `command -v` (or `npx --no-install <tool> --version`); mark it `installed` or `not installed`. Offer not-installed entries unselected; never install.
+Loaded by [`first-run.md`](first-run.md) step 3 for a web UI target. Entries are examples: `name · command · pass criterion · tool`. The user edits them before approving. Probe each tool with `command -v` (or `npx --no-install <tool> --version`); mark it `installed` or `not installed`. Offer not-installed entries unselected; never install.
 
-## Functional
+Pillar keys: `functional`, `security`, `performance`, `ui-a11y`.
+
+## functional
 
 - Playwright flows · `npx playwright test` · all specs pass · playwright
 - smoke route check · `curl -fsS -o /dev/null -w '%{http_code}' <url>/` · 200 · curl
 
-## Security
+## security
 
 - dependency audit · `npm audit --audit-level=high` · no findings at or above high · npm
 - static scan · `semgrep --config auto --error` · exit 0 · semgrep
 
-## Performance
+## performance
 
 - Lighthouse budget · `lighthouse <url> --budget-path=.budget.json --quiet` · budget met · lighthouse
 
-## UI / a11y
+## ui-a11y
 
 - axe scan · `npx @axe-core/cli <url> --exit` · no violations · axe-core
 - pa11y scan (alternative to axe) · `pa11y <url>` · exit 0 · pa11y
