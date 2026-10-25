@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	ms "github.com/l4ci/rota/internal/milestone"
 	"os"
 	"path/filepath"
@@ -182,7 +183,7 @@ func releaseBump(fs *flag.FlagSet) RunFunc {
 		next, err := release.Bump(dir, path, kind, bump, false)
 		if err != nil {
 			if errors.Is(err, release.ErrNotGreater) {
-				return Result{Data: gitObj("blockedBy", "not greater", "changed", false)}, releaseBumpErr(err, true)
+				return Result{Data: gitObj("blockedBy", blockedby.NotGreater, "changed", false)}, releaseBumpErr(err, true)
 			}
 			return Result{}, releaseBumpErr(err, true)
 		}
@@ -322,7 +323,7 @@ func releaseChangelog(fs *flag.FlagSet) RunFunc {
 		}
 		out, err := release.UpdateChangelog(existing, rerr == nil, version, c.deps().Today().Format("2006-01-02"), notes)
 		if errors.Is(err, release.ErrSectionExists) {
-			return Result{Data: gitObj("blockedBy", "exists", "changed", false)},
+			return Result{Data: gitObj("blockedBy", blockedby.Exists, "changed", false)},
 				Refused("%s already has a section for v%s", *path, version)
 		}
 		if err != nil {

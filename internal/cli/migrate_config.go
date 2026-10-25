@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
@@ -200,21 +201,21 @@ func roundMigrationFail(err error) (Result, error) {
 		for _, x := range me.Conflicts {
 			list = append(list, knObj("file", x.File, "old", x.Old, "new", x.New))
 		}
-		d := knObj("blockedBy", "merge conflict", "conflicts", list, "changed", false)
+		d := knObj("blockedBy", blockedby.MergeConflict, "conflicts", list, "changed", false)
 		return Result{Data: d}, Refused("%s", err.Error())
 	case errors.As(err, &ae):
 		list := []any{}
 		for _, x := range ae.Conflicts {
 			list = append(list, knObj("file", x.File, "name", x.Name, "dirs", anySlice([]string{x.A, x.B})))
 		}
-		d := knObj("blockedBy", "account conflict", "conflicts", list, "changed", false)
+		d := knObj("blockedBy", blockedby.AccountConflict, "conflicts", list, "changed", false)
 		return Result{Data: d}, Refused("%s", err.Error())
 	case errors.As(err, &ce):
 		list := []any{}
 		for _, x := range ce.Conflicts {
 			list = append(list, knObj("file", x.File, "from", x.Old, "to", x.New, "fromValue", x.OldValue, "toValue", x.NewValue))
 		}
-		d := knObj("blockedBy", "config conflict", "conflicts", list, "changed", false)
+		d := knObj("blockedBy", blockedby.ConfigConflict, "conflicts", list, "changed", false)
 		return Result{Data: d}, Refused("%s", err.Error())
 	case errors.Is(err, config.ErrCorrupt):
 		return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
@@ -267,7 +268,7 @@ func roundKeysStop(c *Ctx) (Result, error) {
 	msg := "config still uses the old round key names " + strings.Join(old, ", ") + ", which nothing reads since they moved to round.*"
 	if c.Path == "rota" || pathUnder(c.Path, roundKeyVerbs) {
 		d := jsonx.NewObject()
-		d.Set("blockedBy", "config migration")
+		d.Set("blockedBy", blockedby.ConfigMigration)
 		d.Set("keys", anySlice(old))
 		d.Set("changed", false)
 		return Result{Data: d}, Refused("%s", msg).WithHint("run: rota migrate config --apply")

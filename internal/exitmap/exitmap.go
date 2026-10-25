@@ -7,6 +7,7 @@ package exitmap
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/blockedby"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
@@ -100,7 +101,7 @@ func translate(err error, o Options) (any, error) {
 	var ufe *tracker.UnknownForgeError
 	switch {
 	case has(Tracker) && errors.As(err, &ufe):
-		return jsonObj("blockedBy", "forge", "changed", false),
+		return jsonObj("blockedBy", blockedby.Forge, "changed", false),
 			&exitcode.Error{Exit: exitcode.ExitRefused, Message: err.Error(), Hint: tracker.UnknownForgeHint}
 	case has(Tracker) && errors.As(err, &te):
 		return nil, &exitcode.Error{Exit: te.Kind.Exit(), Message: te.Message}
@@ -110,10 +111,10 @@ func translate(err error, o Options) (any, error) {
 		return jsonObj("blockedBy", ref.BlockedBy, "changed", false),
 			&exitcode.Error{Exit: exitcode.ExitRefused, Message: ref.Msg, Hint: ref.Hint}
 	case has(Refusal) && errors.As(err, &act):
-		return jsonObj("blockedBy", "active", "id", act.ID, "activeBranch", act.Branch, "changed", false),
+		return jsonObj("blockedBy", blockedby.Active, "id", act.ID, "activeBranch", act.Branch, "changed", false),
 			&exitcode.Error{Exit: exitcode.ExitRefused, Message: act.Error(), Hint: "end the stream first: rota status rm " + act.Branch}
 	case has(Refusal) && errors.Is(err, backlog.ErrWrongBackend):
-		return jsonObj("blockedBy", "backend", "changed", false),
+		return jsonObj("blockedBy", blockedby.Backend, "changed", false),
 			&exitcode.Error{Exit: exitcode.ExitRefused, Message: err.Error()}
 	case notFound(err, o.Classes):
 		return nil, &exitcode.Error{Exit: exitcode.ExitResolution, Message: err.Error()}

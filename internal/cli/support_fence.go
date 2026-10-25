@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/blockedby"
 	"io/fs"
 	"os"
 	"strings"
@@ -142,7 +143,7 @@ const supportBackendHint = "set issues.source to a tracker (github, gitlab, …)
 // supportFileModeStop refuses a support key set or in use under issues.source
 // file: a support round needs labels, comments and PRs (D3).
 func supportFileModeStop() (Result, error) {
-	d := jsonObj("blockedBy", "backend", "changed", false)
+	d := jsonObj("blockedBy", blockedby.Backend, "changed", false)
 	return Result{Data: d}, Refused("a support round needs an issue tracker, but issues.source is file").WithHint(supportBackendHint)
 }
 
@@ -162,7 +163,7 @@ func roleInTrackedConfigStop(c *Ctx) (Result, error) {
 	if _, ok := config.Lookup(project, "round.role"); !ok {
 		return Result{}, nil
 	}
-	d := jsonObj("blockedBy", "config", "key", "round.role", "changed", false)
+	d := jsonObj("blockedBy", blockedby.Config, "key", "round.role", "changed", false)
 	return Result{Data: d}, Refused("round.role is set in .rota/config.json, which every machine shares").
 		WithHint("remove it from .rota/config.json, then run: rota config set round.role <value>, which writes .rota/config.local.json")
 }
@@ -185,7 +186,7 @@ func supportRoleStop(c *Ctx) (Result, error) {
 // fenced verb when round.role cannot be read; nil on main.
 func supportRefusal(c *Ctx, root, what string) (Result, error) {
 	unknown := func(why, hint string) (Result, error) {
-		d := jsonObj("blockedBy", "config", "key", "round.role", "changed", false)
+		d := jsonObj("blockedBy", blockedby.Config, "key", "round.role", "changed", false)
 		return Result{Data: d}, Refused("%s needs to know this machine's role: %s", what, why).WithHint(hint)
 	}
 	// Reads the layer from disk on purpose, not through Deps.Config.
@@ -205,7 +206,7 @@ func supportRefusal(c *Ctx, root, what string) (Result, error) {
 	if role != roundcfg.RoleSupport {
 		return Result{}, nil
 	}
-	d := jsonObj("blockedBy", "role", "role", roundcfg.RoleSupport, "changed", false)
+	d := jsonObj("blockedBy", blockedby.Role, "role", roundcfg.RoleSupport, "changed", false)
 	return Result{Data: d}, Refused("%s is refused on a support machine (round.role support): only the main orchestrator merges and writes tracked .rota/ content", what).
 		WithHint("run this on the main machine, or unset round.role in .rota/config.local.json")
 }
@@ -235,12 +236,12 @@ func supportRoundStartStop(c *Ctx, root string, set roundcfg.Settings) (Result, 
 		return supportFileModeStop()
 	}
 	if set.Role == roundcfg.RoleSupport && set.Support == "" {
-		d := jsonObj("blockedBy", "config", "changed", false)
+		d := jsonObj("blockedBy", blockedby.Config, "changed", false)
 		return Result{Data: d}, Refused("round.role is support but round.support is empty").WithHint("set round.support to this machine's name")
 	}
 	if set.Support != "" {
 		if _, err := c.deps().workerEnv().BounceStore(root); errors.Is(err, worker.ErrNoPushTrust) {
-			d := jsonObj("blockedBy", "forge", "changed", false)
+			d := jsonObj("blockedBy", blockedby.Forge, "changed", false)
 			return Result{Data: d}, Refused("%s", err.Error()).WithHint("a support round needs GitHub: only GitHub can say who has write access, which the bounce markers rely on")
 		} else if err != nil {
 			return Result{}, err

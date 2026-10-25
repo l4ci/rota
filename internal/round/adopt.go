@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -19,12 +20,12 @@ import (
 // Blocked reasons of an adoption (exit 4, `blockedBy`).
 const (
 	// BlockRegistered: a slot already holds the branch.
-	BlockRegistered = "registered"
+	BlockRegistered = blockedby.Registered
 	// BlockHeld: a slot already holds the issue.
-	BlockHeld = "held"
+	BlockHeld = blockedby.Held
 	// BlockExternal: a destructive verb was pointed at an adopted slot, whose
 	// worktree and branch rota did not create.
-	BlockExternal = worker.BlockExternal
+	BlockExternal = blockedby.External
 )
 
 // AdoptOpts are the flags of `rota worker adopt`.

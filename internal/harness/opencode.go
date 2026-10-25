@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -217,8 +218,8 @@ const OpencodeInstallHint = "install opencode (https://opencode.ai) and put it o
 
 // Block reasons of an opencode worker that cannot start.
 const (
-	BlockOpencodeFlags  = "opencode flags"
-	BlockOpencodeBinary = "opencode binary"
+	BlockOpencodeFlags  = blockedby.OpencodeFlags
+	BlockOpencodeBinary = blockedby.OpencodeBinary
 )
 
 func opencodeEnv(home string) []string {

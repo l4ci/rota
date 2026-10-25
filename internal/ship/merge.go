@@ -3,6 +3,7 @@ package ship
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/blockedby"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
@@ -29,7 +30,7 @@ type MergePorts struct {
 // failures pass through with their original merge error.
 func MergeBranch(p MergePorts, branch, base, msg string) (string, *exitcode.Refusal, error) {
 	if base == branch {
-		return "", nil, &Refusal{By: "base branch", Msg: "'" + branch + "' is the base branch"}
+		return "", nil, &Refusal{By: blockedby.BaseBranch, Msg: "'" + branch + "' is the base branch"}
 	}
 	// The commit the gates judge is the commit that lands: a push to the
 	// branch after this point cannot ride in.
@@ -65,7 +66,7 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, *exitcode.Refu
 	case errors.As(err, new(*land.CleanupError)):
 		return "", nil, err
 	case errors.As(err, new(*land.ConflictError)):
-		return "", nil, &Refusal{By: "conflict", Msg: "merge conflict; merge aborted"}
+		return "", nil, &Refusal{By: blockedby.Conflict, Msg: "merge conflict; merge aborted"}
 	default:
 		var me *land.MergeError
 		if errors.As(err, &me) {

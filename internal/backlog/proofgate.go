@@ -1,5 +1,7 @@
 package backlog
 
+import "github.com/l4ci/rota/internal/blockedby"
+
 // The proof-before-done rule, written once. Completing an item as done and
 // merging a PR that closes it both need a recorded proof row; the three
 // callers (File.Complete, Issues.Complete, Issues.MergePRGated) differ only in
@@ -19,7 +21,7 @@ func requireProof(id string, count func() (int, error)) error {
 		return err
 	}
 	if !ok {
-		return refused("proof missing", ErrProofMissing,
+		return refused(blockedby.ProofMissing, ErrProofMissing,
 			"[%s] no proof recorded, pass --no-proof to override", id)
 	}
 	return nil

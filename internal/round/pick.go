@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/strutil"
 	"strings"
 
@@ -13,10 +14,10 @@ import (
 
 // Blocked reasons of pick (exit 4, `blockedBy`).
 const (
-	BlockNotBestOf      = "not best-of"
-	BlockNotAttempt     = "not an attempt"
-	BlockPicked         = "already picked"
-	BlockAttemptRunning = "attempt running"
+	BlockNotBestOf      = blockedby.NotBestOf
+	BlockNotAttempt     = blockedby.NotAttempt
+	BlockPicked         = blockedby.AlreadyPicked
+	BlockAttemptRunning = blockedby.AttemptRunning
 )
 
 // Attempt states, as pick reports them.

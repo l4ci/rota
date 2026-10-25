@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"strings"
@@ -356,14 +357,14 @@ func limitWatchGuard(c *Ctx, root, cd string) (Result, error) {
 		return Result{Data: d}, &Error{Exit: ExitRefused, Message: msg, Hint: hint}
 	}
 	if ks, found, _ := keepalive.ReadState(keepalive.StatePath(cd)); st == roundlease.Live && found && ks.Running(le) && lease.PID == ks.PID {
-		return refuse("supervised", fmt.Sprintf("rota keepalive run (pid %d) holds the lease and already watches for usage limits", ks.PID),
+		return refuse(blockedby.Supervised, fmt.Sprintf("rota keepalive run (pid %d) holds the lease and already watches for usage limits", ks.PID),
 			"run rota limit status, or start the supervisor with --no-limits to watch by hand")
 	}
 	if !held {
-		return refuse("no round", "this process holds no round lease: run rota round start first", "a switch moves work, which is the orchestrator's act")
+		return refuse(blockedby.NoRound, "this process holds no round lease: run rota round start first", "a switch moves work, which is the orchestrator's act")
 	}
 	if w, ok := limits.ActiveWatching(le, cd); ok && w.PID != os.Getpid() {
-		return refuse("watching", fmt.Sprintf("a usage-limit watcher (%s, pid %d) is already running", w.Mode, w.PID), "one watcher acts on the limits list")
+		return refuse(blockedby.Watching, fmt.Sprintf("a usage-limit watcher (%s, pid %d) is already running", w.Mode, w.PID), "one watcher acts on the limits list")
 	}
 	return Result{}, nil
 }

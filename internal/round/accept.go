@@ -2,6 +2,7 @@ package round
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/blockedby"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -11,18 +12,18 @@ import (
 
 // BlockNoSlotHolds: accept found no slot holding the item, and the item is not
 // one it already closed.
-const BlockNoSlotHolds = "no slot holds it"
+const BlockNoSlotHolds = blockedby.NoSlotHolds
 
 // BlockNoIssues: neither the slot nor --issues names the filed issues.
-const BlockNoIssues = "no issues"
+const BlockNoIssues = blockedby.NoIssues
 
 // BlockFindingMissing: a research item has no finding comment posted since its
 // assignment.
-const BlockFindingMissing = "finding missing"
+const BlockFindingMissing = blockedby.FindingMissing
 
 // BlockNoGist: a decision item closes with a one-line gist for the milestone's
 // decision log.
-const BlockNoGist = "gist missing"
+const BlockNoGist = blockedby.NoGist
 
 // AcceptInput is the flags of `rota round accept`.
 type AcceptInput struct {
