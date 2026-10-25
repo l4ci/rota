@@ -347,7 +347,9 @@ func (e Env) MintReview(ctx context.Context, root string, be backlog.Backend, a 
 		// The registry is main's alone: this comment is how a support machine
 		// learns the title is not a lookalike.
 		if _, err := be.AddComment(res.ID, "feedback", marker.ReviewMintedLine(round)+"\nMinted by main in round "+strconv.Itoa(round)+": architecture review of "+area+"."); err != nil {
-			return fail(err)
+			// Nothing re-posts it, and a support machine refuses an item
+			// without it for good: name the manual recovery.
+			return fail(fmt.Errorf("%w (review %s exists without its review-minted comment, so a support machine will refuse it: post a comment on it starting with %s)", err, res.ID, marker.ReviewMintedLine(round)))
 		}
 		if n := issueNumber(be, res.ID); n != "" && e.Forge != nil {
 			if err := e.Forge.AddLabels(ctx, n, []string{RefactorLabel}, true); err != nil {
