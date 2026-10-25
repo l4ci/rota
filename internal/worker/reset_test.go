@@ -368,3 +368,80 @@ func TestResetKeepsASlotReboundDuringTheLookup(t *testing.T) {
 		t.Errorf("state %q pr %q, want the re-bound busy slot on pull/10", s.State(), s.PR())
 	}
 }
+
+// headForge answers a PR lookup with a state and head commit.
+type headForge struct {
+	Forge
+	state, head string
+}
+
+func (f headForge) PRView(context.Context, int) (tracker.PRInfo, error) {
+	return tracker.PRInfo{State: f.state, HeadSHA: f.head}, nil
+}
+
+func mergedPREnv(state, head string) Env {
+	e := Env{}
+	e.Forge = func(string, string, tracker.Settings) (Forge, error) { return headForge{state: state, head: head}, nil }
+	realGit := git.Exec
+	e.Git = func(ctx context.Context, d string, args ...string) (git.Result, error) {
+		if len(args) >= 2 && args[0] == "remote" && args[1] == "get-url" {
+			return git.Result{Stdout: "https://github.com/o/r.git\n"}, nil
+		}
+		return realGit(ctx, d, args...)
+	}
+	return e
+}
+
+// A squash merge leaves the slot's commits unmerged by patch (`git cherry`);
+// the merged PR whose head is the slot's HEAD proves they landed.
+func TestResetEndsDoneForASquashMergedPR(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		headSame bool
+		wantErr  bool
+	}{{"head is the PR head", true, false}, {"commits past the PR head", false, true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := slotProject(t)
+			gittest.Run(t, b, "remote", "add", "origin", "https://github.com/o/r.git")
+			commitIn(t, wt(b), "work.txt")
+			head := gittest.Run(t, wt(b), "rev-parse", "HEAD")
+			if !tc.headSame {
+				head = "0000000000000000000000000000000000000000"
+			}
+			if _, err := UpdateSlot(b, "w1", func(s *Slot) {
+				s.SetPR("https://github.com/o/r/pull/9")
+				_ = s.MarkState("done", "")
+			}); err != nil {
+				t.Fatal(err)
+			}
+			_, err := mergedPREnv("MERGED", head).Reset(b, "w1", "T-8", false)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err = %v, want error %v", err, tc.wantErr)
+			}
+			s := LoadRegistryTolerant(b).Slot("w1")
+			if done := IsDone(s.State()); done != tc.wantErr {
+				t.Errorf("state %q: still done = %v, want %v", s.State(), done, tc.wantErr)
+			}
+		})
+	}
+}
+
+// Ending done clears the binding the way Park does, not only the PR.
+func TestResetDoneEndClearsTheTask(t *testing.T) {
+	b := slotProject(t)
+	gittest.Run(t, b, "remote", "add", "origin", "https://github.com/o/r.git")
+	if _, err := UpdateSlot(b, "w1", func(s *Slot) {
+		s.SetPR("https://github.com/o/r/pull/9")
+		s.SetTask("T-7")
+		s.SetClaimID("c1")
+		_ = s.MarkState("done", "")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mergedPREnv("MERGED", "").Reset(b, "w1", "T-8", false); err != nil {
+		t.Fatal(err)
+	}
+	if s := LoadRegistryTolerant(b).Slot("w1"); s.Task() != "" || s.ClaimID() != "" || s.PR() != "" {
+		t.Errorf("task %q claim %q pr %q left on the idle slot", s.Task(), s.ClaimID(), s.PR())
+	}
+}
