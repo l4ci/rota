@@ -48,6 +48,7 @@ const (
 	StalledSlot          = "stalled"
 	ItemTimeout          = "item-timeout"
 	ClaimMismatch        = "claim-mismatch"
+	ClaimLabelDrift      = "claim-label-drift"
 	UnregisteredBranch   = "unregistered-branch"
 	// Bounced: on the support machine, a queued PR main sent back (#1598).
 	Bounced              = "bounced"
@@ -598,7 +599,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	}
 	tracker.SortKeys(stale)
 	for _, n := range stale {
-		rep.add(Finding{Kind: LabelStale, Issue: n.String(), Detail: fmt.Sprintf("%s is closed and still has %s", n.Ref(), e.Label), Repair: "remove " + e.Label})
+		rep.add(Finding{Kind: LabelStale, Issue: n.String(), Detail: fmt.Sprintf("%s is closed and still has %s or claimed: labels", n.Ref(), e.Label), Repair: "remove claim labels"})
 	}
 	if labelsOK {
 		var orphans []tracker.IssueKey

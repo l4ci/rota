@@ -106,6 +106,31 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 	if !labelsOK {
 		return
 	}
+	if syncer, ok := e.Board.(backlog.ClaimLabelSyncer); ok {
+		refs := map[string]bool{}
+		for id := range held {
+			refs[id] = true
+		}
+		for key := range labelled {
+			refs[key.String()] = true
+		}
+		var sorted []string
+		for ref := range refs {
+			sorted = append(sorted, ref)
+		}
+		slices.Sort(sorted)
+		for _, ref := range sorted {
+			add, remove, err := syncer.ClaimLabelDrift(ref)
+			if err != nil {
+				rep.Warnings = append(rep.Warnings, fmt.Sprintf("claim label check %s: %v", tracker.RefOf(ref), err))
+				continue
+			}
+			if len(add)+len(remove) > 0 {
+				rep.add(Finding{Kind: ClaimLabelDrift, Issue: ref,
+					Detail: fmt.Sprintf("%s claim labels disagree with comment claims: add %v, remove %v", tracker.RefOf(ref), add, remove), Repair: "sync claim labels"})
+			}
+		}
+	}
 	var nums []tracker.IssueKey
 	for n := range labelled {
 		if !held[n.String()] {

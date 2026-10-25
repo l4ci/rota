@@ -691,7 +691,8 @@ func (b *Issues) applyState(is Issue, want string) (bool, error) {
 // claim record), re-reads the claims, and the earliest open claim wins
 // (IssueBackend.claim). A loser posts its release
 // marker and changes no labels; the winner gets the in-progress label and the
-// assignment. An unknown or closed item wraps ErrNotFound.
+// assignment plus its derived claimed:<agent>@<machine> label (best effort).
+// An unknown or closed item wraps ErrNotFound.
 func (b *Issues) Claim(ref, claimID string) (won bool, holder string, err error) {
 	return b.ClaimShared(ref, claimID, 1)
 }
@@ -781,7 +782,7 @@ func (b *Issues) dropClaim(n tracker.IssueKey, claimID string) error {
 }
 
 // Release posts the release marker (on a tracker.ClaimStore, drops its claim
-// record) and drops the in-progress label when no
+// record), removes its derived claim label (best effort) and drops the in-progress label when no
 // claim remains. It writes nothing and returns false when claimID holds no open
 // claim.
 func (b *Issues) Release(ref, claimID string) (bool, error) {

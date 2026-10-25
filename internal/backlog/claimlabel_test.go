@@ -2,9 +2,12 @@ package backlog
 
 import (
 	"errors"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 func TestClaimLabel(t *testing.T) {
@@ -128,5 +131,75 @@ func TestIssuesCompleteDropsClaimLabel(t *testing.T) {
 				t.Fatalf("after complete: state=%s labels=%v want closed [keep]", got.State, got.Labels)
 			}
 		})
+	}
+}
+
+func TestClaimLabelDrift(t *testing.T) {
+	for _, tc := range []struct {
+		name, state                         string
+		labels, comments, add, remove, want []string
+	}{
+		{"missing", "open", []string{"keep"}, []string{"<!-- rota:claim dana@3 -->"}, []string{"claimed:dana@main"}, nil, []string{"keep", "claimed:dana@main"}},
+		{"wrong agent", "open", []string{"claimed:ben@main", "keep"}, []string{"<!-- rota:claim dana@3 -->"}, []string{"claimed:dana@main"}, []string{"claimed:ben@main"}, []string{"keep", "claimed:dana@main"}},
+		{"released", "open", []string{"claimed:dana@main", "keep"}, []string{"<!-- rota:claim dana@3 -->", "<!-- rota:release dana@3 -->"}, nil, []string{"claimed:dana@main"}, []string{"keep"}},
+		{"shared", "open", []string{"claimed:dana@main", "keep"}, []string{"<!-- rota:claim dana@3 -->", "<!-- rota:claim mac-ben@3 -->"}, []string{"claimed:ben@mac"}, nil, []string{"claimed:dana@main", "keep", "claimed:ben@mac"}},
+		{"closed", "closed", []string{"claimed:dana@main", "keep"}, []string{"<!-- rota:claim dana@3 -->"}, nil, []string{"claimed:dana@main"}, []string{"keep"}},
+		{"in sync", "open", []string{"claimed:dana@main", "keep"}, []string{"<!-- rota:claim dana@3 -->"}, nil, nil, []string{"claimed:dana@main", "keep"}},
+		{"legacy", "open", []string{"keep"}, []string{"<!-- rota:claim alice -->"}, nil, nil, []string{"keep"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			is := open(1, tc.labels...)
+			is.State = tc.state
+			for i, body := range tc.comments {
+				is.Comments = append(is.Comments, tracker.Comment{ID: string(rune('1' + i)), Body: body})
+			}
+			b, tr := newIssues(t, `{"round":{"support":"mac"}}`, is)
+			before := slices.Clone(is.Comments)
+			add, remove, err := b.ClaimLabelDrift("1")
+			if err != nil || !slices.Equal(add, tc.add) || !slices.Equal(remove, tc.remove) {
+				t.Fatalf("drift: add=%v remove=%v err=%v; want %v %v", add, remove, err, tc.add, tc.remove)
+			}
+			changed, err := b.SyncClaimLabels("1")
+			if err != nil || changed != (len(tc.add)+len(tc.remove) > 0) {
+				t.Fatalf("sync: changed=%v err=%v", changed, err)
+			}
+			if got := tr.Issues[0].Labels; !slices.Equal(got, tc.want) {
+				t.Fatalf("labels=%v want %v", got, tc.want)
+			}
+			if !reflect.DeepEqual(before, tr.Issues[0].Comments) {
+				t.Fatal("sync edited comment claims")
+			}
+			if changed, err := b.SyncClaimLabels("1"); changed || err != nil {
+				t.Fatalf("second sync: changed=%v err=%v", changed, err)
+			}
+		})
+	}
+}
+
+func TestClaimLabelDriftReadFailure(t *testing.T) {
+	b, tr := newIssues(t, `{}`, open(1, "claimed:ben@main"))
+	tr.Fail = map[string]error{"comments": errors.New("unreadable claims")}
+	if changed, err := b.SyncClaimLabels("1"); changed || err == nil {
+		t.Fatalf("unreadable claims: changed=%v err=%v", changed, err)
+	}
+	if !slices.Equal(tr.Issues[0].Labels, []string{"claimed:ben@main"}) {
+		t.Fatalf("guessed a repair: %v", tr.Issues[0].Labels)
+	}
+}
+
+func TestUmbrellaClaimLabelDrift(t *testing.T) {
+	u, remotes, _ := newUmbrella(t, `{}`, map[string][]Issue{
+		"web": {open(1, "claimed:ben@main")}, "api": {open(1, "claimed:kit@main")},
+	}, "web", "api")
+	remotes["web"].Issues[0].Comments = []tracker.Comment{{ID: "1", Body: "<!-- rota:claim dana@3 -->"}}
+	add, remove, err := u.ClaimLabelDrift("web:1")
+	if err != nil || !slices.Equal(add, []string{"claimed:dana@main"}) || !slices.Equal(remove, []string{"claimed:ben@main"}) {
+		t.Fatalf("drift: %v %v %v", add, remove, err)
+	}
+	if changed, err := u.SyncClaimLabels("web:1"); err != nil || !changed {
+		t.Fatalf("sync: %v %v", changed, err)
+	}
+	if !slices.Equal(remotes["web"].Issues[0].Labels, []string{"claimed:dana@main"}) || !slices.Equal(remotes["api"].Issues[0].Labels, []string{"claimed:kit@main"}) {
+		t.Fatal("repair reached wrong tracker")
 	}
 }
