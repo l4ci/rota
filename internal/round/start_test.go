@@ -403,6 +403,19 @@ func TestStartRenewKeepsRecordedScope(t *testing.T) {
 	if st, err := e.Start(bg, fresh, opts); err != nil || st.Scope != roundcfg.ScopeOpen {
 		t.Fatalf("config default: %v %+v", err, st)
 	}
+	// A renewal with nothing recorded takes the round.scope default.
+	renew := newRepo(t, nil)
+	if _, err := e.Start(bg, renew, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.Update(renew, func(doc *worker.Doc) { doc.SetScope("") }); err != nil {
+		t.Fatal(err)
+	}
+	opts = startOpts("", 100)
+	opts.Settings.Scope = roundcfg.ScopeOpen
+	if st, err := e.Start(bg, renew, opts); err != nil || st.Scope != roundcfg.ScopeOpen {
+		t.Fatalf("renew plus default: %v %+v", err, st)
+	}
 	// A renewal without --scope keeps scope and slate.
 	st, err = e.Start(bg, root, startOpts("", 100))
 	if err != nil || st.Scope != roundcfg.ScopeSlate || !reflect.DeepEqual(st.Slate, []string{"12", "13"}) {
@@ -610,5 +623,18 @@ func TestStartPoolInitUsesConfiguredWorkerEnv(t *testing.T) {
 	}
 	if calls == 0 {
 		t.Fatal("start's PoolInit ignored the Git configured on Env.Worker")
+	}
+}
+
+func TestResolveScope(t *testing.T) {
+	for _, c := range []struct{ name, override, recorded, def, want string }{
+		{"override wins", "open", "slate", "milestone", "open"},
+		{"recorded wins", "", "slate", "milestone", "slate"},
+		{"default", "", "", "milestone", "milestone"},
+		{"all empty", "", "", "", ""},
+	} {
+		if got := resolveScope(c.override, c.recorded, c.def); got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
 	}
 }
