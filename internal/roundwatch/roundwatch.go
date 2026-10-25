@@ -363,7 +363,7 @@ func Digest(root string, round int, armed bool) string {
 		if pr := s.PR(); pr != "" {
 			p += " " + pr
 		}
-		if worker.NeedsWake(st) {
+		if worker.NeedsWake(st) && !s.PRMerged() {
 			p += " (needs you)"
 		}
 		parts = append(parts, p)
@@ -406,7 +406,7 @@ func NeedsWatch(root string) (bool, []string) {
 			continue
 		}
 		need = true
-		if worker.NeedsWake(st) {
+		if worker.NeedsWake(st) && !s.PRMerged() {
 			attn = append(attn, s.Name()+" "+st)
 		}
 	}

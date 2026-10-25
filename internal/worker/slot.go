@@ -379,7 +379,7 @@ func (s *Slot) Unbind() {
 	s.SetBriefContext("", nil)
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
-	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "bundle", "issues", "reviewSeen", "event", "heartbeatAt", "outcome", "inbox", "finding"} {
+	for _, k := range []string{"prMerged", "claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "bundle", "issues", "reviewSeen", "event", "heartbeatAt", "outcome", "inbox", "finding"} {
 		s.o.Delete(k)
 	}
 }
@@ -420,6 +420,19 @@ func (s *Slot) setState(next, now string) {
 func (s *Slot) Release() {
 	s.o.Set("handle", nil)
 	s.o.Set("state", "idle")
+}
+
+// PRMerged says the forge showed the slot's recorded PR merged when the watch
+// last looked: a done slot in that case waits on nothing from the orchestrator.
+func (s *Slot) PRMerged() bool { return jsonx.Bool(s.o, "prMerged") }
+
+// SetPRMerged records or clears the merged-PR mark.
+func (s *Slot) SetPRMerged(v bool) {
+	if v {
+		s.o.Set("prMerged", true)
+		return
+	}
+	s.o.Delete("prMerged")
 }
 
 // SetPR records the slot's open PR; "" clears it.
