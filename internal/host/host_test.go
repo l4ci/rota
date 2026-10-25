@@ -1814,6 +1814,39 @@ func TestHerdrCodexSendRequiresAcknowledgement(t *testing.T) {
 	}
 }
 
+// A busy Codex queues the relay: the pane lists it above the composer, which
+// still shows the empty prompt, and the preview cuts the brief short of its
+// signature line. The relay marker in the pane is the pickup (#1862).
+func TestHerdrCodexSendAcknowledgesQueuedRelay(t *testing.T) {
+	text := "--- ORCHESTRATOR (round 35) ---\n[ORCHESTRATOR RELAY note]\n[relay 2]\n\nREVIEW pr\n--- ROTA-SIG abc ---\n"
+	file := filepath.Join(t.TempDir(), "brief.md")
+	os.WriteFile(file, []byte(text), 0o600)
+	cases := map[string]struct {
+		queued string
+		want   error
+	}{
+		"queued":  {"• Queued follow-up messages\n  ↳ --- ORCHESTRATOR (round 35) ---\n    [ORCHESTRATOR RELAY note]\n    [relay 2] …\n", nil},
+		"absent":  {"", ErrNotSubmitted},
+		"earlier": {"  ↳ --- ORCHESTRATOR (round 35) ---\n    [relay 1] …\n", ErrNotSubmitted},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := &fake{handler: func(_ string, a []string) Result {
+				switch a[1] {
+				case "read":
+					return Result{Stdout: "OpenAI Codex\n• Working (3s)\n" + c.queued + "› Ask Codex to do anything\n"}
+				case "prompt":
+					return Result{Stdout: strings.Replace(agentJSON("working"), `"agent_status":`, `"agent":"codex","agent_status":`, 1)}
+				}
+				return Result{}
+			}}
+			if err := New("herdr", deps(f, herdrEnv, &clock{})).Send(bg, "sam", "w9:t7", file); err != c.want {
+				t.Fatalf("Send = %v, want %v", err, c.want)
+			}
+		})
+	}
+}
+
 func TestHerdrCodexSendAcknowledgesFastCompletion(t *testing.T) {
 	text := "--- ORCHESTRATOR (round 35) ---\nbuild issue 1800\n--- ROTA-SIG abc ---\n"
 	file := filepath.Join(t.TempDir(), "brief.md")
