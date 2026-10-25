@@ -76,7 +76,7 @@ func TestDefaultRoundEnvLabelsComeFromConfig(t *testing.T) {
 
 func TestDefaultRoundEnvDefaultLabels(t *testing.T) {
 	e := defaultRoundEnv(context.Background(), t.TempDir(), defaultDeps(), false)
-	if e.Label != "in-progress" || e.NeedsHuman != "needs-human" || e.NeedsReview != "needs-review" || e.SupportLabel != "site:support" {
+	if e.Label != "in-progress" || e.NeedsHuman != "needs-human" || e.NeedsReview != "needs-review" || e.SupportLabel != "" {
 		t.Errorf("default labels = %q, %q, %q, %q", e.Label, e.NeedsHuman, e.NeedsReview, e.SupportLabel)
 	}
 }
