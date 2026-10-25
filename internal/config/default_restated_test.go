@@ -48,7 +48,7 @@ func TestNoLabelOrRetryDefaultRestatedOutsideConfig(t *testing.T) {
 
 func restatedLabelDefaults() map[string]string {
 	banned := map[string]string{}
-	for _, role := range []string{"needsReview", "notPlanned", "needsHuman", "support"} {
+	for _, role := range []string{"needsReview", "notPlanned", "needsHuman"} {
 		banned[Label(nil, role)] = "issues.labels." + role
 	}
 	return banned

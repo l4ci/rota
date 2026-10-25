@@ -723,7 +723,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	if err := e.refuseWhileGateRuns(ctx, root, "assign"); err != nil {
 		return run, false, err
 	}
-	if why := e.offSite(set.Support, set.Role, *it); why != "" {
+	if why := e.offSite(set.Support, set.Role, set.LegacySupportLabel, *it); why != "" {
 		return run, false, blocked(BlockSite, "%s", why)
 	}
 
@@ -788,7 +788,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		return run, false, err
 	}
 	for _, m := range members {
-		if why := e.offSite(set.Support, set.Role, *m); why != "" {
+		if why := e.offSite(set.Support, set.Role, set.LegacySupportLabel, *m); why != "" {
 			return run, false, blocked(BlockSite, "bundle member %s", why)
 		}
 		res.Bundle = append(res.Bundle, worker.NormID(m.ID))
