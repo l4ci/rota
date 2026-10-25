@@ -11,7 +11,7 @@ import (
 func fileDeferredRepo(t *testing.T) string {
 	t.Helper()
 	dir := verdictRepo(t)
-	for f, c := range map[string]string{"BACKLOG.md": "# TODO\n\n## Tasks\n\n## Completed\n", "counters.json": "{}\n"} {
+	for f, c := range map[string]string{"BACKLOG.md": "# TODO\n\n## Tasks\n\n## Completed\n", "counters.json": "{}\n", "config.json": `{"review":{"fileDeferred":"minor"}}` + "\n"} {
 		if err := os.WriteFile(filepath.Join(dir, ".rota", f), []byte(c), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -183,5 +183,58 @@ func TestFileDeferredBadFloorStopsBeforeRecord(t *testing.T) {
 	}
 	if code, out, _ := rotaIn(t, dir, "verdict", "show", "--json"); code == 0 && strings.Contains(out, "review-quality") {
 		t.Errorf("a verdict was recorded despite the bad floor:\n%s", out)
+	}
+}
+
+// #2012 AC-1: with no configuration only major deferred findings are filed;
+// the minor stays in the record and the output lists it as kept.
+func TestFileDeferredDefaultFilesOnlyMajor(t *testing.T) {
+	dir := fileDeferredRepo(t)
+	if err := os.Remove(filepath.Join(dir, ".rota", "config.json")); err != nil {
+		t.Fatal(err)
+	}
+	code, d, errOut := fileDeferred(t, dir, "review-quality", `{"severity":"minor","title":"nit"},{"severity":"major","title":"big","blocking":false}`)
+	if code != 0 {
+		t.Fatalf("add: %d %s", code, errOut)
+	}
+	if d["appended"] != 1.0 {
+		t.Errorf("appended = %v, want 1", d["appended"])
+	}
+	kept, _ := d["kept"].([]any)
+	if len(kept) != 1 || kept[0] != "nit" {
+		t.Errorf("kept = %v, want [nit]", d["kept"])
+	}
+	text := readTask(t, dir, "T01")
+	if strings.Contains(text, "nit") || !strings.Contains(text, "big") {
+		t.Errorf("T01.md should hold big only:\n%s", text)
+	}
+	if code, out, _ := rotaIn(t, dir, "verdict", "show", "--json"); code != 0 || !strings.Contains(out, "nit") {
+		t.Errorf("the minor finding left the verdict record (exit %d):\n%s", code, out)
+	}
+}
+
+// #2012 AC-2: a PR whose issue is itself a deferred-findings item files nothing.
+func TestFileDeferredSkipsFollowUpPR(t *testing.T) {
+	dir := fileDeferredRepo(t)
+	bl := "# TODO\n\n## Tasks\n\n- **[#5] Review follow-ups from PR #70.** Related: #70\n\n## Completed\n"
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte(bl), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, dir, "checkout", "-q", "-b", "kit/5-review-follow-ups-from-pr")
+	code, d, errOut := fileDeferred(t, dir, "review-quality", `{"severity":"major","title":"big","blocking":false}`)
+	if code != 0 {
+		t.Fatalf("add: %d %s", code, errOut)
+	}
+	if filed, _ := d["filed"].([]any); len(filed) != 0 || d["appended"] != 0.0 {
+		t.Errorf("filed = %v appended = %v, want nothing", d["filed"], d["appended"])
+	}
+	if why, _ := d["filedWhy"].(string); !strings.Contains(why, "follow-up") {
+		t.Errorf("filedWhy = %q, want it to say the PR is a follow-up", why)
+	}
+	if kept, _ := d["kept"].([]any); len(kept) != 1 {
+		t.Errorf("kept = %v, want the deferred finding", d["kept"])
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".rota", "tasks", "T01.md")); err == nil {
+		t.Error("an item was filed for a follow-up PR")
 	}
 }
