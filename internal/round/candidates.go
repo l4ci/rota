@@ -63,16 +63,23 @@ type CandidateOpts struct {
 // ScopeOf is the scope and slate the round's candidates are drawn from: an
 // explicit override, else the scope the registry recorded, else round.scope.
 // The slate is the recorded one whatever the scope came from. This is the only
-// place the fallback is spelled.
+// place the fallback is spelled; round start reaches it through resolveScope.
 func ScopeOf(root string, set roundcfg.Settings, override string) (scope string, slate []string) {
-	scope, slate = SlateOf(root)
-	if override != "" {
-		scope = override
+	recorded, slate := SlateOf(root)
+	return resolveScope(override, recorded, set.Scope), slate
+}
+
+// resolveScope is the one spelling of the fallback: the override, else the
+// recorded scope, else the round.scope default. A caller with no recorded
+// scope to honour passes "".
+func resolveScope(override, recorded, def string) string {
+	switch {
+	case override != "":
+		return override
+	case recorded != "":
+		return recorded
 	}
-	if scope == "" {
-		scope = set.Scope
-	}
-	return scope, slate
+	return def
 }
 
 // RoundCandidates is Candidates for the round as configured: the scope from
