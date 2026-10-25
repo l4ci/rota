@@ -12,7 +12,7 @@ import (
 )
 
 // PRSpec is a pull request (GitLab: merge request) to open. Base is read only
-// where PRNeedsBase.
+// where PRNeedsBase; GitHub omits --base when it is empty.
 type PRSpec struct {
 	Title string
 	Body  string
@@ -77,11 +77,14 @@ func relFail(what string) failWith {
 
 // ---- GitHub -----------------------------------------------------------------
 
-func (g *GitHub) PRNeedsBase() bool { return false }
+func (g *GitHub) PRNeedsBase() bool { return true }
 
 func (g *GitHub) PRCreate(ctx context.Context, s PRSpec) (string, error) {
-	return g.lastLine(ctx, []string{"pr", "create", "--title", s.Title, "--body-file", "-"}, s.Body,
-		prFail("gh pr create"))
+	args := []string{"pr", "create", "--title", s.Title, "--body-file", "-"}
+	if s.Base != "" {
+		args = append(args, "--base", s.Base)
+	}
+	return g.lastLine(ctx, args, s.Body, prFail("gh pr create"))
 }
 
 func (g *GitHub) ReleaseDrafts() bool { return true }
