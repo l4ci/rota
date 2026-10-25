@@ -1,6 +1,9 @@
 package round
 
 import (
+	"context"
+	"errors"
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
@@ -340,6 +343,42 @@ func TestSupportQueueGroupsWaitingActiveAndUnknown(t *testing.T) {
 	if len(got) == 0 || !got[0].Unknown || got[0].Active() {
 		t.Errorf("an unreadable claim must be unknown, not waiting: %+v", got)
 	}
+}
+
+// A cancelled pass stops reading claims: the screen that asked for the queue
+// is gone, so no further tracker call is made for it (#1873 AC-4).
+func TestSupportQueueStopsWhenCancelled(t *testing.T) {
+	label := config.Label(nil, "support")
+	be := &countingStatus{fakeRemote: &fakeRemote{}}
+	for _, id := range []string{"1", "2", "3"} {
+		be.add(id, "work "+id, "", false, "")
+		be.items[id].Labels = []string{label}
+	}
+	be.claims, be.gone = map[string]string{}, map[string]bool{}
+	e := Env{SupportLabel: label}
+
+	if _, err := e.SupportQueue(bg, be, "mac"); err != nil || be.statuses != 3 {
+		t.Fatalf("a live pass reads one claim per labelled issue: err %v, %d reads", err, be.statuses)
+	}
+	be.statuses = 0
+	ctx, cancel := context.WithCancel(bg)
+	cancel()
+	if _, err := e.SupportQueue(ctx, be, "mac"); !errors.Is(err, context.Canceled) {
+		t.Errorf("a cancelled pass must report the cancellation, got %v", err)
+	}
+	if be.statuses != 0 {
+		t.Errorf("%d claim reads after cancellation", be.statuses)
+	}
+}
+
+type countingStatus struct {
+	*fakeRemote
+	statuses int
+}
+
+func (c *countingStatus) Status(id string) (*backlog.Status, error) {
+	c.statuses++
+	return c.fakeRemote.Status(id)
 }
 
 // #1827 AC-1: the support machine hands an issue back with a reason comment

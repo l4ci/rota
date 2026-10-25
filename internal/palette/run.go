@@ -80,7 +80,8 @@ func RunDefault(cfg Config) error {
 
 // childTick is how often an open screen hears a Tick. A screen that loads in
 // the background needs the driver's read deadline to learn its load finished;
-// a screen that refreshes itself chooses its own pace inside it.
+// a screen that refreshes itself chooses its own pace inside it. Only a screen
+// with a TickEvery method hears it; the rest are never ticked.
 const childTick = 5 * time.Second
 
 // Run shows the palette until the person quits or an Ends entry has run.
@@ -173,6 +174,11 @@ func (m model) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 // updateChild feeds the open screen. Its Quit closes it and shows the list;
 // an Exec it asks for still runs, and its Done lands back in the child.
 func (m model) updateChild(msg tui.Msg) (tui.Model, tui.Cmd) {
+	if _, tick := msg.(tui.Tick); tick {
+		if _, paced := m.child.(interface{ TickEvery() time.Duration }); !paced {
+			return m, tui.Cmd{} // the palette ticks for the screens that asked
+		}
+	}
 	next, cmd := m.child.Update(msg)
 	m.child = next
 	if cmd.Quit {

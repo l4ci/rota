@@ -490,3 +490,41 @@ func TestNumberedFallbackListsViewAndDynamicEntries(t *testing.T) {
 		}
 	}
 }
+
+// ticker counts the Ticks it hears; every is its TickEvery, when it has one.
+type ticker struct {
+	n     *int
+	every time.Duration
+}
+
+func (t ticker) Update(m tui.Msg) (tui.Model, tui.Cmd) {
+	if _, ok := m.(tui.Tick); ok {
+		*t.n++
+	}
+	return t, tui.Cmd{}
+}
+func (t ticker) Render(int, int, tui.Style) string { return "TICKER\n" }
+
+type pacedTicker struct{ ticker }
+
+func (p pacedTicker) TickEvery() time.Duration { return p.every }
+
+// #1873 AC-8: the palette's 5 s Tick reaches only the screens that asked for
+// one (TickEvery); the others never hear it.
+func TestTicksReachOnlyScreensThatAskForThem(t *testing.T) {
+	var plain, paced int
+	for _, c := range []struct {
+		child tui.Model
+		n     *int
+		want  int
+	}{
+		{ticker{n: &plain}, &plain, 0},
+		{pacedTicker{ticker{n: &paced, every: time.Second}}, &paced, 1},
+	} {
+		m := model{child: c.child}
+		m.Update(tui.Tick{})
+		if *c.n != c.want {
+			t.Errorf("%T heard %d Tick(s), want %d", c.child, *c.n, c.want)
+		}
+	}
+}

@@ -116,7 +116,9 @@ func loadRoundSnap(ctx context.Context, c *Ctx, root string) (roundSnap, error) 
 		s.CandsErr = err.Error()
 		return s, nil
 	}
-	if items, err := be.List(false); err == nil { // answered from the pass's read cache
+	if items, err := be.List(false); err != nil { // answered from the pass's read cache
+		s.Notes = append(s.Notes, "issue links unavailable: "+err.Error())
+	} else {
 		s.IssueURLs = map[string]string{}
 		for _, it := range items {
 			if it.URL != "" {
@@ -219,6 +221,9 @@ type loadBox struct {
 	snap   roundSnap
 	err    error
 	cancel context.CancelFunc // of the pass in flight
+	// stopped is set by stop and never cleared: a pass whose goroutine has not
+	// registered its cancel yet sees it there and does not start.
+	stopped bool
 }
 
 func (b *loadBox) cancelSet() bool {
@@ -228,12 +233,26 @@ func (b *loadBox) cancelSet() bool {
 }
 
 // stop cancels the pass in flight, when there is one: the screen is closing.
+// It also bars passes that have not registered yet.
 func (b *loadBox) stop() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.stopped = true
 	if b.cancel != nil {
 		b.cancel()
 	}
+}
+
+// register records the cancel of a pass about to run, and is false when the
+// screen already closed: the pass must not start.
+func (b *loadBox) register(cancel context.CancelFunc) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.stopped {
+		return false
+	}
+	b.cancel = cancel
+	return true
 }
 
 func (b *loadBox) put(s roundSnap, err error) {
@@ -400,9 +419,9 @@ func (m *roundScreen) pass() tui.Cmd {
 	return tui.Cmd{Tag: m.tag, Async: func(ctx context.Context) error {
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
-		box.mu.Lock()
-		box.cancel = cancel
-		box.mu.Unlock()
+		if !box.register(cancel) {
+			return nil // the screen closed before this pass began
+		}
 		s, err := load(ctx)
 		box.put(s, err)
 		return nil
