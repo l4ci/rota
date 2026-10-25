@@ -432,6 +432,9 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 	}
 	key := rowKey(t, r)
 	prev := s.State()
+	if t.evSeq > 0 {
+		s.SetUnsent(false) // the worker's own event proves the brief was submitted
+	}
 	if err := s.MarkState(r.State, at); err != nil {
 		return false, err
 	}
@@ -526,6 +529,18 @@ func rowKey(t pollTarget, r PollRow) string {
 	return k
 }
 
+// eventAfterDispatch: the slot's standing event is not older than the last
+// dispatch (activeAt). A worker only sends one after it read its brief, so it
+// outranks a stale "brief was not submitted" alarm.
+func (t pollTarget) eventAfterDispatch() bool {
+	if t.ev == nil || t.ev.TS == "" {
+		return false
+	}
+	spec, _ := EventSpecFor(t.ev.Kind)
+	ts, err := stamp.Parse(t.ev.TS)
+	return spec.Poll != "" && err == nil && !ts.Before(t.lastChange)
+}
+
 // refreshEvents re-reads each target's event and last-change stamp (and its
 // recorded state) from reg, for a loop that classifies the same targets again.
 func refreshEvents(reg Registry, targets []pollTarget) {
@@ -584,7 +599,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		slept = true
 	}
 	for i, t := range targets {
-		if t.unsent && t.relayPending == 0 {
+		if t.unsent && t.relayPending == 0 && !t.eventAfterDispatch() {
 			rows = append(rows, PollRow{t.name, StateBlocked, "dispatch: brief was not submitted; retry the task dispatch"})
 			continue
 		}
