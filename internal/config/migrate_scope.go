@@ -115,8 +115,12 @@ func migrateScopePlan(path, local string, keep []string, m *ScopeMigration, appl
 				continue
 			}
 			c.Reason = "pinned at its default"
+		case hasLocal && k.Name == "round.accounts" && !sameJSON(mergeByKind([][]any{asList(v), asList(lv)}), lv):
+			// Accounts merge by kind: kinds the local list lacks move into it.
+			c.Action, c.Reason, c.After = ScopeMove, "machine key", mergeByKind([][]any{asList(v), asList(lv)})
+			moves = true
 		case hasLocal:
-			c.Reason = "config.local.json already holds " + compactJSON(lv)
+			c.Reason = "config.local.json already holds it"
 		case hasGlobal && sameJSON(v, g):
 			c.Reason = "equals global"
 		case sameJSON(v, Default(k)):

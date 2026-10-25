@@ -356,4 +356,7 @@ func TestRoundStatusShowsNoLoginSlot(t *testing.T) {
 	if !strings.Contains(out, "no login: no credentials file") {
 		t.Errorf("the table lacks the no-login column:\n%s", out)
 	}
+	if !strings.Contains(out, "account work (claude)") {
+		t.Errorf("the table lacks the account and its kind:\n%s", out)
+	}
 }
