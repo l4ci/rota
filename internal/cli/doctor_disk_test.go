@@ -13,6 +13,12 @@ import (
 	"github.com/l4ci/rota/internal/git"
 )
 
+func fixedDisk(free, total uint64) func(string) *doctor.Disk {
+	return func(dir string) *doctor.Disk {
+		return &doctor.Disk{Path: dir, Free: free, Total: total}
+	}
+}
+
 func TestLeakedTempDirs(t *testing.T) {
 	dir := t.TempDir()
 	old := time.Now().Add(-3 * time.Hour)
@@ -37,7 +43,7 @@ func TestDoctorDiskInput(t *testing.T) {
 	cfg := config.Load(filepath.Join(t.TempDir(), "absent.json"))
 	t.Setenv("TMPDIR", t.TempDir())
 	in := doctor.Input{Dir: t.TempDir()}
-	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now(), doctorDisk("1000:100000"), os.Getenv) // 1% free
+	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now(), fixedDisk(1000, 100000), os.Getenv) // 1% free
 	if in.MinFreeDiskPercent != 10 || in.Disk == nil || in.Disk.Free != 1000 {
 		t.Fatalf("default threshold / disk not read: %+v", in)
 	}
@@ -56,7 +62,7 @@ func TestDoctorDiskInput(t *testing.T) {
 		t.Errorf("no disk warning in %+v", rep.Checks)
 	}
 	in = doctor.Input{Dir: t.TempDir()}
-	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now(), doctorDisk("50000:100000"), os.Getenv)
+	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now(), fixedDisk(50000, 100000), os.Getenv)
 	if len(in.Leftovers) != 0 {
 		t.Errorf("leftovers are only scanned when the disk is low: %v", in.Leftovers)
 	}
@@ -81,7 +87,7 @@ func TestDoctorDiskInputWarnsOnTheGoCacheVolume(t *testing.T) {
 	cache := t.TempDir()
 	in := doctor.Input{Dir: t.TempDir()}
 	// Same device as Dir: the repo-volume check already covers it.
-	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now(), doctorDisk("1000:100000"), func(string) string { return cache })
+	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now(), fixedDisk(1000, 100000), func(string) string { return cache })
 	if in.CacheDisk != nil {
 		t.Errorf("cache on the repo volume duplicated the disk check: %+v", in.CacheDisk)
 	}

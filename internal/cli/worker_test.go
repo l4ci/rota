@@ -326,18 +326,56 @@ func TestWorkerPollVerb(t *testing.T) {
 	if code, _, _ := rotaInWith(t, deps, dir, "worker", "poll", "ghost"); code != 3 {
 		t.Errorf("unknown slot: %d", code)
 	}
+}
 
-	fx := filepath.Join(t.TempDir(), "pane.txt")
-	os.WriteFile(fx, []byte("ROTA-BLOCKED w1: which?\n"), 0o644)
-	deps.PollFixture, deps.PollStatus = fx, "working"
-	code, out, _ = rotaInWith(t, deps, dir, "worker", "poll", "--json")
-	rows = data(t, out)["slots"].([]any)
-	if code != 0 || rows[0].(map[string]any)["state"] != "blocked" || rows[0].(map[string]any)["name"] != "fixture" {
-		t.Errorf("fixture mode: %d %v", code, rows)
+func TestWorkerPollAdapter(t *testing.T) {
+	dir := workerProject(t, `{}`)
+	deps := testDeps()
+	deps.WorkerPoll = func(ctx context.Context, root string, opts worker.PollOpts) (worker.PollResult, error) {
+		if ctx.Err() != nil || root != dir || opts.Slot != "sam" || opts.Lines != 17 || opts.Settle != 500*time.Millisecond {
+			t.Fatalf("poll arguments: root=%q opts=%+v context=%v", root, opts, ctx.Err())
+		}
+		return worker.PollResult{Slots: []worker.PollRow{{Name: "sam", State: worker.StateBlocked, Evidence: "which?"}}}, nil
 	}
-	deps.PollFixture = "/no/such"
+	code, out, errs := rotaInWith(t, deps, dir, "worker", "poll", "sam", "--lines", "17", "--settle", "0.5", "--json")
+	if code != 0 {
+		t.Fatalf("poll adapter: %d %s", code, errs)
+	}
+	rows := data(t, out)["slots"].([]any)
+	if len(rows) != 1 || rows[0].(map[string]any)["state"] != "blocked" || rows[0].(map[string]any)["evidence"] != "which?" {
+		t.Fatalf("adapter result lost: %v", rows)
+	}
+	deps.WorkerPoll = func(context.Context, string, worker.PollOpts) (worker.PollResult, error) {
+		return worker.PollResult{}, Usage("poll unavailable")
+	}
 	if code, _, _ := rotaInWith(t, deps, dir, "worker", "poll"); code != 2 {
-		t.Errorf("missing fixture: %d", code)
+		t.Errorf("adapter error: exit %d, want 2", code)
+	}
+}
+
+// Release dependencies must poll the host even if old smoke variables leaked
+// into the caller's environment.
+func TestWorkerPollIgnoresFixtureEnv(t *testing.T) {
+	dir := workerProject(t, `{}`)
+	fx := filepath.Join(t.TempDir(), "pane.txt")
+	if err := os.WriteFile(fx, []byte("ROTA-BLOCKED w1: fixture only\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ROTA_TEST_POLL_FIXTURE", fx)
+	t.Setenv("ROTA_TEST_POLL_KIND", harness.Codex)
+	t.Setenv("ROTA_TEST_POLL_STATUS", "working")
+	deps := testDeps()
+	useHost(deps, &cliHost{inSession: true})
+	if code, _, errs := rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main"); code != 0 {
+		t.Fatalf("pool init: %d %s", code, errs)
+	}
+	code, out, errs := rotaInWith(t, deps, dir, "worker", "poll", "w1", "--settle", "0", "--json")
+	if code != 0 {
+		t.Fatalf("poll: %d %s", code, errs)
+	}
+	rows := data(t, out)["slots"].([]any)
+	if len(rows) != 1 || rows[0].(map[string]any)["state"] != "idle" {
+		t.Fatalf("poll must classify the injected host, got %v", rows)
 	}
 }
 
