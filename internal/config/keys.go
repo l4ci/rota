@@ -119,7 +119,7 @@ var Keys = []Key{
 	k("docs.path", ScopeProject, "docs", true, TypePath, "Project-relative documentation folder that /rota-docs reads and writes."),
 	k("docs.autoCreate", ScopeTaste, false, false, TypeBool, "Whether the after-work docs flow writes proposed updates without waiting for approval."),
 	k("docs.afterWork", ScopeTaste, false, false, TypeBool, "Whether /rota-work, /rota-ship and /rota-release run the docs after-work flow when their primary action finishes."),
-	projectOwned(k("git.baseBranch", ScopeProject, "", true, TypeString, "Base branch the skills merge into and diff against. Empty auto-detects it; a set branch that does not exist is an error (exit 3).")),
+	projectOwned(k("git.baseBranch", ScopeProject, "", true, TypeString, "Base branch the skills merge into and diff against. Empty auto-detects it.")),
 	projectOwned(k("umbrella.enabled", ScopeProject, false, true, TypeBool, "Umbrella mode: .rota/ stays at the umbrella and verbs operate per registered sub-repo. Turning it off keeps .rota/repos.json.")),
 	projectOwned(k(VersionKey, ScopeProject, "", true, TypeString, "Release of rota that wrote this config. Managed by rota init and rota update; do not set it by hand.")),
 	k("issues.labels.inProgress", ScopeProject, "in-progress", false, TypeString, "Tracker label for an item a worker holds."),
