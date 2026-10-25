@@ -169,9 +169,9 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 	if kind != "" && moved {
 		held.Kind, held.PR = kind, strutil.FirstNonEmpty(pr, held.PR)
 		if kind == ledger.KindDone {
-			held.Detail = ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts, root, held.Harness, held.Account))
+			held.Detail = ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts(), root, held.Harness, held.Account))
 		}
-		if err := worker.LedgerAppendErr(e.workerEnv(), root, held); err != nil {
+		if err := e.Worker.LedgerAppendErr(root, held); err != nil {
 			return res, fmt.Errorf("slot %s is now %s, but the round ledger row was not written: %w", o.Slot, state, err)
 		}
 	}

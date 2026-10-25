@@ -54,10 +54,10 @@ type pool struct {
 // Accounts whose usage cannot be read count as free.
 func (e Env) meterPool(ctx context.Context, root string) pool {
 	var p pool
-	if e.Worker.Accounts == nil {
+	if e.Worker.Accounts() == nil {
 		return p
 	}
-	meters := e.Worker.Accounts.Meters(ctx, root)
+	meters := e.Worker.Accounts().Meters(ctx, root)
 	for _, m := range meters {
 		if m.Verdict == worker.VerdictCooling && m.ResetsAt != nil {
 			p.resets = append(p.resets, *m.ResetsAt)
@@ -71,7 +71,7 @@ func (e Env) meterPool(ctx context.Context, root string) pool {
 // loggedPool reads the accounts of a kind with no usage meter through the
 // limits the watcher logged.
 func (e Env) loggedPool(root string, h harness.Harness) (p pool, configured bool) {
-	logins := h.Accounts(e.Worker.WithDefaults().Config(root)).Entries
+	logins := h.Accounts(e.Worker.Config(root)).Entries
 	cooling := limits.Cooling(root, h.Kind(), e.now())
 	for _, l := range logins {
 		if at, ok := cooling[l.Name]; ok {
@@ -93,7 +93,7 @@ func (e Env) poolOf(ctx context.Context, root string, h harness.Harness) (pool, 
 
 // poolKey is the config key of the kind's accounts.
 func (e Env) poolKey(root string, h harness.Harness) string {
-	return h.Accounts(e.Worker.WithDefaults().Config(root)).Key
+	return h.Accounts(e.Worker.Config(root)).Key
 }
 
 // Headroom says why a worker of the harness kind has no account to run under,

@@ -100,7 +100,7 @@ func TestItemClockSurvivesATransferToAnotherSlot(t *testing.T) {
 	}
 }
 
-// The timeout park resolves the lease holder through Env.Worker.Getenv, not the
+// The timeout park resolves the lease holder through wenv(&Env).Getenv, not the
 // process environment.
 func TestItemTimeoutApplyReadsHolderFromEnvGetenv(t *testing.T) {
 	f := newMoveFx(t)
@@ -109,7 +109,7 @@ func TestItemTimeoutApplyReadsHolderFromEnvGetenv(t *testing.T) {
 	f.env.NeedsHuman = "needs-human"
 	f.env.HolderPID = 0 // discover the holder from the environment
 	asked := false
-	f.env.Worker.Getenv = func(k string) string {
+	wenv(&f.env).Getenv = func(k string) string {
 		if k == roundlease.HolderPIDEnv {
 			asked = true
 			return "100"

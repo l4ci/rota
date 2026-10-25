@@ -79,7 +79,7 @@ func TestPickSlotsOrderIsResumeIdleParkable(t *testing.T) {
 	)
 	reg := worker.LoadRegistryTolerant(root)
 	roster := roundcfg.Settings{Roster: []string{"ben", "cy", "dana"}}
-	var e Env
+	e := Env{Worker: wk(worker.Env{})}
 	names := func(ss []*worker.Slot, _ []string) (out []string) {
 		for _, s := range ss {
 			out = append(out, s.Name())
@@ -109,7 +109,7 @@ func TestPickSlotsSkipsAccountsWithoutLogin(t *testing.T) {
 	)
 	reg := worker.LoadRegistryTolerant(root)
 	set := roundcfg.Settings{Roster: []string{"ben", "cy", "dana"}}
-	var e Env
+	e := Env{Worker: wk(worker.Env{})}
 	got, skipped := e.pickSlots(bg, reg, set, "8", 3)
 	if len(got) != 2 || got[0].Name() != "cy" || got[1].Name() != "dana" {
 		t.Errorf("picked %v, want cy then dana", got)
@@ -129,13 +129,13 @@ func TestSlotLoginProblemExemptsCodex(t *testing.T) {
 		slot(root, "cy", "park/cy", func(o *jsonx.Object) { o.Set("kind", harness.Codex); o.Set("configDir", empty) }),
 	)
 	reg := worker.LoadRegistryTolerant(root)
-	if (Env{}).SlotLoginProblem(reg.Slot("ben")) == "" {
+	if (Env{Worker: wk(worker.Env{})}).SlotLoginProblem(reg.Slot("ben")) == "" {
 		t.Error("a claude slot with no credentials should have a login problem")
 	}
-	if why := (Env{}).SlotLoginProblem(reg.Slot("cy")); why != "" {
+	if why := (Env{Worker: wk(worker.Env{})}).SlotLoginProblem(reg.Slot("cy")); why != "" {
 		t.Errorf("codex slot: %q, want no login problem", why)
 	}
-	got, skipped := Env{}.pickSlots(bg, reg, roundcfg.Settings{Roster: []string{"cy"}}, "8", 1)
+	got, skipped := Env{Worker: wk(worker.Env{})}.pickSlots(bg, reg, roundcfg.Settings{Roster: []string{"cy"}}, "8", 1)
 	if len(got) != 1 || got[0].Name() != "cy" || len(skipped) != 0 {
 		t.Errorf("picked %v skipped %v, want cy picked", got, skipped)
 	}
@@ -156,10 +156,10 @@ func TestSlotLoginProblemReadsThroughEnvLogin(t *testing.T) {
 			return proc.Result{Stdout: blob + "\n"}, nil
 		}}
 	}
-	if why := (Env{Login: keychain(`{"claudeAiOauth":{"accessToken":"kc"}}`)}).SlotLoginProblem(s); why != "" {
+	if why := (Env{Login: keychain(`{"claudeAiOauth":{"accessToken":"kc"}}`), Worker: wk(worker.Env{})}).SlotLoginProblem(s); why != "" {
 		t.Errorf("keychain entry: %q, want usable", why)
 	}
-	if why := (Env{Login: keychain("")}).SlotLoginProblem(s); !strings.Contains(why, "Keychain") {
+	if why := (Env{Login: keychain(""), Worker: wk(worker.Env{})}).SlotLoginProblem(s); !strings.Contains(why, "Keychain") {
 		t.Errorf("keychain miss: %q, want it to name the Keychain", why)
 	}
 }

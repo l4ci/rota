@@ -374,11 +374,11 @@ func TestTransferOfAPickedBestOfResumesAfterAFailedDispatch(t *testing.T) {
 		d.SetBestOf(worker.BestOf{Issue: "12", Pick: "#7", Attempts: []worker.BestOfAttempt{
 			{Slot: "ben", Branch: f.queued()[0].Branch, ClaimID: "ben@1"}, {Slot: "kit", Branch: "kit/12-x", ClaimID: "kit@1"}}})
 	})
-	f.env.Worker.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} }
+	wenv(&f.env).NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} }
 	if _, err := f.transfer("12", "dana", nil); err == nil {
 		t.Fatal("the dispatch was meant to fail")
 	}
-	f.env.Worker.NewHost = func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }
+	wenv(&f.env).NewHost = func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }
 	res, err := f.transfer("12", "dana", nil)
 	if err != nil || !res.Dispatched {
 		t.Fatalf("the receiver is not a second holder; the same call resumes: %v %+v", err, res)

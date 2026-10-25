@@ -23,7 +23,7 @@ func TestCandidatesSupportSplit(t *testing.T) {
 	be.add("1", "main work", "", false, "")
 	be.add("2", "support work", "", false, "")
 	be.items["2"].Labels = []string{config.Label(nil, "support")}
-	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv, Config: diskConfig}, Lease: fakeLease("h", 100)}
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
 	e.SupportLabel = config.Label(nil, "support")
 	get := func(set roundcfg.Settings) []string {
 		t.Helper()
@@ -312,7 +312,7 @@ func TestSupportQueueGroupsWaitingActiveAndUnknown(t *testing.T) {
 	}
 	be.claims = map[string]string{"2": "mac-ben", "3": "main-kit"}
 	be.gone = map[string]bool{}
-	e := Env{SupportLabel: label}
+	e := Env{SupportLabel: label, Worker: wk(worker.Env{})}
 	got, err := e.SupportQueue(bg, be, "mac")
 	if err != nil {
 		t.Fatal(err)

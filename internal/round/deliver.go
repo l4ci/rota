@@ -29,7 +29,7 @@ func (e Env) deliveryRefusals(ctx context.Context, root, kind, slot, model strin
 	if why := hz.SoloRefusal(); why != "" && worker.IsSolo(root) {
 		return nil, usage("%s", why)
 	}
-	setup, err := e.workerEnv().Preflight(ctx, root, kind, slot, model)
+	setup, err := e.Worker.Preflight(ctx, root, kind, slot, model)
 	if err != nil {
 		var we *exitcode.Error
 		if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
@@ -92,7 +92,7 @@ func (d *delivery) steps(ctx context.Context, e Env, root string) ([]step, error
 		// round.accounts is Anthropic's: a codex slot's CODEX_HOME is its account.
 		// Under solo every subagent runs on the orchestrator's own account.
 		{name: "account", skip: func() bool {
-			return solo || !hz.WorkAccounts() || !e.AccountPicking || len(e.Worker.Accounts.Configured(root)) == 0
+			return solo || !hz.WorkAccounts() || !e.AccountPicking || len(e.Worker.Accounts().Configured(root)) == 0
 		}, do: func() error {
 			name, err := e.pickAccount(ctx, root, d.Slot)
 			d.Account = name
@@ -130,7 +130,7 @@ func (d *delivery) steps(ctx context.Context, e Env, root string) ([]step, error
 	// was not delivered and resumes it.
 	return append(steps, step{name: "dispatch", keep: true, do: func() error {
 		rnd := d.Round
-		dr, err := e.workerEnv().Dispatch(ctx, root, worker.DispatchOpts{Slot: d.Slot, BodyFile: d.tmpName, Task: d.Task, Round: &rnd,
+		dr, err := e.Worker.Dispatch(ctx, root, worker.DispatchOpts{Slot: d.Slot, BodyFile: d.tmpName, Task: d.Task, Round: &rnd,
 			Branch: d.Branch(), Model: d.Model, Kind: d.Kind})
 		d.Shared = dr.Shared
 		if err != nil {
