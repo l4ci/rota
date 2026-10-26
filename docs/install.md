@@ -34,7 +34,7 @@ There is no native Windows build: rota's file locks use `flock`. Run it inside [
 
 1. In PowerShell, run `wsl --install` (Ubuntu by default) and open the distro.
 2. Inside WSL, install rota with the install script or Homebrew above, plus `git`, `gh` or `glab`, and Claude Code or Codex. rota calls them from the same environment, so Windows-side installs are not seen.
-3. Clone your repos into the Linux filesystem (`~/src/...`), not under `/mnt/c`. Git is much slower across the Windows mount, and rota's locks expect a Linux filesystem.
+3. Clone your repos into the Linux filesystem (`~/src/...`), not under `/mnt/c`. Git is much slower across the Windows mount.
 4. For rounds, run tmux inside WSL.
 
 ### Release binaries by hand
