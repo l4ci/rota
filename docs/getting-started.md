@@ -21,6 +21,8 @@ Run `rota setup` once at the project root. It scaffolds `.rota/` and asks the ma
 
 Every question and its choices are described in [config options](reference/config-options.md); [configuration](usage/configuration.md) explains the keys by concept. A second machine that builds issues beside main uses the `support` role: see [Support role](contributing/rounds.md#support-role).
 
+Commit `.rota/` and the files setup wrote (`AGENTS.md`, `CLAUDE.md`, `.claude/agents/`, `.gitignore`): `/rota-work` starts from a clean tree.
+
 ## 🔁 Your first cycle
 
 One item, with you driving each step. The [quickstart walkthrough](walkthroughs/quickstart-manual-mode.md) shows the full output.
@@ -39,7 +41,7 @@ One item, with you driving each step. The [quickstart walkthrough](walkthroughs/
    /rota-work B03
    ```
 
-   Use the ID capture printed. `/rota-work` checks the tree is clean, cuts a branch and builds the item in small commits, one per task. For a behavior change the proof gate wants a failing test run first, then a passing one. `rota item complete` closes an item only when it has proof. See [running work](usage/running-work.md).
+   Use the ID capture printed. `/rota-work` checks the tree is clean, cuts a branch and builds the item in small commits, one per task. For a behavior change the proof gate wants a failing test run first, then a passing one. See [running work](usage/running-work.md).
 
 3. **Ship it.**
 
@@ -49,7 +51,7 @@ One item, with you driving each step. The [quickstart walkthrough](walkthroughs/
 
    Ship runs `/rota-review` first. On a pass it merges into the base branch (`work.mergeStrategy: direct`, the default) or pushes and prints the PR URL (`pr`). With the issue backend it always opens a PR that closes the issue. See [review and ship](usage/review-and-ship.md).
 
-For an item too big to one-shot, run `/rota-plan` between capture and work. [Skills](skills/README.md) lists every `/rota-*` skill and the chains between them.
+For an item too big to one-shot, run `/rota-plan` between capture and work. [Skills](skills/README.md) lists every `/rota-*` skill; [how skills chain](how-it-works.md#how-skills-chain) shows which follow which.
 
 ## ➡ Next
 
