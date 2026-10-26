@@ -25,6 +25,43 @@ func (p *parked) park(issue, _ string) error {
 	return nil
 }
 
+// bouncing gives stale and provenance-fail the bounce meaning, which no shipped
+// verdict carries now, so the counting and parking below still run.
+func bouncing(t *testing.T) {
+	t.Helper()
+	old := classify
+	classify = func(v string) worker.VerdictMeaning {
+		m := old(v)
+		m.Bounce = m.Bounce || v == worker.GateStale || v == worker.GateProvenanceFail
+		return m
+	}
+	t.Cleanup(func() { classify = old })
+}
+
+// Neither verdict counts, writes a ledger row or parks the item, even with the
+// count already at round.maxBounces (#2072).
+func TestStaleAndProvenanceFailNeverCountOrPark(t *testing.T) {
+	for _, v := range []string{worker.GateStale, worker.GateProvenanceFail} {
+		root := t.TempDir()
+		p := &parked{}
+		for i := 1; i <= 5; i++ {
+			o, err := Gate(worker.Env{Config: diskConfig}, root, "7", worker.GateResult{Verdict: v, Slot: "w1", SHA: "sha" + strconv.Itoa(i)}, p.park)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if o != (Outcome{}) {
+				t.Fatalf("%s #%d: %+v, want no bounce", v, i, o)
+			}
+		}
+		if n := bounces(root, "7"); n != 0 || len(p.issues) != 0 {
+			t.Errorf("%s: count %d, parked %v", v, n, p.issues)
+		}
+		if es, _ := ledger.Load(root); len(es) != 0 {
+			t.Errorf("%s wrote ledger rows: %+v", v, es)
+		}
+	}
+}
+
 func bounces(root, issue string) int {
 	return worker.LoadRegistryTolerant(root).Bounces(issue)
 }
@@ -53,6 +90,7 @@ func TestGatePassEndsTheItemClockAndBestOf(t *testing.T) {
 }
 
 func TestGateBouncesAreParkedAtMaxBounces(t *testing.T) {
+	bouncing(t)
 	root := t.TempDir() // round.maxBounces defaults to 3
 	p := &parked{}
 	for i := 1; i <= 3; i++ {
@@ -73,6 +111,7 @@ func TestGateBouncesAreParkedAtMaxBounces(t *testing.T) {
 }
 
 func TestParkFailureIsReportedAndTheCountStands(t *testing.T) {
+	bouncing(t)
 	root := t.TempDir()
 	recordBounceCappedVia(worker.Env{Config: diskConfig}, nil, root, "7", "w1", "a", 0)
 	recordBounceCappedVia(worker.Env{Config: diskConfig}, nil, root, "7", "w1", "b", 0)
@@ -85,6 +124,7 @@ func TestParkFailureIsReportedAndTheCountStands(t *testing.T) {
 // The train counts a bounce like the gate does, for the culprit alone, and
 // ends the items it landed.
 func TestTrainBouncesTheCulpritAndEndsLandedItems(t *testing.T) {
+	bouncing(t)
 	root := t.TempDir()
 	if err := worker.RecordItemStart(root, "1", time.Now()); err != nil {
 		t.Fatal(err)
@@ -116,6 +156,7 @@ func TestTrainBouncesTheCulpritAndEndsLandedItems(t *testing.T) {
 // PR number. The stale refusal's bounce must fold into the issue's own row: no
 // slot or account total named by the PR number.
 func TestStaleGateByPRNumberAfterTheSlotMovedOnMakesNoPseudoSlot(t *testing.T) {
+	bouncing(t)
 	root := t.TempDir()
 	at := time.Date(2026, 10, 17, 21, 0, 0, 0, time.UTC)
 	if err := ledger.Append(root, ledger.Entry{TS: at, Kind: ledger.KindAssign, Issue: "12", Slot: "nia", Account: "work", Harness: "claude", PR: "847"}); err != nil {
@@ -143,6 +184,7 @@ func TestStaleGateByPRNumberAfterTheSlotMovedOnMakesNoPseudoSlot(t *testing.T) {
 // recorded under it even when the registry no longer holds that slot, so the
 // attribution never depends on a late pool lookup.
 func TestGateBounceByPRNumberUsesTheResolvedSlot(t *testing.T) {
+	bouncing(t)
 	root := t.TempDir()
 	at := time.Date(2026, 10, 17, 21, 0, 0, 0, time.UTC)
 	res := worker.GateResult{Verdict: worker.GateStale, Slot: "847", TargetSlot: "nia", PR: "847", SHA: "h1"}
@@ -161,6 +203,7 @@ func TestGateBounceByPRNumberUsesTheResolvedSlot(t *testing.T) {
 // The bounce accounting reads round.maxBounces from Env.Config, not from the
 // project config on disk: root holds no .rota/config.json here.
 func TestBounceReadsMaxBouncesFromTheInjectedConfig(t *testing.T) {
+	bouncing(t)
 	root := t.TempDir()
 	cfg, err := jsonx.Decode([]byte(`{"round":{"maxBounces":1}}`))
 	if err != nil {
@@ -206,6 +249,7 @@ func (c *issueComments) DeleteComment(context.Context, tracker.IssueKey, string)
 // #1598 AC-7: with round.support set the gate counts and parks from the issue,
 // never the registry, and parking posts the reset.
 func TestGateBouncesOnTheIssueWithSupport(t *testing.T) {
+	bouncing(t)
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
 		t.Fatal(err)
@@ -280,6 +324,7 @@ func (f *noteForge) Reviews(context.Context, int) ([]tracker.Review, error) { re
 // failing too, is not lost: the retry finds the head already counted and still
 // posts the review-bounce.
 func TestGateRetryPostsTheReviewBounceAfterAFailedUndo(t *testing.T) {
+	bouncing(t)
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
 		t.Fatal(err)
@@ -314,6 +359,7 @@ func TestGateRetryPostsTheReviewBounceAfterAFailedUndo(t *testing.T) {
 // One bounce, two machines: the gate's 7-character head and the relay's full
 // head are one bounce on the issue.
 func TestGateAndRelayHeadsCountOnce(t *testing.T) {
+	bouncing(t)
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
 		t.Fatal(err)

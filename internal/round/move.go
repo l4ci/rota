@@ -840,6 +840,9 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	if err := fenceExternal(sender, "transfer", "move a worktree"); err != nil {
 		return nil, err
 	}
+	if sender != nil && e.mergeInProgress(ctx, sender.Worktree()) {
+		return nil, blocked(BlockMergeInProgress, "slot %s is mid-merge (MERGE_HEAD) in its worktree: wait for the worker to commit or abort it before moving %s", sender.Name(), id)
+	}
 	if !toHuman {
 		if run.to = reg.Slot(o.To); run.to == nil {
 			return nil, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.To)}
@@ -923,6 +926,16 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		res.ClaimID = receiver.ClaimID()
 	}
 	return run, nil
+}
+
+// mergeInProgress reports whether the worktree at wt holds an unfinished merge:
+// its worker is resolving a conflict, and parking the slot would cut that off.
+func (e Env) mergeInProgress(ctx context.Context, wt string) bool {
+	if wt == "" {
+		return false
+	}
+	_, _, code := e.gitOut(ctx, wt, "rev-parse", "-q", "--verify", "MERGE_HEAD")
+	return code == 0
 }
 
 // transferHeadSteps is what both targets share: park the sender, say so on the

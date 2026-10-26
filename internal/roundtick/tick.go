@@ -118,6 +118,11 @@ type Env struct {
 	// nil means the round has no review loop. A slot it relays, or holds, is not
 	// merged this tick; one it only reports (manual) is gated as before.
 	ReviewLoop func(ctx context.Context, s Slot) ReviewOutcome
+	// AwaitingReview says why a done slot's head still lacks the review
+	// verdicts ship.review needs, "" when it has them (or needs none). Such a
+	// slot is not gated: the gate checks freshness first, so a fresh done with
+	// no verdicts would read as stale. nil means no such check.
+	AwaitingReview func(ctx context.Context, s Slot, base string) string
 	// Capped returns why the round may not fill slots now (every account is
 	// cooling down), "" when it may. nil means no quota cap. A capped tick
 	// mints and assigns nothing and says why in Result.Capped; it merges and
@@ -229,6 +234,12 @@ func Run(ctx context.Context, e Env) (Result, error) {
 						continue
 					}
 				case out.Hold: // a failed poll: held without an item, the caller warned
+					continue
+				}
+			}
+			if e.AwaitingReview != nil {
+				if why := e.AwaitingReview(ctx, s, e.targetBase(s.Name)); why != "" {
+					r.NeedsYou = append(r.NeedsYou, Item{"awaiting-review", s.Name, why})
 					continue
 				}
 			}
