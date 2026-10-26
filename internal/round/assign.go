@@ -94,13 +94,14 @@ func (e *BlockedError) Error() string { return e.Msg }
 
 // AssignOpts are the flags of `rota round assign`, with the config read.
 type AssignOpts struct {
-	ReclaimStale  string // exact stale holder approved by the maintainer
-	ID            string
-	Agent         string
-	Decisions     string // answered decisions, verbatim; "" for none
-	Siblings      []string
-	CheckOnly     bool
-	AcceptOverlap bool
+	ReclaimStale   string // exact stale holder approved by the maintainer
+	ID             string
+	Agent          string
+	Decisions      string   // answered decisions, verbatim; "" for none
+	DecisionTopics []string // DECISIONS.md topics to include in full
+	Siblings       []string
+	CheckOnly      bool
+	AcceptOverlap  bool
 	// AcceptOpenPR lets a deliberate redo through an issue an open PR resolves.
 	AcceptOpenPR bool
 	// AcceptCrossMilestone lets the maintainer assign an issue that depends on another active milestone.
@@ -212,7 +213,7 @@ func briefPath(root string, set roundcfg.Settings, getenv func(string) string, c
 // (the lead first, then its members; none for one issue) swaps the lead's Out
 // of scope and Touches for one block of Acceptance, Out of scope and Touches
 // per issue. dispatch signs it.
-func pointerBrief(agent, id, branch, brief string, siblings []string, decisions, outOfScope, touches, tryIt, tryItWithheld string, bundle []bundleIssue, t tierBrief) string {
+func pointerBrief(agent, id, branch, brief string, siblings []string, decisions, decisionContext, outOfScope, touches, tryIt, tryItWithheld string, bundle []bundleIssue, t tierBrief) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "You are %s. Read %s in full before anything else: it is your standing contract.\n\n", agent, brief)
 	fmt.Fprintf(&b, "Then read issue %s and its whole thread yourself. Dispute the ticket before implementing if it is wrong, already decided or contradicts the code: say so instead of building it.\n\n", id)
@@ -253,6 +254,9 @@ func pointerBrief(agent, id, branch, brief string, siblings []string, decisions,
 	}
 	if d := strings.TrimSpace(decisions); d != "" {
 		fmt.Fprintf(&b, "\nDecisions already settled (verbatim):\n\n%s\n", d)
+	}
+	if decisionContext != "" {
+		fmt.Fprintf(&b, "\n%s\n", decisionContext)
 	}
 	// Last, so it is the final thing read: a worker that ends on a prose summary
 	// of its PR otherwise never prints the sentinel the poll routes on.
@@ -639,6 +643,7 @@ type assignRun struct {
 	pick              Pick
 	decision          string // the item's decision type
 	decisions, brief  string
+	decisionContext   string
 	bo                *bestOfRun
 	slot              *worker.Slot
 	members           []*backlog.Item // the bundle's, none for one issue
@@ -934,6 +939,14 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 		return run, false, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
 	}
 
+	decisionContext := slot.BriefDecisionContext()
+	if !resuming || len(o.DecisionTopics) > 0 {
+		decisionContext, err = decisionBriefContext(root, o.DecisionTopics)
+		if err != nil {
+			return run, false, err
+		}
+	}
+
 	if bo != nil && bo.preflight {
 		return run, true, nil
 	}
@@ -962,7 +975,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	res.SmokeSection = e.reserveSmokeSection(ctx, root, be, reg, set.Roster, id, agent)
 	return assignRun{id: id, agent: agent, branch: res.Branch, resuming: resuming, queue: queue,
 		kind: pf.Kind, kindSource: pf.KindSource, model: pf.Model, tier: tier, reason: reason,
-		pick: pf.Pick, decision: pf.Decision, decisions: decisions, brief: brief, bo: bo, slot: slot, members: members, from: from, base: msBase, tag: it.Fields.Get("milestone"), fallback: pf.Fallback, openPR: hasOpenPR}, false, nil
+		pick: pf.Pick, decision: pf.Decision, decisions: decisions, brief: brief, decisionContext: decisionContext, bo: bo, slot: slot, members: members, from: from, base: msBase, tag: it.Fields.Get("milestone"), fallback: pf.Fallback, openPR: hasOpenPR}, false, nil
 }
 
 // notReadyBy is the blockedBy of a failed readiness: overlap when only the
@@ -1187,6 +1200,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 			if err := editSlot(root, agent, func(s *worker.Slot) error {
 				s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: run.kind, KindSource: run.kindSource, Tier: run.tier, Model: res.Model, TierReason: run.reason, SmokeSection: res.SmokeSection, Attempt: attempt, AttemptBase: attemptBase, Bundle: res.Bundle})
 				s.SetBriefContext(run.decisions, o.Siblings)
+				s.SetBriefDecisionContext(run.decisionContext)
 				s.SetAwaitingDone(run.openPR)
 				return nil
 			}); err != nil {
@@ -1207,7 +1221,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 	d := &delivery{Slot: agent, Task: id, Branch: func() string { return res.Branch }, Kind: run.kind, Model: res.Model, Round: rnd,
 		Brief: func() string {
 			return e.taskBrief(ctx, root, be, taskBriefSpec{agent: agent, id: id, branch: res.Branch, contract: run.brief,
-				decisions: run.decisions, siblings: o.Siblings, bundle: res.Bundle,
+				decisions: run.decisions, decisionContext: run.decisionContext, siblings: o.Siblings, bundle: res.Bundle,
 				tier: tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, Base: run.base, FullOnly: set.FullOnly, TDD: set.TDD, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()}})
 		}}
 	// 8-9. The account, the pointer brief and the hand-off.
