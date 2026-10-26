@@ -11,6 +11,7 @@ import (
 // A worker slot the round routed to a milestone branch reads that branch as
 // its base; any other caller, and a slot on the round base, reads the repo's.
 func TestGitBaseHonoursASlotRoutedToAMilestone(t *testing.T) {
+	t.Setenv("ROTA_SLOT", "ben")
 	d := t.TempDir()
 	repo := newRepo(t, d, "repo", "main")
 	slot := worker.NewSlot("ben", "ben/1-x", filepath.Join(repo, ".worktrees", "ben"), "main", "")
@@ -44,7 +45,9 @@ func TestGitBaseHonoursASlotRoutedToAMilestone(t *testing.T) {
 	if got := base(asSlot()); got != "milestone/M01" {
 		t.Errorf("slot routed to a milestone: %q", got)
 	}
-	if got := base(testDeps()); got != "main" {
+	orchestrator := testDeps()
+	orchestrator.Getenv = func(string) string { return "" }
+	if got := base(orchestrator); got != "main" {
 		t.Errorf("the orchestrator is not a slot: %q", got)
 	}
 }
