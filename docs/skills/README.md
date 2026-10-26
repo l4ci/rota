@@ -165,6 +165,7 @@ chains:
           steps:
             - you: /rota-plan M01-S01
             - agent: |
+                Planning dial: 3 (research round) - a schema migration does not revert cleanly; the spike already answered the open question. Override: say "level 1" or "level 4".
                 Read .rota/spikes/sqlite-schema.md: ship single-currency in M01, no currency column yet.
                 Goal: stand up the SQLite schema and tally add end to end.
                 T1. Skeleton CLI in cmd/tally.
@@ -211,6 +212,7 @@ chains:
           steps:
             - you: /rota-plan M01-S01
             - agent: |
+                Planning dial: 2 (spec) - first slice of a new schema; a migration does not revert cleanly. Override: say "level 1" or "level 4".
                 Goal: stand up the SQLite schema and tally add end to end.
                 T1. Skeleton CLI in cmd/tally.
                     Verify: go test ./... && tally --version | grep v0.0.0
