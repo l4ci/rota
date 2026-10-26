@@ -19,8 +19,9 @@ example:
   source: walkthroughs/greenfield-from-brief.md#step-3-rota-spike-optional
   reviewed: true
   steps:
-    - you: "/rota-spike sqlite-schema \"Will a single-currency schema survive multi-currency migration cleanly?\""
+    - you: /rota-spike will a single-currency schema survive a later move to multi-currency?
     - agent: |
+        Question: can a single-currency schema migrate to multi-currency without data loss? Named it sqlite-schema.
         Created branch spike/sqlite-schema and .rota/spikes/sqlite-schema.md.
         The question is recorded. Experiment on the branch; fill in Findings and Decision when done.
   changes:
