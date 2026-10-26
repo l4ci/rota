@@ -158,9 +158,14 @@ func runInit(c *Ctx, noBlocks bool) (Result, error) {
 	}
 	// The machine-wide registry is not the project's state: a failure to write
 	// it warns, and neither it nor a first registration counts as `changed`.
-	added, err := projects.Register(c.deps().projectsEnv(), dir, c.deps().Now())
-	if err != nil {
-		warnings = append(warnings, "could not register the project in the global registry: "+err.Error())
+	added := false
+	if projects.Temporary(c.deps().projectsEnv(), dir) {
+		lines = append(lines, "project not registered: temporary directory")
+	} else {
+		added, err = projects.Register(c.deps().projectsEnv(), dir, c.deps().Now())
+		if err != nil {
+			warnings = append(warnings, "could not register the project in the global registry: "+err.Error())
+		}
 	}
 	data.Set("projectRegistered", added)
 	for _, w := range warnings {
