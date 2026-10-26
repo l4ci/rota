@@ -27,7 +27,6 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 - [Codex workers](usage/codex-workers.md): run Codex as a worker in a round
 - [OpenCode workers](usage/opencode-workers.md): run OpenCode, and any model it can reach, as a worker in a round
 - [Orchestrator harnesses](usage/orchestrator-harnesses.md): run the orchestrator in Claude Code, Codex, Hermes or opencode
-- [rota or a bare session](usage/rota-vs-plain-session.md): a row-by-row comparison with a plain Claude Code session that runs its own subagents
 - [Skills in Codex](usage/codex-skills.md): install and call the skills from Codex
 
 ### 🧰 Skills
@@ -108,6 +107,21 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 - [Release signing](contributing/release-signing.md): generating or rotating the minisign key, the Actions secret, verifying by hand
 - [Market review, October 2026](contributing/market-review-2026-10.md): what comparable orchestrators' users ask for, where rota stands, and the ranked gaps behind issues #574 to #587
 - [Plain orchestrator comparison, October 2026](contributing/plain-orchestrator-comparison-2026-10.md): what a bare Claude Code session would do to run a team against what rounds do, and the six gaps behind issues #897 to #902. The [re-judged user version](usage/rota-vs-plain-session.md) is the current one
+
+### ⚖ Compare
+
+- [How rota compares](compare/README.md): one page per tool, with the version checked
+- [rota vs GSD](compare/gsd.md): spec-driven phases from discuss to ship
+- [rota vs Superpowers](compare/superpowers.md): a skills methodology for many harnesses
+- [rota vs OpenSpec](compare/openspec.md): living specs and delta change folders
+- [rota vs ralph](compare/ralph.md): a fresh-context loop over a `prd.json`
+- [rota vs Conductor](compare/conductor.md): a Mac app for agents in workspaces
+- [rota vs Orca](compare/orca.md): a desktop app for fleets of agents
+- [rota vs Vibe Kanban](compare/vibe-kanban.md): a kanban board that runs agents
+- [rota vs Claude Squad](compare/claude-squad.md): a TUI for agents in tmux sessions
+- [rota vs Gas Town](compare/gastown.md): a Mayor, polecats and a merge queue
+- [rota vs Octo](compare/octo.md): several AI providers on one question
+- [rota or a bare session](usage/rota-vs-plain-session.md): a row-by-row comparison with a plain Claude Code session that runs its own subagents
 
 ### Other
 
