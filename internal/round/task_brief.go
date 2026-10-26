@@ -14,6 +14,7 @@ import (
 // assignment's decisions and siblings, which cannot be recovered from labels.
 type taskBriefSpec struct {
 	agent, id, branch, contract, decisions string
+	decisionContext                        string
 	siblings, bundle                       []string
 	tier                                   tierBrief
 }
@@ -24,7 +25,7 @@ func (e Env) taskBrief(ctx context.Context, root string, be Board, in taskBriefS
 	if len(in.bundle) > 0 {
 		bundle = bundleBrief(be, append([]string{in.id}, in.bundle...))
 	}
-	text := pointerBrief(in.agent, in.id, in.branch, in.contract, in.siblings, in.decisions,
+	text := pointerBrief(in.agent, in.id, in.branch, in.contract, in.siblings, in.decisions, in.decisionContext,
 		outOfScope(be, in.id), touches(be, in.id), steps, withheld, bundle, in.tier)
 	if hb := latestHandoffBranch(be, in.id); hb != "" {
 		text += fmt.Sprintf("\nAn earlier worker handed this issue back: read the latest `rota:handoff` comment on it. Its work is pushed on branch %s (origin/%s); fetch it before you start over.\n", hb, hb)
@@ -80,5 +81,5 @@ func (e Env) RebuildTaskBrief(ctx context.Context, root string, be Board, o work
 		}
 	}
 	return e.taskBrief(ctx, root, be, taskBriefSpec{agent: o.Slot, id: s.Task(), branch: o.Branch, contract: contract,
-		decisions: s.BriefDecisions(), siblings: s.BriefSiblings(), bundle: s.Bundle(), tier: t}), o, nil
+		decisions: s.BriefDecisions(), decisionContext: s.BriefDecisionContext(), siblings: s.BriefSiblings(), bundle: s.Bundle(), tier: t}), o, nil
 }
