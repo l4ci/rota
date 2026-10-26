@@ -446,3 +446,31 @@ func jsonString(s string) string {
 	out, _ := json.Marshal(s)
 	return string(out)
 }
+
+// A lens FAIL blocks a ship like a review FAIL until a newer record of the
+// same lens clears it (#2064); a lens PASS never hides another lens's FAIL.
+func TestBlockingLens(t *testing.T) {
+	list := []Record{{Kind: ReviewQuality, Verdict: Pass, Combined: Pass, Sha: "a"}, {Kind: ReviewSecurity, Verdict: Fail, Sha: "a"}, {Kind: ReviewUX, Verdict: Pass, Sha: "a"}}
+	if r, ok := Blocking(list, Settings{}); !ok || r.Kind != ReviewSecurity {
+		t.Fatalf("Blocking = %v, %v; want the review-security FAIL", r, ok)
+	}
+	list = append(list, Record{Kind: ReviewSecurity, Verdict: Pass, Sha: "b"})
+	if _, ok := Blocking(list, Settings{}); ok {
+		t.Fatal("a newer review-security PASS must clear the block")
+	}
+}
+
+func TestLensKinds(t *testing.T) {
+	for _, name := range []string{"security", "perf", "ux"} {
+		k := LensKind(name)
+		if !IsLens(k) || !slices.Contains(BranchKinds, k) {
+			t.Errorf("%s: IsLens=%v, in BranchKinds=%v", k, IsLens(k), slices.Contains(BranchKinds, k))
+		}
+		if !slices.Contains(kindVerdicts[k], Concerns) {
+			t.Errorf("%s does not accept CONCERNS", k)
+		}
+	}
+	if IsLens(ReviewCross) {
+		t.Error("review-cross is not a lens")
+	}
+}

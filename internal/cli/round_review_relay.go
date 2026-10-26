@@ -123,7 +123,8 @@ func findingLine(f verdict.Finding) string {
 }
 
 // failRecords are branch's FAIL verdicts a relay carries: the effective review
-// and the cross-harness review (#1612), each when it is FAIL.
+// the cross-harness review (#1612) and each lens review (#2064), each when it
+// is FAIL.
 func failRecords(root, branch string) []verdict.Record {
 	list := verdict.Load(root).Branches[verdict.BranchKey("", branch)]
 	var out []verdict.Record
@@ -133,7 +134,7 @@ func failRecords(root, branch string) []verdict.Record {
 	if r, ok := verdict.CrossFail(list); ok {
 		out = append(out, r)
 	}
-	return out
+	return append(out, verdict.LensFails(list)...)
 }
 
 // openFindings are the findings of branch's FAIL reviews: after a re-review

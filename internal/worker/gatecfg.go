@@ -51,6 +51,8 @@ type GateConfig struct {
 	reviewErr  error
 	cross      roundcfg.CrossReview
 	crossErr   error
+	lenses     config.Lenses
+	lensesErr  error
 	tddErr     error
 	testsErr   error // a malformed test.fast or test.full
 	isolate    bool
@@ -88,6 +90,7 @@ func ParseGateConfig(cfg any) GateConfig {
 	c.ciMinutes, c.ciErr = config.Int(cfg, "test.ciTimeoutMinutes", 1, 24*60)
 	c.review, c.reviewErr = config.ReviewPolicyOf(cfg)
 	c.cross, c.crossErr = roundcfg.ParseCrossReview(cfg)
+	c.lenses, c.lensesErr = config.LensesOf(cfg)
 	c.isolate, c.isolateErr = config.Bool(cfg, "test.isolate")
 	c.slots, c.slotsErr = config.Int(cfg, "test.slots", 1, 64)
 	return c
@@ -154,6 +157,9 @@ func (c GateConfig) ReviewPolicy() (config.ReviewPolicy, error) { return c.revie
 // CrossReview is the cross-harness review settings, or the error of a
 // malformed review.crossLabels or round.harnesses.
 func (c GateConfig) CrossReview() (roundcfg.CrossReview, error) { return c.cross, c.crossErr }
+
+// Lenses is review.lenses, or the error of a malformed one.
+func (c GateConfig) Lenses() (config.Lenses, error) { return c.lenses, c.lensesErr }
 
 // TDDEnabled is work.tdd, or the error of a non-boolean value.
 func (c GateConfig) TDDEnabled() (bool, error) { return c.TDD, c.tddErr }

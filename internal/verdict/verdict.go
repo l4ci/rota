@@ -28,10 +28,16 @@ const (
 	// ReviewCross is the cross-harness review of a size:Major or risk:high
 	// issue's PR (#1612): one read-only run on a harness other than the
 	// author's. Its record names that harness and model.
-	ReviewCross   = "review-cross"
-	SecondOpinion = "second-opinion"
-	QA            = "qa"
-	DebugFix      = "debug-fix"
+	ReviewCross = "review-cross"
+	// ReviewSecurity, ReviewPerf and ReviewUX are the focused lens reviews
+	// (#2064) a branch triggers by the paths it touches or its issue's labels
+	// (review.lenses). Each is one read-only reviewer on one axis.
+	ReviewSecurity = "review-security"
+	ReviewPerf     = "review-perf"
+	ReviewUX       = "review-ux"
+	SecondOpinion  = "second-opinion"
+	QA             = "qa"
+	DebugFix       = "debug-fix"
 	// Behaviour is the merge gate's run of an item's "Try it" steps on the
 	// merged tree (#899): PASS, or FAIL on a non-zero exit or a missing
 	// expected line. Its record carries the transcript's path.
@@ -53,16 +59,28 @@ const (
 
 // BranchKinds are the kinds recorded against a branch, in the order
 // `verdict show` lists them.
-var BranchKinds = []string{ReviewSpec, ReviewQuality, ReviewCross, SecondOpinion, QA, Behaviour}
+var BranchKinds = []string{ReviewSpec, ReviewQuality, ReviewCross, ReviewSecurity, ReviewPerf, ReviewUX, SecondOpinion, QA, Behaviour}
+
+// LensKinds are the lens review kinds, one per lens name.
+var LensKinds = []string{ReviewSecurity, ReviewPerf, ReviewUX}
+
+// LensKind is the verdict kind of the lens called name: review-<name>.
+func LensKind(name string) string { return "review-" + name }
+
+// IsLens reports whether kind is a lens review kind.
+func IsLens(kind string) bool { return slices.Contains(LensKinds, kind) }
 
 var kindVerdicts = map[string][]string{
-	ReviewSpec:    {Pass, Concerns, Fail},
-	ReviewQuality: {Pass, Concerns, Fail},
-	ReviewCross:   {Pass, Concerns, Fail},
-	SecondOpinion: {Pass, Concerns, Fail},
-	QA:            {Pass, Concerns, Fail, InfraFail},
-	DebugFix:      {Pass, Fail},
-	Behaviour:     {Pass, Fail},
+	ReviewSpec:     {Pass, Concerns, Fail},
+	ReviewQuality:  {Pass, Concerns, Fail},
+	ReviewCross:    {Pass, Concerns, Fail},
+	ReviewSecurity: {Pass, Concerns, Fail},
+	ReviewPerf:     {Pass, Concerns, Fail},
+	ReviewUX:       {Pass, Concerns, Fail},
+	SecondOpinion:  {Pass, Concerns, Fail},
+	QA:             {Pass, Concerns, Fail, InfraFail},
+	DebugFix:       {Pass, Fail},
+	Behaviour:      {Pass, Fail},
 }
 
 var rank = map[string]int{Pass: 0, Concerns: 1, Fail: 2, InfraFail: 3}
@@ -514,6 +532,25 @@ func CrossAt(root, branch, head string) (Record, bool) {
 	return r, ok && AtHead(r, head)
 }
 
+// LensAt is the branch's newest record of the lens kind when it was recorded at
+// head; a record on another commit is stale and does not count.
+func LensAt(root, branch, kind, head string) (Record, bool) {
+	r, ok := Latest(Load(root).Branches[BranchKey("", branch)], kind)
+	return r, ok && AtHead(r, head)
+}
+
+// LensFails are the lens reviews whose newest record is FAIL, in LensKinds
+// order: lens reviews that block and are relayed like a review FAIL.
+func LensFails(list []Record) []Record {
+	var out []Record
+	for _, k := range LensKinds {
+		if r, ok := Latest(list, k); ok && r.Verdict == Fail {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 // CrossFail is the branch's newest review-cross record when it is FAIL: a
 // cross-harness review that blocks and is relayed like a review FAIL.
 func CrossFail(list []Record) (Record, bool) {
@@ -588,7 +625,7 @@ func (r Record) Failing() bool {
 
 // Blocking is the record that blocks a ship (B3): the effective review
 // verdict when it is FAIL, else the latest review-cross record when it is
-// FAIL, else the latest second-opinion record when it is FAIL and the runner
+// FAIL, else a lens review's latest record when it is FAIL, else the latest second-opinion record when it is FAIL and the runner
 // is not the advisory codex fallback. A stale record
 // still blocks; only a newer record of the same kind clears it. CONCERNS and
 // QA never block.
@@ -598,6 +635,9 @@ func Blocking(list []Record, s Settings) (Record, bool) {
 	}
 	if r, ok := CrossFail(list); ok {
 		return r, true
+	}
+	if fails := LensFails(list); len(fails) > 0 {
+		return fails[0], true
 	}
 	if r, ok := Latest(list, SecondOpinion); ok && r.Verdict == Fail {
 		return r, true

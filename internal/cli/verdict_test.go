@@ -456,3 +456,46 @@ func TestRelayCarriesACrossFail(t *testing.T) {
 		t.Fatalf("relay: %+v", v)
 	}
 }
+
+// A lens verdict (#2064) is recorded by kind with PASS/CONCERNS/FAIL and listed
+// by verdict show; a lens FAIL is relayed like a review FAIL.
+func TestVerdictAddLens(t *testing.T) {
+	dir := verdictRepo(t)
+	for _, kind := range []string{"review-security", "review-perf", "review-ux"} {
+		code, out, _ := rotaIn(t, dir, "verdict", "add", "--kind", kind, "--verdict", "CONCERNS", "--json")
+		if d := data(t, out); code != 0 || d["kind"] != kind || d["next"] != "report" {
+			t.Fatalf("%s add: %d %v", kind, code, d)
+		}
+	}
+	if code, _, _ := rotaIn(t, dir, "verdict", "add", "--kind", "review-ux", "--verdict", "INFRA-FAIL"); code != 2 {
+		t.Errorf("a lens refuses INFRA-FAIL: exit %d, want 2", code)
+	}
+	code, out, _ := rotaIn(t, dir, "verdict", "show")
+	if code != 0 {
+		t.Fatalf("show: %d %q", code, out)
+	}
+	for _, kind := range []string{"review-security", "review-perf", "review-ux"} {
+		if !strings.Contains(out, kind+" CONCERNS @ ") {
+			t.Errorf("show lacks %s: %q", kind, out)
+		}
+	}
+}
+
+func TestRelayCarriesALensFail(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, ".rota"), 0o777)
+	sec := verdict.Record{Kind: verdict.ReviewSecurity, Verdict: verdict.Fail, Sha: "abc1234", RecordedAt: "2026-10-22T10:05:00Z",
+		Findings: []verdict.Finding{{Severity: "major", Title: "argument injection", File: "run.go", Line: 9}}}
+	ux := verdict.Record{Kind: verdict.ReviewUX, Verdict: verdict.Pass, Sha: "abc1234", RecordedAt: "2026-10-22T10:06:00Z", Findings: []verdict.Finding{}}
+	for _, r := range []verdict.Record{sec, ux} {
+		if _, err := verdict.AddBranch(root, "nia/6-x", r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := openFindings(root, "nia/6-x"); len(got) != 1 || got[0] != "[major] argument injection (run.go:9)" {
+		t.Errorf("open findings: %v", got)
+	}
+	if v := failVerdict(root, "nia/6-x"); v == nil || !strings.Contains(v.Text, "review-security FAIL at abc1234") {
+		t.Fatalf("relay: %+v", v)
+	}
+}

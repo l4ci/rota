@@ -270,3 +270,19 @@ func floorMinor(t *testing.T, dir string) {
 		t.Fatal(err)
 	}
 }
+
+// A lens verdict's blocking finding lets a bounce through when the review
+// verdicts hold only nits (#2064).
+func TestRoundBounceCountsABlockingLensFinding(t *testing.T) {
+	dir, head := bounceFixture(t, `{"findings":[{"severity":"minor","title":"nit"}]}`)
+	body := writeBody(t, t.TempDir(), `{"findings":[{"severity":"major","title":"argument injection"}]}`)
+	if code, _, errOut := rotaIn(t, dir, "verdict", "add", "feat/x", "--kind", "review-security", "--verdict", "FAIL", "--sha", head, "--body-file", body); code != 0 {
+		t.Fatalf("lens verdict add: %d %s", code, errOut)
+	}
+	if code, out, errOut := rotaIn(t, dir, "round", "bounce", "31", "--head", head, "--json"); code != 0 {
+		t.Fatalf("a blocking lens finding must allow the bounce: %d %v %s", code, data(t, out), errOut)
+	}
+	if n := worker.LoadRegistryTolerant(dir).Bounces("31"); n != 1 {
+		t.Errorf("registry says %d bounces, want 1", n)
+	}
+}

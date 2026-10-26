@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Review lenses.** `review.lenses` maps `security`, `perf` and `ux` to path globs and issue labels. `rota review depth --json` lists the triggered lenses as `lenses`, `/rota-review` runs one focused reviewer per lens at `full` and `light` and records `review-security`, `review-perf` or `review-ux`, and `rota worker gate` refuses `review-missing` until each triggered lens has a record at head. The default is empty, so nothing changes until a lens is configured.
 - **Surface-aware `/rota-qa` strategies.** `first-run` offers a per-surface check menu and audit rubric (`surface-cli|web|api|lib.md`; web adds a `ui-a11y` pillar), marking each tool installed or not installed and installing nothing. Strategies gain an optional `pillar-globs` frontmatter map (`functional`, `security`, `performance`, `ui-a11y`). `qa.afterWork` and `ship.qa` now call `/rota-qa run --gate`, which runs only the pillars whose globs match the touched files plus pillars with no globs, and lists skipped pillars. Manual `/rota-qa run` and strategies without `pillar-globs` are unchanged.
 - **Assign before landing.** Train nudges name an assignment to run first when a free slot has a ready candidate. `rota worker gate` and `rota worker train` warn on stderr and in JSON `warnings` about the same opportunity; `--no-assign-check` skips the check for scripted runs.
 
