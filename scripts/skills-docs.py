@@ -201,30 +201,6 @@ def cell(s):
     return s.replace('|', '\\|')
 
 
-def render_cheatsheet(meta, chains):
-    out = []
-    for name, items in by_lane(meta):
-        out.append('## ' + name)
-        for m in items:
-            line = '- **%s**: %s' % (link(m, 'skills/'), with_period(m['summary']))
-            flags = [f['flag'] for f in m['flags'] if not f['flag'].startswith('(')]
-            if flags:
-                line += ' Flags: %s.' % ', '.join('`%s`' % f for f in flags)
-            out.append(line)
-        out.append('')
-    return out[:-1]
-
-
-def render_table(meta, chains):
-    out = ['| Skill | Lane | What it does |', '|-------|------|--------------|']
-    for m in ordered(meta):
-        what = cell(m['summary'].strip())
-        if m['manual_only']:
-            what += ' (manual only)'
-        out.append('| %s | %s | %s |' % (link(m, '../skills/'), LANE_NAME[m['lane']], what))
-    return out
-
-
 def render_readme(meta, chains):
     groups = {}
     for m in ordered(meta):
@@ -235,15 +211,6 @@ def render_readme(meta, chains):
         what = '; '.join(cell(no_period(m['summary'])) for m in items)
         out.append('| %s | %s | %s |' % (cell(sit), skills, what))
     return out
-
-
-def render_lanes(meta, chains):
-    out = []
-    for name, items in by_lane(meta):
-        parts = ['%s: %s' % (link(m, 'skills/'), no_period(m['summary'])) for m in items]
-        out.append('**%s.** %s' % (name, '; '.join(parts)))
-        out.append('')
-    return out[:-1]
 
 
 def render_chains(meta, chains, root=None):
@@ -271,6 +238,9 @@ def render_index(meta, chains):
             line = '- %s: %s' % (link(m, ''), with_period(m['summary']))
             if m['manual_only']:
                 line += ' Manual only.'
+            flags = [f['flag'] for f in m['flags'] if not f['flag'].startswith('(')]
+            if flags:
+                line += ' Flags: %s.' % ', '.join('`%s`' % f for f in flags)
             out.append(line)
         out.append('')
     return out[:-1]
@@ -302,10 +272,7 @@ def replace_block(text, name, body, rel):
 
 
 TARGETS = [
-    ('docs/cheatsheet.md', 'cheatsheet', render_cheatsheet),
-    ('docs/reference/slash-commands.md', 'table', render_table),
     ('README.md', 'readme', render_readme),
-    ('docs/how-it-works.md', 'lanes', render_lanes),
     ('docs/how-it-works.md', 'chains', render_chains),
     ('docs/skills/README.md', 'index', render_index),
     ('docs/README.md', 'nav', render_nav),

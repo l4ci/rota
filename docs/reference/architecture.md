@@ -62,7 +62,6 @@ The registry the round writes inside the project is `.rota/workers.json`: see [`
 
 ## Related
 
-- [How rota works](../how-it-works.md): system diagram and lane overview
-- [Slash commands](slash-commands.md): every `/rota-*` command
+- [How rota works](../how-it-works.md): the two ways to use rota, roles and the system diagram
 - [`rota` verb reference](cli-helpers.md): every verb
 - [`.rota/` folder reference](rota-folder.md): per-file detail
