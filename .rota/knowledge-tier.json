@@ -1050,6 +1050,36 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-24"
+    },
+    "Rounds: Orchestration: Workers & relays::Run proof records for one issue one at a time": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-26"
+    },
+    "Rounds: Orchestration: Workers & relays::Slot not in the pool from a worktree: check the main registry": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-26"
+    },
+    "Rounds: Orchestration: Workers & relays::A Codex 'never picked up' dispatch is often queued, not lost": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-26"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::Clear CODEX_HOME for smoke runs from a Codex worker": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-26"
+    },
+    "Architecture: Skill authoring::Skill files live at the top of the skill folder": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-26"
+    },
+    "Build & Tooling: Smoke testing: Gate & frozen records::A new config key shifts every later frozen config-show/all row": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-26"
     }
   }
 }
