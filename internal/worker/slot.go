@@ -104,6 +104,18 @@ func (s *Slot) TierReason() string { return jsonx.Str(s.o, "tierReason") }
 func (s *Slot) BriefDecisions() string  { return jsonx.Str(s.o, "briefDecisions") }
 func (s *Slot) BriefSiblings() []string { return strList(s.o, "briefSiblings") }
 
+// BriefDecisionContext is the decision text captured for this assignment.
+func (s *Slot) BriefDecisionContext() string { return jsonx.Str(s.o, "briefDecisionContext") }
+
+// SetBriefDecisionContext stores the snapshot, or removes it when empty.
+func (s *Slot) SetBriefDecisionContext(text string) {
+	if text == "" {
+		s.o.Delete("briefDecisionContext")
+	} else {
+		s.o.Set("briefDecisionContext", text)
+	}
+}
+
 func (s *Slot) SetBriefContext(decisions string, siblings []string) {
 	if decisions == "" {
 		s.o.Delete("briefDecisions")
@@ -385,6 +397,7 @@ type Binding struct {
 // Bind records the issue the slot works on. Empty optional fields stay unset.
 func (s *Slot) Bind(b Binding) {
 	s.SetBriefContext("", nil)
+	s.SetBriefDecisionContext("")
 	s.o.Delete("awaitingDone")
 	s.o.Set("task", b.Task)
 	for _, f := range []struct{ k, v string }{
@@ -413,6 +426,7 @@ func smokeStr(n int) string {
 // reason) are removed so a freed slot reports nothing of the last issue.
 func (s *Slot) Unbind() {
 	s.SetBriefContext("", nil)
+	s.SetBriefDecisionContext("")
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
 	for _, k := range []string{"prMerged", "claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "bundle", "issues", "reviewSeen", "event", "heartbeatAt", "outcome", "inbox", "finding", "awaitingDone"} {

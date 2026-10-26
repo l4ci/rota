@@ -21,6 +21,11 @@ Work only this task, then stop.
   invisible in the body. Then dispute it before building: if the ticket is wrong,
   already decided or contradicted by the code, say so (`ROTA-BLOCKED`, or in your PR
   if you built a narrower thing) instead of implementing it as written.
+- Before implementing, consult the DECISIONS.md entries that bind the issue. Read
+  any entries included in the brief, and run `rota decisions query <topic>...` for
+  other topics the issue touches (the brief or project instructions list them).
+  If the issue conflicts with a decision, escalate with `ROTA-BLOCKED` rather
+  than implement the conflict.
 - Bundle. If your brief says the assignment is a bundle, you hold a lead issue plus
   members: read and dispute each one, build them all on the one branch the brief names
   and open one PR with a `Closes #<issue>` line for every issue. Record proof per issue id
