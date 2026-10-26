@@ -545,7 +545,7 @@ func ReserveSlot(root, name, task string) (held string, ok bool, err error) {
 // a slot that holds another task, or already carries its claim, is left alone.
 func ReleaseReserved(root, name, task string) error {
 	_, err := UpdateSlot(root, name, func(s *Slot) {
-		if s.Task() == NormID(task) && s.ClaimID() == "" {
+		if NormID(s.Task()) == NormID(task) && s.ClaimID() == "" {
 			s.Unbind()
 		}
 	})
