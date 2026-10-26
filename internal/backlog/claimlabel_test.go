@@ -11,6 +11,52 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 )
 
+func TestIsClaimLabel(t *testing.T) {
+	for _, tc := range []struct {
+		label string
+		want  bool
+	}{
+		{"claimed:nia@main", true},
+		{"claimed:ben@mac", true},
+		{"claimed:", true},
+		{"claimed:legacy", true},
+		{"in-progress", false},
+		{"claimed", false},
+		{"unclaimed:nia@main", false},
+		{"Claimed:nia@main", false},
+		{" claimed:nia@main", false},
+		{"", false},
+	} {
+		t.Run(tc.label, func(t *testing.T) {
+			if got := IsClaimLabel(tc.label); got != tc.want {
+				t.Fatalf("IsClaimLabel(%q) = %v; want %v", tc.label, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestHasClaimLabel(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		labels []string
+		want   bool
+	}{
+		{"nil", nil, false},
+		{"empty", []string{}, false},
+		{"empty label", []string{""}, false},
+		{"other labels", []string{"in-progress", "claimed", "bug"}, false},
+		{"claim first", []string{"claimed:nia@main", "bug"}, true},
+		{"claim last", []string{"bug", "claimed:ben@mac"}, true},
+		{"bare prefix", []string{"", "claimed:"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := HasClaimLabel(tc.labels); got != tc.want {
+				t.Fatalf("HasClaimLabel(%q) = %v; want %v", tc.labels, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestClaimLabel(t *testing.T) {
 	for _, tc := range []struct{ id, cfg, want string }{
 		{"dana@3", `{}`, "claimed:dana@main"},

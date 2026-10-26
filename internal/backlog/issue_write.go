@@ -334,7 +334,7 @@ func (b *Issues) Complete(ref string, in CompleteInput) (bool, error) {
 		}
 	}
 	for _, l := range is.Labels {
-		if strings.HasPrefix(l, ClaimLabelPrefix) {
+		if IsClaimLabel(l) {
 			stale = append(stale, l)
 		}
 	}

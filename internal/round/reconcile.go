@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/strutil"
@@ -96,7 +95,7 @@ func (e Env) findClosedClaimLabels(ctx context.Context, rep *Report) {
 		if is.State != "closed" || seen[is.Key.String()] {
 			continue
 		}
-		if slices.ContainsFunc(is.Labels, func(label string) bool { return strings.HasPrefix(label, backlog.ClaimLabelPrefix) }) {
+		if backlog.HasClaimLabel(is.Labels) {
 			keys = append(keys, is.Key)
 			seen[is.Key.String()] = true
 		}
@@ -199,7 +198,7 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 		}
 		var drop []string
 		for _, l := range is.Labels {
-			if l == e.Label || strings.HasPrefix(l, backlog.ClaimLabelPrefix) {
+			if l == e.Label || backlog.IsClaimLabel(l) {
 				drop = append(drop, l)
 			}
 		}
