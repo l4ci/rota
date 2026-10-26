@@ -26,6 +26,7 @@ import (
 func verdictCommands() *Command {
 	return &Command{Name: "verdict", Summary: "record typed review, second-opinion and QA verdicts and route on them", Subs: []*Command{
 		{Name: "add", Summary: "record a verdict for a branch", Repo: true, Verb: verdictAdd},
+		{Name: "post", Summary: "retry posting the latest verdict reports for a branch", Repo: true, Verb: noFlags(verdictPost)},
 		{Name: "show", Summary: "latest verdict of each kind for a branch", Repo: true, Verb: noFlags(verdictShow)},
 		{Name: "route", Summary: "next step for a consumer of a branch's verdict", Repo: true, Verb: verdictRoute},
 	}}
@@ -285,6 +286,7 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		d := r.Object()
+		setReportStatus(d, postVerdictReport(c, t, r))
 		next := verdict.ProducerNext(r.Kind, r.Verdict)
 		d.Set("next", next)
 		d.Set("changed", true)

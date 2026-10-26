@@ -815,6 +815,9 @@ func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
 	ctx, stop := workerContext()
 	defer stop()
 	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Prune: o.Prune, Approval: mergeApproval(c, policy, o.Confirm, o.Approval, nil), Verdict: shipVerdict(c, root, root).BlockGate, CheckReviews: true, ItemBody: lazyItemBody(c, root)})
+	if !o.CheckOnly {
+		postGateReport(c, root, r)
+	}
 	run := gateRun{Result: r, Err: err, Issue: r.Issue, Refused: r.Refused(err)}
 	if run.Refused || err != nil || o.CheckOnly {
 		return run

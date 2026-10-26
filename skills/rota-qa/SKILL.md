@@ -96,7 +96,7 @@ Per target:
 - **CONCERNS** — all executable checks met, but audit has P0/P1, OR ≥1 check passed only with a warning. Ship allowed; user owns the call.
 - **FAIL** — any executable check `met: false`, OR an audit P0 with `severity: blocker`.
 
-**Record the verdict** for the current branch, once per repo (umbrella: read [`umbrella-scope.md`](umbrella-scope.md)). The body carries the failed executable checks and P0/P1 audit findings, mapping P0 `blocker` to `blocker`, other P0 and P1 to `major`, the rest to `minor`:
+**Record the verdict** for the current branch, once per repo (umbrella: read [`umbrella-scope.md`](umbrella-scope.md)). The body names every executable check, its command and result, and the existing artifact paths it cites (use `info` findings for passed checks), plus P0/P1 audit findings, mapping P0 `blocker` to `blocker`, other P0 and P1 to `major`, the rest to `minor`:
 
 ```bash
 rota verdict add <branch> --kind qa --verdict <PASS|CONCERNS|FAIL|INFRA-FAIL> --sha "$QA_SHA" --body-file "$VERDICT" --json
@@ -120,30 +120,9 @@ Exit 2 names the failing field: fix the body, re-run `rota verdict add`. Exit 4 
 
 #### Step 7 — Report
 
-```
-QA verdict: <PASS|CONCERNS|FAIL|INFRA-FAIL>
+`rota verdict add` renders and posts the report on the PR and linked items, or under `## Reports` in file-mode item details. It includes the checks from the body and lists only cited artifact paths that exist. Do not cite a full-report file that was never written. Relay the recorded verdict and any findings needing a decision to the user.
 
-Targets:
-  <target-1>: <verdict>
-    Executable checks: <n passed> / <n total>
-    Audit findings: <n P0>, <n P1>, <n P2>, <n P3>
-  ...
-
-Skipped pillars (filtered run only):
-  - <target>/<pillar> — globs: <globs>
-
-Failed executable checks:
-  - <name> — <command> — <evidence>
-  ...
-
-Audit findings (P0/P1 inline; full list at <path>):
-  - [P0] <dimension>: <observation>  — fix: <suggested_fix>
-  ...
-
-Evidence: .rota/qa-runs/<timestamp>/
-```
-
-Same PASS/CONCERNS/FAIL contract as `references/review-verdict-routing.md`.
+When `data.report` is `pending`, the local verdict was saved; surface `data.reportReason`. Once the PR exists or the tracker is available, use `rota verdict post <branch> --json` to retry the latest report of each kind. Posting updates the report for the same kind and sha.
 
 #### Step 8 — Routing
 

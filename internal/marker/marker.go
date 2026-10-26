@@ -62,7 +62,12 @@ const (
 	// KindReviewMinted is the comment main leaves on an architecture-review
 	// item it minted, so a support machine can tell it from a lookalike title.
 	KindReviewMinted = "review-minted"
+	// KindReport identifies a rendered verdict or gate report, keyed by kind and SHA.
+	KindReport = "report"
 )
+
+// Report is the identity of one rendered report on a PR or item.
+func Report(kind, sha string) string { return Line(KindReport, kind, "sha="+sha) }
 
 // opener matches `<!-- ` plus either prefix's name, up to the kind.
 const opener = `\A<!-- (?:rota|hv):`

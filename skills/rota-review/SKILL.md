@@ -134,6 +134,8 @@ rota verdict add <branch> --kind review-spec --verdict <PASS|CONCERNS|FAIL> --sh
 rota verdict add <branch> --kind review-quality --verdict <PASS|CONCERNS|FAIL> --sha "$REVIEWED" --body-file "$STANDARDS" --json
 ```
 
+The verb renders the report from the recorded body and upserts it by kind and sha. If `data.report` is `pending`, surface `data.reportReason`; the local verdict is saved. Retry posting with `rota verdict post <branch>` after the PR exists or the tracker recovers. Do not hand-write another tracker verdict comment.
+
 `--sha` binds the record to the reviewed commit. Exit 4 means the branch moved on origin after the briefing (the message names the extra commits): review the new head, do not record against it. Never skip `--sha` to get past the refusal.
 
 Record the cross-harness reviewer's block, when Step 7 ran one, after those two: `rota verdict add <branch> --kind review-cross --verdict <V> --harness <cross> --model <model> --sha "$REVIEWED" --body-file "$CROSS" --json`. Its retry and unavailable rules are in [`cross-harness-reviewer.md`](cross-harness-reviewer.md); without the record `rota worker gate` refuses `review-missing`.
@@ -185,7 +187,7 @@ Read [`queue-mode.md`](queue-mode.md) when invoked with `--queue` (issue backend
 
 ## Rules
 
-- **Read-only.** Never edit, commit, or stage. Recording with `rota verdict add` (the gitignored `.rota/verdicts.json`) is the one write.
+- **Read-only code.** Never edit, commit, or stage code. `rota verdict add` saves the local record and posts its marked report on the PR and linked items (file mode: item details).
 - **Evidence over opinion.** Every concern cites file:line or commit hash.
 - **Scope is bounded.** Only the diff against the base; don't wander into unchanged code.
 - **Call it honestly.** If conventions were violated for a good reason, the reviewer still reports CONCERN; the user decides.
