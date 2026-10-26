@@ -182,7 +182,7 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 	rec := worker.QueuedPR{
 		Issue: s.HeldID(), Branch: strutil.FirstNonEmpty(p.Branch, s.Branch()), PR: pr,
 		Base: strutil.FirstNonEmpty(s.Base(), e.Base), From: name, ClaimID: s.ClaimID(),
-		Round: registryRound(root), Relays: s.Relays(), Bundle: s.Bundle(),
+		Round: registryRound(root), Relays: s.Relays(), Bundle: s.Bundle(), DecisionContext: s.BriefDecisionContext(),
 	}
 	return worker.Update(root, func(doc *worker.Doc) {
 		if !merged {
