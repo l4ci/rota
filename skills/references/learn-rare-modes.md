@@ -6,6 +6,7 @@
 
 - Manual flags
   - `--retro`
+  - `--external-review`
   - `--term <name>`
   - `--promote <topic> "<title>"`
   - `--deprecate <topic> "<title>"`
@@ -69,6 +70,30 @@ Steering files (not touched): AGENTS.md 212 lines, CLAUDE.md 4 lines
 No guardrail: check command `bash test/gate.sh` runs in no CI workflow or hook; filed #305
 ```
 
+
+### `--external-review`
+
+Maintenance pass over the external knowledge base (`knowledge.external`). With the key unset, say so and exit. Nothing here writes until the maintainer says yes: **ask before every `rota knowledge split`, whatever `autonomy.level` says.** The `autonomy.level` dial ([`references/autonomy.md`](autonomy.md)) does not apply here: a split rewrites a whole topic across files, so it is never auto-approved.
+
+1. Measure: `rota knowledge stats --external --json`. A topic is oversized when `rota doctor` names it under `external knowledge size` (past `knowledge.externalMaxBullets` or `knowledge.externalMaxBytes`); a subtopic or `stray` entry counts as its own topic. None oversized and no stray: report `External base is within limits` and exit.
+2. Draft a plan per oversized flat topic. Read it with `rota knowledge query --external "<topic>"`, group its bullets by theme into 3 to 7 subtopics, and write `plan.json` in a scratch directory:
+
+   ```json
+   {"subtopics": [{"name": "Networking", "hook": "multiplayer, RPCs, lobbies", "titles": ["RPC authority", "Lobby code"]}]}
+   ```
+
+   `name` is the short name (the verb prefixes the topic: `Godot: Networking`); `hook` is one short line for the sub-index; `titles` are the exact bold titles of the bullets that move. Bullets you leave out stay in the topic's README. A topic that is already split but still oversized gets a plan that moves more README bullets or adds subtopics; never plan a split of a subtopic.
+3. Fold strays: `stats` shows `stray: true` for a flat file an older rota left beside a split topic. Folding needs no plan (`rota knowledge split --external --topic "<topic>"`); name the stray in the report.
+4. Show the maintainer, per topic, the subtopics with their hooks and bullet titles, and any stray to fold. Ask once per topic: split as drafted, adjust, or skip. Edit `plan.json` on an adjustment and show it again.
+5. On a yes, run `rota knowledge split --external --topic "<topic>" --plan <plan.json>`. It validates the whole plan first (exit 2 or 3 names the problem; fix the plan and ask again), keeps every bullet line, commits once and lands by the repo's policy. A rerun of the same plan is `changed: false`. Exit 4 means a dirty or diverged clone or a stray bullet that conflicts with one in the folder: report it and move on.
+
+Every machine that writes to the base needs a rota that knows split topics before the first split; say so when the maintainer approves the first one. Report one line per topic:
+
+```
+Split: <topic> into <N> subtopics (<left> left in the README)
+Folded: <stray file> into <topic> (<n> bullets)
+Skipped: <topic>
+```
 
 ### `--term <name>`
 

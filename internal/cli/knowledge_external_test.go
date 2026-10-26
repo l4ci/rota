@@ -214,3 +214,61 @@ func TestKnowledgeExternalSeenFlags(t *testing.T) {
 		t.Fatalf("json: %v %q", err, o.stdout)
 	}
 }
+
+func TestKnowledgeExternalSplit(t *testing.T) {
+	project, clone, _ := extFixture(t, "")
+	for _, title := range []string{"Parallel subtests", "Golden files"} {
+		if o := knNew(t, project, "body of "+title, "knowledge", "add", "--external", "--topic", "Go", "--title", title, "--body-file", "-"); o.rc != 0 {
+			t.Fatalf("add: %+v", o)
+		}
+	}
+	plan := `{"subtopics":[{"name":"Testing","hook":"test habits","titles":["Table tests","Parallel subtests"]}]}`
+	if o := knNew(t, project, plan, "knowledge", "split", "--topic", "Go", "--plan", "-"); o.rc != ExitUsage {
+		t.Fatalf("split without --external: %+v", o)
+	}
+	if o := knNew(t, project, "{nope", "knowledge", "split", "--external", "--topic", "Go", "--plan", "-"); o.rc != ExitUsage {
+		t.Fatalf("malformed plan: %+v", o)
+	}
+	if o := knNew(t, project, `{"subtopics":[{"name":"T","titles":["Nope"]}]}`, "knowledge", "split", "--external", "--topic", "Go", "--plan", "-"); o.rc != ExitResolution {
+		t.Fatalf("unknown title: %+v", o)
+	}
+	if o := knNew(t, project, "", "knowledge", "split", "--external", "--topic", "Go"); o.rc != ExitUsage {
+		t.Fatalf("flat topic without a plan: %+v", o)
+	}
+	o := knNew(t, project, plan, "knowledge", "split", "--external", "--topic", "Go", "--plan", "-", "--json")
+	if o.rc != 0 {
+		t.Fatalf("split: %+v", o)
+	}
+	var out struct {
+		Data struct {
+			Topic     string
+			Changed   bool
+			Left      int
+			Folded    int
+			Subtopics []struct {
+				Name, File string
+				Bullets    int
+			}
+		}
+	}
+	if err := json.Unmarshal([]byte(o.stdout), &out); err != nil {
+		t.Fatalf("json: %v: %s", err, o.stdout)
+	}
+	d := out.Data
+	if d.Topic != "Go" || !d.Changed || d.Left != 1 || d.Folded != 0 || len(d.Subtopics) != 1 || d.Subtopics[0].Name != "Go: Testing" || d.Subtopics[0].File != "topics/go/testing.md" || d.Subtopics[0].Bullets != 2 {
+		t.Fatalf("data = %+v", d)
+	}
+	if _, err := os.Stat(filepath.Join(clone, "topics/go.md")); !os.IsNotExist(err) {
+		t.Fatal("flat file must be gone")
+	}
+	o = knNew(t, project, "", "knowledge", "query", "--external", "--all", "Go")
+	for _, want := range []string{"## Go\n", "- [Testing](testing.md) — test habits", "**Golden files**", "## Go: Testing\n", "**Table tests**"} {
+		if o.rc != 0 || !strings.Contains(o.stdout, want) {
+			t.Fatalf("query --all missing %q: %+v", want, o)
+		}
+	}
+	o = knNew(t, project, plan, "knowledge", "split", "--external", "--topic", "Go", "--plan", "-")
+	if o.rc != 0 || !strings.Contains(o.stdout, "unchanged: Go") {
+		t.Fatalf("rerun: %+v", o)
+	}
+}

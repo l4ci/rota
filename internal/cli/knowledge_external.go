@@ -291,6 +291,33 @@ func knExtAmend(c *Ctx, topic, fragment, body, date string, seen *extknowledge.S
 	return Result{Data: extWriteData(topic, res), Text: "amended: " + res.File + extLanded(res)}, nil
 }
 
+func knExtSplit(c *Ctx, topic string, plan *extknowledge.SplitPlan) (Result, error) {
+	cl, err := externalClone(c)
+	if err != nil {
+		return Result{}, err
+	}
+	sr, wr, err := cl.Split(c.Context(), extknowledge.SplitIn{Topic: topic, Plan: plan})
+	if err != nil {
+		return Result{}, extErr(err)
+	}
+	subs := []any{}
+	for _, s := range sr.Subtopics {
+		subs = append(subs, knObj("name", s.Name, "file", s.File, "bullets", s.Bullets))
+	}
+	d := extWriteData(sr.Topic, wr)
+	d.Set("subtopics", subs)
+	d.Set("left", sr.Left)
+	d.Set("folded", sr.Folded)
+	if !wr.Changed {
+		return Result{Data: d, Text: fmt.Sprintf("unchanged: %s (already split that way)", sr.Topic)}, nil
+	}
+	text := fmt.Sprintf("split: %s into %d subtopics, %d left in the README", sr.Topic, len(sr.Subtopics), sr.Left)
+	if sr.Folded > 0 {
+		text += fmt.Sprintf(", %d stray bullets folded in", sr.Folded)
+	}
+	return Result{Data: d, Text: text + extLanded(wr)}, nil
+}
+
 func knExtReplace(c *Ctx, topic, old, repl string) (Result, error) {
 	cl, err := externalClone(c)
 	if err != nil {

@@ -109,4 +109,53 @@ assert "Big (26 bullets > 25)" in c["detail"], c
 assert "/rota-learn --external-review" in c["hint"], c' <<<"$OUT" || fail "doctor lacks the external knowledge size warning: $OUT"
 pass "doctor warns on a topic over knowledge.externalMaxBullets"
 
+# split moves the bullets into subtopic files, keeps every line, and reads reach the parts (#2109).
+count_bullets() { cat "$EKCLONE"/topics/big.md "$EKCLONE"/topics/big/*.md 2>/dev/null | grep -c '^- \*\*'; }
+[ "$(count_bullets)" = "26" ] || fail "fixture should hold 26 bullets, has $(count_bullets)"
+python3 - "$TMP_EK/plan.json" <<'PY'
+import json, sys
+t = lambda a, b: ["Bullet %d" % i for i in range(a, b + 1)]
+json.dump({"subtopics": [
+    {"name": "Alpha", "hook": "the first thirteen", "titles": t(1, 13)},
+    {"name": "Beta", "hook": "the next seven", "titles": t(14, 20)},
+]}, open(sys.argv[1], "w"))
+PY
+BEFORE="$(git -C "$EKCLONE" rev-list --count HEAD)"
+RC=0; OUT=$(ek knowledge split --external --topic Big --plan "$TMP_EK/plan.json") || RC=$?
+[ "$RC" = "0" ] || fail "split exited $RC: $OUT"
+[ "$(jget data.changed <<<"$OUT")" = "true" ] && [ "$(jget data.left <<<"$OUT")" = "6" ] && [ "$(jget 'data.subtopics[0].file' <<<"$OUT")" = "topics/big/alpha.md" ] || fail "split data: $OUT"
+[ ! -e "$EKCLONE/topics/big.md" ] || fail "split left the flat file"
+[ "$(count_bullets)" = "26" ] || fail "split lost or doubled bullets: $(count_bullets) left"
+[ "$(git -C "$EKCLONE" rev-list --count HEAD)" = "$((BEFORE + 1))" ] || fail "split should make exactly one commit"
+[ "$(git -C "$EKREMOTE" rev-parse main)" = "$(git -C "$EKCLONE" rev-parse HEAD)" ] || fail "split did not push"
+grep -q '^- \[Big\](topics/big/README.md) — a topic past the bullet limit$' "$EKCLONE/README.md" || fail "root line not rewritten: $(cat "$EKCLONE/README.md")"
+pass "split moves the bullets into topics/big/ in one pushed commit"
+
+RC=0; OUT=$(ekn knowledge query --external Big) || RC=$?
+case "$OUT" in *"- [Alpha](alpha.md) — the first thirteen"*"**Bullet 21**"*) ;; *) fail "parent read lacks the sub-index or a left-over bullet: $OUT" ;; esac
+case "$OUT" in *"**Bullet 1**"*) fail "parent read printed a moved bullet: $OUT" ;; esac
+RC=0; OUT=$(ekn knowledge query --external --all Big) || RC=$?
+case "$OUT" in *"## Big: Alpha"*"**Bullet 13**"*"## Big: Beta"*"**Bullet 20**"*) ;; *) fail "--all lacks the subtopic sections: $OUT" ;; esac
+RC=0; OUT=$(ekn knowledge query --external "Big: Beta") || RC=$?
+case "$OUT" in *"**Bullet 14**"*) ;; *) fail "subtopic read lacks its bullet: $OUT" ;; esac
+case "$OUT" in *"**Bullet 1**"*|*"**Bullet 21**"*) fail "subtopic read printed other files: $OUT" ;; esac
+pass "query reads the parent, --all and one subtopic"
+
+# A flat file an older rota writes beside the folder is flagged, then folded back in.
+printf '# Big\n\n- **Old write** — From an older rota. <!-- 2026-10-02 source:app -->\n' > "$EKCLONE/topics/big.md"
+printf -- '- [Big](topics/big.md) — a topic past the bullet limit\n' >> "$EKCLONE/README.md"
+git -C "$EKCLONE" add -A && git -C "$EKCLONE" commit -q -m "older rota add" && git -C "$EKCLONE" push -q origin main || fail "planting the stray failed"
+ERR="$TMP_EK/stray.err"
+RC=0; OUT=$(cd "$EKPROJ" && "$ROTA_BIN" knowledge query --external Big 2>"$ERR") || RC=$?
+case "$OUT" in *"(stray: topics/big.md)"*"**Old write**"*) ;; *) fail "stray bullets not printed: $OUT" ;; esac
+grep -q 'rota knowledge split --external --topic Big' "$ERR" || fail "no stray hint on stderr: $(cat "$ERR")"
+RC=0; OUT=$(ek knowledge split --external --topic Big) || RC=$?
+[ "$RC" = "0" ] || fail "fold exited $RC: $OUT"
+[ "$(jget data.folded <<<"$OUT")" = "1" ] && [ "$(jget data.changed <<<"$OUT")" = "true" ] || fail "fold data: $OUT"
+[ ! -e "$EKCLONE/topics/big.md" ] || fail "fold left the stray file"
+[ "$(grep -c '\](topics/big' "$EKCLONE/README.md")" = "1" ] || fail "fold left a second root line: $(cat "$EKCLONE/README.md")"
+grep -q '\*\*Old write\*\*' "$EKCLONE/topics/big/README.md" || fail "stray bullet not in the folder README"
+[ "$(git -C "$EKREMOTE" rev-parse main)" = "$(git -C "$EKCLONE" rev-parse HEAD)" ] || fail "fold did not push"
+pass "split folds a stray flat file back into the folder"
+
 rm -rf "$TMP_EK"
