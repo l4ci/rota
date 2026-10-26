@@ -1047,7 +1047,7 @@ func TestGateVerdictRefusal(t *testing.T) {
 	for _, check := range []bool{false, true} {
 		w := newWorld(t, ghURL)
 		var seen string
-		res, err := w.gate(false, GateOpts{CheckOnly: check, Verdict: func(b string) error { seen = b; return block }})
+		res, err := w.gate(false, GateOpts{CheckOnly: check, Verdict: func(b, _ string) error { seen = b; return block }})
 		if err != block || res.Verdict != GateVerdictBlocked || res.Changed {
 			t.Fatalf("check=%v: %+v %v", check, res, err)
 		}
@@ -1059,8 +1059,24 @@ func TestGateVerdictRefusal(t *testing.T) {
 		}
 	}
 	w := newWorld(t, ghURL)
-	if res, err := w.gate(false, GateOpts{CheckOnly: true, Verdict: func(string) error { return nil }}); err != nil || !res.OK() {
+	if res, err := w.gate(false, GateOpts{CheckOnly: true, Verdict: func(string, string) error { return nil }}); err != nil || !res.OK() {
 		t.Errorf("no blocking record: %+v %v", res, err)
+	}
+}
+
+// The Verdict port gets the head the gate merges: origin/<branch> for a PR,
+// not a local branch of the same name that has moved on.
+func TestGateVerdictPortGetsMergedHead(t *testing.T) {
+	w := newWorld(t, ghURL)
+	gitq(t, w.dir, "fetch", "-q", "origin")
+	want := strings.TrimSpace(gitq(t, w.dir, "rev-parse", "--short", "origin/w1"))
+	gitq(t, w.dir, "branch", "-f", "w1", "origin/main")
+	var got string
+	if _, err := w.gate(false, GateOpts{CheckOnly: true, Verdict: func(_, head string) error { got = head; return nil }}); err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Errorf("port head = %q, want origin/w1 %q", got, want)
 	}
 }
 
