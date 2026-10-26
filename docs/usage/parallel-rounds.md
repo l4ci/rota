@@ -804,6 +804,9 @@ in `<!-- rota:handoff <slot>@<round> -->`.
 `rota round status` lists the round's slots with host, PR and drift. `rota round reconcile` reports
 drift between the registry, the host, git and the forge, including `stalled` (never repaired),
 `lease-stale`, `claim-mismatch`, `claim-label-drift` and `unregistered-branch`.
+When a slot records a closed, unmerged PR and an open PR heads the same branch,
+`pr-superseded` names both PRs. `reconcile --apply` records the open PR's URL;
+the next reconcile reports no drift for that record. A merged PR record is kept.
 Each won round claim has a visible `claimed:<agent>@<machine>` label: `claimed:ben@main` on main,
 or `claimed:ben@mac` for support slot `mac-ben` when `round.support` is `mac`. Comment claims
 decide ownership; labels follow them. `--apply` repairs missing or stale claim labels without
