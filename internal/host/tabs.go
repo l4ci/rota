@@ -157,3 +157,38 @@ func (h *herdr) SweepShells(ctx context.Context, cwd string) (int, error) {
 	}
 	return n, nil
 }
+
+// TabFollower is the optional way to keep a slot's handle on the tab its pane
+// is in. Only herdr has it: its agent name derives from the handle, and a pane
+// moved to another tab keeps the name it was started under.
+type TabFollower interface {
+	// CurrentTab is the tab the slot's agent is in now, "" when the host
+	// cannot say.
+	CurrentTab(ctx context.Context, slot, handle string) string
+	// FollowTab renames the slot's agent for its new tab, so lookups by the
+	// new handle find it.
+	FollowTab(ctx context.Context, slot, from, to string) error
+}
+
+// CurrentTab reads the tab from `agent get`: the agent is addressed by the
+// name it was started under, which a move between tabs does not change.
+func (h *herdr) CurrentTab(ctx context.Context, slot, handle string) string {
+	if handle == "" {
+		return ""
+	}
+	r := h.herdr(ctx, "agent", "get", AgentName(slot, handle))
+	if r.ExitCode != 0 {
+		return ""
+	}
+	return jget(r.Stdout, "result.agent.tab_id")
+}
+
+// FollowTab is `herdr agent rename`. It fails when herdr refuses, so a caller
+// never records a handle whose agent name nothing answers to.
+func (h *herdr) FollowTab(ctx context.Context, slot, from, to string) error {
+	r := h.herdr(ctx, "agent", "rename", AgentName(slot, from), AgentName(slot, to))
+	if r.ExitCode != 0 {
+		return fmt.Errorf("herdr agent rename failed for slot '%s' (%s -> %s): %s", slot, from, to, strings.TrimSpace(r.Stderr))
+	}
+	return nil
+}

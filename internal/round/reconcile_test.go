@@ -571,3 +571,91 @@ func TestReconcileApplyKeepsABlockedSlotWhoseUnmergedPR(t *testing.T) {
 		})
 	}
 }
+
+// movedPane has kit's pane moved into the orchestrator's tab: the agent keeps
+// the name it was started under, but its tab is no longer the recorded one.
+func movedPane(t *testing.T) (string, Env, *[]string) {
+	root, e, _ := fixture(t)
+	snap := e.Snapshot
+	e.Snapshot = func(ctx context.Context) ([]host.Agent, error) {
+		all, err := snap(ctx)
+		for i := range all {
+			if all[i].Name == "kit" {
+				all[i].Name, all[i].Tab = host.AgentName("kit", "w1:t3"), "w4:t9"
+			}
+		}
+		return all, err
+	}
+	var renamed []string
+	e.FollowTab = func(_ context.Context, slot, from, to string) error {
+		renamed = append(renamed, slot+" "+from+" "+to)
+		return nil
+	}
+	return root, e, &renamed
+}
+
+func TestStatusReportsAPaneMovedToAnotherTab(t *testing.T) {
+	root, e, _ := movedPane(t)
+	rep, err := e.Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := kinds(rep.Findings)["kit"]; !slices.Contains(got, TabMoved) || slices.Contains(got, DeadTab) {
+		t.Fatalf("kit findings = %v, want tab-moved and no dead-tab", got)
+	}
+	for _, f := range rep.Findings {
+		if f.Kind == TabMoved && (!strings.Contains(f.Detail, "w1:t3") || !strings.Contains(f.Detail, "w4:t9")) {
+			t.Errorf("detail %q must name the recorded and the current tab", f.Detail)
+		}
+	}
+}
+
+func TestReconcileApplyRecordsTheMovedPanesTab(t *testing.T) {
+	root, e, renamed := movedPane(t)
+	out, err := e.Reconcile(bg, root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(kinds(out.Repaired)["kit"], TabMoved) {
+		t.Fatalf("kit repaired = %v, warnings %v", kinds(out.Repaired)["kit"], out.Report.Warnings)
+	}
+	if got := worker.LoadRegistryTolerant(root).Slot("kit").Handle(); got != "w4:t9" {
+		t.Errorf("kit handle = %q, want w4:t9", got)
+	}
+	if want := []string{"kit w1:t3 w4:t9"}; !slices.Equal(*renamed, want) {
+		t.Errorf("renames = %v, want %v", *renamed, want)
+	}
+	// The agent now carries the name of its new tab, as herdr would report it.
+	snap := e.Snapshot
+	e.Snapshot = func(ctx context.Context) ([]host.Agent, error) {
+		all, err := snap(ctx)
+		for i := range all {
+			if all[i].Tab == "w4:t9" {
+				all[i].Name = host.AgentName("kit", "w4:t9")
+			}
+		}
+		return all, err
+	}
+	again, err := e.Reconcile(bg, root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(kinds(again.Drift)["kit"], TabMoved) {
+		t.Errorf("a second reconcile still drifts: %v", again.Drift)
+	}
+}
+
+func TestReconcileApplyKeepsTheHandleWhenTheRenameFails(t *testing.T) {
+	root, e, _ := movedPane(t)
+	e.FollowTab = func(context.Context, string, string, string) error { return errors.New("agent_not_found") }
+	out, err := e.Reconcile(bg, root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(kinds(out.Drift)["kit"], TabMoved) {
+		t.Errorf("kit drift = %v, want tab-moved still reported", kinds(out.Drift)["kit"])
+	}
+	if got := worker.LoadRegistryTolerant(root).Slot("kit").Handle(); got != "w1:t3" {
+		t.Errorf("kit handle = %q, want it untouched so the agent name still resolves", got)
+	}
+}
