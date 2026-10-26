@@ -1118,7 +1118,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 			// Only this assign's own binding: a slot another assign filled
 			// first (reserveStep refused us) keeps its worker.
 			return editSlot(root, agent, func(s *worker.Slot) error {
-				if s.Task() == worker.NormID(id) {
+				if worker.NormID(s.Task()) == worker.NormID(id) {
 					s.Unbind()
 				}
 				return nil
