@@ -213,3 +213,30 @@ func TestReviewStepAuto(t *testing.T) {
 		})
 	}
 }
+
+// A done slot whose head has no review verdicts is not gated: the gate would
+// call a fresh done "stale" before it asked for the verdicts (#2072). The
+// slot is reported as waiting for review and the next tick looks again.
+func TestTickDoneSlotWithoutReviewVerdictsIsNotGated(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "ben", State: "done", Issue: "#7", PR: "#70"}, {Name: "dana", State: "done", Issue: "#8", PR: "#80"}}}
+	e := f.env()
+	e.AwaitingReview = func(_ context.Context, s Slot, _ string) string {
+		if s.Name == "ben" {
+			return "review depth full needs a recorded review verdict"
+		}
+		return ""
+	}
+	r, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"main:dana"}; !slices.Equal(f.gated, want) {
+		t.Fatalf("gated %v, want %v: ben waits for review", f.gated, want)
+	}
+	if want := []Item{{"awaiting-review", "ben", "review depth full needs a recorded review verdict"}}; !slices.Equal(r.NeedsYou, want) {
+		t.Fatalf("needs-you %+v, want %+v", r.NeedsYou, want)
+	}
+	if len(r.Held) != 0 {
+		t.Errorf("waiting for review must not hold the slot: %v", r.Held)
+	}
+}

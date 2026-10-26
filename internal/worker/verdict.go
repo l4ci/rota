@@ -18,6 +18,9 @@ type VerdictMeaning struct {
 	// other refusal arrives with a nil error.
 	ViaError bool
 	// Bounce: the PR goes back to its worker and the item's bounce count rises.
+	// A stale merge and a provenance failure go back to the worker without it:
+	// they are bookkeeping the worker repairs, not review findings, so they
+	// never count toward round.maxBounces or park the item (#2072).
 	Bounce bool
 	// Hold: a refused target waits for a person. False for a verdict that
 	// clears itself or goes back to a worker.
@@ -33,9 +36,9 @@ const BlockedByVerdict = blockedby.Verdict
 var verdictMeanings = map[string]VerdictMeaning{
 	GateFresh:            {Success: true, Hold: true},
 	GatePass:             {Success: true, Hold: true},
-	GateStale:            {Bounce: true},
+	GateStale:            {},
 	GatePRMismatch:       {Hold: true},
-	GateProvenanceFail:   {Bounce: true},
+	GateProvenanceFail:   {},
 	GateNotMerged:        {Hold: true},
 	GateNotOnBase:        {Hold: true},
 	GateVerifyFailed:     {Hold: true},

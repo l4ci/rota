@@ -1,4 +1,4 @@
-echo "worker gate: merges a clean stale branch itself, counts bounces, parks at the cap (#31)"
+echo "worker gate: merges a clean stale branch itself, sends a conflict back uncounted (#31, #2072)"
 # An issue-mode project driven by FAKES only (gh and tmux fakes, a local bare
 # origin), as section 87. The slot has no PR, so the gate merges locally; the
 # forge is only touched when the issue is parked.
@@ -49,31 +49,22 @@ RC=0; OUT=$(gs worker gate ben --base main) || RC=$?
 [ -f "$GPROJ/own.txt" ] && [ -f "$GPROJ/other.txt" ] || fail "main should hold both the slot's and main's own work"
 pass "a stale branch with a clean merge and no shared file is merged by the gate"
 
-# A conflict goes back to the worker; each bounce is counted and, at the cap
-# (round.maxBounces, default 3), the issue is parked needs-human.
+# A conflict goes back to the worker uncounted (#2072): it is bookkeeping the
+# worker repairs, so it never counts toward round.maxBounces (default 3) and
+# never parks the issue, however often the gate sees it.
+LABELS0=$(gslabels)
 gswork clash.txt
 gsmain clash.txt
-for N in 1 2; do
-  [ "$N" = "2" ] && gswork "again$N.txt"   # a new head between bounces: it counts
+for N in 1 2 3 4; do
+  [ "$N" != "1" ] && gswork "again$N.txt"   # a new head each time
   RC=0; OUT=$(gs worker gate ben --base main) || RC=$?
-  [ "$RC" = "1" ] && [ "$(echo "$OUT" | jget data.verdict)" = "stale" ] && [ "$(echo "$OUT" | jget data.bounces)" = "$N" ] \
-    || fail "bounce $N should be a counted stale refusal: rc=$RC $OUT"
-  [ "$(echo "$OUT" | jget data.parked)" = "false" ] || fail "bounce $N is under the cap: $OUT"
+  [ "$RC" = "1" ] && [ "$(echo "$OUT" | jget data.verdict)" = "stale" ] \
+    || fail "refusal $N should be a stale refusal: rc=$RC $OUT"
+  [ -z "$(echo "$OUT" | jget data.bounces 2>/dev/null || true)" ] && [ -z "$(echo "$OUT" | jget data.parked 2>/dev/null || true)" ] \
+    || fail "a stale merge is no bounce, refusal $N: $OUT"
 done
-# Re-gating an unchanged head is not a new bounce.
-RC=0; OUT=$(gs worker gate ben --base main) || RC=$?
-[ "$RC" = "1" ] && [ "$(echo "$OUT" | jget data.verdict)" = "stale" ] && [ "$(echo "$OUT" | jget data.bounces)" = "2" ] \
-  || fail "re-gating an unchanged head must not count: rc=$RC $OUT"
-gswork again3.txt
-[ "$(gsslot task)" = "1" ] || fail "the slot still holds the issue under the cap"
-RC=0; OUT=$(gs worker gate ben --base main --check-only) || RC=$?
-[ "$RC" = "1" ] && [ -z "$(echo "$OUT" | jget data.bounces 2>/dev/null || true)" ] || fail "--check-only must not count a bounce: rc=$RC $OUT"
-RC=0; OUT=$(gs worker gate ben --base main) || RC=$?
-[ "$RC" = "1" ] && [ "$(echo "$OUT" | jget data.bounces)" = "3" ] && [ "$(echo "$OUT" | jget data.parked)" = "true" ] \
-  || fail "the third bounce should park the issue: rc=$RC $OUT"
-[ "$(gslabels)" = "needs-human,type:task" ] || fail "a parked issue is labelled needs-human: $(gslabels)"
-case "$(gscomments)" in *"sent branch"*"back 3 time(s)"*) ;; *) fail "the park should leave a comment: $(gscomments)" ;; esac
-[ -z "$(gsslot task)" ] && [ "$(git -C "$GPROJ/.worktrees/ben" symbolic-ref --short HEAD)" = "park/ben" ] || fail "the slot should be freed and parked"
-pass "bounces are counted per item; the cap parks the issue needs-human with a comment, and --check-only never counts"
+[ "$(gsslot task)" = "1" ] || fail "the slot still holds the issue past the old cap"
+[ "$(gslabels)" = "$LABELS0" ] || fail "a stale merge must not park the issue: $(gslabels)"
+pass "a conflicting branch is refused stale without a bounce: nothing is counted and the issue is never parked"
 
 rm -rf "${TMP_GS:?}"
