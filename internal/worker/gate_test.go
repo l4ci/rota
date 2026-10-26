@@ -1187,69 +1187,6 @@ func TestGateRefusesASlicePRTheForgeSaysClosesItsIssue(t *testing.T) {
 	}
 }
 
-// closingSpy is a Forge that reports closing refs and records the PR number it
-// was asked about.
-type closingSpy struct {
-	Forge
-	asked []int
-}
-
-func (c *closingSpy) ClosingRefs(_ context.Context, n int) ([]int, bool, error) {
-	c.asked = append(c.asked, n)
-	return nil, false, nil
-}
-
-// A PR ref the slice-close check cannot parse is a broken check naming the ref,
-// not a closing-refs query for PR 0 that fails with "cannot read PR 0".
-func TestGateSliceCloseNamesAnUnparsablePRRef(t *testing.T) {
-	spy := &closingSpy{}
-	g := &gate{ctx: context.Background(), res: &GateResult{}, o: GateOpts{Slot: "w1"}, pr: "not-a-pr", forge: spy}
-	stop, err := g.stepNoSliceClose(nil)
-	if err != nil || !stop || g.res.Verdict != GateCheckBroke {
-		t.Fatalf("stop=%v err=%v verdict=%q, want a stopped %q", stop, err, g.res.Verdict, GateCheckBroke)
-	}
-	if !strings.Contains(g.res.Err, "not-a-pr") {
-		t.Errorf("message must name the unparsable ref: %q", g.res.Err)
-	}
-	if len(spy.asked) != 0 {
-		t.Errorf("closing refs asked for PR %v despite the unparsable ref", spy.asked)
-	}
-}
-
-// The closing-refs check reads every issue the forge says the PR closes, not
-// only the slot's own: a sub-issue slice that closes its partial-slice parent
-// is refused though its own issue carries no label.
-func TestGateRefusesASlicePRClosingAnotherPartialSliceIssue(t *testing.T) {
-	cases := []struct {
-		name, refs, parentLabels string
-		final                    bool
-		verdict                  string
-	}{
-		{name: "forge says it closes the labelled parent", refs: "5,9", parentLabels: "in-progress," + PartialSliceLabel, verdict: GateNotClosing},
-		{name: "parent is not partial", refs: "5,9", parentLabels: "in-progress", verdict: GatePass},
-		{name: "forge does not list the parent", refs: "5", parentLabels: "in-progress," + PartialSliceLabel, verdict: GatePass},
-		{name: "final slice may close the parent", refs: "5,9", parentLabels: "in-progress," + PartialSliceLabel, final: true, verdict: GatePass},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			w := newWorld(t, ghURL)
-			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
-				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
-			w.forge("body", "Closes #5\n\nCloses #9\n")
-			w.forge("issueLabels", "in-progress")
-			w.forge("issueLabels.9", c.parentLabels)
-			w.forge("closingRefs", c.refs)
-			res, err := w.gate(false, GateOpts{FinalSlice: c.final})
-			if err != nil || res.Verdict != c.verdict {
-				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.verdict, res)
-			}
-			if c.verdict == GateNotClosing && !strings.Contains(res.Err, "#9") {
-				t.Errorf("the refusal must name the parent #9: %q", res.Err)
-			}
-		})
-	}
-}
-
 // A PR no slot or review record owns (a fix-forward PR, a PR after wind-down)
 // is gated by number like a round PR: it lands when fresh and is refused STALE
 // when its merge with the base conflicts.

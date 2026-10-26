@@ -56,7 +56,9 @@ func (g *gate) closeOnMilestone(src tracker.ClosingSource, label string) bool {
 			closed = false
 			continue
 		}
-		g.releaseClaimLabel(key, is.Labels)
+		if n := releaseClaimLabel(g.ctx, releaseInput{Slot: g.o.Slot, Label: g.label, Issues: g.issues}, key, is.Labels); n != "" {
+			g.res.Notes = append(g.res.Notes, n)
+		}
 	}
 	return closed
 }
