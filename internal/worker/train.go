@@ -75,7 +75,7 @@ type TrainOpts struct {
 	// union of the paths the members change.
 	Approve func(files func() ([]string, error)) (*exitcode.Refusal, error)
 	// Verdict is GateOpts.Verdict, run for every member's check.
-	Verdict func(branch string) error
+	Verdict func(branch, head string) error
 	// CheckReviews is GateOpts.CheckReviews, run for every member's check.
 	CheckReviews bool
 	// Order replaces the computed merge order; see orderTrain.

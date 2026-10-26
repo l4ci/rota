@@ -593,7 +593,8 @@ question the issue left open that it answered from the code, `None` if there wer
 The gate refuses before it merges anything (exit 4, nothing lands) in these cases:
 
 - **A recorded FAIL verdict** on the slot's branch (`blockedBy: verdict`, verdict `verdict-blocked`). A newer
-  PASS of the same kind clears it.
+  PASS of the same kind clears it. A review record at the current head with a blocking finding
+  refuses the same way, even when its verdict is CONCERNS; a newer record at a new head clears it.
 - **No `Closes #N`** in the PR body (`blockedBy: closes`), unless the issue is labelled `partial-slice`.
 - **An unpicked best-of attempt** (`blockedBy: best-of-unpicked`).
 - **A missing review verdict.** The depth `ship.review` resolves for the branch (diff size, the issue's labels) decides what must be on record: `full` both the Spec and Standards verdicts, `light` the Spec verdict (the Standards verdict when the slot has no issue), `none` nothing (`blockedBy: review-missing`). Run `/rota-review`, which records them.
