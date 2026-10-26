@@ -15,11 +15,11 @@ flowchart LR
 ## Step 1: capture
 
 ```
-/rota-capture "--limit 0 prints every row instead of none"
+/rota-capture the list command shows every row when I ask for zero
 ```
 
 ```
-[B03] --limit 0 prints every row instead of none   Bug, P2
+[B03] list shows every row when the limit is zero   Bug, P2
 ```
 
 What changed: a new row under `## Bugs` in `.rota/BACKLOG.md`. Capture records and stops; it never starts work. See [capturing work](../usage/capturing-work.md).
