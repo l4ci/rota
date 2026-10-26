@@ -331,10 +331,9 @@ func (r Registry) GateTarget(arg string) (GateTarget, error) {
 	return GateTarget{}, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", arg))
 }
 
-// GateTargetAny is GateTarget for `rota worker gate`, which also gates any open
-// PR of the repo: a PR argument that no slot or review record owns resolves to an
-// External target instead of being refused. A slot name still must exist, and
-// the train keeps GateTarget's refusal.
+// GateTargetAny resolves targets for the gate and train, which also gate any
+// open PR of the repo: a PR argument that no slot or review record owns resolves
+// to an External target instead of being refused. A slot name still must exist.
 func (r Registry) GateTargetAny(arg string) (GateTarget, error) {
 	t, err := r.GateTarget(arg)
 	if err == nil || r.Slot(arg) != nil {
