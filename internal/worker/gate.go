@@ -176,7 +176,7 @@ type GateOpts struct {
 	// Verdict is the review-verdict gate (B3), run after provenance, also under
 	// CheckOnly. A non-nil error (a recorded FAIL) stops the gate with verdict
 	// verdict-blocked and is returned as is. branch is the worker branch.
-	Verdict func(branch string) error
+	Verdict func(branch, head string) error
 	// CheckReviews makes the gate refuse a branch lacking the review verdicts
 	// its resolved review depth needs, read with verdict.Recorded at the
 	// checked tip (the full sha). Unset skips that check.
@@ -1315,7 +1315,8 @@ func (g *gate) stepVerdict() (bool, error) {
 	if g.o.Verdict == nil {
 		return false, nil
 	}
-	if err := g.o.Verdict(g.branch); err != nil {
+	head, _ := g.git(g.root, "rev-parse", "--short", g.headRef) // the head the gate merges
+	if err := g.o.Verdict(g.branch, head); err != nil {
 		g.res.Verdict = GateVerdictBlocked
 		return true, err
 	}
