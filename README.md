@@ -4,9 +4,9 @@
 
 # rota
 
-**Capture, build and ship work with Claude Code or Codex, one item or many.**
+**Coding agents write fast. rota makes sure what they merge works.**
 
-rota turns a to-do list into reviewed, merged work. You capture an item, your agent builds it in small commits, and `/rota-ship` reviews the branch and merges it. Set `work.mergeStrategy` to `pr` to open a pull request instead. What the project learned is kept for the next session.
+Capture work as issues. rota hands them to Claude Code, Codex or OpenCode, reviews every branch and merges only what passes your tests, one issue at a time or a round in parallel. Lessons and decisions stay in the repo, so the next session starts ahead.
 
 [![Release](https://img.shields.io/github/v/release/l4ci/rota?color=blue&sort=semver)](https://github.com/l4ci/rota/releases)
 [![License](https://img.shields.io/github/license/l4ci/rota?color=green)](LICENSE)
@@ -15,6 +15,7 @@ rota turns a to-do list into reviewed, merged work. You capture an item, your ag
 [![skills.sh](https://img.shields.io/badge/skills.sh-l4ci%2Frota-black)](https://skills.sh/l4ci/rota)
 [![For Claude Code](https://img.shields.io/badge/for-Claude%20Code-8A2BE2)](https://claude.com/claude-code)
 [![For Codex](https://img.shields.io/badge/for-Codex-000000)](https://developers.openai.com/codex)
+[![OpenCode workers](https://img.shields.io/badge/workers-OpenCode-555555)](docs/usage/opencode-workers.md)
 [![Runs in herdr or tmux](https://img.shields.io/badge/runs%20in-herdr%20%C2%B7%20tmux-2ea44f)](#-runs-in-herdr-or-tmux)
 
 [Website](https://volkerotto.net/rota/) · [Quick start](#-quick-start) · [How it works](#-how-it-works) · [Rounds](#-parallel-rounds) · [herdr and tmux](#-runs-in-herdr-or-tmux) · [Accounts](#-several-accounts-balanced) · [Skills](#-skills) · [Docs](docs/)
