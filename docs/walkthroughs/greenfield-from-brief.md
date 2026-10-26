@@ -109,10 +109,10 @@ Plus three detail files at `.rota/milestones/M01.md`, `M02.md`, `M03.md`, each w
 The vision session named one unknown: the SQLite schema design for transactions, specifically how you'd handle multi-currency. The brief doesn't require it, but you suspect you'll add it within a year. A spike checks whether a one-currency-now schema would hurt later.
 
 ```bash
-$ /rota-spike sqlite-schema "Will a single-currency schema survive multi-currency migration cleanly?"
+$ /rota-spike will a single-currency schema survive a later move to multi-currency?
 ```
 
-This creates a `spike/sqlite-schema` branch (which never merges into `main`) and `.rota/spikes/sqlite-schema.md` with the question recorded. You experiment on the branch: try two schemas, write a sketch migration, see what feels right. When you're done, fill in *Findings* and *Decision* in the spike file:
+The skill sharpens the question and names the spike `sqlite-schema`. This creates a `spike/sqlite-schema` branch (which never merges into `main`) and `.rota/spikes/sqlite-schema.md` with the question recorded. You experiment on the branch: try two schemas, write a sketch migration, see what feels right. When you're done, fill in *Findings* and *Decision* in the spike file:
 
 ```markdown
 **Findings.** A `currency` column added later with default `'USD'` and a backfill works fine; the rollup queries need a one-line change. No data loss.
