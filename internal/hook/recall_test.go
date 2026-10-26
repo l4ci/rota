@@ -36,6 +36,14 @@ func TestRecallClaimsConcurrentEntriesAndPreservesRefresh(t *testing.T) {
 	if got := Recall(dir, "session", entry, now); got != "" {
 		t.Fatalf("refresh forgot recall: %s", got)
 	}
+	// Another session's statusline cleanup must not forget a still-open
+	// session's already-injected entries, even after the readings expire.
+	if err := Dump(dir, []byte(`{"session_id":"other","cwd":"/project"}`), now.Add(25*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if got := Recall(dir, "session", entry, now.Add(25*time.Hour)); got != "" {
+		t.Fatalf("reading cleanup forgot recall: %s", got)
+	}
 	entry = append(entry, knowledge.PathEntry{ID: "two", Text: "new guidance"})
 	if got := Recall(dir, "session", entry, now); !strings.Contains(got, "new guidance") || strings.Contains(got, "unique guidance") {
 		t.Fatalf("new entry: %s", got)

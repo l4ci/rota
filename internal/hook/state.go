@@ -24,6 +24,7 @@ const lockWait = 2 * time.Second
 
 // State is <git-common-dir>/rota/session/<session_id>.json. D2 and D3 read it.
 type State struct {
+	// Recall receipts live in session/recall, outside the reading TTL sweep.
 	RecalledEntries map[string]bool `json:"recalledEntries,omitempty"`
 	SessionID       string          `json:"sessionId"`
 	Cwd             string          `json:"cwd"`
