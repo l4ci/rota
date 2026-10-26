@@ -6,7 +6,7 @@ Checked 2026-10-26 against Gas Town commit `de2ce8e` on `main` (latest tagged re
 
 ## The short version
 
-- Pick Gas Town when you want a standing, supervised swarm with a conversational coordinator, many agent runtimes, dashboards and a bisecting merge queue, and you accept running Dolt and a larger moving part count.
+- Pick Gas Town when you want a standing, supervised swarm with a conversational coordinator, many agent runtimes, dashboards and an always-on merge queue, and you accept running Dolt and a larger moving part count.
 - Pick rota when you want a single Go binary and skills that work for one agent on one item, and that scale up to a round of parallel workers whose PRs a test gate verifies before merge.
 - Both keep workers off `main`: Gas Town polecats never push directly, and rota workers never merge.
 
@@ -33,7 +33,7 @@ Checked 2026-10-26 against Gas Town commit `de2ce8e` on `main` (latest tagged re
 - **Supervision.** A Witness per rig detects stuck polecats and nudges or hands off; a Deacon patrols across rigs. rota has stall detection, `rota reap` and `round watch`, but no layered supervisor agents.
 - **Runtime breadth.** The README lists eleven built-in presets. rota supports three harnesses.
 - **Observability.** `gt feed` and a web dashboard show agent activity and the merge queue, and it exports OpenTelemetry. rota has `round status` and `round summary` (cost per issue, slot and account), but no dashboard or metrics export.
-- **Merge queue shape.** The Refinery is a Bors-style queue that bisects a failing batch. rota's train reports a culprit member; a bisect is not documented.
+- **Merge queue shape.** The Refinery is a standing Bors-style queue that batches merge requests as they arrive and bisects a failing batch. rota's [merge train](../usage/parallel-rounds.md#merge-train) also bisects a red train and names the culprit, but the orchestrator starts each train; nothing queues on its own.
 - **Scale and reach.** Cross-repo rigs, escalation routing by severity, convoys, a Docker sandbox and a federation network (Wasteland) are documented. rota's umbrella mode covers several repos but nothing like federation.
 - **Conversational start.** You describe the goal to the Mayor. rota expects issues with acceptance criteria first.
 

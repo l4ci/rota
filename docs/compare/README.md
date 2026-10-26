@@ -1,6 +1,6 @@
 # How rota compares
 
-Each page puts rota beside one other tool: what each is for, a side-by-side table, where the other tool is stronger, and where rota is. Every page names the version and date it was checked against.
+Each page puts rota beside one other tool: what each is for, a side-by-side table, where the other tool is stronger, and where rota is. Every page names the release or commit it was checked against, and the date.
 
 **Workflows and skills** for one agent at a time:
 
