@@ -20,8 +20,8 @@ flags:
   - flag: "--queue"
     does: issue backend; review every needs-review item's open PR or MR and merge the ones that pass
 example:
-  source: walkthroughs/quickstart-manual-mode.md#step-4-ship
-  reviewed: true
+  source: getting-started.md
+  reviewed: false
   steps:
     - you: /rota-review
     - agent: |
