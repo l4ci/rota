@@ -26,6 +26,7 @@ Copy this checklist and track your progress:
 - [ ] Step 1 — Guard
 - [ ] Step 2 — Project Checklist
 - [ ] Step 3 — Milestone Gate (issue mode)
+- [ ] Step 3b — Merge the Milestone Branch (milestone with a branch)
 - [ ] Step 4 — Version and Bump Level
 - [ ] Step 5 — Generate Release Notes
 - [ ] Step 6 — Review Notes
@@ -36,6 +37,7 @@ Copy this checklist and track your progress:
 - [ ] Step 11 — Publish Remote Release
 - [ ] Step 11b — Push the Branch
 - [ ] Step 12 — Close Out the Milestone (issue mode)
+- [ ] Step 12b — Clean Up the Milestone Branch
 - [ ] Step 13 — Close Upstream Issues
 - [ ] Step 14 — Docs Nudge
 - [ ] Step 15 — Summary
@@ -65,6 +67,10 @@ Per-project release steps live in `release.checklistPath`; the skill hardcodes n
 ## Step 3 — Milestone Gate (issue mode)
 
 When `issues.source` is `github` or `gitlab` or `rota repo umbrella` exits 0, read [`milestone-gate.md`](milestone-gate.md), *Step 3*, and follow it. Otherwise skip.
+
+## Step 3b — Merge the Milestone Branch
+
+When Step 3 picked a milestone and `milestone/<MNN>` exists on origin, read [`milestone-branch.md`](milestone-branch.md), *Step 3b*, and follow it: sync the base into the branch, gate, open a PR to the base, merge it with a merge commit, pinned to the gated head, once CI is green. A red gate or red CI stops the release before anything merges. No milestone, or no branch: skip; the release runs as before.
 
 ## Step 4 — Version and Bump Level
 
@@ -149,6 +155,10 @@ Skipped in `--dry-run`. On a non-zero exit, read [`publish-failures.md`](publish
 
 In issue mode, read [`milestone-gate.md`](milestone-gate.md), *Step 12*, after Steps 10 and 11. Otherwise skip.
 
+## Step 12b — Clean Up the Milestone Branch
+
+When `milestone/<MNN>` still exists on origin or issues still carry `on-milestone/<MNN>` (also on a resumed release), read [`milestone-branch.md`](milestone-branch.md), *Step 12b*: remove the labels, delete the branch, mark the milestone shipped. Otherwise skip. Skipped in `--dry-run`.
+
 ## Step 13 — Close Upstream Issues
 
 When `rota issues imported --json --open-only` lists open upstream issues, read [`upstream-issues.md`](upstream-issues.md) and follow it. Skip in `--dry-run`.
@@ -182,6 +192,7 @@ List skipped checklist items under `Skipped checklist items:`. In `--dry-run`, p
 
 - [`unpushed-commits.md`](unpushed-commits.md): Step 1 handling of unpushed HEAD commits.
 - [`milestone-gate.md`](milestone-gate.md): Issue-mode milestone gate, close-out and umbrella repos (Steps 3, 12).
+- [`milestone-branch.md`](milestone-branch.md): Milestone release through a PR from its branch to the base (Steps 3b, 12b).
 - [`release-review.md`](release-review.md): Cross-harness review of the range since the last tag (Step 5).
 - [`publish-failures.md`](publish-failures.md): Push/publish failure handling and edge cases (Steps 10-11b).
 - [`upstream-issues.md`](upstream-issues.md): Close shipped upstream issues (Step 13).
