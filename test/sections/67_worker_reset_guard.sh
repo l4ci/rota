@@ -25,7 +25,7 @@ case "$1 $2" in
     printf '{"id":"cli","result":{"type":"tab_created","tab":{"tab_id":"w9:t7"},"root_pane":{"pane_id":"w9:p17"}}}\n' ;;
   "tab close") [ -f "$F/dirty_on_close" ] && echo wip > "$(cat "$F/dirty_on_close")"
     [ -f "$F/close_fails" ] || rm -f "$F/tab_alive"; echo '{"id":"cli","result":{"type":"ok"}}' ;;
-  "tab get") [ -f "$F/tab_alive" ] || err tab_not_found; echo '{"id":"cli","result":{"type":"tab_info"}}' ;;
+  "tab get") [ -f "$F/tab_alive" ] || err tab_not_found; echo '{"id":"cli","result":{"tab":{"pane_count":1,"tab_id":"w9:t7"},"type":"tab_info"}}' ;;
   "pane process-info")
     procs=""; [ -f "$F/pid" ] && procs="{\"pid\":$(cat "$F/pid")}"
     printf '{"id":"cli","result":{"process_info":{"foreground_processes":[%s]}}}\n' "$procs" ;;
