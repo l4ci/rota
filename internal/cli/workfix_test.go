@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -116,5 +117,39 @@ func TestWorkFixCountsPerTask(t *testing.T) {
 	}
 	if code, out, _ := rotaIn(t, dir, "debug", "work-fix", "attempt", "B07", "--task", "2", "--json"); code != 0 || data(t, out)["attempt"] != float64(2) {
 		t.Errorf("task 2 count disturbed by task 1 reset: %d %s", code, out)
+	}
+}
+
+// On an issue backend debugItem canonicalizes every stored item key; a task's
+// count must survive that and stay apart from its siblings.
+func TestWorkFixCapOnIssueBackend(t *testing.T) {
+	root := trackerProject(t, issuesConfig)
+	deps := withTracker(t, issueFixture())
+	run := func(args ...string) (int, map[string]any) {
+		code, env, _ := rotaRunWith(t, deps, append([]string{"--json", "-C", root, "debug", "work-fix"}, args...)...)
+		return code, ddata(t, env)
+	}
+	for n := 1; n <= 3; n++ {
+		if code, d := run("attempt", "7", "--task", "1"); code != 0 || fmt.Sprint(d["attempt"]) != fmt.Sprint(n) {
+			t.Fatalf("attempt %d: exit %d data %v", n, code, d)
+		}
+	}
+	if code, d := run("attempt", "7", "--task", "1"); code != 4 || d["blockedBy"] != "iron law" {
+		t.Fatalf("fourth attempt: exit %d data %v", code, d)
+	}
+	if code, _ := run("attempt", "7", "--task", "2"); code != 0 {
+		t.Fatalf("sibling task refused: exit %d", code)
+	}
+	if code, _ := run("pass", "7", "--task", "2"); code != 0 {
+		t.Fatalf("pass: exit %d", code)
+	}
+	if code, _ := run("attempt", "7", "--task", "1"); code != 4 {
+		t.Fatalf("sibling PASS cleared task 1: exit %d", code)
+	}
+	if code, d := run("reset", "7", "--task", "1", "--reason", "r", "--confirm", "--confirm-note", "ok"); code != 0 || d["changed"] != true {
+		t.Fatalf("reset: exit %d data %v", code, d)
+	}
+	if code, _ := run("attempt", "7", "--task", "1"); code != 0 {
+		t.Fatalf("attempt after reset: exit %d", code)
 	}
 }
