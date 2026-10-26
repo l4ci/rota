@@ -61,6 +61,8 @@ func migrateExternalKnowledge(fs *flag.FlagSet) RunFunc {
 		case len(rep.Changes) > 0:
 			c.Warn("preview only; pass --apply")
 			fmt.Fprintf(&text, "would move %d (seen on …) suffix(es) into seen: stamps:\n%s", len(rep.Changes), strings.Join(lines, "\n"))
+		case len(manual) > 0:
+			fmt.Fprintf(&text, "nothing to migrate automatically; %d bullet(s) need manual review:", len(manual))
 		default:
 			text.WriteString("nothing to migrate: no bullet ends in a (seen on …) suffix")
 		}
@@ -68,7 +70,11 @@ func migrateExternalKnowledge(fs *flag.FlagSet) RunFunc {
 			fmt.Fprintf(&text, "\nthe clone has commits its remote lacks (an earlier apply that did not push): run `git -C %s push`", cl.Dir)
 		}
 		if len(manual) > 0 {
-			fmt.Fprintf(&text, "\nmanual review (left as written):\n%s", strings.Join(manual, "\n"))
+			if len(rep.Changes) == 0 {
+				fmt.Fprintf(&text, "\n%s", strings.Join(manual, "\n"))
+			} else {
+				fmt.Fprintf(&text, "\nmanual review (left as written):\n%s", strings.Join(manual, "\n"))
+			}
 		}
 		return Result{Data: data, Text: text.String()}, nil
 	}

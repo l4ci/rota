@@ -36,7 +36,7 @@ func TestMigrateExternalKnowledge(t *testing.T) {
 		t.Fatalf("remote = %q", got)
 	}
 	n = gittest.Run(t, clone, "rev-list", "--count", "HEAD")
-	if o := run("--apply"); o.rc != 0 || !strings.Contains(o.stdout, "nothing to migrate") {
+	if o := run("--apply"); o.rc != 0 || !strings.Contains(o.stdout, "nothing to migrate automatically; 1 bullet(s) need manual review:") || strings.Contains(o.stdout, "no bullet ends in") {
 		t.Fatalf("re-apply: %+v", o)
 	}
 	if gittest.Run(t, clone, "rev-list", "--count", "HEAD") != n {

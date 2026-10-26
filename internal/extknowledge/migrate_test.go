@@ -2,6 +2,7 @@ package extknowledge
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -240,5 +241,27 @@ func TestMigrateSeenPRMode(t *testing.T) {
 	}
 	if goFile(t, f) != migrateGo {
 		t.Fatal("main checkout changed")
+	}
+}
+
+func TestMigrateSeenPRModeFailureRestoresBranch(t *testing.T) {
+	f := migrateFixture(t, `{"write":"pr","branch":"main"}`, migrateGo)
+	// The branch push fails: the remote disappears once the switch is done.
+	f.hook = func(args []string) {
+		if len(args) > 0 && args[0] == "push" {
+			_ = os.RemoveAll(f.remote)
+		}
+	}
+	if _, err := f.clone().MigrateSeen(context.Background(), true); err == nil {
+		t.Fatal("a failed push must fail the apply")
+	}
+	if got := gittest.Run(t, f.a, "rev-parse", "--abbrev-ref", "HEAD"); got != "main" {
+		t.Fatalf("clone left on %q", got)
+	}
+	if got := gittest.Run(t, f.a, "status", "--porcelain"); got != "" {
+		t.Fatalf("clone dirty: %q", got)
+	}
+	if len(f.gh) != 0 {
+		t.Fatalf("a PR was opened after the failed push: %v", f.gh)
 	}
 }
