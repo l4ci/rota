@@ -272,3 +272,32 @@ func TestKnowledgeExternalSplit(t *testing.T) {
 		t.Fatalf("rerun: %+v", o)
 	}
 }
+
+func TestKnowledgeExternalMatch(t *testing.T) {
+	project, _, _ := extFixture(t, "")
+	o := knNew(t, project, "", "knowledge", "query", "--external", "--match", "t.run")
+	if o.rc != 0 || o.stdout != "## Go\n- **Table tests** — Use t.Run. <!-- 2026-01-02 source:rota -->\n" {
+		t.Fatalf("match: %+v", o)
+	}
+	o = knNew(t, project, "", "knowledge", "query", "--external", "--match", "nothing here", "--json")
+	var env struct {
+		Data struct {
+			Text    string
+			Matches int
+			Missing []string
+			Recheck []any
+		}
+	}
+	if err := json.Unmarshal([]byte(o.stdout), &env); err != nil || o.rc != 0 || env.Data.Text != "" || env.Data.Matches != 0 || env.Data.Missing == nil || env.Data.Recheck == nil {
+		t.Fatalf("no hit: %v %+v", err, o)
+	}
+	for _, args := range [][]string{
+		{"query", "--external", "--match", ""},
+		{"query", "--external", "--match", "  "},
+		{"query", "--match", "x", "Go"},
+	} {
+		if o := knNew(t, project, "", append([]string{"knowledge"}, args...)...); o.rc != ExitUsage {
+			t.Errorf("%v: rc=%d", args, o.rc)
+		}
+	}
+}
