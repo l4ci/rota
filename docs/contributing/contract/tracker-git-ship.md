@@ -36,6 +36,7 @@ exit: 2 at an umbrella root without --repo; 3 when no base branch resolves, or w
 old: hv-base-branch
 shim: runs in the repo's directory; `base` is the stdout line. Old exit 1 with `umbrella` in stderr becomes 2; other old exit 1 becomes 3.
 note: `git.baseBranch` if set, then main, master, trunk, origin/HEAD when it is empty. A set `git.baseBranch` that does not exist is an error (exit 3), never replaced by a conventional name.
+note: in a worker slot (`ROTA_SLOT`) the round routed to a milestone branch, `git base`, the branch-scoped verbs and `ship pr` use that branch as the base. `ship pr` passes it to `gh pr create --base` on GitHub, as it already did for GitLab (`PRNeedsBase` is true for both forges).
 
 ### rota git guard clean
 rota git guard clean [--context <text>]
