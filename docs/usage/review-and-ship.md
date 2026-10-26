@@ -4,7 +4,7 @@
 
 ## 🔍 /rota-review
 
-`/rota-review` is a staff-engineer-level read of a feature branch before it leaves your machine. It is **read-only**: no commits, no mutations. The skill scopes the branch (commits, touched files, referenced item IDs), pulls relevant topics from [`KNOWLEDGE.md`](learning.md) and `DECISIONS.md`, resolves what each item promised, and dispatches two reviewers in parallel: Spec (does the diff do what the items promised, nothing more) and Standards (conventions, code smells, test quality, silent failures). Their reports are shown as separate sections; the overall verdict is the worse of the two. Standards runs on the `standard` model tier (`round.tiers.claude.standard`). The diff is not pasted: `rota review package` writes the commits, `--stat` and full diff (with 10 lines of context) to a gitignored file under `.rota/review/`, and both reviewers read that file, so a large branch needs no file cap. After fixes, `--since <sha>` packages only what changed since the last review.
+`/rota-review` is a staff-engineer-level read of a feature branch before it leaves your machine. It reads the code without changing it; recording the verdict saves and posts its report. The skill scopes the branch (commits, touched files, referenced item IDs), pulls relevant topics from [`KNOWLEDGE.md`](learning.md) and `DECISIONS.md`, resolves what each item promised, and dispatches two reviewers in parallel: Spec (does the diff do what the items promised, nothing more) and Standards (conventions, code smells, test quality, silent failures). Their reports are shown as separate sections; the overall verdict is the worse of the two. Standards runs on the `standard` model tier (`round.tiers.claude.standard`). The diff is not pasted: `rota review package` writes the commits, `--stat` and full diff (with 10 lines of context) to a gitignored file under `.rota/review/`, and both reviewers read that file, so a large branch needs no file cap. After fixes, `--since <sha>` packages only what changed since the last review.
 
 ### What counts as the spec
 
@@ -22,6 +22,8 @@ In issue mode the issue body is the spec, plus any `decision` comments on it. A 
 ### Verdict
 
 The report ends with one verdict (`PASS` / `CONCERNS` / `FAIL`) with file:line evidence where applicable. It is recorded with `rota verdict add` in the gitignored `.rota/verdicts.json`, and `/rota-ship` routes on the recorded verdict with `rota verdict route`, not on the report text.
+
+`rota verdict add` also renders a marked report on the PR and each linked item, with findings by severity, declined findings and the reviewed sha. File-mode items keep it under `## Reports` in their detail files. Re-recording a kind at the same sha updates its report. If posting is pending, the local verdict remains usable; `rota verdict post <branch>` retries the latest reports. Merge gates post their outcome, checks and refusal reason in the same places.
 
 | Verdict | Meaning |
 |---------|---------|
