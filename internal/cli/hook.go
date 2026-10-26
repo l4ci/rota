@@ -20,6 +20,8 @@ import (
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/keepalive"
+	"github.com/l4ci/rota/internal/knowledge"
+	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
@@ -44,7 +46,7 @@ func hookCommands() *Command {
 	return &Command{Name: "hook", Summary: "Claude Code hooks that hand the orchestrator off before its context runs out", Subs: []*Command{
 		{Name: "stop", Summary: "Stop hook: block above the context threshold until a handoff is written, or while workers run with no watch armed", Verb: noFlags(hookStop)},
 		{Name: "prompt", Summary: "UserPromptSubmit hook: one-line round digest and a missing-watch reminder", Verb: noFlags(hookPrompt)},
-		{Name: "guard", Summary: "PreToolUse hook: deny destructive git and gh pr merge for workers (ROTA_SLOT set); no-op otherwise", Verb: noFlags(hookGuard)},
+		{Name: "guard", Summary: "PreToolUse hook: recall path-scoped context before Edit/Write; deny destructive git for workers", Verb: noFlags(hookGuard)},
 		{Name: "session-start", Summary: "SessionStart hook: inject and consume the handoff", Verb: noFlags(hookSessionStart)},
 		{Name: "install", Summary: "merge the hooks and the statusline into a Claude Code settings file", Verb: hookInstall},
 		{Name: "uninstall", Summary: "remove what install wrote and restore a wrapped statusline", Verb: hookUninstall},
@@ -388,21 +390,57 @@ func hookSessionStart(c *Ctx, args []string) (res Result, _ error) {
 	return hookPrint(out), nil
 }
 
-// hookGuard is the PreToolUse hook for Bash (#702): exit 2 with a one-line reason
-// when a worker runs a command its contract forbids. Silent and exit 0 for
-// everyone without ROTA_SLOT (the orchestrator, a human) and for any payload it
-// cannot read, so it never blocks a build step.
+// hookGuard recalls path-scoped context before Edit/Write for any session.
+// For Bash it exits 2 when a worker runs a command its contract forbids (#702).
+// Unreadable payloads pass silently.
 func hookGuard(c *Ctx, args []string) (res Result, _ error) {
 	c.JSON = false
-	slot := c.deps().Getenv("ROTA_SLOT")
-	if slot == "" {
-		return Result{}, nil
-	}
 	defer func() {
 		if r := recover(); r != nil {
 			res = Result{}
 		}
 	}()
+	input := readInput(c)
+	var payload struct {
+		Tool    string `json:"tool_name"`
+		Session string `json:"session_id"`
+		Input   struct {
+			File string `json:"file_path"`
+		} `json:"tool_input"`
+	}
+	if json.Unmarshal(input, &payload) == nil && (payload.Tool == "Edit" || payload.Tool == "Write") {
+		var m map[string]any
+		_ = json.Unmarshal(input, &m)
+		cwd := payloadCwd(c, m)
+		root, found := rotatree.Find(cwd)
+		if !found || payload.Input.File == "" {
+			return Result{}, nil
+		}
+		file := payload.Input.File
+		if !filepath.IsAbs(file) {
+			file = filepath.Join(cwd, file)
+		}
+		st := knowledge.Store{Root: root, Repos: repos.Paths(root), Config: c.deps().Config}
+		entries, err := st.PathEntries(file)
+		if err != nil || len(entries) == 0 {
+			return Result{}, nil
+		}
+		cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, cwd)
+		if err != nil {
+			return Result{}, nil
+		}
+		context := hook.Recall(cd, payload.Session, entries, c.deps().Now())
+		if context == "" {
+			return Result{}, nil
+		}
+		return hookPrint(map[string]any{"hookSpecificOutput": map[string]any{
+			"hookEventName": "PreToolUse", "additionalContext": context,
+		}}), nil
+	}
+	slot := c.deps().Getenv("ROTA_SLOT")
+	if slot == "" {
+		return Result{}, nil
+	}
 	gitOut := func(dir string, a ...string) (string, error) {
 		r, err := c.deps().Git(c.Context(), dir, a...)
 		if err != nil {
@@ -414,7 +452,7 @@ func hookGuard(c *Ctx, args []string) (res Result, _ error) {
 		return strings.TrimSpace(r.Stdout), nil
 	}
 	wd, _ := c.deps().Getwd()
-	if reason := hook.DecideGuard(hook.GuardRequest{Payload: readInput(c), Slot: slot, DefaultCwd: wd, Git: gitOut}); reason != "" {
+	if reason := hook.DecideGuard(hook.GuardRequest{Payload: input, Slot: slot, DefaultCwd: wd, Git: gitOut}); reason != "" {
 		return Result{}, &Error{Exit: ExitUsage, Message: "rota guard: " + reason}
 	}
 	return Result{}, nil

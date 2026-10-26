@@ -47,6 +47,28 @@ the umbrella root it asks once whether a learning is umbrella-shared or
 sub-repo-scoped. DECISIONS stays umbrella-only. Single-repo projects are
 unaffected. Full model: [`references/persistence-skills.md`](../../skills/references/persistence-skills.md#umbrella-scoping).
 
+## Recall before editing
+
+With `rota hook install`, Claude Code's Edit and Write tools receive matching
+knowledge and active decisions before the tool runs, once per entry per session.
+Add file scopes to a project learning with repeatable `--path` flags:
+
+```sh
+rota knowledge add --topic Architecture --title "Storage seam" --body-file tip.txt --path 'internal/storage/**/*.go' --path 'cmd/server/*.go'
+```
+
+This writes `<!-- paths: ["internal/storage/**/*.go","cmd/server/*.go"] -->`
+before the bullet's date stamp. `/rota-decide` can put the same optional comment
+inside a decision entry. Existing query verbs preserve it; use `knowledge replace`
+to change a learning's field. Decisions keep their existing skill write flow.
+
+Globs use slash-separated paths relative to the project root, or the registered
+repo root for repo-local knowledge. `*`, `?` and character classes match within a
+path segment; a `**` segment spans zero or more directories. No scope means topic
+consult only. Deprecated learnings and retired or superseded decisions are skipped.
+External knowledge has no project path scope. Re-run `rota hook install` to update
+an older Bash-only installation; `rota hook uninstall` removes the marked hook.
+
 ## Promotion lifecycle
 
 `KNOWLEDGE.md` bullets carry a tier (`provisional`, `confirmed`, or `deprecated`) tracked in a sidecar (`.rota/knowledge-tier.json`) along with a hit counter. Tiers separate "we wrote this down once" from "we've validated this repeatedly in real cycles."
