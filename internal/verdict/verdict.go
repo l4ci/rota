@@ -644,3 +644,17 @@ func Blocking(list []Record, s Settings) (Record, bool) {
 	}
 	return Record{}, false
 }
+
+// BlockingAtHead is the first review record (spec, quality, cross, then the
+// lenses) recorded at head that is Failing: a FAIL, a blocking finding or a
+// failed item. It is the bounce rule, which the merge gate applies so a PR a
+// bounce would relay is not merged. Unlike Blocking it ignores a record at
+// another commit, and a CONCERNS review can trip it. Ship does not use it.
+func BlockingAtHead(list []Record, head string) (Record, bool) {
+	for _, kind := range append([]string{ReviewSpec, ReviewQuality, ReviewCross}, LensKinds...) {
+		if r, ok := Latest(list, kind); ok && AtHead(r, head) && r.Failing() {
+			return r, true
+		}
+	}
+	return Record{}, false
+}
