@@ -59,7 +59,7 @@ func (f *moveFx) transferPlan(t *testing.T, id, to string) (*transferRun, []step
 	return run, steps
 }
 
-var assignMarkSteps = []string{"queue the slot's PR", "claim", "in-progress", "comment",
+var assignMarkSteps = []string{"queue the slot's PR", "claim", "reserve the slot", "in-progress", "comment",
 	"reset the slot onto its branch", "bind the slot", "start the item clock"}
 
 func TestAssignStepsOrder(t *testing.T) {

@@ -45,6 +45,7 @@ type fakeRemote struct {
 	prNotes        map[int][]tracker.Comment // MRNotes answers by PR number
 	closedLists    int                       // List calls that asked for closed issues
 	retargeted     map[int]string            // PR number -> the base PRSetBase moved it onto
+	onReady        func(ref string)          // runs inside Ready, i.e. between an assign's slot read and its marks
 
 	// Board side.
 	items      map[string]*backlog.Item
@@ -242,7 +243,12 @@ func (f *fakeRemote) List(closed bool) ([]backlog.Item, error) {
 }
 
 func (f *fakeRemote) Detail(ref string) (string, bool, error) { return f.details[ref], true, nil }
-func (f *fakeRemote) Ready(ref string) ([]string, error)      { return f.ready[ref], nil }
+func (f *fakeRemote) Ready(ref string) ([]string, error) {
+	if f.onReady != nil {
+		f.onReady(ref)
+	}
+	return f.ready[ref], nil
+}
 
 func (f *fakeRemote) Create(in backlog.CreateInput) (backlog.CreateResult, error) {
 	f.made = append(f.made, in)
