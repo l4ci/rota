@@ -14,24 +14,50 @@ import (
 
 // indexRe is one index entry: "- [Name](topics/slug.md) — hook", or for a
 // split topic "- [Name](topics/slug/README.md) — hook".
-var indexRe = regexp.MustCompile(`^- \[([^\]]+)\]\(topics/([^)/]+)(\.md|/README\.md)\)(?:\s+—\s+(.*))?\s*$`)
+var indexRe = regexp.MustCompile(`^- \[([^\]]+)\]\(topics/([a-z0-9-]+)(\.md|/README\.md)\)(?:\s+—\s+(.*))?\s*$`)
+
+// looseIndexRe is any index line that points into topics/. One that indexRe
+// rejects names a path outside the slugs rota writes (a glob, "..", capitals):
+// it is ignored, never followed, and reported by Malformed.
+var looseIndexRe = regexp.MustCompile(`^- \[[^\]]+\]\(topics/`)
+
+// slugOK is a path stem Slugify could have produced.
+var slugOK = regexp.MustCompile(`^[a-z0-9-]+$`)
 
 // Topics lists the index entries, with each topic file's bullet count. A
 // split topic is followed by its subtopics, named "Topic: Subtopic". A flat
 // file an older rota left beside a split topic is its Stray, never a second
 // topic.
 func (c Clone) Topics() ([]Topic, error) {
+	ts, _, err := c.scan()
+	return ts, err
+}
+
+// Malformed lists the index and sub-index lines that name a path outside the
+// slugs rota writes, each as "file: line". Topics ignores them and no write
+// follows them.
+func (c Clone) Malformed() []string {
+	_, bad, _ := c.scan()
+	return bad
+}
+
+func (c Clone) scan() ([]Topic, []string, error) {
+	var bad []string
 	raw, err := c.readRegular(filepath.Join(c.Dir, c.indexName()))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("%w: %s has no %s", ErrNotFound, c.Dir, c.indexName())
+			return nil, nil, fmt.Errorf("%w: %s has no %s", ErrNotFound, c.Dir, c.indexName())
 		}
-		return nil, err
+		return nil, nil, err
 	}
 	var roots []Topic
 	for _, line := range strings.Split(string(raw), "\n") {
-		m := indexRe.FindStringSubmatch(strings.TrimRight(line, " \t\r"))
+		line = strings.TrimRight(line, " \t\r")
+		m := indexRe.FindStringSubmatch(line)
 		if m == nil {
+			if looseIndexRe.MatchString(line) {
+				bad = append(bad, c.indexName()+": "+line)
+			}
 			continue
 		}
 		t := Topic{Name: strings.TrimSpace(m[1]), Slug: m[2], Hook: strings.TrimSpace(m[4]), File: TopicsDir + "/" + m[2] + m[3], Split: m[3] != ".md"}
@@ -58,7 +84,11 @@ func (c Clone) Topics() ([]Topic, error) {
 		if err == nil {
 			if t.Split {
 				t.Bullets = len(t.bullets(string(body)))
-				t.Subtopics = subtopics(t, string(body))
+				var sbad []string
+				t.Subtopics, sbad = subtopics(t, string(body))
+				for _, l := range sbad {
+					bad = append(bad, t.File+": "+l)
+				}
 				for i := range t.Subtopics {
 					st := &t.Subtopics[i]
 					if sb, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(st.File))); err == nil {
@@ -79,23 +109,27 @@ func (c Clone) Topics() ([]Topic, error) {
 		out = append(out, t)
 		out = append(out, t.Subtopics...)
 	}
-	return out, nil
+	return out, bad, nil
 }
 
-// subtopics reads the sub-index lines of a split topic's README.
-func subtopics(parent Topic, readme string) []Topic {
-	var out []Topic
+// subtopics reads the sub-index lines of a split topic's README; bad holds
+// the lines whose path is not a plain slug.
+func subtopics(parent Topic, readme string) (out []Topic, bad []string) {
 	dir := strings.TrimSuffix(parent.File, "/README.md")
 	for _, l := range strings.Split(readme, "\n") {
 		m := subIndexRe.FindStringSubmatch(strings.TrimRight(l, " \t\r"))
 		if m == nil || strings.EqualFold(m[2], "README") {
 			continue
 		}
+		if !slugOK.MatchString(m[2]) {
+			bad = append(bad, strings.TrimRight(l, " \t\r"))
+			continue
+		}
 		sub := strings.TrimPrefix(strings.TrimSpace(m[1]), parent.Name+": ")
 		name := parent.Name + ": " + sub
 		out = append(out, Topic{Name: name, Slug: Slugify(name), Hook: strings.TrimSpace(m[3]), File: dir + "/" + m[2] + ".md", Parent: parent.Name})
 	}
-	return out
+	return out, bad
 }
 
 // bulletLines are the "- " lines of a topic file.

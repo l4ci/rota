@@ -213,6 +213,9 @@ type ExternalKnowledge struct {
 	Over []string
 	// Stray lists flat topic files an older rota left beside a split topic.
 	Stray []string
+	// Malformed lists index lines whose path is not a plain topic slug; rota
+	// ignores them.
+	Malformed []string
 }
 
 // externalKnowledge reports the state of the external knowledge clone: unset
@@ -242,7 +245,7 @@ func (d *runner) externalKnowledgeSize() (Check, bool) {
 	if len(over) == 0 {
 		return Check{}, false
 	}
-	return Check{Name: "external knowledge size", Status: Warn, Detail: strings.Join(over, "; "), Hint: "/rota-learn --external-review proposes a split"}, true
+	return Check{Name: "external knowledge size", Status: Warn, Detail: strings.Join(over, "; "), Hint: "/rota-learn --external-review drafts a split; rota knowledge split --external applies it"}, true
 }
 
 // externalKnowledgeLayout warns when an older rota left a flat topic file
@@ -253,6 +256,16 @@ func (d *runner) externalKnowledgeLayout() (Check, bool) {
 		return Check{}, false
 	}
 	return Check{Name: "external knowledge layout", Status: Warn, Detail: strings.Join(stray, ", ") + " sits beside a split topic folder (an older rota wrote it)", Hint: "fold it in with: rota knowledge split --external --topic <topic>"}, true
+}
+
+// externalKnowledgeIndex warns about index lines that name a path outside the
+// slugs rota writes (a glob, "..", capitals). They are ignored, never followed.
+func (d *runner) externalKnowledgeIndex() (Check, bool) {
+	bad := d.in.ExternalKnowledge.Malformed
+	if len(bad) == 0 {
+		return Check{}, false
+	}
+	return Check{Name: "external knowledge index", Status: Warn, Detail: strings.Join(bad, "; ") + " (ignored: not a plain topic slug)", Hint: "fix or remove the line in the knowledge repo"}, true
 }
 
 // Run executes every check in the contract's order.
@@ -272,6 +285,9 @@ func Run(ctx context.Context, in Input) Report {
 			checks = append(checks, c)
 		}
 		if c, ok := d.externalKnowledgeLayout(); ok {
+			checks = append(checks, c)
+		}
+		if c, ok := d.externalKnowledgeIndex(); ok {
 			checks = append(checks, c)
 		}
 	}

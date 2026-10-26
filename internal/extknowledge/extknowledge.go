@@ -35,6 +35,7 @@ var (
 	ErrPolicy     = errors.New("invalid policy")
 	ErrContent    = errors.New("invalid bullet text")
 	ErrUsage      = errors.New("invalid request")
+	ErrIdentity   = errors.New("git has no author identity")
 )
 
 // Env is everything the package reaches outside its own memory.

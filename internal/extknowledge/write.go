@@ -203,8 +203,8 @@ func (c Clone) Add(ctx context.Context, in AddIn) (WriteResult, error) {
 // newSubtopic reads a topic name of the form "Topic: Subtopic" that names no
 // existing topic. ok is true when Topic is a split topic, so the subtopic can
 // be created under it. A name with a second ": " level, or a subtopic under a
-// flat topic, is refused (exit 3) with the way out: split the topic first. A
-// name whose first part is no topic at all is an ordinary new flat topic.
+// flat topic, or under no topic at all, is refused (exit 3) with the way out:
+// add the topic first, then split it.
 func (c Clone) newSubtopic(name string) (parent Topic, sub string, ok bool, err error) {
 	parts := strings.Split(name, ": ")
 	if len(parts) < 2 {
@@ -234,7 +234,7 @@ func (c Clone) newSubtopic(name string) (parent Topic, sub string, ok bool, err 
 		}
 		return t, sub, true, nil
 	}
-	return Topic{}, "", false, nil
+	return Topic{}, "", false, fmt.Errorf("%w: %q has no topic %q to hold a subtopic; add to %q first, then split it: rota knowledge split --external --topic %q", ErrNotFound, name, head, head, head)
 }
 
 // insertBulletBelowSubIndex puts bullet above the first bullet of a split
@@ -357,7 +357,7 @@ func (c Clone) writable(ctx context.Context, rel, dst string) error {
 	if !fi.Mode().IsRegular() {
 		return fmt.Errorf("%w: %s is not a regular file; refusing to write through it", ErrDirty, rel)
 	}
-	if _, err := c.out(ctx, "ls-files", "--error-unmatch", "--", rel); err != nil {
+	if _, err := c.out(ctx, "ls-files", "--error-unmatch", "--", lit(rel)); err != nil {
 		return fmt.Errorf("%w: untracked %s would be overwritten", ErrDirty, rel)
 	}
 	return nil
@@ -405,9 +405,7 @@ func (c Clone) land(ctx context.Context, pol Policy, p *plan) (res WriteResult, 
 		defer func() {
 			if !committed {
 				// Drop the half-written plan and the branch it started.
-				_, _ = c.out(ctx, "reset", "-q", "--hard", "HEAD")
-				_, _ = c.out(ctx, append([]string{"clean", "-fdq", "--"}, p.order...)...)
-				c.pruneEmptyDirs(p.order)
+				c.rollback(ctx, p)
 			}
 			_, _ = c.out(ctx, "switch", "-q", cur)
 			if !committed {
@@ -434,9 +432,7 @@ func (c Clone) land(ctx context.Context, pol Policy, p *plan) (res WriteResult, 
 	if err := c.writeAndCommit(ctx, p); err != nil {
 		// The clone was clean before this write: drop what it half-did, so the
 		// next write is not refused as dirty.
-		_, _ = c.out(ctx, "reset", "-q", "--hard", "HEAD")
-		_, _ = c.out(ctx, append([]string{"clean", "-fdq", "--"}, p.order...)...)
-		c.pruneEmptyDirs(p.order)
+		c.rollback(ctx, p)
 		return res, err
 	}
 	if !remote {
@@ -474,23 +470,50 @@ func (c Clone) writeAndCommit(ctx context.Context, p *plan) error {
 			return err
 		}
 	}
-	if _, err := c.out(ctx, append([]string{"add", "--"}, p.order...)...); err != nil {
+	if _, err := c.out(ctx, append([]string{"add", "--"}, lits(p.order)...)...); err != nil {
 		return err
 	}
 	for _, rel := range p.deletes {
-		if _, err := c.out(ctx, "ls-files", "--error-unmatch", "--", rel); err != nil {
+		if _, err := c.out(ctx, "ls-files", "--error-unmatch", "--", lit(rel)); err != nil {
 			// Not tracked (a stray the clone never committed): just delete it.
 			if err := os.Remove(filepath.Join(c.Dir, filepath.FromSlash(rel))); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return err
 			}
 			continue
 		}
-		if _, err := c.out(ctx, "rm", "-q", "--", rel); err != nil {
+		if _, err := c.out(ctx, "rm", "-q", "--", lit(rel)); err != nil {
 			return err
 		}
 	}
 	_, err := c.out(ctx, "commit", "-q", "-m", p.message)
+	if err != nil {
+		if m := err.Error(); strings.Contains(m, "ident") || strings.Contains(m, "auto-detect email") {
+			return fmt.Errorf("%w: %v", ErrIdentity, err)
+		}
+	}
 	return err
+}
+
+// rollback undoes a failed write by restoring only the plan's own paths: the
+// ones HEAD tracks (written or deleted) come back from HEAD, the ones the plan
+// created are unstaged and removed by exact path. Any other file in the clone,
+// edited by hand or by a concurrent writer, is left as it is.
+func (c Clone) rollback(ctx context.Context, p *plan) {
+	var tracked []string
+	for _, rel := range append(append([]string(nil), p.order...), p.deletes...) {
+		if _, err := c.out(ctx, "cat-file", "-e", "HEAD:"+rel); err == nil {
+			tracked = append(tracked, rel)
+			continue
+		}
+		_, _ = c.out(ctx, "rm", "-q", "--cached", "--ignore-unmatch", "--", lit(rel))
+		if fi, err := os.Lstat(filepath.Join(c.Dir, filepath.FromSlash(rel))); err == nil && fi.Mode().IsRegular() {
+			_ = os.Remove(filepath.Join(c.Dir, filepath.FromSlash(rel)))
+		}
+	}
+	if len(tracked) > 0 {
+		_, _ = c.out(ctx, append([]string{"restore", "--source=HEAD", "--staged", "--worktree", "--"}, lits(tracked)...)...)
+	}
+	c.pruneEmptyDirs(p.order)
 }
 
 // pruneEmptyDirs removes the directories a failed write created for the

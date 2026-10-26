@@ -153,12 +153,12 @@ func (c Clone) Hit(topic, title, project string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return 0, err
 	}
 	// One O_APPEND write per hit: concurrent rota processes interleave whole
 	// lines, never characters.
-	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return 0, err
 	}

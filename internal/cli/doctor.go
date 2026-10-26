@@ -339,6 +339,7 @@ func doctorExternalKnowledge(ctx context.Context, d *Deps, cwd, home string) doc
 	k := doctor.ExternalKnowledge{Path: path, Exists: st.Exists, IsGit: st.IsGit, HasRemote: st.HasRemote, HasPolicy: st.HasPolicy}
 	if st.Exists {
 		// Disk only: no fetch, so a stale clone is measured as it stands.
+		k.Malformed = (extknowledge.Clone{Dir: path}).Malformed()
 		if stats, err := (extknowledge.Clone{Dir: path}).Stats(); err == nil {
 			k.Over = externalLimits(d, cwd).Over(stats)
 			for _, st := range stats {

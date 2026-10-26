@@ -116,6 +116,8 @@ func extErr(err error) error {
 		return nil
 	case errors.Is(err, extknowledge.ErrNotFound), errors.Is(err, extknowledge.ErrPolicy):
 		return Resolution("%s", err)
+	case errors.Is(err, extknowledge.ErrIdentity):
+		return Refused("%s", err).WithHint("in the knowledge clone, set git config user.name and git config user.email")
 	case errors.Is(err, extknowledge.ErrDirty), errors.Is(err, extknowledge.ErrDiverged), errors.Is(err, extknowledge.ErrMultiMatch), errors.Is(err, extknowledge.ErrContent):
 		return Refused("%s", err)
 	case errors.Is(err, extknowledge.ErrUsage):
@@ -148,6 +150,7 @@ func knExtQuery(c *Ctx, topics []string, all bool) (Result, error) {
 	for _, s := range res.Strays {
 		c.Warn("%s has a stray file %s beside its folder (an older rota wrote it): run `rota knowledge split --external --topic %s` to fold it in", s.Topic, s.File, s.Topic)
 	}
+	warnMalformed(c, cl.Malformed())
 	ms := []any{}
 	for _, m := range missing {
 		c.Warn("no external topic matches %q — run `rota knowledge topics --external` to list them", m)
@@ -158,6 +161,22 @@ func knExtQuery(c *Ctx, topics []string, all bool) (Result, error) {
 		rs = append(rs, knObj("topic", r.Topic, "title", r.Title, "tool", r.Tool, "seen", r.Seen, "project", r.Project))
 	}
 	return Result{Data: knObj("text", text, "missing", ms, "recheck", rs), Text: text}, nil
+}
+
+// warnMalformed names each index line the base wrote outside the slugs rota
+// follows.
+func warnMalformed(c *Ctx, bad []string) {
+	for _, l := range bad {
+		c.Warn("ignoring index line %s — its path is not a plain topic slug", l)
+	}
+}
+
+// bulletsOf is "1 bullet" or "N bullets".
+func bulletsOf(n int) string {
+	if n == 1 {
+		return "1 bullet"
+	}
+	return fmt.Sprintf("%d bullets", n)
 }
 
 // knExtMatch prints only the external bullets that hold every word of match.
@@ -171,10 +190,14 @@ func knExtMatch(c *Ctx, topics []string, match string) (Result, error) {
 	if err != nil {
 		return Result{}, extErr(err)
 	}
+	warnMalformed(c, cl.Malformed())
 	ms := []any{}
 	for _, m := range res.Missing {
 		c.Warn("no external topic matches %q — run `rota knowledge topics --external` to list them", m)
 		ms = append(ms, m)
+	}
+	if res.N == 0 && len(res.Missing) == 0 {
+		c.Warn("no bullet matches %q", match)
 	}
 	return Result{Data: knObj("text", res.Text, "missing", ms, "recheck", []any{}, "matches", res.N), Text: res.Text}, nil
 }
@@ -235,7 +258,7 @@ func knExtTopics(c *Ctx) (Result, error) {
 	var lines []string
 	for _, t := range ts {
 		items = append(items, knObj("name", t.Name, "slug", t.Slug, "bullets", t.Bullets, "hook", t.Hook))
-		line := fmt.Sprintf("%s: %d bullets", t.Name, t.Bullets)
+		line := fmt.Sprintf("%s: %s", t.Name, bulletsOf(t.Bullets))
 		if t.Hook != "" {
 			line += " — " + t.Hook
 		}
@@ -258,7 +281,7 @@ func knExtStats(c *Ctx) (Result, error) {
 	var lines []string
 	for _, s := range stats {
 		item := knObj("name", s.Name, "file", s.File, "bullets", s.Bullets, "bytes", s.Bytes, "hits", s.Hits)
-		line := fmt.Sprintf("%s: %d bullets, %d bytes, %d hits", s.Name, s.Bullets, s.Bytes, s.Hits)
+		line := fmt.Sprintf("%s: %s, %d bytes, %d hits", s.Name, bulletsOf(s.Bullets), s.Bytes, s.Hits)
 		if s.Stray {
 			item.Set("stray", true)
 			line += " (stray)"

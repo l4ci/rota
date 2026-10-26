@@ -998,7 +998,7 @@ func TestExternalKnowledgeSizeWarns(t *testing.T) {
 	if c.Status != Warn || !strings.Contains(c.Detail, "Godot (29 bullets > 25, 9904 bytes > 8192)") || !strings.Contains(c.Detail, "index has 61 topics") {
 		t.Fatalf("check = %+v", c)
 	}
-	if !strings.Contains(c.Hint, "/rota-learn --external-review") {
+	if !strings.Contains(c.Hint, "/rota-learn --external-review drafts a split; rota knowledge split --external applies it") {
 		t.Fatalf("hint = %q", c.Hint)
 	}
 
@@ -1022,5 +1022,14 @@ func TestExternalKnowledgeStrayWarns(t *testing.T) {
 	r = Run(context.Background(), Input{Exec: f.exec, Look: f.look, ExternalKnowledge: base})
 	if c := statusOf(r, "external knowledge layout"); c.Name != "" {
 		t.Fatalf("no stray file adds no line, got %+v", c)
+	}
+}
+
+func TestExternalKnowledgeMalformedIndexWarns(t *testing.T) {
+	k := ExternalKnowledge{Path: "/kb", Exists: true, IsGit: true, HasRemote: true, HasPolicy: true, Malformed: []string{"README.md: - [X](topics/*.md)"}}
+	f := &fake{have: map[string]bool{}, reply: map[string]Result{}}
+	c := statusOf(Run(context.Background(), Input{Exec: f.exec, Look: f.look, ExternalKnowledge: k}), "external knowledge index")
+	if c.Status != Warn || !strings.Contains(c.Detail, "topics/*.md") {
+		t.Fatalf("check = %+v", c)
 	}
 }

@@ -338,3 +338,46 @@ func TestKnowledgeExternalHitCountsInStats(t *testing.T) {
 		t.Fatal("hit changed the clone")
 	}
 }
+
+func TestKnowledgeExternalSplitWithoutPlanShowsShape(t *testing.T) {
+	project, _, _ := extFixture(t, "")
+	o := knNew(t, project, "", "knowledge", "split", "--external", "--topic", "Go")
+	if o.rc != ExitUsage || !strings.Contains(o.stderr, "needs --plan") || !strings.Contains(o.stderr, `{"subtopics":[{"name":"…","hook":"…","titles":["…"]}]}`) || !strings.Contains(o.stderr, "/rota-learn --external-review") {
+		t.Fatalf("split without a plan: %+v", o)
+	}
+	if o := knNew(t, project, "", "knowledge", "split", "--help"); !strings.Contains(o.stdout+o.stderr, `{"subtopics":[{"name","hook","titles"}]}`) {
+		t.Fatalf("--plan help names no shape: %+v", o)
+	}
+}
+
+func TestKnowledgeExternalPolish(t *testing.T) {
+	project, _, _ := extFixture(t, "")
+	if o := knNew(t, project, "", "knowledge", "stats", "--external"); !strings.Contains(o.stdout, "Go: 1 bullet,") {
+		t.Fatalf("stats text: %q", o.stdout)
+	}
+	if o := knNew(t, project, "", "knowledge", "topics", "--external"); !strings.Contains(o.stdout, "Go: 1 bullet ") && !strings.Contains(o.stdout, "Go: 1 bullet\n") {
+		t.Fatalf("topics text: %q", o.stdout)
+	}
+	o := knNew(t, project, "", "knowledge", "query", "--external", "--match", "nothing here")
+	if o.rc != 0 || o.stdout != "" || !strings.Contains(o.stderr, `no bullet matches "nothing here"`) {
+		t.Fatalf("no hit: %+v", o)
+	}
+}
+
+func TestKnowledgeExternalMissingGitIdentityIsRefused(t *testing.T) {
+	project, _, _ := extFixture(t, "")
+	t.Setenv("GIT_AUTHOR_NAME", "")
+	t.Setenv("GIT_COMMITTER_NAME", "")
+	o := knNew(t, project, "body", "knowledge", "add", "--external", "--topic", "Go", "--title", "New one", "--body-file", "-")
+	if o.rc != ExitRefused || !strings.Contains(o.stderr, "git config user.name") {
+		t.Fatalf("add without identity: %+v", o)
+	}
+}
+
+func TestKnowledgeExternalAddUnknownSubtopicHead(t *testing.T) {
+	project, _, _ := extFixture(t, "")
+	o := knNew(t, project, "body", "knowledge", "add", "--external", "--topic", "Unknown: Sub", "--title", "T", "--body-file", "-")
+	if o.rc != ExitResolution || !strings.Contains(o.stderr, "add to") {
+		t.Fatalf("unknown head: %+v", o)
+	}
+}
