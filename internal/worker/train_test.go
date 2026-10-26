@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/verdict"
 	"os"
 	"path/filepath"
 	"slices"
@@ -242,6 +243,69 @@ func TestTrainRefusesMixedMembers(t *testing.T) {
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[{"name":"b1","branch":"b1"},{"name":"b2","branch":"b2","pr":"https://example.test/o/r/pull/7"}]}`), 0o644)
 	if _, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}}); err == nil || !strings.Contains(err.Error(), "all PRs or all slots") {
 		t.Fatalf("a mixed train is refused: %v", err)
+	}
+}
+
+func TestTrainExternalPRTargets(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		targets []string
+		plan    bool
+	}{
+		{"numbers", []string{"7", "8"}, true},
+		{"hashes", []string{"#7", "#8"}, true},
+		{"URLs", []string{ghURL, "https://github.com/o/r/pull/8"}, true},
+		{"land", []string{"7"}, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := slicePRTrain(t)
+			// Neither PR belongs to a slot or the review queue.
+			if err := os.WriteFile(RegistryPath(w.dir), []byte(`{"slots":[]}`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			w.setConfig(`{"ship":{"review":"light"},"test":{"full":["true"]}}`)
+			w.record("w1", w.forgeWord("sha"), verdict.ReviewQuality)
+			w.record("w2", w.forgeWord("sha#8"), verdict.ReviewQuality)
+			for _, target := range c.targets {
+				res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: target, Base: "main", CheckOnly: true, CheckReviews: true})
+				if err != nil || res.Verdict != GateFresh {
+					t.Fatalf("gate check %s: %+v %v", target, res, err)
+				}
+			}
+			res, err := w.train(TrainOpts{Targets: c.targets, Plan: c.plan, CheckReviews: true})
+			if err != nil || len(res.Members) != len(c.targets) {
+				t.Fatalf("train of gate-accepted external PRs: %+v %v", res, err)
+			}
+			if c.plan {
+				if res.Verdict != GatePlan || res.Plan == nil || !slices.Equal(res.Plan.Landable, c.targets) || res.Changed {
+					t.Fatalf("external PR plan: %+v", res)
+				}
+			} else if res.Verdict != GatePass || !slices.Equal(res.Landed, c.targets) || !w.onMain("work.txt") || len(res.Verified) != 1 {
+				t.Fatalf("external PR landing: %+v", res)
+			}
+		})
+	}
+}
+
+func TestTrainExternalPRUsage(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		targets []string
+		message string
+	}{
+		{"number and hash repeat", []string{"7", "#7"}, "already in the train"},
+		{"hash and URL repeat", []string{"#7", ghURL}, "already in the train"},
+		{"PR then local slot", []string{"7", "w1"}, "all PRs or all slots"},
+		{"local slot then PR", []string{"w1", "7"}, "all PRs or all slots"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, "")
+			_, err := w.train(TrainOpts{Targets: c.targets, Plan: true})
+			var we *exitcode.Error
+			if !errors.As(err, &we) || we.Exit != exitcode.ExitUsage || !strings.Contains(err.Error(), c.message) {
+				t.Fatalf("targets %v: got %v, want usage refusal containing %q", c.targets, err, c.message)
+			}
+		})
 	}
 }
 
