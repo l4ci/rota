@@ -1080,6 +1080,26 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-26"
+    },
+    "Build & Tooling: Git & isolation::gh pr edit fails on this repo; patch via REST": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-26"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes::Tests that read slot env must stub Getenv": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-26"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::Herdr fakes must answer tab get with pane_count": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-26"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Gate a slot's PR by slot name, not PR number": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-26"
     }
   }
 }
