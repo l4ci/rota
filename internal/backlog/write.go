@@ -13,6 +13,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/fsio"
 	gitx "github.com/l4ci/rota/internal/git"
@@ -54,11 +55,12 @@ type CreateResult struct {
 
 // CompleteInput is one close (Backend.Complete).
 type CompleteInput struct {
-	Commit  string // short hash recorded on the Done line
-	Date    string // YYYY-MM-DD
-	Reason  string // done | handed-off | blocked | dropped
-	Note    string // one line; ignored for done
-	NoProof bool   // skip the proof gate
+	Commit      string // short hash recorded on the Done line
+	Date        string // YYYY-MM-DD
+	Reason      string // done | handed-off | blocked | dropped
+	Note        string // one line; ignored for done
+	NoProof     bool   // skip the proof gate
+	UnmetReason string // explicit reason for closing with unmet AC ids
 }
 
 // Comment is one comment of an item.
@@ -448,6 +450,21 @@ func (f *File) Complete(ref string, in CompleteInput) (bool, error) {
 			}
 			return errf(ErrNotFound, "[%s] not found", ref)
 		}
+		acceptanceRecord := ""
+		detailPath := DetailPath(f.Root, ref)
+		if in.Reason == "done" && detailPath != "" {
+			body, err := fsio.ReadText(detailPath)
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			unmet := unmetAcceptance(body, "", "", nil)
+			if len(unmet) > 0 {
+				if strings.TrimSpace(in.UnmetReason) == "" {
+					return AcceptanceRefusal(ref, unmet)
+				}
+				acceptanceRecord = AcceptanceRecord(unmet, in.UnmetReason)
+			}
+		}
 		if in.Reason == "done" && !in.NoProof {
 			if err := requireProof(ref, func() (int, error) { return f.proofRows(ref) }); err != nil {
 				return err
@@ -468,6 +485,21 @@ func (f *File) Complete(ref string, in CompleteInput) (bool, error) {
 			content = strings.TrimRight(content, "\n") + "\n\n## Completed\n\n" + done + "\n"
 		} else {
 			content = strings.TrimRight(content[:end], "\n") + "\n" + done + "\n" + content[end:]
+		}
+		if acceptanceRecord != "" {
+			if err := fsio.Locked(detailPath, fsio.LockTimeout, func() error {
+				body, err := fsio.ReadText(detailPath)
+				if err != nil {
+					return err
+				}
+				if strings.Contains(section.Body(body, "Completed"), acceptanceRecord) {
+					return nil
+				}
+				updated, _ := artifact.AppendSection(body, "Completed", "\n"+acceptanceRecord+"\n")
+				return fsio.WriteFileAtomic(detailPath, []byte(updated))
+			}); err != nil {
+				return err
+			}
 		}
 		moved = true
 		return fsio.WriteFileAtomic(path, []byte(content))

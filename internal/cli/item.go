@@ -602,7 +602,7 @@ func completeItem(be backlog.Backend, ref string, in backlog.CompleteInput, gist
 				e.(*Error).Hint = "record proof with `rota proof add`, or pass --no-proof"
 				return res, e
 			}
-			return Result{}, err
+			return backlogFail(err)
 		}
 		data := jsonObj("id", id, "type", typ, "reason", in.Reason, "commit", in.Commit, "changed", changed)
 		text := fmt.Sprintf("completed %s (%s) at %s", id, in.Reason, in.Commit)
@@ -665,6 +665,7 @@ func itemComplete(fs *flag.FlagSet) RunFunc {
 	reason := fs.String("reason", "done", "done|handed-off|blocked|dropped")
 	note := fs.String("note", "", "closure note")
 	noProof := fs.Bool("no-proof", false, "skip the proof gate")
+	unmetReason := fs.String("unmet-reason", "", "reason for closing with unmet acceptance criteria")
 	gist := fs.String("gist", "", "decision items: the one-line gist for the milestone's decision log")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := argCount(c, args, 1, 1, "item complete takes one item ID"); err != nil {
@@ -688,7 +689,7 @@ func itemComplete(fs *flag.FlagSet) RunFunc {
 		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
 			return completeItem(be, args[0], backlog.CompleteInput{
 				Commit: hash, Date: todayDate(c), Reason: *reason,
-				Note: strings.ReplaceAll(*note, "\n", " "), NoProof: *noProof,
+				Note: strings.ReplaceAll(*note, "\n", " "), NoProof: *noProof, UnmetReason: *unmetReason,
 			}, *gist)
 		})
 	}

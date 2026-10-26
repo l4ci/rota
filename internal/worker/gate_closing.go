@@ -8,6 +8,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/marker"
+	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -15,6 +16,8 @@ import (
 // through a small input struct and returns a stepOutcome, so a closing rule
 // changes here and is tested without a gate fixture. The gate methods at the
 // bottom only feed them from the gate and apply the outcome.
+
+const GateUnmetAcceptance = "unmet acceptance"
 
 // stepOutcome is what a closing-family check decided. The zero value passes.
 // Verdict (with Msg and Hint) refuses the PR; Broke reports a check that could
@@ -51,7 +54,7 @@ func checkCloses(ctx context.Context, in closesInput) stepOutcome {
 	if len(in.Keys) == 0 {
 		return stepOutcome{}
 	}
-	out := checkNoSliceClose(ctx, in)
+	out := checkClosingItems(ctx, in)
 	if out.stops() {
 		return out
 	}
@@ -64,7 +67,7 @@ func checkCloses(ctx context.Context, in closesInput) stepOutcome {
 		}
 		is, err := in.Issues.Get(ctx, key, false)
 		if err != nil {
-			return stepOutcome{Broke: fmt.Sprintf("could not read %s to check for the %s label: %v", key.Ref(), PartialSliceLabel, err), Notes: out.Notes}
+			return stepOutcome{Broke: fmt.Sprintf("could not read %s to check closing rules: %v", key.Ref(), err), Notes: out.Notes}
 		}
 		// a member closed since the assign has left the bundle (the lead, keys[0], stays)
 		if i > 0 && is.State == "closed" {
@@ -100,16 +103,12 @@ func checkCloses(ctx context.Context, in closesInput) stepOutcome {
 		Hint: fmt.Sprintf("put %s in the PR title or branch, or label %s %s if this PR lands only part of %s", refs, refs, PartialSliceLabel, them)}
 }
 
-// checkNoSliceClose refuses a PR the forge says closes an issue labelled
-// PartialSliceLabel: merging it would close the parent with slices to come. A
-// closing keyword in prose is enough, so the forge's own list is read, not the
-// body, and every issue on it is checked, not only the slot's own. FinalSlice
-// exempts the last slice. A forge that cannot report closing references skips
-// the check, noted once.
-func checkNoSliceClose(ctx context.Context, in closesInput) stepOutcome {
-	if in.FinalSlice {
-		return stepOutcome{}
-	}
+// checkClosingItems refuses closing an item with unmet acceptance or a
+// partial-slice parent with slices to come. The forge's closing list includes
+// issues beyond the slot's own. FinalSlice exempts only the partial-slice rule;
+// when the forge cannot report closing refs, acceptance still checks the
+// slot's own items under the tracker's closing convention.
+func checkClosingItems(ctx context.Context, in closesInput) stepOutcome {
 	var nums []int
 	known := false
 	var closingErr error
@@ -126,30 +125,45 @@ func checkNoSliceClose(ctx context.Context, in closesInput) stepOutcome {
 			closingErr = err
 		}
 	}
-	// With the forge's list in hand, judge every issue it says the PR closes: a
-	// sub-issue slice can close its partial-slice parent without naming it in
-	// the slot. Without the list, only the slot's own keys can be judged.
-	cands := in.Keys
+	// Judge the slot's keys plus the forge's refs. A milestone merge closes the
+	// slot's items explicitly even when the forge reports no auto-close refs.
+	// The partial-slice rule still follows only the forge's list when known.
+	cands := slices.Clone(in.Keys)
 	if known {
-		cands = make([]tracker.IssueKey, len(nums))
-		for i, n := range nums {
-			cands[i] = tracker.NumKey(n)
+		for _, n := range nums {
+			key := tracker.NumKey(n)
+			if !slices.Contains(cands, key) {
+				cands = append(cands, key)
+			}
 		}
 	}
 	var leaks []tracker.IssueKey
 	partial := false
 	for _, key := range cands {
-		if _, numbered := key.Number(); !numbered {
-			continue
-		}
+		number, numbered := key.Number()
+		forgeCloses := known && numbered && slices.Contains(nums, number)
 		is, err := in.Issues.Get(ctx, key, false)
 		if err != nil {
-			if !known {
-				continue // no verdict to give without the forge's list; later steps read the issue too
+			if !known && !in.Issues.ClosesIssue(key, in.Source) {
+				continue // later steps read items the PR leaves open
 			}
 			return stepOutcome{Broke: fmt.Sprintf("could not read %s to check for the %s label: %v", key.Ref(), PartialSliceLabel, err)}
 		}
-		if slices.Contains(is.Labels, PartialSliceLabel) {
+		if is.State != "closed" && (forgeCloses || in.Issues.ClosesIssue(key, in.Source)) && backlog.HasAcceptanceIDs(is.Body) {
+			is, err = in.Issues.Get(ctx, key, true)
+			if err != nil {
+				return stepOutcome{Broke: fmt.Sprintf("could not read acceptance notes on %s: %v", key.Ref(), err)}
+			}
+			unmet, err := backlog.UnmetAcceptance(is.Body, is.Comments, proof.Lookup)
+			if err != nil {
+				return stepOutcome{Broke: fmt.Sprintf("could not read acceptance on %s: %v", key.Ref(), err)}
+			}
+			if len(unmet) > 0 {
+				refusal := backlog.AcceptanceRefusal(key.String(), unmet)
+				return stepOutcome{Verdict: GateUnmetAcceptance, Msg: refusal.Msg + "; nothing landed", Hint: refusal.Hint}
+			}
+		}
+		if numbered && (!known || forgeCloses) && !in.FinalSlice && slices.Contains(is.Labels, PartialSliceLabel) {
 			partial = true
 			leaks = append(leaks, key)
 		}
