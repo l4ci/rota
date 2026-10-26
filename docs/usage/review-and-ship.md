@@ -142,3 +142,7 @@ For each gate the skill asks: *Yes, continue* / *Fix now and continue* / *Skip t
 When the file is absent, the skill offers to scaffold a starter under `autonomy.level: off`, or silently skips the gate under `roundtrip` and `auto` (don't interrupt unattended runs). See [`release.checklistPath`](configuration.md#releasechecklistpath) to override the path.
 
 The file is tracked by default, so the release checklist is shared with the team like any other source file. To keep it per-contributor instead, add `.rota/RELEASE.md` to `.gitignore`.
+
+### Releasing a milestone
+
+A release of a milestone with a branch goes through that branch: `/rota-release` syncs the base into `milestone/<id>`, runs the full gate and e2e, opens a PR to the base and merges it with a merge commit, pinned to the gated head, once CI is green and you confirm. A red gate or CI stops the release before anything merges; fix it with a PR to the milestone branch and rerun. Afterwards it removes the `on-milestone/<id>` labels, deletes the branch and marks the milestone shipped. A release with no milestone runs as before.
