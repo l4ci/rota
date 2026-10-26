@@ -51,3 +51,5 @@ They can sit side by side. Orca can host the terminals where Claude Code or Code
 - [stablyai/orca](https://github.com/stablyai/orca): README for features, agents, platforms, install, license and the "merge the winner" line; GitHub API for stars, release tag and date.
 - [Orca orchestration skill guide](https://github.com/stablyai/orca/blob/main/skill-guides/orchestration.md): Run, Task and Dispatch model, `worker_done` outcome, liveness verdicts.
 - [rota market review, October 2026](../contributing/market-review-2026-10.md): code read of Orca's orchestration layer on 2026-10-16.
+
+More comparisons: [how rota compares](README.md).

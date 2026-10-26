@@ -58,3 +58,5 @@ A split that avoids that:
 - [Superpowers skills](https://github.com/obra/superpowers/tree/main/skills): `subagent-driven-development`, `using-git-worktrees`, `verification-before-completion`, `finishing-a-development-branch`, `dispatching-parallel-agents`, `writing-plans`.
 - [Superpowers releases](https://github.com/obra/superpowers/releases): v7.0.1 and its date. Stars (305.5k) from the GitHub API on 2026-10-26.
 - rota: [README](../../README.md), [how it works](../how-it-works.md), [parallel rounds](../usage/parallel-rounds.md), [install](../install.md).
+
+More comparisons: [how rota compares](README.md).

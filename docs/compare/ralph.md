@@ -53,3 +53,5 @@ The loop idea fits inside rota's model: a worker that takes small, well-specifie
 - [ralph.sh](https://github.com/snarktank/ralph/blob/main/ralph.sh) and [CLAUDE.md prompt](https://github.com/snarktank/ralph/blob/main/CLAUDE.md): tools supported, permission flags, commit step, absence of a push or merge step.
 - [Geoffrey Huntley, Ralph](https://ghuntley.com/ralph/): the underlying technique.
 - [rota market review, October 2026](../contributing/market-review-2026-10.md): ralph's open requests and star count.
+
+More comparisons: [how rota compares](README.md).

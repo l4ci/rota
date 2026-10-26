@@ -49,3 +49,5 @@
 - [Claude Squad repository and README](https://github.com/smtg-ai/claude-squad): features, key bindings, install, prerequisites, license, "How it works".
 - [Releases](https://github.com/smtg-ai/claude-squad/releases): v1.0.20, 2026-08-20.
 - [rota market review, October 2026](../contributing/market-review-2026-10.md): star count and open requests.
+
+More comparisons: [how rota compares](README.md).

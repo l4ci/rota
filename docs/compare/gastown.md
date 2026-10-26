@@ -56,3 +56,5 @@ Not a natural fit. Both want to own assignment and merging in a repo. beads, the
 - [Repository API](https://github.com/steveyegge/gastown): stars (18.6k on 2026-10-26), MIT, release tags, head commit.
 - [Gas Town issue 232](https://github.com/steveyegge/gastown/issues/232): open rate-limit request.
 - [beads](https://github.com/steveyegge/beads): the tracker.
+
+More comparisons: [how rota compares](README.md).

@@ -51,3 +51,5 @@ They compose. Run an Octo debate or council to settle a design, record the outco
 - [claude-octopus README](https://github.com/nyldn/claude-octopus): v11.15.1, MIT, providers, install, platforms, consensus gate, reaction engine, memory, cost table.
 - [`/octo:parallel` command](https://github.com/nyldn/claude-octopus/blob/main/commands/parallel.md): work packages as separate `claude -p` processes.
 - [Command reference](https://github.com/nyldn/claude-octopus/blob/main/docs/COMMAND-REFERENCE.md): parallel and multi-provider commands.
+
+More comparisons: [how rota compares](README.md).
