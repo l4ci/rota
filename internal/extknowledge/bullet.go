@@ -111,3 +111,31 @@ func parseStamp(b *bullet, comment string) {
 		}
 	}
 }
+
+// subIndexRe is one sub-index line of a split topic's README.md:
+// "- [Name](<sub>.md) — hook". The path is matched loosely; a path that is not
+// a plain slug is reported by Malformed and never followed.
+var subIndexRe = regexp.MustCompile(`^- \[([^\]]+)\]\(([^)]*)\.md\)(?:\s+—\s+(.*))?\s*$`)
+
+// isSubIndexLine reports whether a line of a split topic's README is one of
+// its sub-index entries rather than a bullet.
+func isSubIndexLine(l string) bool {
+	return subIndexRe.MatchString(strings.TrimRight(l, " \t\r"))
+}
+
+// bullets lists the bullets of the topic's file. A split topic's README holds
+// its sub-index lines among the "- " lines; those are not bullets.
+func (t Topic) bullets(file string) []bullet {
+	all := parseBullets(file)
+	if !t.Split {
+		return all
+	}
+	lines := strings.Split(file, "\n")
+	out := all[:0:0]
+	for _, b := range all {
+		if !isSubIndexLine(lines[b.Line]) {
+			out = append(out, b)
+		}
+	}
+	return out
+}

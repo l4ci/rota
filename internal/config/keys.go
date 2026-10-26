@@ -296,6 +296,9 @@ var Keys = []Key{
 	k("issues.itsaplan.project", ScopeProject, "", false, TypeString, "It's a Plan project key, such as MKT, that issues.connection reads from and writes to."),
 	k("knowledge.external", ScopeMachine, "", false, TypePath, "Local path of the cloned external knowledge repo (README.md, topics/, rota-knowledge.json) that rota knowledge --external reads and writes, and that /rota-learn and the knowledge consult also use. Machine-specific, so set it in the global config. Empty means the feature is off."),
 	k("knowledge.externalTTL", ScopeMachine, num("10"), false, TypeInt, "Minutes a fetch of the external knowledge clone stays fresh. A read inside the window uses the local copy; past it, rota fetches and fast-forwards first. 0 fetches on every read."),
+	k("knowledge.externalMaxBullets", ScopeMachine, num("25"), false, TypeInt, "Bullets a topic file of the external knowledge repo may hold before rota doctor warns that it has outgrown a cheap read. 0 turns the check off."),
+	k("knowledge.externalMaxBytes", ScopeMachine, num("8192"), false, TypeInt, "Bytes a topic file of the external knowledge repo may hold before rota doctor warns. 0 turns the check off."),
+	k("knowledge.externalMaxTopics", ScopeMachine, num("60"), false, TypeInt, "Topics the external knowledge index may list before rota doctor warns. 0 turns the check off."),
 }
 
 func init() {
