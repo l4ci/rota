@@ -89,7 +89,10 @@ type WriteResult struct {
 }
 
 // AddIn is one bullet to add.
-type AddIn struct{ Topic, Title, Body, Date, Source, Hook string }
+type AddIn struct {
+	Topic, Title, Body, Date, Source, Hook string
+	Seen                                   Seen // tool versions the learning was seen on
+}
 
 // AmendIn appends Text to the one bullet under Topic that contains Fragment.
 type AmendIn struct{ Topic, Fragment, Text string }

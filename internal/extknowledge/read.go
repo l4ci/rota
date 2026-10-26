@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/l4ci/rota/internal/toolver"
 )
 
 // indexRe is one index entry: "- [Name](topics/slug.md) — hook".
@@ -72,12 +74,18 @@ func resolve(want string, topics []Topic) []Topic {
 	return partial
 }
 
+// Recheck is one tool a bullet was seen on that the project has since outgrown.
+type Recheck struct{ Topic, Title, Tool, Seen, Project string }
+
 // Query prints "## Name" sections for the requested topics, in argument
-// order. missing lists the requests that matched no index entry.
-func (c Clone) Query(want []string) (text string, missing []string, err error) {
+// order. missing lists the requests that matched no index entry. A bullet seen
+// on an older major.minor of a tool than project (tool name to version) gets a
+// recheck marker before its stamp and a row in recheck; bullets are never
+// hidden and a bullet with nothing outgrown prints as stored.
+func (c Clone) Query(want []string, project map[string]string) (text string, missing []string, recheck []Recheck, err error) {
 	topics, err := c.Topics()
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	var parts []string
 	printed := map[string]bool{}
@@ -97,15 +105,42 @@ func (c Clone) Query(want []string) (text string, missing []string, err error) {
 				if errors.Is(err, os.ErrNotExist) {
 					continue // indexed but not written yet: nothing to print
 				}
-				return "", nil, err
+				return "", nil, nil, err
 			}
-			parts = append(parts, "## "+t.Name+"\n"+sectionBody(string(body)))
+			file, rows := markRecheck(t.Name, string(body), project)
+			recheck = append(recheck, rows...)
+			parts = append(parts, "## "+t.Name+"\n"+sectionBody(file))
 		}
 	}
 	if len(parts) > 0 {
 		text = strings.Join(parts, "\n")
 	}
-	return text, missing, nil
+	return text, missing, recheck, nil
+}
+
+// markRecheck inserts the recheck marker before the stamp of every bullet of
+// file that was seen on an older version than project's, and lists them.
+func markRecheck(topic, file string, project map[string]string) (string, []Recheck) {
+	if len(project) == 0 {
+		return file, nil
+	}
+	lines := strings.Split(file, "\n")
+	var rows []Recheck
+	for _, b := range parseBullets(file) {
+		var notes []string
+		for _, tv := range b.Seen {
+			if pv, ok := project[tv.Tool]; ok && toolver.Newer(tv.Version, pv) {
+				notes = append(notes, fmt.Sprintf("seen on %s %s, project on %s", tv.Tool, tv.Version, pv))
+				rows = append(rows, Recheck{Topic: topic, Title: b.Title, Tool: tv.Tool, Seen: tv.Version, Project: pv})
+			}
+		}
+		if len(notes) == 0 {
+			continue
+		}
+		l := lines[b.Line]
+		lines[b.Line] = strings.TrimSuffix(l, b.Stamp) + " (" + strings.Join(notes, "; ") + ": recheck)" + strings.TrimRight(b.Stamp, " \t\r")
+	}
+	return strings.Join(lines, "\n"), rows
 }
 
 // sectionBody is a topic file without its "# Name" title line, trimmed, with
