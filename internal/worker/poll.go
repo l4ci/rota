@@ -137,7 +137,7 @@ func (e Env) promoteIdleWithPR(ctx context.Context, root string, rows []PollRow)
 	openPRs := e.openPRsByHead(ctx, root, reg, idle)
 	for i, r := range rows {
 		s := reg.Slot(r.Name)
-		if _, ok := idle[r.Name]; !ok || s == nil || s.Branch() == "" || IsOwnPark(s.Branch(), s.Name()) || s.AwaitingDone() {
+		if _, ok := idle[r.Name]; !ok || s == nil || s.Branch() == "" || IsOwnPark(s.Branch(), s.Name()) || (s.AwaitingDone() && !e.branchMoved(ctx, root, s)) {
 			continue
 		}
 		if url := openPRs[s.Branch()]; url != "" {
@@ -149,6 +149,22 @@ func (e Env) promoteIdleWithPR(ctx context.Context, root string, rows []PollRow)
 		}
 	}
 	return rows, notes
+}
+
+// branchMoved says the slot's branch on origin is past the tip the attempt
+// inherited (AttemptBase): the slot pushed work of its own, so the open PR is
+// its to report. False when no base was recorded or origin cannot say.
+func (e Env) branchMoved(ctx context.Context, root string, s *Slot) bool {
+	base := s.AttemptBase()
+	if base == "" {
+		return false
+	}
+	out, code := e.runGit(ctx, root, "ls-remote", "--exit-code", "origin", "refs/heads/"+s.Branch())
+	if code != 0 {
+		return false
+	}
+	tip, _, _ := strings.Cut(strings.TrimSpace(out), "\t")
+	return tip != "" && tip != base
 }
 
 // PollOpts are the flags of `rota worker poll`.

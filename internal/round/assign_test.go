@@ -879,6 +879,24 @@ func TestAssignRefusesAnIssueWithAnOpenPR(t *testing.T) {
 	}
 }
 
+// A redo onto an issue whose PR is open starts on that PR's head: the slot is
+// not "done" until its own worker says so (#2074).
+func TestAssignAcceptOpenPRMarksTheSlotAwaitingDone(t *testing.T) {
+	f := openPRFixture(t, tracker.PR{Number: 104, Branch: "ben/12-add-the-round-assign"})
+	if _, err := f.assign("12", "ben", func(o *AssignOpts) { o.AcceptOpenPR = true }); err != nil {
+		t.Fatal(err)
+	}
+	if !worker.LoadRegistryTolerant(f.root).Slot("ben").AwaitingDone() {
+		t.Errorf("an open PR heads the branch")
+	}
+	if _, err := f.assign("13", "dana", nil); err != nil {
+		t.Fatal(err)
+	}
+	if worker.LoadRegistryTolerant(f.root).Slot("dana").AwaitingDone() {
+		t.Errorf("no open PR, nothing to wait for")
+	}
+}
+
 func TestAssignResumingASlotIgnoresItsOwnOpenPR(t *testing.T) {
 	f := openPRFixture(t)
 	if _, err := f.assign("12", "ben", nil); err != nil {

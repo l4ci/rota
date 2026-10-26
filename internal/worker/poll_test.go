@@ -1,8 +1,10 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/stamp"
 	"os"
@@ -426,6 +428,35 @@ func TestPollReadsEachSlotsPaneByItsHarnessKind(t *testing.T) {
 	}
 	if len(res.Slots) != 2 || res.Slots[0].State != StateLimited || res.Slots[1].State != StateIdle {
 		t.Errorf("opencode slot w1, claude slot w2: %+v", res.Slots)
+	}
+}
+
+// A transferred slot whose branch moved past the tip it inherited has pushed
+// its own work: the open PR is its to report, so the promotion resumes (#2074).
+func TestPromoteIdlePromotesATransferredSlotOnceTheBranchMoves(t *testing.T) {
+	idle := func() []PollRow { return []PollRow{{"w1", StateIdle, "static pane, no sentinel"}} }
+	w := newWorld(t, "")
+	w.forge("listed", "1")
+	if _, err := UpdateSlot(w.dir, "w1", func(s *Slot) {
+		s.SetAwaitingDone(true)
+		s.Raw().Set("attemptBase", "aaa111")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	tip := "aaa111"
+	env := w.env(false).WithDefaults()
+	env.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		if len(args) > 0 && args[0] == "ls-remote" {
+			return git.Result{Stdout: tip + "\trefs/heads/x\n"}, nil
+		}
+		return git.Exec(ctx, dir, args...)
+	}
+	if rows, _ := env.promoteIdleWithPR(bg, w.dir, idle()); rows[0].State != StateIdle {
+		t.Errorf("tip unchanged, still the sender's head: %+v", rows)
+	}
+	tip = "bbb222"
+	if rows, notes := env.promoteIdleWithPR(bg, w.dir, idle()); rows[0].State != StateDone || notes["w1"] != missingSentinelNote {
+		t.Errorf("branch moved past the inherited tip: %+v %v", rows, notes)
 	}
 }
 
