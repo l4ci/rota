@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/proc"
 )
@@ -178,29 +179,27 @@ func insertBullet(body, bullet string) string {
 	return strings.TrimRight(body, "\n") + "\n\n" + bullet + "\n"
 }
 
-// Amend appends text to the one bullet under the topic that contains the
-// fragment (case-sensitive), before its date stamp, then lands it by policy.
+// Amend edits the one bullet under the topic that contains the fragment
+// (case-sensitive): it appends text before the date stamp and rewrites the
+// stamp's date and seen: list, then lands it by policy.
 func (c Clone) Amend(ctx context.Context, in AmendIn) (WriteResult, error) {
 	if err := checkLine("text", strings.TrimRight(in.Text, "\r\n")); err != nil {
 		return WriteResult{}, err
 	}
-	if err := c.syncForWrite(ctx); err != nil {
-		return WriteResult{}, err
+	if in.Text == "" && in.Date == "" && in.Seen == nil {
+		return WriteResult{}, fmt.Errorf("%w: amend needs text, a date or a seen list", ErrUsage)
 	}
-	pol, err := c.Policy()
+	if in.Date != "" {
+		if _, err := time.Parse("2006-01-02", in.Date); err != nil || !dateRe.MatchString(in.Date) {
+			return WriteResult{}, fmt.Errorf("%w: date %q is not a real YYYY-MM-DD", ErrUsage, in.Date)
+		}
+	}
+	e, err := c.beginEdit(ctx, in.Topic)
 	if err != nil {
 		return WriteResult{}, err
 	}
-	t, raw, err := c.topicFile(in.Topic)
-	if err != nil {
-		return WriteResult{}, err
-	}
-	if raw == nil {
-		return WriteResult{}, fmt.Errorf("%w: topic file %s/%s.md does not exist", ErrNotFound, TopicsDir, t.Slug)
-	}
-	lines := strings.Split(string(raw), "\n")
 	hit := -1
-	for i, l := range lines {
+	for i, l := range e.lines {
 		if strings.HasPrefix(l, "- ") && strings.Contains(l, in.Fragment) {
 			if hit >= 0 {
 				return WriteResult{}, fmt.Errorf("%w: fragment %q under %q", ErrMultiMatch, in.Fragment, in.Topic)
@@ -211,12 +210,24 @@ func (c Clone) Amend(ctx context.Context, in AmendIn) (WriteResult, error) {
 	if hit < 0 {
 		return WriteResult{}, fmt.Errorf("%w: no bullet in %q contains %q", ErrNotFound, in.Topic, in.Fragment)
 	}
-	l := lines[hit]
+	l := e.lines[hit]
 	tail := stampTail.FindString(l)
-	lines[hit] = strings.TrimRight(strings.TrimSuffix(l, tail), " ") + " " + in.Text + tail
-	p := &plan{message: fmt.Sprintf("knowledge: amend %q in %s", strings.TrimSpace(in.Fragment), in.Topic), slug: t.Slug}
-	p.set(filepath.ToSlash(filepath.Join(TopicsDir, t.Slug+".md")), strings.Join(lines, "\n"))
-	return c.land(ctx, pol, p)
+	text := strings.TrimRight(strings.TrimSuffix(l, tail), " ")
+	if in.Text != "" {
+		text += " " + in.Text
+	}
+	stamp := strings.TrimSpace(tail)
+	if in.Date != "" || in.Seen != nil {
+		if stamp == "" && in.Date == "" {
+			return WriteResult{}, fmt.Errorf("%w: the bullet has no stamp; give --date too so it gets one", ErrUsage)
+		}
+		stamp = editStamp(stamp, in.Date, in.Seen)
+	}
+	if stamp != "" {
+		text += " " + stamp
+	}
+	e.lines[hit] = text
+	return e.land(ctx, fmt.Sprintf("knowledge: amend %q in %s", strings.TrimSpace(in.Fragment), in.Topic))
 }
 
 // startBranch is the branch a write lands on when the policy names none: the

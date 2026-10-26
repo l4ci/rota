@@ -9,7 +9,7 @@ refs:
 Every verb that rewrites S's KNOWLEDGE.md (`knowledge add`, `amend`, `replace`, `rm`, `rename-topic`, `glossary write`, `glossary import`) holds the advisory lock on the sibling `KNOWLEDGE.md.lock` for its whole read-modify-write, and takes the `knowledge-tier.json.lock` inside it, never the reverse. `rename-topic`, `replace`, `rm` and `tier set` fold the buffered hits (see `knowledge hit`) under the `KNOWLEDGE.md` lock before they touch the sidecar. N concurrent calls each land their own change (the parallel rename batch in `rota-learn/topic-size.md` relies on it), and the temp file each write renames over the target is unique per call (`<path>.<pid>.<n>.tmp`), per the Writes rule in `cli-conventions.md`. The empty `.lock` stays behind, so a golden that records a writer's changed files lists it. (#895)
 
 ### External knowledge (`--external`)
-note: `--external` on `query`, `topics`, `add` and `amend` reads or writes the external knowledge clone named by `knowledge.external` instead of `.rota/KNOWLEDGE.md`; `--hook <line>` (add only, needs `--external`) sets the `README.md` line of a new topic. The external base has no tiers or shas: `query --tier` or `--include-deprecated` and `add --sha` with `--external` are usage errors (exit 2). Exit codes: 3 when `knowledge.external` is unset, the topic or fragment is not found or the repo policy is invalid; 4 when the clone is dirty or diverged, a fragment matches several bullets, or the title, body or amend text is not a single line without `*` (title) or `-->`; 5 when the remote is unreachable on a write; 1 when a push or `gh pr create` fails. Without a policy `branch`, a push write lands on the clone's upstream branch. See [external-knowledge](../../usage/external-knowledge.md).
+note: `--external` on `query`, `topics`, `add`, `amend`, `replace` and `rm` reads or writes the external knowledge clone named by `knowledge.external` instead of `.rota/KNOWLEDGE.md`; `--hook <line>` (add only, needs `--external`) sets the `README.md` line of a new topic; `--seen <tools>` (add, amend; needs `--external`) writes the stamp's `seen:tool@version,…` list (bare tools take the project's version, exit 3 when none; malformed or uppercase tokens exit 2) and `amend --date YYYY-MM-DD` rewrites the stamp date (exit 2 unless it is a real date). `amend --external` with `--seen` and/or `--date` makes `--mode`/`--body-file` optional; with none of the three it is exit 2, and `--seen` alone on a bullet with no stamp is exit 2 naming `--date`. `replace --external` matches only a bullet's title and body, never its stamp (`--old` in no such text is exit 3; several bullets or a `--new` with `-->` or a line break is exit 4); `rm --external` exits 3 for an unknown title and 4 for several. Each edit pulls, edits one bullet, commits with no trailer and lands by the repo policy like `add`. `rename-topic --external` is a usage error. The external base has no tiers or shas: `query --tier` or `--include-deprecated` and `add --sha` with `--external` are usage errors (exit 2). Exit codes: 3 when `knowledge.external` is unset, the topic or fragment is not found or the repo policy is invalid; 4 when the clone is dirty or diverged, a fragment matches several bullets, or the title, body or amend text is not a single line without `*` (title) or `-->`; 5 when the remote is unreachable on a write; 1 when a push or `gh pr create` fails. Without a policy `branch`, a push write lands on the clone's upstream branch. See [external-knowledge](../../usage/external-knowledge.md).
 
 ### rota knowledge query
 rota knowledge query <topic>… [--tier provisional|confirmed|deprecated] [--include-deprecated] [--external]
@@ -41,7 +41,7 @@ old: none (new)
 note: text is one `<heading>: <n> bullets` line per topic, in document order. `decisions topics` is the same over `.rota/DECISIONS.md`. Use it to find the heading text to pass to `query`. It is `stats` without the byte sizes.
 
 ### rota knowledge add
-rota knowledge add --topic <T> --title <S> --body-file <path|-> [--date YYYY-MM-DD] [--sha <hex>] [--external [--hook <line>]]
+rota knowledge add --topic <T> --title <S> --body-file <path|-> [--date YYYY-MM-DD] [--sha <hex>] [--external [--hook <line>] [--seen <tools>]]
 repo: scoped (scope S)
 data: {"topic": string, "title": string, "changed": bool}
 exit: 2 when `--topic`, `--title` or `--body-file` is missing, or `--sha` is not 7 to 40 hex digits; 3 when the `## <T>` heading does not exist in S's KNOWLEDGE.md
@@ -50,7 +50,7 @@ shim: stderr `wrote:` gives `changed: true`; `noop: … (title already present)`
 note: the old inline `--body` and the TTY-blocking stdin fallback are dropped. Dedup is by case-insensitive title, so a repeated title is `changed: false`. A successful add also initializes the bullet's tier entry as provisional. The missing-topic exit moves from 1 to 3. `--sha` is new (not in the old helper): it stores the commit the bullet's claim about code was true at beside the date, as `<!-- YYYY-MM-DD sha:<hex> -->` (lowercased). `rota knowledge query` prints the bullet line as stored, so the sha shows, and still tier-filters it; entries without a sha render as before.
 
 ### rota knowledge amend
-rota knowledge amend --topic <T> --fragment <F> --mode append --body-file <path|-> [--external]
+rota knowledge amend --topic <T> --fragment <F> --mode append --body-file <path|-> [--external [--seen <tools>] [--date YYYY-MM-DD]]
 repo: scoped (scope S)
 data: {"topic": string, "changed": bool}
 exit: 2 when a flag is missing, `--mode` is not `append`, or when no `--repo` is given and the fragment matches in both the umbrella and the resolved sub-repo (hint: pass `--repo`); 3 when the topic or fragment is not found
@@ -59,7 +59,7 @@ shim: reads the body file (or stdin for `-`) into the text argument. The old hel
 note: `--append TEXT` becomes `--mode append` plus `--body-file`, per rule 3, as for `design amend`; `append` is the only mode, so a later mode can be added. Without `--repo`, a single match across umbrella and the resolved sub-repo is amended, as before. A multi-file match was exit 1 and is now exit 2 (a missing decision, per the conventions).
 
 ### rota knowledge replace
-rota knowledge replace --topic <T> --old <text> --new <text>
+rota knowledge replace --topic <T> --old <text> --new <text> [--external]
 repo: scoped (scope S); edits S's KNOWLEDGE.md only, with no umbrella/sub-repo fallback search
 data: {"topic": string, "changed": bool}; on exit 4 `{"blockedBy": "ambiguous", "changed": false}`
 exit: 2 when `--topic`, `--old` or `--new` is missing (`--new ""` is allowed and deletes the text); 3 when the topic is not found or `<old>` is in no bullet of it; 4 when `<old>` is in more than one bullet of it (hint: use a longer fragment)
@@ -68,7 +68,7 @@ note: `--old` is a case-sensitive exact substring. A bullet runs from its `- ` l
 note: `amend` only appends and `rename-topic` only renames or moves; this is the verb that corrects a stale bullet. Unlike `amend`, ambiguity is exit 4 (the file is intact and the caller can retry with a longer fragment), not 2. The ticket asked for exit 4 on zero matches too; zero matches stays exit 3, as for `amend` and `rename-topic`, because the bullet could not be resolved (unratified).
 
 ### rota knowledge rm
-rota knowledge rm --topic <T> --title <title>
+rota knowledge rm --topic <T> --title <title> [--external]
 repo: scoped (scope S); edits S's KNOWLEDGE.md and tier sidecar only
 data: {"topic": string, "title": string, "changed": true}
 exit: 2 when `--topic` or `--title` is missing; 3 when the topic or the bullet is not found (nothing is written); 4 when several bullets share the title (`blockedBy: ambiguous`)

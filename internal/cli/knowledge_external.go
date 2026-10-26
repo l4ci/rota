@@ -92,6 +92,8 @@ func extErr(err error) error {
 		return Resolution("%s", err)
 	case errors.Is(err, extknowledge.ErrDirty), errors.Is(err, extknowledge.ErrDiverged), errors.Is(err, extknowledge.ErrMultiMatch), errors.Is(err, extknowledge.ErrContent):
 		return Refused("%s", err)
+	case errors.Is(err, extknowledge.ErrUsage):
+		return Usage("%s", err)
 	case errors.Is(err, extknowledge.ErrOffline):
 		return Unavailable("%s", err)
 	case errors.Is(err, extknowledge.ErrPush):
@@ -222,16 +224,43 @@ func knExtAdd(c *Ctx, topic, title, body, date, hook string, seen extknowledge.S
 	return Result{Data: extWriteData(topic, res, "title", title), Text: text}, nil
 }
 
-func knExtAmend(c *Ctx, topic, fragment, body string) (Result, error) {
+func knExtAmend(c *Ctx, topic, fragment, body, date string, seen *extknowledge.Seen) (Result, error) {
 	cl, err := externalClone(c)
 	if err != nil {
 		return Result{}, err
 	}
-	res, err := cl.Amend(c.Context(), extknowledge.AmendIn{Topic: topic, Fragment: fragment, Text: body})
+	res, err := cl.Amend(c.Context(), extknowledge.AmendIn{Topic: topic, Fragment: fragment, Text: body, Date: date, Seen: seen})
 	if err != nil {
 		return Result{}, extErr(err)
 	}
 	return Result{Data: extWriteData(topic, res), Text: "amended: " + res.File + extLanded(res)}, nil
+}
+
+func knExtReplace(c *Ctx, topic, old, repl string) (Result, error) {
+	cl, err := externalClone(c)
+	if err != nil {
+		return Result{}, err
+	}
+	res, err := cl.Replace(c.Context(), extknowledge.ReplaceIn{Topic: topic, Old: old, New: repl})
+	if err != nil {
+		return Result{}, extErr(err)
+	}
+	if !res.Changed {
+		return Result{Data: extWriteData(topic, res), Text: "unchanged: " + topic + " (--old equals --new)"}, nil
+	}
+	return Result{Data: extWriteData(topic, res), Text: "replaced: " + res.File + extLanded(res)}, nil
+}
+
+func knExtRm(c *Ctx, topic, title string) (Result, error) {
+	cl, err := externalClone(c)
+	if err != nil {
+		return Result{}, err
+	}
+	res, err := cl.Remove(c.Context(), extknowledge.RmIn{Topic: topic, Title: title})
+	if err != nil {
+		return Result{}, extErr(err)
+	}
+	return Result{Data: extWriteData(topic, res, "title", title), Text: fmt.Sprintf("removed: %s :: %s (%s)%s", topic, title, res.File, extLanded(res))}, nil
 }
 
 func extWriteData(topic string, res extknowledge.WriteResult, kv ...any) *jsonx.Object {
