@@ -211,6 +211,8 @@ type ExternalKnowledge struct {
 	// Over names each topic past a size limit, and the index past the topic
 	// limit; empty when nothing is over or the clone could not be read.
 	Over []string
+	// Stray lists flat topic files an older rota left beside a split topic.
+	Stray []string
 }
 
 // externalKnowledge reports the state of the external knowledge clone: unset
@@ -243,6 +245,16 @@ func (d *runner) externalKnowledgeSize() (Check, bool) {
 	return Check{Name: "external knowledge size", Status: Warn, Detail: strings.Join(over, "; "), Hint: "/rota-learn --external-review proposes a split"}, true
 }
 
+// externalKnowledgeLayout warns when an older rota left a flat topic file
+// beside a split topic's folder.
+func (d *runner) externalKnowledgeLayout() (Check, bool) {
+	stray := d.in.ExternalKnowledge.Stray
+	if len(stray) == 0 {
+		return Check{}, false
+	}
+	return Check{Name: "external knowledge layout", Status: Warn, Detail: strings.Join(stray, ", ") + " sits beside a split topic folder (an older rota wrote it)", Hint: "fold it in with: rota knowledge split --external --topic <topic>"}, true
+}
+
 // Run executes every check in the contract's order.
 func Run(ctx context.Context, in Input) Report {
 	d := &runner{in: in, ctx: ctx}
@@ -257,6 +269,9 @@ func Run(ctx context.Context, in Input) Report {
 		// Unset adds no line: the feature is off, like a healthy disk.
 		checks = append(checks, d.externalKnowledge())
 		if c, ok := d.externalKnowledgeSize(); ok {
+			checks = append(checks, c)
+		}
+		if c, ok := d.externalKnowledgeLayout(); ok {
 			checks = append(checks, c)
 		}
 	}

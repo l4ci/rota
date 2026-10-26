@@ -341,6 +341,11 @@ func doctorExternalKnowledge(ctx context.Context, d *Deps, cwd, home string) doc
 		// Disk only: no fetch, so a stale clone is measured as it stands.
 		if stats, err := (extknowledge.Clone{Dir: path}).Stats(); err == nil {
 			k.Over = externalLimits(d, cwd).Over(stats)
+			for _, st := range stats {
+				if st.Stray {
+					k.Stray = append(k.Stray, st.File)
+				}
+			}
 		}
 	}
 	return k

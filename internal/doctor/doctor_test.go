@@ -990,12 +990,12 @@ func TestExternalKnowledgeCheck(t *testing.T) {
 func TestExternalKnowledgeSizeWarns(t *testing.T) {
 	base := ExternalKnowledge{Path: "/kb", Exists: true, IsGit: true, HasRemote: true, HasPolicy: true}
 	over := base
-	over.Over = []string{"Godot (29 bullets, limit 25)", "index has 61 topics (limit 60)"}
+	over.Over = []string{"Godot (29 bullets > 25, 9904 bytes > 8192)", "index has 61 topics (limit 60)"}
 	f := &fake{have: map[string]bool{}, reply: map[string]Result{}}
 
 	r := Run(context.Background(), Input{Exec: f.exec, Look: f.look, ExternalKnowledge: over})
 	c := statusOf(r, "external knowledge size")
-	if c.Status != Warn || !strings.Contains(c.Detail, "Godot (29 bullets, limit 25)") || !strings.Contains(c.Detail, "index has 61 topics") {
+	if c.Status != Warn || !strings.Contains(c.Detail, "Godot (29 bullets > 25, 9904 bytes > 8192)") || !strings.Contains(c.Detail, "index has 61 topics") {
 		t.Fatalf("check = %+v", c)
 	}
 	if !strings.Contains(c.Hint, "/rota-learn --external-review") {
@@ -1005,5 +1005,22 @@ func TestExternalKnowledgeSizeWarns(t *testing.T) {
 	r = Run(context.Background(), Input{Exec: f.exec, Look: f.look, ExternalKnowledge: base})
 	if c := statusOf(r, "external knowledge size"); c.Name != "" {
 		t.Fatalf("nothing over adds no line, got %+v", c)
+	}
+}
+
+func TestExternalKnowledgeStrayWarns(t *testing.T) {
+	base := ExternalKnowledge{Path: "/kb", Exists: true, IsGit: true, HasRemote: true, HasPolicy: true}
+	stray := base
+	stray.Stray = []string{"topics/godot.md"}
+	f := &fake{have: map[string]bool{}, reply: map[string]Result{}}
+
+	r := Run(context.Background(), Input{Exec: f.exec, Look: f.look, ExternalKnowledge: stray})
+	c := statusOf(r, "external knowledge layout")
+	if c.Status != Warn || !strings.Contains(c.Detail, "topics/godot.md") || !strings.Contains(c.Hint, "rota knowledge split --external") {
+		t.Fatalf("check = %+v", c)
+	}
+	r = Run(context.Background(), Input{Exec: f.exec, Look: f.look, ExternalKnowledge: base})
+	if c := statusOf(r, "external knowledge layout"); c.Name != "" {
+		t.Fatalf("no stray file adds no line, got %+v", c)
 	}
 }

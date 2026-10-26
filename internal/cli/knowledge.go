@@ -118,16 +118,20 @@ func knNoArgs(args []string) error {
 func knQuery(fs *flag.FlagSet) RunFunc {
 	tier := fs.String("tier", "", "only bullets on this `tier` (provisional|confirmed|deprecated)")
 	incl := fs.Bool("include-deprecated", false, "also print deprecated bullets")
+	all := fs.Bool("all", false, "with --external: also print every subtopic of a split topic")
 	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) == 0 {
 			return Result{}, Usage("name at least one topic")
 		}
+		if *all && !*ext {
+			return Result{}, Usage("--all needs --external")
+		}
 		if *ext {
 			if *tier != "" || *incl {
 				return Result{}, Usage("--tier and --include-deprecated do not apply to --external: the external base has no tiers")
 			}
-			return knExtQuery(c, args)
+			return knExtQuery(c, args, *all)
 		}
 		if *tier != "" && !knowledge.ValidTier(*tier) {
 			return Result{}, Usage("--tier must be one of: provisional, confirmed, deprecated")

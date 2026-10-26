@@ -134,15 +134,19 @@ func extFreshen(c *Ctx, cl extknowledge.Clone) {
 	}
 }
 
-func knExtQuery(c *Ctx, topics []string) (Result, error) {
+func knExtQuery(c *Ctx, topics []string, all bool) (Result, error) {
 	cl, err := externalClone(c)
 	if err != nil {
 		return Result{}, err
 	}
 	extFreshen(c, cl)
-	text, missing, recheck, err := cl.Query(topics, projectTools(c))
+	res, err := cl.QueryWith(topics, extknowledge.QueryOpts{All: all, Project: projectTools(c)})
 	if err != nil {
 		return Result{}, extErr(err)
+	}
+	text, missing, recheck := res.Text, res.Missing, res.Recheck
+	for _, s := range res.Strays {
+		c.Warn("%s has a stray file %s beside its folder (an older rota wrote it): run `rota knowledge split --external --topic %s` to fold it in", s.Topic, s.File, s.Topic)
 	}
 	ms := []any{}
 	for _, m := range missing {
@@ -234,8 +238,14 @@ func knExtStats(c *Ctx) (Result, error) {
 	items := []any{}
 	var lines []string
 	for _, s := range stats {
-		items = append(items, knObj("name", s.Name, "file", s.File, "bullets", s.Bullets, "bytes", s.Bytes))
-		lines = append(lines, fmt.Sprintf("%s: %d bullets, %d bytes", s.Name, s.Bullets, s.Bytes))
+		item := knObj("name", s.Name, "file", s.File, "bullets", s.Bullets, "bytes", s.Bytes)
+		line := fmt.Sprintf("%s: %d bullets, %d bytes", s.Name, s.Bullets, s.Bytes)
+		if s.Stray {
+			item.Set("stray", true)
+			line += " (stray)"
+		}
+		items = append(items, item)
+		lines = append(lines, line)
 	}
 	return Result{Data: knObj("topics", items), Text: strings.Join(lines, "\n")}, nil
 }
