@@ -194,7 +194,7 @@ func TestNeedsWatchAndDigest(t *testing.T) {
 			if strings.Contains(d, "dana") != tc.active || strings.Contains(d, "#31") != tc.active || strings.Contains(d, "ben") {
 				t.Errorf("digest slot visibility: %q", d)
 			}
-			if !strings.Contains(d, "round 2") || !strings.Contains(d, "NO WATCH ARMED") {
+			if !strings.Contains(d, "round 2") || !strings.HasSuffix(d, "NO WATCH ARMED: run `rota round watch` in the background now.") {
 				t.Errorf("digest round/watch status: %q", d)
 			}
 		})
@@ -206,6 +206,18 @@ func TestNeedsWatchAndDigest(t *testing.T) {
 	}
 	if d := Digest(root, 0, true); !strings.Contains(d, "needs you") || !strings.HasSuffix(d, "Watch armed.") {
 		t.Fatalf("digest %q", d)
+	}
+}
+
+func TestExitDigest(t *testing.T) {
+	root := t.TempDir()
+	if got, want := ExitDigest(root, 0), "rota round: no active slots. Watch exiting; re-arm `rota round watch`."; got != want {
+		t.Errorf("empty round exit digest = %q, want %q", got, want)
+	}
+	writeRegistry(t, root, `{"slots":[{"name":"ben","state":"idle"},{"name":"dana","state":"done","task":"31","pr":"https://x/pull/7"}],"escalations":[{"id":"E1","status":"pending"}]}`)
+	want := "rota round 2: dana done #31 https://x/pull/7 (needs you); 1 escalation(s) pending. Watch exiting; re-arm `rota round watch`."
+	if got := ExitDigest(root, 2); got != want {
+		t.Errorf("active round exit digest = %q, want %q", got, want)
 	}
 }
 
