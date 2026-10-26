@@ -999,11 +999,8 @@ func assignedHarness(root, issue string) string {
 		return ""
 	}
 	es, _ := ledger.Load(root)
-	for i := len(es) - 1; i >= 0; i-- {
-		e := es[i]
-		if e.Kind == ledger.KindAssign && e.Harness != "" && NormID(e.Issue) == NormID(issue) {
-			return e.Harness
-		}
+	if e := ledger.LatestAssign(es, ledger.AssignQuery{Issue: issue, RequireHarness: true}); e != nil {
+		return e.Harness
 	}
 	return ""
 }
