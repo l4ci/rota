@@ -15,7 +15,7 @@ manual_only: false
 flags: []
 example:
   source: null
-  reviewed: false
+  reviewed: true
   steps:
     - you: /rota-bugreport
     - agent: |

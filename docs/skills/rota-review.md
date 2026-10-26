@@ -21,7 +21,7 @@ flags:
     does: issue backend; review every needs-review item's open PR or MR and merge the ones that pass
 example:
   source: walkthroughs/quickstart-manual-mode.md#step-4-ship
-  reviewed: false
+  reviewed: true
   steps:
     - you: /rota-review
     - agent: |

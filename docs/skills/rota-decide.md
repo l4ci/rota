@@ -23,7 +23,7 @@ flags:
     does: mark a decision lifted, nothing replacing it
 example:
   source: usage/decisions.md#capturing-a-decision
-  reviewed: false
+  reviewed: true
   steps:
     - you: /rota-decide
     - agent: |

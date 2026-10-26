@@ -15,7 +15,7 @@ manual_only: true
 flags: []
 example:
   source: null
-  reviewed: false
+  reviewed: true
   steps:
     - you: /rota-init
     - agent: |

@@ -19,7 +19,7 @@ flags:
     does: deprecated alias for /rota-docs
 example:
   source: walkthroughs/quickstart-manual-mode.md#step-4-ship
-  reviewed: false
+  reviewed: true
   steps:
     - you: /rota-ship
     - agent: |

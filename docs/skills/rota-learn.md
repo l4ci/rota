@@ -23,7 +23,7 @@ flags:
     does: edit one existing bullet's tier or body without the capture flow
 example:
   source: walkthroughs/brownfield-existing-project.md#step-8-a-real-debug-cycle
-  reviewed: false
+  reviewed: true
   steps:
     - you: /rota-learn
     - agent: |
