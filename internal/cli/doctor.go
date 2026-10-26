@@ -335,19 +335,6 @@ func doctorExternalKnowledge(ctx context.Context, d *Deps, cwd, home string) doc
 		return doctor.ExternalKnowledge{}
 	}
 	path = config.ExpandDir(path, home)
-	k := doctor.ExternalKnowledge{Path: path}
-	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
-		return k
-	}
-	k.Exists = true
-	if res, err := d.Git(ctx, path, "rev-parse", "--is-inside-work-tree"); err != nil || res.ExitCode != 0 || strings.TrimSpace(res.Stdout) != "true" {
-		return k
-	}
-	k.IsGit = true
-	if res, err := d.Git(ctx, path, "remote"); err == nil && res.ExitCode == 0 && strings.TrimSpace(res.Stdout) != "" {
-		k.HasRemote = true
-	}
-	_, err := os.Stat(filepath.Join(path, extknowledge.PolicyFile))
-	k.HasPolicy = err == nil
-	return k
+	st := extknowledge.Clone{Dir: path, Env: extknowledge.Env{Git: d.Git}}.State(ctx)
+	return doctor.ExternalKnowledge{Path: path, Exists: st.Exists, IsGit: st.IsGit, HasRemote: st.HasRemote, HasPolicy: st.HasPolicy}
 }
