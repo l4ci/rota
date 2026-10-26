@@ -109,10 +109,14 @@ Hard boundaries for this project. Each entry is a commitment, not a preference â
 
 **Permits.** <What this still allows.>
 
+<!-- paths: ["internal/storage/**/*.go", "cmd/server/*.go"] -->
+
 <!-- 2026-05-01 -->
 ```
 
 **Merge rules:**
+
+- The `paths` comment is optional. Include only the relative file globs this boundary applies to; omit it when no file scope is known. With `rota hook install`, matching Edit/Write calls receive the full active entry once per session. Globs are relative to the umbrella root; `*` stays in one path segment and `**` spans directories. Topic-based consult still applies to every entry.
 
 - Never rewrite sections you didn't change; make targeted edits rather than replacing the whole file.
 - Insert new `### Decision title` blocks at the **top** of their topic (newest first).
