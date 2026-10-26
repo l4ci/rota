@@ -628,18 +628,27 @@ func debugReset(fs *flag.FlagSet) RunFunc {
 
 // ---- debug work-fix
 
-func workFixItem(c *Ctx, args []string) (root, bug string, err error) {
+// workFixTarget resolves the item and the store key of one task's count: the
+// item's ID, plus "#<task>" when --task names one, so sibling tasks of an
+// item neither share a count nor clear each other's.
+func workFixTarget(c *Ctx, args []string, task string) (root, bug, key string, err error) {
 	bug, err = oneArg(args, "bugId")
 	if err != nil {
 		return
 	}
 	if bug = strings.TrimSpace(bug); bug == "" {
-		return "", "", Usage("bugId must not be empty")
+		return "", "", "", Usage("bugId must not be empty")
 	}
 	if root, err = c.Root(); err != nil {
 		return
 	}
-	bug, err = debugItem(c, bug)
+	if bug, err = debugItem(c, bug); err != nil {
+		return
+	}
+	key = bug
+	if task = strings.TrimSpace(task); task != "" {
+		key += "#" + task
+	}
 	return
 }
 
@@ -655,47 +664,61 @@ func workFixRecord(c *Ctx, root, v string, body verdict.Body) verdict.Record {
 	return verdict.NewRecord(kind, v, sha, body, c.deps().Now())
 }
 
-// runWorkFixAttempt records one Step 7 fix dispatch for an item. The fourth
-// since the last PASS or reset is refused (exit 4) and names /rota-debug.
-func runWorkFixAttempt(c *Ctx, args []string) (Result, error) {
-	root, bug, err := workFixItem(c, args)
-	if err != nil {
-		return backlogFail(err)
+// workFixAttempt records one Step 7 fix dispatch for a task. The fourth since
+// the task's last PASS or reset is refused (exit 4) and names /rota-debug.
+func workFixAttempt(fs *flag.FlagSet) RunFunc {
+	task := fs.String("task", "", "the plan task the fix is for; its count is kept apart")
+	return func(c *Ctx, args []string) (Result, error) {
+		root, bug, key, err := workFixTarget(c, args, *task)
+		if err != nil {
+			return backlogFail(err)
+		}
+		n, ok, err := verdict.AddWorkFix(root, key, workFixRecord(c, root, verdict.Fail, verdict.Body{}))
+		if err != nil {
+			return Result{}, err
+		}
+		d := jsonx.NewObject()
+		d.Set("bugId", bug)
+		if !ok {
+			d.Set("blockedBy", blockedby.IronLaw)
+			d.Set("failedAttempts", n)
+			d.Set("next", "/rota-debug "+bug)
+			d.Set("changed", false)
+			return Result{Data: d}, Refused("%s has %d failed fix attempts; /rota-work dispatches no more, run /rota-debug %s", key, n, bug).
+				WithHint("rota debug work-fix reset " + bug + taskFlag(*task))
+		}
+		d.Set("attempt", n)
+		d.Set("changed", true)
+		return Result{Data: d, Text: strconv.Itoa(n)}, nil
 	}
-	n, ok, err := verdict.AddWorkFix(root, bug, workFixRecord(c, root, verdict.Fail, verdict.Body{}))
-	if err != nil {
-		return Result{}, err
-	}
-	d := jsonx.NewObject()
-	d.Set("bugId", bug)
-	if !ok {
-		d.Set("blockedBy", blockedby.IronLaw)
-		d.Set("failedAttempts", n)
-		d.Set("next", "/rota-debug "+bug)
-		d.Set("changed", false)
-		return Result{Data: d}, Refused("%s has %d failed fix attempts; /rota-work dispatches no more, run /rota-debug %s", bug, n, bug).
-			WithHint("rota debug work-fix reset " + bug)
-	}
-	d.Set("attempt", n)
-	d.Set("changed", true)
-	return Result{Data: d, Text: strconv.Itoa(n)}, nil
 }
 
-func runWorkFixPass(c *Ctx, args []string) (Result, error) {
-	root, bug, err := workFixItem(c, args)
-	if err != nil {
-		return backlogFail(err)
+func taskFlag(task string) string {
+	if task = strings.TrimSpace(task); task != "" {
+		return " --task " + task
 	}
-	if _, _, err := verdict.AddWorkFix(root, bug, workFixRecord(c, root, verdict.Pass, verdict.Body{})); err != nil {
-		return Result{}, err
+	return ""
+}
+
+func workFixPass(fs *flag.FlagSet) RunFunc {
+	task := fs.String("task", "", "the plan task whose verify passed")
+	return func(c *Ctx, args []string) (Result, error) {
+		root, bug, key, err := workFixTarget(c, args, *task)
+		if err != nil {
+			return backlogFail(err)
+		}
+		if _, _, err := verdict.AddWorkFix(root, key, workFixRecord(c, root, verdict.Pass, verdict.Body{})); err != nil {
+			return Result{}, err
+		}
+		d := jsonx.NewObject()
+		d.Set("bugId", bug)
+		d.Set("changed", true)
+		return Result{Data: d}, nil
 	}
-	d := jsonx.NewObject()
-	d.Set("bugId", bug)
-	d.Set("changed", true)
-	return Result{Data: d}, nil
 }
 
 func workFixReset(fs *flag.FlagSet) RunFunc {
+	task := fs.String("task", "", "the plan task whose count starts again")
 	reason := fs.String("reason", "", "why the count starts again")
 	confirm := confirmFlags(fs)
 	return func(c *Ctx, args []string) (Result, error) {
@@ -706,27 +729,27 @@ func workFixReset(fs *flag.FlagSet) RunFunc {
 		if strings.TrimSpace(*reason) == "" {
 			return Result{}, Usage("--reason is required")
 		}
-		root, bug, err := workFixItem(c, args)
+		root, bug, key, err := workFixTarget(c, args, *task)
 		if err != nil {
 			return backlogFail(err)
 		}
 		d := jsonx.NewObject()
 		d.Set("bugId", bug)
-		if verdict.WorkFixAttempts(verdict.Load(root).Items[bug]) == 0 {
+		if verdict.WorkFixAttempts(verdict.Load(root).Items[key]) == 0 {
 			d.Set("cleared", 0)
 			d.Set("changed", false)
 			return Result{Data: d, Text: "nothing to reset"}, nil
 		}
-		if res, err := clearGate(c, gate.DebugReset, bug, conf, nil, nil); err != nil {
+		if res, err := clearGate(c, gate.DebugReset, key, conf, nil, nil); err != nil {
 			return res, err
 		}
 		r := workFixRecord(c, root, verdict.Reset, verdict.Body{Summary: strings.TrimSpace(*reason)})
-		cleared, err := verdict.ResetWorkFix(root, bug, r)
+		cleared, err := verdict.ResetWorkFix(root, key, r)
 		if err != nil {
 			return Result{}, err
 		}
 		d.Set("cleared", cleared)
 		d.Set("changed", cleared > 0)
-		return Result{Data: d, Text: "reset " + bug + " (" + strconv.Itoa(cleared) + " cleared)"}, nil
+		return Result{Data: d, Text: "reset " + key + " (" + strconv.Itoa(cleared) + " cleared)"}, nil
 	}
 }

@@ -10,23 +10,23 @@ B3 (#56) moves two prose rules into the verbs. Orchestrator rulings (round 4, ph
 - **Ship refusal.** `ship pr` and `ship merge` read the branch's records in the B2 store (key as `verdict add` builds it). The branch is blocked when its effective review verdict is `FAIL`, or its latest `review-cross`, lens review (`review-security`, `review-perf`, `review-ux`) or `second-opinion` record is `FAIL`. A stale FAIL still blocks: only a newer record of the same kind clears it, so a fix is reviewed again before it ships. `CONCERNS` and QA verdicts never block here; their routing stays with `verdict route`. A branch with no records ships as before. The refusal is exit 4 before anything changes, with failure data `{"blockedBy": "verdict", "kind": string, "verdict": "FAIL", "sha": string, "stale": bool, "changed": false}` (`kind` is the blocking record's: `review-spec`, `review-quality`, `review-cross`, a lens kind or `second-opinion`, checked in that order; the first failing lens in `security`, `perf`, `ux` order). The hint names `rota verdict show`. `ship pr-merge` (the `/rota-review --queue` merge path) applies the same refusal to the PR's head branch, read from the forge's open-PR listing the verb already makes; in umbrella mode the key is `<repo>:<branch>` for the `--repo` sub-repo. When the forge reports no head branch, the verb does not refuse and adds the warning `could not resolve the head branch of PR <n>; verdicts not checked`. `worker gate` and `worker train` apply the same FAIL refusal plus the bounce rule (#2073): a review record (`review-spec`, `review-quality`, `review-cross`, a lens) recorded at the head the gate merges (the PR's pushed head, not the local tip) with a blocking finding or a failed item refuses even under `CONCERNS`, with `kind` and `sha` of that record, `stale` false and the finding's title in the message. A record at another commit does not count there. `ship pr`, `ship merge` and `ship pr-merge` keep the FAIL-only rule.
 - **Iron Law.** The count is per item: the item's `debug-fix` FAIL records in the store since its latest `debug-reset` record, the same number `debug verdict` reports as `failedFixes`. A new branch or a cleared session file does not reset it. At 3 or more, `debug counter init <ID>` and `debug counter record-attempt` (which reads the item from the session's `bug_id`) exit 4 with failure data `{"blockedBy": "iron law", "bugId": string, "failedFixes": number, "changed": false}` and the hint `rota debug reset <ID>`. `debug verdict` is never refused: an outcome is always recorded.
 
-- **Work-fix cap (#2121).** `/rota-work` Step 7 counts fix dispatches per item the way the Iron Law counts debug fixes, but separately: the count is the item's `work-fix` FAIL records since its latest `work-fix` PASS or `work-fix-reset` record, so a PASS clears it and a new session or branch does not. It never feeds `failedFixes`, so the hand-off to `/rota-debug` is not halted by it.
+- **Work-fix cap (#2121).** `/rota-work` Step 7 counts fix dispatches per task the way the Iron Law counts debug fixes, but separately: the count is the `work-fix` FAIL records of the store key (the item ID, or `<ID>#<task>` with `--task`, one key per plan task) since its latest `work-fix` PASS or `work-fix-reset` record, so a PASS clears it and a new session or branch does not. It never feeds `failedFixes`, so the hand-off to `/rota-debug` is not halted by it.
 
 ### rota debug work-fix attempt
-rota debug work-fix attempt <ID>
+rota debug work-fix attempt <ID> [--task <N>]
 repo: scoped
 data: {"bugId": string, "attempt": number, "changed": true}
 exit: 3 when no `.rota/` is found or the issue does not resolve; 4 when the item already has 3 attempts since its last PASS or reset, with `{"blockedBy": "iron law", "bugId": string, "failedAttempts": number, "next": "/rota-debug <ID>", "changed": false}` and the hint `rota debug work-fix reset <ID>`
 note: appends a `work-fix` FAIL record and returns the new count; the check and the write share the store lock. A refusal writes nothing.
 
 ### rota debug work-fix pass
-rota debug work-fix pass <ID>
+rota debug work-fix pass <ID> [--task <N>]
 repo: scoped
 data: {"bugId": string, "changed": true}
 note: appends a `work-fix` PASS record, which starts the count again at 0.
 
 ### rota debug work-fix reset
-rota debug work-fix reset <ID> --reason <text> --confirm --confirm-note <answer>
+rota debug work-fix reset <ID> [--task <N>] --reason <text> --confirm --confirm-note <answer>
 repo: scoped
 data: {"bugId": string, "cleared": number, "changed": bool}
 exit: as `debug reset`; the gate is the same `debug-reset` row.

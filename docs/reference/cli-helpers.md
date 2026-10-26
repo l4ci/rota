@@ -316,9 +316,9 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota debug counter inc-cycle` | count a hypothesis cycle |
 | `rota debug verdict <bugId> --verdict <PASS\|FAIL> [--body-file <path\|->]` | record whether a fix held and route on the item's failed-fix count |
 | `rota debug reset <bugId> --reason <text> --confirm --confirm-note <answer>` | start an item's failed-fix count again (manual gate) |
-| `rota debug work-fix attempt <ID>` | record a `/rota-work` Step 7 fix attempt; exit 4 on the fourth since the last PASS or reset |
-| `rota debug work-fix pass <ID>` | a verify passed: start the item's attempt count again |
-| `rota debug work-fix reset <ID> --reason <text> --confirm --confirm-note <answer>` | start the attempt count again (manual gate) |
+| `rota debug work-fix attempt <ID> [--task <N>]` | record a `/rota-work` Step 7 fix attempt; exit 4 on the fourth since the last PASS or reset |
+| `rota debug work-fix pass <ID> [--task <N>]` | a verify passed: start the item's attempt count again |
+| `rota debug work-fix reset <ID> [--task <N>] --reason <text> --confirm --confirm-note <answer>` | start the attempt count again (manual gate) |
 
 ## `rota worker`
 
