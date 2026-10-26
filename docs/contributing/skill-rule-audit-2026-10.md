@@ -59,10 +59,6 @@ E6's reviewer test-budget instruction and E7's prohibition on assignment-scope n
 - [#2144 — Prepare reviewer workspaces through a fail-closed verb](https://github.com/l4ci/rota/issues/2144): own archive preparation, the pinned workspace, extraction failure and cleanup in the managed review path. A scratch cwd alone must not be advertised as an OS sandbox.
 - [#2145 — Run reviewer binary probes with isolated config state](https://github.com/l4ci/rota/issues/2145): execute probes with temporary HOME/config roots, refuse setup failures and demonstrate that a mutating probe preserves the real config. This does not move harness credentials or claim to prevent arbitrary absolute-path access.
 
-## Covered prose removed
-
-The inventory preserves the pre-cut snapshot, including removed occurrences. The cut log and before/after measurements are filled after merging the moved base; semantic duties and usage commands remain.
-
 ## Reproduce inventory coverage
 
 Run from the repository root. This checks every source occurrence against the table, including literal text, descriptive rows and duplicate detection; it does not automate the classification judgment.
@@ -92,4 +88,47 @@ actual = {(path, int(line)): html.unescape(value) for path, line, value in rows}
 assert len(rows) == len(actual), "duplicate source rows"
 assert actual == expected, (expected.keys() - actual.keys(), actual.keys() - expected.keys())
 print(f"PASS: {len(actual)} source occurrences covered")
+```
+
+## Covered prose removed
+
+The inventory preserves the pre-cut snapshot. Main was fetched before cutting and still resolved to the snapshot commit, so no base merge was needed. Five covered occurrences were removed in four small, local edits; semantic duties, commands, manual gates and recovery steps remain.
+
+| Inventory rows | Removed repetition | Existing implementation |
+|---|---|---|
+| R018 | Repeated capability-membership validation sentence | `milestone check`: `internal/milestone/check.go:101`, `internal/cli/milestone.go:569` |
+| R120 | Optional worktree count and mutually exclusive repo flags restated beside the command | `status add`: `internal/cli/backlog.go:492`, `:510`; the command signature remains |
+| R167 | Item-removal effects, default preview, archive preservation and nondecreasing counters restated above the workflow | `item rm`: `internal/backlog/rm.go:331`, `:364`, `:409`; R2 still runs and shows the preview, R4 still selects the apply/archive mode, and the contract pointer remains |
+| R305–R306 | “Never creates a second release” and “branch never leads binaries” explanations | `release publish`: `internal/cli/release_gate.go:173`; `release push --branch-only`: `internal/release/flow.go:187`, `:203`; failure/recovery instructions remain |
+
+The cuts avoid the concurrent work, decide/learn, QA and review skill edits called out in the assignment. They remove 104 whitespace-delimited words (0.117%) and 666 bytes from canonical skill Markdown. Top-level SKILL.md files stay unchanged; the reduction is in their loaded references.
+
+| Measure | Base | Branch |
+|---|---:|---:|
+| Canonical skill Markdown lines | 7,067 | 7,066 |
+| Canonical skill Markdown words | 89,204 | 89,100 |
+| Canonical skill Markdown bytes | 579,495 | 578,829 |
+| Matching never/must source lines | 387 | 382 |
+| Top-level SKILL.md words | 33,504 | 33,504 |
+
+These measurements compare the snapshot to the checked-out branch and exclude the new audit documentation. The following read-only command reproduces them:
+
+```python
+import re
+import subprocess
+from pathlib import Path
+
+base = "dd371b42a8472d95ef34a2910a8fc0a6112a4ddc"
+paths = subprocess.check_output(
+    ["git", "ls-tree", "-r", "--name-only", base, "--", "skills/"], text=True
+).splitlines()
+paths = [path for path in paths if path.endswith(".md")]
+for label in ("base", "branch"):
+    blobs = [subprocess.check_output(["git", "show", f"{base}:{path}"])
+             if label == "base" else Path(path).read_bytes() for path in paths]
+    print(label, "lines", sum(len(blob.splitlines()) for blob in blobs),
+          "words", sum(len(blob.split()) for blob in blobs),
+          "bytes", sum(len(blob) for blob in blobs),
+          "matches", sum(bool(re.search(rb"\b(never|must)\b", line, re.I))
+                         for blob in blobs for line in blob.splitlines()))
 ```
