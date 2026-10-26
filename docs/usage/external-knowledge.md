@@ -34,7 +34,7 @@ On another machine, clone the same repo and set the key there.
 
 | File | Holds |
 |------|-------|
-| `INDEX.md` | One line per topic: `- [Go](topics/go.md) — hook`. The name is the topic, the hook says what is in it. |
+| `README.md` | One line per topic: `- [Go](topics/go.md) — hook`. The name is the topic, the hook says what is in it. It renders as the repo front page on GitHub and GitLab. An older base that has only `INDEX.md` keeps working: rota reads and updates that file until you rename it. |
 | `topics/<slug>.md` | The topic's bullets, in the same shape as `KNOWLEDGE.md`: `- **Title** — body <!-- 2026-10-12 source:rota -->`. `source:` names the project the learning came from. |
 | `rota-knowledge.json` | How writes land (below). Optional. |
 
@@ -61,7 +61,7 @@ printf '%s' "$BODY" | rota knowledge add --external --topic Go --title "Per-case
 rota knowledge amend --external --topic Go --fragment "Per-case test names" --mode append --body-file -
 ```
 
-A write needs a clean clone. It pulls (fast-forward only), writes the bullet to `topics/<slug>.md`, adds the topic and its `INDEX.md` line when the topic is new (`--hook` sets the line, default the bullet title), commits and then follows the repo's policy in `rota-knowledge.json`:
+A write needs a clean clone. It pulls (fast-forward only), writes the bullet to `topics/<slug>.md`, adds the topic and its `README.md` line when the topic is new (`--hook` sets the line, default the bullet title), commits and then follows the repo's policy in `rota-knowledge.json`:
 
 ```json
 {"write": "push", "branch": "main"}

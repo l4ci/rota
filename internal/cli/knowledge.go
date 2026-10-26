@@ -213,7 +213,7 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 	bodyFile := fs.String("body-file", "", "bullet body: a `path`, or - for stdin")
 	date := fs.String("date", "", "bullet `date` (YYYY-MM-DD), default today")
 	sha := fs.String("sha", "", "commit `sha` (7 to 40 hex digits) the bullet's claim about code was true at")
-	hook := fs.String("hook", "", "with --external: one-line `hook` for the INDEX.md entry of a new topic, default the bullet title")
+	hook := fs.String("hook", "", "with --external: one-line `hook` for the README.md entry of a new topic, default the bullet title")
 	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := knNoArgs(args); err != nil {
