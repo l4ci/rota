@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -72,10 +71,12 @@ func runDoctor(c *Ctx, args []string) (Result, error) {
 	return res, nil
 }
 
-// doctorInput gathers the real environment: Deps.DoctorPath replaces PATH for
-// tool lookup (a test hook, not part of the CLI).
+// doctorInput gathers the environment through the invocation dependencies.
 func doctorInput(ctx context.Context, d *Deps) doctor.Input {
-	in := doctor.Input{Exec: doctorExec(d.Proc), Look: doctorLook(d.LookPath, d.DoctorPath), Credentials: d.credentials()}
+	in := doctor.Input{Exec: doctorExec(d.Proc), Credentials: d.credentials(), Look: func(name string) (string, bool) {
+		path, err := d.LookPath(name)
+		return path, err == nil
+	}}
 	in.Dir, _ = d.Getwd()
 	in.Home, _ = d.UserHomeDir()
 	if dir, src, warn, err := projects.Resolve(d.projectsEnv()); err == nil {
@@ -94,14 +95,14 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	root, _ := rotatree.Find(in.Dir)
 	in.Skills = doctorSkills(d, d.Getenv, in.Home, root, d.Toplevel(ctx))
 	if root == "" {
-		in.RoundHost = worker.ResolveHost("", nil, d.Getenv, doctorLookErr(in.Look))
-		doctorDiskInput(ctx, &in, nil, "", d.Git, d.Now(), d.DoctorDisk, d.Getenv)
+		in.RoundHost = worker.ResolveHost("", nil, d.Getenv, d.LookPath)
+		doctorDiskInput(ctx, &in, nil, "", d.Git, d.Now(), d.DiskUsage, d.Getenv)
 		return in
 	}
 	cfg := d.Config(root)
 	in.Dispatch = config.Dispatch(cfg)
 	in.RegistrySolo = worker.IsSolo(root)
-	in.RoundHost = worker.ResolveHost(root, cfg, d.Getenv, doctorLookErr(in.Look))
+	in.RoundHost = worker.ResolveHost(root, cfg, d.Getenv, d.LookPath)
 	if err := tracker.ValidateConfig(cfg); err != nil {
 		in.SourceProblem = err.Error()
 	}
@@ -142,7 +143,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	if issue, err := issueBackend(d, root); err == nil && issue {
 		in.StaleMilestoneFiles, _ = migrate.StaleMilestoneFiles(root)
 	}
-	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now(), d.DoctorDisk, d.Getenv)
+	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now(), d.DiskUsage, d.Getenv)
 	if on, err := config.SwitchOnUsage(cfg); err == nil {
 		in.SwitchOnUsage = on
 	}
@@ -245,30 +246,6 @@ func doctorSkills(d *Deps, getenv func(string) string, home, root, top string) *
 	return &rep
 }
 
-// doctorLook finds a tool through lookPath: on pathOverride when set, else on
-// PATH. A name with a slash is a path and skips the search. lookPath owns the
-// executable-file rule.
-func doctorLook(lookPath func(string) (string, error), pathOverride string) func(string) (string, bool) {
-	if lookPath == nil {
-		lookPath = exec.LookPath
-	}
-	return func(name string) (string, bool) {
-		if pathOverride == "" || strings.Contains(name, "/") {
-			p, err := lookPath(name)
-			return p, err == nil
-		}
-		for _, dir := range filepath.SplitList(pathOverride) {
-			if dir == "" {
-				continue
-			}
-			if p, err := lookPath(filepath.Join(dir, name)); err == nil {
-				return p, true
-			}
-		}
-		return "", false
-	}
-}
-
 // doctorExec adapts a process runner to doctor.Exec, bounding each call.
 func doctorExec(run proc.Runner) doctor.Exec {
 	return func(ctx context.Context, bin string, args, extraEnv []string, dir string) (doctor.Result, error) {
@@ -295,14 +272,7 @@ func doctorKinds(cfg any, home string) map[string]doctor.KindInput {
 		if len(in.Homes) == 0 {
 			in.Homes = []doctor.Home{{}}
 		}
-		in.Tiers = harness.TierMapSet(cfg, k)
-		if !in.Tiers {
-			for _, tier := range harness.Tiers {
-				if m, _ := roundcfg.Effective(cfg, k, tier); m != "" {
-					in.Models = append(in.Models, tier+"="+m)
-				}
-			}
-		}
+		in.Tiers, in.Models = roundcfg.TierSet(cfg, k)
 		out[k] = in
 	}
 	return out
@@ -356,16 +326,6 @@ func procCwdOf(ctx context.Context, run proc.Runner, pid int) string {
 		return ""
 	}
 	return doctor.ParseLsofCwd(res.Stdout)
-}
-
-// doctorLookErr adapts doctor's Look to the lookPath worker.ResolveHost takes.
-func doctorLookErr(look func(string) (string, bool)) func(string) (string, error) {
-	return func(name string) (string, error) {
-		if p, ok := look(name); ok {
-			return p, nil
-		}
-		return "", os.ErrNotExist
-	}
 }
 
 // doctorExternalKnowledge probes the clone knowledge.external points at.

@@ -27,6 +27,7 @@ const (
 	BriefMissing    = "brief missing"
 	NoTierMap       = "no tier map"
 	HumanDecision   = "human decision"
+	CrossMilestone  = "cross-milestone"
 	Registered      = "registered"
 	Held            = "held"
 	External        = "external"
@@ -142,7 +143,7 @@ const (
 func All() []string {
 	return []string{
 		NoRound, OutOfScope, NotReady, Overlap, Claimed, NotStale, StaleClaim, ClaimLost, OpenPR, Batch, Bundle, SlotBusy, NoFreeSlot, NoLogin,
-		Draining, Quota, BriefMissing, NoTierMap, HumanDecision, Registered, Held, External, NoPRRecorded, Site, Fetch,
+		Draining, Quota, BriefMissing, NoTierMap, HumanDecision, CrossMilestone, Registered, Held, External, NoPRRecorded, Site, Fetch,
 		Conflict, Dirty, Role, NoSlotHolds, NoIssues, FindingMissing, NoGist, ReviewNotMinted, NotYourSlot, SameSlot, Healthy,
 		LiveAgent, Unverifiable,
 		BestOfLabel, BestOfSlots, BestOf, NotBestOf, NotAttempt, AlreadyPicked, AttemptRunning, HarnessLabel,

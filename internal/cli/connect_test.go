@@ -225,7 +225,7 @@ func TestConnectRemoveClearsSecret(t *testing.T) {
 // doctorWithConnection runs `rota doctor` in a project that names a connection.
 func doctorWithConnection(t *testing.T, e *connectEnv, name string) (bool, map[string]any) {
 	t.Helper()
-	e.d.DoctorPath = doctorFakes(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`})
+	e.d.LookPath = fakeToolLookup(doctorFakes(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`}))
 	dir, _ := filepath.EvalSymlinks(t.TempDir())
 	os.MkdirAll(filepath.Join(dir, ".rota"), 0o755)
 	cfg := `{"issues":{"connection":"` + name + `"}}`

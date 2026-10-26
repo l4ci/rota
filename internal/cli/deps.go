@@ -71,9 +71,7 @@ type Deps struct {
 
 	// Getenv is the one environment reader; the clock overrides, the worker
 	// env, the accounts and every cli env read go through it. A test swaps it.
-	// defaultDeps also reads the remaining ROTA_TEST_* hooks once, at this
-	// edge, into PollFixture, PollStatus, DoctorPath and DoctorDisk, and
-	// ROTA_TEST_LATEST_VERSION into UpdateEnv.
+	// defaultDeps reads ROTA_TEST_LATEST_VERSION into UpdateEnv.
 	Getenv  func(string) string
 	Environ func() []string
 	// RecordMistakes makes an internal error or panic write a record to the
@@ -83,16 +81,11 @@ type Deps struct {
 	// LookPath is the one PATH lookup the host decision reads, beside Getenv.
 	LookPath func(string) (string, error)
 
-	// PollFixture, when set, makes `worker poll` classify that file as a static
-	// pane (no host, no registry writes); PollStatus is the agent status it
-	// reports. DoctorPath replaces PATH for doctor's tool lookup when set.
-	// DoctorDisk reads the free space of the volume holding a directory.
-	PollFixture string
-	// PollKind is the harness kind the fixture is read as (ROTA_TEST_POLL_KIND).
-	PollKind   string
-	PollStatus string
-	DoctorPath string
-	DoctorDisk func(dir string) *doctor.Disk
+	// DiskUsage reads the free space of the volume holding a directory.
+	DiskUsage func(dir string) *doctor.Disk
+	// WorkerPoll classifies panes through the worker environment. Tests can
+	// replace the adapter without adding fixture switches to the CLI.
+	WorkerPoll func(context.Context, string, worker.PollOpts) (worker.PollResult, error)
 
 	// TrackerOptions apply to every forge CLI the verbs build; a test swaps
 	// in a fake executor here.
@@ -157,6 +150,7 @@ func defaultDeps() *Deps {
 		Getwd:            os.Getwd,
 		UserHomeDir:      os.UserHomeDir,
 		LookPath:         exec.LookPath,
+		DiskUsage:        statDisk,
 		WorkerEnv:        func() worker.Env { return worker.Env{} },
 		EscalationEnv:    func() escalation.Env { return escalation.Env{} },
 		LeaseEnv:         func() roundlease.Env { return roundlease.DefaultEnv() },
@@ -177,10 +171,6 @@ func defaultDeps() *Deps {
 	d.Keychain = func() connections.Store { return connections.OSKeychain(d.Proc, runtime.GOOS) }
 	d.ConnTesters = map[string]connections.Tester{connections.KindJira: tracker.JiraTester{}, connections.KindLinear: tracker.LinearTester{}, connections.KindItsaplan: tracker.ItsaplanTester{}}
 	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(d.Getenv)
-	d.PollFixture, d.PollStatus = d.Getenv("ROTA_TEST_POLL_FIXTURE"), d.Getenv("ROTA_TEST_POLL_STATUS")
-	d.PollKind = d.Getenv("ROTA_TEST_POLL_KIND")
-	d.DoctorPath = d.Getenv("ROTA_TEST_DOCTOR_PATH")
-	d.DoctorDisk = doctorDisk(d.Getenv("ROTA_TEST_DOCTOR_DISK"))
 	// ROTA_TEST_LATEST_VERSION (no network) stands in for the release read; a
 	// smoke test cannot reach the update package any other way.
 	latest := d.Getenv("ROTA_TEST_LATEST_VERSION")
@@ -191,6 +181,11 @@ func defaultDeps() *Deps {
 			e.Latest = func() string { return latest }
 		}
 		return e
+	}
+	d.WorkerPoll = func(ctx context.Context, root string, opts worker.PollOpts) (worker.PollResult, error) {
+		e := d.workerEnv()
+		e.Ctx = ctx
+		return e.Poll(ctx, root, opts)
 	}
 	d.OrchestrateEnv = func() orchestrate.Env { return defaultOrchestrateEnv(d) }
 	d.WorkerAccounts = func() *worker.Accounts {

@@ -59,3 +59,25 @@ func TestTierMapSet(t *testing.T) {
 		}
 	}
 }
+
+func TestParseTierKeyRoundTrip(t *testing.T) {
+	for _, kind := range Kinds() {
+		for _, tier := range Tiers {
+			k, ti, ok := ParseTierKey(TierKey(kind, tier))
+			if !ok || k != kind || ti != tier {
+				t.Errorf("ParseTierKey(TierKey(%q, %q)) = %q, %q, %v", kind, tier, k, ti, ok)
+			}
+		}
+	}
+}
+
+func TestParseTierKeyRejects(t *testing.T) {
+	for _, key := range []string{
+		"", "round.tiers.", "round.tiers.codex", "round.tiers.codex.", "round.tiers.codex.huge",
+		"round.profile", "round.tiers.codex.light.extra", "x.round.tiers.codex.light",
+	} {
+		if k, ti, ok := ParseTierKey(key); ok {
+			t.Errorf("ParseTierKey(%q) = %q, %q, true; want rejected", key, k, ti)
+		}
+	}
+}

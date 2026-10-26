@@ -46,7 +46,7 @@ Copy this checklist and track your progress (run mode):
 
 Any `rota` verb exiting 3 means no `.rota/` project: surface that and stop.
 
-A named target (`/rota-qa run web`) wins. Otherwise:
+`--gate` is a flag of `run` set by the `qa.afterWork` and `ship.qa` callers; it only enables the Step 4 pillar filter. A named target (`/rota-qa run web`) wins. Otherwise:
 
 When `.rota/repos.json` is non-empty (umbrella), read [`umbrella-scope.md`](umbrella-scope.md). Single-repo: all `.rota/qa/*.md` entries.
 
@@ -54,7 +54,7 @@ No strategy file for the scope: halt, tell the user to run `/rota-qa first-run`.
 
 #### Step 2 — Load Strategies
 
-`rota qa query <target>` per target. Parse the five body sections. A strategy missing `Executable checks` or `Infra requirements` is a config error: route to `restructure`.
+`rota qa query <target>` per target. Parse the five body sections. The strategy's `pillar-globs` frontmatter (optional map of pillar to globs) is read from `.rota/qa/<target>.md` directly; `rota qa query` returns only the body. A strategy missing `Executable checks` or `Infra requirements` is a config error: route to `restructure`.
 
 #### Step 3 — Infra Preflight
 
@@ -67,6 +67,8 @@ Verify everything under `Infra requirements`:
 Anything missing: record an `INFRA-FAIL` verdict (Step 6's `rota verdict add`, missing items as `info` findings) and halt. Tell the user exactly what to start or install.
 
 #### Step 4 — Execute Checks
+
+**Filter pillars.** Only when invoked as `/rota-qa run --gate` (what `qa.afterWork` and `ship.qa` pass; a plain `/rota-qa run` is manual and skips nothing) and the strategy has `pillar-globs`: match its globs against the touched-file set the caller passed, else `rota review scope --json`. Pattern semantics are in [`gates-and-modes.md`](gates-and-modes.md). Run pillars that match and pillars with no entry; skip the rest and note each skipped pillar with its globs. A manual run skips nothing. If every pillar is skipped, record PASS with summary `no pillar matched`, not INFRA-FAIL.
 
 Dispatch one subagent per check group (per pillar per target) in parallel through the current harness; see `references/subagent-dispatch.md`. The orchestrator does not run checks itself. Each subagent:
 
@@ -106,7 +108,7 @@ rota verdict add <branch> --kind qa --verdict <PASS|CONCERNS|FAIL|INFRA-FAIL> --
 
 ```json
 {
-  "summary": "<one line: what ran and the result>",
+  "summary": "<one line: what ran and the result; when any pillar was skipped, name the pillars that ran>",
   "findings": [
     {"severity": "blocker|major|minor|info", "title": "<failed check or audit finding>",
      "file": "<path, optional>", "line": 12, "detail": "<command and evidence, optional>"}
@@ -126,6 +128,9 @@ Targets:
     Executable checks: <n passed> / <n total>
     Audit findings: <n P0>, <n P1>, <n P2>, <n P3>
   ...
+
+Skipped pillars (filtered run only):
+  - <target>/<pillar> — globs: <globs>
 
 Failed executable checks:
   - <name> — <command> — <evidence>
@@ -176,6 +181,7 @@ When strategy files drifted, read [`restructure.md`](restructure.md) and follow 
 - [`references/umbrella-mode.md`](references/umbrella-mode.md) — Per-repo resolution for `--repo` / `--all`.
 - [`references/post-cycle-trigger-gate.md`](references/post-cycle-trigger-gate.md) — When `qa.afterWork: true` should fire.
 - [`first-run.md`](first-run.md) — `first-run` mode: probe surfaces, propose strategy.
+- [`surface-cli.md`](surface-cli.md), [`surface-web.md`](surface-web.md), [`surface-api.md`](surface-api.md), [`surface-lib.md`](surface-lib.md) — per-surface check menus and audit rubrics for `first-run`.
 - [`restructure.md`](restructure.md) — `restructure` mode.
 - [`gates-and-modes.md`](gates-and-modes.md) — gate/hook config, mode skeleton, `/rota-ship` routing.
 - [`umbrella-scope.md`](umbrella-scope.md) — Steps 1 and 6 in umbrella repos.
