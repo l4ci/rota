@@ -877,7 +877,7 @@ func (e Env) readForge(ctx context.Context, rep *Report) forgeState {
 		// list from it. The error surfaces on the filtered list.
 		open, _ := e.Forge.List(ctx, tracker.ListFilter{State: "open"})
 		for _, is := range open {
-			if slices.ContainsFunc(is.Labels, func(label string) bool { return strings.HasPrefix(label, backlog.ClaimLabelPrefix) }) {
+			if backlog.HasClaimLabel(is.Labels) {
 				fs.claimLabelled[is.Key] = true
 			}
 		}
