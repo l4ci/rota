@@ -15,7 +15,7 @@ Each triggered lens gets one reviewer, at `full` and at `light`, dispatched in t
 
 ## Lens brief
 
-The shared block from [`reviewer-briefs.md`](reviewer-briefs.md), plus:
+The shared block from `reviewer-briefs.md`, plus:
 
 ```
 **Axis: <lens>.** Judge only the <lens> axis, from the diff. Do not judge spec fit, conventions or test quality: other reviewers do. This lens triggered because: <why from the depth JSON>.
