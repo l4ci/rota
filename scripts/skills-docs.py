@@ -110,16 +110,7 @@ def load(root):
             for n, it in enumerate(fm['flags']):
                 if not isinstance(it, dict) or 'flag' not in it or 'does' not in it:
                     errs.append('%s: flags[%d] needs flag and does keys' % (rel, n))
-        ex = fm['example']
-        if not isinstance(ex, dict):
-            errs.append('%s: example must be a mapping' % rel)
-        else:
-            for k in ('steps', 'changes', 'reviewed'):
-                if k not in ex:
-                    errs.append('%s: example is missing %r' % (rel, k))
-            src = ex.get('source')
-            if src:
-                errs.extend(check_doc_path(root, src, '%s: example.source' % rel))
+        errs.extend(check_example(root, fm['example'], rel))
     # unique orders
     seen = {}
     for p, fm in meta.items():
@@ -160,9 +151,27 @@ def load(root):
                 errs.append('%s: steps[%d] needs skill and why' % (where, n))
             elif st['skill'] not in pages:
                 errs.append('%s: steps[%d] references unknown skill %r' % (where, n, st['skill']))
+            if isinstance(st, dict) and 'example' in st:
+                errs.extend(check_example(root, st['example'], '%s: steps[%d]' % (where, n)))
     if errs:
         raise Fail('\n'.join(errs))
     return meta, chains
+
+
+def check_example(root, ex, where):
+    # Shared by a skill's example and a chain step's example.
+    if not isinstance(ex, dict):
+        return ['%s: example must be a mapping' % where]
+    errs = []
+    for k in ('steps', 'changes', 'reviewed'):
+        if k not in ex:
+            errs.append('%s: example is missing %r' % (where, k))
+    if 'reviewed' in ex and not isinstance(ex['reviewed'], bool):
+        errs.append('%s: example.reviewed must be true or false' % where)
+    src = ex.get('source')
+    if src:
+        errs.extend(check_doc_path(root, src, '%s: example.source' % where))
+    return errs
 
 
 def check_doc_path(root, ref, what):
