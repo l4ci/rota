@@ -46,7 +46,7 @@ var Registry = []Gate{
 	{ReleasePublish, []string{"release publish"}, []string{"rota-release"}, "a GitHub or GitLab release page"},
 	{PublicFiling, []string{"tracker suggest-upstream"}, nil, "a public issue on the rota repo"},
 	{MergeApproval, []string{"ship merge", "ship pr-merge", "worker gate"}, []string{"rota-ship", "rota-review", "rota-work"}, "a merge into the base branch"},
-	{DebugReset, []string{"debug reset"}, []string{"rota-debug"}, "a fresh failed-fix count for an item the Iron Law halted"},
+	{DebugReset, []string{"debug reset", "debug work-fix reset"}, []string{"rota-debug", "rota-work"}, "a fresh failed-fix count for an item the Iron Law halted"},
 	{BugreportFile, []string{"bugreport file"}, []string{"rota-bugreport"}, "a public issue or comment on the rota repo"},
 	{"pr-open", nil, []string{"rota-ship"}, "a public PR or MR"},
 	{"issue-close", nil, []string{"rota-ship", "rota-release"}, "closed upstream issues"},
