@@ -25,7 +25,7 @@ flags:
     does: walk one item's acceptance criteria with you
 example:
   source: usage/qa.md#invocation
-  reviewed: false
+  reviewed: true
   steps:
     - you: /rota-qa run web
     - agent: |

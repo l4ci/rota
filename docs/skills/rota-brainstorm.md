@@ -19,7 +19,7 @@ flags:
     does: force the one-pass grilling of open decisions on any item, not only Major features and P0 bugs
 example:
   source: usage/brainstorm.md#one-example-end-to-end
-  reviewed: false
+  reviewed: true
   steps:
     - you: /rota-brainstorm 42
     - agent: |

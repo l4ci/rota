@@ -19,7 +19,7 @@ flags:
     does: first-run scaffold if docs.path is missing or empty, else after-work proposals
 example:
   source: null
-  reviewed: false
+  reviewed: true
   steps:
     - you: /rota-docs
     - agent: |

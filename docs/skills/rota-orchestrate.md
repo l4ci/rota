@@ -15,7 +15,7 @@ manual_only: false
 flags: []
 example:
   source: walkthroughs/round-cycle.md#2-run-the-round
-  reviewed: false
+  reviewed: true
   steps:
     - you: rota orchestrate
     - you: run a round on issues 42, 51, 58 and 63

@@ -19,7 +19,7 @@ flags:
     does: run the flow without tagging or publishing; skips the close-upstream-issues gate
 example:
   source: walkthroughs/round-cycle.md#4-release
-  reviewed: false
+  reviewed: true
   steps:
     - you: /rota-release
     - agent: |

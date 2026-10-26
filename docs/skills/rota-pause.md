@@ -17,7 +17,7 @@ flags:
     does: also write .rota/handoff/<branch>.report.md (commits, files, tasks, proof) for you to read
 example:
   source: usage/pausing-and-resuming.md
-  reviewed: false
+  reviewed: true
   steps:
     - you: /rota-pause
     - agent: |

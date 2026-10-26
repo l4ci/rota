@@ -23,7 +23,7 @@ flags:
     does: write the `.rota/map/` subsystem files, then run `rota map index`
 example:
   source: walkthroughs/brownfield-existing-project.md
-  reviewed: false
+  reviewed: true
   steps:
     - you: /rota-refactor internal/cli
     - agent: |
