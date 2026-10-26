@@ -141,6 +141,14 @@ case "$OUT" in *"**Bullet 14**"*) ;; *) fail "subtopic read lacks its bullet: $O
 case "$OUT" in *"**Bullet 1**"*|*"**Bullet 21**"*) fail "subtopic read printed other files: $OUT" ;; esac
 pass "query reads the parent, --all and one subtopic"
 
+RC=0; OUT=$(ekn knowledge query --external --match "BULLET 14") || RC=$?
+[ "$RC" = "0" ] && [ "$OUT" = "$(printf '## Big: Beta\n- **Bullet 14** — Filler. <!-- 2026-10-01 source:app -->')" ] || fail "--match should print only the one bullet under its subtopic: rc=$RC $OUT"
+RC=0; OUT=$(ek knowledge query --external --match "no such words") || RC=$?
+[ "$RC" = "0" ] && [ "$(jget data.matches <<<"$OUT")" = "0" ] && [ -z "$(jget data.text <<<"$OUT")" ] || fail "--match without a hit should be exit 0, matches 0: rc=$RC $OUT"
+RC=0; ekn knowledge query --external --match "" >/dev/null 2>&1 || RC=$?
+[ "$RC" = "2" ] || fail "--match '' should be exit 2, got $RC"
+pass "query --match returns only matching bullets across subtopics"
+
 # A flat file an older rota writes beside the folder is flagged, then folded back in.
 printf '# Big\n\n- **Old write** — From an older rota. <!-- 2026-10-02 source:app -->\n' > "$EKCLONE/topics/big.md"
 printf -- '- [Big](topics/big.md) — a topic past the bullet limit\n' >> "$EKCLONE/README.md"

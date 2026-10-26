@@ -122,17 +122,32 @@ func knQuery(fs *flag.FlagSet) RunFunc {
 	tier := fs.String("tier", "", "only bullets on this `tier` (provisional|confirmed|deprecated)")
 	incl := fs.Bool("include-deprecated", false, "also print deprecated bullets")
 	all := fs.Bool("all", false, "with --external: also print every subtopic of a split topic")
+	match := fs.String("match", "", "with --external: only the bullets whose title or body hold every whitespace-separated `word` (case-insensitive); topics narrow the search")
 	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
-		if len(args) == 0 {
+		matching := false
+		fs.Visit(func(f *flag.Flag) { matching = matching || f.Name == "match" })
+		if matching && !*ext {
+			return Result{}, Usage("--match needs --external")
+		}
+		if matching && strings.TrimSpace(*match) == "" {
+			return Result{}, Usage("--match needs at least one word")
+		}
+		if len(args) == 0 && !matching {
 			return Result{}, Usage("name at least one topic")
 		}
 		if *all && !*ext {
 			return Result{}, Usage("--all needs --external")
 		}
+		if matching && *all {
+			return Result{}, Usage("--all does not apply to --match: a split topic's subtopics are searched anyway")
+		}
 		if *ext {
 			if *tier != "" || *incl {
 				return Result{}, Usage("--tier and --include-deprecated do not apply to --external: the external base has no tiers")
+			}
+			if matching {
+				return knExtMatch(c, args, *match)
 			}
 			return knExtQuery(c, args, *all)
 		}

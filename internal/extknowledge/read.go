@@ -331,3 +331,130 @@ type QueryResult struct {
 	Recheck []Recheck
 	Strays  []StrayRef
 }
+
+// MatchResult is what MatchWith found.
+type MatchResult struct {
+	Text    string
+	N       int
+	Missing []string
+}
+
+// Match prints "## Name" sections holding only the bullets (with their
+// continuation lines) whose title or body contain every word,
+// case-insensitively. Words are literal substrings; the stamp never matches.
+// With no topics it searches every topic and subtopic in index order; with
+// topics it searches those (a split parent includes its subtopics, and a
+// stray flat file beside a split topic is searched too). A matched bullet
+// carries the recheck marker as Query prints it. n counts the bullets.
+func (c Clone) Match(words []string, topics []string, project map[string]string) (text string, n int, err error) {
+	res, err := c.MatchWith(words, topics, project)
+	return res.Text, res.N, err
+}
+
+// MatchWith is Match that also lists the requested topics that named no index entry.
+func (c Clone) MatchWith(words []string, want []string, project map[string]string) (MatchResult, error) {
+	var ws []string
+	for _, w := range words {
+		ws = append(ws, strings.Fields(strings.ToLower(w))...)
+	}
+	if len(ws) == 0 {
+		return MatchResult{}, fmt.Errorf("%w: --match needs at least one word", ErrUsage)
+	}
+	all, err := c.Topics()
+	if err != nil {
+		return MatchResult{}, err
+	}
+	var res MatchResult
+	var parts []string
+	seen := map[string]bool{}
+	section := func(heading, rel, name string, split bool) error {
+		if seen[rel] {
+			return nil
+		}
+		seen[rel] = true
+		raw, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(rel)))
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		file := string(raw)
+		marked, _ := markRecheck(name, file, project)
+		orig, out := strings.Split(file, "\n"), strings.Split(marked, "\n")
+		var lines []string
+		for _, b := range parseBullets(file) {
+			if split && isSubIndexLine(orig[b.Line]) {
+				continue
+			}
+			end := b.Line + 1
+			for end < len(orig) && orig[end] != "" && (orig[end][0] == ' ' || orig[end][0] == '\t') {
+				end++
+			}
+			if !hasAll(bulletText(b, orig[b.Line:end]), ws) {
+				continue
+			}
+			lines = append(lines, out[b.Line:end]...)
+			res.N++
+		}
+		if len(lines) > 0 {
+			parts = append(parts, "## "+heading+"\n"+strings.Join(lines, "\n")+"\n")
+		}
+		return nil
+	}
+	withStray := func(t Topic) error {
+		if err := section(t.Name, t.File, t.Name, t.Split); err != nil {
+			return err
+		}
+		if t.Stray != "" {
+			return section(t.Name+" (stray: "+t.Stray+")", t.Stray, t.Name, false)
+		}
+		return nil
+	}
+	if len(want) == 0 {
+		for _, t := range all {
+			if err := withStray(t); err != nil {
+				return MatchResult{}, err
+			}
+		}
+	}
+	for _, w := range want {
+		hit := resolve(w, all)
+		if len(hit) == 0 {
+			res.Missing = append(res.Missing, w)
+			continue
+		}
+		for _, t := range hit {
+			if err := withStray(t); err != nil {
+				return MatchResult{}, err
+			}
+			for _, st := range t.Subtopics {
+				if err := withStray(st); err != nil {
+					return MatchResult{}, err
+				}
+			}
+		}
+	}
+	res.Text = strings.Join(parts, "\n")
+	return res, nil
+}
+
+// bulletText is what --match searches: the title and body of the bullet,
+// continuation lines included, without the final stamp, lowercased.
+func bulletText(b bullet, unit []string) string {
+	s := strings.Join(unit, "\n")
+	s = strings.TrimSuffix(s, stampTail.FindString(s))
+	if b.Title != "" {
+		s = strings.Replace(s, "**"+b.Title+"**", b.Title, 1)
+	}
+	return strings.ToLower(strings.TrimPrefix(s, "- "))
+}
+
+func hasAll(s string, words []string) bool {
+	for _, w := range words {
+		if !strings.Contains(s, w) {
+			return false
+		}
+	}
+	return true
+}

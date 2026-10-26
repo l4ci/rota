@@ -160,6 +160,25 @@ func knExtQuery(c *Ctx, topics []string, all bool) (Result, error) {
 	return Result{Data: knObj("text", text, "missing", ms, "recheck", rs), Text: text}, nil
 }
 
+// knExtMatch prints only the external bullets that hold every word of match.
+func knExtMatch(c *Ctx, topics []string, match string) (Result, error) {
+	cl, err := externalClone(c)
+	if err != nil {
+		return Result{}, err
+	}
+	extFreshen(c, cl)
+	res, err := cl.MatchWith([]string{match}, topics, projectTools(c))
+	if err != nil {
+		return Result{}, extErr(err)
+	}
+	ms := []any{}
+	for _, m := range res.Missing {
+		c.Warn("no external topic matches %q — run `rota knowledge topics --external` to list them", m)
+		ms = append(ms, m)
+	}
+	return Result{Data: knObj("text", res.Text, "missing", ms, "recheck", []any{}, "matches", res.N), Text: res.Text}, nil
+}
+
 // projectTools is the tool versions the current project runs, read from its
 // manifests between the working directory and the rota project root. An
 // unreadable working directory yields none.

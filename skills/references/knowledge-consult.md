@@ -10,11 +10,14 @@ The pattern is one pair of `rota` calls (a third when an external knowledge base
 rota knowledge query "Topic A" "Topic B"
 rota decisions query "Topic A" "Topic B"
 rota knowledge query --external "Go" "git"   # only when knowledge.external is set
+rota knowledge query --external --match "rpc authority"   # same, when the task names specific terms
 ```
 
 Topic selection: read the `rota-knowledge` and `rota-decisions` managed blocks in `CLAUDE.md`, infer which topics plausibly touch the work (e.g., a backend refactor might pull `Architecture`), and pass those names as arguments. Pass several when in doubt; both verbs filter, so extras cost nothing.
 
 The third call runs only when `rota config show knowledge.external` prints a path. Its topics are the technologies the work touches (Go, git, herdr, GitHub Actions, Postgres), not the project's topic names; `rota knowledge topics --external` lists what exists. It freshens the clone first (at most one fetch per `knowledge.externalTTL` minutes) and warns on stderr when it reads a stale, dirty or diverged copy: pass that warning on, do not treat it as failure. With the key unset skip the call; the pattern is unchanged.
+
+When the task names specific terms (an API, an error, a flag), use `query --external --match "<terms>"`: it returns only the bullets that hold every word, across topics and subtopics, never whole files. Otherwise read topics; a split topic prints its README, so add `--all` or name a subtopic (`"Godot: Networking"`) for the rest.
 
 Both verbs are lookups: they exit 0 with empty `text` when no topic matches (`knowledge query` also lists the unmatched names in `data.missing`). Do not wrap them with `2>/dev/null` or treat empty output as failure: that hides real errors and contradicts the lookup-vs-resolve contract in `.rota/DECISIONS.md`.
 
