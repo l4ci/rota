@@ -16,7 +16,7 @@ after: [rota-work]
 manual_only: false
 flags: []
 example:
-  source: getting-started.md
+  source: null
   reviewed: false
   steps:
     - you: /rota-plan B03

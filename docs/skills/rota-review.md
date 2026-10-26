@@ -20,7 +20,7 @@ flags:
   - flag: "--queue"
     does: issue backend; review every needs-review item's open PR or MR and merge the ones that pass
 example:
-  source: getting-started.md
+  source: null
   reviewed: false
   steps:
     - you: /rota-review
