@@ -24,12 +24,14 @@ const lockWait = 2 * time.Second
 
 // State is <git-common-dir>/rota/session/<session_id>.json. D2 and D3 read it.
 type State struct {
-	SessionID  string          `json:"sessionId"`
-	Cwd        string          `json:"cwd"`
-	UpdatedAt  string          `json:"updatedAt"`
-	ContextPct *float64        `json:"contextPct,omitempty"`
-	RateLimits json.RawMessage `json:"rateLimits,omitempty"`
-	Raw        json.RawMessage `json:"raw"`
+	// Recall receipts live in session/recall, outside the reading TTL sweep.
+	RecalledEntries map[string]bool `json:"recalledEntries,omitempty"`
+	SessionID       string          `json:"sessionId"`
+	Cwd             string          `json:"cwd"`
+	UpdatedAt       string          `json:"updatedAt"`
+	ContextPct      *float64        `json:"contextPct,omitempty"`
+	RateLimits      json.RawMessage `json:"rateLimits,omitempty"`
+	Raw             json.RawMessage `json:"raw"`
 
 	// Written by the Stop hook, kept across statusline refreshes.
 	HandoffBlocks int    `json:"handoffBlocks,omitempty"`

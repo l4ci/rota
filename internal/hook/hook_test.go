@@ -270,7 +270,7 @@ func TestInstallGuardEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := dump(t, o)
-	if !strings.Contains(got, `"PreToolUse"`) || !strings.Contains(got, `"matcher": "Bash"`) || !strings.Contains(got, GuardCommand) {
+	if !strings.Contains(got, `"PreToolUse"`) || !strings.Contains(got, `"matcher": "Bash|Edit|Write"`) || !strings.Contains(got, GuardCommand) {
 		t.Errorf("guard entry missing:\n%s", got)
 	}
 	if MarkedEvents(o)[EventGuard] != GuardCommand {
@@ -278,6 +278,13 @@ func TestInstallGuardEntry(t *testing.T) {
 	}
 	if out, _ := Install(InstallIn{Scope: ScopeProject, Files: map[Scope]*jsonx.Object{ScopeProject: o}}); out.Changed {
 		t.Error("second install changed the file")
+	}
+	legacy := parse(t, `{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"rota hook guard # rota-hook"}]}]}}`)
+	if out, err := Install(InstallIn{Scope: ScopeProject, Files: map[Scope]*jsonx.Object{ScopeProject: legacy}}); err != nil || !out.Changed {
+		t.Fatalf("upgrade: %+v %v", out, err)
+	}
+	if got := dump(t, legacy); !strings.Contains(got, `"matcher": "Bash|Edit|Write"`) || strings.Count(got, GuardCommand) != 1 {
+		t.Fatalf("upgrade failed or stacked hooks: %s", got)
 	}
 	// A user's own PreToolUse hook is kept through install and uninstall.
 	own := parse(t, `{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"mine.sh"}]}]}}`)

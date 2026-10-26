@@ -40,6 +40,11 @@ func debugCommands() []*Command {
 			}},
 			{Name: "verdict", Summary: "record whether a fix held and route on the item's failed-fix count", Repo: true, Verb: debugVerdict},
 			{Name: "reset", Summary: "start an item's failed-fix count again", Repo: true, Verb: debugReset},
+			{Name: "work-fix", Summary: "cap /rota-work Step 7 fix attempts per item", Subs: []*Command{
+				{Name: "attempt", Summary: "record a fix attempt; exit 4 on the fourth", Repo: true, Verb: workFixAttempt},
+				{Name: "pass", Summary: "a verify PASSed: start the attempt count again", Repo: true, Verb: workFixPass},
+				{Name: "reset", Summary: "start an item's attempt count again", Repo: true, Verb: workFixReset},
+			}},
 		}},
 	}
 }
