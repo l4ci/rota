@@ -1,6 +1,6 @@
 # Orchestrator harnesses
 
-`rota orchestrate` starts the orchestrator in the agent named by `orchestrator.harness`: `claude` (default), `codex`, `hermes` or `opencode`. Workers are a separate choice (`--kind`); this page is only about the orchestrator.
+`rota orchestrate` starts the orchestrator in the agent named by `orchestrator.harness`: `claude` (default), `codex`, `hermes` or `opencode`. Workers are a separate choice (`--kind`).
 
 ```sh
 rota config set orchestrator.harness hermes
@@ -14,7 +14,7 @@ rota orchestrate --dry-run     # shows the command and first prompt
 | `hermes` | `hermes chat -s rota-orchestrate -q` | plain sentence naming the skill | `.agents/skills` and `.hermes/skills` after `hermes skills trust`; `~/.hermes/skills` |
 | `opencode` | `opencode --prompt` | plain sentence naming the skill | `.agents/skills`, `.claude/skills`, `.opencode/skills` and their `~/` twins |
 
-The prompt is the last argument, on the first start and on every keepalive restart, which is why the Hermes and opencode commands end in `-q` and `--prompt`.
+The prompt is the last argument, on the first start and on every keepalive restart. That is why the Hermes and opencode commands end in `-q` and `--prompt`.
 
 ## Setup for Hermes and opencode
 
@@ -37,7 +37,7 @@ The skill asks in plain language. Claude Code renders that as `AskUserQuestion`;
 
 ## Adopting work another tool started
 
-Some tools make their own branch and worktree: Codex's managed worktrees, Claude Code agent teams, a cloud session that pushes a branch. Rota does not launch these and cannot read their panes, but it can track the branch so the overlap check, status, gate, train and reap see it like round work.
+Some tools make their own branch and worktree: Codex's managed worktrees, Claude Code agent teams, a cloud session that pushes a branch. Rota does not launch these and cannot read their panes, but it can track the branch, so the overlap check, status, gate, train and reap treat it like round work.
 
 ```sh
 rota worker adopt codex/612-thing --issue 612          # a branch
@@ -64,7 +64,7 @@ rota config set round.adoptPattern 'codex/*'
 ## Last verified (2026-10-04)
 
 > [!NOTE]
-> This is a dated snapshot, not a compatibility guarantee. Checked 2026-10-04 on Codex 0.159.2, Hermes v0.21.5 and opencode 1.17.9, in a scratch git repo with one probe skill per location.
+> Dated snapshot, not a compatibility guarantee. Checked 2026-10-04 on Codex 0.159.2, Hermes v0.21.5 and opencode 1.17.9, in a scratch git repo with one probe skill per location.
 
 - **Codex.** See [Codex skills](codex-skills.md). Tab-mode round end to end (herdr, Codex 0.159.2 orchestrator and Codex workers, file backend, no forge): two tasks assigned, built, merged with `rota worker gate` and wound down clean. It needed the worker contract found under `.agents/skills` (`rota round assign` read only Claude roots until this change), and it ran with `approval_policy=never` and `sandbox_mode=danger-full-access` because Codex's sandbox did not initialise on the test machine.
 - **Hermes.** `hermes skills list` shows a `.agents/skills` probe only after `hermes skills trust`; a `.claude/skills` probe never loads. `hermes chat -s <skill> -Q -q <prompt>` resolved the trusted project skill and the model answered; an unknown name fails with `Unknown skill(s)`. Not verified: a full orchestrator round, and whether a literal `/rota-orchestrate` typed as the seed prompt dispatches as a slash command (the launcher avoids it by using `-s`).

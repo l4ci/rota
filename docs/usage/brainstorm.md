@@ -31,7 +31,7 @@ You take the nudge:
 /rota-brainstorm F12
 ```
 
-The skill resolves `F12`, reads its TODO entry, and queries relevant `KNOWLEDGE.md` and `DECISIONS.md` topics. It asks nothing unless something is truly ambiguous or conflicts with a decision, and then it asks the one question that unblocks it:
+The skill resolves `F12`, reads its TODO entry, and queries relevant `KNOWLEDGE.md` and `DECISIONS.md` topics. It asks only when something is ambiguous or conflicts with a decision, and then just the one question that unblocks it:
 
 > What signals "resolved"? `## Completed` only, or also `ARCHIVE.md`?
 
@@ -102,7 +102,7 @@ title: /rota-archive command for old resolved items
 status: planned
 ```
 
-The design is soft input: `/rota-plan` doesn't require it, and a plan can override a design's choice if facts changed since the brainstorm.
+A plan can override a design's choice if facts changed since the brainstorm.
 
 ## Re-running on an existing design
 
@@ -117,7 +117,6 @@ If `.rota/designs/<ID>.md` already exists, `/rota-brainstorm` asks how to procee
 - Project-level design stays with [`/rota-vision`](vision-and-plans.md): milestones, multi-feature arcs, vision rewrites.
 - Code-touching feasibility experiments stay with [`/rota-spike`](spikes.md): a throwaway branch that proves a thing works before the design hardens.
 - Implementation plan with task decomposition stays with [`/rota-plan`](vision-and-plans.md).
-- Items with an obvious shape can skip the brainstorm: capture them and go straight to [`/rota-work`](running-work.md).
 
 ## Autonomy interaction
 

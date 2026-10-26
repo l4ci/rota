@@ -56,7 +56,7 @@ Triggered by `/rota-ship` when `ship.qa: true`. Runs after `/rota-review` and th
 
 | `qa.gate` | `PASS` | `CONCERNS` | `FAIL` |
 |---|---|---|---|
-| `"advisory"` (default) | continue silently | surface findings, continue | surface findings, continue (advisory means advisory) |
+| `"advisory"` (default) | continue silently | surface findings, continue | surface findings, continue |
 | `"blocking"` | continue silently | surface, ask you how to proceed | stop; user fixes via `/rota-work` or `/rota-debug` and reruns `/rota-ship` |
 
 ## When to use
@@ -73,7 +73,7 @@ Triggered by `/rota-ship` when `ship.qa: true`. Runs after `/rota-review` and th
 
 ## Configuration
 
-`/rota-qa` reads three keys from `.rota/config.json`:
+`/rota-qa` reads these keys from `.rota/config.json`:
 
 - `qa.gate`: `"advisory"` (default) or `"blocking"`. Controls whether `FAIL` halts `/rota-ship` invocations.
 - `qa.afterWork`: `false` (default). When `true`, `/rota-work` invokes `/rota-qa run` post-cycle if touched files match a target's `Watch globs`.

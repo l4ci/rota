@@ -1,17 +1,17 @@
 # rota or a bare session
 
-You can run a team of subagents from a plain Claude Code session with no rota and no skills. This page lines that up against what a rota round does, so you can decide which you need. It is the October 2026 comparison re-judged after six follow-ups landed (#897 to #902). The dated baseline is [Plain orchestrator comparison, October 2026](../contributing/plain-orchestrator-comparison-2026-10.md).
+You can run a team of subagents from a plain Claude Code session with no rota and no skills. This page compares that with a rota round. It is the October 2026 comparison re-judged after six follow-ups landed (#897 to #902). The dated baseline is [Plain orchestrator comparison, October 2026](../contributing/plain-orchestrator-comparison-2026-10.md).
 
 ## The short version
 
-rota wins where structure matters: the merged-tree gate before merge, measured proof rows, typed worker states, signed provenance, resumability, per-slot port and database isolation, bounce accounting. A bare session has no answer to any of those.
+rota wins where structure matters: the merged-tree gate before merge, measured proof rows, typed worker states, signed provenance, resumability, per-slot port and database isolation, bounce accounting. A bare session has none of these.
 
 The baseline listed three places where the bare session came out ahead, plus its lower reading cost. Two of the three are closed, one is narrowed, and reading cost still holds:
 
 - **Spec review on every PR.** Closed. `light` review depth now runs the Spec reviewer (#898).
 - **Review weight follows the diff.** Closed. A one-way door, files outside the issue's named set or a matching risk path raise the depth (#897).
 - **Behaviour exercised after a merge.** Narrowed. An issue can carry `## Try it` commands that the gate runs on the merged tree (#899). It is opt-in per issue, and `/rota-qa` is still off here (`ship.qa: false`, no `.rota/qa/`).
-- **Reading cost.** Still holds, and the follow-ups added a little (`bounce-cap.md`, the scope-scout rules).
+- **Reading cost.** Still holds; the follow-ups added a little (`bounce-cap.md`, the scope-scout rules).
 
 ## The bare session, in short
 
@@ -52,7 +52,7 @@ One correction to the bare design: running the suite on `main` after every merge
 
 Yes. A worker slot that finishes an issue is parked, not kept warm. The next task dispatch closes the slot's previous tab (`/exit`, then `tab close`) and opens a new one, so the next issue starts a fresh harness session with none of the earlier issue's context. The herdr dispatch notes call a fresh session per task "the only trustworthy reset". On herdr the workspace is recreated too. Only a `--relay` to a slot that is still working an issue reaches the same session, which is how review feedback arrives. A dispatch is refused (exit 4) if the reset guard finds the slot still holding work, or if `round.commands.claude` carries a resume flag. Exit 5 means the host is unavailable, the old session would not close, or a startup dialog refused input. Source: [`skills/references/herdr-dispatch.md`](../../skills/references/herdr-dispatch.md) and `internal/worker/dispatch.go`.
 
-So stale context does not build up across issues. What carries over is the worktree on disk, the slot's registry entry and the knowledge files, none of which sit in the model's context.
+Stale context does not build up across issues. What carries over is the worktree on disk, the slot's registry entry and the knowledge files, none of which sit in the model's context.
 
 ## Related
 

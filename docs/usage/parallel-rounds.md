@@ -4,15 +4,15 @@ A round is one orchestrator session plus two to five workers. Each worker is a s
 its own git worktree and terminal tab (herdr or tmux), or an in-harness subagent when there is no
 terminal host ([solo mode](#solo-mode)). Each holds one backlog item at a time: a GitHub or GitLab issue, or a `.rota/BACKLOG.md` item on the file backend ([issue backend](issue-backend.md)). Workers implement,
 verify and open a PR; they never merge. The orchestrator assigns issues, relays decisions, merges
-PRs; the merge gate is the only full verification run.
+PRs. The merge gate is the only full verification run.
 
 The orchestrator runs the `rota-orchestrate` skill, which holds the judgment: which issues, how to
 read a stuck worker, what to escalate, when to merge. The mechanics are `rota round` verbs, so a round
 never polls inside the orchestrator's context. A worker reads
 [`skills/references/worker-contract.md`](../../skills/references/worker-contract.md); `rota round assign` points it there.
 
-This page covers what a round does and how to run one. Running a round on rota itself, with its
-gate and repo rules, is in [contributing: rounds](../contributing/rounds.md).
+Running a round on rota itself, with its gate and repo rules, is in
+[contributing: rounds](../contributing/rounds.md).
 
 ## Round or `/rota-work`
 
@@ -34,9 +34,8 @@ a round is the same idea with the assignment, waiting and merging done by verbs.
 
 1. **A host** for the workers' tabs: herdr (pinned to 0.9.x) or tmux. Leave
    `round.dispatch` at the default `rota init` writes (`subagent`) and `rota round start` detects the
-   host from where it runs (herdr inside a herdr pane, tmux inside tmux). Set `herdr` or `tmux` only
-   to force one. With neither it falls back to
-   [solo mode](#solo-mode).
+   host from where it runs, falling back to [solo mode](#solo-mode). Set `herdr` or `tmux` only
+   to force one.
 2. **A backlog.** With `issues.source` set to `github` or `gitlab`, rounds take GitHub (`gh`) or GitLab (`glab`) issues, authenticated. On the file backend (the default) they take `.rota/BACKLOG.md` items and the orchestrator completes them at merge. Either way, workers open a PR against the base and the merge gate merges through the forge, so a project with an `origin` remote needs `gh` or `glab` installed and logged in on the file backend too (`rota doctor` checks it). With `forge.provider: local` (or no `origin` remote under `auto`) there is no PR: workers merge directly (`rota ship strategy` answers `direct`) and the gate never looks for one. See [issue backend](issue-backend.md).
 3. **Accounts, if you have more than one.** `round.accounts` maps slots to separate
    config homes (`kind: "claude"` entries set `CLAUDE_CONFIG_DIR`), so workers draw on different usage limits and `rota round assign` can avoid a
@@ -135,7 +134,7 @@ rota reap --apply                            # delete the merged branches and le
 left. After every `wait`, give each free slot its next issue before you review: a slot whose worker
 reported done with a PR is free, and `assign` moves its PR to the round's review list. Replace `ben` with the
 slot `wait` named, or gate a PR in review by number (`rota worker gate 61 --base main`). Preview `rota reap` without
-`--apply` first. The sections below cover each step.
+`--apply` first.
 
 ## The round flow
 
@@ -278,8 +277,8 @@ The autopilot skips that refusal and continues to the next candidate.
   subagents. See [round keys](configuration.md#round-keys).
 - **Profile.** `round.profile` fills the Claude tier models in one setting; `rota config show`
   reports the effective model of every tier and where it came from. An explicit
-  `round.tiers.claude.<tier>` beats the profile for that tier; unset keeps today's tiers; Codex and
-  OpenCode tiers are never touched.
+  `round.tiers.claude.<tier>` beats the profile for that tier; with no profile set, the default tiers
+  apply. Codex and OpenCode tiers are never touched.
 
   | Profile | light | standard | heavy |
   | --- | --- | --- | --- |
@@ -289,7 +288,7 @@ The autopilot skips that refusal and continues to the next candidate.
   | `inherit` | empty | empty | empty |
 
   `inherit` launches workers without `--model`, so they run on whatever model the session's provider
-  picks (a non-Anthropic provider, say). Precedence per Claude tier: explicit key, profile, then the default.
+  picks (a non-Anthropic provider, say).
 - **Kind.** `--kind codex` starts a Codex worker instead of a Claude one; see
   [Codex workers](codex-workers.md). An issue can ask for its own harness and model: label it
   `harness:claude` or `harness:codex`, and optionally `model:<id>` (file backend: end the bullet with
@@ -467,8 +466,8 @@ the split lives in its tab. Running `rota layout split` from a plain pane of the
 pane instead. With no pane known the orchestrator keeps the left column to itself. `rota layout tabs` puts the orchestrator
 and the workers back in tabs of their own and leaves the CLI pane where it is.
 
-The verb only moves panes. No process restarts, nothing is typed into a pane, and focus stays where it
-was, so it is safe in the middle of a round.
+The verb only moves panes: no process restarts, nothing is typed into a pane, and focus stays where
+it was, so it is safe in the middle of a round.
 
 - **All projects by default.** It arranges every rota project that has an orchestrator open in the herdr
   you run it from. `--project <dir>` narrows it to one.
@@ -514,8 +513,8 @@ have not seen, at the heartbeat, or when the autopilot stops (a wind-down or a l
 failed for a reason a person must clear is held, not re-run on every tick. Every action is one line in
 `.rota/gate-audit.jsonl` with `"gate": "autopilot"`.
 
-The watch is the autopilot's heartbeat: keep exactly one running, as above. The scope you chose at
-`round start` bounds what it assigns; start a `slate` round to keep it to issues you picked.
+The scope you chose at `round start` bounds what it assigns; start a `slate` round to keep it to
+issues you picked.
 
 ## PRs in review
 
@@ -562,7 +561,7 @@ reads the answers back.
 When several decisions wait, type `/rota-answer`. The orchestrator then asks them one by one (the
 `AskUserQuestion` picker in Claude Code; one message with an `A)` to `E)` list elsewhere, `A)` the
 recommendation, the last entry "Write your own answer"), records each answer as a `decision` comment
-and applies it before the next question. Rounds use no blocking picker otherwise, and the
+and applies it before the next question. Otherwise rounds never use a blocking picker, and the
 orchestrator never starts `/rota-answer` itself.
 
 ```sh
@@ -591,7 +590,8 @@ marked `done`.
 `rota worker gate <slot> --base <branch>` is the one merge path in a round. It checks the branch is
 fresh, the PR is the worker's, provenance holds and the PR body closes the slot's issue
 (`Closes #N`, unless the issue is labelled `partial-slice`), then builds a scratch
-merge of the PR into the base, runs `test.full` there, then `test.e2e` when set, and merges on a pass.
+merge of the PR into the base (a worktree under `$TMPDIR`), runs `test.full` there, then `test.e2e`
+when set, and merges on a pass.
 
 A worker's PR body carries four sections besides the closing keyword: `## Approvals` (the channel of each
 decision it acted on), `## Rulings` (its own calls, each with a cost if wrong), `## Assumptions` (each
@@ -614,9 +614,7 @@ The gate refuses before it merges anything (exit 4, nothing lands) in these case
 A local gate verifies before it merges. For a PR it first asks the forge whether the PR merges
 cleanly; a conflict the forge reports (git can miss one, for example after a file move) is
 `merge-failed` at once, before the slow verify. If the forge is still computing or the question fails,
-the gate carries on. It then builds a scratch merge of the PR head into the current base
-(in a scratch worktree under `$TMPDIR`), runs `test.full` there, then `test.e2e` when set. If that
-fails (`verify-failed`), nothing landed and the PR stays open: send the slot back to fix it, then
+the gate carries on. If the scratch verify fails (`verify-failed`), nothing landed and the PR stays open: send the slot back to fix it, then
 gate again. If the base moved while the scratch tree verified, the verdict is `base-moved` and nothing
 landed; gate again. After the merge lands, the gate compares the landed tree with the verified one. When
 they match, that is the pass. When the base moved between the last check and the merge, the gate prints
@@ -650,8 +648,7 @@ and `train --plan`) skip it.
 
 With two or more reviewed PRs waiting on one base, `rota worker train <slot|PR>... --base <branch>` is the
 default way to land them; a single `gate` is for exactly one waiting PR. The train gates them together and
-pays for the verify once instead of once per PR. A train can go red, but the culprit handling below keeps
-the other members moving. A gate or train takes 2 to 3 minutes: start it
+pays for the verify once instead of once per PR. A gate or train takes 2 to 3 minutes: start it
 as a background command, review the next PRs meanwhile, and read the verdict when it
 exits. `round assign` and `round transfer` refuse (`gate-running`, naming the PR the gate holds the lock for) until it exits; `round watch` returns when the lock clears, so assign freed slots then. The autopilot tick reports `deferred` instead of erroring. Don't start a second gate or train beside it, and don't write tracked `.rota/` files on the base
 checkout until it exits; the checkout guard fails the gate on a changed tracked file. It checks each member the way `gate --check-only` does,

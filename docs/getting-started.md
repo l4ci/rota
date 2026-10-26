@@ -19,7 +19,7 @@ Run `rota setup` once at the project root. It scaffolds `.rota/` and asks the ma
 - `rota setup --yes` takes the suggested values and asks nothing. `--set key=value` answers one question. Both suit scripts and CI.
 - `rota config set <key> <value>` changes a setting later. Don't hand-edit the JSON files.
 
-Every question and its choices is described in [config options](reference/config-options.md); [configuration](usage/configuration.md) explains the keys by concept. A second machine that builds issues beside main uses the `support` role: see [Support role](contributing/rounds.md#support-role).
+Every question and its choices are described in [config options](reference/config-options.md); [configuration](usage/configuration.md) explains the keys by concept. A second machine that builds issues beside main uses the `support` role: see [Support role](contributing/rounds.md#support-role).
 
 ## 🔁 Your first cycle
 

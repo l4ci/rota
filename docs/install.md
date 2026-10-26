@@ -1,6 +1,6 @@
 # Install
 
-Available from 0.9.0. `rota` is a single binary that carries the skills. Install the binary (Homebrew, the install script, or a release download), install the skills, then run `rota init` in your project. Claude Code users can instead start from the [plugin marketplace](#-plugin-marketplace), which brings the skills and installs the binary for them.
+Install the `rota` binary (Homebrew, the install script, or a release download), install the skills it carries, then run `rota setup` in your project. Claude Code users can instead start from the [plugin marketplace](#-plugin-marketplace), which brings the skills and installs the binary for them.
 
 ## 📦 The binary
 
@@ -20,13 +20,22 @@ No Homebrew? This works on any linux or macOS machine.
 curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh
 ```
 
-It installs to `~/.local/bin/rota`. It needs no sudo and does not edit your shell profile; if the directory is not on your `PATH` it prints the line to add. It needs `curl` (or `wget` as a fallback). With [`minisign`](https://jedisct1.github.io/minisign/) installed (`brew install minisign`, `apt install minisign`) it checks the signature and the sha256. Without minisign it checks the sha256 only, warns that the signature was not checked and how to install minisign, and finishes the install. `--strict` (or `ROTA_STRICT=1`) makes a missing minisign an error and installs nothing.
+It installs to `~/.local/bin/rota`. It needs `curl` (or `wget` as a fallback) but no sudo, and does not edit your shell profile; if the directory is not on your `PATH` it prints the line to add. With [`minisign`](https://jedisct1.github.io/minisign/) installed (`brew install minisign`, `apt install minisign`) it checks the signature and the sha256. Without minisign it checks the sha256 only, warns that the signature was not checked and how to install minisign, and finishes the install. `--strict` (or `ROTA_STRICT=1`) makes a missing minisign an error and installs nothing.
 
 | Option | Env var | Meaning |
 |---|---|---|
 | `--version X.Y.Z` | `ROTA_VERSION` | install this release instead of the latest |
 | `--prefix DIR` | `ROTA_PREFIX` | install to `DIR/bin` instead of `~/.local/bin` |
 | `--strict` | `ROTA_STRICT=1` | fail when minisign is missing instead of falling back to sha256 only; either one turns it on. `ROTA_STRICT` accepts `1`, `true`, `yes` (on) and `0`, `false`, `no` or empty (off); any other value is an error |
+
+### Windows (WSL2)
+
+There is no native Windows build: rota's file locks use `flock`. Run it inside [WSL2](https://learn.microsoft.com/windows/wsl/install) instead, where it behaves as on Linux.
+
+1. In PowerShell, run `wsl --install` (Ubuntu by default) and open the distro.
+2. Inside WSL, install rota with the install script or Homebrew above, plus `git`, `gh` or `glab`, and Claude Code or Codex. rota calls them from the same environment, so Windows-side installs are not seen.
+3. Clone your repos into the Linux filesystem (`~/src/...`), not under `/mnt/c`. Git is much slower across the Windows mount, and rota's locks expect a Linux filesystem.
+4. For rounds, run tmux inside WSL.
 
 ### Release binaries by hand
 
@@ -98,7 +107,7 @@ Plugin skills are namespaced: `/rota:rota-work`, `/rota:rota-ship` and so on. Wh
 
 `rota doctor` and `rota skills status` count the plugin's copy as a skill root. It matches when its files are the ones the binary carries, so a plugin install with the right binary reports healthy. On a mismatch, either run `/rota:rota-install` (binary to the plugin's version) or `claude plugin update rota@rota` (plugin to the binary's).
 
-Pick one way per machine. A plugin plus a `rota skills install` user copy shows every skill twice, once as `/rota-work` and once as `/rota:rota-work`; `rota skills uninstall` removes the second. Codex has its own plugin (see below).
+Pick one way per machine. A plugin plus a `rota skills install` user copy shows every skill twice, once as `/rota-work` and once as `/rota:rota-work`; `rota skills uninstall` removes the second.
 
 ### Codex
 
@@ -113,7 +122,7 @@ Verified on Codex 0.161.0 in a throwaway `CODEX_HOME`, with the repo's marketpla
 
 Copilot CLI was not installed on the test machine and is untested.
 
-Per route, does it update itself?
+Does each route update itself?
 
 | Route | Updates itself? | Update with |
 |---|---|---|

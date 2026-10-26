@@ -1,8 +1,8 @@
 # Configuration
 
-All settings live in [`.rota/config.json`](../reference/rota-folder.md). Run `rota config show` to list every key with its value and source, `rota config edit` (or `rota config --ui`) to change keys on [a screen](#the-config-screen) (terminal only; it is also the Config entry of the bare-`rota` menu), and `rota config set <key> <value>` to change one from a script (positional arguments; see [config options](../reference/config-options.md)). `rota init` fills any missing required project key with its default (see [Scopes](#scopes-which-file-a-key-belongs-in)). Don't hand-edit the file. `rota config save-global` merges this project's `config.json` keys (not `config.local.json`; without `rota.version`, `git.baseBranch` and `umbrella.enabled`) into `config.json` in the rota config dir, keeping the global keys the project does not set (see [the global config dir](#the-global-config-dir)), beside `connections.json`. The global file is a runtime layer: values resolve as schema default < global < `.rota/config.json` < `.rota/config.local.json`, so a value set once applies to every project that does not set that key, and `rota config show` reports `global` as its source (a key the project overrides also carries the global value in `--json`, as `global`). `rota config show --global`, `set --global` and `edit --global` read and write the global file itself, from any directory and with no project; in your home directory (no `.rota/` there or above) they do so without `--global`, and `config set` says `global:` in its output. A project-owned key is refused there. Bare `rota` in your home directory is a launcher whose Config entry opens the global config. On the config screen, `g` switches a key between inheriting the global value and overriding it in this project. The project-owned keys (`rota.version`, `git.baseBranch`, `umbrella.enabled`) are never read from it. A missing file changes nothing; a corrupt one warns and is skipped (every write to it, `set --global`, `save-global` and setup's save offer included, refuses with exit 70 and leaves the file as it is), and `rota config fill` then writes no defaults (so they are not pinned over the repaired global) while `rota config check` names the corrupt global. `rota init` and `rota setup` do not copy global values into the new `config.json`; the project inherits them, and `rota setup` offers each as the question's default. Interactive `rota setup` ends by offering to save its answers there: all of them when no global file exists yet, later only those that differ from it, merged into the file. `--yes`, `--set` and runs without a terminal never ask; `rota setup --save-global` saves the same answers without asking.
+All settings live in [`.rota/config.json`](../reference/rota-folder.md). Run `rota config show` to list every key with its value and source, `rota config edit` (or `rota config --ui`) to change keys on [a screen](#the-config-screen) (terminal only; also the Config entry of the bare-`rota` menu), and `rota config set <key> <value>` to change one from a script (positional arguments). `rota init` fills any missing required project key with its default (see [Scopes](#scopes-which-file-a-key-belongs-in)). Don't hand-edit the file. `rota config save-global` merges this project's `config.json` keys (not `config.local.json`; without `rota.version`, `git.baseBranch` and `umbrella.enabled`) into `config.json` in the rota config dir, keeping the global keys the project does not set (see [the global config dir](#the-global-config-dir)), beside `connections.json`. The global file is a runtime layer: values resolve as schema default < global < `.rota/config.json` < `.rota/config.local.json`, so a value set once applies to every project that does not set that key, and `rota config show` reports `global` as its source (a key the project overrides also carries the global value in `--json`, as `global`). `rota config show --global`, `set --global` and `edit --global` read and write the global file itself, from any directory and with no project; in your home directory (no `.rota/` there or above) they do so without `--global`, and `config set` says `global:` in its output. A project-owned key is refused there. Bare `rota` in your home directory is a launcher whose Config entry opens the global config. On the config screen, `g` switches a key between inheriting the global value and overriding it in this project. The project-owned keys (`rota.version`, `git.baseBranch`, `umbrella.enabled`) are never read from it. A missing file changes nothing; a corrupt one warns and is skipped (every write to it, `set --global`, `save-global` and setup's save offer included, refuses with exit 70 and leaves the file as it is), and `rota config fill` then writes no defaults (so they are not pinned over the repaired global) while `rota config check` names the corrupt global. `rota init` and `rota setup` do not copy global values into the new `config.json`; the project inherits them, and `rota setup` offers each as the question's default. Interactive `rota setup` ends by offering to save its answers there: all of them when no global file exists yet, later only those that differ from it, merged into the file. `--yes`, `--set` and runs without a terminal never ask; `rota setup --save-global` saves the same answers without asking.
 
-For the allowed values and option labels of each key, see [Configuration options](../reference/config-options.md).
+Allowed values and option labels of each key are in [Configuration options](../reference/config-options.md).
 
 Default config (what `rota init --no-blocks` writes in a fresh repo; `rota.version` is stamped with the release that wrote it):
 
@@ -74,7 +74,7 @@ Keys split by flow. `work.*` keys apply to `/rota-work` and other solo cycles: `
 
 ## Models: orchestrator.model and round.tiers.claude.standard
 
-`orchestrator.model` (default `opus`) drives planning, exploration, verification and design. `round.tiers.claude.standard` (default `sonnet`) is the model of implementation subagents and of standard-tier round workers; `/rota-work` and rounds read the same key. Set them independently to trade off quality against cost and speed. `round.profile` fills the Claude tiers when `round.tiers.claude.standard` is unset (see [round keys](#round-keys)).
+`orchestrator.model` (default `opus`) drives planning, exploration, verification and design. `round.tiers.claude.standard` (default `sonnet`) is the model of implementation subagents and of standard-tier round workers; `/rota-work` and rounds read the same key. Set them independently to trade quality against cost and speed. `round.profile` fills the Claude tiers when `round.tiers.claude.standard` is unset (see [round keys](#round-keys)).
 
 | Value | Best for |
 |-------|----------|
@@ -84,18 +84,18 @@ Keys split by flow. `work.*` keys apply to `/rota-work` and other solo cycles: `
 
 ## work.isolation: branch or worktree
 
-Affects `/rota-work` (solo). Controls where skill work happens.
+Affects `/rota-work` (solo). Sets where skill work happens.
 
 | Mode | How it works | When to use |
 |------|-------------|-------------|
 | `"branch"` | Feature branch in current worktree | Solo work, simple workflows |
 | `"worktree"` | Isolated directory under `.claude/worktrees/` | Parallel work streams, keep main clean while agents work |
 
-Switch to `"worktree"` when you want multiple work streams in flight without context bleeding between them. See [parallel work](parallel-work.md) for the full pattern.
+Use `"worktree"` to keep several work streams in flight without context bleeding between them. See [parallel work](parallel-work.md).
 
 ## work.mergeStrategy: direct or pr
 
-Affects `/rota-work` and `/rota-ship` (solo). Controls how [`/rota-ship`](review-and-ship.md) integrates completed work.
+Affects `/rota-work` and `/rota-ship` (solo). Sets how [`/rota-ship`](review-and-ship.md) integrates completed work.
 
 | Strategy | How it works | When to use |
 |----------|-------------|-------------|
@@ -118,20 +118,20 @@ Affects rounds only. `/rota-work` always runs in-process `Agent` workers that wr
 rota config set round.dispatch tmux
 ```
 
-**Parallel rounds (`rota round`) pick their host differently, so a round in herdr needs no setting.** With `round.dispatch` unset or `subagent` (the default `rota init` writes), `rota round start` detects one: herdr when it runs inside a herdr pane, tmux when it runs inside tmux, and otherwise **solo mode**, where the orchestrator runs each worker as a Claude `Agent` subagent in the slot's own worktree. An explicit `tmux` or `herdr` is used as set, and fails if unavailable rather than falling back. The round records its host when it starts and keeps it until wind-down. Solo workers share the orchestrator's account, rate window and context, so one usage limit stops them all. Solo mode runs Claude workers only: a Codex subagent cannot be given a working directory. See [Parallel rounds](parallel-rounds.md).
+**A round in herdr needs no setting.** With `round.dispatch` unset or `subagent` (the default `rota init` writes), `rota round start` detects the host: herdr inside a herdr pane, tmux inside tmux, and otherwise **solo mode**, where the orchestrator runs each worker as a Claude `Agent` subagent in the slot's own worktree. An explicit `tmux` or `herdr` is used as set, and fails if unavailable rather than falling back. The round records its host when it starts and keeps it until wind-down. Solo workers share the orchestrator's account, rate window and context, so one usage limit stops them all. Solo mode runs Claude workers only: a Codex subagent cannot be given a working directory. See [Parallel rounds](parallel-rounds.md).
 
 Two things behave differently under `tmux` and `herdr` than in `/rota-work`:
 
 - **`work.isolation` stops applying.** Every slot has its own worktree, so its own git index, by construction.
-- **Workers commit.** The orchestrator's per-task commit step is skipped; integration happens through the merge gate instead, which re-verifies the *merged* tree. Two workers can each be honestly green and still break the cycle branch together — a signature one widens while another adds a caller, a constant one stops emitting while another starts reading it. Nothing about a clean merge rules that out, which is why the gate runs `test.full` after every merge rather than trusting the branches.
+- **Workers commit.** The orchestrator's per-task commit step is skipped; integration happens through the merge gate instead, which re-verifies the *merged* tree. Two workers can each be green and still break the cycle branch together (one widens a signature while another adds a caller, one stops emitting a constant while another starts reading it), and a clean merge does not rule that out. So the gate runs `test.full` after every merge rather than trusting the branches.
 
 Related keys: `round.slots` (pool size, default `3`), `round.commands` (the launch command per harness: `round.commands.claude` defaults to `claude --model <round.tiers.claude.standard> --dangerously-skip-permissions`, `round.commands.opencode` to `opencode --model <model>`, `round.commands.codex` to `codex --model <model> --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen`), `orchestrator.command` (starts the orchestrator for `rota orchestrate` and `rota worker session ensure`; the default builds `claude --model <orchestrator.model> --permission-mode auto`, with `--continue` added for `session ensure`; `rota keepalive run` restarts it), and `round.accounts` (the named worker accounts of every harness, a list of `{ "kind", "name", "dir" }`: `kind` is `claude`, `codex` or `opencode`, and `dir` is that harness's config home, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `OPENCODE_CONFIG_DIR`; a leading `~` or `~/` in `dir` expands to the home directory; names are unique across kinds; with no entry of a kind, workers of that kind use the harness's default home).
 
-**Workers run with permissions skipped; the operator does not.** A worker is briefed to commit, open a PR and run tests with nobody in its pane to answer a prompt, so a narrower mode just stalls it. What bounds a worker is scope rather than gating — a throwaway branch in its own worktree, with `rota worker gate` verifying a scratch merge before anything reaches the cycle branch. The operator keeps `auto` because it performs the merges and it is the window a human is actually watching. Narrow either via its config key; a worker that then stops on a prompt reports `NEEDS-PERMISSION` rather than hanging.
+**Workers run with permissions skipped; the operator does not.** A worker is briefed to commit, open a PR and run tests with nobody in its pane to answer a prompt, so a narrower mode just stalls it. What bounds a worker is scope, not gating: a throwaway branch in its own worktree, with `rota worker gate` verifying a scratch merge before anything reaches the cycle branch. The operator keeps `auto` because it performs the merges and is the window a human watches. Narrow either via its config key; a worker that then stops on a prompt reports `NEEDS-PERMISSION` rather than hanging.
 
 ## brainstorm.edgeProbe
 
-Opt-in, `false` by default. With `false`, [`/rota-brainstorm`](brainstorm.md) is unchanged. With `true`, Step 3 adds an edge and prohibition probe to the one draft: it lists boundary, empty, ordering, idempotency, concurrency, encoding, precision and adjacency, records each as `covered: <how>` or `dismissed: <reason>`, asks once "What must this never do?" and writes each answer as a `- [ ] AC-n:` line that states a prohibition. It adds no approval step, and it is skipped when the issue body already has `## Acceptance`. `/rota-plan` and `--grill` are unaffected.
+Opt-in, `false` by default. With `true`, Step 3 adds an edge and prohibition probe to the one draft: it lists boundary, empty, ordering, idempotency, concurrency, encoding, precision and adjacency, records each as `covered: <how>` or `dismissed: <reason>`, asks once "What must this never do?" and writes each answer as a `- [ ] AC-n:` line that states a prohibition. It adds no approval step and is skipped when the issue body already has `## Acceptance`. `/rota-plan` and `--grill` are unaffected.
 
 ```bash
 rota config set brainstorm.edgeProbe true
@@ -139,7 +139,7 @@ rota config set brainstorm.edgeProbe true
 
 ## research.packageCheck
 
-Opt-in, `false` by default. With `false`, no skill makes a registry call. With `true`, [`/rota-spike`](spikes.md) Step 2 and [`/rota-plan`](vision-and-plans.md) Step 2 look up each new package they would recommend on its registry (npm, PyPI, crates.io, Go proxy), so **it makes network calls**. A package that is not on the registry is `missing` and is not recommended. One first published under 90 days ago, or with no source repository link, is `suspect`: it is listed with its reason and appears in a plan or finding only after you say yes. Dependencies already in the repo are not checked. The verdicts are defined in `skills/references/package-check.md`.
+Opt-in, `false` by default (no skill makes a registry call). With `true`, [`/rota-spike`](spikes.md) Step 2 and [`/rota-plan`](vision-and-plans.md) Step 2 look up each new package they would recommend on its registry (npm, PyPI, crates.io, Go proxy), so it makes network calls. A package that is not on the registry is `missing` and is not recommended. One first published under 90 days ago, or with no source repository link, is `suspect`: it is listed with its reason and appears in a plan or finding only after you say yes. Dependencies already in the repo are not checked. The verdicts are defined in `skills/references/package-check.md`.
 
 ```bash
 rota config set research.packageCheck true
@@ -193,11 +193,11 @@ rota config set round.portBlock 200
 
 ## round.herdrGroupSlots: slots as linked herdr workspaces
 
-Affects rounds only. `true` (default): dispatch opens the slot's worktree as a herdr workspace linked to the orchestrator's (`herdr worktree open`), so herdr groups the slots under their project in the sidebar. That helps when several projects share one herdr session. Workers then sit in their own workspaces instead of beside the orchestrator, and each slot costs one extra workspace while it runs. `false`: under herdr, each worker slot is a tab in the orchestrator's own workspace. It changes nothing under tmux. The worktrees stay in `.worktrees/`.
+Affects rounds only. `true` (default): dispatch opens the slot's worktree as a herdr workspace linked to the orchestrator's (`herdr worktree open`), so herdr groups the slots under their project in the sidebar. This helps when several projects share one herdr session. Workers sit in their own workspaces instead of beside the orchestrator, and each slot costs one extra workspace while it runs. `false`: under herdr, each worker slot is a tab in the orchestrator's own workspace. It changes nothing under tmux. The worktrees stay in `.worktrees/`.
 
-`rota layout split` folds the slots' panes into the orchestrator's tab, so they leave their workspaces (herdr closes a workspace with its last tab); the command says so. `rota layout tabs` opens each slot's workspace again and moves its pane back in. With the key `false`, layout works as it did.
+`rota layout split` folds the slots' panes into the orchestrator's tab, so they leave their workspaces (herdr closes a workspace with its last tab); the command says so. `rota layout tabs` opens each slot's workspace again and moves its pane back in. With the key `false`, layout is unchanged.
 
-Closing the orchestrator's workspace by hand now needs `herdr workspace close --group`, which also closes every slot's workspace; rota never passes `--group`. See [`herdr-dispatch.md`](../../skills/rota-orchestrate/references/herdr-dispatch.md#linked-workspaces-per-slot).
+Closing the orchestrator's workspace by hand needs `herdr workspace close --group`, which also closes every slot's workspace; rota never passes `--group`. See [`herdr-dispatch.md`](../../skills/rota-orchestrate/references/herdr-dispatch.md#linked-workspaces-per-slot).
 
 ```bash
 rota config set round.herdrGroupSlots false
@@ -272,7 +272,7 @@ A known-red or flaky test may be passed over by the merge gate and the merge tra
 
 `test.full` replaces `refactor.verifyCommands`. `rota config fill` moves the old key's commands to `test.full` and deletes it. Until then the gate still reads the old key when `test.full` is empty, and warns on stderr that it is deprecated.
 
-When `test.full` is non-empty, the verifier executes each command in order and refuses to PASS unless every command exits zero. This catches formatter drift, import-sort failures, and type errors locally instead of on push. See [rota #9](https://github.com/l4ci/rota/issues/9) for the motivating incident.
+When `test.full` is non-empty, the verifier executes each command in order and refuses to PASS unless every command exits zero. This catches formatter drift, import-sort failures and type errors locally instead of on push. See [rota #9](https://github.com/l4ci/rota/issues/9) for the motivating incident.
 
 Example for a Python project using ruff + pytest:
 
@@ -286,7 +286,7 @@ Example for a Python project using ruff + pytest:
 }
 ```
 
-Commands run from the repo root (or, in umbrella mode, the sub-repo's root), one after the other. To use several cores, put the concurrency in one command: this repo sets the list to `["bash test/gate.sh"]`, which runs validate, `go vet`, `go test -race` and the smoke suite together (smoke split into [`ROTA_SMOKE_SHARDS`](#smoke-shards) shards, the sharded gate takes about 2–3 minutes, serial smoke is several times slower). Set via `rota config set` (which parses argv[2] as JSON):
+Commands run from the repo root (or, in umbrella mode, the sub-repo's root), one after the other. To use several cores, put the concurrency in one command: this repo sets the list to `["bash test/gate.sh"]`, which runs validate, `go vet`, `go test -race` and the smoke suite together (smoke split into [`ROTA_SMOKE_SHARDS`](#smoke-shards) shards, the sharded gate takes about 2 to 3 minutes, serial smoke is several times slower). Set via `rota config set` (which parses argv[2] as JSON):
 
 ```bash
 rota config set test.full '["uv run ruff check .","uv run ruff format --check ."]'
@@ -329,7 +329,7 @@ CI runs the definition in the pushed tree, so a merge that changes it would choo
 
 - GitLab: pipelines run on branch pushes unless `workflow:rules` exclude them. Make sure `rota/ci/` branches are allowed.
 
-Trade-off: a CI queue can be slower than a 2-3 minute local gate, so `local` stays a fine choice. `ci` saves local or VPS CPU and avoids running the suite twice.
+Trade-off: a CI queue can be slower than a 2-3 minute local gate. `ci` saves local or VPS CPU and avoids running the suite twice.
 
 Not covered: the `rota round wind-down` base re-verify and `rota test run full` still run `test.full` locally. Tuning, in seconds: `ROTA_CI_POLL` (default 20), `ROTA_CI_START_WAIT` (300), `ROTA_CI_TIMEOUT` (overrides the config timeout).
 
@@ -343,7 +343,7 @@ ROTA_SMOKE_SHARDS=6 bash test/gate.sh
 
 ## doctor.minFreeDiskPercent
 
-Free-disk threshold for `rota doctor`, as a percent of the volume holding the project. Integer 0-100, default `10`; `0` turns the check off. Below it doctor adds a `warn disk` line (the run still passes) whose hint names the rota leftovers that would give space back: leaked temp dirs and worktrees whose directory is gone. The same threshold gates a `warn go-cache-disk` line when the volume holding the Go build cache is that low; its hint is `go clean -cache`. A parallel round writes worktrees, builds and logs, and a full disk fails it halfway.
+Free-disk threshold for `rota doctor`, as a percent of the volume holding the project. Integer 0-100, default `10`; `0` turns the check off. Below it doctor adds a `warn disk` line (the run still passes) whose hint names the rota leftovers that would give space back: leaked temp dirs and worktrees whose directory is gone. The same threshold gates a `warn go-cache-disk` line when the volume holding the Go build cache is that low; its hint is `go clean -cache`. A parallel round writes worktrees, builds and logs, and a full disk fails it midway.
 
 ```bash
 rota config set doctor.minFreeDiskPercent 5
@@ -351,29 +351,29 @@ rota config set doctor.minFreeDiskPercent 5
 
 ## learn.verify
 
-Controls whether [`/rota-learn`](learning.md) always runs a second-opinion pass on what it just wrote. The verifier is a fresh Opus sub-agent with no session context that reads only the updated `KNOWLEDGE.md` diff. It judges each new bullet on four criteria: durable (not ephemeral), sharp (concrete claim, not vague), correctly topic'd, and non-duplicate. It can demote weak entries, sharpen vague wording, re-file wrong-topic bullets, or delete restatements of existing knowledge.
+Whether [`/rota-learn`](learning.md) always runs a second-opinion pass on what it just wrote. The verifier is a fresh Opus subagent with no session context that reads only the updated `KNOWLEDGE.md` diff. It judges each new bullet on four criteria: durable (not ephemeral), sharp (a concrete claim), correctly topic'd, and non-duplicate. It can demote weak entries, sharpen vague wording, re-file wrong-topic bullets, or delete restatements of existing knowledge.
 
 | Value | Behavior |
 |-------|----------|
-| `true` | After writing, dispatches the verifier. Catches weak, duplicate, or wrong-topic entries before they accrete in `KNOWLEDGE.md`. Adds one Opus roundtrip per `/rota-learn` call. |
-| `false` (default) | Skip the verifier. `/rota-learn` writes and reports. Fast and cheap. Pass `--strict` to `/rota-learn` to run the verifier for one call anyway. |
+| `true` | After writing, dispatches the verifier, catching weak, duplicate or wrong-topic entries before they accrete in `KNOWLEDGE.md`. Adds one Opus roundtrip per `/rota-learn` call. |
+| `false` (default) | Skip the verifier. `/rota-learn` writes and reports. Pass `--strict` to `/rota-learn` to run the verifier for one call anyway. |
 
-A weak bullet consulted by 20 future `/rota-work` runs costs more than one extra Opus call. Set `true` if you want every capture checked, or use `--strict` when a capture matters.
+A weak bullet consulted by 20 future `/rota-work` runs costs more than one extra Opus call. Set `true` to check every capture, or use `--strict` when one matters.
 
 See [learning](learning.md) for the full `/rota-learn` workflow.
 
 ## learn.promoteThreshold
 
-Controls the F03 knowledge promotion lifecycle: how many `rota knowledge hit` events a `provisional` bullet must accumulate before auto-promotion to `confirmed`. Integer ≥ 0; default `3`.
+The F03 knowledge promotion lifecycle: how many `rota knowledge hit` events a `provisional` bullet must accumulate before auto-promotion to `confirmed`. Integer ≥ 0; default `3`.
 
-A "hit" registers when `/rota-work` or `/rota-review` consumes the bullet during a cycle's K+D consult (the bullet shows up in a worker brief's `Known gotchas:` section) AND the user doesn't push back with a correction that overlaps the bullet's body. The threshold is the cycle count after which the project decides the bullet has earned `confirmed` status. At that point `rota knowledge query` drops the `(provisional)` suffix and the bullet flows into consumers indistinguishable from established knowledge.
+A "hit" registers when `/rota-work` or `/rota-review` consumes the bullet during a cycle's K+D consult (the bullet shows up in a worker brief's `Known gotchas:` section) AND the user doesn't push back with a correction that overlaps the bullet's body. At the threshold the bullet becomes `confirmed`: `rota knowledge query` drops the `(provisional)` suffix and consumers see it as established knowledge.
 
 | Value | Behavior |
 |-------|----------|
-| `3` (default) | Auto-promote at the third clean hit. Catches durable bullets after a small handful of validated consults. |
-| `≥4` | Stricter. Bullets earn `confirmed` only after more validation. Use when you've seen weak bullets sneak through to `confirmed` too quickly. |
-| `1` or `2` | Looser. Almost every new bullet auto-promotes on first or second consult. Use when manual `/rota-learn --promote` flow feels heavy. |
-| `0` | Auto-promote on `rota knowledge add` itself, effectively disabling the `provisional` tier. Defeats the lifecycle's purpose; included for completeness only. |
+| `3` (default) | Auto-promote at the third clean hit. |
+| `≥4` | Stricter. Use when weak bullets reach `confirmed` too quickly. |
+| `1` or `2` | Looser. Almost every new bullet auto-promotes on its first or second consult. Use when the manual `/rota-learn --promote` flow feels heavy. |
+| `0` | Auto-promote on `rota knowledge add` itself, which disables the `provisional` tier. |
 
 Pending contradictions block auto-promotion regardless of hit count. The user must resolve them via `/rota-learn` Step 9 (Demote / Keep / Defer) before the bullet can flow forward.
 
@@ -381,13 +381,13 @@ See [learning](learning.md) for the full `/rota-learn` workflow.
 
 ## ship.review
 
-Controls how deep a review `/rota-ship` runs before integrating.
+How deep a review `/rota-ship` runs before integrating.
 
 | Value | Behavior |
 |-------|----------|
 | `"full"` (default) | `/rota-ship` runs `/rota-review` (Spec and Standards reviewers) before integrating. FAIL blocks, CONCERNS ask, PASS flows through. |
 | `"light"` | `/rota-review` dispatches the Spec reviewer only, on the `standard` tier, and skips Standards (the deterministic gate covers its mechanical half). A branch that references no issue has no spec and gets the Standards reviewer instead. |
-| `"none"` | `/rota-ship` integrates directly without a review pass. Use when you want raw speed and already reviewed manually. |
+| `"none"` | `/rota-ship` integrates directly without a review pass. Use when you already reviewed manually. |
 | `true` / `false` | The old boolean, still read: `true` is `full`, `false` is `none`. |
 | object | Picks the depth per branch, see below. |
 
@@ -411,33 +411,33 @@ See [review and ship](review-and-ship.md) for the full `/rota-ship` workflow.
 
 ## ship.secondOpinion
 
-Controls whether `/rota-ship` runs a second adversarial review with a fresh subagent after `/rota-review` passes. `/rota-review` shares the project's context (conventions, KNOWLEDGE, plan) with the work it produced, and a reviewer with that context naturalizes blind spots. A fresh subagent with only the diff + the goal has to reason from scratch and catches what the contextualized reviewer normalized.
+Whether `/rota-ship` runs a second adversarial review with a fresh subagent after `/rota-review` passes. `/rota-review` shares the project's context (conventions, KNOWLEDGE, plan) with the work it reviews, which can hide blind spots. A fresh subagent with only the diff and the goal reasons from scratch and catches what the contextualized reviewer normalized.
 
 | Value | Behavior |
 |-------|----------|
 | `false` (default) | `/rota-ship` skips the gate. `/rota-review` alone gates merges. |
 | `true` | After `/rota-review` returns PASS, `/rota-ship` dispatches a fresh `general-purpose` Sonnet subagent with the goal + diff only (no KNOWLEDGE/DECISIONS/conventions) and an adversarial framing. Returns PASS/CONCERNS/FAIL via the same routing as `/rota-review`. |
 
-The gate is opt-in because it adds one Sonnet roundtrip per ship and most cycles don't need it. Enable when you ship work that touches load-bearing surfaces (release tooling, security paths, data migrations) and want a second pair of eyes that genuinely don't know what they're "supposed to" see.
+The gate adds one Sonnet roundtrip per ship, and most cycles don't need it. Enable it for work that touches load-bearing surfaces (release tooling, security paths, data migrations).
 
-Same-model-fresh-context is the cheap MVP; cross-model second-opinions (Codex/Gemini/etc.) would be stronger but aren't currently wired.
+The reviewer is the same model with fresh context. Cross-model second opinions (Codex, Gemini) are not wired.
 
 See [review and ship](review-and-ship.md) for the full `/rota-ship` workflow.
 
 ## ship.qa
 
-Controls whether `/rota-ship` invokes [`/rota-qa run`](qa.md) between `/rota-review` (and the optional second-opinion gate) and the merge/PR step. `/rota-review` answers *"does this diff make sense"*. `/rota-qa` answers *"does the product actually work"* by executing the per-target strategy in `.rota/qa/<target>.md`.
+Whether `/rota-ship` invokes [`/rota-qa run`](qa.md) between `/rota-review` (and the optional second-opinion gate) and the merge/PR step. `/rota-review` asks whether the diff makes sense; `/rota-qa` asks whether the product works, by executing the per-target strategy in `.rota/qa/<target>.md`.
 
 | Value | Behavior |
 |-------|----------|
 | `false` (default) | `/rota-ship` skips QA. Diff-level review alone gates merges. |
 | `true` | After `/rota-review` (and second-opinion if on), `/rota-ship` calls `/rota-qa run` scoped to the active repo. QA findings route per `qa.gate`. If no strategy file exists for the active scope, `/rota-ship` surfaces a one-line note pointing at `/rota-qa first-run` and proceeds without QA. |
 
-The gate is opt-in because product QA needs strategy files (`/rota-qa first-run` bootstraps them) and often binds to infra (dev server, sandbox creds, runners installed). Most cycles don't need it. Enable for repos that have a QA strategy wired up and where regressions cost more than the runner time.
+Product QA needs strategy files (`/rota-qa first-run` bootstraps them) and often infra (dev server, sandbox creds, installed runners), and most cycles don't need it. Enable it for repos with a QA strategy wired up, where regressions cost more than the runner time.
 
 ## ship.uat
 
-Controls whether `/rota-ship` runs [`/rota-qa uat`](qa.md#uat-human-acceptance) for each item on the branch, after review and before the merge/PR step.
+Whether `/rota-ship` runs [`/rota-qa uat`](qa.md#uat-human-acceptance) for each item on the branch, after review and before the merge/PR step.
 
 | Value | Behavior |
 |-------|----------|
@@ -622,36 +622,36 @@ rota config set map.softcap_subsystems 30
 
 ## qa.gate
 
-Controls how `/rota-ship` routes a `/rota-qa run` verdict when `ship.qa: true`. Independent of the `/rota-review` verdict routing.
+How `/rota-ship` routes a `/rota-qa run` verdict when `ship.qa: true`. Independent of `/rota-review` verdict routing.
 
 | Value | Behavior |
 |-------|----------|
-| `"advisory"` (default) | All verdicts surface findings (PASS silently, CONCERNS / FAIL with the `QA concerns:` carrier label) and continue to merge / PR. Advisory means advisory: the ship is never blocked on QA. |
+| `"advisory"` (default) | All verdicts surface findings (PASS silently, CONCERNS / FAIL with the `QA concerns:` carrier label) and continue to merge / PR. The ship is never blocked on QA. |
 | `"blocking"` | PASS continues silently. CONCERNS asks (`AskUserQuestion` Address / Ship anyway / Stop) at every `autonomy.level`. FAIL stops the ship; user fixes via `/rota-work` or `/rota-debug` and reruns `/rota-ship`. |
 
-`INFRA-FAIL` (dev server / creds / binary missing) is always treated as advisory regardless of `qa.gate`. Missing infrastructure isn't a quality signal; ship shouldn't break because the dev server happened to be down. The missing requirements surface as a note and the ship continues.
+`INFRA-FAIL` (dev server / creds / binary missing) is always treated as advisory regardless of `qa.gate`. Missing infrastructure is not a quality signal. The missing requirements surface as a note and the ship continues.
 
 ## qa.afterWork
 
-Controls whether `/rota-work` invokes `/rota-qa run` post-cycle when touched files match a target's `Watch globs`.
+Whether `/rota-work` invokes `/rota-qa run` post-cycle when touched files match a target's `Watch globs`.
 
 | Value | Behavior |
 |-------|----------|
 | `false` (default) | `/rota-work` never invokes `/rota-qa`. QA only runs from `/rota-ship` (when `ship.qa: true`) or manual `/rota-qa run`. |
 | `true` | After `/rota-work` finishes a cycle, if any touched file matches a `Watch globs` entry in a `.rota/qa/<target>.md` strategy, `/rota-qa run` fires scoped to that target. Verdict is advisory at this stage (the cycle is already complete) but findings surface for the next session. |
 
-Skip turning this on until you have stable strategies and want continuous coverage on every cycle. Otherwise the noise of running runners on every commit outweighs the value.
+Turn this on only once strategies are stable and you want coverage on every cycle; otherwise the runner noise outweighs the value.
 
 ## autonomy.level
 
-Controls how far a run goes before it stops. Three levels: `"off"` (default), `"roundtrip"`, `"auto"`. `"auto"` also turns on the round autopilot. `"loop"` was removed; `rota config check` fails on it and on any other value. See [autonomy levels](autonomy.md) for the full breakdown: when each level fires, what gates still apply, and how to pick.
+How far a run goes before it stops. Three levels: `"off"` (default), `"roundtrip"`, `"auto"`. `"auto"` also turns on the round autopilot. `"loop"` was removed; `rota config check` fails on it and on any other value. See [autonomy levels](autonomy.md) for when each level fires, which gates still apply, and how to pick.
 
 ## docs.path
 
 - **Type:** string
 - **Default:** `"docs"`
 
-Relative path (from the project root) to the documentation folder that [`/rota-docs`](../skills/rota-docs.md) reads and writes. Set this when your project keeps docs somewhere other than the default, for example `"documentation"`, `"site/content"`, or `"wiki"`.
+Relative path (from the project root) to the documentation folder that [`/rota-docs`](../skills/rota-docs.md) reads and writes. Set it when your project keeps docs elsewhere, for example `"documentation"`, `"site/content"` or `"wiki"`.
 
 ```json
 { "docs": { "path": "documentation" } }
@@ -662,12 +662,12 @@ Relative path (from the project root) to the documentation folder that [`/rota-d
 - **Type:** boolean
 - **Default:** `false`
 
-Controls whether `/rota-docs` after-work mode automatically writes proposed doc updates without pausing for approval. When `false` (the default), the after-work flow proposes changes and waits for your confirmation before writing. That's the safe propose-mode path. When `true`, it skips the approval gate and commits the doc updates directly.
+Whether `/rota-docs` after-work mode writes proposed doc updates without pausing for approval. When `false`, the after-work flow proposes changes and waits for your confirmation. When `true`, it skips the approval gate and commits the doc updates directly.
 
 | Value | Behavior |
 |-------|----------|
 | `false` (default) | After-work mode proposes updates and waits for approval before writing. |
-| `true` | After-work mode commits doc updates without the approval gate. Fast; assumes you trust the agent's judgment on doc prose. Best paired with a `git diff` review per cycle. |
+| `true` | After-work mode commits doc updates without the approval gate. Assumes you trust the agent's judgment on doc prose; review the `git diff` per cycle. |
 
 ## docs.afterWork
 
@@ -680,24 +680,22 @@ Gate for the after-work docs flow. When `true`, the skills [`/rota-work`](runnin
 { "docs": { "afterWork": true } }
 ```
 
-Leave `false` while you're shaping docs by hand. Flip on once your docs structure is stable enough that `/rota-docs`'s propose-mode adds value rather than noise.
+Leave `false` while you shape docs by hand; turn it on once the structure is stable.
 
 ## release.checklistPath
 
 - **Type:** string
 - **Default:** `.rota/RELEASE.md`
 
-Path to the project's release checklist: a flat markdown file with `- [ ]` items that `/rota-release` walks as gates before bumping the version (Step 1.5). Each open checkbox becomes an `AskUserQuestion` interjection: *Yes, continue* / *Fix now and continue* / *Skip* / *Abort*. Items marked `- [x]` are ignored. Items whose text ends with `(manual)` always interject even under `autonomy.level: roundtrip` or `auto`. Use this for sensitive gates (staging migrations, infra rollouts) that need attention regardless of autonomy.
+Path to the project's release checklist: a flat markdown file with `- [ ]` items that `/rota-release` walks as gates before bumping the version (Step 1.5). Each open checkbox becomes an `AskUserQuestion` interjection: *Yes, continue* / *Fix now and continue* / *Skip* / *Abort*. Items marked `- [x]` are ignored. Items whose text ends with `(manual)` always interject, even under `autonomy.level: roundtrip` or `auto`; use them for sensitive gates (staging migrations, infra rollouts).
 
 The file is per-project and tracked by default, so the checklist is shared with the team. When absent under `autonomy.level: off`, the skill offers to scaffold a starter template; under `roundtrip` or `auto`, the skill silently skips the gate rather than interrupt an unattended run. To keep the checklist per-contributor instead, add it to `.gitignore`.
 
-The skill itself stays generic: no release step is hardcoded. Drift like a forgotten sibling-version-file bump (e.g. the marketplace.json that went stale by two majors) gets caught by adding an item, not by patching the skill.
+No release step is hardcoded in the skill. Catch drift such as a forgotten sibling version file bump (a `marketplace.json` that went stale by two majors) by adding an item.
 
 ```json
 { "release": { "checklistPath": "docs/RELEASE-CHECKLIST.md" } }
 ```
-
-Override the path if your project prefers a different location. By default the checklist is tracked at `.rota/RELEASE.md` and shared with the team.
 
 ## release.versionFile
 
@@ -715,13 +713,13 @@ Project-relative path of the version file. Empty means `/rota-release` and `rota
 - **Type:** integer
 - **Default:** `10`
 
-Threshold for the number of unpushed commits above which `/rota-release` will interject one confirmation prompt before pushing, even under `autonomy.level: roundtrip` or `auto`. Below the threshold, those levels silently push the unpushed range as part of the release (the existing speed-contract behavior). Above it, the skill always asks. Releases that push 10+ commits are not the common case and the user usually wants a beat to confirm.
+Number of unpushed commits above which `/rota-release` asks for one confirmation before pushing, even under `autonomy.level: roundtrip` or `auto`. At or below it, those levels push the unpushed range silently as part of the release.
 
 ```json
 { "release": { "confirmLargePushCommits": 25 } }
 ```
 
-Set higher to suppress the prompt for typical project velocities; set lower (e.g., `5`) for projects where every push is consequential.
+Set it higher to suppress the prompt at your usual velocity, or lower (for example `5`) where every push matters.
 
 ## release.nudgeAfterCommits
 
@@ -735,20 +733,20 @@ Number of commits since the last release tag at which [`/rota-work` (no argument
 - **Type:** integer
 - **Default:** `14`
 
-Companion to `release.nudgeAfterCommits`. The release nudge fires when EITHER threshold is reached: high-velocity projects hit the commits threshold first, slow-burn projects hit the days threshold first. Set one or both higher to suppress more aggressively, or lower to release more often.
+Companion to `release.nudgeAfterCommits`. The nudge fires when either threshold is reached. Raise one or both to nudge less, lower them to release more often.
 
 ## git.baseBranch
 
 - **Type:** string
 - **Default:** `""` (auto-detect)
 
-Override the base branch that `rota git base` resolves to. When empty (the default), `rota` auto-detects by probing `main`, `master`, `trunk`, then `origin/HEAD` in that order. A set branch that does not exist is an error (`rota git base` exits 3), never replaced by one of those names. Set this explicitly when your project uses a non-default base branch such as `develop` (gitflow), `release`, or any other name that won't be found by auto-detection.
+Overrides the base branch that `rota git base` resolves to. When empty, `rota` auto-detects by probing `main`, `master`, `trunk`, then `origin/HEAD` in that order. A set branch that does not exist is an error (`rota git base` exits 3), never replaced by one of those names. Set it when your project uses a base branch auto-detection won't find, such as `develop` (gitflow) or `release`.
 
 ```json
 { "git": { "baseBranch": "develop" } }
 ```
 
-Skills that use the base branch (including `/rota-ship`, `/rota-review` and `/rota-work`) all call `rota git base` and will pick up this override automatically.
+Skills that use the base branch (`/rota-ship`, `/rota-review`, `/rota-work`) call `rota git base` and pick up this override.
 
 ## Issues backend keys
 
@@ -813,11 +811,11 @@ An older rota kept `projects.json` in the config dir. The first run after upgrad
 - **Type:** string
 - **Default:** `""` (unstamped until `rota init` first runs)
 
-Records the rota release (binary version) that `rota init` last ran with. Auto-managed: `rota init` re-stamps this on every run, including STALE migrations. Don't edit by hand.
+The rota release (binary version) that `rota init` last ran with. `rota init` re-stamps it on every run, including STALE migrations. Don't edit by hand.
 
 `rota version --drift` compares the stamped value with the installed `rota` binary, and [`rota init check`](../reference/preflight.md) surfaces the same drift as a warning. `--json` returns `stamped`, `installed` and `status` (`match`, `drift` or `unknown`).
 
-Re-running `rota init` re-stamps `rota.version`; there are no project files to refresh. A stamp written before the rename to rota is read as a fallback and moved to `rota.version` by `rota init` / `rota config fill`. Distinct from `rota update` (which compares installed vs latest GitHub release): this is *project drift*, visible when `rota` was upgraded under you and the project hasn't been re-stamped yet.
+There are no project files to refresh. A stamp written before the rename to rota is read as a fallback and moved to `rota.version` by `rota init` / `rota config fill`. This is *project drift* (`rota` was upgraded and the project was not re-stamped), distinct from `rota update`, which compares the installed binary with the latest GitHub release.
 
 When `rota version --drift` reports drift, re-run `rota init` after an upgrade to clear it.
 

@@ -1,10 +1,10 @@
 # Implementing
 
-Items captured in the backlog ([`BACKLOG.md`](../reference/rota-folder.md), or issues on the [issue backend](issue-backend.md)) reach "merged" through `/rota-work`, an orchestrator that plans, dispatches parallel workers, and lands one atomic commit per task. For a single ad-hoc fix, run `/rota-capture`, then `/rota-work <ID>`.
+Items captured in the backlog ([`BACKLOG.md`](../reference/rota-folder.md), or issues on the [issue backend](issue-backend.md)) reach "merged" through `/rota-work`, an orchestrator that plans, dispatches parallel workers, and lands one atomic commit per task.
 
 ## /rota-work
 
-`/rota-work` is the main implementation driver. The orchestrator plans tasks, dispatches workers in parallel (one per task), verifies each result, then either merges to main or opens a PR based on your `work.mergeStrategy`. On the issue backend it always opens a PR.
+The orchestrator plans tasks, dispatches workers in parallel (one per task), verifies each result, then merges to main or opens a PR per your `work.mergeStrategy`. On the issue backend it always opens a PR.
 
 **Trigger phrases:**
 
@@ -52,7 +52,7 @@ d4e5f6a feat: per-project theme support [F07]
 g7h8i9j chore: update CI to Node 20 [T02]
 ```
 
-That keeps reverts surgical (drop one task without touching others), makes PR review easier (read commit by commit), and leaves a history `/rota-ship` reads to build PR bodies: it lists the items whose IDs the commits name.
+This keeps reverts surgical (drop one task without touching others) and lets you review a PR commit by commit. `/rota-ship` reads the history to build PR bodies: it lists the items whose IDs the commits name.
 
 ## Isolation: branch vs. worktree
 
@@ -78,11 +78,9 @@ For a single ad-hoc fix, run `/rota-capture` and then `/rota-work` on the printe
 
 The item gets a real ID (`#N` on the issue backend, `[B07]` on the file backend). Capture prints the ID and stops; it never starts work. If the scope is fuzzy, refine the item before running `/rota-work <ID>`.
 
-**Flow:** `/rota-capture` files the item, `/rota-work <ID>` implements it. All `/rota-capture` rules (classification, detail-file overflow, ID assignment) and all `/rota-work` rules (clean-tree guard, branch/worktree isolation, parallel workers, per-task commits) apply.
-
 ## Capture vs. Work: picking the right entry
 
-Pick by **intent**, not by the verb typed:
+Pick by intent, not by the verb typed:
 
 | The user wants to… | Use | Why |
 |---------------------|-----|-----|
@@ -120,7 +118,7 @@ After `/rota-work` finishes, `work.mergeStrategy` in `config.json` controls what
 | `"direct"` (default) | Merges the branch to main with `--no-ff`, deletes the branch |
 | `"pr"` | Pushes the branch and opens a GitHub PR or GitLab MR with a summary |
 
-On the issue backend the strategy is treated as `pr`, the PR closes the issues when it merges, and `/rota-work` never merges (`/rota-review --queue` does). The actual ship-time gates (review, second opinion, QA, PR body composition) live in [review and ship](review-and-ship.md).
+On the issue backend the strategy is treated as `pr`, the PR closes the issues when it merges, and `/rota-work` never merges (`/rota-review --queue` does). Ship-time gates (review, second opinion, QA, PR body composition) are in [review and ship](review-and-ship.md).
 
 ## Many items at once
 

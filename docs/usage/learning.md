@@ -121,11 +121,7 @@ See [configuration](configuration.md) for the full `learn.verify` setting.
 
 ## CLAUDE.md integration
 
-`/rota-learn` keeps the managed `rota-knowledge` block in the project instructions file (`AGENTS.md` when present, else `CLAUDE.md`) in sync with
-the topic headings in `KNOWLEDGE.md`. Each time `/rota-learn` runs it rewrites
-that block to reflect the current topic list. `/rota-work` reads this index at the
-start of a task to decide whether the task at hand warrants consulting
-`KNOWLEDGE.md` before planning begins.
+Each run, `/rota-learn` rewrites the managed `rota-knowledge` block in the project instructions file (`AGENTS.md` when present, else `CLAUDE.md`) to match the topic headings in `KNOWLEDGE.md`.
 
 ## Knowledge vs decisions
 

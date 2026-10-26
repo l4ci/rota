@@ -17,7 +17,7 @@ In issue mode the issue body is the spec, plus any `decision` comments on it. A 
 - **Decision violations:** any forbidden pattern from `DECISIONS.md` present in the diff = `FAIL`.
 - **Obvious quality:** dead code, swallowed errors, untested branches, security smells, API breaks, performance cliffs.
 - **Stale scaffolding:** leftover *Task N* / *placeholder* / *in-flight* annotations that should have been removed once the corresponding work landed.
-- **Silent-failure hunter:** for every verification claim in the diff (new test, smoke section, assertion, helper-output check), apply a four-question rubric: *(a)* what does this verify concretely? *(b)* is the asserted-on shape the same shape the real consumer reads? *(c)* was the new code path actually exercised? *(d)* if you deleted the new code, would the assertion still pass? If any answer is *no* or *unclear*, the claim is flagged `SILENT-FAIL` with file:line. Flags surface as CONCERNS; they don't break the build alone, but you see them before merging.
+- **Silent-failure hunter:** for every verification claim in the diff (new test, smoke section, assertion, helper-output check), apply a four-question rubric: *(a)* what does this verify concretely? *(b)* is the asserted-on shape the same shape the real consumer reads? *(c)* was the new code path actually exercised? *(d)* if you deleted the new code, would the assertion still pass? If any answer is *no* or *unclear*, the claim is flagged `SILENT-FAIL` with file:line. Flags surface as CONCERNS and do not block alone, but you see them before merging.
 
 ### Verdict
 
@@ -35,7 +35,7 @@ You can run `/rota-review` at any time on a branch, not only before shipping. On
 
 ## 🚢 /rota-ship
 
-`/rota-ship` bundles a completed feature branch into main. Typical usage after finishing work:
+Run it after finishing work:
 
 ```
 /rota-ship
@@ -51,9 +51,9 @@ The review gate behaves as follows:
 
 ### Second-opinion gate (opt-in)
 
-When `ship.secondOpinion: true` and `/rota-review` returned `PASS`, `/rota-ship` dispatches a fresh subagent with **no prior conversation context** and gives it only the diff plus the stated goal. `/rota-review` shares the project's context (conventions, `KNOWLEDGE.md`, plan) with the work it produced, and a reviewer with that context normalizes blind spots. A reviewer without it must reason from the diff alone, catching what the contextualized reviewer let pass.
+When `ship.secondOpinion: true` and `/rota-review` returned `PASS`, `/rota-ship` dispatches a fresh subagent with **no prior conversation context** and gives it only the diff plus the stated goal. `/rota-review` shares the project's context (conventions, `KNOWLEDGE.md`, plan) with the work it produced, so it shares the blind spots of the work it reviews. A reviewer without that context reasons from the diff alone and catches what the first let pass.
 
-Returns `PASS` / `CONCERNS` / `FAIL` and routes through the same verdict logic as `/rota-review`. Skipped if the user already accepted CONCERNS in Step 3 (no value in re-litigating), and for a round worker's PR (the orchestrator's merge gate is the second check). Opt-in because it adds one fresh-context roundtrip per ship and most cycles don't need it. Enable when shipping release tooling, security paths, or data migrations. See [`ship.secondOpinion`](configuration.md#shipsecondopinion).
+It returns `PASS` / `CONCERNS` / `FAIL` and routes through the same verdict logic as `/rota-review`. Skipped if the user already accepted CONCERNS in Step 3, and for a round worker's PR (the orchestrator's merge gate is the second check). Opt-in because it adds one fresh-context roundtrip per ship and most cycles don't need it. Enable when shipping release tooling, security paths, or data migrations. See [`ship.secondOpinion`](configuration.md#shipsecondopinion).
 
 ### QA gate (opt-in)
 
@@ -63,7 +63,7 @@ Verdict routes per `qa.gate`:
 
 | `qa.gate` | `PASS` | `CONCERNS` | `FAIL` |
 |---|---|---|---|
-| `"advisory"` (default) | continue silently | surface findings, continue | surface findings, continue (advisory means advisory) |
+| `"advisory"` (default) | continue silently | surface findings, continue | surface findings, continue |
 | `"blocking"` | continue silently | ask you how to proceed | stop the ship |
 
 `INFRA-FAIL` (dev server / creds / binary missing) is always advisory regardless of `qa.gate`. See [product QA](qa.md) for the full strategy file format.
@@ -72,7 +72,7 @@ Verdict routes per `qa.gate`:
 
 When `ship.uat: true`, `/rota-ship` runs [`/rota-qa uat <ID>`](qa.md#uat-human-acceptance) for each item on the branch, after review and the QA gate and before the merge or PR. It lists the item's acceptance criteria, auto-passes the ones a PASS test proof row covers and asks you about the rest. A criterion marked `(human)` in the item body always comes to you: `- [ ] AC-4: the error copy reads clearly (human)`. A failed criterion becomes a new captured item that names the original under `Related:`; it does not block the ship. Round PRs never get this gate: `rota worker gate` and the round merge path ignore `ship.uat`.
 
-Use `/rota-ship` to integrate finished work. Finish the implementation cycle in [`/rota-work`](running-work.md) first; don't call `/rota-ship` mid-implementation.
+Finish the implementation cycle in [`/rota-work`](running-work.md) first; don't call `/rota-ship` mid-implementation.
 
 ## Direct merge vs PR
 
@@ -95,7 +95,7 @@ See [configuration](configuration.md) for the full `work` block.
 |-------|---------|
 | `full` (default) | `/rota-review` runs first. `FAIL` blocks, `CONCERNS` surface but you can proceed, `PASS` flows through. |
 | `light` | Only the Spec reviewer runs, on the `standard` tier; the report says the Standards axis was not run. A branch that references no issue has no spec and gets the Standards reviewer instead. |
-| `none` | Skips the review pass. Integration runs immediately. Use when you have already reviewed manually and want to skip the second pass. |
+| `none` | Skips the review pass. Integration runs immediately. Use when you already reviewed manually. |
 
 `true` and `false` still work as `full` and `none`. An object picks the depth by diff size, label and path (for example `risk:high` forces `full`), and lifts a `light` review to `full` on a `Door: one-way` PR, a diff outside the issue's declared files or a risky path. Support files do not count as outside: tests beside a declared file, docs (the generated option reference included), frozen and golden records and smoke sections (`ship.review.supportPaths` sets the list); see [configuration](configuration.md#shipreview). `/rota-ship` prints the chosen depth and why.
 
@@ -140,7 +140,7 @@ The nudge fires when EITHER `release.nudgeAfterCommits` (default 10) OR `release
 
 ## Release checklist
 
-`/rota-release` walks a per-project checklist (`.rota/RELEASE.md` by default) as a preflight gate before the version bump and before any writes. Each `- [ ]` line is one gate. Released-once-forgotten-forever drift like a sibling version file going stale, a missing CHANGELOG humanization pass, or an infra rollout step nobody owns ends up here. The skill itself stays generic.
+`/rota-release` walks a per-project checklist (`.rota/RELEASE.md` by default) as a preflight gate before the version bump and before any writes. Each `- [ ]` line is one gate. Drift that gets forgotten after a release, such as a sibling version file going stale, a missing CHANGELOG humanization pass or an infra rollout step nobody owns, ends up here. The skill itself stays generic.
 
 ```markdown
 # Release Checklist
