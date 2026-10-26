@@ -50,3 +50,5 @@ They compose loosely. You could use GSD to produce a roadmap and phase plans, th
 - [Configuration](https://github.com/open-gsd/gsd-core/blob/main/docs/CONFIGURATION.md): `use_worktrees`, `parallelization`, `ship`, model profiles.
 - [Issue-driven orchestration](https://github.com/open-gsd/gsd-core/blob/main/docs/issue-driven-orchestration.md): states "no tracker integration, no daemon".
 - [Architecture](https://github.com/open-gsd/gsd-core/blob/main/docs/ARCHITECTURE.md) and [Features](https://github.com/open-gsd/gsd-core/blob/main/docs/FEATURES.md): agents, runtimes, Windows support, global learnings.
+
+More comparisons: [how rota compares](README.md).

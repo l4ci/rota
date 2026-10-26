@@ -52,3 +52,5 @@ The caveat is the project's status. Its maintainers announced a shutdown of the 
 - [Supported coding agents](https://vibekanban.com/docs/supported-coding-agents): the agent list.
 - [npm registry entry](https://www.npmjs.com/package/vibe-kanban): latest published version 0.1.44.
 - [rota market review, October 2026](../contributing/market-review-2026-10.md): star count and top requests.
+
+More comparisons: [how rota compares](README.md).

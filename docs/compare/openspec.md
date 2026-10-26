@@ -56,3 +56,5 @@ rota took one idea from OpenSpec without taking the files. For milestones that s
 - [OpenSpec supported tools](https://github.com/Fission-AI/OpenSpec/blob/main/docs/supported-tools.md): tool list.
 - [OpenSpec v1.15.0 release](https://github.com/Fission-AI/OpenSpec/releases): version and date. Star count from the GitHub API on 2026-10-26.
 - rota: [README](../../README.md), [how it works](../how-it-works.md), [vision and plans](../usage/vision-and-plans.md), [market review](../contributing/market-review-2026-10.md).
+
+More comparisons: [how rota compares](README.md).

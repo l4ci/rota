@@ -55,3 +55,5 @@ Possible but redundant. Conductor can open any git repo, so you could review a r
 - [Workflow](https://www.conductor.build/docs/concepts/workflow) and [Checks](https://www.conductor.build/docs/reference/checks): PR flow, GitHub and Linear issues, merge checks.
 - [Parallel agents](https://www.conductor.build/docs/concepts/parallel-agents): shared versus separate workspaces.
 - [API](https://www.conductor.build/docs/api), [pricing](https://www.conductor.build/pricing), [changelog](https://www.conductor.build/changelog): API, plans, 0.92.0.
+
+More comparisons: [how rota compares](README.md).

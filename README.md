@@ -182,6 +182,7 @@ See how rota compares to [GSD](docs/compare/gsd.md), [Superpowers](docs/compare/
 - [Getting started](docs/getting-started.md): install and your first item, end to end
 - [Your first round](docs/first-round.md): orchestrator, workers and the gate, step by step
 - [How it works](docs/how-it-works.md): the roles, the map of skills and files, and how skills chain
+- [How rota compares](docs/compare/README.md): one page per comparable tool
 - [FAQ](docs/faq.md) · [All docs](docs/)
 
 ## 🤝 Contributing
