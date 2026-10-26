@@ -173,6 +173,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota migrate hv [--apply] [--verbose] [--skip-skills]` | move a project from the old state folder and names to `.rota/` and rota (preview unless --apply) |
 | `rota migrate issues [--apply] [--limit <n>]` | move the file backlog onto the issue tracker (preview unless --apply) |
 | `rota migrate labels [--apply]` | main only: relabel open legacy support issues to `machine:<round.support>` (preview unless `--apply`); migrate the configured legacy value, falling back to `site:support`; successful apply retires the tracked `issues.labels.support` key, which `config fill` preserves until then (local config stays); without `round.support`, apply may retire it when no open issue uses the old label; conflicts with another pin remain untouched and keep the key |
+| `rota migrate external-knowledge [--apply]` | move trailing `(seen on Godot 4.6)` suffixes of the external knowledge bullets into `seen:` stamps (preview unless --apply); `--apply` is one commit landed by the repo's policy |
 | `rota migrate milestones [--apply]` | rename `## Acceptance criteria` to `## Acceptance` and make each bullet a checkbox (preview unless --apply) |
 | `rota migrate milestone-files [--apply]` | move `.rota/milestones/*.md` left from file mode to `.rota/archive/milestones/` when milestones live on the tracker (preview unless --apply); refuses, preview included, when the archive already holds a file of the same name |
 

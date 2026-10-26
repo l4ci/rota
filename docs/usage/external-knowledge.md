@@ -104,6 +104,28 @@ rota knowledge rm --external --topic Godot --title "Tween leak"
 
 All three exit 4 on a dirty or diverged clone and write nothing. `rename-topic` has no `--external` form. Git history keeps what an edit or removal replaced.
 
+## Move old `(seen on …)` suffixes
+
+Bullets written before `seen:` existed carry their tool version as a trailing `(seen on Godot 4.6)` in the body, which `query` cannot compare. `rota migrate external-knowledge` moves each one into the stamp.
+
+```sh
+rota migrate external-knowledge          # preview: nothing is written
+rota migrate external-knowledge --apply  # one commit, landed by the repo's policy
+```
+
+| Suffix | Becomes |
+|--------|---------|
+| `(seen on Godot 4.6)` | `seen:godot@4.6` |
+| `(seen on Swift 6, macOS 26)` | `seen:swift@6,macos@26` |
+| `(seen on three.js r186)` | `seen:three.js@r186` |
+| `(seen on 26.5)` under Xcode | `seen:xcode@26.5`, marked `inferred` in the preview (a suffix with no tool takes the topic's name) |
+
+Tool names are lowercased, spaces become `-`, and versions stay as written. A trailing `.` after the closing parenthesis stays as the sentence's period. A bullet that already has `seen:` keeps its versions and gains the tools it lacks; when the stamp and the suffix name different versions of one tool, the whole bullet is left as written and listed as `manualReview` ("stamp says X, suffix says Y"). A `(seen on …)` that is not at the end of the bullet, sits on a continuation line, or has no version is not touched: the preview and `--apply` list it as `manualReview` for you to fix with `replace --external`.
+
+The preview reads the clone like `query` does, so a dirty clone is fine. `--apply` needs a clean, current clone (exit 4 when dirty or diverged, exit 5 when the remote is unreachable) and writes one commit, `knowledge: move (seen on …) into seen: stamps`, with no trailer. A second `--apply` reports `changed: false` and commits nothing. If a run finds nothing to change but the clone is ahead of its remote (an earlier apply whose push failed), it says so and names `git -C <clone> push`.
+
+To roll back, revert the commit: `git -C <clone> revert <sha>` and push. In `pr` mode the change sits on a `rota-knowledge/seen-stamps-…` branch with an open PR; close the PR instead.
+
 ## Settings
 
 | Key | Default | Meaning |
