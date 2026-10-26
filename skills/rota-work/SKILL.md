@@ -121,7 +121,7 @@ Verify silently. Trust the diff, not the subagent's narrative.
 5. Claim-weight check on gap-fills, and treat a subagent's dispute of its brief as a FAIL on the plan (see `references/work-wave-planning.md`, *Verifying a completion*).
 6. When `test.fast` is set, run `rota test run fast`; a FAIL is a FAIL. Use it as the PASS proof `--check`.
 
-**PASS** → move on. **FAIL** → dispatch a fix agent and re-verify; repeat until PASS, and surface only persistent failures. Commit (Step 7.5) only on PASS.
+**PASS** → `rota debug work-fix pass <ID>` (clears the item's attempt count), then move on. **FAIL** → `rota debug work-fix attempt <ID>` before each fix dispatch, then dispatch a fix agent and re-verify. Exit 4 (`iron law`) is the cap: three fix attempts since the last PASS, and the count survives sessions. Dispatch no fourth fix, print the failing proof rows and name `/rota-debug <ID>` as the next step; only a human resets it (`rota debug work-fix reset <ID> --reason "<why>"`, a manual gate: only after explicit user approval, with `--confirm --confirm-note "<their answer>"`). Skip the counter for a task that resolves no item. Commit (Step 7.5) only on PASS.
 
 **Tracer stop.** When the plan's T1 (the tracer) fails its Verify, or its RED run does not turn green, dispatch no later task and report the failure to the user. Do not build on it. One-task plans have no tracer.
 
