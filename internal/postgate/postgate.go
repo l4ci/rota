@@ -44,7 +44,7 @@ type Failure struct {
 // counts, and at round.maxBounces the item is parked instead (the PR stays
 // open) so it is never re-dispatched silently. A stale merge and a provenance
 // failure are not bounces (worker.verdictMeanings): they count nothing and
-// never park the item.
+// never park the item, but a support machine's worker is still told on its PR.
 func Gate(env worker.Env, root, issue string, r worker.GateResult, park Park) (Outcome, error) {
 	if issue == "" {
 		return Outcome{}, nil
@@ -54,6 +54,8 @@ func Gate(env worker.Env, root, issue string, r worker.GateResult, park Park) (O
 		return Outcome{}, landed(env, root, issue)
 	case m.Bounce:
 		return bounce(env, root, issue, r, park)
+	case m.Notify:
+		return Outcome{}, notify(env, root, r)
 	}
 	return Outcome{}, nil
 }
@@ -71,11 +73,18 @@ func Train(env worker.Env, round *worker.RoundMemo, root string, issues map[stri
 			}
 		}
 	}
-	if issue := issues[r.Culprit]; issue != "" && classify(r.Verdict).Bounce {
+	if issue := issues[r.Culprit]; issue != "" {
 		g := r.CulpritGate
 		g.Slot, g.Verdict, g.Err, g.Round = r.Culprit, r.Verdict, r.Err, round
-		if _, err := bounce(env, root, issue, g, park); err != nil {
-			fails = append(fails, Failure{r.Culprit, err})
+		switch m := classify(r.Verdict); {
+		case m.Bounce:
+			if _, err := bounce(env, root, issue, g, park); err != nil {
+				fails = append(fails, Failure{r.Culprit, err})
+			}
+		case m.Notify:
+			if err := notify(env, root, g); err != nil {
+				fails = append(fails, Failure{r.Culprit, err})
+			}
 		}
 	}
 	return fails
@@ -95,6 +104,14 @@ func landed(env worker.Env, root, issue string) error {
 		return err
 	}
 	return store.Clear(issue)
+}
+
+// notify tells a support machine's worker its PR was sent back, with no count
+// and no park. The post is idempotent per head, so a tick that gates the same
+// head again posts nothing new.
+func notify(env worker.Env, root string, r worker.GateResult) error {
+	_, err := env.PostReviewBounce(root, r.Branch, r.PR, r.SHA, r.Err)
+	return err
 }
 
 // bounce counts one bounce for the item and parks it at round.maxBounces. A

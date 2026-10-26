@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -202,8 +203,7 @@ func reviewVerdictsMissing(c *Ctx, root, slot, base string) string {
 	if err != nil || r.Verdict != worker.GateReviewMissing {
 		return ""
 	}
-	why, _, _ := strings.Cut(r.Err, "\n")
-	return why
+	return roundtick.WaitingForReview(r.Err, strutil.FirstNonEmpty(r.Branch, slot))
 }
 
 // quotaCapped is the tick's cap hook: why no slot may fill, "" when one may.

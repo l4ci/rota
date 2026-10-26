@@ -1,7 +1,7 @@
 echo "worker gate: merges a clean stale branch itself, sends a conflict back uncounted (#31, #2072)"
 # An issue-mode project driven by FAKES only (gh and tmux fakes, a local bare
 # origin), as section 87. The slot has no PR, so the gate merges locally; the
-# forge is only touched when the issue is parked.
+# forge is never touched: a stale refusal parks nothing.
 
 TMP_GS="$(mktemp -d)"
 FKG="$TMP_GS/fake"
@@ -26,10 +26,6 @@ gslabels() { python3 -c '
 import json, sys
 issue = next(i for i in json.load(open(sys.argv[1]))["issues"] if i["number"] == 1)
 print(",".join(sorted(issue["labels"])))' "$TMP_GS/db.json"; }
-gscomments() { python3 -c '
-import json, sys
-issue = next(i for i in json.load(open(sys.argv[1]))["issues"] if i["number"] == 1)
-print("\n=====\n".join(c["body"] for c in issue["comments"]))' "$TMP_GS/db.json"; }
 gsslot() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); s=[x for x in d["slots"] if x["name"]=="ben"][0]; v=s.get(sys.argv[2]); print("" if v is None else v)' "$GPROJ/.rota/workers.json" "$1"; }
 # gsmain <file>: land a commit on main in the gate checkout.
 gsmain() { ( cd "$GPROJ" && echo main > "$1" && git add "$1" && git -c user.email=t@t -c user.name=t commit -q -m "main adds $1" ); }

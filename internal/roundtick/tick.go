@@ -36,7 +36,7 @@ type Merged struct {
 	Target string
 	Landed bool
 	// Hold is set for a failure only a person can clear, so the next tick does
-	// not re-run the checks on it. A stale or provenance bounce is not held:
+	// not re-run the checks on it. A stale or provenance refusal is not held:
 	// the worker fixes it and the PR comes back.
 	Hold bool
 	// Skip is a member that did not land through no fault of its own (a train
@@ -330,7 +330,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 // mergeAll groups the targets by the base each merges into, in first-seen
 // order: a lone target is a gate, several a train. A target that did not land
 // is reported with its verdict; whether it is held for a person is the
-// verdict's call: a stale or provenance bounce goes back to the worker and
+// verdict's call: a stale or provenance refusal goes back to the worker uncounted and
 // returns, any other failure waits for a person.
 func (e Env) mergeAll(ctx context.Context, targets []string) []Merged {
 	var order []string
