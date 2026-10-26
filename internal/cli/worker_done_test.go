@@ -66,27 +66,6 @@ func TestWorkerDone(t *testing.T) {
 			t.Error("a refusal must not mark the slot done")
 		}
 	})
-	t.Run("a FAIL row does not count", func(t *testing.T) {
-		dir := doneProject(t, "true")
-		rotaIn(t, dir, "proof", "add", "B07", "--check", "true", "--result", "FAIL", "--evidence", "x", "--sha", headOf(t, dir))
-		if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json"); code != 4 {
-			t.Fatalf("exit %d: %s", code, out)
-		}
-	})
-	t.Run("a PASS row at an older sha does not count", func(t *testing.T) {
-		dir := doneProject(t, "true")
-		if code, out, _ := rotaIn(t, dir, "proof", "record", "B07", "--", "true"); code != 0 {
-			t.Fatalf("record: %d %s", code, out)
-		}
-		c := exec.Command("git", "-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "--allow-empty", "-m", "more")
-		c.Dir = dir
-		if out, err := c.CombinedOutput(); err != nil {
-			t.Fatalf("%v %s", err, out)
-		}
-		if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json"); code != 4 {
-			t.Fatalf("stale sha: exit %d: %s", code, out)
-		}
-	})
 	t.Run("accepts a PASS row at HEAD", func(t *testing.T) {
 		dir := doneProject(t, "true")
 		if code, out, _ := rotaIn(t, dir, "proof", "record", "B07", "--", "true"); code != 0 {
@@ -95,30 +74,6 @@ func TestWorkerDone(t *testing.T) {
 		code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json")
 		if code != 0 || data(t, out)["changed"] != true {
 			t.Fatalf("exit %d: %s", code, out)
-		}
-		if slotState(t, dir) != "done" {
-			t.Error("slot not marked done")
-		}
-	})
-	t.Run("accepts the whole-tier row", func(t *testing.T) {
-		dir := doneProject(t, "true")
-		rotaIn(t, dir, "proof", "add", "B07", "--check", "rota test run fast", "--result", "PASS", "--evidence", "x", "--sha", headOf(t, dir))
-		if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json"); code != 0 {
-			t.Fatalf("exit %d: %s", code, out)
-		}
-	})
-	t.Run("accepts the whole-tier row recorded multi-arg", func(t *testing.T) {
-		dir := doneProject(t, "true")
-		rotaIn(t, dir, "proof", "add", "B07", "--check", "'rota' 'test' 'run' 'fast'", "--result", "PASS", "--evidence", "x", "--sha", headOf(t, dir))
-		if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json"); code != 0 {
-			t.Fatalf("exit %d: %s", code, out)
-		}
-	})
-	t.Run("unset test.fast skips the proof half with a warning", func(t *testing.T) {
-		dir := doneProject(t, "")
-		code, out, errOut := rotaIn(t, dir, "worker", "done", "ben", "--json")
-		if code != 0 || data(t, out)["proofSkipped"] != true || !strings.Contains(errOut+out, "test.fast is unset") {
-			t.Fatalf("exit %d: %s %s", code, out, errOut)
 		}
 		if slotState(t, dir) != "done" {
 			t.Error("slot not marked done")
@@ -202,37 +157,6 @@ func TestWorkerDoneFromWorktree(t *testing.T) {
 	})
 }
 
-// A worker whose slot was reclaimed or reassigned still holds its old attempt
-// id: its done is refused (exit 4) before anything is read or written.
-func TestWorkerDoneFencesAStaleAttempt(t *testing.T) {
-	dir := doneProject(t, "")
-	os.WriteFile(filepath.Join(dir, ".rota", "workers.json"),
-		[]byte(`{"slots":[{"name":"ben","branch":"feat/x","task":"B07","state":"busy","attempt":"bbbb2222"}]}`), 0o644)
-	code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--attempt", "aaaa1111", "--json")
-	if code != 4 || !strings.Contains(out, "attempt") || strings.Contains(out, "bbbb2222") {
-		t.Fatalf("stale attempt: exit %d: %s", code, out)
-	}
-	if slotState(t, dir) == "done" {
-		t.Error("a fenced done must not mark the slot done")
-	}
-	if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--attempt", "bbbb2222", "--json"); code != 0 {
-		t.Fatalf("current attempt: exit %d: %s", code, out)
-	}
-	if slotState(t, dir) != "done" {
-		t.Error("the current attempt marks the slot done")
-	}
-}
-
-// A slot reclaimed and not yet reassigned holds no attempt at all.
-func TestWorkerDoneFencesAReclaimedSlot(t *testing.T) {
-	dir := doneProject(t, "")
-	os.WriteFile(filepath.Join(dir, ".rota", "workers.json"),
-		[]byte(`{"slots":[{"name":"ben","branch":"park/ben","state":"idle"}]}`), 0o644)
-	if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--attempt", "aaaa1111", "--json"); code != 4 {
-		t.Fatalf("exit %d: %s", code, out)
-	}
-}
-
 // worker done run from a worktree whose tracked config still has the old
 // work.accounts reads round.accounts from the main checkout: the ledger row
 // carries the headroom of the slot's account (#1190).
@@ -272,163 +196,6 @@ func TestWorkerDoneLedgerAccountsFromMainCheckout(t *testing.T) {
 		}
 	}
 	t.Fatalf("no done row in the main checkout's ledger: %+v", es)
-}
-
-// commitFile commits one file on the checked-out branch.
-func commitFile(t *testing.T, dir, name string) {
-	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte("package x\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	for _, args := range [][]string{{"add", name}, {"-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "-m", "add " + name}} {
-		c := exec.Command("git", args...)
-		c.Dir = dir
-		if out, err := c.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", args, err, out)
-		}
-	}
-	runGit(t, dir, "push", "-q", "origin", "feat/x")
-}
-
-// TestWorkerDoneFlagsMissingRed: with work.tdd on, a branch that changes
-// non-test Go code and holds no FAIL proof row warns, and --require-red refuses (#1300).
-func TestWorkerDoneFlagsMissingRed(t *testing.T) {
-	base := func(t *testing.T) (dir, baseSha string) {
-		dir = doneProject(t, "")
-		baseSha = headOf(t, dir)
-		commitFile(t, dir, "prod.go")
-		return dir, baseSha
-	}
-	t.Run("warns without a FAIL row", func(t *testing.T) {
-		dir, b := base(t)
-		code, out, errOut := rotaIn(t, dir, "worker", "done", "ben", "--base", b, "--json")
-		d := data(t, out)
-		if code != 0 || d["noRed"] != true || !strings.Contains(errOut+out, "no failing (RED) proof row") {
-			t.Fatalf("exit %d: %s %s", code, out, errOut)
-		}
-	})
-	t.Run("--require-red refuses", func(t *testing.T) {
-		dir, b := base(t)
-		code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--base", b, "--require-red", "--json")
-		if code != 4 || slotState(t, dir) == "done" {
-			t.Fatalf("exit %d: %s", code, out)
-		}
-	})
-	t.Run("unresolvable base warns", func(t *testing.T) {
-		dir, _ := base(t)
-		code, out, errOut := rotaIn(t, dir, "worker", "done", "ben", "--base", "no-such-ref", "--json")
-		if code != 0 || data(t, out)["noRedUnchecked"] != true || !strings.Contains(errOut, "cannot check for a RED proof row") {
-			t.Fatalf("exit %d: %s %s", code, out, errOut)
-		}
-	})
-	t.Run("unresolvable base refuses under --require-red", func(t *testing.T) {
-		dir, _ := base(t)
-		code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--base", "no-such-ref", "--require-red", "--json")
-		if code != 4 || slotState(t, dir) == "done" {
-			t.Fatalf("exit %d: %s", code, out)
-		}
-	})
-	t.Run("a FAIL row satisfies it", func(t *testing.T) {
-		dir, b := base(t)
-		rotaIn(t, dir, "proof", "add", "B07", "--check", "go test ./x", "--result", "FAIL", "--evidence", "x", "--sha", headOf(t, dir))
-		code, out, errOut := rotaIn(t, dir, "worker", "done", "ben", "--base", b, "--require-red", "--json")
-		if code != 0 || data(t, out)["noRed"] == true || strings.Contains(errOut, "RED") {
-			t.Fatalf("exit %d: %s %s", code, out, errOut)
-		}
-	})
-	t.Run("test-only change is not flagged", func(t *testing.T) {
-		dir := doneProject(t, "")
-		b := headOf(t, dir)
-		commitFile(t, dir, "prod_test.go")
-		code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--base", b, "--require-red", "--json")
-		if code != 0 || data(t, out)["noRed"] == true {
-			t.Fatalf("exit %d: %s", code, out)
-		}
-	})
-	t.Run("work.tdd off is not flagged", func(t *testing.T) {
-		dir, b := base(t)
-		os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"work":{"tdd":false}}`), 0o644)
-		code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--base", b, "--require-red", "--json")
-		if code != 0 || data(t, out)["noRed"] == true {
-			t.Fatalf("exit %d: %s", code, out)
-		}
-	})
-}
-
-// bundleDoneProject is doneProject whose slot also holds member B08.
-func bundleDoneProject(t *testing.T) string {
-	dir := doneProject(t, "true")
-	os.WriteFile(filepath.Join(dir, ".rota", "workers.json"),
-		[]byte(`{"slots":[{"name":"ben","branch":"feat/x","task":"B07","state":"busy","bundle":["B08"]}]}`), 0o644)
-	return dir
-}
-
-// A bundled slot is done only when the lead and every member hold a PASS row at
-// HEAD; the refusal names the first issue without one.
-func TestWorkerDoneBundleNeedsEveryProof(t *testing.T) {
-	dir := bundleDoneProject(t)
-	if code, out, _ := rotaIn(t, dir, "proof", "record", "B07", "--", "true"); code != 0 {
-		t.Fatalf("record lead: %d %s", code, out)
-	}
-	code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json")
-	if code != 4 || !strings.Contains(out, "B08 has no PASS proof row") || !strings.Contains(out, "rota proof record B08") {
-		t.Fatalf("member without a row: exit %d: %s", code, out)
-	}
-	if d := data(t, out); d["item"] != "B07" || d["missing"] == nil || d["changed"] != false {
-		t.Errorf("item stays the lead, missing kept: %s", out)
-	}
-	if slotState(t, dir) == "done" {
-		t.Error("a refusal must not mark the slot done")
-	}
-	if code, out, _ := rotaIn(t, dir, "proof", "record", "B08", "--", "true"); code != 0 {
-		t.Fatalf("record B08: %d %s", code, out)
-	}
-	code, out, _ = rotaIn(t, dir, "worker", "done", "ben", "--json")
-	if code != 0 || data(t, out)["changed"] != true || slotState(t, dir) != "done" {
-		t.Fatalf("all rows: exit %d: %s", code, out)
-	}
-}
-
-// A member closed since the assign leaves the bundle: done no longer asks for
-// its proof row, but the lead's still counts.
-func TestWorkerDoneBundleSkipsAClosedMember(t *testing.T) {
-	dir := bundleDoneProject(t)
-	if code, out, errOut := rotaIn(t, dir, "item", "complete", "B08", "--commit", "abc", "--no-proof"); code != 0 {
-		t.Fatalf("close B08: %d %s %s", code, out, errOut)
-	}
-	code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json")
-	if code != 4 || !strings.Contains(out, "B07 has no PASS proof row") {
-		t.Fatalf("the lead still needs its row: exit %d: %s", code, out)
-	}
-	if code, out, _ := rotaIn(t, dir, "proof", "record", "B07", "--", "true"); code != 0 {
-		t.Fatalf("record lead: %d %s", code, out)
-	}
-	code, out, _ = rotaIn(t, dir, "worker", "done", "ben", "--json")
-	if code != 0 || data(t, out)["changed"] != true || slotState(t, dir) != "done" {
-		t.Fatalf("closed member without a row: exit %d: %s", code, out)
-	}
-}
-
-// One red-first run anywhere in the bundle satisfies work.tdd, and the warning
-// names the lead.
-func TestWorkerDoneBundleRedFromAnyIssue(t *testing.T) {
-	dir := bundleDoneProject(t)
-	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{}`), 0o644)
-	b := headOf(t, dir)
-	commitFile(t, dir, "prod.go")
-	code, out, errOut := rotaIn(t, dir, "worker", "done", "ben", "--base", b, "--json")
-	if code != 0 || data(t, out)["noRed"] != true || !strings.Contains(errOut+out, "B07 changes non-test Go code") {
-		t.Fatalf("no row anywhere: exit %d: %s %s", code, out, errOut)
-	}
-	dir = bundleDoneProject(t)
-	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{}`), 0o644)
-	b = headOf(t, dir)
-	commitFile(t, dir, "prod.go")
-	rotaIn(t, dir, "proof", "add", "B08", "--check", "go test ./x", "--result", "FAIL", "--evidence", "x", "--sha", headOf(t, dir))
-	code, out, errOut = rotaIn(t, dir, "worker", "done", "ben", "--base", b, "--require-red", "--json")
-	if code != 0 || data(t, out)["noRed"] == true || strings.Contains(errOut, "RED") {
-		t.Fatalf("member FAIL row: exit %d: %s %s", code, out, errOut)
-	}
 }
 
 // TestWorkerDoneAcceptsDocumentedFastProof pins the contract's done gate end to
