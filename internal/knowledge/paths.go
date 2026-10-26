@@ -102,9 +102,6 @@ func (s Store) PathEntries(file string) ([]PathEntry, error) {
 			return err
 		}
 		for _, topic := range section.Topics(content) {
-			if topic.Name == GlossaryTopic {
-				continue
-			}
 			for _, loc := range bulletStart.FindAllStringSubmatchIndex(topic.Body, -1) {
 				title := topic.Body[loc[2]:loc[3]]
 				block := strings.TrimSpace(topic.Body[loc[0]:bulletEnd(topic.Body, loc[0])])
