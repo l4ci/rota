@@ -259,9 +259,9 @@ func markDone(env Env, req DoneRequest, dp DoneDeps, snap *Slot, id string, res 
 		if req.Kind != "" {
 			s.SetOutcome(req.Kind, req.Summary, now)
 		}
-		evidence := outcomeEvidence(req.Kind, req.Summary, s.PR())
+		evidence := OutcomeEvidence(req.Kind, req.Summary, s.PR())
 		if k, sum := s.Outcome(); req.Kind == "" && OutcomeOpen(k) {
-			evidence = outcomeEvidence(k, sum, s.PR())
+			evidence = OutcomeEvidence(k, sum, s.PR())
 		}
 		s.SetEvent(EventDone, evidence, now)
 		if IsDone(s.State()) {
@@ -288,19 +288,6 @@ func markDone(env Env, req DoneRequest, dp DoneDeps, snap *Slot, id string, res 
 	}
 	res.Changed = changed
 	return nil
-}
-
-// outcomeEvidence is the done event's body: the PR, as before, or for a typed
-// outcome "<outcome>: <line> | <line> | <line>", which `round wait` and
-// `round status` show beside the slot state.
-func outcomeEvidence(kind string, summary []string, pr string) string {
-	if kind == "" {
-		return pr
-	}
-	if len(summary) == 0 {
-		return kind
-	}
-	return kind + ": " + strings.Join(summary, " | ")
 }
 
 // unreadMailRefusal is the exit-4 refusal of a done while the slot's inbox
