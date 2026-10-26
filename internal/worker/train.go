@@ -280,11 +280,16 @@ func (t *trainRun) plan() (bool, error) {
 	seen := map[string]bool{}
 	withPR := 0
 	for _, tg := range o.Targets {
-		gt, err := reg.GateTarget(tg)
+		gt, err := reg.GateTargetAny(tg)
 		if err != nil {
 			return true, err
 		}
 		key := gt.Branch + "|" + gt.PR
+		if gt.PR != "" {
+			// External targets keep the caller's spelling until the gate reads
+			// the forge: 7, #7 and its URL still name the same train member.
+			key = "pr|" + prNumText(gt.PR)
+		}
 		if seen[key] {
 			return true, fail(exitcode.ExitUsage, fmt.Sprintf("%s names a PR already in the train", tg))
 		}
