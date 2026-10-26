@@ -137,7 +137,7 @@ func (e Env) promoteIdleWithPR(ctx context.Context, root string, rows []PollRow)
 	openPRs := e.openPRsByHead(ctx, root, reg, idle)
 	for i, r := range rows {
 		s := reg.Slot(r.Name)
-		if _, ok := idle[r.Name]; !ok || s == nil || s.Branch() == "" || IsOwnPark(s.Branch(), s.Name()) {
+		if _, ok := idle[r.Name]; !ok || s == nil || s.Branch() == "" || IsOwnPark(s.Branch(), s.Name()) || s.AwaitingDone() {
 			continue
 		}
 		if url := openPRs[s.Branch()]; url != "" {
@@ -421,6 +421,9 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 	}
 	if r.State == StateDone && !strings.EqualFold(prev, "done") {
 		s.BaselineReview(now)
+	}
+	if r.State == StateDone {
+		s.SetAwaitingDone(false) // the receiver of a transfer reported for itself
 	}
 	if s.Seen() != key {
 		s.ClearSeen()

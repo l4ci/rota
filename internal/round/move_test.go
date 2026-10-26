@@ -718,6 +718,21 @@ func TestTransferToASlotChecksOutTheExistingBranch(t *testing.T) {
 	}
 }
 
+// The receiver of a transfer inherits the old head's PR: it reads busy until
+// its own worker reports done, so poll does not promote it on that head (#2074).
+func TestTransferMarksTheReceiverAwaitingItsOwnDone(t *testing.T) {
+	f := newMoveFx(t)
+	if _, err := f.transfer("12", "dana", nil); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := f.slot("dana").Raw().Get("awaitingDone"); v != true {
+		t.Errorf("dana must await its own done: %v", f.slot("dana"))
+	}
+	if v, _ := f.slot("ben").Raw().Get("awaitingDone"); v == true {
+		t.Errorf("the sender is not marked: %v", f.slot("ben"))
+	}
+}
+
 func TestTransferRefusals(t *testing.T) {
 	f := newMoveFx(t)
 	if _, err := f.transfer("12", "", nil); exitOf(err) != exitcode.ExitUsage {
