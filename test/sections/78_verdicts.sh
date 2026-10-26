@@ -63,3 +63,9 @@ done
 [ "$( cd "$VD" && hvj debug verdict B08 --verdict PASS | jget data.next )" = "complete" ] \
   || fail "a passing fix on another item should route to complete"
 pass "debug verdict counts failed fixes per item and halts at three"
+
+# Posting is retryable before a PR or linked item exists; the verdict stays local.
+OUT=$( cd "$VD" && hvj verdict post ) || vfail
+[ "$(echo "$OUT" | jget data.report)" = "pending" ] || fail "unlinked reports should be pending: $OUT"
+[ "$(echo "$OUT" | jget 'data.reports[0].kind')" = "review-spec" ] || fail "post must retry the latest kinds: $OUT"
+pass "verdict post retries local reports without failing the saved verdict"
