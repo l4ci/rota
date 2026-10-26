@@ -16,6 +16,14 @@ func postGateReport(c *Ctx, root string, r worker.GateResult) {
 	if r.Branch == "" || r.Verdict == "" {
 		return
 	}
+	// A recorded PR with no origin is a gate refusal with zero forge traffic.
+	// Reporting must preserve that boundary even with an explicit provider.
+	if r.PR != "" {
+		remote, err := c.deps().Repo(root).Run(c.Context(), "remote", "get-url", "origin")
+		if err != nil || remote.ExitCode != 0 {
+			return
+		}
+	}
 	ref := r.Branch
 	if ok, _ := c.deps().Repo(root).Verify(c.Context(), "refs/heads/"+ref); !ok {
 		ref = "origin/" + ref
