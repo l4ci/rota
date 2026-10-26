@@ -153,6 +153,8 @@ def load(root):
         ids.add(c.get('id'))
         if c.get('walkthrough'):
             errs.extend(check_doc_path(root, c['walkthrough'], where + ' walkthrough'))
+        if 'featured' in c and not isinstance(c['featured'], bool):
+            errs.append('%s: featured must be true or false' % where)
         for n, st in enumerate(c.get('steps') or []):
             if not isinstance(st, dict) or 'skill' not in st or 'why' not in st:
                 errs.append('%s: steps[%d] needs skill and why' % (where, n))
