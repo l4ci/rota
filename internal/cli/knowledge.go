@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -21,6 +23,7 @@ func knowledgeCommands() *Command {
 		{Name: "stats", Summary: "bullet count and size per topic", Verb: knStatsVerb, View: knowledgeView},
 		{Name: "topics", Summary: "list topic headings with bullet counts", Verb: knTopics},
 		{Name: "add", Summary: "add a bullet under a topic", Repo: true, Verb: knAdd},
+		{Name: "split", Summary: "split an oversized external topic into subtopics", Verb: knSplit},
 		{Name: "amend", Summary: "append text to an existing bullet", Repo: true, Verb: knAmend},
 		{Name: "replace", Summary: "replace text inside one bullet", Repo: true, Verb: knReplace},
 		{Name: "rm", Summary: "delete one bullet and its tier entry", Repo: true, Verb: knRm},
@@ -279,6 +282,37 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 			text = fmt.Sprintf("unchanged: %s (title already present)", *topic)
 		}
 		return Result{Data: knObj("topic", *topic, "title", *title, "changed", res.Changed), Text: text}, nil
+	}
+}
+
+func knSplit(fs *flag.FlagSet) RunFunc {
+	topic := fs.String("topic", "", "the `topic` to split")
+	planFile := fs.String("plan", "", "the split plan, JSON: a `path`, or - for stdin; optional only to fold a stray file into a topic that is already split")
+	ext := externalFlag(fs)
+	return func(c *Ctx, args []string) (Result, error) {
+		if err := knNoArgs(args); err != nil {
+			return Result{}, err
+		}
+		if !*ext {
+			return Result{}, Usage("split needs --external: only the external knowledge base splits into subtopics")
+		}
+		if err := knRequire(map[string]string{"topic": *topic}, "topic"); err != nil {
+			return Result{}, err
+		}
+		var plan *extknowledge.SplitPlan
+		if *planFile != "" {
+			raw, err := readBodyInput(c, "plan", *planFile, ExitResolution)
+			if err != nil {
+				return Result{}, err
+			}
+			plan = &extknowledge.SplitPlan{}
+			dec := json.NewDecoder(bytes.NewReader(raw))
+			dec.DisallowUnknownFields()
+			if err := dec.Decode(plan); err != nil {
+				return Result{}, Usage("--plan is not a split plan ({\"subtopics\":[{\"name\",\"hook\",\"titles\"}]}): %v", err)
+			}
+		}
+		return knExtSplit(c, *topic, plan)
 	}
 }
 

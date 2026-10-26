@@ -40,6 +40,7 @@ func exact(want string, topics []Topic) (Topic, bool) {
 type plan struct {
 	files   map[string]string
 	order   []string
+	deletes []string // tracked files the commit removes (git rm)
 	message string
 	slug    string
 }
@@ -390,6 +391,11 @@ func (c Clone) land(ctx context.Context, pol Policy, p *plan) (res WriteResult, 
 			return res, err
 		}
 	}
+	for _, rel := range p.deletes {
+		if fi, err := os.Lstat(filepath.Join(c.Dir, filepath.FromSlash(rel))); err == nil && !fi.Mode().IsRegular() {
+			return res, fmt.Errorf("%w: %s is not a regular file; refusing to delete it", ErrDirty, rel)
+		}
+	}
 	if pol.Write == "pr" {
 		res.Branch = fmt.Sprintf("rota-knowledge/%s-%s", p.slug, c.now().UTC().Format("20060102T150405"))
 		if _, err := c.out(ctx, "switch", "-q", "-c", res.Branch); err != nil {
@@ -401,6 +407,7 @@ func (c Clone) land(ctx context.Context, pol Policy, p *plan) (res WriteResult, 
 				// Drop the half-written plan and the branch it started.
 				_, _ = c.out(ctx, "reset", "-q", "--hard", "HEAD")
 				_, _ = c.out(ctx, append([]string{"clean", "-fdq", "--"}, p.order...)...)
+				c.pruneEmptyDirs(p.order)
 			}
 			_, _ = c.out(ctx, "switch", "-q", cur)
 			if !committed {
@@ -425,6 +432,11 @@ func (c Clone) land(ctx context.Context, pol Policy, p *plan) (res WriteResult, 
 		return res, nil
 	}
 	if err := c.writeAndCommit(ctx, p); err != nil {
+		// The clone was clean before this write: drop what it half-did, so the
+		// next write is not refused as dirty.
+		_, _ = c.out(ctx, "reset", "-q", "--hard", "HEAD")
+		_, _ = c.out(ctx, append([]string{"clean", "-fdq", "--"}, p.order...)...)
+		c.pruneEmptyDirs(p.order)
 		return res, err
 	}
 	if !remote {
@@ -465,8 +477,32 @@ func (c Clone) writeAndCommit(ctx context.Context, p *plan) error {
 	if _, err := c.out(ctx, append([]string{"add", "--"}, p.order...)...); err != nil {
 		return err
 	}
+	for _, rel := range p.deletes {
+		if _, err := c.out(ctx, "ls-files", "--error-unmatch", "--", rel); err != nil {
+			// Not tracked (a stray the clone never committed): just delete it.
+			if err := os.Remove(filepath.Join(c.Dir, filepath.FromSlash(rel))); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+			continue
+		}
+		if _, err := c.out(ctx, "rm", "-q", "--", rel); err != nil {
+			return err
+		}
+	}
 	_, err := c.out(ctx, "commit", "-q", "-m", p.message)
 	return err
+}
+
+// pruneEmptyDirs removes the directories a failed write created for the
+// plan's files, deepest first; a directory that still holds anything stays.
+func (c Clone) pruneEmptyDirs(rels []string) {
+	for _, rel := range rels {
+		for d := filepath.Dir(filepath.FromSlash(rel)); d != "." && d != ""; d = filepath.Dir(d) {
+			if fi, err := os.Lstat(filepath.Join(c.Dir, d)); err != nil || !fi.IsDir() || os.Remove(filepath.Join(c.Dir, d)) != nil {
+				break
+			}
+		}
+	}
 }
 
 func (c Clone) openPR(ctx context.Context, pol Policy, branch, title string) (string, error) {
