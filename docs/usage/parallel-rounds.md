@@ -402,7 +402,7 @@ Neither applies to a solo round, which has no panes to watch.
 
 ### Worker guard
 
-`rota hook install` also adds a `PreToolUse` hook on `Bash` (`rota hook guard`). It reads `ROTA_SLOT`,
+`rota hook install` also adds a `PreToolUse` hook on `Bash|Edit|Write` (`rota hook guard`). Edit and Write recall [path-scoped knowledge and decisions](learning.md#recall-before-editing) in any session. For Bash it reads `ROTA_SLOT`,
 which every worker tab has and the orchestrator and your own sessions do not, and does nothing without
 it. For a worker it refuses (exit 2, one-line reason) the commands the worker contract forbids:
 
