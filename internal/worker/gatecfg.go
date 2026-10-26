@@ -50,9 +50,9 @@ type GateConfig struct {
 	review     config.ReviewPolicy
 	reviewErr  error
 	cross      roundcfg.CrossReview
+	crossErr   error
 	lenses     config.Lenses
 	lensesErr  error
-	crossErr   error
 	tddErr     error
 	testsErr   error // a malformed test.fast or test.full
 	isolate    bool

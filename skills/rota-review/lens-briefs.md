@@ -2,9 +2,9 @@
 
 ## Contents
 
-- When a lens runs
 - Lens brief
-- Rubrics: security, perf, ux
+- Rubrics
+- Record
 
 `rota review depth <branch> --json` carries `lenses`: one `{name, why}` per lens the branch triggers (`security`, `perf`, `ux`), from `review.lenses` globs over the diff's files and the labels of the branch's issues. `why` is `path <file>` or `label <name>`. An empty list runs nothing, and depth `none` lists none. Triggers are deterministic: never pick a lens yourself, never skip a listed one.
 
