@@ -11,6 +11,19 @@ rota backlog list --json
 rota knowledge query "Auth & Sessions"
 ```
 
+## Quick index
+
+Verbs are not skills: skills are the `/rota-*` slash commands (see [skills](../skills/README.md)); these are the `rota` binary's own verbs. Where to find the common ones:
+
+- **Start and set up.** [`rota init`](#rota-init) scaffolds `.rota/`; `rota setup` (same section) adds the config walkthrough. [`rota config`](#rota-config) reads and changes settings. [`rota skills`](#rota-skills) writes and refreshes the skills. [`rota update`](#rota-update) checks for a newer release. [`rota migrate`](#rota-migrate) moves the backlog or milestones.
+- **Bare `rota`.** In a terminal it opens a palette. Enter on the preselected entry runs `rota setup` in a directory without `.rota/` and launches the orchestrator in an initialized project. Outside a terminal it prints usage. See [`rota orchestrate`](#rota-orchestrate).
+- **`--ui`.** Opens a verb's terminal screen instead of printing its result: `rota config --ui`, `rota projects --ui`, `rota round status --ui` (refreshes every 5 s), and read-only views for `rota doctor`, `rota worker account list`, `rota backlog list`, `rota knowledge stats` and `rota decisions stats`. Terminal only; refused with `--json`. Plain output never changes.
+- **Run a round.** [`rota orchestrate`](#rota-orchestrate) starts the orchestrator. [`rota round`](#rota-round) takes the lease, assigns issues, waits, summarizes cost (`round summary`) and winds down. [`rota worker`](#rota-worker) holds the slot registry and the merge gate (`rota worker gate <PR>` gates any open PR by number).
+- **Keep a round healthy.** [`rota doctor`](#rota-doctor) preflights the machine. [`rota reap`](#rota-reap) removes leftovers. [`rota layout`](#rota-layout) folds panes into a split view or back into tabs. [`rota keepalive`](#rota-keepalive), [`rota limit`](#rota-limit), [`rota hook`](#rota-hook) and [`rota statusline`](#rota-statusline) cover unattended rounds. [`rota verdict`](#rota-verdict) records review and QA verdicts.
+- **Agents and projects.** [`rota agents write`](#rota-agents) writes the role subagent files. `rota projects` (under [`rota init`](#rota-init)) lists the projects registered on this machine.
+
+See [parallel rounds](../usage/parallel-rounds.md) and [unattended rounds](../usage/unattended-rounds.md).
+
 ## Conventions
 
 - **Global flags.** `--json` prints one JSON envelope on stdout, `-C <dir>` runs

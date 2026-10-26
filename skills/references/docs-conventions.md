@@ -8,7 +8,7 @@ Tailored trees follow this layout, used across rota's own `docs/` and reusable e
 
 - **Spine** — top-level pages: `README.md` (TOC), `getting-started.md` (5-minute walkthrough), `faq.md` (common questions, optional).
 - **Phase-grouped usage pages** — `docs/usage/<verb-noun>.md`: examples — `picking-work.md`, `running-work.md`, `pausing-and-resuming.md`, `review-and-ship.md`. The verb-noun shape keeps file names self-documenting and groups related actions.
-- **Reference material** — `docs/reference/`: full helper / command / config references — `slash-commands.md`, `cli-helpers.md`, `configuration.md`, etc. Reference pages are flat lists/tables; usage pages are narrative walkthroughs.
+- **Reference material** — `docs/reference/`: full helper / command / config references — `cli-helpers.md`, `configuration.md`, etc. Reference pages are flat lists/tables; usage pages are narrative walkthroughs.
 
 When the tailored proposal in Step D4 doesn't fit the convention (e.g., a CLI tool with no usage phases, or a library with API references but no walkthroughs), describe the deviation in one line in the proposal — *"This project ships only reference material; no `usage/` pages proposed."* — so the user sees the conscious choice.
 

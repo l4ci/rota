@@ -72,7 +72,7 @@ Two issues that edit the same file or name the same `## Touches` entry clash. Re
 
 ## 2. Run the round
 
-Start the orchestrator from the host pane (see [first round](../first-round.md#12--launch-the-orchestrator)):
+Start the orchestrator from the host pane (see [first round](../first-round.md#10--launch-the-orchestrator)):
 
 ```bash
 rota orchestrate
