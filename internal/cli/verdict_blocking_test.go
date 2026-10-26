@@ -286,3 +286,62 @@ func TestRoundBounceCountsABlockingLensFinding(t *testing.T) {
 		t.Errorf("registry says %d bounces, want 1", n)
 	}
 }
+
+// A review record at the branch head with a blocking finding refuses `worker
+// gate` (also --check-only) and `worker train` even when its verdict is only
+// CONCERNS, the rule `round bounce` applies. Non-blocking findings pass, and a
+// newer record at a new head clears the refusal.
+func TestWorkerGateRefusesBlockingFindingUnderConcerns(t *testing.T) {
+	dir := workerProject(t, `{"ship":{"review":"none"},"test":{"full":["test -f feature.txt"]}}`)
+	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+	wt := filepath.Join(dir, ".worktrees", "w1")
+	write(t, filepath.Join(wt, "feature.txt"), "f")
+	gitT(t, wt, "add", "feature.txt")
+	gitT(t, wt, "commit", "-q", "-m", "feature")
+	branch := strings.TrimSpace(gitT(t, wt, "rev-parse", "--abbrev-ref", "HEAD"))
+	merged := func() bool { _, err := os.Stat(filepath.Join(dir, "feature.txt")); return err == nil }
+	add := func(findings string) {
+		t.Helper()
+		body := writeBody(t, t.TempDir(), findings)
+		if code, _, errOut := rotaIn(t, dir, "verdict", "add", branch, "--kind", "review-spec", "--verdict", "CONCERNS", "--body-file", body); code != 0 {
+			t.Fatalf("verdict add: %d %s", code, errOut)
+		}
+	}
+
+	add(`{"findings":[{"severity":"minor","title":"nit"},{"severity":"major","title":"real"}]}`)
+	for _, args := range [][]string{
+		{"worker", "gate", "w1", "--base", "main", "--check-only"},
+		{"worker", "gate", "w1", "--base", "main"},
+		{"worker", "train", "w1", "--base", "main"},
+	} {
+		code, out, _ := rotaIn(t, dir, append([]string{"--json"}, args...)...)
+		d := data(t, out)
+		if code != 4 || d["blockedBy"] != "verdict" || d["verdict"] != "verdict-blocked" || d["kind"] != "review-spec" || d["changed"] != false {
+			t.Fatalf("%v: %d %v", args, code, d)
+		}
+		if merged() {
+			t.Fatalf("%v merged a branch with a blocking finding", args)
+		}
+	}
+
+	add(`{"findings":[{"severity":"minor","title":"nit"},{"severity":"major","title":"waived","blocking":false}]}`)
+	if code, out, _ := rotaIn(t, dir, "--json", "worker", "gate", "w1", "--base", "main", "--check-only"); code != 0 {
+		t.Fatalf("non-blocking findings: %d %s", code, out)
+	}
+
+	// A new head the record was not made at: the old blocking record is stale.
+	add(`{"findings":[{"severity":"blocker","title":"old"}]}`)
+	write(t, filepath.Join(wt, "more.txt"), "m")
+	gitT(t, wt, "add", "more.txt")
+	gitT(t, wt, "commit", "-q", "-m", "more")
+	if code, out, _ := rotaIn(t, dir, "--json", "worker", "gate", "w1", "--base", "main", "--check-only"); code != 0 {
+		t.Fatalf("stale blocking record: %d %s", code, out)
+	}
+	add(`{"findings":[]}`)
+	if code, out, _ := rotaIn(t, dir, "--json", "worker", "gate", "w1", "--base", "main"); code != 0 {
+		t.Fatalf("newer clean record: %d %s", code, out)
+	}
+	if !merged() {
+		t.Error("the cleared branch did not merge")
+	}
+}
