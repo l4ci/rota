@@ -20,8 +20,8 @@ flags:
   - flag: "(no argument)"
     does: reconcile the backlog against git state, read any handoff note, and suggest the next item
 example:
-  source: walkthroughs/quickstart-manual-mode.md#step-3-work
-  reviewed: true
+  source: getting-started.md
+  reviewed: false
   steps:
     - you: /rota-work B03
     - agent: |

@@ -16,8 +16,8 @@ after: [rota-work]
 manual_only: false
 flags: []
 example:
-  source: walkthroughs/quickstart-manual-mode.md#step-2-plan-optional
-  reviewed: true
+  source: null
+  reviewed: false
   steps:
     - you: /rota-plan B03
     - agent: |

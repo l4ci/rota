@@ -95,7 +95,7 @@ One clear item, small enough to build in one sitting.
 2. [`/rota-work`](skills/rota-work.md): Build it in small commits. The proof gate needs a red run, then a green one.
 3. [`/rota-ship`](skills/rota-ship.md): Review the branch, then open the PR or merge.
 
-Walkthrough: [Quickstart: one item in manual mode](walkthroughs/quickstart-manual-mode.md)
+Walkthrough: [Getting started](getting-started.md)
 
 ### Build a bigger feature
 
@@ -117,7 +117,7 @@ Something is broken and the cause is not known yet.
 2. [`/rota-ship`](skills/rota-ship.md): Review and merge the fix.
 3. [`/rota-learn`](skills/rota-learn.md): Keep what the bug taught you for the next session.
 
-Walkthrough: [Greenfield: from a brief to a shipped milestone](walkthroughs/greenfield-from-brief.md#step-7-a-real-bug-run-rota-debug)
+Walkthrough: [Greenfield: what a project holds after a brief](walkthroughs/greenfield-from-brief.md#step-7-a-real-bug-run-rota-debug)
 
 ### Try a risky idea first
 
@@ -127,7 +127,7 @@ You don't know yet whether an approach or a library works.
 2. [`/rota-plan`](skills/rota-plan.md): Plan the real work with what the spike found.
 3. [`/rota-work`](skills/rota-work.md): Build it.
 
-Walkthrough: [Greenfield: from a brief to a shipped milestone](walkthroughs/greenfield-from-brief.md#step-3-rota-spike-optional)
+Walkthrough: [Greenfield: what a project holds after a brief](walkthroughs/greenfield-from-brief.md#step-3-rota-spike-optional)
 
 ### Start a project from a brief
 
@@ -139,7 +139,20 @@ An empty repo and an idea of where it should go.
 4. [`/rota-capture`](skills/rota-capture.md): Turn the plan into backlog items.
 5. [`/rota-work`](skills/rota-work.md): Build the first item.
 
-Walkthrough: [Greenfield: from a brief to a shipped milestone](walkthroughs/greenfield-from-brief.md)
+Walkthrough: [Greenfield: what a project holds after a brief](walkthroughs/greenfield-from-brief.md)
+
+### Bring rota into an existing project
+
+A repo with history and a backlog that lives in your head, with no rota yet.
+
+1. [`/rota-init`](skills/rota-init.md): Suggest config values from the repo, confirmed one by one.
+2. [`/rota-refactor`](skills/rota-refactor.md): With --map, draft the project map so later cycles skip re-exploring the code.
+3. [`/rota-capture`](skills/rota-capture.md): Brain-dump the bugs and ideas you have been carrying around.
+4. [`/rota-work`](skills/rota-work.md): Take the P0 first. The map and knowledge tell the worker where to look.
+5. [`/rota-debug`](skills/rota-debug.md): When a fix will not stay fixed, find the cause before changing code.
+6. [`/rota-learn`](skills/rota-learn.md): Keep the gotcha so the next cycle in that area starts with it.
+
+Walkthrough: [Brownfield: what rota adds to an existing project](walkthroughs/brownfield-existing-project.md)
 
 ### Run several issues in parallel
 
