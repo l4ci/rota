@@ -16,7 +16,7 @@ import (
 )
 
 // roundBounce is the orchestrator's count of a review bounce (SKILL §7): the
-// merge gate counts its own stale and provenance bounces, this counts the ones
+// merge gate counts no stale or provenance refusal, this counts the ones
 // the orchestrator sends back by hand. It refuses once the item sits at
 // round.maxBounces, so a further bounce is never the answer: the item goes to a
 // higher tier or the human instead.

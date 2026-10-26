@@ -125,3 +125,13 @@ func TestClaimLostIsHeldRefusal(t *testing.T) {
 		t.Fatal("claim-lost must be an exit-4 refusal")
 	}
 }
+
+// A stale merge and a provenance failure are bookkeeping the worker repairs,
+// not review findings: neither counts toward round.maxBounces (#2072).
+func TestStaleAndProvenanceFailAreNotBounces(t *testing.T) {
+	for _, v := range []string{GateStale, GateProvenanceFail} {
+		if m := ClassifyVerdict(v); m.Bounce {
+			t.Errorf("%q must not count as a bounce: %+v", v, m)
+		}
+	}
+}

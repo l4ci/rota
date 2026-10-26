@@ -628,8 +628,9 @@ After `test.full` and `test.e2e` pass, the gate runs the `## Try it` steps of th
 
 A branch that is only behind the base is merged as is when the merge is clean, even when both sides
 changed a file: the `STALE-MERGE` note names the shared files (`round.sharedPaths` aside) and the gate
-verifies the merged tree. Only a conflict sends it back as `stale`. Each `stale` or `provenance-fail` bounce is counted per item; at `round.maxBounces` (default
-3) the gate parks the item `needs-human` with a comment instead of sending it back again (the PR stays open; a pass resets the count, and `0` turns the cap off).
+verifies the merged tree. Only a conflict sends it back as `stale`. A `stale` or `provenance-fail` refusal is not a bounce: it is
+counted nowhere and never parks the item, because the worker repairs it (merge the base, fix the PR body). Review bounces
+still count per item; at `round.maxBounces` (default 3) the item is parked `needs-human` (a pass resets the count, and `0` turns the cap off).
 
 ### CI and `GITHUB_TOKEN`
 

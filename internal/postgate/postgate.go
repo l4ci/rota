@@ -14,6 +14,11 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
+// classify says what a verdict means to the bookkeeping. A variable so the
+// tests can give a verdict the bounce meaning no shipped verdict carries now
+// (a stale merge and a provenance failure go back to the worker uncounted).
+var classify = worker.ClassifyVerdict
+
 // Park sends an item to a human: the move `round transfer --to human` makes.
 // note is the comment it leaves on the item.
 type Park func(issue, note string) error
@@ -35,18 +40,22 @@ type Failure struct {
 
 // Gate does the per-item bounce accounting after a real gate run (never
 // --check-only: that would count a peek). A pass forgets the item's count and
-// ends its clocks. A stale or provenance-fail verdict sends the PR back to its
-// worker: it counts, and at round.maxBounces the item is parked instead (the PR
-// stays open) so it is never re-dispatched silently.
+// ends its clocks. A verdict that bounces sends the PR back to its worker: it
+// counts, and at round.maxBounces the item is parked instead (the PR stays
+// open) so it is never re-dispatched silently. A stale merge and a provenance
+// failure are not bounces (worker.verdictMeanings): they count nothing and
+// never park the item, but a support machine's worker is still told on its PR.
 func Gate(env worker.Env, root, issue string, r worker.GateResult, park Park) (Outcome, error) {
 	if issue == "" {
 		return Outcome{}, nil
 	}
-	switch m := worker.ClassifyVerdict(r.Verdict); {
+	switch m := classify(r.Verdict); {
 	case r.OK():
 		return Outcome{}, landed(env, root, issue)
 	case m.Bounce:
 		return bounce(env, root, issue, r, park)
+	case m.Notify:
+		return Outcome{}, notify(env, root, r)
 	}
 	return Outcome{}, nil
 }
@@ -64,11 +73,18 @@ func Train(env worker.Env, round *worker.RoundMemo, root string, issues map[stri
 			}
 		}
 	}
-	if issue := issues[r.Culprit]; issue != "" && worker.ClassifyVerdict(r.Verdict).Bounce {
+	if issue := issues[r.Culprit]; issue != "" {
 		g := r.CulpritGate
 		g.Slot, g.Verdict, g.Err, g.Round = r.Culprit, r.Verdict, r.Err, round
-		if _, err := bounce(env, root, issue, g, park); err != nil {
-			fails = append(fails, Failure{r.Culprit, err})
+		switch m := classify(r.Verdict); {
+		case m.Bounce:
+			if _, err := bounce(env, root, issue, g, park); err != nil {
+				fails = append(fails, Failure{r.Culprit, err})
+			}
+		case m.Notify:
+			if err := notify(env, root, g); err != nil {
+				fails = append(fails, Failure{r.Culprit, err})
+			}
 		}
 	}
 	return fails
@@ -88,6 +104,14 @@ func landed(env worker.Env, root, issue string) error {
 		return err
 	}
 	return store.Clear(issue)
+}
+
+// notify tells a support machine's worker its PR was sent back, with no count
+// and no park. The post is idempotent per head, so a tick that gates the same
+// head again posts nothing new.
+func notify(env worker.Env, root string, r worker.GateResult) error {
+	_, err := env.PostReviewBounce(root, r.Branch, r.PR, r.SHA, r.Err)
+	return err
 }
 
 // bounce counts one bounce for the item and parks it at round.maxBounces. A
