@@ -29,7 +29,7 @@ The queries are independent and disk-bound. Dispatch all of them as parallel too
 
 The two verbs return different *kinds* of content; handle them differently.
 
-**KNOWLEDGE bullets are gotchas / hints.** External bullets (`query --external`) count as KNOWLEDGE bullets here: carry the relevant ones into the brief the same way. They have no tier, so skip them in the hit-register step below. Surface relevant ones into whatever brief the calling skill is building: debug hypothesis, reviewer brief, refactor sub-agent prompt, worker brief. The label varies; the role is the same: prior art that informs but does not constrain.
+**KNOWLEDGE bullets are gotchas / hints.** External bullets (`query --external`) count as KNOWLEDGE bullets here: carry the relevant ones into the brief the same way. They have no tier; the hit-register step below counts their use on this machine. Surface relevant ones into whatever brief the calling skill is building: debug hypothesis, reviewer brief, refactor sub-agent prompt, worker brief. The label varies; the role is the same: prior art that informs but does not constrain.
 
 **DECISIONS entries are hard boundaries.** Pass the FULL entry to the consumer (rule, *Why*, **Forbids**, **Permits**), not just the title. The calling skill MUST treat them as constraints, not suggestions. If the planned action would violate a decision, stop and surface it to the user first. Do not reword or scope a violation away.
 
@@ -62,6 +62,14 @@ And both bullets survived into the brief's `**Known gotchas:**` section. Registe
 rota knowledge hit --topic "Architecture" --title "Always route network calls through NetworkClient"
 rota knowledge hit --topic "Architecture" --title "Avoid force-unwrap in production paths"
 ```
+
+External bullets that reached a brief register with the external form, using the bullet's topic (a subtopic is `"Godot: Networking"`) and bold title:
+
+```bash
+rota knowledge hit --external --topic "<T>" --title "<title>"
+```
+
+It appends one line to a log on this machine, never touches the clone or the network, and exits 3 when the bullet is not in the base (skip it: it was renamed or removed). Hits are per machine and never synced; `/rota-learn --external-review` reads them to find bullets nobody uses. They are not tiers: nothing auto-promotes.
 
 Issue all calls **in a single parallel tool-call batch**: each verb serializes its sidecar write behind a per-file lock, so concurrent calls don't lose hits. Silent on success. Provisional bullets auto-promote to confirmed once `hits >= learn.promoteThreshold` (default 3) without a pending contradiction.
 

@@ -250,23 +250,44 @@ func knExtStats(c *Ctx) (Result, error) {
 		return Result{}, err
 	}
 	extFreshen(c, cl)
-	stats, err := cl.Stats()
+	stats, torn, err := cl.StatsWithHits()
 	if err != nil {
 		return Result{}, extErr(err)
 	}
 	items := []any{}
 	var lines []string
 	for _, s := range stats {
-		item := knObj("name", s.Name, "file", s.File, "bullets", s.Bullets, "bytes", s.Bytes)
-		line := fmt.Sprintf("%s: %d bullets, %d bytes", s.Name, s.Bullets, s.Bytes)
+		item := knObj("name", s.Name, "file", s.File, "bullets", s.Bullets, "bytes", s.Bytes, "hits", s.Hits)
+		line := fmt.Sprintf("%s: %d bullets, %d bytes, %d hits", s.Name, s.Bullets, s.Bytes, s.Hits)
 		if s.Stray {
 			item.Set("stray", true)
 			line += " (stray)"
 		}
+		bullets := []any{}
+		for _, b := range s.Items {
+			bullets = append(bullets, knObj("title", b.Title, "date", b.Date, "hits", b.Hits, "lastHit", b.LastHit))
+		}
+		item.Set("items", bullets)
 		items = append(items, item)
 		lines = append(lines, line)
 	}
-	return Result{Data: knObj("topics", items), Text: strings.Join(lines, "\n")}, nil
+	if torn > 0 {
+		c.Warn("skipped %d unreadable line(s) in the hits log", torn)
+	}
+	return Result{Data: knObj("topics", items, "tornHits", torn), Text: strings.Join(lines, "\n")}, nil
+}
+
+// knExtHit records a use of an external bullet in the per-machine hits log.
+func knExtHit(c *Ctx, topic, title string) (Result, error) {
+	cl, err := externalClone(c)
+	if err != nil {
+		return Result{}, err
+	}
+	n, err := cl.Hit(topic, title, extSource(c))
+	if err != nil {
+		return Result{}, extErr(err)
+	}
+	return Result{Data: knObj("topic", topic, "title", title, "hits", n, "changed", true), Text: fmt.Sprintf("hit: %s :: %s (hits=%d, this machine)", topic, title, n)}, nil
 }
 
 // extSource is the project tag a new external bullet carries: the name of the

@@ -12,6 +12,7 @@ type TopicStat struct {
 	File    string // repo-relative, slash-separated
 	Bullets int
 	Bytes   int
+	Hits    int    // hits on this machine; only StatsWithHits fills it
 	Parent  string // the split topic a subtopic belongs to
 	Stray   bool   // a flat file an older rota left beside a split topic
 }

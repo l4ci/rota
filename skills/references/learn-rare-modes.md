@@ -75,7 +75,7 @@ No guardrail: check command `bash test/gate.sh` runs in no CI workflow or hook; 
 
 Maintenance pass over the external knowledge base (`knowledge.external`). With the key unset, say so and exit. Nothing here writes until the maintainer says yes: **ask before every `rota knowledge split`, whatever `autonomy.level` says.** The `autonomy.level` dial ([`references/autonomy.md`](autonomy.md)) does not apply here: a split rewrites a whole topic across files, so it is never auto-approved.
 
-1. Measure: `rota knowledge stats --external --json`. A topic is oversized when `rota doctor` names it under `external knowledge size` (past `knowledge.externalMaxBullets` or `knowledge.externalMaxBytes`); a subtopic or `stray` entry counts as its own topic. None oversized and no stray: report `External base is within limits` and exit.
+1. Measure: `rota knowledge stats --external --json`. A topic is oversized when `rota doctor` names it under `external knowledge size` (past `knowledge.externalMaxBullets` or `knowledge.externalMaxBytes`); a subtopic or `stray` entry counts as its own topic. None oversized and no stray: report `External base is within limits`, then go to step 6.
 2. Draft a plan per oversized flat topic. Read it with `rota knowledge query --external "<topic>"`, group its bullets by theme into 3 to 7 subtopics, and write `plan.json` in a scratch directory:
 
    ```json
@@ -86,6 +86,8 @@ Maintenance pass over the external knowledge base (`knowledge.external`). With t
 3. Fold strays: `stats` shows `stray: true` for a flat file an older rota left beside a split topic. Folding needs no plan (`rota knowledge split --external --topic "<topic>"`); name the stray in the report.
 4. Show the maintainer, per topic, the subtopics with their hooks and bullet titles, and any stray to fold. Ask once per topic: split as drafted, adjust, or skip. Edit `plan.json` on an adjustment and show it again.
 5. On a yes, run `rota knowledge split --external --topic "<topic>" --plan <plan.json>`. It validates the whole plan first (exit 2 or 3 names the problem; fix the plan and ask again), keeps every bullet line, commits once and lands by the repo's policy. A rerun of the same plan is `changed: false`. Exit 4 means a dirty or diverged clone or a stray bullet that conflicts with one in the folder: report it and move on.
+
+6. Prune candidates. In the `stats --external --json` output, each topic's `items` carry `title`, `date` (the stamp's date), `hits` and `lastHit`, counted on this machine only. List a bullet as a candidate when it has `hits: 0` and its `date` is more than 30 days old (a bullet with no date counts as old), and list near-duplicates: bullets in one topic family whose titles or bodies say the same thing (read the topic to judge). Show each with its reason (`0 hits, stamped 2026-08-01` or `near-duplicate of "<title>"`). A bullet with 0 hits here may be used on another machine: say so, and never remove, amend or merge one without the maintainer's yes for that bullet; on a yes use `rota knowledge rm --external --topic "<topic>" --title "<title>"`. Report `Prune candidates: <n>` and one `Removed:` line per yes.
 
 Every machine that writes to the base needs a rota that knows split topics before the first split; say so when the maintainer approves the first one. Report one line per topic:
 

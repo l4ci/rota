@@ -53,7 +53,7 @@ A split topic reads its sub-index and the bullets without a subtopic. `--all` ad
 ```bash
 rota knowledge query --external Godot            # sub-index + bullets without a subtopic
 rota knowledge query --external --all Godot      # also every subtopic
-rota knowledge stats --external                  # bullets and bytes per topic file
+rota knowledge stats --external                  # bullets, bytes and hits per topic file
 ```
 
 Before it reads, rota makes sure the clone is current. It fetches at most once per `knowledge.externalTTL` minutes (default 10; the stamp lives in the rota state dir), then fast-forwards when the remote is ahead. It never resets anything:
@@ -119,6 +119,12 @@ rota knowledge split --external --topic Godot
 ```
 
 The stray bullets join the README (or the subtopics of a `--plan` that lists them), the stray file and its root line go in the same commit, and the result reports `folded: N`. A stray bullet whose title already exists in the folder is kept once when the two lines are byte-identical; when they differ, the verb exits 4 naming both files and you reconcile them by hand.
+
+## Hits
+
+An agent that carries an external bullet into its work registers it: `rota knowledge hit --external --topic "Godot: Networking" --title "RPC authority"`. The hit goes to a log in the rota state dir (`external-knowledge/<clone-hash>.hits.jsonl`), not into the clone: it never fetches, never dirties the repo and is never pushed. **Hits are per machine and never synced**, so a bullet with no hits here may be in daily use on another machine. `rota knowledge stats --external` shows hits per topic and, in `--json`, per bullet with the date of the last one. A bullet that `split` moved keeps its hits; the hit is not found (exit 3) when the bullet is not in the base.
+
+`/rota-learn --external-review` lists the bullets with no hits on this machine that are more than 30 days old, by their stamp date, plus near-duplicates, as prune candidates. It removes none without your yes for each one.
 
 ## Tool versions
 

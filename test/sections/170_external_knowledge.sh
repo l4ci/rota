@@ -166,4 +166,19 @@ grep -q '\*\*Old write\*\*' "$EKCLONE/topics/big/README.md" || fail "stray bulle
 [ "$(git -C "$EKREMOTE" rev-parse main)" = "$(git -C "$EKCLONE" rev-parse HEAD)" ] || fail "fold did not push"
 pass "split folds a stray flat file back into the folder"
 
+# hit --external logs per machine, outside the clone, and stats reports it (#2109).
+BEFORE="$(git -C "$EKCLONE" rev-parse HEAD)"
+RC=0; OUT=$(ek knowledge hit --external --topic "Big: Beta" --title "Bullet 14") || RC=$?
+[ "$RC" = "0" ] && [ "$(jget data.hits <<<"$OUT")" = "1" ] && [ "$(jget data.changed <<<"$OUT")" = "true" ] || fail "hit --external data: rc=$RC $OUT"
+RC=0; OUT=$(ek knowledge hit --external --topic "Big: Beta" --title "Bullet 14") || RC=$?
+[ "$(jget data.hits <<<"$OUT")" = "2" ] || fail "second hit should count 2: $OUT"
+RC=0; ek knowledge hit --external --topic "Big: Beta" --title "No such bullet" >/dev/null 2>&1 || RC=$?
+[ "$RC" = "3" ] || fail "hit on an unknown bullet should be exit 3, got $RC"
+[ "$(git -C "$EKCLONE" rev-parse HEAD)" = "$BEFORE" ] && [ -z "$(git -C "$EKCLONE" status --porcelain)" ] || fail "hit changed the clone"
+RC=0; OUT=$(ek knowledge stats --external) || RC=$?
+[ "$(jget 'data.tornHits' <<<"$OUT")" = "0" ] && case "$OUT" in *'"lastHit"'*) ;; *) false ;; esac || fail "stats lacks hits: $OUT"
+RC=0; OUT=$(ekn knowledge stats --external) || RC=$?
+case "$OUT" in *"Big: Beta: "*", 2 hits"*) ;; *) fail "stats text lacks the 2 hits: $OUT" ;; esac
+pass "hit --external counts per machine without touching the clone"
+
 rm -rf "$TMP_EK"
