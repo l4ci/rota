@@ -170,4 +170,4 @@ It moves `.hv/` to `.rota/`, rewrites the `.gitignore` entries, the managed bloc
 
 ## Next
 
-Run `rota init` once at the project root (`rota init --no-blocks` skips `AGENTS.md` and the managed blocks; `rota init umbrella` sets up a multi-repo coordinator). [Getting started](getting-started.md) walks through the first cycle.
+Run `rota setup` once at the project root, or `rota init` to take the defaults without questions (`rota init --no-blocks` skips `AGENTS.md` and the managed blocks; `rota init umbrella` sets up a multi-repo coordinator). [Getting started](getting-started.md) walks through the first cycle.
