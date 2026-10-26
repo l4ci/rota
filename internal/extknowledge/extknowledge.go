@@ -34,6 +34,7 @@ var (
 	ErrPush       = errors.New("push failed")
 	ErrPolicy     = errors.New("invalid policy")
 	ErrContent    = errors.New("invalid bullet text")
+	ErrUsage      = errors.New("invalid request")
 )
 
 // Env is everything the package reaches outside its own memory.
@@ -77,7 +78,7 @@ type Policy struct {
 	Defaulted bool   // no policy file: the default applies
 }
 
-// WriteResult reports Add and Amend.
+// WriteResult reports Add, Amend, Remove and Replace.
 type WriteResult struct {
 	Changed bool
 	Policy  Policy
@@ -89,7 +90,24 @@ type WriteResult struct {
 }
 
 // AddIn is one bullet to add.
-type AddIn struct{ Topic, Title, Body, Date, Source, Hook string }
+type AddIn struct {
+	Topic, Title, Body, Date, Source, Hook string
+	Seen                                   Seen // tool versions the learning was seen on
+}
 
-// AmendIn appends Text to the one bullet under Topic that contains Fragment.
-type AmendIn struct{ Topic, Fragment, Text string }
+// AmendIn edits the one bullet under Topic that contains Fragment: it appends
+// Text before the stamp, sets the stamp's date to Date and replaces its seen:
+// list with *Seen (a pointer to an empty list drops the field). Empty Text,
+// empty Date and nil Seen leave that part alone; at least one must be given.
+type AmendIn struct {
+	Topic, Fragment, Text string
+	Date                  string
+	Seen                  *Seen
+}
+
+// RmIn removes the one bullet under Topic with the bold title Title.
+type RmIn struct{ Topic, Title string }
+
+// ReplaceIn replaces every occurrence of Old by New inside the title and body
+// of the one bullet under Topic that holds Old. The stamp is never matched.
+type ReplaceIn struct{ Topic, Old, New string }

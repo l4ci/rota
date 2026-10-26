@@ -155,3 +155,62 @@ func TestExtErrExitCodes(t *testing.T) {
 		}
 	}
 }
+
+func TestKnowledgeExternalSeenFlags(t *testing.T) {
+	project, clone, _ := extFixture(t, "")
+	add := func(stdin string, args ...string) knOut {
+		return knNew(t, project, stdin, append([]string{"knowledge", "add", "--topic", "Go", "--title", "T1", "--body-file", "-"}, args...)...)
+	}
+	// Usage errors.
+	if o := add("b", "--seen", "godot@4.6"); o.rc != ExitUsage {
+		t.Errorf("--seen without --external: rc=%d", o.rc)
+	}
+	for _, bad := range []string{"godot@", "@4.6", "Go Dot@4", "Godot@4.6"} {
+		if o := add("b", "--external", "--seen", bad); o.rc != ExitUsage {
+			t.Errorf("--seen %q: rc=%d %q", bad, o.rc, o.stderr)
+		}
+	}
+	// Bare tool with no manifest: exit 3 naming the tool.
+	if o := add("b", "--external", "--seen", "godot"); o.rc != ExitResolution || !strings.Contains(o.stderr, "godot") {
+		t.Errorf("bare godot: rc=%d %q", o.rc, o.stderr)
+	}
+	if gittest.Run(t, clone, "status", "--porcelain") != "" || gittest.Run(t, clone, "rev-list", "--count", "HEAD") != "1" {
+		t.Fatal("a refused add wrote something")
+	}
+	// Explicit version writes the stamp.
+	if o := add("b", "--external", "--seen", "godot@4.6"); o.rc != 0 {
+		t.Fatalf("add: %+v", o)
+	}
+	if got := gittest.Run(t, clone, "show", "HEAD:topics/go.md"); !strings.Contains(got, "seen:godot@4.6 -->") {
+		t.Fatalf("file = %q", got)
+	}
+	// Bare tool takes the project's version.
+	os.WriteFile(filepath.Join(project, "project.godot"), []byte("config/features=PackedStringArray(\"4.8\", \"Forward Plus\")\n"), 0o644)
+	if o := knNew(t, project, "b", "knowledge", "add", "--external", "--topic", "Go", "--title", "T2", "--body-file", "-", "--seen", "godot"); o.rc != 0 {
+		t.Fatalf("bare add: %+v", o)
+	}
+	if got := gittest.Run(t, clone, "show", "HEAD:topics/go.md"); !strings.Contains(got, "seen:godot@4.8 -->") {
+		t.Fatalf("file = %q", got)
+	}
+	// Mixed bare + explicit: godot from project.godot, swift as given.
+	if o := knNew(t, project, "b", "knowledge", "add", "--external", "--topic", "Go", "--title", "T3", "--body-file", "-", "--seen", "godot swift@6"); o.rc != 0 {
+		t.Fatalf("mixed add: %+v", o)
+	}
+	if got := gittest.Run(t, clone, "show", "HEAD:topics/go.md"); !strings.Contains(got, "seen:godot@4.8,swift@6 -->") {
+		t.Fatalf("file = %q", got)
+	}
+	// The project is on 4.8: T1 (seen 4.6) is flagged, T2 is not, JSON lists it.
+	o := knNew(t, project, "", "knowledge", "query", "--external", "go")
+	if !strings.Contains(o.stdout, "**T1** — b (seen on godot 4.6, project on 4.8: recheck) <!--") || strings.Contains(o.stdout, "**T2** — b (seen") {
+		t.Fatalf("query: %q", o.stdout)
+	}
+	o = knNew(t, project, "", "knowledge", "query", "--external", "go", "--json")
+	var env struct {
+		Data struct {
+			Recheck []struct{ Topic, Title, Tool, Seen, Project string }
+		}
+	}
+	if err := json.Unmarshal([]byte(o.stdout), &env); err != nil || len(env.Data.Recheck) != 1 || env.Data.Recheck[0].Title != "T1" || env.Data.Recheck[0].Project != "4.8" {
+		t.Fatalf("json: %v %q", err, o.stdout)
+	}
+}

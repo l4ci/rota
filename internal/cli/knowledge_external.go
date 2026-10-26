@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/toolver"
 )
 
 const (
@@ -91,6 +92,8 @@ func extErr(err error) error {
 		return Resolution("%s", err)
 	case errors.Is(err, extknowledge.ErrDirty), errors.Is(err, extknowledge.ErrDiverged), errors.Is(err, extknowledge.ErrMultiMatch), errors.Is(err, extknowledge.ErrContent):
 		return Refused("%s", err)
+	case errors.Is(err, extknowledge.ErrUsage):
+		return Usage("%s", err)
 	case errors.Is(err, extknowledge.ErrOffline):
 		return Unavailable("%s", err)
 	case errors.Is(err, extknowledge.ErrPush):
@@ -111,7 +114,7 @@ func knExtQuery(c *Ctx, topics []string) (Result, error) {
 		return Result{}, err
 	}
 	extFreshen(c, cl)
-	text, missing, err := cl.Query(topics)
+	text, missing, recheck, err := cl.Query(topics, projectTools(c))
 	if err != nil {
 		return Result{}, extErr(err)
 	}
@@ -120,7 +123,53 @@ func knExtQuery(c *Ctx, topics []string) (Result, error) {
 		c.Warn("no external topic matches %q — run `rota knowledge topics --external` to list them", m)
 		ms = append(ms, m)
 	}
-	return Result{Data: knObj("text", text, "missing", ms), Text: text}, nil
+	rs := []any{}
+	for _, r := range recheck {
+		rs = append(rs, knObj("topic", r.Topic, "title", r.Title, "tool", r.Tool, "seen", r.Seen, "project", r.Project))
+	}
+	return Result{Data: knObj("text", text, "missing", ms, "recheck", rs), Text: text}, nil
+}
+
+// projectTools is the tool versions the current project runs, read from its
+// manifests between the working directory and the rota project root. An
+// unreadable working directory yields none.
+func projectTools(c *Ctx) map[string]string {
+	cwd, err := c.deps().Getwd()
+	if err != nil {
+		return nil
+	}
+	root, _ := rotatree.Find(cwd)
+	return toolver.Detect(cwd, root)
+}
+
+// extSeen turns --seen into stamp entries. A tool@version entry is taken as
+// written; a bare tool takes its version from the project's manifests (exit 3
+// naming the tool when none is found). Tool names are lowercase.
+func extSeen(c *Ctx, raw string) (extknowledge.Seen, error) {
+	toks := strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' })
+	var have map[string]string
+	for i, t := range toks {
+		if strings.Contains(t, "@") {
+			continue
+		}
+		if t != strings.ToLower(t) {
+			return nil, Usage("--seen: %q has uppercase letters: tool names are lowercase, e.g. godot@4.6", t)
+		}
+		if have == nil {
+			have = projectTools(c)
+		}
+		v, ok := have[t]
+		if !ok {
+			return nil, Resolution("--seen %s: no %s version found in this project's manifests", t, t).
+				WithHint("give the version: --seen " + t + "@<version>")
+		}
+		toks[i] = t + "@" + v
+	}
+	seen, err := extknowledge.ParseSeen(strings.Join(toks, ","))
+	if err != nil {
+		return nil, Usage("--seen: %s", err)
+	}
+	return seen, nil
 }
 
 func knExtTopics(c *Ctx) (Result, error) {
@@ -159,12 +208,12 @@ func extSource(c *Ctx) string {
 	return filepath.Base(cwd)
 }
 
-func knExtAdd(c *Ctx, topic, title, body, date, hook string) (Result, error) {
+func knExtAdd(c *Ctx, topic, title, body, date, hook string, seen extknowledge.Seen) (Result, error) {
 	cl, err := externalClone(c)
 	if err != nil {
 		return Result{}, err
 	}
-	res, err := cl.Add(c.Context(), extknowledge.AddIn{Topic: topic, Title: title, Body: body, Date: date, Source: extSource(c), Hook: hook})
+	res, err := cl.Add(c.Context(), extknowledge.AddIn{Topic: topic, Title: title, Body: body, Date: date, Source: extSource(c), Hook: hook, Seen: seen})
 	if err != nil {
 		return Result{}, extErr(err)
 	}
@@ -175,16 +224,43 @@ func knExtAdd(c *Ctx, topic, title, body, date, hook string) (Result, error) {
 	return Result{Data: extWriteData(topic, res, "title", title), Text: text}, nil
 }
 
-func knExtAmend(c *Ctx, topic, fragment, body string) (Result, error) {
+func knExtAmend(c *Ctx, topic, fragment, body, date string, seen *extknowledge.Seen) (Result, error) {
 	cl, err := externalClone(c)
 	if err != nil {
 		return Result{}, err
 	}
-	res, err := cl.Amend(c.Context(), extknowledge.AmendIn{Topic: topic, Fragment: fragment, Text: body})
+	res, err := cl.Amend(c.Context(), extknowledge.AmendIn{Topic: topic, Fragment: fragment, Text: body, Date: date, Seen: seen})
 	if err != nil {
 		return Result{}, extErr(err)
 	}
 	return Result{Data: extWriteData(topic, res), Text: "amended: " + res.File + extLanded(res)}, nil
+}
+
+func knExtReplace(c *Ctx, topic, old, repl string) (Result, error) {
+	cl, err := externalClone(c)
+	if err != nil {
+		return Result{}, err
+	}
+	res, err := cl.Replace(c.Context(), extknowledge.ReplaceIn{Topic: topic, Old: old, New: repl})
+	if err != nil {
+		return Result{}, extErr(err)
+	}
+	if !res.Changed {
+		return Result{Data: extWriteData(topic, res), Text: "unchanged: " + topic + " (--old equals --new)"}, nil
+	}
+	return Result{Data: extWriteData(topic, res), Text: "replaced: " + res.File + extLanded(res)}, nil
+}
+
+func knExtRm(c *Ctx, topic, title string) (Result, error) {
+	cl, err := externalClone(c)
+	if err != nil {
+		return Result{}, err
+	}
+	res, err := cl.Remove(c.Context(), extknowledge.RmIn{Topic: topic, Title: title})
+	if err != nil {
+		return Result{}, extErr(err)
+	}
+	return Result{Data: extWriteData(topic, res, "title", title), Text: fmt.Sprintf("removed: %s :: %s (%s)%s", topic, title, res.File, extLanded(res))}, nil
 }
 
 func extWriteData(topic string, res extknowledge.WriteResult, kv ...any) *jsonx.Object {

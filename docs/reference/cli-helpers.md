@@ -173,6 +173,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota migrate hv [--apply] [--verbose] [--skip-skills]` | move a project from the old state folder and names to `.rota/` and rota (preview unless --apply) |
 | `rota migrate issues [--apply] [--limit <n>]` | move the file backlog onto the issue tracker (preview unless --apply) |
 | `rota migrate labels [--apply]` | main only: relabel open legacy support issues to `machine:<round.support>` (preview unless `--apply`); migrate the configured legacy value, falling back to `site:support`; successful apply retires the tracked `issues.labels.support` key, which `config fill` preserves until then (local config stays); without `round.support`, apply may retire it when no open issue uses the old label; conflicts with another pin remain untouched and keep the key |
+| `rota migrate external-knowledge [--apply]` | move trailing `(seen on Godot 4.6)` suffixes of the external knowledge bullets into `seen:` stamps (preview unless --apply); `--apply` is one commit landed by the repo's policy |
 | `rota migrate milestones [--apply]` | rename `## Acceptance criteria` to `## Acceptance` and make each bullet a checkbox (preview unless --apply) |
 | `rota migrate milestone-files [--apply]` | move `.rota/milestones/*.md` left from file mode to `.rota/archive/milestones/` when milestones live on the tracker (preview unless --apply); refuses, preview included, when the archive already holds a file of the same name |
 
@@ -180,13 +181,13 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 
 | Usage | What it does |
 |---|---|
-| `rota knowledge query <topic>… [--tier provisional\|confirmed\|deprecated] [--include-deprecated] [--external]` | print topic sections, tier-aware; `--external` reads the [external knowledge base](../usage/external-knowledge.md) instead (fetched and fast-forwarded first; no tiers) |
+| `rota knowledge query <topic>… [--tier provisional\|confirmed\|deprecated] [--include-deprecated] [--external]` | print topic sections, tier-aware; `--external` reads the [external knowledge base](../usage/external-knowledge.md) instead (fetched and fast-forwarded first; no tiers); `--external` marks a bullet `(seen on <tool> X, project on Y: recheck)` when the project runs a newer tool version, and `--json` carries the `recheck` key |
 | `rota knowledge stats` | bullet count and size per topic |
 | `rota knowledge topics [--external]` | list topic headings with bullet counts; `--external` lists the external base's `README.md` |
-| `rota knowledge add --topic <T> --title <S> --body-file <path\|-> [--date YYYY-MM-DD] [--sha <hex>] [--external [--hook <text>]]` | add a bullet under a topic; `--external` writes to the external base (new topic: file and `README.md` line), then pushes or opens a PR by its `rota-knowledge.json` policy |
-| `rota knowledge amend --topic <T> --fragment <F> --mode append --body-file <path\|-> [--external]` | append text to an existing bullet; `--external` amends the external base |
-| `rota knowledge replace --topic <T> --old <text> --new <text>` | replace text inside the one bullet that contains it |
-| `rota knowledge rm --topic <T> --title <title>` | delete one bullet and its tier entry |
+| `rota knowledge add --topic <T> --title <S> --body-file <path\|-> [--date YYYY-MM-DD] [--sha <hex>] [--external [--hook <text>] [--seen <tools>]]` | add a bullet under a topic; `--seen` (external only) stamps the tools it was seen on (`tool@version`, a bare tool takes the project's version); `--external` writes to the external base (new topic: file and `README.md` line), then pushes or opens a PR by its `rota-knowledge.json` policy |
+| `rota knowledge amend --topic <T> --fragment <F> [--mode append --body-file <path\|->] [--external [--seen <tools>] [--date YYYY-MM-DD]]` | append text to an existing bullet; `--mode`/`--body-file` are optional when `--seen` or `--date` is given (external only: `--seen` replaces the whole tool list, `""` drops it; `--date` sets the stamp date); `--external` amends the external base |
+| `rota knowledge replace --topic <T> --old <text> --new <text> [--external]` | replace text inside the one bullet that contains it |
+| `rota knowledge rm --topic <T> --title <title> [--external]` | delete one bullet and its tier entry |
 | `rota knowledge rename-topic --from <X> --to <Y> [--title <T>]` | rename a topic or move one bullet |
 | `rota knowledge harvest [--round <n>] [--mark <commentId>]` | list `learning` comments on issues merged in the round and not yet marked; `--mark` records one as harvested (`--mark` is refused on a support machine; issue backends only; only comments by authors with write access count, and a forge that cannot say is refused `blockedBy: forge`: the listing exits 1, `--mark` exits 4) |
 | `rota knowledge hit --topic <T> --title <S>` | register a consulted bullet; buffered in the gitignored `knowledge-hits.jsonl` until `tier fold` |
