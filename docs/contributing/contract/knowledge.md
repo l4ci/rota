@@ -304,6 +304,16 @@ old: hv-qa-index    (stdout status word)
 shim: same transform as `rota block`.
 note: the generated block text names `rota qa query <target>` (it names `.hv/bin/hv-qa-query` today).
 
+### rota migrate external-knowledge
+rota migrate external-knowledge [--apply]
+repo: none (it acts on the clone named by `knowledge.external`)
+data: {"changed": bool, "planned": bool, "applied": bool, "count": number, "changes": [{"topic": string, "title": string, "seen": string, "inferred": bool}], "manualReview": [{"topic": string, "title": string, "text": string}], "stranded": bool, "write"?: "push"|"pr", "pushed"?: bool, "pr"?: string, "branch"?: string}
+exit: 3 when `knowledge.external` is unset or the base has no index or the repo policy is invalid; 4 when `--apply` meets a dirty or diverged clone (nothing written); 5 when `--apply` cannot reach the remote; 1 when the push or `gh pr create` fails; 2 on a stray argument
+old: none (new in #2110)
+shim: none
+note: moves each bullet's trailing `(seen on Godot 4.6)` (optionally followed by `.`) into its stamp as `seen:godot@4.6`: names are lowercased with spaces turned into `-`, versions stay as written, several tools split on `, ` (`seen:swift@6,macos@26`). A tool-less suffix takes the topic's slug and sets `inferred`. A bullet that already has `seen:` keeps its versions and gains the missing tools; a tool on both with different versions leaves the whole bullet unchanged and lists it in `manualReview` as `stamp says X, suffix says Y`. A `(seen on …)` that is not trailing, sits on a continuation line or has no version stays as written and is listed in `manualReview`. Other stamp fields (`source:kluft+Upracked`) are kept byte for byte.
+note: preview by default (adds the warning `preview only; pass --apply`), reading the clone like `query` with no sync, so a dirty clone previews. `--apply` syncs like `add`, rewrites every listed bullet in one commit `knowledge: move (seen on …) into seen: stamps` with no trailer and lands it by the policy (push, or a `rota-knowledge/seen-stamps-<time>` branch and PR in `pr` mode, which leaves the clone on its own branch after a failure). `changed` is true only when `--apply` committed; a second `--apply` is `changed: false` with no commit. `stranded` is true when nothing was left to change but the clone is ahead of its upstream (an earlier apply whose push failed); the text names `git -C <clone> push`. Rollback: `git -C <clone> revert <sha>` and push, or close the PR in `pr` mode.
+
 ### rota migrate hv
 rota migrate hv [--apply] [--verbose] [--skip-skills]
 repo: none (it migrates the project around the working directory and every registered sub-repo that has its own `.hv/`, each with its own backup)
