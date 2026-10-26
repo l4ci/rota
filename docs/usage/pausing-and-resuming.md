@@ -4,7 +4,7 @@ Long sessions hit `/clear` or get interrupted. `/rota-pause` writes what was in 
 
 ## /rota-pause
 
-`/rota-pause` captures the live state of a mid-session investigation into `.rota/handoff/<branch>.md` before you stop. Git commits carry code. The handoff note carries intent: current hypothesis, next planned step, files that are mid-edit, and gotchas you ran into along the way.
+`/rota-pause` captures the live state of a mid-session investigation into `.rota/handoff/<branch>.md` before you stop. Git commits carry code; the handoff note carries intent: current hypothesis, next planned step, files that are mid-edit, and gotchas you ran into along the way.
 
 **Use it when:**
 
@@ -50,8 +50,6 @@ If a handoff is present, `/rota-work` (no argument)'s per-stream question offers
 
 ## Recovering after /clear
 
-A typical recovery looks like this:
-
 1. You're mid-investigation on branch `rota/my-feature`, context is filling. You run `/rota-pause`, which writes `.rota/handoff/rota/my-feature.md` with your current hypothesis and the next step you were about to try.
 2. You run `/clear`. All conversation context is gone.
 3. In the new session, you run `/rota-work` (no argument).
@@ -72,7 +70,7 @@ Handoff note found:
 
 ## When to /rota-pause vs just commit and walk away
 
-A clean commit is enough when the work sits at a natural stopping point: a passing test, a completed subtask, a checkpoint that git state alone can describe. `/rota-pause` is for the messy middle. The live hypothesis, the half-written test, the "I was about to try X": none of that survives a `/clear` from git state alone. If you'd have to re-read diffs and reconstruct your reasoning to figure out what to do next, pause first.
+A clean commit is enough when the work sits at a natural stopping point: a passing test, a completed subtask, a checkpoint that git state alone can describe. `/rota-pause` is for the messy middle: the live hypothesis, the half-written test, the "I was about to try X". None of that survives a `/clear` from git state alone. If you'd have to re-read diffs and reconstruct your reasoning to figure out what to do next, pause first.
 
 ## Context guard
 
@@ -93,7 +91,7 @@ rota config set work.contextGuard auto
 `/rota-pause` also works for an orchestrator mid-round. It records the round (slots, PRs awaiting review) in `.rota/handoff/<base>.md` and leaves the round running; it never winds it down.
 
 A round's orchestrator hands off before its context fills, through a `Stop` and a `SessionStart` hook
-that `rota hook install` writes. That moved to [unattended rounds](unattended-rounds.md#orchestrator-handoff).
+that `rota hook install` writes (see [unattended rounds](unattended-rounds.md#orchestrator-handoff)).
 For a handoff you write yourself, use `/rota-pause` above.
 
 ## Keepalive

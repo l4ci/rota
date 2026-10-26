@@ -31,4 +31,4 @@ example:
 ---
 # /rota-plan
 
-Writes an implementation plan before `/rota-work` runs, keyed by a milestone slice (`M01-S01`) or an item (`M01-B07`, `#42`). Tasks must fit one execution window and each requires a verifiable outcome. `/rota-work` consults the plan automatically if one exists. See [vision and plans](../usage/vision-and-plans.md) for the full flow.
+Writes an implementation plan before `/rota-work` runs, keyed by a milestone slice (`M01-S01`) or an item (`M01-B07`, `#42`). Each task must fit one execution window and have a verifiable outcome. `/rota-work` consults the plan automatically if one exists. See [vision and plans](../usage/vision-and-plans.md) for the full flow.

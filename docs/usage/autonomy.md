@@ -45,7 +45,7 @@ To roll back after downgrading the binary, run `rota config set autonomy.level a
 
 ## What auto does not add
 
-`auto` is not the loop autonomy that #70 removed. It adds no loop machinery. Solo `auto` is `/rota-work` after each ship, rounds reuse the autopilot tick, and limits go through `/rota-pause`. It relaxes no verb-enforced gate and no `ship.mergeApproval`.
+`auto` is not the loop autonomy that #70 removed. It adds no loop machinery. Solo `auto` is `/rota-work` after each ship, rounds reuse the autopilot tick, and limits go through `/rota-pause`. It relaxes neither the verb-enforced gates nor `ship.mergeApproval`.
 
 ## What still gates the chain
 

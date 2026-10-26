@@ -35,6 +35,6 @@ example:
 ---
 # /rota-brainstorm
 
-Per-item design exploration before `/rota-plan`: Socratic discovery, 2-3 approaches with tradeoffs, sectioned design with per-section approval; stores the design as `.rota/designs/<ID>.md` (file backend) or a note on the issue (issue backend), which `/rota-plan` reads as soft input. Major features and P0 bugs get one grilling pass first (every open decision settled before drafting); `--grill` forces that pass on any item. It is skipped when the issue body already has `## Acceptance`.
+Per-item design exploration before `/rota-plan`: Socratic discovery, 2-3 approaches with tradeoffs, then a sectioned design approved section by section. It stores the design as `.rota/designs/<ID>.md` (file backend) or a note on the issue (issue backend), which `/rota-plan` reads as soft input. Major features and P0 bugs get one grilling pass first, settling every open decision before drafting; `--grill` forces that pass on any item. The skill is skipped when the issue body already has `## Acceptance`.
 
 See [brainstorming a design](../usage/brainstorm.md) for the full flow.

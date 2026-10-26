@@ -1,6 +1,6 @@
 # Project check reference
 
-Skills no longer run a preflight step. Every `rota` verb that needs `.rota/` exits `3` when it cannot find one, so a skill that touches a project learns about a missing init from the verb itself. `rota init check` is the explicit check, for the few places that want one up front and for scripts. Before a [parallel round](../usage/parallel-rounds.md), `rota doctor` checks the machine instead of the project.
+Skills run no preflight step. Every `rota` verb that needs `.rota/` exits `3` when it cannot find one, so a skill learns about a missing init from the verb itself. `rota init check` is the explicit check, for the few places that want one up front and for scripts. Before a [parallel round](../usage/parallel-rounds.md), `rota doctor` checks the machine instead of the project.
 
 ## `rota init check`
 
@@ -70,18 +70,12 @@ The checks, in the order they run:
 | `test` | nothing to fail: the line shows the test lock width (`test.slots`) and the smoke shard count `bash test/gate.sh` would use here: `ROTA_SMOKE_SHARDS`, else one shard per two cores, at most four | never; the line appears only inside a project |
 | `verify` | `test.full` or `test.e2e` is set, so the merge gate has something to run | nothing to report: the line appears only as a `warn`, when both are empty under a local verify (fix: `rota config set test.full '[...]'`) |
 
-The three hook checks are opt-in. Until something `rota hook install` writes is present, they skip and do not fail a project that never installed the hooks. Once it is, a partial or broken install fails. `skills` follows the same rule: it skips until `rota skills install` has written a manifest.
+The three hook checks are opt-in. Until something `rota hook install` writes is present, they skip rather than fail a project that never installed the hooks; once it is, a partial or broken install fails. `skills` follows the same rule: it skips until `rota skills install` has written a manifest.
 
 See [unattended rounds](../usage/unattended-rounds.md) for the hooks and [parallel rounds](../usage/parallel-rounds.md) for what a round does after a clean `rota doctor`.
 
 ## Missing `.rota/` from any other verb
 
-Exit `3` (`resolution`), with the message `no .rota/ directory here or in any parent` and the hint `run: rota init`. The skills carry no special message for it: they surface the verb's error and hint, and the user runs `rota init`.
-
-| Skill or verb | When `.rota/` is missing |
-|-------|------------------------|
-| Any verb that reads project state | Exit `3` with the hint `run: rota init`. |
-| `rota update` | Not affected: it runs without a project. |
-| `rota init` | Is the bootstrapper itself. |
+Exit `3` (`resolution`), with the message `no .rota/ directory here or in any parent` and the hint `run: rota init`. Skills surface the verb's error and hint, and the user runs `rota init`. `rota update` runs without a project, and `rota init` bootstraps one.
 
 All exit codes: [`rota` verb reference](cli-helpers.md#conventions).

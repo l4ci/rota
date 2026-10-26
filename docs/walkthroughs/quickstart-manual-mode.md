@@ -1,6 +1,6 @@
 # Quickstart: one item in manual mode
 
-One small bug, from capture to merge, with you driving each step. No round, no orchestrator agent, no workers in other tabs. The longer walkthroughs ([greenfield](greenfield-from-brief.md), [brownfield](brownfield-existing-project.md)) cover whole projects; this one shows the loop on a single page.
+One small bug, from capture to merge, with you driving each step and no round, orchestrator agent or workers in other tabs. The longer walkthroughs ([greenfield](greenfield-from-brief.md), [brownfield](brownfield-existing-project.md)) cover whole projects; this one shows the loop on one item.
 
 The example is a bug in a small CLI: `--limit 0` prints every row instead of none. It uses the default file backend, so IDs read `[B03]`. On the [issue backend](../usage/issue-backend.md) the same item is an issue and its ID is `#N`.
 
