@@ -42,6 +42,7 @@ const (
 	UnregisteredWorktree = "unregistered-worktree"
 	BranchNoPR           = "branch-no-pr"
 	PRUnrecorded         = "pr-unrecorded"
+	PRSuperseded         = "pr-superseded"
 	PRStale              = "pr-stale"
 	LabelMissing         = "label-missing"
 	LabelOrphan          = "label-orphan"
@@ -547,6 +548,16 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 					r.PR = pr.URL
 					if r.Registered {
 						rep.add(Finding{Kind: PRUnrecorded, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("open PR #%d has branch %s as head, slot records none", pr.Number, r.Branch), Repair: "record pr"})
+					}
+				} else if n, ok := worker.PRRefNumber(r.PR); ok && n != pr.Number {
+					// An open PR for the branch does not prove the recorded one
+					// was superseded: a merged PR must keep its record.
+					st, err := e.Forge.PRState(ctx, n)
+					if err != nil {
+						v.prErr = true
+						rep.unavailable(SourceForge, fmt.Sprintf("PR #%d state: %v", n, err))
+					} else if st == "closed" {
+						rep.add(Finding{Kind: PRSuperseded, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("slot records closed unmerged PR #%d; open PR #%d has branch %s as head", n, pr.Number, r.Branch), Repair: "record open pr"})
 					}
 				}
 			} else if n, ok := e.adoptedPRNumber(ctx, root, rep, v, r); ok {

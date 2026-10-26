@@ -45,6 +45,118 @@ func rowOf(rep *Report, name string) (Row, bool) {
 	return Row{}, false
 }
 
+func supersededPRFixture(t *testing.T) (string, Env, *fakeRemote) {
+	t.Helper()
+	root := newRepo(t, map[string]string{"ben": "ben/12-thing"}, "ben")
+	const oldURL = "https://github.com/o/r/pull/7"
+	const newURL = "https://github.com/o/r/pull/8"
+	writeRegistry(t, root, slot(root, "ben", "ben/12-thing", func(o *jsonx.Object) {
+		o.Set("task", "12")
+		o.Set("pr", oldURL)
+	}))
+	fr := &fakeRemote{
+		prs:      []tracker.PR{{Number: 8, Branch: "ben/12-thing", URL: newURL}},
+		states:   map[int]string{7: "closed"},
+		labelled: []int{12},
+	}
+	return root, env([]host.Agent{}, fr.asForge()), fr
+}
+
+func TestReconcileSupersededPR(t *testing.T) {
+	root, e, _ := supersededPRFixture(t)
+	const oldURL = "https://github.com/o/r/pull/7"
+	const newURL = "https://github.com/o/r/pull/8"
+	out, err := e.Reconcile(bg, root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Drift) != 1 || out.Drift[0].Kind != "pr-superseded" || out.Drift[0].Slot != "ben" ||
+		!strings.Contains(out.Drift[0].Detail, "#7") || !strings.Contains(out.Drift[0].Detail, "#8") {
+		t.Fatalf("want superseded finding naming both PRs, got %+v", out.Drift)
+	}
+	if got := worker.LoadRegistryTolerant(root).Slot("ben").PR(); got != oldURL {
+		t.Fatalf("dry run recorded %q, want %q", got, oldURL)
+	}
+	out, err = e.Reconcile(bg, root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Repaired) != 1 || out.Repaired[0].Kind != "pr-superseded" || len(out.Drift) != 0 {
+		t.Fatalf("want superseded repair, got %+v", out)
+	}
+	if got := worker.LoadRegistryTolerant(root).Slot("ben").PR(); got != newURL {
+		t.Fatalf("apply recorded %q, want %q", got, newURL)
+	}
+	out, err = e.Reconcile(bg, root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !out.Clean() {
+		t.Fatalf("second reconcile still drifts: %+v", out)
+	}
+}
+
+func TestReconcileSupersededPRKeepsOtherRecords(t *testing.T) {
+	for _, state := range []string{"merged", "open", "same PR", "no replacement"} {
+		t.Run(state, func(t *testing.T) {
+			root, e, fr := supersededPRFixture(t)
+			const oldURL = "https://github.com/o/r/pull/7"
+			switch state {
+			case "same PR":
+				fr.prs[0].Number, fr.prs[0].URL = 7, oldURL
+				// The open list already proves this PR is open; no state read is needed.
+				fr.stateErrs = map[int]error{7: errors.New("unexpected state read")}
+			case "no replacement":
+				fr.prs = nil
+			default:
+				fr.states[7] = state
+			}
+			out, err := e.Reconcile(bg, root, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if slices.Contains(kinds(out.Drift)["ben"], "pr-superseded") || len(out.Repaired) != 0 {
+				t.Fatalf("unexpected supersession or repair: %+v", out)
+			}
+			if len(out.Report.Unavailable) != 0 {
+				t.Fatalf("unexpected unavailable source: %v", out.Report.Unavailable)
+			}
+			if got := worker.LoadRegistryTolerant(root).Slot("ben").PR(); got != oldURL {
+				t.Fatalf("record changed to %q", got)
+			}
+		})
+	}
+}
+
+func TestReconcileSupersededPRForgeUnreadable(t *testing.T) {
+	for _, read := range []string{"open PRs", "recorded PR state", "labels"} {
+		t.Run(read, func(t *testing.T) {
+			root, e, fr := supersededPRFixture(t)
+			switch read {
+			case "open PRs":
+				fr.prsErr = errors.New("forge down")
+			case "recorded PR state":
+				fr.stateErrs = map[int]error{7: errors.New("forge down")}
+			case "labels":
+				e.Forge = closedListFails{e.Forge}
+			}
+			out, err := e.Reconcile(bg, root, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Contains(out.Report.Unavailable, SourceForge) || len(out.Repaired) != 0 {
+				t.Fatalf("unreadable forge must be reported without repair: %+v", out)
+			}
+			if got := worker.LoadRegistryTolerant(root).Slot("ben").PR(); got != "https://github.com/o/r/pull/7" {
+				t.Fatalf("unreadable forge changed record to %q", got)
+			}
+			if read == "labels" && !slices.Contains(kinds(out.Drift)["ben"], "pr-superseded") {
+				t.Fatalf("partly unreadable forge must leave supersession in drift: %+v", out.Drift)
+			}
+		})
+	}
+}
+
 func TestStatusExternalDerivedState(t *testing.T) {
 	url := "https://github.com/o/r/pull/7"
 	root, e, _ := extFixture(t, "", tracker.PR{Number: 7, Branch: "codex/12-thing", URL: url})
