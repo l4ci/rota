@@ -15,7 +15,7 @@ Capture work as issues. rota hands them to Claude Code, Codex or OpenCode, revie
 [![skills.sh](https://img.shields.io/badge/skills.sh-l4ci%2Frota-black)](https://skills.sh/l4ci/rota)
 [![For Claude Code](https://img.shields.io/badge/for-Claude%20Code-8A2BE2)](https://claude.com/claude-code)
 [![For Codex](https://img.shields.io/badge/for-Codex-000000)](https://developers.openai.com/codex)
-[![For OpenCode](https://img.shields.io/badge/for-OpenCode-555555)](https://opencode.ai)
+[![OpenCode workers](https://img.shields.io/badge/workers-OpenCode-555555)](docs/usage/opencode-workers.md)
 [![Runs in herdr or tmux](https://img.shields.io/badge/runs%20in-herdr%20%C2%B7%20tmux-2ea44f)](#-runs-in-herdr-or-tmux)
 
 [Website](https://volkerotto.net/rota/) · [Quick start](#-quick-start) · [How it works](#-how-it-works) · [Rounds](#-parallel-rounds) · [herdr and tmux](#-runs-in-herdr-or-tmux) · [Accounts](#-several-accounts-balanced) · [Skills](#-skills) · [Docs](docs/)
