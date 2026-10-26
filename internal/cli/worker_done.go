@@ -204,9 +204,6 @@ func targetedProof(c *Ctx, root, dir, command, base, head string, ids []string) 
 	return command, nil
 }
 
-// maxSummaryLine caps one summary line: the three ride one event body.
-const maxSummaryLine = 200
-
 // readOutcome validates --outcome and --summary-file. No outcome and no file is
 // a plain done, as before. partial and failed must say why, so they require
 // the file; a file names three lines: what changed, what was found, what
@@ -228,21 +225,8 @@ func readOutcome(outcome, file string) (kind string, summary []string, err error
 	if err != nil {
 		return "", nil, Resolution("cannot read --summary-file: %v", err)
 	}
-	for _, l := range strings.Split(string(b), "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			summary = append(summary, l)
-		}
-	}
-	for _, l := range summary {
-		if strings.Contains(l, " | ") {
-			return "", nil, Usage("--summary-file lines must not contain \" | \" (it joins them in the event): %q", l)
-		}
-		if len([]rune(l)) > maxSummaryLine {
-			return "", nil, Usage("--summary-file lines are at most %d characters, got %d", maxSummaryLine, len([]rune(l)))
-		}
-	}
-	if len(summary) != 3 {
-		return "", nil, Usage("--summary-file must hold exactly three lines (what changed, what was found, what remains), got %d", len(summary))
+	if summary, err = worker.ParseSummary(string(b)); err != nil {
+		return "", nil, Usage("%v", err)
 	}
 	return outcome, summary, nil
 }

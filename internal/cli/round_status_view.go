@@ -182,14 +182,7 @@ func fillBurn(ctx context.Context, c *Ctx, root string, rows []round.Row) {
 		if r.Issue == "" {
 			continue
 		}
-		var last *ledger.Entry
-		for j := len(entries) - 1; j >= 0; j-- {
-			e := &entries[j]
-			if e.Kind == ledger.KindAssign && e.Slot == r.Name && worker.NormID(e.Issue) == worker.NormID(r.Issue) {
-				last = e
-				break
-			}
-		}
+		last := ledger.LatestAssign(entries, ledger.AssignQuery{Issue: r.Issue, Slot: r.Name})
 		if last == nil || last.Account == "" {
 			continue
 		}
