@@ -1,6 +1,8 @@
 package backlog
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 
 	ms "github.com/l4ci/rota/internal/milestone"
@@ -17,7 +19,24 @@ func DecisionRef(id string) string {
 
 // MilestoneStore is the file backend's milestone store: detail files under
 // .rota/milestones.
-func (f *File) MilestoneStore() ms.Store { return ms.FileStore{Root: f.Root, Today: f.Today} }
+func (f *File) MilestoneStore() ms.Store {
+	return ms.FileStore{Root: f.Root, Today: f.Today, ClosedItems: func(id string) ([]string, error) {
+		items, err := f.milestoneItems(id)
+		if errors.Is(err, ErrNotFound) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		var closed []string
+		for _, it := range items {
+			if it.Closed != "" {
+				closed = append(closed, fmt.Sprintf("- %s: %s (%s)", it.ID, it.Title, it.Closed))
+			}
+		}
+		return closed, nil
+	}}
+}
 
 // LogDecision appends `- <ref>: <gist>` to the "## Decisions" list of the
 // item's milestone (the first it names) and returns that milestone's ID. It is

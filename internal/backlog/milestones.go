@@ -282,6 +282,21 @@ func (b *Issues) MilestoneStatus(mid, status string) error {
 	if err != nil {
 		return err
 	}
+	summary := ""
+	if status == "shipped" && (is.State != "closed" || is.StateReason != tracker.CloseCompleted) {
+		children, err := mt.List(b.ctx(), tracker.ListFilter{State: "closed", Milestone: is.Milestone})
+		if err != nil {
+			return err
+		}
+		sort.SliceStable(children, func(i, j int) bool { return tracker.CompareKeys(children[i].Key, children[j].Key) < 0 })
+		var closed []string
+		for _, child := range children {
+			if is.Milestone != "" && child.Milestone == is.Milestone && child.State == "closed" && !slices.Contains(child.Labels, config.Label(b.Cfg, "milestoneTracker")) {
+				closed = append(closed, fmt.Sprintf("- %s: %s", child.Key.Ref(), oneLine(child.Title)))
+			}
+		}
+		summary = ms.ShippedSummary(is.Body, closed)
+	}
 	n := is.Key
 	label := msStatusPrefix + status
 	var stale []string
@@ -319,7 +334,7 @@ func (b *Issues) MilestoneStatus(mid, status string) error {
 		is.State = "open"
 	}
 	if wantClosed && is.State == "open" {
-		if err := mt.Close(b.ctx(), n, reason, ""); err != nil {
+		if err := mt.Close(b.ctx(), n, reason, summary); err != nil {
 			return err
 		}
 	}

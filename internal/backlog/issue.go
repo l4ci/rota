@@ -74,8 +74,10 @@ type Issues struct {
 	// Tracker. The row format belongs to the proof package, which imports
 	// backlog, so Open injects it.
 	CountProof func(text string) int
-	Warn       func(string) // notices (duplicate tracking issues); nil drops them
-	Repo       string       // umbrella sub-repo name, rendered as Repos:; "" otherwise. IDs stay plain numbers: the umbrella backend qualifies them ("repo:12") and resolves qualified refs, as in Python.
+	// LookupProof reads the latest result for a mark; injected to avoid a proof/backlog cycle.
+	LookupProof func(text, sha, check string) (string, bool)
+	Warn        func(string) // notices (duplicate tracking issues); nil drops them
+	Repo        string       // umbrella sub-repo name, rendered as Repos:; "" otherwise. IDs stay plain numbers: the umbrella backend qualifies them ("repo:12") and resolves qualified refs, as in Python.
 	// OnMissingMilestone is the umbrella hook (on_missing_milestone): called
 	// with a rota milestone ID the tracker has no native milestone for, it
 	// creates it and returns its title; ok false leaves the ID unknown.

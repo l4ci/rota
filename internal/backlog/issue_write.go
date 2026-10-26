@@ -322,6 +322,19 @@ func (b *Issues) Complete(ref string, in CompleteInput) (bool, error) {
 		_, err := tr.AddComment(b.ctx(), n, "Blocked"+suffix+"\n\n"+marker.Line("blocked"))
 		return err == nil, err
 	}
+	acceptanceRecord := ""
+	if in.Reason == "done" && HasAcceptanceIDs(is.Body) {
+		unmet, err := b.itemUnmetAcceptance(is)
+		if err != nil {
+			return false, err
+		}
+		if len(unmet) > 0 {
+			if strings.TrimSpace(in.UnmetReason) == "" {
+				return false, AcceptanceRefusal(itemID, unmet)
+			}
+			acceptanceRecord = "\n\n" + AcceptanceRecord(unmet, in.UnmetReason)
+		}
+	}
 	if in.Reason == "done" && !in.NoProof {
 		if err := requireProof(itemID, func() (int, error) { return b.proofCount(itemID) }); err != nil {
 			return false, err
@@ -344,7 +357,7 @@ func (b *Issues) Complete(ref string, in CompleteInput) (bool, error) {
 		}
 	}
 	if in.Reason == "done" {
-		return true, tr.Close(b.ctx(), n, tracker.CloseCompleted, "Done in `"+in.Commit+"`"+suffix+"\n\n"+marker.Line("done"))
+		return true, tr.Close(b.ctx(), n, tracker.CloseCompleted, "Done in `"+in.Commit+"`"+suffix+acceptanceRecord+"\n\n"+marker.Line("done"))
 	}
 	return true, tr.Close(b.ctx(), n, tracker.CloseNotPlanned, "Closed: "+in.Reason+suffix+"\n\n"+marker.Line("closed"))
 }
@@ -443,6 +456,11 @@ func (b *Issues) noteComments(n tracker.IssueKey, kind string) ([]notePart, erro
 	if err != nil {
 		return nil, err
 	}
+	return noteParts(comments, kind)
+}
+
+func noteParts(comments []tracker.Comment, kind string) ([]notePart, error) {
+	var err error
 	var found []notePart
 	for _, c := range comments {
 		nt, ok := marker.ParseNote(c.Body)
