@@ -226,6 +226,12 @@ LANES = [("capture", "Capture"), ("plan", "Plan"), ("execute", "Execute"), ("shi
          ("persist", "Persist"), ("rounds", "Rounds"), ("maintenance", "Maintenance")]
 
 
+def with_source_url(ex):
+    """Add source_url to a skill example or a chain step example that names a source."""
+    if ex and ex.get("source"):
+        ex["source_url"] = resolve(ex["source"], "README.md")
+
+
 def skill_data():
     """Skill cards and chains for the site, from docs/skills/ plus each SKILL.md description."""
     lane_ix = {k: i for i, (k, _) in enumerate(LANES)}
@@ -240,15 +246,15 @@ def skill_data():
         fm["when"] = sk.get("description", "")
         fm["lane_name"] = lane_name[fm["lane"]]
         fm["url"] = permalink(rel)
-        ex = fm.get("example") or {}
-        if ex.get("source"):
-            ex["source_url"] = resolve(ex["source"], "README.md")
+        with_source_url(fm.get("example"))
         skills.append(fm)
     skills.sort(key=lambda d: (lane_ix[d["lane"]], d["order"]))
     idx, _ = fmlite.load_front_matter(os.path.join(DOCS, "skills", "README.md"))
     chains = idx.get("chains", [])
     for c in chains:
         c["walkthrough_url"] = resolve(c["walkthrough"], "README.md") if c.get("walkthrough") else None
+        for st in c.get("steps", []):
+            with_source_url(st.get("example"))
     return skills, chains
 
 
