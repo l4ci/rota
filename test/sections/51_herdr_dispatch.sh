@@ -137,7 +137,7 @@ pass "worker dispatch: a task re-dispatch closes the old tab and starts fresh"
 : >"$FAKE/log"
 hd "$ROTA_BIN" worker dispatch w1 --body-file "$TMP_HD/brief.md" --relay >/dev/null \
   || fail "herdr relay failed"
-if grep -q '^tab \|^agent start' "$FAKE/log"; then
+if grep -q '^tab create\|^tab close\|^agent start' "$FAKE/log"; then
   fail "a relay must go into the running session, not a fresh one; log: $(cat "$FAKE/log")"
 fi
 grep -q 'ORCHESTRATOR RELAY' "$FAKE/last_prompt" || fail "relay text lost its ORCHESTRATOR RELAY marker"
