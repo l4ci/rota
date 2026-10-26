@@ -3,7 +3,6 @@ package extknowledge
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 )
 
@@ -31,7 +30,7 @@ func (c Clone) beginEdit(ctx context.Context, name string) (*edit, error) {
 		return nil, err
 	}
 	if raw == nil {
-		return nil, fmt.Errorf("%w: topic file %s/%s.md does not exist", ErrNotFound, TopicsDir, t.Slug)
+		return nil, fmt.Errorf("%w: topic file %s does not exist", ErrNotFound, t.File)
 	}
 	return &edit{c: c, pol: pol, topic: t, lines: strings.Split(string(raw), "\n")}, nil
 }
@@ -39,9 +38,13 @@ func (c Clone) beginEdit(ctx context.Context, name string) (*edit, error) {
 // land writes the edited file and lands it by the policy.
 func (e *edit) land(ctx context.Context, message string) (WriteResult, error) {
 	p := &plan{message: message, slug: e.topic.Slug}
-	p.set(filepath.ToSlash(filepath.Join(TopicsDir, e.topic.Slug+".md")), strings.Join(e.lines, "\n"))
+	p.set(e.topic.File, strings.Join(e.lines, "\n"))
 	return e.c.land(ctx, e.pol, p)
 }
+
+// bullets lists the bullets of the open file; a split topic's sub-index lines
+// are not bullets.
+func (e *edit) bullets() []bullet { return e.topic.bullets(strings.Join(e.lines, "\n")) }
 
 // Remove deletes the one bullet whose bold title equals in.Title
 // (case-insensitive), with its indented continuation lines, then lands it.
@@ -52,7 +55,7 @@ func (c Clone) Remove(ctx context.Context, in RmIn) (WriteResult, error) {
 	}
 	want := strings.ToLower(strings.TrimSpace(in.Title))
 	hit := -1
-	for _, b := range parseBullets(strings.Join(e.lines, "\n")) {
+	for _, b := range e.bullets() {
 		if b.Title != "" && strings.ToLower(b.Title) == want {
 			if hit >= 0 {
 				return WriteResult{}, fmt.Errorf("%w: several bullets in %q are titled %q", ErrMultiMatch, in.Topic, in.Title)
@@ -89,7 +92,7 @@ func (c Clone) Replace(ctx context.Context, in ReplaceIn) (WriteResult, error) {
 	}
 	hit := -1
 	var stamp string
-	for _, b := range parseBullets(strings.Join(e.lines, "\n")) {
+	for _, b := range e.bullets() {
 		if strings.Contains(strings.TrimSuffix(e.lines[b.Line], b.Stamp), in.Old) {
 			if hit >= 0 {
 				return WriteResult{}, fmt.Errorf("%w: %q is in several bullets of %q; use a longer fragment", ErrMultiMatch, in.Old, in.Topic)

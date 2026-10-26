@@ -105,7 +105,7 @@ import json,sys
 cs={c["name"]:c for c in json.load(sys.stdin)["data"]["checks"]}
 c=cs["external knowledge size"]
 assert c["status"]=="warn", c
-assert "Big (26 bullets, limit 25)" in c["detail"], c
+assert "Big (26 bullets > 25)" in c["detail"], c
 assert "/rota-learn --external-review" in c["hint"], c' <<<"$OUT" || fail "doctor lacks the external knowledge size warning: $OUT"
 pass "doctor warns on a topic over knowledge.externalMaxBullets"
 

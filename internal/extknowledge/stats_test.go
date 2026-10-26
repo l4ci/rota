@@ -37,8 +37,9 @@ func TestLimitsOver(t *testing.T) {
 		l    Limits
 		want string
 	}{
-		{"bullets", Limits{Bullets: 25, Bytes: 8192, Topics: 60}, "Big (26 bullets, limit 25); Fat (9000 bytes, limit 8192)"},
+		{"bullets", Limits{Bullets: 25, Bytes: 8192, Topics: 60}, "Big (26 bullets > 25); Fat (9000 bytes > 8192)"},
 		{"topics", Limits{Topics: 2}, "index has 3 topics (limit 2)"},
+		{"both", Limits{Bullets: 25, Bytes: 50}, "Big (26 bullets > 25, 100 bytes > 50); Fat (9000 bytes > 50); Ok (100 bytes > 50)"},
 		{"zero disables", Limits{}, ""},
 		{"under", Limits{Bullets: 30, Bytes: 10000, Topics: 5}, ""},
 	} {

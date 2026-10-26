@@ -12,10 +12,14 @@ import (
 	"github.com/l4ci/rota/internal/toolver"
 )
 
-// indexRe is one index entry: "- [Name](topics/slug.md) — hook".
-var indexRe = regexp.MustCompile(`^- \[([^\]]+)\]\(topics/([^)/]+)\.md\)(?:\s+—\s+(.*))?\s*$`)
+// indexRe is one index entry: "- [Name](topics/slug.md) — hook", or for a
+// split topic "- [Name](topics/slug/README.md) — hook".
+var indexRe = regexp.MustCompile(`^- \[([^\]]+)\]\(topics/([^)/]+)(\.md|/README\.md)\)(?:\s+—\s+(.*))?\s*$`)
 
-// Topics lists the index entries, with each topic file's bullet count.
+// Topics lists the index entries, with each topic file's bullet count. A
+// split topic is followed by its subtopics, named "Topic: Subtopic". A flat
+// file an older rota left beside a split topic is its Stray, never a second
+// topic.
 func (c Clone) Topics() ([]Topic, error) {
 	raw, err := c.readRegular(filepath.Join(c.Dir, c.indexName()))
 	if err != nil {
@@ -24,23 +28,74 @@ func (c Clone) Topics() ([]Topic, error) {
 		}
 		return nil, err
 	}
-	var out []Topic
+	var roots []Topic
 	for _, line := range strings.Split(string(raw), "\n") {
 		m := indexRe.FindStringSubmatch(strings.TrimRight(line, " \t\r"))
 		if m == nil {
 			continue
 		}
-		t := Topic{Name: strings.TrimSpace(m[1]), Slug: m[2], Hook: strings.TrimSpace(m[3])}
-		if body, err := c.readRegular(c.topicPath(t.Slug)); err == nil {
-			t.Bullets = len(bulletLines(string(body)))
+		t := Topic{Name: strings.TrimSpace(m[1]), Slug: m[2], Hook: strings.TrimSpace(m[4]), File: TopicsDir + "/" + m[2] + m[3], Split: m[3] != ".md"}
+		merged := false
+		for i := range roots {
+			if roots[i].Slug != t.Slug || roots[i].Split == t.Split {
+				continue
+			}
+			if t.Split {
+				t.Stray, roots[i] = roots[i].File, t
+			} else {
+				roots[i].Stray = t.File
+			}
+			merged = true
+			break
+		}
+		if !merged {
+			roots = append(roots, t)
+		}
+	}
+	var out []Topic
+	for _, t := range roots {
+		body, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(t.File)))
+		if err == nil {
+			if t.Split {
+				t.Bullets = len(t.bullets(string(body)))
+				t.Subtopics = subtopics(t, string(body))
+				for i := range t.Subtopics {
+					st := &t.Subtopics[i]
+					if sb, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(st.File))); err == nil {
+						st.Bullets = len(bulletLines(string(sb)))
+					}
+				}
+			} else {
+				t.Bullets = len(bulletLines(string(body)))
+			}
+		}
+		if t.Split && t.Stray == "" {
+			// An older rota's flat file beside the folder, with or without a root line.
+			flat := TopicsDir + "/" + t.Slug + ".md"
+			if fi, err := os.Lstat(filepath.Join(c.Dir, filepath.FromSlash(flat))); err == nil && fi.Mode().IsRegular() {
+				t.Stray = flat
+			}
 		}
 		out = append(out, t)
+		out = append(out, t.Subtopics...)
 	}
 	return out, nil
 }
 
-func (c Clone) topicPath(slug string) string {
-	return filepath.Join(c.Dir, TopicsDir, slug+".md")
+// subtopics reads the sub-index lines of a split topic's README.
+func subtopics(parent Topic, readme string) []Topic {
+	var out []Topic
+	dir := strings.TrimSuffix(parent.File, "/README.md")
+	for _, l := range strings.Split(readme, "\n") {
+		m := subIndexRe.FindStringSubmatch(strings.TrimRight(l, " \t\r"))
+		if m == nil || strings.EqualFold(m[2], "README") {
+			continue
+		}
+		sub := strings.TrimPrefix(strings.TrimSpace(m[1]), parent.Name+": ")
+		name := parent.Name + ": " + sub
+		out = append(out, Topic{Name: name, Slug: Slugify(name), Hook: strings.TrimSpace(m[3]), File: dir + "/" + m[2] + ".md", Parent: parent.Name})
+	}
+	return out
 }
 
 // bulletLines are the "- " lines of a topic file.
@@ -83,39 +138,71 @@ type Recheck struct{ Topic, Title, Tool, Seen, Project string }
 // recheck marker before its stamp and a row in recheck; bullets are never
 // hidden and a bullet with nothing outgrown prints as stored.
 func (c Clone) Query(want []string, project map[string]string) (text string, missing []string, recheck []Recheck, err error) {
-	topics, err := c.Topics()
+	res, err := c.QueryWith(want, QueryOpts{Project: project})
 	if err != nil {
 		return "", nil, nil, err
 	}
+	return res.Text, res.Missing, res.Recheck, nil
+}
+
+// QueryWith is Query with options. A split topic prints its README (sub-index
+// and any bullets not yet given a subtopic); All adds a section per subtopic.
+// A subtopic named on its own prints only its file. A stray flat file beside a
+// split topic prints under "## Name (stray: file)" and is listed in Strays.
+func (c Clone) QueryWith(want []string, opts QueryOpts) (QueryResult, error) {
+	topics, err := c.Topics()
+	if err != nil {
+		return QueryResult{}, err
+	}
+	var res QueryResult
 	var parts []string
 	printed := map[string]bool{}
+	section := func(heading, rel, name string) error {
+		if printed[rel] {
+			return nil
+		}
+		printed[rel] = true
+		body, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(rel)))
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil // indexed but not written yet: nothing to print
+			}
+			return err
+		}
+		file, rows := markRecheck(name, string(body), opts.Project)
+		res.Recheck = append(res.Recheck, rows...)
+		parts = append(parts, "## "+heading+"\n"+sectionBody(file))
+		return nil
+	}
 	for _, w := range want {
 		hit := resolve(w, topics)
 		if len(hit) == 0 {
-			missing = append(missing, w)
+			res.Missing = append(res.Missing, w)
 			continue
 		}
 		for _, t := range hit {
-			if printed[t.Slug] {
-				continue
+			if err := section(t.Name, t.File, t.Name); err != nil {
+				return QueryResult{}, err
 			}
-			printed[t.Slug] = true
-			body, err := c.readRegular(c.topicPath(t.Slug))
-			if err != nil {
-				if errors.Is(err, os.ErrNotExist) {
-					continue // indexed but not written yet: nothing to print
+			if t.Stray != "" && !printed[t.Stray] {
+				if err := section(t.Name+" (stray: "+t.Stray+")", t.Stray, t.Name); err != nil {
+					return QueryResult{}, err
 				}
-				return "", nil, nil, err
+				res.Strays = append(res.Strays, StrayRef{Topic: t.Name, File: t.Stray})
 			}
-			file, rows := markRecheck(t.Name, string(body), project)
-			recheck = append(recheck, rows...)
-			parts = append(parts, "## "+t.Name+"\n"+sectionBody(file))
+			if opts.All {
+				for _, st := range t.Subtopics {
+					if err := section(st.Name, st.File, st.Name); err != nil {
+						return QueryResult{}, err
+					}
+				}
+			}
 		}
 	}
 	if len(parts) > 0 {
-		text = strings.Join(parts, "\n")
+		res.Text = strings.Join(parts, "\n")
 	}
-	return text, missing, recheck, nil
+	return res, nil
 }
 
 // markRecheck inserts the recheck marker before the stamp of every bullet of
@@ -226,4 +313,21 @@ func (c Clone) insideClone(dir string) error {
 		return fmt.Errorf("%s resolves outside the knowledge clone", dir)
 	}
 	return nil
+}
+
+// QueryOpts tunes Query.
+type QueryOpts struct {
+	All     bool              // a split topic also prints every subtopic
+	Project map[string]string // tool versions the project runs
+}
+
+// StrayRef is a flat file left beside a split topic.
+type StrayRef struct{ Topic, File string }
+
+// QueryResult is what QueryWith found.
+type QueryResult struct {
+	Text    string
+	Missing []string
+	Recheck []Recheck
+	Strays  []StrayRef
 }

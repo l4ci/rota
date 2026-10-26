@@ -79,7 +79,7 @@ func (c Clone) topicFile(name string) (Topic, []byte, error) {
 	if !ok {
 		return Topic{}, nil, fmt.Errorf("%w: topic %q is not in %s", ErrNotFound, name, c.indexName())
 	}
-	raw, err := c.readRegular(c.topicPath(t.Slug))
+	raw, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(t.File)))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return t, nil, nil
@@ -138,8 +138,39 @@ func (c Clone) Add(ctx context.Context, in AddIn) (WriteResult, error) {
 				return WriteResult{Policy: pol}, nil
 			}
 		}
-		p.set(filepath.ToSlash(filepath.Join(TopicsDir, t.Slug+".md")), insertBullet(body, bullet))
+		if t.Split {
+			p.set(t.File, insertBulletBelowSubIndex(body, bullet))
+		} else {
+			p.set(t.File, insertBullet(body, bullet))
+		}
 		p.slug = t.Slug
+	} else if parent, sub, ok, err := c.newSubtopic(in.Topic); err != nil {
+		return WriteResult{}, err
+	} else if ok {
+		hook := in.Hook
+		if hook == "" {
+			hook = in.Title
+		}
+		subSlug := Slugify(sub)
+		if subSlug == "" || subSlug == "readme" {
+			return WriteResult{}, fmt.Errorf("%w: subtopic %q has no usable file name", ErrNotFound, sub)
+		}
+		dir := strings.TrimSuffix(parent.File, "/README.md")
+		rel := dir + "/" + subSlug + ".md"
+		if _, err := os.Lstat(filepath.Join(c.Dir, filepath.FromSlash(rel))); err == nil {
+			return WriteResult{}, fmt.Errorf("%w: %s exists but %s does not list it", ErrContent, rel, parent.File)
+		}
+		readme, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(parent.File)))
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return WriteResult{}, err
+		}
+		body := string(readme)
+		if body == "" {
+			body = "# " + parent.Name + "\n\n"
+		}
+		p.set(parent.File, insertSubIndex(body, fmt.Sprintf("- [%s](%s.md) — %s", sub, subSlug, hook)))
+		p.set(rel, "# "+parent.Name+": "+sub+"\n\n"+bullet+"\n")
+		p.slug = Slugify(parent.Name + " " + sub)
 	} else {
 		slug := Slugify(in.Topic)
 		if slug == "" {
@@ -166,6 +197,76 @@ func (c Clone) Add(ctx context.Context, in AddIn) (WriteResult, error) {
 	}
 	p.message = fmt.Sprintf("knowledge: add %q to %s", in.Title, in.Topic)
 	return c.land(ctx, pol, p)
+}
+
+// newSubtopic reads a topic name of the form "Topic: Subtopic" that names no
+// existing topic. ok is true when Topic is a split topic, so the subtopic can
+// be created under it. A name with a second ": " level, or a subtopic under a
+// flat topic, is refused (exit 3) with the way out: split the topic first. A
+// name whose first part is no topic at all is an ordinary new flat topic.
+func (c Clone) newSubtopic(name string) (parent Topic, sub string, ok bool, err error) {
+	parts := strings.Split(name, ": ")
+	if len(parts) < 2 {
+		return Topic{}, "", false, nil
+	}
+	topics, err := c.Topics()
+	if errors.Is(err, ErrNotFound) {
+		return Topic{}, "", false, nil // no index yet: the first topic creates it
+	}
+	if err != nil {
+		return Topic{}, "", false, err
+	}
+	head := strings.TrimSpace(parts[0])
+	for _, t := range topics {
+		if t.Parent != "" || !(strings.EqualFold(t.Name, head) || t.Slug == Slugify(head)) {
+			continue
+		}
+		switch {
+		case len(parts) > 2:
+			return Topic{}, "", false, fmt.Errorf("%w: %q is two levels deep; subtopics nest one level (%s: <Subtopic>)", ErrNotFound, name, t.Name)
+		case !t.Split:
+			return Topic{}, "", false, fmt.Errorf("%w: %q is a flat topic, so it has no subtopics; split it first: rota knowledge split --external --topic %q", ErrNotFound, t.Name, t.Name)
+		}
+		sub = strings.TrimSpace(strings.Join(parts[1:], ": "))
+		if sub == "" {
+			return Topic{}, "", false, fmt.Errorf("%w: %q has an empty subtopic name", ErrNotFound, name)
+		}
+		return t, sub, true, nil
+	}
+	return Topic{}, "", false, nil
+}
+
+// insertBulletBelowSubIndex puts bullet above the first bullet of a split
+// topic's README that is not a sub-index line, or at its end.
+func insertBulletBelowSubIndex(body, bullet string) string {
+	lines := strings.Split(body, "\n")
+	for i, l := range lines {
+		if strings.HasPrefix(l, "- ") && !isSubIndexLine(l) {
+			return strings.Join(append(lines[:i:i], append([]string{bullet}, lines[i:]...)...), "\n")
+		}
+	}
+	return strings.TrimRight(body, "\n") + "\n\n" + bullet + "\n"
+}
+
+// insertSubIndex adds a sub-index line after the last one of a split topic's
+// README, or below its title when it has none.
+func insertSubIndex(body, line string) string {
+	lines := strings.Split(body, "\n")
+	last := -1
+	for i, l := range lines {
+		if isSubIndexLine(l) {
+			last = i
+		}
+	}
+	if last >= 0 {
+		return strings.Join(append(lines[:last+1:last+1], append([]string{line}, lines[last+1:]...)...), "\n")
+	}
+	for i, l := range lines {
+		if strings.HasPrefix(l, "- ") {
+			return strings.Join(append(lines[:i:i], append([]string{line, ""}, lines[i:]...)...), "\n")
+		}
+	}
+	return strings.TrimRight(body, "\n") + "\n\n" + line + "\n"
 }
 
 // insertBullet puts bullet above the first bullet of body, or at its end.
@@ -200,7 +301,7 @@ func (c Clone) Amend(ctx context.Context, in AmendIn) (WriteResult, error) {
 	}
 	hit := -1
 	for i, l := range e.lines {
-		if strings.HasPrefix(l, "- ") && strings.Contains(l, in.Fragment) {
+		if strings.HasPrefix(l, "- ") && strings.Contains(l, in.Fragment) && !(e.topic.Split && isSubIndexLine(l)) {
 			if hit >= 0 {
 				return WriteResult{}, fmt.Errorf("%w: fragment %q under %q", ErrMultiMatch, in.Fragment, in.Topic)
 			}

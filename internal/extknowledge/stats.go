@@ -3,6 +3,7 @@ package extknowledge
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 )
 
 // TopicStat is the size of one topic file.
@@ -11,6 +12,8 @@ type TopicStat struct {
 	File    string // repo-relative, slash-separated
 	Bullets int
 	Bytes   int
+	Parent  string // the split topic a subtopic belongs to
+	Stray   bool   // a flat file an older rota left beside a split topic
 }
 
 // Stats measures every indexed topic whose file exists, in index order. It
@@ -22,7 +25,7 @@ func (c Clone) Stats() ([]TopicStat, error) {
 	}
 	out := make([]TopicStat, 0, len(files))
 	for _, f := range files {
-		out = append(out, TopicStat{Name: f.Topic.Name, File: filepath.ToSlash(f.Rel), Bullets: len(parseBullets(f.Content)), Bytes: len(f.Content)})
+		out = append(out, TopicStat{Name: f.Topic.Name, File: filepath.ToSlash(f.Rel), Bullets: len(f.bullets()), Bytes: len(f.Content), Parent: f.Topic.Parent, Stray: f.Stray})
 	}
 	return out, nil
 }
@@ -30,20 +33,30 @@ func (c Clone) Stats() ([]TopicStat, error) {
 // Limits are the size thresholds of the base; 0 disables one.
 type Limits struct{ Bullets, Bytes, Topics int }
 
-// Over names every topic past a bullet or byte limit and the index when it
-// lists more topics than the limit, in index order.
+// Over names every topic past a bullet or byte limit, once per topic with each
+// breach in it, and the index when it lists more topics than the limit, in
+// index order. A subtopic and a stray file count as topics of their own but
+// not toward the index limit.
 func (l Limits) Over(stats []TopicStat) []string {
 	var out []string
+	indexed := 0
 	for _, s := range stats {
+		if s.Parent == "" && !s.Stray {
+			indexed++
+		}
+		var parts []string
 		if l.Bullets > 0 && s.Bullets > l.Bullets {
-			out = append(out, fmt.Sprintf("%s (%d bullets, limit %d)", s.Name, s.Bullets, l.Bullets))
+			parts = append(parts, fmt.Sprintf("%d bullets > %d", s.Bullets, l.Bullets))
 		}
 		if l.Bytes > 0 && s.Bytes > l.Bytes {
-			out = append(out, fmt.Sprintf("%s (%d bytes, limit %d)", s.Name, s.Bytes, l.Bytes))
+			parts = append(parts, fmt.Sprintf("%d bytes > %d", s.Bytes, l.Bytes))
+		}
+		if len(parts) > 0 {
+			out = append(out, fmt.Sprintf("%s (%s)", s.Name, strings.Join(parts, ", ")))
 		}
 	}
-	if l.Topics > 0 && len(stats) > l.Topics {
-		out = append(out, fmt.Sprintf("index has %d topics (limit %d)", len(stats), l.Topics))
+	if l.Topics > 0 && indexed > l.Topics {
+		out = append(out, fmt.Sprintf("index has %d topics (limit %d)", indexed, l.Topics))
 	}
 	return out
 }

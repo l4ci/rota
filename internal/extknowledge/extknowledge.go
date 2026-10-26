@@ -69,6 +69,16 @@ type Topic struct {
 	Slug    string
 	Hook    string
 	Bullets int
+	// File is the repo-relative, slash-separated path of the topic's file.
+	File string
+	// Split marks a topic that is a folder: File is topics/<slug>/README.md.
+	Split bool
+	// Parent names the split topic a subtopic belongs to; empty otherwise.
+	Parent string
+	// Subtopics lists a split topic's subtopics (also listed by Topics itself).
+	Subtopics []Topic
+	// Stray is a flat topics/<slug>.md an older rota left beside a split topic.
+	Stray string
 }
 
 // Policy says how writes land.
