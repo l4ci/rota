@@ -6,15 +6,21 @@ import (
 	"github.com/l4ci/rota/internal/verdict"
 )
 
-// VerdictBlockedError is a recorded FAIL that stops branch from shipping (B3).
-// Stale is set when the branch has moved past the reviewed commit.
+// VerdictBlockedError is a recorded FAIL, or a review at the gate's head with a
+// blocking finding, that stops branch from shipping (B3). Stale is set when the
+// branch has moved past the reviewed commit. Finding is the title of the
+// blocking finding when that is what blocks.
 type VerdictBlockedError struct {
-	Branch string
-	Record verdict.Record
-	Stale  bool
+	Branch  string
+	Record  verdict.Record
+	Stale   bool
+	Finding string
 }
 
 func (e *VerdictBlockedError) Error() string {
+	if e.Finding != "" {
+		return e.Record.Kind + " " + e.Record.Verdict + " recorded for " + e.Branch + " with a blocking finding (" + e.Finding + "); not shipped"
+	}
 	return e.Record.Kind + " " + e.Record.Verdict + " recorded for " + e.Branch + "; not shipped"
 }
 
@@ -42,20 +48,24 @@ func (v VerdictCheck) Block(branch string) error {
 }
 
 // BlockGate is Block plus the bounce rule, for the merge gate and train: a
-// review record at the branch tip with a blocking finding or a failed item
-// refuses the merge even when its verdict is CONCERNS. Ship keeps Block, which
-// follows the recorded FAIL alone.
-func (v VerdictCheck) BlockGate(branch string) error {
+// review record at head (the commit the gate merges, which for a PR is the
+// pushed head, not the local branch tip) with a blocking finding or a failed
+// item refuses the merge even when its verdict is CONCERNS. Ship keeps Block,
+// which follows the recorded FAIL alone.
+func (v VerdictCheck) BlockGate(branch, head string) error {
 	if err := v.Block(branch); err != nil {
 		return err
 	}
-	res, err := v.Git.Run("rev-parse", "--short", branch)
-	if err != nil || res.ExitCode != 0 {
-		return nil
-	}
-	r, ok := verdict.BlockingAtHead(v.Store.Branches[verdict.BranchKey(v.Repo, branch)], strings.TrimSpace(res.Stdout))
+	r, ok := verdict.BlockingAtHead(v.Store.Branches[verdict.BranchKey(v.Repo, branch)], strings.TrimSpace(head))
 	if !ok {
 		return nil
 	}
-	return &VerdictBlockedError{Branch: branch, Record: r}
+	e := &VerdictBlockedError{Branch: branch, Record: r}
+	for _, f := range r.Findings {
+		if f.IsBlocking() {
+			e.Finding = f.Title
+			break
+		}
+	}
+	return e
 }
