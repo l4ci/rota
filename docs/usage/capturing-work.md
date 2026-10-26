@@ -1,6 +1,6 @@
 # Capturing work
 
-`/rota-capture` records bugs, features, and tasks into the backlog with auto-classification and auto-assigned IDs. Where they land depends on `issues.source`: on the default `file`, in `.rota/BACKLOG.md`; on `github` or `gitlab`, as GitHub or GitLab issues. See [Issue backend](issue-backend.md). Paste a raw description, structured notes, or a mixed list; it sorts the rest out.
+`/rota-capture` records bugs, features, and tasks into the backlog with auto-classification and auto-assigned IDs. Where they land depends on `issues.source`: on the default `file`, in `.rota/BACKLOG.md`; on `github` or `gitlab`, as GitHub or GitLab issues. See [Issue backend](issue-backend.md). Paste a raw description, structured notes, or a mixed list.
 
 The examples below show the file backend. On the issue backend the same classification becomes labels (`type:bug`, `p1`, `size:Major`), and the ID is the issue number (`#42`).
 
@@ -24,7 +24,7 @@ On the file backend each item gets a zero-padded, auto-incrementing ID (`[B##]` 
 
 ## Mixed input: bugs, features, and tasks in one message
 
-You don't need to file items one at a time. Describe everything at once and `/rota-capture` splits it into distinct entries routed to the correct section.
+Describe everything at once and `/rota-capture` splits it into entries routed to the right section.
 
 Telling `/rota-capture` *"the sidebar flickers on hover, also we should add keyboard shortcuts, and update the linter config"* produces:
 
@@ -39,7 +39,7 @@ Telling `/rota-capture` *"the sidebar flickers on hover, also we should add keyb
 - **[T06] Update linter config for new rules.** ...
 ```
 
-Each item gets its own ID type, section, and classification, regardless of how they arrived in one message. Items captured in the same batch can reference each other via `Related:` links.
+Items captured in the same batch can reference each other via `Related:` links.
 
 Underneath, `rota item create` refuses an empty title or a placeholder (`x`, `tbd`, `todo`, `title`, `untitled`, any case) with exit 2. To file many items in one call, pass `--batch-file <json|->` with a JSON array of records; it cannot be combined with the other item flags. rota checks every title, kind and field first, then files the records in order and returns one id per record under `items`. A batch title needs at least three words. If a record fails part way, the error names it and lists the ids already filed.
 
@@ -59,7 +59,7 @@ Detail files land in type-specific subdirectories:
 | Feature | `.rota/features/` | `.rota/features/F08.md` |
 | Task | `.rota/tasks/` | `.rota/tasks/T09.md` |
 
-Most entries won't need a detail file; they're only created when the input would bloat the TODO entry beyond a few sentences.
+A detail file is created only when the input would push the TODO entry past a few sentences.
 
 ## Related items
 
@@ -75,7 +75,7 @@ Links are optional. [`/rota-work` (no argument)](picking-work.md) infers the rev
 
 ## Milestone-spec audit
 
-When you capture from a milestone spec (the text references an `M<NN>` tag or a `milestones/M<NN>.md` path), `/rota-capture` runs a ship-evidence audit before writing anything. Old specs drift behind code. Acceptance criteria written months ago often ship under different IDs, and capturing them again creates duplicate work.
+When you capture from a milestone spec (the text references an `M<NN>` tag or a `milestones/M<NN>.md` path), `/rota-capture` runs a ship-evidence audit before writing anything. Old specs drift behind code: acceptance criteria written months ago often ship under different IDs, and capturing them again creates duplicate work.
 
 The audit runs [`rota item shipped`](../reference/cli-helpers.md) against every parsed title and groups matches into three confidence tiers: `[STRONG]` (commit subject + title overlap), `[MEDIUM]` (subject hint only), `[PATH]` (file path hint). For each flagged title you get three options:
 
@@ -99,4 +99,4 @@ If the text names a harness ("do this one with codex") or a model, `/rota-captur
 
 ## What /rota-capture is not
 
-`/rota-capture` is a pure recording tool. It classifies and files. It does not act, validate the item, or deduplicate against existing entries. It prints the new IDs and stops; it never starts work. To implement an item, run [/rota-work](running-work.md) on its ID. To remove a captured item that turned out to be a duplicate or wrong-premise, use [`/rota-capture --remove`](removing-work.md).
+`/rota-capture` only records. It classifies and files; it does not act, validate the item, or deduplicate against existing entries. It prints the new IDs and stops, and never starts work. To implement an item, run [/rota-work](running-work.md) on its ID. To remove a captured item that turned out to be a duplicate or wrong-premise, use [`/rota-capture --remove`](removing-work.md).

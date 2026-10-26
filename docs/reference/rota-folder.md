@@ -1,17 +1,17 @@
 # The `.rota/` folder
 
-`rota init` creates this folder once per project. Everything inside is Markdown or JSON, and most of it is tracked by default. Only a handful of machine-specific or transient paths are gitignored. Use the skills or `rota` verbs to update tracked content; reach for hand-editing only when investigating or fixing something that drifted.
+`rota init` creates this folder once per project. Everything inside is Markdown or JSON, and most of it is tracked by default. Only machine-specific or transient paths are gitignored. Update tracked content with the skills or `rota` verbs; hand-edit only to investigate or fix drift.
 
 ## Overview
 
 | File | Purpose |
 |------|---------|
-| `BACKLOG.md` | File-backend backlog: bugs, features, tasks, and recent completions. Under `issues.source` set to `github` or `gitlab` the tracker holds the backlog instead and this file is unused ([issue backend](../usage/issue-backend.md)) |
+| `BACKLOG.md` | File-backend backlog: bugs, features, tasks, and recent completions. With `issues.source` set to `github` or `gitlab` the tracker holds the backlog and this file is unused ([issue backend](../usage/issue-backend.md)) |
 | `KNOWLEDGE.md` | Durable learnings grouped by topic: gotchas, conventions, constraints |
-| `DECISIONS.md` | Hard-boundary decisions with explicit forbids/permits. Active commitments future work must respect |
+| `DECISIONS.md` | Hard-boundary decisions with explicit forbids/permits: active commitments future work must respect |
 | `MILESTONES.md` | Milestone overview: one short section per milestone, with a vision intro paragraph and an active list |
-| `MAP.md` + `map/<subsystem>.md` | Project map: AI-facing narratives describing one coherent area each. Source-of-truth for the `## Project Map` block in `CLAUDE.md`. Hand-authored; `touched:` auto-bumped by cycle skills (`/rota-work`, `/rota-debug`). |
-| `knowledge-tier.json` | Sidecar for `KNOWLEDGE.md`: each bullet's tier (`provisional`, `confirmed`, `deprecated`) and hit count. Tracked. Written by `rota knowledge` and by `rota knowledge tier fold`, which applies the buffered hits; in umbrella mode each sub-repo keeps its own copy beside its scoped `KNOWLEDGE.md` |
+| `MAP.md` + `map/<subsystem>.md` | Project map: AI-facing narratives, one per coherent area. Source of truth for the `## Project Map` block in `CLAUDE.md`. Hand-authored; `touched:` auto-bumped by cycle skills (`/rota-work`, `/rota-debug`). |
+| `knowledge-tier.json` | Tracked sidecar for `KNOWLEDGE.md`: each bullet's tier (`provisional`, `confirmed`, `deprecated`) and hit count. Written by `rota knowledge` and by `rota knowledge tier fold`, which applies the buffered hits; in umbrella mode each sub-repo keeps its own copy beside its scoped `KNOWLEDGE.md` |
 | `issue-map.json` | Maps old file-backlog IDs to issue numbers. Tracked. Written by `rota migrate issues`, which resumes from it after an interrupted run; `rota round candidates` reads it |
 | `test-ledger.json` | Known-red tests the merge gate and `rota worker train` may pass over. Tracked, created by hand when the first entry is needed (a missing file means no exclusions); an expired entry fails the gate. Check it with `rota test ledger check` ([format](../usage/configuration.md)) |
 | `counters.json` | Auto-incrementing IDs for each item type |
@@ -41,7 +41,7 @@
 
 ## BACKLOG.md: active backlog
 
-On the file backend (`issues.source` is `file`, the default) `BACKLOG.md` is the source of truth for everything in flight. It holds open bugs, features, and tasks organised by type, plus a "recently completed" section at the bottom. [`/rota-capture`](../usage/capturing-work.md) appends new items, and [`/rota-work` (no argument)](../usage/picking-work.md) reads it to suggest what to work on next. With `issues.source` set to `github` or `gitlab` the open issues on GitHub or GitLab are the backlog and `BACKLOG.md` stays unused; see [issue backend](../usage/issue-backend.md).
+On the file backend (`issues.source` is `file`, the default) `BACKLOG.md` is the source of truth for everything in flight. It holds open bugs, features and tasks by type, plus a "recently completed" section at the bottom. [`/rota-capture`](../usage/capturing-work.md) appends new items, and [`/rota-work` (no argument)](../usage/picking-work.md) reads it to suggest what to work on next. With `issues.source` set to `github` or `gitlab`, the open issues there are the backlog and `BACKLOG.md` stays unused; see [issue backend](../usage/issue-backend.md).
 
 A typical entry looks like:
 
@@ -49,81 +49,67 @@ A typical entry looks like:
 - [ ] B03: login redirect loops after OAuth token refresh
 ```
 
-Edit this file by hand whenever you want: reorder items, bump priorities, or delete things no longer relevant. The skills re-read it on every invocation, so any manual change takes effect immediately.
+You can edit this file by hand: reorder items, bump priorities, delete stale ones. The skills re-read it on every invocation, so changes take effect immediately.
 
 ## KNOWLEDGE.md: durable learnings + glossary
 
-`KNOWLEDGE.md` stores durable project knowledge: gotchas, team conventions, architectural constraints, and anything else you don't want to rediscover later. Entries sit under free-form topic headings. [`/rota-learn`](../usage/learning.md) appends new learnings at the end of a session.
+`KNOWLEDGE.md` stores durable project knowledge: gotchas, team conventions, architectural constraints. Entries sit under free-form topic headings. [`/rota-learn`](../usage/learning.md) appends new learnings at the end of a session.
 
 One topic is special-cased: `## Glossary` holds domain-terminology entries as nested bullets (`- **<term>** — <definition>` with indented `**Aliases:**` / optional `**Not:**` / date stamp). The Glossary topic is pinned at `rota init` time; entries are written via `/rota-learn --term <name>` (`rota glossary write`) and read via `rota glossary read <term>`. The F03 tier lifecycle skips Glossary, since terms are canonical, not probationary.
 
-See [../usage/learning.md](../usage/learning.md) for how to capture and review knowledge.
-
-`rota init` inserts a managed block in `CLAUDE.md` (or `AGENTS.md` when present) that lists the current topics (`Glossary` surfaces here like any other topic). That block keeps knowledge visible to the model across context clears without re-reading the full file.
+`rota init` inserts a managed block in `CLAUDE.md` (or `AGENTS.md` when present) that lists the current topics (`Glossary` surfaces here like any other topic). That block keeps knowledge visible to the model across context clears without re-reading the file.
 
 ## DECISIONS.md: hard-boundary decisions
 
-`DECISIONS.md` records hard boundaries the project has committed to. It is the sibling of `KNOWLEDGE.md`, but where knowledge is passive (gotchas, conventions), decisions are active commitments with explicit `forbids:` and `permits:` clauses. [`/rota-decide`](../usage/decisions.md) writes new entries; [`/rota-work`](../usage/running-work.md), [`/rota-debug`](../usage/debugging.md), [`/rota-plan`](../usage/vision-and-plans.md), [`/rota-refactor`](../skills/rota-refactor.md), [`/rota-review`](../usage/review-and-ship.md), and [`/rota-vision`](../usage/vision-and-plans.md) consult them as constraints.
+`DECISIONS.md` records hard boundaries the project has committed to. Unlike the passive gotchas and conventions in `KNOWLEDGE.md`, decisions are active commitments with explicit `forbids:` and `permits:` clauses. [`/rota-decide`](../usage/decisions.md) writes new entries; [`/rota-work`](../usage/running-work.md), [`/rota-debug`](../usage/debugging.md), [`/rota-plan`](../usage/vision-and-plans.md), [`/rota-refactor`](../skills/rota-refactor.md), [`/rota-review`](../usage/review-and-ship.md) and [`/rota-vision`](../usage/vision-and-plans.md) consult them as constraints.
 
-A companion managed block in `CLAUDE.md` lists the current decision topics so the model can pull only the relevant entries on demand.
-
-See [../usage/decisions.md](../usage/decisions.md) for the full capture flow and the difference between decisions and learnings.
+A companion managed block in `CLAUDE.md` lists the current decision topics so the model can pull only the relevant entries on demand. See [../usage/decisions.md](../usage/decisions.md) for the capture flow and the difference between decisions and learnings.
 
 ## MILESTONES.md: milestone overview
 
-`MILESTONES.md` lists the milestones, each with a one-paragraph overview and status, opened by a short vision intro paragraph as preamble. `/rota-vision` writes the initial version, and you update it as the project evolves.
-
-See [../usage/vision-and-plans.md](../usage/vision-and-plans.md) for how milestones work with planning and implementation skills.
+`MILESTONES.md` lists the milestones, each with a one-paragraph overview and status, opened by a short vision intro paragraph as preamble. `/rota-vision` writes the initial version, and you update it as the project evolves. See [../usage/vision-and-plans.md](../usage/vision-and-plans.md) for how milestones work with planning and implementation skills.
 
 A companion managed block in `CLAUDE.md` lists active milestones so `/rota-work` (no argument) and [`/rota-pause`](../usage/pausing-and-resuming.md) can scope their suggestions to what is in progress.
 
 ## MAP.md: project map
 
-`MAP.md` is an AI-facing index of project subsystems. It holds a brief summary for each named area; full narratives live in `map/<subsystem>.md` and are loaded on demand via `rota map query <name>`. Write `.rota/map/<name>.md` files by hand as you discover subsystems, or let `/rota-refactor --map` draft them: one file per coherent area, with `subsystem:`/`summary:`/`touched:` frontmatter (and `last_mapped_commit:`, the commit the file describes, when `/rota-refactor --map` wrote it) and free-form body sections (Purpose, Entry points, Key files / dirs, Conventions, Notes / gotchas). Cycle skills (`/rota-work`, `/rota-debug`) bump `touched:` post-cycle when their changes overlap a subsystem's key files or entry points, and regenerate the always-on `## Project Map` block in `CLAUDE.md` via `rota map index`. `last_mapped_commit` lets `rota map stats` count how far HEAD has moved past a file; above `map.staleCommits` commits (default 50) it prints a `note:` and still exits 0. Re-run `/rota-refactor --map` to refresh. When subsystems drift or duplicate, edit or retire `.rota/map/<name>.md` entries directly; the index verb picks up the change on the next run.
+`MAP.md` is an AI-facing index of project subsystems. It holds a brief summary per area; full narratives live in `map/<subsystem>.md` and are loaded on demand via `rota map query <name>`. Write `.rota/map/<name>.md` files by hand as you discover subsystems, or let `/rota-refactor --map` draft them. Each file covers one coherent area, with `subsystem:`/`summary:`/`touched:` frontmatter (and `last_mapped_commit:`, the commit the file describes, when `/rota-refactor --map` wrote it) and free-form body sections (Purpose, Entry points, Key files / dirs, Conventions, Notes / gotchas). Cycle skills (`/rota-work`, `/rota-debug`) bump `touched:` post-cycle when their changes overlap a subsystem's key files or entry points, and regenerate the always-on `## Project Map` block in `CLAUDE.md` via `rota map index`. `last_mapped_commit` lets `rota map stats` count how far HEAD has moved past a file; above `map.staleCommits` commits (default 50) it prints a `note:` and still exits 0. Re-run `/rota-refactor --map` to refresh. When subsystems drift or duplicate, edit or retire `.rota/map/<name>.md` entries directly; `rota map index` picks up the change on the next run.
 
-A managed `## Project Map` block in `CLAUDE.md` surfaces the thin summary so the model can orient without loading detail files.
+A managed `## Project Map` block in `CLAUDE.md` surfaces the summary so the model can orient without loading detail files.
 
 ## counters.json: auto-incrementing IDs
 
-`counters.json` tracks the highest ID assigned for each item type so that IDs never collide across sessions.
+`counters.json` tracks the highest ID assigned for each item type so IDs never collide across sessions.
 
 ```json
 { "bugs": 3, "features": 7, "tasks": 12, "milestones": 2, "since_refactor": { "features": 1, "bugs": 0 } }
 ```
 
-You should not need to edit this by hand. If you ever manually delete items from `BACKLOG.md`, the counters are safe to leave as-is; IDs are never reused.
+You should not need to edit this by hand. Deleting items from `BACKLOG.md` leaves the counters correct; IDs are never reused.
 
 ## config.json: settings
 
-`config.json` stores project-level preferences: which model to use, whether branch isolation is on, how merges are handled, the ship/learn/refactor gate thresholds, and the autonomy level for orchestration.
-
-See [../usage/configuration.md](../usage/configuration.md) for the full list of options and how to change them with `rota config set`.
+`config.json` stores project-level preferences: model, isolation, merge handling, the ship/learn/refactor gates and the autonomy level. See [../usage/configuration.md](../usage/configuration.md) for the options and `rota config set`.
 
 ## status.json: active work streams
 
-`status.json` records which items are currently being worked on and which git branch or worktree each one lives in. It is written when work starts and cleared when work completes.
-
-See [../usage/picking-work.md](../usage/picking-work.md) for how `/rota-work` (no argument) uses this file to orient the model after a context clear.
+`status.json` records which items are being worked on and which git branch or worktree each one lives in. It is written when work starts and cleared when work completes. See [../usage/picking-work.md](../usage/picking-work.md) for how `/rota-work` (no argument) uses it to orient the model after a context clear.
 
 ## bugs/, features/, tasks/: overflow detail files
 
-When a bug report, feature spec, or task description is too long to fit inline in `BACKLOG.md`, the overflow content goes into a separate file in the matching subdirectory (e.g. `bugs/B03.md`). The `BACKLOG.md` entry links to it. This keeps `BACKLOG.md` scannable while preserving full detail.
-
-Create these files by hand, or let `/rota-capture` handle it when you supply a long description.
+When a bug report, feature spec, or task description is too long to fit inline in `BACKLOG.md`, the overflow goes into a file in the matching subdirectory (e.g. `bugs/B03.md`) and the `BACKLOG.md` entry links to it. Create these files by hand, or let `/rota-capture` do it for a long description.
 
 ## milestones/: per-milestone plans
 
-Each milestone gets its own detail file (`milestones/M01.md`, `milestones/M02.md`, …) containing the full plan: goal, acceptance criteria, rationale, risks, research findings, and working notes. `/rota-vision` creates an initial file for each milestone it defines.
+Each milestone gets its own detail file (`milestones/M01.md`, `milestones/M02.md`, …) containing the full plan: goal, acceptance criteria, rationale, risks, research findings and working notes. `/rota-vision` creates an initial file for each milestone it defines.
 
 ## plans/: implementation plans
 
-`plans/` holds the output of `/rota-plan`: one Markdown file per planning unit, named after the milestone and item it covers (`M01-S01.md` for a slice, `M01-B07.md` for a specific bug). Plans are consumed by `/rota-work` when it orchestrates implementation.
-
-See [../usage/vision-and-plans.md](../usage/vision-and-plans.md) for the full planning workflow.
+`plans/` holds the output of `/rota-plan`: one Markdown file per planning unit, named after the milestone and item it covers (`M01-S01.md` for a slice, `M01-B07.md` for a specific bug). `/rota-work` consumes them when it orchestrates implementation. See [../usage/vision-and-plans.md](../usage/vision-and-plans.md) for the planning workflow.
 
 ## spikes/: feasibility findings
 
-`spikes/` stores the written findings from [`/rota-spike`](../usage/spikes.md) runs: one Markdown file per spike summarising what was learned, what was tried, and what the recommendation is. The throwaway experimental code lives on its own `spike/<name>` git branch and is never merged.
+`spikes/` stores the written findings from [`/rota-spike`](../usage/spikes.md) runs: one Markdown file per spike covering what was tried, what was learned and the recommendation. The throwaway experimental code lives on its own `spike/<name>` git branch and is never merged.
 
 ## handoff/: pause notes
 
@@ -131,9 +117,7 @@ When you run `/rota-pause`, the current state of the session (active hypothesis,
 
 `/rota-pause --report` adds `handoff/<branch>.report.md`, a human-readable session summary that `/rota-work` never reads or deletes.
 
-Notes are scoped per branch and overwritten by subsequent `/rota-pause` runs on the same branch. `rota status rm <branch>` deletes the note when the stream ends.
-
-See [../usage/pausing-and-resuming.md](../usage/pausing-and-resuming.md) for the pause/resume flow.
+Notes are scoped per branch and overwritten by later `/rota-pause` runs on the same branch. `rota status rm <branch>` deletes the note when the stream ends. See [../usage/pausing-and-resuming.md](../usage/pausing-and-resuming.md) for the pause/resume flow.
 
 ## workers.json: round state
 
@@ -157,11 +141,11 @@ The orchestrator hooks `rota hook install` writes are not in `.rota/` either: by
 
 ## ARCHIVE.md: old completions
 
-Completed items are moved from `BACKLOG.md` to `ARCHIVE.md` automatically after they have been in the completed section for more than five days. This keeps `BACKLOG.md` short without losing history. You can read `ARCHIVE.md` at any time; no skill reads it during normal operation.
+Completed items are moved from `BACKLOG.md` to `ARCHIVE.md` automatically after they have been in the completed section for more than five days. This keeps `BACKLOG.md` short without losing history. No skill reads `ARCHIVE.md` during normal operation.
 
 ## What's tracked and what's gitignored
 
-The backlog is shared by default: state travels with the repo so collaborators see the same `BACKLOG.md`, learn from the same `KNOWLEDGE.md`, and respect the same `DECISIONS.md`. A few paths stay gitignored because they're machine-specific, per-developer, transient, or regenerated on demand:
+State travels with the repo, so collaborators share the same `BACKLOG.md`, `KNOWLEDGE.md` and `DECISIONS.md`. A few paths stay gitignored because they are machine-specific, per-developer, transient or regenerated on demand:
 
 | Path | Why ignored |
 |------|-------------|
@@ -196,8 +180,8 @@ Drop a JSON file at `.rota/config.local.json` to override any setting from `.rot
 }
 ```
 
-This overrides `autonomy.level` and `round.tiers.claude.standard` while inheriting every other key (including `orchestrator.model`) from the shared `config.json`. Typical uses: per-developer autonomy preferences, model selection for cost or latency, or experimenting with a setting before committing it to the team default.
+This overrides `autonomy.level` and `round.tiers.claude.standard` while inheriting every other key (including `orchestrator.model`) from the shared `config.json`. Typical uses: autonomy preferences, model choice for cost or latency, or trying a setting before committing it to the team default.
 
 ### Opting out: fully private backlog
 
-If you'd rather keep the whole `.rota/` folder private (solo development, or experimentation that isn't ready to share), add a blanket `.rota/` line to `.gitignore` before your first commit. The pattern is supported but is no longer the default.
+To keep the whole `.rota/` folder private (solo development, or experiments not ready to share), add a blanket `.rota/` line to `.gitignore` before your first commit. This is supported but no longer the default.

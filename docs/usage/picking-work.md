@@ -1,10 +1,8 @@
 # Picking work
 
-Two flows help you orient and pick what to do next. `/rota-work` (no argument) reconciles git state, surfaces any [`/rota-pause`](pausing-and-resuming.md) handoff note for active streams, presents the backlog (`.rota/BACKLOG.md`, or the tracker's issues on the [issue backend](issue-backend.md)), and suggests work. `/rota-work --preview <ID>` lets you peek at the orchestrator's plan before code lands.
+`/rota-work` (no argument) reconciles git state, surfaces any [`/rota-pause`](pausing-and-resuming.md) handoff note for active streams, presents the backlog (`.rota/BACKLOG.md`, or the tracker's issues on the [issue backend](issue-backend.md)), and suggests work. `/rota-work --preview <ID>` lets you peek at the orchestrator's plan before code lands.
 
 ## /rota-work (no argument)
-
-Reconciles the backlog against actual git state, then suggests what to pick up.
 
 Before presenting results it:
 

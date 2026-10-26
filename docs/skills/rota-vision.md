@@ -31,4 +31,4 @@ example:
 ---
 # /rota-vision
 
-Brainstorms a project's bigger vision and breaks it into milestones with explicit dependencies and ready/blocked status, writing `MILESTONES.md` and per-milestone detail files under `.rota/milestones/` (on the issue backend each milestone is also a tracker milestone with a tracking issue). Uses Socratic discovery, web research, and deliberate challenge before proposing milestones. See [vision and plans](../usage/vision-and-plans.md) for the full flow.
+Brainstorms a project's bigger vision and breaks it into milestones with explicit dependencies and ready/blocked status, writing `MILESTONES.md` and per-milestone detail files under `.rota/milestones/` (on the issue backend each milestone is also a tracker milestone with a tracking issue). It uses Socratic discovery, web research and deliberate challenge before proposing milestones. See [vision and plans](../usage/vision-and-plans.md) for the full flow.

@@ -1,6 +1,6 @@
 # Decisions
 
-`.rota/DECISIONS.md` records hard boundaries the project has committed to. It sits alongside `.rota/KNOWLEDGE.md`, but the two play different roles. Knowledge is passive: gotchas and conventions to remember if relevant. Decisions are commitments with forbids and permits that future work must respect.
+`.rota/DECISIONS.md` records hard boundaries the project has committed to. It sits alongside `.rota/KNOWLEDGE.md`. Knowledge is passive: gotchas and conventions to remember if relevant. Decisions are commitments with forbids and permits that future work must respect.
 
 ## Decisions vs learnings
 
