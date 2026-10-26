@@ -388,6 +388,8 @@ slot needs attention, a PR or an escalation changes, or after `--heartbeat` seco
 nothing to report, and the harness wakes the orchestrator when it exits. Keep exactly one running and
 re-arm it after every wake; a second one is refused (exit 4). The registry is read every `--poll`
 seconds and the forge every `--forge-poll`; `reason` in the result says which woke it.
+The exit digest says the watch is exiting and must be re-armed; the prompt hook reports
+whether a watch is currently armed.
 
 With `rota hook install` the orchestrator is held to this. The Stop hook refuses to let a lease-holding
 orchestrator go idle while workers are active and no watch is running, and the prompt hook adds a

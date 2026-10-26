@@ -233,7 +233,7 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 		text = append(text, fmt.Sprintf("change\t%s\t%s -> %s", ch.Key, dash(ch.From), dash(ch.To)))
 	}
 	d.Set("changes", changes)
-	digest := roundwatch.Digest(root, round, false)
+	digest := roundwatch.ExitDigest(root, round)
 	d.Set("digest", digest)
 	if tick != nil {
 		d.Set("autopilot", tickData(*tick))
@@ -261,7 +261,7 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 		d.Set("staleBinaryError", serr.Error())
 		text = append(text, "warning\tstale-binary check: "+serr.Error())
 	}
-	if len(text) == 0 {
+	if len(text) == 0 || res.Reason == roundwatch.ReasonHeartbeat {
 		text = append(text, res.Reason+"\t"+digest)
 	}
 	return Result{Data: d, Text: strings.Join(text, "\n")}
