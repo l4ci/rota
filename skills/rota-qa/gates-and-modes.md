@@ -10,6 +10,12 @@ Loaded by `SKILL.md` when a caller or config flag decides whether `/rota-qa` run
 
 - `ship.uat` — `false` (default). When `true`, `/rota-ship` calls `/rota-qa uat <ID>` after review and the other gates, before the merge/PR step. Never read by `rota worker gate` or the round merge path. Calling `/rota-qa uat` directly works either way; `qa.gate` does not apply to it.
 
+## Pillar filtering
+
+`qa.afterWork` and `ship.qa` call `/rota-qa run --gate`; only that run filters pillars, by the rule in `SKILL.md` Step 4. A manual `/rota-qa run` runs every pillar.
+
+Pillar keys are lowercase: `functional`, `security`, `performance`, `ui-a11y`. Globs are root-relative paths matched against the touched files; `*` stays within a segment and `**` spans directories. The caller passes the touched-file set it matched on; absent that, the run reads `rota review scope --json`. On main that set is empty, so every pillar with globs would be skipped and the run would record PASS: do not use `--gate` there.
+
 ## Modes
 
 `/rota-qa` shares the three-mode skeleton with `/rota-ship`'s Docs Mode (scaffold / after-work / audit); see `references/three-mode-skill-shape.md`. Divergences:
