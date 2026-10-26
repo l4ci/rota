@@ -1,39 +1,44 @@
 # rota cheat sheet
 
-What each `/rota-*` skill does, one line each. For details: [`reference/slash-commands.md`](reference/slash-commands.md).
+What each `/rota-*` skill does, one line each. For details: [`skills/README.md`](skills/README.md).
 
-## Capture & pick
-- **`/rota-capture`**: add bugs, features, tasks to the backlog (`.rota/BACKLOG.md` or GitHub/GitLab issues, per `issues.source`; see [issue backend](usage/issue-backend.md)). No code yet. Prints the new IDs and stops. Flag: `--remove`.
-- **`/rota-pause`**: stop cleanly; leave a handoff note for the next session.
+<!-- generated:skills:cheatsheet begin -->
+<!-- edit docs/skills/*.md and run python3 scripts/skills-docs.py -->
 
-## Plan & build
-- **`/rota-brainstorm`**: design exploration before planning. For big items.
-- **`/rota-plan`**: write the implementation plan with verifiable tasks.
-- **`/rota-spike`**: throwaway experiment on a dedicated branch. Only findings come back.
-- **`/rota-work`**: execute the plan in parallel with per-task commits. `--preview` for a read-only peek. No argument: reconcile the backlog and suggest the next item.
-- **`/rota-debug`**: systematic bug cycle. Reproduce, hypothesize, fix.
-- **`/rota-orchestrate`**: run a parallel round: choose the slate, route workers, merge. The `rota round` verbs do the mechanics.
-- **`/rota-answer`**: in a round, answer the pending decisions one by one.
+## Capture
+- **[`/rota-capture`](skills/rota-capture.md)**: Record bugs, features and tasks in the backlog without starting work. Flags: `--remove <ID>`, `--triage <N>`.
 
-## Setup
-- **`/rota-init`**: inspect the repo and suggest config values, confirmed one by one.
+## Plan
+- **[`/rota-brainstorm`](skills/rota-brainstorm.md)**: Negotiate the design of one Major item before planning it. Flags: `--grill`.
+- **[`/rota-spike`](skills/rota-spike.md)**: Try one risky idea on a throwaway branch and keep only the finding. Flags: `done <name>`.
+- **[`/rota-plan`](skills/rota-plan.md)**: Write a signed-off implementation plan with verifiable tasks.
+- **[`/rota-vision`](skills/rota-vision.md)**: Turn an idea into milestones with dependencies and ready/blocked status.
 
-## Review & ship
-- **`/rota-review`**: one review pass (spec match and code quality).
-- **`/rota-qa`**: product-level QA. Playwright, smoke, lighthouse, axe, ZAP.
-- **`/rota-ship`**: open a PR or direct merge. `--undo` rolls back.
+## Execute
+- **[`/rota-work`](skills/rota-work.md)**: Build the next item in small commits, one verified task at a time. Flags: `--preview <ID>`.
+- **[`/rota-debug`](skills/rota-debug.md)**: Find the root cause of one bug, fix it atomically and prove it.
+- **[`/rota-refactor`](skills/rota-refactor.md)**: Review the architecture and file refactor issues; --map drafts the map. Flags: `--fix`, `--designs`, `--interactive`, `--map`.
+
+## Ship
+- **[`/rota-review`](skills/rota-review.md)**: Review a branch against its spec and conventions before it leaves. Flags: `--since <sha>`, `--queue`.
+- **[`/rota-ship`](skills/rota-ship.md)**: Review, then open the PR or merge, linking items by ID. Flags: `--undo`, `--docs`.
+- **[`/rota-docs`](skills/rota-docs.md)**: Scaffold, update or reorganize the public docs. Flags: `restructure`.
+- **[`/rota-qa`](skills/rota-qa.md)**: Run product-level QA against the built artifact and score it. Flags: `first-run`, `run [<target>]`, `restructure`, `uat <ID>`.
 
 ## Persist
-- **`/rota-learn`**: capture reusable lessons in `KNOWLEDGE.md`.
-- **`/rota-decide`**: lock in a hard-boundary decision. Manual only.
+- **[`/rota-learn`](skills/rota-learn.md)**: Save the session's durable lessons to KNOWLEDGE.md. Flags: `--strict`, `--retro [<session-id|path>]`, `--term <name>`, `--promote | --deprecate | --amend <topic> "<title>"`.
+- **[`/rota-decide`](skills/rota-decide.md)**: Record a hard-boundary decision with explicit forbids and permits. Flags: `--from-learning <topic>`, `--from-spike <name>`, `--supersede <topic> "<title>"`, `--retire <topic> "<title>"`.
+- **[`/rota-pause`](skills/rota-pause.md)**: Stop cleanly and leave a handoff note for the next session. Flags: `--report`.
 
-## Vision & shape
-- **`/rota-vision`**: brainstorm milestones and the project roadmap.
-- **`/rota-refactor`**: architecture review; files findings as refactor issues (`--fix` to implement).
+## Rounds
+- **[`/rota-orchestrate`](skills/rota-orchestrate.md)**: Run a parallel round: pick the slate, watch workers, merge their PRs.
+- **[`/rota-answer`](skills/rota-answer.md)**: Answer every decision a round is waiting on, one question at a time.
 
 ## Maintenance
-- **`/rota-release`**: cut a release.
-- **`/rota-docs`**: scaffold, update or restructure the public docs. After-work runs anywhere, including in a round worker's PR; scaffold and restructure are the maintainer's.
+- **[`/rota-init`](skills/rota-init.md)**: Suggest config values from the repo and write the ones you confirm.
+- **[`/rota-bugreport`](skills/rota-bugreport.md)**: File rota's own mistakes upstream, after your explicit yes.
+- **[`/rota-release`](skills/rota-release.md)**: Cut a release: checklist, version bump, notes, tag, publish. Flags: `major | minor | patch | <semver>`, `--dry-run`.
+<!-- generated:skills:cheatsheet end -->
 
 ## Verbs, not skills
 - **`rota`** (bare, in a terminal): opens a palette. Enter on the preselected entry runs `rota setup` in a directory without `.rota/` and launches the orchestrator in an initialized project. Outside a terminal it prints usage.

@@ -536,7 +536,7 @@ Verdicts are `PASS`, `CONCERNS` or `FAIL` (`qa` also takes `INFRA-FAIL`). They l
 | `rota bugreport file <id> --confirm --confirm-note <answer> [--comment <number>]` | file the report on the rota repo, or comment on a duplicate (manual gate) |
 | `rota bugreport dismiss <id>` | drop a record without filing it |
 
-A verb that fails with exit 70 writes a record by itself. See [`/rota-bugreport`](slash-commands.md#rota-bugreport).
+A verb that fails with exit 70 writes a record by itself. See [`/rota-bugreport`](../skills/rota-bugreport.md).
 
 ## `rota gate`
 

@@ -134,7 +134,7 @@ this codebase,"* that belongs in a [decision](decisions.md). Knowledge is
 advisory ("remember this if relevant"). Decisions are hard boundaries that FAIL
 review when violated. Use `/rota-decide` for the latter. It captures
 rule + why + forbids + permits and is consulted as a constraint by `/rota-work`,
-[`/rota-debug`](debugging.md), [`/rota-plan`](vision-and-plans.md), [`/rota-refactor`](../reference/slash-commands.md#rota-refactor), [`/rota-review`](review-and-ship.md), and [`/rota-vision`](vision-and-plans.md).
+[`/rota-debug`](debugging.md), [`/rota-plan`](vision-and-plans.md), [`/rota-refactor`](../skills/rota-refactor.md), [`/rota-review`](review-and-ship.md), and [`/rota-vision`](vision-and-plans.md).
 
 ## See also
 

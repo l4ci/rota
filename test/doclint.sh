@@ -22,6 +22,18 @@ echo "doclint: skills and references pass the validator; the prose lint catches 
 OUT="$(cd "$REPO" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || fail "validate-skills fails on the repo: $OUT"
 pass "skills and references pass the doclint"
 
+# ── skill lists are generated from docs/skills ──────────────────────────────
+OUT="$(python3 "$REPO/scripts/skills-docs.py" --check 2>&1)" || fail "skill lists are stale or the skill pages are invalid: $OUT"
+pass "skill lists are generated from docs/skills"
+
+SG="$TMP/skillsgen"; mkdir -p "$SG"
+cp -R "$REPO/docs" "$REPO/skills" "$REPO/scripts" "$REPO/README.md" "$SG/"
+sed -i 's/^summary: Build the next item.*/summary: Build something else entirely./' "$SG/docs/skills/rota-work.md"
+RC=0; OUT="$(python3 "$SG/scripts/skills-docs.py" --check --root "$SG" 2>&1)" || RC=$?
+[ "$RC" = 1 ] && grep -qF "README.md" <<<"$OUT" \
+  || fail "skills-docs --check missed an edited summary (rc $RC): $OUT"
+pass "skills-docs --check fails when a skill page changes without regenerating"
+
 # ── the chain lint can fail (#1897) ─────────────────────────────────────────
 # A line that tells a model to run a manual-only skill must fail the validator, even
 # with "ask the user" or "never" nearby and in a nested reference file; a line that

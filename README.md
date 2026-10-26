@@ -152,22 +152,26 @@ Setup: [parallel rounds](docs/usage/parallel-rounds.md#-setup) and [unattended r
 
 In the order you'd usually reach for them:
 
+<!-- generated:skills:readme begin -->
+<!-- edit docs/skills/*.md and run python3 scripts/skills-docs.py -->
+
 | When | Skill | What it does |
 |---|---|---|
-| Something to do | `/rota-capture` | Turn a brain dump into backlog items or issues |
-| Not sure how | `/rota-brainstorm`, `/rota-spike` | Explore designs; try a risky idea on a throwaway branch |
-| Ready to build | `/rota-plan`, `/rota-work` | Plan a bigger item; build the next one |
-| Something broke | `/rota-debug` | Reproduce, find the cause, fix it |
-| Done | `/rota-review`, `/rota-ship` | Review the branch; open the PR or merge |
-| Docs drifted | `/rota-docs` | Scaffold, update or restructure the public docs |
-| Many issues at once | `/rota-orchestrate`, `/rota-answer` | Run a round with parallel workers; answer its pending decisions one by one |
-| Worth remembering | `/rota-learn`, `/rota-decide` | Save a lesson; lock in a rule |
-| Fresh project | `/rota-init` | Read the repo and suggest config values, confirmed one by one |
-| rota itself misbehaved | `/rota-bugreport` | File a redacted report on the rota repo, only on your explicit yes |
-| Out of context | `/rota-pause` | Write a handoff so a fresh session continues |
-| Bigger picture | `/rota-vision`, `/rota-refactor`, `/rota-qa`, `/rota-release` | Milestones, architecture review, product QA, releases |
+| Something to do | `/rota-capture` | Record bugs, features and tasks in the backlog without starting work |
+| Not sure how | `/rota-brainstorm`, `/rota-spike` | Negotiate the design of one Major item before planning it; Try one risky idea on a throwaway branch and keep only the finding |
+| Ready to build | `/rota-plan`, `/rota-work` | Write a signed-off implementation plan with verifiable tasks; Build the next item in small commits, one verified task at a time |
+| Something broke | `/rota-debug` | Find the root cause of one bug, fix it atomically and prove it |
+| Done | `/rota-review`, `/rota-ship` | Review a branch against its spec and conventions before it leaves; Review, then open the PR or merge, linking items by ID |
+| Docs drifted | `/rota-docs` | Scaffold, update or reorganize the public docs |
+| Many issues at once | `/rota-orchestrate`, `/rota-answer` | Run a parallel round: pick the slate, watch workers, merge their PRs; Answer every decision a round is waiting on, one question at a time |
+| Worth remembering | `/rota-learn`, `/rota-decide` | Save the session's durable lessons to KNOWLEDGE.md; Record a hard-boundary decision with explicit forbids and permits |
+| Fresh project | `/rota-init` | Suggest config values from the repo and write the ones you confirm |
+| rota itself misbehaved | `/rota-bugreport` | File rota's own mistakes upstream, after your explicit yes |
+| Out of context | `/rota-pause` | Stop cleanly and leave a handoff note for the next session |
+| Bigger picture | `/rota-vision`, `/rota-refactor`, `/rota-qa`, `/rota-release` | Turn an idea into milestones with dependencies and ready/blocked status; Review the architecture and file refactor issues; --map drafts the map; Run product-level QA against the built artifact and score it; Cut a release: checklist, version bump, notes, tag, publish |
+<!-- generated:skills:readme end -->
 
-Every skill: [slash commands](docs/reference/slash-commands.md). Settings: [configuration](docs/usage/configuration.md).
+Every skill: [skills](docs/skills/README.md). Settings: [configuration](docs/usage/configuration.md).
 
 ## 📚 Docs
 

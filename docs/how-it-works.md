@@ -82,18 +82,104 @@ Almost everything Claude reads or mutates lives under `.rota/` in your project; 
 
 ## The seven lanes
 
-**Capture.** `/rota-capture` is the brain-dump entry point. It splits, classifies, and creates the items with `rota item create`, on whichever source `issues.source` selects: `.rota/BACKLOG.md` with IDs `B01`, `F01`, `T01` (`file`, the default), or GitHub/GitLab issues with IDs `#N` (`github` or `gitlab`). See the [issue backend](usage/issue-backend.md). `/rota-capture` prints the new IDs and stops; `/rota-work` picks them up. Import (`--from-github` / `--from-gitlab`) was removed: under `issues.source` set to `github` or `gitlab` the issues already are the backlog. `/rota-capture --remove <ID>` is the local inverse: it strips a captured item and cleans up its dependencies behind a dry-run preview and confirmation gate.
+<!-- generated:skills:lanes begin -->
+<!-- edit docs/skills/*.md and run python3 scripts/skills-docs.py -->
 
-**Plan.** `/rota-vision` brainstorms milestones with Socratic discovery, web research, and a deliberate critique pass. `/rota-brainstorm` explores design for size-Major features or P0 bugs before planning. `/rota-plan` writes the implementation plan to its own file, keyed by milestone slice or item. `/rota-spike` runs throwaway feasibility experiments on a branch that never merges; only findings come back. `/rota-work --preview <ID>` previews the orchestrator's intended approach without writing anything, a cheap gate before code lands on high-stakes items.
+**Capture.** [`/rota-capture`](skills/rota-capture.md): Record bugs, features and tasks in the backlog without starting work
 
-**Execute.** `/rota-work` is the orchestrator. It reads the plan (or decomposes ad-hoc if none exists), dispatches worker subagents in parallel, commits one verifiable task at a time. `/rota-debug` runs a systematic reproduce → hypothesize → verify → fix cycle for bugs. `/rota-refactor` reviews the architecture and files findings as `refactor` issues; `--fix` implements the ones you pick. `/rota-pause` writes a handoff note when the context window is filling, so a fresh `/rota-work` (no argument) session picks up cleanly.
+**Plan.** [`/rota-brainstorm`](skills/rota-brainstorm.md): Negotiate the design of one Major item before planning it; [`/rota-spike`](skills/rota-spike.md): Try one risky idea on a throwaway branch and keep only the finding; [`/rota-plan`](skills/rota-plan.md): Write a signed-off implementation plan with verifiable tasks; [`/rota-vision`](skills/rota-vision.md): Turn an idea into milestones with dependencies and ready/blocked status
 
-**Ship.** `/rota-review` runs two parallel reviewers over the branch and reports them separately: Spec (intent match against the item's spec, the issue body in issue mode, plus drift and `DECISIONS.md` violations) and Standards (`KNOWLEDGE.md` conventions, a code-smell baseline, tautological and implementation-coupled tests, the silent-failure-hunter rubric). It returns `PASS` / `CONCERNS` / `FAIL`, the worse of the two. `/rota-qa` answers the orthogonal question, *"does the product actually work?"*, by running per-target strategies (`.rota/qa/<target>.md`) with Playwright / smoke / lighthouse / axe / ZAP / contract runners. `/rota-ship` builds an ID-linked PR body or direct-merges based on configured strategy (the issue backend always uses a PR), with two opt-in gates layered after `/rota-review`: a fresh-eyes second-opinion review (`ship.secondOpinion`) and a product QA run (`ship.qa`). `/rota-ship --undo` rolls back the last direct-merge cycle in one operation, restoring the backlog items.
+**Execute.** [`/rota-work`](skills/rota-work.md): Build the next item in small commits, one verified task at a time; [`/rota-debug`](skills/rota-debug.md): Find the root cause of one bug, fix it atomically and prove it; [`/rota-refactor`](skills/rota-refactor.md): Review the architecture and file refactor issues; --map drafts the map
 
-**Persist.** `/rota-learn` writes durable session learnings to `KNOWLEDGE.md`, with an optional Opus verification pass (`--strict` or `learn.verify`). That includes domain terms via the `--term <name>` flag, which lands the term as a nested-bullet entry under the pinned `## Glossary` topic of the same file. `/rota-decide` captures hard-boundary commitments to `DECISIONS.md` with explicit forbids and permits. The project map (`.rota/map/<name>.md` files describing subsystems) is hand-authored; cycle skills (`/rota-work`, `/rota-debug`) bump `touched:` post-cycle on matched subsystems and regenerate the always-on `## Project Map` block via `rota map index`. `/rota-docs` keeps the public docs in sync with the code (inline at ship time or via the manual `--docs` flag).
+**Ship.** [`/rota-review`](skills/rota-review.md): Review a branch against its spec and conventions before it leaves; [`/rota-ship`](skills/rota-ship.md): Review, then open the PR or merge, linking items by ID; [`/rota-docs`](skills/rota-docs.md): Scaffold, update or reorganize the public docs; [`/rota-qa`](skills/rota-qa.md): Run product-level QA against the built artifact and score it
 
-**Rounds.** `/rota-orchestrate` runs a parallel round. The `rota round` verbs do the mechanics: take the orchestrator lease, assign issues, wait for workers, wind down. Each worker is an agent in its own git worktree (`rota worker` manages slots, hosts and accounts) that implements one issue and opens a PR; the orchestrator runs the gate and merges. `rota agents write` (run by `rota init`) writes the subagent definitions workers use. For a hard issue, the label `best-of:2` gives it to two workers at once, and `rota round pick` names the attempt that may merge. The gate refuses an empty `test.full` (unless `--no-verify`), a PR body without `Closes #N` (unless the issue is `partial-slice`), a recorded FAIL verdict and an unpicked best-of attempt. A slot is free as soon as its PR is open, so the next issue starts while the PR waits for review. `rota doctor` checks the machine first and `rota reap` clears leftovers. For unattended runs, `rota hook`, `rota statusline`, `rota keepalive` and `rota limit` hand the orchestrator off before its context fills, restart it and wait out usage limits. See [parallel rounds](usage/parallel-rounds.md) and [unattended rounds](usage/unattended-rounds.md).
+**Persist.** [`/rota-learn`](skills/rota-learn.md): Save the session's durable lessons to KNOWLEDGE.md; [`/rota-decide`](skills/rota-decide.md): Record a hard-boundary decision with explicit forbids and permits; [`/rota-pause`](skills/rota-pause.md): Stop cleanly and leave a handoff note for the next session
 
-**Maintenance.** `rota init` sets up `.rota/` once at the project root (`rota setup` adds a config walkthrough; bare `rota` runs it in an uninitialized project and launches the orchestrator in an initialized one). `rota config set` edits config (never hand-edit JSON). `rota update` checks for newer rota releases and prints the exact upgrade command. `rota skills` installs and refreshes the skills from the binary. `rota doctor` checks git, the forge, accounts and installed skills. `/rota-release` cuts your project's own releases: version bump, categorized notes, tag, push, GitHub/GitLab release.
+**Rounds.** [`/rota-orchestrate`](skills/rota-orchestrate.md): Run a parallel round: pick the slate, watch workers, merge their PRs; [`/rota-answer`](skills/rota-answer.md): Answer every decision a round is waiting on, one question at a time
 
-For the alphabetical reference of every skill see [the slash commands page](reference/slash-commands.md). For two worked examples that carry one concrete project end-to-end, see the [walkthroughs](walkthroughs/).
+**Maintenance.** [`/rota-init`](skills/rota-init.md): Suggest config values from the repo and write the ones you confirm; [`/rota-bugreport`](skills/rota-bugreport.md): File rota's own mistakes upstream, after your explicit yes; [`/rota-release`](skills/rota-release.md): Cut a release: checklist, version bump, notes, tag, publish
+<!-- generated:skills:lanes end -->
+
+**Verbs.** `rota init` sets up `.rota/` once at the project root (`rota setup` adds a config walkthrough; bare `rota` runs it in an uninitialized project and launches the orchestrator in an initialized one). `rota config set` edits config (never hand-edit JSON). `rota update` checks for newer rota releases and prints the exact upgrade command. `rota skills` installs and refreshes the skills from the binary. `rota doctor` checks git, the forge, accounts and installed skills. `/rota-release` cuts your project's own releases: version bump, categorized notes, tag, push, GitHub/GitLab release.
+
+## How skills chain
+
+<!-- generated:skills:chains begin -->
+<!-- edit docs/skills/*.md and run python3 scripts/skills-docs.py -->
+
+### Fix a small bug or add a small feature
+
+One clear item, small enough to build in one sitting.
+
+1. [`/rota-capture`](skills/rota-capture.md): Write the item down. Capture records it and stops.
+2. [`/rota-work`](skills/rota-work.md): Build it in small commits. The proof gate needs a red run, then a green one.
+3. [`/rota-ship`](skills/rota-ship.md): Review the branch, then open the PR or merge.
+
+Walkthrough: [Quickstart: one item in manual mode](walkthroughs/quickstart-manual-mode.md)
+
+### Build a bigger feature
+
+A Major item where the design or the approach needs sign-off before code lands.
+
+1. [`/rota-capture`](skills/rota-capture.md): Record the feature as an item.
+2. [`/rota-brainstorm`](skills/rota-brainstorm.md): Settle the design with you, section by section.
+3. [`/rota-plan`](skills/rota-plan.md): Turn the design into tasks with a way to verify each.
+4. [`/rota-work`](skills/rota-work.md): Build the plan, one verified task at a time.
+5. [`/rota-ship`](skills/rota-ship.md): Review against what the item promised, then merge.
+
+Walkthrough: [A round cycle: shape the slate, run the round, cut the release](walkthroughs/round-cycle.md#a-major-item-brainstorm-then-plan)
+
+### Chase a bug you don't understand
+
+Something is broken and the cause is not known yet.
+
+1. [`/rota-debug`](skills/rota-debug.md): Reproduce it, test one hypothesis at a time, fix it in one commit.
+2. [`/rota-ship`](skills/rota-ship.md): Review and merge the fix.
+3. [`/rota-learn`](skills/rota-learn.md): Keep what the bug taught you for the next session.
+
+Walkthrough: [Greenfield: from a brief to a shipped milestone](walkthroughs/greenfield-from-brief.md#step-7-a-real-bug-run-rota-debug)
+
+### Try a risky idea first
+
+You don't know yet whether an approach or a library works.
+
+1. [`/rota-spike`](skills/rota-spike.md): Try it on a throwaway branch. Only the findings come back.
+2. [`/rota-plan`](skills/rota-plan.md): Plan the real work with what the spike found.
+3. [`/rota-work`](skills/rota-work.md): Build it.
+
+Walkthrough: [Greenfield: from a brief to a shipped milestone](walkthroughs/greenfield-from-brief.md#step-3-rota-spike-optional)
+
+### Start a project from a brief
+
+An empty repo and an idea of where it should go.
+
+1. [`/rota-init`](skills/rota-init.md): Suggest config values from the repo, confirmed one by one.
+2. [`/rota-vision`](skills/rota-vision.md): Turn the brief into milestones.
+3. [`/rota-plan`](skills/rota-plan.md): Plan the first milestone slice.
+4. [`/rota-capture`](skills/rota-capture.md): Turn the plan into backlog items.
+5. [`/rota-work`](skills/rota-work.md): Build the first item.
+
+Walkthrough: [Greenfield: from a brief to a shipped milestone](walkthroughs/greenfield-from-brief.md)
+
+### Run several issues in parallel
+
+A few independent issues are ready and you can stay around for questions.
+
+1. [`/rota-plan`](skills/rota-plan.md): Shape the slate so every issue has clear acceptance.
+2. [`/rota-orchestrate`](skills/rota-orchestrate.md): Hand issues to workers, review their PRs, merge through the gate.
+3. [`/rota-answer`](skills/rota-answer.md): Answer the decisions the round put to you, one at a time.
+4. [`/rota-learn`](skills/rota-learn.md): At wind-down, keep what the round learned.
+5. [`/rota-release`](skills/rota-release.md): Cut a release when the work adds up to one.
+
+Walkthrough: [A round cycle: shape the slate, run the round, cut the release](walkthroughs/round-cycle.md)
+
+### Stop for today
+
+The context is filling up or you have to leave mid-item.
+
+1. [`/rota-learn`](skills/rota-learn.md): Save the lessons worth keeping.
+2. [`/rota-pause`](skills/rota-pause.md): Write a handoff so a fresh session continues.
+3. [`/rota-work`](skills/rota-work.md): Next session, with no argument, it reads the handoff and picks up.
+<!-- generated:skills:chains end -->
+
+Every skill has its own page with examples and flags: [skills](skills/README.md). For two worked examples that carry one concrete project end-to-end, see the [walkthroughs](walkthroughs/).
