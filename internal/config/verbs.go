@@ -458,6 +458,12 @@ func validateValue(key string, value any) error {
 		}
 		return nil
 	}
+	if key == LensesKey {
+		if _, err := ParseLenses(value); err != nil {
+			return fmt.Errorf("%w for %s: %v", ErrBadValue, key, err)
+		}
+		return nil
+	}
 	if strictEnumKeys[key] {
 		return validateEnum(key, value)
 	}
@@ -570,6 +576,11 @@ func Retired(root string) []string {
 	}
 	if v, _ := Value(Load(configPath(root)), ReviewKey); v != nil {
 		if _, err := ParseReviewPolicy(v); err != nil {
+			out = append(out, err.Error())
+		}
+	}
+	if v, _ := Value(Load(configPath(root)), LensesKey); v != nil {
+		if _, err := ParseLenses(v); err != nil {
 			out = append(out, err.Error())
 		}
 	}

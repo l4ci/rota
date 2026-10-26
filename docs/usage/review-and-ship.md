@@ -101,6 +101,20 @@ See [configuration](configuration.md) for the full `work` block.
 
 The review gate is independent of the autonomy level. A `FAIL` verdict still halts the chain until you fix the branch.
 
+## Review lenses
+
+Security, performance and UX get one line of attention in the Standards reviewer's baseline, and at `light` depth that reviewer does not run. A lens is a focused reviewer for one axis, chosen by what a branch touches. `review.lenses` maps a lens (`security`, `perf` or `ux`) to path globs and issue labels; the default is empty, so no lens runs:
+
+```bash
+rota config set review.lenses '{"security": {"paths": ["internal/git/**"], "labels": ["risk:security"]}, "ux": {"paths": ["internal/cli/**"]}}'
+```
+
+Globs allow `*` within a segment and a trailing `/**` for a directory. An unknown lens name or a malformed glob is a config error naming `review.lenses`. A lens triggers when a changed file (renames count both paths) or a label of the branch's issue, or of any issue in a bundled slot, matches. At depth `none` none triggers.
+
+- **What shows.** `rota review depth --json` lists `lenses`: one `{name, why}` per triggered lens, with `why` as `path <file>` or `label <name>`. A branch that triggers none lists an empty array.
+- **What runs.** `/rota-review` runs one read-only reviewer per triggered lens beside Spec and Standards, at `full` and at `light`: `security` on `orchestrator.model`, `perf` and `ux` on the standard tier. Each records `review-security`, `review-perf` or `review-ux` (PASS, CONCERNS or FAIL) at the reviewed commit. A `--since` re-review runs the triggered lenses again on the fix range, majors only.
+- **What it blocks.** `rota worker gate` refuses the merge (`review-missing`) until each triggered lens has a record at the PR's head; the refusal names the lens and why, for example `review-security verdict (path internal/git/run.go)`. A lens FAIL blocks and bounces like any review FAIL, and its findings are relayed; `rota verdict add --file-deferred` files the deferred ones.
+
 ## Cross-harness review
 
 The two reviewers run on the harness you work in, so code Claude wrote is reviewed by Claude. For the work where a miss costs most, a third review comes from a different model. Once `round.harnesses` lists more than one harness (for example `["claude", "codex"]`), an issue labelled `size:Major` or `risk:high` (`review.crossLabels`) needs one read-only review from a harness other than its author's. `rota review depth --json` shows which one as `cross`, and why as `crossWhy`.

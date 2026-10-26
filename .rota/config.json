@@ -74,5 +74,46 @@
   },
   "release": {
     "versionFile": "VERSION"
+  },
+  "review": {
+    "lenses": {
+      "security": {
+        "paths": [
+          "internal/proc/**",
+          "internal/fsio/**",
+          "internal/git/**",
+          "internal/hook/**",
+          "internal/tracker/**",
+          "internal/roundlease/**",
+          "internal/cli/hook.go",
+          "internal/cli/browser.go",
+          "hooks/**",
+          "scripts/**",
+          "install.sh",
+          "internal/cli/keepalive.go",
+          "internal/cli/testlock.go",
+          "internal/cli/deps.go",
+          "internal/cli/orchestrate.go",
+          "internal/tui/term.go",
+          "internal/doctor/doctor.go",
+          "internal/worker/registry.go",
+          "internal/host/**"
+        ],
+        "labels": [
+          "risk:security"
+        ]
+      },
+      "ux": {
+        "paths": [
+          "internal/cli/exit.go",
+          "internal/cli/palette.go",
+          "internal/tui/**",
+          "docs/usage/**"
+        ],
+        "labels": [
+          "risk:ux"
+        ]
+      }
+    }
   }
 }

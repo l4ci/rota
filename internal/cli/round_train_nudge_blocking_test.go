@@ -39,3 +39,25 @@ func TestTrainBlockedSecondOpinionAndStaleFail(t *testing.T) {
 		}
 	}
 }
+
+// A lens FAIL, or a lens record with a blocking finding, keeps a PR out of a
+// nudged train like a review-cross one (#2064).
+func TestTrainBlockedLens(t *testing.T) {
+	major := []verdict.Finding{{Severity: "major", Title: "x"}}
+	for name, tc := range map[string]struct {
+		rec  verdict.Record
+		want bool
+	}{
+		"security fail":            {verdict.Record{Kind: verdict.ReviewSecurity, Verdict: verdict.Fail, Sha: "a"}, true},
+		"ux concerns with a major": {verdict.Record{Kind: verdict.ReviewUX, Verdict: verdict.Concerns, Sha: "a", Findings: major}, true},
+		"perf pass":                {verdict.Record{Kind: verdict.ReviewPerf, Verdict: verdict.Pass, Sha: "a"}, false},
+	} {
+		root := t.TempDir()
+		if _, err := verdict.AddBranch(root, "w1", tc.rec); err != nil {
+			t.Fatal(err)
+		}
+		if got := trainBlocked(verdict.Load(root), "w1", verdict.Settings{}); got != tc.want {
+			t.Errorf("%s: blocked %v want %v", name, got, tc.want)
+		}
+	}
+}
