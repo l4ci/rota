@@ -3,6 +3,7 @@ package extknowledge
 import (
 	"context"
 	"fmt"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -41,9 +42,23 @@ type topicFileRef struct {
 	Topic   Topic
 	Rel     string // repo-relative, slash-separated
 	Content string
+	Stray   bool // a flat file beside a split topic: read, never written
 }
 
-// topicFiles lists every indexed topic whose file exists, in index order.
+// bullets lists the bullets of the file.
+func (f topicFileRef) bullets() []bullet { return f.Topic.bullets(f.Content) }
+
+// toolSlug is the slug a bare "(seen on 4.6)" takes as its tool: a subtopic
+// takes its split topic's folder name.
+func (t Topic) toolSlug() string {
+	if t.Parent != "" {
+		return path.Base(path.Dir(t.File))
+	}
+	return t.Slug
+}
+
+// topicFiles lists every indexed topic and subtopic whose file exists, in
+// index order, each split topic's stray flat file right after it.
 func (c Clone) topicFiles() ([]topicFileRef, error) {
 	topics, err := c.Topics()
 	if err != nil {
@@ -58,7 +73,15 @@ func (c Clone) topicFiles() ([]topicFileRef, error) {
 		if raw == nil {
 			continue
 		}
-		out = append(out, topicFileRef{Topic: t, Rel: filepath.ToSlash(filepath.Join(TopicsDir, t.Slug+".md")), Content: string(raw)})
+		out = append(out, topicFileRef{Topic: t, Rel: t.File, Content: string(raw)})
+		if t.Stray == "" || t.Parent != "" {
+			continue
+		}
+		if sraw, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(t.Stray))); err == nil {
+			st := t
+			st.File, st.Split, st.Stray = t.Stray, false, ""
+			out = append(out, topicFileRef{Topic: st, Rel: t.Stray, Content: string(sraw), Stray: true})
+		}
 	}
 	return out, nil
 }
@@ -86,6 +109,9 @@ func (c Clone) MigrateSeen(ctx context.Context, apply bool) (MigrateReport, erro
 	var rep MigrateReport
 	p := &plan{message: "knowledge: move (seen on …) into seen: stamps", slug: "seen-stamps"}
 	for _, f := range files {
+		if f.Stray {
+			continue // never written
+		}
 		lines := strings.Split(f.Content, "\n")
 		touched := false
 		for i, l := range lines {
@@ -152,7 +178,7 @@ func migrateLine(t Topic, line string) (out string, ch *MigrateChange, reviews [
 	for _, s := range anySeenRe.FindAllString(rest, -1) {
 		reviews = append(reviews, MigrateReview{t.Name, title, s + " is not trailing"})
 	}
-	found, inferred, err := parseSuffix(raw, t.Slug)
+	found, inferred, err := parseSuffix(raw, t.toolSlug())
 	if err != nil {
 		reviews = append(reviews, MigrateReview{t.Name, title, "(seen on " + raw + "): " + err.Error()})
 		return line, nil, reviews

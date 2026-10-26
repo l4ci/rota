@@ -214,3 +214,170 @@ func TestKnowledgeExternalSeenFlags(t *testing.T) {
 		t.Fatalf("json: %v %q", err, o.stdout)
 	}
 }
+
+func TestKnowledgeExternalSplit(t *testing.T) {
+	project, clone, _ := extFixture(t, "")
+	for _, title := range []string{"Parallel subtests", "Golden files"} {
+		if o := knNew(t, project, "body of "+title, "knowledge", "add", "--external", "--topic", "Go", "--title", title, "--body-file", "-"); o.rc != 0 {
+			t.Fatalf("add: %+v", o)
+		}
+	}
+	plan := `{"subtopics":[{"name":"Testing","hook":"test habits","titles":["Table tests","Parallel subtests"]}]}`
+	if o := knNew(t, project, plan, "knowledge", "split", "--topic", "Go", "--plan", "-"); o.rc != ExitUsage {
+		t.Fatalf("split without --external: %+v", o)
+	}
+	if o := knNew(t, project, "{nope", "knowledge", "split", "--external", "--topic", "Go", "--plan", "-"); o.rc != ExitUsage {
+		t.Fatalf("malformed plan: %+v", o)
+	}
+	if o := knNew(t, project, `{"subtopics":[{"name":"T","titles":["Nope"]}]}`, "knowledge", "split", "--external", "--topic", "Go", "--plan", "-"); o.rc != ExitResolution {
+		t.Fatalf("unknown title: %+v", o)
+	}
+	if o := knNew(t, project, "", "knowledge", "split", "--external", "--topic", "Go"); o.rc != ExitUsage {
+		t.Fatalf("flat topic without a plan: %+v", o)
+	}
+	o := knNew(t, project, plan, "knowledge", "split", "--external", "--topic", "Go", "--plan", "-", "--json")
+	if o.rc != 0 {
+		t.Fatalf("split: %+v", o)
+	}
+	var out struct {
+		Data struct {
+			Topic     string
+			Changed   bool
+			Left      int
+			Folded    int
+			Subtopics []struct {
+				Name, File string
+				Bullets    int
+			}
+		}
+	}
+	if err := json.Unmarshal([]byte(o.stdout), &out); err != nil {
+		t.Fatalf("json: %v: %s", err, o.stdout)
+	}
+	d := out.Data
+	if d.Topic != "Go" || !d.Changed || d.Left != 1 || d.Folded != 0 || len(d.Subtopics) != 1 || d.Subtopics[0].Name != "Go: Testing" || d.Subtopics[0].File != "topics/go/testing.md" || d.Subtopics[0].Bullets != 2 {
+		t.Fatalf("data = %+v", d)
+	}
+	if _, err := os.Stat(filepath.Join(clone, "topics/go.md")); !os.IsNotExist(err) {
+		t.Fatal("flat file must be gone")
+	}
+	o = knNew(t, project, "", "knowledge", "query", "--external", "--all", "Go")
+	for _, want := range []string{"## Go\n", "- [Testing](testing.md) — test habits", "**Golden files**", "## Go: Testing\n", "**Table tests**"} {
+		if o.rc != 0 || !strings.Contains(o.stdout, want) {
+			t.Fatalf("query --all missing %q: %+v", want, o)
+		}
+	}
+	o = knNew(t, project, plan, "knowledge", "split", "--external", "--topic", "Go", "--plan", "-")
+	if o.rc != 0 || !strings.Contains(o.stdout, "unchanged: Go") {
+		t.Fatalf("rerun: %+v", o)
+	}
+}
+
+func TestKnowledgeExternalMatch(t *testing.T) {
+	project, _, _ := extFixture(t, "")
+	o := knNew(t, project, "", "knowledge", "query", "--external", "--match", "t.run")
+	if o.rc != 0 || o.stdout != "## Go\n- **Table tests** — Use t.Run. <!-- 2026-01-02 source:rota -->\n" {
+		t.Fatalf("match: %+v", o)
+	}
+	o = knNew(t, project, "", "knowledge", "query", "--external", "--match", "nothing here", "--json")
+	var env struct {
+		Data struct {
+			Text    string
+			Matches int
+			Missing []string
+			Recheck []any
+		}
+	}
+	if err := json.Unmarshal([]byte(o.stdout), &env); err != nil || o.rc != 0 || env.Data.Text != "" || env.Data.Matches != 0 || env.Data.Missing == nil || env.Data.Recheck == nil {
+		t.Fatalf("no hit: %v %+v", err, o)
+	}
+	for _, args := range [][]string{
+		{"query", "--external", "--match", ""},
+		{"query", "--external", "--match", "  "},
+		{"query", "--match", "x", "Go"},
+	} {
+		if o := knNew(t, project, "", append([]string{"knowledge"}, args...)...); o.rc != ExitUsage {
+			t.Errorf("%v: rc=%d", args, o.rc)
+		}
+	}
+}
+
+func TestKnowledgeExternalHitCountsInStats(t *testing.T) {
+	project, clone, _ := extFixture(t, "")
+	head := gittest.Run(t, clone, "rev-parse", "HEAD")
+	o := knNew(t, project, "", "knowledge", "hit", "--external", "--topic", "Go", "--title", "Table tests", "--json")
+	if o.rc != 0 || !strings.Contains(o.stdout, `"hits": 1`) || !strings.Contains(o.stdout, `"changed": true`) {
+		t.Fatalf("hit: %+v", o)
+	}
+	if o = knNew(t, project, "", "knowledge", "hit", "--external", "--topic", "Go", "--title", "Nope"); o.rc != ExitResolution {
+		t.Fatalf("unknown bullet rc=%d %+v", o.rc, o)
+	}
+	if o = knNew(t, project, "", "knowledge", "hit", "--external", "--topic", "Go"); o.rc != ExitUsage {
+		t.Fatalf("missing title rc=%d", o.rc)
+	}
+	o = knNew(t, project, "", "knowledge", "stats", "--external", "--json")
+	var env struct {
+		Data struct {
+			Topics []struct {
+				Hits  int
+				Items []struct {
+					Title   string
+					Hits    int
+					LastHit string
+				}
+			}
+		}
+	}
+	if err := json.Unmarshal([]byte(o.stdout), &env); err != nil || len(env.Data.Topics) != 1 || env.Data.Topics[0].Hits != 1 || env.Data.Topics[0].Items[0].Hits != 1 || env.Data.Topics[0].Items[0].LastHit == "" {
+		t.Fatalf("stats: %v %+v", err, o)
+	}
+	if o = knNew(t, project, "", "knowledge", "stats", "--external"); !strings.Contains(o.stdout, ", 1 hits") {
+		t.Fatalf("stats text: %q", o.stdout)
+	}
+	if now := gittest.Run(t, clone, "rev-parse", "HEAD"); now != head || strings.TrimSpace(gittest.Run(t, clone, "status", "--porcelain")) != "" {
+		t.Fatal("hit changed the clone")
+	}
+}
+
+func TestKnowledgeExternalSplitWithoutPlanShowsShape(t *testing.T) {
+	project, _, _ := extFixture(t, "")
+	o := knNew(t, project, "", "knowledge", "split", "--external", "--topic", "Go")
+	if o.rc != ExitUsage || !strings.Contains(o.stderr, "needs --plan") || !strings.Contains(o.stderr, `{"subtopics":[{"name":"…","hook":"…","titles":["…"]}]}`) || !strings.Contains(o.stderr, "/rota-learn --external-review") {
+		t.Fatalf("split without a plan: %+v", o)
+	}
+	if o := knNew(t, project, "", "knowledge", "split", "--help"); !strings.Contains(o.stdout+o.stderr, `{"subtopics":[{"name","hook","titles"}]}`) {
+		t.Fatalf("--plan help names no shape: %+v", o)
+	}
+}
+
+func TestKnowledgeExternalPolish(t *testing.T) {
+	project, _, _ := extFixture(t, "")
+	if o := knNew(t, project, "", "knowledge", "stats", "--external"); !strings.Contains(o.stdout, "Go: 1 bullet,") {
+		t.Fatalf("stats text: %q", o.stdout)
+	}
+	if o := knNew(t, project, "", "knowledge", "topics", "--external"); !strings.Contains(o.stdout, "Go: 1 bullet ") && !strings.Contains(o.stdout, "Go: 1 bullet\n") {
+		t.Fatalf("topics text: %q", o.stdout)
+	}
+	o := knNew(t, project, "", "knowledge", "query", "--external", "--match", "nothing here")
+	if o.rc != 0 || o.stdout != "" || !strings.Contains(o.stderr, `no bullet matches "nothing here"`) {
+		t.Fatalf("no hit: %+v", o)
+	}
+}
+
+func TestKnowledgeExternalMissingGitIdentityIsRefused(t *testing.T) {
+	project, _, _ := extFixture(t, "")
+	t.Setenv("GIT_AUTHOR_NAME", "")
+	t.Setenv("GIT_COMMITTER_NAME", "")
+	o := knNew(t, project, "body", "knowledge", "add", "--external", "--topic", "Go", "--title", "New one", "--body-file", "-")
+	if o.rc != ExitRefused || !strings.Contains(o.stderr, "git config user.name") {
+		t.Fatalf("add without identity: %+v", o)
+	}
+}
+
+func TestKnowledgeExternalAddUnknownSubtopicHead(t *testing.T) {
+	project, _, _ := extFixture(t, "")
+	o := knNew(t, project, "body", "knowledge", "add", "--external", "--topic", "Unknown: Sub", "--title", "T", "--body-file", "-")
+	if o.rc != ExitResolution || !strings.Contains(o.stderr, "add to") {
+		t.Fatalf("unknown head: %+v", o)
+	}
+}

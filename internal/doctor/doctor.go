@@ -208,6 +208,14 @@ type ExternalKnowledge struct {
 	IsGit     bool // it is a git work tree
 	HasRemote bool // the clone has a remote to fetch from and push to
 	HasPolicy bool // rota-knowledge.json is at its root
+	// Over names each topic past a size limit, and the index past the topic
+	// limit; empty when nothing is over or the clone could not be read.
+	Over []string
+	// Stray lists flat topic files an older rota left beside a split topic.
+	Stray []string
+	// Malformed lists index lines whose path is not a plain topic slug; rota
+	// ignores them.
+	Malformed []string
 }
 
 // externalKnowledge reports the state of the external knowledge clone: unset
@@ -230,6 +238,36 @@ func (d *runner) externalKnowledge() Check {
 	return pass(name, k.Path)
 }
 
+// externalKnowledgeSize warns when a topic or the index of the external
+// knowledge base has outgrown its limits. A base within them adds no line.
+func (d *runner) externalKnowledgeSize() (Check, bool) {
+	over := d.in.ExternalKnowledge.Over
+	if len(over) == 0 {
+		return Check{}, false
+	}
+	return Check{Name: "external knowledge size", Status: Warn, Detail: strings.Join(over, "; "), Hint: "/rota-learn --external-review drafts a split; rota knowledge split --external applies it"}, true
+}
+
+// externalKnowledgeLayout warns when an older rota left a flat topic file
+// beside a split topic's folder.
+func (d *runner) externalKnowledgeLayout() (Check, bool) {
+	stray := d.in.ExternalKnowledge.Stray
+	if len(stray) == 0 {
+		return Check{}, false
+	}
+	return Check{Name: "external knowledge layout", Status: Warn, Detail: strings.Join(stray, ", ") + " sits beside a split topic folder (an older rota wrote it)", Hint: "fold it in with: rota knowledge split --external --topic <topic>"}, true
+}
+
+// externalKnowledgeIndex warns about index lines that name a path outside the
+// slugs rota writes (a glob, "..", capitals). They are ignored, never followed.
+func (d *runner) externalKnowledgeIndex() (Check, bool) {
+	bad := d.in.ExternalKnowledge.Malformed
+	if len(bad) == 0 {
+		return Check{}, false
+	}
+	return Check{Name: "external knowledge index", Status: Warn, Detail: strings.Join(bad, "; ") + " (ignored: not a plain topic slug)", Hint: "fix or remove the line in the knowledge repo"}, true
+}
+
 // Run executes every check in the contract's order.
 func Run(ctx context.Context, in Input) Report {
 	d := &runner{in: in, ctx: ctx}
@@ -243,6 +281,15 @@ func Run(ctx context.Context, in Input) Report {
 	if in.ExternalKnowledge.Path != "" {
 		// Unset adds no line: the feature is off, like a healthy disk.
 		checks = append(checks, d.externalKnowledge())
+		if c, ok := d.externalKnowledgeSize(); ok {
+			checks = append(checks, c)
+		}
+		if c, ok := d.externalKnowledgeLayout(); ok {
+			checks = append(checks, c)
+		}
+		if c, ok := d.externalKnowledgeIndex(); ok {
+			checks = append(checks, c)
+		}
 	}
 	if c, ok := d.disk(); ok {
 		// Only a volume below the threshold adds a line: a healthy one stays

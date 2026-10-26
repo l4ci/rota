@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -18,15 +20,16 @@ import (
 func knowledgeCommands() *Command {
 	return &Command{Name: "knowledge", Summary: "read and write .rota/KNOWLEDGE.md", Subs: []*Command{
 		{Name: "query", Summary: "print topic sections, tier-aware", Repo: true, Verb: knQuery},
-		{Name: "stats", Summary: "bullet count and size per topic", Verb: noFlags(knStats), View: knowledgeView},
+		{Name: "stats", Summary: "bullet count and size per topic", Verb: knStatsVerb, View: knowledgeView},
 		{Name: "topics", Summary: "list topic headings with bullet counts", Verb: knTopics},
 		{Name: "add", Summary: "add a bullet under a topic", Repo: true, Verb: knAdd},
+		{Name: "split", Summary: "split an oversized external topic into subtopics", Verb: knSplit},
 		{Name: "amend", Summary: "append text to an existing bullet", Repo: true, Verb: knAmend},
 		{Name: "replace", Summary: "replace text inside one bullet", Repo: true, Verb: knReplace},
 		{Name: "rm", Summary: "delete one bullet and its tier entry", Repo: true, Verb: knRm},
 		{Name: "rename-topic", Summary: "rename a topic or move one bullet", Repo: true, Verb: knRename},
 		{Name: "harvest", Summary: "list (or --mark) learning comments on merged issues", Verb: knHarvest},
-		{Name: "hit", Summary: "register a consulted bullet", Repo: true, Verb: knHit},
+		{Name: "hit", Summary: "register a consulted bullet (--external: on this machine only)", Repo: true, Verb: knHit},
 		{Name: "tier", Summary: "read and write bullet tiers", Subs: []*Command{
 			{Name: "get", Summary: "show one bullet's tier", Repo: true, Verb: knTierGet},
 			{Name: "set", Summary: "set one bullet's tier", Repo: true, Verb: knTierSet},
@@ -118,16 +121,35 @@ func knNoArgs(args []string) error {
 func knQuery(fs *flag.FlagSet) RunFunc {
 	tier := fs.String("tier", "", "only bullets on this `tier` (provisional|confirmed|deprecated)")
 	incl := fs.Bool("include-deprecated", false, "also print deprecated bullets")
+	all := fs.Bool("all", false, "with --external: also print every subtopic of a split topic")
+	match := fs.String("match", "", "with --external: only the bullets whose title or body hold every whitespace-separated `word` (case-insensitive); topics narrow the search")
 	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
-		if len(args) == 0 {
+		matching := false
+		fs.Visit(func(f *flag.Flag) { matching = matching || f.Name == "match" })
+		if matching && !*ext {
+			return Result{}, Usage("--match needs --external")
+		}
+		if matching && strings.TrimSpace(*match) == "" {
+			return Result{}, Usage("--match needs at least one word")
+		}
+		if len(args) == 0 && !matching {
 			return Result{}, Usage("name at least one topic")
+		}
+		if *all && !*ext {
+			return Result{}, Usage("--all needs --external")
+		}
+		if matching && *all {
+			return Result{}, Usage("--all does not apply to --match: a split topic's subtopics are searched anyway")
 		}
 		if *ext {
 			if *tier != "" || *incl {
 				return Result{}, Usage("--tier and --include-deprecated do not apply to --external: the external base has no tiers")
 			}
-			return knExtQuery(c, args)
+			if matching {
+				return knExtMatch(c, args, *match)
+			}
+			return knExtQuery(c, args, *all)
 		}
 		if *tier != "" && !knowledge.ValidTier(*tier) {
 			return Result{}, Usage("--tier must be one of: provisional, confirmed, deprecated")
@@ -148,6 +170,19 @@ func knQuery(fs *flag.FlagSet) RunFunc {
 			ms = append(ms, m)
 		}
 		return Result{Data: knObj("text", text, "missing", ms), Text: text}, nil
+	}
+}
+
+func knStatsVerb(fs *flag.FlagSet) RunFunc {
+	ext := externalFlag(fs)
+	return func(c *Ctx, args []string) (Result, error) {
+		if *ext {
+			if err := knNoArgs(args); err != nil {
+				return Result{}, err
+			}
+			return knExtStats(c)
+		}
+		return knStats(c, args)
 	}
 }
 
@@ -262,6 +297,37 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 			text = fmt.Sprintf("unchanged: %s (title already present)", *topic)
 		}
 		return Result{Data: knObj("topic", *topic, "title", *title, "changed", res.Changed), Text: text}, nil
+	}
+}
+
+func knSplit(fs *flag.FlagSet) RunFunc {
+	topic := fs.String("topic", "", "the `topic` to split")
+	planFile := fs.String("plan", "", "the split plan, JSON {\"subtopics\":[{\"name\",\"hook\",\"titles\"}]}: a `path`, or - for stdin; optional only to fold a stray file into a topic that is already split")
+	ext := externalFlag(fs)
+	return func(c *Ctx, args []string) (Result, error) {
+		if err := knNoArgs(args); err != nil {
+			return Result{}, err
+		}
+		if !*ext {
+			return Result{}, Usage("split needs --external: only the external knowledge base splits into subtopics")
+		}
+		if err := knRequire(map[string]string{"topic": *topic}, "topic"); err != nil {
+			return Result{}, err
+		}
+		var plan *extknowledge.SplitPlan
+		if *planFile != "" {
+			raw, err := readBodyInput(c, "plan", *planFile, ExitResolution)
+			if err != nil {
+				return Result{}, err
+			}
+			plan = &extknowledge.SplitPlan{}
+			dec := json.NewDecoder(bytes.NewReader(raw))
+			dec.DisallowUnknownFields()
+			if err := dec.Decode(plan); err != nil {
+				return Result{}, Usage("--plan is not a split plan ({\"subtopics\":[{\"name\",\"hook\",\"titles\"}]}): %v", err)
+			}
+		}
+		return knExtSplit(c, *topic, plan)
 	}
 }
 
@@ -429,12 +495,16 @@ func knRename(fs *flag.FlagSet) RunFunc {
 func knHit(fs *flag.FlagSet) RunFunc {
 	topic := fs.String("topic", "", "the `topic` heading")
 	title := fs.String("title", "", "bullet `title`")
+	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := knNoArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "title": *title}, "topic", "title"); err != nil {
 			return Result{}, err
+		}
+		if *ext {
+			return knExtHit(c, *topic, *title)
 		}
 		st, scope, err := knStore(c)
 		if err != nil {

@@ -40,6 +40,7 @@ func exact(want string, topics []Topic) (Topic, bool) {
 type plan struct {
 	files   map[string]string
 	order   []string
+	deletes []string // tracked files the commit removes (git rm)
 	message string
 	slug    string
 }
@@ -79,7 +80,7 @@ func (c Clone) topicFile(name string) (Topic, []byte, error) {
 	if !ok {
 		return Topic{}, nil, fmt.Errorf("%w: topic %q is not in %s", ErrNotFound, name, c.indexName())
 	}
-	raw, err := c.readRegular(c.topicPath(t.Slug))
+	raw, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(t.File)))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return t, nil, nil
@@ -138,8 +139,39 @@ func (c Clone) Add(ctx context.Context, in AddIn) (WriteResult, error) {
 				return WriteResult{Policy: pol}, nil
 			}
 		}
-		p.set(filepath.ToSlash(filepath.Join(TopicsDir, t.Slug+".md")), insertBullet(body, bullet))
+		if t.Split {
+			p.set(t.File, insertBulletBelowSubIndex(body, bullet))
+		} else {
+			p.set(t.File, insertBullet(body, bullet))
+		}
 		p.slug = t.Slug
+	} else if parent, sub, ok, err := c.newSubtopic(in.Topic); err != nil {
+		return WriteResult{}, err
+	} else if ok {
+		hook := in.Hook
+		if hook == "" {
+			hook = in.Title
+		}
+		subSlug := Slugify(sub)
+		if subSlug == "" || subSlug == "readme" {
+			return WriteResult{}, fmt.Errorf("%w: subtopic %q has no usable file name", ErrNotFound, sub)
+		}
+		dir := strings.TrimSuffix(parent.File, "/README.md")
+		rel := dir + "/" + subSlug + ".md"
+		if _, err := os.Lstat(filepath.Join(c.Dir, filepath.FromSlash(rel))); err == nil {
+			return WriteResult{}, fmt.Errorf("%w: %s exists but %s does not list it", ErrContent, rel, parent.File)
+		}
+		readme, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(parent.File)))
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return WriteResult{}, err
+		}
+		body := string(readme)
+		if body == "" {
+			body = "# " + parent.Name + "\n\n"
+		}
+		p.set(parent.File, insertSubIndex(body, fmt.Sprintf("- [%s](%s.md) — %s", sub, subSlug, hook)))
+		p.set(rel, "# "+parent.Name+": "+sub+"\n\n"+bullet+"\n")
+		p.slug = Slugify(parent.Name + " " + sub)
 	} else {
 		slug := Slugify(in.Topic)
 		if slug == "" {
@@ -166,6 +198,76 @@ func (c Clone) Add(ctx context.Context, in AddIn) (WriteResult, error) {
 	}
 	p.message = fmt.Sprintf("knowledge: add %q to %s", in.Title, in.Topic)
 	return c.land(ctx, pol, p)
+}
+
+// newSubtopic reads a topic name of the form "Topic: Subtopic" that names no
+// existing topic. ok is true when Topic is a split topic, so the subtopic can
+// be created under it. A name with a second ": " level, or a subtopic under a
+// flat topic, or under no topic at all, is refused (exit 3) with the way out:
+// add the topic first, then split it.
+func (c Clone) newSubtopic(name string) (parent Topic, sub string, ok bool, err error) {
+	parts := strings.Split(name, ": ")
+	if len(parts) < 2 {
+		return Topic{}, "", false, nil
+	}
+	topics, err := c.Topics()
+	if errors.Is(err, ErrNotFound) {
+		return Topic{}, "", false, nil // no index yet: the first topic creates it
+	}
+	if err != nil {
+		return Topic{}, "", false, err
+	}
+	head := strings.TrimSpace(parts[0])
+	for _, t := range topics {
+		if t.Parent != "" || !(strings.EqualFold(t.Name, head) || t.Slug == Slugify(head)) {
+			continue
+		}
+		switch {
+		case len(parts) > 2:
+			return Topic{}, "", false, fmt.Errorf("%w: %q is two levels deep; subtopics nest one level (%s: <Subtopic>)", ErrNotFound, name, t.Name)
+		case !t.Split:
+			return Topic{}, "", false, fmt.Errorf("%w: %q is a flat topic, so it has no subtopics; split it first: rota knowledge split --external --topic %q", ErrNotFound, t.Name, t.Name)
+		}
+		sub = strings.TrimSpace(strings.Join(parts[1:], ": "))
+		if sub == "" {
+			return Topic{}, "", false, fmt.Errorf("%w: %q has an empty subtopic name", ErrNotFound, name)
+		}
+		return t, sub, true, nil
+	}
+	return Topic{}, "", false, fmt.Errorf("%w: %q has no topic %q to hold a subtopic; add to %q first, then split it: rota knowledge split --external --topic %q", ErrNotFound, name, head, head, head)
+}
+
+// insertBulletBelowSubIndex puts bullet above the first bullet of a split
+// topic's README that is not a sub-index line, or at its end.
+func insertBulletBelowSubIndex(body, bullet string) string {
+	lines := strings.Split(body, "\n")
+	for i, l := range lines {
+		if strings.HasPrefix(l, "- ") && !isSubIndexLine(l) {
+			return strings.Join(append(lines[:i:i], append([]string{bullet}, lines[i:]...)...), "\n")
+		}
+	}
+	return strings.TrimRight(body, "\n") + "\n\n" + bullet + "\n"
+}
+
+// insertSubIndex adds a sub-index line after the last one of a split topic's
+// README, or below its title when it has none.
+func insertSubIndex(body, line string) string {
+	lines := strings.Split(body, "\n")
+	last := -1
+	for i, l := range lines {
+		if isSubIndexLine(l) {
+			last = i
+		}
+	}
+	if last >= 0 {
+		return strings.Join(append(lines[:last+1:last+1], append([]string{line}, lines[last+1:]...)...), "\n")
+	}
+	for i, l := range lines {
+		if strings.HasPrefix(l, "- ") {
+			return strings.Join(append(lines[:i:i], append([]string{line, ""}, lines[i:]...)...), "\n")
+		}
+	}
+	return strings.TrimRight(body, "\n") + "\n\n" + line + "\n"
 }
 
 // insertBullet puts bullet above the first bullet of body, or at its end.
@@ -200,7 +302,7 @@ func (c Clone) Amend(ctx context.Context, in AmendIn) (WriteResult, error) {
 	}
 	hit := -1
 	for i, l := range e.lines {
-		if strings.HasPrefix(l, "- ") && strings.Contains(l, in.Fragment) {
+		if strings.HasPrefix(l, "- ") && strings.Contains(l, in.Fragment) && !(e.topic.Split && isSubIndexLine(l)) {
 			if hit >= 0 {
 				return WriteResult{}, fmt.Errorf("%w: fragment %q under %q", ErrMultiMatch, in.Fragment, in.Topic)
 			}
@@ -255,7 +357,7 @@ func (c Clone) writable(ctx context.Context, rel, dst string) error {
 	if !fi.Mode().IsRegular() {
 		return fmt.Errorf("%w: %s is not a regular file; refusing to write through it", ErrDirty, rel)
 	}
-	if _, err := c.out(ctx, "ls-files", "--error-unmatch", "--", rel); err != nil {
+	if _, err := c.out(ctx, "ls-files", "--error-unmatch", "--", lit(rel)); err != nil {
 		return fmt.Errorf("%w: untracked %s would be overwritten", ErrDirty, rel)
 	}
 	return nil
@@ -289,6 +391,11 @@ func (c Clone) land(ctx context.Context, pol Policy, p *plan) (res WriteResult, 
 			return res, err
 		}
 	}
+	for _, rel := range p.deletes {
+		if fi, err := os.Lstat(filepath.Join(c.Dir, filepath.FromSlash(rel))); err == nil && !fi.Mode().IsRegular() {
+			return res, fmt.Errorf("%w: %s is not a regular file; refusing to delete it", ErrDirty, rel)
+		}
+	}
 	if pol.Write == "pr" {
 		res.Branch = fmt.Sprintf("rota-knowledge/%s-%s", p.slug, c.now().UTC().Format("20060102T150405"))
 		if _, err := c.out(ctx, "switch", "-q", "-c", res.Branch); err != nil {
@@ -298,8 +405,7 @@ func (c Clone) land(ctx context.Context, pol Policy, p *plan) (res WriteResult, 
 		defer func() {
 			if !committed {
 				// Drop the half-written plan and the branch it started.
-				_, _ = c.out(ctx, "reset", "-q", "--hard", "HEAD")
-				_, _ = c.out(ctx, append([]string{"clean", "-fdq", "--"}, p.order...)...)
+				c.rollback(ctx, p)
 			}
 			_, _ = c.out(ctx, "switch", "-q", cur)
 			if !committed {
@@ -324,6 +430,9 @@ func (c Clone) land(ctx context.Context, pol Policy, p *plan) (res WriteResult, 
 		return res, nil
 	}
 	if err := c.writeAndCommit(ctx, p); err != nil {
+		// The clone was clean before this write: drop what it half-did, so the
+		// next write is not refused as dirty.
+		c.rollback(ctx, p)
 		return res, err
 	}
 	if !remote {
@@ -361,11 +470,62 @@ func (c Clone) writeAndCommit(ctx context.Context, p *plan) error {
 			return err
 		}
 	}
-	if _, err := c.out(ctx, append([]string{"add", "--"}, p.order...)...); err != nil {
+	if _, err := c.out(ctx, append([]string{"add", "--"}, lits(p.order)...)...); err != nil {
 		return err
 	}
+	for _, rel := range p.deletes {
+		if _, err := c.out(ctx, "ls-files", "--error-unmatch", "--", lit(rel)); err != nil {
+			// Not tracked (a stray the clone never committed): just delete it.
+			if err := os.Remove(filepath.Join(c.Dir, filepath.FromSlash(rel))); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+			continue
+		}
+		if _, err := c.out(ctx, "rm", "-q", "--", lit(rel)); err != nil {
+			return err
+		}
+	}
 	_, err := c.out(ctx, "commit", "-q", "-m", p.message)
+	if err != nil {
+		if m := err.Error(); strings.Contains(m, "ident") || strings.Contains(m, "auto-detect email") {
+			return fmt.Errorf("%w: %v", ErrIdentity, err)
+		}
+	}
 	return err
+}
+
+// rollback undoes a failed write by restoring only the plan's own paths: the
+// ones HEAD tracks (written or deleted) come back from HEAD, the ones the plan
+// created are unstaged and removed by exact path. Any other file in the clone,
+// edited by hand or by a concurrent writer, is left as it is.
+func (c Clone) rollback(ctx context.Context, p *plan) {
+	var tracked []string
+	for _, rel := range append(append([]string(nil), p.order...), p.deletes...) {
+		if _, err := c.out(ctx, "cat-file", "-e", "HEAD:"+rel); err == nil {
+			tracked = append(tracked, rel)
+			continue
+		}
+		_, _ = c.out(ctx, "rm", "-q", "--cached", "--ignore-unmatch", "--", lit(rel))
+		if fi, err := os.Lstat(filepath.Join(c.Dir, filepath.FromSlash(rel))); err == nil && fi.Mode().IsRegular() {
+			_ = os.Remove(filepath.Join(c.Dir, filepath.FromSlash(rel)))
+		}
+	}
+	if len(tracked) > 0 {
+		_, _ = c.out(ctx, append([]string{"restore", "--source=HEAD", "--staged", "--worktree", "--"}, lits(tracked)...)...)
+	}
+	c.pruneEmptyDirs(p.order)
+}
+
+// pruneEmptyDirs removes the directories a failed write created for the
+// plan's files, deepest first; a directory that still holds anything stays.
+func (c Clone) pruneEmptyDirs(rels []string) {
+	for _, rel := range rels {
+		for d := filepath.Dir(filepath.FromSlash(rel)); d != "." && d != ""; d = filepath.Dir(d) {
+			if fi, err := os.Lstat(filepath.Join(c.Dir, d)); err != nil || !fi.IsDir() || os.Remove(filepath.Join(c.Dir, d)) != nil {
+				break
+			}
+		}
+	}
 }
 
 func (c Clone) openPR(ctx context.Context, pol Policy, branch, title string) (string, error) {

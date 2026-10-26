@@ -24,18 +24,26 @@ const (
 	defaultTTLMin  = 10
 )
 
-// externalSettings reads knowledge.external and knowledge.externalTTL: the
-// merged project config inside a rota project, the global config elsewhere.
+// externalGetter reads config keys the way the external knowledge settings
+// do: the merged project config inside a rota project, the global config
+// elsewhere. ok is false when neither is reachable.
+func externalGetter(d *Deps, cwd string) (get func(key string) (any, bool), ok bool) {
+	if root, found := rotatree.Find(cwd); found {
+		cfg := d.Config(root)
+		return func(key string) (any, bool) { return config.Lookup(cfg, key) }, true
+	}
+	if dir, err := projects.Dir(d.projectsEnv()); err == nil {
+		vals, _ := config.LoadGlobal(dir)
+		return func(key string) (any, bool) { v, ok := vals[key]; return v, ok }, true
+	}
+	return nil, false
+}
+
+// externalSettings reads knowledge.external and knowledge.externalTTL.
 func externalSettings(d *Deps, cwd string) (path string, ttlMin int) {
 	ttlMin = defaultTTLMin
-	var get func(key string) (any, bool)
-	if root, ok := rotatree.Find(cwd); ok {
-		cfg := d.Config(root)
-		get = func(key string) (any, bool) { return config.Lookup(cfg, key) }
-	} else if dir, err := projects.Dir(d.projectsEnv()); err == nil {
-		vals, _ := config.LoadGlobal(dir)
-		get = func(key string) (any, bool) { v, ok := vals[key]; return v, ok }
-	} else {
+	get, ok := externalGetter(d, cwd)
+	if !ok {
 		return "", ttlMin
 	}
 	if v, ok := get(externalKey); ok {
@@ -47,6 +55,24 @@ func externalSettings(d *Deps, cwd string) (path string, ttlMin int) {
 		}
 	}
 	return strings.TrimSpace(path), ttlMin
+}
+
+// externalLimits reads the three size thresholds of the external base; a
+// missing or negative value takes its default.
+func externalLimits(d *Deps, cwd string) extknowledge.Limits {
+	l := extknowledge.Limits{Bullets: 25, Bytes: 8192, Topics: 60}
+	get, ok := externalGetter(d, cwd)
+	if !ok {
+		return l
+	}
+	for key, dst := range map[string]*int{"knowledge.externalMaxBullets": &l.Bullets, "knowledge.externalMaxBytes": &l.Bytes, "knowledge.externalMaxTopics": &l.Topics} {
+		if v, ok := get(key); ok {
+			if n, ok := intOf(v); ok && n >= 0 {
+				*dst = n
+			}
+		}
+	}
+	return l
 }
 
 func intOf(v any) (int, bool) {
@@ -90,6 +116,8 @@ func extErr(err error) error {
 		return nil
 	case errors.Is(err, extknowledge.ErrNotFound), errors.Is(err, extknowledge.ErrPolicy):
 		return Resolution("%s", err)
+	case errors.Is(err, extknowledge.ErrIdentity):
+		return Refused("%s", err).WithHint("in the knowledge clone, set git config user.name and git config user.email")
 	case errors.Is(err, extknowledge.ErrDirty), errors.Is(err, extknowledge.ErrDiverged), errors.Is(err, extknowledge.ErrMultiMatch), errors.Is(err, extknowledge.ErrContent):
 		return Refused("%s", err)
 	case errors.Is(err, extknowledge.ErrUsage):
@@ -108,16 +136,21 @@ func extFreshen(c *Ctx, cl extknowledge.Clone) {
 	}
 }
 
-func knExtQuery(c *Ctx, topics []string) (Result, error) {
+func knExtQuery(c *Ctx, topics []string, all bool) (Result, error) {
 	cl, err := externalClone(c)
 	if err != nil {
 		return Result{}, err
 	}
 	extFreshen(c, cl)
-	text, missing, recheck, err := cl.Query(topics, projectTools(c))
+	res, err := cl.QueryWith(topics, extknowledge.QueryOpts{All: all, Project: projectTools(c)})
 	if err != nil {
 		return Result{}, extErr(err)
 	}
+	text, missing, recheck := res.Text, res.Missing, res.Recheck
+	for _, s := range res.Strays {
+		c.Warn("%s has a stray file %s beside its folder (an older rota wrote it): run `rota knowledge split --external --topic %s` to fold it in", s.Topic, s.File, s.Topic)
+	}
+	warnMalformed(c, cl.Malformed())
 	ms := []any{}
 	for _, m := range missing {
 		c.Warn("no external topic matches %q — run `rota knowledge topics --external` to list them", m)
@@ -128,6 +161,45 @@ func knExtQuery(c *Ctx, topics []string) (Result, error) {
 		rs = append(rs, knObj("topic", r.Topic, "title", r.Title, "tool", r.Tool, "seen", r.Seen, "project", r.Project))
 	}
 	return Result{Data: knObj("text", text, "missing", ms, "recheck", rs), Text: text}, nil
+}
+
+// warnMalformed names each index line the base wrote outside the slugs rota
+// follows.
+func warnMalformed(c *Ctx, bad []string) {
+	for _, l := range bad {
+		c.Warn("ignoring index line %s — its path is not a plain topic slug", l)
+	}
+}
+
+// bulletsOf is "1 bullet" or "N bullets".
+func bulletsOf(n int) string {
+	if n == 1 {
+		return "1 bullet"
+	}
+	return fmt.Sprintf("%d bullets", n)
+}
+
+// knExtMatch prints only the external bullets that hold every word of match.
+func knExtMatch(c *Ctx, topics []string, match string) (Result, error) {
+	cl, err := externalClone(c)
+	if err != nil {
+		return Result{}, err
+	}
+	extFreshen(c, cl)
+	res, err := cl.MatchWith([]string{match}, topics, projectTools(c))
+	if err != nil {
+		return Result{}, extErr(err)
+	}
+	warnMalformed(c, cl.Malformed())
+	ms := []any{}
+	for _, m := range res.Missing {
+		c.Warn("no external topic matches %q — run `rota knowledge topics --external` to list them", m)
+		ms = append(ms, m)
+	}
+	if res.N == 0 && len(res.Missing) == 0 {
+		c.Warn("no bullet matches %q", match)
+	}
+	return Result{Data: knObj("text", res.Text, "missing", ms, "recheck", []any{}, "matches", res.N), Text: res.Text}, nil
 }
 
 // projectTools is the tool versions the current project runs, read from its
@@ -186,13 +258,59 @@ func knExtTopics(c *Ctx) (Result, error) {
 	var lines []string
 	for _, t := range ts {
 		items = append(items, knObj("name", t.Name, "slug", t.Slug, "bullets", t.Bullets, "hook", t.Hook))
-		line := fmt.Sprintf("%s: %d bullets", t.Name, t.Bullets)
+		line := fmt.Sprintf("%s: %s", t.Name, bulletsOf(t.Bullets))
 		if t.Hook != "" {
 			line += " — " + t.Hook
 		}
 		lines = append(lines, line)
 	}
 	return Result{Data: knObj("topics", items), Text: strings.Join(lines, "\n")}, nil
+}
+
+func knExtStats(c *Ctx) (Result, error) {
+	cl, err := externalClone(c)
+	if err != nil {
+		return Result{}, err
+	}
+	extFreshen(c, cl)
+	stats, torn, err := cl.StatsWithHits()
+	if err != nil {
+		return Result{}, extErr(err)
+	}
+	items := []any{}
+	var lines []string
+	for _, s := range stats {
+		item := knObj("name", s.Name, "file", s.File, "bullets", s.Bullets, "bytes", s.Bytes, "hits", s.Hits)
+		line := fmt.Sprintf("%s: %s, %d bytes, %d hits", s.Name, bulletsOf(s.Bullets), s.Bytes, s.Hits)
+		if s.Stray {
+			item.Set("stray", true)
+			line += " (stray)"
+		}
+		bullets := []any{}
+		for _, b := range s.Items {
+			bullets = append(bullets, knObj("title", b.Title, "date", b.Date, "hits", b.Hits, "lastHit", b.LastHit))
+		}
+		item.Set("items", bullets)
+		items = append(items, item)
+		lines = append(lines, line)
+	}
+	if torn > 0 {
+		c.Warn("skipped %d unreadable line(s) in the hits log", torn)
+	}
+	return Result{Data: knObj("topics", items, "tornHits", torn), Text: strings.Join(lines, "\n")}, nil
+}
+
+// knExtHit records a use of an external bullet in the per-machine hits log.
+func knExtHit(c *Ctx, topic, title string) (Result, error) {
+	cl, err := externalClone(c)
+	if err != nil {
+		return Result{}, err
+	}
+	n, err := cl.Hit(topic, title, extSource(c))
+	if err != nil {
+		return Result{}, extErr(err)
+	}
+	return Result{Data: knObj("topic", topic, "title", title, "hits", n, "changed", true), Text: fmt.Sprintf("hit: %s :: %s (hits=%d, this machine)", topic, title, n)}, nil
 }
 
 // extSource is the project tag a new external bullet carries: the name of the
@@ -234,6 +352,33 @@ func knExtAmend(c *Ctx, topic, fragment, body, date string, seen *extknowledge.S
 		return Result{}, extErr(err)
 	}
 	return Result{Data: extWriteData(topic, res), Text: "amended: " + res.File + extLanded(res)}, nil
+}
+
+func knExtSplit(c *Ctx, topic string, plan *extknowledge.SplitPlan) (Result, error) {
+	cl, err := externalClone(c)
+	if err != nil {
+		return Result{}, err
+	}
+	sr, wr, err := cl.Split(c.Context(), extknowledge.SplitIn{Topic: topic, Plan: plan})
+	if err != nil {
+		return Result{}, extErr(err)
+	}
+	subs := []any{}
+	for _, s := range sr.Subtopics {
+		subs = append(subs, knObj("name", s.Name, "file", s.File, "bullets", s.Bullets))
+	}
+	d := extWriteData(sr.Topic, wr)
+	d.Set("subtopics", subs)
+	d.Set("left", sr.Left)
+	d.Set("folded", sr.Folded)
+	if !wr.Changed {
+		return Result{Data: d, Text: fmt.Sprintf("unchanged: %s (already split that way)", sr.Topic)}, nil
+	}
+	text := fmt.Sprintf("split: %s into %d subtopics, %d left in the README", sr.Topic, len(sr.Subtopics), sr.Left)
+	if sr.Folded > 0 {
+		text += fmt.Sprintf(", %d stray bullets folded in", sr.Folded)
+	}
+	return Result{Data: d, Text: text + extLanded(wr)}, nil
 }
 
 func knExtReplace(c *Ctx, topic, old, repl string) (Result, error) {

@@ -22,6 +22,18 @@ func (c Clone) git(ctx context.Context, args ...string) (git.Result, error) {
 	return run(ctx, c.Dir, args...)
 }
 
+// lit makes a repo path a literal git pathspec. A topic path comes from a
+// shared base, so `*`, `?` and `[` in it must not match other files.
+func lit(rel string) string { return ":(literal)" + rel }
+
+func lits(rels []string) []string {
+	out := make([]string, len(rels))
+	for i, r := range rels {
+		out[i] = lit(r)
+	}
+	return out
+}
+
 // out runs git and returns trimmed stdout; a non-zero exit is an error that
 // carries git's first message line.
 func (c Clone) out(ctx context.Context, args ...string) (string, error) {
@@ -54,12 +66,16 @@ func (c Clone) now() time.Time {
 }
 
 // stampPath is the per-clone file that records the last successful fetch.
-func (c Clone) stampPath() string {
+func (c Clone) stampPath() string { return c.statePath(".fetch") }
+
+// statePath is a per-clone file in the state dir: the clone path's hash plus
+// ext. Empty without a state dir.
+func (c Clone) statePath(ext string) string {
 	if c.StateDir == "" {
 		return ""
 	}
 	sum := sha256.Sum256([]byte(c.Dir))
-	return filepath.Join(c.StateDir, "external-knowledge", hex.EncodeToString(sum[:6])+".fetch")
+	return filepath.Join(c.StateDir, "external-knowledge", hex.EncodeToString(sum[:6])+ext)
 }
 
 // fresh is whether the last fetch is within the TTL.

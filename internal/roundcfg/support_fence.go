@@ -28,7 +28,7 @@ var supportFenced = []string{
 	// Runs an arbitrary command.
 	"rota test lock",
 	// Tracked .rota/ writes.
-	"rota knowledge add", "rota knowledge amend", "rota knowledge rename-topic", "rota knowledge replace", "rota knowledge rm",
+	"rota knowledge add", "rota knowledge amend", "rota knowledge rename-topic", "rota knowledge replace", "rota knowledge rm", "rota knowledge split",
 	"rota knowledge tier fold", "rota knowledge tier set",
 	"rota knowledge contradiction add", "rota knowledge contradiction clear",
 	"rota glossary write", "rota glossary import",
