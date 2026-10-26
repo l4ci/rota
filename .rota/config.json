@@ -79,34 +79,25 @@
     "lenses": {
       "security": {
         "paths": [
-          "internal/git/**",
           "internal/proc/**",
           "internal/fsio/**",
-          "internal/roundlease/**",
+          "internal/git/**",
           "internal/hook/**",
-          "internal/connections/**",
-          "internal/harness/**",
-          "internal/host/**",
-          "internal/reap/**",
-          "internal/round/**",
-          "internal/hvmigrate/**",
-          "internal/extknowledge/**",
-          "internal/knowledge/**",
-          "internal/ledger/**",
-          "internal/migrate/**",
-          "internal/projects/**",
-          "internal/skills/**",
-          "internal/gate/**",
-          "internal/doctor/doctor.go",
-          "internal/tracker/cli.go",
-          "internal/tui/term.go",
-          "internal/worker/registry.go",
-          "internal/cli/browser.go",
+          "internal/tracker/**",
+          "internal/roundlease/**",
           "internal/cli/hook.go",
+          "internal/cli/browser.go",
+          "hooks/**",
+          "scripts/**",
+          "install.sh",
           "internal/cli/keepalive.go",
           "internal/cli/testlock.go",
           "internal/cli/deps.go",
-          "internal/cli/orchestrate.go"
+          "internal/cli/orchestrate.go",
+          "internal/tui/term.go",
+          "internal/doctor/doctor.go",
+          "internal/worker/registry.go",
+          "internal/host/**"
         ],
         "labels": [
           "risk:security"
@@ -114,7 +105,13 @@
       },
       "ux": {
         "paths": [
-          "internal/cli/**"
+          "internal/cli/exit.go",
+          "internal/cli/palette.go",
+          "internal/tui/**",
+          "docs/usage/**"
+        ],
+        "labels": [
+          "risk:ux"
         ]
       }
     }
