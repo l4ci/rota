@@ -66,7 +66,7 @@ func checkLine(what, s string) error {
 }
 
 // Add writes one bullet under the topic, creating the topic file and its
-// INDEX.md line when the topic is new, then lands it by the repo's policy. A
+// index line when the topic is new, then lands it by the repo's policy. A
 // bullet whose title already exists (case-insensitive) is a no-op.
 func (c Clone) Add(ctx context.Context, in AddIn) (WriteResult, error) {
 	for _, f := range []struct{ what, s string }{{"title", in.Title}, {"body", strings.TrimRight(in.Body, "\r\n")}, {"topic", in.Topic}, {"hook", in.Hook}, {"source", in.Source}} {
@@ -125,7 +125,7 @@ func (c Clone) Add(ctx context.Context, in AddIn) (WriteResult, error) {
 		if hook == "" {
 			hook = in.Title
 		}
-		idx, err := c.readRegular(filepath.Join(c.Dir, IndexFile))
+		idx, err := c.readRegular(filepath.Join(c.Dir, c.indexName()))
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return WriteResult{}, err
 		}
@@ -136,7 +136,7 @@ func (c Clone) Add(ctx context.Context, in AddIn) (WriteResult, error) {
 			text += "\n"
 		}
 		text += fmt.Sprintf("- [%s](%s/%s.md) — %s\n", in.Topic, TopicsDir, slug, hook)
-		p.set(IndexFile, text)
+		p.set(c.indexName(), text)
 		p.set(filepath.ToSlash(filepath.Join(TopicsDir, slug+".md")), "# "+in.Topic+"\n\n"+bullet+"\n")
 		p.slug = slug
 	}
@@ -174,7 +174,7 @@ func (c Clone) Amend(ctx context.Context, in AmendIn) (WriteResult, error) {
 	}
 	t, ok := exact(in.Topic, topics)
 	if !ok {
-		return WriteResult{}, fmt.Errorf("%w: topic %q is not in %s", ErrNotFound, in.Topic, IndexFile)
+		return WriteResult{}, fmt.Errorf("%w: topic %q is not in %s", ErrNotFound, in.Topic, c.indexName())
 	}
 	raw, err := c.readRegular(c.topicPath(t.Slug))
 	if err != nil {

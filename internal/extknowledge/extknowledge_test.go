@@ -39,10 +39,16 @@ func newFixture(t *testing.T, policy string) *fixture {
 
 func newFixtureOn(t *testing.T, policy, branch string) *fixture {
 	t.Helper()
+	return newFixtureIndex(t, policy, branch, IndexFile)
+}
+
+// newFixtureIndex seeds the base with its index under the given file name.
+func newFixtureIndex(t *testing.T, policy, branch, index string) *fixture {
+	t.Helper()
 	root := gittest.TempDir(t)
 	seed := filepath.Join(root, "seed")
 	gittest.Init(t, seed, branch)
-	gittest.Write(t, seed, IndexFile, seedIndex)
+	gittest.Write(t, seed, index, seedIndex)
 	gittest.Write(t, seed, "topics/go.md", seedGo)
 	if policy != "" {
 		gittest.Write(t, seed, PolicyFile, policy)
@@ -480,5 +486,32 @@ func TestBulletContentIsRejected(t *testing.T) {
 		if _, err := c.Amend(ctx, AmendIn{Topic: "Go", Fragment: "Table tests", Text: text}); !errorsIs(err, ErrContent) {
 			t.Fatalf("amend %q: err = %v", text, err)
 		}
+	}
+}
+
+func TestLegacyIndexBaseReadsAndAppendsToIndexMD(t *testing.T) {
+	f := newFixtureIndex(t, "", "main", LegacyIndexFile)
+	c := f.clone()
+	if !has(topicNames(t, c), "Go") {
+		t.Fatalf("legacy INDEX.md not read: %v", topicNames(t, c))
+	}
+	if _, err := c.Add(context.Background(), AddIn{Topic: "Git", Title: "Rebase", Body: "Use --onto.", Hook: "git tips"}); err != nil {
+		t.Fatal(err)
+	}
+	idx, err := os.ReadFile(filepath.Join(f.a, LegacyIndexFile))
+	if err != nil || !strings.Contains(string(idx), "[Git](topics/git.md)") {
+		t.Fatalf("INDEX.md missing new topic: %q %v", idx, err)
+	}
+	if _, err := os.Stat(filepath.Join(f.a, IndexFile)); err == nil {
+		t.Fatal("README.md was created next to a legacy INDEX.md")
+	}
+}
+
+func TestReadmeWinsOverLegacyIndex(t *testing.T) {
+	f := newFixtureIndex(t, "", "main", IndexFile)
+	gittest.Write(t, f.a, LegacyIndexFile, "# old\n\n- [Old](topics/old.md) — stale\n")
+	names := topicNames(t, f.clone())
+	if has(names, "Old") || !has(names, "Go") {
+		t.Fatalf("README.md should win: %v", names)
 	}
 }

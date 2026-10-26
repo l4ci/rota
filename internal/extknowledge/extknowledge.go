@@ -1,11 +1,13 @@
 // Package extknowledge is the external knowledge base: a git repo of markdown
-// files (INDEX.md, topics/<slug>.md, rota-knowledge.json) cloned anywhere on
+// files (README.md, topics/<slug>.md, rota-knowledge.json) cloned anywhere on
 // the machine and shared by every project. It reads after a bounded freshen of
 // the clone and writes bullets that land by the repo's own policy.
 package extknowledge
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/l4ci/rota/internal/git"
@@ -14,9 +16,12 @@ import (
 
 // Files of the knowledge repo.
 const (
-	IndexFile  = "INDEX.md"
-	PolicyFile = "rota-knowledge.json"
-	TopicsDir  = "topics"
+	IndexFile = "README.md"
+	// LegacyIndexFile is the pre-README index name; a base that has only this
+	// keeps using it.
+	LegacyIndexFile = "INDEX.md"
+	PolicyFile      = "rota-knowledge.json"
+	TopicsDir       = "topics"
 )
 
 // Sentinels the verbs map to exit codes.
@@ -46,7 +51,18 @@ type Clone struct {
 	Env
 }
 
-// Topic is one INDEX.md entry.
+// indexName is the index file this clone uses: README.md, or a legacy
+// INDEX.md when README.md is absent. A new base gets README.md.
+func (c Clone) indexName() string {
+	if _, err := os.Stat(filepath.Join(c.Dir, IndexFile)); err != nil {
+		if _, lerr := os.Stat(filepath.Join(c.Dir, LegacyIndexFile)); lerr == nil {
+			return LegacyIndexFile
+		}
+	}
+	return IndexFile
+}
+
+// Topic is one index entry.
 type Topic struct {
 	Name    string
 	Slug    string

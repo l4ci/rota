@@ -22,7 +22,7 @@ func extFixture(t *testing.T, policy string) (project, clone, remote string) {
 	root := gittest.TempDir(t)
 	seed := filepath.Join(root, "seed")
 	gittest.Init(t, seed, "main")
-	gittest.Write(t, seed, "INDEX.md", "# Knowledge index\n\n- [Go](topics/go.md) — testing quirks\n")
+	gittest.Write(t, seed, "README.md", "# Knowledge index\n\n- [Go](topics/go.md) — testing quirks\n")
 	gittest.Write(t, seed, "topics/go.md", "# Go\n\n- **Table tests** — Use t.Run. <!-- 2026-01-02 source:rota -->\n")
 	if policy != "" {
 		gittest.Write(t, seed, "rota-knowledge.json", policy)

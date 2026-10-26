@@ -10,15 +10,15 @@ import (
 	"strings"
 )
 
-// indexRe is one INDEX.md entry: "- [Name](topics/slug.md) — hook".
+// indexRe is one index entry: "- [Name](topics/slug.md) — hook".
 var indexRe = regexp.MustCompile(`^- \[([^\]]+)\]\(topics/([^)/]+)\.md\)(?:\s+—\s+(.*))?\s*$`)
 
-// Topics lists the INDEX.md entries, with each topic file's bullet count.
+// Topics lists the index entries, with each topic file's bullet count.
 func (c Clone) Topics() ([]Topic, error) {
-	raw, err := c.readRegular(filepath.Join(c.Dir, IndexFile))
+	raw, err := c.readRegular(filepath.Join(c.Dir, c.indexName()))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("%w: %s has no %s", ErrNotFound, c.Dir, IndexFile)
+			return nil, fmt.Errorf("%w: %s has no %s", ErrNotFound, c.Dir, c.indexName())
 		}
 		return nil, err
 	}

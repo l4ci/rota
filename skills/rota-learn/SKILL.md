@@ -61,7 +61,7 @@ Project learnings continue through Steps 4 to 6. For each external one:
 printf '%s' "$BODY" | rota knowledge add --external --topic "<Technology>" --title "<Short rule title>" --body-file -
 ```
 
-The verb pulls, writes `topics/<slug>.md` (and the `INDEX.md` line for a new topic), commits, then pushes or opens a PR by the repo's own policy, and prints which. It exits 4 on a dirty or diverged clone: report that in Step 8 and keep the learning for a rerun. External bullets carry no sha, no tier and no managed block, so Steps 5 and 6 do not apply to them.
+The verb pulls, writes `topics/<slug>.md` (and the `README.md` line for a new topic), commits, then pushes or opens a PR by the repo's own policy, and prints which. It exits 4 on a dirty or diverged clone: report that in Step 8 and keep the learning for a rerun. External bullets carry no sha, no tier and no managed block, so Steps 5 and 6 do not apply to them.
 
 ## Step 4 — Auto-Write
 
