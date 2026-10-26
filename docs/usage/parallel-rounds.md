@@ -267,7 +267,7 @@ issue to read and dispute, the item's `## Out of scope` section when it has one,
 
 Concurrent assignments reserve the slot under the registry lock. If another manual assign or
 autopilot tick has taken the slot since planning, the later assign exits 4 with
-`blockedBy: slot-busy` and releases its claim without changing the winner's binding.
+`blockedBy: "slot busy"` and releases its claim without changing the winner's binding.
 The autopilot skips that refusal and continues to the next candidate.
 
 - **Milestone base.** An issue tagged to an active milestone is cut from `origin/milestone/<id>`

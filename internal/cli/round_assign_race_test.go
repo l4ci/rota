@@ -38,7 +38,7 @@ func TestRoundAssignRaceExitsFourWithSlotBusy(t *testing.T) {
 	if code != 4 {
 		t.Fatalf("later assign exit %d, want 4: %s %s", code, out, errOut)
 	}
-	if d := data(t, out); d["blockedBy"] != "slot-busy" || d["changed"] != false {
+	if d := data(t, out); d["blockedBy"] != "slot busy" || d["changed"] != false {
 		t.Errorf("refusal data: %v", d)
 	}
 	if held := worker.LoadRegistryTolerant(f.root).Slot("dana").HeldID(); held != "1" {
