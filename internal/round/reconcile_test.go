@@ -575,13 +575,18 @@ func TestReconcileApplyKeepsABlockedSlotWhoseUnmergedPR(t *testing.T) {
 // movedPane has kit's pane moved into the orchestrator's tab: the agent keeps
 // the name it was started under, but its tab is no longer the recorded one.
 func movedPane(t *testing.T) (string, Env, *[]string) {
+	return movedPaneIn(t, 6)
+}
+
+// movedPaneIn: the tab kit's pane moved to holds n panes.
+func movedPaneIn(t *testing.T, n int) (string, Env, *[]string) {
 	root, e, _ := fixture(t)
 	snap := e.Snapshot
 	e.Snapshot = func(ctx context.Context) ([]host.Agent, error) {
 		all, err := snap(ctx)
 		for i := range all {
 			if all[i].Name == "kit" {
-				all[i].Name, all[i].Tab = host.AgentName("kit", "w1:t3"), "w4:t9"
+				all[i].Name, all[i].Tab, all[i].Pane, all[i].TabPanes = host.AgentName("kit", "w1:t3"), "w4:t9", "w4:p57", n
 			}
 		}
 		return all, err
@@ -619,10 +624,10 @@ func TestReconcileApplyRecordsTheMovedPanesTab(t *testing.T) {
 	if !slices.Contains(kinds(out.Repaired)["kit"], TabMoved) {
 		t.Fatalf("kit repaired = %v, warnings %v", kinds(out.Repaired)["kit"], out.Report.Warnings)
 	}
-	if got := worker.LoadRegistryTolerant(root).Slot("kit").Handle(); got != "w4:t9" {
-		t.Errorf("kit handle = %q, want w4:t9", got)
+	if got := worker.LoadRegistryTolerant(root).Slot("kit").Handle(); got != "w4:p57" {
+		t.Errorf("kit handle = %q, want the pane w4:p57: its tab holds other panes", got)
 	}
-	if want := []string{"kit w1:t3 w4:t9"}; !slices.Equal(*renamed, want) {
+	if want := []string{"kit w1:t3 w4:p57"}; !slices.Equal(*renamed, want) {
 		t.Errorf("renames = %v, want %v", *renamed, want)
 	}
 	// The agent now carries the name of its new tab, as herdr would report it.
@@ -631,7 +636,7 @@ func TestReconcileApplyRecordsTheMovedPanesTab(t *testing.T) {
 		all, err := snap(ctx)
 		for i := range all {
 			if all[i].Tab == "w4:t9" {
-				all[i].Name = host.AgentName("kit", "w4:t9")
+				all[i].Name = host.AgentName("kit", "w4:p57")
 			}
 		}
 		return all, err
@@ -657,5 +662,19 @@ func TestReconcileApplyKeepsTheHandleWhenTheRenameFails(t *testing.T) {
 	}
 	if got := worker.LoadRegistryTolerant(root).Slot("kit").Handle(); got != "w1:t3" {
 		t.Errorf("kit handle = %q, want it untouched so the agent name still resolves", got)
+	}
+}
+
+// A pane alone in its new tab owns it: the tab stays the handle.
+func TestReconcileApplyRecordsTheTabOfAPaneAloneInIt(t *testing.T) {
+	root, e, renamed := movedPaneIn(t, 1)
+	if _, err := e.Reconcile(bg, root, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := worker.LoadRegistryTolerant(root).Slot("kit").Handle(); got != "w4:t9" {
+		t.Errorf("kit handle = %q, want the tab w4:t9", got)
+	}
+	if want := []string{"kit w1:t3 w4:t9"}; !slices.Equal(*renamed, want) {
+		t.Errorf("renames = %v, want %v", *renamed, want)
 	}
 }

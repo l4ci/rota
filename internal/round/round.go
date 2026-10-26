@@ -356,7 +356,8 @@ type Finding struct {
 	support bool
 	// to is the base a base-drift finding retargets the PR onto: the milestone
 	// branch, or "" for the slot's registered base. For tab-moved it is the
-	// tab the pane is in now and from the one the registry records.
+	// handle the pane has now (its tab, or the pane when the tab is shared)
+	// and from the one the registry records.
 	to, from string
 	// tag is the issue's milestone tag the repair records on the slot.
 	tag string
@@ -503,10 +504,10 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			r.Agent, r.HostState = agents[i].Name, agents[i].Status
 			if r.Tab == "" {
 				r.Tab = agents[i].Tab
-			} else if cur := agents[i].Tab; cur != "" && cur != r.Tab && agents[i].Name == host.AgentName(r.Name, r.Tab) && r.Registered {
-				// Found by the name it was started under, in a tab that is not
-				// the recorded one: the pane was moved.
-				rep.add(Finding{Kind: TabMoved, Slot: r.Name, Detail: fmt.Sprintf("recorded tab %s, pane is now in tab %s", r.Tab, cur), Repair: "record tab " + cur, from: r.Tab, to: cur})
+			} else if cur := agents[i].Handle(); cur != "" && cur != r.Tab && agents[i].Name == host.AgentName(r.Name, r.Tab) && r.Registered {
+				// Found by the name it was started under, under a handle that
+				// is not the recorded one: the pane was moved.
+				rep.add(Finding{Kind: TabMoved, Slot: r.Name, Detail: fmt.Sprintf("recorded tab %s, pane is now in tab %s", r.Tab, agents[i].Tab), Repair: "record " + cur, from: r.Tab, to: cur})
 			}
 		} else if r.Registered && r.Tab != "" {
 			rep.add(Finding{Kind: DeadTab, Slot: r.Name, Detail: fmt.Sprintf("host has no live agent for tab %s", r.Tab), Repair: "clear handle, set state dead"})

@@ -377,9 +377,9 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	res.Handle = handle
 	if o.Relay {
 		// The pane may have moved to another tab since the handle was recorded;
-		// the message goes by agent name, so report the tab it landed in.
+		// the message goes by agent name, so report where it landed.
 		if tf := h.Capabilities().TabFollower; tf != nil {
-			if cur := tf.CurrentTab(ctx, o.Slot, handle); cur != "" {
+			if cur := tf.CurrentHandle(ctx, o.Slot, handle); cur != "" {
 				res.Handle = cur
 			}
 		}
