@@ -1,0 +1,6 @@
+		buildSettings = {
+				SWIFT_VERSION = 5.0;
+		};
+		buildSettings = {
+				SWIFT_VERSION = 6.0;
+		};

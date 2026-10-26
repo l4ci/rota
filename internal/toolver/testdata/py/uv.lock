@@ -1,0 +1,15 @@
+version = 1
+requires-python = ">=3.12"
+
+[[package]]
+name = "streamlit"
+version = "1.66.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "Plotly_Express"
+version = "6.0.0"
+
+[[package]]
+name = "plotly"
+version = "6.3.1"
