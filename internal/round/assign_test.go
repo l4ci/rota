@@ -318,6 +318,120 @@ func TestAssignSlotBusyAndFreeSlot(t *testing.T) {
 	}
 }
 
+// A second assign whose plan saw the slot idle, run after a first one filled
+// it, is refused instead of overwriting the first's binding (#2070).
+func TestAssignRacingOnOneSlotRefusesTheLaterWriter(t *testing.T) {
+	f := newAssignFixture(t)
+	fb := f.be
+	fired := false
+	var first Assigned
+	var firstErr error
+	fb.onReady = func(ref string) {
+		if ref != "13" || fired {
+			return
+		}
+		fired = true
+		first, firstErr = f.assign("12", "ben", nil)
+	}
+	later, err := f.assign("13", "ben", func(o *AssignOpts) { o.AcceptOverlap = true })
+	if !fired || firstErr != nil || !first.Dispatched {
+		t.Fatalf("first assign: fired=%v dispatched=%v err=%v", fired, first.Dispatched, firstErr)
+	}
+	winners := 1
+	if err == nil {
+		winners++
+	}
+	claims := len(fb.held("12")) + len(fb.held("13"))
+	f.env.Board, f.env.Forge = fb, fb.asForge()
+	fb.labels = map[int][]string{}
+	for id, state := range fb.bstates {
+		if state == "in-progress" {
+			n, _ := strconv.Atoi(id)
+			fb.labels[n] = []string{f.env.Label}
+		}
+	}
+	f.env.HostName = host.Tmux
+	f.env.Snapshot = func(context.Context) ([]host.Agent, error) {
+		var agents []host.Agent
+		for _, spawn := range f.host.spawned {
+			name, cwd, _ := strings.Cut(spawn, " ")
+			agents = append(agents, host.Agent{Name: name, Cwd: cwd, Tab: "w1:t1"})
+		}
+		return agents, nil
+	}
+	out, reconcileErr := f.env.Reconcile(bg, f.root, false)
+	if reconcileErr != nil {
+		t.Fatal(reconcileErr)
+	}
+	if len(out.Report.Unavailable) != 0 {
+		t.Fatalf("reconcile sources unavailable: %v", out.Report.Unavailable)
+	}
+	bad := map[string]int{ClaimMismatch: 0, LabelOrphan: 0, UnclaimedTab: 0}
+	for _, finding := range out.Drift {
+		if _, ok := bad[finding.Kind]; ok {
+			bad[finding.Kind]++
+		}
+	}
+	t.Logf("race measurements: successful assigns=%d open claims=%d claim-mismatch=%d label-orphan=%d unclaimed-tab=%d", winners, claims, bad[ClaimMismatch], bad[LabelOrphan], bad[UnclaimedTab])
+	if winners != 1 || claims != 1 || len(f.host.spawned) != 1 || later.Dispatched {
+		t.Errorf("want one winner, claim and live agent: winners=%d claims=%d agents=%d later dispatched=%v", winners, claims, len(f.host.spawned), later.Dispatched)
+	}
+	for kind, count := range bad {
+		if count != 0 {
+			t.Errorf("reconcile reports %d %s findings: %+v", count, kind, out.Drift)
+		}
+	}
+	if blockedBy(t, err) != BlockSlotBusy {
+		t.Fatalf("the later writer must be refused as slot-busy: %v", err)
+	}
+	reg := worker.LoadRegistryTolerant(f.root)
+	if got := reg.Slot("ben").HeldID(); got != "12" {
+		t.Errorf("ben holds %q, want 12", got)
+	}
+	if h := fb.held("13"); len(h) != 0 {
+		t.Errorf("the refused assign left claims on 13: %v", h)
+	}
+}
+
+func TestAssignRollbackNonNormalizedItemID(t *testing.T) {
+	for _, id := range []string{"#12", "b07"} {
+		t.Run(id, func(t *testing.T) {
+			f := newAssignFixture(t)
+			key := strings.ToUpper(strings.TrimPrefix(id, "#"))
+			f.be.add(key, "Rollback reservation", "M01", false, "## Acceptance\n- [ ] works")
+			f.be.items[key].ID = id
+			boom := errors.New("label write failed")
+			f.be.failState = boom
+			if _, err := f.assign(key, "ben", nil); !errors.Is(err, boom) {
+				t.Fatalf("want label write failure, got %v", err)
+			}
+			if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.HeldID() != "" || s.ClaimID() != "" {
+				t.Errorf("failed assign left slot reserved: task=%q claim=%q", s.Task(), s.ClaimID())
+			}
+			if len(f.be.claims) != 0 {
+				t.Errorf("failed assign left claims: %v", f.be.claims)
+			}
+		})
+	}
+}
+
+func TestReleaseReservedNonNormalizedTaskID(t *testing.T) {
+	for _, id := range []string{"#12", "b07"} {
+		t.Run(id, func(t *testing.T) {
+			f := newAssignFixture(t)
+			if held, ok, err := worker.ReserveSlot(f.root, "ben", id); err != nil || !ok {
+				t.Fatalf("reserve: held=%q ok=%v err=%v", held, ok, err)
+			}
+			if err := worker.ReleaseReserved(f.root, "ben", id); err != nil {
+				t.Fatal(err)
+			}
+			if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.HeldID() != "" {
+				t.Errorf("released reservation still holds %q", s.HeldID())
+			}
+		})
+	}
+}
+
 func TestAssignBatchCap(t *testing.T) {
 	f := newAssignFixture(t)
 	f.be.add("15", "Third", "M01", false, "## Acceptance\n- [ ] x")

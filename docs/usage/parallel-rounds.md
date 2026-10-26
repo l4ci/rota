@@ -265,6 +265,11 @@ branch `<agent>/<issue>-<slug>`, picks the account and dispatches a short signed
 pointer to the standing contract (`round.brief`, else `skills/references/worker-contract.md`), the
 issue to read and dispute, the item's `## Out of scope` section when it has one, the siblings and the decisions from `--body-file`.
 
+Concurrent assignments reserve the slot under the registry lock. If another manual assign or
+autopilot tick has taken the slot since planning, the later assign exits 4 with
+`blockedBy: "slot busy"` and releases its claim without changing the winner's binding.
+The autopilot skips that refusal and continues to the next candidate.
+
 - **Milestone base.** An issue tagged to an active milestone is cut from `origin/milestone/<id>`
   and its PR targets that branch; see [milestone branches](vision-and-plans.md#milestone-branches).
 - **Tier.** `--tier light|standard|heavy` picks the worker's model tier (default `round.tier`); a

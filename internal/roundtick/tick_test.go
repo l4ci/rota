@@ -273,6 +273,23 @@ func TestAssignRefusalSkipsToNextCandidate(t *testing.T) {
 	}
 }
 
+// A slot the snapshot showed idle but a manual assign filled meanwhile: the
+// assign refuses it as slot-busy and the tick moves on without erroring (#2070).
+func TestSlotFilledMeanwhileSkipsToNextCandidate(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#1", true), cand("#2", true)}}
+	f.assignFn = func(id string) ([]string, error) {
+		if id == "#1" {
+			return nil, &round.BlockedError{By: round.BlockSlotBusy, Msg: "slot ben was filled by another assign"}
+		}
+		f.assigned = append(f.assigned, id)
+		return []string{"ben"}, nil
+	}
+	r, err := Run(context.Background(), f.env())
+	if err != nil || !reflect.DeepEqual(f.assigned, []string{"#2"}) || len(r.NeedsYou) != 0 {
+		t.Fatalf("%v %v %+v", err, f.assigned, r)
+	}
+}
+
 func TestAssignFailureStopsTheTick(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []round.Candidate{cand("#1", true)}}
 	f.assignFn = func(string) ([]string, error) { return nil, errors.New("forge down") }
