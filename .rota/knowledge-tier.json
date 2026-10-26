@@ -156,17 +156,7 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Git & isolation::EnterWorktree branches from origin/main; rebase onto local main before editing": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-05-18"
-    },
     "Build & Tooling: Git & isolation::`git branch -d` refuses on stale remote-tracking refs": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-05-18"
-    },
-    "Build & Tooling: Git & isolation::git checkout -b inherits HEAD's lead over base": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
@@ -276,11 +266,6 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Git & isolation::bg-isolation guard blocks main-thread Edits under /rota-work branch isolation": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-05-18"
-    },
     "Build & Tooling: Git & isolation::Worktree .rota/ runtime is gitignored \u2014 run state helpers from main repo path": {
       "tier": "provisional",
       "hits": 0,
@@ -333,18 +318,18 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Embedding host fakes must redeclare Capabilities": {
       "tier": "confirmed",
-      "hits": 5,
-      "lastSeen": "2026-10-22"
+      "hits": 6,
+      "lastSeen": "2026-10-24"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Palette entries name the verb that registers the View": {
-      "tier": "provisional",
-      "hits": 2,
-      "lastSeen": "2026-10-19"
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-10-24"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::A per-invocation cache must reset per pass in long-running verbs": {
-      "tier": "provisional",
-      "hits": 2,
-      "lastSeen": "2026-10-22"
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-10-24"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Wrappers read stdin only when an argument takes it": {
       "tier": "deprecated",
@@ -403,18 +388,18 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate target fields change mid-run": {
       "tier": "confirmed",
-      "hits": 5,
-      "lastSeen": "2026-10-22"
+      "hits": 6,
+      "lastSeen": "2026-10-24"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate steps read the forge only after stepRemote": {
       "tier": "confirmed",
-      "hits": 4,
-      "lastSeen": "2026-10-22"
+      "hits": 5,
+      "lastSeen": "2026-10-24"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::The tracker REST layer never resends a POST after a 5xx": {
       "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-22"
+      "hits": 2,
+      "lastSeen": "2026-10-24"
     },
     "Rounds: Orchestration: Workers & relays::Sonnet workers write tests after the code unless the brief names the RED": {
       "tier": "provisional",
@@ -622,9 +607,9 @@
       "lastSeen": "2026-10-19"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::The worker forge must not share the read cache": {
-      "tier": "provisional",
-      "hits": 2,
-      "lastSeen": "2026-10-22"
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-10-24"
     },
     "Rounds: Orchestration: Slate & issues::The queue-empty architecture trigger re-fires on every idle check": {
       "tier": "provisional",
@@ -803,8 +788,8 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::A config enum of harness kinds must be allowlisted in the kind-switch guard": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-20"
+      "hits": 1,
+      "lastSeen": "2026-10-24"
     },
     "Rounds: Orchestration: Reviews & verdicts::Verdict severities are blocker, major, minor and info": {
       "tier": "provisional",
@@ -883,8 +868,8 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::A bigger timeout is not a flake fix": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-21"
+      "hits": 1,
+      "lastSeen": "2026-10-24"
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::printf into head dies under pipefail": {
       "tier": "provisional",
@@ -893,8 +878,8 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Isolate the global config without a temp dir leak": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-21"
+      "hits": 1,
+      "lastSeen": "2026-10-24"
     },
     "Rounds: Orchestration: Reviews & verdicts::Record verdicts at review package data.head": {
       "tier": "provisional",
@@ -926,15 +911,10 @@
       "hits": 0,
       "lastSeen": "2026-10-21"
     },
-    "Build & Tooling: Git & isolation::zsh does not split unquoted variables": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-22"
-    },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Contract data lines decide read-only verbs": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-22"
+      "hits": 1,
+      "lastSeen": "2026-10-24"
     },
     "Rounds: Orchestration: Reviews & verdicts::Packages before -run in review test commands": {
       "tier": "provisional",
