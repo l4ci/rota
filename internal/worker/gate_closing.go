@@ -67,7 +67,7 @@ func checkCloses(ctx context.Context, in closesInput) stepOutcome {
 		}
 		is, err := in.Issues.Get(ctx, key, false)
 		if err != nil {
-			return stepOutcome{Broke: fmt.Sprintf("could not read %s to check closing rules: %v", key.Ref(), err), Notes: out.Notes}
+			return stepOutcome{Broke: fmt.Sprintf("could not read %s to check for the %s label: %v", key.Ref(), PartialSliceLabel, err), Notes: out.Notes}
 		}
 		// a member closed since the assign has left the bundle (the lead, keys[0], stays)
 		if i > 0 && is.State == "closed" {
@@ -144,8 +144,8 @@ func checkClosingItems(ctx context.Context, in closesInput) stepOutcome {
 		forgeCloses := known && numbered && slices.Contains(nums, number)
 		is, err := in.Issues.Get(ctx, key, false)
 		if err != nil {
-			if !known && !in.Issues.ClosesIssue(key, in.Source) {
-				continue // later steps read items the PR leaves open
+			if !known {
+				continue // preserve the existing optional-read fallback without forge refs
 			}
 			return stepOutcome{Broke: fmt.Sprintf("could not read %s to check for the %s label: %v", key.Ref(), PartialSliceLabel, err)}
 		}

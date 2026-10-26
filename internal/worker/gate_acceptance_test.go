@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -10,10 +11,14 @@ import (
 
 type acceptanceIssues struct {
 	seamIssues
-	items map[tracker.IssueKey]tracker.Issue
+	items    map[tracker.IssueKey]tracker.Issue
+	notesErr error
 }
 
 func (s *acceptanceIssues) Get(ctx context.Context, key tracker.IssueKey, comments bool) (tracker.Issue, error) {
+	if comments && s.notesErr != nil {
+		return tracker.Issue{}, s.notesErr
+	}
 	if is, ok := s.items[key]; ok {
 		return is, nil
 	}
@@ -77,5 +82,14 @@ func TestCheckClosesUnmetKeyAcceptance(t *testing.T) {
 	out := checkCloses(context.Background(), closesInput{Slot: "kit", PR: "https://github.com/o/r/pull/12", Keys: []tracker.IssueKey{key}, Source: tracker.ClosingSource{Body: "Closes ENG-1"}, Issues: issues})
 	if out.Verdict != "unmet acceptance" {
 		t.Fatalf("keyed item outcome %+v, want unmet acceptance", out)
+	}
+}
+
+func TestCheckClosesAcceptanceNotesReadFailure(t *testing.T) {
+	key := tracker.NumKey(5)
+	issues := &acceptanceIssues{notesErr: errors.New("notes unavailable"), items: map[tracker.IssueKey]tracker.Issue{key: {Key: key, State: "open", Body: "## Acceptance\n- [ ] AC-1: ready\n"}}}
+	out := checkCloses(context.Background(), closesInput{Slot: "kit", PR: "https://github.com/o/r/pull/12", Keys: []tracker.IssueKey{key}, Source: tracker.ClosingSource{Body: "Closes #5"}, Issues: issues})
+	if !strings.Contains(out.Broke, "could not read acceptance notes") || !strings.Contains(out.Broke, "notes unavailable") {
+		t.Fatalf("note read failure was ignored: %+v", out)
 	}
 }
