@@ -266,7 +266,7 @@ func releaseClaimLabel(ctx context.Context, in releaseInput, key tracker.IssueKe
 	}
 	var drop []string
 	for _, label := range labels {
-		if label == in.Label || strings.HasPrefix(label, backlog.ClaimLabelPrefix) {
+		if label == in.Label || backlog.IsClaimLabel(label) {
 			drop = append(drop, label)
 		}
 	}

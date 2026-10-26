@@ -8,8 +8,18 @@ import (
 	"github.com/l4ci/rota/internal/roundcfg"
 )
 
-// ClaimLabelPrefix identifies the visible, derived marker of a comment claim.
-const ClaimLabelPrefix = "claimed:"
+const claimLabelPrefix = "claimed:"
+
+// IsClaimLabel reports whether label is a visible, derived claim marker.
+// It recognizes the prefix only; it does not validate the agent or machine.
+func IsClaimLabel(label string) bool {
+	return strings.HasPrefix(label, claimLabelPrefix)
+}
+
+// HasClaimLabel reports whether labels contains a claim marker.
+func HasClaimLabel(labels []string) bool {
+	return slices.ContainsFunc(labels, IsClaimLabel)
+}
 
 var claimLabelID = regexp.MustCompile(`^([a-z][a-z0-9-]*)@[0-9]+$`)
 
@@ -28,7 +38,7 @@ func ClaimLabel(cfg any, claimID string) (string, bool) {
 			return "", false
 		}
 	}
-	label := ClaimLabelPrefix + agent + "@" + machine
+	label := claimLabelPrefix + agent + "@" + machine
 	if len(label) > 50 {
 		return "", false
 	}
@@ -63,7 +73,7 @@ func (b *Issues) ClaimLabelDrift(ref string) (add, remove []string, err error) {
 		}
 	}
 	for _, label := range is.Labels {
-		if strings.HasPrefix(label, ClaimLabelPrefix) && !want[label] {
+		if IsClaimLabel(label) && !want[label] {
 			remove = append(remove, label)
 		}
 	}
