@@ -22,6 +22,18 @@ func (c Clone) git(ctx context.Context, args ...string) (git.Result, error) {
 	return run(ctx, c.Dir, args...)
 }
 
+// lit makes a repo path a literal git pathspec. A topic path comes from a
+// shared base, so `*`, `?` and `[` in it must not match other files.
+func lit(rel string) string { return ":(literal)" + rel }
+
+func lits(rels []string) []string {
+	out := make([]string, len(rels))
+	for i, r := range rels {
+		out[i] = lit(r)
+	}
+	return out
+}
+
 // out runs git and returns trimmed stdout; a non-zero exit is an error that
 // carries git's first message line.
 func (c Clone) out(ctx context.Context, args ...string) (string, error) {

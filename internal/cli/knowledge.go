@@ -302,7 +302,7 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 
 func knSplit(fs *flag.FlagSet) RunFunc {
 	topic := fs.String("topic", "", "the `topic` to split")
-	planFile := fs.String("plan", "", "the split plan, JSON: a `path`, or - for stdin; optional only to fold a stray file into a topic that is already split")
+	planFile := fs.String("plan", "", "the split plan, JSON {\"subtopics\":[{\"name\",\"hook\",\"titles\"}]}: a `path`, or - for stdin; optional only to fold a stray file into a topic that is already split")
 	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := knNoArgs(args); err != nil {

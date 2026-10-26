@@ -19,6 +19,9 @@ type SplitSubtopic struct {
 	Titles []string `json:"titles"`
 }
 
+// PlanShape is the JSON a split plan takes.
+const PlanShape = `{"subtopics":[{"name":"…","hook":"…","titles":["…"]}]}`
+
 // SplitPlan says how a topic's bullets divide into subtopics. Bullets the plan
 // does not list stay in the topic's README, below the sub-index.
 type SplitPlan struct {
@@ -127,8 +130,11 @@ type planSub struct {
 // checkPlan validates the plan on its own: names, slugs, hooks and titles. It
 // reads nothing from the clone.
 func checkPlan(parent string, plan *SplitPlan) ([]planSub, error) {
-	if plan == nil || len(plan.Subtopics) == 0 {
-		return nil, fmt.Errorf("%w: the plan lists no subtopics", ErrUsage)
+	if plan == nil {
+		return nil, fmt.Errorf("%w: splitting %q needs --plan <file>: %s; /rota-learn --external-review drafts one", ErrUsage, parent, PlanShape)
+	}
+	if len(plan.Subtopics) == 0 {
+		return nil, fmt.Errorf("%w: the plan lists no subtopics: %s", ErrUsage, PlanShape)
 	}
 	var out []planSub
 	slugs := map[string]string{}
@@ -283,6 +289,9 @@ func (c Clone) Split(ctx context.Context, in SplitIn) (SplitResult, WriteResult,
 	pool := append([]unit(nil), main.units...)
 	var strayUnits, dropped []unit
 	if t.Split && t.Stray != "" {
+		if _, err := c.out(ctx, "ls-files", "--error-unmatch", "--", lit(t.Stray)); err != nil {
+			return res, WriteResult{}, fmt.Errorf("%w: %s is untracked, so folding it could lose it; commit or remove it first", ErrDirty, t.Stray)
+		}
 		sb, _, err := read(t.Stray)
 		if err != nil {
 			return res, WriteResult{}, err
