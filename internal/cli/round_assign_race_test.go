@@ -11,6 +11,12 @@ import (
 
 func TestRoundAssignRaceExitsFourWithSlotBusy(t *testing.T) {
 	f := newScopeFx(t, "warn", "")
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) {
+		s.Unbind()
+		s.SetBranch("park/ben")
+	}); err != nil {
+		t.Fatal(err)
+	}
 	realGit := f.deps.Git
 	fired := false
 	f.deps.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
@@ -18,7 +24,7 @@ func TestRoundAssignRaceExitsFourWithSlotBusy(t *testing.T) {
 		// attempt's inherited branch tip. Complete the competing assign here.
 		if !fired && strings.Join(args, " ") == "check-ref-format --branch dana/2-candidate" {
 			fired = true
-			code, out, errOut := rotaInWith(t, f.deps, f.root, "--json", "round", "assign", "3", "--agent", "dana", "--holder-pid", "4242")
+			code, out, errOut := rotaInWith(t, f.deps, f.root, "--json", "round", "assign", "1", "--agent", "dana", "--holder-pid", "4242")
 			if code != 0 {
 				t.Fatalf("first assign exit %d: %s %s", code, out, errOut)
 			}
@@ -35,7 +41,7 @@ func TestRoundAssignRaceExitsFourWithSlotBusy(t *testing.T) {
 	if d := data(t, out); d["blockedBy"] != "slot-busy" || d["changed"] != false {
 		t.Errorf("refusal data: %v", d)
 	}
-	if held := worker.LoadRegistryTolerant(f.root).Slot("dana").HeldID(); held != "3" {
-		t.Errorf("slot holds %q, want winner 3", held)
+	if held := worker.LoadRegistryTolerant(f.root).Slot("dana").HeldID(); held != "1" {
+		t.Errorf("slot holds %q, want winner 1", held)
 	}
 }

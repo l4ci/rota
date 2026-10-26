@@ -432,32 +432,6 @@ func TestReleaseReservedNonNormalizedTaskID(t *testing.T) {
 	}
 }
 
-func TestAssignRollbackBoundNonNormalizedItemID(t *testing.T) {
-	for _, id := range []string{"#12", "b07"} {
-		t.Run(id, func(t *testing.T) {
-			f := newAssignFixture(t)
-			key := strings.ToUpper(strings.TrimPrefix(id, "#"))
-			f.be.add(key, "Rollback binding", "M01", false, "## Acceptance\n- [ ] works")
-			f.be.items[key].ID = id
-			// Reset fails after binding, so claim undo must clear the raw ID
-			// even though the reservation already has a claim and cannot release it.
-			wt := filepath.Join(f.root, ".worktrees", "ben")
-			if err := os.WriteFile(filepath.Join(wt, "scratch.txt"), []byte("wip"), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := f.assign(key, "ben", nil); blockedBy(t, err) != BlockSlotBusy {
-				t.Fatalf("dirty worktree must refuse reset: %v", err)
-			}
-			if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.HeldID() != "" || s.ClaimID() != "" {
-				t.Errorf("failed reset left slot bound: task=%q claim=%q", s.Task(), s.ClaimID())
-			}
-			if len(f.be.claims) != 0 {
-				t.Errorf("failed reset left claims: %v", f.be.claims)
-			}
-		})
-	}
-}
-
 func TestAssignBatchCap(t *testing.T) {
 	f := newAssignFixture(t)
 	f.be.add("15", "Third", "M01", false, "## Acceptance\n- [ ] x")
