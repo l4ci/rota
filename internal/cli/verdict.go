@@ -629,7 +629,7 @@ func debugReset(fs *flag.FlagSet) RunFunc {
 // ---- debug work-fix
 
 // workFixTarget resolves the item and the store key of one task's count: the
-// item's ID, plus "#<task>" when --task names one, so sibling tasks of an
+// item's ID, plus "@<task>" when --task names one, so sibling tasks of an
 // item neither share a count nor clear each other's.
 func workFixTarget(c *Ctx, args []string, task string) (root, bug, key string, err error) {
 	bug, err = oneArg(args, "bugId")
@@ -647,7 +647,7 @@ func workFixTarget(c *Ctx, args []string, task string) (root, bug, key string, e
 	}
 	key = bug
 	if task = strings.TrimSpace(task); task != "" {
-		key += "#" + task
+		key += "@" + task
 	}
 	return
 }
