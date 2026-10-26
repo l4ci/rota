@@ -12,6 +12,16 @@ rota is MIT licensed and free. The agents run on your own Claude or Codex plan. 
 
 No. The backlog lives in `.rota/BACKLOG.md` by default. Set `issues.source` to use GitHub, GitLab, Jira, Linear or itsaplan issues instead: see the [issue backend](usage/issue-backend.md). A project with an `origin` remote needs `gh` or `glab` logged in even on the file backend, because workers open PRs and the gate merges through the forge. With no remote (`forge.provider: local`) there are no PRs and finished work merges directly.
 
+## What if I'm not using Claude Code?
+
+Codex is supported. `rota skills install` writes the skills to `~/.agents/skills` as well as the Claude Code directory. In a round, Codex and [OpenCode](usage/opencode-workers.md) can run as workers beside Claude Code, and the orchestrator itself can run in Claude Code, Codex, Hermes or OpenCode ([orchestrator harnesses](usage/orchestrator-harnesses.md)). A few skill instructions are still labelled Claude-only; [skills in Codex](usage/codex-skills.md) lists them.
+
+The `.rota/` folder, the backlog formats and the `rota` binary are agent-agnostic, so you can call `rota` from any shell.
+
+## Does rota work on Windows?
+
+Through WSL2. There is no native Windows build. Install rota, git, `gh` and your agent inside the WSL2 distro and keep the repo on the Linux filesystem. See [Windows](install.md#windows-wsl2).
+
 ## Can a worker merge broken code?
 
 Workers never merge. They open a PR, and the orchestrator merges through the gate (`rota worker gate`). The gate runs your full test suite (`test.full`) on a scratch merge of the PR and the current base, and merges only on a pass. It refuses to merge while `test.full` is empty, unless you pass `--no-verify`. To approve every merge yourself, set `ship.mergeApproval`: see [merge approval](usage/parallel-rounds.md#merge-approval).
@@ -27,16 +37,6 @@ Yes, once a supervised round works. Install the handoff hooks (`rota hook instal
 ## Do I need herdr or tmux?
 
 No. Workers in a [parallel round](usage/parallel-rounds.md) get a tab each in herdr or tmux when the orchestrator runs inside one. Without either, `rota round start` picks solo mode and the orchestrator runs each worker as a subagent in its own worktree. Solo mode has no host to notify you, so questions go on the issue or PR thread. Solo workers share the orchestrator's account and usage limit, and run Claude only, so keep solo rounds to two or three workers.
-
-## What if I'm not using Claude Code?
-
-Codex is supported. `rota skills install` writes the skills to `~/.agents/skills` as well as the Claude Code directory. In a round, Codex and [OpenCode](usage/opencode-workers.md) can run as workers beside Claude Code, and the orchestrator itself can run in Claude Code, Codex, Hermes or OpenCode ([orchestrator harnesses](usage/orchestrator-harnesses.md)). A few skill instructions are still labelled Claude-only; [skills in Codex](usage/codex-skills.md) lists them.
-
-The `.rota/` folder, the backlog formats and the `rota` binary are agent-agnostic, so you can call `rota` from any shell.
-
-## Does rota work on Windows?
-
-Through WSL2. There is no native Windows build. Install rota, git, `gh` and your agent inside the WSL2 distro and keep the repo on the Linux filesystem. See [Windows](install.md#windows-wsl2).
 
 ## Is `.rota/` tracked by default?
 
