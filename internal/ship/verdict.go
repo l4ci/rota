@@ -40,3 +40,22 @@ func (v VerdictCheck) Block(branch string) error {
 	}
 	return &VerdictBlockedError{Branch: branch, Record: r, Stale: stale}
 }
+
+// BlockGate is Block plus the bounce rule, for the merge gate and train: a
+// review record at the branch tip with a blocking finding or a failed item
+// refuses the merge even when its verdict is CONCERNS. Ship keeps Block, which
+// follows the recorded FAIL alone.
+func (v VerdictCheck) BlockGate(branch string) error {
+	if err := v.Block(branch); err != nil {
+		return err
+	}
+	res, err := v.Git.Run("rev-parse", "--short", branch)
+	if err != nil || res.ExitCode != 0 {
+		return nil
+	}
+	r, ok := verdict.BlockingAtHead(v.Store.Branches[verdict.BranchKey(v.Repo, branch)], strings.TrimSpace(res.Stdout))
+	if !ok {
+		return nil
+	}
+	return &VerdictBlockedError{Branch: branch, Record: r}
+}
