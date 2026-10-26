@@ -1,36 +1,53 @@
 # Changelog
 
-## Unreleased
+## v0.26.0 — 2026-10-26
 
-- **Review lenses.** `review.lenses` maps `security`, `perf` and `ux` to path globs and issue labels. `rota review depth --json` lists the triggered lenses as `lenses`, `/rota-review` runs one focused reviewer per lens at `full` and `light` and records `review-security`, `review-perf` or `review-ux`, and `rota worker gate` refuses `review-missing` until each triggered lens has a record at head. The default is empty, so nothing changes until a lens is configured.
-- **Surface-aware `/rota-qa` strategies.** `first-run` offers a per-surface check menu and audit rubric (`surface-cli|web|api|lib.md`; web adds a `ui-a11y` pillar), marking each tool installed or not installed and installing nothing. Strategies gain an optional `pillar-globs` frontmatter map (`functional`, `security`, `performance`, `ui-a11y`). `qa.afterWork` and `ship.qa` now call `/rota-qa run --gate`, which runs only the pillars whose globs match the touched files plus pillars with no globs, and lists skipped pillars. Manual `/rota-qa run` and strategies without `pillar-globs` are unchanged.
-- **Assign before landing.** Train nudges name an assignment to run first when a free slot has a ready candidate. `rota worker gate` and `rota worker train` warn on stderr and in JSON `warnings` about the same opportunity; `--no-assign-check` skips the check for scripted runs.
+Milestones get their own integration branches, reviews gain security, perf and UX lenses, and a shared knowledge base can follow you across projects.
 
-### Support pull
+## Upgrade notes
 
-- Support fills free slots from its pinned issues, then unpinned issues within `round.scope`. Both machines use the shared claim; support pins a won issue so main can track its queue, comments and PR approvals. A failed assignment before dispatch removes the pin it added. `round support return` releases support's claims and removes the pin.
+- **Named machine pins.** `machine:<name>` replaces `site:support`: main is named `main`, support uses `round.support`. On main, preview with `rota migrate labels`, then run `rota migrate labels --apply` to relabel open issues and retire `issues.labels.support` (including a custom label value). `config fill` keeps that key until the migration succeeds.
+- **Visible claim labels.** After upgrading, run `rota round reconcile --apply` once to backfill `claimed:<agent>@<machine>` labels for in-flight comment claims. Comment claims stay authoritative. Reverting leaves the `claimed:*` labels on the tracker; remove them by hand.
+- **Stale claims can be reclaimed.** Status, candidates and doctor mark inactive remote claims `stale-claim` (`round.claimStaleMinutes`, default 240; `round.claimStaleMinutesMajor`, default 480 for Major features; `0` disables). After approval, `rota round assign <ID> --reclaim-stale <claim-id>` transfers the claim, and the former holder's PR is refused `claim-lost` at the gate.
+- **Fewer filed follow-ups.** `review.fileDeferred` now defaults to `major`: minor deferred findings stay in the verdict record. A PR whose issue is itself a deferred-findings item files none. Set `minor` for the old behaviour.
+- **Stale and provenance-fail gates no longer count as bounces.** They go back to the worker, and a support machine's worker still gets the review-bounce comment on its PR, but neither counts toward `round.maxBounces` or parks the item.
+- **An unresolved base refuses.** A `git.baseBranch` that is set but missing used to fall back to main. Round verbs, `round start` and `worker adopt` now refuse and name it, and `rota ship` passes `--base` to `gh pr create`.
 
+## Milestone branches
 
-### Milestone branches
+Issues tagged to an active milestone merge into `milestone/<id>`, which reaches main only through a release PR.
 
-- **Cross-milestone dependencies need a maintainer decision.** `rota round candidates` flags dependencies on another active milestone and shared `## Touches` entries. Closed dependencies count only when labelled `on-milestone/<id>`, including for untagged issues targeting main. `rota round assign` refuses these ties with `cross-milestone`; `--accept-cross-milestone` overrides the refusal for the lead and its bundle members.
+- **Branch lifecycle.** Activating a milestone cuts and pushes `milestone/<id>` from origin's base. Archiving keeps it as `archive/milestone/<id>` or deletes it (`--branch`), and shipping deletes it.
+- **Routing.** `rota round assign` branches the worker from the milestone, records it as the slot's base and names it in the brief; the PR, `rota git base` and `rota ship` follow. When an issue's milestone changes after assign, `rota round reconcile --apply` repairs the new `base-drift`: it retargets the PR and holds the slot until the worker merges the new base.
+- **Trains sync first.** `rota worker train --base milestone/<id>` merges the project base into the milestone, gates base + milestone + members once and pushes only on green. A sync conflict ends the train `merge-failed` and pushes nothing.
+- **Close on merge.** PRs merged into a milestone label their issues `on-milestone/<id>` and close them. `rota round candidates` and `assign` flag dependencies on another active milestone (`cross-milestone`; override with `--accept-cross-milestone`).
+- **Release.** `/rota-release` on a milestone with a branch syncs the base, runs the full gate plus e2e, opens a PR to the base and merges it with a merge commit once CI is green. It then removes the labels, deletes the branch and marks the milestone shipped.
 
-- **Milestone merges close their linked issues.** PRs merged into `milestone/<id>` label linked issues `on-milestone/<id>` and close them. Each successfully closed issue releases its claim labels even if another linked issue fails; tracker failures name the manual label and close commands. Trains surface landing warnings in their notes. Archiving a milestone instead of releasing it leaves already merged issues closed even though their work never reached main; find them by their `on-milestone/<id>` label.
-- **Issues of an active milestone route to its branch.** `rota round assign` cuts the worker branch from `origin/milestone/<id>`, records it as the slot's base and names it in the brief; the worker's PR, `rota git base` and `rota ship` follow. Untagged issues, issues of a milestone that is not active, projects without `origin` and milestones whose branch is not on origin keep the round base. `rota round reconcile --apply` repairs a new `base-drift`: when an issue's milestone tag changes after assign, the PR is retargeted, the slot rerouted and held until the worker merges the new base. A milestone going active under an unchanged tag is not drift. Milestone PRs are not gated by the tick yet (train sync is a sibling issue).
-- **A train onto a milestone branch syncs the project base first.** `rota worker train --base milestone/<id>` merges the project base branch (`git.baseBranch`, else main) into the milestone in the scratch tree before the members, runs `test.full` once on base + milestone + members, and pushes the sync merge to `origin/milestone/<id>` only on green, ahead of the first landing. A sync conflict ends the train with `merge-failed`, naming the milestone and the conflicting paths, and pushes nothing. Trains on the base branch are unchanged.
-- **A milestone releases through a PR from its branch.** `/rota-release` on a milestone with a branch syncs the base into `milestone/<id>`, runs `test.full` and `test.e2e`, opens a PR to the base, waits for CI and merges it with a merge commit after a confirmation. A red gate or CI stops before anything merges; the fix goes to the milestone branch. After the tag and publish it removes the `on-milestone/<id>` labels, deletes the branch and marks the milestone shipped. A release with no milestone is unchanged.
+## New
 
-### Upgrade notes
+- **Review lenses.** `review.lenses` maps `security`, `perf` and `ux` to path globs and labels. `rota review depth --json` lists the triggered lenses, `/rota-review` runs one focused reviewer per lens, and `rota worker gate` refuses `review-missing` until each lens has a record at head. Empty by default.
+- **Gate refuses a blocking finding.** `rota worker gate` and `rota worker train` refuse a PR whose review record at the merged head carries a blocker or major finding, even under CONCERNS.
+- **External knowledge base.** `knowledge.external` points at a cloned git repo of markdown topics shared across projects. `rota knowledge query|topics|add|amend --external` read and write it, and writes land by the repo's own push or PR policy. See [external knowledge](docs/usage/external-knowledge.md).
+- **Surface-aware `/rota-qa`.** `first-run` offers a check menu per surface (CLI, web, API, library). Strategies can scope pillars with `pillar-globs`, and `ship.qa` runs only the pillars the change touches (`/rota-qa run --gate`).
+- **Support pull.** A support machine fills free slots from its pinned issues, then unpinned issues in `round.scope`, through the shared claim.
+- **Merge trains.** `rota worker train --plan` previews the conflict-free subset, and trains accept external PR targets.
+- **Assign before landing.** Train nudges, `worker gate` and `worker train` name a ready assignment to run first when a slot is free (`--no-assign-check` skips it).
+- **Worker pre-flight.** The worker contract and brief carry measured, numeric acceptance checks, and round workers post learnings on their issue before `worker done`.
 
-- **Reclaim stale claims.** Status, candidates and doctor mark inactive remote claims as `stale-claim`. `round.claimStaleMinutes` defaults to 240 for bugs, tasks and Minor/Cosmetic features; `round.claimStaleMinutesMajor` defaults to 480 for Major features. Set either to `0` to disable that class. After maintainer approval, `rota round assign <ID> --reclaim-stale <claim-id>` rechecks activity and transfers the claim. A former holder's recorded claim is refused with `claim-lost` at the merge gate; adoption refuses `claimed` with positive stale/reclaimed evidence. PRs without a recorded claim remain gateable.
+## Fixed
 
-- **Visible claim labels.** After upgrading, run `rota round reconcile --apply` once to backfill `claimed:<agent>@<machine>` labels for in-flight comment claims and repair stale labels. Comment claims remain authoritative. Reverting this change leaves `claimed:*` labels already written to the tracker; remove those labels by hand.
-- **Named machine pins.** `machine:<name>` replaces `site:support`: main is named `main`, support uses `round.support`. On main, preview with `rota migrate labels`, then run `rota migrate labels --apply` to relabel open issues and retire `issues.labels.support` (including a custom label value). `config fill` preserves that key until migration succeeds. Candidates show pins to other machines as blocked; unpinned issues are available to both machines, with support preferring its pins.
-- **Fewer filed follow-ups.** `review.fileDeferred` now defaults to `major`: minor deferred findings stay in the verdict record and `verdict add` lists them as `kept`. A PR whose issue is itself a deferred-findings item files none. Set `minor` to get the old behavior.
+- **herdr panes that move.** Reconcile follows a pane moved to another tab (`tab-moved` drift) and records the pane handle when the tab holds other panes. Kill checks the tab's pane count before it closes anything, so a shared tab is never closed.
+- **Round watch.** Every exit carries the re-arm hint, and the watch wakes on gate release, support PR comments and pushes, and a second done for the same PR.
+- **Assign races.** Two assigns racing on one slot: the later one is refused `slot busy` and rolls back only its own claim.
+- **Transfers.** A transferred slot stays busy until its own worker reports done.
+- **Superseded PRs.** Reconcile repairs a slot whose recorded PR was closed while another PR heads its branch (`pr-superseded`).
+- **Merged PRs.** The gate judges the merged head, not the local branch tip, and a merged PR counts as closed for dependencies.
+- **Builds.** Unstamped builds report their version as `unknown`.
 
-### New
+## Stats
+387 commits, 469 files changed, +22337 −3570 lines
 
-- **External knowledge base.** `knowledge.external` (global) points at a cloned git repo of markdown topics shared by every project, and `knowledge.externalTTL` sets how long a fetch stays fresh. `rota knowledge query|topics|add|amend --external` read and write it, `add --external --hook` names the index line of a new topic, and `rota doctor` checks the clone. Writes land by the repo's `rota-knowledge.json` (`push` or `pr`); exit 3 when the key is unset, 4 for a dirty or diverged clone or a multi-match, 5 when the remote is offline. See [external knowledge](docs/usage/external-knowledge.md).
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.25.0...v0.26.0
 
 ## v0.25.0 — 2026-10-24
 
