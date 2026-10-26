@@ -393,6 +393,8 @@ slot needs attention, a PR or an escalation changes, or after `--heartbeat` seco
 nothing to report, and the harness wakes the orchestrator when it exits. Keep exactly one running and
 re-arm it after every wake; a second one is refused (exit 4). The registry is read every `--poll`
 seconds and the forge every `--forge-poll`; `reason` in the result says which woke it.
+The exit digest says the watch is exiting and must be re-armed; the prompt hook reports
+whether a watch is currently armed.
 
 With `rota hook install` the orchestrator is held to this. The Stop hook refuses to let a lease-holding
 orchestrator go idle while workers are active and no watch is running, and the prompt hook adds a
@@ -809,6 +811,9 @@ in `<!-- rota:handoff <slot>@<round> -->`.
 `rota round status` lists the round's slots with host, PR and drift. `rota round reconcile` reports
 drift between the registry, the host, git and the forge, including `stalled` (never repaired),
 `lease-stale`, `claim-mismatch`, `claim-label-drift` and `unregistered-branch`.
+When a slot records a closed, unmerged PR and an open PR heads the same branch,
+`pr-superseded` names both PRs. `reconcile --apply` records the open PR's URL;
+the next reconcile reports no drift for that record. A merged PR record is kept.
 Each won round claim has a visible `claimed:<agent>@<machine>` label: `claimed:ben@main` on main,
 or `claimed:ben@mac` for support slot `mac-ben` when `round.support` is `mac`. Comment claims
 decide ownership; labels follow them. `--apply` repairs missing or stale claim labels without

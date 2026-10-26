@@ -25,7 +25,7 @@ func (o Outcome) Clean() bool { return len(o.Drift) == 0 && len(o.Repaired) == 0
 
 // Reconcile assembles the round and, with apply, makes the safe repairs: it
 // clears the handle of a dead tab, registers an unregistered worktree,
-// records an unrecorded PR, adds a missing in-progress label, removes claim labels from a closed issue,
+// records an unrecorded or superseding open PR, adds a missing in-progress label, removes claim labels from a closed issue,
 // syncs visible claim labels from comment claims and clears a
 // claimId whose claim is gone from the tracker (never the tracker's side) and
 // drops a queued PR record whose PR is merged or closed, parks a slot whose PR is merged and releases an adopted slot whose PR is merged (worktree and branch kept). Every other
@@ -115,7 +115,7 @@ func unreadSource(rep *Report, kind string) string {
 	switch kind {
 	case DeadTab:
 		need = SourceHost
-	case PRUnrecorded, MergedExternal, PRStale, BaseDrift, LabelMissing, LabelStale, ClaimLabelDrift:
+	case PRUnrecorded, PRSuperseded, MergedExternal, PRStale, BaseDrift, LabelMissing, LabelStale, ClaimLabelDrift:
 		need = SourceForge
 	}
 	for _, u := range rep.Unavailable {
@@ -134,7 +134,7 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 			s.SetHandle("")
 			return s.MarkState("dead", "")
 		})
-	case PRUnrecorded:
+	case PRUnrecorded, PRSuperseded:
 		pr := v.recordablePR()
 		if pr == nil {
 			return fmt.Errorf("no PR to record")
