@@ -2,7 +2,7 @@
 
 Some learnings hold in every project that uses a tool: how Go tests behave, how git worktrees share state, a GitHub Actions quirk. `.rota/KNOWLEDGE.md` keeps them in one project. The external knowledge base keeps them in a separate git repo of markdown files, cloned once on your machine and shared by every project.
 
-It is off until you set one key. With the key unset nothing changes.
+It is off until you set one key.
 
 ## Set it up
 

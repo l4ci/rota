@@ -52,16 +52,16 @@ cd your-project && rota setup
 /rota-ship      # reviews the branch, then opens a PR or merges
 ```
 
-That's the whole loop. [Install](docs/install.md) lists every way to get the binary (the script checks the sha256 and, if `minisign` is installed, the signature). [Getting started](docs/getting-started.md) walks through the loop with what each `rota setup` question decides.
+[Install](docs/install.md) lists every way to get the binary (the script checks the sha256 and, if `minisign` is installed, the signature). [Getting started](docs/getting-started.md) walks through setup and the loop.
 
-Other install routes, and whether each updates itself:
+How each install route updates:
 
-| Route | Updates itself? |
+| Route | Update with |
 |---|---|
-| [Claude Code plugin](#claude-code-plugin) | No: `claude plugin update rota@rota` |
-| `rota skills install` | No: `rota skills update` |
-| `npx skills add l4ci/rota` | No: run it again |
-| Homebrew or install script | No: `rota update` prints the command |
+| [Claude Code plugin](#claude-code-plugin) | `claude plugin update rota@rota` |
+| `rota skills install` | `rota skills update` |
+| `npx skills add l4ci/rota` | run it again |
+| Homebrew or install script | `rota update` prints the command |
 
 ### Claude Code plugin
 
@@ -87,14 +87,14 @@ Then run `rota setup` in your project. [Install](docs/install.md#-plugin-marketp
 
 - Agents start building before the task is clear. `/rota-brainstorm` and `/rota-plan` settle it first.
 - A session ends and the next one starts blind. `.rota/` and `/rota-pause` carry state across.
-- Parallel agents collide or merge red. Each gets a worktree, and the gate tests the merged `main`.
+- Parallel agents collide or merge red. Each gets a worktree, and the gate tests every PR merged with the base before it lands.
 - Lessons get lost. `/rota-learn` and `/rota-decide` keep them where the next session reads them.
 
 ## 🔄 How it works
 
 rota has two parts: **skills**, slash commands like `/rota-work` that tell the agent how to do a job well, and the **`rota` CLI**, which the skills call to do the bookkeeping and enforce the rules (who holds which issue, what may merge).
 
-You can use it two ways. The [quick start](#-quick-start) above is the first; move to the second when you have several issues ready at once.
+There are two ways to use it. The [quick start](#-quick-start) above is the first; move to the second when several issues are ready at once.
 
 **1. One agent, one item at a time.** You stay in the conversation.
 
@@ -113,13 +113,13 @@ issues ─► orchestrator ─┼─► worker dana ─► PR ─┼─► gate 
 
 - **Orchestrator**: one agent that picks the next issues, hands them out, answers workers' questions, and merges. It asks you only for product decisions.
 - **Workers**: agents that each take one issue in their own git worktree and terminal tab, build it, and open a PR. They never merge.
-- **Gate**: the only merge path. It checks the PR is current and properly signed off, merges it, then runs your full test suite on the merged `main`. A red result stops the round until it's fixed. With `test.fullWhere ci` the suite runs in CI before the merge instead.
+- **Gate**: the only merge path. It checks the PR is current and properly signed off, runs your full test suite on a scratch merge of the PR and the base, and merges only on a pass. A red result sends the PR back to its worker. With `test.fullWhere ci` the suite runs in CI instead.
 
 Both ways share a memory in `.rota/`: what the project has learned (`KNOWLEDGE.md`), the lines it must not cross (`DECISIONS.md`), and handoff notes, so a fresh session picks up where the last one stopped.
 
 ## 🧵 Parallel rounds
 
-When you have a few independent issues, a round runs them side by side: one orchestrator hands issues to workers, and the gate merges a PR only after your tests pass on the merged code. [Your first round](docs/first-round.md) sets it up; you'll want `gh` (or `glab`) and [herdr](https://herdr.dev) or tmux.
+A round runs several independent issues side by side. [Your first round](docs/first-round.md) sets it up; you'll want `gh` (or `glab`) and [herdr](https://herdr.dev) or tmux.
 
 <p align="center"><img src="docs/images/rota-round.gif" alt="Animated demo: running rota opens its palette; picking Orchestrate starts a round in herdr's split view, where the orchestrator assigns three issues to Claude and Codex workers, escalates a worker's product question, gates and merges a finished PR, and places the next issue on the account with the most headroom" width="100%"></p>
 <p align="center"><sub>A round in herdr's split view (illustration with a sample project; the palette is rota's real first screen).</sub></p>

@@ -3,7 +3,7 @@
 Umbrella mode lets one rota setup span several independent git repositories that sit side by side under one parent folder. Knowledge, decisions, vision, and the backlog live once at the umbrella; each sub-repo keeps its own history, branches, and remotes.
 
 > [!NOTE]
-> If you're in single-repo mode, skip this page. Single-repo behavior is unchanged.
+> In single-repo mode, skip this page.
 
 ## When to use it
 
@@ -11,8 +11,8 @@ Turn on umbrella mode when you maintain a handful of related repositories (say `
 
 ## When NOT to use it
 
-- **Single-repo project.** Don't enable. The single-repo path is simpler and faster.
-- **Monorepo.** Don't enable. A monorepo is one git repo; umbrella mode is for *multiple* repos under a parent.
+- **Single-repo project.** The single-repo path is simpler and faster.
+- **Monorepo.** A monorepo is one git repo; umbrella mode is for *multiple* repos under a parent.
 - **Casually-grouped unrelated repos.** If the repos under your folder don't share knowledge, decisions, or planning concerns, umbrella mode just adds bookkeeping.
 
 ## How it differs from single-repo
@@ -26,9 +26,9 @@ Turn on umbrella mode when you maintain a handful of related repositories (say `
 | `KNOWLEDGE.md` (+ Glossary, tier sidecar) | Per-repo | Hybrid: umbrella `.rota/KNOWLEDGE.md` for cross-repo learnings/terms **plus** per-sub-repo `.rota/knowledge/<name>/KNOWLEDGE.md` for repo-local ones |
 | `status.json` entries | Keyed by `branch` | Keyed by `(branch, repo)` |
 | `.rota/handoff/<branch>.md` | One per branch | `.rota/handoff/<branch>@<repo>.md` (one per branch+repo) |
-| Sub-repo git histories | n/a | Independent. No submodules, no version pinning |
+| Sub-repo git histories | n/a | Independent, with no submodules or version pinning |
 
-Single-repo behavior is unchanged. Umbrella mode is in effect when `.rota/repos.json` registers at least one sub-repo; `umbrella.enabled` in `.rota/config.json` is informational. Without registered sub-repos, every skill behaves exactly as before.
+Umbrella mode is in effect when `.rota/repos.json` registers at least one sub-repo; `umbrella.enabled` in `.rota/config.json` is informational. Without registered sub-repos, every skill behaves exactly as before.
 
 ## Enabling it
 
@@ -70,7 +70,7 @@ The registry is one JSON file at the umbrella's `.rota/repos.json`:
 - `name` is the sub-repo's basename and the value `/rota-capture` accepts in the `Repos:` field on items.
 - `path` is relative to the umbrella root. `rota` canonicalizes each entry via `realpath` at lookup time, so symlinked sub-repo paths resolve correctly.
 - Entries are sorted alphabetically for stable diffs.
-- No SHAs, no version pins. Sub-repos are independent git repositories. See `.rota/DECISIONS.md` (Architecture, "Umbrella mode does not use git submodules") for the rationale.
+- The registry holds no SHAs or version pins: sub-repos are independent git repositories. See `.rota/DECISIONS.md` (Architecture, "Umbrella mode does not use git submodules") for the rationale.
 
 Edit the registry with `rota repo add` and `rota repo rm` (see below), or re-run `rota init umbrella` to rescan. `rota init umbrella` is idempotent: a second run with the same selection is a no-op; a run with new names adds them; names you omit but were previously registered are kept (with a warning).
 
@@ -82,7 +82,7 @@ rota repo add ./api --name backend        # registers "backend" at ./api
 rota repo rm backend                      # unregisters it; ./api is left alone
 ```
 
-`rota repo add <path>` registers one git repo below the umbrella root. The name defaults to the directory's name; `--name` overrides it. Run again with the same name and directory, it changes nothing and exits 0. A name already taken by another directory, or a directory already registered under another name, exits 4. A path that is missing, not a git repo or outside the umbrella exits 3. A new entry gets the same `.rota/knowledge/<name>/` directory and `.gitignore` line `rota init umbrella` writes.
+`rota repo add <path>` registers one git repo below the umbrella root. The name defaults to the directory's name; `--name` overrides it. Repeating it with the same name and directory changes nothing and exits 0. A name already taken by another directory, or a directory already registered under another name, exits 4. A path that is missing, not a git repo or outside the umbrella exits 3. A new entry gets the same `.rota/knowledge/<name>/` directory and `.gitignore` line `rota init umbrella` writes.
 
 `rota repo rm <name>` drops the entry and nothing else: the repo, its knowledge directory and its `.gitignore` line stay. An unregistered name exits 3. It warns when open items still carry the repo in `Repos:` or an active stream in `status.json` is in it; the warning does not block, and `--json` lists both as `openItems` and `activeStreams`.
 
@@ -90,14 +90,14 @@ Both take `--json`.
 
 ### KNOWLEDGE.md and Glossary in umbrella mode
 
-KNOWLEDGE.md is **hybrid** in umbrella projects:
+KNOWLEDGE.md is hybrid in umbrella projects:
 
 - `.rota/KNOWLEDGE.md`: umbrella file. Cross-repo learnings and umbrella Glossary terms.
 - `.rota/knowledge/<name>/KNOWLEDGE.md`: per-sub-repo file. Repo-local learnings and per-sub-repo Glossary terms. Created on first write (and pre-seeded by `rota init` umbrella setup).
 
-The Glossary topic follows the same hybrid scoping. Scope resolves in this order: an explicit `--repo umbrella|<name>` flag wins; otherwise the cwd auto-resolves (inside a registered sub-repo → that repo; at the umbrella root → umbrella). Single-repo projects always resolve to `umbrella` and behave byte-identically to before. The knowledge verbs (`rota knowledge add`, `query`, `tier`, `amend`) and the glossary verbs (`rota glossary write`, `read`, `import`) all take `--repo`; readers (`rota knowledge query`, `rota glossary read`) merge umbrella + sub-repo content with a `> from: <path>` provenance line per source when scope is a sub-repo. Tier sidecars split per file (`.rota/knowledge-tier.json` umbrella, `.rota/knowledge/<name>/knowledge-tier.json` per sub-repo).
+The Glossary topic follows the same hybrid scoping. Scope resolves in this order: an explicit `--repo umbrella|<name>` flag wins; otherwise the cwd auto-resolves (inside a registered sub-repo it resolves to that repo, at the umbrella root to the umbrella). Single-repo projects always resolve to `umbrella` and behave byte-identically to before. The knowledge verbs (`rota knowledge add`, `query`, `tier`, `amend`) and the glossary verbs (`rota glossary write`, `read`, `import`) all take `--repo`; readers (`rota knowledge query`, `rota glossary read`) merge umbrella + sub-repo content with a `> from: <path>` provenance line per source when scope is a sub-repo. Tier sidecars split per file (`.rota/knowledge-tier.json` umbrella, `.rota/knowledge/<name>/knowledge-tier.json` per sub-repo).
 
-**DECISIONS.md stays umbrella-only.** Hard boundaries are inherently cross-repo. A repo-local "decision" is really a learning; capture it with `/rota-learn`. Full model and rationale: [`references/persistence-skills.md`](../../skills/references/persistence-skills.md#umbrella-scoping), governed by the `.rota/DECISIONS.md` *"Persistence-trio scoping under umbrella mode"* boundary.
+DECISIONS.md stays umbrella-only. Hard boundaries are inherently cross-repo. A repo-local "decision" is really a learning; capture it with `/rota-learn`. Full model and rationale: [`references/persistence-skills.md`](../../skills/references/persistence-skills.md#umbrella-scoping), governed by the `.rota/DECISIONS.md` *"Persistence-trio scoping under umbrella mode"* boundary.
 
 ## Resolvers: `rota repo umbrella` and `rota repo which`
 
@@ -121,13 +121,13 @@ Both are read-only.
 
 ## Worktree layout
 
-Umbrella worktrees use **Layout B**:
+Umbrella worktrees use Layout B:
 
 ```
 <umbrella>/.claude/worktrees/<repo>/<branch>
 ```
 
-One discovery point at the umbrella, `<umbrella>/.claude/worktrees/`, holds every active worktree across every sub-repo, grouped by repo. No `.gitignore` edits in the sub-repos. Single-repo mode keeps `<repo>/.claude/worktrees/<branch>` and is unaffected. To resolve the canonical Layout B path for a `(repo, branch)` pair without hand-encoding it, call `rota git worktree-path --repo <name> <branch>`.
+One discovery point at the umbrella, `<umbrella>/.claude/worktrees/`, holds every active worktree across every sub-repo, grouped by repo. Sub-repos need no `.gitignore` edits. Single-repo mode keeps `<repo>/.claude/worktrees/<branch>` and is unaffected. To resolve the canonical Layout B path for a `(repo, branch)` pair without hand-encoding it, call `rota git worktree-path --repo <name> <branch>`.
 
 ## Per-skill behavior
 
@@ -155,7 +155,6 @@ The `--repo <name>` flag is also exposed on the underlying verbs when you call t
 
 - **Don't create `.rota/` inside a registered sub-repo.** It masks the umbrella. `rota repo which` detects this and exits 3 with a message naming the stray `.rota/`.
 - **Never add a sub-repo as a git submodule of the umbrella.** Sub-repos must remain independent. See `.rota/DECISIONS.md` (Architecture).
-- **Symlinked sub-repo paths work,** because `rota` resolves each registry entry with `realpath` at lookup time.
 
 ## See also
 

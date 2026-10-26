@@ -1,6 +1,6 @@
 # Vision and plans
 
-rota supports planning above the day-to-day backlog. `/rota-vision` frames milestones so the project has a clear direction. `/rota-plan` locks an implementation approach for a slice or item before code lands. Together they keep the orchestrator executing your written intent instead of decomposing ad-hoc from an empty context.
+`/rota-vision` frames milestones. `/rota-plan` locks an implementation approach for a slice or item before code lands, so the orchestrator executes your written intent instead of decomposing ad hoc from an empty context.
 
 ## /rota-vision: brainstorm milestones
 
@@ -30,7 +30,7 @@ Multiple milestones can be `active` simultaneously when their dependencies allow
 
 When an active milestone has no open items remaining, `/rota-work` (no argument) surfaces an empty-active notice so you know the milestone is ready to close. Run `rota milestone status <MID> --to shipped` to flip its status, which immediately unblocks any milestone that listed it as a dependency. Shipping is refused (exit 4, nothing changes) while the milestone has open items or unticked `- [ ]` criteria in its body; the failure lists them, `rota milestone check <MID>` shows the breakdown, and `--force` ships anyway.
 
-Marking a milestone `shipped` immediately unblocks anything that depended on it. Marking it `archived` does not. Use `archived` for milestones you are intentionally dropping, not for ones that finished.
+Use `archived` for milestones you are intentionally dropping, not for ones that finished.
 
 ## Milestone branches
 
@@ -117,7 +117,7 @@ When two levels fit, the lower one wins. A round worker never stops on the level
 
 On the [issue backend](issue-backend.md) an item plan is a note on the item's issue (key `#42`), and a slice plan lives on the milestone's tracking issue.
 
-Each plan contains: goal in one sentence, approach in 3–6 sentences, tasks with observable behaviors and verify steps, named assumptions, and open questions. Tasks must fit one execution window. If they don't, split the plan. Every task requires a verify step; a task without one is not well-defined. In a plan with two or more tasks, the first is the tracer: the thinnest end-to-end path through every layer the change touches. It runs alone as the first wave. If its verify fails or its RED run does not turn green, `/rota-work` dispatches no other task and reports the failure; a round worker stops with `ROTA-BLOCKED`.
+Each plan contains: goal in one sentence, approach in 3 to 6 sentences, tasks with observable behaviors and verify steps, named assumptions, and open questions. Tasks must fit one execution window. If they don't, split the plan. Every task requires a verify step; a task without one is not well-defined. In a plan with two or more tasks, the first is the tracer: the thinnest end-to-end path through every layer the change touches. It runs alone as the first wave. If its verify fails or its RED run does not turn green, `/rota-work` dispatches no other task and reports the failure; a round worker stops with `ROTA-BLOCKED`.
 
 Before the plan is signed off, `/rota-plan` checks doc-by-path deliverables: any task file path containing a `docs/` segment must resolve to an existing doc home in the target repo. Mismatches surface as Open questions instead of biting mid-`/rota-work`. In umbrella mode a sibling `<repo>-docs` sub-repo registered in `.rota/repos.json` is surfaced as the suggested alternative home.
 
@@ -129,7 +129,7 @@ On the file backend, after `/rota-work` completes an item that had its own plan 
 
 For small items (Minor or Cosmetic), the overhead of a plan outweighs the benefit. Capture the item with [capturing work](capturing-work.md) and run `/rota-work` directly.
 
-For larger or higher-stakes items, especially size-Major or anything where you and the orchestrator need to agree on the approach before any worker dispatches, `/rota-plan` earns its keep. The cost is a short focused conversation. The payoff is that six weeks from now the orchestrator is executing your written approach, not its own ad-hoc interpretation.
+For larger or higher-stakes items, especially size-Major or anything where you and the orchestrator need to agree on the approach before any worker dispatches, write a plan. The cost is a short conversation; the orchestrator then executes your written approach, not its own ad-hoc interpretation.
 
 Rough heuristic: if you would want to review the implementation approach before a colleague started coding, write the plan.
 
@@ -141,6 +141,6 @@ When a milestone hinges on a question you cannot answer from the chair (*"can SS
 
 `/rota-capture` tags an item when you name a milestone, or asks once whether to tag when exactly one milestone is active (the default is untagged). With several active milestones and none named, it leaves items untagged. On the file backend an item can carry a `Milestone: M01` field or a comma-separated list (`Milestone: M01, M03`) when work spans milestones; the issue backend takes one milestone.
 
-`/rota-work` (no argument) prefers milestone-tagged items within each priority and size band but general-backlog items still surface. The active milestone set acts as a soft scope rather than a hard filter, so you stay focused without losing sight of the rest of the backlog.
+`/rota-work` (no argument) prefers milestone-tagged items within each priority and size band but general-backlog items still surface.
 
 See [capturing work](capturing-work.md) for how items are filed and [running work](running-work.md) for how `/rota-work` (no argument) and `/rota-work` use the milestone tag when dispatching.

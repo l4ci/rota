@@ -10,7 +10,7 @@ It works on the file backend only (`rota item rm` refuses under `issues.source` 
 /rota-capture --remove F99
 ```
 
-Default mode is a dry run. The skill shows what would change and asks for confirmation before writing anything. Nothing is modified until you say yes.
+Default mode is a dry run. The skill shows what would change and asks for confirmation before writing anything.
 
 ## Worked example
 
@@ -78,7 +78,7 @@ Remove multiple items in one pass by separating IDs with commas:
 
 Validation is all-or-nothing. If any ID in the list is unknown or invalid, the entire batch aborts before any write. Fix the offending ID and re-run.
 
-The dry-run preview lists every item in the batch so you can review the full scope before confirming.
+The preview lists every item in the batch.
 
 ## When to use
 
@@ -93,6 +93,6 @@ If an item is done rather than unwanted, use [/rota-work](running-work.md) to co
 
 `/rota-capture --remove` isn't a soft-delete or an undo mechanism. Once applied, the entry is gone from the active backlog. `ARCHIVE.md` keeps a historical record by default; `--scrub-archive` erases it there too.
 
-`/rota-capture --remove` doesn't close upstream issues. Close them manually after removing a backlog entry.
+It doesn't close upstream issues either. Close them by hand after removing the entry.
 
 It never deletes a branch, reverts commits, or discards work in progress. To abandon a branch, end its stream with `rota status rm <branch>` and delete the branch with git.

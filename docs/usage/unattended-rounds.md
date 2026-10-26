@@ -17,14 +17,13 @@ What you need first is a working round: [parallel rounds](parallel-rounds.md). W
 | Account switch | `orchestrator.switchOnUsage` | an orchestrator close to a limit, before it hits | `orchestrator.usageThreshold` |
 
 A typical unattended start: `rota hook install`, then in the orchestrator's pane
-`rota keepalive run -- claude --model opus`. `rota orchestrate` already starts the orchestrator under `rota keepalive run`, so after `rota hook install` you only start it. The keepalive supervisor runs the limit watcher beside the
-command, so there is nothing more to start.
+`rota keepalive run -- claude --model opus`. `rota orchestrate` already starts the orchestrator under `rota keepalive run`, so after `rota hook install` you only start it. The supervisor runs the limit watcher beside the
+command.
 
 ## Orchestrator handoff
 
 An orchestrator's context fills over a long round. Two hooks make it hand off before that happens, with
-no one at the keyboard. They act only on the orchestrator, the session that holds the
-[round lease](parallel-rounds.md#starting-a-round).
+no one at the keyboard.
 
 ### Install the hooks
 
@@ -66,8 +65,8 @@ This path is the orchestrator's. Every other session gets the lighter `work.cont
 2. When the orchestrator tries to stop and the state shows `orchestrator.handoffThreshold` percent
    (default 75) or more, the Stop hook blocks. It tells the orchestrator to write
    `.rota/handoff/<base>.md` and run `/exit`.
-3. If it blocked again 2 more times after the first block and still
-   found no handoff, the hook gives up and records `handoffFailed` in the
+3. If the hook blocked 2 more times after the first block and still
+   found no handoff, it gives up and records `handoffFailed` in the
    state, so a session that cannot write a handoff is not held forever.
 
 The percentage comes from `context_window.used_percentage`, else from `current_usage` over
@@ -93,10 +92,6 @@ The SessionStart hook fires on `startup` and `clear`.
 - After that they fail on a partial or broken install: one hook missing, a statusline without the
   dump, or a hook command that no longer resolves.
 
-Restarting the orchestrator after the exit is the next section; usage limits follow it. Without the
-hooks, `/rota-pause` and `/rota-work` (no argument) are the manual route
-([pausing and resuming](pausing-and-resuming.md)).
-
 ## 💓 Keepalive
 
 The hooks end an orchestrator session cleanly. `rota keepalive run` starts the next one. Start the
@@ -107,8 +102,7 @@ rota keepalive run -- claude --model opus       # everything after -- is the com
 ```
 
 `rota keepalive run` is the pane's foreground process and `claude` is its child, so it learns the exit from
-the child's own status and needs neither herdr nor tmux to notice it. It is a supervisor, not a watcher
-of the pane. The cost: an orchestrator not started under `run` is not restarted.
+the child's own status and needs neither herdr nor tmux to notice it. It supervises the process and does not watch the pane, so an orchestrator not started under `run` is not restarted.
 
 ### When it restarts
 
@@ -121,7 +115,7 @@ On every exit it looks for a fresh handoff, `.rota/handoff/<base>.md` no older t
 
 ### The lease
 
-`run` takes the round lease and holds it across restarts, and tells its child through
+`run` takes the round lease, holds it across restarts, and tells its child through
 `ROTA_ROUND_HOLDER_PID`. So:
 
 - `rota round start` and the hooks inside the orchestrator see the supervisor as the holder.
@@ -165,10 +159,10 @@ never deletes the handoff; only the SessionStart hook consumes it.
 
 ## ⏳ Usage limits
 
-A 5-hour or weekly usage limit stops a session until the window resets. `rota limit watch` keeps a round
-from stalling on that: it notices the limit, waits for the reset, and types a resume prompt into the pane.
+A 5-hour or weekly usage limit stops a session until the window resets. `rota limit watch` notices the
+limit, waits for the reset, and types a resume prompt into the pane.
 
-Under `rota keepalive run` the same loop runs inside the supervisor, so there is nothing more to start. For
+Under `rota keepalive run` the same loop runs inside the supervisor. For
 an orchestrator not started under `run`, start the verb in the background or in a pane of its own:
 
 ```sh
@@ -188,7 +182,7 @@ another watcher.
   pane shows a limit message, never on a timer.
 - **A Codex slot:** there is no meter, so the pane's limit message is the evidence. The limit counts
   against the slot's `codex` login in `round.accounts`, and the reset comes from `try again at <time>` in the text.
-- **The message as fallback:** on herdr 0.9.x the loop subscribes to `pane.output_matched` with the
+- **The message, as fallback:** on herdr 0.9.x the loop subscribes to `pane.output_matched` with the
   phrases `rota worker poll` already uses for LIMITED. On tmux, or if herdr refuses the subscription, it
   captures the panes every `--settle` seconds. A match counts only in the harness's own dialog region of
   the pane, the block above the input box. A limit phrase quoted in a reply, a diff or a tool listing
@@ -214,7 +208,7 @@ another watcher.
 
 ### The slot cap
 
-The round does not keep filling slots into a quota that has run out. When every account a worker could run
+When every account a worker could run
 under is cooling down, `rota round tick` (and `rota round watch --autopilot`) mints and assigns nothing and
 prints `capped` with the reason, and `rota round assign` refuses with `blockedBy` `quota`. `rota round
 status` shows `cap <effective>/<roster>` and the reason while the cap is below the roster size. The slots
@@ -254,9 +248,9 @@ where you left off.`). The resume margin (60 s), fallback sleep (1800 s) and res
 
 ## Switching the orchestrator's account
 
-Off by default. With `orchestrator.switchOnUsage` set to `true`, an orchestrator that is close to its usage
-limit hands off and restarts under another account, instead of running into the limit and sleeping. The
-usage-limit sleep stays the behavior when the key is off, and for anything the switch does not cover.
+Off by default. With `orchestrator.switchOnUsage` set to `true`, an orchestrator close to its usage
+limit hands off and restarts under another account instead of running into the limit and sleeping. The
+usage-limit sleep still applies when the key is off, and to anything the switch does not cover.
 
 ```sh
 rota config set orchestrator.switchOnUsage true
@@ -301,15 +295,14 @@ The supervisor restarts at once on the same account and holds the switch until t
 - While the hold lasts, the hook passes on usage, so the session works on and the in-session limit sleep
   handles the real limit at 100 percent.
 - A context handoff is not held.
-- A hold with no reset time lasts 30 minutes. While usage stays
-  at or above the threshold, handoffs repeat after each hold until the cap of 10 restarts stops
+- While usage stays at or above the threshold, handoffs repeat after each hold until the cap of 10 restarts stops
   the supervisor.
 
 ### The figure is not a limit
 
 The threshold reads the session file's `used_percentage`, which carries no `extra_usage` information. A
-weekly window at the threshold counts even when extra usage is enabled and would keep the account going. For
-an opt-in this is the simple choice; set `usageThreshold` to 100 to wait for the window to fill.
+weekly window at the threshold counts even when extra usage is enabled and would keep the account going.
+Set `usageThreshold` to 100 to wait for the window to fill.
 
 ### The log
 

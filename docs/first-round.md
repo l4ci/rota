@@ -1,6 +1,6 @@
 # Your first round
 
-Finish [getting started](getting-started.md) first: install rota, install the skills and run `rota setup` in the project. This page then walks you to a first parallel round in [herdr](https://herdr.dev) or [tmux](https://github.com/tmux/tmux): an orchestrator in one pane, workers in tabs (tmux: windows), each worker on its own issue. The details behind each step live in [parallel rounds](usage/parallel-rounds.md); this page is the order to do them in.
+Finish [getting started](getting-started.md) first: install rota, install the skills and run `rota setup` in the project. This page walks you to a first parallel round in [herdr](https://herdr.dev) or [tmux](https://github.com/tmux/tmux): an orchestrator in one pane, workers in tabs (tmux: windows), each on its own issue. [Parallel rounds](usage/parallel-rounds.md) has the details behind each step.
 
 ## 1. 📋 Prerequisites
 
@@ -97,13 +97,13 @@ The orchestrator runs many `rota`, git and forge commands. Allow them in `.claud
 }
 ```
 
-`gh` covers GitHub and `glab` GitLab; a rule for a CLI you don't use never matches. `Bash(rota *)` allows `rota` with any arguments; the older `Bash(rota:*)` form means the same. See Claude Code's [permission rules](https://code.claude.com/docs/en/permissions#wildcard-patterns). Running with `--dangerously-skip-permissions` is your call; rota doesn't do it for you. Workers are different: they launch with permissions skipped by default (`round.commands.claude`), because nobody is in their pane to answer a prompt. See [configuration](usage/configuration.md#rounddispatch-subagent-tmux-or-herdr).
+`gh` covers GitHub and `glab` GitLab; a rule for a CLI you don't use never matches. `Bash(rota *)` allows `rota` with any arguments; the older `Bash(rota:*)` form means the same. See Claude Code's [permission rules](https://code.claude.com/docs/en/permissions#wildcard-patterns). Running with `--dangerously-skip-permissions` is your call; rota doesn't do it for you. Workers launch with permissions skipped by default (`round.commands.claude`), because nobody is in their pane to answer a prompt. See [configuration](usage/configuration.md#rounddispatch-subagent-tmux-or-herdr).
 
 ## 8. Unattended hooks (skip for now)
 
-`rota hook install` adds handoff hooks so a long round can survive the orchestrator's context filling. It writes `.claude/settings.local.json` by default; `--scope project` and `--scope user` also exist, `--wrap-statusline` keeps a statusline you already have, and `rota` must be on `PATH`.
+`rota hook install` adds handoff hooks so a long round survives the orchestrator's context filling up. It writes `.claude/settings.local.json` by default; `--scope project` and `--scope user` also exist, `--wrap-statusline` keeps a statusline you already have, and `rota` must be on `PATH`.
 
-For a first round, skip the hooks and keepalive both. Hooks without keepalive means the orchestrator exits at the context threshold and nothing restarts it. Install them together later: [unattended rounds](usage/unattended-rounds.md).
+For a first round, skip the hooks and keepalive both. Hooks without keepalive mean the orchestrator exits at the context threshold and nothing restarts it. Install them together later: [unattended rounds](usage/unattended-rounds.md).
 
 ## 9. 🩺 Run doctor
 
@@ -134,7 +134,7 @@ rota round status
 ```
 
 > [!TIP]
-> You don't need to poll. The orchestrator waits on `rota round wait` and wakes when a slot is done, blocked or dead. A slot is free as soon as its worker opens a PR: the orchestrator gives it the next issue while that PR waits for review.
+> No need to poll. The orchestrator waits on `rota round wait` and wakes when a slot is done, blocked or dead. A slot is free as soon as its worker opens a PR: the orchestrator gives it the next issue while that PR waits for review.
 
 ## 12. Merges and escalations
 

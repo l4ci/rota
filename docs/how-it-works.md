@@ -16,7 +16,7 @@ Both ways share a memory in `.rota/`: knowledge, decisions and handoff notes.
 
 ## The detailed map
 
-The diagram below shows how every skill connects to the artifacts it reads or writes, and which skills nudge or consult each other.
+Every skill, the artifacts it reads or writes, and which skills nudge or consult each other:
 
 ```mermaid
 flowchart LR
@@ -78,7 +78,7 @@ flowchart LR
   ORCH -.unattended.-> KEEP["rota hook / keepalive / limit"]
 ```
 
-Almost everything Claude reads or mutates lives under `.rota/` in your project; with `issues.source` set to `github` or `gitlab` the backlog lives on the GitHub/GitLab tracker instead. Git is the source of truth; `status.json` is just a cache, and `/rota-work` with no argument reconciles drift between the two.
+Almost everything Claude reads or mutates lives under `.rota/` in your project; with `issues.source` set to `github` or `gitlab` the backlog lives on the GitHub/GitLab tracker instead. Git is the source of truth; `status.json` is a cache, and `/rota-work` with no argument reconciles drift between the two.
 
 ## How skills chain
 

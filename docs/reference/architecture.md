@@ -1,6 +1,6 @@
 # Architecture
 
-Everything Claude reads or mutates lives under `.rota/` in your project. Git is the source of truth; `status.json` is just a cache, and `/rota-work` (no argument) reconciles drift between the two whenever it runs. The layout below is the file backend (`issues.source` is `file`, the default). Under `"issues"` the backlog, milestones and item designs and plans live on GitHub or GitLab instead; see [issue backend](../usage/issue-backend.md).
+Everything Claude reads or mutates lives under `.rota/` in your project. Git is the source of truth; `status.json` is a cache, and `/rota-work` (no argument) reconciles drift between the two whenever it runs. The layout below is the file backend (`issues.source` is `file`, the default). Under `"issues"` the backlog, milestones and item designs and plans live on GitHub or GitLab instead; see [issue backend](../usage/issue-backend.md).
 
 ## `.rota/` layout
 
@@ -50,7 +50,7 @@ A [parallel round](../usage/parallel-rounds.md) keeps its per-repo state in the 
 | `limit-watch.json` | `rota limit watch`, or the supervisor's own watcher | `rota limit status`, a second `watch` (to refuse it) |
 | `codex/<slot>/` | `rota round assign --kind codex` | `rota worker prompt-check`, relays to the slot |
 
-The lease is what makes a session "the orchestrator". The Stop and SessionStart hooks act only for the session that holds it, so installing them wide leaves workers alone. Under `rota keepalive run` the supervisor holds the lease for its whole life, across restarts, and hands the pid to the orchestrator it starts through `ROTA_ROUND_HOLDER_PID`.
+Holding the lease makes a session "the orchestrator". The Stop and SessionStart hooks act only for the session that holds it, so installing them wide leaves workers alone. Under `rota keepalive run` the supervisor holds the lease for its whole life, across restarts, and hands the pid to the orchestrator it starts through `ROTA_ROUND_HOLDER_PID`.
 
 The slot state directories sit outside `.worktrees/`, so `rota reap` never sees them. Codex workers log in through the default Codex home (or a Codex home from `round.accounts`), never a per-slot one.
 

@@ -1,8 +1,8 @@
 # Brownfield: dropping rota into an existing project
 
-You have a codebase. You've been maintaining it for months or years. You're tracking a list of bugs informally, some open GitHub issues you haven't gotten to, and a vague sense that the same gotchas keep recurring. By the end of this walkthrough rota is wired into the project, your bugs are captured, one is shipped, and a first lesson is in `KNOWLEDGE.md`.
+You have a codebase you have maintained for months or years, an informal list of bugs, some open GitHub issues you haven't gotten to, and a vague sense that the same gotchas keep recurring. This walkthrough ends with rota wired into the project, your bugs captured, one shipped and a first lesson in `KNOWLEDGE.md`.
 
-The example project is **Pinpoint**, an internal incident dashboard. Node and React, deployed as a single container. It's been in production for 18 months. 14 open GitHub issues, 30-odd `TODO` comments scattered through the source, and three bugs you keep meaning to fix.
+The example project is **Pinpoint**, an internal incident dashboard. Node and React, deployed as a single container. It has been in production for 18 months, with 14 open GitHub issues, 30-odd `TODO` comments scattered through the source and three bugs you keep meaning to fix.
 
 ## The shape of the walkthrough
 
@@ -23,17 +23,15 @@ flowchart LR
   KNOW -.consults.-> WORK
 ```
 
-Ten steps follow, in execution order.
-
 ## Step 1: rota init
 
 ```bash
 $ rota init
 ```
 
-Same defaults as a greenfield setup. For an existing repo I usually flip two with `rota config set`: `worktree` isolation so `main` stays untouched while agents run (useful when you also need to deploy from `main` mid-cycle), and `pr` merge strategy if your team requires GitHub review. For a solo maintenance pass, the defaults are fine.
+The defaults match a greenfield setup. For an existing repo, consider flipping two with `rota config set`: `worktree` isolation so `main` stays untouched while agents run (useful when you also need to deploy from `main` mid-cycle), and `pr` merge strategy if your team requires GitHub review. For a solo maintenance pass, the defaults are fine.
 
-`rota init` writes `.rota/` and the managed blocks in `AGENTS.md` (`CLAUDE.md` imports it). It doesn't read your code. That happens next.
+`rota init` writes `.rota/` and the managed blocks in `AGENTS.md` (`CLAUDE.md` imports it). It doesn't read your code.
 
 ## Step 2: Scaffold the project map
 
@@ -51,7 +49,7 @@ For Pinpoint you spend ten minutes sketching out:
   shared.md        shared/*               (cross-cutting types, utils)
 ```
 
-Each file is short. A typical one:
+A typical file:
 
 ```markdown
 ---
@@ -152,7 +150,7 @@ $ /rota-capture "fix typo in CONTRIBUTING.md line 23, 'depencency' → 'dependen
 $ /rota-work T01
 ```
 
-`/rota-capture` mints `[T01]` and stops; `/rota-work T01` which dispatches a worker, lands one commit on a feature branch, merges back. About thirty seconds. Capture and execute in one pass for things too small to queue.
+`/rota-capture` mints `[T01]` and stops; `/rota-work T01` dispatches a worker, lands one commit on a feature branch and merges back in about thirty seconds.
 
 ## Step 7: the P0 cycle
 
@@ -175,7 +173,7 @@ Task 4. Update integration docs to describe the new form.
         Verify: docs build passes.
 ```
 
-Four tasks, four commits, all on `rota/B05-secrets-in-url-form`. Worktree isolation keeps `main` clean. The branch merges back via `--no-ff`, so the cycle is one revertable unit if anything goes sideways downstream.
+Four tasks, four commits, all on `rota/B05-secrets-in-url-form`. Worktree isolation keeps `main` clean. The branch merges back via `--no-ff`, so the cycle is one revertable unit.
 
 ## Step 8: a real debug cycle
 
@@ -215,7 +213,7 @@ The bullet that lands:
 - **Severity is case-sensitive in the dedup key path.** External integrations send inconsistent casing for severity (Datadog sends `high`, PagerDuty sends `HIGH`). Normalize at the boundary, not at storage time. The dedup gate runs before normalization. Fix once at the integration layer, or accept that the bug-class returns.
 ```
 
-This bullet now travels with every future `/rota-work` and `/rota-debug` cycle in the `alerts` or `integrations` subsystems. Next time you or a teammate touches dedup logic, the orchestrator pulls this paragraph into its planning context automatically. The class of bug doesn't recur.
+This bullet now travels with every future `/rota-work` and `/rota-debug` cycle in the `alerts` or `integrations` subsystems: the orchestrator pulls it into its planning context automatically.
 
 ## Step 9: /rota-ship
 
@@ -237,14 +235,14 @@ After a week of dropping rota into Pinpoint:
 - `KNOWLEDGE.md` has four to six bullets across `Alerts`, `Storage`, `Integrations`, and `Security`. Surprises worth keeping, not a fix log
 - `.rota/map/` has six subsystems, three of them `touched: 2026-05-19` (this week) and three older
 - `DECISIONS.md` has one hard boundary you committed to mid-cycle: *"Secrets are never accepted via URL query params on any integration endpoint. Forbids: query-string POST bodies. Permits: form bodies with `type=password` inputs."* Future workers must respect it; the orchestrator surfaces it during planning if a touched file is in scope.
-- One milestone if you decided to add one, e.g. `M01 — security hardening`. Or none, if you've been working straight off the backlog. Either is fine; brownfield doesn't require a milestone to be useful.
+- Optionally one milestone, e.g. `M01 — security hardening`; brownfield works without one.
 
-What you notice over time is that the same class of gotcha stops recurring. Three months from now, when a teammate ships a new integration and trips the severity-casing bug, the next `/rota-work` cycle pulls the `## Alerts` knowledge bullet into context and the orchestrator flags it during planning, before any code lands.
+Over time the same class of gotcha stops recurring. Three months from now, when a teammate ships a new integration and trips the severity-casing bug, the next `/rota-work` cycle pulls the `## Alerts` knowledge bullet into context and the orchestrator flags it during planning, before any code lands.
 
 ## What changes structurally
 
-You don't have to refactor anything to adopt rota. The only structural addition is `.rota/` (tracked by default, with a few machine-specific paths gitignored) and a managed block in `AGENTS.md`. Your existing build, tests, deploy pipeline, and code layout stay the same. The map and the knowledge accumulate from how you already work (debug, fix, ship), except now the loop leaves a trace that future cycles consult automatically.
+Adopting rota needs no refactoring. The only structural addition is `.rota/` (tracked by default, with a few machine-specific paths gitignored) and a managed block in `AGENTS.md`. Your existing build, tests, deploy pipeline, and code layout stay the same. The map and the knowledge accumulate from how you already work (debug, fix, ship); the loop now leaves a trace that future cycles consult.
 
 ## Scale to a round
 
-Once the backlog holds several independent, well-specified items, you don't need to drive each `/rota-work` cycle yourself. A [parallel round](../usage/parallel-rounds.md) has an orchestrator hand issues to workers in separate worktrees and merge what passes the gate. Use it when you have a queue of issues that don't touch the same files; keep `/rota-work` for the handful you are watching.
+With several independent, well-specified items in the backlog, a [parallel round](../usage/parallel-rounds.md) has an orchestrator hand issues to workers in separate worktrees and merge what passes the gate. Use it for a queue of issues that don't touch the same files; keep `/rota-work` for the handful you are watching.

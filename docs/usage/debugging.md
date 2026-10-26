@@ -9,7 +9,7 @@ Invoke with a bug ID: `/rota-debug 42` on the [issue backend](issue-backend.md),
 The skill loads the item (its issue, or the `[B07]` entry in [`BACKLOG.md`](../reference/rota-folder.md) and any associated detail file), consults `KNOWLEDGE.md` for topics that match the bug's area, then works through a fixed cycle:
 
 1. **Build a feedback loop**: before any theory, it builds a command that shows the bug, taking the cheapest rung of a ladder: existing test, new failing test, CLI or HTTP call, replayed input, `git bisect`, old-vs-new differential run, a loop for flaky bugs, or a script for you to run. The reproducer must be red now, deterministic (or have a measured failure rate), fast and runnable without you. A flaky bug is run N times and its rate raised first. Then the skill minimises the reproducer, and the minimal version becomes the regression test.
-2. **Hypothesize**: it writes 3–5 hypotheses ranked by likelihood, each as a falsifiable claim ("if X, then changing Y makes the bug vanish"), and prints the list before probing.
+2. **Hypothesize**: it writes 3 to 5 hypotheses ranked by likelihood, each as a falsifiable claim ("if X, then changing Y makes the bug vanish"), and prints the list before probing.
 3. **Verify**: it probes in rank order (log inspection, targeted reads, narrow experiment) before any code changes, striking each refuted hypothesis with its evidence. Temporary probe lines carry a `[DEBUG-<id>]` tag, and the skill will not commit or finish while `git grep` still finds one.
 4. **Fix**: the minimal change that removes the root cause, as one atomic commit tagged `fix: … [B07]` (`#42` on the issue backend).
 5. **Prove and hand off**: the reproducer must pass, and the fix carries a regression test at the bug's seam. If the only possible test would mock the code under test or assert internals, the skill skips it, files a `refactor` item naming the missing seam, and records the reproducer as the proof with a row that links that item. It opens a PR. It never merges. The issue closes when the PR merges; on the file backend it completes the item.
@@ -36,8 +36,6 @@ If the root cause was non-obvious (required extra verification rounds, or contra
 `/rota-debug` uses the same `work.isolation` setting (`branch` or `worktree`) as `/rota-work`. It refuses to start on a dirty working tree; stash or commit first.
 
 ## The cycle
-
-Here is what the session looks like:
 
 **Invoke**
 ```
@@ -73,7 +71,7 @@ Root cause was non-obvious. Consider running /rota-learn to capture this.
 
 ## When to use /rota-debug vs /rota-work
 
-Use `/rota-debug` when you don't yet know the root cause and need the reproduce, hypothesize, verify loop. The cycle is the point.
+Use `/rota-debug` when you don't yet know the root cause and need the reproduce, hypothesize, verify loop.
 
 Use `/rota-capture` then `/rota-work` when:
 
