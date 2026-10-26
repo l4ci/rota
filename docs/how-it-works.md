@@ -82,6 +82,8 @@ Almost everything Claude reads or mutates lives under `.rota/` in your project; 
 
 ## How skills chain
 
+Each chain below plays out step by step, with what you type and what the agent prints, on the [Examples page](https://volkerotto.net/rota/examples/).
+
 <!-- generated:skills:chains begin -->
 <!-- edit docs/skills/*.md and run python3 scripts/skills-docs.py -->
 
