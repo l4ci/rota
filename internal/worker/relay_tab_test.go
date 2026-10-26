@@ -12,7 +12,7 @@ type movedHost struct {
 	tab string
 }
 
-func (h *movedHost) CurrentTab(context.Context, string, string) string       { return h.tab }
+func (h *movedHost) CurrentHandle(context.Context, string, string) string    { return h.tab }
 func (h *movedHost) FollowTab(context.Context, string, string, string) error { return nil }
 
 func TestRelayReportsTheTabItWasDeliveredTo(t *testing.T) {

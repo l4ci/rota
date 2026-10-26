@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -158,21 +159,34 @@ func (h *herdr) SweepShells(ctx context.Context, cwd string) (int, error) {
 	return n, nil
 }
 
-// TabFollower is the optional way to keep a slot's handle on the tab its pane
-// is in. Only herdr has it: its agent name derives from the handle, and a pane
-// moved to another tab keeps the name it was started under.
+// HandleFor is the handle a slot records for an agent in tab, pane: the tab,
+// unless the tab holds other panes, which closing it would take along. Then
+// the pane, which a kill closes alone.
+func HandleFor(tab, pane string, tabPanes int) string {
+	if pane != "" && tabPanes > 1 {
+		return pane
+	}
+	return tab
+}
+
+// isPaneHandle: herdr ids are `w1:t7` for a tab and `w1:p3` for a pane.
+func isPaneHandle(handle string) bool { return strings.Contains(handle, ":p") }
+
+// TabFollower is the optional way to keep a slot's handle where its pane is.
+// Only herdr has it: its agent name derives from the handle, and a pane moved
+// to another tab keeps the name it was started under.
 type TabFollower interface {
-	// CurrentTab is the tab the slot's agent is in now, "" when the host
-	// cannot say.
-	CurrentTab(ctx context.Context, slot, handle string) string
-	// FollowTab renames the slot's agent for its new tab, so lookups by the
-	// new handle find it.
+	// CurrentHandle is the handle the slot's agent has now (see HandleFor),
+	// "" when the host cannot say.
+	CurrentHandle(ctx context.Context, slot, handle string) string
+	// FollowTab renames the slot's agent for its new handle, so lookups by
+	// the new handle find it.
 	FollowTab(ctx context.Context, slot, from, to string) error
 }
 
-// CurrentTab reads the tab from `agent get`: the agent is addressed by the
+// CurrentHandle reads `agent get` and `tab get`: the agent is addressed by the
 // name it was started under, which a move between tabs does not change.
-func (h *herdr) CurrentTab(ctx context.Context, slot, handle string) string {
+func (h *herdr) CurrentHandle(ctx context.Context, slot, handle string) string {
 	if handle == "" {
 		return ""
 	}
@@ -180,7 +194,15 @@ func (h *herdr) CurrentTab(ctx context.Context, slot, handle string) string {
 	if r.ExitCode != 0 {
 		return ""
 	}
-	return jget(r.Stdout, "result.agent.tab_id")
+	tab, pane := jget(r.Stdout, "result.agent.tab_id"), jget(r.Stdout, "result.agent.pane_id")
+	if tab == "" {
+		return ""
+	}
+	n := 0
+	if t := h.herdr(ctx, "tab", "get", tab); t.ExitCode == 0 {
+		n, _ = strconv.Atoi(jget(t.Stdout, "result.tab.pane_count"))
+	}
+	return HandleFor(tab, pane, n)
 }
 
 // FollowTab is `herdr agent rename`. It fails when herdr refuses, so a caller
