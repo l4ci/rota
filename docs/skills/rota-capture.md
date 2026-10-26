@@ -20,8 +20,8 @@ flags:
   - flag: "--triage <N>"
     does: vet a tracker issue someone else filed; creates no item, ends in closed, needs-info or ready
 example:
-  source: walkthroughs/quickstart-manual-mode.md#step-1-capture
-  reviewed: true
+  source: getting-started.md
+  reviewed: false
   steps:
     - you: /rota-capture the list command shows every row when I ask for zero
     - agent: |

@@ -4,7 +4,7 @@ chains:
     featured: true
     title: Fix a small bug or add a small feature
     when: One clear item, small enough to build in one sitting.
-    walkthrough: walkthroughs/quickstart-manual-mode.md
+    walkthrough: getting-started.md
     steps:
       - skill: rota-capture
         why: Write the item down. Capture records it and stops.
@@ -260,6 +260,74 @@ chains:
           changes:
             - a feature branch with one commit per task
             - F01 marked complete in BACKLOG.md
+  - id: existing-project
+    title: Bring rota into an existing project
+    when: A repo with history and a backlog that lives in your head, with no rota yet.
+    walkthrough: walkthroughs/brownfield-existing-project.md
+    steps:
+      - skill: rota-init
+        why: Suggest config values from the repo, confirmed one by one.
+      - skill: rota-refactor
+        why: With --map, draft the project map so later cycles skip re-exploring the code.
+        example:
+          source: walkthroughs/brownfield-existing-project.md#step-2-scaffold-the-project-map
+          reviewed: false
+          steps:
+            - you: /rota-refactor --map
+            - agent: |
+                Mapped 6 subsystems. Files to write:
+                  .rota/map/api.md           new
+                  .rota/map/dashboard.md     new
+                  .rota/map/alerts.md        new
+                  .rota/map/integrations.md  new
+                  .rota/map/storage.md       new
+                  .rota/map/shared.md        new
+                Write the new files? (all / pick / none)
+            - you: all
+            - agent: |
+                Wrote 6 files, skipped 0. Ran rota map index and rota map stats.
+          changes:
+            - one `.rota/map/<name>.md` per subsystem, stamped with `last_mapped_commit`
+            - the always-on `## Project Map` block in `AGENTS.md`
+            - no issues filed, no code changed
+      - skill: rota-capture
+        why: Brain-dump the bugs and ideas you have been carrying around.
+        example:
+          source: walkthroughs/brownfield-existing-project.md#step-4-rota-capture-for-the-mental-backlog
+          reviewed: false
+          steps:
+            - you: /rota-capture "alert rule editor crashes on empty title; we should add a /health endpoint for k8s; dedup window is hardcoded at 5 min, should be per-rule; DST off-by-one on dashboard 24h filter"
+            - agent: |
+                [B06] alert rule editor crash on empty title  Bug, P1, Major
+                [F01] /health endpoint for k8s probes         Feature, Minor
+                [F02] per-rule dedup window                   Feature, Major
+                [B07] DST off-by-one on dashboard 24h filter  Bug, P1, Major
+                F02 is Major: consider /rota-brainstorm F02 before /rota-plan.
+          changes:
+            - four new rows in `.rota/BACKLOG.md`, with detail files for the long ones
+            - nothing else; capture records and stops
+      - skill: rota-work
+        why: Take the P0 first. The map and knowledge tell the worker where to look.
+        example:
+          source: walkthroughs/brownfield-existing-project.md#step-7-the-p0-cycle
+          reviewed: false
+          steps:
+            - you: /rota-work B05
+            - agent: |
+                Read .rota/map/integrations.md. KNOWLEDGE.md has nothing under Security yet.
+                Branch rota/B05-secrets-in-url-form created. 4 tasks.
+                T1  render secrets via <input type="password">
+                    rota proof record B05 -- npm test -- integration-form   PASS
+                T2  reject secrets in the URL query on the POST endpoint
+                ...
+          changes:
+            - a feature branch with one commit per task
+            - a proof row per check
+            - B05 marked in progress in .rota/status.json until it lands
+      - skill: rota-debug
+        why: When a fix will not stay fixed, find the cause before changing code.
+      - skill: rota-learn
+        why: Keep the gotcha so the next cycle in that area starts with it.
   - id: parallel-round
     featured: true
     title: Run several issues in parallel

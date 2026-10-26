@@ -15,7 +15,7 @@ manual_only: false
 flags: []
 example:
   source: walkthroughs/greenfield-from-brief.md#step-2-rota-vision
-  reviewed: true
+  reviewed: false
   steps:
     - you: /rota-vision
     - agent: |
