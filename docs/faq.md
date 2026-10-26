@@ -4,6 +4,10 @@
 
 A TODO file or tracker is where most workflows start and stay. Three things tend to go wrong: commits stop being atomic and one PR touches six unrelated things, you re-discover the same gotcha three sessions in a row because nothing reads it back, and a session doesn't survive `/clear` because the live hypothesis is gone. `/rota-work` enforces atomic per-task commits, `/rota-learn` writes durable gotchas that future runs consult automatically, and `/rota-pause` with `/rota-work` carry intent across context resets. If those problems never bite you, stock Claude Code is fine.
 
+## How does rota compare to other tools?
+
+[How rota compares](compare/README.md) has one page per tool: GSD, Superpowers, OpenSpec, ralph, Conductor, Orca, Vibe Kanban, Claude Squad, Gas Town and Octo, plus a bare Claude Code session. Each says where the other tool is stronger.
+
 ## What does rota cost?
 
 rota is MIT licensed and free. The agents run on your own Claude or Codex plan. A [parallel round](usage/parallel-rounds.md) spends quota roughly once per worker, so three workers use it about three times as fast as one session. `rota round summary` (also printed at wind-down) shows what a round cost per issue, per slot and per account.
