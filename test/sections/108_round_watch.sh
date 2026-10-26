@@ -74,6 +74,11 @@ wait "$WATCH_PID" || fail "the watch should exit 0 at its heartbeat"
 WATCH_PID=""
 OUT="$(cat "$TMP_RWT/watch.out")"
 [ "$(jget data.reason <<<"$OUT")" = "heartbeat" ] || fail "a quiet watch ends with reason heartbeat: $OUT"
+case "$(jget data.digest <<<"$OUT")" in
+  *"NO WATCH ARMED"*) fail "a watch heartbeat must not report an unarmed watch: $OUT" ;;
+  *'Watch exiting; re-arm `rota round watch`.'*) ;;
+  *) fail "a watch heartbeat must say it is exiting and must be re-armed: $OUT" ;;
+esac
 [ ! -f "$CDW/rota/round-watch.json" ] || fail "the watch must remove its marker on exit"
 OUT="$(rw_stop false)"; [ "$(jget decision <<<"$OUT")" = "block" ] || fail "with the watch gone Stop blocks again: $OUT"
 pass "round watch arms one marker, refuses a second watch, returns a heartbeat and cleans up"

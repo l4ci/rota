@@ -371,6 +371,19 @@ func EscalationStatusKey(id string) string { return changeKeyEscalat + "status/"
 // Digest is the one-line round state the prompt hook shows: each active
 // slot with its issue and PR, the open escalations and whether a watch is armed.
 func Digest(root string, round int, armed bool) string {
+	line := roundState(root, round)
+	if armed {
+		return line + ". Watch armed."
+	}
+	return line + ". NO WATCH ARMED: run `rota round watch` in the background now."
+}
+
+// ExitDigest describes the round as its watch returns and must be re-armed.
+func ExitDigest(root string, round int) string {
+	return roundState(root, round) + ". Watch exiting; re-arm `rota round watch`."
+}
+
+func roundState(root string, round int) string {
 	var parts []string
 	// Tolerant: a hook digest cannot refuse; a corrupt registry reads as no slots.
 	for _, s := range worker.LoadRegistryTolerant(root).Slots() {
@@ -415,10 +428,7 @@ func Digest(root string, round int, armed bool) string {
 	} else {
 		line += ": " + strings.Join(parts, "; ")
 	}
-	if armed {
-		return line + ". Watch armed."
-	}
-	return line + ". NO WATCH ARMED: run `rota round watch` in the background now."
+	return line
 }
 
 // NeedsWatch is the Stop hook's question: is there anything a watch would
