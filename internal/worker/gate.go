@@ -1302,7 +1302,7 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	}
 	if len(lensMissing) > 0 {
 		needs = append(needs, "the review lenses need a recorded "+strings.Join(lensMissing, " and "))
-		hint = fmt.Sprintf("run /rota-review on %s (it runs a reviewer per triggered lens and records the verdicts), or loosen review.lenses", g.branch)
+		hint += fmt.Sprintf("; the review lenses need a reviewer per triggered lens recorded by /rota-review on %s, or a looser review.lenses", g.branch)
 	}
 	g.verdict(GateReviewMissing, fmt.Sprintf("GATE %s refused — %s; nothing landed", g.o.Slot, strings.Join(needs, ", and ")), hint)
 	return true, nil

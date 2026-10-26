@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -60,5 +62,32 @@ func TestLensesMatch(t *testing.T) {
 	}
 	if got = l.Match([]string{"README.md"}, nil); len(got) != 0 {
 		t.Errorf("no match hits = %v", got)
+	}
+}
+
+// rota's own .rota/config.json enables the security lens for the shell-out
+// and file-write code, so a diff touching those files triggers it (#2064).
+func TestOwnConfigTriggersSecurityLens(t *testing.T) {
+	raw, err := os.ReadFile("../../.rota/config.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := LensesOf(decode(t, string(raw)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{
+		"internal/cli/browser.go", "internal/cli/hook.go", "internal/cli/keepalive.go", "internal/cli/testlock.go",
+		"internal/tui/term.go", "internal/git/git.go", "internal/round/retarget.go", "internal/hvmigrate/x.go", "internal/worker/registry.go",
+	} {
+		if hits := l.Match([]string{f}, nil); !slices.ContainsFunc(hits, func(h LensHit) bool { return h.Name == "security" }) {
+			t.Errorf("%s does not trigger the security lens: %v", f, hits)
+		}
+	}
+	if hits := l.Match([]string{"docs/usage/x.md"}, nil); len(hits) != 0 {
+		t.Errorf("docs trigger %v", hits)
+	}
+	if hits := l.Match([]string{"README.md"}, []string{"risk:security"}); len(hits) != 1 || hits[0].Name != "security" {
+		t.Errorf("label risk:security: %v", hits)
 	}
 }
