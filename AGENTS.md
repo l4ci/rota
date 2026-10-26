@@ -36,7 +36,7 @@ Durable learnings live in `.rota/KNOWLEDGE.md`. Consult it when work touches the
 
 Project milestones are tracker milestones, each with a tracking issue (`rota milestone show MNN`). `.rota/MILESTONES.md` is the index.
 
-_(no active milestones — 1 planned; set one active with `/rota-vision`)_
+_(no active milestones — all shipped or archived; run `/rota-vision` to plan more)_
 <!-- rota-vision-end -->
 
 ## Working in this repo
