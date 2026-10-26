@@ -14,7 +14,15 @@ type Agent struct {
 	Name   string
 	Cwd    string
 	Status string // the host's native state; "" when it has none (tmux)
+	// Pane and TabPanes are herdr's: the agent's pane and how many panes its
+	// tab holds. Handle uses them to name a pane that shares its tab.
+	Pane     string
+	TabPanes int
 }
+
+// Handle is what a slot records for this agent: its tab, or its pane when the
+// tab holds other panes too, since closing that tab would close them as well.
+func (a Agent) Handle() string { return HandleFor(a.Tab, a.Pane, a.TabPanes) }
 
 // Snapshotter is the optional read-only view of everything a host runs.
 // `rota round` uses it to find tabs no slot owns; it is separate from Host so
@@ -37,9 +45,14 @@ func (h *herdr) Snapshot(ctx context.Context) ([]Agent, error) {
 				Agents *[]struct {
 					Name   string `json:"name"`
 					TabID  string `json:"tab_id"`
+					PaneID string `json:"pane_id"`
 					Cwd    string `json:"cwd"`
 					Status string `json:"agent_status"`
 				} `json:"agents"`
+				Tabs []struct {
+					TabID     string `json:"tab_id"`
+					PaneCount int    `json:"pane_count"`
+				} `json:"tabs"`
 			} `json:"snapshot"`
 		} `json:"result"`
 	}
@@ -49,9 +62,13 @@ func (h *herdr) Snapshot(ctx context.Context) ([]Agent, error) {
 	if doc.Result.Snapshot.Agents == nil { // valid JSON of another shape is not "no agents": every tab would read dead
 		return nil, fmt.Errorf("herdr api snapshot: reply has no result.snapshot.agents")
 	}
+	panes := map[string]int{}
+	for _, t := range doc.Result.Snapshot.Tabs {
+		panes[t.TabID] = t.PaneCount
+	}
 	out := []Agent{}
 	for _, a := range *doc.Result.Snapshot.Agents {
-		out = append(out, Agent{Tab: a.TabID, Name: a.Name, Cwd: a.Cwd, Status: a.Status})
+		out = append(out, Agent{Tab: a.TabID, Name: a.Name, Cwd: a.Cwd, Status: a.Status, Pane: a.PaneID, TabPanes: panes[a.TabID]})
 	}
 	return out, nil
 }

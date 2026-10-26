@@ -35,9 +35,10 @@ esac
 case "$1 $2" in
   "tab create")
     ws=w9; prev=""; for a in "$@"; do [ "$prev" = "--workspace" ] && ws="$a"; prev="$a"; done
-    n=$(( $(cat "$F/tabs" 2>/dev/null || echo 6) + 1 )); echo "$n" >"$F/tabs"
+    n=$(( $(cat "$F/tabs" 2>/dev/null || echo 6) + 1 )); echo "$n" >"$F/tabs"; rm -f "$F/closed"
     printf '{"id":"cli","result":{"type":"tab_created","tab":{"tab_id":"%s:t%s","workspace_id":"%s","label":"x","number":%s,"focused":false,"pane_count":1,"agent_status":"unknown"},"root_pane":{"pane_id":"%s:p1%s","tab_id":"%s:t%s","workspace_id":"%s"}}}\n' "$ws" "$n" "$ws" "$n" "$ws" "$n" "$ws" "$n" "$ws" ;;
-  "tab close") echo '{"id":"cli","result":{"type":"ok"}}' ;;
+  "tab close") : >"$F/closed"; echo '{"id":"cli","result":{"type":"ok"}}' ;;
+  "tab get") [ -f "$F/closed" ] && err tab_not_found; echo '{"id":"cli","result":{"tab":{"pane_count":1,"tab_id":"w9:t7"},"type":"tab_info"}}' ;;
   "agent start")
     if [ -f "$F/start_busy" ]; then
       n=$(cat "$F/start_busy")
@@ -137,7 +138,7 @@ pass "worker dispatch: a task re-dispatch closes the old tab and starts fresh"
 : >"$FAKE/log"
 hd "$ROTA_BIN" worker dispatch w1 --body-file "$TMP_HD/brief.md" --relay >/dev/null \
   || fail "herdr relay failed"
-if grep -q '^tab \|^agent start' "$FAKE/log"; then
+if grep -q '^tab create\|^tab close\|^agent start' "$FAKE/log"; then
   fail "a relay must go into the running session, not a fresh one; log: $(cat "$FAKE/log")"
 fi
 grep -q 'ORCHESTRATOR RELAY' "$FAKE/last_prompt" || fail "relay text lost its ORCHESTRATOR RELAY marker"

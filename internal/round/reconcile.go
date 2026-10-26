@@ -23,7 +23,7 @@ type Outcome struct {
 func (o Outcome) Clean() bool { return len(o.Drift) == 0 && len(o.Repaired) == 0 }
 
 // Reconcile assembles the round and, with apply, makes the safe repairs: it
-// clears the handle of a dead tab, registers an unregistered worktree,
+// clears the handle of a dead tab, follows a pane moved to another tab, registers an unregistered worktree,
 // records an unrecorded or superseding open PR, adds a missing in-progress label, removes claim labels from a closed issue,
 // syncs visible claim labels from comment claims and clears a
 // claimId whose claim is gone from the tracker (never the tracker's side) and
@@ -112,7 +112,7 @@ func (e Env) findClosedClaimLabels(ctx context.Context, rep *Report) {
 func unreadSource(rep *Report, kind string) string {
 	need := ""
 	switch kind {
-	case DeadTab:
+	case DeadTab, TabMoved:
 		need = SourceHost
 	case PRUnrecorded, PRSuperseded, MergedExternal, PRStale, BaseDrift, LabelMissing, LabelStale, ClaimLabelDrift:
 		need = SourceForge
@@ -133,6 +133,16 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 			s.SetHandle("")
 			return s.MarkState("dead", "")
 		})
+	case TabMoved:
+		if e.FollowTab == nil {
+			return fmt.Errorf("host cannot rename an agent")
+		}
+		// Rename first: the handle names the agent, so recording it ahead of a
+		// failed rename would leave a handle nothing answers to.
+		if err := e.FollowTab(ctx, f.Slot, f.from, f.to); err != nil {
+			return err
+		}
+		return editSlot(root, f.Slot, func(s *worker.Slot) error { s.SetHandle(f.to); return nil })
 	case PRUnrecorded, PRSuperseded:
 		pr := v.recordablePR()
 		if pr == nil {

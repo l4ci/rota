@@ -571,3 +571,180 @@ func TestReconcileApplyKeepsABlockedSlotWhoseUnmergedPR(t *testing.T) {
 		})
 	}
 }
+
+// movedPane has kit's pane moved into the orchestrator's tab: the agent keeps
+// the name it was started under, but its tab is no longer the recorded one.
+func movedPane(t *testing.T) (string, Env, *[]string) {
+	return movedPaneIn(t, 6)
+}
+
+// movedPaneIn: the tab kit's pane moved to holds n panes.
+func movedPaneIn(t *testing.T, n int) (string, Env, *[]string) {
+	root, e, _ := fixture(t)
+	snap := e.Snapshot
+	e.Snapshot = func(ctx context.Context) ([]host.Agent, error) {
+		all, err := snap(ctx)
+		for i := range all {
+			if all[i].Name == "kit" {
+				all[i].Name, all[i].Tab, all[i].Pane, all[i].TabPanes = host.AgentName("kit", "w1:t3"), "w4:t9", "w4:p57", n
+			}
+		}
+		return all, err
+	}
+	var renamed []string
+	e.FollowTab = func(_ context.Context, slot, from, to string) error {
+		renamed = append(renamed, slot+" "+from+" "+to)
+		return nil
+	}
+	return root, e, &renamed
+}
+
+func TestStatusReportsAPaneMovedToAnotherTab(t *testing.T) {
+	root, e, _ := movedPane(t)
+	rep, err := e.Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := kinds(rep.Findings)["kit"]; !slices.Contains(got, TabMoved) || slices.Contains(got, DeadTab) {
+		t.Fatalf("kit findings = %v, want tab-moved and no dead-tab", got)
+	}
+	for _, f := range rep.Findings {
+		if f.Kind == TabMoved && (!strings.Contains(f.Detail, "w1:t3") || !strings.Contains(f.Detail, "w4:t9")) {
+			t.Errorf("detail %q must name the recorded and the current tab", f.Detail)
+		}
+	}
+}
+
+func TestReconcileApplyRecordsTheMovedPanesTab(t *testing.T) {
+	root, e, renamed := movedPane(t)
+	out, err := e.Reconcile(bg, root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(kinds(out.Repaired)["kit"], TabMoved) {
+		t.Fatalf("kit repaired = %v, warnings %v", kinds(out.Repaired)["kit"], out.Report.Warnings)
+	}
+	if got := worker.LoadRegistryTolerant(root).Slot("kit").Handle(); got != "w4:p57" {
+		t.Errorf("kit handle = %q, want the pane w4:p57: its tab holds other panes", got)
+	}
+	if want := []string{"kit w1:t3 w4:p57"}; !slices.Equal(*renamed, want) {
+		t.Errorf("renames = %v, want %v", *renamed, want)
+	}
+	// The agent now carries the name of its new tab, as herdr would report it.
+	snap := e.Snapshot
+	e.Snapshot = func(ctx context.Context) ([]host.Agent, error) {
+		all, err := snap(ctx)
+		for i := range all {
+			if all[i].Tab == "w4:t9" {
+				all[i].Name = host.AgentName("kit", "w4:p57")
+			}
+		}
+		return all, err
+	}
+	again, err := e.Reconcile(bg, root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(kinds(again.Drift)["kit"], TabMoved) {
+		t.Errorf("a second reconcile still drifts: %v", again.Drift)
+	}
+}
+
+func TestReconcileApplyKeepsTheHandleWhenTheRenameFails(t *testing.T) {
+	root, e, _ := movedPane(t)
+	e.FollowTab = func(context.Context, string, string, string) error { return errors.New("agent_not_found") }
+	out, err := e.Reconcile(bg, root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(kinds(out.Drift)["kit"], TabMoved) {
+		t.Errorf("kit drift = %v, want tab-moved still reported", kinds(out.Drift)["kit"])
+	}
+	if got := worker.LoadRegistryTolerant(root).Slot("kit").Handle(); got != "w1:t3" {
+		t.Errorf("kit handle = %q, want it untouched so the agent name still resolves", got)
+	}
+}
+
+// A pane alone in its new tab owns it: the tab stays the handle.
+func TestReconcileApplyRecordsTheTabOfAPaneAloneInIt(t *testing.T) {
+	root, e, renamed := movedPaneIn(t, 1)
+	if _, err := e.Reconcile(bg, root, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := worker.LoadRegistryTolerant(root).Slot("kit").Handle(); got != "w4:t9" {
+		t.Errorf("kit handle = %q, want the tab w4:t9", got)
+	}
+	if want := []string{"kit w1:t3 w4:t9"}; !slices.Equal(*renamed, want) {
+		t.Errorf("renames = %v, want %v", *renamed, want)
+	}
+}
+
+// Panes folded into one tab share it. Whichever agent the snapshot lists
+// first there, each slot must find its own by name.
+func TestAgentsSharingATabAreMatchedByNameInEitherOrder(t *testing.T) {
+	for _, reversed := range []bool{false, true} {
+		root, e, _ := fixture(t)
+		snap := e.Snapshot
+		e.Snapshot = func(ctx context.Context) ([]host.Agent, error) {
+			all, err := snap(ctx)
+			// kit, finn and nia all sit in kit's recorded tab w1:t3, beside the orchestrator.
+			shared := []host.Agent{
+				{Tab: "w1:t3", Pane: "w1:p1", TabPanes: 4, Name: "orchestrator-pane", Cwd: root, Status: "working"},
+				{Tab: "w1:t3", Pane: "w1:p2", TabPanes: 4, Name: host.AgentName("kit", "w1:t3"), Cwd: filepath.Join(root, ".worktrees", "kit"), Status: "working"},
+				{Tab: "w1:t3", Pane: "w1:p3", TabPanes: 4, Name: host.AgentName("finn", "w1:t4"), Cwd: filepath.Join(root, ".worktrees", "finn"), Status: "done"},
+				{Tab: "w1:t3", Pane: "w1:p4", TabPanes: 4, Name: host.AgentName("nia", "w1:t5"), Cwd: filepath.Join(root, ".worktrees", "nia"), Status: "idle"},
+			}
+			if reversed {
+				slices.Reverse(shared)
+			}
+			all = slices.DeleteFunc(all, func(a host.Agent) bool { return a.Name == "kit" || a.Name == "finn" || a.Name == "nia" })
+			return append(all, shared...), err
+		}
+		rep, err := e.Status(bg, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := kinds(rep.Findings)
+		for slot, handle := range map[string]string{"kit": "w1:p2", "finn": "w1:p3", "nia": "w1:p4"} {
+			if !slices.Contains(got[slot], TabMoved) {
+				t.Errorf("reversed=%v: %s findings = %v, want tab-moved", reversed, slot, got[slot])
+			}
+			for _, f := range rep.Findings {
+				if f.Kind == TabMoved && f.Slot == slot && f.to != handle {
+					t.Errorf("reversed=%v: %s would record %q, want %q", reversed, slot, f.to, handle)
+				}
+			}
+		}
+		if slices.Contains(got["kit"], UnclaimedTab) || slices.Contains(got["w1-p2"], UnclaimedTab) {
+			t.Errorf("reversed=%v: kit's own agent reads unclaimed: %v", reversed, got)
+		}
+	}
+}
+
+// Only the pane count changed: the detail must not claim a move.
+func TestTabMovedDetailForASharedRecordedTab(t *testing.T) {
+	root, e, _ := fixture(t)
+	snap := e.Snapshot
+	e.Snapshot = func(ctx context.Context) ([]host.Agent, error) {
+		all, err := snap(ctx)
+		for i := range all {
+			if all[i].Name == "kit" {
+				all[i].Name, all[i].Pane, all[i].TabPanes = host.AgentName("kit", "w1:t3"), "w1:p9", 2
+			}
+		}
+		return all, err
+	}
+	rep, err := e.Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range rep.Findings {
+		if f.Kind == TabMoved {
+			if strings.Contains(f.Detail, "now in tab") || !strings.Contains(f.Detail, "w1:t3") || f.to != "w1:p9" {
+				t.Errorf("detail %q to %q", f.Detail, f.to)
+			}
+			return
+		}
+	}
+	t.Errorf("no tab-moved finding: %v", kinds(rep.Findings))
+}
