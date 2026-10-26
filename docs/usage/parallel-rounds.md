@@ -481,8 +481,8 @@ was, so it is safe in the middle of a round.
 - **herdr only.** A round on tmux or solo is skipped with `host is tmux: layout needs herdr`.
 
 A worker's recorded tab id is the tab it started in, and after a move that tab may be gone. `rota round
-reconcile` and `rota round status` still find the live agent: they match it by the recorded tab, then by its
-herdr agent name (stable across moves), then by its worktree, so a moved worker is not reported as a
+reconcile` and `rota round status` still find the live agent: they match it by its
+herdr agent name (stable across moves), then the recorded tab, then its worktree, so a moved worker is not reported as a
 `dead-tab`. The worker verbs address it by agent name. `round reconcile` reports a `tab-moved` finding naming the
 recorded tab and the tab the pane is in now; `--apply` renames the agent and records the new handle: the pane
 (`w2E:p57`) when its tab holds other panes, the tab when the pane is alone in it. `worker dispatch` prints the

@@ -507,7 +507,11 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			} else if cur := agents[i].Handle(); cur != "" && cur != r.Tab && agents[i].Name == host.AgentName(r.Name, r.Tab) && r.Registered {
 				// Found by the name it was started under, under a handle that
 				// is not the recorded one: the pane was moved.
-				rep.add(Finding{Kind: TabMoved, Slot: r.Name, Detail: fmt.Sprintf("recorded tab %s, pane is now in tab %s", r.Tab, agents[i].Tab), Repair: "record " + cur, from: r.Tab, to: cur})
+				detail := fmt.Sprintf("recorded tab %s, pane is now in tab %s", r.Tab, agents[i].Tab)
+				if agents[i].Tab == r.Tab {
+					detail = fmt.Sprintf("recorded tab %s now holds other panes; pane %s is not alone in it", r.Tab, agents[i].Pane)
+				}
+				rep.add(Finding{Kind: TabMoved, Slot: r.Name, Detail: detail, Repair: "record " + cur, from: r.Tab, to: cur})
 			}
 		} else if r.Registered && r.Tab != "" {
 			rep.add(Finding{Kind: DeadTab, Slot: r.Name, Detail: fmt.Sprintf("host has no live agent for tab %s", r.Tab), Repair: "clear handle, set state dead"})
@@ -930,14 +934,16 @@ func (r *Report) unavailable(src, why string) {
 // row's worktree. -1 when none.
 func matchAgent(agents []host.Agent, slot, tab, wt string) int {
 	if tab != "" {
-		for i, a := range agents {
-			if a.Tab == tab {
-				return i
-			}
-		}
+		// The name first: panes folded into one tab share it, and the first
+		// agent in the snapshot there is not necessarily this slot's.
 		name := host.AgentName(slot, tab)
 		for i, a := range agents {
 			if a.Name == name {
+				return i
+			}
+		}
+		for i, a := range agents {
+			if a.Tab == tab {
 				return i
 			}
 		}

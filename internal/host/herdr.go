@@ -691,6 +691,15 @@ func (h *herdr) Kill(ctx context.Context, slot, handle string) error {
 	if paneOnly && pane == "" {
 		pane = handle
 	}
+	// A tab handle recorded while the pane was alone goes stale when other
+	// panes join that tab. Ask at kill time; a count that cannot be read is
+	// not proof the tab is the slot's own.
+	if !paneOnly && pane != "" {
+		// A tab herdr says is already gone holds nothing to protect.
+		if n, gone, ok := h.tabPanes(ctx, handle); !gone && (!ok || n != 1) {
+			paneOnly = true
+		}
+	}
 	if !paneOnly {
 		h.herdr(ctx, "tab", "close", handle)
 	}
@@ -699,11 +708,11 @@ func (h *herdr) Kill(ctx context.Context, slot, handle string) error {
 	if pane != "" {
 		h.herdr(ctx, "pane", "close", pane)
 	}
-	kind := "tab"
+	kind, target := "tab", handle
 	if paneOnly {
-		kind = "pane"
+		kind, target = "pane", pane
 	}
-	alive, ok := killLoop(&h.d, pids, func() bool { return h.herdr(ctx, kind, "get", handle).ExitCode != 0 })
+	alive, ok := killLoop(&h.d, pids, func() bool { return h.herdr(ctx, kind, "get", target).ExitCode != 0 })
 	if ok {
 		return nil
 	}

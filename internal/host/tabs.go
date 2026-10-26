@@ -159,11 +159,11 @@ func (h *herdr) SweepShells(ctx context.Context, cwd string) (int, error) {
 	return n, nil
 }
 
-// HandleFor is the handle a slot records for an agent in tab, pane: the tab,
-// unless the tab holds other panes, which closing it would take along. Then
-// the pane, which a kill closes alone.
+// HandleFor is the handle a slot records for an agent in tab, pane: the tab
+// when the agent is its only pane, else the pane, which a kill closes alone.
+// A count that was not read (0) is the safe side too: the pane.
 func HandleFor(tab, pane string, tabPanes int) string {
-	if pane != "" && tabPanes > 1 {
+	if pane != "" && tabPanes != 1 {
 		return pane
 	}
 	return tab
@@ -198,11 +198,19 @@ func (h *herdr) CurrentHandle(ctx context.Context, slot, handle string) string {
 	if tab == "" {
 		return ""
 	}
-	n := 0
-	if t := h.herdr(ctx, "tab", "get", tab); t.ExitCode == 0 {
-		n, _ = strconv.Atoi(jget(t.Stdout, "result.tab.pane_count"))
-	}
+	n, _, _ := h.tabPanes(ctx, tab)
 	return HandleFor(tab, pane, n)
+}
+
+// tabPanes is `tab get`'s pane_count. ok is false when it was not read; gone
+// says herdr knows no such tab.
+func (h *herdr) tabPanes(ctx context.Context, tab string) (n int, gone, ok bool) {
+	t := h.herdr(ctx, "tab", "get", tab)
+	if t.ExitCode != 0 {
+		return 0, jget(t.Stderr, "error.code") == "tab_not_found", false
+	}
+	n, err := strconv.Atoi(jget(t.Stdout, "result.tab.pane_count"))
+	return n, false, err == nil
 }
 
 // FollowTab is `herdr agent rename`. It fails when herdr refuses, so a caller

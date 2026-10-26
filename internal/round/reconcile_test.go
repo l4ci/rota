@@ -678,3 +678,73 @@ func TestReconcileApplyRecordsTheTabOfAPaneAloneInIt(t *testing.T) {
 		t.Errorf("renames = %v, want %v", *renamed, want)
 	}
 }
+
+// Panes folded into one tab share it. Whichever agent the snapshot lists
+// first there, each slot must find its own by name.
+func TestAgentsSharingATabAreMatchedByNameInEitherOrder(t *testing.T) {
+	for _, reversed := range []bool{false, true} {
+		root, e, _ := fixture(t)
+		snap := e.Snapshot
+		e.Snapshot = func(ctx context.Context) ([]host.Agent, error) {
+			all, err := snap(ctx)
+			// kit, finn and nia all sit in kit's recorded tab w1:t3, beside the orchestrator.
+			shared := []host.Agent{
+				{Tab: "w1:t3", Pane: "w1:p1", TabPanes: 4, Name: "orchestrator-pane", Cwd: root, Status: "working"},
+				{Tab: "w1:t3", Pane: "w1:p2", TabPanes: 4, Name: host.AgentName("kit", "w1:t3"), Cwd: filepath.Join(root, ".worktrees", "kit"), Status: "working"},
+				{Tab: "w1:t3", Pane: "w1:p3", TabPanes: 4, Name: host.AgentName("finn", "w1:t4"), Cwd: filepath.Join(root, ".worktrees", "finn"), Status: "done"},
+				{Tab: "w1:t3", Pane: "w1:p4", TabPanes: 4, Name: host.AgentName("nia", "w1:t5"), Cwd: filepath.Join(root, ".worktrees", "nia"), Status: "idle"},
+			}
+			if reversed {
+				slices.Reverse(shared)
+			}
+			all = slices.DeleteFunc(all, func(a host.Agent) bool { return a.Name == "kit" || a.Name == "finn" || a.Name == "nia" })
+			return append(all, shared...), err
+		}
+		rep, err := e.Status(bg, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := kinds(rep.Findings)
+		for slot, handle := range map[string]string{"kit": "w1:p2", "finn": "w1:p3", "nia": "w1:p4"} {
+			if !slices.Contains(got[slot], TabMoved) {
+				t.Errorf("reversed=%v: %s findings = %v, want tab-moved", reversed, slot, got[slot])
+			}
+			for _, f := range rep.Findings {
+				if f.Kind == TabMoved && f.Slot == slot && f.to != handle {
+					t.Errorf("reversed=%v: %s would record %q, want %q", reversed, slot, f.to, handle)
+				}
+			}
+		}
+		if slices.Contains(got["kit"], UnclaimedTab) || slices.Contains(got["w1-p2"], UnclaimedTab) {
+			t.Errorf("reversed=%v: kit's own agent reads unclaimed: %v", reversed, got)
+		}
+	}
+}
+
+// Only the pane count changed: the detail must not claim a move.
+func TestTabMovedDetailForASharedRecordedTab(t *testing.T) {
+	root, e, _ := fixture(t)
+	snap := e.Snapshot
+	e.Snapshot = func(ctx context.Context) ([]host.Agent, error) {
+		all, err := snap(ctx)
+		for i := range all {
+			if all[i].Name == "kit" {
+				all[i].Name, all[i].Pane, all[i].TabPanes = host.AgentName("kit", "w1:t3"), "w1:p9", 2
+			}
+		}
+		return all, err
+	}
+	rep, err := e.Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range rep.Findings {
+		if f.Kind == TabMoved {
+			if strings.Contains(f.Detail, "now in tab") || !strings.Contains(f.Detail, "w1:t3") || f.to != "w1:p9" {
+				t.Errorf("detail %q to %q", f.Detail, f.to)
+			}
+			return
+		}
+	}
+	t.Errorf("no tab-moved finding: %v", kinds(rep.Findings))
+}
