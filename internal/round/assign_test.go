@@ -318,6 +318,34 @@ func TestAssignSlotBusyAndFreeSlot(t *testing.T) {
 	}
 }
 
+// A second assign whose plan saw the slot idle, run after a first one filled
+// it, is refused instead of overwriting the first's binding (#2070).
+func TestAssignRacingOnOneSlotRefusesTheLaterWriter(t *testing.T) {
+	f := newAssignFixture(t)
+	fb := f.be
+	fired := false
+	fb.onReady = func(ref string) {
+		if ref != "13" || fired {
+			return
+		}
+		fired = true
+		if _, err := f.assign("12", "ben", nil); err != nil {
+			t.Errorf("the first assign: %v", err)
+		}
+	}
+	_, err := f.assign("13", "ben", func(o *AssignOpts) { o.AcceptOverlap = true })
+	if blockedBy(t, err) != BlockSlotBusy {
+		t.Fatalf("the later writer must be refused as slot-busy: %v", err)
+	}
+	reg := worker.LoadRegistryTolerant(f.root)
+	if got := reg.Slot("ben").HeldID(); got != "12" {
+		t.Errorf("ben holds %q, want 12", got)
+	}
+	if h := fb.held("13"); len(h) != 0 {
+		t.Errorf("the refused assign left claims on 13: %v", h)
+	}
+}
+
 func TestAssignBatchCap(t *testing.T) {
 	f := newAssignFixture(t)
 	f.be.add("15", "Third", "M01", false, "## Acceptance\n- [ ] x")
