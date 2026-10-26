@@ -375,6 +375,15 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		}
 	}
 	res.Handle = handle
+	if o.Relay {
+		// The pane may have moved to another tab since the handle was recorded;
+		// the message goes by agent name, so report where it landed.
+		if tf := h.Capabilities().TabFollower; tf != nil {
+			if cur := tf.CurrentHandle(ctx, o.Slot, handle); cur != "" {
+				res.Handle = cur
+			}
+		}
+	}
 
 	// The turn baseline is read before the brief goes out: a turn finished
 	// after it is numbered past it, however fast the worker answers. 0 (no

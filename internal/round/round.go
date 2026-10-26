@@ -38,6 +38,7 @@ import (
 // Drift kinds.
 const (
 	DeadTab              = "dead-tab"
+	TabMoved             = "tab-moved"
 	UnclaimedTab         = "unclaimed-tab"
 	UnregisteredWorktree = "unregistered-worktree"
 	BranchNoPR           = "branch-no-pr"
@@ -93,8 +94,11 @@ type Env struct {
 	// Snapshot lists the host's live agents; HostName is "herdr" or "tmux", or
 	// "solo" with no Snapshot when the round has no terminal host.
 	Snapshot func(ctx context.Context) ([]host.Agent, error)
-	HostName host.Kind
-	Forge    Forge
+	// FollowTab renames a slot's agent for the tab its pane moved to; nil
+	// where the host has no such name (tmux).
+	FollowTab func(ctx context.Context, slot, from, to string) error
+	HostName  host.Kind
+	Forge     Forge
 	// SweepClosedClaims lets Reconcile list every closed issue for stray claim
 	// labels. Only `round reconcile` sets it; status, watch and the autopilot
 	// tick stay on label-filtered closed reads.
@@ -351,8 +355,10 @@ type Finding struct {
 	// (#1598): its pr is the open PR to adopt with, and adopting fetches it.
 	support bool
 	// to is the base a base-drift finding retargets the PR onto: the milestone
-	// branch, or "" for the slot's registered base.
-	to string
+	// branch, or "" for the slot's registered base. For tab-moved it is the
+	// handle the pane has now (its tab, or the pane when the tab is shared)
+	// and from the one the registry records.
+	to, from string
 	// tag is the issue's milestone tag the repair records on the slot.
 	tag string
 }
@@ -498,6 +504,14 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			r.Agent, r.HostState = agents[i].Name, agents[i].Status
 			if r.Tab == "" {
 				r.Tab = agents[i].Tab
+			} else if cur := agents[i].Handle(); cur != "" && cur != r.Tab && agents[i].Name == host.AgentName(r.Name, r.Tab) && r.Registered {
+				// Found by the name it was started under, under a handle that
+				// is not the recorded one: the pane was moved.
+				detail := fmt.Sprintf("recorded tab %s, pane is now in tab %s", r.Tab, agents[i].Tab)
+				if agents[i].Tab == r.Tab {
+					detail = fmt.Sprintf("recorded tab %s now holds other panes; pane %s is not alone in it", r.Tab, agents[i].Pane)
+				}
+				rep.add(Finding{Kind: TabMoved, Slot: r.Name, Detail: detail, Repair: "record " + cur, from: r.Tab, to: cur})
 			}
 		} else if r.Registered && r.Tab != "" {
 			rep.add(Finding{Kind: DeadTab, Slot: r.Name, Detail: fmt.Sprintf("host has no live agent for tab %s", r.Tab), Repair: "clear handle, set state dead"})
@@ -920,14 +934,16 @@ func (r *Report) unavailable(src, why string) {
 // row's worktree. -1 when none.
 func matchAgent(agents []host.Agent, slot, tab, wt string) int {
 	if tab != "" {
-		for i, a := range agents {
-			if a.Tab == tab {
-				return i
-			}
-		}
+		// The name first: panes folded into one tab share it, and the first
+		// agent in the snapshot there is not necessarily this slot's.
 		name := host.AgentName(slot, tab)
 		for i, a := range agents {
 			if a.Name == name {
+				return i
+			}
+		}
+		for i, a := range agents {
+			if a.Tab == tab {
 				return i
 			}
 		}

@@ -685,13 +685,34 @@ func (h *herdr) Kill(ctx context.Context, slot, handle string) error {
 		pids = processPIDs(h.herdr(ctx, "pane", "process-info", "--pane", pane).Stdout)
 	}
 	h.herdr(ctx, "agent", "prompt", name, "/exit")
-	h.herdr(ctx, "tab", "close", handle)
+	// A handle naming a pane is one that shares its tab with panes rota does
+	// not own (the orchestrator's): only the pane closes, never that tab.
+	paneOnly := isPaneHandle(handle)
+	if paneOnly && pane == "" {
+		pane = handle
+	}
+	// A tab handle recorded while the pane was alone goes stale when other
+	// panes join that tab. Ask at kill time; a count that cannot be read is
+	// not proof the tab is the slot's own.
+	if !paneOnly && pane != "" {
+		// A tab herdr says is already gone holds nothing to protect.
+		if n, gone, ok := h.tabPanes(ctx, handle); !gone && (!ok || n != 1) {
+			paneOnly = true
+		}
+	}
+	if !paneOnly {
+		h.herdr(ctx, "tab", "close", handle)
+	}
 	// A `layout split` moves the pane out of its tab, so closing the tab no
 	// longer reaches it: close the pane itself.
 	if pane != "" {
 		h.herdr(ctx, "pane", "close", pane)
 	}
-	alive, ok := killLoop(&h.d, pids, func() bool { return h.herdr(ctx, "tab", "get", handle).ExitCode != 0 })
+	kind, target := "tab", handle
+	if paneOnly {
+		kind, target = "pane", pane
+	}
+	alive, ok := killLoop(&h.d, pids, func() bool { return h.herdr(ctx, kind, "get", target).ExitCode != 0 })
 	if ok {
 		return nil
 	}
