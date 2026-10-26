@@ -35,9 +35,10 @@ esac
 case "$1 $2" in
   "tab create")
     ws=w9; prev=""; for a in "$@"; do [ "$prev" = "--workspace" ] && ws="$a"; prev="$a"; done
-    n=$(( $(cat "$F/tabs" 2>/dev/null || echo 6) + 1 )); echo "$n" >"$F/tabs"
+    n=$(( $(cat "$F/tabs" 2>/dev/null || echo 6) + 1 )); echo "$n" >"$F/tabs"; rm -f "$F/closed"
     printf '{"id":"cli","result":{"type":"tab_created","tab":{"tab_id":"%s:t%s","workspace_id":"%s","label":"x","number":%s,"focused":false,"pane_count":1,"agent_status":"unknown"},"root_pane":{"pane_id":"%s:p1%s","tab_id":"%s:t%s","workspace_id":"%s"}}}\n' "$ws" "$n" "$ws" "$n" "$ws" "$n" "$ws" "$n" "$ws" ;;
-  "tab close") echo '{"id":"cli","result":{"type":"ok"}}' ;;
+  "tab close") : >"$F/closed"; echo '{"id":"cli","result":{"type":"ok"}}' ;;
+  "tab get") [ -f "$F/closed" ] && err tab_not_found; echo '{"id":"cli","result":{"tab":{"pane_count":1,"tab_id":"w9:t7"},"type":"tab_info"}}' ;;
   "agent start")
     if [ -f "$F/start_busy" ]; then
       n=$(cat "$F/start_busy")
