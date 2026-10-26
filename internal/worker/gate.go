@@ -36,7 +36,7 @@ import (
 //     the worker never merged what landed since it branched and its green is
 //     stale. That alone is no refusal (#31): when the merge is clean the gate
 //     merges it itself and verifies the merged tree, naming any file both sides
-//     changed in the note; a conflict bounces it (see staleReason), and the CLI counts bounces per item. With a recorded PR and an origin remote this is judged
+//     changed in the note; a conflict sends it back uncounted (see staleReason). With a recorded PR and an origin remote this is judged
 //     on the PUSHED refs after a fetch (origin/<base> vs origin/<branch>),
 //     because the PR merges what was pushed, not what sits in a local worktree.
 //     The PR's head branch, head SHA and target branch must match the verified

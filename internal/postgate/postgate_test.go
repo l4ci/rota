@@ -383,3 +383,36 @@ func TestGateAndRelayHeadsCountOnce(t *testing.T) {
 
 // diskConfig reads the .rota/config.json a test wrote, as cli's Deps.Config does.
 func diskConfig(root string) any { return config.Load(rotatree.Config(root)) }
+
+// A support machine's worker learns of a stale merge or provenance failure on
+// its PR, as it did when they bounced, but nothing is counted or parked (#2072).
+// The post is one per head, so a later tick on the same head adds none.
+func TestStaleAndProvenanceFailPostTheReviewBounceUncounted(t *testing.T) {
+	for _, v := range []string{worker.GateStale, worker.GateProvenanceFail} {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"issues":{"source":"github"},"round":{"support":"mac"}}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		nf := &noteForge{}
+		env := worker.Env{
+			Config:        diskConfig,
+			IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return &issueComments{}, nil },
+			Forge:         func(string, string, tracker.Settings) (worker.Forge, error) { return nf, nil },
+		}
+		p := &parked{}
+		res := worker.GateResult{Verdict: v, Slot: "ext-1", SHA: "a1b2c3d", Branch: "mac-ben/7-thing", PR: "https://github.com/o/r/pull/70", Err: v + ": fix it"}
+		o, err := Gate(env, root, "7", res, p.park)
+		if err != nil || o != (Outcome{}) {
+			t.Fatalf("%s: %+v %v", v, o, err)
+		}
+		if len(nf.bodies) != 1 || !strings.HasPrefix(nf.bodies[0], "<!-- rota:review-bounce head=a1b2c3d -->") {
+			t.Errorf("%s: PR comments %q, want one review-bounce", v, nf.bodies)
+		}
+		if n := bounces(root, "7"); n != 0 || len(p.issues) != 0 {
+			t.Errorf("%s: count %d, parked %v", v, n, p.issues)
+		}
+	}
+}
