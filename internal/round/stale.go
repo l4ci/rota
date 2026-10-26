@@ -77,7 +77,7 @@ func (e Env) hasClaimSignal(it backlog.Item) bool {
 	if label == "" {
 		label = "in-progress"
 	}
-	return slices.ContainsFunc(it.Labels, func(l string) bool { return l == label || strings.HasPrefix(l, backlog.ClaimLabelPrefix) })
+	return slices.Contains(it.Labels, label) || backlog.HasClaimLabel(it.Labels)
 }
 func (e Env) claimedItems(items []backlog.Item) []backlog.Item {
 	var out []backlog.Item
