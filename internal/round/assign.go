@@ -1122,15 +1122,23 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 			return wrap(e.queuePR(ctx, root, be, agent))
 		}},
 		claimStep(be, id, claimID, holders, func() error {
-			return editSlot(root, agent, func(s *worker.Slot) error { s.Unbind(); return nil })
+			// Only this assign's own binding: a slot another assign filled
+			// first (reserveStep refused us) keeps its worker.
+			return editSlot(root, agent, func(s *worker.Slot) error {
+				if worker.NormID(s.Task()) == worker.NormID(id) {
+					s.Unbind()
+				}
+				return nil
+			})
 		}, reclaim),
+		reserveStep(root, agent, id, resuming),
 		stateStep(root, be, id, agent, resuming, &res.Changed),
 		{name: "comment", skip: func() bool { return resuming }, do: func() error {
 			_, err := be.AddComment(id, "feedback", assignNote(agent, res.Branch))
 			return err
 		}},
 	}
-	afterClaim := 2
+	afterClaim := 3
 	supportPull := e.Round.Role == roundcfg.RoleSupport && e.Round.Support != ""
 	if supportPull {
 		steps = slices.Insert(steps, afterClaim, e.supportPinStep(ctx, be, it))
@@ -1206,6 +1214,23 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 		return nil, d, err
 	}
 	return append(steps, ds...), d, nil
+}
+
+// reserveStep takes the slot for the issue right after the claim. The plan
+// read the registry outside its lock, so a concurrent assign or the autopilot
+// tick may have filled the slot since; the compare-and-set refuses the later
+// writer before it marks the issue or binds, instead of overwriting the first one's binding.
+func reserveStep(root, agent, id string, resuming bool) step {
+	return step{name: "reserve the slot", skip: func() bool { return resuming }, do: func() error {
+		held, ok, err := worker.ReserveSlot(root, agent, id)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return blocked(BlockSlotBusy, "slot %s was filled by another assign: it holds %s", agent, held)
+		}
+		return nil
+	}, undo: func() error { return worker.ReleaseReserved(root, agent, id) }}
 }
 
 // claimStep takes the issue's claim, among the first holders open claims (two

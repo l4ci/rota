@@ -522,6 +522,36 @@ func UpdateChanged(root string, mutate func(d *Doc)) (bool, error) {
 	return update(root, slotsDefault(), mutate)
 }
 
+// ReserveSlot is the compare-and-set that serialises two assigns on one slot:
+// under the registry lock it takes the slot for task when the slot still holds
+// nothing, and otherwise reports what it holds. An assign plans against a read
+// that the lock does not cover, so the slot may have been filled since (by a
+// manual assign or the autopilot tick); the later writer is refused here.
+func ReserveSlot(root, name, task string) (held string, ok bool, err error) {
+	found, err := UpdateSlot(root, name, func(s *Slot) {
+		if held = s.HeldID(); held != "" {
+			return
+		}
+		s.SetTask(task)
+		ok = true
+	})
+	if err == nil && !found {
+		err = fmt.Errorf("slot %s is not in the registry", name)
+	}
+	return held, ok, err
+}
+
+// ReleaseReserved gives back a ReserveSlot reservation that nothing bound yet;
+// a slot that holds another task, or already carries its claim, is left alone.
+func ReleaseReserved(root, name, task string) error {
+	_, err := UpdateSlot(root, name, func(s *Slot) {
+		if NormID(s.Task()) == NormID(task) && s.ClaimID() == "" {
+			s.Unbind()
+		}
+	})
+	return err
+}
+
 // writeGens counts, per registry path, the updates of this process that
 // changed the document. A caller that runs many writers (pool init, poll)
 // compares ChangeCount before and after instead of diffing the file's bytes.
