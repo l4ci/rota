@@ -48,6 +48,9 @@ type Deps struct {
 	Git  git.Runner
 	Proc proc.Runner
 
+	// ReviewRemoveAll is the filesystem boundary for disposable review cleanup.
+	ReviewRemoveAll func(string) error
+
 	// Getwd and UserHomeDir are the one working-directory and home reads;
 	// Toplevel asks Git from the working directory. A test swaps them to run
 	// in a temp dir with a fake git.
@@ -146,6 +149,7 @@ func defaultDeps() *Deps {
 	d := &Deps{
 		Git:              git.Exec,
 		Proc:             proc.Run,
+		ReviewRemoveAll:  os.RemoveAll,
 		Getenv:           os.Getenv,
 		Getwd:            os.Getwd,
 		UserHomeDir:      os.UserHomeDir,

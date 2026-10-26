@@ -114,7 +114,9 @@ No `data.findings` → no candidates. Otherwise carry the matches into the brief
 
 **Depth.** Run `rota review depth <branch> --json`; it reads the labels of a round branch's issue itself, so `risk:high` and `best-of:2` reach it without a flag. `full` dispatches both reviewers; `light` (a small diff or a labelled attempt, per `ship.review`) dispatches the Spec reviewer only, on the `standard` tier (`round.tiers.claude.standard`, not the orchestrator model; same brief and rubric as `full`): skip the Standards brief, record only `review-spec` in Step 8, and say in the report that the Standards axis was not run (the deterministic gate covers its mechanical half). A branch with no referenced items has no spec: it keeps Standards only, below. `none` is `/rota-ship`'s to skip; a direct `/rota-review` is an explicit request and runs `full`. What a full review checks does not change.
 
-At `full`, dispatch two reviewers **in parallel** (one message, two dispatches), fresh context each, same diff file and same Steps 2-6 context. Two axes, judged apart, so one cannot mask the other:
+**Workspace preparation (before any dispatch).** For each reviewer that will run (Spec, Standards and each lens), run `rota review prepare "$REVIEWED" --json` from the source repo (umbrella: add `--repo <name>`). Require success, `data.head == REVIEWED` and a nonempty `data.path`; copy its brief, the Step 5 package and any other inputs into `data.path/.review/`. Use those copied input paths and set the reviewer's working directory to `data.path` (or require it to change there before any code reads or commands). Pass that workspace and head in the shared brief. Any preparation or input-copy failure stops dispatch: report unavailable, never fall back to the live checkout. Once each reviewer finishes, fails or is cancelled, run `rota review cleanup <its data.path>`; surface a cleanup failure with that path, never broaden removal to another directory. The cross-harness reviewer prepares its own workspace as below.
+
+At `full`, dispatch two reviewers **in parallel** (one message, two dispatches), fresh context each, same diff content in separate prepared workspaces and same Steps 2-6 context. Two axes, judged apart, so one cannot mask the other:
 
 - **Spec** — **orchestrator** model (`standard` tier at `light`). Does the diff do what the items promised, and nothing more?
 - **Standards** — **`standard`** tier. Does it meet the project's standards?
@@ -185,7 +187,7 @@ Read [`queue-mode.md`](queue-mode.md) when invoked with `--queue` (issue backend
 
 ## Rules
 
-- **Read-only.** Never edit, commit, or stage. Recording with `rota verdict add` (the gitignored `.rota/verdicts.json`) is the one write.
+- **Read-only.** Never edit, commit, or stage. Source checkout stays read-only. Caller writes are the gitignored verdict record (`rota verdict add`) and disposable workspace preparation, input copies and cleanup.
 - **Evidence over opinion.** Every concern cites file:line or commit hash.
 - **Scope is bounded.** Only the diff against the base; don't wander into unchanged code.
 - **Call it honestly.** If conventions were violated for a good reason, the reviewer still reports CONCERN; the user decides.
