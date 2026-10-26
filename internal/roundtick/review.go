@@ -120,3 +120,16 @@ func reviewSummary(b worker.ReviewBatch) string {
 	}
 	return fmt.Sprintf("%d from %s %s", n, from, b.PR)
 }
+
+// WaitingForReview is the tick line for a done slot whose head lacks review
+// verdicts. gateErr is the gate's review-missing refusal ("GATE ben refused —
+// <what is missing>; nothing landed"); no gate ran for the slot, so the line
+// keeps only what is missing and says what to do.
+func WaitingForReview(gateErr, branch string) string {
+	line, _, _ := strings.Cut(gateErr, "\n")
+	if _, rest, ok := strings.Cut(line, " — "); ok {
+		line = rest
+	}
+	line = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(line), "; nothing landed"))
+	return fmt.Sprintf("waiting for review verdicts at head (%s); run /rota-review on %s", line, branch)
+}

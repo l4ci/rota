@@ -47,6 +47,7 @@ const (
 	Healthy         = "healthy"
 	LiveAgent       = "live agent"
 	Unverifiable    = "unverifiable"
+	MergeInProgress = "merge in progress"
 
 	// best-of:2 and per-issue labels.
 	BestOfLabel     = "best-of label"
@@ -145,7 +146,7 @@ func All() []string {
 		NoRound, OutOfScope, NotReady, Overlap, Claimed, NotStale, StaleClaim, ClaimLost, OpenPR, Batch, Bundle, SlotBusy, NoFreeSlot, NoLogin,
 		Draining, Quota, BriefMissing, NoTierMap, HumanDecision, CrossMilestone, Registered, Held, External, NoPRRecorded, Site, Fetch,
 		Conflict, Dirty, Role, NoSlotHolds, NoIssues, FindingMissing, NoGist, ReviewNotMinted, NotYourSlot, SameSlot, Healthy,
-		LiveAgent, Unverifiable,
+		LiveAgent, Unverifiable, MergeInProgress,
 		BestOfLabel, BestOfSlots, BestOf, NotBestOf, NotAttempt, AlreadyPicked, AttemptRunning, HarnessLabel,
 		ModelLabel, DecisionLabel, NoBlockingFinds,
 		CodexFlags, OpencodeFlags, OpencodeBinary, OutsideHerdr, Host, ResumeFlag, Limited, Dialog, ResetGuard,
