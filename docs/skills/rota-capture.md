@@ -23,9 +23,9 @@ example:
   source: walkthroughs/quickstart-manual-mode.md#step-1-capture
   reviewed: true
   steps:
-    - you: "/rota-capture \"--limit 0 prints every row instead of none\""
+    - you: /rota-capture the list command shows every row when I ask for zero
     - agent: |
-        [B03] --limit 0 prints every row instead of none   Bug, P2
+        [B03] list shows every row when the limit is zero   Bug, P2
   changes:
     - a new row under `## Bugs` in `.rota/BACKLOG.md`
     - nothing else; capture records and stops
