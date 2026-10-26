@@ -291,6 +291,9 @@ func knAmend(fs *flag.FlagSet) RunFunc {
 		}
 		var body string
 		if !stampEdit || given["mode"] || given["body-file"] {
+			if *ext && !given["mode"] && !given["body-file"] {
+				return Result{}, Usage("nothing to change: pass --mode append --body-file, or --seen / --date")
+			}
 			if err := knRequire(map[string]string{"mode": *mode, "body-file": *bodyFile}, "mode", "body-file"); err != nil {
 				return Result{}, err
 			}

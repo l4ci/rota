@@ -29,6 +29,10 @@ func TestKnowledgeExternalEditFlags(t *testing.T) {
 	if gittest.Run(t, clone, "rev-list", "--count", "HEAD") != "1" {
 		t.Fatal("a refused call committed")
 	}
+	// Nothing to change: the error names the options.
+	if o := ext("", "amend", "--external", "--topic", "Go", "--fragment", "Table"); !strings.Contains(o.stderr, "--seen") || !strings.Contains(o.stderr, "--date") || !strings.Contains(o.stderr, "--mode append") {
+		t.Errorf("empty external amend: %q", o.stderr)
+	}
 	// Stamp-only amend: no body needed.
 	o := ext("", "amend", "--external", "--topic", "Go", "--fragment", "Table", "--seen", "go@1.23", "--date", "2026-10-26")
 	if o.rc != 0 || !strings.Contains(o.stdout, "amended: topics/go.md") {
