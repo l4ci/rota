@@ -18,8 +18,8 @@ flags:
   - flag: "--docs"
     does: deprecated alias for /rota-docs
 example:
-  source: walkthroughs/quickstart-manual-mode.md#step-4-ship
-  reviewed: true
+  source: getting-started.md
+  reviewed: false
   steps:
     - you: /rota-ship
     - agent: |

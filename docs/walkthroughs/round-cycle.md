@@ -1,8 +1,8 @@
 # A round cycle: shape the slate, run the round, cut the release
 
-[Your first round](../first-round.md) gets a round running, and [parallel rounds](../usage/parallel-rounds.md) documents every verb. This page is the loop a maintainer repeats between releases: shape the slate, run an orchestrated round, wind down, and sometimes release.
+[Your first round](../first-round.md) gets a round running, and [parallel rounds](../usage/parallel-rounds.md) documents every verb and its mechanics. This page is the loop a maintainer repeats between releases and the decisions that are yours in it: shape the slate, run an orchestrated round, wind down, and sometimes release. It does not repeat the mechanics; each stage links to where they live.
 
-It assumes the host is set up and `rota doctor` is green. One item without a round is the [manual-mode quickstart](quickstart-manual-mode.md). The issue numbers below are made up, for a project with a backlog on GitHub issues.
+It assumes the host is set up and `rota doctor` is green. One item without a round is the first cycle in [getting started](../getting-started.md). The issue numbers below are made up, for a project with a backlog on GitHub issues.
 
 ```mermaid
 flowchart LR
@@ -70,30 +70,9 @@ Two issues that edit the same file or name the same `## Touches` entry clash. Re
 
 ## 2. Run the round
 
-Start the orchestrator from the host pane (see [first round](../first-round.md#10--launch-the-orchestrator)):
+Start the orchestrator from the host pane with `rota orchestrate` ([launching it](../first-round.md#10--launch-the-orchestrator)) and tell it the slate, for example "run a round on issues 42, 51, 58 and 63". It starts the round and assigns each issue to a worker in its own worktree. `rota round assign` refuses an item that is not ready, overlaps an in-flight slot or has no free slot, and prints why. Your decision here is whether to override an overlap (`--accept-overlap`) or wait.
 
-```bash
-rota orchestrate
-```
-
-Tell it the slate, for example "run a round on issues 42, 51, 58 and 63". Under the hood it runs:
-
-```bash
-rota round start --scope slate --items 42,51,58,63
-rota round assign 42      # claims the issue, cuts <agent>/42-<slug>, starts a worker
-```
-
-`rota round assign` refuses an item that is not ready, overlaps an in-flight slot or has no free slot, and prints why. It marks nothing when it refuses. Your decision here is whether to override an overlap (`--accept-overlap`) or wait.
-
-### Watch
-
-You do not poll. The orchestrator waits on `rota round wait` (or runs `rota round watch` in the background) and wakes when a slot is done, blocked or dead:
-
-```bash
-rota round status          # every slot, its PR and drift
-```
-
-A slot is free as soon as its worker opens a PR, so the next issue starts while that PR waits for review. A worker that cannot decide prints `ROTA-BLOCKED` with one question. Answer on the issue or PR thread, or type `m: <answer>` in the pane.
+You do not poll. The orchestrator waits on `rota round wait` and wakes when a slot is done, blocked or dead. A worker that cannot decide prints `ROTA-BLOCKED` with one question; answer on the issue or PR thread, or type `m: <answer>` in the pane.
 
 ### Review, then bounce or fix
 
@@ -101,34 +80,15 @@ Workers open PRs and never merge. For each PR, read the diff against the issue's
 
 Your decision, per PR:
 
-- **Bounce it** when the worker misread the issue or skipped a stated criterion: the worker can learn from it. Count it, then relay the comments:
-
-  ```bash
-  rota round bounce 42 --head <sha>
-  rota round review-relay <slot>
-  ```
-
-  Only blocking findings count as a bounce. File the rest in one follow-up item per PR (floor: `review.fileDeferred`) with `rota verdict add --file-deferred --pr <pr-ref>` instead of relaying them.
+- **Bounce it** when the worker misread the issue or skipped a stated criterion: the worker can learn from it. Only blocking findings count as a bounce; file the rest in one follow-up item per PR instead of relaying them.
 - **Fix it yourself** when the gap is one line and a round trip costs more than the fix. A fix you push still needs an independent reviewer.
 - **Dispute the ticket** when the worker is right that the issue is wrong. Edit the issue, not the worker.
 
-At `round.freshAt` (default 2) a bounce moves the branch to a fresh slot, so the second attempt does not carry the first one's context. At `round.maxBounces` rota stops relaying and escalates on the PR. Do not bounce it again: audit the acceptance criteria first, since a criterion with two readings produces the same wrong PR every time. If one is ambiguous, hand the issue to a human (`rota round transfer <issue> --to human --cap-reason ambiguous-criteria --note-file <audit>`). If they all hold, hand it to a stronger worker (`rota round transfer <issue> --to <slot> --tier heavy --tier-reason <why> --cap-reason tier`). See [PRs in review](../usage/parallel-rounds.md#prs-in-review).
+At `round.maxBounces` rota stops relaying and escalates on the PR. Do not bounce it again: audit the acceptance criteria first, since a criterion with two readings produces the same wrong PR every time. An ambiguous one goes to a human; if they all hold, a stronger worker takes it. The verbs for counting, relaying and transferring are in [PRs in review](../usage/parallel-rounds.md#prs-in-review) and the [review loop](../usage/parallel-rounds.md#review-loop).
 
 ### Gate and merge
 
-With two or more reviewed PRs waiting, land them together on a merge train:
-
-```bash
-rota worker train 42 51 58 --base main
-```
-
-For exactly one waiting PR:
-
-```bash
-rota worker gate 63 --base main
-```
-
-Both verify the merged tree before anything lands. The gate also refuses a PR whose body lacks `Closes #N` or that carries a FAIL review verdict, and a red train names the member that broke the tree. A gate takes two to three minutes: start it in the background, review the next PR meanwhile and do not start a second one beside it. See [merge train](../usage/parallel-rounds.md#merge-train).
+Two or more reviewed PRs land together on a [merge train](../usage/parallel-rounds.md#merge-train); a single one goes through `rota worker gate`. Both verify the merged tree before anything lands. A gate takes two to three minutes: start it in the background, review the next PR meanwhile and do not start a second one beside it.
 
 ### Skip this stage when
 
@@ -136,28 +96,11 @@ Both verify the merged tree before anything lands. The gate also refuses a PR wh
 
 ## 3. Wind down
 
-When the slate is done, or you call the round, tell the orchestrator to finish:
-
-```bash
-rota round wind-down
-```
-
-It re-verifies the base branch, parks every slot, releases the lease and prints the same table as `rota round summary`: per issue the slot, wall time, bounces and gate outcome, then totals per slot and per account, then the idle table. A slot that still holds work is reported and left alone; fix it and run wind-down again.
+When the slate is done, or you call the round, tell the orchestrator to finish. [Winding down](../usage/parallel-rounds.md#winding-down) re-verifies the base branch, parks every slot, releases the lease and prints the round summary: per issue the slot, wall time, bounces and gate outcome, then totals per slot and per account, then the idle table.
 
 Read the table for what it says about your slate, not for the totals. An issue with three bounces points at its acceptance criteria. A slot idle for long stretches means the slate was too small or too serial for the number of workers.
 
-Then clean up and capture what you learned:
-
-```bash
-rota round reconcile
-rota reap            # preview; --apply removes what holds no work
-```
-
-```text
-/rota-learn
-```
-
-`/rota-learn` writes the reusable lessons of the round into `.rota/KNOWLEDGE.md`: a gate trap, a worker mistake that bounced twice, a decision you made once and should not make again. Run it once for the whole round, since workers skip it per PR. Your decision: which of the proposed entries are durable. Drop the ones that only describe this round.
+Then clean up (`rota round reconcile`, then `rota reap` and `rota reap --apply`; see [doctor and reap](../usage/doctor-and-reap.md)) and capture what you learned with `/rota-learn`. It writes the reusable lessons of the round into `.rota/KNOWLEDGE.md`: a gate trap, a worker mistake that bounced twice, a decision you made once and should not make again. Run it once for the whole round, since workers skip it per PR. Your decision: which of the proposed entries are durable. Drop the ones that only describe this round.
 
 Commit the knowledge entries straight to the base branch: bookkeeping needs no PR.
 

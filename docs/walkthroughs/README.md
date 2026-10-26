@@ -1,8 +1,7 @@
 # Walkthroughs
 
-End-to-end examples that follow one scenario from the first command to the last.
+Guides to what a project holds on disk after rota has been used on it. The command-by-command transcripts live on the [Examples page](https://volkerotto.net/rota/examples/), one per situation. For one small item, see [getting started](../getting-started.md).
 
-- [A round cycle: shape the slate, run the round, release](round-cycle.md). The loop between releases: `/rota-brainstorm` and `/rota-plan`, an orchestrated round, wind-down, `/rota-learn`, `/rota-release`.
-- [Quickstart: one item in manual mode](quickstart-manual-mode.md). One small bug through `/rota-capture`, `/rota-plan`, `/rota-work` and `/rota-ship`, with the proof and review gates marked.
-- [Greenfield: from a brief to a shipped milestone](greenfield-from-brief.md). Empty repo plus a one-page brief, through `/rota-vision`, `/rota-plan`, `/rota-work`, `/rota-debug`, `/rota-ship`, `/rota-learn`.
-- [Brownfield: dropping rota into an existing project](brownfield-existing-project.md). An established codebase with open issues, through `rota init`, `/rota-capture`, a P0 cycle and a debug cycle.
+- [Greenfield: what a project holds after a brief](greenfield-from-brief.md). Empty repo plus a one-page brief: the milestones, slice plan, backlog and knowledge entries that `/rota-vision`, `/rota-plan`, `/rota-capture` and `/rota-learn` write.
+- [Brownfield: what rota adds to an existing project](brownfield-existing-project.md). An established codebase with open issues: the project map, config choices, backlog, decision and knowledge entry.
+- [A round cycle: shape the slate, run the round, release](round-cycle.md). The decisions you make between releases: slate, bounces, wind-down, release.

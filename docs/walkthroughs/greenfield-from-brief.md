@@ -1,6 +1,8 @@
-# Greenfield: from a brief to a shipped milestone
+# Greenfield: what a project holds after a brief
 
-You have an idea, a one-page brief, and an empty repo. This walkthrough ends with a roadmap on disk, a slice plan, code in `main` and durable knowledge for the next session.
+You have an idea, a one-page brief, and an empty repo. This page shows what is on disk once rota has taken it to a shipped milestone: a roadmap, a slice plan, a backlog, code in `main` and durable knowledge for the next session.
+
+The commands and their output are on the Examples page: [Start a project from a brief](https://volkerotto.net/rota/examples/#new-project), [Try a risky idea first](https://volkerotto.net/rota/examples/#risky-idea) and [Chase a bug you don't understand](https://volkerotto.net/rota/examples/#unclear-bug). This page keeps what a transcript cannot show: file contents, config choices and the arc over several weeks.
 
 The project carried through every step is **Tally**, a self-hosted household budget tracker. CLI first, web dashboard later. The brief lives at the project root as `README.md`:
 
@@ -55,31 +57,15 @@ Most of `.rota/` is tracked by default, so the backlog and learnings travel with
 
 ## Step 2: /rota-vision
 
-`/rota-vision` turns "I have an idea" into "I have milestones I can execute against." It runs Socratic discovery, then web research, then a critique pass.
+`/rota-vision` turns "I have an idea" into "I have milestones I can execute against." It runs Socratic discovery, then web research, then a critique pass; see the [new-project example](https://volkerotto.net/rota/examples/#new-project) for how a session reads.
 
 ```bash
 $ /rota-vision
 ```
 
-It reads `README.md` and any stack file (`package.json`, `go.mod`, `Cargo.toml`, …) at the project root before asking anything. It also finds the brief on its own: a plan-shaped `README.md`, or a file named like `brief.md`, `spec.md` or `concept.md`, that no milestone covers yet. It opens with *"I found README.md (Tally)"* and offers to seed milestones from it, which you can take or decline in favour of the interview below. A brief under an unrelated name (`pitch.md`, `idea.md`) is still found when its first heading reads as a plan; otherwise point at it in the opening message.
+It reads `README.md` and any stack file (`package.json`, `go.mod`, `Cargo.toml`, …) at the project root before asking anything, and finds the brief on its own: a plan-shaped `README.md`, or a file named like `brief.md`, `spec.md` or `concept.md`, that no milestone covers yet. A brief under an unrelated name (`pitch.md`, `idea.md`) is still found when its first heading reads as a plan; otherwise point at it in the opening message.
 
-The first discovery question is short:
-
-> *Your brief says "dogfood within two weeks." What does dogfooded mean concretely: (a) you have a working CLI you use daily for two weeks before showing anyone else, or (b) the CLI plus a shared deployment with your partner within those two weeks?*
-
-You answer. It probes one more layer ("would month one of CLI-only be enough validation, or does the web piece have to land for the dogfood to count?") and then moves to web research.
-
-Web research for Tally surfaces:
-
-- The popular self-hosted budget tools are web-first (Firefly III, Actual). A CLI-first design is unusual but defensible.
-- `shopspring/decimal` for Go and `rust_decimal` for Rust are both well maintained. Float math for money is the canonical mistake.
-- OFX and QIF imports remain common from US banks. Pure CSV is more universal but loses metadata.
-
-The critique pass pushes back on your scope:
-
-> *Your brief calls Postgres-or-SQLite "no decision yet," but the rest of your constraints (single binary, privacy, household scale) strongly favor SQLite. Want me to lock that in as M01 scope, or keep it open?*
-
-You commit to SQLite. After two or three rounds of back and forth you end up with:
+Two things in the Tally session changed the plan. The interview pinned "dogfood within two weeks" down to a working CLI used daily before anyone else sees it. The critique pass pointed out that single binary, privacy and household scale all favour SQLite over Postgres, and you committed to it. After two or three rounds of back and forth you end up with:
 
 ```markdown
 # Milestones
@@ -104,13 +90,7 @@ Plus three detail files at `.rota/milestones/M01.md`, `M02.md`, `M03.md`, each w
 
 ## Step 3: /rota-spike (optional)
 
-The vision session named one unknown: the SQLite schema design for transactions, specifically how you'd handle multi-currency. The brief doesn't require it, but you suspect you'll add it within a year. A spike checks whether a one-currency-now schema would hurt later.
-
-```bash
-$ /rota-spike will a single-currency schema survive a later move to multi-currency?
-```
-
-The skill sharpens the question and names the spike `sqlite-schema`. This creates a `spike/sqlite-schema` branch (which never merges into `main`) and `.rota/spikes/sqlite-schema.md` with the question recorded. You experiment on the branch: try two schemas, write a sketch migration, see what feels right. When you're done, fill in *Findings* and *Decision* in the spike file:
+The vision session named one unknown: how to design the transaction schema for multi-currency. The brief doesn't require it, but you suspect you'll add it within a year. `/rota-spike will a single-currency schema survive a later move to multi-currency?` names the spike `sqlite-schema` and creates a `spike/sqlite-schema` branch (which never merges into `main`) and `.rota/spikes/sqlite-schema.md` with the question recorded. See the [risky-idea example](https://volkerotto.net/rota/examples/#risky-idea). You experiment on the branch: try two schemas, write a sketch migration. When you're done, fill in *Findings* and *Decision* in the spike file:
 
 ```markdown
 **Findings.** A `currency` column added later with default `'USD'` and a backfill works fine; the rollup queries need a one-line change. No data loss.
@@ -124,11 +104,7 @@ For a brand-new project you might do zero spikes. Use them when the answer mater
 
 ## Step 4: /rota-plan M01-S01
 
-```bash
-$ /rota-plan M01-S01
-```
-
-A focused session walks you through goal, approach, task decomposition, named assumptions, and open questions. The output lives at `.rota/plans/M01-S01.md`:
+`/rota-plan M01-S01` runs a focused session on goal, approach, task decomposition, named assumptions and open questions. The planning dial it picks, and the confirm step, are in the [new-project example](https://volkerotto.net/rota/examples/#new-project). The output lives at `.rota/plans/M01-S01.md`:
 
 ```markdown
 ---
@@ -171,83 +147,25 @@ Single binary, `cobra` for the CLI, `database/sql` plus `mattn/go-sqlite3`. Deci
 
 ## Step 5: /rota-capture
 
-You can run `/rota-work` against the plan directly (it decomposes the same way), or capture the slice as backlog items first so each gets an ID, a detail file, and a KNOWLEDGE.md link. This walkthrough captures: the IDs allow tracking, and `/rota-work` (no argument) surfaces items in order.
+You can run `/rota-work` against the plan directly (it decomposes the same way), or capture the slice as backlog items first so each gets an ID, a detail file, and a KNOWLEDGE.md link. This walkthrough captures: the IDs allow tracking, and `/rota-work` (no argument) surfaces items in order. One `/rota-capture` call with the five task names becomes `F01` to `F05`, all Minor features tagged `Milestone: M01`.
 
-```bash
-$ /rota-capture "tally CLI skeleton, sqlite migrations engine, transactions schema with int64 minor units, tally add command, tally list command"
-```
-
-The output:
-
-```
-[F01] tally CLI skeleton                          Feature, Minor, Milestone: M01
-[F02] sqlite migrations engine                    Feature, Minor, Milestone: M01
-[F03] transactions schema with int64 minor units  Feature, Minor, Milestone: M01
-[F04] tally add command                           Feature, Minor, Milestone: M01
-[F05] tally list command                          Feature, Minor, Milestone: M01
-```
-
-Each gets a row in `BACKLOG.md` under `## Features`, tagged `Milestone: M01`. Detail files live at `.rota/features/F01.md` … `F05.md` (auto-created when the description is long enough to overflow the BACKLOG row). With `issues.source` set to `github` or `gitlab` each item is an issue on the tracker instead; see the [issue backend](../usage/issue-backend.md).
+Each gets a row in `BACKLOG.md` under `## Features`. Detail files live at `.rota/features/F01.md` … `F05.md` (auto-created when the description is long enough to overflow the BACKLOG row). With `issues.source` set to `github` or `gitlab` each item is an issue on the tracker instead; see the [issue backend](../usage/issue-backend.md).
 
 If any of these had been size-Major instead of Minor, `/rota-capture` would have nudged you toward `/rota-brainstorm` before plan to negotiate the design first. Minor items skip that layer.
 
 ## Step 6: first cycle (/rota-work → /rota-ship → /rota-learn)
 
-```bash
-$ /rota-work
-```
+`/rota-work` with no argument suggests F01, the head of the M01 dependency chain. The orchestrator reads `.rota/plans/M01-S01.md`, picks the F01 task and dispatches a worker on `rota/F01-tally-cli-skeleton` (branch isolation). The transcript is in the [new-project example](https://volkerotto.net/rota/examples/#new-project).
 
-```
-Backlog (M01 active):
-  Features: F01, F02, F03, F04, F05 (all Minor)
-
-Suggested next: F01 (head of M01 dependency chain)
-Run /rota-work F01? [y/N]
-```
-
-You confirm. The orchestrator reads `.rota/plans/M01-S01.md`, picks the F01 task, and dispatches a worker on `rota/F01-tally-cli-skeleton` (branch isolation):
-
-```
-[orchestrator] Plan reads: 1. Skeleton CLI ...
-[orchestrator] Dispatching 1 worker on branch rota/F01-tally-cli-skeleton
-[worker]  ↳ created cmd/tally/main.go, cmd/tally/root.go, go.mod
-[worker]  ↳ verify: go test ./...                      (PASS)
-[worker]  ↳ verify: tally --version | grep v0.0.0      (PASS)
-[worker]  ↳ commit: feat(cli): scaffold tally root command [F01]
-```
-
-`rota item complete` marks F01 done in `BACKLOG.md`. `/rota-work` merges the branch into `main` with `--no-ff` (direct merge), deletes the branch, and prompts for the next item.
+What lands on disk: one commit per task (`feat(cli): scaffold tally root command [F01]`), a proof row per verify step, F01 marked done in `BACKLOG.md`. `/rota-work` merges the branch into `main` with `--no-ff` (direct merge), deletes it, and prompts for the next item.
 
 You repeat for F02 and F03. F03 introduces a subtle bug. The transactions schema stores amounts as int64 minor units, but the worker's helper converts `decimal.Decimal` to int64 by multiplying by 100 and casting, which looks right and is wrong.
 
 ## Step 7: a real bug, run /rota-debug
 
-F04 lands. You try a quick smoke test:
+F04 lands, and a quick smoke test shows `tally add --amount 0.10` stored as `0.09`: a float intermediary. `/rota-debug` reproduces it with a failing `TestAmountRoundTrip`, tests one hypothesis (the helper multiplies `Float64()` by 100, and `0.10` times 100 is `9.999…`, which truncates to `9`), confirms it before touching code and fixes it with `decimal`'s own `Shift(2)`. The session is in the [unclear-bug example](https://volkerotto.net/rota/examples/#unclear-bug).
 
-```bash
-$ tally add --amount 12.34 --category food --note "lunch"
-$ tally add --amount 0.10 --category food
-$ tally list
-2026-05-13  12.34   food  lunch
-2026-05-13   0.09   food
-```
-
-`0.10` came back as `0.09`, a float intermediary. Run a debug cycle.
-
-```bash
-$ /rota-debug
-```
-
-It asks which open or recently completed item to debug. You point at F04 (the `add` command, though the real bug was introduced in F03's helper). The cycle:
-
-1. **Reproduce.** Write a failing test against the conversion helper. `TestAmountRoundTrip` fails: `0.10` → `9`, expected `10`.
-2. **Hypothesize.** The orchestrator inspects the helper and proposes: *the implementation uses `amount.Float64() * 100` and casts to int64; `0.10` has no exact float64 representation, so the multiplication produces `9.9999…` which truncates to `9`.*
-3. **Verify the hypothesis before changing code.** Add a debug print of the intermediate float. It prints `9.999999999999998`. Confirmed.
-4. **Fix.** Replace the float roundtrip with `decimal`'s own shift. Parse input via `decimal.NewFromString(input)`, then `shifted.Shift(2).IntPart()`. The test now passes for `0.10`, `12.34`, `0.001` (correctly errors), and `99999.99`.
-5. **Commit.** `fix(money): use decimal.Shift instead of Float64 for minor-unit conversion`. One atomic commit.
-6. **Nudge /rota-learn.** `/rota-debug` ends with: *this was a subtle gotcha (decimal/float interaction). Run /rota-learn to capture it?*
-
-You do, after Step 8.
+What lands on disk: one atomic commit, `fix(money): use decimal.Shift instead of Float64 for minor-unit conversion`, plus a proof row for the reproducer. The bug sat in F03's helper, not in `add`, which is why you point `/rota-debug` at F04 and let it trace back. `/rota-debug` ends by nudging `/rota-learn`, which you take in Step 9.
 
 ## Step 8: /rota-ship
 
@@ -257,21 +175,13 @@ When F05 lands the slice is functionally complete:
 $ /rota-ship
 ```
 
-`/rota-ship` runs `/rota-review` first. The reviewer reads recent commits, the resolved item IDs, and any `KNOWLEDGE.md` topics that match touched files. It returns one of `PASS`, `CONCERNS`, `FAIL`.
+`/rota-ship` runs `/rota-review` first, then merges or opens a PR; the flow is in the [unclear-bug example](https://volkerotto.net/rota/examples/#unclear-bug). For M01-S01 the verdict is `PASS` with one `CONCERNS` note attached: *"F05 uses `fmt.Println` for output; consider `cmd.OutOrStdout()` for testability when the web dashboard imports the same package in M02."* You file that as a follow-up via `/rota-capture` and continue.
 
-For M01-S01 you get `PASS` with one `CONCERNS` note attached: *"F05 uses `fmt.Println` for output; consider `cmd.OutOrStdout()` for testability when the web dashboard imports the same package in M02."* You file that as a follow-up via `/rota-capture` and continue.
-
-`/rota-ship` then either opens a GitHub PR or merges directly into `main`, depending on `work.mergeStrategy` (the issue backend always opens a PR). Solo mode for Tally is direct merge.
+The merge goes into `main` or becomes a GitHub PR, depending on `work.mergeStrategy` (the issue backend always opens a PR). Solo mode for Tally is direct merge.
 
 ## Step 9: /rota-learn
 
-The float-bug session produced one durable insight. `/rota-learn` writes it into `KNOWLEDGE.md` under a topic of your choice:
-
-```bash
-$ /rota-learn
-```
-
-`/rota-learn` keeps only durable bullets (`--strict` adds an Opus verifier pass). It skips "fixed the bug" but writes:
+The float-bug session produced one durable insight. `/rota-learn` (see the [unclear-bug example](https://volkerotto.net/rota/examples/#unclear-bug)) keeps only durable bullets (`--strict` adds an Opus verifier pass). It skips "fixed the bug" but writes:
 
 ```markdown
 ## Money & Decimals
@@ -285,13 +195,7 @@ The topic shows up in the `## Project Knowledge` block in `AGENTS.md`. Next time
 
 You loop steps 6 to 9 through additional slices: `tally summary` for monthly rollups, `tally yoy` for year-over-year compare, a CSV importer. Each `/rota-plan M01-S02`, `M01-S03`, `M01-S04` writes its own slice plan; `/rota-capture` seeds items; `/rota-work` ships them; `/rota-learn` catches anything subtle that surfaced.
 
-After the importer ships, `/rota-work` (no argument) flags the empty milestone in its orientation output:
-
-```
-empty-active: M01
-```
-
-You close it with `rota milestone status M01 --to shipped`. M02 and M03 (which both depend on M01) flip from blocked to ready in `MILESTONES.md`. The next `/rota-vision` invocation enters edit mode and refines M02's plan with what you learned in M01. The float gotcha now informs the dashboard's number rendering, and the XDG-paths-Linux-only assumption gets revisited for cross-platform packaging.
+After the importer ships, `/rota-work` (no argument) flags the empty milestone in its orientation output as `empty-active: M01`. You close it with `rota milestone status M01 --to shipped`. M02 and M03 (which both depend on M01) flip from blocked to ready in `MILESTONES.md`. The next `/rota-vision` invocation enters edit mode and refines M02's plan with what you learned in M01. The float gotcha now informs the dashboard's number rendering, and the XDG-paths-Linux-only assumption gets revisited for cross-platform packaging.
 
 ## What you have after two weeks
 

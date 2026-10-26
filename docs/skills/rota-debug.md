@@ -17,7 +17,7 @@ manual_only: false
 flags: []
 example:
   source: walkthroughs/brownfield-existing-project.md
-  reviewed: true
+  reviewed: false
   steps:
     - you: /rota-debug B01
     - agent: |
