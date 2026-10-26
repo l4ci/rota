@@ -24,18 +24,26 @@ const (
 	defaultTTLMin  = 10
 )
 
-// externalSettings reads knowledge.external and knowledge.externalTTL: the
-// merged project config inside a rota project, the global config elsewhere.
+// externalGetter reads config keys the way the external knowledge settings
+// do: the merged project config inside a rota project, the global config
+// elsewhere. ok is false when neither is reachable.
+func externalGetter(d *Deps, cwd string) (get func(key string) (any, bool), ok bool) {
+	if root, found := rotatree.Find(cwd); found {
+		cfg := d.Config(root)
+		return func(key string) (any, bool) { return config.Lookup(cfg, key) }, true
+	}
+	if dir, err := projects.Dir(d.projectsEnv()); err == nil {
+		vals, _ := config.LoadGlobal(dir)
+		return func(key string) (any, bool) { v, ok := vals[key]; return v, ok }, true
+	}
+	return nil, false
+}
+
+// externalSettings reads knowledge.external and knowledge.externalTTL.
 func externalSettings(d *Deps, cwd string) (path string, ttlMin int) {
 	ttlMin = defaultTTLMin
-	var get func(key string) (any, bool)
-	if root, ok := rotatree.Find(cwd); ok {
-		cfg := d.Config(root)
-		get = func(key string) (any, bool) { return config.Lookup(cfg, key) }
-	} else if dir, err := projects.Dir(d.projectsEnv()); err == nil {
-		vals, _ := config.LoadGlobal(dir)
-		get = func(key string) (any, bool) { v, ok := vals[key]; return v, ok }
-	} else {
+	get, ok := externalGetter(d, cwd)
+	if !ok {
 		return "", ttlMin
 	}
 	if v, ok := get(externalKey); ok {
@@ -47,6 +55,24 @@ func externalSettings(d *Deps, cwd string) (path string, ttlMin int) {
 		}
 	}
 	return strings.TrimSpace(path), ttlMin
+}
+
+// externalLimits reads the three size thresholds of the external base; a
+// missing or negative value takes its default.
+func externalLimits(d *Deps, cwd string) extknowledge.Limits {
+	l := extknowledge.Limits{Bullets: 25, Bytes: 8192, Topics: 60}
+	get, ok := externalGetter(d, cwd)
+	if !ok {
+		return l
+	}
+	for key, dst := range map[string]*int{"knowledge.externalMaxBullets": &l.Bullets, "knowledge.externalMaxBytes": &l.Bytes, "knowledge.externalMaxTopics": &l.Topics} {
+		if v, ok := get(key); ok {
+			if n, ok := intOf(v); ok && n >= 0 {
+				*dst = n
+			}
+		}
+	}
+	return l
 }
 
 func intOf(v any) (int, bool) {
@@ -191,6 +217,25 @@ func knExtTopics(c *Ctx) (Result, error) {
 			line += " — " + t.Hook
 		}
 		lines = append(lines, line)
+	}
+	return Result{Data: knObj("topics", items), Text: strings.Join(lines, "\n")}, nil
+}
+
+func knExtStats(c *Ctx) (Result, error) {
+	cl, err := externalClone(c)
+	if err != nil {
+		return Result{}, err
+	}
+	extFreshen(c, cl)
+	stats, err := cl.Stats()
+	if err != nil {
+		return Result{}, extErr(err)
+	}
+	items := []any{}
+	var lines []string
+	for _, s := range stats {
+		items = append(items, knObj("name", s.Name, "file", s.File, "bullets", s.Bullets, "bytes", s.Bytes))
+		lines = append(lines, fmt.Sprintf("%s: %d bullets, %d bytes", s.Name, s.Bullets, s.Bytes))
 	}
 	return Result{Data: knObj("topics", items), Text: strings.Join(lines, "\n")}, nil
 }
