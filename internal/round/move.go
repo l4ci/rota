@@ -1109,6 +1109,7 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 			err := editSlot(root, o.To, func(s *worker.Slot) error {
 				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: run.kind, KindSource: run.kindSource, Tier: run.tier, Model: run.model, TierReason: run.reason, Attempt: attempt, AttemptBase: attemptBase})
 				s.SetBranch(run.branch)
+				s.SetAwaitingDone(true) // the branch's PR is the sender's: only this worker's own done counts
 				return nil
 			})
 			if err == nil {

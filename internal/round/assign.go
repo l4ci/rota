@@ -630,6 +630,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 type assignRun struct {
 	id, agent, branch string
 	resuming, queue   bool
+	openPR            bool // an open PR already heads the issue: the slot awaits its own done
 	kind, kindSource  string
 	model, tier       string
 	reason            string
@@ -830,11 +831,17 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 			return run, false, err
 		}
 	}
-	if !resuming && !o.AcceptOpenPR {
+	hasOpenPR := false
+	if !resuming {
 		// An attempt of a best-of:2 issue ignores the PR of its sibling's branch.
 		openPR, err := e.openPRIssuesExcept(ctx, be, bo.otherBranch())
-		if err != nil {
+		if err != nil && !o.AcceptOpenPR {
 			return run, false, err
+		}
+		// A redo onto an open PR starts on its head: the slot awaits its own done.
+		hasOpenPR = err == nil && openPR[it.IssueKey()] != 0
+		if o.AcceptOpenPR {
+			openPR = nil
 		}
 		if n := openPR[it.IssueKey()]; n != 0 {
 			return run, false, blocked(BlockOpenPR, "%s has open PR #%d: not ready; --accept-open-pr assigns it again for a deliberate redo", id, n)
@@ -953,7 +960,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	res.SmokeSection = e.reserveSmokeSection(ctx, root, be, reg, set.Roster, id, agent)
 	return assignRun{id: id, agent: agent, branch: res.Branch, resuming: resuming, queue: queue,
 		kind: pf.Kind, kindSource: pf.KindSource, model: pf.Model, tier: tier, reason: reason,
-		pick: pf.Pick, decision: pf.Decision, decisions: decisions, brief: brief, bo: bo, slot: slot, members: members, from: from, base: msBase, tag: it.Fields.Get("milestone"), fallback: pf.Fallback}, false, nil
+		pick: pf.Pick, decision: pf.Decision, decisions: decisions, brief: brief, bo: bo, slot: slot, members: members, from: from, base: msBase, tag: it.Fields.Get("milestone"), fallback: pf.Fallback, openPR: hasOpenPR}, false, nil
 }
 
 // notReadyBy is the blockedBy of a failed readiness: overlap when only the
@@ -1170,6 +1177,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 			if err := editSlot(root, agent, func(s *worker.Slot) error {
 				s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: run.kind, KindSource: run.kindSource, Tier: run.tier, Model: res.Model, TierReason: run.reason, SmokeSection: res.SmokeSection, Attempt: attempt, AttemptBase: attemptBase, Bundle: res.Bundle})
 				s.SetBriefContext(run.decisions, o.Siblings)
+				s.SetAwaitingDone(run.openPR)
 				return nil
 			}); err != nil {
 				return err
