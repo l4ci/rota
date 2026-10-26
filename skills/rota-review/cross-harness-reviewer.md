@@ -4,7 +4,7 @@ A `size:Major` or `risk:high` issue's PR gets one more review from a model famil
 
 ## Brief and inputs
 
-1. Extract `$REVIEWED` (Step 5) into a fresh scratch directory: `git archive "$REVIEWED" | tar -x -C <scratch>`, then `mkdir <scratch>/.review`.
+1. Run `rota review prepare "$REVIEWED" --json` (Step 5) and require success with `data.head == REVIEWED`. Use its `data.path` as `<scratch>`; `.review` is already created. A preparation failure stops the run as unavailable; never use the live checkout.
 2. Copy the Step 5 package to `<scratch>/.review/diff.txt` with the token line first (`cross-harness-run.md`, *Inputs*). Write the items' spec (Step 3) to `<scratch>/.review/items.md`.
 On a re-review (`re-review.md`), `$REVIEWED` is the new head and the extract is of it, while `diff.txt` is the `--since <sha>` package of Step 5, the fix range only. The brief then carries the latest `review-cross` record's blocking findings as `**Earlier findings:**`.
 
@@ -21,7 +21,7 @@ Run it on `data.cross` with `cross-harness-run.md`, *Run*, *Account* and the rep
 - **Unavailable.** A failed check, or the second block failed: record nothing, never a guessed verdict, and print `cross-harness review unavailable (<harness>: <reason>)` in the report. `rota worker gate` keeps refusing `review-missing` until a `review-cross` record from that harness exists at head. In a round that line goes to the orchestrator, who reruns the review later (a quota resets) or adds the `review:none` label to the issue, a visible choice on the issue.
 - **Fallback is not another harness.** Never record a `review-cross` from the harness you run in, or from the author's: the gate refuses a record whose `harness` differs from `data.cross`.
 
-Delete the extract when the record is written or the run is given up.
+Run `rota review cleanup <scratch>` when the record is written or the run is given up (also on failure or cancellation). Report cleanup failures with the path; do not remove any other directory.
 
 ## Report
 

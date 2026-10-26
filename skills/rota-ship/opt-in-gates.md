@@ -17,6 +17,8 @@ rota review brief [--repo "$REPO"] <branch>
 REVIEWED=$(git rev-parse <branch>)   # the tip the brief diffs, captured with it
 ```
 
+Before dispatch, run `rota review prepare "$REVIEWED" --json` from the source repo (umbrella: add `--repo "$REPO"`). Require success, `data.head == REVIEWED` and a nonempty `data.path`; save the brief under `data.path/.review/`. A preparation or input-write failure stops dispatch with no checkout fallback. Set the subagent's cwd to `data.path` (or require it to change there before reading code or running commands), and tell it to remain read-only and use only that workspace. A scratch cwd is not an OS sandbox; unsandboxed absolute-path access remains possible. After the subagent succeeds, fails or is cancelled, run `rota review cleanup <data.path>`; surface cleanup failures with the path, never broaden removal.
+
 Dispatch the brief verbatim to a fresh `standard` subagent through the harness's dispatch interface (`references/subagent-dispatch.md`), with the brief labelled "Second-opinion review of <branch>". It returns a report ending in a fenced `json` verdict block. Save the block to a temp file, then:
 
 ```bash
