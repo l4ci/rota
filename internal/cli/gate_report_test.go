@@ -87,6 +87,7 @@ func TestGateReportFileOutcomes(t *testing.T) {
 
 func TestGateReportPRMergeAndRefusal(t *testing.T) {
 	dir := fileDeferredRepo(t)
+	gitIn(t, dir, "remote", "add", "origin", "git@github.com:example/reports.git")
 	write(t, filepath.Join(dir, ".rota", "config.json"), `{"forge":{"provider":"github"}}`)
 	write(t, filepath.Join(dir, ".rota", "BACKLOG.md"), "# TODO\n\n## Tasks\n\n- **[T01] [Minor] Gate target.** Evidence\n")
 	var reports []string
@@ -126,5 +127,18 @@ func TestGateReportPRMergeAndRefusal(t *testing.T) {
 	}
 	if text := readTask(t, dir, "T01"); strings.Count(text, "<!-- rota:report gate sha=") != 2 {
 		t.Fatalf("linked item's gate reports: %s", text)
+	}
+}
+
+func TestGateReportSkipsRecordedPRWithoutOrigin(t *testing.T) {
+	dir := fileDeferredRepo(t)
+	write(t, filepath.Join(dir, ".rota", "config.json"), `{"forge":{"provider":"github"}}`)
+	f := &forge{answer: func(string, []string) (string, string, int) { return "[]", "", 0 }}
+	deps := useForge(t, f)
+	deps.Getwd = func() (string, error) { return dir, nil }
+	var warnings bytes.Buffer
+	postGateReport(&Ctx{Deps: deps, Stderr: &warnings}, dir, worker.GateResult{Branch: "feat/x", PR: "20", SHA: "abc1234", Verdict: worker.GateCheckBroke, Err: "no origin"})
+	if len(f.calls) != 0 {
+		t.Fatalf("gate without origin reached the forge: %v", f.calls)
 	}
 }
