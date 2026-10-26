@@ -227,6 +227,7 @@ type Capabilities struct {
 	TabOpener       TabOpener
 	SessionStarter  SessionStarter
 	TabLister       TabLister
+	TabFollower     TabFollower
 	PaneHost        PaneHost
 	OutputWatcher   OutputWatcher
 	Operator        Operator
@@ -257,6 +258,7 @@ func CapabilitiesOf(h any) Capabilities {
 	c.TabOpener, _ = h.(TabOpener)
 	c.SessionStarter, _ = h.(SessionStarter)
 	c.TabLister, _ = h.(TabLister)
+	c.TabFollower, _ = h.(TabFollower)
 	c.WorkspaceCloser, _ = h.(WorkspaceCloser)
 	c.LinkedLayouter, _ = h.(LinkedLayouter)
 	c.PaneHost, _ = h.(PaneHost)
