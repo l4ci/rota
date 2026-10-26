@@ -1,6 +1,6 @@
 # rota documentation
 
-Public user guide for rota, a dev workflow for Claude Code, Codex and OpenCode: skills plus a single-binary CLI. Start with one agent: capture an item, build it, ship it. When you have several issues ready, an orchestrator agent hands them to worker agents and a gate checks every merge.
+Public user guide for rota, a dev workflow for Claude Code and Codex, with OpenCode as a round worker: skills plus a single-binary CLI. Start with one agent: capture an item, build it, ship it. When you have several issues ready, an orchestrator agent hands them to worker agents and a gate checks every merge.
 
 ## Contents
 
