@@ -36,7 +36,7 @@ import (
 //     the worker never merged what landed since it branched and its green is
 //     stale. That alone is no refusal (#31): when the merge is clean the gate
 //     merges it itself and verifies the merged tree, naming any file both sides
-//     changed in the note; a conflict bounces it (see staleReason), and the CLI counts bounces per item. With a recorded PR and an origin remote this is judged
+//     changed in the note; a conflict sends it back uncounted (see staleReason). With a recorded PR and an origin remote this is judged
 //     on the PUSHED refs after a fetch (origin/<base> vs origin/<branch>),
 //     because the PR merges what was pushed, not what sits in a local worktree.
 //     The PR's head branch, head SHA and target branch must match the verified
@@ -179,6 +179,14 @@ type GateOpts struct {
 	// its resolved review depth needs, read with verdict.Recorded at the
 	// checked tip (the full sha). Unset skips that check.
 	CheckReviews bool
+	// ReviewsOnly asks only whether the head has the review verdicts its depth
+	// needs: a read-only run (CheckOnly with CheckReviews) that skips the stages
+	// judging the branch itself (freshness, provenance, closes, claim, the
+	// recorded verdict). It ends review-missing, fresh, or the verdict of a
+	// stage before them (the forge, the slot, the PR). The autopilot asks it
+	// before it gates, since the gate's freshness check runs first and reads a
+	// done awaiting review as stale.
+	ReviewsOnly bool
 	// Approval is the merge-approval gate (B1), run after provenance and right
 	// before the merge, never under CheckOnly. Its thread comes from the
 	// resolved target. A refusal or an error stops the gate with verdict
@@ -395,6 +403,9 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	if o.Round == nil {
 		o.Round = &RoundMemo{}
 	}
+	if o.ReviewsOnly {
+		o.CheckOnly, o.CheckReviews = true, true
+	}
 	if o.CheckOnly || o.HoldsLandLock { // read-only, or the caller already holds the land lock
 		res, err := e.gate(ctx, root, o)
 		res.Round = o.Round
@@ -527,6 +538,21 @@ var gateSteps = []gateStep{
 	(*gate).stepVerify,
 }
 
+// reviewsOnlySteps is the table of a ReviewsOnly run: it resolves the target
+// and its head as the full table does, then stops at the review verdicts.
+var reviewsOnlySteps = []gateStep{
+	(*gate).stepForge,
+	(*gate).stepExternal,
+	(*gate).stepAdoptPR,
+	(*gate).stepRemote,
+	(*gate).stepWaitedMerged,
+	(*gate).stepSlotHead,
+	(*gate).stepRefs,
+	(*gate).stepPRMatches,
+	(*gate).stepReviewDepth,
+	(*gate).stepCheckOnly,
+}
+
 // gatePostSteps run after the steps above, however they ended, unless one
 // returned an error: the verdict is final and these record it.
 var gatePostSteps = []func(*gate) error{
@@ -538,7 +564,11 @@ var gatePostSteps = []func(*gate) error{
 // run walks the step table, then the post steps. A step that is done ends the
 // table, not the post steps; an error ends both.
 func (g *gate) run() error {
-	for _, step := range gateSteps {
+	steps := gateSteps
+	if g.o.ReviewsOnly {
+		steps = reviewsOnlySteps
+	}
+	for _, step := range steps {
 		done, err := step(g)
 		if err != nil {
 			return err

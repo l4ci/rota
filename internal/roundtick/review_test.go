@@ -213,3 +213,38 @@ func TestReviewStepAuto(t *testing.T) {
 		})
 	}
 }
+
+// A done slot whose head has no review verdicts is not gated: the gate would
+// call a fresh done "stale" before it asked for the verdicts (#2072). The
+// slot is reported as waiting for review and the next tick looks again.
+func TestTickDoneSlotWithoutReviewVerdictsIsNotGated(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "ben", State: "done", Issue: "#7", PR: "#70"}, {Name: "dana", State: "done", Issue: "#8", PR: "#80"}}}
+	e := f.env()
+	e.AwaitingReview = func(_ context.Context, s Slot, _ string) string {
+		if s.Name == "ben" {
+			return "waiting for review verdicts at head"
+		}
+		return ""
+	}
+	r, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"main:dana"}; !slices.Equal(f.gated, want) {
+		t.Fatalf("gated %v, want %v: ben waits for review", f.gated, want)
+	}
+	if want := []Item{{"awaiting-review", "ben", "waiting for review verdicts at head"}}; !slices.Equal(r.NeedsYou, want) {
+		t.Fatalf("needs-you %+v, want %+v", r.NeedsYou, want)
+	}
+	if len(r.Held) != 0 {
+		t.Errorf("waiting for review must not hold the slot: %v", r.Held)
+	}
+}
+
+func TestWaitingForReviewIsAPlainLine(t *testing.T) {
+	got := WaitingForReview("GATE ben refused — review depth full (default depth) needs a recorded review-spec and review-quality verdict; nothing landed", "ben/7-x")
+	want := "waiting for review verdicts at head (review depth full (default depth) needs a recorded review-spec and review-quality verdict); run /rota-review on ben/7-x"
+	if got != want {
+		t.Fatalf("got %q\nwant %q", got, want)
+	}
+}

@@ -36,7 +36,7 @@ type Merged struct {
 	Target string
 	Landed bool
 	// Hold is set for a failure only a person can clear, so the next tick does
-	// not re-run the checks on it. A stale or provenance bounce is not held:
+	// not re-run the checks on it. A stale or provenance refusal is not held:
 	// the worker fixes it and the PR comes back.
 	Hold bool
 	// Skip is a member that did not land through no fault of its own (a train
@@ -118,6 +118,11 @@ type Env struct {
 	// nil means the round has no review loop. A slot it relays, or holds, is not
 	// merged this tick; one it only reports (manual) is gated as before.
 	ReviewLoop func(ctx context.Context, s Slot) ReviewOutcome
+	// AwaitingReview says why a done slot's head still lacks the review
+	// verdicts ship.review needs, "" when it has them (or needs none). Such a
+	// slot is not gated: the gate checks freshness first, so a fresh done with
+	// no verdicts would read as stale. nil means no such check.
+	AwaitingReview func(ctx context.Context, s Slot, base string) string
 	// Capped returns why the round may not fill slots now (every account is
 	// cooling down), "" when it may. nil means no quota cap. A capped tick
 	// mints and assigns nothing and says why in Result.Capped; it merges and
@@ -232,6 +237,12 @@ func Run(ctx context.Context, e Env) (Result, error) {
 					continue
 				}
 			}
+			if e.AwaitingReview != nil {
+				if why := e.AwaitingReview(ctx, s, e.targetBase(s.Name)); why != "" {
+					r.NeedsYou = append(r.NeedsYou, Item{"awaiting-review", s.Name, why})
+					continue
+				}
+			}
 			targets = append(targets, s.Name)
 		}
 	}
@@ -319,7 +330,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 // mergeAll groups the targets by the base each merges into, in first-seen
 // order: a lone target is a gate, several a train. A target that did not land
 // is reported with its verdict; whether it is held for a person is the
-// verdict's call: a stale or provenance bounce goes back to the worker and
+// verdict's call: a stale or provenance refusal goes back to the worker uncounted and
 // returns, any other failure waits for a person.
 func (e Env) mergeAll(ctx context.Context, targets []string) []Merged {
 	var order []string
