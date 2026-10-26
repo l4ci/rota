@@ -59,6 +59,8 @@ Most of `.rota/` is tracked by default, so the backlog and learnings travel with
 
 `/rota-vision` turns "I have an idea" into "I have milestones I can execute against." It runs Socratic discovery, then web research, then a critique pass; see the [new-project example](https://volkerotto.net/rota/examples/#new-project) for how a session reads.
 
+In the Tally run the research came back with three findings that shaped M01: the popular self-hosted budget tools are web-first (Firefly III, Actual), so a CLI-first design is unusual but defensible; `shopspring/decimal` (Go) and `rust_decimal` (Rust) are well maintained, and float math for money is the canonical mistake; OFX and QIF imports remain common from US banks, while pure CSV is more universal but loses metadata.
+
 ```bash
 $ /rota-vision
 ```
