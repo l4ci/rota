@@ -45,6 +45,13 @@ const (
 	// DebugReset is the human reset of an item's failed-fix count (B3). It is
 	// written by `debug reset` only: no verb takes it as --kind.
 	DebugReset = "debug-reset"
+	// WorkFix is one /rota-work Step 7 fix dispatch (FAIL), or the PASS that
+	// ends the run of them. Its count is separate from the debug-fix one, so
+	// the cap that hands off to /rota-debug never halts /rota-debug itself.
+	WorkFix = "work-fix"
+	// WorkFixReset is the human reset of an item's work-fix count. It is
+	// written by `debug work-fix reset` only: no verb takes it as --kind.
+	WorkFixReset = "work-fix-reset"
 )
 
 // Verdicts, in worst-of order.
@@ -89,6 +96,10 @@ var severities = []string{"blocker", "major", "minor", "info"}
 
 // IronLaw is the number of failed fixes that halts a debug session.
 const IronLaw = 3
+
+// WorkFixCap is the number of Step 7 fix attempts after which /rota-work
+// dispatches no more and hands the item to /rota-debug.
+const WorkFixCap = 3
 
 // keep is the history limit, extended for items with older active failures.
 const keep = 20
@@ -479,6 +490,49 @@ func FailedFixes(list []Record) int {
 		}
 	}
 	return n
+}
+
+// WorkFixAttempts counts an item's work-fix attempts since the latest
+// work-fix PASS or work-fix-reset record.
+func WorkFixAttempts(list []Record) int {
+	n := 0
+	for _, r := range list {
+		switch {
+		case r.Kind == WorkFixReset, r.Kind == WorkFix && r.Verdict == Pass:
+			n = 0
+		case r.Kind == WorkFix && r.Verdict == Fail:
+			n++
+		}
+	}
+	return n
+}
+
+// AddWorkFix appends r, a work-fix record, to an item's list and returns the
+// item's attempt count after it. A FAIL record is refused (ok false, nothing
+// written) when the count already stands at WorkFixCap; the check and the
+// write share one lock.
+func AddWorkFix(root, id string, r Record) (attempts int, ok bool, err error) {
+	err = update(root, func(s *Store) {
+		attempts = WorkFixAttempts(s.Items[id])
+		if r.Verdict == Fail && attempts >= WorkFixCap {
+			return
+		}
+		s.Items[id] = appendItem(s.Items[id], r)
+		attempts = WorkFixAttempts(s.Items[id])
+		ok = true
+	})
+	return
+}
+
+// ResetWorkFix appends the work-fix-reset record r when the item has attempts
+// to clear, and returns that count. With none it appends nothing.
+func ResetWorkFix(root, id string, r Record) (cleared int, err error) {
+	err = update(root, func(s *Store) {
+		if cleared = WorkFixAttempts(s.Items[id]); cleared > 0 {
+			s.Items[id] = appendItem(s.Items[id], r)
+		}
+	})
+	return
 }
 
 // ResetItem appends the reset record r to an item's list when the item has

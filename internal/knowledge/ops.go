@@ -68,7 +68,14 @@ func NormalizeSha(sha string) (string, error) {
 // when sha is not empty) under "## topic" in scope's
 // KNOWLEDGE.md. A bullet whose title already exists (case-insensitive) is a
 // no-op. A new bullet is also registered as provisional in the tier sidecar.
-func (s Store) Add(scope, topic, title, body, date, sha string) (AddResult, error) {
+func (s Store) Add(scope, topic, title, body, date, sha string, paths ...string) (AddResult, error) {
+	field, err := PathField(paths)
+	if err != nil {
+		return AddResult{}, err
+	}
+	if field != "" {
+		body = strings.TrimRight(body, "\n") + " " + field
+	}
 	target, err := s.KnowledgePath(scope)
 	if err != nil {
 		return AddResult{}, err

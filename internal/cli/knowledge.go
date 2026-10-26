@@ -245,6 +245,8 @@ func statsResult(stats []knowledge.Stat) Result {
 }
 
 func knAdd(fs *flag.FlagSet) RunFunc {
+	var paths stringList
+	fs.Var(&paths, "path", "relative file glob to recall this bullet before editing (repeatable)")
 	topic := fs.String("topic", "", "the `topic` heading to add under")
 	title := fs.String("title", "", "bullet `title`")
 	bodyFile := fs.String("body-file", "", "bullet body: a `path`, or - for stdin")
@@ -269,6 +271,12 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 		if *ext && *sha != "" {
 			return Result{}, Usage("--sha does not apply to --external")
 		}
+		if *ext && len(paths) > 0 {
+			return Result{}, Usage("--path does not apply to --external")
+		}
+		if _, err := knowledge.PathField(paths); err != nil {
+			return Result{}, Usage("%s", err)
+		}
 		normSha, err := knowledge.NormalizeSha(*sha)
 		if err != nil {
 			return Result{}, Usage(err.Error())
@@ -288,7 +296,7 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		res, err := st.Add(scope, *topic, *title, body, *date, normSha)
+		res, err := st.Add(scope, *topic, *title, body, *date, normSha, paths...)
 		if err != nil {
 			return knFail(err)
 		}

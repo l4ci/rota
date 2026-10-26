@@ -129,6 +129,7 @@ var supportAllowed = []string{
 	"rota status add", "rota status handoff", "rota status rm",
 	"rota debug counter clear", "rota debug counter fail", "rota debug counter inc-cycle", "rota debug counter init", "rota debug counter pass",
 	"rota debug counter record-attempt", "rota debug reset", "rota debug session put", "rota debug session rm", "rota debug verdict",
+	"rota debug work-fix attempt", "rota debug work-fix pass", "rota debug work-fix reset",
 	"rota repo add", "rota repo rm",
 	// Disposable reviewer workspaces outside the repo.
 	"rota review prepare", "rota review cleanup",

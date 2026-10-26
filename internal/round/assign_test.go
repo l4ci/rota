@@ -1036,7 +1036,7 @@ func TestOpenPRsAreListedOncePerCandidatesRun(t *testing.T) {
 
 // The brief ends on the sentinel step with the slot filled in (#227).
 func TestPointerBriefEndsWithSentinelStep(t *testing.T) {
-	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "decided: X", "", "", "", "", nil, tierBrief{Kind: "claude", Tier: "standard"})
+	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "decided: X", "", "", "", "", "", nil, tierBrief{Kind: "claude", Tier: "standard"})
 	last := got[strings.LastIndex(strings.TrimRight(got, "\n"), "\n")+1:]
 	if !strings.Contains(last, "`ROTA-DONE ben <pr-url>`") {
 		t.Errorf("last line is not the sentinel step: %q", last)
@@ -1046,11 +1046,11 @@ func TestPointerBriefEndsWithSentinelStep(t *testing.T) {
 // The item's Out of scope section rides in the brief; an item without one adds nothing.
 func TestPointerBriefCarriesOutOfScope(t *testing.T) {
 	tb := tierBrief{Kind: "claude", Tier: "standard"}
-	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "- the CLI flags", "", "", "", nil, tb)
+	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "- the CLI flags", "", "", "", nil, tb)
 	if !strings.Contains(got, "Out of scope") || !strings.Contains(got, "- the CLI flags") {
 		t.Errorf("brief lacks the out-of-scope text:\n%s", got)
 	}
-	if strings.Contains(pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", nil, tb), "Out of scope") {
+	if strings.Contains(pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", "", nil, tb), "Out of scope") {
 		t.Error("empty out-of-scope still printed a heading")
 	}
 }
@@ -1116,7 +1116,7 @@ func TestAssignHarnessAndModelLabels(t *testing.T) {
 		}
 	})
 	t.Run("the brief names the pick", func(t *testing.T) {
-		got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", nil, tierBrief{Kind: "codex", Tier: "standard", Pick: "harness:codex"})
+		got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", "", nil, tierBrief{Kind: "codex", Tier: "standard", Pick: "harness:codex"})
 		if !strings.Contains(got, "The issue asks for harness:codex") {
 			t.Errorf("brief = %s", got)
 		}
@@ -1176,7 +1176,7 @@ func TestCandidatesShowThePick(t *testing.T) {
 
 func TestPointerBriefTouches(t *testing.T) {
 	tb := tierBrief{Kind: "claude", Tier: "standard"}
-	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "- the CLI flags", "- POST /items", "", "", nil, tb)
+	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "- the CLI flags", "- POST /items", "", "", nil, tb)
 	if !strings.Contains(got, "<<<issue-text\n- POST /items\nissue-text>>>") {
 		t.Errorf("brief lacks the touches block:\n%s", got)
 	}
@@ -1186,7 +1186,7 @@ func TestPointerBriefTouches(t *testing.T) {
 }
 
 func TestPointerBriefNoTouches(t *testing.T) {
-	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", nil, tierBrief{Kind: "claude", Tier: "standard"})
+	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", "", nil, tierBrief{Kind: "claude", Tier: "standard"})
 	if strings.Contains(got, "Touches") {
 		t.Errorf("empty touches printed a heading:\n%s", got)
 	}
@@ -1204,14 +1204,14 @@ func TestTouchesReaderKeepsSpellingAndFiltersSentinels(t *testing.T) {
 
 func TestPointerBriefTryIt(t *testing.T) {
 	tb := tierBrief{Kind: "claude", Tier: "standard"}
-	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "- POST /items", "- `rota x`\n  expect: ok", "", nil, tb)
+	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "- POST /items", "- `rota x`\n  expect: ok", "", nil, tb)
 	if !strings.Contains(got, "<<<issue-text\n- `rota x`\n  expect: ok\nissue-text>>>") || !strings.Contains(got, "ROTA_PORT_BASE and ROTA_DB_SUFFIX") {
 		t.Errorf("brief lacks the try-it block:\n%s", got)
 	}
 	if strings.Index(got, "Touches, quoted") > strings.Index(got, "Try it, quoted") {
 		t.Errorf("Try it must follow Touches:\n%s", got)
 	}
-	if got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", nil, tb); strings.Contains(got, "Try it") {
+	if got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", "", nil, tb); strings.Contains(got, "Try it") {
 		t.Errorf("empty try-it printed a heading:\n%s", got)
 	}
 }
@@ -1341,7 +1341,7 @@ func TestTryItBriefFollowsTheGatesTrustDecision(t *testing.T) {
 }
 
 func TestPointerBriefTryItWithheld(t *testing.T) {
-	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "author mallory of #9 is not a collaborator with write access", nil, tierBrief{Kind: "claude", Tier: "standard"})
+	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", "author mallory of #9 is not a collaborator with write access", nil, tierBrief{Kind: "claude", Tier: "standard"})
 	want := "Try it: the issue has a ## Try it section, but its steps are withheld from this brief (author mallory of #9 is not a collaborator with write access). Do not run them; the merge gate skips them for the same reason."
 	if !strings.Contains(got, want) || strings.Contains(got, "Try it, quoted") || strings.Contains(got, "merge gate runs") {
 		t.Errorf("brief:\n%s", got)
@@ -1406,11 +1406,11 @@ func TestAssignAfterReclaimMintsANewAttempt(t *testing.T) {
 
 // An empty test.fast puts the run-test.full instruction in the brief (#1169).
 func TestPointerBriefFullOnly(t *testing.T) {
-	on := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", nil, tierBrief{Kind: "claude", Tier: "standard", FullOnly: true})
+	on := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", "", nil, tierBrief{Kind: "claude", Tier: "standard", FullOnly: true})
 	if !strings.Contains(on, "rota test run full") {
 		t.Errorf("brief lacks the test.full instruction:\n%s", on)
 	}
-	off := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", nil, tierBrief{Kind: "claude", Tier: "standard"})
+	off := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", "", nil, tierBrief{Kind: "claude", Tier: "standard"})
 	if strings.Contains(off, "rota test run full") {
 		t.Errorf("brief carries the test.full instruction without FullOnly:\n%s", off)
 	}
@@ -1533,11 +1533,11 @@ func TestStatusSkipsLoginCheckForDrainingSlot(t *testing.T) {
 
 // work.tdd on puts the red-first line in the brief (#1300); off leaves it out.
 func TestPointerBriefTDD(t *testing.T) {
-	on := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", nil, tierBrief{Kind: "claude", Tier: "standard", TDD: true})
+	on := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", "", nil, tierBrief{Kind: "claude", Tier: "standard", TDD: true})
 	if !strings.Contains(on, "failing test first") || !strings.Contains(on, "rota proof record") {
 		t.Errorf("brief lacks the TDD line:\n%s", on)
 	}
-	off := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", nil, tierBrief{Kind: "claude", Tier: "standard"})
+	off := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", "", nil, tierBrief{Kind: "claude", Tier: "standard"})
 	if strings.Contains(off, "failing test first") {
 		t.Errorf("brief carries the TDD line without TDD:\n%s", off)
 	}
@@ -1639,7 +1639,7 @@ func TestAssignRefusesOnRoundErr(t *testing.T) {
 func TestPointerBriefPreflight(t *testing.T) {
 	brief := func(tb tierBrief) string {
 		tb.Kind, tb.Tier = "claude", "standard"
-		return pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", nil, tb)
+		return pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", "", nil, tb)
 	}
 	fast := brief(tierBrief{})
 	for _, want := range []string{"Pre-flight before `rota worker done`", "base and on your branch", "--outcome partial", "third line", "still print `ROTA-DONE", "not run: merge-only by rule"} {
