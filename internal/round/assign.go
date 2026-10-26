@@ -58,9 +58,11 @@ const (
 	BlockBatch = blockedby.Batch
 	// BlockBundle: the --bundle members are too many, repeat a slot's recorded
 	// bundle differently, are closed, or cannot be bundled (best-of:2).
-	BlockBundle     = blockedby.Bundle
-	BlockSlotBusy   = blockedby.SlotBusy
-	BlockNoFreeSlot = blockedby.NoFreeSlot
+	BlockBundle   = blockedby.Bundle
+	BlockSlotBusy = blockedby.SlotBusy
+	// BlockMergeInProgress: the sender's worktree is mid-merge (MERGE_HEAD).
+	BlockMergeInProgress = blockedby.MergeInProgress
+	BlockNoFreeSlot      = blockedby.NoFreeSlot
 	// BlockNoLogin: the slot's account has no usable Claude login, so a session
 	// there would stall at a login prompt.
 	BlockNoLogin = blockedby.NoLogin

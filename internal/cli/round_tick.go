@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -127,6 +128,9 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		run := runGate(c, root, gateRunOpts{Slot: target, Base: base})
 		return roundtick.GateRun{Result: run.Result, Err: run.Err, Refused: run.Refused, BookErr: run.BookErr}
 	}
+	e.AwaitingReview = func(_ context.Context, sl roundtick.Slot, base string) string {
+		return reviewVerdictsMissing(c, root, sl.Name, base)
+	}
 	e.RunTrain = func(_ context.Context, targets []string, base string) roundtick.TrainRun {
 		run := runTrain(c, root, trainRunOpts{Targets: targets, Base: base})
 		return roundtick.TrainRun{Result: run.Result, Err: run.Err, Refused: run.Refused, Book: run.Book}
@@ -187,6 +191,19 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		c.Warn("autopilot state not saved: %v", err)
 	}
 	return r, nil
+}
+
+// reviewVerdictsMissing says why a done slot's head still lacks the review verdicts
+// ship.review needs, "" when it has them or the check could not be made (the
+// gate then judges the slot as before).
+func reviewVerdictsMissing(c *Ctx, root, slot, base string) string {
+	ctx, stop := workerContext()
+	defer stop()
+	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: base, ReviewsOnly: true, ItemBody: lazyItemBody(c, root)})
+	if err != nil || r.Verdict != worker.GateReviewMissing {
+		return ""
+	}
+	return roundtick.WaitingForReview(r.Err, strutil.FirstNonEmpty(r.Branch, slot))
 }
 
 // quotaCapped is the tick's cap hook: why no slot may fill, "" when one may.

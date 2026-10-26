@@ -1793,3 +1793,41 @@ func TestGateRequiresLensReview(t *testing.T) {
 		})
 	}
 }
+
+// ReviewsOnly asks the one question the autopilot needs before it gates: does
+// the head have the review verdicts its depth needs? It skips the freshness
+// check, which would call a fresh done with no verdicts "stale" when it
+// conflicts with the base (#2072).
+func TestGateReviewsOnlyIgnoresFreshness(t *testing.T) {
+	spec, quality := verdict.ReviewSpec, verdict.ReviewQuality
+	for _, c := range []struct {
+		name     string
+		recorded []string
+		verdict  string
+	}{
+		{"no verdicts", nil, GateReviewMissing},
+		{"verdicts recorded", []string{spec, quality}, GateFresh},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.setConfig(`{"ship":{"review":{"default":"full"}},"test":{"full":["true"]}}`)
+			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
+			w.forge("body", "Closes #5\n")
+			w.forge("issueLabels", "in-progress")
+			w.record("w1", "", c.recorded...)
+			advanceMainOn(w, "work.txt") // the branch now conflicts with the base
+			stale, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
+			if err != nil || stale.Verdict != GateStale {
+				t.Fatalf("a plain check must still call the conflict stale: %+v %v", stale, err)
+			}
+			res, err := w.gate(false, GateOpts{ReviewsOnly: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Verdict != c.verdict || res.Changed {
+				t.Fatalf("verdict %s (%s), want %s", res.Verdict, res.Err, c.verdict)
+			}
+		})
+	}
+}

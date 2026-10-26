@@ -15,7 +15,7 @@ Under `autonomy.level` set to `auto` ([`../references/autonomy.md`](../reference
 - gates and merges finished PRs (never where `ship.mergeApproval` asks for a person, never without a pass);
 - assigns ready candidates to idle slots at the default tier.
 
-It returns only for unseen `autopilot.needsYou` items: a blocked, limited or dead slot, a failed gate, drift it won't repair, a merge a policy leaves to you. Those stay yours: answer, escalate, bounce or fix as usual.
+It returns only for unseen `autopilot.needsYou` items: a blocked, limited or dead slot, a failed gate, a done slot waiting for review verdicts (`awaiting-review`: run `/rota-review` on it), drift it won't repair, a merge a policy leaves to you. Those stay yours: answer, escalate, bounce or fix as usual.
 
 - It never answers a `ROTA-BLOCKED`; a quiet watch is not "no questions".
 - It is still the one watch the Stop hook wants, and a wind-down stops it.
