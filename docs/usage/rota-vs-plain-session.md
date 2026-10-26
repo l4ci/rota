@@ -58,4 +58,5 @@ Stale context does not build up across issues. What carries over is the worktree
 
 - [Parallel rounds](parallel-rounds.md): the round, the gate and solo mode
 - [Review and ship](review-and-ship.md): review depth and `ship.review`
+- [How rota compares](../compare/README.md): rota beside other tools
 - [Product QA](qa.md): `/rota-qa` and the `ship.qa` gate

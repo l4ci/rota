@@ -173,11 +173,16 @@ In the order you'd usually reach for them:
 
 Every skill: [skills](docs/skills/README.md). Settings: [configuration](docs/usage/configuration.md).
 
+## ⚖ How rota compares
+
+See how rota compares to [GSD](docs/compare/gsd.md), [Superpowers](docs/compare/superpowers.md), [OpenSpec](docs/compare/openspec.md), [ralph](docs/compare/ralph.md), [Conductor](docs/compare/conductor.md), [Orca](docs/compare/orca.md), [Vibe Kanban](docs/compare/vibe-kanban.md), [Claude Squad](docs/compare/claude-squad.md), [Gas Town](docs/compare/gastown.md), [Octo](docs/compare/octo.md) and [a bare Claude Code session](docs/usage/rota-vs-plain-session.md).
+
 ## 📚 Docs
 
 - [Getting started](docs/getting-started.md): install and your first item, end to end
 - [Your first round](docs/first-round.md): orchestrator, workers and the gate, step by step
 - [How it works](docs/how-it-works.md): the roles, the map of skills and files, and how skills chain
+- [How rota compares](docs/compare/README.md): one page per comparable tool
 - [FAQ](docs/faq.md) · [All docs](docs/)
 
 ## 🤝 Contributing
