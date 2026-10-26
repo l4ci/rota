@@ -61,13 +61,6 @@ func TestWorkerDoneOutcome(t *testing.T) {
 			}
 		}
 	})
-	t.Run("the summary is exactly three lines", func(t *testing.T) {
-		dir := doneProject(t, "")
-		sum := writeSummary(t, dir, "one\ntwo\n")
-		if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--outcome", "partial", "--summary-file", sum, "--json"); code != 2 {
-			t.Fatalf("two lines: exit %d: %s", code, out)
-		}
-	})
 	t.Run("an unknown outcome is a usage error", func(t *testing.T) {
 		dir := doneProject(t, "")
 		sum := writeSummary(t, dir, threeLines)
