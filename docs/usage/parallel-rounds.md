@@ -249,7 +249,8 @@ A directory in an issue's `## Pointers` (`src/app/ui/`) matches every file below
 
 ```sh
 rota round assign 59 --check-only             # readiness only; exit 1 when not ready
-rota round assign 59 --agent ben --body-file decisions.md --siblings 58,60,62
+rota round assign 59 --agent ben --body-file decisions.md --siblings 58,60,62 \
+  --decision-topics "Architecture,Rounds: Orchestration"
 ```
 
 Without `--agent` the first idle roster slot takes it, else the first slot whose worker is done with
@@ -263,6 +264,14 @@ claims the item (`<agent>@<round>`), sets it in progress with a comment, cuts th
 branch `<agent>/<issue>-<slug>`, picks the account and dispatches a short signed brief: a
 pointer to the standing contract (`round.brief`, else `skills/references/worker-contract.md`), the
 issue to read and dispute, the item's `## Out of scope` section when it has one, the siblings and the decisions from `--body-file`.
+
+`--decision-topics` takes comma-separated DECISIONS.md topics, using the same matching rules as
+`rota decisions query`. The brief includes each matching active entry in full, including its
+Forbids and Permits; retired and superseded entries are excluded. Unknown topics are a usage error.
+Without this flag, the brief lists the available topics and asks the worker to query those its issue
+touches before implementing. A missing or empty DECISIONS.md adds no text. The assignment stores this
+context so re-briefing, resuming and transfer keep the same entries even if DECISIONS.md later changes.
+Workers escalate a conflict between the issue and a binding decision before implementing.
 
 Concurrent assignments reserve the slot under the registry lock. If another manual assign or
 autopilot tick has taken the slot since planning, the later assign exits 4 with
