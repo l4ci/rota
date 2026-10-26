@@ -208,6 +208,9 @@ type ExternalKnowledge struct {
 	IsGit     bool // it is a git work tree
 	HasRemote bool // the clone has a remote to fetch from and push to
 	HasPolicy bool // rota-knowledge.json is at its root
+	// Over names each topic past a size limit, and the index past the topic
+	// limit; empty when nothing is over or the clone could not be read.
+	Over []string
 }
 
 // externalKnowledge reports the state of the external knowledge clone: unset
@@ -230,6 +233,16 @@ func (d *runner) externalKnowledge() Check {
 	return pass(name, k.Path)
 }
 
+// externalKnowledgeSize warns when a topic or the index of the external
+// knowledge base has outgrown its limits. A base within them adds no line.
+func (d *runner) externalKnowledgeSize() (Check, bool) {
+	over := d.in.ExternalKnowledge.Over
+	if len(over) == 0 {
+		return Check{}, false
+	}
+	return Check{Name: "external knowledge size", Status: Warn, Detail: strings.Join(over, "; "), Hint: "/rota-learn --external-review proposes a split"}, true
+}
+
 // Run executes every check in the contract's order.
 func Run(ctx context.Context, in Input) Report {
 	d := &runner{in: in, ctx: ctx}
@@ -243,6 +256,9 @@ func Run(ctx context.Context, in Input) Report {
 	if in.ExternalKnowledge.Path != "" {
 		// Unset adds no line: the feature is off, like a healthy disk.
 		checks = append(checks, d.externalKnowledge())
+		if c, ok := d.externalKnowledgeSize(); ok {
+			checks = append(checks, c)
+		}
 	}
 	if c, ok := d.disk(); ok {
 		// Only a volume below the threshold adds a line: a healthy one stays

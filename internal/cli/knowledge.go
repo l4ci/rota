@@ -18,7 +18,7 @@ import (
 func knowledgeCommands() *Command {
 	return &Command{Name: "knowledge", Summary: "read and write .rota/KNOWLEDGE.md", Subs: []*Command{
 		{Name: "query", Summary: "print topic sections, tier-aware", Repo: true, Verb: knQuery},
-		{Name: "stats", Summary: "bullet count and size per topic", Verb: noFlags(knStats), View: knowledgeView},
+		{Name: "stats", Summary: "bullet count and size per topic", Verb: knStatsVerb, View: knowledgeView},
 		{Name: "topics", Summary: "list topic headings with bullet counts", Verb: knTopics},
 		{Name: "add", Summary: "add a bullet under a topic", Repo: true, Verb: knAdd},
 		{Name: "amend", Summary: "append text to an existing bullet", Repo: true, Verb: knAmend},
@@ -148,6 +148,19 @@ func knQuery(fs *flag.FlagSet) RunFunc {
 			ms = append(ms, m)
 		}
 		return Result{Data: knObj("text", text, "missing", ms), Text: text}, nil
+	}
+}
+
+func knStatsVerb(fs *flag.FlagSet) RunFunc {
+	ext := externalFlag(fs)
+	return func(c *Ctx, args []string) (Result, error) {
+		if *ext {
+			if err := knNoArgs(args); err != nil {
+				return Result{}, err
+			}
+			return knExtStats(c)
+		}
+		return knStats(c, args)
 	}
 }
 

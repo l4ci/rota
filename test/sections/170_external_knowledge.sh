@@ -83,4 +83,30 @@ RC=0; OUT=$(ek migrate external-knowledge --apply) || RC=$?
 [ "$(git -C "$EKCLONE" rev-list --count HEAD)" = "$AFTER" ] || fail "re-apply committed"
 pass "a second migrate --apply changes nothing"
 
+# stats --external measures each topic; doctor warns on a topic past the bullet limit (#2109).
+{
+  printf '# Big\n\n'
+  for i in $(seq 1 26); do printf -- '- **Bullet %s** — Filler. <!-- 2026-10-01 source:app -->\n' "$i"; done
+} > "$EKCLONE/topics/big.md"
+printf -- '- [Big](topics/big.md) — a topic past the bullet limit\n' >> "$EKCLONE/README.md"
+git -C "$EKCLONE" add -A && git -C "$EKCLONE" commit -q -m "add big topic" && git -C "$EKCLONE" push -q origin main || fail "seeding the big topic failed"
+RC=0; OUT=$(ekn knowledge stats --external) || RC=$?
+[ "$RC" = "0" ] || fail "stats --external exited $RC: $OUT"
+case "$OUT" in *"Big: 26 bullets, "*" bytes"*) ;; *) fail "stats --external lacks the Big line: $OUT" ;; esac
+RC=0; OUT=$(ek knowledge stats --external) || RC=$?
+[ "$(jget 'data.topics[2].file' <<<"$OUT")" = "topics/big.md" ] && [ "$(jget 'data.topics[2].bullets' <<<"$OUT")" = "26" ] || fail "stats --external JSON: $OUT"
+pass "stats --external prints bullets and bytes per topic"
+
+# Doctor looks tools up in ROTA_TEST_DOCTOR_PATH, so no real codex or forge CLI runs.
+EKBIN="$TMP_EK/bin"; mkdir -p "$EKBIN"; ln -s "$(command -v git)" "$EKBIN/git"
+RC=0; OUT=$(ROTA_TEST_DOCTOR_PATH="$EKBIN" ek doctor 2>/dev/null) || RC=$?
+python3 -c '
+import json,sys
+cs={c["name"]:c for c in json.load(sys.stdin)["data"]["checks"]}
+c=cs["external knowledge size"]
+assert c["status"]=="warn", c
+assert "Big (26 bullets, limit 25)" in c["detail"], c
+assert "/rota-learn --external-review" in c["hint"], c' <<<"$OUT" || fail "doctor lacks the external knowledge size warning: $OUT"
+pass "doctor warns on a topic over knowledge.externalMaxBullets"
+
 rm -rf "$TMP_EK"

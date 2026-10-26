@@ -362,6 +362,9 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 |-----|-------|------|---------|--------|-------------|
 | `knowledge.external` | machine (local) | path | unset |  | Local path of the cloned external knowledge repo (README.md, topics/, rota-knowledge.json) that rota knowledge --external reads and writes, and that /rota-learn and the knowledge consult also use. Machine-specific, so set it in the global config. Empty means the feature is off. |
 | `knowledge.externalTTL` | machine (local) | int | `10` |  | Minutes a fetch of the external knowledge clone stays fresh. A read inside the window uses the local copy; past it, rota fetches and fast-forwards first. 0 fetches on every read. |
+| `knowledge.externalMaxBullets` | machine (local) | int | `25` |  | Bullets a topic file of the external knowledge repo may hold before rota doctor warns that it has outgrown a cheap read. 0 turns the check off. |
+| `knowledge.externalMaxBytes` | machine (local) | int | `8192` |  | Bytes a topic file of the external knowledge repo may hold before rota doctor warns. 0 turns the check off. |
+| `knowledge.externalMaxTopics` | machine (local) | int | `60` |  | Topics the external knowledge index may list before rota doctor warns. 0 turns the check off. |
 
 ## Removed keys
 
