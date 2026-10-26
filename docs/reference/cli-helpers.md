@@ -191,7 +191,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota knowledge rm --topic <T> --title <title> [--external]` | delete one bullet and its tier entry |
 | `rota knowledge rename-topic --from <X> --to <Y> [--title <T>]` | rename a topic or move one bullet |
 | `rota knowledge harvest [--round <n>] [--mark <commentId>]` | list `learning` comments on issues merged in the round and not yet marked; `--mark` records one as harvested (`--mark` is refused on a support machine; issue backends only; only comments by authors with write access count, and a forge that cannot say is refused `blockedBy: forge`: the listing exits 1, `--mark` exits 4) |
-| `rota knowledge hit --topic <T> --title <S>` | register a consulted bullet; buffered in the gitignored `knowledge-hits.jsonl` until `tier fold` |
+| `rota knowledge hit --topic <T> --title <S> [--external]` | register a consulted bullet; buffered in the gitignored `knowledge-hits.jsonl` until `tier fold`; `--external` appends to a per-machine log in the rota state dir instead (no clone write, no network, exit 3 when the bullet is not in the base) and `stats --external` reports the counts |
 | `rota knowledge tier get --topic <T> --title <S>` | show one bullet's tier |
 | `rota knowledge tier set --topic <T> --title <S> --tier provisional\|confirmed\|deprecated` | set one bullet's tier |
 | `rota knowledge tier fold` | fold buffered hits into the tracked sidecar and empty the buffer |

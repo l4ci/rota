@@ -29,7 +29,7 @@ func knowledgeCommands() *Command {
 		{Name: "rm", Summary: "delete one bullet and its tier entry", Repo: true, Verb: knRm},
 		{Name: "rename-topic", Summary: "rename a topic or move one bullet", Repo: true, Verb: knRename},
 		{Name: "harvest", Summary: "list (or --mark) learning comments on merged issues", Verb: knHarvest},
-		{Name: "hit", Summary: "register a consulted bullet", Repo: true, Verb: knHit},
+		{Name: "hit", Summary: "register a consulted bullet (--external: on this machine only)", Repo: true, Verb: knHit},
 		{Name: "tier", Summary: "read and write bullet tiers", Subs: []*Command{
 			{Name: "get", Summary: "show one bullet's tier", Repo: true, Verb: knTierGet},
 			{Name: "set", Summary: "set one bullet's tier", Repo: true, Verb: knTierSet},
@@ -495,12 +495,16 @@ func knRename(fs *flag.FlagSet) RunFunc {
 func knHit(fs *flag.FlagSet) RunFunc {
 	topic := fs.String("topic", "", "the `topic` heading")
 	title := fs.String("title", "", "bullet `title`")
+	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := knNoArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "title": *title}, "topic", "title"); err != nil {
 			return Result{}, err
+		}
+		if *ext {
+			return knExtHit(c, *topic, *title)
 		}
 		st, scope, err := knStore(c)
 		if err != nil {

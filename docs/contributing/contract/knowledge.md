@@ -41,6 +41,7 @@ old: hv-knowledge-stats
 shim: stdout JSON passes through unchanged; `topics[].name|bullets|bytes` already match.
 note: the old helper reads only the umbrella file, so the verb has no repo scope and a learn run inside a sub-repo still gets umbrella numbers.
 note: `--ui` opens a read-only topic list over this data; Enter reads the topic. See cli-conventions.md.
+note: `--external` measures the external base instead: topics (each split topic's subtopics and any `stray: true` file included) carry `file`, `hits` and `items: [{"title", "date", "hits", "lastHit"}]`, and the data adds `tornHits`. Hits are counted from the per-machine log written by `hit --external`; see the note under `knowledge hit`.
 
 ### rota knowledge topics
 rota knowledge topics [--external]
@@ -113,6 +114,8 @@ shim: stderr `auto-promoted:` sets `promoted: true`; stderr `skip-auto-promote:`
 note: the result moves from stderr into `data`. For topic `Glossary` the old helper does nothing and exits 0; the contract returns `changed: false` with `hits` 0 and `tier` `provisional`. An untracked bullet is created with hits 1, provisional (`bump_hit` behaviour). The threshold is config `learn.promoteThreshold` (default 3), and promotion is skipped while the pair is in the contradiction queue.
 note: the port reads the value it reports in the same locked pass as the write; the shim's follow-up read can skew it under concurrent writers.
 note: since #1290 a hit appends one JSON line `{topic, title, date}` to the gitignored per-developer buffer `knowledge-hits.jsonl` beside the scope's sidecar (under its `.lock`) and does not write the tracked `knowledge-tier.json`, so consulting a bullet never dirties the tree. `data` is what the sidecar reads once the buffer is folded in (`hits`, `tier`, `promoted`, `promotionBlocked`); `changed` is true. `rota knowledge tier fold` applies the buffer.
+
+note: `--external` (`rota knowledge hit --external --topic <T> --title <S>`) appends `{topic, title, date, project}` to `<state dir>/external-knowledge/<clone-hash>.hits.jsonl` with one append-only line write, so concurrent rota processes interleave whole lines. It never fetches, never writes the clone and has no tier: `data` is `{"topic", "title", "hits": number, "changed": true}` where `hits` counts this machine's hits on the bullet. Exit 3 when the topic or the bullet is not in the base (and when `knowledge.external` is unset). Hits join by title within the topic family, so a bullet `split` moved into `Godot: Networking` keeps the hits recorded under `Godot`. A line that does not parse is skipped and counted (`tornHits` in `stats --external`). Like the project `hit`, a gitignored per-machine write: the support fence allows `rota knowledge hit`, and it is not in `readOnlyVerbs` (`changed` is in its data).
 
 ### rota knowledge tier get
 rota knowledge tier get --topic <T> --title <S>

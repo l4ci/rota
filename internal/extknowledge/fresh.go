@@ -54,12 +54,16 @@ func (c Clone) now() time.Time {
 }
 
 // stampPath is the per-clone file that records the last successful fetch.
-func (c Clone) stampPath() string {
+func (c Clone) stampPath() string { return c.statePath(".fetch") }
+
+// statePath is a per-clone file in the state dir: the clone path's hash plus
+// ext. Empty without a state dir.
+func (c Clone) statePath(ext string) string {
 	if c.StateDir == "" {
 		return ""
 	}
 	sum := sha256.Sum256([]byte(c.Dir))
-	return filepath.Join(c.StateDir, "external-knowledge", hex.EncodeToString(sum[:6])+".fetch")
+	return filepath.Join(c.StateDir, "external-knowledge", hex.EncodeToString(sum[:6])+ext)
 }
 
 // fresh is whether the last fetch is within the TTL.

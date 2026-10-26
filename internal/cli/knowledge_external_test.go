@@ -301,3 +301,40 @@ func TestKnowledgeExternalMatch(t *testing.T) {
 		}
 	}
 }
+
+func TestKnowledgeExternalHitCountsInStats(t *testing.T) {
+	project, clone, _ := extFixture(t, "")
+	head := gittest.Run(t, clone, "rev-parse", "HEAD")
+	o := knNew(t, project, "", "knowledge", "hit", "--external", "--topic", "Go", "--title", "Table tests", "--json")
+	if o.rc != 0 || !strings.Contains(o.stdout, `"hits": 1`) || !strings.Contains(o.stdout, `"changed": true`) {
+		t.Fatalf("hit: %+v", o)
+	}
+	if o = knNew(t, project, "", "knowledge", "hit", "--external", "--topic", "Go", "--title", "Nope"); o.rc != ExitResolution {
+		t.Fatalf("unknown bullet rc=%d %+v", o.rc, o)
+	}
+	if o = knNew(t, project, "", "knowledge", "hit", "--external", "--topic", "Go"); o.rc != ExitUsage {
+		t.Fatalf("missing title rc=%d", o.rc)
+	}
+	o = knNew(t, project, "", "knowledge", "stats", "--external", "--json")
+	var env struct {
+		Data struct {
+			Topics []struct {
+				Hits  int
+				Items []struct {
+					Title   string
+					Hits    int
+					LastHit string
+				}
+			}
+		}
+	}
+	if err := json.Unmarshal([]byte(o.stdout), &env); err != nil || len(env.Data.Topics) != 1 || env.Data.Topics[0].Hits != 1 || env.Data.Topics[0].Items[0].Hits != 1 || env.Data.Topics[0].Items[0].LastHit == "" {
+		t.Fatalf("stats: %v %+v", err, o)
+	}
+	if o = knNew(t, project, "", "knowledge", "stats", "--external"); !strings.Contains(o.stdout, ", 1 hits") {
+		t.Fatalf("stats text: %q", o.stdout)
+	}
+	if now := gittest.Run(t, clone, "rev-parse", "HEAD"); now != head || strings.TrimSpace(gittest.Run(t, clone, "status", "--porcelain")) != "" {
+		t.Fatal("hit changed the clone")
+	}
+}
