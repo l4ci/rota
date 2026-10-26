@@ -385,6 +385,7 @@ type Binding struct {
 // Bind records the issue the slot works on. Empty optional fields stay unset.
 func (s *Slot) Bind(b Binding) {
 	s.SetBriefContext("", nil)
+	s.o.Delete("awaitingDone")
 	s.o.Set("task", b.Task)
 	for _, f := range []struct{ k, v string }{
 		{"claimId", b.ClaimID}, {"kind", b.Kind}, {"kindSource", b.KindSource}, {"tier", b.Tier},
@@ -414,9 +415,23 @@ func (s *Slot) Unbind() {
 	s.SetBriefContext("", nil)
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
-	for _, k := range []string{"prMerged", "claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "bundle", "issues", "reviewSeen", "event", "heartbeatAt", "outcome", "inbox", "finding"} {
+	for _, k := range []string{"prMerged", "claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "bundle", "issues", "reviewSeen", "event", "heartbeatAt", "outcome", "inbox", "finding", "awaitingDone"} {
 		s.o.Delete(k)
 	}
+}
+
+// AwaitingDone says the slot took over a branch whose PR it did not open (a
+// transfer): its idle pane is not "opened the PR and stopped", so poll must not
+// promote it from the forge. Its own done (event or sentinel) clears the mark.
+func (s *Slot) AwaitingDone() bool { return jsonx.Bool(s.o, "awaitingDone") }
+
+// SetAwaitingDone records or clears the mark.
+func (s *Slot) SetAwaitingDone(v bool) {
+	if v {
+		s.o.Set("awaitingDone", true)
+		return
+	}
+	s.o.Delete("awaitingDone")
 }
 
 // Park unbinds the slot, marks it idle and puts it back on its park branch.

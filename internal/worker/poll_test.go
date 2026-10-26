@@ -281,6 +281,22 @@ func TestPromoteIdleWithPR(t *testing.T) {
 	}
 }
 
+// A transferred slot inherits an open PR it has not touched: its idle pane is
+// not a worker that stopped after opening it. Only the slot's own done clears
+// the mark, and the promotion resumes (#2074).
+func TestPromoteIdleSkipsATransferredSlotUntilItReportsDone(t *testing.T) {
+	idle := func() []PollRow { return []PollRow{{"w1", StateIdle, "static pane, no sentinel"}} }
+	w := newWorld(t, "")
+	w.forge("listed", "1")
+	if _, err := UpdateSlot(w.dir, "w1", func(s *Slot) { s.Raw().Set("awaitingDone", true) }); err != nil {
+		t.Fatal(err)
+	}
+	rows, notes := w.env(false).WithDefaults().promoteIdleWithPR(bg, w.dir, idle())
+	if rows[0].State != StateIdle || notes != nil {
+		t.Errorf("transferred slot promoted on the old head: %+v %v", rows, notes)
+	}
+}
+
 // A slot herdr cannot classify carries herdr's own explanation; a failing
 // explain leaves today's evidence and the poll still succeeds.
 func TestPollUnknownCarriesExplainExcerpt(t *testing.T) {
@@ -410,5 +426,17 @@ func TestPollReadsEachSlotsPaneByItsHarnessKind(t *testing.T) {
 	}
 	if len(res.Slots) != 2 || res.Slots[0].State != StateLimited || res.Slots[1].State != StateIdle {
 		t.Errorf("opencode slot w1, claude slot w2: %+v", res.Slots)
+	}
+}
+
+// The receiver's own done (a recorded row, not a forge promotion) ends the wait.
+func TestRecordRowDoneClearsAwaitingDone(t *testing.T) {
+	s := NewSlot("w1", "b", "wt", "main", "h")
+	s.SetAwaitingDone(true)
+	if _, err := recordRow(s, PollRow{"w1", StateBusy, "x"}, slotTarget(s), time.Now(), Registry{}); err != nil || !s.AwaitingDone() {
+		t.Fatalf("busy keeps the mark: %v %v", err, s.AwaitingDone())
+	}
+	if _, err := recordRow(s, PollRow{"w1", StateDone, "ROTA-DONE"}, slotTarget(s), time.Now(), Registry{}); err != nil || s.AwaitingDone() {
+		t.Errorf("done clears the mark: %v %v", err, s.AwaitingDone())
 	}
 }
