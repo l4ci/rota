@@ -214,6 +214,7 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 	date := fs.String("date", "", "bullet `date` (YYYY-MM-DD), default today")
 	sha := fs.String("sha", "", "commit `sha` (7 to 40 hex digits) the bullet's claim about code was true at")
 	hook := fs.String("hook", "", "with --external: one-line `hook` for the README.md entry of a new topic, default the bullet title")
+	seen := fs.String("seen", "", "with --external: `tools` the learning was seen on, tool@version separated by spaces or commas; a bare tool takes the project's version")
 	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := knNoArgs(args); err != nil {
@@ -225,6 +226,9 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 		if *hook != "" && !*ext {
 			return Result{}, Usage("--hook needs --external")
 		}
+		if *seen != "" && !*ext {
+			return Result{}, Usage("--seen needs --external")
+		}
 		if *ext && *sha != "" {
 			return Result{}, Usage("--sha does not apply to --external")
 		}
@@ -232,12 +236,16 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Usage(err.Error())
 		}
+		seenList, err := extSeen(c, *seen)
+		if err != nil {
+			return Result{}, err
+		}
 		body, err := readBodyText(c, "body-file", *bodyFile, ExitResolution)
 		if err != nil {
 			return Result{}, err
 		}
 		if *ext {
-			return knExtAdd(c, *topic, *title, body, *date, *hook)
+			return knExtAdd(c, *topic, *title, body, *date, *hook, seenList)
 		}
 		st, scope, err := knStore(c)
 		if err != nil {

@@ -65,6 +65,29 @@ func checkLine(what, s string) error {
 	return nil
 }
 
+// topicFile resolves a topic name to its index entry and the topic file's
+// content, the one path every write that touches an existing bullet goes
+// through. An unknown topic (or a base without an index) is ErrNotFound; an
+// indexed topic whose file is not written yet returns nil content.
+func (c Clone) topicFile(name string) (Topic, []byte, error) {
+	topics, err := c.Topics()
+	if err != nil {
+		return Topic{}, nil, err
+	}
+	t, ok := exact(name, topics)
+	if !ok {
+		return Topic{}, nil, fmt.Errorf("%w: topic %q is not in %s", ErrNotFound, name, c.indexName())
+	}
+	raw, err := c.readRegular(c.topicPath(t.Slug))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return t, nil, nil
+		}
+		return Topic{}, nil, err
+	}
+	return t, raw, nil
+}
+
 // Add writes one bullet under the topic, creating the topic file and its
 // index line when the topic is new, then lands it by the repo's policy. A
 // bullet whose title already exists (case-insensitive) is a no-op.
@@ -84,7 +107,8 @@ func (c Clone) Add(ctx context.Context, in AddIn) (WriteResult, error) {
 	if err != nil {
 		return WriteResult{}, err
 	}
-	topics, err := c.Topics()
+	t, raw, err := c.topicFile(in.Topic)
+	known := err == nil
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return WriteResult{}, err
 	}
@@ -96,14 +120,13 @@ func (c Clone) Add(ctx context.Context, in AddIn) (WriteResult, error) {
 	if in.Source != "" {
 		stamp += " source:" + in.Source
 	}
+	if len(in.Seen) > 0 {
+		stamp += " seen:" + in.Seen.String()
+	}
 	bullet := fmt.Sprintf("- **%s** — %s <!-- %s -->", in.Title, strings.TrimRight(in.Body, "\n"), stamp)
 
 	p := &plan{}
-	if t, ok := exact(in.Topic, topics); ok {
-		raw, err := c.readRegular(c.topicPath(t.Slug))
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return WriteResult{}, err
-		}
+	if known {
 		body := string(raw)
 		if body == "" {
 			body = "# " + t.Name + "\n\n"
@@ -168,17 +191,12 @@ func (c Clone) Amend(ctx context.Context, in AmendIn) (WriteResult, error) {
 	if err != nil {
 		return WriteResult{}, err
 	}
-	topics, err := c.Topics()
+	t, raw, err := c.topicFile(in.Topic)
 	if err != nil {
 		return WriteResult{}, err
 	}
-	t, ok := exact(in.Topic, topics)
-	if !ok {
-		return WriteResult{}, fmt.Errorf("%w: topic %q is not in %s", ErrNotFound, in.Topic, c.indexName())
-	}
-	raw, err := c.readRegular(c.topicPath(t.Slug))
-	if err != nil {
-		return WriteResult{}, fmt.Errorf("%w: topic file %s/%s.md: %v", ErrNotFound, TopicsDir, t.Slug, err)
+	if raw == nil {
+		return WriteResult{}, fmt.Errorf("%w: topic file %s/%s.md does not exist", ErrNotFound, TopicsDir, t.Slug)
 	}
 	lines := strings.Split(string(raw), "\n")
 	hit := -1
