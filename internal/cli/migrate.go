@@ -11,6 +11,7 @@ func migrateCommands() *Command {
 		configMigrateCommand(),
 		milestonesMigrateCommand(),
 		milestoneFilesMigrateCommand(),
+		externalKnowledgeMigrateCommand(),
 		{Name: "issues", Summary: "move the file backlog onto the issue tracker (preview unless --apply)", Verb: migrateIssues},
 	}}
 }

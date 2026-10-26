@@ -1,0 +1,7 @@
+{
+  "name": "web",
+  "dependencies": {"next": "^15.1.0", "three": "~0.170.0", "@storybook/react": "8.4.2", "local": "workspace:*", "tag": "latest", "gitdep": "git+https://github.com/x/y.git"},
+  "devDependencies": {"typescript": "6.0.3", "vite": "^8.1.5", "@playwright/test": "^1.48.0", "@graphql-codegen/cli": "5.0.3"},
+  "peerDependencies": {"React": "^19.0.0"},
+  "engines": {"node": ">=20.11", "pnpm": ">=9"}
+}

@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/extknowledge"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/knowledge"
 )
@@ -214,6 +216,7 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 	date := fs.String("date", "", "bullet `date` (YYYY-MM-DD), default today")
 	sha := fs.String("sha", "", "commit `sha` (7 to 40 hex digits) the bullet's claim about code was true at")
 	hook := fs.String("hook", "", "with --external: one-line `hook` for the README.md entry of a new topic, default the bullet title")
+	seen := fs.String("seen", "", "with --external: `tools` the learning was seen on, tool@version separated by spaces or commas; a bare tool takes the project's version")
 	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := knNoArgs(args); err != nil {
@@ -225,6 +228,9 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 		if *hook != "" && !*ext {
 			return Result{}, Usage("--hook needs --external")
 		}
+		if *seen != "" && !*ext {
+			return Result{}, Usage("--seen needs --external")
+		}
 		if *ext && *sha != "" {
 			return Result{}, Usage("--sha does not apply to --external")
 		}
@@ -232,12 +238,16 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Usage(err.Error())
 		}
+		seenList, err := extSeen(c, *seen)
+		if err != nil {
+			return Result{}, err
+		}
 		body, err := readBodyText(c, "body-file", *bodyFile, ExitResolution)
 		if err != nil {
 			return Result{}, err
 		}
 		if *ext {
-			return knExtAdd(c, *topic, *title, body, *date, *hook)
+			return knExtAdd(c, *topic, *title, body, *date, *hook, seenList)
 		}
 		st, scope, err := knStore(c)
 		if err != nil {
@@ -260,27 +270,55 @@ func knAmend(fs *flag.FlagSet) RunFunc {
 	fragment := fs.String("fragment", "", "`text` the bullet contains (case-sensitive)")
 	mode := fs.String("mode", "", "how to amend: append")
 	bodyFile := fs.String("body-file", "", "text to add: a `path`, or - for stdin")
+	seen := fs.String("seen", "", "with --external: replace the bullet's seen `tools` (tool@version, a bare tool takes the project's version); \"\" drops them")
+	date := fs.String("date", "", "with --external: set the bullet's stamp `date` (YYYY-MM-DD)")
 	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := knNoArgs(args); err != nil {
 			return Result{}, err
 		}
-		if err := knRequire(map[string]string{"topic": *topic, "fragment": *fragment, "mode": *mode, "body-file": *bodyFile}, "topic", "fragment", "mode", "body-file"); err != nil {
+		if err := knRequire(map[string]string{"topic": *topic, "fragment": *fragment}, "topic", "fragment"); err != nil {
 			return Result{}, err
 		}
-		if *mode != "append" {
-			return Result{}, Usage("--mode must be append")
+		given := map[string]bool{}
+		fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
+		if (given["seen"] || given["date"]) && !*ext {
+			return Result{}, Usage("--seen and --date need --external")
 		}
-		body, err := readBodyText(c, "body-file", *bodyFile, ExitResolution)
-		if err != nil {
-			return Result{}, err
+		stampEdit := given["seen"] || given["date"]
+		if given["date"] && !validDate(*date) {
+			return Result{}, Usage("--date must be a real YYYY-MM-DD, got %q", *date)
 		}
-		body = strings.TrimRight(body, "\n")
-		if strings.TrimSpace(body) == "" {
-			return Result{}, Usage("--body-file is empty; nothing to append")
+		var body string
+		if !stampEdit || given["mode"] || given["body-file"] {
+			if *ext && !given["mode"] && !given["body-file"] {
+				return Result{}, Usage("nothing to change: pass --mode append --body-file, or --seen / --date")
+			}
+			if err := knRequire(map[string]string{"mode": *mode, "body-file": *bodyFile}, "mode", "body-file"); err != nil {
+				return Result{}, err
+			}
+			if *mode != "append" {
+				return Result{}, Usage("--mode must be append")
+			}
+			var err error
+			if body, err = readBodyText(c, "body-file", *bodyFile, ExitResolution); err != nil {
+				return Result{}, err
+			}
+			body = strings.TrimRight(body, "\n")
+			if strings.TrimSpace(body) == "" {
+				return Result{}, Usage("--body-file is empty; nothing to append")
+			}
 		}
 		if *ext {
-			return knExtAmend(c, *topic, *fragment, body)
+			var seenList *extknowledge.Seen
+			if given["seen"] {
+				list, err := extSeen(c, *seen)
+				if err != nil {
+					return Result{}, err
+				}
+				seenList = &list
+			}
+			return knExtAmend(c, *topic, *fragment, body, *date, seenList)
 		}
 		st, scope, err := knStore(c)
 		if err != nil {
@@ -298,6 +336,7 @@ func knReplace(fs *flag.FlagSet) RunFunc {
 	topic := fs.String("topic", "", "the `topic` heading")
 	old := fs.String("old", "", "`text` to replace; must sit in exactly one bullet (case-sensitive)")
 	repl := fs.String("new", "", "the replacement `text`")
+	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := knNoArgs(args); err != nil {
 			return Result{}, err
@@ -309,6 +348,9 @@ func knReplace(fs *flag.FlagSet) RunFunc {
 		fs.Visit(func(f *flag.Flag) { given = given || f.Name == "new" })
 		if !given {
 			return Result{}, Usage("--new is required (it may be empty to delete text)")
+		}
+		if *ext {
+			return knExtReplace(c, *topic, *old, *repl)
 		}
 		st, scope, err := knStore(c)
 		if err != nil {
@@ -325,12 +367,16 @@ func knReplace(fs *flag.FlagSet) RunFunc {
 func knRm(fs *flag.FlagSet) RunFunc {
 	topic := fs.String("topic", "", "the `topic` heading")
 	title := fs.String("title", "", "bullet `title`")
+	ext := externalFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := knNoArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "title": *title}, "topic", "title"); err != nil {
 			return Result{}, err
+		}
+		if *ext {
+			return knExtRm(c, *topic, *title)
 		}
 		st, scope, err := knStore(c)
 		if err != nil {
@@ -640,4 +686,10 @@ func knFail(err error) (Result, error) {
 		return Result{Data: knObj("blockedBy", blockedby.Ambiguous, "changed", false)}, e
 	}
 	return Result{}, e
+}
+
+// validDate is a real calendar date written YYYY-MM-DD.
+func validDate(s string) bool {
+	t, err := time.Parse("2006-01-02", s)
+	return err == nil && t.Format("2006-01-02") == s
 }

@@ -214,7 +214,7 @@ func TestFreshenOfflineReadsStaleAndDoesNotStamp(t *testing.T) {
 func TestQueryPrintsTopicSectionsAndListsMissing(t *testing.T) {
 	f := newFixture(t, "")
 	c := f.clone()
-	text, missing, err := c.Query([]string{"go", "rust"})
+	text, missing, _, err := c.Query([]string{"go", "rust"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
