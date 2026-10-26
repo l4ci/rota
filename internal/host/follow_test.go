@@ -83,3 +83,65 @@ func TestHerdrKillOfAMovedSlotLeavesTheSharedTabAlone(t *testing.T) {
 		t.Errorf("log = %s\nwant %s", f.log(), want)
 	}
 }
+
+// A tab handle recorded while the pane was alone goes stale once other panes
+// join that tab: Kill asks at kill time and closes the pane only.
+func TestHerdrKillOfATabHandleThatNowHoldsOtherPanesClosesOnlyThePane(t *testing.T) {
+	for name, tabGet := range map[string]Result{
+		"shared":     {Stdout: `{"result":{"tab":{"pane_count":3}}}`},
+		"unreadable": {Stdout: `{"result":{"tab":{}}}`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gone := false
+			f := &fake{handler: func(_ string, a []string) Result {
+				switch {
+				case a[0] == "agent" && a[1] == "get":
+					return Result{Stdout: `{"id":"cli","result":{"agent":{"tab_id":"w2:t79","pane_id":"w2:p57"}}}`}
+				case a[0] == "tab" && a[1] == "get":
+					return tabGet
+				case a[0] == "pane" && a[1] == "close":
+					gone = true
+				case a[0] == "pane" && a[1] == "get" && gone:
+					return Result{ExitCode: 1, Stderr: `{"error":{"code":"pane_not_found"}}`}
+				case a[0] == "pane" && a[1] == "process-info":
+					return Result{Stdout: `{"result":{"processes":[]}}`}
+				}
+				return Result{Stdout: `{"id":"cli","result":{"type":"ok"}}`}
+			}}
+			if err := New("herdr", deps(f, nil, &clock{})).Kill(context.Background(), "ben", "w2:t79"); err != nil {
+				t.Fatal(err)
+			}
+			if f.count("herdr tab close") != 0 {
+				t.Errorf("the shared tab was closed:\n%s", f.log())
+			}
+			if want := "herdr pane close w2:p57"; !strings.Contains(f.log(), want) {
+				t.Errorf("log = %s\nwant %s", f.log(), want)
+			}
+		})
+	}
+}
+
+func TestHerdrSnapshotReadsPaneAndTabPaneCount(t *testing.T) {
+	f := &fake{handler: func(string, []string) Result {
+		return Result{Stdout: `{"id":"cli:api:snapshot","result":{"snapshot":{
+			"agents":[
+				{"agent_status":"idle","cwd":"/p/.worktrees/ben","name":"rota-ben-w1-t2","tab_id":"w2:t79","pane_id":"w2:p57"},
+				{"agent_status":"idle","cwd":"/p/.worktrees/kit","name":"rota-kit-w1-t3","tab_id":"w2:t7F","pane_id":"w2:p60"},
+				{"agent_status":"idle","cwd":"/p/.worktrees/nia","name":"rota-nia-w1-t4","tab_id":"w2:t80","pane_id":"w2:p61"}],
+			"tabs":[{"tab_id":"w2:t79","pane_count":6},{"tab_id":"w2:t7F","pane_count":1}]}}}`}
+	}}
+	got, err := New("herdr", deps(f, nil, &clock{})).(Snapshotter).Snapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// shared tab: the pane; alone: the tab; count missing: the pane, the safe side
+	want := []string{"w2:p57", "w2:t7F", "w2:p61"}
+	for i, a := range got {
+		if a.Handle() != want[i] {
+			t.Errorf("agent %s handle = %q, want %q (%+v)", a.Name, a.Handle(), want[i], a)
+		}
+	}
+	if got[0].Pane != "w2:p57" || got[0].TabPanes != 6 || got[2].TabPanes != 0 {
+		t.Errorf("agents = %+v", got)
+	}
+}

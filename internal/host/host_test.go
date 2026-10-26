@@ -868,7 +868,7 @@ func TestHerdrKill(t *testing.T) {
 			if closed {
 				return Result{ExitCode: 1, Stderr: herdrErr("tab_not_found")}
 			}
-			return Result{Stdout: "{}"}
+			return Result{Stdout: `{"result":{"tab":{"pane_count":1}}}`}
 		}
 		return Result{}
 	}
