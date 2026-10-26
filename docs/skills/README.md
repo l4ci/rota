@@ -1,6 +1,7 @@
 ---
 chains:
   - id: small-item
+    featured: true
     title: Fix a small bug or add a small feature
     when: One clear item, small enough to build in one sitting.
     walkthrough: walkthroughs/quickstart-manual-mode.md
@@ -27,6 +28,7 @@ chains:
       - skill: rota-ship
         why: Review against what the item promised, then merge.
   - id: unclear-bug
+    featured: true
     title: Chase a bug you don't understand
     when: Something is broken and the cause is not known yet.
     walkthrough: walkthroughs/greenfield-from-brief.md#step-7-a-real-bug-run-rota-debug
@@ -64,6 +66,7 @@ chains:
       - skill: rota-work
         why: Build the first item.
   - id: parallel-round
+    featured: true
     title: Run several issues in parallel
     when: A few independent issues are ready and you can stay around for questions.
     walkthrough: walkthroughs/round-cycle.md
