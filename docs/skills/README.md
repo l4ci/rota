@@ -92,40 +92,40 @@ chains:
 ---
 # Skills
 
-One page per `/rota-*` skill: when to use it, when another skill fits better, what usually comes before and after, and a short example. The cheat sheet, the slash commands table, the README skills table and the chains in [how it works](../how-it-works.md) are generated from these pages by `scripts/skills-docs.py`, so edit the pages, not those lists.
+One page per `/rota-*` skill: when to use it, when another skill fits better, what usually comes before and after, and a short example. This index, the README skills table and the chains in [how it works](../how-it-works.md) are generated from these pages by `scripts/skills-docs.py`, so edit the pages, not those lists.
 
 <!-- generated:skills:index begin -->
 <!-- edit docs/skills/*.md and run python3 scripts/skills-docs.py -->
 
 ## Capture
 
-- [`/rota-capture`](rota-capture.md): Record bugs, features and tasks in the backlog without starting work.
+- [`/rota-capture`](rota-capture.md): Record bugs, features and tasks in the backlog without starting work. Flags: `--remove <ID>`, `--triage <N>`.
 
 ## Plan
 
-- [`/rota-brainstorm`](rota-brainstorm.md): Negotiate the design of one Major item before planning it.
-- [`/rota-spike`](rota-spike.md): Try one risky idea on a throwaway branch and keep only the finding.
+- [`/rota-brainstorm`](rota-brainstorm.md): Negotiate the design of one Major item before planning it. Flags: `--grill`.
+- [`/rota-spike`](rota-spike.md): Try one risky idea on a throwaway branch and keep only the finding. Flags: `done <name>`.
 - [`/rota-plan`](rota-plan.md): Write a signed-off implementation plan with verifiable tasks.
 - [`/rota-vision`](rota-vision.md): Turn an idea into milestones with dependencies and ready/blocked status.
 
 ## Execute
 
-- [`/rota-work`](rota-work.md): Build the next item in small commits, one verified task at a time.
+- [`/rota-work`](rota-work.md): Build the next item in small commits, one verified task at a time. Flags: `--preview <ID>`.
 - [`/rota-debug`](rota-debug.md): Find the root cause of one bug, fix it atomically and prove it.
-- [`/rota-refactor`](rota-refactor.md): Review the architecture and file refactor issues; --map drafts the map.
+- [`/rota-refactor`](rota-refactor.md): Review the architecture and file refactor issues; --map drafts the map. Flags: `--fix`, `--designs`, `--interactive`, `--map`.
 
 ## Ship
 
-- [`/rota-review`](rota-review.md): Review a branch against its spec and conventions before it leaves.
-- [`/rota-ship`](rota-ship.md): Review, then open the PR or merge, linking items by ID.
-- [`/rota-docs`](rota-docs.md): Scaffold, update or reorganize the public docs.
-- [`/rota-qa`](rota-qa.md): Run product-level QA against the built artifact and score it.
+- [`/rota-review`](rota-review.md): Review a branch against its spec and conventions before it leaves. Flags: `--since <sha>`, `--queue`.
+- [`/rota-ship`](rota-ship.md): Review, then open the PR or merge, linking items by ID. Flags: `--undo`, `--docs`.
+- [`/rota-docs`](rota-docs.md): Scaffold, update or reorganize the public docs. Flags: `restructure`.
+- [`/rota-qa`](rota-qa.md): Run product-level QA against the built artifact and score it. Flags: `first-run`, `run [<target>]`, `restructure`, `uat <ID>`.
 
 ## Persist
 
-- [`/rota-learn`](rota-learn.md): Save the session's durable lessons to KNOWLEDGE.md.
-- [`/rota-decide`](rota-decide.md): Record a hard-boundary decision with explicit forbids and permits. Manual only.
-- [`/rota-pause`](rota-pause.md): Stop cleanly and leave a handoff note for the next session.
+- [`/rota-learn`](rota-learn.md): Save the session's durable lessons to KNOWLEDGE.md. Flags: `--strict`, `--retro [<session-id|path>]`, `--term <name>`, `--promote | --deprecate | --amend <topic> "<title>"`.
+- [`/rota-decide`](rota-decide.md): Record a hard-boundary decision with explicit forbids and permits. Manual only. Flags: `--from-learning <topic>`, `--from-spike <name>`, `--supersede <topic> "<title>"`, `--retire <topic> "<title>"`.
+- [`/rota-pause`](rota-pause.md): Stop cleanly and leave a handoff note for the next session. Flags: `--report`.
 
 ## Rounds
 
@@ -136,5 +136,5 @@ One page per `/rota-*` skill: when to use it, when another skill fits better, wh
 
 - [`/rota-init`](rota-init.md): Suggest config values from the repo and write the ones you confirm. Manual only.
 - [`/rota-bugreport`](rota-bugreport.md): File rota's own mistakes upstream, after your explicit yes.
-- [`/rota-release`](rota-release.md): Cut a release: checklist, version bump, notes, tag, publish. Manual only.
+- [`/rota-release`](rota-release.md): Cut a release: checklist, version bump, notes, tag, publish. Manual only. Flags: `major | minor | patch | <semver>`, `--dry-run`.
 <!-- generated:skills:index end -->

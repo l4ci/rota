@@ -177,8 +177,8 @@ Every skill: [skills](docs/skills/README.md). Settings: [configuration](docs/usa
 
 - [Getting started](docs/getting-started.md): install and your first item, end to end
 - [Your first round](docs/first-round.md): orchestrator, workers and the gate, step by step
-- [How it works](docs/how-it-works.md): every skill, file and verb, and how they connect
-- [FAQ](docs/faq.md) · [Cheatsheet](docs/cheatsheet.md) · [All docs](docs/)
+- [How it works](docs/how-it-works.md): the roles, the map of skills and files, and how skills chain
+- [FAQ](docs/faq.md) · [All docs](docs/)
 
 ## 🤝 Contributing
 

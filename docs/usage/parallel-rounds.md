@@ -73,7 +73,7 @@ For a round that must survive the orchestrator's context filling or a usage limi
 hooks and run the orchestrator under `rota keepalive run`:
 [unattended rounds](unattended-rounds.md). For Codex workers: [Codex workers](codex-workers.md).
 
-## 🚀 Your first round
+## 🚀 Launching a round
 
 ```sh
 rota orchestrate

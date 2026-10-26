@@ -6,7 +6,6 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 
 ### 🚀 Getting started
 
-- [Cheat sheet](cheatsheet.md): one-line summary of every `/rota-*` skill (rapid scan)
 - [Install](install.md): Homebrew, the install script, release binaries, the Claude Code plugin, upgrading, uninstalling
 - [Getting started](getting-started.md): install and run your first cycle
 - [How it works](how-it-works.md): the two ways to use rota (orchestrator, workers, gate), plus how each skill connects to the artifacts it touches
@@ -20,7 +19,7 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 
 ### 🔄 Rounds
 
-- [Your first round](first-round.md): install, skills, herdr or tmux, launching the orchestrator, a first round and wind-down, step by step
+- [Your first round](first-round.md): herdr or tmux, launching the orchestrator, a first round and wind-down, step by step
 - [A round cycle](walkthroughs/round-cycle.md): shape the slate, run a round, wind down, release
 - [Parallel rounds](usage/parallel-rounds.md): an orchestrator, standing workers in worktrees, the merge gate, solo mode
 - [Unattended rounds](usage/unattended-rounds.md): hooks, statusline, keepalive, usage limits, the orchestrator switch
@@ -97,7 +96,6 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 ### 📖 Reference
 
 - [Architecture](reference/architecture.md): how the CLI, the skills and `.rota/` fit together
-- [Slash commands](reference/slash-commands.md): every `/rota-*` command, alphabetical
 - [The `.rota/` folder](reference/rota-folder.md): files and directories created by `rota init`
 - [`rota` verb reference](reference/cli-helpers.md): every `rota` verb, with conventions and exit codes
 - [Configuration options](reference/config-options.md): every config key and option label, set via `rota config set`
