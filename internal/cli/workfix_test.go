@@ -85,3 +85,36 @@ func TestWorkFixReset(t *testing.T) {
 		t.Errorf("attempt after reset: exit %d", code)
 	}
 }
+
+func TestWorkFixCountsPerTask(t *testing.T) {
+	dir := verdictRepo(t)
+	for i := 0; i < 3; i++ {
+		if code, _, _ := rotaIn(t, dir, "debug", "work-fix", "attempt", "B07", "--task", "1"); code != 0 {
+			t.Fatalf("task 1 attempt %d: exit %d", i+1, code)
+		}
+	}
+	// A sibling task starts at zero, and its PASS leaves task 1's count alone.
+	code, out, _ := rotaIn(t, dir, "debug", "work-fix", "attempt", "B07", "--task", "2", "--json")
+	if d := data(t, out); code != 0 || d["attempt"] != float64(1) {
+		t.Fatalf("task 2: exit %d data %v", code, d)
+	}
+	if code, _, _ := rotaIn(t, dir, "debug", "work-fix", "pass", "B07", "--task", "2"); code != 0 {
+		t.Fatalf("task 2 pass: exit %d", code)
+	}
+	code, out, _ = rotaIn(t, dir, "debug", "work-fix", "attempt", "B07", "--task", "1", "--json")
+	if d := data(t, out); code != 4 || d["failedAttempts"] != float64(3) || d["next"] != "/rota-debug B07" {
+		t.Fatalf("task 1 fourth attempt: exit %d data %v", code, d)
+	}
+	// Resetting task 2 (nothing to clear) leaves task 1 capped; resetting task 1 lifts only it.
+	rotaIn(t, dir, "debug", "work-fix", "attempt", "B07", "--task", "2")
+	code, _, _ = rotaIn(t, dir, "debug", "work-fix", "reset", "B07", "--task", "1", "--reason", "r", "--confirm", "--confirm-note", "ok")
+	if code != 0 {
+		t.Fatalf("task 1 reset: exit %d", code)
+	}
+	if code, _, _ := rotaIn(t, dir, "debug", "work-fix", "attempt", "B07", "--task", "1"); code != 0 {
+		t.Errorf("task 1 after reset: exit %d", code)
+	}
+	if code, out, _ := rotaIn(t, dir, "debug", "work-fix", "attempt", "B07", "--task", "2", "--json"); code != 0 || data(t, out)["attempt"] != float64(2) {
+		t.Errorf("task 2 count disturbed by task 1 reset: %d %s", code, out)
+	}
+}
