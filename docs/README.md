@@ -31,6 +31,34 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 - [rota or a bare session](usage/rota-vs-plain-session.md): a row-by-row comparison with a plain Claude Code session that runs its own subagents
 - [Skills in Codex](usage/codex-skills.md): install and call the skills from Codex
 
+### 🧰 Skills
+
+<!-- generated:skills:nav begin -->
+<!-- edit docs/skills/*.md and run python3 scripts/skills-docs.py -->
+
+- [All skills](skills/README.md): when to use each skill, and how they chain
+- [`/rota-capture`](skills/rota-capture.md): Record bugs, features and tasks in the backlog without starting work
+- [`/rota-brainstorm`](skills/rota-brainstorm.md): Negotiate the design of one Major item before planning it
+- [`/rota-spike`](skills/rota-spike.md): Try one risky idea on a throwaway branch and keep only the finding
+- [`/rota-plan`](skills/rota-plan.md): Write a signed-off implementation plan with verifiable tasks
+- [`/rota-work`](skills/rota-work.md): Build the next item in small commits, one verified task at a time
+- [`/rota-debug`](skills/rota-debug.md): Find the root cause of one bug, fix it atomically and prove it
+- [`/rota-review`](skills/rota-review.md): Review a branch against its spec and conventions before it leaves
+- [`/rota-ship`](skills/rota-ship.md): Review, then open the PR or merge, linking items by ID
+- [`/rota-docs`](skills/rota-docs.md): Scaffold, update or reorganize the public docs
+- [`/rota-orchestrate`](skills/rota-orchestrate.md): Run a parallel round: pick the slate, watch workers, merge their PRs
+- [`/rota-answer`](skills/rota-answer.md): Answer every decision a round is waiting on, one question at a time
+- [`/rota-learn`](skills/rota-learn.md): Save the session's durable lessons to KNOWLEDGE.md
+- [`/rota-decide`](skills/rota-decide.md): Record a hard-boundary decision with explicit forbids and permits
+- [`/rota-init`](skills/rota-init.md): Suggest config values from the repo and write the ones you confirm
+- [`/rota-bugreport`](skills/rota-bugreport.md): File rota's own mistakes upstream, after your explicit yes
+- [`/rota-pause`](skills/rota-pause.md): Stop cleanly and leave a handoff note for the next session
+- [`/rota-vision`](skills/rota-vision.md): Turn an idea into milestones with dependencies and ready/blocked status
+- [`/rota-refactor`](skills/rota-refactor.md): Review the architecture and file refactor issues; --map drafts the map
+- [`/rota-qa`](skills/rota-qa.md): Run product-level QA against the built artifact and score it
+- [`/rota-release`](skills/rota-release.md): Cut a release: checklist, version bump, notes, tag, publish
+<!-- generated:skills:nav end -->
+
 ### 📥 Capture and backlog
 
 - [Capturing work](usage/capturing-work.md): `/rota-capture`, mixed input, related links, detail files

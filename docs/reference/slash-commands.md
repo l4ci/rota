@@ -1,131 +1,34 @@
 # Slash commands
 
-Quick-reference table of every `/rota-*` command. Detailed entries follow below.
+Quick-reference table of every `/rota-*` command.
 
 Setup, config, update and migration are `rota` verbs, not skills: `rota init` (and `rota init umbrella`), `rota config show` / `rota config set`, `rota update`, `rota migrate hv` / `rota migrate issues`. See [config options](config-options.md).
 
-| Skill | Description |
-|-------|-------------|
-| `/rota-vision` | Brainstorm a project's bigger vision and milestones using Socratic discovery, web research, and a critique pass; writes `MILESTONES.md` plus per-milestone detail files |
-| `/rota-brainstorm` | Per-item design exploration before `/rota-plan`: Socratic discovery, 2-3 approaches with tradeoffs, sectioned design with per-section approval; stores the design as `.rota/designs/<ID>.md` (file backend) or a note on the issue (issue backend), which `/rota-plan` reads as soft input. Major features and P0 bugs get one grilling pass first (every open decision settled before drafting); `--grill` forces that pass on any item. It is skipped when the issue body already has `## Acceptance` |
-| `/rota-capture` | Capture bugs, features, and tasks into the configured backlog (`.rota/BACKLOG.md` or GitHub/GitLab issues): auto-classifies, assigns priority/size, routes to the correct section or labels. On milestone-spec captures, audits the diff for ship-evidence and asks per flagged title before appending. Prints the new IDs and stops |
-| `/rota-capture --remove` | Remove a captured backlog item and clean up its dependencies. Dry-run preview by default, asks before applying |
-| `/rota-pause` | Gracefully stop mid-session; writes a handoff note (next step, hypothesis, mid-edit files) for the next session's `/rota-work` (no argument) |
-| `/rota-plan` | Write an implementation plan for a milestone slice or item (`M01-S01`, `M01-B07`): task decomposition with verifiable outcomes, named assumptions, open questions; `/rota-work` consults if present |
-| `/rota-docs` | Public-docs maintainer: scaffolds `<docs.path>/` on first run, proposes doc updates in after-work mode, or audits and reorganizes (`restructure`). After-work runs in any agent; scaffold and restructure follow `autonomy.level` and escalate to the maintainer in a round; `/rota-ship --docs` is a deprecated alias |
-| `/rota-bugreport` | File rota's own mistakes (a verb that exited 70, a wrong refusal, a contradicting skill step) as issues on the rota repo. Reads the local `.rota/bugreports.jsonl`, shows a redacted draft with version, OS, harness and model, checks for a duplicate, and files only on your explicit yes (`bugreport-file` manual gate) |
-| `/rota-spike` | Throwaway feasibility experiment on a `spike/<name>` branch. Branch never merges, only findings come back as `.rota/spikes/<name>.md` |
-| `/rota-work` | Orchestrated parallel implementation with per-task commits. With no item argument it reconciles the backlog against git state and suggests the next item; consults `KNOWLEDGE.md` and `.rota/plans/<key>.md` if present. Pass `--preview <ID>` for a read-only peek of the intended approach (files, tests, assumptions, unknowns) that gates high-stakes work without writing anything |
-| `/rota-orchestrate` | Run a [parallel round](../usage/parallel-rounds.md) as the orchestrator: choose the slate, read what workers are doing, answer or escalate their questions, merge their PRs, wind the round down. The `rota round` verbs do the sequencing; the skill holds the judgment |
-| `/rota-answer` | During a round, put every decision waiting on the maintainer one at a time (escalations, blocked slots, review waivers, held candidates, open questions) with a recommended option first; records each answer as a `decision` comment and applies it. Maintainer-invoked only |
-| `/rota-debug` | Systematic bug cycle: reproduce, hypothesize, verify, fix with one atomic commit; hard-stops via the Iron Law after 3 failed committed fixes, nudges `/rota-learn` |
-| `/rota-decide` | Capture a hard-boundary decision into `.rota/DECISIONS.md`. Manually confirmed, never auto-invoked; decisions differ from learnings by being active commitments with explicit forbids/permits |
-| `/rota-review` | Review of a branch by two parallel reviewers, reported separately: Spec (intent match, drift, decision violations) and Standards (`KNOWLEDGE.md` conventions, code smells, test quality, silent failures); returns PASS / CONCERNS / FAIL, the worse of the two |
-| `/rota-qa` | Product-level QA: executes per-target strategy files (`.rota/qa/<target>.md`) with Playwright / smoke / lighthouse / axe / ZAP / contract runners; emits PASS / CONCERNS / FAIL. Modes: first-run / run / restructure |
-| `/rota-ship` | Bundle commits into a PR (or direct merge) with ID-linked body; runs `/rota-review` first by default, plus opt-in second-opinion (`ship.secondOpinion`) and product QA (`ship.qa`) gates. Flags: `--undo` (guided rollback of the last cycle on the base branch) and `--docs` (public-docs maintenance: first-run / after-work / restructure modes; auto-fires inline at ship time when `docs.afterWork: true`) |
-| `/rota-learn` | Extract durable session learnings into `KNOWLEDGE.md`, grouped by topic; `--strict` adds Opus verification; `--retro [<session-id|path>]` turns mistakes into guardrails and standards |
-| `/rota-refactor` | Architecture review that files findings as refactor issues; `--fix` implements them; `--map` writes the `.rota/map/` subsystem files |
-| `/rota-init` | Inspect the repo and propose config values with the evidence for each (`test.fast`, `test.full`, `git.baseBranch`, `forge.provider`, `issues.source`, `round.harnesses`, `work.isolation`, `round.dispatch`); asks one question per key, recommended value first, and writes confirmed answers only through `rota setup --set` / `rota config set`. On an initialized project it shows only keys that differ. Maintainer-invoked only |
-| `/rota-release` | Cut a release: walk per-project checklist, bump version, generate notes, tag, push, publish to GitHub/GitLab |
+<!-- generated:skills:table begin -->
+<!-- edit docs/skills/*.md and run python3 scripts/skills-docs.py -->
 
----
+| Skill | Lane | What it does |
+|-------|------|--------------|
+| [`/rota-capture`](../skills/rota-capture.md) | Capture | Record bugs, features and tasks in the backlog without starting work. |
+| [`/rota-brainstorm`](../skills/rota-brainstorm.md) | Plan | Negotiate the design of one Major item before planning it. |
+| [`/rota-spike`](../skills/rota-spike.md) | Plan | Try one risky idea on a throwaway branch and keep only the finding. |
+| [`/rota-plan`](../skills/rota-plan.md) | Plan | Write a signed-off implementation plan with verifiable tasks. |
+| [`/rota-work`](../skills/rota-work.md) | Execute | Build the next item in small commits, one verified task at a time. |
+| [`/rota-debug`](../skills/rota-debug.md) | Execute | Find the root cause of one bug, fix it atomically and prove it. |
+| [`/rota-review`](../skills/rota-review.md) | Ship | Review a branch against its spec and conventions before it leaves. |
+| [`/rota-ship`](../skills/rota-ship.md) | Ship | Review, then open the PR or merge, linking items by ID. |
+| [`/rota-docs`](../skills/rota-docs.md) | Ship | Scaffold, update or reorganize the public docs. |
+| [`/rota-orchestrate`](../skills/rota-orchestrate.md) | Rounds | Run a parallel round: pick the slate, watch workers, merge their PRs. |
+| [`/rota-answer`](../skills/rota-answer.md) | Rounds | Answer every decision a round is waiting on, one question at a time. (manual only) |
+| [`/rota-learn`](../skills/rota-learn.md) | Persist | Save the session's durable lessons to KNOWLEDGE.md. |
+| [`/rota-decide`](../skills/rota-decide.md) | Persist | Record a hard-boundary decision with explicit forbids and permits. (manual only) |
+| [`/rota-init`](../skills/rota-init.md) | Maintenance | Suggest config values from the repo and write the ones you confirm. (manual only) |
+| [`/rota-bugreport`](../skills/rota-bugreport.md) | Maintenance | File rota's own mistakes upstream, after your explicit yes. |
+| [`/rota-pause`](../skills/rota-pause.md) | Persist | Stop cleanly and leave a handoff note for the next session. |
+| [`/rota-vision`](../skills/rota-vision.md) | Plan | Turn an idea into milestones with dependencies and ready/blocked status. |
+| [`/rota-refactor`](../skills/rota-refactor.md) | Execute | Review the architecture and file refactor issues; --map drafts the map. |
+| [`/rota-qa`](../skills/rota-qa.md) | Ship | Run product-level QA against the built artifact and score it. |
+| [`/rota-release`](../skills/rota-release.md) | Maintenance | Cut a release: checklist, version bump, notes, tag, publish. (manual only) |
+<!-- generated:skills:table end -->
 
-Alphabetical reference of every `/rota-*` command.
-
-## /rota-capture
-
-Captures bugs, features, and tasks into the backlog with `rota item create`. Where the item lands depends on `issues.source`. On the file backend (default) it goes into [`BACKLOG.md`](rota-folder.md) under the correct section with a zero-padded auto-incrementing ID (`[B01]`, `[F01]`, `[T01]`). On the issue backend it becomes a GitHub or GitLab issue with type, priority and size labels, and the ID is the issue number (`#42`); see [issue backend](../usage/issue-backend.md). Either way it auto-classifies each item and assigns priority (P0/P1/P2) for bugs and size (Major/Minor/Cosmetic) for features. See [capturing work](../usage/capturing-work.md) for the full flow.
-
-## /rota-debug
-
-Systematic root-cause cycle for a single bug (`[B##]` on the file backend, `#N` on the issue backend): reproduce, state a testable hypothesis and verify it before touching code, fix with one atomic commit, confirm the reproducer passes, record proof and open a PR (on the file backend it marks the item complete instead). After two refuted hypotheses it re-reads the symptom and the reproducer from scratch. One circuit breaker: after 3 failed committed fixes (counted per item in `.rota/verdicts.json`, so a new session or branch does not reset it) the Iron Law fires a hard stop with no further attempts, surfacing to the user. Uses the same isolation mode as `/rota-work`, and nudges you toward [`/rota-learn`](../usage/learning.md) when the root cause was non-obvious. See [debugging](../usage/debugging.md) for the full flow.
-
-## /rota-decide
-
-Captures a hard-boundary decision into `.rota/DECISIONS.md`. Manually confirmed, never auto-invoked. Decisions differ from learnings in `KNOWLEDGE.md` by being commitments with explicit forbids/permits; `/rota-work`, `/rota-debug`, `/rota-refactor`, `/rota-plan`, `/rota-brainstorm`, `/rota-vision` and [`/rota-review`](../usage/review-and-ship.md) consult them as constraints. Accepts `--from-learning <topic>` to promote a hardened `KNOWLEDGE.md` bullet into a decision (rule/why are pre-filled; you supply the forbids/permits), and `--from-spike <name>` to promote a `.rota/spikes/<name>.md` finding the same way (`inconclusive` spikes are refused). See [decisions](../usage/decisions.md) for the full flow.
-
-## /rota-learn
-
-Writes durable knowledge from the current session into `.rota/KNOWLEDGE.md`, grouped by topic. Captures gotchas, project conventions, constraints, debugging insights, and decisions with rationale. Skips anything already obvious from reading the code. `--strict` adds a verifier pass over the new bullets (off by default). `--retro [<session-id|path>]` reads the newest session transcript (Claude Code or Codex), or the one you name, and cites it as evidence, then classifies the session's mistakes into guardrails (filed as items), standards, navigation pointers, tool-economy fixes and information-access gaps (filed as items), flags no-op bullets for removal without deleting them, audits steering files (`AGENTS.md`, `CLAUDE.md`, global instructions) for restating or dead lines without editing them, and reports a repo whose check command runs in no CI workflow or hook as a no-guardrail finding. In umbrella mode the write (and `--term` Glossary entries) routes to the cwd/`--repo`-resolved scope: repo-local vs the umbrella-shared `.rota/KNOWLEDGE.md`. Three manual flags edit one existing bullet and skip the capture flow: `--promote <topic> "<title>"` sets its tier to `confirmed` without waiting for the hit threshold, `--deprecate <topic> "<title>"` sets it to `deprecated`, and `--amend <topic> "<title>"` appends text to its body (tier and hits stay). See [learning](../usage/learning.md) and [umbrella mode](../usage/umbrella-mode.md) for the full flow.
-
-## /rota-orchestrate
-
-Runs a parallel round: you are the orchestrator, and standing workers (`round.slots`, at most as many as `round.roster` names) each take one issue in their own worktree and terminal tab. Start it with `rota orchestrate` or bare `rota` (`orchestrator.harness` picks the agent), or tell an existing session "you are the orchestrator". The skill decides what the `rota round` verbs cannot: which issues make a good slate, how to read a stuck worker, what to escalate to you and when to merge. Sequencing and the rules are the verbs' job (`rota doctor`, `rota round start`, `assign`, `wait`, `rota worker gate`, `rota round wind-down`), and a refusal from a verb is the rule, not an obstacle. Workers build and open PRs; they never merge. Triggered by "you are the orchestrator" or "run a round". For one item, use `/rota-work`. See [parallel rounds](../usage/parallel-rounds.md) and the [`rota round` verbs](cli-helpers.md#rota-round).
-
-## /rota-answer
-
-During a round, puts every decision waiting on you to you one at a time: open escalations, slots blocked on a question, PRs whose review or bounce cap needs a call, candidates the orchestrator is holding, and items with an open `question` comment. Each question carries the facts, 2 to 4 options and the recommended one first. In Claude Code it uses the `AskUserQuestion` picker; in any other harness it sends one message per question with a lettered list `A)` to `E)` (`A)` the recommendation, the last entry "Write your own answer"). Each answer is recorded as a `decision` comment citing "maintainer, answering the orchestrator in its session", then applied (relay, re-recorded verdict, issue edit, follow-up) before the next question. With nothing pending it prints `no decisions pending`. Manual only: the orchestrator never starts it, and a round otherwise uses no blocking picker. See [parallel rounds](../usage/parallel-rounds.md#asking-the-maintainer).
-
-## /rota-init
-
-Reads the project first, then proposes config values that fit it: the test commands from the manifests, Makefile and CI config (`test.fast`, `test.full`), the base branch and forge from the `origin` remote (`git.baseBranch`, `forge.provider`, `issues.source`), the harness CLIs on `PATH` (`round.harnesses`) and the terminal host (`round.dispatch`, `work.isolation`). Every proposal names the file or command it came from; a key with no signal keeps the schema default and is reported as such. Each choice is one question with the recommended value first (`AskUserQuestion` in Claude Code, a lettered list elsewhere). Answers are written only after you confirm, through `rota setup --set` on a project without `.rota/` and `rota config set` otherwise. On an initialized project it lists only the keys whose current value differs from the suggestion. It does not change `rota init` or `rota setup` defaults and installs no harness or host. Manual only.
-
-## /rota-pause
-
-Stops mid-session (or an orchestrator mid-round, without winding the round down) by writing a handoff note to `.rota/handoff/<branch>.md` that captures current hypothesis, next planned step, files mid-edit, and gotchas discovered. Use it when the context window is filling or you need to step away mid-`/rota-work`. With `--report` it also writes `.rota/handoff/<branch>.report.md` (commits, files changed, tasks, proof) for you to read; `/rota-work` ignores it. See [pausing and resuming](../usage/pausing-and-resuming.md) for the full flow.
-
-## /rota-plan
-
-Writes an implementation plan before `/rota-work` runs, keyed by a milestone slice (`M01-S01`) or an item (`M01-B07`, `#42`). Tasks must fit one execution window and each requires a verifiable outcome. `/rota-work` consults the plan automatically if one exists. See [vision and plans](../usage/vision-and-plans.md) for the full flow.
-
-## /rota-qa
-
-Product-level QA: runs the per-target strategy declared in `.rota/qa/<target>.md` and emits a scored verdict. `/rota-qa` does NOT read commits or the diff (that's `/rota-review`'s job). It runs the built artifact: Playwright, smoke scripts, contract tests, Lighthouse, axe, ZAP, whatever the strategy declares, grouped into executable and audit pillars. Three modes: `first-run` (probe surfaces, propose strategy), `run` (execute, score, verdict), `restructure` (audit strategy files). Returns `PASS` / `CONCERNS` / `FAIL`, or `INFRA-FAIL` when required infra is missing. Invoked from `/rota-ship` when `ship.qa: true`; route on verdict gated by `qa.gate` (`"advisory"` reports only, `"blocking"` halts on `FAIL`). See [product QA](../usage/qa.md) for the full flow.
-
-## /rota-refactor
-
-Architecture review. Explores the codebase (or one area, `/rota-refactor internal/cli`) for friction using one vocabulary (module, interface, depth, seam, adapter, leverage, locality) and a few heuristics (the deletion test, the interface as the test surface, one adapter is a hypothetical seam). It reads the glossary, knowledge and decisions first, ranks candidates Strong / Worth exploring / Speculative, and files each as a `refactor`-labelled issue with a `## Acceptance` section, deduped against open and closed issues. It changes no code by default.
-
-Flags: `--fix` implements the candidates you pick (parallel workers, verification, one commit; `refactor.confirmBeforeExecute` gates it), `--designs` drafts competing interfaces for structural candidates, `--interactive` lets you choose which to file. Several workers can each review one area in a round.
-
-## /rota-release
-
-Cuts a release end-to-end: walks the project's release checklist (`.rota/RELEASE.md` by default; override via `release.checklistPath`) as a preflight gate, bumps the project version (`major`/`minor`/`patch` or explicit semver), generates categorized release notes from commits since the last tag, prepends a section to `CHANGELOG.md` (creating it if absent), creates an annotated git tag, pushes commit + tag, and publishes a release on GitHub or GitLab when origin is set. Auto-detects the version source (`plugin.json`, `package.json`, `pyproject.toml`, `Cargo.toml`, plain `VERSION`), and honors `release.versionFile` override.
-
-The checklist file is per-project and tracked by default; see [release checklist](../usage/review-and-ship.md#release-checklist) for the format. When absent, the skill offers to scaffold a starter (under `autonomy.level: off`) or silently skips the gate (under `auto`). Items ending in `(manual)` always interject even in unattended modes.
-
-After publishing, an always-manual gate offers to close any upstream GitHub/GitLab issues that landed in the release but are still open. This covers the direct-push path where work skipped `/rota-ship` (or chose "leave open") and the linked issues never got closed. Candidates come from `rota issues imported --open-only`; the gate is silent when nothing is open. Skipped entirely in `--dry-run` mode.
-
-## /rota-review
-
-Staff-engineer review of a feature branch before it leaves your machine: scopes the diff, pulls relevant `KNOWLEDGE.md` topics, returns PASS / CONCERNS / FAIL with file-and-line evidence. Read-only; no mutations, no commits. On the issue backend, `--queue` instead works through every `needs-review` item's open PR or MR and merges the ones that pass. See [review and ship](../usage/review-and-ship.md) for the full flow.
-
-## /rota-capture --triage
-
-Vets tracker issues filed by someone else: redundancy search, prior-decision check and, for bugs, a bounded reproduce. Creates no item. Each issue ends in one outcome you confirm: closed with the reason, `needs-info` with a question comment, or ready. See [capturing work](../usage/capturing-work.md#triaging-an-issue-someone-else-filed).
-
-## /rota-capture --remove
-
-Removes a captured backlog item and cleans up its dependencies in one operation, through `rota item rm`. File backend only; on the issue backend close the issue with `rota item complete <ID> --reason dropped` instead. Strips the item's entry from `BACKLOG.md`, removes `Related:` cross-references that point to it from other items, and deletes any matching detail file (`.rota/bugs/`, `.rota/features/`, `.rota/tasks/`) and plan file (`.rota/plans/`). An item active in `status.json` is refused on apply until its stream is dropped with `rota status rm <branch>`.
-
-Dry-run-by-default: the first pass shows what would change, then an explicit `AskUserQuestion` confirmation gate must be cleared before any writes happen. `ARCHIVE.md` is preserved by default as the historical record; pass `--scrub-archive` to also remove an archived entry and its cross-references there. Accepts one or more comma-separated IDs (e.g. `B07,F03`). If any ID is unknown, the verb exits 3 before any write. See [removing work](../usage/removing-work.md) for the full flow.
-
-## /rota-ship
-
-Finishes a feature branch: runs `/rota-review` (by default), builds a PR body from commit subjects and resolved item IDs, then either opens a PR (GitHub) or MR (GitLab) or merges directly based on `work.mergeStrategy`. Clears the `status.json` entry and closes referenced items on completion. On the issue backend it always opens a PR or MR with `Closes #N` lines and never merges; the merge closes the issues ([issue backend](../usage/issue-backend.md)). See [review and ship](../usage/review-and-ship.md).
-
-One mode folded in via a flag:
-
-- `/rota-ship --undo`: guided rollback of the last `/rota-work` cycle on the base branch. Resets the merge commit and restores the cycle's TODO entries to their type sections in `BACKLOG.md`. Direct-merge cycles only (MVP); PR-mode cycles refused with a manual-recovery pointer. Refuses on cycles that have post-merge commits unless `--allow-post-merge` is passed. Defaults to a dry-run preview; the slash command always asks for explicit confirmation before applying. See [rolling back a cycle](../usage/undo.md) for the full flow.
-
-## /rota-docs
-
-The public-docs maintainer. After-work mode may run in any agent, including a round worker's PR; scaffold and restructure follow `autonomy.level` and escalate to the maintainer in a round. Scaffolds `<docs.path>/` on first run (discovery + tailored tree + interactive approval), proposes doc updates in after-work mode, or audits and reorganizes in restructure mode (`/rota-docs restructure`). Runs inline at ship time when `docs.afterWork: true` and the post-cycle trigger condition matches.
-
-`/rota-ship --docs` still works for one release as a deprecated alias: it prints a one-line pointer to `/rota-docs` and runs it.
-
-## /rota-bugreport
-
-Files rota's own mistakes upstream. rota records them in `.rota/bugreports.jsonl` while it runs: a verb that fails with an internal error or panic (exit 70) writes a record, and an agent adds one it noticed with `rota bugreport add`. `rota round wind-down` and the Stop hook of a solo session print one non-blocking line when records are open. The skill lists them, shows each report redacted (tokens and keys, email addresses, home-directory paths, hostnames, your repo name and remote URL are removed) with the rota version, OS and architecture, harness and model, searches `l4ci/rota` for a duplicate (offering a comment instead), and files only after your yes for that report. Bugs in your own project stay with `/rota-capture`. Nothing is sent in the background.
-
-## /rota-spike
-
-Throwaway feasibility experiment on a dedicated `spike/<name>` branch that is never merged. Answers a specific yes/no/conditional question and records question, what was tried, findings, and decision in `.rota/spikes/<name>.md`. See [spikes](../usage/spikes.md).
-
-## /rota-vision
-
-Brainstorms a project's bigger vision and breaks it into milestones with explicit dependencies and ready/blocked status, writing `MILESTONES.md` and per-milestone detail files under `.rota/milestones/` (on the issue backend each milestone is also a tracker milestone with a tracking issue). Uses Socratic discovery, web research, and deliberate challenge before proposing milestones. See [vision and plans](../usage/vision-and-plans.md) for the full flow.
-
-## /rota-work
-
-Orchestrated parallel implementation: the orchestrator plans tasks and dispatches worker subagents to implement them, each on a feature branch or isolated worktree. With no item argument it first reconciles the backlog against git state (`rota status show`, `rota backlog drift`, `rota backlog list`, `rota milestone active`), reads any `/rota-pause` handoff note, and suggests the next item. Consults `KNOWLEDGE.md` and any matching `.rota/plans/<key>.md` at the start, then registers progress in `status.json` throughout. See [running work](../usage/running-work.md) for the full flow.
+Each skill has its own page with examples, flags and the detail that used to live here: [skills](../skills/README.md).

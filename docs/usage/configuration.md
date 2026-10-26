@@ -250,7 +250,7 @@ rota config set work.contextGuard auto
 Three tiers of shell commands, each an array defaulting to `[]`:
 
 - `test.fast`: quick checks for a task or worker to run while working.
-- `test.full`: the full suite. The merge gate (`rota worker gate`) and the merge train run it on the merged tree, and [`/rota-refactor`](../reference/slash-commands.md#rota-refactor) runs it in `--fix` verification as CI-shape gates before committing. Empty means read-only verification: the gate and the train refuse to merge (exit 4, `blockedBy: no-verify`) unless `test.e2e` is set or you pass `--no-verify`, which merges and reports `NO-VERIFY`.
+- `test.full`: the full suite. The merge gate (`rota worker gate`) and the merge train run it on the merged tree, and [`/rota-refactor`](../skills/rota-refactor.md) runs it in `--fix` verification as CI-shape gates before committing. Empty means read-only verification: the gate and the train refuse to merge (exit 4, `blockedBy: no-verify`) unless `test.e2e` is set or you pass `--no-verify`, which merges and reports `NO-VERIFY`.
 - `test.e2e`: slow end-to-end checks. `rota worker gate` and the merge train run it on the merged tree after `test.full` passes, so a round pays for it at merge instead of once per branch (a train runs it once for all members). A red train run bisects like a red `test.full`. Empty skips the step.
 
 ### The exclusion ledger
@@ -651,7 +651,7 @@ Controls how far a run goes before it stops. Three levels: `"off"` (default), `"
 - **Type:** string
 - **Default:** `"docs"`
 
-Relative path (from the project root) to the documentation folder that [`/rota-docs`](../reference/slash-commands.md#rota-docs) reads and writes. Set this when your project keeps docs somewhere other than the default, for example `"documentation"`, `"site/content"`, or `"wiki"`.
+Relative path (from the project root) to the documentation folder that [`/rota-docs`](../skills/rota-docs.md) reads and writes. Set this when your project keeps docs somewhere other than the default, for example `"documentation"`, `"site/content"`, or `"wiki"`.
 
 ```json
 { "docs": { "path": "documentation" } }
@@ -674,7 +674,7 @@ Controls whether `/rota-docs` after-work mode automatically writes proposed doc 
 - **Type:** boolean
 - **Default:** `false`
 
-Gate for the after-work docs flow. When `true`, the skills [`/rota-work`](running-work.md), `/rota-ship`, and [`/rota-release`](../reference/slash-commands.md#rota-release) trigger the docs after-work flow after their primary action completes. `/rota-work` and `/rota-ship` only fire on cycles that resolve 2+ items or touch 5+ files (small fixes don't trigger); `/rota-release` fires on every successful release (release notes are inherently user-facing). `/rota-work` only nudges, in a one-line terminal report, at either autonomy level. `/rota-ship` runs the after-work flow inline, with its approval gate as the checkpoint. `/rota-release` nudges under `autonomy.level: off` and auto-dispatches `/rota-docs` under `auto`.
+Gate for the after-work docs flow. When `true`, the skills [`/rota-work`](running-work.md), `/rota-ship`, and [`/rota-release`](../skills/rota-release.md) trigger the docs after-work flow after their primary action completes. `/rota-work` and `/rota-ship` only fire on cycles that resolve 2+ items or touch 5+ files (small fixes don't trigger); `/rota-release` fires on every successful release (release notes are inherently user-facing). `/rota-work` only nudges, in a one-line terminal report, at either autonomy level. `/rota-ship` runs the after-work flow inline, with its approval gate as the checkpoint. `/rota-release` nudges under `autonomy.level: off` and auto-dispatches `/rota-docs` under `auto`.
 
 ```json
 { "docs": { "afterWork": true } }

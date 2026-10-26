@@ -63,7 +63,7 @@ See [../usage/learning.md](../usage/learning.md) for how to capture and review k
 
 ## DECISIONS.md: hard-boundary decisions
 
-`DECISIONS.md` records hard boundaries the project has committed to. It is the sibling of `KNOWLEDGE.md`, but where knowledge is passive (gotchas, conventions), decisions are active commitments with explicit `forbids:` and `permits:` clauses. [`/rota-decide`](../usage/decisions.md) writes new entries; [`/rota-work`](../usage/running-work.md), [`/rota-debug`](../usage/debugging.md), [`/rota-plan`](../usage/vision-and-plans.md), [`/rota-refactor`](slash-commands.md#rota-refactor), [`/rota-review`](../usage/review-and-ship.md), and [`/rota-vision`](../usage/vision-and-plans.md) consult them as constraints.
+`DECISIONS.md` records hard boundaries the project has committed to. It is the sibling of `KNOWLEDGE.md`, but where knowledge is passive (gotchas, conventions), decisions are active commitments with explicit `forbids:` and `permits:` clauses. [`/rota-decide`](../usage/decisions.md) writes new entries; [`/rota-work`](../usage/running-work.md), [`/rota-debug`](../usage/debugging.md), [`/rota-plan`](../usage/vision-and-plans.md), [`/rota-refactor`](../skills/rota-refactor.md), [`/rota-review`](../usage/review-and-ship.md), and [`/rota-vision`](../usage/vision-and-plans.md) consult them as constraints.
 
 A companion managed block in `CLAUDE.md` lists the current decision topics so the model can pull only the relevant entries on demand.
 
