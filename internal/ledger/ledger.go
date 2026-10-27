@@ -11,6 +11,7 @@ package ledger
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -32,8 +33,10 @@ const (
 	KindPick     = "pick"
 	KindPark     = "park"
 	KindGate     = "gate"
-	KindMerge    = "merge"
-	KindLimited  = "limited"
+	// KindTrain records one completed train invocation, rather than a member.
+	KindTrain   = "train"
+	KindMerge   = "merge"
+	KindLimited = "limited"
 	// KindReviewReply records a worker's answer to a reviewer (`rota worker reply`).
 	KindReviewReply = "review-reply"
 	// KindAdopt records `rota worker adopt`: detail.branch is the branch taken over.
@@ -143,34 +146,100 @@ func Append(root string, e Entry) error {
 // Load reads every entry in file order. A missing file is no entries and
 // os.ErrNotExist is not returned for it; a line that does not parse is skipped.
 func Load(root string) ([]Entry, error) {
+	s := load(root, false)
+	return s.Entries, s.err
+}
+
+// SummarySource keeps readable events and accounts for damaged lines. Damage
+// with an identifiable round invalidates only that round's metrics.
+type SummarySource struct {
+	Entries                  []Entry
+	skippedLines             int
+	rounds, unreadableRounds map[int]bool
+	err                      error
+}
+
+// Loaded reports a successful whole-file read, even when damaged lines were skipped.
+func (s SummarySource) Loaded() bool { return s.err == nil }
+
+// HasRound includes damaged events whose round can still be identified.
+func (s SummarySource) HasRound(round int) bool { return s.rounds[round] }
+
+// HighestRound includes identifiable rounds even when all their events are damaged.
+func (s SummarySource) HighestRound() int {
+	var n int
+	for round := range s.rounds {
+		n = max(n, round)
+	}
+	return n
+}
+
+// Fold applies source diagnostics to the selected round's scorecard.
+func (source SummarySource) Fold(audit []*jsonx.Object, round int) Summary {
+	s := Fold(source.Entries, audit, round)
+	s.SkippedLedgerLines = source.skippedLines
+	if source.err != nil {
+		s.UnavailableMetrics(source.err.Error())
+	} else if source.unreadableRounds[round] {
+		s.UnavailableMetrics(fmt.Sprintf("ledger has unreadable events for round %d", round))
+	}
+	return s
+}
+
+// LoadForSummary skips and counts damaged lines. Load retains its tolerant
+// recovery behavior for other consumers, including malformed event fields.
+func LoadForSummary(root string) SummarySource { return load(root, true) }
+
+func load(root string, strict bool) SummarySource {
+	s := SummarySource{rounds: map[int]bool{}, unreadableRounds: map[int]bool{}}
 	data, err := os.ReadFile(Path(root))
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		if strict {
+			s.err = errors.New("no ledger")
+		}
+		return s
 	}
 	if err != nil {
-		return nil, err
+		s.err = err
+		if strict {
+			s.err = errors.New("ledger unreadable")
+		}
+		return s
 	}
-	var out []Entry
 	for _, line := range bytes.Split(data, []byte{'\n'}) {
-		v, err := jsonx.Decode(line)
-		if err != nil {
+		if len(bytes.TrimSpace(line)) == 0 {
 			continue
 		}
+		v, err := jsonx.Decode(line)
 		o, ok := v.(*jsonx.Object)
-		if !ok {
+		if err != nil || !ok {
+			s.skippedLines++
 			continue
 		}
 		e := Entry{Kind: jsonx.Str(o, "kind"), Issue: jsonx.Str(o, "issue"), Slot: jsonx.Str(o, "slot"),
 			Account: jsonx.Str(o, "account"), Harness: jsonx.Str(o, "harness"), PR: jsonx.Str(o, "pr")}
 		e.TS, _ = time.Parse(time.RFC3339, jsonx.Str(o, "ts"))
 		rv, _ := o.Get("round")
-		e.Round, _ = jsonx.Int(rv)
-		if d, ok := o.Get("detail"); ok {
-			e.Detail, _ = d.(*jsonx.Object)
+		e.Round, ok = jsonx.Int(rv)
+		knownRound := ok && e.Round >= 0
+		if knownRound {
+			s.rounds[e.Round] = true
 		}
-		out = append(out, e)
+		valid := knownRound && !e.TS.IsZero() && e.Kind != ""
+		if d, exists := o.Get("detail"); exists {
+			e.Detail, ok = d.(*jsonx.Object)
+			valid = valid && ok
+		}
+		if strict && !valid {
+			s.skippedLines++
+			if knownRound {
+				s.unreadableRounds[e.Round] = true
+			}
+			continue
+		}
+		s.Entries = append(s.Entries, e)
 	}
-	return out, nil
+	return s
 }
 
 // Exists says whether the ledger file is there.
