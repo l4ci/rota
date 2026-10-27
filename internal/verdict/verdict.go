@@ -343,6 +343,9 @@ func jsonType(kind string) string {
 
 // Record is one stored verdict.
 type Record struct {
+	// FromReport distinguishes cache entries from locally recorded verdicts.
+	// A recovered report only applies at its reviewed head.
+	FromReport bool          `json:"fromReport,omitempty"`
 	Kind       string        `json:"kind"`
 	Verdict    string        `json:"verdict"`
 	Combined   string        `json:"combined,omitempty"`
@@ -569,7 +572,7 @@ func AtHead(rec Record, head string) bool {
 // recorded for branch at head. A record on another commit is stale and does
 // not count, as /rota-review treats it.
 func Recorded(root, branch, head string) []string {
-	list := Load(root).Branches[BranchKey("", branch)]
+	list := ForHead(Load(root).Branches[BranchKey("", branch)], head)
 	var kinds []string
 	for _, k := range []string{ReviewSpec, ReviewQuality} {
 		if r, ok := Latest(list, k); ok && AtHead(r, head) {
@@ -582,14 +585,14 @@ func Recorded(root, branch, head string) []string {
 // CrossAt is the branch's newest review-cross record when it was recorded at
 // head; a record on another commit is stale and does not count.
 func CrossAt(root, branch, head string) (Record, bool) {
-	r, ok := Latest(Load(root).Branches[BranchKey("", branch)], ReviewCross)
+	r, ok := Latest(ForHead(Load(root).Branches[BranchKey("", branch)], head), ReviewCross)
 	return r, ok && AtHead(r, head)
 }
 
 // LensAt is the branch's newest record of the lens kind when it was recorded at
 // head; a record on another commit is stale and does not count.
 func LensAt(root, branch, kind, head string) (Record, bool) {
-	r, ok := Latest(Load(root).Branches[BranchKey("", branch)], kind)
+	r, ok := Latest(ForHead(Load(root).Branches[BranchKey("", branch)], head), kind)
 	return r, ok && AtHead(r, head)
 }
 
