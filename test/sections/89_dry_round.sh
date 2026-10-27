@@ -109,7 +109,7 @@ pass "doctor: healthy on the fixture, exit 1 and ok false once herdr is gone"
 # The issue goes in before start so start lists it; the config now also names the
 # forge and the merge policy the later steps need.
 printf '{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]},"test":{"full":["true"]},"forge":{"provider":"github"},"issues":{},"autonomy":{"level":"auto"},"ship":{"mergeApproval":"all","review":"none"}}\n' "$TMP_DY/acct" > "$DY/.rota/config.json"
-dyj item create --kind features --title First --milestone M01 --body-file - <<<$'## Acceptance\n- [ ] works\nTouches internal/a.go\n\n## Touches\n- POST /items' >/dev/null \
+dyj item create --kind features --title First --milestone M01 --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] works\nTouches internal/a.go\n\n## Touches\n- POST /items' >/dev/null \
   || fail "dry round: item create failed"
 printf '{"id":"cli","result":{"snapshot":{"agents":[]}}}\n' > "$FK/snapshot.json"
 rc=0; OUT="$(dyj round start --holder-pid "$DYHOLD" --slots 1)" || rc=$?
@@ -143,7 +143,7 @@ pass "assign: tier heavy needs a reason, claims F01, cuts ben/f01-first, dispatc
 
 # A second issue naming the same declared scope (different files) clashes with the
 # slot that holds F01: warned in candidates, still ready under the default round.scopeOverlap.
-dyj item create --kind features --title Second --milestone M01 --body-file - <<<$'## Acceptance\n- [ ] works\n\n## Touches\n- post /items ' >/dev/null \
+dyj item create --kind features --title Second --milestone M01 --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] works\n\n## Touches\n- post /items ' >/dev/null \
   || fail "dry round: second item create failed"
 OUT="$(dyj round candidates || true)"
 case "$OUT" in *'"scopes":["post /items"]'*|*'"scopes": ["post /items"]'*) ;; *) fail "dry round: candidates should report the shared scope post /items: $OUT" ;; esac

@@ -1,0 +1,1 @@
+{"inputs":"item template --kind features --tag Major","outputs":"## Summary\n\n<!-- optional -->\n\n## Acceptance\n\n<!-- required -->\n\n## Out of scope\n\n<!-- required -->\n\n## Touches\n\n<!-- recommended -->\n\n## Pointers\n\n<!-- recommended when file paths are named -->\n\n## Detail\n\n<!-- optional -->\n"}

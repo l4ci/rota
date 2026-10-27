@@ -43,6 +43,20 @@ Items captured in the same batch can reference each other via `Related:` links.
 
 Underneath, `rota item create` refuses an empty title or a placeholder (`x`, `tbd`, `todo`, `title`, `untitled`, any case) with exit 2. To file many items in one call, pass `--batch-file <json|->` with a JSON array of records; it cannot be combined with the other item flags. rota checks every title, kind and field first, then files the records in order and returns one id per record under `items`. A batch title needs at least three words. If a record fails part way, the error names it and lists the ids already filed.
 
+## Item templates
+
+`/rota-capture` reads the per-kind template from the binary before drafting a body. You can print the same Markdown skeleton yourself:
+
+```sh
+rota item template --kind features --tag Major
+rota item template --kind bugs
+rota item template --kind tasks
+```
+
+Comments in the skeleton mark sections as required, recommended or optional. Every feature, including Cosmetic, requires Acceptance and Out of scope; Major features also recommend Touches. Bugs recommend Repro, Expected and Actual, which can also be stated in the description. Tasks have no required sections. Pointers is recommended when you name file paths.
+
+`rota item create` warns about missing required or recommended sections and still captures the item. Each warning names the new item and asks you to add the section, with a command to print its template. A fresh [round assignment](parallel-rounds.md#picking-issues) refuses a feature missing either required heading and names what to add; an assignment brief can supply them too. `rota item ready` reports the same required sections. Presence is enough: an empty heading counts, and Out of scope may say "nothing noted". Old items need no migration or body rewrite; add the missing headings when preparing them for work.
+
 ## Detail files for large input
 
 When an item's input is too large for a TODO entry (crash dumps, specs, logs, long checklists), `/rota-capture` creates a detail file and links to it from the main entry (on the issue backend the text goes into the issue body instead):
@@ -59,7 +73,7 @@ Detail files land in type-specific subdirectories:
 | Feature | `.rota/features/` | `.rota/features/F08.md` |
 | Task | `.rota/tasks/` | `.rota/tasks/T09.md` |
 
-A detail file is created only when the input would push the TODO entry past a few sentences.
+A detail file also holds template sections passed through `--body-file`, even for a short feature. Simple bugs and tasks can keep their information in the description when no separate body is needed.
 
 ## Related items
 

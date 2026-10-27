@@ -368,7 +368,7 @@ func suiteItem(t *testing.T) {
 	add(variants(ready("criteria-in-detail", "B01", fx{}, 0))...)
 	add(variants(ready("not-ready", "B03", fx{}, 1))...)
 	add(
-		ready("design-note", "F02", fx{}, 0),
+		ready("design-note", "F02", fx{}, 1), // a feature note cannot replace required headings
 		ready("plan-note", "B02", fx{}, 0),
 		ready("detail-without-criteria", "F01", fx{files: map[string]string{".rota/plans/M02-F01.md": ""}}, 1),
 		ready("checkbox-line", "T01", fx{files: map[string]string{".rota/tasks/T01.md": "# T01\n\n  * [x] done thing\n"}}, 0),

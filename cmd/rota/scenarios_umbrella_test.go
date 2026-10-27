@@ -646,7 +646,7 @@ func suiteUmbrella(t *testing.T) {
 			}}
 	}
 	add(
-		rdy("criteria", "web:F1", 0, true), rdy("design-note", "web:T5", 0, true), rdy("criteria-gl", "api:B4", 0, true),
+		rdy("criteria", "web:F1", 1, false), rdy("design-note", "web:T5", 0, true), rdy("criteria-gl", "api:B4", 0, true),
 		rdy("not-ready", "api:T3", 1, false), rdy("not-ready-bare", "F5", 1, false), rdy("ambiguous", "F1", 2, false), rdy("unknown", "web:99", 3, false),
 	)
 	ca := func(name, ref, kind, body string, want int) ubcase {

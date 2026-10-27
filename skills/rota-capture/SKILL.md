@@ -95,6 +95,8 @@ When the user's phrasing may map to a canonical glossary term (`## Glossary` in 
 
 Create each item in one command; it prints the new ID:
 
+First run `rota item template --kind <bugs|features|tasks> [--tag <tag>]` for each kind/tag in the batch. Draft the `--body-file` from that skeleton: its comments identify required, recommended and optional sections. Fill the sections from the user's input and omit unused optional sections; keep an empty required heading when nothing is known rather than inventing content. Simple bugs/tasks need no body file when their description already carries the information. `item create` warns on missing required or recommended sections and still captures; round assignment refuses missing required sections. For Out of scope, "nothing noted" is enough. Preserve bulky input under Detail (`references/detail-files.md`).
+
 ```bash
 ID=$(rota item create --json --kind bugs --title "Short title" --tag P1 --desc "Description." --related "[F02]" | jq -r .data.id)
 ```
@@ -110,8 +112,7 @@ Judgment calls:
 - **`--subsystem`:** match filenames and skill names in the user's text against `.rota/map/` (or the `## Project Map` block in CLAUDE.md). Pass `Subsystem: <name>` only on a confident match; never delay capture for it.
 - **`--desc`:** what happens, when, what should happen instead (bugs); what, where, why it matters (features); what and why (tasks). One to three sentences.
 - **Behavior, not paths:** descriptions and acceptance criteria state observable behavior. File paths and line numbers go in a `## Pointers` section of the body (`--body-file`), never in the criteria. Name exact files, not a bare directory (`internal/cli/round_assign.go`, not `internal/cli/`): `rota round candidates` and `assign` match a directory against every file below it, so one directory pointer makes the issue overlap most others. Warn the user when a draft body carries one, and ask for the files. Files every issue mentions in a shared footer (a `TODO.md` line) belong in `round.sharedPaths`, not in the pointers.
-- **`## Out of scope`:** features and Major items get this section in the body (`--body-file`): one to three bullets naming what a worker must not take on, or the line "nothing noted". `rota round assign` copies it into the worker brief, so write it as the contract's boundary. Bugs and tasks may omit it.
-- **`## Touches`:** features and Major items also list the contracts they change, one bullet each: a symbol, endpoint, schema or table, migration, config key or event (`POST /items`, `worker.Slot`, `round.maxBounces`). `rota round candidates` and `assign` flag two in-flight issues that name the same entry, which a file-path check misses. `assign` copies the section into the worker brief. Ask for it the way you ask for out-of-scope bullets; omit it when the item changes no shared contract. For a child of a milestone, copy the entries from the milestone's `## Capabilities` list and follow `references/breakdown.md` for the `## Change` section.
+- **Contract boundaries:** write Out of scope as what a worker must not take on. In Touches, list contracts one per bullet: a symbol, endpoint, schema or table, migration, config key or event (`POST /items`, `worker.Slot`, `round.maxBounces`). `assign` quotes these sections in the brief; candidates and assign compare Touches entries to detect collisions across files. For a milestone child, copy its entries from the milestone's Capabilities list and follow `references/breakdown.md` for Change. The binary template decides which sections each kind needs.
 
 ## Step 7 — Brainstorm Nudge
 
