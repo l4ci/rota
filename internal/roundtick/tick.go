@@ -99,6 +99,9 @@ type Env struct {
 	// configured fill decisions. Nil accepts the already selected targets.
 	TrainReady func(string) bool
 	ReadySince func(string) time.Time
+	// FillBypass sends known PR-state refusals and ready PRs without a usable
+	// review-disabled clock to an individual gate instead of waiting for fill.
+	FillBypass func(string) bool
 	Now        func() time.Time
 	// MergeApproval is ship.mergeApproval: any mode but none (empty
 	// included) asks for a person, and the autopilot then merges nothing.
@@ -152,6 +155,8 @@ type Env struct {
 	// not cleared; Remember stores the new set and the keys reported so far.
 	Held     map[string]string
 	Reported map[string]bool
+	// Filling is the last per-base fill status, for changed-only output.
+	Filling map[string]string
 	// FailedHeads remembers attempted failures across worker state changes.
 	// Unlike legacy Held entries, these clear only when the PR head changes.
 	FailedHeads map[string]FailedHead
@@ -177,6 +182,9 @@ func (i Item) Key() string { return i.Kind + " " + i.Target }
 // blocked slot every pass.
 type Result struct {
 	Did []Action
+	// Holding contains changed, non-actionable train fill status lines.
+	Holding []string
+	Filling map[string]string
 	// Capped is why the tick filled no slot: the quota cap (Env.Capped).
 	Capped string
 	// BatchFull is true when round.batch items are open: the tick assigned
@@ -222,7 +230,7 @@ func (e Env) audit(r *Result, a Action) {
 // The merge comes before the assign so the next assignment branches from the
 // gated base (rota-orchestrate, section 6), not from before the merge.
 func Run(ctx context.Context, e Env) (Result, error) {
-	r := Result{Held: map[string]string{}, Reported: map[string]bool{}, FailedHeads: maps.Clone(e.FailedHeads)}
+	r := Result{Held: map[string]string{}, Reported: map[string]bool{}, FailedHeads: maps.Clone(e.FailedHeads), Filling: map[string]string{}}
 	if r.FailedHeads == nil {
 		r.FailedHeads = map[string]FailedHead{}
 	}
@@ -342,10 +350,8 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 	var run []string
 	heads := map[string]string{}
 	for _, t := range targets {
-		why, held := e.Held[t]
+		why, held := HoldReason(e.Held, r.FailedHeads, t, "")
 		if e.Head != nil {
-			v, _, _ := strings.Cut(why, ":")
-			held = held && failedHeadVerdict(v)
 			head, err := e.Head(ctx, t)
 			if err != nil || head == "" {
 				detail := "cannot read PR head; not retrying the gate"
@@ -356,26 +362,17 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 				continue
 			}
 			heads[t] = head
-			if prev, ok := r.FailedHeads[t]; ok {
-				why, held = prev.Why, prev.Head == head
-				if !held {
-					delete(r.FailedHeads, t)
-				}
-			} else if held {
-				// Upgrade a legacy hold without guessing which old head failed.
-				r.FailedHeads[t] = FailedHead{Head: head, Why: why}
+			why, held = HoldReason(e.Held, r.FailedHeads, t, head)
+			if prev, ok := r.FailedHeads[t]; ok && prev.Head != head {
+				delete(r.FailedHeads, t)
 			}
-			if !held {
-				// A worker can move on and leave the same PR in the queue.
-				// Carry its hold to the new target rather than retry its head.
+			if held {
 				for old, prev := range r.FailedHeads {
-					if prev.Head == head {
-						why, held = prev.Why, true
+					if old != t && prev.Head == head {
 						delete(r.FailedHeads, old)
-						r.FailedHeads[t] = prev
-						break
 					}
 				}
+				r.FailedHeads[t] = FailedHead{Head: head, Why: why}
 			}
 		}
 		if held {
@@ -387,7 +384,8 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 			r.NeedsYou = append(r.NeedsYou, Item{"gate-failed", t, detail})
 			continue
 		}
-		if e.TrainFill.Enabled() && e.TrainReady != nil && !e.TrainReady(t) {
+		if e.TrainFill.Enabled() && e.TrainReady != nil && !e.TrainReady(t) && (e.FillBypass == nil || !e.FillBypass(t)) {
+			r.NeedsYou = append(r.NeedsYou, Item{"awaiting-review", t, "PR is not ready for train fill; waiting for current-head review readiness"})
 			continue
 		}
 		if e.TrainFill.Enabled() || len(run) < e.cap() {
@@ -397,7 +395,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 	if len(run) == 0 {
 		return nil
 	}
-	for _, m := range e.mergeAll(ctx, run) {
+	for _, m := range e.mergeAll(ctx, r, run) {
 		switch {
 		case m.Skip:
 		case m.Verdict == worker.GateRunning:
@@ -446,7 +444,7 @@ func failedHeadVerdict(v string) bool {
 // is reported with its verdict; whether it is held for a person is the
 // verdict's call: a stale or provenance refusal goes back to the worker uncounted and
 // returns, any other failure waits for a person.
-func (e Env) mergeAll(ctx context.Context, targets []string) []Merged {
+func (e Env) mergeAll(ctx context.Context, r *Result, targets []string) []Merged {
 	var order []string
 	groups := map[string][]string{}
 	for _, t := range targets {
@@ -461,6 +459,22 @@ func (e Env) mergeAll(ctx context.Context, targets []string) []Merged {
 	for _, b := range order {
 		ts := groups[b]
 		if e.TrainFill.Enabled() {
+			var filling []string
+			for _, target := range ts {
+				if e.FillBypass != nil && e.FillBypass(target) {
+					out = append(out, e.gate(ctx, target, b))
+					remaining--
+					if remaining == 0 {
+						return out
+					}
+				} else {
+					filling = append(filling, target)
+				}
+			}
+			ts = filling
+			if len(ts) == 0 {
+				continue
+			}
 			var oldest time.Time
 			if e.ReadySince != nil {
 				for _, t := range ts {
@@ -474,14 +488,18 @@ func (e Env) mergeAll(ctx context.Context, targets []string) []Merged {
 				now = e.Now()
 			}
 			if e.TrainFill.Due(len(ts), oldest, now) == "" {
+				line := e.TrainFill.Holding(b, len(ts), oldest, now)
+				r.Filling[b] = line
+				if e.Filling[b] != line {
+					r.Holding = append(r.Holding, line)
+				}
 				continue
 			}
-			if e.TrainFill.Max > 0 && len(ts) > e.TrainFill.Max {
-				ts = ts[:e.TrainFill.Max]
+			limit := remaining
+			if e.TrainFill.Max > 0 {
+				limit = min(limit, e.TrainFill.Max)
 			}
-			if len(ts) > remaining {
-				ts = ts[:remaining]
-			}
+			ts = roundcfg.OldestReady(ts, limit, e.ReadySince)
 		}
 		if len(ts) == 1 {
 			out = append(out, e.gate(ctx, ts[0], b))
