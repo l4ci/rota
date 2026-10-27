@@ -236,6 +236,9 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 	if done, err := t.verifyStage(); done || err != nil {
 		return t.res, err
 	}
+	if done, err := t.vacuousStage(); done || err != nil {
+		return t.res, err
+	}
 	if done, err := t.behaviourStage(); done || err != nil {
 		return t.res, err
 	}
