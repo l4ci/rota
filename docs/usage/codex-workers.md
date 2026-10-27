@@ -17,6 +17,14 @@ rota round assign 59 --kind codex
 
 A `best-of:2` issue gets one Claude and one Codex attempt when both `round.tiers.claude` and `round.tiers.codex` are set and neither `--kind` nor a `harness:` label pins a harness. See [best-of](parallel-rounds.md#best-of-two-workers-on-one-issue).
 
+## Read the slot's status
+
+While Codex shows `Waiting for background terminal` followed by elapsed time, `rota round status`
+shows the slot as `working` and `rota round watch` keeps waiting. This also applies when the pane
+truncates the interrupt hint. A `ROTA-BLOCKED` sentinel or an approval prompt still needs attention,
+even when the terminal-wait text remains visible. If a wait lasts longer than expected, inspect
+the slot's tab to see what the command is doing.
+
 ## What you need
 
 - **herdr.** Codex workers run under `round.dispatch` set to `herdr` (or detected inside a herdr pane).
