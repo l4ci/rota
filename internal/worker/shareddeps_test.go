@@ -61,7 +61,7 @@ func TestSharedDirsSkippedWhenLockfileDiffers(t *testing.T) {
 	}
 	wt := filepath.Join(b, ".worktrees", "w1")
 	os.WriteFile(filepath.Join(wt, "package-lock.json"), []byte("lock-b\n"), 0o644)
-	res, err := env.slotDeps(bg, b, "w1", wt, env.Config(b), 20000, 100)
+	res, err := env.slotDeps(bg, b, "w1", wt, ParseDepsConfig(env.Config(b)), 20000, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,12 +83,12 @@ func TestSharedDirsRelinkedWhenTargetVanished(t *testing.T) {
 		t.Fatal(err)
 	}
 	wt := filepath.Join(b, ".worktrees", "w1")
-	rows, _ := env.slotDeps(bg, b, "w1", wt, env.Config(b), 20000, 100)
+	rows, _ := env.slotDeps(bg, b, "w1", wt, ParseDepsConfig(env.Config(b)), 20000, 100)
 	if len(rows) != 1 || rows[0].Action != "kept" {
 		t.Errorf("rows = %+v, want kept", rows)
 	}
 	os.Remove(filepath.Join(wt, "node_modules"))
-	rows, _ = env.slotDeps(bg, b, "w1", wt, env.Config(b), 20000, 100)
+	rows, _ = env.slotDeps(bg, b, "w1", wt, ParseDepsConfig(env.Config(b)), 20000, 100)
 	if len(rows) != 1 || rows[0].Action != "linked" || linkTarget(t, b, "w1") == "" {
 		t.Errorf("rows = %+v, want linked again", rows)
 	}

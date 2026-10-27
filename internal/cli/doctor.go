@@ -95,14 +95,14 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	root, _ := rotatree.Find(in.Dir)
 	in.Skills = doctorSkills(d, d.Getenv, in.Home, root, d.Toplevel(ctx))
 	if root == "" {
-		in.RoundHost = worker.ResolveHost("", nil, d.Getenv, d.LookPath)
+		in.RoundHost = worker.ResolveHost("", worker.HostConfig{}, d.Getenv, d.LookPath)
 		doctorDiskInput(ctx, &in, nil, "", d.Git, d.Now(), d.DiskUsage, d.Getenv)
 		return in
 	}
 	cfg := d.Config(root)
 	in.Dispatch = config.Dispatch(cfg)
 	in.RegistrySolo = worker.IsSolo(root)
-	in.RoundHost = worker.ResolveHost(root, cfg, d.Getenv, d.LookPath)
+	in.RoundHost = worker.ResolveHost(root, worker.ParseHostConfig(cfg), d.Getenv, d.LookPath)
 	if err := tracker.ValidateConfig(cfg); err != nil {
 		in.SourceProblem = err.Error()
 	}
