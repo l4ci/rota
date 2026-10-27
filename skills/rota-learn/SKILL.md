@@ -30,8 +30,7 @@ With none of those, run the normal flow (Step 2 onward), after the role check be
 
 Run `rota config show round.role` first.
 
-- **`support`** (a support machine): never write `.rota/KNOWLEDGE.md`, never run `rota knowledge add` or `tier fold` (both exit 4 `blockedBy: role`). Post each learning on the issue it came from: `rota item comment add <ID> --kind learning --body-file <f>`. A learning with no issue goes upstream, not into a file: a rota defect to `/rota-bugreport`, anything else to `/rota-capture`. Stop after posting; main harvests.
-- **Round worker** (`ROTA_SLOT` is set, any role): run only the learning pass of Step 2, once, before `rota worker done`. Post each learning on the issue you worked, as for `support` above (rules and the `Learnings: none` / `Learnings: <n> posted` PR marker: `skills/references/worker-contract.md`). The orchestrator's wind-down run harvests them.
+- **`support`** or **round worker** (`ROTA_SLOT` is set, any role): read [`worker-roles.md`](worker-roles.md) and follow it instead of the normal flow.
 - **main** (the default, no `ROTA_SLOT`): first harvest what workers posted, main-machine and support alike. `rota knowledge harvest --json` lists unharvested `learning` comments on issues merged in the round. Decide per comment: fold or reject. Fold an accepted one into `KNOWLEDGE.md` through Steps 3 to 6 (`rota knowledge add`). Either way run `rota knowledge harvest --mark <commentId>` so it never lists again; a rejected comment is marked too. Then run the normal scan. The `harvest` listing exits 1 on the file backend (`blockedBy: backend`) and on a forge that cannot say who may write, such as GitLab (`blockedBy: forge`); on either, skip it and run the normal scan.
 
 ## Step 2 — Scan the Session for Learnings
@@ -50,19 +49,7 @@ Reuse existing `## Topic` headings in `.rota/KNOWLEDGE.md`; new topic only if no
 
 Run `rota config show knowledge.external`. Empty means no external base: every learning is project knowledge and this subsection changes nothing.
 
-With a path set, decide per learning. **Project:** it names this repo's files, verbs, config or conventions. **External:** it holds in any repo that uses the tool (Go, git, herdr, GitHub Actions, Postgres). State each call in one line, for example `-> external (Go): t.Run needs a case name`. When `autonomy.level` is `auto` you decide; otherwise ask once for the whole batch, with your calls as the default answer.
-
-Project learnings continue through Steps 4 to 6. For each external one:
-
-1. Reuse a topic from `rota knowledge topics --external` before minting one (technology names, not project names).
-2. Dedupe: run `rota knowledge query --external "<topic>"`. A bullet that already says it is skipped; a sharper version is `rota knowledge amend --external`. Query marks a bullet `(seen on <tool> X, project on Y: recheck)` when the project runs a newer tool version than the bullet was seen on. If this session confirmed such a bullet, run `rota knowledge amend --external --topic "<Technology>" --fragment "<title>" --seen "<tool>"` (a bare tool takes the project's version; no body needed). `--seen` replaces the whole list, so pass every tool the bullet carries (e.g. `--seen "godot swift"`) or the others are dropped. A bullet the session found wrong is fixed with `rota knowledge replace --external --topic "<Technology>" --old "<text>" --new "<text>"` or dropped with `rota knowledge rm --external --topic "<Technology>" --title "<title>"`; git history keeps the old text.
-3. Write it. Add `--seen <tool>` when the learning depends on a tool version:
-
-```bash
-printf '%s' "$BODY" | rota knowledge add --external --topic "<Technology>" --title "<Short rule title>" [--seen "<tool>"] --body-file -
-```
-
-The verb pulls, writes `topics/<slug>.md` (and the `README.md` line for a new topic), commits, then pushes or opens a PR by the repo's own policy, and prints which. It exits 4 on a dirty or diverged clone: report that in Step 8 and keep the learning for a rerun. External bullets carry no sha, no tier and no managed block, so Steps 5 and 6 do not apply to them.
+With a path set, read [`external-routing.md`](external-routing.md) and follow it: it decides project or external per learning and writes the external ones.
 
 ## Step 4 — Auto-Write
 
@@ -154,5 +141,7 @@ If verification ran and passed, add a middle line: `Opus verification: PASS — 
 - [`references/persistence-skills.md`](references/persistence-skills.md): shared spine and divergence axes for `/rota-learn` and `/rota-decide`, including `--term` for Glossary entries.
 - [`references/learn-rare-modes.md`](references/learn-rare-modes.md): `--external-review`, `--term`, `--promote`, `--deprecate`, `--amend`, `--remove`, and the contradiction queue.
 - [`umbrella-routing.md`](umbrella-routing.md): Step 5 / 6 `--repo` scope flag and scope question in umbrella mode.
+- [`external-routing.md`](external-routing.md): Step 3 project-or-external routing and external writes when `knowledge.external` is set.
+- [`worker-roles.md`](worker-roles.md): Step 1 role check for `support` machines and round workers.
 - [`topic-size.md`](topic-size.md): Step 8 nudge or auto-split for large topics.
 - [`verifier.md`](verifier.md): Step 7 Opus verifier dispatch, prompt and verdict rules.
