@@ -1076,7 +1076,8 @@ without that evidence do not prevent adoption; unreadable history is warned and 
 A failed verification after a landing freezes the landing queue. `rota round status`
 and the prompt digest show the frozen base, SHA and failed checks. Gate, train and
 assign refuse unrelated work until recovery. Name the repair with
-`rota round freeze --repair-issue 123` (or `--repair-pr 456` for an existing PR),
+`rota round freeze --repair-issue 123` (or `--repair-issue B07` on the file backend,
+or `--repair-pr 456` for an existing PR),
 then assign and gate it normally. A verified repair landing clears the freeze.
 After repairing outside the round, update your base checkout and run
 `rota round freeze --verify`. Verification requires a clean checkout of the frozen
@@ -1085,6 +1086,8 @@ otherwise it refuses with exit 4. CI checks that time out or never run stop the
 train without creating a freeze. To override the freeze deliberately, use
 `rota round freeze --clear --reason 'why verification can be bypassed'`;
 the reason is recorded in the gate audit. This also recovers an unreadable freeze
-record or a freeze whose base was deleted. A manual clear records the operator's
-current HEAD; replacing an unreadable record is noted in the audit. Status and the
-prompt digest warn about unreadable records and show the recovery command.
+record or a freeze whose base was deleted. A manual clear records the frozen base
+SHA when it resolves, otherwise the operator's current HEAD; replacing an unreadable
+record is noted in the audit. Plain `round freeze`, repair designation and verification
+refuse an unreadable record with exit 4 and the clear command. Status and the prompt
+digest warn about unreadable records and show the recovery command.
