@@ -139,7 +139,7 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 			out[roundwatch.EscalationStatusKey(r.Entry.ID)] = r.Status
 		}
 	}
-	renv := c.deps().RoundEnv(ctx, root)
+	renv := withBoard(c, root, c.deps().RoundEnv(ctx, root))
 	merged := map[string]bool{}
 	if rep, err := renv.Status(ctx, root); err == nil { // a bad round.* key is noted once by the config load below
 		for _, r := range rep.Rows {
@@ -153,9 +153,14 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 			c.Warn("merged-PR mark skipped: registry write failed: %v", err)
 		}
 		_, warnings := refreshMaintainerSnapshot(ctx, c, root, renv)
+		nextWarnings := map[string]bool{}
 		for _, warning := range warnings {
-			c.Warn("%s", warning)
+			if !c.maintainerWarnings[warning] && !nextWarnings[warning] {
+				c.Warn("%s", warning)
+			}
+			nextWarnings[warning] = true
 		}
+		c.maintainerWarnings = nextWarnings
 	}
 	set, err := c.deps().roundSettings(root, roundConfigUsage)
 	if err != nil {

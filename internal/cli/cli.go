@@ -81,6 +81,9 @@ type Ctx struct {
 	// mergedMarkNoted is set once `round watch` has warned that it could not
 	// write the merged-PR mark to the registry.
 	mergedMarkNoted bool
+	// maintainerWarnings is the last forge pass's warning set. Recovered
+	// warnings may be reported again if they recur, unchanged outages do not spam.
+	maintainerWarnings map[string]bool
 
 	// dashAt is how many positional arguments came before a bare "--", -1
 	// when there was none. Verbs that run a command after "--" need to tell.
