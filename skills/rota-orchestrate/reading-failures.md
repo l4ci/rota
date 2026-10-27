@@ -21,3 +21,12 @@ All three push the branch before moving the slot off it, so no work is lost. `ro
 **Red tests.** Before you bounce a PR for a red suite, rerun the failing test alone. Passes alone, fails under load: a flake; note it, don't send the worker back. Fails alone: real. A green suite that surprises you is worth one rerun.
 
 **Green branch, red base.** A branch can pass and still break once merged with the base: the gate's `verify-failed` verdict. The gate verifies a scratch merge before landing, so `data.changed` is false: the base is untouched and the slot goes back. Only with `data.changed` true (a `VERIFY-AGAIN` run on the landed base) is the base the problem: stop assigning, find which merge broke it, fix or revert before any other merge. Tell the maintainer.
+
+
+A failed verification after landing records a repository-wide freeze. Gate,
+train and assign refuse with `blockedBy: "freeze"` until recovery. Read
+`rota round freeze`, then designate the repair with `rota round freeze --repair-issue <id>`
+or `--repair-pr <pr>`. Assign and gate that repair normally; a verified repair
+landing clears the freeze. After a repair outside rota, update the frozen base
+checkout and run `rota round freeze --verify`. A deliberate override uses
+`rota round freeze --clear --reason "<why>"`, which records the reason in the gate audit.

@@ -83,7 +83,7 @@ Field types use JSON names (`string`, `number`, `bool`, `object`, `[]string`). `
 | skills | `install`, `update`, `uninstall`, `status`, `list`, `get` (F6a, #821) | F6a |
 | gate | `list` | B1 |
 | bugreport | `add`, `list`, `draft`, `duplicates`, `file`, `dismiss` | #1175 |
-| round | `wait` (C1), `status`, `reconcile` (C2), `start`, `candidates`, `assign`, `wind-down` (C3), `scope` (#900), `escalate send`, `escalate check` (C4), `return`, `transfer`, `reclaim` (C10), `report` (C8) | C1, C2, C3, C4, C10, C8 |
+| round | `freeze` (#2170), `wait` (C1), `status`, `reconcile` (C2), `start`, `candidates`, `assign`, `wind-down` (C3), `scope` (#900), `escalate send`, `escalate check` (C4), `return`, `transfer`, `reclaim` (C10), `report` (C8) | C1, C2, C3, C4, C10, C8 |
 | receipt | `show` (#959) | C13 |
 | doctor | `doctor` (C6; D1 adds `statusline` and `stop-hook` checks) | C6, D1 |
 | labels | `sync [--apply]` (#2136) | A4 |
