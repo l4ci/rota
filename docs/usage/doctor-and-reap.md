@@ -41,6 +41,8 @@ never exits 5.
 
 `agents` also appears only when something is wrong: it warns when a generated subagent file (`.claude/agents/rota-*.md`, and `.codex/agents/rota-*.toml` when Codex is configured) is missing or no longer matches the `roles.*` config. The hint is `run: rota agents write`. It never fails the run. See [`roles` keys](configuration.md#roles-keys-and-rota-agents-write).
 
+`gitignore` also appears only when managed ignore entries are missing, after `agents` when that warning is present. A complete managed `.gitignore` adds no row. A missing entry (including `.rota/flakes.jsonl`) reports `warn`, hints `run: rota init`, and leaves the exit status at 0 when no other check fails.
+
 `milestones` also appears only when something is wrong: it warns when milestones live on the tracker but `.rota/milestones/` still holds files from file mode, because no verb reads them. The hint is `run: rota migrate milestone-files --apply`. It never fails the run.
 
 `binary` also appears only when something is wrong. Run from a checkout of rota's own source (go.mod module `github.com/l4ci/rota`), doctor warns when the installed binary's commit is not the checkout's HEAD and HEAD changed non-test Go files under `cmd/` or `internal/` since it. The hint prints a rebuild command that keeps `Version` equal to `VERSION`, so the `skills` check still passes. `rota round start` prints the same warning, and `rota round watch` repeats it once per round. Elsewhere the check does not appear.
