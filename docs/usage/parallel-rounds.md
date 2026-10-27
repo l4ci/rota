@@ -386,15 +386,20 @@ blocking finding, when the gate sent it back at its current head (a push clears 
 it is already merged or closed. The autopilot assigns by itself, so
 a watch running with `--autopilot` skips the assign line but still prints the train line.
 
-The autopilot waits for every review verdict required at a done PR's head before
-gating it. If it cannot confirm review readiness or read the PR head, it reports
-the problem and waits. A merge conflict, failed verification (including CI and
+The autopilot checks the required review verdicts at a done PR's head before
+gating it. Missing reviews, an incomplete probe or an unreadable PR head make it
+report the problem and wait. A known PR identity or state verdict goes to the real
+gate, which handles mismatches and already-merged PRs; it also checks reviews
+before merging. A merge conflict, failed verification (including CI and
 train checks), or vacuous-test result holds that head across watch
 restarts, worker busy/done transitions, and moving the PR into the review queue;
 a push with a new head permits another attempt. A train member skipped because
 another member failed can still run. Temporary refusals such as a busy gate,
 forge trouble, train order, missing CI or a verification timeout retry on the
-next tick without a push. A held-head message says to push a new head to retry.
+next tick without a push. Configuration, approval and assignment refusals
+(`ci-config-changed`, `no-verify`, `stale-attempt`) also retry: those conditions
+can change without changing the PR head. The first `gate-failed` report for a
+held head and later reports all say to push a new head to retry.
 
 `rota worker dispatch` and `--relay` check what is on the prompt line before they type. A typed human
 draft is refused as a draft (exit 5, nothing sent). The autocompact settings picker is dismissed once

@@ -373,7 +373,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 			r.Held[t] = why
 			detail := why
 			if e.Head != nil {
-				detail += "; held at PR head; push a new head to retry"
+				detail += heldHeadHint
 			}
 			r.NeedsYou = append(r.NeedsYou, Item{"gate-failed", t, detail})
 			continue
@@ -403,11 +403,16 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 					r.FailedHeads[m.Target] = FailedHead{Head: head, Why: why}
 				}
 			}
+			if e.Head != nil && failedHeadVerdict(m.Verdict) {
+				why += heldHeadHint
+			}
 			r.NeedsYou = append(r.NeedsYou, Item{"gate-failed", m.Target, why})
 		}
 	}
 	return nil
 }
+
+const heldHeadHint = "; held at PR head; push a new head to retry"
 
 // failedHeadVerdict identifies results that judged the head's content. A CI
 // failure and a failed train verification both use GateVerifyFailed; merge
