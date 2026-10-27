@@ -1085,35 +1085,22 @@ func (e Env) bundleMembers(be Board, o AssignOpts, lead *backlog.Item, slot *wor
 		} else if bestOf {
 			return nil, blocked(BlockBundle, "bundle member %s is labelled %s and cannot be bundled", m.ID, BestOfLabel)
 		}
-		if who := bundleHolder(reg, id, slot.Name(), resuming); who != "" {
+		opts := worker.HolderOpts{Lead: true}
+		if resuming {
+			opts.Skip = slot.Name()
+		}
+		if hs, hq := reg.BundleHolder(id, opts); hs != nil || hq != nil {
+			who := "the queued PR of "
+			if hs != nil {
+				who = "slot " + hs.Name()
+			} else {
+				who += hq.From
+			}
 			return nil, blocked(BlockClaimed, "bundle member %s is already held by %s", m.ID, who)
 		}
 		out = append(out, m)
 	}
 	return out, nil
-}
-
-// bundleHolder names what holds id (a slot's lead or member, or a queued PR's):
-// "" for none. The slot own, when it resumes its bundle, holds its members.
-func bundleHolder(reg worker.Registry, id, own string, resuming bool) string {
-	for _, s := range reg.Slots() {
-		if resuming && s.Name() == own {
-			continue
-		}
-		for _, h := range s.BundleIssues() {
-			if worker.NormID(h) == id {
-				return "slot " + s.Name()
-			}
-		}
-	}
-	for _, q := range reg.PRs() {
-		for _, h := range q.Issues() {
-			if worker.NormID(h) == id {
-				return "the queued PR of " + q.From
-			}
-		}
-	}
-	return ""
 }
 
 // sameSet reports whether a and b hold the same ids, in any order.

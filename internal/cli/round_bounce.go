@@ -110,7 +110,7 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 // bundleHolder is the slot (or the queued PR's origin slot) and the lead of the
 // bundle that holds issue as a member; lead is "" when issue is no member.
 func bundleHolder(root, issue string) (slot, lead string) {
-	s, q := worker.LoadRegistryTolerant(root).BundleHolder(issue)
+	s, q := worker.LoadRegistryTolerant(root).BundleHolder(issue, worker.HolderOpts{})
 	switch {
 	case s != nil:
 		return s.Name(), s.HeldID()
