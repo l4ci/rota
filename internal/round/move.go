@@ -579,7 +579,7 @@ type TransferOpts struct {
 	// Tier and TierReason are the receiver's tier ("" is round.tier); one above
 	// the default needs a reason, as in assign. Unused when To is the human.
 	Tier, TierReason string
-	// Kind and Model override the item's labels, as in assign. Unused when
+	// Kind and Model override the item's labels, as in assign. Refused when
 	// To is the human.
 	Kind, Model string
 	// CapReason says why an item at the bounce cap moves: ledger.CapAmbiguousCriteria
@@ -687,6 +687,9 @@ func (o TransferOpts) checkFlags(set roundcfg.Settings) (toHuman bool, reason st
 	toHuman = o.To == HumanTarget
 	if o.To == "" || (!toHuman && !slices.Contains(set.Roster, o.To)) {
 		return false, "", usage("--to must be %s or a roster slot (%s)", HumanTarget, strings.Join(set.Roster, ", "))
+	}
+	if toHuman && (o.Kind != "" || o.Model != "") {
+		return false, "", usage("--kind and --model require --to <slot>, not --to human")
 	}
 	switch {
 	case o.CapReason == "":
