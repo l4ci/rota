@@ -245,6 +245,57 @@ Affects `/rota-work` and other solo sessions. `warn` (default), `auto` or `off`.
 rota config set work.contextGuard auto
 ```
 
+## Checking whether tests depend on a change
+
+`test.vacuousCheck` defaults to `false`. Set it to `true` to make `rota worker gate`
+and `rota worker train` check whether added or changed tests fail without their
+non-test changes. The settings come from the base checkout, so a PR cannot disable
+its own check.
+
+```sh
+rota config set test.vacuousCheck true
+```
+
+`test.filePattern` is a regular expression over repository-relative paths. Its
+Go default, `_test\.go$`, selects Go test files. `test.vacuousCommand` defaults to
+`go test -json -count=1 {packages} -run {tests}`: it runs test, example and fuzz entry
+points in the changed test files, including their subtests, with caching disabled.
+`{packages}` expands to those files' Go packages and `{tests}` to an anchored
+expression of their entry-point names. `{files}` expands to the changed test paths.
+Every expansion is shell-quoted; leave the placeholders unquoted in the template.
+The command must prepare any dependencies needed in a fresh checkout and disable
+its test cache.
+For Python, for example:
+
+```sh
+rota config set test.filePattern '(^|/)(test_[^/]+|[^/]+_test)\.py$'
+rota config set test.vacuousCommand 'python -m pytest {files}'
+```
+
+After normal verification passes, the check makes a disposable worktree of the
+merge. The selected command must pass there. It then restores the merge's changed
+non-test files from the preceding base, keeping the test changes, and runs the
+same command again. If it still passes, the gate refuses with exit 4 and
+`blockedBy: vacuous-tests`, naming the test files. A nonzero test exit passes this
+check; this establishes dependence on the change, not assertion quality. A
+cancelled run or a counterfactual command that cannot execute is `check-broke`.
+
+A tests-only PR skips the check because it has no non-test changes to revert.
+A PR with no surviving added or changed test files, only docs or skills, or no
+runnable Go entry points also gets a `VACUOUS-SKIP` note. With the default Go
+command, JSON events must show at least one selected test completing without a
+skip on each successful run. If build constraints exclude all selected tests or
+they all skip on either run, the check reports an inconclusive `VACUOUS-SKIP`
+instead of refusing the PR. Custom commands supply their own test selection and
+execution semantics. Tests that already fail on the merge are `verify-failed`.
+The train checks each member against its preceding merged prefix, so an earlier
+member's code stays present.
+A failing member refuses the whole train, including with `--land-green`; the
+full-tier cache never substitutes for this check. The check runs locally even
+with `test.fullWhere: ci`. Gate `--check-only` and a train's landing gates do not
+run it; train `--plan` also skips it. Both gate and train `--no-verify` skip this
+check.
+
 ## test.fast, test.full, test.e2e
 
 Three tiers of shell commands, each an array defaulting to `[]`:
@@ -806,7 +857,7 @@ Outside a project, rota follows the XDG Base Directory spec. An `XDG_*` variable
 
 An older rota kept `projects.json` in the config dir. The first run after upgrading moves it to the state dir and removes the old copy; a registry already in the state dir wins.
 
-`rota init` and `rota setup` leave projects in temporary storage out of this registry: paths under `$TMPDIR`, `/tmp` or macOS's `/var/folders` (including `/private/var/folders`), after resolving symlinks. Init still seeds the project and prints `project not registered: temporary directory`. `rota projects cleanup` removes older temp entries as well as missing projects and projects that no longer hold `.rota/`; it lists each removed entry and leaves the project files alone. Plain `rota projects` keeps listing existing entries until you remove them.
+`rota init` and `rota setup` leave projects in temporary storage out of this registry: paths under `$TMPDIR`, `/tmp` or macOS's `/var/folders` (including `/private/var/folders`), after resolving symlinks. Init still seeds the project and prints `project not registered: temporary directory`. `rota projects cleanup` removes older temp entries as well as missing projects and projects that no longer hold `.rota/`; it lists each removed entry and leaves the project files alone. Temporary removals have a `(temporary)` column in text output; JSON rows add `reason: "temporary"` or `reason: "stale"`. When nothing is removed, text output says `noop: no stale or temporary projects`. Plain `rota projects` keeps listing existing entries until you remove them.
 
 ## rota.version (auto-managed)
 

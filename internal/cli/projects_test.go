@@ -175,6 +175,78 @@ func TestProjectsCleanupWithoutRegistryCreatesNothing(t *testing.T) {
 	}
 }
 
+func TestProjectsCleanupExplainsRemovals(t *testing.T) {
+	for _, jsonOutput := range []bool{false, true} {
+		t.Run(map[bool]string{false: "text", true: "json"}[jsonOutput], func(t *testing.T) {
+			projectsXDG(t)
+			root := t.TempDir()
+			temp := filepath.Join(root, "temporary")
+			d := testDeps()
+			d.TempDirs = func() []string { return []string{temp} }
+			env := d.projectsEnv()
+			stamp := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			var wantLines []string
+			var wantRows []any
+			for _, tc := range []struct {
+				name, reason string
+				exists, rota bool
+			}{
+				{"temporary", "temporary", true, true},
+				{"temporary/gone", "temporary", false, false},
+				{"gone", "stale", false, false},
+				{"bare", "stale", true, false},
+				{"live", "", true, true},
+			} {
+				path := filepath.Join(root, tc.name)
+				if tc.exists {
+					dir := path
+					if tc.rota {
+						dir = filepath.Join(path, ".rota")
+					}
+					if err := os.MkdirAll(dir, 0o755); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if _, err := projects.Register(env, path, stamp); err != nil {
+					t.Fatal(err)
+				}
+				if tc.reason == "" {
+					continue
+				}
+				path = repos.Realpath(path)
+				name := filepath.Base(path)
+				line := "removed\t" + name + "\t" + path
+				if tc.reason == "temporary" {
+					line += "\t(temporary)"
+				}
+				wantLines = append(wantLines, line)
+				wantRows = append(wantRows, knObj("name", name, "path", path, "lastSeen", "2026-01-01T00:00:00Z", "reason", tc.reason))
+			}
+			if jsonOutput {
+				code, result, _ := initRunWith(t, d, root, "projects", "cleanup")
+				rows, _ := initData(result).Get("removed")
+				changed, _ := initData(result).Get("changed")
+				if code != 0 || changed != true || !reflect.DeepEqual(rows, wantRows) {
+					t.Errorf("cleanup: exit %d changed %v removed %v; want %v", code, changed, rows, wantRows)
+				}
+			} else {
+				code, out, _ := runMainWith(d, "projects", "cleanup")
+				if want := strings.Join(wantLines, "\n") + "\n"; code != 0 || out != want {
+					t.Errorf("cleanup: exit %d output %q; want %q", code, out, want)
+				}
+			}
+			code, out, _ := runMainWith(d, "projects", "cleanup")
+			if code != 0 || out != "noop: no stale or temporary projects\n" {
+				t.Errorf("second cleanup: exit %d output %q", code, out)
+			}
+			kept, err := projects.List(env)
+			if err != nil || len(kept) != 1 || kept[0].Path != repos.Realpath(filepath.Join(root, "live")) {
+				t.Errorf("kept projects: %+v, %v", kept, err)
+			}
+		})
+	}
+}
+
 func TestProjectsRemoveDropsOneEntryAndKeepsTheDirectory(t *testing.T) {
 	projectsXDG(t)
 	a, b := t.TempDir(), t.TempDir()

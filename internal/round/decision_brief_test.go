@@ -76,7 +76,7 @@ func TestAssignNamedDecisionTopics(t *testing.T) {
 	writeBriefDecisions(t, f.root, briefDecisionFixture)
 	if _, err := f.assign("12", "ben", func(o *AssignOpts) {
 		o.DecisionTopics = []string{"Architecture", "Rounds", "Architecture"}
-		o.Decisions = "m: Keep the CLI spelling."
+		o.SettledAnswers = "m: Keep the CLI spelling."
 	}); err != nil {
 		t.Fatal(err)
 	}
