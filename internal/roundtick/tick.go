@@ -90,7 +90,10 @@ type Env struct {
 	// TrainFill holds automatic merges until the count or age rule fires.
 	// ReadySince reads the current-head review time; unknown times cannot
 	// trigger the age rule. Now defaults to time.Now.
-	TrainFill  roundcfg.TrainFill
+	TrainFill roundcfg.TrainFill
+	// TrainReady excludes PRs that are no longer reviewed and ready from
+	// configured fill decisions. Nil accepts the already selected targets.
+	TrainReady func(string) bool
 	ReadySince func(string) time.Time
 	Now        func() time.Time
 	// MergeApproval is ship.mergeApproval: any mode but none (empty
@@ -315,6 +318,9 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 		if why, held := e.Held[t]; held {
 			r.Held[t] = why
 			r.NeedsYou = append(r.NeedsYou, Item{"gate-failed", t, why})
+			continue
+		}
+		if e.TrainFill.Enabled() && e.TrainReady != nil && !e.TrainReady(t) {
 			continue
 		}
 		if e.TrainFill.Enabled() || len(run) < e.cap() {

@@ -127,7 +127,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	// Read once, after reconciliation, using the same current-head review
 	// timestamps as the nudge. A missing timestamp leaves the count rule usable.
 	var readySince map[int]time.Time
-	e.ReadySince = func(target string) time.Time {
+	lookupReady := func(target string) (time.Time, bool) {
 		if readySince == nil {
 			readySince = map[int]time.Time{}
 			for _, w := range waitingPRs(c, root) {
@@ -138,10 +138,19 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		}
 		t, err := e.Target(target)
 		if err != nil {
-			return time.Time{}
+			return time.Time{}, false
 		}
 		n, _ := worker.PRRefNumber(t.PR)
-		return readySince[n]
+		at, ready := readySince[n]
+		return at, ready
+	}
+	e.TrainReady = func(target string) bool {
+		_, ready := lookupReady(target)
+		return ready
+	}
+	e.ReadySince = func(target string) time.Time {
+		at, _ := lookupReady(target)
+		return at
 	}
 	e.Role = set.Role
 	e.RunGate = func(_ context.Context, target, base string) roundtick.GateRun {
