@@ -54,6 +54,8 @@ if name.startswith("go:"):
     pkg = "github.com/l4ci/rota/internal/example"
     if failed and os.environ.get("GO_TIMEOUT") == "1":
         print(json.dumps(dict(Action="output", Package=pkg, Output="panic: test timed out after 30m")))
+    if failed and os.environ.get("GO_INFRA"):
+        print(json.dumps(dict(Action="output", Package=pkg, Output=os.environ["GO_INFRA"])))
     output = "--- FAIL: TestUnderLoad (0s)\\nFAIL\\n" if failed else "ok example/pkg\\n"
     print(json.dumps(dict(Action="output", Package=pkg, Output=output)))
     print(json.dumps(dict(Action="fail" if failed else "pass", Package=pkg)))
@@ -93,6 +95,13 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
 
     def test_go_timeout_is_not_retried(self):
         self.env["GO_TIMEOUT"] = "1"
+        result, calls = self.run_gate("go:internal/example")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(max(c["n"] for c in calls), 1, calls)
+        self.assertNotIn("FLAKY", result.stdout)
+
+    def test_go_infrastructure_failure_is_not_retried(self):
+        self.env["GO_INFRA"] = "fork/exec compiler: resource temporarily unavailable"
         result, calls = self.run_gate("go:internal/example")
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertEqual(max(c["n"] for c in calls), 1, calls)

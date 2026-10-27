@@ -1,7 +1,18 @@
 """Select failed packages and their output from go test -json gate logs."""
 import json
 from pathlib import Path
+import re
 import sys
+
+
+# Keep these rejection shapes aligned with internal/worker/flaky.go. An
+# assertion in one package must not hide an infrastructure failure alongside it.
+infrastructure = re.compile(
+    r"signal:|\bkilled\b|\[build failed\]|\[setup failed\]|^panic:|fatal error:|"
+    r"test timed out|context deadline exceeded|resource temporarily unavailable|"
+    r"cannot allocate memory|no space left on device|permission denied|command not found|"
+    r"executable file not found|fork/exec|connection refused|network is unreachable|i/o timeout",
+    re.I | re.M)
 
 
 def events(path):
@@ -10,7 +21,9 @@ def events(path):
             try:
                 event = json.loads(line)
             except ValueError:
-                continue  # go may print build diagnostics outside the JSON stream
+                # go can print build diagnostics outside the JSON stream.
+                yield {"Output": line}
+                continue
             if isinstance(event, dict):
                 yield event
 
@@ -21,7 +34,7 @@ if sys.argv[1] == "failed":
     for event in events(sys.argv[2]):
         package, action = event.get("Package"), event.get("Action")
         output = event.get("Output", "")
-        if "panic: test timed out" in output or event.get("FailedBuild"):
+        if infrastructure.search(output) or event.get("FailedBuild"):
             ineligible = True
         if not package or event.get("Test"):
             continue
