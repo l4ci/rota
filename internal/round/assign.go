@@ -981,7 +981,17 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 // notReadyBy is the blockedBy of a failed readiness: overlap when only the
 // overlap check failed, else not ready.
 func notReadyBy(r Readiness) string {
-	if len(r.Checks) == 3 && r.Checks[0].OK && r.Checks[1].OK && !r.Checks[2].OK {
+	overlapFailed := false
+	for _, check := range r.Checks {
+		if check.OK {
+			continue
+		}
+		if check.Name != CheckOverlap {
+			return BlockNotReady
+		}
+		overlapFailed = true
+	}
+	if overlapFailed {
 		return BlockOverlap
 	}
 	return BlockNotReady

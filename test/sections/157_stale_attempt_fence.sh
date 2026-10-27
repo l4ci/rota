@@ -14,7 +14,7 @@ SP="$SA/proj"
 SAENV="env -u HERDR_ENV -u HERDR_PANE_ID -u TMUX -u TMUX_PANE"
 sa() { ( cd "$SP" && $SAENV "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 sareg() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(eval(sys.argv[2]))' "$SP/.rota/workers.json" "$1"; }
-sa item create --kind features --title "Fenced item" --body-file - <<<$'## Acceptance\n- [ ] works\nTouches internal/a.go' >/dev/null || fail "item create failed"
+sa item create --kind features --title "Fenced item" --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] works\nTouches internal/a.go' >/dev/null || fail "item create failed"
 printf 'stub worker contract\n' > "$SA/contract.md"
 sa config set round.brief "$SA/contract.md" >/dev/null
 sa config set ship.review none >/dev/null

@@ -1,5 +1,5 @@
 // Package itembody owns the headings an item body may carry that rota reads or
-// writes: Depends on, Files, Touches and Capabilities. The writer (rota item create) and the reader
+// writes, including per-kind templates, Depends on, Files, Touches and Capabilities. The writer (rota item create) and the reader
 // (the round readiness check) both go through here, so the grammar is spelled
 // once and pinned by a round-trip test.
 package itembody

@@ -39,6 +39,26 @@ rc=0
 OUT=$(bc item create --kind tasks --title TBD) || rc=$?
 [ "$rc" -eq 2 ] || fail "placeholder title: want exit 2, got $rc"
 
+# The binary owns per-kind templates; missing sections warn without losing a capture.
+OUT=$(bc item template --kind features --tag Major) || vfail
+for section in '## Acceptance' '## Out of scope' '## Touches'; do
+  case "$OUT" in *"$section"*) ;; *) fail "feature template omitted $section: $OUT" ;; esac
+done
+OUT=$(bc item template --kind bugs) || vfail
+for section in '## Repro' '## Expected' '## Actual'; do
+  case "$OUT" in *"$section"*) ;; *) fail "bug template omitted $section: $OUT" ;; esac
+done
+OUT=$(bc item template --kind tasks) || vfail
+case "$OUT" in *required*) fail "task template requires sections: $OUT" ;; esac
+OUT=$(bc item create --kind features --tag Cosmetic --title 'Warn about missing sections') || vfail
+for section in '## Acceptance' '## Out of scope'; do
+  case "$OUT" in *"missing required section: $section"*) ;; *) fail "create missed $section warning: $OUT" ;; esac
+done
+OUT=$(bc item create --kind bugs --title 'Capture an incomplete report') || vfail
+for section in '## Repro' '## Expected' '## Actual'; do
+  case "$OUT" in *"missing recommended section: $section"*) ;; *) fail "bug create missed $section warning: $OUT" ;; esac
+done
+
 rm -rf "$TMP_BC"
 trap 'rm -rf "$TMP"' EXIT
 pass "item create --batch-file pairs titles with bodies"

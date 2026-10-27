@@ -33,8 +33,8 @@ cx() { ( cd "$CX" && $CXENV "$@" ); }
 cxrc() { RC=0; OUT=$( cd "$CX" && $CXENV "$ROTA_BIN" --json "$@" 2>"$TMP_CX/err" ) || RC=$?; ERR=$(cat "$TMP_CX/err"); }
 cxc() { ( cd "$CX" && "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 
-cxc item create --kind features --title First --milestone M01 --body-file - <<<$'## Acceptance\n- [ ] works\nTouches internal/a.go' >/dev/null
-cxc item create --kind features --title Second --milestone M01 --body-file - <<<$'## Acceptance\n- [ ] ok\nTouches internal/b.go' >/dev/null
+cxc item create --kind features --title First --milestone M01 --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] works\nTouches internal/a.go' >/dev/null
+cxc item create --kind features --title Second --milestone M01 --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] ok\nTouches internal/b.go' >/dev/null
 HOLDER=$$
 # A herdr round: the host is fixed when the round starts (C8), so set it first.
 cxc config set round.dispatch herdr >/dev/null || fail "config set round.dispatch failed"

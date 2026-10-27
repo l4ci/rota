@@ -24,7 +24,7 @@ pass "an empty candidate list carries a reason and the next command"
 
 # One item with no criteria (not ready), one with criteria, no milestone anywhere.
 nm item create --kind features --title "Bare" --body-file - <<<'Touches internal/a.go' >/dev/null
-nm item create --kind features --title "Ready" --body-file - <<<$'## Acceptance\n- [ ] works\nTouches internal/b.go' >/dev/null
+nm item create --kind features --title "Ready" --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] works\nTouches internal/b.go' >/dev/null
 OUT=$(nm round start --holder-pid "$HOLD" --slots 1) || fail "start failed: $OUT"
 [ "$(echo "$OUT" | jget data.scope)" = "milestone" ] && [ "$(echo "$OUT" | jget data.fellBack)" = "true" ] \
   || fail "start with no milestone should fall back and say so: $OUT"
@@ -34,7 +34,7 @@ pass "no unfinished milestone: the default scope offers every open item"
 # A not-ready item reaches assign when the brief carries its acceptance criteria.
 RC=0; OUT=$(nm round assign F01 --holder-pid "$HOLD") || RC=$?
 [ "$RC" = "4" ] || fail "a bare item should be refused without criteria: rc=$RC $OUT"
-printf '## Acceptance\n- [ ] the bare item works\n' > "$NM/brief.md"
+printf '## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] the bare item works\n' > "$NM/brief.md"
 OUT=$(nm round assign F01 --holder-pid "$HOLD" --body-file "$NM/brief.md") || fail "assign with criteria in the brief failed: $OUT"
 [ "$(echo "$OUT" | jget data.agent)" = "ben" ] || fail "F01 should go to ben: $OUT"
 pass "assign --body-file with acceptance criteria stands in for a plan note"
