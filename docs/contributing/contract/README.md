@@ -86,6 +86,7 @@ Field types use JSON names (`string`, `number`, `bool`, `object`, `[]string`). `
 | round | `wait` (C1), `status`, `reconcile` (C2), `start`, `candidates`, `assign`, `wind-down` (C3), `scope` (#900), `escalate send`, `escalate check` (C4), `return`, `transfer`, `reclaim` (C10), `report` (C8) | C1, C2, C3, C4, C10, C8 |
 | receipt | `show` (#959) | C13 |
 | doctor | `doctor` (C6; D1 adds `statusline` and `stop-hook` checks) | C6, D1 |
+| labels | `sync [--apply]` (#2136) | A4 |
 | statusline | `dump` (D1) | D1 |
 | hook | `stop`, `session-start`, `install`, `uninstall` (D1) | D1 |
 | keepalive | `run`, `status` (D2); `run --first-prompt` (#19) | D2 |
@@ -100,7 +101,7 @@ The entries live one file per verb group, so a change to one group does not conf
 | File | Section | Verbs |
 |---|---|---|
 | [version-config-repo.md](version-config-repo.md) | A3 and A4 | `version`, `update`, `config`, `repo` |
-| [backlog.md](backlog.md) | A4 | `id`, `item` (including `item template`), `backlog`, `summary`, `issues`, `status`, `refactor`, `migrate issues` |
+| [backlog.md](backlog.md) | A4 | `id`, `item` (including `item template`), `backlog`, `summary`, `issues`, `labels`, `status`, `refactor`, `migrate issues` |
 | [knowledge.md](knowledge.md) | A5 | `knowledge`, `decisions`, `glossary`, `block`, `instructions`, `map`, `qa`, `migrate hv`, `migrate external-knowledge` |
 | [milestones.md](milestones.md) | A6 | `milestone`, `plan`, `design`, `spike`, `proof`, `debug` |
 | [workers.md](workers.md) | A7 | `worker` (pool, dispatch, poll, gate, session, account), `test run`, `test ledger check` |

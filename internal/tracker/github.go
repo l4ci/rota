@@ -220,7 +220,7 @@ func (g *GitHub) EnsureLabels(ctx context.Context, names []string, autoCreate bo
 		return nil
 	}
 	var have []struct{ Name string }
-	if err := g.json(ctx, []string{"label", "list", "--json", "name", "--limit", "1000"}, &have); err != nil {
+	if err := g.list(ctx, []string{"label", "list", "--json", "name"}, ghLimit, ghPaging, &have); err != nil {
 		return err
 	}
 	set := map[string]bool{}
@@ -235,7 +235,11 @@ func (g *GitHub) EnsureLabels(ctx context.Context, names []string, autoCreate bo
 			// A missing label is a missing object (exit 3); Code stays 1, as Python's.
 			return &Error{Kind: KindNotFound, Code: 1, Message: fmt.Sprintf("label '%s' does not exist (issues.autoCreateLabel is off)", n)}
 		}
-		if _, err := g.run(ctx, []string{"label", "create", n, "--force"}, ""); err != nil {
+		args := []string{"label", "create", n, "--force"}
+		if lb, ok := labelMetadata(n, g.labelEntries); ok {
+			args = append(args, "--description", lb.Description, "--color", labelColor(lb.Color))
+		}
+		if _, err := g.run(ctx, args, ""); err != nil {
 			return err
 		}
 	}

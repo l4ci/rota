@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/labels"
 )
 
 // Harness kinds of a worker.
@@ -37,7 +38,7 @@ const (
 var kinds = []string{Claude, Codex, OpenCode}
 
 // LabelPrefix starts a label that names the harness an issue runs on.
-const LabelPrefix = "harness:"
+const LabelPrefix = labels.HarnessPrefix
 
 // FromLabels is the kind the first valid harness:<kind> label names, "" when
 // none does. Worker picking and the review depth both read labels through it,

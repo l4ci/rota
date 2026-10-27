@@ -12,7 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
-// Only internal/config and cli/deps.go read the project config from disk; every
+// Runtime config reads stay in internal/config and cli/deps.go; every
 // verb and leaf package takes it from Deps.Config (a loaded value or a loader
 // func), so a test can swap in an in-memory config.
 func TestConfigLoadsStayOnDeps(t *testing.T) {
@@ -23,7 +23,9 @@ func TestConfigLoadsStayOnDeps(t *testing.T) {
 				return err
 			}
 			rel := filepath.ToSlash(strings.TrimPrefix(path, root+string(filepath.Separator)))
-			if strings.HasPrefix(rel, "internal/config/") || rel == "internal/cli/deps.go" {
+			// The standalone reference generator has no invocation Deps. Its explicit
+			// --config input uses the canonical loader; runtime consumers stay guarded.
+			if strings.HasPrefix(rel, "internal/config/") || rel == "internal/cli/deps.go" || rel == "internal/labels/genref/main.go" {
 				return nil
 			}
 			b, err := os.ReadFile(path)

@@ -18,6 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -778,7 +779,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		}
 		for _, q := range reg.PRs() {
 			if queuedIssue(q) == worker.NormID(id) {
-				holders = append(holders, "review:"+q.From)
+				holders = append(holders, labels.ReviewPrefix+q.From)
 			}
 		}
 		if len(holders) > 1 {

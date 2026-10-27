@@ -3,6 +3,7 @@ refs:
   - internal/backlog
   - internal/cli/backlog.go
   - internal/cli/item.go
+  - internal/cli/labels.go
   - internal/cli/item_template.go
   - internal/itembody
 ---
@@ -276,6 +277,15 @@ data: {"backlog": {"bugs": number, "features": number, "tasks": number}, "active
 exit: tracker
 old: hv-summary
 shim: parse the labelled lines (`Backlog:`, `Active:` one per entry, `Recent:` top 3, `Active milestones:`, `Knowledge:`, `Decisions:`, `Archive:`); an absent line gives an empty list or an absent object. `topics` holds the names as printed (old truncates to a few). The placeholder `No .rota/ yet` becomes the root-not-found error (3).
+
+### rota labels sync
+rota labels sync [--apply]
+repo: scoped
+data: {"apply": bool, "writable": bool, "changed": bool, "changes": [{"kind": "missing"|"metadata"|"default-overlap"|"unused-claim"|"unknown", "name": string, "description": string, "color": string, "current"?: {"name": string, "description": string, "color": string}}]}
+exit: 3 with the file backend (there are no tracker labels); 5 when the tracker cannot list label definitions; tracker
+old: none (#2136)
+note: dry run by default: no tracker writes, including when labels are missing. The registry resolves configured names, project extras and review labels. All open issues are read without backlog filters to identify claim labels still in use; a closed issue does not keep a claim definition active. A read failure stops before any writes.
+note: with --apply, GitHub, GitLab and Linear create missing fixed labels and finite families and correct descriptions and colors of known labels. Open prefixes update existing definitions only. Tracker defaults that overlap rota labels, unused claim definitions and unknown labels (including retired names) are report-only: never changed, renamed or deleted. Jira and It's a Plan support names only and stay report-only even with --apply; writable is false and metadata differences are omitted. changed is true after any successful upsert; an apply failure returns the measured changes and whether earlier writes succeeded.
 
 ### rota issues label
 rota issues label <issue|key> (--add <name> | --remove <name>)

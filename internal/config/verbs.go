@@ -12,6 +12,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 )
@@ -454,6 +455,12 @@ func validateValue(key string, value any) error {
 	}
 	if key == ReviewKey {
 		if _, err := ParseReviewPolicy(value); err != nil {
+			return fmt.Errorf("%w for %s: %v", ErrBadValue, key, err)
+		}
+		return nil
+	}
+	if key == labels.ExtraKey {
+		if _, err := ExtraLabels(value); err != nil {
 			return fmt.Errorf("%w for %s: %v", ErrBadValue, key, err)
 		}
 		return nil

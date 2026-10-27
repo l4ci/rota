@@ -7,6 +7,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitmap"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -130,7 +131,7 @@ func (c *crossMilestones) check(it backlog.Item) ([]string, error) {
 		if dep.Closed {
 			tags = nil
 			for _, label := range dep.Labels {
-				if id, ok := strings.CutPrefix(label, "on-milestone/"); ok && id != "" {
+				if id, ok := strings.CutPrefix(label, labels.OnMilestonePrefix); ok && id != "" {
 					tags = append(tags, id)
 				}
 			}

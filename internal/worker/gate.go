@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/overlap"
@@ -135,7 +136,7 @@ const AttemptTrailer = "Rota-Attempt"
 
 // PartialSliceLabel marks an issue whose PR lands only a slice of it, so the PR
 // body must not close it.
-const PartialSliceLabel = "partial-slice"
+const PartialSliceLabel = labels.PartialSlice
 
 // noVerifyRefusal is the message and hint of the refusal for an empty
 // test.full under a local verify, shared by the gate and the train.
@@ -1954,7 +1955,7 @@ func (g *gate) ffFailureCause(mergeOut string) string {
 // milestone closes also release each successful issue's labels independently.
 func (g *gate) closeMerged(src tracker.ClosingSource) bool {
 	if id, ok := strings.CutPrefix(g.o.Base, "milestone/"); ok && id != "" && g.issues != nil {
-		return g.closeOnMilestone(src, "on-milestone/"+id)
+		return g.closeOnMilestone(src, labels.OnMilestonePrefix+id)
 	}
 	mc, ok := g.issues.(tracker.MergeCloser)
 	if !ok {
