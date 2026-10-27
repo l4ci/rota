@@ -44,7 +44,10 @@ active = root / (name.replace("/", "_") + ".active")
 if n > 1 and list(root.glob("*.active")):
     raise SystemExit("retry overlapped initial checks")
 active.touch()
-time.sleep(0.04)
+# Keep a later initial check alive after the failing check exits, so the
+# isolation assertion cannot pass merely because every stub finished quickly.
+slow = (name == "smoke-shard1" and os.environ.get("FAIL_CHECK") == "go:internal/example") or (name == "go:internal/example" and os.environ.get("FAIL_CHECK") == "smoke-shard1")
+time.sleep(0.4 if n == 1 and slow else 0.04)
 active.unlink()
 mode = os.environ.get("FAIL_CHECK", "")
 failed = name == mode and (n == 1 or os.environ.get("FAIL_TWICE") == "1")
