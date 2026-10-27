@@ -36,6 +36,7 @@ const BlockedByVerdict = blockedby.Verdict
 // verdictMeanings classifies every gate and train verdict. A verdict missing
 // here fails TestVerdictsAreClassified.
 var verdictMeanings = map[string]VerdictMeaning{
+	GateFreeze:             {Refusal: true, BlockedBy: blockedby.Freeze, Hold: true},
 	GateFresh:              {Success: true, Hold: true},
 	GatePass:               {Success: true, Hold: true},
 	GateStale:              {Notify: true},

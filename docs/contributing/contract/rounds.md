@@ -1,6 +1,7 @@
 ---
 refs:
   - internal/round
+  - internal/landfreeze
   - internal/worker
   - internal/roundcfg
   - internal/cli/round.go
@@ -18,7 +19,7 @@ refs:
 
 ## C: rounds
 
-The `round` group is the orchestrator layer over the same slot registry (`.rota/workers.json`) and host package as `rota worker`. It adds no second state file. Each verb below owns its entry.
+The `round` group is the orchestrator layer over the same slot registry (`.rota/workers.json`) and host package as `rota worker`. Landing freezes live under the git common directory; each verb below owns its entry.
 
 ### rota round wait
 rota round wait [<slot>...] [--timeout <seconds>] [--settle <seconds>] [--lines <n>]
@@ -82,7 +83,7 @@ note: no `ROTA_TEST_*` hooks. The smoke section (114) uses the gh and tmux fakes
 ### rota round status
 rota round status
 repo: none
-data: {"slots": []row, "staleClaims"?: []finding, "drift": number, "unavailable": []string, "host"?: string, "escalations": []escalationRow, "limits": []limit, "review": []reviewRow, "cap"?: {"effective": number, "roster": number, "reason": string, "resumesAt": string}}
+data: {"freeze"?: object, "slots": []row, "staleClaims"?: []finding, "drift": number, "unavailable": []string, "host"?: string, "escalations": []escalationRow, "limits": []limit, "review": []reviewRow, "cap"?: {"effective": number, "roster": number, "reason": string, "resumesAt": string}}
 exit: 2 when a `round.*` key (or `round.itemTimeoutMinutes`) is invalid (the message names the key; nothing is reported or repaired); 3 when there is no project root; 5 when git fails. Also 3 when `git.baseBranch` is set and does not resolve (the message names the key; never replaced by a conventional name).
 old: none (new in C2)
 note: `row` is `{"name": string, "agent"?: string, "issue"?: string, "branch": string, "pr"?: string, "prState"?: string, "hostState"?: string, "evidence"?: string, "state"?: string, "tab"?: string, "registered": bool, "drift": []string, "escalations": []string, "kind"?: string, "kindSource"?: string, "tier"?: string, "model"?: string, "tierReason"?: string, "bounces": number, "bundle"?: []string, "bestOf"?: string, "outcome"?: string, "event"?: {"seq": number, "kind": string, "body"?: string, "ts": string}, "draining"?: true, "noLogin"?: string, "account"?: string, "accountKind"?: string}`; `bounces` is how often the slot's issue was sent back (0 when never; see `round bounce`); `account` and `accountKind` (#1824) are the slot's account name and its kind (`claude`, `codex` or `opencode`), `account` absent when the slot never ran under one; `kind`, `tier`, `model` and `tierReason` are the slot's C9 fields, absent on a slot that was never assigned; `escalations` holds the ids of the slot's open escalations (C4). `agent` is the host agent's name, `hostState` its `agent_status` (absent when the host is unavailable or the row has no live agent), `drift` the kinds above. Unclaimed tabs are rows with `registered: false` and no `name` match, listed after the slots.
@@ -95,7 +96,6 @@ note: `unregistered-branch` (#580) is a finding kind for a local or remote branc
 note: (#1598) on the main machine with `round.support` set, `round reconcile` also lists as `unregistered-branch` each open PR whose head branch matches `<round.support>-*/*`, that no slot holds and whose issue carries `issues.labels.needsReview` (default `needs-review`). It reads the forge's open PRs and the labelled issues, not refs, so main needs no fetch to see the PR; a support branch with no PR yet or whose issue is not handed to review is never listed, whatever `round.adoptPattern` says, and the pattern scan skips every branch with that prefix. `--apply` fetches the branch, creates the local branch and adopts it with the PR recorded. On the support machine (`round.role support`), `round reconcile` reports `bounced` for a queued PR whose last PR comment opening with `<!-- rota:review-bounce head=<sha> -->` names the PR's current head: main sent it back and no fix was pushed since. `bounced` has no repair; its detail names `rota round transfer <issue> --to <free slot>`. A done slot still holding its PR takes the same comment as review input through the review poll (the one rota-marked comment it does not skip, and only on a slot that is not adopted).
 note: external (adopted) slots are skipped by the `dead-tab`, `unclaimed-tab`, `stalled` and `item-timeout` findings: they have no host.
 note: `limits` (D3 amendment) lists the usage-limit entries still `waiting`, as `rota limit status` stores them, read from the registry only. A waiting limit is not drift. Text mode adds one `limit <id> waiting <session> <window> <resetsAt> <action> <note>` line each.
-
 ### rota round reconcile
 rota round reconcile [--apply]
 repo: none
@@ -540,3 +540,14 @@ note: **herdr 0.9.3 semantics (probed in a throwaway session).** `--ratio` is th
 note: **Idempotence.** `split` on a view whose panes already sit in the grid (same column order and same order inside each column, read from `pane layout`) does nothing; widths a person dragged stay. Otherwise (a worker assigned since, a different order) it sends every worker already in the tab out to a tab of its own, in slot order, and builds the grid again. `tabs` moves only the workers that are in the orchestrator's tab, in slot order, labelled with the slot name. Running either twice in a row is a no-op the second time.
 note: **Finding the panes.** The workers' panes are the live slots' agents: the agent named for the slot and its recorded `handle` (`rota-<slot>-<tab id>`), whose name survives a move; a slot with no handle (parked) or no agent (dead) is skipped. The `handle` is not rewritten: after a move it names the tab the slot started in, which may be gone. The orchestrator is the pane working in the project root that no slot owns, preferring one in a tab or workspace labelled `orchestrator` (`orchestrate.Label`) and one running an agent. No pane id is recorded at launch: the label and cwd lookup also covers an orchestrator started by hand.
 note: **Which projects.** Without `--project`: every project in `rota projects` that exists on disk, plus the one the caller is in, that has an orchestrator pane in the herdr the command talks to (the one the shell is in; the default session otherwise). A project whose registry records a tmux or solo round is skipped with `host is tmux: layout needs herdr` (listed only when `--project` names it or the registry still holds a handle). `round assign` keeps opening workers as tabs; run `rota layout split` again to fold them in.
+
+### rota round freeze
+rota round freeze [--repair-issue <id> | --repair-pr <number-or-url> | --verify | --clear --reason <text>]
+repo: none
+data: {"freeze": object | null, "changed": bool}
+exit: 1 when recovery verification fails (freeze kept); 2 for incompatible flags, invalid repair IDs/URLs or a clear without a non-empty reason; 3 when no freeze exists for a mutation; 4 when recovery is attempted off the frozen base, against a dirty or outdated checkout, with no verification commands, or when the freeze record is unreadable
+old: none (#2170)
+note: without flags, shows the latest freeze, including its clearance record. State lives under `<git-common-dir>/rota/freeze.json`, shared by all worktrees and outside the source tree. A failed post-landing gate verification freezes further gate, train and assign calls (`exit 4`, `blockedBy: "freeze"`). A scratch verification failure before landing does not freeze. CI verification that times out or never runs stops without freezing. Unreadable records refuse landing/assignment with the same freeze classification and name the audited clear command; status and the prompt warn and remain available. The record names the base, full landed SHA, landed PRs and failing checks. `round status` adds an active `freeze` object and the prompt digest says `FROZEN`.
+note: designate the repair by positive issue number or backlog item ID such as `B07` (allowing assignment and its gate/train) or PR number/URL (allowing its gate/train). All members of a train must be repairs while frozen. Designation replaces the previous repair. A repair must target the frozen base and still passes the normal gate checks; it cannot bypass verification. A verified repair landing clears the matching base's freeze. A train clears only after the complete verified tree lands. Skipped verification never clears.
+note: `--verify` runs the configured full tier (local or CI), followed by `test.e2e`, on the frozen base checked out at the current origin SHA; without an origin it checks the local base. It clears only when verification passes and HEAD stays at that SHA. The record retains who cleared it, when, and the full SHA. Use this after an external repair or a transient failure.
+note: `--clear --reason <text>` clears without verification and writes a `freeze-clear` gate-audit entry with the reason. Clearance records the frozen base SHA when it resolves, otherwise the operator's current HEAD; a deleted base does not prevent a clear. An unreadable record is replaced with an inactive record and the audit names the damaged path and read error. Missing reasons are rejected, with a hint to supply one. Clearance and repair designation use the landing lock, so a concurrent failing landing cannot be cleared accidentally.

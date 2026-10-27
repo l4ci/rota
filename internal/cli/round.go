@@ -5,6 +5,7 @@ package cli
 // append without touching each other's lines.
 func roundCommands() *Command {
 	return &Command{Name: "round", Summary: "orchestrator view of a round's workers", Subs: []*Command{
+		{Name: "freeze", Summary: "show the landing freeze, designate its repair or clear it", Verb: roundFreeze},
 		{Name: "wait", Summary: "block until a worker needs attention", Verb: roundWait},
 		{Name: "watch", Summary: "background watch: exit on a slot, PR or escalation change, or a heartbeat", Verb: roundWatch},
 		{Name: "status", Summary: "list the round's slots with host, PR and drift", Verb: roundStatus, View: roundStatusView, UIFirst: true},
