@@ -398,8 +398,10 @@ both unset keeps the behavior above.
 
 While filling, the tick reports one non-actionable line per base, such as
 `holding train for main: 2/4 ready, oldest waited 6m of 20m` (JSON `holding`).
-It reports the line only when its count or observed minute changes, including across watch
-restarts. With review disabled, readiness age uses the worker done time. A ready record with
+Changed holding notices use a base/count/maximum key, including across watch restarts;
+elapsed minutes alone produce no new notice. Current observed age remains visible in explicit
+tick output (`fillStatus` in JSON), `round status` and watch heartbeat output. A holding notice
+alone does not wake the armed watch; completed merges and new attention items still do. With review disabled, readiness age uses the worker done time. A ready record with
 no usable done time goes straight to the gate. Persisted gate holds keep failed heads out of
 both tick and nudge readiness; PR state refusals still reach the gate for cleanup.
 
