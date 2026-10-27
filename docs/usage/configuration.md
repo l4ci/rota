@@ -806,6 +806,8 @@ Outside a project, rota follows the XDG Base Directory spec. An `XDG_*` variable
 
 An older rota kept `projects.json` in the config dir. The first run after upgrading moves it to the state dir and removes the old copy; a registry already in the state dir wins.
 
+`rota init` and `rota setup` leave projects in temporary storage out of this registry: paths under `$TMPDIR`, `/tmp` or macOS's `/var/folders` (including `/private/var/folders`), after resolving symlinks. Init still seeds the project and prints `project not registered: temporary directory`. `rota projects cleanup` removes older temp entries as well as missing projects and projects that no longer hold `.rota/`; it lists each removed entry and leaves the project files alone. Plain `rota projects` keeps listing existing entries until you remove them.
+
 ## rota.version (auto-managed)
 
 - **Type:** string
