@@ -525,6 +525,7 @@ var gateSteps = []gateStep{
 	(*gate).stepOutcome,
 	(*gate).stepFreshness,
 	(*gate).stepPRMatches,
+	(*gate).stepVerdictReports,
 	(*gate).stepProvenance,
 	(*gate).stepCloses,
 	(*gate).stepClaim,
@@ -551,6 +552,7 @@ var reviewsOnlySteps = []gateStep{
 	(*gate).stepSlotHead,
 	(*gate).stepRefs,
 	(*gate).stepPRMatches,
+	(*gate).stepVerdictReports,
 	(*gate).stepReviewDepth,
 	(*gate).stepCheckOnly,
 }

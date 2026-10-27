@@ -421,3 +421,15 @@ func TestMergeBranchApproveRefusalIsTyped(t *testing.T) {
 		t.Errorf("refusal = %+v, err %v", ref, err)
 	}
 }
+
+func TestExpiredReportDoesNotMaskLocalFail(t *testing.T) {
+	store := verdict.Store{Branches: map[string][]verdict.Record{"feat": {
+		{Kind: verdict.ReviewSpec, Verdict: verdict.Fail, Sha: "1111111"},
+		{Kind: verdict.ReviewQuality, Verdict: verdict.Pass, Combined: verdict.Pass, Sha: "1111111", FromReport: true},
+	}}}
+	err := (VerdictCheck{Store: store}).BlockAt("feat", "2222222")
+	var blocked *VerdictBlockedError
+	if !errors.As(err, &blocked) || !blocked.Stale || blocked.Record.Kind != verdict.ReviewSpec {
+		t.Fatalf("expired cached PASS masked local stale FAIL: %v", err)
+	}
+}
