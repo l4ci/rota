@@ -598,7 +598,7 @@ marked `done`.
 
 Before reporting done, workers mark each verified `AC-n` on the lead and every open
 bundle member with `rota plan pass <ID> AC-n --proof '<sha>:<check>'` (use an issue key
-such as `#2150`). The sha and check must name a recorded PASS row from
+such as `'#2150'`). The sha and check must name a recorded PASS row from
 `rota proof show <ID>`; proof rows alone do not mark acceptance. A plain done or
 `--outcome done` refuses (exit 4) while explicit criteria are unmet, listing them and
 their marking commands. Changed criterion text or withdrawn proof makes a mark unmet

@@ -97,7 +97,7 @@ Work only this task, then stop.
   first in the PR body, above the other sections: done runs after the PR exists, so add it with `gh pr edit <pr> --body-file <f>` (the branch does not change).
 - Acceptance marks. After recording PASS proof, before reporting done, read each held item's
   criteria (`rota item show <ID>` and `rota proof show <ID>`). For each met `AC-n`, run
-  `rota plan pass <ID> AC-n --proof '<sha>:<check>'` (use `#2150`, for example, as the issue key) using the recorded PASS row's sha and
+  `rota plan pass <ID> AC-n --proof '<sha>:<check>'` (use `'#2150'`, for example, as the issue key) using the recorded PASS row's sha and
   check. Repeat for every open bundle member. Proof rows alone do not mark acceptance;
   a changed criterion or withdrawn proof needs a new valid mark. A plain done or
   `--outcome done` refuses (exit 4) while explicit criteria remain unmet. If one cannot be

@@ -112,7 +112,7 @@ func TestWorkerDoneUnmetAcceptance(t *testing.T) {
 	if code != 4 || data(t, out)["changed"] != false {
 		t.Fatalf("unmet acceptance: exit %d: %s %s", code, out, stderr)
 	}
-	for _, want := range []string{"AC-1: first", "AC-2: second", "rota plan pass #7 AC-1 --proof", "rota plan pass #7 AC-2 --proof"} {
+	for _, want := range []string{"AC-1: first", "AC-2: second", "rota plan pass '#7' AC-1 --proof", "rota plan pass '#7' AC-2 --proof"} {
 		if !strings.Contains(out+stderr, want) {
 			t.Errorf("refusal lacks %q: %s %s", want, out, stderr)
 		}
@@ -242,7 +242,7 @@ func TestWorkerDoneBundleAcceptance(t *testing.T) {
 				}
 			}
 			code, out, stderr = rotaInWith(t, deps, dir, "worker", "done", "ben", "--json")
-			if closed && code != 0 || !closed && (code != 4 || !strings.Contains(out+stderr, "rota plan pass #8 AC-3")) {
+			if closed && code != 0 || !closed && (code != 4 || !strings.Contains(out+stderr, "rota plan pass '#8' AC-3")) {
 				t.Fatalf("member acceptance: %d %s %s", code, out, stderr)
 			}
 		})
