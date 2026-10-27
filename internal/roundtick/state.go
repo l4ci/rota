@@ -23,7 +23,8 @@ type State struct {
 	Held        map[string]string     `json:"held,omitempty"`
 	Reported    []string              `json:"reported,omitempty"`
 	FailedHeads map[string]FailedHead `json:"failedHeads,omitempty"`
-	Filling     map[string]string     `json:"filling,omitempty"`
+	// Filling stores base/count/maximum keys, never rendered elapsed time.
+	Filling map[string]string `json:"filling,omitempty"`
 }
 
 func statePath(commonDir string) string { return rotastate.File(commonDir, StateFile) }

@@ -140,9 +140,12 @@ func TestTickTrainFillReportsChangesAcrossRestart(t *testing.T) {
 	tick("holding train for main: 2/4 ready, oldest waited 6m of 20m")
 	tick("")
 	now = now.Add(time.Minute)
-	tick("holding train for main: 2/4 ready, oldest waited 7m of 20m")
+	tick("")
 	f.queued = []string{"#1"}
 	tick("holding train for main: 1/4 ready, oldest waited 7m of 20m")
+	if key := LoadState(cd, 40).Filling["main"]; key != "main:1/4" {
+		t.Fatalf("persisted fill key=%q, want base/count/max without elapsed time", key)
+	}
 }
 
 func TestFillBypassReachesGateWithReviewNotReady(t *testing.T) {

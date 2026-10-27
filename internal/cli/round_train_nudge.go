@@ -90,6 +90,47 @@ func readyTrainNudges(c *Ctx, root string) []trainNudge {
 	return ns
 }
 
+// trainHoldingLines reads current progress without consuming changed-only
+// notices or running a tick. Status can show elapsed time while watch sleeps.
+func trainHoldingLines(c *Ctx, root string) []string {
+	set, ok := c.deps().tolerantRoundSettings(root)
+	if !ok || !set.TrainFill.Enabled() {
+		return nil
+	}
+	type group struct {
+		count  int
+		oldest time.Time
+	}
+	groups := map[string]group{}
+	var bases []string
+	seen := map[int]bool{}
+	for _, w := range waitingPRs(c, root) {
+		n, parsed := worker.PRRefNumber(w.PR)
+		if !w.Reviewed || w.Immediate || !parsed || seen[n] {
+			continue
+		}
+		seen[n] = true
+		g, known := groups[w.Base]
+		if !known {
+			bases = append(bases, w.Base)
+		}
+		g.count++
+		if !w.ReadySince.IsZero() && (g.oldest.IsZero() || w.ReadySince.Before(g.oldest)) {
+			g.oldest = w.ReadySince
+		}
+		groups[w.Base] = g
+	}
+	now := c.deps().Now()
+	var lines []string
+	for _, base := range bases {
+		g := groups[base]
+		if set.TrainFill.Due(g.count, g.oldest, now) == "" {
+			lines = append(lines, set.TrainFill.Holding(base, g.count, g.oldest, now))
+		}
+	}
+	return lines
+}
+
 func prHashes(prs []string) []string {
 	out := make([]string, len(prs))
 	for i, p := range prs {

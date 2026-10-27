@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
@@ -150,5 +151,64 @@ func TestAutopilotTrainFillReadinessGlue(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestAutopilotTrainFillRejectsQueuedMissingReview(t *testing.T) {
+	c, root, _ := fillTickFixture(t, `"light"`, true, true)
+	if _, err := config.Set(root, config.RoundTrainMaxKey, "2"); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, root, "branch", "dana/2-fill", "ben/1-fill")
+	gitIn(t, root, "push", "origin", "dana/2-fill")
+	r, err := c.deps().Git(context.Background(), root, "rev-parse", "dana/2-fill")
+	if err != nil || r.ExitCode != 0 {
+		t.Fatalf("head: %+v %v", r, err)
+	}
+	head := strings.TrimSpace(r.Stdout)
+	addRegistryRows(t, root, map[string][]map[string]any{"prs": {{"branch": "dana/2-fill", "pr": "#12", "base": "main", "issue": "2"}}})
+	previous := c.deps().trackerExec()
+	c.Deps.TrackerOptions = append(c.Deps.TrackerOptions, tracker.WithExec(func(ctx context.Context, dir, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
+		pr := map[string]any{"number": 12, "headRefName": "dana/2-fill", "headRefOid": head, "baseRefName": "main", "state": "OPEN", "body": "Closes #2", "url": "https://github.com/o/r/pull/12"}
+		if len(args) >= 3 && args[0] == "pr" && args[1] == "view" && (args[2] == "12" || args[2] == "dana/2-fill") {
+			b, err := json.Marshal(pr)
+			return b, nil, 0, err
+		}
+		b, stderr, code, err := previous(ctx, dir, name, args, stdin)
+		if err == nil && code == 0 && len(args) >= 2 && args[0] == "pr" && args[1] == "list" {
+			include := true
+			for i := 2; i+1 < len(args); i++ {
+				if args[i] == "--head" && args[i+1] != "dana/2-fill" || args[i] == "--state" && args[i+1] != "open" && args[i+1] != "all" {
+					include = false
+				}
+			}
+			if include {
+				var rows []map[string]any
+				if err := json.Unmarshal(b, &rows); err != nil {
+					t.Fatal(err)
+				}
+				rows = append(rows, pr)
+				b, err = json.Marshal(rows)
+			}
+		}
+		return b, stderr, code, err
+	}, func(name string) (string, error) { return "/fake/" + name, nil }))
+	set, err := c.deps().roundSettings(root, roundConfigRequired)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := autopilotTick(c, root, set, "", scopePID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Holding) != 1 || result.Holding[0] != "holding train for main: 1/2 ready, oldest waited 6m of 20m" {
+		t.Fatalf("queued missing review contributed to train: holding=%q needs=%+v", result.Holding, result.NeedsYou)
+	}
+	waiting := false
+	for _, it := range result.NeedsYou {
+		waiting = waiting || it.Kind == "awaiting-review" && it.Target == "#12"
+	}
+	if !waiting {
+		t.Fatalf("missing queued review was not reported: %+v", result)
 	}
 }

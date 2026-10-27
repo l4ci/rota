@@ -155,7 +155,7 @@ type Env struct {
 	// not cleared; Remember stores the new set and the keys reported so far.
 	Held     map[string]string
 	Reported map[string]bool
-	// Filling is the last per-base fill status, for changed-only output.
+	// Filling is the last base/count/max key, for changed-only output.
 	Filling map[string]string
 	// FailedHeads remembers attempted failures across worker state changes.
 	// Unlike legacy Held entries, these clear only when the PR head changes.
@@ -184,7 +184,10 @@ type Result struct {
 	Did []Action
 	// Holding contains changed, non-actionable train fill status lines.
 	Holding []string
-	Filling map[string]string
+	// FillStatus is the current rendered progress, including observed time.
+	// It is available for status and heartbeats without being a wake reason.
+	FillStatus []string
+	Filling    map[string]string
 	// Capped is why the tick filled no slot: the quota cap (Env.Capped).
 	Capped string
 	// BatchFull is true when round.batch items are open: the tick assigned
@@ -489,8 +492,10 @@ func (e Env) mergeAll(ctx context.Context, r *Result, targets []string) []Merged
 			}
 			if e.TrainFill.Due(len(ts), oldest, now) == "" {
 				line := e.TrainFill.Holding(b, len(ts), oldest, now)
-				r.Filling[b] = line
-				if e.Filling[b] != line {
+				key := fmt.Sprintf("%s:%d/%d", b, len(ts), e.TrainFill.Max)
+				r.FillStatus = append(r.FillStatus, line)
+				r.Filling[b] = key
+				if e.Filling[b] != key {
 					r.Holding = append(r.Holding, line)
 				}
 				continue
