@@ -96,6 +96,7 @@ Public user guide for rota, a dev workflow for Claude Code and Codex, with OpenC
 - [The `.rota/` folder](reference/rota-folder.md): files and directories created by `rota init`
 - [`rota` verb reference](reference/cli-helpers.md): every `rota` verb, with conventions and exit codes
 - [Configuration options](reference/config-options.md): every config key and option label, set via `rota config set`
+- [Tracker labels](reference/labels.md): label definitions, project declarations and dry-run sync
 - [Upstream issues reference](reference/rota-issues.md): GitHub/GitLab issue backend and round-trip closing
 - [Project check](reference/preflight.md): what `rota init check` verifies, plus exit-code meanings
 
