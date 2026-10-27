@@ -95,19 +95,7 @@ Work only this task, then stop.
   line names the slices still to come. Use `partial` there only when the PR misses part of
   its own slice. Put the `prBlock` the verb prints
   first in the PR body, above the other sections: done runs after the PR exists, so add it with `gh pr edit <pr> --body-file <f>` (the branch does not change).
-- Acceptance marks (issue backend). After recording PASS proof, before reporting done, read each held item's
-  criteria (`rota item show <ID>` and `rota proof show <ID>`). For each met `AC-n`, run
-  `rota plan pass <ID> AC-n --proof '<sha>:<check>'` (use `'#2150'`, for example, as the issue key) using the recorded PASS row's sha and
-  check. Repeat for every open bundle member. Proof rows alone do not mark acceptance;
-  a changed criterion or withdrawn proof needs a new valid mark. A plain done or
-  `--outcome done` refuses (exit 4) while explicit criteria on tracker items the PR closes remain unmet.
-  A `Refs` slice leaves the parent open and does not require its later criteria. If one cannot be
-  met, report `--outcome partial --summary-file <f>` and name each unmet id and its reason
-  on the third line (or `failed` when nothing can be delivered); never mark it met to
-  clear the refusal. File-mode items keep their existing done flow. The merger can explicitly
-  close an item with `rota item complete <ID> --commit <sha> --unmet-reason <text>`, which
-  records the unmet criteria and reason; the gate then skips acceptance for that closed issue.
-  Workers never close items to bypass the refusal. Items without explicit `AC-n` ids need no acceptance marks.
+- Acceptance marks (issue backend). After recording PASS proof, before reporting done, follow [`acceptance-marks.md`](acceptance-marks.md): mark each met `AC-n`, and report `--outcome partial` for an unmet one.
 - Attempt id. If your brief names an attempt id, pass `--attempt <id>` to `rota worker done` and
   `rota round report`. A refusal that calls the attempt stale (exit 4) means the orchestrator
   reclaimed or transferred your assignment: you are fenced. Stop at once, do not retry, do not

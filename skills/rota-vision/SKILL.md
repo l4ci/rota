@@ -31,7 +31,7 @@ Follow `references/context-load-protocol.md` (parallel, silent), plus `.rota/MIL
 
 Open with 3-4 sentences on what you see: the project's shape, existing milestones, obvious gaps. When Step 2 found an uncovered document, say `I found <path> (<title>)` here and lead the batch with *Seed from it* (Recommended; a pick between documents when there are several). On yes, seed per `source-discovery.md`, then continue at Step 5 with the drafted milestones. Otherwise, or with no document found, one question batch (see `references/design-exploration.md`):
 
-A big effort whose design questions are still open (nobody can write Acceptance yet) is a **decision milestone**: offer it as a *Scope* option and see "Decision milestone" in Step 7.
+A big effort whose design questions are still open (nobody can write Acceptance yet) is a **decision milestone**: offer it as a *Scope* option and read [`decision-milestone.md`](decision-milestone.md).
 
 - **Create** — 2-3 questions: *Scope* (new product / strategic refactor / research / other), *Audience*, *Constraint* (time or scope limit).
 - **Edit** — one question, *Action*: add a milestone (Recommended if the vision feels incomplete), refine one, retire/activate, re-prioritize, or explore a new direction.
@@ -91,7 +91,7 @@ MID=$(rota milestone add --json --title "<title>" --summary "<one line>" [--depe
 
 Issue mode: creates the native milestone and tracking issue (status `planned`). Draft the full plan (frontmatter `id: <MNN>` required) in a scratch file and publish with `rota milestone put <MNN> --body-file <file>|-`. File mode: mints `MNN`, a stub `.rota/milestones/MNN.md` and an overview block; edit the stub's sections (keep the frontmatter). For a seeded milestone, put the plain line `Source: <path>#<heading>` in the plan body (after Rationale, as in the Step 6 template): issue mode in the drafted file published with `put` (never read or write `.rota/milestones/*.md`), file mode in the stub.
 
-- **Decision milestone** (`--kind decision`): for an effort too foggy to slice. Mint it with `rota milestone add --kind decision --title … --summary …`; the plan gets a `## Decisions` list (one line per closed decision, written by `item complete --gist`, never by hand) and `## Not yet specified` (the fog). Its children are decision items, one per open design question, not delivery work. File each with `rota item create --milestone <MNN> [--depends-on <ID>,…]` and label it `decision:research` (a question a worker answers by reading code and docs: it posts a `finding` comment, and the orchestrator accepts it with `rota round accept <ID> --gist <line>`) or `decision:grilling` (a call only the human can make: `/rota-brainstorm <ID>`, one per session; `round assign` refuses it). File backend: a `Decision: research|grilling` field. Wire the order with `--depends-on`: a decision whose answer another needs waits for it. List decisions and fog in the plan, never the open items. Prototype- and task-typed decisions do not exist yet: spike with `/rota-spike` or file a normal item. A decision milestone ships under the usual rule.
+- **Decision milestone** (`--kind decision`): for an effort too foggy to slice. Read [`decision-milestone.md`](decision-milestone.md).
 - **Status:** `rota milestone status <MNN> --to <planned|active|shipped|archived>` per changed milestone. Several can be active when independent. `archived` retires one without deleting it, but an archived dependency does not unblock dependents; `shipped` does. `--to shipped` exits 4 while the milestone has open items or unticked criteria (`data.open`, `data.unticked`); tick or close them, or pass `--force`. With an origin remote, `--to active` also pushes `milestone/<MNN>` (the status stays unchanged when the push fails), `--to shipped` deletes it, and `--to archived` needs `--branch keep|delete`: ask the maintainer which, then pass it.
 - **Vision paragraph** (Create only): `rota milestone overview --body-file <file>|-` (file mode: replace the placeholder under `# Milestones`), 2-4 sentences on the why. In Edit mode leave it unless the framing changed.
 - **Index:** `rota milestone index` regenerates the Active list and the managed instructions block. Never hand-edit the Active list.
@@ -117,6 +117,7 @@ If a newly active milestone has no items, offer (default Capture): `/rota-captur
 ## References
 
 - [`source-discovery.md`](source-discovery.md): find an uncovered concept document and seed milestones from it; read from Step 2.
+- [`decision-milestone.md`](decision-milestone.md): decision milestones (`--kind decision`); read from Steps 3 and 7.
 - [`research.md`](research.md): opt-in web research; read from Step 4.
 - [`references/context-load-protocol.md`](references/context-load-protocol.md): shared parallel context load.
 - [`references/knowledge-consult.md`](references/knowledge-consult.md): the K+D query pattern the load uses.

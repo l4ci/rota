@@ -73,7 +73,7 @@ func TestSkillsHarnessNeutral(t *testing.T) {
 func TestRoundWorkerLearningAligned(t *testing.T) {
 	for _, f := range []string{
 		"skills/references/worker-contract.md",
-		"skills/rota-learn/SKILL.md",
+		"skills/rota-learn/worker-roles.md",
 		"skills/rota-ship/round-worker-and-issue-mode.md",
 	} {
 		b, err := os.ReadFile(f)
