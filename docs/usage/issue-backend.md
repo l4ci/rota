@@ -139,6 +139,8 @@ An ID is the type letter plus the issue number: `#42` is `F42`, `B42` or `T42`. 
 
 In a [round](parallel-rounds.md), `rota worker gate` also wants the PR body to carry `Closes #N` (or `Fixes #N`) for the slot's issue. Without it the merge would leave the issue open and claimed, so the gate refuses (exit 4, `blockedBy: closes`). A PR that lands only part of an issue says `Refs #N` and the issue carries the `partial-slice` label, which exempts it.
 
+A `done` close refuses while any explicit `AC-n` criterion lacks a current `plan pass` mark backed by PASS proof. The refusal lists the unmet criteria. To close with known gaps, pass `--unmet-reason "<why>"`; the close comment records both the gaps and your reason. `--no-proof` only bypasses the proof-row requirement. The merge gate checks acceptance before merging a PR that closes an item, including a merge into a milestone branch.
+
 `rota item complete <ID> --reason handed-off|blocked|dropped` closes without a merge: `dropped` and `handed-off` close as not planned; `blocked` keeps the issue open with the `blocked` label.
 
 ## Milestones and release

@@ -209,6 +209,13 @@ func (b *Issues) MergePRGated(pr int, items []string, approve MergeApprover) (Me
 		if is.State != "open" {
 			continue
 		}
+		unmet, err := b.itemUnmetAcceptance(is)
+		if err != nil {
+			return MergeResult{}, err
+		}
+		if len(unmet) > 0 {
+			return MergeResult{}, AcceptanceRefusal(id, unmet)
+		}
 		ok, err := hasProof(func() (int, error) { return b.proofCount(id) })
 		if err != nil {
 			return MergeResult{}, err
