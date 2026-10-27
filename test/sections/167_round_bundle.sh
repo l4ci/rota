@@ -102,7 +102,7 @@ st = json.load(open(os.environ["BG_STATE"]))
 a = sys.argv[1:]
 if a[:2] == ["pr", "view"]:
     print(json.dumps({"headRefName": "ben/5-thing", "headRefOid": st["sha"], "baseRefName": "main",
-                      "state": "OPEN", "mergeCommit": None, "body": st["body"]}))
+                      "state": "OPEN", "mergeCommit": None, "body": st["body"] + "\n## Assumptions\nNone\n\n## Rulings\nNone\n"}))
 elif a[:2] == ["issue", "view"]:
     print(json.dumps({"number": int(a[2]), "title": "t", "body": "", "state": "OPEN", "url": "",
                       "labels": [], "assignees": [], "milestone": None}))

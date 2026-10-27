@@ -28,7 +28,7 @@ func TestGateQueuedPR(t *testing.T) {
 	for _, arg := range []string{"#7", "7", ghURL} {
 		w := newWorld(t, "")
 		w.setQueued()
-		w.forge("body", "Closes #5\n")
+		w.setPRBody("Closes #5\n")
 		if res, err := gateAs(w, arg, GateOpts{CheckOnly: true}); err != nil || res.Verdict != GateFresh || res.Branch != "w1" || res.PR != ghURL {
 			t.Fatalf("%s check-only: %+v %v", arg, res, err)
 		}
@@ -103,7 +103,7 @@ func TestGateDropsMergedQueuedPR(t *testing.T) {
 		t.Run(arg, func(t *testing.T) {
 			w := newWorld(t, "")
 			w.setQueued()
-			w.forge("body", "Closes #5\n")
+			w.setPRBody("Closes #5\n")
 			if arg == "w2" {
 				// the slot records the PR the queue also holds
 				doc := `{"slots":[{"name":"w2","branch":"w1","pr":"` + ghURL + `","base":"main"}],"prs":[{"issue":"5","branch":"w1","pr":"` + ghURL + `","base":"main","from":"w2","round":1,"relays":[]}]}`
@@ -134,7 +134,7 @@ func TestGateQueuedPRAuthorFromAssignLedger(t *testing.T) {
 		w := newWorld(t, "")
 		w.setConfig(`{"round":{"harnesses":["claude","codex"]},"test":{"full":["true"]}}`)
 		w.setQueued()
-		w.forge("body", "Closes #5\n")
+		w.setPRBody("Closes #5\n")
 		w.forge("issueLabels", "in-progress,size:Major")
 		w.record("w1", "", verdict.ReviewSpec, verdict.ReviewQuality)
 		for _, e := range entries {

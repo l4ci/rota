@@ -18,7 +18,7 @@ func (w *world) setOutcomeSlot(outcome string) {
 	}
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q%s}]}`, ghURL, extra)), 0o644)
-	w.forge("body", "Closes #5\n")
+	w.setPRBody("Closes #5\n")
 }
 
 // A PR whose worker reported partial or failed goes to review or relay first:
@@ -85,7 +85,7 @@ func TestGateLandsADoneSlicePROnAPartialSliceIssue(t *testing.T) {
 			w.pushStamped("a.txt", "")
 			w.setConfig(`{"issues":{"source":"gitlab"},"test":{"full":["true"]}}`)
 			w.setOutcomeSlot(c.outcome)
-			w.forge("body", "Refs #5\n")
+			w.setPRBody("Refs #5\n")
 			e := w.env(false)
 			e.Issues = func(string, tracker.Settings) (Issues, error) {
 				return &issueStub{labels: []string{PartialSliceLabel}}, nil

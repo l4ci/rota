@@ -180,7 +180,7 @@ func TestGateClosingCheckReadsTheIssueSource(t *testing.T) {
 			w.setConfig(`{"issues":{"source":"gitlab"},"test":{"full":["true"]}}`) // a github forge, issues elsewhere
 			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
-			w.forge("body", "Refs #5\n")
+			w.setPRBody("Refs #5\n")
 			w.forge("issueErr", "the forge must not be asked for the issue") // the forge's own Get fails
 			stub := &issueStub{labels: c.labels}
 			var gotSource string
@@ -218,7 +218,7 @@ func TestGateClosesByKeyOnAKeyBasedTracker(t *testing.T) {
 			w.setConfig(`{"issues":{"source":"jira"},"test":{"full":["true"]}}`)
 			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"PROJ-123","pr":%q}]}`, ghURL)), 0o644)
-			w.forge("body", c.body)
+			w.setPRBody(c.body)
 			w.forge("title", c.title)
 			w.forge("head", c.head)
 			stub := &issueStub{labels: c.labels, keyed: true}

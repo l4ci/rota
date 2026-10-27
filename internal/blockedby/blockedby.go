@@ -80,17 +80,19 @@ const (
 
 // Gate and train refusals; each equals the verdict that raises it.
 const (
-	Verdict        = "verdict"
-	NoVerify       = "no-verify"
-	VacuousTests   = "vacuous-tests"
-	Closes         = "closes"
-	BestOfUnpicked = "best-of-unpicked"
-	ReviewMissing  = "review-missing"
-	StaleAttempt   = "stale-attempt"
-	OutcomeOpen    = "outcome-open"
-	GateRunning    = "gate-running"
-	Forge          = "forge"
-	Order          = "order"
+	Verdict            = "verdict"
+	NoVerify           = "no-verify"
+	VacuousTests       = "vacuous-tests"
+	Closes             = "closes"
+	AssumptionsMissing = "assumptions-missing"
+	RulingsMissing     = "rulings-missing"
+	BestOfUnpicked     = "best-of-unpicked"
+	ReviewMissing      = "review-missing"
+	StaleAttempt       = "stale-attempt"
+	OutcomeOpen        = "outcome-open"
+	GateRunning        = "gate-running"
+	Forge              = "forge"
+	Order              = "order"
 )
 
 // Refusals raised by the other verbs.
@@ -153,7 +155,7 @@ func All() []string {
 		ModelLabel, DecisionLabel, NoBlockingFinds,
 		CodexFlags, OpencodeFlags, OpencodeBinary, OutsideHerdr, Host, ResumeFlag, Limited, Dialog, ResetGuard,
 		Dispatch, MaxBounces, State, Handle,
-		Verdict, NoVerify, VacuousTests, Closes, BestOfUnpicked, ReviewMissing, StaleAttempt, OutcomeOpen, GateRunning, Forge, Order,
+		Verdict, NoVerify, VacuousTests, Closes, AssumptionsMissing, RulingsMissing, BestOfUnpicked, ReviewMissing, StaleAttempt, OutcomeOpen, GateRunning, Forge, Order,
 		Backend, Config, Active, Umbrella, Proof, ProofMissing, UnmetAcceptance, ClosedItem, Exists, Ambiguous, AliasCollision, Edited, Unmanaged, IDMismatch, RequestID, LeaseHeld,
 		Supervised, Watching, SlotHoldsWork, ManualGate, ApprovalPending, ApprovalDeclined, IronLaw,
 		StatuslineExists, ReleaseOrder, NotGreater, UnfinishedMilestone, HeadingInBody, MergeConflict,
