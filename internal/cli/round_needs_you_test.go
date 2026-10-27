@@ -14,6 +14,12 @@ import (
 func TestRoundNeedsYou(t *testing.T) {
 	root, deps := roundFixture(t, nil)
 	pinNow(deps, "2026-10-03T12:00:00Z")
+	original := deps.RoundEnv
+	deps.RoundEnv = func(ctx context.Context, root string) round.Env {
+		env := original(ctx, root)
+		env.Round.MaxBounces = 3
+		return env
+	}
 	if err := worker.UpdateEscalations(root, func([]worker.Escalation) []worker.Escalation {
 		return []worker.Escalation{
 			{ID: "open", Kind: "issue", Number: 58, Title: "Keep the current design?", Status: "pending", SentAt: "2026-10-03T10:00:00Z", Options: []string{"Keep it", "Replace it"}, Recommend: 1},
@@ -42,12 +48,6 @@ func TestRoundNeedsYou(t *testing.T) {
 	}
 	t.Run("escalation-replaces-bounce-hold", func(t *testing.T) {
 		write(t, worker.RegistryPath(root), `{"slots":[{"name":"cap","task":"12","state":"done","pr":"#7"}],"bounces":{"12":3},"escalations":[{"id":"cap","kind":"pr","number":7,"status":"pending","title":"Audit or transfer?"}]}`)
-		original := deps.RoundEnv
-		deps.RoundEnv = func(ctx context.Context, root string) round.Env {
-			env := original(ctx, root)
-			env.Round.MaxBounces = 3
-			return env
-		}
 		code, out, stderr := rotaInWith(t, deps, root, "--json", "round", "status", "--needs-you")
 		if code != 0 {
 			t.Fatalf("digest: %d %s %s", code, out, stderr)
@@ -80,6 +80,20 @@ func TestRoundNeedsYou(t *testing.T) {
 			t.Fatalf("a recorded approval also waits before a PR exists: %d %s %s", code, out, stderr)
 		}
 	})
+	t.Run("closed-queued-cap-is-not-waiting", func(t *testing.T) {
+		write(t, worker.RegistryPath(root), `{"prs":[{"issue":"12","pr":"#7"}],"bounces":{"12":3}}`)
+		original := deps.RoundEnv
+		t.Cleanup(func() { deps.RoundEnv = original })
+		deps.RoundEnv = func(ctx context.Context, root string) round.Env {
+			env := original(ctx, root)
+			env.Forge = digestClosedPR{}
+			return env
+		}
+		code, out, stderr := rotaInWith(t, deps, root, "--json", "round", "status", "--needs-you")
+		if code != 0 || len(data(t, out)["needsYou"].([]any)) != 0 {
+			t.Fatalf("closed queued PRs need no bounce-cap decision: %d %s %s", code, out, stderr)
+		}
+	})
 	t.Run("shared-bounce-store", func(t *testing.T) {
 		write(t, worker.RegistryPath(root), `{"slots":[{"name":"cap","task":"12","state":"done","pr":"#7"}]}`)
 		fk := &bounceFakes{issue: []string{"<!-- rota:bounce head=a -->", "<!-- rota:bounce head=b -->", "<!-- rota:bounce head=c -->"}}
@@ -88,6 +102,7 @@ func TestRoundNeedsYou(t *testing.T) {
 			t.Fatal(err)
 		}
 		original := deps.RoundEnv
+		t.Cleanup(func() { deps.RoundEnv = original })
 		deps.RoundEnv = func(ctx context.Context, root string) round.Env {
 			env := original(ctx, root)
 			env.Round.Support = "mac"
@@ -102,7 +117,18 @@ func TestRoundNeedsYou(t *testing.T) {
 			t.Fatalf("support-mode bounces live on the issue, not the registry: %d %s %s", code, out, stderr)
 		}
 	})
+	t.Run("text-is-safe-to-print", func(t *testing.T) {
+		write(t, worker.RegistryPath(root), `{"escalations":[{"id":"text","kind":"issue","number":12,"status":"pending","title":"Keep \u001b[31mthe flag?\u001b[0m"}]}`)
+		code, out, stderr := rotaInWith(t, deps, root, "round", "status", "--needs-you")
+		if code != 0 || strings.Contains(out, "\x1b") || !strings.Contains(out, "Keep the flag?") {
+			t.Fatalf("terminal control sequences must not enter digest rows: %d %q %s", code, out, stderr)
+		}
+	})
 }
+
+type digestClosedPR struct{ round.Forge }
+
+func (digestClosedPR) PRState(context.Context, int) (string, error) { return "closed", nil }
 
 func TestHookPromptNeedsYouCount(t *testing.T) {
 	root := orchProject(t, true)

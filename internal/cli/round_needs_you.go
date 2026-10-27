@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundwatch"
+	"github.com/l4ci/rota/internal/tui"
 )
 
 func refreshMaintainerSnapshot(ctx context.Context, c *Ctx, root string, env round.Env) ([]round.MaintainerWait, []string) {
@@ -49,7 +50,7 @@ func maintainerRows(waits []round.MaintainerWait, now time.Time) ([]any, []strin
 		}
 		o.Set("defaultReply", wait.DefaultReply)
 		rows = append(rows, o)
-		lines = append(lines, fmt.Sprintf("%s\t%s\t%s\t%s", wait.Item, strings.Join(strings.Fields(wait.Ask), " "), age, wait.DefaultReply))
+		lines = append(lines, fmt.Sprintf("%s\t%s\t%s\t%s", tui.Sanitize(wait.Item, false), strings.Join(strings.Fields(tui.Sanitize(wait.Ask, false)), " "), age, wait.DefaultReply))
 	}
 	return rows, lines
 }

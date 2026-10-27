@@ -93,6 +93,23 @@ func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []str
 		n, ok := worker.PRRefNumber(pr)
 		return ok && escalated[fmt.Sprintf("PR #%d", n)]
 	}
+	openPRs := map[int]bool{}
+	openPR := func(pr string) bool {
+		n, ok := worker.PRRefNumber(pr)
+		if !ok || e.Forge == nil {
+			return true
+		}
+		if open, seen := openPRs[n]; seen {
+			return open
+		}
+		state, err := e.Forge.PRState(ctx, n)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("maintainer digest PR #%d: %v", n, err))
+		}
+		open := err == nil && strings.EqualFold(state, "open")
+		openPRs[n] = open
+		return open
+	}
 	approvalSeen := map[string]bool{}
 	approval := func(item, pr, slot, issue string) {
 		if covered(item, pr, slot) {
@@ -121,15 +138,8 @@ func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []str
 				}
 			}
 		}
-		if ok && e.Forge != nil {
-			state, err := e.Forge.PRState(ctx, n)
-			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("maintainer digest PR #%d: %v", n, err))
-				return
-			}
-			if !strings.EqualFold(state, "open") {
-				return
-			}
+		if !openPR(pr) {
+			return
 		}
 		out = append(out, MaintainerWait{"merge-approval", item, "Approve this merge?", waitStamp(g.TS), "hold"})
 	}
@@ -162,7 +172,7 @@ func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []str
 			if ev := s.Event(); strings.EqualFold(s.State(), worker.StateBlocked) && ev != nil && (ev.Kind == worker.EventBlocked || ev.Kind == worker.EventQuestion) {
 				out = append(out, MaintainerWait{"question", item, ev.Body, ev.TS, "reply"})
 			}
-			if e.Round.MaxBounces > 0 && worker.IsDone(s.State()) && count(s.HeldID()) >= e.Round.MaxBounces {
+			if e.Round.MaxBounces > 0 && worker.IsDone(s.State()) && count(s.HeldID()) >= e.Round.MaxBounces && openPR(s.PR()) {
 				out = append(out, MaintainerWait{"bounce-cap", item, "Audit the acceptance criteria before another bounce", bouncedAt[worker.NormID(s.HeldID())], "audit"})
 			}
 		}
@@ -171,7 +181,7 @@ func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []str
 	for _, q := range reg.PRs() {
 		item := tracker.RefOf(q.Issue)
 		approval(item, q.PR, "", q.Issue)
-		if !covered(item, q.PR, "") && e.Round.MaxBounces > 0 && count(q.Issue) >= e.Round.MaxBounces {
+		if !covered(item, q.PR, "") && e.Round.MaxBounces > 0 && count(q.Issue) >= e.Round.MaxBounces && openPR(q.PR) {
 			out = append(out, MaintainerWait{"bounce-cap", item, "Audit the acceptance criteria before another bounce", bouncedAt[worker.NormID(q.Issue)], "audit"})
 		}
 	}
