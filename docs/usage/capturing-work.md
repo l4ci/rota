@@ -55,7 +55,7 @@ rota item template --kind tasks
 
 Comments in the skeleton mark sections as required, recommended or optional. Every feature, including Cosmetic, requires Acceptance and Out of scope; Major features also recommend Touches. Bugs recommend Repro, Expected and Actual, which can also be stated in the description. Tasks have no required sections. Pointers is recommended when you name file paths.
 
-`rota item create` warns about missing required or recommended sections and still captures the item. [Round assignment](parallel-rounds.md#picking-issues) refuses a feature missing either required heading and names what to add; an assignment brief can supply them too. Presence is enough: an empty heading counts, and Out of scope may say "nothing noted". Old items need no migration or body rewrite; add the missing headings when preparing them for work.
+`rota item create` warns about missing required or recommended sections and still captures the item. Each warning names the new item and asks you to add the section, with a command to print its template. A fresh [round assignment](parallel-rounds.md#picking-issues) refuses a feature missing either required heading and names what to add; an assignment brief can supply them too. `rota item ready` reports the same required sections. Presence is enough: an empty heading counts, and Out of scope may say "nothing noted". Old items need no migration or body rewrite; add the missing headings when preparing them for work.
 
 ## Detail files for large input
 
