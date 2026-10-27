@@ -119,8 +119,9 @@ const (
 	// and no relay or transfer has answered it; the CLI exits 4 with it,
 	// blockedBy outcome-open.
 	GateOutcomeOpen = "outcome-open"
-	// GateRunning: another gate for the same PR is running or queued; the CLI
-	// exits 4 with it, blockedBy gate-running, before this one takes the land lock.
+	// GateRunning: another gate for this PR is running or queued, or a NoWait
+	// run yielded to other landing work. The CLI exits 4, blockedBy gate-running,
+	// before this run takes the land lock.
 	GateRunning = "gate-running"
 	// GateForge: the origin names no forge and forge.provider names none, so
 	// the gate cannot tell where the PR lives (tracker.ResolveProvider, an
