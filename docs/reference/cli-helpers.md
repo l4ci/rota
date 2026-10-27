@@ -572,7 +572,7 @@ A gated verb refuses with exit 4 (`blockedBy: "manual gate"`) at every autonomy 
 |---|---|
 | `rota init [--force]` | create or refresh `.rota/`, the managed blocks and `.gitignore`; in your home directory (no `.rota/` there or above) it refuses and points at `rota projects`, and `--force` inits there anyway |
 | `rota projects` | list the projects registered on this machine; `rota init` registers, a missing path is marked, not pruned |
-| `rota projects cleanup` | delete every entry whose directory is gone or has no `.rota/`, printing each; no preview |
+| `rota projects cleanup` | delete temporary entries and entries whose directory is gone or has no `.rota/`; mark temporary removals in text and include a JSON `reason`; no preview |
 | `rota projects remove <dir>` | drop one registry entry; the directory stays |
 | `rota projects --ui` | terminal screen over the registry: status, last round, lease; open, cleanup, remove, add |
 | `rota connect add <name> --kind jira\|linear [--site <url>] [--user <u>] [--deployment cloud\|datacenter] --token-stdin` | add or `--replace` a machine-wide tracker connection and store its token in the keychain, else a 0600 file; reports which. `--site` is required for jira; linear defaults to `https://api.linear.app` |
