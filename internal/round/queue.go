@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/strutil"
-	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/tracker"
@@ -29,9 +28,9 @@ func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string)
 	switch {
 	case s.HeldID() == "":
 		return false, "holds nothing"
-	case s.PR() == "" && len(s.Issues()) == 0 && s.Finding() != "":
+	case s.PR() == "" && !s.ReviewResult().Complete() && s.Finding() != "":
 		return false, "its finding awaits `rota round accept`"
-	case s.PR() == "" && len(s.Issues()) == 0:
+	case s.PR() == "" && !s.ReviewResult().Complete():
 		return false, fmt.Sprintf("no PR recorded for branch %s; check the forge and run `rota round reconcile --apply`", strutil.FirstNonEmpty(s.Branch(), "(none)"))
 	}
 	// A relay can leave a slot blocked after its PR merged: the merged PR frees it.
@@ -79,7 +78,7 @@ func (e Env) prMerged(ctx context.Context, pr string) bool {
 // unless persist is false (a check-only run writes nothing). A forge that
 // cannot answer, no PR or a parked branch leaves the slot as it was.
 func (e Env) adoptBranchPR(ctx context.Context, root string, s *worker.Slot, persist bool) {
-	if e.Forge == nil || s.HeldID() == "" || s.PR() != "" || len(s.Issues()) > 0 || s.Branch() == "" || worker.IsOwnPark(s.Branch(), s.Name()) {
+	if e.Forge == nil || s.HeldID() == "" || s.PR() != "" || s.ReviewResult().Complete() || s.Branch() == "" || worker.IsOwnPark(s.Branch(), s.Name()) {
 		return
 	}
 	if !worker.Parkable(s.State()) {
@@ -230,7 +229,7 @@ func (e Env) closeReview(ctx context.Context, root string, be Board, s *worker.S
 	if err != nil {
 		return err
 	}
-	return e.closeNoPR(ctx, root, be, s, it, "Review done: ", "filed "+strings.Join(s.Issues(), ", "), nil)
+	return e.closeNoPR(ctx, root, be, s, it, "Review done: ", s.ReviewResult().Note(), nil)
 }
 
 // closeNoPR completes an item that delivers no PR: the slot parks, the note is
