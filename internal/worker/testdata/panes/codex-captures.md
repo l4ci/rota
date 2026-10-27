@@ -11,5 +11,9 @@ The temporary discovery session used the light-tier gpt-6-luna model.
 - `codex-approval.txt`: the session requested approval to run `true`. Captured
   before answering; the prompt was then cancelled.
 
+`codex-terminal-wait-narrow.txt` preserves the two-line capture from kit's
+pane in round 40, supplied in the #2178 review feedback. Its long elapsed
+time leaves only `esc t…` of the interrupt hint visible.
+
 Tests also compose these captures and use synthetic quotes to check that
 stronger attention states and unrelated pane text keep their meaning.

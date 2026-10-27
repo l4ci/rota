@@ -27,6 +27,31 @@ func TestClassifyCodexTerminalWait(t *testing.T) {
 	}
 }
 
+func TestClassifyCodexTerminalWaitNarrow(t *testing.T) {
+	pane := codexPaneFixture(t, "terminal-wait-narrow")
+	if state, evidence := ClassifyFor(harness.Codex, pane, false, 60, "blocked"); state != StateBusy {
+		t.Fatalf("narrow terminal wait: %s %q, want BUSY", state, evidence)
+	}
+}
+
+func TestClassifyCodexTerminalWaitKeepsEarlierBlockedSentinel(t *testing.T) {
+	pane := codexPaneFixture(t, "blocked") + codexPaneFixture(t, "terminal-wait-narrow")
+	if state, evidence := ClassifyFor(harness.Codex, pane, false, 60, "blocked"); state != StateBlocked {
+		t.Fatalf("blocked before wait: %s %q, want BLOCKED", state, evidence)
+	}
+}
+
+func TestClassifyCodexTerminalWaitTruncatedHints(t *testing.T) {
+	for _, duration := range []string{"1h", "14m", "38s"} {
+		for _, hint := range []string{"", " •", " • e…", " • esc t…", " • esc to interrupt)"} {
+			pane := "• Waiting for background terminal (" + duration + hint + "\n"
+			if state, evidence := ClassifyFor(harness.Codex, pane, false, 60, "blocked"); state != StateBusy {
+				t.Errorf("%q: %s %q, want BUSY", pane, state, evidence)
+			}
+		}
+	}
+}
+
 func TestClassifyCodexTerminalWaitKeepsAttentionStates(t *testing.T) {
 	pane := codexPaneFixture(t, "terminal-wait")
 	for name, c := range map[string]struct {
@@ -58,6 +83,8 @@ func TestClassifyCodexTerminalWaitIgnoresQuotesAndOtherHarnesses(t *testing.T) {
 		"• Ran cat fixture.txt\n  └ • Waiting for background terminal · sleep 45\n",
 		"• The display says Waiting for background terminal while waiting.\n",
 		"• Waiting for background terminal is normal during a test run.\n",
+		"• Waiting for background terminal (as the documentation calls it).\n",
+		"• Ran cat fixture.txt\n  └ • Waiting for background terminal (1h 14m 38s • esc t…\n",
 		"--- ORCHESTRATOR (round 40) ---\nThe pane says Waiting for background terminal.\n--- ROTA-SIG abcdef ---\n",
 		"• Waited for background terminal · sleep 45\n",
 	} {
@@ -67,11 +94,12 @@ func TestClassifyCodexTerminalWaitIgnoresQuotesAndOtherHarnesses(t *testing.T) {
 	}
 }
 
-// These three panes were captured from Codex 0.164.0 through herdr. Both
+// These panes were captured from Codex through herdr. Both
 // poll/watch and round status must distinguish a tool wait from real input.
 func TestClassifyCodexCapturedAttentionPanes(t *testing.T) {
 	for _, c := range []struct{ name, want string }{
 		{"terminal-wait", StateBusy},
+		{"terminal-wait-narrow", StateBusy},
 		{"blocked", StateBlocked},
 		{"approval", StateNeedsPermission},
 	} {
@@ -92,6 +120,7 @@ func TestClassifyCodexCapturedAttentionPanes(t *testing.T) {
 func TestPollCodexCapturedPanes(t *testing.T) {
 	for _, c := range []struct{ fixture, want, recorded string }{
 		{"terminal-wait", StateBusy, "busy"},
+		{"terminal-wait-narrow", StateBusy, "busy"},
 		{"blocked", StateBlocked, "blocked"},
 		{"approval", StateNeedsPermission, "needs-permission"},
 	} {
