@@ -120,7 +120,9 @@ secret from the worker or from other processes of the same user, so anything tha
 key file can sign. Codex's behaviour when the hook runs past its 30 s timeout is untested.
 
 To give a Codex worker anything else, send it through `rota worker dispatch --relay` or the assignment
-brief.
+brief. A relay accepted by a busy Codex session reports `queued: <slot> (<handle>)`
+(`queued: true` in JSON) and exits 0. It will be handled as the session continues; do not resend it.
+If rota cannot confirm delivery, dispatch still exits 6 and asks you to inspect the session before resending.
 
 ## A Codex plan critic
 
