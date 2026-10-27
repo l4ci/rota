@@ -321,3 +321,23 @@ func TestIgnoreLinesCoverCodexAgents(t *testing.T) {
 		t.Fatalf(".codex/ not managed: missing = %v", missing)
 	}
 }
+
+func TestRuntimeFileListsMatchManagedIgnores(t *testing.T) {
+	for _, path := range []string{"AGENTS.md", "internal/knowledge/skills_block.md", "docs/reference/rota-folder.md", "docs/contributing/contract/init.md"} {
+		b, err := os.ReadFile(filepath.Join("..", "..", path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Pin the regular runtime files; directories and glob descriptions use
+		// deliberately different prose in these inventories.
+		for _, line := range ignoreLines[1:] {
+			if !strings.HasPrefix(line, ".rota/") || strings.ContainsAny(line, "*") || strings.HasSuffix(line, "/") {
+				continue
+			}
+			name := strings.TrimPrefix(line, ".rota/")
+			if !strings.Contains(string(b), "`"+line+"`") && !strings.Contains(string(b), "`"+name+"`") {
+				t.Errorf("%s omits managed runtime file %s", path, line)
+			}
+		}
+	}
+}

@@ -258,3 +258,48 @@ func TestCancelledAssertionDoesNotRetry(t *testing.T) {
 		t.Fatalf("%+v calls=%d err=%v", r, calls, err)
 	}
 }
+
+func TestGateRetryReportsDurationAndTests(t *testing.T) {
+	w := gateLedgerWorld(t, "check")
+	e := w.env(false)
+	now := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
+	e.Now = func() time.Time { return now }
+	calls := 0
+	e.Shell = func(context.Context, string, string) (string, int) {
+		calls++
+		if calls == 1 {
+			return "--- FAIL: TestUnderLoad (0s)\n--- FAIL: TestOther (0s)\nFAIL\n", 1
+		}
+		now = now.Add(1250 * time.Millisecond)
+		return "ok\n", 0
+	}
+	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+	want := "FLAKY check — tests: TestUnderLoad, TestOther; rerun: 1.250s"
+	if err != nil || res.Verdict != GatePass || !strings.Contains(strings.Join(res.Notes, "\n"), want) {
+		t.Fatalf("missing rerun diagnostics: %+v %v", res, err)
+	}
+}
+
+func TestTrainRetryReportsDurationAndTests(t *testing.T) {
+	w := trainWorld(t, "check", "b1")
+	e := w.env(false)
+	now := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
+	e.Now = func() time.Time { return now }
+	calls := 0
+	e.Shell = func(context.Context, string, string) (string, int) {
+		calls++
+		if calls == 1 {
+			return "--- FAIL: TestLoad (0s)\nFAIL\n", 1
+		}
+		now = now.Add(2500 * time.Millisecond)
+		return "ok\n", 0
+	}
+	r, err := e.Train(bg, w.dir, TrainOpts{Targets: []string{"b1"}, Base: "main"})
+	if err != nil || r.Verdict != GatePass || len(r.Flaky) != 1 || r.Flaky[0].Retry.WallSeconds != 2.5 || !strings.Contains(strings.Join(r.Notes, "\n"), "tests: TestLoad; rerun: 2.500s") {
+		t.Fatalf("%+v %v", r, err)
+	}
+	rows, err := flakeledger.Load(w.dir)
+	if err != nil || len(rows) != 1 || rows[0].Retry.WallSeconds != 2.5 {
+		t.Fatalf("duration not persisted: %+v %v", rows, err)
+	}
+}

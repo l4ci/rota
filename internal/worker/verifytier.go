@@ -3,6 +3,7 @@ package worker
 import (
 	"fmt"
 
+	"github.com/l4ci/rota/internal/flakeledger"
 	"github.com/l4ci/rota/internal/testledger"
 )
 
@@ -47,7 +48,7 @@ func tierOutcomeOf(tier, subject string, vr VerifyResult) tierOutcome {
 		o.Notes = append(o.Notes, label+" FAILED: "+c)
 	}
 	for _, f := range vr.Flaky {
-		o.Notes = append(o.Notes, "FLAKY "+f.Check)
+		o.Notes = append(o.Notes, flakeNote(f))
 	}
 	return o
 }
@@ -115,7 +116,7 @@ type tierWalk struct {
 	// it (the gate keeps none).
 	notes, verified, e2eVerified *[]string
 	excluded                     *[]testledger.Entry
-	flaky                        *[]string
+	flaky                        *[]flakeledger.Entry
 
 	// What the walk saw.
 	at        string // tier being walked when it ended or errored
@@ -154,7 +155,7 @@ func (w *tierWalk) take(tier string, vr VerifyResult) (ended, ok bool, err error
 	out := tierOutcomeOf(tier, w.subject, vr)
 	if w.flaky != nil {
 		for _, f := range vr.Flaky {
-			*w.flaky = append(*w.flaky, f.Check)
+			*w.flaky = append(*w.flaky, f)
 		}
 	}
 	*w.notes = append(*w.notes, out.Notes...)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/flakeledger"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/land"
@@ -229,7 +230,7 @@ type GateResult struct {
 	SHA           string
 	PR            string
 	Verified      []string
-	Flaky         []string
+	Flaky         []flakeledger.Entry
 	VerifySkipped bool
 	Changed       bool
 	// AlreadyMerged says the forge reported the PR merged before this gate ran:

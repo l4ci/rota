@@ -730,7 +730,7 @@ func gateData(r worker.GateResult) *jsonx.Object {
 	d.Set("verified", strList(r.Verified))
 	d.Set("verifySkipped", r.VerifySkipped)
 	if len(r.Flaky) > 0 {
-		d.Set("flaky", strList(r.Flaky))
+		d.Set("flaky", flakyData(r.Flaky))
 	}
 	d.Set("changed", r.Changed)
 	setLedgerData(d, r.Excluded, r.Expired)

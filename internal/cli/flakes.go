@@ -21,7 +21,14 @@ func testFlakes(c *Ctx, args []string) (Result, error) {
 		return Result{}, err
 	}
 	entries, err := flakeledger.Load(root)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	if errors.Is(err, os.ErrNotExist) {
+		d := jsonx.NewObject()
+		d.Set("flakes", []any{})
+		d.Set("records", nil)
+		d.Set("unavailable", "no flake ledger")
+		return Result{Data: d, Text: "unavailable (no flake ledger)"}, nil
+	}
+	if err != nil {
 		return Result{}, Unavailable("cannot read flake ledger: %v", err)
 	}
 	ranked := flakeledger.Rank(entries)
@@ -48,5 +55,18 @@ func testFlakes(c *Ctx, args []string) (Result, error) {
 	d := jsonx.NewObject()
 	d.Set("flakes", rows)
 	d.Set("records", len(entries))
+	d.Set("unavailable", nil)
 	return Result{Data: d, Text: b.String()}, nil
+}
+
+func flakyData(entries []flakeledger.Entry) []any {
+	out := make([]any, 0, len(entries))
+	for _, f := range entries {
+		d := jsonx.NewObject()
+		d.Set("check", f.Check)
+		d.Set("tests", strList(f.Tests))
+		d.Set("rerunSeconds", f.Retry.WallSeconds)
+		out = append(out, d)
+	}
+	return out
 }
