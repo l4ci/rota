@@ -1835,7 +1835,7 @@ func TestHerdrCodexSendAcknowledgesQueuedRelay(t *testing.T) {
 		queued, composer string
 		want             error
 	}{
-		"queued":      {"• Queued follow-up messages\n" + head, "Ask Codex to do anything", nil},
+		"queued":      {"• Queued follow-up messages\n" + head, "Ask Codex to do anything", ErrQueued},
 		"absent":      {"", "Ask Codex to do anything", ErrNotSubmitted},
 		"earlier":     {earlier, "Ask Codex to do anything", ErrNotSubmitted},
 		"quoted":      {"The previous response mentioned [relay 2] in prose.\n", "Ask Codex to do anything", ErrNotSubmitted},
