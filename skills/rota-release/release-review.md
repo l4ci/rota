@@ -20,6 +20,11 @@ Run it with [`references/cross-harness-run.md`](references/cross-harness-run.md)
 Review a release range on cross-cutting risks only. You run in an extract of the
 release head; .review/range.txt holds the commits and the diff since the last tag,
 .review/notes.md the draft release notes. Do not edit files and do not run tests.
+Run any binary probe through the caller's installed `rota review probe --
+<command> [<arg>...]` from this extract. Its temporary HOME and config roots are
+for the probe only; setup or cleanup failure makes the probe unavailable. Do not
+override those roots with developer paths. Environment isolation does not prevent
+absolute-path access by unsandboxed commands.
 
 Report only these, one line each with file:line or commit:
 1. Contract or JSON changes (verb output fields, flags, file formats) that the notes
