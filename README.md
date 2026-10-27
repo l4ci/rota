@@ -18,22 +18,31 @@ Capture work as issues. rota hands them to Claude Code, Codex or OpenCode, revie
 [![For Claude Code](https://img.shields.io/badge/for-Claude%20Code-8A2BE2)](https://claude.com/claude-code)
 [![For Codex](https://img.shields.io/badge/for-Codex-000000)](https://developers.openai.com/codex)
 [![OpenCode workers](https://img.shields.io/badge/workers-OpenCode-555555)](docs/usage/opencode-workers.md)
-[![Runs in herdr or tmux](https://img.shields.io/badge/runs%20in-herdr%20%C2%B7%20tmux-2ea44f)](#-runs-in-herdr-or-tmux)
 
-[Website](https://volkerotto.net/rota/) · [Quick start](#-quick-start) · [How it works](#-how-it-works) · [Rounds](#-parallel-rounds) · [herdr and tmux](#-runs-in-herdr-or-tmux) · [Accounts](#-several-accounts-balanced) · [Skills](#-skills) · [Docs](docs/)
+[Website](https://volkerotto.net/rota/) · [Quick start](#-quick-start) · [How it works](#-how-it-works) · [Skills](#-skills) · [Docs](docs/)
 
 </div>
 
 ---
 
-## 🔌 Works with
-
-| | Supported | Set up in |
-|---|---|---|
-| **Forges** (where code lands) | [GitHub](https://github.com), [GitLab](https://gitlab.com) (self-hosted too), local (no remote, direct merge) | [Issue source and forge](docs/usage/issue-backend.md#issue-source-and-forge) |
-| **Issue sources** | `BACKLOG.md` in the repo, [GitHub Issues](https://docs.github.com/en/issues), [GitLab Issues](https://docs.gitlab.com/ee/user/project/issues/), [Jira](https://www.atlassian.com/software/jira), [Linear](https://linear.app), [It's a Plan](https://github.com/croffasia/itsaplan) | [Issue backend](docs/usage/issue-backend.md) · [Tracker connections](docs/usage/configuration.md#tracker-connections) |
-| **Agent harnesses** | [Claude Code](https://claude.com/claude-code), [Codex](https://developers.openai.com/codex), [OpenCode](https://opencode.ai) | [Codex workers](docs/usage/codex-workers.md) · [OpenCode workers](docs/usage/opencode-workers.md) |
-| **Terminal hosts** (a round needs one) | [herdr](https://herdr.dev), [tmux](https://github.com/tmux/tmux) | [Parallel rounds](docs/usage/parallel-rounds.md) |
+- [**Issues where you already keep them**](https://volkerotto.net/rota/docs/usage/issue-backend/): BACKLOG.md, GitHub, GitLab, Jira, Linear
+- [**Design before code**](https://volkerotto.net/rota/docs/usage/brainstorm/): brainstorm, plan, spike
+- [**Small, verified commits**](https://volkerotto.net/rota/docs/usage/running-work/)
+- [**Every branch reviewed against its spec**](https://volkerotto.net/rota/docs/usage/review-and-ship/)
+- [**A merge gate**](https://volkerotto.net/rota/docs/usage/parallel-rounds/#merge-approval): only green merges land
+- [**Parallel rounds**](https://volkerotto.net/rota/docs/usage/parallel-rounds/): an orchestrator plus workers, each in its own worktree
+- **Mix agents**: Claude Code, [Codex](https://volkerotto.net/rota/docs/usage/codex-workers/), [OpenCode](https://volkerotto.net/rota/docs/usage/opencode-workers/)
+- [**In your terminal**](https://volkerotto.net/rota/docs/usage/parallel-rounds/#layout): herdr or tmux, or subagents
+- [**Several accounts, balanced**](https://volkerotto.net/rota/docs/usage/unattended-rounds/#usage-limits)
+- [**Autonomy you choose**](https://volkerotto.net/rota/docs/usage/autonomy/): off, roundtrip, auto
+- **Memory that stays in the repo**: [knowledge](https://volkerotto.net/rota/docs/usage/learning/), [decisions](https://volkerotto.net/rota/docs/usage/decisions/), [handoff notes](https://volkerotto.net/rota/docs/usage/pausing-and-resuming/)
+- [**Knowledge shared across projects**](https://volkerotto.net/rota/docs/usage/external-knowledge/): lessons that hold everywhere live in their own git repo
+- [**Root-cause debugging**](https://volkerotto.net/rota/docs/usage/debugging/)
+- [**Product QA**](https://volkerotto.net/rota/docs/usage/qa/)
+- [**Milestones and vision**](https://volkerotto.net/rota/docs/usage/vision-and-plans/)
+- [**Undo the last cycle**](https://volkerotto.net/rota/docs/usage/undo/)
+- [**Multi-repo umbrella**](https://volkerotto.net/rota/docs/usage/umbrella-mode/)
+- [**A second support machine**](https://volkerotto.net/rota/docs/usage/support-machine/)
 
 ---
 
@@ -61,39 +70,13 @@ How each install route updates:
 
 | Route | Update with |
 |---|---|
-| [Claude Code plugin](#claude-code-plugin) | `claude plugin update rota@rota` |
+| [Claude Code plugin](docs/install.md#-plugin-marketplace) | `claude plugin update rota@rota` |
 | `rota skills install` | `rota skills update` |
 | `npx skills add l4ci/rota` | run it again |
 | Homebrew or install script | `rota update` prints the command |
 
-### Claude Code plugin
-
-Install it from the marketplace in one line (Claude Code 2.1.275 or later):
-
-```text
-/plugin install rota --marketplace l4ci/rota
-```
-
-On older versions, run `/plugin marketplace add l4ci/rota`, then `/plugin install rota@rota`.
-
-The plugin carries the skills, not the `rota` binary. Run `/rota:rota-install` to get it:
-
-- It installs the binary at the plugin's version. It uses Homebrew when `brew` is on your `PATH`, and otherwise downloads and runs [`install.sh`](https://raw.githubusercontent.com/l4ci/rota/main/install.sh) from this repo.
-- It runs `rota doctor` and reports the result.
-- It never uses `sudo`, edits your shell profile or runs `rota skills install`.
-
-The plugin downloads nothing on its own. At session start it prints a one-line hint when the binary is missing or has another version.
-
-Then run `rota setup` in your project. [Install](docs/install.md#-plugin-marketplace) has the details.
-
-## 🩹 Problems this fixes
-
-- Agents start building before the task is clear. `/rota-brainstorm` and `/rota-plan` settle it first.
-- A session ends and the next one starts blind. `.rota/` and `/rota-pause` carry state across.
-- Parallel agents collide or merge red. Each gets a worktree, and the gate tests every PR merged with the base before it lands.
-- Lessons get lost. `/rota-learn` and `/rota-decide` keep them where the next session reads them.
-
-[Where coding agents go wrong](docs/agent-mistakes.md) covers seven common mistakes, the checks rota enforces, the rules it asks agents to follow and the gaps that remain.
+<p align="center"><img src="docs/images/rota-round.gif" alt="Animated demo: running rota opens its palette; picking Orchestrate starts a round in herdr's split view, where the orchestrator assigns three issues to Claude and Codex workers, escalates a worker's product question, gates and merges a finished PR, and places the next issue on the account with the most headroom" width="100%"></p>
+<p align="center"><sub>A round in herdr's split view (illustration with a sample project; the palette is rota's real first screen).</sub></p>
 
 ## 🔄 How it works
 
@@ -121,37 +104,6 @@ issues ─► orchestrator ─┼─► worker dana ─► PR ─┼─► gate 
 - **Gate**: the only merge path. It checks the PR is current and properly signed off, runs your full test suite on a scratch merge of the PR and the base, and merges only on a pass. A red result sends the PR back to its worker. With `test.fullWhere ci` the suite runs in CI instead.
 
 Both ways share a memory in `.rota/`: what the project has learned (`KNOWLEDGE.md`), the lines it must not cross (`DECISIONS.md`), and handoff notes, so a fresh session picks up where the last one stopped.
-
-## 🧵 Parallel rounds
-
-A round runs several independent issues side by side. [Your first round](docs/first-round.md) sets it up; you'll want `gh` (or `glab`) and [herdr](https://herdr.dev) or tmux.
-
-<p align="center"><img src="docs/images/rota-round.gif" alt="Animated demo: running rota opens its palette; picking Orchestrate starts a round in herdr's split view, where the orchestrator assigns three issues to Claude and Codex workers, escalates a worker's product question, gates and merges a finished PR, and places the next issue on the account with the most headroom" width="100%"></p>
-<p align="center"><sub>A round in herdr's split view (illustration with a sample project; the palette is rota's real first screen).</sub></p>
-
-## 🪟 Runs in herdr or tmux
-
-A round runs in your terminal, not in a cloud dashboard. Start the orchestrator inside [herdr](https://herdr.dev) or [tmux](https://github.com/tmux/tmux) and rota gives every worker its own tab (tmux: window), so you can watch any agent, or type into one, at any time.
-
-- **herdr** reports each agent's state directly (working, blocked, done), and rota waits on those events instead of polling.
-- **tmux** works too: rota reads the panes to tell what each worker is doing.
-- **Neither?** The round still runs, with workers as subagents of the orchestrator.
-
-> [!TIP]
-> On a wide screen, `rota layout split` folds the workers into the orchestrator's tab as one grid (as in the demo above); `rota layout tabs` gives each its own tab again. In the `rota` palette, one View entry switches between them.
-
-Workers can be Claude Code, Codex or [OpenCode](docs/usage/opencode-workers.md), mixed in one round: a `harness:codex` or `harness:opencode` label, or the first entry of `round.harnesses`, picks per issue or per project.
-
-## 🔀 Several accounts, balanced
-
-Long rounds run into usage limits. List your accounts and rota spreads the work and routes around limits:
-
-- **Load balancing.** With several Claude accounts in `round.accounts`, `rota round assign` puts new work on the account with the most headroom and skips one that is cooling down.
-- **Limits.** When a worker hits a limit, `rota limit watch` moves its issue to a free slot on another account, continuing from the pushed branch, or waits for the reset if none is free.
-- **The orchestrator** can hand off and restart under another account before it hits its own limit (`orchestrator.switchOnUsage`), and `rota keepalive` restarts it if it stops.
-- **Codex.** `round.accounts` entries with `kind: "codex"` spread Codex workers over several logins (rota can't read Codex usage, so these aren't balanced by headroom). Entries with `kind: "opencode"` do the same for OpenCode.
-
-Setup: [parallel rounds](docs/usage/parallel-rounds.md#-setup) and [unattended rounds](docs/usage/unattended-rounds.md).
 
 ## 🧰 Skills
 
