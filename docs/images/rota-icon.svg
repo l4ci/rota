@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="rota">
+<title>rota</title>
+<rect width="32" height="32" rx="7" fill="#1f2328"/>
+<path fill="#ffffff" shape-rendering="crispEdges" d="M6 20h4v4H6zM8 16h4v4H8zM10 12h4v4h-4zM12 8h4v4h-4zM16 8h8v4h-8z"/>
+<path fill="#f0883e" shape-rendering="crispEdges" d="M16 20h8v4h-8z"/>
+</svg>
