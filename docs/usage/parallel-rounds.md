@@ -543,7 +543,11 @@ whose worker is busy, blocked or has uncommitted files is never taken.
   `rota worker gate <slot>` on a slot whose PR moved to review is refused with the PR to gate, so a
   habitual slot gate never merges the slot's next branch.
 - **Bounce it**: `rota round transfer <issue> --to <free slot> --body-file <gap>` checks the
-  branch out in that slot, moves the PR back onto it and dispatches the follow-up. Count it first with
+  branch out in that slot, moves the PR back onto it and dispatches the follow-up. Use
+  `--kind <harness>` and `--model <id>` to override the receiver's harness and model.
+  Transfer uses the same precedence and launch checks as `round assign`: flags override
+  issue labels, which otherwise apply to the target slot. These flags are ignored for `--to human`.
+  Count it first with
   `rota round bounce <issue> --head <sha>`: it exits 4 once the item is at `round.maxBounces`, and
   `rota round status` shows each slot's count. At the cap, never bounce it again: audit the issue's acceptance criteria first (is each one
   checkable as written, with one reading; three lines per criterion at most). If any is not, hand the
@@ -833,6 +837,7 @@ as `1559 (+#1563, +#1564)`.
 ```sh
 rota round return ben --reason "wrong premise" --note-file next.md   # the worker's own verb
 rota round transfer 59 --to dana --note-file next.md                 # orchestrator: to a slot
+rota round transfer 59 --to dana --kind codex --model gpt-6.1-sol    # orchestrator: override harness and model
 rota round transfer 59 --to human                                    # orchestrator: to the human
 rota round transfer 59 --to human --cap-reason ambiguous-criteria --note-file audit.md  # at the bounce cap, after the criteria audit
 rota round transfer 59 --to kit --tier heavy --tier-reason "bounced 3x"  # orchestrator: to a stronger worker
