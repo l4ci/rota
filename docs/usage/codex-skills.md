@@ -13,6 +13,16 @@ To keep installed skills from drifting behind the binary, `rota skills install` 
 
 A stub root follows the binary. Run `rota skills update` only when `rota skills status` (or `rota doctor`) reports it stale, which for a stub means a skill was added or removed or its stub changed (frontmatter or stub text); the report names the skill. A full root needs `rota skills update` after every upgrade. `update` keeps each root's recorded mode unless you pass `--stub` or `--full`.
 
+`--references` lists both the skill's linked local files and its shared references, with paths relative to the skill directory. Use the listed path to fetch a file:
+
+```sh
+rota skills get rota-review --references
+rota skills get rota-review --reference reviewer-briefs.md
+rota skills get rota-review --reference references/test-quality.md
+```
+
+Bare shared names such as `test-quality.md` still work. When a linked local file has the same name, the bare name selects the local file; `references/<name>` selects the shared one. An unknown name exits with a list of valid paths.
+
 To run Codex as a worker in a [parallel round](parallel-rounds.md), see [Codex workers](codex-workers.md).
 
 In Codex, type `$rota-pause` where Claude Code uses `/rota-pause`. It is the same skill.
