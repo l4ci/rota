@@ -15,6 +15,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotastate"
@@ -163,11 +164,12 @@ func positiveID(s string) bool {
 	return err == nil && n > 0
 }
 
-// ValidateRepair accepts positive tracker numbers (and PR URLs for --repair-pr),
-// rejecting controls before trimming so a trailing newline is not hidden.
+// ValidateRepair accepts tracker numbers or file-backend item IDs for issues,
+// and positive numbers or URLs for PRs. Issue whitespace is never normalized.
 func ValidateRepair(issue, pr string) error {
-	if issue != "" && (hasControl(issue) || !positiveID(issueID(issue))) {
-		return fmt.Errorf("--repair-issue requires a positive issue number")
+	id := strings.TrimPrefix(issue, "#")
+	if issue != "" && (hasControl(issue) || (!positiveID(id) && !backlog.ValidID(id, backlog.FileIDDigits))) {
+		return fmt.Errorf("--repair-issue requires a positive issue number or backlog item ID")
 	}
 	if pr != "" {
 		if hasControl(pr) {

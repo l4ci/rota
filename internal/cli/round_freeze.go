@@ -54,6 +54,9 @@ func roundFreeze(fs *flag.FlagSet) RunFunc {
 		d := jsonx.NewObject()
 		d.Set("freeze", freezeData(r))
 		d.Set("changed", n > 0 && err == nil)
+		if err != nil {
+			return Result{Data: d}, err
+		}
 		text := "no landing freeze"
 		if r != nil {
 			if r.Active {

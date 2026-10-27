@@ -127,3 +127,21 @@ func TestFreezeClearDeletedBase(t *testing.T) {
 		t.Fatalf("clear must persist: %+v %v", stored, err)
 	}
 }
+
+func TestFreezeClearRecordsExistingBase(t *testing.T) {
+	w, p := frozenWorld(t)
+	base := gitq(t, w.dir, "rev-parse", "main")
+	gitq(t, w.dir, "checkout", "-q", "-b", "unrelated")
+	gitq(t, w.dir, "commit", "-q", "--allow-empty", "-m", "unrelated work")
+	if base == gitq(t, w.dir, "rev-parse", "HEAD") {
+		t.Fatal("fixture must have an unrelated operator HEAD")
+	}
+	cleared, err := w.env(false).Freeze(bg, w.dir, FreezeOpts{Clear: true, Reason: "known obsolete check"})
+	if err != nil || cleared.ClearedSHA != base {
+		t.Fatalf("clear must record the frozen base, not unrelated HEAD: %+v %v", cleared, err)
+	}
+	stored, err := landfreeze.Read(p)
+	if err != nil || stored.ClearedSHA != base || stored.Active {
+		t.Fatalf("clearance must persist the base SHA: %+v %v", stored, err)
+	}
+}
