@@ -64,3 +64,49 @@ func TestTickTrainFill(t *testing.T) {
 		})
 	}
 }
+
+func TestTickTrainFillReviewReadiness(t *testing.T) {
+	now := time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name string
+		refs []string
+		age  time.Duration
+	}{
+		{"unready PR cannot fill count", []string{"#1", "#2", "#3"}, 0},
+		{"unready PR cannot expire alone", []string{"#3"}, time.Hour},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fake{queued: tc.refs}
+			e := f.env()
+			e.TrainFill = roundcfg.TrainFill{Max: 3, Minutes: 60}
+			e.Now = func() time.Time { return now }
+			e.TrainReady = func(target string) bool { return target != "#3" }
+			e.ReadySince = func(string) time.Time { return now.Add(-tc.age) }
+			if _, err := Run(context.Background(), e); err != nil {
+				t.Fatal(err)
+			}
+			if len(f.gated) != 0 || len(f.trained) != 0 {
+				t.Fatalf("unready PR contributed to landing: gated=%v trained=%v", f.gated, f.trained)
+			}
+		})
+	}
+}
+
+func TestTickTrainFillDisabledKeepsLegacyMerge(t *testing.T) {
+	f := &fake{queued: []string{"#1"}}
+	e := f.env()
+	e.TrainReady = func(string) bool {
+		t.Fatal("disabled fill policy must not read extra review state")
+		return false
+	}
+	e.ReadySince = func(string) time.Time {
+		t.Fatal("disabled fill policy must not read review age")
+		return time.Time{}
+	}
+	if _, err := Run(context.Background(), e); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.gated) != 1 || f.gated[0] != "main:#1" {
+		t.Fatalf("gated=%v, want legacy lone gate", f.gated)
+	}
+}
