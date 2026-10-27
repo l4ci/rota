@@ -209,6 +209,16 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota decisions topics` | list topic headings with bullet counts |
 | `rota decisions stats` | bullet count and size per topic |
 
+All writes target the umbrella `.rota/DECISIONS.md`, reject `--repo`, and refresh the decisions index. The body file for `add` / `supersede` holds the rule, `*Why.*`, `**Forbids.**` and `**Permits.**` in order; inline text and bullet lists are accepted. Existing optional paths comments are preserved. For `amend`, supply only the selected part's contents, without its marker.
+
+| Usage | What it does |
+|---|---|
+| `rota decisions add --topic <T> --title <S> --body-file <path\|-> [--date YYYY-MM-DD]` | validate and insert an entry at the top of its topic, creating the topic when missing |
+| `rota decisions amend --topic <T> --title <S> --part rule\|why\|forbids\|permits --body-file <path\|->` | replace one part of one active entry |
+| `rota decisions check` | validate every entry; malformed entries exit 1, missing date stamps warn without failing |
+| `rota decisions retire --topic <T> --title <S> --reason <text> [--date YYYY-MM-DD]` | lift a boundary and keep its entry as history |
+| `rota decisions supersede --topic <T> --title <S> --new-title <S> --body-file <path\|-> [--date YYYY-MM-DD]` | atomically replace a boundary within its topic and mark the old entry superseded |
+
 ## `rota glossary`
 
 | Usage | What it does |

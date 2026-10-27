@@ -15,8 +15,8 @@ Copy this checklist and track your progress:
 - [ ] Step 3 — Compose the Four Parts
 - [ ] Step 4 — Classify by Topic
 - [ ] Step 5 — Confirmation Gate
-- [ ] Step 6 — Merge into DECISIONS.md
-- [ ] Step 7 — Update the Decisions Index
+- [ ] Step 6 — Write through the Decisions Verb
+- [ ] Step 7 — Check the Result
 - [ ] Step 8 — Confirm
 ```
 
@@ -82,25 +82,17 @@ Present the assembled entry to the user with a question:
 - **Header:** `"Decide"`
 - **Question:** *"Lock in this decision?"*
 - **Options** (single-select):
-  1. *"Write it (Recommended)"* — *"Append to `.rota/DECISIONS.md` under `<topic>` and update the decisions index."*
+  1. *"Write it (Recommended)"* — *"Insert into `.rota/DECISIONS.md` under `<topic>` and update the decisions index."*
   2. *"Edit first"* — *"Show the draft inline so you can rewrite any of the four parts before writing."*
   3. *"Cancel"* — *"Skip — nothing is written."*
 
 Show the full draft (rule, why, forbids, permits) above the question. Write only on an explicit "Write it"; anything else cancels. **Edit first** takes revisions and re-asks. **Cancel** stops with *"Decision not captured."*
 
-## Step 6 — Merge into DECISIONS.md
+## Step 6 — Write through the Decisions Verb
 
-Format of `.rota/DECISIONS.md`:
+Never edit `.rota/DECISIONS.md` directly. Save the approved four-part body to a temporary file, without the topic or title headings:
 
 ```markdown
-# Decisions
-
-Hard boundaries for this project. Each entry is a commitment, not a preference — re-read before proposing changes that touch its area.
-
-## <Topic>
-
-### <Decision title>
-
 <One-sentence rule.>
 
 *Why.* <One paragraph rationale.>
@@ -110,26 +102,23 @@ Hard boundaries for this project. Each entry is a commitment, not a preference �
 **Permits.** <What this still allows.>
 
 <!-- paths: ["internal/storage/**/*.go", "cmd/server/*.go"] -->
-
-<!-- 2026-05-01 -->
 ```
 
-**Merge rules:**
-
-- The `paths` comment is optional. Include only the relative file globs this boundary applies to; omit it when no file scope is known. With `rota hook install`, matching Edit/Write calls receive the full active entry once per session. Globs are relative to the umbrella root; `*` stays in one path segment and `**` spans directories. Topic-based consult still applies to every entry.
-
-- Never rewrite sections you didn't change; make targeted edits rather than replacing the whole file.
-- Insert new `### Decision title` blocks at the **top** of their topic (newest first).
-- Stamp today's absolute date as `<!-- YYYY-MM-DD -->`.
-- New topics go alphabetically, except `Architecture` and `Build & Tooling` may be pinned near the top (as in `KNOWLEDGE.md`).
-
-## Step 7 — Update the Decisions Index
+The `paths` comment is optional; preserve it when supplied, and omit it when no file scope is known. Globs are relative to the umbrella root; `*` stays in one segment and `**` spans directories. With `rota hook install`, matching Edit/Write calls receive the full active entry once per session. Topic-based consult still applies.
 
 ```bash
-rota block decisions
+rota decisions add --topic "<topic>" --title "<title>" --body-file <temporary-file>
 ```
 
-Updates the managed `<!-- rota-decisions-start -->` block in the project instructions file (`AGENTS.md` if present, else `CLAUDE.md`; the verb resolves it, never hardcode). The read-site skills (`/rota-work`, `/rota-debug`, `/rota-plan`, `/rota-refactor`, `/rota-review`, `/rota-vision`) read this block to know when to consult `DECISIONS.md`.
+The verb validates the body, stamps today's absolute date (`--date YYYY-MM-DD` overrides it), and inserts the entry at the top of its topic. It creates a missing topic alphabetically after pinned `Architecture` / `Build & Tooling` topics and refreshes the managed decisions block in `AGENTS.md` when present, else `CLAUDE.md`. All decisions writes are umbrella-only: never pass `--repo`.
+
+To correct one approved part of an existing active entry, save only that part's text (without its marker) and use `rota decisions amend --topic "<topic>" --title "<title>" --part rule|why|forbids|permits --body-file <temporary-file>`. It preserves the rest of the entry and every other entry. Keep the same manual confirmation gate for a correction.
+
+## Step 7 — Check the Result
+
+Inspect the writer's result and the diff. Each writer refreshes the decisions index internally; do not hand-edit the block or run a second index write. The read-site skills use it to find relevant hard boundaries.
+
+`rota decisions check` validates all entries using the same parser as the writer. Missing or out-of-order parts and malformed lifecycle status lines fail with the topic and title; a missing date stamp is a warning only. If the writer refuses the approved draft, correct its input and retry; never bypass it with a file edit.
 
 ## Step 8 — Confirm
 
