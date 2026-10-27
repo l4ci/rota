@@ -23,6 +23,8 @@ type State struct {
 	Held        map[string]string     `json:"held,omitempty"`
 	Reported    []string              `json:"reported,omitempty"`
 	FailedHeads map[string]FailedHead `json:"failedHeads,omitempty"`
+	// Filling stores base/count/maximum keys, never rendered elapsed time.
+	Filling map[string]string `json:"filling,omitempty"`
 }
 
 func statePath(commonDir string) string { return rotastate.File(commonDir, StateFile) }
@@ -46,6 +48,7 @@ func LoadState(commonDir string, round int) State {
 func (s State) Apply(e *Env) {
 	e.Held = s.Held
 	e.FailedHeads = s.FailedHeads
+	e.Filling = s.Filling
 	e.Reported = map[string]bool{}
 	for _, k := range s.Reported {
 		e.Reported[k] = true
@@ -75,6 +78,7 @@ func SaveState(commonDir string, round int, r Result) error {
 	return update(commonDir, round, func(s *State) {
 		s.Held, s.Reported = r.Held, nil
 		s.FailedHeads = r.FailedHeads
+		s.Filling = r.Filling
 		for k := range r.Reported {
 			s.Reported = append(s.Reported, k)
 		}

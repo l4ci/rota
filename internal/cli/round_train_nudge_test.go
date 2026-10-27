@@ -137,13 +137,15 @@ func nudgeProject(t *testing.T, branches, reviewed []string) string {
 	}
 	sha = strings.TrimSpace(string(out))
 	for _, b := range reviewed {
-		rec := verdict.NewRecord(verdict.ReviewQuality, "PASS", sha, verdict.Body{}, time.Now())
+		rec := verdict.NewRecord(verdict.ReviewQuality, "PASS", sha, verdict.Body{}, nudgeReviewedAt)
 		if _, err := verdict.AddBranch(dir, verdict.BranchKey("", b), rec); err != nil {
 			t.Fatal(err)
 		}
 	}
 	return dir
 }
+
+var nudgeReviewedAt = time.Date(2026, 10, 27, 8, 0, 0, 0, time.UTC)
 
 // addRegistryRows merges rows into .rota/workers.json, creating it when absent.
 func addRegistryRows(t *testing.T, dir string, rows map[string][]map[string]any) {
@@ -185,9 +187,9 @@ func TestWaitingPRsReadsDoneSlotsAndQueue(t *testing.T) {
 	})
 	got := waitingPRs(&Ctx{Deps: testDeps(), ctx: context.Background()}, dir)
 	want := []waitingPR{
-		{PR: "https://example.test/o/r/pull/11", Base: "main", Reviewed: true},
+		{PR: "https://example.test/o/r/pull/11", Base: "main", Reviewed: true, ReadySince: nudgeReviewedAt},
 		{PR: "#13", Base: "main", Reviewed: false},
-		{PR: "#12", Base: "cycle", Reviewed: true},
+		{PR: "#12", Base: "cycle", Reviewed: true, ReadySince: nudgeReviewedAt},
 		{PR: "#19", Base: "main", Reviewed: false},
 	}
 	if len(got) != len(want) {
@@ -212,8 +214,8 @@ func TestWaitingPRsFillsEmptyBaseFromConfiguredBase(t *testing.T) {
 	})
 	got := waitingPRs(&Ctx{Deps: testDeps(), ctx: context.Background()}, dir)
 	want := []waitingPR{
-		{PR: "#11", Base: "feat/x", Reviewed: true},
-		{PR: "#12", Base: "feat/x", Reviewed: true},
+		{PR: "#11", Base: "feat/x", Reviewed: true, ReadySince: nudgeReviewedAt},
+		{PR: "#12", Base: "feat/x", Reviewed: true, ReadySince: nudgeReviewedAt},
 	}
 	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("waiting = %+v, want %+v", got, want)

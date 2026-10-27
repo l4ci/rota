@@ -14,6 +14,11 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
+func reviewVerdictsMissing(c *Ctx, root, slot, base string) string {
+	why, _ := reviewReadiness(c, root, slot, base)
+	return why
+}
+
 func TestAutopilotReviewProbeLetsPRStateReachGate(t *testing.T) {
 	for _, state := range []string{"CLOSED", "MERGED", "OPEN"} {
 		t.Run(state, func(t *testing.T) {
