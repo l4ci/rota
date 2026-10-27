@@ -2,6 +2,16 @@
 
 Install the `rota` binary (Homebrew, the install script, or a release download), install the skills it carries, then run `rota setup` in your project. Claude Code users can instead start from the [plugin marketplace](#-plugin-marketplace), which brings the skills and installs the binary for them.
 
+## 🤖 Let your agent do it
+
+Paste this into Claude Code, Codex or OpenCode:
+
+```
+Install rota and set it up in this project. Follow https://raw.githubusercontent.com/l4ci/rota/main/install.md
+```
+
+The agent reads [install.md](https://github.com/l4ci/rota/blob/main/install.md) in the repo root (the prompt links the raw file) and works through the same steps as below: binary, skills, `rota doctor`, project setup. It shows each command and waits for your yes, never uses `sudo`, does not edit your shell profile without asking and stops on any checksum or signature failure. It does not answer the setup questions for you: it puts each `rota setup --list` question to you and applies your answer with `--set` (never `--yes`), or runs `rota init` with the defaults and offers `/rota-init` to tune them. Read the file first if you want to know what your agent will be told. [llms.txt](https://volkerotto.net/rota/llms.txt) indexes these docs for agents.
+
 ## 📦 The binary
 
 ### Homebrew
