@@ -80,9 +80,14 @@ RC=0; OUT=$(bn worker done "$SLOTB") || RC=$?
 [ "$RC" = "4" ] && grep -q "3 has no PASS proof row" <<<"$OUT" || fail "one member still lacks proof, done must exit 4 naming it: rc=$RC $OUT"
 bnp 3 >/dev/null || fail "proof record for member 3 failed"
 RC=0; OUT=$(bn worker done "$SLOTB") || RC=$?
-[ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "every issue proven: done should pass: rc=$RC $OUT"
+[ "$RC" = "4" ] && grep -q "unmet acceptance" <<<"$OUT" || fail "proof alone must not mark acceptance: rc=$RC $OUT"
+for n in 1 2 3; do
+  bn plan pass "#$n" AC-1 --proof "$BNHEAD:echo fast" >/dev/null || fail "could not mark acceptance for $n"
+done
+RC=0; OUT=$(bn worker done "$SLOTB") || RC=$?
+[ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "every issue proven and marked: done should pass: rc=$RC $OUT"
 grep -q '"state": *"done"' "$BNPROJ/.rota/workers.json" || fail "the slot should be recorded done"
-pass "worker done passes once the lead and every member have a PASS row"
+pass "worker done passes once the lead and every member have proof and acceptance marks with a local origin"
 rm -rf "$TMP_BN"
 
 # ── the gate wants the PR to close every issue of the bundle ────────────────

@@ -139,10 +139,7 @@ func doneAcceptance(c *Ctx, root, dir, branch string, ids []string) error {
 			continue
 		}
 		if closes == nil {
-			closes, err = doneClosing(c, root, dir, branch)
-			if err != nil {
-				return err
-			}
+			closes = doneClosing(c, root, dir, branch)
 		}
 		if !closes(it.IssueKey()) {
 			continue
@@ -181,18 +178,20 @@ func doneAcceptance(c *Ctx, root, dir, branch string, ids []string) error {
 	return e
 }
 
-// doneClosing uses the issue source's closing convention, including keyed
-// trackers on another forge. Like the gate, a branch with no PR closes nothing.
-func doneClosing(c *Ctx, root, dir, branch string) (func(tracker.IssueKey) bool, error) {
+// doneClosing uses PR closing information when available. A forge is optional:
+// when it cannot be read, keep checking the held items' acceptance as before.
+// A successful lookup finding no PR, or a known non-closing PR, closes nothing.
+func doneClosing(c *Ctx, root, dir, branch string) func(tracker.IssueKey) bool {
+	assumeClosing := func(tracker.IssueKey) bool { return true }
 	env := c.deps().workerEnv().WithDefaults()
 	settings := env.GateConfig(root).Tracker
 	f, err := env.Forge("", dir, settings)
 	if err != nil {
-		return nil, trackerErr(err)
+		return assumeClosing
 	}
 	prs, err := f.OpenPRs(c.Context())
 	if err != nil {
-		return nil, trackerErr(err)
+		return assumeClosing
 	}
 	for _, pr := range prs {
 		if pr.Branch != branch {
@@ -200,12 +199,12 @@ func doneClosing(c *Ctx, root, dir, branch string) (func(tracker.IssueKey) bool,
 		}
 		issues, err := env.Issues(dir, settings)
 		if err != nil {
-			return nil, trackerErr(err)
+			return assumeClosing
 		}
 		src := tracker.ClosingSource{Body: pr.Body, Title: pr.Title, Branch: pr.Branch}
-		return func(key tracker.IssueKey) bool { return issues.ClosesIssue(key, src) }, nil
+		return func(key tracker.IssueKey) bool { return issues.ClosesIssue(key, src) }
 	}
-	return func(tracker.IssueKey) bool { return false }, nil
+	return func(tracker.IssueKey) bool { return false }
 }
 
 // proofRows is the proof rows of item id, errors mapped onto the exit table.

@@ -606,7 +606,9 @@ such as `'#2150'`). The sha and check must name a recorded PASS row from
 `rota proof show <ID>`; proof rows alone do not mark acceptance. A plain done or
 `--outcome done` refuses (exit 4) while explicit criteria on tracker items the PR closes are unmet, listing them and
 their marking commands. Changed criterion text or withdrawn proof makes a mark unmet
-again. Items without explicit `AC-n` ids keep their existing behavior.
+again. When PR closing information cannot be read (for example, with a local origin),
+done checks all held tracker items; it does not require a reachable forge.
+Items without explicit `AC-n` ids keep their existing behavior.
 
 For an unmet criterion, leave it unmarked and report `--outcome partial --summary-file <f>`
 (or `failed` when nothing can be delivered). The file has three lines: what changed,

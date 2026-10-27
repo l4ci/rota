@@ -110,10 +110,54 @@ func acceptanceDoneProject(t *testing.T) (string, *trackertest.Fake, *Deps) {
 type doneForge struct {
 	worker.Forge
 	body string
+	err  error
 }
 
 func (f doneForge) OpenPRs(context.Context) ([]tracker.PR, error) {
-	return []tracker.PR{{Branch: "feat/x", Body: f.body}}, nil
+	return []tracker.PR{{Branch: "feat/x", Body: f.body}}, f.err
+}
+
+func TestWorkerDoneOptionalForge(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mark bool
+		want int
+	}{{"undeterminable", true, 0}, {"unreachable", true, 0}, {"unmarked", false, 4}} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, _, deps := acceptanceDoneProject(t)
+			if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"issues":{"source":"github"}}`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if tc.mark {
+				addProof(t, deps, dir, "PASS", "abc1234", "check")
+				for _, ac := range []string{"AC-1", "AC-2"} {
+					if code, _, stderr := issueRunWith(t, deps, dir, "plan", "pass", "#7", ac, "--proof", "abc1234:check"); code != 0 {
+						t.Fatalf("mark: %d %s", code, stderr)
+					}
+				}
+			}
+			base := deps.WorkerEnv
+			deps.WorkerEnv = func() worker.Env {
+				e := base()
+				// Use the real resolver against the fixture's local bare
+				// origin; the unknown forge fails before any forge CLI runs.
+				e.Forge = nil
+				if tc.name == "unreachable" {
+					e.Forge = func(string, string, tracker.Settings) (worker.Forge, error) {
+						return doneForge{err: errors.New("forge offline")}, nil
+					}
+				}
+				return e
+			}
+			code, out, stderr := rotaInWith(t, deps, dir, "worker", "done", "ben", "--outcome", "done", "--json")
+			if code != tc.want {
+				t.Fatalf("optional forge: exit %d, want %d: %s %s", code, tc.want, out, stderr)
+			}
+			if !tc.mark && !strings.Contains(out+stderr, "AC-1: first") {
+				t.Fatalf("fallback must still check acceptance: %s %s", out, stderr)
+			}
+		})
+	}
 }
 
 func donePR(deps *Deps, fake *trackertest.Fake, body string) {
@@ -240,13 +284,23 @@ func TestWorkerDoneAcceptanceCoverage(t *testing.T) {
 
 func TestWorkerDoneFileAcceptance(t *testing.T) {
 	dir := doneProject(t, "")
+	deps := testDeps()
+	base := deps.WorkerEnv
+	deps.WorkerEnv = func() worker.Env {
+		e := base()
+		e.Forge = func(string, string, tracker.Settings) (worker.Forge, error) {
+			t.Fatal("file-mode done must not look up a forge")
+			return nil, nil
+		}
+		return e
+	}
 	if err := os.MkdirAll(filepath.Join(dir, ".rota", "bugs"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "bugs", "B07.md"), []byte("## Acceptance\n- [ ] AC-1: first\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	code, out, stderr := rotaIn(t, dir, "worker", "done", "ben", "--json")
+	code, out, stderr := rotaInWith(t, deps, dir, "worker", "done", "ben", "--json")
 	if code != 0 || slotState(t, dir) != "done" {
 		t.Fatalf("file-mode criteria must not acquire the tracker-only refusal: %d %s %s", code, out, stderr)
 	}
