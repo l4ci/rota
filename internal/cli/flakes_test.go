@@ -91,3 +91,20 @@ func TestFlakeLedgerMissingEmptyAndMalformed(t *testing.T) {
 		})
 	}
 }
+
+func TestFlakeCountUsesItsOwnEvidenceSource(t *testing.T) {
+	dir := workerProject(t, `{}`)
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "flakes.jsonl"), []byte(recoveryRow), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// No round ledger exists, but the observed fail/pass record still counts.
+	code, out, _ := rotaInWith(t, testDeps(), dir, "round", "summary", "--round", "2", "--json")
+	if code != 0 {
+		t.Fatalf("summary exit %d: %s", code, out)
+	}
+	metrics := data(t, out)["metrics"].(map[string]any)
+	flaky := metrics["flakes"].(map[string]any)
+	if flaky["count"] != float64(1) || flaky["unavailable"] != nil || metrics["redTrainRate"].(map[string]any)["unavailable"] != "no ledger" {
+		t.Fatalf("independent evidence sources: %v", metrics)
+	}
+}
