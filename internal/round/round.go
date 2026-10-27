@@ -538,6 +538,12 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 				rep.add(Finding{Kind: TabMoved, Slot: r.Name, Detail: detail, Repair: "record " + cur, from: r.Tab, to: cur})
 			}
 		} else if r.Registered && r.Tab != "" {
+			// A runtime restart can orphan Orca handles while their processes
+			// survive. Never offer the destructive dead-tab repair for absence.
+			if e.HostName == host.Orca {
+				r.HostState, r.Evidence = "unverifiable", "stale-handle"
+				continue
+			}
 			rep.add(Finding{Kind: DeadTab, Slot: r.Name, Detail: fmt.Sprintf("host has no live agent for tab %s", r.Tab), Repair: "clear handle, set state dead"})
 		}
 	}

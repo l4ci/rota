@@ -104,23 +104,62 @@ Affects `/rota-work` and `/rota-ship` (solo). Sets how [`/rota-ship`](review-and
 
 With `issues.source` set to `github` or `gitlab` this key is ignored: `/rota-work`, `/rota-debug` and `/rota-ship` always open a PR or MR and never merge. A local forge (no `origin` remote, or `forge.provider: local`) lands `direct` whatever this key says. The routing lives in one place, `ship.Strategy` in `internal/ship`, and `rota ship strategy` prints its answer. See [issue backend](issue-backend.md).
 
-## round.dispatch: subagent, tmux or herdr
+## round.dispatch: subagent, tmux, herdr or orca
 
-Affects rounds only. `/rota-work` always runs in-process `Agent` workers that write files while the orchestrator commits, whatever this key says. Standing workers in tmux windows or herdr tabs (each its own Claude Code session in its own worktree, opening a PR behind a merge gate) belong to [`/rota-orchestrate`](parallel-rounds.md); this key only chooses their host.
+Affects rounds only. `/rota-work` always runs in-process `Agent` workers that write files while the orchestrator commits, whatever this key says. Standing workers in tmux windows, herdr tabs or Orca terminals (each its own agent session in its own worktree, opening a PR behind a merge gate) belong to [`/rota-orchestrate`](parallel-rounds.md); this key only chooses their host.
 
 | Mode | Effect on a round |
 |------|-------------------|
 | `"subagent"` (default) | `rota round start` detects the host: herdr inside a herdr pane, tmux inside tmux, otherwise solo. |
 | `"tmux"` | One tmux window per worker. Needs a `tmux` binary and a working `claude` on `PATH`. |
 | `"herdr"` | One herdr tab per worker in the orchestrator's workspace; herdr reports each worker's state, notifies when one needs you, and rota titles each tab `<slot> · <task> · <state>`. The orchestrator must run inside a herdr pane. |
+| `"orca"` | One terminal per worker in its existing worktree. Explicit opt-in; needs `orca` on PATH and the Orca app running. Claude and Codex use their configured launch commands. |
 
 ```bash
 rota config set round.dispatch tmux
 ```
 
-**A round in herdr needs no setting.** With `round.dispatch` unset or `subagent` (the default `rota init` writes), `rota round start` detects the host: herdr inside a herdr pane, tmux inside tmux, and otherwise **solo mode**, where the orchestrator runs each worker as a Claude `Agent` subagent in the slot's own worktree. An explicit `tmux` or `herdr` is used as set, and fails if unavailable rather than falling back. The round records its host when it starts and keeps it until wind-down. Solo workers share the orchestrator's account, rate window and context, so one usage limit stops them all. Solo mode runs Claude workers only: a Codex subagent cannot be given a working directory. See [Parallel rounds](parallel-rounds.md).
+**A round in herdr needs no setting.** With `round.dispatch` unset or `subagent` (the default `rota init` writes), `rota round start` detects the host: herdr inside a herdr pane, tmux inside tmux, and otherwise **solo mode**, where the orchestrator runs each worker as a Claude `Agent` subagent in the slot's own worktree. An explicit `tmux`, `herdr` or `orca` is used as set, and fails if unavailable rather than falling back. The round records its host when it starts and keeps it until wind-down. Solo workers share the orchestrator's account, rate window and context, so one usage limit stops them all. Solo mode runs Claude workers only: a Codex subagent cannot be given a working directory. See [Parallel rounds](parallel-rounds.md).
 
-Two things behave differently under `tmux` and `herdr` than in `/rota-work`:
+**Orca must be running.** Set `round.dispatch` to `orca`, disable
+`autoRenameBranchFromWork` in Orca, and run `rota doctor` before assigning a
+worker. Doctor warns when status exposes auto-renaming as enabled; a passing
+check does not prove an unavailable setting is off. Codex uses its default
+account unless an account is configured. Layouts and linked workspaces are
+unavailable.
+
+Dispatch waits for the agent's input line and confirms pickup from a turn-start
+receipt, or a new harness busy indicator. Codex must also have finished loading
+its model header. Native handles identify terminals even when pane titles change.
+
+If dispatch or cleanup refuses:
+
+- **Trust or another interactive dialog:** dismiss it in the Orca terminal, then
+  re-run assign. rota does not answer the dialog or paste the brief into it.
+- **Oversize brief:** shorten the submitted text to fit the 120 KiB UTF-8 byte
+  limit. Reported Orca tests found that filenames and stdin markers passed as
+  text are sent literally; they cannot bypass the limit.
+- **Stale handle after an app restart:** inspect the slot, then reclaim with
+  `--force`. Cleanup still requires retained process evidence showing the
+  agent and recorded descendants are gone. Missing evidence or a surviving
+  child requires investigation; force does not waive that proof.
+- **Branch changed after pickup:** the prompt was already submitted. Disable
+  `autoRenameBranchFromWork` in Orca settings and inspect the slot and branch
+  before retrying; do not resend the brief blindly.
+
+Orca types the launch command into its login shell, where it can enter history.
+Only account paths and slot/port/database variables belong in its environment
+prefix; never put secrets there or in the launch command. rota retains process
+evidence from boot and polling so an agent exit does not prevent later cleanup.
+
+Robert Braatz's reported Codex tests, relayed during round 41, confirmed multiline
+delivery, turn-start receipts and background creation. Live validation still
+needs to check pre-seeded trust, auto-renaming on rota-created worktrees, terminal
+closure with process proof, complete JSON response envelopes and status settings,
+whether the optional `exited` field exists, and dash-led `--text` values.
+Local fake-CLI tests do not settle those details.
+
+Two things behave differently under `tmux`, `herdr` and `orca` than in `/rota-work`:
 
 - **`work.isolation` stops applying.** Every slot has its own worktree, so its own git index, by construction.
 - **Workers commit.** The orchestrator's per-task commit step is skipped; integration happens through the merge gate instead, which re-verifies the *merged* tree. Two workers can each be green and still break the cycle branch together (one widens a signature while another adds a caller, one stops emitting a constant while another starts reading it), and a clean merge does not rule that out. So the gate runs `test.full` after every merge rather than trusting the branches.

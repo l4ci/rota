@@ -158,7 +158,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 		handle := session + ":" + name
 		// A round slot has no session until its first dispatch, whatever the
 		// host: a nominal handle would read as a dead tab to reconcile.
-		if dispatch == host.Herdr || len(o.Names) > 0 {
+		if dispatch == host.Herdr || dispatch == host.Orca || len(o.Names) > 0 {
 			handle = ""
 		}
 		if err := registerSlot(root, name, branch, abs, base, session, handle); err != nil {
@@ -297,6 +297,14 @@ func (e Env) Reap(root string, names []string, all bool) (reaped []string, err e
 		if s.IsExternal() { // unregister only: the worktree and branch are not rota's
 			reaped = append(reaped, name)
 			continue
+		}
+		// Orca owns a terminal whose agent can outlive its runtime handle.
+		// Retain the worktree and registry until close proves the tree gone.
+		if e.hostKind(root) == host.Orca && s.Handle() != "" {
+			if err := e.KillSlot(context.Background(), root, name); err != nil {
+				failed = append(failed, fmt.Sprintf("%s: %v", name, err))
+				continue
+			}
 		}
 		e.ClearLabel(context.Background(), root, name)
 		removed := true

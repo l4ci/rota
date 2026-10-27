@@ -330,9 +330,12 @@ func (t *tmux) SendPane(ctx context.Context, pane, text string) error {
 }
 
 // CurrentPane returns the pane this process runs in under the host kind, ""
-// when the environment names none. herdr reads HERDR_PANE_ID; every other kind
-// (tmux, and solo inside tmux) reads TMUX_PANE.
+// when the environment names none. herdr reads HERDR_PANE_ID; tmux and solo
+// read TMUX_PANE; Orca reads ORCA_TERMINAL_HANDLE.
 func CurrentPane(kind Kind, getenv func(string) string) string {
+	if kind == Orca {
+		return getenv("ORCA_TERMINAL_HANDLE")
+	}
 	if kind == Herdr {
 		return getenv("HERDR_PANE_ID")
 	}
@@ -340,9 +343,9 @@ func CurrentPane(kind Kind, getenv func(string) string) string {
 }
 
 // CurrentPaneAny is CurrentPane when the host kind is unknown: herdr first,
-// then tmux. It returns the pane and the kind that named it.
+// then tmux, then Orca. It returns the pane and the kind that named it.
 func CurrentPaneAny(getenv func(string) string) (pane string, kind Kind) {
-	for _, k := range []Kind{Herdr, Tmux} {
+	for _, k := range []Kind{Herdr, Tmux, Orca} {
 		if p := CurrentPane(k, getenv); p != "" {
 			return p, k
 		}
