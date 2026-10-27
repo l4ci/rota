@@ -45,7 +45,7 @@ OCSTART="env -u HERDR_PANE_ID -u TMUX_PANE -u HERDR_ENV PATH=$TMP_OC/down:$FKB:$
 ocrc() { RC=0; OUT=$( cd "$OC" && $OCENV "$ROTA_BIN" --json "$@" 2>"$TMP_OC/err" ) || RC=$?; ERR=$(cat "$TMP_OC/err"); }
 occ() { ( cd "$OC" && "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 
-occ item create --kind features --title First --milestone M01 --body-file - <<<$'## Acceptance\n- [ ] works\nTouches internal/a.go' >/dev/null || fail "item create failed"
+occ item create --kind features --title First --milestone M01 --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] works\nTouches internal/a.go' >/dev/null || fail "item create failed"
 HOLDER=$$
 occ config set round.dispatch herdr >/dev/null || fail "config set round.dispatch failed"
 ( cd "$OC" && $OCSTART "$ROTA_BIN" --json round start --holder-pid "$HOLDER" --slots 2 >/dev/null 2>&1 ) || fail "round start failed"

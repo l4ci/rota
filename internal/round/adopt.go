@@ -117,7 +117,13 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 	}
 	res.Overlaps = r.Overlaps
 	if len(r.Overlaps) > 0 && !o.AcceptOverlap {
-		blk := blocked(BlockOverlap, "%s overlaps work in flight: %s", res.Issue, strings.Join(r.Checks[len(r.Checks)-1].Detail, "; "))
+		var detail []string
+		for _, check := range r.Checks {
+			if check.Name == CheckOverlap {
+				detail = check.Detail
+			}
+		}
+		blk := blocked(BlockOverlap, "%s overlaps work in flight: %s", res.Issue, strings.Join(detail, "; "))
 		blk.Readiness = &r
 		return res, blk
 	}

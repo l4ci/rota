@@ -13,8 +13,8 @@ SO="$(mktemp -d "$TMP/solo.XXXXXX")"
 SOENV="env -u HERDR_ENV -u HERDR_PANE_ID -u TMUX -u TMUX_PANE"
 so() { ( cd "$SO" && $SOENV "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 reg() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(eval(sys.argv[2]))' "$SO/.rota/workers.json" "$1"; }
-so item create --kind features --title First --milestone M01 --body-file - <<<$'## Acceptance\n- [ ] works\nTouches internal/a.go' >/dev/null
-so item create --kind features --title Second --milestone M01 --body-file - <<<$'## Acceptance\n- [ ] works\nTouches internal/b.go' >/dev/null
+so item create --kind features --title First --milestone M01 --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] works\nTouches internal/a.go' >/dev/null
+so item create --kind features --title Second --milestone M01 --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] works\nTouches internal/b.go' >/dev/null
 printf 'stub worker contract\n' > "$SO/contract.md"
 so config set round.brief "$SO/contract.md" >/dev/null
 HOLD=$$
