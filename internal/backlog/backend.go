@@ -138,6 +138,8 @@ type Options struct {
 	// belongs to the proof package, which imports backlog, so the caller
 	// injects it; a backend without it refuses to complete an item as done.
 	CountProof func(text string) int
+	// LookupProof reads the latest result for a mark; injected to avoid a proof/backlog cycle.
+	LookupProof func(text, sha, check string) (string, bool)
 	// NoteLimit is the ROTA_NOTE_LIMIT value; see Issues.NoteLimit.
 	NoteLimit string
 	// Today is the day clock of the file backend's dated rows and of milestone
@@ -167,6 +169,7 @@ func Open(ctx context.Context, root string, cfg any, opts Options) (Backend, err
 		u := NewUmbrella(root, cfg, func(dir string) (Tracker, error) { return opts.NewTracker(ctx, dir) })
 		u.Ctx = ctx
 		u.CountProof = opts.CountProof
+		u.LookupProof = opts.LookupProof
 		u.NoteLimit = opts.NoteLimit
 		u.Today = opts.Today
 		u.Scope = opts.Scope
@@ -179,7 +182,7 @@ func Open(ctx context.Context, root string, cfg any, opts Options) (Backend, err
 	if err != nil {
 		return nil, err
 	}
-	return &Issues{Cfg: cfg, Tracker: tr, Ctx: ctx, CountProof: opts.CountProof, NoteLimit: opts.NoteLimit, Today: opts.Today}, nil
+	return &Issues{Cfg: cfg, Tracker: tr, Ctx: ctx, CountProof: opts.CountProof, LookupProof: opts.LookupProof, NoteLimit: opts.NoteLimit, Today: opts.Today}, nil
 }
 
 var (

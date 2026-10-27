@@ -12,6 +12,15 @@ gpv() { ( cd "$1" && shift && "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 gpv "$GP/alpha" init --no-blocks >/dev/null || fail "init alpha failed"
 gpv "$GP/beta" init --no-blocks >/dev/null || fail "init beta failed"
 
+# Legacy temp entries remain visible until an explicit cleanup/remove.
+mkdir -p "$XDG_STATE_HOME/rota"
+python3 - "$XDG_STATE_HOME/rota/projects.json" "$GP" <<'PYREG'
+import json, os, sys
+with open(sys.argv[1], 'w') as f:
+    json.dump({'projects': [{'path': os.path.realpath(os.path.join(sys.argv[2], n)), 'name': n,
+                             'lastSeen': '2026-01-01T00:00:00Z'} for n in ('alpha', 'beta')]}, f)
+PYREG
+
 OUT=$(gpv "$GP" projects remove "$GP/alpha") || fail "projects remove failed: $OUT"
 [ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "remove should change: $OUT"
 [ "$(echo "$OUT" | jget 'data.removed[0].name')" = "alpha" ] || fail "remove should name the entry: $OUT"
