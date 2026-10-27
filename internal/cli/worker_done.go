@@ -5,17 +5,21 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 
+	"github.com/l4ci/rota/internal/acceptance"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proof"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
 // workerDone is `rota worker done <slot>`: the last step before ROTA-DONE, after the PR. It refuses
 // (exit 4) a slot whose item has no PASS proof row at the branch's current
-// HEAD for test.fast, then marks the slot done.
+// HEAD for test.fast or whose completed outcome has unmet explicit acceptance
+// criteria on tracker items the PR closes, then marks the slot done.
 func workerDone(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "ref {files} is diffed against (default: the base branch)")
 	attempt := fs.String("attempt", "", "the attempt id from your brief; a stale one exits 4")
@@ -81,6 +85,9 @@ func doneDeps(c *Ctx, root string) worker.DoneDeps {
 		},
 		ChangedFiles: func(dir, base string) ([]string, error) { return changedFiles(c, dir, base) },
 		ProofRows:    func(id string) ([]proof.Row, error) { return proofRows(c, id) },
+		Acceptance: func(dir, branch string, ids []string) error {
+			return doneAcceptance(c, root, dir, branch, ids)
+		},
 		// A backlog that cannot be read keeps every member.
 		Closed: func(id string) bool {
 			if !opened {
@@ -97,6 +104,107 @@ func doneDeps(c *Ctx, root string) worker.DoneDeps {
 			return targetedProof(c, root, dir, command, base, head, ids)
 		},
 	}
+}
+
+// doneAcceptance uses the same coverage as plan pass and item show, but only
+// explicit ids of tracker items the PR closes block completion, as at the gate.
+// Check the whole bundle before refusing so the worker can mark every missing
+// criterion in one pass. Non-closing slices and file items keep their flow.
+func doneAcceptance(c *Ctx, root, dir, branch string, ids []string) error {
+	be, err := openBacklog(c, root, false, "")
+	if err != nil {
+		_, err = backlogFail(err)
+		return err
+	}
+	if !be.Capabilities().IssueIDs {
+		return nil
+	}
+	var closes func(tracker.IssueKey) bool
+	var missing, commands []string
+	for _, id := range ids {
+		it, err := be.Get(id)
+		if err != nil {
+			_, err = backlogFail(err)
+			return err
+		}
+		if it.Closed {
+			continue
+		}
+		body, _, err := be.Detail(id)
+		if err != nil {
+			_, err = backlogFail(err)
+			return err
+		}
+		if !backlog.HasAcceptanceIDs(body) {
+			continue
+		}
+		if closes == nil {
+			closes = doneClosing(c, root, dir, branch)
+		}
+		if !closes(it.IssueKey()) {
+			continue
+		}
+		crits, _ := acceptance.Parse(body)
+		wf, err := backlog.WorkflowOf(be)
+		if err != nil {
+			_, err = backlogFail(err)
+			return err
+		}
+		cover, err := acceptanceCoverage(c, wf, id, &backlog.Status{Body: body})
+		if err != nil {
+			_, err = backlogFail(err)
+			return err
+		}
+		for _, st := range cover {
+			if st.Met || !slices.ContainsFunc(crits, func(c acceptance.Criterion) bool { return c.ID == st.ID }) {
+				continue
+			}
+			missing = append(missing, fmt.Sprintf("[%s] %s: %s", id, st.ID, st.Text))
+			key := it.ID
+			if it.Number > 0 {
+				key = "'#" + strconv.Itoa(it.Number) + "'" // Keep the item key out of shell comments.
+			}
+			commands = append(commands, fmt.Sprintf("`rota plan pass %s %s --proof '<sha:check>'`", key, st.ID))
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	e := Refused("unmet acceptance criteria: %s", strings.Join(missing, "; "))
+	e.Hint = "report --outcome partial --summary-file <file> with each unmet criterion and its reason on the third line"
+	if len(commands) > 0 {
+		e.Hint = "mark met criteria with " + strings.Join(commands, "; ") + ", or " + e.Hint
+	}
+	return e
+}
+
+// doneClosing uses PR closing information when available. A forge is optional:
+// when it cannot be read, keep checking the held items' acceptance as before.
+// A successful lookup finding no PR, or a known non-closing PR, closes nothing.
+func doneClosing(c *Ctx, root, dir, branch string) func(tracker.IssueKey) bool {
+	assumeClosing := func(tracker.IssueKey) bool { return true }
+	env := c.deps().workerEnv().WithDefaults()
+	settings := env.GateConfig(root).Tracker
+	f, err := env.Forge("", dir, settings)
+	if err != nil {
+		return assumeClosing
+	}
+	prs, err := f.OpenPRs(c.Context())
+	if err != nil {
+		return assumeClosing
+	}
+	for _, pr := range prs {
+		if pr.Branch != branch {
+			continue
+		}
+		issues, err := env.Issues(dir, settings)
+		if err != nil {
+			return assumeClosing
+		}
+		src := tracker.ClosingSource{Body: pr.Body, Title: pr.Title, Branch: pr.Branch}
+		return func(key tracker.IssueKey) bool { return issues.ClosesIssue(key, src) }
+	}
+	return func(tracker.IssueKey) bool { return false }
 }
 
 // proofRows is the proof rows of item id, errors mapped onto the exit table.

@@ -600,6 +600,25 @@ recorded with `rota proof record <ID> -- rota test run fast`. A later commit mak
 the worker records again. With `test.fast` unset it warns and skips that check. The worker brief then tells the worker to run `rota test run full` and have it green first, and `rota round start` warns once that the proof rows will be missing (reviewers treat that as minor at most). On success the slot is
 marked `done`.
 
+On the issue backend, before reporting done, workers mark each verified `AC-n` on the lead and every open
+bundle member with `rota plan pass <ID> AC-n --proof '<sha>:<check>'` (use an issue key
+such as `'#2150'`). The sha and check must name a recorded PASS row from
+`rota proof show <ID>`; proof rows alone do not mark acceptance. A plain done or
+`--outcome done` refuses (exit 4) while explicit criteria on tracker items the PR closes are unmet, listing them and
+their marking commands. Changed criterion text or withdrawn proof makes a mark unmet
+again. When PR closing information cannot be read (for example, with a local origin),
+done checks all held tracker items; it does not require a reachable forge.
+Items without explicit `AC-n` ids keep their existing behavior.
+
+For an unmet criterion, leave it unmarked and report `--outcome partial --summary-file <f>`
+(or `failed` when nothing can be delivered). The file has three lines: what changed,
+what was found, and each unmet id with its reason. These outcomes preserve the merge
+gate's hold until the orchestrator handles the gap. Non-closing `Refs` slices and file-mode
+items keep their existing done flow. An intentional close with gaps uses
+`rota item complete <ID> --commit <sha> --unmet-reason <text>` to record the unmet criteria
+and reason. The merger handles this; a worker never closes an issue to bypass the refusal.
+The gate skips acceptance once that issue is explicitly closed.
+
 `rota worker gate <slot> --base <branch>` is the one merge path in a round. It checks the branch is
 fresh, the PR is the worker's, provenance holds and the PR body closes the slot's issue
 (`Closes #N`, unless the issue is labelled `partial-slice`), then builds a scratch
@@ -750,11 +769,14 @@ the winner as usual. If one attempt was returned, reclaimed or died without a PR
 the remaining PR alone; while the other worker is still building, it refuses. The autopilot
 assigns best-of issues but never picks: the pick is yours.
 
-An architecture-review item ends with filed issues, not a PR. When its worker prints
+An architecture-review item ends with its review result and no PR. When its worker prints
 `ROTA-DONE <slot> issues:#a,#b`, read the issues and run `rota round accept <ID>`. It closes the
 item with a note listing them, releases its claim and frees the slot, so no `reclaim` is needed.
-If the slot recorded no issues, pass `--issues #a,#b`. Running it again on a closed item changes
-nothing.
+If the worker filed issues but the slot did not record them, pass `--issues #a,#b`.
+A completed review with no findings prints `ROTA-DONE <slot> issues:none` instead. Accept it
+with `rota round accept <ID>`: it closes with `Review done: no findings.` and frees the slot,
+without a fabricated finding issue. An omitted list or bare `issues:` is missing evidence
+and remains refused, even with a `--gist`. Running accept again on a closed item changes nothing.
 
 A `decision:research` item (see decision milestones in `/rota-vision`) ends with a finding comment,
 also with no PR. `round assign` starts it on the `light` tier (`--tier` overrides) and its worker
@@ -952,7 +974,7 @@ set and fails when unavailable; solo is never a fallback from it.
 
 Under solo, each worker is a Claude `Agent` subagent the orchestrator launches in the slot's
 `.worktrees/<agent>` checkout. `rota round assign` returns the brief and the worktree instead
-of starting a pane, `rota round report <slot> --state ...` records what the subagent said (`--issues "#a,#b"` in place of `--pr` for an architecture-review item),
+of starting a pane, `rota round report <slot> --state ...` records what the subagent said (`--issues "#a,#b"` in place of `--pr` for an architecture-review item, or `--issues none` for a completed review with no findings),
 and `rota round wait` reads the registry without blocking. The pane verbs (`rota worker
 dispatch`, `rota worker poll`, `rota worker session`) refuse. The registry holds what tab mode writes (minus the
 pane fields), so `rota round reconcile`, the gate and the merge policy work unchanged.

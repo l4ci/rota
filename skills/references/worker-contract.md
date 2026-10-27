@@ -95,6 +95,19 @@ Work only this task, then stop.
   line names the slices still to come. Use `partial` there only when the PR misses part of
   its own slice. Put the `prBlock` the verb prints
   first in the PR body, above the other sections: done runs after the PR exists, so add it with `gh pr edit <pr> --body-file <f>` (the branch does not change).
+- Acceptance marks (issue backend). After recording PASS proof, before reporting done, read each held item's
+  criteria (`rota item show <ID>` and `rota proof show <ID>`). For each met `AC-n`, run
+  `rota plan pass <ID> AC-n --proof '<sha>:<check>'` (use `'#2150'`, for example, as the issue key) using the recorded PASS row's sha and
+  check. Repeat for every open bundle member. Proof rows alone do not mark acceptance;
+  a changed criterion or withdrawn proof needs a new valid mark. A plain done or
+  `--outcome done` refuses (exit 4) while explicit criteria on tracker items the PR closes remain unmet.
+  A `Refs` slice leaves the parent open and does not require its later criteria. If one cannot be
+  met, report `--outcome partial --summary-file <f>` and name each unmet id and its reason
+  on the third line (or `failed` when nothing can be delivered); never mark it met to
+  clear the refusal. File-mode items keep their existing done flow. The merger can explicitly
+  close an item with `rota item complete <ID> --commit <sha> --unmet-reason <text>`, which
+  records the unmet criteria and reason; the gate then skips acceptance for that closed issue.
+  Workers never close items to bypass the refusal. Items without explicit `AC-n` ids need no acceptance marks.
 - Attempt id. If your brief names an attempt id, pass `--attempt <id>` to `rota worker done` and
   `rota round report`. A refusal that calls the attempt stale (exit 4) means the orchestrator
   reclaimed or transferred your assignment: you are fenced. Stop at once, do not retry, do not
@@ -221,13 +234,16 @@ Work only this task, then stop.
 - When your PR is open, print `ROTA-DONE <slot> <pr-url>` and stop. Print it as the LAST line of your last message, after any summary of the work: a summary alone leaves the slot looking stuck. The dispatched brief repeats it with your slot filled in. If a slot goes idle with no sentinel but its branch heads an open PR, `rota worker poll` / `round wait` record it as done with that PR and note the sentinel was missing.
 - An architecture-review item (`arch(<area>): architecture review`) produces issues,
   not code, so it has no PR. When every finding is filed, print
-  `ROTA-DONE <slot> issues:#a,#b` (the issue numbers, comma-separated) and stop.
+  `ROTA-DONE <slot> issues:#a,#b` (the issue numbers, comma-separated), or
+  `ROTA-DONE <slot> issues:none` when the completed review found nothing, and stop.
   Do not open a PR for it.
 ```
 
 `rota worker poll` and `rota round wait` read `issues:#a,#b` as done with the issue list as evidence and record it on the slot instead of a PR. `rota round assign` (or `transfer`) onto that slot then closes the review item with a note listing the issues, releases its claim and frees the slot. Only a review item the round minted closes this way: a worker that reports issues on any other item is refused until it has a PR. Solo rounds record the same with `rota round report <slot> --state done --issues "#a,#b"`.
 
-After `ROTA-DONE <slot> issues:#a,#b`, the orchestrator reads the filed issues and runs `rota round accept <ID>` (add `--issues #a,#b` when the slot recorded none). It closes the item and frees the slot with no PR; assign or transfer onto the slot still closes it as a fallback.
+An explicitly completed review with no findings prints `ROTA-DONE <slot> issues:none`; under solo, record it with `rota round report <slot> --state done --issues none` (include `--attempt <id>` when briefed). This is completion evidence, unlike a bare `issues:` or an omitted issue list. Acceptance closes it with `Review done: no findings.` and frees the slot, with no PR or fabricated issue.
+
+After `ROTA-DONE <slot> issues:#a,#b` or `ROTA-DONE <slot> issues:none`, the orchestrator reads the filed issues and runs `rota round accept <ID>` (add `--issues #a,#b` when the slot recorded none). It closes the item and frees the slot with no PR; assign or transfer onto the slot still closes it as a fallback.
 
 A research item (a `decision:research` label) delivers a finding, not code: post it with
 `rota --json item comment add <ID> --kind finding --body-file <f>`, commit nothing, open no PR and print
