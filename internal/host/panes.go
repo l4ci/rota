@@ -330,9 +330,12 @@ func (t *tmux) SendPane(ctx context.Context, pane, text string) error {
 }
 
 // CurrentPane returns the pane this process runs in under the host kind, ""
-// when the environment names none. herdr reads HERDR_PANE_ID; every other kind
-// (tmux, and solo inside tmux) reads TMUX_PANE.
+// when the environment names none. herdr reads HERDR_PANE_ID; tmux and solo
+// read TMUX_PANE. Orca has no ambient pane marker; its host probes current.
 func CurrentPane(kind Kind, getenv func(string) string) string {
+	if kind == Orca {
+		return ""
+	}
 	if kind == Herdr {
 		return getenv("HERDR_PANE_ID")
 	}

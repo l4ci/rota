@@ -1,9 +1,9 @@
 // Package host drives the terminal host that runs /rota-work worker sessions:
-// tmux windows or herdr tabs. It is the Go port of bin/hv-host-select.sh,
-// bin/hv-host-tmux.sh and bin/hv-host-herdr.sh.
+// tmux windows, herdr tabs or Orca terminals. It ports the bin/hv-host-*.sh
+// helpers and adds the opt-in Orca adapter.
 //
-// SAFETY: a round runs inside herdr and tmux, and a stray `herdr tab close` or
-// `tmux kill-window` kills live agents. Nothing here execs a binary directly:
+// SAFETY: closing a herdr tab, tmux window or Orca terminal kills live agents.
+// Nothing here execs a binary directly:
 // every command goes through Deps.Run, which tests replace with a fake. The
 // default runner (ExecRunner) is the only place that reaches os/exec.
 package host
@@ -273,7 +273,7 @@ func CapabilitiesOf(h any) Capabilities {
 
 // Host is one terminal backend.
 type Host interface {
-	// Kind is the backend this host drives (Herdr or Tmux).
+	// Kind is the backend this host drives (Herdr, Tmux or Orca).
 	Kind() Kind
 	// Capabilities names the optional sides this host supports; a field is
 	// nil for a side it lacks. Callers ask here instead of type-asserting.
@@ -303,11 +303,13 @@ type Host interface {
 	Notify(ctx context.Context, title, body string)
 }
 
-// New returns the host for a kind: Herdr selects herdr, anything else,
-// including Solo, selects tmux (the worker helpers
-// predate round.dispatch=herdr and have always driven tmux).
+// New returns the adapter for Herdr or Orca; every other kind, including Solo,
+// selects tmux (the worker helpers predate round.dispatch=herdr).
 func New(kind Kind, d Deps) Host {
 	d.fill()
+	if kind == Orca {
+		return &orca{d: d}
+	}
 	if kind == Herdr {
 		return &herdr{d: d, noted: new(atomic.Bool)}
 	}

@@ -19,13 +19,14 @@ type Kind string
 const (
 	Herdr Kind = "herdr"
 	Tmux  Kind = "tmux"
+	Orca  Kind = "orca"
 )
 
-// KindOf is the kind a config or registry string names: "herdr", "tmux" and "solo",
+// KindOf is the kind a config or registry string names: "herdr", "tmux", "orca" and "solo",
 // anything else (including "subagent" and "") the zero Kind.
 func KindOf(s string) Kind {
 	switch k := Kind(s); k {
-	case Herdr, Tmux, Solo:
+	case Herdr, Tmux, Orca, Solo:
 		return k
 	}
 	return ""
@@ -36,7 +37,7 @@ func (k Kind) String() string { return string(k) }
 
 // Binary is the executable that runs the kind ("" for Solo).
 func (k Kind) Binary() string {
-	if k == Herdr || k == Tmux {
+	if k == Herdr || k == Tmux || k == Orca {
 		return string(k)
 	}
 	return ""
@@ -45,7 +46,7 @@ func (k Kind) Binary() string {
 // Resolve is the rule for which host a round runs on (C8), the in-session one:
 // it never opens a session (see ResolveLaunch for the launcher that may). The round's
 // recorded host (registry, "" when no round is in flight) wins. Without one it
-// picks from round.dispatch and the environment. An explicit herdr or tmux is taken as it is, even when it is
+// picks from round.dispatch and the environment. An explicit herdr, tmux or orca is taken as it is, even when it is
 // not installed: that fails later as unavailable (exit 5), and solo is never a
 // silent fallback from a host the config named. Unset or "subagent" detects:
 // herdr inside a herdr pane with the binary on PATH, else tmux inside tmux,
@@ -61,7 +62,7 @@ func Resolve(registry, dispatch Kind, getenv func(string) string, lookPath func(
 		return registry
 	}
 	switch dispatch {
-	case Herdr, Tmux:
+	case Herdr, Tmux, Orca:
 		return dispatch
 	}
 	if getenv("HERDR_ENV") == "1" {
@@ -77,7 +78,7 @@ func Resolve(registry, dispatch Kind, getenv func(string) string, lookPath func(
 
 // Launch is where a launcher that may open its own session puts itself.
 type Launch struct {
-	Kind Kind // Herdr, Tmux or Solo
+	Kind Kind // Herdr, Tmux, Orca or Solo
 	// NewSession: the caller is in no pane of Kind, so the launcher opens a
 	// session of its own (named, never the user's default) instead of a tab.
 	NewSession bool
@@ -87,8 +88,7 @@ type Launch struct {
 // session (`rota orchestrate`): the same kinds, a different question. Resolve
 // asks which host a round's workers run on, so it answers solo when the caller
 // is in no pane. ResolveLaunch asks where to start, so with no pane it opens a
-// session rather than falling back to solo. Four differences follow, all
-// deliberate:
+// session rather than falling back to solo. The differences are deliberate:
 //
 //   - Being in a pane (herdr: HERDR_ENV=1 and HERDR_WORKSPACE_ID, with the binary
 //     on PATH; tmux: TMUX) beats round.dispatch, which Resolve checks first: you
@@ -98,6 +98,8 @@ type Launch struct {
 //   - Outside any pane, an explicit dispatch picks the kind and must be installed
 //     (an error otherwise); unset or "subagent" prefers herdr, then tmux, then
 //     solo with no session.
+//   - Explicit orca outside a herdr/tmux pane opens a terminal in its running
+//     app, without a named session. Orca is never automatically detected.
 //   - There is no registry: the launcher starts before any round exists.
 //
 // getenv and lookPath default to the process's own.
@@ -109,6 +111,12 @@ func ResolveLaunch(dispatch Kind, getenv func(string) string, lookPath func(stri
 		return Launch{Kind: Herdr}, nil
 	case tmux.InSession():
 		return Launch{Kind: Tmux}, nil
+	case dispatch == Orca:
+		d.fill()
+		if _, err := d.LookPath(Orca.Binary()); err != nil {
+			return Launch{}, fmt.Errorf("round.dispatch=orca but orca is not installed")
+		}
+		return Launch{Kind: Orca}, nil
 	case dispatch == Herdr && herdr.Require() != nil:
 		return Launch{}, fmt.Errorf("round.dispatch=herdr but herdr is not installed")
 	case dispatch == Tmux && tmux.Require() != nil:

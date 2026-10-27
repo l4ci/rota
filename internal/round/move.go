@@ -413,6 +413,13 @@ func (e Env) Health(ctx context.Context, root string, s *worker.Slot, now time.T
 			h.Alive = matchAgent(agents, name, tab, wt) >= 0
 		}
 	}
+	// Orca handles are runtime-scoped: list absence cannot prove exit, even
+	// when the app answered. A positive dead poll is still exit evidence.
+	if e.HostName == host.Orca && tab != "" && !h.Alive && !worker.IsDead(s.State()) {
+		h.Known = false
+		h.Health, h.Reason = HealthUnverifiable, "stale-handle"
+		return h
+	}
 	if worker.IsDead(s.State()) || (h.Known && !h.Alive && tab != "") {
 		h.Health = HealthDead
 		return h
@@ -532,7 +539,13 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 	}
 	// A live pane must be gone before its worktree moves under it. A dead
 	// slot's agent is gone, but its pane may linger as a bare shell.
-	if h.Health == HealthDead {
+	if e.HostName == host.Orca {
+		// Force bypasses the uncertainty refusal, not the process-tree proof.
+		// Even a positive exit poll may leave captured descendants alive.
+		if err := e.Worker.KillSlot(ctx, root, o.Slot); err != nil {
+			return res, wrap(err)
+		}
+	} else if h.Health == HealthDead {
 		e.Worker.SweepSlot(ctx, root, o.Slot)
 	} else {
 		switch {
