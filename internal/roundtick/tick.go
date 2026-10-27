@@ -217,6 +217,16 @@ func Run(ctx context.Context, e Env) (Result, error) {
 	if r.FailedHeads == nil {
 		r.FailedHeads = map[string]FailedHead{}
 	}
+	if e.Head != nil {
+		// Older ticks persisted every refusal, including temporary conditions.
+		// Do not keep such entries pinned to an otherwise unchanged head.
+		for target, prev := range r.FailedHeads {
+			v, _, _ := strings.Cut(prev.Why, ":")
+			if !failedHeadVerdict(v) {
+				delete(r.FailedHeads, target)
+			}
+		}
+	}
 
 	repaired, drift, err := e.Reconcile(ctx)
 	if err != nil {
@@ -314,6 +324,8 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 	for _, t := range targets {
 		why, held := e.Held[t]
 		if e.Head != nil {
+			v, _, _ := strings.Cut(why, ":")
+			held = held && failedHeadVerdict(v)
 			head, err := e.Head(ctx, t)
 			if err != nil || head == "" {
 				detail := "cannot read PR head; not retrying the gate"
@@ -324,7 +336,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 				continue
 			}
 			heads[t] = head
-			if prev, ok := e.FailedHeads[t]; ok {
+			if prev, ok := r.FailedHeads[t]; ok {
 				why, held = prev.Why, prev.Head == head
 				if !held {
 					delete(r.FailedHeads, t)
@@ -336,7 +348,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 			if !held {
 				// A worker can move on and leave the same PR in the queue.
 				// Carry its hold to the new target rather than retry its head.
-				for old, prev := range e.FailedHeads {
+				for old, prev := range r.FailedHeads {
 					if prev.Head == head {
 						why, held = prev.Why, true
 						delete(r.FailedHeads, old)
@@ -348,7 +360,11 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 		}
 		if held {
 			r.Held[t] = why
-			r.NeedsYou = append(r.NeedsYou, Item{"gate-failed", t, why})
+			detail := why
+			if e.Head != nil {
+				detail += "; held at PR head; push a new head to retry"
+			}
+			r.NeedsYou = append(r.NeedsYou, Item{"gate-failed", t, detail})
 			continue
 		}
 		if len(run) < e.cap() {
@@ -370,7 +386,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 			if m.Detail != "" {
 				why += ": " + m.Detail
 			}
-			if m.Hold || e.Head != nil && worker.ClassifyVerdict(m.Verdict).Notify {
+			if e.Head != nil && failedHeadVerdict(m.Verdict) || e.Head == nil && m.Hold {
 				r.Held[m.Target] = why
 				if head := heads[m.Target]; head != "" {
 					r.FailedHeads[m.Target] = FailedHead{Head: head, Why: why}
@@ -380,6 +396,19 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 		}
 	}
 	return nil
+}
+
+// failedHeadVerdict identifies results that judged the head's content. A CI
+// failure and a failed train verification both use GateVerifyFailed; merge
+// conflicts use GateStale. Refusals and infrastructure errors can clear without
+// a push, so they are reported for this tick and retried on the next one.
+func failedHeadVerdict(v string) bool {
+	switch v {
+	case worker.GateStale, worker.GateVerifyFailed, worker.GateVacuousTests:
+		return true
+	default:
+		return false
+	}
 }
 
 // mergeAll groups the targets by the base each merges into, in first-seen

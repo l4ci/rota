@@ -388,10 +388,13 @@ a watch running with `--autopilot` skips the assign line but still prints the tr
 
 The autopilot waits for every review verdict required at a done PR's head before
 gating it. If it cannot confirm review readiness or read the PR head, it reports
-the problem and waits. A failed gate or train holds that head across watch
+the problem and waits. A merge conflict, failed verification (including CI and
+train checks), or vacuous-test result holds that head across watch
 restarts, worker busy/done transitions, and moving the PR into the review queue;
 a push with a new head permits another attempt. A train member skipped because
-another member failed can still run.
+another member failed can still run. Temporary refusals such as a busy gate,
+forge trouble, train order, missing CI or a verification timeout retry on the
+next tick without a push. A held-head message says to push a new head to retry.
 
 `rota worker dispatch` and `--relay` check what is on the prompt line before they type. A typed human
 draft is refused as a draft (exit 5, nothing sent). The autocompact settings picker is dismissed once
