@@ -278,8 +278,19 @@ func Run(ctx context.Context, e Env) (Result, error) {
 
 	sort.SliceStable(r.NeedsYou, func(i, j int) bool { return r.NeedsYou[i].Key() < r.NeedsYou[j].Key() })
 	for _, it := range r.NeedsYou {
-		r.Reported[it.Key()] = true
-		if !e.Reported[it.Key()] {
+		key := it.Key()
+		if name, ok := strings.CutPrefix(it.Target, round.BranchNoPR+" "); it.Kind == "drift" && ok {
+			// A missing PR is news again when its slot changes state or
+			// takes another issue, even while the finding stays present.
+			for _, s := range slots {
+				if s.Name == name {
+					key += " " + s.State + " " + s.Issue
+					break
+				}
+			}
+		}
+		r.Reported[key] = true
+		if !e.Reported[key] {
 			r.New = append(r.New, it)
 		}
 	}

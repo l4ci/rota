@@ -60,6 +60,43 @@ func TestLoadSkipsTornLine(t *testing.T) {
 	}
 }
 
+func TestSummarySourceScopesDamagedEvents(t *testing.T) {
+	root := t.TempDir()
+	for _, e := range []Entry{
+		{TS: at(0), Kind: KindAssign, Round: 2, PR: "#7"},
+		{TS: at(10), Kind: KindMerge, Round: 2, PR: "#7"},
+	} {
+		if err := Append(root, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f, err := os.OpenFile(Path(root), os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.WriteString("{torn\n" + `{"round":1,"kind":"bounce","ts":"wrong"}` + "\n")
+	f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Existing readers still recover the parsed event with its invalid timestamp.
+	if entries, err := Load(root); err != nil || len(entries) != 3 {
+		t.Fatalf("tolerant Load = %v, %v", entries, err)
+	}
+	source := LoadForSummary(root)
+	if len(source.Entries) != 2 || source.HighestRound() != 2 || !source.HasRound(1) || source.HasRound(9) {
+		t.Fatalf("source lost readable events or identified rounds: %+v", source)
+	}
+	good := source.Fold(nil, 2)
+	metricValue(t, metricObject(t, good, "assignToMerged"), "medianSeconds", 600)
+	if good.SkippedLedgerLines != 2 {
+		t.Errorf("skipped %d lines, want 2", good.SkippedLedgerLines)
+	}
+	bad := metricObject(t, source.Fold(nil, 1), "assignToMerged")
+	metricValue(t, bad, "medianSeconds", nil)
+	metricValue(t, bad, "samples", nil)
+}
+
 // Append writes under the file's sidecar lock: while another holder has it,
 // nothing is written, and the line lands once it is released.
 func TestAppendWaitsForTheLock(t *testing.T) {

@@ -116,7 +116,7 @@ func fixture(t *testing.T) (string, Env, *fakeRemote) {
 		{Tab: "w1:t3", Name: "kit", Cwd: filepath.Join(root, ".worktrees", "kit"), Status: "working"},
 		{Tab: "w1:t4", Name: "finn", Cwd: filepath.Join(root, ".worktrees", "finn"), Status: "done"},
 		{Tab: "w1:t5", Name: "nia", Cwd: filepath.Join(root, ".worktrees", "nia"), Status: "idle"},
-		{Tab: "w2:t1", Name: "dana", Cwd: filepath.Join(root, ".worktrees", "dana"), Status: "working"},
+		{Tab: "w2:t1", Name: "dana", Cwd: filepath.Join(root, ".worktrees", "dana"), Status: "idle"},
 		{Tab: "w3:t1", Name: "ghost", Cwd: filepath.Join(root, ".worktrees", "ghost"), Status: "working"},
 		{Tab: "w4:t1", Name: "orchestrator", Cwd: root, Status: "working"},
 	}
@@ -153,7 +153,7 @@ func TestRowsFromWorktreesAndSnapshot(t *testing.T) {
 		rows[r.Name] = r
 	}
 	d := rows["dana"]
-	if d.Registered || d.Issue != "58" || d.Branch != "dana/58-foo" || d.HostState != "working" || d.Tab != "w2:t1" {
+	if d.Registered || d.Issue != "58" || d.Branch != "dana/58-foo" || d.HostState != "idle" || d.Tab != "w2:t1" {
 		t.Errorf("dana (unregistered, matched by cwd) = %+v", d)
 	}
 	k := rows["kit"]

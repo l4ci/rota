@@ -9,6 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundtick"
@@ -196,14 +198,14 @@ func markMergedDone(root string, merged map[string]bool) error {
 }
 
 func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Result, tick *roundtick.Result, stopped string) Result {
-	round := 0
+	roundNumber := 0
 	if l, _, err := lenv.Read(cd); err == nil {
-		round = l.Round
+		roundNumber = l.Round
 	}
 	d := jsonx.NewObject()
 	d.Set("reason", res.Reason)
 	d.Set("waited", res.Waited.Seconds())
-	d.Set("round", round)
+	d.Set("round", roundNumber)
 	var text []string
 	if n := res.Slot; n != nil {
 		d.Set("slot", n.Slot)
@@ -233,11 +235,21 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 		text = append(text, fmt.Sprintf("change\t%s\t%s -> %s", ch.Key, dash(ch.From), dash(ch.To)))
 	}
 	d.Set("changes", changes)
-	digest := roundwatch.ExitDigest(root, round)
+	digest := roundwatch.ExitDigest(root, roundNumber)
 	d.Set("digest", digest)
 	if tick != nil {
-		d.Set("autopilot", tickData(*tick))
-		if l := tickLines(*tick); l != "nothing to do" {
+		// Status and explicit ticks keep the full drift list. The watch
+		// reports a missing PR once, then again only when it becomes news.
+		visible := *tick
+		visible.NeedsYou = nil
+		for _, it := range tick.NeedsYou {
+			if it.Kind == "drift" && strings.HasPrefix(it.Target, round.BranchNoPR+" ") && !slices.Contains(tick.New, it) {
+				continue
+			}
+			visible.NeedsYou = append(visible.NeedsYou, it)
+		}
+		d.Set("autopilot", tickData(visible))
+		if l := tickLines(visible); l != "nothing to do" {
 			text = append(text, l)
 		}
 	}
@@ -252,7 +264,7 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 		d.Set("autopilotStopped", stopped)
 		text = append(text, "autopilot\tstopped\t"+stopped)
 	}
-	f, stale, serr := staleBinaryOncePerRound(c, cd, round)
+	f, stale, serr := staleBinaryOncePerRound(c, cd, roundNumber)
 	if stale {
 		d.Set("staleBinary", staleData(f))
 		text = append(text, "warning\t"+f.Detail()+"; rebuild: "+f.Rebuild)
