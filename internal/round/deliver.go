@@ -3,9 +3,9 @@ package round
 import (
 	"context"
 	"errors"
-	"os"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -67,7 +67,8 @@ type delivery struct {
 	Shared                       []worker.SharedDir
 	Dispatched, Changed          bool
 
-	tmpName string
+	tmpName     string
+	removeBrief func()
 }
 
 func (d *delivery) wrap(err error) error {
@@ -103,14 +104,13 @@ func (d *delivery) steps(ctx context.Context, e Env, root string) ([]step, error
 			if solo {
 				return nil
 			}
-			tmp, err := os.CreateTemp("", "rota-round-brief-")
+			path, cleanup, err := fsio.WriteTemp(e.Worker.Getenv("TMPDIR"), "rota-round-brief-", []byte(text))
 			if err != nil {
 				return d.wrap(err)
 			}
-			d.tmpName = tmp.Name()
+			d.tmpName, d.removeBrief = path, cleanup
 			d.BriefText = text
-			tmp.WriteString(text)
-			return d.wrap(tmp.Close())
+			return nil
 		}},
 	}
 	if solo {
@@ -147,7 +147,7 @@ func (d *delivery) steps(ctx context.Context, e Env, root string) ([]step, error
 
 // cleanup removes the brief's temp file.
 func (d *delivery) cleanup() {
-	if d.tmpName != "" {
-		os.Remove(d.tmpName)
+	if d.removeBrief != nil {
+		d.removeBrief()
 	}
 }

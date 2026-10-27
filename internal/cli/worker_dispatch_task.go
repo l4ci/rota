@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -53,21 +54,11 @@ func assignedTaskDispatch(c *Ctx, ctx context.Context, root string, o worker.Dis
 	if err != nil {
 		return o, cleanup, Resolution("body file not found: %s", o.BodyFile)
 	}
-	tmp, err := os.CreateTemp("", "rota-rebuilt-brief-")
+	path, cleanup, err := fsio.WriteTemp(c.deps().Getenv("TMPDIR"), "rota-rebuilt-brief-", []byte(text+"\nNotes appended for recovery:\n\n"+string(notes)))
 	if err != nil {
 		return o, cleanup, err
 	}
-	cleanup = func() { os.Remove(tmp.Name()) }
-	if _, err = tmp.WriteString(text + "\nNotes appended for recovery:\n\n" + string(notes)); err == nil {
-		err = tmp.Close()
-	} else {
-		tmp.Close()
-	}
-	if err != nil {
-		cleanup()
-		return o, func() {}, err
-	}
-	rebuilt.BodyFile = tmp.Name()
+	rebuilt.BodyFile = path
 	return rebuilt, cleanup, nil
 }
 

@@ -41,13 +41,32 @@ func TestVerifyReportsPassedFailedAndLog(t *testing.T) {
 
 func TestVerifyPassRemovesLogAndNoCommandsIsFlagged(t *testing.T) {
 	root := t.TempDir()
+	tmp := t.TempDir()
+	e := Env{
+		Getenv: func(key string) string {
+			if key == "TMPDIR" {
+				return tmp
+			}
+			return ""
+		},
+		Shell: func(context.Context, string, string) (string, int) {
+			files, err := os.ReadDir(tmp)
+			if err != nil || len(files) != 1 {
+				t.Errorf("during verify: temp files = %v, err = %v; want one log in injected TMPDIR", files, err)
+			}
+			return "", 0
+		},
+	}
 	full := verifyCfg(t, `["true"]`)
-	res, err := Env{}.Verify(context.Background(), full, root, root)
+	res, err := e.Verify(context.Background(), full, root, root)
 	if err != nil || !res.OK() || res.LogPath != "" {
 		t.Errorf("a pass leaves no log: %+v %v", res, err)
 	}
+	if files, err := os.ReadDir(tmp); err != nil || len(files) != 0 {
+		t.Errorf("after verify: temp files = %v, err = %v; want none", files, err)
+	}
 	none := verifyCfg(t, `[]`)
-	res, _ = Env{}.Verify(context.Background(), none, root, root)
+	res, _ = e.Verify(context.Background(), none, root, root)
 	if !res.NoCommands || none.HasVerifyCommands() || !full.HasVerifyCommands() {
 		t.Errorf("empty list must report NoCommands: %+v", res)
 	}

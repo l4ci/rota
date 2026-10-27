@@ -3,9 +3,9 @@ package cli
 import (
 	"context"
 	"flag"
-	"os"
 	"strings"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/release"
 	"github.com/l4ci/rota/internal/strutil"
@@ -155,19 +155,12 @@ func releasePublish(fs *flag.FlagSet) RunFunc {
 		if res, err := clearGate(c, gate.ReleasePublish, tag, conf, nil, nil); err != nil {
 			return res, err
 		}
-		notes, err := os.CreateTemp("", "rota-release-notes-*.md")
+		path, cleanup, err := fsio.WriteTemp(c.deps().Getenv("TMPDIR"), "rota-release-notes-*.md", []byte(body+"\n"))
 		if err != nil {
 			return Result{}, err
 		}
-		defer os.Remove(notes.Name())
-		_, werr := notes.WriteString(body + "\n")
-		if cerr := notes.Close(); werr == nil {
-			werr = cerr
-		}
-		if werr != nil {
-			return Result{}, werr
-		}
-		spec := tracker.ReleaseSpec{Tag: tag, Title: *title, Notes: notes.Name(), Draft: *draft}
+		defer cleanup()
+		spec := tracker.ReleaseSpec{Tag: tag, Title: *title, Notes: path, Draft: *draft}
 		publish := cl.ReleaseCreate
 		if existing {
 			// The workflow already made the draft: finish it, never make a second.
