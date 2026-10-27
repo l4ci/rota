@@ -4,6 +4,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -31,7 +32,7 @@ func TestGetAndStubbed(t *testing.T) {
 	if _, ok := s.Skill("nope"); ok {
 		t.Error("Skill found nope")
 	}
-	if got := s.References("rota-a"); len(got) != 1 || got[0] != "x.md" {
+	if got := s.References("rota-a"); len(got) != 1 || got[0] != "references/x.md" {
 		t.Errorf("References: %v", got)
 	}
 	for file, want := range map[string]bool{"x.md": true, "../SKILL.md": false, "y.md": false} {
@@ -52,6 +53,44 @@ func TestGetAndStubbed(t *testing.T) {
 	}
 	if got := st.Paths(); len(got) != 2 || got[0] != "rota-a/SKILL.md" || got[1] != "rota-a/agents/a.yaml" {
 		t.Errorf("stub paths: %v", got)
+	}
+}
+
+func TestReferencesFollowSkillLinks(t *testing.T) {
+	f := getFixture()
+	f["rota-a/SKILL.md"] = &fstest.MapFile{Data: []byte("[local](x.md) [shared](references/x.md#section) [again](x.md)\n")}
+	f["rota-a/x.md"] = &fstest.MapFile{Data: []byte("local [extra](extra.md)\n")}
+	f["references/x.md"] = &fstest.MapFile{Data: []byte("shared [skill](../rota-a/SKILL.md)\n")}
+	s, err := Load(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := s.References("rota-a"), []string{"references/x.md", "x.md"}; !slices.Equal(got, want) {
+		t.Fatalf("References = %v, want %v", got, want)
+	}
+	for file, want := range map[string]string{
+		"x.md":            "local [extra](extra.md)\n",
+		"references/x.md": "shared [skill](../rota-a/SKILL.md)\n",
+	} {
+		if got, ok := s.Reference("rota-a", file); !ok || string(got) != want {
+			t.Errorf("Reference(%q) = %q, %v, want %q", file, got, ok, want)
+		}
+	}
+	for _, file := range []string{"extra.md", "agents/a.yaml", "SKILL.md", "../references/x.md", "../rota-b/SKILL.md", "/references/x.md", "references/../x.md"} {
+		if _, ok := s.Reference("rota-a", file); ok {
+			t.Errorf("Reference accepted unlisted name %q", file)
+		}
+	}
+	base := t.TempDir()
+	tree := filepath.Join(base, CacheName("v-test", s.Digest()))
+	for file, want := range map[string]string{
+		"x.md":            filepath.Join(tree, "rota-a", "extra.md"),
+		"references/x.md": filepath.Join(tree, "rota-a", "SKILL.md"),
+	} {
+		text, warn, err := s.Serve("rota-a", file, base, "v-test")
+		if err != nil || warn != "" || !strings.Contains(text, "Files this skill links to:\n- "+want+"\n") {
+			t.Errorf("Serve(%q) = %q, %q, %v; want link %s", file, text, warn, err, want)
+		}
 	}
 }
 
@@ -120,8 +159,10 @@ func TestEveryEmbeddedLinkResolves(t *testing.T) {
 			if first, _, _ := strings.Cut(text, "\n"); first != want {
 				t.Fatalf("%s: no base directory: first line %q, want %q", name, first, want)
 			}
+		} else if strings.HasPrefix(file, "references/") {
+			rel = file // the shared copy at the tree root
 		} else {
-			rel = "references/" + file // the shared copy at the tree root
+			rel = name + "/" + file
 		}
 		body, _ := set.Skill(name)
 		if file != "" {
@@ -145,7 +186,41 @@ func TestEveryEmbeddedLinkResolves(t *testing.T) {
 	for _, name := range set.Skills() {
 		check(name, "")
 		for _, ref := range set.References(name) {
-			check(name, ref)
+			if strings.HasPrefix(ref, "references/") {
+				check(name, ref)
+			}
+		}
+	}
+}
+
+func TestEveryEmbeddedReferenceRetrievable(t *testing.T) {
+	set, err := Embedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := t.TempDir()
+	for _, name := range set.Skills() {
+		refs := set.References(name)
+		body, _ := set.Skill(name)
+		for _, link := range Links(body) {
+			if strings.HasPrefix(link, "../") {
+				continue // cross-skill links are checked by TestEveryEmbeddedLinkResolves
+			}
+			if !slices.Contains(refs, link) {
+				t.Errorf("%s links %q but --references omits it", name, link)
+			}
+			got, ok := set.Reference(name, link)
+			want, exists := set.File(name + "/" + link)
+			if !ok || !exists || string(got) != string(want) {
+				t.Errorf("%s linked reference %q does not return its embedded content", name, link)
+			}
+		}
+		for _, ref := range refs {
+			want, ok := set.File(name + "/" + ref)
+			text, warn, err := set.Serve(name, ref, base, "v-test")
+			if !ok || len(want) == 0 || err != nil || warn != "" || !strings.HasPrefix(text, string(want)) {
+				t.Errorf("Serve(%s,%s) did not return the listed file: %v %q", name, ref, err, warn)
+			}
 		}
 	}
 }

@@ -3,8 +3,10 @@ package skills
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -12,13 +14,30 @@ import (
 // Skill is the embedded SKILL.md of one skill; ok is false for an unknown name.
 func (s *Set) Skill(name string) ([]byte, bool) { return s.File(name + "/SKILL.md") }
 
-// References are the reference file names a skill installs, sorted.
+// References are the shared references a skill installs and the skill-local
+// files its SKILL.md links, sorted and relative to the skill directory.
 func (s *Set) References(name string) []string {
-	prefix := name + "/references/"
+	prefix := name + "/"
+	seen := map[string]bool{}
 	var out []string
+	add := func(file string) {
+		if !seen[file] {
+			seen[file] = true
+			out = append(out, file)
+		}
+	}
 	for _, p := range s.paths {
-		if strings.HasPrefix(p, prefix) {
-			out = append(out, strings.TrimPrefix(p, prefix))
+		if strings.HasPrefix(p, prefix+"references/") {
+			add(strings.TrimPrefix(p, prefix))
+		}
+	}
+	body, _ := s.Skill(name)
+	for _, file := range Links(body) {
+		if !fs.ValidPath(file) || file == "SKILL.md" {
+			continue // another skill's files are served through that skill
+		}
+		if _, ok := s.File(prefix + file); ok {
+			add(file)
 		}
 	}
 	sort.Strings(out)
@@ -27,10 +46,24 @@ func (s *Set) References(name string) []string {
 
 // Reference is one reference file of a skill.
 func (s *Set) Reference(name, file string) ([]byte, bool) {
-	if file != path.Base(file) {
-		return nil, false
+	rel, ok := s.referencePath(name, file)
+	if !ok {
+		return nil, ok
 	}
-	return s.File(name + "/references/" + file)
+	return s.File(name + "/" + rel)
+}
+
+// referencePath resolves a listed name, with bare shared names retained as
+// legacy aliases. A linked local file takes precedence over a shared alias.
+func (s *Set) referencePath(name, file string) (string, bool) {
+	refs := s.References(name)
+	if slices.Contains(refs, file) {
+		return file, true
+	}
+	if file == path.Base(file) && slices.Contains(refs, "references/"+file) {
+		return "references/" + file, true
+	}
+	return "", false
 }
 
 // Stubbed is the set a stub install writes: each SKILL.md keeps its
@@ -94,8 +127,14 @@ func (s *Set) Serve(name, file, cacheBase, version string) (text, warning string
 	if file == "" {
 		b, ok = s.Skill(name)
 	} else {
-		rel = "references/" + file // the shared copy, see Extract
-		b, ok = s.Reference(name, file)
+		var ref string
+		if ref, ok = s.referencePath(name, file); ok {
+			b, ok = s.File(name + "/" + ref)
+			rel = name + "/" + ref
+			if strings.HasPrefix(ref, "references/") {
+				rel = ref // the shared copy, see Extract
+			}
+		}
 	}
 	if !ok {
 		return "", "", fmt.Errorf("skills: no %s %q", name, file)

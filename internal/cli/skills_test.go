@@ -394,6 +394,33 @@ func TestSkillsListAndGet(t *testing.T) {
 	}
 }
 
+func TestSkillsGetLocalReference(t *testing.T) {
+	home, work := t.TempDir(), t.TempDir()
+	t.Setenv("ROTA_CACHE_DIR", t.TempDir())
+	code, env, errOut := skillsRun(t, home, work, "skills", "get", "rota-review", "--reference", "reviewer-briefs.md")
+	if text, _ := skData(env)["text"].(string); code != 0 || !strings.HasPrefix(text, "# Reviewer briefs (Step 7)\n") {
+		t.Fatalf("local reference: exit %d, text %q, stderr %s", code, text, errOut)
+	}
+	code, env, errOut = skillsRun(t, home, work, "skills", "get", "rota-review", "--references")
+	found := false
+	for _, ref := range skData(env)["references"].([]any) {
+		found = found || ref == "reviewer-briefs.md"
+	}
+	if code != 0 || !found {
+		t.Fatalf("local reference missing from listing: exit %d, %v, stderr %s", code, skData(env), errOut)
+	}
+	refs := skData(env)["references"].([]any)
+	code, _, errOut = skillsRun(t, home, work, "skills", "get", "rota-review", "--reference", "missing-reference.md")
+	if code != 2 {
+		t.Fatalf("unknown reference: exit %d, want 2", code)
+	}
+	for _, ref := range refs {
+		if !strings.Contains(errOut, ref.(string)) {
+			t.Errorf("unknown reference hint omits %q: %s", ref, errOut)
+		}
+	}
+}
+
 func TestSkillsInstallStub(t *testing.T) {
 	home, work := t.TempDir(), t.TempDir()
 	if code, _, errOut := skillsRun(t, home, work, "skills", "install", "--agent", "codex"); code != 0 {
