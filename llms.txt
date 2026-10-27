@@ -4,7 +4,7 @@
 
 To install rota in a project, follow the agent-readable install steps and ask the user before each command.
 
-- [install.md](https://volkerotto.net/rota/install.md): ordered install steps for a coding agent: binary, skills, doctor, project setup
+- [install.md](https://raw.githubusercontent.com/l4ci/rota/main/install.md): ordered install steps for a coding agent: binary, skills, doctor, project setup
 
 ## Start here
 

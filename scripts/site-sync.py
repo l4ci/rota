@@ -4,8 +4,9 @@
 # and the sidebar data <site>/_data/rota/nav.yml, parsed from docs/README.md.
 # It also writes _data/rota/skills.json and chains.json from the docs/skills/
 # front matter, for the skill cards and the landing page's explorer.
-# It publishes the repo-root install.md and llms.txt verbatim at <site>/rota/,
-# as raw files with no front matter, so Jekyll serves them as plain text.
+# It publishes the repo-root llms.txt verbatim at <site>/rota/llms.txt, a raw
+# file with no front matter, so Jekyll serves it as plain text. install.md is
+# linked from GitHub, not published here.
 # Everything it writes is generated; docs/contributing/ is left out. Only those
 # paths in the site are deleted and rewritten. Runs are idempotent.
 # Usage: python3 scripts/site-sync.py <site-root>
@@ -260,13 +261,13 @@ def skill_data():
     return skills, chains
 
 
-AGENT_FILES = ("install.md", "llms.txt")
+AGENT_FILES = ("llms.txt",)
 SITE_DOCS = "https://volkerotto.net" + BASE
 SITE_ROOT = "https://volkerotto.net/rota/"
 
 
 def publish_agent_files(site):
-    """Copy install.md and llms.txt raw to <site>/rota/; fail on a docs link that is no page."""
+    """Copy llms.txt raw to <site>/rota/; fail on a docs link that is no page."""
     pages = {permalink(r) for r in MD}
     for name in AGENT_FILES:
         with open(os.path.join(REPO, name), encoding="utf-8") as f:
