@@ -58,4 +58,4 @@ Ranked by how much of the plain default's advantage each closes, cheapest first.
 
 ## Checked and still open
 
-Checked after the first draft: depth already takes diff size (#581); overlap already takes declared scopes (#575); `round.autopilot` is off here; `assign` carries decisions into the brief only through `--body-file`. Still unverified: whether a parked slot's next dispatch starts a fresh harness session or continues the old one, which decides whether stale context accumulates across issues.
+Checked after the first draft: depth already takes diff size (#581); overlap already takes declared scopes (#575); `round.autopilot` is off here; `assign` carries settled answers into the brief through `--settled-file` (formerly `--body-file`). Still unverified: whether a parked slot's next dispatch starts a fresh harness session or continues the old one, which decides whether stale context accumulates across issues.
