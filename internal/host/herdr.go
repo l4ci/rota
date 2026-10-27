@@ -406,7 +406,8 @@ const submitRetries = 3
 
 // Send submits the file and confirms pickup: it returns once the agent is
 // observed working (or blocked on a dialog), NOT when the task finishes,
-// since a plain --wait would hold until the whole task settled. ErrNotSubmitted
+// since a plain --wait would hold until the whole task settled. ErrQueued
+// acknowledges a relay in a busy Codex session. ErrNotSubmitted
 // means no activity followed the submission; ErrDialogOpen means a dialog was
 // already up and nothing was sent; ErrDraftOnPrompt means a human draft is on
 // the prompt line and nothing was typed.
@@ -430,8 +431,20 @@ func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 	}
 	r := h.herdr(ctx, "agent", "prompt", name, text,
 		"--wait", "--until", "working", "--until", "blocked", "--timeout", "60000")
-	if r.ExitCode == 0 {
-		status, kind := jget(r.Stdout, "result.agent.agent_status"), jget(r.Stdout, "result.agent.agent")
+	status, kind := jget(r.Stdout, "result.agent.agent_status"), jget(r.Stdout, "result.agent.agent")
+	confirm := r.ExitCode == 0
+	// A busy Codex can receive the relay while the prompt RPC times out
+	// waiting for a new working transition. Its pane still proves delivery.
+	// Keep other harnesses and an explicit input refusal on their old path.
+	if !confirm && hasRelayMarker(text) && jget(r.Stderr, "error.code") != "agent_blocked" {
+		agent := h.herdr(ctx, "agent", "get", name)
+		kind = jget(agent.Stdout, "result.agent.agent")
+		if hz, ok := harness.Lookup(kind); agent.ExitCode == 0 && ok && hz.PromptAcknowledgement().RequireEcho {
+			status = jget(agent.Stdout, "result.agent.agent_status")
+			confirm = true
+		}
+	}
+	if confirm {
 		if hz, known := harness.Lookup(kind); known && kind != "" && !hz.PromptAcknowledgement().RequireEcho && (status == "working" || status == "blocked") {
 			return nil
 		}
@@ -444,6 +457,9 @@ func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 			output = pane[:i]
 		}
 		ack := briefTail(text) != "" && strings.Contains(squeeze(output), briefTail(text))
+		if (status == "working" || status == "blocked") && harness.RequiresPromptEcho(kind, pane) && hasRelayMarker(text) && relayQueued(output, text) {
+			return ErrQueued
+		}
 		if ack || ((status == "working" || status == "blocked") && !harness.RequiresPromptEcho(kind, pane)) {
 			return nil
 		}
@@ -462,6 +478,15 @@ func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 		return h.submitTyped(ctx, name)
 	}
 	return ErrNotSubmitted
+}
+
+func hasRelayMarker(text string) bool {
+	for _, line := range strings.Split(text, "\n") {
+		if harness.RelaySequence(line) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // relayQueued reports whether output, the pane text above the prompt line,
