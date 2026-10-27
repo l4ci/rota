@@ -153,9 +153,9 @@ func doneAcceptance(c *Ctx, root string, ids []string) error {
 			if be.Capabilities().IssueIDs {
 				key := id
 				if _, err := strconv.Atoi(id); err == nil {
-					key = "#" + id // plan pass takes an item key, not a bare number.
+					key = "'#" + id + "'" // Keep the item key out of shell comments.
 				}
-				commands = append(commands, fmt.Sprintf("`rota plan pass %s %s --proof <sha:check>`", key, st.ID))
+				commands = append(commands, fmt.Sprintf("`rota plan pass %s %s --proof '<sha:check>'`", key, st.ID))
 			}
 		}
 	}
