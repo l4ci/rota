@@ -799,7 +799,7 @@ func (t *trainRun) verifyStage() (bool, error) {
 		fullTierName = tierFull + "@ci"
 	}
 	full := cached(fullTierName, func() (VerifyResult, error) { return t.verify(scratch) })
-	e2e := cached(tierE2E, func() (VerifyResult, error) { return e.runGateVerify(ctx, t.in.cfg.E2E, scratch, t.in.ledger) })
+	e2e := cached(tierE2E, func() (VerifyResult, error) { return e.runE2E(ctx, t.in.cfg.E2E, scratch, t.in.ledger) })
 	// bisect names the culprit of a red tier; it reports whether the train ends.
 	bisect := func(tier string, run func(int) (VerifyResult, error), failed VerifyResult, key string) (stop bool, err error) {
 		passing, stop, err = e.bisectTrain(scratch, res, tips, tier, run, failed, o.LandGreen)
@@ -1252,6 +1252,21 @@ func appendNew(dst []string, notes ...string) []string {
 	return dst
 }
 
+// landedPRs names the landed members by PR, falling back to the branch.
+func landedPRs(res *TrainResult) []string {
+	var prs []string
+	for _, m := range res.Members {
+		if m.Landed {
+			pr := m.PR
+			if pr == "" {
+				pr = m.Branch
+			}
+			prs = append(prs, pr)
+		}
+	}
+	return prs
+}
+
 // verifyLanded checks an unexpected forge result. Prefix bisection failures
 // before landing never call this, and therefore never freeze the queue.
 func (t *trainRun) verifyLanded(res *TrainResult) (bool, error) {
@@ -1270,7 +1285,10 @@ func (t *trainRun) verifyLanded(res *TrainResult) (bool, error) {
 	}
 	checks := full.Failed
 	if full.OK() {
-		e2e, err := t.e.RunVerifyWith(t.ctx, t.in.cfg.E2E, t.root, t.in.ledger)
+		e2e, err := t.e.runE2E(t.ctx, t.in.cfg.E2E, t.root, t.in.ledger)
+		if err == nil {
+			err = t.e.recordFlakes(t.root, t.o.Round, landedPRs(res), e2e)
+		}
 		if err != nil {
 			return true, err
 		}
@@ -1279,16 +1297,7 @@ func (t *trainRun) verifyLanded(res *TrainResult) (bool, error) {
 		}
 		checks = e2e.Failed
 	}
-	var prs []string
-	for _, m := range res.Members {
-		if m.Landed {
-			pr := m.PR
-			if pr == "" {
-				pr = m.Branch
-			}
-			prs = append(prs, pr)
-		}
-	}
+	prs := landedPRs(res)
 	if err := t.e.freezeLandedFailure(t.ctx, t.root, t.o.Base, prs, checks); err != nil {
 		return true, err
 	}
