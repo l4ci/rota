@@ -204,7 +204,7 @@ var Keys = []Key{
 	k("test.fullWhere", ScopeProject, "local", false, TypeEnum, "Where the gate and train run the full tier: here, or by pushing the merge result and waiting for the forge's checks (needs test.ciChecks).", "local", "ci"),
 	k("test.vacuousCheck", ScopeProject, false, false, TypeBool, "Refuse tests that still pass after reverting the merge's non-test changes in a disposable worktree. Off by default."),
 	k("test.filePattern", ScopeProject, `_test\.go$`, false, TypeString, "Regular expression matching test-file paths for test.vacuousCheck. Defaults to Go test files."),
-	k("test.vacuousCommand", ScopeProject, "go test -count=1 {packages} -run {tests}", false, TypeString, "Command for test.vacuousCheck. Shell-quoted {files} selects changed test files; {packages} and {tests} select Go packages and test names."),
+	k("test.vacuousCommand", ScopeProject, "go test -json -count=1 {packages} -run {tests}", false, TypeString, "Command for test.vacuousCheck. Shell-quoted {files} selects changed test files; {packages} and {tests} select Go packages and test names."),
 	k("test.ciTimeoutMinutes", ScopeProject, num("60"), false, TypeInt, "How long a ci run waits for its checks, 1 to 1440 minutes. ROTA_CI_TIMEOUT (seconds) overrides it for one run."),
 	k("test.ciChecks", ScopeProject, []any{}, false, TypeList, "Check names that must all succeed on the pushed commit under test.fullWhere ci: GitHub check-run names or commit-status contexts, GitLab job names."),
 	// #797: where issues live and where code lands, split. They replace

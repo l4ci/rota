@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -86,6 +87,9 @@ func (e Env) checkVacuous(ctx context.Context, root, before, after string, c vac
 	if len(tests) == 0 {
 		return vacuousResult{note: "VACUOUS-SKIP — no added or changed test files (or docs/skills only)"}, nil
 	}
+	if len(production) == 0 {
+		return vacuousResult{note: "VACUOUS-SKIP — no non-test changes to revert: " + strings.Join(tests, ", ")}, nil
+	}
 	dir, cleanup, err := e.scratchTree(ctx, root, after, "rota-train-vacuous-")
 	if err != nil {
 		return vacuousResult{}, err
@@ -106,6 +110,10 @@ func (e Env) checkVacuous(ctx context.Context, root, before, after string, c vac
 	if code != 0 {
 		return vacuousResult{verdict: GateVerifyFailed, detail: fmt.Sprintf("selected tests fail on the merge: %s\n%s", names, indentTail(out, 20))}, nil
 	}
+	goDefault := c.command == config.String(nil, "test.vacuousCommand")
+	if goDefault && !vacuousGoTestsRan(out) {
+		return vacuousResult{note: "VACUOUS-SKIP — inconclusive: no selected Go tests completed without skipping on the merge: " + names}, nil
+	}
 	// restore handles additions, deletions, modes and renames (diff uses no-renames).
 	args := append([]string{"--literal-pathspecs", "restore", "--source=" + before, "--staged", "--worktree", "--"}, production...)
 	if len(production) > 0 {
@@ -121,9 +129,25 @@ func (e Env) checkVacuous(ctx context.Context, root, before, after string, c vac
 		return vacuousResult{}, fmt.Errorf("counterfactual test command could not complete (exit %d): %s", code, indentTail(out, 20))
 	}
 	if code == 0 {
+		if goDefault && !vacuousGoTestsRan(out) {
+			return vacuousResult{note: "VACUOUS-SKIP — inconclusive: no selected Go tests completed without skipping with non-test changes reverted: " + names}, nil
+		}
 		return vacuousResult{verdict: GateVacuousTests, detail: "tests still pass with non-test changes reverted: " + names}, nil
 	}
 	return vacuousResult{note: "VACUOUS-PASS — tests fail with non-test changes reverted: " + names}, nil
+}
+
+// A successful package exit alone proves nothing: build constraints can exclude
+// every selected test, and run events can all end in skips. Require a completed,
+// non-skipped test (including examples and fuzz seeds) before judging vacuity.
+func vacuousGoTestsRan(out string) bool {
+	for _, line := range strings.Split(out, "\n") {
+		var event struct{ Action, Test string }
+		if json.Unmarshal([]byte(line), &event) == nil && event.Test != "" && event.Action == "pass" {
+			return true
+		}
+	}
+	return false
 }
 
 // The Go default selects test entry points in the changed files, with caching
@@ -186,6 +210,9 @@ func (g *gate) vacuousRun(before, after string) (bool, error) {
 // vacuousStage checks each train member independently of later members and
 // never reuses the full-tier cache. A failure names the owning member.
 func (t *trainRun) vacuousStage() (bool, error) {
+	if t.o.NoVerify {
+		return false, nil
+	}
 	for i := 0; i < t.passing; i++ {
 		r, err := t.e.checkVacuous(t.ctx, t.root, t.tips[i], t.tips[i+1], t.in.cfg.vacuous)
 		if err != nil {
