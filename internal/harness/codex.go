@@ -158,7 +158,14 @@ func (codex) CrossReviewer() bool { return true }
 
 func (codex) LimitPhrases() []string { return SharedLimitPhrases() }
 
-func (codex) PaneVocab() PaneVocab { return PaneVocab{} }
+func (codex) PaneVocab() PaneVocab {
+	return PaneVocab{
+		// The active status starts with elapsed time; Codex truncates the
+		// following interrupt hint to the pane width. Require the duration
+		// frame so prose quoting the label does not count as active work.
+		Waiting: []string{`(?m)^\s*• Waiting for background terminal \(\d+[hms][^\n]*$`},
+	}
+}
 
 // Tiers: the tier map is optional (#68), unset a worker runs on Codex's own
 // default model, but a configured one names every tier.
