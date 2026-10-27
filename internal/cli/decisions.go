@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/knowledge"
 	"strings"
 
 	"github.com/l4ci/rota/internal/mapqa"
@@ -10,7 +13,12 @@ import (
 
 // decisionsCommands is the `rota decisions` group (A5, #49).
 func decisionsCommands() *Command {
-	return &Command{Name: "decisions", Summary: "read .rota/DECISIONS.md", Subs: []*Command{
+	return &Command{Name: "decisions", Summary: "read and write .rota/DECISIONS.md", Subs: []*Command{
+		{Name: "check", Summary: "validate decision entry shape", Verb: noFlags(decCheck)},
+		{Name: "amend", Summary: "replace one part of an active decision", Verb: decAmend},
+		{Name: "retire", Summary: "retire an active decision", Verb: decRetire},
+		{Name: "supersede", Summary: "replace an active decision", Verb: decSupersede},
+		{Name: "add", Summary: "add a canonical decision entry", Verb: decAdd},
 		{Name: "query", Summary: "print topic sections", Verb: noFlags(decQuery)},
 		{Name: "topics", Summary: "list topic headings with bullet counts", Verb: noFlags(decTopics)},
 		{Name: "stats", Summary: "bullet count and size per topic", Verb: noFlags(decStats), View: decisionsView},
@@ -169,5 +177,139 @@ func mapStats(fs *flag.FlagSet) RunFunc {
 			text += "note: " + note
 		}
 		return Result{Data: data, Text: text}, nil
+	}
+}
+
+func decWriteResult(topic, title string, changed bool, err error) (Result, error) {
+	if errors.Is(err, knowledge.ErrDecisionInvalid) {
+		return Result{}, Usage("%s", err)
+	}
+	if err != nil {
+		return knFail(err)
+	}
+	return Result{Data: knObj("topic", topic, "title", title, "changed", changed), Text: fmt.Sprintf("updated: %s :: %s", topic, title)}, nil
+}
+
+func decAdd(fs *flag.FlagSet) RunFunc {
+	topic := fs.String("topic", "", "topic heading")
+	title := fs.String("title", "", "decision title")
+	bodyFile := fs.String("body-file", "", "four-part body: a path, or - for stdin")
+	date := fs.String("date", "", "date (YYYY-MM-DD), default today")
+	return func(c *Ctx, args []string) (Result, error) {
+		if err := knNoArgs(args); err != nil {
+			return Result{}, err
+		}
+		if err := knRequire(map[string]string{"topic": *topic, "title": *title, "body-file": *bodyFile}, "topic", "title", "body-file"); err != nil {
+			return Result{}, err
+		}
+		body, err := readBodyText(c, "body-file", *bodyFile, ExitResolution)
+		if err != nil {
+			return Result{}, err
+		}
+		st, _, err := knStore(c)
+		if err != nil {
+			return Result{}, err
+		}
+		changed, err := st.AddDecision(*topic, *title, body, *date)
+		return decWriteResult(*topic, *title, changed, err)
+	}
+}
+
+func decCheck(c *Ctx, args []string) (Result, error) {
+	if err := knNoArgs(args); err != nil {
+		return Result{}, err
+	}
+	st, _, err := knStore(c)
+	if err != nil {
+		return Result{}, err
+	}
+	check, err := st.CheckDecisions()
+	if err != nil {
+		return Result{}, err
+	}
+	lines := append([]string{}, check.Errors...)
+	for _, warning := range check.Warnings {
+		lines = append(lines, "notice: "+warning)
+	}
+	res := Result{Data: knObj("errors", strSlice(check.Errors), "warnings", strSlice(check.Warnings)), Text: strings.Join(lines, "\n")}
+	if len(check.Errors) > 0 {
+		return res, Failed("malformed decisions")
+	}
+	return res, nil
+}
+
+func decAmend(fs *flag.FlagSet) RunFunc {
+	topic := fs.String("topic", "", "topic heading")
+	title := fs.String("title", "", "decision title")
+	part := fs.String("part", "", "part: rule, why, forbids or permits")
+	bodyFile := fs.String("body-file", "", "replacement part: a path, or - for stdin")
+	return func(c *Ctx, args []string) (Result, error) {
+		if err := knNoArgs(args); err != nil {
+			return Result{}, err
+		}
+		if err := knRequire(map[string]string{"topic": *topic, "title": *title, "part": *part, "body-file": *bodyFile}, "topic", "title", "part", "body-file"); err != nil {
+			return Result{}, err
+		}
+		body, err := readBodyText(c, "body-file", *bodyFile, ExitResolution)
+		if err != nil {
+			return Result{}, err
+		}
+		st, _, err := knStore(c)
+		if err != nil {
+			return Result{}, err
+		}
+		changed, err := st.AmendDecision(*topic, *title, *part, body)
+		return decWriteResult(*topic, *title, changed, err)
+	}
+}
+
+func decRetire(fs *flag.FlagSet) RunFunc {
+	topic := fs.String("topic", "", "topic heading")
+	title := fs.String("title", "", "decision title")
+	reason := fs.String("reason", "", "one-line reason for lifting the boundary")
+	date := fs.String("date", "", "date (YYYY-MM-DD), default today")
+	return func(c *Ctx, args []string) (Result, error) {
+		if err := knNoArgs(args); err != nil {
+			return Result{}, err
+		}
+		if err := knRequire(map[string]string{"topic": *topic, "title": *title, "reason": *reason}, "topic", "title", "reason"); err != nil {
+			return Result{}, err
+		}
+		st, _, err := knStore(c)
+		if err != nil {
+			return Result{}, err
+		}
+		changed, err := st.RetireDecision(*topic, *title, *reason, *date)
+		return decWriteResult(*topic, *title, changed, err)
+	}
+}
+
+func decSupersede(fs *flag.FlagSet) RunFunc {
+	topic := fs.String("topic", "", "topic heading")
+	title := fs.String("title", "", "old decision title")
+	newTitle := fs.String("new-title", "", "replacement decision title")
+	bodyFile := fs.String("body-file", "", "replacement four-part body: a path, or - for stdin")
+	date := fs.String("date", "", "date (YYYY-MM-DD), default today")
+	return func(c *Ctx, args []string) (Result, error) {
+		if err := knNoArgs(args); err != nil {
+			return Result{}, err
+		}
+		if err := knRequire(map[string]string{"topic": *topic, "title": *title, "new-title": *newTitle, "body-file": *bodyFile}, "topic", "title", "new-title", "body-file"); err != nil {
+			return Result{}, err
+		}
+		body, err := readBodyText(c, "body-file", *bodyFile, ExitResolution)
+		if err != nil {
+			return Result{}, err
+		}
+		st, _, err := knStore(c)
+		if err != nil {
+			return Result{}, err
+		}
+		changed, err := st.SupersedeDecision(*topic, *title, *newTitle, body, *date)
+		res, err := decWriteResult(*topic, *title, changed, err)
+		if err == nil {
+			res.Data.(*jsonx.Object).Set("newTitle", *newTitle)
+		}
+		return res, err
 	}
 }

@@ -47,3 +47,29 @@ EMPTY_BLOCK=$(grep -A 10 "<!-- rota-decisions-start -->" CLAUDE.md)
 grep -q "no decisions yet" <<<"$EMPTY_BLOCK" || fail "empty-state placeholder missing"
 pass "decisions block handles empty file"
 
+
+# Writers own the entry shape and automatically regenerate the managed block.
+cat > "$TMP/decision-body.md" <<'EOF_BODY'
+Use writer verbs.
+
+*Why.* Avoid entry drift.
+
+**Forbids.** Hand edits.
+
+**Permits.** Validated writes.
+EOF_BODY
+OUT=$(hvj decisions add --topic Architecture --title "Owned writes" --body-file "$TMP/decision-body.md" --date 2026-10-27) || vfail
+[ "$(jget data.changed <<<"$OUT")" = true ] || fail "add did not report a write: $OUT"
+grep -qF '<!-- 2026-10-27 -->' .rota/DECISIONS.md || fail "add omitted the stamp"
+grep -qF -- '- Architecture' CLAUDE.md || fail "writer did not refresh the index"
+printf 'Reviewed changes.\n' > "$TMP/decision-part.md"
+OUT=$(hvj decisions amend --topic Architecture --title "Owned writes" --part why --body-file "$TMP/decision-part.md") || vfail
+grep -qF '*Why.* Reviewed changes.' .rota/DECISIONS.md || fail "amend missed why"
+OUT=$(hvj decisions supersede --topic Architecture --title "Owned writes" --new-title "Replacement" --body-file "$TMP/decision-body.md" --date 2026-10-27) || vfail
+OUT=$(hvj decisions query Architecture) || vfail
+[[ "$OUT" = *'### Replacement'* && "$OUT" != *'### Owned writes'* ]] || fail "supersede left the old boundary active: $OUT"
+OUT=$(hvj decisions retire --topic Architecture --title Replacement --reason "Boundary lifted." --date 2026-10-27) || vfail
+OUT=$(hvj decisions check) || vfail
+OUT=$(hvj decisions query Architecture) || vfail
+[[ "$OUT" != *'### Replacement'* ]] || fail "retire left the boundary active: $OUT"
+pass "decisions writers add, amend, supersede and retire validated entries"

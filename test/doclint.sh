@@ -120,6 +120,35 @@ if [ -z "${ROTA_BIN:-}" ]; then
     -o "$TMP/rota" ./cmd/rota) || fail "go build ./cmd/rota failed"
   ROTA_BIN="$TMP/rota"
 fi
+# Decision shape is a merge gate, including historical entries. Missing dates
+# are notices so existing undated boundaries remain usable.
+OUT="$("$ROTA_BIN" -C "$REPO" decisions check 2>&1)" || fail "DECISIONS.md is malformed: $OUT"
+pass "DECISIONS.md entries pass the shared shape check"
+DC="$TMP/decisions"; mkdir -p "$DC/.rota"
+printf '# Decisions\n\n## Testing\n\n### Broken boundary\n\nRule only.\n' > "$DC/.rota/DECISIONS.md"
+rc=0; OUT="$("$ROTA_BIN" -C "$DC" decisions check 2>&1)" || rc=$?
+[ "$rc" = 1 ] && grep -qF "Testing :: Broken boundary: missing why" <<<"$OUT" \
+  || fail "decisions check did not fail a broken entry (rc $rc): $OUT"
+cat > "$DC/.rota/DECISIONS.md" <<'EOF'
+# Decisions
+
+## Testing
+
+### Undated boundary
+
+Keep the gate.
+
+*Why.* Catch drift.
+
+**Forbids.** Broken entries.
+
+**Permits.** Undated history.
+EOF
+rc=0; OUT="$("$ROTA_BIN" -C "$DC" decisions check 2>&1)" || rc=$?
+[ "$rc" = 0 ] && grep -qF "notice: Testing :: Undated boundary: missing date" <<<"$OUT" \
+  || fail "an undated decision should only warn (rc $rc): $OUT"
+pass "decisions check fails malformed entries and only warns for missing dates"
+
 LINT="$TESTDIR/lint-verbs.py"
 rc=0; OUT="$(python3 "$LINT" "$ROTA_BIN" "$REPO/skills/rota-orchestrate/$SK" "$REPO/skills/rota-orchestrate/solo-and-autopilot.md" "$REPO"/skills/rota-orchestrate/{architecture-review,reading-failures,escalations-and-provenance,merge-train-and-approval,bounce-cap}.md "$REPO/docs/usage/parallel-rounds.md" 2>&1)" || rc=$?
 [ "$rc" = "0" ] || fail "verbs named in the skill or docs that do not exist: $OUT"

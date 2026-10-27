@@ -70,6 +70,8 @@ func doctorData(t *testing.T, out string) (bool, map[string]map[string]any) {
 		byName[c["name"].(string)] = c
 		order += c["name"].(string) + ","
 	}
+	// The decisions line appears only when DECISIONS.md exists.
+	order = strings.Replace(order, "decisions,", "", 1)
 	// The agents line appears only in a project whose agent files are stale.
 	order = strings.Replace(order, "agents,", "", 1)
 	// The verify line appears only in a project with no test.full or test.e2e.
