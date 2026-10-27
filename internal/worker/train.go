@@ -109,6 +109,8 @@ type TrainResult struct {
 	Verdict string
 	Members []TrainMember
 	Culprit string
+	// Culprits lists members excluded by the static PR-section pre-filter.
+	Culprits []TrainCulprit
 	// CulpritGate is the gate result that named the culprit, for the bookkeeping
 	// that follows (its head SHA, PR and branch). Zero when none did.
 	CulpritGate GateResult
@@ -162,7 +164,7 @@ type TrainBlocked struct {
 	By     []string // targets
 }
 
-// OK reports a train that verified and landed whole.
+// OK reports a train that verified and landed every member left by the pre-filter.
 func (r TrainResult) OK() bool { return r.Verdict == GatePass }
 
 // Train runs a merge train (see above). The base must be checked out in root.
@@ -305,8 +307,12 @@ func (t *trainRun) plan() (bool, error) {
 		return true, fail(exitcode.ExitUsage, fmt.Sprintf("a train is all PRs or all slots without one, not a mix: PRs merge onto origin/%s and slots onto the local %s", o.Base, o.Base))
 	}
 
-	// 1. Check every member.
-	for _, tg := range o.Targets {
+	// 1. Pre-filter static PR sections, then check the remaining members.
+	targets, done, err := t.filterPRSections(reg, o.Targets)
+	if done || err != nil {
+		return true, err
+	}
+	for _, tg := range targets {
 		gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, tg), Verdict: o.Verdict, CheckReviews: o.CheckReviews})
 		if err != nil {
 			if gr.Verdict == GateVerdictBlocked {
@@ -315,12 +321,23 @@ func (t *trainRun) plan() (bool, error) {
 			return true, err
 		}
 		res.Notes = appendNew(res.Notes, gr.Notes...)
+		if t.excludePRSections(tg, gr) {
+			continue
+		}
 		if !gr.OK() {
 			res.Verdict, res.Culprit, res.CulpritGate, res.Err, res.Hint = gr.Verdict, tg, gr, gr.Err, gr.Hint
 			return true, nil
 		}
 		res.Members = append(res.Members, TrainMember{Target: tg, Branch: gr.Branch, PR: gr.PR})
 		t.remote = t.remote || gr.PR != ""
+	}
+	if err := t.filterSectionOrder(&o); err != nil {
+		return true, err
+	}
+	if len(res.Members) == 0 {
+		c := res.Culprits[0]
+		res.Verdict, res.Culprit, res.CulpritGate, res.Err, res.Hint = c.Gate.Verdict, c.Target, c.Gate, c.Gate.Err, c.Gate.Hint
+		return true, nil
 	}
 	t.baseRef = o.Base
 	if t.remote {

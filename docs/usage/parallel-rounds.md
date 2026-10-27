@@ -628,13 +628,17 @@ when set, and merges on a pass.
 A worker's PR body carries four sections besides the closing keyword: `## Approvals` (the channel of each
 decision it acted on), `## Rulings` (its own calls, each with a cost if wrong), `## Assumptions` (each
 question the issue left open that it answered from the code, `None` if there were none) and the
-`Door:` line. The gate reads only `## Approvals`; the orchestrator reads the rest before review.
+`Door:` line. The gate checks approval provenance and requires the Assumptions and Rulings
+headings. It checks their presence only: `None` and empty sections pass. The orchestrator reads
+the content before review.
 
 The gate refuses before it merges anything (exit 4, nothing lands) in these cases:
 
 - **A recorded FAIL verdict** on the slot's branch (`blockedBy: verdict`, verdict `verdict-blocked`). A newer
   PASS of the same kind clears it. A review record at the current head with a blocking finding
   refuses the same way, even when its verdict is CONCERNS; a newer record at a new head clears it.
+- **A missing `## Assumptions` or `## Rulings` heading** (`blockedBy: assumptions-missing` or
+  `blockedBy: rulings-missing`). Add the heading to the PR body and retry.
 - **No `Closes #N`** in the PR body (`blockedBy: closes`), unless the issue is labelled `partial-slice`.
 - **An unpicked best-of attempt** (`blockedBy: best-of-unpicked`).
 - **A missing review verdict.** The depth `ship.review` resolves for the branch (diff size, the issue's labels) decides what must be on record: `full` both the Spec and Standards verdicts, `light` the Spec verdict (the Standards verdict when the slot has no issue), `none` nothing (`blockedBy: review-missing`). Run `/rota-review`, which records them.
@@ -642,6 +646,12 @@ The gate refuses before it merges anything (exit 4, nothing lands) in these case
   `local`, the gate would merge a tree no command checked, so it stops (`blockedBy: no-verify`). Set
   one with `rota config set test.full <command>`, or pass `--no-verify` to merge unverified on purpose.
   The train takes the same flag.
+
+A train excludes PRs missing these headings before building or verifying its merge. Its
+`culprits` list names each excluded target and PR with its own `blockedBy` reason; the remaining
+PRs train normally. If every PR is excluded, nothing is verified or landed, and the train
+refuses with the first missing-section reason. Other member-check and verification failures
+keep their existing stop behavior. An explicit `--order` retains the order of the remaining PRs.
 
 A local gate verifies before it merges. For a PR it first asks the forge whether the PR merges
 cleanly; a conflict the forge reports (git can miss one, for example after a file move) is

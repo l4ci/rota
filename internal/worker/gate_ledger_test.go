@@ -107,7 +107,7 @@ func TestGateLedgerExternalPRKeepsResolvedTarget(t *testing.T) {
 	}
 	gitq(t, w.worker, "push", "-q", "origin", "w1:dana/7-x")
 	w.forge("head", "dana/7-x")
-	w.forge("body", "Closes #7")
+	w.setPRBody("Closes #7")
 	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: ghURL, Base: "main", NoVerify: true})
 	if err != nil || res.Verdict != GatePass {
 		t.Fatalf("gate = %+v, %v", res, err)

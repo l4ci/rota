@@ -35,7 +35,7 @@ func supportGateWith(t *testing.T, support bool, body string, setup func(*world)
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(`{"slots":[{"name":"w1","branch":"w1","task":"7","pr":"`+ghURL+`"}]}`), 0o644)
 	w.forge("readers", "mallory")
-	w.forge("body", "Closes #7\n\n"+body)
+	w.setPRBody("Closes #7\n\n" + body)
 	if len(comments) > 0 {
 		raw, _ := json.Marshal(comments)
 		w.forge("issueComments", string(raw))
