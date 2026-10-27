@@ -69,6 +69,9 @@ func TestCheckClosesUnmetAcceptance(t *testing.T) {
 			if out.Verdict != tc.want || out.Broke != "" {
 				t.Fatalf("outcome %+v, want verdict %q", out, tc.want)
 			}
+			if tc.want != "" && !strings.HasPrefix(out.Msg, "GATE kit refused") {
+				t.Fatalf("refusal lacks the gate and slot: %s", out.Msg)
+			}
 			if tc.want != "" && !strings.Contains(out.Msg, "AC-1: ready") {
 				t.Fatalf("missing unmet criterion: %+v", out)
 			}

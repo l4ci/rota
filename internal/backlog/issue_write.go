@@ -322,18 +322,12 @@ func (b *Issues) Complete(ref string, in CompleteInput) (bool, error) {
 		_, err := tr.AddComment(b.ctx(), n, "Blocked"+suffix+"\n\n"+marker.Line("blocked"))
 		return err == nil, err
 	}
-	acceptanceRecord := ""
-	if in.Reason == "done" && HasAcceptanceIDs(is.Body) {
-		unmet, err := b.itemUnmetAcceptance(is)
-		if err != nil {
-			return false, err
-		}
-		if len(unmet) > 0 {
-			if strings.TrimSpace(in.UnmetReason) == "" {
-				return false, AcceptanceRefusal(itemID, unmet)
-			}
-			acceptanceRecord = "\n\n" + AcceptanceRecord(unmet, in.UnmetReason)
-		}
+	acceptanceRecord, err := b.completionAcceptance(is, itemID, in)
+	if err != nil {
+		return false, err
+	}
+	if acceptanceRecord != "" {
+		acceptanceRecord = "\n\n" + acceptanceRecord
 	}
 	if in.Reason == "done" && !in.NoProof {
 		if err := requireProof(itemID, func() (int, error) { return b.proofCount(itemID) }); err != nil {

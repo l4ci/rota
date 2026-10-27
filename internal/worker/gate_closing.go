@@ -160,7 +160,7 @@ func checkClosingItems(ctx context.Context, in closesInput) stepOutcome {
 			}
 			if len(unmet) > 0 {
 				refusal := backlog.AcceptanceRefusal(key.String(), unmet)
-				return stepOutcome{Verdict: GateUnmetAcceptance, Msg: refusal.Msg + "; nothing landed", Hint: refusal.Hint}
+				return stepOutcome{Verdict: GateUnmetAcceptance, Msg: fmt.Sprintf("GATE %s refused — %s; nothing landed", in.Slot, refusal.Msg), Hint: refusal.Hint}
 			}
 		}
 		if numbered && (!known || forgeCloses) && !in.FinalSlice && slices.Contains(is.Labels, PartialSliceLabel) {
