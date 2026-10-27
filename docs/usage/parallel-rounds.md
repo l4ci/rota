@@ -949,6 +949,8 @@ with no reading, or when headroom rose because the quota window reset.
 
 ## Two machines: main and support
 
+Run `rota update` on either machine to check the installed version against the latest release and see the update command. The check writes nothing.
+
 With `round.support` set, main labels issues for the support machine (`rota round support offer`)
 and the two orchestrators talk through the issue thread. The support machine hands back an issue
 it cannot work with `rota round support return <ID> --reason-file <f>`. Both `round watch` runs

@@ -29,6 +29,7 @@ exit: implied only. A missing `gh`, a network failure or an unresolved install g
 old: hv-update-check (no args). Env: `HV_INSTALL_ROOT` stays as the real override (`installType: "override"`, not a test hook); `ROTA_TEST_LATEST_VERSION` is the test hook, for old `HV_LATEST_VERSION` (rule 10).
 shim: old stdout is already this JSON; pass it through unchanged and export `HV_LATEST_VERSION="$HV_TEST_LATEST_VERSION"` when set.
 note: strings may be empty rather than absent, as in the old helper.
+note: allowed on a support machine (`round.role support`): the support fence permits this read-only check, with the same version report and update command as on main.
 note: F6b (#230) replaced the plugin-era detection. `currentVersion` is the running binary's version and `installRoot` is the directory holding the binary (symlinks resolved). `installType` is `brew` for a path under a Homebrew prefix (`/Cellar/`, `/homebrew/`, `/linuxbrew/`), `dev` for an unstamped or `-dev` build or one stamped with a full-length (40-char) commit SHA, which only a checkout rebuild writes (goreleaser stamps a short abbreviation), `unknown` when the binary path does not resolve, otherwise `script`. `updateCommand` is `brew update && brew upgrade rota`, the `install.sh` pipe, or a rebuild, each followed by `&& rota skills update`. `HV_INSTALL_ROOT` and `CLAUDE_PLUGIN_ROOT` are no longer read.
 
 ### rota config show
