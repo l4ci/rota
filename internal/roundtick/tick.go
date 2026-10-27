@@ -388,6 +388,8 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 	for _, m := range e.mergeAll(ctx, run) {
 		switch {
 		case m.Skip:
+		case m.Verdict == worker.GateRunning:
+			r.Deferred = "gate running, deferred: " + m.Detail
 		case m.Landed:
 			e.audit(r, Action{"merge", m.Target, m.Detail})
 		case m.Verdict == "":
