@@ -51,6 +51,14 @@ func TestTickFailedHeadWaitsForPushAcrossRestart(t *testing.T) {
 				if got := len(f.gated) + len(f.trained); got != 1 {
 					t.Fatalf("unchanged failed head attempted %d times, want 1", got)
 				}
+				// Reassigning the worker queues its old PR under a new target.
+				// The failed head belongs to the PR, not its registry location.
+				f.slots = nil
+				f.queued = []string{"#10"}
+				tick()
+				if got := len(f.gated) + len(f.trained); got != 1 {
+					t.Fatalf("queued unchanged failed head attempted %d times, want 1", got)
+				}
 				head = "head-b"
 				tick()
 				if got := len(f.gated) + len(f.trained); got != 2 {

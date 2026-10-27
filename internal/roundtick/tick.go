@@ -333,6 +333,18 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 				// Upgrade a legacy hold without guessing which old head failed.
 				r.FailedHeads[t] = FailedHead{Head: head, Why: why}
 			}
+			if !held {
+				// A worker can move on and leave the same PR in the queue.
+				// Carry its hold to the new target rather than retry its head.
+				for old, prev := range e.FailedHeads {
+					if prev.Head == head {
+						why, held = prev.Why, true
+						delete(r.FailedHeads, old)
+						r.FailedHeads[t] = prev
+						break
+					}
+				}
+			}
 		}
 		if held {
 			r.Held[t] = why
