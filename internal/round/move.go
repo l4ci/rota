@@ -770,7 +770,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	}
 	// A bundle member leaves only to the human, on its own; it is no slot's task,
 	// so it is looked up before "no slot holds".
-	if hs, hr := reg.BundleHolder(id); hs != nil || hr != nil {
+	if hs, hr := reg.BundleHolder(id, worker.HolderOpts{}); hs != nil || hr != nil {
 		if !toHuman {
 			return nil, blocked(BlockBundle, "%s is bundled: a member leaves a bundle only to the human (--to %s)", id, HumanTarget)
 		}
