@@ -11,6 +11,8 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
+const decisionSectionsFixture = "\n## Assumptions\nNone\n## Rulings\nNone\n"
+
 type sectionPRForge struct {
 	worker.Forge
 	sha, body string
