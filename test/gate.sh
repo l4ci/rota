@@ -184,8 +184,15 @@ for idx in "${!PIDS[@]}"; do
       (cd "$REPO" && go test -race -timeout 30m -count=1 "$pkg") >"$retry_log" 2>&1 || retry_rc=$?
       check="go:${pkg#"$module"/}"
       if [ "$retry_rc" = 0 ] && retry_tree_unchanged; then
-        echo "FLAKY $check (failed once, passed isolated retry)"
-        flaky=1
+        first_log="$LOGS/go-first$pkg_idx.log"
+        if python3 "$REPO/test/gate-go.py" output "$LOGS/gotest.log" "$pkg" >"$first_log" &&
+           python3 "$REPO/test/gate-flake.py" "$check" "$first_log" "$retry_log"; then
+          echo "FLAKY $check (failed once, passed isolated retry)"
+          flaky=1
+        else
+          echo "FAIL $check (could not report recovery)"
+          go_failed=1
+        fi
       else
         echo "FAIL $check isolated retry (exit $retry_rc)"
         tail -n 25 "$retry_log" | sed 's/^/     /'
@@ -195,16 +202,26 @@ for idx in "${!PIDS[@]}"; do
     [ "$go_failed" = 0 ] && continue
   fi
   case "$name" in smoke-*)
-    if [ "$rc" = 0 ] && ! grep -q 'All smoke tests passed.' "$LOGS/$name.log"; then rc=1; fi
-    if [ "$rc" = 1 ] && retry_tree_unchanged; then
+    retryable=1
+    if [ "$rc" = 0 ] && ! grep -q 'All smoke tests passed.' "$LOGS/$name.log"; then
+      echo "FAIL $name (no pass line)"
+      rc=1
+      retryable=0
+    fi
+    if [ "$rc" = 1 ] && [ "$retryable" = 1 ] && retry_tree_unchanged; then
       retry_rc=0
       shard="${name#smoke-shard}"
       (cd "$REPO" && env ROTA_SMOKE_DIAGNOSTICS="$SMOKE_DIAGNOSTICS" \
         SECTION_LIST="$(cat "$LOGS/shard$shard.list")" bash test/runner.sh) \
         >"$LOGS/$name.retry.log" 2>&1 || retry_rc=$?
       if [ "$retry_rc" = 0 ] && retry_tree_unchanged && grep -q 'All smoke tests passed.' "$LOGS/$name.retry.log"; then
-        echo "FLAKY $name (failed once, passed isolated retry)"
-        flaky=1
+        if python3 "$REPO/test/gate-flake.py" "$name" "$LOGS/$name.log" "$LOGS/$name.retry.log"; then
+          echo "FLAKY $name (failed once, passed isolated retry)"
+          flaky=1
+        else
+          echo "FAIL $name (could not report recovery)"
+          fail=1
+        fi
         continue
       fi
       echo "FAIL $name isolated retry (exit $retry_rc)"
