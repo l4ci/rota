@@ -265,6 +265,9 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 			visible.NeedsYou = append(visible.NeedsYou, it)
 		}
 		d.Set("autopilot", tickData(visible))
+		if res.Reason == roundwatch.ReasonHeartbeat {
+			visible.Holding = tick.FillStatus
+		}
 		if l := tickLines(visible); l != "nothing to do" {
 			text = append(text, l)
 		}
@@ -296,8 +299,8 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 }
 
 // autopilotWatch is `round watch --autopilot`: tick first, then wait, tick on
-// every wake, and return only for something the orchestrator has not seen, a
-// stop (wind-down or a lost lease), or the heartbeat. The watch is the
+// every wake, and return for new attention, a completed merge, a stop
+// (wind-down or a lost lease), or the heartbeat. Fill progress stays quiet. The watch is the
 // autopilot's heartbeat, so a round running it still has its watch armed.
 func autopilotWatch(c *Ctx, ctx context.Context, env roundwatch.Env, opts roundwatch.Opts, set roundcfg.Settings, root, cd string, lenv roundlease.Env, base string, pid int, poll time.Duration) (Result, error) {
 	c.ctx = ctx
@@ -316,7 +319,7 @@ func autopilotWatch(c *Ctx, ctx context.Context, env roundwatch.Env, opts roundw
 			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonChange}, nil, "tick failed: "+terr.Error()), nil
 		case ctx.Err() != nil:
 			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonInterrupt}, tp, ""), nil
-		case len(tr.New) > 0:
+		case len(tr.New) > 0 || set.TrainFill.Enabled() && slices.ContainsFunc(tr.Did, func(a roundtick.Action) bool { return a.Action == "merge" }):
 			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonChange}, tp, ""), nil
 		case left <= 0:
 			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonHeartbeat}, tp, ""), nil

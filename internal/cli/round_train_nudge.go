@@ -4,8 +4,14 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/roundtick"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -14,16 +20,21 @@ import (
 // the review queue. Reviewed is true when a review verdict is recorded at its
 // head and none blocks the gate, the state the train needs from every member.
 type waitingPR struct {
-	PR, Base string
-	Reviewed bool
+	PR, Base   string
+	Reviewed   bool
+	ReadySince time.Time
+	Immediate  bool
 }
 
-// trainNudge is a base with two or more reviewed PRs waiting: one train lands
-// them in a single verify where a gate per PR would run one full verify each.
+// trainNudge is a base whose reviewed PRs are due for landing: a train, or a
+// lone gate when the configured fill deadline expires.
 type trainNudge struct {
-	Base   string
-	PRs    []string
-	Assign *assignNudge
+	Base       string
+	PRs        []string
+	Assign     *assignNudge
+	Reason     string
+	Wait       string
+	ReadyCount int
 }
 
 // Command is the train to run, the PR numbers as `rota worker train` takes them.
@@ -31,6 +42,9 @@ func (n trainNudge) Command() string {
 	base := n.Base
 	if base == "" {
 		base = "<base>"
+	}
+	if len(n.PRs) == 1 {
+		return fmt.Sprintf("rota worker gate %s --base %s", n.PRs[0], base)
 	}
 	return fmt.Sprintf("rota worker train %s --base %s", strings.Join(n.PRs, " "), base)
 }
@@ -41,12 +55,32 @@ func (n trainNudge) Text() string {
 	if n.Assign != nil {
 		command = n.Assign.First() + "; then " + command
 	}
-	return fmt.Sprintf("nudge\ttrain\t%d reviewed PRs wait on %s (%s)\t%s",
-		len(n.PRs), dash(n.Base), strings.Join(prHashes(n.PRs), " "), command)
+	reason := ""
+	if n.Reason != "" {
+		reason = "; " + n.Reason
+		if n.Wait != "" {
+			reason += "; " + n.Wait
+		}
+	}
+	if n.Reason != "" {
+		count, noun, verb := fmt.Sprint(len(n.PRs)), "ready PRs", "wait"
+		if len(n.PRs) == 1 {
+			noun, verb = "ready PR", "waits"
+		}
+		if n.ReadyCount > len(n.PRs) {
+			count = fmt.Sprintf("%d of %d", len(n.PRs), n.ReadyCount)
+			noun = "ready PRs"
+		}
+		return fmt.Sprintf("nudge\ttrain\t%s %s %s on %s (%s)%s\t%s", count, noun, verb, dash(n.Base), strings.Join(prHashes(n.PRs), " "), reason, command)
+	}
+	return fmt.Sprintf("nudge\ttrain\t%d reviewed PRs wait on %s (%s)%s\t%s",
+		len(n.PRs), dash(n.Base), strings.Join(prHashes(n.PRs), " "), reason, command)
 }
 
 func readyTrainNudges(c *Ctx, root string) []trainNudge {
-	ns := trainNudges(waitingPRs(c, root))
+	// Advisory: an unrelated invalid round key must not hide legacy nudges.
+	set, _ := c.deps().tolerantRoundSettings(root)
+	ns := trainNudgesWithFill(waitingPRs(c, root), set.TrainFill, c.deps().Now())
 	if len(ns) > 0 {
 		n := freeSlotAssignment(c, root)
 		for i := range ns {
@@ -54,6 +88,47 @@ func readyTrainNudges(c *Ctx, root string) []trainNudge {
 		}
 	}
 	return ns
+}
+
+// trainHoldingLines reads current progress without consuming changed-only
+// notices or running a tick. Status can show elapsed time while watch sleeps.
+func trainHoldingLines(c *Ctx, root string) []string {
+	set, ok := c.deps().tolerantRoundSettings(root)
+	if !ok || !set.TrainFill.Enabled() {
+		return nil
+	}
+	type group struct {
+		count  int
+		oldest time.Time
+	}
+	groups := map[string]group{}
+	var bases []string
+	seen := map[int]bool{}
+	for _, w := range waitingPRs(c, root) {
+		n, parsed := worker.PRRefNumber(w.PR)
+		if !w.Reviewed || w.Immediate || !parsed || seen[n] {
+			continue
+		}
+		seen[n] = true
+		g, known := groups[w.Base]
+		if !known {
+			bases = append(bases, w.Base)
+		}
+		g.count++
+		if !w.ReadySince.IsZero() && (g.oldest.IsZero() || w.ReadySince.Before(g.oldest)) {
+			g.oldest = w.ReadySince
+		}
+		groups[w.Base] = g
+	}
+	now := c.deps().Now()
+	var lines []string
+	for _, base := range bases {
+		g := groups[base]
+		if set.TrainFill.Due(g.count, g.oldest, now) == "" {
+			lines = append(lines, set.TrainFill.Holding(base, g.count, g.oldest, now))
+		}
+	}
+	return lines
 }
 
 func prHashes(prs []string) []string {
@@ -64,29 +139,57 @@ func prHashes(prs []string) []string {
 	return out
 }
 
-// trainNudges groups the reviewed waiting PRs by base. A base with one stays
-// out: a lone PR is a plain gate.
-func trainNudges(waiting []waitingPR) []trainNudge {
+// trainNudgesWithFill groups reviewed PRs by base and proposes due groups.
+// The zero policy preserves the legacy nudge at two reviewed PRs.
+func trainNudgesWithFill(waiting []waitingPR, fill roundcfg.TrainFill, now time.Time) []trainNudge {
 	by := map[string][]string{}
+	oldest := map[string]time.Time{}
+	immediate := map[string][]string{}
+	ages := map[string]time.Time{}
+	seen := map[int]bool{}
 	var bases []string
 	for _, w := range waiting {
 		if !w.Reviewed {
 			continue
 		}
 		n, ok := worker.PRRefNumber(w.PR)
-		if !ok {
+		if !ok || seen[n] {
 			continue
 		}
-		if _, seen := by[w.Base]; !seen {
+		seen[n] = true
+		if _, known := by[w.Base]; !known {
 			bases = append(bases, w.Base)
 		}
 		by[w.Base] = append(by[w.Base], fmt.Sprint(n))
+		ages[fmt.Sprint(n)] = w.ReadySince
+		if w.Immediate {
+			immediate[w.Base] = append(immediate[w.Base], fmt.Sprint(n))
+		}
+		if at := w.ReadySince; !at.IsZero() && (oldest[w.Base].IsZero() || at.Before(oldest[w.Base])) {
+			oldest[w.Base] = at
+		}
 	}
 	var out []trainNudge
 	for _, b := range bases {
-		if prs := by[b]; len(prs) >= 2 {
+		prs := by[b]
+		count := len(prs)
+		observedSince := oldest[b]
+		reason := fill.Due(len(prs), oldest[b], now)
+		if fill.Enabled() && reason == "" && len(immediate[b]) > 0 {
+			reason = "review disabled; ready time unavailable, land now"
+			prs = immediate[b]
+			observedSince = time.Time{}
+		}
+		if fill.Enabled() && reason != "" || !fill.Enabled() && len(prs) >= 2 {
+			wait := ""
+			if fill.Enabled() {
+				wait = fill.Wait(observedSince, now)
+			}
 			sort.Slice(prs, func(i, j int) bool { return len(prs[i]) < len(prs[j]) || len(prs[i]) == len(prs[j]) && prs[i] < prs[j] })
-			out = append(out, trainNudge{Base: b, PRs: prs})
+			if fill.Max > 0 && len(prs) > fill.Max {
+				prs = roundcfg.OldestReady(prs, fill.Max, func(pr string) time.Time { return ages[pr] })
+			}
+			out = append(out, trainNudge{Base: b, PRs: prs, Reason: reason, Wait: wait, ReadyCount: count})
 		}
 	}
 	return out
@@ -96,6 +199,21 @@ func trainNudges(waiting []waitingPR) []trainNudge {
 // nudge is advice, so an unreadable registry or branch reads as nothing waiting.
 func waitingPRs(c *Ctx, root string) []waitingPR {
 	reg := worker.LoadRegistryTolerant(root)
+	state := roundtick.State{}
+	if round, ok := reg.Round(); ok {
+		if cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root); err == nil {
+			state = roundtick.LoadState(cd, round)
+		}
+	}
+	return waitingPRsWithState(c, root, state)
+}
+
+func waitingPRsWithState(c *Ctx, root string, state roundtick.State) []waitingPR {
+	reg := worker.LoadRegistryTolerant(root)
+	cfg := c.deps().Config(root)
+	policy, _ := config.ReviewPolicyOf(cfg)
+	fill := roundcfg.TrainFill{Max: config.IntOr(cfg, config.RoundTrainMaxKey, 0, config.MaxInt), Minutes: config.IntOr(cfg, config.RoundTrainFillMinutesKey, 0, config.MaxInt)}
+	reviewOff := fill.Enabled() && policy.Default == config.DepthNone
 	store, _ := c.deps().workerEnv().BounceStore(root)
 	bounceHead := func(issue string) string {
 		if store == nil || issue == "" {
@@ -105,32 +223,68 @@ func waitingPRs(c *Ctx, root string) []waitingPR {
 		return head
 	}
 	vc := shipVerdict(c, root, root)
-	reviewed := func(branch, issue string) bool {
+	reviewed := func(branch, issue, target, pr string, doneAt time.Time) (bool, time.Time) {
 		if branch == "" {
-			return false
+			return false, time.Time{}
 		}
 		r, err := c.deps().Git(c.Context(), root, "rev-parse", "--verify", "-q", branch)
 		if err != nil || r.ExitCode != 0 {
-			return false
+			return false, time.Time{}
 		}
 		head := strings.TrimSpace(r.Stdout)
-		if bh := bounceHead(issue); bh != "" && head != "" && (strings.HasPrefix(head, bh) || strings.HasPrefix(bh, head)) {
-			return false // sent back and not yet pushed to
+		if n, ok := worker.PRRefNumber(pr); ok {
+			for _, name := range []string{target, pr, fmt.Sprintf("#%d", n), fmt.Sprint(n)} {
+				if _, held := roundtick.HoldReason(state.Held, state.FailedHeads, name, fmt.Sprintf("%d:%s", n, head)); held {
+					return false, time.Time{}
+				}
+			}
 		}
-		return len(verdict.Recorded(root, branch, head)) > 0 && !trainBlocked(vc.Store, branch, vc.Settings)
+		if bh := bounceHead(issue); bh != "" && head != "" && (strings.HasPrefix(head, bh) || strings.HasPrefix(bh, head)) {
+			return false, time.Time{} // sent back and not yet pushed to
+		}
+		if reviewOff {
+			return !trainBlocked(vc.Store, branch, vc.Settings), doneAt
+		}
+		ready := len(verdict.Recorded(root, branch, head)) > 0 && !trainBlocked(vc.Store, branch, vc.Settings)
+		return ready, reviewReadySince(vc.Store.Branches[verdict.BranchKey("", branch)], head)
 	}
 	var out []waitingPR
 	for _, s := range reg.Slots() {
 		if s.PR() != "" && worker.IsDone(s.State()) {
-			out = append(out, waitingPR{PR: s.PR(), Base: s.Base(), Reviewed: reviewed(s.Branch(), s.Issue())})
+			at, _ := stamp.Parse(s.ActiveAt())
+			if event := s.Event(); event != nil && (event.Kind == "done" || event.Kind == "review-reply") {
+				if doneAt, err := stamp.Parse(event.TS); err == nil {
+					at = doneAt
+				}
+			}
+			ready, since := reviewed(s.Branch(), s.Issue(), s.Name(), s.PR(), at)
+			out = append(out, waitingPR{PR: s.PR(), Base: s.Base(), Reviewed: ready, ReadySince: since, Immediate: reviewOff && ready && since.IsZero()})
 		}
 	}
 	for _, q := range reg.PRs() {
 		if q.PR != "" {
-			out = append(out, waitingPR{PR: q.PR, Base: q.Base, Reviewed: reviewed(q.Branch, q.Issue)})
+			ready, since := reviewed(q.Branch, q.Issue, q.From, q.PR, time.Time{})
+			out = append(out, waitingPR{PR: q.PR, Base: q.Base, Reviewed: ready, ReadySince: since, Immediate: reviewOff && ready && since.IsZero()})
 		}
 	}
 	return fillDefaultBase(openOnly(c, root, out), defaultBase(c, root))
+}
+
+// reviewReadySince uses the last current-head review prerequisite, so an old
+// PR or a review of a previous head cannot make a fresh review expire early.
+func reviewReadySince(records []verdict.Record, head string) time.Time {
+	var since time.Time
+	list := verdict.ForHead(records, head)
+	for _, kind := range append([]string{verdict.ReviewSpec, verdict.ReviewQuality, verdict.ReviewCross, verdict.SecondOpinion}, verdict.LensKinds...) {
+		r, ok := verdict.Latest(list, kind)
+		if !ok || !verdict.AtHead(r, head) {
+			continue
+		}
+		if at, err := stamp.Parse(r.RecordedAt); err == nil && at.After(since) {
+			since = at
+		}
+	}
+	return since
 }
 
 // openOnly drops the PRs the forge no longer lists as open: gate and train
@@ -209,6 +363,7 @@ func trainNudgeData(ns []trainNudge) []any {
 		o.Set("base", n.Base)
 		o.Set("prs", strList(n.PRs))
 		o.Set("command", n.Command())
+		setIf(o, "reason", n.Reason)
 		if n.Assign != nil {
 			a := n.Assign.data()
 			a.Set("command", n.Assign.Command()+" --agent "+n.Assign.Slot)
@@ -229,7 +384,7 @@ func trainNudgeLines(ns []trainNudge) []string {
 }
 
 // addTrainNudge sets the `trainNudge` array on d and returns text with the
-// nudge lines appended, when two or more reviewed PRs wait on one base. Shared
+// nudge lines appended, when reviewed PRs on one base are due. Shared
 // by `round watch` and `round tick` (`round wait` builds its own): a tick that merged nothing
 // still leaves the nudge, since PRs the autopilot held or has not reached wait.
 func addTrainNudge(c *Ctx, root string, d *jsonx.Object, text []string) []string {
