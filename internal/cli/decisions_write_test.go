@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -73,6 +74,35 @@ func TestDecisionsAmendPreservesOtherBytes(t *testing.T) {
 	raw, _ := os.ReadFile(path)
 	if want := strings.Replace(before, "Prevent drift.", "Keep review explicit.", 1); string(raw) != want {
 		t.Fatalf("amend changed other bytes:\n%q\nwant\n%q", raw, want)
+	}
+}
+
+func TestDecisionsAmendRefreshesLegacyHeaderOnly(t *testing.T) {
+	for _, nl := range []string{"\n", "\r\n"} {
+		t.Run(fmt.Sprintf("newline-%q", nl), func(t *testing.T) {
+			dir := knProject(t, false)
+			path := filepath.Join(dir, ".rota", "DECISIONS.md")
+			header := "# Decisions\n\nUse `/hv-decide` to capture. `/hv-work`, `/hv-debug`, `/hv-plan`, `/hv-refactor`, `/hv-review`, and `/hv-vision` consult this file.\n\n"
+			wantHeader := "# Decisions\n\nUse `/rota-decide` to capture. `/rota-work`, `/rota-debug`, `/rota-plan`, `/rota-refactor`, `/rota-review`, and `/rota-vision` consult this file.\n\n"
+			entries := "## Architecture\n\n### History\n\nUse `/hv-work` as recorded.\n\n*Why.* Preserve `/hv-learn` history.\n\n**Forbids.** Rewriting history.\n\n**Permits.** Header repair.\n\n<!-- 2026-05-16 -->\n"
+			knWrite(t, path, strings.ReplaceAll(header+entries, "\n", nl))
+			body := filepath.Join(dir, "rule.md")
+			knWrite(t, body, "Use `/hv-work` as recorded.")
+			args := []string{"decisions", "amend", "--topic", "Architecture", "--title", "History", "--part", "rule", "--body-file", body}
+			for i := 0; i < 2; i++ {
+				got := knNew(t, dir, "", args...)
+				if got.rc != 0 {
+					t.Fatalf("amend rc=%d: %s", got.rc, got.stderr)
+				}
+				raw, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if want := strings.ReplaceAll(wantHeader+entries, "\n", nl); string(raw) != want {
+					t.Fatalf("header repair changed unexpected bytes:\ngot %q\nwant %q", raw, want)
+				}
+			}
+		})
 	}
 }
 
