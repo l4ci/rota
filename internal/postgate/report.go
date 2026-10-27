@@ -40,7 +40,7 @@ func RenderReport(r worker.GateResult) string {
 
 // Keep the reason and next action, never the machine-captured output tail.
 // Redact before clipping so a token straddling the limit cannot leak a prefix.
-var localPathRE = regexp.MustCompile("(^|[\\s\"'`=(])(?:[A-Za-z]:[\\\\/]|~?/)[^\\s\"'`<>),;]*")
+var localPathRE = regexp.MustCompile("(^|[\\s\"'`=(:])(?:[A-Za-z]:[\\\\/]|~?/)[^\\s\"'`<>),;]*")
 
 func publicGateText(text string) string {
 	text, _, _ = strings.Cut(text, "\n")
