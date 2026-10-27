@@ -22,6 +22,7 @@ import (
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/roundwatch"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -139,7 +140,13 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 			out[roundwatch.EscalationStatusKey(r.Entry.ID)] = r.Status
 		}
 	}
-	renv := withBoard(c, root, c.deps().RoundEnv(ctx, root))
+	renv := c.deps().RoundEnv(ctx, root)
+	// The real combined forge exposes the issue backend. A custom round
+	// environment may supply only round.Forge (and its own Board); do not
+	// bypass that boundary by constructing a different tracker behind it.
+	if _, ok := renv.Forge.(tracker.IssueTracker); ok {
+		renv = withBoard(c, root, renv)
+	}
 	merged := map[string]bool{}
 	if rep, err := renv.Status(ctx, root); err == nil { // a bad round.* key is noted once by the config load below
 		for _, r := range rep.Rows {
