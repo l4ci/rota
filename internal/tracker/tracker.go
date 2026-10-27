@@ -194,6 +194,9 @@ type PR struct {
 	// HeadSHA is the PR's head commit; set by MergedPRs, which callers use to
 	// tell a branch's own PR from an older one that reused the name.
 	HeadSHA string
+	// SameRepository is true only when OpenPRs confirms the head repository is
+	// the target repository; false also covers missing ownership metadata.
+	SameRepository bool
 }
 
 // PRInfo is one PR/MR as the merge gate reads it. State is OPEN, MERGED or
