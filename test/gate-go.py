@@ -36,7 +36,7 @@ if sys.argv[1] == "failed":
     print("\n".join(sorted(failed)))
 elif sys.argv[1] == "output":
     for event in events(sys.argv[2]):
-        if event.get("Package") == sys.argv[3]:
-            print(event.get("Output", json.dumps(event) + "\n"), end="")
+        if event.get("Package") == sys.argv[3] and "Output" in event:
+            print(event["Output"], end="")
 else:
     raise SystemExit("unknown operation")
