@@ -285,6 +285,9 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 | `test.fast` | project (tracked) | list | `[]` |  | Shell commands for the quick per-task and worker checks. {files} expands to the changed files, single-quoted; put -- before it. |
 | `test.full` | project (tracked) | list | `[]` |  | Shell commands for the full suite, run by rota worker gate and the merge train on the merged tree. Empty with test.e2e also empty: the gate refuses to merge without --no-verify. |
 | `test.e2e` | project (tracked) | list | `[]` |  | Shell commands for slow end-to-end checks, run by the gate and merge train after test.full passes. Empty skips the step. |
+| `test.vacuousCheck` | project (tracked) | bool | `false` |  | Refuse tests that still pass after reverting the merge's non-test changes in a disposable worktree. Off by default. |
+| `test.filePattern` | project (tracked) | string | `"_test\\.go$"` |  | Regular expression matching test-file paths for test.vacuousCheck. Defaults to Go test files. |
+| `test.vacuousCommand` | project (tracked) | string | `"go test -count=1 {packages} -run {tests}"` |  | Command for test.vacuousCheck. Shell-quoted {files} selects changed test files; {packages} and {tests} select Go packages and test names. |
 | `test.fullWhere` | project (tracked) | enum | `"local"` | `local`, `ci` | Where the gate and train run the full tier: here, or by pushing the merge result and waiting for the forge's checks (needs test.ciChecks). |
 | `test.ciTimeoutMinutes` | project (tracked) | int | `60` |  | How long a ci run waits for its checks, 1 to 1440 minutes. ROTA_CI_TIMEOUT (seconds) overrides it for one run. |
 | `test.ciChecks` | project (tracked) | list | `[]` |  | Check names that must all succeed on the pushed commit under test.fullWhere ci: GitHub check-run names or commit-status contexts, GitLab job names. |
