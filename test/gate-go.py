@@ -5,25 +5,35 @@ import sys
 
 
 def events(path):
-    for line in Path(path).read_text(errors="replace").splitlines():
-        try:
-            event = json.loads(line)
-        except ValueError:
-            continue  # go may also print build diagnostics outside the JSON stream
-        if isinstance(event, dict):
-            yield event
+    with Path(path).open(errors="replace") as stream:
+        for line in stream:
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue  # go may print build diagnostics outside the JSON stream
+            if isinstance(event, dict):
+                yield event
 
 
 if sys.argv[1] == "failed":
-    rows = list(events(sys.argv[2]))
-    failed = sorted({e["Package"] for e in rows
-                     if e.get("Action") == "fail" and e.get("Package") and not e.get("Test")})
-    started = {e["Package"] for e in rows if e.get("Action") == "start" and e.get("Package")}
-    finished = {e["Package"] for e in rows if e.get("Action") in ("pass", "fail", "skip")
-                and e.get("Package") and not e.get("Test")}
-    if not failed or started - finished:
-        raise SystemExit(1)  # interrupted/incomplete output must never turn green
-    print("\n".join(failed))
+    failed, started, finished = set(), set(), set()
+    ineligible = False
+    for event in events(sys.argv[2]):
+        package, action = event.get("Package"), event.get("Action")
+        output = event.get("Output", "")
+        if "panic: test timed out" in output or event.get("FailedBuild"):
+            ineligible = True
+        if not package or event.get("Test"):
+            continue
+        if action == "start":
+            started.add(package)
+        elif action in ("pass", "fail", "skip"):
+            finished.add(package)
+            if action == "fail":
+                failed.add(package)
+    if ineligible or not failed or started - finished:
+        raise SystemExit(1)  # timeouts/builds/incomplete output must never turn green
+    print("\n".join(sorted(failed)))
 elif sys.argv[1] == "output":
     for event in events(sys.argv[2]):
         if event.get("Package") == sys.argv[3]:

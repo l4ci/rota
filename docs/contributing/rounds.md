@@ -15,7 +15,7 @@ tree through `bash test/gate.sh`: validate-skills, the doc lints (`bash test/doc
 and the smoke suite in shards (`ROTA_SMOKE_SHARDS`, default one per two cores, 1 to 4), all at once. The sharded gate takes about 2–3 minutes;
 running the smoke suite in series is several times slower. It takes a machine-wide lock, so two gates never overlap, and
 keeps one log per check. After all initial checks finish, a failed Go package or smoke shard
-runs once more, alone, on the same tree. Go retries bypass the test cache; smoke retries use
+runs once more, alone, on the same clean tree. Go retries bypass the test cache; smoke retries use
 the original shard's section list. A passing retry prints `FLAKY` and feeds the verifier's
 flake ledger; a second failure keeps the gate red. Validation, gofmt, vet, doclint and
 grep-gate failures are never retried by this wrapper. Initial and retry logs stay separate.

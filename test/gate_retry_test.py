@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -16,7 +17,7 @@ class GateRetryTest(unittest.TestCase):
         self.repo = self.root / "repo"
         (self.repo / "test/sections").mkdir(parents=True)
         source = Path(__file__).resolve().parent
-        shutil.copy(source / "gate.sh", self.repo / "test/gate.sh")
+        shutil.copy(os.environ.get("GATE_SCRIPT", source / "gate.sh"), self.repo / "test/gate.sh")
         shutil.copytree(source / "lib", self.repo / "test/lib")
         for helper in source.glob("gate-*.py"):
             shutil.copy(helper, self.repo / "test" / helper.name)
@@ -51,12 +52,14 @@ if failed and os.environ.get("DIRTY_ON_FAIL") == "1":
     pathlib.Path("go.mod").write_text("module changed\\n")
 if name.startswith("go:"):
     pkg = "github.com/l4ci/rota/internal/example"
+    if failed and os.environ.get("GO_TIMEOUT") == "1":
+        print(json.dumps(dict(Action="output", Package=pkg, Output="panic: test timed out after 30m")))
     print(json.dumps(dict(Action="fail" if failed else "pass", Package=pkg)))
-elif name.startswith("smoke-") and not failed:
+elif name.startswith("smoke-") and not failed and os.environ.get("OMIT_SUMMARY") != "1":
     print("All smoke tests passed.")
 else:
     print("controlled " + name)
-raise SystemExit(1 if failed else 0)
+raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
 ''')
         for name in ("doclint", "grep-gate", "gofmt"):
             (self.repo / "test" / (name + ".sh")).write_text(
@@ -85,6 +88,39 @@ raise SystemExit(1 if failed else 0)
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
         calls = [json.loads(line) for line in (self.control / "calls").read_text().splitlines()]
         return result, calls
+
+    def test_go_timeout_is_not_retried(self):
+        self.env["GO_TIMEOUT"] = "1"
+        result, calls = self.run_gate("go:internal/example")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(max(c["n"] for c in calls), 1, calls)
+        self.assertNotIn("FLAKY", result.stdout)
+
+    def test_smoke_infrastructure_exit_is_not_retried(self):
+        self.env["FAIL_EXIT"] = "2"
+        result, calls = self.run_gate("smoke-shard1")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(max(c["n"] for c in calls), 1, calls)
+        self.assertNotIn("FLAKY", result.stdout)
+
+    def test_recovery_reports_both_run_outcomes_for_the_ledger(self):
+        result, calls = self.run_gate("smoke-shard1")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        records = [json.loads(line.removeprefix("ROTA-FLAKY "))
+                   for line in result.stdout.splitlines() if line.startswith("ROTA-FLAKY ")]
+        self.assertEqual(len(records), 1, result.stdout)
+        record = records[0]
+        self.assertEqual(record["check"], "smoke-shard1")
+        self.assertEqual((record["firstExit"], record["retryExit"]), (1, 0))
+        self.assertIn("controlled smoke-shard1", record["firstOutput"])
+        self.assertIn("All smoke tests passed.", record["retryOutput"])
+
+    def test_incomplete_smoke_success_is_not_retried(self):
+        self.env["OMIT_SUMMARY"] = "1"
+        result, calls = self.run_gate("")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(max(c["n"] for c in calls), 1, calls)
+        self.assertNotIn("FLAKY", result.stdout)
 
     def test_changed_tree_is_not_retried(self):
         self.env["DIRTY_ON_FAIL"] = "1"
@@ -124,6 +160,12 @@ raise SystemExit(1 if failed else 0)
         self.assertEqual(retries[0]["args"][-1], "github.com/l4ci/rota/internal/example")
         self.assertIn("-count=1", retries[0]["args"])
         self.assertIn("FLAKY go:internal/example", result.stdout)
+        records = [json.loads(line.removeprefix("ROTA-FLAKY "))
+                   for line in result.stdout.splitlines() if line.startswith("ROTA-FLAKY ")]
+        self.assertEqual(len(records), 1, result.stdout)
+        self.assertEqual(records[0]["check"], "go:internal/example")
+        self.assertIn('"Action": "fail"', records[0]["firstOutput"])
+        self.assertIn('"Action": "pass"', records[0]["retryOutput"])
 
     def test_flaky_smoke_retries_once_after_all_initial_checks(self):
         result, calls = self.run_gate("smoke-shard1")
@@ -136,4 +178,21 @@ raise SystemExit(1 if failed else 0)
 
 
 if __name__ == "__main__":
-    unittest.main()
+    if len(sys.argv) > 1 and sys.argv[1] == "--measure":
+        os.environ["GATE_SCRIPT"] = sys.argv[2]
+        rows = []
+        for check, twice in [("go:internal/example", False), ("smoke-shard1", False),
+                             ("go:internal/example", True), ("smoke-shard1", True),
+                             ("gofmt", False), ("vet", False), ("doclint", False),
+                             ("grepgate", False)]:
+            fixture = GateRetryTest()
+            try:
+                fixture.setUp()
+                result, calls = fixture.run_gate(check, twice)
+                rows.append(dict(check=check, persistent=twice, gateExit=result.returncode,
+                                 runs=max(c["n"] for c in calls if c["name"] == check)))
+            finally:
+                fixture.doCleanups()
+        print(json.dumps(rows, indent=2))
+    else:
+        unittest.main()
