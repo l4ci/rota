@@ -3,6 +3,7 @@ refs:
   - internal/verdict
   - internal/cli/verdict.go
   - internal/cli/verdict_report.go
+  - internal/cli/verdict_lookup.go
   - internal/backlog/report.go
   - internal/tracker/report.go
 ---
@@ -48,7 +49,7 @@ repo: scoped
 data: {"branch": string, "repo"?: string, "head": string, "records": [record + {"stale": bool}]}
 exit: 2 at an umbrella root without --repo; 3 when the branch does not exist, HEAD is detached and no branch is named, or no base branch resolves; 5 when git fails
 old: none (new in B2)
-note: `records` holds the latest record of each kind for the branch, in kind order (`review-spec`, `review-quality`, `review-cross`, `review-security`, `review-perf`, `review-ux`, `second-opinion`, `qa`, `behaviour`). A branch with none gives `records: []` and exit 0. `head` is the branch's current short tip. The text prints one `<kind> <verdict> @ <sha>` line per record, followed by ` (<harness> <model>)` when the record names them.
+note: `records` holds the latest record of each kind for the branch, in kind order (`review-spec`, `review-quality`, `review-cross`, `review-security`, `review-perf`, `review-ux`, `second-opinion`, `qa`, `behaviour`). A branch with none gives `records: []` and exit 0. `head` is the branch's current short tip. The text prints one `<kind> <verdict> @ <sha>` line per record, followed by ` (<harness> <model>)` when the record names them. In issue mode, missing kind/head records are recovered from marked reports on the same-repository PR and cached locally. The marker must be the first line, name a branch verdict kind and a matching SHA, and have a valid fenced verdict body consistent with the report header. Gate reports, malformed comments and reports for another SHA are ignored. The report author must be the authenticated user or have repository write access (when the forge supports that check). Local records at head take precedence; file mode remains local-only. Forge or cache errors warn and retain the local rules. The existing body format carries no reviewer harness/model, so recovery does not invent them; a cross-harness PASS still needs its reviewer identity recorded locally to satisfy a cross-review requirement.
 
 ### rota verdict route
 rota verdict route [<branch>] --for <ship-review|ship-second-opinion|ship-qa|queue>
