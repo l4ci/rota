@@ -183,7 +183,7 @@ func TestOrcaRelayIdentityUsesOnlyNativeHandle(t *testing.T) {
 	}
 	// A different terminal with the original title cannot be adopted or closed.
 	closed := false
-	h = New(Orca, Deps{Alive: func(int) bool { return true }, Tree: func(p int) []int { return []int{p} }, Run: func(_ context.Context, _ string, a []string) (Result, error) {
+	h = New(Orca, Deps{Sleep: func(time.Duration) {}, KillWait: 1, Alive: func(int) bool { return true }, Tree: func(p int) []int { return []int{p} }, Run: func(_ context.Context, _ string, a []string) (Result, error) {
 		if a[1] == "close" {
 			closed = true
 		}
