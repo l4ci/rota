@@ -11,7 +11,7 @@ import (
 
 // taskBriefSpec is the context shared by assignment and operator recovery.
 // Issue sections are always read from the backlog; the binding keeps the
-// assignment's decisions and siblings, which cannot be recovered from labels.
+// assignment's settled answers and siblings, which cannot be recovered from labels.
 type taskBriefSpec struct {
 	agent, id, branch, contract, decisions string
 	decisionContext                        string
@@ -81,5 +81,5 @@ func (e Env) RebuildTaskBrief(ctx context.Context, root string, be Board, o work
 		}
 	}
 	return e.taskBrief(ctx, root, be, taskBriefSpec{agent: o.Slot, id: s.Task(), branch: o.Branch, contract: contract,
-		decisions: s.BriefDecisions(), decisionContext: s.BriefDecisionContext(), siblings: s.BriefSiblings(), bundle: s.Bundle(), tier: t}), o, nil
+		decisions: s.BriefSettledAnswers(), decisionContext: s.BriefDecisionContext(), siblings: s.BriefSiblings(), bundle: s.Bundle(), tier: t}), o, nil
 }

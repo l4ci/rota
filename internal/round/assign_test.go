@@ -145,7 +145,7 @@ func TestAssignMarksResetsAndDispatches(t *testing.T) {
 	f := newAssignFixture(t)
 	res, err := f.assign("12", "", func(o *AssignOpts) {
 		o.Siblings = []string{"13"}
-		o.Decisions = "m: use the lease"
+		o.SettledAnswers = "m: use the lease"
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -165,7 +165,7 @@ func TestAssignMarksResetsAndDispatches(t *testing.T) {
 	if strings.TrimSpace(out) != res.Branch {
 		t.Errorf("worktree must sit on the issue branch, not %q", out)
 	}
-	for _, want := range []string{"--- ORCHESTRATOR (round 1) ---", "You are ben", "contract", "issue 12", "Dispute the ticket", "ben/12-", "Sibling issues running now: 13", "m: use the lease"} {
+	for _, want := range []string{"--- ORCHESTRATOR (round 1) ---", "You are ben", "contract", "issue 12", "Dispute the ticket", "ben/12-", "Sibling issues running now: 13", "Settled answers (verbatim):\n\nm: use the lease"} {
 		if !strings.Contains(f.host.sent, want) {
 			t.Errorf("brief lacks %q:\n%s", want, f.host.sent)
 		}
