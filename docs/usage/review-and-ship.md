@@ -23,7 +23,7 @@ In issue mode the issue body is the spec, plus any `decision` comments on it. A 
 
 The report ends with one verdict (`PASS` / `CONCERNS` / `FAIL`) with file:line evidence where applicable. It is recorded with `rota verdict add` in the gitignored `.rota/verdicts.json`, and `/rota-ship` routes on the recorded verdict with `rota verdict route`, not on the report text.
 
-`rota verdict add` also renders a marked report on the PR and each linked item, with findings by severity, declined findings and the reviewed sha. File-mode items keep it under `## Reports` in their detail files. Re-recording a kind at the same sha updates its report. If posting is pending, the local verdict remains usable; `rota verdict post <branch>` retries the latest reports. Merge gates post their outcome, checks and refusal reason in the same places.
+`rota verdict add` also renders a marked report on the PR and each linked item, with findings by severity, declined findings and the reviewed sha. File-mode items keep it under `## Reports` in their detail files. Re-recording a kind at the same sha updates its report. If posting is pending, the local verdict remains usable. `rota ship pr` retries the latest reports after creating the PR; `rota verdict post <branch>` retries after other posting failures. Report updates only edit comments authored by the authenticated user, and automatic PR discovery accepts only a PR from the same repository. Merge gates post their outcome, checks and a bounded, redacted refusal summary in the same places. Raw output stays on the gate host; the report points to the local verdict record.
 
 | Verdict | Meaning |
 |---------|---------|
@@ -33,7 +33,7 @@ The report ends with one verdict (`PASS` / `CONCERNS` / `FAIL`) with file:line e
 
 Each finding is blocking or not. By default `blocker` and `major` findings block and `minor` and `info` do not. Only blocking findings are relayed to a round worker and count toward a bounce. Non-blocking findings above `info` are deferred: `rota verdict add --file-deferred --pr <ref>` collects them in one follow-up task item per PR, related to it, instead of relaying them. A later verdict on the same PR adds to that item. `review.fileDeferred` sets the floor: `major` (default; minor findings stay in the verdict record and the output lists them as kept), `minor` or `off`. A PR whose issue is itself a deferred-findings item files nothing.
 
-You can run `/rota-review` at any time on a branch, not only before shipping. On the [issue backend](issue-backend.md), `/rota-review --queue` reviews the PRs waiting on `needs-review` items and merges the ones that pass.
+You can run `/rota-review` at any time on a branch, not only before shipping. On the [issue backend](issue-backend.md), `/rota-review --queue` reviews the PRs waiting on `needs-review` items and merges the ones that pass. When it requests changes, it leaves a `feedback` handoff pointing to the marked report so `/rota-work` can resume from the findings.
 
 ## 🚢 /rota-ship
 
