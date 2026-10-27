@@ -40,7 +40,7 @@ func TestGateClaimLost(t *testing.T) {
 			w.setConfig(`{"issues":{"source":"gitlab"},"test":{"full":["true"]}}`)
 			claimID := "w1@3"
 			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","claimId":%q,"pr":%q}]}`, claimID, ghURL)), 0600)
-			w.forge("body", "Closes #5")
+			w.setPRBody("Closes #5")
 			e := w.env(false)
 			e.Issues = func(string, tracker.Settings) (Issues, error) {
 				return &claimIssues{bodies: []string{"<!-- rota:claim w1@3 -->", "<!-- rota:release w1@3 -->", "<!-- rota:claim dana@5 -->"}}, nil
@@ -76,7 +76,7 @@ func TestGateClaimPasses(t *testing.T) {
 			branch := "mac-ben/5-work"
 			gitq(t, w.worker, "push", "-q", "origin", "w1:refs/heads/"+branch)
 			w.forge("head", branch)
-			w.forge("body", "Closes #5")
+			w.setPRBody("Closes #5")
 			w.setConfig(`{"issues":{"source":"gitlab"},"test":{"full":["true"]}}`)
 			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":%q,"task":"5","claimId":%q,"pr":%q}]}`, branch, c.claim, ghURL)), 0600)
 			e := w.env(false)
@@ -97,7 +97,7 @@ func TestGateClaimPasses(t *testing.T) {
 func TestGateRecordedClaimDoesNotFallBackToAgent(t *testing.T) {
 	w := newWorld(t, ghURL)
 	w.setConfig(`{"issues":{"source":"gitlab"},"test":{"full":["true"]}}`)
-	w.forge("body", "Closes #5")
+	w.setPRBody("Closes #5")
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"5","claimId":"w1@3","pr":%q}]}`, ghURL)), 0600)
 	e := w.env(false)
 	e.Issues = func(string, tracker.Settings) (Issues, error) {
@@ -157,7 +157,7 @@ func TestGateClaimStore(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
 			w.setConfig(`{"issues":{"source":"gitlab"},"test":{"full":["true"]}}`)
-			w.forge("body", "Closes #5")
+			w.setPRBody("Closes #5")
 			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"5","claimId":"ben@3","pr":%q}]}`, ghURL)), 0600)
 			e := w.env(false)
 			e.Issues = func(string, tracker.Settings) (Issues, error) {
@@ -202,7 +202,7 @@ func TestGateClaimSkipsUnrecordedClaim(t *testing.T) {
 			branch := "fixforward/5-work"
 			gitq(t, w.worker, "push", "-q", "origin", "w1:refs/heads/"+branch)
 			w.forge("head", branch)
-			w.forge("body", "Closes #5")
+			w.setPRBody("Closes #5")
 			w.setConfig(`{"issues":{"source":"gitlab"},"test":{"full":["true"]}}`)
 			record := fmt.Sprintf(`{"slots":[{"name":"w1","branch":%q,"task":"5","kind":%q,"pr":%q}]}`, branch, c.kind, ghURL)
 			if c.arg == "7" {

@@ -27,7 +27,7 @@ func behaviourWorld(t *testing.T, body string) (*world, func(GateOpts) (GateResu
 	w := newWorld(t, ghURL)
 	os.Remove(ranMark)
 	t.Cleanup(func() { os.Remove(ranMark) })
-	w.forge("body", "Closes #899")
+	w.setPRBody("Closes #899")
 	w.forge("issueBody", body)
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","pr":%q,"task":"899","portBase":20100,"portBlock":100}]}`, ghURL)), 0o644)

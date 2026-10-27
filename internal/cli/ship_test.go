@@ -297,6 +297,9 @@ func shipPRForge(url string) *forge {
 		if len(args) > 1 && (args[0] == "pr" || args[0] == "mr") && args[1] == "create" {
 			return url + "\n", "", 0
 		}
+		if len(args) > 1 && (args[0] == "pr" || args[0] == "mr") && args[1] == "list" {
+			return "[]", "", 0
+		}
 		return "", "", 0
 	}}
 }
@@ -480,11 +483,21 @@ func TestShipPRIssueMode(t *testing.T) {
 				t.Errorf("data %v", d)
 			}
 			want := "Summary line\n\nCloses #7\nCloses #9"
-			if prov == "github" && f.stdins[0] != want {
-				t.Errorf("body %q, want %q", f.stdins[0], want)
+			created := -1
+			for i, call := range f.calls {
+				if strings.HasPrefix(call, "gh pr create ") || strings.HasPrefix(call, "glab mr create ") {
+					created = i
+					break
+				}
 			}
-			if prov == "gitlab" && !strings.Contains(f.calls[0], "--description "+want+" --source-branch") {
-				t.Errorf("glab call %q", f.calls[0])
+			if created < 0 {
+				t.Fatalf("no PR created: %v", f.calls)
+			}
+			if prov == "github" && f.stdins[created] != want {
+				t.Errorf("body %q, want %q", f.stdins[created], want)
+			}
+			if prov == "gitlab" && !strings.Contains(f.calls[created], "--description "+want+" --source-branch") {
+				t.Errorf("glab call %q", f.calls[created])
 			}
 
 			// an unknown item fails before anything is pushed

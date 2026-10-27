@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -91,21 +92,40 @@ func shipErr(err error) (Result, error) {
 	return Result{}, err
 }
 
-// shipVerdict is the B3 verdict gate for the checkout in dir. root is the
-// project holding the verdict store.
-func shipVerdict(c *Ctx, dir, root string) ship.VerdictCheck {
+// shipVerdictLookup refreshes the local store after gate report recovery.
+type shipVerdictLookup struct {
+	ship.VerdictCheck
+	c               *Ctx
+	dir, root, repo string
+}
+
+// shipVerdict is the B3 verdict gate for the checkout in dir. root holds its store.
+func shipVerdict(c *Ctx, dir, root string) shipVerdictLookup {
 	repo := c.Repo
 	if repo == "" && repos.Umbrella(root) {
 		if r, err := repos.Which(dir); err == nil {
 			repo = r.Name
 		}
 	}
-	return ship.VerdictCheck{
-		Git:      shipGitRunner{c, dir},
-		Store:    verdict.Load(root),
-		Repo:     repo,
-		Settings: verdict.Settings{},
-	}
+	v := shipVerdictLookup{c: c, dir: dir, root: root, repo: repo}
+	v.VerdictCheck = v.local()
+	return v
+}
+
+func (v shipVerdictLookup) local() ship.VerdictCheck {
+	return ship.VerdictCheck{Git: shipGitRunner{v.c, v.dir}, Store: verdict.Load(v.root), Repo: v.repo, Settings: verdict.Settings{}}
+}
+
+func (v shipVerdictLookup) Block(branch string) error {
+	head, _ := reviewGit(v.c.Context(), v.c.deps(), v.dir, "rev-parse", "--short", branch)
+	lookupVerdicts(v.c, verdictBranch{root: v.root, dir: v.dir, repo: v.repo, branch: branch, key: verdict.BranchKey(v.repo, branch), head: strings.TrimSpace(head)})
+	return v.local().Block(branch)
+}
+
+func (v shipVerdictLookup) BlockGate(branch, head string) error {
+	// The gate recovered its validated PR before this callback. Reload here:
+	// constructing this check before the gate runs must not freeze an empty cache.
+	return v.local().BlockGate(branch, head)
 }
 
 // shipPRVerdict is the verdict gate for the head branch of PR pr, with the PR
@@ -119,7 +139,22 @@ func shipPRVerdict(c *Ctx, pr int, branch string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if err := shipVerdict(c, dir, root).Block(branch); err != nil {
+	v := shipVerdict(c, dir, root)
+	// PR merges can run on a clone with no local head branch. Bind recovery and
+	// staleness to the forge head rather than an absent or stale checkout ref.
+	head := ""
+	if source, e := config.IssueSource(c.deps().Config(root)); e == nil && source != config.SourceFile {
+		f, e := c.deps().forge(c.Context(), c.deps().Config(root), "", dir)
+		if e == nil {
+			info, e := f.PRView(c.Context(), pr)
+			if e == nil && info.Head == branch {
+				head = info.HeadSHA
+			}
+		}
+		lookupVerdicts(c, verdictBranch{root: root, dir: dir, repo: v.repo, branch: branch, key: verdict.BranchKey(v.repo, branch), head: head})
+	}
+	check := v.local()
+	if err := check.BlockAt(branch, head); err != nil {
 		res, e := shipErr(err)
 		if d, ok := res.Data.(*jsonx.Object); ok {
 			d.Set("pr", pr)

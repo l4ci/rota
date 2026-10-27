@@ -526,6 +526,7 @@ var gateSteps = []gateStep{
 	(*gate).stepOutcome,
 	(*gate).stepFreshness,
 	(*gate).stepPRMatches,
+	(*gate).stepVerdictReports,
 	(*gate).stepProvenance,
 	(*gate).stepCloses,
 	(*gate).stepClaim,
@@ -552,6 +553,7 @@ var reviewsOnlySteps = []gateStep{
 	(*gate).stepSlotHead,
 	(*gate).stepRefs,
 	(*gate).stepPRMatches,
+	(*gate).stepVerdictReports,
 	(*gate).stepReviewDepth,
 	(*gate).stepCheckOnly,
 }
@@ -980,7 +982,7 @@ func (g *gate) stepProvenance() (bool, error) {
 		g.verdict(GateProvenanceFail, failMsg, "")
 		return true, nil
 	}
-	return false, nil
+	return g.checkRequiredPRSections()
 }
 
 // stepBestOf refuses an attempt of a best-of:2 issue until a `rota round pick`
@@ -1643,7 +1645,9 @@ type gate struct {
 	target GateTarget
 	// resolved is the target as GateTarget returned it. stepExternal rewrites
 	// target.Branch to the forge head; the ledger keeps the resolved one.
-	resolved GateTarget
+	resolved    GateTarget
+	sectionBody *string // successful PR body read, reused by the section check
+
 	// viewed is the PR stepSlotHead read, for stepPRMatches to reuse once.
 	viewed   *tracker.PRInfo
 	branch   string
@@ -1761,6 +1765,7 @@ func (g *gate) checkProvenance() (failMsg, brokeMsg string) {
 		}
 		return "", fmt.Sprintf("could not read the body of %s to check its approvals: %v", g.pr, err)
 	}
+	g.sectionBody = &body
 	relays, offered, support, err := g.supportApprovals()
 	if err != nil {
 		// Relay citations fall back to the local relay log with a skip note.

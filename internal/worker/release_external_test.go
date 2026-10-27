@@ -23,7 +23,7 @@ func adoptedWorld(t *testing.T, body string) (*world, string) {
 	if err := RegisterExternal(w.dir, "ext-1", "w1", wt, "main", "", ghURL); err != nil {
 		t.Fatal(err)
 	}
-	w.forge("body", body)
+	w.setPRBody(body)
 	return w, wt
 }
 
