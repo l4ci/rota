@@ -1,7 +1,7 @@
 echo "round autopilot: tick assigns ready items, escalates the rest, never merges without a gate (#93)"
 # An issue-mode project driven by FAKES only (gh and tmux fakes, a local bare
-# origin), as section 104. The gate cannot pass here (the fake forge knows no PR
-# 7), which is the point: the autopilot must refuse to merge and say why.
+# origin), as section 104. The gate has a pushed, reviewed PR but fails its
+# verification command: the autopilot must escalate and remember that head.
 
 TMP_AP="$(mktemp -d)"
 FKA="$TMP_AP/fake"
@@ -83,10 +83,41 @@ OUT=$(ap round tick)
 pass "a blocked slot lands in needsYou once as new, and the autopilot does nothing about it"
 
 # ── a failed gate is escalated and held; a policy asking a human merges nothing
+ap config set forge.provider github >/dev/null || fail "could not set the fixture forge"
+ap config set ship.mergeApproval none >/dev/null || fail "could not allow the fixture gate"
+ap config set test.full '["false"]' >/dev/null || fail "could not set the failing verification command"
+AP_BRANCH=ben/1-one
+git -C "$APROJ" push -q origin "$AP_BRANCH" || fail "could not push the reviewed fixture head"
+AP_HEAD=$(git -C "$APROJ" rev-parse "$AP_BRANCH") || fail "could not read the fixture head"
+python3 - "$TMP_AP/db.json" "$AP_BRANCH" "$AP_HEAD" <<'PY'
+import json, sys
+p, branch, head = sys.argv[1:]
+d = json.load(open(p))
+d["prs"].append({"number": 7, "title": "One", "body": "Closes #1\n\n## Approvals\n\nNone\n\n## Rulings\n\nNone\n\n## Assumptions\n\nNone\n",
+                 "head": branch, "base": "main", "sha": head, "state": "open"})
+d["next_issue"] = max(d.get("next_issue", 1), 8)
+json.dump(d, open(p, "w"))
+PY
+for kind in review-spec review-quality; do
+  ap verdict add "$AP_BRANCH" --kind "$kind" --verdict PASS --sha "$AP_HEAD" >/dev/null \
+    || fail "could not record the fixture's $kind verdict at head"
+done
+AP_PROOF=$(ap proof record 1 -- true) || fail "could not record the fixture's acceptance proof"
+AP_PROOF_SHA=$(echo "$AP_PROOF" | jget data.sha)
+AP_PROOF_CHECK=$(echo "$AP_PROOF" | jget data.check)
+AP_PASS=$(ap plan pass '#1' AC-1 --proof "$AP_PROOF_SHA:$AP_PROOF_CHECK") \
+  || fail "could not mark the fixture's acceptance criterion: $AP_PASS"
 apslot ben done https://github.com/o/r/pull/7
 OUT=$(ap round tick)
 [ "$(apneeds <<<"$OUT")" = "gate-failed:ben" ] || fail "a gate that cannot pass must be escalated: $OUT"
-grep -q '"ben"' "$CDA/rota/round-autopilot.json" && grep -q '"held"' "$CDA/rota/round-autopilot.json" || fail "a failed gate should be held: $(cat "$CDA/rota/round-autopilot.json")"
+[[ "$(echo "$OUT" | jget 'data.needsYou[0].why')" == verify-failed:* ]] || fail "the reviewed PR must reach the deliberately failing verifier: $OUT"
+python3 - "$CDA/rota/round-autopilot.json" "$AP_HEAD" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+held = d.get("failedHeads", {}).get("ben", {})
+assert held.get("head") == "7:" + sys.argv[2], d
+assert held.get("why", "").startswith("verify-failed:"), d
+PY
 OUT=$(ap round tick)
 [ "$(apneeds <<<"$OUT")" = "gate-failed:ben" ] && [ "$(echo "$OUT" | jget 'data.new')" = "[]" ] || fail "a held failure is listed again but not re-run or re-reported: $OUT"
 ap config set ship.mergeApproval all >/dev/null
@@ -96,6 +127,14 @@ ap config set ship.mergeApproval none >/dev/null
 pass "a failed gate is escalated and held; ship.mergeApproval other than none stops the autopilot merging"
 
 # ── a done slot with no PR is not merged ───────────────────────────────────
+# Remove the preceding case's PR so reconcile cannot adopt it onto this slot.
+python3 - "$TMP_AP/db.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d["prs"] = [pr for pr in d["prs"] if pr["number"] != 7]
+json.dump(d, open(p, "w"))
+PY
 apslot ben done
 OUT=$(ap round tick)
 [ -z "$(apneeds <<<"$OUT")" ] && [ -z "$(apdid <<<"$OUT")" ] || fail "a done slot with no PR is not the autopilot's to merge: $OUT"
