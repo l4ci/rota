@@ -833,7 +833,13 @@ acceptance. The gate refuses (`blockedBy: closes`) a PR that does not close ever
 lands or bounces as a unit: `rota round bounce` counts it on the lead and refuses a member.
 
 To drop one member, `rota round transfer <member> --to human`. Closing a member drops it too: `rota worker done` no longer wants its proof row, the gate no longer wants its `Closes` line, and the next `round assign` of the lead removes it from the slot's bundle.
-The lead cannot be transferred while members remain, not even after `round.maxBounces`: transfer the members to the human first, or return or reclaim the slot. `round return`, `round reclaim` and
+To drop the lead, `rota round transfer <lead> --to human`: the first member becomes the lead,
+and the other members stay in order. The branch and PR stay in place, and an active worker
+keeps its session. The dropped issue loses its claim and in-progress state and gets `needs-human`; the
+gate requires closing references only for the issues still held. `round status` shows the new
+lead. When only one issue remains, transferring it to the human frees the slot as usual.
+Transferring a lead with members to another slot is still refused: transfer the members to
+the human first, or return or reclaim the slot. `round return`, `round reclaim` and
 `round wind-down` release the lead and its members together. `rota round status` shows the slot
 as `1559 (+#1563, +#1564)`.
 
