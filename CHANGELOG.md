@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Upgrade notes
+
+- **Skill reference precedence.** `rota skills get <skill> --reference <name>` now prefers a linked skill-local file when its bare name also matches a shared reference. For example, `rota skills get rota-review --reference umbrella-mode.md` now returns the local review steps; it previously returned the shared umbrella guide. Use `--reference references/umbrella-mode.md` to request that shared guide explicitly. `--references` lists shared files with the `references/` prefix; bare shared names remain aliases when no linked local file has the same name.
+
 ## v0.26.0 — 2026-10-26
 
 Milestones get their own integration branches, reviews gain security, perf and UX lenses, and a shared knowledge base can follow you across projects.

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
 )
@@ -14,12 +15,19 @@ func roundTransfer(fs *flag.FlagSet) RunFunc {
 	body := fs.String("body-file", "", "decisions already settled, passed verbatim to the receiver (- for stdin)")
 	tier := fs.String("tier", "", "receiver's tier: light, standard or heavy (default round.tier)")
 	tierReason := fs.String("tier-reason", "", "one line on why; required above the default tier")
+	kind := fs.String("kind", "", "receiver's harness kind: "+harness.KindList()+" (default the issue's harness: label, then round.harnesses, then slot kind, else claude)")
+	model := fs.String("model", "", "receiver's model id (default the issue's model: label, then the tier map, then the harness default)")
 	capReason := fs.String("cap-reason", "", "why an item at the bounce cap moves: ambiguous-criteria (with --to human) or tier (with --to <slot>)")
 	accept := fs.Bool("accept-overlap", false, "skip the file and scope overlap checks")
 	pid := fs.Int("holder-pid", 0, "orchestrator pid, when its ancestry cannot be read")
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) != 1 {
 			return Result{}, Usage("round transfer takes one item ID")
+		}
+		workerFlags := false
+		fs.Visit(func(f *flag.Flag) { workerFlags = workerFlags || f.Name == "kind" || f.Name == "model" })
+		if *to == round.HumanTarget && workerFlags {
+			return Result{}, Usage("--kind and --model require --to <slot>, not --to human")
 		}
 		root, err := c.Root()
 		if err != nil {
@@ -49,7 +57,7 @@ func roundTransfer(fs *flag.FlagSet) RunFunc {
 		env.HolderPID = *pid
 		res, err := env.Transfer(c.Context(), root, be, round.TransferOpts{
 			Issue: id, To: *to, Note: text, Decisions: decisions, AcceptOverlap: *accept,
-			Tier: *tier, TierReason: *tierReason, CapReason: *capReason,
+			Tier: *tier, TierReason: *tierReason, Kind: *kind, Model: *model, CapReason: *capReason,
 		})
 		if err != nil {
 			r, ferr := moveFailure(err, res.Changed)
