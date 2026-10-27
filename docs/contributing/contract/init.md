@@ -63,10 +63,10 @@ note: the machine-wide registry `rota init` fills (#24): `<state dir>/projects.j
 ### rota projects cleanup
 rota projects cleanup
 repo: none
-data: {"removed": [{"name": string, "path": string, "lastSeen": string}], "changed": bool}
+data: {"removed": [{"name": string, "path": string, "lastSeen": string, "reason": "temporary"|"stale"}], "changed": bool}
 exit: 70 as `rota projects`. Runs without a `.rota/` root and ignores the working directory.
 old: none.
-note: deletes at once, no preview (#195, #2107): every registry entry in temporary storage (the same resolved-path rule as init), whose directory is gone or no longer holds `.rota/`, under the registry's lock. Text mode prints `removed<TAB>name<TAB>path` per entry, or `noop: no stale projects`. An absent registry removes nothing and is not created. Plain `rota projects` still never prunes.
+note: deletes at once, no preview (#195, #2107): every registry entry in temporary storage (the same resolved-path rule as init), whose directory is gone or no longer holds `.rota/`, under the registry's lock. Text mode prints `removed<TAB>name<TAB>path` per entry, appending `<TAB>(temporary)` for temporary entries, or `noop: no stale or temporary projects` when nothing is removed. Each JSON row keeps `name`, `path` and `lastSeen`, and adds `reason`: `temporary` for temporary paths (even if also stale), otherwise `stale`. An absent registry removes nothing and is not created. Plain `rota projects` still never prunes.
 
 ### rota projects remove
 rota projects remove <dir>

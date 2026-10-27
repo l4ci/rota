@@ -22,6 +22,7 @@ import (
 // the *Err fields hold the parse error until the step that needs the value
 // asks for it (Where, CISettings, ReviewPolicy, IsolateEnabled).
 type GateConfig struct {
+	vacuous vacuousConfig
 	// Full is test.full, or the deprecated refactor.verifyCommands while a
 	// config still holds only that. Fast and E2E are test.fast and test.e2e.
 	Full, Fast, E2E []string
@@ -84,6 +85,7 @@ func ParseGateConfig(cfg any) GateConfig {
 	t := roundcfg.ParseTests(cfg)
 	c.Full, c.Fast, c.legacy, c.testsErr = t.Full, t.Fast, t.Legacy, t.Err
 	c.legacyOnce = new(sync.Once)
+	c.vacuous = parseVacuousConfig(cfg)
 	c.TDD, c.tddErr = t.TDD, t.TDDErr
 	c.where, c.whereErr = parseFullWhere(cfg, c.CIChecks)
 	c.sourceErr = tracker.ValidateConfig(cfg)
