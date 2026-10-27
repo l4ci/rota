@@ -9,8 +9,22 @@ import (
 
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
+
+func TestTransferHumanRefusesWorkerOverrides(t *testing.T) {
+	for _, opts := range []TransferOpts{
+		{To: HumanTarget, Kind: "codex"},
+		{To: HumanTarget, Model: "task-model"},
+		{To: HumanTarget, Kind: "codex", Model: "task-model"},
+	} {
+		_, _, err := opts.checkFlags(roundcfg.Settings{})
+		if exitOf(err) != 2 || !strings.Contains(err.Error(), "--kind and --model require --to <slot>, not --to human") {
+			t.Fatalf("want usage refusal for %+v, got %v", opts, err)
+		}
+	}
+}
 
 func TestTransferWorkerPickPrecedence(t *testing.T) {
 	for _, tc := range []struct {
