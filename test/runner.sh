@@ -201,6 +201,8 @@ git checkout -q -b main 2>/dev/null || git branch -m main
 git add -A && git commit -q -m "seed"
 
 # Source pass()/fail() so sections can use them.
+# Keep assertion exits distinct inside the runner; normalize them after guards.
+export ROTA_SMOKE_ASSERTION_EXIT=97
 source "$TESTDIR/lib.sh"
 
 # F62 — static preamble scan: shadowing / trap-convention violations
@@ -253,6 +255,10 @@ fi
 if [ -s "$ROTA_POISON_LOG" ]; then
   printf '\n\033[31merror: a section called a real forge or host CLI (poison gh/glab/herdr/tmux on PATH):\033[0m\n' >&2
   sed 's/^/  /' "$ROTA_POISON_LOG" >&2
+  exit 1
+fi
+if [ "$SECTIONS_RC" = "$ROTA_SMOKE_ASSERTION_EXIT" ]; then
+  printf '\nSmoke assertions failed.\n'
   exit 1
 fi
 [ "$SECTIONS_RC" = 0 ] || exit "$SECTIONS_RC"

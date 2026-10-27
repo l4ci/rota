@@ -48,8 +48,9 @@ if sys.argv[1] == "failed":
         raise SystemExit(1)  # timeouts/builds/incomplete output must never turn green
     print("\n".join(sorted(failed)))
 elif sys.argv[1] == "output":
+    package = sys.argv[3] if len(sys.argv) > 3 else None
     for event in events(sys.argv[2]):
-        if event.get("Package") == sys.argv[3] and "Output" in event:
+        if (package is None or event.get("Package") == package) and "Output" in event:
             print(event["Output"], end="")
 else:
     raise SystemExit("unknown operation")

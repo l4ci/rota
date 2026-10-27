@@ -143,6 +143,25 @@ retry_tree_unchanged() {
     [ -z "$(git -C "$REPO" status --porcelain)" ]
 }
 
+# Keep the JSON side channel for package selection, while ordinary failure
+# logs retain go test's human assertion lines.
+run_go_tests() {
+  local rc=0
+  go test -json -race -timeout 30m -p "$SHARDS" ./... >"$LOGS/gotest.json" 2>&1 || rc=$?
+  python3 "$REPO/test/gate-go.py" output "$LOGS/gotest.json" || return 2
+  return "$rc"
+}
+
+go_retry_budget() {
+  local count
+  count="$(wc -l <"$LOGS/go-failed.list")"
+  if [ "$count" -gt 3 ]; then
+    echo "gate: skipping Go retries ($count failed packages; limit 3)"
+    return 1
+  fi
+  return 0
+}
+
 TIMEFORMAT='%R'
 START=$SECONDS
 if [ "$SMOKE_ONLY" = 0 ]; then
@@ -151,7 +170,7 @@ if [ "$SMOKE_ONLY" = 0 ]; then
   launch grepgate bash test/grep-gate.sh
   launch gofmt bash test/gofmt.sh
   launch vet go vet ./...
-  launch gotest go test -json -race -timeout 30m -p "$SHARDS" ./...
+  launch gotest run_go_tests
 fi
 N="$(partition)" || { echo "gate: partition failed" >&2; exit 2; }
 for i in $(seq 1 "$N"); do
@@ -166,12 +185,11 @@ for idx in "${!PIDS[@]}"; do
   RCS+=("$rc")
 done
 fail=0
-flaky=0
 for idx in "${!PIDS[@]}"; do
   name="${NAMES[$idx]}"
   rc="${RCS[$idx]}"
   if [ "$name" = gotest ] && [ "$rc" = 1 ] && retry_tree_unchanged &&
-     python3 "$REPO/test/gate-go.py" failed "$LOGS/gotest.log" >"$LOGS/go-failed.list"; then
+     python3 "$REPO/test/gate-go.py" failed "$LOGS/gotest.json" >"$LOGS/go-failed.list" && go_retry_budget; then
     go_failed=0
     pkg_idx=0
     module="$(awk '$1 == "module" {print $2}' "$REPO/go.mod")"
@@ -188,10 +206,9 @@ for idx in "${!PIDS[@]}"; do
       check="go:${pkg#"$module"/}"
       if [ "$retry_rc" = 0 ] && retry_tree_unchanged; then
         first_log="$LOGS/go-first$pkg_idx.log"
-        if python3 "$REPO/test/gate-go.py" output "$LOGS/gotest.log" "$pkg" >"$first_log" &&
+        if python3 "$REPO/test/gate-go.py" output "$LOGS/gotest.json" "$pkg" >"$first_log" &&
            python3 "$REPO/test/gate-flake.py" "$check" "$first_log" "$retry_log" "$retry_log.time"; then
           echo "FLAKY $check (failed once, passed isolated retry)"
-          flaky=1
         else
           echo "FAIL $check (could not report recovery)"
           go_failed=1
@@ -205,13 +222,13 @@ for idx in "${!PIDS[@]}"; do
     [ "$go_failed" = 0 ] && continue
   fi
   case "$name" in smoke-*)
-    retryable=1
     if [ "$rc" = 0 ] && ! grep -q 'All smoke tests passed.' "$LOGS/$name.log"; then
       echo "FAIL $name (no pass line)"
-      rc=1
-      retryable=0
+      fail=1
+      continue
     fi
-    if [ "$rc" = 1 ] && [ "$retryable" = 1 ] && retry_tree_unchanged; then
+    if [ "$SMOKE_ONLY" = 0 ] && [ "$rc" = 1 ] && retry_tree_unchanged &&
+       python3 "$REPO/test/gate-smoke.py" "$LOGS/$name.log"; then
       retry_rc=0
       shard="${name#smoke-shard}"
       { time { (cd "$REPO" && env ROTA_SMOKE_DIAGNOSTICS="$SMOKE_DIAGNOSTICS" \
@@ -220,7 +237,6 @@ for idx in "${!PIDS[@]}"; do
       if [ "$retry_rc" = 0 ] && retry_tree_unchanged && grep -q 'All smoke tests passed.' "$LOGS/$name.retry.log"; then
         if python3 "$REPO/test/gate-flake.py" "$name" "$LOGS/$name.log" "$LOGS/$name.retry.log" "$LOGS/$name.retry.log.time"; then
           echo "FLAKY $name (failed once, passed isolated retry)"
-          flaky=1
         else
           echo "FAIL $name (could not report recovery)"
           fail=1
@@ -239,7 +255,7 @@ for idx in "${!PIDS[@]}"; do
     # A shard that dies without a summary line (set -e, SIGPIPE 141, a kill) leaves only the
     # last section header behind; name it so the death is not a bare FAILED (#1242).
     case "$name" in smoke-*)
-      grep -q 'All smoke tests passed.' "$LOGS/$name.log" || \
+      grep -qE 'All smoke tests passed\.|^Smoke assertions failed\.$' "$LOGS/$name.log" || \
         echo "     $name died without a summary line: exit $rc, last output: $(tail -n 1 "$LOGS/$name.log")" ;; esac
     fail=1
   fi
@@ -252,7 +268,7 @@ if [ -n "$(ls -A "$GATE_TMP" 2>/dev/null)" ]; then
 fi
 worktree_guard_check "$WORKTREES_BEFORE" "$REPO" || { echo "FAIL worktree guard"; fail=1; }
 if [ "$fail" = 0 ]; then
-  [ -n "${ROTA_GATE_LOGS:-}" ] || [ "$flaky" = 1 ] || rm -rf "$LOGS"
+  [ -n "${ROTA_GATE_LOGS:-}" ] || rm -rf "$LOGS"
   echo "All smoke tests passed."
   exit 0
 fi
