@@ -78,6 +78,7 @@ note: the autopilot never answers a worker, approves a permission, picks a tier 
 note: `new` is the `needsYou` items no earlier tick reported. State lives in `<git-common-dir>/rota/round-autopilot.json` (`round`, `held`, `failedHeads`, `reported`, `stopped`), per round. `failedHeads` maps targets to `{head, why}`; `head` includes the PR number and head SHA. `round wind-down` sets `stopped` before it re-verifies, so no tick assigns or merges meanwhile, clears it when the lease is kept and removes the file when the round ends.
 note: every action is appended to `.rota/gate-audit.jsonl` as `{"gate": "autopilot", "verb": "round tick <action>", "target", "note"}`. These are not human approvals.
 note: no `ROTA_TEST_*` hooks. The smoke section (114) uses the gh and tmux fakes of section 104.
+note: (#2176) the tick's merge runs yield while any gate or train is running or queued for the land lock. They set `deferred` with the busy reason, create no `gate-failed` item or hold, and retry on a later tick. The train nudge remains visible for reviewed PRs still waiting. Admission registers gates and trains before they queue, under a shared short lock, so a waiting manual train is covered as well as a held land lock. Read-only gate checks and train plans do not register landing intent.
 
 ### rota round status
 rota round status
