@@ -22,6 +22,11 @@ func TestGateVacuousRefusesTestsThatPassWithoutChange(t *testing.T) {
 	if err != nil || res.Verdict != "vacuous-tests" || res.Changed || !strings.Contains(res.Err, "work.test") {
 		t.Fatalf("want vacuous-tests naming work.test with nothing landed, got %+v, %v", res, err)
 	}
+	for _, want := range []string{"add an assertion that fails with non-test changes reverted", "disable test.vacuousCheck", "--no-verify", "refactors or tests-only", "re-gate"} {
+		if !strings.Contains(res.Hint, want) {
+			t.Fatalf("hint missing %q: %s", want, res.Hint)
+		}
+	}
 	if w.onOriginMain("work.txt") || w.forgeWord("state") != "OPEN" {
 		t.Fatal("vacuous PR landed")
 	}
@@ -42,6 +47,11 @@ func TestTrainVacuousNamesMemberAndLandsNothing(t *testing.T) {
 	}
 	if !strings.Contains(res.Err, "work.test") {
 		t.Fatalf("tests missing from refusal: %s", res.Err)
+	}
+	for _, want := range []string{"add an assertion that fails with non-test changes reverted", "disable test.vacuousCheck", "--no-verify", "refactors or tests-only", "re-run the train"} {
+		if !strings.Contains(res.Hint, want) {
+			t.Fatalf("hint missing %q: %s", want, res.Hint)
+		}
 	}
 }
 

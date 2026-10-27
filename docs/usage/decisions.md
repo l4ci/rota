@@ -27,7 +27,13 @@ After confirmation, the skill saves the approved body to a temporary file and ru
 
 To correct a part of an active entry, use `rota decisions amend --topic "<topic>" --title "<title>" --part rule|why|forbids|permits --body-file <file>`. Supply only the replacement part's text, without its marker; other parts and entries stay unchanged. See [decisions verbs](../reference/cli-helpers.md#rota-decisions) for the command reference.
 
-`rota decisions check` validates every entry, including history. A missing or out-of-order part, malformed status line or unclosed code fence fails; a missing date stamp only warns. Older entries may place their trailing status, paths and date fields in any order. New entries use the canonical order, while amendments preserve existing metadata. Status and heading examples inside backtick or tilde fences stay literal in readers and the index. The project's doclint runs this check as part of the gate. `rota doctor` reports malformed entries as a warning with a hint to use `rota decisions amend`; missing dates appear only in its detail.
+`rota decisions check` validates every entry, including history. A missing or out-of-order part, malformed status line or unclosed code fence fails; a missing date stamp only warns. Older entries may place their trailing status, paths and date fields in any order. New entries use the canonical order, while amendments preserve existing metadata. Status and heading examples inside backtick or tilde fences stay literal in readers and the index. The project's doclint runs this check as part of the gate. `rota doctor` reports malformed entries as a warning with repair instructions; missing dates appear only in its detail.
+
+### Repairing malformed entries
+
+`amend` can insert a missing part or replace one part only when the complete resulting file passes validation. It cannot repair several missing parts one at a time, and it cannot edit a lifecycle status line.
+
+If no decisions verb can repair the file, manual repair is the recovery exception to the no-hand-edits rule. Correct only the reported malformed entries in `.rota/DECISIONS.md`, preserving the approved rule and history. A malformed `*Status.*` line needs a manual edit: restore `*Status.* Retired YYYY-MM-DD. <reason>` or `*Status.* Superseded YYYY-MM-DD by "<title>".` with a real date and the intended lifecycle state. Then run `rota decisions check`; once it passes, run `rota block decisions` to refresh the index. New decisions and substantive changes still go through `/rota-decide` and its confirmation gate.
 
 ## Promoting a learning or spike into a decision
 
@@ -46,7 +52,7 @@ Both flags only seed `Rule` and `Why`. You still articulate `Forbids` and `Permi
 
 ## Lifting a decision
 
-A decision stays active until you say otherwise, and `DECISIONS.md` is never hand-edited. Two flags mark an entry instead of deleting it:
+A decision stays active until you say otherwise. Lifecycle changes use the verbs below; the [malformed-entry recovery exception](#repairing-malformed-entries) is only for repairing stored syntax. Two flags mark an entry instead of deleting it:
 
 | Flag | Use when | Result |
 |------|----------|--------|
