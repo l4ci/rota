@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 import tempfile
 import unittest
 
@@ -17,7 +16,7 @@ class GateRetryTest(unittest.TestCase):
         self.repo = self.root / "repo"
         (self.repo / "test/sections").mkdir(parents=True)
         source = Path(__file__).resolve().parent
-        shutil.copy(os.environ.get("GATE_SCRIPT", source / "gate.sh"), self.repo / "test/gate.sh")
+        shutil.copy(source / "gate.sh", self.repo / "test/gate.sh")
         shutil.copytree(source / "lib", self.repo / "test/lib")
         for helper in source.glob("gate-*.py"):
             shutil.copy(helper, self.repo / "test" / helper.name)
@@ -55,15 +54,32 @@ if failed and os.environ.get("DIRTY_ON_FAIL") == "1":
     pathlib.Path("go.mod").write_text("module changed\\n")
 if name.startswith("go:"):
     pkg = "github.com/l4ci/rota/internal/example"
+    if failed and sys.argv[-1] == "./..." and os.environ.get("GO_FAIL_PACKAGES"):
+        for i in range(1, int(os.environ["GO_FAIL_PACKAGES"]) + 1):
+            package = pkg + str(i)
+            print(json.dumps(dict(Action="output", Package=package, Output="--- FAIL: TestUnderLoad (0s)\\nFAIL\\n")))
+            print(json.dumps(dict(Action="fail", Package=package)))
+        raise SystemExit(1)
     if failed and os.environ.get("GO_TIMEOUT") == "1":
         print(json.dumps(dict(Action="output", Package=pkg, Output="panic: test timed out after 30m")))
     if failed and os.environ.get("GO_INFRA"):
         print(json.dumps(dict(Action="output", Package=pkg, Output=os.environ["GO_INFRA"])))
     output = "--- FAIL: TestUnderLoad (0s)\\nFAIL\\n" if failed else "ok example/pkg\\n"
-    print(json.dumps(dict(Action="output", Package=pkg, Output=output)))
-    print(json.dumps(dict(Action="fail" if failed else "pass", Package=pkg)))
-elif name.startswith("smoke-") and not failed and os.environ.get("OMIT_SUMMARY") != "1":
-    print("All smoke tests passed.")
+    if "-json" in sys.argv:
+        print(json.dumps(dict(Action="output", Package=pkg, Output=output)))
+        print(json.dumps(dict(Action="fail" if failed else "pass", Package=pkg)))
+    else:
+        print(output, end="")
+elif name.startswith("smoke-"):
+    if failed:
+        if os.environ.get("SMOKE_NO_ASSERT") != "1":
+            print("  \\033[31mFAIL\\033[0m controlled smoke-shard1")
+        if os.environ.get("SMOKE_NO_SUMMARY") != "1":
+            print("Smoke assertions failed.")
+        if os.environ.get("SMOKE_INFRA"):
+            print(os.environ["SMOKE_INFRA"])
+    elif os.environ.get("OMIT_SUMMARY") != "1":
+        print("All smoke tests passed.")
 else:
     print("controlled " + name)
 raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
@@ -88,13 +104,117 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
         subprocess.run(["git", "-C", str(self.repo), "-c", "user.name=test", "-c",
                         "user.email=test@example.com", "commit", "-qm", "seed"], check=True)
 
-    def run_gate(self, check, twice=False):
-        result = subprocess.run(["bash", "test/gate.sh", "--shards", "1"],
+    def run_gate(self, check, twice=False, smoke_only=False):
+        command = ["bash", "test/gate.sh", "--shards", "1"]
+        if smoke_only:
+            command.append("--smoke-only")
+        result = subprocess.run(command,
                                 cwd=self.repo, env=dict(self.env, FAIL_CHECK=check,
                                 FAIL_TWICE=str(int(twice))), text=True,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
         calls = [json.loads(line) for line in (self.control / "calls").read_text().splitlines()]
         return result, calls
+
+    def run_real_section(self, section):
+        source = Path(__file__).resolve().parent
+        for name in ("runner.sh", "lib.sh", "lint-sections.py"):
+            shutil.copy(source / name, self.repo / "test" / name)
+        (self.repo / "test/sections/01_stub.sh").write_text(section)
+        return subprocess.run(["bash", "test/runner.sh"], cwd=self.repo,
+                              env=dict(self.env, ROTA_BIN="/bin/true", CODEX_HOME="",
+                                       TMPDIR=str(self.root), ROTA_SMOKE_DIAGNOSTICS=str(self.root / "diagnostics"),
+                                       SECTION_LIST="test/sections/01_stub.sh"),
+                              text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+
+    def test_real_runner_reports_assertion_summary_after_guards(self):
+        result = self.run_real_section('fail "controlled smoke assertion"\n')
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("controlled smoke assertion", result.stdout)
+        self.assertIn("Smoke assertions failed.", result.stdout)
+
+    def test_real_runner_infrastructure_has_no_assertion_summary(self):
+        for section in (
+            'false\n',
+            'printf leak > "$REPO/AGENTS.md"\nfail "controlled smoke assertion"\n',
+            'gh forbidden >/dev/null 2>&1 || true\nfail "controlled smoke assertion"\n',
+        ):
+            with self.subTest(section=section):
+                (self.repo / "AGENTS.md").unlink(missing_ok=True)
+                result = self.run_real_section(section)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertNotIn("Smoke assertions failed.", result.stdout)
+
+    def test_smoke_infrastructure_markers_stay_red(self):
+        for marker in (
+            "smoke-shard1 died without a summary line: exit 1",
+            "error: checkout changed during smoke: fixture; possible test leak",
+            "error: the run changed the worktrees of fixture",
+            "error: a section called a real forge or host CLI (poison gh/herdr)",
+            "mktemp: failed to create directory: No space left on device (ENOSPC)",
+            "error: 151 temp entries left under fixture (limit 150); a section or helper is leaking",
+        ):
+            with self.subTest(marker=marker):
+                for path in self.control.glob("*.count"):
+                    path.unlink()
+                (self.control / "calls").unlink(missing_ok=True)
+                self.env["SMOKE_INFRA"] = marker
+                result, calls = self.run_gate("smoke-shard1")
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertEqual(max(c["n"] for c in calls), 1, calls)
+                self.assertNotIn("ROTA-FLAKY ", result.stdout)
+
+    def test_smoke_failure_requires_assertion_and_summary(self):
+        for missing in ("SMOKE_NO_ASSERT", "SMOKE_NO_SUMMARY"):
+            with self.subTest(missing=missing):
+                for path in self.control.glob("*.count"):
+                    path.unlink()
+                (self.control / "calls").unlink(missing_ok=True)
+                self.env.pop("SMOKE_NO_ASSERT", None)
+                self.env.pop("SMOKE_NO_SUMMARY", None)
+                self.env[missing] = "1"
+                result, calls = self.run_gate("smoke-shard1")
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertEqual(max(c["n"] for c in calls), 1, calls)
+                self.assertNotIn("ROTA-FLAKY ", result.stdout)
+
+    def test_persistent_go_failure_keeps_human_test_names(self):
+        result, calls = self.run_gate("go:internal/example", twice=True)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        log = (self.root / "logs/gotest.log").read_text()
+        self.assertRegex(log, r"(?m)^--- FAIL: TestUnderLoad ")
+        self.assertNotIn('"Action":', log)
+        self.assertRegex(result.stdout, r"(?m)^\s*--- FAIL: TestUnderLoad ")
+        self.assertNotIn("ROTA-FLAKY ", result.stdout)
+
+    def test_smoke_only_ci_failures_are_not_retried(self):
+        result, calls = self.run_gate("smoke-shard1", smoke_only=True)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(len(calls), 1, calls)
+        self.assertNotIn("ROTA-FLAKY ", result.stdout)
+
+    def test_broad_go_failure_is_not_retried(self):
+        self.env["GO_FAIL_PACKAGES"] = "4"
+        result, calls = self.run_gate("go:internal/example")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(max(c["n"] for c in calls), 1, calls)
+        self.assertNotIn("ROTA-FLAKY ", result.stdout)
+        self.assertIn("limit 3", result.stdout)
+
+    def test_three_go_packages_can_each_retry_once(self):
+        self.env["GO_FAIL_PACKAGES"] = "3"
+        result, calls = self.run_gate("go:internal/example")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        go_calls = [c for c in calls if c["name"] == "go:internal/example"]
+        self.assertEqual(len(go_calls), 4, calls)
+        self.assertEqual(len({c["args"][-1] for c in go_calls[1:]}), 3, calls)
+
+    def test_green_recovery_removes_automatic_log_directory(self):
+        self.env.pop("ROTA_GATE_LOGS")
+        self.env["TMPDIR"] = str(self.root)
+        result, calls = self.run_gate("smoke-shard1")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        path = Path(result.stdout.split("logs in ", 1)[1].splitlines()[0])
+        self.assertFalse(path.exists(), result.stdout)
 
     def test_go_timeout_is_not_retried(self):
         self.env["GO_TIMEOUT"] = "1"
@@ -127,7 +247,8 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
         self.assertEqual(record["check"], "smoke-shard1")
         self.assertEqual((record["firstExit"], record["retryExit"]), (1, 0))
         self.assertGreater(record.get("retrySeconds", 0), 0, record)
-        self.assertIn("controlled smoke-shard1", record["firstOutput"])
+        self.assertIn("FAIL", record["firstOutput"])
+        self.assertIn("Smoke assertions failed.", record["firstOutput"])
         self.assertIn("All smoke tests passed.", record["retryOutput"])
 
     def test_incomplete_smoke_success_is_not_retried(self):
@@ -136,6 +257,8 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertEqual(max(c["n"] for c in calls), 1, calls)
         self.assertNotIn("FLAKY", result.stdout)
+        failures = [line for line in result.stdout.splitlines() if line.startswith("FAIL smoke-shard1")]
+        self.assertEqual(len(failures), 1, result.stdout)
 
     def test_changed_tree_is_not_retried(self):
         self.env["DIRTY_ON_FAIL"] = "1"
@@ -193,21 +316,4 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--measure":
-        os.environ["GATE_SCRIPT"] = sys.argv[2]
-        rows = []
-        for check, twice in [("go:internal/example", False), ("smoke-shard1", False),
-                             ("go:internal/example", True), ("smoke-shard1", True),
-                             ("gofmt", False), ("vet", False), ("doclint", False),
-                             ("grepgate", False)]:
-            fixture = GateRetryTest()
-            try:
-                fixture.setUp()
-                result, calls = fixture.run_gate(check, twice)
-                rows.append(dict(check=check, persistent=twice, gateExit=result.returncode,
-                                 runs=max(c["n"] for c in calls if c["name"] == check)))
-            finally:
-                fixture.doCleanups()
-        print(json.dumps(rows, indent=2))
-    else:
-        unittest.main()
+    unittest.main()
