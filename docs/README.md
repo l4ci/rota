@@ -106,7 +106,7 @@ Public user guide for rota, a dev workflow for Claude Code and Codex, with OpenC
 - [Rounds on rota itself](contributing/rounds.md): the gate, repo rules and roster for contributors
 - [Skill-rule audit, October 2026](contributing/skill-rule-audit-2026-10.md): the complete never/must inventory, enforcement gaps and observed breakage
 - [Release signing](contributing/release-signing.md): generating or rotating the minisign key, the Actions secret, verifying by hand
-- [Market review, October 2026](contributing/market-review-2026-10.md): what comparable orchestrators' users ask for, where rota stands, and the ranked gaps behind issues #574 to #587
+- [Market review, October 2026](contributing/market-review-2026-10.md): what comparable orchestrators' users ask for, where rota stands, and the ranked gaps behind issues #574 to #587; refreshed 2026-10-27 with gstack (#2170 to #2174) and new entrants
 - [Plain orchestrator comparison, October 2026](contributing/plain-orchestrator-comparison-2026-10.md): what a bare Claude Code session would do to run a team against what rounds do, and the six gaps behind issues #897 to #902. The [re-judged user version](usage/rota-vs-plain-session.md) is the current one
 
 ### ⚖ Compare
