@@ -3,9 +3,9 @@ package round
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -123,19 +123,12 @@ func (e Env) retarget(ctx context.Context, root string, f Finding) error {
 	if s.PaneHandle() == "" {
 		return nil // the mail waits in the inbox: `worker done` refuses while it is unread
 	}
-	body, err := os.CreateTemp("", "rota-base-relay-*")
+	path, cleanup, err := fsio.WriteTemp(e.Worker.Getenv("TMPDIR"), "rota-base-relay-*", []byte(text))
 	if err != nil {
 		return err
 	}
-	defer os.Remove(body.Name())
-	_, werr := body.WriteString(text)
-	if cerr := body.Close(); werr == nil {
-		werr = cerr
-	}
-	if werr != nil {
-		return werr
-	}
-	if _, err := e.Worker.Dispatch(ctx, root, worker.DispatchOpts{Slot: f.Slot, BodyFile: body.Name(), Relay: true}); err != nil {
+	defer cleanup()
+	if _, err := e.Worker.Dispatch(ctx, root, worker.DispatchOpts{Slot: f.Slot, BodyFile: path, Relay: true}); err != nil {
 		return fmt.Errorf("PR retargeted, but the relay failed: %w", err)
 	}
 	return nil

@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"unicode"
 
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
@@ -133,18 +133,11 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		return out, &exitcode.Error{Exit: exitcode.ExitRefused, Message: fmt.Sprintf("slot '%s' has no session to relay into", o.Slot),
 			Hint: "the pane is gone: re-dispatch the task or transfer the item", Data: worker.BlockData{BlockedBy: blockedby.Handle}}
 	}
-	body, err := os.CreateTemp("", "rota-review-relay-*")
+	path, cleanup, err := fsio.WriteTemp(e.Worker.Getenv("TMPDIR"), "rota-review-relay-*", []byte(ReviewRelayText(batch)))
 	if err != nil {
 		return out, err
 	}
-	defer os.Remove(body.Name())
-	_, werr := body.WriteString(ReviewRelayText(batch))
-	if cerr := body.Close(); werr == nil {
-		werr = cerr
-	}
-	if werr != nil {
-		return out, werr
-	}
+	defer cleanup()
 	// The bounce and the cursor are written before the relay goes out: a write
 	// that fails afterwards cannot leave a relayed batch unconsumed, which the
 	// next pass would send again. A dispatch that fails puts both back.
@@ -189,7 +182,7 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		out.Bounces = recount()
 		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr))
 	}
-	if _, err := e.Worker.Dispatch(ctx, root, worker.DispatchOpts{Slot: o.Slot, BodyFile: body.Name(), Relay: true}); err != nil {
+	if _, err := e.Worker.Dispatch(ctx, root, worker.DispatchOpts{Slot: o.Slot, BodyFile: path, Relay: true}); err != nil {
 		rerr, serr := rec.Undo(), unseen()
 		merr := worker.RetractMail(root, o.Slot, mail.Seq)
 		out.Bounces = recount()

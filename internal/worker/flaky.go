@@ -69,7 +69,7 @@ func (e Env) runGateVerify(ctx context.Context, cmds []string, dir string, led t
 		}
 		return combined, retryCode
 	}
-	r, err := runVerifyCmds(ctx, shell, cmds, dir, led, now)
+	r, err := runVerifyCmds(ctx, shell, cmds, dir, e.Getenv("TMPDIR"), led, now)
 	r.Flaky = flakes
 	return r, err
 }

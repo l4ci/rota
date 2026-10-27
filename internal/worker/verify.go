@@ -3,12 +3,12 @@ package worker
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/flakeledger"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/testledger"
 )
 
@@ -92,27 +92,26 @@ func (e Env) RunVerify(ctx context.Context, cmds []string, dir string) (VerifyRe
 // in Excluded.
 func (e Env) RunVerifyWith(ctx context.Context, cmds []string, dir string, led testledger.Ledger) (VerifyResult, error) {
 	e = e.WithDefaults()
-	return runVerifyCmds(ctx, e.Shell, cmds, dir, led, e.Now())
+	return runVerifyCmds(ctx, e.Shell, cmds, dir, e.Getenv("TMPDIR"), led, e.Now())
 }
 
 // runVerifyCmds runs cmds through shell, one after another, in dir.
-func runVerifyCmds(ctx context.Context, shell func(ctx context.Context, dir, command string) (string, int), cmds []string, dir string, led testledger.Ledger, now time.Time) (VerifyResult, error) {
+func runVerifyCmds(ctx context.Context, shell func(ctx context.Context, dir, command string) (string, int), cmds []string, dir, tempDir string, led testledger.Ledger, now time.Time) (VerifyResult, error) {
 	var res VerifyResult
 	if len(cmds) == 0 {
 		res.NoCommands = true
 		return res, nil
 	}
-	logf, err := os.CreateTemp("", "rota-gate-verify-")
+	logPath, cleanup, err := fsio.WriteTemp(tempDir, "rota-gate-verify-", nil)
 	if err != nil {
 		return res, err
 	}
-	logf.Close()
 	var log strings.Builder
 	for _, c := range cmds {
 		out, code := shell(ctx, dir, c)
 		section := "== " + c + "\n" + out
 		log.WriteString(section)
-		appendFile(logf.Name(), section)
+		appendFile(logPath, section)
 		excused, covered := led.Excuses(out, now)
 		switch {
 		case code == 0:
@@ -126,9 +125,9 @@ func runVerifyCmds(ctx context.Context, shell func(ctx context.Context, dir, com
 	}
 	res.Log = log.String()
 	if res.OK() {
-		os.Remove(logf.Name())
+		cleanup()
 	} else {
-		res.LogPath = logf.Name()
+		res.LogPath = logPath
 	}
 	return res, nil
 }
