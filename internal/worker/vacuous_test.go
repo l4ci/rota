@@ -3,6 +3,7 @@ package worker
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -53,7 +54,7 @@ func TestGateVacuousOutcomes(t *testing.T) {
 		{name: "already red", body: "false", verdict: GateVerifyFailed},
 		{name: "disabled", body: "true", cfg: `{"test":{"full":["true"]}}`, verdict: GatePass},
 		{name: "no test changes", verdict: GatePass, note: "VACUOUS-SKIP"},
-		{name: "only tests", body: "true", removeWork: true, verdict: GateVacuousTests},
+		{name: "only tests", body: "true", removeWork: true, verdict: GatePass, note: "VACUOUS-SKIP — no non-test changes to revert"},
 		{name: "docs and skills only", removeWork: true, verdict: GatePass, note: "VACUOUS-SKIP"},
 		{name: "bad pattern", body: "true", cfg: `{"test":{"full":["true"],"vacuousCheck":true,"filePattern":"["}}`, verdict: GateCheckBroke},
 	} {
@@ -152,6 +153,46 @@ func TestGateVacuousGoDefaultRunsSelectedTests(t *testing.T) {
 	}
 }
 
+func TestGateVacuousGoDefaultInconclusiveWhenNoTestsRun(t *testing.T) {
+	otherOS := "windows"
+	if runtime.GOOS == otherOS {
+		otherOS = "linux"
+	}
+	for _, tc := range []struct{ name, file, source string }{
+		{"build tag", "feature_test.go", "//go:build rota_unset_test_tag\n\npackage check\nimport \"testing\"\nfunc TestAnswer(t *testing.T) {}\n"},
+		{"other OS", "feature_" + otherOS + "_test.go", "package check\nimport \"testing\"\nfunc TestAnswer(t *testing.T) {}\n"},
+		{"skipped", "feature_test.go", "package check\nimport \"testing\"\nfunc TestAnswer(t *testing.T) { t.Skip(\"not available\") }\n"},
+		{"counterfactual skipped", "feature_test.go", "package check\nimport \"testing\"\nfunc TestAnswer(t *testing.T) { if answer() != 2 { t.Skip(\"not available\") } }\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			trainWrite(t, w, "go.mod", "module example.com/check\n\ngo 1.22")
+			trainWrite(t, w, "feature.go", "package check\nfunc answer() int { return 1 }")
+			gitq(t, w.dir, "push", "-q", "origin", "main")
+			gitq(t, w.worker, "fetch", "-q", "origin", "main")
+			gitq(t, w.worker, "merge", "-q", "origin/main", "-m", "sync")
+			for file, body := range map[string]string{"feature.go": "package check\nfunc answer() int { return 2 }\n", tc.file: tc.source} {
+				if err := os.WriteFile(filepath.Join(w.worker, file), []byte(body), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				gitq(t, w.worker, "add", file)
+			}
+			gitq(t, w.worker, "commit", "-qm", "add unavailable test")
+			gitq(t, w.worker, "push", "-q", "origin", "w1")
+			w.forge("sha", gitq(t, w.worker, "rev-parse", "HEAD"))
+			w.setConfig(`{"test":{"full":["true"],"vacuousCheck":true}}`)
+			res, err := w.gate(false, GateOpts{})
+			if err != nil || res.Verdict != GatePass || !res.Changed {
+				t.Fatalf("unavailable tests must not refuse the PR: %+v, %v", res, err)
+			}
+			notes := strings.Join(res.Notes, "\n")
+			if !strings.Contains(notes, "VACUOUS-SKIP") || !strings.Contains(notes, "inconclusive") || !strings.Contains(notes, tc.file) {
+				t.Fatalf("want inconclusive skip naming %s, got %s", tc.file, notes)
+			}
+		})
+	}
+}
+
 func TestGateVacuousRestoresModifiedDeletedAndRenamedFiles(t *testing.T) {
 	for _, change := range []string{"modify", "delete", "rename"} {
 		t.Run(change, func(t *testing.T) {
@@ -203,5 +244,20 @@ func TestTrainVacuousDependentMemberPasses(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(res.Notes, "\n"), "b2: VACUOUS-PASS") {
 		t.Fatalf("missing pass note: %v", res.Notes)
+	}
+}
+
+func TestTrainNoVerifySkipsVacuousCheck(t *testing.T) {
+	w := trainWorld(t, "true", "b1")
+	gitq(t, w.dir, "checkout", "-q", "b1")
+	trainWrite(t, w, "work.test", "true")
+	gitq(t, w.dir, "checkout", "-q", "main")
+	w.setConfig(`{"test":{"full":["true"],"vacuousCheck":true,"filePattern":"\\.test$","vacuousCommand":"sh {files}"}}`)
+	res, err := w.train(TrainOpts{Targets: []string{"b1"}, NoVerify: true})
+	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1" {
+		t.Fatalf("--no-verify must skip vacuity and land b1: %+v, %v", res, err)
+	}
+	if strings.Contains(strings.Join(res.Notes, "\n"), "VACUOUS") {
+		t.Fatalf("unexpected vacuity check under --no-verify: %v", res.Notes)
 	}
 }
