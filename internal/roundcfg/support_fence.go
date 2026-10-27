@@ -28,6 +28,7 @@ var supportFenced = []string{
 	// Runs an arbitrary command.
 	"rota test lock",
 	// Tracked .rota/ writes.
+	"rota decisions supersede", "rota decisions retire", "rota decisions add", "rota decisions amend",
 	"rota knowledge add", "rota knowledge amend", "rota knowledge rename-topic", "rota knowledge replace", "rota knowledge rm", "rota knowledge split",
 	"rota knowledge tier fold", "rota knowledge tier set",
 	"rota knowledge contradiction add", "rota knowledge contradiction clear",
@@ -68,7 +69,7 @@ var supportAllowed = []string{
 	"rota config check", "rota config show",
 	"rota connect list", "rota connect test",
 	"rota debug counter show", "rota debug counter summary", "rota debug session list", "rota debug session show",
-	"rota decisions query", "rota decisions stats", "rota decisions topics",
+	"rota decisions check", "rota decisions query", "rota decisions stats", "rota decisions topics",
 	"rota design list", "rota design show",
 	"rota doctor", "rota gate list",
 	"rota git base", "rota git branch", "rota git guard clean", "rota git guard feature-branch", "rota git worktree-path",
