@@ -104,7 +104,7 @@ var supportAllowed = []string{
 	"rota item claim", "rota item comment add", "rota item complete", "rota item create", "rota item field set",
 	"rota item note add", "rota item note rm", "rota item ready", "rota item release", "rota item reopen", "rota item rm",
 	"rota item section set", "rota item shipped", "rota item state",
-	"rota issues close", "rota issues label", "rota tracker call",
+	"rota issues close", "rota issues label", "rota labels sync", "rota tracker call",
 	// Regenerates the tracking issue's child list; in file mode it also rewrites
 	// tracked milestone files, which a support machine never reaches (D3).
 	"rota milestone check",
