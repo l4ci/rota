@@ -4,7 +4,15 @@
 
 ## 🔍 /rota-review
 
-`/rota-review` is a staff-engineer-level read of a feature branch before it leaves your machine. It reads the code without changing it; recording the verdict saves and posts its report. The skill scopes the branch (commits, touched files, referenced item IDs), pulls relevant topics from [`KNOWLEDGE.md`](learning.md) and `DECISIONS.md`, resolves what each item promised, and dispatches two reviewers in parallel: Spec (does the diff do what the items promised, nothing more) and Standards (conventions, code smells, test quality, silent failures). Their reports are shown as separate sections; the overall verdict is the worse of the two. Standards runs on the `standard` model tier (`round.tiers.claude.standard`). The diff is not pasted: `rota review package` writes the commits, `--stat` and full diff (with 10 lines of context) to a gitignored file under `.rota/review/`, and both reviewers read that file, so a large branch needs no file cap. After fixes, `--since <sha>` packages only what changed since the last review.
+`/rota-review` is a staff-engineer-level read of a feature branch before it leaves your machine. It reads code in disposable workspaces created with `rota review prepare`, without changing that code; recording the verdict saves it locally and posts its report on the PR and linked items. The skill scopes the branch (commits, touched files, referenced item IDs), pulls relevant topics from [`KNOWLEDGE.md`](learning.md) and `DECISIONS.md`, resolves what each item promised, and dispatches two reviewers in parallel: Spec (does the diff do what the items promised, nothing more) and Standards (conventions, code smells, test quality, silent failures). Their reports are shown as separate sections; the overall verdict is the worse of the two. Standards runs on the `standard` model tier (`round.tiers.claude.standard`). The diff is not pasted: `rota review package` writes the commits, `--stat` and full diff (with 10 lines of context) to a gitignored file under `.rota/review/`, and each reviewer reads a copy in its prepared workspace, so a large branch needs no file cap. After fixes, `--since <sha>` packages only what changed since the last review.
+
+### Disposable reviewer workspaces
+
+Before dispatch, the caller runs `rota review prepare <reviewed-sha> --json` for each reviewer. It resolves the commit once and returns its `head` and disposable tree `path`, with a `.review/` directory for the copied brief and diff. Reviewers use that tree as their working directory. Missing commits, archive or extraction failures, and incomplete setup stop dispatch; the live checkout is never a fallback.
+
+The caller runs `rota review cleanup <path>` after success, failure or cancellation. Cleanup requires the matching ownership record and removes only that workspace. A cleanup failure is reported with its path. Keep the same temporary-directory environment for preparation and cleanup.
+
+These workspaces also serve cross-harness, second-opinion and release-range reviews. Reviewers remain read-only. A scratch working directory is not an OS sandbox: an unsandboxed reviewer can still access absolute paths in the live repository or user home. User configuration during binary probes is unchanged.
 
 ### What counts as the spec
 

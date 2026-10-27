@@ -61,5 +61,26 @@ EOF
   [ $rc -eq 3 ] || fail "package --since the tip (empty range) should exit 3, got $rc"
   [ "$(hvj review package feat --base main --since main | jget data.files)" = "$(git diff --name-only main...feat | wc -l | tr -d ' ')" ] || fail "package --since main should cover the whole branch"
   pass "review package writes commits, stat and diff to a file; empty range exits 3"
+  # Prepared review trees come from the pinned commit, never dirty live files.
+  PINNED=$(git rev-parse feat)
+  echo "dirty live content" > a.txt
+  LIVE_STATUS=$(git status --porcelain)
+  LIVE_REGISTRY=$(git worktree list --porcelain)
+  OUT=$(hvj review prepare "$PINNED") || vfail
+  WORKSPACE=$(echo "$OUT" | jget data.path)
+  [ "$(echo "$OUT" | jget data.head)" = "$PINNED" ] || fail "prepare returned the wrong head: $OUT"
+  [ -d "$WORKSPACE/.review" ] || fail "prepare omitted reviewer input directory"
+  git show "$PINNED:a.txt" > "$WORKSPACE/.review/expected"
+  cmp "$WORKSPACE/a.txt" "$WORKSPACE/.review/expected" || fail "prepared tree did not use pinned content"
+  OUT=$(hvj review cleanup "$WORKSPACE") || vfail
+  [ ! -e "$WORKSPACE" ] || fail "cleanup left workspace"
+  [ "$(git status --porcelain)" = "$LIVE_STATUS" ] || fail "prepare/cleanup changed live status"
+  [ "$(git worktree list --porcelain)" = "$LIVE_REGISTRY" ] || fail "prepare/cleanup changed worktree registry"
+  rc=0; hvj review cleanup "$SCAF_TMP" >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 4 ] || fail "cleanup accepted a live checkout: $rc"
+  rc=0; hvj review prepare missing-commit >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 3 ] || fail "prepare accepted a missing commit: $rc"
+  pass "review prepare pins the archive; cleanup only removes owned workspace"
+
 )
 trap 'rm -rf "$TMP"' EXIT
