@@ -94,6 +94,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	ctx := c.Context()
 	renv := withBoard(c, root, accountedRoundEnv(c, ctx, root))
 	renv.HolderPID = pid
+	state := roundtick.LoadState(cd, lease.Round)
 
 	e := roundtick.Env{Cap: set.AutopilotCap, MergeApproval: policy.Mode, Batch: set.Batch, TrainFill: set.TrainFill, Now: c.deps().Now}
 	e.Capped = quotaCapped(renv, root, set)
@@ -126,31 +127,39 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	}
 	// Read once, after reconciliation, using the same current-head review
 	// timestamps as the nudge. A missing timestamp leaves the count rule usable.
-	var readySince map[int]time.Time
-	lookupReady := func(target string) (time.Time, bool) {
-		if readySince == nil {
-			readySince = map[int]time.Time{}
-			for _, w := range waitingPRs(c, root) {
+	gateNow := map[string]bool{}
+	var readyPRs map[int]waitingPR
+	lookupReady := func(target string) (waitingPR, bool) {
+		if readyPRs == nil {
+			readyPRs = map[int]waitingPR{}
+			for _, w := range waitingPRsWithState(c, root, state) {
 				if n, ok := worker.PRRefNumber(w.PR); ok && w.Reviewed {
-					readySince[n] = w.ReadySince
+					readyPRs[n] = w
 				}
 			}
 		}
 		t, err := e.Target(target)
 		if err != nil {
-			return time.Time{}, false
+			return waitingPR{}, false
 		}
 		n, _ := worker.PRRefNumber(t.PR)
-		at, ready := readySince[n]
-		return at, ready
+		w, ready := readyPRs[n]
+		return w, ready
 	}
 	e.TrainReady = func(target string) bool {
 		_, ready := lookupReady(target)
 		return ready
 	}
 	e.ReadySince = func(target string) time.Time {
-		at, _ := lookupReady(target)
-		return at
+		w, _ := lookupReady(target)
+		return w.ReadySince
+	}
+	e.FillBypass = func(target string) bool {
+		if gateNow[target] {
+			return true
+		}
+		w, ready := lookupReady(target)
+		return ready && w.Immediate
 	}
 	e.Head = func(ctx context.Context, target string) (string, error) {
 		t, err := e.Target(target)
@@ -169,7 +178,16 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		if err != nil {
 			return "", err
 		}
+		if prState := strings.ToLower(info.State); prState != "" && prState != "open" {
+			gateNow[target] = true
+		}
+		if info.Base != "" && info.Base != strutil.FirstNonEmpty(e.BaseOverride, t.Base, e.Base) {
+			gateNow[target] = true
+		}
 		if info.HeadSHA == "" {
+			if gateNow[target] {
+				return fmt.Sprintf("%d:state", n), nil
+			}
 			return "", fmt.Errorf("PR %s has no head SHA", t.PR)
 		}
 		return fmt.Sprintf("%d:%s", n, info.HeadSHA), nil
@@ -180,7 +198,9 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		return roundtick.GateRun{Result: run.Result, Err: run.Err, Refused: run.Refused, BookErr: run.BookErr}
 	}
 	e.AwaitingReview = func(_ context.Context, sl roundtick.Slot, base string) string {
-		return reviewVerdictsMissing(c, root, sl.Name, base)
+		why, pass := reviewReadiness(c, root, sl.Name, base)
+		gateNow[sl.Name] = pass
+		return why
 	}
 	e.RunTrain = func(_ context.Context, targets []string, base string) roundtick.TrainRun {
 		run := runTrain(c, root, trainRunOpts{Targets: targets, Base: base, NoWait: true})
@@ -229,7 +249,6 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 			c.Warn("audit line not written: %v", err)
 		}
 	}
-	state := roundtick.LoadState(cd, lease.Round)
 	if state.Stopped {
 		return roundtick.Result{}, errAutopilotStopped
 	}
@@ -244,29 +263,29 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	return r, nil
 }
 
-// reviewVerdictsMissing says why a done slot's head still lacks the review verdicts
-// ship.review needs. Identity/state verdicts go to the real gate for handling;
+// reviewReadiness says why a done slot still waits for required reviews,
+// and whether its identity/state verdict must go straight to the real gate;
 // an incomplete probe or a read error cannot confirm readiness.
-func reviewVerdictsMissing(c *Ctx, root, slot, base string) string {
+func reviewReadiness(c *Ctx, root, slot, base string) (string, bool) {
 	ctx, stop := workerContext()
 	defer stop()
 	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: base, ReviewsOnly: true, ItemBody: lazyItemBody(c, root)})
 	if err != nil {
-		return "cannot confirm review verdicts at head: " + strutil.FirstLine(err.Error())
+		return "cannot confirm review verdicts at head: " + strutil.FirstLine(err.Error()), false
 	}
 	switch r.Verdict {
 	case worker.GateStale, worker.GatePRMismatch, worker.GateAlreadyMerged, worker.GateMergedRemotely:
 		// These describe the branch or PR, not missing review verdicts. The
 		// real gate sends stale work back or handles the PR's current state.
-		return ""
+		return "", true
 	}
 	if r.Verdict == worker.GateReviewMissing {
-		return roundtick.WaitingForReview(r.Err, strutil.FirstNonEmpty(r.Branch, slot))
+		return roundtick.WaitingForReview(r.Err, strutil.FirstNonEmpty(r.Branch, slot)), false
 	}
 	if r.Verdict != worker.GateFresh {
-		return "cannot confirm review verdicts at head: " + strutil.FirstNonEmpty(strutil.FirstLine(r.Err), r.Verdict)
+		return "cannot confirm review verdicts at head: " + strutil.FirstNonEmpty(strutil.FirstLine(r.Err), r.Verdict), false
 	}
-	return ""
+	return "", false
 }
 
 // quotaCapped is the tick's cap hook: why no slot may fill, "" when one may.
@@ -276,6 +295,9 @@ func quotaCapped(renv round.Env, root string, set roundcfg.Settings) func(contex
 
 func tickData(r roundtick.Result) *jsonx.Object {
 	d := jsonx.NewObject()
+	if len(r.Holding) > 0 {
+		d.Set("holding", strList(r.Holding))
+	}
 	did := make([]any, 0, len(r.Did))
 	for _, a := range r.Did {
 		o := jsonx.NewObject()
@@ -308,6 +330,7 @@ func tickData(r roundtick.Result) *jsonx.Object {
 
 func tickLines(r roundtick.Result) string {
 	var lines []string
+	lines = append(lines, r.Holding...)
 	for _, a := range r.Did {
 		lines = append(lines, fmt.Sprintf("did\t%s\t%s\t%s", a.Action, a.Target, dash(a.Detail)))
 	}

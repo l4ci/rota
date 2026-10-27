@@ -300,7 +300,7 @@ func autopilotWatch(c *Ctx, ctx context.Context, env roundwatch.Env, opts roundw
 			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonChange}, nil, "tick failed: "+terr.Error()), nil
 		case ctx.Err() != nil:
 			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonInterrupt}, tp, ""), nil
-		case len(tr.New) > 0:
+		case len(tr.New) > 0 || len(tr.Holding) > 0:
 			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonChange}, tp, ""), nil
 		case left <= 0:
 			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonHeartbeat}, tp, ""), nil

@@ -110,3 +110,75 @@ func TestTickTrainFillDisabledKeepsLegacyMerge(t *testing.T) {
 		t.Fatalf("gated=%v, want legacy lone gate", f.gated)
 	}
 }
+
+func TestTickTrainFillReportsChangesAcrossRestart(t *testing.T) {
+	now := time.Date(2026, 10, 27, 9, 6, 0, 0, time.UTC)
+	at := now.Add(-6 * time.Minute)
+	f := &fake{queued: []string{"#1", "#2"}}
+	e := f.env()
+	e.TrainFill = roundcfg.TrainFill{Max: 4, Minutes: 20}
+	e.Now = func() time.Time { return now }
+	e.ReadySince = func(string) time.Time { return at }
+	cd := t.TempDir()
+	tick := func(want string) {
+		t.Helper()
+		LoadState(cd, 40).Apply(&e)
+		r, err := Run(context.Background(), e)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want == "" && len(r.Holding) != 0 || want != "" && (len(r.Holding) != 1 || r.Holding[0] != want) {
+			t.Fatalf("holding=%q, want %q", r.Holding, want)
+		}
+		if len(r.NeedsYou) != 0 || len(r.Did) != 0 {
+			t.Fatalf("fill wait became actionable: %+v", r)
+		}
+		if err := SaveState(cd, 40, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tick("holding train for main: 2/4 ready, oldest waited 6m of 20m")
+	tick("")
+	now = now.Add(time.Minute)
+	tick("holding train for main: 2/4 ready, oldest waited 7m of 20m")
+	f.queued = []string{"#1"}
+	tick("holding train for main: 1/4 ready, oldest waited 7m of 20m")
+}
+
+func TestFillBypassReachesGateWithReviewNotReady(t *testing.T) {
+	f := &fake{queued: []string{"#11"}}
+	e := f.env()
+	e.TrainFill = roundcfg.TrainFill{Max: 4}
+	e.TrainReady = func(string) bool { return false }
+	e.FillBypass = func(string) bool { return true }
+	if _, err := Run(context.Background(), e); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.gated) != 1 || f.gated[0] != "main:#11" {
+		t.Fatalf("state refusal did not reach gate: %v", f.gated)
+	}
+}
+
+func TestTickTrainFillKeepsOldestReady(t *testing.T) {
+	now := time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)
+	f := &fake{queued: []string{"#1", "#2", "#90"}}
+	e := f.env()
+	e.TrainFill = roundcfg.TrainFill{Max: 2, Minutes: 60}
+	e.Now = func() time.Time { return now }
+	e.ReadySince = func(target string) time.Time {
+		switch target {
+		case "#90":
+			return now.Add(-65 * time.Minute)
+		case "#2":
+			return now.Add(-2 * time.Minute)
+		default:
+			return now.Add(-time.Minute)
+		}
+	}
+	if _, err := Run(context.Background(), e); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.trained) != 1 || len(f.trained[0]) != 3 || f.trained[0][1] != "#2" || f.trained[0][2] != "#90" {
+		t.Fatalf("oldest-ready selection: %v", f.trained)
+	}
+}
