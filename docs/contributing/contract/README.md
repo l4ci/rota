@@ -100,7 +100,7 @@ The entries live one file per verb group, so a change to one group does not conf
 | File | Section | Verbs |
 |---|---|---|
 | [version-config-repo.md](version-config-repo.md) | A3 and A4 | `version`, `update`, `config`, `repo` |
-| [backlog.md](backlog.md) | A4 | `id`, `item`, `backlog`, `summary`, `issues`, `status`, `refactor`, `migrate issues` |
+| [backlog.md](backlog.md) | A4 | `id`, `item` (including `item template`), `backlog`, `summary`, `issues`, `status`, `refactor`, `migrate issues` |
 | [knowledge.md](knowledge.md) | A5 | `knowledge`, `decisions`, `glossary`, `block`, `instructions`, `map`, `qa`, `migrate hv`, `migrate external-knowledge` |
 | [milestones.md](milestones.md) | A6 | `milestone`, `plan`, `design`, `spike`, `proof`, `debug` |
 | [workers.md](workers.md) | A7 | `worker` (pool, dispatch, poll, gate, session, account), `test run`, `test ledger check` |
