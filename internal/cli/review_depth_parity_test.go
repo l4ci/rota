@@ -78,7 +78,7 @@ func TestGateAndReviewDepthPrintTheSameReason(t *testing.T) {
 		{"size", "Closes #6\n", "", "1 changed lines, under lightBelow 100000"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			prBody, issueBody = c.pr, c.issue
+			prBody, issueBody = c.pr+decisionSectionsFixture, c.issue
 			_, _, gateErr := rotaInWith(t, deps, dir, "worker", "gate", "w1", "--base", "main", "--check-only")
 			g := gateReason.FindStringSubmatch(gateErr)
 			if g == nil {
