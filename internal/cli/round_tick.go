@@ -216,14 +216,20 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 }
 
 // reviewVerdictsMissing says why a done slot's head still lacks the review verdicts
-// ship.review needs. Only a completed, successful probe permits a real gate;
-// an early refusal or a read error cannot confirm readiness.
+// ship.review needs. Identity/state verdicts go to the real gate for handling;
+// an incomplete probe or a read error cannot confirm readiness.
 func reviewVerdictsMissing(c *Ctx, root, slot, base string) string {
 	ctx, stop := workerContext()
 	defer stop()
 	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: base, ReviewsOnly: true, ItemBody: lazyItemBody(c, root)})
 	if err != nil {
 		return "cannot confirm review verdicts at head: " + strutil.FirstLine(err.Error())
+	}
+	switch r.Verdict {
+	case worker.GateStale, worker.GatePRMismatch, worker.GateAlreadyMerged, worker.GateMergedRemotely:
+		// These describe the branch or PR, not missing review verdicts. The
+		// real gate sends stale work back or handles the PR's current state.
+		return ""
 	}
 	if r.Verdict == worker.GateReviewMissing {
 		return roundtick.WaitingForReview(r.Err, strutil.FirstNonEmpty(r.Branch, slot))
