@@ -942,6 +942,35 @@ merged), then totals per slot and per account, then an idle table (each stretch 
 its next assign, with the median; `idle` in JSON), then the round's gate audit lines. A re-done after a
 bounce is not counted as idle time.
 
+The summary also prints round metrics, with a counting rule on each line:
+
+- **Lead time assign→merged and done→merged:** each distinct merged PR's winning
+  assignment, using its first assign, latest done report and first merge observation.
+  Text prints durations; JSON gives whole seconds. Open PRs are excluded.
+  The median averages the middle pair for an even sample; p90 uses nearest rank
+  (`ceil(0.9 × samples)`). Missing or invalid timestamps make that metric unavailable.
+- **Red-train rate:** non-pass train outcomes divided by recorded train outcomes. One
+  outcome is recorded per completed train invocation, including refusals; plans and
+  usage errors without a verdict are excluded. Member gate rows are not trains. Older
+  rounds without train outcomes show unavailable.
+- **Bounces per merged PR:** all bounce events in the round divided by its distinct
+  merged PRs, including bounces on work that did not land.
+
+Missing or unreadable sources print `unavailable (<reason>)`, never a measured zero.
+JSON puts these under `metrics`: `assignToMerged`, `doneToMerged`, `redTrainRate`,
+`bouncesPerMergedPR`. Each carries `rule` and `unavailable` (null when
+available); lead times carry `samples`, `medianSeconds` and `p90Seconds`, while ratios
+carry `numerator`, `denominator` and `value`. Unavailable numeric values, including
+`samples` counts, are null.
+
+Unreadable ledger lines are skipped and counted in `skippedLedgerLines` (across the
+file). If a damaged event has a readable round number, only that round's metrics
+become unavailable. A torn line whose round cannot be identified does not invalidate
+other readable events. Once the ledger loads, an explicitly requested round with
+no identifiable events exits 3. Missing or wholly unreadable ledgers return
+unavailable metrics at exit 0, even with an explicit `--round`. Existing issue-row `mergedAt` and fallback `wallSeconds` retain the
+last merge observation; only the new lead-time metrics use the first.
+
 ```sh
 rota round summary              # the current round, else the highest in the ledger
 rota round summary --round 3
