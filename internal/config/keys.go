@@ -201,10 +201,10 @@ var Keys = []Key{
 	k("test.fast", ScopeProject, []any{}, true, TypeList, "Shell commands for the quick per-task and worker checks. {files} expands to the changed files, single-quoted; put -- before it."),
 	k("test.full", ScopeProject, []any{}, true, TypeList, "Shell commands for the full suite, run by rota worker gate and the merge train on the merged tree. Empty with test.e2e also empty: the gate refuses to merge without --no-verify."),
 	k("test.e2e", ScopeProject, []any{}, true, TypeList, "Shell commands for slow end-to-end checks, run by the gate and merge train after test.full passes. Empty skips the step."),
+	k("test.fullWhere", ScopeProject, "local", false, TypeEnum, "Where the gate and train run the full tier: here, or by pushing the merge result and waiting for the forge's checks (needs test.ciChecks).", "local", "ci"),
 	k("test.vacuousCheck", ScopeProject, false, false, TypeBool, "Refuse tests that still pass after reverting the merge's non-test changes in a disposable worktree. Off by default."),
 	k("test.filePattern", ScopeProject, `_test\.go$`, false, TypeString, "Regular expression matching test-file paths for test.vacuousCheck. Defaults to Go test files."),
 	k("test.vacuousCommand", ScopeProject, "go test -count=1 {packages} -run {tests}", false, TypeString, "Command for test.vacuousCheck. Shell-quoted {files} selects changed test files; {packages} and {tests} select Go packages and test names."),
-	k("test.fullWhere", ScopeProject, "local", false, TypeEnum, "Where the gate and train run the full tier: here, or by pushing the merge result and waiting for the forge's checks (needs test.ciChecks).", "local", "ci"),
 	k("test.ciTimeoutMinutes", ScopeProject, num("60"), false, TypeInt, "How long a ci run waits for its checks, 1 to 1440 minutes. ROTA_CI_TIMEOUT (seconds) overrides it for one run."),
 	k("test.ciChecks", ScopeProject, []any{}, false, TypeList, "Check names that must all succeed on the pushed commit under test.fullWhere ci: GitHub check-run names or commit-status contexts, GitLab job names."),
 	// #797: where issues live and where code lands, split. They replace

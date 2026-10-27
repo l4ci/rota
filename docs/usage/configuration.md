@@ -278,7 +278,7 @@ non-test files from the preceding base, keeping the test changes, and runs the
 same command again. If it still passes, the gate refuses with exit 4 and
 `blockedBy: vacuous-tests`, naming the test files. A nonzero test exit passes this
 check; this establishes dependence on the change, not assertion quality. A
-cancelled run or a command that cannot execute is `check-broke`.
+cancelled run or a counterfactual command that cannot execute is `check-broke`.
 
 With this opt-in policy, tests-only PRs also need a failing counterfactual run.
 A PR with no surviving added or changed test files, only docs or skills, or no
