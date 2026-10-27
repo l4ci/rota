@@ -601,8 +601,9 @@ posts the question on the issue or PR thread and raises a host notification; `ro
 reads the answers back.
 
 Run `rota round status --needs-you` for a list of what waits on the maintainer:
-open escalations, worker questions, needs-human parks, merge approvals and bounce-cap
-calls. Each row shows the item, question, age and a one-word default reply. Use
+open escalations, needs-human parks, merge approvals, stale-claim reclaim approvals
+and unfiled bugreports. Raw worker questions and bounce-cap audits belong to the
+orchestrator; they reach this list only after an escalation or handoff to the human. Each row shows the item, question, compact age (`4m`, `2h`) and a one-word default reply. Use
 `--json` for the same list as `needsYou`. Explicit Spec waiver requests are
 escalations; an ordinary failing review remains work for the worker. An unknown
 age means the source has no recorded timestamp. The command never answers an item.
