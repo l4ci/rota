@@ -292,7 +292,7 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 				body, _, _ := be.Detail(res.ID)
 				in.Body = []byte(body)
 			}
-			reportCreateWarnings(c, data, createTemplateWarnings(in))
+			reportCreateWarnings(c, data, createTemplateWarnings(res.ID, in))
 			return Result{Data: data, Text: res.ID}, nil
 		}
 		req := backlog.CaptureRequest{Kind: *kind, Title: *title, Tag: *tag, Desc: *desc,
@@ -321,16 +321,20 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 				data.Set("detail", res.Detail)
 			}
 			data.Set("changed", true)
-			reportCreateWarnings(c, data, createTemplateWarnings(in))
+			reportCreateWarnings(c, data, createTemplateWarnings(res.ID, in))
 			return Result{Data: data, Text: res.ID}, nil
 		})
 	}
 }
 
-func createTemplateWarnings(in backlog.CreateInput) []string {
+func createTemplateWarnings(id string, in backlog.CreateInput) []string {
 	var warnings []string
+	template := "rota item template --kind " + in.Kind
+	if in.Tag != "" && backlog.ValidTag(in.Kind, in.Tag) {
+		template += " --tag " + in.Tag
+	}
 	for _, missing := range itembody.CheckTemplate(in.Kind, in.Tag, in.Desc+"\n\n"+string(in.Body)) {
-		warnings = append(warnings, fmt.Sprintf("missing %s section: ## %s", missing.Level, missing.Name))
+		warnings = append(warnings, fmt.Sprintf("%s: missing %s section: ## %s; add it to the item body (skeleton: `%s`)", id, missing.Level, missing.Name, template))
 	}
 	return warnings
 }
@@ -453,7 +457,7 @@ func fileBatch(be backlog.Backend, ins []backlog.CreateInput) (Result, error) {
 		}
 		ids = append(ids, res.ID)
 		row := jsonObj("id", res.ID, "type", res.Type, "kind", in.Kind, "title", in.Title)
-		if missing := createTemplateWarnings(in); len(missing) > 0 {
+		if missing := createTemplateWarnings(res.ID, in); len(missing) > 0 {
 			row.Set("warnings", missing)
 			for _, warning := range missing {
 				warnings = append(warnings, fmt.Sprintf("record %d: %s", i+1, warning))
@@ -926,6 +930,18 @@ func itemReady(fs *flag.FlagSet) RunFunc {
 				reasons, err := be.Ready(args[0])
 				if err != nil {
 					return Result{}, err
+				}
+				it, err := be.Get(args[0])
+				if err != nil {
+					return Result{}, err
+				}
+				decision, _ := round.DecisionOf(be.Capabilities(), *it)
+				if decision == "" {
+					body, _, err := be.Detail(args[0])
+					if err != nil {
+						return Result{}, err
+					}
+					reasons = append(reasons, backlog.TemplateReasons(*it, body)...)
 				}
 				if reasons == nil {
 					reasons = []string{}

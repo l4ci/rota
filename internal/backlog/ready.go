@@ -41,6 +41,22 @@ func readyReasons(criteria, note bool) []string {
 	return []string{"no acceptance criteria in the issue body", "no design or plan note"}
 }
 
+// TemplateReasons lists missing required headings, using the same diagnostics
+// for item ready and round readiness. Callers apply decision-item exemptions.
+// Backend.Ready remains the criteria/note check so assign briefs can supply
+// criteria and template headings independently.
+func TemplateReasons(it Item, body string) []string {
+	reasons := []string{}
+	if typ, ok := TypeByLetter(it.Type); ok {
+		for _, missing := range itembody.CheckTemplate(typ.Kind, it.Tag, body) {
+			if missing.Level == itembody.Required {
+				reasons = append(reasons, "missing required section: ## "+missing.Name)
+			}
+		}
+	}
+	return reasons
+}
+
 // Ready lists what the item lacks to be startable (FileBackend.ready_reasons):
 // acceptance criteria in the detail file, or a design (.rota/designs/<ID>.md) or
 // plan (.rota/plans/*-<ID>.md) note. An empty list means ready.

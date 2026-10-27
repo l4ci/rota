@@ -887,7 +887,17 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	}
 	inFlight = slices.DeleteFunc(inFlight, func(x InFlight) bool { return own[worker.NormID(x.Issue)] })
 	assess := func(id string) (Readiness, error) {
-		return AssessScoped(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap, decisions, set.BlockScopeOverlap)
+		r, err := AssessScoped(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap, decisions, set.BlockScopeOverlap)
+		if resuming || (o.AcceptOpenPR && hasOpenPR) {
+			// Template requirements gate new work, not work already held or
+			// deliberately restarted from an existing PR. Other checks still run.
+			for i := range r.Checks {
+				if r.Checks[i].Name == CheckTemplate {
+					r.Checks[i].OK, r.Checks[i].Detail = true, []string{}
+				}
+			}
+		}
+		return r, err
 	}
 	r, err := assess(id)
 	if err != nil {

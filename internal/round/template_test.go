@@ -9,8 +9,40 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
+
+func TestAssignLegacyFeatureResumeAndRedo(t *testing.T) {
+	t.Run("resume", func(t *testing.T) {
+		f := newAssignFixture(t)
+		f.be.items["12"].Type = "F"
+		f.be.details["12"] = "## Acceptance\n- [ ] Works\n\n## Out of scope\nnothing noted\n"
+		if _, err := f.assign("12", "ben", nil); err != nil {
+			t.Fatal(err)
+		}
+		f.be.details["12"] = "## Acceptance\n- [ ] Works\n"
+		if res, err := f.assign("12", "ben", nil); err != nil || !res.Ready() {
+			t.Fatalf("resuming in-flight feature must not require a new heading: %+v %v", res, err)
+		}
+	})
+	t.Run("open PR redo", func(t *testing.T) {
+		f := openPRFixture(t, tracker.PR{Number: 104, Branch: "ben/12-add-the-round-assign"})
+		f.be.items["12"].Type = "F"
+		f.be.details["12"] = "## Acceptance\n- [ ] Works\n"
+		if res, err := f.assign("12", "dana", func(o *AssignOpts) { o.AcceptOpenPR = true }); err != nil || !res.Ready() {
+			t.Fatalf("redo of an open PR must not require a new heading: %+v %v", res, err)
+		}
+	})
+	t.Run("fresh item with redo flag", func(t *testing.T) {
+		f := newAssignFixture(t)
+		f.be.items["12"].Type = "F"
+		_, err := f.assign("12", "ben", func(o *AssignOpts) { o.AcceptOpenPR = true })
+		if err == nil || blockedBy(t, err) != BlockNotReady || !strings.Contains(err.Error(), "## Out of scope") {
+			t.Fatalf("flag alone must not exempt a fresh item: %v", err)
+		}
+	})
+}
 
 func TestAssignFeatureTemplate(t *testing.T) {
 	for _, tag := range []string{"Major", "Minor", "Cosmetic"} {

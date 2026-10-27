@@ -352,14 +352,8 @@ func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFli
 	// Only a recognized decision exempts the template.
 	decision, _ := DecisionOf(be.Capabilities(), *self)
 	if decision == "" {
-		if typ, ok := backlog.TypeByLetter(self.Type); ok {
-			for _, missing := range itembody.CheckTemplate(typ.Kind, self.Tag, body+"\n\n"+brief) {
-				if missing.Level == itembody.Required {
-					template.OK = false
-					template.Detail = append(template.Detail, "missing required section: ## "+missing.Name)
-				}
-			}
-		}
+		template.Detail = backlog.TemplateReasons(*self, body+"\n\n"+brief)
+		template.OK = len(template.Detail) == 0
 	}
 	r.Checks = append(r.Checks, template)
 	return r, nil
