@@ -42,10 +42,10 @@ func TestResolveHostCrossesTheSeam(t *testing.T) {
 				recordHost(t, dir, c.registry)
 			}
 			getenv := func(k string) string { return c.env[k] }
-			if got := ResolveHost(dir, config.Load(rotatree.Config(dir)), getenv, c.look); got != c.want {
+			if got := ResolveHost(dir, ParseHostConfig(config.Load(rotatree.Config(dir))), getenv, c.look); got != c.want {
 				t.Errorf("ResolveHost = %q, want %q", got, c.want)
 			}
-			if got := ResolvePaneHost(dir, config.Load(rotatree.Config(dir)), getenv, c.look); got != c.wantPane {
+			if got := ResolvePaneHost(dir, ParseHostConfig(config.Load(rotatree.Config(dir))), getenv, c.look); got != c.wantPane {
 				t.Errorf("ResolvePaneHost = %q, want %q", got, c.wantPane)
 			}
 		})
