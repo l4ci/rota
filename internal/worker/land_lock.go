@@ -30,6 +30,10 @@ const landLockTimeout = 4 * time.Hour
 // a train's targets), readable through LandLockHolder while it is held. A train's own landing steps run under the lock it
 // already holds (GateOpts.HoldsLandLock) and do not retake it.
 func (e Env) withLandLock(ctx context.Context, root, holder string, fn func(waited bool) error) error {
+	return e.withLandLockMode(ctx, root, holder, false, fn)
+}
+
+func (e Env) withLandLockMode(ctx context.Context, root, holder string, noWait bool, fn func(waited bool) error) error {
 	common, err := rotastate.CommonDirVia(ctx, e.Git, root)
 	if err != nil {
 		return err
@@ -51,6 +55,9 @@ func (e Env) withLandLock(ctx context.Context, root, holder string, fn func(wait
 	// waited: the lock was busy, so what fn is about to judge may have changed.
 	err = fsio.Locked(path, 0, held(false))
 	if errors.Is(err, fsio.ErrLockTimeout) {
+		if noWait {
+			return errLandingBusy
+		}
 		return fsio.Locked(path, landLockTimeout, held(true))
 	}
 	return err

@@ -112,6 +112,7 @@ func planText(p *worker.TrainPlan) string {
 
 // trainRunOpts is what one merge train needs: the verb's flags, without the verb.
 type trainRunOpts struct {
+	NoWait              bool
 	Targets             []string
 	Base                string
 	Order               []string
@@ -158,7 +159,7 @@ func runTrain(c *Ctx, root string, o trainRunOpts) trainRun {
 	if err != nil {
 		return trainRun{Err: err}
 	}
-	r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: o.Targets, Base: o.Base, SyncBase: syncBase, Order: o.Order, Plan: o.Plan, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, Verdict: shipVerdict(c, root, root).BlockGate, CheckReviews: true, Round: round, ItemBody: lazyItemBody(c, root)})
+	r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{NoWait: o.NoWait, Targets: o.Targets, Base: o.Base, SyncBase: syncBase, Order: o.Order, Plan: o.Plan, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, Verdict: shipVerdict(c, root, root).BlockGate, CheckReviews: true, Round: round, ItemBody: lazyItemBody(c, root)})
 	if !o.Plan {
 		postTrainReports(c, root, issues, r)
 	}

@@ -3,10 +3,52 @@ package roundtick
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/worker"
 )
+
+func TestTickFirstFailedHeadReportExplainsRetry(t *testing.T) {
+	for _, v := range []string{worker.GateStale, worker.GateVerifyFailed, worker.GateVacuousTests} {
+		for _, train := range []bool{false, true} {
+			name := "gate"
+			if train {
+				name = "train"
+			}
+			t.Run(v+"/"+name, func(t *testing.T) {
+				f := &fake{slots: []Slot{{Name: "ben", State: "done", PR: "#10"}}}
+				if train {
+					f.queued = []string{"#11"}
+				}
+				f.gateOut = func(string) GateRun { return GateRun{Result: worker.GateResult{Verdict: v}} }
+				f.trainOut = func([]string) TrainRun {
+					return TrainRun{Result: worker.TrainResult{Verdict: v, Culprit: "ben"}}
+				}
+				e := f.env()
+				e.Head = func(_ context.Context, target string) (string, error) { return target + ":head-a", nil }
+				first, err := Run(context.Background(), e)
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := v + "; held at PR head; push a new head to retry"
+				if len(first.New) != 1 || first.New[0] != (Item{"gate-failed", "ben", want}) {
+					t.Fatalf("first report lacks held-head next step: %+v", first.New)
+				}
+				cd := t.TempDir()
+				if err := SaveState(cd, 40, first); err != nil {
+					t.Fatal(err)
+				}
+				LoadState(cd, 40).Apply(&e)
+				f.queued = nil
+				second, err := Run(context.Background(), e)
+				if err != nil || len(second.New) != 0 || len(second.NeedsYou) != 1 || second.NeedsYou[0].Why != want {
+					t.Fatalf("held report changed after restart: %+v %v", second, err)
+				}
+			})
+		}
+	}
+}
 
 func TestTickFailedHeadWaitsForPushAcrossRestart(t *testing.T) {
 	for _, v := range []string{worker.GateStale, worker.GateVerifyFailed, worker.GateVacuousTests} {
@@ -72,7 +114,8 @@ func TestTickFailedHeadWaitsForPushAcrossRestart(t *testing.T) {
 func TestTickTransientRefusalRetriesSameHead(t *testing.T) {
 	for _, v := range []string{worker.GateRunning, worker.GateForge, worker.GateOrder,
 		worker.GateCINotRun, worker.GateVerifyTimeout, worker.GateCheckBroke,
-		worker.GateProvenanceFail, worker.GateMergeFailed} {
+		worker.GateProvenanceFail, worker.GateMergeFailed, worker.GateCIConfigChanged,
+		worker.GateNoVerify, worker.GateStaleAttempt} {
 		for _, train := range []bool{false, true} {
 			name := "gate"
 			if train {
@@ -91,6 +134,11 @@ func TestTickTransientRefusalRetriesSameHead(t *testing.T) {
 				first, err := Run(context.Background(), e)
 				if err != nil {
 					t.Fatal(err)
+				}
+				for _, item := range first.NeedsYou {
+					if strings.Contains(item.Why, "push a new head") {
+						t.Fatalf("retryable refusal asks for a push: %+v", item)
+					}
 				}
 				if err := SaveState(cd, 40, first); err != nil {
 					t.Fatal(err)
