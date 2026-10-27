@@ -138,7 +138,7 @@ Body sections:
 - **## Acceptance**: checkable boxes: the interface the callers use afterwards, which duplicated logic is gone, which tests cross the seam. Include "existing tests still pass" and "unit tests superseded by seam-level tests are removed, not kept alongside".
 - **## Out of scope**: one to three bullets on what the fix must not touch, or "nothing noted". `rota round assign` copies it into the worker brief.
 
-Report: table of filed issues (number, title, strength), skipped duplicates with the matched issue, the top recommendation. Zero filed is valid.
+Report: table of filed issues (number, title, strength), skipped duplicates with the matched issue, the top recommendation. Zero filed is valid. A round architecture-review worker with no findings ends with `ROTA-DONE <slot> issues:none`; solo reporting uses `rota round report <slot> --state done --issues none` (include `--attempt <id>` when briefed).
 
 When the user rejects a finding, or `--interactive` was passed, read [`options.md`](options.md) (Rejections, Interactive filing).
 

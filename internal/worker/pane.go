@@ -28,6 +28,7 @@ import (
 //
 //	ROTA-DONE <slot> <pr-url-or-branch>
 //	ROTA-DONE <slot> issues:#a,#b      (a review item: filed issues, no PR)
+//	ROTA-DONE <slot> issues:none       (a completed review with no findings)
 //	ROTA-DONE <slot> finding:<id>      (a research item: the finding comment, no PR)
 //	ROTA-BLOCKED <slot>: <one question in plain language>
 //
@@ -123,28 +124,7 @@ var (
 		`No, and tell Claude what to do differently`,
 		`Allow .{0,40}\bto run\b`,
 	})
-	// An architecture-review item produces issues, not code: its done line
-	// names them in place of a PR, `issues:#139,#140`.
-	// An entry is a number (`#139`) or a key-based tracker's key (`PROJ-123`).
-	reIssuesDone = regexp.MustCompile(`^issues:\s*(?:#?\d+|[A-Z][A-Z0-9_]*-\d+)(?:\s*,\s*(?:#?\d+|[A-Z][A-Z0-9_]*-\d+))*$`)
-	reIssueRef   = regexp.MustCompile(`#?\d+|[A-Z][A-Z0-9_]*-\d+`)
 )
-
-// ParseIssuesDone reads the evidence of `ROTA-DONE <slot> issues:#a,#b` into
-// the issue refs (`#a`, `PROJ-123`). ok is false for any other evidence.
-func ParseIssuesDone(evidence string) (refs []string, ok bool) {
-	ev := strings.TrimSpace(evidence)
-	if !reIssuesDone.MatchString(ev) {
-		return nil, false
-	}
-	for _, r := range reIssueRef.FindAllString(strings.TrimPrefix(ev, "issues:"), -1) {
-		refs = append(refs, "#"+strings.TrimPrefix(r, "#"))
-		if strings.Contains(r, "-") {
-			refs[len(refs)-1] = r
-		}
-	}
-	return refs, true
-}
 
 // reFindingDone is a research item's done line: the id of the finding comment
 // the worker posted, in place of a PR.

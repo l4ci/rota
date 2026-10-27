@@ -221,13 +221,16 @@ Work only this task, then stop.
 - When your PR is open, print `ROTA-DONE <slot> <pr-url>` and stop. Print it as the LAST line of your last message, after any summary of the work: a summary alone leaves the slot looking stuck. The dispatched brief repeats it with your slot filled in. If a slot goes idle with no sentinel but its branch heads an open PR, `rota worker poll` / `round wait` record it as done with that PR and note the sentinel was missing.
 - An architecture-review item (`arch(<area>): architecture review`) produces issues,
   not code, so it has no PR. When every finding is filed, print
-  `ROTA-DONE <slot> issues:#a,#b` (the issue numbers, comma-separated) and stop.
+  `ROTA-DONE <slot> issues:#a,#b` (the issue numbers, comma-separated), or
+  `ROTA-DONE <slot> issues:none` when the completed review found nothing, and stop.
   Do not open a PR for it.
 ```
 
 `rota worker poll` and `rota round wait` read `issues:#a,#b` as done with the issue list as evidence and record it on the slot instead of a PR. `rota round assign` (or `transfer`) onto that slot then closes the review item with a note listing the issues, releases its claim and frees the slot. Only a review item the round minted closes this way: a worker that reports issues on any other item is refused until it has a PR. Solo rounds record the same with `rota round report <slot> --state done --issues "#a,#b"`.
 
-After `ROTA-DONE <slot> issues:#a,#b`, the orchestrator reads the filed issues and runs `rota round accept <ID>` (add `--issues #a,#b` when the slot recorded none). It closes the item and frees the slot with no PR; assign or transfer onto the slot still closes it as a fallback.
+An explicitly completed review with no findings prints `ROTA-DONE <slot> issues:none`; under solo, record it with `rota round report <slot> --state done --issues none` (include `--attempt <id>` when briefed). This is completion evidence, unlike a bare `issues:` or an omitted issue list. Acceptance closes it with `Review done: no findings.` and frees the slot, with no PR or fabricated issue.
+
+After `ROTA-DONE <slot> issues:#a,#b` or `ROTA-DONE <slot> issues:none`, the orchestrator reads the filed issues and runs `rota round accept <ID>` (add `--issues #a,#b` when the slot recorded none). It closes the item and frees the slot with no PR; assign or transfer onto the slot still closes it as a fallback.
 
 A research item (a `decision:research` label) delivers a finding, not code: post it with
 `rota --json item comment add <ID> --kind finding --body-file <f>`, commit nothing, open no PR and print
