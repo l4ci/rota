@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/landfreeze"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -138,6 +139,14 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		d.Set("limits", lim)
 		d.Set("review", queuedRows(rep.Queued))
 		var lines []string
+		frozen, ferr := landfreeze.Load(ctx, c.deps().Git, root)
+		if ferr != nil {
+			return Result{}, ferr
+		}
+		if frozen != nil && frozen.Active {
+			d.Set("freeze", freezeData(frozen))
+			lines = append(lines, frozen.Line())
+		}
 		if set, ok := c.deps().tolerantRoundSettings(root); ok {
 			// Status ran without accounts; the quota read gets its own accounted env.
 			qc := accountedRoundEnv(c, ctx, root).QuotaCap(ctx, root, set) // one meter read serves the fallback and the cap
