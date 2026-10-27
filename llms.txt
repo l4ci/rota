@@ -1,0 +1,48 @@
+# rota
+
+> rota is a dev workflow for Claude Code and Codex, with OpenCode as a round worker: skills plus a single-binary CLI. Capture an item, build it, ship it; for several issues at once, an orchestrator hands them to worker agents and a gate checks every merge.
+
+To install rota in a project, follow the agent-readable install steps and ask the user before each command.
+
+- [install.md](https://volkerotto.net/rota/install.md): ordered install steps for a coding agent: binary, skills, doctor, project setup
+
+## Start here
+
+- [Install](https://volkerotto.net/rota/docs/install/): Homebrew, the install script, release binaries, the Claude Code plugin, upgrading, uninstalling
+- [Getting started](https://volkerotto.net/rota/docs/getting-started/): install and run your first capture, work, ship cycle
+- [How it works](https://volkerotto.net/rota/docs/how-it-works/): the two ways to use rota, and how each skill connects to the artifacts it touches
+- [Where coding agents go wrong](https://volkerotto.net/rota/docs/agent-mistakes/): common mistakes, enforced checks, written rules and remaining gaps
+
+## Skills
+
+- [All skills](https://volkerotto.net/rota/docs/skills/): when to use each `/rota-*` skill, and how they chain
+- [Capturing work](https://volkerotto.net/rota/docs/usage/capturing-work/): `/rota-capture`, mixed input, related links, detail files
+- [Running work](https://volkerotto.net/rota/docs/usage/running-work/): `/rota-work` cycles, branch or worktree isolation
+- [Review and ship](https://volkerotto.net/rota/docs/usage/review-and-ship/): `/rota-review` and `/rota-ship` gates
+- [Debugging](https://volkerotto.net/rota/docs/usage/debugging/): the `/rota-debug` cycle
+- [Vision and plans](https://volkerotto.net/rota/docs/usage/vision-and-plans/): `/rota-vision`, `/rota-plan`, milestones
+- [Skills in Codex](https://volkerotto.net/rota/docs/usage/codex-skills/): install and call the skills from Codex
+
+## Parallel rounds
+
+- [Your first round](https://volkerotto.net/rota/docs/first-round/): launching the orchestrator, a first round and wind-down, step by step
+- [Parallel rounds](https://volkerotto.net/rota/docs/usage/parallel-rounds/): an orchestrator, standing workers in worktrees, the merge gate, solo mode
+- [Unattended rounds](https://volkerotto.net/rota/docs/usage/unattended-rounds/): hooks, statusline, keepalive, usage limits
+- [Doctor and reap](https://volkerotto.net/rota/docs/usage/doctor-and-reap/): check the machine before a round, clear leftovers after
+- [Codex workers](https://volkerotto.net/rota/docs/usage/codex-workers/): run Codex as a worker in a round
+- [OpenCode workers](https://volkerotto.net/rota/docs/usage/opencode-workers/): run OpenCode, and any model it can reach, as a worker
+
+## Reference
+
+- [Configuration](https://volkerotto.net/rota/docs/usage/configuration/): every key in `.rota/config.json` and what it does
+- [Configuration options](https://volkerotto.net/rota/docs/reference/config-options/): every config key and option label
+- [`rota` verb reference](https://volkerotto.net/rota/docs/reference/cli-helpers/): every `rota` verb, with conventions and exit codes
+- [The `.rota/` folder](https://volkerotto.net/rota/docs/reference/rota-folder/): files and directories created by `rota init`
+- [Architecture](https://volkerotto.net/rota/docs/reference/architecture/): how the CLI, the skills and `.rota/` fit together
+- [Issue backend](https://volkerotto.net/rota/docs/usage/issue-backend/): backlog on GitHub or GitLab issues
+
+## Optional
+
+- [How rota compares](https://volkerotto.net/rota/docs/compare/): one page per tool, with the version checked
+- [FAQ](https://volkerotto.net/rota/docs/faq/): common questions
+- [Source](https://github.com/l4ci/rota): the repository
