@@ -22,6 +22,8 @@ import (
 
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/landfreeze"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/strutil"
@@ -385,6 +387,13 @@ func ExitDigest(root string, round int) string {
 
 func roundState(root string, round int) string {
 	var parts []string
+	if frozen, err := landfreeze.Load(context.Background(), git.Exec, root); err != nil {
+		if !errors.Is(err, rotastate.ErrNotRepo) {
+			parts = append(parts, landfreeze.UnreadableLine(err))
+		}
+	} else if frozen != nil && frozen.Active {
+		parts = append(parts, frozen.Line())
+	}
 	// Tolerant: a hook digest cannot refuse; a corrupt registry reads as no slots.
 	for _, s := range worker.LoadRegistryTolerant(root).Slots() {
 		st := strings.ToLower(s.State())

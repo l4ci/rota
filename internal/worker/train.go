@@ -7,6 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
+	"github.com/l4ci/rota/internal/landfreeze"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/testledger"
 	"math/bits"
@@ -305,6 +306,40 @@ func (t *trainRun) plan() (bool, error) {
 	}
 	if withPR != 0 && withPR != len(o.Targets) {
 		return true, fail(exitcode.ExitUsage, fmt.Sprintf("a train is all PRs or all slots without one, not a mix: PRs merge onto origin/%s and slots onto the local %s", o.Base, o.Base))
+	}
+
+	// Freeze is a queue-wide refusal, before static sections can prune members.
+	frozen, err := landfreeze.Load(ctx, e.Git, root)
+	if err != nil {
+		res.Verdict, res.Err, res.Hint = GateFreeze, landfreeze.UnreadableLine(err), landfreeze.ClearHint
+		return true, nil
+	}
+	if frozen != nil && frozen.Active {
+		if frozen.Base != o.Base {
+			res.Verdict, res.Err, res.Hint = GateFreeze, frozen.Line(), "repairs must target the frozen base"
+			return true, nil
+		}
+		for _, tg := range o.Targets {
+			gt, err := reg.GateTargetAny(tg)
+			if err != nil {
+				return true, err
+			}
+			if frozen.Allows(gt.Issue, gt.PR) {
+				continue
+			}
+			// A PR outside the registry derives its repair issue from its head branch.
+			if gt.External {
+				gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, CheckOnly: true})
+				if err != nil {
+					return true, err
+				}
+				if gr.Verdict != GateFreeze {
+					continue
+				}
+			}
+			res.Verdict, res.Err, res.Hint = GateFreeze, frozen.Line(), "designate the repair with rota round freeze before landing or assigning"
+			return true, nil
+		}
 	}
 
 	// 1. Pre-filter static PR sections, then check the remaining members.
@@ -914,12 +949,22 @@ func (t *trainRun) land() (TrainResult, error) {
 	res.SHA, _ = e.git(root, "rev-parse", "--short=7", "HEAD")
 	if tree, _ := e.git(root, "rev-parse", "HEAD^{tree}"); tree != "" {
 		if want, _ := e.git(root, "rev-parse", tips[passing]+"^{tree}"); want != tree {
+			// A forge may land a different tree than the scratch merge. Verify that
+			// landed base before reporting the mismatch, freezing it if it is red.
+			if stop, err := t.verifyLanded(&res); stop || err != nil {
+				return res, err
+			}
 			return e.trainMoved(res, "", fmt.Sprintf("the landed tree %s differs from the verified scratch tree %s; the forge merged differently than git did", strutil.ShortSHA(tree), strutil.ShortSHA(want)))
 		}
 	}
 	res.Verdict, res.Culprit = verdict, culprit
 	if verdict == "" {
 		res.Verdict = GatePass
+	}
+	if res.Verdict == GatePass && passing == len(res.Members) && passing > 0 && len(res.Verified) > 0 {
+		if err := e.clearVerifiedFreeze(ctx, root, o.Base); err != nil {
+			return res, err
+		}
 	}
 	return res, nil
 }
@@ -1181,4 +1226,50 @@ func appendNew(dst []string, notes ...string) []string {
 		}
 	}
 	return dst
+}
+
+// verifyLanded checks an unexpected forge result. Prefix bisection failures
+// before landing never call this, and therefore never freeze the queue.
+func (t *trainRun) verifyLanded(res *TrainResult) (bool, error) {
+	if !t.onCI && t.o.NoVerify && len(t.in.cfg.Full) == 0 && len(t.in.cfg.E2E) == 0 {
+		return false, nil
+	}
+	full, err := t.verify(t.root)
+	if err != nil {
+		return true, err
+	}
+	if v, msg, hint := full.stopVerdict("train"); v != "" {
+		res.Verdict = v
+		res.Err = strings.Replace(msg, "; nothing landed", "; train already landed; verification incomplete", 1)
+		res.Hint = hint
+		return true, nil
+	}
+	checks := full.Failed
+	if full.OK() {
+		e2e, err := t.e.RunVerifyWith(t.ctx, t.in.cfg.E2E, t.root, t.in.ledger)
+		if err != nil {
+			return true, err
+		}
+		if e2e.OK() {
+			return false, nil
+		}
+		checks = e2e.Failed
+	}
+	var prs []string
+	for _, m := range res.Members {
+		if m.Landed {
+			pr := m.PR
+			if pr == "" {
+				pr = m.Branch
+			}
+			prs = append(prs, pr)
+		}
+	}
+	if err := t.e.freezeLandedFailure(t.ctx, t.root, t.o.Base, prs, checks); err != nil {
+		return true, err
+	}
+	res.Verdict = GateVerifyFailed
+	res.Err = "landed train base does not pass verification: " + strings.Join(checks, ", ")
+	res.Hint = "fix forward; rota round freeze names the blocked base and its repair"
+	return true, nil
 }

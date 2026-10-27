@@ -113,7 +113,7 @@ var supportAllowed = []string{
 	// Rotates a support round: workers.json, the lease, the ledger, receipts
 	// and status are gitignored; claims, labels and the architecture review
 	// item are tracker writes.
-	"rota round accept", "rota round architecture", "rota round assign", "rota round bounce", "rota round escalate check",
+	"rota round freeze", "rota round accept", "rota round architecture", "rota round assign", "rota round bounce", "rota round escalate check",
 	"rota round escalate send", "rota round pick", "rota round reclaim", "rota round reconcile", "rota round report",
 	"rota round return", "rota round review-relay", "rota round scope", "rota round start", "rota round tick",
 	"rota round transfer", "rota round wind-down",
