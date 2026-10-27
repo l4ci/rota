@@ -43,6 +43,7 @@ type DispatchResult struct {
 	Task   string
 	Round  *int
 	Relay  bool
+	Queued bool
 	// Kind is the harness the session runs; "" for a relay, which ignores it.
 	Kind     string
 	Warnings []string
@@ -479,6 +480,9 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		}
 	}
 	switch {
+	case errors.Is(sendErr, host.ErrQueued):
+		res.Queued = true
+		return res, nil
 	case sendErr == nil:
 		return res, nil
 	case errors.Is(sendErr, host.ErrDialogOpen):
