@@ -1064,3 +1064,13 @@ never reclaim stale claims. The gate refuses an old holder's recorded `claimId` 
 Adopt refuses `claimed` only if the current holder is stale or authoritative claim history
 shows that the branch's former claim was released and replaced. Fresh different holders
 without that evidence do not prevent adoption; unreadable history is warned and skipped.
+
+A failed verification after a landing freezes the landing queue. `rota round status`
+and the prompt digest show the frozen base, SHA and failed checks. Gate, train and
+assign refuse unrelated work until recovery. Name the repair with
+`rota round freeze --repair-issue 123` (or `--repair-pr 456` for an existing PR),
+then assign and gate it normally. A verified repair landing clears the freeze.
+After repairing outside the round, update your base checkout and run
+`rota round freeze --verify`. To override the freeze deliberately, use
+`rota round freeze --clear --reason 'why verification can be bypassed'`;
+the reason is recorded in the gate audit.
