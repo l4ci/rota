@@ -57,7 +57,7 @@ repo: scoped
 data: {"for": string, "kind": string, "verdict": string, "sha": string, "stale": bool, "advisory": bool, "next": string}
 exit: 2 when --for is missing or unknown, or at an umbrella root without --repo; 3 when no verdict of the kind --for reads is recorded for the branch (hint: rota verdict add), the branch does not exist, HEAD is detached and no branch is named, or no base branch resolves; 5 when git fails
 old: none (new in B2)
-note: a classifier (rule 7): exit 0 whatever the verdict. `ship-review` and `queue` read the effective review verdict, `ship-second-opinion` the latest `second-opinion` record, `ship-qa` the latest `qa` record.
+note: a classifier (rule 7): exit 0 whatever the verdict. `ship-review` and `queue` read the effective review verdict, `ship-second-opinion` the latest `second-opinion` record, `ship-qa` the latest `qa` record. It reads the same records as `verdict show`, so PR-report recovery (#2133) applies.
 note: `next` is the consumer's next step, from the verdict, `autonomy.level`, and `qa.gate`. `ask` is the Address / Ship anyway / Stop question; `surface` shows the findings and continues; `stop` halts. For `queue`, `ask` is the merge question.
 
 | --for | PASS | CONCERNS | FAIL | INFRA-FAIL (qa only) |
