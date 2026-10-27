@@ -12,6 +12,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/frontmatter"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/marker"
 	ms "github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/notechunk"
@@ -40,9 +41,9 @@ type MilestoneTracker interface {
 var ErrMilestoneText = errors.New("milestone text needs frontmatter with its id")
 
 // MilestoneStatuses are the legal milestone statuses.
-var MilestoneStatuses = []string{"planned", "active", "shipped", "archived"}
+var MilestoneStatuses = labels.MilestoneStatuses()
 
-const msStatusPrefix = "status:"
+const msStatusPrefix = labels.StatusPrefix
 
 var (
 	msTitleRe   = regexp.MustCompile(`\A(` + ms.TokenPattern + `)`)

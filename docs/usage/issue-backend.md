@@ -32,6 +32,26 @@ Older configs used `backlog.backend` (`file` or `issues`) and `issues.provider`.
 | `issues.autoCreateLabel` | `true` | Create a missing label on first use. When off, a missing label is an error. |
 | `issues.homeRepo` | `""` | Umbrella only: sub-repo holding milestone tracking issues; empty is the first registered sub-repo. |
 
+### Label registry and sync
+
+The [label registry](../reference/labels.md) lists every label rota sets or reads, including
+claim prefixes and review triggers. Configured names under `issues.labels.*` are respected.
+Declare project labels with descriptions in `issues.labels.extra`:
+
+```sh
+rota config set issues.labels.extra '{"area:api":"API ownership"}'
+rota labels sync             # preview missing labels, metadata drift and unknown labels
+rota labels sync --apply     # create missing labels and correct descriptions and colors
+```
+
+Sync writes only with `--apply`. GitHub, GitLab and Linear support metadata changes; Jira and
+It's a Plan report names only and stay read-only. Tracker defaults such as `bug`, unused
+`claimed:*` definitions and unknown or retired labels are reported without changes. A claim
+definition is unused when no open issue carries it. Sync never deletes or renames labels.
+
+`rota doctor` warns about missing or undescribed registry labels and points to this preview.
+An unreachable or name-only tracker (Jira, It's a Plan) skips the definition check with a reason; missing names on these report-only trackers do not warn. The file backend has no label check.
+
 ## Jira
 
 `issues.source: jira` keeps the issues in one Jira project and the code on your forge (GitHub or GitLab). rota talks to the Jira REST API directly, so it needs no CLI: Cloud through REST v3, Data Center through REST v2.

@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -75,7 +76,7 @@ func (e Env) StaleClaims(ctx context.Context, root string, be Board, keys []trac
 func (e Env) hasClaimSignal(it backlog.Item) bool {
 	label := e.Label
 	if label == "" {
-		label = "in-progress"
+		label = labels.InProgress
 	}
 	return slices.Contains(it.Labels, label) || backlog.HasClaimLabel(it.Labels)
 }

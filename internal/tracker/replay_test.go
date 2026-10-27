@@ -20,8 +20,7 @@ import (
 // adapter returned. They are frozen; the recorder is gone, so a fixture changes
 // only by reviewed hand edit. Replaying them proves the Go adapters make
 // the same calls, in the same order, and return the same values, apart from
-// two deliberate fixes the review of #90 asked for (see divergeArgv and
-// divergeResult).
+// deliberate fixes and metadata additions (see divergeArgv and divergeResult).
 
 type recCall struct {
 	Name   string   `json:"name"`
@@ -253,6 +252,11 @@ var pyNotFound = regexp.MustCompile(`(?i)not found|could not resolve|404`)
 // glab merges with auto-merge off, so a pipeline can't turn the merge into a
 // scheduled one that merges nothing.
 func divergeArgv(provider, op string, argv []string) []string {
+	if provider == "github" && op == "ensure_labels" && reflect.DeepEqual(argv, []string{"label", "create", "p1", "--force"}) {
+		// Registry labels now carry metadata at first use (#2136); the
+		// retired Python recording predates the registry.
+		return append(append([]string(nil), argv...), "--description", "Bug priority; lower numbers are more urgent.", "--color", "d93f0b")
+	}
 	if provider == "github" && (op == "open_prs" || op == "prs_closing") {
 		// Stale-claim detection and report routing request activity and head ownership metadata.
 		out := append([]string(nil), argv...)

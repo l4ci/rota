@@ -118,28 +118,30 @@ func isBlockedByOperand(e ast.Expr) bool {
 	return false
 }
 
-// TestNoBareBlockedByLiteral fails on a string literal in blockedBy position
+// bareBlockedByLiterals finds string literals in blockedBy position
 // outside this package: a data key written as "blockedBy", a BlockedBy / By
 // field, the first argument of a blocked/refuse constructor, the by argument of
 // refuseHarvest/blockedRefusal/blocked, the by argument of milestoneFail, a map
 // literal keyed "blockedBy", or a comparison or switch case against a blockedBy
 // value. It also fails on a Block* const declared outside this package.
-func TestNoBareBlockedByLiteral(t *testing.T) {
-	root := "../"
+func bareBlockedByLiterals(root string) ([]string, error) {
 	var found []string
 	fset := token.NewFileSet()
 	err := filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
 			return err
 		}
-		if strings.HasPrefix(filepath.ToSlash(p), "../blockedby/") {
+		rel, _ := filepath.Rel(root, p)
+		rel = filepath.ToSlash(rel)
+		// The labels registry owns tracker label strings, including "blocked", not blockedBy reasons.
+		if strings.HasPrefix(rel, "blockedby/") || strings.HasPrefix(rel, "labels/") {
 			return nil
 		}
 		f, err := parser.ParseFile(fset, p, nil, 0)
 		if err != nil {
 			return err
 		}
-		inCLI := strings.HasPrefix(filepath.ToSlash(p), "../cli/")
+		inCLI := strings.HasPrefix(rel, "cli/")
 		lit := func(e ast.Expr) bool {
 			b, ok := e.(*ast.BasicLit)
 			return ok && b.Kind == token.STRING
@@ -230,11 +232,48 @@ func TestNoBareBlockedByLiteral(t *testing.T) {
 		})
 		return nil
 	})
+	sort.Strings(found)
+	return found, err
+}
+
+func TestNoBareBlockedByLiteral(t *testing.T) {
+	found, err := bareBlockedByLiterals("../")
 	if err != nil {
 		t.Fatal(err)
 	}
-	sort.Strings(found)
 	for _, pos := range found {
 		t.Errorf("bare blockedBy string literal at %s: declare it in internal/blockedby", pos)
+	}
+}
+
+func TestBlockedByGuardOwnerBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		name, path, code string
+		wantHit          bool
+	}{
+		{"label owner", "labels/registry.go", `const Blocked = "blocked"`, false},
+		{"blockedBy owner", "blockedby/reason.go", `const Blocked = "blocked"`, false},
+		{"other constant", "other/reason.go", `const Blocked = "blocked"`, true},
+		{"bare refusal", "other/refuse.go", `func f() { blocked("bare-reason") }`, true},
+		{"sibling name", "labels_extra/reason.go", `const Blocked = "blocked"`, true},
+		{"bare field", "cli/field.go", `var data = map[string]string{"blockedBy":"bare-reason"}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, tc.path)
+			if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte("package fixture\n"+tc.code+"\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			hits, err := bareBlockedByLiterals(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (len(hits) > 0) != tc.wantHit {
+				t.Fatalf("guard hits=%v, wantHit=%v", hits, tc.wantHit)
+			}
+		})
 	}
 }

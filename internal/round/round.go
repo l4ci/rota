@@ -26,6 +26,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -70,7 +71,7 @@ const (
 
 // NeedsInfoLabel is the label `/rota-capture --triage` puts on an issue it
 // found too unclear to build. A constant: triage writes it literally.
-const NeedsInfoLabel = "needs-info"
+const NeedsInfoLabel = labels.NeedsInfo
 
 // Forge is the part of the tracker adapter a round reads and, for the
 // label repair, writes. tracker.Adapter satisfies it.

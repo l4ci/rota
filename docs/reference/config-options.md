@@ -267,6 +267,7 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 | `issues.jira.project` | project (tracked) | string | unset |  | Jira project key, such as ROTA, that issues.connection reads from and writes to. |
 | `issues.linear.team` | project (tracked) | string | unset |  | Linear team key, such as ROT, that issues.connection reads from and writes to. |
 | `issues.itsaplan.project` | project (tracked) | string | unset |  | It's a Plan project key, such as MKT, that issues.connection reads from and writes to. |
+| `issues.labels.extra` | project (tracked) | object | `{}` |  | Project tracker labels as name to description. Label sync treats these as known; registry labels retain their own metadata. |
 
 ### release
 

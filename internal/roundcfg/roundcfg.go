@@ -10,6 +10,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/labels"
 )
 
 // Scope values of round.scope: which issues a round may take.
@@ -636,7 +637,7 @@ func LegacySupportLabel(cfg any) string {
 			return label
 		}
 	}
-	return "site:support"
+	return labels.LegacySupport
 }
 
 // MachineRole is round.role read alone, so a bad value in another round.* key cannot
@@ -694,7 +695,7 @@ func (s *Settings) supportRoster() error {
 }
 
 // MachinePrefix is the fixed prefix of labels pinning issues to a machine.
-const MachinePrefix = "machine:"
+const MachinePrefix = labels.MachinePrefix
 
 // MachineLabel is the pin for name, or empty when support is disabled.
 func MachineLabel(name string) string {

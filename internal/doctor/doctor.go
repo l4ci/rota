@@ -86,6 +86,8 @@ type StaleClaim struct {
 
 // Input is everything Run needs from the outside.
 type Input struct {
+	// Labels is the bounded remote label scan; nil outside an issue backend.
+	Labels *LabelState
 	// StaleClaims are remote claims past their activity threshold; empty adds no rows.
 	StaleClaims []StaleClaim
 	// StaleClaimWarnings explain why the remote scan could not finish.
@@ -310,6 +312,9 @@ func Run(ctx context.Context, in Input) Report {
 	}
 	if len(in.GitignoreMissing) > 0 {
 		checks = append(checks, Check{Name: "gitignore", Status: Warn, Detail: "missing from .gitignore: " + strings.Join(in.GitignoreMissing, ", "), Hint: "run: rota init"})
+	}
+	if in.Labels != nil {
+		checks = append(checks, labelCheck(*in.Labels))
 	}
 	for _, claim := range in.StaleClaims {
 		checks = append(checks, Check{Name: "stale claims", Status: Warn, Detail: fmt.Sprintf("claim %s on %s has had no push or PR activity since %s", claim.Holder, tracker.RefOf(claim.Issue), claim.Last.UTC().Format(time.RFC3339)), Hint: fmt.Sprintf("ask the maintainer before reclaiming with rota round assign %s --reclaim-stale %s", claim.Issue, claim.Holder)})

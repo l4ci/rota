@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/itembody"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/roundcfg"
 	secpkg "github.com/l4ci/rota/internal/section"
@@ -1438,7 +1439,7 @@ func harnessStep(ctx context.Context, e Env, be Board, it *backlog.Item, fb *Fal
 			return err
 		}}
 	}
-	label := "harness:" + fb.To
+	label := labels.HarnessPrefix + fb.To
 	return step{name: "harness label", do: func() error {
 		return wrap(e.Forge.AddLabels(ctx, it.IssueKey(), []string{label}, true))
 	}, undo: func() error {

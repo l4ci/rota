@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/jsonx"
 )
@@ -355,7 +356,8 @@ func TestSettingsFromConfig(t *testing.T) {
 		{parse(`{"backlog":{"backend":"issues"},"issues":{"provider":"gitlab"}}`),
 			Settings{Provider: "gitlab", Source: "gitlab", RetryWait: 60 * time.Second, NotPlannedLabel: "not-planned"}},
 	} {
-		if got := SettingsFromConfig(c.cfg); got != c.want {
+		c.want.Labels, _ = config.ResolvedLabels(c.cfg)
+		if got := SettingsFromConfig(c.cfg); !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%v: %+v, want %+v", c.cfg, got, c.want)
 		}
 	}
@@ -379,7 +381,7 @@ func TestReadSettingsRefusesInvalidKeys(t *testing.T) {
 		}
 	}
 	cfg, _ := jsonx.Decode([]byte(`{"issues":{"source":"jira"}}`))
-	if s, err := ReadSettings(cfg); err != nil || s != SettingsFromConfig(cfg) {
+	if s, err := ReadSettings(cfg); err != nil || !reflect.DeepEqual(s, SettingsFromConfig(cfg)) {
 		t.Errorf("valid config: %+v, %v", s, err)
 	}
 }

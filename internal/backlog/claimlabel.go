@@ -5,10 +5,11 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/roundcfg"
 )
 
-const claimLabelPrefix = "claimed:"
+const claimLabelPrefix = labels.ClaimPrefix
 
 // IsClaimLabel reports whether label is a visible, derived claim marker.
 // It recognizes the prefix only; it does not validate the agent or machine.
