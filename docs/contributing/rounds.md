@@ -14,7 +14,12 @@ tree through `bash test/gate.sh`: validate-skills, the doc lints (`bash test/doc
 `.worktrees/` decoy check, that every `rota` verb the docs name exists, and the contract-doc stamps below), the grep gate (`bash test/grep-gate.sh`), the gofmt check (`bash test/gofmt.sh`, the same `gofmt -l` CI runs), `go vet ./...`, `go test -race -timeout 30m ./...`
 and the smoke suite in shards (`ROTA_SMOKE_SHARDS`, default one per two cores, 1 to 4), all at once. The sharded gate takes about 2–3 minutes;
 running the smoke suite in series is several times slower. It takes a machine-wide lock, so two gates never overlap, and
-keeps one log per check. Every check makes its temp files under one gate-owned root, and the gate fails if
+keeps one log per check. After all initial checks finish, a failed Go package or smoke shard
+runs once more, alone, on the same tree. Go retries bypass the test cache; smoke retries use
+the original shard's section list. A passing retry prints `FLAKY` and feeds the verifier's
+flake ledger; a second failure keeps the gate red. Validation, gofmt, vet, doclint and
+grep-gate failures are never retried by this wrapper. Initial and retry logs stay separate.
+Every check makes its temp files under one gate-owned root, and the gate fails if
 any entry is left in it afterwards, so a run that leaks shows up as a red gate, not as a full `/tmp`.
 The gate builds with `-trimpath` (it adds it to `GOFLAGS`), so each fresh scratch worktree reuses the Go build cache instead of adding a copy per path (#709).
 Workers do not run it. The same goes for `test.e2e`: the gate and the merge train run it on the merged tree after `test.full`, and round PRs skip per-branch ship-time QA. Here `test.e2e` is the scripted stub-worker scenarios; see [E2E scenarios](e2e-scenarios.md).

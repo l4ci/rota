@@ -95,7 +95,7 @@ for f in "$@"; do
     internal/host/*|internal/worker/dispatch.go) add_section 51_herdr_dispatch.sh ;;
   esac
   case "$f" in
-    test/lib/*|test/fakes/*|test/e2e/*|test/runner.sh|test/lib.sh) infra=1 ;;
+    test/lib/*|test/fakes/*|test/e2e/*|test/runner.sh|test/lib.sh|test/gate.sh|test/gate-*.py|test/gate_retry_test.py) infra=1 ;;
   esac
   case "$f" in
     skills/*|docs/*|*.md|test/validate-skills.py|test/doclint.sh) docs=1 ;;
@@ -169,7 +169,7 @@ fi
 
 if [ "$infra" = 1 ]; then
   echo "fast: infra (bash -n, py_compile, runner_leak_test)"
-  for f in test/runner.sh test/lib.sh test/lib/* test/fakes/* test/e2e/*.sh test/e2e/scenarios/*.sh; do
+  for f in test/runner.sh test/lib.sh test/gate.sh test/gate-*.py test/gate_retry_test.py test/lib/* test/fakes/* test/e2e/*.sh test/e2e/scenarios/*.sh; do
     [ -f "$f" ] || continue
     case "$f" in
       *.py) python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' "$f" ;;
@@ -178,6 +178,7 @@ if [ "$infra" = 1 ]; then
     esac
   done
   python3 test/runner_leak_test.py
+  python3 test/gate_retry_test.py
 fi
 
 if [ "${#sections[@]}" -gt 0 ]; then

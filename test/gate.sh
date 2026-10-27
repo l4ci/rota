@@ -131,6 +131,17 @@ print(n)
 PY
 }
 
+# A recovery is valid only at the original clean checkout, matching the
+# verifier's same-tree policy. Never excuse a check that repaired its inputs.
+RETRY_HEAD="$(git -C "$REPO" rev-parse HEAD 2>/dev/null)"
+RETRY_CLEAN=0
+[ -n "$RETRY_HEAD" ] && [ -z "$(git -C "$REPO" status --porcelain)" ] && RETRY_CLEAN=1
+retry_tree_unchanged() {
+  [ "$RETRY_CLEAN" = 1 ] &&
+    [ "$(git -C "$REPO" rev-parse HEAD 2>/dev/null)" = "$RETRY_HEAD" ] &&
+    [ -z "$(git -C "$REPO" status --porcelain)" ]
+}
+
 START=$SECONDS
 if [ "$SMOKE_ONLY" = 0 ]; then
   launch validate python3 test/validate-skills.py
@@ -138,7 +149,7 @@ if [ "$SMOKE_ONLY" = 0 ]; then
   launch grepgate bash test/grep-gate.sh
   launch gofmt bash test/gofmt.sh
   launch vet go vet ./...
-  launch gotest go test -race -timeout 30m -p "$SHARDS" ./...
+  launch gotest go test -json -race -timeout 30m -p "$SHARDS" ./...
 fi
 N="$(partition)" || { echo "gate: partition failed" >&2; exit 2; }
 for i in $(seq 1 "$N"); do
@@ -146,12 +157,62 @@ for i in $(seq 1 "$N"); do
 done
 echo "gate: ${#NAMES[@]} checks running ($N smoke shards); logs in $LOGS"
 
+# Reap every initial check before retrying anything: a retry runs alone.
+RCS=()
+for idx in "${!PIDS[@]}"; do
+  rc=0; wait "${PIDS[$idx]}" || rc=$?
+  RCS+=("$rc")
+done
 fail=0
+flaky=0
 for idx in "${!PIDS[@]}"; do
   name="${NAMES[$idx]}"
-  rc=0; wait "${PIDS[$idx]}" || rc=$?
+  rc="${RCS[$idx]}"
+  if [ "$name" = gotest ] && [ "$rc" = 1 ] && retry_tree_unchanged &&
+     python3 "$REPO/test/gate-go.py" failed "$LOGS/gotest.log" >"$LOGS/go-failed.list"; then
+    go_failed=0
+    pkg_idx=0
+    module="$(awk '$1 == "module" {print $2}' "$REPO/go.mod")"
+    while IFS= read -r pkg; do
+      pkg_idx=$((pkg_idx + 1))
+      retry_log="$LOGS/go-retry$pkg_idx.log"
+      if ! retry_tree_unchanged; then
+        go_failed=1
+        break
+      fi
+      retry_rc=0
+      (cd "$REPO" && go test -race -timeout 30m -count=1 "$pkg") >"$retry_log" 2>&1 || retry_rc=$?
+      check="go:${pkg#"$module"/}"
+      if [ "$retry_rc" = 0 ] && retry_tree_unchanged; then
+        echo "FLAKY $check (failed once, passed isolated retry)"
+        flaky=1
+      else
+        echo "FAIL $check isolated retry (exit $retry_rc)"
+        tail -n 25 "$retry_log" | sed 's/^/     /'
+        go_failed=1
+      fi
+    done <"$LOGS/go-failed.list"
+    [ "$go_failed" = 0 ] && continue
+  fi
+  case "$name" in smoke-*)
+    if [ "$rc" = 0 ] && ! grep -q 'All smoke tests passed.' "$LOGS/$name.log"; then rc=1; fi
+    if [ "$rc" = 1 ] && retry_tree_unchanged; then
+      retry_rc=0
+      shard="${name#smoke-shard}"
+      (cd "$REPO" && env ROTA_SMOKE_DIAGNOSTICS="$SMOKE_DIAGNOSTICS" \
+        SECTION_LIST="$(cat "$LOGS/shard$shard.list")" bash test/runner.sh) \
+        >"$LOGS/$name.retry.log" 2>&1 || retry_rc=$?
+      if [ "$retry_rc" = 0 ] && retry_tree_unchanged && grep -q 'All smoke tests passed.' "$LOGS/$name.retry.log"; then
+        echo "FLAKY $name (failed once, passed isolated retry)"
+        flaky=1
+        continue
+      fi
+      echo "FAIL $name isolated retry (exit $retry_rc)"
+      tail -n 25 "$LOGS/$name.retry.log" | sed 's/^/     /'
+    fi
+    ;;
+  esac
   if [ "$rc" = 0 ]; then
-    case "$name" in smoke-*) grep -q 'All smoke tests passed.' "$LOGS/$name.log" || { echo "FAIL $name (no pass line)"; fail=1; continue; } ;; esac
     echo "ok   $name"
   else
     echo "FAIL $name (exit $rc)"; tail -n 25 "$LOGS/$name.log" | sed 's/^/     /'
@@ -171,7 +232,7 @@ if [ -n "$(ls -A "$GATE_TMP" 2>/dev/null)" ]; then
 fi
 worktree_guard_check "$WORKTREES_BEFORE" "$REPO" || { echo "FAIL worktree guard"; fail=1; }
 if [ "$fail" = 0 ]; then
-  [ -n "${ROTA_GATE_LOGS:-}" ] || rm -rf "$LOGS"
+  [ -n "${ROTA_GATE_LOGS:-}" ] || [ "$flaky" = 1 ] || rm -rf "$LOGS"
   echo "All smoke tests passed."
   exit 0
 fi
