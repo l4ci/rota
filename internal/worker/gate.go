@@ -7,6 +7,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/flakeledger"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/land"
@@ -233,6 +234,7 @@ type GateResult struct {
 	SHA           string
 	PR            string
 	Verified      []string
+	Flaky         []flakeledger.Entry
 	VerifySkipped bool
 	Changed       bool
 	// AlreadyMerged says the forge reported the PR merged before this gate ran:
@@ -1404,7 +1406,15 @@ func (g *gate) verifyLocal(dir, _ string) (bool, error) {
 // clears VerifySkipped. done is true when it ends the gate with a verdict.
 func (g *gate) verifyTiers(first, dir string, landed bool) (bool, error) {
 	w := g.tierWalk(func(_ string, cmds []string) (VerifyResult, error) {
-		return runVerifyCmds(g.ctx, g.e.Shell, cmds, dir, g.in.ledger, g.e.Now())
+		vr, err := g.e.runGateVerify(g.ctx, cmds, dir, g.in.ledger)
+		if err == nil {
+			prs := []string{}
+			if g.res.PR != "" {
+				prs = append(prs, g.res.PR)
+			}
+			err = g.e.recordFlakes(g.root, g.o.Round, prs, vr)
+		}
+		return vr, err
 	}, g.redTier(landed))
 	ended, err := w.walk(g.in.cfg, first)
 	if w.fullEmpty {
@@ -1432,7 +1442,7 @@ func (g *gate) tierWalk(run func(string, []string) (VerifyResult, error), red fu
 			return true
 		},
 		red:   red,
-		notes: &res.Notes, verified: &res.Verified, excluded: &res.Excluded,
+		notes: &res.Notes, verified: &res.Verified, excluded: &res.Excluded, flaky: &res.Flaky,
 	}
 }
 
