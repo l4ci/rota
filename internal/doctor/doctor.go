@@ -447,6 +447,27 @@ func (d *runner) host() Check {
 			return fail("host", fmt.Sprintf("herdr %s, need %s", v, want), "install herdr "+want+" (https://herdr.dev)")
 		}
 		return pass("host", "herdr "+v)
+	case host.Orca:
+		h := host.New(host.Orca, host.Deps{
+			LookPath: func(name string) (string, error) {
+				bin, ok := d.in.Look(name)
+				if !ok {
+					return "", exec.ErrNotFound
+				}
+				return bin, nil
+			},
+			Run: func(ctx context.Context, name string, args []string) (host.Result, error) {
+				bin, ok := d.in.Look(name)
+				if !ok {
+					return host.Result{}, exec.ErrNotFound
+				}
+				return d.in.Exec(ctx, bin, args, nil, d.in.Dir)
+			},
+		})
+		if err := h.Require(); err != nil {
+			return fail("host", err.Error(), "put orca on PATH and open the Orca app")
+		}
+		return pass("host", "orca on PATH; app running")
 	case host.Tmux:
 		if _, ok := d.in.Look(host.Tmux.Binary()); !ok {
 			return fail("host", "tmux not found on PATH", "install tmux")

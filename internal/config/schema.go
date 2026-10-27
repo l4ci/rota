@@ -248,6 +248,7 @@ var Prompts = []Prompt{
 		"subagent": "in-process subagents (rounds detect herdr or tmux)",
 		"tmux":     "separate Claude Code sessions in tmux",
 		"herdr":    "separate Claude Code sessions in herdr",
+		"orca":     "worker terminals in a running Orca app (explicit only)",
 	}},
 	{Key: "autonomy.level", Title: "How much may rota chain on its own?", Help: map[string]string{
 		"off":       "skills only suggest the next step",

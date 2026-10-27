@@ -230,3 +230,30 @@ func TestDefaultReapEnvBuildsNoForge(t *testing.T) {
 		t.Errorf("reap env built %d forge(s), Forge %v", *builds, e.Forge)
 	}
 }
+
+type orcaReapTestHost struct{ cliHost }
+
+func (h *orcaReapTestHost) Kind() host.Kind                 { return host.Orca }
+func (h *orcaReapTestHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }
+func (h *orcaReapTestHost) Snapshot(context.Context) ([]host.Agent, error) {
+	return []host.Agent{}, nil
+}
+func (h *orcaReapTestHost) Tabs(context.Context) ([]host.Tab, error) {
+	return []host.Tab{{ID: "orca-owned"}}, nil
+}
+func (h *orcaReapTestHost) CloseTab(context.Context, string) error { return nil }
+
+func TestOrcaDefaultReapUsesTabCapability(t *testing.T) {
+	root := trackerProject(t, "")
+	gitIn(t, root, "init", "-q")
+	d := testDeps()
+	d.Host = func(host.Kind) host.Host { return &orcaReapTestHost{} }
+	_, ops := defaultReapEnv(context.Background(), root, d)
+	if ops == nil {
+		t.Fatal("Orca tabs unavailable to reap")
+	}
+	tabs, err := ops.Tabs(context.Background())
+	if err != nil || len(tabs) != 1 || tabs[0].ID != "orca-owned" {
+		t.Fatalf("tabs=%+v err=%v", tabs, err)
+	}
+}
