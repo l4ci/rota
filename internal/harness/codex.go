@@ -160,9 +160,10 @@ func (codex) LimitPhrases() []string { return SharedLimitPhrases() }
 
 func (codex) PaneVocab() PaneVocab {
 	return PaneVocab{
-		// The active status includes elapsed time and an interrupt hint.
-		// Requiring that frame keeps prose quoting the label from counting.
-		Waiting: []string{`(?m)^\s*• Waiting for background terminal \([^\n]*esc to inter(?:rupt|…)[^\n]*$`},
+		// The active status starts with elapsed time; Codex truncates the
+		// following interrupt hint to the pane width. Require the duration
+		// frame so prose quoting the label does not count as active work.
+		Waiting: []string{`(?m)^\s*• Waiting for background terminal \(\d+[hms][^\n]*$`},
 	}
 }
 

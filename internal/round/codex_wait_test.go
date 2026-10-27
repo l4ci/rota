@@ -16,6 +16,7 @@ func TestStatusCodexTerminalWait(t *testing.T) {
 		capture                           bool
 	}{
 		{"wait", harness.Codex, "blocked", "terminal-wait", "working", true},
+		{"narrow wait", harness.Codex, "blocked", "terminal-wait-narrow", "working", true},
 		{"sentinel", harness.Codex, "blocked", "blocked", "blocked", true},
 		{"approval", harness.Codex, "blocked", "approval", "blocked", true},
 		{"capture unavailable", harness.Codex, "blocked", "", "blocked", false},
