@@ -16,6 +16,14 @@ printf 'config/features=PackedStringArray("4.8", "Forward Plus")\n' > "$EKPROJ/p
 ( cd "$EKPROJ" && git init -q -b main . ) || fail "project fixture failed"
 ek() { ( cd "$EKPROJ" && "$ROTA_BIN" --json "$@" ); }
 ekn() { ( cd "$EKPROJ" && "$ROTA_BIN" "$@" ); }
+# Sections share the runner's isolated global config. Restore its prior state
+# before removing the clone, so later sections never inherit a dangling path.
+EKGLOBAL="$XDG_CONFIG_HOME/rota/config.json"
+EKHADGLOBAL=0
+if [ -f "$EKGLOBAL" ]; then
+  cp "$EKGLOBAL" "$TMP_EK/global-config.before"
+  EKHADGLOBAL=1
+fi
 RC=0; ek config set knowledge.external "$EKCLONE" --global >/dev/null || RC=$?
 [ "$RC" = "0" ] || fail "config set knowledge.external exited $RC"
 
@@ -181,4 +189,9 @@ RC=0; OUT=$(ekn knowledge stats --external) || RC=$?
 case "$OUT" in *"Big: Beta: "*", 2 hits"*) ;; *) fail "stats text lacks the 2 hits: $OUT" ;; esac
 pass "hit --external counts per machine without touching the clone"
 
+if [ "$EKHADGLOBAL" = 1 ]; then
+  cp "$TMP_EK/global-config.before" "$EKGLOBAL"
+else
+  rm -f "$EKGLOBAL"
+fi
 rm -rf "$TMP_EK"

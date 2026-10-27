@@ -10,8 +10,8 @@ The first `claude` or `codex` entry of `round.harnesses` (`rota config show roun
 
 With `<prev_tag>` from Step 4 (no tag: the whole history, and say so):
 
-1. `git archive HEAD | tar -x -C <scratch>` and `mkdir <scratch>/.review`.
-2. `{ echo "Review token: <hex>"; git log --format='%h %s' <prev_tag>..HEAD; git diff --stat <prev_tag>..HEAD; git diff <prev_tag>..HEAD; } > <scratch>/.review/range.txt`.
+1. Pin `HEAD` with `git rev-parse HEAD`, then run `rota review prepare <pinned-sha> --json`. Require success and `data.head` equal to that SHA; use `data.path` as `<scratch>` (`.review` already exists). A failure means unavailable, never a launch from the live checkout.
+2. `{ echo "Review token: <hex>"; git log --format='%h %s' <prev_tag>..<pinned-sha>; git diff --stat <prev_tag>..<pinned-sha>; git diff <prev_tag>..<pinned-sha>; } > <scratch>/.review/range.txt`.
 3. The Step 5 draft to `<scratch>/.review/notes.md`, and `CHANGELOG.md` is already in the extract.
 
 Run it with [`references/cross-harness-run.md`](references/cross-harness-run.md) (*Run*, *Account*, *Read the output*) from inside the extract, with this brief and the token line at the end:
@@ -34,4 +34,4 @@ bugs: each PR was reviewed on its own.
 
 ## Show
 
-Trim the reply to the four headings and show it under the draft in Step 6 as `## Cross-harness review (<harness> <model>)`. When the run is unavailable, show one line instead: `release review: <harness> unavailable (<reason>)`. Never retry on another harness and never stop the release for it. Delete the extract afterwards.
+Trim the reply to the four headings and show it under the draft in Step 6 as `## Cross-harness review (<harness> <model>)`. When the run is unavailable, show one line instead: `release review: <harness> unavailable (<reason>)`. Never retry on another harness and never stop the release for it. Run `rota review cleanup <scratch>` afterwards, including failure or cancellation; report cleanup failures with the path and never remove another directory.

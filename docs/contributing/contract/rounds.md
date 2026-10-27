@@ -458,6 +458,8 @@ exit: 2 when no ID is given; 3 when the item is unknown; 4 with `blockedBy` `slo
 old: none (new in #1091)
 note: the orchestrator's no-PR completion for an `arch(<area>): architecture review` item the round minted. The slot must be `done`, `idle` or `blocked` with a clean worktree. The issue list is `--issues` when given, else the slot's recorded `issues:`. Through one close path shared with `round assign` and `round transfer` onto a review slot: park, comment `Review done: filed #a, #b.` (`--gist` replaces the note), complete without proof, release the claim, clear `in-progress`, free the slot. An item it already closed answers `changed: false` and writes nothing. A `decision:research` item (a decision milestone's research ticket) closes the same way once its worker posted a `finding` comment after the assignment (`ROTA-DONE <slot> finding:<comment-id>`); `--gist <line>` is then required, comments `Finding accepted: <gist>.` and is the line the milestone's `## Decisions` list gets. A finding comment from before the assignment does not count. Accept is the only close for a research item: nothing closes it on the next assign.
 
+note: no-PR completion preflights the acceptance rule before parking or posting feedback, and before writing a research decision log. The filed issue list or accepted finding is the recorded `--unmet-reason` equivalent: unmarked AC ids and that reason appear in the close comment (file mode: the detail file). A read or parse failure during preflight leaves the branch, slot, comments and decision log untouched. Existing acceptance marks are retained.
+
 ### rota round pick
 rota round pick <ID> --pr <N> --reason-file <path|-> [--holder-pid <n>]
 repo: none

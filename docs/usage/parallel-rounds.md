@@ -764,6 +764,11 @@ milestone's `## Decisions` list. A `decision:grilling` item is never assigned: `
 `round transfer` refuse it (`blockedBy: human decision`), `round candidates` lists it as not ready,
 and the human resolves it with `/rota-brainstorm <ID>`.
 
+For a no-PR item with unmarked AC ids, the filed issue list or accepted finding supplies a
+recorded completion reason. The close comment lists those criteria and the reason. A read
+or parse failure during acceptance preflight leaves the slot, feedback comments and
+research decision log unchanged.
+
 ## Bundles: one worker, several small issues
 
 Small related issues (a few follow-ups in the same two files) each cost a worker boot, a PR,

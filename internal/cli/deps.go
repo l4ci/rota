@@ -48,11 +48,17 @@ type Deps struct {
 	Git  git.Runner
 	Proc proc.Runner
 
+	// ReviewRemoveAll is the filesystem boundary for disposable review cleanup.
+	ReviewRemoveAll func(string) error
+
 	// Getwd and UserHomeDir are the one working-directory and home reads;
 	// Toplevel asks Git from the working directory. A test swaps them to run
 	// in a temp dir with a fake git.
 	Getwd       func() (string, error)
 	UserHomeDir func() (string, error)
+	// TempDirs supplies OS temporary roots to the project registry; nil uses
+	// the platform locations and TMPDIR through Getenv.
+	TempDirs func() []string
 
 	// Config returns the merged project config of root: the one read the worker
 	// and escalation envs, the knowledge store, the gate and the host decision
@@ -146,6 +152,7 @@ func defaultDeps() *Deps {
 	d := &Deps{
 		Git:              git.Exec,
 		Proc:             proc.Run,
+		ReviewRemoveAll:  os.RemoveAll,
 		Getenv:           os.Getenv,
 		Getwd:            os.Getwd,
 		UserHomeDir:      os.UserHomeDir,
@@ -250,7 +257,7 @@ func (d *Deps) Repo(dir string) git.Repo {
 // projectsEnv is the environment the global dir lookups read: Deps.Getenv and
 // Deps.UserHomeDir, so nothing under internal/projects reads the process.
 func (d *Deps) projectsEnv() projects.Env {
-	return projects.Env{Getenv: d.Getenv, Home: d.UserHomeDir}
+	return projects.Env{Getenv: d.Getenv, Home: d.UserHomeDir, TempDirs: d.TempDirs}
 }
 
 // resolveHost is worker.ResolveHost over Deps' own getenv and lookPath, so the

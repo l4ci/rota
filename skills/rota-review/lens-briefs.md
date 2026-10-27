@@ -25,7 +25,7 @@ The shared block from `reviewer-briefs.md`, plus:
 Report findings with file:line, ranked by severity. Anything that needs a running product goes in `Declined to judge`, never in a finding or a PASS.
 ```
 
-End it with the calibration rules and verdict block from `reviewer-briefs.md`, unchanged. `items` may be omitted. The reviewer follows the read-only rules of the shared block (git archive extract, scratch `HOME`, named tests only).
+End it with the calibration rules and verdict block from `reviewer-briefs.md`, unchanged. `items` may be omitted. The reviewer follows the read-only rules of the shared block (prepared workspace, semantic read-only access, named tests only).
 
 ## Rubrics
 
