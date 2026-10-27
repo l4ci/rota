@@ -203,7 +203,11 @@ func (g *gate) vacuousRun(before, after string) (bool, error) {
 	if r.verdict == "" {
 		return false, nil
 	}
-	g.verdict(r.verdict, r.detail+"; nothing landed", "fix the selected tests, then re-gate")
+	hint := "fix the selected tests, then re-gate"
+	if r.verdict == GateVacuousTests {
+		hint = "add an assertion that fails with non-test changes reverted, then re-gate; for refactors or tests-only work, disable test.vacuousCheck in the base configuration or use --no-verify"
+	}
+	g.verdict(r.verdict, r.detail+"; nothing landed", hint)
 	return true, nil
 }
 
@@ -231,6 +235,9 @@ func (t *trainRun) vacuousStage() (bool, error) {
 		t.res.Culprit = t.res.Members[i].Target
 		t.res.Verdict, t.res.Err = r.verdict, r.detail+"; nothing landed"
 		t.res.Hint = "fix the selected tests, then re-run the train"
+		if r.verdict == GateVacuousTests {
+			t.res.Hint = "add an assertion that fails with non-test changes reverted, then re-run the train; for refactors or tests-only work, disable test.vacuousCheck in the base configuration or use --no-verify"
+		}
 		// Unlike tier bisection this check has not verified the earlier prefix on
 		// its own. Refuse the whole train, including under --land-green.
 		return true, nil

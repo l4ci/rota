@@ -19,6 +19,15 @@ func decisionInvalid(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrDecisionInvalid, fmt.Sprintf(format, args...))
 }
 
+// Keep the original refusal and exit code, but give malformed stored entries a
+// recovery path when a writer cannot make the complete file valid.
+func decisionRepairError(content string, err error) error {
+	if report := CheckDecisions(content); len(report.Errors) > 0 {
+		return fmt.Errorf("%w; stored DECISIONS.md: %s; manually repair the reported entries in .rota/DECISIONS.md, then run rota decisions check and rota block decisions", err, strings.Join(report.Errors, "; "))
+	}
+	return err
+}
+
 func decisionBody(title, body, date string) (string, error) {
 	if !decisionName(title) {
 		return "", decisionInvalid("title must be one nonempty line")
@@ -108,10 +117,10 @@ func (s Store) changeDecisions(change func(string) (string, error)) (bool, error
 		}
 		next, err := change(string(raw))
 		if err != nil {
-			return err
+			return decisionRepairError(string(raw), err)
 		}
 		if report := CheckDecisions(next); len(report.Errors) > 0 {
-			return decisionInvalid("resulting DECISIONS.md: %s", strings.Join(report.Errors, "; "))
+			return decisionRepairError(string(raw), decisionInvalid("resulting DECISIONS.md: %s", strings.Join(report.Errors, "; ")))
 		}
 		changed = next != string(raw)
 		if changed {
