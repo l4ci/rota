@@ -172,9 +172,8 @@ type Result struct {
 	// BatchFull is true when round.batch items are open: the tick assigned
 	// nothing more, and minted no review.
 	BatchFull bool
-	// Deferred is set when a gate or train held the land lock, so the assign
-	// was refused for now: the tick stopped, and the next one tries again. It
-	// names the holder where the refusal did.
+	// Deferred says why a merge or assign yielded to running or queued landing
+	// work. The next tick retries; the reason names the holder when known.
 	Deferred string
 	NeedsYou []Item
 	New      []Item
@@ -388,6 +387,8 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 	for _, m := range e.mergeAll(ctx, run) {
 		switch {
 		case m.Skip:
+		case m.Verdict == worker.GateRunning:
+			r.Deferred = "gate running, deferred: " + m.Detail
 		case m.Landed:
 			e.audit(r, Action{"merge", m.Target, m.Detail})
 		case m.Verdict == "":

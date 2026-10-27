@@ -534,6 +534,11 @@ Runs only under `autonomy.level: auto`; under `off` or `roundtrip` both verbs ex
    at `round.batch` open items: the tick assigns nothing and says `batch-full`; gating and merging
    go on, and the next tick assigns once an item has landed.
 
+If a manual gate or train is running or waiting for the land lock, the tick
+defers its merges until that work finishes. It reports `deferred`, keeps the
+train nudge visible when reviewed PRs wait, and retries on the next tick.
+This is a wait, so it creates no gate failure, bounce or hold.
+
 It never answers a worker, approves a permission, picks a higher tier, reclaims a slot or merges
 without a passing gate. A blocked, limited or dead slot, a failed gate, drift it will not repair and
 any merge a policy sends to a person come back in `needsYou`. The watch wakes you only for an item you
