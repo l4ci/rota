@@ -100,8 +100,17 @@ func (s *Slot) Tier() string       { return jsonx.Str(s.o, "tier") }
 func (s *Slot) Model() string      { return jsonx.Str(s.o, "model") }
 func (s *Slot) TierReason() string { return jsonx.Str(s.o, "tierReason") }
 
-// BriefDecisions and BriefSiblings preserve context supplied only at assignment.
-func (s *Slot) BriefDecisions() string  { return jsonx.Str(s.o, "briefDecisions") }
+// BriefSettledAnswers preserves answers supplied only at assignment. Slots
+// written before the rename keep their answers until their next context update.
+func (s *Slot) BriefSettledAnswers() string {
+	if v, ok := s.o.Get("briefSettledAnswers"); ok {
+		text, _ := v.(string)
+		return text
+	}
+	return jsonx.Str(s.o, "briefDecisions")
+}
+
+// BriefSiblings preserves the siblings supplied only at assignment.
 func (s *Slot) BriefSiblings() []string { return strList(s.o, "briefSiblings") }
 
 // BriefDecisionContext is the decision text captured for this assignment.
@@ -116,11 +125,12 @@ func (s *Slot) SetBriefDecisionContext(text string) {
 	}
 }
 
-func (s *Slot) SetBriefContext(decisions string, siblings []string) {
-	if decisions == "" {
-		s.o.Delete("briefDecisions")
+func (s *Slot) SetBriefContext(settledAnswers string, siblings []string) {
+	s.o.Delete("briefDecisions")
+	if settledAnswers == "" {
+		s.o.Delete("briefSettledAnswers")
 	} else {
-		s.o.Set("briefDecisions", decisions)
+		s.o.Set("briefSettledAnswers", settledAnswers)
 	}
 	setStrList(s.o, "briefSiblings", siblings)
 }
