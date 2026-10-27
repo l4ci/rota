@@ -44,12 +44,15 @@ func slotOutcomeList(slots []round.SlotOutcome) []any {
 // `rota round summary` prints. ok is false when there is no ledger or nothing
 // for that round, so wind-down adds nothing.
 func windDownSummary(root string, rnd int) (obj *jsonx.Object, text string, ok bool) {
-	entries, err := ledger.Load(root)
-	if err != nil || len(entries) == 0 {
+	entries, err := ledger.LoadForSummary(root)
+	if len(entries) == 0 {
 		return nil, "", false
 	}
 	audit, _ := gate.ReadAudit(root)
 	s := ledger.Fold(entries, audit, rnd)
+	if err != nil {
+		s.UnavailableMetrics(err.Error())
+	}
 	if len(s.Issues) == 0 {
 		return nil, "", false
 	}

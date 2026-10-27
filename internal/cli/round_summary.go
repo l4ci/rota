@@ -21,13 +21,7 @@ func roundSummaryVerb(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		entries, err := ledger.Load(root)
-		if err != nil {
-			return Result{}, err
-		}
-		if len(entries) == 0 {
-			return Result{Data: ledger.Fold(nil, nil, 0).Object(), Text: "no ledger yet: it fills as rounds assign, report and gate"}, nil
-		}
+		entries, sourceErr := ledger.LoadForSummary(root)
 		n := *want
 		if n < 0 {
 			n = currentRound(c, root, entries)
@@ -36,7 +30,7 @@ func roundSummaryVerb(fs *flag.FlagSet) RunFunc {
 		for _, e := range entries {
 			known = known || e.Round == n
 		}
-		if !known && *want >= 0 {
+		if !known && *want >= 0 && len(entries) > 0 && sourceErr == nil {
 			return Result{}, Resolution("round %d has no ledger entries", n)
 		}
 		audit, err := gate.ReadAudit(root)
@@ -44,6 +38,13 @@ func roundSummaryVerb(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		s := ledger.Fold(entries, audit, n)
-		return Result{Data: s.Object(), Text: s.Text()}, nil
+		if sourceErr != nil {
+			s.UnavailableMetrics(sourceErr.Error())
+		}
+		text := s.Text()
+		if len(entries) == 0 && (sourceErr == nil || !ledger.Exists(root)) {
+			text = "no ledger yet: it fills as rounds assign, report and gate\n" + text
+		}
+		return Result{Data: s.Object(), Text: text}, nil
 	}
 }
