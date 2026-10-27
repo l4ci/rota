@@ -229,11 +229,41 @@ rc=0; OUT="$(dyj worker gate ben --base main --escalate)" || rc=$?
 [ "$(jget data.verdict <<<"$OUT")" = "approval-required" ] || fail "dry round: verdict approval-required: $OUT"
 [ "$(jget data.escalation.id <<<"$OUT")" = "e1" ] || fail "dry round: the refusal should carry escalation e1: $OUT"
 [ "$(jget data.changed <<<"$OUT")" = "false" ] || fail "dry round: a refused gate changes nothing: $OUT"
-COMMENTS="$(dy gh api --paginate "repos/o/r/issues/$PRN/comments")"
+COMMENTS="$(dy gh api --paginate "repos/o/r/issues/$PRN/comments")" || fail "dry round: could not read approval comments"
 grep -q 'Merge approval' <<<"$COMMENTS" || fail "dry round: the approval request should be on the PR thread: $COMMENTS"
-# Re-gating posts nothing new.
-dyj worker gate ben --base main --escalate >/dev/null || true
-[ "$(python3 -c 'import json,sys; print(len(json.load(sys.stdin)))' <<<"$(dy gh api --paginate "repos/o/r/issues/$PRN/comments")")" = "1" ] || fail "dry round: a re-gate must reuse the pending request"
+# Re-gating reuses the request and refreshes the owned gate report in place.
+printf '%s\n' "$COMMENTS" > "$TMP_DY/gate-comments-before.json"
+GATE_REPORT_ID="$(python3 - "$TMP_DY/gate-comments-before.json" <<'PYREPORT'
+import json, sys
+comments = json.load(open(sys.argv[1]))
+requests = [c for c in comments if "Merge approval" in c["body"] and "<!-- rota:escalation " in c["body"]]
+reports = [c for c in comments if c["body"].startswith("<!-- rota:report gate sha=")]
+assert len(requests) == 1 and "<!-- rota:escalation e1 -->" in requests[0]["body"], comments
+assert len(reports) == 1 and "Outcome: **approval-required**" in reports[0]["body"], comments
+print(reports[0]["id"])
+PYREPORT
+)" || fail "dry round: expected one approval request and one gate report"
+STALE_GATE_REPORT="$(python3 -c 'import json,sys; print(next(c["body"].splitlines()[0] for c in json.load(open(sys.argv[1])) if c["body"].startswith("<!-- rota:report gate sha=")) + "\nstale gate report")' "$TMP_DY/gate-comments-before.json")" || fail "dry round: could not prepare a stale report"
+dy gh api -X PATCH "repos/o/r/issues/comments/$GATE_REPORT_ID" -f body="$STALE_GATE_REPORT" >/dev/null || fail "dry round: could not seed the stale gate report"
+rc=0; OUT="$(dyj worker gate ben --base main --escalate)" || rc=$?
+[ "$rc" = "4" ] && [ "$(jget data.verdict <<<"$OUT")" = "approval-required" ] && [ "$(jget data.escalation.id <<<"$OUT")" = "e1" ] \
+  || fail "dry round: re-gating must reuse escalation e1: rc=$rc $OUT"
+COMMENTS="$(dy gh api --paginate "repos/o/r/issues/$PRN/comments")" || fail "dry round: could not read re-gated comments"
+printf '%s\n' "$COMMENTS" > "$TMP_DY/gate-comments-after.json"
+python3 - "$TMP_DY/gate-comments-before.json" "$TMP_DY/gate-comments-after.json" <<'PYREPORT' || fail "dry round: a re-gate must reuse the request and update the gate report in place"
+import json, sys
+before, after = [json.load(open(path)) for path in sys.argv[1:]]
+requests = lambda rows: [c for c in rows if "Merge approval" in c["body"] and "<!-- rota:escalation " in c["body"]]
+reports = lambda rows: [c for c in rows if c["body"].startswith("<!-- rota:report gate sha=")]
+assert len(after) == len(before), (before, after)
+assert {c["id"] for c in after} == {c["id"] for c in before}, (before, after)
+assert len(requests(after)) == 1 and requests(after) == requests(before), after
+assert len(reports(after)) == 1, after
+old, new = reports(before)[0], reports(after)[0]
+assert new["id"] == old["id"] and new["body"].splitlines()[0] == old["body"].splitlines()[0], (old, new)
+assert "Outcome: **approval-required**" in new["body"] and "stale gate report" not in new["body"], new
+print(f"re-gate comments unchanged: total={len(after)}, requests=1, gate reports=1")
+PYREPORT
 # Not answered yet: held, pending.
 rc=0; OUT="$(dyj worker gate ben --base main --approval e1)" || rc=$?
 [ "$rc" = "4" ] && [ "$(jget data.blockedBy <<<"$OUT")" = "approval pending" ] || fail "dry round: an unanswered request holds the merge: rc=$rc $OUT"
@@ -251,7 +281,7 @@ line = json.loads(open(sys.argv[1]).read().splitlines()[-1])
 sys.exit(0 if line["gate"] == "merge-approval" and line["note"] == "approve" and line["escalation"] == "e1" else 1)' "$DY/.rota/gate-audit.jsonl" \
   || fail "dry round: the audit line should quote the answer and name e1: $(cat "$DY/.rota/gate-audit.jsonl")"
 [ "$(git -C "$DY" rev-parse HEAD)" = "$(git -C "$ORIGIN" rev-parse main)" ] || fail "dry round: the merged base should match origin/main"
-pass "gate: --escalate exits 4 and posts once, pending then answered, --approval merges and the audit line quotes the answer"
+pass "gate: reuses the approval request, refreshes the report, then merges with the answer in the audit line"
 
 # ── 8. wind-down, then reap ─────────────────────────────────────────────────
 printf '{"id":"cli","result":{"snapshot":{"agents":[]}}}\n' > "$FK/snapshot.json"
