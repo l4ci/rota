@@ -132,6 +132,8 @@ var supportAllowed = []string{
 	"rota debug counter record-attempt", "rota debug reset", "rota debug session put", "rota debug session rm", "rota debug verdict",
 	"rota debug work-fix attempt", "rota debug work-fix pass", "rota debug work-fix reset",
 	"rota repo add", "rota repo rm",
+	// Disposable reviewer workspaces outside the repo.
+	"rota review prepare", "rota review cleanup",
 	// Outside the repo: the global config, machine-wide connections and
 	// project registry, the harness's hooks and skills.
 	"rota config save-global",

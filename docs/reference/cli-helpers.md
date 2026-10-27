@@ -525,6 +525,8 @@ Verdicts are `PASS`, `CONCERNS` or `FAIL` (`qa` also takes `INFRA-FAIL`). They l
 | `rota review brief [<branch>]` | fresh-eyes second-opinion brief for a branch |
 | `rota review scaffolding [<branch>] [--base <branch>]` | added diff lines that look like leftover task scaffolding |
 | `rota review package [<branch>] [--base <ref>] [--since <sha>]` | write a branch's commits, `--stat` and full diff (`-U10`) to `.rota/review/<branch>.md` and print the path (`data.head` is the branch sha it diffed, the sha to pass `verdict add --sha`); `--since` packages only the commits after a sha |
+| `rota review prepare <commit>` | prepare a disposable archive tree at the resolved SHA; returns `data.path` and `data.head`, creates `.review/` for caller inputs, and refuses incomplete setup without a checkout fallback |
+| `rota review cleanup <workspace>` | validate ownership and remove only the prepared workspace; report cleanup failures without widening removal |
 | `rota review depth [<branch>] [--labels <a,b>]` | review depth `ship.review` picks for a branch (`full`, `light`, `none`) from its diff size and the labels given, and why |
 | `rota review queue` | open issues waiting for review |
 

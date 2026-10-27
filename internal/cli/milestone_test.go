@@ -89,6 +89,13 @@ func TestMilestoneStatusShippedAudit(t *testing.T) {
 	if d := data(t, out); code != 0 || d["status"] != "shipped" || d["changed"] != true {
 		t.Errorf("--force: %d %s", code, out)
 	}
+	shipped, err := os.ReadFile(filepath.Join(dir, ".rota/milestones/M01.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(shipped), "AC-2: unmet") {
+		t.Fatalf("forced ship lost unmet status: %s", shipped)
+	}
 	done := "---\nid: M02\ntitle: Second\nstatus: planned\n---\n# M02\n\n## Acceptance\n\n- [x] AC-1: one\n"
 	if code, _, _ := rotaStdin(t, dir, done, "milestone", "put", "M02", "--body-file", "-"); code != 0 {
 		t.Fatalf("put M02: %d", code)

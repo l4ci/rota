@@ -1,7 +1,7 @@
 // Package projects is the machine-wide registry of rota projects: one
 // projects.json under the rota state dir, $XDG_STATE_HOME/rota (default
 // ~/.local/state/rota); it was under the config dir until #1184. `rota init`
-// registers the project it seeds and `rota projects` lists them. It is not .rota/repos.json, the per-project
+// registers projects outside temporary storage and `rota projects` lists them. It is not .rota/repos.json, the per-project
 // umbrella sub-repo registry (internal/repos).
 //
 // A path that no longer exists is kept and flagged on read, never pruned by
@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,11 +40,34 @@ const (
 )
 
 // Env is the process environment the dir lookups read: Getenv the variable
-// reader and Home the home-dir reader. The cli supplies them from Deps; the
+// reader, Home the home-dir reader and TempDirs the OS temp roots. The cli supplies them from Deps; the
 // package reads neither the process env nor the home itself.
 type Env struct {
 	Getenv func(string) string
 	Home   func() (string, error)
+	// TempDirs supplies the OS temporary directories. Nil uses TMPDIR and
+	// the standard Unix/macOS locations; tests can supply their own OS roots.
+	TempDirs func() []string
+}
+
+// Temporary reports whether root is in temporary storage, resolving symlinks
+// on both sides and matching whole path components (not just a string prefix).
+func Temporary(env Env, root string) bool {
+	dirs := []string{env.Getenv("TMPDIR"), "/tmp", "/var/folders", "/private/var/folders"}
+	if env.TempDirs != nil {
+		dirs = env.TempDirs()
+	}
+	root = repos.Realpath(root)
+	for _, dir := range dirs {
+		if dir == "" {
+			continue
+		}
+		rel, err := filepath.Rel(repos.Realpath(dir), root)
+		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
 }
 
 // OSEnv is the process environment and home dir: the edge for code that has
@@ -229,7 +253,7 @@ func List(env Env) ([]Project, error) {
 	return out, nil
 }
 
-// Cleanup drops every entry whose directory is gone or no longer holds .rota/,
+// Cleanup drops every entry in temporary storage, gone or no longer holding .rota/,
 // under the registry lock, and returns what it removed (in registry order). An
 // absent registry removes nothing and is not created.
 func Cleanup(env Env) ([]Project, error) {
@@ -253,12 +277,13 @@ func Cleanup(env Env) ([]Project, error) {
 			if o, ok := it.(*jsonx.Object); ok {
 				p, _ := o.Get("path")
 				if ps, _ := p.(string); ps != "" {
-					if _, err := os.Stat(rotatree.Dir(ps)); err != nil {
+					_, statErr := os.Stat(rotatree.Dir(ps))
+					if statErr != nil || Temporary(env, ps) {
 						n, _ := o.Get("name")
 						s, _ := o.Get("lastSeen")
 						ns, _ := n.(string)
 						ls, _ := s.(string)
-						removed = append(removed, Project{Path: ps, Name: ns, LastSeen: ls, Missing: true})
+						removed = append(removed, Project{Path: ps, Name: ns, LastSeen: ls, Missing: statErr != nil})
 						continue
 					}
 				}

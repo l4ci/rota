@@ -158,12 +158,13 @@ shim: parse the one-line JSON (keys already camel-safe).
 note: the old `--dump` flag becomes the sub-verb `list`.
 
 ### rota item complete
-rota item complete <ID> [--commit <hash>] [--reason <done|handed-off|blocked|dropped>] [--note <text>] [--no-proof] [--gist <text>]
+rota item complete <ID> [--commit <hash>] [--reason <done|handed-off|blocked|dropped>] [--note <text>] [--no-proof] [--unmet-reason <text>] [--gist <text>]
 repo: scoped
 data: {"id": string, "type": "B"|"F"|"T", "reason": string, "commit": string, "changed": bool, "decisionLog"?: string}
-exit: 1 when the item is a decision item (`decision:` label, file `Decision:` field) and `--gist` is missing (the message names the flag), when `--gist` is given for any other item, or when the item has a bad `decision:` label; 3 unknown ID or type-letter mismatch; 4 when a `done` close has no `## Proof` row (old rc 3, bypass with `--no-proof`); 5 when git has no HEAD to default `--commit`; tracker
+exit: 1 when the item is a decision item (`decision:` label, file `Decision:` field) and `--gist` is missing (the message names the flag), when `--gist` is given for any other item, or when the item has a bad `decision:` label; 3 unknown ID or type-letter mismatch; 4 when a `done` close has no `## Proof` row (old rc 3, bypass with `--no-proof`), or when an explicitly numbered `AC-n` criterion is unmet (`blockedBy: "unmet acceptance"`, bypass with `--unmet-reason <text>`); 5 when git has no HEAD to default `--commit`; tracker
 old: hv-complete <ID> [<hash>] [--reason R] [--note N] [--no-proof]
 shim: stdout is empty, so `commit` is `--commit` or `git log -1 --format=%h`, `reason` defaults to `done`, `changed` is false when already completed (stderr says no-op), else true. The shim tells proof-missing from tracker-unavailable (both old rc 3) by the stderr text.
+note: a `done` close requires every explicit `AC-n` criterion to have a current acceptance mark backed by PASS proof, as `plan pass` records it. A ticked checkbox alone is not a mark. The refusal names every unmet criterion; `--no-proof` does not bypass it. `--unmet-reason` records the unmet ids, their text and the reason in the close comment (file mode: under `## Completed` in the item detail file). File mode has no acceptance notes, so its explicit AC ids require this override. Items without explicit AC ids and non-done reasons keep their existing behavior.
 note: `--note` newlines are flattened to spaces and `--reason` defaults to `done`, as old.
 note: `--gist` is the one-line summary of a decision item. After the close, `- <ID>: <gist>` is appended under `## Decisions` in the item's milestone plan (the section is created when missing), and `decisionLog` is that milestone's ID. A repeat adds no second line, so a retry after a lost response is safe. An item with no milestone logs nothing (`decisionLog` is `""`, the text says so). The checks run before the close, so a refusal leaves the item open.
 
