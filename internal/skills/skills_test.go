@@ -785,3 +785,26 @@ func mustStub(t *testing.T, s *Set) *Set {
 	}
 	return st
 }
+
+// Queue routing must leave the feedback handoff consumed by rota-work, while
+// the verdict verb remains responsible for rendering the findings.
+func TestReviewQueueKeepsFeedbackHandoff(t *testing.T) {
+	s, err := Embedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, ok := s.File("rota-review/queue-mode.md")
+	if !ok {
+		t.Fatal("queue mode not installed")
+	}
+	_, route, ok := strings.Cut(string(b), "**`request-changes`**")
+	if !ok {
+		t.Fatal("queue missing changes-requested route")
+	}
+	route, _, _ = strings.Cut(route, "5. **Return.")
+	for _, want := range []string{"rota item comment add <ID> --kind feedback --body-file", "marked report", "rota item state <ID> --to changes-requested"} {
+		if !strings.Contains(route, want) {
+			t.Errorf("request-changes loses author handoff %q: %s", want, route)
+		}
+	}
+}
