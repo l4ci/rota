@@ -81,7 +81,8 @@ type Summary struct {
 	// CapReasons counts the bounce-cap transfers by reason.
 	CapReasons CapReasons
 	// Idle is each slot's wait between a done and its next assign.
-	Idle []IdleRow
+	Idle    []IdleRow
+	Metrics RoundMetrics
 }
 
 // IdleRow is one stretch a slot sat done before the orchestrator assigned it
@@ -185,6 +186,9 @@ func Fold(entries []Entry, audit []*jsonx.Object, round int) Summary {
 			}
 		}
 		ts := e.TS
+		if e.Kind == KindTrain {
+			continue // a train outcome has no issue or slot of its own
+		}
 		if e.Kind == KindBounce && e.Slot == "" && f.find(e) == nil {
 			continue // no owner: a row would total under "-"
 		}
@@ -249,7 +253,10 @@ func Fold(entries []Entry, audit []*jsonx.Object, round int) Summary {
 				r.Gate = v
 			}
 		case KindMerge:
-			r.Merged, r.Outcome, r.MergedAt = true, OutcomeMerged, &ts
+			r.Merged, r.Outcome = true, OutcomeMerged
+			if r.MergedAt == nil {
+				r.MergedAt = &ts // a repeated observation does not extend lead time
+			}
 		}
 	}
 	for _, r := range f.rows {
@@ -266,6 +273,7 @@ func Fold(entries []Entry, audit []*jsonx.Object, round int) Summary {
 	}
 	s.Slots = totals(s.Issues, func(r IssueRow) string { return r.Slot })
 	s.Accounts = totals(s.Issues, func(r IssueRow) string { return r.Account })
+	s.Metrics = roundMetrics(s.Issues, entries, round)
 	for _, a := range audit {
 		ts, err := time.Parse(time.RFC3339, jsonx.Str(a, "ts"))
 		if err != nil || first.IsZero() || ts.Before(first) || ts.After(last) {
@@ -381,6 +389,7 @@ func (s Summary) Text() string {
 		title += " (no round lease)"
 	}
 	fmt.Fprintln(&b, title)
+	fmt.Fprint(&b, s.Metrics.text())
 	if len(s.Issues) == 0 {
 		fmt.Fprintln(&b, "no entries for this round")
 		return b.String()
@@ -457,7 +466,7 @@ func floatVal(p *float64) any {
 	return *p
 }
 
-// Object is the --json shape: {round, issues[], slots[], accounts[], audit[], capReasons}.
+// Object is the --json shape: {round, issues[], slots[], accounts[], audit[], capReasons, metrics}.
 // Unknown values (times, headroom, quotaShare, wallSeconds) are null.
 func (s Summary) Object() *jsonx.Object {
 	issues := make([]any, 0, len(s.Issues))
@@ -530,5 +539,6 @@ func (s Summary) Object() *jsonx.Object {
 	cap.Set(CapTier, s.CapReasons.Tier)
 	cap.Set(CapFresh, s.CapReasons.Fresh)
 	d.Set("capReasons", cap)
+	d.Set("metrics", s.Metrics.object())
 	return d
 }

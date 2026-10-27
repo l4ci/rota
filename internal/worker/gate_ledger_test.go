@@ -5,8 +5,47 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 )
+
+func TestTrainSummaryCountsInvocations(t *testing.T) {
+	w := trainWorld(t, "test ! -f b2.txt", "b1", "b2", "b3")
+	targets := []string{"b1", "b2", "b3"}
+	if _, err := w.train(TrainOpts{Targets: targets, Plan: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.train(TrainOpts{}); err == nil {
+		t.Fatal("empty train should be a usage error")
+	}
+	if res, err := w.train(TrainOpts{Targets: targets}); err != nil || res.Verdict != GateVerifyFailed {
+		t.Fatalf("red train: %+v, %v", res, err)
+	}
+	w.setConfig(`{"test":{"full":["true"]}}`)
+	if res, err := w.train(TrainOpts{Targets: targets}); err != nil || res.Verdict != GatePass {
+		t.Fatalf("green train: %+v, %v", res, err)
+	}
+	es, err := ledger.Load(w.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := ledger.Fold(es, nil, 0)
+	v, _ := s.Object().Get("metrics")
+	metrics := v.(*jsonx.Object)
+	v, _ = metrics.Get("redTrainRate")
+	rate, ok := v.(*jsonx.Object)
+	if !ok {
+		t.Fatalf("red-train metric missing: %v", v)
+	}
+	for key, want := range map[string]any{"numerator": 1, "denominator": 2, "value": 0.5, "unavailable": nil} {
+		if got, _ := rate.Get(key); got != want {
+			t.Errorf("%s = %v, want %v; count train invocations, not members or previews", key, got, want)
+		}
+	}
+	if len(s.Issues) != 3 {
+		t.Errorf("train outcomes created phantom issue rows: %+v", s.Issues)
+	}
+}
 
 func gateKinds(t *testing.T, w *world) (verdicts []string, merges int) {
 	t.Helper()

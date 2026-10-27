@@ -11,6 +11,7 @@ package ledger
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -32,8 +33,10 @@ const (
 	KindPick     = "pick"
 	KindPark     = "park"
 	KindGate     = "gate"
-	KindMerge    = "merge"
-	KindLimited  = "limited"
+	// KindTrain records one completed train invocation, rather than a member.
+	KindTrain   = "train"
+	KindMerge   = "merge"
+	KindLimited = "limited"
 	// KindReviewReply records a worker's answer to a reviewer (`rota worker reply`).
 	KindReviewReply = "review-reply"
 	// KindAdopt records `rota worker adopt`: detail.branch is the branch taken over.
@@ -143,34 +146,68 @@ func Append(root string, e Entry) error {
 // Load reads every entry in file order. A missing file is no entries and
 // os.ErrNotExist is not returned for it; a line that does not parse is skipped.
 func Load(root string) ([]Entry, error) {
+	return load(root, false)
+}
+
+// LoadForSummary keeps readable rows for the table, but also reports a missing
+// or corrupt source so a scorecard cannot mistake lost events for zero events.
+// Other ledger consumers retain Load's tolerant recovery behavior.
+func LoadForSummary(root string) ([]Entry, error) {
+	return load(root, true)
+}
+
+func load(root string, strict bool) ([]Entry, error) {
 	data, err := os.ReadFile(Path(root))
 	if errors.Is(err, os.ErrNotExist) {
+		if strict {
+			return nil, fmt.Errorf("ledger missing: %w", err)
+		}
 		return nil, nil
 	}
 	if err != nil {
+		if strict {
+			return nil, fmt.Errorf("ledger unreadable: %w", err)
+		}
 		return nil, err
 	}
 	var out []Entry
-	for _, line := range bytes.Split(data, []byte{'\n'}) {
+	var invalid error
+	markInvalid := func(n int) {
+		if strict && invalid == nil {
+			invalid = fmt.Errorf("ledger line %d is unreadable or has invalid event fields", n+1)
+		}
+	}
+	for n, line := range bytes.Split(data, []byte{'\n'}) {
+		if len(bytes.TrimSpace(line)) == 0 {
+			continue
+		}
 		v, err := jsonx.Decode(line)
 		if err != nil {
+			markInvalid(n)
 			continue
 		}
 		o, ok := v.(*jsonx.Object)
 		if !ok {
+			markInvalid(n)
 			continue
 		}
 		e := Entry{Kind: jsonx.Str(o, "kind"), Issue: jsonx.Str(o, "issue"), Slot: jsonx.Str(o, "slot"),
 			Account: jsonx.Str(o, "account"), Harness: jsonx.Str(o, "harness"), PR: jsonx.Str(o, "pr")}
 		e.TS, _ = time.Parse(time.RFC3339, jsonx.Str(o, "ts"))
 		rv, _ := o.Get("round")
-		e.Round, _ = jsonx.Int(rv)
+		e.Round, ok = jsonx.Int(rv)
+		if !ok || e.Round < 0 || e.TS.IsZero() || e.Kind == "" {
+			markInvalid(n)
+		}
 		if d, ok := o.Get("detail"); ok {
-			e.Detail, _ = d.(*jsonx.Object)
+			e.Detail, ok = d.(*jsonx.Object)
+			if !ok {
+				markInvalid(n)
+			}
 		}
 		out = append(out, e)
 	}
-	return out, nil
+	return out, invalid
 }
 
 // Exists says whether the ledger file is there.

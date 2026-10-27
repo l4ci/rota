@@ -1,12 +1,64 @@
 package cli
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/l4ci/rota/internal/ledger"
 )
+
+func TestRoundSummaryUnavailableSources(t *testing.T) {
+	for _, kind := range []string{"missing", "unreadable", "malformed", "invalid timestamp"} {
+		t.Run(kind, func(t *testing.T) {
+			deps := testDeps()
+			dir := workerProject(t, `{}`)
+			switch kind {
+			case "unreadable":
+				if err := os.Mkdir(ledger.Path(dir), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			case "malformed", "invalid timestamp":
+				seedLedger(t, dir)
+				bad := "{torn\n"
+				if kind == "invalid timestamp" {
+					bad = `{"ts":"wrong","round":2,"kind":"bounce"}` + "\n"
+				}
+				f, err := os.OpenFile(ledger.Path(dir), os.O_APPEND|os.O_WRONLY, 0o644)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = f.WriteString(bad)
+				f.Close()
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			code, out, stderr := rotaInWith(t, deps, dir, "round", "summary", "--json")
+			if code != 0 {
+				t.Fatalf("summary must report unavailable sources: exit %d, %s %s", code, out, stderr)
+			}
+			metrics := data(t, out)["metrics"].(map[string]any)
+			for _, name := range []string{"assignToMerged", "doneToMerged", "redTrainRate", "bouncesPerMergedPR"} {
+				m := metrics[name].(map[string]any)
+				reason, _ := m["unavailable"].(string)
+				if !strings.Contains(reason, "ledger") {
+					t.Errorf("%s needs its source-error reason, got %v", name, m)
+				}
+				for _, key := range []string{"value", "numerator", "denominator", "medianSeconds", "p90Seconds"} {
+					if m[key] != nil {
+						t.Errorf("%s.%s = %v, want null for unavailable source", name, key, m[key])
+					}
+				}
+			}
+			code, out, _ = rotaInWith(t, deps, dir, "round", "summary")
+			if code != 0 || !strings.Contains(out, "unavailable (ledger") || !strings.Contains(out, "rule:") {
+				t.Errorf("text must name unavailable source and counting rules: exit %d, %s", code, out)
+			}
+		})
+	}
+}
 
 func seedLedger(t *testing.T, dir string) {
 	t.Helper()
