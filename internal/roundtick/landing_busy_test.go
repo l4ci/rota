@@ -32,7 +32,7 @@ func TestTickDefersBusyLanding(t *testing.T) {
 			if !strings.Contains(r.Deferred, "manual landing is running or queued") {
 				t.Fatalf("Deferred = %q, want the busy landing reason", r.Deferred)
 			}
-			if len(r.Did) != 0 || len(r.NeedsYou) != 0 || len(r.Held) != 0 {
+			if len(r.Did) != 0 || len(r.NeedsYou) != 0 || len(r.Held) != 0 || len(r.FailedHeads) != 0 {
 				t.Fatalf("a busy landing must be retried without a failure or hold: %+v", r)
 			}
 		})
