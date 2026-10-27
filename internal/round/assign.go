@@ -97,7 +97,7 @@ type AssignOpts struct {
 	ReclaimStale   string // exact stale holder approved by the maintainer
 	ID             string
 	Agent          string
-	Decisions      string   // answered decisions, verbatim; "" for none
+	SettledAnswers string   // settled answers, verbatim; "" for none
 	DecisionTopics []string // DECISIONS.md topics to include in full
 	Siblings       []string
 	CheckOnly      bool
@@ -209,7 +209,7 @@ func briefPath(root string, set roundcfg.Settings, getenv func(string) string, c
 
 // pointerBrief is the short brief a worker is dispatched with: where its
 // contract is, which issue to read and dispute, its branch, its siblings and
-// the item's Out of scope section and the decisions already settled. A bundle
+// the item's Out of scope section and the settled answers. A bundle
 // (the lead first, then its members; none for one issue) swaps the lead's Out
 // of scope and Touches for one block of Acceptance, Out of scope and Touches
 // per issue. dispatch signs it.
@@ -253,7 +253,7 @@ func pointerBrief(agent, id, branch, brief string, siblings []string, decisions,
 		fmt.Fprintf(&b, "\nTry it: the issue has a ## Try it section, but its steps are withheld from this brief (%s). Do not run them; the merge gate skips them for the same reason.\n", w)
 	}
 	if d := strings.TrimSpace(decisions); d != "" {
-		fmt.Fprintf(&b, "\nDecisions already settled (verbatim):\n\n%s\n", d)
+		fmt.Fprintf(&b, "\nSettled answers (verbatim):\n\n%s\n", d)
 	}
 	if decisionContext != "" {
 		fmt.Fprintf(&b, "\n%s\n", decisionContext)
@@ -876,7 +876,7 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	}
 
 	// 4. Readiness.
-	decisions := o.Decisions
+	decisions := o.SettledAnswers
 	tracked := e.trackedFiles(ctx, root)
 	inFlight := e.InFlightItems(ctx, root, be, tracked, set.SharedPaths)
 	// The bundle never overlaps itself: what its own slot holds of it (on a

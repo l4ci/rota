@@ -257,7 +257,7 @@ func Assess(be backlog.Backend, id string, tracked, shared []string, inFlight []
 }
 
 // AssessBrief is Assess where the acceptance criteria may come from brief, the
-// text an orchestrator passes to assign (--body-file): a brief that states
+// text an orchestrator passes to assign (--settled-file): a brief that states
 // criteria makes the item startable without a design or plan note, so a round
 // needs no bookkeeping PR before its first assign.
 func AssessBrief(be backlog.Backend, id string, tracked, shared []string, inFlight []InFlight, acceptOverlap bool, brief string) (Readiness, error) {
