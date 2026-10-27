@@ -216,9 +216,10 @@ rota round candidates                         # re-read the board with readiness
 
 ### Picking issues
 
-Candidates carry three checks:
+Candidates carry four checks:
 
 - `criteria`: acceptance criteria, or a design or plan note. Acceptance criteria in the `assign --settled-file` text count too.
+- `template`: every feature, including Cosmetic, has Acceptance and Out of scope headings. Missing headings are named; an assign `--settled-file` brief can supply them. Research and decision items are exempt. Bugs and tasks have no required template sections. This checks presence only, so an empty heading or "nothing noted" counts. Existing items need no migration: add the missing headings to the body or supply them in the brief.
 - `dependencies`: every `## Depends on` reference is closed. One that cannot be looked up fails the
   check, so fix the issue text.
 - `overlap`: no shared file with an in-flight slot, from a `## Files` section or the paths the issue

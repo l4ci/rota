@@ -3,6 +3,8 @@ refs:
   - internal/backlog
   - internal/cli/backlog.go
   - internal/cli/item.go
+  - internal/cli/item_template.go
+  - internal/itembody
 ---
 
 ## A4: backlog, capture, IDs, status
@@ -20,7 +22,7 @@ note: `--kind` is a flag, as in `item create` (rule 1). Exception to rule 11: `i
 rota item create --kind <bugs|features|tasks> --title <text> [--tag <tag>] [--desc <text>] [--body-file <path|->] [--depends-on <refs>] [--related <text>] [--milestone <text>] [--repos <csv>] [--subsystem <text>] [--captured <YYYY-MM-DD>] | --kind <kind> --raw-file <path|->
 rota item create --batch-file <path|->
 repo: scoped
-data: {"id": string, "type": "B"|"F"|"T", "kind": string, "detail"?: string, "changed": bool}
+data: {"id": string, "type": "B"|"F"|"T", "kind": string, "detail"?: string, "warnings"?: []string, "changed": bool}
 exit: 3 when BACKLOG.md or its section is missing, `--body-file` or `--raw-file` cannot be read, the milestone is unknown (not under `.rota/milestones/` on the file backend, absent on the tracker), or the umbrella repo is unknown or ambiguous; backend (`--raw-file` is file-only); tracker
 old: hv-item-create <kind> --title <text> [--tag T] [--desc D] [--body-file F] [--field Related=<v>] [--field Milestone=<v>] [--field Repos=<v>] [--field Subsystem=<v>] [--field Captured=<v>]; with `--raw-file`: hv-append "<section for kind>" "$(cat <file>)"
 shim: the helper prints one ID line. File mode: `id` is that line (for `--raw-file`, the ID parsed from the bullet). Issue mode: the line is `B12`, so `id` is `12` (letter dropped, rule 11). `type` is the dropped or leading letter; `detail` is `.rota/<kind>/<ID>.md` when `--body-file` was given; `kind` and `changed:true` are set by the shim.
@@ -30,7 +32,16 @@ note: `--depends-on` takes `#N` or file IDs (comma or space separated) and appen
 note: `--raw-file` absorbs hv-append: it appends one preformatted bullet (ID already in it) verbatim except for the `Since: <HEAD>` drift baseline it stamps, as hv-append did, excludes `--title`, and stays because smoke fixtures depend on it. The verb already takes `--body-file` for the detail body, so rule 3 lets this second file input take a name after its content.
 note: `--batch-file <path|->` takes a JSON array, one record per item with the flags above as keys (`dependsOn` for `--depends-on`), checks every record's title, kind and field shape before filing any (milestone, labels and `dependsOn` resolve at create, so a later record can still fail after earlier ones filed), files them in order and returns `{"items": [{id, type, kind, title}], "changed": true}` (Text: one id per line). When a record fails to file, the exit is the failure's own and the data carries the `items` filed so far and `failedAt` (1-based), with the filed ids also in the error message. It excludes every other flag. A title that is empty or a placeholder (x, tbd, todo, title, untitled) exits 2 on every create path; a batch also exits 2 under three words (#838).
 note: `--tag` is P0..P3 for bugs and Major|Minor|Cosmetic for features; tasks take none (2).
+note: missing required or recommended template sections produce one warning each in `data.warnings`, the envelope warnings and stderr, without refusing capture. The template is printed by `item template`; section presence is checked, not content quality. For a batch, each successful row carries its own optional `warnings`, and `data.warnings` aggregates them prefixed by record number. Raw bullets are checked too. No missing sections means the optional warnings fields are absent.
 note: a field flag given with an empty value (`--related ""`) exits 2, as old did; `--milestone` takes exactly one milestone (a list exits 2); a label the tracker lacks while `autoCreateLabel` is off exits 3. The bullet's fields keep the old helper's order (Related, Milestone, Repos, Subsystem, Captured).
+
+### rota item template
+rota item template --kind <bugs|features|tasks> [--tag <tag>]
+repo: none
+data: {"kind": string, "tag": string, "body": string}
+exit: 2 when kind is missing or invalid, or the tag is not valid for the kind
+old: none
+note: prints a Markdown skeleton whose comments label required, recommended and optional sections. Features of every size require Acceptance and Out of scope; Major features also recommend Touches. Bugs recommend Repro, Expected and Actual (words in the description also satisfy them at capture). Tasks require no sections. Pointers is recommended when file paths are named, optional otherwise. No backend, repository or migration is needed.
 
 ### rota item show
 rota item show <ID>
