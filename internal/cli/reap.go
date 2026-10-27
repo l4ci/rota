@@ -23,20 +23,20 @@ import (
 func defaultReapEnv(ctx context.Context, root string, d *Deps) (round.Env, reap.HostOps) {
 	e := d.RoundEnvLocal(ctx, root)
 	var ops reap.HostOps
-	if e.Snapshot != nil && e.HostName == host.Herdr {
-		if tl := d.Host(host.Herdr).Capabilities().TabLister; tl != nil {
-			ops = herdrReapOps{tl}
+	if e.Snapshot != nil {
+		if tl := d.Host(e.HostName).Capabilities().TabLister; tl != nil {
+			ops = terminalReapOps{tl}
 		}
 	}
 	return e, ops
 }
 
-// herdrReapOps adapts herdr's tab listing. herdr reports no process tree it
-// can prove agent-free, so reap lists no process on a real host.
-type herdrReapOps struct{ host.TabLister }
+// terminalReapOps adapts a host tab listing. Process proof stays inside the
+// host's CloseTab; reap offers no standalone processes on a real host.
+type terminalReapOps struct{ host.TabLister }
 
-func (herdrReapOps) Processes(context.Context) ([]reap.Process, error) { return nil, nil }
-func (herdrReapOps) StopProcess(context.Context, int) error {
+func (terminalReapOps) Processes(context.Context) ([]reap.Process, error) { return nil, nil }
+func (terminalReapOps) StopProcess(context.Context, int) error {
 	return fmt.Errorf("stopping a process is not supported on a real host")
 }
 

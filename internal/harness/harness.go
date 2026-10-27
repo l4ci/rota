@@ -306,6 +306,8 @@ type PreflightOpts struct {
 	Launch string
 	// Herdr is whether the round's host is herdr.
 	Herdr bool
+	// Orca permits terminal-based Codex launch without herdr integration.
+	Orca bool
 	// Worktree is the slot's worktree, which a seeded home must trust.
 	Worktree string
 	// CommonDir is the git common dir, asked for only by a harness that keeps

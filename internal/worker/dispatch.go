@@ -492,6 +492,10 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			Message: fmt.Sprintf("slot '%s' has a dialog open%s and refused input — inspect it before resending", o.Slot, first)}
 	case errors.Is(sendErr, host.ErrDraftOnPrompt):
 		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s' has a human draft on its prompt line and nothing was sent — resend once it is submitted or cleared", o.Slot))
+	case h.Kind() == host.Orca && !errors.Is(sendErr, host.ErrNotSubmitted):
+		// Orca can discover a branch rename after the prompt has been accepted.
+		// Preserve that evidence instead of suggesting the brief was never sent.
+		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s': %v", o.Slot, sendErr))
 	default:
 		return res, fail(exitcode.ExitRetry, fmt.Sprintf("slot '%s' never picked up the brief — inspect the session before resending", o.Slot))
 	}

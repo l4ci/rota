@@ -357,9 +357,9 @@ func homeEnv(dir string) string {
 // Preflight is everything a codex worker needs before anything is marked or
 // killed, shared by `worker dispatch` and `round assign`: codex installed
 // (Unavailable), every flag of the launch line listed by `codex --help`
-// (Refused, blockedBy BlockCodexFlags), the host herdr, the account's home (the
-// default Codex home, or a configured account's) with herdr's codex integration
-// installed and logged in (Unavailable, hint `[CODEX_HOME=<home> ]codex login`),
+// (Refused, blockedBy BlockCodexFlags), a supported host, the account's home (the
+// default Codex home, or a configured account's), herdr integration when on herdr,
+// and login (Unavailable, hint `[CODEX_HOME=<home> ]codex login`),
 // and the slot's state directory. It never writes into a Codex home beyond
 // herdr's own integration install, and never touches auth.json.
 func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, error) {
@@ -368,12 +368,16 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 	if !ok {
 		return set, refuse(Unavailable, "codex is not installed or not runnable")
 	}
-	if !o.Herdr {
-		return set, refuse(Unavailable, "codex workers need round.dispatch=herdr")
+	if !o.Herdr && !o.Orca {
+		return set, refuse(Unavailable, "codex workers need round.dispatch=herdr or orca")
 	}
-	herdr, ok := p.Look("herdr")
-	if !ok {
-		return set, refuse(Unavailable, "herdr is not installed")
+	herdr := ""
+	if o.Herdr {
+		var ok bool
+		herdr, ok = p.Look("herdr")
+		if !ok {
+			return set, refuse(Unavailable, "herdr is not installed")
+		}
 	}
 
 	cd, err := o.CommonDir()

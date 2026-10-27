@@ -9,6 +9,7 @@ package doctor
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -447,6 +448,41 @@ func (d *runner) host() Check {
 			return fail("host", fmt.Sprintf("herdr %s, need %s", v, want), "install herdr "+want+" (https://herdr.dev)")
 		}
 		return pass("host", "herdr "+v)
+	case host.Orca:
+		var statusJSON string
+		h := host.New(host.Orca, host.Deps{
+			LookPath: func(name string) (string, error) {
+				bin, ok := d.in.Look(name)
+				if !ok {
+					return "", exec.ErrNotFound
+				}
+				return bin, nil
+			},
+			Run: func(ctx context.Context, name string, args []string) (host.Result, error) {
+				bin, ok := d.in.Look(name)
+				if !ok {
+					return host.Result{}, exec.ErrNotFound
+				}
+				r, err := d.in.Exec(ctx, bin, args, nil, d.in.Dir)
+				statusJSON = r.Stdout
+				return r, err
+			},
+		})
+		if err := h.Require(); err != nil {
+			return fail("host", err.Error(), "put orca on PATH and open the Orca app")
+		}
+		var status struct {
+			AutoRename bool `json:"autoRenameBranchFromWork"`
+			Settings   struct {
+				AutoRename bool `json:"autoRenameBranchFromWork"`
+			} `json:"settings"`
+		}
+		// The setting is optional status evidence, not a documented settings API.
+		// Dispatch checks the saved branch after pickup even when it is absent.
+		if json.Unmarshal([]byte(statusJSON), &status) == nil && (status.AutoRename || status.Settings.AutoRename) {
+			return Check{Name: "host", Status: Warn, Detail: "orca app running; autoRenameBranchFromWork is enabled", Hint: "disable autoRenameBranchFromWork before dispatching rota slots"}
+		}
+		return pass("host", "orca on PATH; app running")
 	case host.Tmux:
 		if _, ok := d.in.Look(host.Tmux.Binary()); !ok {
 			return fail("host", "tmux not found on PATH", "install tmux")
