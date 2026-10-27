@@ -105,3 +105,28 @@ func TestReferencePageIsCurrent(t *testing.T) {
 		t.Fatal("docs/reference/labels.md is stale; run go generate ./internal/labels")
 	}
 }
+
+func TestMilestoneMergeLabelRegistry(t *testing.T) {
+	entries := Resolve(nil)
+	label, ok := Find(entries, "on-milestone/M01")
+	if !ok || label.Description == "" || label.Color != "0052cc" {
+		t.Fatalf("milestone merge label is absent or undescribed: %+v, %v", label, ok)
+	}
+	for _, change := range Diff(entries, []Label{{Name: "on-milestone/M01"}}, nil, true) {
+		if change.Label.Name == "on-milestone/M01" && change.Kind != Metadata {
+			t.Fatalf("milestone merge label classified as %s", change.Kind)
+		}
+		if change.Kind == Missing && strings.HasPrefix(change.Label.Name, "on-milestone/") {
+			t.Fatalf("open milestone prefix materialized: %+v", change)
+		}
+	}
+	found := false
+	for _, e := range entries {
+		if e.Name == "on-milestone/" {
+			found = e.Prefix && strings.Contains(e.Removed, "release")
+		}
+	}
+	if !found {
+		t.Fatal("milestone prefix lifecycle is not registered")
+	}
+}

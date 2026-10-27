@@ -50,7 +50,7 @@ It's a Plan report names only and stay read-only. Tracker defaults such as `bug`
 definition is unused when no open issue carries it. Sync never deletes or renames labels.
 
 `rota doctor` warns about missing or undescribed registry labels and points to this preview.
-An unreachable tracker skips the check; the file backend has no label check.
+An unreachable or name-only tracker (Jira, It's a Plan) skips the definition check with a reason; missing names on these report-only trackers do not warn. The file backend has no label check.
 
 ## Jira
 
