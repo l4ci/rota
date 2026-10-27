@@ -75,7 +75,7 @@ func TestOrcaDispatchClaudeAndCodexThroughAdapter(t *testing.T) {
 			unreadable := false
 			reads := 0
 			sends := 0
-			h := host.New(host.Kind("orca"), host.Deps{Getenv: func(string) string { return "" }, LookPath: func(string) (string, error) { return "/fake/orca", nil }, Sleep: func(time.Duration) {}, Run: func(ctx context.Context, name string, a []string) (host.Result, error) {
+			h := host.New(host.Kind("orca"), host.Deps{Getenv: func(string) string { return "" }, LookPath: func(string) (string, error) { return "/fake/orca", nil }, Sleep: func(time.Duration) {}, Alive: func(pid int) bool { return pid == 123 || pid == 456 }, Tree: func(pid int) []int { return []int{pid, 456} }, Run: func(ctx context.Context, name string, a []string) (host.Result, error) {
 				if name == "git" {
 					return host.ExecRunner(ctx, name, a)
 				}
@@ -90,6 +90,9 @@ func TestOrcaDispatchClaudeAndCodexThroughAdapter(t *testing.T) {
 						if v == "--worktree" {
 							cwd = strings.TrimPrefix(a[i+1], "path:")
 						}
+					}
+					if e := seedOrcaAdapterPID(t, ctx, cwd); e != nil {
+						return host.Result{}, e
 					}
 					b, _ := json.Marshal(map[string]string{"handle": "t1", "title": "rota:w1"})
 					return host.Result{Stdout: string(b)}, nil
@@ -185,5 +188,110 @@ func TestOrcaDispatchPreservesHostFailureEvidence(t *testing.T) {
 		if exitOf(err) != 5 || !strings.Contains(err.Error(), detail) {
 			t.Fatalf("Orca safety evidence hidden: %v", err)
 		}
+	}
+}
+
+// The fake CLI writes the wrapper PID at terminal creation, as the real shell
+// would, while every process liveness/tree observation stays injected.
+func seedOrcaAdapterPID(t *testing.T, ctx context.Context, cwd string) error {
+	t.Helper()
+	metadata, e := host.ExecRunner(ctx, "git", []string{"-C", cwd, "rev-parse", "--absolute-git-dir"})
+	if e != nil || metadata.ExitCode != 0 {
+		return fmt.Errorf("fixture git metadata: %v %s", e, metadata.Stderr)
+	}
+	files, e := filepath.Glob(filepath.Join(strings.TrimSpace(metadata.Stdout), "rota-orca", "agent-*.pid"))
+	if e != nil || len(files) != 1 {
+		return fmt.Errorf("fixture PID files: %v %v", files, e)
+	}
+	return os.WriteFile(files[0], []byte("123\n"), 0600)
+}
+
+func TestOrcaPoolReapThroughAdapterAfterAgentExit(t *testing.T) {
+	for _, survivor := range []bool{false, true} {
+		t.Run(map[bool]string{false: "all-gone", true: "orphan-child"}[survivor], func(t *testing.T) {
+			dir := newProject(t, `{"round":{"dispatch":"orca"}}`)
+			if _, e := goInit(t, dir, InitOpts{Slots: 1, Base: "main"}); e != nil {
+				t.Fatal(e)
+			}
+			wt := LoadRegistryTolerant(dir).Slot("w1").Worktree()
+			present := true
+			closes := 0
+			alive := map[int]bool{123: true, 456: true}
+			deps := host.Deps{Getenv: func(string) string { return "" }, LookPath: func(string) (string, error) { return "/fake/orca", nil }, Sleep: func(time.Duration) {}, KillWait: 1,
+				Alive: func(pid int) bool { return alive[pid] }, Tree: func(pid int) []int {
+					if alive[pid] {
+						return []int{pid, 456}
+					}
+					return []int{pid}
+				},
+				Run: func(ctx context.Context, name string, a []string) (host.Result, error) {
+					if name == "git" {
+						return host.ExecRunner(ctx, name, a)
+					}
+					switch strings.Join(a[:2], " ") {
+					case "status --json":
+						return host.Result{Stdout: `{"running":true}`}, nil
+					case "terminal create":
+						if e := seedOrcaAdapterPID(t, ctx, wt); e != nil {
+							return host.Result{}, e
+						}
+						return host.Result{Stdout: `{"handle":"native-w1","title":"rota:w1"}`}, nil
+					case "terminal read":
+						if !present {
+							return host.Result{ExitCode: 1}, nil
+						}
+						return host.Result{Stdout: `{"screen":"model: gpt-test\n› "}`}, nil
+					case "terminal list":
+						if !present {
+							return host.Result{Stdout: `{"terminals":[]}`}, nil
+						}
+						b, _ := json.Marshal(map[string]any{"terminals": []map[string]string{{"handle": "native-w1", "title": "shell after agent exit", "worktreePath": wt, "branch": LoadRegistryTolerant(dir).Slot("w1").Branch()}}})
+						return host.Result{Stdout: string(b)}, nil
+					case "terminal close":
+						closes++
+						present = false
+						return host.Result{Stdout: `{}`}, nil
+					}
+					return host.Result{ExitCode: 1, Stderr: "unexpected fixture operation"}, nil
+				}}
+			handle, e := host.New(host.Orca, deps).Spawn(bg, host.SpawnOpts{Session: "rota", Slot: "w1", Cwd: wt, Launch: "codex", BootTimeout: 2})
+			if e != nil {
+				t.Fatal(e)
+			}
+			if _, e = UpdateSlot(dir, "w1", func(s *Slot) { s.SetHandle(handle) }); e != nil {
+				t.Fatal(e)
+			}
+			// The agent root has exited before reap starts, so its former children
+			// cannot be rediscovered from the process tree at cleanup time.
+			alive[123] = false
+			alive[456] = survivor
+			eworker := envWith(host.New(host.Orca, deps))
+			eworker.Getenv = func(string) string { return "" }
+			reaped, e := eworker.Reap(dir, []string{"w1"}, false)
+			if closes != 1 {
+				t.Fatalf("reap did not close the recorded terminal after agent exit: closes=%d reaped=%v err=%v", closes, reaped, e)
+			}
+			if survivor {
+				if e == nil || len(reaped) != 0 || !strings.Contains(e.Error(), "456") {
+					t.Fatalf("surviving child not retained by actual adapter: reaped=%v err=%v", reaped, e)
+				}
+				if _, e = os.Stat(wt); e != nil {
+					t.Fatalf("removed worktree under surviving child: %v", e)
+				}
+				if s := LoadRegistryTolerant(dir).Slot("w1"); s == nil || s.Handle() != handle {
+					t.Fatal("unregistered a slot with a surviving child")
+				}
+			} else {
+				if e != nil || len(reaped) != 1 || reaped[0] != "w1" {
+					t.Fatalf("reap after all captured processes exited: %v %v", reaped, e)
+				}
+				if _, e = os.Stat(wt); !os.IsNotExist(e) {
+					t.Fatalf("reaped worktree remains: %v", e)
+				}
+				if LoadRegistryTolerant(dir).Slot("w1") != nil {
+					t.Fatal("reaped slot remains registered")
+				}
+			}
+		})
 	}
 }

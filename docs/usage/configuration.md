@@ -121,35 +121,43 @@ rota config set round.dispatch tmux
 
 **A round in herdr needs no setting.** With `round.dispatch` unset or `subagent` (the default `rota init` writes), `rota round start` detects the host: herdr inside a herdr pane, tmux inside tmux, and otherwise **solo mode**, where the orchestrator runs each worker as a Claude `Agent` subagent in the slot's own worktree. An explicit `tmux`, `herdr` or `orca` is used as set, and fails if unavailable rather than falling back. The round records its host when it starts and keeps it until wind-down. Solo workers share the orchestrator's account, rate window and context, so one usage limit stops them all. Solo mode runs Claude workers only: a Codex subagent cannot be given a working directory. See [Parallel rounds](parallel-rounds.md).
 
-**Orca must be running.** Set `round.dispatch` to `orca` and run `rota doctor`
-before assigning a worker. Codex readiness requires its `›` input line and a
-model header that has finished loading; trust dialogs are refused. Dispatch
-uses the terminal's turn-start receipt to confirm pickup. Native terminal
-handles identify workers; pane titles can change and are never used for recovery.
-A missing handle is unverifiable, so reclaim needs `--force`; shutdown still
-requires process proof. Layouts and linked workspaces are unavailable.
+**Orca must be running.** Set `round.dispatch` to `orca`, disable
+`autoRenameBranchFromWork` in Orca, and run `rota doctor` before assigning a
+worker. Doctor warns when status exposes auto-renaming as enabled; a passing
+check does not prove an unavailable setting is off. Codex uses its default
+account unless an account is configured. Layouts and linked workspaces are
+unavailable.
+
+Dispatch waits for the agent's input line and confirms pickup from a turn-start
+receipt, or a new harness busy indicator. Codex must also have finished loading
+its model header. Native handles identify terminals even when pane titles change.
+
+If dispatch or cleanup refuses:
+
+- **Trust or another interactive dialog:** dismiss it in the Orca terminal, then
+  re-run assign. rota does not answer the dialog or paste the brief into it.
+- **Oversize brief:** shorten the submitted text to fit the 120 KiB UTF-8 byte
+  limit. Reported Orca tests found that filenames and stdin markers passed as
+  text are sent literally; they cannot bypass the limit.
+- **Stale handle after an app restart:** inspect the slot, then reclaim with
+  `--force`. Cleanup still requires retained process evidence showing the
+  agent and recorded descendants are gone. Missing evidence or a surviving
+  child requires investigation; force does not waive that proof.
+- **Branch changed after pickup:** the prompt was already submitted. Disable
+  `autoRenameBranchFromWork` in Orca settings and inspect the slot and branch
+  before retrying; do not resend the brief blindly.
 
 Orca types the launch command into its login shell, where it can enter history.
-The environment prefix accepts only account directory paths and rota's slot,
-port and database suffix variables. **Never put secrets in these values or the
-launch command.** Codex uses its default account unless an account is configured.
-The adapter uses `terminal close`, retaining PID and descendant evidence in the
-worktree's git metadata for cleanup retries. `ORCA_TERMINAL_HANDLE` identifies
-an in-session caller; no `terminal current` probe is needed.
+Only account paths and slot/port/database variables belong in its environment
+prefix; never put secrets there or in the launch command. rota retains process
+evidence from boot and polling so an agent exit does not prevent later cleanup.
 
-Orca's `autoRenameBranchFromWork` setting can rename a branch on the first agent
-prompt. Disable it in Orca before running a round. Dispatch records the branch
-before launch and checks it after pickup, refusing loudly if the terminal or git
-reports a different branch. Doctor warns when its status response exposes the
-setting as enabled; a passing check does not prove an unavailable setting is off.
-
-Briefs are passed as one `--text` argument, with a conservative 120 KiB UTF-8 byte
-limit. Orca sends `-` and `@file` literally; neither is a file/stdin form. Live
-Codex testing confirmed byte-identical multiline delivery, a turn-start receipt,
-and background terminal creation. Remaining live checks are whether a pre-seeded
-trust entry skips the dialog, whether auto-renaming affects rota-created worktrees,
-and terminal closure with process proof; see
-[issue #2203](https://github.com/l4ci/rota/issues/2203).
+Robert Braatz's reported Codex tests, relayed during round 41, confirmed multiline
+delivery, turn-start receipts and background creation. Live validation still
+needs to check pre-seeded trust, auto-renaming on rota-created worktrees, terminal
+closure with process proof, complete JSON response envelopes and status settings,
+whether the optional `exited` field exists, and dash-led `--text` values.
+Local fake-CLI tests do not settle those details.
 
 Two things behave differently under `tmux`, `herdr` and `orca` than in `/rota-work`:
 

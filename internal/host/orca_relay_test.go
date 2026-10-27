@@ -12,11 +12,9 @@ import (
 	"time"
 )
 
-const orcaLiveReady = "OpenAI Codex\nmodel: gpt-5.3-codex high\n› A changing placeholder"
+const orcaRelayReady = "OpenAI Codex\nmodel: gpt-5.3-codex high\n› A changing placeholder"
 
-// Branch is injected in the opaque wire metadata so this test compiles against
-// the old adapter and demonstrates its missing guard as an assertion failure.
-func orcaLiveHandle(t *testing.T) string {
+func orcaRelayHandle(t *testing.T) string {
 	t.Helper()
 	cwd := orcaWorktree(t)
 	dir := filepath.Join(cwd, ".git", "rota-orca")
@@ -34,12 +32,12 @@ func orcaLiveHandle(t *testing.T) string {
 	}
 	return h
 }
-func TestOrcaLiveReadiness(t *testing.T) {
+func TestOrcaRelayReadiness(t *testing.T) {
 	for _, tc := range []struct {
 		name, screen string
 		want         bool
 	}{
-		{"loaded changing placeholder", orcaLiveReady, true},
+		{"loaded changing placeholder", orcaRelayReady, true},
 		{"loading with old placeholder", "model: loading\n› Ask Codex to do anything", false},
 		{"placeholder alone", "Ask Codex to do anything\n› ", false},
 		{"inline marker", "model: gpt-5.3-codex\noutput mentions › inline", false},
@@ -53,7 +51,7 @@ func TestOrcaLiveReadiness(t *testing.T) {
 		})
 	}
 }
-func TestOrcaLiveMarker(t *testing.T) {
+func TestOrcaRelayMarker(t *testing.T) {
 	getenv := func(k string) string {
 		if k == "ORCA_TERMINAL_HANDLE" {
 			return "native-here"
@@ -71,11 +69,11 @@ func TestOrcaLiveMarker(t *testing.T) {
 		t.Fatal("Orca marker was not used consistently")
 	}
 }
-func TestOrcaLiveCreateCapturesBranchAndHandle(t *testing.T) {
+func TestOrcaRelayCreateCapturesBranchAndHandle(t *testing.T) {
 	cwd := orcaWorktree(t)
 	gitBeforeCreate := false
 	created := false
-	h := New(Orca, Deps{Getenv: func(string) string { return "" }, Sleep: func(time.Duration) {}, Run: func(_ context.Context, name string, a []string) (Result, error) {
+	h := New(Orca, Deps{Getenv: func(string) string { return "" }, Sleep: func(time.Duration) {}, Alive: func(int) bool { return true }, Tree: func(p int) []int { return []int{p} }, Run: func(_ context.Context, name string, a []string) (Result, error) {
 		if name == "git" {
 			if strings.Join(a, " ") != "-C "+cwd+" symbolic-ref --quiet --short HEAD" {
 				t.Fatalf("unexpected branch probe: %v", a)
@@ -87,10 +85,16 @@ func TestOrcaLiveCreateCapturesBranchAndHandle(t *testing.T) {
 		}
 		if a[1] == "create" {
 			created = true
+			files, _ := filepath.Glob(filepath.Join(cwd, ".git", "rota-orca", "agent-*.pid"))
+			for _, file := range files {
+				if err := os.WriteFile(file, []byte("123\n"), 0600); err != nil {
+					return Result{}, err
+				}
+			}
 			return Result{Stdout: `{"handle":"native-1","title":"r:ben","tabId":"tab-1"}`}, nil
 		}
 		if a[1] == "read" {
-			b, _ := json.Marshal(map[string]string{"screen": orcaLiveReady})
+			b, _ := json.Marshal(map[string]string{"screen": orcaRelayReady})
 			return Result{Stdout: string(b)}, nil
 		}
 		return Result{ExitCode: 1}, nil
@@ -111,7 +115,7 @@ func TestOrcaLiveCreateCapturesBranchAndHandle(t *testing.T) {
 		t.Fatalf("branch/handle not preserved before create: %+v gitBefore=%v", meta, gitBeforeCreate)
 	}
 }
-func TestOrcaLiveReceiptAndBranchGuard(t *testing.T) {
+func TestOrcaRelayReceiptAndBranchGuard(t *testing.T) {
 	for _, tc := range []struct {
 		name, nativeBranch, gitBranch, receipt string
 		want                                   string
@@ -123,7 +127,7 @@ func TestOrcaLiveReceiptAndBranchGuard(t *testing.T) {
 		{"fallback renamed", "renamed-by-orca", "ben/2203-orca", `{}`, "branch"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			handle := orcaLiveHandle(t)
+			handle := orcaRelayHandle(t)
 			meta, _ := decodeOrca(handle)
 			file := filepath.Join(t.TempDir(), "brief")
 			os.WriteFile(file, []byte("do work"), 0600)
@@ -163,8 +167,8 @@ func TestOrcaLiveReceiptAndBranchGuard(t *testing.T) {
 		})
 	}
 }
-func TestOrcaLiveIdentityUsesOnlyNativeHandle(t *testing.T) {
-	handle := orcaLiveHandle(t)
+func TestOrcaRelayIdentityUsesOnlyNativeHandle(t *testing.T) {
+	handle := orcaRelayHandle(t)
 	meta, _ := decodeOrca(handle)
 	h := New(Orca, Deps{Run: func(_ context.Context, _ string, a []string) (Result, error) {
 		if a[1] == "list" {
@@ -196,8 +200,8 @@ func TestOrcaLiveIdentityUsesOnlyNativeHandle(t *testing.T) {
 		t.Fatalf("closed replacement terminal: closed=%v error=%v", closed, e)
 	}
 }
-func TestOrcaLivePortableBriefLimit(t *testing.T) {
-	handle := orcaLiveHandle(t)
+func TestOrcaRelayPortableBriefLimit(t *testing.T) {
+	handle := orcaRelayHandle(t)
 	file := filepath.Join(t.TempDir(), "brief")
 	text := strings.Repeat("ö", 61441)
 	os.WriteFile(file, []byte(text), 0600)
@@ -212,7 +216,7 @@ func TestOrcaLivePortableBriefLimit(t *testing.T) {
 	}
 }
 
-func TestOrcaLiveCurrentPaneAny(t *testing.T) {
+func TestOrcaRelayCurrentPaneAny(t *testing.T) {
 	pane, kind := CurrentPaneAny(func(k string) string {
 		switch k {
 		case "ORCA_TERMINAL_HANDLE":
@@ -222,11 +226,11 @@ func TestOrcaLiveCurrentPaneAny(t *testing.T) {
 		}
 		return ""
 	})
-	if pane != "native-here" || kind != Orca {
+	if pane != "%inherited" || kind != Tmux {
 		t.Fatalf("current pane=%q kind=%q", pane, kind)
 	}
 }
-func TestOrcaLiveNativePaneOperations(t *testing.T) {
+func TestOrcaRelayNativePaneOperations(t *testing.T) {
 	calls := 0
 	sent := false
 	h := New(Orca, Deps{Run: func(_ context.Context, name string, a []string) (Result, error) {
@@ -268,7 +272,7 @@ func TestOrcaLiveNativePaneOperations(t *testing.T) {
 	}
 }
 
-func TestOrcaLiveEchoAloneDoesNotProveTurnStarted(t *testing.T) {
+func TestOrcaRelayEchoAloneDoesNotProveTurnStarted(t *testing.T) {
 	f := newOrcaFake(t)
 	f.receipt = `{"stages":["input_accepted"],"observation":"supported"}`
 	f.after = "do work\n› "
