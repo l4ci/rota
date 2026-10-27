@@ -9,6 +9,7 @@ Public user guide for rota, a dev workflow for Claude Code and Codex, with OpenC
 - [Install](install.md): Homebrew, the install script, release binaries, the Claude Code plugin, upgrading, uninstalling
 - [Getting started](getting-started.md): install and run your first cycle
 - [How it works](how-it-works.md): the two ways to use rota (orchestrator, workers, gate), plus how each skill connects to the artifacts it touches
+- [Where coding agents go wrong](agent-mistakes.md): seven common mistakes, enforced checks, written rules and remaining gaps
 
 ### Walkthroughs
 
