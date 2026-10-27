@@ -112,7 +112,10 @@ func (e Env) Freeze(ctx context.Context, root string, o FreezeOpts) (r *landfree
 		if !vr.OK() {
 			return fail(exitcode.ExitFailed, "base verification failed; freeze kept\n"+vr.detail())
 		}
-		vr, err = e.RunVerifyWith(ctx, in.cfg.E2E, root, in.ledger)
+		vr, err = e.runE2E(ctx, in.cfg.E2E, root, in.ledger)
+		if err == nil {
+			err = e.recordFlakes(root, nil, nil, vr)
+		}
 		if err != nil {
 			return err
 		}

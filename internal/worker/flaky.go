@@ -74,6 +74,13 @@ func (e Env) runGateVerify(ctx context.Context, cmds []string, dir string, led t
 	return r, err
 }
 
+// runE2E is the one entry point for the test.e2e tier: gate, train, the
+// post-landing check and freeze recovery all verify e2e through it, so the
+// retry policy has a single owner. Callers record vr.Flaky themselves.
+func (e Env) runE2E(ctx context.Context, cmds []string, dir string, led testledger.Ledger) (VerifyResult, error) {
+	return e.runGateVerify(ctx, cmds, dir, led)
+}
+
 func (e Env) recordFlakes(root string, round *RoundMemo, prs []string, vr VerifyResult) error {
 	for _, f := range vr.Flaky {
 		f.PRs = append([]string{}, prs...)
