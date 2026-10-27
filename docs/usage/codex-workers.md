@@ -15,6 +15,10 @@ rota round assign 59 --kind codex
 
 `--kind` is `claude` or `codex`. Without it, the issue's `harness:` label applies (file backend: a `Harness:` field), then the project default (the first entry of `round.harnesses`), then the slot's recorded kind, else `claude`. A Codex-first project sets `rota config set round.harnesses '["codex"]'` once; autopilot, `rota round architecture` and `rota round transfer` then start Codex workers too. `rota round status` shows each slot's kind and where it came from. To pick a model per issue, add a `model:<id>` label or pass `--model <id>`; see [assigning](parallel-rounds.md#assigning-an-issue).
 
+While Codex shows `Waiting for background terminal` with an interrupt hint, `rota round status`
+shows the slot as `working` and `rota round watch` keeps waiting. A `ROTA-BLOCKED` sentinel or an
+approval prompt still needs attention, even when the terminal-wait text remains visible.
+
 A `best-of:2` issue gets one Claude and one Codex attempt when both `round.tiers.claude` and `round.tiers.codex` are set and neither `--kind` nor a `harness:` label pins a harness. See [best-of](parallel-rounds.md#best-of-two-workers-on-one-issue).
 
 ## What you need
