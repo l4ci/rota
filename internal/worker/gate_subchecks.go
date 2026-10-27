@@ -24,15 +24,16 @@ func gateSubchecks(output, tree string, now time.Time) ([]flakeledger.Entry, err
 			continue
 		}
 		var wire struct {
-			Check       string  `json:"check"`
-			FirstExit   *int    `json:"firstExit"`
-			RetryExit   *int    `json:"retryExit"`
-			FirstOutput *string `json:"firstOutput"`
-			RetryOutput *string `json:"retryOutput"`
+			Check        string  `json:"check"`
+			FirstExit    *int    `json:"firstExit"`
+			RetryExit    *int    `json:"retryExit"`
+			FirstOutput  *string `json:"firstOutput"`
+			RetryOutput  *string `json:"retryOutput"`
+			RetrySeconds float64 `json:"retrySeconds"`
 		}
 		if len(line) > 64*1024 || json.Unmarshal([]byte(strings.TrimPrefix(line, subcheckPrefix)), &wire) != nil ||
 			!subcheckName.MatchString(wire.Check) || wire.FirstExit == nil || *wire.FirstExit != 1 ||
-			wire.RetryExit == nil || *wire.RetryExit != 0 || wire.FirstOutput == nil || wire.RetryOutput == nil {
+			wire.RetryExit == nil || *wire.RetryExit != 0 || wire.FirstOutput == nil || wire.RetryOutput == nil || wire.RetrySeconds < 0 {
 			return nil, fmt.Errorf("invalid gate sub-check recovery record")
 		}
 		tests, _ := testledger.FailingTests(*wire.FirstOutput)
@@ -41,7 +42,7 @@ func gateSubchecks(output, tree string, now time.Time) ([]flakeledger.Entry, err
 		}
 		entries = append(entries, flakeledger.Entry{Check: wire.Check, Tests: tests, Tree: tree, TS: now.UTC(),
 			First: flakeledger.Run{ExitCode: *wire.FirstExit, Output: *wire.FirstOutput},
-			Retry: flakeledger.Run{ExitCode: *wire.RetryExit, Output: *wire.RetryOutput}})
+			Retry: flakeledger.Run{ExitCode: *wire.RetryExit, Output: *wire.RetryOutput, WallSeconds: wire.RetrySeconds}})
 	}
 	return entries, nil
 }
