@@ -14,7 +14,7 @@ import (
 
 func subcheckMarker(t *testing.T, check, first, retry string) string {
 	t.Helper()
-	b, err := json.Marshal(map[string]any{"check": check, "firstExit": 1, "retryExit": 0, "firstOutput": first, "retryOutput": retry})
+	b, err := json.Marshal(map[string]any{"check": check, "firstExit": 1, "retryExit": 0, "firstOutput": first, "retryOutput": retry, "retrySeconds": 0.125})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,10 +48,10 @@ func TestGateRecordsSubcheckRecovery(t *testing.T) {
 				t.Fatalf("sub-check recovery must reach the shared flake ledger: rows=%+v err=%v", rows, err)
 			}
 			f := rows[0]
-			if f.Check != tc.check || strings.Join(f.Tests, ",") != tc.test || f.Tree != tree || !f.TS.Equal(now) || len(f.PRs) != 1 || f.PRs[0] != ghURL || f.First.ExitCode != 1 || f.First.Output != tc.first || f.Retry.ExitCode != 0 || f.Retry.Output != "ok\n" {
+			if f.Check != tc.check || strings.Join(f.Tests, ",") != tc.test || f.Tree != tree || !f.TS.Equal(now) || len(f.PRs) != 1 || f.PRs[0] != ghURL || f.First.ExitCode != 1 || f.First.Output != tc.first || f.Retry.ExitCode != 0 || f.Retry.Output != "ok\n" || f.Retry.WallSeconds != 0.125 {
 				t.Fatalf("incomplete sub-check record: %+v", f)
 			}
-			if strings.Join(r.Flaky, ",") != tc.check || !strings.Contains(strings.Join(r.Notes, "\n"), "FLAKY "+tc.check) {
+			if len(r.Flaky) != 1 || r.Flaky[0].Check != tc.check || !strings.Contains(strings.Join(r.Notes, "\n"), "FLAKY "+tc.check) || !strings.Contains(strings.Join(r.Notes, "\n"), "rerun: 0.125s") {
 				t.Fatalf("sub-check must be named in the verdict: %+v", r)
 			}
 		})
@@ -68,7 +68,7 @@ func TestTrainRecordsSubcheckRecovery(t *testing.T) {
 	}
 	r, err := e.Train(bg, w.dir, TrainOpts{Targets: []string{"b1", "b2"}, Base: "main"})
 	rows, loadErr := flakeledger.Load(w.dir)
-	if err != nil || r.Verdict != GatePass || len(r.Landed) != 2 || calls != 1 || loadErr != nil || len(rows) != 1 || rows[0].Check != "smoke-shard1" || strings.Join(r.Flaky, ",") != "smoke-shard1" {
+	if err != nil || r.Verdict != GatePass || len(r.Landed) != 2 || calls != 1 || loadErr != nil || len(rows) != 1 || rows[0].Check != "smoke-shard1" || (len(r.Flaky) != 1 || r.Flaky[0].Check != "smoke-shard1") {
 		t.Fatalf("train must reuse the same sub-check ledger path: %+v calls=%d rows=%+v err=%v load=%v", r, calls, rows, err, loadErr)
 	}
 }
