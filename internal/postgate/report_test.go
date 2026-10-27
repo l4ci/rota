@@ -49,10 +49,10 @@ func TestRenderReportRedactsGateOutput(t *testing.T) {
 	got := RenderReport(worker.GateResult{
 		Verdict: worker.GateVerifyFailed, SHA: "abc1234",
 		Verified: []string{"go test /home/alice/private/pkg --token=" + token},
-		Err:      "verification failed /tmp/rota-train-123/log " + token + "\nRAW OUTPUT MUST STAY LOCAL",
+		Err:      "verification failed /tmp/rota-train-123/log log:/var/private/result " + token + "\nRAW OUTPUT MUST STAY LOCAL",
 		Hint:     "retry from /home/alice/work/repo or C:\\Users\\alice\\repo " + token + " " + strings.Repeat("x", 4000),
 	})
-	for _, secret := range []string{token, "/home/alice", "/tmp/rota-train", `C:\Users`, "RAW OUTPUT MUST STAY LOCAL", strings.Repeat("x", 600)} {
+	for _, secret := range []string{token, "/home/alice", "/tmp/rota-train", "/var/private", `C:\Users`, "RAW OUTPUT MUST STAY LOCAL", strings.Repeat("x", 600)} {
 		if strings.Contains(got, secret) {
 			t.Errorf("public gate report leaked %q", secret)
 		}
