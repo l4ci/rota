@@ -275,9 +275,8 @@ func TestInitChangedWhenOnlyAMigrationWrote(t *testing.T) {
 	}
 }
 
-// The merge train verdict cache (#400) holds local shas: `rota init` ignores it,
-// and git agrees the file stays untracked.
-func TestInitIgnoresTrainCache(t *testing.T) {
+// Runtime verification evidence stays per-developer after initialization.
+func TestInitIgnoresVerificationState(t *testing.T) {
 	dir := t.TempDir()
 	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v %s", err, out)
@@ -285,15 +284,18 @@ func TestInitIgnoresTrainCache(t *testing.T) {
 	if _, err := Init(dir); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, ".rota", "train-cache.json"), []byte("{}\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if out, err := exec.Command("git", "-C", dir, "check-ignore", "-q", ".rota/train-cache.json").CombinedOutput(); err != nil {
-		t.Errorf("train-cache.json is not gitignored: %v %s", err, out)
-	}
-	out, _ := exec.Command("git", "-C", dir, "status", "--porcelain", "--", ".rota/train-cache.json").Output()
-	if len(out) != 0 {
-		t.Errorf("train-cache.json shows in git status: %s", out)
+	for _, name := range []string{"train-cache.json", "flakes.jsonl"} {
+		path := filepath.Join(".rota", name)
+		if err := os.WriteFile(filepath.Join(dir, path), []byte("{}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if out, err := exec.Command("git", "-C", dir, "check-ignore", "-q", path).CombinedOutput(); err != nil {
+			t.Errorf("%s is not gitignored: %v %s", name, err, out)
+		}
+		out, err := exec.Command("git", "-C", dir, "status", "--porcelain", "--", path).Output()
+		if err != nil || len(out) != 0 {
+			t.Errorf("%s shows in git status: %s %v", name, out, err)
+		}
 	}
 }
 
@@ -317,5 +319,25 @@ func TestInitIgnoresClaimedHitBuffer(t *testing.T) {
 func TestIgnoreLinesCoverCodexAgents(t *testing.T) {
 	if missing := MissingIgnoreLines(".rota/status.json\n"); !slices.Contains(missing, ".codex/") {
 		t.Fatalf(".codex/ not managed: missing = %v", missing)
+	}
+}
+
+func TestRuntimeFileListsMatchManagedIgnores(t *testing.T) {
+	for _, path := range []string{"AGENTS.md", "internal/knowledge/skills_block.md", "docs/reference/rota-folder.md", "docs/contributing/contract/init.md"} {
+		b, err := os.ReadFile(filepath.Join("..", "..", path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Pin the regular runtime files; directories and glob descriptions use
+		// deliberately different prose in these inventories.
+		for _, line := range ignoreLines[1:] {
+			if !strings.HasPrefix(line, ".rota/") || strings.ContainsAny(line, "*") || strings.HasSuffix(line, "/") {
+				continue
+			}
+			name := strings.TrimPrefix(line, ".rota/")
+			if !strings.Contains(string(b), "`"+line+"`") && !strings.Contains(string(b), "`"+name+"`") {
+				t.Errorf("%s omits managed runtime file %s", path, line)
+			}
+		}
 	}
 }

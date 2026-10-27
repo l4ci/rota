@@ -21,6 +21,7 @@ type LeadTimeMetric struct {
 type RoundMetrics struct {
 	AssignToMerged, DoneToMerged     LeadTimeMetric
 	RedTrainRate, BouncesPerMergedPR RatioMetric
+	Flakes                           CountMetric
 }
 
 // RatioMetric carries its measured counts as well as the quotient.
@@ -44,6 +45,7 @@ const leadRule = "distinct merged PRs, winning assignment's %s to first merge; m
 
 func roundMetrics(rows []IssueRow, entries []Entry, round int) RoundMetrics {
 	m := RoundMetrics{
+		Flakes:         CountMetric{Rule: flakeRule, Unavailable: "flake ledger not read"},
 		AssignToMerged: LeadTimeMetric{Rule: fmt.Sprintf(leadRule, "first assign")},
 		DoneToMerged:   LeadTimeMetric{Rule: fmt.Sprintf(leadRule, "latest done")},
 	}
@@ -205,6 +207,7 @@ func (m RoundMetrics) object() *jsonx.Object {
 	o.Set("doneToMerged", m.DoneToMerged.object())
 	o.Set("redTrainRate", m.RedTrainRate.object())
 	o.Set("bouncesPerMergedPR", m.BouncesPerMergedPR.object())
+	o.Set("flakes", m.Flakes.object())
 	return o
 }
 
@@ -243,5 +246,6 @@ func (m RoundMetrics) text() string {
 	}
 	fmt.Fprint(&b, m.RedTrainRate.text("Red-train rate"))
 	fmt.Fprint(&b, m.BouncesPerMergedPR.text("Bounces per merged PR"))
+	fmt.Fprint(&b, m.Flakes.text())
 	return b.String()
 }

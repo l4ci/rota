@@ -50,6 +50,7 @@ func windDownSummary(root string, rnd int) (obj *jsonx.Object, text string, ok b
 	}
 	audit, _ := gate.ReadAudit(root)
 	s := source.Fold(audit, rnd)
+	s.ReadFlakes(root)
 	return s.Object(), s.Text(), true
 }
 

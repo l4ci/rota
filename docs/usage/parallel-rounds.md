@@ -711,6 +711,22 @@ they match, that is the pass. When the base moved between the last check and the
 with `data.changed` true, and you fix forward with a new PR. With `test.fullWhere` set to `ci`, CI
 checks the merge result first and nothing lands when it fails.
 
+For local verification, the gate and train retry a configured command once when its output
+identifies Go assertion failures (`--- FAIL: <test>` followed by a final `FAIL` summary).
+The retry runs sequentially in the same directory at the same clean tree. A pass stays green and
+adds `FLAKY <command>` with failing test names and rerun wall time to the result's notes and structured `data.flaky` entries; it costs no bounce. A second failure stays red.
+Build, setup, panic, infrastructure, timeout, signal and unknown failures are not retried.
+The known-red exclusion ledger keeps its existing behavior and is checked before retrying.
+
+Each recovery appends the command, failing test names, tree, PR references, round, timestamp
+and both runs' output and exit status to the gitignored `.rota/flakes.jsonl` in the gate
+checkout. `rota test flakes` ranks commands and test names by repeat count. `rota round summary`
+and the wind-down summary report the round's recorded recoveries as `metrics.flakes`.
+A missing or unreadable ledger makes that metric unavailable, rather than claiming zero flakes.
+CI verification, `rota test run` and `## Try it` steps do not retry. Wrapper output that does
+not identify assertion failures also stays red; this repo's `test/gate.sh` needs the separate
+adapter tracked in #2196 before it can use sequential retries.
+
 After `test.full` and `test.e2e` pass, the gate runs the `## Try it` steps of the slot's issue on the merged tree, in order, stopping at the first failure. A step fails on a non-zero exit or a missing `expect:` substring (`verify-failed`, nothing lands). The steps run only when the issue's author and last editor have write access on the forge (a file issue source runs unchecked); otherwise the gate notes `BEHAVIOUR-SKIP` and continues. The transcript goes to `.rota/qa-runs/behaviour/` and a `behaviour` verdict is recorded. `--check-only` and `--no-verify` skip the run.
 
 A branch that is only behind the base is merged as is when the merge is clean, even when both sides

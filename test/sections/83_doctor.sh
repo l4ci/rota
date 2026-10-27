@@ -47,7 +47,7 @@ mkdir -p "$TMP_DR/proj/.rota"
 echo '{"claudeAiOauth":{"accessToken":"t"}}' >"$TMP_DR/claude/.credentials.json"
 : >"$TMP_DR/claude/installed"
 # every managed line (internal/initproj/gitignore.go), or doctor warns about the gitignore
-printf '%s\n' '# ── rota ──' .rota/status.json .rota/repos.json .rota/config.local.json .rota/handoff/ .rota/debug/ .rota/review/ .rota/qa-runs/ .rota/verdicts.json .rota/gate-audit.jsonl .rota/ledger.jsonl .rota/bugreports.jsonl .rota/train-cache.json .rota/workers.json .rota/receipts.json '.rota/**/knowledge-hits.jsonl*' '.rota/**/*.proof' '.rota/**/*.lock' .codex/ .worktrees/ >"$TMP_DR/proj/.gitignore"
+printf '%s\n' '# ── rota ──' .rota/status.json .rota/repos.json .rota/config.local.json .rota/handoff/ .rota/debug/ .rota/review/ .rota/qa-runs/ .rota/verdicts.json .rota/gate-audit.jsonl .rota/ledger.jsonl .rota/flakes.jsonl .rota/bugreports.jsonl .rota/train-cache.json .rota/workers.json .rota/receipts.json '.rota/**/knowledge-hits.jsonl*' '.rota/**/*.proof' '.rota/**/*.lock' .codex/ .worktrees/ >"$TMP_DR/proj/.gitignore"
 printf '{"round":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]}}\n' "$TMP_DR/claude" >"$TMP_DR/proj/.rota/config.json"
 # D1 (#65): the orchestrator hooks are opt-in, so a project that has not installed them skips both checks
 git -C "$TMP_DR/proj" init -q
@@ -55,19 +55,22 @@ rc=0; OUT="$(dr_run "$TMP_DR/proj")" || rc=$?
 [ "$rc" -eq 0 ] || fail "C6[a]: healthy project exited $rc: $OUT"
 [ "$(printf '%s' "$OUT" | dr_ok)" = "True" ] || fail "C6[a]: ok is not true: $OUT"
 NAMES="$(printf '%s' "$OUT" | python3 -c 'import json,sys; print(",".join(c["name"] for c in json.load(sys.stdin)["data"]["checks"]))')"
+# A complete managed gitignore emits no warning row (doctor.TestGitignoreCheck).
 [ "$NAMES" = "git,jq,host,tracker,accounts,hook,statusline,stop-hook,guard-hook,switch,skills,codex,opencode,config dir,agents,verify,test,state dir" ] || fail "C6[a]: checks were: $NAMES"
 for pair in git:pass host:pass tracker:skip accounts:pass hook:pass statusline:skip stop-hook:skip guard-hook:skip skills:skip codex:skip; do
   [ "$(printf '%s' "$OUT" | dr_field "${pair%%:*}" status)" = "${pair##*:}" ] || fail "C6[a]: ${pair%%:*} was not ${pair##*:}: $OUT"
 done
 [ "$(printf '%s' "$OUT" | dr_field "state dir" status)" = "pass" ] || fail "C6[a]: state dir was not pass: $OUT"
 case "$OUT" in *'"changed"'*) fail "C6[a]: doctor reports changed: $OUT" ;; esac
-pass "C6[a]: a healthy herdr project passes in contract order, with no changed"
+pass "C6[a]: a healthy herdr project with every managed ignore line passes in contract order, with no changed"
 
 # (a1) #1331: a .gitignore missing a managed line warns with the init hint
 cp "$TMP_DR/proj/.gitignore" "$TMP_DR/gitignore.full"
 grep -vF 'knowledge-hits.jsonl' "$TMP_DR/gitignore.full" >"$TMP_DR/proj/.gitignore"
 rc=0; OUT="$(dr_run "$TMP_DR/proj")" || rc=$?
 [ "$rc" -eq 0 ] || fail "C6[a1]: a missing gitignore line must warn, not fail; exited $rc: $OUT"
+WARN_NAMES="$(printf '%s' "$OUT" | python3 -c 'import json,sys; print(",".join(c["name"] for c in json.load(sys.stdin)["data"]["checks"]))')"
+[ "$WARN_NAMES" = "git,jq,host,tracker,accounts,hook,statusline,stop-hook,guard-hook,switch,skills,codex,opencode,config dir,agents,gitignore,verify,test,state dir" ] || fail "C6[a1]: checks were: $WARN_NAMES"
 [ "$(printf '%s' "$OUT" | dr_field gitignore status)" = "warn" ] || fail "C6[a1]: gitignore was not warn: $OUT"
 case "$(printf '%s' "$OUT" | dr_field gitignore detail)" in *knowledge-hits.jsonl*) ;; *) fail "C6[a1]: detail misses the hits line: $OUT" ;; esac
 [ "$(printf '%s' "$OUT" | dr_field gitignore hint)" = "run: rota init" ] || fail "C6[a1]: hint was not 'run: rota init': $OUT"
