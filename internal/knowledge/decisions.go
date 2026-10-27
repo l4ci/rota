@@ -110,3 +110,12 @@ func ActiveDecisions(content string) string {
 	flushTopic()
 	return strings.Join(out, "")
 }
+
+// CheckDecisions validates the umbrella file; a missing file has no entries.
+func (s Store) CheckDecisions() (DecisionCheck, error) {
+	content, err := ReadFile(s.decisionsPath())
+	if err != nil {
+		return DecisionCheck{}, err
+	}
+	return CheckDecisions(content), nil
+}
