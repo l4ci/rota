@@ -386,6 +386,12 @@ blocking finding, when the gate sent it back at its current head (a push clears 
 it is already merged or closed. The autopilot assigns by itself, so
 a watch running with `--autopilot` skips the assign line but still prints the train line.
 
+Set `round.trainMax` and `round.trainFillMinutes` to wait for a fuller train or an age deadline.
+The tick and nudge wait until either threshold fires on one base. For example, `3` and `60` wait
+for three reviewed PRs or sixty minutes since the oldest PR's latest current-head review. A lone
+PR at the deadline gets a `worker gate` command. The nudge names the threshold in its text and
+JSON `reason`. Each key defaults to `0` (disabled); leaving both unset keeps the behavior above.
+
 `rota worker dispatch` and `--relay` check what is on the prompt line before they type. A typed human
 draft is refused as a draft (exit 5, nothing sent). The autocompact settings picker is dismissed once
 with Escape and the send is retried. Any other Claude Code dialog, or a picker that survives Escape, is
@@ -508,7 +514,8 @@ Runs only under `autonomy.level: auto`; under `off` or `roundtrip` both verbs ex
 
 1. repair the safe drift (`reconcile --apply`);
 2. gate and merge every finished PR, as one `worker train` when several wait, at most
-   `round.autopilotCap` (default 3) per tick, and only under `ship.mergeApproval: none`;
+   `round.autopilotCap` (default 3) per tick, and only under `ship.mergeApproval: none`.
+   When train fill thresholds are enabled, wait for their count or age rule first;
 3. run the architecture-review trigger (`rota round architecture`): when the
    threshold is reached, or a slot is idle with nothing assignable, mint the review items
    (`round.architectureEvery` 0 never mints), one audit line per mint;
