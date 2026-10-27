@@ -64,7 +64,7 @@ Multi-repo items always need the captured `Repos:` field. They get no cwd defaul
 ## Status registration
 
 - `rota status add <branch> --items <ids-csv> [--worktree <path>] [--repo <name>] [--if-absent]` ; uniqueness key becomes `(branch, repo)` when `--repo` is set. An unregistered `--repo` exits 3.
-- `rota status add <branch> --items <ids-csv> --repos <repos-csv> [--worktrees <paths-csv>] [--if-absent]` ; writes one entry per `(branch, repo)` pair. `--worktrees` is optional; if given, its length must equal `--repos` (else exit 2). `--repo` with `--repos` exits 2.
+- `rota status add <branch> --items <ids-csv> --repos <repos-csv> [--worktrees <paths-csv>] [--if-absent]` ; writes one entry per `(branch, repo)` pair.
 - `rota status rm <branch> [--repo <name>]`: in umbrella mode, **pass `--repo`** or umbrella-tagged entries leak. Without `--repo`, only legacy entries (repo: null/missing) are removed; umbrella entries are preserved. It also deletes the branch's handoff note.
 
 ## Merge / PR with `--repo`

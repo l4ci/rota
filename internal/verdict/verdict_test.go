@@ -474,3 +474,31 @@ func TestLensKinds(t *testing.T) {
 		t.Error("review-cross is not a lens")
 	}
 }
+
+func TestWorkFixAttemptsAndRetention(t *testing.T) {
+	root := t.TempDir()
+	rec := func(kind, v string) Record { return NewRecord(kind, v, "abc1234", Body{}, time.Time{}) }
+	for n := 1; n <= WorkFixCap; n++ {
+		got, ok, err := AddWorkFix(root, "7", rec(WorkFix, Fail))
+		if err != nil || !ok || got != n {
+			t.Fatalf("attempt %d: got %d ok %v err %v", n, got, ok, err)
+		}
+	}
+	if got, ok, _ := AddWorkFix(root, "7", rec(WorkFix, Fail)); ok || got != WorkFixCap {
+		t.Fatalf("fourth attempt: got %d ok %v", got, ok)
+	}
+	// Active failures survive the history limit; work-fix records never count as debug fixes.
+	for i := 0; i < keep+5; i++ {
+		_, _ = AddItem(root, "7", rec(DebugFix, Pass))
+	}
+	list := Load(root).Items["7"]
+	if got := WorkFixAttempts(list); got != WorkFixCap {
+		t.Errorf("attempts after trimming = %d", got)
+	}
+	if FailedFixes(list) != 0 {
+		t.Errorf("work-fix FAILs counted as debug fixes")
+	}
+	if got, ok, _ := AddWorkFix(root, "7", rec(WorkFix, Pass)); !ok || got != 0 {
+		t.Errorf("pass: got %d ok %v", got, ok)
+	}
+}

@@ -618,6 +618,7 @@ type transferRun struct {
 	model, tier      string // model is the applied one
 	reason           string
 	decisions, brief string
+	decisionContext  string
 	rnd              int
 
 	branch, oldClaim string
@@ -836,6 +837,14 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		res.From = o.To
 	}
 	run.from = res.From
+	switch {
+	case sender != nil:
+		run.decisionContext = sender.BriefDecisionContext()
+	case run.rec != nil:
+		run.decisionContext = run.rec.DecisionContext
+	case receiver != nil:
+		run.decisionContext = receiver.BriefDecisionContext()
+	}
 
 	if err := fenceExternal(sender, "transfer", "move a worktree"); err != nil {
 		return nil, err
@@ -1084,7 +1093,7 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return run.branch }, Round: rnd, Kind: run.kind, Model: run.model, Wrap: wrap, LogRelay: true,
 		Brief: func() string {
 			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
-			text := pointerBrief(o.To, id, run.branch, run.brief, nil, run.decisions, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, nil, tierBrief{Kind: run.kind, Tier: run.tier, Model: run.model, Default: e.Round.Tier, Reason: run.reason, Table: e.Round.Models[run.kind], Attempt: attempt, FullOnly: e.Round.FullOnly, TDD: e.Round.TDD})
+			text := pointerBrief(o.To, id, run.branch, run.brief, nil, run.decisions, run.decisionContext, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, nil, tierBrief{Kind: run.kind, Tier: run.tier, Model: run.model, Default: e.Round.Tier, Reason: run.reason, Table: e.Round.Models[run.kind], Attempt: attempt, FullOnly: e.Round.FullOnly, TDD: e.Round.TDD})
 			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `%s` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
 				res.From, marker.Handoff(res.From, rnd), run.branch)
 			if rec != nil {
@@ -1122,6 +1131,8 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 			err := editSlot(root, o.To, func(s *worker.Slot) error {
 				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: run.kind, KindSource: run.kindSource, Tier: run.tier, Model: run.model, TierReason: run.reason, Attempt: attempt, AttemptBase: attemptBase})
 				s.SetBranch(run.branch)
+				s.SetBriefContext(run.decisions, nil)
+				s.SetBriefDecisionContext(run.decisionContext)
 				s.SetAwaitingDone(true) // the branch's PR is the sender's: only this worker's own done counts
 				return nil
 			})

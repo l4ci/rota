@@ -12,7 +12,7 @@ The registry lives in code. `rota gate list` prints every gate, whether a verb e
 | `release-publish` | `rota release publish` | `/rota-release` Step 11 |
 | `public-filing` | `rota tracker suggest-upstream` | none (no skill files upstream issues) |
 | `merge-approval` | `rota ship merge`, `rota ship pr-merge`, `rota worker gate`, when `ship.mergeApproval` covers the merge (`all`, or `paths` matching `ship.mergeApprovalPaths`) | `/rota-ship` Step 6b, `/rota-review --queue`, `/rota-work` gate step |
-| `debug-reset` | `rota debug reset <ID> --reason <why>` (starts an item's failed-fix count again after the Iron Law halted it) | `/rota-debug` Step 9.5 |
+| `debug-reset` | `rota debug reset <ID> --reason <why>` (starts an item's failed-fix count again after the Iron Law halted it); `rota debug work-fix reset <ID> --reason <why>` (the same for the `/rota-work` Step 7 attempt cap) | `/rota-debug` Step 9.5, `/rota-work` Step 7 |
 
 At every autonomy level the verb exits 4 with `data.blockedBy: "manual gate"` and `data.gate` unless it gets `--confirm --confirm-note "<answer>"`. `merge-approval` adds `data.paths`, the changed files that matched (`worker gate` reports `data.verdict: "approval-required"`). A cleared gate appends one line to `.rota/gate-audit.jsonl` (gitignored): gate, verb, target, time, the quoted answer and the autonomy level.
 
