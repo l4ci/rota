@@ -49,9 +49,9 @@ type DoneDeps struct {
 	// Closed reports whether a bundle member's item is closed; false when it
 	// cannot be read.
 	Closed func(id string) bool
-	// Acceptance refuses completion while any open item's explicit criteria
-	// lack a proof-backed mark. Partial and failed reports skip it.
-	Acceptance func(ids []string) error
+	// Acceptance checks explicit criteria on tracker items this branch's PR
+	// closes. Partial and failed reports skip it.
+	Acceptance func(dir, branch string, ids []string) error
 	// RunTargeted proves each of ids with command at head: a PASS row or a run.
 	// It returns the expanded command, "" when expansion failed.
 	RunTargeted func(dir, command, base, head string, ids []string) (string, error)
@@ -140,7 +140,7 @@ func done(req DoneRequest, dp DoneDeps, res *DoneResult) error {
 		kind, _ = sl.Outcome() // A plain done preserves a standing partial/failed.
 	}
 	if !OutcomeOpen(kind) && dp.Acceptance != nil {
-		if err := dp.Acceptance(bundle()); err != nil {
+		if err := dp.Acceptance(dir, sl.Branch(), bundle()); err != nil {
 			return err
 		}
 	}

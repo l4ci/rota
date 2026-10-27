@@ -103,7 +103,62 @@ func acceptanceDoneProject(t *testing.T) (string, *trackertest.Fake, *Deps) {
 	fake := acceptFixture()
 	fake.Issues[0].Body = "## Acceptance\n- [ ] AC-1: first\n- [ ] AC-2: second\n"
 	deps := withTracker(t, fake)
+	donePR(deps, fake, "Closes #7\nCloses #8")
 	return dir, fake, deps
+}
+
+type doneForge struct {
+	worker.Forge
+	body string
+}
+
+func (f doneForge) OpenPRs(context.Context) ([]tracker.PR, error) {
+	return []tracker.PR{{Branch: "feat/x", Body: f.body}}, nil
+}
+
+func donePR(deps *Deps, fake *trackertest.Fake, body string) {
+	base := deps.WorkerEnv
+	deps.WorkerEnv = func() worker.Env {
+		e := base()
+		e.Forge = func(string, string, tracker.Settings) (worker.Forge, error) { return doneForge{body: body}, nil }
+		e.Issues = func(string, tracker.Settings) (worker.Issues, error) {
+			return &a8Forge{MS: &trackertest.MS{Fake: fake}}, nil
+		}
+		return e
+	}
+}
+
+func TestWorkerDoneSliceAcceptance(t *testing.T) {
+	for _, tc := range []struct {
+		body string
+		want int
+	}{{"Refs #7", 0}, {"Closes #7", 4}} {
+		t.Run(tc.body, func(t *testing.T) {
+			dir, fake, deps := acceptanceDoneProject(t)
+			fake.Issues[0].Labels = append(fake.Issues[0].Labels, "partial-slice")
+			donePR(deps, fake, tc.body)
+			code, out, stderr := rotaInWith(t, deps, dir, "worker", "done", "ben", "--outcome", "done", "--json")
+			if code != tc.want || (slotState(t, dir) == "done") != (tc.want == 0) {
+				t.Fatalf("slice with parent criteria unmet: %d %s %s", code, out, stderr)
+			}
+		})
+	}
+}
+
+func TestWorkerDoneBundleClosingAcceptance(t *testing.T) {
+	dir, fake, deps := acceptanceDoneProject(t)
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "workers.json"), []byte(`{"slots":[{"name":"ben","branch":"feat/x","task":"7","bundle":["8"],"state":"busy"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	member := fake.Issues[0]
+	member.Key = tracker.NumKey(8)
+	member.Body = "## Acceptance\n- [ ] AC-3: bundled\n"
+	fake.Issues = append(fake.Issues, member)
+	donePR(deps, fake, "Refs #7\nCloses #8")
+	code, out, stderr := rotaInWith(t, deps, dir, "worker", "done", "ben", "--outcome", "done", "--json")
+	if code != 4 || strings.Contains(out+stderr, "[7] AC-1") || !strings.Contains(out+stderr, "[8] AC-3") {
+		t.Fatalf("only the closing bundle member needs marks: %d %s %s", code, out, stderr)
+	}
 }
 
 func TestWorkerDoneUnmetAcceptance(t *testing.T) {
@@ -192,8 +247,8 @@ func TestWorkerDoneFileAcceptance(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, out, stderr := rotaIn(t, dir, "worker", "done", "ben", "--json")
-	if code != 4 || !strings.Contains(out+stderr, "[B07] AC-1: first") || !strings.Contains(out+stderr, "--outcome partial") || strings.Contains(out+stderr, "plan pass") {
-		t.Fatalf("file refusal: %d %s %s", code, out, stderr)
+	if code != 0 || slotState(t, dir) != "done" {
+		t.Fatalf("file-mode criteria must not acquire the tracker-only refusal: %d %s %s", code, out, stderr)
 	}
 }
 
