@@ -309,6 +309,10 @@ func SetStatus(root, id, status string) (changed bool, err error) {
 
 // setStatus is SetStatus without the Index pass.
 func setStatus(root, id, status string) (changed bool, err error) {
+	return setStatusWithItems(root, id, status, nil)
+}
+
+func setStatusWithItems(root, id, status string, closedItems func(string) ([]string, error)) (changed bool, err error) {
 	if err = checkID(id); err != nil {
 		return
 	}
@@ -330,6 +334,18 @@ func setStatus(root, id, status string) (changed bool, err error) {
 		}
 		if updated == content {
 			return nil
+		}
+		if status == "shipped" {
+			closed := closedItemBullets(content)
+			if closedItems != nil {
+				var err error
+				closed, err = closedItems(id)
+				if err != nil {
+					return err
+				}
+			}
+			summary := strings.TrimPrefix(ShippedSummary(content, closed), "## Shipped\n")
+			updated = section.Replace(updated, "Shipped", summary)
 		}
 		changed = true
 		return fsio.WriteFileAtomic(p, []byte(updated))

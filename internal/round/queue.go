@@ -230,24 +230,36 @@ func (e Env) closeReview(ctx context.Context, root string, be Board, s *worker.S
 	if err != nil {
 		return err
 	}
-	return e.closeNoPR(ctx, root, be, s, it, "Review done: ", "filed "+strings.Join(s.Issues(), ", "))
+	return e.closeNoPR(ctx, root, be, s, it, "Review done: ", "filed "+strings.Join(s.Issues(), ", "), nil)
 }
 
 // closeNoPR completes an item that delivers no PR: the slot parks, the note is
 // commented on the item and closes it without proof, the claim and in-progress
 // state go and the slot is freed. Assign, transfer and accept all close here;
-// did opens the comment ("Review done: ", "Finding accepted: ").
-func (e Env) closeNoPR(ctx context.Context, root string, be Board, s *worker.Slot, it *backlog.Item, did, note string) error {
+// did opens the comment ("Review done: ", "Finding accepted: "). Acceptance is
+// checked first using that artifact as a recorded override reason. before logs
+// a research decision only after that check succeeds.
+func (e Env) closeNoPR(ctx context.Context, root string, be Board, s *worker.Slot, it *backlog.Item, did, note string, before func() error) error {
+	in := backlog.CompleteInput{Date: e.Worker.Now().Format("2006-01-02"), Reason: "done", Note: note, NoProof: true, UnmetReason: did + note}
+	if checker, ok := be.(backlog.AcceptanceChecker); ok {
+		if err := checker.CheckAcceptance(it.ID, in); err != nil {
+			return wrap(err)
+		}
+	}
+	if before != nil {
+		if err := before(); err != nil {
+			return wrap(err)
+		}
+	}
 	name := s.Name()
 	if _, err := e.Park(ctx, root, name, "assign"); err != nil {
 		return err
 	}
-	now := e.Worker.Now
 	// The close note is dropped by the file backend, so it also goes in a comment.
 	if _, err := be.AddComment(it.ID, "feedback", did+note+"."); err != nil {
 		return wrap(err)
 	}
-	if _, err := be.Complete(it.ID, backlog.CompleteInput{Date: now().Format("2006-01-02"), Reason: "done", Note: note, NoProof: true}); err != nil {
+	if _, err := be.Complete(it.ID, in); err != nil {
 		return wrap(err)
 	}
 	if _, err := releaseClaims(be, it.ID, name, s.ClaimID(), true); err != nil {
