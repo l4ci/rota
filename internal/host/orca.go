@@ -10,28 +10,22 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/l4ci/rota/internal/shlex"
 )
 
-// Orca's JSON contract is deliberately narrow pending live validation: create,
-// current return {"terminal":{"id":"…","title":"…","cwd":"…","exited":false}};
-// list returns {"terminals":[...]}; read returns {"screen":"…","exited":false}; status
-// returns {"running":true}; send returns {"receipt":{"turn_started":true}}.
-// Unsupported or incomplete replies fail closed, never imply a dead agent.
-type orca struct {
-	d           Deps
-	currentOnce sync.Once
-	current     orcaTerminal
-}
-type orcaHandle struct{ ID, Title, Cwd, PIDFile string }
+// Orca uses native handles for identity; titles are mutable display text.
+// Decode only direct records and explicit terminal/terminals/receipt wrappers.
+// Read's direct screen and status's running fields await a raw live sample.
+type orca struct{ d Deps }
+type orcaHandle struct{ ID, Title, Cwd, PIDFile, Branch string }
 type orcaTerminal struct {
-	ID     string `json:"id"`
+	ID     string `json:"handle"`
 	Title  string `json:"title"`
-	Cwd    string `json:"cwd"`
+	Cwd    string `json:"worktreePath"`
 	Exited bool   `json:"exited"`
+	Branch string `json:"branch"`
 }
 
 func (o *orca) Kind() Kind                 { return Orca }
@@ -62,28 +56,10 @@ func (o *orca) Require() error {
 	}
 	return nil
 }
-func (o *orca) probeCurrent() {
-	o.currentOnce.Do(func() {
-		raw, e := o.call(context.Background(), "terminal", "current", "--json")
-		if e != nil {
-			return
-		}
-		var r struct {
-			Terminal orcaTerminal `json:"terminal"`
-		}
-		if json.Unmarshal([]byte(raw), &r) == nil && r.Terminal.ID != "" {
-			o.current = r.Terminal
-		}
-	})
-}
-func (o *orca) InSession() bool { o.probeCurrent(); return o.current.ID != "" }
+func (o *orca) InSession() bool { return o.d.Getenv("ORCA_TERMINAL_HANDLE") != "" }
 func (o *orca) Where() string {
-	o.probeCurrent()
-	if o.current.Title != "" {
-		return o.current.Title
-	}
-	if o.current.ID != "" {
-		return o.current.ID
+	if h := o.d.Getenv("ORCA_TERMINAL_HANDLE"); h != "" {
+		return h
 	}
 	return "?"
 }
@@ -94,7 +70,7 @@ func encodeOrca(h orcaHandle) string {
 func decodeOrca(s string) (orcaHandle, error) {
 	var h orcaHandle
 	b, e := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(s, "orca:"))
-	if !strings.HasPrefix(s, "orca:") || e != nil || json.Unmarshal(b, &h) != nil || h.Title == "" || h.Cwd == "" || h.PIDFile == "" {
+	if !strings.HasPrefix(s, "orca:") || e != nil || json.Unmarshal(b, &h) != nil || h.Cwd == "" || h.PIDFile == "" {
 		return h, fmt.Errorf("unverifiable Orca handle")
 	}
 	return h, nil
@@ -156,13 +132,17 @@ func (o *orca) create(ctx context.Context, cwd, title, launch string, env []stri
 	if e != nil {
 		return "", e
 	}
+	branch, e := o.gitBranch(ctx, cwd)
+	if e != nil {
+		return "", e
+	}
 	pidfile, e := orcaPIDFile(cwd)
 	if e != nil {
 		return "", e
 	}
 	// Creation can succeed even if the response is lost or unsupported. Keep
-	// enough identity to reacquire it without ever using an empty CLI target.
-	h := orcaHandle{Title: title, Cwd: cwd, PIDFile: pidfile}
+	// the attempted creation proof, without adopting by title or using a blank target.
+	h := orcaHandle{Title: title, Cwd: cwd, PIDFile: pidfile, Branch: branch}
 	pending := encodeOrca(h)
 	if e := os.WriteFile(pidfile+".json", []byte(pending), 0600); e != nil {
 		os.Remove(pidfile)
@@ -178,13 +158,11 @@ func (o *orca) create(ctx context.Context, cwd, title, launch string, env []stri
 	if e != nil {
 		return pending, e
 	}
-	var v struct {
-		Terminal orcaTerminal `json:"terminal"`
+	v, e := decodeOrcaTerminal(raw)
+	if e != nil {
+		return pending, e
 	}
-	if json.Unmarshal([]byte(raw), &v) != nil || v.Terminal.ID == "" {
-		return pending, fmt.Errorf("orca create returned unsupported terminal JSON")
-	}
-	h.ID = v.Terminal.ID
+	h.ID = v.ID
 	encoded := encodeOrca(h)
 	if e := os.WriteFile(pidfile+".json", []byte(encoded), 0600); e != nil {
 		return encoded, fmt.Errorf("persist Orca identity: %w", e)
@@ -212,9 +190,38 @@ func (o *orca) Spawn(ctx context.Context, s SpawnOpts) (string, error) {
 	}
 	return h, fmt.Errorf("slot %q input did not come up within %ds", s.Slot, s.BootTimeout)
 }
+
+var orcaCodexPrompt = regexp.MustCompile(`(?m)^[ \t]*›(?:[ \t]|$)`)
+var orcaCodexModel = regexp.MustCompile(`(?mi)^[ \t]*(?:[│|][ \t]*)?model:[ \t]*([^\r\n│]+)`)
+
+const orcaTrustQuestion = "Do you trust the contents of this directory?"
+
+func orcaDialog(p string) (Dialog, bool) {
+	if strings.Contains(p, orcaTrustQuestion) {
+		return Dialog{First: orcaTrustQuestion}, true
+	}
+	return ReadDialog(p)
+}
 func orcaReady(p string) bool {
-	_, dialog := ReadDialog(p)
-	return !dialog && looksBooted(p) && strings.ContainsAny(p, promptMarkers)
+	if _, ok := orcaDialog(p); ok {
+		return false
+	}
+	model := orcaCodexModel.FindStringSubmatch(p)
+	if len(model) > 0 || orcaCodexPrompt.MatchString(p) {
+		return len(model) > 1 && !strings.HasPrefix(strings.ToLower(strings.TrimSpace(model[1])), "loading") && orcaCodexPrompt.MatchString(p)
+	}
+	if !strings.Contains(p, "❯") {
+		return false
+	}
+	for _, pattern := range bootPatterns {
+		if strings.Contains(pattern.String(), "Ask Codex") {
+			continue
+		}
+		if pattern.MatchString(p) {
+			return true
+		}
+	}
+	return false
 }
 func (o *orca) ReadPane(ctx context.Context, slot, h string, lines int) (string, error) {
 	v, e := decodeOrca(h)
@@ -225,11 +232,7 @@ func (o *orca) ReadPane(ctx context.Context, slot, h string, lines int) (string,
 }
 func (o *orca) readPane(ctx context.Context, v *orcaHandle, lines int) (string, error) {
 	if v.ID == "" {
-		resolved, e := o.resolve(ctx, *v)
-		if e != nil {
-			return "", e
-		}
-		*v = resolved
+		return "", fmt.Errorf("unverifiable Orca terminal: native handle missing")
 	}
 	raw, e := o.call(ctx, "terminal", "read", "--terminal", v.ID, "--screen", "--json")
 	if e != nil {
@@ -278,10 +281,24 @@ func (o *orca) Send(ctx context.Context, slot, handle, file string) error {
 	return o.send(ctx, handle, text)
 }
 
+const orcaBriefLimit = 120 * 1024
+
+func orcaCheckSize(text string) error {
+	if len(text) > orcaBriefLimit {
+		return fmt.Errorf("Orca brief is %d UTF-8 bytes; limit is %d bytes", len(text), orcaBriefLimit)
+	}
+	return nil
+}
 func (o *orca) send(ctx context.Context, handle, text string) error {
+	if err := orcaCheckSize(text); err != nil {
+		return err
+	}
 	h, err := decodeOrca(handle)
 	if err != nil {
 		return err
+	}
+	if h.Branch == "" {
+		return fmt.Errorf("cannot submit Orca prompt: saved worktree branch is missing")
 	}
 	before, err := o.readPane(ctx, &h, 0)
 	handle = encodeOrca(h)
@@ -290,7 +307,7 @@ func (o *orca) send(ctx context.Context, handle, text string) error {
 	}
 	// Orca has no validated key-only transport. Refuse every dialog without
 	// changing its selection or pasting text into it.
-	if dialog, ok := ReadDialog(before); ok {
+	if dialog, ok := orcaDialog(before); ok {
 		return &DialogError{First: dialog.First}
 	}
 	readErr := error(nil)
@@ -309,7 +326,7 @@ func (o *orca) send(ctx context.Context, handle, text string) error {
 	if readErr != nil {
 		return readErr
 	}
-	if dialog, ok := ReadDialog(latest); ok {
+	if dialog, ok := orcaDialog(latest); ok {
 		return &DialogError{First: dialog.First}
 	}
 	before = latest
@@ -321,16 +338,12 @@ func (o *orca) send(ctx context.Context, handle, text string) error {
 	if err != nil {
 		return err
 	}
-	var r struct {
-		Receipt *struct {
-			TurnStarted bool `json:"turn_started"`
-		} `json:"receipt"`
+	started, err := orcaTurnStarted(raw)
+	if err != nil {
+		return err
 	}
-	if json.Unmarshal([]byte(raw), &r) != nil {
-		return fmt.Errorf("orca send returned malformed JSON; pickup unconfirmed")
-	}
-	if r.Receipt != nil && r.Receipt.TurnStarted {
-		return nil
+	if started {
+		return o.verifyBranch(ctx, h)
 	}
 	for i := 0; i < 4; i++ {
 		o.d.settle(time.Second)
@@ -346,7 +359,8 @@ func (o *orca) send(ctx context.Context, handle, text string) error {
 			above = after[:n]
 		}
 		// Draft-only changes are not submission. Require new output above the
-		// composer containing brief echo or explicit turn/busy evidence.
+		// composer containing explicit turn/busy evidence. An echo alone
+		// proves input acceptance, not the turn-start required by dispatch.
 		oldAbove := before
 		if n := strings.LastIndexAny(before, promptMarkers); n >= 0 {
 			oldAbove = before[:n]
@@ -354,9 +368,8 @@ func (o *orca) send(ctx context.Context, handle, text string) error {
 		if above == oldAbove {
 			continue
 		}
-		tail := briefTail(text)
-		if (tail != "" && strings.Contains(squeeze(above), tail) && !strings.Contains(squeeze(oldAbove), tail)) || (orcaBusy.MatchString(above) && !orcaBusy.MatchString(oldAbove)) {
-			return nil
+		if orcaBusy.MatchString(above) && !orcaBusy.MatchString(oldAbove) {
+			return o.verifyBranch(ctx, h)
 		}
 	}
 	return ErrNotSubmitted
@@ -372,6 +385,9 @@ func (o *orca) Kill(ctx context.Context, slot, handle string) error {
 	if e != nil {
 		return e
 	}
+	if h.ID == "" {
+		return fmt.Errorf("unverifiable Orca close: native handle missing")
+	}
 	pids, e := o.processes(h, true)
 	if e != nil {
 		return e
@@ -382,17 +398,22 @@ func (o *orca) Kill(ctx context.Context, slot, handle string) error {
 	}
 	matches := []orcaTerminal{}
 	for _, t := range ts {
-		if t.Title == h.Title && filepath.Clean(t.Cwd) == filepath.Clean(h.Cwd) {
+		if t.ID == h.ID {
 			matches = append(matches, t)
 		}
 	}
 	if len(matches) > 1 {
-		return fmt.Errorf("unverifiable Orca close: duplicate title and cwd")
+		return fmt.Errorf("unverifiable Orca close: duplicate native handle")
 	}
 	if len(matches) == 1 {
-		if _, e = o.call(ctx, "terminal", "close", "--terminal", matches[0].ID, "--json"); e != nil {
+		if _, e = o.call(ctx, "terminal", "close", "--terminal", h.ID, "--json"); e != nil {
 			return e
 		}
+		if e = os.WriteFile(h.PIDFile+".closed", []byte(h.ID), 0600); e != nil {
+			return e
+		}
+	} else if b, e := os.ReadFile(h.PIDFile + ".closed"); e != nil || string(b) != h.ID {
+		return fmt.Errorf("unverifiable Orca close: native handle missing without prior close evidence")
 	}
 	gone := func() bool {
 		ts, e := o.terminals(ctx)
@@ -400,7 +421,7 @@ func (o *orca) Kill(ctx context.Context, slot, handle string) error {
 			return false
 		}
 		for _, t := range ts {
-			if t.Title == h.Title && filepath.Clean(t.Cwd) == filepath.Clean(h.Cwd) && !t.Exited {
+			if t.ID == h.ID && !t.Exited {
 				return false
 			}
 		}
@@ -467,18 +488,29 @@ func (o *orca) terminals(ctx context.Context) ([]orcaTerminal, error) {
 	if e != nil {
 		return nil, e
 	}
-	var r struct {
-		Terminals *[]orcaTerminal `json:"terminals"`
-	}
-	if json.Unmarshal([]byte(raw), &r) != nil || r.Terminals == nil {
-		return nil, fmt.Errorf("orca list returned unsupported terminal JSON")
-	}
-	for _, t := range *r.Terminals {
-		if t.ID == "" || t.Cwd == "" {
-			return nil, fmt.Errorf("orca list returned incomplete terminal identity")
+	var ts []orcaTerminal
+	trimmed := strings.TrimSpace(raw)
+	if strings.HasPrefix(trimmed, "[") {
+		if e = json.Unmarshal([]byte(raw), &ts); e != nil {
+			return nil, fmt.Errorf("orca list returned malformed terminal JSON: %w", e)
 		}
+	} else {
+		var r struct {
+			Terminals *[]orcaTerminal `json:"terminals"`
+		}
+		if json.Unmarshal([]byte(raw), &r) != nil || r.Terminals == nil {
+			return nil, fmt.Errorf("orca list returned unsupported terminal JSON")
+		}
+		ts = *r.Terminals
 	}
-	return *r.Terminals, nil
+	seen := map[string]bool{}
+	for _, t := range ts {
+		if t.ID == "" || seen[t.ID] {
+			return nil, fmt.Errorf("orca list returned missing or duplicate native handle")
+		}
+		seen[t.ID] = true
+	}
+	return ts, nil
 }
 func (o *orca) resolve(ctx context.Context, h orcaHandle) (orcaHandle, error) {
 	ts, e := o.terminals(ctx)
@@ -487,12 +519,12 @@ func (o *orca) resolve(ctx context.Context, h orcaHandle) (orcaHandle, error) {
 	}
 	found := []orcaTerminal{}
 	for _, t := range ts {
-		if t.Title == h.Title && filepath.Clean(t.Cwd) == filepath.Clean(h.Cwd) {
+		if t.ID == h.ID {
 			found = append(found, t)
 		}
 	}
 	if len(found) != 1 {
-		return h, fmt.Errorf("unverifiable Orca terminal: title and cwd matched %d terminals", len(found))
+		return h, fmt.Errorf("unverifiable Orca terminal: native handle matched %d terminals", len(found))
 	}
 	if found[0].Exited {
 		return h, ErrPaneGone
@@ -519,7 +551,7 @@ func (o *orca) recorded(t orcaTerminal) (string, orcaHandle, bool) {
 			continue
 		}
 		h, e := decodeOrca(string(b))
-		if e == nil && h.Title == t.Title && filepath.Clean(h.Cwd) == filepath.Clean(t.Cwd) {
+		if e == nil && h.ID == t.ID && filepath.Clean(h.Cwd) == filepath.Clean(t.Cwd) {
 			candidates = append(candidates, string(b))
 		}
 	}
@@ -576,19 +608,58 @@ func (o *orca) PaneOf(ctx context.Context, slot, handle string) string {
 	if e != nil {
 		return ""
 	}
-	if _, e := o.ReadPane(ctx, slot, handle, 0); e != nil {
+	if _, e = o.readPane(ctx, &h, 0); e != nil {
 		return ""
 	}
-	return encodeOrca(h)
+	return h.ID
 }
 func (o *orca) CapturePane(ctx context.Context, pane string, lines int) string {
-	return o.Capture(ctx, "", pane, lines)
+	if pane == "" {
+		return ""
+	}
+	if strings.HasPrefix(pane, "orca:") {
+		h, e := decodeOrca(pane)
+		if e != nil {
+			return ""
+		}
+		pane = h.ID
+	}
+	if pane == "" {
+		return ""
+	}
+	p, _ := o.readPane(ctx, &orcaHandle{ID: pane}, lines)
+	return p
 }
-func (o *orca) SendPane(ctx context.Context, pane, text string) error { return o.send(ctx, pane, text) }
+func (o *orca) SendPane(ctx context.Context, pane, text string) error {
+	if pane == "" {
+		return fmt.Errorf("no Orca pane to send to")
+	}
+	if e := orcaCheckSize(text); e != nil {
+		return e
+	}
+	if strings.HasPrefix(pane, "orca:") {
+		h, e := decodeOrca(pane)
+		if e != nil {
+			return e
+		}
+		pane = h.ID
+	}
+	if pane == "" {
+		return fmt.Errorf("no native Orca pane handle")
+	}
+	_, e := o.call(ctx, "terminal", "send", "--terminal", pane, "--text", text, "--enter", "--json")
+	return e
+}
 
 // Once the startup banner scrolls away, a persisted successful boot and the
 // still-live exec PID identify this as the same agent rather than a bare shell.
 func (o *orca) inputReady(h orcaHandle, p string) bool {
+	if _, ok := orcaDialog(p); ok {
+		return false
+	}
+	if m := orcaCodexModel.FindStringSubmatch(p); len(m) > 1 && strings.HasPrefix(strings.ToLower(strings.TrimSpace(m[1])), "loading") {
+		return false
+	}
 	if _, e := os.Stat(h.PIDFile + ".ready"); e != nil {
 		return false
 	}
@@ -601,4 +672,84 @@ func (o *orca) inputReady(h orcaHandle, p string) bool {
 		return false
 	}
 	return strings.ContainsAny(p, promptMarkers) || orcaBusy.MatchString(p)
+}
+
+func decodeOrcaTerminal(raw string) (orcaTerminal, error) {
+	var t orcaTerminal
+	if e := json.Unmarshal([]byte(raw), &t); e != nil {
+		return t, fmt.Errorf("orca create returned malformed JSON: %w", e)
+	}
+	if t.ID == "" {
+		var r struct {
+			Terminal orcaTerminal `json:"terminal"`
+		}
+		if json.Unmarshal([]byte(raw), &r) == nil {
+			t = r.Terminal
+		}
+	}
+	if t.ID == "" {
+		return t, fmt.Errorf("orca create returned unsupported terminal JSON")
+	}
+	return t, nil
+}
+func orcaTurnStarted(raw string) (bool, error) {
+	type receipt struct {
+		Stages      []string `json:"stages"`
+		Provider    string   `json:"provider"`
+		Observation string   `json:"observation"`
+	}
+	var r receipt
+	if e := json.Unmarshal([]byte(raw), &r); e != nil {
+		return false, fmt.Errorf("orca send returned malformed JSON; pickup unconfirmed: %w", e)
+	}
+	if r.Stages == nil {
+		var w struct {
+			Receipt *receipt `json:"receipt"`
+		}
+		if json.Unmarshal([]byte(raw), &w) == nil && w.Receipt != nil {
+			r = *w.Receipt
+		}
+	}
+	if r.Observation != "" && r.Observation != "supported" {
+		return false, nil
+	}
+	for _, stage := range r.Stages {
+		if stage == "turn_started" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+func (o *orca) gitBranch(ctx context.Context, cwd string) (string, error) {
+	r, e := o.d.Run(ctx, "git", []string{"-C", cwd, "symbolic-ref", "--quiet", "--short", "HEAD"})
+	branch := strings.TrimSpace(r.Stdout)
+	if e != nil || r.ExitCode != 0 || branch == "" || strings.ContainsAny(branch, "\r\n") {
+		return "", fmt.Errorf("cannot verify Orca worktree symbolic branch in %s", cwd)
+	}
+	return branch, nil
+}
+func (o *orca) verifyBranch(ctx context.Context, h orcaHandle) error {
+	ts, e := o.terminals(ctx)
+	if e != nil {
+		return fmt.Errorf("prompt already submitted; Orca branch verification failed: %w; disable autoRenameBranchFromWork and do not resend the prompt", e)
+	}
+	var terminal *orcaTerminal
+	for i := range ts {
+		if ts[i].ID == h.ID {
+			terminal = &ts[i]
+			break
+		}
+	}
+	gitBranch, e := o.gitBranch(ctx, h.Cwd)
+	if e != nil {
+		return fmt.Errorf("prompt already submitted; Orca branch verification failed: %w; disable autoRenameBranchFromWork and do not resend the prompt", e)
+	}
+	nativeBranch := "<native handle missing>"
+	if terminal != nil {
+		nativeBranch = terminal.Branch
+	}
+	if h.Branch == "" || terminal == nil || nativeBranch != h.Branch || gitBranch != h.Branch {
+		return fmt.Errorf("prompt already submitted; Orca branch changed or is unverifiable: expected %q, terminal %q, worktree %q; disable autoRenameBranchFromWork and do not resend the prompt", h.Branch, nativeBranch, gitBranch)
+	}
+	return nil
 }

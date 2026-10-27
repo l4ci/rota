@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -24,8 +25,8 @@ func TestOrcaFakeExecutableLifecycle(t *testing.T) {
 	if err := os.Mkdir(metadata, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(cwd, ".git"), []byte("gitdir: "+metadata+"\n"), 0600); err != nil {
-		t.Fatal(err)
+	if out, e := exec.Command("git", "init", "--separate-git-dir", metadata, "--initial-branch", "ben/2203-orca", cwd).CombinedOutput(); e != nil {
+		t.Fatalf("git init fixture: %s %v", out, e)
 	}
 	envFile := filepath.Join(dir, "worker-env.json")
 	briefFile := filepath.Join(dir, "submitted.txt")
@@ -38,17 +39,16 @@ def emit(v): print(json.dumps(v))
 state=Path(os.environ['ORCA_TEST_STATE'])
 if a[0]=='status': emit({'running':True})
 elif a[1]=='create':
- t={'id':'native-1','title':arg('--title'),'cwd':arg('--worktree')[5:]}
+ t={'handle':'native-1','title':arg('--title'),'worktreePath':arg('--worktree')[5:],'branch':'ben/2203-orca'}
  state.write_text(json.dumps(t))
- subprocess.run(arg('--command'), shell=True, cwd=t['cwd'], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
- emit({'terminal':t})
-elif a[1]=='read': emit({'screen':'Ask Codex to do anything\n› '})
+ subprocess.run(arg('--command'), shell=True, cwd=t['worktreePath'], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+ emit(t)
+elif a[1]=='read': emit({'screen':'OpenAI Codex\nmodel: gpt-5.3-codex high\n› '})
 elif a[1]=='send':
  Path(os.environ['ORCA_TEST_BRIEF']).write_bytes(arg('--text').encode())
- emit({'receipt':{'turn_started':True}})
+ emit({'stages':['input_accepted','turn_started'],'provider':'codex','observation':'supported'})
 elif a[1]=='list': emit({'terminals':[json.loads(state.read_text())] if state.exists() else []})
 elif a[1]=='close': state.unlink(); emit({})
-elif a[1]=='current': emit({'terminal':json.loads(state.read_text())})
 else: sys.exit(1)
 `
 	if err := os.WriteFile(filepath.Join(dir, "orca"), []byte(fake), 0700); err != nil {

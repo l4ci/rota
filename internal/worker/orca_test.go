@@ -71,11 +71,14 @@ func TestOrcaDispatchClaudeAndCodexThroughAdapter(t *testing.T) {
 			dir := newProject(t, `{"round":{"dispatch":"orca","commands":{"claude":"claude --model haiku"}}}`)
 			goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 			command, sent, cwd := "", "", ""
-			screen := "Ask Codex to do anything\n› "
+			screen := "model: gpt-test\n› "
 			unreadable := false
 			reads := 0
 			sends := 0
-			h := host.New(host.Kind("orca"), host.Deps{Getenv: func(string) string { return "" }, LookPath: func(string) (string, error) { return "/fake/orca", nil }, Sleep: func(time.Duration) {}, Run: func(_ context.Context, _ string, a []string) (host.Result, error) {
+			h := host.New(host.Kind("orca"), host.Deps{Getenv: func(string) string { return "" }, LookPath: func(string) (string, error) { return "/fake/orca", nil }, Sleep: func(time.Duration) {}, Run: func(ctx context.Context, name string, a []string) (host.Result, error) {
+				if name == "git" {
+					return host.ExecRunner(ctx, name, a)
+				}
 				switch strings.Join(a[:2], " ") {
 				case "status --json":
 					return host.Result{Stdout: `{"running":true}`}, nil
@@ -88,7 +91,14 @@ func TestOrcaDispatchClaudeAndCodexThroughAdapter(t *testing.T) {
 							cwd = strings.TrimPrefix(a[i+1], "path:")
 						}
 					}
-					b, _ := json.Marshal(map[string]any{"terminal": map[string]string{"id": "t1", "title": "rota:w1", "cwd": cwd}})
+					b, _ := json.Marshal(map[string]string{"handle": "t1", "title": "rota:w1"})
+					return host.Result{Stdout: string(b)}, nil
+				case "terminal list":
+					branch, err := host.ExecRunner(ctx, "git", []string{"-C", cwd, "symbolic-ref", "--short", "HEAD"})
+					if err != nil {
+						return host.Result{}, err
+					}
+					b, _ := json.Marshal(map[string]any{"terminals": []map[string]any{{"handle": "t1", "title": "agent overwrites this", "worktreePath": cwd, "branch": strings.TrimSpace(branch.Stdout), "connected": true, "writable": true}}})
 					return host.Result{Stdout: string(b)}, nil
 				case "terminal read":
 					if unreadable {
@@ -108,7 +118,7 @@ func TestOrcaDispatchClaudeAndCodexThroughAdapter(t *testing.T) {
 							sent = a[i+1]
 						}
 					}
-					return host.Result{Stdout: `{"receipt":{"turn_started":true}}`}, nil
+					return host.Result{Stdout: `{"stages":["input_accepted","turn_started"],"observation":"supported"}`}, nil
 				}
 				return host.Result{ExitCode: 1, Stderr: "unexpected call"}, nil
 			}})
@@ -163,5 +173,17 @@ func TestOrcaDispatchClaudeAndCodexThroughAdapter(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestOrcaDispatchPreservesHostFailureEvidence(t *testing.T) {
+	for _, detail := range []string{"prompt already submitted: branch changed from ben/2203 to auto-name; disable autoRenameBranchFromWork", "brief has 122881 bytes; limit is 122880 bytes"} {
+		dir := newProject(t, `{"round":{"dispatch":"orca","commands":{"claude":"claude --model haiku"}}}`)
+		goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+		h := &fakeHost{name: host.Orca, sendErr: errors.New(detail)}
+		_, err := envWith(h).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "brief"), Task: "T1"})
+		if exitOf(err) != 5 || !strings.Contains(err.Error(), detail) {
+			t.Fatalf("Orca safety evidence hidden: %v", err)
+		}
 	}
 }

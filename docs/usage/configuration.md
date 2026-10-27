@@ -121,11 +121,12 @@ rota config set round.dispatch tmux
 
 **A round in herdr needs no setting.** With `round.dispatch` unset or `subagent` (the default `rota init` writes), `rota round start` detects the host: herdr inside a herdr pane, tmux inside tmux, and otherwise **solo mode**, where the orchestrator runs each worker as a Claude `Agent` subagent in the slot's own worktree. An explicit `tmux`, `herdr` or `orca` is used as set, and fails if unavailable rather than falling back. The round records its host when it starts and keeps it until wind-down. Solo workers share the orchestrator's account, rate window and context, so one usage limit stops them all. Solo mode runs Claude workers only: a Codex subagent cannot be given a working directory. See [Parallel rounds](parallel-rounds.md).
 
-**Orca is experimental until its live checks are complete.** Set `round.dispatch` to
-`orca` and run `rota doctor` before assigning a worker. The adapter waits for a
-recognised agent input screen before sending a brief, and requires a turn-start
-receipt or evidence above the input line before reporting pickup. A missing
-terminal handle is unverifiable, so reclaim needs `--force`; shutdown still
+**Orca must be running.** Set `round.dispatch` to `orca` and run `rota doctor`
+before assigning a worker. Codex readiness requires its `›` input line and a
+model header that has finished loading; trust dialogs are refused. Dispatch
+uses the terminal's turn-start receipt to confirm pickup. Native terminal
+handles identify workers; pane titles can change and are never used for recovery.
+A missing handle is unverifiable, so reclaim needs `--force`; shutdown still
 requires process proof. Layouts and linked workspaces are unavailable.
 
 Orca types the launch command into its login shell, where it can enter history.
@@ -133,11 +134,22 @@ The environment prefix accepts only account directory paths and rota's slot,
 port and database suffix variables. **Never put secrets in these values or the
 launch command.** Codex uses its default account unless an account is configured.
 The adapter uses `terminal close`, retaining PID and descendant evidence in the
-worktree's git metadata until shutdown is proved.
+worktree's git metadata for cleanup retries. `ORCA_TERMINAL_HANDLE` identifies
+an in-session caller; no `terminal current` probe is needed.
 
-The CLI JSON fields and Codex delivery behavior are tested with a fake executable;
-real Orca validation remains required. Follow the live-check checklist linked from
-[issue #2203](https://github.com/l4ci/rota/issues/2203) before relying on it for a round.
+Orca's `autoRenameBranchFromWork` setting can rename a branch on the first agent
+prompt. Disable it in Orca before running a round. Dispatch records the branch
+before launch and checks it after pickup, refusing loudly if the terminal or git
+reports a different branch. Doctor warns when its status response exposes the
+setting as enabled; a passing check does not prove an unavailable setting is off.
+
+Briefs are passed as one `--text` argument, with a conservative 120 KiB UTF-8 byte
+limit. Orca sends `-` and `@file` literally; neither is a file/stdin form. Live
+Codex testing confirmed byte-identical multiline delivery, a turn-start receipt,
+and background terminal creation. Remaining live checks are whether a pre-seeded
+trust entry skips the dialog, whether auto-renaming affects rota-created worktrees,
+and terminal closure with process proof; see
+[issue #2203](https://github.com/l4ci/rota/issues/2203).
 
 Two things behave differently under `tmux`, `herdr` and `orca` than in `/rota-work`:
 
