@@ -8,7 +8,7 @@ A `size:Major` or `risk:high` issue's PR gets one more review from a model famil
 2. Copy the Step 5 package to `<scratch>/.review/diff.txt` with the token line first (`cross-harness-run.md`, *Inputs*). Write the items' spec (Step 3) to `<scratch>/.review/items.md`.
 On a re-review (`re-review.md`), `$REVIEWED` is the new head and the extract is of it, while `diff.txt` is the `--since <sha>` package of Step 5, the fix range only. The brief then carries the latest `review-cross` record's blocking findings as `**Earlier findings:**`.
 
-3. Build the **Standards** brief from `reviewer-briefs.md` (Step 7) with its shared block, then the Spec rubric's *Intent match* item, then *Both briefs end with*. Two edits: the diff and spec paths are `.review/diff.txt` and `.review/items.md`, relative to the extract, and *Running the branch* becomes one line: `You run in an extract of the branch; read code there. Do not run tests: the merge gate runs them.` End the prompt with the token line.
+3. Build the **Standards** brief from `reviewer-briefs.md` (Step 7) with its shared block, then the Spec rubric's *Intent match* item, then *Both briefs end with*. Two edits: the diff and spec paths are `.review/diff.txt` and `.review/items.md`, relative to the extract, and *Running the branch* becomes: `You run in an extract of the branch; read code there. Do not run tests: the merge gate runs them. Any binary probe must use the caller's installed rota review probe -- <command> [<arg>...] from the extract; setup or cleanup failure makes the probe unavailable. Do not override its temporary config roots with developer paths. This isolates environment paths, not absolute-path access by unsandboxed commands.` End the prompt with the token line.
 
 ## Run and record
 

@@ -82,5 +82,27 @@ EOF
   [ "$rc" -eq 3 ] || fail "prepare accepted a missing commit: $rc"
   pass "review prepare pins the archive; cleanup only removes owned workspace"
 
+  # A mutating probe runs the reviewed binary, with inherited developer roots.
+  PROBE_DEV="$SCAF_TMP/developer"
+  mkdir -p "$PROBE_DEV/home/.config/rota" "$PROBE_DEV/xdg/rota" "$PROBE_DEV/override"
+  for config in "$PROBE_DEV/home/.config/rota/config.json" "$PROBE_DEV/xdg/rota/config.json" "$PROBE_DEV/override/config.json"; do
+    printf '{"round":{"slots":7}}\n' > "$config"
+  done
+  OUT=$(HOME="$PROBE_DEV/home" XDG_CONFIG_HOME="$PROBE_DEV/xdg" ROTA_CONFIG_DIR="$PROBE_DEV/override" \
+    "$ROTA_BIN" --json review probe -- sh -c '
+      "$1" config set --global round.slots 9 >/dev/null || exit
+      cat "$ROTA_CONFIG_DIR/config.json"
+      printf "\n%s\n" "$HOME"
+    ' _ "$ROTA_BIN") || vfail
+  PROBE_OUTPUT=$(echo "$OUT" | jget data.stdout)
+  printf '%s\n' "$PROBE_OUTPUT" | python3 -c 'import json,sys; assert json.JSONDecoder().raw_decode(sys.stdin.read())[0]["round"]["slots"] == 9' \
+    || fail "reviewed binary did not write temporary config: $OUT"
+  PROBE_HOME=${PROBE_OUTPUT##*$'\n'}
+  [ ! -e "$PROBE_HOME" ] || fail "probe left temporary HOME: $PROBE_HOME"
+  for config in "$PROBE_DEV/home/.config/rota/config.json" "$PROBE_DEV/xdg/rota/config.json" "$PROBE_DEV/override/config.json"; do
+    [ "$(cat "$config")" = '{"round":{"slots":7}}' ] || fail "probe changed developer config: $config"
+  done
+  pass "review probe confines a real binary's config write to temporary state"
+
 )
 trap 'rm -rf "$TMP"' EXIT
