@@ -1073,6 +1073,12 @@ assign refuse unrelated work until recovery. Name the repair with
 `rota round freeze --repair-issue 123` (or `--repair-pr 456` for an existing PR),
 then assign and gate it normally. A verified repair landing clears the freeze.
 After repairing outside the round, update your base checkout and run
-`rota round freeze --verify`. To override the freeze deliberately, use
+`rota round freeze --verify`. Verification requires a clean checkout of the frozen
+base at its current origin SHA and configured `test.full` commands or CI checks;
+otherwise it refuses with exit 4. CI checks that time out or never run stop the
+train without creating a freeze. To override the freeze deliberately, use
 `rota round freeze --clear --reason 'why verification can be bypassed'`;
-the reason is recorded in the gate audit.
+the reason is recorded in the gate audit. This also recovers an unreadable freeze
+record or a freeze whose base was deleted. A manual clear records the operator's
+current HEAD; replacing an unreadable record is noted in the audit. Status and the
+prompt digest warn about unreadable records and show the recovery command.
