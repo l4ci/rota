@@ -19,7 +19,7 @@ ar config set round.architectureEvery 2 >/dev/null
 ar config set round.architectureAreas '["cli","worker"]' >/dev/null
 HOLD=$$
 done_feature() { # <id>: create, commit, complete: one counted feature
-  ar item create --kind features --title "Feature $1" --body-file - <<<$'## Acceptance\n- [ ] works' >/dev/null
+  ar item create --kind features --title "Feature $1" --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] works' >/dev/null
   ( cd "$AP" && echo "$1" > "$1.txt" && git add "$1.txt" && git -c user.email=a@b -c user.name=n commit -q -m "feat: add $1" )
   ar item complete "$2" --no-proof >/dev/null || fail "complete $2 failed"
 }
@@ -41,7 +41,7 @@ OUT=$(ar round architecture --check) || fail "architecture --check failed: $OUT"
 pass "the queue-empty trigger fires with an idle slot and nothing to assign"
 
 # A ready open item keeps the queue non-empty, so only the threshold can fire now.
-ar item create --kind features --title "Standing item" --body-file - <<<$'## Acceptance\n- [ ] works' >/dev/null
+ar item create --kind features --title "Standing item" --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] works' >/dev/null
 OUT=$(ar round architecture --check)
 [ "$(echo "$OUT" | jget data.count)" = "1" ] && [ "$(echo "$OUT" | jget data.until)" = "1" ] \
   && [ "$(echo "$OUT" | jget data.due)" = "false" ] \
@@ -53,7 +53,7 @@ pass "the counter counts closed non-refactor items and shows in round status"
 
 # Threshold: the second counted feature makes a review due; a refactor-form commit does not count.
 ( cd "$AP" && echo r > r.txt && git add r.txt && git -c user.email=a@b -c user.name=n commit -q -m "refactor: tidy" )
-ar item create --kind features --title "Refactor-driven" --body-file - <<<$'## Acceptance\n- [ ] works' >/dev/null
+ar item create --kind features --title "Refactor-driven" --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] works' >/dev/null
 ar item complete F03 --no-proof >/dev/null
 [ "$(ar round architecture --check | jget data.count)" = "1" ] || fail "a refactor-form completion must not count"
 done_feature three F04

@@ -195,6 +195,23 @@ func (f *File) Append(sec, line string) error {
 }
 
 // checkCreate is _check_create: the cleaned title and fields, or ErrInvalid.
+// ValidTag reports whether tag is allowed for kind, including an omitted tag.
+func ValidTag(kind, tag string) bool {
+	tags, ok := kindTags[kind]
+	if !ok {
+		return false
+	}
+	if tag == "" {
+		return true
+	}
+	for _, allowed := range tags {
+		if tag == allowed {
+			return true
+		}
+	}
+	return false
+}
+
 func checkCreate(in CreateInput) (title string, fields []Field, err error) {
 	if _, ok := kindLetter[in.Kind]; !ok {
 		return "", nil, errf(ErrInvalid, "unknown kind '%s' (expected bugs|features|tasks)", in.Kind)
@@ -204,11 +221,7 @@ func checkCreate(in CreateInput) (title string, fields []Field, err error) {
 		return "", nil, errf(ErrInvalid, "--title is required")
 	}
 	if in.Tag != "" {
-		ok := false
-		for _, t := range kindTags[in.Kind] {
-			ok = ok || t == in.Tag
-		}
-		if !ok {
+		if !ValidTag(in.Kind, in.Tag) {
 			if len(kindTags[in.Kind]) == 0 {
 				return "", nil, errf(ErrInvalid, "invalid tag '%s' for %s (tasks take no tag)", in.Tag, in.Kind)
 			}

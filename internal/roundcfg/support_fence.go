@@ -76,7 +76,7 @@ var supportAllowed = []string{
 	"rota glossary read",
 	"rota init check",
 	"rota issues imported", "rota issues provider",
-	"rota item comment list", "rota item field get", "rota item field list", "rota item note show", "rota item show",
+	"rota item comment list", "rota item field get", "rota item field list", "rota item note show", "rota item show", "rota item template",
 	"rota keepalive status", "rota layout", "rota limit status",
 	"rota knowledge contradiction has", "rota knowledge contradiction list", "rota knowledge query", "rota knowledge stats",
 	"rota knowledge tier get", "rota knowledge tier list", "rota knowledge topics",

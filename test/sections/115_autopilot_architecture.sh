@@ -23,7 +23,7 @@ apa_fixture() { # <dir>: a project with one slot, autopilot on, an area per revi
 }
 apa() { ( cd "$APA_DIR" && $APA_ENV ROTA_ROUND_HOLDER_PID="$APA_HOLD" "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 apa_feature() { # <id> <F-id>: one counted, closed feature
-  apa item create --kind features --title "Feature $1" --body-file - <<<$'## Acceptance\n- [ ] works' >/dev/null
+  apa item create --kind features --title "Feature $1" --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] works' >/dev/null
   ( cd "$APA_DIR" && echo "$1" > "$1.txt" && git add "$1.txt" && git -c user.email=a@b -c user.name=n commit -q -m "feat: add $1" )
   apa item complete "$2" --no-proof >/dev/null || fail "complete $2 failed"
 }
@@ -34,7 +34,7 @@ apa_audit() { [ -f "$APA_DIR/.rota/gate-audit.jsonl" ] && grep -c "\"verb\": \"r
 APA1="$(mktemp -d "$TMP/apa1.XXXXXX")/proj"
 apa_fixture "$APA1"
 apa config set round.architectureEvery 2 >/dev/null
-apa item create --kind features --title "Standing item" --body-file - <<<$'## Acceptance\n- [ ] works' >/dev/null
+apa item create --kind features --title "Standing item" --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] works' >/dev/null
 apa_feature one F02
 apa_feature two F03
 OUT=$(apa round tick) || fail "tick failed: $OUT"

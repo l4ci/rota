@@ -216,9 +216,10 @@ rota round candidates                         # re-read the board with readiness
 
 ### Picking issues
 
-Candidates carry three checks:
+Candidates carry four checks:
 
 - `criteria`: acceptance criteria, or a design or plan note. Acceptance criteria in the `assign --settled-file` text count too.
+- `template`: every feature, including Cosmetic, has Acceptance and Out of scope headings. Missing headings are named; an assign `--settled-file` brief can supply them. Fresh assignment enforces this check; resuming a slot's own issue or deliberately redoing an existing open PR does not enforce it again. Research and decision items are exempt. Bugs and tasks have no required template sections. This checks presence only, so an empty heading or "nothing noted" counts. Existing items need no migration: add the missing headings to the body or supply them in the brief. `rota item ready` reports the same required headings.
 - `dependencies`: every `## Depends on` reference is closed. One that cannot be looked up fails the
   check, so fix the issue text.
 - `overlap`: no shared file with an in-flight slot, from a `## Files` section or the paths the issue
@@ -266,8 +267,7 @@ pointer to the standing contract (`round.brief`, else `skills/references/worker-
 issue to read and dispute, the item's `## Out of scope` section when it has one, the siblings and the settled answers from `--settled-file`.
 
 `--settled-file <path|->` passes answers already settled by the maintainer verbatim under
-“Settled answers” and preserves them when a slot is re-briefed. `--body-file` is a deprecated
-alias for this assign flag.
+“Settled answers” and preserves them when a slot is re-briefed.
 
 `--decision-topics` takes comma-separated DECISIONS.md topics, using the same matching rules as
 `rota decisions query`. The brief includes each matching active entry in full, including its
