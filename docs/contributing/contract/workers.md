@@ -1,6 +1,8 @@
 ---
 refs:
   - internal/worker
+  - internal/flakeledger
+  - internal/cli/flakes.go
   - internal/cli/worker.go
   - internal/cli/worker_send.go
   - internal/cli/worker_train.go
@@ -311,3 +313,12 @@ exit 4, `blockedBy: claim-lost`, and nothing lands. No open claims, no remote PR
 unreadable claim source skips this check (read errors add a `CLAIMS-UNKNOWN` note).
 Bundle members are checked with their lead. This fences PRs from holders whose stale
 claim was reclaimed on another machine.
+
+### rota test flakes
+rota test flakes
+repo: none
+data: {"flakes": [{"check": string, "test": string, "count": number, "lastSeen": string}], "records": number}
+exit: 0 for a readable ledger, including a missing file; 2 for arguments; 5 for an unreadable or malformed ledger
+old: none (new in #2171)
+note: reads the per-developer `.rota/flakes.jsonl` from the shared gate checkout; ranks command/test pairs by descending repeat count, then command and test name. A record names `check`, `tests`, `tree`, `prs`, `round`, `ts`, `first` and `retry`; each run carries `output` and `exitCode`. A single recovery counts once in `round summary`'s `metrics.flakes`, even when several tests failed or several train PRs share the tree. A missing ledger lists no records; a missing or unreadable ledger makes the summary metric unavailable. An existing empty ledger measures zero recorded recoveries.
+note: local gate and train verification retry only a command whose exit status is 1 and whose output names assertion failures with Go `--- FAIL:` lines and a final `FAIL` summary. Context cancellation, signals, timeout, panic, build/setup/infrastructure errors and unrecognised wrapper output never qualify. A retry runs once, synchronously, in the same directory at the same clean tracked tree. A pass adds `FLAKY <check>` to notes and the command to optional `data.flaky`; a second failure stays red. Both outputs are kept in the verify log on failure. A flaky success is not cached by the train, so a cache hit neither replays a flaky marker nor appends another record. Existing known-red exclusions apply before retry; CI, `test run` and behaviour checks do not retry. A flake-ledger write failure stops verification before landing.
