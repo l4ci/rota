@@ -600,6 +600,19 @@ A worker or the orchestrator that needs a human decision does not guess. `rota r
 posts the question on the issue or PR thread and raises a host notification; `rota round escalate check`
 reads the answers back.
 
+Run `rota round status --needs-you` for a list of what waits on the maintainer:
+open escalations, needs-human parks, merge approvals, stale-claim reclaim approvals
+and unfiled bugreports. Raw worker questions and bounce-cap audits belong to the
+orchestrator; they reach this list only after an escalation or handoff to the human. Each row shows the item, question, compact age (`4m`, `2h`) and a one-word default reply. Use
+`--json` for the same list as `needsYou`. Explicit Spec waiver requests are
+escalations; an ordinary failing review remains work for the worker. An unknown
+age means the source has no recorded timestamp. The command never answers an item.
+
+Status and the watch's forge pass refresh a local count for the prompt. A prompt
+might say `3 wait on you, as of 4m ago`; it never calls the tracker to refresh that
+count. Missing snapshots and snapshots older than the watch heartbeat (ten minutes
+by default) are omitted. Run status again to pick up label-only changes immediately.
+
 When several decisions wait, type `/rota-answer`. The orchestrator then asks them one by one (the
 `AskUserQuestion` picker in Claude Code; one message with an `A)` to `E)` list elsewhere, `A)` the
 recommendation, the last entry "Write your own answer"), records each answer as a `decision` comment

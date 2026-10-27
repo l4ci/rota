@@ -22,6 +22,7 @@ import (
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/roundwatch"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -29,7 +30,7 @@ import (
 // free. It is meant to run in the background, one at a time; the harness wakes
 // the orchestrator when it exits, and the orchestrator re-arms it.
 func roundWatch(fs *flag.FlagSet) RunFunc {
-	heartbeat := fs.Float64("heartbeat", 600, "seconds after which the watch returns even if nothing changed")
+	heartbeat := fs.Float64("heartbeat", roundwatch.DefaultHeartbeat.Seconds(), "seconds after which the watch returns even if nothing changed")
 	poll := fs.Float64("poll", 30, "seconds between registry checks")
 	forgePoll := fs.Float64("forge-poll", 120, "seconds between forge checks (escalation answers, PR states); 0 never asks the forge")
 	settle := fs.Float64("settle", 5, "seconds between the two pane captures of one classification")
@@ -140,6 +141,12 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 		}
 	}
 	renv := c.deps().RoundEnv(ctx, root)
+	// The real combined forge exposes the issue backend. A custom round
+	// environment may supply only round.Forge (and its own Board); do not
+	// bypass that boundary by constructing a different tracker behind it.
+	if _, ok := renv.Forge.(tracker.IssueTracker); ok {
+		renv = withBoard(c, root, renv)
+	}
 	merged := map[string]bool{}
 	if rep, err := renv.Status(ctx, root); err == nil { // a bad round.* key is noted once by the config load below
 		for _, r := range rep.Rows {
@@ -152,6 +159,15 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 			c.mergedMarkNoted = true
 			c.Warn("merged-PR mark skipped: registry write failed: %v", err)
 		}
+		_, warnings := refreshMaintainerSnapshot(ctx, c, root, renv)
+		nextWarnings := map[string]bool{}
+		for _, warning := range warnings {
+			if !c.maintainerWarnings[warning] && !nextWarnings[warning] {
+				c.Warn("%s", warning)
+			}
+			nextWarnings[warning] = true
+		}
+		c.maintainerWarnings = nextWarnings
 	}
 	set, err := c.deps().roundSettings(root, roundConfigUsage)
 	if err != nil {
