@@ -67,14 +67,19 @@ func appendItem(list []Record, r Record) []Record {
 	if cut <= 0 {
 		return list
 	}
-	start := 0
+	debugStart, workStart := 0, 0
 	for i, record := range list {
-		if record.Kind == DebugReset {
-			start = i + 1
+		switch {
+		case record.Kind == DebugReset:
+			debugStart = i + 1
+		case record.Kind == WorkFixReset, record.Kind == WorkFix && record.Verdict == Pass:
+			workStart = i + 1
 		}
 	}
-	for i := start; i < cut; i++ {
-		if list[i].Kind == DebugFix && list[i].Verdict == Fail {
+	for i := 0; i < cut; i++ {
+		r := list[i]
+		if (i >= debugStart && r.Kind == DebugFix && r.Verdict == Fail) ||
+			(i >= workStart && r.Kind == WorkFix && r.Verdict == Fail) {
 			cut = i
 			break
 		}

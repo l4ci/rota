@@ -112,7 +112,7 @@ const (
 	StartMatcher     = "^(startup|clear)$"
 	PromptCommand    = "rota hook prompt " + Marker
 	GuardCommand     = "rota hook guard " + Marker
-	GuardMatcher     = "Bash"
+	GuardMatcher     = "Bash|Edit|Write"
 	StatuslineCmd    = "rota statusline dump"
 	keyWrapped       = "rotaWrapped"
 	keyWrappedScope  = "rotaWrappedFrom"
