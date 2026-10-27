@@ -13,8 +13,7 @@ import (
 
 // preflightIn is what Assign and Transfer hand the shared preflight: the item,
 // the settings, the tier the worker starts on and what each verb knows about
-// the worker's kind and model. Transfer sets no flags: it has no --kind or
-// --model.
+// the worker's kind and model.
 type preflightIn struct {
 	Item     *backlog.Item
 	Settings roundcfg.Settings
