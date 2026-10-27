@@ -75,8 +75,8 @@ func snap(t *testing.T, root, stage string) {
 }
 
 // The scenario is the one the goldens were recorded on; every file must stay
-// byte-identical to what the retired hv-vision-* helpers wrote. The goldens are
-// frozen and change only by reviewed edit.
+// byte-identical to the retired hv-vision-* helpers apart from intentional
+// changes, including the shipped summary. Goldens change only by reviewed edit.
 func TestMatchesOldHelpers(t *testing.T) {
 	root := project(t)
 	if changed, err := Index(root); err != nil || !changed {
