@@ -8,18 +8,18 @@ Refresh with `/rota-refactor --map`. `rota map stats` warns when a file falls be
 
 | Subsystem | Covers |
 |---|---|
-| [backlog-items](map/backlog-items.md) | Backlog item model over file and issue backends, ID counters, plans, designs, spikes, milestones, status.json, debug counter and sessions, shared section/artifact helpers, blockedBy vocabulary |
-| [cli-dispatch](map/cli-dispatch.md) | The rota command dispatcher, exit-code contract, error translation and the terminal UI (bare-rota palette, --ui screens) |
-| [config-and-setup](map/config-and-setup.md) | Layered config, project seeding and registry, on-disk layout paths, version and update checks, and the one-shot migrations |
-| [doctor-and-reap](map/doctor-and-reap.md) | Read-only preflight checks (rota doctor) and fail-closed cleanup of what a round left behind (rota reap) |
-| [foundations](map/foundations.md) | Leaf primitives every other package builds on: atomic files and locks, git and process execution, JSON, timestamps, liveness and small string helpers |
-| [gate-landing](map/gate-landing.md) | Manual-gate registry, landing adapters and freeze, post-gate bookkeeping, footprint overlap, ship and release domain logic |
+| [backlog-items](map/backlog-items.md) | backlog item model over file and issue backends, ID counters, plans, designs, spikes, milestones, status.json, debug counter and sessions, shared section/artifact helpers, blockedBy vocabulary |
+| [cli-dispatch](map/cli-dispatch.md) | the rota command dispatcher, exit-code contract, error translation and the terminal UI (bare-rota palette, --ui screens) |
+| [config-and-setup](map/config-and-setup.md) | layered config, project seeding and registry, on-disk layout paths, version and update checks, and the one-shot migrations |
+| [doctor-and-reap](map/doctor-and-reap.md) | read-only preflight checks (rota doctor) and fail-closed cleanup of what a round left behind (rota reap) |
+| [foundations](map/foundations.md) | leaf primitives every other package builds on: atomic files and locks, git and process execution, JSON, timestamps, liveness and small string helpers |
+| [gate-landing](map/gate-landing.md) | manual-gate registry, landing adapters and freeze, post-gate bookkeeping, footprint overlap, ship and release domain logic |
 | [hooks-guard](map/hooks-guard.md) | Claude Code hooks: statusline state dump, Stop/prompt context guard, SessionStart handoff, PreToolUse worker guard, settings merge, plugin hooks/ dir |
-| [knowledge-and-map](map/knowledge-and-map.md) | Project knowledge, decisions and glossary files, the external knowledge repo, the subsystem map and QA indexes, staleness listing and the shared frontmatter parser |
-| [review-verdicts](map/review-verdicts.md) | Typed verdict store and routing, proof rows, acceptance-criteria grammar, test and flake ledgers, golden records, Go test-path rules |
+| [knowledge-and-map](map/knowledge-and-map.md) | project knowledge, decisions and glossary files, the external knowledge repo, the subsystem map and QA indexes, staleness listing and the shared frontmatter parser |
+| [review-verdicts](map/review-verdicts.md) | typed verdict store and routing, proof rows, acceptance-criteria grammar, test and flake ledgers, golden records, Go test-path rules |
 | [round-orchestration](map/round-orchestration.md) | orchestrator side of a parallel round: lease, drift report, assign, autopilot tick, watch, escalation, ledger, receipts, launcher |
-| [skills-packaging](map/skills-packaging.md) | The rota-* skill sources, their embedding in the binary, install into Claude Code and Codex, the plugin manifests, install.sh and the docs generators |
+| [skills-packaging](map/skills-packaging.md) | the rota-* skill sources, their embedding in the binary, install into Claude Code and Codex, the plugin manifests, install.sh and the docs generators |
 | [terminal-hosts](map/terminal-hosts.md) | terminal host abstraction (herdr, tmux, Orca) that runs worker sessions, and the herdr pane layout (split/tabs) |
-| [test-infra](map/test-infra.md) | The merge gate, sharded smoke suite, doc lints, fakes, e2e scenarios, evals and the shared Go test helpers |
-| [tracker-issues](map/tracker-issues.md) | Forge and issue-tracker adapters (gh, glab, Jira, Linear, Itsaplan), upstream-issue verbs, label registry, comment markers, note chunking, item-body grammar, tracker connections, bug-report log |
+| [test-infra](map/test-infra.md) | the merge gate, sharded smoke suite, doc lints, fakes, e2e scenarios, evals and the shared Go test helpers |
+| [tracker-issues](map/tracker-issues.md) | forge and issue-tracker adapters (gh, glab, Jira, Linear, Itsaplan), upstream-issue verbs, label registry, comment markers, note chunking, item-body grammar, tracker connections, bug-report log |
 | [workers](map/workers.md) | worker slots, registry, gate/train/done verbs, agent harness adapters, subagent definitions, keepalive supervisor, usage limits |

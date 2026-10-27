@@ -1,6 +1,6 @@
 ---
 subsystem: gate-landing
-summary: Manual-gate registry, landing adapters and freeze, post-gate bookkeeping, footprint overlap, ship and release domain logic
+summary: manual-gate registry, landing adapters and freeze, post-gate bookkeeping, footprint overlap, ship and release domain logic
 touched: 2026-10-27
 last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 ---
@@ -45,5 +45,5 @@ Go, stdlib only. Git and forge access through injected ports (`land.Git`, `ship.
 - SECTION_LIST=test/sections/77_manual_gates.sh bash test/runner.sh (also 08_ship, 35_undo, 14_release, 96_release_order, 104_gate_stale_merge, 107_gate_lock, 131_gate_closes, 172_round_freeze)
 
 ## Concerns
-- ship (1637 lines) mixes unrelated rules (PR body, merge, undo, worktree clearing) in one package.
+- ship (953 non-test lines) mixes unrelated rules (PR body, merge, undo, worktree clearing) in one package.
 - postgate imports worker, roundcfg and bugreport, so it depends on the round layer.

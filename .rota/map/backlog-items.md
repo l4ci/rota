@@ -1,6 +1,6 @@
 ---
 subsystem: backlog-items
-summary: Backlog item model over file and issue backends, ID counters, plans, designs, spikes, milestones, status.json, debug counter and sessions, shared section/artifact helpers, blockedBy vocabulary
+summary: backlog item model over file and issue backends, ID counters, plans, designs, spikes, milestones, status.json, debug counter and sessions, shared section/artifact helpers, blockedBy vocabulary
 touched: 2026-10-27
 last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 ---

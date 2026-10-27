@@ -1,6 +1,6 @@
 ---
 subsystem: cli-dispatch
-summary: The rota command dispatcher, exit-code contract, error translation and the terminal UI (bare-rota palette, --ui screens)
+summary: the rota command dispatcher, exit-code contract, error translation and the terminal UI (bare-rota palette, --ui screens)
 touched: 2026-10-27
 last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 ---
@@ -9,7 +9,7 @@ last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 
 Turns `rota <group> <verb>` into a verb call and owns the global conventions: global flags, the `--json` envelope, the stderr format and the exit codes (`docs/contributing/contract/cli-conventions.md`). Verbs return data or an `*Error` and never print those parts themselves. Also holds the terminal screen kit behind bare `rota` and `--ui`.
 
-Depends on (by map file): knowledge-and-map (knowledge, extknowledge, mapqa, stale), config-and-setup (config, initproj, projects, repos, toolver, update, stalebin, version, migrate, hvmigrate, legacystate, rotastate, rotatree), doctor-and-reap, foundations (fsio, git, jsonx, proc, pystr, shlex, stamp, strutil), plus the domain packages that are not in these seven maps (backlog, tracker, round*, worker, ship, gate, host, ...). `internal/cli` imports about 60 internal packages; `exitcode` and `tui`/`palette` import almost none.
+Depends on (by map file): knowledge-and-map (knowledge, extknowledge, mapqa, stale), config-and-setup (config, initproj, projects, repos, toolver, update, stalebin, version, migrate, hvmigrate, legacystate, rotastate, rotatree), doctor-and-reap, foundations (fsio, git, jsonx, proc, pystr, shlex, stamp, strutil), backlog-items (backlog, plan, milestone, ...), tracker-issues (tracker, issues, labels), round-orchestration (round, roundtick, roundwatch, ...), workers (worker, harness), gate-landing (ship, gate, land), terminal-hosts (host), hooks-guard (hook) and review-verdicts (verdict, proof). `internal/cli` imports about 60 internal packages; `exitcode` and `tui`/`palette` import almost none.
 
 ## Entry points
 - cmd/rota/main.go:12 — `main`: `os.Exit(cli.Main(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))`

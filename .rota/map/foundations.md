@@ -1,6 +1,6 @@
 ---
 subsystem: foundations
-summary: Leaf primitives every other package builds on: atomic files and locks, git and process execution, JSON, timestamps, liveness and small string helpers
+summary: leaf primitives every other package builds on: atomic files and locks, git and process execution, JSON, timestamps, liveness and small string helpers
 touched: 2026-10-27
 last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 ---
@@ -9,7 +9,7 @@ last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 
 The lowest layer of `internal/`. Each package is the one place for its job: writing state files atomically under a lock, running git, running any external binary, encoding JSON, formatting timestamps, deciding whether a pid is alive, and the Python-compatible string behavior some ports must keep.
 
-Depends on: only each other. `git` imports `proc` and `rotatree` (config-and-setup); `fsio` imports `jsonx`; `pidlive` imports `proc`; `strutil` imports `pystr`. `stamp`, `shlex`, `pystr`, `proc` import no rota package. Used by every other subsystem.
+Depends on: each other, plus config-and-setup (`git` imports `rotatree`). `git` imports `proc`; `fsio` imports `jsonx`; `pidlive` imports `proc`; `strutil` imports `pystr`. `stamp`, `shlex`, `pystr`, `proc` import no rota package. Used by every other subsystem.
 
 ## Entry points
 - internal/fsio/fsio.go:64 — `WriteFileAtomic`; `WriteJSONAtomic` at :108, `Locked` (sidecar advisory lock) at :150, `UpdateJSON` at :213
