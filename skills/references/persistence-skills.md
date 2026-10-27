@@ -14,10 +14,10 @@ Every persistence skill (and `/rota-learn`'s `--term` mode) follows:
 4. **Merges via a writer verb** that owns insertion, deduplication, and the date stamp:
    - `/rota-learn` (topic bullets) → `rota knowledge add`
    - `/rota-learn --term` → `rota glossary write`
-   - `/rota-decide` → edit `.rota/DECISIONS.md` directly (no writer verb)
+   - `/rota-decide` → `rota decisions add` (or `amend` for one approved part)
 5. **Regenerates the managed index block** in the instructions file (`AGENTS.md` when it exists, else `CLAUDE.md`; the verb resolves it) via `rota block`. The block is the always-on signal to read-side skills:
    - `/rota-learn` (both modes) → `rota block knowledge` (`--term` runs it internally via `rota glossary write`; Glossary surfaces as a topic name in the Knowledge index automatically)
-   - `/rota-decide` → `rota block decisions`
+   - `/rota-decide` → the decisions writer refreshes the block internally
 6. **Confirms via a compact block** — *"Captured `<artifact>` into `.rota/<FILE>.md`… Updated CLAUDE.md `<block>` block."* Match the shape; don't recap the plan.
 
 The duo does **not** commit. `.rota/KNOWLEDGE.md`, `.rota/DECISIONS.md`, and `CLAUDE.md` are all tracked under the partial-ignore model, so the duo leaves up to three working-tree diffs and lets the caller (the user, or a parent `/rota-work` cycle) commit them as one summary. Under `autonomy.level: roundtrip` or `auto` ([`references/autonomy.md`](autonomy.md)) the duo runs in sequence, so a per-skill commit would split what should be one commit.
@@ -43,7 +43,7 @@ The gate strengths are by design. This is where the active/passive distinction l
 | Confirmation gate | conditional (only on existing-term conflict — alias collision is the gate; same-name updates are silent) | **none** — Step 4 explicitly auto-writes | **manual gate**, always |
 | Verifier | none | Opus opt-in (`--strict` or `learn.verify`) | none |
 | Source-prefill flags | `--def`, `--alias`, `--not`, `--touch` | none | `--from-learning`, `--from-spike` |
-| Lifecycle flags | none | `--deprecate`, `--amend` (tier / body edit via `rota knowledge`) | `--supersede`, `--retire` (status line edit; no writer verb) |
+| Lifecycle flags | none | `--deprecate`, `--amend` (tier / body edit via `rota knowledge`) | `--supersede`, `--retire` (via `rota decisions supersede` / `retire`) |
 | Retire gate | n/a | none | **manual gate**; a superseding entry also passes the three gates |
 | Active vs passive | vocabulary (low-risk additive) | passive ("remember if relevant") | active commitment (forbids + permits) |
 
