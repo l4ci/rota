@@ -1405,8 +1405,12 @@ func (g *gate) verifyLocal(dir, _ string) (bool, error) {
 // back. An empty test.full leaves a NO-VERIFY note; test.e2e passing after it
 // clears VerifySkipped. done is true when it ends the gate with a verdict.
 func (g *gate) verifyTiers(first, dir string, landed bool) (bool, error) {
-	w := g.tierWalk(func(_ string, cmds []string) (VerifyResult, error) {
-		vr, err := g.e.runGateVerify(g.ctx, cmds, dir, g.in.ledger)
+	w := g.tierWalk(func(tier string, cmds []string) (VerifyResult, error) {
+		run := g.e.runGateVerify
+		if tier == tierE2E {
+			run = g.e.runE2E
+		}
+		vr, err := run(g.ctx, cmds, dir, g.in.ledger)
 		if err == nil {
 			prs := []string{}
 			if g.res.PR != "" {
