@@ -34,6 +34,7 @@ func roundSummaryVerb(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		s := source.Fold(audit, n)
+		s.ReadFlakes(root)
 		text := s.Text()
 		if !ledger.Exists(root) {
 			text = "no ledger yet: it fills as rounds assign, report and gate\n" + text

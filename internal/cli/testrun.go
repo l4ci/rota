@@ -16,6 +16,7 @@ func testCommands() *Command {
 	return &Command{Name: "test", Summary: "run a config test tier", Subs: []*Command{
 		{Name: "run", Summary: "run test.fast, test.full or test.e2e in order, stopping at the first failure", Verb: testRun},
 		{Name: "lock", Summary: "run a command holding a slot of the machine-wide test lock", Verb: testLock},
+		{Name: "flakes", Summary: "rank observed flaky command/test pairs by repeat count", Verb: noFlags(testFlakes)},
 		{Name: "ledger", Summary: "the exclusion ledger of known-red tests", Subs: []*Command{
 			{Name: "check", Summary: "report expired and malformed entries in .rota/test-ledger.json", Verb: noFlags(testLedgerCheck)},
 		}},

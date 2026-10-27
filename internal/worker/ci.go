@@ -320,7 +320,7 @@ func (e Env) fullTier(ctx context.Context, root, name string, in gateInput) (ver
 	cfg := in.cfg
 	if cfg.where == WhereLocal {
 		return func(dir string) (VerifyResult, error) {
-			return e.RunVerifyWith(ctx, cfg.Full, dir, in.ledger)
+			return e.runGateVerify(ctx, cfg.Full, dir, in.ledger)
 		}, false, "", nil
 	}
 	provider, perr := e.detectProvider(ctx, root, "", cfg.Tracker.Provider, tracker.ForgeActor)
