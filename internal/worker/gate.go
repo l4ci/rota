@@ -120,8 +120,9 @@ const (
 	// and no relay or transfer has answered it; the CLI exits 4 with it,
 	// blockedBy outcome-open.
 	GateOutcomeOpen = "outcome-open"
-	// GateRunning: another gate for the same PR is running or queued; the CLI
-	// exits 4 with it, blockedBy gate-running, before this one takes the land lock.
+	// GateRunning: another gate for this PR is running or queued, or a NoWait
+	// run yielded to other landing work. The CLI exits 4, blockedBy gate-running,
+	// before this run takes the land lock.
 	GateRunning = "gate-running"
 	// GateForge: the origin names no forge and forge.provider names none, so
 	// the gate cannot tell where the PR lives (tracker.ResolveProvider, an
@@ -148,6 +149,9 @@ func noVerifyRefusal(what string) (msg, hint string) {
 
 // GateOpts are the flags of `rota worker gate`.
 type GateOpts struct {
+	// NoWait is the autopilot's landing mode: defer if any gate or train is
+	// running or queued, without entering the gate or waiting on the land lock.
+	NoWait    bool
 	Slot      string
 	Base      string
 	CheckOnly bool
@@ -430,11 +434,15 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 		}
 		defer release()
 	}
-	err := e.withLandLock(ctx, root, o.Slot, func(waited bool) (err error) {
+	err := e.withLandingRun(ctx, root, o.Slot, o.NoWait, func(waited bool) (err error) {
 		o.waited = waited
 		res, err = e.gate(ctx, root, o)
 		return err
 	})
+	if errors.Is(err, errLandingBusy) {
+		res = GateResult{Slot: o.Slot, Base: o.Base, Verdict: GateRunning, Err: err.Error()}
+		err = nil
+	}
 	res.Round = o.Round
 	return res, err
 }
