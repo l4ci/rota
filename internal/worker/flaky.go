@@ -1,0 +1,70 @@
+package worker
+
+import (
+	"context"
+	"fmt"
+	"regexp"
+
+	"github.com/l4ci/rota/internal/flakeledger"
+	"github.com/l4ci/rota/internal/testledger"
+)
+
+// Unknown output stays red. Even an assertion summary must not hide a
+// process/infrastructure failure in another package of the same command.
+var retryInfrastructure = regexp.MustCompile(`(?im)signal:|\bkilled\b|\[build failed\]|\[setup failed\]|^panic:|fatal error:|test timed out|context deadline exceeded|resource temporarily unavailable|cannot allocate memory|no space left on device|permission denied|command not found|executable file not found|fork/exec|connection refused|network is unreachable|i/o timeout`)
+
+// cleanVerifyTree identifies the committed tree and refuses tracked edits.
+// Untracked test artifacts are allowed, as in every scratch verification.
+func (e Env) cleanVerifyTree(ctx context.Context, dir string) string {
+	tree, code := e.runGit(ctx, dir, "rev-parse", "HEAD^{tree}")
+	if code != 0 || tree == "" {
+		return ""
+	}
+	status, code := e.runGit(ctx, dir, "status", "--porcelain", "--untracked-files=no")
+	if code != 0 || status != "" {
+		return ""
+	}
+	return tree
+}
+
+// runGateVerify opts gate/train local tiers into retry. General test runs,
+// proof recording, CI and behaviour checks retain their existing semantics.
+func (e Env) runGateVerify(ctx context.Context, cmds []string, dir string, led testledger.Ledger) (VerifyResult, error) {
+	e = e.WithDefaults()
+	now := e.Now()
+	var flakes []flakeledger.Entry
+	shell := func(ctx context.Context, dir, cmd string) (string, int) {
+		tree := e.cleanVerifyTree(ctx, dir)
+		out, code := e.Shell(ctx, dir, cmd)
+		tests, assertion := testledger.FailingTests(out)
+		_, excluded := led.Excuses(out, now)
+		if code != 1 || ctx.Err() != nil || !assertion || excluded || retryInfrastructure.MatchString(out) || tree == "" || e.cleanVerifyTree(ctx, dir) != tree {
+			return out, code
+		}
+		again, retryCode := e.Shell(ctx, dir, cmd)
+		combined := out + "\n== RETRY " + cmd + "\n" + again
+		if retryCode == 0 && ctx.Err() == nil && e.cleanVerifyTree(ctx, dir) == tree {
+			flakes = append(flakes, flakeledger.Entry{Check: cmd, Tests: tests, Tree: tree, TS: e.Now().UTC(), First: flakeledger.Run{Output: out, ExitCode: code}, Retry: flakeledger.Run{Output: again, ExitCode: retryCode}})
+			return combined, 0
+		}
+		// A changed tree or cancellation cannot turn the original red green.
+		if retryCode == 0 {
+			retryCode = 1
+		}
+		return combined, retryCode
+	}
+	r, err := runVerifyCmds(ctx, shell, cmds, dir, led, now)
+	r.Flaky = flakes
+	return r, err
+}
+
+func (e Env) recordFlakes(root string, round *RoundMemo, prs []string, vr VerifyResult) error {
+	for _, f := range vr.Flaky {
+		f.PRs = append([]string{}, prs...)
+		f.Round = round.Round(e, root)
+		if err := flakeledger.Append(root, f); err != nil {
+			return fmt.Errorf("flake ledger not written: %w", err)
+		}
+	}
+	return nil
+}

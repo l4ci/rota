@@ -116,6 +116,7 @@ type TrainResult struct {
 	// that follows (its head SHA, PR and branch). Zero when none did.
 	CulpritGate GateResult
 	Verified    []string // test.full commands that passed
+	Flaky       []string // commands recovered on one isolated retry
 	E2EVerified []string // test.e2e commands that passed
 	Landed      []string
 	Changed     bool
@@ -757,6 +758,22 @@ func (t *trainRun) verifyStage() (bool, error) {
 			}
 			r, err := run()
 			if err == nil {
+				prs := []string{}
+				for _, m := range res.Members[:k] {
+					if m.PR != "" {
+						prs = append(prs, m.PR)
+					}
+				}
+				err = e.recordFlakes(t.root, o.Round, prs, r)
+				// Prefix verifies run inside bisect, outside the tier walk.
+				if k != n {
+					for _, f := range r.Flaky {
+						res.Flaky = append(res.Flaky, f.Check)
+						res.Notes = append(res.Notes, "FLAKY "+f.Check)
+					}
+				}
+			}
+			if err == nil {
 				cache.put(key, r)
 			}
 			return r, err
@@ -775,7 +792,7 @@ func (t *trainRun) verifyStage() (bool, error) {
 		fullTierName = tierFull + "@ci"
 	}
 	full := cached(fullTierName, func() (VerifyResult, error) { return t.verify(scratch) })
-	e2e := cached(tierE2E, func() (VerifyResult, error) { return e.RunVerifyWith(ctx, t.in.cfg.E2E, scratch, t.in.ledger) })
+	e2e := cached(tierE2E, func() (VerifyResult, error) { return e.runGateVerify(ctx, t.in.cfg.E2E, scratch, t.in.ledger) })
 	// bisect names the culprit of a red tier; it reports whether the train ends.
 	bisect := func(tier string, run func(int) (VerifyResult, error), failed VerifyResult, key string) (stop bool, err error) {
 		passing, stop, err = e.bisectTrain(scratch, res, tips, tier, run, failed, o.LandGreen)
@@ -805,7 +822,7 @@ func (t *trainRun) verifyStage() (bool, error) {
 			}
 			return bisect(tierE2E, e2e, vr, tierE2E)
 		},
-		notes: &res.Notes, verified: &res.Verified, e2eVerified: &res.E2EVerified, excluded: &res.Excluded,
+		notes: &res.Notes, verified: &res.Verified, e2eVerified: &res.E2EVerified, excluded: &res.Excluded, flaky: &res.Flaky,
 	}
 	ended, err := w.walk(t.in.cfg, tierFull)
 	if err != nil {
