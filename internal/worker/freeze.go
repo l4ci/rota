@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	gatepolicy "github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/landfreeze"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 const GateFreeze = "freeze"
@@ -29,7 +31,11 @@ func (e Env) Freeze(ctx context.Context, root string, o FreezeOpts) (r *landfree
 	}
 	mutate := o.RepairIssue != "" || o.RepairPR != "" || o.Verify || o.Clear
 	if !mutate {
-		return landfreeze.Load(ctx, e.Git, root)
+		r, err := landfreeze.Load(ctx, e.Git, root)
+		if err != nil && !errors.Is(err, rotastate.ErrNotRepo) {
+			return nil, fail(exitcode.ExitRefused, landfreeze.UnreadableLine(err))
+		}
+		return r, err
 	}
 	err = e.withLandLock(ctx, root, "freeze recovery", func(bool) error {
 		p, err := landfreeze.Path(ctx, e.Git, root)
@@ -43,11 +49,7 @@ func (e Env) Freeze(ctx context.Context, root string, o FreezeOpts) (r *landfree
 				return fail(exitcode.ExitRefused, landfreeze.UnreadableLine(readErr))
 			}
 			// Discard the damaged snapshot only through the audited clear path.
-			sha, code := e.runGit(ctx, root, "rev-parse", "HEAD")
-			if code != 0 {
-				return fail(exitcode.ExitResolution, "cannot resolve clearance HEAD")
-			}
-			r = &landfreeze.Record{Active: true, Base: "unknown", SHA: sha}
+			r = &landfreeze.Record{Active: true, Base: "unknown"}
 		}
 		if r == nil || !r.Active {
 			return fail(exitcode.ExitResolution, "no active landing freeze")
@@ -60,14 +62,21 @@ func (e Env) Freeze(ctx context.Context, root string, o FreezeOpts) (r *landfree
 			if strings.TrimSpace(o.Reason) == "" {
 				return fail(exitcode.ExitUsage, "freeze clear requires --reason <text>")
 			}
-			// A reasoned override records the operator's HEAD; the frozen base
-			// may have been deleted or renamed since the failure.
-			sha, code := e.runGit(ctx, root, "rev-parse", "HEAD")
+			// Prefer the frozen base over an unrelated worktree's HEAD. A
+			// deleted base or damaged record still has an audited escape hatch.
+			sha, code := "", 1
+			if readErr == nil {
+				sha, code = e.runGit(ctx, root, "rev-parse", "--verify", "--end-of-options", r.Base+"^{commit}")
+			}
+			if code != 0 {
+				sha, code = e.runGit(ctx, root, "rev-parse", "HEAD")
+			}
 			if code != 0 {
 				return fail(exitcode.ExitResolution, "cannot resolve clearance HEAD")
 			}
 			note := o.Reason
 			if readErr != nil {
+				r.SHA = sha
 				note += "; replaced unreadable record: " + readErr.Error()
 			}
 			if err := gatepolicy.Clear(root, e.Config(root), e.Now(), "freeze-clear", "rota round freeze", r.Base, gatepolicy.Confirm{Given: true, Note: note}, nil); err != nil {

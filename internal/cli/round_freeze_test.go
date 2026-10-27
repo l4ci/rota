@@ -142,6 +142,17 @@ func TestRoundFreezeUnreadableRecovery(t *testing.T) {
 	}
 }
 
+func TestRoundFreezeUnreadableReadRefusal(t *testing.T) {
+	root, deps := roundFixture(t, nil)
+	write(t, seedFreeze(t, root, "feat/x"), `{`)
+	for _, flags := range [][]string{nil, {"--repair-issue", "B07"}, {"--verify"}} {
+		code, out, stderr := rotaInWith(t, deps, root, append([]string{"round", "freeze"}, flags...)...)
+		if code != 4 || !strings.Contains(out+stderr, "--clear --reason") || strings.Contains(out+stderr, "this is a bug") || strings.Contains(out, "no landing freeze") {
+			t.Errorf("unreadable freeze %v must refuse with recovery only: exit=%d stdout=%q stderr=%q", flags, code, out, stderr)
+		}
+	}
+}
+
 func TestRoundFreezeHookUnreadableWithoutActiveSlots(t *testing.T) {
 	root := orchProject(t, true)
 	write(t, seedFreeze(t, root, "feat/x"), `{`)

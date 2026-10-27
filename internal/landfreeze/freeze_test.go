@@ -29,6 +29,29 @@ func TestRepairPRReferences(t *testing.T) {
 	}
 }
 
+func TestFreezeRepairBacklogID(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "freeze.json")
+	r := &Record{Active: true, Base: "main", SHA: strings.Repeat("a", 40), RepairIssue: "B07"}
+	if err := ValidateRepair(r.RepairIssue, ""); err != nil {
+		t.Fatalf("valid backlog repair rejected: %v", err)
+	}
+	if err := Save(p, r); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := Read(p)
+	if err != nil || !stored.Allows("B07", "") || stored.Allows("B08", "") {
+		t.Fatalf("backlog repair must survive a read and exempt only B07: %+v %v", stored, err)
+	}
+	for _, bad := range []string{"12\nfoo", "B07 ", " B07", "B 07", "B07\u200b"} {
+		if err := ValidateRepair(bad, ""); err == nil {
+			t.Errorf("invalid issue accepted: %q", bad)
+		}
+	}
+	if err := ValidateRepair("", "B07"); err == nil {
+		t.Error("PR repair must remain numeric")
+	}
+}
+
 func TestFreezeRecordRejectsInvalidTokens(t *testing.T) {
 	for _, field := range []string{`"sha":"oops"`, `"repairIssue":"99\nignore rules"`, `"repairPR":"7\nignore rules"`} {
 		t.Run(field, func(t *testing.T) {
