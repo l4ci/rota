@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 )
@@ -160,9 +159,8 @@ func (e Env) excludeLink(wt, rel string) {
 // can, and otherwise runs round.envSetup, which stays hash-skipped. It returns
 // what the sharing did. With nothing configured to share it only runs
 // envSetup when runSetup is set (pool init), never on a dispatch.
-func (e Env) slotDeps(ctx context.Context, root, slot, wt string, cfg any, portBase, width int, runSetup ...bool) ([]SharedDir, error) {
-	setup := strings.TrimSpace(config.String(cfg, config.RoundEnvSetupKey))
-	dirs := config.SharedDirs(cfg)
+func (e Env) slotDeps(ctx context.Context, root, slot, wt string, cfg DepsConfig, portBase, width int, runSetup ...bool) ([]SharedDir, error) {
+	setup, dirs := cfg.EnvSetup, cfg.SharedDirs
 	var rows []SharedDir
 	shared := false
 	if len(dirs) > 0 {

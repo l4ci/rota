@@ -263,12 +263,12 @@ func (d *Deps) projectsEnv() projects.Env {
 // resolveHost is worker.ResolveHost over Deps' own getenv and lookPath, so the
 // decision and the handle from Host come from the same injected sources.
 func (d *Deps) resolveHost(root string) host.Kind {
-	return worker.ResolveHost(root, d.Config(root), d.Getenv, d.LookPath)
+	return worker.ResolveHost(root, worker.ParseHostConfig(d.Config(root)), d.Getenv, d.LookPath)
 }
 
 // resolvePaneHost is worker.ResolvePaneHost over Deps' own getenv and lookPath.
 func (d *Deps) resolvePaneHost(root string, cfg any) host.Kind {
-	return worker.ResolvePaneHost(root, cfg, d.Getenv, d.LookPath)
+	return worker.ResolvePaneHost(root, worker.ParseHostConfig(cfg), d.Getenv, d.LookPath)
 }
 
 // credentials is worker.SystemCredentials with the home and clock read off Deps.

@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 )
@@ -93,9 +92,9 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 
 	// tmux handles are known now; herdr tab ids exist only after a dispatch.
 	cfg := e.Config(root)
-	dispatch := host.KindOf(config.Dispatch(cfg))
-
-	portStart, portBlock := PortRange(cfg)
+	dispatch := ParseHostConfig(cfg).Dispatch
+	ports := ParsePortConfig(cfg)
+	deps := ParseDepsConfig(cfg)
 
 	names, branchOf := o.slotNames()
 	for _, name := range names {
@@ -167,11 +166,11 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 		}
 		// Fail fast: a red setup stops the pool here, the slot stays registered
 		// and the next init retries it because no hash was stored.
-		portBase, width, err := EnsurePortBase(root, name, portStart, portBlock)
+		portBase, width, err := EnsurePortBase(root, name, ports.Base, ports.Block)
 		if err != nil {
 			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
-		rows, err := e.slotDeps(ctx, root, name, abs, cfg, portBase, width, true)
+		rows, err := e.slotDeps(ctx, root, name, abs, deps, portBase, width, true)
 		res.Shared = append(res.Shared, rows...)
 		if err != nil {
 			return res, err
