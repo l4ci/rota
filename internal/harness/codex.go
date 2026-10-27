@@ -158,7 +158,13 @@ func (codex) CrossReviewer() bool { return true }
 
 func (codex) LimitPhrases() []string { return SharedLimitPhrases() }
 
-func (codex) PaneVocab() PaneVocab { return PaneVocab{} }
+func (codex) PaneVocab() PaneVocab {
+	return PaneVocab{
+		// The active status includes elapsed time and an interrupt hint.
+		// Requiring that frame keeps prose quoting the label from counting.
+		Waiting: []string{`(?m)^\s*• Waiting for background terminal \([^\n]*esc to inter(?:rupt|…)[^\n]*$`},
+	}
+}
 
 // Tiers: the tier map is optional (#68), unset a worker runs on Codex's own
 // default model, but a configured one names every tier.

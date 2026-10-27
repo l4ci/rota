@@ -55,6 +55,7 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) 
 			e.HostErr = err.Error()
 		} else if s := h.Capabilities().Snapshotter; s != nil {
 			e.Snapshot, e.HostName = s.Snapshot, h.Kind()
+			e.Capture = h.Capture
 			if tf := h.Capabilities().TabFollower; tf != nil {
 				e.FollowTab = tf.FollowTab
 			}
