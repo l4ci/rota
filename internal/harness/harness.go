@@ -195,6 +195,9 @@ type PaneVocab struct {
 	// Retry marks a retry in flight (busy, checked before limits); Busy marks a
 	// turn running (busy, checked after limits and dialogs).
 	Retry, Busy []string
+	// Waiting marks an internal tool wait that a host may mistake for a
+	// blocked dialog. Pane approval prompts and terminal failures still win.
+	Waiting []string
 	// Background marks work the session waits on while its pane sits still (a
 	// shell or monitor it started): busy, with evidence that ignores the count.
 	Background []string

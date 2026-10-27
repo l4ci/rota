@@ -1,0 +1,14 @@
+• I’ll run the requested wait and collect the terminal
+  result.
+
+• Ran sleep 45
+  └ (no output)
+
+• ROTA-BLOCKED capture: which capture should be kept?
+
+  Worked for 49s • 7:49 AM
+
+
+› Ask Codex to do anything
+
+  GPT-6-Luna high · /tmp ·…  ⚠ 1 warning · f2 to view
