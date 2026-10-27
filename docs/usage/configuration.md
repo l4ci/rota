@@ -280,6 +280,11 @@ same command again. If it still passes, the gate refuses with exit 4 and
 check; this establishes dependence on the change, not assertion quality. A
 cancelled run or a counterfactual command that cannot execute is `check-broke`.
 
+To resolve `vacuous-tests`, add an assertion that fails with the non-test changes
+reverted, then re-run the gate or train. For refactors or tests-only work, disable
+`test.vacuousCheck` in the base configuration or use `--no-verify` to skip this
+check for that gate or train run.
+
 A tests-only PR skips the check because it has no non-test changes to revert.
 A PR with no surviving added or changed test files, only docs or skills, or no
 runnable Go entry points also gets a `VACUOUS-SKIP` note. With the default Go

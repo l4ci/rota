@@ -18,7 +18,7 @@ func (d *runner) decisions() (Check, bool) {
 	if os.IsNotExist(err) {
 		return Check{}, false
 	}
-	const hint = "run: rota decisions amend --topic <topic> --title <title> --part rule|why|forbids|permits --body-file <file>"
+	const hint = "use rota decisions amend if one part can make the whole file valid; otherwise manually repair the reported entries in .rota/DECISIONS.md, then run rota decisions check and rota block decisions (malformed *Status.* lines require a manual edit)"
 	if err != nil {
 		return Check{Name: "decisions", Status: Warn, Detail: err.Error(), Hint: "restore read access to .rota/DECISIONS.md"}, true
 	}
