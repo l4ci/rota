@@ -1,0 +1,206 @@
+package round
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/worker"
+)
+
+// MaintainerWait is a recorded question or a hold that needs a human decision.
+// Since is empty when the source has no timestamp; readers must not invent one.
+type MaintainerWait struct {
+	Kind, Item, Ask, Since, DefaultReply string
+}
+
+// NeedsYou collects decisions for status and the watch's prompt snapshot. It never
+// answers an escalation, changes a label or runs a gate. Spec waiver requests
+// use explicit escalations: a failing review alone is work for the worker.
+func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []string) {
+	var out []MaintainerWait
+	var warnings []string
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return nil, []string{fmt.Sprintf("maintainer digest: %v", err)}
+	}
+	entries, err := ledger.Load(root)
+	if err != nil {
+		warnings = append(warnings, fmt.Sprintf("maintainer digest ledger: %v", err))
+	}
+	if e.Forge == nil && e.NeedsHuman != "" && e.ForgeErr != "" {
+		// File-mode rounds have no needs-human labels to read. A missing
+		// forge there does not make their local escalation count incomplete.
+		if mode, err := config.Backend(e.Worker.Config(root)); err != nil || mode == "issues" {
+			warnings = append(warnings, "maintainer digest forge unavailable: "+e.ForgeErr)
+		}
+	}
+	// An explicit escalation replaces the implicit hold on its thread or slot.
+	escalated := map[string]bool{}
+	for _, esc := range reg.Escalations() {
+		if esc.Status != worker.EscalationPending {
+			continue
+		}
+		reply := "reply"
+		if esc.Recommend > 0 && esc.Recommend <= len(esc.Options) && esc.Recommend <= 26 {
+			reply = string(rune('A' + esc.Recommend - 1))
+		}
+		item := esc.Ref()
+		if esc.Kind == "pr" {
+			item = "PR " + item
+		}
+		out = append(out, MaintainerWait{"escalation", item, esc.Title, esc.SentAt, reply})
+		escalated[item] = true
+		if esc.Slot != "" {
+			escalated["slot:"+esc.Slot] = true
+		}
+	}
+
+	// Only the latest gate result for a target still held by a slot or queue
+	// can ask for merge approval; old refusals must not survive a later gate.
+	gateByPR := map[int]ledger.Entry{}
+	gateBySlot := map[string]ledger.Entry{}
+	parkedAt := map[string]string{}
+	bouncedAt := map[string]string{}
+	for _, entry := range entries {
+		id := worker.NormID(entry.Issue)
+		switch entry.Kind {
+		case ledger.KindTransfer:
+			if entry.Slot == "human" {
+				parkedAt[id] = waitStamp(entry.TS)
+			} else {
+				delete(parkedAt, id)
+			}
+		case ledger.KindBounce:
+			bouncedAt[id] = waitStamp(entry.TS)
+		case ledger.KindGate, ledger.KindMerge:
+			if n, ok := worker.PRRefNumber(entry.PR); ok {
+				gateByPR[n] = entry
+			} else if entry.Slot != "" {
+				gateBySlot[entry.Slot] = entry
+			}
+		}
+	}
+	covered := func(item, pr, slot string) bool {
+		if escalated[item] || (slot != "" && escalated["slot:"+slot]) {
+			return true
+		}
+		n, ok := worker.PRRefNumber(pr)
+		return ok && escalated[fmt.Sprintf("PR #%d", n)]
+	}
+	approvalSeen := map[string]bool{}
+	approval := func(item, pr, slot, issue string) {
+		if covered(item, pr, slot) {
+			return
+		}
+		n, ok := worker.PRRefNumber(pr)
+		key := "slot:" + slot
+		g := gateBySlot[slot]
+		if ok {
+			key = fmt.Sprintf("PR #%d", n)
+			g = gateByPR[n]
+			item = key
+		} else if slot == "" || worker.NormID(g.Issue) != worker.NormID(issue) {
+			return // never attach a previous assignment's refusal to this item
+		}
+		if approvalSeen[key] || g.Kind != ledger.KindGate || g.DetailStr("verdict") != worker.GateApprovalRequired {
+			return
+		}
+		approvalSeen[key] = true
+		for _, esc := range reg.Escalations() {
+			same := (ok && esc.Kind == "pr" && esc.Number == n) || (!ok && esc.Kind == "issue" && worker.NormID(esc.IssueKey().String()) == worker.NormID(issue))
+			if same && strings.HasPrefix(esc.Title, "Merge approval: ") && esc.Status == worker.EscalationAnswered && esc.Answer != nil {
+				answered, err := time.Parse(time.RFC3339, esc.Answer.SeenAt)
+				if err == nil && !answered.Before(g.TS) {
+					return
+				}
+			}
+		}
+		if ok && e.Forge != nil {
+			state, err := e.Forge.PRState(ctx, n)
+			if err != nil {
+				warnings = append(warnings, fmt.Sprintf("maintainer digest PR #%d: %v", n, err))
+				return
+			}
+			if !strings.EqualFold(state, "open") {
+				return
+			}
+		}
+		out = append(out, MaintainerWait{"merge-approval", item, "Approve this merge?", waitStamp(g.TS), "hold"})
+	}
+	counts := map[string]int{}
+	count := func(issue string) int {
+		id := worker.NormID(issue)
+		if n, ok := counts[id]; ok {
+			return n
+		}
+		n := reg.Bounces(issue)
+		if e.Round.Support != "" {
+			store, err := e.Worker.BounceStore(root)
+			if err == nil {
+				n, _, err = store.Count(issue)
+			}
+			if err != nil {
+				warnings = append(warnings, fmt.Sprintf("maintainer digest bounces for %s: %v", issue, err))
+				n = 0
+			}
+		}
+		counts[id] = n
+		return n
+	}
+	for _, s := range reg.Slots() {
+		if s.PRMerged() || s.HeldID() == "" {
+			continue
+		}
+		item := tracker.RefOf(s.HeldID())
+		if !covered(item, s.PR(), s.Name()) {
+			if ev := s.Event(); strings.EqualFold(s.State(), worker.StateBlocked) && ev != nil && (ev.Kind == worker.EventBlocked || ev.Kind == worker.EventQuestion) {
+				out = append(out, MaintainerWait{"question", item, ev.Body, ev.TS, "reply"})
+			}
+			if e.Round.MaxBounces > 0 && worker.IsDone(s.State()) && count(s.HeldID()) >= e.Round.MaxBounces {
+				out = append(out, MaintainerWait{"bounce-cap", item, "Audit the acceptance criteria before another bounce", bouncedAt[worker.NormID(s.HeldID())], "audit"})
+			}
+		}
+		approval(item, s.PR(), s.Name(), s.HeldID())
+	}
+	for _, q := range reg.PRs() {
+		item := tracker.RefOf(q.Issue)
+		approval(item, q.PR, "", q.Issue)
+		if !covered(item, q.PR, "") && e.Round.MaxBounces > 0 && count(q.Issue) >= e.Round.MaxBounces {
+			out = append(out, MaintainerWait{"bounce-cap", item, "Audit the acceptance criteria before another bounce", bouncedAt[worker.NormID(q.Issue)], "audit"})
+		}
+	}
+	if e.Forge != nil && e.NeedsHuman != "" {
+		issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{e.NeedsHuman}})
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("maintainer digest needs-human: %v", err))
+		} else {
+			for _, issue := range issues {
+				item := issue.Key.Ref()
+				if !escalated[item] {
+					out = append(out, MaintainerWait{"needs-human", item, "Resolve the parked item and clear " + e.NeedsHuman, parkedAt[worker.NormID(issue.Key.String())], "hold"})
+				}
+			}
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		// Known oldest waits first; missing timestamps sort last.
+		if (out[i].Since == "") != (out[j].Since == "") {
+			return out[i].Since != ""
+		}
+		return out[i].Since < out[j].Since
+	})
+	return out, warnings
+}
+
+func waitStamp(at time.Time) string {
+	if at.IsZero() {
+		return ""
+	}
+	return at.UTC().Format(time.RFC3339)
+}
