@@ -49,6 +49,9 @@ type DoneDeps struct {
 	// Closed reports whether a bundle member's item is closed; false when it
 	// cannot be read.
 	Closed func(id string) bool
+	// Acceptance checks explicit criteria on tracker items this branch's PR
+	// closes. Partial and failed reports skip it.
+	Acceptance func(dir, branch string, ids []string) error
 	// RunTargeted proves each of ids with command at head: a PASS row or a run.
 	// It returns the expanded command, "" when expansion failed.
 	RunTargeted func(dir, command, base, head string, ids []string) (string, error)
@@ -76,7 +79,8 @@ type DoneResult struct {
 
 // Done is the worker's last action: the attempt fence, unread mail, a settled
 // pushed branch, the test.fast (or targeted) proof at HEAD for every open
-// bundle issue, the RED check, then the slot's done event, state and ledger row.
+// bundle issue, acceptance marks for a completed outcome, the RED check, then
+// the slot's done event, state and ledger row.
 // A refusal returns the partial result beside the exit-4 error.
 func Done(req DoneRequest, dp DoneDeps) (*DoneResult, error) {
 	res := &DoneResult{}
@@ -130,6 +134,15 @@ func done(req DoneRequest, dp DoneDeps, res *DoneResult) error {
 	bundle := func() []string { return OpenBundle(sl.BundleIssues(), dp.Closed) }
 	if err := doneProof(env, req, dp, sl, dir, bundle, res); err != nil {
 		return err
+	}
+	kind := req.Kind
+	if kind == "" {
+		kind, _ = sl.Outcome() // A plain done preserves a standing partial/failed.
+	}
+	if !OutcomeOpen(kind) && dp.Acceptance != nil {
+		if err := dp.Acceptance(dir, sl.Branch(), bundle()); err != nil {
+			return err
+		}
 	}
 	if req.Kind != OutcomeFailed {
 		if err := doneRed(env, req, dp, id, dir, bundle, res); err != nil {
