@@ -26,10 +26,10 @@ Review `<branch>` against base `<base>` on one axis (named below).
 
 **Diff:** read `<data.path from Step 5>` (commits, `--stat`, full diff with context). Do not ask for the diff to be pasted.
 
-**Running the branch.** The merge gate fails `FAIL worktree guard` when `git worktree list` changes during verify, so never touch the repo's worktrees or checkout. Export the branch and run everything there:
-- `git -C <repo> archive <ref> | tar -x -C <scratch>`, then run tests and probes only inside `<scratch>`.
+**Running the branch.** The caller prepared `<workspace>` with `rota review prepare <sha>`; its returned `data.head` is `<reviewed SHA>`. Read code and run tests and probes only inside `<workspace>`. Mechanical setup and cleanup belong to the caller, not the reviewer.
 - Never run `git worktree add`, `git worktree remove`, `git checkout` or `git switch` in the repo, and never write a probe or test file into it.
-- If the extract fails, stop and report it. No fallback: do not fall back to a checkout, a worktree or the repo itself.
+- If preparation failed or the workspace is unavailable, stop and report it. No fallback to a checkout, a worktree or the repo itself.
+- Remain semantically read-only: do not edit, commit or stage. A scratch cwd is not an OS sandbox; an unsandboxed agent can still access absolute paths in the live repo and user home. Never use that access to write outside the prepared workspace. The merge gate's worktree guard is unchanged.
 - To run a smoke section, build the binary from the exported tree and set `ROTA_BIN` to it. `test/runner.sh` reads `ROTA_BIN`, not `PATH`, so a binary only prepended to `PATH` silently tests the installed one.
 ```
 

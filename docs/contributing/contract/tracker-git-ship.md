@@ -120,6 +120,22 @@ old: none (new verb)
 note: writes `<project root>/.rota/review/<branch>.md` (gitignored; `/` in the branch becomes `-`) with the commits, `git diff --stat` and `git diff -U10`, and prints the absolute path. The file is rewritten on every call. `data.head` is the branch sha resolved once and diffed; pass it to `rota verdict add --sha`.
 note: the base need not be an ancestor of the branch tip: the diff is `base...branch`, so a base that moved on since the fork is fine. Only unrelated histories fail. `--since` is a point on the branch and must be an ancestor; the range is then `since..branch`.
 
+### rota review prepare
+rota review prepare <commit>
+repo: scoped
+data: {"changed": bool, "path": string, "head": string}
+exit: 2 at an umbrella root without --repo; 3 when the commit cannot be resolved; 5 when archive creation, extraction or setup fails
+old: none (new verb)
+note: resolves the requested commit once, archives that SHA, and extracts into a fresh private temporary directory without registering a git worktree. `path` is the absolute extracted tree, `head` the resolved SHA; `.review/` is created for caller inputs. A tracked `.review` refuses setup. Archive creation and extraction are checked separately, and setup failures return no launchable result and attempt removal of only the new temporary directory. A failed removal is reported with its path. No live-checkout fallback exists. The caller copies its inputs before launching and uses `path` as the reviewer cwd. This cwd is disposable, not an OS sandbox: absolute-path access and ambient user configuration remain reachable.
+
+### rota review cleanup
+rota review cleanup <workspace>
+repo: none
+data: {"changed": bool, "path": string, "head": string}
+exit: 4 when the path is not an owned prepared workspace; 5 when removal fails
+old: none (new verb)
+note: accepts only the absolute `path` returned by preparation under the current temporary directory, with a matching ownership record outside the extracted tree. Removes that workspace's private temporary parent and no other workspace; symlinks inside it are removed without following their targets. Missing, malformed or symlinked ownership records and symlinked parent paths refuse. A cleanup failure is surfaced, never retried against a broader path. Call after reviewer success, failure or cancellation, with the same temporary-directory environment as preparation.
+
 ### rota review queue
 rota review queue
 repo: scoped
