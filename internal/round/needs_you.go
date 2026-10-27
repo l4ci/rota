@@ -162,7 +162,7 @@ func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []str
 			for _, issue := range issues {
 				item := issue.Key.Ref()
 				if !escalated[item] {
-					out = append(out, MaintainerWait{"needs-human", item, "Resolve the parked item and clear " + e.NeedsHuman, parkedAt[worker.NormID(issue.Key.String())], "hold"})
+					out = append(out, MaintainerWait{e.NeedsHuman, item, "Resolve the parked item and clear " + e.NeedsHuman, parkedAt[worker.NormID(issue.Key.String())], "hold"})
 				}
 			}
 		}

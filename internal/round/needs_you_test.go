@@ -16,15 +16,38 @@ import (
 
 type needsYouForge struct {
 	Forge
-	issues []tracker.Issue
-	states map[int]string
+	issues    []tracker.Issue
+	states    map[int]string
+	parkLabel string
 }
 
 func (f needsYouForge) List(_ context.Context, filter tracker.ListFilter) ([]tracker.Issue, error) {
-	if filter.State != "open" || !reflect.DeepEqual(filter.Labels, []string{"needs-human"}) {
+	label := f.parkLabel
+	if label == "" {
+		label = "needs-human"
+	}
+	if filter.State != "open" || !reflect.DeepEqual(filter.Labels, []string{label}) {
 		panic("digest must ask only for open parked items")
 	}
 	return f.issues, nil
+}
+
+func TestNeedsYouConfiguredParkLabel(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	e := Env{NeedsHuman: "maintainer-handoff", Forge: needsYouForge{
+		parkLabel: "maintainer-handoff", issues: []tracker.Issue{{Key: "99"}},
+	}}
+	rows, warnings := e.NeedsYou(context.Background(), root)
+	if len(warnings) != 0 {
+		t.Fatal(warnings)
+	}
+	want := []MaintainerWait{{"maintainer-handoff", "#99", "Resolve the parked item and clear maintainer-handoff", "", "hold"}}
+	if !reflect.DeepEqual(rows, want) {
+		t.Fatalf("configured park label must name the wait: got %#v, want %#v", rows, want)
+	}
 }
 
 func (f needsYouForge) PRState(_ context.Context, n int) (string, error) {
