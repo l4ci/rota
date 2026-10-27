@@ -95,6 +95,16 @@ Work only this task, then stop.
   line names the slices still to come. Use `partial` there only when the PR misses part of
   its own slice. Put the `prBlock` the verb prints
   first in the PR body, above the other sections: done runs after the PR exists, so add it with `gh pr edit <pr> --body-file <f>` (the branch does not change).
+- Acceptance marks. After recording PASS proof, before reporting done, read each held item's
+  criteria (`rota item show <ID>` and `rota proof show <ID>`). For each met `AC-n`, run
+  `rota plan pass <ID> AC-n --proof '<sha>:<check>'` (use `#2150`, for example, as the issue key) using the recorded PASS row's sha and
+  check. Repeat for every open bundle member. Proof rows alone do not mark acceptance;
+  a changed criterion or withdrawn proof needs a new valid mark. A plain done or
+  `--outcome done` refuses (exit 4) while explicit criteria remain unmet. If one cannot be
+  met, report `--outcome partial --summary-file <f>` and name each unmet id and its reason
+  on the third line (or `failed` when nothing can be delivered); never mark it met to
+  clear the refusal. File mode has no `plan pass`: disclose explicit unmet criteria in
+  that summary. Items without explicit `AC-n` ids need no acceptance marks.
 - Attempt id. If your brief names an attempt id, pass `--attempt <id>` to `rota worker done` and
   `rota round report`. A refusal that calls the attempt stale (exit 4) means the orchestrator
   reclaimed or transferred your assignment: you are fenced. Stop at once, do not retry, do not

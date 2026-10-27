@@ -91,6 +91,8 @@ When `ship.uat` is `true`, read `opt-in-gates.md` (Step 3.8: skip conditions and
 
 ## Step 4 — Build the PR Body
 
+For issue-backed items, check acceptance before shipping: read `rota item show <ID>` and `rota proof show <ID>`, then mark each verified criterion with `rota plan pass <ID> AC-n --proof '<sha>:<check>'` (use `#2150`, for example, as the issue key) against its recorded PASS row. Leave unmet criteria unmarked and state their ids and reasons in the PR. Round workers follow the outcome reporting in [`round-worker-and-issue-mode.md`](round-worker-and-issue-mode.md) before `worker done`; proof rows alone do not mark acceptance.
+
 ```bash
 rota ship body <branch>
 ```
