@@ -252,9 +252,9 @@
       "lastSeen": "2026-10-01"
     },
     "Architecture: Skill authoring::Codex drops skills whose unquoted description has ': ' or ' #'": {
-      "tier": "provisional",
-      "hits": 2,
-      "lastSeen": "2026-10-18"
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-10-27"
     },
     "Build & Tooling: Git & isolation::Repo-wide renames: one sweep PR owns shared code, slices stack on it": {
       "tier": "provisional",
@@ -318,7 +318,7 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Embedding host fakes must redeclare Capabilities": {
       "tier": "confirmed",
-      "hits": 7,
+      "hits": 8,
       "lastSeen": "2026-10-27"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Palette entries name the verb that registers the View": {
@@ -393,7 +393,7 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate steps read the forge only after stepRemote": {
       "tier": "confirmed",
-      "hits": 8,
+      "hits": 9,
       "lastSeen": "2026-10-27"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::The tracker REST layer never resends a POST after a 5xx": {
@@ -787,8 +787,8 @@
       "lastSeen": "2026-10-20"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::A config enum of harness kinds must be allowlisted in the kind-switch guard": {
-      "tier": "provisional",
-      "hits": 2,
+      "tier": "confirmed",
+      "hits": 4,
       "lastSeen": "2026-10-27"
     },
     "Rounds: Orchestration: Reviews & verdicts::Verdict severities are blocker, major, minor and info": {
@@ -867,9 +867,9 @@
       "lastSeen": "2026-10-21"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::A bigger timeout is not a flake fix": {
-      "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-24"
+      "tier": "confirmed",
+      "hits": 4,
+      "lastSeen": "2026-10-27"
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::printf into head dies under pipefail": {
       "tier": "provisional",
@@ -878,8 +878,8 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Isolate the global config without a temp dir leak": {
       "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-24"
+      "hits": 2,
+      "lastSeen": "2026-10-27"
     },
     "Rounds: Orchestration: Reviews & verdicts::Record verdicts at review package data.head": {
       "tier": "provisional",
@@ -1052,8 +1052,8 @@
       "lastSeen": "2026-10-26"
     },
     "Architecture: Skill authoring::Skill files live at the top of the skill folder": {
-      "tier": "provisional",
-      "hits": 2,
+      "tier": "confirmed",
+      "hits": 3,
       "lastSeen": "2026-10-27"
     },
     "Build & Tooling: Smoke testing: Gate & frozen records::A new config key shifts every later frozen config-show/all row": {
@@ -1068,7 +1068,7 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Tests that read slot env must stub Getenv": {
       "tier": "confirmed",
-      "hits": 7,
+      "hits": 11,
       "lastSeen": "2026-10-27"
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::Herdr fakes must answer tab get with pane_count": {
@@ -1123,7 +1123,7 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Set Item.Type explicitly in round tests": {
       "tier": "provisional",
-      "hits": 0,
+      "hits": 1,
       "lastSeen": "2026-10-27"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Wrappers that embed IssueTracker hide optional interfaces": {
@@ -1152,6 +1152,31 @@
       "lastSeen": "2026-10-27"
     },
     "Product: Market & competitors::Question-heavy planning drives users away": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes::New terminal hosts need real-adapter round tests": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes::Capture host process evidence while the agent lives": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-27"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Never push to main while a gate runs": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-27"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::Check triggered review lenses before gating": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-27"
+    },
+    "Architecture: Skill authoring::Smoke sections grep skill text where it lives": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-27"
