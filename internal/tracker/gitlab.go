@@ -436,19 +436,21 @@ func (g *GitLab) username(ctx context.Context) (string, error) {
 
 func (g *GitLab) OpenPRs(ctx context.Context) ([]PR, error) {
 	var raw []struct {
-		UpdatedAt    time.Time `json:"updated_at"`
-		IID          int       `json:"iid"`
-		Title        string    `json:"title"`
-		Description  string    `json:"description"`
-		SourceBranch string    `json:"source_branch"`
-		WebURL       string    `json:"web_url"`
+		UpdatedAt       time.Time `json:"updated_at"`
+		IID             int       `json:"iid"`
+		Title           string    `json:"title"`
+		Description     string    `json:"description"`
+		SourceBranch    string    `json:"source_branch"`
+		WebURL          string    `json:"web_url"`
+		SourceProjectID int       `json:"source_project_id"`
+		TargetProjectID int       `json:"target_project_id"`
 	}
 	if err := g.list(ctx, []string{"mr", "list", "--output", "json"}, glPerPage, glPaging, &raw); err != nil {
 		return nil, err
 	}
 	out := []PR{}
 	for _, d := range raw {
-		out = append(out, PR{Number: d.IID, Title: d.Title, Branch: d.SourceBranch, URL: d.WebURL, UpdatedAt: d.UpdatedAt, Body: d.Description})
+		out = append(out, PR{Number: d.IID, Title: d.Title, Branch: d.SourceBranch, URL: d.WebURL, UpdatedAt: d.UpdatedAt, Body: d.Description, SameRepository: d.SourceProjectID > 0 && d.SourceProjectID == d.TargetProjectID})
 	}
 	return out, nil
 }

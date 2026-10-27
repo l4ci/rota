@@ -136,6 +136,8 @@ rota verdict add <branch> --kind review-spec --verdict <PASS|CONCERNS|FAIL> --sh
 rota verdict add <branch> --kind review-quality --verdict <PASS|CONCERNS|FAIL> --sha "$REVIEWED" --body-file "$STANDARDS" --json
 ```
 
+The verb renders the report from the recorded body and upserts it by kind and sha. If `data.report` is `pending`, surface `data.reportReason`; the local verdict is saved. Retry posting with `rota verdict post <branch>` after the PR exists or the tracker recovers. Do not hand-write another tracker verdict comment.
+
 `--sha` binds the record to the reviewed commit. Exit 4 means the branch moved on origin after the briefing (the message names the extra commits): review the new head, do not record against it. Never skip `--sha` to get past the refusal.
 
 Record the cross-harness reviewer's block, when Step 7 ran one, after those two: `rota verdict add <branch> --kind review-cross --verdict <V> --harness <cross> --model <model> --sha "$REVIEWED" --body-file "$CROSS" --json`. Its retry and unavailable rules are in [`cross-harness-reviewer.md`](cross-harness-reviewer.md); without the record `rota worker gate` refuses `review-missing`.
@@ -187,7 +189,7 @@ Read [`queue-mode.md`](queue-mode.md) when invoked with `--queue` (issue backend
 
 ## Rules
 
-- **Read-only.** Never edit, commit, or stage. Source checkout stays read-only. Caller writes are the gitignored verdict record (`rota verdict add`) and disposable workspace preparation, input copies and cleanup.
+- **Read-only code.** Reviewers never edit, commit, or stage code. Caller writes are managed workspace preparation and cleanup (`rota review prepare`, `rota review cleanup`), copied inputs, and `rota verdict add`: the local record plus marked PR/item reports (file mode: item details).
 - **Evidence over opinion.** Every concern cites file:line or commit hash.
 - **Scope is bounded.** Only the diff against the base; don't wander into unchanged code.
 - **Call it honestly.** If conventions were violated for a good reason, the reviewer still reports CONCERN; the user decides.

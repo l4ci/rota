@@ -126,7 +126,7 @@ var supportAllowed = []string{
 	// an issue-less learning goes (D2).
 	"rota knowledge hit",
 	"rota bugreport add", "rota bugreport dismiss", "rota bugreport draft", "rota bugreport duplicates", "rota bugreport file", "rota bugreport list",
-	"rota verdict add", "rota verdict route",
+	"rota verdict add", "rota verdict post", "rota verdict route",
 	"rota status add", "rota status handoff", "rota status rm",
 	"rota debug counter clear", "rota debug counter fail", "rota debug counter inc-cycle", "rota debug counter init", "rota debug counter pass",
 	"rota debug counter record-attempt", "rota debug reset", "rota debug session put", "rota debug session rm", "rota debug verdict",

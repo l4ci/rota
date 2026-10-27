@@ -286,6 +286,18 @@ func shipPR(fs *flag.FlagSet) RunFunc {
 		}
 		data.Set("items", given)
 		data.Set("changed", true)
+		// Solo reviews run before the PR exists. Retry their durable reports
+		// against the PR just created, without changing a successful ship.
+		if t, err := resolveVerdictBranch(c, []string{branch}); err != nil {
+			setReportStatus(data, err)
+			c.Warn("PR opened; reports pending: %v; retry: rota verdict post %s", err, branch)
+		} else if reports, err := postLatestVerdictReports(c, t, pr.URL); len(reports) > 0 {
+			data.Set("reports", reports)
+			setReportStatus(data, err)
+			if err != nil {
+				c.Warn("PR opened; reports pending: %v; retry: rota verdict post %s", err, branch)
+			}
+		}
 		return Result{Data: data, Text: pr.URL}, nil
 	}
 }
