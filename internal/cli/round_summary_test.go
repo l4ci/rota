@@ -99,10 +99,14 @@ func TestRoundSummaryRequestedRoundSourceStatus(t *testing.T) {
 			}
 			for name, value := range d["metrics"].(map[string]any) {
 				m := value.(map[string]any)
-				if m["unavailable"] != tc.reason {
-					t.Errorf("%s reason = %v, want %s", name, m["unavailable"], tc.reason)
+				wantReason := tc.reason
+				if name == "flakes" { // observed flakes have their own evidence source
+					wantReason = "no flake ledger"
 				}
-				for _, key := range []string{"samples", "medianSeconds", "p90Seconds", "numerator", "denominator", "value"} {
+				if m["unavailable"] != wantReason {
+					t.Errorf("%s reason = %v, want %s", name, m["unavailable"], wantReason)
+				}
+				for _, key := range []string{"samples", "medianSeconds", "p90Seconds", "numerator", "denominator", "value", "count"} {
 					if m[key] != nil {
 						t.Errorf("%s.%s = %v, want null", name, key, m[key])
 					}
