@@ -54,6 +54,8 @@ if name.startswith("go:"):
     pkg = "github.com/l4ci/rota/internal/example"
     if failed and os.environ.get("GO_TIMEOUT") == "1":
         print(json.dumps(dict(Action="output", Package=pkg, Output="panic: test timed out after 30m")))
+    output = "--- FAIL: TestUnderLoad (0s)\\nFAIL\\n" if failed else "ok example/pkg\\n"
+    print(json.dumps(dict(Action="output", Package=pkg, Output=output)))
     print(json.dumps(dict(Action="fail" if failed else "pass", Package=pkg)))
 elif name.startswith("smoke-") and not failed and os.environ.get("OMIT_SUMMARY") != "1":
     print("All smoke tests passed.")
@@ -164,8 +166,8 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
                    for line in result.stdout.splitlines() if line.startswith("ROTA-FLAKY ")]
         self.assertEqual(len(records), 1, result.stdout)
         self.assertEqual(records[0]["check"], "go:internal/example")
-        self.assertIn('"Action": "fail"', records[0]["firstOutput"])
-        self.assertIn('"Action": "pass"', records[0]["retryOutput"])
+        self.assertIn("TestUnderLoad", records[0]["firstOutput"])
+        self.assertIn("ok example/pkg", records[0]["retryOutput"])
 
     def test_flaky_smoke_retries_once_after_all_initial_checks(self):
         result, calls = self.run_gate("smoke-shard1")

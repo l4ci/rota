@@ -2,6 +2,7 @@
 # The full merge gate, run concurrently: validate-skills, the doc lints
 # (test/doclint.sh), the grep gate (test/grep-gate.sh), gofmt, go vet, go test -race and the smoke suite split into N shards, all at once (#82). One serial gate
 # is several times slower; this takes about 2-3 minutes.
+# Failed Go packages and smoke shards retry once after all initial checks exit.
 #
 # Usage: bash test/gate.sh [--smoke-only] [--random] [--shards N]
 #   --smoke-only  run only the sharded smoke suite (the CI shard guard); skips

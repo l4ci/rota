@@ -30,6 +30,8 @@ func (e Env) cleanVerifyTree(ctx context.Context, dir string) string {
 
 // runGateVerify opts gate/train local tiers into retry. General test runs,
 // proof recording, CI and behaviour checks retain their existing semantics.
+// Gate wrappers report their own isolated sub-check recoveries as markers;
+// those use the same ledger entries and never trigger a second wrapper retry.
 func (e Env) runGateVerify(ctx context.Context, cmds []string, dir string, led testledger.Ledger) (VerifyResult, error) {
 	e = e.WithDefaults()
 	now := e.Now()
@@ -37,6 +39,17 @@ func (e Env) runGateVerify(ctx context.Context, cmds []string, dir string, led t
 	shell := func(ctx context.Context, dir, cmd string) (string, int) {
 		tree := e.cleanVerifyTree(ctx, dir)
 		out, code := e.Shell(ctx, dir, cmd)
+		subchecks, parseErr := gateSubchecks(out, tree, e.Now())
+		if parseErr != nil {
+			return out + "\n" + parseErr.Error() + "\n", 1
+		}
+		if len(subchecks) > 0 {
+			if ctx.Err() != nil || tree == "" || e.cleanVerifyTree(ctx, dir) != tree {
+				return out, 1
+			}
+			flakes = append(flakes, subchecks...)
+			return out, code // the wrapper already retried; never rerun it here
+		}
 		tests, assertion := testledger.FailingTests(out)
 		_, excluded := led.Excuses(out, now)
 		if code != 1 || ctx.Err() != nil || !assertion || excluded || retryInfrastructure.MatchString(out) || tree == "" || e.cleanVerifyTree(ctx, dir) != tree {
