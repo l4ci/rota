@@ -131,27 +131,14 @@ func (s Store) PathEntries(file string) ([]PathEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, topic := range section.Topics(ActiveDecisions(content)) {
-		// Ignore entry-like headings inside fenced examples.
-		var block, title string
-		flush := func() {
-			if title != "" && scopedMatch(block, rel) {
-				entries = append(entries, PathEntry{s.decisionsPath() + "::" + topic.Name + "::" + title, "Decision (hard boundary): " + topic.Name + "\n" + strings.TrimSpace(block)})
+	content = ActiveDecisions(content)
+	for _, topic := range decisionTopics(content) {
+		for _, entry := range topic.entries {
+			block := content[entry.start:entry.end]
+			if scopedMatch(block, rel) {
+				entries = append(entries, PathEntry{s.decisionsPath() + "::" + topic.name + "::" + entry.title, "Decision (hard boundary): " + topic.name + "\n" + strings.TrimSpace(block)})
 			}
 		}
-		fenced := false
-		for _, line := range strings.SplitAfter(topic.Body, "\n") {
-			if strings.HasPrefix(line, "```") {
-				fenced = !fenced
-			}
-			if !fenced && strings.HasPrefix(line, "### ") {
-				flush()
-				title = strings.TrimSpace(strings.TrimPrefix(line, "### "))
-				block = ""
-			}
-			block += line
-		}
-		flush()
 	}
 	return entries, nil
 }

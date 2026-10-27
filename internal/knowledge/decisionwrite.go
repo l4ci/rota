@@ -110,6 +110,9 @@ func (s Store) changeDecisions(change func(string) (string, error)) (bool, error
 		if err != nil {
 			return err
 		}
+		if report := CheckDecisions(next); len(report.Errors) > 0 {
+			return decisionInvalid("resulting DECISIONS.md: %s", strings.Join(report.Errors, "; "))
+		}
 		changed = next != string(raw)
 		if changed {
 			if err = writeText(s.decisionsPath(), next, fsio.WriteFileAtomic); err != nil {
