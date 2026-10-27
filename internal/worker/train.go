@@ -55,6 +55,8 @@ const GatePlan = "plan"
 
 // TrainOpts are the flags of `rota worker train`.
 type TrainOpts struct {
+	// NoWait is GateOpts.NoWait for an autopilot train.
+	NoWait  bool
 	Targets []string // slot names or PR refs, in merge order
 	// Round reads the round lease for the train's ledger entries; Train makes
 	// one when nil, so the whole train reads the lease once.
@@ -178,7 +180,7 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	if o.Plan { // a preview changes nothing, so it does not queue behind a landing
 		return e.train(ctx, root, o, nil, nil)
 	}
-	err := e.withLandLock(ctx, root, strings.Join(o.Targets, ", "), func(bool) (err error) {
+	err := e.withLandingRun(ctx, root, strings.Join(o.Targets, ", "), o.NoWait, func(bool) (err error) {
 		cache := loadTrainCache(root)
 		gated := map[string]bool{}
 		res, err = e.train(ctx, root, o, cache, gated)
@@ -190,6 +192,10 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		}
 		return err
 	})
+	if errors.Is(err, errLandingBusy) {
+		res = TrainResult{Base: o.Base, Verdict: GateRunning, Err: err.Error()}
+		err = nil
+	}
 	return res, err
 }
 
