@@ -109,7 +109,8 @@ func withBoard(c *Ctx, root string, env round.Env) round.Env {
 	return env
 }
 
-func roundStatus(*flag.FlagSet) RunFunc {
+func roundStatus(fs *flag.FlagSet) RunFunc {
+	needsYou := fs.Bool("needs-you", false, "list only decisions waiting on the maintainer")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
 			return Result{}, err
@@ -120,15 +121,33 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		}
 		ctx := c.Context()
 		renv := withBoard(c, root, c.deps().RoundEnv(ctx, root))
+		readWaits := func() ([]any, []string) {
+			waits, warnings := refreshMaintainerSnapshot(ctx, c, root, renv)
+			for _, warning := range warnings {
+				c.Warn("%s", warning)
+			}
+			return maintainerRows(waits, c.deps().Now())
+		}
+		if *needsYou {
+			if renv.RoundErr != nil {
+				return Result{}, Usage("%v", renv.RoundErr)
+			}
+			waitRows, waitLines := readWaits()
+			d := jsonx.NewObject()
+			d.Set("needsYou", waitRows)
+			return Result{Data: d, Text: strings.Join(waitLines, "\n")}, nil
+		}
 		// Status refuses on a bad round.* key (exit 2), like assign and start.
 		rep, err := renv.Status(ctx, root)
 		if err != nil {
 			return Result{}, err
 		}
+		waitRows, waitLines := readWaits()
 		for _, w := range rep.Warnings {
 			c.Warn("%s", w)
 		}
 		d := jsonx.NewObject()
+		d.Set("needsYou", waitRows)
 		d.Set("slots", rowList(rep.Rows))
 		d.Set("drift", len(rep.Findings))
 		d.Set("unavailable", strs(rep.Unavailable))
@@ -222,6 +241,9 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		}
 		for _, l := range limLines {
 			lines = append(lines, "limit\t"+l)
+		}
+		for _, l := range waitLines {
+			lines = append(lines, "needs-you\t"+l)
 		}
 		return Result{Data: d, Text: strings.Join(lines, "\n"), Source: rep}, nil
 	}

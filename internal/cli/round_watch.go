@@ -29,7 +29,7 @@ import (
 // free. It is meant to run in the background, one at a time; the harness wakes
 // the orchestrator when it exits, and the orchestrator re-arms it.
 func roundWatch(fs *flag.FlagSet) RunFunc {
-	heartbeat := fs.Float64("heartbeat", 600, "seconds after which the watch returns even if nothing changed")
+	heartbeat := fs.Float64("heartbeat", roundwatch.DefaultHeartbeat.Seconds(), "seconds after which the watch returns even if nothing changed")
 	poll := fs.Float64("poll", 30, "seconds between registry checks")
 	forgePoll := fs.Float64("forge-poll", 120, "seconds between forge checks (escalation answers, PR states); 0 never asks the forge")
 	settle := fs.Float64("settle", 5, "seconds between the two pane captures of one classification")
@@ -151,6 +151,10 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 		if err := markMergedDone(root, merged); err != nil && !c.mergedMarkNoted {
 			c.mergedMarkNoted = true
 			c.Warn("merged-PR mark skipped: registry write failed: %v", err)
+		}
+		_, warnings := refreshMaintainerSnapshot(ctx, c, root, renv)
+		for _, warning := range warnings {
+			c.Warn("%s", warning)
 		}
 	}
 	set, err := c.deps().roundSettings(root, roundConfigUsage)
