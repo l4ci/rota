@@ -143,7 +143,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		var lines []string
 		frozen, ferr := landfreeze.Load(ctx, c.deps().Git, root)
 		if ferr != nil && !errors.Is(ferr, rotastate.ErrNotRepo) {
-			return Result{}, ferr
+			c.Warn("%s", landfreeze.UnreadableLine(ferr))
 		}
 		if frozen != nil && frozen.Active {
 			d.Set("freeze", freezeData(frozen))

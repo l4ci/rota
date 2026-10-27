@@ -615,7 +615,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	}
 	frozen, err := landfreeze.Load(ctx, e.Git, root)
 	if err != nil {
-		return res, err
+		return res, blocked(blockedby.Freeze, "%s", landfreeze.UnreadableLine(err))
 	}
 	if !frozen.Allows(o.ID, "") {
 		return res, blocked(blockedby.Freeze, "%s", frozen.Line())

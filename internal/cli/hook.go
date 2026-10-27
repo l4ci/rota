@@ -330,8 +330,8 @@ func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 			"additionalContext": line,
 		}}), nil
 	}
-	frozen, _ := landfreeze.Read(rotastate.File(hc.commonDir, "freeze.json"))
-	activeFreeze := frozen != nil && frozen.Active
+	frozen, freezeErr := landfreeze.Read(rotastate.File(hc.commonDir, "freeze.json"))
+	activeFreeze := freezeErr != nil || (frozen != nil && frozen.Active)
 	if worker.IsSolo(hc.root) && !activeFreeze {
 		return Result{}, nil
 	}

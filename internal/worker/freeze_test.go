@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/landfreeze"
@@ -20,7 +21,7 @@ func frozenWorld(t *testing.T) (*world, string) {
 	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(p, []byte(`{"active":true,"base":"main","sha":"red","checks":["false"]}`), 0644); err != nil {
+	if err := os.WriteFile(p, []byte(`{"active":true,"base":"main","sha":"0123456789012345678901234567890123456789","checks":["false"]}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	return w, p
@@ -95,5 +96,34 @@ func TestFreezeSharedAcrossLinkedWorktrees(t *testing.T) {
 	}
 	if stored.RepairIssue != "99" {
 		t.Fatalf("linked worktree wrote a separate freeze: %s", b)
+	}
+}
+
+func TestFreezeClearDeletedBase(t *testing.T) {
+	w, p := frozenWorld(t)
+	gitq(t, w.dir, "branch", "gone")
+	r, err := landfreeze.Read(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Base = "gone"
+	if err := landfreeze.Save(p, r); err != nil {
+		t.Fatal(err)
+	}
+	gitq(t, w.dir, "branch", "-d", "gone")
+	cleared, err := w.env(false).Freeze(bg, w.dir, FreezeOpts{Clear: true, Reason: "base was deleted"})
+	if err != nil {
+		t.Fatalf("manual clear must not resolve deleted base: %v", err)
+	}
+	if cleared.Active || cleared.Base != "gone" || cleared.ClearedSHA != gitq(t, w.dir, "rev-parse", "HEAD") {
+		t.Fatalf("clear must retain cause and record operator HEAD: %+v", cleared)
+	}
+	audit, err := os.ReadFile(filepath.Join(w.dir, ".rota", "gate-audit.jsonl"))
+	if err != nil || !strings.Contains(string(audit), "base was deleted") {
+		t.Fatalf("missing clear audit: %s %v", audit, err)
+	}
+	stored, err := landfreeze.Read(p)
+	if err != nil || stored.Active {
+		t.Fatalf("clear must persist: %+v %v", stored, err)
 	}
 }
