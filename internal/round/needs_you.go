@@ -151,7 +151,7 @@ func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []str
 		}
 		n := reg.Bounces(issue)
 		if e.Round.Support != "" {
-			store, err := e.Worker.BounceStore(root)
+			store, err := e.readBounceStore(ctx, root)
 			if err == nil {
 				n, _, err = store.Count(issue)
 			}
