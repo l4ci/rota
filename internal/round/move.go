@@ -611,19 +611,19 @@ type transferRun struct {
 	queueTo           bool // the receiver holds a PR that can wait in the queue
 	sender, receiver  *worker.Slot
 	rec               *worker.QueuedPR // no slot holds the issue but a queued PR does
-	// member: the issue is a bundle member, not a lead (transfer to the human
-	// only). lead is its bundle's lead, holder the slot (or queued record) with it.
-	member           bool
-	lead             string
-	holder           *worker.Slot
-	holderRec        *worker.QueuedPR
-	to               *worker.Slot
-	kind, kindSource string
-	model, tier      string // model is the applied one
-	reason           string
-	decisions, brief string
-	decisionContext  string
-	rnd              int
+	// bundleDrop: the issue leaves a bundle for the human. promote also replaces
+	// its lead. holder is the slot (or queued record) keeping the remaining work.
+	bundleDrop, promote bool
+	lead                string
+	holder              *worker.Slot
+	holderRec           *worker.QueuedPR
+	to                  *worker.Slot
+	kind, kindSource    string
+	model, tier         string // model is the applied one
+	reason              string
+	decisions, brief    string
+	decisionContext     string
+	rnd                 int
 
 	branch, oldClaim string
 	parked           Parked
@@ -655,8 +655,8 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	// The moves run as steps (saga.go). Transfer only goes forward: once the
 	// sender is parked and its claim released there is nothing to give back, so
 	// no step but a failed dispatch compensates, and a repeated call resumes.
-	if run.member {
-		if err := runSteps(e.transferMemberSteps(ctx, root, be, run, &res)); err != nil {
+	if run.bundleDrop {
+		if err := runSteps(e.transferBundleIssueSteps(ctx, root, be, run, &res)); err != nil {
 			return res, err
 		}
 		res.Changed = true
@@ -764,7 +764,7 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		if !e.forgeOn(be) {
 			return nil, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, e.NeedsHuman)
 		}
-		run.member, run.holder, run.holderRec = true, hs, hr
+		run.bundleDrop, run.holder, run.holderRec = true, hs, hr
 		if hs != nil {
 			run.lead, run.from = hs.HeldID(), hs.Name()
 		} else {
@@ -811,9 +811,9 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	if sender == nil {
 		run.rec = reg.QueuedIssue(id)
 	}
-	// A bundle's lead cannot move alone, and moving the whole bundle to another
-	// slot is not built: its members go to the human first, or the slot is
-	// returned or reclaimed.
+	// To the human, a lead leaves just like a member: the first remaining
+	// member takes over without moving the worker or its branch. Moving a
+	// bundle to another slot still needs its members released first.
 	var bundle []string
 	switch {
 	case sender != nil:
@@ -822,6 +822,20 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 		bundle = run.rec.Bundle
 	}
 	if len(bundle) > 0 {
+		if toHuman {
+			if !e.forgeOn(be) {
+				return nil, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, e.NeedsHuman)
+			}
+			run.bundleDrop, run.promote, run.lead = true, true, id
+			run.holder, run.holderRec = sender, run.rec
+			if sender != nil {
+				run.from = sender.Name()
+			} else {
+				run.from = run.rec.From
+			}
+			res.From = run.from
+			return run, nil
+		}
 		refs := make([]string, len(bundle))
 		for i, m := range bundle {
 			refs[i] = tracker.RefOf(m)
@@ -1017,11 +1031,10 @@ func (e Env) transferToHumanSteps(ctx context.Context, root string, be Board, o 
 		}})
 }
 
-// transferMemberSteps is `--to human` for a bundle member: a note on the
-// member, its claim and state given back, the needs-human label, and the member
-// dropped from the bundle. The lead keeps its slot, branch and session; nothing
-// is parked or dispatched. Forward only, like the other transfers.
-func (e Env) transferMemberSteps(ctx context.Context, root string, be Board, run *transferRun, res *Transferred) []step {
+// transferBundleIssueSteps gives one bundled issue to the human. Dropping the lead
+// promotes the first member. The worker keeps its slot, branch and session;
+// nothing is parked or dispatched. Forward only, like the other transfers.
+func (e Env) transferBundleIssueSteps(ctx context.Context, root string, be Board, run *transferRun, res *Transferred) []step {
 	id, from := run.id, run.from
 	tolerate := tolerateMissing(&res.Warnings, id)
 	claim := from + "@" + strconv.Itoa(run.rnd)
@@ -1038,6 +1051,9 @@ func (e Env) transferMemberSteps(ctx context.Context, root string, be Board, run
 		{name: "handoff comment", do: func() error {
 			h := handoff{verb: "transfer", from: from, round: run.rnd, branch: branch, head: head,
 				reason: fmt.Sprintf("left the bundle of %s on slot %s: transferred to the human", tracker.RefOf(run.lead), from)}
+			if run.promote {
+				h.reason = fmt.Sprintf("left the bundle lead on slot %s: transferred to the human; the next member becomes lead", from)
+			}
 			_, _, err := h.post(be, id)
 			return wrap(tolerate("handoff comment", err))
 		}},
@@ -1053,6 +1069,9 @@ func (e Env) transferMemberSteps(ctx context.Context, root string, be Board, run
 			return wrap(e.Forge.AddLabels(ctx, run.it.IssueKey(), []string{e.NeedsHuman}, true))
 		}},
 		{name: "leave the bundle", do: func() error {
+			if run.promote {
+				return wrap(worker.PromoteBundleLead(root, id))
+			}
 			return wrap(worker.DropBundleMember(root, id))
 		}},
 		{name: "stop the item clock", do: func() error {

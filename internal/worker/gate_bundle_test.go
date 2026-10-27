@@ -67,3 +67,40 @@ func TestGateClosesSkipsAClosedMember(t *testing.T) {
 		t.Fatalf("verdict %q: %+v", res.Verdict, res)
 	}
 }
+
+func TestGateClosesAfterBundleLeadPromotion(t *testing.T) {
+	for _, queued := range []bool{false, true} {
+		for _, tc := range []struct {
+			name, body, verdict, missing string
+		}{
+			{"remaining only", "Closes #6\nCloses #7\n", GateFresh, ""},
+			{"new lead missing", "Closes #7\n", GateNotClosing, "#6"},
+			{"member missing", "Closes #6\n", GateNotClosing, "#7"},
+		} {
+			t.Run(fmt.Sprintf("queued=%t/%s", queued, tc.name), func(t *testing.T) {
+				w := newWorld(t, ghURL)
+				branch := "ben/5-bundle"
+				gitq(t, w.worker, "push", "-q", "origin", "w1:refs/heads/"+branch)
+				w.forge("head", branch)
+				reg := fmt.Sprintf(`{"slots":[{"name":"w1","branch":%q,"task":"5","pr":%q,"bundle":["6","7"]}]}`, branch, ghURL)
+				if queued {
+					reg = fmt.Sprintf(`{"slots":[],"prs":[{"from":"w1","branch":%q,"issue":"5","pr":%q,"bundle":["6","7"]}]}`, branch, ghURL)
+				}
+				if err := os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(reg), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				if err := PromoteBundleLead(w.dir, "5"); err != nil {
+					t.Fatal(err)
+				}
+				w.setPRBody(tc.body)
+				res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: ghURL, Base: "main", CheckOnly: true})
+				if err != nil || res.Verdict != tc.verdict || res.Issue != "6" {
+					t.Fatalf("gate on original branch: %+v error %v", res, err)
+				}
+				if tc.missing != "" && !strings.Contains(res.Err, "does not close "+tc.missing+",") {
+					t.Errorf("missing remaining issue: %s", res.Err)
+				}
+			})
+		}
+	}
+}
