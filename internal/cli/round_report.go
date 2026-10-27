@@ -14,7 +14,7 @@ func roundReport(fs *flag.FlagSet) RunFunc {
 	state := fs.String("state", "", "done, blocked, idle, dead or limited")
 	evidence := fs.String("evidence", "", "what the worker's result said, echoed and not stored")
 	pr := fs.String("pr", "", "the worker's PR, as a URL or a number")
-	issues := fs.String("issues", "", "a review item's filed issues, comma-separated (#139,#140), in place of a PR")
+	issues := fs.String("issues", "", "review evidence: filed issues (#139,#140) or none for no findings, in place of a PR")
 	attempt := fs.String("attempt", "", "the attempt id from your brief; a stale one exits 4")
 	return func(c *Ctx, args []string) (Result, error) {
 		slot, err := oneArg(args, "slot")
@@ -35,8 +35,11 @@ func roundReport(fs *flag.FlagSet) RunFunc {
 		d.Set("state", res.State)
 		d.Set("previous", res.Previous)
 		setIf(d, "pr", res.PR)
-		if len(res.Issues) > 0 {
-			d.Set("issues", res.Issues)
+		if len(res.Issues) > 0 || res.NoFindings {
+			d.Set("issues", append([]string{}, res.Issues...))
+		}
+		if res.NoFindings {
+			d.Set("noFindings", true)
 		}
 		setIf(d, "evidence", res.Evidence)
 		d.Set("changed", res.Changed)

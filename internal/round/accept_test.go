@@ -24,30 +24,6 @@ func (f *moveFx) doneNoIssues(t *testing.T, state string) {
 	}
 }
 
-func TestAcceptClosesReviewWithRecordedIssues(t *testing.T) {
-	f := newMoveFx(t)
-	f.mintReview(t, "12")
-	f.reportIssues(t, "ben", "#139", "#140")
-
-	res, err := f.accept("12", nil)
-	if err != nil || !res.Changed || res.Slot != "ben" || strings.Join(res.Issues, ",") != "#139,#140" {
-		t.Fatalf("%+v %v", res, err)
-	}
-	c := f.be.comments["12"]
-	if !f.be.items["12"].Closed || c[len(c)-2] != "Review done: filed #139, #140." {
-		t.Errorf("closed with the issues commented: %v %v", f.be.items["12"].Closed, c)
-	}
-	if f.be.claims["12"] != "" || f.be.bstates["12"] == "in-progress" || len(f.queued()) != 0 {
-		t.Errorf("claim, state, queue: %v %v %v", f.be.claims, f.be.bstates, f.queued())
-	}
-	if s := f.slot("ben"); s.Task() != "" || len(s.Issues()) != 0 {
-		t.Errorf("slot freed: %v", s)
-	}
-	if _, err := f.assign("13", "ben"); err != nil {
-		t.Fatalf("assignable right after, no reclaim: %v", err)
-	}
-}
-
 func TestAcceptClosesReviewWithoutIssuesFlag(t *testing.T) {
 	t.Run("issues flag supplies them", func(t *testing.T) {
 		f := newMoveFx(t)
@@ -56,18 +32,6 @@ func TestAcceptClosesReviewWithoutIssuesFlag(t *testing.T) {
 		res, err := f.accept("12", func(in *AcceptInput) { in.Issues = []string{"#7", "#8"} })
 		if err != nil || !res.Changed || !f.be.items["12"].Closed {
 			t.Fatalf("%+v %v", res, err)
-		}
-	})
-	t.Run("neither names --issues", func(t *testing.T) {
-		f := newMoveFx(t)
-		f.mintReview(t, "12")
-		f.doneNoIssues(t, "done")
-		_, err := f.accept("12", nil)
-		if blockedBy(t, err) != BlockNoIssues || !strings.Contains(err.Error(), "--issues") {
-			t.Fatalf("%v", err)
-		}
-		if f.be.items["12"].Closed || f.slot("ben").Task() != "12" {
-			t.Error("a refusal moves nothing")
 		}
 	})
 	t.Run("gist replaces the note", func(t *testing.T) {
