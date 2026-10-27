@@ -1,4 +1,4 @@
-echo "global project registry: init registers, projects lists and marks missing (#24)"
+echo "global project registry: temporary init skips registration; projects lists and marks legacy entries missing (#24, #2107)"
 
 # XDG_CONFIG_HOME points at a temp dir, so the real ~/.config/rota is never
 # touched. No network, no forge.
@@ -14,9 +14,17 @@ OUT=$(gpv "$GP" projects) || fail "projects on an empty registry failed: $OUT"
 [ "$(echo "$OUT" | jget 'data.projects' | tr -d ' \n')" = "[]" ] || fail "empty registry should list nothing: $OUT"
 
 OUT=$(gpv "$GP/alpha" init --no-blocks) || fail "init alpha failed: $OUT"
-[ "$(echo "$OUT" | jget data.projectRegistered)" = "true" ] || fail "first init should register: $OUT"
+[ "$(echo "$OUT" | jget data.projectRegistered)" = "false" ] || fail "temporary init must not register: $OUT"
 gpv "$GP/beta" init --no-blocks >/dev/null || fail "init beta failed"
-[ -f "$XDG_STATE_HOME/rota/projects.json" ] || fail "registry not written under XDG_STATE_HOME"
+[ ! -e "$XDG_STATE_HOME/rota/projects.json" ] || fail "temporary init wrote the registry"
+# Seed an older registry explicitly: listing never prunes temporary entries.
+mkdir -p "$XDG_STATE_HOME/rota"
+python3 - "$XDG_STATE_HOME/rota/projects.json" "$GP" <<'PYREG'
+import json, os, sys
+with open(sys.argv[1], 'w') as f:
+    json.dump({'projects': [{'path': os.path.realpath(os.path.join(sys.argv[2], n)), 'name': n,
+                             'lastSeen': '2026-01-01T00:00:00Z'} for n in ('alpha', 'beta')]}, f)
+PYREG
 
 OUT=$(gpv "$GP/alpha" init --no-blocks) || fail "re-init alpha failed: $OUT"
 [ "$(echo "$OUT" | jget data.projectRegistered)" = "false" ] || fail "re-init should not re-register: $OUT"

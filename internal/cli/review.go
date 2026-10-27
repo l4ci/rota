@@ -27,6 +27,8 @@ func reviewCommands() *Command {
 		{Name: "scope", Summary: "commits, files, item IDs and origin entries of a branch", Repo: true, Verb: noFlags(reviewScope)},
 		{Name: "brief", Summary: "fresh-eyes second-opinion brief for a branch", Repo: true, Verb: noFlags(reviewBrief)},
 		{Name: "scaffolding", Summary: "added diff lines that look like leftover task scaffolding", Repo: true, Verb: reviewScaffolding},
+		{Name: "prepare", Summary: "prepare a disposable reviewer workspace at a pinned commit", Repo: true, Verb: noFlags(reviewPrepare)},
+		{Name: "cleanup", Summary: "remove only a prepared reviewer workspace", Verb: noFlags(reviewCleanup)},
 		{Name: "package", Summary: "write a branch's commits, stat and diff to a file for the reviewer", Repo: true, Verb: reviewPackage},
 		{Name: "depth", Summary: "review depth (full, light, none) ship.review picks for a branch, and why", Repo: true, Verb: reviewDepth},
 		{Name: "queue", Summary: "open issues waiting for review", Repo: true, Verb: noFlags(reviewQueue)},

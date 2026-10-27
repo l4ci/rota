@@ -19,13 +19,13 @@ import (
 // run without a project root.
 func projectsCommand() *Command {
 	return &Command{Name: "projects", Summary: "list the rota projects registered on this machine", Verb: noFlags(runProjects), Subs: []*Command{
-		{Name: "cleanup", Summary: "drop registry entries whose directory is gone or no longer holds .rota/", Verb: noFlags(runProjectsCleanup)},
+		{Name: "cleanup", Summary: "drop temporary projects and entries whose directory is gone or no longer holds .rota/", Verb: noFlags(runProjectsCleanup)},
 		{Name: "remove", Summary: "drop one registry entry by directory; the directory itself stays", Verb: noFlags(runProjectsRemove)},
 	}, View: projectsView}
 }
 
 // runProjectsCleanup deletes at once, no preview: the entries are a cache of
-// `rota init` runs and the next init puts a live one back.
+// `rota init` runs and the next init puts a live non-temporary one back.
 func runProjectsCleanup(c *Ctx, args []string) (Result, error) {
 	if err := knNoArgs(args); err != nil {
 		return Result{}, err

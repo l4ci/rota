@@ -480,10 +480,11 @@ def prose_rules():
           has(D, "Skills MUST consult this file", "missing the rule that skills consult the dispatch discipline")]
     # reviewer brief: export with git archive, never touch the repo's worktrees (#1293)
     RB = "skills/rota-review/reviewer-briefs.md"
-    r += [has(RB, "archive <ref> | tar -x -C <scratch>", "reviewer brief must export the branch with git archive | tar"),
+    r += [has(RB, "rota review prepare <sha>", "reviewer brief must delegate preparation to the supported verb"),
           has(RB, "Never run `git worktree add`, `git worktree remove`, `git checkout` or `git switch` in the repo",
               "reviewer brief must forbid worktree add/remove, checkout and switch in the repo"),
-          has(RB, "If the extract fails, stop and report it. No fallback", "reviewer brief must stop on a failed extract"),
+          has(RB, "If preparation failed or the workspace is unavailable, stop and report it. No fallback", "reviewer brief must refuse unavailable workspaces"),
+          has(RB, "scratch cwd is not an OS sandbox", "reviewer brief must retain absolute-path access limitations"),
           has(RB, "set `ROTA_BIN`", "reviewer brief must say to set ROTA_BIN for smoke sections")]
     # --retro reads the session transcript for evidence
     RR = "skills/references/learn-rare-modes.md"
