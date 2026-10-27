@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="docs/images/rota-logo.svg" alt="rota" width="309">
-
 <img src="docs/images/rota-icon.svg" alt="rota icon" width="64">
+<br><br>
+<img src="docs/images/rota-logo.svg" alt="rota" width="309">
 
 # rota
 
