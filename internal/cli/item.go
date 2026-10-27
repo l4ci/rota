@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitmap"
+	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/pystr"
@@ -45,7 +46,7 @@ func withReadOnly(groups ...[]*Command) []*Command {
 var readOnlyVerbs = map[string]bool{
 	"update": true, "config show": true, "config check": true,
 	"repo which": true, "repo resolve": true, "repo umbrella": true,
-	"item show": true, "item ready": true, "item comment list": true, "item note show": true,
+	"item show": true, "item ready": true, "item template": true, "item comment list": true, "item note show": true,
 	"item field get": true, "item field list": true, "item shipped": true,
 	"backlog list": true, "backlog ids": true, "backlog milestones": true, "backlog drift": true,
 	"backlog stale": true, "summary": true,
@@ -84,6 +85,7 @@ func itemCommands() []*Command {
 		}},
 		{Name: "item", Summary: "backlog items", Subs: []*Command{
 			{Name: "create", Summary: "capture one item", Repo: true, Verb: itemCreate},
+			{Name: "template", Summary: "print the body template for an item kind", Verb: itemTemplate},
 			{Name: "field", Summary: "read and write item fields", Subs: []*Command{
 				{Name: "get", Summary: "print one field of an item", Repo: true, Verb: itemFieldGet},
 				{Name: "set", Summary: "set, replace or clear a field of an open item", Repo: true, Verb: itemFieldSet},
@@ -283,7 +285,15 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return backlogFail(err)
 			}
-			return Result{Data: jsonObj("id", res.ID, "type", res.Type, "kind", *kind, "changed", true), Text: res.ID}, nil
+			data := jsonObj("id", res.ID, "type", res.Type, "kind", *kind, "changed", true)
+			entry, _ := backlog.ParseOpen(strings.TrimSpace(string(raw)))
+			in := backlog.CreateInput{Kind: *kind, Tag: entry.Tag, Desc: entry.Rest}
+			if be, ok := ops.(backlog.Backend); ok {
+				body, _, _ := be.Detail(res.ID)
+				in.Body = []byte(body)
+			}
+			reportCreateWarnings(c, data, createTemplateWarnings(in))
+			return Result{Data: data, Text: res.ID}, nil
 		}
 		req := backlog.CaptureRequest{Kind: *kind, Title: *title, Tag: *tag, Desc: *desc,
 			Fields: map[string]string{}, Given: given, DependsOn: *dependsOn, DependsGiven: given["depends-on"]}
@@ -311,8 +321,27 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 				data.Set("detail", res.Detail)
 			}
 			data.Set("changed", true)
+			reportCreateWarnings(c, data, createTemplateWarnings(in))
 			return Result{Data: data, Text: res.ID}, nil
 		})
+	}
+}
+
+func createTemplateWarnings(in backlog.CreateInput) []string {
+	var warnings []string
+	for _, missing := range itembody.CheckTemplate(in.Kind, in.Tag, in.Desc+"\n\n"+string(in.Body)) {
+		warnings = append(warnings, fmt.Sprintf("missing %s section: ## %s", missing.Level, missing.Name))
+	}
+	return warnings
+}
+
+func reportCreateWarnings(c *Ctx, data *jsonx.Object, warnings []string) {
+	if len(warnings) == 0 {
+		return
+	}
+	data.Set("warnings", warnings)
+	for _, warning := range warnings {
+		c.Warn("%s", warning)
 	}
 }
 
@@ -371,7 +400,16 @@ func itemCreateBatch(c *Ctx, root, path string) (Result, error) {
 		}
 		ins[i] = in
 	}
-	return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) { return fileBatch(be, ins) })
+	return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
+		res, err := fileBatch(be, ins)
+		if data, ok := res.Data.(*jsonx.Object); ok {
+			warnings, _ := data.Get("warnings")
+			if warnings, ok := warnings.([]string); ok {
+				reportCreateWarnings(c, data, warnings)
+			}
+		}
+		return res, err
+	})
 }
 
 // fileBatch files ins in order. A failure at record N keeps the first N-1 ids:
@@ -380,6 +418,7 @@ func itemCreateBatch(c *Ctx, root, path string) (Result, error) {
 func fileBatch(be backlog.Backend, ins []backlog.CreateInput) (Result, error) {
 	var out []any
 	var ids []string
+	var warnings []string
 	for i, in := range ins {
 		res, err := be.Create(in)
 		if err != nil {
@@ -406,13 +445,27 @@ func fileBatch(be backlog.Backend, ins []backlog.CreateInput) (Result, error) {
 			data.Set("items", out)
 			data.Set("failedAt", i+1)
 			data.Set("changed", len(out) > 0)
+			if len(warnings) > 0 {
+				data.Set("warnings", warnings)
+			}
 			r.Data = data
 			return r, ferr
 		}
 		ids = append(ids, res.ID)
-		out = append(out, jsonObj("id", res.ID, "type", res.Type, "kind", in.Kind, "title", in.Title))
+		row := jsonObj("id", res.ID, "type", res.Type, "kind", in.Kind, "title", in.Title)
+		if missing := createTemplateWarnings(in); len(missing) > 0 {
+			row.Set("warnings", missing)
+			for _, warning := range missing {
+				warnings = append(warnings, fmt.Sprintf("record %d: %s", i+1, warning))
+			}
+		}
+		out = append(out, row)
 	}
-	return Result{Data: jsonObj("items", out, "changed", true), Text: strings.Join(ids, "\n")}, nil
+	data := jsonObj("items", out, "changed", true)
+	if len(warnings) > 0 {
+		data.Set("warnings", warnings)
+	}
+	return Result{Data: data, Text: strings.Join(ids, "\n")}, nil
 }
 
 // ---- item field -----------------------------------------------------------

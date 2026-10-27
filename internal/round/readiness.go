@@ -24,6 +24,7 @@ const (
 	CheckCriteria     = "criteria"
 	CheckDependencies = "dependencies"
 	CheckOverlap      = "overlap"
+	CheckTemplate     = "template"
 )
 
 // Check is one readiness check of one item.
@@ -249,7 +250,7 @@ func itemFootprint(be backlog.Backend, id string, tracked, shared []string) []st
 	return footprint(body, comments, tracked, shared)
 }
 
-// Assess runs the three readiness checks on one item. inFlight is what other
+// Assess runs the readiness checks on one item. inFlight is what other
 // slots hold; shared and tracked feed the footprint. acceptOverlap records the
 // overlap but does not fail the check.
 func Assess(be backlog.Backend, id string, tracked, shared []string, inFlight []InFlight, acceptOverlap bool) (Readiness, error) {
@@ -344,6 +345,23 @@ func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFli
 		}
 	}
 	r.Checks = append(r.Checks, ov)
+
+	template := Check{Name: CheckTemplate, OK: true, Detail: []string{}}
+	decision, err := DecisionOf(be.Capabilities(), *self)
+	if err != nil {
+		return r, err
+	}
+	if decision == "" {
+		if typ, ok := backlog.TypeByLetter(self.Type); ok {
+			for _, missing := range itembody.CheckTemplate(typ.Kind, self.Tag, body+"\n\n"+brief) {
+				if missing.Level == itembody.Required {
+					template.OK = false
+					template.Detail = append(template.Detail, "missing required section: ## "+missing.Name)
+				}
+			}
+		}
+	}
+	r.Checks = append(r.Checks, template)
 	return r, nil
 }
 

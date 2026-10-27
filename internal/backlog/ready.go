@@ -9,12 +9,13 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
 )
 
 var (
-	acceptHeadingRe = regexp.MustCompile(`(?mi)^#{1,6}[ \t]+.*acceptance`)
+	acceptHeadingRe = itembody.AcceptanceHeadRe
 	checkboxRe      = regexp.MustCompile(`(?m)^[ \t]*[-*][ \t]+\[[ xX]\]`)
 )
 
