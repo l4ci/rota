@@ -205,7 +205,7 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 	return out, nil
 }
 
-// freshBrief is the transfer's decisions file: the last review's findings still
+// freshBrief is the transfer's settled answers file: the last review's findings still
 // open and the review link, not the relay history.
 func freshBrief(pr string, findings []string) string {
 	var sb strings.Builder

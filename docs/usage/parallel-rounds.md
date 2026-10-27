@@ -123,7 +123,7 @@ The orchestrator then does the steps below. To drive a round by hand instead:
 ```sh
 rota doctor                                  # fix every fail it reports
 rota round start --slots 2                   # take the lease, make two slots, list candidates
-rota round assign 59 --body-file notes.md    # first idle slot takes issue 59; repeat for a second issue
+rota round assign 59 --settled-file notes.md    # first idle slot takes issue 59; repeat for a second issue
 rota round wait                              # blocks until a worker is done, blocked or dead
 rota worker gate ben --base main             # verify on the merged tree, merge on a pass
 rota round wind-down                         # re-verify main, park the slots, release the lease
@@ -218,7 +218,7 @@ rota round candidates                         # re-read the board with readiness
 
 Candidates carry three checks:
 
-- `criteria`: acceptance criteria, or a design or plan note. Acceptance criteria in the `assign --body-file` text count too.
+- `criteria`: acceptance criteria, or a design or plan note. Acceptance criteria in the `assign --settled-file` text count too.
 - `dependencies`: every `## Depends on` reference is closed. One that cannot be looked up fails the
   check, so fix the issue text.
 - `overlap`: no shared file with an in-flight slot, from a `## Files` section or the paths the issue
@@ -249,7 +249,7 @@ A directory in an issue's `## Pointers` (`src/app/ui/`) matches every file below
 
 ```sh
 rota round assign 59 --check-only             # readiness only; exit 1 when not ready
-rota round assign 59 --agent ben --body-file decisions.md --siblings 58,60,62 \
+rota round assign 59 --agent ben --settled-file settled.md --siblings 58,60,62 \
   --decision-topics "Architecture,Rounds: Orchestration"
 ```
 
@@ -263,7 +263,11 @@ with `no round`, `out of scope`, `not ready`, `overlap`, `claimed`, `open PR`, `
 claims the item (`<agent>@<round>`), sets it in progress with a comment, cuts the slot's
 branch `<agent>/<issue>-<slug>`, picks the account and dispatches a short signed brief: a
 pointer to the standing contract (`round.brief`, else `skills/references/worker-contract.md`), the
-issue to read and dispute, the item's `## Out of scope` section when it has one, the siblings and the decisions from `--body-file`.
+issue to read and dispute, the item's `## Out of scope` section when it has one, the siblings and the settled answers from `--settled-file`.
+
+`--settled-file <path|->` passes answers already settled by the maintainer verbatim under
+“Settled answers” and preserves them when a slot is re-briefed. `--body-file` is a deprecated
+alias for this assign flag.
 
 `--decision-topics` takes comma-separated DECISIONS.md topics, using the same matching rules as
 `rota decisions query`. The brief includes each matching active entry in full, including its

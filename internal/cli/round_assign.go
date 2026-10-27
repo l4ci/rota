@@ -38,7 +38,8 @@ func overlapList(os []round.Overlap) []any {
 
 func roundAssign(fs *flag.FlagSet) RunFunc {
 	agent := fs.String("agent", "", "roster name to assign to (default: the first idle slot)")
-	body := fs.String("body-file", "", "decisions already settled, passed verbatim to the worker (- for stdin)")
+	settled := fs.String("settled-file", "", "settled answers, passed verbatim to the worker (- for stdin)")
+	fs.StringVar(settled, "body-file", "", "deprecated alias for --settled-file")
 	decisionTopics := fs.String("decision-topics", "", "DECISIONS.md topics to include in the worker brief, comma-separated")
 	siblings := fs.String("siblings", "", "issues running alongside, comma-separated")
 	checkOnly := fs.Bool("check-only", false, "run the readiness checks and write nothing")
@@ -67,9 +68,9 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := workerContext()
 		defer stop()
-		var decisions string
-		if *body != "" {
-			if decisions, err = readBodyText(c, "body-file", *body, ExitUsage); err != nil {
+		var settledAnswers string
+		if *settled != "" {
+			if settledAnswers, err = readBodyText(c, "settled-file", *settled, ExitUsage); err != nil {
 				return Result{}, err
 			}
 		}
@@ -88,7 +89,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		env := accountedRoundEnv(c, ctx, root)
 		env.HolderPID = *pid
 		res, err := env.Assign(ctx, root, be, round.AssignOpts{
-			ID: id, Agent: *agent, Decisions: decisions, DecisionTopics: pystr.SplitCSV(*decisionTopics), Siblings: pystr.SplitCSV(*siblings), Bundle: bundleArg(*bundle),
+			ID: id, Agent: *agent, SettledAnswers: settledAnswers, DecisionTopics: pystr.SplitCSV(*decisionTopics), Siblings: pystr.SplitCSV(*siblings), Bundle: bundleArg(*bundle),
 			ReclaimStale: *reclaimStale, CheckOnly: *checkOnly, AcceptOverlap: *accept, AcceptOpenPR: *acceptOpenPR, AcceptCrossMilestone: *acceptCross, AcceptBatch: *acceptBatch,
 			Tier: *tier, TierReason: *tierReason, Kind: *kind, Model: *model,
 		})
