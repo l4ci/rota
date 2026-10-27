@@ -142,6 +142,10 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		d.Set("limits", lim)
 		d.Set("review", queuedRows(rep.Queued))
 		var lines []string
+		if holding := trainHoldingLines(c, root); len(holding) > 0 {
+			d.Set("holding", strList(holding))
+			lines = append(lines, holding...)
+		}
 		frozen, ferr := landfreeze.Load(ctx, c.deps().Git, root)
 		if ferr != nil && !errors.Is(ferr, rotastate.ErrNotRepo) {
 			c.Warn("%s", landfreeze.UnreadableLine(ferr))

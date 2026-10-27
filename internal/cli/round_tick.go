@@ -59,7 +59,9 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 		}
 		d := tickData(r)
 		d.Set("changed", len(r.Did) > 0)
-		text := tickLines(r)
+		visible := r
+		visible.Holding = r.FillStatus
+		text := tickLines(visible)
 		if lines := addTrainNudge(c, root, d, nil); len(lines) > 0 {
 			if text == "nothing to do" {
 				text = ""
@@ -297,6 +299,9 @@ func tickData(r roundtick.Result) *jsonx.Object {
 	d := jsonx.NewObject()
 	if len(r.Holding) > 0 {
 		d.Set("holding", strList(r.Holding))
+	}
+	if len(r.FillStatus) > 0 {
+		d.Set("fillStatus", strList(r.FillStatus))
 	}
 	did := make([]any, 0, len(r.Did))
 	for _, a := range r.Did {
