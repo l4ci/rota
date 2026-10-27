@@ -73,6 +73,9 @@ HV_SCOPE=(
   ':(exclude)internal/round/move.go'
   ':(exclude)internal/cli/migrate_hv.go'
   ':(exclude)internal/cli/migrate_hv_test.go'
+  # Decisions writers repair legacy skill names in the preamble only.
+  ':(exclude)internal/knowledge/decisionwrite.go'
+  ':(exclude)internal/cli/decisions_write_test.go'
   ':(exclude)test/sections/98_migrate_hv.sh'
   ':(exclude)internal/round/move_test.go'
   ':(exclude)internal/config/fill.go'
