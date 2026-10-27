@@ -43,18 +43,13 @@ func TestSummaryBounceRatioAndRules(t *testing.T) {
 	metricValue(t, m, "numerator", 3)
 	metricValue(t, m, "denominator", 2)
 	metricValue(t, m, "value", 1.5)
-	for _, name := range []string{"assignToMerged", "doneToMerged", "redTrainRate", "bouncesPerMergedPR", "flakeRate"} {
+	for _, name := range []string{"assignToMerged", "doneToMerged", "redTrainRate", "bouncesPerMergedPR"} {
 		m := metricObject(t, s, name)
 		if rule := jsonx.Str(m, "rule"); rule == "" || !strings.Contains(s.Text(), rule) {
 			t.Errorf("%s missing its counting rule in text/JSON", name)
 		}
 	}
-	f := metricObject(t, s, "flakeRate")
-	metricValue(t, f, "value", nil)
-	metricValue(t, f, "numerator", nil)
-	if reason := jsonx.Str(f, "unavailable"); reason == "" || !strings.Contains(s.Text(), "unavailable ("+reason+")") {
-		t.Error("flake metric needs an explicit unavailable reason")
-	}
+
 }
 
 func metricValue(t *testing.T, m *jsonx.Object, key string, want any) {
@@ -88,6 +83,19 @@ func TestSummaryLeadTimePercentiles(t *testing.T) {
 	metricValue(t, d, "p90Seconds", 600)
 }
 
+func TestSummaryMergeObservationsPreserveExistingFields(t *testing.T) {
+	s := Fold([]Entry{
+		{TS: at(0), Round: 2, Kind: KindAssign, Issue: "1", Slot: "ben"},
+		{TS: at(10), Round: 2, Kind: KindMerge, Issue: "1", Slot: "ben", PR: "#7"},
+		{TS: at(20), Round: 2, Kind: KindMerge, PR: "https://h/o/r/pull/7"},
+	}, nil, 2)
+	r := row(t, s, "1", "ben")
+	if r.MergedAt == nil || !r.MergedAt.Equal(at(20)) || r.WallSeconds == nil || *r.WallSeconds != 1200 {
+		t.Errorf("existing fields must retain last merge: %+v", r)
+	}
+	metricValue(t, metricObject(t, s, "assignToMerged"), "medianSeconds", 600)
+}
+
 func TestSummaryMetricEvidence(t *testing.T) {
 	t.Run("measured zero is available", func(t *testing.T) {
 		es := []Entry{
@@ -119,6 +127,7 @@ func TestSummaryMetricEvidence(t *testing.T) {
 			m := metricObject(t, s, name)
 			metricValue(t, m, "medianSeconds", nil)
 			metricValue(t, m, "p90Seconds", nil)
+			metricValue(t, m, "samples", nil)
 			if jsonx.Str(m, "unavailable") == "" {
 				t.Errorf("%s omitted missing endpoints", name)
 			}

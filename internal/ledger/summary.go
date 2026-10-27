@@ -83,6 +83,8 @@ type Summary struct {
 	// Idle is each slot's wait between a done and its next assign.
 	Idle    []IdleRow
 	Metrics RoundMetrics
+	// SkippedLedgerLines counts unreadable lines across the source file.
+	SkippedLedgerLines int
 }
 
 // IdleRow is one stretch a slot sat done before the orchestrator assigned it
@@ -253,10 +255,7 @@ func Fold(entries []Entry, audit []*jsonx.Object, round int) Summary {
 				r.Gate = v
 			}
 		case KindMerge:
-			r.Merged, r.Outcome = true, OutcomeMerged
-			if r.MergedAt == nil {
-				r.MergedAt = &ts // a repeated observation does not extend lead time
-			}
+			r.Merged, r.Outcome, r.MergedAt = true, OutcomeMerged, &ts
 		}
 	}
 	for _, r := range f.rows {
@@ -389,6 +388,9 @@ func (s Summary) Text() string {
 		title += " (no round lease)"
 	}
 	fmt.Fprintln(&b, title)
+	if s.SkippedLedgerLines > 0 {
+		fmt.Fprintf(&b, "Ledger: skipped %d unreadable line(s)\n", s.SkippedLedgerLines)
+	}
 	fmt.Fprint(&b, s.Metrics.text())
 	if len(s.Issues) == 0 {
 		fmt.Fprintln(&b, "no entries for this round")
@@ -540,5 +542,6 @@ func (s Summary) Object() *jsonx.Object {
 	cap.Set(CapFresh, s.CapReasons.Fresh)
 	d.Set("capReasons", cap)
 	d.Set("metrics", s.Metrics.object())
+	d.Set("skippedLedgerLines", s.SkippedLedgerLines)
 	return d
 }

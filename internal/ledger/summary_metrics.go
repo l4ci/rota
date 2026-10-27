@@ -19,8 +19,8 @@ type LeadTimeMetric struct {
 
 // RoundMetrics contains the scorecard and its counting rules.
 type RoundMetrics struct {
-	AssignToMerged, DoneToMerged                LeadTimeMetric
-	RedTrainRate, BouncesPerMergedPR, FlakeRate RatioMetric
+	AssignToMerged, DoneToMerged     LeadTimeMetric
+	RedTrainRate, BouncesPerMergedPR RatioMetric
 }
 
 // RatioMetric carries its measured counts as well as the quotient.
@@ -30,8 +30,7 @@ type RatioMetric struct {
 	Value                  *float64
 }
 
-// UnavailableMetrics invalidates only the metrics that depend on the ledger.
-// FlakeRate has its own absent source and retains that more specific reason.
+// UnavailableMetrics invalidates the metrics that depend on the ledger.
 func (s *Summary) UnavailableMetrics(reason string) {
 	for _, m := range []*LeadTimeMetric{&s.Metrics.AssignToMerged, &s.Metrics.DoneToMerged} {
 		m.Unavailable, m.MedianSeconds, m.P90Seconds = reason, nil, nil
@@ -41,18 +40,31 @@ func (s *Summary) UnavailableMetrics(reason string) {
 	}
 }
 
-const leadRule = "distinct merged PRs, winning assignment's %s to merge; median averages middle pair (whole seconds), p90 nearest rank ceil(0.9*n); open PRs excluded"
+const leadRule = "distinct merged PRs, winning assignment's %s to first merge; median averages middle pair (whole seconds), p90 nearest rank ceil(0.9*n); open PRs excluded"
 
 func roundMetrics(rows []IssueRow, entries []Entry, round int) RoundMetrics {
 	m := RoundMetrics{
 		AssignToMerged: LeadTimeMetric{Rule: fmt.Sprintf(leadRule, "first assign")},
 		DoneToMerged:   LeadTimeMetric{Rule: fmt.Sprintf(leadRule, "latest done")},
 	}
+	firstMerge := map[int]time.Time{}
+	for _, e := range entries {
+		if e.Round == round && e.Kind == KindMerge {
+			if n := prNum(e.PR); n != 0 {
+				if _, exists := firstMerge[n]; !exists {
+					firstMerge[n] = e.TS
+				}
+			}
+		}
+	}
 	merged := map[int]IssueRow{}
 	for _, r := range rows {
 		if r.Merged {
 			if n := prNum(r.PR); n != 0 {
 				if _, exists := merged[n]; !exists {
+					if ts, exists := firstMerge[n]; exists {
+						r.MergedAt = &ts // metrics use first merge; existing row fields remain last-wins
+					}
 					merged[n] = r
 				}
 			} else {
@@ -93,7 +105,6 @@ func roundMetrics(rows []IssueRow, entries []Entry, round int) RoundMetrics {
 		}
 	}
 	m.BouncesPerMergedPR = ratio("all round bounce events / distinct merged PRs; includes bounces on unmerged work", bounces, len(merged), reason)
-	m.FlakeRate = ratio("confirmed flaky runs / verified runs; numerator is flake count; requires a flake ledger", 0, 0, "flake ledger not recorded")
 	return m
 }
 
@@ -178,7 +189,11 @@ func metricFields(rule, reason string) *jsonx.Object {
 
 func (m LeadTimeMetric) object() *jsonx.Object {
 	o := metricFields(m.Rule, m.Unavailable)
-	o.Set("samples", m.Samples)
+	if m.Unavailable == "" {
+		o.Set("samples", m.Samples)
+	} else {
+		o.Set("samples", nil)
+	}
 	o.Set("medianSeconds", intVal(m.MedianSeconds))
 	o.Set("p90Seconds", intVal(m.P90Seconds))
 	return o
@@ -190,7 +205,6 @@ func (m RoundMetrics) object() *jsonx.Object {
 	o.Set("doneToMerged", m.DoneToMerged.object())
 	o.Set("redTrainRate", m.RedTrainRate.object())
 	o.Set("bouncesPerMergedPR", m.BouncesPerMergedPR.object())
-	o.Set("flakeRate", m.FlakeRate.object())
 	return o
 }
 
@@ -219,12 +233,15 @@ func (m RoundMetrics) text() string {
 	}{{"Lead time assign→merged", m.AssignToMerged}, {"Lead time done→merged", m.DoneToMerged}} {
 		v := fmt.Sprintf("unavailable (%s)", row.m.Unavailable)
 		if row.m.Unavailable == "" {
-			v = fmt.Sprintf("median %s, p90 %s (%d PRs)", wall(row.m.MedianSeconds), wall(row.m.P90Seconds), row.m.Samples)
+			noun := "PRs"
+			if row.m.Samples == 1 {
+				noun = "PR"
+			}
+			v = fmt.Sprintf("median %s, p90 %s (%d %s)", wall(row.m.MedianSeconds), wall(row.m.P90Seconds), row.m.Samples, noun)
 		}
 		fmt.Fprintf(&b, "%s: %s; rule: %s\n", row.name, v, row.m.Rule)
 	}
 	fmt.Fprint(&b, m.RedTrainRate.text("Red-train rate"))
 	fmt.Fprint(&b, m.BouncesPerMergedPR.text("Bounces per merged PR"))
-	fmt.Fprint(&b, m.FlakeRate.text("Flake count/rate"))
 	return b.String()
 }
