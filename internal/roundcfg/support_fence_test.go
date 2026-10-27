@@ -11,7 +11,7 @@ func TestMayRunRefusesFencedActionsOnSupport(t *testing.T) {
 			t.Errorf("main may not run %s", action)
 		}
 	}
-	for _, action := range []string{"rota worker gate", "rota worker train", "rota ship merge", "rota spike add", "rota init", "rota update", "rota migrate config", "rota config fill"} {
+	for _, action := range []string{"rota worker gate", "rota worker train", "rota ship merge", "rota spike add", "rota init", "rota migrate config", "rota config fill"} {
 		if SupportClass(action) != FenceRefused {
 			t.Errorf("%s is not fenced", action)
 		}
@@ -19,6 +19,9 @@ func TestMayRunRefusesFencedActionsOnSupport(t *testing.T) {
 }
 
 func TestMayRunLetsSupportRunAllowedAndInVerbActions(t *testing.T) {
+	if got := SupportClass("rota update"); got != FenceAllowed {
+		t.Errorf("rota update class = %d, want allowed (%d)", got, FenceAllowed)
+	}
 	for _, class := range []FenceClass{FenceAllowed, FenceInVerb} {
 		for _, action := range SupportActions(class) {
 			if !MayRun(RoleSupport, action) {
