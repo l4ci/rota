@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 
+	"github.com/l4ci/rota/internal/acceptance"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proof"
@@ -15,7 +17,8 @@ import (
 
 // workerDone is `rota worker done <slot>`: the last step before ROTA-DONE, after the PR. It refuses
 // (exit 4) a slot whose item has no PASS proof row at the branch's current
-// HEAD for test.fast, then marks the slot done.
+// HEAD for test.fast or whose completed outcome has unmet explicit acceptance
+// criteria, then marks the slot done.
 func workerDone(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "ref {files} is diffed against (default: the base branch)")
 	attempt := fs.String("attempt", "", "the attempt id from your brief; a stale one exits 4")
@@ -81,6 +84,7 @@ func doneDeps(c *Ctx, root string) worker.DoneDeps {
 		},
 		ChangedFiles: func(dir, base string) ([]string, error) { return changedFiles(c, dir, base) },
 		ProofRows:    func(id string) ([]proof.Row, error) { return proofRows(c, id) },
+		Acceptance:   func(ids []string) error { return doneAcceptance(c, root, ids) },
 		// A backlog that cannot be read keeps every member.
 		Closed: func(id string) bool {
 			if !opened {
@@ -97,6 +101,73 @@ func doneDeps(c *Ctx, root string) worker.DoneDeps {
 			return targetedProof(c, root, dir, command, base, head, ids)
 		},
 	}
+}
+
+// doneAcceptance uses the same coverage as plan pass and item show, but only
+// explicit ids block completion. Check the whole bundle before refusing so the
+// worker can mark every missing criterion in one pass.
+func doneAcceptance(c *Ctx, root string, ids []string) error {
+	be, err := openBacklog(c, root, false, "")
+	if err != nil {
+		_, err = backlogFail(err)
+		return err
+	}
+	var missing, commands []string
+	for _, id := range ids {
+		if be.Capabilities().IssueIDs {
+			it, err := be.Get(id)
+			if err != nil {
+				_, err = backlogFail(err)
+				return err
+			}
+			if it.Closed {
+				continue
+			}
+		}
+		body, _, err := be.Detail(id)
+		if err != nil {
+			_, err = backlogFail(err)
+			return err
+		}
+		if !backlog.HasAcceptanceIDs(body) {
+			continue
+		}
+		crits, _ := acceptance.Parse(body)
+		cover := acceptance.Coverage(body, nil, nil)
+		if be.Capabilities().IssueIDs {
+			wf, err := backlog.WorkflowOf(be)
+			if err != nil {
+				return err
+			}
+			cover, err = acceptanceCoverage(c, wf, id, &backlog.Status{Body: body})
+			if err != nil {
+				_, err = backlogFail(err)
+				return err
+			}
+		}
+		for _, st := range cover {
+			if st.Met || !slices.ContainsFunc(crits, func(c acceptance.Criterion) bool { return c.ID == st.ID }) {
+				continue
+			}
+			missing = append(missing, fmt.Sprintf("[%s] %s: %s", id, st.ID, st.Text))
+			if be.Capabilities().IssueIDs {
+				key := id
+				if _, err := strconv.Atoi(id); err == nil {
+					key = "#" + id // plan pass takes an item key, not a bare number.
+				}
+				commands = append(commands, fmt.Sprintf("`rota plan pass %s %s --proof <sha:check>`", key, st.ID))
+			}
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	e := Refused("unmet acceptance criteria: %s", strings.Join(missing, "; "))
+	e.Hint = "report --outcome partial --summary-file <file> with each unmet criterion and its reason on the third line"
+	if len(commands) > 0 {
+		e.Hint = "mark met criteria with " + strings.Join(commands, "; ") + ", or " + e.Hint
+	}
+	return e
 }
 
 // proofRows is the proof rows of item id, errors mapped onto the exit table.

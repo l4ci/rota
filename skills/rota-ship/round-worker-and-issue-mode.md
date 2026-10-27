@@ -14,6 +14,7 @@ Loaded by `SKILL.md` when the branch is a round worker's (`<agent>/<issue>-<slug
 
 - **Step 4 (PR body):** run the learning pass of `skills/references/worker-contract.md` first (post each learning with `--kind learning`), then end the body with `Learnings: none` or `Learnings: <n> posted`. This is before Step 6a, so the PR opens with the line already in it.
 - **Before the push (Step 6a):** merge the moved base first (`git fetch origin <base>`; when the base is past your merge base, `git merge origin/<base>`, never a rebase), resolve conflicts, re-run the targeted checks and record proof at the merged head. The same holds before every relay-fix push (`skills/references/worker-contract.md`).
+- **Before reporting done:** for the lead and every open bundle member, mark each met `AC-n` with `rota plan pass <ID> AC-n --proof '<sha>:<check>'` (use `#2150`, for example, as the issue key) against its recorded PASS row (`rota proof show <ID>`). Proof alone does not mark acceptance. A plain done or `--outcome done` refuses while explicit criteria remain unmet. Leave unmet criteria unmarked and use `--outcome partial --summary-file <f>` (or `failed` if nothing can be delivered), naming each unmet id and reason on the third line. File mode has no `plan pass`; disclose explicit unmet criteria in that summary. Items with no `AC-n` ids need no marks.
 
 ## Issue backend
 
