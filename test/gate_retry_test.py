@@ -114,6 +114,7 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
         record = records[0]
         self.assertEqual(record["check"], "smoke-shard1")
         self.assertEqual((record["firstExit"], record["retryExit"]), (1, 0))
+        self.assertGreater(record.get("retrySeconds", 0), 0, record)
         self.assertIn("controlled smoke-shard1", record["firstOutput"])
         self.assertIn("All smoke tests passed.", record["retryOutput"])
 
