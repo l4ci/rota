@@ -12,7 +12,9 @@ Before dispatch, the caller runs `rota review prepare <reviewed-sha> --json` for
 
 The caller runs `rota review cleanup <path>` after success, failure or cancellation. Cleanup requires the matching ownership record and removes only that workspace. A cleanup failure is reported with its path. Keep the same temporary-directory environment for preparation and cleanup.
 
-These workspaces also serve cross-harness, second-opinion and release-range reviews. Reviewers remain read-only. A scratch working directory is not an OS sandbox: an unsandboxed reviewer can still access absolute paths in the live repository or user home. User configuration during binary probes is unchanged.
+These workspaces also serve cross-harness, second-opinion and release-range reviews. Reviewers remain read-only. Run binary probes from the workspace through the caller's installed `rota review probe -- <command> [<arg>...]`, for example `rota review probe -- ./rota config show`. Each invocation creates a temporary HOME, XDG roots and tool config roots, runs the command, and removes the temporary state after success or failure. A setup failure prevents the command from starting; a cleanup failure reports the remaining path. Use `--json` before `--` for the command's `stdout`, `stderr` and `exitCode`. Seed and inspect config in one shell invocation when a probe needs several steps in the same temporary state.
+
+The harness itself keeps its existing authentication and account configuration; only probe subprocesses use the temporary roots. Neither a scratch working directory nor environment isolation is an OS sandbox: unsandboxed commands can still access absolute paths in the live repository or user home, expand tildes through passwd, and inspect process environments.
 
 ### What counts as the spec
 
