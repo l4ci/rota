@@ -110,8 +110,11 @@ func (d *Deps) settle(dur time.Duration) {
 	d.Sleep(dur)
 }
 
-// Sentinel failures of Send, so callers can map them to exit codes.
+// Send outcomes, so callers can distinguish queued delivery from failures.
 var (
+	// ErrQueued acknowledges a relay delivered to a busy session's queue.
+	// It is a successful delivery; callers must not resend it.
+	ErrQueued = errors.New("relay queued")
 	// ErrNotSubmitted: nothing showed the brief was picked up. Safe to resend.
 	ErrNotSubmitted = errors.New("brief was never submitted")
 	// ErrDialogOpen: a dialog in the session refused input; nothing was sent.
@@ -287,7 +290,8 @@ type Host interface {
 	// session remains.
 	Spawn(ctx context.Context, o SpawnOpts) (string, error)
 	// Send submits the file as a prompt and confirms pickup. The error is
-	// ErrNotSubmitted, ErrDialogOpen, or another failure.
+	// ErrQueued (successful queued delivery), ErrNotSubmitted, ErrDialogOpen,
+	// or another failure.
 	Send(ctx context.Context, slot, handle, file string) error
 	// Capture returns recent pane text, "" for a slot without a handle.
 	Capture(ctx context.Context, slot, handle string, lines int) string
