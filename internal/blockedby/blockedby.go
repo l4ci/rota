@@ -8,6 +8,7 @@ package blockedby
 
 // Refusals of the round verbs (assign, transfer, accept, pick, adopt, support).
 const (
+	Freeze          = "freeze"
 	NoRound         = "no round"
 	OutOfScope      = "out of scope"
 	NotReady        = "not ready"
@@ -146,7 +147,7 @@ const (
 
 // All is every declared blockedBy value, each once.
 func All() []string {
-	return []string{
+	return []string{Freeze,
 		NoRound, OutOfScope, NotReady, Overlap, Claimed, NotStale, StaleClaim, ClaimLost, OpenPR, Batch, Bundle, SlotBusy, NoFreeSlot, NoLogin,
 		Draining, Quota, BriefMissing, NoTierMap, HumanDecision, CrossMilestone, Registered, Held, External, NoPRRecorded, Site, Fetch,
 		Conflict, Dirty, Role, NoSlotHolds, NoIssues, FindingMissing, NoGist, ReviewNotMinted, NotYourSlot, SameSlot, Healthy,
