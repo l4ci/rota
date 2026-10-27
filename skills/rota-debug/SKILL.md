@@ -69,7 +69,7 @@ The first deliverable, non-negotiable: a command that shows the bug and that you
 
 **Flaky bugs.** When the bug is intermittent, read [`flaky-bugs.md`](flaky-bugs.md).
 
-**Slow or regressed behaviour.** The red signal is a measurement: record a baseline (the last good commit, or a median of N runs), set a threshold, and assert against it (`elapsed <= baseline * 1.2`). Measure before the fix, then again after, on the same input. Prefer a debugger or profiler to log spam: one profile names the hot path, and print probes shift timing.
+**Slow or regressed behaviour.** When the bug is a slowdown or regression, read [`slow-regressions.md`](slow-regressions.md).
 
 **Minimise.** Shrink the reproducer while it stays red, re-running after each cut, until any further removal turns it green. It becomes the regression test in Step 5.
 
@@ -194,4 +194,5 @@ Nudge one line, only when it applies: cause not obvious from the code, or the se
 - [`references/knowledge-consult.md`](references/knowledge-consult.md) — K+D query pattern.
 - [`flaky-bugs.md`](flaky-bugs.md) — measuring and raising an intermittent bug's failure rate.
 - [`iron-law-stop.md`](iron-law-stop.md) — what to do after three failed fixes.
+- [`slow-regressions.md`](slow-regressions.md) — a measured baseline and threshold as the red signal.
 - [`no-seam.md`](no-seam.md) — filing the missing seam and wording the proof row.

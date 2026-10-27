@@ -52,7 +52,7 @@ rota bugreport file <id> --confirm --confirm-note "<the user's answer, quoted>" 
 
 Without `--confirm` the verb exits 4 and files nothing. The record is marked `filed` with the issue URL. If `gh` is missing or unauthenticated the verb prints where to file it by hand; the record stays open.
 
-Exit 0 with `recorded:false` (or a `warning:` line) is not plain success: the issue exists, but the record could not be marked `filed` and stays open. Tell the user the issue is filed and give the URL, run `rota bugreport dismiss <id>` to close the record, and never refile. Left open, the Stop hook and wind-down re-offer it, and a later yes would file a duplicate.
+When the verb exits 0 with `recorded:false` (or a `warning:` line), read [`unrecorded-filing.md`](unrecorded-filing.md): the issue exists but the record stays open.
 
 ## Offers
 

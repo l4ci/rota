@@ -103,7 +103,7 @@ ID=$(rota item create --json --kind bugs --title "Short title" --tag P1 --desc "
 
 Flags: `--kind bugs|features|tasks`, `--tag` (`P0`-`P3` for bugs, `Major`/`Minor`/`Cosmetic` for features, none for tasks), `--desc`, `--related`, `--milestone`, `--repos`, `--subsystem`, `--body-file`, `--depends-on`. See `rota item create --help` and `docs/contributing/contract/backlog.md` (*rota item create*) for ID minting, field order, the `Since:` stamp, detail-file placement and the issue-backend mapping.
 
-**Harness and model.** When the text names a harness ("with codex") or a model, record it so `rota round assign` picks it up. Issue backend: after create, `rota issues label <N> --add harness:codex` and, for a model, `--add model:<id>` (values `harness:claude|codex`; one of each). File backend: end `--desc` with `Harness: codex Model: <id>`. Add nothing when the text names neither.
+When the text names a harness ("with codex") or a model, read [`harness-model.md`](harness-model.md) before creating. Add nothing when the text names neither.
 
 Judgment calls:
 
@@ -152,6 +152,7 @@ Read [`triage-mode.md`](triage-mode.md) when the first arg is `--triage` and fol
 | [`milestone-tagging.md`](milestone-tagging.md) | Step 4.5: tag the active or named milestone. |
 | [`umbrella-tagging.md`](umbrella-tagging.md) | Step 4.6: pick sub-repos for `--repos`. |
 | [`glossary-terms.md`](glossary-terms.md) | Step 6: write canonical glossary terms. |
+| [`harness-model.md`](harness-model.md) | Step 6: record a named harness or model. |
 | [`remove-mode.md`](remove-mode.md) | `--remove` flow, Steps R1 to R5. |
 | [`triage-mode.md`](triage-mode.md) | `--triage` flow, Steps T1 to T5. |
 | [`authoring-conventions.md`](references/authoring-conventions.md) | Destructive and manual gates. |
