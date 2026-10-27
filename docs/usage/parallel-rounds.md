@@ -526,6 +526,10 @@ have not seen, at the heartbeat, or when the autopilot stops (a wind-down or a l
 failed for a reason a person must clear is held, not re-run on every tick. Every action is one line in
 `.rota/gate-audit.jsonl` with `"gate": "autopilot"`.
 
+A `branch-no-pr` finding appears only after a slot is done or idle with commits and no PR.
+The watch reports it once per slot state or held-issue change, and again if it disappears and returns.
+Repeated heartbeats omit it from text and JSON; `round status` and `round reconcile` still list it.
+
 The scope you chose at `round start` bounds what it assigns; start a `slate` round to keep it to
 issues you picked.
 

@@ -294,7 +294,7 @@ func (e Env) adoptedPRNumber(ctx context.Context, root string, rep *Report, v *v
 // base, so how far ahead the branch is cannot gate the lookup; a failed lookup
 // warns and sets v.prErr, so --apply skips the repair.
 func (e Env) unrecordedMergedPR(ctx context.Context, root string, rep *Report, v *view, r *Row, so *worker.Slot) *tracker.PR {
-	if !r.Registered || so == nil || r.Issue == "" || r.PR != "" || !worker.Parkable(strutil.FirstNonEmpty(r.HostState, so.State())) {
+	if !r.Registered || so == nil || r.Issue == "" || r.PR != "" || !slotFinished(r, so) {
 		return nil
 	}
 	m, err := e.mergedBranchPR(ctx, root, r.Branch, v.base)
@@ -303,6 +303,16 @@ func (e Env) unrecordedMergedPR(ctx context.Context, root string, rep *Report, v
 		v.prErr = true
 	}
 	return m
+}
+
+// slotFinished prefers the live host state, falling back to the registry when
+// no host state is available. A working slot is still producing its PR.
+func slotFinished(r *Row, s *worker.Slot) bool {
+	state := r.HostState
+	if state == "" && s != nil {
+		state = s.State()
+	}
+	return worker.Parkable(state)
 }
 
 // ownsMergedPR says whether a merged PR is this slot's: the forge matches a
@@ -599,7 +609,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 					v.mergedPR = m
 					r.PR = m.URL
 					rep.add(Finding{Kind: PRUnrecorded, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("merged PR #%d has branch %s as head, slot records none", m.Number, r.Branch), Repair: "record pr"})
-				} else if ahead > 0 {
+				} else if ahead > 0 && slotFinished(r, slotObj[r.Name]) {
 					rep.add(Finding{Kind: BranchNoPR, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("%s is %d commit(s) ahead of %s with no PR", r.Branch, ahead, v.base)})
 				}
 			}
