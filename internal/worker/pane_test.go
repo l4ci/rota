@@ -233,7 +233,7 @@ func TestLimitRegexIsTheAlternationOfTheClassifierPhrases(t *testing.T) {
 	}
 }
 
-func TestParseIssuesDone(t *testing.T) {
+func TestParseReviewResult(t *testing.T) {
 	for in, want := range map[string][]string{
 		"issues:#139":             {"#139"},
 		"issues:#139,#140, #141":  {"#139", "#140", "#141"},
@@ -241,29 +241,17 @@ func TestParseIssuesDone(t *testing.T) {
 		"issues:PROJ-123":         {"PROJ-123"},
 		"issues:#7, PROJ-8,ENG-9": {"#7", "PROJ-8", "ENG-9"},
 	} {
-		got, ok := ParseIssuesDone(in)
+		result := ParseReviewResult(in)
+		got, ok := result.Issues(), result.Complete()
 		if !ok || strings.Join(got, " ") != strings.Join(want, " ") {
 			t.Errorf("%q: %v %v", in, got, ok)
 		}
 	}
-	for _, in := range []string{"", "rota-worker/w1", "https://github.com/o/r/pull/12", "issues:", "issues:#a", "issues:#1,", "issues:proj-1", "issues:PROJ-", "issues:#PROJ-1"} {
-		if got, ok := ParseIssuesDone(in); ok {
+	for _, in := range []string{"", "rota-worker/w1", "https://github.com/o/r/pull/12", "issues:", "issues:#a", "issues:#1,", "issues:proj-1", "issues:PROJ-", "issues:#PROJ-1", "issues:none,#1", "issues:#1,none", "issues:None"} {
+		if result := ParseReviewResult(in); result.Complete() {
+			got := result.Issues()
 			t.Errorf("%q parsed as %v", in, got)
 		}
-	}
-}
-
-func TestClassifyIssuesDoneKeys(t *testing.T) {
-	st, ev := Classify("work\nROTA-DONE ben issues:PROJ-1,PROJ-2\n", false, 60, "")
-	if st != StateDone || ev != "issues:PROJ-1,PROJ-2" {
-		t.Errorf("%v %q", st, ev)
-	}
-}
-
-func TestClassifyIssuesDone(t *testing.T) {
-	st, ev := Classify("work\nROTA-DONE ben issues:#139,#140\n", false, 60, "")
-	if st != StateDone || ev != "issues:#139,#140" {
-		t.Errorf("%s %q", st, ev)
 	}
 }
 

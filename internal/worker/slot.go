@@ -439,7 +439,7 @@ func (s *Slot) Unbind() {
 	s.SetBriefDecisionContext("")
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
-	for _, k := range []string{"prMerged", "claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "bundle", "issues", "reviewSeen", "event", "heartbeatAt", "outcome", "inbox", "finding", "awaitingDone"} {
+	for _, k := range []string{"prMerged", "claimId", "kind", "tier", "model", "tierReason", "smokeSection", "attempt", "attemptBase", "bundle", "issues", "reviewNoFindings", "reviewSeen", "event", "heartbeatAt", "outcome", "inbox", "finding", "awaitingDone"} {
 		s.o.Delete(k)
 	}
 }
@@ -519,7 +519,8 @@ func (s *Slot) SetPR(url string) {
 }
 
 // Issues are the issues a review item's worker reported filing
-// (`ROTA-DONE <slot> issues:#a,#b`), the slot's done evidence in place of a PR.
+// (`ROTA-DONE <slot> issues:#a,#b`). ReviewResult distinguishes a completed
+// empty review from missing evidence.
 func (s *Slot) Issues() []string { return strList(s.o, "issues") }
 
 // strList is the string entries of the list under key, skipping any other.
@@ -566,7 +567,10 @@ func (s *Slot) SetFinding(id string) {
 }
 
 // SetIssues records the reported issues; none clears them.
-func (s *Slot) SetIssues(refs []string) { setStrList(s.o, "issues", refs) }
+func (s *Slot) SetIssues(refs []string) {
+	result := ParseReviewResult("issues:" + strings.Join(refs, ","))
+	s.SetReviewResult(result)
+}
 
 // SetHandle records the pane handle; "" clears it.
 func (s *Slot) SetHandle(h string) {

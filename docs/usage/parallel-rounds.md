@@ -769,11 +769,14 @@ the winner as usual. If one attempt was returned, reclaimed or died without a PR
 the remaining PR alone; while the other worker is still building, it refuses. The autopilot
 assigns best-of issues but never picks: the pick is yours.
 
-An architecture-review item ends with filed issues, not a PR. When its worker prints
+An architecture-review item ends with its review result and no PR. When its worker prints
 `ROTA-DONE <slot> issues:#a,#b`, read the issues and run `rota round accept <ID>`. It closes the
 item with a note listing them, releases its claim and frees the slot, so no `reclaim` is needed.
-If the slot recorded no issues, pass `--issues #a,#b`. Running it again on a closed item changes
-nothing.
+If the worker filed issues but the slot did not record them, pass `--issues #a,#b`.
+A completed review with no findings prints `ROTA-DONE <slot> issues:none` instead. Accept it
+with `rota round accept <ID>`: it closes with `Review done: no findings.` and frees the slot,
+without a fabricated finding issue. An omitted list or bare `issues:` is missing evidence
+and remains refused, even with a `--gist`. Running accept again on a closed item changes nothing.
 
 A `decision:research` item (see decision milestones in `/rota-vision`) ends with a finding comment,
 also with no PR. `round assign` starts it on the `light` tier (`--tier` overrides) and its worker
@@ -971,7 +974,7 @@ set and fails when unavailable; solo is never a fallback from it.
 
 Under solo, each worker is a Claude `Agent` subagent the orchestrator launches in the slot's
 `.worktrees/<agent>` checkout. `rota round assign` returns the brief and the worktree instead
-of starting a pane, `rota round report <slot> --state ...` records what the subagent said (`--issues "#a,#b"` in place of `--pr` for an architecture-review item),
+of starting a pane, `rota round report <slot> --state ...` records what the subagent said (`--issues "#a,#b"` in place of `--pr` for an architecture-review item, or `--issues none` for a completed review with no findings),
 and `rota round wait` reads the registry without blocking. The pane verbs (`rota worker
 dispatch`, `rota worker poll`, `rota worker session`) refuse. The registry holds what tab mode writes (minus the
 pane fields), so `rota round reconcile`, the gate and the merge policy work unchanged.

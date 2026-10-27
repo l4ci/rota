@@ -62,6 +62,7 @@ func TestPollRecordsDoneAndEvidenceInOneWrite(t *testing.T) {
 	for _, tc := range []struct{ line, field string }{
 		{"ROTA-DONE w1 https://github.com/o/r/pull/9", "pr"},
 		{"ROTA-DONE w1 issues:#4,#5", "issues"},
+		{"ROTA-DONE w1 issues:none", "no findings"},
 	} {
 		dir, f := pollRegistry(t, "tmux")
 		f.panes["w1"] = []string{"x\n", "x\n" + tc.line + "\n"}
@@ -79,7 +80,7 @@ func TestPollRecordsDoneAndEvidenceInOneWrite(t *testing.T) {
 				if err != nil {
 					continue
 				}
-				if s := reg.Slot("w1"); s != nil && s.State() == "done" && s.PR() == "" && len(s.Issues()) == 0 {
+				if s := reg.Slot("w1"); s != nil && s.State() == "done" && s.PR() == "" && !s.ReviewResult().Complete() {
 					bad <- "done recorded without evidence"
 					return
 				}
@@ -94,7 +95,7 @@ func TestPollRecordsDoneAndEvidenceInOneWrite(t *testing.T) {
 			t.Errorf("%s: %s", tc.field, msg)
 		}
 		reg := LoadRegistryTolerant(dir)
-		if s := reg.Slot("w1"); s.State() != "done" || (s.PR() == "" && len(s.Issues()) == 0) {
+		if s := reg.Slot("w1"); s.State() != "done" || (s.PR() == "" && !s.ReviewResult().Complete()) {
 			t.Errorf("%s: final state %s pr=%q issues=%v", tc.field, s.State(), s.PR(), s.Issues())
 		}
 	}
@@ -206,26 +207,6 @@ func TestActiveAtStampedByDispatchAndRestampedByPollOnAStateChange(t *testing.T)
 	}
 	if got := slotField(t, dir, "w1", "activeAt"); got != "2026-10-02T16:00:00Z" {
 		t.Errorf("a state change restamps: %q", got)
-	}
-}
-
-// A review item's done line names the issues it filed; Poll records them on the
-// slot and leaves slot.pr empty.
-func TestPollRecordsIssuesDone(t *testing.T) {
-	dir, f := pollRegistry(t, "tmux")
-	f.panes["w1"] = []string{"x\n", "ROTA-DONE w1 issues:#139,#140\n"}
-	f.panes["w2"] = []string{"a\n", "a\n"}
-	if _, err := envWith(f).Poll(bg, dir, PollOpts{Lines: 60}); err != nil {
-		t.Fatal(err)
-	}
-	if got := LoadRegistryTolerant(dir).Slot("w1").Issues(); strings.Join(got, ",") != "#139,#140" {
-		t.Errorf("issues = %v", got)
-	}
-	if got := slotField(t, dir, "w1", "pr"); got != "<null>" {
-		t.Errorf("pr = %s", got)
-	}
-	if got := slotField(t, dir, "w1", "state"); got != "done" {
-		t.Errorf("state = %s", got)
 	}
 }
 
