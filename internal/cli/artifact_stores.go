@@ -55,7 +55,15 @@ func openProof(c *Ctx, id string) (root string, st proof.Store, w *who, err erro
 	}
 	w = &who{ID: id, Type: backlog.ItemType(id)}
 	if issue {
-		return root, proof.NewNotes(proofLockDir(c, root), itemNotes(c, id, w)), w, nil
+		open := itemNotes(c, id, w)
+		return root, proof.NewNotes(proofLockDir(c, root), func() (artifact.Notes, error) {
+			// Update calls this under its append lock. The command may have
+			// run for hours since validation read the note, and another
+			// process may have appended meanwhile. Read the current note,
+			// including when we waited for the append lock itself.
+			c.deps().freshReads()
+			return open()
+		}), w, nil
 	}
 	return root, proof.Files(root), w, nil
 }

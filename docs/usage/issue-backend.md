@@ -157,6 +157,8 @@ An ID is the type letter plus the issue number: `#42` is `F42`, `B42` or `T42`. 
 
 `/rota-work`, `/rota-debug` and `/rota-ship` always open a PR / MR in issue mode and never merge. `rota ship pr --items <IDs>` adds `Closes #<n>` lines. `/rota-review --queue` lists `needs-review` items with their PRs (`rota review queue`), reviews them and merges with `rota ship pr-merge`. Proof comes first: an open linked item with no proof blocks the merge, becomes `changes-requested` and gets a feedback comment (exit 4). Proof rows are added with `rota proof record` (it runs a command and writes the row) or, for a docs-only change with no command, `rota proof add`, into the item's proof note.
 
+Overlapping `rota proof record` runs on the same item preserve both rows. Each append reads the current proof note under its lock, including rows recorded while its command was running. File mode preserves concurrent rows in the item's proof sidecar too.
+
 In a [round](parallel-rounds.md), `rota worker gate` also wants the PR body to carry `Closes #N` (or `Fixes #N`) for the slot's issue. Without it the merge would leave the issue open and claimed, so the gate refuses (exit 4, `blockedBy: closes`). A PR that lands only part of an issue says `Refs #N` and the issue carries the `partial-slice` label, which exempts it.
 
 A `done` close refuses while any explicit `AC-n` criterion lacks a current `plan pass` mark backed by PASS proof. The refusal lists the unmet criteria. To close with known gaps, pass `--unmet-reason "<why>"`; the close comment records both the gaps and your reason. `--no-proof` only bypasses the proof-row requirement. The merge gate checks acceptance before merging a PR that closes an item, including a merge into a milestone branch.

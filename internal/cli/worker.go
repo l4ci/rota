@@ -521,9 +521,16 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			d.Set("round", *res.Round)
 		}
 		d.Set("relay", res.Relay)
+		if res.Queued {
+			d.Set("queued", true)
+		}
 		setIf(d, "kind", res.Kind)
 		d.Set("changed", true)
-		return Result{Data: d, Text: fmt.Sprintf("dispatched: %s (%s)", res.Slot, res.Handle)}, nil
+		verb := "dispatched"
+		if res.Queued {
+			verb = "queued"
+		}
+		return Result{Data: d, Text: fmt.Sprintf("%s: %s (%s)", verb, res.Slot, res.Handle)}, nil
 	}
 }
 
