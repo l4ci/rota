@@ -412,6 +412,27 @@ func (r Registry) BundleHolder(id string) (*Slot, *QueuedPR) {
 	return nil, nil
 }
 
+// PromoteBundleLead drops lead from its slot or queued record and promotes the
+// first member, locked. The branch, PR and running attempt stay with the work.
+func PromoteBundleLead(root, lead string) error {
+	want := NormID(lead)
+	return Update(root, func(d *Doc) {
+		for _, s := range d.Slots() {
+			if b := s.Bundle(); s.HeldID() == want && len(b) > 0 {
+				s.SetTask(b[0])
+				s.o.Set("issue", b[0])
+				s.SetBundle(b[1:])
+			}
+		}
+		for _, o := range d.queued() {
+			if b := strList(o, "bundle"); NormID(jsonx.Str(o, "issue")) == want && len(b) > 0 {
+				o.Set("issue", b[0])
+				setStrList(o, "bundle", b[1:])
+			}
+		}
+	})
+}
+
 // DropBundleMember removes id from the bundle of the slot or queued record
 // that lists it, locked. A bundle left empty loses the field.
 func DropBundleMember(root, id string) error {
