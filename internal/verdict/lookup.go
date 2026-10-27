@@ -51,10 +51,11 @@ type ReportSource interface {
 	MRNotes(context.Context, int) ([]tracker.Comment, error)
 }
 
-// RecoverPR fills missing kind/head entries from trusted PR reports. Local
-// records at head win. Only current-head reports are cached, never stale ones.
+// RecoverPR reads trusted PR reports only when no local record exists at head.
+// Local verdicts are authoritative for the whole branch, not just their kind.
+// Recovered records refresh from the newest trusted reports at the same SHA.
 func RecoverPR(ctx context.Context, root, key, head string, pr int, source ReportSource) error {
-	if head == "" {
+	if head == "" || hasLocalAtHead(Load(root).Branches[key], head) {
 		return nil
 	}
 	notes, err := source.MRNotes(ctx, pr)
@@ -85,10 +86,10 @@ func RecoverPR(ctx context.Context, root, key, head string, pr int, source Repor
 				if access, ok := source.(interface {
 					CanPush(context.Context, string) (bool, error)
 				}); ok {
-					allowed, err = access.CanPush(ctx, note.Author)
-					if err != nil {
-						return err
-					}
+					canPush, permissionErr := access.CanPush(ctx, note.Author)
+					// An unverifiable author is untrusted, not a reason to
+					// discard another author's already verified FAIL.
+					allowed = permissionErr == nil && canPush
 				}
 			}
 			trusted[note.Author] = allowed
@@ -105,13 +106,26 @@ func RecoverPR(ctx context.Context, root, key, head string, pr int, source Repor
 	}
 	return update(root, func(s *Store) {
 		list := s.Branches[key]
+		// A local verdict may have arrived while the forge read was in flight.
+		if hasLocalAtHead(list, head) {
+			return
+		}
+		// Preserve the newest cached kind when this response has no replacement.
+		// Refresh the head's cache as a set so spec/quality ordering and Combined
+		// cannot retain an older result after an upsert at the same SHA.
+		for i := len(list) - 1; i >= 0; i-- {
+			r := list[i]
+			if r.FromReport && AtHead(r, head) {
+				if _, ok := candidates[r.Kind]; !ok {
+					candidates[r.Kind] = r
+				}
+			}
+		}
+		list = slices.DeleteFunc(list, func(r Record) bool { return r.FromReport && AtHead(r, head) })
 		// Stable kind order keeps spec before quality for the effective verdict.
 		for _, kind := range BranchKinds {
 			r, ok := candidates[kind]
 			if !ok {
-				continue
-			}
-			if local, ok := Latest(list, kind); ok && AtHead(local, head) {
 				continue
 			}
 			if kind == ReviewSpec {
@@ -129,15 +143,21 @@ func RecoverPR(ctx context.Context, root, key, head string, pr int, source Repor
 	})
 }
 
-// ForHead keeps all local verdicts and only the recovered reports at head.
+// ForHead keeps all local verdicts. Recovered reports count only at head,
+// and only when the branch has no locally recorded verdict there.
 // Local stale FAILs retain their existing policy; a cached PR report cannot
 // acquire that authority merely because another clone downloaded it.
 func ForHead(list []Record, head string) []Record {
+	local := hasLocalAtHead(list, head)
 	out := make([]Record, 0, len(list))
 	for _, r := range list {
-		if !r.FromReport || AtHead(r, head) {
+		if !r.FromReport || (!local && AtHead(r, head)) {
 			out = append(out, r)
 		}
 	}
 	return out
+}
+
+func hasLocalAtHead(list []Record, head string) bool {
+	return slices.ContainsFunc(list, func(r Record) bool { return !r.FromReport && AtHead(r, head) })
 }

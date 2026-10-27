@@ -3,6 +3,7 @@ package verdict
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -38,10 +39,11 @@ func TestParseReport(t *testing.T) {
 }
 
 type lookupSource struct {
-	notes   []tracker.Comment
-	err     error
-	self    string
-	writers map[string]bool
+	notes            []tracker.Comment
+	err              error
+	self             string
+	writers          map[string]bool
+	permissionErrors map[string]error
 }
 
 func (f *lookupSource) MRNotes(context.Context, int) ([]tracker.Comment, error) {
@@ -49,6 +51,9 @@ func (f *lookupSource) MRNotes(context.Context, int) ([]tracker.Comment, error) 
 }
 func (f *lookupSource) AuthenticatedUser(context.Context) (string, error) { return f.self, nil }
 func (f *lookupSource) CanPush(_ context.Context, author string) (bool, error) {
+	if err := f.permissionErrors[author]; err != nil {
+		return false, err
+	}
 	return f.writers[author], nil
 }
 
@@ -107,7 +112,9 @@ func TestRecoverPR(t *testing.T) {
 	})
 	t.Run("offline preserves cache", func(t *testing.T) {
 		root := t.TempDir()
-		_, _ = AddBranch(root, "feature", NewRecord(QA, Pass, head, Body{}, recAt))
+		cached := NewRecord(QA, Pass, head, Body{}, recAt)
+		cached.FromReport = true
+		_, _ = AddBranch(root, "feature", cached)
 		if err := RecoverPR(context.Background(), root, "feature", head, 20, &lookupSource{err: errors.New("offline")}); err == nil {
 			t.Fatal("missing read error")
 		}
@@ -124,5 +131,84 @@ func TestParseReportGitObjectFormats(t *testing.T) {
 		if !ok || r.Sha != sha || r.Verdict != InfraFail {
 			t.Fatalf("valid git object name %q was lost: %+v %v", sha, r, ok)
 		}
+	}
+}
+
+func TestRecoveredCacheDefersToLocalBranch(t *testing.T) {
+	const head = "abcdef1"
+	root := t.TempDir()
+	if _, err := AddBranch(root, "feature", NewRecord(ReviewQuality, Fail, head, Body{}, recAt)); err != nil {
+		t.Fatal(err)
+	}
+	cached := NewRecord(ReviewSpec, Pass, head, Body{}, recAt)
+	cached.FromReport = true
+	if _, err := AddBranch(root, "feature", cached); err != nil {
+		t.Fatal(err)
+	}
+	list := ForHead(Load(root).Branches["feature"], head)
+	if r, ok := Blocking(list, Settings{}); !ok || r.Kind != ReviewQuality || r.Verdict != Fail {
+		t.Fatalf("cached PASS masked local FAIL: %+v %v", r, ok)
+	}
+	if kinds := Recorded(root, "feature", head); len(kinds) != 1 || kinds[0] != ReviewQuality {
+		t.Fatalf("cached record supplemented authoritative local review: %v", kinds)
+	}
+}
+
+func TestRecoverPRRefreshesCachedAtHead(t *testing.T) {
+	const head = "abcdef1"
+	root := t.TempDir()
+	report := func(kind, v string) tracker.Comment {
+		return tracker.Comment{Author: "me", Body: RenderReport(NewRecord(kind, v, head, Body{}, recAt), nil)}
+	}
+	source := &lookupSource{self: "me", notes: []tracker.Comment{report(ReviewSpec, Fail), report(ReviewQuality, Pass)}}
+	if err := RecoverPR(context.Background(), root, "feature", head, 20, source); err != nil {
+		t.Fatal(err)
+	}
+	if r, ok := EffectiveReview(Load(root).Branches["feature"]); !ok || r.Verdict != Fail {
+		t.Fatalf("initial FAIL not cached: %+v %v", r, ok)
+	}
+	// The posting verb upserts a comment: its position and SHA stay the same.
+	source.notes[0] = report(ReviewSpec, Pass)
+	for i := 0; i < 2; i++ {
+		if err := RecoverPR(context.Background(), root, "feature", head, 20, source); err != nil {
+			t.Fatal(err)
+		}
+		list := Load(root).Branches["feature"]
+		if r, ok := EffectiveReview(list); !ok || r.Verdict != Pass || !r.FromReport {
+			t.Fatalf("new PASS did not refresh cached FAIL/combined: %+v %v", r, ok)
+		}
+		if len(list) != 2 {
+			t.Fatalf("refresh duplicated cache entries: %+v", list)
+		}
+	}
+	source.notes[1] = report(ReviewQuality, Fail)
+	if err := RecoverPR(context.Background(), root, "feature", head, 20, source); err != nil {
+		t.Fatal(err)
+	}
+	if r, ok := Blocking(Load(root).Branches["feature"], Settings{}); !ok || r.Verdict != Fail {
+		t.Fatalf("new FAIL did not replace cached PASS: %+v %v", r, ok)
+	}
+}
+
+func TestRecoverPRSkipsAuthorPermissionError(t *testing.T) {
+	const head = "abcdef1"
+	note := func(v, author string) tracker.Comment {
+		return tracker.Comment{Author: author, Body: RenderReport(NewRecord(ReviewSpec, v, head, Body{}, recAt), nil)}
+	}
+	for _, badFirst := range []bool{true, false} {
+		t.Run(fmt.Sprint("bad author first: ", badFirst), func(t *testing.T) {
+			root := t.TempDir()
+			notes := []tracker.Comment{note(Pass, "unverified"), note(Fail, "me")}
+			if !badFirst {
+				notes[0], notes[1] = notes[1], notes[0]
+			}
+			source := &lookupSource{self: "me", notes: notes, permissionErrors: map[string]error{"unverified": errors.New("permission lookup unavailable")}}
+			if err := RecoverPR(context.Background(), root, "feature", head, 20, source); err != nil {
+				t.Fatalf("one author aborted recovery: %v", err)
+			}
+			if r, ok := Blocking(ForHead(Load(root).Branches["feature"], head), Settings{}); !ok || r.Verdict != Fail || !r.FromReport {
+				t.Fatalf("lost trusted FAIL: %+v %v", r, ok)
+			}
+		})
 	}
 }

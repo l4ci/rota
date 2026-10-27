@@ -50,6 +50,7 @@ func TestShipPRMergeRecoversRemoteFailWithoutLocalBranch(t *testing.T) {
 	root, deps := a8Project(t, backend)
 	prHead := "abcdef1234567"
 	report := verdict.RenderReport(verdict.Record{Kind: verdict.ReviewSpec, Verdict: verdict.Fail, Sha: prHead, Summary: "remote FAIL"}, nil)
+	unverified := verdict.RenderReport(verdict.Record{Kind: verdict.ReviewSpec, Verdict: verdict.Pass, Sha: prHead}, nil)
 	fake := &forge{answer: func(_ string, args []string) (string, string, int) {
 		call := strings.Join(args, " ")
 		switch {
@@ -59,8 +60,10 @@ func TestShipPRMergeRecoversRemoteFailWithoutLocalBranch(t *testing.T) {
 			raw, _ := json.Marshal(map[string]string{"headRefName": "feat/ten", "headRefOid": prHead, "state": "OPEN"})
 			return string(raw), "", 0
 		case strings.Contains(call, "issues/10/comments"):
-			raw, _ := json.Marshal([]any{map[string]any{"id": 1, "body": report, "user": map[string]string{"login": "reviewer"}}})
+			raw, _ := json.Marshal([]any{map[string]any{"id": 2, "body": unverified, "user": map[string]string{"login": "unverified"}}, map[string]any{"id": 1, "body": report, "user": map[string]string{"login": "reviewer"}}})
 			return string(raw), "", 0
+		case strings.Contains(call, "collaborators/unverified/permission"):
+			return "", "permission lookup unavailable", 1
 		case strings.HasPrefix(call, "api user"):
 			return `{"login":"reviewer"}`, "", 0
 		}
@@ -144,6 +147,61 @@ func TestVerdictLookupFilters(t *testing.T) {
 			}
 			if tc.source == "file" && len(fake.calls) != 0 {
 				t.Fatalf("file mode read forge: %v", fake.calls)
+			}
+		})
+	}
+}
+
+func TestVerdictRecoveryPreservesLocalBranch(t *testing.T) {
+	shipDeterministic(t)
+	for _, tc := range []struct {
+		name string
+		args []string
+	}{
+		{"route", []string{"verdict", "route", "feat/x", "--for", "ship-review", "--json"}},
+		{"ship pr", []string{"ship", "pr", "feat/x", "--title", "T", "--body-file", "-", "--json"}},
+		{"ship merge", []string{"ship", "merge", "feat/x", "--body-file", "-", "--json"}},
+		{"ship pr-merge", []string{"ship", "pr-merge", "10", "--json"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := shipFixture(t, `{"forge":{"provider":"github"},"issues":{"source":"github"},"ship":{"review":"none"}}`)
+			shipBranchOf(t, dir, "feat/x", [3]string{"x.txt", "feature", ""})
+			head := gitT(t, dir, "rev-parse", "feat/x")
+			b3Record(t, dir, "feat/x", verdict.ReviewQuality, verdict.Fail, head)
+			report := verdict.RenderReport(verdict.Record{Kind: verdict.ReviewSpec, Verdict: verdict.Pass, Sha: head}, nil)
+			backend := a8Fixture()
+			backend.prs[0].Branch = "feat/x"
+			fake := &forge{answer: func(_ string, args []string) (string, string, int) {
+				call := strings.Join(args, " ")
+				switch {
+				case strings.HasPrefix(call, "pr list "):
+					return `[{"number":10,"headRefName":"feat/x","isCrossRepository":false}]`, "", 0
+				case strings.HasPrefix(call, "pr view 10 "):
+					raw, _ := json.Marshal(map[string]string{"headRefName": "feat/x", "headRefOid": head, "state": "OPEN"})
+					return string(raw), "", 0
+				case strings.Contains(call, "issues/10/comments"):
+					raw, _ := json.Marshal([]any{map[string]any{"id": 1, "body": report, "user": map[string]string{"login": "reviewer"}}})
+					return string(raw), "", 0
+				case strings.HasPrefix(call, "api user"):
+					return `{"login":"reviewer"}`, "", 0
+				case strings.HasPrefix(call, "pr create "):
+					return "https://github.com/fake/repo/pull/10\n", "", 0
+				}
+				return "[]", "", 0
+			}}
+			deps := useForge(t, fake)
+			deps.NewTracker = withTracker(t, backend).NewTracker
+			out := trRunWith(t, deps, dir, "merge: feature\n", tc.args...)
+			d := data(t, out.stdout)
+			if tc.name == "route" {
+				if out.code != 0 || d["verdict"] != "FAIL" || d["next"] != "stop" {
+					t.Fatalf("remote PASS overrode local FAIL: %+v", out)
+				}
+			} else if out.code != 4 || d["blockedBy"] != "verdict" {
+				t.Fatalf("remote PASS allowed ship past local FAIL: %+v", out)
+			}
+			if len(backend.merged) != 0 {
+				t.Fatal("merged a local FAIL")
 			}
 		})
 	}

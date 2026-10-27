@@ -78,7 +78,7 @@ func (v VerdictCheck) BlockGate(branch, head string) error {
 	if err := v.BlockAt(branch, head); err != nil {
 		return err
 	}
-	r, ok := verdict.BlockingAtHead(v.Store.Branches[verdict.BranchKey(v.Repo, branch)], strings.TrimSpace(head))
+	r, ok := verdict.BlockingAtHead(verdict.ForHead(v.Store.Branches[verdict.BranchKey(v.Repo, branch)], head), strings.TrimSpace(head))
 	if !ok {
 		return nil
 	}
