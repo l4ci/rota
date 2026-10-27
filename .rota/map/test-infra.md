@@ -1,6 +1,6 @@
 ---
 subsystem: test-infra
-summary: The merge gate, sharded smoke suite, doc lints, fakes, e2e scenarios, evals and the shared Go test helpers
+summary: the merge gate, sharded smoke suite, doc lints, fakes, e2e scenarios, evals and the shared Go test helpers
 touched: 2026-10-27
 last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 ---

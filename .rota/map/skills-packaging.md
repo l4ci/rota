@@ -1,6 +1,6 @@
 ---
 subsystem: skills-packaging
-summary: The rota-* skill sources, their embedding in the binary, install into Claude Code and Codex, the plugin manifests, install.sh and the docs generators
+summary: the rota-* skill sources, their embedding in the binary, install into Claude Code and Codex, the plugin manifests, install.sh and the docs generators
 touched: 2026-10-27
 last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 ---
@@ -9,7 +9,7 @@ last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 
 Holds the skills (markdown the agent reads), packs them into the binary with `go:embed`, installs them as self-contained directories for Claude Code and Codex, ships the plugin manifests and the binary installer, and generates the skill lists in the docs from `docs/skills/*.md`.
 
-Depends on (by map file): foundations (fsio), cli-dispatch (verbs in `internal/cli/skills.go`, `blockedby` via `internal/skills`), test-infra (`test/validate-skills.py`, `test/doclint.sh` check the sources). Also imports `blockedby` (not in these seven maps). Used by doctor-and-reap (installed-skills check) and config-and-setup (`hvmigrate`).
+Depends on (by map file): foundations (fsio), cli-dispatch (verbs in `internal/cli/skills.go`), backlog-items (`blockedby`, imported by `internal/skills`), test-infra (`test/validate-skills.py`, `test/doclint.sh` check the sources). Used by doctor-and-reap (installed-skills check) and config-and-setup (`hvmigrate`).
 
 ## Entry points
 - embed.go:14 — `FS`: the embedded skills, Codex `agents/*.yaml` and shared references

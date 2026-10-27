@@ -1,6 +1,6 @@
 ---
 subsystem: config-and-setup
-summary: Layered config, project seeding and registry, on-disk layout paths, version and update checks, and the one-shot migrations
+summary: layered config, project seeding and registry, on-disk layout paths, version and update checks, and the one-shot migrations
 touched: 2026-10-27
 last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 ---
@@ -9,7 +9,7 @@ last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 
 Everything a project needs to exist and be configured: the config schema and its layered load, `rota init` seeding of `.rota/`, the machine-wide project registry, the umbrella sub-repo registry, the single source of truth for in-tree and per-checkout paths, build and update reporting, and the migrations that move older layouts forward.
 
-Depends on (by map file): foundations (fsio, git, jsonx, proc, pystr, strutil, stamp), knowledge-and-map (knowledge, mapqa, frontmatter), skills-packaging (skills, used by hvmigrate). Also imports `golden`, `gopath`, `labels`, `itembody`, `overlap`, `milestone`, `section`, `blockedby`, `hook`, `tracker`, `worker`, `connections`, `roundcfg`, `backlog` (not in these seven maps). Used by every other subsystem.
+Depends on (by map file): foundations (fsio, git, jsonx, proc, pystr, strutil, stamp), knowledge-and-map (knowledge, mapqa, frontmatter), skills-packaging (skills, used by hvmigrate). Also imports review-verdicts (`golden`, `gopath`), tracker-issues (`labels`, `itembody`, `tracker`, `connections`), gate-landing (`overlap`), backlog-items (`milestone`, `section`, `blockedby`, `backlog`), hooks-guard (`hook`), workers (`worker`) and round-orchestration (`roundcfg`). Used by every other subsystem.
 
 ## Entry points
 - internal/config/config.go:24 — `Load`: schema default < global < project `config.json` < `config.local.json`
@@ -33,7 +33,7 @@ Depends on (by map file): foundations (fsio, git, jsonx, proc, pystr, strutil, s
 - `internal/stalebin/` — `Check`: installed binary behind the source checkout
 - `internal/version/` — `Get`: ldflags `Version`/`Commit`/`Date`, else build info
 - `internal/migrate/` — `migrate.go`, `labels.go`, `milestones.go`, `plan.go`: file backlog to issues, relabel, milestone bodies
-- `internal/hvmigrate/` — one-shot hv-to-rota project migration (directory name `hvmigrate`, Go package name `migrate`)
+- `internal/hvmigrate/` — one-shot hv-to-rota project migration
 - `internal/legacystate/` — `LegacyState`, `FindState`: probe for the hv-era state folder
 - CLI verbs for this subsystem live in `internal/cli/{config,init,projects,migrate*,setup}.go`
 
@@ -55,5 +55,5 @@ Go 1.22, standard library; JSON files read and written through `jsonx` and `fsio
 - Regenerate the config reference page: `go run ./internal/config/genref <output file>` (`-` prints to stdout)
 
 ## Concerns
-- `internal/migrate` has no package doc comment; `internal/hvmigrate` declares `package migrate`, the same name as `internal/migrate`.
+- `internal/migrate` has no package doc comment.
 - `config` imports `projects` and `itembody`; `projects` imports `repos`, so config sits above the registry packages in the import graph.

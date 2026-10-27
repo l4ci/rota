@@ -1,6 +1,6 @@
 ---
 subsystem: tracker-issues
-summary: Forge and issue-tracker adapters (gh, glab, Jira, Linear, Itsaplan), upstream-issue verbs, label registry, comment markers, note chunking, item-body grammar, tracker connections, bug-report log
+summary: forge and issue-tracker adapters (gh, glab, Jira, Linear, Itsaplan), upstream-issue verbs, label registry, comment markers, note chunking, item-body grammar, tracker connections, bug-report log
 touched: 2026-10-27
 last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 ---

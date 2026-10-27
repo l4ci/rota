@@ -1,6 +1,6 @@
 ---
 subsystem: review-verdicts
-summary: Typed verdict store and routing, proof rows, acceptance-criteria grammar, test and flake ledgers, golden records, Go test-path rules
+summary: typed verdict store and routing, proof rows, acceptance-criteria grammar, test and flake ledgers, golden records, Go test-path rules
 touched: 2026-10-27
 last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 ---

@@ -1,6 +1,6 @@
 ---
 subsystem: doctor-and-reap
-summary: Read-only preflight checks (rota doctor) and fail-closed cleanup of what a round left behind (rota reap)
+summary: read-only preflight checks (rota doctor) and fail-closed cleanup of what a round left behind (rota reap)
 touched: 2026-10-27
 last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 ---
@@ -9,7 +9,7 @@ last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 
 `doctor` runs one read-only check per thing a parallel round depends on (git, jq, the dispatch host, the forge CLI, worker accounts, herdr's agent integration, installed skills, disk, labels, decisions, external knowledge) and reports pass/fail/skip/warn. `reap` finds worktrees, branches, tabs, processes, leases and skill caches that nothing live owns and, on request, removes only what is provably safe.
 
-Depends on (by map file): config-and-setup (config, rotatree, stalebin), foundations (fsio, git, proc, strutil), knowledge-and-map (knowledge), skills-packaging (skills), cli-dispatch (exitcode). Also imports `harness`, `hook`, `host`, `labels`, `tracker`, `worker`, `round`, `roundlease` (not in these seven maps). The verbs live in cli-dispatch (`internal/cli/doctor*.go`, `reap.go`).
+Depends on (by map file): config-and-setup (config, rotatree, stalebin), foundations (fsio, git, proc, strutil), knowledge-and-map (knowledge), skills-packaging (skills), cli-dispatch (exitcode). Also imports workers (`harness`, `worker`), hooks-guard (`hook`), terminal-hosts (`host`), tracker-issues (`labels`, `tracker`) and round-orchestration (`round`, `roundlease`). The verbs live in cli-dispatch (`internal/cli/doctor*.go`, `reap.go`).
 
 ## Entry points
 - internal/doctor/doctor.go:275 — `Run`: all checks, returns a `Report`

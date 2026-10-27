@@ -1,6 +1,6 @@
 ---
 subsystem: knowledge-and-map
-summary: Project knowledge, decisions and glossary files, the external knowledge repo, the subsystem map and QA indexes, staleness listing and the shared frontmatter parser
+summary: project knowledge, decisions and glossary files, the external knowledge repo, the subsystem map and QA indexes, staleness listing and the shared frontmatter parser
 touched: 2026-10-27
 last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 ---
@@ -9,7 +9,7 @@ last_mapped_commit: a27543a2d266e573ab6ad79a0cf630c97d854188
 
 Reads and writes the tracked `.rota/` text stores that hold durable project memory: topic bullets in `KNOWLEDGE.md`, decisions, the glossary, `.rota/map/` and `.rota/qa/` files, plus the shared external knowledge repo. `stale` lists entries gone stale across the backlog, knowledge and map. `frontmatter` is the one parser of the flat `---` header those files use.
 
-Depends on (by map file): foundations (fsio, git, jsonx, proc, pystr, stamp, strutil), config-and-setup (config, rotatree, toolver). Also imports `section` and `backlog` (not in these seven maps). Used by cli-dispatch, config-and-setup (initproj, migrate) and doctor-and-reap (doctor).
+Depends on (by map file): foundations (fsio, git, jsonx, proc, pystr, stamp, strutil), config-and-setup (config, rotatree, toolver). Also imports backlog-items (`section`, `backlog`). Used by cli-dispatch, config-and-setup (initproj, migrate) and doctor-and-reap (doctor).
 
 ## Entry points
 - internal/knowledge/scope.go:29 — `Store`: locates the knowledge files of one project (root plus sub-repo map)
