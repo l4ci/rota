@@ -175,11 +175,14 @@ func mergedIssues(entries []ledger.Entry, round int) []string {
 }
 
 // currentRound is the lease's round while one is live or foreign, else the
-// highest round in the ledger.
-func currentRound(c *Ctx, root string, entries []ledger.Entry) int {
+// highest round in the ledger, including supplied rounds identified in damaged events.
+func currentRound(c *Ctx, root string, entries []ledger.Entry, knownRounds ...int) int {
 	n := 0
 	for _, e := range entries {
 		n = max(n, e.Round)
+	}
+	for _, round := range knownRounds {
+		n = max(n, round)
 	}
 	env := c.deps().baseRoundEnv()
 	if l, st, err := env.ReadLease(c.Context(), root); err == nil && (st == roundlease.Live || st == roundlease.Foreign) {
