@@ -10,11 +10,12 @@ import (
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/worker"
 )
 
 // BestOfLabel is the issue label that has two slots build the issue at once.
-const BestOfLabel = "best-of:2"
+const BestOfLabel = labels.BestOfTwo
 
 // Blocked reasons of a best-of:2 issue (exit 4, `blockedBy`).
 const (
@@ -34,7 +35,7 @@ func BestOfOf(caps backlog.Capabilities, it backlog.Item) (bool, error) {
 	if !caps.IssueIDs {
 		return false, nil
 	}
-	ls := labelsWith(it.Labels, "best-of:")
+	ls := labelsWith(it.Labels, labels.BestOfPrefix)
 	switch {
 	case len(ls) == 0:
 		return false, nil

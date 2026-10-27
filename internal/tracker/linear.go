@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/connections"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/marker"
 )
 
@@ -30,8 +31,9 @@ import (
 // canceled, unstarted, started), never by name. Projects and cycles are not
 // rota milestones (#586): the milestone calls fail and FindMilestone finds none.
 type Linear struct {
-	rest *REST
-	team string
+	rest         *REST
+	team         string
+	labelEntries []labels.Entry
 
 	mu     sync.Mutex
 	me     *linearUser
@@ -82,6 +84,7 @@ func newLinearTracker(ctx context.Context, c *CLI, s Settings) (*Linear, error) 
 		return nil, unavailable("connection %q has no secret (run: rota connect add %s --replace, or set %s)", conn.Name, conn.Name, connections.EnvVar(conn.Name))
 	}
 	l := NewLinear(conn, secret, s.LinearTeam)
+	l.labelEntries = s.Labels
 	if sleep := c.Sleep; sleep != nil {
 		l.rest.Sleep = func(ctx context.Context, d time.Duration) error {
 			sleep(d)
@@ -333,9 +336,11 @@ func (l *Linear) stateOf(ctx context.Context, want ...string) (string, error) {
 }
 
 type linearLabel struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Team *struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Color       string `json:"color"`
+	Team        *struct {
 		ID string `json:"id"`
 	} `json:"team"`
 }
@@ -355,13 +360,17 @@ func (l *Linear) loadLabels(ctx context.Context) error {
 				PageInfo pageInfo      `json:"pageInfo"`
 			} `json:"issueLabels"`
 		}
-		if err := l.query(ctx, "Labels", `($after: String) { issueLabels(first: 250, after: $after) { nodes { id name team { id } } pageInfo { hasNextPage endCursor } } }`,
+		if err := l.query(ctx, "Labels", `($after: String) { issueLabels(first: 250, after: $after) { nodes { id name description color team { id } } pageInfo { hasNextPage endCursor } } }`,
 			map[string]any{"after": after(cursor)}, &d); err != nil {
 			return "", err
 		}
 		for _, lb := range d.IssueLabels.Nodes {
 			if lb.Team == nil || lb.Team.ID == teamID {
-				got[strings.ToLower(lb.Name)] = lb
+				key := strings.ToLower(lb.Name)
+				// Team definitions take precedence over workspace labels with the same name.
+				if prior, ok := got[key]; !ok || prior.Team == nil || lb.Team != nil {
+					got[key] = lb
+				}
 			}
 		}
 		return d.IssueLabels.PageInfo.next(), nil
@@ -412,8 +421,12 @@ func (l *Linear) labelIDs(ctx context.Context, names []string, create bool) ([]s
 				IssueLabel linearLabel `json:"issueLabel"`
 			} `json:"issueLabelCreate"`
 		}
+		in := map[string]any{"name": n, "teamId": l.teamID}
+		if lb, ok := labelMetadata(n, l.labelEntries); ok {
+			in["description"], in["color"] = lb.Description, "#"+labelColor(lb.Color)
+		}
 		if err := l.mutate(ctx, "LabelCreate", `($input: IssueLabelCreateInput!) { issueLabelCreate(input: $input) { success issueLabel { id name } } }`,
-			map[string]any{"input": map[string]any{"name": n, "teamId": l.teamID}}, &d); err != nil {
+			map[string]any{"input": in}, &d); err != nil {
 			return nil, err
 		}
 		if err := succeeded("LabelCreate", d.IssueLabelCreate.Success); err != nil {

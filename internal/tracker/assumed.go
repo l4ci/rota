@@ -22,6 +22,15 @@ func AssumedNote(it IssueTracker) string {
 
 func (a assumedForge) refuse() error { return &UnknownForgeError{Origin: a.r.Origin} }
 
+func (a assumedForge) ListLabels(ctx context.Context) ([]Label, error) {
+	if lister, ok := a.IssueTracker.(LabelLister); ok {
+		return lister.ListLabels(ctx)
+	}
+	return nil, failed("the assumed forge does not support listing label definitions")
+}
+
+func (a assumedForge) UpsertLabel(context.Context, Label) error { return a.refuse() }
+
 func (a assumedForge) Create(context.Context, string, string, []string, string) (IssueKey, error) {
 	return "", a.refuse()
 }

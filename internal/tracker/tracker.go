@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -451,16 +452,19 @@ type Settings struct {
 	JiraProject     string
 	LinearTeam      string
 	ItsaplanProject string
+	// Labels carries the resolved registry, including project overrides and extras.
+	Labels []labels.Entry
 }
 
 // SettingsFromConfig reads forge.provider, issues.source,
-// issues.labels.notPlanned, issues.connection,
+// issues.labels.*, issues.connection,
 // issues.jira.project, issues.linear.team and issues.itsaplan.project, with the schema
 // defaults for absent or null keys. An invalid forge.provider or issues.source
 // reads as its default here; ValidateConfig, ReadSettings (and the *FromConfig
 // constructors) fail on it instead.
 func SettingsFromConfig(cfg any) Settings {
 	s := Settings{Provider: config.ForgeAuto, Source: config.SourceFile, RetryWait: retryWait(), NotPlannedLabel: config.Label(cfg, "notPlanned")}
+	s.Labels, _ = config.ResolvedLabels(cfg)
 	if p, err := config.ForgeProvider(cfg); err == nil {
 		s.Provider = p
 	}
@@ -493,13 +497,16 @@ var RetryPause = 60 * time.Second
 func retryWait() time.Duration { return RetryPause }
 
 // ValidateConfig is the corrupt-config check of the keys SettingsFromConfig
-// reads: an invalid forge.provider or issues.source is a KindInternal error
-// (exit 70), as an invalid issues.source is for every backlog verb.
+// reads: invalid providers, issue sources or label declarations are KindInternal
+// errors (exit 70).
 func ValidateConfig(cfg any) error {
 	if _, err := config.ForgeProvider(cfg); err != nil {
 		return internal("%s", err.Error())
 	}
 	if _, err := config.IssueSource(cfg); err != nil {
+		return internal("%s", err.Error())
+	}
+	if _, err := config.ResolvedLabels(cfg); err != nil {
 		return internal("%s", err.Error())
 	}
 	return nil
@@ -529,9 +536,9 @@ func New(ctx context.Context, s Settings, provider, dir string, opts ...Option) 
 
 func adapterFor(c *CLI, s Settings) Adapter {
 	if c.Provider == "github" {
-		return &GitHub{base: base{cli: c, closing: closingGH}}
+		return &GitHub{base: base{cli: c, closing: closingGH, labelEntries: s.Labels}}
 	}
-	return &GitLab{base: base{cli: c, closing: closingGL}, NotPlannedLabel: s.NotPlannedLabel}
+	return &GitLab{base: base{cli: c, closing: closingGL, labelEntries: s.Labels}, NotPlannedLabel: s.NotPlannedLabel}
 }
 
 // NewForge returns the forge for forgeProvider ("" or "auto" falls back to
@@ -684,8 +691,9 @@ func WithSleep(sleep func(time.Duration)) Option {
 
 // base holds what both adapters share.
 type base struct {
-	cli     *CLI
-	closing func(string) []int
+	cli          *CLI
+	closing      func(string) []int
+	labelEntries []labels.Entry
 }
 
 func (b *base) Provider() string { return b.cli.Provider }

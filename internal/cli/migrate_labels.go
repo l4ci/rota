@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
@@ -38,7 +39,7 @@ func migrateLabels(fs *flag.FlagSet) RunFunc {
 		if support == "" && !*apply {
 			return blockedRefusal(nil, blockedby.Config, "round.support must name the support machine before migrating labels", "")
 		}
-		from := "site:support"
+		from := labels.LegacySupport
 		if v, ok := config.Lookup(cfg, "issues.labels.support"); ok {
 			var valid bool
 			from, valid = v.(string)

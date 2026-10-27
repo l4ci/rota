@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/labels"
 )
 
 // Blocked reasons of a bad harness: or model: label (exit 4, `blockedBy`).
@@ -21,8 +22,8 @@ const (
 // Decision types of a decision item (a `decision:<type>` label, a `Decision:`
 // field on a file bullet).
 const (
-	DecisionResearch = "research"
-	DecisionGrilling = "grilling"
+	DecisionResearch = labels.DecisionResearch
+	DecisionGrilling = labels.DecisionGrilling
 )
 
 // Pick is the harness and model an item asks for; "" is no request.
@@ -65,7 +66,7 @@ func PickOf(caps backlog.Capabilities, it backlog.Item) (Pick, error) {
 		}
 		return p, nil
 	}
-	hs, ms := labelsWith(it.Labels, harness.LabelPrefix), labelsWith(it.Labels, "model:")
+	hs, ms := labelsWith(it.Labels, harness.LabelPrefix), labelsWith(it.Labels, labels.ModelPrefix)
 	if len(hs) > 1 {
 		return p, blocked(BlockHarnessLabel, "%s has more than one harness: label (%s): keep one", it.ID, strings.Join(hs, ", "))
 	}
@@ -80,7 +81,7 @@ func PickOf(caps backlog.Capabilities, it backlog.Item) (Pick, error) {
 		p.Harness = v
 	}
 	if len(ms) == 1 {
-		v := strings.TrimPrefix(ms[0], "model:")
+		v := strings.TrimPrefix(ms[0], labels.ModelPrefix)
 		if !ValidModel(v) {
 			return p, blocked(BlockModelLabel, "%s has label %s: not a valid model id (letters, digits, . _ : / @ -)", it.ID, ms[0])
 		}
@@ -101,12 +102,12 @@ func DecisionOf(caps backlog.Capabilities, it backlog.Item) (string, error) {
 		}
 		v = m[1]
 	} else {
-		ds := labelsWith(it.Labels, "decision:")
+		ds := labelsWith(it.Labels, labels.DecisionPrefix)
 		switch len(ds) {
 		case 0:
 			return "", nil
 		case 1:
-			v = strings.TrimPrefix(ds[0], "decision:")
+			v = strings.TrimPrefix(ds[0], labels.DecisionPrefix)
 		default:
 			return "", blocked(BlockDecisionLabel, "%s has more than one decision: label (%s): keep one", it.ID, strings.Join(ds, ", "))
 		}
@@ -131,10 +132,10 @@ func labelsWith(labels []string, prefix string) []string {
 func (p Pick) String() string {
 	var out []string
 	if p.Harness != "" {
-		out = append(out, "harness:"+p.Harness)
+		out = append(out, labels.HarnessPrefix+p.Harness)
 	}
 	if p.Model != "" {
-		out = append(out, "model:"+p.Model)
+		out = append(out, labels.ModelPrefix+p.Model)
 	}
 	return strings.Join(out, " ")
 }
