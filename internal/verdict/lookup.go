@@ -96,6 +96,7 @@ func RecoverPR(ctx context.Context, root, key, head string, pr int, source Repor
 		if !allowed {
 			continue
 		}
+		r.FromReport = true
 		r.RecordedAt = note.CreatedAt.UTC().Format("2006-01-02T15:04:05Z")
 		candidates[r.Kind] = r // notes are oldest first; the newest valid report wins
 	}
@@ -126,4 +127,17 @@ func RecoverPR(ctx context.Context, root, key, head string, pr int, source Repor
 		}
 		s.Branches[key] = list
 	})
+}
+
+// ForHead keeps all local verdicts and only the recovered reports at head.
+// Local stale FAILs retain their existing policy; a cached PR report cannot
+// acquire that authority merely because another clone downloaded it.
+func ForHead(list []Record, head string) []Record {
+	out := make([]Record, 0, len(list))
+	for _, r := range list {
+		if !r.FromReport || AtHead(r, head) {
+			out = append(out, r)
+		}
+	}
+	return out
 }

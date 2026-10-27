@@ -41,16 +41,26 @@ func (v VerdictCheck) Block(branch string) error {
 // BlockAt uses the known PR head when the branch is absent or stale locally.
 // An empty head keeps Block's existing local-ref behavior.
 func (v VerdictCheck) BlockAt(branch, head string) error {
-	r, ok := verdict.Blocking(v.Store.Branches[verdict.BranchKey(v.Repo, branch)], v.Settings)
+	list := v.Store.Branches[verdict.BranchKey(v.Repo, branch)]
+	// Keep local records' old stale semantics, but bind recovered reports to
+	// the supplied PR head (or the branch tip on the ordinary ship path).
+	r, ok := verdict.Blocking(list, v.Settings)
 	if !ok {
 		return nil
 	}
-	// A branch whose tip cannot be read has moved on as far as we can tell.
-	stale := true
-	if head != "" {
+	explicit := head != ""
+	if head == "" {
+		if res, err := v.Git.Run("rev-parse", "--short", branch); err == nil && res.ExitCode == 0 {
+			head = strings.TrimSpace(res.Stdout)
+		}
+	}
+	r, ok = verdict.Blocking(verdict.ForHead(list, head), v.Settings)
+	if !ok {
+		return nil
+	}
+	stale := r.Sha != head
+	if explicit {
 		stale = !verdict.AtHead(r, head)
-	} else if res, err := v.Git.Run("rev-parse", "--short", branch); err == nil && res.ExitCode == 0 {
-		stale = r.Sha != strings.TrimSpace(res.Stdout)
 	}
 	return &VerdictBlockedError{Branch: branch, Record: r, Stale: stale}
 }
@@ -61,7 +71,7 @@ func (v VerdictCheck) BlockAt(branch, head string) error {
 // item refuses the merge even when its verdict is CONCERNS. Ship keeps Block,
 // which follows the recorded FAIL alone.
 func (v VerdictCheck) BlockGate(branch, head string) error {
-	if err := v.Block(branch); err != nil {
+	if err := v.BlockAt(branch, head); err != nil {
 		return err
 	}
 	r, ok := verdict.BlockingAtHead(v.Store.Branches[verdict.BranchKey(v.Repo, branch)], strings.TrimSpace(head))

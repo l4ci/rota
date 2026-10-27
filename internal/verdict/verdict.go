@@ -343,6 +343,9 @@ func jsonType(kind string) string {
 
 // Record is one stored verdict.
 type Record struct {
+	// FromReport distinguishes cache entries from locally recorded verdicts.
+	// A recovered report only applies at its reviewed head.
+	FromReport bool          `json:"fromReport,omitempty"`
 	Kind       string        `json:"kind"`
 	Verdict    string        `json:"verdict"`
 	Combined   string        `json:"combined,omitempty"`
