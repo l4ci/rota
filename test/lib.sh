@@ -17,7 +17,7 @@
 # rm-at-end pattern leaks. Apply the same pattern in any new section.
 
 pass() { printf '  \033[32mOK\033[0m  %s\n' "$1"; }
-fail() { printf '  \033[31mFAIL\033[0m %s\n' "$1"; exit 1; }
+fail() { printf '  \033[31mFAIL\033[0m %s\n' "$1"; exit "${ROTA_SMOKE_ASSERTION_EXIT:-1}"; }
 
 # vfail is the handler for a captured verb call (#579): `OUT=$(hvj item show X) || vfail`.
 # It reads the failing status, finds the source line of the call and fails with the
