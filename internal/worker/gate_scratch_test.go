@@ -45,7 +45,7 @@ func TestGateLocalRedVerifyLandsNothing(t *testing.T) {
 func TestGateLocalRedVerifyKeepsTheReviewRecord(t *testing.T) {
 	w := newWorld(t, ghURL)
 	w.setConfig(`{"test":{"full":["false"]}}`)
-	w.forge("body", "Closes #7")
+	w.setPRBody("Closes #7")
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"next"}],"prs":[{"pr":%q,"branch":"w1","base":"main","from":"w1","issue":"7"}]}`, ghURL)), 0o644)
 	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "#7", Base: "main"})

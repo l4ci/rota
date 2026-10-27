@@ -165,7 +165,7 @@ PRN="${PRURL##*/}"
 python3 - "$TMP_DY/forge.json" "$ORIGIN" "$(git -C "$DY/.worktrees/ben" rev-parse HEAD)" <<'PY' || fail "dry round: could not seed the fake forge"
 import json, sys
 json.dump({"origin": sys.argv[2], "head": "ben/f01-first", "sha": sys.argv[3], "base": "main",
-           "state": "OPEN", "merge": "", "body": "## Approvals\nnone"}, open(sys.argv[1], "w"))
+           "state": "OPEN", "merge": "", "body": "## Approvals\nnone\n## Assumptions\nNone\n\n## Rulings\nNone\n"}, open(sys.argv[1], "w"))
 PY
 : > "$TMP_DY/forge.log"
 # The host still reports ben working; the socket server flips it to done one

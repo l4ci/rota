@@ -109,6 +109,8 @@ type TrainResult struct {
 	Verdict string
 	Members []TrainMember
 	Culprit string
+	// Culprits lists members excluded by the static PR-section pre-filter.
+	Culprits []TrainCulprit
 	// CulpritGate is the gate result that named the culprit, for the bookkeeping
 	// that follows (its head SHA, PR and branch). Zero when none did.
 	CulpritGate GateResult
@@ -315,12 +317,23 @@ func (t *trainRun) plan() (bool, error) {
 			return true, err
 		}
 		res.Notes = appendNew(res.Notes, gr.Notes...)
+		if t.excludePRSections(tg, gr) {
+			continue
+		}
 		if !gr.OK() {
 			res.Verdict, res.Culprit, res.CulpritGate, res.Err, res.Hint = gr.Verdict, tg, gr, gr.Err, gr.Hint
 			return true, nil
 		}
 		res.Members = append(res.Members, TrainMember{Target: tg, Branch: gr.Branch, PR: gr.PR})
 		t.remote = t.remote || gr.PR != ""
+	}
+	if err := t.filterSectionOrder(&o); err != nil {
+		return true, err
+	}
+	if len(res.Members) == 0 {
+		c := res.Culprits[0]
+		res.Verdict, res.Culprit, res.CulpritGate, res.Err, res.Hint = c.Gate.Verdict, c.Target, c.Gate, c.Gate.Err, c.Gate.Hint
+		return true, nil
 	}
 	t.baseRef = o.Base
 	if t.remote {

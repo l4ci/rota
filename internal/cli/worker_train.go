@@ -33,6 +33,17 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 	}
 	d.Set("members", ms)
 	d.Set("order", strList(r.Order))
+	if len(r.Culprits) > 0 {
+		cs := []any{}
+		for _, culprit := range r.Culprits {
+			c := jsonx.NewObject()
+			c.Set("target", culprit.Target)
+			c.Set("pr", culprit.PR)
+			c.Set("blockedBy", culprit.BlockedBy)
+			cs = append(cs, c)
+		}
+		d.Set("culprits", cs)
+	}
 	if r.Culprit != "" {
 		d.Set("culprit", r.Culprit)
 	}

@@ -211,6 +211,9 @@ func trainLedger(env Env, m *RoundMemo, root string, res TrainResult, gated map[
 	if res.Verdict == "" {
 		return
 	}
+	for _, culprit := range res.Culprits {
+		gateLedger(env, m, root, GateTarget{Name: culprit.Gate.TargetSlot, Issue: culprit.Gate.Issue, Branch: culprit.Gate.Branch, PR: culprit.PR}, culprit.Gate)
+	}
 	targets := make([]string, 0, len(res.Members)+1)
 	for _, m := range res.Members {
 		targets = append(targets, m.Target)
@@ -221,6 +224,13 @@ func trainLedger(env Env, m *RoundMemo, root string, res TrainResult, gated map[
 	reg := LoadRegistryTolerant(root) // best-effort ledger notes; the train already read the registry strictly
 	round := m.Round(env, root)
 	for _, t := range targets {
+		sectionCulprit := false
+		for _, c := range res.Culprits {
+			sectionCulprit = sectionCulprit || c.Target == t
+		}
+		if sectionCulprit {
+			continue
+		}
 		if gated[t] || slices.Contains(res.Landed, t) {
 			continue
 		}
