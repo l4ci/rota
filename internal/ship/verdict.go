@@ -35,13 +35,21 @@ type VerdictCheck struct {
 // Block returns a *VerdictBlockedError when a recorded FAIL blocks branch, nil
 // when nothing does.
 func (v VerdictCheck) Block(branch string) error {
+	return v.BlockAt(branch, "")
+}
+
+// BlockAt uses the known PR head when the branch is absent or stale locally.
+// An empty head keeps Block's existing local-ref behavior.
+func (v VerdictCheck) BlockAt(branch, head string) error {
 	r, ok := verdict.Blocking(v.Store.Branches[verdict.BranchKey(v.Repo, branch)], v.Settings)
 	if !ok {
 		return nil
 	}
 	// A branch whose tip cannot be read has moved on as far as we can tell.
 	stale := true
-	if res, err := v.Git.Run("rev-parse", "--short", branch); err == nil && res.ExitCode == 0 {
+	if head != "" {
+		stale = !verdict.AtHead(r, head)
+	} else if res, err := v.Git.Run("rev-parse", "--short", branch); err == nil && res.ExitCode == 0 {
 		stale = r.Sha != strings.TrimSpace(res.Stdout)
 	}
 	return &VerdictBlockedError{Branch: branch, Record: r, Stale: stale}

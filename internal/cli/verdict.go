@@ -403,7 +403,7 @@ func verdictShow(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	list := verdict.Load(t.root).Branches[t.key]
+	list := lookupVerdicts(c, t)
 	records := []any{}
 	var lines []string
 	for _, kind := range verdict.BranchKinds {
@@ -444,7 +444,7 @@ func verdictRoute(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		r, ok := verdict.ForConsumer(*consumer, verdict.Load(t.root).Branches[t.key])
+		r, ok := verdict.ForConsumer(*consumer, lookupVerdicts(c, t))
 		if !ok {
 			return Result{}, Resolution("no verdict recorded for %s that %s reads", t.branch, *consumer).
 				WithHint("record one with: rota verdict add")
