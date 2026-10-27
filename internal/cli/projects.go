@@ -30,18 +30,25 @@ func runProjectsCleanup(c *Ctx, args []string) (Result, error) {
 	if err := knNoArgs(args); err != nil {
 		return Result{}, err
 	}
-	gone, err := projects.Cleanup(c.deps().projectsEnv())
+	env := c.deps().projectsEnv()
+	gone, err := projects.Cleanup(env)
 	if err != nil {
 		return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 	}
 	rows := []any{}
 	var lines []string
 	for _, p := range gone {
-		rows = append(rows, knObj("name", p.Name, "path", p.Path, "lastSeen", p.LastSeen))
-		lines = append(lines, fmt.Sprintf("removed\t%s\t%s", p.Name, p.Path))
+		reason := "stale"
+		line := fmt.Sprintf("removed\t%s\t%s", p.Name, p.Path)
+		if projects.Temporary(env, p.Path) {
+			reason = "temporary"
+			line += "\t(temporary)"
+		}
+		rows = append(rows, knObj("name", p.Name, "path", p.Path, "lastSeen", p.LastSeen, "reason", reason))
+		lines = append(lines, line)
 	}
 	if len(gone) == 0 {
-		lines = append(lines, "noop: no stale projects")
+		lines = append(lines, "noop: no stale or temporary projects")
 	}
 	data := jsonx.NewObject()
 	data.Set("removed", rows)
