@@ -112,7 +112,7 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 			if mode == "" {
 				break
 			}
-			group, gerr := worker.GroupSlots(c.deps().Config(root), caps)
+			group, gerr := worker.GroupSlots(worker.ParseHostConfig(c.deps().Config(root)), caps)
 			if gerr != nil {
 				return Result{}, Resolution("%s: %v", o.name, gerr)
 			}

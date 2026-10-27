@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/shlex"
 )
@@ -44,18 +43,6 @@ func (s *Slot) PortBlock() int {
 func (s *Slot) ReleasePort() {
 	s.o.Set("portBase", nil)
 	s.o.Set("portBlock", nil)
-}
-
-// PortRange reads round.portBase and round.portBlock from cfg.
-func PortRange(cfg any) (base, block int) {
-	base, block = DefaultPortBase, DefaultPortBlock
-	if n, err := config.Int(cfg, config.RoundPortBaseKey, 1, 65535); err == nil && n > 0 {
-		base = n
-	}
-	if n, err := config.Int(cfg, config.RoundPortBlockKey, 1, 65535); err == nil && n > 0 {
-		block = n
-	}
-	return base, block
 }
 
 // EnsurePortBase reserves the slot's port block in the registry and returns
