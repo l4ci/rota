@@ -19,7 +19,7 @@ cp "$TESTDIR/fakes/codex" "$RT/downbin/codex"
 RTENV="env -u HERDR_PANE_ID -u TMUX_PANE -u HERDR_ENV PATH=$RT/downbin:$PATH"
 rt() { ( cd "$RT" && $RTENV "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 rtrc() { RC=0; OUT=$( cd "$RT" && $RTENV "$ROTA_BIN" --json "$@" 2>/dev/null ) || RC=$?; }
-rt item create --kind features --title First --milestone M01 --body-file - <<<$'## Acceptance\n- [ ] works' >/dev/null
+rt item create --kind features --title First --milestone M01 --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] works' >/dev/null
 HOLDER=$$
 # Tab mode, explicitly: with no round.dispatch a round with no host would be solo (C8).
 rt config set round.dispatch tmux >/dev/null

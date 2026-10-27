@@ -441,8 +441,8 @@ func suiteItemIssue(t *testing.T) {
 				eq(t, e, "data.ready", ready)
 			}}
 	}
-	add(rdy("criteria", "1", 0, true), rdy("design-note", "5", 0, true), rdy("not-ready", "10", 1, false), rdy("not-ready-bug", "2", 1, false))
-	both(rdy("criteria", "1", 0, true))
+	add(rdy("criteria", "1", 1, false), rdy("design-note", "5", 0, true), rdy("not-ready", "10", 1, false), rdy("not-ready-bug", "2", 1, false))
+	both(rdy("criteria", "1", 1, false)) // feature still lacks Out of scope
 
 	// ---- comment add / list
 	ca := func(name, id, kind, body string, want int) isc {

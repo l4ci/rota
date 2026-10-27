@@ -11,9 +11,9 @@ SC="$(mktemp -d "$TMP/round-scope.XXXXXX")"
 sc() { ( cd "$SC" && "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 sc config set round.scope open >/dev/null || vfail
 sc config set round.scopeOverlap block >/dev/null || vfail
-sc item create --kind features --title Holder --body-file - <<<$'## Acceptance\n- [ ] a\n\n## Touches\n- POST /items\n' >/dev/null || vfail
-sc item create --kind features --title Bare --body-file - <<<$'## Acceptance\n- [ ] b\n' >/dev/null || vfail
-sc item create --kind features --title Declared --body-file - <<<$'## Acceptance\n- [ ] c\n\n## Touches\n- other\n' >/dev/null || vfail
+sc item create --kind features --title Holder --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] a\n\n## Touches\n- POST /items\n' >/dev/null || vfail
+sc item create --kind features --title Bare --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] b\n' >/dev/null || vfail
+sc item create --kind features --title Declared --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] c\n\n## Touches\n- other\n' >/dev/null || vfail
 printf '{"slots":[{"name":"ben","task":"F01","branch":"ben/F01-holder"}]}\n' > "$SC/.rota/workers.json"
 
 OUT=$(sc round candidates) || vfail

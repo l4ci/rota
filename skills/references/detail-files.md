@@ -10,19 +10,7 @@ An item's input has bulky raw data that would push the backlog entry past ~3 sen
 
 ## The detail-file shape
 
-```markdown
-# {ID}: Short title
-
-> Related TODO entry: `[{ID}]` in `.rota/BACKLOG.md`
-
-## Summary
-
-{The same 1–3 sentence summary that goes into BACKLOG.md}
-
-## Detail
-
-{Full user input — crash dump, stack trace, logs, specs, checklists, etc. Preserved verbatim or lightly formatted for readability.}
-```
+Start from `rota item template --kind <bugs|features|tasks> [--tag <tag>]`, the same skeleton Step 6 uses. Put the short description under Summary and bulky raw input under Detail, preserved verbatim or lightly formatted for readability. Fill the other sections from the user's input. The binary owns the section list and its required/recommended levels.
 
 ## Ordering
 

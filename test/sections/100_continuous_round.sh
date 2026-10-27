@@ -24,7 +24,7 @@ CRENV="env -u HERDR_ENV -u HERDR_PANE_ID -u TMUX -u TMUX_PANE PATH=$CR/bin:$PATH
 cr() { ( cd "$CP" && $CRENV "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 creg() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(eval(sys.argv[2]))' "$CP/.rota/workers.json" "$1"; }
 for n in a b c; do
-  cr item create --kind features --title "Item $n" --body-file - <<<$'## Acceptance\n- [ ] works\nTouches internal/'"$n"'.go' >/dev/null
+  cr item create --kind features --title "Item $n" --body-file - <<<$'## Out of scope\nnothing noted\n\n## Acceptance\n- [ ] works\nTouches internal/'"$n"'.go' >/dev/null
 done
 printf 'stub worker contract\n' > "$CR/contract.md"
 cr config set round.brief "$CR/contract.md" >/dev/null

@@ -128,7 +128,7 @@ func TestAssessChecks(t *testing.T) {
 	dirFlight := []InFlight{{Slot: "dana", Issue: "9", Paths: []string{"internal/worker/"}}}
 	r, _ = Assess(be, "8", tracked, nil, dirFlight, false)
 	if r.Ready() || len(r.Overlaps) != 1 || !reflect.DeepEqual(r.Overlaps[0].Dirs, []string{"internal/worker/"}) ||
-		!strings.Contains(strings.Join(r.Checks[len(r.Checks)-1].Detail, ";"), "from directory internal/worker/") {
+		!strings.Contains(strings.Join(r.Checks[2].Detail, ";"), "from directory internal/worker/") {
 		t.Errorf("directory pointer must be named as the cause: %+v", r)
 	}
 	if r, _ = Assess(be, "8", tracked, nil, flight, false); len(r.Overlaps[0].Dirs) != 0 {
