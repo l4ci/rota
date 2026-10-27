@@ -68,6 +68,7 @@ Public user guide for rota, a dev workflow for Claude Code and Codex, with OpenC
 - [Debugging](usage/debugging.md): `/rota-debug` systematic cycle
 - [Pausing and resuming](usage/pausing-and-resuming.md): `/rota-pause`, recovering after `/clear`
 - [Parallel work](usage/parallel-work.md): worktree mode, concurrent `/rota-work` sessions
+- [Support machine](usage/support-machine.md): a second machine in the same round, pinning, claim labels, hand-back
 
 ### 📦 Shipping
 
