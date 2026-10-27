@@ -546,7 +546,8 @@ whose worker is busy, blocked or has uncommitted files is never taken.
   branch out in that slot, moves the PR back onto it and dispatches the follow-up. Use
   `--kind <harness>` and `--model <id>` to override the receiver's harness and model.
   Transfer uses the same precedence and launch checks as `round assign`: flags override
-  issue labels, which otherwise apply to the target slot. These flags are ignored for `--to human`.
+  issue labels, which otherwise apply to the target slot. These flags require a slot target;
+  using either with `--to human` is a usage error (exit 2).
   Count it first with
   `rota round bounce <issue> --head <sha>`: it exits 4 once the item is at `round.maxBounces`, and
   `rota round status` shows each slot's count. At the cap, never bounce it again: audit the issue's acceptance criteria first (is each one
