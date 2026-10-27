@@ -147,14 +147,14 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	}
 	e.Role = set.Role
 	e.RunGate = func(_ context.Context, target, base string) roundtick.GateRun {
-		run := runGate(c, root, gateRunOpts{Slot: target, Base: base})
+		run := runGate(c, root, gateRunOpts{Slot: target, Base: base, NoWait: true})
 		return roundtick.GateRun{Result: run.Result, Err: run.Err, Refused: run.Refused, BookErr: run.BookErr}
 	}
 	e.AwaitingReview = func(_ context.Context, sl roundtick.Slot, base string) string {
 		return reviewVerdictsMissing(c, root, sl.Name, base)
 	}
 	e.RunTrain = func(_ context.Context, targets []string, base string) roundtick.TrainRun {
-		run := runTrain(c, root, trainRunOpts{Targets: targets, Base: base})
+		run := runTrain(c, root, trainRunOpts{Targets: targets, Base: base, NoWait: true})
 		return roundtick.TrainRun{Result: run.Result, Err: run.Err, Refused: run.Refused, Book: run.Book}
 	}
 	e.Say = func(line string) { fmt.Fprintln(c.Stderr, line) }
