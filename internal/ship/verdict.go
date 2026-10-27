@@ -45,7 +45,11 @@ func (v VerdictCheck) BlockAt(branch, head string) error {
 	// Keep local records' old stale semantics, but bind recovered reports to
 	// the supplied PR head (or the branch tip on the ordinary ship path).
 	r, ok := verdict.Blocking(list, v.Settings)
-	if !ok {
+	hasReports := false
+	for _, record := range list {
+		hasReports = hasReports || record.FromReport
+	}
+	if !ok && !hasReports {
 		return nil
 	}
 	explicit := head != ""
