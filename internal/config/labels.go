@@ -31,9 +31,9 @@ func ExtraLabels(v any) (map[string]string, error) {
 	return out, nil
 }
 
-// ResolvedLabels bridges the leaf registry to the effective project config,
-// including label-only review triggers that rota reads but never applies.
-func ResolvedLabels(cfg any) ([]labels.Entry, error) {
+// LabelDefinitions resolves the labels available for tracker creation without
+// validating unrelated review policies.
+func LabelDefinitions(cfg any) ([]labels.Entry, error) {
 	var getErr error
 	out := labels.Resolve(func(key string) string {
 		v, err := Value(cfg, key)
@@ -56,13 +56,24 @@ func ResolvedLabels(cfg any) ([]labels.Entry, error) {
 		return nil, err
 	}
 	out = labels.WithExtras(out, extras)
+	return out, nil
+}
+
+// ResolvedLabels includes the review labels rota reads but never applies.
+// Sync and doctor need these; tracker construction leaves review validation
+// to the review layer so its own diagnostic and refusal remain authoritative.
+func ResolvedLabels(cfg any) ([]labels.Entry, error) {
+	out, err := LabelDefinitions(cfg)
+	if err != nil {
+		return nil, err
+	}
 	addRead := func(name, desc, key string) {
 		if _, ok := labels.Find(out, name); ok {
 			return
 		}
 		out = append(out, labels.Entry{Label: labels.Label{Name: name, Description: desc, Color: "b60205"}, Group: "review", ConfigKey: key, Sets: "maintainer", Reads: key, Removed: "explicit removal"})
 	}
-	v, _ = Value(cfg, "review.crossLabels")
+	v, _ := Value(cfg, "review.crossLabels")
 	cross, ok := stringList(v)
 	if !ok {
 		return nil, fmt.Errorf("review.crossLabels must be a list of non-empty label names")
