@@ -19,8 +19,8 @@ type Tab struct {
 }
 
 // TabLister is the optional view of a host's tabs and the way to close one.
-// Only herdr has it: a tmux window carries no agent state, so nothing about a
-// window can prove its agent dead.
+// Herdr and Orca provide it. A tmux window carries no agent state, so nothing
+// about a window can prove its agent dead.
 type TabLister interface {
 	Tabs(ctx context.Context) ([]Tab, error)
 	// CloseTab closes one tab and proves it gone.

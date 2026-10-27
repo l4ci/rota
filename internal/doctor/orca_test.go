@@ -2,6 +2,7 @@ package doctor
 
 import (
 	"github.com/l4ci/rota/internal/host"
+	"strings"
 	"testing"
 )
 
@@ -27,5 +28,16 @@ func TestDoctorOrcaRuntime(t *testing.T) {
 				t.Fatalf("host = %+v, want %s", c, tc.want)
 			}
 		})
+	}
+}
+
+func TestDoctorOrcaWarnsOnBranchAutoRename(t *testing.T) {
+	for _, reply := range []string{`{"running":true,"autoRenameBranchFromWork":true}`, `{"running":true,"settings":{"autoRenameBranchFromWork":true}}`} {
+		f := &fake{have: map[string]bool{"orca": true}, reply: map[string]Result{"orca status --json": {Stdout: reply}}}
+		d := &runner{in: Input{RoundHost: host.Kind("orca"), Dispatch: "orca", Look: f.look, Exec: f.exec}}
+		c := d.host()
+		if c.Status != Warn || !strings.Contains(c.Detail, "autoRenameBranchFromWork") {
+			t.Fatalf("branch rename risk was not reported: %+v", c)
+		}
 	}
 }
