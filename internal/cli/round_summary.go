@@ -26,7 +26,7 @@ func roundSummaryVerb(fs *flag.FlagSet) RunFunc {
 		if n < 0 {
 			n = currentRound(c, root, source.Entries, source.HighestRound())
 		}
-		if !source.HasRound(n) && *want >= 0 {
+		if source.Loaded() && !source.HasRound(n) && *want >= 0 {
 			return Result{}, Resolution("round %d has no ledger entries", n)
 		}
 		audit, err := gate.ReadAudit(root)

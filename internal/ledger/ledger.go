@@ -159,6 +159,9 @@ type SummarySource struct {
 	err                      error
 }
 
+// Loaded reports a successful whole-file read, even when damaged lines were skipped.
+func (s SummarySource) Loaded() bool { return s.err == nil }
+
 // HasRound includes damaged events whose round can still be identified.
 func (s SummarySource) HasRound(round int) bool { return s.rounds[round] }
 

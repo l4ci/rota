@@ -954,8 +954,9 @@ carry `numerator`, `denominator` and `value`. Unavailable numeric values, includ
 Unreadable ledger lines are skipped and counted in `skippedLedgerLines` (across the
 file). If a damaged event has a readable round number, only that round's metrics
 become unavailable. A torn line whose round cannot be identified does not invalidate
-other readable events. An explicitly requested round with no identifiable events
-still exits 3. Existing issue-row `mergedAt` and fallback `wallSeconds` retain the
+other readable events. Once the ledger loads, an explicitly requested round with
+no identifiable events exits 3. Missing or wholly unreadable ledgers return
+unavailable metrics at exit 0, even with an explicit `--round`. Existing issue-row `mergedAt` and fallback `wallSeconds` retain the
 last merge observation; only the new lead-time metrics use the first.
 
 ```sh
