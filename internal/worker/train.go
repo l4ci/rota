@@ -164,7 +164,7 @@ type TrainBlocked struct {
 	By     []string // targets
 }
 
-// OK reports a train that verified and landed whole.
+// OK reports a train that verified and landed every member left by the pre-filter.
 func (r TrainResult) OK() bool { return r.Verdict == GatePass }
 
 // Train runs a merge train (see above). The base must be checked out in root.
@@ -307,8 +307,12 @@ func (t *trainRun) plan() (bool, error) {
 		return true, fail(exitcode.ExitUsage, fmt.Sprintf("a train is all PRs or all slots without one, not a mix: PRs merge onto origin/%s and slots onto the local %s", o.Base, o.Base))
 	}
 
-	// 1. Check every member.
-	for _, tg := range o.Targets {
+	// 1. Pre-filter static PR sections, then check the remaining members.
+	targets, done, err := t.filterPRSections(reg, o.Targets)
+	if done || err != nil {
+		return true, err
+	}
+	for _, tg := range targets {
 		gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, tg), Verdict: o.Verdict, CheckReviews: o.CheckReviews})
 		if err != nil {
 			if gr.Verdict == GateVerdictBlocked {

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestGateRequiresPRSections(t *testing.T) {
@@ -124,5 +125,20 @@ func TestTrainPRSectionsExplicitOrder(t *testing.T) {
 	res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"w1", "w2", "w3"}, Order: []string{"9", "8", "7"}})
 	if err != nil || res.Verdict != GatePass || !slices.Equal(res.Landed, []string{"w3", "w1"}) || len(res.Culprits) != 1 {
 		t.Fatalf("filter must preserve the explicit order of the remaining PRs: %+v %v", res, err)
+	}
+}
+
+func TestTrainPRSectionsPrecedesOtherChecks(t *testing.T) {
+	w, e := sectionTrainWorld(t, []string{completePRSections, "## Rulings\nNone\n", completePRSections})
+	// This PR also fails provenance. A static pre-filter must remove it
+	// before the ordinary member checks can stop the remaining train.
+	if _, err := UpdateSlot(w.dir, "w2", func(s *Slot) {
+		s.AppendRelay(newRelayEntry(39, time.Unix(0, 0), "use the cache"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"w1", "w2", "w3"}})
+	if err != nil || res.Verdict != GatePass || !slices.Equal(res.Landed, []string{"w1", "w3"}) || len(res.Culprits) != 1 || res.Culprits[0].Target != "w2" {
+		t.Fatalf("static section filter must precede provenance: %+v %v", res, err)
 	}
 }
