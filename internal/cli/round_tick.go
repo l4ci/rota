@@ -152,6 +152,28 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		at, _ := lookupReady(target)
 		return at
 	}
+	e.Head = func(ctx context.Context, target string) (string, error) {
+		t, err := e.Target(target)
+		if err != nil {
+			return "", err
+		}
+		n, ok := worker.PRRefNumber(t.PR)
+		if !ok {
+			return "", fmt.Errorf("cannot read PR number from %q", t.PR)
+		}
+		forge, err := c.deps().forge(ctx, c.deps().Config(root), "", root)
+		if err != nil {
+			return "", err
+		}
+		info, err := forge.PRView(ctx, n)
+		if err != nil {
+			return "", err
+		}
+		if info.HeadSHA == "" {
+			return "", fmt.Errorf("PR %s has no head SHA", t.PR)
+		}
+		return fmt.Sprintf("%d:%s", n, info.HeadSHA), nil
+	}
 	e.Role = set.Role
 	e.RunGate = func(_ context.Context, target, base string) roundtick.GateRun {
 		run := runGate(c, root, gateRunOpts{Slot: target, Base: base})
@@ -223,16 +245,22 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 }
 
 // reviewVerdictsMissing says why a done slot's head still lacks the review verdicts
-// ship.review needs, "" when it has them or the check could not be made (the
-// gate then judges the slot as before).
+// ship.review needs. Only a completed, successful probe permits a real gate;
+// an early refusal or a read error cannot confirm readiness.
 func reviewVerdictsMissing(c *Ctx, root, slot, base string) string {
 	ctx, stop := workerContext()
 	defer stop()
 	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: base, ReviewsOnly: true, ItemBody: lazyItemBody(c, root)})
-	if err != nil || r.Verdict != worker.GateReviewMissing {
-		return ""
+	if err != nil {
+		return "cannot confirm review verdicts at head: " + strutil.FirstLine(err.Error())
 	}
-	return roundtick.WaitingForReview(r.Err, strutil.FirstNonEmpty(r.Branch, slot))
+	if r.Verdict == worker.GateReviewMissing {
+		return roundtick.WaitingForReview(r.Err, strutil.FirstNonEmpty(r.Branch, slot))
+	}
+	if r.Verdict != worker.GateFresh {
+		return "cannot confirm review verdicts at head: " + strutil.FirstNonEmpty(strutil.FirstLine(r.Err), r.Verdict)
+	}
+	return ""
 }
 
 // quotaCapped is the tick's cap hook: why no slot may fill, "" when one may.
