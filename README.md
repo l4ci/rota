@@ -33,7 +33,7 @@ Capture work as issues. rota hands them to Claude Code, Codex or OpenCode, revie
 - [**Parallel rounds**](https://volkerotto.net/rota/docs/usage/parallel-rounds/): an orchestrator plus workers, each in its own worktree
 - **Mix agents**: Claude Code, [Codex](https://volkerotto.net/rota/docs/usage/codex-workers/), [OpenCode](https://volkerotto.net/rota/docs/usage/opencode-workers/)
 - [**In your terminal**](https://volkerotto.net/rota/docs/usage/parallel-rounds/#layout): herdr or tmux, or subagents
-- [**Several accounts, balanced**](https://volkerotto.net/rota/docs/usage/unattended-rounds/#usage-limits)
+- [**Several accounts, balanced**](https://volkerotto.net/rota/docs/usage/unattended-rounds/#-usage-limits)
 - [**Autonomy you choose**](https://volkerotto.net/rota/docs/usage/autonomy/): off, roundtrip, auto
 - **Memory that stays in the repo**: [knowledge](https://volkerotto.net/rota/docs/usage/learning/), [decisions](https://volkerotto.net/rota/docs/usage/decisions/), [handoff notes](https://volkerotto.net/rota/docs/usage/pausing-and-resuming/)
 - [**Knowledge shared across projects**](https://volkerotto.net/rota/docs/usage/external-knowledge/): lessons that hold everywhere live in their own git repo
