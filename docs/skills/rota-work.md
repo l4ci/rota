@@ -41,4 +41,6 @@ Parallel implementation: the orchestrator plans tasks and dispatches worker suba
 
 **The proof gate sits here.** Each task writes proof rows. For a behaviour change the test runs first and must fail on an assertion, then pass. `rota item complete` closes an item only when it has proof, and exits 4 otherwise.
 
+On the issue backend, each verified `AC-n` also needs `rota plan pass <ID> AC-n --proof '<sha>:<check>'` against a recorded PASS row (use an issue key such as `#2150`). Unmet criteria stay unmarked and are reported with their reasons; round workers use a partial outcome and name them on the summary's third line before reporting done.
+
 See [running work](../usage/running-work.md) for the full flow and [picking work](../usage/picking-work.md) for the no-argument mode.
