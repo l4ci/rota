@@ -94,12 +94,13 @@ func openBacklog(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backe
 	}
 	cwd, _ := c.deps().Getwd()
 	return backlog.Open(c.Context(), root, cfg, backlog.Options{
-		Scope:      c.Repo,
-		Cwd:        cwd,
-		CountProof: proof.CountRows,
-		Today:      c.deps().Today,
-		Warn:       func(msg string) { c.Warn("%s", msg) },
-		NoteLimit:  c.deps().Getenv("ROTA_NOTE_LIMIT"),
+		Scope:       c.Repo,
+		Cwd:         cwd,
+		CountProof:  proof.CountRows,
+		LookupProof: proof.Lookup,
+		Today:       c.deps().Today,
+		Warn:        func(msg string) { c.Warn("%s", msg) },
+		NoteLimit:   c.deps().Getenv("ROTA_NOTE_LIMIT"),
 		NewTracker: func(ctx context.Context, dir string) (backlog.Tracker, error) {
 			tr, err := c.deps().NewTracker(ctx, dir, cfg)
 			if it, ok := tr.(tracker.IssueTracker); ok && err == nil {

@@ -83,6 +83,84 @@ func TestListEmptyAndCorruptRegistry(t *testing.T) {
 	}
 }
 
+func TestCleanupDropsTemporaryProjectAndKeepsLiveProject(t *testing.T) {
+	x, env := isolate(t)
+	temp := filepath.Join(x, "scratch")
+	live := filepath.Join(x, "scratch-projects")
+	env.TempDirs = func() []string { return []string{temp} }
+	for _, dir := range []string{temp, live} {
+		if err := os.MkdirAll(filepath.Join(dir, ".rota"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Register(env, dir, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	removed, err := Cleanup(env)
+	if err != nil || len(removed) != 1 || removed[0].Path != repos.Realpath(temp) || removed[0].Missing {
+		t.Fatalf("removed %+v, %v; want the existing temporary project", removed, err)
+	}
+	if ps, err := List(env); err != nil || len(ps) != 1 || ps[0].Path != repos.Realpath(live) {
+		t.Fatalf("kept %+v, %v; want the live non-temporary project", ps, err)
+	}
+	if _, err := os.Stat(filepath.Join(temp, ".rota")); err != nil {
+		t.Fatalf("cleanup must leave temporary project files alone: %v", err)
+	}
+}
+
+func TestTemporaryUsesOSTempRootsAndDirectoryBoundaries(t *testing.T) {
+	t.Setenv("TMPDIR", "/process-temp")
+	env := fakeEnv(map[string]string{"TMPDIR": "/custom-temp"}, "/home")
+	for _, tc := range []struct {
+		path string
+		want bool
+	}{
+		{"/tmp", true},
+		{"/tmp/repo", true},
+		{"/tmp-projects/repo", false},
+		{"/custom-temp/repo", true},
+		{"/custom-temp-projects/repo", false},
+		{"/process-temp/repo", false},
+		{"/var/folders/ab/cd/T/repo", true},
+		{"/private/var/folders/ab/cd/T/repo", true},
+		{"/private/var/folders-projects/repo", false},
+		{"/home/project", false},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			if got := Temporary(env, tc.path); got != tc.want {
+				t.Errorf("Temporary(%q) = %v, want %v", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTemporaryResolvesProjectAndTempRootSymlinks(t *testing.T) {
+	x, env := isolate(t)
+	temp, live := filepath.Join(x, "temp"), filepath.Join(x, "live")
+	for _, dir := range []string{temp, live} {
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	alias := filepath.Join(x, "temp-alias")
+	if err := os.Symlink(temp, alias); err != nil {
+		t.Fatal(err)
+	}
+	env.TempDirs = func() []string { return []string{alias} }
+	intoTemp, outOfTemp := filepath.Join(x, "checkout"), filepath.Join(temp, "checkout")
+	for link, target := range map[string]string{intoTemp: temp, outOfTemp: live} {
+		if err := os.Symlink(target, link); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !Temporary(env, intoTemp) || !Temporary(env, filepath.Join(alias, "repo")) {
+		t.Error("a resolved path under the temp root must be temporary")
+	}
+	if Temporary(env, outOfTemp) {
+		t.Error("a symlink resolving outside temporary storage must stay eligible")
+	}
+}
+
 func TestRemoveDropsOneEntryAndKeepsTheDirectory(t *testing.T) {
 	_, env := isolate(t)
 	a, b := t.TempDir(), t.TempDir()
