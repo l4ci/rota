@@ -930,6 +930,27 @@ merged), then totals per slot and per account, then an idle table (each stretch 
 its next assign, with the median; `idle` in JSON), then the round's gate audit lines. A re-done after a
 bounce is not counted as idle time.
 
+The summary also prints round metrics, with a counting rule on each line:
+
+- **Lead time assign→merged and done→merged:** seconds for each distinct merged PR's
+  winning assignment, using its first assign and latest done report. Open PRs are excluded.
+  The median averages the middle pair for an even sample; p90 uses nearest rank
+  (`ceil(0.9 × samples)`). Missing or invalid timestamps make that metric unavailable.
+- **Red-train rate:** non-pass train outcomes divided by recorded train outcomes. One
+  outcome is recorded per completed train invocation, including refusals; plans and
+  usage errors without a verdict are excluded. Member gate rows are not trains. Older
+  rounds without train outcomes show unavailable.
+- **Bounces per merged PR:** all bounce events in the round divided by its distinct
+  merged PRs, including bounces on work that did not land.
+- **Flake count/rate:** unavailable until a flake ledger records confirmed flakes and
+  verified runs. A transient train-cache note alone does not establish a flake rate.
+
+Missing or unreadable sources print `unavailable (<reason>)`, never a measured zero.
+JSON puts these under `metrics`: `assignToMerged`, `doneToMerged`, `redTrainRate`,
+`bouncesPerMergedPR` and `flakeRate`. Each carries `rule` and `unavailable` (null when
+available); lead times carry `samples`, `medianSeconds` and `p90Seconds`, while ratios
+carry `numerator`, `denominator` and `value`. Unavailable numeric values are null.
+
 ```sh
 rota round summary              # the current round, else the highest in the ledger
 rota round summary --round 3
