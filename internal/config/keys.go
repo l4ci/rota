@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/labels"
 )
 
 // Type is the kind of value a key holds, for editors and the reference page.
@@ -179,18 +180,18 @@ var Keys = []Key{
 	projectOwned(k("git.baseBranch", ScopeProject, "", true, TypeString, "Base branch the skills merge into and diff against. Empty auto-detects it.")),
 	projectOwned(k("umbrella.enabled", ScopeProject, false, true, TypeBool, "Umbrella mode: .rota/ stays at the umbrella and verbs operate per registered sub-repo. Turning it off keeps .rota/repos.json.")),
 	projectOwned(k(VersionKey, ScopeProject, "", true, TypeString, "Release of rota that wrote this config. Managed by rota init and rota update; do not set it by hand.")),
-	k("issues.labels.inProgress", ScopeProject, "in-progress", false, TypeString, "Tracker label for an item a worker holds."),
-	k("issues.labels.needsReview", ScopeProject, "needs-review", false, TypeString, "Tracker label for an item whose work awaits review."),
-	k("issues.labels.changesRequested", ScopeProject, "changes-requested", false, TypeString, "Tracker label for an item sent back with review feedback."),
-	k("issues.labels.released", ScopeProject, "released", false, TypeString, "Tracker label for an item that shipped in a release."),
-	k("issues.labels.notPlanned", ScopeProject, "not-planned", false, TypeString, "Tracker label for an item closed as not planned."),
-	k("issues.labels.blocked", ScopeProject, "blocked", false, TypeString, "Label rota item complete --reason blocked sets; the issue stays open."),
-	k("issues.labels.milestoneTracker", ScopeProject, "milestone-tracker", false, TypeString, "Tracker label for a milestone's tracking issue."),
-	k("issues.labels.types.bug", ScopeProject, "type:bug", false, TypeString, "Tracker label for the bug item type."),
-	k("issues.labels.types.feature", ScopeProject, "type:feature", false, TypeString, "Tracker label for the feature item type."),
-	k("issues.labels.types.task", ScopeProject, "type:task", false, TypeString, "Tracker label for the task item type."),
-	k("issues.labels.priorityPrefix", ScopeProject, "p", false, TypeString, "Prefix of priority labels."),
-	k("issues.labels.sizePrefix", ScopeProject, "size:", false, TypeString, "Prefix of feature size labels, such as size:Major."),
+	k("issues.labels.inProgress", ScopeProject, labels.InProgress, false, TypeString, "Tracker label for an item a worker holds."),
+	k("issues.labels.needsReview", ScopeProject, labels.NeedsReview, false, TypeString, "Tracker label for an item whose work awaits review."),
+	k("issues.labels.changesRequested", ScopeProject, labels.ChangesRequested, false, TypeString, "Tracker label for an item sent back with review feedback."),
+	k("issues.labels.released", ScopeProject, labels.Released, false, TypeString, "Tracker label for an item that shipped in a release."),
+	k("issues.labels.notPlanned", ScopeProject, labels.NotPlanned, false, TypeString, "Tracker label for an item closed as not planned."),
+	k("issues.labels.blocked", ScopeProject, labels.Blocked, false, TypeString, "Label rota item complete --reason blocked sets; the issue stays open."),
+	k("issues.labels.milestoneTracker", ScopeProject, labels.MilestoneTracker, false, TypeString, "Tracker label for a milestone's tracking issue."),
+	k("issues.labels.types.bug", ScopeProject, labels.TypeBug, false, TypeString, "Tracker label for the bug item type."),
+	k("issues.labels.types.feature", ScopeProject, labels.TypeFeature, false, TypeString, "Tracker label for the feature item type."),
+	k("issues.labels.types.task", ScopeProject, labels.TypeTask, false, TypeString, "Tracker label for the task item type."),
+	k("issues.labels.priorityPrefix", ScopeProject, labels.PriorityPrefix, false, TypeString, "Prefix of priority labels."),
+	k("issues.labels.sizePrefix", ScopeProject, labels.SizePrefix, false, TypeString, "Prefix of feature size labels, such as size:Major."),
 	k("issues.autoCreateLabel", ScopeProject, true, false, TypeBool, "Create a tracker label the first time something asks for it. When off, adding a missing label fails."),
 	k("issues.homeRepo", ScopeProject, "", false, TypeString, "Umbrella mode with the issues backend only: the registered sub-repo that holds milestone tracking issues. Empty means the first registered sub-repo."),
 	k("release.checklistPath", ScopeProject, ".rota/RELEASE.md", false, TypePath, "Project's release checklist, whose open items /rota-release walks before it tags."),
@@ -212,10 +213,11 @@ var Keys = []Key{
 	k("issues.source", ScopeProject, "file", false, TypeEnum, "Where issues live: BACKLOG.md in the repo (file), or a tracker. github and gitlab must match the forge. forge means each repo's own forge, for an umbrella whose sub-repos sit on different hosts. jira reads issues.connection and issues.jira.project; linear reads issues.connection and issues.linear.team; itsaplan reads issues.connection and issues.itsaplan.project. Switch with rota migrate issues.", "file", "github", "gitlab", "forge", "jira", "linear", "itsaplan"),
 	k("forge.provider", ScopeProject, "auto", false, TypeEnum, "Where code lands: pull requests, checks and releases. auto reads the origin remote and is local with no remote; local means direct merge, no PR. Set it by hand only when detection misses (self-hosted GitLab without gitlab in the host, SSH host aliases, mirrors).", "auto", "github", "gitlab", "local"),
 	// 5.0 keys: not in CONFIG_KEYS.
+	k(labels.ExtraKey, ScopeProject, jsonx.NewObject(), false, TypeObject, "Project tracker labels as name to description. Label sync treats these as known; registry labels retain their own metadata."),
 	k("ship.mergeApproval", ScopeProject, "none", false, TypeEnum, "Which merges need a human: none, all, or only those touching ship.mergeApprovalPaths. The merge verbs enforce it at every autonomy level.", "none", "all", "paths"),
 	k("ship.mergeApprovalPaths", ScopeProject, []any{}, false, TypeList, "Repo-relative paths or globs that need human approval when ship.mergeApproval is paths."),
 	k("review.fileDeferred", ScopeTaste, "major", false, TypeEnum, "Which deferred review findings rota verdict add --file-deferred files, as one follow-up item per PR. minor: minor and major. major: only major (minor stays in the verdict record). off: none. A PR that closes a deferred-findings item files none.", "minor", "major", "off"),
-	k("review.crossLabels", ScopeProject, []any{"size:Major", "risk:high"}, false, TypeList, "Issue labels that make a PR need a cross-harness review: one read-only review on a harness other than the author's, recorded as a review-cross verdict the merge gate requires. Applies only when round.harnesses is set. A review:<harness> label (claude or codex) picks the reviewer, review:none skips it. Empty: no PR needs one."),
+	k("review.crossLabels", ScopeProject, []any{labels.SizePrefix + "Major", labels.RiskHigh}, false, TypeList, "Issue labels that make a PR need a cross-harness review: one read-only review on a harness other than the author's, recorded as a review-cross verdict the merge gate requires. Applies only when round.harnesses is set. A review:<harness> label (claude or codex) picks the reviewer, review:none skips it. Empty: no PR needs one."),
 	k(LensesKey, ScopeProject, jsonx.NewObject(), false, TypeObject, "Review lenses: per lens (security, perf, ux), the path globs and issue labels that make /rota-review run one focused reviewer on that axis, as {\"security\": {\"paths\": [\"internal/git/**\"], \"labels\": [\"risk:security\"]}}. Globs allow * within a segment and a trailing /** for a directory. The merge gate requires a review-<lens> verdict at head for each triggered lens. An unknown lens or a malformed glob is an error. Empty: no lens triggers."),
 	k(RoundScopeKey, ScopeProject, ScopeMilestone, false, TypeEnum, "Rounds: Which issues a round may take. slate: only those named at rota round start --items. milestone: the active milestones. next: also the next ready milestone. open: every open item no slot holds.", ScopeMilestone, ScopeSlate, ScopeNext, ScopeOpen),
 	k(RoundRosterKey, ScopeProject, []any{"ben", "dana", "nia", "kit"}, false, TypeList, "Rounds: Agent names slots are provisioned under, one slot each. Lowercase letters, digits and -, no duplicates."),
@@ -264,7 +266,7 @@ var Keys = []Key{
 	k(RoundBatchKey, ScopeProject, num("0"), false, TypeInt, "Rounds: Most items a round may have assigned and not yet landed or parked at once. rota round assign refuses the next one past it and rota round tick assigns none. 0 means no limit."),
 	k(RoundBundleMaxKey, ScopeProject, num("3"), false, TypeInt, "Rounds: Most member issues rota round assign --bundle may hand one slot beside the lead issue. It refuses a bundle past it. 0 means no limit."),
 	k(RoundReviewLoopKey, ScopeTaste, "manual", false, TypeEnum, "Rounds: What happens when a reviewer comments on a finished worker's PR. manual reports it and leaves rota round review-relay to the orchestrator; auto relays it to the worker as a counted bounce (round.maxBounces) from rota round watch and rota round tick.", "manual", "auto"),
-	k("issues.labels.needsHuman", ScopeProject, "needs-human", false, TypeString, "Label rota round transfer --to human puts on an issue handed to the human. rota round candidates skips an issue that carries it."),
+	k("issues.labels.needsHuman", ScopeProject, labels.NeedsHuman, false, TypeString, "Label rota round transfer --to human puts on an issue handed to the human. rota round candidates skips an issue that carries it."),
 	k(RoundEnvSetupKey, ScopeProject, "", false, TypeString, "Rounds: Shell command rota worker pool init runs in each new slot worktree, for example npm ci. Empty: no setup."),
 	k(RoundSharedDirsKey, ScopeProject, []any{}, false, TypeList, "Rounds: Dependency directories, relative to the repo root, that rota symlinks from the main checkout into each slot worktree, for example node_modules or .venv. rota worker pool init links them and rota round assign re-links them on a parked slot. When the slot's lockfile differs from main's, or a directory is missing in main, no directory is linked and round.envSetup installs the slot's own. List the directories in .gitignore. Empty: no sharing."),
 	k(RoundPortBaseKey, ScopeMachine, num("20000"), false, TypeInt, "Rounds: First port of the range rota hands out to worker slots. A new slot takes the lowest range of portBlock ports from here that no other slot holds, exported as ROTA_PORT_BASE; a slot keeps its range until it is reaped or reclaimed."),

@@ -124,6 +124,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	}
 	in.Slots, in.CwdOf = doctorSlotBlocks(root), procCwd(ctx, d.Proc)
 	in.StaleClaims, in.StaleClaimWarnings = doctorStaleClaims(ctx, d, root)
+	in.Labels = doctorLabelInput(ctx, d, root)
 	in.NothingToVerify = d.workerEnv().NothingToVerify(root)
 	if slots, err := d.workerEnv().GateConfig(root).TestSlots(); err == nil {
 		in.TestSlots = slots

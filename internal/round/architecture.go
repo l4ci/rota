@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/strutil"
 	"slices"
 	"strconv"
@@ -26,7 +27,7 @@ import (
 
 // RefactorLabel marks refactor findings and review items; they do not count
 // toward the next review.
-const RefactorLabel = "refactor"
+const RefactorLabel = labels.Refactor
 
 // ReviewPrefix opens the title of a review item or a refactor finding
 // (`arch(<area>): …`). ReviewSuffix ends a review item's title only.

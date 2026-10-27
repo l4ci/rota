@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/overlap"
@@ -135,7 +136,7 @@ const AttemptTrailer = "Rota-Attempt"
 
 // PartialSliceLabel marks an issue whose PR lands only a slice of it, so the PR
 // body must not close it.
-const PartialSliceLabel = "partial-slice"
+const PartialSliceLabel = labels.PartialSlice
 
 // noVerifyRefusal is the message and hint of the refusal for an empty
 // test.full under a local verify, shared by the gate and the train.

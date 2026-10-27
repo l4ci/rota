@@ -6,6 +6,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -96,7 +97,7 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 		// A model asked for by name must reach the launch line; the tier map's
 		// is a default and only warns.
 		if in.FlagModel != "" || out.Pick.Model != "" {
-			src := "model:" + out.Pick.Model + " label"
+			src := labels.ModelPrefix + out.Pick.Model + " label"
 			if in.FlagModel != "" {
 				src = "--model " + in.FlagModel
 			}

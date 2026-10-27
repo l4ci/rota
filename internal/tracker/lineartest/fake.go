@@ -39,7 +39,7 @@ type state struct {
 	pos           int
 }
 
-type label struct{ id, name, team string } // team "" is a workspace label
+type label struct{ id, name, team, description, color string } // team "" is a workspace label
 
 type attachment struct {
 	id, url  string
@@ -185,7 +185,7 @@ func (s *Server) Requests() []string {
 func (s *Server) AddLabel(name, team string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	l := &label{s.uid("lbl"), name, team}
+	l := &label{id: s.uid("lbl"), name: name, team: team}
 	s.labels = append(s.labels, l)
 	return l.id
 }
@@ -404,7 +404,7 @@ func reply(w http.ResponseWriter, status int, v any) {
 }
 
 // kinds says whether each operation is a query or a mutation.
-var kinds = map[string]string{"Viewer": "query", "Team": "query", "Labels": "query", "LabelCreate": "mutation", "Issue": "query",
+var kinds = map[string]string{"Viewer": "query", "Team": "query", "Labels": "query", "LabelCreate": "mutation", "LabelUpdate": "mutation", "Issue": "query",
 	"Attachments": "query", "Comments": "query", "Issues": "query", "IssueCreate": "mutation", "IssueUpdate": "mutation",
 	"IssueDelete": "mutation", "CommentCreate": "mutation", "CommentUpdate": "mutation", "CommentDelete": "mutation",
 	"CommentURL": "query", "AttachmentCreate": "mutation", "AttachmentDelete": "mutation"}
@@ -417,10 +417,10 @@ var schemaNames = map[string]bool{}
 
 func init() {
 	for _, n := range strings.Fields(`query mutation String Boolean IssueFilter
-		IssueCreateInput IssueUpdateInput IssueLabelCreateInput CommentCreateInput CommentUpdateInput AttachmentCreateInput
+		IssueCreateInput IssueUpdateInput IssueLabelCreateInput IssueLabelUpdateInput CommentCreateInput CommentUpdateInput AttachmentCreateInput
 		viewer teams issueLabels issue issues comment
-		issueCreate issueUpdate issueDelete issueLabelCreate commentCreate commentUpdate commentDelete attachmentCreate attachmentDelete
-		id name displayName key states type position team identifier title description url completedAt canceledAt
+		issueCreate issueUpdate issueDelete issueLabelCreate issueLabelUpdate commentCreate commentUpdate commentDelete attachmentCreate attachmentDelete
+		id name displayName key states type position team identifier title description color url completedAt canceledAt
 		state labels assignee creator attachments metadata comments body createdAt user
 		success issueLabel nodes pageInfo hasNextPage endCursor
 		filter first after input eq`) {
@@ -527,7 +527,7 @@ func (s *Server) dispatch(op string, v obj) (any, *fault) {
 			if l.team != "" {
 				team = obj{"id": "team-" + strings.ToLower(l.team)}
 			}
-			nodes = append(nodes, obj{"id": l.id, "name": l.name, "team": team})
+			nodes = append(nodes, obj{"id": l.id, "name": l.name, "description": l.description, "color": l.color, "team": team})
 		}
 		return obj{"issueLabels": obj{"nodes": nodes, "pageInfo": info}}, nil
 	case "LabelCreate":
@@ -540,9 +540,21 @@ func (s *Server) dispatch(op string, v obj) (any, *fault) {
 				return nil, invalid("Duplicate label name %q", name)
 			}
 		}
-		l := &label{s.uid("lbl"), name, s.o.Team}
+		l := &label{id: s.uid("lbl"), name: name, team: s.o.Team, description: str(in["description"]), color: str(in["color"])}
 		s.labels = append(s.labels, l)
-		return obj{"issueLabelCreate": obj{"success": true, "issueLabel": obj{"id": l.id, "name": l.name, "team": obj{"id": s.teamID()}}}}, nil
+		return obj{"issueLabelCreate": obj{"success": true, "issueLabel": obj{"id": l.id, "name": l.name, "description": l.description, "color": l.color, "team": obj{"id": s.teamID()}}}}, nil
+	case "LabelUpdate":
+		l := s.label(str(v["id"]))
+		if l == nil {
+			return nil, missing("IssueLabel", nil)
+		}
+		for k := range in {
+			if k != "description" && k != "color" {
+				return nil, invalid("unsupported label update field %s", k)
+			}
+		}
+		l.description, l.color = str(in["description"]), str(in["color"])
+		return obj{"issueLabelUpdate": obj{"success": true}}, nil
 	case "Issue":
 		i := s.find(str(v["id"]))
 		if i == nil {

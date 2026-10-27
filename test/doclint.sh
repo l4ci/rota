@@ -247,4 +247,15 @@ printf 'hand edit\n' >> "$TMP/config-options.edited"
 if diff -q "$TMP/config-options.edited" "$GEN" >/dev/null; then fail "the config page drift check cannot fail"; fi
 pass "docs/reference/config-options.md matches what the config schema generates"
 
+# ── the tracker-label reference is generated from the registry (#2136) ─────
+GEN="$TMP/labels.md"
+(cd "$REPO" && go run ./internal/labels/genref "$GEN") || fail "go run ./internal/labels/genref failed"
+diff -u "$REPO/docs/reference/labels.md" "$GEN" >"$TMP/labels.diff" \
+  || fail "docs/reference/labels.md differs from the registry; run: go generate ./internal/labels
+$(head -20 "$TMP/labels.diff")"
+cp "$GEN" "$TMP/labels.edited"
+printf 'hand edit\n' >> "$TMP/labels.edited"
+if diff -q "$TMP/labels.edited" "$GEN" >/dev/null; then fail "the labels page drift check cannot fail"; fi
+pass "docs/reference/labels.md matches the tracker-label registry"
+
 echo "All doclint checks passed."
