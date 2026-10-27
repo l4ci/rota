@@ -27,6 +27,8 @@ After confirmation, the skill saves the approved body to a temporary file and ru
 
 To correct a part of an active entry, use `rota decisions amend --topic "<topic>" --title "<title>" --part rule|why|forbids|permits --body-file <file>`. Supply only the replacement part's text, without its marker; other parts and entries stay unchanged. See [decisions verbs](../reference/cli-helpers.md#rota-decisions) for the command reference.
 
+Successful decisions writes also refresh backticked `/hv-*` skill names to `/rota-*` in the header above the first topic. Entry bodies keep their historical names. To repair only a stale header, pass an existing part unchanged through `rota decisions amend`; no new decision is needed. `rota migrate hv` leaves skill names in prose for manual review.
+
 `rota decisions check` validates every entry, including history. A missing or out-of-order part, malformed status line or unclosed code fence fails; a missing date stamp only warns. Older entries may place their trailing status, paths and date fields in any order. New entries use the canonical order, while amendments preserve existing metadata. Status and heading examples inside backtick or tilde fences stay literal in readers and the index. The project's doclint runs this check as part of the gate. `rota doctor` reports malformed entries as a warning with repair instructions; missing dates appear only in its detail.
 
 ### Repairing malformed entries
