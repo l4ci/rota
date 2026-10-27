@@ -245,6 +245,51 @@ Affects `/rota-work` and other solo sessions. `warn` (default), `auto` or `off`.
 rota config set work.contextGuard auto
 ```
 
+## Checking whether tests depend on a change
+
+`test.vacuousCheck` defaults to `false`. Set it to `true` to make `rota worker gate`
+and `rota worker train` check whether added or changed tests fail without their
+non-test changes. The settings come from the base checkout, so a PR cannot disable
+its own check.
+
+```sh
+rota config set test.vacuousCheck true
+```
+
+`test.filePattern` is a regular expression over repository-relative paths. Its
+Go default, `_test\.go$`, selects Go test files. `test.vacuousCommand` defaults to
+`go test -count=1 {packages} -run {tests}`: it runs test, example and fuzz entry
+points in the changed test files, including their subtests, with caching disabled.
+`{packages}` expands to those files' Go packages and `{tests}` to an anchored
+expression of their entry-point names. `{files}` expands to the changed test paths.
+Every expansion is shell-quoted; leave the placeholders unquoted in the template.
+The command must prepare any dependencies needed in a fresh checkout and disable
+its test cache.
+For Python, for example:
+
+```sh
+rota config set test.filePattern '(^|/)(test_[^/]+|[^/]+_test)\.py$'
+rota config set test.vacuousCommand 'python -m pytest {files}'
+```
+
+After normal verification passes, the check makes a disposable worktree of the
+merge. The selected command must pass there. It then restores the merge's changed
+non-test files from the preceding base, keeping the test changes, and runs the
+same command again. If it still passes, the gate refuses with exit 4 and
+`blockedBy: vacuous-tests`, naming the test files. A nonzero test exit passes this
+check; this establishes dependence on the change, not assertion quality. A
+cancelled run or a command that cannot execute is `check-broke`.
+
+With this opt-in policy, tests-only PRs also need a failing counterfactual run.
+A PR with no surviving added or changed test files, only docs or skills, or no
+runnable Go entry points gets a `VACUOUS-SKIP` note. Tests that already fail on the
+merge are `verify-failed`. The train checks each member against its preceding
+merged prefix, so an earlier member's code stays present.
+A failing member refuses the whole train, including with `--land-green`; the
+full-tier cache never substitutes for this check. The check runs locally even
+with `test.fullWhere: ci`. Gate `--check-only`, `--no-verify`, and a train's landing
+gates do not run it; train `--plan` also skips it.
+
 ## test.fast, test.full, test.e2e
 
 Three tiers of shell commands, each an array defaulting to `[]`:
