@@ -1,0 +1,20 @@
+
+• Running true
+
+
+  Would you like to run the following command?
+
+  Environment: local
+
+  Reason: Capture the approval dialog for the rota
+  regression.
+
+  $ true
+
+
+› 1. Yes, proceed (y)
+  2. Yes, and don't ask again for commands that start
+     with `true` (p)
+  3. No, and tell Codex what to do differently (esc)
+
+  Press enter to confirm or esc to cancel

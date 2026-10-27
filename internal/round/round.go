@@ -25,6 +25,7 @@ import (
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/limits"
@@ -95,6 +96,9 @@ type Env struct {
 	// Snapshot lists the host's live agents; HostName is "herdr" or "tmux", or
 	// "solo" with no Snapshot when the round has no terminal host.
 	Snapshot func(ctx context.Context) ([]host.Agent, error)
+	// Capture reads a pane when the harness can distinguish an internal tool
+	// wait from the host's blocked status. Nil leaves the snapshot unchanged.
+	Capture func(ctx context.Context, slot, handle string, lines int) string
 	// FollowTab renames a slot's agent for the tab its pane moved to; nil
 	// where the host has no such name (tmux).
 	FollowTab func(ctx context.Context, slot, from, to string) error
@@ -513,6 +517,15 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			claimed[i] = true
 			alive[r.Name] = true
 			r.Agent, r.HostState = agents[i].Name, agents[i].Status
+			// An internal tool wait can look blocked to the host. Only
+			// harnesses with that vocabulary need a pane read; ordinary
+			// snapshots and other harnesses keep their existing state.
+			if r.HostState == "blocked" && e.Capture != nil && len(harness.Resolve(r.Kind).PaneVocab().Waiting) > 0 {
+				pane := e.Capture(ctx, r.Name, agents[i].Handle(), 60)
+				if st, ev := worker.ClassifyFor(r.Kind, pane, false, 60, r.HostState); st == worker.StateBusy {
+					r.HostState, r.Evidence = "working", ev
+				}
+			}
 			if r.Tab == "" {
 				r.Tab = agents[i].Tab
 			} else if cur := agents[i].Handle(); cur != "" && cur != r.Tab && agents[i].Name == host.AgentName(r.Name, r.Tab) && r.Registered {

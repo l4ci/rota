@@ -44,7 +44,8 @@ import (
 //
 // herdr adds a native agent state, read before the pane text: working is
 // BUSY; blocked is NEEDS-PERMISSION (a dialog is up) unless the pane carries
-// a ROTA-BLOCKED sentinel; idle/done fall to the text rules; unknown falls to
+// a ROTA-BLOCKED sentinel or the harness's internal tool-wait status;
+// idle/done fall to the text rules; unknown falls to
 // the text rules and ends UNKNOWN (with a short `herdr agent explain` excerpt in its evidence), which is surfaced and never treated as
 // finished; gone (no agent) is DEAD. Sentinels, `Retrying in` and LIMITED
 // still outrank the native state, the same as they outrank movement.
@@ -392,10 +393,10 @@ func StripRelays(kind, text string) string {
 
 // paneRules are a kind's PaneVocab compiled.
 type paneRules struct {
-	retry, busy, background, limits []*regexp.Regexp
-	authDead, badModel              *regexp.Regexp
-	loggedOut                       *regexp.Regexp
-	gutter                          bool
+	retry, busy, waiting, background, limits []*regexp.Regexp
+	authDead, badModel                       *regexp.Regexp
+	loggedOut                                *regexp.Regexp
+	gutter                                   bool
 }
 
 var (
@@ -415,6 +416,7 @@ func paneRulesFor(kind string) *paneRules {
 	if h, ok := harness.Lookup(kind); ok && kind != "" {
 		v := h.PaneVocab()
 		r.retry, r.busy = compileAll(`(?i)`, v.Retry), compileAll(`(?i)`, v.Busy)
+		r.waiting = compileAll(`(?i)`, v.Waiting)
 		r.background = compileAll(`(?i)`, v.Background)
 		r.limits = compileAll(`(?i)`, v.Limits)
 		if v.AuthDead != "" {
@@ -533,7 +535,8 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	if moved {
 		return StateBusy, "pane changed between captures"
 	}
-	if native == "blocked" {
+	waiting := anyMatch(rules.waiting, own)
+	if native == "blocked" && !waiting {
 		return StateNeedsPermission, "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen round.commands.claude"
 	}
 	if native == "gone" {
@@ -550,6 +553,9 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 		if re.MatchString(tail) {
 			return StateNeedsPermission, "stopped at a permission prompt — approve in the pane, or widen round.commands.claude"
 		}
+	}
+	if waiting {
+		return StateBusy, "pane shows an internal tool wait"
 	}
 	if native == "unknown" {
 		return StateUnknown, "herdr cannot classify the agent — inspect the tab; not proof it finished"
