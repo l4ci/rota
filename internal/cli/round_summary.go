@@ -21,28 +21,21 @@ func roundSummaryVerb(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		entries, sourceErr := ledger.LoadForSummary(root)
+		source := ledger.LoadForSummary(root)
 		n := *want
 		if n < 0 {
-			n = currentRound(c, root, entries)
+			n = currentRound(c, root, source.Entries, source.HighestRound())
 		}
-		known := false
-		for _, e := range entries {
-			known = known || e.Round == n
-		}
-		if !known && *want >= 0 && len(entries) > 0 && sourceErr == nil {
+		if !source.HasRound(n) && *want >= 0 {
 			return Result{}, Resolution("round %d has no ledger entries", n)
 		}
 		audit, err := gate.ReadAudit(root)
 		if err != nil {
 			return Result{}, err
 		}
-		s := ledger.Fold(entries, audit, n)
-		if sourceErr != nil {
-			s.UnavailableMetrics(sourceErr.Error())
-		}
+		s := source.Fold(audit, n)
 		text := s.Text()
-		if len(entries) == 0 && (sourceErr == nil || !ledger.Exists(root)) {
+		if !ledger.Exists(root) {
 			text = "no ledger yet: it fills as rounds assign, report and gate\n" + text
 		}
 		return Result{Data: s.Object(), Text: text}, nil

@@ -6,11 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 )
 
 func TestRoundSummaryUnavailableSources(t *testing.T) {
-	for _, kind := range []string{"missing", "unreadable", "malformed", "invalid timestamp"} {
+	for _, kind := range []string{"missing", "unreadable", "invalid timestamp"} {
 		t.Run(kind, func(t *testing.T) {
 			deps := testDeps()
 			dir := workerProject(t, `{}`)
@@ -46,17 +47,92 @@ func TestRoundSummaryUnavailableSources(t *testing.T) {
 				if !strings.Contains(reason, "ledger") {
 					t.Errorf("%s needs its source-error reason, got %v", name, m)
 				}
-				for _, key := range []string{"value", "numerator", "denominator", "medianSeconds", "p90Seconds"} {
+				for _, key := range []string{"value", "numerator", "denominator", "medianSeconds", "p90Seconds", "samples"} {
 					if m[key] != nil {
 						t.Errorf("%s.%s = %v, want null for unavailable source", name, key, m[key])
 					}
 				}
 			}
 			code, out, _ = rotaInWith(t, deps, dir, "round", "summary")
-			if code != 0 || !strings.Contains(out, "unavailable (ledger") || !strings.Contains(out, "rule:") {
+			if code != 0 || !strings.Contains(out, "unavailable (") || !strings.Contains(out, "rule:") {
 				t.Errorf("text must name unavailable source and counting rules: exit %d, %s", code, out)
 			}
+			if kind == "missing" && (!strings.Contains(out, "unavailable (no ledger)") || strings.Contains(out, dir)) {
+				t.Errorf("missing source needs a stable reason without an absolute path: %s", out)
+			}
 		})
+	}
+}
+
+func TestRoundSummaryCorruptionIsScoped(t *testing.T) {
+	for _, tc := range []struct {
+		name, line string
+		available  bool
+	}{
+		{"unidentifiable torn line", "{torn\n", true},
+		{"other round invalid event", `{"round":1,"kind":"bounce","ts":"wrong"}` + "\n", true},
+		{"own round invalid event", `{"round":2,"kind":"bounce","ts":"wrong"}` + "\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := workerProject(t, `{}`)
+			seedLedger(t, dir)
+			b, err := os.ReadFile(ledger.Path(dir))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(ledger.Path(dir), append(b, tc.line...), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			deps := testDeps()
+			code, out, _ := rotaInWith(t, deps, dir, "round", "summary", "--round", "2", "--json")
+			if code != 0 {
+				t.Fatalf("exit %d: %s", code, out)
+			}
+			d := data(t, out)
+			if d["skippedLedgerLines"] != float64(1) {
+				t.Errorf("skipped line count = %v, want 1", d["skippedLedgerLines"])
+			}
+			m := d["metrics"].(map[string]any)["assignToMerged"].(map[string]any)
+			var want any
+			if tc.available {
+				want = float64(1260)
+			}
+			if m["medianSeconds"] != want {
+				t.Errorf("median = %v, want %v; corruption must stay within its identified round", m, want)
+			}
+			if !tc.available && m["samples"] != nil {
+				t.Errorf("unavailable samples = %v, want null", m["samples"])
+			}
+			if code, out, _ := rotaInWith(t, deps, dir, "round", "summary", "--round", "9"); code != 3 {
+				t.Errorf("unknown round with corrupt source: exit %d, want 3: %s", code, out)
+			}
+			obj, _, ok := windDownSummary(dir, 2)
+			if !ok {
+				t.Fatal("wind-down lost the readable summary")
+			}
+			v, _ := obj.Get("metrics")
+			v, _ = v.(*jsonx.Object).Get("assignToMerged")
+			metric := v.(*jsonx.Object)
+			v, _ = metric.Get("medianSeconds")
+			if (v != nil) != tc.available {
+				t.Errorf("wind-down availability differs from summary: %v", v)
+			}
+		})
+	}
+}
+
+func TestRoundSummaryIdentifiesDamagedRound(t *testing.T) {
+	dir := workerProject(t, `{}`)
+	if err := os.WriteFile(ledger.Path(dir), []byte(`{"round":4,"kind":"merge","ts":"wrong"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, out, _ := rotaInWith(t, testDeps(), dir, "round", "summary", "--json")
+	if code != 0 || data(t, out)["round"] != float64(4) {
+		t.Fatalf("default must select the highest identifiable round: exit %d: %s", code, out)
+	}
+	obj, text, ok := windDownSummary(dir, 4)
+	if !ok || obj == nil || !strings.Contains(text, "unavailable (ledger has unreadable events for round 4)") {
+		t.Errorf("wind-down must report the identified damaged round: %s", text)
 	}
 }
 
@@ -84,7 +160,7 @@ func TestRoundSummaryText(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
-	for _, want := range []string{"Round 2", "quota share", "QUOTA SHARE", "25%", "ben", "work", "Gate audit"} {
+	for _, want := range []string{"Round 2", "quota share", "QUOTA SHARE", "25%", "ben", "work", "Gate audit", "median 21m00s, p90 21m00s (1 PR)", "median 1m00s, p90 1m00s (1 PR)"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
@@ -111,6 +187,9 @@ func TestRoundSummaryJSON(t *testing.T) {
 	row := issues[0].(map[string]any)
 	if row["quotaShare"] != float64(25) || row["merged"] != true || row["gate"] != "pass" {
 		t.Errorf("row = %v", row)
+	}
+	if _, exists := d["metrics"].(map[string]any)["flakeRate"]; exists {
+		t.Error("flake metric belongs to #2171 and must be absent")
 	}
 }
 

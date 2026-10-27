@@ -932,8 +932,9 @@ bounce is not counted as idle time.
 
 The summary also prints round metrics, with a counting rule on each line:
 
-- **Lead time assign→merged and done→merged:** seconds for each distinct merged PR's
-  winning assignment, using its first assign and latest done report. Open PRs are excluded.
+- **Lead time assign→merged and done→merged:** each distinct merged PR's winning
+  assignment, using its first assign, latest done report and first merge observation.
+  Text prints durations; JSON gives whole seconds. Open PRs are excluded.
   The median averages the middle pair for an even sample; p90 uses nearest rank
   (`ceil(0.9 × samples)`). Missing or invalid timestamps make that metric unavailable.
 - **Red-train rate:** non-pass train outcomes divided by recorded train outcomes. One
@@ -942,14 +943,20 @@ The summary also prints round metrics, with a counting rule on each line:
   rounds without train outcomes show unavailable.
 - **Bounces per merged PR:** all bounce events in the round divided by its distinct
   merged PRs, including bounces on work that did not land.
-- **Flake count/rate:** unavailable until a flake ledger records confirmed flakes and
-  verified runs. A transient train-cache note alone does not establish a flake rate.
 
 Missing or unreadable sources print `unavailable (<reason>)`, never a measured zero.
 JSON puts these under `metrics`: `assignToMerged`, `doneToMerged`, `redTrainRate`,
-`bouncesPerMergedPR` and `flakeRate`. Each carries `rule` and `unavailable` (null when
+`bouncesPerMergedPR`. Each carries `rule` and `unavailable` (null when
 available); lead times carry `samples`, `medianSeconds` and `p90Seconds`, while ratios
-carry `numerator`, `denominator` and `value`. Unavailable numeric values are null.
+carry `numerator`, `denominator` and `value`. Unavailable numeric values, including
+`samples` counts, are null.
+
+Unreadable ledger lines are skipped and counted in `skippedLedgerLines` (across the
+file). If a damaged event has a readable round number, only that round's metrics
+become unavailable. A torn line whose round cannot be identified does not invalidate
+other readable events. An explicitly requested round with no identifiable events
+still exits 3. Existing issue-row `mergedAt` and fallback `wallSeconds` retain the
+last merge observation; only the new lead-time metrics use the first.
 
 ```sh
 rota round summary              # the current round, else the highest in the ledger
