@@ -25,7 +25,7 @@ type ReportOpts struct {
 	Slot, State, Evidence, PR string
 	// Attempt is the attempt id the worker was briefed with, "" for none.
 	Attempt string
-	// Issues is a review item's done evidence in place of a PR: `#139,#140`.
+	// Issues is a review item's done evidence in place of a PR: `#139,#140` or `none`.
 	Issues string
 	// Event is the worker event kind this report records (worker.EventBlocked
 	// and the others), "" for a plain `round report`. An event is the worker's
@@ -36,6 +36,7 @@ type ReportOpts struct {
 
 // Reported is what ReportSlot did. Evidence is echoed, never stored.
 type Reported struct {
+	NoFindings                          bool
 	Slot, State, Previous, PR, Evidence string
 	Issues                              []string
 	Changed                             bool
@@ -68,15 +69,17 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 		return res, usage("--pr must be a PR or MR URL or a number, got %q", o.PR)
 	}
 	res.PR = pr
+	var result worker.ReviewResult
 	if iss := strings.TrimSpace(o.Issues); iss != "" {
 		if pr != "" {
 			return res, usage("--issues and --pr are exclusive: a review item reports issues, any other item a PR")
 		}
-		refs, ok := worker.ParseIssuesDone("issues:" + iss)
-		if !ok {
-			return res, usage("--issues must be issue numbers or keys like #139,PROJ-140, got %q", o.Issues)
+		result = worker.ParseReviewResult("issues:" + iss)
+		if !result.Complete() {
+			return res, usage("--issues must be issue numbers or keys like #139,PROJ-140, or none for no findings, got %q", o.Issues)
 		}
-		res.Issues = refs
+		res.Issues = result.Issues()
+		res.NoFindings = result.NoFindings()
 	}
 	switch h := worker.RegistryHost(root); {
 	case worker.IsSoloHost(h) || o.Event != "":
@@ -136,8 +139,8 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 			s.SetPR(pr)
 			res.Changed = true
 		}
-		if len(res.Issues) > 0 && strings.Join(s.Issues(), ",") != strings.Join(res.Issues, ",") {
-			s.SetIssues(res.Issues)
+		if result.Complete() && !s.ReviewResult().Equal(result) {
+			s.SetReviewResult(result)
 			res.Changed = true
 		}
 	})

@@ -474,8 +474,8 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 	// A review item reports the issues it filed instead; `round assign` frees
 	// the slot on them and closes the item.
 	if r.State == StateDone {
-		if refs, ok := ParseIssuesDone(r.Evidence); ok {
-			s.SetIssues(refs)
+		if result := ParseReviewResult(r.Evidence); result.Complete() {
+			s.SetReviewResult(result)
 		}
 		if id, ok := ParseFindingDone(r.Evidence); ok {
 			s.SetFinding(id)
