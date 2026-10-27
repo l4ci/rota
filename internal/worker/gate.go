@@ -1643,7 +1643,7 @@ type gate struct {
 	// resolved is the target as GateTarget returned it. stepExternal rewrites
 	// target.Branch to the forge head; the ledger keeps the resolved one.
 	resolved    GateTarget
-	sectionBody *string // successful provenance read, reused by the section check
+	sectionBody *string // successful PR body read, reused by the section check
 
 	// viewed is the PR stepSlotHead read, for stepPRMatches to reuse once.
 	viewed   *tracker.PRInfo

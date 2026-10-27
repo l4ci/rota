@@ -3,6 +3,8 @@ package worker
 import (
 	"fmt"
 	"strings"
+
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 const (
@@ -38,7 +40,9 @@ func (g *gate) checkRequiredPRSections() (bool, error) {
 	if verdict == "" {
 		return false, nil
 	}
-	g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
+	if g.headRef != "" {
+		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
+	}
 	g.verdict(verdict, fmt.Sprintf("GATE %s refused — PR %s is missing %s; nothing landed", g.o.Slot, g.pr, heading),
 		fmt.Sprintf("add %s to the PR body (None is allowed), then retry", heading))
 	return true, nil
@@ -64,6 +68,65 @@ func (t *trainRun) excludePRSections(target string, gr GateResult) bool {
 	t.res.Culprits = append(t.res.Culprits, TrainCulprit{Target: target, PR: gr.PR, BlockedBy: gr.Verdict, Gate: gr})
 	t.res.Notes = append(t.res.Notes, fmt.Sprintf("TRAIN-SKIP %s (%s) — blockedBy: %s; %s", target, gr.PR, gr.Verdict, gr.Err))
 	return true
+}
+
+// filterPRSections reads every PR body before the ordinary member checks.
+// It does not fetch, merge, run provenance/review checks, or verify code.
+func (t *trainRun) filterPRSections(reg Registry, targets []string) ([]string, bool, error) {
+	var kept []string
+	for _, target := range targets {
+		gt, err := reg.GateTargetAny(target)
+		if err != nil {
+			return nil, true, err
+		}
+		gr, err := t.prSectionGate(target, gt)
+		t.res.Notes = appendNew(t.res.Notes, gr.Notes...)
+		if err != nil {
+			return nil, true, err
+		}
+		if t.excludePRSections(target, gr) {
+			continue
+		}
+		if !gr.OK() {
+			t.res.Verdict, t.res.Culprit, t.res.CulpritGate, t.res.Err, t.res.Hint = gr.Verdict, target, gr, gr.Err, gr.Hint
+			return nil, true, nil
+		}
+		kept = append(kept, target)
+	}
+	return kept, false, nil
+}
+
+func (t *trainRun) prSectionGate(target string, gt GateTarget) (GateResult, error) {
+	gr := GateResult{Slot: target, Base: t.o.Base, TargetSlot: gt.Name, Issue: gt.Issue}
+	g := &gate{e: t.e, ctx: t.ctx, root: t.root, res: &gr, in: t.in, target: gt, resolved: gt,
+		o: GateOpts{Slot: target, Base: t.o.Base, CheckOnly: true}, branch: gt.Branch, pr: gt.PR}
+	for _, step := range []gateStep{(*gate).stepForge, (*gate).stepAdoptPR, (*gate).stepRemote} {
+		if done, err := step(g); done || err != nil {
+			return gr, err
+		}
+	}
+	gr.Verdict = GateFresh
+	if !g.remote {
+		return gr, nil
+	}
+	info, err := g.prView()
+	if err != nil {
+		if tracker.IsCLIMissing(err) {
+			return gr, nil // the regular gate supplies its normal skip note
+		}
+		_, err = g.broke(fmt.Sprintf("could not read the body of %s to check required PR sections: %v", g.pr, err))
+		return gr, err
+	}
+	if info.State != "OPEN" {
+		return gr, nil // the ordinary gate handles closed or already merged PRs
+	}
+	gr.Branch, gr.SHA = info.Head, info.HeadSHA
+	if gt.External {
+		gr.Issue = HeldID(gt.Task, info.Head, gt.Name)
+	}
+	g.sectionBody = &info.Body
+	_, err = g.checkRequiredPRSections()
+	return gr, err
 }
 
 // Validate --order against the original membership, then remove only the
