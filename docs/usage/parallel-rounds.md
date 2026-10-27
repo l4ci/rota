@@ -1095,7 +1095,7 @@ parked anyway, so fix the slot and run it again. It deletes no branch and clears
 
 `rota round start` resolves the round's host once and records it in `.rota/workers.json`. With
 `round.dispatch` at `subagent` (the default) or unset it is herdr inside a herdr pane (`HERDR_ENV=1`), tmux
-inside tmux (`TMUX` set), and otherwise **solo**. An explicit `herdr` or `tmux` is used as
+inside tmux (`TMUX` set), and otherwise **solo**. An explicit `herdr`, `tmux` or `orca` is used as
 set and fails when unavailable; solo is never a fallback from it.
 
 Under solo, each worker is a Claude `Agent` subagent the orchestrator launches in the slot's
