@@ -596,6 +596,20 @@ recorded with `rota proof record <ID> -- rota test run fast`. A later commit mak
 the worker records again. With `test.fast` unset it warns and skips that check. The worker brief then tells the worker to run `rota test run full` and have it green first, and `rota round start` warns once that the proof rows will be missing (reviewers treat that as minor at most). On success the slot is
 marked `done`.
 
+Before reporting done, workers mark each verified `AC-n` on the lead and every open
+bundle member with `rota plan pass <ID> AC-n --proof '<sha>:<check>'` (use an issue key
+such as `#2150`). The sha and check must name a recorded PASS row from
+`rota proof show <ID>`; proof rows alone do not mark acceptance. A plain done or
+`--outcome done` refuses (exit 4) while explicit criteria are unmet, listing them and
+their marking commands. Changed criterion text or withdrawn proof makes a mark unmet
+again. Items without explicit `AC-n` ids keep their existing behavior.
+
+For an unmet criterion, leave it unmarked and report `--outcome partial --summary-file <f>`
+(or `failed` when nothing can be delivered). The file has three lines: what changed,
+what was found, and each unmet id with its reason. These outcomes preserve the merge
+gate's hold until the orchestrator handles the gap. File mode has no `plan pass`, so
+workers disclose explicit unmet criteria through that summary.
+
 `rota worker gate <slot> --base <branch>` is the one merge path in a round. It checks the branch is
 fresh, the PR is the worker's, provenance holds and the PR body closes the slot's issue
 (`Closes #N`, unless the issue is labelled `partial-slice`), then builds a scratch

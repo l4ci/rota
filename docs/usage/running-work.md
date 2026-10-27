@@ -112,6 +112,14 @@ After each task, `/rota-work` checks the diff against the brief, then writes pro
 
 ## Merge or PR
 
+On the issue backend, mark acceptance after recording PASS proof and before shipping:
+`rota plan pass '#2150' AC-1 --proof '<sha>:<check>'`. Use the sha and check from
+`rota proof show 2150`, and repeat for each verified criterion. Leave unmet criteria
+unmarked and state their ids and reasons. In a round, report them with
+`worker done --outcome partial --summary-file <f>` on the summary's third line;
+`--outcome done` refuses while explicit criteria remain unmet. Items without `AC-n`
+ids need no marks; file mode has no `plan pass`.
+
 After `/rota-work` finishes, `work.mergeStrategy` in `config.json` controls what happens next:
 
 | Strategy | Behavior |
