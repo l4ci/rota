@@ -7,6 +7,9 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 func TestAssignFeatureTemplate(t *testing.T) {
@@ -106,5 +109,27 @@ func TestAssessOldFileFeatureTemplate(t *testing.T) {
 	r, err = Assess(be, "F01", nil, nil, nil, false)
 	if err != nil || !r.Ready() {
 		t.Fatalf("old feature should be ready after headings added: %+v %v", r, err)
+	}
+}
+
+func TestCandidatesTemplateKeepsDecisionErrorsLocal(t *testing.T) {
+	root := newRepo(t, nil)
+	be := &fakeRemote{}
+	be.add("1", "Invalid decision feature", "", false, "")
+	be.items["1"].Type = "F"
+	be.items["1"].Labels = []string{"decision:unknown"}
+	be.add("2", "An ordinary task", "", false, "")
+	be.items["2"].Type = "T"
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig})}
+	cs, err := e.RoundCandidates(bg, root, be, roundcfg.Settings{Scope: roundcfg.ScopeOpen}, "")
+	if err != nil {
+		t.Fatalf("one invalid decision must not abort the candidate list: %v", err)
+	}
+	by := map[string]Candidate{}
+	for _, c := range cs {
+		by[c.ID] = c
+	}
+	if len(cs) != 2 || !strings.Contains(by["1"].PickErr, "decision unknown") || by["2"].ID != "2" || !by["2"].Ready() {
+		t.Fatalf("expected a local policy error and an unaffected ready task: %+v", cs)
 	}
 }

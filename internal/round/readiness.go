@@ -347,10 +347,10 @@ func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFli
 	r.Checks = append(r.Checks, ov)
 
 	template := Check{Name: CheckTemplate, OK: true, Detail: []string{}}
-	decision, err := DecisionOf(be.Capabilities(), *self)
-	if err != nil {
-		return r, err
-	}
+	// Invalid decision labels are diagnosed by the candidate/assignment policy
+	// path, rather than aborting the whole candidate list from this check.
+	// Only a recognized decision exempts the template.
+	decision, _ := DecisionOf(be.Capabilities(), *self)
 	if decision == "" {
 		if typ, ok := backlog.TypeByLetter(self.Type); ok {
 			for _, missing := range itembody.CheckTemplate(typ.Kind, self.Tag, body+"\n\n"+brief) {
