@@ -19,11 +19,13 @@ Capture work as issues. rota hands them to Claude Code, Codex or OpenCode, revie
 [![For Codex](https://img.shields.io/badge/for-Codex-000000)](https://developers.openai.com/codex)
 [![OpenCode workers](https://img.shields.io/badge/workers-OpenCode-555555)](docs/usage/opencode-workers.md)
 
-[Website](https://volkerotto.net/rota/) · [Quick start](#-quick-start) · [How it works](#-how-it-works) · [Skills](#-skills) · [Docs](docs/)
+[Website](https://volkerotto.net/rota/) · [Features](#-features) · [Quick start](#-quick-start) · [How it works](#-how-it-works) · [Skills](#-skills) · [Docs](docs/)
 
 </div>
 
 ---
+
+## ⚡ Features
 
 - [**Issues where you already keep them**](https://volkerotto.net/rota/docs/usage/issue-backend/): BACKLOG.md, GitHub, GitLab, Jira, Linear
 - [**Design before code**](https://volkerotto.net/rota/docs/usage/brainstorm/): brainstorm, plan, spike
