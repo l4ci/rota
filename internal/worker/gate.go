@@ -1950,7 +1950,7 @@ func (g *gate) ffFailureCause(mergeOut string) string {
 // milestone closes also release each successful issue's labels independently.
 func (g *gate) closeMerged(src tracker.ClosingSource) bool {
 	if id, ok := strings.CutPrefix(g.o.Base, "milestone/"); ok && id != "" && g.issues != nil {
-		return g.closeOnMilestone(src, "on-milestone/"+id)
+		return g.closeOnMilestone(src, labels.OnMilestonePrefix+id)
 	}
 	mc, ok := g.issues.(tracker.MergeCloser)
 	if !ok {

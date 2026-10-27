@@ -32,6 +32,7 @@ Colors are six-digit RGB: blue for milestones and sizes, purple for routing and 
 | `size:Major` | Feature implementation size. | `0052cc` | size | `issues.labels.sizePrefix` | item create; migrate | backlog; round tier; review depth | size change |
 | `size:Minor` | Feature implementation size. | `0052cc` | size | `issues.labels.sizePrefix` | item create; migrate | backlog; round tier; review depth | size change |
 | `size:Cosmetic` | Feature implementation size. | `0052cc` | size | `issues.labels.sizePrefix` | item create; migrate | backlog; round tier; review depth | size change |
+| `on-milestone/*` | Work merged into a milestone branch and awaiting release. | `0052cc` | milestone |  | merge gate | cross-milestone dependency checks; release | milestone release cleanup |
 | `claimed:*` | Worker and machine holding an open issue. | `1d76db` | claim |  | item claim | round claim arbitration; doctor | release, return or completed merge |
 | `harness:claude` | Harness selected for this issue. | `5319e7` | routing |  | maintainer; round assign | round worker selection | explicit routing change |
 | `harness:codex` | Harness selected for this issue. | `5319e7` | routing |  | maintainer; round assign | round worker selection | explicit routing change |

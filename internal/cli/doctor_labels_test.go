@@ -58,3 +58,24 @@ func TestDoctorLabelsReadOnlyBoundedAndUnreachable(t *testing.T) {
 		t.Fatalf("file labels = %+v", state)
 	}
 }
+
+func TestDoctorNameOnlyLabelsSkipDefinitionCheck(t *testing.T) {
+	for _, source := range []string{"jira", "itsaplan"} {
+		t.Run(source, func(t *testing.T) {
+			root := trackerProject(t, `{"issues":{"source":"`+source+`"}}`)
+			fake := syncFixture().labelSyncReader
+			fake.definitions = nil
+			state := doctorLabelInput(context.Background(), withTracker(t, fake), root)
+			report := doctor.Run(context.Background(), doctor.Input{Labels: state, Look: func(string) (string, bool) { return "", false }})
+			for _, check := range report.Checks {
+				if check.Name == "labels" {
+					if check.Status != doctor.Skip || !strings.Contains(check.Detail, "report-only") || check.Hint != "" {
+						t.Fatalf("unfixable name-only notice: %+v", check)
+					}
+					return
+				}
+			}
+			t.Fatal("no label check")
+		})
+	}
+}

@@ -19,6 +19,9 @@ func labelCheck(state LabelState) Check {
 	if state.Problem != "" {
 		return Check{Name: "labels", Status: Skip, Detail: "label registry scan unavailable: " + state.Problem}
 	}
+	if !state.Metadata {
+		return Check{Name: "labels", Status: Skip, Detail: "name-only tracker: registry definition checks are report-only; labels cannot be synchronized"}
+	}
 	var missing, undescribed []string
 	for _, change := range labels.Diff(state.Entries, state.Existing, state.Used, state.Metadata) {
 		switch change.Kind {
@@ -39,9 +42,6 @@ func labelCheck(state LabelState) Check {
 	}
 	if len(details) > 0 {
 		return Check{Name: "labels", Status: Warn, Detail: strings.Join(details, "; "), Hint: "run: rota labels sync"}
-	}
-	if !state.Metadata {
-		return Check{Name: "labels", Status: Pass, Detail: "registry label names are present"}
 	}
 	return Check{Name: "labels", Status: Pass, Detail: "registry labels are present and described"}
 }

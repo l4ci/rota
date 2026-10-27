@@ -20,7 +20,8 @@ func TestLabelRegistryNotice(t *testing.T) {
 		{"undescribed", []labels.Label{{Name: "required", Color: want.Color}}, true, "", Warn, "undescribed: required"},
 		{"current", []labels.Label{want}, true, "", Pass, "present"},
 		{"nonempty metadata", []labels.Label{{Name: "required", Description: "custom", Color: "ffffff"}}, true, "", Pass, "present"},
-		{"name only", []labels.Label{{Name: "required"}}, false, "", Pass, "present"},
+		{"name only", []labels.Label{{Name: "required"}}, false, "", Skip, "report-only"},
+		{"name only missing", nil, false, "", Skip, "report-only"},
 		{"unreachable", nil, true, "offline", Skip, "offline"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
