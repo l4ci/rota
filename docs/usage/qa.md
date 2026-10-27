@@ -41,6 +41,8 @@ Strategies are written once via `/rota-qa first-run`, which probes the repo for 
 
 A fourth shape, `INFRA-FAIL`, surfaces when required infra is missing (dev server down, binary not installed, creds absent). QA can't run; treat it as advisory, not as a quality signal.
 
+The recording verb posts a marked report on the PR and each linked item, or under `## Reports` in file-mode item details. The report names the checks and existing artifact paths supplied in the verdict body. Recording the same kind and sha updates that report. If posting is pending (for example, no PR exists yet), the local verdict is still saved; `rota ship pr` retries when it opens the PR, or use `rota verdict post <branch>` once the tracker recovers.
+
 ## Invocation
 
 Manual:

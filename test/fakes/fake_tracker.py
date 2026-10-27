@@ -529,6 +529,8 @@ def gh_api(db, args):
         nodes = [{"number": i} for i in db.get("closing_refs", {}).get(str(n), [])]
         return emit({"data": {"repository": {"pullRequest": {"closingIssuesReferences": {"nodes": nodes}}}}})
     method = (method or ("POST" if fields else "GET")).upper()
+    if path == "user" and method == "GET":
+        return emit({"login": USER})
     m = re.match(r"^repos/[^/]+/[^/]+/(.+)$", path)
     if not m:
         raise Fail("unsupported", 2)
