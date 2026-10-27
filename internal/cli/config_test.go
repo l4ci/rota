@@ -30,6 +30,42 @@ func TestConfigUpdateIsPinned(t *testing.T) {
 	}
 }
 
+func TestUpdateOnSupportMatchesMain(t *testing.T) {
+	deps := testDeps()
+	deps.UpdateEnv = func() update.Env {
+		return update.Env{ExeDir: "/opt/homebrew/bin", Current: "1.0.0",
+			Latest:           func() string { return "2.0.0" },
+			SkillsNeedUpdate: func() bool { return false }}
+	}
+	root := supportProject(t)
+	for _, role := range []string{"main", "support"} {
+		t.Run(role, func(t *testing.T) {
+			writeLocalConfig(t, root, `{"round":{"role":"`+role+`"}}`+"\n")
+			code, env, stderr := rotaRunWith(t, deps, "--json", "-C", root, "update")
+			if code != ExitOK {
+				t.Fatalf("update: exit %d, env=%v stderr=%s", code, env, stderr)
+			}
+			d := dataOf(env)
+			for key, want := range map[string]string{
+				"status": "behind", "currentVersion": "1.0.0", "latestVersion": "2.0.0",
+				"updateCommand": "brew update && brew upgrade rota",
+			} {
+				if got := get(d, key); got != want {
+					t.Errorf("%s = %v, want %q", key, got, want)
+				}
+			}
+			wd, _ := os.Getwd()
+			defer os.Chdir(wd)
+			var out, errb bytes.Buffer
+			code = mainWith(deps, []string{"-C", root, "update"}, strings.NewReader(""), &out, &errb)
+			const want = "rota 1.0.0 (brew), latest 2.0.0: behind\nupdate with: brew update && brew upgrade rota\n"
+			if code != ExitOK || out.String() != want {
+				t.Errorf("text update: exit %d, stdout=%q stderr=%s", code, out.String(), errb.String())
+			}
+		})
+	}
+}
+
 func TestConfigRoundTrip(t *testing.T) {
 	root := trackerProject(t, "{}\n")
 	code, env, _ := rotaRun(t, "--json", "-C", root, "config", "set", "round.slots", "5")
