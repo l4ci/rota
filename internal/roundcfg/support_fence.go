@@ -39,7 +39,7 @@ var supportFenced = []string{
 	"rota config fill",
 	"rota id next", "rota refactor reset",
 	"rota spike add", "rota spike finish",
-	"rota init", "rota init umbrella", "rota update",
+	"rota init", "rota init umbrella",
 	"rota migrate labels", "rota migrate config", "rota migrate external-knowledge", "rota migrate hv", "rota migrate issues", "rota migrate milestone-files", "rota migrate milestones", "rota migrate source",
 	// Tracked instruction files, which main regenerates and commits.
 	"rota block", "rota instructions init",
@@ -94,7 +94,7 @@ var supportAllowed = []string{
 	"rota spike list", "rota spike show",
 	"rota status show", "rota statusline dump", "rota summary",
 	"rota test ledger check", "rota test run",
-	"rota tracker suggest-upstream", "rota verdict show", "rota version",
+	"rota tracker suggest-upstream", "rota update", "rota verdict show", "rota version",
 	"rota worker account list", "rota worker pool list", "rota worker prompt-check", "rota worker session check",
 	// The tracker: item, design, plan and proof writers keep their text on the
 	// issue (notes and comments) on an issue backend.
