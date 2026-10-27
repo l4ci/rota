@@ -10,6 +10,8 @@ A reviewer runs in a workspace returned by `rota review prepare <pinned-sha> --j
 
 ## Run
 
+Reviewer binary probes inside the extract use the caller's installed `rota review probe -- <command> [<arg>...]`, as required by `rota-review/reviewer-briefs.md`. Its temporary HOME and config roots apply only to that probe subprocess. Launch the harness itself with the account configuration below; do not wrap the harness launch in `review probe`. Environment isolation is not an OS sandbox: unsandboxed commands retain absolute-path access, passwd-based tilde expansion and process-environment access.
+
 `<prompt>` is the brief plus the input paths. Close stdin (`< /dev/null`): `codex exec` otherwise waits on it for more input and never returns.
 
 | Harness | Command | Read-only because |
