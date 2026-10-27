@@ -91,6 +91,8 @@ Then run `rota setup` in your project. [Install](docs/install.md#-plugin-marketp
 - Parallel agents collide or merge red. Each gets a worktree, and the gate tests every PR merged with the base before it lands.
 - Lessons get lost. `/rota-learn` and `/rota-decide` keep them where the next session reads them.
 
+[Where coding agents go wrong](docs/agent-mistakes.md) covers seven common mistakes, the checks rota enforces, the rules it asks agents to follow and the gaps that remain.
+
 ## 🔄 How it works
 
 rota has two parts: **skills**, slash commands like `/rota-work` that tell the agent how to do a job well, and the **`rota` CLI**, which the skills call to do the bookkeeping and enforce the rules (who holds which issue, what may merge).
@@ -183,6 +185,7 @@ See how rota compares to [GSD](docs/compare/gsd.md), [Superpowers](docs/compare/
 - [Getting started](docs/getting-started.md): install and your first item, end to end
 - [Your first round](docs/first-round.md): orchestrator, workers and the gate, step by step
 - [How it works](docs/how-it-works.md): the roles, the map of skills and files, and how skills chain
+- [Where coding agents go wrong](docs/agent-mistakes.md): enforced checks, written rules and remaining gaps
 - [How rota compares](docs/compare/README.md): one page per comparable tool
 - [FAQ](docs/faq.md) · [All docs](docs/)
 
