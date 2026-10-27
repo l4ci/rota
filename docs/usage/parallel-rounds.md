@@ -1069,8 +1069,8 @@ With `round.support` set, main labels issues for the support machine (`rota roun
 and the two orchestrators talk through the issue thread. The support machine hands back an issue
 it cannot work with `rota round support return <ID> --reason-file <f>`. Both `round watch` runs
 wake on the other machine's PR changes and comments (the support machine's also on main's comments on the issue of a PR parked for review, and on a PR of its own that turns conflicting with its base), and main's merge gate accepts a support PR's
-approvals from relays the support orchestrator posted as issue comments. See
-`docs/contributing/rounds.md` (Support role) for the rules.
+approvals from relays the support orchestrator posted as issue comments. Setup, pinning, claim
+labels and hand-back are on [Support machine](support-machine.md).
 
 ## Winding down
 
