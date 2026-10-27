@@ -114,6 +114,8 @@ func loadRoundSnap(ctx context.Context, c *Ctx, root string) (roundSnap, error) 
 		return roundSnap{}, err
 	}
 	s := snapFromReport(rep)
+	_, warnings := refreshMaintainerSnapshot(ctx, c, root, env)
+	s.Notes = append(s.Notes, warnings...)
 	addFreezeNote(ctx, c, root, &s)
 	s.CandsLoaded = true
 	fillBurn(ctx, c, root, s.Slots)

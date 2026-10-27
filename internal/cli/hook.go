@@ -332,16 +332,25 @@ func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 	}
 	frozen, freezeErr := landfreeze.Read(rotastate.File(hc.commonDir, "freeze.json"))
 	activeFreeze := freezeErr != nil || (frozen != nil && frozen.Active)
-	if worker.IsSolo(hc.root) && !activeFreeze {
+	marker, armed := roundwatch.Armed(hc.lease, hc.commonDir)
+	interval := roundwatch.DefaultHeartbeat
+	if armed && marker.Heartbeat > 0 {
+		interval = time.Duration(marker.Heartbeat) * time.Second
+	}
+	waitLine := roundwatch.MaintainerSnapshotLine(hc.commonDir, c.deps().Now(), interval)
+	if worker.IsSolo(hc.root) && !activeFreeze && waitLine == "" {
 		return Result{}, nil
 	}
-	if need, _ := roundwatch.NeedsWatch(hc.root); !need && !activeFreeze {
+	if need, _ := roundwatch.NeedsWatch(hc.root); !need && !activeFreeze && waitLine == "" {
 		return Result{}, nil
 	}
-	_, armed := roundwatch.Armed(hc.lease, hc.commonDir)
+	digest := roundwatch.Digest(hc.root, hc.who.Lease.Round, armed)
+	if waitLine != "" {
+		digest += " " + waitLine + "."
+	}
 	out := map[string]any{"hookSpecificOutput": map[string]any{
 		"hookEventName":     "UserPromptSubmit",
-		"additionalContext": roundwatch.Digest(hc.root, hc.who.Lease.Round, armed),
+		"additionalContext": digest,
 	}}
 	return hookPrint(out), nil
 }
