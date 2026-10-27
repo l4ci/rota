@@ -1,6 +1,6 @@
 # Market review, October 2026
 
-A gap analysis of rota v0.14.0 against what users of similar agent orchestrators ask for, and what practitioners complained about in September and October 2026. Written 2026-10-08 from a codebase audit, the open-issue trackers of twelve comparable projects, and Hacker News, Reddit and blog posts of the previous month. The ranked suggestions became backlog issues; the durable conclusions are in `.rota/KNOWLEDGE.md` under *Product: Market & competitors*.
+A gap analysis of rota v0.14.0 against what users of similar agent orchestrators ask for, and what practitioners complained about in September and October 2026. Written 2026-10-08 from a codebase audit, the open-issue trackers of twelve comparable projects (fourteen after the 10-27 refresh, plus nine new entrants), and Hacker News, Reddit and blog posts of the previous month. The ranked suggestions became backlog issues; the durable conclusions are in `.rota/KNOWLEDGE.md` under *Product: Market & competitors*.
 
 Refresh this page before the next `/rota-vision` pass instead of re-running the research.
 
@@ -8,11 +8,13 @@ Refreshed 2026-10-27: gstack added as a competitor (see *gstack crew*), the comp
 
 ## Summary
 
-rota's core bets are the ones the market asks for. Rate-limit-aware account switching is the single most upvoted request on gastown, GitLab support is the top request on vibe-kanban, and a durable knowledge layer is what beads and paperclip users want most. The test-gated merge matches the most repeated diagnosis of the month: generation is cheap, verification is the bottleneck.
+rota's core bets are the ones the market asks for. Rate-limit-aware account switching was the most upvoted request on gastown on 10-08 (by 10-27 three others had passed it), GitLab support is the top request on vibe-kanban, and a durable knowledge layer is what beads and paperclip users want most. The test-gated merge matches the most repeated diagnosis of the month: generation is cheap, verification is the bottleneck.
 
 The gaps are in what rota does not show and does not catch. It records no cost, token or duration data per issue or worker, and the gate audit log is written but never read back. Its overlap check works on file paths only, while the loudest recent thread argues that worktrees isolate files, not plans. The biggest strategic shift is external: Anthropic and OpenAI both shipped first-party parallel sessions in September, so rota's value has to sit above the worktree, not in creating it.
 
 ## What the market validates
+
+Figures as of 2026-10-08; the competitor snapshot below has the 10-27 counts.
 
 | rota feature | External demand | Signal |
 |---|---|---|
@@ -89,7 +91,7 @@ Top requests by thumbs-up on open issues, pulled 2026-10-08 and refreshed 2026-1
 | [Backlog.md](https://github.com/MrLesk/Backlog.md) | Markdown board in git | 7.2k [7.0k] | search closed tasks (+5), decision-create flags (+3), cross-repo view (+3, new) | v1.54 archive keeps IDs and dependencies; keeps unknown frontmatter |
 | Conductor | Mac app, Claude/Codex in worktrees | closed | no public tracker | 0.92 remote control from iOS, "actions", routines; Codex usage-limit request to an admin |
 
-No competitor shipped a test-gated merge train, quota-based account switching or a knowledge layer like rota's between 10-08 and 10-27, except gstack's trains (below). Paperclip is the one moving into rota's metrics and review gaps.
+Among the tracked competitors in this table, only gstack shipped a test-gated merge train between 10-08 and 10-27, and none shipped quota-based account switching or a knowledge layer like rota's. Small new entrants do gate merges (SVRF, claude-code-merge-queue; see *New entrants*). This is from release notes and top issues, not an exhaustive search. Paperclip is the one moving into rota's metrics and review gaps.
 
 ## Orca orchestration, checked 2026-10-16
 
@@ -156,10 +158,10 @@ First-party, from changelog aggregators (not primary sources): Codex CLI 0.162 t
 - Verification as the bottleneck: review time up, no-review merges up, agentic PR pickup slower (secondary data, unverified).
 - Token burn: "ten agents in parallel uses your quota roughly ten times as fast"; the forgekit fix was a parallel cap of two, fresh subagents and model routing.
 - Praised practices: one worktree per task plus an orchestrator; two to five sessions; an intent lease logged before coding; Ralph loops with fresh context per iteration; plan approval and human-curated AGENTS.md.
-- Added 2026-10-27. Merge queues rebuilt by individuals: approved PRs go stale after every merge and GitHub's queue needs an organisation ([alatas.dev](https://alatas.dev/blog/ai-agents-made-my-personal-github-repo-need-a-merge-queue.html)); SVRF, openmerge and gstack's trains answer the same complaint.
+- Added 2026-10-27. Merge queues rebuilt by individuals: approved PRs go stale after every merge and GitHub's queue needs an organisation ([alatas.dev](https://alatas.dev/blog/ai-agents-made-my-personal-github-repo-need-a-merge-queue.html)); SVRF, claude-code-merge-queue and gstack's trains answer the same complaint.
 - Independent verification is the common pitch: Kander, pitwall and SVRF all sell protection against false greens.
 - Too many questions backfire: superpowers v7's question-first brainstorming drew a +24 complaint within a week. Keep `/rota-brainstorm` questions few and pre-answered.
-- Quota anxiety continues (HN 50222093, a 5-hour limit hit after $1.37 of usage); porch and paperclip ship cost reporting.
+- Quota anxiety continues ([HN 50222093](https://news.ycombinator.com/item?id=50222093), a 5-hour limit hit after $1.37 of usage); porch and paperclip ship cost reporting.
 
 ## What the research got wrong
 
@@ -169,7 +171,7 @@ Three subagent claims did not survive a check against the tree.
 - The competitor sweep listed a worktree setup hook, overlap checks, stall detection, multi-repo and merge approval as missing. rota has `round.envSetup`, the candidates overlap pass, `round.stallMinutes`, umbrella mode and `ship.mergeApproval`.
 - The audit referred to legacy `hv-` helper names that no longer exist.
 
-Coverage caveats: X, YouTube and most Reddit threads were not reachable, so social claims rest on titles and Hacker News. Conductor and herdr have no public trackers. Competitor requests come from issue titles and reaction counts, not issue bodies. The "441% review time" and "3% AGENTS.md" figures are each from one secondary source.
+Coverage caveats: X, YouTube and most Reddit threads were not reachable, so social claims rest on titles and Hacker News. Conductor and herdr have no public trackers. Competitor requests come from issue titles and reaction counts, not issue bodies. The "441% review time" and "3% AGENTS.md" figures are each from one secondary source. The 10-27 refresh took stars and reaction counts from the GitHub API without a second check, read gstack from its docs and help text rather than its code, and took first-party changes from changelog aggregators.
 
 ## Sources
 
