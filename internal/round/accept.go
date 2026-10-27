@@ -14,7 +14,7 @@ import (
 // one it already closed.
 const BlockNoSlotHolds = blockedby.NoSlotHolds
 
-// BlockNoIssues: neither the slot nor --issues names the filed issues.
+// BlockNoIssues: neither the slot nor --issues supplies completed review evidence.
 const BlockNoIssues = blockedby.NoIssues
 
 // BlockFindingMissing: a research item has no finding comment posted since its
@@ -32,7 +32,7 @@ const BlockReviewNotMinted = blockedby.ReviewNotMinted
 // AcceptInput is the flags of `rota round accept`.
 type AcceptInput struct {
 	ID string
-	// Issues supplies the filed issues when the slot recorded none.
+	// Issues supplies review evidence when the slot recorded none ("none" for no findings).
 	Issues []string
 	// Gist replaces the close note ("filed #a, #b").
 	Gist string
@@ -40,8 +40,9 @@ type AcceptInput struct {
 
 // Accepted is what Accept did.
 type Accepted struct {
-	ID, Slot string
-	Issues   []string
+	ID, Slot   string
+	Issues     []string
+	NoFindings bool
 	// Finding is the comment id a research worker reported, "" for a review.
 	Finding string
 	// Changed is false when the item was already closed by an earlier accept.
@@ -103,21 +104,22 @@ func (e Env) Accept(ctx context.Context, root string, be Board, in AcceptInput) 
 	if ok, why := e.settled(ctx, s, worker.Settled); !ok {
 		return res, blocked(BlockSlotBusy, "%s", busyMsg(s.Name(), id, why))
 	}
-	issues := s.Issues()
+	result := s.ReviewResult()
 	if len(in.Issues) > 0 {
-		issues = in.Issues
+		result = worker.ParseReviewResult("issues:" + strings.Join(in.Issues, ","))
 	}
-	if len(issues) == 0 {
-		return res, blocked(BlockNoIssues, "slot %s recorded no filed issues: pass --issues #a,#b", s.Name())
+	if !result.Complete() {
+		return res, blocked(BlockNoIssues, "slot %s recorded no completed review evidence: pass --issues #a,#b or --issues none for a completed review with no findings", s.Name())
 	}
 	note := strings.TrimSpace(in.Gist)
 	if note == "" {
-		note = "filed " + strings.Join(issues, ", ")
+		note = result.Note()
 	}
 	if err := e.closeNoPR(ctx, root, be, s, it, "Review done: ", note, nil); err != nil {
 		return res, err
 	}
-	res.Issues, res.Changed = issues, true
+	res.Issues, res.Changed = result.Issues(), true
+	res.NoFindings = result.NoFindings()
 	return res, nil
 }
 
