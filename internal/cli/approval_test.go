@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -190,6 +191,17 @@ func TestWorkerGateApprovalOnIssueThread(t *testing.T) {
 	gitT(t, wt, "add", "feature.txt")
 	gitT(t, wt, "commit", "-q", "-m", "feature")
 	th := &fakeThread{}
+	// Gate outcome reports share this thread; count approval requests by their
+	// marker rather than counting every POST on the issue.
+	approvalPosts := func() int {
+		n := 0
+		for _, comment := range th.comments {
+			if strings.Contains(comment["body"].(string), "<!-- rota:escalation ") {
+				n++
+			}
+		}
+		return n
+	}
 	deps := useThread(t, th)
 	clock := time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)
 	useEscalation(deps, &escHost{}, "", &clock)
@@ -200,7 +212,7 @@ func TestWorkerGateApprovalOnIssueThread(t *testing.T) {
 	}
 
 	// no PR and no issue number: no thread, exit 2
-	if code, _, msg := run("--escalate"); code != 2 || !strings.Contains(msg, "approval thread") || posts(th) != 0 {
+	if code, _, msg := run("--escalate"); code != 2 || !strings.Contains(msg, "approval thread") || approvalPosts() != 0 {
 		t.Fatalf("no thread: %d %s", code, msg)
 	}
 	if code, _, _ := run("--approval", "e1"); code != 2 {
@@ -218,11 +230,13 @@ func TestWorkerGateApprovalOnIssueThread(t *testing.T) {
 	if code != 4 || d["verdict"] != "approval-required" || d["blockedBy"] != "manual gate" || e["id"] != "e1" || e["kind"] != "issue" || e["number"] != float64(7) || e["slot"] != "w1" {
 		t.Fatalf("escalate: %d %v", code, d)
 	}
-	if posts(th) != 1 || !strings.Contains(th.calls[0], "issues/7/comments") || !strings.Contains(th.comments[0]["body"].(string), "Merge approval: w1 (") {
+	if approvalPosts() != 1 || !slices.ContainsFunc(th.calls, func(call string) bool {
+		return strings.Contains(call, "issues/7/comments") && strings.Contains(call, "<!-- rota:escalation ")
+	}) || !strings.Contains(th.comments[0]["body"].(string), "Merge approval: w1 (") {
 		t.Fatalf("post: %v", th.calls)
 	}
-	if code, d, _ := run("--escalate"); code != 4 || posts(th) != 1 || d["escalation"].(map[string]any)["id"] != "e1" {
-		t.Fatalf("re-gate: %d %v posts %d", code, d, posts(th))
+	if code, d, _ := run("--escalate"); code != 4 || approvalPosts() != 1 || d["escalation"].(map[string]any)["id"] != "e1" {
+		t.Fatalf("re-gate: %d %v posts %d", code, d, approvalPosts())
 	}
 	// pending: exit 4 in the worker gate shape
 	code, d, _ = run("--approval", "e1")

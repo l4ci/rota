@@ -254,11 +254,11 @@ var pyNotFound = regexp.MustCompile(`(?i)not found|could not resolve|404`)
 // scheduled one that merges nothing.
 func divergeArgv(provider, op string, argv []string) []string {
 	if provider == "github" && (op == "open_prs" || op == "prs_closing") {
-		// Stale-claim detection additionally requests server activity timestamps.
+		// Stale-claim detection and report routing request activity and head ownership metadata.
 		out := append([]string(nil), argv...)
 		for i := 0; i+1 < len(out); i++ {
 			if out[i] == "--json" {
-				out[i+1] += ",updatedAt"
+				out[i+1] += ",updatedAt,isCrossRepository"
 			}
 		}
 		return out
