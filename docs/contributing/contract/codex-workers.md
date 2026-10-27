@@ -9,6 +9,7 @@ refs:
   - internal/round/quota.go
   - internal/roundcfg/roundcfg.go
   - internal/cli/hook.go
+  - internal/roundwatch/maintainer.go
   - internal/hook
   - internal/doctor/doctor.go
 ---

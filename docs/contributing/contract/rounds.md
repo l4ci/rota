@@ -5,6 +5,8 @@ refs:
   - internal/worker
   - internal/roundcfg
   - internal/cli/round.go
+  - internal/cli/round_status.go
+  - internal/cli/round_needs_you.go
   - internal/cli/round_start.go
   - internal/cli/round_summary.go
   - internal/cli/round_winddown.go
