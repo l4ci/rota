@@ -81,6 +81,8 @@ const (
 	GateNotMerged      = "not-merged"
 	GateNotOnBase      = "not-on-base"
 	GateVerifyFailed   = "verify-failed"
+	// GateVacuousTests refuses tests independent of the non-test change.
+	GateVacuousTests   = "vacuous-tests"
 	GateMergedRemotely = "merged-remotely"
 	GateMergeFailed    = "merge-failed"
 	GateCheckBroke     = "check-broke"
@@ -1335,6 +1337,9 @@ func (g *gate) verifyFirst(what string, check func(dir, sha string) (bool, error
 	tree, _ := g.git(dir, "rev-parse", "HEAD^{tree}")
 	g.res.SHA = strutil.ShortSHA(sha)
 	if done, err := check(dir, sha); done || err != nil {
+		return true, err
+	}
+	if done, err := g.vacuousRun(baseSHA, sha); done || err != nil {
 		return true, err
 	}
 	if done, err := g.behaviourRun(dir); done || err != nil {
