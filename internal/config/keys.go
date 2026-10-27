@@ -213,7 +213,6 @@ var Keys = []Key{
 	k("issues.source", ScopeProject, "file", false, TypeEnum, "Where issues live: BACKLOG.md in the repo (file), or a tracker. github and gitlab must match the forge. forge means each repo's own forge, for an umbrella whose sub-repos sit on different hosts. jira reads issues.connection and issues.jira.project; linear reads issues.connection and issues.linear.team; itsaplan reads issues.connection and issues.itsaplan.project. Switch with rota migrate issues.", "file", "github", "gitlab", "forge", "jira", "linear", "itsaplan"),
 	k("forge.provider", ScopeProject, "auto", false, TypeEnum, "Where code lands: pull requests, checks and releases. auto reads the origin remote and is local with no remote; local means direct merge, no PR. Set it by hand only when detection misses (self-hosted GitLab without gitlab in the host, SSH host aliases, mirrors).", "auto", "github", "gitlab", "local"),
 	// 5.0 keys: not in CONFIG_KEYS.
-	k(labels.ExtraKey, ScopeProject, jsonx.NewObject(), false, TypeObject, "Project tracker labels as name to description. Label sync treats these as known; registry labels retain their own metadata."),
 	k("ship.mergeApproval", ScopeProject, "none", false, TypeEnum, "Which merges need a human: none, all, or only those touching ship.mergeApprovalPaths. The merge verbs enforce it at every autonomy level.", "none", "all", "paths"),
 	k("ship.mergeApprovalPaths", ScopeProject, []any{}, false, TypeList, "Repo-relative paths or globs that need human approval when ship.mergeApproval is paths."),
 	k("review.fileDeferred", ScopeTaste, "major", false, TypeEnum, "Which deferred review findings rota verdict add --file-deferred files, as one follow-up item per PR. minor: minor and major. major: only major (minor stays in the verdict record). off: none. A PR that closes a deferred-findings item files none.", "minor", "major", "off"),
@@ -304,6 +303,8 @@ var Keys = []Key{
 	k("knowledge.externalMaxBullets", ScopeMachine, num("25"), false, TypeInt, "Bullets a topic file of the external knowledge repo may hold before rota doctor warns that it has outgrown a cheap read. 0 turns the check off."),
 	k("knowledge.externalMaxBytes", ScopeMachine, num("8192"), false, TypeInt, "Bytes a topic file of the external knowledge repo may hold before rota doctor warns. 0 turns the check off."),
 	k("knowledge.externalMaxTopics", ScopeMachine, num("60"), false, TypeInt, "Topics the external knowledge index may list before rota doctor warns. 0 turns the check off."),
+	// Append new keys so frozen config fixtures keep existing row positions.
+	k(labels.ExtraKey, ScopeProject, jsonx.NewObject(), false, TypeObject, "Project tracker labels as name to description. Label sync treats these as known; registry labels retain their own metadata."),
 }
 
 func init() {

@@ -465,6 +465,10 @@ type Settings struct {
 func SettingsFromConfig(cfg any) Settings {
 	s := Settings{Provider: config.ForgeAuto, Source: config.SourceFile, RetryWait: retryWait(), NotPlannedLabel: config.Label(cfg, "notPlanned")}
 	s.Labels, _ = config.ResolvedLabels(cfg)
+	if s.Labels == nil {
+		// An unrelated malformed review policy is diagnosed by its consumer.
+		s.Labels, _ = config.LabelDefinitions(cfg)
+	}
 	if p, err := config.ForgeProvider(cfg); err == nil {
 		s.Provider = p
 	}
@@ -497,7 +501,7 @@ var RetryPause = 60 * time.Second
 func retryWait() time.Duration { return RetryPause }
 
 // ValidateConfig is the corrupt-config check of the keys SettingsFromConfig
-// reads: invalid providers, issue sources or label declarations are KindInternal
+// reads: invalid providers, issue sources or extra label declarations are KindInternal
 // errors (exit 70).
 func ValidateConfig(cfg any) error {
 	if _, err := config.ForgeProvider(cfg); err != nil {
@@ -506,7 +510,8 @@ func ValidateConfig(cfg any) error {
 	if _, err := config.IssueSource(cfg); err != nil {
 		return internal("%s", err.Error())
 	}
-	if _, err := config.ResolvedLabels(cfg); err != nil {
+	v, _ := config.Value(cfg, labels.ExtraKey)
+	if _, err := config.ExtraLabels(v); err != nil {
 		return internal("%s", err.Error())
 	}
 	return nil

@@ -285,3 +285,18 @@ func TestAssumedForgeLabelsReadOnly(t *testing.T) {
 		t.Fatal("unsupported label listing must fail")
 	}
 }
+
+func TestLabelMetadataLeavesReviewValidationAtConsumer(t *testing.T) {
+	cfg, err := jsonx.Decode([]byte(`{"issues":{"source":"github","labels":{"needsReview":"ready-custom"}},"ship":{"review":{"default":"invalid"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateConfig(cfg); err != nil {
+		t.Fatalf("tracker validated an unrelated review policy: %v", err)
+	}
+	s := SettingsFromConfig(cfg)
+	label, ok := labelMetadata("ready-custom", s.Labels)
+	if !ok || label.Description != "Work is ready for review." {
+		t.Fatalf("review policy error lost configured label metadata: %+v, %v", label, ok)
+	}
+}
