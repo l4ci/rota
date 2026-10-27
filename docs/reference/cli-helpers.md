@@ -316,6 +316,9 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota debug counter inc-cycle` | count a hypothesis cycle |
 | `rota debug verdict <bugId> --verdict <PASS\|FAIL> [--body-file <path\|->]` | record whether a fix held and route on the item's failed-fix count |
 | `rota debug reset <bugId> --reason <text> --confirm --confirm-note <answer>` | start an item's failed-fix count again (manual gate) |
+| `rota debug work-fix attempt <ID> [--task <N>]` | record a `/rota-work` Step 7 fix attempt; exit 4 on the fourth since the last PASS or reset |
+| `rota debug work-fix pass <ID> [--task <N>]` | a verify passed: start the item's attempt count again |
+| `rota debug work-fix reset <ID> [--task <N>] --reason <text> --confirm --confirm-note <answer>` | start the attempt count again (manual gate) |
 
 ## `rota worker`
 
@@ -447,7 +450,7 @@ herdr only; a tmux or solo round is skipped. Moves live panes without restarting
 | `rota hook stop` | Stop hook: block above the context threshold until a handoff is written, or while workers run with no watch armed |
 | `rota hook prompt` | UserPromptSubmit hook: one-line round digest and a missing-watch reminder |
 | `rota hook session-start` | SessionStart hook: inject and consume the handoff |
-| `rota hook guard` | PreToolUse hook on `Bash`: deny destructive git and `gh pr merge` for a worker (`ROTA_SLOT` set), exit 2 with a one-line reason; no-op otherwise |
+| `rota hook guard` | PreToolUse hook on `Bash\|Edit\|Write`: recall matching path-scoped knowledge and decisions once per session before Edit/Write; deny destructive git and `gh pr merge` for worker Bash calls (`ROTA_SLOT` set), exit 2 with a one-line reason |
 
 `install` and `uninstall` are the ones you run; `stop`, `prompt`, `session-start` and `guard` are what Claude Code calls. Default scope is `project-local` (`.claude/settings.local.json`). `install` exits 4 rather than replace a statusline you already have unless you pass `--wrap-statusline`. `stop`, `prompt` and `session-start` always exit 0; `guard` exits 2 to refuse a worker's command. `install` warns when the guard sits only in `project-local` scope, which worker worktrees do not read. See [the worker guard](../usage/parallel-rounds.md#worker-guard).
 

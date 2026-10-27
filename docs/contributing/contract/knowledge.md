@@ -52,13 +52,15 @@ old: none (new)
 note: text is one `<heading>: <n> bullets` line per topic, in document order. `decisions topics` is the same over `.rota/DECISIONS.md`. Use it to find the heading text to pass to `query`. It is `stats` without the byte sizes.
 
 ### rota knowledge add
-rota knowledge add --topic <T> --title <S> --body-file <path|-> [--date YYYY-MM-DD] [--sha <hex>] [--external [--hook <line>] [--seen <tools>]]
+rota knowledge add --topic <T> --title <S> --body-file <path|-> [--date YYYY-MM-DD] [--sha <hex>] [--path <glob>]… [--external [--hook <line>] [--seen <tools>]]
 repo: scoped (scope S)
 data: {"topic": string, "title": string, "changed": bool}
 exit: 2 when `--topic`, `--title` or `--body-file` is missing, or `--sha` is not 7 to 40 hex digits; 3 when the `## <T>` heading does not exist in S's KNOWLEDGE.md
 old: hv-knowledge-merge [--repo <name>] --topic <T> --title <S> [--date <d>] [--body <text>]    (`--body-file -` pipes the shim's stdin to old stdin; `--body-file <p>` becomes `< <p>`; `--date` is the same flag)
 shim: stderr `wrote:` gives `changed: true`; `noop: … (title already present)` gives `changed: false`.
 note: the old inline `--body` and the TTY-blocking stdin fallback are dropped. Dedup is by case-insensitive title, so a repeated title is `changed: false`. A successful add also initializes the bullet's tier entry as provisional. The missing-topic exit moves from 1 to 3. `--sha` is new (not in the old helper): it stores the commit the bullet's claim about code was true at beside the date, as `<!-- YYYY-MM-DD sha:<hex> -->` (lowercased). `rota knowledge query` prints the bullet line as stored, so the sha shows, and still tier-filters it; entries without a sha render as before.
+
+note: repeatable `--path` stores a JSON array in `<!-- paths: ["glob", "glob"] -->` before the date. Globs are relative to the project root (registered repo root for repo-local knowledge); `*` stays within one segment and `**` spans directories. Invalid globs, absolute paths, parent traversal and `--external --path` exit 2. Existing query/amend/replace/rename flows preserve the field. Optional paths comments also work in decision entries written by `/rota-decide`; `decisions query` retains them. Topic selection is unchanged.
 
 ### rota knowledge amend
 rota knowledge amend --topic <T> --fragment <F> --mode append --body-file <path|-> [--external [--seen <tools>] [--date YYYY-MM-DD]]

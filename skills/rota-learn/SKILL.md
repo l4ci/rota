@@ -83,6 +83,8 @@ Format of `.rota/KNOWLEDGE.md` (size nudges for big topics come in Step 8; the m
 - <older legacy learning without title>
 ```
 
+For a project learning tied to known files, pass `--path "<glob>"` for each applicable glob. This stores an optional `<!-- paths: ["glob"] -->` field before the date; installed Edit/Write hooks recall it once per session. Paths are relative to the project root, or the registered repo root for repo-local knowledge. `*` stays in one path segment; `**` spans directories. Omit the flag when no file scope is known. External knowledge does not accept it.
+
 Each new bullet: short sentence-case `**Title**`, an em-dash (U+2014, not a hyphen), the body, and a trailing `<!-- YYYY-MM-DD -->` stamp. `rota knowledge add` dedups by (topic, title, case-insensitive): a repeat is a silent no-op and never overwrites. Leave untitled legacy bullets as-is.
 
 **Commit sha.** When a candidate bullet names a function, file, flag or verb, ask for the commit it was true at, with HEAD as the recommended answer (`git rev-parse --short HEAD`), and pass it as `--sha`. The sha is stored beside the date, and `rota knowledge query` prints it, so a reader can run `git diff <sha>..HEAD -- <path>` and check that the named thing still exists. Skip the question for bullets that name no code (process, product, judgment). Do not backfill shas on existing bullets.
@@ -90,7 +92,7 @@ Each new bullet: short sentence-case `**Title**`, an em-dash (U+2014, not a hyph
 For each captured bullet, call:
 
 ```bash
-printf '%s' "$BODY" | rota knowledge add --topic "<Topic>" --title "<Short rule title>" [--sha "<sha>"] --body-file -
+printf '%s' "$BODY" | rota knowledge add --topic "<Topic>" --title "<Short rule title>" [--sha "<sha>"] [--path "<glob>"] --body-file -
 ```
 
 The verb inserts at the top of the topic and stamps the date.
