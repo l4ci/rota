@@ -6,7 +6,6 @@ import (
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/ledger"
-	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -57,25 +56,6 @@ type Worker interface {
 // embedded env supplies the operations; the methods below cover those that are
 // fields, or free functions taking the env, on the worker side.
 type envWorker struct{ worker.Env }
-
-type bounceCounter interface {
-	Count(issue string) (n int, head string, err error)
-}
-
-// readBounceStore shares the monitoring pass's comment cache with claims and
-// candidates. It exposes only Count; the worker's writing path stays uncached
-// so Record can read its own write back fresh.
-func (e Env) readBounceStore(ctx context.Context, root string) (bounceCounter, error) {
-	if comments, ok := e.Forge.(worker.IssueComments); ok {
-		if _, trusted := comments.(worker.PushTrust); trusted {
-			reader := worker.Env{Ctx: ctx, Config: e.Worker.Config,
-				IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return comments, nil },
-			}
-			return reader.BounceStore(root)
-		}
-	}
-	return e.Worker.BounceStore(root)
-}
 
 // FromWorkerEnv adapts w as the Worker a round runs against. It is the only
 // place round holds the concrete worker.Env.

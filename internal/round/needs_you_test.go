@@ -80,8 +80,6 @@ func TestNeedsYouSources(t *testing.T) {
 		{"needs-human", "#99", "Resolve the parked item and clear needs-human", "2026-10-03T09:00:00Z", "hold"},
 		{"escalation", "PR #11", "Audit or transfer?", "2026-10-03T09:30:00Z", "B"},
 		{"merge-approval", "PR #8", "Approve this merge?", "2026-10-03T10:00:00Z", "hold"},
-		{"bounce-cap", "#12", "Audit the acceptance criteria before another bounce", "2026-10-03T10:15:00Z", "audit"},
-		{"question", "#13", "Which design?", "2026-10-03T10:30:00Z", "reply"},
 		{"escalation", "PR #20", "Waive Spec?", "2026-10-03T11:00:00Z", "reply"},
 		{"needs-human", "#100", "Resolve the parked item and clear needs-human", "", "hold"},
 	}

@@ -47,13 +47,22 @@ func MaintainerSnapshotLine(commonDir string, now time.Time, interval time.Durat
 	if interval <= 0 || age < 0 || age > interval {
 		return ""
 	}
-	when := fmt.Sprintf("%ds", int(age.Seconds()))
-	if age >= time.Minute {
-		when = fmt.Sprintf("%dm", int(age.Minutes()))
-	}
 	verb := "wait"
 	if snapshot.Count == 1 {
 		verb = "waits"
 	}
-	return fmt.Sprintf("%d %s on you, as of %s ago", snapshot.Count, verb, when)
+	return fmt.Sprintf("%d %s on you, as of %s ago", snapshot.Count, verb, CompactAge(age))
+}
+
+// CompactAge formats wait and snapshot ages using one whole s/m/h/d unit.
+func CompactAge(age time.Duration) string {
+	for _, unit := range []struct {
+		duration time.Duration
+		suffix   string
+	}{{24 * time.Hour, "d"}, {time.Hour, "h"}, {time.Minute, "m"}} {
+		if age >= unit.duration {
+			return fmt.Sprintf("%d%s", age/unit.duration, unit.suffix)
+		}
+	}
+	return fmt.Sprintf("%ds", max(int64(age/time.Second), 0))
 }

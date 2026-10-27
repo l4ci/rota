@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/bugreport"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -66,7 +68,6 @@ func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []str
 	gateByPR := map[int]ledger.Entry{}
 	gateBySlot := map[string]ledger.Entry{}
 	parkedAt := map[string]string{}
-	bouncedAt := map[string]string{}
 	for _, entry := range entries {
 		id := worker.NormID(entry.Issue)
 		switch entry.Kind {
@@ -76,8 +77,6 @@ func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []str
 			} else {
 				delete(parkedAt, id)
 			}
-		case ledger.KindBounce:
-			bouncedAt[id] = waitStamp(entry.TS)
 		case ledger.KindGate, ledger.KindMerge:
 			if n, ok := worker.PRRefNumber(entry.PR); ok {
 				gateByPR[n] = entry
@@ -143,47 +142,17 @@ func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []str
 		}
 		out = append(out, MaintainerWait{"merge-approval", item, "Approve this merge?", waitStamp(g.TS), "hold"})
 	}
-	counts := map[string]int{}
-	count := func(issue string) int {
-		id := worker.NormID(issue)
-		if n, ok := counts[id]; ok {
-			return n
-		}
-		n := reg.Bounces(issue)
-		if e.Round.Support != "" {
-			store, err := e.readBounceStore(ctx, root)
-			if err == nil {
-				n, _, err = store.Count(issue)
-			}
-			if err != nil {
-				warnings = append(warnings, fmt.Sprintf("maintainer digest bounces for %s: %v", issue, err))
-				n = 0
-			}
-		}
-		counts[id] = n
-		return n
-	}
 	for _, s := range reg.Slots() {
 		if s.PRMerged() || s.HeldID() == "" {
 			continue
 		}
 		item := tracker.RefOf(s.HeldID())
-		if !covered(item, s.PR(), s.Name()) {
-			if ev := s.Event(); strings.EqualFold(s.State(), worker.StateBlocked) && ev != nil && (ev.Kind == worker.EventBlocked || ev.Kind == worker.EventQuestion) {
-				out = append(out, MaintainerWait{"question", item, ev.Body, ev.TS, "reply"})
-			}
-			if e.Round.MaxBounces > 0 && worker.IsDone(s.State()) && count(s.HeldID()) >= e.Round.MaxBounces && openPR(s.PR()) {
-				out = append(out, MaintainerWait{"bounce-cap", item, "Audit the acceptance criteria before another bounce", bouncedAt[worker.NormID(s.HeldID())], "audit"})
-			}
-		}
 		approval(item, s.PR(), s.Name(), s.HeldID())
 	}
 	for _, q := range reg.PRs() {
 		item := tracker.RefOf(q.Issue)
 		approval(item, q.PR, "", q.Issue)
-		if !covered(item, q.PR, "") && e.Round.MaxBounces > 0 && count(q.Issue) >= e.Round.MaxBounces && openPR(q.PR) {
-			out = append(out, MaintainerWait{"bounce-cap", item, "Audit the acceptance criteria before another bounce", bouncedAt[worker.NormID(q.Issue)], "audit"})
-		}
+
 	}
 	if e.Forge != nil && e.NeedsHuman != "" {
 		issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{e.NeedsHuman}})
@@ -196,6 +165,28 @@ func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []str
 					out = append(out, MaintainerWait{"needs-human", item, "Resolve the parked item and clear " + e.NeedsHuman, parkedAt[worker.NormID(issue.Key.String())], "hold"})
 				}
 			}
+		}
+	}
+	if e.Board != nil {
+		claims, scanWarnings := e.StaleClaims(ctx, root, e.Board, nil)
+		warnings = append(warnings, scanWarnings...)
+		for _, claim := range claims {
+			item := tracker.RefOf(claim.Issue)
+			if !escalated[item] {
+				out = append(out, MaintainerWait{StaleClaimKind, item, "Approve reclaiming stale claim " + claim.Holder + "?", waitStamp(claim.Last.Add(claim.Threshold)), "hold"})
+			}
+		}
+	}
+	run := e.Git
+	if run == nil {
+		run = git.Exec
+	}
+	bugs, err := bugreport.Open(ctx, run, root)
+	if err != nil {
+		warnings = append(warnings, fmt.Sprintf("maintainer digest bugreports: %v", err))
+	} else {
+		for _, bug := range bugs {
+			out = append(out, MaintainerWait{"bugreport", bug.ID, "Approve filing rota bugreport: " + bug.Summary, bug.TS, "hold"})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {

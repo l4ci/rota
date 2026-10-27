@@ -5,9 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
-	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -33,8 +31,6 @@ func TestRoundNeedsYou(t *testing.T) {
 		t.Fatalf("status: %d %s", code, errOut)
 	}
 	rows, ok := data(t, out)["needsYou"].([]any)
-	viewCode, _, _ := rotaInWith(t, deps, root, "--json", "round", "status", "--needs-you")
-	t.Logf("measurement: maintainerRows=%d filteredViewExit=%d", len(rows), viewCode)
 	if !ok || len(rows) != 1 {
 		t.Fatalf("want one maintainer decision, got %s", out)
 	}
@@ -43,10 +39,10 @@ func TestRoundNeedsYou(t *testing.T) {
 		t.Fatalf("incomplete decision: %v", r)
 	}
 	code, out, errOut = rotaInWith(t, deps, root, "round", "status", "--needs-you")
-	if code != 0 || !strings.Contains(out, "#58\tKeep the current design?\t2h0m0s\tA") || strings.Contains(out, "dana/58-x") || strings.Contains(out, "Already answered") {
+	if code != 0 || !strings.Contains(out, "#58\tKeep the current design?\t2h\tA") || strings.Contains(out, "dana/58-x") || strings.Contains(out, "Already answered") {
 		t.Fatalf("maintainer-only view: %d %s | %s", code, out, errOut)
 	}
-	t.Run("escalation-replaces-bounce-hold", func(t *testing.T) {
+	t.Run("cap-escalation-is-human-reserved", func(t *testing.T) {
 		write(t, worker.RegistryPath(root), `{"slots":[{"name":"cap","task":"12","state":"done","pr":"#7"}],"bounces":{"12":3},"escalations":[{"id":"cap","kind":"pr","number":7,"status":"pending","title":"Audit or transfer?"}]}`)
 		code, out, stderr := rotaInWith(t, deps, root, "--json", "round", "status", "--needs-you")
 		if code != 0 {
@@ -94,33 +90,10 @@ func TestRoundNeedsYou(t *testing.T) {
 			t.Fatalf("closed queued PRs need no bounce-cap decision: %d %s %s", code, out, stderr)
 		}
 	})
-	t.Run("shared-bounce-store", func(t *testing.T) {
-		write(t, worker.RegistryPath(root), `{"slots":[{"name":"cap","task":"12","state":"done","pr":"#7"}]}`)
-		fk := &bounceFakes{issue: []string{"<!-- rota:bounce head=a -->", "<!-- rota:bounce head=b -->", "<!-- rota:bounce head=c -->"}}
-		cfg, err := jsonx.Decode([]byte(`{"issues":{"source":"github"},"round":{"support":"mac"}}`))
-		if err != nil {
-			t.Fatal(err)
-		}
-		original := deps.RoundEnv
-		t.Cleanup(func() { deps.RoundEnv = original })
-		deps.RoundEnv = func(ctx context.Context, root string) round.Env {
-			env := original(ctx, root)
-			env.Round.Support = "mac"
-			env.Worker = round.FromWorkerEnv(worker.Env{
-				Config:        func(string) any { return cfg },
-				IssueComments: func(string, tracker.Settings) (worker.IssueComments, error) { return fk, nil },
-			})
-			return env
-		}
-		code, out, stderr := rotaInWith(t, deps, root, "--json", "round", "status", "--needs-you")
-		if code != 0 || len(data(t, out)["needsYou"].([]any)) != 1 {
-			t.Fatalf("support-mode bounces live on the issue, not the registry: %d %s %s", code, out, stderr)
-		}
-	})
 	t.Run("text-is-safe-to-print", func(t *testing.T) {
-		write(t, worker.RegistryPath(root), `{"escalations":[{"id":"text","kind":"issue","number":12,"status":"pending","title":"Keep \u001b[31mthe flag?\u001b[0m"}]}`)
+		write(t, worker.RegistryPath(root), `{"escalations":[{"id":"text","kind":"issue","number":12,"status":"pending","title":"Keep \u202e\u001b[31mthe\u2066 flag?\u001b[0m\u200b"}]}`)
 		code, out, stderr := rotaInWith(t, deps, root, "round", "status", "--needs-you")
-		if code != 0 || strings.Contains(out, "\x1b") || !strings.Contains(out, "Keep the flag?") {
+		if code != 0 || strings.ContainsAny(out, "\x1b\u202e\u2066\u200b") || !strings.Contains(out, "Keep the flag?") {
 			t.Fatalf("terminal control sequences must not enter digest rows: %d %q %s", code, out, stderr)
 		}
 	})
@@ -142,7 +115,6 @@ func TestHookPromptNeedsYouCount(t *testing.T) {
 	}
 	code, out, stderr := rotaIn(t, root, "round", "status", "--needs-you")
 	freshPrompt := promptOut(t, root)
-	t.Logf("measurement: snapshotRefreshExit=%d promptCountPresent=%t", code, strings.Contains(freshPrompt, "1 waits on you"))
 	if code != 0 {
 		t.Fatalf("refresh snapshot: %d %s %s", code, out, stderr)
 	}

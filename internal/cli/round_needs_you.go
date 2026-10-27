@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotastate"
@@ -46,11 +47,20 @@ func maintainerRows(waits []round.MaintainerWait, now time.Time) ([]any, []strin
 		if since, err := time.Parse(time.RFC3339, wait.Since); err == nil {
 			seconds := max(int64(now.Sub(since)/time.Second), 0)
 			o.Set("ageSeconds", seconds)
-			age = (time.Duration(seconds) * time.Second).String()
+			age = roundwatch.CompactAge(time.Duration(seconds) * time.Second)
 		}
 		o.Set("defaultReply", wait.DefaultReply)
 		rows = append(rows, o)
-		lines = append(lines, fmt.Sprintf("%s\t%s\t%s\t%s", tui.Sanitize(wait.Item, false), strings.Join(strings.Fields(tui.Sanitize(wait.Ask, false)), " "), age, wait.DefaultReply))
+		lines = append(lines, fmt.Sprintf("%s\t%s\t%s\t%s", maintainerText(wait.Item), strings.Join(strings.Fields(maintainerText(wait.Ask)), " "), age, wait.DefaultReply))
 	}
 	return rows, lines
+}
+
+func maintainerText(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, tui.Sanitize(s, false))
 }
