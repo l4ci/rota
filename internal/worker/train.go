@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/flakeledger"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/landfreeze"
@@ -115,9 +116,9 @@ type TrainResult struct {
 	// CulpritGate is the gate result that named the culprit, for the bookkeeping
 	// that follows (its head SHA, PR and branch). Zero when none did.
 	CulpritGate GateResult
-	Verified    []string // test.full commands that passed
-	Flaky       []string // commands recovered on one isolated retry
-	E2EVerified []string // test.e2e commands that passed
+	Verified    []string            // test.full commands that passed
+	Flaky       []flakeledger.Entry // commands recovered on one sequential retry
+	E2EVerified []string            // test.e2e commands that passed
 	Landed      []string
 	Changed     bool
 	SHA         string
@@ -768,8 +769,8 @@ func (t *trainRun) verifyStage() (bool, error) {
 				// Prefix verifies run inside bisect, outside the tier walk.
 				if k != n {
 					for _, f := range r.Flaky {
-						res.Flaky = append(res.Flaky, f.Check)
-						res.Notes = append(res.Notes, "FLAKY "+f.Check)
+						res.Flaky = append(res.Flaky, f)
+						res.Notes = append(res.Notes, flakeNote(f))
 					}
 				}
 			}

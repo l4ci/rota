@@ -51,7 +51,7 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 	d.Set("verified", strList(r.Verified))
 	d.Set("e2eVerified", strList(r.E2EVerified))
 	if len(r.Flaky) > 0 {
-		d.Set("flaky", strList(r.Flaky))
+		d.Set("flaky", flakyData(r.Flaky))
 	}
 	d.Set("cacheHits", strList(r.CacheHits))
 	d.Set("transient", strList(r.Transient))

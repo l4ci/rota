@@ -18,8 +18,9 @@ const File = "flakes.jsonl"
 
 // Run preserves the exit status and output of either observation.
 type Run struct {
-	Output   string `json:"output"`
-	ExitCode int    `json:"exitCode"`
+	Output      string  `json:"output"`
+	ExitCode    int     `json:"exitCode"`
+	WallSeconds float64 `json:"wallSeconds,omitempty"`
 }
 
 // Entry is one observed fail/pass pair on the same tree. PRs contains every

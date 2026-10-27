@@ -31,8 +31,8 @@ RC=0; OUT=$(tlcheck) || RC=$?
 pass "a malformed entry exits 1 with verdict malformed"
 
 RC=0; OUT=$(cd "$TLP" && "$ROTA_BIN" --json test flakes) || RC=$?
-[ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.records)" = "0" ] \
-  || fail "a missing flake ledger should list no recoveries: rc=$RC $OUT"
+[ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.records)" = "null" ] && [ "$(echo "$OUT" | jget data.unavailable)" = "no flake ledger" ] \
+  || fail "a missing flake ledger should report unavailable evidence: rc=$RC $OUT"
 printf '%s\n' '{"check":"check","tests":["TestLoad"],"tree":"abc123","prs":[],"round":0,"ts":"2026-10-27T12:00:00Z","first":{"output":"FAIL","exitCode":1},"retry":{"output":"ok","exitCode":0}}' > "$TLP/.rota/flakes.jsonl"
 RC=0; OUT=$(cd "$TLP" && "$ROTA_BIN" --json test flakes) || RC=$?
 [ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.flakes[0].test)" = "TestLoad" ] && [ "$(echo "$OUT" | jget data.flakes[0].count)" = "1" ] \

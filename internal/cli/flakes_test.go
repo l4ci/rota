@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"encoding/json"
+	"github.com/l4ci/rota/internal/flakeledger"
+	"github.com/l4ci/rota/internal/worker"
 	"os"
 	"path/filepath"
 	"strings"
@@ -106,5 +109,41 @@ func TestFlakeCountUsesItsOwnEvidenceSource(t *testing.T) {
 	flaky := metrics["flakes"].(map[string]any)
 	if flaky["count"] != float64(1) || flaky["unavailable"] != nil || metrics["redTrainRate"].(map[string]any)["unavailable"] != "no ledger" {
 		t.Fatalf("independent evidence sources: %v", metrics)
+	}
+}
+
+func TestFlakeLedgerMissingIsUnavailable(t *testing.T) {
+	dir := workerProject(t, `{}`)
+	code, out, _ := rotaInWith(t, testDeps(), dir, "test", "flakes", "--json")
+	if code != 0 {
+		t.Fatalf("exit=%d: %s", code, out)
+	}
+	d := data(t, out)
+	if d["records"] != nil || d["unavailable"] != "no flake ledger" {
+		t.Fatalf("missing evidence must not report zero: %v", d)
+	}
+	code, out, _ = rotaInWith(t, testDeps(), dir, "test", "flakes")
+	if code != 0 || !strings.Contains(out, "unavailable (no flake ledger)") {
+		t.Fatalf("missing ledger text: %d %s", code, out)
+	}
+}
+
+func TestFlakyDataIncludesRerunDurationAndTests(t *testing.T) {
+	entries := []flakeledger.Entry{{Check: "check", Tests: []string{"TestA", "TestB"}, Retry: flakeledger.Run{WallSeconds: 1.25}}}
+	for _, obj := range []*jsonx.Object{gateData(worker.GateResult{Flaky: entries}), trainData(worker.TrainResult{Flaky: entries})} {
+		raw, err := jsonx.MarshalCompact(obj)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var d map[string]any
+		if err := json.Unmarshal(raw, &d); err != nil {
+			t.Fatal(err)
+		}
+		a := d["flaky"].([]any)
+		f := a[0].(map[string]any)
+		tests := f["tests"].([]any)
+		if f["check"] != "check" || f["rerunSeconds"] != float64(1.25) || len(tests) != 2 || tests[0] != "TestA" || tests[1] != "TestB" {
+			t.Fatalf("missing flake diagnostics: %v", f)
+		}
 	}
 }

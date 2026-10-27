@@ -15,7 +15,7 @@ import (
 // VerifyResult is one run of test.full. Callers only phrase the
 // verdict; reading the key, running the commands and keeping the log live here.
 type VerifyResult struct {
-	Flaky      []flakeledger.Entry // assertion failures recovered on one isolated retry
+	Flaky      []flakeledger.Entry // assertion failures recovered on one sequential retry
 	NoCommands bool                // test.full is empty: nothing was run
 	Verified   []string            // commands that passed
 	Failed     []string            // commands that failed

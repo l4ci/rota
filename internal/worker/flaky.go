@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/l4ci/rota/internal/flakeledger"
 	"github.com/l4ci/rota/internal/testledger"
@@ -41,10 +42,12 @@ func (e Env) runGateVerify(ctx context.Context, cmds []string, dir string, led t
 		if code != 1 || ctx.Err() != nil || !assertion || excluded || retryInfrastructure.MatchString(out) || tree == "" || e.cleanVerifyTree(ctx, dir) != tree {
 			return out, code
 		}
+		started := e.Now()
 		again, retryCode := e.Shell(ctx, dir, cmd)
+		elapsed := max(0, e.Now().Sub(started).Seconds())
 		combined := out + "\n== RETRY " + cmd + "\n" + again
 		if retryCode == 0 && ctx.Err() == nil && e.cleanVerifyTree(ctx, dir) == tree {
-			flakes = append(flakes, flakeledger.Entry{Check: cmd, Tests: tests, Tree: tree, TS: e.Now().UTC(), First: flakeledger.Run{Output: out, ExitCode: code}, Retry: flakeledger.Run{Output: again, ExitCode: retryCode}})
+			flakes = append(flakes, flakeledger.Entry{Check: cmd, Tests: tests, Tree: tree, TS: e.Now().UTC(), First: flakeledger.Run{Output: out, ExitCode: code}, Retry: flakeledger.Run{Output: again, ExitCode: retryCode, WallSeconds: elapsed}})
 			return combined, 0
 		}
 		// A changed tree or cancellation cannot turn the original red green.
@@ -67,4 +70,8 @@ func (e Env) recordFlakes(root string, round *RoundMemo, prs []string, vr Verify
 		}
 	}
 	return nil
+}
+
+func flakeNote(f flakeledger.Entry) string {
+	return fmt.Sprintf("FLAKY %s — tests: %s; rerun: %.3fs", f.Check, strings.Join(f.Tests, ", "), f.Retry.WallSeconds)
 }
