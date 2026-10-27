@@ -343,9 +343,9 @@ func CurrentPane(kind Kind, getenv func(string) string) string {
 }
 
 // CurrentPaneAny is CurrentPane when the host kind is unknown: herdr first,
-// then Orca, then tmux. It returns the pane and the kind that named it.
+// then tmux, then Orca. It returns the pane and the kind that named it.
 func CurrentPaneAny(getenv func(string) string) (pane string, kind Kind) {
-	for _, k := range []Kind{Herdr, Orca, Tmux} {
+	for _, k := range []Kind{Herdr, Tmux, Orca} {
 		if p := CurrentPane(k, getenv); p != "" {
 			return p, k
 		}

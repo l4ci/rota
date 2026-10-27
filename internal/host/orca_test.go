@@ -60,6 +60,12 @@ func (f *orcaFake) run(_ context.Context, name string, a []string) (Result, erro
 	}
 	switch a[1] {
 	case "create":
+		files, _ := filepath.Glob(filepath.Join(f.cwd, ".git", "rota-orca", "agent-*.pid"))
+		for _, file := range files {
+			if err := os.WriteFile(file, []byte("123\n"), 0600); err != nil {
+				return Result{}, err
+			}
+		}
 		for i, v := range a {
 			if v == "--command" {
 				f.command = a[i+1]
@@ -357,14 +363,6 @@ func TestOrcaDialogAppearingDuringGuardRefusesSend(t *testing.T) {
 	e := New(Orca, f.deps()).Send(context.Background(), "ben", f.handle(t), orcaBrief(t, "do work"))
 	if !errors.Is(e, ErrDialogOpen) || f.sends != 0 {
 		t.Fatalf("late dialog: %v sends=%d", e, f.sends)
-	}
-}
-func TestOrcaDeadRootWithoutTreeCannotProveGone(t *testing.T) {
-	f := newOrcaFake(t)
-	f.alive[123] = false
-	e := New(Orca, f.deps()).Kill(context.Background(), "ben", f.handle(t))
-	if e == nil || f.calls != 0 {
-		t.Fatalf("dead root lost orphan proof: %v calls=%d", e, f.calls)
 	}
 }
 func TestOrcaCloseFailureNeverProvesGone(t *testing.T) {

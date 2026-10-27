@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/shlex"
 )
 
@@ -72,6 +73,11 @@ func decodeOrca(s string) (orcaHandle, error) {
 	b, e := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(s, "orca:"))
 	if !strings.HasPrefix(s, "orca:") || e != nil || json.Unmarshal(b, &h) != nil || h.Cwd == "" || h.PIDFile == "" {
 		return h, fmt.Errorf("unverifiable Orca handle")
+	}
+	dir, err := orcaStateDir(h.Cwd)
+	match, _ := filepath.Match("agent-*.pid", filepath.Base(h.PIDFile))
+	if err != nil || !filepath.IsAbs(h.PIDFile) || filepath.Clean(filepath.Dir(h.PIDFile)) != filepath.Clean(dir) || !match {
+		return h, fmt.Errorf("unverifiable Orca handle: PID proof must be an agent-*.pid file in the worktree's rota-orca directory")
 	}
 	return h, nil
 }
@@ -176,8 +182,16 @@ func (o *orca) Spawn(ctx context.Context, s SpawnOpts) (string, error) {
 	}
 	for waited := 0; waited < s.BootTimeout; waited += 2 {
 		p, e := o.ReadPane(ctx, s.Slot, h, 0)
+		if e == nil {
+			if dialog, ok := orcaDialog(p); ok {
+				return h, fmt.Errorf("%w; dismiss it in the Orca terminal, then re-run assign", &DialogError{First: dialog.First})
+			}
+		}
 		if e == nil && orcaReady(p) {
 			meta, _ := decodeOrca(h)
+			if _, e := o.processes(meta, true); e != nil {
+				return h, fmt.Errorf("record Orca boot process evidence: %w", e)
+			}
 			if e := os.WriteFile(meta.PIDFile+".ready", []byte("ready"), 0600); e != nil {
 				return h, e
 			}
@@ -231,6 +245,12 @@ func (o *orca) ReadPane(ctx context.Context, slot, h string, lines int) (string,
 	return o.readPane(ctx, &v, lines)
 }
 func (o *orca) readPane(ctx context.Context, v *orcaHandle, lines int) (string, error) {
+	if v.PIDFile != "" {
+		// Keep observed descendants while the agent is alive, before a crash
+		// can reparent them. Missing proof during early boot does not hide a
+		// dialog; Spawn requires a successful snapshot before returning ready.
+		_, _ = o.processes(*v, true)
+	}
 	if v.ID == "" {
 		return "", fmt.Errorf("unverifiable Orca terminal: native handle missing")
 	}
@@ -285,7 +305,7 @@ const orcaBriefLimit = 120 * 1024
 
 func orcaCheckSize(text string) error {
 	if len(text) > orcaBriefLimit {
-		return fmt.Errorf("Orca brief is %d UTF-8 bytes; limit is %d bytes", len(text), orcaBriefLimit)
+		return fmt.Errorf("Orca brief is %d UTF-8 bytes; limit is %d bytes; shorten the brief before resending", len(text), orcaBriefLimit)
 	}
 	return nil
 }
@@ -332,7 +352,7 @@ func (o *orca) send(ctx context.Context, handle, text string) error {
 	before = latest
 	handle = encodeOrca(h)
 	if !orcaReady(before) && !o.inputReady(h, before) {
-		return fmt.Errorf("orca input is not ready")
+		return fmt.Errorf("orca input is not ready; wait for the agent prompt in the Orca terminal, then retry")
 	}
 	raw, err := o.call(ctx, "terminal", "send", "--terminal", h.ID, "--text", text, "--enter", "--wait-submit", "20", "--json")
 	if err != nil {
@@ -368,14 +388,14 @@ func (o *orca) send(ctx context.Context, handle, text string) error {
 		if above == oldAbove {
 			continue
 		}
-		if orcaBusy.MatchString(above) && !orcaBusy.MatchString(oldAbove) {
+		if orcaBusy.MatchString(above) && !orcaBusy.MatchString(oldAbove) && !orcaBusy.MatchString(text) {
 			return o.verifyBranch(ctx, h)
 		}
 	}
 	return ErrNotSubmitted
 }
 
-var orcaBusy = regexp.MustCompile(`(?i)esc to interrupt|working[.…]|thinking[.…]|turn started`)
+var orcaBusy = regexp.MustCompile(`(?im)^[ \t]*(?:[•●✶✻✽✢*][ \t]*)?[^\r\n]*\besc to interrupt\b[^\r\n]*$`)
 
 func (o *orca) Kill(ctx context.Context, slot, handle string) error {
 	if handle == "" {
@@ -409,12 +429,10 @@ func (o *orca) Kill(ctx context.Context, slot, handle string) error {
 		if _, e = o.call(ctx, "terminal", "close", "--terminal", h.ID, "--json"); e != nil {
 			return e
 		}
-		if e = os.WriteFile(h.PIDFile+".closed", []byte(h.ID), 0600); e != nil {
-			return e
-		}
-	} else if b, e := os.ReadFile(h.PIDFile + ".closed"); e != nil || string(b) != h.ID {
-		return fmt.Errorf("unverifiable Orca close: native handle missing without prior close evidence")
 	}
+	// A runtime restart can remove the native handle without a prior close.
+	// Absence is not process proof: the retained tree must still be all gone.
+	// Round reclaim owns the --force guard for an unverifiable stale handle.
 	gone := func() bool {
 		ts, e := o.terminals(ctx)
 		if e != nil {
@@ -434,9 +452,18 @@ func (o *orca) Kill(ctx context.Context, slot, handle string) error {
 	return nil
 }
 
-// processes preserves the pre-close tree on disk: a retry after the root exits
-// must still check children that were reparented when the terminal closed.
+// processes retains observations from boot, polling and cleanup. Serialize
+// updates so a polling process cannot discard descendants saved by cleanup.
 func (o *orca) processes(h orcaHandle, snapshot bool) ([]int, error) {
+	var pids []int
+	err := fsio.Locked(h.PIDFile+".tree", 10*time.Second, func() error {
+		var err error
+		pids, err = o.processesLocked(h, snapshot)
+		return err
+	})
+	return pids, err
+}
+func (o *orca) processesLocked(h orcaHandle, snapshot bool) ([]int, error) {
 	raw, e := os.ReadFile(h.PIDFile)
 	if e != nil {
 		return nil, fmt.Errorf("missing Orca PID proof: %w", e)
@@ -461,10 +488,16 @@ func (o *orca) processes(h orcaHandle, snapshot bool) ([]int, error) {
 	} else if !os.IsNotExist(e) {
 		return nil, e
 	} else if !snapshot || !o.d.Alive(pid) {
-		return nil, fmt.Errorf("missing Orca pre-close process-tree proof")
+		return nil, fmt.Errorf("missing Orca retained process-tree proof; inspect the slot processes before retrying cleanup")
 	}
 	if snapshot {
-		pids = append(pids, o.d.Tree(pid)...)
+		// An observed child may have outlived the original agent and spawned
+		// its own descendants. Refresh every retained live root, not just PID.
+		for _, root := range append([]int(nil), pids...) {
+			if o.d.Alive(root) {
+				pids = append(pids, o.d.Tree(root)...)
+			}
+		}
 	}
 	unique := []int{}
 	seen := map[int]bool{}
@@ -476,7 +509,7 @@ func (o *orca) processes(h orcaHandle, snapshot bool) ([]int, error) {
 	}
 	if snapshot {
 		raw, _ := json.Marshal(unique)
-		if e := os.WriteFile(treeFile, raw, 0600); e != nil {
+		if e := fsio.WriteFileAtomic(treeFile, raw); e != nil {
 			return nil, e
 		}
 	}
@@ -571,10 +604,28 @@ func (o *orca) Snapshot(ctx context.Context) ([]Agent, error) {
 		if t.Exited {
 			continue
 		}
-		handle, _, _ := o.recorded(t)
+		handle, h, owned := o.recorded(t)
+		if owned && o.processesGone(h) {
+			continue
+		}
 		out = append(out, Agent{Tab: handle, Name: t.Title, Cwd: t.Cwd})
 	}
 	return out, nil
+}
+
+// Only rota-owned, retained process evidence can prove a terminal agentless;
+// connected/writable/orphaned and absent runtime handles cannot.
+func (o *orca) processesGone(h orcaHandle) bool {
+	pids, err := o.processes(h, false)
+	if err != nil {
+		return false
+	}
+	for _, pid := range pids {
+		if o.d.Alive(pid) {
+			return false
+		}
+	}
+	return true
 }
 func (o *orca) Tabs(ctx context.Context) ([]Tab, error) {
 	ts, e := o.terminals(ctx)
@@ -584,17 +635,7 @@ func (o *orca) Tabs(ctx context.Context) ([]Tab, error) {
 	out := []Tab{}
 	for _, t := range ts {
 		handle, h, owned := o.recorded(t)
-		agentless := false
-		if t.Exited && owned {
-			if pids, e := o.processes(h, false); e == nil {
-				agentless = true
-				for _, p := range pids {
-					if o.d.Alive(p) {
-						agentless = false
-					}
-				}
-			}
-		}
+		agentless := owned && o.processesGone(h)
 		out = append(out, Tab{ID: handle, Cwds: []string{t.Cwd}, Agentless: agentless})
 	}
 	return out, nil
@@ -731,7 +772,7 @@ func (o *orca) gitBranch(ctx context.Context, cwd string) (string, error) {
 func (o *orca) verifyBranch(ctx context.Context, h orcaHandle) error {
 	ts, e := o.terminals(ctx)
 	if e != nil {
-		return fmt.Errorf("prompt already submitted; Orca branch verification failed: %w; disable autoRenameBranchFromWork and do not resend the prompt", e)
+		return fmt.Errorf("prompt already submitted; Orca branch verification failed: %w; disable autoRenameBranchFromWork in Orca settings and do not resend the prompt", e)
 	}
 	var terminal *orcaTerminal
 	for i := range ts {
@@ -742,14 +783,14 @@ func (o *orca) verifyBranch(ctx context.Context, h orcaHandle) error {
 	}
 	gitBranch, e := o.gitBranch(ctx, h.Cwd)
 	if e != nil {
-		return fmt.Errorf("prompt already submitted; Orca branch verification failed: %w; disable autoRenameBranchFromWork and do not resend the prompt", e)
+		return fmt.Errorf("prompt already submitted; Orca branch verification failed: %w; disable autoRenameBranchFromWork in Orca settings and do not resend the prompt", e)
 	}
 	nativeBranch := "<native handle missing>"
 	if terminal != nil {
 		nativeBranch = terminal.Branch
 	}
 	if h.Branch == "" || terminal == nil || nativeBranch != h.Branch || gitBranch != h.Branch {
-		return fmt.Errorf("prompt already submitted; Orca branch changed or is unverifiable: expected %q, terminal %q, worktree %q; disable autoRenameBranchFromWork and do not resend the prompt", h.Branch, nativeBranch, gitBranch)
+		return fmt.Errorf("prompt already submitted; Orca branch changed or is unverifiable: expected %q, terminal %q, worktree %q; disable autoRenameBranchFromWork in Orca settings and do not resend the prompt", h.Branch, nativeBranch, gitBranch)
 	}
 	return nil
 }
