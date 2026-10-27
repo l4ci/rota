@@ -32,7 +32,7 @@ func TestAutopilotTickDefersManualGate(t *testing.T) {
 	if _, err := config.Set(f.root, "ship.review", "none"); err != nil {
 		t.Fatal(err)
 	}
-	for _, branch := range []string{"ben/1-x", "dana/2-y", "manual/3-z"} {
+	for _, branch := range []string{"ben/1-x", "dana/2-y"} {
 		gitIn(t, f.root, "branch", branch)
 	}
 	headOut, err := exec.Command("git", "-C", f.root, "rev-parse", "HEAD").Output()
@@ -48,8 +48,7 @@ func TestAutopilotTickDefersManualGate(t *testing.T) {
 	}
 	write(t, filepath.Join(f.root, ".rota", "workers.json"), `{"slots":[
 		{"name":"ben","branch":"ben/1-x","base":"main","state":"done","pr":"#11"},
-		{"name":"dana","branch":"dana/2-y","base":"main","state":"done","pr":"#12"},
-		{"name":"manual","branch":"manual/3-z","base":"main","state":"busy","pr":"#99"}]}`)
+		{"name":"dana","branch":"dana/2-y","base":"main","state":"done","pr":"#12"}]}`)
 	started, release, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	releaseManual := sync.OnceFunc(func() { close(release) })
 	manual := worker.Env{Config: diskConfig, Forge: func(string, string, tracker.Settings) (worker.Forge, error) {
@@ -59,7 +58,7 @@ func TestAutopilotTickDefersManualGate(t *testing.T) {
 	}}
 	go func() {
 		defer close(finished)
-		_, _ = manual.Gate(context.Background(), f.root, worker.GateOpts{Slot: "manual", Base: "main"})
+		_, _ = manual.Gate(context.Background(), f.root, worker.GateOpts{Slot: "ben", Base: "main"})
 	}()
 	defer func() {
 		releaseManual()
