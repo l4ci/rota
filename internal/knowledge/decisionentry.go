@@ -26,6 +26,11 @@ type decisionLine struct {
 // decisionLines marks fenced code as literal, including longer and tilde
 // fences. Positions always address the original bytes, including CRLF files.
 func decisionLines(text string) []decisionLine {
+	lines, _ := scanDecisionLines(text)
+	return lines
+}
+
+func scanDecisionLines(text string) ([]decisionLine, bool) {
 	var out []decisionLine
 	var fence byte
 	width := 0
@@ -53,7 +58,7 @@ func decisionLines(text string) []decisionLine {
 		out = append(out, decisionLine{pos, end, line, structural})
 		pos = end
 	}
-	return out
+	return out, fence != 0
 }
 
 var decisionMarkers = []struct{ name, prefix string }{
@@ -74,7 +79,10 @@ func ParseDecision(raw string) Decision {
 	}
 	var marks []mark
 	bodyStart := 0
-	lines := decisionLines(raw)
+	lines, unclosed := scanDecisionLines(raw)
+	if unclosed {
+		d.errors = append(d.errors, "unclosed fence")
+	}
 	if len(lines) > 0 && strings.HasPrefix(lines[0].text, "### ") {
 		d.Title = strings.TrimSpace(strings.TrimPrefix(lines[0].text, "### "))
 		bodyStart = lines[0].end
@@ -82,7 +90,9 @@ func ParseDecision(raw string) Decision {
 		d.errors = append(d.errors, "missing title")
 	}
 	marks = append(marks, mark{"rule", bodyStart, bodyStart})
-	rank := map[string]int{"rule": 0, "why": 1, "forbids": 2, "permits": 3, "status": 4, "paths": 5, "date": 6}
+	// Older writers placed trailing metadata in different orders. Keep the
+	// four content parts ordered, but read metadata as one trailing group.
+	rank := map[string]int{"rule": 0, "why": 1, "forbids": 2, "permits": 3, "status": 4, "paths": 4, "date": 4}
 	last := 0
 	seen := map[string]bool{"rule": true}
 	for _, l := range lines {
@@ -191,6 +201,9 @@ type DecisionCheck struct{ Errors, Warnings []string }
 
 func CheckDecisions(content string) DecisionCheck {
 	r := DecisionCheck{Errors: []string{}, Warnings: []string{}}
+	if _, unclosed := scanDecisionLines(content); unclosed {
+		r.Errors = append(r.Errors, "DECISIONS.md: unclosed fence")
+	}
 	for _, t := range decisionTopics(content) {
 		for _, e := range t.entries {
 			d := ParseDecision(content[e.start:e.end])
