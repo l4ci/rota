@@ -391,21 +391,40 @@ func (r Registry) BranchHolder(branch string) (s *Slot, q *QueuedPR) {
 	return s, q
 }
 
-// BundleHolder finds who holds id as a bundle member (not as a lead): the slot
-// whose bundle lists it, else the queued record whose bundle does. Both are nil
-// when id is no member.
-func (r Registry) BundleHolder(id string) (*Slot, *QueuedPR) {
+// HolderOpts scopes BundleHolder. Lead also matches the lead issue of a slot or
+// queued PR, not only its members. Skip names a slot that is passed over: the
+// slot resuming its own bundle holds its members itself.
+type HolderOpts struct {
+	Lead bool
+	Skip string
+}
+
+// BundleHolder finds who holds id: the slot whose bundle lists it (its lead too
+// under o.Lead), else the queued record that does. Both are nil when nothing
+// holds it. The queued record is only looked up when no slot matched.
+func (r Registry) BundleHolder(id string, o HolderOpts) (*Slot, *QueuedPR) {
 	want := NormID(id)
 	has := func(ids []string) bool {
 		return want != "" && slices.ContainsFunc(ids, func(m string) bool { return NormID(m) == want })
 	}
 	for _, s := range r.Slots() {
-		if has(s.Bundle()) {
+		if o.Skip != "" && s.Name() == o.Skip {
+			continue
+		}
+		ids := s.Bundle()
+		if o.Lead {
+			ids = s.BundleIssues()
+		}
+		if has(ids) {
 			return s, nil
 		}
 	}
 	for _, q := range r.PRs() {
-		if has(q.Bundle) {
+		ids := q.Bundle
+		if o.Lead {
+			ids = q.Issues()
+		}
+		if has(ids) {
 			return nil, &q
 		}
 	}
