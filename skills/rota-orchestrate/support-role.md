@@ -1,6 +1,6 @@
 # Support role
 
-Loaded by `skills/rota-orchestrate/SKILL.md` (section *Support role*) when `round.role: support` is set on this machine.
+Loaded by `skills/rota-orchestrate/SKILL.md` (section *Support role*) when `round.role: support` is set on this machine, or `round.support` names a support machine (main side).
 
 A second machine can run rounds beside main without any link between them (`round.support` names it, `round.role: support` is set locally per machine; see `docs/contributing/rounds.md`). On a support machine you never merge and never write tracked `.rota/` content: those verbs exit 4 `blockedBy: role`. Workers there post learnings as `learning` comments (`rota item comment add <ID> --kind learning`), skip the contract-doc restamp, and leave knowledge to main, which runs `/rota-learn` at wind-down and harvests them. Set `round.support` between rounds: bounce counts are not carried over when the key flips. At the bounce cap the item parks `needs-human` and no review-bounce is posted.
 

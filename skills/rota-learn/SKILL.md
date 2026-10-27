@@ -30,7 +30,7 @@ With none of those, run the normal flow (Step 2 onward), after the role check be
 
 Run `rota config show round.role` first.
 
-- **`support`** or **round worker** (`ROTA_SLOT` is set, any role): read [`worker-roles.md`](worker-roles.md) and follow it instead of the normal flow.
+- **`support`** or **round worker** (`ROTA_SLOT` is set, any role): do the Step 2 scan as usual, then read [`worker-roles.md`](worker-roles.md) for where the learnings go (they are posted, not written to a file).
 - **main** (the default, no `ROTA_SLOT`): first harvest what workers posted, main-machine and support alike. `rota knowledge harvest --json` lists unharvested `learning` comments on issues merged in the round. Decide per comment: fold or reject. Fold an accepted one into `KNOWLEDGE.md` through Steps 3 to 6 (`rota knowledge add`). Either way run `rota knowledge harvest --mark <commentId>` so it never lists again; a rejected comment is marked too. Then run the normal scan. The `harvest` listing exits 1 on the file backend (`blockedBy: backend`) and on a forge that cannot say who may write, such as GitLab (`blockedBy: forge`); on either, skip it and run the normal scan.
 
 ## Step 2 — Scan the Session for Learnings

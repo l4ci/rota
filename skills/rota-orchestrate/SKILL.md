@@ -125,7 +125,7 @@ When the slate is done or the maintainer calls the round: `rota round wind-down`
 
 ## Support role
 
-When `round.role: support` is set on this machine (a second machine running rounds beside main), read [`support-role.md`](support-role.md): you never merge and never write tracked `.rota/` content.
+When `round.role: support` is set on this machine, or `round.support` is set (main side of a two-machine setup), read [`support-role.md`](support-role.md): on a support machine you never merge and never write tracked `.rota/` content; main has its own rules there.
 
 ## Solo mode
 
