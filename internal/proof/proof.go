@@ -166,6 +166,13 @@ func Latest(rows []Row, sha, check string) (Row, bool) {
 	return Row{}, false
 }
 
+// Lookup reads the latest result for a mark from stored proof text.
+func Lookup(content, sha, check string) (string, bool) {
+	rows, _, _ := parseRows(content)
+	row, ok := Latest(rows, sha, check)
+	return row.Result, ok
+}
+
 // Proves reports whether the latest row for check at head is a PASS: a FAIL
 // recorded after a PASS at the same sha withdraws the proof.
 func Proves(rows []Row, head, check string) bool {

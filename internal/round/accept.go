@@ -114,7 +114,7 @@ func (e Env) Accept(ctx context.Context, root string, be Board, in AcceptInput) 
 	if note == "" {
 		note = "filed " + strings.Join(issues, ", ")
 	}
-	if err := e.closeNoPR(ctx, root, be, s, it, "Review done: ", note); err != nil {
+	if err := e.closeNoPR(ctx, root, be, s, it, "Review done: ", note, nil); err != nil {
 		return res, err
 	}
 	res.Issues, res.Changed = issues, true
@@ -134,12 +134,13 @@ func (e Env) acceptResearch(ctx context.Context, root string, be Board, s *worke
 	if gist == "" {
 		return res, blocked(BlockNoGist, "%s is a research item: pass --gist <one line> for the milestone's decision log", tracker.RefOf(it.ID))
 	}
-	// The decision log first: it is idempotent, so a failed close is retried by
-	// running accept again.
-	if _, err := backlog.LogDecision(be, it, backlog.DecisionRef(it.ID), gist); err != nil {
-		return res, wrap(err)
+	// The decision log follows acceptance preflight but still precedes the
+	// close, so a failed close can retry the idempotent log.
+	before := func() error {
+		_, err := backlog.LogDecision(be, it, backlog.DecisionRef(it.ID), gist)
+		return err
 	}
-	if err := e.closeNoPR(ctx, root, be, s, it, "Finding accepted: ", gist); err != nil {
+	if err := e.closeNoPR(ctx, root, be, s, it, "Finding accepted: ", gist, before); err != nil {
 		return res, err
 	}
 	res.Finding, res.Changed = s.Finding(), true
