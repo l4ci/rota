@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"os/signal"
 	"strconv"
@@ -17,6 +16,8 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -401,19 +402,7 @@ func bodyPath(c *Ctx, path string) (string, func(), error) {
 	if err != nil {
 		return "", nil, err
 	}
-	f, err := os.CreateTemp("", "rota-body-*")
-	if err != nil {
-		return "", nil, err
-	}
-	_, err = f.Write(b)
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
-		os.Remove(f.Name())
-		return "", nil, err
-	}
-	return f.Name(), func() { os.Remove(f.Name()) }, nil
+	return fsio.WriteTemp(c.deps().Getenv("TMPDIR"), "rota-body-*", b)
 }
 
 func workerDispatch(fs *flag.FlagSet) RunFunc {

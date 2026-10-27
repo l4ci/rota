@@ -430,13 +430,11 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	payload.WriteString(text)
 	out := payload.String()
 	out = hz.Sign(signKey, out)
-	tmp, err := os.CreateTemp("", "rota-dispatch-*")
+	path, cleanup, err := fsio.WriteTemp(e.Getenv("TMPDIR"), "rota-dispatch-*", []byte(out))
 	if err != nil {
 		return res, err
 	}
-	defer os.Remove(tmp.Name())
-	tmp.WriteString(out)
-	tmp.Close()
+	defer cleanup()
 
 	// A relay reuses the session, so a brief an earlier send left unsent on the
 	// prompt line is still there: submit it rather than type a second copy. A
@@ -449,10 +447,10 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		}
 	}
 	if rs := h.Capabilities().Resubmitter; rs != nil && o.Relay && s.Unsent() {
-		handled, sendErr = rs.SubmitPending(ctx, o.Slot, handle, tmp.Name())
+		handled, sendErr = rs.SubmitPending(ctx, o.Slot, handle, path)
 	}
 	if !handled {
-		sendErr = h.Send(ctx, o.Slot, handle, tmp.Name())
+		sendErr = h.Send(ctx, o.Slot, handle, path)
 	}
 	// Remember a stall so the next relay checks the prompt line first. Written
 	// only on a change: a clean send leaves the registry untouched.

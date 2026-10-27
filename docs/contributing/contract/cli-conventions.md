@@ -105,6 +105,7 @@ Exits 1 and 4 say that the requested outcome did not happen. They do not say tha
 - `fsio.UpdateJSONStrict` is for a file whose loss is destructive (the worker registry). A missing file starts from the default; a file that exists but cannot be read or parsed is an error wrapping `fsio.ErrUnreadable` ("fix or remove it, rota will not overwrite it"), where `UpdateJSON` would start from the default and overwrite it. Such a verb exits 5, per Exit codes.
 - A marker file (a small JSON file one process owns, such as a lease) is written and removed under the same sidecar lock. A remove deletes the file only when the caller still owns its contents, so a successor's marker is never removed, and a missing file is not an error.
 - JSON state files are written the way Python's `json.dumps(data, indent=2)` writes them: two-space indent, key order preserved, `\uXXXX` for non-ASCII, and a trailing newline. A file round-tripped through `rota` produces no diff.
+- Disposable body, brief and verification-log files use `fsio.WriteTemp`. Callers pass `TMPDIR` through their `Getenv` seam (empty uses the OS default), receive a closed file and a cleanup function, and keep the file until its consumer returns, including on error. Creation, write or close failures return an error; an incomplete file is removed. A failed verification keeps its log for the caller to report or remove.
 
 ## Config
 
