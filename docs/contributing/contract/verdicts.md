@@ -1,6 +1,10 @@
 ---
 refs:
   - internal/verdict
+  - internal/cli/verdict.go
+  - internal/cli/verdict_report.go
+  - internal/backlog/report.go
+  - internal/tracker/report.go
 ---
 
 ## B2: verdicts
@@ -17,7 +21,7 @@ B2 (#55) replaces "parse the last line" routing in `/rota-review`, `/rota-qa`, `
 ### rota verdict add
 rota verdict add [<branch>] --kind <review-spec|review-quality|review-cross|review-security|review-perf|review-ux|second-opinion|qa|behaviour> --verdict <verdict> [--harness <claude|codex|opencode> --model <model>] [--sha <sha>] [--body-file <path|->] [--transcript <path>] [--file-deferred --pr <ref>]
 repo: scoped
-data: record, plus {"next": string, "combined"?: string, "depthNote"?: string, "filed"?: []string, "appended"?: number, "filedWhy"?: string, "changed": true}
+data: record, plus {"next": string, "combined"?: string, "depthNote"?: string, "report": "posted"|"pending", "reportReason"?: string, "filed"?: []string, "appended"?: number, "filedWhy"?: string, "changed": true}
 exit: 2 when `--file-deferred` is given without `--pr` or `--pr` without `--file-deferred`, `review.fileDeferred` holds a value other than `minor`, `major` or `off`, the backlog scope cannot be resolved (both before the record is written), when --kind or --verdict is missing, the verdict is not one the kind takes, the body is invalid (see body), `--transcript` is given with a kind other than `behaviour`, `--harness` is not a harness kind, `--kind review-cross` lacks `--harness` or `--model`, or at an umbrella root without --repo; 3 when the branch does not exist, `--sha` names no commit, HEAD is detached and no branch is named, or no base branch resolves; 4 when `--sha` is not the head of the remote branch or, without `--sha`, the local branch differs from it; 5 when git fails
 old: none (new in B2)
 note: (#1292) A leading `<remote>/` on `<branch>` is stripped, so `origin/feat/x` and `feat/x` share the key `feat/x`, unless a local branch of the full name exists. The head `verdict show` and `route` compare against is still the revision named.
@@ -27,6 +31,16 @@ note: `combined` is set on `review-quality` and `review-spec` records. On `revie
 note: (#963) `--file-deferred --pr <ref>` collects the deferred findings of the body in **one** `tasks` item per PR, titled "Review follow-ups from PR #N" with `--related <ref>`. Each finding is a `### <title>` block under `## Problem` (detail, `file:line`, the PR and verdict it came from) and one `- [ ] AC-n:` line under `## Acceptance` (the finding's `fix`, else a neutral "the problem above no longer reproduces, and a test or check that failed before the fix passes after it"; the title is never an acceptance line), so the item is ready for `round candidates`. A later call for the same PR appends to the open item instead of filing another; a finding with the same title and file is not added twice. `filed` names the item (empty when nothing was filed) and `appended` counts the new lines. The config key `review.fileDeferred` sets the floor: `minor` (minor and major), `major` (default: only major; minor stays in the record and `kept` lists its titles) or `off` (nothing is filed; `filedWhy` says so). When the PR's branch leads with an issue whose title is "Review follow-ups from PR …", nothing is filed (`filedWhy` says so, every deferred title is in `kept`): a follow-up PR files no further follow-ups. The record is written first, so a retry adds only what is missing. The read-modify-write of the item runs under a per-PR lock (`.rota/followup-<N>.lock`), so verdicts recorded together for one PR still end in one item. A failure while filing or appending (an open follow-up with no `## Acceptance` section, a tracker error, a cannot-build-an-item error) is returned with the record and the item found so far in `data` (`filed`); the findings not yet written are left to a by-hand edit. `--pr 77` and `--pr '#77'` name the same PR, matched by number.
 note: `next` is the producer's next step. `review-spec`: `quality` on PASS or CONCERNS, `report` on FAIL (Stage 2 is skipped). Every other kind: `report`.
 note: `depthNote` is set on a `review-spec` or `review-quality` record when the branch's review depth (`rota review depth`) now needs a review kind not yet recorded at its head, as when a bounce fix outside the issue's files raises `light` to `full` after the light review ran: `review depth <old> -> <new> (<why>): still needs <kinds> at head, or the gate refuses review-missing`. `<old>` is the depth the branch's newest review set covered, recorded at whatever head. Text mode appends it in parentheses. It is absent when nothing is missing or the depth cannot be read; the record is already written either way.
+
+note: (#2132) After saving locally, renders a marked report (`<!-- rota:report <kind> sha=<sha> -->`) with kind, verdict, reviewed sha, findings by severity, declined findings, per-item verdicts and the unchanged body as fenced JSON. Issue mode upserts a comment on the branch's open PR and each linked item (branch, commit closing references, PR closing references and body item IDs; key-based trackers follow their existing branch/title convention). File mode upserts under `## Reports` in each linked item's detail file. The same kind and sha replaces its earlier report only when the comment belongs to the authenticated posting user; foreign marker comments are ignored. If ownership cannot be resolved, an existing marked report remains pending. Another sha appends. QA lists only cited artifact paths under `.rota/qa-runs/` that exist. Posting failures never undo or fail the local record: exit 0, `report: pending`, `reportReason` names the cause; `ship pr` retries the latest reports after opening the PR, so pre-PR reviews reach it automatically; use `verdict post` after a tracker failure.
+
+### rota verdict post
+rota verdict post [<branch>]
+repo: scoped
+data: {"branch": string, "reports": [{"kind": string, "sha": string, "report": "posted"|"pending", "reportReason"?: string}], "report": "posted"|"pending", "reportReason"?: string, "changed": bool}
+exit: 2 at an umbrella root without --repo; 3 when the branch does not exist, HEAD is detached and no branch is named, or no base branch resolves; 5 when git fails resolving the branch
+old: none (#2132)
+note: Retries the latest local record of each branch kind, including stale records at their recorded sha. Missing records give `reports: []` and `changed: false`; otherwise `changed: true` says reports were attempted. Tracker failures remain pending with exit 0, as in `verdict add`. The report marker makes repeated posting idempotent. Does not read verdicts back from the tracker.
 
 ### rota verdict show
 rota verdict show [<branch>]
