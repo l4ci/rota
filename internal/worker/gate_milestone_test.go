@@ -124,7 +124,7 @@ func TestGateMilestonePartialSliceAndDefaultBranch(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
-			w.forge("body", c.body)
+			w.setPRBody(c.body)
 			if c.base != "main" {
 				w.forge("base", c.base)
 				gitq(t, w.dir, "push", "-q", "origin", "main:refs/heads/"+c.base)
@@ -152,7 +152,7 @@ func TestGateMilestoneMixedFailureReleasesClosedClaims(t *testing.T) {
 		t.Run(failure, func(t *testing.T) {
 			w := newWorld(t, ghURL)
 			w.forge("base", "milestone/M01")
-			w.forge("body", "Closes #5\nCloses #6\nCloses #7")
+			w.setPRBody("Closes #5\nCloses #6\nCloses #7")
 			gitq(t, w.dir, "push", "-q", "origin", "main:refs/heads/milestone/M01")
 			gitq(t, w.dir, "checkout", "-q", "-b", "milestone/M01")
 			if err := os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q,"bundle":["#6","#7"]}]}`, ghURL)), 0o644); err != nil {
@@ -197,7 +197,7 @@ func TestGateMilestoneMixedFailureReleasesClosedClaims(t *testing.T) {
 func TestGateMilestoneClosesBundleAndOtherLinkedIssues(t *testing.T) {
 	w := newWorld(t, ghURL)
 	w.forge("base", "milestone/M01")
-	w.forge("body", "Closes #5\nCloses #6\nCloses #8\nRefs #9")
+	w.setPRBody("Closes #5\nCloses #6\nCloses #8\nRefs #9")
 	gitq(t, w.dir, "push", "-q", "origin", "main:refs/heads/milestone/M01")
 	gitq(t, w.dir, "checkout", "-q", "-b", "milestone/M01")
 	if err := os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q,"bundle":["#6"]}]}`, ghURL)), 0o644); err != nil {

@@ -12,7 +12,7 @@ st = json.load(open(os.environ["RM_STATE"]))
 a = sys.argv[1:]
 if a[:2] == ["pr", "view"]:
     print(json.dumps({"headRefName": "ben/5-thing", "headRefOid": st["sha"], "baseRefName": "main",
-                      "state": "OPEN", "mergeCommit": None, "body": "Closes #5"}))
+                      "state": "OPEN", "mergeCommit": None, "body": "Closes #5\n## Assumptions\nNone\n\n## Rulings\nNone\n"}))
 elif a[:2] == ["issue", "view"]:
     open(os.environ["RM_LOG"], "a").write("issue view\n")
     print(json.dumps({"number": 5, "title": "t", "body": "", "state": "OPEN", "url": "",

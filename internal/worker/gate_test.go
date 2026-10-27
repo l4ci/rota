@@ -89,7 +89,7 @@ func newWorld(t *testing.T, pr string) *world {
 	w.forge("base", "main")
 	w.forge("state", "OPEN")
 	w.forge("merge", "")
-	w.forge("body", "")
+	w.setPRBody("")
 	return w
 }
 
@@ -114,6 +114,12 @@ func (w *world) setSlot(pr, relays string) {
 		slot += `,"relays":` + relays
 	}
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[`+slot+`}]}`), 0o644)
+}
+
+// setPRBody supplies the required decision headings for fixtures testing other
+// gate behavior. Section-presence tests use forge("body", ...) for exact text.
+func (w *world) setPRBody(body string) {
+	w.forge("body", body+completePRSections)
 }
 
 // forge sets one key of the fake forge's state (a string value; "merge" and
@@ -325,7 +331,7 @@ func TestGate(t *testing.T) {
 		{name: "f: gitlab fast-forward merge has no merge commit", pr: glURL, mode: "ff", verdict: GatePass, changed: true, files: []string{"work.txt"}},
 		{name: "f2: gitlab provenance reads the MR description", pr: glURL, opts: GateOpts{CheckOnly: true}, verdict: GateProvenanceFail,
 			setup: func(w *world) {
-				w.forge("body", "## Approvals\n- x: orchestrator relay round 2\n")
+				w.setPRBody("## Approvals\n- x: orchestrator relay round 2\n")
 				w.setSlot(glURL, "[]")
 			}},
 		{name: "g: PR without an origin remote is refused, never merged locally", pr: ghURL, verdict: GateCheckBroke, noFiles: []string{"work.txt"},
@@ -367,7 +373,7 @@ func TestGateProvenance(t *testing.T) {
 		c := c
 		cases = append(cases, gateCase{name: c.name, pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: c.verdict, body: c.body, relays: c.relays,
 			setup: func(w *world) {
-				w.forge("body", c.body)
+				w.setPRBody(c.body)
 				w.setSlot(ghURL, c.relays)
 			}})
 	}
@@ -840,7 +846,7 @@ func TestGateExternalPRIssueComesFromItsHead(t *testing.T) {
 	w := newWorld(t, "")
 	gitq(t, w.worker, "push", "-q", "origin", "w1:dana/5-x")
 	w.forge("head", "dana/5-x")
-	w.forge("body", "Adds the thing.\n")
+	w.setPRBody("Adds the thing.\n")
 	res, _ := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true})
 	if res.Issue != "5" || res.Verdict != GateNotClosing {
 		t.Errorf("issue %q verdict %q, want 5 and %s: %+v", res.Issue, res.Verdict, GateNotClosing, res)
@@ -858,7 +864,7 @@ func TestGateAdoptedSupportSlotJudgesThePushedFixHead(t *testing.T) {
 		t.Fatal(err)
 	}
 	w.forge("head", branch)
-	w.forge("body", "Closes #5")
+	w.setPRBody("Closes #5")
 	w.forge("sha", gitq(t, w.worker, "rev-parse", "HEAD"))
 	gate := func() string {
 		t.Helper()
@@ -924,7 +930,7 @@ func TestGateReleasesTheClaimLabelOfClosedIssues(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
-			w.forge("body", "Closes #5\n")
+			w.setPRBody("Closes #5\n")
 			w.forge("issueState", c.state)
 			w.forge("issueLabels", "in-progress,type:bug")
 			w.forge("removeErr", c.remErr)
@@ -951,7 +957,7 @@ func TestGateMergeDropsClaimLabel(t *testing.T) {
 		for _, state := range []string{"open", "closed"} {
 			t.Run(labels+state, func(t *testing.T) {
 				w := newWorld(t, ghURL)
-				w.forge("body", "Closes #5\n")
+				w.setPRBody("Closes #5\n")
 				w.forge("issueState", state)
 				w.forge("issueLabels", labels)
 				res, err := w.gate(false, GateOpts{})
@@ -1119,7 +1125,7 @@ func TestGateRefusesAPRThatDoesNotCloseItsIssue(t *testing.T) {
 			w := newWorld(t, ghURL)
 			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
-			w.forge("body", c.body)
+			w.setPRBody(c.body)
 			w.forge("issueLabels", c.labels)
 			res, err := w.gate(false, GateOpts{CheckOnly: c.check})
 			want := c.verdict
@@ -1165,7 +1171,7 @@ func TestGateRefusesASlicePRTheForgeSaysClosesItsIssue(t *testing.T) {
 			w := newWorld(t, ghURL)
 			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
-			w.forge("body", "Refs #5\n\nD=T8 learnings (Closes #5)\n")
+			w.setPRBody("Refs #5\n\nD=T8 learnings (Closes #5)\n")
 			w.forge("issueLabels.5", "in-progress,"+PartialSliceLabel)
 			w.forge("closingRefs", c.refs)
 			res, err := w.gate(false, GateOpts{FinalSlice: c.final})
@@ -1283,7 +1289,7 @@ func TestGateRefusesAnUnpickedBestOfPR(t *testing.T) {
 			}
 			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]%s}`, ghURL, extra)), 0o644)
-			w.forge("body", "Closes #5\n")
+			w.setPRBody("Closes #5\n")
 			res, err := w.gate(false, GateOpts{CheckOnly: c.check})
 			if err != nil || res.Verdict != c.verdict {
 				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.verdict, res)
@@ -1330,7 +1336,7 @@ func TestGateAppliesTheReviewDepth(t *testing.T) {
 			w.setConfig(c.cfg)
 			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
-			w.forge("body", "Closes #5\n")
+			w.setPRBody("Closes #5\n")
 			w.forge("issueLabels", c.labels)
 			w.record("w1", "", c.recorded...)
 			res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
@@ -1376,7 +1382,7 @@ func TestGateReviewDepthSignals(t *testing.T) {
 			w.setConfig(c.cfg)
 			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
-			w.forge("body", c.body)
+			w.setPRBody(c.body)
 			w.forge("issueLabels", c.labels)
 			w.forge("issueBody", c.issueBody)
 			w.record("w1", "", spec)
@@ -1412,7 +1418,7 @@ func TestGateReviewDepthOnAnExternalPR(t *testing.T) {
 			w.setConfig(`{"ship":{"review":{"default":"full","lightBelow":1000}},"test":{"full":["true"]}}`)
 			gitq(t, w.worker, "push", "-q", "origin", "w1:dana/5-x")
 			w.forge("head", "dana/5-x")
-			w.forge("body", c.body)
+			w.setPRBody(c.body)
 			w.forge("issueLabels", "in-progress")
 			w.forge("issueBody", c.issueBody)
 			w.record("dana/5-x", "", spec)
@@ -1442,7 +1448,7 @@ func TestGateLightWithoutAnIssueNeedsStandards(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
 			w.setConfig(`{"ship":{"review":"light"},"test":{"full":["true"]}}`)
-			w.forge("body", "no issue here\n")
+			w.setPRBody("no issue here\n")
 			w.record("w1", "", c.recorded...)
 			res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
 			if err != nil {
@@ -1467,7 +1473,7 @@ func TestGateReviewDepthUnresolvable(t *testing.T) {
 	w.setConfig(`{"ship":{"review":{"default":"full","labels":{"risk:high":"full"}}},"test":{"full":["true"]}}`)
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
-	w.forge("body", "Closes #5\n")
+	w.setPRBody("Closes #5\n")
 	if res, err := w.gate(false, GateOpts{CheckOnly: true}); err != nil || res.Verdict != GateFresh {
 		t.Fatalf("no port: %+v %v", res, err)
 	}
@@ -1485,7 +1491,7 @@ func TestGateReviewDepthLabelReadFailureIsCheckBroke(t *testing.T) {
 	w.setConfig(`{"ship":{"review":{"default":"full","labels":{"risk:high":"full"}}},"test":{"full":["true"]}}`)
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
-	w.forge("body", "Closes #5\n")
+	w.setPRBody("Closes #5\n")
 	w.forge("issueErr", "HTTP 500: server error")
 	w.record("w1", "", verdict.ReviewSpec, verdict.ReviewQuality)
 	res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
@@ -1505,7 +1511,7 @@ func TestGateReviewDepthCrossIssueReadFailureIsCheckBroke(t *testing.T) {
 	w.setConfig(`{"round":{"harnesses":["claude","codex"]},"test":{"full":["true"]}}`)
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","kind":"claude","pr":%q}]}`, ghURL)), 0o644)
-	w.forge("body", "Closes #5\n")
+	w.setPRBody("Closes #5\n")
 	w.forge("issueErr", "HTTP 500: server error")
 	w.record("w1", "", verdict.ReviewSpec, verdict.ReviewQuality)
 	res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
@@ -1523,7 +1529,7 @@ func TestGateReviewDepthDiffReadFailureIsCheckBroke(t *testing.T) {
 	w.setConfig(`{"ship":{"review":{"default":"full","lightBelow":100}},"test":{"full":["true"]}}`)
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
-	w.forge("body", "Closes #5\n")
+	w.setPRBody("Closes #5\n")
 	e := w.env(false)
 	realGit := e.Git
 	if realGit == nil {
@@ -1553,7 +1559,7 @@ func TestGateReviewDepthAsksForTheCheckedHead(t *testing.T) {
 	w.setConfig(`{"ship":{"review":{"default":"light"}},"test":{"full":["true"]}}`)
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
-	w.forge("body", "Closes #5\n")
+	w.setPRBody("Closes #5\n")
 	w.record("w1", "oldsha", verdict.ReviewSpec)
 	res, err := w.gate(false, GateOpts{CheckOnly: true, CheckReviews: true})
 	if err != nil {
@@ -1586,7 +1592,7 @@ func secondPR(t *testing.T, head string) *world {
 	w := newWorld(t, ghURL)
 	gitq(t, w.worker, "push", "-q", "origin", "w1:refs/heads/"+head)
 	w.forge("head", head)
-	w.forge("body", "Closes #5\n\n## Approvals\n- use the shared cache: orchestrator relay round 2\n")
+	w.setPRBody("Closes #5\n\n## Approvals\n- use the shared cache: orchestrator relay round 2\n")
 	relays := `[{"round":2,"ts":"2026-10-02T10:00:00Z","summary":"use the shared cache for the lookup"}]`
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"dana/5-first-slice","task":"#5","pr":%q,"relays":%s}]}`, ghURL, relays)), 0o644)
@@ -1700,7 +1706,7 @@ func TestGateRequiresCrossReview(t *testing.T) {
 			w.setConfig(c.cfg)
 			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","kind":%q,"pr":%q}]}`, c.kind, ghURL)), 0o644)
-			w.forge("body", "Closes #5\n")
+			w.setPRBody("Closes #5\n")
 			w.forge("issueLabels", "in-progress,"+c.labels)
 			w.record("w1", "", spec, quality)
 			if c.cross != "" {
@@ -1764,7 +1770,7 @@ func TestGateRequiresLensReview(t *testing.T) {
 			w.setConfig(c.cfg)
 			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","kind":"claude","pr":%q}]}`, ghURL)), 0o644)
-			w.forge("body", "Closes #5\n")
+			w.setPRBody("Closes #5\n")
 			w.forge("issueLabels", "in-progress,"+c.labels)
 			w.record("w1", "", spec, quality)
 			for _, r := range c.recs {
@@ -1813,7 +1819,7 @@ func TestGateReviewsOnlyIgnoresFreshness(t *testing.T) {
 			w.setConfig(`{"ship":{"review":{"default":"full"}},"test":{"full":["true"]}}`)
 			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
-			w.forge("body", "Closes #5\n")
+			w.setPRBody("Closes #5\n")
 			w.forge("issueLabels", "in-progress")
 			w.record("w1", "", c.recorded...)
 			advanceMainOn(w, "work.txt") // the branch now conflicts with the base

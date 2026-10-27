@@ -171,7 +171,7 @@ type prForge struct {
 }
 
 func (f prForge) PRView(context.Context, int) (tracker.PRInfo, error) {
-	return tracker.PRInfo{Head: "rota-worker/w1", HeadSHA: f.sha, Base: "main", State: "OPEN", Title: f.title}, nil
+	return tracker.PRInfo{Head: "rota-worker/w1", HeadSHA: f.sha, Base: "main", State: "OPEN", Title: f.title, Body: "## Assumptions\nNone\n## Rulings\nNone\n"}, nil
 }
 
 func (prForge) PRMergeable(context.Context, int) (tracker.Mergeability, error) {
