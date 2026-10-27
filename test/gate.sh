@@ -143,6 +143,7 @@ retry_tree_unchanged() {
     [ -z "$(git -C "$REPO" status --porcelain)" ]
 }
 
+TIMEFORMAT='%R'
 START=$SECONDS
 if [ "$SMOKE_ONLY" = 0 ]; then
   launch validate python3 test/validate-skills.py
@@ -182,12 +183,13 @@ for idx in "${!PIDS[@]}"; do
         break
       fi
       retry_rc=0
-      (cd "$REPO" && go test -race -timeout 30m -count=1 "$pkg") >"$retry_log" 2>&1 || retry_rc=$?
+      { time { (cd "$REPO" && go test -race -timeout 30m -count=1 "$pkg") >"$retry_log" 2>&1; }; } \
+        2>"$retry_log.time" || retry_rc=$?
       check="go:${pkg#"$module"/}"
       if [ "$retry_rc" = 0 ] && retry_tree_unchanged; then
         first_log="$LOGS/go-first$pkg_idx.log"
         if python3 "$REPO/test/gate-go.py" output "$LOGS/gotest.log" "$pkg" >"$first_log" &&
-           python3 "$REPO/test/gate-flake.py" "$check" "$first_log" "$retry_log"; then
+           python3 "$REPO/test/gate-flake.py" "$check" "$first_log" "$retry_log" "$retry_log.time"; then
           echo "FLAKY $check (failed once, passed isolated retry)"
           flaky=1
         else
@@ -212,11 +214,11 @@ for idx in "${!PIDS[@]}"; do
     if [ "$rc" = 1 ] && [ "$retryable" = 1 ] && retry_tree_unchanged; then
       retry_rc=0
       shard="${name#smoke-shard}"
-      (cd "$REPO" && env ROTA_SMOKE_DIAGNOSTICS="$SMOKE_DIAGNOSTICS" \
+      { time { (cd "$REPO" && env ROTA_SMOKE_DIAGNOSTICS="$SMOKE_DIAGNOSTICS" \
         SECTION_LIST="$(cat "$LOGS/shard$shard.list")" bash test/runner.sh) \
-        >"$LOGS/$name.retry.log" 2>&1 || retry_rc=$?
+        >"$LOGS/$name.retry.log" 2>&1; }; } 2>"$LOGS/$name.retry.log.time" || retry_rc=$?
       if [ "$retry_rc" = 0 ] && retry_tree_unchanged && grep -q 'All smoke tests passed.' "$LOGS/$name.retry.log"; then
-        if python3 "$REPO/test/gate-flake.py" "$name" "$LOGS/$name.log" "$LOGS/$name.retry.log"; then
+        if python3 "$REPO/test/gate-flake.py" "$name" "$LOGS/$name.log" "$LOGS/$name.retry.log" "$LOGS/$name.retry.log.time"; then
           echo "FLAKY $name (failed once, passed isolated retry)"
           flaky=1
         else

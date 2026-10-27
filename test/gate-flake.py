@@ -12,4 +12,5 @@ def tail(path):
 
 
 print("ROTA-FLAKY " + json.dumps(dict(check=sys.argv[1], firstExit=1, retryExit=0,
-                                    firstOutput=tail(sys.argv[2]), retryOutput=tail(sys.argv[3]))))
+                                    firstOutput=tail(sys.argv[2]), retryOutput=tail(sys.argv[3]),
+                                    retrySeconds=float(Path(sys.argv[4]).read_text().strip()))))
