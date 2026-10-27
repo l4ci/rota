@@ -30,6 +30,8 @@ Multiple milestones can be `active` simultaneously when their dependencies allow
 
 When an active milestone has no open items remaining, `/rota-work` (no argument) surfaces an empty-active notice so you know the milestone is ready to close. Run `rota milestone status <MID> --to shipped` to flip its status, which immediately unblocks any milestone that listed it as a dependency. Shipping is refused (exit 4, nothing changes) while the milestone has open items or unticked `- [ ]` criteria in its body; the failure lists them, `rota milestone check <MID>` shows the breakdown, and `--force` ships anyway.
 
+Shipping also leaves a closing summary with closed child items, acceptance checkbox status and the milestone's decisions. It appears as a closing comment on the tracking issue, or under `## Shipped` in the file milestone. A forced ship records the unticked criteria too.
+
 Use `archived` for milestones you are intentionally dropping, not for ones that finished.
 
 ## Milestone branches
