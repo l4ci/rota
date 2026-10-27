@@ -225,9 +225,11 @@ func TestTrainLedgerStampsTheVerdictOnTheCulpritOnly(t *testing.T) {
 	verdicts := map[string]string{}
 	es, _ := ledger.Load(dir)
 	for _, e := range es {
-		verdicts[e.Slot] = e.DetailStr("verdict")
+		if e.Kind == ledger.KindGate {
+			verdicts[e.Slot] = e.DetailStr("verdict")
+		}
 	}
-	if len(es) != 2 || verdicts["b2"] != GateVerifyFailed || verdicts["b3"] != "" {
+	if len(es) != 3 || verdicts["b2"] != GateVerifyFailed || verdicts["b3"] != "" {
 		t.Fatalf("entries %+v, want verify-failed on b2 only", es)
 	}
 }
@@ -282,7 +284,7 @@ func TestGateAndTrainLedgerRowsTakeTheEnvClock(t *testing.T) {
 	gateLedger(env, nil, dir, GateTarget{Name: "b1", Branch: "b1"}, GateResult{Verdict: GatePass})
 	trainLedger(env, nil, dir, TrainResult{Verdict: GateVerifyFailed, Culprit: "b2", Members: []TrainMember{{Target: "b2", Culprit: true}}}, map[string]bool{})
 	es, _ := ledger.Load(dir)
-	if len(es) != 3 { // gate, merge, train gate
+	if len(es) != 4 { // gate, merge, train outcome, train gate
 		t.Fatalf("entries %+v", es)
 	}
 	for _, e := range es {

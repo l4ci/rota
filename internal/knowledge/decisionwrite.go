@@ -119,6 +119,13 @@ func (s Store) changeDecisions(change func(string) (string, error)) (bool, error
 		if err != nil {
 			return decisionRepairError(string(raw), err)
 		}
+		// Refresh legacy skill names in the preamble only. Decision entries
+		// retain the names that were true when their boundaries were recorded.
+		end := len(next)
+		if topics := decisionTopics(next); len(topics) > 0 {
+			end = topics[0].start
+		}
+		next = strings.ReplaceAll(next[:end], "`/hv-", "`/rota-") + next[end:]
 		if report := CheckDecisions(next); len(report.Errors) > 0 {
 			return decisionRepairError(string(raw), decisionInvalid("resulting DECISIONS.md: %s", strings.Join(report.Errors, "; ")))
 		}
