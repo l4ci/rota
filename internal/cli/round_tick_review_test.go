@@ -2,14 +2,48 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
+	"github.com/l4ci/rota/internal/worker"
 )
+
+func TestAutopilotReviewProbeLetsPRStateReachGate(t *testing.T) {
+	for _, state := range []string{"CLOSED", "MERGED", "OPEN"} {
+		t.Run(state, func(t *testing.T) {
+			const branch = "ben/2185-x"
+			dir := nudgeProject(t, []string{branch}, nil)
+			remote := t.TempDir()
+			gitT(t, remote, "init", "--bare", "-q")
+			gitT(t, dir, "remote", "add", "origin", remote)
+			gitT(t, dir, "push", "-q", "origin", "main", branch)
+			write(t, filepath.Join(dir, ".rota", "config.json"), `{"forge":{"provider":"github"},"ship":{"review":"full"}}`)
+			addRegistryRows(t, dir, map[string][]map[string]any{
+				"slots": {{"name": "ben", "state": "done", "branch": branch, "pr": "#11", "task": "2185"}},
+			})
+			deps := testDeps()
+			// An open PR targeting another base is also an identity refusal,
+			// not evidence that the head is waiting for review.
+			deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
+				return []byte(fmt.Sprintf(`{"state":%q,"headRefName":%q,"baseRefName":"other"}`, state, branch)), nil, 0, nil
+			}, func(n string) (string, error) { return "/fake/" + n, nil })}
+			c := &Ctx{Deps: deps, ctx: context.Background(), Stderr: io.Discard}
+			probe, err := workerEnvCtx(c, c.Context()).Gate(c.Context(), dir, worker.GateOpts{Slot: "ben", Base: "main", ReviewsOnly: true})
+			if err != nil || probe.Verdict != worker.GatePRMismatch {
+				t.Fatalf("fixture did not reach PR state refusal: %+v %v", probe, err)
+			}
+			if why := reviewVerdictsMissing(c, dir, "ben", "main"); why != "" {
+				t.Fatalf("PR state refusal must reach the real gate, got review wait: %s", why)
+			}
+		})
+	}
+}
 
 func TestAutopilotReviewProbeMustConfirmReadiness(t *testing.T) {
 	dir := nudgeProject(t, []string{"ben/2175-x"}, nil)
