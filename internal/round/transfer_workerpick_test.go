@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -53,7 +54,7 @@ func TestTransferWorkerPickPrecedence(t *testing.T) {
 			f.wire(func(w *worker.Env) {
 				w.LookPath = func(n string) (string, error) { return "/fake/" + n, nil }
 				w.Run = func(_ context.Context, name string, args, _ []string) (host.Result, error) {
-					if filepath.Base(name) == "codex" && strings.Join(args, " ") == "--help" {
+					if filepath.Base(name) == harness.Codex && strings.Join(args, " ") == "--help" {
 						return host.Result{Stdout: codexHelp}, nil
 					}
 					return host.Result{}, nil
