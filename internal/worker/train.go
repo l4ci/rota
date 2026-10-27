@@ -311,7 +311,8 @@ func (t *trainRun) plan() (bool, error) {
 	// Freeze is a queue-wide refusal, before static sections can prune members.
 	frozen, err := landfreeze.Load(ctx, e.Git, root)
 	if err != nil {
-		return true, err
+		res.Verdict, res.Err, res.Hint = GateFreeze, landfreeze.UnreadableLine(err), landfreeze.ClearHint
+		return true, nil
 	}
 	if frozen != nil && frozen.Active {
 		if frozen.Base != o.Base {
@@ -1237,10 +1238,13 @@ func (t *trainRun) verifyLanded(res *TrainResult) (bool, error) {
 	if err != nil {
 		return true, err
 	}
-	checks := appendNew(full.Failed, full.Missing...)
-	if !full.OK() && len(checks) == 0 {
-		checks = []string{"test.full: verification incomplete"}
+	if v, msg, hint := full.stopVerdict("train"); v != "" {
+		res.Verdict = v
+		res.Err = strings.Replace(msg, "; nothing landed", "; train already landed; verification incomplete", 1)
+		res.Hint = hint
+		return true, nil
 	}
+	checks := full.Failed
 	if full.OK() {
 		e2e, err := t.e.RunVerifyWith(t.ctx, t.in.cfg.E2E, t.root, t.in.ledger)
 		if err != nil {

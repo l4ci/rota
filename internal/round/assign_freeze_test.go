@@ -12,7 +12,7 @@ func TestAssignFreezeRefusesExceptRepair(t *testing.T) {
 	if err := os.MkdirAll(p, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(p, "freeze.json"), []byte(`{"active":true,"base":"main","sha":"red","repairIssue":"13"}`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(p, "freeze.json"), []byte(`{"active":true,"base":"main","sha":"0123456789012345678901234567890123456789","repairIssue":"13"}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	_, err := f.assign("12", "ben", nil)

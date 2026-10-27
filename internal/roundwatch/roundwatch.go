@@ -387,7 +387,11 @@ func ExitDigest(root string, round int) string {
 
 func roundState(root string, round int) string {
 	var parts []string
-	if frozen, err := landfreeze.Load(context.Background(), git.Exec, root); err == nil && frozen != nil && frozen.Active {
+	if frozen, err := landfreeze.Load(context.Background(), git.Exec, root); err != nil {
+		if !errors.Is(err, rotastate.ErrNotRepo) {
+			parts = append(parts, landfreeze.UnreadableLine(err))
+		}
+	} else if frozen != nil && frozen.Active {
 		parts = append(parts, frozen.Line())
 	}
 	// Tolerant: a hook digest cannot refuse; a corrupt registry reads as no slots.

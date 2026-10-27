@@ -594,7 +594,7 @@ func addFreezeNote(ctx context.Context, c *Ctx, root string, s *roundSnap) {
 		return
 	}
 	if err != nil {
-		s.Notes = append(s.Notes, "landing freeze unreadable: "+err.Error())
+		s.Notes = append(s.Notes, landfreeze.UnreadableLine(err))
 		return
 	}
 	if frozen != nil && frozen.Active {

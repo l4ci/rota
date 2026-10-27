@@ -3,8 +3,6 @@ package cli
 import (
 	"encoding/json"
 	"flag"
-	"github.com/l4ci/rota/internal/tracker"
-	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -43,17 +41,8 @@ func roundFreeze(fs *flag.FlagSet) RunFunc {
 		if *clear && strings.TrimSpace(*reason) == "" {
 			return Result{}, Usage("freeze clear requires --reason <text>")
 		}
-		if *issue != "" && strings.Trim(strings.TrimSpace(*issue), "#") == "" {
-			return Result{}, Usage("--repair-issue requires an item ID")
-		}
-		if *pr != "" {
-			n, err := strconv.Atoi(strings.TrimLeft(strings.TrimSpace(*pr), "#!"))
-			if ref, ok := tracker.ParsePRURL(strings.TrimSpace(*pr)); ok {
-				n, err = ref.Number, nil
-			}
-			if err != nil || n <= 0 {
-				return Result{}, Usage("--repair-pr requires a positive PR number or PR URL")
-			}
+		if err := landfreeze.ValidateRepair(*issue, *pr); err != nil {
+			return Result{}, Usage(err.Error())
 		}
 		root, err := c.Root()
 		if err != nil {

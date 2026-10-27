@@ -1,9 +1,12 @@
 package worker
 
 import (
+	"context"
 	"encoding/json"
+	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -38,7 +41,7 @@ func TestGateFreezeRefusesLanding(t *testing.T) {
 	if err := os.MkdirAll(p, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(p, "freeze.json"), []byte(`{"active":true,"base":"main","sha":"red","prs":["old"],"checks":["false"],"repairIssue":"99"}`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(p, "freeze.json"), []byte(`{"active":true,"base":"main","sha":"0123456789012345678901234567890123456789","prs":["old"],"checks":["false"],"repairIssue":"99"}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	res, err := w.gate(false, GateOpts{})
@@ -53,7 +56,7 @@ func TestTrainFreezeRefusesUnrelatedMembers(t *testing.T) {
 	if err := os.MkdirAll(p, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(p, "freeze.json"), []byte(`{"active":true,"base":"main","sha":"red","repairIssue":"99"}`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(p, "freeze.json"), []byte(`{"active":true,"base":"main","sha":"0123456789012345678901234567890123456789","repairIssue":"99"}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
@@ -70,7 +73,7 @@ func TestGateFreezeRepairCanLandAndClear(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(p, []byte(`{"active":true,"base":"main","sha":"red","repairPR":"7"}`), 0644); err != nil {
+	if err := os.WriteFile(p, []byte(`{"active":true,"base":"main","sha":"0123456789012345678901234567890123456789","repairPR":"7"}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
@@ -135,7 +138,7 @@ func TestTrainFreezeRepairClearsOnlyWithVerification(t *testing.T) {
 			if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(p, []byte(`{"active":true,"base":"main","sha":"red","repairPR":"7"}`), 0644); err != nil {
+			if err := os.WriteFile(p, []byte(`{"active":true,"base":"main","sha":"0123456789012345678901234567890123456789","repairPR":"7"}`), 0644); err != nil {
 				t.Fatal(err)
 			}
 			if skip {
@@ -156,6 +159,50 @@ func TestTrainFreezeRepairClearsOnlyWithVerification(t *testing.T) {
 			}
 			if f.Active != skip {
 				t.Fatalf("active=%v skip=%v: %s", f.Active, skip, b)
+			}
+		})
+	}
+}
+
+// CI answers normally until the forge lands a different tree, then stops
+// answering. This exercises the public train's post-landing verification.
+type landedIncompleteForge struct {
+	*fakeForge
+	notRun bool
+}
+
+func (f landedIncompleteForge) CommitChecks(ctx context.Context, sha string) ([]tracker.CheckRun, error) {
+	if f.w.forgeWord("state") == "MERGED" {
+		if f.notRun {
+			return nil, nil
+		}
+		return []tracker.CheckRun{{Name: "ci/test", State: tracker.CheckPending}}, nil
+	}
+	return f.fakeForge.CommitChecks(ctx, sha)
+}
+
+func TestTrainFreezeIncompleteCIVerification(t *testing.T) {
+	for _, notRun := range []bool{false, true} {
+		t.Run(map[bool]string{false: "timeout", true: "not-run"}[notRun], func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.setConfig(ciCfg)
+			w.forge("pushBeforeMerge", "other.txt")
+			e := w.ciEnv().withForge(func(provider, dir string) Forge {
+				return landedIncompleteForge{fakeForge: &fakeForge{w: w, provider: provider}, notRun: notRun}
+			}, false)
+			res, err := e.Train(bg, w.dir, TrainOpts{Targets: []string{"w1"}, Base: "main"})
+			want := GateVerifyTimeout
+			if notRun {
+				want = GateCINotRun
+			}
+			if err != nil || res.Verdict != want || !res.Changed || !w.onOriginMain("work.txt") {
+				t.Fatalf("incomplete landed CI must stop with %s: %+v %v", want, res, err)
+			}
+			if strings.Contains(res.Err, "nothing landed") {
+				t.Errorf("stop must report the landing truthfully: %s", res.Err)
+			}
+			if _, err := os.Stat(filepath.Join(w.dir, ".git", "rota", "freeze.json")); !os.IsNotExist(err) {
+				t.Fatalf("incomplete verification must not freeze: %v", err)
 			}
 		})
 	}

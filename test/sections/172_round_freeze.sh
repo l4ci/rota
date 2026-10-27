@@ -10,7 +10,7 @@ TMP_FREEZE="$(mktemp -d "$TMP/freeze.XXXXXX")"
   git add .gitignore
   git -c user.name=test -c user.email=test@test commit -q -m ignore-runtime
   printf '%s\n' '{"forge":{"provider":"local"},"test":{"full":["true"]}}' > .rota/config.json
-  printf '%s\n' '{"active":true,"base":"main","sha":"red","prs":["7"],"checks":["false"]}' > .git/rota/freeze.json
+  printf '%s\n' '{"active":true,"base":"main","sha":"0123456789012345678901234567890123456789","prs":["7"],"checks":["false"]}' > .git/rota/freeze.json
   OUT=$("$ROTA_BIN" --json round freeze --repair-issue 99) || vfail
   [ "$(jget data.freeze.repairIssue <<<"$OUT")" = 99 ] || fail "repair designation missing: $OUT"
   OUT=$("$ROTA_BIN" --json round freeze) || vfail
@@ -20,8 +20,8 @@ TMP_FREEZE="$(mktemp -d "$TMP/freeze.XXXXXX")"
   OUT=$("$ROTA_BIN" --json round freeze --clear --reason 'obsolete check') || vfail
   OUT=$("$ROTA_BIN" --json round freeze) || vfail
   [ "$(jget data.freeze.active <<<"$OUT")" = false ] || fail "manual clear did not persist: $OUT"
-  rg -q 'obsolete check' .rota/gate-audit.jsonl || fail "manual clear missing audit reason"
-  printf '%s\n' '{"active":true,"base":"main","sha":"red","prs":["7"],"checks":["false"]}' > .git/rota/freeze.json
+  grep -q 'obsolete check' .rota/gate-audit.jsonl || fail "manual clear missing audit reason"
+  printf '%s\n' '{"active":true,"base":"main","sha":"0123456789012345678901234567890123456789","prs":["7"],"checks":["false"]}' > .git/rota/freeze.json
   OUT=$("$ROTA_BIN" --json round freeze --verify) || vfail
   OUT=$("$ROTA_BIN" --json round freeze) || vfail
   [ "$(jget data.freeze.active <<<"$OUT")" = false ] || fail "green verification did not clear freeze: $OUT"

@@ -24,6 +24,9 @@ type FreezeOpts struct {
 // cannot clear a failure recorded by a concurrent landing.
 func (e Env) Freeze(ctx context.Context, root string, o FreezeOpts) (r *landfreeze.Record, err error) {
 	e = e.WithDefaults()
+	if err := landfreeze.ValidateRepair(o.RepairIssue, o.RepairPR); err != nil {
+		return nil, fail(exitcode.ExitUsage, err.Error())
+	}
 	mutate := o.RepairIssue != "" || o.RepairPR != "" || o.Verify || o.Clear
 	if !mutate {
 		return landfreeze.Load(ctx, e.Git, root)
@@ -34,8 +37,17 @@ func (e Env) Freeze(ctx context.Context, root string, o FreezeOpts) (r *landfree
 			return err
 		}
 		r, err = landfreeze.Read(p)
-		if err != nil {
-			return err
+		readErr := err
+		if readErr != nil {
+			if !o.Clear {
+				return fail(exitcode.ExitRefused, landfreeze.UnreadableLine(readErr))
+			}
+			// Discard the damaged snapshot only through the audited clear path.
+			sha, code := e.runGit(ctx, root, "rev-parse", "HEAD")
+			if code != 0 {
+				return fail(exitcode.ExitResolution, "cannot resolve clearance HEAD")
+			}
+			r = &landfreeze.Record{Active: true, Base: "unknown", SHA: sha}
 		}
 		if r == nil || !r.Active {
 			return fail(exitcode.ExitResolution, "no active landing freeze")
@@ -48,11 +60,17 @@ func (e Env) Freeze(ctx context.Context, root string, o FreezeOpts) (r *landfree
 			if strings.TrimSpace(o.Reason) == "" {
 				return fail(exitcode.ExitUsage, "freeze clear requires --reason <text>")
 			}
-			sha, code := e.runGit(ctx, root, "rev-parse", r.Base)
+			// A reasoned override records the operator's HEAD; the frozen base
+			// may have been deleted or renamed since the failure.
+			sha, code := e.runGit(ctx, root, "rev-parse", "HEAD")
 			if code != 0 {
-				return fail(exitcode.ExitResolution, "cannot resolve frozen base "+r.Base)
+				return fail(exitcode.ExitResolution, "cannot resolve clearance HEAD")
 			}
-			if err := gatepolicy.Clear(root, e.Config(root), e.Now(), "freeze-clear", "rota round freeze", r.Base, gatepolicy.Confirm{Given: true, Note: o.Reason}, nil); err != nil {
+			note := o.Reason
+			if readErr != nil {
+				note += "; replaced unreadable record: " + readErr.Error()
+			}
+			if err := gatepolicy.Clear(root, e.Config(root), e.Now(), "freeze-clear", "rota round freeze", r.Base, gatepolicy.Confirm{Given: true, Note: note}, nil); err != nil {
 				return err
 			}
 			return e.clearFreeze(ctx, root, p, r, sha, o.Reason)
@@ -143,7 +161,8 @@ func (e Env) clearFreeze(ctx context.Context, root, p string, r *landfreeze.Reco
 func (g *gate) stepFreeze() (bool, error) {
 	r, err := landfreeze.Load(g.ctx, g.e.Git, g.root)
 	if err != nil {
-		return true, err
+		g.verdict(GateFreeze, landfreeze.UnreadableLine(err), landfreeze.ClearHint)
+		return true, nil
 	}
 	if r.Allows(g.target.Issue, g.pr) && (r == nil || !r.Active || r.Base == g.o.Base) {
 		return false, nil
