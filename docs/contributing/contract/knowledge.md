@@ -2,6 +2,7 @@
 refs:
   - internal/knowledge
   - internal/cli/knowledge.go
+  - internal/cli/decisions.go
 ---
 
 ## A5: knowledge, decisions, glossary, blocks, map, qa
@@ -198,7 +199,47 @@ exit: 2 when no topic is given
 old: hv-decisions-query <topic>…    (same positionals)
 shim: stdout is `text`; `missing` is omitted.
 note: unlike `knowledge query`, an unmatched topic emits no warning, as old, and only the port fills `missing`. Zero topics moves from exit 1 to 2.
-note: an entry whose body carries a `*Status.* Retired` or `*Status.* Superseded` line (written by `/rota-decide --retire` and `--supersede`) is dropped from `text` by `query`, and from the `decisions` managed block; `topics` and `stats` still count it.
+note: an entry whose body carries a `*Status.* Retired` or `*Status.* Superseded` line (written by `/rota-decide --retire` and `--supersede`) is dropped from `text` by `query`, and from the `decisions` managed block; `topics` and `stats` skip it too.
+
+### rota decisions add
+rota decisions add --topic <T> --title <S> --body-file <path|-> [--date YYYY-MM-DD]
+repo: none (umbrella `.rota/DECISIONS.md` only; `--repo` is rejected)
+data: {"topic": string, "title": string, "changed": bool}
+exit: 2 when a required flag is missing, the date is invalid or the body fails the entry check; 4 when the title already exists or the topic is ambiguous
+old: none (new in #2129)
+note: the body contains a rule paragraph, `*Why.*`, `**Forbids.**` and `**Permits.**`, in that order; forbids and permits may be inline or bullet lists. The shared entry parser validates the body before any write. An optional existing `<!-- paths: [...] -->` comment is accepted and preserved; no path flags are added. The writer supplies the title heading and date stamp (today unless `--date` overrides it), inserts at the top of the topic, creates a missing topic alphabetically after pinned `Architecture` / `Build & Tooling`, and refreshes the `## Project Decisions` managed block in the instructions file. All decisions writers use the umbrella file, even from a sub-repo; none accepts `--repo` or adds an interactive confirmation gate. `/rota-decide` owns that gate.
+
+### rota decisions amend
+rota decisions amend --topic <T> --title <S> --part rule|why|forbids|permits --body-file <path|->
+repo: none (umbrella `.rota/DECISIONS.md` only; `--repo` is rejected)
+data: {"topic": string, "title": string, "changed": bool}
+exit: 2 when a required flag is missing, `--part` is invalid or the replacement would fail the entry check; 3 when the topic or title is missing; 4 when the target is ambiguous or inactive
+old: none (new in #2129)
+note: replaces one part of one active entry; the body file supplies that part's contents without its marker. The other parts, optional paths comment, stamp and every other entry remain byte-identical. It refreshes the decisions managed block. Topic and title matching is case-insensitive and requires a unique target.
+
+### rota decisions check
+rota decisions check
+repo: none (umbrella `.rota/DECISIONS.md` only)
+data: {"errors": [string], "warnings": [string]}
+exit: 1 when any entry is malformed; 2 on an argument or flag
+old: none (new in #2129)
+note: read-only. Checks every `###` entry under a `##` topic, including retired and superseded entries, for a rule, `*Why.*`, `**Forbids.**`, `**Permits.**` and their order. Fenced code headings do not create entries. An optional `*Status.*` line must be `Retired YYYY-MM-DD. <reason>` or `Superseded YYYY-MM-DD by "<title>".`. Errors name `topic :: title: missing <part>` (or the malformed/out-of-order part). A missing date stamp is a notice in text and a warning in data, never a failure on its own. Optional paths comments remain accepted; the preamble is not checked. A missing file or a file with no entries passes. `test/doclint.sh` runs this check so malformed entries fail the gate. `rota doctor` uses the same validator and reports malformed entries as a Warn check with a `rota decisions amend` hint; a missing stamp appears only in the detail.
+
+### rota decisions retire
+rota decisions retire --topic <T> --title <S> --reason <text> [--date YYYY-MM-DD]
+repo: none (umbrella `.rota/DECISIONS.md` only; `--repo` is rejected)
+data: {"topic": string, "title": string, "changed": bool}
+exit: 2 when a required flag is missing or the date or reason is invalid; 3 when the topic or title is missing; 4 when the target is ambiguous or inactive
+old: none (new in #2129)
+note: inserts `*Status.* Retired YYYY-MM-DD. <reason>` before the entry's stamp, with today's date unless overridden, and refreshes the decisions managed block. It retains the entry as history; active readers skip it. Topic and title matching is case-insensitive and requires a unique target.
+
+### rota decisions supersede
+rota decisions supersede --topic <T> --title <S> --new-title <S> --body-file <path|-> [--date YYYY-MM-DD]
+repo: none (umbrella `.rota/DECISIONS.md` only; `--repo` is rejected)
+data: {"topic": string, "title": string, "newTitle": string, "changed": bool}
+exit: 2 when a required flag is missing, the date is invalid or the replacement body fails the entry check; 3 when the topic or title is missing; 4 when the target is ambiguous or inactive, or the replacement title already exists
+old: none (new in #2129)
+note: validates a replacement body as `add` does, inserts it at the top of the same topic, and marks the old entry `*Status.* Superseded YYYY-MM-DD by "<new title>".` in one atomic file update. A refused replacement leaves the old entry active. It refreshes the decisions managed block after the write. Topic and title matching is case-insensitive and requires a unique target. The date defaults to today.
 
 ### rota decisions topics
 rota decisions topics
