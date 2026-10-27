@@ -258,7 +258,7 @@ rota config set test.vacuousCheck true
 
 `test.filePattern` is a regular expression over repository-relative paths. Its
 Go default, `_test\.go$`, selects Go test files. `test.vacuousCommand` defaults to
-`go test -count=1 {packages} -run {tests}`: it runs test, example and fuzz entry
+`go test -json -count=1 {packages} -run {tests}`: it runs test, example and fuzz entry
 points in the changed test files, including their subtests, with caching disabled.
 `{packages}` expands to those files' Go packages and `{tests}` to an anchored
 expression of their entry-point names. `{files}` expands to the changed test paths.
@@ -280,15 +280,21 @@ same command again. If it still passes, the gate refuses with exit 4 and
 check; this establishes dependence on the change, not assertion quality. A
 cancelled run or a counterfactual command that cannot execute is `check-broke`.
 
-With this opt-in policy, tests-only PRs also need a failing counterfactual run.
+A tests-only PR skips the check because it has no non-test changes to revert.
 A PR with no surviving added or changed test files, only docs or skills, or no
-runnable Go entry points gets a `VACUOUS-SKIP` note. Tests that already fail on the
-merge are `verify-failed`. The train checks each member against its preceding
-merged prefix, so an earlier member's code stays present.
+runnable Go entry points also gets a `VACUOUS-SKIP` note. With the default Go
+command, JSON events must show at least one selected test completing without a
+skip on each successful run. If build constraints exclude all selected tests or
+they all skip on either run, the check reports an inconclusive `VACUOUS-SKIP`
+instead of refusing the PR. Custom commands supply their own test selection and
+execution semantics. Tests that already fail on the merge are `verify-failed`.
+The train checks each member against its preceding merged prefix, so an earlier
+member's code stays present.
 A failing member refuses the whole train, including with `--land-green`; the
 full-tier cache never substitutes for this check. The check runs locally even
-with `test.fullWhere: ci`. Gate `--check-only`, `--no-verify`, and a train's landing
-gates do not run it; train `--plan` also skips it.
+with `test.fullWhere: ci`. Gate `--check-only` and a train's landing gates do not
+run it; train `--plan` also skips it. Both gate and train `--no-verify` skip this
+check.
 
 ## test.fast, test.full, test.e2e
 
