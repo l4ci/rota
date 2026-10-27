@@ -118,7 +118,9 @@ To correct one approved part of an existing active entry, save only that part's 
 
 Inspect the writer's result and the diff. Each writer refreshes the decisions index internally; do not hand-edit the block or run a second index write. The read-site skills use it to find relevant hard boundaries.
 
-`rota decisions check` validates all entries using the same parser as the writer. Missing or out-of-order parts and malformed lifecycle status lines fail with the topic and title; a missing date stamp is a warning only. If the writer refuses the approved draft, correct its input and retry; never bypass it with a file edit.
+`rota decisions check` validates all entries using the same parser as the writer. Missing or out-of-order parts and malformed lifecycle status lines fail with the topic and title; a missing date stamp is a warning only. If the writer refuses the approved draft, correct its input and retry; never bypass draft validation with a file edit.
+
+Malformed stored entries have a narrow recovery exception: `amend` can repair one part only if the complete resulting file becomes valid. When no verb can repair the file (for example, several parts are missing or a `*Status.*` line is malformed), follow the diagnostic's manual-repair instructions for the reported entries in `.rota/DECISIONS.md`. Preserve the approved substance and history, run `rota decisions check`, then `rota block decisions` once validation passes. Status lines require a manual edit because `amend` has no status part; this exception does not authorize new decisions or substantive changes without the usual confirmation.
 
 ## Step 8 — Confirm
 
