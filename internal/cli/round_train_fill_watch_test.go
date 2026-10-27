@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/roundwatch"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 func TestAutopilotHoldingWaitsForHeartbeat(t *testing.T) {
@@ -62,14 +63,34 @@ func TestRoundStatusShowsCurrentTrainFill(t *testing.T) {
 	c, root, tick := fillTickFixture(t, `"light"`, true, true)
 	tick()
 	pinNow(c.Deps, "2026-10-27T09:01:00Z")
-	res, err := roundStatus(nil)(c, nil)
+	if err := worker.UpdateEscalations(root, func(list []worker.Escalation) []worker.Escalation {
+		return append(list, worker.Escalation{ID: "fill-decision", Kind: "issue", Number: 12, Title: "Keep the current design?", Status: "pending", SentAt: "2026-10-27T09:00:00Z"})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	code, out, stderr := rotaInWith(t, c.Deps, root, "round", "status")
+	if code != 0 {
+		t.Fatalf("status: %d %s %s", code, out, stderr)
+	}
+	if !strings.Contains(out, "holding train for main: 1/4 ready, oldest waited 7m of 20m") {
+		t.Fatalf("status missing current fill wait for %s: %s", root, out)
+	}
+	cd, err := rotastate.CommonDir(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(res.Text, "holding train for main: 1/4 ready, oldest waited 7m of 20m") {
-		t.Fatalf("status missing current fill wait for %s: %s", root, res.Text)
+	if line := roundwatch.MaintainerSnapshotLine(cd, c.Deps.Now(), roundwatch.DefaultHeartbeat); line != "1 waits on you, as of 0s ago" {
+		t.Fatalf("fill status did not refresh the maintainer snapshot: %q", line)
 	}
-	if _, ok := res.Data.(*jsonx.Object).Get("holding"); !ok {
+	code, out, stderr = rotaInWith(t, c.Deps, root, "--json", "round", "status")
+	if code != 0 {
+		t.Fatalf("status JSON: %d %s %s", code, out, stderr)
+	}
+	d := data(t, out)
+	if holding, ok := d["holding"].([]any); !ok || len(holding) != 1 {
 		t.Fatal("status JSON missing holding progress")
+	}
+	if waits, ok := d["needsYou"].([]any); !ok || len(waits) != 1 {
+		t.Fatalf("fill status lost the maintainer decision: %s", out)
 	}
 }
