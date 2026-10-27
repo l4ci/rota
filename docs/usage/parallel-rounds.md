@@ -390,7 +390,18 @@ Set `round.trainMax` and `round.trainFillMinutes` to wait for a fuller train or 
 The tick and nudge wait until either threshold fires on one base. For example, `3` and `60` wait
 for three reviewed PRs or sixty minutes since the oldest PR's latest current-head review. A lone
 PR at the deadline gets a `worker gate` command. The nudge names the threshold in its text and
-JSON `reason`. Each key defaults to `0` (disabled); leaving both unset keeps the behavior above.
+JSON `reason`, and its text reports the observed oldest wait. `round.trainMax` also caps the
+train size: trimming keeps the oldest-ready members while preserving their relative order
+for the existing merge-order selector. Without `round.trainFillMinutes`, a lone ready PR can
+wait indefinitely. Set both keys for a deadline. Each key defaults to `0` (disabled); leaving
+both unset keeps the behavior above.
+
+While filling, the tick reports one non-actionable line per base, such as
+`holding train for main: 2/4 ready, oldest waited 6m of 20m` (JSON `holding`).
+It reports the line only when its count or observed minute changes, including across watch
+restarts. With review disabled, readiness age uses the worker done time. A ready record with
+no usable done time goes straight to the gate. Persisted gate holds keep failed heads out of
+both tick and nudge readiness; PR state refusals still reach the gate for cleanup.
 
 The autopilot checks the required review verdicts at a done PR's head before
 gating it. Missing reviews, an incomplete probe or an unreadable PR head make it
