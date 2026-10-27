@@ -19,9 +19,10 @@ const StateFile = "round-autopilot.json"
 type State struct {
 	Round int `json:"round"`
 	// Stopped is set while the round winds down: no tick assigns or merges.
-	Stopped  bool              `json:"stopped,omitempty"`
-	Held     map[string]string `json:"held,omitempty"`
-	Reported []string          `json:"reported,omitempty"`
+	Stopped     bool                  `json:"stopped,omitempty"`
+	Held        map[string]string     `json:"held,omitempty"`
+	Reported    []string              `json:"reported,omitempty"`
+	FailedHeads map[string]FailedHead `json:"failedHeads,omitempty"`
 }
 
 func statePath(commonDir string) string { return rotastate.File(commonDir, StateFile) }
@@ -44,6 +45,7 @@ func LoadState(commonDir string, round int) State {
 // Apply loads the state into an env.
 func (s State) Apply(e *Env) {
 	e.Held = s.Held
+	e.FailedHeads = s.FailedHeads
 	e.Reported = map[string]bool{}
 	for _, k := range s.Reported {
 		e.Reported[k] = true
@@ -72,6 +74,7 @@ func update(commonDir string, round int, fn func(*State)) error {
 func SaveState(commonDir string, round int, r Result) error {
 	return update(commonDir, round, func(s *State) {
 		s.Held, s.Reported = r.Held, nil
+		s.FailedHeads = r.FailedHeads
 		for k := range r.Reported {
 			s.Reported = append(s.Reported, k)
 		}
