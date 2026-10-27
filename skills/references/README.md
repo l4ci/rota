@@ -8,6 +8,7 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for when to extract (≥3
 
 | Reference | Purpose |
 |-----------|---------|
+| [`acceptance-marks.md`](acceptance-marks.md) | Marking `AC-n` criteria met, the partial/failed outcome and the intentional unmet close (issue backend). |
 | [`references/autonomy.md`](autonomy.md) | What each `autonomy.level` (off, roundtrip, auto) chains, where a run stops and how a stop is raised. |
 | [`authoring-conventions.md`](authoring-conventions.md) | Authoring rules shared across SKILL.md files. |
 | [`breakdown.md`](breakdown.md) | Milestone Capabilities, the child issue shape (`## Change`, Touches copied from capabilities), the confirm line and `rota milestone check` for a 3+ split. |

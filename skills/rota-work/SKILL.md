@@ -131,7 +131,7 @@ Verify silently. Trust the diff, not the subagent's narrative.
 - **Persistent FAIL:** `rota proof record` already wrote the FAIL row.
 - **Behavior task** (skip the RED half when `rota config show work.tdd` is `false`; PASS rows stay): run the new test through `rota proof record <ID> -- <test command>` before the change (the FAIL row is the RED; the verb exits 1, expected), then again after for the PASS row. A subagent that reports no RED gets a fix dispatch (a FAIL above). So does one whose RED evidence is a build, compile or setup failure (`undefined:`, `cannot find`, `no such file`, `command not found`, import or syntax error): the test must fail on an assertion, so the fix agent repairs the test until it does.
 - **Docs or skill-only task:** no RED, and no command to run. Use `rota proof add` with `no test seam: docs/skill change` in the row's `--check`.
-- **Acceptance marks (issue backend):** after recording PASS proof, read `rota item show <ID>` and `rota proof show <ID>`. Mark each verified criterion with `rota plan pass <ID> AC-n --proof '<sha>:<check>'` (use `'#2150'`, for example, as the issue key), using that PASS row's sha and check. Repeat per resolved item, including open bundle members, before closing or shipping; proof rows alone do not mark criteria. Leave an unmet criterion unmarked and state its id and reason. A round worker reports `rota worker done <slot> --outcome partial --summary-file <f>`, with each unmet id and reason on the summary's third line (`failed` if nothing can be delivered). A plain done or `--outcome done` refuses while an explicit criterion on a tracker item the PR closes is unmet. Non-closing `Refs` slices and file-mode items keep their existing done flow. For an intentional close with unmet criteria, the merger uses `rota item complete <ID> --commit <sha> --unmet-reason <text>` to record the gaps and reason; the gate skips acceptance for the closed issue. Round workers never close items to clear the refusal. Items without explicit `AC-n` ids keep their existing flow.
+- **Acceptance marks (issue backend):** when the backlog backend is issues, read [`references/acceptance-marks.md`](references/acceptance-marks.md) after recording PASS proof.
 - **Acceptance:** `rota item complete` (Step 9) writes it and exits 4 when an item has no proof. Never pass `--no-proof` on your own; an unproven item stays open and is surfaced.
 
 Issue mode keeps the rows in the item's proof note.
@@ -223,5 +223,6 @@ One line, only when `references/post-cycle-trigger-gate.md` fires: *"Run `/rota-
 - [`contradictions.md`](contradictions.md): Step 2.5 contradiction logging.
 - [`umbrella-and-issue-mode.md`](umbrella-and-issue-mode.md): umbrella and issue-backend branches of Steps 3–11.
 - [`dispatch-brief.md`](dispatch-brief.md): Step 6 brief template.
+- [`references/acceptance-marks.md`](references/acceptance-marks.md): Step 7 acceptance marks on the issue backend.
 - [`file-backend-close.md`](file-backend-close.md): Step 9 on the file backend.
 - [`after-work-qa.md`](after-work-qa.md): Step 12.

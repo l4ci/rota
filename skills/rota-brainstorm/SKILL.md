@@ -22,7 +22,7 @@ Target: `#N` / bare number (issue backend) or `[BFT]\d{2,}` (file backend), plus
 
 If a design exists, ask once (View / Edit / Replace, default View): View runs `rota design show <ID>` and exits; Edit loads it as the starting draft; Replace runs `rota design rm <ID>` first.
 
-**Decision item.** An item labelled `decision:grilling` (file backend: a `Decision: grilling` field; see `rota item show <ID>`) belongs to a decision milestone and takes the *decision path* instead of Steps 3-5: run one grilling pass (`references/grilling.md`) on the question the item asks, record the settled answer with `rota item comment add <ID> --kind decision --body-file -`, then close it with `rota item complete <ID> --no-proof --gist "<one line>"` (a decision has no tests, so no `rota proof add` row). The gist is what the milestone's `## Decisions` list gets. Stop there: draft no design, offer no next item, and resolve no second grilling item in this session, so each invocation settles exactly one decision. A `decision:research` item is a worker's finding, not a grilling: say *"`rota round assign` takes it"* and exit.
+When the item is labelled `decision:grilling` (file backend: a `Decision: grilling` field), read [`decision-item.md`](decision-item.md): it takes the decision path instead of Steps 3-5.
 
 ## Step 2 — Load context
 
@@ -34,7 +34,7 @@ Follow `references/context-load-protocol.md` (parallel, silent), plus `rota item
 
 **Grill first, once.** Run one pass of `references/grilling.md` before drafting when the item is a Major feature or P0 bug, or the invocation has `--grill`. Skip it when the issue body already has `## Acceptance` (`--grill` does not override). For other items ask nothing unless real ambiguity or a decision conflict remains after the item, its thread and the code; then ask the one question that unblocks you (≤ 4 options). Record answers that changed direction in Step 5. If a question needs code-touching evidence (feasibility, library support, performance), say: *"This warrants a spike. Run `/rota-spike <name>` first, then re-invoke `/rota-brainstorm <ID>`."* Don't guess.
 
-**Edge probe (opt-in).** Read `rota config show brainstorm.edgeProbe`. `false` (default): skip this paragraph, brainstorm is unchanged. `true`: run the probe inside this one draft, with no extra approval step, and skip it when the issue body already has `## Acceptance`. Walk eight categories: boundary, empty, ordering, idempotency, concurrency, encoding, precision, adjacency. Answer each from the item and the code, and record it in the draft as `covered: <how>` or `dismissed: <reason>`. Then ask once, "What must this never do?", and write each answer as a `- [ ] AC-n:` line that states a prohibition ("never X"), under Acceptance.
+When `rota config show brainstorm.edgeProbe` is `true`, read [`edge-probe.md`](edge-probe.md) and run it inside this one draft. `false` (default): skip it, brainstorm is unchanged.
 
 Write the whole design as one unsaved markdown draft:
 
@@ -75,6 +75,8 @@ If no milestone exists (`rota milestone list`) and the repo had no open items be
 
 ## References
 
+- [`decision-item.md`](decision-item.md): Step 1, the decision path for `decision:grilling` items.
+- [`edge-probe.md`](edge-probe.md): Step 3, the opt-in edge probe (`brainstorm.edgeProbe`).
 - [`references/design-exploration.md`](references/design-exploration.md): shared spine with `/rota-vision`.
 - [`references/grilling.md`](references/grilling.md): the grilling pass (Major / P0 / `--grill`).
 - [`references/subagent-dispatch.md`](references/subagent-dispatch.md): the `light` subagent that grilling sends for broad reads.
