@@ -2,6 +2,8 @@
 
 <img src="docs/images/rota-logo.svg" alt="rota" width="309">
 
+<img src="docs/images/rota-icon.svg" alt="rota icon" width="64">
+
 # rota
 
 **Coding agents write fast. rota makes sure what they merge works.**
