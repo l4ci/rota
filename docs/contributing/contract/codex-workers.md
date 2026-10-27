@@ -79,6 +79,8 @@ data: none (hook protocol: JSON with `hookSpecificOutput.additionalContext`, exi
 exit: always 0.
 old: none (new in #81)
 note: the UserPromptSubmit hook. When this session is the orchestrator and some slot is not `idle` or an escalation is pending, it injects a one-line digest as `additionalContext` on every maintainer message, read from the registry alone (no host or forge call): `rota round 1: ben busy #81; dana done https://…/pull/7 (needs you); 1 escalation(s) pending. Watch armed.` or, with no watch running, `NO WATCH ARMED: run \`rota round watch\` in the background now.` For any other session it emits the `work.contextGuard` warn line once per threshold crossing (see [pausing and resuming](../../usage/pausing-and-resuming.md)) and is otherwise silent; an idle round is silent too.
+note: (#2174) after `round status` or a watch forge pass refreshes the maintainer snapshot, the prompt appends `3 wait on you, as of 4m ago` when its count is non-zero. This reads only the local snapshot, with no host or forge refresh. Missing, corrupt, future-dated or expired snapshots are omitted. The freshness limit is the live watch's heartbeat interval, otherwise the normal ten-minute heartbeat; label-only changes appear after the next refresh. A fresh non-zero snapshot can show even when there are no active slots.
+
 
 ### rota hook session-start
 rota hook session-start
