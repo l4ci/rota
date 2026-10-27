@@ -82,6 +82,7 @@ const (
 const (
 	Verdict        = "verdict"
 	NoVerify       = "no-verify"
+	VacuousTests   = "vacuous-tests"
 	Closes         = "closes"
 	BestOfUnpicked = "best-of-unpicked"
 	ReviewMissing  = "review-missing"
@@ -151,7 +152,7 @@ func All() []string {
 		ModelLabel, DecisionLabel, NoBlockingFinds,
 		CodexFlags, OpencodeFlags, OpencodeBinary, OutsideHerdr, Host, ResumeFlag, Limited, Dialog, ResetGuard,
 		Dispatch, MaxBounces, State, Handle,
-		Verdict, NoVerify, Closes, BestOfUnpicked, ReviewMissing, StaleAttempt, OutcomeOpen, GateRunning, Forge, Order,
+		Verdict, NoVerify, VacuousTests, Closes, BestOfUnpicked, ReviewMissing, StaleAttempt, OutcomeOpen, GateRunning, Forge, Order,
 		Backend, Config, Active, Umbrella, Proof, ProofMissing, ClosedItem, Exists, Ambiguous, AliasCollision, Edited, Unmanaged, IDMismatch, RequestID, LeaseHeld,
 		Supervised, Watching, SlotHoldsWork, ManualGate, ApprovalPending, ApprovalDeclined, IronLaw,
 		StatuslineExists, ReleaseOrder, NotGreater, UnfinishedMilestone, HeadingInBody, MergeConflict,
