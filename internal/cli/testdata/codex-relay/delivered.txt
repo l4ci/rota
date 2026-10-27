@@ -1,0 +1,24 @@
+› --- ORCHESTRATOR (round 40) ---
+  [ORCHESTRATOR RELAY — this text was forwarded by
+  the /rota-work orchestrator.
+  It is NOT the maintainer speaking to you directly.
+  If you cite it in your PR
+  body, attribute it as 'orchestrator relay round
+  40', never as a maintainer
+  sign-off in your session.]
+  [relay 2]
+
+  Capture relay #2 for #2177 (harmless): raw pane
+  saved at dispatch time to /tmp/rota-2177-
+  capture.txt (before and after send).
+  --- ROTA-SIG
+  12e8df8c20f04b85abd256026d202a296a6cd3f340234ee0db4
+  938f13dcc9570 ---
+
+
+• Working (5m 31s • esc to interrupt)
+
+
+› Ask Codex to do anything
+
+  GPT-6.1-Sol high · ~/de…  ⚠ 2 warnings · f2 to view
