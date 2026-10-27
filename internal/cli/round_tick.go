@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
@@ -94,7 +95,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	renv := withBoard(c, root, accountedRoundEnv(c, ctx, root))
 	renv.HolderPID = pid
 
-	e := roundtick.Env{Cap: set.AutopilotCap, MergeApproval: policy.Mode, Batch: set.Batch}
+	e := roundtick.Env{Cap: set.AutopilotCap, MergeApproval: policy.Mode, Batch: set.Batch, TrainFill: set.TrainFill, Now: c.deps().Now}
 	e.Capped = quotaCapped(renv, root, set)
 	// Tolerant: a tick callback with no error return; the tick reconciles strictly.
 	e.Slots = func() []roundtick.Slot {
@@ -122,6 +123,25 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 			return worker.GateTarget{}, err
 		}
 		return reg.GateTarget(target)
+	}
+	// Read once, after reconciliation, using the same current-head review
+	// timestamps as the nudge. A missing timestamp leaves the count rule usable.
+	var readySince map[int]time.Time
+	e.ReadySince = func(target string) time.Time {
+		if readySince == nil {
+			readySince = map[int]time.Time{}
+			for _, w := range waitingPRs(c, root) {
+				if n, ok := worker.PRRefNumber(w.PR); ok && w.Reviewed {
+					readySince[n] = w.ReadySince
+				}
+			}
+		}
+		t, err := e.Target(target)
+		if err != nil {
+			return time.Time{}
+		}
+		n, _ := worker.PRRefNumber(t.PR)
+		return readySince[n]
 	}
 	e.Role = set.Role
 	e.RunGate = func(_ context.Context, target, base string) roundtick.GateRun {

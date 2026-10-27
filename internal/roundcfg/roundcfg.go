@@ -125,6 +125,7 @@ type Settings struct {
 	// the most assigns and the most merges one tick does.
 	Autopilot    bool
 	AutopilotCap int
+	TrainFill    TrainFill
 	// Batch is round.batch: the most items a round has assigned and not yet
 	// landed or parked at once; 0 means no limit.
 	Batch int
@@ -257,6 +258,12 @@ func FromConfig(cfg any) (Settings, error) {
 	}
 	s.Autopilot = config.String(cfg, "autonomy.level") == "auto"
 	if s.AutopilotCap, err = config.Int(cfg, config.RoundAutopilotCapKey, 0, config.MaxInt); err != nil {
+		return s, err
+	}
+	if s.TrainFill.Max, err = config.Int(cfg, config.RoundTrainMaxKey, 0, config.MaxInt); err != nil {
+		return s, err
+	}
+	if s.TrainFill.Minutes, err = config.Int(cfg, config.RoundTrainFillMinutesKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
 	if s.Batch, err = config.Int(cfg, config.RoundBatchKey, 0, config.MaxInt); err != nil {

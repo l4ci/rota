@@ -22,6 +22,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 )
 
 // DefaultCap is round.autopilotCap: the most assigns, and the most merges, one
@@ -86,6 +87,12 @@ type Env struct {
 	Say func(string)
 	// Cap bounds assigns and merges per tick; <= 0 means DefaultCap.
 	Cap int
+	// TrainFill holds automatic merges until the count or age rule fires.
+	// ReadySince reads the current-head review time; unknown times cannot
+	// trigger the age rule. Now defaults to time.Now.
+	TrainFill  roundcfg.TrainFill
+	ReadySince func(string) time.Time
+	Now        func() time.Time
 	// MergeApproval is ship.mergeApproval: any mode but none (empty
 	// included) asks for a person, and the autopilot then merges nothing.
 	MergeApproval string
@@ -299,7 +306,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 			r.NeedsYou = append(r.NeedsYou, Item{"gate-failed", t, why})
 			continue
 		}
-		if len(run) < e.cap() {
+		if e.TrainFill.Enabled() || len(run) < e.cap() {
 			run = append(run, t)
 		}
 	}
@@ -343,11 +350,40 @@ func (e Env) mergeAll(ctx context.Context, targets []string) []Merged {
 		groups[b] = append(groups[b], t)
 	}
 	var out []Merged
+	remaining := e.cap()
 	for _, b := range order {
-		if ts := groups[b]; len(ts) == 1 {
+		ts := groups[b]
+		if e.TrainFill.Enabled() {
+			var oldest time.Time
+			if e.ReadySince != nil {
+				for _, t := range ts {
+					if at := e.ReadySince(t); !at.IsZero() && (oldest.IsZero() || at.Before(oldest)) {
+						oldest = at
+					}
+				}
+			}
+			now := time.Now()
+			if e.Now != nil {
+				now = e.Now()
+			}
+			if e.TrainFill.Due(len(ts), oldest, now) == "" {
+				continue
+			}
+			if e.TrainFill.Max > 0 && len(ts) > e.TrainFill.Max {
+				ts = ts[:e.TrainFill.Max]
+			}
+			if len(ts) > remaining {
+				ts = ts[:remaining]
+			}
+		}
+		if len(ts) == 1 {
 			out = append(out, e.gate(ctx, ts[0], b))
 		} else {
 			out = append(out, e.train(ctx, ts, b)...)
+		}
+		remaining -= len(ts)
+		if remaining == 0 {
+			break
 		}
 	}
 	return out
