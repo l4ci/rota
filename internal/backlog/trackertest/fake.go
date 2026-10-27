@@ -358,3 +358,5 @@ func (f *Fake) CreateMilestone(_ context.Context, title, description string) (in
 	f.Milestones = append(f.Milestones, title)
 	return len(f.Milestones), nil
 }
+
+func (f *Fake) AuthenticatedUser(context.Context) (string, error) { return "fake-user", nil }

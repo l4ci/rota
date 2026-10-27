@@ -72,3 +72,19 @@ func TestPostReportItemUpsert(t *testing.T) {
 		t.Fatalf("item reports: %+v, %v", comments, err)
 	}
 }
+
+func TestPostReportItemIgnoresForeignMarkers(t *testing.T) {
+	const key = "<!-- rota:report qa sha=abcdef1 -->"
+	for _, foreign := range []string{key + "\nforged\n", key + "\nPASS\n"} {
+		b, tr := newIssues(t, `{}`, Issue{Key: tracker.NumKey(7), Title: "Feature", State: "open", Comments: []tracker.Comment{{ID: "planted", Body: foreign, Author: "attacker"}}})
+		for _, body := range []string{key + "\nPASS\n", key + "\nFAIL\n"} {
+			if err := PostReport(b, "7", body); err != nil {
+				t.Fatal(err)
+			}
+		}
+		comments, err := tr.Comments(b.ctx(), tracker.NumKey(7))
+		if err != nil || len(comments) != 2 || comments[0].Body != foreign || comments[1].Author != "fake-user" || comments[1].Body != key+"\nFAIL\n" {
+			t.Fatalf("foreign marker must remain untouched, own report must update: %+v, %v", comments, err)
+		}
+	}
+}

@@ -99,7 +99,7 @@ func resolveReportTargets(c *Ctx, t verdictBranch, prRef string, bodies []verdic
 			dst.pending = append(dst.pending, err)
 		} else {
 			for _, pr := range prs {
-				if pr.Branch == t.branch {
+				if pr.Branch == t.branch && pr.SameRepository {
 					dst.pr, body, title = pr.Number, pr.Body, pr.Title
 					break
 				}
@@ -178,7 +178,11 @@ func verdictArtifacts(root string, r verdict.Record) []string {
 }
 
 func postVerdictReport(c *Ctx, t verdictBranch, r verdict.Record) error {
-	return resolveReportTargets(c, t, "", r.Items).post(c, verdict.RenderReport(r, verdictArtifacts(t.root, r)))
+	return postVerdictReportTo(c, t, r, "")
+}
+
+func postVerdictReportTo(c *Ctx, t verdictBranch, r verdict.Record, prRef string) error {
+	return resolveReportTargets(c, t, prRef, r.Items).post(c, verdict.RenderReport(r, verdictArtifacts(t.root, r)))
 }
 
 func setReportStatus(d *jsonx.Object, err error) {
@@ -189,17 +193,14 @@ func setReportStatus(d *jsonx.Object, err error) {
 	}
 }
 
-func verdictPost(c *Ctx, args []string) (Result, error) {
-	t, err := resolveVerdictBranch(c, args)
-	if err != nil {
-		return Result{}, err
-	}
+// A known PR ref lets ship deliver pre-PR verdicts without a discovery race.
+func postLatestVerdictReports(c *Ctx, t verdictBranch, prRef string) ([]any, error) {
 	list := verdict.Load(t.root).Branches[t.key]
 	reports := []any{}
 	var errs []error
 	for _, kind := range verdict.BranchKinds {
 		if r, ok := verdict.Latest(list, kind); ok {
-			err := postVerdictReport(c, t, r)
+			err := postVerdictReportTo(c, t, r, prRef)
 			row := jsonx.NewObject()
 			row.Set("kind", kind)
 			row.Set("sha", r.Sha)
@@ -210,10 +211,19 @@ func verdictPost(c *Ctx, args []string) (Result, error) {
 			}
 		}
 	}
+	return reports, errors.Join(errs...)
+}
+
+func verdictPost(c *Ctx, args []string) (Result, error) {
+	t, err := resolveVerdictBranch(c, args)
+	if err != nil {
+		return Result{}, err
+	}
+	reports, postErr := postLatestVerdictReports(c, t, "")
 	d := jsonx.NewObject()
 	d.Set("branch", t.branch)
 	d.Set("reports", reports)
 	d.Set("changed", len(reports) > 0)
-	setReportStatus(d, errors.Join(errs...))
+	setReportStatus(d, postErr)
 	return Result{Data: d, Text: fmt.Sprintf("%d report(s) retried for %s", len(reports), t.branch)}, nil
 }

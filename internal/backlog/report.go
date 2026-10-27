@@ -9,6 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/section"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // PostReport upserts a rendered report on one item's backend.
@@ -93,9 +94,20 @@ func (b *Issues) postReport(ref, key, markdown string) error {
 	if err != nil {
 		return err
 	}
+	var author string
 	for _, c := range comments {
 		line, _, _ := strings.Cut(c.Body, "\n")
 		if line == key {
+			if author == "" {
+				author, err = tracker.ReportAuthor(b.ctx(), tr)
+				if err != nil {
+					return err
+				}
+			}
+			if c.Author != author {
+				continue
+			}
+
 			if c.Body == markdown {
 				return nil
 			}

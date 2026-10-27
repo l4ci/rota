@@ -13,6 +13,37 @@ type MRNoteEditor interface {
 	EditMRNote(ctx context.Context, pr int, commentID, body string) error
 }
 
+// ReportAuthor resolves the authenticated comment author. A marker is never
+// proof of ownership; adapters without an identity seam must fail closed.
+func ReportAuthor(ctx context.Context, adapter any) (string, error) {
+	identity, ok := adapter.(interface {
+		AuthenticatedUser(context.Context) (string, error)
+	})
+	if !ok {
+		return "", fmt.Errorf("tracker cannot resolve the authenticated report author")
+	}
+	author, err := identity.AuthenticatedUser(ctx)
+	if err != nil {
+		return "", err
+	}
+	if author == "" {
+		return "", fmt.Errorf("tracker returned an empty authenticated report author")
+	}
+	return author, nil
+}
+
+func (g *GitHub) AuthenticatedUser(ctx context.Context) (string, error) {
+	var user struct {
+		Login string `json:"login"`
+	}
+	if err := g.json(ctx, []string{"api", "user"}, &user); err != nil {
+		return "", err
+	}
+	return user.Login, nil
+}
+
+func (g *GitLab) AuthenticatedUser(ctx context.Context) (string, error) { return g.username(ctx) }
+
 // PostReport upserts the rendered report on the PR, keyed by its first marker line.
 func PostReport(ctx context.Context, forge Forge, pr int, markdown string) error {
 	key, _, _ := strings.Cut(markdown, "\n")
@@ -23,9 +54,19 @@ func PostReport(ctx context.Context, forge Forge, pr int, markdown string) error
 	if err != nil {
 		return err
 	}
+	var author string
 	for _, note := range notes {
 		line, _, _ := strings.Cut(note.Body, "\n")
 		if line != key {
+			continue
+		}
+		if author == "" {
+			author, err = ReportAuthor(ctx, forge)
+			if err != nil {
+				return err
+			}
+		}
+		if note.Author != author {
 			continue
 		}
 		if note.Body == markdown {
