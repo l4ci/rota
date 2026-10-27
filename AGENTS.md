@@ -88,7 +88,21 @@ Hard boundaries live in `.rota/DECISIONS.md`. Consult them before acting on work
 
 Subsystems live in `.rota/MAP.md` (detail in `.rota/map/<name>.md`). Pull with `rota map query <name>`.
 
-- _(no subsystems yet — write `.rota/map/<name>.md` as you discover subsystems)_
+- **backlog-items** — Backlog item model over file and issue backends, ID counters, plans, designs, spikes, milestones, status.json, debug counter and sessions, shared section/artifact helpers, blockedBy vocabulary
+- **cli-dispatch** — The rota command dispatcher, exit-code contract, error translation and the terminal UI (bare-rota palette, --ui screens)
+- **config-and-setup** — Layered config, project seeding and registry, on-disk layout paths, version and update checks, and the one-shot migrations
+- **doctor-and-reap** — Read-only preflight checks (rota doctor) and fail-closed cleanup of what a round left behind (rota reap)
+- **foundations** — Leaf primitives every other package builds on: atomic files and locks, git and process execution, JSON, timestamps, liveness and small string helpers
+- **gate-landing** — Manual-gate registry, landing adapters and freeze, post-gate bookkeeping, footprint overlap, ship and release domain logic
+- **hooks-guard** — Claude Code hooks: statusline state dump, Stop/prompt context guard, SessionStart handoff, PreToolUse worker guard, settings merge, plugin hooks/ dir
+- **knowledge-and-map** — Project knowledge, decisions and glossary files, the external knowledge repo, the subsystem map and QA indexes, staleness listing and the shared frontmatter parser
+- **review-verdicts** — Typed verdict store and routing, proof rows, acceptance-criteria grammar, test and flake ledgers, golden records, Go test-path rules
+- **round-orchestration** — orchestrator side of a parallel round: lease, drift report, assign, autopilot tick, watch, escalation, ledger, receipts, launcher
+- **skills-packaging** — The rota-* skill sources, their embedding in the binary, install into Claude Code and Codex, the plugin manifests, install.sh and the docs generators
+- **terminal-hosts** — terminal host abstraction (herdr, tmux, Orca) that runs worker sessions, and the herdr pane layout (split/tabs)
+- **test-infra** — The merge gate, sharded smoke suite, doc lints, fakes, e2e scenarios, evals and the shared Go test helpers
+- **tracker-issues** — Forge and issue-tracker adapters (gh, glab, Jira, Linear, Itsaplan), upstream-issue verbs, label registry, comment markers, note chunking, item-body grammar, tracker connections, bug-report log
+- **workers** — worker slots, registry, gate/train/done verbs, agent harness adapters, subagent definitions, keepalive supervisor, usage limits
 <!-- rota-map-end -->
 
 <!-- rota-qa-start -->
