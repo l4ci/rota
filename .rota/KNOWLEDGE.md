@@ -79,6 +79,27 @@ Use `/rota-learn` at the end of a session to capture new learnings. `/rota-work`
 - **Reviewer subagents export with git archive, never worktree add** — A reviewer subagent that runs git worktree add or remove while a gate runs changes git worktree list, and the gate fails FAIL worktree guard (#659, round 12; #607, round 11). Reviewer and fixer briefs export the branch with git archive <ref> | tar -x -C <scratch> and never touch worktrees. <!-- 2026-10-09 -->
 - **Repo-wide renames: one sweep PR owns shared code, slices stack on it** — Run a repo-wide rename as one sweep PR that alone owns shared code. Other slices own disjoint files (front-door docs, release files) and stack on the sweep. Rename on top of the last merged stepping stone, never in parallel slices. Frozen records go through the same rename script; only content hashes may differ. <!-- 2026-10-04 -->
 
+## Glossary
+
+- **binding decision** — A hard project boundary stored in DECISIONS.md, with Forbids and Permits. round assign --decision-topics includes these entries in a worker brief. This is one meaning of decision; it differs from settled answers, decision comments and decision items.
+  - **Aliases:** _none_
+  <!-- 2026-10-27 -->
+
+- **decision** — An overloaded word in rota. A binding decision is a hard boundary in DECISIONS.md. Settled answers are context the orchestrator passes to round assign --settled-file. A decision comment records an answer on an item. A decision item is research or grilling tracked by a decision milestone or decision:research|grilling label. These have separate storage and roles; only DECISIONS.md entries define project boundaries.
+  - **Aliases:** _none_
+  <!-- 2026-10-27 -->
+
+- **decision comment** — An item comment of kind decision that records an answer and its provenance in the issue thread. It does not itself add a binding decision to DECISIONS.md, assign settled answers to a slot or change a decision item label.
+  - **Aliases:** _none_
+  <!-- 2026-10-27 -->
+
+- **decision item** — A tracked question organized in a decision milestone or classified by a decision:research or decision:grilling label (file backend: Decision field). Research delivers a finding; grilling needs the human to settle the choice. It is distinct from DECISIONS.md boundaries, settled answers and decision comments.
+  - **Aliases:** _none_
+  <!-- 2026-10-27 -->
+
+- **settled answers** — Answers already settled by the maintainer and passed verbatim to a worker through round assign --settled-file. Stored on the slot as briefSettledAnswers and printed under Settled answers. This assignment context does not create or replace a binding decision in DECISIONS.md.
+  - **Aliases:** _none_
+  <!-- 2026-10-27 -->
 ## Process: Knowledge capture
 
 - **Tool gotchas become issues; knowledge only for current blockers** — When developing rota with rota, every improvement or gotcha found along the way (a tool quirk, a missing guard, a workaround) is filed as an issue (/rota-capture), not written to KNOWLEDGE.md. A bullet is added only when the problem blocks further development right now, and then it names the issue ("until #N lands: ...") so it is removed with rota knowledge rm once that issue merges. Durable project facts that no fix would change (conventions, design rationale, market notes) still go here as before. <!-- 2026-10-21 -->
