@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/blockedby"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/harness"
@@ -51,9 +50,6 @@ type DispatchResult struct {
 	Shared []SharedDir
 }
 
-// dispatchSetting is round.dispatch from cfg, "" when unset.
-func dispatchSetting(cfg any) host.Kind { return host.KindOf(config.Dispatch(cfg)) }
-
 // RegistryHost is the round host `round start` recorded (C8), "" when no
 // round is in flight.
 //
@@ -77,14 +73,14 @@ func IsSolo(root string) bool { return IsSoloHost(RegistryHost(root)) }
 // a caller that holds injected ones (cli's Deps, worker.Env) passes them, so
 // the decision reads the same sources as the handle it then drives. cfg is the
 // project's loaded config, which the caller owns.
-func ResolveHost(root string, cfg any, getenv func(string) string, lookPath func(string) (string, error)) host.Kind {
-	return host.Resolve(RegistryHost(root), dispatchSetting(cfg), getenv, lookPath)
+func ResolveHost(root string, cfg HostConfig, getenv func(string) string, lookPath func(string) (string, error)) host.Kind {
+	return host.Resolve(RegistryHost(root), cfg.Dispatch, getenv, lookPath)
 }
 
 // ResolvePaneHost is ResolveHost for a verb that must drive a pane host even
 // with no round recorded: a bare environment reads as tmux, which reports
 // unavailable if it is absent. A recorded solo round stays solo.
-func ResolvePaneHost(root string, cfg any, getenv func(string) string, lookPath func(string) (string, error)) host.Kind {
+func ResolvePaneHost(root string, cfg HostConfig, getenv func(string) string, lookPath func(string) (string, error)) host.Kind {
 	k := ResolveHost(root, cfg, getenv, lookPath)
 	if k == host.Solo && !IsSolo(root) {
 		return host.Tmux
@@ -95,7 +91,7 @@ func ResolvePaneHost(root string, cfg any, getenv func(string) string, lookPath 
 // hostKind is the host a pane verb drives. Never pass "solo" on to host.New:
 // callers refuse it first (SoloRefusal), and New maps it to tmux anyway.
 func (e Env) hostKind(root string) host.Kind {
-	return ResolveHost(root, e.Config(root), e.Getenv, e.LookPath)
+	return ResolveHost(root, ParseHostConfig(e.Config(root)), e.Getenv, e.LookPath)
 }
 
 // SoloRefusal is the exit 2 a pane verb gives when the round's recorded host
@@ -191,7 +187,8 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		return res, fail(exitcode.ExitResolution, "body file not found: "+o.BodyFile)
 	}
 	cfg := e.Config(root)
-	h := e.NewHost(ResolveHost(root, cfg, e.Getenv, e.LookPath))
+	hostCfg := ParseHostConfig(cfg)
+	h := e.NewHost(ResolveHost(root, hostCfg, e.Getenv, e.LookPath))
 	if err := h.Require(); err != nil {
 		return res, fail(exitcode.ExitUnavailable, err.Error())
 	}
@@ -303,7 +300,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		if launch, signKey, err = hz.Prepare(launch, e.Executable, setup); err != nil {
 			return res, asError(err)
 		}
-		group, err := GroupSlots(cfg, h.Capabilities())
+		group, err := GroupSlots(hostCfg, h.Capabilities())
 		if err != nil {
 			return res, fail(exitcode.ExitResolution, err.Error())
 		}
@@ -330,14 +327,14 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			// The old session was killed and its handle cleared on the way here.
 			return res, resetRefusal(err, true)
 		}
-		portStart, portBlock := PortRange(cfg)
-		portBase, width, err := EnsurePortBase(root, o.Slot, portStart, portBlock)
+		ports := ParsePortConfig(cfg)
+		portBase, width, err := EnsurePortBase(root, o.Slot, ports.Base, ports.Block)
 		if err != nil {
 			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
 		// A parked slot reused for a task: re-apply round.sharedDirs, the
 		// branch switch may have changed the lockfile or the link may be gone.
-		shared, err := e.slotDeps(ctx, root, o.Slot, worktree, cfg, portBase, width)
+		shared, err := e.slotDeps(ctx, root, o.Slot, worktree, ParseDepsConfig(cfg), portBase, width)
 		res.Shared = shared
 		if err != nil {
 			clearHandle(root, o.Slot)
@@ -401,7 +398,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	if !o.Relay {
 		// The round was folded into the orchestrator's tab: the new worker
 		// joins the grid instead of keeping its own tab.
-		if w := arrangeNew(ctx, h, root, cfg); w != "" {
+		if w := arrangeNew(ctx, h, root, hostCfg); w != "" {
 			res.Warnings = append(res.Warnings, w)
 		}
 		syncLabel(ctx, h, root, o.Slot)
@@ -625,7 +622,7 @@ func sweepShells(ctx context.Context, h host.Host, worktree string) {
 // worker assigned later does not sit in a tab of its own. A host that cannot
 // arrange panes, or a round in tabs, is a no-op. The worker is already up, so a
 // failure is a warning, never a failed dispatch.
-func arrangeNew(ctx context.Context, h host.Host, root string, cfg any) string {
+func arrangeNew(ctx context.Context, h host.Host, root string, cfg HostConfig) string {
 	l := h.Capabilities().Layouter
 	reg := LoadRegistryTolerant(root) // a warning-only rearrange after a spawn; cannot fail the dispatch
 	if l == nil || reg.Layout() != layout.Split {
@@ -664,9 +661,8 @@ func LiveWorkers(ctx context.Context, h host.Layouter, reg Registry) []layout.Wo
 // GroupSlots reads round.herdrGroupSlots: whether a slot lives in a linked
 // workspace of its own. It is on only for a host that can group (herdr); on
 // any other host the default being true must not record workspaces.
-func GroupSlots(cfg any, caps host.Capabilities) (bool, error) {
-	on, err := config.Bool(cfg, config.RoundHerdrGroupSlotsKey)
-	return on && caps.CanGroup(), err
+func GroupSlots(cfg HostConfig, caps host.Capabilities) (bool, error) {
+	return cfg.GroupSlots && caps.CanGroup(), cfg.GroupErr
 }
 
 // RecordWorkspaces stores each live slot's linked workspace as herdr has it
