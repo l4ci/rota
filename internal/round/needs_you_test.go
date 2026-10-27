@@ -43,7 +43,7 @@ func TestNeedsYouSources(t *testing.T) {
  {"name":"approval","task":"14","state":"done","pr":"#8"},
  {"name":"cleared","task":"15","state":"done","pr":"#9"},
  {"name":"duplicate","task":"17","state":"done","pr":"#11"}
- ],"prs":[{"issue":"16","pr":"#10"}],"bounces":{"12":3,"17":3}}`
+ ],"prs":[{"issue":"16","pr":"#10"}],"bounces":{"12":3,"16":3,"17":3}}`
 	if err := os.WriteFile(worker.RegistryPath(root), []byte(registry), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestNeedsYouSources(t *testing.T) {
 		}
 	}
 	e := Env{Round: roundcfg.Settings{MaxBounces: 3}, NeedsHuman: "needs-human", Forge: needsYouForge{
-		issues: []tracker.Issue{{Key: "99"}, {Key: "100"}}, states: map[int]string{8: "open", 10: "closed"},
+		issues: []tracker.Issue{{Key: "99"}, {Key: "100"}}, states: map[int]string{7: "open", 8: "open", 10: "closed"},
 	}}
 	rows, warnings := e.NeedsYou(context.Background(), root)
 	if len(warnings) != 0 {
