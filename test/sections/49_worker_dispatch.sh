@@ -435,7 +435,8 @@ json.dump(d, open(sys.argv[1], "w"))
 PYEOF
 }
 prov() {  # prov <body> -> "<exit code>:<verdict>" of the check
-  printf '%s' "$1" > "$TMP_WD/pr_body.md"
+  # Keep required decision headings present so these cases test Approvals.
+  printf '%s\n\n## Assumptions\n\nNone\n\n## Rulings\n\nNone\n' "$1" > "$TMP_WD/pr_body.md"
   local rc=0
   ( cd "$TMP_WD" && PATH="$FAKEBIN:$PATH" FAKE_PR_BODY="$TMP_WD/pr_body.md" FAKE_PR_HEAD="$FAKE_PR_HEAD" FAKE_PR_SHA="$FAKE_PR_SHA" \
       "$ROTA_BIN" --json worker gate w3 --base main --check-only ) >"$TMP_WD/prov.out" 2>"$TMP_WD/prov.err" || rc=$?
