@@ -2,8 +2,10 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"strings"
@@ -140,7 +142,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		d.Set("review", queuedRows(rep.Queued))
 		var lines []string
 		frozen, ferr := landfreeze.Load(ctx, c.deps().Git, root)
-		if ferr != nil {
+		if ferr != nil && !errors.Is(ferr, rotastate.ErrNotRepo) {
 			return Result{}, ferr
 		}
 		if frozen != nil && frozen.Active {

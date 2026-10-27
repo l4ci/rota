@@ -2,7 +2,9 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/rotastate"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -588,6 +590,9 @@ func (m *roundScreen) Render(w, h int, st tui.Style) string {
 
 func addFreezeNote(ctx context.Context, c *Ctx, root string, s *roundSnap) {
 	frozen, err := landfreeze.Load(ctx, c.deps().Git, root)
+	if errors.Is(err, rotastate.ErrNotRepo) {
+		return
+	}
 	if err != nil {
 		s.Notes = append(s.Notes, "landing freeze unreadable: "+err.Error())
 		return

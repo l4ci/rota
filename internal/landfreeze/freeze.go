@@ -8,7 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/tracker"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -80,16 +83,34 @@ func Save(path string, r *Record) error {
 
 func issueID(s string) string { return strings.TrimPrefix(strings.TrimSpace(s), "#") }
 func prID(s string) string {
-	s = strings.TrimRight(strings.TrimSpace(s), "/")
-	if i := strings.LastIndex(s, "/"); i >= 0 {
-		s = s[i+1:]
+	s = strings.TrimSpace(s)
+	if ref, ok := tracker.ParsePRURL(s); ok {
+		return strconv.Itoa(ref.Number)
 	}
-	return strings.TrimPrefix(strings.TrimPrefix(s, "#"), "!")
+	n, err := strconv.Atoi(strings.TrimLeft(s, "#!"))
+	if err != nil || n <= 0 {
+		return ""
+	}
+	return strconv.Itoa(n)
+}
+
+func samePR(a, b string) bool {
+	ar, aURL := tracker.ParsePRURL(a)
+	br, bURL := tracker.ParsePRURL(b)
+	if aURL && bURL {
+		au, _ := url.Parse(a)
+		bu, _ := url.Parse(b)
+		if ar.Provider != br.Provider || ar.Repo != br.Repo || !strings.EqualFold(au.Host, bu.Host) {
+			return false
+		}
+	}
+	id := prID(a)
+	return id != "" && id == prID(b)
 }
 
 // Allows grants an exception only to the explicitly designated repair.
 func (r *Record) Allows(issue, pr string) bool {
-	return r == nil || !r.Active || (r.RepairIssue != "" && issueID(issue) == issueID(r.RepairIssue)) || (r.RepairPR != "" && prID(pr) == prID(r.RepairPR))
+	return r == nil || !r.Active || (r.RepairIssue != "" && issueID(issue) == issueID(r.RepairIssue)) || (r.RepairPR != "" && samePR(pr, r.RepairPR))
 }
 
 func (r *Record) Line() string {

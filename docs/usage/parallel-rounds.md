@@ -1065,6 +1065,8 @@ Adopt refuses `claimed` only if the current holder is stale or authoritative cla
 shows that the branch's former claim was released and replaced. Fresh different holders
 without that evidence do not prevent adoption; unreadable history is warned and skipped.
 
+## Recover a frozen base
+
 A failed verification after a landing freezes the landing queue. `rota round status`
 and the prompt digest show the frozen base, SHA and failed checks. Gate, train and
 assign refuse unrelated work until recovery. Name the repair with
