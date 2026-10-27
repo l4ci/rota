@@ -49,7 +49,6 @@ func TestSummaryBounceRatioAndRules(t *testing.T) {
 			t.Errorf("%s missing its counting rule in text/JSON", name)
 		}
 	}
-
 }
 
 func metricValue(t *testing.T, m *jsonx.Object, key string, want any) {

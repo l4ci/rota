@@ -20,12 +20,9 @@ func TestRoundSummaryUnavailableSources(t *testing.T) {
 				if err := os.Mkdir(ledger.Path(dir), 0o755); err != nil {
 					t.Fatal(err)
 				}
-			case "malformed", "invalid timestamp":
+			case "invalid timestamp":
 				seedLedger(t, dir)
-				bad := "{torn\n"
-				if kind == "invalid timestamp" {
-					bad = `{"ts":"wrong","round":2,"kind":"bounce"}` + "\n"
-				}
+				bad := `{"ts":"wrong","round":2,"kind":"bounce"}` + "\n"
 				f, err := os.OpenFile(ledger.Path(dir), os.O_APPEND|os.O_WRONLY, 0o644)
 				if err != nil {
 					t.Fatal(err)
@@ -59,6 +56,64 @@ func TestRoundSummaryUnavailableSources(t *testing.T) {
 			}
 			if kind == "missing" && (!strings.Contains(out, "unavailable (no ledger)") || strings.Contains(out, dir)) {
 				t.Errorf("missing source needs a stable reason without an absolute path: %s", out)
+			}
+		})
+	}
+}
+
+func TestRoundSummaryRequestedRoundSourceStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name, reason string
+		wantExit     int
+	}{
+		{"missing", "no ledger", 0},
+		{"unreadable", "ledger unreadable", 0},
+		{"loaded without requested round", "", 3},
+		{"loaded with only torn lines", "", 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := workerProject(t, `{}`)
+			switch tc.name {
+			case "unreadable":
+				if err := os.Mkdir(ledger.Path(dir), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			case "loaded without requested round":
+				seedLedger(t, dir)
+			case "loaded with only torn lines":
+				if err := os.WriteFile(ledger.Path(dir), []byte("{torn\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			deps := testDeps()
+			code, out, _ := rotaInWith(t, deps, dir, "round", "summary", "--round", "9", "--json")
+			if code != tc.wantExit {
+				t.Fatalf("explicit round with %s source: exit %d, want %d: %s", tc.name, code, tc.wantExit, out)
+			}
+			if code != 0 {
+				return
+			}
+			d := data(t, out)
+			if d["round"] != float64(9) {
+				t.Errorf("requested round = %v, want 9", d["round"])
+			}
+			for name, value := range d["metrics"].(map[string]any) {
+				m := value.(map[string]any)
+				if m["unavailable"] != tc.reason {
+					t.Errorf("%s reason = %v, want %s", name, m["unavailable"], tc.reason)
+				}
+				for _, key := range []string{"samples", "medianSeconds", "p90Seconds", "numerator", "denominator", "value"} {
+					if m[key] != nil {
+						t.Errorf("%s.%s = %v, want null", name, key, m[key])
+					}
+				}
+			}
+			code, text, _ := rotaInWith(t, deps, dir, "round", "summary", "--round", "9")
+			if code != 0 || !strings.Contains(text, "unavailable ("+tc.reason+")") {
+				t.Errorf("text must report unavailable source at exit 0: %d: %s", code, text)
+			}
+			if tc.name == "missing" && !strings.Contains(text, "no ledger yet") {
+				t.Errorf("missing source must retain its explanation: %s", text)
 			}
 		})
 	}
