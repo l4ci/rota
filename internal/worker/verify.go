@@ -8,16 +8,18 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/flakeledger"
 	"github.com/l4ci/rota/internal/testledger"
 )
 
 // VerifyResult is one run of test.full. Callers only phrase the
 // verdict; reading the key, running the commands and keeping the log live here.
 type VerifyResult struct {
-	NoCommands bool     // test.full is empty: nothing was run
-	Verified   []string // commands that passed
-	Failed     []string // commands that failed
-	Log        string   // every command's output, as it ran
+	Flaky      []flakeledger.Entry // assertion failures recovered on one sequential retry
+	NoCommands bool                // test.full is empty: nothing was run
+	Verified   []string            // commands that passed
+	Failed     []string            // commands that failed
+	Log        string              // every command's output, as it ran
 	// LogPath is the same log on disk, set only when a command failed. The
 	// caller owns it: report it, or remove it.
 	LogPath string

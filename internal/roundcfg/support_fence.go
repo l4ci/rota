@@ -93,7 +93,7 @@ var supportAllowed = []string{
 	"rota skills get", "rota skills list", "rota skills status",
 	"rota spike list", "rota spike show",
 	"rota status show", "rota statusline dump", "rota summary",
-	"rota test ledger check", "rota test run",
+	"rota test flakes", "rota test ledger check", "rota test run",
 	"rota tracker suggest-upstream", "rota update", "rota verdict show", "rota version",
 	"rota worker account list", "rota worker pool list", "rota worker prompt-check", "rota worker session check",
 	// The tracker: item, design, plan and proof writers keep their text on the
