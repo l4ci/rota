@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/labels"
+	"github.com/l4ci/rota/internal/landfreeze"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/roundcfg"
 	secpkg "github.com/l4ci/rota/internal/section"
@@ -611,6 +612,18 @@ func (e Env) requireLease(ctx context.Context, root string, o AssignOpts) error 
 func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (res Assigned, err error) {
 	if err := e.roundCfgErr(); err != nil {
 		return res, err
+	}
+	frozen, err := landfreeze.Load(ctx, e.Git, root)
+	if err != nil {
+		return res, blocked(blockedby.Freeze, "%s", landfreeze.UnreadableLine(err))
+	}
+	if !frozen.Allows(o.ID, "") {
+		return res, blocked(blockedby.Freeze, "%s", frozen.Line())
+	}
+	for _, id := range o.Bundle {
+		if !frozen.Allows(id, "") {
+			return res, blocked(blockedby.Freeze, "%s; unrelated bundle member %s", frozen.Line(), id)
+		}
 	}
 	it, err := be.Get(o.ID)
 	if err != nil {
