@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -393,7 +394,25 @@ func a8Project(t *testing.T, f *a8Forge) (string, *Deps) {
 	t.Helper()
 	root := newRepo(t, t.TempDir(), "proj", "main")
 	write(t, filepath.Join(root, ".rota", "config.json"), issuesConfig)
-	return root, withTracker(t, f)
+	deps := withTracker(t, f)
+	// Verdict recovery reads the PR forge separately from the issue backend.
+	// This fixture has no posted verdict reports; keep those reads on its fake.
+	reader := &forge{answer: func(_ string, args []string) (string, string, int) {
+		if len(args) > 1 && args[0] == "pr" && args[1] == "list" {
+			return "[]", "", 0
+		}
+		if len(args) > 2 && args[0] == "pr" && args[1] == "view" {
+			for _, pr := range f.prs {
+				if strconv.Itoa(pr.Number) == args[2] {
+					raw, _ := json.Marshal(map[string]string{"headRefName": pr.Branch, "headRefOid": "feedface00000000000000000000000000000001"})
+					return string(raw), "", 0
+				}
+			}
+		}
+		return "", "unexpected forge call", 1
+	}}
+	deps.TrackerOptions = useForge(t, reader).TrackerOptions
+	return root, deps
 }
 
 // a8RunIn runs a8Run against a fresh a8Project served by f.

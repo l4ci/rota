@@ -48,14 +48,16 @@ func TestVerdictShowRecoversPRReport(t *testing.T) {
 func TestShipPRMergeRecoversRemoteFailWithoutLocalBranch(t *testing.T) {
 	backend := a8Fixture()
 	root, deps := a8Project(t, backend)
-	report := verdict.RenderReport(verdict.Record{Kind: verdict.ReviewSpec, Verdict: verdict.Fail, Sha: "abcdef1234567", Summary: "remote FAIL"}, nil)
+	prHead := "abcdef1234567"
+	report := verdict.RenderReport(verdict.Record{Kind: verdict.ReviewSpec, Verdict: verdict.Fail, Sha: prHead, Summary: "remote FAIL"}, nil)
 	fake := &forge{answer: func(_ string, args []string) (string, string, int) {
 		call := strings.Join(args, " ")
 		switch {
 		case strings.HasPrefix(call, "pr list "):
 			return `[{"number":10,"headRefName":"feat/ten","isCrossRepository":false}]`, "", 0
 		case strings.HasPrefix(call, "pr view 10 "):
-			return `{"headRefName":"feat/ten","headRefOid":"abcdef1234567","state":"OPEN"}`, "", 0
+			raw, _ := json.Marshal(map[string]string{"headRefName": "feat/ten", "headRefOid": prHead, "state": "OPEN"})
+			return string(raw), "", 0
 		case strings.Contains(call, "issues/10/comments"):
 			raw, _ := json.Marshal([]any{map[string]any{"id": 1, "body": report, "user": map[string]string{"login": "reviewer"}}})
 			return string(raw), "", 0
@@ -72,6 +74,13 @@ func TestShipPRMergeRecoversRemoteFailWithoutLocalBranch(t *testing.T) {
 	}
 	if len(backend.merged) != 0 {
 		t.Fatal("merged a remote FAIL")
+	}
+	// A later push must not turn a cached report into an authoritative local
+	// stale FAIL: AC-3 applies after recovery as well as on a fresh clone.
+	prHead = "1234567abcdef"
+	out = trRunWith(t, deps, root, "", "ship", "pr-merge", "10", "--json")
+	if out.code != 0 || len(backend.merged) != 1 {
+		t.Fatalf("old cached PR report counted at new head: %+v", out)
 	}
 }
 

@@ -29,5 +29,5 @@ func lookupVerdicts(c *Ctx, t verdictBranch) []verdict.Record {
 	if err != nil {
 		c.Warn("could not recover PR verdicts for %s: %v", t.branch, err)
 	}
-	return verdict.Load(t.root).Branches[t.key]
+	return verdict.ForHead(verdict.Load(t.root).Branches[t.key], t.head)
 }
