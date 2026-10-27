@@ -50,6 +50,9 @@ func postGateReport(c *Ctx, root string, r worker.GateResult) {
 // A train's landed members and culprit are the PRs whose gate outcomes changed.
 // Unattempted members receive no outcome report.
 func postTrainReports(c *Ctx, root string, issues map[string]string, r worker.TrainResult) {
+	for _, culprit := range r.Culprits {
+		postGateReport(c, root, culprit.Gate)
+	}
 	for _, m := range r.Members {
 		if !m.Landed {
 			continue
@@ -58,6 +61,11 @@ func postTrainReports(c *Ctx, root string, issues map[string]string, r worker.Tr
 		postGateReport(c, root, worker.GateResult{Branch: m.Branch, PR: m.PR, Issue: issues[m.Target], SHA: r.SHA, Verdict: worker.GatePass, Verified: checks, VerifySkipped: len(checks) == 0})
 	}
 	if r.Culprit != "" {
+		for _, culprit := range r.Culprits {
+			if culprit.Target == r.Culprit {
+				return // this section culprit was already reported above
+			}
+		}
 		g := r.CulpritGate
 		if g.Branch == "" {
 			for _, m := range r.Members {

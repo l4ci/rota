@@ -38,7 +38,7 @@ func (w *world) setAttemptSlot(attempt, base string) {
 	}
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q%s}]}`, ghURL, extra)), 0o644)
-	w.forge("body", "Closes #5\n")
+	w.setPRBody("Closes #5\n")
 }
 
 // A PR carrying a commit stamped with an attempt the slot no longer holds is

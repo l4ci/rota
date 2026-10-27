@@ -25,7 +25,7 @@ func TestGateClosesEveryBundledIssue(t *testing.T) {
 			w := newWorld(t, ghURL)
 			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q,"bundle":["#6","#7"]}]}`, ghURL)), 0o644)
-			w.forge("body", c.body)
+			w.setPRBody(c.body)
 			res, err := w.gate(false, GateOpts{CheckOnly: true})
 			if err != nil {
 				t.Fatal(err)
@@ -58,7 +58,7 @@ func TestGateClosesSkipsAClosedMember(t *testing.T) {
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q,"bundle":["#6","#7"]}]}`, ghURL)), 0o644)
 	// the fake forge answers every Get with this state; the body closes #5 and #7
 	w.forge("issueState", "closed")
-	w.forge("body", "Closes #5\nCloses #7\n")
+	w.setPRBody("Closes #5\nCloses #7\n")
 	res, err := w.gate(false, GateOpts{CheckOnly: true})
 	if err != nil {
 		t.Fatal(err)

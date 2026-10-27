@@ -814,7 +814,7 @@ func TestOrderTrainOverrideRejectsBadTokens(t *testing.T) {
 func TestTrainDropsLandedQueuedPR(t *testing.T) {
 	w := newWorld(t, "")
 	w.setQueued()
-	w.forge("body", "Closes #5\n")
+	w.setPRBody("Closes #5\n")
 	if n := len(LoadRegistryTolerant(w.dir).PRs()); n != 1 {
 		t.Fatalf("setup: %d queued record(s)", n)
 	}
@@ -842,7 +842,7 @@ func slicePRTrain(t *testing.T) *world {
 	pr := func(n int) string { return fmt.Sprintf("https://github.com/o/r/pull/%d", n) }
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(fmt.Sprintf(
 		`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q},{"name":"w2","branch":"w2","task":"#6","pr":%q}]}`, pr(7), pr(8))), 0o644)
-	w.forge("body", "Refs #5 #6\n")
+	w.setPRBody("Refs #5 #6\n")
 	w.forge("issueLabels", "in-progress,"+PartialSliceLabel)
 	w.forge("closingRefs", "5,6")
 	return w
@@ -878,7 +878,7 @@ func TestTrainFinalSliceExemptsOnlyTheNamedMember(t *testing.T) {
 func TestTrainNotesClosingRefsUnknownOnce(t *testing.T) {
 	w := newWorld(t, "")
 	w.setQueued()
-	w.forge("body", "Refs #5\n")
+	w.setPRBody("Refs #5\n")
 	w.forge("issueLabels", "in-progress,"+PartialSliceLabel)
 	res, err := w.train(TrainOpts{Targets: []string{"#7"}})
 	if err != nil || res.Verdict != GatePass {
@@ -1103,7 +1103,7 @@ func syncPRWorld(t *testing.T, verify string) *world {
 	w := newWorld(t, "")
 	w.setQueued()
 	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q]}}`, verify))
-	w.forge("body", "Closes #5\n")
+	w.setPRBody("Closes #5\n")
 	w.forge("base", "milestone/M01")
 	gitq(t, w.dir, "push", "-q", "origin", "main:refs/heads/milestone/M01")
 	os.WriteFile(filepath.Join(w.worker, "main2.txt"), []byte("main2\n"), 0o644)
