@@ -22,7 +22,7 @@ func (s Store) DecisionsQuery(topics []string) (text string, missing []string, e
 
 func queryTopics(content string, topics []string) (string, []string, error) {
 	var names []string
-	for _, t := range section.Topics(content) {
+	for _, t := range decisionSections(content) {
 		names = append(names, t.Name)
 	}
 	wanted := map[string]bool{}
@@ -39,7 +39,13 @@ func queryTopics(content string, topics []string) (string, []string, error) {
 			missing = append(missing, t)
 		}
 	}
-	return section.Matching(content, wanted), missing, nil
+	var matched []string
+	for _, t := range decisionSections(content) {
+		if wanted[strings.ToLower(t.Name)] {
+			matched = append(matched, "## "+t.Name+"\n"+strings.TrimRight(t.Body, " \t\n\r\f\v")+"\n")
+		}
+	}
+	return strings.Join(matched, "\n"), missing, nil
 }
 
 // DecisionsStats counts bullets and bytes per topic of DECISIONS.md, the list
@@ -49,7 +55,11 @@ func (s Store) DecisionsStats() ([]Stat, error) {
 	if err != nil {
 		return nil, err
 	}
-	return topicStats(ActiveDecisions(content)), nil
+	var stats = []Stat{}
+	for _, t := range decisionSections(ActiveDecisions(content)) {
+		stats = append(stats, Stat{t.Name, len(bulletLine.FindAllStringIndex(t.Body, -1)), len(t.Body)})
+	}
+	return stats, nil
 }
 
 // retiredStatus marks a decision entry lifted by /rota-decide --retire or
@@ -64,49 +74,55 @@ func ActiveDecisions(content string) string {
 	if !retiredStatus.MatchString(content) {
 		return content
 	}
-	lines := strings.SplitAfter(content, "\n")
-	var out []string
-	var topic []string // lines of the current "## " topic, heading included
-	var entry []string // lines of the current "### " entry
-	entries, kept := 0, 0
-	inFence := false
-	flushEntry := func() {
-		if entry == nil {
-			return
-		}
-		entries++
-		if !retiredStatus.MatchString(strings.Join(entry, "")) {
-			kept++
-			topic = append(topic, entry...)
-		}
-		entry = nil
+	topics := decisionTopics(content)
+	if len(topics) == 0 {
+		return content
 	}
-	flushTopic := func() {
-		flushEntry()
-		if topic != nil && (entries == 0 || kept > 0) {
-			out = append(out, topic...)
+	var out strings.Builder
+	out.WriteString(content[:topics[0].start])
+	for _, topic := range topics {
+		if len(topic.entries) == 0 {
+			out.WriteString(content[topic.start:topic.end])
+			continue
 		}
-		topic, entries, kept = nil, 0, 0
-	}
-	for _, l := range lines {
-		if strings.HasPrefix(l, "```") {
-			inFence = !inFence
+		var kept strings.Builder
+		for _, entry := range topic.entries {
+			raw := content[entry.start:entry.end]
+			status := ParseDecision(raw).Status
+			if !retiredStatus.MatchString("*Status.* " + status) {
+				kept.WriteString(raw)
+			}
 		}
-		switch {
-		case !inFence && strings.HasPrefix(l, "## "):
-			flushTopic()
-			topic = []string{l}
-		case topic == nil:
-			out = append(out, l)
-		case !inFence && strings.HasPrefix(l, "### "):
-			flushEntry()
-			entry = []string{l}
-		case entry != nil:
-			entry = append(entry, l)
-		default:
-			topic = append(topic, l)
+		if kept.Len() > 0 {
+			out.WriteString(content[topic.start:topic.entries[0].start])
+			out.WriteString(kept.String())
 		}
 	}
-	flushTopic()
-	return strings.Join(out, "")
+	return out.String()
+}
+
+// CheckDecisions validates the umbrella file; a missing file has no entries.
+func (s Store) CheckDecisions() (DecisionCheck, error) {
+	content, err := ReadFile(s.decisionsPath())
+	if err != nil {
+		return DecisionCheck{}, err
+	}
+	return CheckDecisions(content), nil
+}
+
+// decisionSections gives readers the same fence-aware topic boundaries as the
+// validator. Body includes the heading's newline, matching section.Topics.
+func decisionSections(content string) []section.Topic {
+	var out []section.Topic
+	for _, topic := range decisionTopics(content) {
+		start := topic.body
+		if start > topic.start && content[start-1] == '\n' {
+			start--
+			if start > topic.start && content[start-1] == '\r' {
+				start--
+			}
+		}
+		out = append(out, section.Topic{Name: topic.name, Body: content[start:topic.end]})
+	}
+	return out
 }

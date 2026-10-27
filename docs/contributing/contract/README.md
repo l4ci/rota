@@ -60,7 +60,7 @@ Field types use JSON names (`string`, `number`, `bool`, `object`, `[]string`). `
 | refactor | `age`, `reset`, `targets` | A4 |
 | migrate | `issues` (A4), `hv` (#236), `labels` (#1973) | A4 |
 | knowledge | `query`, `stats`, `topics`, `add`, `amend`, `rm`, `rename-topic`, `harvest`, `hit`, `tier get`, `tier set`, `tier list`, `contradiction add`, `contradiction list`, `contradiction clear`, `contradiction has` | A5 |
-| decisions | `query`, `topics` | A5 |
+| decisions | `query`, `topics`, `stats`, `add`, `amend`, `check`, `retire`, `supersede` | A5 |
 | glossary | `read`, `write`, `import` | A5 |
 | block | `<key>`, `skills` | A5 |
 | instructions | `init` | A5 |
