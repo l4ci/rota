@@ -9,7 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
-	registry "github.com/l4ci/rota/internal/labels"
+	labeldefs "github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -207,7 +207,7 @@ func resolveCross(c roundcfg.CrossReview, labels []string, author string) (strin
 		if trigger == "" && slices.Contains(c.Labels, l) {
 			trigger = l
 		}
-		if v, ok := strings.CutPrefix(l, registry.ReviewPrefix); ok && route != CrossNone && (v == CrossNone || crossReviewer(v)) {
+		if v, ok := strings.CutPrefix(l, labeldefs.ReviewPrefix); ok && route != CrossNone && (v == CrossNone || crossReviewer(v)) {
 			route = v
 		}
 	}
