@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/landfreeze"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/tui"
@@ -71,7 +72,9 @@ func roundStatusView(c *Ctx, _ Result) (tui.Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	m := newRoundScreen(snapFromReport(rep), load, c.deps().Now, roundRefresh)
+	initial := snapFromReport(rep)
+	addFreezeNote(c.Context(), c, root, &initial)
+	m := newRoundScreen(initial, load, c.deps().Now, roundRefresh)
 	m.open = c.deps().OpenURL
 	m.loading = true // Init starts the first pass
 	return m, nil
@@ -109,6 +112,7 @@ func loadRoundSnap(ctx context.Context, c *Ctx, root string) (roundSnap, error) 
 		return roundSnap{}, err
 	}
 	s := snapFromReport(rep)
+	addFreezeNote(ctx, c, root, &s)
 	s.CandsLoaded = true
 	fillBurn(ctx, c, root, s.Slots)
 	set, err := c.deps().roundSettings(root, roundConfigRequired)
@@ -580,4 +584,15 @@ func (m *roundScreen) Render(w, h int, st tui.Style) string {
 	body = append(body, dt.Render(w, detailRows, st))
 	bar := tui.Hints([]tui.Hint{{Key: "↑/↓", Desc: "select"}, {Key: "PgUp/PgDn", Desc: "scroll"}, {Key: "i", Desc: "issue link"}, {Key: "p", Desc: "PR link"}, {Key: "r", Desc: "refresh"}, {Key: "q", Desc: "back"}}, w, st)
 	return tui.Frame(strings.Join(body, "\n"), bar, h)
+}
+
+func addFreezeNote(ctx context.Context, c *Ctx, root string, s *roundSnap) {
+	frozen, err := landfreeze.Load(ctx, c.deps().Git, root)
+	if err != nil {
+		s.Notes = append(s.Notes, "landing freeze unreadable: "+err.Error())
+		return
+	}
+	if frozen != nil && frozen.Active {
+		s.Notes = append(s.Notes, frozen.Line())
+	}
 }

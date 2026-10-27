@@ -517,6 +517,7 @@ var gateSteps = []gateStep{
 	(*gate).stepForge,
 	(*gate).stepExternal,
 	(*gate).stepAdoptPR,
+	(*gate).stepFreeze,
 	(*gate).stepBestOf,
 	(*gate).stepRemote,
 	(*gate).stepWaitedMerged,
@@ -548,6 +549,7 @@ var reviewsOnlySteps = []gateStep{
 	(*gate).stepForge,
 	(*gate).stepExternal,
 	(*gate).stepAdoptPR,
+	(*gate).stepFreeze,
 	(*gate).stepRemote,
 	(*gate).stepWaitedMerged,
 	(*gate).stepSlotHead,
@@ -561,6 +563,7 @@ var reviewsOnlySteps = []gateStep{
 // gatePostSteps run after the steps above, however they ended, unless one
 // returned an error: the verdict is final and these record it.
 var gatePostSteps = []func(*gate) error{
+	(*gate).stepClearFreeze,
 	(*gate).stepRecordLedger,
 	(*gate).stepDequeue,
 	(*gate).stepReleaseExternal,
@@ -1518,6 +1521,9 @@ func (g *gate) redTier(landed bool) func(string, VerifyResult) (bool, error) {
 			detail = fmt.Sprintf("last lines of the e2e output (full log: %s):\n%s", vr.LogPath, indentTail(vr.Log, 20))
 		}
 		if landed {
+			if err := g.freezeFailure(vr); err != nil {
+				return true, err
+			}
 			g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — merged tree does not pass %s at %s\n%s", o.Slot, what, res.SHA, detail),
 				fmt.Sprintf("fix forward on %s; the owning slot has usually moved on", o.Base))
 			return true, nil

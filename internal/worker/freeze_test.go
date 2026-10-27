@@ -1,0 +1,99 @@
+package worker
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/l4ci/rota/internal/landfreeze"
+)
+
+func frozenWorld(t *testing.T) (*world, string) {
+	t.Helper()
+	w := newWorld(t, "")
+	// Keep runtime state out of git status, as rota init does in real projects.
+	if err := os.WriteFile(filepath.Join(w.dir, ".git", "info", "exclude"), []byte(".rota/\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(w.dir, ".git", "rota", "freeze.json")
+	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(`{"active":true,"base":"main","sha":"red","checks":["false"]}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return w, p
+}
+
+func TestFreezeVerifiedRecovery(t *testing.T) {
+	w, p := frozenWorld(t)
+	e := w.env(false)
+	r, err := e.Freeze(bg, w.dir, FreezeOpts{Verify: true})
+	if err != nil || r.Active || r.ClearedBy == "" || r.ClearedSHA != gitq(t, w.dir, "rev-parse", "HEAD") {
+		t.Fatalf("green recovery: %+v %v", r, err)
+	}
+	stored, err := landfreeze.Read(p)
+	if err != nil || stored.Active {
+		t.Fatalf("clear not persisted: %+v %v", stored, err)
+	}
+}
+
+func TestFreezeRecoveryKeepsRedOrUnverifiedBase(t *testing.T) {
+	for _, cfg := range []string{`{"test":{"full":["false"]}}`, `{"test":{"full":[]}}`, `{"test":{"full":["true"],"e2e":["false"]}}`} {
+		t.Run(cfg, func(t *testing.T) {
+			w, p := frozenWorld(t)
+			w.setConfig(cfg)
+			if _, err := w.env(false).Freeze(bg, w.dir, FreezeOpts{Verify: true}); err == nil {
+				t.Fatal("red or absent verification must not clear freeze")
+			}
+			r, err := landfreeze.Read(p)
+			if err != nil || !r.Active {
+				t.Fatalf("freeze lost: %+v %v", r, err)
+			}
+		})
+	}
+}
+
+func TestFreezeRecoveryRefusesDirtyOrWrongBranch(t *testing.T) {
+	for _, kind := range []string{"dirty", "branch", "stale-origin", "moved-during-verify"} {
+		t.Run(kind, func(t *testing.T) {
+			w, p := frozenWorld(t)
+			switch kind {
+			case "dirty":
+				os.WriteFile(filepath.Join(w.dir, "seed.txt"), []byte("dirty"), 0644)
+			case "branch":
+				gitq(t, w.dir, "checkout", "-q", "-b", "other")
+			case "stale-origin":
+				advanceMainOn(w, "more.txt")
+			case "moved-during-verify":
+				w.setConfig(`{"test":{"full":["git -c user.name=t -c user.email=t@t commit --allow-empty -m moved"]}}`)
+			}
+			if _, err := w.env(false).Freeze(bg, w.dir, FreezeOpts{Verify: true}); err == nil {
+				t.Fatal("unsafe base cleared freeze")
+			}
+			r, err := landfreeze.Read(p)
+			if err != nil || !r.Active {
+				t.Fatalf("freeze lost: %+v %v", r, err)
+			}
+		})
+	}
+}
+
+func TestFreezeSharedAcrossLinkedWorktrees(t *testing.T) {
+	w, p := frozenWorld(t)
+	wt := filepath.Join(t.TempDir(), "linked")
+	gitq(t, w.dir, "worktree", "add", "-q", "--detach", wt)
+	r, err := w.env(false).Freeze(bg, wt, FreezeOpts{RepairIssue: "99"})
+	if err != nil || r.RepairIssue != "99" {
+		t.Fatalf("linked repair: %+v %v", r, err)
+	}
+	b, _ := os.ReadFile(p)
+	var stored landfreeze.Record
+	if err := json.Unmarshal(b, &stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored.RepairIssue != "99" {
+		t.Fatalf("linked worktree wrote a separate freeze: %s", b)
+	}
+}

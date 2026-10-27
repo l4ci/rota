@@ -21,6 +21,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/knowledge"
+	"github.com/l4ci/rota/internal/landfreeze"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -329,10 +330,12 @@ func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 			"additionalContext": line,
 		}}), nil
 	}
-	if worker.IsSolo(hc.root) {
+	frozen, _ := landfreeze.Read(rotastate.File(hc.commonDir, "freeze.json"))
+	activeFreeze := frozen != nil && frozen.Active
+	if worker.IsSolo(hc.root) && !activeFreeze {
 		return Result{}, nil
 	}
-	if need, _ := roundwatch.NeedsWatch(hc.root); !need {
+	if need, _ := roundwatch.NeedsWatch(hc.root); !need && !activeFreeze {
 		return Result{}, nil
 	}
 	_, armed := roundwatch.Armed(hc.lease, hc.commonDir)
