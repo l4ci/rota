@@ -450,21 +450,11 @@ func (f *File) Complete(ref string, in CompleteInput) (bool, error) {
 			}
 			return errf(ErrNotFound, "[%s] not found", ref)
 		}
-		acceptanceRecord := ""
-		detailPath := DetailPath(f.Root, ref)
-		if in.Reason == "done" && detailPath != "" {
-			body, err := fsio.ReadText(detailPath)
-			if err != nil && !errors.Is(err, fs.ErrNotExist) {
-				return err
-			}
-			unmet := unmetAcceptance(body, "", "", nil)
-			if len(unmet) > 0 {
-				if strings.TrimSpace(in.UnmetReason) == "" {
-					return AcceptanceRefusal(ref, unmet)
-				}
-				acceptanceRecord = AcceptanceRecord(unmet, in.UnmetReason)
-			}
+		acceptanceRecord, err := f.completionAcceptance(ref, in)
+		if err != nil {
+			return err
 		}
+		detailPath := DetailPath(f.Root, ref)
 		if in.Reason == "done" && !in.NoProof {
 			if err := requireProof(ref, func() (int, error) { return f.proofRows(ref) }); err != nil {
 				return err

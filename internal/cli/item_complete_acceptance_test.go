@@ -36,6 +36,9 @@ func TestFileCompleteUnmetAcceptance(t *testing.T) {
 	if code != 4 || !strings.Contains(stderr+out, "AC-1") || !strings.Contains(stderr+out, "AC-2") {
 		t.Fatalf("file completion: exit %d: %s %s", code, out, stderr)
 	}
+	if strings.Contains(stderr+out, "plan pass") {
+		t.Fatalf("file backend suggests unavailable plan pass: %s %s", out, stderr)
+	}
 	code, _, stderr = rotaIn(t, root, "item", "complete", "B01", "--commit", "abc1234", "--no-proof", "--unmet-reason", "defer second")
 	if code != 0 {
 		t.Fatalf("override: %d %s", code, stderr)
