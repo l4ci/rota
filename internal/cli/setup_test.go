@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -22,7 +23,8 @@ func setupRun(t *testing.T, dir, stdin string, tty bool, args ...string) (int, s
 	t.Helper()
 	wd, _ := os.Getwd()
 	t.Cleanup(func() { os.Chdir(wd) })
-	d := testDeps()
+	// The support path ends with doctor, including its read-only label scan.
+	d := withTracker(t, &labelSyncReader{Fake: &trackertest.Fake{}})
 	d.SetupIsTTY = func(io.Reader) bool { return tty }
 	// No harness or host on PATH, so the project signals do not depend on the machine.
 	d.LookPath = func(string) (string, error) { return "", exec.ErrNotFound }
