@@ -32,14 +32,14 @@ type AutonomyMigration struct {
 
 // AutonomyPending reports the migration Fill would run on root. An unreadable
 // file contributes nothing.
-func AutonomyPending(root string) AutonomyMigration {
+func AutonomyPending(env projects.Env, root string) AutonomyMigration {
 	cfg, local := readObject(configPath(root)), readObject(localPath(root))
 	stale := autonomyStale(cfg)
 	localAP := false
 	if local != nil {
 		_, localAP = lookupPresent(local, []string{"round", "autopilot"})
 	}
-	gdir := globalConfigDir()
+	gdir := globalConfigDir(env)
 	global := (*jsonx.Object)(nil)
 	if gdir != "" {
 		global = readObject(GlobalPath(gdir))
@@ -182,8 +182,8 @@ func migrateAutonomyLocal(root string, stale bool) (bool, error) {
 }
 
 // globalConfigDir is the rota config dir, or "" when it cannot be resolved.
-func globalConfigDir() string {
-	dir, err := projects.Dir(projects.OSEnv())
+func globalConfigDir(env projects.Env) string {
+	dir, err := projects.Dir(env)
 	if err != nil {
 		return ""
 	}
@@ -232,8 +232,8 @@ func stampGlobal(dir string) error {
 // in the global config.json becomes roundtrip, and the stamp is written either
 // way, so a later deliberate global auto survives. A missing or unreadable
 // global is left alone and stays unstamped.
-func migrateAutonomyGlobal() (bool, error) {
-	dir := globalConfigDir()
+func migrateAutonomyGlobal(env projects.Env) (bool, error) {
+	dir := globalConfigDir(env)
 	if dir == "" {
 		return false, nil
 	}

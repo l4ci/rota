@@ -63,8 +63,8 @@ func TestSetRoutesMachineKeysToLocal(t *testing.T) {
 
 // A required key set only in the local or global layer is not missing.
 func TestCheckReadsMergedConfig(t *testing.T) {
-	root := layerRig(t, `{"docs":{"path":"doc"}}`, `{}`, `{"learn":{"promoteThreshold":2}}`)
-	_, missing := Check(root)
+	root, env := layerRig(t, `{"docs":{"path":"doc"}}`, `{}`, `{"learn":{"promoteThreshold":2}}`)
+	_, missing := Check(env, root)
 	if contains(missing, "docs.path") || contains(missing, "learn.promoteThreshold") {
 		t.Errorf("missing %v", missing)
 	}
@@ -73,11 +73,11 @@ func TestCheckReadsMergedConfig(t *testing.T) {
 func TestWarningsAndUnknown(t *testing.T) {
 	// debug.competingHypotheses is a removed key, not an unknown one; an
 	// unknown key in the global config warns, as the tracked file's fail.
-	root := layerRig(t, `{"orchestrator":{"model":"opus"},"zzg":{"a":1}}`,
+	root, env := layerRig(t, `{"orchestrator":{"model":"opus"},"zzg":{"a":1}}`,
 		`{"round":{"slots":3},"work":{"isolation":"branch","mergeStrategy":"pr"},"ship":{"review":{"default":"full"}},"backlog":{"backend":"file"},"debug":{"competingHypotheses":true},"legacy":{"x":1},"orchestrator":5}`,
 		`{"work":{"workerSlots":2},"zzz":{}}`)
 	want := []string{"work.isolation is pinned at its default in .rota/config.json", "round.slots is a machine key in .rota/config.json", "zzg.a in the global config is not a config key (nothing reads it)"}
-	if got := Warnings(root); !reflect.DeepEqual(got, want) {
+	if got := Warnings(env, root); !reflect.DeepEqual(got, want) {
 		t.Errorf("Warnings = %v", got)
 	}
 	if got := Unknown(root); !reflect.DeepEqual(got, []string{"legacy.x", "zzz" + LocalMark}) {

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"testing"
@@ -17,7 +18,7 @@ func TestDoctorKindsExpandsAccountHomes(t *testing.T) {
 	if err := os.WriteFile(p, []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	k := doctorKinds(config.Load(p), "/home/u")[harness.Codex]
+	k := doctorKinds(config.Load(projects.OSEnv(), p), "/home/u")[harness.Codex]
 	if len(k.Homes) != 1 || k.Homes[0].Dir != "/home/u/.codex" {
 		t.Errorf("homes = %+v", k.Homes)
 	}

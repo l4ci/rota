@@ -3,6 +3,7 @@ package keepalive
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
@@ -449,7 +450,7 @@ func TestLoadSettingsDefaultsAndRanges(t *testing.T) {
 		if body != "" {
 			os.WriteFile(p, []byte(body), 0o644)
 		}
-		return LoadSettings(config.Load(p))
+		return LoadSettings(config.Load(projects.OSEnv(), p))
 	}
 	s, err := load("")
 	if err != nil || s.MaxRestarts != 10 || s.Breaker != 3 || s.Backoff != 5*time.Second || s.Prompt != DefaultPrompt || s.EscalateIssue != "" || s.HandoffMaxAge != 900*time.Second {

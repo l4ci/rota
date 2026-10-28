@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +19,7 @@ func cfgOf(t *testing.T, doc string) any {
 			t.Fatal(err)
 		}
 	}
-	return config.Load(p)
+	return config.Load(projects.OSEnv(), p)
 }
 
 func fixture(t *testing.T, name string) string {

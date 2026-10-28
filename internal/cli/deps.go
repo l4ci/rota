@@ -172,9 +172,9 @@ func defaultDeps() *Deps {
 		RunView:          runView,
 		OpenURL:          openBrowser,
 		ReadCache:        tracker.NewReadCache(),
-		Config:           func(root string) any { return config.Load(rotatree.Config(root)) },
 		RecordMistakes:   true,
 	}
+	d.Config = func(root string) any { return config.Load(d.projectsEnv(), rotatree.Config(root)) }
 	d.Keychain = func() connections.Store { return connections.OSKeychain(d.Proc, runtime.GOOS) }
 	d.ConnTesters = map[string]connections.Tester{connections.KindJira: tracker.JiraTester{}, connections.KindLinear: tracker.LinearTester{}, connections.KindItsaplan: tracker.ItsaplanTester{}}
 	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(d.Getenv)

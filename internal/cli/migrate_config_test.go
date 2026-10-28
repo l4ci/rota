@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -276,7 +277,7 @@ func TestMigrateConfigAccounts(t *testing.T) {
 	if code, out := textRun(t, "-C", root, "migrate", "config", "--apply"); code != 0 {
 		t.Fatalf("apply: %d %q", code, out)
 	}
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	cfg := config.Load(projects.OSEnv(), filepath.Join(root, ".rota", "config.json"))
 	want := []config.Account{{Kind: "claude", Name: "l", Dir: "/l"}, {Kind: "codex", Name: "g", Dir: "/g"}, {Kind: "opencode", Name: "p", Dir: "/p"}}
 	if got := config.Accounts(cfg); !reflect.DeepEqual(got, want) {
 		t.Errorf("accounts after apply = %v, want %v", got, want)

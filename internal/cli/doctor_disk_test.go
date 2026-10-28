@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,7 +41,7 @@ func TestLeakedTempDirs(t *testing.T) {
 }
 
 func TestDoctorDiskInput(t *testing.T) {
-	cfg := config.Load(filepath.Join(t.TempDir(), "absent.json"))
+	cfg := config.Load(projects.OSEnv(), filepath.Join(t.TempDir(), "absent.json"))
 	t.Setenv("TMPDIR", t.TempDir())
 	in := doctor.Input{Dir: t.TempDir()}
 	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now(), fixedDisk(1000, 100000), os.Getenv) // 1% free
@@ -82,7 +83,7 @@ func TestDoctorSlotBlocksUsesTheStoredWidth(t *testing.T) {
 }
 
 func TestDoctorDiskInputWarnsOnTheGoCacheVolume(t *testing.T) {
-	cfg := config.Load(filepath.Join(t.TempDir(), "absent.json"))
+	cfg := config.Load(projects.OSEnv(), filepath.Join(t.TempDir(), "absent.json"))
 	t.Setenv("TMPDIR", t.TempDir())
 	cache := t.TempDir()
 	in := doctor.Input{Dir: t.TempDir()}

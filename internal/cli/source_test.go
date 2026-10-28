@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,7 +67,7 @@ func TestMigrateSourceVerb(t *testing.T) {
 			if got := config.Legacy(root); len(got) != 0 {
 				t.Errorf("legacy keys left: %v", got)
 			}
-			if v, _ := config.IssueSource(config.Load(filepath.Join(root, ".rota", "config.json"))); v != c.source {
+			if v, _ := config.IssueSource(config.Load(projects.OSEnv(), filepath.Join(root, ".rota", "config.json"))); v != c.source {
 				t.Errorf("issues.source = %q, want %q", v, c.source)
 			}
 			after := readCfgText(t, root)
@@ -94,7 +95,7 @@ func TestMigrateSourceUnresolvedLeavesTheLegacyKeys(t *testing.T) {
 	if !strings.Contains(stderr, "set issues.source by hand") {
 		t.Errorf("no hint: %s", stderr)
 	}
-	if v, _ := config.IssueSource(config.Load(filepath.Join(root, ".rota", "config.json"))); v != config.SourceIssues {
+	if v, _ := config.IssueSource(config.Load(projects.OSEnv(), filepath.Join(root, ".rota", "config.json"))); v != config.SourceIssues {
 		t.Errorf("an unmigrated issues project reads as %q", v)
 	}
 }
@@ -117,7 +118,7 @@ func TestConfigCheckListsLegacyKeysAndFillMigrates(t *testing.T) {
 	if _, has := dataOf(env).Get("legacy"); has {
 		t.Errorf("legacy still listed after fill: %v", env)
 	}
-	if v, _ := config.IssueSource(config.Load(filepath.Join(root, ".rota", "config.json"))); v != "gitlab" {
+	if v, _ := config.IssueSource(config.Load(projects.OSEnv(), filepath.Join(root, ".rota", "config.json"))); v != "gitlab" {
 		t.Errorf("issues.source = %q", v)
 	}
 }
@@ -147,7 +148,7 @@ func TestInitWritesAnExplicitIssueSource(t *testing.T) {
 			if got := cfgValue(t, dir, "issues.source"); got != c.want {
 				t.Errorf("issues.source = %v, want %s", got, c.want)
 			}
-			if _, set := config.Lookup(config.Load(filepath.Join(dir, ".rota", "config.json")), "forge.provider"); set {
+			if _, set := config.Lookup(config.Load(projects.OSEnv(), filepath.Join(dir, ".rota", "config.json")), "forge.provider"); set {
 				t.Error("init wrote forge.provider; auto is the default")
 			}
 		})

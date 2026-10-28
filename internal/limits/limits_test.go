@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
@@ -519,7 +520,7 @@ func TestDataFromRateLimits(t *testing.T) {
 func jsonNum(n int64) string { b, _ := json.Marshal(n); return string(b) }
 
 func TestLoadSettings(t *testing.T) {
-	cfg := config.Load(filepath.Join(t.TempDir(), "missing.json"))
+	cfg := config.Load(projects.OSEnv(), filepath.Join(t.TempDir(), "missing.json"))
 	s, err := LoadSettings(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -534,13 +535,13 @@ func TestLoadSettings(t *testing.T) {
 	} {
 		p := filepath.Join(dir, key+".json")
 		os.WriteFile(p, []byte(`{"limits":{"`+key+`":`+val+`}}`), 0o666)
-		if _, err := LoadSettings(config.Load(p)); err == nil || !strings.Contains(err.Error(), "limits."+key) {
+		if _, err := LoadSettings(config.Load(projects.OSEnv(), p)); err == nil || !strings.Contains(err.Error(), "limits."+key) {
 			t.Errorf("%s=%s: %v", key, val, err)
 		}
 	}
 	p := filepath.Join(dir, "ok.json")
 	os.WriteFile(p, []byte(`{"limits":{"mode":"sleep"},"orchestrator":{"escalateIssue":9}}`), 0o666)
-	s, err = LoadSettings(config.Load(p))
+	s, err = LoadSettings(config.Load(projects.OSEnv(), p))
 	if err != nil || s.Mode != ModeSleep || s.MaxResumes != 3 || s.EscalateIssue != "9" {
 		t.Fatalf("%+v %v", s, err)
 	}

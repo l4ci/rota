@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/overlap"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
@@ -241,7 +242,7 @@ func fakeLease(host string, alive ...int) roundlease.Env {
 }
 
 func startOpts(scope string, pid int, items ...string) StartOpts {
-	set, _ := roundcfg.FromConfig(config.Load(rotatree.Config(os.TempDir()))) // defaults: no config there
+	set, _ := roundcfg.FromConfig(config.Load(projects.OSEnv(), rotatree.Config(os.TempDir()))) // defaults: no config there
 	// Dispatch tmux: these tests drive tab mode through a fake host.
 	return StartOpts{Scope: scope, Items: items, HolderPID: pid, Settings: set, DefaultNum: 2, Dispatch: "tmux"}
 }
