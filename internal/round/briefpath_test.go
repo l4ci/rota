@@ -133,3 +133,40 @@ func TestBriefPathFallsBackToTheSkillsCache(t *testing.T) {
 		t.Error("a missing round.brief fell back to the cache")
 	}
 }
+
+// A round.brief that points into rota's own skills cache at a tree an update
+// removed falls back to the current cache copy with a warning naming both; one
+// outside the cache root stays a miss; one that exists is used first (#2229).
+func TestBriefPathStaleCacheBrief(t *testing.T) {
+	root, home, cache := t.TempDir(), t.TempDir(), t.TempDir()
+	env := func(k string) string {
+		if k == "HOME" {
+			return home
+		}
+		return ""
+	}
+	stale := filepath.Join(cache, "0.26.0", "references", "worker-contract.md")
+	p, warn, ok := resolveBrief(root, roundcfg.Settings{Brief: stale}, env, cache)
+	if !ok || !strings.HasPrefix(p, cache) || p == stale || filepath.Base(p) != "worker-contract.md" {
+		t.Fatalf("no stale-cache fallback: %q %v", p, ok)
+	}
+	if !strings.Contains(warn, stale) || !strings.Contains(warn, p) {
+		t.Errorf("warning must name the stale value and the path used: %q", warn)
+	}
+
+	outside := filepath.Join(t.TempDir(), "gone.md")
+	p, warn, ok = resolveBrief(root, roundcfg.Settings{Brief: outside}, env, cache)
+	if ok || warn != "" {
+		t.Errorf("outside the cache root must stay a miss: %q %q %v", p, warn, ok)
+	}
+	if msg := briefMissingMsg(roundcfg.Settings{Brief: outside}, cache); !strings.Contains(msg, outside) || !strings.Contains(msg, cache) {
+		t.Errorf("refusal must name the configured value and the cache path: %q", msg)
+	}
+
+	good := filepath.Join(cache, "0.27.0", "references", "worker-contract.md")
+	writeAt(t, good, "mine")
+	p, warn, ok = resolveBrief(root, roundcfg.Settings{Brief: good}, env, cache)
+	if !ok || p != good || warn != "" {
+		t.Errorf("an existing round.brief must win silently: %q %q %v", p, warn, ok)
+	}
+}
