@@ -1659,3 +1659,40 @@ func TestPointerBriefPreflight(t *testing.T) {
 		t.Errorf("research brief carries the pre-flight:\n%s", r)
 	}
 }
+
+// Two assigns racing for the same slot and issue (a hand assign and an
+// autopilot tick) post the same claim id, so the later writer's claim step
+// "wins" the idempotent claim. Its rollback must leave the first assign's
+// claim, claimId and attempt alone (#2227).
+func TestAssignRacingOnOneSlotAndIssueKeepsTheWinnersClaim(t *testing.T) {
+	f := newAssignFixture(t)
+	fired := false
+	var first Assigned
+	var firstErr error
+	var attempt string
+	f.be.onReady = func(ref string) {
+		if ref != "12" || fired {
+			return
+		}
+		fired = true
+		first, firstErr = f.assign("12", "ben", nil)
+		attempt = worker.LoadRegistryTolerant(f.root).Slot("ben").Attempt()
+	}
+	_, err := f.assign("12", "ben", nil)
+	if !fired || firstErr != nil || !first.Dispatched {
+		t.Fatalf("first assign: fired=%v dispatched=%v err=%v", fired, first.Dispatched, firstErr)
+	}
+	if blockedBy(t, err) != BlockSlotBusy {
+		t.Fatalf("the later writer is refused as slot-busy: %v", err)
+	}
+	s := worker.LoadRegistryTolerant(f.root).Slot("ben")
+	if s.HeldID() != "12" || s.ClaimID() == "" || attempt == "" || s.Attempt() != attempt {
+		t.Errorf("winner's slot lost its binding: task=%q claim=%q attempt=%q want attempt %q", s.HeldID(), s.ClaimID(), s.Attempt(), attempt)
+	}
+	if held := f.be.held("12"); len(held) != 1 || held[0] != s.ClaimID() {
+		t.Errorf("winner's claim must stay open: held=%v slot claim=%q", held, s.ClaimID())
+	}
+	if err := worker.FenceAttempt(s, attempt); err != nil {
+		t.Errorf("the winner's worker done must not see a stale attempt: %v", err)
+	}
+}

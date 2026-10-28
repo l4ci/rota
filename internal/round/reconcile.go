@@ -180,7 +180,7 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 		_, err := e.Transfer(ctx, root, e.Board, TransferOpts{Issue: f.Issue, To: HumanTarget, Note: note})
 		return err
 	case ClaimMismatch:
-		return editSlot(root, f.Slot, func(s *worker.Slot) error { s.SetClaimID(""); return nil })
+		return e.rearmClaim(root, f)
 	case ClaimLabelDrift:
 		syncer, ok := e.Board.(backlog.ClaimLabelSyncer)
 		if !ok {
@@ -286,4 +286,27 @@ func registerSlot(root string, row Row, v *view) error {
 		}
 		doc.AppendSlot(s)
 	})
+}
+
+// rearmClaim repairs a slot whose claim is gone from the tracker (a release
+// that raced an assign, or a human's): the slot still holds the issue, so its
+// claim is posted again under the slot's own claimId and the attempt stays. A
+// claim another holder took meanwhile is theirs: the slot's claimId is
+// cleared instead.
+func (e Env) rearmClaim(root string, f Finding) error {
+	clear := func() error {
+		return editSlot(root, f.Slot, func(s *worker.Slot) error { s.SetClaimID(""); return nil })
+	}
+	s := worker.LoadRegistryTolerant(root).Slot(f.Slot)
+	if e.Board == nil || s == nil || s.ClaimID() == "" || worker.NormID(s.HeldID()) != worker.NormID(f.Issue) {
+		return clear()
+	}
+	won, _, err := e.Board.Claim(f.Issue, s.ClaimID())
+	if err != nil {
+		return err
+	}
+	if !won {
+		return clear()
+	}
+	return nil
 }

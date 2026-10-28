@@ -442,6 +442,7 @@ func TestClaimMismatchOnADesyncedFixture(t *testing.T) {
 
 	// The tracker lost the claim (a human released it): the registry side is
 	// repaired, the tracker is never touched.
+	attempt := f.slot("ben").Attempt()
 	delete(f.be.claims, "12")
 	rep, _ = f.env.Status(bg, f.root)
 	var found *Finding
@@ -462,13 +463,13 @@ func TestClaimMismatchOnADesyncedFixture(t *testing.T) {
 		repaired = repaired || r.Kind == ClaimMismatch
 	}
 	if !repaired {
-		t.Fatalf("apply should clear the claimId: %+v", out)
+		t.Fatalf("apply should re-post the claim: %+v", out)
 	}
-	if s := f.slot("ben"); s.ClaimID() != "" || s.Task() != "12" {
-		t.Errorf("claimId cleared, task kept: %v", s)
+	if s := f.slot("ben"); s.ClaimID() != "ben@1" || s.Task() != "12" || s.Attempt() != attempt {
+		t.Errorf("claimId, task and attempt kept: %v", s)
 	}
-	if len(f.be.claims) != 0 {
-		t.Errorf("reconcile never edits the tracker: %v", f.be.claims)
+	if f.be.claims["12"] != "ben@1" {
+		t.Errorf("the slot still holds the issue, so its claim is posted again: %v", f.be.claims)
 	}
 
 	// Another holder: reported, not repaired (ambiguous).
