@@ -691,7 +691,26 @@ func (g *gate) stepExternal() (bool, error) {
 	g.target.Issue = HeldID(g.target.Task, info.Head, g.target.Name)
 	g.target.Bundle = nil // a bundle belongs to a slot's lead, not to a branch-derived issue
 	g.res.Issue = g.target.Issue
+	g.target.relays = append(slices.Clone(g.target.relays), g.unrecordedSlotRelays(info.Head)...)
 	return false, nil
+}
+
+// unrecordedSlotRelays is the relay log of the slot that holds the issue the
+// PR's head branch leads with but never recorded a PR: the worker opened it
+// without `worker done` recording it, so the PR resolved as external and would
+// otherwise be judged against no relays (bug-16).
+func (g *gate) unrecordedSlotRelays(head string) []any {
+	issue := g.target.Issue
+	if issue == "" {
+		return nil
+	}
+	var out []any
+	for _, s := range LoadRegistryTolerant(g.root).Slots() {
+		if s.PR() == "" && (s.Branch() == head || s.HeldID() == issue) {
+			out = append(out, s.Relays()...)
+		}
+	}
+	return out
 }
 
 // stepAdoptPR looks a PR up by head when the slot recorded none. A worker can
