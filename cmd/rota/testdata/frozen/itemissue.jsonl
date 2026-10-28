@@ -1,4 +1,4 @@
-{"utc":"2026-10-24","local":"2026-10-24"}
+{"utc":"2026-10-28","local":"2026-10-28"}
 {"name":"claim/already-holder","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"me","id":"7","type":"T"},"ok":true},"db":"65a31659890ddc93"}]}
 {"name":"claim/arrow-as","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--as must be a claim ID: non-empty, no whitespace, no -->"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"claim/bad-as","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--as must be a claim ID: non-empty, no whitespace, no -->"},"ok":false},"db":"396d7faf5419e420"}]}
@@ -144,10 +144,10 @@
 {"name":"release/bad-as","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--as must be a claim ID: non-empty, no whitespace, no -->"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"release/closed-item","steps":[{"exit":0,"env":{"data":{"changed":false,"claimId":"me","id":"4","type":"T"},"ok":true},"db":"396d7faf5419e420"}]}
 {"name":"release/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
-{"name":"release/gitlab-match/github","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"other","id":"6","type":"F"},"ok":true},"db":"727c3920460917c2"}]}
-{"name":"release/gitlab-match/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"other","id":"6","type":"F"},"ok":true},"db":"727c3920460917c2"}]}
-{"name":"release/match-keeps-state","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"me","id":"7","type":"T"},"ok":true},"db":"b36ef9f30ec7d4ad"}]}
-{"name":"release/match-last-claim","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"other","id":"6","type":"F"},"ok":true},"db":"727c3920460917c2"}]}
+{"name":"release/gitlab-match/github","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"other","id":"6","type":"F"},"ok":true},"db":"50823aae5853900b"}]}
+{"name":"release/gitlab-match/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"other","id":"6","type":"F"},"ok":true},"db":"50823aae5853900b"}]}
+{"name":"release/match-keeps-state","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"me","id":"7","type":"T"},"ok":true},"db":"3d072401dd8c06fa"}]}
+{"name":"release/match-last-claim","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"other","id":"6","type":"F"},"ok":true},"db":"50823aae5853900b"}]}
 {"name":"release/no-match","steps":[{"exit":0,"env":{"data":{"changed":false,"claimId":"zzz","id":"6","type":"F"},"ok":true},"db":"396d7faf5419e420"}]}
 {"name":"release/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"release/tracker-issue","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 3"},"ok":false},"db":"396d7faf5419e420"}]}
