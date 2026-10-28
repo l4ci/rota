@@ -285,9 +285,18 @@ func homeOf(f func() (string, error)) string {
 	return h
 }
 
-// workerEnv is the WorkerEnv hook with its host filled from Host.
-func (d *Deps) workerEnv() worker.Env {
+// workerEnv is the WorkerEnv hook with its host filled from Host, under no
+// invocation context (the hook's own, else Background).
+func (d *Deps) workerEnv() worker.Env { return d.workerEnvFor(nil) }
+
+// workerEnvFor is workerEnv bound to ctx before the tracker factories capture
+// it, so a cancelled invocation reaches the connection lookup they start with.
+// A nil ctx keeps what the hook set.
+func (d *Deps) workerEnvFor(ctx context.Context) worker.Env {
 	e := d.WorkerEnv()
+	if ctx != nil {
+		e.Ctx = ctx
+	}
 	if e.Config == nil {
 		e.Config = d.Config
 	}
