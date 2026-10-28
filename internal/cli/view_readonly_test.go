@@ -322,11 +322,24 @@ func TestViewLoadersKeepScopeBeforeTheSeparator(t *testing.T) {
 			t.Errorf("scoped knowledge query %q = %q, %v; want %q", topic, text, err, want)
 		}
 	}
-	if _, err := runVerbText(c, true, "item", "field", "get", "--name", "detail", "--", "nope"); err == nil || strings.Contains(err.Error(), "unknown flag") || strings.Contains(err.Error(), "usage") || strings.Contains(err.Error(), "positional") {
-		t.Errorf("scoped item field get: %v", err)
-	}
 	plain := &Ctx{Path: "rota knowledge stats", Deps: testDeps()}
 	if text, err := runVerbText(plain, true, "knowledge", "query", "--", "Build"); err != nil || !strings.Contains(text, "Gamma tip") {
 		t.Errorf("unscoped knowledge query = %q, %v", text, err)
+	}
+}
+
+func TestViewBacklogLoaderReadsTheSelectedSubRepoItem(t *testing.T) {
+	root, deps, fakes, _ := umbrellaProject(t)
+	fakes["api"].Issues[0].Body = "Api detail text."
+	fakes["web"].Issues[0].Body = "Web detail text."
+	old, _ := os.Getwd()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(old) })
+	c := &Ctx{Path: "rota backlog", Repo: "api", Deps: deps}
+	text, err := runVerbText(c, true, "item", "field", "get", "--name", "detail", "--", "1")
+	if err != nil || !strings.Contains(text, "Api detail text.") {
+		t.Errorf("scoped backlog body = %q, %v; want the api item", text, err)
 	}
 }
