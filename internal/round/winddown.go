@@ -13,6 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -338,13 +339,13 @@ func pendingHitFolds(root string) (cmds, sidecars []string) {
 		fi, err := os.Stat(f)
 		return err == nil && fi.Size() > 0
 	}
-	if nonEmpty(filepath.Join(root, ".rota", "knowledge-hits.jsonl")) {
+	if nonEmpty(rotatree.File(root, rotatree.KnowledgeHits)) {
 		cmds = append(cmds, "rota knowledge tier fold")
 		sidecars = append(sidecars, ".rota/knowledge-tier.json")
 	}
-	scopes := filepath.Join(root, ".rota", "knowledge")
+	scopes := rotatree.File(root, rotatree.KnowledgeDir)
 	for _, d := range fsio.GlobDir(scopes, "*") {
-		f := filepath.Join(d, "knowledge-hits.jsonl")
+		f := filepath.Join(d, rotatree.KnowledgeHits)
 		name := filepath.Base(d)
 		if nonEmpty(f) && hitScopeName.MatchString(name) {
 			cmds = append(cmds, "rota --repo "+name+" knowledge tier fold")
