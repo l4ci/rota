@@ -481,8 +481,12 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	if o.Relay && !errors.Is(sendErr, host.ErrDialogOpen) && !errors.Is(sendErr, host.ErrDraftOnPrompt) {
 		entry := newRelayEntry(round, e.Now(), string(brief))
 		if relayQueued {
-			if err := Update(root, func(d *Doc) { d.AppendQueuedRelay(o.Slot, entry) }); err != nil {
+			logged := false
+			if err := Update(root, func(d *Doc) { logged = d.AppendQueuedRelay(o.Slot, entry) }); err != nil {
 				return res, err
+			}
+			if !logged {
+				return res, fmt.Errorf("relay sent but no queued PR from slot %s to log it on", o.Slot)
 			}
 		} else if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.AppendRelay(entry) }); err != nil {
 			return res, err
