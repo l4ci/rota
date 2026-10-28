@@ -21,8 +21,8 @@ import (
 // < project < local). Nested objects merge by key; any other override value (scalar,
 // array, null, or a type mismatch) replaces the base. A missing or
 // unparseable file counts as absent; with no base the result is {}.
-func Load(configPath string) any {
-	merged, _ := loadLayers(configPath)
+func Load(env projects.Env, configPath string) any {
+	merged, _ := loadLayers(env, configPath)
 	return merged
 }
 
@@ -51,16 +51,15 @@ func warnGlobal(msg string) {
 
 // GlobalError is why the global config is unusable: nil when it is missing or
 // valid, else the read or parse error.
-func GlobalError() error {
-	_, err := globalLayerErr()
+func GlobalError(env projects.Env) error {
+	_, err := globalLayerErr(env)
 	return err
 }
 
 // globalLayerErr is the global config as a nested object of its schema keys
 // (nil when absent) and the error that made it unreadable.
-func globalLayerErr() (any, error) {
-	// config.Load has no Deps to take an Env from: the process is its edge.
-	dir, err := projects.Dir(projects.OSEnv())
+func globalLayerErr(env projects.Env) (any, error) {
+	dir, err := projects.Dir(env)
 	if err != nil {
 		return nil, nil
 	}
@@ -81,8 +80,8 @@ func globalLayerErr() (any, error) {
 }
 
 // globalLayer is the global layer; a corrupt file warns once and is skipped.
-func globalLayer() any {
-	obj, err := globalLayerErr()
+func globalLayer(env projects.Env) any {
+	obj, err := globalLayerErr(env)
 	if err != nil {
 		warnGlobal("global config skipped: " + err.Error())
 		return nil
@@ -99,9 +98,9 @@ func globalSupplies(global any, key string) bool {
 
 // loadLayers keeps the layers alongside the runtime config so display
 // provenance uses the same reads and merge semantics as Load.
-func loadLayers(configPath string) (merged any, l layers) {
+func loadLayers(env projects.Env, configPath string) (merged any, l layers) {
 	l = layers{
-		global:  globalLayer(),
+		global:  globalLayer(env),
 		project: fsio.LoadJSON(configPath, jsonx.NewObject()),
 		local:   fsio.LoadJSON(filepath.Join(filepath.Dir(configPath), "config.local.json"), nil),
 	}

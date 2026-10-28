@@ -80,8 +80,8 @@ func IsSchemaKey(name string) bool {
 // parent. The source names the supplying layer (local, project or global), or "default" on fallback. A key
 // outside the schema is accepted when the merged config holds it, so a
 // hand-edited key stays readable; the old helper rejected it.
-func Show(root string, key string, one bool) ([]Entry, error) {
-	merged, l := loadLayers(configPath(root))
+func Show(env projects.Env, root string, key string, one bool) ([]Entry, error) {
+	merged, l := loadLayers(env, configPath(root))
 	source := func(key string) string {
 		if _, ok := walk(l.local, key); ok {
 			return "local"
@@ -524,7 +524,7 @@ const (
 // required schema keys. Missing lists, in schema order, the required keys that
 // are absent or null, then LegacyVerifyKey when it still holds commands that
 // test.full does not; it is non-empty only for Stale. A key the local overlay or the global config supplies is not missing.
-func Check(root string) (status string, missing []string) {
+func Check(env projects.Env, root string) (status string, missing []string) {
 	missing = []string{}
 	raw, err := os.ReadFile(configPath(root))
 	if errors.Is(err, os.ErrNotExist) {
@@ -537,7 +537,7 @@ func Check(root string) (status string, missing []string) {
 	if !ok {
 		return Corrupt, missing
 	}
-	global := globalLayer()
+	global := globalLayer(env)
 	local := fsio.LoadJSON(localPath(root), nil)
 	for _, k := range Keys {
 		if _, ok := walk(doc, k.Name); k.Required && !ok && !globalSupplies(global, k.Name) && !globalSupplies(local, k.Name) {
@@ -571,9 +571,9 @@ func legacyVerifyPending(doc *jsonx.Object) bool {
 // loop autonomy (#70), and anything else is no level. It also holds a
 // malformed ship.review policy, which would otherwise read as the default, and
 // an account dir that is neither absolute nor ~-prefixed.
-func Retired(root string) []string {
+func Retired(env projects.Env, root string) []string {
 	out := []string{}
-	if v, _ := Value(Load(configPath(root)), "autonomy.level"); validateEnum("autonomy.level", v) != nil {
+	if v, _ := Value(Load(env, configPath(root)), "autonomy.level"); validateEnum("autonomy.level", v) != nil {
 		b, _ := jsonx.MarshalCompact(v)
 		msg := "autonomy.level " + string(b) + " is not a level: set it to off, roundtrip or auto"
 		if v == "loop" {
@@ -581,17 +581,17 @@ func Retired(root string) []string {
 		}
 		out = append(out, msg)
 	}
-	if v, _ := Value(Load(configPath(root)), ReviewKey); v != nil {
+	if v, _ := Value(Load(env, configPath(root)), ReviewKey); v != nil {
 		if _, err := ParseReviewPolicy(v); err != nil {
 			out = append(out, err.Error())
 		}
 	}
-	if v, _ := Value(Load(configPath(root)), LensesKey); v != nil {
+	if v, _ := Value(Load(env, configPath(root)), LensesKey); v != nil {
 		if _, err := ParseLenses(v); err != nil {
 			out = append(out, err.Error())
 		}
 	}
-	out = append(out, AccountDirProblems(Load(configPath(root)))...)
+	out = append(out, AccountDirProblems(Load(env, configPath(root)))...)
 	return out
 }
 
