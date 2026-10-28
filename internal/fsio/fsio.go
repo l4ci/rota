@@ -5,7 +5,6 @@ package fsio
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -178,7 +177,7 @@ func Locked(path string, timeout time.Duration, fn func() error) error {
 // WriteMarker writes v as indented JSON to path under the path's lock. guard,
 // when non-nil, runs under the lock first and its error aborts the write.
 func WriteMarker(path string, v any, guard func() error) error {
-	b, err := json.MarshalIndent(v, "", "  ")
+	b, err := jsonx.Marshal(v)
 	if err != nil {
 		return err
 	}

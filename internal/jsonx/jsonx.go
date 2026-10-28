@@ -126,7 +126,8 @@ func decodeValue(dec *json.Decoder) (any, error) {
 
 // Marshal encodes v as json.dumps(v, indent=2) would, without a trailing
 // newline. v may hold the decoded types plus map[string]any (keys sorted),
-// []string, int, int64 and float64.
+// []string, int, int64 and float64; any other value (a struct) is encoded
+// as encoding/json would lay it out, in these bytes.
 func Marshal(v any) ([]byte, error) {
 	var b strings.Builder
 	if err := encode(&b, v, 0); err != nil {
@@ -184,9 +185,24 @@ func encode(b *strings.Builder, v any, level int) error {
 	case []string:
 		return encodeArray(b, len(t), func(i int) any { return t[i] }, level)
 	default:
-		return fmt.Errorf("jsonx: cannot encode %T", v)
+		return encodeTyped(b, v, level)
 	}
 	return nil
+}
+
+// encodeTyped encodes a struct or other typed value by round-tripping it
+// through encoding/json, whose field order and omitempty rules decide the
+// document, and re-encoding the decoded form so the bytes are jsonx's.
+func encodeTyped(b *strings.Builder, v any, level int) error {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Errorf("jsonx: cannot encode %T: %w", v, err)
+	}
+	dec, err := Decode(raw)
+	if err != nil {
+		return fmt.Errorf("jsonx: cannot encode %T: %w", v, err)
+	}
+	return encode(b, dec, level)
 }
 
 func encodeObject(b *strings.Builder, keys []string, get func(string) any, level int) error {
