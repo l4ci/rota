@@ -89,6 +89,7 @@ func (u *Umbrella) MilestoneList() ([]ms.Entry, error) {
 		return nil, err
 	}
 	var set nativeSet
+	reopened := false
 	for i := range rows {
 		if rows[i].Status != "shipped" {
 			continue
@@ -101,23 +102,13 @@ func (u *Umbrella) MilestoneList() ([]ms.Entry, error) {
 		for _, m := range set.of(rows[i].ID) {
 			if m.State != "closed" {
 				rows[i].Status = "active"
+				reopened = true
 				break
 			}
 		}
 	}
-	shipped := map[string]bool{}
-	for _, r := range rows {
-		if r.Status == "shipped" {
-			shipped[r.ID] = true
-		}
-	}
-	for i := range rows {
-		rows[i].Ready = true
-		for _, d := range rows[i].Depends {
-			if !shipped[d] {
-				rows[i].Ready = false
-			}
-		}
+	if reopened {
+		ms.MarkReady(rows)
 	}
 	return rows, nil
 }
