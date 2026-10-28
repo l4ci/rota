@@ -100,3 +100,20 @@ func TestGateByPRNumberUsesRelaysOfTheSlotThatNeverRecordedIt(t *testing.T) {
 		t.Fatalf("verdict = %q (%v): %+v", res.Verdict, err, res)
 	}
 }
+
+// A PR on another branch that merely carries the slot's issue number in its
+// name (a best-of sibling, another agent's branch) did not get the slot's
+// relays: provenance matches on the exact branch only.
+func TestGateByPRNumberDoesNotInheritRelaysOfAnotherBranchWithTheSameIssue(t *testing.T) {
+	w := newWorld(t, "")
+	gitq(t, w.worker, "push", "-q", "origin", "w1:dana/5-x")
+	w.forge("head", "dana/5-x")
+	w.setPRBody("Closes #5\n\n## Approvals\n- use the cache: orchestrator relay round 2\n")
+	relays := `[{"round":2,"ts":"2026-10-02T10:00:00Z","summary":"use the cache"}]`
+	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+		[]byte(`{"slots":[{"name":"w1","branch":"nia/5-y","task":"#5","relays":`+relays+`}]}`), 0o644)
+	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true})
+	if err != nil || res.Verdict != GateProvenanceFail {
+		t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, GateProvenanceFail, res)
+	}
+}

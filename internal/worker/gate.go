@@ -695,8 +695,9 @@ func (g *gate) stepExternal() (bool, error) {
 	return false, nil
 }
 
-// unrecordedSlotRelays is the relay log of the slot that holds the issue the
-// PR's head branch leads with but never recorded a PR: the worker opened it
+// unrecordedSlotRelays is the relay log of the slot on the PR's head branch
+// that never recorded a PR (the exact branch, never the issue number, which a
+// sibling or another agent's branch shares): the worker opened it
 // without `worker done` recording it, so the PR resolved as external and would
 // otherwise be judged against no relays (bug-16).
 func (g *gate) unrecordedSlotRelays(head string) []any {
@@ -706,7 +707,7 @@ func (g *gate) unrecordedSlotRelays(head string) []any {
 	}
 	var out []any
 	for _, s := range LoadRegistryTolerant(g.root).Slots() {
-		if s.PR() == "" && (s.Branch() == head || s.HeldID() == issue) {
+		if s.PR() == "" && s.Branch() == head {
 			out = append(out, s.Relays()...)
 		}
 	}
