@@ -84,11 +84,7 @@ func (c *trainCache) retainBase(base string) {
 }
 
 func (c *trainCache) save() error {
-	b, err := json.MarshalIndent(c.f, "", "  ")
-	if err != nil {
-		return err
-	}
-	return fsio.WriteFileAtomic(c.path, append(b, '\n'))
+	return fsio.WriteJSONAtomic(c.path, c.f)
 }
 
 // blame records a member named as culprit on the verdict key it failed on.

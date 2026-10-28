@@ -121,11 +121,7 @@ func NewestAtRoot(commonDir, root string, at func(State) (string, bool)) (best S
 }
 
 func writeState(path string, st State) error {
-	b, err := json.MarshalIndent(st, "", "  ")
-	if err != nil {
-		return err
-	}
-	return fsio.WriteFileAtomic(path, append(b, '\n'))
+	return fsio.WriteJSONAtomic(path, st)
 }
 
 // UpdateState is a locked read-modify-write of one state file. mutate sees
