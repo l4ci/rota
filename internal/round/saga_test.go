@@ -67,7 +67,7 @@ func TestRunStepsSkippedStepIsStillUndone(t *testing.T) {
 func TestClaimStepUndoReleasesAndUnbinds(t *testing.T) {
 	be := &fakeRemote{}
 	unbound := false
-	s := claimStep(be, "12", "ben@1", 1, func() error { unbound = true; return nil }, nil)
+	s := claimStep(be, "12", "ben@1", 1, false, &ownership{reserved: true}, func() error { unbound = true; return nil }, nil)
 	if err := s.do(); err != nil || be.claims["12"] != "ben@1" {
 		t.Fatalf("claim: %v %v", err, be.claims)
 	}
@@ -77,9 +77,23 @@ func TestClaimStepUndoReleasesAndUnbinds(t *testing.T) {
 	}
 }
 
+// A claim id that was already open before the step ran is another attempt's
+// (claims are idempotent per id): the undo gives back only what it posted (#2227).
+func TestClaimStepUndoKeepsAClaimItDidNotPost(t *testing.T) {
+	be := &fakeRemote{claims: map[string]string{"12": "ben@1"}}
+	s := claimStep(be, "12", "ben@1", 1, false, &ownership{reserved: true}, func() error { return nil }, nil)
+	if err := s.do(); err != nil {
+		t.Fatal(err)
+	}
+	s.undo()
+	if be.claims["12"] != "ben@1" {
+		t.Errorf("undo released a live claim it did not post: %v", be.claims)
+	}
+}
+
 func TestClaimStepLostClaimIsBlockedAndUndoesNothingElse(t *testing.T) {
 	be := &fakeRemote{claimedBy: "dana@1"}
-	steps := []step{claimStep(be, "12", "ben@1", 1, func() error { t.Error("unbind without a claim"); return nil }, nil)}
+	steps := []step{claimStep(be, "12", "ben@1", 1, false, &ownership{reserved: true}, func() error { t.Error("unbind without a claim"); return nil }, nil)}
 	err := runSteps(steps)
 	if blockedBy(t, err) != BlockClaimed {
 		t.Fatalf("got %v", err)
