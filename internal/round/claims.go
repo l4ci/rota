@@ -22,8 +22,9 @@ var reClaimID = regexp.MustCompile(`^([a-z][a-z0-9-]*)@\d+$`)
 // disagree about who holds an issue. Two shapes: a slot's claimId is not the
 // issue's earliest open claim (gone, or another holds it), and an open claim
 // `<agent>@<round>` on an in-progress issue names a registry slot that does not
-// hold that issue. Only a claim that is gone has a repair (clear the claimId);
-// the tracker is the source of truth and is never edited. The two attempts of a
+// hold that issue. Only a claim that is gone has a repair: the slot still holds
+// the issue, so its own claim is posted again (a claim another took meanwhile
+// is theirs, and the claimId is cleared instead). The two attempts of a
 // best-of:2 issue each hold a claim: either is fine while it is among the
 // issue's first two. A bundle's members count as held by its lead's slot (or
 // queued PR); their claims are not compared. Needs the Board and, for the second shape, the labelled
@@ -70,7 +71,7 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 		case st.Claim == want, bestOfClaim(r.Issue, r.Name, want, st):
 		case st.Claim == "":
 			rep.add(Finding{Kind: ClaimMismatch, Slot: r.Name, Issue: r.Issue,
-				Detail: fmt.Sprintf("slot records claim %s on %s, which has no open claim", want, tracker.RefOf(r.Issue)), Repair: "clear claimId"})
+				Detail: fmt.Sprintf("slot records claim %s on %s, which has no open claim", want, tracker.RefOf(r.Issue)), Repair: "re-post claim"})
 		default:
 			rep.add(Finding{Kind: ClaimMismatch, Slot: r.Name, Issue: r.Issue,
 				Detail: fmt.Sprintf("slot records claim %s on %s, which %s holds", want, tracker.RefOf(r.Issue), st.Claim)})
