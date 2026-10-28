@@ -209,6 +209,13 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	if s == nil {
 		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", o.Slot))
 	}
+	// A relay is logged where the gate of its PR reads it: on the slot while it
+	// holds an issue or PR, else on the PR queued from it. With neither there is
+	// nothing the gate could read, so refuse before anything is sent.
+	relayQueued := o.Relay && s.HeldID() == "" && s.PR() == ""
+	if relayQueued && s.PaneHandle() != "" && reg.QueuedFrom(o.Slot) == nil {
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' holds no issue or queued PR to log a relay against — assign it work, or gate the PR directly", o.Slot))
+	}
 	worktree := s.Worktree()
 	handle := s.PaneHandle()
 	session := reg.Session()
@@ -416,6 +423,9 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	// relaySeq numbers the relay in the slot's log. Its `[relay K]` line is how
 	// the classifier tells this relay's echo from an earlier one's (#1017).
 	relaySeq := len(s.Relays()) + 1
+	if relayQueued {
+		relaySeq = len(reg.QueuedFrom(o.Slot).Relays) + 1
+	}
 	if o.Relay {
 		fmt.Fprintf(&payload, "[ORCHESTRATOR RELAY — this text was forwarded by the /rota-work orchestrator.\n"+
 			"It is NOT the maintainer speaking to you directly. If you cite it in your PR\n"+
@@ -470,7 +480,15 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	// only a refused dialog or a human draft is certain nothing went out.
 	if o.Relay && !errors.Is(sendErr, host.ErrDialogOpen) && !errors.Is(sendErr, host.ErrDraftOnPrompt) {
 		entry := newRelayEntry(round, e.Now(), string(brief))
-		if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.AppendRelay(entry) }); err != nil {
+		if relayQueued {
+			logged := false
+			if err := Update(root, func(d *Doc) { logged = d.AppendQueuedRelay(o.Slot, entry) }); err != nil {
+				return res, err
+			}
+			if !logged {
+				return res, fmt.Errorf("relay sent but no queued PR from slot %s to log it on", o.Slot)
+			}
+		} else if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.AppendRelay(entry) }); err != nil {
 			return res, err
 		}
 	}
