@@ -16,8 +16,16 @@ func NewNotes(open func() (artifact.Notes, error)) Store { return notes{open} }
 
 func (notes) Digits() int { return 1 }
 
-func noteMissing(id string) *exitcode.Error {
-	return exitcode.Errf(exitcode.ExitResolution, "design note for %s not found", id)
+// docs resolves the item's notes on first use and keeps the design in its
+// `design` note.
+func (s notes) docs() artifact.NoteDocs {
+	return artifact.NoteDocs{Kind: "design", Open: func(id string) (artifact.NoteSlot, string, error) {
+		n, err := s.open()
+		if err != nil {
+			return nil, "", err
+		}
+		return artifact.ItemNote{Notes: n, Ref: id, Kind: "design"}, id, nil
+	}}
 }
 
 func (s notes) Create(id, text string) error {
@@ -34,46 +42,8 @@ func (s notes) Create(id, text string) error {
 	return err
 }
 
-// Read adds the newline the old helper printed after a note.
-func (s notes) Read(id string) (string, error) {
-	n, err := s.open()
-	if err != nil {
-		return "", err
-	}
-	text, ok, err := n.NoteGet(id, "design")
-	if err != nil {
-		return "", err
-	}
-	if !ok {
-		return "", noteMissing(id)
-	}
-	return text + "\n", nil
-}
+func (s notes) Read(id string) (string, error) { return s.docs().Read(id) }
 
-func (s notes) Replace(id, text string) (bool, error) {
-	n, err := s.open()
-	if err != nil {
-		return false, err
-	}
-	if _, ok, err := n.NoteGet(id, "design"); err != nil {
-		return false, err
-	} else if !ok {
-		return false, noteMissing(id)
-	}
-	return n.NotePut(id, "design", text)
-}
+func (s notes) Replace(id, text string) (bool, error) { return s.docs().Replace(id, text) }
 
-func (s notes) Remove(id string) error {
-	n, err := s.open()
-	if err != nil {
-		return err
-	}
-	removed, err := n.NoteRm(id, "design")
-	if err != nil {
-		return err
-	}
-	if !removed {
-		return noteMissing(id)
-	}
-	return nil
-}
+func (s notes) Remove(id string) error { return s.docs().Remove(id) }
