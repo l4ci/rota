@@ -13,6 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/escalation"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/issues"
 	"github.com/l4ci/rota/internal/tracker"
@@ -200,22 +201,25 @@ func TestApprovalThreadForKeyIssue(t *testing.T) {
 	}
 
 	// --approval: pending, then answered
-	if _, res, err := approvalConfirm(c, "e1", th, nil); err == nil || res.Data == nil {
-		t.Errorf("pending escalation approved a merge: %v", err)
+	confirm := func(th worker.ApprovalThread) (gate.Confirm, *exitcode.Refusal, error) {
+		return mergeApproval(c, gate.MergePolicy{Mode: gate.MergeAll}, gate.Confirm{}, approvalReq{}, nil).Confirmation("e1", th)
+	}
+	if conf, ref, err := confirm(th); err != nil || ref == nil || conf.Given {
+		t.Errorf("pending escalation approved a merge: %+v %v %v", conf, ref, err)
 	}
 	f.threads["PROJ-123"] = append(f.threads["PROJ-123"], tracker.Comment{ID: "9", Author: "maint", Body: "approve"})
 	if _, err := escalation.Check(context.Background(), deps.escalationEnv(), dir, nil); err != nil {
 		t.Fatal(err)
 	}
-	conf, _, err := approvalConfirm(c, "e1", th, nil)
+	conf, _, err := confirm(th)
 	if err != nil || !conf.Given || conf.Escalation != "e1" {
 		t.Errorf("answered: %+v %v", conf, err)
 	}
 	// the same escalation is not an approval for another issue's thread
 	other := th
 	other.Key = "PROJ-124"
-	if _, _, err := approvalConfirm(c, "e1", other, nil); err == nil || !strings.Contains(err.Error(), "is on issue PROJ-123, not on this merge's approval thread (issue PROJ-124)") {
-		t.Errorf("wrong thread: %v", err)
+	if _, ref, _ := confirm(other); ref == nil || !strings.Contains(ref.Err.Error(), "is on issue PROJ-123, not on this merge's approval thread (issue PROJ-124)") {
+		t.Errorf("wrong thread: %v", ref)
 	}
 }
 

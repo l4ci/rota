@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"strings"
 	"time"
 
@@ -153,58 +152,24 @@ func approvalNow(c *Ctx) time.Time {
 	return c.deps().Now()
 }
 
-// approvalFail builds the exit 4 refusal of a --approval check: extra's
-// fields first (the caller's own shape), then the C5 fields, changed false.
-func approvalFail(extra *jsonx.Object, msg string, fields ...any) (Result, error) {
-	d := extra
-	if d == nil {
-		d = jsonx.NewObject()
-	}
-	for i := 0; i+1 < len(fields); i += 2 {
-		d.Set(fields[i].(string), fields[i+1])
-	}
-	d.Set("changed", false)
-	return Result{Data: d}, Refused("%s", msg)
-}
+// approvalAnswers is the escalation registry behind --approval: the
+// worker.ApprovalReader the cli wires. The rule over it lives in worker.
+type approvalAnswers struct{ c *Ctx }
 
-// approvalConfirm turns --approval <id> into the confirmation the gate takes:
-// the answered escalation on this merge's thread whose answer the allowlist
-// approves. It reads the registry only.
-func approvalConfirm(c *Ctx, id string, th worker.ApprovalThread, extra *jsonx.Object) (gate.Confirm, Result, error) {
-	root, err := c.Root()
+func (r approvalAnswers) Entry(id string) (worker.Escalation, bool, error) {
+	root, err := r.c.Root()
 	if err != nil {
-		return gate.Confirm{}, Result{}, err
+		return worker.Escalation{}, false, err
 	}
-	var e *escalation.Entry
-	list := escalation.Load(root)
-	for i := range list {
-		if list[i].ID == id {
-			e = &list[i]
-			break
+	for _, e := range escalation.Load(root) {
+		if e.ID == id {
+			return e, true, nil
 		}
 	}
-	switch {
-	case e == nil:
-		return gate.Confirm{}, Result{}, Resolution("no escalation %s", id)
-	case e.Kind != th.Kind || e.Ref() != th.Ref():
-		return gate.Confirm{}, Result{}, Usage("escalation %s is on %s %s, not on this merge's approval thread (%s %s)", id, e.Kind, e.Ref(), th.Kind, th.Ref())
-	case e.Status != escalation.StatusAnswered:
-		status := e.Derived(approvalNow(c))
-		res, err := approvalFail(extra, fmt.Sprintf("escalation %s is %s; no approval yet", id, status),
-			"blockedBy", blockedby.ApprovalPending, "escalation", id, "status", status)
-		return gate.Confirm{}, res, err
-	}
-	body := ""
-	if e.Answer != nil {
-		body = e.Answer.Body
-	}
-	if !escalation.Approves(body) {
-		res, err := approvalFail(extra, fmt.Sprintf("escalation %s was answered without approving the merge", id),
-			"blockedBy", blockedby.ApprovalDeclined, "escalation", id, "answer", body)
-		return gate.Confirm{}, res, err
-	}
-	return gate.Confirm{Given: true, Note: body, Escalation: id}, Result{}, nil
+	return worker.Escalation{}, false, nil
 }
+
+func (approvalAnswers) Approves(answer string) bool { return escalation.Approves(answer) }
 
 // approvalForge is the escalation registry and forge behind a merge's approval
 // request: the worker.ApprovalEscalator the cli wires.
@@ -263,11 +228,7 @@ func clearMerge(c *Ctx, p gate.MergePolicy, target string, conf gate.Confirm, re
 func mergeApproval(c *Ctx, p gate.MergePolicy, conf gate.Confirm, req approvalReq, extra *jsonx.Object) *worker.MergeApproval {
 	return &worker.MergeApproval{
 		Policy: p, Confirm: conf, ID: req.ID, Escalate: req.Escalate,
-		Resolve: func(id string, th worker.ApprovalThread) (gate.Confirm, *exitcode.Refusal, error) {
-			conf, res, err := approvalConfirm(c, id, th, extra)
-			ref, err := refusalOf(res, err)
-			return conf, ref, err
-		},
+		Answers: approvalAnswers{c}, Now: func() time.Time { return approvalNow(c) }, Extra: extra,
 		Clear: func(target string, conf gate.Confirm, paths []string) (*exitcode.Refusal, error) {
 			res, err := clearGate(c, gate.MergeApproval, target, conf, paths, extra)
 			return refusalOf(res, err)
