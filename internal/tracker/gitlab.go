@@ -45,7 +45,6 @@ type glIssue struct {
 	WebURL      string                      `json:"web_url"`
 	Assignees   []struct{ Username string } `json:"assignees"`
 	Author      *struct{ Username string }  `json:"author"`
-	Notes       []glNote                    `json:"notes"`
 }
 
 type glNote struct {
@@ -190,20 +189,15 @@ func (g *GitLab) Get(ctx context.Context, key IssueKey, withComments bool) (Issu
 		return Issue{}, err
 	}
 	args := []string{"issue", "view", strconv.Itoa(number), "--output", "json"}
-	if withComments {
-		args = append(args, "--comments")
-	}
 	var d glIssue
 	if err := g.json(ctx, args, &d); err != nil {
 		return Issue{}, err
 	}
 	is := g.norm(d)
 	if withComments {
-		is.Comments = []Comment{}
-		for _, n := range d.Notes {
-			if !n.System { // as in Comments
-				is.Comments = append(is.Comments, n.comment())
-			}
+		is.Comments, err = g.Comments(ctx, key)
+		if err != nil {
+			return Issue{}, err
 		}
 	}
 	return is, nil
