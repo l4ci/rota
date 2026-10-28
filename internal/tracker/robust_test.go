@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -333,6 +334,91 @@ func TestGitLabPRMerge(t *testing.T) {
 	}
 }
 
+func TestGitLabGetCommentsPaginate(t *testing.T) {
+	ctx := context.Background()
+	const claim = "<!-- rota:claim ben@42 -->"
+	const acceptance = "<!-- rota:acceptance AC-1 -->"
+	notes := make([]map[string]any, 45)
+	for i := range notes {
+		id := i + 1
+		body := fmt.Sprintf("note %d", id)
+		if id == 41 {
+			body = claim
+		} else if id == 44 {
+			body = acceptance
+		}
+		notes[i] = map[string]any{
+			"id": id, "body": body, "system": id == 5 || id == 25,
+			"author":     map[string]string{"username": "ben"},
+			"created_at": fmt.Sprintf("2026-10-28T00:00:%02dZ", id),
+		}
+	}
+	encode := func(v any) string {
+		t.Helper()
+		b, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	firstPage := encode(notes[:20])
+	s := &scripted{answer: func(_ string, args []string) (string, string, int) {
+		switch strings.Join(args, " ") {
+		case "issue view 1 --output json", "issue view 1 --output json --comments":
+			// The view endpoint only embeds the oldest page of notes.
+			return `{"iid":1,"title":"busy issue","notes":` + firstPage + `}`, "", 0
+		case "api projects/:id/issues/1/notes?sort=asc&order_by=created_at --paginate":
+			// glab emits one JSON array per API page.
+			return firstPage + "\n" + encode(notes[20:40]) + "\n" + encode(notes[40:]), "", 0
+		case "api projects/:id/issues/1/notes?sort=asc&order_by=created_at":
+			return firstPage, "", 0
+		}
+		return "", "unexpected " + strings.Join(args, " "), 1
+	}}
+	a := newAdapter(t, "gitlab", s)
+	is, err := a.Get(ctx, NumKey(1), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs, err := a.Comments(ctx, NumKey(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hasClaim, hasAcceptance := false, false
+	for _, c := range is.Comments {
+		hasClaim = hasClaim || c.Body == claim
+		hasAcceptance = hasAcceptance || c.Body == acceptance
+	}
+	t.Logf("45 notes / 3 API pages: Get=%d, Comments=%d, late claim=%t, late acceptance=%t",
+		len(is.Comments), len(cs), hasClaim, hasAcceptance)
+	if len(is.Comments) != 43 || !hasClaim || !hasAcceptance {
+		t.Fatalf("Get returned %d comments; want 43 non-system notes including both late markers", len(is.Comments))
+	}
+	if !reflect.DeepEqual(is.Comments, cs) {
+		t.Fatalf("Get and Comments disagree: Get %+v, Comments %+v", is.Comments, cs)
+	}
+	if is.Title != "busy issue" {
+		t.Fatalf("Get lost issue fields: %+v", is)
+	}
+	for i, c := range cs {
+		id := i + 1
+		if id >= 5 {
+			id++
+		}
+		if id >= 25 {
+			id++
+		}
+		if c.ID != fmt.Sprint(id) || c.Author != "ben" || c.CreatedAt != time.Date(2026, time.October, 28, 0, 0, id, 0, time.UTC) {
+			t.Fatalf("comment %d is not the expected oldest-first note: %+v", i, c)
+		}
+	}
+	for _, call := range s.calls {
+		if strings.Contains(call, "--comments") {
+			t.Fatalf("Get still reads truncated view notes: %s", call)
+		}
+	}
+}
+
 func TestGitLabGetDropsSystemNotesLikeComments(t *testing.T) {
 	ctx := context.Background()
 	notes := `[{"id":7,"body":"added label","system":true},{"id":8,"body":"hi","author":{"username":"u"}}]`
@@ -340,7 +426,7 @@ func TestGitLabGetDropsSystemNotesLikeComments(t *testing.T) {
 		if args[0] == "api" {
 			return notes, "", 0
 		}
-		return `{"iid":1,"notes":` + notes + `}`, "", 0
+		return `{"iid":1}`, "", 0
 	}}
 	a := newAdapter(t, "gitlab", s)
 	is, err := a.Get(ctx, NumKey(1), true)
@@ -353,6 +439,30 @@ func TestGitLabGetDropsSystemNotesLikeComments(t *testing.T) {
 	}
 	if len(is.Comments) != 1 || is.Comments[0] != cs[0] || len(cs) != 1 {
 		t.Fatalf("Get %+v, Comments %+v", is.Comments, cs)
+	}
+}
+
+func TestGitLabGetNotesOptionalAndErrorsPropagate(t *testing.T) {
+	for _, withComments := range []bool{false, true} {
+		t.Run(fmt.Sprintf("withComments=%t", withComments), func(t *testing.T) {
+			s := &scripted{answer: func(_ string, args []string) (string, string, int) {
+				switch strings.Join(args, " ") {
+				case "issue view 1 --output json":
+					return `{"iid":1,"title":"issue without notes"}`, "", 0
+				case "api projects/:id/issues/1/notes?sort=asc&order_by=created_at --paginate":
+					return "", "notes unavailable", 1
+				}
+				return "", "unexpected " + strings.Join(args, " "), 1
+			}}
+			is, err := newAdapter(t, "gitlab", s).Get(context.Background(), NumKey(1), withComments)
+			if withComments {
+				if !IsKind(err, KindFailed) || !strings.Contains(err.Error(), "notes unavailable") || is.Key != "" {
+					t.Fatalf("Get should propagate the notes error without a partial issue: %+v, %v", is, err)
+				}
+			} else if err != nil || is.Title != "issue without notes" || is.Comments != nil {
+				t.Fatalf("Get without comments should succeed without loading notes: %+v, %v", is, err)
+			}
+		})
 	}
 }
 
