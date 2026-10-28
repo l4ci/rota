@@ -1,11 +1,12 @@
 package config
 
 import (
-	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/l4ci/rota/internal/projects"
 )
 
 func TestSupportLabelKeyRetired(t *testing.T) {

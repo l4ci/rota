@@ -2,13 +2,13 @@ package cli
 
 import (
 	"context"
-	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/tracker"
 )
 

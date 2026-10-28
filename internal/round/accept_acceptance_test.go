@@ -2,13 +2,13 @@ package round
 
 import (
 	"errors"
-	"github.com/l4ci/rota/internal/projects"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"

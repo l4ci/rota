@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"github.com/l4ci/rota/internal/projects"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
@@ -37,7 +37,7 @@ func TestConfigLoadsStayOnDeps(t *testing.T) {
 				if strings.HasPrefix(strings.TrimSpace(line), "//") {
 					continue
 				}
-				if strings.Contains(line, "config.Load(projects.OSEnv(), ") {
+				if strings.Contains(line, "config.Load(") {
 					t.Errorf("%s calls config.Load; take the config from Deps.Config: %s", rel, strings.TrimSpace(line))
 				}
 			}

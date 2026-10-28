@@ -2,11 +2,11 @@ package cli
 
 import (
 	"context"
-	"github.com/l4ci/rota/internal/projects"
 	"path/filepath"
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"

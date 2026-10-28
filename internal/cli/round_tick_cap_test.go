@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 	"path/filepath"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"

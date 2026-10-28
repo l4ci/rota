@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -18,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/limits"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundlease"

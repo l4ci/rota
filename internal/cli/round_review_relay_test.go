@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 	"io"
 	"os"
@@ -12,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundwatch"

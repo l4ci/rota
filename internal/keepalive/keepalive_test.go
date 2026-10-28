@@ -3,7 +3,6 @@ package keepalive
 import (
 	"context"
 	"errors"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/hook"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/roundlease"
 )
 

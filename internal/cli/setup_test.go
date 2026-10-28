@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"fmt"
-	"github.com/l4ci/rota/internal/projects"
 	"io"
 	"os"
 	"os/exec"
@@ -16,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // setupRun runs `rota -C dir setup args` with stdin as given and, when tty,

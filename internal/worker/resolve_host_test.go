@@ -2,11 +2,11 @@ package worker
 
 import (
 	"errors"
-	"github.com/l4ci/rota/internal/projects"
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"github.com/l4ci/rota/internal/limits"
-	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
 )
