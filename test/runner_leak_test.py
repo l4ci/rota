@@ -55,7 +55,8 @@ PY
     def start(self, name="one", leak=False, gate=False, section_fail=False):
         control = self.root / name
         control.mkdir()
-        env = dict(os.environ, ROTA_BIN="/bin/true", CONTROL=str(control),
+        env = dict(os.environ, ROTA_BIN="/bin/true", ROTA_TEST_LOCK_HELD="1",
+                   CONTROL=str(control),
                    SECTION_LIST="test/sections/01_wait.sh",
                    ROTA_SMOKE_DIAGNOSTICS=str(self.root / "diagnostics"),
                    TMPDIR=str(self.root), INJECT_LEAK=str(int(leak)),
