@@ -165,7 +165,7 @@ type rootStore struct {
 }
 
 func (s rootStore) Rows() ([]cfgRow, error) {
-	entries, err := config.Show(s.root, "", false)
+	entries, err := config.Show(s.env, s.root, "", false)
 	if err != nil {
 		return nil, err
 	}

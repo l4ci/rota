@@ -5,6 +5,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // The scope step of `rota migrate config` (#1786): keys that belong outside the
@@ -42,18 +43,18 @@ func (m ScopeMigration) Changed() bool { return len(m.Changes) > 0 }
 // ErrCorrupt naming it, and nothing is written. The step plans on the files as
 // the round-key rename (MigrateRoundKeys) leaves them, so a preview that also
 // renames old work.* names lists what --apply, which renames first, does.
-func MigrateScopeFiles(root string, apply bool, keep []string) (ScopeMigration, error) {
+func MigrateScopeFiles(env projects.Env, root string, apply bool, keep []string) (ScopeMigration, error) {
 	var m ScopeMigration
 	path, local := configPath(root), localPath(root)
 	err := fsio.Locked(path, fsio.LockTimeout, func() error {
 		return fsio.Locked(local, fsio.LockTimeout, func() error {
-			return migrateScopePlan(path, local, keep, &m, apply)
+			return migrateScopePlan(env, path, local, keep, &m, apply)
 		})
 	})
 	return m, err
 }
 
-func migrateScopePlan(path, local string, keep []string, m *ScopeMigration, apply bool) error {
+func migrateScopePlan(env projects.Env, path, local string, keep []string, m *ScopeMigration, apply bool) error {
 	cfg, err := readMigrateTarget(path, "config.json")
 	if err != nil || cfg == nil {
 		return err
@@ -66,7 +67,7 @@ func migrateScopePlan(path, local string, keep []string, m *ScopeMigration, appl
 	// Under apply they already ran, so this is a no-op; in a preview it makes
 	// the plan the one --apply writes. A merges conflict leaves a file as it is:
 	// the merges step reports it.
-	global := globalLayer()
+	global := globalLayer(env)
 	var below []any
 	if h, ok := walk(global, "round.harnesses"); ok {
 		below = asList(h)
