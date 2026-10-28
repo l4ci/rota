@@ -285,6 +285,34 @@ func (d *Doc) QueuePR(rec QueuedPR) {
 	d.doc.Set("prs", append(d.list("prs"), rec.object()))
 }
 
+// QueuedFrom is the newest queued record sent from a slot, nil when none.
+func (r Registry) QueuedFrom(slot string) *QueuedPR {
+	var out *QueuedPR
+	for _, o := range r.queued() {
+		if jsonx.Str(o, "from") == slot {
+			q := queuedFrom(o)
+			out = &q
+		}
+	}
+	return out
+}
+
+// AppendQueuedRelay logs a relay on the newest queued record sent from slot,
+// where the gate of that PR reads it. False when the slot has no such record.
+func (d *Doc) AppendQueuedRelay(slot string, entry *jsonx.Object) bool {
+	var hit *jsonx.Object
+	for _, o := range d.queued() {
+		if jsonx.Str(o, "from") == slot {
+			hit = o
+		}
+	}
+	if hit == nil {
+		return false
+	}
+	hit.Set("relays", append(listOf(hit, "relays"), entry))
+	return true
+}
+
 // DropQueued removes the records match accepts.
 func (d *Doc) DropQueued(match func(QueuedPR) bool) {
 	d.dropQueued(func(o *jsonx.Object) bool { return match(queuedFrom(o)) })
