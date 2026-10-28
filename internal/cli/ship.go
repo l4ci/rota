@@ -113,7 +113,7 @@ func shipVerdict(c *Ctx, dir, root string) shipVerdictLookup {
 }
 
 func (v shipVerdictLookup) local() ship.VerdictCheck {
-	return ship.VerdictCheck{Git: shipGitRunner{v.c, v.dir}, Store: verdict.Load(v.root), Repo: v.repo, Settings: verdict.Settings{}}
+	return ship.VerdictCheck{Git: shipGitRunner{v.c, v.dir}, Store: verdict.Load(v.root), Repo: v.repo}
 }
 
 func (v shipVerdictLookup) Block(branch string) error {
