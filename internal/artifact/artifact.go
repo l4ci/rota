@@ -1,7 +1,8 @@
-// Package artifact holds what the file-mode verbs (milestone, plan,
-// design, spike, proof, debug counter) share: the exit-coded error their
-// packages return. It does not import internal/cli; internal/cli's glue
-// maps Error to the exit table.
+// Package artifact holds what the document verbs (milestone, plan, design,
+// spike, proof, debug counter) share: the keyed-doc stores (FileDocs for
+// .rota/<dir>/<key>.md, NoteDocs for issue notes), the Notes seam to the
+// issue backend, ListDocs, AppendSection, SplitCSV and Repos. Errors are
+// exitcode.Errors; internal/cli maps them to the exit table.
 package artifact
 
 import (
