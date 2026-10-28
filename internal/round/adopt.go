@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/tracker"
@@ -202,13 +203,8 @@ func (e Env) resolveAdoptRef(ctx context.Context, root, ref string) (branch, wt 
 	}
 	type entry struct{ path, branch string }
 	var all []entry
-	for _, l := range strings.Split(res.Stdout, "\n") {
-		switch {
-		case strings.HasPrefix(l, "worktree "):
-			all = append(all, entry{path: realPath(strings.TrimPrefix(l, "worktree "))})
-		case strings.HasPrefix(l, "branch ") && len(all) > 0:
-			all[len(all)-1].branch = strings.TrimPrefix(strings.TrimPrefix(l, "branch "), "refs/heads/")
-		}
+	for _, w := range git.ParseWorktrees(res.Stdout) {
+		all = append(all, entry{path: realPath(w.Path), branch: w.Branch})
 	}
 	isBranch := func() bool {
 		r, _ := e.Git(ctx, root, "rev-parse", "--verify", "--quiet", "refs/heads/"+ref)
