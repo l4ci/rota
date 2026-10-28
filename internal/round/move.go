@@ -928,8 +928,13 @@ func (e Env) planTransfer(ctx context.Context, root string, be Board, o Transfer
 	// Checks before anything moves: the brief, the receiver's launch, the
 	// overlap, the receiver's guard.
 	if !toHuman {
-		if run.brief, ok = briefPath(root, set, e.getenv(), skills.CacheDir(e.getenv())); !ok {
-			return nil, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
+		cacheDir := skills.CacheDir(e.getenv())
+		var briefWarn string
+		if run.brief, briefWarn, ok = resolveBrief(root, set, e.getenv(), cacheDir); !ok {
+			return nil, blocked(BlockBriefMissing, "%s", briefMissingMsg(set, cacheDir))
+		}
+		if briefWarn != "" {
+			res.Warnings = append(res.Warnings, briefWarn)
 		}
 		// The receiver is refused as assign would refuse it, before anything moves.
 		warns, err := e.deliveryRefusals(ctx, root, run.kind, o.To, model)
