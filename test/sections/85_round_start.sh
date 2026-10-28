@@ -103,6 +103,7 @@ RC=0; OUT=$( cd "$RN" && $RNENV "$ROTA_BIN" --json round assign F01 --holder-pid
 rn config set round.brief no-such-contract.md >/dev/null
 RC=0; OUT=$( cd "$RN" && $RNENV "$ROTA_BIN" --json round assign F01 --holder-pid "$HOLDER" 2>/dev/null ) || RC=$?
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "brief missing" ] || fail "a missing worker contract is refused before marking: $RC $OUT"
+grep -q 'no-such-contract.md' <<<"$OUT" || fail "the refusal should name the configured round.brief: $OUT"
 [ "$(git -C "$RN/.worktrees/ben" symbolic-ref --short HEAD)" = "park/ben" ] || fail "a refused assign must leave the slot parked"
 rn config set round.brief "" >/dev/null
 pass "assign refuses before marking: not ready, no lease, missing contract; check-only writes nothing"

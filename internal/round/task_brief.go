@@ -57,9 +57,10 @@ func (e Env) RebuildTaskBrief(ctx context.Context, root string, be Board, o work
 	if err != nil {
 		return "", o, err
 	}
-	contract, ok := briefPath(root, set, e.getenv(), skills.CacheDir(e.getenv()))
+	cacheDir := skills.CacheDir(e.getenv())
+	contract, _, ok := resolveBrief(root, set, e.getenv(), cacheDir)
 	if !ok {
-		return "", o, blocked(BlockBriefMissing, "the worker contract was not found; set round.brief")
+		return "", o, blocked(BlockBriefMissing, "%s", briefMissingMsg(set, cacheDir))
 	}
 	if o.Kind == "" {
 		o.Kind = s.HarnessKind()

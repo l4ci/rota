@@ -174,13 +174,24 @@ func (a Assigned) Ready() bool {
 // and none of those present, the copy in the skills cache under cache (the
 // tree this binary extracts, made when missing); "" skips it.
 func briefPath(root string, set roundcfg.Settings, getenv func(string) string, cache string) (string, bool) {
+	p, _, ok := resolveBrief(root, set, getenv, cache)
+	return p, ok
+}
+
+// resolveBrief is briefPath plus the warning for a stale round.brief: one
+// that is missing but lies under the skills cache root (an update removed the
+// tree it named) falls back to the current cache copy, and the warning names
+// the stale value and the path used. A missing round.brief elsewhere stays a
+// miss.
+func resolveBrief(root string, set roundcfg.Settings, getenv func(string) string, cache string) (string, string, bool) {
 	var cands []string
+	configured := ""
 	if set.Brief != "" {
-		p := set.Brief
-		if !filepath.IsAbs(p) {
-			p = filepath.Join(root, p)
+		configured = set.Brief
+		if !filepath.IsAbs(configured) {
+			configured = filepath.Join(root, configured)
 		}
-		cands = append(cands, p)
+		cands = append(cands, configured)
 	} else {
 		cands = append(cands, filepath.Join(root, "skills", "references", "worker-contract.md"))
 		installed := filepath.Join("rota-orchestrate", "references", "worker-contract.md")
@@ -193,20 +204,61 @@ func briefPath(root string, set roundcfg.Settings, getenv func(string) string, c
 	}
 	for _, c := range cands {
 		if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
-			return c, true
+			return c, "", true
 		}
 	}
-	if set.Brief == "" && cache != "" {
-		if set, err := skills.Embedded(); err == nil {
-			if tree, err := skills.Extract(set, version.Get().Version, cache); err == nil {
-				c := filepath.Join(tree, "references", "worker-contract.md")
-				if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
-					return c, true
-				}
+	if set.Brief == "" || inCache(configured, cache) {
+		if c, ok := cachedBrief(cache); ok {
+			if set.Brief == "" {
+				return c, "", true
 			}
+			return c, fmt.Sprintf("round.brief %s is missing (a stale skills cache path); using %s", set.Brief, c), true
 		}
 	}
-	return "", false
+	return "", "", false
+}
+
+// cachedBrief is the contract in the skills cache this binary extracts
+// (made when missing); "" cache skips it.
+func cachedBrief(cache string) (string, bool) {
+	if cache == "" {
+		return "", false
+	}
+	set, err := skills.Embedded()
+	if err != nil {
+		return "", false
+	}
+	tree, err := skills.Extract(set, version.Get().Version, cache)
+	if err != nil {
+		return "", false
+	}
+	c := filepath.Join(tree, "references", "worker-contract.md")
+	if fi, err := os.Stat(c); err != nil || fi.IsDir() {
+		return "", false
+	}
+	return c, true
+}
+
+// inCache reports whether p lies under the skills cache root.
+func inCache(p, cache string) bool {
+	if p == "" || cache == "" {
+		return false
+	}
+	rel, err := filepath.Rel(cache, p)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// briefMissingMsg is the refusal text when no contract was found: it names a
+// configured round.brief and the skills cache root to point it into.
+func briefMissingMsg(set roundcfg.Settings, cache string) string {
+	msg := "the worker contract (skills/references/worker-contract.md) was not found"
+	if set.Brief != "" {
+		msg += fmt.Sprintf("; round.brief is %q", set.Brief)
+	}
+	if cache != "" {
+		msg += fmt.Sprintf("; the current skills cache is %s", cache)
+	}
+	return msg + "; set round.brief to an existing file or unset it"
 }
 
 // pointerBrief is the short brief a worker is dispatched with: where its
@@ -958,9 +1010,13 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	res.Warnings = append(res.Warnings, warns...)
 
 	// 5. The brief exists before anything is marked.
-	brief, ok := briefPath(root, set, e.getenv(), skills.CacheDir(e.getenv()))
+	cacheDir := skills.CacheDir(e.getenv())
+	brief, briefWarn, ok := resolveBrief(root, set, e.getenv(), cacheDir)
 	if !ok {
-		return run, false, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
+		return run, false, blocked(BlockBriefMissing, "%s", briefMissingMsg(set, cacheDir))
+	}
+	if briefWarn != "" {
+		res.Warnings = append(res.Warnings, briefWarn)
 	}
 
 	decisionContext := slot.BriefDecisionContext()
@@ -1153,13 +1209,17 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 		}
 	}
 	w := e.Worker
+	var mine ownership
 	steps := []step{
 		{name: "queue the slot's PR", skip: func() bool { return !run.queue }, do: func() error {
 			return wrap(e.queuePR(ctx, root, be, agent))
 		}},
-		claimStep(be, id, claimID, holders, func() error {
-			// Only this assign's own binding: a slot another assign filled
-			// first (reserveStep refused us) keeps its worker.
+		claimStep(be, id, claimID, holders, resuming, &mine, func() error {
+			// Only a binding this assign made: a slot another assign filled first
+			// (reserveStep refused us) keeps its worker.
+			if !resuming && !mine.reserved {
+				return nil
+			}
 			return editSlot(root, agent, func(s *worker.Slot) error {
 				if worker.NormID(s.Task()) == worker.NormID(id) {
 					s.Unbind()
@@ -1167,7 +1227,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 				return nil
 			})
 		}, reclaim),
-		reserveStep(root, agent, id, resuming),
+		reserveStep(root, agent, id, resuming, &mine),
 		stateStep(root, be, id, agent, resuming, &res.Changed),
 		{name: "comment", skip: func() bool { return resuming }, do: func() error {
 			_, err := be.AddComment(id, "feedback", assignNote(agent, res.Branch))
@@ -1188,7 +1248,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 	// A bundle's members are claimed and marked like the lead, each with its own
 	// undo; a resume finds them done.
 	for _, m := range run.members {
-		claim := claimStep(be, m.ID, claimID, 1, func() error { return nil }, nil)
+		claim := claimStep(be, m.ID, claimID, 1, resuming, &mine, func() error { return nil }, nil)
 		claim.name, claim.skip = "claim "+m.ID, func() bool { return resuming }
 		state := stateStep(root, be, m.ID, agent, resuming, new(bool))
 		state.name = "in-progress " + m.ID
@@ -1257,12 +1317,16 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 // read the registry outside its lock, so a concurrent assign or the autopilot
 // tick may have filled the slot since; the compare-and-set refuses the later
 // writer before it marks the issue or binds, instead of overwriting the first one's binding.
-func reserveStep(root, agent, id string, resuming bool) step {
+func reserveStep(root, agent, id string, resuming bool, mine *ownership) step {
 	return step{name: "reserve the slot", skip: func() bool { return resuming }, do: func() error {
 		held, ok, err := worker.ReserveSlot(root, agent, id)
 		if err != nil {
 			return err
 		}
+		mine.reserved = ok
+		// A claim id is <agent>@<round>, so an assign that lost the slot to one for
+		// the same issue "won" the same idempotent claim: it is the winner's.
+		mine.sameIssue = !ok && worker.NormID(held) == worker.NormID(id)
 		if !ok {
 			return blocked(BlockSlotBusy, "slot %s was filled by another assign: it holds %s", agent, held)
 		}
@@ -1270,12 +1334,28 @@ func reserveStep(root, agent, id string, resuming bool) step {
 	}, undo: func() error { return worker.ReleaseReserved(root, agent, id) }}
 }
 
+// ownership is what one assign call knows it made, shared by its claim and
+// reserve steps so a rollback gives back only that and not a concurrent
+// assign's.
+type ownership struct {
+	reserved  bool // this call took the slot
+	sameIssue bool // the slot was lost to another assign of the same issue
+}
+
 // claimStep takes the issue's claim, among the first holders open claims (two
 // for an attempt of a best-of:2 issue); its undo gives the claim back and
 // clears the slot's binding. A lost claim is a refusal and leaves nothing to
 // undo.
-func claimStep(be Board, id, claimID string, holders int, unbind func() error, reclaim func() error) step {
+func claimStep(be Board, id, claimID string, holders int, resuming bool, mine *ownership, unbind func() error, reclaim func() error) step {
+	// posted is false when the claim was already open before this call: a claim
+	// is idempotent per id, so winning it then proves nothing about ownership and
+	// the undo must not release a live claim of another attempt. A resumed call
+	// owns what the first one left.
+	posted := true
 	return step{name: "claim", do: func() error {
+		if st, err := be.Status(id); err == nil && st != nil && !resuming {
+			posted = !slices.Contains(openClaimsOf(st), claimID)
+		}
 		// Reclaim before claiming: shared claims may still have a free holder slot,
 		// so winning a new claim does not prove the approved stale one was released.
 		if reclaim != nil {
@@ -1307,8 +1387,10 @@ func claimStep(be Board, id, claimID string, holders int, unbind func() error, r
 		return nil
 	}, undo: func() error {
 		var errs []error
-		if _, err := be.Release(id, claimID); err != nil {
-			errs = append(errs, fmt.Errorf("claim %s not released: %w", claimID, err))
+		if posted && !mine.sameIssue {
+			if _, err := be.Release(id, claimID); err != nil {
+				errs = append(errs, fmt.Errorf("claim %s not released: %w", claimID, err))
+			}
 		}
 		if err := unbind(); err != nil {
 			errs = append(errs, fmt.Errorf("slot not unbound: %w", err))
