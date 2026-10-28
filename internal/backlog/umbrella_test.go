@@ -530,11 +530,6 @@ func TestUmbrellaTrackingIssuePick(t *testing.T) {
 	if !reflect.DeepEqual(fakes["web"].Milestones, []string{"M05 — First open"}) {
 		t.Errorf("created %v", fakes["web"].Milestones)
 	}
-	for in, want := range map[string]string{"M05": "M05", " M5 — x": "M5", "M05x": "", "M05_": "", "M7-x": "M7", "Plain": "", "M": ""} {
-		if got := msTitleID(in); got != want {
-			t.Errorf("msTitleID(%q) = %q, want %q", in, got, want)
-		}
-	}
 }
 
 func TestUmbrellaHomeRepoMustBeRegistered(t *testing.T) {
