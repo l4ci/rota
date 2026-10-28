@@ -27,11 +27,11 @@ func (files) Digits() int { return backlog.FileIDDigits }
 
 func (files) ItemOnly() bool { return false }
 
-func path(root, key string) string { return rotatree.Doc(root, rotatree.PlansDir, key) }
-
-func notFound(key string) *exitcode.Error {
-	return exitcode.Errf(exitcode.ExitResolution, "plan %s not found (.rota/plans/%s.md)", key, key)
+func docs(root string) artifact.FileDocs {
+	return artifact.FileDocs{Root: root, Dir: rotatree.PlansDir, Kind: "plan"}
 }
+
+func path(root, key string) string { return docs(root).Path(key) }
 
 // DesignRef is the path of the design file, which must exist.
 func (s files) DesignRef(_ bool, design string) (string, error) {
@@ -86,46 +86,11 @@ func nextSlice(dir, milestone string) int {
 	return max + 1
 }
 
-// Read is the stored plan, verbatim.
-func (s files) Read(key string) (string, error) {
-	b, err := os.ReadFile(path(s.root, key))
-	if err != nil {
-		return "", notFound(key)
-	}
-	return string(b), nil
-}
+func (s files) Read(key string) (string, error) { return docs(s.root).Read(key) }
 
-func (s files) Replace(key, text string) (changed bool, err error) {
-	p := path(s.root, key)
-	if _, serr := os.Stat(p); serr != nil {
-		return false, notFound(key)
-	}
-	err = fsio.Locked(p, fsio.LockTimeout, func() error {
-		old, rerr := os.ReadFile(p)
-		if rerr != nil {
-			return notFound(key)
-		}
-		if string(old) == text {
-			return nil
-		}
-		changed = true
-		return fsio.WriteFileAtomic(p, []byte(text))
-	})
-	return
-}
+func (s files) Replace(key, text string) (bool, error) { return docs(s.root).Replace(key, text) }
 
-func (s files) Remove(key string) error {
-	p := path(s.root, key)
-	if _, err := os.Stat(p); err != nil {
-		return notFound(key)
-	}
-	return fsio.Locked(p, fsio.LockTimeout, func() error {
-		if err := os.Remove(p); err != nil {
-			return notFound(key)
-		}
-		return nil
-	})
-}
+func (s files) Remove(key string) error { return docs(s.root).Remove(key) }
 
 // List reads .rota/plans/*.md in name order, optionally only one milestone's.
 func (s files) List(milestone string) ([]Entry, error) {
