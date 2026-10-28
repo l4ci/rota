@@ -460,6 +460,9 @@ func TestDispatchRejectsResumeAndUnparseableWorkerCommands(t *testing.T) {
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := tmuxFake()
 	e := envWith(f)
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.Bind(Binding{Task: "12"}) }); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "q"), Relay: true}); err != nil {
 		t.Errorf("relay with a resume workerCommand: %v", err)
 	}
