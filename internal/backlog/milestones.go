@@ -248,7 +248,6 @@ func (b *Issues) MilestoneList() ([]ms.Entry, error) {
 	}
 	sort.Strings(ids)
 	rows := []ms.Entry{}
-	shipped := map[string]bool{}
 	for _, id := range ids {
 		is := all[id]
 		_, block, _ := ParseFieldsBlock(is.Body)
@@ -261,19 +260,9 @@ func (b *Issues) MilestoneList() ([]ms.Entry, error) {
 		if r.Depends == nil {
 			r.Depends = []string{}
 		}
-		if r.Status == "shipped" {
-			shipped[id] = true
-		}
 		rows = append(rows, r)
 	}
-	for i := range rows {
-		rows[i].Ready = true
-		for _, d := range rows[i].Depends {
-			if !shipped[d] {
-				rows[i].Ready = false
-			}
-		}
-	}
+	ms.MarkReady(rows)
 	return rows, nil
 }
 
