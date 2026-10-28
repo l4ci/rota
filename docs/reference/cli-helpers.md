@@ -350,6 +350,7 @@ All writes target the umbrella `.rota/DECISIONS.md`, reject `--repo`, and refres
 | `rota test run <fast\|full\|e2e> [--base <ref>]` | run `test.<tier>` in order, stopping at the first failure; `{files}` expands to the files changed against base; exit 3 when the tier is empty |
 | `rota test lock -- <cmd> [<arg>...]` | run any command holding a slot of the machine-wide test lock (`test.slots`, default 1), passing stdin, stdout and stderr through; the exit code is the command's |
 | `rota test ledger check` | report expired and malformed entries in `.rota/test-ledger.json`; exit 1 when there are any |
+| `rota test flakes` | rank the flaky command and test pairs recorded in `.rota/flakes.jsonl` by repeat count; see [flaky checks](../usage/parallel-rounds.md) |
 | `rota worker prompt-check [--key <file>]` | Codex UserPromptSubmit hook: pass only signed or maintainer input |
 | `rota worker session check [--session <name>]` | inside a managed host session? (exit 1 when outside) |
 | `rota worker session ensure [--session <name>] [--body-file <path\|->] [--boot-timeout <s>]` | hand the orchestrator off into a host session |
@@ -391,6 +392,7 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 | `rota round watch [--heartbeat <seconds>] [--poll <seconds>] [--forge-poll <seconds>] [--settle <seconds>] [--lines <n>] [--autopilot [--base <branch>] [--holder-pid <n>]]` | background watch: exit on a slot, PR or escalation change, or at a heartbeat, with the same nudges as `round wait`; `--autopilot` runs a tick on every wake |
 | `rota round tick [--base <branch>] [--holder-pid <n>]` | one autopilot pass: repair safe drift, merge finished PRs behind the gate, assign ready items (`autonomy.level: auto` only; exit 4 otherwise) |
 | `rota round status [--ui]` | list the round's slots with host, PR and drift; `--ui` opens the read-only overview screen, see [the status screen](../usage/parallel-rounds.md#the-status-screen); a bundled slot shows as `1559 (+#1563, +#1564)` |
+| `rota round summary [--round <n>]` | the round's issues, slots and accounts: wall time, lead times, red-train rate, bounces per merged PR, flake recoveries and quota share |
 | `rota round reconcile [--apply]` | report drift between registry, host, git and forge; `--apply` repairs the safe kinds, including parking slots whose PR merged |
 | `rota round report <slot> --state <done\|blocked\|idle\|dead\|limited> [--evidence <text>] [--pr <url\|number> \| --issues <#a,#b>] [--attempt <id>]` | record a solo worker's result (exit 4 on a stale `--attempt`): state and PR (or, for a review item, the issues it filed) |
 | `rota round escalate send <number|key> [--pr] [--slot <name>] --title <text> --body-file <path\|-> --options <text>… --recommend <n> [--cost-if-wrong <text>] [--timeout <seconds>]` | ask the human on an issue or PR thread; exit 4 without at least two `--options` and a `--recommend` |
