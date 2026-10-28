@@ -68,7 +68,10 @@ func ClearWorktree(g Git, branch string, at Checkout) error {
 // or a familiar directory name alone never authorizes deletion. listing is the
 // porcelain worktree list, whose first entry is the primary checkout.
 func checkOwnership(listing string, at Checkout, branch, wt string) error {
-	primary := strings.TrimPrefix(strings.SplitN(listing, "\n", 2)[0], "worktree ")
+	primary := ""
+	if wts := git.ParseWorktrees(listing); len(wts) > 0 {
+		primary = wts[0].Path
+	}
 	roots := []string{projectRoot(primary), primary, projectRoot(at.Dir)}
 	resolve := func(root, path string) string {
 		if filepath.IsAbs(path) {
@@ -126,13 +129,10 @@ func projectRoot(dir string) string {
 // linkedWorktree is the path of the linked (not the first) worktree in a
 // porcelain listing that has branch checked out, "" if none.
 func linkedWorktree(porcelain, branch string) string {
-	wt, count := "", 0
-	for _, l := range strings.Split(porcelain, "\n") {
-		if p, ok := strings.CutPrefix(l, "worktree "); ok {
-			wt = p
-			count++
-		} else if l == "branch refs/heads/"+branch && count > 1 {
-			return wt
+	wts := git.ParseWorktrees(porcelain)
+	for i := 1; i < len(wts); i++ {
+		if wts[i].Branch == branch {
+			return wts[i].Path
 		}
 	}
 	return ""
