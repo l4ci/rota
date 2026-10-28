@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
@@ -219,7 +220,7 @@ func TestAssignRefusals(t *testing.T) {
 // switching a slot worktree's branch would trip the gate's checkout guard.
 func holdLandLock(t *testing.T, root string, fn func()) {
 	t.Helper()
-	cd, err := rotastate.CommonDir(root)
+	cd, err := rotastatetest.CommonDir(root)
 	if err != nil {
 		t.Fatal(err)
 	}

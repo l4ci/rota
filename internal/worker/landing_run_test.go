@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 )
 
 type landingAnswer struct {
@@ -94,7 +95,7 @@ func TestLandingQueuedManualRunDefersNoWaitGateAndTrain(t *testing.T) {
 		t.Run(manual, func(t *testing.T) {
 			w := trainWorld(t, "true", "b1", "b2", "b3")
 			e := w.env(false).WithDefaults()
-			common, err := rotastate.CommonDir(w.dir)
+			common, err := rotastatetest.CommonDir(w.dir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -199,7 +200,7 @@ func TestLandingQueuedManualRunDefersNoWaitGateAndTrain(t *testing.T) {
 func TestLandingNoWaitRefusesUnmarkedLandLock(t *testing.T) {
 	w := trainWorld(t, "true", "b1")
 	e := w.env(false).WithDefaults()
-	common, err := rotastate.CommonDir(w.dir)
+	common, err := rotastatetest.CommonDir(w.dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +236,7 @@ func TestLandingAbandonedIntentDoesNotWedgeRuns(t *testing.T) {
 				}
 				w := trainWorld(t, "true", "b1")
 				e := w.env(false).WithDefaults()
-				common, err := rotastate.CommonDir(w.dir)
+				common, err := rotastatetest.CommonDir(w.dir)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -266,7 +267,7 @@ func TestLandingAbandonedIntentDoesNotWedgeRuns(t *testing.T) {
 func TestLandingReadOnlyGateAndTrainBypassIntentAndLock(t *testing.T) {
 	w := trainWorld(t, "false", "b1") // a preview must not verify or land
 	e := w.env(false).WithDefaults()
-	common, err := rotastate.CommonDir(w.dir)
+	common, err := rotastatetest.CommonDir(w.dir)
 	if err != nil {
 		t.Fatal(err)
 	}
