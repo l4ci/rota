@@ -19,7 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 )
 
-// Store is where plans live. Errors are artifact.Errors: Create is exit 4 when
+// Store is where plans live. Errors are exitcode.Errors: Create is exit 4 when
 // the plan exists, Read, Replace and Remove are exit 3 when it does not.
 type Store interface {
 	// Digits is the fewest digits a unit may carry when a plan is added:
