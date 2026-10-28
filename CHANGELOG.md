@@ -1,5 +1,48 @@
 # Changelog
 
+## v0.27.0 — 2026-10-28
+
+Orca as a worker host, a one-line agent install, and stricter gates on what counts as done.
+
+### New
+
+- **Orca terminals as a round worker host.** Set `round.dispatch: orca` to run Claude Code and Codex workers in Orca terminals. Reclaim and reap prove the agent's process tree is gone before closing a slot (#2215).
+- **Install rota from your agent.** Paste one line into Claude Code, Codex or OpenCode and it follows the repo's new `install.md`: binary, skills, `rota doctor`, project setup, asking before each command and never answering setup questions for you. An `llms.txt` indexes the docs for agents (#2221).
+- **Merge trains that wait to fill.** Automatic trains hold until a count or age threshold (`round.trainMax`, `round.trainFillMinutes`) (#2199). The landing queue freezes after a red landed base until someone recovers it (#2190).
+- **Flaky checks retried and recorded.** A failed gate sub-check or assertion gets one retry; recoveries go to a per-developer flake ledger, shown by `rota test flakes` (#2200, #2202, #2214).
+- **Round insight.** `rota round summary` reports lead time, red-train rate and bounces per merged PR (#2189). A maintainer digest lists the decisions waiting on you (#2201).
+- **Item templates** with create-time warnings and assignment checks (#2163), and one registry for tracker labels (#2166).
+- **Knowledge and decisions where you edit.** Path-scoped knowledge and decisions are injected before edits (#2142); binding decisions go into worker briefs (#2139).
+
+### Stricter gates
+
+- Items with unmet acceptance criteria refuse to complete, and workers must mark each met criterion before reporting done (#2147, #2157).
+- PRs need `## Assumptions` and `## Rulings` before they enter the gate (#2165). Vacuous tests are refused in the gate and train (#2149).
+- Reviewer workspaces are prepared through fail-closed verbs, and reviewer binary probes run with isolated config (#2148, #2152). Review, QA and gate reports are posted durably on the PR (#2143).
+- `/rota-work` Step 7 stops after three failed fix attempts (#2138).
+
+### Fixed
+
+- Autopilot waits for reviews and changed heads before gating, defers merges behind manual landing work, and reports failed heads clearly (#2183, #2197, #2198).
+- Codex workers: background terminal waits count as working, and relays delivered after a prompt stall are recognised (#2193, #2186).
+- `round transfer` honours harness and model overrides (#2184); missing-PR drift stays quiet while workers build (#2194); missing verdicts are recovered from current PR reports (#2164).
+- `rota skills get` serves skill-local reference files (#2187); temporary repos stay out of the project registry (#2140); support machines can check for updates (#2168).
+
+### Skills and docs
+
+- Every `SKILL.md` keeps only the happy path inline; edge cases moved to referenced files, and the acceptance-marks rule has one owner file (#2217).
+- The README is a short feature list linking the website docs (#2219). New pages cover the support machine, coding-agent mistakes rota enforces against, and one compare page per comparable tool (#2206, #2167, #2113).
+- The repo has a real subsystem map under `.rota/map/` (#2224).
+
+### Internal
+
+- Temp body, brief and log files go through one `fsio.WriteTemp` seam (#2225); host, port and dependency settings are typed at the worker seam (#2213); bundle-holder lookup has one owner (#2212).
+
+## Stats
+227 commits, 687 files changed, +35386 −4898 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.26.0...v0.27.0
+
 ## Unreleased
 
 ### Upgrade notes
