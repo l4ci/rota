@@ -24,11 +24,13 @@ func Files(root string) Store { return files{root} }
 
 func (files) Digits() int { return backlog.FileIDDigits }
 
-func path(root, id string) string { return rotatree.Doc(root, rotatree.DesignsDir, id) }
-
-func notFound(id string) *exitcode.Error {
-	return exitcode.Errf(exitcode.ExitResolution, "design %s not found (.rota/designs/%s.md)", id, id)
+func docs(root string) artifact.FileDocs {
+	return artifact.FileDocs{Root: root, Dir: rotatree.DesignsDir, Kind: "design"}
 }
+
+func path(root, id string) string { return docs(root).Path(id) }
+
+func notFound(id string) *exitcode.Error { return docs("").NotFound(id) }
 
 func (s files) Create(id, text string) error {
 	p := path(s.root, id)
@@ -40,46 +42,11 @@ func (s files) Create(id, text string) error {
 	})
 }
 
-// Read is the stored design, verbatim.
-func (s files) Read(id string) (string, error) {
-	b, err := os.ReadFile(path(s.root, id))
-	if err != nil {
-		return "", notFound(id)
-	}
-	return string(b), nil
-}
+func (s files) Read(id string) (string, error) { return docs(s.root).Read(id) }
 
-func (s files) Replace(id, text string) (changed bool, err error) {
-	p := path(s.root, id)
-	if _, serr := os.Stat(p); serr != nil { // no lock file or directory for a missing design
-		return false, notFound(id)
-	}
-	err = fsio.Locked(p, fsio.LockTimeout, func() error {
-		old, rerr := os.ReadFile(p)
-		if rerr != nil {
-			return notFound(id)
-		}
-		if string(old) == text {
-			return nil
-		}
-		changed = true
-		return fsio.WriteFileAtomic(p, []byte(text))
-	})
-	return
-}
+func (s files) Replace(id, text string) (bool, error) { return docs(s.root).Replace(id, text) }
 
-func (s files) Remove(id string) error {
-	p := path(s.root, id)
-	if _, err := os.Stat(p); err != nil {
-		return notFound(id)
-	}
-	return fsio.Locked(p, fsio.LockTimeout, func() error {
-		if err := os.Remove(p); err != nil {
-			return notFound(id)
-		}
-		return nil
-	})
-}
+func (s files) Remove(id string) error { return docs(s.root).Remove(id) }
 
 // Entry is one row of List.
 type Entry struct{ ID, Title, Status, Created string }
