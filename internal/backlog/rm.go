@@ -7,10 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
+	"github.com/l4ci/rota/internal/status"
 )
 
 // Item removal with dependency cleanup: bin/hv-rm and bin/hvlib_crossref.py.
@@ -237,67 +236,6 @@ func collectArchiveCrossRefs(content, id string) []XRef {
 	return hits
 }
 
-// activeBranches maps item IDs to the branch of the first active entry of
-// status.json that lists them.
-func (f *File) activeBranches() map[string]string {
-	out := map[string]string{}
-	st, ok := fsio.LoadJSON(f.rota("status.json"), nil).(*jsonx.Object)
-	if !ok {
-		return out
-	}
-	list, _ := st.Get("active")
-	entries, _ := list.([]any)
-	for _, e := range entries {
-		obj, ok := e.(*jsonx.Object)
-		if !ok {
-			continue
-		}
-		branch := "(unknown)"
-		if b, has := obj.Get("branch"); has {
-			if s, ok := b.(string); ok {
-				branch = s
-			} else {
-				branch = pyBranch(b)
-			}
-		}
-		for _, id := range activeItems(obj) {
-			if _, seen := out[id]; !seen {
-				out[id] = branch
-			}
-		}
-	}
-	return out
-}
-
-func pyBranch(v any) string {
-	b, _ := jsonx.MarshalCompact(v)
-	return string(b)
-}
-
-// activeItems is active_items: entry["items"] as a list, or a CSV string split.
-func activeItems(entry *jsonx.Object) []string {
-	raw, _ := entry.Get("items")
-	switch v := raw.(type) {
-	case []any:
-		var out []string
-		for _, x := range v {
-			if s, ok := x.(string); ok {
-				out = append(out, s)
-			}
-		}
-		return out
-	case string:
-		var out []string
-		for _, p := range strings.Split(v, ",") {
-			if p = pystr.Strip(p); p != "" {
-				out = append(out, p)
-			}
-		}
-		return out
-	}
-	return nil
-}
-
 func (f *File) planFiles(id string) []string {
 	entries, err := os.ReadDir(f.rota("plans"))
 	if err != nil {
@@ -346,7 +284,7 @@ func (f *File) Remove(ids []string, scrubArchive, apply bool) (RmResult, error) 
 			}
 			return errf(ErrNotFound, "[%s] not found in .rota/BACKLOG.md or .rota/ARCHIVE.md", id)
 		}
-		active := f.activeBranches()
+		active := status.ActiveBranches(f.Root)
 		if apply {
 			for _, id := range ids {
 				if br, ok := active[id]; ok {
