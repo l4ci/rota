@@ -37,9 +37,7 @@ func workerContext() (context.Context, context.CancelFunc) {
 
 // workerEnvCtx is the worker Env bound to ctx.
 func workerEnvCtx(c *Ctx, ctx context.Context) worker.Env {
-	e := c.deps().workerEnv()
-	e.Ctx = ctx
-	return e
+	return c.deps().workerEnvFor(ctx)
 }
 
 func workerCommands() *Command {

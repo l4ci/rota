@@ -182,8 +182,9 @@ func TestCredentialReadsUseDepsClock(t *testing.T) {
 }
 
 // The gate's issue tracker and the bounce store's comment tracker are built
-// under the worker env's context, as its forge is, so an interrupt reaches the
-// connection lookup they start with.
+// under the context workerEnvCtx binds, as its forge is, so an interrupt reaches
+// the connection lookup they start with. The hook supplies no context: the
+// production binding route alone has to carry it.
 func TestGateIssueTrackersCarryEnvCtx(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -193,8 +194,7 @@ func TestGateIssueTrackersCarryEnvCtx(t *testing.T) {
 		seen = append(seen, c.Err())
 		return connections.Connection{}, "", c.Err()
 	})}
-	d.WorkerEnv = func() worker.Env { return worker.Env{Ctx: ctx} }
-	e := d.workerEnv()
+	e := workerEnvCtx(&Ctx{Deps: d}, ctx)
 	s := tracker.Settings{Source: "jira", Connection: "c", JiraProject: "P"}
 	e.Issues(t.TempDir(), s)
 	e.IssueComments(t.TempDir(), s)
@@ -220,8 +220,7 @@ func TestGateIssueTrackerCallsAbortOnEnvCtx(t *testing.T) {
 	d.TrackerOptions = []tracker.Option{tracker.WithConnections(func(context.Context, string) (connections.Connection, string, error) {
 		return connections.Connection{Name: "c", Kind: connections.KindJira, Site: srv.URL, User: "u@example.com", Deployment: connections.DeploymentDataCenter}, "secret", nil
 	})}
-	d.WorkerEnv = func() worker.Env { return worker.Env{Ctx: ctx} }
-	e := d.workerEnv()
+	e := workerEnvCtx(&Ctx{Deps: d}, ctx)
 	s := tracker.Settings{Source: "jira", Connection: "c", JiraProject: "P"}
 	issues, err := e.Issues(t.TempDir(), s)
 	if err != nil {
