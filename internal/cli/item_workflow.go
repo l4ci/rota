@@ -224,7 +224,11 @@ func itemRelease(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		changed, err := wf.Release(args[0], *as)
+		release := wf.Release
+		if hr, ok := wf.(backlog.HandReleaser); ok {
+			release = hr.ReleaseByHand
+		}
+		changed, err := release(args[0], *as)
 		if err != nil {
 			return backlogFail(err)
 		}
