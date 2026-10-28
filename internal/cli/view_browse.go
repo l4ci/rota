@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 
@@ -201,10 +202,16 @@ func (b browser) readerView(w, h int, st tui.Style) string {
 }
 
 // runVerbText runs one rota verb in process, the way a typed command would,
-// and returns its plain output. A failure is its first stderr line.
+// and returns its plain output. A failure is its first stderr line. A
+// repoScoped verb gets the selected sub-repo as --repo, placed before the "--"
+// terminator so the dispatcher reads it as a flag, not as positional data.
 func runVerbText(c *Ctx, repoScoped bool, args ...string) (string, error) {
 	if repoScoped && c.Repo != "" {
-		args = append(args, "--repo", c.Repo)
+		at := slices.Index(args, "--")
+		if at < 0 {
+			at = len(args)
+		}
+		args = slices.Insert(slices.Clone(args), at, "--repo", c.Repo)
 	}
 	var out, errb bytes.Buffer
 	if code := run(Tree(), c.deps(), args, strings.NewReader(""), &out, &errb); code != ExitOK {
