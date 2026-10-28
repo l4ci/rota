@@ -236,7 +236,7 @@ case "$(dbq comments 3)" in *"rota:claim ben@1"*"rota:release ben@1"*"rota:claim
 : > "$FK/tmux/log"
 OUT=$(rrsnap round reclaim ben --holder-pid "$HOLDER") || fail "reclaim of a stalled slot failed: $OUT"
 [ "$(echo "$OUT" | jget data.health)" = "stalled" ] && [ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "stalled reclaim data: $OUT"
-[ "$(echo "$OUT" | jget data.released)" = "false" ] || fail "a claim already gone is not an error and releases nothing: $OUT"
+[ "$(echo "$OUT" | jget data.released)" = "true" ] || fail "the re-armed claim is released by the reclaim: $OUT"
 grep -q 'kill-window' "$FK/tmux/log" || fail "a live pane must be killed before its worktree is parked: $(cat "$FK/tmux/log")"
 [ "$(branch_of ben)" = "park/ben" ] && [ -z "$(reg ben task)" ] || fail "ben must be parked and free"
 case "$(dbq comments 3)" in *"Reason: reclaimed, stalled"*) ;; *) fail "reclaim reason: $(dbq comments 3)" ;; esac
