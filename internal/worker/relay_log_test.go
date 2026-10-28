@@ -1,6 +1,8 @@
 package worker
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -79,5 +81,22 @@ func TestDispatchRelayWithoutTargetFails(t *testing.T) {
 	}
 	if n := len(LoadRegistryTolerant(dir).Slot("w1").Relays()); n != 0 {
 		t.Errorf("refused relay was logged (%d)", n)
+	}
+}
+
+// bug-16: `worker gate <PR>` for a PR the slot never recorded resolved to an
+// external target with no relay log, so a cited relay failed provenance. The
+// relays of the slot holding the PR's issue are the log.
+func TestGateByPRNumberUsesRelaysOfTheSlotThatNeverRecordedIt(t *testing.T) {
+	w := newWorld(t, "")
+	gitq(t, w.worker, "push", "-q", "origin", "w1:dana/5-x")
+	w.forge("head", "dana/5-x")
+	w.setPRBody("Closes #5\n\n## Approvals\n- use the cache: orchestrator relay round 2\n")
+	relays := `[{"round":2,"ts":"2026-10-02T10:00:00Z","summary":"use the cache"}]`
+	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+		[]byte(`{"slots":[{"name":"w1","branch":"dana/5-x","task":"#5","relays":`+relays+`}]}`), 0o644)
+	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true})
+	if err != nil || res.Verdict == GateProvenanceFail {
+		t.Fatalf("verdict = %q (%v): %+v", res.Verdict, err, res)
 	}
 }
