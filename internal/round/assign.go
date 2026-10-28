@@ -174,13 +174,24 @@ func (a Assigned) Ready() bool {
 // and none of those present, the copy in the skills cache under cache (the
 // tree this binary extracts, made when missing); "" skips it.
 func briefPath(root string, set roundcfg.Settings, getenv func(string) string, cache string) (string, bool) {
+	p, _, ok := resolveBrief(root, set, getenv, cache)
+	return p, ok
+}
+
+// resolveBrief is briefPath plus the warning for a stale round.brief: one
+// that is missing but lies under the skills cache root (an update removed the
+// tree it named) falls back to the current cache copy, and the warning names
+// the stale value and the path used. A missing round.brief elsewhere stays a
+// miss.
+func resolveBrief(root string, set roundcfg.Settings, getenv func(string) string, cache string) (string, string, bool) {
 	var cands []string
+	configured := ""
 	if set.Brief != "" {
-		p := set.Brief
-		if !filepath.IsAbs(p) {
-			p = filepath.Join(root, p)
+		configured = set.Brief
+		if !filepath.IsAbs(configured) {
+			configured = filepath.Join(root, configured)
 		}
-		cands = append(cands, p)
+		cands = append(cands, configured)
 	} else {
 		cands = append(cands, filepath.Join(root, "skills", "references", "worker-contract.md"))
 		installed := filepath.Join("rota-orchestrate", "references", "worker-contract.md")
@@ -193,20 +204,61 @@ func briefPath(root string, set roundcfg.Settings, getenv func(string) string, c
 	}
 	for _, c := range cands {
 		if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
-			return c, true
+			return c, "", true
 		}
 	}
-	if set.Brief == "" && cache != "" {
-		if set, err := skills.Embedded(); err == nil {
-			if tree, err := skills.Extract(set, version.Get().Version, cache); err == nil {
-				c := filepath.Join(tree, "references", "worker-contract.md")
-				if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
-					return c, true
-				}
+	if set.Brief == "" || inCache(configured, cache) {
+		if c, ok := cachedBrief(cache); ok {
+			if set.Brief == "" {
+				return c, "", true
 			}
+			return c, fmt.Sprintf("round.brief %s is missing (a stale skills cache path); using %s", set.Brief, c), true
 		}
 	}
-	return "", false
+	return "", "", false
+}
+
+// cachedBrief is the contract in the skills cache this binary extracts
+// (made when missing); "" cache skips it.
+func cachedBrief(cache string) (string, bool) {
+	if cache == "" {
+		return "", false
+	}
+	set, err := skills.Embedded()
+	if err != nil {
+		return "", false
+	}
+	tree, err := skills.Extract(set, version.Get().Version, cache)
+	if err != nil {
+		return "", false
+	}
+	c := filepath.Join(tree, "references", "worker-contract.md")
+	if fi, err := os.Stat(c); err != nil || fi.IsDir() {
+		return "", false
+	}
+	return c, true
+}
+
+// inCache reports whether p lies under the skills cache root.
+func inCache(p, cache string) bool {
+	if p == "" || cache == "" {
+		return false
+	}
+	rel, err := filepath.Rel(cache, p)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// briefMissingMsg is the refusal text when no contract was found: it names a
+// configured round.brief and the skills cache root to point it into.
+func briefMissingMsg(set roundcfg.Settings, cache string) string {
+	msg := "the worker contract (skills/references/worker-contract.md) was not found"
+	if set.Brief != "" {
+		msg += fmt.Sprintf("; round.brief is %q", set.Brief)
+	}
+	if cache != "" {
+		msg += fmt.Sprintf("; the current skills cache is %s", cache)
+	}
+	return msg + "; set round.brief to an existing file or unset it"
 }
 
 // pointerBrief is the short brief a worker is dispatched with: where its
@@ -958,9 +1010,13 @@ func (e Env) planAssign(ctx context.Context, root string, be Board, o AssignOpts
 	res.Warnings = append(res.Warnings, warns...)
 
 	// 5. The brief exists before anything is marked.
-	brief, ok := briefPath(root, set, e.getenv(), skills.CacheDir(e.getenv()))
+	cacheDir := skills.CacheDir(e.getenv())
+	brief, briefWarn, ok := resolveBrief(root, set, e.getenv(), cacheDir)
 	if !ok {
-		return run, false, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
+		return run, false, blocked(BlockBriefMissing, "%s", briefMissingMsg(set, cacheDir))
+	}
+	if briefWarn != "" {
+		res.Warnings = append(res.Warnings, briefWarn)
 	}
 
 	decisionContext := slot.BriefDecisionContext()
