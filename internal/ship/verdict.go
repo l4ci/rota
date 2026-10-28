@@ -26,10 +26,9 @@ func (e *VerdictBlockedError) Error() string {
 
 // VerdictCheck reads the verdict store for one checkout.
 type VerdictCheck struct {
-	Git      Git
-	Store    verdict.Store
-	Repo     string // sub-repo name in an umbrella, else ""
-	Settings verdict.Settings
+	Git   Git
+	Store verdict.Store
+	Repo  string // sub-repo name in an umbrella, else ""
 }
 
 // Block returns a *VerdictBlockedError when a recorded FAIL blocks branch, nil
@@ -44,7 +43,7 @@ func (v VerdictCheck) BlockAt(branch, head string) error {
 	list := v.Store.Branches[verdict.BranchKey(v.Repo, branch)]
 	// Keep local records' old stale semantics, but bind recovered reports to
 	// the supplied PR head (or the branch tip on the ordinary ship path).
-	r, ok := verdict.Blocking(list, v.Settings)
+	r, ok := verdict.Blocking(list)
 	hasReports := false
 	for _, record := range list {
 		hasReports = hasReports || record.FromReport
@@ -58,7 +57,7 @@ func (v VerdictCheck) BlockAt(branch, head string) error {
 			head = strings.TrimSpace(res.Stdout)
 		}
 	}
-	r, ok = verdict.Blocking(verdict.ForHead(list, head), v.Settings)
+	r, ok = verdict.Blocking(verdict.ForHead(list, head))
 	if !ok {
 		return nil
 	}
