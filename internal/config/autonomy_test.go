@@ -2,11 +2,12 @@ package config
 
 import (
 	"errors"
-	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/projects"
 )
 
 func readLocal(t *testing.T, root string) string {

@@ -1,13 +1,13 @@
 package harness
 
 import (
-	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // cfgOf is the parsed project config for a JSON document.

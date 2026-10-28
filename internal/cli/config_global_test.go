@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/tui"
 	"os"
 	"path/filepath"
@@ -11,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // isolateGlobal points the rota config dir at a fresh temp dir and returns it.

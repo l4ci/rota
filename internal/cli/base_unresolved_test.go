@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 func TestReviewScaffoldingNoBaseDoesNotAssumeMain(t *testing.T) {

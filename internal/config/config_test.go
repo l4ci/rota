@@ -1,13 +1,13 @@
 package config
 
 import (
-	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // Each testdata/<case>/ directory is a fixture: Go's Load must produce the

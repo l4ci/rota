@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // envObj is a nested envelope object as a map ("" keys absent).

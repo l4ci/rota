@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/worker"
 )
 

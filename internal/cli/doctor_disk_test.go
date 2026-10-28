@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 func fixedDisk(free, total uint64) func(string) *doctor.Disk {

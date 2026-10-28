@@ -10,7 +10,6 @@ import (
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/overlap"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
@@ -20,6 +19,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"

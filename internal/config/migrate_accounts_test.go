@@ -2,12 +2,13 @@ package config
 
 import (
 	"errors"
-	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/projects"
 )
 
 func TestMigrateAccountsDoc(t *testing.T) {

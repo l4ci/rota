@@ -2,7 +2,6 @@ package config
 
 import (
 	"errors"
-	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 func requiredNames() []string {

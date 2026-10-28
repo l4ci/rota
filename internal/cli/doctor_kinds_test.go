@@ -1,13 +1,13 @@
 package cli
 
 import (
-	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // Doctor checks a codex account's login in the expanded home, the same path a

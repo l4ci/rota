@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )

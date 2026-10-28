@@ -2,11 +2,12 @@ package config
 
 import (
 	"errors"
-	"github.com/l4ci/rota/internal/projects"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // mergeVal reads the dotted path out of a JSON body.
