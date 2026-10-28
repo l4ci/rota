@@ -45,6 +45,10 @@ Orca as a worker host, a one-line agent install, and stricter gates on what coun
 
 ## Unreleased
 
+### Fixed
+
+- GitLab issue reads now load all comment pages, so the worker gate sees claim, acceptance and proof notes beyond the oldest 20 notes (#2226).
+
 ### Upgrade notes
 
 - **Skill reference precedence.** `rota skills get <skill> --reference <name>` now prefers a linked skill-local file when its bare name also matches a shared reference. For example, `rota skills get rota-review --reference umbrella-mode.md` now returns the local review steps; it previously returned the shared umbrella guide. Use `--reference references/umbrella-mode.md` to request that shared guide explicitly. `--references` lists shared files with the `references/` prefix; bare shared names remain aliases when no linked local file has the same name.
