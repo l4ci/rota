@@ -188,21 +188,59 @@ func TestRemove(t *testing.T) {
 			t.Error("wrote")
 		}
 	})
-	t.Run("active branch", func(t *testing.T) {
-		f := rmProject(t, map[string]string{".rota/status.json": `{"active": [{"branch": "feat/x", "items": "T01, B01"}]}`})
-		res, err := f.Remove([]string{"B01"}, false, false)
-		if err != nil || res.Items[0].ActiveBranch != "feat/x" {
-			t.Fatalf("preview: %+v %v", res, err)
-		}
-		_, err = f.Remove([]string{"B01"}, false, true)
-		var a *ActiveError
-		if !errors.As(err, &a) || a.ID != "B01" || a.Branch != "feat/x" {
-			t.Fatalf("apply err = %v", err)
-		}
-		if _, e := os.Stat(filepath.Join(f.Root, ".rota/bugs/B01.md")); e != nil {
-			t.Error("a refused removal deleted a file")
-		}
-	})
+}
+
+// Exercise status.json through removal: preview identifies the first active
+// branch, and apply refuses without changing documents or deleting artifacts.
+func TestRemoveActiveStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name, doc, branch string
+	}{
+		{"list", `{"active":[{"branch":"feat/list","items":[false,"B01",12]}]}`, "feat/list"},
+		{"CSV", `{"active":[{"branch":"feat/csv","items":" T01, \u00a0B01\u00a0, ,"}]}`, "feat/csv"},
+		{"first entry wins", `{"active":[false,{"branch":"first","items":["B01"]},{"branch":"second","items":"B01"}]}`, "first"},
+		{"missing branch", `{"active":[{"items":["B01"]}]}`, "(unknown)"},
+		{"empty branch", `{"active":[{"branch":"","items":["B01"]}]}`, ""},
+		{"null branch", `{"active":[{"branch":null,"items":["B01"]}]}`, "null"},
+		{"numeric branch", `{"active":[{"branch":42,"items":["B01"]}]}`, "42"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := rmProject(t, map[string]string{".rota/status.json": tc.doc})
+			before := read(t, f, ".rota/BACKLOG.md")
+			res, err := f.Remove([]string{"B01"}, false, false)
+			if err != nil || res.Applied || len(res.Items) != 1 || res.Items[0].ActiveBranch != tc.branch {
+				t.Fatalf("preview = %+v, %v; want branch %q", res, err, tc.branch)
+			}
+			res, err = f.Remove([]string{"B01"}, false, true)
+			var active *ActiveError
+			if !errors.As(err, &active) || res.Applied || active.ID != "B01" || active.Branch != tc.branch {
+				t.Fatalf("apply = %+v, %v; want active B01 on %q", res, err, tc.branch)
+			}
+			if got := read(t, f, ".rota/BACKLOG.md"); got != before {
+				t.Fatal("refused removal changed the backlog")
+			}
+			for _, path := range []string{".rota/bugs/B01.md", ".rota/plans/M01-B01.md"} {
+				if _, err := os.Stat(filepath.Join(f.Root, path)); err != nil {
+					t.Fatalf("refused removal deleted %s: %v", path, err)
+				}
+			}
+		})
+	}
+}
+
+func TestRemoveInactiveStatus(t *testing.T) {
+	for _, doc := range []string{
+		`{oops`, `[]`, `{"active":null}`, `{"active":{}}`,
+		`{"active":[false,{"branch":"other","items":["B02"]},{"items":12},{}]}`,
+	} {
+		t.Run(doc, func(t *testing.T) {
+			f := rmProject(t, map[string]string{".rota/status.json": doc})
+			res, err := f.Remove([]string{"B01"}, false, true)
+			if err != nil || !res.Applied {
+				t.Fatalf("apply = %+v, %v; want removal", res, err)
+			}
+		})
+	}
 }
 
 func TestRemoveWriterArchive(t *testing.T) {
