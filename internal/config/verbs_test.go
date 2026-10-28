@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -35,7 +36,7 @@ func read(t *testing.T, root string) string {
 }
 
 func TestShowAllKeysInSchemaOrder(t *testing.T) {
-	es, err := Show(project(t, "", ""), "", false)
+	es, err := Show(projects.OSEnv(), project(t, "", ""), "", false)
 	if err != nil || len(es) != len(Keys) {
 		t.Fatalf("%d entries, %v", len(es), err)
 	}
@@ -57,7 +58,7 @@ func TestShowSources(t *testing.T) {
 		"docs.path":            {"docs.path", "d", "local", nil, nil, false},
 		"docs.afterWork":       {"docs.afterWork", false, "default", nil, nil, false},
 	} {
-		es, err := Show(root, key, true)
+		es, err := Show(projects.OSEnv(), root, key, true)
 		if err == nil && len(es) == 1 {
 			if es[0].Schema == nil || es[0].Schema.Name != key {
 				t.Errorf("%s: schema row %+v", key, es[0].Schema)
@@ -122,8 +123,8 @@ func TestShowMatchesRuntime(t *testing.T) {
 				tc.local = encode(local)
 			}
 			root := project(t, tc.project, tc.local)
-			cfg := Load(configPath(root))
-			rows, err := Show(root, "", false)
+			cfg := Load(projects.OSEnv(), configPath(root))
+			rows, err := Show(projects.OSEnv(), root, "", false)
 			if err != nil || len(rows) != len(Keys) {
 				t.Fatalf("Show: %d rows, %v", len(rows), err)
 			}
@@ -132,7 +133,7 @@ func TestShowMatchesRuntime(t *testing.T) {
 				if err != nil || !reflect.DeepEqual(row.Value, want) || row.Source != tc.source {
 					t.Errorf("%s: show=%v (%s), runtime=%v; want source %s, err=%v", row.Key, row.Value, row.Source, want, tc.source, err)
 				}
-				one, err := Show(root, row.Key, true)
+				one, err := Show(projects.OSEnv(), root, row.Key, true)
 				if err != nil || len(one) != 1 || !reflect.DeepEqual(one[0], row) {
 					t.Errorf("single-key Show disagrees: %v, %v", one, err)
 				}
@@ -151,7 +152,7 @@ func TestShowDeepMergeSources(t *testing.T) {
 		"issues.labels.types.bug":  {"issues.labels.types.bug", "bug", "local", nil, nil, false},
 		"issues.labels.types.task": {"issues.labels.types.task", "chore", "project", nil, nil, false},
 	} {
-		rows, err := Show(root, key, true)
+		rows, err := Show(projects.OSEnv(), root, key, true)
 		if err == nil && len(rows) == 1 {
 			rows[0].Schema = nil
 		}
@@ -163,17 +164,17 @@ func TestShowDeepMergeSources(t *testing.T) {
 
 func TestShowUnknownAndHandEditedKeys(t *testing.T) {
 	root := project(t, `{"custom": {"x": 1}, "nul": null}`, `{"custom": {"y": 2}}`)
-	if _, err := Show(root, "nope", true); !errors.Is(err, ErrUnknownKey) {
+	if _, err := Show(projects.OSEnv(), root, "nope", true); !errors.Is(err, ErrUnknownKey) {
 		t.Errorf("unknown key: %v", err)
 	}
-	if _, err := Show(root, "nul", true); !errors.Is(err, ErrUnknownKey) {
+	if _, err := Show(projects.OSEnv(), root, "nul", true); !errors.Is(err, ErrUnknownKey) {
 		t.Errorf("null key: %v", err)
 	}
-	es, err := Show(root, "custom.x", true)
+	es, err := Show(projects.OSEnv(), root, "custom.x", true)
 	if err != nil || es[0].Source != "project" || es[0].Value.(interface{ String() string }).String() != "1" {
 		t.Errorf("custom.x: %+v %v", es, err)
 	}
-	es, _ = Show(root, "custom.y", true)
+	es, _ = Show(projects.OSEnv(), root, "custom.y", true)
 	if len(es) != 1 || es[0].Source != "local" {
 		t.Errorf("custom.y: %+v", es)
 	}
@@ -235,7 +236,7 @@ func TestSetCreatesAndReplacesParents(t *testing.T) {
 	if _, err := Set(root, "issues.labels.types.bug", "x"); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(Load(filepath.Join(root, ".rota", "config.json")).(*jsonx.Object).Keys(), []string{"issues"}) {
+	if !reflect.DeepEqual(Load(projects.OSEnv(), filepath.Join(root, ".rota", "config.json")).(*jsonx.Object).Keys(), []string{"issues"}) {
 		t.Error("no nested object")
 	}
 }
@@ -332,24 +333,24 @@ func splitDots(s string) []string {
 
 func TestCheckVerdicts(t *testing.T) {
 	root := project(t, "", "")
-	if st, m := Check(root); st != Fresh || len(m) != 0 || m == nil {
+	if st, m := Check(projects.OSEnv(), root); st != Fresh || len(m) != 0 || m == nil {
 		t.Errorf("fresh: %s %v", st, m)
 	}
 	for _, body := range []string{"{oops", "[1]", "null", "", "\xff{}", `{"a": NaN}`} {
 		os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(body), 0o644)
-		if st, _ := Check(root); st != Corrupt {
+		if st, _ := Check(projects.OSEnv(), root); st != Corrupt {
 			t.Errorf("%q: %s", body, st)
 		}
 	}
 	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte("{}"), 0o644)
-	st, m := Check(root)
+	st, m := Check(projects.OSEnv(), root)
 	if st != Stale || len(m) == 0 || m[0] != "learn.promoteThreshold" {
 		t.Errorf("stale: %s %v", st, m)
 	}
 	cfg := fullConfig()
 	b, _ := jsonx.Marshal(cfg)
 	os.WriteFile(filepath.Join(root, ".rota", "config.json"), b, 0o644)
-	if st, m := Check(root); st != UpToDate || len(m) != 0 {
+	if st, m := Check(projects.OSEnv(), root); st != UpToDate || len(m) != 0 {
 		t.Errorf("up to date: %s %v", st, m)
 	}
 	// null and a scalar parent both count as missing, in schema order
@@ -358,25 +359,25 @@ func TestCheckVerdicts(t *testing.T) {
 	cfg.Set("rota", "scalar")
 	b, _ = jsonx.Marshal(cfg)
 	os.WriteFile(filepath.Join(root, ".rota", "config.json"), b, 0o644)
-	if st, m := Check(root); st != Stale || !reflect.DeepEqual(m, []string{"umbrella.enabled", "rota.version"}) {
+	if st, m := Check(projects.OSEnv(), root); st != Stale || !reflect.DeepEqual(m, []string{"umbrella.enabled", "rota.version"}) {
 		t.Errorf("null/scalar: %s %v", st, m)
 	}
 }
 
 func TestCheckCountsLocalFile(t *testing.T) {
 	root := project(t, "{}", `{"learn": {"promoteThreshold": 1}}`)
-	if st, m := Check(root); st != Stale || m[0] != "docs.path" {
+	if st, m := Check(projects.OSEnv(), root); st != Stale || m[0] != "docs.path" {
 		t.Errorf("%s %v", st, m)
 	}
 }
 
 func TestRetired(t *testing.T) {
 	for _, cfg := range []string{"", "{}", `{"autonomy": {"level": "auto"}}`, `{"autonomy": {"level": "off"}}`} {
-		if got := Retired(project(t, cfg, "")); len(got) != 0 || got == nil {
+		if got := Retired(projects.OSEnv(), project(t, cfg, "")); len(got) != 0 || got == nil {
 			t.Errorf("%q: %v", cfg, got)
 		}
 	}
-	got := Retired(project(t, `{"autonomy": {"level": "loop"}}`, ""))
+	got := Retired(projects.OSEnv(), project(t, `{"autonomy": {"level": "loop"}}`, ""))
 	if len(got) != 1 || !strings.Contains(got[0], `autonomy.level "loop" was removed`) {
 		t.Errorf("loop: %v", got)
 	}
@@ -405,15 +406,15 @@ func TestCheckFlagsLegacyVerifyCommands(t *testing.T) {
 	cfg := fullConfig()
 	legacy(cfg, []any{"make test"})
 	write(cfg)
-	st, m := Check(root)
+	st, m := Check(projects.OSEnv(), root)
 	if st != Stale || !reflect.DeepEqual(m, []string{LegacyVerifyKey}) {
 		t.Errorf("legacy only: %s %v", st, m)
 	}
 	// Fill moves it, so check is up to date afterwards.
-	if _, err := Fill(root); err != nil {
+	if _, err := Fill(projects.OSEnv(), root); err != nil {
 		t.Fatal(err)
 	}
-	if st, m := Check(root); st != UpToDate || len(m) != 0 {
+	if st, m := Check(projects.OSEnv(), root); st != UpToDate || len(m) != 0 {
 		t.Errorf("after fill: %s %v", st, m)
 	}
 
@@ -422,13 +423,13 @@ func TestCheckFlagsLegacyVerifyCommands(t *testing.T) {
 	setFull(cfg, []any{"make test"})
 	legacy(cfg, []any{"old"})
 	write(cfg)
-	if st, _ := Check(root); st != UpToDate {
+	if st, _ := Check(projects.OSEnv(), root); st != UpToDate {
 		t.Errorf("test.full set: %s", st)
 	}
 	cfg = fullConfig()
 	legacy(cfg, []any{})
 	write(cfg)
-	if st, _ := Check(root); st != UpToDate {
+	if st, _ := Check(projects.OSEnv(), root); st != UpToDate {
 		t.Errorf("empty legacy list: %s", st)
 	}
 }
@@ -509,7 +510,7 @@ func TestSetContextGuardValidatesEnum(t *testing.T) {
 
 func TestShipUATDefaultsOffAndIsBool(t *testing.T) {
 	root := project(t, `{}`, `{}`)
-	rows, err := Show(root, "ship.uat", true)
+	rows, err := Show(projects.OSEnv(), root, "ship.uat", true)
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("ship.uat: %v, %v", rows, err)
 	}
@@ -522,7 +523,7 @@ func TestShipUATDefaultsOffAndIsBool(t *testing.T) {
 }
 
 func TestPlanCriticHarnessIsOptInEnum(t *testing.T) {
-	rows, err := Show(project(t, `{}`, `{}`), "plan.criticHarness", true)
+	rows, err := Show(projects.OSEnv(), project(t, `{}`, `{}`), "plan.criticHarness", true)
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("plan.criticHarness: %v, %v", rows, err)
 	}
@@ -599,11 +600,11 @@ func TestSetScopeOverlapRefusesNonChoices(t *testing.T) {
 // whatever directory the launch runs in, so config check fails on it (#1777).
 func TestRetiredRejectsRelativeAccountDirs(t *testing.T) {
 	good := `{"round":{"accounts":[{"kind":"claude","name":"a","dir":"~/.claude-a"},{"kind":"codex","name":"c","dir":"~"},{"kind":"opencode","name":"o","dir":"~/.oc"}]}}`
-	if got := Retired(project(t, good, "")); len(got) != 0 {
+	if got := Retired(projects.OSEnv(), project(t, good, "")); len(got) != 0 {
 		t.Errorf("valid dirs flagged: %v", got)
 	}
 	bad := `{"round":{"accounts":[{"kind":"claude","name":"a","dir":".claude-a"},{"kind":"codex","name":"c","dir":"$HOME/.codex"},{"kind":"opencode","name":"o","dir":"~bob/x"}]}}`
-	got := Retired(project(t, bad, ""))
+	got := Retired(projects.OSEnv(), project(t, bad, ""))
 	if len(got) != 3 {
 		t.Fatalf("want 3 problems, got %v", got)
 	}

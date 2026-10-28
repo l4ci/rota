@@ -8,9 +8,9 @@ import (
 )
 
 func TestMigrateScopePreviewAndApply(t *testing.T) {
-	root := layerRig(t, `{"round":{"dispatch":"tmux"}}`,
+	root, env := layerRig(t, `{"round":{"dispatch":"tmux"}}`,
 		`{"round":{"dispatch":"tmux","slots":5,"roster":["a"]},"autonomy":{"level":"off"},"ship":{"review":"light"}}`, ``)
-	m, err := MigrateScopeFiles(root, false, nil)
+	m, err := MigrateScopeFiles(env, root, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +25,7 @@ func TestMigrateScopePreviewAndApply(t *testing.T) {
 	if _, err := os.Stat(localPath(root)); err == nil {
 		t.Fatal("the preview wrote config.local.json")
 	}
-	if _, err := MigrateScopeFiles(root, true, nil); err != nil {
+	if _, err := MigrateScopeFiles(env, root, true, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := readFile(t, localPath(root)); got != "{\n  \"round\": {\n    \"slots\": 5\n  }\n}\n" {
@@ -36,7 +36,7 @@ func TestMigrateScopePreviewAndApply(t *testing.T) {
 	if got := readFile(t, configPath(root)); got != "{\n  \"round\": {\n    \"roster\": [\n      \"a\"\n    ]\n  },\n  \"ship\": {\n    \"review\": \"light\"\n  }\n}\n" {
 		t.Errorf("config = %q", got)
 	}
-	if m, _ := MigrateScopeFiles(root, false, nil); m.Changed() {
+	if m, _ := MigrateScopeFiles(env, root, false, nil); m.Changed() {
 		t.Errorf("a second run plans %+v", m.Changes)
 	}
 }
@@ -44,17 +44,17 @@ func TestMigrateScopePreviewAndApply(t *testing.T) {
 // round.accounts merge by kind: when config.local.json already holds a list,
 // the tracked kinds it lacks move into it and the local kinds stay.
 func TestMigrateScopeAccountsMergeByKind(t *testing.T) {
-	root := layerRig(t, ``,
+	root, env := layerRig(t, ``,
 		`{"round":{"accounts":[{"kind":"codex","name":"c1","dir":"/c1"}]}}`,
 		`{"round":{"accounts":[{"kind":"claude","name":"a1","dir":"/a1"}]}}`)
-	m, err := MigrateScopeFiles(root, false, nil)
+	m, err := MigrateScopeFiles(env, root, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(m.Changes) != 1 || m.Changes[0].Key != "round.accounts" || m.Changes[0].Action != ScopeMove {
 		t.Fatalf("plan %+v", m.Changes)
 	}
-	if _, err := MigrateScopeFiles(root, true, nil); err != nil {
+	if _, err := MigrateScopeFiles(env, root, true, nil); err != nil {
 		t.Fatal(err)
 	}
 	var got struct {
@@ -69,7 +69,7 @@ func TestMigrateScopeAccountsMergeByKind(t *testing.T) {
 	if !reflect.DeepEqual(got.Round.Accounts, want) {
 		t.Errorf("local accounts = %+v, want %+v", got.Round.Accounts, want)
 	}
-	if m, _ := MigrateScopeFiles(root, false, nil); m.Changed() {
+	if m, _ := MigrateScopeFiles(env, root, false, nil); m.Changed() {
 		t.Errorf("a second run plans %+v", m.Changes)
 	}
 }

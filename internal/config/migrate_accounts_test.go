@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -72,12 +73,15 @@ func TestMigrateAccountsDocConflict(t *testing.T) {
 	}
 }
 
-type acctRig struct{ root, gdir string }
+type acctRig struct {
+	root, gdir string
+	env        projects.Env
+}
 
 func newAcctRig(t *testing.T, global, project, local string) acctRig {
 	t.Helper()
 	r := acctRig{root: t.TempDir(), gdir: t.TempDir()}
-	t.Setenv("ROTA_CONFIG_DIR", r.gdir)
+	r.env = dirEnv(t, r.gdir)
 	for path, body := range map[string]string{
 		GlobalPath(r.gdir): global,
 		filepath.Join(r.root, ".rota", "config.json"):       project,
@@ -178,10 +182,10 @@ func TestOldAccountKeysAreRemoved(t *testing.T) {
 // fill migrates before it strips, so deleting a removed key never loses a login.
 func TestFillMigratesAccountsBeforeStripping(t *testing.T) {
 	r := newAcctRig(t, "", `{"round":{"codexAccounts":[{"name":"c","codexHome":"/c"}]}}`, "")
-	if _, err := Fill(r.root); err != nil {
+	if _, err := Fill(r.env, r.root); err != nil {
 		t.Fatal(err)
 	}
-	got := Accounts(Load(filepath.Join(r.root, ".rota", "config.json")))
+	got := Accounts(Load(r.env, filepath.Join(r.root, ".rota", "config.json")))
 	if want := []Account{{KindCodex, "c", "/c"}}; !reflect.DeepEqual(got, want) {
 		t.Errorf("accounts after fill = %v, want %v", got, want)
 	}
@@ -200,10 +204,10 @@ func TestAccountsStepKeepsOtherLayersOutOfTrackedConfig(t *testing.T) {
 			if _, err := MigrateAccountsFiles(r.root, r.gdir, true); err != nil {
 				return err
 			}
-			_, err := MigrateScopeFiles(r.root, true, nil)
+			_, err := MigrateScopeFiles(r.env, r.root, true, nil)
 			return err
 		},
-		"fill": func(r acctRig) error { _, err := Fill(r.root); return err },
+		"fill": func(r acctRig) error { _, err := Fill(r.env, r.root); return err },
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := newAcctRig(t, global, project, "")
@@ -230,7 +234,7 @@ func TestAccountsStepKeepsOtherLayersOutOfTrackedConfig(t *testing.T) {
 			if got := fileAccounts(filepath.Join(r.root, ".rota", "config.local.json")); !reflect.DeepEqual(got, localWant) {
 				t.Errorf("config.local.json accounts = %v, want %v", got, localWant)
 			}
-			if got := Accounts(Load(cfgPath)); !reflect.DeepEqual(got, want) {
+			if got := Accounts(Load(r.env, cfgPath)); !reflect.DeepEqual(got, want) {
 				t.Errorf("effective accounts = %v, want %v", got, want)
 			}
 		})
@@ -242,7 +246,7 @@ func TestAccountsStepKeepsOtherLayersOutOfTrackedConfig(t *testing.T) {
 func TestFillLeavesGlobalConfigToMigrate(t *testing.T) {
 	const global = `{"round":{"accounts":[{"name":"g","configDir":"/g"}]}}`
 	r := newAcctRig(t, global, `{"round":{"codexAccounts":[{"name":"c","codexHome":"/c"}]}}`, "")
-	if _, err := Fill(r.root); err != nil {
+	if _, err := Fill(r.env, r.root); err != nil {
 		t.Fatal(err)
 	}
 	if got := r.read(t, GlobalPath(r.gdir)); got != compact(t, decodeCfg(t, global)) {

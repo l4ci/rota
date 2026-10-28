@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/l4ci/rota/internal/projects"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -36,7 +37,7 @@ func TestConfigLoadsStayOnDeps(t *testing.T) {
 				if strings.HasPrefix(strings.TrimSpace(line), "//") {
 					continue
 				}
-				if strings.Contains(line, "config.Load(") {
+				if strings.Contains(line, "config.Load(projects.OSEnv(), ") {
 					t.Errorf("%s calls config.Load; take the config from Deps.Config: %s", rel, strings.TrimSpace(line))
 				}
 			}
@@ -73,4 +74,4 @@ func TestShipStrategyReadsInMemoryConfig(t *testing.T) {
 }
 
 // diskConfig reads the .rota/config.json a test wrote, as the real Deps.Config does.
-func diskConfig(root string) any { return config.Load(rotatree.Config(root)) }
+func diskConfig(root string) any { return config.Load(projects.OSEnv(), rotatree.Config(root)) }

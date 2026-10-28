@@ -1,6 +1,7 @@
 package initproj
 
 import (
+	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -13,7 +14,7 @@ import (
 
 // checkDir runs Check against the config on disk under dir.
 func checkDir(dir string, drift func() string) CheckResult {
-	return Check(dir, config.Load(rotatree.Config(dir)), drift)
+	return Check(dir, config.Load(projects.OSEnv(), rotatree.Config(dir)), drift)
 }
 
 func TestCheck(t *testing.T) {

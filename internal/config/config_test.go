@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/l4ci/rota/internal/projects"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,7 +23,7 @@ func TestLoadMatchesPython(t *testing.T) {
 		}
 		t.Run(c.Name(), func(t *testing.T) {
 			path, _ := filepath.Abs(filepath.Join("testdata", c.Name(), "config.json"))
-			got, err := jsonx.Marshal(Load(path))
+			got, err := jsonx.Marshal(Load(projects.OSEnv(), path))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -43,7 +44,7 @@ func TestDivergentInputs(t *testing.T) {
 	t.Run("NaN and Infinity", func(t *testing.T) {
 		path, _ := filepath.Abs("divergent/nan/config.json")
 		// Go: not valid JSON, so the file counts as absent.
-		if got, _ := jsonx.MarshalCompact(Load(path)); string(got) != "{}" {
+		if got, _ := jsonx.MarshalCompact(Load(projects.OSEnv(), path)); string(got) != "{}" {
 			t.Fatalf("Go Load = %s, want {}", got)
 		}
 		// Python: json.loads accepts NaN and Infinity.
@@ -51,7 +52,7 @@ func TestDivergentInputs(t *testing.T) {
 	t.Run("invalid UTF-8", func(t *testing.T) {
 		path, _ := filepath.Abs("divergent/badutf8/config.json")
 		// Go: loads, with U+FFFD for the bad byte.
-		v, ok := Lookup(Load(path), "round.dispatch")
+		v, ok := Lookup(Load(projects.OSEnv(), path), "round.dispatch")
 		if !ok || v != "tm\uFFFDux" {
 			t.Fatalf("Go Load round.dispatch = %q", v)
 		}

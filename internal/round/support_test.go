@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
@@ -198,7 +199,7 @@ func supportFixture(t *testing.T, cfg string) (*assignFixture, string) {
 	sh(t, f.root, "config", "user.name", "t")
 	writeFile(t, filepath.Join(f.root, ".rota", "config.json"), cfg)
 	writeFile(t, filepath.Join(f.root, ".rota", "config.local.json"), `{"round":{"role":"support"}}`)
-	set, err := roundcfg.FromConfig(config.Load(rotatree.Config(f.root)))
+	set, err := roundcfg.FromConfig(config.Load(projects.OSEnv(), rotatree.Config(f.root)))
 	if err != nil {
 		t.Fatal(err)
 	}

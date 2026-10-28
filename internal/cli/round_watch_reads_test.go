@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/projects"
 	"os"
 
 	"path/filepath"
@@ -33,7 +34,7 @@ func TestWatchForgeSeesAChangeBetweenPasses(t *testing.T) {
 		return []byte("[]"), nil, 0, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	deps.RoundEnv = func(ctx context.Context, root string) round.Env {
-		f, err := deps.forgeAndIssues(ctx, config.Load(rotatree.Config(root)), root)
+		f, err := deps.forgeAndIssues(ctx, config.Load(projects.OSEnv(), rotatree.Config(root)), root)
 		if err != nil {
 			t.Fatal(err)
 		}

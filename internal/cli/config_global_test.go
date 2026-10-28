@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/tui"
 	"os"
 	"path/filepath"
@@ -86,7 +87,7 @@ func TestInitInheritsGlobalWithoutCopyingIt(t *testing.T) {
 	if err != nil || strings.Contains(string(raw), "isolation") {
 		t.Errorf("init copied the global key into config.json (%v):\n%s", err, raw)
 	}
-	rows, err := config.Show(dir, "work.isolation", true)
+	rows, err := config.Show(projects.OSEnv(), dir, "work.isolation", true)
 	if err != nil || len(rows) != 1 || rows[0].Source != "global" || rows[0].Value != "worktree" {
 		t.Errorf("show = %v, %v", rows, err)
 	}
@@ -105,7 +106,7 @@ func TestProjectKeyBeatsGlobalAfterInit(t *testing.T) {
 	if v := cfgValue(t, dir, "work.isolation"); v != "branch" {
 		t.Errorf("work.isolation = %v, want project value branch", v)
 	}
-	rows, err := config.Show(dir, "work.isolation", true)
+	rows, err := config.Show(projects.OSEnv(), dir, "work.isolation", true)
 	if err != nil || len(rows) != 1 || rows[0].Source != "project" || rows[0].Value != "branch" {
 		t.Errorf("show = %v, %v", rows, err)
 	}
