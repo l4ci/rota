@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/worker"
@@ -16,7 +16,7 @@ import (
 func TestAutopilotHoldingWaitsForHeartbeat(t *testing.T) {
 	c, root, tick := fillTickFixture(t, `"light"`, true, true)
 	initial := tick()
-	cd, err := rotastate.CommonDir(root)
+	cd, err := rotastatetest.CommonDir(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestRoundStatusShowsCurrentTrainFill(t *testing.T) {
 	if !strings.Contains(out, "holding train for main: 1/4 ready, oldest waited 7m of 20m") {
 		t.Fatalf("status missing current fill wait for %s: %s", root, out)
 	}
-	cd, err := rotastate.CommonDir(root)
+	cd, err := rotastatetest.CommonDir(root)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 )
 
 type procs map[int]uint64 // pid -> start; absent means dead
@@ -161,11 +161,11 @@ func TestCommonDirIsSharedAcrossWorktrees(t *testing.T) {
 	wt := filepath.Join(t.TempDir(), "wt")
 	run(repo, "worktree", "add", "-q", wt, "-b", "other")
 
-	a, err := rotastate.CommonDir(repo)
+	a, err := rotastatetest.CommonDir(repo)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := rotastate.CommonDir(wt)
+	b, err := rotastatetest.CommonDir(wt)
 	if err != nil {
 		t.Fatal(err)
 	}

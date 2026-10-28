@@ -1,10 +1,12 @@
 package rotastate
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 )
 
@@ -24,9 +26,9 @@ func TestCommonDirResolvesSymlinksAndLinkedWorktrees(t *testing.T) {
 	gittest.Run(t, repo, "worktree", "add", "-q", wt, "-b", "other")
 
 	for name, dir := range map[string]string{"main": repo, "symlinked": link, "linked worktree": wt} {
-		got, err := CommonDir(dir)
+		got, err := CommonDirVia(context.Background(), git.Exec, dir)
 		if err != nil || got != want {
-			t.Errorf("%s: CommonDir = %q, %v; want %q", name, got, err, want)
+			t.Errorf("%s: CommonDirVia = %q, %v; want %q", name, got, err, want)
 		}
 	}
 	if main, ok := MainCheckout(want); !ok || main != real {
@@ -35,7 +37,7 @@ func TestCommonDirResolvesSymlinksAndLinkedWorktrees(t *testing.T) {
 }
 
 func TestCommonDirOutsideRepo(t *testing.T) {
-	if _, err := CommonDir(t.TempDir()); err == nil {
+	if _, err := CommonDirVia(context.Background(), git.Exec, t.TempDir()); err == nil {
 		t.Fatal("want an error outside a repository")
 	}
 }

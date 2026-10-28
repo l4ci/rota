@@ -11,7 +11,7 @@ import (
 
 	"github.com/l4ci/rota/internal/bugreport"
 	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
 )
 
@@ -34,7 +34,7 @@ func TestWindDownPrintsSummary(t *testing.T) {
 // the buffered-hits warning names the fold command the maintainer needs.
 func TestWindDownPrintsWarningsOnError(t *testing.T) {
 	dir := workerProject(t, `{}`)
-	cd, err := rotastate.CommonDir(dir)
+	cd, err := rotastatetest.CommonDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestWindDownPrintsWarningsOnError(t *testing.T) {
 func TestWindDownOffersBugreports(t *testing.T) {
 	for _, records := range []int{0, 2} {
 		dir := workerProject(t, `{}`)
-		cd, err := rotastate.CommonDir(dir)
+		cd, err := rotastatetest.CommonDir(dir)
 		if err != nil {
 			t.Fatal(err)
 		}

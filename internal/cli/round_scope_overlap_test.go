@@ -13,7 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -111,7 +111,7 @@ func newScopeFx(t *testing.T, overlap string, extraCfg string) *scopeFx {
 	le := roundlease.DefaultEnv()
 	le.Alive = func(p int) bool { return p == scopePID }
 	le.StartTime = func(p int) (uint64, bool) { return 99, p == scopePID }
-	cd, err := rotastate.CommonDir(root)
+	cd, err := rotastatetest.CommonDir(root)
 	if err != nil {
 		t.Fatal(err)
 	}
