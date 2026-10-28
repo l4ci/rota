@@ -223,15 +223,15 @@ OUT=$(rrsnap round reconcile --apply)
 case "$(echo "$OUT" | drifts)" in *stalled:ben*) ;; *) fail "reconcile should report ben as stalled: $OUT" ;; esac
 [ "$(cat "$PROJ/.rota/workers.json")" = "$BEFORE" ] || fail "stalled is never repaired: --apply changed the registry"
 
-# claim-mismatch: a human released the claim on the tracker. Only the registry
-# side is repaired.
+# claim-mismatch: a human released the claim on the tracker. The slot still
+# holds the issue, so apply posts its claim again and keeps claimId and attempt.
 gh_ api -X POST repos/o/r/issues/3/comments -f body='<!-- rota:release ben@1 -->' >/dev/null || fail "could not release the claim by hand"
 OUT=$(rrsnap round reconcile)
 case "$(echo "$OUT" | drifts)" in *claim-mismatch:ben*) ;; *) fail "reconcile should report the claim mismatch: $OUT" ;; esac
 OUT=$(rrsnap round reconcile --apply)
-case "$(echo "$OUT" | drifts)" in *"|claim-mismatch"*) ;; *) fail "apply should repair the registry side: $OUT" ;; esac
-[ -z "$(reg ben claimId)" ] && [ "$(reg ben task)" = "3" ] || fail "claimId cleared, task kept: $(cat "$PROJ/.rota/workers.json")"
-case "$(dbq comments 3)" in *"rota:claim ben@1"*"rota:release ben@1"*) ;; *) fail "the tracker is the source of truth and is not edited: $(dbq comments 3)" ;; esac
+case "$(echo "$OUT" | drifts)" in *"|claim-mismatch"*) ;; *) fail "apply should repair the claim: $OUT" ;; esac
+[ "$(reg ben claimId)" = "ben@1" ] && [ "$(reg ben task)" = "3" ] || fail "claimId and task kept: $(cat "$PROJ/.rota/workers.json")"
+case "$(dbq comments 3)" in *"rota:claim ben@1"*"rota:release ben@1"*"rota:claim ben@1"*) ;; *) fail "the slot's claim is posted again: $(dbq comments 3)" ;; esac
 
 : > "$FK/tmux/log"
 OUT=$(rrsnap round reclaim ben --holder-pid "$HOLDER") || fail "reclaim of a stalled slot failed: $OUT"
