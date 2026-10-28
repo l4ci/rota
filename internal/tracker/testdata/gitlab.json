@@ -1015,11 +1015,22 @@
       "view",
       "1",
       "--output",
-      "json",
-      "--comments"
+      "json"
      ],
      "stdin": "",
-     "stdout": "{\"iid\": 1, \"title\": \"First!\", \"description\": \"new body\\nmore\", \"labels\": [\"bug\"], \"milestone\": {\"title\": \"M07 Tracker\", \"iid\": 1}, \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/1\", \"closed_at\": null, \"assignees\": [], \"notes\": [{\"id\": 1, \"body\": \"edited\", \"author\": {\"username\": \"fake-user\"}}]}\n",
+     "stdout": "{\"iid\": 1, \"title\": \"First!\", \"description\": \"new body\\nmore\", \"labels\": [\"bug\"], \"milestone\": {\"title\": \"M07 Tracker\", \"iid\": 1}, \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/1\", \"closed_at\": null, \"assignees\": []}\n",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "projects/:id/issues/1/notes?sort=asc&order_by=created_at",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"id\": 1, \"body\": \"edited\", \"author\": {\"username\": \"fake-user\"}, \"system\": false}]\n",
      "stderr": "",
      "code": 0
     }
