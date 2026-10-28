@@ -329,17 +329,17 @@ func TestViewLoadersKeepScopeBeforeTheSeparator(t *testing.T) {
 }
 
 func TestViewBacklogLoaderReadsTheSelectedSubRepoItem(t *testing.T) {
-	root, deps, fakes, _ := umbrellaProject(t)
-	fakes["api"].Issues[0].Body = "Api detail text."
-	fakes["web"].Issues[0].Body = "Web detail text."
+	root := trackerProject(t, "")
+	knWrite(t, filepath.Join(root, ".rota", "repos.json"), `{"repos": [{"name": "web", "path": "web"}]}`)
+	knWrite(t, filepath.Join(root, ".rota", "BACKLOG.md"), "# TODO\n\n## Bugs\n- **[B01] [P1] First.** Detail: `.rota/bugs/B01.md`\n\n## Completed\n")
 	old, _ := os.Getwd()
 	if err := os.Chdir(root); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.Chdir(old) })
-	c := &Ctx{Path: "rota backlog", Repo: "api", Deps: deps}
-	text, err := runVerbText(c, true, "item", "field", "get", "--name", "detail", "--", "1")
-	if err != nil || !strings.Contains(text, "Api detail text.") {
-		t.Errorf("scoped backlog body = %q, %v; want the api item", text, err)
+	c := &Ctx{Path: "rota backlog", Repo: "web", Deps: testDeps()}
+	text, err := runVerbText(c, true, "item", "field", "get", "--name", "detail", "--", "B01")
+	if err != nil || !strings.Contains(text, ".rota/bugs/B01.md") {
+		t.Errorf("scoped backlog detail = %q, %v; want the item's Detail pointer", text, err)
 	}
 }
