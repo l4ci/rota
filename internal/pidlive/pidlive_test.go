@@ -128,3 +128,15 @@ func TestProcStatCurrentPid(t *testing.T) {
 		t.Error("ProcStat(-1) ok")
 	}
 }
+
+func TestCommCurrentPid(t *testing.T) {
+	if _, _, ok := ProcStat(os.Getpid()); !ok {
+		t.Skip("no /proc")
+	}
+	if got := Comm(os.Getpid()); got == "" {
+		t.Fatalf("Comm(self) is empty, want the test binary's name")
+	}
+	if got := Comm(900000003); got != "" {
+		t.Fatalf("Comm(missing pid) = %q, want empty", got)
+	}
+}
