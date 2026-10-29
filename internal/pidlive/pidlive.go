@@ -86,3 +86,13 @@ func StartTicks(pid int) (uint64, bool) {
 	_, st, ok := ProcStat(pid)
 	return st, ok
 }
+
+// Comm reads the command name of pid from /proc/<pid>/comm. It is empty where
+// /proc is absent or unreadable.
+func Comm(pid int) string {
+	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/comm")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
