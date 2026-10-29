@@ -9,10 +9,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/l4ci/rota/internal/pystr"
 
 	"github.com/l4ci/rota/internal/jsonx"
 )
@@ -49,8 +50,7 @@ func ReadText(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	t := strings.ReplaceAll(string(b), "\r\n", "\n")
-	return strings.ReplaceAll(t, "\r", "\n"), nil
+	return pystr.UniversalNewlines(string(b)), nil
 }
 
 // tmpSeq numbers temp files within one process; the pid separates processes.
