@@ -735,8 +735,8 @@ type Env struct {
 	// tracker.NewIssueTracker (no tracker is nil, nil); tests inject a fake.
 	Issues func(dir string, s tracker.Settings) (Issues, error)
 	// IssueComments returns the issue tracker issues.source names, for the
-	// issue bounce store (round.support set). Nil builds it with
-	// tracker.NewIssueTracker; tests inject a fake.
+	// issue bounce store (round.support set) and writer trust. Nil builds it
+	// with tracker.NewIssueTracker when needed; tests inject a fake.
 	IssueComments func(dir string, s tracker.Settings) (IssueComments, error)
 	// Shell runs one verification command through `sh -c` in dir and returns
 	// its combined output and exit code.
