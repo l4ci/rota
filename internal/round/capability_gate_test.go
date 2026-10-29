@@ -14,9 +14,9 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// noStatusBoard satisfies Workflow but reports ItemStatus=false, like a
-// backend whose Status is refused: a caller that reads the capability never
-// calls Status, one that asserts Workflow would.
+// noStatusBoard has a Status method but reports ItemStatus=false, like a
+// backend that cannot read the tracker: a caller that reads the capability
+// never calls Status, one that asserts ItemTracker would.
 type noStatusBoard struct {
 	*fakeRemote
 	statusCalls int

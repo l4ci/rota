@@ -506,9 +506,9 @@ func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog
 	for _, is := range issues {
 		labelled[is.Key] = true
 	}
-	var wf backlog.Workflow
+	var wf backlog.ItemTracker
 	if be.Capabilities().ItemStatus {
-		wf, _ = backlog.WorkflowOf(be)
+		wf, _ = be.(backlog.ItemTracker)
 	}
 	return func(it backlog.Item) bool {
 		if labelled[it.IssueKey()] || e.hasClaimSignal(it) {

@@ -34,6 +34,17 @@ type Board interface {
 	backlog.Workflow
 }
 
+// statusOf reads an item's status through the backend's ItemTracker. A backend
+// without one (file mode) answers with the issue-only refusal, which the
+// callers already treat as "no claims to read".
+func statusOf(be backlog.Backend, ref string) (*backlog.Status, error) {
+	it, err := backlog.ItemTrackerOf(be, "item show", backlog.FileShowHint)
+	if err != nil {
+		return nil, err
+	}
+	return it.Status(ref)
+}
+
 // BoardOf is the one place a backend becomes a Board; ok is false when it
 // has no workflow verbs.
 func BoardOf(be backlog.Backend) (Board, bool) {
@@ -1353,7 +1364,7 @@ func claimStep(be Board, id, claimID string, holders int, resuming bool, mine *o
 	// owns what the first one left.
 	posted := true
 	return step{name: "claim", do: func() error {
-		if st, err := be.Status(id); err == nil && st != nil && !resuming {
+		if st, err := statusOf(be, id); err == nil && st != nil && !resuming {
 			posted = !slices.Contains(openClaimsOf(st), claimID)
 		}
 		// Reclaim before claiming: shared claims may still have a free holder slot,
@@ -1432,7 +1443,7 @@ func clearState(root string, be Board, id, slot string) (bool, error) {
 	}
 	if b := reg.BestOf(id); b != nil {
 		if sib := b.Sibling(slot); sib != nil {
-			if st, err := be.Status(id); err == nil && st != nil {
+			if st, err := statusOf(be, id); err == nil && st != nil {
 				for _, c := range append([]string{st.Claim}, st.Claims...) {
 					if strings.HasPrefix(c, sib.Slot+"@") {
 						return false, nil

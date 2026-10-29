@@ -37,7 +37,7 @@ func (e Env) SupportQueue(ctx context.Context, be backlog.Backend, support strin
 	if err != nil {
 		return nil, err
 	}
-	wf, hasWorkflow := be.(backlog.Workflow)
+	wf, hasWorkflow := be.(backlog.ItemTracker)
 	hasWorkflow = hasWorkflow && be.Capabilities().ItemStatus
 	var out []SupportItem
 	for _, it := range items {
