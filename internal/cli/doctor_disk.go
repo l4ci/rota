@@ -101,8 +101,7 @@ func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string
 	if cache := goCacheDir(getenv); cache != "" && !sameVolume(cache, dir) {
 		in.CacheDisk = disk(cache)
 	}
-	if in.Disk != nil && in.Disk.Total > 0 && min > 0 &&
-		float64(in.Disk.Free)/float64(in.Disk.Total)*100 < float64(min) {
+	if in.Disk.Low(min) {
 		in.Leftovers = doctorLeftovers(ctx, run, root, now)
 	}
 }
