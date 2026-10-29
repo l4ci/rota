@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/ship"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
@@ -183,7 +184,7 @@ func shipBodyArg(c *Ctx, path, what string) (string, error) {
 // shipRoot is the project whose .rota/ holds the config and backlog of the
 // checkout in dir.
 func shipRoot(dir string) string {
-	if root, err := git.FindRoot(dir, registeredRels); err == nil {
+	if root, err := rotatree.FindRoot(dir, registeredRels); err == nil {
 		return root
 	}
 	return dir

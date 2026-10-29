@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -69,7 +70,7 @@ func gitDir(c *Ctx) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if git.AtUmbrellaRoot(cwd, func() bool { return len(registeredRels(cwd)) > 0 }) {
+	if rotatree.AtUmbrellaRoot(cwd, func() bool { return len(registeredRels(cwd)) > 0 }) {
 		return "", Usage("%s from the umbrella root has no git context; pass --repo <name>", c.Path)
 	}
 	return cwd, nil
@@ -87,7 +88,7 @@ func registeredRels(root string) []string {
 // configuredBase is git.baseBranch of the project that holds dir, or ""
 // when there is none or a stray sub-repo .rota/ masks it (hv-base-branch).
 func configuredBase(d *Deps, dir string) string {
-	root, err := git.FindRoot(dir, registeredRels)
+	root, err := rotatree.FindRoot(dir, registeredRels)
 	if err != nil {
 		return ""
 	}
@@ -198,7 +199,7 @@ func gitGuardClean(fs *flag.FlagSet) RunFunc {
 			return res, Failed("uncommitted changes; stash (`git stash`) or commit before running %s", what)
 		}
 		// Not a repo: an umbrella root walks its sub-repos.
-		if !git.AtUmbrellaRoot(dir, func() bool { return len(registeredRels(dir)) > 0 }) {
+		if !rotatree.AtUmbrellaRoot(dir, func() bool { return len(registeredRels(dir)) > 0 }) {
 			return Result{}, Resolution("not a git repository; %s requires git", what)
 		}
 		var dirty []string
@@ -352,7 +353,7 @@ func gitWorktreePath(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	root, err := git.FindRoot(cwd, registeredRels)
+	root, err := rotatree.FindRoot(cwd, registeredRels)
 	if err != nil {
 		return Result{}, Resolution("cannot resolve the umbrella: %v", err)
 	}
