@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/agents"
-	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/doctor"
@@ -123,8 +122,18 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		}
 	}
 	in.Slots, in.CwdOf = doctorSlotBlocks(root), procCwd(ctx, d.Proc)
-	in.StaleClaims, in.StaleClaimWarnings = doctorStaleClaims(ctx, d, root)
-	in.Labels = doctorLabelInput(ctx, d, root)
+	issue, issueErr := issueBackend(d, root)
+	if issueErr != nil {
+		in.StaleClaimWarnings = []string{issueErr.Error()}
+	} else if issue {
+		scan := doctor.RemoteScanner{
+			NewTracker: func(ctx context.Context, dir string) (doctor.Tracker, error) { return d.NewTracker(ctx, dir, cfg) },
+			NewForge:   func(ctx context.Context) (tracker.Forge, error) { return d.forge(ctx, cfg, "", root) },
+			RoundEnv:   func(ctx context.Context) round.Env { return d.RoundEnvLocal(ctx, root) },
+			Cwd:        in.Dir, Today: d.Today,
+		}.Scan(ctx, root, cfg)
+		in.StaleClaims, in.StaleClaimWarnings, in.Labels = scan.StaleClaims, scan.Warnings, scan.Labels
+	}
 	in.NothingToVerify = d.workerEnv().NothingToVerify(root)
 	if slots, err := d.workerEnv().GateConfig(root).TestSlots(); err == nil {
 		in.TestSlots = slots
@@ -141,7 +150,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	if raw, err := os.ReadFile(filepath.Join(root, ".gitignore")); err == nil {
 		in.GitignoreMissing = initproj.MissingIgnoreLines(string(raw))
 	}
-	if issue, err := issueBackend(d, root); err == nil && issue {
+	if issueErr == nil && issue {
 		in.StaleMilestoneFiles, _ = migrate.StaleMilestoneFiles(root)
 	}
 	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now(), d.DiskUsage, d.Getenv)
@@ -159,64 +168,6 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		}
 	}
 	return in
-}
-
-// doctorStaleClaims bounds the entire remote scan. Confirmed findings survive
-// partial failures; warnings keep an incomplete scan distinct from a clean one.
-func doctorStaleClaims(ctx context.Context, d *Deps, root string) ([]doctor.StaleClaim, []string) {
-	issue, err := issueBackend(d, root)
-	if err != nil {
-		return nil, []string{err.Error()}
-	}
-	if !issue {
-		return nil, nil
-	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	env := d.RoundEnv(ctx, root)
-	if env.RoundErr != nil {
-		return nil, []string{env.RoundErr.Error()}
-	}
-	if env.Forge == nil {
-		reason := env.ForgeErr
-		if reason == "" {
-			reason = "forge unavailable"
-		}
-		return nil, []string{reason}
-	}
-	board := env.Board
-	if board == nil {
-		cwd, _ := d.Getwd()
-		cfg := d.Config(root)
-		be, err := backlog.Open(ctx, root, cfg, backlog.Options{Cwd: cwd, Today: d.Today, NewTracker: func(ctx context.Context, dir string) (backlog.Tracker, error) { return d.NewTracker(ctx, dir, cfg) }})
-		if err != nil {
-			return nil, []string{err.Error()}
-		}
-		var ok bool
-		board, ok = round.BoardOf(be)
-		if !ok {
-			return nil, []string{"tracker does not support claims"}
-		}
-	}
-	claims, warnings := env.StaleClaims(ctx, root, board, nil)
-	if err := ctx.Err(); err != nil {
-		reason := err.Error()
-		found := false
-		for _, warning := range warnings {
-			if strings.Contains(warning, reason) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			warnings = append(warnings, reason)
-		}
-	}
-	var out []doctor.StaleClaim
-	for _, claim := range claims {
-		out = append(out, doctor.StaleClaim{Issue: claim.Issue, Holder: claim.Holder, Last: claim.Last})
-	}
-	return out, warnings
 }
 
 // staleBinary asks whether the running rota is behind the rota source checkout
