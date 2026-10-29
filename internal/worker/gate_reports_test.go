@@ -44,7 +44,7 @@ func TestGateRecoversPRVerdicts(t *testing.T) {
 				return &verdictReportForge{fakeForge: &fakeForge{w: w, provider: provider}, notes: notes}, nil
 			}
 			block := func(branch, head string) error {
-				if r, ok := verdict.Blocking(verdict.Load(w.dir).Branches[branch], verdict.Settings{}); ok {
+				if r, ok := verdict.Blocking(verdict.Load(w.dir).Branches[branch]); ok {
 					return fmt.Errorf("%s remote FAIL", r.Kind)
 				}
 				return nil

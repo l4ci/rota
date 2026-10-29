@@ -682,11 +682,11 @@ func (r Record) Failing() bool {
 
 // Blocking is the record that blocks a ship (B3): the effective review
 // verdict when it is FAIL, else the latest review-cross record when it is
-// FAIL, else a lens review's latest record when it is FAIL, else the latest second-opinion record when it is FAIL and the runner
-// is not the advisory codex fallback. A stale record
-// still blocks; only a newer record of the same kind clears it. CONCERNS and
-// QA never block.
-func Blocking(list []Record, s Settings) (Record, bool) {
+// FAIL, else a lens review's latest record when it is FAIL, else the latest
+// second-opinion record when it is FAIL, whatever runner produced it. A stale
+// record still blocks; only a newer record of the same kind clears it.
+// CONCERNS and QA never block.
+func Blocking(list []Record) (Record, bool) {
 	if r, ok := EffectiveFail(list); ok {
 		return r, true
 	}
