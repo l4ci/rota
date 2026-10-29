@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -144,7 +143,7 @@ func shipPRVerdict(c *Ctx, pr int, branch string) (Result, error) {
 	// PR merges can run on a clone with no local head branch. Bind recovery and
 	// staleness to the forge head rather than an absent or stale checkout ref.
 	head := ""
-	if source, e := config.IssueSource(c.deps().Config(root)); e == nil && source != config.SourceFile {
+	if issue, e := issueBackend(c.deps(), root); e == nil && issue {
 		f, e := c.deps().forge(c.Context(), c.deps().Config(root), "", dir)
 		if e == nil {
 			info, e := f.PRView(c.Context(), pr)
@@ -355,11 +354,11 @@ func shipClosesLines(c *Ctx, root string, cfg any, ids []string) (string, error)
 	if len(ids) == 0 {
 		return "", nil
 	}
-	name, _, err := backendMode(c.deps(), root)
+	caps, _, err := backendMode(c.deps(), root)
 	if err != nil {
 		return "", err
 	}
-	if name == "file" {
+	if !caps.IssueIDs {
 		return "", nil
 	}
 	b, err := openBacklog(c, root, false, "")
