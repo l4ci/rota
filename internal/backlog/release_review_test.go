@@ -302,7 +302,7 @@ func rrStepGo(b *Issues, st rrStep) map[string]any {
 		}
 		return ok(out)
 	case "merge":
-		res, err := b.MergePR(st.PR, st.Items)
+		res, err := b.MergePRGated(st.PR, st.Items, nil, stubLander)
 		if err != nil {
 			return bad(err)
 		}
@@ -441,7 +441,7 @@ func TestIssuesReviewQueue(t *testing.T) {
 
 func TestIssuesMergePR(t *testing.T) {
 	b, f := rrOne(t)
-	res, err := b.MergePR(20, nil)
+	res, err := b.MergePRGated(20, nil, nil, stubLander)
 	if err != nil || res.SHA != rrSHA || len(res.Closed) != 1 || res.Closed[0].Ref() != "F1" {
 		t.Fatalf("merge: %+v %v", res, err)
 	}
@@ -454,7 +454,7 @@ func TestIssuesMergePR(t *testing.T) {
 		t.Fatalf("close comment %q", last)
 	}
 	// Unproven T11: nothing is merged, the item flips and gets the feedback.
-	res, err = b.MergePR(21, nil)
+	res, err = b.MergePRGated(21, nil, nil, stubLander)
 	if err != nil || res.SHA != "" || len(res.Unproven) != 1 || res.Unproven[0].Ref() != "T11" {
 		t.Fatalf("unproven: %+v %v", res, err)
 	}
@@ -467,15 +467,15 @@ func TestIssuesMergePR(t *testing.T) {
 		is.Comments[len(is.Comments)-1].Body != want {
 		t.Fatalf("T11 %+v", is)
 	}
-	if _, err := b.MergePR(99, nil); !errors.Is(err, ErrNotFound) {
+	if _, err := b.MergePRGated(99, nil, nil, stubLander); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("unknown PR: %v", err)
 	}
-	if _, err := b.MergePR(23, []string{"#99"}); !errors.Is(err, ErrNotFound) {
+	if _, err := b.MergePRGated(23, []string{"#99"}, nil, stubLander); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("unknown item: %v", err)
 	}
 	// A PR that is not open is not found with --items too (the contract), and
 	// nothing reaches the forge's merge.
-	if _, err := b.MergePR(99, []string{"F1"}); !errors.Is(err, ErrNotFound) {
+	if _, err := b.MergePRGated(99, []string{"F1"}, nil, stubLander); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("PR not open with --items: %v", err)
 	}
 	if slices.Contains(f.merged, "99") {
@@ -485,7 +485,7 @@ func TestIssuesMergePR(t *testing.T) {
 
 func TestIssuesMergePRHostClosed(t *testing.T) {
 	b, f := rrBackend(t, rrSeed{Cfg: defaultCfg, Issues: rrIssues(), Comments: rrComments(), Native: rrNativeSeed(), PRs: rrPRs(), HostCloses: true})
-	res, err := b.MergePR(20, nil)
+	res, err := b.MergePRGated(20, nil, nil, stubLander)
 	if err != nil || len(res.Closed) != 1 {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -502,17 +502,17 @@ func TestIssuesMergePRHostClosed(t *testing.T) {
 	}
 }
 
-func TestIssuesMergePRRefused(t *testing.T) {
-	b, f := rrOne(t)
-	f.Fake.Fail = map[string]error{"pr_merge": &tracker.Error{Kind: tracker.KindFailed, Code: 1, Message: "gh pr merge 23: not mergeable"}}
-	_, err := b.MergePR(23, nil)
-	var mf *MergeFailedError
-	if !errors.As(err, &mf) || mf.PR != 23 {
-		t.Fatalf("want MergeFailedError, got %v", err)
-	}
-	f.Fake.Fail = map[string]error{"pr_merge": &tracker.Error{Kind: tracker.KindUnavailable, Code: 3, Message: "gh missing"}}
-	if _, err = b.MergePR(23, nil); errors.As(err, &mf) {
-		t.Fatalf("an unavailable forge is not a refused merge: %v", err)
+// stubLander merges through the tracker pinned to head, as the landing adapter does.
+func stubLander(ctx context.Context, pt PRTracker, pr int, head string) (string, error) {
+	return pt.PRMerge(ctx, pr, tracker.MergeOpts{HeadSHA: head, DeleteBranch: true})
+}
+
+func TestIssuesMergePRGatedPassesTheLanderErrorThrough(t *testing.T) {
+	b, _ := rrOne(t)
+	refused := errors.New("refused")
+	_, err := b.MergePRGated(23, nil, nil, func(context.Context, PRTracker, int, string) (string, error) { return "", refused })
+	if !errors.Is(err, refused) {
+		t.Fatalf("want the lander's error, got %v", err)
 	}
 }
 
@@ -621,12 +621,12 @@ func TestUmbrellaReleaseReview(t *testing.T) {
 	}
 
 	u.Scope = ""
-	if _, err := u.MergePR(20, nil); !errors.Is(err, ErrInvalid) {
+	if _, err := u.MergePRGated(20, nil, nil, stubLander); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("merge without --repo: %v", err)
 	}
 	// Scope S: with no --repo, the working directory's sub-repo is the one.
 	u.CwdRepo = "gl"
-	if res, err := u.MergePR(25, nil); err != nil || len(res.Closed) != 2 || res.Closed[0].ID != "gl:1" ||
+	if res, err := u.MergePRGated(25, nil, nil, stubLander); err != nil || len(res.Closed) != 2 || res.Closed[0].ID != "gl:1" ||
 		!slices.Contains(f["gl"].merged, "25") || slices.Contains(f["gh"].merged, "25") {
 		t.Fatalf("merge from the gl cwd: %+v %v", res, err)
 	}
@@ -635,10 +635,10 @@ func TestUmbrellaReleaseReview(t *testing.T) {
 	}
 	u.CwdRepo = ""
 	u.Scope = "gl"
-	if _, err := u.MergePR(20, []string{"gh:1"}); !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "belongs to gh") {
+	if _, err := u.MergePRGated(20, []string{"gh:1"}, nil, stubLander); !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "belongs to gh") {
 		t.Fatalf("cross-repo item: %v", err)
 	}
-	res, err := u.MergePR(20, []string{"gl:1"})
+	res, err := u.MergePRGated(20, []string{"gl:1"}, nil, stubLander)
 	if err != nil || len(res.Closed) != 1 || res.Closed[0].ID != "gl:1" || !slices.Contains(f["gl"].merged, "20") || slices.Contains(f["gh"].merged, "20") {
 		t.Fatalf("merge gl: %+v %v", res, err)
 	}
