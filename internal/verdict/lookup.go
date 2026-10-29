@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -98,7 +99,7 @@ func RecoverPR(ctx context.Context, root, key, head string, pr int, source Repor
 			continue
 		}
 		r.FromReport = true
-		r.RecordedAt = note.CreatedAt.UTC().Format("2006-01-02T15:04:05Z")
+		r.RecordedAt = stamp.Format(note.CreatedAt)
 		candidates[r.Kind] = r // notes are oldest first; the newest valid report wins
 	}
 	if len(candidates) == 0 {
