@@ -6,11 +6,11 @@
 package roundlease
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -19,6 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/pidlive"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/rotastate"
 )
 
@@ -273,15 +274,13 @@ func (e Env) ClearStale(commonDir string) (Lease, bool, error) {
 	return gone, cleared, err
 }
 
-// procStat reads ppid and start ticks of pid from /proc/<pid>/stat.
-func procStat(pid int) (ppid int, start uint64, ok bool) { return pidlive.ProcStat(pid) }
-
 // realPS runs ps with the C locale and returns its trimmed stdout.
 func realPS(args ...string) (string, error) {
-	cmd := exec.Command("ps", args...)
-	cmd.Env = append(os.Environ(), "LC_ALL=C")
-	b, err := cmd.Output()
-	return strings.TrimSpace(string(b)), err
+	r, err := proc.Run(context.Background(), proc.Cmd{Name: "ps", Args: args, Env: []string{"LC_ALL=C"}})
+	if err == nil && r.ExitCode != 0 {
+		err = fmt.Errorf("ps exited %d", r.ExitCode)
+	}
+	return strings.TrimSpace(r.Stdout), err
 }
 
 // psStat reads ppid and start time (unix seconds) of pid through ps, for hosts
@@ -316,25 +315,17 @@ func psComm(run PSFunc, pid int) string {
 }
 
 func procStart(run PSFunc, pid int) (uint64, bool) {
-	if _, st, ok := procStat(pid); ok {
+	if _, st, ok := pidlive.ProcStat(pid); ok {
 		return st, true
 	}
 	_, st, ok := psStat(run, pid)
 	return st, ok
 }
 
-func procComm(pid int) string {
-	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/comm")
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(b))
-}
-
 // realProc reads ppid and comm from /proc, or through ps where there is none.
 func realProc(run PSFunc, pid int) (int, string, bool) {
-	if pp, _, ok := procStat(pid); ok {
-		if comm := procComm(pid); comm != "" {
+	if pp, _, ok := pidlive.ProcStat(pid); ok {
+		if comm := pidlive.Comm(pid); comm != "" {
 			return pp, comm, true
 		}
 		return 0, "", false
