@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 func (c Clone) git(ctx context.Context, args ...string) (git.Result, error) {
@@ -42,20 +43,9 @@ func (c Clone) out(ctx context.Context, args ...string) (string, error) {
 		return "", err
 	}
 	if res.ExitCode != 0 {
-		return "", fmt.Errorf("git %s: %s", args[0], firstLine(res.Stderr, res.Stdout))
+		return "", fmt.Errorf("git %s: %s", args[0], strutil.OrDefault(strutil.FirstNonEmpty(strutil.FirstLine(res.Stderr), strutil.FirstLine(res.Stdout)), "no output"))
 	}
 	return strings.TrimSpace(res.Stdout), nil
-}
-
-func firstLine(texts ...string) string {
-	for _, t := range texts {
-		for _, l := range strings.Split(t, "\n") {
-			if l = strings.TrimSpace(l); l != "" {
-				return l
-			}
-		}
-	}
-	return "no output"
 }
 
 func (c Clone) now() time.Time {

@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/bugreport"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -138,21 +139,14 @@ func brRedactEnv(c *Ctx, root string) bugreport.Env {
 func brEnvironment(c *Ctx, root string, r bugreport.Record, harness, model string) bugreport.Environment {
 	v := version.Get()
 	env := bugreport.Environment{Version: v.Version, Commit: v.Commit, OS: runtime.GOOS, Arch: runtime.GOARCH,
-		Harness: firstNonEmpty(harness, r.Harness), Model: firstNonEmpty(model, r.Model)}
+		Harness: strutil.FirstNonEmpty(harness, r.Harness), Model: strutil.FirstNonEmpty(model, r.Model)}
 	if name := c.deps().Getenv("ROTA_SLOT"); name != "" && (env.Harness == "" || env.Model == "") {
 		if s := worker.LoadRegistryTolerant(root).Slot(name); s != nil {
-			env.Harness = firstNonEmpty(env.Harness, s.HarnessKind())
-			env.Model = firstNonEmpty(env.Model, s.Model())
+			env.Harness = strutil.FirstNonEmpty(env.Harness, s.HarnessKind())
+			env.Model = strutil.FirstNonEmpty(env.Model, s.Model())
 		}
 	}
 	return env
-}
-
-func firstNonEmpty(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }
 
 func brDraftOf(c *Ctx, root string, r bugreport.Record, harness, model string) (title, body string) {
