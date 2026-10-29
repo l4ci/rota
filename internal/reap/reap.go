@@ -34,6 +34,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/skills"
 )
 
 // Candidate kinds.
@@ -119,12 +120,9 @@ type Input struct {
 	Now func() time.Time
 }
 
-// extractPrefix and extractMaxAge name a killed `rota skills get` extraction:
-// a `.extract-*` temp dir untouched for longer than extractMaxAge.
-const (
-	extractPrefix = ".extract-"
-	extractMaxAge = time.Hour
-)
+// extractMaxAge is how long a skills.ExtractPrefix temp dir may sit untouched
+// before its `rota skills get` extraction counts as killed.
+const extractMaxAge = time.Hour
 
 // Result is what Find and Apply report. Warnings are for the caller to print.
 type Result struct {
@@ -192,7 +190,7 @@ func (s *state) skillTree(name string) bool {
 // the cache that nothing has touched for extractMaxAge, so its extraction died.
 // A younger one may still be running and is left alone.
 func (s *state) orphanExtract(name string) bool {
-	if !strings.HasPrefix(name, extractPrefix) || filepath.Base(name) != name {
+	if !strings.HasPrefix(name, skills.ExtractPrefix) || filepath.Base(name) != name {
 		return false
 	}
 	fi, err := os.Lstat(filepath.Join(s.in.SkillCache, name))
