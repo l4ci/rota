@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/strutil"
@@ -57,7 +57,7 @@ type TryItSource struct {
 // a malformed section of an untrusted issue must skip, not fail the gate.
 func TrustedTryIt(ctx context.Context, s TryItSource) (body, skip string, err error) {
 	ref := tracker.RefOf(s.Issue)
-	if s.Source == config.SourceFile || s.Source == "" {
+	if !backlog.CapabilitiesForSource(s.Source).IssueIDs {
 		body, found, err := s.FileBody()
 		switch {
 		case err != nil:
@@ -168,7 +168,7 @@ func (g *gate) behaviourRun(dir string) (bool, error) {
 	}
 	ref := tracker.RefOf(issue)
 	src := g.in.cfg.Tracker.Source
-	if src != config.SourceFile && src != "" && !g.remote {
+	if backlog.CapabilitiesForSource(src).IssueIDs && !g.remote {
 		// Project rule (#817): a gate step that calls the forge skips when the
 		// gate reads no origin refs.
 		return skip(fmt.Sprintf("the gate reads no origin refs (no PR), so it reads no forge for %s's Try it steps", ref))

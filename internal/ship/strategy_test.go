@@ -2,6 +2,7 @@ package ship
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/backlog"
 	"testing"
 
 	"github.com/l4ci/rota/internal/tracker"
@@ -26,7 +27,7 @@ func TestStrategy(t *testing.T) {
 		{"tracker on a local forge", "issues", tracker.ProviderLocal, "pr", "", ErrTrackerNeedsLocalForge},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := Strategy(c.backend, c.forge, c.configured)
+			got, err := Strategy(backlog.Capabilities{IssueIDs: c.backend == "issues"}, c.forge, c.configured)
 			if !errors.Is(err, c.err) {
 				t.Fatalf("err = %v, want %v", err, c.err)
 			}

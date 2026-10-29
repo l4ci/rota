@@ -96,7 +96,7 @@ func withBoard(c *Ctx, root string, env round.Env) round.Env {
 	if env.Board != nil {
 		return env
 	}
-	if name, _, err := backendMode(c.deps(), root); err != nil || name != "issues" {
+	if caps, _, err := backendMode(c.deps(), root); err != nil || !caps.IssueIDs {
 		return env
 	}
 	be, err := openBacklog(c, root, false, "")

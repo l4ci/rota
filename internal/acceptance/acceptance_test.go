@@ -134,3 +134,36 @@ func TestHumanTokenKeepsIDsReadable(t *testing.T) {
 		t.Fatalf("human flags = %v", got)
 	}
 }
+
+func TestAppendNumbersAfterMax(t *testing.T) {
+	body := "## Problem\n\nx\n\n## Acceptance\n\n- [ ] AC-1: a\n- [x] AC-4: b\n"
+	got, ok := Append(body, "first", "second")
+	want := body + "- [ ] AC-5: first\n- [ ] AC-6: second\n"
+	if !ok || got != want {
+		t.Fatalf("ok=%v got %q", ok, got)
+	}
+}
+
+func TestAppendEmptySectionKeepsBlankLine(t *testing.T) {
+	got, ok := Append("## Problem\n\nx\n\n## Acceptance\n", "only")
+	if want := "## Problem\n\nx\n\n## Acceptance\n\n- [ ] AC-1: only\n"; !ok || got != want {
+		t.Fatalf("ok=%v got %q", ok, got)
+	}
+}
+
+func TestAppendStaysInsideSection(t *testing.T) {
+	got, ok := Append("## Acceptance\n- [ ] AC-1: a\n\n## Notes\n\nn\n", "b")
+	if want := "## Acceptance\n- [ ] AC-1: a\n- [ ] AC-2: b\n\n## Notes\n\nn\n"; !ok || got != want {
+		t.Fatalf("ok=%v got %q", ok, got)
+	}
+}
+
+func TestAppendMissingSectionOrNothingToAdd(t *testing.T) {
+	if got, ok := Append("no section\n", "x"); ok || got != "no section\n" {
+		t.Errorf("missing section: ok=%v got %q", ok, got)
+	}
+	body := "## Acceptance\n- [ ] AC-1: a\n"
+	if got, ok := Append(body); !ok || got != body {
+		t.Errorf("no texts: ok=%v got %q", ok, got)
+	}
+}

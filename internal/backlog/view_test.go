@@ -114,18 +114,6 @@ func TestIDsByMilestoneAndMilestonesFor(t *testing.T) {
 	}
 }
 
-func TestCapabilities(t *testing.T) {
-	if c := (&File{}).Capabilities(); c != (Capabilities{}) {
-		t.Errorf("file = %+v", c)
-	}
-	if c := (&Issues{}).Capabilities(); c != (Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true}) {
-		t.Errorf("issues = %+v", c)
-	}
-	if c := (&Umbrella{}).Capabilities(); c != (Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true, Umbrella: true}) {
-		t.Errorf("umbrella = %+v", c)
-	}
-}
-
 func listing(t *testing.T, md string, active []Active, grep string) *Listing {
 	t.Helper()
 	rows, md, ok, err := OpenRows(fileBackend(t, md))

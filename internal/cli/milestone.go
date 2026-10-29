@@ -476,11 +476,11 @@ func syncMilestoneItems(c *Ctx, id string) (drifted bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	f, ok := be.(*backlog.File)
+	ops, ok := be.(backlog.FileOps)
 	if !ok {
 		return false, nil
 	}
-	changed, err := f.SyncMilestones()
+	changed, err := ops.SyncMilestones()
 	for _, m := range changed {
 		drifted = drifted || m == id
 	}

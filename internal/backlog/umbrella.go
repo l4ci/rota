@@ -133,7 +133,7 @@ func (u *Umbrella) Name() string { return "issues" }
 
 // Capabilities: tracker issues across sub-repos.
 func (u *Umbrella) Capabilities() Capabilities {
-	return Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true, Umbrella: true}
+	return Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true, Umbrella: true, ItemStatus: true}
 }
 
 // Rows lists the open issues of every sub-repo, each naming its owner.
@@ -587,8 +587,9 @@ func (u *Umbrella) createSubMilestone(sub *Issues, mid string) (string, bool, er
 }
 
 var (
-	_ Backend  = (*Umbrella)(nil)
-	_ Workflow = (*Umbrella)(nil)
+	_ Backend     = (*Umbrella)(nil)
+	_ Workflow    = (*Umbrella)(nil)
+	_ ItemTracker = (*Umbrella)(nil)
 )
 
 // SetDetail rewrites the item's body on its sub-repo's tracker.

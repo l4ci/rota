@@ -268,7 +268,7 @@ func realPath(p string) string {
 // branch name alone. Raw marker history comes from the issue source, which can
 // differ from the PR forge. An unavailable history cannot prove a takeover.
 func (e Env) checkAdoptClaim(ctx context.Context, root string, be Board, branch, issue string) ([]string, error) {
-	st, err := be.Status(issue)
+	st, err := statusOf(be, issue)
 	if err != nil {
 		return []string{fmt.Sprintf("adopt claim check on %s skipped: %v", issue, err)}, nil
 	}
@@ -296,11 +296,16 @@ func (e Env) checkAdoptClaim(ctx context.Context, root string, be Board, branch,
 			return warnings, blocked(BlockClaimed, "%s has stale claim %s; branch %s cannot be adopted without reclaiming it", issue, claim.Holder, branch)
 		}
 	}
-	source, ok := be.(*backlog.Issues)
-	if !ok || source.Tracker == nil {
+	var (
+		comments []tracker.Comment
+		have     bool
+	)
+	if hist, ok := be.(backlog.ClaimHistorian); ok {
+		comments, have, err = hist.ClaimComments(ctx, key)
+	}
+	if !have {
 		return append(warnings, fmt.Sprintf("adopt claim history on %s unavailable; reclaimed-branch check skipped", issue)), nil
 	}
-	comments, err := source.Tracker.Comments(ctx, key)
 	if err != nil {
 		return append(warnings, fmt.Sprintf("adopt claim history on %s skipped: %v", issue, err)), nil
 	}

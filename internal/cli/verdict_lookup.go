@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/verdict"
 )
 
@@ -9,8 +8,7 @@ import (
 // PR. Read failures leave the local verdict rules in force and are visible.
 func lookupVerdicts(c *Ctx, t verdictBranch) []verdict.Record {
 	cfg := c.deps().Config(t.root)
-	source, err := config.IssueSource(cfg)
-	if err != nil || source == config.SourceFile {
+	if issue, err := issueBackend(c.deps(), t.root); err != nil || !issue {
 		return verdict.Load(t.root).Branches[t.key]
 	}
 	f, err := c.deps().forge(c.Context(), cfg, "", t.dir)

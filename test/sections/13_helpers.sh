@@ -292,10 +292,10 @@ EOF
   rc=0; hvj knowledge amend --topic "Topic A" --fragment "NOTHING" --mode append --body-file - <<<"X" >/dev/null 2>&1 || rc=$?
   [ "$rc" = "3" ] || fail "missing fragment: expected exit 3, got $rc"
 
-  # 4. Successful append after the trailing date comment
+  # 4. Successful append inside the body, ahead of the trailing date comment
   OUT=$(hvj knowledge amend --topic "Topic A" --fragment "ALPHA" --mode append --body-file - <<<"Upstream: rota#42") || fail "append failed: $OUT"
   [ "$(jget data.changed <<<"$OUT")" = "true" ] || fail "append: expected changed true: $OUT"
-  grep -q "^- \*\*First rule\*\* — body with unique fragment ALPHA\. <!-- 2026-04-01 --> Upstream: rota#42$" .rota/KNOWLEDGE.md || fail "append wrong (Topic A First rule)"
+  grep -q "^- \*\*First rule\*\* — body with unique fragment ALPHA\. Upstream: rota#42 <!-- 2026-04-01 -->$" .rota/KNOWLEDGE.md || fail "append wrong (Topic A First rule)"
 
   # 5. Other bullets and topics untouched
   grep -q "^- \*\*Second rule\*\* — body with unique fragment BETA\. <!-- 2026-04-02 -->$" .rota/KNOWLEDGE.md || fail "Second rule changed unexpectedly"
