@@ -217,8 +217,8 @@ func (r initConfigResult) report(data *jsonx.Object, lines *[]string) {
 // config is not copied in: a new project inherits it at runtime.
 func initConfig(c *Ctx, root string) (initConfigResult, error) {
 	var r initConfigResult
-	am := config.AutonomyPending(root)
-	filled, sm, rm, err := config.FillDetect(root, c.deps().originProvider(c.Context(), root))
+	am := config.AutonomyPending(c.deps().projectsEnv(), root)
+	filled, sm, rm, err := config.FillDetect(c.deps().projectsEnv(), root, c.deps().originProvider(c.Context(), root))
 	if err != nil {
 		_, err = roundMigrationFail(err)
 		return r, err

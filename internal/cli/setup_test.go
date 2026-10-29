@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // setupRun runs `rota -C dir setup args` with stdin as given and, when tty,
@@ -35,7 +36,7 @@ func setupRun(t *testing.T, dir, stdin string, tty bool, args ...string) (int, s
 
 func cfgValue(t *testing.T, dir, key string) any {
 	t.Helper()
-	v, err := config.Value(config.Load(filepath.Join(dir, ".rota", "config.json")), key)
+	v, err := config.Value(config.Load(projects.OSEnv(), filepath.Join(dir, ".rota", "config.json")), key)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
 )
@@ -25,7 +26,7 @@ func kaProject(t *testing.T, cfg string) string {
 }
 
 func kaHandoff(dir string) string {
-	return handoffFile(defaultDeps(), dir, config.Load(filepath.Join(dir, ".rota", "config.json")))
+	return handoffFile(defaultDeps(), dir, config.Load(projects.OSEnv(), filepath.Join(dir, ".rota", "config.json")))
 }
 
 // kaChild is a shell child that counts its starts, records its arguments and

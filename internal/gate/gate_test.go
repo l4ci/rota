@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
@@ -29,7 +30,7 @@ func project(t *testing.T, cfg string) string {
 }
 
 // diskCfg is the project config read from root, as Deps.Config does.
-func diskCfg(root string) any { return config.Load(rotatree.Config(root)) }
+func diskCfg(root string) any { return config.Load(projects.OSEnv(), rotatree.Config(root)) }
 
 func auditLines(t *testing.T, root string) []map[string]any {
 	t.Helper()

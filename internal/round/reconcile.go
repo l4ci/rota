@@ -289,10 +289,11 @@ func registerSlot(root string, row Row, v *view) error {
 }
 
 // rearmClaim repairs a slot whose claim is gone from the tracker (a release
-// that raced an assign, or a human's): the slot still holds the issue, so its
+// that raced an assign): the slot still holds the issue, so its
 // claim is posted again under the slot's own claimId and the attempt stays. A
 // claim another holder took meanwhile is theirs: the slot's claimId is
-// cleared instead.
+// cleared instead. A release a person made on purpose is never repaired: the
+// finding carries no repair, so it only reaches here for an unmarked release.
 func (e Env) rearmClaim(root string, f Finding) error {
 	clear := func() error {
 		return editSlot(root, f.Slot, func(s *worker.Slot) error { s.SetClaimID(""); return nil })

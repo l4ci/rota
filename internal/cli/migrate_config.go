@@ -58,7 +58,7 @@ func migrateConfig(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return roundMigrationFail(err)
 		}
-		sm, err := config.MigrateScopeFiles(root, *apply, keep)
+		sm, err := config.MigrateScopeFiles(c.deps().projectsEnv(), root, *apply, keep)
 		if err != nil {
 			return roundMigrationFail(err)
 		}
@@ -106,7 +106,7 @@ func migrateConfigPlan(c *Ctx, root string, keep []string) error {
 	if _, err := migrateMerges(c, root, false); err != nil {
 		return err
 	}
-	_, err := config.MigrateScopeFiles(root, false, keep)
+	_, err := config.MigrateScopeFiles(c.deps().projectsEnv(), root, false, keep)
 	return err
 }
 

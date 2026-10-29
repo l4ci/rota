@@ -168,7 +168,6 @@ func List(root string) ([]Entry, error) {
 		return nil, err
 	}
 	out := []Entry{}
-	shipped := map[string]bool{}
 	for _, d := range docs {
 		e := Entry{ID: frontmatter.Str(d.FM, "id"), Title: frontmatter.Str(d.FM, "title"),
 			Status: frontmatter.Str(d.FM, "status"), Depends: []string{}}
@@ -179,19 +178,9 @@ func List(root string) ([]Entry, error) {
 			e.Status = "planned"
 		}
 		e.Depends = append(e.Depends, DependsOf(d.FM)...)
-		if e.Status == "shipped" {
-			shipped[e.ID] = true
-		}
 		out = append(out, e)
 	}
-	for i := range out {
-		out[i].Ready = true
-		for _, d := range out[i].Depends {
-			if !shipped[d] {
-				out[i].Ready = false
-			}
-		}
-	}
+	MarkReady(out)
 	return out, nil
 }
 
@@ -406,14 +395,11 @@ const seed = "# Milestones\n\n_(no vision yet \u2014 run `/rota-vision` to brain
 // MILESTONES.md is seeded, the per-milestone **Status:** lines are left
 // alone, and the vision block points at the tracking issues.
 func IndexFrom(root string, items []Entry, issue bool) (changed bool, err error) {
+	MarkReady(items)
 	var active []Entry
-	shipped := map[string]bool{}
 	for _, i := range items {
 		if i.Status == "active" {
 			active = append(active, i)
-		}
-		if i.Status == "shipped" {
-			shipped[i.ID] = true
 		}
 	}
 
@@ -483,11 +469,8 @@ func IndexFrom(root string, items []Entry, issue bool) (changed bool, err error)
 				deps = strings.Join(i.Depends, ", ")
 			}
 			flag := ""
-			for _, d := range i.Depends {
-				if !shipped[d] {
-					flag = " ⚠ blocked"
-					break
-				}
+			if !i.Ready {
+				flag = " ⚠ blocked"
 			}
 			lines[k] = fmt.Sprintf("- **%s** — %s (depends: %s)%s", i.ID, i.Title, deps, flag)
 		}
@@ -522,4 +505,25 @@ func IndexFrom(root string, items []Entry, issue bool) (changed bool, err error)
 		changed = true
 	}
 	return changed, nil
+}
+
+// MarkReady sets Ready on every entry: true when each dependency is an entry
+// with status shipped. It is the one readiness rule; each backend only decides
+// the statuses.
+func MarkReady(entries []Entry) {
+	shipped := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		if e.Status == "shipped" {
+			shipped[e.ID] = true
+		}
+	}
+	for i := range entries {
+		entries[i].Ready = true
+		for _, d := range entries[i].Depends {
+			if !shipped[d] {
+				entries[i].Ready = false
+				break
+			}
+		}
+	}
 }

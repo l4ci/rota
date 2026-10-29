@@ -307,20 +307,39 @@ func TestViewsDropControlCharactersFromRowsAndBodies(t *testing.T) {
 	}
 }
 
-func TestViewLoadersAcceptDashDashBeforeThePositional(t *testing.T) {
-	dir := knProject(t, false)
-	knWrite(t, filepath.Join(dir, ".rota", "KNOWLEDGE.md"), "# Knowledge\n\n## Build\n\n- **Gate.** runs fast\n")
+func TestViewLoadersKeepScopeBeforeTheSeparator(t *testing.T) {
+	dir := knProject(t, true)
+	knWrite(t, filepath.Join(dir, ".rota", "knowledge", "web", "KNOWLEDGE.md"), "# Web\n\n## Build\n\n- **Web gate.** web only\n\n## -Odd\n\n- **Dash.** web dash\n")
 	old, _ := os.Getwd()
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.Chdir(old) })
-	c := &Ctx{Path: "rota knowledge stats", Deps: testDeps()}
-	text, err := runVerbText(c, true, "knowledge", "query", "--", "Build")
-	if err != nil || !strings.Contains(text, "Gate") {
-		t.Errorf("knowledge query = %q, %v", text, err)
+	c := &Ctx{Path: "rota knowledge stats", Repo: "web", Deps: testDeps()}
+	for topic, want := range map[string]string{"Build": "Web gate", "-Odd": "Dash"} {
+		text, err := runVerbText(c, true, "knowledge", "query", "--", topic)
+		if err != nil || !strings.Contains(text, want) {
+			t.Errorf("scoped knowledge query %q = %q, %v; want %q", topic, text, err, want)
+		}
 	}
-	if _, err := runVerbText(c, true, "item", "field", "get", "--name", "detail", "--", "nope"); err == nil || strings.Contains(err.Error(), "unknown flag") || strings.Contains(err.Error(), "usage") {
-		t.Errorf("item field get with -- : %v", err)
+	plain := &Ctx{Path: "rota knowledge stats", Deps: testDeps()}
+	if text, err := runVerbText(plain, true, "knowledge", "query", "--", "Build"); err != nil || !strings.Contains(text, "Gamma tip") {
+		t.Errorf("unscoped knowledge query = %q, %v", text, err)
+	}
+}
+
+func TestViewBacklogLoaderReadsTheSelectedSubRepoItem(t *testing.T) {
+	root := trackerProject(t, "")
+	knWrite(t, filepath.Join(root, ".rota", "repos.json"), `{"repos": [{"name": "web", "path": "web"}]}`)
+	knWrite(t, filepath.Join(root, ".rota", "BACKLOG.md"), "# TODO\n\n## Bugs\n- **[B01] [P1] First.** Detail: `.rota/bugs/B01.md`\n\n## Completed\n")
+	old, _ := os.Getwd()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(old) })
+	c := &Ctx{Path: "rota backlog", Repo: "web", Deps: testDeps()}
+	text, err := runVerbText(c, true, "item", "field", "get", "--name", "detail", "--", "B01")
+	if err != nil || !strings.Contains(text, ".rota/bugs/B01.md") {
+		t.Errorf("scoped backlog detail = %q, %v; want the item's Detail pointer", text, err)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
@@ -18,7 +19,7 @@ func reviewAcceptanceBoard(t *testing.T, f *moveFx) (*backlog.Issues, *trackerte
 	f.mintReview(t, "12")
 	f.reportIssues(t, "ben", "#139", "#140")
 	remote := &trackertest.Fake{Issues: []tracker.Issue{{Key: tracker.NumKey(12), Title: ReviewTitle("cli"), State: "open", Labels: []string{"type:task", "in-progress"}, Body: "## Acceptance\n- [ ] AC-1: review ran\n- [ ] AC-2: findings filed\n"}}}
-	be := &backlog.Issues{Cfg: config.Load(rotatree.Config(f.root)), Tracker: remote, CountProof: proof.CountRows, LookupProof: proof.Lookup}
+	be := &backlog.Issues{Cfg: config.Load(projects.OSEnv(), rotatree.Config(f.root)), Tracker: remote, CountProof: proof.CountRows, LookupProof: proof.Lookup}
 	if won, _, err := be.Claim("12", f.slot("ben").ClaimID()); err != nil || !won {
 		t.Fatalf("claim: %v %v", won, err)
 	}
