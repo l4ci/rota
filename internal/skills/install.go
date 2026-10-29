@@ -533,8 +533,7 @@ func Uninstall(roots []Root, o Options) ([]UninstallResult, error) {
 			if len(res.Kept) == 0 {
 				res.Changed = true
 				// Both go while the lock is held, so no waiter locks a dead inode.
-				os.Remove(manifestPath(r.Path) + ".lock")
-				return os.Remove(manifestPath(r.Path))
+				return fsio.RemoveWithLock(manifestPath(r.Path))
 			}
 			return writeManifest(r.Path, m)
 		})

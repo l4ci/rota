@@ -7,8 +7,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -286,4 +288,47 @@ func SameDir(a, b string) bool {
 		return filepath.Clean(p)
 	}
 	return norm(a) == norm(b)
+}
+
+// RemoveWithLock removes path and its lock sidecar. The sidecar goes first, so
+// a caller inside Locked(path) drops both while still holding the lock. A
+// missing sidecar is not an error; the result is path's own Remove error.
+func RemoveWithLock(path string) error {
+	os.Remove(path + ".lock")
+	return os.Remove(path)
+}
+
+// HeldLockUnder walks root for lock sidecars and returns the first one some
+// process holds, or "" when none is. It creates no file. skip, when non-nil,
+// is asked about every directory and prunes it when it returns true.
+func HeldLockUnder(root string, skip func(path string, d fs.DirEntry) bool) string {
+	var held string
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || held != "" {
+			return nil
+		}
+		if d.IsDir() {
+			if path != root && skip != nil && skip(path, d) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".lock") {
+			return nil
+		}
+		f, err := os.OpenFile(path, os.O_RDWR, 0)
+		if err != nil {
+			return nil
+		}
+		defer f.Close()
+		if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+			if errors.Is(err, syscall.EWOULDBLOCK) {
+				held = path
+			}
+			return nil
+		}
+		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		return nil
+	})
+	return held
 }
