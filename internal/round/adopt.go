@@ -296,11 +296,16 @@ func (e Env) checkAdoptClaim(ctx context.Context, root string, be Board, branch,
 			return warnings, blocked(BlockClaimed, "%s has stale claim %s; branch %s cannot be adopted without reclaiming it", issue, claim.Holder, branch)
 		}
 	}
-	source, ok := be.(*backlog.Issues)
-	if !ok || source.Tracker == nil {
+	var (
+		comments []tracker.Comment
+		have     bool
+	)
+	if hist, ok := be.(backlog.ClaimHistorian); ok {
+		comments, have, err = hist.ClaimComments(ctx, key)
+	}
+	if !have {
 		return append(warnings, fmt.Sprintf("adopt claim history on %s unavailable; reclaimed-branch check skipped", issue)), nil
 	}
-	comments, err := source.Tracker.Comments(ctx, key)
 	if err != nil {
 		return append(warnings, fmt.Sprintf("adopt claim history on %s skipped: %v", issue, err)), nil
 	}
