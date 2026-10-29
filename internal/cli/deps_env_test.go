@@ -301,3 +301,43 @@ func TestDoctorAccountsUseDepsClock(t *testing.T) {
 		})
 	}
 }
+
+// The worker env's context is bound inside workerEnvFor, before the factories
+// capture it. An assignment to Env.Ctx anywhere else in the CLI (as
+// Deps.WorkerPoll once did) rebinds only the field and leaves the issue,
+// comment and forge factories on Background. Poll resolves its forge through
+// one of them, so a cancelled invocation could still start that lookup live.
+func TestNoWorkerEnvCtxAssignAfterConstruction(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		af, err := parser.ParseFile(fset, f, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, decl := range af.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Name.Name == "workerEnvFor" {
+				continue
+			}
+			ast.Inspect(decl, func(n ast.Node) bool {
+				as, ok := n.(*ast.AssignStmt)
+				if !ok {
+					return true
+				}
+				for _, lhs := range as.Lhs {
+					if sel, ok := lhs.(*ast.SelectorExpr); ok && sel.Sel.Name == "Ctx" {
+						t.Errorf("%s assigns .Ctx after construction: bind it through Deps.workerEnvFor", fset.Position(as.Pos()))
+					}
+				}
+				return true
+			})
+		}
+	}
+}
