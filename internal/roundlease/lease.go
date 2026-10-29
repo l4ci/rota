@@ -21,6 +21,7 @@ import (
 	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // FileName is the lease under <git-common-dir>/rota/.
@@ -231,7 +232,7 @@ func (e Env) Acquire(commonDir, root string, h Holder, round int) (l Lease, out 
 			prev, out = cur, Reclaimed
 		}
 		l = Lease{PID: h.PID, Start: h.Start, Host: e.Host, Pane: h.Pane, PaneHost: h.PaneHost,
-			Root: root, Round: round, StartedAt: e.Now().UTC().Format(time.RFC3339)}
+			Root: root, Round: round, StartedAt: stamp.Format(e.Now())}
 		return write(path, l)
 	})
 	return l, out, prev, err
