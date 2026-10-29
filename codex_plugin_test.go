@@ -38,7 +38,7 @@ func TestCodexPluginTree(t *testing.T) {
 	if !got[".codex-plugin/plugin.json"] {
 		t.Error("manifest missing from the built tree")
 	}
-	// Every skill file reaches the tree, and every shared reference reaches every skill.
+	// Every shared reference reaches every skill (the skill's own files: layout_test.go).
 	dirs, _ := filepath.Glob("skills/rota-*")
 	refs, _ := filepath.Glob("skills/references/*.md")
 	if len(dirs) == 0 || len(refs) == 0 {
@@ -46,15 +46,6 @@ func TestCodexPluginTree(t *testing.T) {
 	}
 	for _, d := range dirs {
 		name := filepath.Base(d)
-		filepath.WalkDir(d, func(p string, e fs.DirEntry, err error) error {
-			if err == nil && !e.IsDir() && e.Type()&fs.ModeSymlink == 0 {
-				rel, _ := filepath.Rel("skills", p)
-				if !got["skills/"+filepath.ToSlash(rel)] {
-					t.Errorf("%s missing from the Codex tree", rel)
-				}
-			}
-			return nil
-		})
 		for _, r := range refs {
 			if rel := name + "/references/" + filepath.Base(r); !got["skills/"+rel] {
 				t.Errorf("skills/%s missing from the Codex tree", rel)
