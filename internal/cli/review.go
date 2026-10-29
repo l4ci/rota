@@ -203,11 +203,6 @@ func reviewScope(c *Ctx, args []string) (Result, error) {
 	return Result{Data: data, Text: text}, nil
 }
 
-// pyUniversalNewlines is what subprocess.run(text=True) does to captured output.
-func pyUniversalNewlines(s string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
-}
-
 func reviewBrief(c *Ctx, args []string) (Result, error) {
 	t, err := reviewTarget(c, args, "second-opinion")
 	if err != nil {
@@ -270,7 +265,7 @@ func reviewBrief(c *Ctx, args []string) (Result, error) {
 		p(fmt.Sprintf("### `%s`", path))
 		p("")
 		p("```diff")
-		p(strings.TrimRight(pyUniversalNewlines(diff), "\n"))
+		p(strings.TrimRight(pystr.UniversalNewlines(diff), "\n"))
 		p("```")
 		p("")
 	}

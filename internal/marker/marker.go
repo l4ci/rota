@@ -101,7 +101,7 @@ type Note struct{ Kind, Part, Rest string }
 
 // ParseNote reads a note comment, which must start with its marker.
 func ParseNote(body string) (Note, bool) {
-	body = strings.ReplaceAll(body, "\r\n", "\n")
+	body = pystr.UniversalNewlines(body)
 	m := noteRe.FindStringSubmatchIndex(body)
 	if m == nil {
 		return Note{}, false
@@ -119,7 +119,7 @@ func CommentHeader(kind string) string { return Line(KindComment, kind) + "\n" }
 // ParseComment reads a context comment into its kind and the text after the
 // header line.
 func ParseComment(body string) (kind, rest string, ok bool) {
-	body = strings.ReplaceAll(body, "\r\n", "\n")
+	body = pystr.UniversalNewlines(body)
 	m := commentRe.FindStringSubmatchIndex(body)
 	if m == nil {
 		return "", "", false
@@ -137,13 +137,13 @@ func HandRelease(id string) string { return Release(id) + "\n" + Line(KindHandRe
 // IsHandRelease reports whether body is a release of claim id that carries the
 // hand-release marker.
 func IsHandRelease(body, id string) bool {
-	return strings.Contains(strings.ReplaceAll(body, "\r\n", "\n"), Line(KindHandRelease, id))
+	return strings.Contains(pystr.UniversalNewlines(body), Line(KindHandRelease, id))
 }
 
 // ParseClaim reads a claim or release comment: verb is KindClaim or
 // KindRelease.
 func ParseClaim(body string) (verb, id string, ok bool) {
-	m := claimRe.FindStringSubmatch(strings.ReplaceAll(body, "\r\n", "\n"))
+	m := claimRe.FindStringSubmatch(pystr.UniversalNewlines(body))
 	if m == nil {
 		return "", "", false
 	}
@@ -192,7 +192,7 @@ func ReviewBounce(head string) string { return Line(KindReviewBounce, "head="+he
 // KindBounce or KindReviewBounce, reset reports a reset, head the sha after
 // head= ("" for a reset or an unknown head).
 func ParseBounce(body string) (kind, head string, reset, ok bool) {
-	m := bounceRe.FindStringSubmatch(strings.ReplaceAll(body, "\r\n", "\n"))
+	m := bounceRe.FindStringSubmatch(pystr.UniversalNewlines(body))
 	if m == nil {
 		return "", "", false, false
 	}
@@ -219,7 +219,7 @@ func SupportOfferLine() string { return Line(KindSupportOffer) }
 // ParseRelay reads a relay comment: its round and the relayed text after the
 // marker line.
 func ParseRelay(body string) (round int, text string, ok bool) {
-	body = strings.ReplaceAll(body, "\r\n", "\n")
+	body = pystr.UniversalNewlines(body)
 	m := relayRe.FindStringSubmatchIndex(body)
 	if m == nil {
 		return 0, "", false
@@ -233,7 +233,7 @@ func ParseRelay(body string) (round int, text string, ok bool) {
 
 // IsSupportOffer reports whether body is a support-offer comment.
 func IsSupportOffer(body string) bool {
-	return offerRe.MatchString(strings.ReplaceAll(body, "\r\n", "\n"))
+	return offerRe.MatchString(pystr.UniversalNewlines(body))
 }
 
 // ReviewMintedLine renders `<!-- rota:review-minted round=<n> -->`.
@@ -243,7 +243,7 @@ func ReviewMintedLine(round int) string {
 
 // IsReviewMinted reports whether body is a review-minted comment.
 func IsReviewMinted(body string) bool {
-	return reviewMintedRe.MatchString(strings.ReplaceAll(body, "\r\n", "\n"))
+	return reviewMintedRe.MatchString(pystr.UniversalNewlines(body))
 }
 
 // PointerLine renders `<!-- rota:pr-pointer <kind> -->`.
@@ -260,7 +260,7 @@ var fromRe = regexp.MustCompile(`(?m)^<!-- (?:rota|hv):from (main|support) -->[ 
 // one machine posts name it by kind: the support-offer comment is main's,
 // the support-return and relay comments the support machine's.
 func SideOf(body string) string {
-	body = strings.ReplaceAll(body, "\r\n", "\n")
+	body = pystr.UniversalNewlines(body)
 	if m := fromRe.FindStringSubmatch(body); m != nil {
 		return m[1]
 	}

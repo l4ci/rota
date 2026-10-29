@@ -315,7 +315,7 @@ func releaseChangelog(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		notes := releaseNewlines(string(b))
+		notes := pystr.UniversalNewlines(string(b))
 		target := releaseInDir(dir, *path)
 		existing, rerr := fsio.ReadText(target)
 		if rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
@@ -334,10 +334,6 @@ func releaseChangelog(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: gitObj("path", *path, "version", version, "changed", true), Text: *path}, nil
 	}
-}
-
-func releaseNewlines(s string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
 }
 
 // releaseInDir resolves p against dir unless it is absolute.
