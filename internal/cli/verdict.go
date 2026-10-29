@@ -14,10 +14,10 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/debugctr"
 	"github.com/l4ci/rota/internal/gate"
-	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -76,7 +76,7 @@ func resolveVerdictBranch(c *Ctx, args []string) (verdictBranch, error) {
 	if err != nil {
 		return verdictBranch{}, err
 	}
-	root, err := git.FindRoot(cwd, registeredRels)
+	root, err := rotatree.FindRoot(cwd, registeredRels)
 	if err != nil {
 		return verdictBranch{}, Resolution("no .rota/ directory here or in any parent").WithHint("run: rota init")
 	}
