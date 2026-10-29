@@ -425,16 +425,16 @@ func loadStrict(root string) (Store, error) {
 		return emptyStore(), nil
 	}
 	if err != nil {
-		return Store{}, err
+		return Store{}, storeRefusal(root, "unreadable", err)
 	}
 	v, err := jsonx.Decode(raw)
 	if err != nil {
-		return Store{}, fmt.Errorf("verdict store %s is unparseable, not overwriting: %w", Path(root), err)
+		return Store{}, storeRefusal(root, "unparseable", err)
 	}
 	compact, _ := jsonx.MarshalCompact(v)
 	s := emptyStore()
 	if err := json.Unmarshal(compact, &s); err != nil {
-		return Store{}, fmt.Errorf("verdict store %s is unparseable, not overwriting: %w", Path(root), err)
+		return Store{}, storeRefusal(root, "unparseable", err)
 	}
 	if s.Branches == nil {
 		s.Branches = map[string][]Record{}
@@ -443,6 +443,14 @@ func loadStrict(root string) (Store, error) {
 		s.Items = map[string][]Record{}
 	}
 	return s, nil
+}
+
+// storeRefusal is the exit-4 refusal a writer returns over a store it cannot
+// read, so a corrupt file is the user's to repair, not a rota bug.
+func storeRefusal(root, why string, cause error) error {
+	e := exitcode.Errf(exitcode.ExitRefused, "verdict store %s is %s, not overwriting: %v", Path(root), why, cause)
+	e.Cause = cause
+	return e.WithHint("repair the file or move it aside; moving it aside drops the recorded verdicts")
 }
 
 // update is a locked read-modify-write of the store.

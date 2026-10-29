@@ -14,7 +14,8 @@ func CanonicalizeItems(root string, targets func(string) []string) error {
 	return fsio.Locked(Path(root), fsio.LockTimeout, func() error {
 		s, err := loadStrict(root)
 		if err != nil {
-			return err
+			// A corrupt store reads as empty here: nothing to move, nothing written.
+			return nil
 		}
 		keys := make([]string, 0, len(s.Items))
 		for key := range s.Items {
