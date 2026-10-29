@@ -48,3 +48,24 @@ func TestNoDirectGitExec(t *testing.T) {
 		t.Fatalf("run git through internal/git, not exec directly: %s", strings.Join(bad, ", "))
 	}
 }
+
+// TestNoRotatreeImport keeps internal/git below rotatree: the .rota/ root
+// walk lives in rotatree, and git does not know the state layout.
+func TestNoRotatreeImport(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(b), `"github.com/l4ci/rota/internal/rotatree"`) {
+			t.Errorf("%s imports internal/rotatree", f)
+		}
+	}
+}
