@@ -46,8 +46,6 @@ func notFound(format string, a ...any) error {
 	return fmt.Errorf("%w: %s", ErrNotFound, fmt.Sprintf(format, a...))
 }
 
-var titleRe = regexp.MustCompile(`^- \*\*([^*]+)\*\*`)
-
 // AddResult reports Add.
 type AddResult struct{ Changed bool }
 
@@ -109,11 +107,7 @@ func (s Store) addLocked(scope, target, topic, title, body, date, sha string) (A
 			return AddResult{}, s.initTierUnlessGlossary(scope, topic, title)
 		}
 	}
-	stamp := date
-	if sha != "" {
-		stamp += " sha:" + sha
-	}
-	bullet := fmt.Sprintf("- **%s** — %s <!-- %s -->", title, body, stamp)
+	bullet := renderBullet(title, body, date, sha)
 	rest := strings.TrimLeft(content[start:end], "\n")
 	newBody := "\n" + bullet + "\n" + rest
 	if !strings.HasSuffix(newBody, "\n") {
@@ -144,7 +138,7 @@ func (s Store) initTier(scope, topic, title string) error {
 	return nil
 }
 
-// Amend appends text after the bullet under "## topic" that contains
+// Amend appends text to the body of the bullet under "## topic" that contains
 // fragment (case-sensitive). With explicit set, only scope's file is searched;
 // otherwise the umbrella file and, for a sub-repo scope, that sub-repo's file
 // are searched and a match in both is ErrAmbiguous. It returns the file
@@ -218,7 +212,7 @@ func (s Store) amendLocked(candidates []string, explicit bool, topic, fragment, 
 	if idx < 0 {
 		return "", false, fmt.Errorf("internal: could not re-locate target line in section body")
 	}
-	body = body[:idx] + h.line + " " + text + body[idx+len(h.line):]
+	body = body[:idx] + appendToBullet(h.line, text) + body[idx+len(h.line):]
 	next := h.content[:st] + body + h.content[en:]
 	if next == h.content {
 		return h.file, false, nil

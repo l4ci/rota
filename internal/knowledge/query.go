@@ -8,10 +8,6 @@ import (
 	"github.com/l4ci/rota/internal/section"
 )
 
-// bulletRe is a dated, titled bullet: "- **Title** — body <!-- YYYY-MM-DD -->",
-// with an optional commit sha beside the date: "<!-- YYYY-MM-DD sha:abc1234 -->".
-var bulletRe = regexp.MustCompile(`^- \*\*([^*]+)\*\* — (.*?)(\s*<!-- \d{4}-\d{2}-\d{2}( sha:[0-9a-f]{7,40})?\s*-->\s*)$`)
-
 // QueryOpts are the filters of Query.
 type QueryOpts struct {
 	IncludeDeprecated bool
@@ -55,12 +51,11 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 	filter := func(body, name string, tiers map[[2]string]string) []string {
 		var out []string
 		for _, line := range section.Lines(body) {
-			m := bulletRe.FindStringSubmatch(strings.TrimRight(line, " \t\r\f\v"))
-			if m == nil {
+			title, text, stamp, ok := parseBullet(strings.TrimRight(line, " \t\r\f\v"))
+			if !ok {
 				out = append(out, line)
 				continue
 			}
-			title := strings.TrimSpace(m[1])
 			tier := tiers[[2]string{name, title}]
 			if o.Tier != "" && tier != o.Tier {
 				continue
@@ -69,7 +64,7 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 				continue
 			}
 			if tier == Provisional {
-				line = fmt.Sprintf("- **%s** — %s (provisional)%s", title, m[2], m[3])
+				line = fmt.Sprintf("- **%s** — %s (provisional)%s", title, text, stamp)
 			}
 			out = append(out, line)
 		}

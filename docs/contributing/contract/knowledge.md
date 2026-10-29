@@ -70,7 +70,7 @@ data: {"topic": string, "changed": bool}
 exit: 2 when a flag is missing, `--mode` is not `append`, or when no `--repo` is given and the fragment matches in both the umbrella and the resolved sub-repo (hint: pass `--repo`); 3 when the topic or fragment is not found
 old: hv-knowledge-amend [--repo <name>] --topic <T> --fragment <F> --append <text>    (`--mode append` selects `--append`; the text is the body file's contents)
 shim: reads the body file (or stdin for `-`) into the text argument. The old helper prints nothing, so `changed` is computed by comparing the target KNOWLEDGE.md before and after the call.
-note: `--append TEXT` becomes `--mode append` plus `--body-file`, per rule 3, as for `design amend`; `append` is the only mode, so a later mode can be added. Without `--repo`, a single match across umbrella and the resolved sub-repo is amended, as before. A multi-file match was exit 1 and is now exit 2 (a missing decision, per the conventions).
+note: `--append TEXT` becomes `--mode append` plus `--body-file`, per rule 3, as for `design amend`; `append` is the only mode, so a later mode can be added. Without `--repo`, a single match across umbrella and the resolved sub-repo is amended, as before. A multi-file match was exit 1 and is now exit 2 (a missing decision, per the conventions). The text joins the end of the bullet's body, ahead of the final stamp: a `<!-- paths: … -->` comment stays where it was and the `<!-- YYYY-MM-DD[ sha:<hex>] -->` stays last, so `query` keeps recognizing the line and applying its tier. (Before, the text landed after the stamp and a deprecated bullet came back in `query`.)
 
 ### rota knowledge replace
 rota knowledge replace --topic <T> --old <text> --new <text> [--external]
