@@ -188,6 +188,45 @@ func TestLoadToleratesCorruptStore(t *testing.T) {
 	}
 }
 
+func TestWritersRefuseCorruptStore(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	writers := map[string]func() error{
+		"AddBranch": func() error { _, err := AddBranch(root, "b", rec(QA, Pass, "a")); return err },
+		"CanonicalizeItems": func() error {
+			return CanonicalizeItems(root, func(string) []string { return nil })
+		},
+	}
+	for _, text := range []string{"not json", `{"branches": 3}`, `[]`} {
+		for name, write := range writers {
+			if err := os.WriteFile(Path(root), []byte(text), 0o666); err != nil {
+				t.Fatal(err)
+			}
+			if err := write(); err == nil {
+				t.Errorf("%s over %q: no error", name, text)
+			}
+			if raw, _ := os.ReadFile(Path(root)); string(raw) != text {
+				t.Errorf("%s over %q rewrote the file: %q", name, text, raw)
+			}
+		}
+	}
+}
+
+func TestWriterCreatesMissingStore(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddBranch(root, "b", rec(QA, Pass, "a")); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(Load(root).Branches["b"]); n != 1 {
+		t.Errorf("recorded %d, want 1", n)
+	}
+}
+
 func TestEffectiveReview(t *testing.T) {
 	q := rec(ReviewQuality, Pass, "a")
 	q.Combined = Concerns

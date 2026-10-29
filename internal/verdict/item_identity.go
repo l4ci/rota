@@ -12,7 +12,10 @@ import (
 // The operation is idempotent and preserves every record, including resets.
 func CanonicalizeItems(root string, targets func(string) []string) error {
 	return fsio.Locked(Path(root), fsio.LockTimeout, func() error {
-		s := Load(root)
+		s, err := loadStrict(root)
+		if err != nil {
+			return err
+		}
 		keys := make([]string, 0, len(s.Items))
 		for key := range s.Items {
 			keys = append(keys, key)
