@@ -8,7 +8,7 @@ import ms "github.com/l4ci/rota/internal/milestone"
 type IssueBackend interface {
 	Backend
 	ReviewQueue() ([]QueueEntry, error)
-	MergePRGated(pr int, items []string, approve MergeApprover) (MergeResult, error)
+	MergePRGated(pr int, items []string, approve MergeApprover, lander Lander) (MergeResult, error)
 	ReleaseGate(mid string) ([]Blocker, []Issue, error)
 	ReleaseNotes(mid string) ([]NoteSection, error)
 	ReleaseClose(mid, tag string) (int, bool, error)

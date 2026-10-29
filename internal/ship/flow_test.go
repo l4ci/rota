@@ -12,6 +12,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/status"
 	"github.com/l4ci/rota/internal/tracker"
@@ -221,7 +222,7 @@ type fakeMerger struct {
 	err error
 }
 
-func (f fakeMerger) MergePRGated(int, []string, backlog.MergeApprover) (backlog.MergeResult, error) {
+func (f fakeMerger) MergePRGated(int, []string, backlog.MergeApprover, backlog.Lander) (backlog.MergeResult, error) {
 	return f.res, f.err
 }
 
@@ -235,8 +236,8 @@ func TestMergePR(t *testing.T) {
 	if !errors.As(err, &un) || len(un.IDs) != 1 || un.IDs[0] != "F02" {
 		t.Errorf("unproven: %v", err)
 	}
-	var rf *PRMergeRefused
-	_, err = MergePR(fakeMerger{err: &backlog.MergeFailedError{Err: errors.New("no")}}, 3, nil, nil)
+	var rf *land.MergeRefusedError
+	_, err = MergePR(fakeMerger{err: &land.MergeRefusedError{PR: 3, Err: errors.New("no")}}, 3, nil, nil)
 	if !errors.As(err, &rf) {
 		t.Errorf("refused: %v", err)
 	}
