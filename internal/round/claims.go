@@ -69,6 +69,9 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 		}
 		switch {
 		case st.Claim == want, bestOfClaim(r.Issue, r.Name, want, st):
+		case st.Claim == "" && slices.Contains(st.HandReleased, want):
+			rep.add(Finding{Kind: ClaimMismatch, Slot: r.Name, Issue: r.Issue,
+				Detail: fmt.Sprintf("slot records claim %s on %s, which was released on purpose", want, tracker.RefOf(r.Issue))})
 		case st.Claim == "":
 			rep.add(Finding{Kind: ClaimMismatch, Slot: r.Name, Issue: r.Issue,
 				Detail: fmt.Sprintf("slot records claim %s on %s, which has no open claim", want, tracker.RefOf(r.Issue)), Repair: "re-post claim"})
