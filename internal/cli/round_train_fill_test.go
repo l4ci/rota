@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/verdict"
@@ -44,7 +44,7 @@ func TestTrainNudgeExcludesAutopilotHolds(t *testing.T) {
 				prev.Head = "11:" + strings.TrimSpace(r.Stdout)
 				tc.failed["old-slot"] = prev
 			}
-			cd, err := rotastate.CommonDir(root)
+			cd, err := rotastatetest.CommonDir(root)
 			if err != nil {
 				t.Fatal(err)
 			}

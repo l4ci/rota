@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -309,7 +310,7 @@ func TestMergedDoneSlotNeedsNoWake(t *testing.T) {
 // reads as a change and wakes a watch whose assign was refused.
 func TestLocalSnapshotReportsTheLandLock(t *testing.T) {
 	repo := gittest.NewRepo(t, "main")
-	cd, err := rotastate.CommonDir(repo)
+	cd, err := rotastatetest.CommonDir(repo)
 	if err != nil {
 		t.Fatal(err)
 	}

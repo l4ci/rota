@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/harness"
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
 )
 
@@ -27,7 +27,7 @@ func orchProject(t *testing.T, lease bool) string {
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"git":{"baseBranch":"feat/x"}}`), 0o644)
 	pinDir(t, dir, func(d *Deps) { pinHolder(d, os.Getpid()); pinNow(d, "2026-10-03T12:00:00Z") })
 	if lease {
-		cd, err := rotastate.CommonDir(dir)
+		cd, err := rotastatetest.CommonDir(dir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -58,7 +58,7 @@ func TestStatuslineDumpThenPassesInputThrough(t *testing.T) {
 	if code != 0 || out != in+" tail\n" {
 		t.Fatalf("code %d out %q", code, out)
 	}
-	cd, _ := rotastate.CommonDir(dir)
+	cd, _ := rotastatetest.CommonDir(dir)
 	if _, err := os.Stat(filepath.Join(cd, "rota", "session", "s1.json")); err != nil {
 		t.Errorf("no state file: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestHookStopLoopPrevention(t *testing.T) {
 	if _, out, _ := rotaStdin(t, dir, stopPayload(dir, true), "hook", "stop"); out != "" {
 		t.Errorf("past the cap should pass: %q", out)
 	}
-	cd, _ := rotastate.CommonDir(dir)
+	cd, _ := rotastatetest.CommonDir(dir)
 	b, _ := os.ReadFile(filepath.Join(cd, "rota", "session", "s1.json"))
 	if !strings.Contains(string(b), `"handoffFailed": true`) {
 		t.Errorf("state: %s", b)
@@ -342,7 +342,7 @@ func TestHookStopUsesInjectedLeaseEnv(t *testing.T) {
 	le := roundlease.DefaultEnv()
 	le.Alive = func(p int) bool { return p == 4242 }
 	le.StartTime = func(p int) (uint64, bool) { return 99, p == 4242 }
-	cd, err := rotastate.CommonDir(dir)
+	cd, err := rotastatetest.CommonDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}

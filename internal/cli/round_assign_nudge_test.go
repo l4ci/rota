@@ -9,7 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundwatch"
 )
@@ -39,7 +39,7 @@ func assignNudgeRepo(t *testing.T, withCandidate bool) string {
 func watchedSlot(t *testing.T, dir, slot string) Result {
 	t.Helper()
 	c := &Ctx{Deps: testDeps(), ctx: context.Background()}
-	cd, err := rotastate.CommonDir(dir)
+	cd, err := rotastatetest.CommonDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestTrainNudgeAssignsFreeSlotFirst(t *testing.T) {
 				}
 			}
 			c := &Ctx{Deps: testDeps(), ctx: context.Background()}
-			cd, err := rotastate.CommonDir(dir)
+			cd, err := rotastatetest.CommonDir(dir)
 			if err != nil {
 				t.Fatal(err)
 			}

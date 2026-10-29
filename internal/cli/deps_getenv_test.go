@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 )
@@ -53,7 +53,7 @@ func heldLeaseDeps(t *testing.T) (c *Ctx, root, cd string, keys *[]string) {
 	le.Alive = func(p int) bool { return p == 4242 }
 	le.StartTime = func(p int) (uint64, bool) { return 99, p == 4242 }
 	var err error
-	if cd, err = rotastate.CommonDir(root); err != nil {
+	if cd, err = rotastatetest.CommonDir(root); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, _, err := le.Acquire(cd, root, roundlease.Holder{PID: 4242, Start: 99}, 1); err != nil {

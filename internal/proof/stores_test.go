@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/artifact/artifacttest"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 )
 
 // Both stores keep rows the same way: same idempotence, same row format, no
@@ -121,7 +122,7 @@ func TestConcurrentAddsAcrossWorktreesKeepEveryRow(t *testing.T) {
 	notes := &slowNotes{Notes: artifacttest.NewNotes()}
 	stores := map[string]Store{}
 	for _, root := range []string{repo, wt} {
-		cd, err := rotastate.CommonDir(root)
+		cd, err := rotastatetest.CommonDir(root)
 		if err != nil {
 			t.Fatal(err)
 		}
