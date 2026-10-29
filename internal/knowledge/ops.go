@@ -227,8 +227,7 @@ type RenameResult struct {
 }
 
 var (
-	bulletStart  = regexp.MustCompile(`(?m)^- \*\*(.+?)\*\*`)
-	siblingStart = regexp.MustCompile(`(?m)^- \*\*`)
+	bulletStart = regexp.MustCompile(`(?m)^- \*\*(.+?)\*\*`)
 )
 
 // RenameTopic renames the "## from" heading to "## to" and re-keys the
@@ -319,10 +318,7 @@ func (s Store) renameLocked(km, sidecar, from, to, title, mode string) (RenameRe
 		return RenameResult{}, notFound("bullet titled '%s' not found under '## %s' in %s", title, from, km)
 	}
 	bStart := tm[0]
-	bEnd := len(srcBody)
-	if n := siblingStart.FindStringIndex(srcBody[tm[1]:]); n != nil {
-		bEnd = tm[1] + n[0]
-	}
+	bEnd := bulletEnd(srcBody, bStart)
 	block := strings.TrimRight(srcBody[bStart:bEnd], "\n")
 	newSrc := srcBody[:bStart] + srcBody[bEnd:]
 
@@ -360,8 +356,8 @@ type ReplaceResult struct {
 
 // Replace swaps every occurrence of old for new inside the one bullet under
 // "## topic" in scope's KNOWLEDGE.md that contains old (case-sensitive). A
-// bullet runs from its "- " line to the next sibling bullet, so wrapped
-// bullets match as a whole. It refuses with ErrMultiMatch when old sits in more
+// bullet is its "- " line plus indented continuations (see bulletEnd), so
+// wrapped bullets match as a whole and prose after them is never touched. It refuses with ErrMultiMatch when old sits in more
 // than one bullet and returns ErrNotFound when it sits in none. When the edit
 // changes the bullet's bold title, the tier entry is re-keyed to the new one.
 // old == new is a no-op.
@@ -392,14 +388,10 @@ func (s Store) replaceLocked(scope, km, topic, old, new string) (ReplaceResult, 
 		return res, nil
 	}
 	body := content[st:en]
-	starts := siblingStart.FindAllStringIndex(body, -1)
 	type span struct{ a, b int }
 	var hits []span
-	for i, m := range starts {
-		b := len(body)
-		if i+1 < len(starts) {
-			b = starts[i+1][0]
-		}
+	for _, m := range bulletStart.FindAllStringIndex(body, -1) {
+		b := bulletEnd(body, m[0])
 		if strings.Contains(body[m[0]:b], old) {
 			hits = append(hits, span{m[0], b})
 		}
@@ -448,9 +440,9 @@ func bulletTitle(block string) string {
 type RemoveResult struct{ File string }
 
 // Remove deletes the bullet titled title under "## topic" in scope's
-// KNOWLEDGE.md and its tier entry. A bullet runs from its "- " line to the
-// next sibling bullet; the last bullet of a section keeps the blank line that
-// separates it from the next heading. It returns ErrNotFound when the topic or
+// KNOWLEDGE.md and its tier entry. A bullet is its "- " line plus indented
+// continuations (see bulletEnd); the last bullet of a section keeps the blank
+// line that separates it from the next heading. It returns ErrNotFound when the topic or
 // the bullet is missing, leaving both files untouched.
 func (s Store) Remove(scope, topic, title string) (RemoveResult, error) {
 	km, err := s.KnowledgePath(scope)
@@ -509,23 +501,4 @@ func (s Store) Remove(scope, topic, title string) (RemoveResult, error) {
 		return Update(sidecar, func(sc *Sidecar) (bool, error) { return sc.Delete(topic, title), nil })
 	})
 	return res, err
-}
-
-// bulletEnd is the offset just past the bullet starting at a: its own line and
-// the indented lines that continue it, including their newlines. Prose or
-// blank lines after it are not part of it.
-func bulletEnd(body string, a int) int {
-	e := a
-	for first := true; e < len(body); first = false {
-		nl := strings.IndexByte(body[e:], '\n')
-		line, next := body[e:], len(body)
-		if nl >= 0 {
-			line, next = body[e:e+nl], e+nl+1
-		}
-		if !first && (line == "" || (line[0] != ' ' && line[0] != '\t')) {
-			break
-		}
-		e = next
-	}
-	return e
 }
