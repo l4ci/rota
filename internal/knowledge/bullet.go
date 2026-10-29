@@ -49,3 +49,24 @@ func appendToBullet(line, text string) string {
 	stampStart := m[6] // start of group 3, the stamp with its leading space
 	return strings.TrimRight(trimmed[:stampStart], " \t") + " " + text + trimmed[stampStart:]
 }
+
+// bulletEnd is the one definition of a local bullet's extent: the offset just
+// past the bullet starting at a, being its own line and the indented lines that
+// continue it, including their newlines. Blank lines and unindented prose after
+// it are not part of it. Replace, move (RenameTopic), Remove and PathEntries
+// all read a bullet through this.
+func bulletEnd(body string, a int) int {
+	e := a
+	for first := true; e < len(body); first = false {
+		nl := strings.IndexByte(body[e:], '\n')
+		line, next := body[e:], len(body)
+		if nl >= 0 {
+			line, next = body[e:e+nl], e+nl+1
+		}
+		if !first && (line == "" || (line[0] != ' ' && line[0] != '\t')) {
+			break
+		}
+		e = next
+	}
+	return e
+}
