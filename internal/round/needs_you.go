@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/bugreport"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/tracker"
@@ -38,7 +38,7 @@ func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []str
 	if e.Forge == nil && e.NeedsHuman != "" && e.ForgeErr != "" {
 		// File-mode rounds have no needs-human labels to read. A missing
 		// forge there does not make their local escalation count incomplete.
-		if mode, err := config.Backend(e.Worker.Config(root)); err != nil || mode == "issues" {
+		if caps, err := backlog.CapabilitiesFor(e.Worker.Config(root)); err != nil || caps.IssueIDs {
 			warnings = append(warnings, "maintainer digest forge unavailable: "+e.ForgeErr)
 		}
 	}

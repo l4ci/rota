@@ -83,16 +83,51 @@ type Capabilities struct {
 	Forge bool
 	// Umbrella: items span several sub-repos, each Row names its owner.
 	Umbrella bool
+	// ItemStatus: Status and the durable notes read and write the tracker.
+	// False: the backend does not implement ItemTracker, so a caller that
+	// wants a status or a note checks this or asserts ItemTracker.
+	ItemStatus bool
 }
 
-// WorkflowOf is the backend's claim, state and note verbs. Both backends
-// have them; the error is for a backend that does not.
+// CapabilitiesFor is what Open's backend will report, from the loaded config
+// alone, so a verb can refuse a mode before it builds a tracker. An umbrella
+// adds Umbrella on top; the root decides that, not the config.
+func CapabilitiesFor(cfg any) (Capabilities, error) {
+	src, err := config.IssueSource(cfg)
+	if err != nil {
+		return Capabilities{}, err
+	}
+	return CapabilitiesForSource(src), nil
+}
+
+// CapabilitiesForSource is CapabilitiesFor for a caller that holds the
+// resolved issues.source string; "" is the file source.
+func CapabilitiesForSource(source string) Capabilities {
+	if source == config.SourceFile || source == "" {
+		return (&File{}).Capabilities()
+	}
+	return (&Issues{}).Capabilities()
+}
+
+// WorkflowOf is the backend's claim and state verbs. Both backends have them;
+// the error is for a backend that does not.
 func WorkflowOf(be Backend) (Workflow, error) {
 	wf, ok := be.(Workflow)
 	if !ok {
 		return nil, ErrWrongBackend
 	}
 	return wf, nil
+}
+
+// ItemTrackerOf is the backend's status and note verbs. File mode has none: the
+// error is the issue-only refusal (exit 4, backend) for the verb named by what,
+// with hint saying where file mode keeps that state.
+func ItemTrackerOf(be Backend, what, hint string) (ItemTracker, error) {
+	it, ok := be.(ItemTracker)
+	if !ok {
+		return nil, fileIssueOnly(what, hint)
+	}
+	return it, nil
 }
 
 // RefactorCounter is the since-refactor counter the file backend keeps in
@@ -117,6 +152,9 @@ type FileOps interface {
 	Drift(targets []Target) ([]DriftItem, []SymbolDrift, error)
 	BackfillSince(head string) (stamped int, err error)
 	Archive(days int, today time.Time) (moved int, err error)
+	// SyncMilestones regenerates every milestone file's Items section and
+	// lists the milestone IDs whose section had drifted.
+	SyncMilestones() ([]string, error)
 }
 
 // SubRepoScoped is implemented by the umbrella backend: SubRepo is the

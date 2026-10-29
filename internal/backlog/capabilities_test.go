@@ -25,7 +25,7 @@ func TestBackendBehavior(t *testing.T) {
 		title string
 	}{
 		{"file", file, Capabilities{}, "First"},
-		{"issues", issues, Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true}, "First"},
+		{"issues", issues, Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true, ItemStatus: true}, "First"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			be, id := c.open(t)
@@ -69,5 +69,71 @@ func TestBackendBehavior(t *testing.T) {
 				t.Errorf("Get after Complete = %+v, %v", closed, err)
 			}
 		})
+	}
+}
+
+// TestCapabilityFlags pins every flag per backend, one subtest per flag, so a
+// new backend or a flipped answer shows up as the flag that changed.
+func TestCapabilityFlags(t *testing.T) {
+	backends := []struct {
+		name string
+		caps Capabilities
+		want map[string]bool
+	}{
+		{"file", (&File{}).Capabilities(), map[string]bool{}},
+		{"issues", (&Issues{}).Capabilities(), map[string]bool{"IssueIDs": true, "ClaimWrites": true, "Forge": true, "ItemStatus": true}},
+		{"umbrella", (&Umbrella{}).Capabilities(), map[string]bool{"IssueIDs": true, "ClaimWrites": true, "Forge": true, "Umbrella": true, "ItemStatus": true}},
+	}
+	for _, b := range backends {
+		got := map[string]bool{
+			"IssueIDs": b.caps.IssueIDs, "ClaimWrites": b.caps.ClaimWrites, "Forge": b.caps.Forge,
+			"Umbrella": b.caps.Umbrella, "ItemStatus": b.caps.ItemStatus,
+		}
+		for flag, v := range got {
+			t.Run(b.name+"/"+flag, func(t *testing.T) {
+				if v != b.want[flag] {
+					t.Errorf("%s.%s = %v, want %v", b.name, flag, v, b.want[flag])
+				}
+			})
+		}
+	}
+}
+
+// TestCapabilitiesFor: the config-only answer matches the opened backend's,
+// so callers refuse a mode without opening one.
+func TestCapabilitiesFor(t *testing.T) {
+	for _, c := range []struct {
+		source string
+		want   Capabilities
+	}{
+		{"file", (&File{}).Capabilities()},
+		{"github", (&Issues{}).Capabilities()},
+	} {
+		got, err := CapabilitiesFor(mustDecode(t, `{"issues":{"source":"`+c.source+`"}}`))
+		if err != nil || got != c.want {
+			t.Errorf("CapabilitiesFor(%s) = %+v, %v; want %+v", c.source, got, err, c.want)
+		}
+	}
+}
+
+// TestFileHoldsNoSharedClaims: a file-mode claim is a no-op that always wins,
+// so it must not satisfy the interface that promises two holders.
+func TestFileHoldsNoSharedClaims(t *testing.T) {
+	var be Backend = &File{}
+	if _, ok := be.(SharedClaimer); ok {
+		t.Error("File satisfies SharedClaimer but cannot hold a second claim")
+	}
+	for _, be := range []Backend{&Issues{}, &Umbrella{}} {
+		if _, ok := be.(SharedClaimer); !ok {
+			t.Errorf("%T must satisfy SharedClaimer", be)
+		}
+	}
+}
+
+func TestCapabilitiesForSource(t *testing.T) {
+	for src, issue := range map[string]bool{"": false, "file": false, "github": true, "jira": true} {
+		if got := CapabilitiesForSource(src).IssueIDs; got != issue {
+			t.Errorf("CapabilitiesForSource(%q).IssueIDs = %v, want %v", src, got, issue)
+		}
 	}
 }

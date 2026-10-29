@@ -7,10 +7,12 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/l4ci/rota/internal/acceptance"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // neutralAC is the one criterion of a deferred finding that carries no fix.
@@ -23,14 +25,11 @@ const (
 	FloorOff   = "off"
 )
 
-// prNumberRe is the number at the end of a --pr ref: `77`, `#77` or a PR URL.
-var prNumberRe = regexp.MustCompile(`^(?:#|\S*/(?:pull|merge_requests)/)?(\d+)(?:[/?#]\S*)?$`)
-
 // prKey is the PR number of a --pr or Related ref, so `77`, `#77` and a PR URL
 // name the same PR; a ref with no number is its own key.
 func prKey(ref string) string {
-	if m := prNumberRe.FindStringSubmatch(strings.TrimSpace(ref)); m != nil {
-		return m[1]
+	if n, ok := tracker.PRRefNumber(ref); ok {
+		return n
 	}
 	return strings.TrimSpace(ref)
 }
@@ -51,10 +50,11 @@ const followUpPrefix = "Review follow-ups from PR"
 
 // followUpTitle names the one item that collects a PR's deferred findings.
 func followUpTitle(pr string) string {
-	if k := prKey(pr); prNumberRe.MatchString(k) {
+	k := prKey(pr)
+	if _, ok := tracker.PRRefNumber(k); ok {
 		return followUpPrefix + " #" + k
 	}
-	return followUpPrefix + " " + prKey(pr)
+	return followUpPrefix + " " + k
 }
 
 // IsFollowUpTitle is whether an item title names a deferred-findings item, the
@@ -117,8 +117,7 @@ func newFollowUp(f Finding, pr, kind, v string) followUp {
 }
 
 var (
-	whereRe      = regexp.MustCompile("(?m)^Where: `([^`]+)`$")
-	followUpACRe = regexp.MustCompile(`(?m)^- \[[ xX]\] AC-(\d+)`)
+	whereRe = regexp.MustCompile("(?m)^Where: `([^`]+)`$")
 )
 
 // presentFindings is the findings (title and file) an item body already holds.
@@ -158,23 +157,14 @@ func addFollowUps(body string, fs []followUp) (out string, ok bool) {
 	if i < 0 {
 		return body, false
 	}
-	next := 1
-	for _, m := range followUpACRe.FindAllStringSubmatch(body, -1) {
-		if n, _ := strconv.Atoi(m[1]); n >= next {
-			next = n + 1
-		}
-	}
-	var blocks, acs strings.Builder
+	var blocks strings.Builder
+	acs := make([]string, 0, len(fs))
 	for _, f := range fs {
 		blocks.WriteString("\n" + f.block)
-		fmt.Fprintf(&acs, "- [ ] AC-%d: %s\n", next, f.ac)
-		next++
+		acs = append(acs, f.ac)
 	}
-	head, tail := strings.TrimRight(body[:i], "\n"), strings.TrimRight(body[i:], "\n")
-	if strings.HasSuffix(tail, "## Acceptance") {
-		tail += "\n" // an empty section: keep the blank line before the first criterion
-	}
-	return head + "\n" + blocks.String() + tail + "\n" + acs.String(), true
+	head, tail := strings.TrimRight(body[:i], "\n"), body[i:]
+	return acceptance.Append(head+"\n"+blocks.String()+tail, acs...)
 }
 
 // FileFollowUps maps findings (the deferred ones a verdict carries) to follow-up

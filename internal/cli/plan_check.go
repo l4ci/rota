@@ -6,6 +6,7 @@ import (
 	"unicode"
 
 	"github.com/l4ci/rota/internal/acceptance"
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/plan"
@@ -40,7 +41,7 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return failAny(err)
 	}
-	be, wf, _, _, err := itemFlow(c, ref)
+	be, wf, _, _, err := itemTrack(c, ref, "plan check", backlog.FileShowHint)
 	if err != nil {
 		return backlogFailRead(err)
 	}

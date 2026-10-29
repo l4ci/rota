@@ -1,16 +1,17 @@
 package backlog
 
 import (
+	"context"
 	"strings"
 
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // Workflow is the part of a backlog that coordinates workers on an item: the
-// claim lock, the state label, the status read-back and the durable notes.
-// Both backends implement it; the file backend keeps the lock in status.json,
-// so its claim, release and state verbs are successful no-ops and its status
-// and note verbs are refused as issue-only (ErrWrongBackend).
+// claim lock and the state label. Both backends implement it; the file backend
+// keeps the lock in status.json, so its claim, release and state verbs are
+// successful no-ops.
 type Workflow interface {
 	// Claim takes the item for claimID. won is false when another claim holds
 	// it; holder is then that claim's ID. changed is false when the backend
@@ -21,7 +22,15 @@ type Workflow interface {
 	// SetState leaves exactly one state label (in-progress, needs-review,
 	// changes-requested) or none ("none"); false when nothing changed.
 	SetState(ref, state string) (bool, error)
-	// Status is the read-back of the item; the file backend refuses it.
+}
+
+// ItemTracker is the part of a backlog that reads an item back from its
+// tracker: the status and the durable notes. Only the issue backends implement
+// it; the file backend keeps that state in BACKLOG.md, status.json and the
+// detail file, so it does not satisfy this interface and a caller branches on
+// the assertion (or Capabilities.ItemStatus).
+type ItemTracker interface {
+	// Status is the read-back of the item.
 	Status(ref string) (*Status, error)
 	// NoteGet returns the durable note of a kind (proof, design, plan or
 	// plan:S<NN>); ok is false when the item has none.
@@ -41,6 +50,22 @@ type SharedClaimer interface {
 	ClaimShared(ref, claimID string, holders int) (won bool, holder string, err error)
 }
 
+// ClaimHistorian reads the raw tracker comments that carry claim markers, for
+// a caller that audits who held an item. ok is false when the backend has no
+// tracker to read; only the single-repo issues backend implements it.
+type ClaimHistorian interface {
+	ClaimComments(ctx context.Context, key tracker.IssueKey) (comments []tracker.Comment, ok bool, err error)
+}
+
+// ClaimComments lists the issue's tracker comments.
+func (b *Issues) ClaimComments(ctx context.Context, key tracker.IssueKey) ([]tracker.Comment, bool, error) {
+	if b.Tracker == nil {
+		return nil, false, nil
+	}
+	comments, err := b.Tracker.Comments(ctx, key)
+	return comments, true, err
+}
+
 // ClaimLabelSyncer repairs only the visible labels derived from tracker claims.
 // The comment claims remain the source of truth; file mode has no labels.
 type ClaimLabelSyncer interface {
@@ -56,16 +81,16 @@ var (
 var (
 	_ Workflow      = (*File)(nil)
 	_ Workflow      = (*Issues)(nil)
-	_ SharedClaimer = (*File)(nil)
+	_ ItemTracker   = (*Issues)(nil)
 	_ SharedClaimer = (*Issues)(nil)
 	_ SharedClaimer = (*Umbrella)(nil)
 )
 
-// fileNoteHint names where a file-mode project keeps what issue mode keeps in
-// notes (_FILE_NOTE_MSG); fileShowHint where it keeps what item show reads.
+// FileNoteHint names where a file-mode project keeps what issue mode keeps in
+// notes (_FILE_NOTE_MSG); FileShowHint where it keeps what item show reads.
 const (
-	fileNoteHint = "rota design or rota plan"
-	fileShowHint = "see BACKLOG.md, status.json and the detail file"
+	FileNoteHint = "rota design or rota plan"
+	FileShowHint = "see BACKLOG.md, status.json and the detail file"
 )
 
 func fileIssueOnly(what, hint string) error {
@@ -83,11 +108,6 @@ func (f *File) exists(ref string) error {
 // Claim is a no-op in file mode: status.json is the lock. The item must exist.
 func (f *File) Claim(ref, claimID string) (bool, string, error) {
 	return true, claimID, f.exists(ref)
-}
-
-// ClaimShared is a no-op in file mode, like Claim.
-func (f *File) ClaimShared(ref, claimID string, _ int) (bool, string, error) {
-	return f.Claim(ref, claimID)
 }
 
 // HandReleaser is a backend whose release can be marked as a person's own, so
@@ -110,23 +130,4 @@ func (f *File) SetState(ref, state string) (bool, error) {
 		return false, errf(ErrInvalid, "state must be one of %s", strings.Join(States, "/"))
 	}
 	return false, f.exists(ref)
-}
-
-// Status is refused in file mode: the state lives in BACKLOG.md, status.json
-// and the detail file.
-func (f *File) Status(string) (*Status, error) { return nil, fileIssueOnly("item show", fileShowHint) }
-
-// NoteGet is refused in file mode.
-func (f *File) NoteGet(string, string) (string, bool, error) {
-	return "", false, fileIssueOnly("item note show", fileNoteHint)
-}
-
-// NotePut is refused in file mode.
-func (f *File) NotePut(string, string, string) (bool, error) {
-	return false, fileIssueOnly("item note add", fileNoteHint)
-}
-
-// NoteRm is refused in file mode.
-func (f *File) NoteRm(string, string) (bool, error) {
-	return false, fileIssueOnly("item note rm", fileNoteHint)
 }

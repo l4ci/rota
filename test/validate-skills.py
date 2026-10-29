@@ -272,6 +272,34 @@ def check_pending_spec(skill_files, issues):
         issues.append(f"{rel}: listed in PENDING_LONG but missing; remove the entry")
 
 
+def supported_skill_file(rel):
+    # Mirrors internal/skills.SupportedFile, the owner of the skill-file layout:
+    # flat markdown plus agents/*.yaml. layout_test.go pins both to the same verdicts.
+    parts = rel.split("/")
+    if len(parts) == 1:
+        return rel.endswith(".md")
+    return len(parts) == 2 and parts[0] == "agents" and rel.endswith(".yaml")
+
+
+def check_layout(skills_dir, issues):
+    # The binary embeds only the supported layout, so a nested file would work
+    # from a source checkout or the Codex plugin yet never reach rota skills get.
+    def files(d):
+        for f in sorted(d.iterdir()):
+            if f.is_dir() and not f.is_symlink():
+                yield from files(f)
+            else:
+                yield f
+
+    for skill in sorted(Path(skills_dir).glob("rota-*")):
+        for f in files(skill):
+            rel = f.relative_to(skill).as_posix()
+            if rel == "references" and f.is_symlink():
+                continue
+            if not supported_skill_file(rel):
+                issues.append(f"{f.as_posix()}: unsupported skill content; skills ship flat markdown and agents/*.yaml only (the binary does not package it)")
+
+
 def check_references(path, text, issues):
     # Skills cite references/<x>.md; `rota skills install` copies each cited file
     # next to the skill, so in the source tree the link resolves against the
@@ -294,6 +322,8 @@ def check_skill_files(path, text, issues):
         linked.add(m.group(1))
         if not (folder / m.group(1)).is_file():
             issues.append(f"{path}: broken sibling link '{m.group(1)}'")
+    for m in re.finditer(r'\]\(((?!references/|\.\./|https?:|/|#)[^)\s]*/[^)\s]*)\)', text):
+        issues.append(f"{path}: link '{m.group(1)}' points into a subdirectory; the binary packages flat sibling markdown only")
     for sib in sorted(folder.glob("*.md")):
         if sib.name == "SKILL.md":
             continue
@@ -549,6 +579,7 @@ def main():
     issues = []
 
     skill_files = sorted(Path(".").glob("skills/rota-*/SKILL.md"))
+    check_layout("skills", issues)
 
     for skill_path in skill_files:
         text = skill_path.read_text(encoding="utf-8")
@@ -575,7 +606,17 @@ def main():
         sys.exit(0)
 
 
+def layout_only(skills_dir):
+    issues = []
+    check_layout(skills_dir, issues)
+    for line in issues:
+        print(line, file=sys.stderr)
+    sys.exit(1 if issues else 0)
+
+
 try:
+    if len(sys.argv) == 3 and sys.argv[1] == "--layout":
+        layout_only(sys.argv[2])
     main()
 except Exception as exc:
     print(f"validate-skills: ERROR {exc}", file=sys.stderr)

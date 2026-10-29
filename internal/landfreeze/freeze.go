@@ -87,13 +87,23 @@ func Save(path string, r *Record) error {
 }
 
 func issueID(s string) string { return strings.TrimPrefix(strings.TrimSpace(s), "#") }
+
+// prID is the one PR-reference grammar: a PR URL, or a positive number with at
+// most one "#" and then one "!" prefix. It returns "" for anything else.
 func prID(s string) string {
 	s = strings.TrimSpace(s)
 	if ref, ok := tracker.ParsePRURL(s); ok {
+		if ref.Number <= 0 {
+			return ""
+		}
 		return strconv.Itoa(ref.Number)
 	}
-	n, err := strconv.Atoi(strings.TrimLeft(s, "#!"))
-	if err != nil || n <= 0 {
+	s = strings.TrimPrefix(strings.TrimPrefix(s, "#"), "!")
+	if !positiveID(s) {
+		return ""
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
 		return ""
 	}
 	return strconv.Itoa(n)
@@ -179,9 +189,7 @@ func ValidateRepair(issue, pr string) error {
 		if hasControl(pr) {
 			return fmt.Errorf("--repair-pr requires a positive PR number or PR URL")
 		}
-		s := strings.TrimSpace(pr)
-		ref, url := tracker.ParsePRURL(s)
-		if (!url || ref.Number <= 0) && !positiveID(strings.TrimPrefix(strings.TrimPrefix(s, "#"), "!")) {
+		if prID(pr) == "" {
 			return fmt.Errorf("--repair-pr requires a positive PR number or PR URL")
 		}
 	}

@@ -145,7 +145,7 @@ func doneAcceptance(c *Ctx, root, dir, branch string, ids []string) error {
 			continue
 		}
 		crits, _ := acceptance.Parse(body)
-		wf, err := backlog.WorkflowOf(be)
+		wf, err := backlog.ItemTrackerOf(be, "item note show", backlog.FileNoteHint)
 		if err != nil {
 			_, err = backlogFail(err)
 			return err
