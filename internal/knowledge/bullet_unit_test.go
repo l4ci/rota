@@ -75,7 +75,7 @@ func TestBulletUnitAgreesAcrossOperations(t *testing.T) {
 			t.Fatal(err)
 		}
 		got := readKM(t, km)
-		wantA := "## A\n\n- **One** first NEEDLE <!-- paths: [\"src/*.go\"] -->\n  continued NEEDLE\n\nProse after one: NEEDLE.\n\n\nTail prose: NEEDLE.\n\n"
+		wantA := "## A\n\n- **One** first NEEDLE <!-- paths: [\"src/*.go\"] -->\n  continued NEEDLE\n\nProse after one: NEEDLE.\n\nTail prose: NEEDLE.\n\n"
 		if !strings.HasPrefix(got, wantA) || !strings.HasSuffix(got, "## B\n\n- **Two** second\n  continued two\n") {
 			t.Errorf("got %q", got)
 		}
@@ -86,7 +86,7 @@ func TestBulletUnitAgreesAcrossOperations(t *testing.T) {
 			t.Fatal(err)
 		}
 		got := readKM(t, km)
-		if !strings.Contains(got, "## A\n\n\nProse after one: NEEDLE.\n\n- **Two**") || !strings.Contains(got, "## B\n\n- **One** first NEEDLE") {
+		if !strings.Contains(got, "## A\n\nProse after one: NEEDLE.\n\n- **Two**") || !strings.Contains(got, "## B\n\n- **One** first NEEDLE") {
 			t.Errorf("got %q", got)
 		}
 	})

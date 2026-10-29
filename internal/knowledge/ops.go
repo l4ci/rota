@@ -320,6 +320,10 @@ func (s Store) renameLocked(km, sidecar, from, to, title, mode string) (RenameRe
 	bStart := tm[0]
 	bEnd := bulletEnd(srcBody, bStart)
 	block := strings.TrimRight(srcBody[bStart:bEnd], "\n")
+	// A blank line on both sides of the bullet collapses to one, as in Remove.
+	if strings.HasSuffix(content[:srcStart+bStart], "\n\n") && strings.HasPrefix(srcBody[bEnd:], "\n") {
+		bEnd++
+	}
 	newSrc := srcBody[:bStart] + srcBody[bEnd:]
 
 	dstBody := content[dstStart:dstEnd]
