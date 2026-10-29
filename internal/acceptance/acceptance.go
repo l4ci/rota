@@ -216,3 +216,31 @@ func Coverage(body string, marks []Mark, proofOf Lookup) []Status {
 // mark for a criterion only a person can judge. The token does not touch the
 // AC-n id, so Parse, IDs and Number read such a line as any other.
 func Human(text string) bool { return humanRe.MatchString(text) }
+
+// Append adds texts as numbered unchecked criteria at the end of the
+// "## Acceptance" section, after the highest id already in the body. ok is
+// false when the body has no such section; Append never creates one.
+func Append(body string, texts ...string) (out string, ok bool) {
+	s, e, found := section.Find(body, "Acceptance")
+	if !found {
+		return body, false
+	}
+	if len(texts) == 0 {
+		return body, true
+	}
+	next := maxID(body) + 1
+	var add strings.Builder
+	for _, t := range texts {
+		add.WriteString("- [ ] " + label(next) + ": " + t + "\n")
+		next++
+	}
+	sep := "\n"
+	if strings.TrimSpace(body[s:e]) == "" {
+		sep = "\n\n" // an empty section: keep the blank line before the first criterion
+	}
+	rest := body[e:]
+	if rest != "" {
+		rest = "\n" + rest // keep a blank line before the next heading
+	}
+	return strings.TrimRight(body[:e], "\n") + sep + add.String() + rest, true
+}
