@@ -21,6 +21,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // File is the log's name under .rota/.
@@ -457,7 +458,7 @@ func orUnknown(s string) string {
 func Draft(r Record, env Environment, red Env) (title, body string) {
 	what := r.Summary
 	if what == "" {
-		what = firstLine(r.Error)
+		what = strutil.FirstLine(r.Error)
 	}
 	if what == "" {
 		what = "unexpected behaviour"
@@ -510,11 +511,6 @@ func orNone(s string) string {
 	if strings.TrimSpace(s) == "" {
 		return "_not given_"
 	}
-	return s
-}
-
-func firstLine(s string) string {
-	s, _, _ = strings.Cut(strings.TrimSpace(s), "\n")
 	return s
 }
 
