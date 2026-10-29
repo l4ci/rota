@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/l4ci/rota/internal/acceptance"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
@@ -116,8 +117,7 @@ func newFollowUp(f Finding, pr, kind, v string) followUp {
 }
 
 var (
-	whereRe      = regexp.MustCompile("(?m)^Where: `([^`]+)`$")
-	followUpACRe = regexp.MustCompile(`(?m)^- \[[ xX]\] AC-(\d+)`)
+	whereRe = regexp.MustCompile("(?m)^Where: `([^`]+)`$")
 )
 
 // presentFindings is the findings (title and file) an item body already holds.
@@ -157,23 +157,14 @@ func addFollowUps(body string, fs []followUp) (out string, ok bool) {
 	if i < 0 {
 		return body, false
 	}
-	next := 1
-	for _, m := range followUpACRe.FindAllStringSubmatch(body, -1) {
-		if n, _ := strconv.Atoi(m[1]); n >= next {
-			next = n + 1
-		}
-	}
-	var blocks, acs strings.Builder
+	var blocks strings.Builder
+	acs := make([]string, 0, len(fs))
 	for _, f := range fs {
 		blocks.WriteString("\n" + f.block)
-		fmt.Fprintf(&acs, "- [ ] AC-%d: %s\n", next, f.ac)
-		next++
+		acs = append(acs, f.ac)
 	}
-	head, tail := strings.TrimRight(body[:i], "\n"), strings.TrimRight(body[i:], "\n")
-	if strings.HasSuffix(tail, "## Acceptance") {
-		tail += "\n" // an empty section: keep the blank line before the first criterion
-	}
-	return head + "\n" + blocks.String() + tail + "\n" + acs.String(), true
+	head, tail := strings.TrimRight(body[:i], "\n"), body[i:]
+	return acceptance.Append(head+"\n"+blocks.String()+tail, acs...)
 }
 
 // FileFollowUps maps findings (the deferred ones a verdict carries) to follow-up
