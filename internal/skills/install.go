@@ -194,11 +194,7 @@ func HasManifest(root string) bool {
 }
 
 func writeManifest(root string, m Manifest) error {
-	b, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return err
-	}
-	return fsio.WriteFileAtomic(manifestPath(root), append(b, '\n'))
+	return fsio.WriteJSONAtomic(manifestPath(root), m)
 }
 
 // Options are the knobs of Install, Update and Uninstall.

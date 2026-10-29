@@ -287,3 +287,28 @@ func TestWriteFileAtomicFailureLeavesNoTemp(t *testing.T) {
 		})
 	}
 }
+
+// A typed value takes the same bytes as its decoded form: no HTML escaping,
+// non-ASCII as \u escapes, struct field order kept.
+func TestWriteJSONAtomicEncodesStructsLikeJsonx(t *testing.T) {
+	type doc struct {
+		Name string            `json:"name"`
+		Tags []string          `json:"tags"`
+		Meta map[string]string `json:"meta,omitempty"`
+		Skip string            `json:"skip,omitempty"`
+	}
+	v := doc{Name: "a<b&c é", Tags: []string{"x>y"}, Meta: map[string]string{"k": "ü"}}
+	path := filepath.Join(t.TempDir(), "doc.json")
+	if err := WriteJSONAtomic(path, v); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(path)
+	want, err := jsonx.Decode([]byte(`{"name": "a<b&c é", "tags": ["x>y"], "meta": {"k": "ü"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantBytes, _ := jsonx.Marshal(want)
+	if string(got) != string(wantBytes)+"\n" {
+		t.Fatalf("got %q, want %q", got, string(wantBytes)+"\n")
+	}
+}
