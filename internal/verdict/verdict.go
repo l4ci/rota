@@ -480,15 +480,30 @@ func AddItem(root, id string, r Record) (failed int, err error) {
 	return
 }
 
+// resetStarts returns the index in list from which each counter counts: debug
+// is the position after the latest debug-reset record, work the position after
+// the latest work-fix-reset or work-fix PASS record. It is the one place that
+// names the reset kinds; FailedFixes, WorkFixAttempts and appendItem's
+// retention cut all read it.
+func resetStarts(list []Record) (debug, work int) {
+	for i, r := range list {
+		switch {
+		case r.Kind == DebugReset:
+			debug = i + 1
+		case r.Kind == WorkFixReset, r.Kind == WorkFix && r.Verdict == Pass:
+			work = i + 1
+		}
+	}
+	return debug, work
+}
+
 // FailedFixes counts an item's failed debug-fix records after its latest
 // debug-reset record.
 func FailedFixes(list []Record) int {
+	debug, _ := resetStarts(list)
 	n := 0
-	for _, r := range list {
-		switch {
-		case r.Kind == DebugReset:
-			n = 0
-		case r.Kind == DebugFix && r.Verdict == Fail:
+	for _, r := range list[debug:] {
+		if r.Kind == DebugFix && r.Verdict == Fail {
 			n++
 		}
 	}
@@ -498,12 +513,10 @@ func FailedFixes(list []Record) int {
 // WorkFixAttempts counts an item's work-fix attempts since the latest
 // work-fix PASS or work-fix-reset record.
 func WorkFixAttempts(list []Record) int {
+	_, work := resetStarts(list)
 	n := 0
-	for _, r := range list {
-		switch {
-		case r.Kind == WorkFixReset, r.Kind == WorkFix && r.Verdict == Pass:
-			n = 0
-		case r.Kind == WorkFix && r.Verdict == Fail:
+	for _, r := range list[work:] {
+		if r.Kind == WorkFix && r.Verdict == Fail {
 			n++
 		}
 	}
