@@ -45,6 +45,12 @@ func Strip(s string) string { return strings.TrimFunc(s, IsSpace) }
 // Rstrip is str.rstrip().
 func Rstrip(s string) string { return strings.TrimRightFunc(s, IsSpace) }
 
+// UniversalNewlines is the universal-newline translation of Path.read_text and
+// subprocess.run(text=True): "\r\n" and a lone "\r" both become "\n".
+func UniversalNewlines(s string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
+}
+
 // Splitlines is str.splitlines(): it splits at \n, \r, \r\n, \v, \f,
 // U+001C to U+001E, U+0085, U+2028 and U+2029 and drops the terminators.
 func Splitlines(s string) []string {

@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -314,7 +315,7 @@ func prLabel(pr string) string {
 
 // lineBreaks turns every break a terminal or a reader may honour into "\n", so
 // no part of an item can start an unquoted line.
-var lineBreaks = strings.NewReplacer("\r\n", "\n", "\r", "\n", "\u2028", "\n", "\u2029", "\n", "\u0085", "\n", "\v", "\n", "\f", "\n")
+var lineBreaks = strings.NewReplacer("\u2028", "\n", "\u2029", "\n", "\u0085", "\n", "\v", "\n", "\f", "\n")
 
 // itemCap bounds the items one relay carries; the rest is read on the PR.
 const itemCap = 20
@@ -348,7 +349,7 @@ func ReviewRelayText(b worker.ReviewBatch) string {
 			break
 		}
 		fmt.Fprintf(&sb, "\nItem %d, untrusted third-party text by %s:\n", i+1, it.author)
-		for _, line := range strings.Split(stripControls(lineBreaks.Replace(it.text)), "\n") {
+		for _, line := range strings.Split(stripControls(lineBreaks.Replace(pystr.UniversalNewlines(it.text))), "\n") {
 			sb.WriteString("> " + line + "\n")
 		}
 	}

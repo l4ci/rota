@@ -21,7 +21,6 @@ var itemSections = map[string]string{"bugs": "## Bugs", "features": "## Features
 var (
 	rawBulletID  = regexp.MustCompile(`\*\*\[(` + IDPattern(1) + `)\]`)
 	dependsRefRe = regexp.MustCompile(`^(?:#\d+|` + IDPattern(FileIDDigits) + `)$`)
-	newlineRepl  = strings.NewReplacer("\r\n", "\n", "\r", "\n")
 )
 
 // ParseDependsRefs splits a --depends-on value into item references, rejecting
@@ -124,7 +123,7 @@ func BuildCreateInput(r CaptureRequest) (CreateInput, error) {
 // AppendRaw appends one preformatted bullet verbatim to kind's section and
 // returns its ID. The bullet must carry a **[ID].
 func AppendRaw(ops FileOps, kind string, raw []byte) (CreateResult, error) {
-	entry := strings.TrimRight(newlineRepl.Replace(string(raw)), "\n")
+	entry := strings.TrimRight(pystr.UniversalNewlines(string(raw)), "\n")
 	m := rawBulletID.FindStringSubmatch(entry)
 	if m == nil {
 		return CreateResult{}, errf(ErrInvalid, "--raw-file bullet needs a **[ID]")
