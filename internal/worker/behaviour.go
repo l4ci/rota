@@ -12,6 +12,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/itembody"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
@@ -235,7 +236,7 @@ func (g *gate) behaviourRun(dir string) (bool, error) {
 // behaviourHome makes the empty HOME of one behaviour run, under
 // .rota/qa-runs/behaviour/. The caller removes it however the run ends.
 func (g *gate) behaviourHome() (string, error) {
-	parent := filepath.Join(g.root, ".rota", "qa-runs", "behaviour")
+	parent := rotatree.File(g.root, rotatree.QARunsDir, "behaviour")
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return "", err
 	}
@@ -355,7 +356,7 @@ func behaviourTranscript(steps []itembody.TryStep, results []behaviourStep) stri
 // to the root. A write error leaves the path in the messages all the same; the
 // gate's verdict does not depend on the file.
 func (g *gate) writeBehaviourTranscript(text string) string {
-	rel := filepath.Join(".rota", "qa-runs", "behaviour",
+	rel := filepath.Join(rotatree.DirName, rotatree.QARunsDir, "behaviour",
 		fmt.Sprintf("%s-%s.txt", notFileName.ReplaceAllString(g.branch, "_"), strutil.ShortSHA(g.verified)))
 	abs := filepath.Join(g.root, rel)
 	err := os.MkdirAll(filepath.Dir(abs), 0o755)

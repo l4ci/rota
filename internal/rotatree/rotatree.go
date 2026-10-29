@@ -31,6 +31,7 @@ const (
 	KnowledgeFile   = "KNOWLEDGE.md"
 	DecisionsFile   = "DECISIONS.md"
 	MilestonesFile  = "MILESTONES.md"
+	KnowledgeHits   = "knowledge-hits.jsonl"
 
 	DesignsDir    = "designs"
 	PlansDir      = "plans"
@@ -40,6 +41,7 @@ const (
 	QADir         = "qa"
 	KnowledgeDir  = "knowledge"
 	DebugDir      = "debug"
+	QARunsDir     = "qa-runs"
 )
 
 // Dir is the .rota directory of the project at root.
