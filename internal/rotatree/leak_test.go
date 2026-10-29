@@ -12,7 +12,7 @@ import (
 )
 
 // literalAllowed names the files that may spell ".rota" on purpose. hvmigrate
-// moves .hv/ to .rota/, so the target directory is part of its own contract.
+// moves the legacy state dir to .rota/, so the target directory is part of its own contract.
 var literalAllowed = map[string]bool{
 	"internal/hvmigrate/hv.go": true,
 }
