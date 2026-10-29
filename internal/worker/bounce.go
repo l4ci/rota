@@ -114,6 +114,15 @@ func sameHead(a, b string) bool {
 	return a != "" && (a == b || (len(a) >= 7 && strings.HasPrefix(b, a)))
 }
 
+// newIssueComments resolves the optional factory only when a consumer needs
+// comment access. WithDefaults deliberately leaves IssueComments optional.
+func (e Env) newIssueComments(root string, s tracker.Settings) (IssueComments, error) {
+	if e.IssueComments != nil {
+		return e.IssueComments(root, s)
+	}
+	return tracker.NewIssueTracker(e.Ctx, s, "", root, machineOption())
+}
+
 // BounceStore is the store round.support picks for root (see BounceStore).
 // round.support is read alone, so a bad value in another key cannot move the
 // count between stores.
@@ -123,17 +132,11 @@ func (e Env) BounceStore(root string) (BounceStore, error) {
 	if roundcfg.SupportName(cfg) == "" {
 		return registryBounces{e: e, root: root}, nil
 	}
-	build := e.IssueComments
-	if build == nil {
-		build = func(dir string, s tracker.Settings) (IssueComments, error) {
-			return tracker.NewIssueTracker(e.Ctx, s, "", dir, machineOption())
-		}
-	}
 	s, err := tracker.ReadSettings(cfg)
 	if err != nil {
 		return nil, err
 	}
-	it, err := build(root, s)
+	it, err := e.newIssueComments(root, s)
 	if errors.Is(err, tracker.ErrNoIssueTracker) || (err == nil && it == nil) {
 		return nil, fmt.Errorf("round.support keeps bounces on the issue, and issues.source has no issue tracker")
 	}
@@ -155,7 +158,7 @@ func (e Env) WriterTrust(root string) (*MarkerTrust, error) {
 	if err != nil {
 		return nil, err
 	}
-	it, err := e.IssueComments(root, s)
+	it, err := e.newIssueComments(root, s)
 	if errors.Is(err, tracker.ErrNoIssueTracker) || (err == nil && it == nil) {
 		return nil, fmt.Errorf("issues.source has no issue tracker")
 	}
