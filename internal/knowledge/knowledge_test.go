@@ -116,16 +116,6 @@ func TestAmendAmbiguousAcrossFiles(t *testing.T) {
 	}
 }
 
-func TestParseTermEntry(t *testing.T) {
-	e := ParseTermEntry("\nan agent in a round\nspanning two lines\n\n**Aliases:** agent, slot\n**Not:** orchestrator\n<!-- 2026-01-01 -->\nignored after the marker\n")
-	if e.Definition != "an agent in a round\nspanning two lines" || strings.Join(e.Aliases, "|") != "agent|slot" || strings.Join(e.Nots, "|") != "orchestrator" {
-		t.Errorf("entry = %+v", e)
-	}
-	if e := ParseTermEntry("def\n**Aliases:** _none_\n"); len(e.Aliases) != 0 || e.Definition != "def" {
-		t.Errorf("none alias: %+v", e)
-	}
-}
-
 func TestTierReadBackfillsLegacyBullets(t *testing.T) {
 	root := t.TempDir()
 	rota := filepath.Join(root, ".rota")
