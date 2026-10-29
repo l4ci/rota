@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
@@ -170,7 +171,7 @@ func TestSoftCap(t *testing.T) {
 			if tc.cfg != "" {
 				write(t, root, ".rota/config.json", tc.cfg)
 			}
-			if got := SoftCap(config.Load(rotatree.Config(root))); got != tc.want {
+			if got := SoftCap(config.Load(projects.OSEnv(), rotatree.Config(root))); got != tc.want {
 				t.Errorf("SoftCap = %d, want %d", got, tc.want)
 			}
 		})
@@ -231,7 +232,7 @@ func TestStaleCommits(t *testing.T) {
 			if tc.cfg != "" {
 				write(t, root, ".rota/config.json", tc.cfg)
 			}
-			if got := StaleCommits(config.Load(rotatree.Config(root))); got != tc.want {
+			if got := StaleCommits(config.Load(projects.OSEnv(), rotatree.Config(root))); got != tc.want {
 				t.Errorf("StaleCommits = %d, want %d", got, tc.want)
 			}
 		})

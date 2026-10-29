@@ -14,6 +14,7 @@ import (
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -382,7 +383,7 @@ func TestGateAndRelayHeadsCountOnce(t *testing.T) {
 }
 
 // diskConfig reads the .rota/config.json a test wrote, as cli's Deps.Config does.
-func diskConfig(root string) any { return config.Load(rotatree.Config(root)) }
+func diskConfig(root string) any { return config.Load(projects.OSEnv(), rotatree.Config(root)) }
 
 // A support machine's worker learns of a stale merge or provenance failure on
 // its PR, as it did when they bounced, but nothing is counted or parked (#2072).

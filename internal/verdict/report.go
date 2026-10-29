@@ -84,6 +84,7 @@ func RenderReport(r Record, artifacts []string) string {
 		Verdict string `json:"verdict"`
 		Body
 	}{r.Verdict, Body{Summary: r.Summary, Findings: findings, Items: r.Items, Declined: r.Declined}}
+	// A markdown snippet for a report, not a state file: jsonx byte-compat does not apply.
 	raw, _ := json.MarshalIndent(payload, "", "  ") // these field types cannot fail
 	fence := reportFence(string(raw))
 	fmt.Fprintf(&out, "\n### Verdict body\n\n%sjson\n%s\n%s\n", fence, raw, fence)

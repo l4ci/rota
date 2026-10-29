@@ -228,11 +228,7 @@ func (s *Store) record(e *Entry) error {
 			out = append(out, r)
 		}
 		d.Receipts = capPerVerb(append(out, *e))
-		b, err := json.MarshalIndent(d, "", "  ")
-		if err != nil {
-			return err
-		}
-		return fsio.WriteFileAtomic(p, append(b, '\n'))
+		return fsio.WriteJSONAtomic(p, d)
 	})
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/limits"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
@@ -86,7 +87,7 @@ func TestTickAssignsOnTheFallbackHarness(t *testing.T) {
 	root := gitRepo(t)
 	write(t, filepath.Join(root, ".rota", "config.json"),
 		`{"round":{"dispatch":"herdr","harnesses":["claude","codex"],"accounts":[{"name":"a","configDir":"/nowhere"}],"roster":["ben"]}}`)
-	set, err := roundcfg.FromConfig(config.Load(rotatree.Config(root)))
+	set, err := roundcfg.FromConfig(config.Load(projects.OSEnv(), rotatree.Config(root)))
 	if err != nil {
 		t.Fatal(err)
 	}
