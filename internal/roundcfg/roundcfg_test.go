@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
@@ -385,7 +386,7 @@ func TestEffectiveModelAndSource(t *testing.T) {
 		{"profile does not reach opencode", `{"round":{"profile":"quality"}}`, "opencode", "heavy", row{"opencode/claude-opus-5-5", "default"}},
 	}
 	for _, c := range cases {
-		cfg := config.Load(rotatree.Config(project(t, c.cfg)))
+		cfg := config.Load(projects.OSEnv(), rotatree.Config(project(t, c.cfg)))
 		m, src := Effective(cfg, c.kind, c.tier)
 		if m != c.want.model || src != c.want.source {
 			t.Errorf("%s: got (%q, %q), want %v", c.name, m, src, c.want)
@@ -612,7 +613,7 @@ func TestHarnessesInvalid(t *testing.T) {
 
 // Load reads the round.* keys from the config on disk under root.
 func Load(root string) (Settings, error) {
-	return FromConfig(config.Load(rotatree.Config(root)))
+	return FromConfig(config.Load(projects.OSEnv(), rotatree.Config(root)))
 }
 
 func TestMachineName(t *testing.T) {
@@ -684,7 +685,7 @@ func TestTierSetDecision(t *testing.T) {
 		{"map set names no fallback models", `{"round":{"tiers":{"codex":{"heavy":"m"}}}}`, true, nil},
 		{"blank map falls back to defaults", `{"round":{"tiers":{"codex":{"light":"  "}}}}`, false, []string{"standard=gpt-6.1-sol", "heavy=gpt-6-astra"}},
 	} {
-		cfg := config.Load(rotatree.Config(project(t, c.cfg)))
+		cfg := config.Load(projects.OSEnv(), rotatree.Config(project(t, c.cfg)))
 		set, models := TierSet(cfg, "codex")
 		if set != c.wantSet || !slices.Equal(models, c.wantModels) {
 			t.Errorf("%s: TierSet = %v, %v; want %v, %v", c.name, set, models, c.wantSet, c.wantModels)

@@ -29,7 +29,7 @@ func LayerFor(key string, project, local bool) Layer {
 // at the schema default; then each key the global config holds that the
 // schema does not know (AC-4 checks every layer; only the tracked and local
 // files fail on one, see Unknown). None fails the check.
-func Warnings(root string) []string {
+func Warnings(env projects.Env, root string) []string {
 	out := []string{}
 	doc := readObject(configPath(root))
 	if doc == nil {
@@ -48,7 +48,7 @@ func Warnings(root string) []string {
 		}
 	}
 	// The raw file: globalLayer keeps schema keys only.
-	if dir, err := projects.Dir(projects.OSEnv()); err == nil {
+	if dir, err := projects.Dir(env); err == nil {
 		if g := readObject(GlobalPath(dir)); g != nil {
 			for _, p := range leafPaths(g, "") {
 				if !knownPath(p) {

@@ -452,6 +452,11 @@ func (u *Umbrella) Release(ref, claimID string) (bool, error) {
 	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.Release(plain, claimID) })
 }
 
+// ReleaseByHand gives the item back as a person's deliberate release.
+func (u *Umbrella) ReleaseByHand(ref, claimID string) (bool, error) {
+	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.ReleaseByHand(plain, claimID) })
+}
+
 // ClaimLabelDrift reads the owning tracker's derived claim labels.
 func (u *Umbrella) ClaimLabelDrift(ref string) (add, remove []string, err error) {
 	err = u.onOwner(ref, func(s *Issues, plain string) (e error) {
@@ -514,20 +519,6 @@ func (u *Umbrella) NoteRm(ref, kind string) (bool, error) {
 
 // ---- milestones ------------------------------------------------------------
 
-// msTitleID is _MS_TITLE_RE's group 1 for a tracking issue title, "" when it
-// does not start with a milestone ID.
-func msTitleID(title string) string {
-	title = pystr.Strip(title)
-	m := msTitleRe.FindStringSubmatch(title)
-	if m == nil {
-		return ""
-	}
-	if r, n := decodeRune(title[len(m[1]):]); n > 0 && pystr.IsWord(r) {
-		return ""
-	}
-	return m[1]
-}
-
 // homeSub is the sub-repo that holds the milestone tracking issues:
 // issues.homeRepo, else the first registered one.
 func (u *Umbrella) HomeSub() (*Issues, error) { return u.homeSub() }
@@ -574,7 +565,8 @@ func (u *Umbrella) createSubMilestone(sub *Issues, mid string) (string, bool, er
 	var best *Issue
 	for i := range all {
 		is := all[i]
-		if !slices.Contains(is.Labels, config.Label(u.Cfg, "milestoneTracker")) || msTitleID(is.Title) != mid {
+		id, _, ok := parseMSTitle(is.Title)
+		if !slices.Contains(is.Labels, config.Label(u.Cfg, "milestoneTracker")) || !ok || id != mid {
 			continue
 		}
 		// Lowest open number wins; the lowest closed one when none is open.

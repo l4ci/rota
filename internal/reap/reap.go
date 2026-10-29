@@ -289,33 +289,14 @@ func newState(ctx context.Context, in Input) (*state, error) {
 	if err != nil || code != 0 {
 		return nil, &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git worktree list failed: " + strings.TrimSpace(errOut)}
 	}
-	var cur *checkout
-	flush := func() {
-		if cur != nil {
-			s.checkouts = append(s.checkouts, *cur)
-			if cur.branch != "" {
-				s.checkedOut[cur.branch] = true
-				s.checkedAt[cur.branch] = cur.path
-			}
-		}
-		cur = nil
-	}
-	for _, line := range strings.Split(out, "\n") {
-		switch {
-		case strings.HasPrefix(line, "worktree "):
-			flush()
-			cur = &checkout{path: filepath.Clean(strings.TrimPrefix(line, "worktree "))}
-		case cur == nil:
-		case strings.HasPrefix(line, "branch "):
-			cur.branch = strings.TrimPrefix(strings.TrimPrefix(line, "branch "), "refs/heads/")
-		case line == "locked" || strings.HasPrefix(line, "locked "):
-			cur.isLocked = true
-		case line == "prunable" || strings.HasPrefix(line, "prunable "):
-			cur.isPrunable = true
-			cur.prunable = strings.TrimSpace(strings.TrimPrefix(line, "prunable"))
+	for _, w := range git.ParseWorktrees(out) {
+		c := checkout{path: filepath.Clean(w.Path), branch: w.Branch, isLocked: w.Locked, isPrunable: w.Prunable, prunable: w.PrunableReason}
+		s.checkouts = append(s.checkouts, c)
+		if c.branch != "" {
+			s.checkedOut[c.branch] = true
+			s.checkedAt[c.branch] = c.path
 		}
 	}
-	flush()
 	return s, nil
 }
 

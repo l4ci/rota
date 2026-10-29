@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundwatch"
@@ -192,7 +193,7 @@ func TestWatchForgeSurfacesABadRoundConfig(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"round":{"maxBounces":"many"}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := roundcfg.FromConfig(config.Load(rotatree.Config(dir))); err == nil {
+	if _, err := roundcfg.FromConfig(config.Load(projects.OSEnv(), rotatree.Config(dir))); err == nil {
 		t.Skip("config still loads")
 	}
 	watchForge(context.Background(), c, dir)
@@ -276,7 +277,7 @@ func TestRoundReviewRelayBadRoundConfigExits3(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"round":{"maxBounces":"many"}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := roundcfg.FromConfig(config.Load(rotatree.Config(dir))); err == nil {
+	if _, err := roundcfg.FromConfig(config.Load(projects.OSEnv(), rotatree.Config(dir))); err == nil {
 		t.Skip("config still loads")
 	}
 	code, _, errOut := rotaInWith(t, useReviewForge(&reviewForge{}), dir, "round", "review-relay", "nia")

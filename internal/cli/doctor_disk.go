@@ -79,8 +79,8 @@ func prunableWorktrees(ctx context.Context, run git.Runner, root string) int {
 		return 0
 	}
 	n := 0
-	for _, l := range strings.Split(res.Stdout, "\n") {
-		if strings.HasPrefix(l, "prunable") {
+	for _, w := range git.ParseWorktrees(res.Stdout) {
+		if w.Prunable {
 			n++
 		}
 	}

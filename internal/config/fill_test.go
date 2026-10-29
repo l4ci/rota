@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 func requiredNames() []string {
@@ -24,7 +25,7 @@ func requiredNames() []string {
 
 func TestFillCreatesMissingFileInSchemaOrder(t *testing.T) {
 	root := project(t, "", "")
-	filled, err := Fill(root)
+	filled, err := Fill(projects.OSEnv(), root)
 	if err != nil || !reflect.DeepEqual(filled, requiredNames()) {
 		t.Fatalf("filled %v, err %v", filled, err)
 	}
@@ -32,7 +33,7 @@ func TestFillCreatesMissingFileInSchemaOrder(t *testing.T) {
 	if got := read(t, root); got != string(want)+"\n" {
 		t.Errorf("file:\n%s", got)
 	}
-	if st, _ := Check(root); st != UpToDate {
+	if st, _ := Check(projects.OSEnv(), root); st != UpToDate {
 		t.Errorf("check after fill: %s", st)
 	}
 }
@@ -42,7 +43,7 @@ func TestFillCreatesMissingFileInSchemaOrder(t *testing.T) {
 func TestFillCompletesTheSeedInSchemaOrder(t *testing.T) {
 	seed := `{"issues": {"labels": {"inProgress": "in-progress"}, "autoCreateLabel": true}}`
 	root := project(t, seed, "")
-	filled, err := Fill(root)
+	filled, err := Fill(projects.OSEnv(), root)
 	if err != nil || len(filled) != len(requiredNames()) {
 		t.Fatalf("filled %v, err %v", filled, err)
 	}
@@ -58,7 +59,7 @@ func TestFillCompletesTheSeedInSchemaOrder(t *testing.T) {
 func TestFillKeepsPresentAndUnknownKeys(t *testing.T) {
 	cfg := `{"zzz": 1, "work": {"custom": "x", "dispatch": "herdr"}, "models": {"worker": "haiku"}, "umbrella": {"enabled": null}, "hvSkills": "scalar"}`
 	root := project(t, cfg, `{"models": {"orchestrator": "local"}}`)
-	if _, err := Fill(root); err != nil {
+	if _, err := Fill(projects.OSEnv(), root); err != nil {
 		t.Fatal(err)
 	}
 	doc, _ := jsonx.Decode([]byte(read(t, root)))
@@ -94,7 +95,7 @@ func TestFillKeepsPresentAndUnknownKeys(t *testing.T) {
 	if v, _ := Value(o, "rota.version"); v != "" {
 		t.Errorf("rota.version %v", v)
 	}
-	if st, m := Check(root); st != UpToDate {
+	if st, m := Check(projects.OSEnv(), root); st != UpToDate {
 		t.Errorf("check: %s %v", st, m)
 	}
 }
@@ -102,7 +103,7 @@ func TestFillKeepsPresentAndUnknownKeys(t *testing.T) {
 func TestFillNothingMissingDoesNotRewrite(t *testing.T) {
 	full, _ := jsonx.MarshalCompact(fullConfig())
 	root := project(t, string(full), "")
-	filled, err := Fill(root)
+	filled, err := Fill(projects.OSEnv(), root)
 	if err != nil || filled == nil || len(filled) != 0 {
 		t.Fatalf("filled %v, err %v", filled, err)
 	}
@@ -116,7 +117,7 @@ func TestFillRefusesCorrupt(t *testing.T) {
 		root := project(t, "", "")
 		p := filepath.Join(root, ".rota", "config.json")
 		os.WriteFile(p, []byte(body), 0o644)
-		if _, err := Fill(root); !errors.Is(err, ErrCorrupt) {
+		if _, err := Fill(projects.OSEnv(), root); !errors.Is(err, ErrCorrupt) {
 			t.Errorf("%q: %v", body, err)
 		}
 		if b, _ := os.ReadFile(p); string(b) != body {
@@ -128,7 +129,7 @@ func TestFillRefusesCorrupt(t *testing.T) {
 func fillLegacy(t *testing.T, cfg string) (string, []string) {
 	t.Helper()
 	root := project(t, cfg, "")
-	filled, err := Fill(root)
+	filled, err := Fill(projects.OSEnv(), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +138,7 @@ func fillLegacy(t *testing.T, cfg string) (string, []string) {
 
 func TestFillMigratesLegacyVersionKey(t *testing.T) {
 	root := project(t, `{"hv":{"version":"4.2.0"}}`, "")
-	filled, err := Fill(root)
+	filled, err := Fill(projects.OSEnv(), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +153,7 @@ func TestFillMigratesLegacyVersionKey(t *testing.T) {
 	if v, _ := Value(o, VersionKey); v != "4.2.0" {
 		t.Errorf("rota.version %v", v)
 	}
-	if st, m := Check(root); st != UpToDate {
+	if st, m := Check(projects.OSEnv(), root); st != UpToDate {
 		t.Errorf("check: %s %v", st, m)
 	}
 }
@@ -181,7 +182,7 @@ func TestFillLegacyKeyAloneRewrites(t *testing.T) {
 	cfg.Set("hv", h)
 	b, _ := jsonx.Marshal(cfg)
 	root := project(t, string(b), "")
-	filled, err := Fill(root)
+	filled, err := Fill(projects.OSEnv(), root)
 	if err != nil || !reflect.DeepEqual(filled, []string{VersionKey}) {
 		t.Fatalf("filled %v err %v", filled, err)
 	}
@@ -248,7 +249,7 @@ func TestStampedVersion(t *testing.T) {
 // key, lists test.full, and leaves the rest of refactor alone.
 func TestFillMovesVerifyCommandsToTestFull(t *testing.T) {
 	root := project(t, `{"refactor":{"confirmBeforeExecute":true,"verifyCommands":["x"]}}`, "")
-	filled, err := Fill(root)
+	filled, err := Fill(projects.OSEnv(), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +271,7 @@ func TestFillMovesVerifyCommandsToTestFull(t *testing.T) {
 
 func TestFillKeepsNonEmptyTestFull(t *testing.T) {
 	root := project(t, `{"test":{"full":["keep"]},"refactor":{"verifyCommands":["old"]}}`, "")
-	if _, err := Fill(root); err != nil {
+	if _, err := Fill(projects.OSEnv(), root); err != nil {
 		t.Fatal(err)
 	}
 	doc, _ := jsonx.Decode([]byte(read(t, root)))
@@ -293,7 +294,7 @@ func TestFillStripsRemovedKeys(t *testing.T) {
 	if got := Removed(root); !reflect.DeepEqual(got, want) {
 		t.Fatalf("Removed before fill: %v", got)
 	}
-	if _, err := Fill(root); err != nil {
+	if _, err := Fill(projects.OSEnv(), root); err != nil {
 		t.Fatal(err)
 	}
 	if got := Removed(root); len(got) != 0 {
@@ -308,7 +309,7 @@ func TestFillStripsRemovedKeys(t *testing.T) {
 
 func TestFillRewritesAFileHoldingOnlyRemovedKeys(t *testing.T) {
 	root := project(t, `{"issues": {"filterMineOnly": false}}`, "")
-	if _, err := Fill(root); err != nil {
+	if _, err := Fill(projects.OSEnv(), root); err != nil {
 		t.Fatal(err)
 	}
 	if got := Removed(root); len(got) != 0 {
@@ -323,26 +324,26 @@ func TestFillMigratesSourceKeys(t *testing.T) {
 		t.Fatalf("Legacy before fill: %v", got)
 	}
 	// No origin: the legacy keys stay and keep deciding.
-	if _, sm, _, err := FillDetect(root, func() string { return "" }); err != nil || !sm.Unresolved {
+	if _, sm, _, err := FillDetect(projects.OSEnv(), root, func() string { return "" }); err != nil || !sm.Unresolved {
 		t.Fatalf("no origin: %+v %v", sm, err)
 	}
-	if got, _ := IssueSource(Load(configPath(root))); got != SourceIssues {
+	if got, _ := IssueSource(Load(projects.OSEnv(), configPath(root))); got != SourceIssues {
 		t.Errorf("unmigrated source = %q, want %q", got, SourceIssues)
 	}
-	if _, sm, _, err := FillDetect(root, func() string { return "gitlab" }); err != nil || !sm.Changed || sm.Source != "gitlab" {
+	if _, sm, _, err := FillDetect(projects.OSEnv(), root, func() string { return "gitlab" }); err != nil || !sm.Changed || sm.Source != "gitlab" {
 		t.Fatalf("with origin: %+v %v", sm, err)
 	}
 	if got := Legacy(root); len(got) != 0 {
 		t.Errorf("Legacy after fill: %v", got)
 	}
 	before := read(t, root)
-	if _, sm, _, err := FillDetect(root, func() string { return "gitlab" }); err != nil || sm.Changed {
+	if _, sm, _, err := FillDetect(projects.OSEnv(), root, func() string { return "gitlab" }); err != nil || sm.Changed {
 		t.Fatalf("second run: %+v %v", sm, err)
 	}
 	if read(t, root) != before {
 		t.Error("second run rewrote the file")
 	}
-	if got, _ := IssueSource(Load(configPath(root))); got != SourceGitLab {
+	if got, _ := IssueSource(Load(projects.OSEnv(), configPath(root))); got != SourceGitLab {
 		t.Errorf("migrated source = %q", got)
 	}
 }
@@ -383,7 +384,7 @@ func TestRemovedNamesLocalOnlyKeys(t *testing.T) {
 	if got := Removed(root); !reflect.DeepEqual(got, want) {
 		t.Fatalf("Removed before fill: %v, want %v", got, want)
 	}
-	if _, err := Fill(root); err != nil {
+	if _, err := Fill(projects.OSEnv(), root); err != nil {
 		t.Fatal(err)
 	}
 	if got := Removed(root); len(got) != 0 {
@@ -428,7 +429,7 @@ func TestInvalidValueErrorsNameTheValue(t *testing.T) {
 // stays with the global config or the defaults.
 func TestFillWritesOnlyProjectKeys(t *testing.T) {
 	root := project(t, "", "")
-	filled, err := Fill(root)
+	filled, err := Fill(projects.OSEnv(), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,7 +450,7 @@ func TestFillStripsCompetingHypotheses(t *testing.T) {
 	if got := Removed(root); !reflect.DeepEqual(got, []string{"debug.competingHypotheses"}) {
 		t.Fatalf("Removed before fill: %v", got)
 	}
-	if _, err := Fill(root); err != nil {
+	if _, err := Fill(projects.OSEnv(), root); err != nil {
 		t.Fatal(err)
 	}
 	if raw := read(t, root); strings.Contains(raw, "debug") {

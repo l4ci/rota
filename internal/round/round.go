@@ -998,24 +998,12 @@ func (e Env) worktrees(ctx context.Context, root string) ([]worktree, error) {
 	}
 	dir := filepath.Join(root, worker.WorktreeRoot)
 	var wts []worktree
-	var cur *worktree
-	flush := func() {
-		if cur != nil && filepath.Dir(cur.path) == dir {
-			cur.name = filepath.Base(cur.path)
-			wts = append(wts, *cur)
-		}
-		cur = nil
-	}
-	for _, line := range strings.Split(out, "\n") {
-		switch {
-		case strings.HasPrefix(line, "worktree "):
-			flush()
-			cur = &worktree{path: filepath.Clean(strings.TrimPrefix(line, "worktree "))}
-		case strings.HasPrefix(line, "branch ") && cur != nil:
-			cur.branch = strings.TrimPrefix(strings.TrimPrefix(line, "branch "), "refs/heads/")
+	for _, w := range git.ParseWorktrees(out) {
+		path := filepath.Clean(w.Path)
+		if filepath.Dir(path) == dir {
+			wts = append(wts, worktree{path: path, name: filepath.Base(path), branch: w.Branch})
 		}
 	}
-	flush()
 	return wts, nil
 }
 

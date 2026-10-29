@@ -83,11 +83,7 @@ func Load(ctx context.Context, run git.Runner, root string) (*Record, error) {
 }
 
 func Save(path string, r *Record) error {
-	b, err := json.MarshalIndent(r, "", "  ")
-	if err != nil {
-		return err
-	}
-	return fsio.WriteFileAtomic(path, append(b, '\n'))
+	return fsio.WriteJSONAtomic(path, r)
 }
 
 func issueID(s string) string { return strings.TrimPrefix(strings.TrimSpace(s), "#") }

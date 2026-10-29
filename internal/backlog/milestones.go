@@ -82,6 +82,28 @@ func parseMSTitle(title string) (id, rest string, ok bool) {
 	return t[:end], rest, true
 }
 
+// selectNativeMilestone prefers the issue's assigned title, otherwise the first
+// milestone with mid's parsed ID, with non-closed milestones before closed ones.
+// Equal-state matches keep the tracker's order.
+func selectNativeMilestone(found []tracker.Milestone, mid, assignedTitle string) *tracker.Milestone {
+	for i := range found {
+		if assignedTitle != "" && found[i].Title == assignedTitle {
+			return &found[i]
+		}
+	}
+	var best *tracker.Milestone
+	for i := range found {
+		id, _, ok := parseMSTitle(found[i].Title)
+		if !ok || id != mid {
+			continue
+		}
+		if best == nil || (best.State == "closed" && found[i].State != "closed") {
+			best = &found[i]
+		}
+	}
+	return best
+}
+
 // trackingIssues is {MNN: issue} for every tracking issue, open and closed.
 // The lowest open number wins per MNN (the lowest closed when none is open);
 // duplicates are reported through Warn.
@@ -226,7 +248,6 @@ func (b *Issues) MilestoneList() ([]ms.Entry, error) {
 	}
 	sort.Strings(ids)
 	rows := []ms.Entry{}
-	shipped := map[string]bool{}
 	for _, id := range ids {
 		is := all[id]
 		_, block, _ := ParseFieldsBlock(is.Body)
@@ -239,19 +260,9 @@ func (b *Issues) MilestoneList() ([]ms.Entry, error) {
 		if r.Depends == nil {
 			r.Depends = []string{}
 		}
-		if r.Status == "shipped" {
-			shipped[id] = true
-		}
 		rows = append(rows, r)
 	}
-	for i := range rows {
-		rows[i].Ready = true
-		for _, d := range rows[i].Depends {
-			if !shipped[d] {
-				rows[i].Ready = false
-			}
-		}
-	}
+	ms.MarkReady(rows)
 	return rows, nil
 }
 
@@ -360,25 +371,7 @@ func (b *Issues) nativeMilestone(mt MilestoneTracker, mid string, is Issue) (*tr
 	if err != nil {
 		return nil, err
 	}
-	for i := range found {
-		if is.Milestone != "" && found[i].Title == is.Milestone {
-			return &found[i], nil
-		}
-	}
-	var hits []tracker.Milestone
-	for _, nm := range found {
-		t := pystr.Strip(nm.Title)
-		if strings.HasPrefix(t, mid) {
-			if r, _ := utf8.DecodeRuneInString(t[len(mid):]); t[len(mid):] == "" || !pystr.IsWord(r) {
-				hits = append(hits, nm)
-			}
-		}
-	}
-	sort.SliceStable(hits, func(i, j int) bool { return hits[i].State != "closed" && hits[j].State == "closed" })
-	if len(hits) == 0 {
-		return nil, nil
-	}
-	return &hits[0], nil
+	return selectNativeMilestone(found, mid, is.Milestone), nil
 }
 
 // MilestonePut replaces the milestone plan text of the tracking issue. The
