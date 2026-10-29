@@ -116,8 +116,6 @@ type Input struct {
 	// SkillCache finds none.
 	SkillCache     string
 	SkillCacheKeep string
-	// Now is the clock for the orphaned-extract age check; nil is time.Now.
-	Now func() time.Time
 }
 
 // extractMaxAge is how long a skills.ExtractPrefix temp dir may sit untouched
@@ -197,11 +195,7 @@ func (s *state) orphanExtract(name string) bool {
 	if err != nil || !fi.IsDir() {
 		return false
 	}
-	now := time.Now
-	if s.in.Now != nil {
-		now = s.in.Now
-	}
-	return now().Sub(fi.ModTime()) > extractMaxAge
+	return time.Since(fi.ModTime()) > extractMaxAge
 }
 
 // findSkillCache lists the extracted skill trees of other rota versions and
