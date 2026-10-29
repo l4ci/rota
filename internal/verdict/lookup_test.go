@@ -146,7 +146,7 @@ func TestRecoveredCacheDefersToLocalBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	list := ForHead(Load(root).Branches["feature"], head)
-	if r, ok := Blocking(list, Settings{}); !ok || r.Kind != ReviewQuality || r.Verdict != Fail {
+	if r, ok := Blocking(list); !ok || r.Kind != ReviewQuality || r.Verdict != Fail {
 		t.Fatalf("cached PASS masked local FAIL: %+v %v", r, ok)
 	}
 	if kinds := Recorded(root, "feature", head); len(kinds) != 1 || kinds[0] != ReviewQuality {
@@ -185,7 +185,7 @@ func TestRecoverPRRefreshesCachedAtHead(t *testing.T) {
 	if err := RecoverPR(context.Background(), root, "feature", head, 20, source); err != nil {
 		t.Fatal(err)
 	}
-	if r, ok := Blocking(Load(root).Branches["feature"], Settings{}); !ok || r.Verdict != Fail {
+	if r, ok := Blocking(Load(root).Branches["feature"]); !ok || r.Verdict != Fail {
 		t.Fatalf("new FAIL did not replace cached PASS: %+v %v", r, ok)
 	}
 }
@@ -206,7 +206,7 @@ func TestRecoverPRSkipsAuthorPermissionError(t *testing.T) {
 			if err := RecoverPR(context.Background(), root, "feature", head, 20, source); err != nil {
 				t.Fatalf("one author aborted recovery: %v", err)
 			}
-			if r, ok := Blocking(ForHead(Load(root).Branches["feature"], head), Settings{}); !ok || r.Verdict != Fail || !r.FromReport {
+			if r, ok := Blocking(ForHead(Load(root).Branches["feature"], head)); !ok || r.Verdict != Fail || !r.FromReport {
 				t.Fatalf("lost trusted FAIL: %+v %v", r, ok)
 			}
 		})

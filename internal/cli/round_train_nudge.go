@@ -243,9 +243,9 @@ func waitingPRsWithState(c *Ctx, root string, state roundtick.State) []waitingPR
 			return false, time.Time{} // sent back and not yet pushed to
 		}
 		if reviewOff {
-			return !trainBlocked(vc.Store, branch, vc.Settings), doneAt
+			return !trainBlocked(vc.Store, branch), doneAt
 		}
-		ready := len(verdict.Recorded(root, branch, head)) > 0 && !trainBlocked(vc.Store, branch, vc.Settings)
+		ready := len(verdict.Recorded(root, branch, head)) > 0 && !trainBlocked(vc.Store, branch)
 		return ready, reviewReadySince(vc.Store.Branches[verdict.BranchKey("", branch)], head)
 	}
 	var out []waitingPR
@@ -338,9 +338,9 @@ func fillDefaultBase(waiting []waitingPR, def string) []waitingPR {
 // gate or bounce the PR: a FAIL (review or second opinion) or a review with a
 // blocking finding keeps it out of a nudged train, a clean CONCERNS and PASS
 // let it in.
-func trainBlocked(store verdict.Store, branch string, s verdict.Settings) bool {
+func trainBlocked(store verdict.Store, branch string) bool {
 	list := store.Branches[verdict.BranchKey("", branch)]
-	if _, blocked := verdict.Blocking(list, s); blocked {
+	if _, blocked := verdict.Blocking(list); blocked {
 		return true
 	}
 	for _, kind := range append([]string{verdict.ReviewCross}, verdict.LensKinds...) {

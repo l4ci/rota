@@ -288,7 +288,7 @@ func TestBlocking(t *testing.T) {
 		{"newer second opinion pass clears", []Record{rec(SecondOpinion, Fail, "a"), rec(SecondOpinion, Pass, "b")}, "", ""},
 	}
 	for _, c := range cases {
-		r, ok := Blocking(c.list, Settings{})
+		r, ok := Blocking(c.list)
 		if ok != (c.kind != "") || r.Kind != c.kind {
 			t.Errorf("%s: got %q %v, want %q", c.name, r.Kind, ok, c.kind)
 		}
@@ -415,11 +415,11 @@ func TestFailingVersusEffectiveFail(t *testing.T) {
 // review-cross record clears it (#1612).
 func TestBlockingReviewCross(t *testing.T) {
 	list := []Record{{Kind: ReviewQuality, Verdict: Pass, Combined: Pass, Sha: "a"}, {Kind: ReviewCross, Verdict: Fail, Sha: "a", Harness: "codex"}}
-	if r, ok := Blocking(list, Settings{}); !ok || r.Kind != ReviewCross {
+	if r, ok := Blocking(list); !ok || r.Kind != ReviewCross {
 		t.Fatalf("cross FAIL must block: %+v %v", r, ok)
 	}
 	list = append(list, Record{Kind: ReviewCross, Verdict: Pass, Sha: "b", Harness: "codex"})
-	if r, ok := Blocking(list, Settings{}); ok {
+	if r, ok := Blocking(list); ok {
 		t.Fatalf("a newer cross PASS clears it: %+v", r)
 	}
 }
@@ -451,11 +451,11 @@ func jsonString(s string) string {
 // same lens clears it (#2064); a lens PASS never hides another lens's FAIL.
 func TestBlockingLens(t *testing.T) {
 	list := []Record{{Kind: ReviewQuality, Verdict: Pass, Combined: Pass, Sha: "a"}, {Kind: ReviewSecurity, Verdict: Fail, Sha: "a"}, {Kind: ReviewUX, Verdict: Pass, Sha: "a"}}
-	if r, ok := Blocking(list, Settings{}); !ok || r.Kind != ReviewSecurity {
+	if r, ok := Blocking(list); !ok || r.Kind != ReviewSecurity {
 		t.Fatalf("Blocking = %v, %v; want the review-security FAIL", r, ok)
 	}
 	list = append(list, Record{Kind: ReviewSecurity, Verdict: Pass, Sha: "b"})
-	if _, ok := Blocking(list, Settings{}); ok {
+	if _, ok := Blocking(list); ok {
 		t.Fatal("a newer review-security PASS must clear the block")
 	}
 }

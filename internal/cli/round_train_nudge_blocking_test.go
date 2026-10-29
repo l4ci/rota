@@ -34,7 +34,7 @@ func TestTrainBlockedSecondOpinionAndStaleFail(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if got := trainBlocked(verdict.Load(root), "w1", verdict.Settings{}); got != tc.want {
+		if got := trainBlocked(verdict.Load(root), "w1"); got != tc.want {
 			t.Errorf("%s: blocked %v want %v", name, got, tc.want)
 		}
 	}
@@ -56,7 +56,7 @@ func TestTrainBlockedLens(t *testing.T) {
 		if _, err := verdict.AddBranch(root, "w1", tc.rec); err != nil {
 			t.Fatal(err)
 		}
-		if got := trainBlocked(verdict.Load(root), "w1", verdict.Settings{}); got != tc.want {
+		if got := trainBlocked(verdict.Load(root), "w1"); got != tc.want {
 			t.Errorf("%s: blocked %v want %v", name, got, tc.want)
 		}
 	}
