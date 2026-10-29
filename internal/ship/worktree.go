@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/status"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
@@ -120,7 +121,7 @@ func projectRoot(dir string) string {
 		}
 		return out
 	}
-	if root, err := git.FindRoot(dir, registered); err == nil {
+	if root, err := rotatree.FindRoot(dir, registered); err == nil {
 		return root
 	}
 	return dir
