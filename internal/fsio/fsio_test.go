@@ -393,3 +393,48 @@ func TestHeldLockUnder(t *testing.T) {
 		t.Errorf("skipped dir still reported: %s", got)
 	}
 }
+
+// TestSidecarNamingStaysInFsio: no non-test package outside fsio builds or
+// globs a lock sidecar name; it asks fsio.
+func TestSidecarNamingStaysInFsio(t *testing.T) {
+	root := filepath.Join("..", "..")
+	var bad []string
+	for _, dir := range []string{"internal", "cmd"} {
+		_ = filepath.WalkDir(filepath.Join(root, dir), func(p string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
+				return nil
+			}
+			if strings.Contains(filepath.ToSlash(p), "internal/fsio/") {
+				return nil
+			}
+			b, _ := os.ReadFile(p)
+			s := string(b)
+			if strings.Contains(s, `".lock"`) || strings.Contains(s, `.*.lock"`) {
+				bad = append(bad, p)
+			}
+			return nil
+		})
+	}
+	if len(bad) > 0 {
+		t.Errorf("sidecar naming outside fsio: %v", bad)
+	}
+}
+
+func TestRemoveSidecars(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "r.json")
+	claim := base + ".abc123"
+	other := filepath.Join(dir, "keep.json")
+	for _, p := range []string{claim, other} {
+		if err := Locked(p, time.Second, func() error { return nil }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	RemoveSidecars(dir, "r.json.*")
+	if _, err := os.Stat(claim + ".lock"); !os.IsNotExist(err) {
+		t.Errorf("claim sidecar still there (err=%v)", err)
+	}
+	if _, err := os.Stat(other + ".lock"); err != nil {
+		t.Errorf("unrelated sidecar gone: %v", err)
+	}
+}

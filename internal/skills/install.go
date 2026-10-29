@@ -532,7 +532,8 @@ func Uninstall(roots []Root, o Options) ([]UninstallResult, error) {
 			res.Changed = len(res.Removed) > 0
 			if len(res.Kept) == 0 {
 				res.Changed = true
-				// Both go while the lock is held, so no waiter locks a dead inode.
+				// Both go while the lock is held. That does not fence waiters: Locked never
+				// re-checks the inode, so a waiter on the old sidecar can overlap a newcomer.
 				return fsio.RemoveWithLock(manifestPath(r.Path))
 			}
 			return writeManifest(r.Path, m)
