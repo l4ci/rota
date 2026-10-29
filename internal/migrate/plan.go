@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -69,7 +70,7 @@ func readOpt(path string) *string {
 // planItems is the open Bugs, Features and Tasks bullets of BACKLOG.md with
 // their detail, proof, design and plan text. warn gets the drop notices.
 func planItems(root, backlogText string, warn func(string)) []*migItem {
-	rota := filepath.Join(root, ".rota")
+	rota := rotatree.Dir(root)
 	var items []*migItem
 	for _, e := range backlog.OpenBullets(backlogText) {
 		kind := migSectionKind[e.Section]
@@ -195,7 +196,7 @@ func planItems(root, backlogText string, warn func(string)) []*migItem {
 // planMilestones is the planned and active milestones of .rota/milestones with
 // their slice plans.
 func planMilestones(root string) []*migMilestone {
-	rota := filepath.Join(root, ".rota")
+	rota := rotatree.Dir(root)
 	entries, _ := os.ReadDir(filepath.Join(rota, "milestones"))
 	var names []string
 	for _, e := range entries {

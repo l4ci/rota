@@ -1033,3 +1033,23 @@ func TestExternalKnowledgeMalformedIndexWarns(t *testing.T) {
 		t.Fatalf("check = %+v", c)
 	}
 }
+
+func TestDiskLow(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		d    *Disk
+		min  int
+		want bool
+	}{
+		{"under the threshold", &Disk{Free: 9, Total: 100}, 10, true},
+		{"exactly at the threshold is fine", &Disk{Free: 10, Total: 100}, 10, false},
+		{"over the threshold", &Disk{Free: 11, Total: 100}, 10, false},
+		{"threshold 0 is off", &Disk{Free: 0, Total: 100}, 0, false},
+		{"unknown size is not low", &Disk{Free: 0, Total: 0}, 10, false},
+		{"unreadable disk is not low", nil, 10, false},
+	} {
+		if got := tc.d.Low(tc.min); got != tc.want {
+			t.Errorf("%s: Low(%d) = %v, want %v", tc.name, tc.min, got, tc.want)
+		}
+	}
+}

@@ -7,7 +7,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	gatepolicy "github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -67,20 +69,17 @@ func TestGateMergeApprovalResolvesBeforeAudit(t *testing.T) {
 		t.Run(outcome, func(t *testing.T) {
 			w := newWorld(t, ghURL)
 			var steps []string
-			ref := refusalWithData()
 			boom := errors.New("registry unavailable")
+			e := answeredOn("pr", 7, "approve")
+			answers := fakeAnswers{entries: map[string]Escalation{"e1": e}, steps: &steps}
+			switch outcome {
+			case "pending":
+				answers.entries["e1"] = Escalation{Kind: "pr", Number: 7, Status: EscalationPending}
+			case "unavailable":
+				answers.err = boom
+			}
 			res, err := w.gate(false, GateOpts{Approval: &MergeApproval{
-				Policy: gatepolicy.MergePolicy{Mode: gatepolicy.MergeAll}, ID: "e1",
-				Resolve: func(id string, th ApprovalThread) (gatepolicy.Confirm, *exitcode.Refusal, error) {
-					steps = append(steps, "resolve "+id+" "+th.Ref())
-					switch outcome {
-					case "pending":
-						return gatepolicy.Confirm{}, ref, nil
-					case "unavailable":
-						return gatepolicy.Confirm{}, nil, boom
-					}
-					return gatepolicy.Confirm{Given: true, Note: "yes", Escalation: "e1"}, nil, nil
-				},
+				Policy: gatepolicy.MergePolicy{Mode: gatepolicy.MergeAll}, ID: "e1", Answers: answers, Now: time.Now,
 				Clear: func(_ string, conf gatepolicy.Confirm, _ []string) (*exitcode.Refusal, error) {
 					steps = append(steps, "audit "+conf.Note)
 					if !conf.Given || conf.Escalation != "e1" {
@@ -89,15 +88,15 @@ func TestGateMergeApprovalResolvesBeforeAudit(t *testing.T) {
 					return nil, nil
 				},
 			}})
-			want := []string{"resolve e1 #7"}
+			want := []string{"resolve e1"}
 			switch outcome {
 			case "approved":
-				want = append(want, "audit yes")
+				want = append(want, "audit approve")
 				if err != nil || res.Verdict != GatePass || !res.Changed {
 					t.Errorf("approved merge: %+v %v", res, err)
 				}
 			case "pending":
-				if err != ref.Err || res.Refusal != ref || res.Verdict != GateApprovalRequired || res.Changed {
+				if res.Refusal == nil || err != res.Refusal.Err || res.Verdict != GateApprovalRequired || res.Changed {
 					t.Errorf("pending approval: %+v %v", res, err)
 				}
 			case "unavailable":
@@ -129,10 +128,7 @@ func TestGateMergeApprovalSkipsUnusedAdapters(t *testing.T) {
 			w := newWorld(t, ghURL)
 			res, err := w.gate(false, GateOpts{CheckOnly: tc.checkOnly, Approval: &MergeApproval{
 				Policy: tc.policy, ID: "e1",
-				Resolve: func(string, ApprovalThread) (gatepolicy.Confirm, *exitcode.Refusal, error) {
-					t.Error("unused approval resolved")
-					return gatepolicy.Confirm{}, nil, errors.New("unused adapter")
-				},
+				Answers: panicAnswers{t},
 				Clear: func(string, gatepolicy.Confirm, []string) (*exitcode.Refusal, error) {
 					t.Error("unused approval audited")
 					return nil, errors.New("unused adapter")
@@ -261,4 +257,92 @@ func TestSlotApprovalThread(t *testing.T) {
 	if _, err := SlotApprovalThread(root, "zz"); err == nil {
 		t.Error("unknown slot")
 	}
+}
+
+func answeredOn(kind string, n int, body string) Escalation {
+	return Escalation{Kind: kind, Number: n, Status: EscalationAnswered, Answer: &EscalationAnswer{Body: body}}
+}
+
+type fakeAnswers struct {
+	entries map[string]Escalation
+	err     error
+	steps   *[]string
+}
+
+type panicAnswers struct{ t *testing.T }
+
+func (p panicAnswers) Entry(string) (Escalation, bool, error) {
+	p.t.Error("unused approval resolved")
+	return Escalation{}, false, errors.New("unused adapter")
+}
+
+func (panicAnswers) Approves(string) bool { return false }
+
+func (f fakeAnswers) Entry(id string) (Escalation, bool, error) {
+	if f.steps != nil {
+		*f.steps = append(*f.steps, "resolve "+id)
+	}
+	e, ok := f.entries[id]
+	return e, ok, f.err
+}
+
+func (fakeAnswers) Approves(answer string) bool { return answer == "approve" }
+
+func TestMergeApprovalConfirmation(t *testing.T) {
+	th := ApprovalThread{Kind: "pr", Number: 7}
+	answers := fakeAnswers{entries: map[string]Escalation{
+		"ok":       answeredOn("pr", 7, "approve"),
+		"declined": answeredOn("pr", 7, "hold"),
+		"pending":  {Kind: "pr", Number: 7, Status: EscalationPending, Deadline: "2026-10-03T11:00:00Z"},
+		"other":    answeredOn("issue", 7, "approve"),
+	}}
+	for _, tc := range []struct {
+		id        string
+		exit      int
+		blockedBy string
+		msg       string
+	}{
+		{id: "ok"},
+		{id: "pending", exit: exitcode.ExitRefused, blockedBy: blockedby.ApprovalPending, msg: "escalation pending is timed-out; no approval yet"},
+		{id: "declined", exit: exitcode.ExitRefused, blockedBy: blockedby.ApprovalDeclined, msg: "escalation declined was answered without approving the merge"},
+		{id: "other", exit: exitcode.ExitUsage, msg: "escalation other is on issue #7, not on this merge's approval thread (pr #7)"},
+		{id: "none", exit: exitcode.ExitResolution, msg: "no escalation none"},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			extra := jsonx.NewObject()
+			extra.Set("slot", "w1")
+			conf, ref, err := MergeApproval{Answers: answers, Extra: extra, Now: func() time.Time { return time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC) }}.Confirmation(tc.id, th)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.exit == 0 {
+				if ref != nil || !conf.Given || conf.Note != "approve" || conf.Escalation != "ok" {
+					t.Errorf("approved: %+v %+v", conf, ref)
+				}
+				return
+			}
+			if ref == nil || conf.Given || ref.Err.Exit != tc.exit || ref.Err.Message != tc.msg {
+				t.Fatalf("refusal = %+v, want exit %d %q", ref, tc.exit, tc.msg)
+			}
+			d, _ := ref.Data.(*jsonx.Object)
+			if tc.blockedBy == "" {
+				return
+			}
+			if got, _ := d.Get("blockedBy"); tc.blockedBy != "" && got != tc.blockedBy {
+				t.Errorf("blockedBy = %v, want %q", got, tc.blockedBy)
+			}
+			if got, _ := d.Get("slot"); tc.blockedBy != "" && got != "w1" {
+				t.Errorf("refusal dropped the verb's envelope: %v", got)
+			}
+			if got, _ := d.Get("changed"); tc.blockedBy != "" && got != false {
+				t.Errorf("changed = %v", got)
+			}
+		})
+	}
+	t.Run("unavailable", func(t *testing.T) {
+		boom := errors.New("registry unavailable")
+		if _, ref, err := (MergeApproval{Answers: fakeAnswers{err: boom}}).Confirmation("ok", th); ref != nil || !errors.Is(err, boom) {
+			t.Errorf("registry error: %+v %v", ref, err)
+		}
+	})
 }

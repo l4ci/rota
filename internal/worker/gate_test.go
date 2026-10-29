@@ -823,21 +823,15 @@ func TestGateFindsTheOpenPROfAnUnrecordedSlot(t *testing.T) {
 func TestGateApprovalSeesTheAdoptedPR(t *testing.T) {
 	w := newWorld(t, "")
 	w.forge("listed", "1")
-	var got ApprovalThread
 	res, err := w.gate(false, GateOpts{Approval: &MergeApproval{
 		Policy: gatepolicy.MergePolicy{Mode: gatepolicy.MergeAll}, ID: "e1",
-		Resolve: func(id string, th ApprovalThread) (gatepolicy.Confirm, *exitcode.Refusal, error) {
-			got = th
-			return gatepolicy.Confirm{Given: true, Note: "yes"}, nil, nil
-		},
-		Clear: func(string, gatepolicy.Confirm, []string) (*exitcode.Refusal, error) { return nil, nil },
+		Answers: fakeAnswers{entries: map[string]Escalation{"e1": answeredOn("pr", 7, "approve")}},
+		Clear:   func(string, gatepolicy.Confirm, []string) (*exitcode.Refusal, error) { return nil, nil },
 	}})
 	if err != nil || res.Verdict != GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
-	if got.Kind != "pr" || got.Number != 7 {
-		t.Errorf("confirmation thread = %+v, want the adopted PR #7", got)
-	}
+	// the escalation sits on PR #7: only the adopted PR's thread accepts it
 }
 
 // An unrecorded external PR takes its issue from the head branch the forge
