@@ -39,6 +39,9 @@ func TestReadHostAnswersSoloUnavailableAndErrorAlone(t *testing.T) {
 		if !reflect.DeepEqual(got, c.want) || ok != c.ok || rep.Host != c.host || !reflect.DeepEqual(rep.Unavailable, c.unavai) {
 			t.Errorf("%s: agents %v ok %v host %q unavailable %v", c.name, got, ok, rep.Host, rep.Unavailable)
 		}
+		if !reflect.DeepEqual(rep.Agents, c.want) {
+			t.Errorf("%s: report agents %v, want %v", c.name, rep.Agents, c.want)
+		}
 	}
 }
 

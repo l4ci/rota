@@ -115,7 +115,7 @@ func (h *fakeHost) StopProcess(_ context.Context, pid int) error {
 }
 
 func input(g *fakeGit, rows []round.Row, agents []host.Agent, h HostOps) Input {
-	return Input{Root: root, Base: "main", Git: g.run, Report: &round.Report{Rows: rows}, Agents: agents, Host: h, Roster: []string{"ben", "dana", "nia", "kit"}}
+	return Input{Root: root, Base: "main", Git: g.run, Report: &round.Report{Rows: rows, Agents: agents}, Host: h, Roster: []string{"ben", "dana", "nia", "kit"}}
 }
 
 func ids(cs []Candidate) []string {
