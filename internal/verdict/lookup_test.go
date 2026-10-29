@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -210,5 +211,26 @@ func TestRecoverPRSkipsAuthorPermissionError(t *testing.T) {
 				t.Fatalf("lost trusted FAIL: %+v %v", r, ok)
 			}
 		})
+	}
+}
+
+func TestRecoverPRStampsRecordedAtWithRegistryLayout(t *testing.T) {
+	const head = "abcdef1234567890123456789012345678901234"
+	created := time.Date(2026, 3, 4, 10, 5, 6, 987654321, time.FixedZone("CET", 60*60))
+	source := &lookupSource{self: "me", notes: []tracker.Comment{{
+		Body:      RenderReport(NewRecord(ReviewSpec, Pass, head, Body{}, recAt), nil),
+		Author:    "me",
+		CreatedAt: created,
+	}}}
+	root := t.TempDir()
+	if err := RecoverPR(context.Background(), root, "feature", head, 20, source); err != nil {
+		t.Fatal(err)
+	}
+	r, ok := Latest(Load(root).Branches["feature"], ReviewSpec)
+	if !ok {
+		t.Fatal("no recovered record")
+	}
+	if want := "2026-03-04T09:05:06Z"; r.RecordedAt != want {
+		t.Fatalf("RecordedAt = %q, want %q", r.RecordedAt, want)
 	}
 }

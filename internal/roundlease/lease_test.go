@@ -473,3 +473,18 @@ func TestDiscoverFlagsUnreadableAncestry(t *testing.T) {
 		t.Fatalf("a named holder is not unverified: %+v", h)
 	}
 }
+
+func TestAcquireStampsStartedAtWithRegistryLayout(t *testing.T) {
+	dir := t.TempDir()
+	e := fakeEnv("h1", procs{10: 100})
+	e.Now = func() time.Time {
+		return time.Date(2026, 10, 3, 14, 0, 7, 123456789, time.FixedZone("CEST", 2*60*60))
+	}
+	l, _, _, err := e.Acquire(dir, "/r", Holder{PID: 10, Start: 100}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "2026-10-03T12:00:07Z"; l.StartedAt != want {
+		t.Fatalf("StartedAt = %q, want %q", l.StartedAt, want)
+	}
+}

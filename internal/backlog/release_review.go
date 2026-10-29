@@ -2,15 +2,12 @@ package backlog
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/strutil"
@@ -36,6 +33,12 @@ type PRTracker interface {
 // the merge with nothing changed; a refusal does the same and comes back in
 // MergeResult.Refusal.
 type MergeApprover func(branch string, files func() ([]string, error)) (*exitcode.Refusal, error)
+
+// Lander puts PR pr on the base branch pinned to head, the commit the gates
+// judged, and returns the merge commit sha. The landing adapter lives outside
+// the item backend, so the caller injects it. A merge the forge refused is the
+// lander's to report; MergePRGated passes its error through.
+type Lander func(ctx context.Context, pt PRTracker, pr int, head string) (string, error)
 
 // ReleaseTracker is the part of tracker.Adapter the release calls need: the
 // native milestones and the issues in one.
@@ -96,16 +99,6 @@ func (b *Issues) ReviewQueue() ([]QueueEntry, error) {
 
 // ---- PR merge --------------------------------------------------------------
 
-// MergeFailedError is the forge refusing to merge a PR: the merge call itself
-// failed with the CLI's own error. Nothing was merged.
-type MergeFailedError struct {
-	PR  int
-	Err error
-}
-
-func (e *MergeFailedError) Error() string { return e.Err.Error() }
-func (e *MergeFailedError) Unwrap() error { return e.Err }
-
 // MergeResult is what MergePR did. SHA is empty and Unproven set when the
 // proof gate stopped the merge.
 type MergeResult struct {
@@ -122,21 +115,17 @@ type ItemRef struct{ ID, Type string }
 // Ref is the old "F12" spelling.
 func (r ItemRef) Ref() string { return r.Type + r.ID }
 
-// MergePR merges PR pr and makes sure the items it links end up closed
+// MergePRGated merges PR pr and makes sure the items it links end up closed
 // (IssueBackend.merge_pr). Linked is items when non-nil, else every issue the
 // PR body closes. Proof is checked before merging, because a merge into the
 // default branch lets the host close the issue and skip the gate: any open
 // linked item without proof stops the merge, flips to changes-requested with a
 // feedback comment, and the result lists it as Unproven. Otherwise the PR
 // merges and the linked items the host left open close as done with the merge
-// sha. An unknown PR (items nil only) or item wraps ErrNotFound; a refused
-// merge is a *MergeFailedError.
-func (b *Issues) MergePR(pr int, items []string) (MergeResult, error) {
-	return b.MergePRGated(pr, items, nil)
-}
-
-// MergePRGated is MergePR with the B1 and B3 merge gates (nil: none).
-func (b *Issues) MergePRGated(pr int, items []string, approve MergeApprover) (MergeResult, error) {
+// sha. An unknown PR (items nil only) or item wraps ErrNotFound; a merge the
+// lander refuses comes back as its own error. approve is the B1 and B3 merge
+// gates (nil: none).
+func (b *Issues) MergePRGated(pr int, items []string, approve MergeApprover, lander Lander) (MergeResult, error) {
 	pt, err := b.prTracker()
 	if err != nil {
 		return MergeResult{}, err
@@ -237,12 +226,8 @@ func (b *Issues) MergePRGated(pr int, items []string, approve MergeApprover) (Me
 		}
 		return MergeResult{Unproven: itemRefs(unproven)}, nil
 	}
-	sha, err := land.MergeForge(b.ctx(), pt, pr, info.HeadSHA, true)
+	sha, err := lander(b.ctx(), pt, pr, info.HeadSHA)
 	if err != nil {
-		var te *tracker.Error
-		if errors.As(err, &te) && te.Kind == tracker.KindFailed && !strings.HasPrefix(te.Message, "cannot read the merge commit") {
-			return MergeResult{}, &MergeFailedError{PR: pr, Err: err}
-		}
 		return MergeResult{}, err
 	}
 	var closed []string
@@ -549,12 +534,7 @@ func (u *Umbrella) ReviewQueue() ([]QueueEntry, error) {
 
 // MergePR merges PR pr of the --repo sub-repo. An --items reference qualified
 // with another sub-repo is an error; the IDs it reports are qualified.
-func (u *Umbrella) MergePR(pr int, items []string) (MergeResult, error) {
-	return u.MergePRGated(pr, items, nil)
-}
-
-// MergePRGated is MergePR with the merge-approval gate (nil: none).
-func (u *Umbrella) MergePRGated(pr int, items []string, approve MergeApprover) (MergeResult, error) {
+func (u *Umbrella) MergePRGated(pr int, items []string, approve MergeApprover, lander Lander) (MergeResult, error) {
 	name, s, err := u.perRepo()
 	if err != nil {
 		return MergeResult{}, err
@@ -573,7 +553,7 @@ func (u *Umbrella) MergePRGated(pr int, items []string, approve MergeApprover) (
 	if items == nil {
 		plain = nil
 	}
-	res, err := s.MergePRGated(pr, plain, approve)
+	res, err := s.MergePRGated(pr, plain, approve, lander)
 	for i := range res.Closed {
 		res.Closed[i].ID = qualifyID(name, res.Closed[i].ID)
 	}
