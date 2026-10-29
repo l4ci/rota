@@ -26,7 +26,7 @@ func shipStrategy(*flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		backend, cfg, err := backendMode(c.deps(), root)
+		caps, cfg, err := backendMode(c.deps(), root)
 		if err != nil {
 			return Result{}, err
 		}
@@ -36,7 +36,7 @@ func shipStrategy(*flag.FlagSet) RunFunc {
 		if ferr != nil {
 			forge = tracker.ProviderUnknown // an origin that names no forge: the configured strategy stands
 		}
-		landing, err := ship.Strategy(backend, forge, config.StringIfSet(cfg, "work.mergeStrategy"))
+		landing, err := ship.Strategy(caps, forge, config.StringIfSet(cfg, "work.mergeStrategy"))
 		if errors.Is(err, ship.ErrTrackerNeedsLocalForge) {
 			return Result{Data: jsonObj("strategy", "", "forge", forge, "changed", false)}, Resolution(err.Error())
 		}

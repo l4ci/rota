@@ -1,9 +1,11 @@
 package backlog
 
 import (
+	"context"
 	"strings"
 
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // Workflow is the part of a backlog that coordinates workers on an item: the
@@ -41,6 +43,22 @@ type SharedClaimer interface {
 	ClaimShared(ref, claimID string, holders int) (won bool, holder string, err error)
 }
 
+// ClaimHistorian reads the raw tracker comments that carry claim markers, for
+// a caller that audits who held an item. ok is false when the backend has no
+// tracker to read; only the single-repo issues backend implements it.
+type ClaimHistorian interface {
+	ClaimComments(ctx context.Context, key tracker.IssueKey) (comments []tracker.Comment, ok bool, err error)
+}
+
+// ClaimComments lists the issue's tracker comments.
+func (b *Issues) ClaimComments(ctx context.Context, key tracker.IssueKey) ([]tracker.Comment, bool, error) {
+	if b.Tracker == nil {
+		return nil, false, nil
+	}
+	comments, err := b.Tracker.Comments(ctx, key)
+	return comments, true, err
+}
+
 // ClaimLabelSyncer repairs only the visible labels derived from tracker claims.
 // The comment claims remain the source of truth; file mode has no labels.
 type ClaimLabelSyncer interface {
@@ -56,7 +74,6 @@ var (
 var (
 	_ Workflow      = (*File)(nil)
 	_ Workflow      = (*Issues)(nil)
-	_ SharedClaimer = (*File)(nil)
 	_ SharedClaimer = (*Issues)(nil)
 	_ SharedClaimer = (*Umbrella)(nil)
 )
@@ -83,11 +100,6 @@ func (f *File) exists(ref string) error {
 // Claim is a no-op in file mode: status.json is the lock. The item must exist.
 func (f *File) Claim(ref, claimID string) (bool, string, error) {
 	return true, claimID, f.exists(ref)
-}
-
-// ClaimShared is a no-op in file mode, like Claim.
-func (f *File) ClaimShared(ref, claimID string, _ int) (bool, string, error) {
-	return f.Claim(ref, claimID)
 }
 
 // HandReleaser is a backend whose release can be marked as a person's own, so

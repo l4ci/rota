@@ -519,12 +519,6 @@ func TestIssuesClaimShared(t *testing.T) {
 	}
 }
 
-func TestSharedClaimerBackends(t *testing.T) {
-	var _ SharedClaimer = (*Issues)(nil)
-	var _ SharedClaimer = (*Umbrella)(nil)
-	var _ SharedClaimer = (*File)(nil)
-}
-
 // AC-2: the issue backend claims, labels and reads an issue named by a
 // key-based tracker's key (PROJ-123) the way it does a numbered one; the claim
 // marker is the claimant's, not the issue's.

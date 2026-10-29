@@ -38,6 +38,7 @@ func (e Env) SupportQueue(ctx context.Context, be backlog.Backend, support strin
 		return nil, err
 	}
 	wf, hasWorkflow := be.(backlog.Workflow)
+	hasWorkflow = hasWorkflow && be.Capabilities().ItemStatus
 	var out []SupportItem
 	for _, it := range items {
 		if it.Closed || !slices.Contains(it.Labels, e.SupportLabel) {
