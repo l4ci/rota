@@ -61,14 +61,30 @@ var tmpSeq atomic.Uint64
 // never half. Unlike hvlib_io it also fsyncs the file before the rename and the
 // directory after it, so a crash cannot leave an empty or missing file.
 func WriteFileAtomic(path string, data []byte) error {
+	return writeFileAtomic(path, data, 0o666, false)
+}
+
+// WriteFileAtomicMode is WriteFileAtomic with an explicit file mode. perm is
+// applied to the temp file before the rename, exactly and not masked by the
+// umask, so the result has that mode whether path was new or overwritten.
+func WriteFileAtomicMode(path string, data []byte, perm os.FileMode) error {
+	return writeFileAtomic(path, data, perm, true)
+}
+
+func writeFileAtomic(path string, data []byte, perm os.FileMode, exact bool) error {
 	// A per-call temp name keeps two writers to one path from renaming each
 	// other's file; the last rename wins with its own complete content.
 	tmp := fmt.Sprintf("%s.%d.%d.tmp", path, os.Getpid(), tmpSeq.Add(1))
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
 	if err != nil {
 		return err
 	}
-	_, err = f.Write(data)
+	if exact {
+		err = f.Chmod(perm)
+	}
+	if err == nil {
+		_, err = f.Write(data)
+	}
 	if err == nil {
 		err = f.Sync()
 	}

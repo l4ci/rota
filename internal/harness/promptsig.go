@@ -13,6 +13,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/shlex"
 )
 
@@ -39,23 +40,8 @@ func newPromptKey(home string) (keyPath string, key []byte, err error) {
 		return "", nil, err
 	}
 	keyPath = filepath.Join(home, PromptKeyFile)
-	tmp, err := os.CreateTemp(home, PromptKeyFile+".*")
-	if err != nil {
+	if err := fsio.WriteFileAtomicMode(keyPath, []byte(hex.EncodeToString(key)+"\n"), 0o600); err != nil {
 		return "", nil, err
-	}
-	_, werr := tmp.WriteString(hex.EncodeToString(key) + "\n")
-	if cerr := tmp.Close(); werr == nil {
-		werr = cerr
-	}
-	if werr == nil {
-		werr = os.Chmod(tmp.Name(), 0o600)
-	}
-	if werr == nil {
-		werr = os.Rename(tmp.Name(), keyPath)
-	}
-	if werr != nil {
-		os.Remove(tmp.Name())
-		return "", nil, werr
 	}
 	return keyPath, key, nil
 }
