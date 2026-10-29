@@ -521,8 +521,6 @@ func (u *Umbrella) NoteRm(ref, kind string) (bool, error) {
 
 // homeSub is the sub-repo that holds the milestone tracking issues:
 // issues.homeRepo, else the first registered one.
-func (u *Umbrella) HomeSub() (*Issues, error) { return u.homeSub() }
-
 func (u *Umbrella) homeSub() (*Issues, error) {
 	name := ""
 	if v, ok := config.Lookup(u.Cfg, "issues.homeRepo"); ok && v != nil {
