@@ -81,3 +81,25 @@ func TestFreezeLineSanitizesAndBoundsFields(t *testing.T) {
 		t.Errorf("empty repair fields should be useful: %s", plain)
 	}
 }
+
+func TestRecordBinds(t *testing.T) {
+	cases := []struct {
+		name string
+		r    *Record
+		base string
+		want bool
+	}{
+		{"nil record", nil, "main", false},
+		{"active same base", &Record{Active: true, Base: "main"}, "main", true},
+		{"active other base", &Record{Active: true, Base: "main"}, "release", false},
+		{"inactive same base", &Record{Active: false, Base: "main"}, "main", false},
+		{"inactive other base", &Record{Active: false, Base: "main"}, "release", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.r.Binds(tc.base); got != tc.want {
+				t.Fatalf("Binds(%q) = %v, want %v", tc.base, got, tc.want)
+			}
+		})
+	}
+}

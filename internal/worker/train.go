@@ -322,8 +322,8 @@ func (t *trainRun) plan() (bool, error) {
 		res.Verdict, res.Err, res.Hint = GateFreeze, landfreeze.UnreadableLine(err), landfreeze.ClearHint
 		return true, nil
 	}
-	if frozen != nil && frozen.Active {
-		if frozen.Base != o.Base {
+	if frozen.Frozen() {
+		if !frozen.Binds(o.Base) {
 			res.Verdict, res.Err, res.Hint = GateFreeze, frozen.Line(), "repairs must target the frozen base"
 			return true, nil
 		}
