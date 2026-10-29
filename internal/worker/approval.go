@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	gatepolicy "github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -27,8 +29,12 @@ type MergeApproval struct {
 	Confirm  gatepolicy.Confirm
 	ID       string
 	Escalate bool
-	// Resolve reads an answered escalation. Required only with ID.
-	Resolve func(id string, th ApprovalThread) (gatepolicy.Confirm, *exitcode.Refusal, error)
+	// Answers reads the escalation behind ID. Required only with ID.
+	Answers ApprovalReader
+	// Now is the clock for the status a refusal reports. Required only with ID.
+	Now func() time.Time
+	// Extra is the verb's own envelope, which a refusal of ID carries first.
+	Extra *jsonx.Object
 	// Clear checks and audits confirmation. Required when the policy covers
 	// the merge; a refusal is a value, an error is a step that could not run.
 	Clear func(target string, conf gatepolicy.Confirm, paths []string) (*exitcode.Refusal, error)
@@ -62,7 +68,7 @@ func (a MergeApproval) Check(target string, files func() ([]string, error), thre
 	if a.ID != "" {
 		var ref *exitcode.Refusal
 		var err error
-		if conf, ref, err = a.Resolve(a.ID, th); ref != nil || err != nil {
+		if conf, ref, err = a.Confirmation(a.ID, th); ref != nil || err != nil {
 			return ref, err
 		}
 	}
@@ -71,6 +77,63 @@ func (a MergeApproval) Check(target string, files func() ([]string, error), thre
 		a.Escalation.Attach(ref, hit, th)
 	}
 	return ref, err
+}
+
+// ApprovalReader is the thread-reading seam of --approval: the escalation
+// registry as the cli wires it, a test a fake.
+type ApprovalReader interface {
+	// Entry is the escalation with that id; ok is false when there is none.
+	Entry(id string) (entry Escalation, ok bool, err error)
+	// Approves reports whether an answer's body approves the merge.
+	Approves(answer string) bool
+}
+
+// Confirmation turns --approval <id> into the confirmation the gate takes:
+// the answered escalation on this merge's thread whose answer approves. A
+// refusal is a value, an error is a step that could not run.
+func (a MergeApproval) Confirmation(id string, th ApprovalThread) (gatepolicy.Confirm, *exitcode.Refusal, error) {
+	e, ok, err := a.Answers.Entry(id)
+	if err != nil {
+		return gatepolicy.Confirm{}, nil, err
+	}
+	switch {
+	case !ok:
+		return gatepolicy.Confirm{}, approvalError(exitcode.ExitResolution, "no escalation %s", id), nil
+	case e.Kind != th.Kind || e.Ref() != th.Ref():
+		return gatepolicy.Confirm{}, approvalError(exitcode.ExitUsage, "escalation %s is on %s %s, not on this merge's approval thread (%s %s)", id, e.Kind, e.Ref(), th.Kind, th.Ref()), nil
+	case e.Status != EscalationAnswered:
+		status := e.Derived(a.Now())
+		return gatepolicy.Confirm{}, a.refuse(fmt.Sprintf("escalation %s is %s; no approval yet", id, status),
+			"blockedBy", blockedby.ApprovalPending, "escalation", id, "status", status), nil
+	}
+	body := ""
+	if e.Answer != nil {
+		body = e.Answer.Body
+	}
+	if !a.Answers.Approves(body) {
+		return gatepolicy.Confirm{}, a.refuse(fmt.Sprintf("escalation %s was answered without approving the merge", id),
+			"blockedBy", blockedby.ApprovalDeclined, "escalation", id, "answer", body), nil
+	}
+	return gatepolicy.Confirm{Given: true, Note: body, Escalation: id}, nil, nil
+}
+
+// approvalError is a refusal that carries no envelope of its own.
+func approvalError(exit int, format string, args ...any) *exitcode.Refusal {
+	return &exitcode.Refusal{Err: &exitcode.Error{Exit: exit, Message: fmt.Sprintf(format, args...)}}
+}
+
+// refuse is the exit 4 refusal of --approval: Extra's fields first (the
+// verb's own shape), then fields, changed false.
+func (a MergeApproval) refuse(msg string, fields ...any) *exitcode.Refusal {
+	d := a.Extra
+	if d == nil {
+		d = jsonx.NewObject()
+	}
+	for i := 0; i+1 < len(fields); i += 2 {
+		d.Set(fields[i].(string), fields[i+1])
+	}
+	d.Set("changed", false)
+	return &exitcode.Refusal{Err: &exitcode.Error{Exit: exitcode.ExitRefused, Message: msg}, Data: d}
 }
 
 // Ref is the thread's number as users read it: `#12`, or the key PROJ-123.
