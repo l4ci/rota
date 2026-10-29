@@ -113,6 +113,14 @@ func samePR(a, b string) bool {
 	return id != "" && id == prID(b)
 }
 
+// Binds reports whether the freeze is active and holds the given base.
+func (r *Record) Binds(base string) bool {
+	return r != nil && r.Active && r.Base == base
+}
+
+// Frozen reports whether any freeze is active, whatever its base.
+func (r *Record) Frozen() bool { return r != nil && r.Active }
+
 // Allows grants an exception only to the explicitly designated repair.
 func (r *Record) Allows(issue, pr string) bool {
 	return r == nil || !r.Active || (r.RepairIssue != "" && issueID(issue) == issueID(r.RepairIssue)) || (r.RepairPR != "" && samePR(pr, r.RepairPR))

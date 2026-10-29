@@ -176,7 +176,7 @@ func (g *gate) stepFreeze() (bool, error) {
 		g.verdict(GateFreeze, landfreeze.UnreadableLine(err), landfreeze.ClearHint)
 		return true, nil
 	}
-	if r.Allows(g.target.Issue, g.pr) && (r == nil || !r.Active || r.Base == g.o.Base) {
+	if r.Allows(g.target.Issue, g.pr) && (!r.Frozen() || r.Binds(g.o.Base)) {
 		return false, nil
 	}
 	g.verdict(GateFreeze, r.Line(), "designate a repair with rota round freeze --repair-issue <id> or --repair-pr <pr>, then verify recovery")
@@ -227,7 +227,7 @@ func (e Env) clearVerifiedFreeze(ctx context.Context, root, base string) error {
 		return err
 	}
 	r, err := landfreeze.Read(p)
-	if err != nil || r == nil || !r.Active || r.Base != base {
+	if err != nil || !r.Binds(base) {
 		return err
 	}
 	sha, code := e.runGit(ctx, root, "rev-parse", "HEAD")
