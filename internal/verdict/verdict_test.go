@@ -502,3 +502,44 @@ func TestWorkFixAttemptsAndRetention(t *testing.T) {
 		t.Errorf("pass: got %d ok %v", got, ok)
 	}
 }
+
+// TestResetKindsAgreeAcrossCountersAndRetention checks that each reset record
+// clears its counter and that retention then drops the cleared failures, so
+// the counters and the history cut never disagree about what is still active.
+func TestResetKindsAgreeAcrossCountersAndRetention(t *testing.T) {
+	fail := func(k string) Record { return Record{Kind: k, Verdict: Fail} }
+	cases := []struct {
+		name  string
+		fixk  string
+		reset Record
+		count func([]Record) int
+	}{
+		{"debug-reset", DebugFix, Record{Kind: DebugReset}, FailedFixes},
+		{"work-fix-reset", WorkFix, Record{Kind: WorkFixReset}, WorkFixAttempts},
+		{"work-fix-pass", WorkFix, Record{Kind: WorkFix, Verdict: Pass}, WorkFixAttempts},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var list []Record
+			for i := 0; i < keep+5; i++ {
+				list = appendItem(list, fail(c.fixk))
+			}
+			if got := c.count(list); got != keep+5 {
+				t.Fatalf("active failures dropped before reset: counter %d, want %d", got, keep+5)
+			}
+			list = appendItem(list, c.reset)
+			if got := c.count(list); got != 0 {
+				t.Errorf("counter after reset = %d, want 0", got)
+			}
+			for i := 0; i < keep; i++ {
+				list = appendItem(list, Record{Kind: "note"})
+			}
+			if len(list) != keep {
+				t.Errorf("history after reset = %d records, want %d", len(list), keep)
+			}
+			if got := c.count(list); got != 0 {
+				t.Errorf("counter after retention = %d, want 0", got)
+			}
+		})
+	}
+}
