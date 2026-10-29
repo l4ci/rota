@@ -17,7 +17,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -625,34 +624,7 @@ func gitClean(dir string, umbrella bool) error {
 // heldLock refuses when a lock file under the state folder is held, that is a
 // verb of the old or the new binary is running. It creates no file.
 func heldLock(root string) error {
-	var held string
-	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || held != "" {
-			return nil
-		}
-		if d.IsDir() {
-			if path != root && d.Name() == "migrate-backup" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(path, ".lock") {
-			return nil
-		}
-		f, err := os.OpenFile(path, os.O_RDWR, 0)
-		if err != nil {
-			return nil
-		}
-		defer f.Close()
-		if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-			if errors.Is(err, syscall.EWOULDBLOCK) {
-				held = path
-			}
-			return nil
-		}
-		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-		return nil
-	})
+	held := fsio.HeldLockUnder(root, func(_ string, d fs.DirEntry) bool { return d.Name() == "migrate-backup" })
 	if held != "" {
 		return refuse(blockedby.LockHeld, "%s is held by a running rota or hv verb.\nWait for it to finish, then re-run rota migrate hv.", held)
 	}
@@ -1022,8 +994,7 @@ func removeLegacyInstall(root string) (removed int, kept []string, err error) {
 			dir = filepath.Dir(dir)
 		}
 	}
-	os.Remove(mp + ".lock")
-	return removed, kept, os.Remove(mp)
+	return removed, kept, fsio.RemoveWithLock(mp)
 }
 
 func symlinkedDir(root, p string) bool {
