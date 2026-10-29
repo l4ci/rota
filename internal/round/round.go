@@ -397,6 +397,9 @@ type Report struct {
 	Unavailable []string
 	Warnings    []string
 	Host        host.Kind
+	// Agents is the host snapshot the report was built from, nil when the host
+	// was not read (solo, unavailable or failed).
+	Agents []host.Agent
 	// Escalations are the open ones (pending or timed-out), read from the
 	// registry without a forge call; `rota round escalate check` looks for answers.
 	Escalations []escalation.Report
@@ -873,7 +876,7 @@ func (e Env) readRows(wts []worktree, reg worker.Registry, rep *Report) ([]*Row,
 }
 
 // readHost is the host source: the live agents, or the reason there are none.
-// It records an unavailable host on rep and sets rep.Host when it answers.
+// It records an unavailable host on rep and sets rep.Host and rep.Agents when it answers.
 func (e Env) readHost(ctx context.Context, rep *Report) (agents []host.Agent, ok bool) {
 	if e.HostName == host.Solo {
 		// No panes to ask: solo is not an unavailable host, and the tab drift
@@ -885,7 +888,7 @@ func (e Env) readHost(ctx context.Context, rep *Report) (agents []host.Agent, ok
 		rep.unavailable(SourceHost, err.Error())
 	} else {
 		agents, ok = a, true
-		rep.Host = e.HostName
+		rep.Host, rep.Agents = e.HostName, a
 	}
 	return agents, ok
 }
