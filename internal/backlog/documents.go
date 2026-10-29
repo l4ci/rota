@@ -47,6 +47,9 @@ func (f *File) readDocuments() (*documents, error) {
 	return &documents{f: f, backlog: backlog, archive: archive, archiveExists: archiveExists}, nil
 }
 
+// writeAtomic is the transfer write; a seam for tests, which fail a chosen path.
+var writeAtomic = fsio.WriteFileAtomic
+
 // write persists the destination before removing the source. An interruption
 // can leave two copies, never zero. Callers recognize those copies on retry:
 // Archive skips identical archived lines; Reopen cleans up the archived done
@@ -57,10 +60,7 @@ func (d *documents) write(backlog, archive string, toArchive bool) error {
 		if old == next {
 			return nil
 		}
-		if d.f.writeAtomic != nil {
-			return d.f.writeAtomic(path, []byte(next))
-		}
-		return fsio.WriteFileAtomic(path, []byte(next))
+		return writeAtomic(path, []byte(next))
 	}
 	if toArchive {
 		if err := write(d.f.archivePath(), d.archive, archive); err != nil {
