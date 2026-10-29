@@ -2,6 +2,7 @@ package milestone
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
@@ -22,6 +23,15 @@ func exitOf(err error) int {
 }
 
 const testDay = "2026-03-04"
+
+// add mints a delivery milestone through the store seam; deps is a comma list.
+func add(root, title, summary, deps, today string) (string, error) {
+	day, err := time.Parse("2006-01-02", today)
+	if err != nil {
+		return "", err
+	}
+	return FileStore{Root: root, Today: func() time.Time { return day }}.Add(title, summary, artifact.SplitCSV(deps), KindDelivery)
+}
 
 var created = regexp.MustCompile(`(?m)^created: \d{4}-\d{2}-\d{2}$`)
 
@@ -88,7 +98,7 @@ func TestMatchesOldHelpers(t *testing.T) {
 		{"Second", "Needs the first.", "M01", "M02"},
 		{"Third", "Needs both.", "M01, M02", "M03"},
 	} {
-		id, err := Add(root, a.title, a.summary, a.deps, testDay)
+		id, err := add(root, a.title, a.summary, a.deps, testDay)
 		if err != nil || id != a.id {
 			t.Fatalf("add %d: %q %v", i, id, err)
 		}
@@ -124,7 +134,7 @@ func TestMatchesOldHelpers(t *testing.T) {
 
 func TestStatusAndIndexChanged(t *testing.T) {
 	root := project(t)
-	Add(root, "A", "a", "", testDay)
+	add(root, "A", "a", "", testDay)
 	if changed, err := SetStatus(root, "M01", "active"); err != nil || !changed {
 		t.Fatalf("first status: %v %v", changed, err)
 	}
@@ -147,7 +157,7 @@ func TestStatusAndIndexChanged(t *testing.T) {
 
 func TestExits(t *testing.T) {
 	root := project(t)
-	Add(root, "A", "a", "", testDay)
+	add(root, "A", "a", "", testDay)
 	for _, id := range []string{"m01", "M1", "X01", "../x"} {
 		if _, err := Show(root, id); exitOf(err) != 2 {
 			t.Errorf("Show(%q) = %v", id, err)
@@ -208,7 +218,7 @@ func TestAddWithoutOverviewAndConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			id, err := Add(root, "T", "s", "", testDay)
+			id, err := add(root, "T", "s", "", testDay)
 			if err != nil {
 				t.Error(err)
 				return
@@ -295,7 +305,7 @@ func TestIDGrammarUnicodeDigits(t *testing.T) {
 // text: Put validates frontmatter only.
 func TestPutAcceptsOptionalPlanSections(t *testing.T) {
 	root := t.TempDir()
-	if _, err := Add(root, "First", "Summary line.", "", testDay); err != nil {
+	if _, err := add(root, "First", "Summary line.", "", testDay); err != nil {
 		t.Fatal(err)
 	}
 	text := "---\nid: M01\nstatus: planned\n---\n\n## Goal\n\ng\n\n## Not yet specified\n\n- sync engine\n\n## Out of scope\n\n- SSO: ruled out, no demand\n"

@@ -111,13 +111,6 @@ func StubOn(id, title, summary string, depends []string, today string) string {
 		"## Research findings\n\n_(prior art, references, lessons from /rota-vision web search)_\n\n## Notes\n\n_(free-form brainstorm)_\n"
 }
 
-// Add mints the next milestone ID, writes its detail file and appends its
-// entry to MILESTONES.md. depends is a comma list; its IDs are not validated.
-// today is the created date.
-func Add(root, title, summary, depends, today string) (string, error) {
-	return addFile(root, title, summary, artifact.SplitCSV(depends), KindDelivery, today)
-}
-
 func addFile(root, title, summary string, deps []string, kind, today string) (string, error) {
 	if err := CheckKind(kind); err != nil {
 		return "", err
