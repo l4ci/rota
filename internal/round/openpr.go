@@ -71,11 +71,6 @@ func (e Env) issuesOfPRs(prs []tracker.PR, skip string) map[tracker.IssueKey]int
 // fix builds on the PR the finding came from.
 var deferredFromRe = regexp.MustCompile(`(?m)^Deferred \w+ finding from the .* verdict on `)
 
-// relatedPRRe is one PR ref in a Related field. --file-deferred stores --pr
-// verbatim, so it is a bare `77`, `#77` or a PR URL (`/pull/77`, GitLab
-// `/merge_requests/77`).
-var relatedPRRe = regexp.MustCompile(`^(?:#|\S*/(?:pull|merge_requests)/)?(\d+)(?:[/?#]\S*)?$`)
-
 // deferredDependency is the open PR a --file-deferred item was filed from, 0
 // when it is not such an item or that PR is no longer open. Another item that
 // merely relates to an open PR is not held back.
@@ -94,11 +89,11 @@ func deferredDependency(be backlog.Backend, it backlog.Item, open map[int]bool) 
 	}
 	refs := strings.FieldsFunc(it.Fields.Related, func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
 	for _, ref := range refs {
-		m := relatedPRRe.FindStringSubmatch(ref)
-		if m == nil {
+		num, ok := tracker.PRRefNumber(ref)
+		if !ok {
 			continue
 		}
-		if n, _ := strconv.Atoi(m[1]); open[n] {
+		if n, _ := strconv.Atoi(num); open[n] {
 			return n
 		}
 	}
