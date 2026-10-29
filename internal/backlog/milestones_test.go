@@ -21,7 +21,16 @@ func TestParseMSTitle(t *testing.T) {
 		{"  M10 – Two words here ", "M10", "Two words here", true},
 		{"M3 - dash", "M3", "dash", true},
 		{"M04", "M04", "", true},
+		{" M5 — x", "M5", "x", true},
+		{"M7-x", "M7", "x", true},
+		{"\u2003M٠٥ — Unicode\u00a0", "M٠٥", "Unicode", true},
+		{"M05: title", "M05", "", true},
 		{"M05x — nope", "", "", false},
+		{"M05_", "", "", false},
+		{"M05é — nope", "", "", false},
+		{"M05中 — nope", "", "", false},
+		{"M", "", "", false},
+		{"m05 — lowercase", "", "", false},
 		{"Milestone M02", "", "", false},
 		{"", "", "", false},
 	} {
@@ -29,6 +38,63 @@ func TestParseMSTitle(t *testing.T) {
 		if id != c.id || rest != c.rest || ok != c.ok {
 			t.Errorf("parseMSTitle(%q) = %q %q %v, want %q %q %v", c.in, id, rest, ok, c.id, c.rest, c.ok)
 		}
+	}
+}
+
+func TestSelectNativeMilestone(t *testing.T) {
+	for _, c := range []struct {
+		name, mid, assigned string
+		found               []tracker.Milestone
+		want                int // zero means no match
+	}{
+		{name: "empty", mid: "M05"},
+		{name: "word boundaries", mid: "M05", found: []tracker.Milestone{
+			{Number: 1, Title: "M050 — another ID", State: "open"},
+			{Number: 2, Title: "M05x", State: "open"},
+			{Number: 3, Title: "M05_", State: "open"},
+			{Number: 4, Title: "M05é", State: "open"},
+			{Number: 5, Title: "M05中", State: "open"},
+		}},
+		{name: "punctuation and whitespace", mid: "M05", found: []tracker.Milestone{
+			{Number: 6, Title: "\u2003M05: title\u00a0", State: "open"},
+		}, want: 6},
+		{name: "bare ID", mid: "M05", found: []tracker.Milestone{
+			{Number: 7, Title: "M05", State: "open"},
+		}, want: 7},
+		{name: "open before closed", mid: "M05", found: []tracker.Milestone{
+			{Number: 1, Title: "M05 — closed", State: "closed"},
+			{Number: 9, Title: "M05 — first open", State: "open"},
+			{Number: 2, Title: "M05 — later open", State: "open"},
+		}, want: 9},
+		{name: "closed fallback keeps order", mid: "M05", found: []tracker.Milestone{
+			{Number: 9, Title: "M05 — first closed", State: "closed"},
+			{Number: 2, Title: "M05 — later closed", State: "closed"},
+		}, want: 9},
+		{name: "non-closed state keeps order", mid: "M05", found: []tracker.Milestone{
+			{Number: 9, Title: "M05 — unspecified state"},
+			{Number: 2, Title: "M05 — open", State: "open"},
+		}, want: 9},
+		{name: "assignment wins over open title match", mid: "M05", assigned: "Legacy title", found: []tracker.Milestone{
+			{Number: 1, Title: "M05 — open", State: "open"},
+			{Number: 2, Title: "Legacy title", State: "closed"},
+		}, want: 2},
+		{name: "missing assignment falls back", mid: "M05", assigned: "Missing title", found: []tracker.Milestone{
+			{Number: 3, Title: "M05 — found", State: "open"},
+		}, want: 3},
+		{name: "Unicode digits", mid: "M٠٥", found: []tracker.Milestone{
+			{Number: 4, Title: "M٠٥ — Unicode", State: "open"},
+		}, want: 4},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := selectNativeMilestone(c.found, c.mid, c.assigned)
+			if c.want == 0 {
+				if got != nil {
+					t.Fatalf("selected %+v, want no match", got)
+				}
+			} else if got == nil || got.Number != c.want {
+				t.Fatalf("selected %+v, want milestone %d", got, c.want)
+			}
+		})
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // ErrCorrupt is Fill's answer when config.json is not a valid JSON object,
@@ -59,15 +60,15 @@ func decodeObject(raw []byte) (*jsonx.Object, bool) {
 // roundtrip in config.json and config.local.json and the stamp is raised, an
 // auto in a global config older than its own stamp becomes roundtrip too, and
 // round.autopilot is deleted from both project files.
-func Fill(root string) ([]string, error) {
-	filled, _, _, err := FillDetect(root, nil)
+func Fill(env projects.Env, root string) ([]string, error) {
+	filled, _, _, err := FillDetect(env, root, nil)
 	return filled, err
 }
 
 // FillDetect is Fill with the origin detection MigrateSource needs for an
 // issues.provider of auto, and a report of the source and round-key
 // migrations. A nil detect leaves such a config on its legacy keys.
-func FillDetect(root string, detect func() string) ([]string, SourceMigration, RoundMigration, error) {
+func FillDetect(env projects.Env, root string, detect func() string) ([]string, SourceMigration, RoundMigration, error) {
 	filled := []string{}
 	var sm SourceMigration
 	rm, err := MigrateRoundKeysFiles(root, true)
@@ -79,7 +80,7 @@ func FillDetect(root string, detect func() string) ([]string, SourceMigration, R
 	if _, err := MigrateAccountsFiles(root, "", true); err != nil {
 		return nil, sm, rm, err
 	}
-	if _, err := MigrateMergesFiles(root, globalConfigDir(), true); err != nil {
+	if _, err := MigrateMergesFiles(root, globalConfigDir(env), true); err != nil {
 		return nil, sm, rm, err
 	}
 	path := configPath(root)
@@ -102,10 +103,10 @@ func FillDetect(root string, detect func() string) ([]string, SourceMigration, R
 		cfg, migrated := migrateLegacyVersion(cfg)
 		cfg, copied, moved := migrateLegacyVerify(cfg)
 		cfg, sm = MigrateSource(cfg, detect)
-		global := globalLayer()
+		global := globalLayer(env)
 		// A corrupt global may hold keys we cannot see: writing defaults now
 		// would pin them over the repaired global, so fill none of them.
-		globalBroken := GlobalError() != nil
+		globalBroken := GlobalError(env) != nil
 		for _, k := range Keys {
 			if (k.Name == VersionKey && migrated) || (k.Name == TestFullKey && copied) {
 				filled = append(filled, k.Name)
@@ -132,7 +133,7 @@ func FillDetect(root string, detect func() string) ([]string, SourceMigration, R
 	if err != nil {
 		return nil, sm, rm, err
 	}
-	if _, err := migrateAutonomyGlobal(); err != nil {
+	if _, err := migrateAutonomyGlobal(env); err != nil {
 		return nil, sm, rm, err
 	}
 	return filled, sm, rm, nil

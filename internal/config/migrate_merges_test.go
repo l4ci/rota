@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // mergeVal reads the dotted path out of a JSON body.
@@ -263,7 +265,7 @@ func TestMergeEmptiedModelsObjectIsRemoved(t *testing.T) {
 // fill migrates before it strips, so deleting a removed key never loses a value.
 func TestMergeFillRunsTheStep(t *testing.T) {
 	r := newAcctRig(t, "", `{"models":{"orchestrator":"sonnet"},"round":{"codexCommand":"cx","workerKind":"codex"}}`, "")
-	if _, err := Fill(r.root); err != nil {
+	if _, err := Fill(projects.OSEnv(), r.root); err != nil {
 		t.Fatal(err)
 	}
 	for path, want := range map[string]any{
@@ -343,7 +345,7 @@ func TestCommandsObjectKey(t *testing.T) {
 	if err := Validate("round.commands.codex", "7"); !errors.Is(err, ErrBadValue) {
 		t.Errorf("non-string command: %v, want ErrBadValue", err)
 	}
-	es, err := Show(root, "round.commands", true)
+	es, err := Show(projects.OSEnv(), root, "round.commands", true)
 	if err != nil || len(es) != 1 || es[0].Source != "local" {
 		t.Errorf("show round.commands = %+v, %v", es, err)
 	}

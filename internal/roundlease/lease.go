@@ -237,11 +237,7 @@ func (e Env) Acquire(commonDir, root string, h Holder, round int) (l Lease, out 
 }
 
 func write(path string, l Lease) error {
-	b, err := json.MarshalIndent(l, "", "  ")
-	if err != nil {
-		return err
-	}
-	return fsio.WriteFileAtomic(path, append(b, '\n'))
+	return fsio.WriteJSONAtomic(path, l)
 }
 
 // Release removes the lease when h holds it. It reports whether it removed

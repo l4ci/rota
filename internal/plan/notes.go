@@ -82,9 +82,35 @@ func itemOf(key string) string {
 	return ""
 }
 
-func missing(what string) *exitcode.Error {
-	return exitcode.Errf(exitcode.ExitResolution, "plan note for %s not found", what)
+// docs opens a key's note: a slice plan is a slice of its milestone's
+// tracking issue, an item plan the `plan` note of the item's issue.
+func (s notes) docs() artifact.NoteDocs {
+	return artifact.NoteDocs{Kind: "plan", Open: func(key string) (artifact.NoteSlot, string, error) {
+		if m, u, isSlice := sliceOf(key); isSlice {
+			sl, err := s.slices()
+			if err != nil {
+				return nil, "", err
+			}
+			return sliceNote{sl, m, u}, key, nil
+		}
+		item := itemOf(key)
+		n, err := s.item(item)
+		if err != nil {
+			return nil, "", err
+		}
+		return artifact.ItemNote{Notes: n, Ref: item, Kind: "plan"}, item, nil
+	}}
 }
+
+// sliceNote is the NoteSlot of one slice plan.
+type sliceNote struct {
+	sl        SliceStore
+	mid, unit string
+}
+
+func (n sliceNote) Get() (string, bool, error)    { return n.sl.SliceGet(n.mid, n.unit) }
+func (n sliceNote) Put(text string) (bool, error) { return n.sl.SlicePut(n.mid, n.unit, text) }
+func (n sliceNote) Rm() (bool, error)             { return n.sl.SliceRm(n.mid, n.unit) }
 
 func (s notes) Create(milestone, unit string, render func(unit string) string) (string, error) {
 	if unit != "" && !strings.HasPrefix(unit, "S") {
@@ -127,91 +153,11 @@ func (s notes) Create(milestone, unit string, render func(unit string) string) (
 	return key, err
 }
 
-// Read adds the newline the old helper printed after a note.
-func (s notes) Read(key string) (string, error) {
-	var text string
-	var ok bool
-	var what string
-	if m, u, isSlice := sliceOf(key); isSlice {
-		sl, err := s.slices()
-		if err != nil {
-			return "", err
-		}
-		what = key
-		if text, ok, err = sl.SliceGet(m, u); err != nil {
-			return "", err
-		}
-	} else {
-		item := itemOf(key)
-		n, err := s.item(item)
-		if err != nil {
-			return "", err
-		}
-		what = item
-		if text, ok, err = n.NoteGet(item, "plan"); err != nil {
-			return "", err
-		}
-	}
-	if !ok {
-		return "", missing(what)
-	}
-	return text + "\n", nil
-}
+func (s notes) Read(key string) (string, error) { return s.docs().Read(key) }
 
-func (s notes) Replace(key, text string) (bool, error) {
-	if m, u, isSlice := sliceOf(key); isSlice {
-		sl, err := s.slices()
-		if err != nil {
-			return false, err
-		}
-		if _, ok, err := sl.SliceGet(m, u); err != nil {
-			return false, err
-		} else if !ok {
-			return false, missing(key)
-		}
-		return sl.SlicePut(m, u, text)
-	}
-	item := itemOf(key)
-	n, err := s.item(item)
-	if err != nil {
-		return false, err
-	}
-	if _, ok, err := n.NoteGet(item, "plan"); err != nil {
-		return false, err
-	} else if !ok {
-		return false, missing(item)
-	}
-	return n.NotePut(item, "plan", text)
-}
+func (s notes) Replace(key, text string) (bool, error) { return s.docs().Replace(key, text) }
 
-func (s notes) Remove(key string) error {
-	var removed bool
-	var what string
-	if m, u, isSlice := sliceOf(key); isSlice {
-		sl, err := s.slices()
-		if err != nil {
-			return err
-		}
-		what = key
-		if removed, err = sl.SliceRm(m, u); err != nil {
-			return err
-		}
-	} else {
-		item := itemOf(key)
-		n, err := s.item(item)
-		if err != nil {
-			return err
-		}
-		what = item
-		if removed, err = n.NoteRm(item, "plan"); err != nil {
-			return err
-		}
-	}
-	if !removed {
-		return missing(what)
-	}
-	return nil
-}
+func (s notes) Remove(key string) error { return s.docs().Remove(key) }
 
 // List is the slice plans of one milestone (or all with ""), their fields
 // read from each note's frontmatter. Item plans are not listed: they live on

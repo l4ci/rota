@@ -134,7 +134,7 @@ func configShow(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		entries, err := config.Show(root, key, len(args) == 1)
+		entries, err := config.Show(c.deps().projectsEnv(), root, key, len(args) == 1)
 		if err != nil {
 			return Result{}, Resolution("unknown config key '%s'", key)
 		}
@@ -341,7 +341,7 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		status, missing := config.Check(root)
+		status, missing := config.Check(c.deps().projectsEnv(), root)
 		data := jsonObj("status", status, "upToDate", status == config.UpToDate, "missing", anySlice(missing))
 		token := map[string]string{config.UpToDate: "UP_TO_DATE", config.Fresh: "FRESH", config.Corrupt: "CORRUPT"}[status]
 		if status == config.Stale {
@@ -373,17 +373,17 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 			data.Set("legacy", anySlice(legacy))
 			res.Text += "\nLEGACY: " + strings.Join(legacy, ", ") + " (replaced by issues.source and forge.provider; run: rota migrate source --apply, or rota config fill)"
 		}
-		warnings := config.Warnings(root)
+		warnings := config.Warnings(c.deps().projectsEnv(), root)
 		data.Set("warnings", anySlice(warnings))
 		for _, w := range warnings {
 			res.Text += "\nwarn: " + w
 		}
-		if gerr := config.GlobalError(); gerr != nil && status == config.Stale {
+		if gerr := config.GlobalError(c.deps().projectsEnv()); gerr != nil && status == config.Stale {
 			data.Set("globalCorrupt", gerr.Error())
 			res.Text += "\n" + globalCorruptLine(gerr)
 		}
 		if status == config.UpToDate || status == config.Stale {
-			if retired := config.Retired(root); len(retired) > 0 {
+			if retired := config.Retired(c.deps().projectsEnv(), root); len(retired) > 0 {
 				data.Set("retired", anySlice(retired))
 				res.Text = "RETIRED: " + strings.Join(retired, "; ")
 				return res, Failed("%s", retired[0])
@@ -432,13 +432,13 @@ func configFill(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		removed = stripping
-		am := config.AutonomyPending(root)
+		am := config.AutonomyPending(c.deps().projectsEnv(), root)
 		// Same condition as `config check`: STALE with an unreadable global.
 		var corrupt error
-		if status, _ := config.Check(root); status == config.Stale {
-			corrupt = config.GlobalError()
+		if status, _ := config.Check(c.deps().projectsEnv(), root); status == config.Stale {
+			corrupt = config.GlobalError(c.deps().projectsEnv())
 		}
-		filled, sm, rm, err := config.FillDetect(root, c.deps().originProvider(c.Context(), root))
+		filled, sm, rm, err := config.FillDetect(c.deps().projectsEnv(), root, c.deps().originProvider(c.Context(), root))
 		if err != nil {
 			return roundMigrationFail(err)
 		}

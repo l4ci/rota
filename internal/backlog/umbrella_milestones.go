@@ -2,12 +2,8 @@ package backlog
 
 import (
 	"fmt"
-	"sort"
-	"strings"
-	"unicode/utf8"
 
 	ms "github.com/l4ci/rota/internal/milestone"
-	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -16,17 +12,6 @@ import (
 // sub-repo, and every sub-repo that uses a milestone has its own native
 // milestone "MNN — <title>". IDs are minted over the native milestones of all
 // sub-repos, and a milestone is shipped only when every native one is closed.
-
-// hasMilestone reports whether native milestone title starts with mid and the
-// ID does not run into a word character (M05 does not match M050).
-func hasMilestone(title, mid string) bool {
-	t := pystr.Strip(title)
-	if !strings.HasPrefix(t, mid) {
-		return false
-	}
-	r, _ := utf8.DecodeRuneInString(t[len(mid):])
-	return t[len(mid):] == "" || !pystr.IsWord(r)
-}
 
 // nativeSet is the native milestones of every sub-repo, fetched once.
 type nativeSet map[string][]tracker.Milestone
@@ -50,15 +35,8 @@ func (u *Umbrella) fetchNatives() (nativeSet, error) {
 func (s nativeSet) of(mid string) map[string]tracker.Milestone {
 	out := map[string]tracker.Milestone{}
 	for name, found := range s {
-		var hits []tracker.Milestone
-		for _, m := range found {
-			if hasMilestone(m.Title, mid) {
-				hits = append(hits, m)
-			}
-		}
-		sort.SliceStable(hits, func(i, j int) bool { return hits[i].State != "closed" && hits[j].State == "closed" })
-		if len(hits) > 0 {
-			out[name] = hits[0]
+		if m := selectNativeMilestone(found, mid, ""); m != nil {
+			out[name] = *m
 		}
 	}
 	return out
@@ -111,6 +89,7 @@ func (u *Umbrella) MilestoneList() ([]ms.Entry, error) {
 		return nil, err
 	}
 	var set nativeSet
+	reopened := false
 	for i := range rows {
 		if rows[i].Status != "shipped" {
 			continue
@@ -123,23 +102,13 @@ func (u *Umbrella) MilestoneList() ([]ms.Entry, error) {
 		for _, m := range set.of(rows[i].ID) {
 			if m.State != "closed" {
 				rows[i].Status = "active"
+				reopened = true
 				break
 			}
 		}
 	}
-	shipped := map[string]bool{}
-	for _, r := range rows {
-		if r.Status == "shipped" {
-			shipped[r.ID] = true
-		}
-	}
-	for i := range rows {
-		rows[i].Ready = true
-		for _, d := range rows[i].Depends {
-			if !shipped[d] {
-				rows[i].Ready = false
-			}
-		}
+	if reopened {
+		ms.MarkReady(rows)
 	}
 	return rows, nil
 }

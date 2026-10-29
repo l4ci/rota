@@ -584,3 +584,31 @@ func TestIssuesSetSection(t *testing.T) {
 		wantCalls(t, tr, c.calls)
 	}
 }
+
+func TestIssuesReleaseByHandMarksStatus(t *testing.T) {
+	b, _ := newIssues(t, `{}`, open(1, "", "keep"))
+	if won, _, err := b.Claim("1", "alice"); !won || err != nil {
+		t.Fatal(won, err)
+	}
+	if ok, err := b.Release("1", "alice"); !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	if st, _ := b.Status("1"); len(st.HandReleased) != 0 {
+		t.Fatalf("a plain release is not deliberate: %v", st.HandReleased)
+	}
+	if won, _, err := b.Claim("1", "alice"); !won || err != nil {
+		t.Fatal(won, err)
+	}
+	if ok, err := b.ReleaseByHand("1", "alice"); !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	if st, _ := b.Status("1"); !slices.Equal(st.HandReleased, []string{"alice"}) {
+		t.Fatalf("a hand release is marked: %v", st.HandReleased)
+	}
+	if won, _, err := b.Claim("1", "alice"); !won || err != nil {
+		t.Fatal(won, err)
+	}
+	if st, _ := b.Status("1"); len(st.HandReleased) != 0 {
+		t.Fatalf("a later claim clears the mark: %v", st.HandReleased)
+	}
+}

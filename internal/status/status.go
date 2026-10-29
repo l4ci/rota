@@ -90,6 +90,30 @@ func Entries(root string) []Entry {
 	return out
 }
 
+// ActiveBranches maps item IDs to the branch of the first active entry that
+// lists them. For removal diagnostics, a missing branch is "(unknown)" and a
+// non-string branch is its compact JSON representation.
+func ActiveBranches(root string) map[string]string {
+	out := map[string]string{}
+	for _, entry := range Entries(root) {
+		branch := "(unknown)"
+		if raw, has := entry.Raw.Get("branch"); has {
+			if s, ok := raw.(string); ok {
+				branch = s
+			} else {
+				b, _ := jsonx.MarshalCompact(raw)
+				branch = string(b)
+			}
+		}
+		for _, id := range entry.Items {
+			if _, seen := out[id]; !seen {
+				out[id] = branch
+			}
+		}
+	}
+	return out
+}
+
 // ErrShape is wrapped by the error for a status.json that parses but is not
 // the {"active": [...]} document the helpers expect.
 var ErrShape = errors.New("status.json has an unexpected shape")

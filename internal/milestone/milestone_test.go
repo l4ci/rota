@@ -373,3 +373,28 @@ func TestFileStoreAddRejectsUnknownKind(t *testing.T) {
 		t.Errorf("nothing may be written: %v", entries)
 	}
 }
+
+func TestMarkReady(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		entries []Entry
+		want    []bool
+	}{
+		{"no dependencies", []Entry{{ID: "M01", Status: "planned"}}, []bool{true}},
+		{"shipped dependency", []Entry{{ID: "M01", Status: "shipped"}, {ID: "M02", Status: "planned", Depends: []string{"M01"}}}, []bool{true, true}},
+		{"active dependency", []Entry{{ID: "M01", Status: "active"}, {ID: "M02", Status: "planned", Depends: []string{"M01"}}}, []bool{true, false}},
+		{"archived dependency", []Entry{{ID: "M01", Status: "archived"}, {ID: "M02", Status: "planned", Depends: []string{"M01"}}}, []bool{true, false}},
+		{"unknown dependency", []Entry{{ID: "M02", Status: "planned", Depends: []string{"M09"}}}, []bool{false}},
+		{"one of two unshipped", []Entry{{ID: "M01", Status: "shipped"}, {ID: "M02", Status: "planned"}, {ID: "M03", Status: "planned", Depends: []string{"M01", "M02"}}}, []bool{true, true, false}},
+		{"stale flag is recomputed", []Entry{{ID: "M02", Status: "planned", Depends: []string{"M01"}, Ready: true}}, []bool{false}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			MarkReady(tc.entries)
+			for i, e := range tc.entries {
+				if e.Ready != tc.want[i] {
+					t.Errorf("%s: Ready = %v, want %v", e.ID, e.Ready, tc.want[i])
+				}
+			}
+		})
+	}
+}

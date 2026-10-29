@@ -19,6 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -101,7 +102,7 @@ func newMoveFx(t *testing.T) *moveFx {
 		n, _ := strconv.Atoi(it.ID)
 		it.Number = n
 	}
-	f.set, _ = roundcfg.FromConfig(config.Load(rotatree.Config(os.TempDir())))
+	f.set, _ = roundcfg.FromConfig(config.Load(projects.OSEnv(), rotatree.Config(os.TempDir())))
 	f.env.Round, f.env.HolderPID = f.set, 100
 
 	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
@@ -422,6 +423,28 @@ func TestReconcileEscalationPendingIsNotStalled(t *testing.T) {
 	f.env.Round.StallMinutes = 0
 	if rep, _ := f.env.Status(bg, f.root); hasKind(kinds(rep.Findings)["ben"], StalledSlot) {
 		t.Errorf("stallMinutes 0 is off: %v", rep.Findings)
+	}
+}
+
+func TestReconcileKeepsAHandReleasedClaim(t *testing.T) {
+	f := newMoveFx(t)
+	f.env.Board = f.be
+	f.forge.labels = map[int][]string{12: {"in-progress"}, 13: {"in-progress"}}
+	f.forge.labelled = nil
+
+	delete(f.be.claims, "12")
+	f.be.handReleased = map[string][]string{"12": {"ben@1"}}
+	rep, _ := f.env.Status(bg, f.root)
+	for _, fd := range rep.Findings {
+		if fd.Kind == ClaimMismatch && fd.Slot == "ben" && fd.Repair != "" {
+			t.Errorf("a deliberate release offers no repair: %+v", fd)
+		}
+	}
+	if _, err := f.env.Reconcile(bg, f.root, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.be.claims["12"]; got != "" {
+		t.Errorf("--apply re-posted a claim a human released on purpose: %q", got)
 	}
 }
 

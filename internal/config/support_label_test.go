@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/l4ci/rota/internal/projects"
 )
 
 func TestSupportLabelKeyRetired(t *testing.T) {
@@ -21,10 +23,10 @@ func TestFillKeepsSupportLabelKey(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, ".rota"), 0755)
 	os.WriteFile(filepath.Join(root, ".rota/config.json"), []byte(`{"issues":{"labels":{"support":"remote"}}}`), 0644)
-	if _, err := Fill(root); err != nil {
+	if _, err := Fill(projects.OSEnv(), root); err != nil {
 		t.Fatal(err)
 	}
-	v, ok := Lookup(Load(filepath.Join(root, ".rota/config.json")), "issues.labels.support")
+	v, ok := Lookup(Load(projects.OSEnv(), filepath.Join(root, ".rota/config.json")), "issues.labels.support")
 	if !ok || v != "remote" {
 		t.Fatalf("old label = %v, %v", v, ok)
 	}
