@@ -44,12 +44,7 @@ func CanonicalizeItems(root string, targets func(string) []string) error {
 			// a reset from one alias to erase another alias's failed attempts.
 			var cleared, active []Record
 			for _, list := range histories {
-				at := 0
-				for i, r := range list {
-					if r.Kind == DebugReset {
-						at = i + 1
-					}
-				}
+				at, _ := resetStarts(list)
 				cleared = append(cleared, list[:at]...)
 				active = append(active, list[at:]...)
 			}
@@ -67,15 +62,7 @@ func appendItem(list []Record, r Record) []Record {
 	if cut <= 0 {
 		return list
 	}
-	debugStart, workStart := 0, 0
-	for i, record := range list {
-		switch {
-		case record.Kind == DebugReset:
-			debugStart = i + 1
-		case record.Kind == WorkFixReset, record.Kind == WorkFix && record.Verdict == Pass:
-			workStart = i + 1
-		}
-	}
+	debugStart, workStart := resetStarts(list)
 	for i := 0; i < cut; i++ {
 		r := list[i]
 		if (i >= debugStart && r.Kind == DebugFix && r.Verdict == Fail) ||

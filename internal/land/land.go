@@ -129,11 +129,28 @@ func RequestForge(ctx context.Context, f Requester, pr int, head string, deleteB
 	return f.PRRequestMerge(ctx, pr, tracker.MergeOpts{HeadSHA: head, DeleteBranch: deleteBranch})
 }
 
+// MergeRefusedError is the forge refusing to merge a PR: the merge call itself
+// failed with the CLI's own error. Nothing was merged.
+type MergeRefusedError struct {
+	PR  int
+	Err error
+}
+
+func (e *MergeRefusedError) Error() string { return e.Err.Error() }
+func (e *MergeRefusedError) Unwrap() error { return e.Err }
+
 // MergeForge is RequestForge plus the confirmation: it returns the merge
-// commit sha, or fails when nothing landed.
+// commit sha, or fails when nothing landed. A merge the forge refused is a
+// *MergeRefusedError; an unreachable forge and a merge that landed but cannot
+// be read back pass through unchanged.
 func MergeForge(ctx context.Context, f Merger, pr int, head string, deleteBranch bool) (string, error) {
 	if head == "" {
 		return "", ErrUnpinned
 	}
-	return f.PRMerge(ctx, pr, tracker.MergeOpts{HeadSHA: head, DeleteBranch: deleteBranch})
+	sha, err := f.PRMerge(ctx, pr, tracker.MergeOpts{HeadSHA: head, DeleteBranch: deleteBranch})
+	var te *tracker.Error
+	if errors.As(err, &te) && te.Kind == tracker.KindFailed && !strings.HasPrefix(te.Message, "cannot read the merge commit") {
+		return "", &MergeRefusedError{PR: pr, Err: err}
+	}
+	return sha, err
 }

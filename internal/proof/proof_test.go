@@ -269,3 +269,41 @@ func TestLegacyDetailRowsAreReadAndSeedTheSidecar(t *testing.T) {
 		t.Errorf("detail file changed:\n%s", after)
 	}
 }
+
+type memStore struct{ content string }
+
+func (m *memStore) Update(_ string, fn func(string) (string, bool, error)) error {
+	out, changed, err := fn(m.content)
+	if changed {
+		m.content = out
+	}
+	return err
+}
+
+func (m *memStore) Read(string) (string, bool, error) { return m.content, true, nil }
+
+// Mark follows Latest's sha rule: an empty or under-7-char sha names no commit,
+// so it marks nothing, while a prefix of a row's sha either way still matches.
+func TestMarkUsesTheSharedShaRule(t *testing.T) {
+	const row = "- 2026-01-01 · go test ./x · PASS · abc1234def5678 · detail"
+	for _, tc := range []struct {
+		name string
+		sha  string
+		want bool
+	}{
+		{"empty sha", "", false},
+		{"short sha", "abc123", false},
+		{"seven char prefix", "abc1234", true},
+		{"longer than row sha", "abc1234def5678aa", true},
+		{"other sha", "ffff0000", false},
+	} {
+		s := &memStore{content: "## Proof\n\n" + row + "\n"}
+		found, err := Mark(s, "1", tc.sha, "go test ./x", "targeted")
+		if err != nil || found != tc.want {
+			t.Errorf("%s: Mark = %v, %v; want %v", tc.name, found, err, tc.want)
+		}
+		if marked := strings.Contains(s.content, "detail targeted"); marked != tc.want {
+			t.Errorf("%s: row marked = %v, want %v", tc.name, marked, tc.want)
+		}
+	}
+}

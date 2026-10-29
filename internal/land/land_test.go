@@ -258,3 +258,29 @@ func TestInterruptedMergeRestoresTree(t *testing.T) {
 		})
 	}
 }
+
+// TestMergeForgeRefusalIsOneErrorType: a merge the forge refused comes back as
+// a *MergeRefusedError carrying the PR; an unavailable forge and a merge that
+// landed but cannot be read back are not refusals.
+func TestMergeForgeRefusalIsOneErrorType(t *testing.T) {
+	refuse := func(kind tracker.Kind, msg string) error {
+		_, err := MergeForge(context.Background(), failingForge{&tracker.Error{Kind: kind, Code: 1, Message: msg}}, 7, "abc", true)
+		return err
+	}
+	var mr *MergeRefusedError
+	if err := refuse(tracker.KindFailed, "gh pr merge 7: not mergeable"); !errors.As(err, &mr) || mr.PR != 7 {
+		t.Fatalf("want MergeRefusedError for PR 7, got %v", err)
+	}
+	if err := refuse(tracker.KindUnavailable, "gh missing"); errors.As(err, &mr) {
+		t.Errorf("an unavailable forge is not a refused merge: %v", err)
+	}
+	if err := refuse(tracker.KindFailed, "cannot read the merge commit"); errors.As(err, &mr) {
+		t.Errorf("a merge that landed is not a refused merge: %v", err)
+	}
+}
+
+type failingForge struct{ err error }
+
+func (f failingForge) PRMerge(context.Context, int, tracker.MergeOpts) (string, error) {
+	return "", f.err
+}
