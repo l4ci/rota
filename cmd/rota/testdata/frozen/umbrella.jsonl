@@ -1,4 +1,4 @@
-{"utc":"2026-10-24","local":"2026-10-24"}
+{"utc":"2026-10-28","local":"2026-10-28"}
 {"name":"backlog-ids/native-milestone","steps":[{"exit":0,"env":{"data":{"ids":["web:1"],"milestone":"M07"},"ok":true},"db":"b531f6a20b50548c"}]}
 {"name":"backlog-ids/no-flag","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--milestone is required"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"backlog-ids/none","steps":[{"exit":0,"env":{"data":{"ids":[],"milestone":"M99"},"ok":true},"db":"b531f6a20b50548c"}]}
@@ -209,7 +209,7 @@
 {"name":"ready/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"release/ambiguous","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"[F1] is ambiguous across sub-repos — qualify it: api:1, web:1"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"release/closed","steps":[{"exit":0,"env":{"data":{"changed":false,"claimId":"me","id":"web:3","type":"T"},"ok":true},"db":"b531f6a20b50548c"}]}
-{"name":"release/match","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"other","id":"api:5","type":"F"},"ok":true},"db":"9759a80cdf3ae0cf"}]}
+{"name":"release/match","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"other","id":"api:5","type":"F"},"ok":true},"db":"de1f7aac3d478596"}]}
 {"name":"release/never-claimed","steps":[{"exit":0,"env":{"data":{"changed":false,"claimId":"me","id":"web:2","type":"B"},"ok":true},"db":"b531f6a20b50548c"}]}
 {"name":"release/no-match","steps":[{"exit":0,"env":{"data":{"changed":false,"claimId":"zzz","id":"api:5","type":"F"},"ok":true},"db":"b531f6a20b50548c"}]}
 {"name":"release/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"b531f6a20b50548c"}]}
