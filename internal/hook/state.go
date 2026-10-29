@@ -239,8 +239,7 @@ func sweep(dir, keepID string, now time.Time) {
 			at = fi.ModTime()
 		}
 		if now.Sub(at) > StateTTL {
-			os.Remove(p)
-			os.Remove(p + ".lock")
+			fsio.RemoveWithLock(p)
 		}
 	}
 }

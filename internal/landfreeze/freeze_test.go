@@ -103,3 +103,35 @@ func TestRecordBinds(t *testing.T) {
 		})
 	}
 }
+
+// ValidateRepair and the samePR match must agree on what a PR reference is.
+func TestRepairPRValidateAndMatchAgree(t *testing.T) {
+	const url = "https://github.com/o/r/pull/12"
+	for _, tc := range []struct {
+		ref   string
+		valid bool
+	}{
+		{"12", true},
+		{"#12", true},
+		{"!12", true},
+		{"##12", false},
+		{"!!12", false},
+		{"0", false},
+		{"+12", false},
+		{"#", false},
+		{url, true},
+		{"https://github.com/o/r/pull/0", false},
+	} {
+		t.Run(tc.ref, func(t *testing.T) {
+			if got := ValidateRepair("", tc.ref) == nil; got != tc.valid {
+				t.Fatalf("ValidateRepair(%q) valid=%v want %v", tc.ref, got, tc.valid)
+			}
+			if tc.ref == url {
+				return
+			}
+			if got := samePR(tc.ref, url); got != tc.valid {
+				t.Fatalf("samePR(%q, %q)=%v want %v", tc.ref, url, got, tc.valid)
+			}
+		})
+	}
+}
