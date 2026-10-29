@@ -45,7 +45,7 @@ func reapCommand() *Command {
 }
 
 func reapVerb(fs *flag.FlagSet) RunFunc {
-	kind := fs.String("kind", "", "only these kinds, comma-separated: worktree, branch, tab, process, lease, skillcache")
+	kind := fs.String("kind", "", "only these kinds, comma-separated: "+strings.Join(reap.Kinds, ", "))
 	apply := fs.Bool("apply", false, "delete the candidates that hold no work (default: preview)")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
