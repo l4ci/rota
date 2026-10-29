@@ -190,9 +190,7 @@ func defaultDeps() *Deps {
 		return e
 	}
 	d.WorkerPoll = func(ctx context.Context, root string, opts worker.PollOpts) (worker.PollResult, error) {
-		e := d.workerEnv()
-		e.Ctx = ctx
-		return e.Poll(ctx, root, opts)
+		return d.workerEnvFor(ctx).Poll(ctx, root, opts)
 	}
 	d.OrchestrateEnv = func() orchestrate.Env { return defaultOrchestrateEnv(d) }
 	d.WorkerAccounts = func() *worker.Accounts {
