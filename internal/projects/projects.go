@@ -159,8 +159,7 @@ func migrate(old, path string) {
 		return
 	}
 	if _, err := os.Stat(path); err == nil {
-		os.Remove(old)
-		os.Remove(old + ".lock")
+		fsio.RemoveWithLock(old)
 		return
 	}
 	if os.MkdirAll(filepath.Dir(path), 0o755) != nil {
@@ -172,9 +171,8 @@ func migrate(old, path string) {
 		if err != nil || fsio.WriteFileAtomic(path, b) != nil {
 			return
 		}
-		os.Remove(old)
 	}
-	os.Remove(old + ".lock")
+	fsio.RemoveWithLock(old)
 }
 
 // Register adds root to the registry, or refreshes its lastSeen when it is
