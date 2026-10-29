@@ -1,14 +1,13 @@
 package cli
 
 import (
-	"path/filepath"
-
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/design"
 	"github.com/l4ci/rota/internal/plan"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // The one place the design, plan and proof verbs meet issues.source: each
@@ -75,7 +74,7 @@ func proofLockDir(c *Ctx, root string) string {
 	if cd, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root); err == nil {
 		return rotastate.Dir(cd)
 	}
-	return filepath.Join(root, ".rota")
+	return rotatree.Dir(root)
 }
 
 // openPlans is the plan store: item plans resolve their item, slice plans

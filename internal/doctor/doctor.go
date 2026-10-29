@@ -71,6 +71,20 @@ type Disk struct {
 	Free, Total uint64
 }
 
+// FreePercent is the free share of the volume, 0 when its size is unknown.
+func (d *Disk) FreePercent() float64 {
+	if d == nil || d.Total == 0 {
+		return 0
+	}
+	return float64(d.Free) / float64(d.Total) * 100
+}
+
+// Low says whether the free share is under min percent. Unreadable disks and
+// min <= 0 (the check is off) are never low; exactly min percent is not low.
+func (d *Disk) Low(min int) bool {
+	return d != nil && d.Total > 0 && min > 0 && d.FreePercent() < float64(min)
+}
+
 // Result is what a finished command left behind.
 type Result = proc.Result
 
@@ -1047,13 +1061,10 @@ func first(l []string) string {
 // the space is fine, unreadable or the check is off.
 func (d *runner) disk() (Check, bool) {
 	disk, min := d.in.Disk, d.in.MinFreeDiskPercent
-	if disk == nil || disk.Total == 0 || min <= 0 {
+	if !disk.Low(min) {
 		return Check{}, false
 	}
-	pct := float64(disk.Free) / float64(disk.Total) * 100
-	if pct >= float64(min) {
-		return Check{}, false
-	}
+	pct := disk.FreePercent()
 	detail := fmt.Sprintf("%s has %s free (%.0f%%), under the %d%% threshold", disk.Path, HumanBytes(disk.Free), pct, min)
 	hint := "free space before a round; set doctor.minFreeDiskPercent to change the threshold"
 	if len(d.in.Leftovers) > 0 {
@@ -1066,13 +1077,10 @@ func (d *runner) disk() (Check, bool) {
 // threshold: a full cache volume fails a gate with "no space left on device".
 func (d *runner) cacheDisk() (Check, bool) {
 	disk, min := d.in.CacheDisk, d.in.MinFreeDiskPercent
-	if disk == nil || disk.Total == 0 || min <= 0 {
+	if !disk.Low(min) {
 		return Check{}, false
 	}
-	pct := float64(disk.Free) / float64(disk.Total) * 100
-	if pct >= float64(min) {
-		return Check{}, false
-	}
+	pct := disk.FreePercent()
 	return Check{Name: "go-cache-disk", Status: Warn,
 		Detail: fmt.Sprintf("%s (the Go build cache) has %s free (%.0f%%), under the %d%% threshold", disk.Path, HumanBytes(disk.Free), pct, min),
 		Hint:   "run: go clean -cache; set doctor.minFreeDiskPercent to change the threshold"}, true
