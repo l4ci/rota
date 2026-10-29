@@ -512,7 +512,7 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 			return clearMerge(c, policy, "PR "+args[0], conf, req, files, jsonObj("pr", pr))
 		}
 		merged, err := ship.MergePR(be, pr, items, approve)
-		var refused *ship.PRMergeRefused
+		var refused *land.MergeRefusedError
 		var unproven *ship.UnprovenError
 		switch {
 		case merged.Refusal != nil:
