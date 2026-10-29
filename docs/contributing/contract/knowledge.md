@@ -78,7 +78,7 @@ repo: scoped (scope S); edits S's KNOWLEDGE.md only, with no umbrella/sub-repo f
 data: {"topic": string, "changed": bool}; on exit 4 `{"blockedBy": "ambiguous", "changed": false}`
 exit: 2 when `--topic`, `--old` or `--new` is missing (`--new ""` is allowed and deletes the text); 3 when the topic is not found or `<old>` is in no bullet of it; 4 when `<old>` is in more than one bullet of it (hint: use a longer fragment)
 old: none (new in T4)
-note: `--old` is a case-sensitive exact substring. A bullet runs from its `- ` line to the next sibling bullet, so a wrapped bullet matches as a whole. Every occurrence inside the one matched bullet is replaced. `changed` is false when `--old` equals `--new`. When the edit changes the bullet's bold title, the tier entry is re-keyed to the new title (hits and tier kept). The Glossary topic has no tier entries, so nothing is re-keyed there.
+note: `--old` is a case-sensitive exact substring. A bullet is its `- ` line plus its indented continuation lines (the one local bullet unit shared by `replace`, `rm`, `rename-topic --title` and path recall), so a wrapped bullet matches as a whole and prose after a blank line or unindented text is never matched or edited. Before, the span ran to the next sibling bullet and swallowed that prose. Every occurrence inside the one matched bullet is replaced. `changed` is false when `--old` equals `--new`. When the edit changes the bullet's bold title, the tier entry is re-keyed to the new title (hits and tier kept). The Glossary topic has no tier entries, so nothing is re-keyed there.
 note: `amend` only appends and `rename-topic` only renames or moves; this is the verb that corrects a stale bullet. Unlike `amend`, ambiguity is exit 4 (the file is intact and the caller can retry with a longer fragment), not 2. The ticket asked for exit 4 on zero matches too; zero matches stays exit 3, as for `amend` and `rename-topic`, because the bullet could not be resolved (unratified).
 
 ### rota knowledge rm
@@ -87,7 +87,7 @@ repo: scoped (scope S); edits S's KNOWLEDGE.md and tier sidecar only
 data: {"topic": string, "title": string, "changed": true}
 exit: 2 when `--topic` or `--title` is missing; 3 when the topic or the bullet is not found (nothing is written); 4 when several bullets share the title (`blockedBy: ambiguous`)
 old: none (new in #1286)
-note: removes the one bullet with that bold title, from its `- ` line to the next sibling bullet, and its `<topic>::<title>` tier entry. The span is the bullet's `- ` line plus its indented continuation lines, so prose after it stays; a blank line left doubled by the removal collapses to one, and every other byte is kept. Buffered hits are folded under the lock first, so none recreates the entry. A rerun finds no bullet and exits 3, as `amend` and `rename-topic` do; the ticket also asked for `changed: false` on a rerun, which cannot hold beside exit 3 for an unknown title, so `changed` is always true on success (unratified).
+note: removes the one bullet with that bold title, and its `<topic>::<title>` tier entry. The span is the bullet's `- ` line plus its indented continuation lines, so prose after it stays; a blank line left doubled by the removal collapses to one, and every other byte is kept. Buffered hits are folded under the lock first, so none recreates the entry. A rerun finds no bullet and exits 3, as `amend` and `rename-topic` do; the ticket also asked for `changed: false` on a rerun, which cannot hold beside exit 3 for an unknown title, so `changed` is always true on success (unratified).
 
 ### rota knowledge rename-topic
 rota knowledge rename-topic --from <X> --to <Y> [--title <T>]
@@ -97,7 +97,7 @@ exit: 2 when `--from` or `--to` is missing; 3 when topic X is not found, when bu
 old: hv-knowledge-rename-topic [--repo <name>] --from <X> --to <Y> [--title <T>]    (same flags)
 shim: `mode` is `bullet` iff `--title` was passed; `changed` is false only for `--from` equal to `--to` (the old helper printed nothing).
 note: the shim cannot honor the contract's file scope, so `--repo <sub-repo>` runs sidecar-only until the port, and smoke must not assert sub-repo file edits for this verb before then.
-note: one verb keeps both modes, selected by `--title`, instead of splitting out a `move-bullet` verb.
+note: one verb keeps both modes, selected by `--title`, instead of splitting out a `move-bullet` verb. With `--title` the moved unit is the bullet's `- ` line plus indented continuations; prose after it stays in the source topic (it used to travel with the bullet up to the next sibling).
 
 ### rota knowledge harvest
 rota knowledge harvest [--round <n>] [--mark <commentId>]
