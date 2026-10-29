@@ -181,3 +181,61 @@ func TestWriteCustomBlockRewritesPreRenameSkillsBlock(t *testing.T) {
 		t.Errorf("block not rewritten:\n%s", got)
 	}
 }
+
+// An amendment must land inside the bullet body, before the final stamp, so
+// tier-aware Query still recognizes the line.
+func TestAmendKeepsStampFinalForQuery(t *testing.T) {
+	root := t.TempDir()
+	body := "## T\n\n" +
+		"- **Old** — Body. <!-- 2026-01-01 -->\n" +
+		"- **Pinned** — Body. <!-- paths: [\"a/**\"] --> <!-- 2026-01-02 sha:abc1234 -->\n" +
+		"- **Fresh** — Body. <!-- 2026-01-03 -->\n"
+	os.MkdirAll(filepath.Join(root, ".rota"), 0o777)
+	file := filepath.Join(root, ".rota", "KNOWLEDGE.md")
+	os.WriteFile(file, []byte(body), 0o666)
+	s := Store{Root: root}
+	for _, title := range []string{"Old", "Pinned", "Fresh"} {
+		if err := s.initTier(Umbrella, "T", title); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, _, err := s.TierSet(Umbrella, "T", "Old", Deprecated); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.TierSet(Umbrella, "T", "Pinned", Confirmed); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"Old", "Pinned", "Fresh"} {
+		if _, changed, err := s.Amend(Umbrella, false, "T", "**"+f+"**", "Added detail."); err != nil || !changed {
+			t.Fatalf("amend %s: changed=%v err=%v", f, changed, err)
+		}
+	}
+	got, _ := os.ReadFile(file)
+	for _, want := range []string{
+		"- **Old** — Body. Added detail. <!-- 2026-01-01 -->\n",
+		"- **Pinned** — Body. <!-- paths: [\"a/**\"] --> Added detail. <!-- 2026-01-02 sha:abc1234 -->\n",
+	} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("file missing %q:\n%s", want, got)
+		}
+	}
+	q := func(o QueryOpts) string {
+		out, _, err := s.Query(Umbrella, []string{"T"}, o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	if out := q(QueryOpts{}); strings.Contains(out, "Old") || !strings.Contains(out, "Pinned") {
+		t.Errorf("default query:\n%s", out)
+	}
+	if out := q(QueryOpts{IncludeDeprecated: true}); !strings.Contains(out, "Old") {
+		t.Errorf("include-deprecated query:\n%s", out)
+	}
+	if out := q(QueryOpts{Tier: Confirmed}); strings.Contains(out, "Old") || strings.Contains(out, "Fresh") || !strings.Contains(out, "Pinned") {
+		t.Errorf("tier=confirmed query:\n%s", out)
+	}
+	if out := q(QueryOpts{Tier: Provisional}); !strings.Contains(out, "- **Fresh** — Body. Added detail. (provisional) <!-- 2026-01-03 -->") || strings.Contains(out, "Pinned") {
+		t.Errorf("tier=provisional query:\n%s", out)
+	}
+}
