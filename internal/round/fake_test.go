@@ -223,7 +223,7 @@ func (f remoteForge) RemoveLabels(_ context.Context, key tracker.IssueKey, label
 
 func (f *fakeRemote) Name() string { return "issues" }
 func (f *fakeRemote) Capabilities() backlog.Capabilities {
-	return backlog.Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true}
+	return backlog.Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true, ItemStatus: true}
 }
 
 func (f *fakeRemote) Get(ref string) (*backlog.Item, error) {
