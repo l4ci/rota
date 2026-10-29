@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/stamp"
 	"io"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -401,12 +402,39 @@ func BranchKey(repo, branch string) string {
 	return repo + ":" + branch
 }
 
-// Load reads the store; a missing or corrupt file is an empty store.
+// Load reads the store for a reader; a missing or corrupt file is an empty
+// store. Writers use loadStrict so they never replace what they cannot parse.
 func Load(root string) Store {
-	s := Store{Branches: map[string][]Record{}, Items: map[string][]Record{}}
-	raw, _ := jsonx.MarshalCompact(fsio.LoadJSON(Path(root), nil))
-	if err := json.Unmarshal(raw, &s); err != nil {
-		return Store{Branches: map[string][]Record{}, Items: map[string][]Record{}}
+	s, err := loadStrict(root)
+	if err != nil {
+		return emptyStore()
+	}
+	return s
+}
+
+func emptyStore() Store {
+	return Store{Branches: map[string][]Record{}, Items: map[string][]Record{}}
+}
+
+// loadStrict reads the store, treating only a missing file as empty. An
+// unreadable or unparseable file is an error, so a read-modify-write refuses
+// to overwrite it.
+func loadStrict(root string) (Store, error) {
+	raw, err := os.ReadFile(Path(root))
+	if errors.Is(err, os.ErrNotExist) {
+		return emptyStore(), nil
+	}
+	if err != nil {
+		return Store{}, storeRefusal(root, "unreadable", err)
+	}
+	v, err := jsonx.Decode(raw)
+	if err != nil {
+		return Store{}, storeRefusal(root, "unparseable", err)
+	}
+	compact, _ := jsonx.MarshalCompact(v)
+	s := emptyStore()
+	if err := json.Unmarshal(compact, &s); err != nil {
+		return Store{}, storeRefusal(root, "unparseable", err)
 	}
 	if s.Branches == nil {
 		s.Branches = map[string][]Record{}
@@ -414,13 +442,24 @@ func Load(root string) Store {
 	if s.Items == nil {
 		s.Items = map[string][]Record{}
 	}
-	return s
+	return s, nil
+}
+
+// storeRefusal is the exit-4 refusal a writer returns over a store it cannot
+// read, so a corrupt file is the user's to repair, not a rota bug.
+func storeRefusal(root, why string, cause error) error {
+	e := exitcode.Errf(exitcode.ExitRefused, "verdict store %s is %s, not overwriting: %v", Path(root), why, cause)
+	e.Cause = cause
+	return e.WithHint("repair the file or move it aside; moving it aside drops the recorded verdicts")
 }
 
 // update is a locked read-modify-write of the store.
 func update(root string, mutate func(*Store)) error {
 	return fsio.Locked(Path(root), fsio.LockTimeout, func() error {
-		s := Load(root)
+		s, err := loadStrict(root)
+		if err != nil {
+			return err
+		}
 		mutate(&s)
 		return fsio.WriteJSONAtomic(Path(root), toJSONX(s))
 	})
