@@ -65,11 +65,7 @@ func update(commonDir string, round int, fn func(*State)) error {
 	return fsio.Locked(p, fsio.LockTimeout, func() error {
 		s := LoadState(commonDir, round)
 		fn(&s)
-		b, err := json.MarshalIndent(s, "", "  ")
-		if err != nil {
-			return err
-		}
-		return fsio.WriteFileAtomic(p, append(b, '\n'))
+		return fsio.WriteJSONAtomic(p, s)
 	})
 }
 

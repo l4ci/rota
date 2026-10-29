@@ -426,6 +426,28 @@ func TestReconcileEscalationPendingIsNotStalled(t *testing.T) {
 	}
 }
 
+func TestReconcileKeepsAHandReleasedClaim(t *testing.T) {
+	f := newMoveFx(t)
+	f.env.Board = f.be
+	f.forge.labels = map[int][]string{12: {"in-progress"}, 13: {"in-progress"}}
+	f.forge.labelled = nil
+
+	delete(f.be.claims, "12")
+	f.be.handReleased = map[string][]string{"12": {"ben@1"}}
+	rep, _ := f.env.Status(bg, f.root)
+	for _, fd := range rep.Findings {
+		if fd.Kind == ClaimMismatch && fd.Slot == "ben" && fd.Repair != "" {
+			t.Errorf("a deliberate release offers no repair: %+v", fd)
+		}
+	}
+	if _, err := f.env.Reconcile(bg, f.root, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.be.claims["12"]; got != "" {
+		t.Errorf("--apply re-posted a claim a human released on purpose: %q", got)
+	}
+}
+
 func TestClaimMismatchOnADesyncedFixture(t *testing.T) {
 	f := newMoveFx(t)
 	f.env.Board = f.be

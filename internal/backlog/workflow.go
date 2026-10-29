@@ -90,6 +90,17 @@ func (f *File) ClaimShared(ref, claimID string, _ int) (bool, string, error) {
 	return f.Claim(ref, claimID)
 }
 
+// HandReleaser is a backend whose release can be marked as a person's own, so
+// reconcile does not post the claim again.
+type HandReleaser interface {
+	ReleaseByHand(ref, claimID string) (bool, error)
+}
+
+var (
+	_ HandReleaser = (*Issues)(nil)
+	_ HandReleaser = (*Umbrella)(nil)
+)
+
 // Release is a no-op in file mode.
 func (f *File) Release(ref, claimID string) (bool, error) { return false, f.exists(ref) }
 

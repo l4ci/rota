@@ -732,7 +732,7 @@ func (b *Issues) ClaimShared(ref, claimID string, holders int) (won bool, holder
 			return false, "", errors.New("claim not visible after posting")
 		}
 		if !slices.Contains(held[:min(holders, len(held))], claimID) {
-			if err := b.dropClaim(n, claimID); err != nil {
+			if err := b.dropClaim(n, claimID, false); err != nil {
 				return false, "", err
 			}
 			return false, held[0], nil
@@ -776,11 +776,15 @@ func (b *Issues) putClaim(n tracker.IssueKey, claimID string) error {
 	return err
 }
 
-func (b *Issues) dropClaim(n tracker.IssueKey, claimID string) error {
+func (b *Issues) dropClaim(n tracker.IssueKey, claimID string, byHand bool) error {
 	if cs, ok := b.Tracker.(tracker.ClaimStore); ok {
 		return cs.DropClaim(b.ctx(), n, claimID)
 	}
-	_, err := b.Tracker.AddComment(b.ctx(), n, marker.Release(claimID))
+	body := marker.Release(claimID)
+	if byHand {
+		body = marker.HandRelease(claimID)
+	}
+	_, err := b.Tracker.AddComment(b.ctx(), n, body)
 	return err
 }
 
@@ -789,7 +793,16 @@ func (b *Issues) dropClaim(n tracker.IssueKey, claimID string) error {
 // (best effort) and drops the in-progress label when no
 // claim remains. It writes nothing and returns false when claimID holds no open
 // claim.
-func (b *Issues) Release(ref, claimID string) (bool, error) {
+func (b *Issues) Release(ref, claimID string) (bool, error) { return b.release(ref, claimID, false) }
+
+// ReleaseByHand is Release for a person's own release: the comment also
+// carries the hand-release marker, which reconcile reads as "leave it gone". A
+// tracker.ClaimStore keeps no release comment, so the marker is lost there.
+func (b *Issues) ReleaseByHand(ref, claimID string) (bool, error) {
+	return b.release(ref, claimID, true)
+}
+
+func (b *Issues) release(ref, claimID string, byHand bool) (bool, error) {
 	tr, err := b.tracker()
 	if err != nil {
 		return false, err
@@ -805,7 +818,7 @@ func (b *Issues) Release(ref, claimID string) (bool, error) {
 	if !slices.Contains(held, claimID) {
 		return false, nil
 	}
-	if err := b.dropClaim(is.Key, claimID); err != nil {
+	if err := b.dropClaim(is.Key, claimID, byHand); err != nil {
 		return false, err
 	}
 	if label, ok := ClaimLabel(b.Cfg, claimID); ok && slices.Contains(is.Labels, label) {
@@ -946,11 +959,14 @@ type Status struct {
 	Claim     string               // earliest open claim; "" when none
 	ClaimedAt map[string]time.Time `json:",omitempty"` // server time of each open comment claim
 	Claims    []string             // every open claim, in claim order; Claim is Claims[0]
-	Assignees []string
-	Milestone string
-	Body      string   // the issue body, fields block included
-	Notes     []string // note kinds present, in comment order
-	Comments  []Comment
+	// HandReleased is the claim ids whose latest release was deliberate (a
+	// person ran `rota item release`), so a reconcile repair leaves them gone.
+	HandReleased []string `json:",omitempty"`
+	Assignees    []string
+	Milestone    string
+	Body         string   // the issue body, fields block included
+	Notes        []string // note kinds present, in comment order
+	Comments     []Comment
 }
 
 // Status reads the issue and its comments. An unknown item wraps ErrNotFound.
@@ -1009,6 +1025,17 @@ func (b *Issues) Status(ref string) (*Status, error) {
 			}
 		}
 	}
+	var handReleased []string
+	for _, c := range comments {
+		verb, id, ok := marker.ParseClaim(c.Body)
+		if !ok {
+			continue
+		}
+		handReleased = slices.DeleteFunc(handReleased, func(h string) bool { return h == id })
+		if verb == marker.KindRelease && marker.IsHandRelease(c.Body, id) {
+			handReleased = append(handReleased, id)
+		}
+	}
 	// Unknown timestamps carry no activity evidence and keep legacy output stable.
 	for id, at := range claimedAt {
 		if at.IsZero() {
@@ -1018,7 +1045,7 @@ func (b *Issues) Status(ref string) (*Status, error) {
 	st := &Status{ClaimedAt: claimedAt,
 		ID: is.Key.String(), Type: b.Letter(is), Title: title, Status: is.State,
 		State: strings.Join(state, ","), Assignees: append([]string{}, is.Assignees...),
-		Milestone: milestone(is, block), Body: is.Body, Notes: notes, Comments: commentRows(comments, ""),
+		Milestone: milestone(is, block), Body: is.Body, Notes: notes, Comments: commentRows(comments, ""), HandReleased: handReleased,
 	}
 	if len(held) > 0 {
 		st.Claim = held[0]
