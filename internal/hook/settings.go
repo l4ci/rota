@@ -173,10 +173,17 @@ func StatusLine(o *jsonx.Object) (entry any, command string, ok bool) {
 	return v, command, true
 }
 
-// IsOurStatusLine reports whether a statusLine command is rota's dump, plain or
-// wrapping another command.
+// IsOurStatusLine reports whether a statusLine command invokes rota's dump,
+// plain or with arguments such as the generated --then wrapper. The dump must
+// be the command word itself: a longer subcommand name ("dumpling") or the
+// text inside another command's argument ("echo 'rota statusline dump'") is
+// not. It owns recognition for install, uninstall and doctor.
 func IsOurStatusLine(command string) bool {
-	return strings.HasPrefix(strings.TrimSpace(command), StatuslineCmd)
+	rest, ok := strings.CutPrefix(strings.TrimSpace(command), StatuslineCmd)
+	if !ok {
+		return false
+	}
+	return rest == "" || rest[0] == ' ' || rest[0] == '	'
 }
 
 // HasMarker reports whether a hook command carries the rota marker.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -567,6 +568,13 @@ func TestStatuslineCheck(t *testing.T) {
 	c := o.check(t, nil, "statusline")
 	if c.Status != Fail || c.Hint != "rota hook install --wrap-statusline" || !strings.Contains(c.Detail, o.a) || !strings.Contains(c.Detail, o.b+": no statusLine") {
 		t.Fatalf("missing: %+v", c)
+	}
+	// Text that only mentions the dump, or names a longer subcommand, is not the dump.
+	for _, cmd := range []string{"echo 'rota statusline dump'", "rota statusline dumpling"} {
+		o.write(t, filepath.Join(o.root, ".claude", "settings.json"), `{"statusLine":{"command":`+strconv.Quote(cmd)+`}}`)
+		if c := o.check(t, nil, "statusline"); c.Status != Fail || !strings.Contains(c.Detail, "does not run rota statusline dump") {
+			t.Fatalf("%q: %+v", cmd, c)
+		}
 	}
 	// A project-local entry outranks both user files.
 	o.write(t, filepath.Join(o.root, ".claude", "settings.json"), `{"statusLine":{"command":"rota statusline dump"}}`)
