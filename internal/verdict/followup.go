@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // neutralAC is the one criterion of a deferred finding that carries no fix.
@@ -23,14 +24,11 @@ const (
 	FloorOff   = "off"
 )
 
-// prNumberRe is the number at the end of a --pr ref: `77`, `#77` or a PR URL.
-var prNumberRe = regexp.MustCompile(`^(?:#|\S*/(?:pull|merge_requests)/)?(\d+)(?:[/?#]\S*)?$`)
-
 // prKey is the PR number of a --pr or Related ref, so `77`, `#77` and a PR URL
 // name the same PR; a ref with no number is its own key.
 func prKey(ref string) string {
-	if m := prNumberRe.FindStringSubmatch(strings.TrimSpace(ref)); m != nil {
-		return m[1]
+	if n, ok := tracker.PRRefNumber(ref); ok {
+		return n
 	}
 	return strings.TrimSpace(ref)
 }
@@ -51,10 +49,11 @@ const followUpPrefix = "Review follow-ups from PR"
 
 // followUpTitle names the one item that collects a PR's deferred findings.
 func followUpTitle(pr string) string {
-	if k := prKey(pr); prNumberRe.MatchString(k) {
+	k := prKey(pr)
+	if _, ok := tracker.PRRefNumber(k); ok {
 		return followUpPrefix + " #" + k
 	}
-	return followUpPrefix + " " + prKey(pr)
+	return followUpPrefix + " " + k
 }
 
 // IsFollowUpTitle is whether an item title names a deferred-findings item, the

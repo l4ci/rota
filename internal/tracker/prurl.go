@@ -35,3 +35,18 @@ func ParsePRURL(s string) (PRRef, bool) {
 	}
 	return PRRef{Provider: provider, Repo: m[1], Number: n}, true
 }
+
+// rePRRefNumber is a PR ref as a person types or stores it: `77`, `#77` or a
+// PR/MR URL (`/pull/77`, GitLab `/merge_requests/77`).
+var rePRRefNumber = regexp.MustCompile(`^(?:#|\S*/(?:pull|merge_requests)/)?(\d+)(?:[/?#]\S*)?$`)
+
+// PRRefNumber is the one reader of a PR ref's number, as the digits written
+// (so `007` stays `007`). ok is false for a ref with no number. Verdict
+// follow-up dedupe and round's Related parse both call it, so they agree.
+func PRRefNumber(ref string) (string, bool) {
+	m := rePRRefNumber.FindStringSubmatch(strings.TrimSpace(ref))
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
+}
