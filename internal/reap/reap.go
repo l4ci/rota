@@ -97,10 +97,9 @@ type Input struct {
 	Git  git.Runner
 	// Report is the round's status (internal/round), the source of the live
 	// set: its rows say which checkouts have a slot or a matched agent, and
-	// its Unavailable list says whether the host could be read. Agents is the
-	// snapshot the report was built from.
+	// its Unavailable list says whether the host could be read, and its Agents
+	// are the host snapshot it was built from.
 	Report *round.Report
-	Agents []host.Agent
 	Host   HostOps
 	Lease  LeaseOps
 	// Adopted names the branches `rota worker adopt` took over. A merged
@@ -307,7 +306,7 @@ func inside(p, dir string) bool {
 // liveAgent: some host agent works inside dir (or is already matched to the
 // round row for it).
 func (s *state) liveAgent(dir string) bool {
-	for _, a := range s.in.Agents {
+	for _, a := range s.agents() {
 		if a.Cwd != "" && inside(a.Cwd, dir) {
 			return true
 		}
@@ -487,8 +486,16 @@ func (s *state) hostOwned(cwd string) bool {
 	return s.registered[name] || s.liveAgent(filepath.Join(s.wtDir(), name))
 }
 
+// agents is the host snapshot the report was built from, none without a report.
+func (s *state) agents() []host.Agent {
+	if s.in.Report == nil {
+		return nil
+	}
+	return s.in.Report.Agents
+}
+
 func (s *state) agentOnTab(tab string) bool {
-	for _, a := range s.in.Agents {
+	for _, a := range s.agents() {
 		if a.Tab == tab {
 			return true
 		}
