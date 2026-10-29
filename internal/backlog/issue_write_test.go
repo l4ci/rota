@@ -449,18 +449,22 @@ func TestIssuesTrackerErrors(t *testing.T) {
 	}
 }
 
-func TestWorkflowFileMode(t *testing.T) {
-	f := &File{Root: t.TempDir()}
-	for _, err := range []error{
-		func() error { _, err := f.Status("B01"); return err }(),
-		func() error { _, _, err := f.NoteGet("B01", "plan"); return err }(),
-		func() error { _, err := f.NotePut("B01", "plan", "x"); return err }(),
-		func() error { _, err := f.NoteRm("B01", "plan"); return err }(),
+// File mode has no ItemTracker: the lookup answers with the issue-only refusal
+// (exit 4, backend) naming the verb and where file mode keeps that state.
+func TestItemTrackerOfFileMode(t *testing.T) {
+	for _, tc := range []struct{ what, hint string }{
+		{"item show", FileShowHint},
+		{"item note add", FileNoteHint},
 	} {
+		_, err := ItemTrackerOf(&File{Root: t.TempDir()}, tc.what, tc.hint)
 		var ref *RefusedError
-		if !errors.Is(err, ErrWrongBackend) || !errors.As(err, &ref) || ref.BlockedBy != "backend" || ref.Hint == "" {
-			t.Errorf("%v", err)
+		if !errors.Is(err, ErrWrongBackend) || !errors.As(err, &ref) || ref.BlockedBy != "backend" || ref.Hint != tc.hint ||
+			!strings.Contains(err.Error(), tc.what+" is not available") {
+			t.Errorf("%s: %v", tc.what, err)
 		}
+	}
+	if _, err := ItemTrackerOf(&Issues{}, "item show", FileShowHint); err != nil {
+		t.Errorf("issue backend: %v", err)
 	}
 }
 

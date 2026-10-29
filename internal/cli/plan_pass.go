@@ -59,7 +59,7 @@ func planPass(fs *flag.FlagSet) RunFunc {
 			return Result{Data: jsonObj("blockedBy", blockedby.Backend, "changed", false)},
 				Refused("%s needs item notes, which only the issue backend has (issues.source is file)", c.Path)
 		}
-		_, wf, id, _, err := itemFlow(c, ref)
+		_, wf, id, _, err := itemTrack(c, ref, "plan pass", backlog.FileNoteHint)
 		if err != nil {
 			return backlogFail(err)
 		}
@@ -132,7 +132,7 @@ func planPass(fs *flag.FlagSet) RunFunc {
 // acceptanceCoverage is the coverage of the item's criteria: its body against
 // the marks in the acceptance note and the proof rows they rest on. The proof
 // rows are read only when there are marks to check.
-func acceptanceCoverage(c *Ctx, wf backlog.Workflow, ref string, st *backlog.Status) ([]acceptance.Status, error) {
+func acceptanceCoverage(c *Ctx, wf backlog.ItemTracker, ref string, st *backlog.Status) ([]acceptance.Status, error) {
 	note, _, err := wf.NoteGet(ref, "acceptance")
 	if err != nil {
 		return nil, err

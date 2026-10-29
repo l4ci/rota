@@ -118,7 +118,7 @@ func (e Env) staleClaims(ctx context.Context, root string, be Board, items []bac
 		if threshold <= 0 {
 			continue
 		}
-		st, err := be.Status(key.String())
+		st, err := statusOf(be, key.String())
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("stale claim %s: %v", key.Ref(), err))
 			continue
@@ -211,7 +211,7 @@ func (e Env) claimBranchActivity(ctx context.Context, root string, key tracker.I
 // checkStaleClaim is repeated at the mutation boundary, after any time spent
 // obtaining approval or preparing the worker. It changes no remote state.
 func (e Env) checkStaleClaim(ctx context.Context, root string, be Board, key tracker.IssueKey, holder string) error {
-	st, err := be.Status(key.String())
+	st, err := statusOf(be, key.String())
 	if err != nil {
 		return blocked(BlockNotStale, "cannot verify claim %s on %s: %v", holder, key.Ref(), err)
 	}

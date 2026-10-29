@@ -268,7 +268,7 @@ func realPath(p string) string {
 // branch name alone. Raw marker history comes from the issue source, which can
 // differ from the PR forge. An unavailable history cannot prove a takeover.
 func (e Env) checkAdoptClaim(ctx context.Context, root string, be Board, branch, issue string) ([]string, error) {
-	st, err := be.Status(issue)
+	st, err := statusOf(be, issue)
 	if err != nil {
 		return []string{fmt.Sprintf("adopt claim check on %s skipped: %v", issue, err)}, nil
 	}

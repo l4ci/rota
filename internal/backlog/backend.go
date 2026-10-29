@@ -84,8 +84,8 @@ type Capabilities struct {
 	// Umbrella: items span several sub-repos, each Row names its owner.
 	Umbrella bool
 	// ItemStatus: Status and the durable notes read and write the tracker.
-	// False: the Workflow verbs exist but refuse them as issue-only, so a
-	// caller that wants a status or a note checks this, not a Workflow assertion.
+	// False: the backend does not implement ItemTracker, so a caller that
+	// wants a status or a note checks this or asserts ItemTracker.
 	ItemStatus bool
 }
 
@@ -109,14 +109,25 @@ func CapabilitiesForSource(source string) Capabilities {
 	return (&Issues{}).Capabilities()
 }
 
-// WorkflowOf is the backend's claim, state and note verbs. Both backends
-// have them; the error is for a backend that does not.
+// WorkflowOf is the backend's claim and state verbs. Both backends have them;
+// the error is for a backend that does not.
 func WorkflowOf(be Backend) (Workflow, error) {
 	wf, ok := be.(Workflow)
 	if !ok {
 		return nil, ErrWrongBackend
 	}
 	return wf, nil
+}
+
+// ItemTrackerOf is the backend's status and note verbs. File mode has none: the
+// error is the issue-only refusal (exit 4, backend) for the verb named by what,
+// with hint saying where file mode keeps that state.
+func ItemTrackerOf(be Backend, what, hint string) (ItemTracker, error) {
+	it, ok := be.(ItemTracker)
+	if !ok {
+		return nil, fileIssueOnly(what, hint)
+	}
+	return it, nil
 }
 
 // RefactorCounter is the since-refactor counter the file backend keeps in

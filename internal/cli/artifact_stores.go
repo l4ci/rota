@@ -24,7 +24,7 @@ type who struct{ ID, Type string }
 // itemNotes resolves id to its issue's notes. An unknown item is exit 3.
 func itemNotes(c *Ctx, id string, w *who) func() (artifact.Notes, error) {
 	return func() (artifact.Notes, error) {
-		_, wf, cid, typ, err := itemFlow(c, id)
+		_, wf, cid, typ, err := itemTrack(c, id, "item note", backlog.FileNoteHint)
 		if err != nil {
 			return nil, err
 		}
@@ -110,7 +110,7 @@ func openItems(c *Ctx, id string) (plan.Items, error) {
 		return plan.FileItems(root, c.deps().Getenv("ROTA_OPEN_SECTIONS")), nil
 	}
 	return plan.NewIssueItems(func() (backlog.Backend, error) {
-		be, _, _, _, err := itemFlow(c, id)
+		be, _, _, err := itemOpen(c, id)
 		return be, err
 	}), nil
 }
