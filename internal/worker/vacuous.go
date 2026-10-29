@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/shlex"
 )
 
 // vacuousConfig is read from the base, never from the candidate's config.
@@ -156,7 +157,7 @@ func vacuousCommand(dir string, files []string, template string) (string, error)
 	quote := func(values []string) string {
 		out := make([]string, len(values))
 		for i, value := range values {
-			out[i] = shellQuote(value)
+			out[i] = shlex.QuoteAlways(value)
 		}
 		return strings.Join(out, " ")
 	}
@@ -189,7 +190,7 @@ func vacuousCommand(dir string, files []string, template string) (string, error)
 		}
 	}
 	re := "^(" + strings.Join(names, "|") + ")$"
-	return strings.NewReplacer("{files}", quote(files), "{packages}", quote(packages), "{tests}", shellQuote(re)).Replace(template), nil
+	return strings.NewReplacer("{files}", quote(files), "{packages}", quote(packages), "{tests}", shlex.QuoteAlways(re)).Replace(template), nil
 }
 
 func (g *gate) vacuousRun(before, after string) (bool, error) {

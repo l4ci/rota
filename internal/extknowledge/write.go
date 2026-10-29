@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 var (
@@ -541,7 +542,7 @@ func (c Clone) openPR(ctx context.Context, pol Policy, branch, title string) (st
 		return "", fmt.Errorf("%w: gh pr create: %v (branch %s is pushed)", ErrPush, err, branch)
 	}
 	if r.ExitCode != 0 {
-		return "", fmt.Errorf("%w: gh pr create: %s (branch %s is pushed)", ErrPush, firstLine(r.Stderr, r.Stdout), branch)
+		return "", fmt.Errorf("%w: gh pr create: %s (branch %s is pushed)", ErrPush, strutil.OrDefault(strutil.FirstNonEmpty(strutil.FirstLine(r.Stderr), strutil.FirstLine(r.Stdout)), "no output"), branch)
 	}
 	return strings.TrimSpace(r.Stdout), nil
 }
