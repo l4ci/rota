@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/roundwatch"
 )
@@ -27,7 +27,7 @@ func TestWatchHeartbeatExitWithAuxiliaryText(t *testing.T) {
 func checkWatchHeartbeatExit(t *testing.T, tick *roundtick.Result) Result {
 	t.Helper()
 	root := gitRepo(t)
-	cd, err := rotastate.CommonDir(root)
+	cd, err := rotastatetest.CommonDir(root)
 	if err != nil {
 		t.Fatal(err)
 	}

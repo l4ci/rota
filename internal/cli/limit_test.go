@@ -18,7 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/projects"
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
@@ -131,7 +131,7 @@ func TestLimitStatusReadsTheLogBack(t *testing.T) {
 	if _, text, _ := rotaIn(t, dir, "limit", "status"); !strings.Contains(text, "l1\twaiting\torchestrator\tfive_hour") {
 		t.Errorf("text %q", text)
 	}
-	cd, _ := rotastate.CommonDir(dir)
+	cd, _ := rotastatetest.CommonDir(dir)
 	limits.WriteWatching(cd, limits.Watching{PID: os.Getpid(), StartedAt: "x", Mode: limits.ModeWatch})
 	if _, out, _ = rotaIn(t, dir, "limit", "status", "--json"); data(t, out)["watching"] != true {
 		t.Errorf("a live watcher record must read as watching: %s", out)
@@ -162,7 +162,7 @@ func TestLimitWatchRefusals(t *testing.T) {
 		t.Fatalf("no lease: %d %v", code, d)
 	}
 	// a lease held by someone else
-	cd, _ := rotastate.CommonDir(dir)
+	cd, _ := rotastatetest.CommonDir(dir)
 	env := roundlease.DefaultEnv()
 	if _, _, _, err := env.Acquire(cd, dir, roundlease.Holder{PID: 1, Start: mustStart(env, 1)}, 2); err != nil {
 		t.Fatal(err)
@@ -205,7 +205,7 @@ func TestLimitWatchResumesAnEntryWhoseResetPassed(t *testing.T) {
 	t.Setenv("TMUX_PANE", "%9")
 	pinHolder(deps, os.Getpid())
 	pinNow(deps, "2026-10-03T16:00:00Z")
-	cd, _ := rotastate.CommonDir(dir)
+	cd, _ := rotastatetest.CommonDir(dir)
 	env := roundlease.DefaultEnv()
 	if _, _, _, err := env.Acquire(cd, dir, env.Discover(os.Getpid(), os.Getenv), 1); err != nil {
 		t.Fatal(err)
@@ -239,7 +239,7 @@ func TestLimitWatchTextOnTheOrchestratorPane(t *testing.T) {
 	pinHolder(deps, os.Getpid())
 	pinNow(deps, "2026-10-03T12:00:00Z")
 	t.Setenv("TZ", "UTC")
-	cd, _ := rotastate.CommonDir(dir)
+	cd, _ := rotastatetest.CommonDir(dir)
 	env := roundlease.DefaultEnv()
 	env.Acquire(cd, dir, env.Discover(os.Getpid(), os.Getenv), 1)
 
@@ -272,7 +272,7 @@ func TestLimitWatchTimeoutNeverCutsTheFirstPass(t *testing.T) {
 	pinHolder(deps, os.Getpid())
 	pinNow(deps, "2026-10-03T12:00:00Z")
 	t.Setenv("TZ", "UTC")
-	cd, _ := rotastate.CommonDir(dir)
+	cd, _ := rotastatetest.CommonDir(dir)
 	env := roundlease.DefaultEnv()
 	env.Acquire(cd, dir, env.Discover(os.Getpid(), os.Getenv), 1)
 
@@ -284,7 +284,7 @@ func TestLimitWatchTimeoutNeverCutsTheFirstPass(t *testing.T) {
 
 func TestOrchestratorDataIsTheNewestSessionFileOfTheRoot(t *testing.T) {
 	dir := limProject(t)
-	cd, _ := rotastate.CommonDir(dir)
+	cd, _ := rotastatetest.CommonDir(dir)
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	write := func(id, cwd string, at time.Time, used int, reset time.Time) {
 		payload := `{"session_id":"` + id + `","cwd":"` + cwd + `","rate_limits":{"five_hour":{"used_percentage":` + strconv.Itoa(used) + `,"resets_at":` + strconv.FormatInt(reset.Unix(), 10) + `}}}`

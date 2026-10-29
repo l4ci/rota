@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/verdict"
@@ -89,7 +89,7 @@ func TestWatchResultNudgesAfterATickWithoutMergeItems(t *testing.T) {
 	}{{2, true}, {1, false}} {
 		root := nudgeRepo(t, tc.waiting)
 		c := &Ctx{Deps: testDeps(), ctx: context.Background()}
-		cd, err := rotastate.CommonDir(root)
+		cd, err := rotastatetest.CommonDir(root)
 		if err != nil {
 			t.Fatal(err)
 		}

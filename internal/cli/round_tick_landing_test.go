@@ -14,7 +14,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/tracker"
@@ -166,7 +166,7 @@ func TestAutopilotTickDefersManualGate(t *testing.T) {
 			t.Fatalf("busy landing became a gate failure: %+v", tick)
 		}
 	}
-	cd, err := rotastate.CommonDir(f.root)
+	cd, err := rotastatetest.CommonDir(f.root)
 	if err != nil {
 		t.Fatal(err)
 	}

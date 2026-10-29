@@ -166,9 +166,6 @@ var ErrGlobalNotObject = errors.New("the global config is not a JSON object")
 // ErrProjectOwned is SetGlobal's answer for a key a project owns (see notGlobal).
 var ErrProjectOwned = errors.New("project-owned key, not a global one")
 
-// IsProjectOwned is whether key belongs to one project and never to the global config.
-func IsProjectOwned(key string) bool { return notGlobal(key) }
-
 // ShowGlobal lists the global config's own values, not the merged runtime
 // ones: every schema key in schema order, or the one key given. A key the
 // global config sets reports source "global" and its value; any other reports
