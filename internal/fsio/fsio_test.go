@@ -3,6 +3,7 @@ package fsio
 import (
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -343,5 +344,52 @@ func TestWriteFileAtomicModeIgnoresUmask(t *testing.T) {
 	}
 	if fi, _ := os.Stat(p); fi.Mode().Perm() != 0o640 {
 		t.Fatalf("mode = %o, want 640", fi.Mode().Perm())
+	}
+}
+
+func TestRemoveWithLockDropsDataAndSidecar(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := WriteJSONAtomic(path, map[string]int{"n": 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Locked(path, time.Second, func() error { return RemoveWithLock(path) }); err != nil {
+		t.Fatalf("RemoveWithLock under its own lock: %v", err)
+	}
+	for _, p := range []string{path, path + ".lock"} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("%s still there (err=%v)", p, err)
+		}
+	}
+	if err := RemoveWithLock(path); !os.IsNotExist(err) {
+		t.Errorf("second remove err = %v, want not-exist", err)
+	}
+}
+
+func TestHeldLockUnder(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "skipme"), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	idle := filepath.Join(root, "idle.json")
+	if err := Locked(idle, time.Second, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if got := HeldLockUnder(root, nil); got != "" {
+		t.Fatalf("idle leftover reported held: %s", got)
+	}
+	busy := filepath.Join(root, "skipme", "busy.json")
+	started, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		Locked(busy, time.Second, func() error { close(started); <-release; return nil })
+	}()
+	<-started
+	defer func() { close(release); <-done }()
+	if got := HeldLockUnder(root, nil); got != busy+".lock" {
+		t.Errorf("held = %q, want %q", got, busy+".lock")
+	}
+	skip := func(p string, d fs.DirEntry) bool { return d.Name() == "skipme" }
+	if got := HeldLockUnder(root, skip); got != "" {
+		t.Errorf("skipped dir still reported: %s", got)
 	}
 }
