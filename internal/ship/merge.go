@@ -102,14 +102,8 @@ func ChangedFiles(g Git, rng string) ([]string, error) {
 
 // PRMerger is the issue backend's gated PR merge.
 type PRMerger interface {
-	MergePRGated(pr int, items []string, approve backlog.MergeApprover) (backlog.MergeResult, error)
+	MergePRGated(pr int, items []string, approve backlog.MergeApprover, lander backlog.Lander) (backlog.MergeResult, error)
 }
-
-// PRMergeRefused is a PR the forge refused to merge.
-type PRMergeRefused struct{ Err error }
-
-func (e *PRMergeRefused) Error() string { return e.Err.Error() }
-func (e *PRMergeRefused) Unwrap() error { return e.Err }
 
 // UnprovenError is a PR held back because linked items have no proof.
 type UnprovenError struct{ IDs []string }
@@ -125,14 +119,11 @@ type MergedPR struct {
 }
 
 // MergePR merges PR pr through the gated issue backend. A refused merge is a
-// *PRMergeRefused and a proof failure an *UnprovenError; the approver's refusal
+// *land.MergeRefusedError and a proof failure an *UnprovenError; the approver's refusal
 // comes back in MergedPR.Refusal. Any other error passes through unchanged.
 func MergePR(be PRMerger, pr int, items []string, approve backlog.MergeApprover) (MergedPR, error) {
-	res, err := be.MergePRGated(pr, items, approve)
-	var mf *backlog.MergeFailedError
+	res, err := be.MergePRGated(pr, items, approve, landForge)
 	switch {
-	case errors.As(err, &mf):
-		return MergedPR{}, &PRMergeRefused{Err: err}
 	case err != nil:
 		return MergedPR{}, err
 	case res.Refusal != nil:
@@ -145,4 +136,9 @@ func MergePR(be PRMerger, pr int, items []string, approve backlog.MergeApprover)
 		return MergedPR{}, &UnprovenError{IDs: ids}
 	}
 	return MergedPR{SHA: res.SHA[:min(7, len(res.SHA))], Closed: res.Closed}, nil
+}
+
+// landForge lands the PR pinned to its verified head and deletes the branch.
+func landForge(ctx context.Context, pt backlog.PRTracker, pr int, head string) (string, error) {
+	return land.MergeForge(ctx, pt, pr, head, true)
 }
