@@ -226,23 +226,7 @@ func (f fileStore) moveLegacy() error {
 	if err != nil {
 		return err
 	}
-	tf, err := os.CreateTemp(filepath.Dir(f.path), "secrets-*.tmp")
-	if err != nil {
-		return err
-	}
-	tmp := tf.Name()
-	_, err = tf.Write(raw)
-	if cerr := tf.Close(); err == nil {
-		err = cerr
-	}
-	if err == nil {
-		err = os.Chmod(tmp, 0o600)
-	}
-	if err == nil {
-		err = os.Rename(tmp, f.path)
-	}
-	if err != nil {
-		os.Remove(tmp)
+	if err := fsio.WriteFileAtomicMode(f.path, raw, 0o600); err != nil {
 		return err
 	}
 	return os.Remove(f.legacy)
@@ -309,22 +293,6 @@ func (f fileStore) update(mutate func(*jsonx.Object)) error {
 		if err != nil {
 			return err
 		}
-		// CreateTemp creates exclusively, mode 0600, under a random name.
-		tf, err := os.CreateTemp(filepath.Dir(f.path), "secrets-*.tmp")
-		if err != nil {
-			return err
-		}
-		tmp := tf.Name()
-		_, err = tf.Write(data)
-		if cerr := tf.Close(); err == nil {
-			err = cerr
-		}
-		if err == nil {
-			err = os.Rename(tmp, f.path)
-		}
-		if err != nil {
-			os.Remove(tmp)
-		}
-		return err
+		return fsio.WriteFileAtomicMode(f.path, data, 0o600)
 	})
 }
