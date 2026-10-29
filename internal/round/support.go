@@ -125,7 +125,7 @@ func (e Env) OfferSupport(ctx context.Context, root string, be Board, ids []stri
 		if pins := roundcfg.PinsOf(it.Labels); !withdraw && len(pins) > 0 && !slices.Contains(pins, support) {
 			return nil, blocked(BlockSite, "%s is pinned %s: remove that label before offering it to %s", it.ID, strings.Join(pinLabels(pins), ", "), roundcfg.MachineLabel(support))
 		}
-		st, err := be.Status(it.ID)
+		st, err := statusOf(be, it.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -255,7 +255,7 @@ func (e Env) ReturnSupport(ctx context.Context, root string, be Board, id, reaso
 	if !slices.Contains(it.Labels, e.SupportLabel) {
 		return out, nil
 	}
-	st, err := be.Status(it.ID)
+	st, err := statusOf(be, it.ID)
 	if err != nil {
 		return out, err
 	}

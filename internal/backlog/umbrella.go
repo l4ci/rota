@@ -587,8 +587,9 @@ func (u *Umbrella) createSubMilestone(sub *Issues, mid string) (string, bool, er
 }
 
 var (
-	_ Backend  = (*Umbrella)(nil)
-	_ Workflow = (*Umbrella)(nil)
+	_ Backend     = (*Umbrella)(nil)
+	_ Workflow    = (*Umbrella)(nil)
+	_ ItemTracker = (*Umbrella)(nil)
 )
 
 // SetDetail rewrites the item's body on its sub-repo's tracker.
