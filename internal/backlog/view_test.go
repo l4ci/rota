@@ -118,10 +118,10 @@ func TestCapabilities(t *testing.T) {
 	if c := (&File{}).Capabilities(); c != (Capabilities{}) {
 		t.Errorf("file = %+v", c)
 	}
-	if c := (&Issues{}).Capabilities(); c != (Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true}) {
+	if c := (&Issues{}).Capabilities(); c != (Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true, ItemStatus: true}) {
 		t.Errorf("issues = %+v", c)
 	}
-	if c := (&Umbrella{}).Capabilities(); c != (Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true, Umbrella: true}) {
+	if c := (&Umbrella{}).Capabilities(); c != (Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true, Umbrella: true, ItemStatus: true}) {
 		t.Errorf("umbrella = %+v", c)
 	}
 }

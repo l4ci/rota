@@ -83,6 +83,24 @@ type Capabilities struct {
 	Forge bool
 	// Umbrella: items span several sub-repos, each Row names its owner.
 	Umbrella bool
+	// ItemStatus: Status and the durable notes read and write the tracker.
+	// False: the Workflow verbs exist but refuse them as issue-only, so a
+	// caller that wants a status or a note checks this, not a Workflow assertion.
+	ItemStatus bool
+}
+
+// CapabilitiesFor is what Open's backend will report, from the loaded config
+// alone, so a verb can refuse a mode before it builds a tracker. An umbrella
+// adds Umbrella on top; the root decides that, not the config.
+func CapabilitiesFor(cfg any) (Capabilities, error) {
+	name, err := config.Backend(cfg)
+	if err != nil {
+		return Capabilities{}, err
+	}
+	if name == "file" {
+		return (&File{}).Capabilities(), nil
+	}
+	return (&Issues{}).Capabilities(), nil
 }
 
 // WorkflowOf is the backend's claim, state and note verbs. Both backends
@@ -117,6 +135,9 @@ type FileOps interface {
 	Drift(targets []Target) ([]DriftItem, []SymbolDrift, error)
 	BackfillSince(head string) (stamped int, err error)
 	Archive(days int, today time.Time) (moved int, err error)
+	// SyncMilestones regenerates every milestone file's Items section and
+	// lists the milestone IDs whose section had drifted.
+	SyncMilestones() ([]string, error)
 }
 
 // SubRepoScoped is implemented by the umbrella backend: SubRepo is the

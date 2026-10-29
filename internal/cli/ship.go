@@ -355,11 +355,11 @@ func shipClosesLines(c *Ctx, root string, cfg any, ids []string) (string, error)
 	if len(ids) == 0 {
 		return "", nil
 	}
-	name, _, err := backendMode(c.deps(), root)
+	caps, _, err := backendMode(c.deps(), root)
 	if err != nil {
 		return "", err
 	}
-	if name == "file" {
+	if !caps.IssueIDs {
 		return "", nil
 	}
 	b, err := openBacklog(c, root, false, "")

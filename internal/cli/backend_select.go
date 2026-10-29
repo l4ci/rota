@@ -21,28 +21,28 @@ import (
 // backlog.File{Root:} themselves; they are file stores by definition and
 // cannot import cli.
 
-// backendMode reads issues.source of the project at root: the mode name
-// ("file", or "issues" for any tracker) and the loaded config. An invalid value is a corrupt
+// backendMode reads issues.source of the project at root: what the configured
+// backend can do (IssueIDs is the tracker test) and the loaded config. An invalid value is a corrupt
 // config (contract, shared definitions): exit 70, never a quiet fall back.
-func backendMode(d *Deps, root string) (name string, cfg any, err error) {
+func backendMode(d *Deps, root string) (caps backlog.Capabilities, cfg any, err error) {
 	cfg = d.Config(root)
-	name, err = config.Backend(cfg)
+	caps, err = backlog.CapabilitiesFor(cfg)
 	if err == nil {
 		_, err = config.ForgeProvider(cfg)
 	}
 	if err != nil {
-		return "", nil, &Error{Exit: ExitInternal, Message: err.Error()}
+		return backlog.Capabilities{}, nil, &Error{Exit: ExitInternal, Message: err.Error()}
 	}
-	return name, cfg, nil
+	return caps, cfg, nil
 }
 
 // issueBackend reports whether issues.source is a tracker.
 func issueBackend(d *Deps, root string) (bool, error) {
-	name, _, err := backendMode(d, root)
+	caps, _, err := backendMode(d, root)
 	if err != nil {
 		return false, err
 	}
-	return name == "issues", nil
+	return caps.IssueIDs, nil
 }
 
 // modeRoot is the project root and whether issues.source is a tracker.
@@ -84,11 +84,11 @@ func backlogScope(c *Ctx) (string, error) {
 // capture target, and a capture with none goes to the sub-repo the working
 // directory is in.
 func openBacklog(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backend, error) {
-	name, cfg, err := backendMode(c.deps(), root)
+	caps, cfg, err := backendMode(c.deps(), root)
 	if err != nil {
 		return nil, err
 	}
-	if name != "file" && fileOnly {
+	if caps.IssueIDs && fileOnly {
 		return nil, &backlog.RefusedError{BlockedBy: blockedby.Backend, Hint: hint, Err: backlog.ErrWrongBackend,
 			Msg: `not available when issues.source is a tracker`}
 	}
@@ -138,11 +138,11 @@ func openIssueBackend(c *Ctx, hint string, perRepo bool) (backlog.IssueBackend, 
 	if err != nil {
 		return nil, err
 	}
-	name, _, err := backendMode(c.deps(), root)
+	caps, _, err := backendMode(c.deps(), root)
 	if err != nil {
 		return nil, err
 	}
-	if name == "file" {
+	if !caps.IssueIDs {
 		return nil, &backlog.RefusedError{BlockedBy: blockedby.Backend, Hint: hint, Err: backlog.ErrWrongBackend,
 			Msg: c.Path + ` is not available when issues.source is file`}
 	}

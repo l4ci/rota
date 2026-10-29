@@ -101,7 +101,7 @@ func (b *Issues) Name() string { return "issues" }
 
 // Capabilities: tracker issues.
 func (b *Issues) Capabilities() Capabilities {
-	return Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true}
+	return Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true, ItemStatus: true}
 }
 
 // Rows lists the open issues.
