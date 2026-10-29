@@ -11,6 +11,10 @@ import (
 
 var unsafeName = regexp.MustCompile(`[^A-Za-z0-9._+-]`)
 
+// ExtractPrefix starts the name of the temp dir an extraction builds in before
+// renaming it into place; `rota reap` matches a killed extraction by it.
+const ExtractPrefix = ".extract-"
+
 // CacheName is the directory name of a binary's extracted tree. A release
 // version names it alone; a build with no release version (a checkout build)
 // also carries the set's digest, since one version string then covers
@@ -56,7 +60,7 @@ func Extract(s *Set, version, base string) (string, error) {
 	if err := os.MkdirAll(base, 0o777); err != nil {
 		return "", err
 	}
-	tmp, err := os.MkdirTemp(base, ".extract-*")
+	tmp, err := os.MkdirTemp(base, ExtractPrefix+"*")
 	if err != nil {
 		return "", err
 	}

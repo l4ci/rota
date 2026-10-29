@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/skills"
 )
 
 var bg = context.Background()
@@ -552,13 +553,13 @@ func TestReapSkipsMergedBranchesNobodyAdopted(t *testing.T) {
 
 func TestReapListsOnlyOrphanedExtractDirs(t *testing.T) {
 	cache := t.TempDir()
-	for _, d := range []string{".extract-old", ".extract-fresh", "0.19.0", ".other-old"} {
+	for _, d := range []string{skills.ExtractPrefix + "old", skills.ExtractPrefix + "fresh", "0.19.0", ".other-old"} {
 		if err := os.MkdirAll(filepath.Join(cache, d), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
 	old := time.Now().Add(-2 * time.Hour)
-	for _, d := range []string{".extract-old", ".other-old", "0.19.0"} {
+	for _, d := range []string{skills.ExtractPrefix + "old", ".other-old", "0.19.0"} {
 		if err := os.Chtimes(filepath.Join(cache, d), old, old); err != nil {
 			t.Fatal(err)
 		}
@@ -566,13 +567,13 @@ func TestReapListsOnlyOrphanedExtractDirs(t *testing.T) {
 	in := input(repo(nil, nil), nil, nil, nil)
 	in.SkillCache, in.SkillCacheKeep = cache, "0.19.0"
 	res := find(t, in, KindSkillCache)
-	if got := strings.Join(ids(res.Candidates), ","); got != "skillcache:.extract-old" {
+	if got := strings.Join(ids(res.Candidates), ","); got != KindSkillCache+":"+skills.ExtractPrefix+"old" {
 		t.Fatalf("candidates %s, want only the stale .extract-* dir", got)
 	}
 	if got := Apply(bg, in, res.Candidates); len(got.Failed) != 0 || len(got.Reaped) != 1 {
 		t.Fatalf("apply: %+v", got)
 	}
-	for d, want := range map[string]bool{".extract-old": false, ".extract-fresh": true, "0.19.0": true, ".other-old": true} {
+	for d, want := range map[string]bool{skills.ExtractPrefix + "old": false, skills.ExtractPrefix + "fresh": true, "0.19.0": true, ".other-old": true} {
 		if _, err := os.Stat(filepath.Join(cache, d)); (err == nil) != want {
 			t.Errorf("%s exists=%v, want %v", d, err == nil, want)
 		}
@@ -581,7 +582,7 @@ func TestReapListsOnlyOrphanedExtractDirs(t *testing.T) {
 
 func TestReapPrunesOldSkillCache(t *testing.T) {
 	cache := t.TempDir()
-	for _, d := range []string{"0.18.0/rota-a", "0.19.0/rota-a", ".extract-123"} {
+	for _, d := range []string{"0.18.0/rota-a", "0.19.0/rota-a", skills.ExtractPrefix + "123"} {
 		if err := os.MkdirAll(filepath.Join(cache, d), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -596,7 +597,7 @@ func TestReapPrunesOldSkillCache(t *testing.T) {
 	if got := Apply(bg, in, res.Candidates); len(got.Failed) != 0 || len(got.Reaped) != 1 {
 		t.Fatalf("apply: %+v", got)
 	}
-	for d, want := range map[string]bool{"0.18.0": false, "0.19.0": true, ".extract-123": true, "stray-file": true} {
+	for d, want := range map[string]bool{"0.18.0": false, "0.19.0": true, skills.ExtractPrefix + "123": true, "stray-file": true} {
 		if _, err := os.Stat(filepath.Join(cache, d)); (err == nil) != want {
 			t.Errorf("%s exists=%v, want %v", d, err == nil, want)
 		}
