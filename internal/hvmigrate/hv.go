@@ -37,7 +37,9 @@ import (
 var ErrNoState = errors.New("no .hv/ or .rota/ directory here or in any parent")
 
 const (
-	legacyDir      = ".hv"
+	legacyDir = ".hv"
+	// stateDir is the migration target, spelled out on purpose: this package
+	// moves .hv/ to .rota/ and owns both names.
 	stateDir       = ".rota"
 	legacyManifest = ".hv-manifest.json"
 	legacyMarker   = "# hv-hook"

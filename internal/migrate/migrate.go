@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -116,8 +116,7 @@ func Run(o Options) (*Result, error) {
 	if o.Today == nil {
 		o.Today = func() string { return time.Now().Format("2006-01-02") }
 	}
-	rota := filepath.Join(o.Root, ".rota")
-	backlogPath := filepath.Join(rota, "BACKLOG.md")
+	backlogPath := rotatree.Backlog(o.Root)
 	text, err := fsio.ReadText(backlogPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -129,7 +128,7 @@ func Run(o Options) (*Result, error) {
 		return nil, ErrUmbrellaMigrate
 	}
 	m := &migrator{o: o, ctx: migrateCtx(o.Ctx), apply: o.Apply, msCache: map[string]bool{}, noMS: map[string]bool{},
-		mapRel: filepath.Join(rota, "issue-map.json"), res: &Result{}}
+		mapRel: rotatree.IssueMap(o.Root), res: &Result{}}
 	m.items = planItems(o.Root, text, o.Warn)
 	m.ms = planMilestones(o.Root)
 	m.msIDs = map[string]bool{}
@@ -299,7 +298,7 @@ func (m *migrator) finish() *Result {
 // state is the map file and BACKLOG.md as bytes, to tell whether a run wrote.
 func (m *migrator) state() string {
 	a, _ := os.ReadFile(m.mapRel)
-	b, _ := os.ReadFile(filepath.Join(m.o.Root, ".rota", "BACKLOG.md"))
+	b, _ := os.ReadFile(rotatree.Backlog(m.o.Root))
 	return string(a) + "\x00" + string(b)
 }
 
