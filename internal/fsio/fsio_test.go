@@ -312,3 +312,36 @@ func TestWriteJSONAtomicEncodesStructsLikeJsonx(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, string(wantBytes)+"\n")
 	}
 }
+
+func TestWriteFileAtomicModeSurvivesOverwrite(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "secret")
+	old := syscall.Umask(0o077)
+	defer syscall.Umask(old)
+	for _, body := range []string{"one", "two"} {
+		if err := WriteFileAtomicMode(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		fi, err := os.Stat(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := fi.Mode().Perm(); got != 0o600 {
+			t.Fatalf("mode after writing %q = %o, want 600", body, got)
+		}
+	}
+	if b, _ := os.ReadFile(p); string(b) != "two" {
+		t.Fatalf("content = %q", b)
+	}
+}
+
+func TestWriteFileAtomicModeIgnoresUmask(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "f")
+	old := syscall.Umask(0o277)
+	defer syscall.Umask(old)
+	if err := WriteFileAtomicMode(p, []byte("x"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Stat(p); fi.Mode().Perm() != 0o640 {
+		t.Fatalf("mode = %o, want 640", fi.Mode().Perm())
+	}
+}
