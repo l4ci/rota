@@ -234,3 +234,16 @@ func TestOpenCodeDoctorPlan(t *testing.T) {
 		t.Errorf("without herdr there is nothing to check: %v", got)
 	}
 }
+
+// opencodeVersion shows the first line of `--version` output; strutil splits
+// on any line break, so a CRLF ending leaves no stray \r.
+func TestOpencodeVersionFirstLine(t *testing.T) {
+	for name, out := range map[string]string{
+		"lf": "1.17.9\nextra\n", "crlf": "1.17.9\r\nextra\r\n", "leading blank": "\r\n1.17.9\r\n",
+	} {
+		p := Probe{Run: func(context.Context, string, []string, []string) (Result, error) { return Result{Stdout: out}, nil }}
+		if v, ok := opencodeVersion(context.Background(), p, "opencode", t.TempDir()); !ok || v != "1.17.9" {
+			t.Errorf("%s: version = %q, %v; want 1.17.9", name, v, ok)
+		}
+	}
+}

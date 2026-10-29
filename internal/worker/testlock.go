@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/shlex"
 )
 
 // testLockPoll is how often a waiter retries every slot.
@@ -110,10 +111,8 @@ func NiceCommand(command string, lookPath func(string) (string, error)) (string,
 	if _, err := lookPath("ionice"); err == nil {
 		prefix += "ionice -c3 "
 	}
-	return prefix + "sh -c " + shellQuote(command), true
+	return prefix + "sh -c " + shlex.QuoteAlways(command), true
 }
-
-func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
 // maxDefaultShards caps the machine-sized smoke shard count.
 const maxDefaultShards = 4

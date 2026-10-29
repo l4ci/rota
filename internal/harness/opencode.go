@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/shlex"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // OpenCode workers (#584). The spike is .rota/spikes/opencode-worker.md.
@@ -236,12 +237,7 @@ func opencodeVersion(ctx context.Context, p Probe, bin, home string) (string, bo
 	if err != nil || r.ExitCode != 0 {
 		return "", false
 	}
-	return strings.TrimSpace(firstLine(r.Stdout)), true
-}
-
-func firstLine(s string) string {
-	l, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
-	return l
+	return strutil.FirstLine(r.Stdout), true
 }
 
 // Doctor: the binary, its version for display and, under herdr, the
