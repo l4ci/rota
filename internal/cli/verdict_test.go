@@ -499,3 +499,22 @@ func TestRelayCarriesALensFail(t *testing.T) {
 		t.Fatalf("relay: %+v", v)
 	}
 }
+
+func TestVerdictAddRefusesCorruptStore(t *testing.T) {
+	dir := verdictRepo(t)
+	store := filepath.Join(dir, ".rota", "verdicts.json")
+	if err := os.WriteFile(store, []byte("not json"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errOut := rotaIn(t, dir, "verdict", "add", "--kind", "qa", "--verdict", "PASS")
+	if code != 4 {
+		t.Errorf("exit %d, want 4: %s %s", code, out, errOut)
+	}
+	all := out + errOut
+	if !strings.Contains(all, "verdicts.json") || !strings.Contains(all, "move it aside") || strings.Contains(all, "bug in rota") {
+		t.Errorf("output lacks path or repair hint: %s", all)
+	}
+	if raw, _ := os.ReadFile(store); string(raw) != "not json" {
+		t.Errorf("store rewritten: %q", raw)
+	}
+}

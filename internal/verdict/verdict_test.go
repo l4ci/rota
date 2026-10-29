@@ -2,6 +2,7 @@ package verdict
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
@@ -195,22 +196,40 @@ func TestWritersRefuseCorruptStore(t *testing.T) {
 	}
 	writers := map[string]func() error{
 		"AddBranch": func() error { _, err := AddBranch(root, "b", rec(QA, Pass, "a")); return err },
-		"CanonicalizeItems": func() error {
-			return CanonicalizeItems(root, func(string) []string { return nil })
-		},
 	}
 	for _, text := range []string{"not json", `{"branches": 3}`, `[]`} {
 		for name, write := range writers {
 			if err := os.WriteFile(Path(root), []byte(text), 0o666); err != nil {
 				t.Fatal(err)
 			}
-			if err := write(); err == nil {
-				t.Errorf("%s over %q: no error", name, text)
+			err := write()
+			var xe *exitcode.Error
+			if !errors.As(err, &xe) || xe.Exit != exitcode.ExitRefused {
+				t.Errorf("%s over %q: err %v, want exit %d", name, text, err, exitcode.ExitRefused)
+			} else if !strings.Contains(xe.Message, Path(root)) || !strings.Contains(xe.Hint, "move it aside") {
+				t.Errorf("%s over %q: message %q hint %q", name, text, xe.Message, xe.Hint)
 			}
 			if raw, _ := os.ReadFile(Path(root)); string(raw) != text {
 				t.Errorf("%s over %q rewrote the file: %q", name, text, raw)
 			}
 		}
+	}
+}
+
+func TestCanonicalizeItemsLeavesCorruptStore(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	const text = "not json"
+	if err := os.WriteFile(Path(root), []byte(text), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if err := CanonicalizeItems(root, func(string) []string { return nil }); err != nil {
+		t.Fatalf("err %v, want nil", err)
+	}
+	if raw, _ := os.ReadFile(Path(root)); string(raw) != text {
+		t.Errorf("file rewritten: %q", raw)
 	}
 }
 
