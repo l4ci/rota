@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/verdict"
 )
 
 // stepVerdictReports runs only after the PR and its pushed head were validated.
 // Both the blocking check and review-depth lookup then see the recovered cache.
 func (g *gate) stepVerdictReports() (bool, error) {
-	if !g.remote || g.pr == "" || g.in.cfg.Tracker.Source == config.SourceFile {
+	if !g.remote || g.pr == "" || !backlog.CapabilitiesForSource(g.in.cfg.Tracker.Source).IssueIDs {
 		return false, nil
 	}
 	source, ok := g.forge.(verdict.ReportSource)
