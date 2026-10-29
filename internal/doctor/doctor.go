@@ -755,7 +755,7 @@ func (d *runner) optIn() (in bool, unreadable []string) {
 		if f.err != nil {
 			unreadable = append(unreadable, f.path)
 		}
-		if len(f.events) > 0 || (f.hasSL && strings.Contains(f.slCmd, hook.StatuslineCmd)) {
+		if len(f.events) > 0 || (f.hasSL && hook.IsOurStatusLine(f.slCmd)) {
 			in = true
 		}
 	}
@@ -811,7 +811,7 @@ func (d *runner) statusline() Check {
 			bad = append(bad, label+": cannot read "+broken)
 		case eff == nil:
 			bad = append(bad, label+": no statusLine")
-		case !strings.Contains(eff.slCmd, hook.StatuslineCmd):
+		case !hook.IsOurStatusLine(eff.slCmd):
 			bad = append(bad, label+": statusLine does not run rota statusline dump ("+eff.path+")")
 		default:
 			parts = append(parts, label+": "+eff.path)

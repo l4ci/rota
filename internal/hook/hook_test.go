@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -310,6 +311,20 @@ func TestWrapUserStatuslineFromProjectLocalShadows(t *testing.T) {
 	Uninstall(local)
 	if dump(t, local) != "{}\n" {
 		t.Errorf("shadow not removed:\n%s", dump(t, local))
+	}
+}
+
+func TestLookalikeStatuslineIsNotOurs(t *testing.T) {
+	for _, cmd := range []string{"rota statusline dumpling", "echo 'rota statusline dump'", "rota statusline dump2 --then x"} {
+		src := `{"statusLine":{"type":"command","command":` + strconv.Quote(cmd) + `}}`
+		o := parse(t, src)
+		out, err := Install(InstallIn{Scope: ScopeProjectLocal, Files: map[Scope]*jsonx.Object{ScopeProjectLocal: o}})
+		if err != nil || !out.Blocked || out.Statusline == SLKept {
+			t.Errorf("%q: install treated a lookalike as its own: %+v %v", cmd, out, err)
+		}
+		if rm := Uninstall(parse(t, src)); len(rm) != 0 {
+			t.Errorf("%q: uninstall removed unrelated command: %v", cmd, rm)
+		}
 	}
 }
 
