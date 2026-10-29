@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -49,8 +50,23 @@ func TestZeroEnvVerbEntriesDoNotPanic(t *testing.T) {
 	}
 }
 
+func TestZeroEnvWriterTrustMissingTracker(t *testing.T) {
+	// No tracker tools are available: missing configuration must be refused
+	// locally, before attempting to contact a forge.
+	t.Setenv("PATH", t.TempDir())
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("WriterTrust panicked with an omitted optional IssueComments seam: %v", r)
+		}
+	}()
+	trust, err := (Env{}).WriterTrust(t.TempDir())
+	if trust != nil || err == nil || !strings.Contains(err.Error(), "issues.source has no issue tracker") {
+		t.Errorf("WriterTrust = %v, %v; want missing-tracker refusal", trust, err)
+	}
+}
+
 // Every seam is non-nil after WithDefaults, except Accounts (nil records no
-// usage meters) and IssueComments (nil keeps the bounce store off the tracker),
+// usage meters) and IssueComments (resolved when a consumer needs comments),
 // which are optional on purpose.
 func TestWithDefaultsFillsEverySeam(t *testing.T) {
 	v := reflect.ValueOf(Env{}.WithDefaults())

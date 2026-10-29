@@ -359,14 +359,72 @@ func TestBounceStoreFailuresDoNotCount(t *testing.T) {
 	}
 }
 
-// A tracker that cannot say who has write access cannot keep bounces on the
-// issue: the store refuses with ErrNoPushTrust, which round start turns into a
-// refusal instead of trusting nobody.
-func TestBounceStoreWithoutPushTrustIsRefused(t *testing.T) {
+// Both comment consumers require the capability to check write access.
+func TestIssueCommentConsumersWithoutPushTrustAreRefused(t *testing.T) {
 	root := bounceRoot(t, `{"issues":{"source":"gitlab"},"round":{"support":"mac"}}`)
 	e := Env{IssueComments: func(string, tracker.Settings) (IssueComments, error) { return noTrustComments{}, nil }}
 	if _, err := e.BounceStore(root); !errors.Is(err, ErrNoPushTrust) {
 		t.Errorf("err = %v, want ErrNoPushTrust", err)
+	}
+	if _, err := e.WriterTrust(root); !errors.Is(err, ErrNoPushTrust) {
+		t.Errorf("WriterTrust err = %v, want ErrNoPushTrust", err)
+	}
+}
+
+func TestWriterTrustInjectedFactory(t *testing.T) {
+	root := bounceRoot(t, `{"issues":{"source":"github"}}`)
+	fc := &fakeComments{}
+	e := Env{IssueComments: func(dir string, s tracker.Settings) (IssueComments, error) {
+		if dir != root || s.Source != "github" {
+			t.Errorf("factory arguments = %q, %+v; want root and configured source", dir, s)
+		}
+		return fc, nil
+	}}
+	trust, err := e.WriterTrust(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for login, want := range map[string]bool{"ann": true, "mallory": false} {
+		if got, err := trust.Writer(login); err != nil || got != want {
+			t.Errorf("Writer(%q) = %v, %v; want %v", login, got, err, want)
+		}
+	}
+}
+
+func TestIssueCommentConsumersMissingTracker(t *testing.T) {
+	factoryErr := errors.New("factory failed")
+	for _, tc := range []struct {
+		name string
+		omit bool
+		err  error
+	}{
+		{name: "omitted factory", omit: true},
+		{name: "nil tracker"},
+		{name: "no tracker error", err: tracker.ErrNoIssueTracker},
+		{name: "factory error", err: factoryErr},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := bounceRoot(t, `{"issues":{"source":"file"},"round":{"support":"mac"}}`)
+			e := Env{}
+			if !tc.omit {
+				e.IssueComments = func(string, tracker.Settings) (IssueComments, error) { return nil, tc.err }
+			}
+			for name, construct := range map[string]func() error{
+				"BounceStore": func() error { _, err := e.BounceStore(root); return err },
+				"WriterTrust": func() error { _, err := e.WriterTrust(root); return err },
+			} {
+				t.Run(name, func(t *testing.T) {
+					err := construct()
+					if tc.err == factoryErr {
+						if !errors.Is(err, factoryErr) {
+							t.Errorf("err = %v, want factory error", err)
+						}
+					} else if err == nil || !strings.Contains(err.Error(), "issues.source has no issue tracker") {
+						t.Errorf("err = %v, want missing-tracker refusal", err)
+					}
+				})
+			}
+		})
 	}
 }
 
