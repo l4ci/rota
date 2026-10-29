@@ -43,8 +43,11 @@ const (
 	KindComment = "comment"
 	KindClaim   = "claim"
 	KindRelease = "release"
-	KindHandoff = "handoff"
-	KindFields  = "fields"
+	// KindHandRelease rides on a release comment a person posted on purpose
+	// (`rota item release`), so reconcile does not post the claim again.
+	KindHandRelease = "hand-release"
+	KindHandoff     = "handoff"
+	KindFields      = "fields"
 	// KindBounce is one bounce counted on an issue, or the reset that zeroes
 	// the count (#1598). KindReviewBounce is a bounce posted on the PR for the
 	// machine whose worker holds it.
@@ -127,6 +130,15 @@ func ParseComment(body string) (kind, rest string, ok bool) {
 // Claim and Release render the comments that take and give back a claim.
 func Claim(id string) string   { return Line(KindClaim, id) }
 func Release(id string) string { return Line(KindRelease, id) }
+
+// HandRelease renders the release of claim id that a person chose to make.
+func HandRelease(id string) string { return Release(id) + "\n" + Line(KindHandRelease, id) }
+
+// IsHandRelease reports whether body is a release of claim id that carries the
+// hand-release marker.
+func IsHandRelease(body, id string) bool {
+	return strings.Contains(strings.ReplaceAll(body, "\r\n", "\n"), Line(KindHandRelease, id))
+}
 
 // ParseClaim reads a claim or release comment: verb is KindClaim or
 // KindRelease.
