@@ -150,20 +150,23 @@ const minSha = 7
 // whitespace collapsed. It is the one rule for which row speaks for a commit;
 // the caller reads the row's Result.
 func Latest(rows []Row, sha, check string) (Row, bool) {
-	sha, check = one(sha), one(check)
-	if len(sha) < minSha {
-		return Row{}, false
-	}
 	for i := len(rows) - 1; i >= 0; i-- {
-		r := rows[i]
-		if one(r.Check) != check || len(r.Sha) < minSha {
-			continue
-		}
-		if strings.HasPrefix(sha, r.Sha) || strings.HasPrefix(r.Sha, sha) {
-			return r, true
+		if speaksFor(rows[i].Sha, rows[i].Check, sha, check) {
+			return rows[i], true
 		}
 	}
 	return Row{}, false
+}
+
+// speaksFor is the match rule behind Latest and Mark: a row's sha and the
+// queried sha agree as prefixes either way, both at least minSha characters,
+// and the checks agree with whitespace collapsed.
+func speaksFor(rowSha, rowCheck, sha, check string) bool {
+	sha = one(sha)
+	if len(sha) < minSha || len(rowSha) < minSha || one(rowCheck) != one(check) {
+		return false
+	}
+	return strings.HasPrefix(sha, rowSha) || strings.HasPrefix(rowSha, sha)
 }
 
 // Lookup reads the latest result for a mark from stored proof text.
@@ -184,7 +187,6 @@ func Proves(rows []Row, head, check string) bool {
 // the row records how it was taken (targeted, say). It reports whether a row
 // was found; a row that already carries the mark is left as it is.
 func Mark(s Store, id, sha, check, mark string) (found bool, err error) {
-	sha, check = one(sha), one(check)
 	err = s.Update(id, func(content string) (string, bool, error) {
 		lines := strings.Split(content, "\n")
 		for i := len(lines) - 1; i >= 0; i-- {
@@ -193,10 +195,7 @@ func Mark(s Store, id, sha, check, mark string) (found bool, err error) {
 				continue
 			}
 			p := strings.SplitN(l[2:], sep, 5)
-			if len(p) < 5 || one(p[1]) != check || p[2] != "PASS" || len(p[3]) < minSha {
-				continue
-			}
-			if !strings.HasPrefix(sha, p[3]) && !strings.HasPrefix(p[3], sha) {
+			if len(p) < 5 || p[2] != "PASS" || !speaksFor(p[3], p[1], sha, check) {
 				continue
 			}
 			found = true
