@@ -255,7 +255,7 @@ func shipTitles(c *Ctx, root string) (func(id string) (line, title string, ok bo
 	if !issue {
 		// File mode only (issue mode takes the tracker below): the corpus is BACKLOG.md and ARCHIVE.md.
 		corpus := fileBackend(root).Corpus()
-		return func(id string) (string, string, bool) { return backlog.FindOrigin(corpus, id) }, nil
+		return ship.CorpusTitles(corpus), nil
 	}
 	be, err := openBacklog(c, root, false, "")
 	if err != nil {
