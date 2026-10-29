@@ -93,14 +93,20 @@ type Capabilities struct {
 // alone, so a verb can refuse a mode before it builds a tracker. An umbrella
 // adds Umbrella on top; the root decides that, not the config.
 func CapabilitiesFor(cfg any) (Capabilities, error) {
-	name, err := config.Backend(cfg)
+	src, err := config.IssueSource(cfg)
 	if err != nil {
 		return Capabilities{}, err
 	}
-	if name == "file" {
-		return (&File{}).Capabilities(), nil
+	return CapabilitiesForSource(src), nil
+}
+
+// CapabilitiesForSource is CapabilitiesFor for a caller that holds the
+// resolved issues.source string; "" is the file source.
+func CapabilitiesForSource(source string) Capabilities {
+	if source == config.SourceFile || source == "" {
+		return (&File{}).Capabilities()
 	}
-	return (&Issues{}).Capabilities(), nil
+	return (&Issues{}).Capabilities()
 }
 
 // WorkflowOf is the backend's claim, state and note verbs. Both backends

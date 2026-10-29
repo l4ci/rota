@@ -129,3 +129,11 @@ func TestFileHoldsNoSharedClaims(t *testing.T) {
 		}
 	}
 }
+
+func TestCapabilitiesForSource(t *testing.T) {
+	for src, issue := range map[string]bool{"": false, "file": false, "github": true, "jira": true} {
+		if got := CapabilitiesForSource(src).IssueIDs; got != issue {
+			t.Errorf("CapabilitiesForSource(%q).IssueIDs = %v, want %v", src, got, issue)
+		}
+	}
+}
