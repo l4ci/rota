@@ -14,20 +14,12 @@ import (
 
 // The issue-mode workflow verbs: `rota item show|claim|release|state` and
 // `rota item note add|show|rm`. The file backend answers claim, release and state
-// with a successful no-op (changed false; status.json is its lock) and refuses
-// show and the notes as issue-only (exit 4, backend).
+// with a successful no-op (changed false; status.json is its lock); it has no
+// ItemTracker, so show and the notes are refused as issue-only (exit 4, backend).
 
 // itemFlow opens the backlog and resolves ref to its canonical ID and type.
 func itemFlow(c *Ctx, ref string) (backlog.Backend, backlog.Workflow, string, string, error) {
-	root, err := backlogScope(c)
-	if err != nil {
-		return nil, nil, "", "", err
-	}
-	be, err := openBacklog(c, root, false, "")
-	if err != nil {
-		return nil, nil, "", "", err
-	}
-	id, typ, err := resolveItem(be, ref)
+	be, id, typ, err := itemOpen(c, ref)
 	if err != nil {
 		return nil, nil, "", "", err
 	}
@@ -38,6 +30,37 @@ func itemFlow(c *Ctx, ref string) (backlog.Backend, backlog.Workflow, string, st
 	return be, wf, id, typ, nil
 }
 
+// itemTrack is itemFlow for the verbs that read the item back from its
+// tracker (status, notes). File mode has no ItemTracker: what and hint name the
+// verb in the issue-only refusal (exit 4, backend).
+func itemTrack(c *Ctx, ref, what, hint string) (backlog.Backend, backlog.ItemTracker, string, string, error) {
+	be, id, typ, err := itemOpen(c, ref)
+	if err != nil {
+		return nil, nil, "", "", err
+	}
+	it, err := backlog.ItemTrackerOf(be, what, hint)
+	if err != nil {
+		return nil, nil, "", "", err
+	}
+	return be, it, id, typ, nil
+}
+
+func itemOpen(c *Ctx, ref string) (backlog.Backend, string, string, error) {
+	root, err := backlogScope(c)
+	if err != nil {
+		return nil, "", "", err
+	}
+	be, err := openBacklog(c, root, false, "")
+	if err != nil {
+		return nil, "", "", err
+	}
+	id, typ, err := resolveItem(be, ref)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return be, id, typ, nil
+}
+
 // ---- item show ------------------------------------------------------------
 
 func itemShow(fs *flag.FlagSet) RunFunc {
@@ -45,7 +68,7 @@ func itemShow(fs *flag.FlagSet) RunFunc {
 		if err := argCount(c, args, 1, 1, "item show takes one item ID"); err != nil {
 			return Result{}, err
 		}
-		_, wf, _, _, err := itemFlow(c, args[0])
+		_, wf, _, _, err := itemTrack(c, args[0], "item show", backlog.FileShowHint)
 		if err != nil {
 			return backlogFailRead(err)
 		}
@@ -307,7 +330,7 @@ func itemNoteAdd(fs *flag.FlagSet) RunFunc {
 		if pystr.Strip(text) == "" {
 			return Result{}, Usage("empty note body")
 		}
-		_, wf, id, typ, err := itemFlow(c, args[0])
+		_, wf, id, typ, err := itemTrack(c, args[0], "item note add", backlog.FileNoteHint)
 		if err != nil {
 			return backlogFail(err)
 		}
@@ -329,7 +352,7 @@ func itemNoteShow(fs *flag.FlagSet) RunFunc {
 		if err := checkNoteKind(*kind); err != nil {
 			return Result{}, err
 		}
-		_, wf, id, typ, err := itemFlow(c, args[0])
+		_, wf, id, typ, err := itemTrack(c, args[0], "item note show", backlog.FileNoteHint)
 		if err != nil {
 			return backlogFailRead(err)
 		}
@@ -353,7 +376,7 @@ func itemNoteRm(fs *flag.FlagSet) RunFunc {
 		if err := checkWritableNoteKind(*kind); err != nil {
 			return Result{}, err
 		}
-		_, wf, id, typ, err := itemFlow(c, args[0])
+		_, wf, id, typ, err := itemTrack(c, args[0], "item note rm", backlog.FileNoteHint)
 		if err != nil {
 			return backlogFail(err)
 		}

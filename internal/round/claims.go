@@ -34,7 +34,7 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 		return
 	}
 	status := func(ref string) (*backlog.Status, bool) {
-		st, err := e.Board.Status(ref)
+		st, err := statusOf(e.Board, ref)
 		if err != nil {
 			if !errors.Is(err, backlog.ErrWrongBackend) {
 				rep.Warnings = append(rep.Warnings, fmt.Sprintf("claim check %s: %v", tracker.RefOf(ref), err))
@@ -180,7 +180,7 @@ func openClaimsOf(st *backlog.Status) []string {
 // prefix, else "". Every open claim counts, not just the earliest: the second
 // attempt of a best-of:2 issue holds the later one.
 func openClaimWith(be Board, id, prefix string) string {
-	st, err := be.Status(id)
+	st, err := statusOf(be, id)
 	if err != nil || st == nil {
 		return ""
 	}
