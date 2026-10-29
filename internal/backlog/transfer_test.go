@@ -12,18 +12,22 @@ import (
 
 const archivedNeighbor = "# Archive\n- ~~**[B09] [P2] neighbor.** keep~~ Done 2020-01-01 [`z`]\n"
 
-// failWrite makes the transfer write to path fail on f until healWrites.
-func failWrite(f *File, path string) {
-	f.writeAtomic = func(p string, data []byte) error {
+// failWrite makes the transfer write to path fail until healWrites or the
+// test ends.
+func failWrite(t *testing.T, path string) {
+	t.Helper()
+	orig := writeAtomic
+	t.Cleanup(func() { writeAtomic = orig })
+	writeAtomic = func(p string, data []byte) error {
 		if p == path {
 			return errors.New("injected write failure")
 		}
-		return fsio.WriteFileAtomic(p, data)
+		return orig(p, data)
 	}
 }
 
 // healWrites ends failWrite.
-func healWrites(f *File) { f.writeAtomic = nil }
+func healWrites() { writeAtomic = fsio.WriteFileAtomic }
 
 func blockPath(t *testing.T, path string) {
 	t.Helper()
@@ -47,9 +51,9 @@ func TestArchiveTransferFailures(t *testing.T) {
 				}
 				blockPath(t, path)
 			case "destination write":
-				failWrite(f, path)
+				failWrite(t, path)
 			case "source write":
-				failWrite(f, f.backlogPath())
+				failWrite(t, f.backlogPath())
 			}
 			if _, err := f.Archive(5, day(t, "2026-10-02")); err == nil {
 				t.Fatal("expected injected failure")
@@ -76,6 +80,7 @@ func TestArchiveTransferFailures(t *testing.T) {
 				writeHV(t, f, "ARCHIVE.md", archivedNeighbor)
 			}
 			// A fresh backend must recover using only the persisted documents.
+			healWrites()
 			f = &File{Root: f.Root}
 			if moved, err := f.Archive(5, day(t, "2026-10-02")); err != nil || moved != 1 {
 				t.Fatalf("retry = %d, %v", moved, err)
@@ -98,10 +103,11 @@ func TestReopenTransferRetry(t *testing.T) {
 	if _, err := f.Archive(5, day(t, "2026-10-02")); err != nil {
 		t.Fatal(err)
 	}
-	failWrite(f, f.archivePath())
+	failWrite(t, f.archivePath())
 	if _, err := f.Reopen("B02"); err == nil {
 		t.Fatal("expected archive write failure")
 	}
+	healWrites()
 	f = &File{Root: f.Root}
 	if _, err := f.Reopen("B02"); err != nil {
 		t.Fatal(err)
@@ -193,11 +199,11 @@ func TestInterruptedArchiveFollowup(t *testing.T) {
 		t.Run(op, func(t *testing.T) {
 			f := fileBackend(t, completed)
 			writeHV(t, f, "ARCHIVE.md", archivedNeighbor)
-			failWrite(f, f.backlogPath())
+			failWrite(t, f.backlogPath())
 			if _, err := f.Archive(5, day(t, "2026-10-02")); err == nil {
 				t.Fatal("expected source write failure")
 			}
-			healWrites(f)
+			healWrites()
 			switch op {
 			case "reopen":
 				if _, err := f.Reopen("B02"); err != nil {
