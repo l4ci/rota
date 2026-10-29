@@ -7,8 +7,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -157,13 +159,16 @@ func writeJSONVerified(path string, v any) error {
 // that exists but cannot be read or parsed.
 var ErrUnreadable = errors.New("state file unreadable")
 
+// lockSuffix names a data file's lock sidecar: "<path>" + lockSuffix.
+const lockSuffix = ".lock"
+
 // Locked runs fn while holding an exclusive flock on "<path>.lock". The lock
 // sits on a sibling file because the atomic rename swaps the data file's
 // inode. A busy lock is retried every 50 ms until timeout. The kernel drops
 // the lock if the process dies; the empty .lock file stays in place.
 // Callers taking multiple locks must use a consistent order across operations.
 func Locked(path string, timeout time.Duration, fn func() error) error {
-	lockPath := path + ".lock"
+	lockPath := path + lockSuffix
 	if err := os.MkdirAll(filepath.Dir(lockPath), 0o777); err != nil {
 		return err
 	}
@@ -286,4 +291,60 @@ func SameDir(a, b string) bool {
 		return filepath.Clean(p)
 	}
 	return norm(a) == norm(b)
+}
+
+// RemoveWithLock removes path and its lock sidecar. The sidecar goes first, so
+// a caller inside Locked(path) drops both while still holding the lock. That
+// is not safe against waiters: Locked does not re-check the inode after it
+// takes the flock, so a waiter already holding the old inode and a newcomer
+// that creates a fresh sidecar can both hold the lock. Use it only where no
+// concurrent locker is expected. A missing sidecar is not an error; the result
+// is path's own Remove error.
+func RemoveWithLock(path string) error {
+	os.Remove(path + lockSuffix)
+	return os.Remove(path)
+}
+
+// RemoveSidecars removes the lock sidecar of every file in dir whose name
+// matches dataPattern (path.Match syntax). Errors are ignored: a sidecar is
+// an empty marker and a missing one is the goal.
+func RemoveSidecars(dir, dataPattern string) {
+	for _, c := range GlobDir(dir, dataPattern+lockSuffix) {
+		os.Remove(c)
+	}
+}
+
+// HeldLockUnder walks root for lock sidecars and returns the first one some
+// process holds, or "" when none is. It creates no file. skip, when non-nil,
+// is asked about every directory and prunes it when it returns true.
+func HeldLockUnder(root string, skip func(path string, d fs.DirEntry) bool) string {
+	var held string
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || held != "" {
+			return nil
+		}
+		if d.IsDir() {
+			if path != root && skip != nil && skip(path, d) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, lockSuffix) {
+			return nil
+		}
+		f, err := os.OpenFile(path, os.O_RDWR, 0)
+		if err != nil {
+			return nil
+		}
+		defer f.Close()
+		if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+			if errors.Is(err, syscall.EWOULDBLOCK) {
+				held = path
+			}
+			return nil
+		}
+		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		return nil
+	})
+	return held
 }
