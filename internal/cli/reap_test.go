@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/skills"
 	"os"
 	"path/filepath"
@@ -32,9 +33,9 @@ func reapProject(t *testing.T, ops reap.HostOps, hostUp bool) (string, *Deps) {
 	t.Helper()
 	root := gitRepo(t)
 	for name, br := range map[string]string{"old": "kit/1-old", "dirty": "kit/2-dirty", "live": "kit/3-live"} {
-		gitIn(t, root, "worktree", "add", "-q", "-b", br, filepath.Join(root, ".worktrees", name), "HEAD")
+		gittest.Run(t, root, "worktree", "add", "-q", "-b", br, filepath.Join(root, ".worktrees", name), "HEAD")
 	}
-	gitIn(t, root, "branch", "kit/9-gone", "HEAD")
+	gittest.Run(t, root, "branch", "kit/9-gone", "HEAD")
 	if err := os.WriteFile(filepath.Join(root, ".worktrees", "dirty", "wip.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +223,7 @@ func TestDepsHostFactoryFeedsEveryHook(t *testing.T) {
 
 func TestDefaultReapEnvBuildsNoForge(t *testing.T) {
 	root := trackerProject(t, "")
-	gitIn(t, root, "init", "-q")
+	gittest.Run(t, root, "init", "-q")
 	d := testDeps()
 	builds := forgeBuilds(d)
 	e, _ := d.ReapEnv(context.Background(), root)
@@ -245,7 +246,7 @@ func (h *orcaReapTestHost) CloseTab(context.Context, string) error { return nil 
 
 func TestOrcaDefaultReapUsesTabCapability(t *testing.T) {
 	root := trackerProject(t, "")
-	gitIn(t, root, "init", "-q")
+	gittest.Run(t, root, "init", "-q")
 	d := testDeps()
 	d.Host = func(host.Kind) host.Host { return &orcaReapTestHost{} }
 	_, ops := defaultReapEnv(context.Background(), root, d)

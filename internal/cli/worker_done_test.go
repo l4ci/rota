@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/tracker"
@@ -29,22 +29,19 @@ func doneProject(t *testing.T, fast string) string {
 		[]byte(`{"slots":[{"name":"ben","branch":"feat/x","task":"B07","state":"busy"}]}`), 0o644)
 	// done refuses a dirty tree: ignore the fixture's own .rota files.
 	os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".rota/\n"), 0o644)
-	runGit(t, dir, "add", ".gitignore")
-	runGit(t, dir, "commit", "-q", "-m", "ignore rota")
+	gittest.Run(t, dir, "add", ".gitignore")
+	gittest.Run(t, dir, "commit", "-q", "-m", "ignore rota")
 	// done also wants the branch pushed: the PR is opened before it.
 	remote := filepath.Join(t.TempDir(), "r.git")
-	runGit(t, dir, "init", "-q", "--bare", remote)
-	runGit(t, dir, "remote", "add", "origin", remote)
-	runGit(t, dir, "push", "-q", "origin", "feat/x")
+	gittest.Run(t, dir, "init", "-q", "--bare", remote)
+	gittest.Run(t, dir, "remote", "add", "origin", remote)
+	gittest.Run(t, dir, "push", "-q", "origin", "feat/x")
 	return dir
 }
 
 func headOf(t *testing.T, dir string) string {
-	out, err := exec.Command("git", "-C", dir, "rev-parse", "--short", "HEAD").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return strings.TrimSpace(string(out))
+	t.Helper()
+	return gittest.Run(t, dir, "rev-parse", "--short", "HEAD")
 }
 
 func slotState(t *testing.T, dir string) string {
@@ -377,9 +374,9 @@ func TestWorkerDoneBaselinesReviewCursor(t *testing.T) {
 func pushWorktreeBranch(t *testing.T, main, wt, branch string) {
 	t.Helper()
 	remote := filepath.Join(t.TempDir(), "r.git")
-	runGit(t, main, "init", "-q", "--bare", remote)
-	runGit(t, main, "remote", "add", "origin", remote)
-	runGit(t, wt, "push", "-q", "origin", branch)
+	gittest.Run(t, main, "init", "-q", "--bare", remote)
+	gittest.Run(t, main, "remote", "add", "origin", remote)
+	gittest.Run(t, wt, "push", "-q", "origin", branch)
 }
 
 // TestWorkerDoneFromWorktree: the registry lives in the main checkout, and
@@ -389,14 +386,14 @@ func TestWorkerDoneFromWorktree(t *testing.T) {
 	os.WriteFile(filepath.Join(main, ".rota", "config.json"), []byte(`{"test":{"fast":["true {files}"]}}`), 0o644)
 	// Proof detail files are untracked noise; ignore them so {files} is stable.
 	os.WriteFile(filepath.Join(main, ".gitignore"), []byte(".rota/*\n!.rota/config.json\n!.rota/BACKLOG.md\n"), 0o644)
-	gitT(t, main, "add", ".gitignore", ".rota/config.json", ".rota/BACKLOG.md")
-	gitT(t, main, "-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "-m", "rota")
-	gitT(t, main, "branch", "base0")
+	gittest.Run(t, main, "add", ".gitignore", ".rota/config.json", ".rota/BACKLOG.md")
+	gittest.Run(t, main, "commit", "-q", "-m", "rota")
+	gittest.Run(t, main, "branch", "base0")
 	wt := filepath.Join(main, ".worktrees", "ben")
-	gitT(t, main, "worktree", "add", "-q", "-b", "ben/x", wt, "base0")
+	gittest.Run(t, main, "worktree", "add", "-q", "-b", "ben/x", wt, "base0")
 	os.WriteFile(filepath.Join(wt, "a.go"), []byte("package a\n"), 0o644)
-	gitT(t, wt, "add", "a.go")
-	gitT(t, wt, "-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "-m", "work")
+	gittest.Run(t, wt, "add", "a.go")
+	gittest.Run(t, wt, "commit", "-q", "-m", "work")
 	pushWorktreeBranch(t, main, wt, "ben/x")
 	os.WriteFile(filepath.Join(main, ".rota", "workers.json"),
 		[]byte(`{"slots":[{"name":"ben","branch":"ben/x","task":"B07","state":"busy","worktree":"`+wt+`"}]}`), 0o644)
@@ -435,9 +432,9 @@ func TestWorkerDoneLedgerAccountsFromMainCheckout(t *testing.T) {
 	main := workerProject(t, `{"round":{"accounts":[{"name":"work","configDir":"/w"}]}}`)
 	wt := filepath.Join(main, ".worktrees", "ben")
 	os.WriteFile(filepath.Join(main, ".gitignore"), []byte(".rota/\n"), 0o644)
-	runGit(t, main, "add", ".gitignore")
-	runGit(t, main, "commit", "-q", "-m", "ignore rota")
-	gitT(t, main, "worktree", "add", "-q", "-b", "ben/x", wt)
+	gittest.Run(t, main, "add", ".gitignore")
+	gittest.Run(t, main, "commit", "-q", "-m", "ignore rota")
+	gittest.Run(t, main, "worktree", "add", "-q", "-b", "ben/x", wt)
 	pushWorktreeBranch(t, main, wt, "ben/x")
 	os.MkdirAll(filepath.Join(wt, ".rota"), 0o755)
 	os.WriteFile(filepath.Join(wt, ".rota", "config.json"), []byte(`{"work":{"accounts":[{"name":"work","configDir":"/w"}]}}`), 0o644)

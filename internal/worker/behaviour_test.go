@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -547,7 +548,7 @@ func TestGateBehaviourNoSectionAsksNoCollaboratorQuestion(t *testing.T) {
 func TestGateBehaviourLocalGateReadsNoForge(t *testing.T) {
 	local := func(t *testing.T) *world {
 		w, _ := behaviourWorld(t, tryTouch)
-		gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+		gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 		os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 			[]byte(`{"slots":[{"name":"w1","branch":"w1","task":"899","portBase":20100,"portBlock":100}]}`), 0o644)
 		return w

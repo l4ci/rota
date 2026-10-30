@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/gittest"
 	"testing"
 
 	"github.com/l4ci/rota/internal/tracker"
@@ -19,7 +20,7 @@ func forgeBuilds(d *Deps) *int {
 // itself, not whether a caller's fake was reached.
 func TestRoundEnvFactoriesBuildAForgeOnlyWhenAsked(t *testing.T) {
 	root := trackerProject(t, "")
-	gitIn(t, root, "init", "-q")
+	gittest.Run(t, root, "init", "-q")
 	d := testDeps()
 	builds := forgeBuilds(d)
 

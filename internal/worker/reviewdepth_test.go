@@ -3,8 +3,8 @@ package worker
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -30,21 +30,14 @@ func (f fakeIssueGet) Get(context.Context, tracker.IssueKey, bool) (tracker.Issu
 func depthRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=a@b", "-c", "user.name=a"}, args...)...)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", args, err, out)
-		}
-	}
-	run("init", "-q", "-b", "main")
-	run("commit", "-q", "--allow-empty", "-m", "base")
-	run("checkout", "-q", "-b", "feat")
+	gittest.Init(t, dir, "main")
+	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "base")
+	gittest.Run(t, dir, "checkout", "-q", "-b", "feat")
 	if err := os.WriteFile(filepath.Join(dir, "x.txt"), []byte("x\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	run("add", "x.txt")
-	run("commit", "-q", "-m", "change")
+	gittest.Run(t, dir, "add", "x.txt")
+	gittest.Run(t, dir, "commit", "-q", "-m", "change")
 	return dir
 }
 
@@ -84,21 +77,15 @@ func TestResolveReviewDepthSignals(t *testing.T) {
 // A file moved out of a protected directory still counts as touching it.
 func TestResolveReviewDepthSeesBothSidesOfARename(t *testing.T) {
 	dir := depthRepo(t)
-	run := func(args ...string) {
-		t.Helper()
-		if out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=a@b", "-c", "user.name=a"}, args...)...).CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", args, err, out)
-		}
-	}
-	run("checkout", "-q", "main")
-	run("checkout", "-q", "-b", "mv")
+	gittest.Run(t, dir, "checkout", "-q", "main")
+	gittest.Run(t, dir, "checkout", "-q", "-b", "mv")
 	os.MkdirAll(filepath.Join(dir, "migrations"), 0o755)
 	os.WriteFile(filepath.Join(dir, "migrations", "001.sql"), []byte("create table t (id int);\n"), 0o644)
-	run("add", "migrations")
-	run("commit", "-q", "-m", "add")
-	run("checkout", "-q", "-b", "mv2")
-	run("mv", "migrations/001.sql", "moved.sql")
-	run("commit", "-q", "-m", "move")
+	gittest.Run(t, dir, "add", "migrations")
+	gittest.Run(t, dir, "commit", "-q", "-m", "add")
+	gittest.Run(t, dir, "checkout", "-q", "-b", "mv2")
+	gittest.Run(t, dir, "mv", "migrations/001.sql", "moved.sql")
+	gittest.Run(t, dir, "commit", "-q", "-m", "move")
 	pol, err := config.ParseReviewPolicy(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -117,9 +104,7 @@ func TestResolveReviewDepthUnquotedPaths(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, "migrations"), 0o755)
 	os.WriteFile(filepath.Join(dir, "migrations", "ä\"x.sql"), []byte("x\n"), 0o644)
 	for _, args := range [][]string{{"add", "migrations"}, {"commit", "-q", "-m", "q"}} {
-		if out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=a@b", "-c", "user.name=a"}, args...)...).CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", args, err, out)
-		}
+		gittest.Run(t, dir, args...)
 	}
 	pol, _ := config.ParseReviewPolicy(nil)
 	pol.LightBelow = 1000

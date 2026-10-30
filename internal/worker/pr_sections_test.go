@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
@@ -66,20 +67,20 @@ func sectionTrainWorld(t *testing.T, bodies []string) (*world, Env) {
 	for i, body := range bodies {
 		branch := fmt.Sprintf("w%d", i+1)
 		if i > 0 {
-			gitq(t, w.worker, "checkout", "-q", "-b", branch, "main")
+			gittest.Run(t, w.worker, "checkout", "-q", "-b", branch, "main")
 			file := fmt.Sprintf("work%d.txt", i+1)
 			if err := os.WriteFile(filepath.Join(w.worker, file), []byte(branch), 0644); err != nil {
 				t.Fatal(err)
 			}
-			gitq(t, w.worker, "add", file)
-			gitq(t, w.worker, "commit", "-qm", branch)
-			gitq(t, w.worker, "push", "-q", "origin", branch)
+			gittest.Run(t, w.worker, "add", file)
+			gittest.Run(t, w.worker, "commit", "-qm", branch)
+			gittest.Run(t, w.worker, "push", "-q", "origin", branch)
 		}
 		pw := *w
 		pw.forgeDB = filepath.Join(filepath.Dir(w.forgeDB), fmt.Sprintf("pr%d.json", i))
 		pw.forge("origin", w.origin)
 		pw.forge("head", branch)
-		pw.forge("sha", gitq(t, w.worker, "rev-parse", branch))
+		pw.forge("sha", gittest.Run(t, w.worker, "rev-parse", branch))
 		pw.forge("base", "main")
 		pw.forge("state", "OPEN")
 		pw.forge("body", body)

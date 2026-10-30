@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 const relayQueuedPR = "https://github.com/o/r/pull/9"
@@ -89,7 +91,7 @@ func TestDispatchRelayWithoutTargetFails(t *testing.T) {
 // relays of the slot holding the PR's issue are the log.
 func TestGateByPRNumberUsesRelaysOfTheSlotThatNeverRecordedIt(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.worker, "push", "-q", "origin", "w1:dana/5-x")
+	gittest.Run(t, w.worker, "push", "-q", "origin", "w1:dana/5-x")
 	w.forge("head", "dana/5-x")
 	w.setPRBody("Closes #5\n\n## Approvals\n- use the cache: orchestrator relay round 2\n")
 	relays := `[{"round":2,"ts":"2026-10-02T10:00:00Z","summary":"use the cache"}]`
@@ -106,7 +108,7 @@ func TestGateByPRNumberUsesRelaysOfTheSlotThatNeverRecordedIt(t *testing.T) {
 // relays: provenance matches on the exact branch only.
 func TestGateByPRNumberDoesNotInheritRelaysOfAnotherBranchWithTheSameIssue(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.worker, "push", "-q", "origin", "w1:dana/5-x")
+	gittest.Run(t, w.worker, "push", "-q", "origin", "w1:dana/5-x")
 	w.forge("head", "dana/5-x")
 	w.setPRBody("Closes #5\n\n## Approvals\n- use the cache: orchestrator relay round 2\n")
 	relays := `[{"round":2,"ts":"2026-10-02T10:00:00Z","summary":"use the cache"}]`

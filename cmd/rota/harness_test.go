@@ -90,18 +90,15 @@ func runMain(m *testing.M) int {
 		// No retry or bulk-write pauses: the rotatest build's seams (formerly the
 		// issues.retryWaitSeconds and issues.bulkPaceMs keys).
 		"ROTA_ISSUES_RETRY_WAIT_SECONDS=0", "ROTA_ISSUES_BULK_PACE_MS=0",
-		// No detached housekeeping in any repo a scenario touches: the fixture
-		// repos, their nested and bare repos, and the ones the binary creates.
-		// A background maintenance run deletes .git/objects/maintenance.lock
-		// while copyTree's cp walks the fixture ("cannot stat"), which failed
-		// a random TestFrozen* subtest on CI. gittest.Quiet sets the same keys
-		// per repo; env config reaches the repos Quiet never sees.
-		"GIT_CONFIG_COUNT=4",
-		"GIT_CONFIG_KEY_0=gc.auto", "GIT_CONFIG_VALUE_0=0",
-		"GIT_CONFIG_KEY_1=gc.autoDetach", "GIT_CONFIG_VALUE_1=false",
-		"GIT_CONFIG_KEY_2=maintenance.auto", "GIT_CONFIG_VALUE_2=false",
-		"GIT_CONFIG_KEY_3=receive.autogc", "GIT_CONFIG_VALUE_3=false",
+		// No detached housekeeping in any repo a scenario touches (nested and
+		// bare repos and the ones the binary creates): a background maintenance
+		// run deletes .git/objects/maintenance.lock while copyTree's cp walks the
+		// fixture ("cannot stat"), which failed a random TestFrozen* subtest on
+		// CI. Env config reaches the repos gittest.Quiet never sees.
 	}
+	baseEnv = append(baseEnv, gittest.QuietEnv()...)
+	// The pinned commit identity (its hashes are in the frozen records) for the fixture and for the binary under test.
+	baseEnv = append(baseEnv, gittest.FixtureIdentity...)
 	return m.Run()
 }
 
@@ -311,8 +308,6 @@ func (f fx) buildIn(t *testing.T, dir string) info {
 	t.Helper()
 	var in info
 	git(t, dir, "init", "-q", "-b", "main")
-	git(t, dir, "config", "user.name", "Fixture")
-	git(t, dir, "config", "user.email", "fixture@example.com")
 	git(t, dir, "config", "commit.gpgsign", "false")
 	if !f.noCommit {
 		write(t, dir, "README.md", "readme\n")
@@ -395,8 +390,6 @@ func (f fx) buildIn(t *testing.T, dir string) info {
 				t.Fatal(err)
 			}
 			git(t, sub, "init", "-q", "-b", "main")
-			git(t, sub, "config", "user.name", "Fixture")
-			git(t, sub, "config", "user.email", "fixture@example.com")
 			git(t, sub, "config", "commit.gpgsign", "false")
 			for k, subject := range f.subs[n] {
 				commitFile(t, sub, subject, fmt.Sprintf("f%d.txt", k), "x\n")

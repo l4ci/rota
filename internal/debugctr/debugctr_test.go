@@ -3,8 +3,8 @@ package debugctr
 import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -16,14 +16,9 @@ import (
 
 func repo(t *testing.T) string {
 	t.Helper()
-	dir, _ := filepath.EvalSymlinks(t.TempDir())
-	for _, a := range [][]string{{"init", "-q", "-b", "feat/x"}, {"-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "--allow-empty", "-m", "i"}} {
-		c := exec.Command("git", a...)
-		c.Dir = dir
-		if out, err := c.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", a, err, out)
-		}
-	}
+	dir := gittest.TempDir(t)
+	gittest.Init(t, dir, "feat/x")
+	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", "i")
 	os.MkdirAll(filepath.Join(dir, ".rota"), 0o777)
 	return dir
 }
@@ -135,7 +130,7 @@ func TestMissingSessionIsExit3(t *testing.T) {
 }
 
 func TestOpenOutsideGitIsExit5(t *testing.T) {
-	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	dir := gittest.TempDir(t)
 	if _, err := Open(dir, nil); exitOf(err) != 5 {
 		t.Errorf("got %v", err)
 	}

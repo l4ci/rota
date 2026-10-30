@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"os/exec"
 	"regexp"
@@ -208,34 +209,25 @@ func (f *fakeForge) PRRequestMerge(_ context.Context, pr int, o tracker.MergeOpt
 		return nil
 	}
 	t := w.t.TempDir()
-	g := func(args ...string) string {
-		cmd := exec.Command("git", append([]string{"-c", "user.name=f", "-c", "user.email=f@f"}, args...)...)
-		cmd.Dir = t
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			w.t.Fatalf("fake forge: git %v: %v\n%s", args, err, out)
-		}
-		return strings.TrimSpace(string(out))
-	}
 	target, head := w.forgeWord("base"), w.forgeWord("head")
 	if f := w.forgeWord("pushBeforeMerge"); f != "" { // the base moves between the gate's check and the merge
 		w.originCommit(f)
 	}
-	g("clone", "-q", w.forgeWord("origin"), ".")
+	gittest.Run(w.t, t, "clone", "-q", w.forgeWord("origin"), ".")
 	if target != "main" && w.mode != "elsewhere" { // a milestone base: merge onto it, not the clone's default branch
-		g("checkout", "-q", "-B", target, "origin/"+target)
+		gittest.Run(w.t, t, "checkout", "-q", "-B", target, "origin/"+target)
 	}
 	if w.mode == "elsewhere" {
 		target = "stack"
-		g("checkout", "-q", "-b", "stack", "origin/"+w.forgeWord("base"))
+		gittest.Run(w.t, t, "checkout", "-q", "-b", "stack", "origin/"+w.forgeWord("base"))
 	}
 	if w.mode == "ff" {
-		g("merge", "--ff-only", "-q", "origin/"+head)
+		gittest.Run(w.t, t, "merge", "--ff-only", "-q", "origin/"+head)
 	} else {
-		g("merge", "--no-ff", "-q", "-m", "merge pr", "origin/"+head)
-		w.forge("merge", g("rev-parse", "HEAD"))
+		gittest.Run(w.t, t, "merge", "--no-ff", "-q", "-m", "merge pr", "origin/"+head)
+		w.forge("merge", gittest.Run(w.t, t, "rev-parse", "HEAD"))
 	}
-	g("push", "-q", "origin", target)
+	gittest.Run(w.t, t, "push", "-q", "origin", target)
 	if f := w.forgeWord("pushAfterMerge"); f != "" { // someone lands work right after the merge
 		w.originCommit(f)
 	}

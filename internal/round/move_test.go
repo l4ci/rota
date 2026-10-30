@@ -69,8 +69,6 @@ func newMoveFx(t *testing.T) *moveFx {
 	f := &moveFx{now: time.Now(), host: &hostFake{}, forge: &fakeRemote{comments: map[string][]string{}}}
 	f.be = f.forge
 	f.root = newRepo(t, nil)
-	sh(t, f.root, "config", "user.email", "t@t")
-	sh(t, f.root, "config", "user.name", "t")
 	for p, c := range map[string]string{"skills/references/worker-contract.md": "contract", "internal/cli/round.go": "x"} {
 		if err := os.MkdirAll(filepath.Dir(filepath.Join(f.root, p)), 0o755); err != nil {
 			t.Fatal(err)
@@ -79,13 +77,13 @@ func newMoveFx(t *testing.T) *moveFx {
 			t.Fatal(err)
 		}
 	}
-	sh(t, f.root, "add", "internal", "skills")
-	sh(t, f.root, "commit", "-q", "-m", "files")
+	gittest.Run(t, f.root, "add", "internal", "skills")
+	gittest.Run(t, f.root, "commit", "-q", "-m", "files")
 	f.origin = filepath.Join(t.TempDir(), "origin.git")
-	sh(t, f.root, "init", "-q", "--bare", f.origin)
+	gittest.Run(t, f.root, "init", "-q", "--bare", f.origin)
 	gittest.Quiet(t, f.origin)
-	sh(t, f.root, "remote", "add", "origin", f.origin)
-	sh(t, f.root, "push", "-q", "origin", "main")
+	gittest.Run(t, f.root, "remote", "add", "origin", f.origin)
+	gittest.Run(t, f.root, "push", "-q", "origin", "main")
 	milestoneDoc(t, f.root, "M01", "active")
 
 	f.env = Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100), Round: roundcfg.Settings{StallMinutes: 30}, Forge: f.forge.asForge()}
@@ -123,8 +121,8 @@ func (f *moveFx) commit(t *testing.T, slot, file string) {
 	if err := os.WriteFile(filepath.Join(f.wt(slot), file), []byte(slot), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sh(t, f.wt(slot), "add", file)
-	sh(t, f.wt(slot), "commit", "-q", "-m", "work on "+file)
+	gittest.Run(t, f.wt(slot), "add", file)
+	gittest.Run(t, f.wt(slot), "commit", "-q", "-m", "work on "+file)
 }
 
 func (f *moveFx) assign(id, agent string) (Assigned, error) {
@@ -234,7 +232,7 @@ func TestParkFailedPushLeavesTheSlotAsFound(t *testing.T) {
 	branch := f.slot("ben").Branch()
 	os.WriteFile(filepath.Join(f.wt("ben"), "dirty.txt"), []byte("wip"), 0o644)
 	head := gitIn(t, f.wt("ben"), "rev-parse", "HEAD")
-	sh(t, f.root, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone.git"))
+	gittest.Run(t, f.root, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone.git"))
 
 	_, err := f.env.Park(bg, f.root, "ben", "return")
 	if exitOf(err) != exitcode.ExitUnavailable {
@@ -687,7 +685,7 @@ func TestReturnRepeatsAfterAFailureAndDoesNotCommentTwice(t *testing.T) {
 
 func TestReturnFailedPushLeavesEverythingAsFound(t *testing.T) {
 	f := newMoveFx(t)
-	sh(t, f.root, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone.git"))
+	gittest.Run(t, f.root, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone.git"))
 	if _, err := f.ret("ben", "x", nil); exitOf(err) != exitcode.ExitUnavailable {
 		t.Fatalf("%v", err)
 	}

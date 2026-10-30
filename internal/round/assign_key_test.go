@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -15,8 +16,8 @@ func TestAssignKeyedIssuesClaimBranchAndOverlap(t *testing.T) {
 	f := newAssignFixture(t)
 	os.MkdirAll(filepath.Join(f.root, "internal", "cli"), 0o755)
 	os.WriteFile(filepath.Join(f.root, "internal", "cli", "round.go"), []byte("x"), 0o644)
-	sh(t, f.root, "add", "internal/cli/round.go")
-	sh(t, f.root, "commit", "-q", "-m", "round.go")
+	gittest.Run(t, f.root, "add", "internal/cli/round.go")
+	gittest.Run(t, f.root, "commit", "-q", "-m", "round.go")
 	f.be.add("PROJ-123", "Widen the tracker seam", "M01", false, "## Acceptance\n- [ ] works\n\nedits internal/cli/round.go")
 	f.be.add("PROJ-124", "Another key", "M01", false, "## Acceptance\n- [ ] ok\n\nalso edits internal/cli/round.go")
 

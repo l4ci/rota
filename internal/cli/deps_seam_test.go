@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 // A swapped Deps.Git, Getenv and LookPath reach the round environment's base
@@ -109,17 +109,9 @@ func TestCtxRootReadsDepsGetwd(t *testing.T) {
 // repo that also has main.
 func TestDefaultRoundEnvBaseHonoursConfiguredBranch(t *testing.T) {
 	root := t.TempDir()
-	for _, args := range [][]string{
-		{"init", "-q", "-b", "main"},
-		{"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"},
-		{"branch", "develop"},
-	} {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = root
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
+	gittest.Init(t, root, "main")
+	gittest.Run(t, root, "commit", "-q", "--allow-empty", "-m", "init")
+	gittest.Run(t, root, "branch", "develop")
 	write(t, filepath.Join(root, ".rota", "config.json"), `{"git": {"baseBranch": "develop"}}`)
 	e := defaultRoundEnv(context.Background(), root, defaultDeps(), false)
 	if e.Base != "develop" {

@@ -2,8 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -110,9 +110,7 @@ func TestPlanVerbs(t *testing.T) {
 func TestPlanRenameCheckRunsInCwd(t *testing.T) {
 	dir := gitRepo(t) // no .rota needed, but gitRepo makes one; rename-check must not use it
 	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("oldname\n"), 0o644)
-	gitAdd := exec.Command("git", "add", "a.txt")
-	gitAdd.Dir = dir
-	gitAdd.Run()
+	gittest.Run(t, dir, "add", "a.txt")
 	code, out, _ := rotaIn(t, dir, "plan", "rename-check", "oldname", "--json")
 	if code != 0 || !strings.Contains(out, `"files": ["a.txt"]`) {
 		t.Errorf("%d %s", code, out)

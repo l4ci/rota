@@ -2,10 +2,11 @@ package cli
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 func editProject(t *testing.T, names ...string) string {
@@ -13,9 +14,7 @@ func editProject(t *testing.T, names ...string) string {
 	root := trackerProject(t, "")
 	root, _ = filepath.EvalSymlinks(root)
 	for _, n := range names {
-		if out, err := exec.Command("git", "init", "-q", filepath.Join(root, n)).CombinedOutput(); err != nil {
-			t.Fatalf("git init: %v\n%s", err, out)
-		}
+		gittest.Init(t, filepath.Join(root, n), "main")
 	}
 	return root
 }
@@ -54,7 +53,7 @@ func TestRepoAddRm(t *testing.T) {
 	}
 	// Name taken by another directory, and directory taken by another name.
 	os.Mkdir(filepath.Join(root, "other"), 0o755)
-	exec.Command("git", "init", "-q", filepath.Join(root, "other")).Run()
+	gittest.Init(t, filepath.Join(root, "other"), "main")
 	if code, _, _ = rotaRun(t, "-C", root, "repo", "add", "other", "--name", "web"); code != ExitRefused {
 		t.Fatalf("name clash: exit %d", code)
 	}

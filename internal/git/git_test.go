@@ -11,11 +11,6 @@ import (
 	"github.com/l4ci/rota/internal/gittest"
 )
 
-func mustGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	gittest.Run(t, dir, args...)
-}
-
 func newRepo(t *testing.T) string {
 	t.Helper()
 	dir := gittest.TempDir(t)
@@ -92,8 +87,8 @@ func TestQueries(t *testing.T) {
 	if _, ok, _ := r.LastCommitDate(ctx, "missing.txt"); ok {
 		t.Fatal("LastCommitDate of an untracked path should not be ok")
 	}
-	mustGit(t, dir, "branch", "spike/x")
-	mustGit(t, dir, "branch", "spike/y")
+	gittest.Run(t, dir, "branch", "spike/x")
+	gittest.Run(t, dir, "branch", "spike/y")
 	refs, ok, err := r.ForEachRef(ctx, "refs/heads/spike/")
 	if err != nil || !ok || strings.Join(refs, ",") != "spike/x,spike/y" {
 		t.Fatalf("ForEachRef = %v, %v, %v", refs, ok, err)
@@ -103,7 +98,7 @@ func TestQueries(t *testing.T) {
 func TestCommonDirOfLinkedWorktree(t *testing.T) {
 	dir := newRepo(t)
 	wt := filepath.Join(t.TempDir(), "wt")
-	mustGit(t, dir, "worktree", "add", "-q", "-b", "side", wt)
+	gittest.Run(t, dir, "worktree", "add", "-q", "-b", "side", wt)
 	got, ok, err := CommonDirVia(context.Background(), Exec, wt)
 	if err != nil || !ok || got != filepath.Join(dir, ".git") {
 		t.Fatalf("CommonDir = %q, %v, %v; want %s", got, ok, err, filepath.Join(dir, ".git"))

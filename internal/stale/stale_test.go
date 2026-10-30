@@ -3,13 +3,13 @@ package stale
 import (
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/mapqa"
 	"github.com/l4ci/rota/internal/pystr"
 )
@@ -37,26 +37,15 @@ func TestDaysBetween(t *testing.T) {
 func project(t *testing.T, files map[string]string) string {
 	t.Helper()
 	root := t.TempDir()
-	run := func(args ...string) {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = root
-		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	run("init", "-q", "-b", "main")
-	run("config", "user.name", "T")
-	run("config", "user.email", "t@example.com")
-	run("config", "commit.gpgsign", "false")
+	gittest.Init(t, root, "main")
 	os.WriteFile(filepath.Join(root, "x"), []byte("x"), 0o644)
 	for p, c := range files {
 		full := filepath.Join(root, filepath.FromSlash(p))
 		os.MkdirAll(filepath.Dir(full), 0o755)
 		os.WriteFile(full, []byte(c), 0o644)
 	}
-	run("add", "-A")
-	run("commit", "-q", "-m", "init")
+	gittest.Run(t, root, "add", "-A")
+	gittest.Run(t, root, "commit", "-q", "-m", "init")
 	return root
 }
 

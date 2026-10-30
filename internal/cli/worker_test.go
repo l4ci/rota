@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/ledger"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/worker"
@@ -32,10 +32,6 @@ func hostTripwire(t *testing.T) {
 		}
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	// the gate's local merge commits as the caller; CI runners have no identity
-	for k, v := range map[string]string{"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"} {
-		t.Setenv(k, v)
-	}
 	for _, k := range []string{"TMUX", "TMUX_PANE", "HERDR_ENV", "HERDR_WORKSPACE_ID", "HERDR_PANE_ID", "HERDR_SOCKET_PATH", "ROTA_ACCOUNT_USAGE_DIR"} {
 		t.Setenv(k, "")
 		os.Unsetenv(k)
@@ -51,18 +47,11 @@ func workerProject(t *testing.T, cfg string) string {
 	t.Helper()
 	hostTripwire(t)
 	dir := gitRepo(t)
-	run := func(args ...string) {
-		c := exec.Command("git", args...)
-		c.Dir = dir
-		if out, err := c.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", args, err, out)
-		}
-	}
-	run("branch", "-m", "main")
+	gittest.Run(t, dir, "branch", "-m", "main")
 	os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".worktrees/\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(cfg), 0o644)
-	run("add", ".gitignore")
-	run("-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "-m", "ignore")
+	gittest.Run(t, dir, "add", ".gitignore")
+	gittest.Run(t, dir, "commit", "-q", "-m", "ignore")
 	return dir
 }
 
@@ -405,11 +394,7 @@ func TestWorkerGateVerb(t *testing.T) {
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	git := func(d string, args ...string) {
 		t.Helper()
-		c := exec.Command("git", append([]string{"-c", "user.email=a@b", "-c", "user.name=n"}, args...)...)
-		c.Dir = d
-		if out, err := c.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", args, err, out)
-		}
+		gittest.Run(t, d, args...)
 	}
 	if code, _, _ := rotaIn(t, dir, "worker", "gate", "w1"); code != 2 {
 		t.Errorf("no --base: %d", code)
@@ -604,8 +589,8 @@ func TestWorkerGateAndTrainLedgerRowsTakeDepsNow(t *testing.T) {
 		rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 		wt := filepath.Join(dir, ".worktrees", "w1")
 		write(t, filepath.Join(wt, file), "f")
-		gitT(t, wt, "add", file)
-		gitT(t, wt, "commit", "-q", "-m", "work")
+		gittest.Run(t, wt, "add", file)
+		gittest.Run(t, wt, "commit", "-q", "-m", "work")
 		return dir
 	}
 
@@ -648,8 +633,8 @@ func TestMergeApprovalAuditLineTakesDepsNow(t *testing.T) {
 	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	write(t, filepath.Join(wt, "feature.txt"), "f")
-	gitT(t, wt, "add", "feature.txt")
-	gitT(t, wt, "commit", "-q", "-m", "feature")
+	gittest.Run(t, wt, "add", "feature.txt")
+	gittest.Run(t, wt, "commit", "-q", "-m", "feature")
 	if code, out, _ := rotaIn(t, dir, "--json", "worker", "gate", "w1", "--base", "main", "--confirm", "--confirm-note", "ok"); code != 0 {
 		t.Fatalf("gate: %d %s", code, out)
 	}
@@ -666,8 +651,8 @@ func TestFileModeProofDoesNotDirtySlot(t *testing.T) {
 	dir := workerProject(t, `{}`)
 	os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".worktrees/\n.rota/**/*.proof\n.rota/**/*.lock\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, ".rota", "BACKLOG.md"), []byte("# Backlog\n\n## Bugs\n\n- **[B07] [Major] Parser.** Unclear.\n"), 0o644)
-	gitIn(t, dir, "add", ".gitignore", ".rota/BACKLOG.md")
-	gitIn(t, dir, "commit", "-q", "-m", "backlog")
+	gittest.Run(t, dir, "add", ".gitignore", ".rota/BACKLOG.md")
+	gittest.Run(t, dir, "commit", "-q", "-m", "backlog")
 	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	if code, out, errOut := rotaIn(t, dir, "worker", "reset", "w1", "--task", "B07", "--json"); code != 0 {
@@ -677,7 +662,7 @@ func TestFileModeProofDoesNotDirtySlot(t *testing.T) {
 	if code, out, errOut := rotaIn(t, wt, "proof", "add", "B07", "--check", "true", "--result", "PASS", "--evidence", "ok", "--json"); code != 0 {
 		t.Fatalf("proof add: %d %s %s", code, out, errOut)
 	}
-	if out, _ := exec.Command("git", "-C", wt, "status", "--porcelain").Output(); strings.TrimSpace(string(out)) != "" {
+	if out := gittest.Run(t, wt, "status", "--porcelain"); out != "" {
 		t.Fatalf("proof row dirtied the worktree:\n%s", out)
 	}
 	code, out, errOut := rotaIn(t, dir, "worker", "reset", "w1", "--check-only", "--json")

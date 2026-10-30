@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,7 +34,7 @@ func (w *world) ciGate(o GateOpts) (GateResult, error) {
 }
 
 func (w *world) ciBranches() string {
-	return gitq(w.t, w.origin, "for-each-ref", "refs/heads/rota/ci/")
+	return gittest.Run(w.t, w.origin, "for-each-ref", "refs/heads/rota/ci/")
 }
 
 // onOriginMain reports whether file is in origin/main's tree.
@@ -98,7 +99,7 @@ func TestGateCIPR(t *testing.T) {
 
 func TestGateCINoPR(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	w.setConfig(ciCfg)
 	res, err := w.ciGate(GateOpts{})
 	if err != nil || res.Verdict != GatePass || !w.onMain("work.txt") {
@@ -123,7 +124,7 @@ func TestGateCINoVerifySkipsCI(t *testing.T) {
 
 func TestGateCIBadFullWhere(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	w.setConfig(`{"test":{"fullWhere":"bogus"}}`)
 	_, err := w.ciGate(GateOpts{})
 	we, _ := err.(*exitcode.Error)
@@ -134,8 +135,8 @@ func TestGateCIBadFullWhere(t *testing.T) {
 
 func TestGateCINoOrigin(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
-	gitq(t, w.dir, "remote", "remove", "origin")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "remote", "remove", "origin")
 	w.setConfig(ciCfg)
 	res, err := w.ciGate(GateOpts{})
 	if err != nil || res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "origin") {
@@ -382,10 +383,10 @@ func TestGateCIConfigChanged(t *testing.T) {
 	w.setConfig(ciCfg)
 	os.MkdirAll(filepath.Join(w.worker, ".github", "workflows"), 0o755)
 	os.WriteFile(filepath.Join(w.worker, ".github", "workflows", "ci.yml"), []byte("on: push\n"), 0o644)
-	gitq(t, w.worker, "add", ".github")
-	gitq(t, w.worker, "commit", "-q", "-m", "ci")
-	gitq(t, w.worker, "push", "-q", "origin", "w1")
-	w.forge("sha", gitq(t, w.worker, "rev-parse", "HEAD"))
+	gittest.Run(t, w.worker, "add", ".github")
+	gittest.Run(t, w.worker, "commit", "-q", "-m", "ci")
+	gittest.Run(t, w.worker, "push", "-q", "origin", "w1")
+	w.forge("sha", gittest.Run(t, w.worker, "rev-parse", "HEAD"))
 	res, err := w.ciGate(GateOpts{})
 	if err != nil || res.Verdict != GateCIConfigChanged || w.forgeWord("state") != "OPEN" || !strings.Contains(res.Err, ".github/workflows/ci.yml") {
 		t.Fatalf("%+v %v", res, err)
@@ -397,9 +398,9 @@ func TestGateCIConfigChanged(t *testing.T) {
 
 func TestTrainCIConfigChanged(t *testing.T) {
 	w := trainWorld(t, "true", "b1", "b2")
-	gitq(t, w.dir, "checkout", "-q", "b2")
+	gittest.Run(t, w.dir, "checkout", "-q", "b2")
 	trainWrite(t, w, ".gitlab-ci.yml", "test: {script: [true]}")
-	gitq(t, w.dir, "checkout", "-q", "main")
+	gittest.Run(t, w.dir, "checkout", "-q", "main")
 	w.setConfig(ciCfg)
 	res, err := w.ciEnv().Train(bg, w.dir, TrainOpts{Targets: []string{"b1", "b2"}, Base: "main"})
 	if err != nil || res.Verdict != GateCIConfigChanged || len(res.Landed) != 0 || !strings.Contains(res.Err, ".gitlab-ci.yml") {
@@ -425,19 +426,19 @@ func TestGateCIConfigRenamedOrQuoted(t *testing.T) {
 			wf := filepath.Join(w.dir, ".github", "workflows")
 			os.MkdirAll(wf, 0o755)
 			os.WriteFile(filepath.Join(wf, "ci.yml"), []byte("on: push\n"), 0o644)
-			gitq(t, w.dir, "add", ".github")
-			gitq(t, w.dir, "commit", "-q", "-m", "ci")
-			gitq(t, w.dir, "push", "-q", "origin", "main")
-			gitq(t, w.worker, "pull", "-q", "--no-rebase", "origin", "main")
+			gittest.Run(t, w.dir, "add", ".github")
+			gittest.Run(t, w.dir, "commit", "-q", "-m", "ci")
+			gittest.Run(t, w.dir, "push", "-q", "origin", "main")
+			gittest.Run(t, w.worker, "pull", "-q", "--no-rebase", "origin", "main")
 			if c.setup == "rename" {
-				gitq(t, w.worker, "mv", ".github/workflows/ci.yml", "disabled.yml")
+				gittest.Run(t, w.worker, "mv", ".github/workflows/ci.yml", "disabled.yml")
 			} else {
 				os.WriteFile(filepath.Join(w.worker, ".github", "workflows", "\u00e9.yml"), []byte("on: push\n"), 0o644)
-				gitq(t, w.worker, "add", ".github")
+				gittest.Run(t, w.worker, "add", ".github")
 			}
-			gitq(t, w.worker, "commit", "-q", "-m", c.name)
-			gitq(t, w.worker, "push", "-q", "origin", "w1")
-			w.forge("sha", gitq(t, w.worker, "rev-parse", "HEAD"))
+			gittest.Run(t, w.worker, "commit", "-q", "-m", c.name)
+			gittest.Run(t, w.worker, "push", "-q", "origin", "w1")
+			w.forge("sha", gittest.Run(t, w.worker, "rev-parse", "HEAD"))
 			w.setConfig(ciCfg)
 			res, err := w.ciGate(GateOpts{})
 			if err != nil || res.Verdict != GateCIConfigChanged || !strings.Contains(res.Err, c.want) {
@@ -452,17 +453,17 @@ func TestGateCIConfigRenamedOrQuoted(t *testing.T) {
 func (w *world) originCommit(file string) {
 	w.t.Helper()
 	d := w.t.TempDir()
-	gitq(w.t, d, "clone", "-q", w.origin, ".")
+	gittest.Run(w.t, d, "clone", "-q", w.origin, ".")
 	os.WriteFile(filepath.Join(d, file), []byte(file+"\n"), 0o644)
-	gitq(w.t, d, "add", file)
-	gitq(w.t, d, "commit", "-q", "-m", "add "+file)
-	gitq(w.t, d, "push", "-q", "origin", "HEAD:main")
+	gittest.Run(w.t, d, "add", file)
+	gittest.Run(w.t, d, "commit", "-q", "-m", "add "+file)
+	gittest.Run(w.t, d, "push", "-q", "origin", "HEAD:main")
 }
 
 // scratchTrees lists the worktrees of the gate checkout other than itself.
 func (w *world) scratchTrees() []string {
 	var extra []string
-	for _, l := range strings.Split(gitq(w.t, w.dir, "worktree", "list", "--porcelain"), "\n") {
+	for _, l := range strings.Split(gittest.Run(w.t, w.dir, "worktree", "list", "--porcelain"), "\n") {
 		if p, ok := strings.CutPrefix(l, "worktree "); ok && p != w.dir {
 			extra = append(extra, p)
 		}

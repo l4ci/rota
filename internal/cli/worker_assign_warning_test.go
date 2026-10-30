@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"github.com/l4ci/rota/internal/gittest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -36,8 +37,8 @@ func TestWorkerGateTrainAssignWarning(t *testing.T) {
 				}
 				wt := filepath.Join(dir, ".worktrees", "w1")
 				write(t, filepath.Join(wt, "feature.txt"), "feature")
-				gitT(t, wt, "add", "feature.txt")
-				gitT(t, wt, "commit", "-q", "-m", "feature")
+				gittest.Run(t, wt, "add", "feature.txt")
+				gittest.Run(t, wt, "commit", "-q", "-m", "feature")
 				if _, err := worker.UpdateSlot(dir, "w1", func(s *worker.Slot) { s.MarkState("busy", "") }); err != nil {
 					t.Fatal(err)
 				}

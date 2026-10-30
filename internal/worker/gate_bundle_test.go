@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,7 +81,7 @@ func TestGateClosesAfterBundleLeadPromotion(t *testing.T) {
 			t.Run(fmt.Sprintf("queued=%t/%s", queued, tc.name), func(t *testing.T) {
 				w := newWorld(t, ghURL)
 				branch := "ben/5-bundle"
-				gitq(t, w.worker, "push", "-q", "origin", "w1:refs/heads/"+branch)
+				gittest.Run(t, w.worker, "push", "-q", "origin", "w1:refs/heads/"+branch)
 				w.forge("head", branch)
 				reg := fmt.Sprintf(`{"slots":[{"name":"w1","branch":%q,"task":"5","pr":%q,"bundle":["6","7"]}]}`, branch, ghURL)
 				if queued {

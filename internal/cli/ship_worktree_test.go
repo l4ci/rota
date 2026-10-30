@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/status"
 )
 
@@ -19,11 +20,11 @@ func TestShipPRPreservesSlotWorktree(t *testing.T) {
 			t.Run(where+map[bool]string{false: "/clean", true: "/dirty"}[dirty], func(t *testing.T) {
 				seed := shipFixture(t, "")
 				work := filepath.Join(t.TempDir(), "clone")
-				gitT(t, seed, "clone", "-q", "--no-local", seed, work)
+				gittest.Run(t, seed, "clone", "-q", "--no-local", seed, work)
 				branch := "nia/366-ship-worktree"
 				shipBranchOf(t, work, branch, [3]string{"feature.txt", "feat: work", ""})
 				wt := filepath.Join(work, ".worktrees", "nia")
-				gitT(t, work, "worktree", "add", "-q", wt, branch)
+				gittest.Run(t, work, "worktree", "add", "-q", wt, branch)
 				write(t, filepath.Join(work, ".rota", "workers.json"), `{"slots":[{"name":"nia","worktree":".worktrees/nia"}]}`)
 				if dirty {
 					write(t, filepath.Join(wt, "feature.txt"), "uncommitted\n")
@@ -36,7 +37,7 @@ func TestShipPRPreservesSlotWorktree(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				before := gitT(t, work, "worktree", "list", "--porcelain")
+				before := gittest.Run(t, work, "worktree", "list", "--porcelain")
 				o := trRunWith(t, useForge(t, shipPRForge("https://example.test/pull/366")), dir, "body", "ship", "pr", branch, "--title", "Fix", "--body-file", "-")
 				if o.code != 0 {
 					t.Errorf("ship pr: exit %d: %s", o.code, o.stderr)
@@ -44,7 +45,7 @@ func TestShipPRPreservesSlotWorktree(t *testing.T) {
 				if _, err := os.Stat(filepath.Join(wt, "feature.txt")); err != nil {
 					t.Fatalf("slot worktree was removed: %v", err)
 				}
-				if got := gitT(t, work, "worktree", "list", "--porcelain"); got != before {
+				if got := gittest.Run(t, work, "worktree", "list", "--porcelain"); got != before {
 					t.Errorf("worktrees changed:\n%s", got)
 				}
 				if _, err := os.Stat(dir); err != nil {
@@ -72,11 +73,11 @@ func TestShipMergeProtectsWorktrees(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			seed := shipFixture(t, "")
 			work := filepath.Join(t.TempDir(), "clone")
-			gitT(t, seed, "clone", "-q", "--no-local", seed, work)
+			gittest.Run(t, seed, "clone", "-q", "--no-local", seed, work)
 			branch := "nia/366-ship-worktree"
 			shipBranchOf(t, work, branch, [3]string{"feature.txt", "feat: work", ""})
 			wt := filepath.Join(work, ".claude", "worktrees", branch)
-			gitT(t, work, "worktree", "add", "-q", wt, branch)
+			gittest.Run(t, work, "worktree", "add", "-q", wt, branch)
 			if kind != "unregistered" {
 				rel, _ := filepath.Rel(work, wt)
 				if _, err := status.Add(work, time.Now(), branch, "", nil, rel, false); err != nil {
@@ -105,7 +106,7 @@ func TestShipMergeProtectsWorktrees(t *testing.T) {
 			case "tracked", "staged":
 				write(t, filepath.Join(wt, "feature.txt"), "uncommitted\n")
 				if kind == "staged" {
-					gitT(t, wt, "add", "feature.txt")
+					gittest.Run(t, wt, "add", "feature.txt")
 				}
 			case "untracked", "ignored":
 				write(t, filepath.Join(wt, "scratch.txt"), "uncommitted\n")
@@ -113,8 +114,8 @@ func TestShipMergeProtectsWorktrees(t *testing.T) {
 					write(t, filepath.Join(work, ".git", "info", "exclude"), "scratch.txt\n")
 				}
 			}
-			head := gitT(t, work, "rev-parse", "main")
-			before := gitT(t, wt, "status", "--porcelain", "--untracked-files=all", "--ignored")
+			head := gittest.Run(t, work, "rev-parse", "main")
+			before := gittest.Run(t, wt, "status", "--porcelain", "--untracked-files=all", "--ignored")
 			o := trRun(t, dir, "merge: work", "ship", "merge", branch, "--body-file", "-")
 			if kind == "owned" {
 				if o.code != 0 {
@@ -131,10 +132,10 @@ func TestShipMergeProtectsWorktrees(t *testing.T) {
 			if _, err := os.Stat(filepath.Join(wt, "feature.txt")); err != nil {
 				t.Fatalf("worktree removed: %v", err)
 			}
-			if got := gitT(t, wt, "status", "--porcelain", "--untracked-files=all", "--ignored"); got != before {
+			if got := gittest.Run(t, wt, "status", "--porcelain", "--untracked-files=all", "--ignored"); got != before {
 				t.Errorf("worktree changed: %s", got)
 			}
-			if got := gitT(t, work, "rev-parse", "main"); got != head {
+			if got := gittest.Run(t, work, "rev-parse", "main"); got != head {
 				t.Errorf("refused merge changed main")
 			}
 		})

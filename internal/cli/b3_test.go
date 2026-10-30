@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/verdict"
 )
 
@@ -34,7 +35,7 @@ func TestShipPRRefusedByVerdict(t *testing.T) {
 	shipBranchOf(t, work, "feat/x", [3]string{"x.txt", "work", ""})
 	f := shipPRForge("https://github.com/fake/repo/pull/1")
 	deps := useForge(t, f)
-	tip := gitT(t, work, "rev-parse", "--short", "feat/x")
+	tip := gittest.Run(t, work, "rev-parse", "--short", "feat/x")
 
 	b3Record(t, work, "feat/x", verdict.ReviewQuality, verdict.Fail, "old1234")
 	o, env := b3ShipPRWith(t, deps, work)
@@ -46,7 +47,7 @@ func TestShipPRRefusedByVerdict(t *testing.T) {
 	if !strings.Contains(o.stdout, "rota verdict show feat/x") {
 		t.Errorf("hint missing: %s", o.stdout)
 	}
-	if len(f.calls) != 0 || gitT(t, work, "ls-remote", "origin", "feat/x") != "" {
+	if len(f.calls) != 0 || gittest.Run(t, work, "ls-remote", "origin", "feat/x") != "" {
 		t.Errorf("a refused ship pushed or called the forge: %q", f.calls)
 	}
 
@@ -66,13 +67,13 @@ func TestShipMergeRefusedByVerdict(t *testing.T) {
 	work := shipFixture(t, "")
 	shipBranchOf(t, work, "feat/x", [3]string{"x.txt", "work", ""})
 	b3Record(t, work, "feat/x", verdict.SecondOpinion, verdict.Fail, "abc1234")
-	head := gitT(t, work, "rev-parse", "HEAD")
+	head := gittest.Run(t, work, "rev-parse", "HEAD")
 	o := trRun(t, work, "merge: x\n", "ship", "merge", "feat/x", "--body-file", "-", "--json")
 	d, _ := envelope(t, o.stdout)["data"].(map[string]any)
 	if o.code != 4 || d["blockedBy"] != "verdict" || d["kind"] != "second-opinion" || d["changed"] != false {
 		t.Fatalf("exit %d data %v", o.code, d)
 	}
-	if gitT(t, work, "rev-parse", "HEAD") != head || gitT(t, work, "branch", "--list", "feat/x") == "" {
+	if gittest.Run(t, work, "rev-parse", "HEAD") != head || gittest.Run(t, work, "branch", "--list", "feat/x") == "" {
 		t.Error("a refused merge changed the repo")
 	}
 	// CONCERNS never blocks.
@@ -239,7 +240,7 @@ func TestAutoLoopFlagRemoved(t *testing.T) {
 // verdict add stamps the record from Deps.Now, not the wall clock.
 func TestVerdictAddUsesInjectedClock(t *testing.T) {
 	dir := gitRepo(t)
-	gitT(t, dir, "branch", "main")
+	gittest.Run(t, dir, "branch", "main")
 	d := testDeps()
 	d.Now = func() time.Time { return testNow }
 	code, out, errOut := rotaInWith(t, d, dir, "verdict", "add", "--kind", "review-spec", "--verdict", "PASS", "--json")

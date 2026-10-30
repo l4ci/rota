@@ -22,11 +22,6 @@ import (
 
 var bg = context.Background()
 
-func sh(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	gittest.Run(t, dir, args...)
-}
-
 // newRepo is a project root on main with one worktree per entry of branches
 // (name -> branch); a branch with "+" suffix in the map value gets a commit.
 func newRepo(t *testing.T, branches map[string]string, ahead ...string) string {
@@ -39,19 +34,19 @@ func newRepo(t *testing.T, branches map[string]string, ahead ...string) string {
 	if err := os.WriteFile(filepath.Join(root, "seed"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sh(t, root, "add", "seed")
-	sh(t, root, "commit", "-q", "-m", "seed")
+	gittest.Run(t, root, "add", "seed")
+	gittest.Run(t, root, "commit", "-q", "-m", "seed")
 	for name, br := range branches {
 		wt := filepath.Join(root, ".worktrees", name)
-		sh(t, root, "worktree", "add", "-q", "-b", br, wt, "main")
+		gittest.Run(t, root, "worktree", "add", "-q", "-b", br, wt, "main")
 	}
 	for _, name := range ahead {
 		wt := filepath.Join(root, ".worktrees", name)
 		if err := os.WriteFile(filepath.Join(wt, "work"), []byte(name), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		sh(t, wt, "add", "work")
-		sh(t, wt, "commit", "-q", "-m", "work")
+		gittest.Run(t, wt, "add", "work")
+		gittest.Run(t, wt, "commit", "-q", "-m", "work")
 	}
 	return root
 }

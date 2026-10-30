@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"github.com/l4ci/rota/internal/gittest"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -80,12 +81,12 @@ func TestLinearRoundAssign(t *testing.T) {
 func TestLinearWorkerGate(t *testing.T) {
 	dir := workerProject(t, `{"ship":{"review":"none"},"forge":{"provider":"github"},"issues":{"source":"linear","connection":"work","linear":{"team":"ENG"}}}`)
 	origin := filepath.Join(t.TempDir(), "origin.git")
-	gitT(t, dir, "init", "-q", "--bare", "-b", "main", origin)
-	gitT(t, dir, "remote", "add", "origin", origin)
-	gitT(t, dir, "push", "-q", "origin", "main")
+	gittest.Run(t, dir, "init", "-q", "--bare", "-b", "main", origin)
+	gittest.Run(t, dir, "remote", "add", "origin", origin)
+	gittest.Run(t, dir, "push", "-q", "origin", "main")
 	deps := testDeps()
 	rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
-	gitT(t, dir, "push", "-q", "origin", "rota-worker/w1")
+	gittest.Run(t, dir, "push", "-q", "origin", "rota-worker/w1")
 	doc := registryDoc(t, dir)
 	slot := doc["slots"].([]any)[0].(map[string]any)
 	slot["task"], slot["pr"] = "ENG-1", "https://github.com/o/r/pull/42"
@@ -97,7 +98,7 @@ func TestLinearWorkerGate(t *testing.T) {
 	if _, err := it.Create(context.Background(), "Widen", "## Acceptance\n- [ ] ok\n", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	sha := strings.TrimSpace(gitT(t, dir, "rev-parse", "origin/rota-worker/w1"))
+	sha := strings.TrimSpace(gittest.Run(t, dir, "rev-parse", "origin/rota-worker/w1"))
 	title := "unrelated change"
 	deps.WorkerEnv = func() worker.Env {
 		return worker.Env{Forge: func(string, string, tracker.Settings) (worker.Forge, error) {

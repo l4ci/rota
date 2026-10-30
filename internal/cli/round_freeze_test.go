@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,8 +95,8 @@ func TestRoundFreezeRefusalExitCodes(t *testing.T) {
 					}
 					wt := filepath.Join(root, ".worktrees", "w1")
 					write(t, filepath.Join(wt, "feature.txt"), "f")
-					gitT(t, wt, "add", "feature.txt")
-					gitT(t, wt, "commit", "-q", "-m", "feature")
+					gittest.Run(t, wt, "add", "feature.txt")
+					gittest.Run(t, wt, "commit", "-q", "-m", "feature")
 					p := seedFreeze(t, root, "main")
 					if broken {
 						write(t, p, `{`)

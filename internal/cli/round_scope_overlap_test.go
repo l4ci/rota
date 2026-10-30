@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -45,9 +45,7 @@ func newScopeFx(t *testing.T, overlap string, extraCfg string) *scopeFx {
 	write(t, filepath.Join(root, "skills", "references", "worker-contract.md"), "contract")
 	// dana is idle on her parked worktree; ben holds #1.
 	wt := filepath.Join(t.TempDir(), "dana")
-	if out, err := exec.Command("git", "-C", root, "worktree", "add", "-q", "-b", "park/dana", wt).CombinedOutput(); err != nil {
-		t.Fatalf("worktree: %v %s", err, out)
-	}
+	gittest.Run(t, root, "worktree", "add", "-q", "-b", "park/dana", wt)
 	write(t, filepath.Join(root, ".rota", "workers.json"),
 		`{"architectureReview":{"at":"2020-01-01T00:00:00Z"},"slots":[{"name":"ben","task":"1","branch":"ben/1-holder"},{"name":"dana","branch":"park/dana","base":"feat/x","worktree":"`+wt+`"}]}`)
 	body := "## Acceptance\\n- [ ] x\\n\\n## Touches\\n- POST /items\\n"

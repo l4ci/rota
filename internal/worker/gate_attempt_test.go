@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,14 +15,14 @@ import (
 func (w *world) pushStamped(file, attempt string) string {
 	w.t.Helper()
 	os.WriteFile(filepath.Join(w.worker, file), []byte(file+"\n"), 0o644)
-	gitq(w.t, w.worker, "add", file)
+	gittest.Run(w.t, w.worker, "add", file)
 	msg := "work on " + file
 	if attempt != "" {
 		msg += "\n\n" + AttemptTrailer + ": " + attempt
 	}
-	gitq(w.t, w.worker, "commit", "-q", "-m", msg)
-	gitq(w.t, w.worker, "push", "-q", "origin", "w1")
-	sha := gitq(w.t, w.worker, "rev-parse", "HEAD")
+	gittest.Run(w.t, w.worker, "commit", "-q", "-m", msg)
+	gittest.Run(w.t, w.worker, "push", "-q", "origin", "w1")
+	sha := gittest.Run(w.t, w.worker, "rev-parse", "HEAD")
 	w.forge("sha", sha)
 	return sha
 }
@@ -75,11 +76,11 @@ func TestGateRefusesACommitFromASupersededAttempt(t *testing.T) {
 			base := w.pushStamped("a.txt", old)
 			w.setAttemptSlot(cur, base)
 			os.WriteFile(filepath.Join(w.dir, "other.txt"), []byte("other\n"), 0o644)
-			gitq(w.t, w.dir, "add", "other.txt")
-			gitq(w.t, w.dir, "commit", "-q", "-m", "other work\n\n"+AttemptTrailer+": cccccccc")
-			gitq(w.t, w.dir, "push", "-q", "origin", "main")
-			gitq(w.t, w.worker, "fetch", "-q", "origin")
-			gitq(w.t, w.worker, "merge", "-q", "--no-edit", "origin/main")
+			gittest.Run(w.t, w.dir, "add", "other.txt")
+			gittest.Run(w.t, w.dir, "commit", "-q", "-m", "other work\n\n"+AttemptTrailer+": cccccccc")
+			gittest.Run(w.t, w.dir, "push", "-q", "origin", "main")
+			gittest.Run(w.t, w.worker, "fetch", "-q", "origin")
+			gittest.Run(w.t, w.worker, "merge", "-q", "--no-edit", "origin/main")
 			w.pushStamped("b.txt", cur)
 		}, true, GateFresh},
 		{"inherited tip no longer an ancestor is not judged", func(w *world) {

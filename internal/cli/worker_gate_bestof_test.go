@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -22,8 +23,8 @@ func TestWorkerGateAndTrainRefuseAnUnpickedBestOf(t *testing.T) {
 	}
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	write(t, filepath.Join(wt, "feature.txt"), "f")
-	gitT(t, wt, "add", "feature.txt")
-	gitT(t, wt, "commit", "-q", "-m", "feature")
+	gittest.Run(t, wt, "add", "feature.txt")
+	gittest.Run(t, wt, "commit", "-q", "-m", "feature")
 	for _, args := range [][]string{
 		{"worker", "gate", "w1", "--base", "main"},
 		{"worker", "gate", "w1", "--base", "main", "--check-only"},

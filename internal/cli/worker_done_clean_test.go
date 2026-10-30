@@ -2,19 +2,9 @@ package cli
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 )
-
-func runGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	c := exec.Command("git", append([]string{"-c", "user.email=a@b", "-c", "user.name=n"}, args...)...)
-	c.Dir = dir
-	if out, err := c.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v %s", args, err, out)
-	}
-}
 
 // TestWorkerDoneNeedsACleanPushedBranch: done is the worker's last action, so
 // a dirty worktree, an unpushed branch or a HEAD past the pushed branch is refused (#1529).

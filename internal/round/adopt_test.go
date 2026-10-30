@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"os"
 	"path/filepath"
@@ -55,7 +56,7 @@ func TestAdoptRegistersExternalSlot(t *testing.T) {
 		t.Error("adopt left no ledger record, so reap cannot tell the branch was adopted")
 	}
 	// A second adoption takes the next free name.
-	sh(t, root, "branch", "other-work")
+	gittest.Run(t, root, "branch", "other-work")
 	if res, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "other-work", Issue: "13", AcceptOverlap: true}); err != nil || res.Slot != "ext-2" || res.Worktree != "" {
 		t.Errorf("second: %v %+v", err, res)
 	}

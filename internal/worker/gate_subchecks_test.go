@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"strings"
 	"testing"
@@ -36,7 +37,7 @@ func TestGateRecordsSubcheckRecovery(t *testing.T) {
 			calls, tree := 0, ""
 			e.Shell = func(_ context.Context, dir, command string) (string, int) {
 				calls++
-				tree = gitq(t, dir, "rev-parse", "HEAD^{tree}")
+				tree = gittest.Run(t, dir, "rev-parse", "HEAD^{tree}")
 				return subcheckMarker(t, tc.check, tc.first, "ok\n") + "All smoke tests passed.\n", 0
 			}
 			r, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
