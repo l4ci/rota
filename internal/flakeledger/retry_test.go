@@ -2,6 +2,7 @@ package flakeledger
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -29,6 +30,21 @@ func TestRetryEligible(t *testing.T) {
 		tests, ok := RetryEligible(c.code, c.out, c.excused)
 		if ok != c.wantOK || !reflect.DeepEqual(tests, c.wantTest) {
 			t.Errorf("%s: got (%v, %v), want (%v, %v)", c.name, tests, ok, c.wantTest, c.wantOK)
+		}
+	}
+}
+
+// Every line of the shared marker file must reach the compiled rule; the
+// Python gate helper reads the same file, so this pins both languages.
+func TestInfrastructureMarkersAllTakeEffect(t *testing.T) {
+	lines := strings.Split(strings.TrimSpace(infrastructureMarkers), "\n")
+	if len(lines) < 10 {
+		t.Fatalf("marker file has %d lines", len(lines))
+	}
+	for _, m := range lines {
+		sample := strings.NewReplacer(`\b`, "", `\[`, "[", `\]`, "]", "^", "").Replace(m)
+		if _, ok := RetryEligible(1, assertionFail+sample+"\n", false); ok {
+			t.Errorf("marker %q (sample %q) did not block retry", m, sample)
 		}
 	}
 }

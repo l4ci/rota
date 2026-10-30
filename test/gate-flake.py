@@ -1,4 +1,6 @@
-"""Emit one bounded, single-line recovery record for the shared verifier."""
+"""Emit one bounded, single-line recovery record for the shared verifier.
+
+The ROTA-FLAKY wire format is defined in internal/worker/gate_subchecks.go."""
 import json
 from pathlib import Path
 import sys
