@@ -5,9 +5,11 @@ lint (PROSE_RULES, #173).
 Stdlib only. Exit 0 on all-pass, exit 1 on any failure, exit 2 on unexpected error.
 """
 
+import atexit
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -336,7 +338,9 @@ def rota_bin():
         _ROTA = os.environ.get("ROTA_BIN") or ""
         if not _ROTA:
             repo = Path(__file__).resolve().parent.parent
-            out = os.path.join(tempfile.mkdtemp(prefix="validate-skills-"), "rota")
+            build_dir = tempfile.mkdtemp(prefix="validate-skills-")
+            atexit.register(shutil.rmtree, build_dir, ignore_errors=True)
+            out = os.path.join(build_dir, "rota")
             subprocess.run(["go", "build", "-o", out, "./cmd/rota"], cwd=repo, check=True)
             _ROTA = out
     return _ROTA
