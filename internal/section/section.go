@@ -224,32 +224,3 @@ func UpsertBlock(path, key, block string) (string, error) {
 func UpsertManaged(root, key, body string) (string, error) {
 	return UpsertBlock(InstructionsFile(root), key, Wrap(key, body))
 }
-
-// Lines splits s like Python's str.splitlines: at \n, \r, \r\n, \v, \f,
-// \x1c-\x1e, \x85, \u2028 and \u2029, dropping the separators and any final
-// empty piece.
-func Lines(s string) []string {
-	var out []string
-	start := 0
-	rs := []rune(s)
-	// Work on byte offsets via a rune walk.
-	pos := 0
-	for i := 0; i < len(rs); i++ {
-		r := rs[i]
-		w := len(string(r))
-		switch r {
-		case '\n', '\r', '\v', '\f', 0x1c, 0x1d, 0x1e, 0x85, 0x2028, 0x2029:
-			out = append(out, s[start:pos])
-			if r == '\r' && i+1 < len(rs) && rs[i+1] == '\n' {
-				i++
-				pos++
-			}
-			start = pos + w
-		}
-		pos += w
-	}
-	if start < len(s) {
-		out = append(out, s[start:])
-	}
-	return out
-}

@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -50,7 +51,7 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 
 	filter := func(body, name string, tiers map[[2]string]string) []string {
 		var out []string
-		for _, line := range section.Lines(body) {
+		for _, line := range pystr.Splitlines(body) {
 			title, text, stamp, ok := parseBullet(strings.TrimRight(line, " \t\r\f\v"))
 			if !ok {
 				out = append(out, line)

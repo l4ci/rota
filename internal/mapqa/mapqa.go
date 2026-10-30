@@ -3,7 +3,6 @@
 package mapqa
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -33,7 +32,7 @@ func Query(root, dir string, names []string) (text string, missing []string, err
 			missing = append(missing, name)
 			continue
 		}
-		raw, err := readText(rotatree.Doc(root, dir, name))
+		raw, err := fsio.ReadText(rotatree.Doc(root, dir, name))
 		if os.IsNotExist(err) {
 			missing = append(missing, name)
 			continue
@@ -41,7 +40,7 @@ func Query(root, dir string, names []string) (text string, missing []string, err
 		if err != nil {
 			return "", nil, err
 		}
-		_, _, body := frontmatter.Parse(string(raw))
+		_, _, body := frontmatter.Parse(raw)
 		body = strings.TrimRight(body, "\n")
 		if body == "" {
 			continue
@@ -69,11 +68,11 @@ func mapEntries(dir string) []entry {
 	sort.Strings(files)
 	var out []entry
 	for _, f := range files {
-		raw, err := readText(f)
+		raw, err := fsio.ReadText(f)
 		if err != nil {
 			continue
 		}
-		fm, _, body := frontmatter.Parse(string(raw))
+		fm, _, body := frontmatter.Parse(raw)
 		if name := frontmatter.Str(fm, "subsystem"); name != "" {
 			out = append(out, entry{name, fm, body, f})
 		}
@@ -104,11 +103,11 @@ func QAIndexBlock(root string) string {
 	if len(files) > 0 {
 		var lines []string
 		for _, f := range files {
-			raw, err := readText(f)
+			raw, err := fsio.ReadText(f)
 			if err != nil {
 				continue
 			}
-			fm, _, _ := frontmatter.Parse(string(raw))
+			fm, _, _ := frontmatter.Parse(raw)
 			name := strings.TrimSuffix(filepath.Base(f), ".md")
 			lines = append(lines, fmt.Sprintf("- **%s** (%s) — %s", name, strutil.OrDefault(frontmatter.Str(fm, "surface"), "?"), strutil.OrDefault(frontmatter.Str(fm, "summary"), "(no summary)")))
 		}
@@ -181,7 +180,7 @@ func refBroken(root, file, line string) bool {
 	if !filepath.IsAbs(p) {
 		p = filepath.Join(root, p)
 	}
-	raw, err := readText(p)
+	raw, err := fsio.ReadText(p)
 	if err != nil {
 		return true
 	}
@@ -189,7 +188,7 @@ func refBroken(root, file, line string) bool {
 	if err != nil {
 		return true
 	}
-	lines := bytes.Count(raw, []byte("\n"))
+	lines := strings.Count(raw, "\n")
 	if len(raw) > 0 && raw[len(raw)-1] != '\n' {
 		lines++
 	}
@@ -227,10 +226,4 @@ func StaleNote(name string, n, limit int) string {
 // CapNote is the nudge printed when count reaches cap.
 func CapNote(count, cap int) string {
 	return fmt.Sprintf("project map has %d subsystems (cap %d); consider merging or retiring stale .rota/map/<name>.md entries", count, cap)
-}
-
-// readText is fsio.ReadText for callers that work on bytes.
-func readText(path string) ([]byte, error) {
-	t, err := fsio.ReadText(path)
-	return []byte(t), err
 }

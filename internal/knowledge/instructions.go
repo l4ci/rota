@@ -69,11 +69,11 @@ func (s Store) InstructionsInit() ([]Action, error) {
 		var moved []string
 		body, rest := "", ""
 		if exists(claude) {
-			raw, err := readTextBytes(claude)
+			raw, err := fsio.ReadText(claude)
 			if err != nil {
 				return nil, err
 			}
-			text := string(raw)
+			text := raw
 			rest = text
 			var chunks []string
 			for _, m := range section.BlockKeyRe.FindAllStringSubmatch(text, -1) {
@@ -125,18 +125,18 @@ func (s Store) InstructionsInit() ([]Action, error) {
 		}
 		acts = append(acts, Action{Action: "created", File: "CLAUDE.md"})
 	} else {
-		raw, err := readTextBytes(claude)
+		raw, err := fsio.ReadText(claude)
 		if err != nil {
 			return nil, err
 		}
 		imports := false
-		for _, l := range strings.Split(string(raw), "\n") {
+		for _, l := range strings.Split(raw, "\n") {
 			if strings.TrimSpace(l) == "@AGENTS.md" {
 				imports = true
 			}
 		}
 		if !imports {
-			if err := write(claude, strings.TrimRight(string(raw), "\n")+"\n\n@AGENTS.md\n"); err != nil {
+			if err := write(claude, strings.TrimRight(raw, "\n")+"\n\n@AGENTS.md\n"); err != nil {
 				return nil, err
 			}
 			acts = append(acts, Action{Action: "linked", File: "CLAUDE.md"})
