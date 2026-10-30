@@ -7,6 +7,18 @@ import (
 	"github.com/l4ci/rota/internal/section"
 )
 
+// ClosedItemBullet is the one spelling of a closed child in a shipped summary:
+// `- <ref>: <title>`, plus ` (<reason>)` when reason is non-empty. The reason is
+// optional: the file backend records one when an item completes, the issues
+// backend has none (a tracker close state is not a reason) and passes "".
+func ClosedItemBullet(ref, title, reason string) string {
+	b := "- " + ref + ": " + title
+	if reason != "" {
+		b += " (" + reason + ")"
+	}
+	return b
+}
+
 // ShippedSummary is the closing record, using the milestone's existing
 // checkbox audit rather than item acceptance marks. closed holds item bullets.
 func ShippedSummary(body string, closed []string) string {
