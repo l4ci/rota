@@ -601,3 +601,41 @@ func TestResetKindsAgreeAcrossCountersAndRetention(t *testing.T) {
 		})
 	}
 }
+
+// BlockingAnyHead blocks on a FAIL, a blocking finding or a failed-item
+// CONCERNS for every review kind, wherever the record was made, and never on
+// a clean CONCERNS or PASS.
+func TestBlockingAnyHead(t *testing.T) {
+	blocker := []Finding{{Severity: "blocker", Title: "x"}}
+	kinds := append([]string{ReviewCross, SecondOpinion}, LensKinds...)
+	for _, kind := range kinds {
+		cases := []struct {
+			name string
+			rec  Record
+			want bool
+		}{
+			{"fail", Record{Kind: kind, Verdict: Fail, Sha: "old"}, true},
+			{"blocking finding", Record{Kind: kind, Verdict: Concerns, Sha: "old", Findings: blocker}, kind != SecondOpinion},
+			{"clean concerns", Record{Kind: kind, Verdict: Concerns, Sha: "old"}, false},
+			{"pass", Record{Kind: kind, Verdict: Pass, Sha: "old"}, false},
+		}
+		for _, c := range cases {
+			if _, got := BlockingAnyHead([]Record{c.rec}); got != c.want {
+				t.Errorf("%s %s: blocked = %v, want %v", kind, c.name, got, c.want)
+			}
+		}
+	}
+	for _, c := range []struct {
+		name string
+		rec  Record
+		want bool
+	}{
+		{"review fail", Record{Kind: ReviewQuality, Verdict: Fail, Combined: Fail, Sha: "old"}, true},
+		{"review blocking finding", Record{Kind: ReviewQuality, Verdict: Concerns, Combined: Concerns, Sha: "old", Findings: blocker}, true},
+		{"review clean concerns", Record{Kind: ReviewQuality, Verdict: Concerns, Combined: Concerns, Sha: "old"}, false},
+	} {
+		if _, got := BlockingAnyHead([]Record{c.rec}); got != c.want {
+			t.Errorf("%s: blocked = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
