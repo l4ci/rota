@@ -135,26 +135,6 @@ func Topics(content string) []Topic {
 
 func decode(s string) (rune, int) { return utf8.DecodeRuneInString(s) }
 
-// Matching renders each section whose lowercased title is in wanted, in
-// document order, separated by a blank line, bodies right-trimmed. Every line
-// ends in a newline; the result is "" when nothing matches.
-func Matching(content string, wanted map[string]bool) string {
-	var b strings.Builder
-	first := true
-	for _, t := range Topics(content) {
-		if !wanted[strings.ToLower(t.Name)] {
-			continue
-		}
-		if !first {
-			b.WriteString("\n")
-		}
-		b.WriteString("## " + t.Name + "\n")
-		b.WriteString(strings.TrimRight(t.Body, " \t\n\r\f\v") + "\n")
-		first = false
-	}
-	return b.String()
-}
-
 // InstructionsFile is the project-instructions file under root that holds the
 // managed rota blocks: AGENTS.md when it exists, else CLAUDE.md (which may not
 // exist yet; UpsertBlock creates it).
