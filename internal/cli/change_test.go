@@ -93,7 +93,7 @@ func TestChangeClassify(t *testing.T) {
 		t.Errorf("code file: %v", d)
 	}
 	// small when under change.smallBelow
-	cfg(`,"change":{"smallBelow":100}`)
+	cfg(`,"change":{"smallBelow":100,"smallPaths":["**"]}`)
 	if _, d, _ := classify("--json"); d["tier"] != "small" {
 		t.Errorf("small diff: %v", d)
 	}
