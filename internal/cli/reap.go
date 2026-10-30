@@ -79,6 +79,7 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 			c.Warn("round ledger unreadable (%v): adopted branches will not be offered for deletion", err)
 		}
 		in := reap.Input{Root: root, Base: env.Base, Git: env.Git, Report: rep, Host: ops, Lease: env, Adopted: adopted, Roster: set.Roster}
+		in.Refresh = func(ctx context.Context) (*round.Report, error) { return env.Status(ctx, root) }
 		if set, err := skills.Embedded(); err == nil {
 			in.SkillCache = skills.CacheDir(c.deps().Getenv)
 			in.SkillCacheKeep = skills.CacheName(version.Get().Version, set.Digest())
