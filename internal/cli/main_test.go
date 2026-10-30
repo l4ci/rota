@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/testiso"
 )
 
 // goldenDay is the day the goldens in testdata/golden were recorded from the
@@ -27,26 +28,16 @@ const goldenDay = "2026-10-03"
 // first on PATH: issue mode builds the real tracker unless a test injects one,
 // and no test may reach a forge.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "cli-tripwire")
+	tw, err := testiso.NewTripwire("cli-tripwire", "gh", "glab", "codex")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	hit := filepath.Join(dir, "hit")
-	for _, name := range []string{"gh", "glab", "codex"} {
-		script := fmt.Sprintf("#!/bin/sh\necho \"$0 $*\" >> '%s'\nexit 99\n", hit)
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-	}
-	os.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	dir := tw.Dir
 	// The usage-limit watcher (D3) types into panes: no test may reach the
 	// real tmux or herdr this round runs in. The default host is a fake that
-	// records, and the pane variables are cleared.
-	for _, k := range []string{"TMUX", "TMUX_PANE", "HERDR_ENV", "HERDR_PANE_ID", "HERDR_WORKSPACE_ID", "HERDR_SOCKET_PATH", "ROTA_TEST_LOCK_HELD"} {
-		os.Unsetenv(k)
-	}
+	// records; testiso scrubs the pane variables.
+	os.Unsetenv("ROTA_TEST_LOCK_HELD")
 	// Retry and bulk-write pauses would only slow the tests down.
 	tracker.RetryPause = 0
 	migrate.BulkPace = 0
@@ -59,11 +50,11 @@ func TestMain(m *testing.M) {
 	// default: the goldens hold commit hashes made under it.
 	gittest.SetIdentity("GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@x", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@x")
 	code := m.Run()
-	if b, err := os.ReadFile(hit); err == nil {
-		fmt.Fprintf(os.Stderr, "FAIL: tests exec'd the forge CLI from PATH:\n%s", b)
+	if hit := tw.Check(); hit != "" {
+		fmt.Fprintf(os.Stderr, "FAIL: tests exec'd the forge CLI from PATH:\n%s", hit)
 		code = 1
 	}
-	os.RemoveAll(dir)
+	tw.Close()
 	os.Exit(code)
 }
 

@@ -10,46 +10,29 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/testiso"
 )
 
-var tripwireHit string
-
-// TestMain puts tripwire herdr, tmux, gh and glab first on PATH and clears the
-// host env. This round runs inside herdr and tmux, where a stray `herdr tab
+// TestMain puts tripwire herdr, tmux, gh and glab first on PATH (the host env
+// is scrubbed by testiso). This round runs inside herdr and tmux, where a stray `herdr tab
 // close` or `tmux kill-window` kills live agents: any test that reaches a real
 // host binary fails the whole run.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "worker-tripwire")
+	tw, err := testiso.NewTripwire("worker-tripwire", "herdr", "tmux", "gh", "glab", "codex")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	tripwireHit = filepath.Join(dir, "hit")
-	for _, bin := range []string{"herdr", "tmux", "gh", "glab", "codex"} {
-		script := fmt.Sprintf("#!/bin/sh\necho \"$0 $*\" >> '%s'\necho 'tripwire: real %s reached from a test' >&2\nexit 99\n", tripwireHit, bin)
-		if err := os.WriteFile(filepath.Join(dir, bin), []byte(script), 0o755); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-	}
-	os.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	// Root the temp dirs of child processes (the fake forge and host scripts
-	// mktemp) under the tripwire dir, which is removed below (#110).
-	if tmp := filepath.Join(dir, "tmp"); os.Mkdir(tmp, 0o755) == nil {
-		os.Setenv("TMPDIR", tmp)
-	}
 	// The gate's local merge commits as the caller. CI runners have no git
 	// identity, so the tests bring their own.
 	gittest.SetIdentity()
-	for _, k := range []string{"TMUX", "TMUX_PANE", "HERDR_ENV", "HERDR_WORKSPACE_ID", "HERDR_PANE_ID", "HERDR_SOCKET_PATH", "ROTA_ACCOUNT_USAGE_DIR"} {
-		os.Unsetenv(k)
-	}
+	os.Unsetenv("ROTA_ACCOUNT_USAGE_DIR")
 	code := m.Run()
-	if b, err := os.ReadFile(tripwireHit); err == nil {
-		fmt.Fprintf(os.Stderr, "FAIL: tests exec'd a real host or forge binary from PATH:\n%s", b)
+	if hit := tw.Check(); hit != "" {
+		fmt.Fprintf(os.Stderr, "FAIL: tests exec'd a real host or forge binary from PATH:\n%s", hit)
 		code = 1
 	}
-	os.RemoveAll(dir)
+	tw.Close()
 	os.Exit(code)
 }
 
@@ -101,11 +84,3 @@ func mustEqual(t *testing.T, what, want, got string) {
 }
 
 var bg = context.Background()
-
-func TestTripwireCatchesRealHostBinary(t *testing.T) {
-	out, err := exec.Command("herdr", "tab", "close", "x").CombinedOutput()
-	if err == nil || !strings.Contains(string(out), "tripwire") {
-		t.Fatalf("herdr on PATH is not the tripwire: %s", out)
-	}
-	os.Remove(tripwireHit) // hit on purpose
-}
