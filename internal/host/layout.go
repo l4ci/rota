@@ -56,24 +56,9 @@ type LinkedLayouter interface {
 
 // LayoutPanes joins `pane list` with the tab and workspace labels.
 func (h *herdr) LayoutPanes(ctx context.Context) ([]LayoutPane, error) {
-	r := h.herdr(ctx, "pane", "list")
-	if r.ExitCode != 0 {
-		return nil, fmt.Errorf("herdr pane list failed: %s", strings.TrimSpace(r.Stderr))
-	}
-	var panes struct {
-		Result struct {
-			Panes []struct {
-				PaneID      string `json:"pane_id"`
-				TabID       string `json:"tab_id"`
-				WorkspaceID string `json:"workspace_id"`
-				Cwd         string `json:"cwd"`
-				FgCwd       string `json:"foreground_cwd"`
-				Agent       string `json:"agent"`
-			} `json:"panes"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal([]byte(r.Stdout), &panes); err != nil {
-		return nil, fmt.Errorf("herdr pane list: unreadable reply: %w", err)
+	panes, err := h.listPanes(ctx)
+	if err != nil {
+		return nil, err
 	}
 	tabs, err := h.labels(ctx, "tab", "tabs", "tab_id")
 	if err != nil {
@@ -83,8 +68,8 @@ func (h *herdr) LayoutPanes(ctx context.Context) ([]LayoutPane, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]LayoutPane, 0, len(panes.Result.Panes))
-	for _, p := range panes.Result.Panes {
+	out := make([]LayoutPane, 0, len(panes))
+	for _, p := range panes {
 		out = append(out, LayoutPane{ID: p.PaneID, Tab: p.TabID, Workspace: p.WorkspaceID,
 			TabLabel: tabs[p.TabID], WorkspaceName: spaces[p.WorkspaceID],
 			Cwd: p.Cwd, FgCwd: p.FgCwd, Agent: p.Agent})

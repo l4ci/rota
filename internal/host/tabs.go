@@ -32,27 +32,13 @@ var shells = map[string]bool{"sh": true, "bash": true, "zsh": true, "fish": true
 // Tabs reads `herdr pane list` and, for each pane that reports no agent,
 // `herdr pane process-info`.
 func (h *herdr) Tabs(ctx context.Context) ([]Tab, error) {
-	r := h.herdr(ctx, "pane", "list")
-	if r.ExitCode != 0 {
-		return nil, fmt.Errorf("herdr pane list failed: %s", strings.TrimSpace(r.Stderr))
-	}
-	var doc struct {
-		Result struct {
-			Panes []struct {
-				PaneID string `json:"pane_id"`
-				TabID  string `json:"tab_id"`
-				Cwd    string `json:"cwd"`
-				Agent  string `json:"agent"`
-				Status string `json:"agent_status"`
-			} `json:"panes"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal([]byte(r.Stdout), &doc); err != nil {
-		return nil, fmt.Errorf("herdr pane list: unreadable reply: %w", err)
+	panes, err := h.listPanes(ctx)
+	if err != nil {
+		return nil, err
 	}
 	var order []string
 	byID := map[string]*Tab{}
-	for _, p := range doc.Result.Panes {
+	for _, p := range panes {
 		t := byID[p.TabID]
 		if t == nil {
 			t = &Tab{ID: p.TabID, Agentless: true}
@@ -63,7 +49,7 @@ func (h *herdr) Tabs(ctx context.Context) ([]Tab, error) {
 		if !t.Agentless {
 			continue
 		}
-		if p.Agent != "" || (p.Status != "unknown" && p.Status != "") || !h.onlyShells(ctx, p.PaneID) {
+		if !h.agentless(ctx, p) {
 			t.Agentless = false
 		}
 	}
@@ -130,26 +116,13 @@ type PaneSweeper interface {
 // SweepShells reads `herdr pane list` and closes each agentless, shell-only
 // pane whose cwd is the worktree.
 func (h *herdr) SweepShells(ctx context.Context, cwd string) (int, error) {
-	r := h.herdr(ctx, "pane", "list")
-	if r.ExitCode != 0 {
-		return 0, fmt.Errorf("herdr pane list failed: %s", strings.TrimSpace(r.Stderr))
-	}
-	var doc struct {
-		Result struct {
-			Panes []struct {
-				PaneID string `json:"pane_id"`
-				Cwd    string `json:"cwd"`
-				Agent  string `json:"agent"`
-				Status string `json:"agent_status"`
-			} `json:"panes"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal([]byte(r.Stdout), &doc); err != nil {
-		return 0, fmt.Errorf("herdr pane list: unreadable reply: %w", err)
+	panes, err := h.listPanes(ctx)
+	if err != nil {
+		return 0, err
 	}
 	n := 0
-	for _, p := range doc.Result.Panes {
-		if p.Cwd != cwd || p.Agent != "" || (p.Status != "unknown" && p.Status != "") || !h.onlyShells(ctx, p.PaneID) {
+	for _, p := range panes {
+		if p.Cwd != cwd || !h.agentless(ctx, p) {
 			continue
 		}
 		if h.herdr(ctx, "pane", "close", p.PaneID).ExitCode == 0 {
