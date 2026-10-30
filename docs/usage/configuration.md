@@ -534,7 +534,7 @@ A rename lists both the old and the new path. A diff it cannot read, a line coun
 - `change.riskyPaths`: globs of files that always get `full`, such as the gate code, the config schema, CI files and the doc pages your tests read. Default `[]`.
 - `change.smallBelow`: the line limit for `small`. Pick the largest diff your `test.small` command checks as well as `test.full` would, not the size you find comfortable to skim. Default `0`, which turns the small tier off.
 - `change.smallPaths`: globs of the files `test.small` actually covers. A code diff with one file outside them is `full`, so a command that plans nothing for a file never stands in for the full run. Default `[]`, which turns the small tier off. Keep it in step with the command: for `bash test/fast.sh`, the files that script maps.
-- `test.docs` and `test.small`: shell command lists, default `[]`. `{files}` in a `test.small` command expands to the changed files, each single-quoted, deleted files included so their package and its dependents still run.
+- `test.docs` and `test.small`: shell command lists, default `[]`. `{files}` in a `test.small` command expands to the changed files, each single-quoted, deleted files included. `test/fast.sh` runs its package and dependents, and runs every Go package when the file's whole directory is gone.
 
 A glob uses `*` within one path segment and `**` as a whole segment for any directories. A pattern with no slash matches the repo root only, so `*.md` is `README.md`, not `docs/a.md` (`**/*.md` covers both). No braces, no leading slash. `rota config set` refuses a bad glob or a negative `change.smallBelow` (exit 2); `rota config check` reports them.
 
@@ -890,6 +890,17 @@ Overrides the base branch that `rota git base` resolves to. When empty, `rota` a
 ```
 
 Skills that use the base branch (`/rota-ship`, `/rota-review`, `/rota-work`) call `rota git base` and pick up this override.
+
+## git.remote
+
+- **Type:** string
+- **Default:** `"origin"`
+
+The git remote round workers fetch from and push to. `rota worker done` checks the branch is pushed to it, `rota worker gate` and `rota worker train` compare branches against it, `rota ship pr` and `rota round park` push to it, and the assignment brief tells the worker its name (the contract says `<remote>`). Set it when `origin` is not the remote that holds the PRs, for example when `origin` has a second push URL that mirrors every branch. Round-side verbs (`round assign`, `transfer`, support cuts, stale-claim checks) read it too. Forge detection still reads `origin` unless `forge.provider` is set. The value must be a valid git remote name: `rota config set` refuses an empty one, one starting with `-` or one with whitespace or control characters (exit 4), and every verb that reads it refuses such a value instead of running git.
+
+```json
+{ "git": { "remote": "upstream" } }
+```
 
 ## Issues backend keys
 

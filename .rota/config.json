@@ -158,14 +158,14 @@
       "internal/hooks/**",
       "internal/host/**",
       "test/sections/**",
-      "scripts/**"
+      "scripts/**",
+      "test/fakes/**",
+      "test/e2e/**"
     ],
     "smallPaths": [
       "**/*.go",
       "**/testdata/**",
-      "test/lib/**",
-      "test/fakes/**",
-      "test/e2e/**"
+      "test/lib/**"
     ]
   }
 }

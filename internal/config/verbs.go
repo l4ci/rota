@@ -435,6 +435,16 @@ func validateValue(key string, value any) error {
 	if name, ok := value.(string); key == "round.support" && ok && strings.TrimSpace(name) == "main" {
 		return fmt.Errorf("%w for round.support: main is reserved for the main machine", ErrBadValue)
 	}
+	if key == GitRemoteKey {
+		name, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("%w for %s: want a remote name", ErrBadValue, key)
+		}
+		if err := ValidGitRemote(name); err != nil {
+			return fmt.Errorf("%w for %s: %v", ErrBadValue, key, err)
+		}
+		return nil
+	}
 	if IsCommandKey(key) {
 		if _, ok := value.(string); !ok {
 			return fmt.Errorf("%w for %s: want a command string", ErrBadValue, key)

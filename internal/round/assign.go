@@ -290,8 +290,15 @@ func pointerBrief(agent, id, branch, brief string, siblings []string, decisions,
 		fmt.Fprintf(&b, "This assignment is a bundle of %s. Read each issue and its whole thread and dispute each one the same way. Build them all on this one branch and open ONE PR whose body has a `Closes #N` line for every one of them. Record proof for each issue id (`rota proof record <ID> -- <test command>`, once per id): `rota worker done` refuses while any of them lacks its PASS row at HEAD. A bundle lands or bounces as a unit.\n\n", strings.Join(refs, ", "))
 	}
 	fmt.Fprintf(&b, "Your branch is %s; your worktree is already on it.\n", branch)
+	remote := t.Remote
+	if remote == "" {
+		remote = "origin"
+	}
+	if t.Remote != "" {
+		fmt.Fprintf(&b, "Your git remote is %s: wherever the contract says <remote>, fetch from, merge from and push to %s.\n", t.Remote, t.Remote)
+	}
 	if t.Base != "" {
-		fmt.Fprintf(&b, "Your base branch is %s, not the round base: the issue belongs to an active milestone. Open your PR against %s, and wherever the contract says to merge the moved base, merge origin/%s.\n", t.Base, t.Base, t.Base)
+		fmt.Fprintf(&b, "Your base branch is %s, not the round base: the issue belongs to an active milestone. Open your PR against %s, and wherever the contract says to merge the moved base, merge %s/%s.\n", t.Base, t.Base, remote, t.Base)
 	}
 	if len(siblings) > 0 {
 		fmt.Fprintf(&b, "Sibling issues running now: %s.\n", strings.Join(siblings, ", "))
@@ -494,6 +501,8 @@ const maxOutOfScope = 1500
 // tierBrief is the resolved tier facts of one worker: its own tier and model,
 // the tier table of its harness kind, and why the tier is above the default.
 type tierBrief struct {
+	// Remote is git.remote: the name the contract's <remote> stands for.
+	Remote                             string
 	Kind, Tier, Model, Default, Reason string
 	Table                              map[string]string
 	// Pick is what the issue's labels (file: fields) asked for, "" for none.
@@ -675,6 +684,9 @@ func (e Env) requireLease(ctx context.Context, root string, o AssignOpts) error 
 func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (res Assigned, err error) {
 	if err := e.roundCfgErr(); err != nil {
 		return res, err
+	}
+	if _, err := e.remote(root); err != nil {
+		return res, blocked(BlockFetch, "%v", err)
 	}
 	frozen, err := landfreeze.Load(ctx, e.Git, root)
 	if err != nil {

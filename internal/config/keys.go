@@ -24,6 +24,7 @@ const (
 // Round config key names are shared by the schema and its callers.
 // Keep the names here so callers do not silently drift from the keys table.
 const (
+	GitRemoteKey                     = "git.remote"
 	RoundDispatchKey                 = "round.dispatch"
 	RoundSlotsKey                    = "round.slots"
 	RoundCommandsKey                 = "round.commands"
@@ -180,6 +181,7 @@ var Keys = []Key{
 	k("docs.autoCreate", ScopeTaste, false, false, TypeBool, "Whether the after-work docs flow writes proposed updates without waiting for approval."),
 	k("docs.afterWork", ScopeTaste, false, false, TypeBool, "Whether /rota-work, /rota-ship and /rota-release run the docs after-work flow when their primary action finishes."),
 	projectOwned(k("git.baseBranch", ScopeProject, "", true, TypeString, "Base branch the skills merge into and diff against. Empty auto-detects it.")),
+	k(GitRemoteKey, ScopeProject, "origin", false, TypeString, "Git remote round workers fetch from and push to: worker done, gate and train compare branches against it, and the worker contract names it. Set it when origin is not the remote that holds the PRs."),
 	projectOwned(k("umbrella.enabled", ScopeProject, false, true, TypeBool, "Umbrella mode: .rota/ stays at the umbrella and verbs operate per registered sub-repo. Turning it off keeps .rota/repos.json.")),
 	projectOwned(k(VersionKey, ScopeProject, "", true, TypeString, "Release of rota that wrote this config. Managed by rota init and rota update; do not set it by hand.")),
 	k("issues.labels.inProgress", ScopeProject, labels.InProgress, false, TypeString, "Tracker label for an item a worker holds."),

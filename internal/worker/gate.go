@@ -494,6 +494,9 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	return res, err
 }
 
+// rem is the configured git remote the gate fetches from and compares against.
+func (g *gate) rem() string { return g.in.cfg.RemoteName() }
+
 // gateInput is what the gate and the train read before they start: the config,
 // the commands it names and the test ledger. Env.GateInput supplies it, so one
 // loader decides what is read and tests hand over a value instead of a .rota
@@ -647,6 +650,9 @@ func (g *gate) stepReleaseExternal() error {
 
 // stepForge picks the provider and opens its forge.
 func (g *gate) stepForge() (bool, error) {
+	if err := g.in.cfg.RemoteErr; err != nil {
+		return true, fail(exitcode.ExitRefused, err.Error())
+	}
 	if err := g.in.cfg.sourceErr; err != nil {
 		return true, fail(exitcode.ExitInternal, err.Error())
 	}
@@ -787,14 +793,14 @@ func (g *gate) stepRemote() (bool, error) {
 	// Only exit 2 ("No such remote") means origin is absent. A git that cannot
 	// run (its directory gone, a signal, a timeout) or fails otherwise says
 	// nothing about the remote, so it is reported as what it is.
-	res, err := g.e.Git(g.ctx, g.root, "remote", "get-url", "origin")
+	res, err := g.e.Git(g.ctx, g.root, "remote", "get-url", g.rem())
 	switch {
 	case err != nil:
-		return g.broke(fmt.Sprintf("could not run git in %s to read the origin remote: %v", g.root, err))
+		return g.broke(fmt.Sprintf("could not run git in %s to read the %s remote: %v", g.root, g.rem(), err))
 	case res.ExitCode == 2:
-		return g.broke(fmt.Sprintf("slot %s has PR %s but this repo has no 'origin' remote; refusing a local merge that would bypass the PR", g.o.Slot, g.pr))
+		return g.broke(fmt.Sprintf("slot %s has PR %s but this repo has no '%s' remote; refusing a local merge that would bypass the PR", g.o.Slot, g.pr, g.rem()))
 	case res.ExitCode != 0:
-		return g.broke(fmt.Sprintf("git remote get-url origin failed in %s (exit %d): %s", g.root, res.ExitCode, strings.TrimSpace(res.Stderr)))
+		return g.broke(fmt.Sprintf("git remote get-url %s failed in %s (exit %d): %s", g.rem(), g.root, res.ExitCode, strings.TrimSpace(res.Stderr)))
 	}
 	if g.prNum == "" {
 		return g.broke(fmt.Sprintf("cannot read a PR number from '%s'", g.pr))
@@ -834,10 +840,10 @@ func (g *gate) stepRefs() (bool, error) {
 		}
 		return false, nil
 	}
-	if _, code := g.git(root, "fetch", "origin", "-q"); code != 0 {
-		return g.broke("git fetch origin failed")
+	if _, code := g.git(root, "fetch", g.rem(), "-q"); code != 0 {
+		return g.broke("git fetch " + g.rem() + " failed")
 	}
-	g.headRef, g.baseRef = "origin/"+g.branch, "origin/"+o.Base
+	g.headRef, g.baseRef = g.rem()+"/"+g.branch, g.rem()+"/"+o.Base
 	if _, code := g.git(root, "rev-parse", "--verify", "--quiet", g.headRef+"^{commit}"); code != 0 {
 		return g.broke(fmt.Sprintf("%s does not exist — has the worker pushed %s?", g.headRef, g.branch))
 	}
@@ -1440,8 +1446,8 @@ func (g *gate) verifyFirst(what string, check func(dir, sha string) (bool, error
 		return true, err
 	}
 	if g.remote {
-		if _, code := g.git(g.root, "fetch", "origin", "-q"); code != 0 {
-			return g.broke("git fetch origin failed after " + what + " verified")
+		if _, code := g.git(g.root, "fetch", g.rem(), "-q"); code != 0 {
+			return g.broke("git fetch " + g.rem() + " failed after " + what + " verified")
 		}
 	}
 	if cur, _ := g.git(g.root, "rev-parse", g.baseRef); cur != baseSHA {
@@ -1827,7 +1833,7 @@ func (g *gate) prInfo() (tracker.PRInfo, bool) {
 // merge stands. Any other failure to ask is a check-broke message: guessing
 // "none" would fail open into a local merge of a branch whose PR may be open.
 func (g *gate) openPRForBranch() (url, brokeMsg string) {
-	if _, code := g.git(g.root, "remote", "get-url", "origin"); code != 0 {
+	if _, code := g.git(g.root, "remote", "get-url", g.rem()); code != 0 {
 		return "", ""
 	}
 	prs, err := g.forge.OpenPRs(g.ctx)
@@ -1995,8 +2001,8 @@ func (g *gate) awaitMerged() (sha string, done bool) {
 // reported distinctly so nobody retries an already-merged PR.
 func (g *gate) confirmLanded(sha string) (done bool) {
 	o := g.o
-	if _, code := g.git(g.root, "fetch", "origin", "-q"); code != 0 {
-		g.broke("git fetch origin failed after merging")
+	if _, code := g.git(g.root, "fetch", g.rem(), "-q"); code != 0 {
+		g.broke("git fetch " + g.rem() + " failed after merging")
 		return true
 	}
 	switch _, code := g.git(g.root, "merge-base", "--is-ancestor", sha, g.baseRef); code {

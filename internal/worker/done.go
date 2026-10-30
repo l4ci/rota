@@ -127,7 +127,11 @@ func done(req DoneRequest, dp DoneDeps, res *DoneResult) error {
 	// Done is the worker's last action: a late edit or commit after it moves
 	// the head a review or the gate has already bound to.
 	if req.Kind != OutcomeFailed {
-		if err := settledBranch(env, dir, sl.Branch(), res); err != nil {
+		remote, err := env.Remote(req.Root)
+		if err != nil {
+			return fail(exitcode.ExitRefused, err.Error())
+		}
+		if err := settledBranch(env, dir, remote, sl.Branch(), res); err != nil {
 			return err
 		}
 	}
@@ -334,9 +338,9 @@ func doneGitErr(err error) error {
 }
 
 // settledBranch refuses a worktree with uncommitted changes, and a branch
-// whose pushed copy (origin/<branch>) is absent or not HEAD: the contract opens
+// whose pushed copy (<remote>/<branch>) is absent or not HEAD: the contract opens
 // the PR, and so pushes, before done.
-func settledBranch(env Env, dir, branch string, res *DoneResult) error {
+func settledBranch(env Env, dir, remoteName, branch string, res *DoneResult) error {
 	repo := git.Repo{Dir: dir, Runner: env.Git}
 	dirty, ok, err := repo.Dirty(env.Ctx)
 	if err != nil {
@@ -348,14 +352,14 @@ func settledBranch(env Env, dir, branch string, res *DoneResult) error {
 		e.Hint = "commit (or discard) them, push, record the proof at the new HEAD, then run `rota worker done` again"
 		return e
 	}
-	remote, err := repo.Run(env.Ctx, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+branch)
+	remote, err := repo.Run(env.Ctx, "rev-parse", "--verify", "--quiet", "refs/remotes/"+remoteName+"/"+branch)
 	if err != nil {
 		return doneGitErr(err)
 	}
 	if remote.ExitCode != 0 {
 		res.Unpushed = true
-		e := fail(exitcode.ExitRefused, fmt.Sprintf("%s was never pushed to origin: done is the last action, after the PR", branch))
-		e.Hint = fmt.Sprintf("`git push origin %s` and open the PR, then run `rota worker done` again", branch)
+		e := fail(exitcode.ExitRefused, fmt.Sprintf("%s was never pushed to %s: done is the last action, after the PR", branch, remoteName))
+		e.Hint = fmt.Sprintf("`git push %s %s` and open the PR, then run `rota worker done` again", remoteName, branch)
 		return e
 	}
 	head, err := repo.Run(env.Ctx, "rev-parse", "HEAD")
@@ -364,8 +368,8 @@ func settledBranch(env Env, dir, branch string, res *DoneResult) error {
 	}
 	if strings.TrimSpace(remote.Stdout) != strings.TrimSpace(head.Stdout) {
 		res.Unpushed = true
-		e := fail(exitcode.ExitRefused, fmt.Sprintf("%s has commits not pushed to origin/%s: done is the last action", branch, branch))
-		e.Hint = fmt.Sprintf("`git push origin %s`, then run `rota worker done` again", branch)
+		e := fail(exitcode.ExitRefused, fmt.Sprintf("%s has commits not pushed to %s/%s: done is the last action", branch, remoteName, branch))
+		e.Hint = fmt.Sprintf("`git push %s %s`, then run `rota worker done` again", remoteName, branch)
 		return e
 	}
 	return nil
