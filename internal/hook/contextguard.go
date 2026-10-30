@@ -56,6 +56,12 @@ func DecideGuardPrompt(st State, set Settings, now time.Time) GuardPromptDecisio
 	return d
 }
 
+// mergeGuardWarned is DecideGuardPrompt's merge: only the warned flag.
+func mergeGuardWarned(cur, decided State) State {
+	cur.GuardWarned = decided.GuardWarned
+	return cur
+}
+
 // DecideGuardStop is the auto rule: block a fresh reading at or above the
 // threshold with a request for /rota-pause, at most set.HandoffMaxBlks times
 // per crossing, counting every block so a re-entered stop (stop_hook_active)
