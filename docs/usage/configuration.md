@@ -532,7 +532,7 @@ A rename lists both the old and the new path. A diff it cannot read, a line coun
 - `change.docsPaths`: globs of documentation files. Default `["*.md", "docs/**", "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.gif", "**/*.svg", "**/*.webp"]`.
 - `change.riskyPaths`: globs of files that always get `full`, such as the gate code, the config schema, CI files and the doc pages your tests read. Default `[]`.
 - `change.smallBelow`: the line limit for `small`. Default `0`, which turns the small tier off.
-- `test.docs` and `test.small`: shell command lists, default `[]`. `{files}` in a `test.small` command expands to the changed files, each single-quoted; deleted files are left out.
+- `test.docs` and `test.small`: shell command lists, default `[]`. `{files}` in a `test.small` command expands to the changed files, each single-quoted, deleted files included so their package and its dependents still run.
 
 A glob uses `*` within one path segment and `**` as a whole segment for any directories. A pattern with no slash matches the repo root only, so `*.md` is `README.md`, not `docs/a.md` (`**/*.md` covers both). No braces, no leading slash. `rota config set` refuses a bad glob or a negative `change.smallBelow` (exit 2); `rota config check` reports them.
 

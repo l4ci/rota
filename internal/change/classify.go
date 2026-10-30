@@ -21,6 +21,29 @@ const (
 	TierFull Tier = "full"
 )
 
+// rank orders tiers by how much checking they need; an unknown tier is full.
+func (t Tier) rank() int {
+	switch t {
+	case TierDocs:
+		return 0
+	case TierSmall:
+		return 1
+	}
+	return 2
+}
+
+// Higher is the stricter of two tiers. Anything but docs or small, the empty
+// tier included, is full.
+func Higher(a, b Tier) Tier {
+	if b.rank() > a.rank() {
+		a = b
+	}
+	if a.rank() == 2 {
+		return TierFull
+	}
+	return a
+}
+
 // Policy is the change.* config.
 type Policy struct {
 	DocsPaths  []string
