@@ -1307,7 +1307,8 @@ func (g *gate) stepTier() (bool, error) {
 	var files []string
 	if tier.Tier == change.TierSmall && anyHasFiles(g.in.cfg.Small) {
 		var err error
-		if files, err = git.DiffFiles(g.ctx, g.e.Git, g.root, "--diff-filter=d", span); err != nil {
+		// Deleted files stay in: a removed file's package and its dependents must run.
+		if files, err = git.DiffFiles(g.ctx, g.e.Git, g.root, span); err != nil {
 			g.res.Tier, g.res.TierReason = string(change.TierFull), fmt.Sprintf("could not list the files of %s for test.small: %v", span, err)
 			return false, nil
 		}

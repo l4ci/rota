@@ -406,12 +406,7 @@ func (t *trainRun) plan() (bool, error) {
 	if o.Plan {
 		return t.preview()
 	}
-	if done, err := t.pickTier(); done || err != nil {
-		return true, err
-	}
-	tierIn := in
-	tierIn.cfg = t.verifyCfg()
-	verify, onCI, brokeMsg, err := e.fullTier(ctx, root, "train", tierIn)
+	verify, onCI, brokeMsg, err := e.fullTier(ctx, root, "train", in)
 	if err != nil {
 		return true, err
 	}
@@ -517,6 +512,7 @@ func (t *trainRun) plan() (bool, error) {
 			return t.broke(fmt.Sprintf("git rev-parse %s exited %d", headRef(m), code))
 		}
 	}
+	t.pickTier()
 	t.cache.retainBase(baseSHA)
 	scratch, cleanup, err := e.scratchTree(ctx, root, baseSHA, "rota-train-")
 	if err != nil {
@@ -749,57 +745,55 @@ func free(clash [][]bool, mask uint32) bool {
 	return true
 }
 
-// pickTier sets the config the train verifies with (#2348): the highest change
-// tier of its members, so one full member makes the whole train full. A member
-// with no tier (its check gave none) counts as full. Under test.fullWhere ci the
-// tier is recorded, not applied. For test.small, {files} is the union of the
-// members' changed files against the base, deletions left out.
-func (t *trainRun) pickTier() (bool, error) {
+// pickTier sets what the train verifies with (#2348): the highest change tier
+// of its members, so one full member makes the whole train full. It runs once
+// the heads are pinned and classifies the exact base...head each member merges,
+// taking the higher of that and the tier its check-only gate saw (which read the
+// PR's Door line): a member pushed again since its check is never verified by
+// a stale tier. A member with no tier counts as full, and so does a train that
+// syncs another base in, whose code no member's diff shows. Under
+// test.fullWhere ci the tier is recorded, not applied. For test.small, {files}
+// is the union of the members' changed files, deleted ones included.
+func (t *trainRun) pickTier() {
 	res := &t.res
 	tier := change.TierDocs
-	for _, m := range res.Members {
-		switch change.Tier(m.Tier) {
-		case change.TierDocs:
-		case change.TierSmall:
-			if tier == change.TierDocs {
-				tier = change.TierSmall
-			}
-		default:
-			tier = change.TierFull
-		}
-	}
-	if len(res.Members) == 0 {
+	if len(res.Members) == 0 || t.o.SyncBase != "" {
 		tier = change.TierFull
 	}
-	res.Tier = string(tier)
-	if tier == change.TierFull || t.in.cfg.where == WhereCI {
-		return false, nil
-	}
+	policy, perr := t.in.cfg.ChangePolicy()
 	var files []string
-	if tier == change.TierSmall && anyHasFiles(t.in.cfg.Small) {
-		seen := map[string]bool{}
-		for _, m := range res.Members {
-			fs, err := git.DiffFiles(t.ctx, t.e.Git, t.root, "--diff-filter=d", t.baseRef+"..."+t.headRef(m))
-			if err != nil {
-				res.Tier = string(change.TierFull)
-				res.Notes = append(res.Notes, fmt.Sprintf("GATE-TIER train — full: could not list the files of %s for test.small: %v", m.Target, err))
-				return false, nil
-			}
-			for _, f := range fs {
-				if !seen[f] {
-					seen[f] = true
-					files = append(files, f)
-				}
+	seen := map[string]bool{}
+	for i, m := range res.Members {
+		span := t.baseSHA + "..." + t.heads[i]
+		now := ClassifyChange(t.ctx, ChangeSources{Policy: policy, PolicyErr: perr, Git: t.e.Git, Dir: t.root, Span: span})
+		tier = change.Higher(tier, change.Higher(change.Tier(m.Tier), now.Tier))
+		if tier == change.TierFull {
+			break
+		}
+		fs, err := git.DiffFiles(t.ctx, t.e.Git, t.root, span)
+		if err != nil {
+			tier = change.TierFull
+			break
+		}
+		for _, f := range fs {
+			if !seen[f] {
+				seen[f] = true
+				files = append(files, f)
 			}
 		}
+	}
+	res.Tier = string(tier)
+	if tier == change.TierFull || t.onCI {
+		return
 	}
 	cfg, ran, skipped := t.in.cfg.forTier(tier, files)
 	if len(skipped) == 0 {
-		return false, nil
+		return
 	}
 	t.tierCfg, t.tierRan, res.Skipped = &cfg, ran, skipped
+	ctx, e, ledger := t.ctx, t.e, t.in.ledger
+	t.verify = func(dir string) (VerifyResult, error) { return e.runGateVerify(ctx, cfg.Full, dir, ledger) }
 	res.Notes = append(res.Notes, fmt.Sprintf("GATE-TIER train — %s (every member is %s or less); ran %s; skipped %s", tier, tier, ran, strings.Join(skipped, ", ")))
-	return false, nil
 }
 
 // verifyCfg is the config the train's scratch tree verifies with: the tier's

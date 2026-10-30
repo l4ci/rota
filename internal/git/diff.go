@@ -68,11 +68,9 @@ func ChangedPaths(ctx context.Context, run Runner, dir, span string) ([]string, 
 // DiffFiles lists every path `git diff <span>` touches, both names of a
 // rename (--no-renames), so a file moved out of a protected directory still
 // counts as touching it. -z keeps git from C-quoting unusual names, which no
-// glob would match. opts go before the span (e.g. --diff-filter=d to leave out
-// deleted files). A non-zero exit is an error.
-func DiffFiles(ctx context.Context, run Runner, dir string, optsAndSpan ...string) ([]string, error) {
-	span := optsAndSpan[len(optsAndSpan)-1]
-	res, err := run(ctx, dir, append([]string{"diff", "--name-only", "-z", "--no-renames"}, optsAndSpan...)...)
+// glob would match. A non-zero exit is an error.
+func DiffFiles(ctx context.Context, run Runner, dir, span string) ([]string, error) {
+	res, err := run(ctx, dir, "diff", "--name-only", "-z", "--no-renames", span)
 	if err != nil {
 		return nil, err
 	}

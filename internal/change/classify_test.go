@@ -82,3 +82,14 @@ func TestValidGlob(t *testing.T) {
 		}
 	}
 }
+
+func TestHigher(t *testing.T) {
+	for _, c := range []struct{ a, b, want Tier }{
+		{TierDocs, TierDocs, TierDocs}, {TierDocs, TierSmall, TierSmall}, {TierSmall, TierDocs, TierSmall},
+		{TierSmall, TierFull, TierFull}, {TierDocs, "", TierFull}, {"", TierDocs, TierFull}, {"bogus", TierSmall, TierFull},
+	} {
+		if got := Higher(c.a, c.b); got != c.want {
+			t.Errorf("Higher(%q, %q) = %q, want %q", c.a, c.b, got, c.want)
+		}
+	}
+}

@@ -3,10 +3,13 @@ package worker
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/git"
 )
 
 // tierTrainWorld is trainWorld with each branch adding the file its map value
@@ -54,5 +57,38 @@ func TestTrainTier(t *testing.T) {
 	w = tierTrainWorld(t, `{"test":{"full":["false"]}}`, map[string]string{"b1": "b1.md"})
 	if res, err = w.train(TrainOpts{Targets: []string{"b1"}}); err != nil || res.Verdict != GateVerifyFailed || len(res.Skipped) != 0 {
 		t.Fatalf("empty test.docs: %s skipped %v err %v", res.Verdict, res.Skipped, err)
+	}
+}
+
+// The train classifies the heads it merges, not only what each member's
+// check saw: a member re-pushed with code after a docs-only check verifies
+// full, and so does a train that syncs another base in.
+func TestTrainTierPinsTheMergedHeads(t *testing.T) {
+	dir := tierRepo(t, "x.go") // feat changes code
+	rev := func(ref string) string {
+		out, err := exec.Command("git", "-C", dir, "rev-parse", ref).Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	cfg := ParseGateConfig(decodeCfg(t, `{"test":{"full":["false"],"docs":["true"]}}`))
+	run := func(o TrainOpts) *trainRun {
+		tr := &trainRun{e: Env{Git: git.Exec}, ctx: bg, root: dir, o: o, in: gateInput{cfg: cfg},
+			baseSHA: rev("main"), heads: []string{rev("feat")}}
+		tr.res.Members = []TrainMember{{Target: "feat", Branch: "feat", Tier: "docs"}}
+		tr.pickTier()
+		return tr
+	}
+	if tr := run(TrainOpts{}); tr.res.Tier != "full" || tr.tierCfg != nil {
+		t.Fatalf("a docs-checked member whose head holds code verified as %q", tr.res.Tier)
+	}
+	docs := tierRepo(t, "README.md")
+	dir = docs
+	if tr := run(TrainOpts{}); tr.res.Tier != "docs" || tr.tierCfg == nil {
+		t.Fatalf("a docs-only head: tier %q", tr.res.Tier)
+	}
+	if tr := run(TrainOpts{SyncBase: "release"}); tr.res.Tier != "full" || tr.tierCfg != nil {
+		t.Fatalf("a synced train verified as %q", tr.res.Tier)
 	}
 }
