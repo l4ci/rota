@@ -365,8 +365,9 @@ func Run(ctx context.Context, in Input) Report {
 }
 
 type runner struct {
-	in  Input
-	ctx context.Context
+	in       Input
+	ctx      context.Context
+	settings *hookSettings // read once per run, see hookSettings
 }
 
 var configDirWhy = map[string]string{
@@ -704,12 +705,39 @@ const (
 	guardHookHint  = "rota hook install --scope project (or --scope user)"
 )
 
-// projectFiles reads the project's two settings files, in precedence order.
-func (d *runner) projectFiles() []hookFile {
-	return []hookFile{
-		d.read(hook.SettingsPath(hook.ScopeProjectLocal, d.in.ProjectRoot)),
-		d.read(hook.SettingsPath(hook.ScopeProject, d.in.ProjectRoot)),
+// hookSettings is the Claude settings files a run looks at, read once: the
+// project's two files in precedence order, then one user file per config dir.
+// It owns the scope rule for the hook checks.
+type hookSettings struct {
+	local, shared hookFile   // settings.local.json, settings.json
+	users         []hookFile // one per in.ConfigDirs entry, same order
+}
+
+// hooks returns the run's settings view, reading the files on first use.
+func (d *runner) hooks() *hookSettings {
+	if d.settings == nil {
+		h := &hookSettings{
+			local:  d.read(hook.SettingsPath(hook.ScopeProjectLocal, d.in.ProjectRoot)),
+			shared: d.read(hook.SettingsPath(hook.ScopeProject, d.in.ProjectRoot)),
+		}
+		for _, dir := range d.in.ConfigDirs {
+			h.users = append(h.users, d.read(hook.SettingsPath(hook.ScopeUser, d.expand(dir))))
+		}
+		d.settings = h
 	}
+	return d.settings
+}
+
+// project is the project's files in precedence order.
+func (h *hookSettings) project() []hookFile { return []hookFile{h.local, h.shared} }
+
+// inScope is every file a hook in this run may live in.
+func (h *hookSettings) inScope() []hookFile { return append(h.project(), h.users...) }
+
+// reachesWorktree is the files a worker worktree reads: settings.local.json is
+// untracked, so it never gets there.
+func (h *hookSettings) reachesWorktree() []hookFile {
+	return append([]hookFile{h.shared}, h.users...)
 }
 
 type hookFile struct {
@@ -737,21 +765,13 @@ func (d *runner) read(path string) hookFile {
 	return f
 }
 
-func (d *runner) userFile(dir string) hookFile {
-	return d.read(hook.SettingsPath(hook.ScopeUser, d.expand(dir)))
-}
-
 // optIn reports whether anything `rota hook install` writes is present in any
 // settings file in scope: a `# rota-hook` entry for any event, or a statusLine
 // that runs `rota statusline dump`. The hooks are opt-in, so with none of that
 // the checks skip; they fail only on a broken or partial install. Unreadable
 // files are returned so a skip can say it could not look there.
 func (d *runner) optIn() (in bool, unreadable []string) {
-	files := d.projectFiles()
-	for _, dir := range d.in.ConfigDirs {
-		files = append(files, d.userFile(dir))
-	}
-	for _, f := range files {
+	for _, f := range d.hooks().inScope() {
 		if f.err != nil {
 			unreadable = append(unreadable, f.path)
 		}
@@ -778,21 +798,22 @@ func (d *runner) statusline() Check {
 	if in, bad := d.optIn(); !in {
 		return notInstalled(name, bad)
 	}
-	proj := d.projectFiles()
-	dirs := d.in.ConfigDirs
-	if len(dirs) == 0 {
-		dirs = []string{""}
+	h := d.hooks()
+	proj := h.project()
+	users := h.users
+	labels := d.in.ConfigDirs
+	if len(users) == 0 {
+		users, labels = []hookFile{{}}, []string{""}
 	}
-	anyFile := proj[0].exists || proj[1].exists
+	anyFile := h.local.exists || h.shared.exists
 	var parts, bad []string
-	for _, dir := range dirs {
+	for i, dir := range labels {
 		files := append([]hookFile{}, proj...)
 		label := "project"
 		if dir != "" {
-			u := d.userFile(dir)
-			files = append(files, u)
+			files = append(files, users[i])
 			label = dir
-			anyFile = anyFile || u.exists
+			anyFile = anyFile || users[i].exists
 		}
 		var eff *hookFile
 		broken := ""
@@ -861,13 +882,9 @@ func (d *runner) stopHook() Check {
 	if in, bad := d.optIn(); !in {
 		return notInstalled(name, bad)
 	}
-	files := d.projectFiles()
-	for _, dir := range d.in.ConfigDirs {
-		files = append(files, d.userFile(dir))
-	}
 	found := map[string]string{}
 	var unreadable []string
-	for _, f := range files {
+	for _, f := range d.hooks().inScope() {
 		if f.err != nil {
 			unreadable = append(unreadable, f.path)
 		}
@@ -909,13 +926,9 @@ func (d *runner) guardHook() Check {
 	if in, bad := d.optIn(); !in {
 		return notInstalled(name, bad)
 	}
-	files := d.projectFiles()[1:] // settings.json; settings.local.json never reaches a worktree
-	for _, dir := range d.in.ConfigDirs {
-		files = append(files, d.userFile(dir))
-	}
 	var unreadable []string
 	cmd := ""
-	for _, f := range files {
+	for _, f := range d.hooks().reachesWorktree() {
 		if f.err != nil {
 			unreadable = append(unreadable, f.path)
 		}
