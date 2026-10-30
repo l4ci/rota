@@ -607,3 +607,83 @@ func TestReapPrunesOldSkillCache(t *testing.T) {
 		t.Errorf("no cache dir must find nothing: %v", ids(got.Candidates))
 	}
 }
+
+func TestApplyRefusesAHandBuiltProcessCandidate(t *testing.T) {
+	g := repo(nil, nil)
+	h := &fakeHost{procs: []Process{
+		{PID: 10, Name: "npm", Tab: "w1:t1", Cwd: "/r/.worktrees/old"},
+		{PID: 11, Name: "node", Tab: "w2:t1", Cwd: "/r/.worktrees/old"},
+	}}
+	agents := []host.Agent{{Tab: "w2:t1", Name: "a", Cwd: "/elsewhere/a", Status: "working"}}
+	in := input(g, nil, agents, h)
+	cases := map[string]Candidate{
+		"agent live on its tab": {ID: "process:11", Kind: KindProcess, PID: 11},
+		"no pid":                {ID: "process:", Kind: KindProcess, Name: "10 npm"},
+		"pid not running":       {ID: "process:99", Kind: KindProcess, PID: 99},
+	}
+	for name, c := range cases {
+		out := Apply(bg, in, []Candidate{c})
+		if len(out.Reaped) != 0 || len(out.Failed) != 1 || len(h.stopped) != 0 {
+			t.Errorf("%s: apply = %+v, stopped %v", name, out, h.stopped)
+		}
+	}
+}
+
+func TestApplyStopsTheProcessByPID(t *testing.T) {
+	g := repo(nil, nil)
+	h := &fakeHost{procs: []Process{{PID: 10, Name: "npm", Tab: "w1:t1", Cwd: "/r/.worktrees/old"}}}
+	in := input(g, nil, []host.Agent{}, h)
+	res := find(t, in, KindProcess)
+	if len(res.Candidates) != 1 || res.Candidates[0].PID != 10 {
+		t.Fatalf("candidates = %+v", res.Candidates)
+	}
+	res.Candidates[0].Name = "display text, not a pid"
+	out := Apply(bg, in, res.Candidates)
+	if !reflect.DeepEqual(h.stopped, []int{10}) || len(out.Failed) != 0 {
+		t.Errorf("stopped %v, apply = %+v", h.stopped, out)
+	}
+}
+
+func TestApplyNeverStopsAProcessAnAgentTookOver(t *testing.T) {
+	g := repo(nil, nil)
+	h := &fakeHost{procs: []Process{{PID: 10, Name: "npm", Tab: "w1:t1", Cwd: "/r/.worktrees/old"}}}
+	in := input(g, nil, []host.Agent{}, h)
+	res := find(t, in, KindProcess)
+	in.Report.Agents = []host.Agent{{Tab: "w1:t1", Name: "a", Cwd: "/r/.worktrees/old", Status: "working"}}
+	out := Apply(bg, in, res.Candidates)
+	if len(h.stopped) != 0 || len(out.Failed) != 1 {
+		t.Errorf("stopped %v, apply = %+v", h.stopped, out)
+	}
+}
+
+func TestApplyRefusesAWorktreeAnAgentTookOver(t *testing.T) {
+	g := repo([]wt{{"old", "kit/1-a", ""}}, nil, "kit/1-a")
+	g.clean("old")
+	g.resp["/r/.worktrees/old|merge-base --is-ancestor HEAD main"] = gitResp{}
+	g.resp["worktree remove /r/.worktrees/old"] = gitResp{}
+	in := input(g, nil, []host.Agent{}, nil)
+	res := find(t, in, KindWorktree)
+	if len(res.Candidates) != 1 {
+		t.Fatalf("candidates = %v", ids(res.Candidates))
+	}
+	in.Report.Agents = []host.Agent{{Tab: "w1:t1", Name: "a", Cwd: "/r/.worktrees/old/internal", Status: "working"}}
+	out := Apply(bg, in, res.Candidates)
+	if len(out.Failed) != 1 || g.ran("worktree remove") {
+		t.Errorf("apply = %+v, calls %v", out, g.calls)
+	}
+}
+
+func TestApplyRefusesAHandBuiltWorktreeCandidate(t *testing.T) {
+	g := repo([]wt{{"slot", "kit/3-a", ""}}, nil)
+	g.resp["worktree remove /r/.worktrees/slot"] = gitResp{}
+	rows := []round.Row{{Name: "slot", Registered: true, Branch: "kit/3-a"}}
+	in := input(g, rows, []host.Agent{}, nil)
+	stale := []Candidate{
+		{ID: "worktree:slot", Kind: KindWorktree, Name: "slot", Path: "/r/.worktrees/slot"},
+		{ID: "worktree:gone", Kind: KindWorktree, Name: "gone", Path: "/r/.worktrees/gone"},
+	}
+	out := Apply(bg, in, stale)
+	if len(out.Reaped) != 0 || len(out.Failed) != 2 || g.ran("worktree remove") {
+		t.Errorf("apply = %+v, calls %v", out, g.calls)
+	}
+}
