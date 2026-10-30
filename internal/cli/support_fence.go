@@ -2,15 +2,10 @@ package cli
 
 import (
 	"errors"
-	"io/fs"
-	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -37,8 +32,7 @@ func roleInTrackedConfigStop(c *Ctx) (Result, error) {
 	if err != nil {
 		return Result{}, nil
 	}
-	project := fsio.LoadJSON(rotatree.Config(root), jsonx.NewObject())
-	if _, ok := config.Lookup(project, config.RoundRoleKey); !ok {
+	if !roundcfg.RoleInTrackedConfig(root) {
 		return Result{}, nil
 	}
 	d := jsonObj("blockedBy", blockedby.Config, "key", config.RoundRoleKey, "changed", false)
@@ -75,25 +69,12 @@ func supportRefusal(c *Ctx, root, what string) (Result, error) {
 // supportMachine is whether this machine's round.role is support. A role it
 // cannot read is the exit-4 refusal, so a verb never runs on a guess.
 func supportMachine(c *Ctx, root, what string) (bool, Result, error) {
-	unknown := func(why, hint string) (bool, Result, error) {
+	support, rerr := roundcfg.SupportMachine(root, c.deps().Config)
+	if rerr != nil {
 		d := jsonObj("blockedBy", blockedby.Config, "key", config.RoundRoleKey, "changed", false)
-		return false, Result{Data: d}, Refused("%s needs to know this machine's role: %s", what, why).WithHint(hint)
+		return false, Result{Data: d}, Refused("%s needs to know this machine's role: %s", what, rerr.Why).WithHint(rerr.Hint)
 	}
-	// Reads the layer from disk on purpose, not through Deps.Config.
-	// config.Load skips a local layer it cannot read or decode, which would
-	// read as role main and open the fence.
-	if raw, err := os.ReadFile(rotatree.ConfigLocal(root)); err == nil {
-		if _, err := jsonx.Decode(raw); err != nil {
-			return unknown(".rota/config.local.json does not decode: "+err.Error(), "fix the JSON in .rota/config.local.json, or remove the file on the main machine")
-		}
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		return unknown(".rota/config.local.json cannot be read: "+err.Error(), "make .rota/config.local.json readable")
-	}
-	role, err := roundcfg.MachineRole(c.deps().Config(root))
-	if err != nil {
-		return unknown(err.Error(), "set round.role to main or support: rota config set round.role main")
-	}
-	return role == roundcfg.RoleSupport, Result{}, nil
+	return support, Result{}, nil
 }
 
 // supportRoundStartStop refuses `round start` for a support configuration that
