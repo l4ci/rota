@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/l4ci/rota/internal/change"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
@@ -42,6 +43,11 @@ type ReviewSources struct {
 	// Lenses is review.lenses (#2064): the focused reviewers a branch triggers
 	// by the files it touches and its issues' labels. Empty triggers none.
 	Lenses config.Lenses
+	// Change is change.* (#2348): the tier the diff falls in sets the depth.
+	// The zero value has no docs paths and no small tier, so it never applies;
+	// ChangeErr, a malformed change.*, classifies as full.
+	Change    change.Policy
+	ChangeErr error
 }
 
 // ReviewDepth is a resolved depth with the inputs it was read from.
@@ -56,6 +62,8 @@ type ReviewDepth struct {
 	// Lenses are the review lenses the branch triggers, each with the path or
 	// label that did it. None when the depth is none.
 	Lenses []config.LensHit
+	// Tier is the change tier the diff was put in.
+	Tier change.Result
 }
 
 // ReviewDepthError says which read failed. Guessing a depth could pass a risky
@@ -77,28 +85,39 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	if err != nil {
 		return ReviewDepth{}, &ReviewDepthError{"diff", fmt.Sprintf("could not diff %s to pick the review depth", s.Span), err}
 	}
-	// --no-renames lists both the old and the new path of a move, so a file
-	// moved out of a protected directory still counts as touching it. -z keeps
-	// git from C-quoting unusual names, which no glob would match.
-	res, err := s.Git(ctx, s.Dir, "diff", "--name-only", "-z", "--no-renames", s.Span)
-	if err == nil && res.ExitCode != 0 {
-		err = &git.ExitError{Args: "diff --name-only " + s.Span, ExitCode: res.ExitCode, Stderr: res.Stderr}
-	}
-	var files []string
-	for _, l := range strings.Split(res.Stdout, "\x00") {
-		if l != "" {
-			files = append(files, l)
-		}
-	}
+	files, err := git.DiffFiles(ctx, s.Git, s.Dir, s.Span)
 	if err != nil {
 		return ReviewDepth{}, &ReviewDepthError{"diff", fmt.Sprintf("could not list the files of %s to pick the review depth", s.Span), err}
 	}
 	in := config.ReviewInput{Changed: changed, Files: files, Labels: slices.Clone(s.Labels)}
+	// The PR body is read at most once, for the tier's Door line and the policy's.
+	prRead := false
+	var prBody string
+	var prErr error
+	readPR := s.PRBody
+	if readPR != nil {
+		readPR = func() (string, error) {
+			if !prRead {
+				prRead = true
+				prBody, prErr = s.PRBody()
+			}
+			return prBody, prErr
+		}
+	}
+	var tier change.Result
+	if s.ChangeErr != nil || len(s.Change.DocsPaths) > 0 || len(s.Change.RiskyPaths) > 0 || s.Change.SmallBelow > 0 {
+		tier = ClassifyChange(ctx, ChangeSources{Policy: s.Change, PolicyErr: s.ChangeErr, Git: s.Git, Dir: s.Dir, Span: s.Span, PRBody: readPR})
+		in.Tier, in.Risky = tier.Tier, tier.Risky
+	}
+	needsIssue := s.Policy.NeedsIssue()
+	if in.Tier == change.TierDocs {
+		needsIssue = len(s.Policy.Labels) > 0 // no drift to read the issue for
+	}
 	decide := s.Policy.Decide
 	// Each issue's own labels decide its cross requirement, as they do its
 	// depth: one issue's review:none must not skip another's.
 	labelSets := [][]string{in.Labels}
-	if s.Issues != nil && s.Issue != "" && (s.Policy.NeedsIssue() || s.Cross.Active() || s.Lenses.UsesLabels()) {
+	if s.Issues != nil && s.Issue != "" && (needsIssue || s.Cross.Active() || s.Lenses.UsesLabels()) {
 		keys := append([]tracker.IssueKey{s.Issue}, s.Members...)
 		var got []tracker.Issue
 		var bodies []string
@@ -142,14 +161,18 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 			}
 		}
 	}
-	if s.PRBody != nil && s.Policy.MayBeBelowFull() {
-		body, err := s.PRBody()
-		if err != nil && !tracker.IsCLIMissing(err) {
+	// A body read only for the tier failed closed there (tier full); only the
+	// policy's own need for the Door line makes an unreadable body an error.
+	if readPR != nil && (s.Policy.MayBeBelowFull() || prRead) {
+		body, err := readPR()
+		if err != nil && !tracker.IsCLIMissing(err) && s.Policy.MayBeBelowFull() {
 			return ReviewDepth{}, &ReviewDepthError{"pr", fmt.Sprintf("could not read the PR body for its Door line to pick the review depth: %v", err), err}
 		}
-		in.PRBody = body
+		if err == nil {
+			in.PRBody = body
+		}
 	}
-	out := ReviewDepth{ReviewDecision: decide(in), Changed: changed, Labels: in.Labels}
+	out := ReviewDepth{ReviewDecision: decide(in), Changed: changed, Labels: in.Labels, Tier: tier}
 	// A depth of none reviews nothing, so no lens runs either. in.Labels is the
 	// union of the lead's and every member's, so any bundled issue can trigger.
 	if out.Depth != config.DepthNone {

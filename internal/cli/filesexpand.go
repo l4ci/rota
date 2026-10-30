@@ -18,7 +18,8 @@ func anyContains(list []string, sub string) bool {
 	return false
 }
 
-// expandFiles is the one owner of the {files} token. Each element of cmds
+// expandFiles owns the {files} token for the worker's own checks (the gate
+// and train expand test.small's in internal/worker/filesexpand.go). Each element of cmds
 // is one command (its arguments; a single argument is a shell line) and comes
 // back as the shell line that runs and that proof records. {files} becomes the
 // shell-quoted changed files of dir against base. git is asked once, and only
