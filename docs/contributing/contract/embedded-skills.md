@@ -47,6 +47,13 @@ data: `{"name": string, "text": string}` where `text` starts with the line `Base
 exit: 2 on an unknown skill or reference (`hint` lists the known names) or when both flags are given
 note: read-only, reads the binary's embedded set (no second copy), so the text matches the verbs and flags the binary accepts. Text mode prints the file with its trailing newline trimmed (the printer adds one back). `--references` lists the skill-local files linked by `SKILL.md` and the installed shared references, using paths relative to the skill directory (`reviewer-briefs.md`, `references/test-quality.md`). Every listed name is accepted by `--reference`. Bare shared names remain accepted as legacy aliases unless a linked local file has that name; use the `references/` prefix to select the shared file in that case. Unlisted files and paths outside the skill are rejected. Link footers resolve local files from the skill directory and shared references from the shared cache copy.
 
+### rota skills links
+rota skills links <file>...
+repo: none
+data: `{"files": [{"file": string, "links": []string}]}`, one entry per argument in order
+exit: 1 when a file cannot be read; 2 with no file
+note: read-only. The one definition of a relative link in a skill body (`skills.Links`): code spans and fenced blocks hold none, URLs, absolute paths and bare anchors are skipped, an anchor or query is cut off and duplicates drop. The `skills get` footer and `test/validate-skills.py` both take their links from it. The install closure is a documented superset: it also installs a reference a skill only names in prose (`references/x.md` outside a link), so a reference cited without a link still ships. Text mode prints one target per line, prefixed `<file>` and a tab when several files are given.
+
 ### rota skills uninstall
 rota skills uninstall [--scope user|project] [--agent claude|codex|all] [--overwrite]
 repo: none

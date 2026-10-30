@@ -5,10 +5,14 @@ lint (PROSE_RULES, #173).
 Stdlib only. Exit 0 on all-pass, exit 1 on any failure, exit 2 on unexpected error.
 """
 
+import atexit
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -322,13 +326,43 @@ def check_layout(skills_dir, issues):
                 issues.append(f"{f.as_posix()}: unsupported skill content; skills ship flat markdown and agents/*.yaml only (the binary does not package it)")
 
 
+_ROTA = None
+
+
+def rota_bin():
+    # The binary is the owner of "what is a relative link" (skills.Links), so the
+    # validator asks it instead of keeping a regex. ROTA_BIN wins; else build one
+    # from this checkout, once.
+    global _ROTA
+    if _ROTA is None:
+        _ROTA = os.environ.get("ROTA_BIN") or ""
+        if not _ROTA:
+            repo = Path(__file__).resolve().parent.parent
+            build_dir = tempfile.mkdtemp(prefix="validate-skills-")
+            atexit.register(shutil.rmtree, build_dir, ignore_errors=True)
+            out = os.path.join(build_dir, "rota")
+            subprocess.run(["go", "build", "-o", out, "./cmd/rota"], cwd=repo, check=True)
+            _ROTA = out
+    return _ROTA
+
+
+def skill_links(*paths):
+    """Map each markdown path to its relative link targets, via `rota skills links`."""
+    out = subprocess.run([rota_bin(), "skills", "links", "--json", *map(str, paths)],
+                         capture_output=True, text=True, check=True).stdout
+    return {f["file"]: f["links"] for f in json.loads(out)["data"]["files"]}
+
+
+SIBLING = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]*\.md')
+
+
 def check_references(path, text, issues):
     # Skills cite references/<x>.md; `rota skills install` copies each cited file
     # next to the skill, so in the source tree the link resolves against the
     # skills/references/ dir.
-    pattern = re.compile(r'\((references/[^)\s]+\.md)\)')
-    for m in pattern.finditer(text):
-        target = m.group(1)
+    for target in skill_links(path)[str(path)]:
+        if not target.startswith("references/") or not target.endswith(".md"):
+            continue
         resolved = (Path(path).parent.parent / target).resolve()
         if not resolved.exists():
             issues.append(f"{path}: broken reference '{target}' -> '{resolved}'")
@@ -339,26 +373,27 @@ def check_skill_files(path, text, issues):
     # from SKILL.md as `[x](x.md)` and read on a condition. Every such link must
     # resolve, every sibling must be linked, and a sibling does not link another.
     folder = Path(path).parent
+    sibs = sorted(s for s in folder.glob("*.md") if s.name != "SKILL.md")
+    links = skill_links(path, *sibs)
     linked = set()
-    for m in re.finditer(r'\]\(([A-Za-z0-9][A-Za-z0-9._-]*\.md)\)', text):
-        linked.add(m.group(1))
-        if not (folder / m.group(1)).is_file():
-            issues.append(f"{path}: broken sibling link '{m.group(1)}'")
-    for m in re.finditer(r'\]\(((?!references/|\.\./|https?:|/|#)[^)\s]*/[^)\s]*)\)', text):
-        issues.append(f"{path}: link '{m.group(1)}' points into a subdirectory; the binary packages flat sibling markdown only")
-    for sib in sorted(folder.glob("*.md")):
-        if sib.name == "SKILL.md":
-            continue
+    for target in links[str(path)]:
+        if SIBLING.fullmatch(target):
+            linked.add(target)
+            if not (folder / target).is_file():
+                issues.append(f"{path}: broken sibling link '{target}'")
+        elif "/" in target and not target.startswith(("references/", "../")):
+            issues.append(f"{path}: link '{target}' points into a subdirectory; the binary packages flat sibling markdown only")
+    for sib in sibs:
         if sib.name not in linked:
             issues.append(f"{sib.as_posix()}: not linked from {path}")
         body = sib.read_text(encoding="utf-8")
         lines = body.splitlines()
         if len(lines) > REF_TOC_LINES and "## Contents" not in lines[:15]:
             issues.append(f"{sib.as_posix()}: {len(lines)} lines with no '## Contents' section in its first 15 lines")
-        others = {s.name for s in folder.glob("*.md") if s != sib}
-        for m in re.finditer(r'\]\(([A-Za-z0-9][A-Za-z0-9._-]*\.md)\)', body):
-            if m.group(1) in others:
-                issues.append(f"{sib.as_posix()}: links sibling '{m.group(1)}'; extracted files do not link each other")
+        others = {s.name for s in sibs if s != sib}
+        for target in links[str(sib)]:
+            if target in others:
+                issues.append(f"{sib.as_posix()}: links sibling '{target}'; extracted files do not link each other")
 
 
 STEP_HEADING = re.compile(r'^#{2,4}\s+((?:Step\s+\d|\d+\.\s).*?)\s*$')
