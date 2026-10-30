@@ -318,7 +318,7 @@ func (b *Issues) MilestoneStatus(mid, status string) error {
 		var closed []string
 		for _, child := range children {
 			if is.Milestone != "" && child.Milestone == is.Milestone && child.State == "closed" && !slices.Contains(child.Labels, config.Label(b.Cfg, "milestoneTracker")) {
-				closed = append(closed, fmt.Sprintf("- %s: %s", child.Key.Ref(), oneLine(child.Title)))
+				closed = append(closed, ms.ClosedItemBullet(child.Key.Ref(), oneLine(child.Title), ""))
 			}
 		}
 		summary = ms.ShippedSummary(is.Body, closed)
