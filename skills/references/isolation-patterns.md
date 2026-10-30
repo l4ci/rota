@@ -1,6 +1,6 @@
 # Isolation patterns
 
-Used by `/rota-work` Step 5: the isolation patterns plus the umbrella-mode worktree variant.
+Used by `/rota-work` Step 5: the isolation patterns plus the umbrella-mode worktree variant. `rota work start` runs the two single-repo patterns itself; the rest are the step-by-step path.
 
 `/rota-work` isolates each cycle from main with a feature branch or a separate worktree, per `work.isolation` in `.rota/config.json` (`"branch"` or `"worktree"`).
 

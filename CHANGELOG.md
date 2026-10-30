@@ -45,6 +45,10 @@ Orca as a worker host, a one-line agent install, and stricter gates on what coun
 
 ## Unreleased
 
+### New
+
+- **`rota work start` and `rota ship finish`.** One call opens a `/rota-work` cycle (clean-tree guard, sibling sweep, branch, status entry, claim); one call closes a `/rota-ship` cycle (status removal, file-backend completion, learn, docs and release triggers, reported and never dispatched). Round workers and umbrella projects keep the step-by-step path (#2349).
+
 ### Fixed
 
 - GitLab issue reads now load all comment pages, so the worker gate sees claim, acceptance and proof notes beyond the oldest 20 notes (#2226).

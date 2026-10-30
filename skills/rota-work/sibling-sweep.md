@@ -1,6 +1,6 @@
 # Sweeping tool-generated siblings
 
-Loaded by `SKILL.md` Step 1 (dirty guard) and Step 8.5 (after the task commits).
+Loaded by `SKILL.md` Step 8.5 (after the task commits) and the step-by-step guard in `umbrella-and-issue-mode.md`. `rota work start` (Step 1) applies the same list in code (`internal/cycle`); change the two together.
 
 Exit 1 from `rota git guard clean` (dirty tree): if **every** dirty path in `git status --porcelain` is a tool-generated sibling, sweep them into their own `chore:` commit (never inside a task commit) and continue; any user change stops with the guard's message. Siblings are:
 
