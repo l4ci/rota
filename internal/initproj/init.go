@@ -54,7 +54,7 @@ func Init(root string) (Result, error) {
 	rota := rotatree.Dir(root)
 	// A corrupt counters.json is refused before anything is written, so exit 70
 	// leaves the tree as it was.
-	if err := checkCounters(filepath.Join(rota, "counters.json")); err != nil {
+	if err := checkCounters(filepath.Join(rota, rotatree.CountersFile)); err != nil {
 		return res, err
 	}
 	step := func(wrote bool, err error) error {
@@ -68,7 +68,7 @@ func Init(root string) (Result, error) {
 	}
 
 	for _, f := range []struct{ name, text string }{
-		{"BACKLOG.md", backlogSeed},
+		{rotatree.BacklogFile, backlogSeed},
 		{"KNOWLEDGE.md", knowledgeSeed},
 		{"DECISIONS.md", decisionsSeed},
 		{"MAP.md", mapSeed},
@@ -82,7 +82,7 @@ func Init(root string) (Result, error) {
 		return res, err
 	}
 
-	if err := seedFile(filepath.Join(rota, "counters.json"), countersSeed); err != nil {
+	if err := seedFile(filepath.Join(rota, rotatree.CountersFile), countersSeed); err != nil {
 		return res, err
 	}
 	for _, f := range []struct{ name, text string }{
