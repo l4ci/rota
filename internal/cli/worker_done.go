@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proof"
+	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -102,6 +103,18 @@ func doneDeps(c *Ctx, root string) worker.DoneDeps {
 		},
 		RunTargeted: func(dir, command, base, head string, ids []string) (string, error) {
 			return targetedProof(c, root, dir, command, base, head, ids)
+		},
+		// A backlog that cannot be read treats the item as code.
+		IsReview: func(id string) bool {
+			if !opened {
+				be, _ = openBacklog(c, root, false, "")
+				opened = true
+			}
+			if be == nil {
+				return false
+			}
+			it, err := be.Get(id)
+			return err == nil && round.IsReviewTitle(it.Title)
 		},
 	}
 }

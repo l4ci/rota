@@ -55,6 +55,9 @@ type DoneDeps struct {
 	// RunTargeted proves each of ids with command at head: a PASS row or a run.
 	// It returns the expanded command, "" when expansion failed.
 	RunTargeted func(dir, command, base, head string, ids []string) (string, error)
+	// IsReview reports whether item id is an architecture-review item: it ends
+	// with the issues it filed, never a PR. nil means no item is.
+	IsReview func(id string) bool
 }
 
 // DoneResult is what done reports, set field by field as the sequence gets
@@ -124,6 +127,11 @@ func done(req DoneRequest, dp DoneDeps, res *DoneResult) error {
 		return err
 	}
 	dir := doneDir(sl, req.Root)
+	// A review ends with the issues it filed, not a PR: no pushed branch, proof
+	// or acceptance marks to check. `round accept` closes the item.
+	if dp.IsReview != nil && dp.IsReview(id) {
+		return markDone(env, req, dp, sl, id, res)
+	}
 	// Done is the worker's last action: a late edit or commit after it moves
 	// the head a review or the gate has already bound to.
 	if req.Kind != OutcomeFailed {
