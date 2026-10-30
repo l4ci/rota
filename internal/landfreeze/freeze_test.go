@@ -1,11 +1,15 @@
 package landfreeze
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"unicode"
+
+	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 func TestRepairPRReferences(t *testing.T) {
@@ -133,5 +137,44 @@ func TestRepairPRValidateAndMatchAgree(t *testing.T) {
 				t.Fatalf("samePR(%q, %q)=%v want %v", tc.ref, url, got, tc.valid)
 			}
 		})
+	}
+}
+
+func TestFrozenReadsThroughRunner(t *testing.T) {
+	common := t.TempDir()
+	run := func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		return git.Result{Stdout: common + "\n"}, nil
+	}
+	write := func(body string) {
+		t.Helper()
+		p := rotastate.File(common, "freeze.json")
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx := context.Background()
+	if Frozen(ctx, run, "/r") {
+		t.Fatal("no record must not be frozen")
+	}
+	write(`{"active":false,"base":"main","sha":"0123456789012345678901234567890123456789"}`)
+	if Frozen(ctx, run, "/r") {
+		t.Fatal("inactive record must not be frozen")
+	}
+	write(`{"active":true,"base":"release","sha":"0123456789012345678901234567890123456789"}`)
+	if !Frozen(ctx, run, "/r") {
+		t.Fatal("active record on any base must be frozen")
+	}
+	write(`{not json`)
+	if !Frozen(ctx, run, "/r") {
+		t.Fatal("unreadable record must count as frozen")
+	}
+	notRepo := func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		return git.Result{ExitCode: 128}, nil
+	}
+	if Frozen(ctx, notRepo, "/r") {
+		t.Fatal("outside a repo there is no freeze")
 	}
 }
