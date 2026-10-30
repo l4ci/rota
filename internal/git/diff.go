@@ -137,16 +137,6 @@ func CountLines(numstat string) int {
 	return total
 }
 
-// RemoteBase is the package function on r's runner in r.Dir.
-func (r Repo) RemoteBase(ctx context.Context, base string) string {
-	return RemoteBase(ctx, r.runner(), r.Dir, base)
-}
-
-// ChangedPaths is the package function on r's runner in r.Dir.
-func (r Repo) ChangedPaths(ctx context.Context, span string) ([]string, error) {
-	return ChangedPaths(ctx, r.runner(), r.Dir, span)
-}
-
 // ChangedLines is the package function on r's runner in r.Dir.
 func (r Repo) ChangedLines(ctx context.Context, span string) (int, error) {
 	return ChangedLines(ctx, r.runner(), r.Dir, span)

@@ -77,7 +77,7 @@ func TestQueries(t *testing.T) {
 	dir := newRepo(t)
 	r := Repo{Dir: dir}
 
-	if got, ok, err := r.CommonDir(ctx); err != nil || !ok || got != filepath.Join(dir, ".git") {
+	if got, ok, err := CommonDirVia(ctx, Exec, r.Dir); err != nil || !ok || got != filepath.Join(dir, ".git") {
 		t.Fatalf("CommonDir = %q, %v, %v", got, ok, err)
 	}
 	if got, ok, err := r.Toplevel(ctx); err != nil || !ok || got != dir {
@@ -104,7 +104,7 @@ func TestCommonDirOfLinkedWorktree(t *testing.T) {
 	dir := newRepo(t)
 	wt := filepath.Join(t.TempDir(), "wt")
 	mustGit(t, dir, "worktree", "add", "-q", "-b", "side", wt)
-	got, ok, err := Repo{Dir: wt}.CommonDir(context.Background())
+	got, ok, err := CommonDirVia(context.Background(), Exec, wt)
 	if err != nil || !ok || got != filepath.Join(dir, ".git") {
 		t.Fatalf("CommonDir = %q, %v, %v; want %s", got, ok, err, filepath.Join(dir, ".git"))
 	}
@@ -113,7 +113,7 @@ func TestCommonDirOfLinkedWorktree(t *testing.T) {
 func TestQueriesOutsideRepo(t *testing.T) {
 	ctx := context.Background()
 	r := Repo{Dir: t.TempDir()}
-	if _, ok, err := r.CommonDir(ctx); ok || err != nil {
+	if _, ok, err := CommonDirVia(ctx, Exec, r.Dir); ok || err != nil {
 		t.Fatalf("CommonDir ok=%v err=%v", ok, err)
 	}
 	if _, ok, err := r.ShortHead(ctx); ok || err != nil {
