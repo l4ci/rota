@@ -19,7 +19,7 @@ If `ROTA_SLOT` is set, or the brief says you are a round worker, stop: *"/rota-g
 4. **On failure,** fix and rerun all three. Never land with a failing cheap check. If you cannot fix it, stop and report.
 5. **Land.** `rota ship strategy --json`, then:
    - `direct`: `rota ship merge <branch> --body-file -` with a subject starting `merge: ` and the footer below. Exit 4 `manual gate`: ask, rerun with `--confirm --confirm-note`.
-   - `pr` (also a tracker, which forces it): `rota ship pr <branch> --items <ID> --body-file <f>` with the footer below.
+   - `pr` (also a tracker, which forces it): write the body to a file first: a summary, the `Closes #<ID>` line, `## Assumptions` and `## Rulings` (`None.` when empty), then the footer below. Then `rota ship pr <branch> --title "<issue title>" --body-file <f> --items <ID>`.
 6. **Close out.** `rota ship finish --json <branch> [--commit <data.sha>]`; act on its JSON as `/rota-ship` Steps 8 to 9.5 do. On a tracker the PR merge closes the issue.
 
 ## Footer (merge commit or PR body)
