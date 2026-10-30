@@ -111,6 +111,8 @@ See [configuration](configuration.md) for the full `work` block.
 
 `true` and `false` still work as `full` and `none`. An object picks the depth by diff size, label and path (for example `risk:high` forces `full`), and lifts a `light` review to `full` on a `Door: one-way` PR, a diff outside the issue's declared files or a risky path. Support files do not count as outside: tests beside a declared file, docs (the generated option reference included), frozen and golden records and smoke sections (`ship.review.supportPaths` sets the list); see [configuration](configuration.md#shipreview). `/rota-ship` prints the chosen depth and why.
 
+The change tier also sets the depth: a docs-only diff gets `none`, even under `full`, and a small one is capped at `light`; a label, a `Door: one-way` line or a `paths` match still raises it. `rota change classify` shows the tier; the rules and the `change.*` keys are in [configuration](configuration.md#change).
+
 The review gate is independent of the autonomy level. A `FAIL` verdict still halts the chain until you fix the branch.
 
 ## Review lenses
