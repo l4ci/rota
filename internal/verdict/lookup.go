@@ -129,15 +129,7 @@ func RecoverPR(ctx context.Context, root, key, head string, pr int, source Repor
 			if !ok {
 				continue
 			}
-			if kind == ReviewSpec {
-				r.Combined = r.Verdict
-			}
-			if kind == ReviewQuality {
-				r.Combined = r.Verdict
-				if spec, ok := Latest(list, ReviewSpec); ok && AtHead(spec, head) {
-					r.Combined = Worst(spec.Verdict, r.Verdict)
-				}
-			}
+			r = combine(list, r)
 			list = appendCapped(list, r)
 		}
 		s.Branches[key] = list
