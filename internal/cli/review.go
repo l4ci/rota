@@ -610,17 +610,9 @@ func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDep
 		switch {
 		case err == nil:
 			src.PRBody = func() (string, error) {
-				prs, err := f.OpenPRs(c.Context())
-				if err != nil {
-					return "", err
-				}
-				for _, pr := range prs {
-					if pr.Branch == t.Branch {
-						prFound = true
-						return pr.Body, nil
-					}
-				}
-				return "", nil
+				body, found, err := branchPRBody(c, f, t.Branch)
+				prFound = found
+				return body, err
 			}
 		case errors.Is(err, tracker.ErrLocalForge) || tracker.IsCLIMissing(err):
 			noForge = true
@@ -637,4 +629,18 @@ func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDep
 		return worker.ReviewDepth{}, "", Failed("%v", err)
 	}
 	return res, res.Why + worker.DoorNote(policy, res, prFound, noForge), nil
+}
+
+// branchPRBody is the body of branch's open PR; found is false when it has none.
+func branchPRBody(c *Ctx, f tracker.Forge, branch string) (body string, found bool, err error) {
+	prs, err := f.OpenPRs(c.Context())
+	if err != nil {
+		return "", false, err
+	}
+	for _, pr := range prs {
+		if pr.Branch == branch {
+			return pr.Body, true, nil
+		}
+	}
+	return "", false, nil
 }
