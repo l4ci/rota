@@ -130,6 +130,19 @@ func holdForHandoff(d *StopDecision, set Settings, ho Handoff, now time.Time, r 
 	return true
 }
 
+// mergeHandoffBlock carries the block counters holdForHandoff writes onto cur.
+func mergeHandoffBlock(cur, decided State) State {
+	cur.HandoffBlocks, cur.BlockedAt, cur.HandoffFailed = decided.HandoffBlocks, decided.BlockedAt, decided.HandoffFailed
+	return cur
+}
+
+// mergeStop is DecideStop's merge: the block counters plus the usage handoff.
+func mergeStop(cur, decided State) State {
+	cur = mergeHandoffBlock(cur, decided)
+	cur.UsageHandoff = decided.UsageHandoff
+	return cur
+}
+
 func blockReason(pct float64, threshold int, path string) string {
 	return fmt.Sprintf("Context is at %s%%, at or above the handoff threshold of %d%%. "+
 		"Write the handoff for the next orchestrator session to %s now: first line %q, "+
