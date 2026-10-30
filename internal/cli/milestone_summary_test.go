@@ -32,7 +32,7 @@ func TestMilestoneShippedSummary(t *testing.T) {
 		if i < 0 {
 			t.Fatalf("missing closing summary: %s", text)
 		}
-		for _, want := range []string{"B01", "First", "AC-1: met", "keep it small"} {
+		for _, want := range []string{"- B01: ", "(dropped)", "AC-1: met", "keep it small"} {
 			if !strings.Contains(string(text)[i:], want) {
 				t.Errorf("summary lacks %q: %s", want, text)
 			}
@@ -59,7 +59,7 @@ func TestMilestoneShippedSummary(t *testing.T) {
 		for _, c := range fake.Issues[2].Comments {
 			summary += c.Body
 		}
-		for _, want := range []string{"## Shipped", "#7", "Add export", "AC-1: met", "keep it small"} {
+		for _, want := range []string{"## Shipped", "- #7: Add export\n", "AC-1: met", "keep it small"} {
 			if !strings.Contains(summary, want) {
 				t.Errorf("summary lacks %q: %s", want, summary)
 			}
