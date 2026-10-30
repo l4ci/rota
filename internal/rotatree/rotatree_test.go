@@ -97,3 +97,10 @@ func TestFind(t *testing.T) {
 		t.Fatalf("Find at the root itself = %q, %v", got, ok)
 	}
 }
+
+func TestDoneSources(t *testing.T) {
+	got := DoneSources()
+	if len(got) != 2 || got[0] != BacklogFile || got[1] != ArchiveFile {
+		t.Fatalf("DoneSources() = %v, want [%s %s]", got, BacklogFile, ArchiveFile)
+	}
+}

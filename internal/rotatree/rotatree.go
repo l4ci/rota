@@ -76,6 +76,10 @@ func TrainCache(root string) string { return File(root, TrainCacheFile) }
 // TestLedger is the tracked exclusion ledger of known-red tests.
 func TestLedger(root string) string { return File(root, TestLedgerFile) }
 
+// DoneSources lists the files that hold item IDs, primary first: the text an
+// ID counter or a done-line scan reads.
+func DoneSources() []string { return []string{BacklogFile, ArchiveFile} }
+
 // Backlog is BACKLOG.md.
 func Backlog(root string) string { return File(root, BacklogFile) }
 
