@@ -767,3 +767,22 @@ func BlockingAtHead(list []Record, head string) (Record, bool) {
 	}
 	return Record{}, false
 }
+
+// BlockingAnyHead is the bounce rule without head scoping, the set a nudged
+// merge train keeps out: Blocking, else the latest cross or lens review that
+// is Failing, else the effective review when Failing. A record at another
+// commit still counts, and a CONCERNS review with a blocking finding trips it.
+func BlockingAnyHead(list []Record) (Record, bool) {
+	if r, ok := Blocking(list); ok {
+		return r, true
+	}
+	for _, kind := range append([]string{ReviewCross}, LensKinds...) {
+		if r, ok := Latest(list, kind); ok && r.Failing() {
+			return r, true
+		}
+	}
+	if r, ok := EffectiveReview(list); ok && r.Failing() {
+		return r, true
+	}
+	return Record{}, false
+}
