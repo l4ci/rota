@@ -15,7 +15,7 @@ import (
 
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/stale"
+	"github.com/l4ci/rota/internal/pystr"
 )
 
 // goldenDay is the day the goldens in testdata/golden were recorded from the
@@ -99,7 +99,7 @@ func pinNow(d *Deps, rfc3339 string) {
 
 // pinDay fixes the day Deps.Today reads (YYYY-MM-DD).
 func pinDay(d *Deps, day string) {
-	t, ok := stale.ParseDate(day)
+	t, ok := pystr.ParseDate(day)
 	if !ok {
 		panic("bad day " + day)
 	}

@@ -6,6 +6,7 @@ package pystr
 
 import (
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -90,4 +91,19 @@ func SplitCSV(s string) []string {
 		}
 	}
 	return out
+}
+
+// ParseDate is parse_date: an ISO date, YYYY-MM-DD or YYYYMMDD, after
+// stripping; ok is false for anything else. (Python 3.11 also reads ISO week
+// dates; no rota file carries one.)
+func ParseDate(s string) (time.Time, bool) {
+	s = Strip(s)
+	for _, layout := range []string{"2006-01-02", "20060102"} {
+		if len(s) == len(layout) {
+			if t, err := time.Parse(layout, s); err == nil && t.Year() >= 1 {
+				return t, true
+			}
+		}
+	}
+	return time.Time{}, false
 }

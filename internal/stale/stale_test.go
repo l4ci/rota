@@ -9,27 +9,18 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/l4ci/rota/internal/mapqa"
+	"github.com/l4ci/rota/internal/pystr"
 )
 
 func date(t *testing.T, s string) time.Time {
 	t.Helper()
-	d, ok := ParseDate(s)
+	d, ok := pystr.ParseDate(s)
 	if !ok {
 		t.Fatalf("bad date %q", s)
 	}
 	return d
-}
-
-func TestParseDate(t *testing.T) {
-	for in, ok := range map[string]bool{
-		"2026-10-02": true, " 2026-10-02 ": true, "20261002": true,
-		"2026-1-2": false, "2026-13-01": false, "2026-02-30": false, "": false, "yesterday": false,
-		"2026-10-02T10:00:00": false, "٢٠٢٦-١٠-٠٢": false, "0000-01-01": false,
-	} {
-		if _, got := ParseDate(in); got != ok {
-			t.Errorf("ParseDate(%q) ok = %v, want %v", in, got, ok)
-		}
-	}
 }
 
 func TestDaysBetween(t *testing.T) {
@@ -104,7 +95,7 @@ func TestFindKnowledgeUsesTheFileCommitDate(t *testing.T) {
 	if err != nil || len(got) != 3 || got[0].Name != "Alpha" || got[1].Name != "Beta, gamma" || got[2].Name != "Delta" {
 		t.Fatalf("knowledge = %v %v", names(got), err)
 	}
-	if _, ok := ParseDate(got[0].Date); !ok {
+	if _, ok := pystr.ParseDate(got[0].Date); !ok {
 		t.Errorf("date = %q", got[0].Date)
 	}
 	if got, _ := Find(root, "knowledge", 90, time.Now()); got != nil {
@@ -157,5 +148,15 @@ func TestFindUntrackedMapFileIsNeverStale(t *testing.T) {
 func TestFindUnknownKind(t *testing.T) {
 	if _, err := Find(t.TempDir(), "plans", 1, time.Now()); !errors.Is(err, ErrKind) || !strings.Contains(err.Error(), "plans") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// Stats (map views) and Find date a map file with an unparseable touched alike.
+func TestFindMapAgreesWithMapStatsOnUnparseableTouched(t *testing.T) {
+	root := project(t, map[string]string{".rota/map/g.md": "---\nsubsystem: g\ntouched: yesterday\n---\nbody\n"})
+	st := mapqa.Stats(root)
+	got, err := Find(root, "map", 0, date(t, "2999-01-01"))
+	if err != nil || len(st) != 1 || len(got) != 1 || st[0].Touched == "" || got[0].Date != st[0].Touched {
+		t.Errorf("Find = %v (%v), Stats = %+v", got, err, st)
 	}
 }
