@@ -632,7 +632,12 @@ func AtHead(rec Record, head string) bool {
 // recorded for branch at head. A record on another commit is stale and does
 // not count, as /rota-review treats it.
 func Recorded(root, branch, head string) []string {
-	list := ForHead(Load(root).Branches[BranchKey("", branch)], head)
+	return RecordedIn(Load(root).Branches[BranchKey("", branch)], head)
+}
+
+// RecordedIn is Recorded over a branch's records already in hand.
+func RecordedIn(records []Record, head string) []string {
+	list := ForHead(records, head)
 	var kinds []string
 	for _, k := range []string{ReviewSpec, ReviewQuality} {
 		if r, ok := Latest(list, k); ok && AtHead(r, head) {
