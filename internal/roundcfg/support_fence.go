@@ -102,7 +102,7 @@ var supportAllowed = []string{
 	"rota review brief", "rota review depth", "rota review package", "rota review queue", "rota review scaffolding", "rota review scope",
 	"rota round candidates", "rota round status", "rota round summary", "rota round watch", "rota round wait",
 	"rota ship body", "rota ship strategy",
-	"rota skills get", "rota skills list", "rota skills status",
+	"rota skills get", "rota skills links", "rota skills list", "rota skills status",
 	"rota spike list", "rota spike show",
 	"rota status show", "rota statusline dump", "rota summary",
 	"rota test flakes", "rota test ledger check", "rota test run",
