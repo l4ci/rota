@@ -32,7 +32,7 @@ type FileStore struct {
 	// Today is the clock of the created date; nil is the wall clock.
 	Today func() time.Time
 	// ClosedItems reads authoritative closed child bullets under the milestone lock.
-	// Nil falls back to its generated Items section.
+	// Nil records no closed items.
 	ClosedItems func(id string) ([]string, error)
 }
 
@@ -55,7 +55,7 @@ func (s FileStore) Put(id, text string) (bool, error) { return Put(s.Root, id, t
 // SetStatus changes status and records a shipped summary. Reindex regenerates the
 // overview afterwards, for every store alike.
 func (s FileStore) SetStatus(id, status string) (bool, error) {
-	return setStatusWithItems(s.Root, id, status, s.ClosedItems)
+	return setStatus(s.Root, id, status, s.ClosedItems)
 }
 
 // OnTracker is false: the detail files are the source of truth.
