@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/l4ci/rota/internal/pathglob"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -53,25 +54,11 @@ func scopedMatch(block, file string) bool {
 		return false
 	}
 	for _, pattern := range patterns {
-		if matchSegments(strings.Split(pattern, "/"), strings.Split(file, "/")) {
+		if pathglob.Match(pattern, file) {
 			return true
 		}
 	}
 	return false
-}
-
-func matchSegments(pattern, file []string) bool {
-	if len(pattern) == 0 {
-		return len(file) == 0
-	}
-	if pattern[0] == "**" {
-		return matchSegments(pattern[1:], file) || (len(file) > 0 && matchSegments(pattern, file[1:]))
-	}
-	if len(file) == 0 {
-		return false
-	}
-	ok, _ := path.Match(pattern[0], file[0])
-	return ok && matchSegments(pattern[1:], file[1:])
 }
 
 func relativeFile(root, file string) (string, bool) {

@@ -49,6 +49,10 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 	}
 	d.Set("landed", strList(r.Landed))
 	d.Set("verified", strList(r.Verified))
+	if r.Tier != "" {
+		d.Set("tier", r.Tier)
+		d.Set("skipped", strList(r.Skipped))
+	}
 	d.Set("e2eVerified", strList(r.E2EVerified))
 	if len(r.Flaky) > 0 {
 		d.Set("flaky", flakyData(r.Flaky))

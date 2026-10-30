@@ -468,6 +468,9 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		}
 		depth := res.Depth
 		data := gitObj("branch", t.Branch, "base", t.Base, "depth", string(depth), "signal", res.Signal, "why", why, "changedLines", res.Changed, "labels", res.Labels)
+		if res.Tier.Tier != "" {
+			data.Set("tier", string(res.Tier.Tier))
+		}
 		text := fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", t.Branch, depth, why)
 		// Printed only when a label asks about it, so a Minor PR's output is
 		// unchanged.
@@ -588,6 +591,8 @@ func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDep
 	}
 	src := worker.ReviewSources{Policy: policy, Git: c.deps().Git, Dir: t.Dir, Span: t.Base + "..." + t.Branch, Labels: extra,
 		Cross: cross, Author: branchAuthor(c, root, t.Branch), Lenses: lenses}
+	src.Change, src.ChangeErr = config.ChangePolicyOf(cfg)
+	tiered := src.ChangeErr == nil && (len(src.Change.DocsPaths) > 0 || src.Change.SmallBelow > 0)
 	// The issue behind a `<agent>/<issue>-<slug>` branch is read, as the worker
 	// gate does, when the policy can use it (a label to match or a file set to
 	// drift from) or a cross-harness review may be required.
@@ -605,25 +610,20 @@ func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDep
 	// forge fails the verb: skipping would print a depth that ignores the line.
 	// A local forge or a missing forge CLI has no PR to read.
 	prFound, noForge := false, false
-	if policy.MayBeBelowFull() {
+	if policy.MayBeBelowFull() || tiered {
 		f, err := c.deps().forge(c.Context(), cfg, "", root)
 		switch {
 		case err == nil:
 			src.PRBody = func() (string, error) {
-				prs, err := f.OpenPRs(c.Context())
-				if err != nil {
-					return "", err
-				}
-				for _, pr := range prs {
-					if pr.Branch == t.Branch {
-						prFound = true
-						return pr.Body, nil
-					}
-				}
-				return "", nil
+				body, found, err := branchPRBody(c, f, t.Branch)
+				prFound = found
+				return body, err
 			}
 		case errors.Is(err, tracker.ErrLocalForge) || tracker.IsCLIMissing(err):
 			noForge = true
+		case !policy.MayBeBelowFull():
+			// only the tier reads the body: it classifies full on the error
+			src.PRBody = func() (string, error) { return "", err }
 		default:
 			return worker.ReviewDepth{}, "", Failed("could not reach the forge to read the PR body for its Door line to pick the review depth: %v", err)
 		}
@@ -637,4 +637,18 @@ func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDep
 		return worker.ReviewDepth{}, "", Failed("%v", err)
 	}
 	return res, res.Why + worker.DoorNote(policy, res, prFound, noForge), nil
+}
+
+// branchPRBody is the body of branch's open PR; found is false when it has none.
+func branchPRBody(c *Ctx, f tracker.Forge, branch string) (body string, found bool, err error) {
+	prs, err := f.OpenPRs(c.Context())
+	if err != nil {
+		return "", false, err
+	}
+	for _, pr := range prs {
+		if pr.Branch == branch {
+			return pr.Body, true, nil
+		}
+	}
+	return "", false, nil
 }
