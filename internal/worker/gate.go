@@ -1572,7 +1572,7 @@ func (g *gate) changedFiles() ([]string, error) {
 // verdict.
 func (g *gate) mergeLocal(dir string) (done bool) {
 	run := func(args ...string) (git.Result, error) { return g.e.Git(g.ctx, dir, args...) }
-	err := land.MergeLocal(run, g.verified, fmt.Sprintf("merge: %s into %s", g.branch, g.o.Base), land.RecoveryGit(g.ctx, g.e.Git, dir))
+	err := land.MergeLocal(run, g.verified, land.MergeSubject(g.branch, g.o.Base), land.RecoveryGit(g.ctx, g.e.Git, dir))
 	if err == nil {
 		return false
 	}

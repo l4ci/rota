@@ -40,3 +40,20 @@ func TestPathContains(t *testing.T) {
 		}
 	}
 }
+
+func TestHeldBy(t *testing.T) {
+	root := t.TempDir()
+	holders := []Holder{{"ben", "wt/ben"}, {"abs", "/elsewhere/abs"}, {"none", ""}}
+	for _, c := range []struct{ wt, want string }{
+		{filepath.Join(root, "wt/ben"), "ben"},
+		{filepath.Join(root, "wt/ben/sub"), "ben"},
+		{filepath.Join(root, "wt/ben-2"), ""},
+		{"/elsewhere/abs", "abs"},
+		{filepath.Join(root, "wt/free"), ""},
+		{"", ""},
+	} {
+		if got := HeldBy(root, holders, c.wt); got != c.want {
+			t.Errorf("HeldBy(%q) = %q, want %q", c.wt, got, c.want)
+		}
+	}
+}

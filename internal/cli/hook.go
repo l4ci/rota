@@ -29,7 +29,6 @@ import (
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/skills"
-	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/status"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -279,7 +278,7 @@ func hookStop(c *Ctx, args []string) (res Result, _ error) {
 func stopHandoff(hc hookContext, sid string, active bool) (hook.SessionDecision, bool) {
 	in := hook.StopIn{StopHookActive: active}
 	if hc.set.SwitchOnUsage {
-		in.Supervised, in.HoldUntil = supervisedHold(hc.lease, hc.commonDir, hc.now())
+		in.Supervised, in.HoldUntil = keepalive.SupervisedHold(hc.lease, hc.commonDir, hc.now())
 	}
 	return hook.ApplySession(hook.SessionIn{Action: hook.StopHandoff, CommonDir: hc.commonDir, SessionID: sid,
 		Settings: hc.set, HandoffPath: hc.handoff, Stop: in, Now: hc.now})
@@ -354,22 +353,6 @@ func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 		"additionalContext": digest,
 	}}
 	return hookPrint(out), nil
-}
-
-// supervisedHold reads keepalive.json the way `rota keepalive status` does: a
-// supervisor is live when the file says running and its pid is alive. The
-// hold is its switchHold when that is still ahead (D4).
-func supervisedHold(le roundlease.Env, commonDir string, now time.Time) (supervised bool, until time.Time) {
-	ks, found, err := keepalive.ReadState(keepalive.StatePath(commonDir))
-	if err != nil || !found || !ks.Running(le) {
-		return false, time.Time{}
-	}
-	if ks.SwitchHold != nil {
-		if t, err := stamp.Parse(ks.SwitchHold.Until); err == nil && t.After(now) {
-			until = t
-		}
-	}
-	return true, until
 }
 
 func hookSessionStart(c *Ctx, args []string) (res Result, _ error) {
