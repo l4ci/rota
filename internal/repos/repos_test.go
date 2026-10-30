@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 func TestLoad(t *testing.T) {
@@ -47,5 +49,27 @@ func TestLoad(t *testing.T) {
 	}
 	if got := Load(t.TempDir()); got != nil {
 		t.Errorf("no registry: %v", got)
+	}
+}
+
+func TestSetTopLevel(t *testing.T) {
+	root := t.TempDir()
+	reg := `{"repos":[{"name":"gone","path":"./gone"},{"name":"web","path":"./apps/web","x":1},{"name":"keep","path":"./keep"}]}`
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(rotatree.Repos(root), []byte(reg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetTopLevel(root, []string{"web", "api", "keep"}); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, r := range Load(root) {
+		got = append(got, r.Name+"="+r.Rel)
+	}
+	want := []string{"api=./api", "keep=./keep", "web=./apps/web"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v want %v", got, want)
 	}
 }
