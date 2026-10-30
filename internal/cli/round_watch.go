@@ -2,19 +2,16 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/escalation"
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
@@ -108,7 +105,8 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 			Local: func() map[string]string { return roundwatch.LocalSnapshot(root) },
 			Forge: func(ctx context.Context) map[string]string { return watchForge(ctx, c, root) },
 		}
-		env.Seen, env.Mark = watchSeen(cd)
+		st := roundwatch.NewSeenStore(cd)
+		env.Seen, env.Mark = st.Seen, st.Mark
 		opts := roundwatch.Opts{Heartbeat: secs(*heartbeat), Poll: secs(*poll), ForgeEvery: secs(*forgePoll)}
 		if !*autopilot {
 			res, err := roundwatch.Run(ctx, env, opts)
@@ -339,33 +337,5 @@ func autopilotWatch(c *Ctx, ctx context.Context, env roundwatch.Env, opts roundw
 		// A slot the orchestrator already knows about wakes Run at once: the
 		// pause keeps the loop from spinning on it.
 		env.Sleep(ctx, poll)
-	}
-}
-
-// watchSeenFile keeps what the support entries said when a watch last
-// returned them (roundwatch.Env.Seen); it lives beside the watch marker.
-const watchSeenFile = "round-watch-seen.json"
-
-// watchSeen reads and extends the seen record of the support entries under
-// the common dir cd. Mark merges, never drops: an entry that vanishes for a
-// poll and comes back unchanged is not news.
-func watchSeen(cd string) (seen func() map[string]string, mark func(map[string]string)) {
-	path := rotastate.File(cd, watchSeenFile)
-	load := func() map[string]string {
-		out := map[string]string{}
-		if b, err := os.ReadFile(path); err == nil {
-			_ = json.Unmarshal(b, &out)
-		}
-		return out
-	}
-	return load, func(m map[string]string) {
-		cur := load()
-		for k, v := range m {
-			cur[k] = v
-		}
-		// A failed write only repeats a wake.
-		if b, err := json.Marshal(cur); err == nil && os.MkdirAll(filepath.Dir(path), 0o755) == nil {
-			_ = fsio.WriteFileAtomic(path, append(b, '\n'))
-		}
 	}
 }
