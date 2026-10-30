@@ -2,8 +2,8 @@ package milestone
 
 import (
 	"errors"
-	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/pystr"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -30,7 +30,7 @@ func add(root, title, summary, deps, today string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return FileStore{Root: root, Today: func() time.Time { return day }}.Add(title, summary, artifact.SplitCSV(deps), KindDelivery)
+	return FileStore{Root: root, Today: func() time.Time { return day }}.Add(title, summary, pystr.SplitCSV(deps), KindDelivery)
 }
 
 // setStat moves a milestone through FileStore.SetStatus, then regenerates the

@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
@@ -515,9 +516,10 @@ func orNone(s string) string {
 	return s
 }
 
+// truncate cuts s to n runes, the last one an ellipsis when it was cut.
 func truncate(s string, n int) string {
-	if r := []rune(s); len(r) > n {
-		return string(r[:n-1]) + "…"
+	if utf8.RuneCountInString(s) > n {
+		return strutil.Clip(s, n-1) + "…"
 	}
 	return s
 }

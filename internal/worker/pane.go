@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -300,7 +301,7 @@ const statusDepth = 8
 // limited). busy are the kind's working-footer patterns; a spinner is frame,
 // not dialog. A pane without a reply marker is dialog throughout.
 func DialogRegion(text string, busy []*regexp.Regexp) string {
-	lines := splitLines(text)
+	lines := pystr.Splitlines(text)
 	isWork := func(l string) bool { return anyMatch(busy, l) || reSpinner.MatchString(l) }
 	end := len(lines)
 	status := end
@@ -380,7 +381,7 @@ var reSpinner = regexp.MustCompile(`^\s*[✻✶✽✢✳·*]\s+\S.*…`)
 // lastSentinel skips them: a limit phrase a brief or relay quotes is the
 // orchestrator's, not the session's. kind picks the gutter reading.
 func StripRelays(kind, text string) string {
-	lines := splitLines(text)
+	lines := pystr.Splitlines(text)
 	mask := relayMask(lines, paneRulesFor(kind).gutter, true)
 	kept := lines[:0:0]
 	for i, l := range lines {
@@ -472,7 +473,7 @@ func DialogFor(kind, text string) string {
 // only.
 func ClassifyFor(kind, text string, moved bool, lines int, native string) (state, evidence string) {
 	rules := paneRulesFor(kind)
-	all := splitLines(text)
+	all := pystr.Splitlines(text)
 	if lines > 0 && len(all) > lines { // [-0:] is the whole list in Python
 		all = all[len(all)-lines:]
 	}
@@ -574,7 +575,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 
 // relayMarkerVisible: the pane capture holds pending relay k's `[relay k]` line.
 func relayMarkerVisible(text string, lines, k int) bool {
-	all := splitLines(text)
+	all := pystr.Splitlines(text)
 	if lines > 0 && len(all) > lines {
 		all = all[len(all)-lines:]
 	}
@@ -590,7 +591,7 @@ func relayMarkerVisible(text string, lines, k int) bool {
 // identified by its `[relay k]` line, not by the shape of the pane, so a second
 // relay not yet rendered is never mistaken for the first.
 func doneAfterRelay(kind, text string, lines, k int) bool {
-	all := splitLines(text)
+	all := pystr.Splitlines(text)
 	if lines > 0 && len(all) > lines {
 		all = all[len(all)-lines:]
 	}

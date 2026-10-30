@@ -13,6 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -94,7 +95,7 @@ func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
 			info.Commits = append(info.Commits, reviewCommit{h, s})
 		}
 	}
-	files, err := c.deps().Repo(t.Dir).ChangedPaths(ctx, t.Base+"..."+t.Branch)
+	files, err := git.ChangedPaths(ctx, c.deps().Git, t.Dir, t.Base+"..."+t.Branch)
 	if err != nil {
 		return info, diffErr(err)
 	}

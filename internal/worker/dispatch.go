@@ -534,30 +534,6 @@ type BlockData struct {
 	Changed   bool
 }
 
-// splitLines is Python's str.splitlines for the separators that matter.
-func splitLines(s string) []string {
-	var out []string
-	start := 0
-	rs := []rune(s)
-	for i := 0; i < len(rs); i++ {
-		switch rs[i] {
-		case '\n', '\v', '\f', 0x1c, 0x1d, 0x1e, 0x85, 0x2028, 0x2029:
-			out = append(out, string(rs[start:i]))
-			start = i + 1
-		case '\r':
-			out = append(out, string(rs[start:i]))
-			if i+1 < len(rs) && rs[i+1] == '\n' {
-				i++
-			}
-			start = i + 1
-		}
-	}
-	if start < len(rs) {
-		out = append(out, string(rs[start:]))
-	}
-	return out
-}
-
 func branchOr(o DispatchOpts) string {
 	if o.Branch != "" {
 		return o.Branch

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/knowledge"
+	"github.com/l4ci/rota/internal/pystr"
 )
 
 // glossaryCommands is the `rota glossary` group (A5, #49).
@@ -65,7 +66,7 @@ func glWrite(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		term := knowledge.Term{Name: strings.TrimSpace(args[0]), Definition: *def, Aliases: knowledge.SplitCSV(*alias), Nots: knowledge.SplitCSV(*not)}
+		term := knowledge.Term{Name: strings.TrimSpace(args[0]), Definition: *def, Aliases: pystr.SplitCSV(*alias), Nots: pystr.SplitCSV(*not)}
 		name, changed, err := st.GlossaryWrite(scope, term, *touch, notsProvided)
 		if err != nil {
 			return knFail(err)

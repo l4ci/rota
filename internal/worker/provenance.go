@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/marker"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/tracker"
 	"regexp"
@@ -40,7 +41,7 @@ func LogRelay(root, slot string, round int, now time.Time, brief string) error {
 // relaySummary is the first non-blank line of the brief that is not the
 // signature, stripped and cut to 200 characters.
 func relaySummary(text string) string {
-	for _, l := range splitLines(text) {
+	for _, l := range pystr.Splitlines(text) {
 		l = strings.TrimSpace(l)
 		if l != "" && !strings.HasPrefix(l, "--- ORCHESTRATOR") {
 			if utf8.RuneCountInString(l) > 200 {
@@ -137,7 +138,7 @@ func checkApprovals(body string, relayLog []any, offerRequired, offered bool) st
 		}
 	}
 	var problems []string
-	for _, line := range splitLines(section) {
+	for _, line := range pystr.Splitlines(section) {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
