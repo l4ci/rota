@@ -1180,6 +1180,56 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-27"
+    },
+    "Architecture: Skill authoring::Re-check generic rules when a skill step becomes a verb": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-30"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Approvals must match logged relays both ways": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-30"
+    },
+    "Rounds: Orchestration: Workers & relays::Item comments have no design kind": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-30"
+    },
+    "Build & Tooling: Smoke testing: Gate & frozen records::Regenerate only the frozen suite you touched": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-30"
+    },
+    "Build & Tooling: Smoke testing: Gate & frozen records::docs pages that tests read are risky paths": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-30"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::runner.sh ignores a section argument": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-30"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes::hvmigrate.splitLines is not a pystr copy": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-30"
+    },
+    "Build & Tooling: Git & isolation::gittest owns test git identity and config isolation": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-30"
+    },
+    "Build & Tooling: Helpers & migrations::Stamp source builds as -dev": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-30"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::A triggered lens needs its own review-security verdict": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-30"
     }
   }
 }
