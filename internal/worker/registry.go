@@ -930,7 +930,7 @@ func recordBounce(env Env, m *RoundMemo, root, issue, slot, head string, limit i
 		b := bouncesOf(doc)
 		heads := bounceHeadsOf(doc)
 		n = bounceCount(b, issue)
-		if limit > 0 && n >= limit {
+		if AtCap(n, limit) {
 			capped = true
 			return
 		}

@@ -132,7 +132,7 @@ func bounce(env worker.Env, root, issue string, r worker.GateResult, park Park) 
 		return Outcome{}, err
 	}
 	n := rec.N
-	if set.MaxBounces == 0 || n < set.MaxBounces {
+	if !worker.AtCap(n, set.MaxBounces) {
 		// A support machine's worker learns of the bounce on its PR (#1598).
 		// The post is idempotent per head, so it also goes out for a head
 		// already counted: a failed post whose undo failed too still lands on
