@@ -487,23 +487,31 @@ func appendCapped(list []Record, r Record) []Record {
 	return list
 }
 
-// AddBranch appends r to a branch's list. A review-quality record gets its
-// combined verdict first: the worst of r and the branch's previous record
-// when that is a review-spec at the same sha, else r's own verdict. A
-// review-spec record is its own combined verdict, the branch's review verdict
-// when the Standards axis was not run (light depth).
+// combine sets r.Combined against the records already stored before it. A
+// review-spec record is its own combined verdict (the branch's review verdict
+// when the Standards axis was not run, light depth). A review-quality record
+// is the worst of its own verdict and the latest review-spec in list recorded
+// at the same sha, else its own verdict; records of other kinds between the
+// two do not matter. Every writer of Combined goes through here.
+func combine(list []Record, r Record) Record {
+	switch r.Kind {
+	case ReviewSpec:
+		r.Combined = r.Verdict
+	case ReviewQuality:
+		r.Combined = r.Verdict
+		if spec, ok := Latest(list, ReviewSpec); ok && AtHead(spec, r.Sha) {
+			r.Combined = Worst(spec.Verdict, r.Verdict)
+		}
+	}
+	return r
+}
+
+// AddBranch appends r to a branch's list, with its combined verdict set by
+// combine.
 func AddBranch(root, key string, r Record) (Record, error) {
 	err := update(root, func(s *Store) {
 		list := s.Branches[key]
-		if r.Kind == ReviewSpec {
-			r.Combined = r.Verdict
-		}
-		if r.Kind == ReviewQuality {
-			r.Combined = r.Verdict
-			if n := len(list); n > 0 && list[n-1].Kind == ReviewSpec && list[n-1].Sha == r.Sha {
-				r.Combined = Worst(list[n-1].Verdict, r.Verdict)
-			}
-		}
+		r = combine(list, r)
 		s.Branches[key] = appendCapped(list, r)
 	})
 	return r, err
