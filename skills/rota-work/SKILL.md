@@ -23,7 +23,7 @@ Read `.rota/config.json`:
 Copy this checklist and track your progress:
 
 ```
-- [ ] Step 1 — Guard
+- [ ] Step 1 — Start
 - [ ] Step 2 — Clarify Ambiguous Briefs (only when needed)
 - [ ] Step 2.5 — Detect Knowledge-vs-Correction Contradictions
 - [ ] Step 3 — Name the Branch
@@ -50,13 +50,18 @@ With no item, ID or brief, read [`no-argument-mode.md`](no-argument-mode.md) and
 
 `--preview <target>` (flag anywhere in the args) prints a read-only approach peek and stops: no writes, no commits, no status. Procedure in [`references/work-preview.md`](references/work-preview.md); context per [`references/context-load-protocol.md`](references/context-load-protocol.md) and [`references/knowledge-consult.md`](references/knowledge-consult.md).
 
-## Step 1 — Guard
+## Step 1 — Start
 
 ```bash
-rota git guard clean --context "/rota-work"
+rota work start --json <ID>[,<ID>...] [--branch <name>]
 ```
 
-Exit 0: continue. Exit 3: not a repo, surface and stop. Exit 1 (dirty tree): when every dirty path is a tool-generated sibling or the target item's own fresh design/plan file, sweep them into a `chore:` commit and continue; any user change stops with the guard's message. Procedure and sibling list: [`sibling-sweep.md`](sibling-sweep.md).
+One call guards the tree (sweeping tool siblings and the target's fresh design/plan file into `chore:` commits), names the branch `rota/<id>-<slug>`, creates it or its worktree per `work.isolation`, registers it, and on a tracker claims each item. A rerun changes nothing.
+
+- `items[].claim` `dropped`: another worker holds it; drop it. `ready: false`: warn with `missing`. Tracker: load each item per *Resuming an item* in `references/issue-mode.md`; a `changes-requested` item follows *Handling review feedback* in `references/worker-contract.md`.
+- Exit 1 (`data.dirty`, or no commit yet: [`sibling-sweep.md`](sibling-sweep.md)) or 3: surface and stop. Exit 4 `exists`: rerun with `--branch`; `claimed`: stop; `umbrella`, `round worker`, or a brief with no ID: the step-by-step path in [`umbrella-and-issue-mode.md`](umbrella-and-issue-mode.md).
+
+The main session stays at the repo root; subagents `cd` into `data.worktree` (when set) and use absolute paths.
 
 ## Step 2 — Clarify Ambiguous Briefs (only when needed)
 
@@ -70,7 +75,7 @@ When Step 2 produced a non-Recommended answer that pushes back on a stated assum
 
 ## Step 3 — Name the Branch
 
-Pick a descriptive branch name (`rota/quick-switch`). Step 5 creates the branch and registers it once. When items carry `Repos:` (umbrella mode) or the backend is issues, read [`umbrella-and-issue-mode.md`](umbrella-and-issue-mode.md) at each step it names.
+Done in Step 1. When items carry `Repos:` (umbrella mode) or the backend is issues, read [`umbrella-and-issue-mode.md`](umbrella-and-issue-mode.md) at each step it names.
 
 ## Step 4 — Plan Tasks
 
@@ -93,18 +98,7 @@ Skip when `rota repo umbrella` exits 1 (single-repo). When it exits 0, read [`um
 
 ## Step 5 — Create Branch or Worktree
 
-Use the Step 3 name; `references/isolation-patterns.md` has the pattern per `work.isolation`. Single-repo, branch isolation:
-
-```bash
-git checkout -b <branch>
-rota status add <branch> --items <ID>[,<ID>...]
-```
-
-The only `rota status add` of the cycle: create the branch or worktree first, then register once (`--worktree <path>` for a worktree). Idempotent on `(branch, repo)`.
-
-When umbrella, read *Step 5* in `umbrella-and-issue-mode.md` (registration, branches). When `issues.source` is `github` or `gitlab`, read the same section for the claim flow before planning tasks.
-
-The main session stays at the repo root; subagents `cd` into their assigned directory first and use absolute paths.
+Done in Step 1. Umbrella: *Step 5* in `umbrella-and-issue-mode.md`.
 
 ## Step 6 — Dispatch Subagents
 
@@ -219,7 +213,7 @@ One line, only when `references/post-cycle-trigger-gate.md` fires: *"Run `/rota-
 - [`references/worker-contract.md`](references/worker-contract.md): round-worker rules and review-feedback handling.
 - [`plan-artifact.md`](plan-artifact.md): Step 4 backend keys, saved tasks and resume identity for item and slice plans.
 - [`no-argument-mode.md`](no-argument-mode.md): reconcile, suggest, then work.
-- [`sibling-sweep.md`](sibling-sweep.md): Step 1 / 8.5 tool-generated sibling sweep.
+- [`sibling-sweep.md`](sibling-sweep.md): the sibling list and the Step 8.5 sweep.
 - [`contradictions.md`](contradictions.md): Step 2.5 contradiction logging.
 - [`umbrella-and-issue-mode.md`](umbrella-and-issue-mode.md): umbrella and issue-backend branches of Steps 3–11.
 - [`dispatch-brief.md`](dispatch-brief.md): Step 6 brief template.

@@ -18,6 +18,7 @@ Verbs are not skills: skills are the `/rota-*` slash commands (see [skills](../s
 - **Start and set up.** [`rota init`](#rota-init) scaffolds `.rota/`; `rota setup` (same section) adds the config walkthrough. [`rota config`](#rota-config) reads and changes settings. [`rota skills`](#rota-skills) writes and refreshes the skills. [`rota update`](#rota-update) checks for a newer release. [`rota migrate`](#rota-migrate) moves the backlog or milestones.
 - **Bare `rota`.** In a terminal it opens a palette. Enter on the preselected entry runs `rota setup` in a directory without `.rota/` and launches the orchestrator in an initialized project. Outside a terminal it prints usage. See [`rota orchestrate`](#rota-orchestrate).
 - **`--ui`.** Opens a verb's terminal screen instead of printing its result: `rota config --ui`, `rota projects --ui`, `rota round status --ui` (refreshes every 5 s), and read-only views for `rota doctor`, `rota worker account list`, `rota backlog list`, `rota knowledge stats` and `rota decisions stats`. Terminal only; refused with `--json`. Plain output never changes.
+- **Start and finish a work cycle.** [`rota work start`](#rota-work) does the guard, branch, status entry and claim that open `/rota-work`; [`rota ship finish`](#rota-ship) does the status, item and nudge bookkeeping that closes `/rota-ship`. Round workers and umbrella projects use the step-by-step skill path instead.
 - **Run a round.** [`rota orchestrate`](#rota-orchestrate) starts the orchestrator. [`rota round`](#rota-round) takes the lease, assigns issues, waits, summarizes cost (`round summary`) and winds down. [`rota worker`](#rota-worker) holds the slot registry and the merge gate (`rota worker gate <PR>` gates any open PR by number).
 - **Keep a round healthy.** [`rota doctor`](#rota-doctor) preflights the machine. [`rota reap`](#rota-reap) removes leftovers. [`rota layout`](#rota-layout) folds panes into a split view or back into tabs. [`rota keepalive`](#rota-keepalive), [`rota limit`](#rota-limit), [`rota hook`](#rota-hook) and [`rota statusline`](#rota-statusline) cover unattended rounds. [`rota verdict`](#rota-verdict) records review and QA verdicts.
 - **Agents and projects.** [`rota agents write`](#rota-agents) writes the role subagent files. `rota projects` (under [`rota init`](#rota-init)) lists the projects registered on this machine.
@@ -158,6 +159,12 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota status rm <branch>` | end a work stream and drop its handoff note |
 | `rota status show <branch>` | which repo a branch's stream is in |
 | `rota status handoff <branch> [--canonical]` | path of a branch's handoff note |
+
+## `rota work`
+
+| Usage | What it does |
+|---|---|
+| `rota work start <ID>[,<ID>…] [--branch <name>]` | the start of `/rota-work` in one call: clean-tree guard, sweep of tool-generated siblings and the target's design or plan file into a commit, branch `rota/<id>-<slug>` (or `--branch`) made per `work.isolation`, `status add`, and on a tracker `item ready` and `item claim`; an item another worker holds is dropped and the rest go on; exit 1 on other uncommitted changes (`data.dirty`), 4 when every item is held, for a round worker (`ROTA_SLOT`) or in an umbrella project; running it again changes nothing |
 
 ## `rota refactor`
 
@@ -547,6 +554,7 @@ Verdicts are `PASS`, `CONCERNS` or `FAIL` (`qa` also takes `INFRA-FAIL`). They l
 | `rota ship pr <branch> --title <text> --body-file <path\|-> [--items <ID>[,<ID>…]]` | push a branch and open a PR or MR; never removes a slot, the current directory or a worktree with changes |
 | `rota ship merge <branch> --body-file <path\|-> [--confirm --confirm-note <answer>]` | merge a branch into the base branch with --no-ff; exit 4 when `ship.mergeApproval` needs a human |
 | `rota ship pr-merge <pr> [--items <ID>[,<ID>…]] [--confirm --confirm-note <answer> \| --approval <escalation> \| --escalate]` | merge a PR in issue mode; exit 4 when `ship.mergeApproval` needs a human; `--escalate` asks on the approval thread, `--approval` cites the answer; give only one of the three |
+| `rota ship finish [<branch>] [--commit <sha>]` | the end of `/rota-ship` in one call: drops the branch's status entry and handoff note, completes still-open items on the file backend, and reports whether the learn, docs and release triggers fired; it decides and never dispatches a skill; exit 4 when a referenced item has no proof row, for a round worker or in an umbrella project; running it again reports `already finished` |
 | `rota ship undo [--cycle <hash>] [--allow-post-merge] [--apply]` | roll back the last cycle merge on the base branch |
 
 ## `rota release`
