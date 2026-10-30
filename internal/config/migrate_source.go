@@ -1,8 +1,6 @@
 package config
 
 import (
-	"errors"
-	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -122,16 +120,9 @@ func MigrateSourceFile(root string, detect func() string, apply bool) (SourceMig
 	var m SourceMigration
 	path := configPath(root)
 	err := fsio.Locked(path, fsio.LockTimeout, func() error {
-		raw, err := os.ReadFile(path)
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		if err != nil {
-			return ErrCorrupt
-		}
-		cfg, ok := decodeObject(raw)
-		if !ok {
-			return ErrCorrupt
+		cfg, err := readMigrateTarget(path, "config.json")
+		if err != nil || cfg == nil {
+			return err
 		}
 		cfg, m = MigrateSource(cfg, detect)
 		if !apply || !m.Changed {
