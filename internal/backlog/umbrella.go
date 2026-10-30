@@ -335,7 +335,7 @@ func (u *Umbrella) Detail(ref string) (string, bool, error) {
 // CwdSubRepo is _cwd_repo: the registered sub-repo that cwd is inside (a
 // Layout B worktree counts, through git's common dir), "" when none.
 func CwdSubRepo(cwd string, list []repos.Repo) string {
-	common, ok, err := gitx.Repo{Dir: cwd}.CommonDir(context.Background())
+	common, ok, err := gitx.CommonDirVia(context.Background(), gitx.Exec, cwd)
 	if err != nil || !ok {
 		return ""
 	}

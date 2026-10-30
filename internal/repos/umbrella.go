@@ -102,7 +102,7 @@ func within(path, dir string) bool {
 // through git's common dir. The registry is the one of the umbrella that
 // FindUmbrella resolves from cwd.
 func Which(cwd string) (Repo, error) {
-	common, ok, err := git.Repo{Dir: cwd}.CommonDir(context.Background())
+	common, ok, err := git.CommonDirVia(context.Background(), git.Exec, cwd)
 	if errors.Is(err, git.ErrNoGit) {
 		return Repo{}, ErrGitMissing
 	}
