@@ -722,3 +722,36 @@ func TestToTabsGroupedFallsBackWhenHerdrCannotLink(t *testing.T) {
 		t.Errorf("result = %+v", res)
 	}
 }
+
+// panesFake serves a fixed pane list to Arrange.
+type panesFake struct {
+	*linkFake
+	panes []host.LayoutPane
+}
+
+func (f *panesFake) LayoutPanes(context.Context) ([]host.LayoutPane, error) { return f.panes, nil }
+
+// AC-1: Arrange(Tabs) on a grouped round keeps each slot's linked workspace.
+func TestArrangeTabsOnAGroupedRoundKeepsLinkedWorkspaces(t *testing.T) {
+	st := grouped(2)
+	panes := []host.LayoutPane{{ID: "p0", Tab: "T", Workspace: "W", TabLabel: SplitLabel, Cwd: root, Agent: "claude"}}
+	var ws []Worker
+	for _, w := range st.Workers {
+		panes = append(panes, host.LayoutPane{ID: w.Pane, Tab: "T", Workspace: "W", Cwd: w.Path, Agent: "claude"})
+		ws = append(ws, Worker{Slot: w.Slot, Pane: w.Pane, Path: w.Path})
+	}
+	f := &panesFake{linkFake: &linkFake{fakeHerdr: &fakeHerdr{tab: map[string]string{}}}, panes: panes}
+	_, res, ok, err := Arrange(bg, f, root, Tabs, "", ws, true)
+	if err != nil || !ok {
+		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+	if res.Moves != 2 {
+		t.Fatalf("moves = %d", res.Moves)
+	}
+	for _, l := range f.log {
+		if strings.HasPrefix(l, "worktree open") {
+			return
+		}
+	}
+	t.Errorf("no linked workspace reopened:\n%s", strings.Join(f.log, "\n"))
+}

@@ -352,8 +352,8 @@ func ToTabs(ctx context.Context, h host.Layouter, st State) (Result, error) {
 			continue
 		}
 		var err error
-		// st.Group is already true only for a host that can group (caps.CanGroup),
-		// so the assertion is a cast; a plain Layouter still gets a tab.
+		// st.Group is true only for a host that can group (caps.CanGroup), so the
+		// assertion is a cast; a plain Layouter still gets a tab.
 		if lh, ok := h.(host.LinkedLayouter); ok && st.Group && w.Path != "" {
 			err = toWorkspace(ctx, lh, w)
 			if errors.Is(err, host.ErrUnsupported) {
@@ -457,8 +457,10 @@ func (r Result) Describe() string {
 
 // Arrange puts root's live workers into mode: the arrangement `rota layout`
 // makes and a round keeps for the workers it spawns later. ok is false when
-// the orchestrator's pane is not among the panes.
-func Arrange(ctx context.Context, h host.Layouter, root, mode, cli string, workers []Worker) (st State, res Result, ok bool, err error) {
+// the orchestrator's pane is not among the panes. group is whether a slot
+// lives in a linked workspace of its own (round.herdrGroupSlots on a host that
+// can group), which `tabs` restores.
+func Arrange(ctx context.Context, h host.Layouter, root, mode, cli string, workers []Worker, group bool) (st State, res Result, ok bool, err error) {
 	panes, err := h.LayoutPanes(ctx)
 	if err != nil {
 		return State{}, Result{}, false, err
@@ -467,6 +469,7 @@ func Arrange(ctx context.Context, h host.Layouter, root, mode, cli string, worke
 	if !ok {
 		return State{}, Result{}, false, nil
 	}
+	st.Group = group
 	if mode == Split {
 		res, err = ToSplit(ctx, h, st)
 	} else {

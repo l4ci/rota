@@ -620,15 +620,14 @@ func arrangeNew(ctx context.Context, h host.Host, root string, cfg HostConfig) s
 	if l == nil || reg.Layout() != layout.Split {
 		return ""
 	}
-	_, _, found, err := layout.Arrange(ctx, l, root, layout.Split, reg.CLIPane(), LiveWorkers(ctx, l, reg))
-	if group, gerr := GroupSlots(cfg, h.Capabilities()); err == nil && found && gerr == nil && group {
-		// The split closed the new worker's linked workspace.
-		err = RecordWorkspaces(ctx, l, root, reg.CLIPane())
+	a, err := ArrangeRound(ctx, l, h.Capabilities(), cfg, root, layout.Split, reg.CLIPane(), reg)
+	if err == nil {
+		err = a.RecordErr
 	}
 	switch {
 	case err != nil:
 		return "layout split: " + err.Error() + "; run rota layout split to retry"
-	case !found:
+	case !a.Found:
 		return "layout split: no orchestrator pane open in herdr; the worker kept its tab"
 	}
 	return ""
@@ -655,6 +654,41 @@ func LiveWorkers(ctx context.Context, h host.Layouter, reg Registry) []layout.Wo
 // any other host the default being true must not record workspaces.
 func GroupSlots(cfg HostConfig, caps host.Capabilities) (bool, error) {
 	return cfg.GroupSlots && caps.CanGroup(), cfg.GroupErr
+}
+
+// Arranged is what ArrangeRound did. RecordErr is a failure to remember the
+// slots' workspaces afterwards: the panes moved, so it is a warning.
+type Arranged struct {
+	State     layout.State
+	Result    layout.Result
+	Found     bool
+	Grouped   bool // slots live in linked workspaces (round.herdrGroupSlots on a host that can group)
+	RecordErr error
+}
+
+// ConfigError is a round setting ArrangeRound could not read; nothing moved.
+type ConfigError struct{ Err error }
+
+func (e ConfigError) Error() string { return e.Err.Error() }
+func (e ConfigError) Unwrap() error { return e.Err }
+
+// ArrangeRound puts root's live workers into mode and remembers where the
+// linked slots ended up. It is the one place that decides grouping: `rota
+// layout` and the re-split after a spawn both come through it. A bad
+// round.herdrGroupSlots fails before any pane moves. The workspaces are
+// recorded even after a failed move, since slots that moved before the
+// failure must not keep stale ids.
+func ArrangeRound(ctx context.Context, l host.Layouter, caps host.Capabilities, cfg HostConfig, root, mode, cli string, reg Registry) (Arranged, error) {
+	group, err := GroupSlots(cfg, caps)
+	if err != nil {
+		return Arranged{}, ConfigError{err}
+	}
+	a := Arranged{Grouped: group}
+	a.State, a.Result, a.Found, err = layout.Arrange(ctx, l, root, mode, cli, LiveWorkers(ctx, l, reg), group)
+	if group && a.Found {
+		a.RecordErr = RecordWorkspaces(ctx, l, root, cli)
+	}
+	return a, err
 }
 
 // RecordWorkspaces stores each live slot's linked workspace as herdr has it
