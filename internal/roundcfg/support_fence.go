@@ -96,6 +96,7 @@ var supportAllowed = []string{
 	"rota plan check", "rota plan list", "rota plan rename-check", "rota plan show", "rota plan uncertain", "rota plan validate-docs",
 	"rota projects", "rota proof show", "rota qa query", "rota receipt show",
 	"rota refactor age", "rota refactor targets",
+	"rota change classify",
 	"rota release host", "rota release milestone-check", "rota release notes", "rota release pending", "rota release version",
 	"rota repo resolve", "rota repo umbrella", "rota repo which",
 	"rota review brief", "rota review depth", "rota review package", "rota review queue", "rota review scaffolding", "rota review scope",

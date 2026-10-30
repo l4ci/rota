@@ -31,6 +31,9 @@ OUT=$(fast_plan test/sections/71_no_pipe_grep_q.sh)
 OUT=$(fast_plan test/lib/isolate.sh docs/foo.md)
 if grep -q "section" <<<"$OUT"; then fail "a file outside the lint paths must not add section 71: $OUT"; fi
 
+OUT=$(fast_plan internal/no_such_pkg_dir/gone.go)
+grep -qx "plan: go-all" <<<"$OUT" || fail "a .go file whose directory is gone should run everything: $OUT"
+
 OUT=$(fast_plan notes/unmapped.txt)
 [ -z "$OUT" ] || fail "an unmapped file should select nothing: $OUT"
 # #1303: shared packages pull in their dependents; config, doctor and host map to checks.

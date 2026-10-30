@@ -481,6 +481,12 @@ func validateValue(key string, value any) error {
 		}
 		return nil
 	}
+	if ok, err := validateChange(key, value); ok {
+		if err != nil {
+			return fmt.Errorf("%w for %s: %v", ErrBadValue, key, err)
+		}
+		return nil
+	}
 	if strictEnumKeys[key] {
 		return validateEnum(key, value)
 	}
@@ -601,6 +607,7 @@ func Retired(env projects.Env, root string) []string {
 			out = append(out, err.Error())
 		}
 	}
+	out = append(out, changeProblems(Load(env, configPath(root)))...)
 	out = append(out, AccountDirProblems(Load(env, configPath(root)))...)
 	return out
 }

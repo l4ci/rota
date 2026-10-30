@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/l4ci/rota/internal/change"
 	"github.com/l4ci/rota/internal/gopath"
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -188,18 +189,24 @@ const (
 	SignalPath       = "path"
 	SignalSize       = "size"
 	SignalDefault    = "default"
+	SignalTier       = "tier"
+	SignalRisky      = "risky"
 )
 
 // ReviewInput is everything a depth is resolved from. Changed is the diff's
 // changed-line count (negative: unknown). Files are the changed paths (nil:
 // unknown). PRBody is the PR description ("" when there is no PR yet).
-// IssueBody is the body of the branch's issue ("" when there is none).
+// IssueBody is the body of the branch's issue ("" when there is none). Tier
+// is the change tier of the diff ("" when tiers do not apply).
 type ReviewInput struct {
 	Changed   int
 	Labels    []string
 	Files     []string
 	PRBody    string
 	IssueBody string
+	Tier      change.Tier
+	// Risky: a change.riskyPaths glob matched a changed file.
+	Risky bool
 }
 
 // ReviewDecision is a resolved depth, the signal that decided it and why.
@@ -243,11 +250,25 @@ func (p ReviewPolicy) Resolve(changed int, labels []string) (ReviewDepth, string
 // A label that maps to none is final. Otherwise the base depth (label, size or
 // default) is raised, never lowered, by a one-way Door line in the PR body, a
 // diff outside the issue's declared files, or a changed path matching a paths
-// glob.
+// glob. The change tier (#2348) sets the base before the raises: a docs-tier
+// diff is none and a small one caps the base and scope drift at light. A label
+// still decides the base, a docs-tier diff never counts as drift, and the Door
+// line and the paths globs still raise any tier.
 func (p ReviewPolicy) Decide(in ReviewInput) ReviewDecision {
 	base := p.base(in.Changed, in.Labels)
 	if base.Signal == SignalLabel && base.Depth == DepthNone {
 		return base
+	}
+	labelled := base.Signal == SignalLabel
+	driftCap := DepthFull
+	switch {
+	case in.Tier == change.TierDocs && !labelled:
+		base = ReviewDecision{DepthNone, SignalTier, "docs-only change (tier docs)"}
+	case in.Tier == change.TierSmall:
+		driftCap = DepthLight
+		if !labelled && base.Depth.rank() > DepthLight.rank() {
+			base = ReviewDecision{DepthLight, SignalTier, "small change (tier small)"}
+		}
 	}
 	best := base
 	raise := func(d ReviewDepth, signal, why string) {
@@ -255,12 +276,19 @@ func (p ReviewPolicy) Decide(in ReviewInput) ReviewDecision {
 			best = ReviewDecision{d, signal, why}
 		}
 	}
-	if doorOneWay.MatchString(in.PRBody) {
+	if DoorOneWay(in.PRBody) {
 		raise(DepthFull, SignalDoor, "PR body says Door: one-way")
 	}
-	if !p.NoScopeDrift {
+	if in.Risky {
+		raise(DepthFull, SignalRisky, "diff touches change.riskyPaths")
+	}
+	if !p.NoScopeDrift && in.Tier != change.TierDocs {
 		if drift := scopeDrift(in.IssueBody, in.Files, p.supportPaths()); len(drift) > 0 {
-			raise(DepthFull, SignalScopeDrift, "diff touches files the issue never named: "+strings.Join(drift, ", "))
+			d := DepthFull
+			if driftCap.rank() < d.rank() {
+				d = driftCap
+			}
+			raise(d, SignalScopeDrift, "diff touches files the issue never named: "+strings.Join(drift, ", "))
 		}
 	}
 	globs := make([]string, 0, len(p.Paths))
