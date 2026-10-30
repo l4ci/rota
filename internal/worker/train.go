@@ -204,6 +204,9 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 // trainRun is one train's state across its three stages: plan (check, order,
 // pre-merge policy, scratch merge), verify (test.full, test.e2e, bisect) and
 // land. Each stage returns done when res already holds the train's answer.
+// rem is the configured git remote the train fetches from and pushes to.
+func (t *trainRun) rem() string { return t.in.cfg.RemoteName() }
+
 type trainRun struct {
 	e     Env
 	ctx   context.Context
@@ -290,6 +293,9 @@ func (t *trainRun) plan() (bool, error) {
 		return true, err
 	}
 	in.cfg.WarnLegacy(e.Stderr)
+	if err := in.cfg.RemoteErr; err != nil {
+		return true, fail(exitcode.ExitRefused, err.Error())
+	}
 	t.in = in
 	seen := map[string]bool{}
 	withPR := 0
@@ -313,7 +319,7 @@ func (t *trainRun) plan() (bool, error) {
 		}
 	}
 	if withPR != 0 && withPR != len(o.Targets) {
-		return true, fail(exitcode.ExitUsage, fmt.Sprintf("a train is all PRs or all slots without one, not a mix: PRs merge onto origin/%s and slots onto the local %s", o.Base, o.Base))
+		return true, fail(exitcode.ExitUsage, fmt.Sprintf("a train is all PRs or all slots without one, not a mix: PRs merge onto %s/%s and slots onto the local %s", t.rem(), o.Base, o.Base))
 	}
 
 	// Freeze is a queue-wide refusal, before static sections can prune members.
@@ -384,11 +390,11 @@ func (t *trainRun) plan() (bool, error) {
 	}
 	t.baseRef = o.Base
 	if t.remote {
-		t.baseRef = "origin/" + o.Base
+		t.baseRef = t.rem() + "/" + o.Base
 	}
 	t.headRef = func(m TrainMember) string {
 		if m.PR != "" {
-			return "origin/" + m.Branch
+			return t.rem() + "/" + m.Branch
 		}
 		return m.Branch
 	}
@@ -487,8 +493,8 @@ func (t *trainRun) plan() (bool, error) {
 
 	// 3. Merge in order in a scratch worktree.
 	if o.SyncBase != "" && t.remote {
-		if _, code := e.git(root, "fetch", "origin", "-q"); code != 0 {
-			return t.broke("git fetch origin failed before syncing " + o.SyncBase)
+		if _, code := e.git(root, "fetch", t.rem(), "-q"); code != 0 {
+			return t.broke("git fetch " + t.rem() + " failed before syncing " + o.SyncBase)
 		}
 	}
 	baseSHA, code := e.git(root, "rev-parse", baseRef)
@@ -550,7 +556,7 @@ func (t *trainRun) syncBase() (bool, error) {
 	e, ctx, o, res := t.e, t.ctx, t.o, &t.res
 	from := o.SyncBase
 	if t.remote {
-		from = "origin/" + o.SyncBase
+		from = t.rem() + "/" + o.SyncBase
 	}
 	sha, code := e.git(t.root, "rev-parse", from)
 	if code != 0 {
@@ -605,11 +611,11 @@ func conflictPaths(out string) []string {
 func (t *trainRun) pushSync() error {
 	e, root, o := t.e, t.root, t.o
 	if t.remote {
-		if out, code := e.runGit(t.ctx, root, "push", "-q", "origin", t.syncSHA+":refs/heads/"+o.Base); code != 0 {
-			return fmt.Errorf("git push of the sync merge to origin/%s failed: %s", o.Base, strings.TrimSpace(out))
+		if out, code := e.runGit(t.ctx, root, "push", "-q", t.rem(), t.syncSHA+":refs/heads/"+o.Base); code != 0 {
+			return fmt.Errorf("git push of the sync merge to %s/%s failed: %s", t.rem(), o.Base, strings.TrimSpace(out))
 		}
-		if _, code := e.git(root, "fetch", "origin", "-q"); code != 0 {
-			return errors.New("git fetch origin failed after pushing the sync merge")
+		if _, code := e.git(root, "fetch", t.rem(), "-q"); code != 0 {
+			return errors.New("git fetch " + t.rem() + " failed after pushing the sync merge")
 		}
 		return nil
 	}
@@ -919,8 +925,8 @@ func (t *trainRun) land() (TrainResult, error) {
 	res, baseRef, baseSHA, headRef, passing := t.res, t.baseRef, t.baseSHA, t.headRef, t.passing
 	n := len(res.Members)
 	if t.remote {
-		if _, code := e.git(root, "fetch", "origin", "-q"); code != 0 {
-			return e.trainBroke(res, "git fetch origin failed before landing")
+		if _, code := e.git(root, "fetch", t.rem(), "-q"); code != 0 {
+			return e.trainBroke(res, "git fetch "+t.rem()+" failed before landing")
 		}
 	}
 	verdict, culprit := res.Verdict, res.Culprit
@@ -941,8 +947,8 @@ func (t *trainRun) land() (TrainResult, error) {
 		m := res.Members[i]
 		if i > 0 { // each landing must start from exactly the tree the scratch merge had at that point
 			if t.remote {
-				if _, code := e.git(root, "fetch", "origin", "-q"); code != 0 {
-					return e.trainBroke(res, "git fetch origin failed between landings")
+				if _, code := e.git(root, "fetch", t.rem(), "-q"); code != 0 {
+					return e.trainBroke(res, "git fetch "+t.rem()+" failed between landings")
 				}
 			}
 			got, _ := e.git(root, "rev-parse", baseRef+"^{tree}")

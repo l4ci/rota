@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
@@ -684,6 +685,12 @@ func SlotData(sl *Slot) *jsonx.Object {
 		out.Set("relays", []any{})
 	}
 	return out
+}
+
+// Remote is the git remote the worker verbs fetch from and push to (git.remote,
+// origin when unset), read from root's config.
+func (e Env) Remote(root string) (string, error) {
+	return config.GitRemote(e.WithDefaults().Config(root))
 }
 
 // git runs git and trims one trailing newline from stdout, like $(...).

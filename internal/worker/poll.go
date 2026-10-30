@@ -159,7 +159,11 @@ func (e Env) branchMoved(ctx context.Context, root string, s *Slot) bool {
 	if base == "" {
 		return false
 	}
-	out, code := e.runGit(ctx, root, "ls-remote", "--exit-code", "origin", "refs/heads/"+s.Branch())
+	remote, err := e.Remote(root)
+	if err != nil {
+		return false // an invalid git.remote: done and the gate refuse it, a best-effort read says nothing
+	}
+	out, code := e.runGit(ctx, root, "ls-remote", "--exit-code", remote, "refs/heads/"+s.Branch())
 	if code != 0 {
 		return false
 	}
@@ -295,7 +299,11 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 // openPRs lists the forge's open PRs. Best effort: ok is false with no origin,
 // a local forge, no forge or a failing listing, where nothing is known.
 func (e Env) openPRs(ctx context.Context, root string) (prs []tracker.PR, ok bool) {
-	if _, code := e.runGit(ctx, root, "remote", "get-url", "origin"); code != 0 {
+	remote, err := e.Remote(root)
+	if err != nil {
+		return nil, false
+	}
+	if _, code := e.runGit(ctx, root, "remote", "get-url", remote); code != 0 {
 		return nil, false
 	}
 	cfg := e.GateConfig(root)
@@ -371,7 +379,11 @@ func (e Env) prInfoKnown(ctx context.Context, root string, s *Slot) (info tracke
 	if !ok {
 		return info, true
 	}
-	if _, code := e.git(root, "remote", "get-url", "origin"); code != 0 {
+	remote, err := e.Remote(root)
+	if err != nil {
+		return info, true
+	}
+	if _, code := e.git(root, "remote", "get-url", remote); code != 0 {
 		return info, true
 	}
 	cfg := e.GateConfig(root)

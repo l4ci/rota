@@ -158,7 +158,11 @@ func (e Env) claimBranchActivity(ctx context.Context, root string, key tracker.I
 	if run == nil {
 		run = git.Exec
 	}
-	args := []string{"ls-remote", "--heads", "origin", "refs/heads/*/" + key.String() + "-*"}
+	remote, err := e.remote(root)
+	if err != nil {
+		return time.Time{}, err
+	}
+	args := []string{"ls-remote", "--heads", remote, "refs/heads/*/" + key.String() + "-*"}
 	for _, branch := range prBranches {
 		args = append(args, "refs/heads/"+branch)
 	}
@@ -167,7 +171,7 @@ func (e Env) claimBranchActivity(ctx context.Context, root string, key tracker.I
 		return time.Time{}, err
 	}
 	if res.ExitCode != 0 {
-		return time.Time{}, fmt.Errorf("cannot read origin branches: %s", strings.TrimSpace(res.Stderr))
+		return time.Time{}, fmt.Errorf("cannot read %s branches: %s", remote, strings.TrimSpace(res.Stderr))
 	}
 	var last time.Time
 	for _, line := range strings.Split(res.Stdout, "\n") {
@@ -179,7 +183,7 @@ func (e Env) claimBranchActivity(ctx context.Context, root string, key tracker.I
 		if branchKey, ok := worker.BranchIssue(branch); (!ok || branchKey != key) && !slices.Contains(prBranches, branch) {
 			continue
 		}
-		res, err = run(ctx, root, "fetch", "--no-tags", "origin", fields[1])
+		res, err = run(ctx, root, "fetch", "--no-tags", remote, fields[1])
 		if err != nil {
 			return time.Time{}, err
 		}
