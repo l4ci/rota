@@ -260,10 +260,7 @@ func FromConfig(cfg any) (Settings, error) {
 	if s.AutopilotCap, err = config.Int(cfg, config.RoundAutopilotCapKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.TrainFill.Max, err = config.Int(cfg, config.RoundTrainMaxKey, 0, config.MaxInt); err != nil {
-		return s, err
-	}
-	if s.TrainFill.Minutes, err = config.Int(cfg, config.RoundTrainFillMinutesKey, 0, config.MaxInt); err != nil {
+	if s.TrainFill, err = TrainFillFromConfig(cfg); err != nil {
 		return s, err
 	}
 	if s.Batch, err = config.Int(cfg, config.RoundBatchKey, 0, config.MaxInt); err != nil {

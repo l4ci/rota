@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/gate"
@@ -98,117 +99,6 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	renv.HolderPID = pid
 	state := roundtick.LoadState(cd, lease.Round)
 
-	e := roundtick.Env{Cap: set.AutopilotCap, MergeApproval: policy.Mode, Batch: set.Batch, TrainFill: set.TrainFill, Now: c.deps().Now}
-	e.Capped = quotaCapped(renv, root, set)
-	// Tolerant: a tick callback with no error return; the tick reconciles strictly.
-	e.Slots = func() []roundtick.Slot {
-		return roundtick.SlotsOf(worker.LoadRegistryTolerant(root).Slots())
-	}
-	e.Active = func() []string {
-		active, _ := round.Members(worker.LoadRegistryTolerant(root), set)
-		return active
-	}
-	e.Queued = func() []string {
-		return roundtick.QueuedRefs(worker.LoadRegistryTolerant(root).PRs())
-	}
-	e.Reconcile = func(ctx context.Context) ([]string, []string, error) {
-		out, err := renv.Reconcile(ctx, root, true)
-		if err != nil {
-			return nil, nil, err
-		}
-		repaired, drift := roundtick.ReconcileLines(out)
-		return repaired, drift, nil
-	}
-	e.Base, e.BaseOverride = renv.Base, baseOverride
-	e.Target = func(target string) (worker.GateTarget, error) {
-		reg, err := worker.LoadRegistry(root)
-		if err != nil {
-			return worker.GateTarget{}, err
-		}
-		return reg.GateTarget(target)
-	}
-	// Read once, after reconciliation, using the same current-head review
-	// timestamps as the nudge. A missing timestamp leaves the count rule usable.
-	gateNow := map[string]bool{}
-	var readyPRs map[int]waitingPR
-	lookupReady := func(target string) (waitingPR, bool) {
-		if readyPRs == nil {
-			readyPRs = map[int]waitingPR{}
-			for _, w := range waitingPRsWithState(c, root, state) {
-				if n, ok := worker.PRRefNumber(w.PR); ok && w.Reviewed {
-					readyPRs[n] = w
-				}
-			}
-		}
-		t, err := e.Target(target)
-		if err != nil {
-			return waitingPR{}, false
-		}
-		n, _ := worker.PRRefNumber(t.PR)
-		w, ready := readyPRs[n]
-		return w, ready
-	}
-	e.TrainReady = func(target string) bool {
-		_, ready := lookupReady(target)
-		return ready
-	}
-	e.ReadySince = func(target string) time.Time {
-		w, _ := lookupReady(target)
-		return w.ReadySince
-	}
-	e.FillBypass = func(target string) bool {
-		if gateNow[target] {
-			return true
-		}
-		w, ready := lookupReady(target)
-		return ready && w.Immediate
-	}
-	e.Head = func(ctx context.Context, target string) (string, error) {
-		t, err := e.Target(target)
-		if err != nil {
-			return "", err
-		}
-		n, ok := worker.PRRefNumber(t.PR)
-		if !ok {
-			return "", fmt.Errorf("cannot read PR number from %q", t.PR)
-		}
-		forge, err := c.deps().forge(ctx, c.deps().Config(root), "", root)
-		if err != nil {
-			return "", err
-		}
-		info, err := forge.PRView(ctx, n)
-		if err != nil {
-			return "", err
-		}
-		if prState := strings.ToLower(info.State); prState != "" && prState != "open" {
-			gateNow[target] = true
-		}
-		if info.Base != "" && info.Base != strutil.FirstNonEmpty(e.BaseOverride, t.Base, e.Base) {
-			gateNow[target] = true
-		}
-		if info.HeadSHA == "" {
-			if gateNow[target] {
-				return fmt.Sprintf("%d:state", n), nil
-			}
-			return "", fmt.Errorf("PR %s has no head SHA", t.PR)
-		}
-		return fmt.Sprintf("%d:%s", n, info.HeadSHA), nil
-	}
-	e.Role = set.Role
-	e.RunGate = func(_ context.Context, target, base string) roundtick.GateRun {
-		run := runGate(c, root, gateRunOpts{Slot: target, Base: base, NoWait: true})
-		return roundtick.GateRun{Result: run.Result, Err: run.Err, Refused: run.Refused, BookErr: run.BookErr}
-	}
-	e.AwaitingReview = func(_ context.Context, sl roundtick.Slot, base string) string {
-		why, pass := reviewReadiness(c, root, sl.Name, base)
-		gateNow[sl.Name] = pass
-		return why
-	}
-	e.RunTrain = func(_ context.Context, targets []string, base string) roundtick.TrainRun {
-		run := runTrain(c, root, trainRunOpts{Targets: targets, Base: base, NoWait: true})
-		return roundtick.TrainRun{Result: run.Result, Err: run.Err, Refused: run.Refused, Book: run.Book}
-	}
-	e.Say = func(line string) { fmt.Fprintln(c.Stderr, line) }
 	be, err := openBacklog(c, root, false, "")
 	if err != nil {
 		_, ferr := backlogFail(err)
@@ -218,39 +108,8 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	if !ok {
 		return roundtick.Result{}, &Error{Exit: ExitInternal, Message: "the backlog backend has no workflow"}
 	}
-	e.OpenItems = func(context.Context) int { return round.OpenItems(root, board) }
-	e.Candidates = func(ctx context.Context) ([]round.Candidate, error) {
-		candidates, err := renv.RoundCandidates(ctx, root, be, set, "")
-		warnCandidateMigrations(c, candidates)
-		return candidates, err
-	}
-	e.Review = reviewAdapter{c: c, root: root, set: set, renv: renv, board: board}
-	// Assign takes no tier, no kind and never accepts overlap: the round's
-	// defaults, and only a candidate that is ready as it stands.
-	e.Assign = func(ctx context.Context, id string) ([]string, error) {
-		res, err := renv.Assign(ctx, root, board, round.AssignOpts{ID: id})
-		for _, w := range res.Warnings {
-			c.Warn("%s", w)
-		}
-		if err != nil {
-			return nil, err
-		}
-		for _, o := range res.Overlaps {
-			c.Warn("%s %s", tracker.RefOf(id), o.String())
-		}
-		if fb := res.Fallback; fb != nil {
-			c.Warn("%s", fallbackLine(id, fb))
-		}
-		return roundtick.AssignedAgents(res), nil
-	}
-	e.ReviewLoop = func(_ context.Context, sl roundtick.Slot) roundtick.ReviewOutcome {
-		return reviewStep(c, root, set, sl.Name)
-	}
-	e.Audit = func(a roundtick.Action) {
-		if err := gate.Autopilot(root, c.deps().Now(), "round tick "+a.Action, a.Target, a.Detail); err != nil {
-			c.Warn("audit line not written: %v", err)
-		}
-	}
+	w := &tickWorld{c: c, root: root, set: set, renv: renv, be: be, board: board, state: state}
+	e := roundtick.NewEnv(w, roundtick.Config{Settings: set, MergeApproval: policy.Mode, Base: renv.Base, BaseOverride: baseOverride})
 	if state.Stopped {
 		return roundtick.Result{}, errAutopilotStopped
 	}
@@ -415,3 +274,97 @@ func (r reviewAdapter) Mint(ctx context.Context, a round.Architecture) ([]string
 func fallbackLine(id string, fb *round.Fallback) string {
 	return fmt.Sprintf("fallback\t%s: %s -> %s: %s", tracker.RefOf(id), fb.From, fb.To, fb.Why)
 }
+
+// tickWorld is the CLI's side of a tick: every seam roundtick.NewEnv wires,
+// answered by the real registry, forge and verbs.
+type tickWorld struct {
+	c     *Ctx
+	root  string
+	set   roundcfg.Settings
+	renv  round.Env
+	be    backlog.Backend
+	board round.Board
+	state roundtick.State
+}
+
+func (w *tickWorld) TolerantRegistry() worker.Registry  { return worker.LoadRegistryTolerant(w.root) }
+func (w *tickWorld) Registry() (worker.Registry, error) { return worker.LoadRegistry(w.root) }
+func (w *tickWorld) Forge(ctx context.Context) (roundtick.PRViewer, error) {
+	return w.c.deps().forge(ctx, w.c.deps().Config(w.root), "", w.root)
+}
+
+// Waiting reads the queued PRs once, using the same current-head review
+// timestamps as the nudge. A missing timestamp leaves the count rule usable.
+func (w *tickWorld) Waiting() []roundtick.ReadyPR {
+	var out []roundtick.ReadyPR
+	for _, p := range waitingPRsWithState(w.c, w.root, w.state) {
+		out = append(out, roundtick.ReadyPR{PR: p.PR, Reviewed: p.Reviewed, ReadySince: p.ReadySince, Immediate: p.Immediate})
+	}
+	return out
+}
+
+func (w *tickWorld) Reconcile(ctx context.Context) (round.Outcome, error) {
+	return w.renv.Reconcile(ctx, w.root, true)
+}
+
+func (w *tickWorld) RunGate(slot, base string) roundtick.GateRun {
+	run := runGate(w.c, w.root, gateRunOpts{Slot: slot, Base: base, NoWait: true})
+	return roundtick.GateRun{Result: run.Result, Err: run.Err, Refused: run.Refused, BookErr: run.BookErr}
+}
+
+func (w *tickWorld) RunTrain(targets []string, base string) roundtick.TrainRun {
+	run := runTrain(w.c, w.root, trainRunOpts{Targets: targets, Base: base, NoWait: true})
+	return roundtick.TrainRun{Result: run.Result, Err: run.Err, Refused: run.Refused, Book: run.Book}
+}
+
+func (w *tickWorld) ReviewReadiness(slot, base string) (string, bool) {
+	return reviewReadiness(w.c, w.root, slot, base)
+}
+
+func (w *tickWorld) ReviewLoop(slot string) roundtick.ReviewOutcome {
+	return reviewStep(w.c, w.root, w.set, slot)
+}
+
+func (w *tickWorld) Capped(ctx context.Context) string {
+	return quotaCapped(w.renv, w.root, w.set)(ctx)
+}
+
+func (w *tickWorld) OpenItems() int { return round.OpenItems(w.root, w.board) }
+
+func (w *tickWorld) Candidates(ctx context.Context) ([]round.Candidate, error) {
+	candidates, err := w.renv.RoundCandidates(ctx, w.root, w.be, w.set, "")
+	warnCandidateMigrations(w.c, candidates)
+	return candidates, err
+}
+
+// Assign takes no tier, no kind and never accepts overlap: the round's
+// defaults, and only a candidate that is ready as it stands.
+func (w *tickWorld) Assign(ctx context.Context, id string) (round.Assigned, error) {
+	res, err := w.renv.Assign(ctx, w.root, w.board, round.AssignOpts{ID: id})
+	for _, warn := range res.Warnings {
+		w.c.Warn("%s", warn)
+	}
+	if err != nil {
+		return res, err
+	}
+	for _, o := range res.Overlaps {
+		w.c.Warn("%s %s", tracker.RefOf(id), o.String())
+	}
+	if fb := res.Fallback; fb != nil {
+		w.c.Warn("%s", fallbackLine(id, fb))
+	}
+	return res, nil
+}
+
+func (w *tickWorld) Review() roundtick.Reviewer {
+	return reviewAdapter{c: w.c, root: w.root, set: w.set, renv: w.renv, board: w.board}
+}
+
+func (w *tickWorld) Audit(a roundtick.Action) {
+	if err := gate.Autopilot(w.root, w.c.deps().Now(), "round tick "+a.Action, a.Target, a.Detail); err != nil {
+		w.c.Warn("audit line not written: %v", err)
+	}
+}
+
+func (w *tickWorld) Say(line string) { fmt.Fprintln(w.c.Stderr, line) }
+func (w *tickWorld) Now() time.Time  { return w.c.deps().Now() }

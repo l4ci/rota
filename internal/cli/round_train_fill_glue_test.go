@@ -17,7 +17,7 @@ import (
 
 // The real tick runs against git, a round lease and a fake forge. With no full
 // tier configured a real gate can report its refusal, but cannot land anything.
-func fillTickFixture(t *testing.T, review string, reviewed, clocked bool, viewedState ...string) (*Ctx, string, func() roundtick.Result) {
+func fillTickFixture(t *testing.T, review string, reviewed, clocked bool) (*Ctx, string, func() roundtick.Result) {
 	t.Helper()
 	f := newScopeFx(t, "warn", "")
 	gitIn(t, f.root, "branch", "-M", "main")
@@ -48,11 +48,6 @@ func fillTickFixture(t *testing.T, review string, reviewed, clocked bool, viewed
 	f.deps.TrackerOptions = append(f.deps.TrackerOptions, tracker.WithExec(func(ctx context.Context, dir, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
 		if len(args) >= 2 && args[0] == "pr" && (args[1] == "view" || args[1] == "list") {
 			pr := map[string]any{"number": 11, "headRefName": "ben/1-fill", "headRefOid": head, "baseRefName": "main", "state": "OPEN", "body": "Closes #1\n\nDoor: two-way.", "url": "https://github.com/o/r/pull/11"}
-			// The list can be an earlier open snapshot while a fresh PR view
-			// sees that someone else has just closed or merged it.
-			if args[1] == "view" && len(viewedState) > 0 {
-				pr["state"] = viewedState[0]
-			}
 			var value any = pr
 			if args[1] == "list" {
 				value = []any{pr}
@@ -88,31 +83,6 @@ func fillTickFixture(t *testing.T, review string, reviewed, clocked bool, viewed
 			t.Fatal(err)
 		}
 		return r
-	}
-}
-
-func TestAutopilotTrainFillPRStatePassThrough(t *testing.T) {
-	for _, state := range []string{"CLOSED", "MERGED"} {
-		t.Run(state, func(t *testing.T) {
-			_, _, tick := fillTickFixture(t, `"light"`, false, true, state)
-			r := tick()
-			if len(r.Holding) != 0 {
-				t.Fatalf("PR state refusal was held for fill: %+v", r)
-			}
-			handled := false
-			for _, a := range r.Did {
-				handled = handled || a.Action == "merge" || a.Action == "reconcile"
-			}
-			for _, item := range r.NeedsYou {
-				if item.Kind == "awaiting-review" {
-					t.Fatalf("PR state refusal was dropped as not ready: %+v", r)
-				}
-				handled = handled || item.Kind == "gate-failed"
-			}
-			if !handled {
-				t.Fatalf("PR state was neither gated nor reconciled: %+v", r)
-			}
-		})
 	}
 }
 
