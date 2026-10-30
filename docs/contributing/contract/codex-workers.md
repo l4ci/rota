@@ -12,6 +12,7 @@ refs:
   - internal/roundwatch/maintainer.go
   - internal/hook
   - internal/doctor/doctor.go
+  - internal/doctor/codex.go
 ---
 
 ## E: Codex workers
