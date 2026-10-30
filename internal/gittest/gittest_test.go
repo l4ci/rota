@@ -133,3 +133,23 @@ func TestQuietEnvMatchesQuiet(t *testing.T) {
 		}
 	}
 }
+
+// TestRunIgnoresUserGitConfig: a developer's global config (signing, hooks)
+// must not reach a fixture commit.
+func TestRunIgnoresUserGitConfig(t *testing.T) {
+	home := TempDir(t)
+	hooks := filepath.Join(home, "hooks")
+	Write(t, hooks, "pre-commit", "#!/bin/sh\nexit 1\n")
+	if err := os.Chmod(filepath.Join(hooks, "pre-commit"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	Write(t, home, ".gitconfig", "[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = false\n[core]\n\thooksPath = "+hooks+"\n")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(home, ".gitconfig"))
+	t.Setenv("GIT_CONFIG_SYSTEM", filepath.Join(home, ".gitconfig"))
+	dir := NewRepo(t, "main")
+	if got := Run(t, dir, "log", "-1", "--format=%G?"); got != "N" {
+		t.Errorf("signature status = %q, want N (unsigned)", got)
+	}
+}

@@ -31,7 +31,7 @@ var FixtureIdentity = []string{"GIT_AUTHOR_NAME=Fixture", "GIT_AUTHOR_EMAIL=fixt
 var CLIGoldenIdentity = []string{"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@x", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@x"}
 
 // Runner runs git with a fixed environment. The zero value is Identity under
-// the test process's environment; a non-nil Env replaces both, for a
+// the test process's environment with the user's and system git config off; a non-nil Env replaces both, for a
 // harness that pins dates, HOME and PATH itself.
 type Runner struct {
 	Env []string
@@ -46,7 +46,9 @@ func (r Runner) Run(t testing.TB, dir string, args ...string) string {
 	if r.Env != nil {
 		cmd.Env = r.Env
 	} else {
-		cmd.Env = append(slices.Clone(Identity), os.Environ()...)
+		// Last, so they win over a developer's own values: a global signing
+		// key, hooksPath or init template must not reach a fixture.
+		cmd.Env = append(append(slices.Clone(Identity), os.Environ()...), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
