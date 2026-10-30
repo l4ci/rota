@@ -4,6 +4,8 @@ Used by `/rota-work` Step 13 (the one-line learn nudge), `/rota-ship` Step 8.5 (
 
 ## The condition
 
+`rota ship finish` evaluates this condition in code for `/rota-ship` Steps 8.5 and 8.6 (`internal/cycle`); change the two together. The pure-mechanical exclusion and the don't-repeat rule below stay with the caller.
+
 A post-cycle nudge or auto-dispatch fires when **at least one** of:
 
 - **2+ items resolved** in the cycle (counted as distinct closed items across the cycle: bracketed IDs such as `[B07]` in its commit messages, or issue closures, i.e. `Closes #N` / `Fixes #N` / `Resolves #N` in its commits or the PR body; `rota ship body` and `rota ship pr --items` emit the `Closes #N` lines).
