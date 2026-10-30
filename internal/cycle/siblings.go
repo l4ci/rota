@@ -17,6 +17,10 @@ const (
 	Artifact
 )
 
+// siblingExts are the suffixes a toolchain writes beside a tracked source
+// file: Godot's .uid and .import, Unity's .meta.
+var siblingExts = map[string]bool{".uid": true, ".import": true, ".meta": true}
+
 // Classify says what a dirty path is. tracked reports whether a path is under
 // version control; itemIDs are the target items, matched exactly against
 // .rota/designs/<ID>.md and .rota/plans/<ID>.md.
@@ -38,8 +42,10 @@ func Classify(p string, tracked func(string) bool, itemIDs []string) Kind {
 	case strings.HasSuffix(path.Dir(p), ".xcodeproj") && base == "project.pbxproj":
 		return ToolSibling
 	}
-	// Beside a tracked file: Foo.gd.uid next to tracked Foo.gd.
-	if ext := path.Ext(p); ext != "" && tracked != nil && tracked(strings.TrimSuffix(p, ext)) {
+	// Beside a tracked file, for a toolchain suffix only: Foo.gd.import next
+	// to tracked Foo.gd. Any other suffix (config.json.local, main.go.orig)
+	// may hold user data, so it stays a user change and the guard refuses it.
+	if ext := path.Ext(p); siblingExts[ext] && tracked != nil && tracked(strings.TrimSuffix(p, ext)) {
 		return ToolSibling
 	}
 	return User
