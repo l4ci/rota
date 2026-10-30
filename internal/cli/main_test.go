@@ -48,7 +48,7 @@ func TestMain(m *testing.M) {
 	// Fixture repos commit and merge: the identity comes from here, not from
 	// the developer's (or CI's missing) global git config. t@x, not gittest's
 	// default: the goldens hold commit hashes made under it.
-	gittest.SetIdentity("GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@x", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@x")
+	gittest.SetIdentity(gittest.CLIGoldenIdentity...)
 	code := m.Run()
 	if hit := tw.Check(); hit != "" {
 		fmt.Fprintf(os.Stderr, "FAIL: tests exec'd the forge CLI from PATH:\n%s", hit)
