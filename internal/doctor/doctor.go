@@ -20,6 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/stalebin"
@@ -142,9 +143,9 @@ type Input struct {
 	// drifted from config (agents.Problems); empty adds no line.
 	AgentProblems []string
 
-	// GitignoreMissing are the managed .gitignore lines the project lacks
-	// (initproj.MissingIgnoreLines); empty adds no line.
-	GitignoreMissing []string
+	// Gitignore is the project's .gitignore text; nil when the file does not
+	// exist, which is not drift (init creates it) and adds no line.
+	Gitignore *string
 
 	// Skills is the state of the installed skill sets (skills.Set.Status);
 	// nil when nothing was read.
@@ -170,21 +171,22 @@ type Input struct {
 	// ProjectRoot is the directory holding .rota/, "" outside a rota project:
 	// the orchestrator checks (statusline, stop-hook) skip without it.
 	ProjectRoot string
-	// ConfigDirs are the Claude config dirs whose settings.json counts for
-	// those checks: each account's configDir, else the default user dir.
-	ConfigDirs []string
+	// DefaultConfigDir is the user's Claude config dir; the orchestrator checks
+	// read it when no account names a configDir of its own.
+	DefaultConfigDir string
 
 	// Disk is the free space of the volume the round writes to; nil when it
 	// could not be read (no check then). MinFreeDiskPercent is the
-	// doctor.minFreeDiskPercent threshold; 0 turns the check off. Leftovers
-	// names what rota left behind that would give space back (stale scratch
-	// worktrees, leaked temp dirs): lines for the warning, nothing when clean.
+	// doctor.minFreeDiskPercent threshold; 0 turns the check off.
+	// ScanLeftovers names what rota left behind that would give space back
+	// (stale scratch worktrees, leaked temp dirs); it walks the disk, so it
+	// runs only once Disk is low. Nil adds no leftovers.
 	Disk               *Disk
 	MinFreeDiskPercent int
+	ScanLeftovers      func() []string
 	// CacheDisk is the volume holding the Go build cache when it is not the
 	// one Disk reads (the gate's builds grow it); nil adds no line.
 	CacheDisk *Disk
-	Leftovers []string
 
 	// StaleBinary is set when the installed rota is behind the rota source
 	// checkout Dir is in (stalebin.Check); nil adds no line.
@@ -325,8 +327,10 @@ func Run(ctx context.Context, in Input) Report {
 	if len(in.AgentProblems) > 0 {
 		checks = append(checks, Check{Name: "agents", Status: Warn, Detail: strings.Join(in.AgentProblems, "; "), Hint: "run: rota agents write"})
 	}
-	if len(in.GitignoreMissing) > 0 {
-		checks = append(checks, Check{Name: "gitignore", Status: Warn, Detail: "missing from .gitignore: " + strings.Join(in.GitignoreMissing, ", "), Hint: "run: rota init"})
+	if in.Gitignore != nil {
+		if missing := initproj.MissingIgnoreLines(*in.Gitignore); len(missing) > 0 {
+			checks = append(checks, Check{Name: "gitignore", Status: Warn, Detail: "missing from .gitignore: " + strings.Join(missing, ", "), Hint: "run: rota init"})
+		}
 	}
 	if in.Labels != nil {
 		checks = append(checks, labelCheck(*in.Labels))
@@ -720,12 +724,27 @@ func (d *runner) hooks() *hookSettings {
 			local:  d.read(hook.SettingsPath(hook.ScopeProjectLocal, d.in.ProjectRoot)),
 			shared: d.read(hook.SettingsPath(hook.ScopeProject, d.in.ProjectRoot)),
 		}
-		for _, dir := range d.in.ConfigDirs {
+		for _, dir := range d.configDirs() {
 			h.users = append(h.users, d.read(hook.SettingsPath(hook.ScopeUser, d.expand(dir))))
 		}
 		d.settings = h
 	}
 	return d.settings
+}
+
+// configDirs are the Claude config dirs whose settings.json counts for the
+// orchestrator checks: each account's configDir, else the default user dir.
+func (d *runner) configDirs() []string {
+	var dirs []string
+	for _, a := range d.in.Accounts {
+		if a.Dir != "" {
+			dirs = append(dirs, a.Dir)
+		}
+	}
+	if len(dirs) == 0 && d.in.DefaultConfigDir != "" {
+		dirs = []string{d.in.DefaultConfigDir}
+	}
+	return dirs
 }
 
 // project is the project's files in precedence order.
@@ -801,7 +820,7 @@ func (d *runner) statusline() Check {
 	h := d.hooks()
 	proj := h.project()
 	users := h.users
-	labels := d.in.ConfigDirs
+	labels := d.configDirs()
 	if len(users) == 0 {
 		users, labels = []hookFile{{}}, []string{""}
 	}
@@ -1080,8 +1099,10 @@ func (d *runner) disk() (Check, bool) {
 	pct := disk.FreePercent()
 	detail := fmt.Sprintf("%s has %s free (%.0f%%), under the %d%% threshold", disk.Path, HumanBytes(disk.Free), pct, min)
 	hint := "free space before a round; set doctor.minFreeDiskPercent to change the threshold"
-	if len(d.in.Leftovers) > 0 {
-		hint = "reclaimable rota leftovers: " + strings.Join(d.in.Leftovers, "; ")
+	if d.in.ScanLeftovers != nil {
+		if left := d.in.ScanLeftovers(); len(left) > 0 {
+			hint = "reclaimable rota leftovers: " + strings.Join(left, "; ")
+		}
 	}
 	return Check{Name: "disk", Status: Warn, Detail: detail, Hint: hint}, true
 }
