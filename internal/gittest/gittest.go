@@ -25,6 +25,11 @@ var Identity = []string{"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMIT
 // it cannot move to Identity without re-freezing them.
 var FixtureIdentity = []string{"GIT_AUTHOR_NAME=Fixture", "GIT_AUTHOR_EMAIL=fixture@example.com", "GIT_COMMITTER_NAME=Fixture", "GIT_COMMITTER_EMAIL=fixture@example.com"}
 
+// CLIGoldenIdentity is the identity internal/cli's TestMain installs: its
+// goldens hold commit hashes made as t <t@x>, so it cannot move to Identity
+// without regenerating them.
+var CLIGoldenIdentity = []string{"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@x", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@x"}
+
 // Runner runs git with a fixed environment. The zero value is Identity under
 // the test process's environment; a non-nil Env replaces both, for a
 // harness that pins dates, HOME and PATH itself.
