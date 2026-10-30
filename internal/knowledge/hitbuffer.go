@@ -1,11 +1,8 @@
 package knowledge
 
 import (
-	"bufio"
-	"bytes"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,46 +33,12 @@ func (s Store) HitsPath(scope string) (string, error) {
 // readPending returns the buffered hits in order and how many lines it
 // skipped. A missing file is empty and a non-blank line that does not parse is
 // skipped, so one torn append loses one hit; the count lets the fold say so.
-func readPending(path string) (hits []pendingHit, skipped int, err error) {
-	raw, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return nil, 0, nil
-	}
-	if err != nil {
-		return nil, 0, err
-	}
-	sc := bufio.NewScanner(bytes.NewReader(raw))
-	for sc.Scan() {
-		if len(bytes.TrimSpace(sc.Bytes())) == 0 {
-			continue
-		}
-		var h pendingHit
-		if json.Unmarshal(sc.Bytes(), &h) == nil && h.Topic != "" && h.Title != "" {
-			hits = append(hits, h)
-		} else {
-			skipped++
-		}
-	}
-	return hits, skipped, sc.Err()
+func readPending(path string) ([]pendingHit, int, error) {
+	return fsio.ReadJSONL(path, func(h *pendingHit) bool { return h.Topic != "" && h.Title != "" })
 }
 
 func appendPending(path string, h pendingHit) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
-		return err
-	}
-	line, err := json.Marshal(h)
-	if err != nil {
-		return err
-	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o666)
-	if err != nil {
-		return err
-	}
-	if _, err := f.Write(append(line, '\n')); err != nil {
-		f.Close()
-		return err
-	}
-	return f.Close()
+	return fsio.AppendJSONL(path, h)
 }
 
 // bumpHit registers one hit on sc in memory and promotes a provisional bullet

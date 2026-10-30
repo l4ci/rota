@@ -324,3 +324,18 @@ func TestPromoteThresholdReadsTheInjectedConfig(t *testing.T) {
 		t.Fatalf("threshold %d, want 4", got)
 	}
 }
+
+// A hit line over bufio.Scanner's 64KB cap must not fail the whole read.
+func TestReadPendingSurvivesLongLine(t *testing.T) {
+	p := filepath.Join(t.TempDir(), HitsFile)
+	if err := appendPending(p, pendingHit{Topic: "Arch", Title: strings.Repeat("x", 100<<10), Date: "2026-01-01"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := appendPending(p, pendingHit{Topic: "Arch", Title: "after", Date: "2026-01-01"}); err != nil {
+		t.Fatal(err)
+	}
+	hits, skipped, err := readPending(p)
+	if err != nil || len(hits) != 2 || skipped != 0 {
+		t.Fatalf("hits=%d skipped=%d err=%v", len(hits), skipped, err)
+	}
+}
