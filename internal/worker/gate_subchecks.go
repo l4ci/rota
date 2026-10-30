@@ -11,6 +11,13 @@ import (
 	"github.com/l4ci/rota/internal/testledger"
 )
 
+// subcheckPrefix opens the ROTA-FLAKY handoff, the one place it is described.
+// test/gate-flake.py prints one unindented line per recovered gate sub-check:
+//
+//	ROTA-FLAKY {"check":…,"firstExit":1,"retryExit":0,"firstOutput":…,"retryOutput":…,"retrySeconds":…}
+//
+// check is smoke-shardN or go:<package>; outputs are tails of the first and
+// retry logs. gateSubchecks below is the only reader and rejects anything else.
 const subcheckPrefix = "ROTA-FLAKY "
 
 var subcheckName = regexp.MustCompile(`^(smoke-shard[1-9][0-9]*|go:[A-Za-z0-9._/-]+)$`)
