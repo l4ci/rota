@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -66,6 +67,11 @@ func String(cfg any, key string) string {
 	return s
 }
 
+// badRefComponent matches what git's ref-component rules forbid in a name: "..",
+// "@{", a bare "@", a trailing dot or lock suffix, an empty path segment, a segment
+// starting with ".". This validates a name; it builds no file.
+var badRefComponent = regexp.MustCompile(`\.\.|@\{|^@$|\.$|\.lock$|^/|/$|//|/\.`)
+
 // ValidGitRemote refuses a value that is not a safe git remote name: empty,
 // a leading "-" (git would read it as an option), whitespace, control
 // characters, or what git's ref-component rules forbid.
@@ -81,9 +87,7 @@ func ValidGitRemote(name string) error {
 			return fmt.Errorf("a remote name cannot contain %q", r)
 		}
 	}
-	if strings.Contains(name, "..") || strings.Contains(name, "@{") || name == "@" ||
-		strings.HasSuffix(name, ".") || strings.HasSuffix(name, ".lock") || strings.HasSuffix(name, "/") ||
-		strings.HasPrefix(name, "/") || strings.Contains(name, "//") || strings.Contains(name, "/.") {
+	if badRefComponent.MatchString(name) {
 		return errors.New("a remote name must be a valid git ref component")
 	}
 	return nil
