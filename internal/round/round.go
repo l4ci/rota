@@ -191,7 +191,10 @@ type Row struct {
 	State      string
 	Tab        string
 	Registered bool
-	Drift      []string
+	// Worktree is the slot's checkout path as the registry or the checkouts
+	// record it; "" when neither does.
+	Worktree string
+	Drift    []string
 	// Escalations are the ids of the slot's open escalations.
 	Escalations []string
 	// Kind, Tier, Model and TierReason are the slot's C9 fields.
@@ -833,7 +836,7 @@ func (e Env) readRows(wts []worktree, reg worker.Registry, rep *Report) ([]*Row,
 		if w, ok := byWT[name]; ok { // the checkout is the truth about the branch
 			branch, wt = w.branch, w.path
 		}
-		r := &Row{Name: name, Branch: branch, PR: s.PR(), Tab: s.Handle(), Registered: true}
+		r := &Row{Name: name, Branch: branch, PR: s.PR(), Tab: s.Handle(), Registered: true, Worktree: wt}
 		r.Issue = worker.HeldID(s.Task(), branch, name)
 		r.Bundle = s.Bundle()
 		if s.IsExternal() {

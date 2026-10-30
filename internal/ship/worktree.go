@@ -19,6 +19,25 @@ import (
 // sub-repo name status entries are matched against ("" resolves it from Dir).
 type Checkout struct {
 	Cwd, Dir, Repo string
+	// Owners is where ownership is read from; nil reads the project's
+	// worker registry and status files from disk.
+	Owners Owners
+}
+
+// Cycle is a status entry that registers a worktree as /rota-work cycle work.
+type Cycle struct{ Branch, Repo, Worktree string }
+
+// Owners is what ClearWorktree knows about who owns a worktree. primary is the
+// first entry of the worktree listing.
+type Owners interface {
+	// Roots are the project roots whose state may register the worktree.
+	Roots(primary string, at Checkout) []string
+	// Slots are the round slots recorded under root.
+	Slots(root string) ([]worker.Holder, error)
+	// Cycles are the status entries recorded under root.
+	Cycles(root string) []Cycle
+	// Repo is the sub-repo name of the checkout in dir ("" when none).
+	Repo(dir string) string
 }
 
 // ClearWorktree removes a clean cycle worktree before a local merge. It owns
@@ -73,42 +92,73 @@ func checkOwnership(listing string, at Checkout, branch, wt string) error {
 	if wts := git.ParseWorktrees(listing); len(wts) > 0 {
 		primary = wts[0].Path
 	}
-	roots := []string{projectRoot(primary), primary, projectRoot(at.Dir)}
-	resolve := func(root, path string) string {
-		if filepath.IsAbs(path) {
-			return path
-		}
-		return filepath.Join(root, path)
+	own := at.Owners
+	if own == nil {
+		own = diskOwners{}
 	}
+	roots := own.Roots(primary, at)
 	for _, root := range roots {
-		reg, err := worker.LoadRegistry(root)
+		holders, err := own.Slots(root)
 		if err != nil {
 			return &GitError{Msg: fmt.Sprintf("cannot read round slots: %v", err)}
 		}
-		for _, slot := range reg.Slots() {
-			if path := slot.Worktree(); path != "" && worker.PathContains(resolve(root, path), wt) {
-				return &Refusal{By: blockedby.Worktree, Msg: "worktree belongs to round slot " + slot.Name() + ": " + wt, Hint: "leave slot cleanup to the round orchestrator"}
-			}
+		if name := worker.HeldBy(root, holders, wt); name != "" {
+			return &Refusal{By: blockedby.Worktree, Msg: "worktree belongs to round slot " + name + ": " + wt, Hint: "leave slot cleanup to the round orchestrator"}
 		}
 	}
 	repo := at.Repo
 	if repo == "" {
-		if r, err := repos.Which(at.Dir); err == nil {
-			repo = r.Name
-		}
+		repo = own.Repo(at.Dir)
 	}
 	for _, root := range roots {
-		for _, entry := range status.Entries(root) {
-			if entry.Branch != branch || entry.Repo != repo || entry.Worktree == "" {
+		for _, c := range own.Cycles(root) {
+			if c.Branch != branch || c.Repo != repo || c.Worktree == "" {
 				continue
 			}
-			path := resolve(root, entry.Worktree)
+			path := c.Worktree
+			if !filepath.IsAbs(path) {
+				path = filepath.Join(root, path)
+			}
 			if worker.PathContains(path, wt) && worker.PathContains(wt, path) {
 				return nil
 			}
 		}
 	}
 	return &Refusal{By: blockedby.Worktree, Msg: "worktree is not registered as cycle work: " + wt, Hint: "preserve this worktree; use the owning workflow to manage it"}
+}
+
+// diskOwners reads ownership from the project's .rota/ state.
+type diskOwners struct{}
+
+func (diskOwners) Roots(primary string, at Checkout) []string {
+	return []string{projectRoot(primary), primary, projectRoot(at.Dir)}
+}
+
+func (diskOwners) Slots(root string) ([]worker.Holder, error) {
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return nil, err
+	}
+	var out []worker.Holder
+	for _, s := range reg.Slots() {
+		out = append(out, worker.Holder{Name: s.Name(), Worktree: s.Worktree()})
+	}
+	return out, nil
+}
+
+func (diskOwners) Cycles(root string) []Cycle {
+	var out []Cycle
+	for _, e := range status.Entries(root) {
+		out = append(out, Cycle{Branch: e.Branch, Repo: e.Repo, Worktree: e.Worktree})
+	}
+	return out
+}
+
+func (diskOwners) Repo(dir string) string {
+	if r, err := repos.Which(dir); err == nil {
+		return r.Name
+	}
+	return ""
 }
 
 // projectRoot is the project whose .rota/ holds the state of the checkout in

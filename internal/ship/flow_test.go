@@ -445,3 +445,43 @@ func TestOpenPRPushesToTheConfiguredRemote(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// fakeOwners is ClearWorktree's ownership source with no disk behind it.
+type fakeOwners struct {
+	slots  []worker.Holder
+	cycles []Cycle
+}
+
+func (f fakeOwners) Roots(primary string, at Checkout) []string { return []string{"/proj"} }
+func (f fakeOwners) Slots(string) ([]worker.Holder, error)      { return f.slots, nil }
+func (f fakeOwners) Cycles(string) []Cycle                      { return f.cycles }
+func (f fakeOwners) Repo(string) string                         { return "app" }
+
+func TestClearWorktreeInjectedOwners(t *testing.T) {
+	list := "worktree /proj\nbranch refs/heads/main\n\nworktree /wt/feat\nbranch refs/heads/feat\n"
+	newGit := func() *fakeGit {
+		return &fakeGit{out: map[string]string{"worktree list --porcelain": list, "worktree remove /wt/feat": "", "-C /wt/feat status --porcelain --untracked-files=all --ignored": ""}}
+	}
+	cycle := Cycle{Branch: "feat", Repo: "app", Worktree: "/wt/feat"}
+	for _, c := range []struct {
+		name string
+		own  fakeOwners
+		want string // "" removes
+	}{
+		{"registered cycle", fakeOwners{cycles: []Cycle{cycle}}, ""},
+		{"unregistered", fakeOwners{}, "not registered"},
+		{"other repo", fakeOwners{cycles: []Cycle{{Branch: "feat", Repo: "other", Worktree: "/wt/feat"}}}, "not registered"},
+		{"round slot", fakeOwners{cycles: []Cycle{cycle}, slots: []worker.Holder{{Name: "kit", Worktree: "/wt/feat"}}}, "round slot kit"},
+	} {
+		g := newGit()
+		err := ClearWorktree(g, "feat", Checkout{Cwd: "/elsewhere", Dir: "/proj", Owners: c.own})
+		removed := contains(g.calls, "worktree remove /wt/feat")
+		var refusal *Refusal
+		switch {
+		case c.want == "" && (err != nil || !removed):
+			t.Errorf("%s: err %v calls %v", c.name, err, g.calls)
+		case c.want != "" && (!errors.As(err, &refusal) || !strings.Contains(refusal.Msg, c.want) || removed):
+			t.Errorf("%s: err %v calls %v", c.name, err, g.calls)
+		}
+	}
+}
