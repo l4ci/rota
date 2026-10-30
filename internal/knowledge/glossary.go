@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -51,17 +52,6 @@ func splitKeep(s string) []string {
 	return out
 }
 
-// SplitCSV splits a comma-separated cell into trimmed, non-empty tokens.
-func SplitCSV(s string) []string {
-	out := []string{}
-	for _, x := range strings.Split(s, ",") {
-		if x = strings.TrimSpace(x); x != "" {
-			out = append(out, x)
-		}
-	}
-	return out
-}
-
 // ParseGlossary reads the entries of a "## Glossary" body in document order.
 // leading is the prose before the first entry (or the "(no terms yet)" note).
 func ParseGlossary(body string) (entries []Term, leading string) {
@@ -94,11 +84,11 @@ func ParseGlossary(body string) (entries []Term, leading string) {
 			case stripped == "":
 			case aliasLine.MatchString(stripped):
 				if v := strings.TrimSpace(aliasLine.FindStringSubmatch(stripped)[1]); v != "" && v != "_none_" {
-					t.Aliases = SplitCSV(v)
+					t.Aliases = pystr.SplitCSV(v)
 				}
 			case notLine.MatchString(stripped):
 				if v := strings.TrimSpace(notLine.FindStringSubmatch(stripped)[1]); v != "" {
-					t.Nots = SplitCSV(v)
+					t.Nots = pystr.SplitCSV(v)
 				}
 			case dateLine.MatchString(stripped):
 				t.Date = dateLine.FindStringSubmatch(stripped)[1]
@@ -346,7 +336,7 @@ func ParseManifest(text string) ([]Term, error) {
 			return nil, fmt.Errorf("%w: manifest line %d: term '%s' appears earlier on line %d — refusing batch", ErrAliasCollision, lineno, term, first)
 		}
 		seen[k] = lineno
-		out = append(out, Term{Name: term, Definition: def, Aliases: SplitCSV(cells[2]), Nots: SplitCSV(cells[3]), Line: lineno})
+		out = append(out, Term{Name: term, Definition: def, Aliases: pystr.SplitCSV(cells[2]), Nots: pystr.SplitCSV(cells[3]), Line: lineno})
 	}
 	return out, nil
 }
