@@ -96,3 +96,34 @@ func TestOwnershipTable(t *testing.T) {
 		}
 	}
 }
+
+func TestOwnershipSlotWorktreePaths(t *testing.T) {
+	const wtDir = "/r/.worktrees"
+	rep := &round.Report{Rows: []round.Row{
+		{Name: "inpool", Registered: true, Worktree: "/r/.worktrees/inpool"},
+		{Name: "away", Registered: true, Worktree: "/elsewhere/away"},
+		{Name: "unrecorded", Registered: true},
+	}}
+	var checkouts []checkout
+	for _, n := range []string{"inpool", "away", "unrecorded", "free"} {
+		checkouts = append(checkouts, checkout{path: wtDir + "/" + n, branch: "kit/" + n})
+	}
+	o := newOwnership(rep, "main", wtDir, checkouts)
+	for _, c := range []struct {
+		name string
+		want bool
+	}{
+		{"inpool", true}, {"away", true}, {"unrecorded", true}, {"free", false},
+	} {
+		if got := o.Worktree(&checkouts[map[string]int{"inpool": 0, "away": 1, "unrecorded": 2, "free": 3}[c.name]]); got != c.want {
+			t.Errorf("Worktree(%s) = %v, want %v", c.name, got, c.want)
+		}
+		if got := o.cwd(wtDir + "/" + c.name + "/sub"); got != c.want {
+			t.Errorf("cwd(%s/sub) = %v, want %v", c.name, got, c.want)
+		}
+	}
+	// A recorded checkout elsewhere is held by path.
+	if !o.slotHolds("/elsewhere/away/sub") {
+		t.Error("path under a slot's recorded Worktree not held")
+	}
+}

@@ -17,6 +17,7 @@ type ownership struct {
 	base, wtDir string
 	checkouts   []checkout
 	agents      []host.Agent    // the host snapshot the report was built from
+	registered  map[string]bool // row names with a slot
 	holders     []worker.Holder // the worktree each registered slot holds
 	rowAgent    map[string]bool // row names the report matched an agent to
 	slotBranch  map[string]bool // branches registered rows name
@@ -27,7 +28,7 @@ type ownership struct {
 // newOwnership reads rep once. A nil report owns nothing by itself; the
 // caller's host-availability check keeps that from failing open.
 func newOwnership(rep *round.Report, base, wtDir string, checkouts []checkout) *ownership {
-	o := &ownership{base: base, wtDir: wtDir, checkouts: checkouts,
+	o := &ownership{registered: map[string]bool{}, base: base, wtDir: wtDir, checkouts: checkouts,
 		rowAgent: map[string]bool{}, slotBranch: map[string]bool{}, slotTab: map[string]bool{}, agentTab: map[string]bool{}}
 	if rep == nil {
 		return o
@@ -43,6 +44,7 @@ func newOwnership(rep *round.Report, base, wtDir string, checkouts []checkout) *
 		if !r.Registered {
 			continue
 		}
+		o.registered[r.Name] = true
 		// A slot with no recorded checkout holds the pool's .worktrees/<name>.
 		wt := r.Worktree
 		if wt == "" {
@@ -83,9 +85,13 @@ func (o *ownership) agentIn(dir string) bool {
 func (o *ownership) tabLive(id string) bool { return o.agentTab[id] || o.slotTab[id] }
 
 // slotHolds: a registered slot holds the worktree at path, by the rule ship's
-// clearing shares (worker.HeldBy).
+// clearing shares (worker.HeldBy), or is named for its .worktrees/ directory
+// whatever Worktree it recorded. Reap fails closed: either keeps it.
 func (o *ownership) slotHolds(path string) bool {
-	return worker.HeldBy(filepath.Dir(o.wtDir), o.holders, path) != ""
+	if worker.HeldBy(filepath.Dir(o.wtDir), o.holders, path) != "" {
+		return true
+	}
+	return filepath.Dir(path) == o.wtDir && o.registered[filepath.Base(path)]
 }
 
 // Worktree: a checkout reap must never remove.
