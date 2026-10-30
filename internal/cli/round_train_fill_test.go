@@ -199,3 +199,18 @@ func TestTrainNudgeInvalidUnrelatedConfigKeepsLegacy(t *testing.T) {
 		t.Fatalf("unrelated invalid config hid legacy nudge: %+v", ns)
 	}
 }
+
+// An invalid train key is refused by the tick (FromConfig); the nudge must not
+// fall back to the legacy two-PR advice the tick would not act on.
+func TestTrainNudgeInvalidTrainKeyRefuses(t *testing.T) {
+	for _, cfg := range []string{
+		`{"round":{"trainMax":"bad"}}`,
+		`{"round":{"trainFillMinutes":-1}}`,
+	} {
+		root := nudgeRepo(t, 2)
+		write(t, filepath.Join(root, ".rota", "config.json"), cfg)
+		if ns := readyTrainNudges(&Ctx{Deps: testDeps(), ctx: context.Background()}, root); len(ns) != 0 {
+			t.Errorf("%s: nudge advised despite invalid train key: %+v", cfg, ns)
+		}
+	}
+}

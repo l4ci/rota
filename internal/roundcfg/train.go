@@ -4,12 +4,29 @@ import (
 	"fmt"
 	"sort"
 	"time"
+
+	"github.com/l4ci/rota/internal/config"
 )
 
 // TrainFill is the count or age threshold shared by the tick and train nudge.
 // Zero thresholds preserve each caller's legacy behavior.
 type TrainFill struct {
 	Max, Minutes int
+}
+
+// TrainFillFromConfig parses the two train thresholds with the strict policy
+// FromConfig applies, so a caller that needs only these keys refuses a bad
+// value exactly as the tick does without failing on an unrelated round key.
+func TrainFillFromConfig(cfg any) (TrainFill, error) {
+	var f TrainFill
+	var err error
+	if f.Max, err = config.Int(cfg, config.RoundTrainMaxKey, 0, config.MaxInt); err != nil {
+		return TrainFill{}, err
+	}
+	if f.Minutes, err = config.Int(cfg, config.RoundTrainFillMinutesKey, 0, config.MaxInt); err != nil {
+		return TrainFill{}, err
+	}
+	return f, nil
 }
 
 // OldestReady keeps the oldest members when a batch is trimmed, preserving
