@@ -108,11 +108,46 @@ func NextID(list []Entry) string {
 	return "e" + strconv.Itoa(highest+1)
 }
 
+// IsOpen reports whether the entry still awaits an answer: stored pending. A
+// pending entry past its deadline stays open (it reads as timed-out, but a
+// late answer still lands); answered entries are closed. Every "is there an
+// open escalation" question goes through here.
+func IsOpen(e Entry) bool { return e.Status == StatusPending }
+
+// Open keeps the open entries of list, in order.
+func Open(list []Entry) []Entry {
+	var out []Entry
+	for _, e := range list {
+		if IsOpen(e) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// LoadOpen is Load narrowed to the open entries; tolerant like Load.
+func LoadOpen(root string) []Entry { return Open(Load(root)) }
+
+// Tally counts reports by their derived status.
+func Tally(reports []Report) (pending, answered, timedOut int) {
+	for _, r := range reports {
+		switch r.Status {
+		case StatusPending:
+			pending++
+		case StatusAnswered:
+			answered++
+		case StatusTimedOut:
+			timedOut++
+		}
+	}
+	return
+}
+
 // PendingOn finds the stored-pending entry on a thread (one per thread).
 // ref is the thread's Entry.Ref spelling: `#12`, or the key PROJ-123.
 func PendingOn(list []Entry, kind, ref string) (Entry, bool) {
 	for _, e := range list {
-		if e.Kind == kind && e.Ref() == ref && e.Status == StatusPending {
+		if e.Kind == kind && e.Ref() == ref && IsOpen(e) {
 			return e, true
 		}
 	}
@@ -325,11 +360,7 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 	list := Load(root)
 	var targets []Entry
 	if len(ids) == 0 {
-		for _, e := range list {
-			if e.Status == StatusPending {
-				targets = append(targets, e)
-			}
-		}
+		targets = Open(list)
 	} else {
 		for _, id := range ids {
 			found := false
@@ -348,7 +379,7 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 	var forge Forge
 	found := map[string]Answer{}
 	for i, e := range targets {
-		if e.Status != StatusPending {
+		if !IsOpen(e) {
 			continue
 		}
 		if forge == nil {
@@ -383,7 +414,7 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 		err := worker.UpdateEscalations(root, func(stored []Entry) []Entry {
 			for j := range stored {
 				a, hit := found[stored[j].ID]
-				if !hit || stored[j].Status != StatusPending {
+				if !hit || !IsOpen(stored[j]) {
 					continue
 				}
 				stored[j].Status, stored[j].Answer = StatusAnswered, &a

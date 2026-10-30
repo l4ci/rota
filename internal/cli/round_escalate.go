@@ -141,17 +141,7 @@ func roundEscalateCheck(fs *flag.FlagSet) RunFunc {
 			return fromEscalation(err)
 		}
 		rows, lines := escalationRows(res.Reports)
-		var pending, answered, timedOut int
-		for _, r := range res.Reports {
-			switch r.Status {
-			case escalation.StatusPending:
-				pending++
-			case escalation.StatusAnswered:
-				answered++
-			case escalation.StatusTimedOut:
-				timedOut++
-			}
-		}
+		pending, answered, timedOut := escalation.Tally(res.Reports)
 		d := jsonx.NewObject()
 		d.Set("escalations", rows)
 		d.Set("pending", pending)

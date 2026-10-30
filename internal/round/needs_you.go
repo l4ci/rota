@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/bugreport"
+	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/stamp"
@@ -45,10 +46,7 @@ func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []str
 	}
 	// An explicit escalation replaces the implicit hold on its thread or slot.
 	escalated := map[string]bool{}
-	for _, esc := range reg.Escalations() {
-		if esc.Status != worker.EscalationPending {
-			continue
-		}
+	for _, esc := range escalation.Open(reg.Escalations()) {
 		reply := "reply"
 		if esc.Recommend > 0 && esc.Recommend <= len(esc.Options) && esc.Recommend <= 26 {
 			reply = string(rune('A' + esc.Recommend - 1))

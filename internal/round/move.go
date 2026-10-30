@@ -434,7 +434,7 @@ func (e Env) Health(ctx context.Context, root string, s *worker.Slot, now time.T
 	}
 	waiting := false
 	for _, x := range escalation.Load(root) {
-		if x.Status == escalation.StatusPending && x.Slot == name {
+		if escalation.IsOpen(x) && x.Slot == name {
 			waiting = true
 		}
 	}
