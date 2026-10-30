@@ -20,6 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	ms "github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -573,28 +574,25 @@ func (f *File) Reopen(ref string) (bool, error) {
 	err := f.withDocuments(func(docs *documents) error {
 		content := docs.backlog
 		cs, ce, hasC := section.Find(content, "Completed")
-		activeRe := regexp.MustCompile(`(?m)^- \*\*\[` + regexp.QuoteMeta(ref) + `\]`)
-		for _, m := range activeRe.FindAllStringIndex(content, -1) {
-			if !hasC || !(cs <= m[0] && m[0] < ce) {
-				// A prior reopen may have persisted the active destination but
-				// failed to remove its archived source. Finish that cleanup.
-				if start, end, d, ok := findDoneIn(docs.archive, ref); ok {
-					lineEnd := strings.IndexByte(content[m[0]:], '\n')
-					if lineEnd < 0 {
-						lineEnd = len(content) - m[0]
-					}
-					if content[m[0]:m[0]+lineEnd] == "- "+d.Inner {
-						if strings.HasPrefix(docs.archive[end:], "\n") {
-							end++
-						}
-						if err := docs.write(content, docs.archive[:start]+docs.archive[end:], false); err != nil {
-							return err
-						}
-						restored, doneHash, dirName = true, d.Hash, detailDir(ref)
-					}
+		for _, m := range activeBullets(content, ref) {
+			// A prior reopen may have persisted the active destination but
+			// failed to remove its archived source. Finish that cleanup.
+			if start, end, d, ok := findDoneIn(docs.archive, ref); ok {
+				lineEnd := strings.IndexByte(content[m[0]:], '\n')
+				if lineEnd < 0 {
+					lineEnd = len(content) - m[0]
 				}
-				return nil // already active
+				if content[m[0]:m[0]+lineEnd] == "- "+d.Inner {
+					if strings.HasPrefix(docs.archive[end:], "\n") {
+						end++
+					}
+					if err := docs.write(content, docs.archive[:start]+docs.archive[end:], false); err != nil {
+						return err
+					}
+					restored, doneHash, dirName = true, d.Hash, detailDir(ref)
+				}
 			}
+			return nil // already active
 		}
 
 		source := ""
@@ -714,4 +712,49 @@ func (f *File) SetDetail(ref, text string) error {
 	r, _ := utf8.DecodeRuneInString(ref)
 	t, _ := TypeByLetter(strings.ToUpper(string(r)))
 	return fsio.WriteFileAtomic(f.rota(t.Kind, ref+".md"), []byte(text))
+}
+
+// activeBullets returns the [start,end) offsets of every "- **[ref]" bullet
+// in content outside ## Completed: the one rule for "ref is active".
+func activeBullets(content, ref string) [][]int {
+	cs, ce, hasC := section.Find(content, "Completed")
+	var out [][]int
+	for _, m := range regexp.MustCompile(`(?m)^- \*\*\[`+regexp.QuoteMeta(ref)+`\]`).FindAllStringIndex(content, -1) {
+		if !hasC || m[0] < cs || m[0] >= ce {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// IsActive reports whether BACKLOG.md under root holds id as an active bullet
+// outside ## Completed, the no-op case of hv-uncomplete. It reads unlocked so
+// the no-op leaves no .lock sidecar, which would dirty a tree that does not
+// ignore it.
+func IsActive(root, id string) bool {
+	content, err := fsio.ReadText(rotatree.Backlog(root))
+	if err != nil {
+		return false
+	}
+	return len(activeBullets(content, id)) > 0
+}
+
+// CycleIDs lists the item IDs whose done line in BACKLOG.md or ARCHIVE.md
+// under root carries one of the cycle's short hashes, first seen first.
+func CycleIDs(root string, hashes map[string]bool) []string {
+	var ids []string
+	seen := map[string]bool{}
+	for _, name := range rotatree.DoneSources() {
+		text, err := fsio.ReadText(rotatree.File(root, name))
+		if err != nil {
+			continue
+		}
+		for _, l := range pystr.Splitlines(text) {
+			if d, ok := ParseDone(l); ok && d.ID != "" && hashes[d.Hash] && !seen[d.ID] {
+				seen[d.ID] = true
+				ids = append(ids, d.ID)
+			}
+		}
+	}
+	return ids
 }

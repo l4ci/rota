@@ -3,38 +3,15 @@ package ship
 import (
 	"fmt"
 	"io"
-	"regexp"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/pystr"
-	"github.com/l4ci/rota/internal/rotatree"
-	"github.com/l4ci/rota/internal/section"
 )
-
-// CycleIDs lists the item IDs whose done line in BACKLOG.md or ARCHIVE.md
-// carries one of the cycle's short hashes, first seen first.
-func CycleIDs(root string, hashes map[string]bool) []string {
-	var ids []string
-	seen := map[string]bool{}
-	for _, name := range rotatree.DoneSources() {
-		text, err := fsio.ReadText(rotatree.File(root, name))
-		if err != nil {
-			continue
-		}
-		for _, l := range pystr.Splitlines(text) {
-			if d, ok := backlog.ParseDone(l); ok && d.ID != "" && hashes[d.Hash] && !seen[d.ID] {
-				seen[d.ID] = true
-				ids = append(ids, d.ID)
-			}
-		}
-	}
-	return ids
-}
 
 // Reopener is the part of the backlog Restore writes through.
 type Reopener interface {
 	Capabilities() backlog.Capabilities
+	// Active reports whether id is already an open item.
+	Active(ref string) bool
 	Reopen(ref string) (changed bool, err error)
 }
 
@@ -44,7 +21,7 @@ type Reopener interface {
 func Restore(b Reopener, root string, ids []string, warn io.Writer) error {
 	for _, id := range ids {
 		changed := false
-		if b.Capabilities().IssueIDs || !active(root, id) {
+		if b.Capabilities().IssueIDs || !b.Active(id) {
 			var err error
 			if changed, err = b.Reopen(id); err != nil {
 				return err
@@ -55,22 +32,4 @@ func Restore(b Reopener, root string, ids []string, warn io.Writer) error {
 		}
 	}
 	return nil
-}
-
-// active reports whether BACKLOG.md under root holds id as an active bullet
-// outside ## Completed, the no-op case of hv-uncomplete. Checking it unlocked
-// keeps the no-op from leaving a .lock sidecar, which the old helper never
-// created and which dirties a tree that does not ignore it.
-func active(root, id string) bool {
-	content, err := fsio.ReadText(rotatree.Backlog(root))
-	if err != nil {
-		return false
-	}
-	cs, ce, hasC := section.Find(content, "Completed")
-	for _, m := range regexp.MustCompile(`(?m)^- \*\*\[`+regexp.QuoteMeta(id)+`\]`).FindAllStringIndex(content, -1) {
-		if !hasC || m[0] < cs || m[0] >= ce {
-			return true
-		}
-	}
-	return false
 }

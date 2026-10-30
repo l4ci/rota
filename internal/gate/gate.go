@@ -26,6 +26,7 @@ const (
 	MergeApproval  = "merge-approval"
 	DebugReset     = "debug-reset"
 	BugreportFile  = "bugreport-file"
+	FreezeClear    = "freeze-clear"
 )
 
 // Gate is one registry row. A gate with Verbs is enforced: those verbs refuse
@@ -49,6 +50,7 @@ var Registry = []Gate{
 	{MergeApproval, []string{"ship merge", "ship pr-merge", "worker gate"}, []string{"rota-ship", "rota-review", "rota-work"}, "a merge into the base branch"},
 	{DebugReset, []string{"debug reset", "debug work-fix reset"}, []string{"rota-debug", "rota-work"}, "a fresh failed-fix count for an item the Iron Law halted"},
 	{BugreportFile, []string{"bugreport file"}, []string{"rota-bugreport"}, "a public issue or comment on the rota repo"},
+	{FreezeClear, nil, []string{"rota-orchestrate"}, "a cleared merge-train freeze (confirm pre-given; audited, not refused)"},
 	{"pr-open", nil, []string{"rota-ship"}, "a public PR or MR"},
 	{"issue-close", nil, []string{"rota-ship", "rota-release"}, "closed upstream issues"},
 	{"decision-write", nil, []string{"rota-decide"}, "a hard boundary in DECISIONS.md"},
