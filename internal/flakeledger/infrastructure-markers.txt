@@ -1,0 +1,18 @@
+signal:
+\bkilled\b
+\[build failed\]
+\[setup failed\]
+^panic:
+fatal error:
+test timed out
+context deadline exceeded
+resource temporarily unavailable
+cannot allocate memory
+no space left on device
+permission denied
+command not found
+executable file not found
+fork/exec
+connection refused
+network is unreachable
+i/o timeout
