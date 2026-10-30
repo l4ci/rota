@@ -46,6 +46,24 @@ func (r Result) Changed() bool {
 
 var seedDirs = []string{"bugs", "features", "tasks", "milestones", "plans", "spikes", "map"}
 
+// seedFiles is the one declaration of what Init seeds under .rota/. Required
+// files are the ones `rota init check` demands (CoreFiles); the rest are
+// seeded but optional. The order is the order Check reports missing files in.
+var seedFiles = []struct {
+	name, text string
+	required   bool
+}{
+	{"DECISIONS.md", decisionsSeed, true},
+	{rotatree.BacklogFile, backlogSeed, true},
+	{"KNOWLEDGE.md", knowledgeSeed, true},
+	{"MILESTONES.md", milestonesSeed, true},
+	{rotatree.CountersFile, countersSeed, true},
+	{"config.json", configSeed, true},
+	{"status.json", statusSeed, true},
+	{"MAP.md", mapSeed, false},
+	{"repos.json", reposSeed, false},
+}
+
 // Init seeds .rota/ under root. It never overwrites an existing file, and a
 // second run is a no-op, as hv-bootstrap was.
 func Init(root string) (Result, error) {
@@ -67,31 +85,14 @@ func Init(root string) (Result, error) {
 		}
 	}
 
-	for _, f := range []struct{ name, text string }{
-		{rotatree.BacklogFile, backlogSeed},
-		{"KNOWLEDGE.md", knowledgeSeed},
-		{"DECISIONS.md", decisionsSeed},
-		{"MAP.md", mapSeed},
-		{"MILESTONES.md", milestonesSeed},
-	} {
+	for _, f := range seedFiles {
 		if err := seedFile(filepath.Join(rota, f.name), f.text); err != nil {
 			return res, err
 		}
-	}
-	if err := step(migrateMilestonesHeading(filepath.Join(rota, "MILESTONES.md"))); err != nil {
-		return res, err
-	}
-
-	if err := seedFile(filepath.Join(rota, rotatree.CountersFile), countersSeed); err != nil {
-		return res, err
-	}
-	for _, f := range []struct{ name, text string }{
-		{"status.json", statusSeed},
-		{"repos.json", reposSeed},
-		{"config.json", configSeed},
-	} {
-		if err := seedFile(filepath.Join(rota, f.name), f.text); err != nil {
-			return res, err
+		if f.name == "MILESTONES.md" {
+			if err := step(migrateMilestonesHeading(filepath.Join(rota, f.name))); err != nil {
+				return res, err
+			}
 		}
 	}
 
