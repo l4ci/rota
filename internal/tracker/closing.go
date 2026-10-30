@@ -6,6 +6,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/l4ci/rota/internal/pystr"
 )
 
 // The closing-keyword patterns of hvlib_tracker. Go's regexp has no
@@ -28,7 +30,7 @@ func closedNumbers(re *regexp.Regexp, body string) []int {
 	var out []int
 	seen := map[int]bool{}
 	for _, m := range re.FindAllStringSubmatchIndex(body, -1) {
-		if r, _ := utf8.DecodeLastRuneInString(body[:m[0]]); m[0] > 0 && isWord(r) {
+		if r, _ := utf8.DecodeLastRuneInString(body[:m[0]]); m[0] > 0 && pystr.IsWord(r) {
 			continue
 		}
 		n, err := strconv.Atoi(body[m[2]:m[3]])
@@ -41,15 +43,10 @@ func closedNumbers(re *regexp.Regexp, body string) []int {
 	return out
 }
 
-// isWord is Python's Unicode \w.
-func isWord(r rune) bool {
-	return r == '_' || unicode.IsLetter(r) || unicode.IsNumber(r)
-}
-
 // startsWithWord reports whether s begins with a word character.
 func startsWithWord(s string) bool {
 	r, n := utf8.DecodeRuneInString(s)
-	return n > 0 && isWord(r)
+	return n > 0 && pystr.IsWord(r)
 }
 
 // isPySpace is Python's str.isspace for one rune.

@@ -15,7 +15,7 @@ func (s Store) DefaultScope(cwd string) string {
 	if len(s.Repos) == 0 {
 		return Umbrella
 	}
-	common, ok, err := git.Repo{Dir: cwd}.CommonDir(context.Background())
+	common, ok, err := git.CommonDirVia(context.Background(), git.Exec, cwd)
 	if err != nil || !ok {
 		return Umbrella
 	}

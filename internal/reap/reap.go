@@ -148,9 +148,7 @@ type state struct {
 	checkouts  []checkout
 	checkedOut map[string]bool   // branches checked out in any worktree
 	checkedAt  map[string]string // the path of that worktree
-	registered map[string]bool   // row names with a slot
-	slotBranch map[string]bool   // branches registered rows name
-	slotTab    map[string]bool   // tab handles registered rows name
+	live       *ownership
 	warnings   []string
 }
 
@@ -257,7 +255,7 @@ func Find(ctx context.Context, in Input, kinds []string) (Result, error) {
 }
 
 func newState(ctx context.Context, in Input) (*state, error) {
-	s := &state{in: in, root: in.Root, checkedOut: map[string]bool{}, checkedAt: map[string]string{}, registered: map[string]bool{}, slotBranch: map[string]bool{}, slotTab: map[string]bool{}}
+	s := &state{in: in, root: in.Root, checkedOut: map[string]bool{}, checkedAt: map[string]string{}}
 	if real, err := filepath.EvalSymlinks(in.Root); err == nil {
 		s.root = real
 	}
@@ -266,17 +264,6 @@ func newState(ctx context.Context, in Input) (*state, error) {
 		for _, u := range in.Report.Unavailable {
 			if u == round.SourceHost {
 				s.hostOK = false
-			}
-		}
-		for _, r := range in.Report.Rows {
-			if r.Registered {
-				s.registered[r.Name] = true
-				if r.Branch != "" {
-					s.slotBranch[r.Branch] = true
-				}
-				if r.Tab != "" {
-					s.slotTab[r.Tab] = true
-				}
 			}
 		}
 	}
@@ -293,6 +280,7 @@ func newState(ctx context.Context, in Input) (*state, error) {
 			s.checkedAt[c.branch] = c.path
 		}
 	}
+	s.live = newOwnership(in.Report, in.Base, s.wtDir(), s.checkouts)
 	return s, nil
 }
 
@@ -301,39 +289,6 @@ func (s *state) warn(format string, a ...any) {
 }
 
 func (s *state) wtDir() string { return filepath.Join(s.root, worker.WorktreeRoot) }
-
-// inside reports whether p is dir or below it.
-func inside(p, dir string) bool {
-	p, dir = filepath.Clean(p), filepath.Clean(dir)
-	return p == dir || strings.HasPrefix(p, dir+string(os.PathSeparator))
-}
-
-// liveAgent: some host agent works inside dir (or is already matched to the
-// round row for it).
-func (s *state) liveAgent(dir string) bool {
-	for _, a := range s.agents() {
-		if a.Cwd != "" && inside(a.Cwd, dir) {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *state) rowAgent(name string) bool {
-	if s.in.Report == nil {
-		return false
-	}
-	for _, r := range s.in.Report.Rows {
-		if r.Name == name && r.Agent != "" {
-			return true
-		}
-	}
-	return false
-}
-
-func protectedBranch(b, base string) bool {
-	return b == base || worker.IsPark(b)
-}
 
 func (s *state) git(ctx context.Context, dir string, args ...string) (string, int, error) {
 	res, err := s.in.Git(ctx, dir, args...)
@@ -388,21 +343,6 @@ func (s *state) checkoutAt(path string) *checkout {
 	return nil
 }
 
-func (s *state) owner(name string) *checkout {
-	for i := range s.checkouts {
-		if filepath.Base(s.checkouts[i].path) == name && filepath.Dir(s.checkouts[i].path) == s.wtDir() {
-			return &s.checkouts[i]
-		}
-	}
-	return nil
-}
-
-// protectedWorktree: a checkout reap must never touch, and why.
-func (s *state) protectedWorktree(c *checkout) bool {
-	name := filepath.Base(c.path)
-	return s.registered[name] || c.isLocked || protectedBranch(c.branch, s.in.Base) || s.liveAgent(c.path) || s.rowAgent(name)
-}
-
 func findWorktrees(ctx context.Context, s *state) ([]Candidate, error) {
 	if !s.hostOK {
 		s.warn("host unavailable: no agent can be matched by cwd, so no .worktrees/ checkout is listed")
@@ -411,7 +351,7 @@ func findWorktrees(ctx context.Context, s *state) ([]Candidate, error) {
 	var out []Candidate
 	for i := range s.checkouts {
 		c := &s.checkouts[i]
-		if filepath.Dir(c.path) != s.wtDir() || s.protectedWorktree(c) {
+		if filepath.Dir(c.path) != s.wtDir() || s.live.Worktree(c) {
 			continue
 		}
 		name := filepath.Base(c.path)
@@ -443,7 +383,7 @@ func findBranches(ctx context.Context, s *state) ([]Candidate, error) {
 	}
 	var out []Candidate
 	for _, b := range strings.Fields(list) {
-		if protectedBranch(b, s.in.Base) || s.slotBranch[b] || !s.owned(b) {
+		if s.live.Branch(b) || !s.owned(b) {
 			continue
 		}
 		if s.checkedOut[b] {
@@ -480,43 +420,6 @@ func (s *state) owned(b string) bool {
 	return worker.RoundBranch(b) && slices.Contains(s.in.Roster, agent)
 }
 
-// hostOwned: whether a tab or process working in cwd belongs to something
-// reap must leave alone: a registered, parked, base-branch or live checkout.
-func (s *state) hostOwned(cwd string) bool {
-	if !inside(cwd, s.wtDir()) {
-		return true // another project's, or the main checkout's
-	}
-	rel, err := filepath.Rel(s.wtDir(), filepath.Clean(cwd))
-	if err != nil {
-		return true
-	}
-	name := strings.Split(rel, string(os.PathSeparator))[0]
-	if name == "." || name == "" {
-		return true
-	}
-	if c := s.owner(name); c != nil {
-		return s.protectedWorktree(c)
-	}
-	return s.registered[name] || s.liveAgent(filepath.Join(s.wtDir(), name))
-}
-
-// agents is the host snapshot the report was built from, none without a report.
-func (s *state) agents() []host.Agent {
-	if s.in.Report == nil {
-		return nil
-	}
-	return s.in.Report.Agents
-}
-
-func (s *state) agentOnTab(tab string) bool {
-	for _, a := range s.agents() {
-		if a.Tab == tab {
-			return true
-		}
-	}
-	return false
-}
-
 // hostCandidates guards the two host kinds: they need a readable host.
 func (s *state) hostCandidates() bool {
 	if !s.hostOK {
@@ -524,18 +427,6 @@ func (s *state) hostCandidates() bool {
 		return false
 	}
 	return s.in.Host != nil
-}
-
-func (s *state) tabOK(t host.Tab) bool {
-	if !t.Agentless || s.agentOnTab(t.ID) || s.slotTab[t.ID] || len(t.Cwds) == 0 {
-		return false
-	}
-	for _, c := range t.Cwds {
-		if s.hostOwned(c) {
-			return false
-		}
-	}
-	return true
 }
 
 func findTabs(ctx context.Context, s *state) ([]Candidate, error) {
@@ -549,18 +440,12 @@ func findTabs(ctx context.Context, s *state) ([]Candidate, error) {
 	}
 	var out []Candidate
 	for _, t := range tabs {
-		if s.tabOK(t) {
+		if !s.live.Tab(t) {
 			out = append(out, Candidate{ID: KindTab + ":" + t.ID, Kind: KindTab, Name: t.ID, Path: t.Cwds[0], Reason: "no agent runs in the tab"})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
-}
-
-// processOK: nothing live owns p, the proof Find lists it by and Apply
-// re-runs before stopping it.
-func (s *state) processOK(p Process) bool {
-	return p.PID > 0 && !s.hostOwned(p.Cwd) && !s.agentOnTab(p.Tab) && !s.slotTab[p.Tab]
 }
 
 func findProcesses(ctx context.Context, s *state) ([]Candidate, error) {
@@ -574,7 +459,7 @@ func findProcesses(ctx context.Context, s *state) ([]Candidate, error) {
 	}
 	var out []Candidate
 	for _, p := range procs {
-		if !s.processOK(p) {
+		if s.live.Process(p) {
 			continue
 		}
 		id := strconv.Itoa(p.PID)
@@ -640,14 +525,14 @@ func (s *state) remove(ctx context.Context, c Candidate) error {
 		if co == nil || filepath.Dir(co.path) != s.wtDir() {
 			return fmt.Errorf("%s is not a .worktrees/ checkout", c.Path)
 		}
-		if s.protectedWorktree(co) {
+		if s.live.Worktree(co) {
 			return fmt.Errorf("%s has a live owner or is protected; left alone", c.Name)
 		}
 		res, err := s.in.Git(ctx, s.root, "worktree", "remove", c.Path)
 		errOut, code := res.Stderr, res.ExitCode
 		return gitErr(errOut, code, err)
 	case KindBranch:
-		if s.checkedOut[c.Name] || protectedBranch(c.Name, s.in.Base) {
+		if s.checkedOut[c.Name] || s.live.Branch(c.Name) {
 			return fmt.Errorf("%s is checked out or protected", c.Name)
 		}
 		if h := s.heldUnmerged(ctx, s.root, c.Name); h != "" {
@@ -666,7 +551,7 @@ func (s *state) remove(ctx context.Context, c Candidate) error {
 		}
 		for _, t := range tabs {
 			if t.ID == c.Name {
-				if !s.tabOK(t) {
+				if s.live.Tab(t) {
 					return fmt.Errorf("an agent may be running in %s; left open", c.Name)
 				}
 				return s.in.Host.CloseTab(ctx, c.Name)
@@ -704,7 +589,7 @@ func (s *state) remove(ctx context.Context, c Candidate) error {
 		}
 		for _, p := range procs {
 			if p.PID == c.PID {
-				if !s.processOK(p) {
+				if s.live.Process(p) {
 					return fmt.Errorf("an agent may own process %d; left running", c.PID)
 				}
 				return s.in.Host.StopProcess(ctx, c.PID)

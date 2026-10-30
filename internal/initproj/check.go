@@ -10,8 +10,17 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
-// CoreFiles are the files `rota init check` requires under .rota/.
-var CoreFiles = []string{"DECISIONS.md", "BACKLOG.md", "KNOWLEDGE.md", "MILESTONES.md", "counters.json", "config.json", "status.json"}
+// CoreFiles are the files `rota init check` requires under .rota/: the seeded
+// files marked required in seedFiles.
+var CoreFiles = func() []string {
+	var names []string
+	for _, f := range seedFiles {
+		if f.required {
+			names = append(names, f.name)
+		}
+	}
+	return names
+}()
 
 // CheckResult is the answer of Check. Missing holds every absent path
 // (`.rota` alone when the directory is missing), where hv-preflight named only

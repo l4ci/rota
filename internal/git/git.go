@@ -180,15 +180,10 @@ func (r Repo) out(ctx context.Context, args ...string) (s string, ok bool, err e
 	return strings.TrimRight(res.Stdout, "\n"), true, nil
 }
 
-// CommonDir is the absolute, symlink-resolved git common dir of Dir, so a
+// CommonDirVia is the absolute, symlink-resolved git common dir of dir, so a
 // linked worktree resolves to its main repository's .git and every spelling of
-// the path agrees. ok is false when Dir is not in a repository.
-func (r Repo) CommonDir(ctx context.Context) (dir string, ok bool, err error) {
-	return CommonDirVia(ctx, r.runner(), r.Dir)
-}
-
-// CommonDirVia is Repo.CommonDir through a Runner, for layers that run git
-// through their own seam. dir "" is the process cwd.
+// the path agrees. ok is false when dir is not in a repository; dir "" is the
+// process cwd.
 func CommonDirVia(ctx context.Context, run Runner, dir string) (string, bool, error) {
 	res, err := run(ctx, dir, "rev-parse", "--git-common-dir")
 	if err != nil || res.ExitCode != 0 {

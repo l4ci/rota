@@ -30,7 +30,7 @@ func TestChangedPathsAndLines(t *testing.T) {
 	dir := branchWithChanges(t)
 	ctx := context.Background()
 	repo := Repo{Dir: dir}
-	paths, err := repo.ChangedPaths(ctx, "main...feat")
+	paths, err := ChangedPaths(ctx, Exec, dir, "main...feat")
 	if err != nil || !reflect.DeepEqual(paths, []string{"b.txt"}) {
 		t.Fatalf("paths = %v, %v", paths, err)
 	}
@@ -38,7 +38,7 @@ func TestChangedPathsAndLines(t *testing.T) {
 	if err != nil || n != 3 {
 		t.Fatalf("lines = %d, %v; want 3", n, err)
 	}
-	if _, err := repo.ChangedPaths(ctx, "nope...feat"); err == nil {
+	if _, err := ChangedPaths(ctx, Exec, dir, "nope...feat"); err == nil {
 		t.Fatal("bad span: want error")
 	}
 	if _, err := repo.ChangedLines(ctx, "nope...feat"); err == nil {
@@ -62,7 +62,7 @@ func TestRemoteBase(t *testing.T) {
 		t.Fatal("empty base resolved")
 	}
 	mustGit(t, dir, "update-ref", "refs/remotes/origin/main", "HEAD")
-	if got := (Repo{Dir: dir}).RemoteBase(ctx, "main"); got != "origin/main" {
+	if got := RemoteBase(ctx, Exec, dir, "main"); got != "origin/main" {
 		t.Fatalf("with remote: got %q", got)
 	}
 	if ref, ok := RemoteRef(ctx, Exec, dir, "main"); !ok || ref != "origin/main" {
@@ -72,7 +72,7 @@ func TestRemoteBase(t *testing.T) {
 
 func TestExitErrorCarriesStderr(t *testing.T) {
 	dir := newRepo(t)
-	_, err := Repo{Dir: dir}.ChangedPaths(context.Background(), "nope...main")
+	_, err := ChangedPaths(context.Background(), Exec, dir, "nope...main")
 	var ee *ExitError
 	if !errors.As(err, &ee) || ee.ExitCode == 0 || !strings.Contains(ee.Stderr, "nope") {
 		t.Fatalf("err = %#v, want ExitError with git's stderr", err)
@@ -87,7 +87,7 @@ func TestChangedPathsRenameBinaryEmpty(t *testing.T) {
 	dir := newRepo(t)
 	ctx := context.Background()
 	repo := Repo{Dir: dir}
-	if p, err := repo.ChangedPaths(ctx, "main...main"); err != nil || len(p) != 0 {
+	if p, err := ChangedPaths(ctx, Exec, dir, "main...main"); err != nil || len(p) != 0 {
 		t.Fatalf("empty diff: %v, %v", p, err)
 	}
 	if n, err := repo.ChangedLines(ctx, "main...main"); err != nil || n != 0 {
@@ -98,7 +98,7 @@ func TestChangedPathsRenameBinaryEmpty(t *testing.T) {
 	gittest.Write(t, dir, "img.bin", "a\x00b\x00\x01")
 	mustGit(t, dir, "add", "-A")
 	mustGit(t, dir, "commit", "-q", "-m", "rename and binary")
-	paths, err := repo.ChangedPaths(ctx, "main...feat")
+	paths, err := ChangedPaths(ctx, Exec, dir, "main...feat")
 	if err != nil {
 		t.Fatal(err)
 	}
