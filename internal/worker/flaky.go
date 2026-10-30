@@ -3,16 +3,11 @@ package worker
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/l4ci/rota/internal/flakeledger"
 	"github.com/l4ci/rota/internal/testledger"
 )
-
-// Unknown output stays red. Even an assertion summary must not hide a
-// process/infrastructure failure in another package of the same command.
-var retryInfrastructure = regexp.MustCompile(`(?im)signal:|\bkilled\b|\[build failed\]|\[setup failed\]|^panic:|fatal error:|test timed out|context deadline exceeded|resource temporarily unavailable|cannot allocate memory|no space left on device|permission denied|command not found|executable file not found|fork/exec|connection refused|network is unreachable|i/o timeout`)
 
 // cleanVerifyTree identifies the committed tree and refuses tracked edits.
 // Untracked test artifacts are allowed, as in every scratch verification.
@@ -50,9 +45,9 @@ func (e Env) runGateVerify(ctx context.Context, cmds []string, dir string, led t
 			flakes = append(flakes, subchecks...)
 			return out, code // the wrapper already retried; never rerun it here
 		}
-		tests, assertion := testledger.FailingTests(out)
 		_, excluded := led.Excuses(out, now)
-		if code != 1 || ctx.Err() != nil || !assertion || excluded || retryInfrastructure.MatchString(out) || tree == "" || e.cleanVerifyTree(ctx, dir) != tree {
+		tests, eligible := flakeledger.RetryEligible(code, out, excluded)
+		if !eligible || ctx.Err() != nil || tree == "" || e.cleanVerifyTree(ctx, dir) != tree {
 			return out, code
 		}
 		started := e.Now()
@@ -60,7 +55,7 @@ func (e Env) runGateVerify(ctx context.Context, cmds []string, dir string, led t
 		elapsed := max(0, e.Now().Sub(started).Seconds())
 		combined := out + "\n== RETRY " + cmd + "\n" + again
 		if retryCode == 0 && ctx.Err() == nil && e.cleanVerifyTree(ctx, dir) == tree {
-			flakes = append(flakes, flakeledger.Entry{Check: cmd, Tests: tests, Tree: tree, TS: e.Now().UTC(), First: flakeledger.Run{Output: out, ExitCode: code}, Retry: flakeledger.Run{Output: again, ExitCode: retryCode, WallSeconds: elapsed}})
+			flakes = append(flakes, flakeledger.NewEntry(cmd, tests, tree, e.Now(), flakeledger.Run{Output: out, ExitCode: code}, flakeledger.Run{Output: again, ExitCode: retryCode, WallSeconds: elapsed}))
 			return combined, 0
 		}
 		// A changed tree or cancellation cannot turn the original red green.

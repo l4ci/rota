@@ -40,9 +40,9 @@ func gateSubchecks(output, tree string, now time.Time) ([]flakeledger.Entry, err
 		if len(tests) == 0 {
 			tests = []string{wire.Check}
 		}
-		entries = append(entries, flakeledger.Entry{Check: wire.Check, Tests: tests, Tree: tree, TS: now.UTC(),
-			First: flakeledger.Run{ExitCode: *wire.FirstExit, Output: *wire.FirstOutput},
-			Retry: flakeledger.Run{ExitCode: *wire.RetryExit, Output: *wire.RetryOutput, WallSeconds: wire.RetrySeconds}})
+		entries = append(entries, flakeledger.NewEntry(wire.Check, tests, tree, now,
+			flakeledger.Run{ExitCode: *wire.FirstExit, Output: *wire.FirstOutput},
+			flakeledger.Run{ExitCode: *wire.RetryExit, Output: *wire.RetryOutput, WallSeconds: wire.RetrySeconds}))
 	}
 	return entries, nil
 }
