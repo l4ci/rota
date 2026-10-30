@@ -142,7 +142,9 @@ func digestOf(paths []string, files map[string][]byte) string {
 }
 
 // closure is the names of the references a skill's own files cite, plus the
-// ones those references cite in turn.
+// ones those references cite in turn. It is deliberately a superset of Links:
+// a reference named in prose (not in a link, or inside a code span) still
+// installs, so dropping a link never strips a file a skill reads.
 func closure(skillFiles, refs map[string][]byte) map[string]bool {
 	need := map[string]bool{}
 	var queue []string
