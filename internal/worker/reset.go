@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/tracker"
 	"strings"
-	"time"
 )
 
 // ResetResult is the outcome of the slot reset guard.
@@ -179,7 +179,7 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 		s.SetBranch(newBranch)
 		if endDone && IsDone(s.State()) && s.PR() == seenPR {
 			s.Unbind()
-			_ = s.MarkState("idle", e.Now().UTC().Format(time.RFC3339))
+			_ = s.MarkState("idle", stamp.Format(e.Now()))
 		}
 	}); err != nil {
 		return res, err

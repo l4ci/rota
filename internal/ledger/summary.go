@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // Outcomes of an issue row beyond merged-or-not.
@@ -274,7 +275,7 @@ func Fold(entries []Entry, audit []*jsonx.Object, round int) Summary {
 	s.Accounts = totals(s.Issues, func(r IssueRow) string { return r.Account })
 	s.Metrics = roundMetrics(s.Issues, entries, round)
 	for _, a := range audit {
-		ts, err := time.Parse(time.RFC3339, jsonx.Str(a, "ts"))
+		ts, err := stamp.Parse(jsonx.Str(a, "ts"))
 		if err != nil || first.IsZero() || ts.Before(first) || ts.After(last) {
 			continue
 		}
@@ -458,7 +459,7 @@ func timeVal(t *time.Time) any {
 	if t == nil {
 		return nil
 	}
-	return t.UTC().Format(time.RFC3339)
+	return stamp.Format(*t)
 }
 
 func floatVal(p *float64) any {
@@ -513,7 +514,7 @@ func (s Summary) Object() *jsonx.Object {
 	audit := make([]any, 0, len(s.Audit))
 	for _, a := range s.Audit {
 		o := jsonx.NewObject()
-		o.Set("ts", a.TS.UTC().Format(time.RFC3339))
+		o.Set("ts", stamp.Format(a.TS))
 		o.Set("gate", a.Gate)
 		o.Set("verb", a.Verb)
 		o.Set("target", a.Target)
@@ -530,8 +531,8 @@ func (s Summary) Object() *jsonx.Object {
 	for _, r := range s.Idle {
 		o := jsonx.NewObject()
 		o.Set("slot", r.Slot)
-		o.Set("doneAt", r.DoneAt.UTC().Format(time.RFC3339))
-		o.Set("nextAssignAt", r.NextAt.UTC().Format(time.RFC3339))
+		o.Set("doneAt", stamp.Format(r.DoneAt))
+		o.Set("nextAssignAt", stamp.Format(r.NextAt))
 		o.Set("idleSeconds", r.IdleSeconds)
 		idle = append(idle, o)
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/stamp"
 	"io"
 	"os"
 	"os/exec"
@@ -1044,7 +1045,7 @@ func RecordItemStart(root, issue string, at time.Time) error {
 		if _, ok := m.Get(issue); ok {
 			return
 		}
-		m.Set(issue, at.UTC().Format(time.RFC3339))
+		m.Set(issue, stamp.Format(at))
 		doc.Set("itemStarts", m)
 	})
 }
@@ -1053,7 +1054,7 @@ func RecordItemStart(root, issue string, at time.Time) error {
 func (r Registry) ItemStart(issue string) (time.Time, bool) {
 	v, _ := itemStartsOf(r.doc).Get(issue)
 	s, _ := v.(string)
-	t, err := time.Parse(time.RFC3339, s)
+	t, err := stamp.Parse(s)
 	return t, err == nil
 }
 

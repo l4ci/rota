@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // UsageHandoff is the marker a usage block leaves in the session file (D4,
@@ -49,7 +51,7 @@ func UsageOf(raw json.RawMessage) (window string, pct float64, resetsAt string, 
 		}
 		window, pct, ok, resetsAt = c.name, *c.w.Used, true, ""
 		if c.w.Resets != nil {
-			resetsAt = time.Unix(int64(*c.w.Resets), 0).UTC().Format(time.RFC3339)
+			resetsAt = stamp.Format(time.Unix(int64(*c.w.Resets), 0))
 		}
 	}
 	return

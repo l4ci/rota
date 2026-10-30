@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -150,7 +151,7 @@ func (e Escalation) Derived(now time.Time) string {
 	if e.Status != EscalationPending || e.Deadline == "" {
 		return e.Status
 	}
-	if d, err := time.Parse(time.RFC3339, e.Deadline); err == nil && now.After(d) {
+	if d, err := stamp.Parse(e.Deadline); err == nil && now.After(d) {
 		return EscalationTimedOut
 	}
 	return e.Status
@@ -179,7 +180,7 @@ func (l Limit) Resets() (time.Time, bool) {
 	if l.ResetsAt == "" {
 		return time.Time{}, false
 	}
-	t, err := time.Parse(time.RFC3339, l.ResetsAt)
+	t, err := stamp.Parse(l.ResetsAt)
 	return t, err == nil
 }
 

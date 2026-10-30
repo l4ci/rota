@@ -23,6 +23,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // Project is one registered project: Path absolute and realpath-resolved, Name
@@ -184,7 +185,7 @@ func Register(env Env, root string, now time.Time) (added bool, err error) {
 		return false, err
 	}
 	abs := repos.Realpath(root)
-	stamp := now.UTC().Format(time.RFC3339)
+	at := stamp.Format(now)
 	err = fsio.UpdateJSON(path, jsonx.NewObject(), func(v any) (any, error) {
 		doc, ok := v.(*jsonx.Object)
 		if !ok {
@@ -195,7 +196,7 @@ func Register(env Env, root string, now time.Time) (added bool, err error) {
 		for _, it := range items {
 			if o, ok := it.(*jsonx.Object); ok {
 				if p, _ := o.Get("path"); p == abs {
-					o.Set("lastSeen", stamp)
+					o.Set("lastSeen", at)
 					return doc, nil
 				}
 			}
@@ -204,7 +205,7 @@ func Register(env Env, root string, now time.Time) (added bool, err error) {
 		e := jsonx.NewObject()
 		e.Set("path", abs)
 		e.Set("name", filepath.Base(abs))
-		e.Set("lastSeen", stamp)
+		e.Set("lastSeen", at)
 		doc.Set("projects", append(items, e))
 		return doc, nil
 	})

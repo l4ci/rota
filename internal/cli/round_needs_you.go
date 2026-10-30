@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundwatch"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/tui"
 )
 
@@ -44,7 +45,7 @@ func maintainerRows(waits []round.MaintainerWait, now time.Time) ([]any, []strin
 		o.Set("since", wait.Since)
 		o.Set("ageSeconds", nil)
 		age := "unknown"
-		if since, err := time.Parse(time.RFC3339, wait.Since); err == nil {
+		if since, err := stamp.Parse(wait.Since); err == nil {
 			seconds := max(int64(now.Sub(since)/time.Second), 0)
 			o.Set("ageSeconds", seconds)
 			age = roundwatch.CompactAge(time.Duration(seconds) * time.Second)

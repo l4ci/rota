@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/l4ci/rota/internal/labels"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
 	"slices"
 	"strconv"
@@ -136,7 +137,7 @@ func (e Env) ArchitectureFacts(ctx context.Context, root string, be backlog.Back
 	a.Areas = reviewAreas(root, set)
 
 	a.Count, a.Unavailable = e.closedSinceReview(ctx, root, be, &a.Since)
-	if at, err := time.Parse(time.RFC3339, a.Since); err == nil && set.ArchitectureIdleMinHours > 0 {
+	if at, err := stamp.Parse(a.Since); err == nil && set.ArchitectureIdleMinHours > 0 {
 		a.Cooling = e.now().Sub(at) < time.Duration(set.ArchitectureIdleMinHours)*time.Hour
 	}
 	for _, c := range cands {
@@ -191,7 +192,7 @@ func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Back
 		return -1, strutil.FirstNonEmpty(e.ForgeErr, "no forge")
 	}
 	if *since == "" {
-		at := e.now().UTC().Format(time.RFC3339)
+		at := stamp.Format(e.now())
 		if err := worker.Update(root, func(d *worker.Doc) { d.SeedReview(at) }); err != nil {
 			return -1, err.Error()
 		}
@@ -201,7 +202,7 @@ func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Back
 	if n, ok := e.cachedClosed(root, *since); ok {
 		return n, ""
 	}
-	floor, _ := time.Parse(time.RFC3339, *since)
+	floor, _ := stamp.Parse(*since)
 	closed, err := e.Forge.List(ctx, tracker.ListFilter{State: "closed"})
 	if err != nil {
 		return -1, err.Error()
@@ -219,7 +220,7 @@ func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Back
 		}
 		n++
 	}
-	checked := e.now().UTC().Format(time.RFC3339)
+	checked := stamp.Format(e.now())
 	// A failed cache write only costs the next call a refetch.
 	_ = worker.Update(root, func(d *worker.Doc) { d.CacheClosedCount(checked, *since, n) })
 	return n, ""
@@ -235,7 +236,7 @@ func (e Env) cachedClosed(root, since string) (int, bool) {
 	if c == nil || c.Since != since {
 		return 0, false
 	}
-	at, err := time.Parse(time.RFC3339, c.Checked)
+	at, err := stamp.Parse(c.Checked)
 	if err != nil || e.now().Sub(at) >= closedCacheTTL || e.now().Before(at) {
 		return 0, false
 	}
@@ -363,7 +364,7 @@ func (e Env) MintReview(ctx context.Context, root string, be backlog.Backend, a 
 			return fail(err)
 		}
 	}
-	at := e.now().UTC().Format(time.RFC3339)
+	at := stamp.Format(e.now())
 	// Cumulative: a review item still open from an earlier review stays recognised.
 	err := worker.Update(root, func(d *worker.Doc) { d.StartReview(at, round, a.Trigger, ids) })
 	return ids, err
