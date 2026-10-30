@@ -6,9 +6,12 @@
 # Subset: a top-level mapping; nested mappings by indentation; block lists
 # ("- item", "- key: v" with following indented keys); flow lists of bare
 # words ([a, b]); scalars bare or double-quoted (\" and \\ escapes only);
-# true/false/null; ints; literal block scalars (|). Anything else raises
-# FmError with file:line. No comments, tabs, anchors, single quotes, folded
-# scalars or multi-document files.
+# true/false/null; ints; literal block scalars (|); folded block scalars (> and
+# >-, the form test/validate-skills.py advises for a SKILL.md description:
+# lines join with a space, a blank line is a newline; >- drops the final
+# newline). Anything else raises FmError with file:line. No comments, tabs,
+# anchors, single quotes, keep (+) or indent-indicator block scalars, or
+# multi-document files.
 import re
 import sys
 
@@ -139,6 +142,20 @@ class _Parser:
         text = '\n'.join(b[common:] if b.strip() else '' for b in body) + '\n'
         return text, i
 
+    def folded(self, i, parent_indent, strip):
+        """Folded block scalar body, read like literal() then folded."""
+        text, i = self.literal(i, parent_indent)
+        out, para = [], []
+        for ln in text.split('\n')[:-1] if text else []:
+            if ln.strip():
+                para.append(ln.strip())
+            else:
+                out.append(' '.join(para))
+                para = []
+        out.append(' '.join(para))
+        folded = '\n'.join(out).strip('\n')
+        return (folded if strip or not folded else folded + '\n'), i
+
     def map_block(self, i, indent):
         result = {}
         while True:
@@ -168,6 +185,8 @@ class _Parser:
                     val, i = None, i + 1
             elif rest.strip() == '|':
                 val, i = self.literal(i + 1, indent)
+            elif rest.strip() in ('>', '>-'):
+                val, i = self.folded(i + 1, indent, rest.strip() == '>-')
             else:
                 val, i = self.scalar(i, rest), i + 1
             result[key] = val
@@ -200,6 +219,10 @@ class _Parser:
             off = len(text) - len(content)  # width of "- " plus extra spaces
             if content == '|':
                 val, i = self.literal(i + 1, indent)
+                result.append(val)
+                continue
+            if content in ('>', '>-'):
+                val, i = self.folded(i + 1, indent, content == '>-')
                 result.append(val)
                 continue
             if KEY_RE.match(content) and not content.startswith('"'):
