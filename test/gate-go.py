@@ -5,14 +5,11 @@ import re
 import sys
 
 
-# Keep these rejection shapes aligned with internal/worker/flaky.go. An
+# The marker list is owned by internal/flakeledger (infrastructure-markers.txt,
+# embedded in the Go retry rule); read it so both retry loops share one rule. An
 # assertion in one package must not hide an infrastructure failure alongside it.
-infrastructure = re.compile(
-    r"signal:|\bkilled\b|\[build failed\]|\[setup failed\]|^panic:|fatal error:|"
-    r"test timed out|context deadline exceeded|resource temporarily unavailable|"
-    r"cannot allocate memory|no space left on device|permission denied|command not found|"
-    r"executable file not found|fork/exec|connection refused|network is unreachable|i/o timeout",
-    re.I | re.M)
+markers = Path(__file__).resolve().parent.parent / "internal/flakeledger/infrastructure-markers.txt"
+infrastructure = re.compile("|".join(m for m in markers.read_text().splitlines() if m), re.I | re.M)
 
 
 def events(path):
