@@ -6,12 +6,10 @@
 package roundlease
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -19,7 +17,6 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/pidlive"
-	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/stamp"
 )
@@ -93,28 +90,25 @@ type Env struct {
 	StartTime func(pid int) (uint64, bool)
 	Now       func() time.Time
 	// Proc reads a process's parent and command name; Parent is this
-	// process's parent. Nil means the real /proc and os.Getppid.
+	// process's parent. Nil means Src and os.Getppid.
 	Proc   func(pid int) (ppid int, comm string, ok bool)
 	Parent func() int
-	// PS runs ps and returns its trimmed stdout; it is the process-table read
-	// for hosts without /proc. Nil means the real ps.
-	PS PSFunc
+	// Src is the process table Proc defaults to. Nil means the real one.
+	Src pidlive.Source
 }
-
-// PSFunc runs ps with args and returns its trimmed stdout.
-type PSFunc func(args ...string) (string, error)
 
 // DefaultEnv reads the real host, process table and clock.
 func DefaultEnv() Env {
 	name, _ := os.Hostname()
-	return Env{Host: name, Alive: pidlive.Alive, Now: time.Now}.WithPS(realPS)
+	return Env{Host: name, Now: time.Now}.WithSource(pidlive.Real{})
 }
 
-// WithPS returns e reading the process table through run, with StartTime bound
-// to it: the one place the ps seam and the start-time read are tied together.
-func (e Env) WithPS(run PSFunc) Env {
-	e.PS = run
-	e.StartTime = func(pid int) (uint64, bool) { return procStart(run, pid) }
+// WithSource returns e reading the process table through src, with Alive and
+// StartTime bound to it: the one place the table and those reads are tied.
+func (e Env) WithSource(src pidlive.Source) Env {
+	e.Src = src
+	e.Alive = func(pid int) bool { return pidlive.AliveIn(src, pid) }
+	e.StartTime = func(pid int) (uint64, bool) { _, st, ok := src.Stat(pid); return st, ok }
 	return e
 }
 
@@ -275,67 +269,6 @@ func (e Env) ClearStale(commonDir string) (Lease, bool, error) {
 	return gone, cleared, err
 }
 
-// realPS runs ps with the C locale and returns its trimmed stdout.
-func realPS(args ...string) (string, error) {
-	r, err := proc.Run(context.Background(), proc.Cmd{Name: "ps", Args: args, Env: []string{"LC_ALL=C"}})
-	if err == nil && r.ExitCode != 0 {
-		err = fmt.Errorf("ps exited %d", r.ExitCode)
-	}
-	return strings.TrimSpace(r.Stdout), err
-}
-
-// psStat reads ppid and start time (unix seconds) of pid through ps, for hosts
-// without /proc (macOS).
-func psStat(run PSFunc, pid int) (ppid int, start uint64, ok bool) {
-	out, err := run("-o", "ppid=,lstart=", "-p", strconv.Itoa(pid))
-	if err != nil {
-		return 0, 0, false
-	}
-	f := strings.Fields(out)
-	if len(f) != 6 { // ppid, then "Mon Oct 20 12:00:00 2026"
-		return 0, 0, false
-	}
-	pp, err := strconv.Atoi(f[0])
-	if err != nil {
-		return 0, 0, false
-	}
-	t, err := time.ParseInLocation("Mon Jan _2 15:04:05 2006", strings.Join(f[1:], " "), time.Local)
-	if err != nil || t.Unix() <= 0 {
-		return 0, 0, false
-	}
-	return pp, uint64(t.Unix()), true
-}
-
-// psComm reads the command name of pid through ps; macOS reports a full path.
-func psComm(run PSFunc, pid int) string {
-	out, err := run("-o", "comm=", "-p", strconv.Itoa(pid))
-	if err != nil || out == "" {
-		return ""
-	}
-	return filepath.Base(out)
-}
-
-func procStart(run PSFunc, pid int) (uint64, bool) {
-	if _, st, ok := pidlive.ProcStat(pid); ok {
-		return st, true
-	}
-	_, st, ok := psStat(run, pid)
-	return st, ok
-}
-
-// realProc reads ppid and comm from /proc, or through ps where there is none.
-func realProc(run PSFunc, pid int) (int, string, bool) {
-	if pp, _, ok := pidlive.ProcStat(pid); ok {
-		if comm := pidlive.Comm(pid); comm != "" {
-			return pp, comm, true
-		}
-		return 0, "", false
-	}
-	pp, _, ok := psStat(run, pid)
-	comm := psComm(run, pid)
-	return pp, comm, ok && comm != ""
-}
-
 // hostServer reports whether comm is a terminal host's server: herdr, or tmux
 // (whose server and client rename themselves "tmux: server" and "tmux: client").
 // Every pane on it shares that ancestor, so it can never be the holder (#205).
@@ -373,11 +306,11 @@ func (e Env) Discover(pid int, getenv func(string) string) Holder {
 	if pid <= 0 {
 		proc, parent := e.Proc, e.Parent
 		if proc == nil {
-			run := e.PS
-			if run == nil {
-				run = realPS
+			src := e.Src
+			if src == nil {
+				src = pidlive.Real{}
 			}
-			proc = func(pid int) (int, string, bool) { return realProc(run, pid) }
+			proc = func(pid int) (int, string, bool) { return pidlive.Parent(src, pid) }
 		}
 		if parent == nil {
 			parent = os.Getppid

@@ -273,7 +273,7 @@ func TestLandingReadOnlyGateAndTrainBypassIntentAndLock(t *testing.T) {
 	}
 	landingHoldLock(t, e, w.dir)
 	marker := filepath.Join(rotastate.Dir(common), "landing-run-live.pid")
-	if err := os.WriteFile(marker, []byte(gateMarker(os.Getpid())), 0o644); err != nil {
+	if err := os.WriteFile(marker, []byte(gateMarker(pidlive.Real{}, os.Getpid())), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for _, preview := range []struct {

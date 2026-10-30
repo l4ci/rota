@@ -29,17 +29,17 @@ func gateRunKey(t GateTarget, arg string) string {
 // instead when there is one, and the release func otherwise. A marker left by a
 // dead process, or by a pid since reused by another process, is replaced. The check and the write share one short lock, so
 // two gates starting together cannot both claim.
-func claimGateRun(common, key string) (other int, release func(), err error) {
+func claimGateRun(src pidlive.Source, common, key string) (other int, release func(), err error) {
 	path := rotastate.File(common, "gate-"+key)
 	me := os.Getpid()
 	err = fsio.Locked(path, fsio.LockTimeout, func() error {
 		if b, rerr := os.ReadFile(path + ".pid"); rerr == nil {
-			if pid, start := parseGateMarker(string(b)); pid != 0 && pid != me && markerLive(pid, start) {
+			if pid, start := parseGateMarker(string(b)); pid != 0 && pid != me && markerLive(src, pid, start) {
 				other = pid
 				return nil
 			}
 		}
-		return os.WriteFile(path+".pid", []byte(gateMarker(me)), 0o644)
+		return os.WriteFile(path+".pid", []byte(gateMarker(src, me)), 0o644)
 	})
 	if err != nil || other != 0 {
 		return other, nil, err
@@ -49,8 +49,8 @@ func claimGateRun(common, key string) (other int, release func(), err error) {
 
 // gateMarker is the marker body: the pid and, where /proc gives it, the start
 // time that tells this process from a later one reusing the pid.
-func gateMarker(pid int) string {
-	if st, ok := pidlive.StartTicks(pid); ok {
+func gateMarker(src pidlive.Source, pid int) string {
+	if _, st, ok := src.Stat(pid); ok {
 		return fmt.Sprintf("%d %d\n", pid, st)
 	}
 	return fmt.Sprintf("%d\n", pid)
@@ -75,13 +75,6 @@ func parseGateMarker(body string) (pid int, start uint64) {
 
 // markerLive reports whether the process a marker names is still that process:
 // alive, and when the marker recorded a start time, started at that time.
-func markerLive(pid int, start uint64) bool {
-	if !pidlive.Alive(pid) {
-		return false
-	}
-	if start == 0 {
-		return true
-	}
-	cur, ok := pidlive.StartTicks(pid)
-	return !ok || cur == start
+func markerLive(src pidlive.Source, pid int, start uint64) bool {
+	return pidlive.Running(src, pid, start)
 }

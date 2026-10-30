@@ -42,7 +42,7 @@ func (e Env) withLandingRun(ctx context.Context, root, holder string, noWait boo
 				return err
 			}
 			pid, start := parseGateMarker(string(b))
-			if pid != 0 && markerLive(pid, start) {
+			if pid != 0 && markerLive(e.procs(), pid, start) {
 				if noWait {
 					return errLandingBusy
 				}
@@ -55,7 +55,7 @@ func (e Env) withLandingRun(ctx context.Context, root, holder string, noWait boo
 			return err
 		}
 		path = f.Name()
-		_, err = f.WriteString(gateMarker(os.Getpid()))
+		_, err = f.WriteString(gateMarker(e.procs(), os.Getpid()))
 		if cerr := f.Close(); err == nil {
 			err = cerr
 		}
