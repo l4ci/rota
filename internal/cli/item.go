@@ -916,6 +916,28 @@ func itemShipped(fs *flag.FlagSet) RunFunc {
 
 // ---- item ready -----------------------------------------------------------
 
+// readyReasons is why ref is not ready to build: the backend's reasons plus,
+// for an item with no decision on it, the template gaps in its body.
+func readyReasons(be backlog.Backend, ref string) ([]string, error) {
+	reasons, err := be.Ready(ref)
+	if err != nil {
+		return nil, err
+	}
+	it, err := be.Get(ref)
+	if err != nil {
+		return nil, err
+	}
+	decision, _ := round.DecisionOf(be.Capabilities(), *it)
+	if decision == "" {
+		body, _, err := be.Detail(ref)
+		if err != nil {
+			return nil, err
+		}
+		reasons = append(reasons, backlog.TemplateReasons(*it, body)...)
+	}
+	return reasons, nil
+}
+
 func itemReady(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := argCount(c, args, 1, 1, "item ready takes one item ID"); err != nil {
@@ -927,21 +949,9 @@ func itemReady(fs *flag.FlagSet) RunFunc {
 		}
 		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
 			return withItem(be, args[0], func(id, typ string) (Result, error) {
-				reasons, err := be.Ready(args[0])
+				reasons, err := readyReasons(be, args[0])
 				if err != nil {
 					return Result{}, err
-				}
-				it, err := be.Get(args[0])
-				if err != nil {
-					return Result{}, err
-				}
-				decision, _ := round.DecisionOf(be.Capabilities(), *it)
-				if decision == "" {
-					body, _, err := be.Detail(args[0])
-					if err != nil {
-						return Result{}, err
-					}
-					reasons = append(reasons, backlog.TemplateReasons(*it, body)...)
 				}
 				if reasons == nil {
 					reasons = []string{}

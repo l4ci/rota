@@ -55,6 +55,8 @@ Run it after finishing work:
 
 **Default flow:** branch check → `/rota-review` (unless `ship.review` is `none`) → second-opinion gate (if `ship.secondOpinion` is `true`) → `/rota-qa` gate (if `ship.qa` is `true`) → UAT gate (if `ship.uat` is `true`) → build PR body → open PR or merge → close resolved items (on the issue backend the PR merge closes them).
 
+After the merge or PR, one `rota ship finish` call does the bookkeeping: it removes the branch's status entry and handoff note, completes still-open items on the file backend, and reports whether the learn, docs and release nudges fire. It decides and never dispatches; `/rota-ship` acts on the result. Round workers and umbrella projects keep the step-by-step path, and the verb refuses an item with no proof row.
+
 The review gate behaves as follows:
 
 - `FAIL` blocks integration; fix the branch and rerun `/rota-ship`.

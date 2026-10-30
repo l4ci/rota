@@ -2,6 +2,14 @@
 
 Loaded by `SKILL.md` when the repo is an umbrella (`rota repo umbrella` exits 0, items carry `Repos:`) or `issues.source` is `github` or `gitlab`. Registry shape and `Repos:` semantics: [`references/umbrella-mode.md`](references/umbrella-mode.md). Issue-mode verbs: [`references/issue-mode.md`](references/issue-mode.md). Step 4.5 is cited by `umbrella-mode.md`: keep the heading.
 
+## Steps 1, 3 and 5 without `rota work start`
+
+`rota work start` refuses an umbrella project and a round worker (exit 4, `blockedBy: "umbrella"` or `"round worker"`), and needs an item ID. Those runs keep the step-by-step path:
+
+1. **Guard:** `rota git guard clean --context "/rota-work"`. Exit 0: continue. Exit 3: not a repo, surface and stop. Exit 1 (dirty tree): when every dirty path is a tool-generated sibling or the target item's own fresh design/plan file, sweep them per `sibling-sweep.md` and continue; any user change stops with the guard's message.
+2. **Name:** a descriptive branch name (`rota/quick-switch`); umbrella items also follow *Step 3* below.
+3. **Create and register:** the pattern per `work.isolation` in `references/isolation-patterns.md`, then one `rota status add <branch> --items <ID>[,<ID>...]` (`--worktree <path>` for a worktree; umbrella: *Step 5* below). Idempotent on `(branch, repo)`. On a tracker, claim as *Step 5* describes.
+
 ## Step 3 — Name the Branch (umbrella)
 
 Items carry `Repos:`, comma-separated (`rota item field get <ID> --name repos`). All items in a wave must share the same repo set. Validate with `rota repo resolve <name>…`; exit 3 names the missing ones: surface and stop.
@@ -23,7 +31,7 @@ Carry the resolved set into Step 5 and Step 10.
 
 **Umbrella registration.** One repo: add `--repo <repo-name>` to `rota status add`. Several repos register one entry per `(branch, repo)`: `rota status add <branch> --items <ids> --repos <repos-csv> [--worktrees <csv>]`. Umbrella branches (`rota git branch <name> --repos <csv>`, Layout B worktree): `references/isolation-patterns.md`.
 
-**Issue mode.** Once the branch exists, per item run `rota item ready <ID>` (exit 1 prints what is missing: warn the user), then claim it with `rota item claim <ID> --as <branch>`. Exit 4 means another worker holds it: drop that item and continue with the rest, or stop when none remain. Exit 3 or 5: stop and report. Load each item's context as `issue-mode.md` "Resuming an item" describes (start with `rota item show <ID>`) before planning tasks. For a `changes-requested` item, follow *Handling review feedback* in `references/worker-contract.md` when working its `feedback` comments.
+**Issue mode.** `rota work start` (Step 1) runs this; the step-by-step path runs it by hand. Once the branch exists, per item run `rota item ready <ID>` (exit 1 prints what is missing: warn the user), then claim it with `rota item claim <ID> --as <branch>`. Exit 4 means another worker holds it: drop that item and continue with the rest, or stop when none remain. Exit 3 or 5: stop and report. Load each item's context as `issue-mode.md` "Resuming an item" describes (start with `rota item show <ID>`) before planning tasks. For a `changes-requested` item, follow *Handling review feedback* in `references/worker-contract.md` when working its `feedback` comments.
 
 ## Step 6 — Dispatch (umbrella)
 
