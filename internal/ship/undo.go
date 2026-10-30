@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/strutil"
 )
@@ -131,7 +132,7 @@ func PlanUndo(g Git, base, cur string, dirty bool, o UndoOpts) (UndoPlan, error)
 	if err != nil {
 		return UndoPlan{}, err
 	}
-	if !strings.HasPrefix(subject, "merge: ") {
+	if !land.IsCycleMerge(subject) {
 		if o.Cycle != "" {
 			return UndoPlan{}, &Refusal{By: blockedby.MergeSubject, Msg: fmt.Sprintf("--cycle commit %s has subject not matching '^merge: ' (subject: %s)", o.Cycle, subject)}
 		}
