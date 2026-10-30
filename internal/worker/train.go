@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/change"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/flakeledger"
 	"github.com/l4ci/rota/internal/git"
@@ -100,6 +101,7 @@ type TrainMember struct {
 	Target  string
 	Branch  string
 	PR      string
+	Tier    string // the change tier its check-only gate put it in
 	Landed  bool
 	Culprit bool
 }
@@ -111,6 +113,10 @@ type TrainMember struct {
 type TrainResult struct {
 	Base    string
 	Verdict string
+	// Tier is the highest change tier of the members, which the train verified
+	// by (#2348); Skipped are the test tiers it ran a cheaper list in place of.
+	Tier    string
+	Skipped []string
 	Members []TrainMember
 	Culprit string
 	// Culprits lists members excluded by the static PR-section pre-filter.
@@ -205,13 +211,17 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 // pre-merge policy, scratch merge), verify (test.full, test.e2e, bisect) and
 // land. Each stage returns done when res already holds the train's answer.
 type trainRun struct {
-	e     Env
-	ctx   context.Context
-	root  string
-	o     TrainOpts
-	cache *trainCache
-	gated map[string]bool // members the landing loop ran a real gate on
-	res   TrainResult
+	// tierCfg and tierRan are the tier's verify config and its list's name
+	// (pickTier); nil and "" when the train verifies with test.full.
+	tierCfg *GateConfig
+	tierRan string
+	e       Env
+	ctx     context.Context
+	root    string
+	o       TrainOpts
+	cache   *trainCache
+	gated   map[string]bool // members the landing loop ran a real gate on
+	res     TrainResult
 
 	in      gateInput
 	remote  bool
@@ -371,7 +381,7 @@ func (t *trainRun) plan() (bool, error) {
 			res.Verdict, res.Culprit, res.CulpritGate, res.Err, res.Hint = gr.Verdict, tg, gr, gr.Err, gr.Hint
 			return true, nil
 		}
-		res.Members = append(res.Members, TrainMember{Target: tg, Branch: gr.Branch, PR: gr.PR})
+		res.Members = append(res.Members, TrainMember{Target: tg, Branch: gr.Branch, PR: gr.PR, Tier: gr.Tier})
 		t.remote = t.remote || gr.PR != ""
 	}
 	if err := t.filterSectionOrder(&o); err != nil {
@@ -396,7 +406,12 @@ func (t *trainRun) plan() (bool, error) {
 	if o.Plan {
 		return t.preview()
 	}
-	verify, onCI, brokeMsg, err := e.fullTier(ctx, root, "train", in)
+	if done, err := t.pickTier(); done || err != nil {
+		return true, err
+	}
+	tierIn := in
+	tierIn.cfg = t.verifyCfg()
+	verify, onCI, brokeMsg, err := e.fullTier(ctx, root, "train", tierIn)
 	if err != nil {
 		return true, err
 	}
@@ -734,6 +749,68 @@ func free(clash [][]bool, mask uint32) bool {
 	return true
 }
 
+// pickTier sets the config the train verifies with (#2348): the highest change
+// tier of its members, so one full member makes the whole train full. A member
+// with no tier (its check gave none) counts as full. Under test.fullWhere ci the
+// tier is recorded, not applied. For test.small, {files} is the union of the
+// members' changed files against the base, deletions left out.
+func (t *trainRun) pickTier() (bool, error) {
+	res := &t.res
+	tier := change.TierDocs
+	for _, m := range res.Members {
+		switch change.Tier(m.Tier) {
+		case change.TierDocs:
+		case change.TierSmall:
+			if tier == change.TierDocs {
+				tier = change.TierSmall
+			}
+		default:
+			tier = change.TierFull
+		}
+	}
+	if len(res.Members) == 0 {
+		tier = change.TierFull
+	}
+	res.Tier = string(tier)
+	if tier == change.TierFull || t.in.cfg.where == WhereCI {
+		return false, nil
+	}
+	var files []string
+	if tier == change.TierSmall && anyHasFiles(t.in.cfg.Small) {
+		seen := map[string]bool{}
+		for _, m := range res.Members {
+			fs, err := git.DiffFiles(t.ctx, t.e.Git, t.root, "--diff-filter=d", t.baseRef+"..."+t.headRef(m))
+			if err != nil {
+				res.Tier = string(change.TierFull)
+				res.Notes = append(res.Notes, fmt.Sprintf("GATE-TIER train — full: could not list the files of %s for test.small: %v", m.Target, err))
+				return false, nil
+			}
+			for _, f := range fs {
+				if !seen[f] {
+					seen[f] = true
+					files = append(files, f)
+				}
+			}
+		}
+	}
+	cfg, ran, skipped := t.in.cfg.forTier(tier, files)
+	if len(skipped) == 0 {
+		return false, nil
+	}
+	t.tierCfg, t.tierRan, res.Skipped = &cfg, ran, skipped
+	res.Notes = append(res.Notes, fmt.Sprintf("GATE-TIER train — %s (every member is %s or less); ran %s; skipped %s", tier, tier, ran, strings.Join(skipped, ", ")))
+	return false, nil
+}
+
+// verifyCfg is the config the train's scratch tree verifies with: the tier's
+// (pickTier), else test.full and test.e2e.
+func (t *trainRun) verifyCfg() GateConfig {
+	if t.tierCfg != nil {
+		return *t.tierCfg
+	}
+	return t.in.cfg
+}
+
 // verifyStage is stage 4: test.full, then test.e2e on the same tree, with a
 // bisect on a red tier. It sets t.passing. The tier policy (what a result means,
 // the note text) is tierOutcomeOf's; this stage owns the cache and the bisect.
@@ -795,6 +872,9 @@ func (t *trainRun) verifyStage() (bool, error) {
 		}
 	}
 	fullTierName := tierFull
+	if t.tierRan != "" {
+		fullTierName = t.tierRan // a cached test.full result never answers a test.docs run
+	}
 	if t.onCI {
 		fullTierName = tierFull + "@ci"
 	}
@@ -831,7 +911,7 @@ func (t *trainRun) verifyStage() (bool, error) {
 		},
 		notes: &res.Notes, verified: &res.Verified, e2eVerified: &res.E2EVerified, excluded: &res.Excluded, flaky: &res.Flaky,
 	}
-	ended, err := w.walk(t.in.cfg, tierFull)
+	ended, err := w.walk(t.verifyCfg(), tierFull)
 	if err != nil {
 		if w.at == tierFull {
 			return verifyErr(err)
@@ -854,7 +934,7 @@ func (t *trainRun) verifyStage() (bool, error) {
 		}
 	}
 
-	if !green && passing > 0 && len(t.in.cfg.E2E) > 0 {
+	if !green && passing > 0 && len(t.verifyCfg().E2E) > 0 {
 		res.Notes = append(res.Notes, noE2ENote(passing))
 	}
 	t.passing = passing

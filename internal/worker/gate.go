@@ -1203,6 +1203,11 @@ func (g *gate) stepCheckOnly() (bool, error) {
 		}
 		// the checked tip: origin/<branch> when a PR is recorded
 		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
+		// A train member says its tier, so the train verifies by the highest.
+		if g.o.BehaviourDir == "" {
+			tier := g.classify(g.baseRef + "..." + g.headRef)
+			g.res.Tier, g.res.TierReason = string(tier.Tier), tier.Reason
+		}
 		g.res.Verdict = GateFresh
 		return true, nil
 	}
@@ -1290,13 +1295,8 @@ func (g *gate) stepTier() (bool, error) {
 	if g.o.skipsVerify() {
 		return false, nil
 	}
-	policy, perr := g.in.cfg.ChangePolicy()
 	span := g.baseRef + "..." + g.verified
-	src := ChangeSources{Policy: policy, PolicyErr: perr, Git: g.e.Git, Dir: g.root, Span: span}
-	if g.pr != "" {
-		src.PRBody = g.prBody
-	}
-	tier := ClassifyChange(g.ctx, src)
+	tier := g.classify(span)
 	g.res.Tier, g.res.TierReason = string(tier.Tier), tier.Reason
 	if g.ci != nil {
 		if tier.Tier != change.TierFull {
@@ -1319,6 +1319,16 @@ func (g *gate) stepTier() (bool, error) {
 	g.tierCfg, g.res.Skipped = &cfg, skipped
 	g.res.Notes = append(g.res.Notes, fmt.Sprintf("GATE-TIER %s — %s (%s); ran %s; skipped %s", g.o.Slot, tier.Tier, tier.Reason, ran, strings.Join(skipped, ", ")))
 	return false, nil
+}
+
+// classify is the change tier of span, with the PR's Door line when there is a PR.
+func (g *gate) classify(span string) change.Result {
+	policy, perr := g.in.cfg.ChangePolicy()
+	src := ChangeSources{Policy: policy, PolicyErr: perr, Git: g.e.Git, Dir: g.root, Span: span}
+	if g.pr != "" {
+		src.PRBody = g.prBody
+	}
+	return ClassifyChange(g.ctx, src)
 }
 
 // stepVerifyFirst verifies the merge result in a scratch tree, before anything
