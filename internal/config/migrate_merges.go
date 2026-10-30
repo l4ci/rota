@@ -155,7 +155,7 @@ func deletePath(doc *jsonx.Object, segs []string) {
 func MigrateMergesFiles(root, globalDir string, apply bool) (MergesMigration, error) {
 	files := []*accountFile{{name: "config.json", path: configPath(root)}, {name: "config.local.json", path: localPath(root)}}
 	if globalDir != "" {
-		files = append([]*accountFile{{name: globalAccountsFile, path: GlobalPath(globalDir)}}, files...)
+		files = append([]*accountFile{{name: "global config.json", path: GlobalPath(globalDir), global: true}}, files...)
 	}
 	var m MergesMigration
 	var lock func(i int) error
@@ -187,7 +187,7 @@ func migrateMergesPlan(files []*accountFile, m *MergesMigration, apply bool) err
 			continue
 		}
 		view := f.doc
-		if f.name != globalAccountsFile {
+		if !f.global {
 			// The renamed view, as the accounts step plans on.
 			view, _, _ = MigrateRoundKeys(f.doc)
 		}
