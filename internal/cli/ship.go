@@ -119,15 +119,8 @@ func (v shipVerdictLookup) local() ship.VerdictCheck {
 }
 
 func (v shipVerdictLookup) Block(branch string) error {
-	head, _ := reviewGit(v.c.Context(), v.c.deps(), v.dir, "rev-parse", "--short", branch)
-	lookupVerdicts(v.c, verdictBranch{root: v.root, dir: v.dir, repo: v.repo, branch: branch, key: verdict.BranchKey(v.repo, branch), head: strings.TrimSpace(head)})
+	lookupVerdicts(v.c, verdictBranch{root: v.root, dir: v.dir, repo: v.repo, branch: branch, key: verdict.BranchKey(v.repo, branch), head: v.local().Head(branch)})
 	return v.local().Block(branch)
-}
-
-func (v shipVerdictLookup) BlockGate(branch, head string) error {
-	// The gate recovered its validated PR before this callback. Reload here:
-	// constructing this check before the gate runs must not freeze an empty cache.
-	return v.local().BlockGate(branch, head)
 }
 
 // shipPRVerdict is the verdict gate for the head branch of PR pr, with the PR
