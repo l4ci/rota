@@ -50,7 +50,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		}
 		req := worker.DoneRequest{Root: root, PoolRoot: poolRoot, Slot: slotName, Attempt: *attempt, Base: *base,
 			Kind: kind, Summary: summary, Targeted: *targeted, RequireRed: *requireRed}
-		res, err := worker.Done(req, doneDeps(c, root))
+		res, err := worker.Done(req, doneDeps(c, root, poolRoot))
 		if res == nil {
 			return Result{}, err
 		}
@@ -74,7 +74,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 
 // doneDeps wires worker.Done to the cli's proof store, backlog and {files}
 // expansion, which hang off the invocation's context.
-func doneDeps(c *Ctx, root string) worker.DoneDeps {
+func doneDeps(c *Ctx, root, poolRoot string) worker.DoneDeps {
 	var be backlog.Backend
 	opened := false
 	return worker.DoneDeps{
@@ -114,7 +114,9 @@ func doneDeps(c *Ctx, root string) worker.DoneDeps {
 				return false
 			}
 			it, err := be.Get(id)
-			return err == nil && round.IsReviewTitle(it.Title)
+			// Title and the registry's minted record, as `round accept` requires:
+			// a code item named like a review still needs its PR.
+			return err == nil && round.IsReviewTitle(it.Title) && round.MintedReviews(poolRoot)[worker.NormID(it.ID)]
 		},
 	}
 }
