@@ -586,21 +586,16 @@ func TestTrainNoVerifyDoesNotForgiveCulprit(t *testing.T) {
 
 func TestTrainVerdictRefusal(t *testing.T) {
 	w := trainWorld(t, "touch ran-verify", "b1", "b2")
-	block := fmt.Errorf("FAIL recorded")
-	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Verdict: func(b, _ string) error {
-		if b == "b2" {
-			return block
-		}
-		return nil
-	}})
-	if err != block || res.Verdict != GateVerdictBlocked || res.Culprit != "b2" {
+	if _, err := verdict.AddBranch(w.dir, "b2", verdict.Record{Kind: verdict.ReviewSpec, Verdict: verdict.Fail, Sha: "abc1234"}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	var vb *verdict.BlockedError
+	if !errors.As(err, &vb) || res.Verdict != GateVerdictBlocked || res.Culprit != "b2" {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if w.onMain("b1.txt") || w.onMain("b2.txt") {
 		t.Error("a train with a FAIL-verdict member merged something")
-	}
-	if res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Verdict: func(string, string) error { return nil }}); err != nil || !res.OK() {
-		t.Fatalf("no blocking record: %+v %v", res, err)
 	}
 }
 

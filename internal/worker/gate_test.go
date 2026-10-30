@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	gatepolicy "github.com/l4ci/rota/internal/gate"
@@ -1040,43 +1041,47 @@ func TestGateSkipsE2EWhenFullRed(t *testing.T) {
 	}
 }
 
-// A recorded FAIL (the Verdict port's error) refuses the gate before the merge,
-// also under --check-only; a nil port, a PASS and an absent record pass.
-func TestGateVerdictRefusal(t *testing.T) {
-	block := fmt.Errorf("FAIL recorded")
+// The gate reads the verdict store itself: a recorded FAIL at the branch
+// refuses it before the merge, also under --check-only.
+func TestGateVerdictFromStore(t *testing.T) {
 	for _, check := range []bool{false, true} {
 		w := newWorld(t, ghURL)
-		var seen string
-		res, err := w.gate(false, GateOpts{CheckOnly: check, Verdict: func(b, _ string) error { seen = b; return block }})
-		if err != block || res.Verdict != GateVerdictBlocked || res.Changed {
+		if _, err := verdict.AddBranch(w.dir, "w1", verdict.Record{Kind: verdict.ReviewSpec, Verdict: verdict.Fail, Sha: "abc1234"}); err != nil {
+			t.Fatal(err)
+		}
+		res, err := w.gate(false, GateOpts{CheckOnly: check})
+		var vb *verdict.BlockedError
+		if !errors.As(err, &vb) || res.Verdict != GateVerdictBlocked || w.onMain("work.txt") {
 			t.Fatalf("check=%v: %+v %v", check, res, err)
 		}
-		if seen == "" {
-			t.Errorf("check=%v: the port got no branch", check)
-		}
-		if w.onMain("work.txt") {
-			t.Errorf("check=%v: a FAIL-verdict branch merged", check)
-		}
-	}
-	w := newWorld(t, ghURL)
-	if res, err := w.gate(false, GateOpts{CheckOnly: true, Verdict: func(string, string) error { return nil }}); err != nil || !res.OK() {
-		t.Errorf("no blocking record: %+v %v", res, err)
 	}
 }
 
-// The Verdict port gets the head the gate merges: origin/<branch> for a PR,
-// not a local branch of the same name that has moved on.
-func TestGateVerdictPortGetsMergedHead(t *testing.T) {
+// A gate without a verdict rule must say so by NoVerdict, never by omission.
+func TestGateNoVerdictIsExplicit(t *testing.T) {
 	w := newWorld(t, ghURL)
-	gitq(t, w.dir, "fetch", "-q", "origin")
-	want := strings.TrimSpace(gitq(t, w.dir, "rev-parse", "--short", "origin/w1"))
-	gitq(t, w.dir, "branch", "-f", "w1", "origin/main")
-	var got string
-	if _, err := w.gate(false, GateOpts{CheckOnly: true, Verdict: func(_, head string) error { got = head; return nil }}); err != nil {
+	if _, err := verdict.AddBranch(w.dir, "w1", verdict.Record{Kind: verdict.ReviewSpec, Verdict: verdict.Fail, Sha: "abc1234"}); err != nil {
 		t.Fatal(err)
 	}
-	if got != want {
-		t.Errorf("port head = %q, want origin/w1 %q", got, want)
+	if res, err := w.gate(false, GateOpts{CheckOnly: true, NoVerdict: true}); err != nil || !res.OK() {
+		t.Fatalf("explicit opt-out must skip the rule: %+v %v", res, err)
+	}
+}
+
+// The verdict rule is judged at the head the gate merges: origin/<branch> for
+// a PR, not a local branch of the same name that has moved on.
+func TestGateVerdictAtMergedHead(t *testing.T) {
+	w := newWorld(t, ghURL)
+	gitq(t, w.dir, "fetch", "-q", "origin")
+	head := strings.TrimSpace(gitq(t, w.dir, "rev-parse", "--short", "origin/w1"))
+	gitq(t, w.dir, "branch", "-f", "w1", "origin/main")
+	rec := verdict.Record{Kind: verdict.ReviewQuality, Verdict: verdict.Concerns, Sha: head, Findings: []verdict.Finding{{Severity: "blocker", Title: "broken"}}}
+	if _, err := verdict.AddBranch(w.dir, "w1", rec); err != nil {
+		t.Fatal(err)
+	}
+	var vb *verdict.BlockedError
+	if _, err := w.gate(false, GateOpts{CheckOnly: true}); !errors.As(err, &vb) || vb.Finding != "broken" {
+		t.Errorf("the bounce rule must read the merged head %s: %v", head, err)
 	}
 }
 

@@ -79,8 +79,8 @@ type TrainOpts struct {
 	// Approve is the merge-approval check for the whole train: files lists the
 	// union of the paths the members change.
 	Approve func(files func() ([]string, error)) (*exitcode.Refusal, error)
-	// Verdict is GateOpts.Verdict, run for every member's check.
-	Verdict func(branch, head string) error
+	// VerdictRepo is GateOpts.VerdictRepo, used for every member's check.
+	VerdictRepo string
 	// CheckReviews is GateOpts.CheckReviews, run for every member's check.
 	CheckReviews bool
 	// Order replaces the computed merge order; see orderTrain.
@@ -353,7 +353,7 @@ func (t *trainRun) plan() (bool, error) {
 			}
 			// A PR outside the registry derives its repair issue from its head branch.
 			if gt.External {
-				gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, CheckOnly: true})
+				gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, CheckOnly: true, NoVerdict: true})
 				if err != nil {
 					return true, err
 				}
@@ -372,7 +372,7 @@ func (t *trainRun) plan() (bool, error) {
 		return true, err
 	}
 	for _, tg := range targets {
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, tg), Verdict: o.Verdict, CheckReviews: o.CheckReviews})
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, tg), VerdictRepo: o.VerdictRepo, CheckReviews: o.CheckReviews})
 		if err != nil {
 			if gr.Verdict == GateVerdictBlocked {
 				res.Verdict, res.Culprit = gr.Verdict, tg
@@ -979,7 +979,7 @@ func (t *trainRun) behaviourStage() (bool, error) {
 		if _, code := e.git(t.scratch, "checkout", "-q", "-f", "--detach", t.tips[i+1]); code != 0 {
 			return t.broke("git checkout " + t.tips[i+1] + " failed in the scratch tree")
 		}
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), Verdict: o.Verdict, CheckReviews: o.CheckReviews,
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, CheckOnly: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), VerdictRepo: o.VerdictRepo, CheckReviews: o.CheckReviews,
 			ItemBody: o.ItemBody, BehaviourDir: t.scratch})
 		if err != nil {
 			return true, err
@@ -1048,7 +1048,7 @@ func (t *trainRun) land() (TrainResult, error) {
 			}
 		}
 		t.gated[m.Target] = true
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, LandVerified: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), HoldsLandLock: true, Round: o.Round})
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, LandVerified: true, NoVerdict: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), HoldsLandLock: true, Round: o.Round})
 		res.Notes = appendNew(res.Notes, gr.Notes...)
 		res.Notes = appendNew(res.Notes, gr.Warnings...)
 		res.Changed = res.Changed || gr.Changed
