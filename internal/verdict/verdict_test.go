@@ -1,9 +1,11 @@
 package verdict
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
 	"slices"
@@ -114,38 +116,75 @@ func TestWorst(t *testing.T) {
 
 func rec(kind, v, sha string) Record { return NewRecord(kind, v, sha, Body{}, recAt) }
 
-func TestAddBranchCombines(t *testing.T) {
-	root := t.TempDir()
-	add := func(r Record) Record {
-		t.Helper()
-		out, err := AddBranch(root, "feat/x", r)
-		if err != nil {
-			t.Fatal(err)
+// TestCombinedPairing drives both writers of the review-quality Combined
+// verdict (AddBranch and RecoverPR) over the same record sequences at one sha
+// and expects the same answer, including with a cross or lens record between
+// the spec and the quality record.
+func TestCombinedPairing(t *testing.T) {
+	const head = "abcdef1"
+	cases := []struct {
+		name string
+		seq  []Record
+		want string // Combined of the review-quality record, the last in seq
+	}{
+		{"quality only", []Record{rec(ReviewQuality, Concerns, head)}, Concerns},
+		{"spec concerns + quality pass", []Record{rec(ReviewSpec, Concerns, head), rec(ReviewQuality, Pass, head)}, Concerns},
+		{"spec pass + quality fail", []Record{rec(ReviewSpec, Pass, head), rec(ReviewQuality, Fail, head)}, Fail},
+		{"cross between", []Record{rec(ReviewSpec, Concerns, head), rec(ReviewCross, Pass, head), rec(ReviewQuality, Pass, head)}, Concerns},
+		{"lens between", []Record{rec(ReviewSpec, Fail, head), rec(ReviewSecurity, Pass, head), rec(ReviewQuality, Pass, head)}, Fail},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root := t.TempDir()
+			var got Record
+			for _, r := range c.seq {
+				out, err := AddBranch(root, "feat/x", r)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got = out
+			}
+			if got.Combined != c.want {
+				t.Errorf("AddBranch combined = %q, want %q", got.Combined, c.want)
+			}
+			var notes []tracker.Comment
+			for _, r := range c.seq {
+				notes = append(notes, tracker.Comment{Author: "me", Body: RenderReport(r, nil)})
+			}
+			rroot := t.TempDir()
+			if err := RecoverPR(context.Background(), rroot, "feat/x", head, 1, &lookupSource{self: "me", notes: notes}); err != nil {
+				t.Fatal(err)
+			}
+			q, ok := Latest(Load(rroot).Branches["feat/x"], ReviewQuality)
+			if !ok || q.Combined != c.want {
+				t.Errorf("RecoverPR combined = %q (found %v), want %q", q.Combined, ok, c.want)
+			}
+		})
+	}
+	t.Run("spec at another sha and non-review kinds", func(t *testing.T) {
+		root := t.TempDir()
+		add := func(r Record) Record {
+			t.Helper()
+			out, err := AddBranch(root, "feat/y", r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return out
 		}
-		return out
-	}
-	if r := add(rec(ReviewSpec, Concerns, "a0")); r.Combined != Concerns {
-		t.Errorf("spec-only combined = %q", r.Combined)
-	}
-	add(rec(ReviewSpec, Concerns, "a1"))
-	if r := add(rec(ReviewQuality, Pass, "a1")); r.Combined != Concerns {
-		t.Errorf("spec CONCERNS + quality PASS combined = %q", r.Combined)
-	}
-	// A quality record after a spec at another sha does not combine.
-	add(rec(ReviewSpec, Fail, "a1"))
-	if r := add(rec(ReviewQuality, Pass, "b2")); r.Combined != Pass {
-		t.Errorf("cross-sha combined = %q", r.Combined)
-	}
-	// Quality-only review: combined is its own verdict.
-	if r := add(rec(ReviewQuality, Concerns, "b2")); r.Combined != Concerns {
-		t.Errorf("quality-only combined = %q", r.Combined)
-	}
-	if r := add(rec(QA, Fail, "b2")); r.Combined != "" {
-		t.Errorf("qa got combined %q", r.Combined)
-	}
-	if got := len(Load(root).Branches["feat/x"]); got != 7 {
-		t.Errorf("stored %d records", got)
-	}
+		if r := add(rec(ReviewSpec, Concerns, "a0")); r.Combined != Concerns {
+			t.Errorf("spec-only combined = %q", r.Combined)
+		}
+		add(rec(ReviewSpec, Fail, "a1"))
+		if r := add(rec(ReviewQuality, Pass, "b2")); r.Combined != Pass {
+			t.Errorf("cross-sha combined = %q", r.Combined)
+		}
+		if r := add(rec(QA, Fail, "b2")); r.Combined != "" {
+			t.Errorf("qa got combined %q", r.Combined)
+		}
+		if got := len(Load(root).Branches["feat/y"]); got != 4 {
+			t.Errorf("stored %d records", got)
+		}
+	})
 }
 
 func TestStoreCapsAndRoundTrips(t *testing.T) {
