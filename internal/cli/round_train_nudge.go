@@ -340,16 +340,8 @@ func fillDefaultBase(waiting []waitingPR, def string) []waitingPR {
 // let it in.
 func trainBlocked(store verdict.Store, branch string) bool {
 	list := store.Branches[verdict.BranchKey("", branch)]
-	if _, blocked := verdict.Blocking(list); blocked {
-		return true
-	}
-	for _, kind := range append([]string{verdict.ReviewCross}, verdict.LensKinds...) {
-		if r, ok := verdict.Latest(list, kind); ok && r.Failing() {
-			return true
-		}
-	}
-	r, ok := verdict.EffectiveReview(list)
-	return ok && r.Failing()
+	_, blocked := verdict.BlockingAnyHead(list)
+	return blocked
 }
 
 // trainNudgeData is the nudges as the `trainNudge` JSON array, nil when none.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/gate"
@@ -414,6 +415,30 @@ func TestTrainFailureLandsSkipsAndHolds(t *testing.T) {
 	// c is a skipped bystander: no escalation, no hold. b is the culprit.
 	if len(r.NeedsYou) != 1 || r.NeedsYou[0].Target != "b" || r.Held["b"] == "" || r.Held["c"] != "" {
 		t.Fatalf("needsYou %+v held %v", r.NeedsYou, r.Held)
+	}
+}
+
+func TestTrainExcludedMemberIsGateFailedNotMerged(t *testing.T) {
+	f := &fake{slots: []Slot{
+		{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"}}}
+	f.trainOut = func([]string) TrainRun {
+		return TrainRun{Result: worker.TrainResult{
+			Verdict: worker.GatePass,
+			Members: []worker.TrainMember{{Target: "a", Landed: true}},
+			Landed:  []string{"a"},
+			Culprits: []worker.TrainCulprit{{Target: "b", PR: "#2", BlockedBy: "assumptions-missing",
+				Gate: worker.GateResult{Verdict: "assumptions-missing", Err: "PR body lacks ## Assumptions"}}},
+		}}
+	}
+	r, err := Run(context.Background(), f.env())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Did) != 1 || r.Did[0].Target != "a" {
+		t.Fatalf("did %+v, want only a merged", r.Did)
+	}
+	if len(r.NeedsYou) != 1 || r.NeedsYou[0].Kind != "gate-failed" || r.NeedsYou[0].Target != "b" || !strings.Contains(r.NeedsYou[0].Why, "assumptions-missing") {
+		t.Fatalf("needsYou %+v", r.NeedsYou)
 	}
 }
 
