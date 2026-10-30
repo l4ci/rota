@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -381,7 +382,7 @@ func (s Store) effectiveBackfilled(scope string) (*Sidecar, error) {
 		if t.Name == GlossaryTopic {
 			continue
 		}
-		for _, line := range section.Lines(t.Body) {
+		for _, line := range pystr.Splitlines(t.Body) {
 			if m := titleRe.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
 				sc.Init(t.Name, m[1], s.today())
 			}

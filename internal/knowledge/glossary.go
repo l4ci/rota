@@ -247,7 +247,7 @@ func (s Store) glossaryTarget(scope string) (path, text string, start, end int, 
 	if err != nil {
 		return
 	}
-	raw, rerr := readTextBytes(path)
+	raw, rerr := fsio.ReadText(path)
 	if rerr != nil {
 		if os.IsNotExist(rerr) {
 			err = notFound("%s missing — run rota init first", path)
@@ -256,7 +256,7 @@ func (s Store) glossaryTarget(scope string) (path, text string, start, end int, 
 		}
 		return
 	}
-	text = string(raw)
+	text = raw
 	var ok bool
 	if start, end, ok = section.Find(text, GlossaryTopic); !ok {
 		err = notFound("## Glossary topic missing from %s — run rota init or add the heading manually", path)
@@ -429,14 +429,14 @@ func (s Store) GlossaryRead(scope string, terms []string) (string, []string, err
 	printed := false
 	matched := map[string]bool{}
 	for _, sc := range srcs {
-		raw, err := readTextBytes(sc.path)
+		raw, err := fsio.ReadText(sc.path)
 		if os.IsNotExist(err) {
 			continue
 		}
 		if err != nil {
 			return "", nil, err
 		}
-		for _, e := range glossaryBlocks(string(raw)) {
+		for _, e := range glossaryBlocks(raw) {
 			if !wanted[strings.ToLower(e.name)] {
 				continue
 			}
