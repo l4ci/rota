@@ -71,6 +71,7 @@ exit: 3 item unknown; tracker
 old: hv-item-release <ID> --as <claim-id>
 shim: old prints nothing, so `changed` is true when the backend is issues and rc 0, false for file backend; the Go port reports false when no open claim matched.
 note: release removes that claim's `claimed:` label (best effort) once no remaining claim maps to it; two rounds held by the same agent share one label. Closing an item through `item complete` removes every `claimed:` label beside its state labels.
+note: the release comment carries a hand-release marker (issue and umbrella backends), so `round reconcile --apply` does not post the claim again; a `tracker.ClaimStore` keeps no release comment and loses the marker.
 
 ### rota item ready
 rota item ready <ID>
