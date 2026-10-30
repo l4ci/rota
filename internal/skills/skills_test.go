@@ -81,7 +81,7 @@ func TestEmbeddedInstallResolvesEveryReference(t *testing.T) {
 		t.Fatal(err)
 	}
 	home := t.TempDir()
-	roots, err := Roots(User, "all", home, filepath.Join(home, ".claude"), "")
+	roots, err := Roots(User, "all", home, []string{filepath.Join(home, ".claude")}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func status(t *testing.T, rs []RootResult, path string) string {
 
 func oneRoot(t *testing.T) []Root {
 	t.Helper()
-	rs, err := Roots(User, Claude, "", filepath.Join(t.TempDir(), ".claude"), "")
+	rs, err := Roots(User, Claude, "", []string{filepath.Join(t.TempDir(), ".claude")}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +287,7 @@ func TestForeignSymlinkNotWrittenThrough(t *testing.T) {
 func TestUpdateRefreshesOnlyInstalledRoots(t *testing.T) {
 	s := loadFake(t, nil)
 	home := t.TempDir()
-	roots, _ := Roots(User, "all", home, filepath.Join(home, ".claude"), "")
+	roots, _ := Roots(User, "all", home, []string{filepath.Join(home, ".claude")}, "")
 	if res, err := s.Update(roots, Options{Mode: ModeFull}); err != nil || len(res) != 0 {
 		t.Fatalf("update with nothing installed: %v %v", res, err)
 	}
@@ -416,7 +416,7 @@ func TestStatusDevBuildComparesByDigest(t *testing.T) {
 }
 
 func TestRoots(t *testing.T) {
-	rs, err := Roots("", "", "/h", "/h/.claude", "/p")
+	rs, err := Roots("", "", "/h", []string{"/h/.claude"}, "/p")
 	if err != nil || len(rs) != 4 {
 		t.Fatalf("%v %v", rs, err)
 	}
@@ -426,24 +426,29 @@ func TestRoots(t *testing.T) {
 			t.Errorf("%d: %s, want %s", i, r.Path, want[i])
 		}
 	}
-	if rs, _ = Roots("", "codex", "/h", "/h/.claude", ""); len(rs) != 1 || rs[0].Scope != User || rs[0].Agent != Codex {
+	if rs, _ = Roots("", "codex", "/h", []string{"/h/.claude"}, ""); len(rs) != 1 || rs[0].Scope != User || rs[0].Agent != Codex {
 		t.Errorf("%v", rs)
 	}
-	if _, err = Roots(Project, "all", "/h", "/h/.claude", ""); err != ErrNoProject {
+	if _, err = Roots(Project, "all", "/h", []string{"/h/.claude"}, ""); err != ErrNoProject {
 		t.Errorf("err %v", err)
 	}
 	// CLAUDE_CONFIG_DIR moves only the Claude root.
-	rs, _ = Roots(User, "all", "/h", "/cfg", "")
+	rs, _ = Roots(User, "all", "/h", []string{"/cfg"}, "")
 	if len(rs) != 2 || rs[0].Path != "/cfg/skills" || rs[1].Path != "/h/.agents/skills" {
 		t.Errorf("%v", rs)
 	}
-	if _, err = Roots(User, "all", "", "", ""); err != ErrNoHome {
+	// Account dirs each get a Claude root, in order, ahead of the Codex root.
+	rs, _ = Roots(User, "all", "/h", []string{"/cfg", "/acct"}, "")
+	if len(rs) != 3 || rs[0].Path != "/cfg/skills" || rs[1].Path != "/acct/skills" || rs[2].Path != "/h/.agents/skills" {
+		t.Errorf("account dirs: %v", rs)
+	}
+	if _, err = Roots(User, "all", "", nil, ""); err != ErrNoHome {
 		t.Errorf("no home: %v", err)
 	}
-	if _, err = Roots("", "claude", "", "", "/p"); err != ErrNoHome {
+	if _, err = Roots("", "claude", "", nil, "/p"); err != ErrNoHome {
 		t.Errorf("no home, both scopes: %v", err)
 	}
-	if rs, err = Roots(User, "claude", "", "/cfg", ""); err != nil || len(rs) != 1 {
+	if rs, err = Roots(User, "claude", "", []string{"/cfg"}, ""); err != nil || len(rs) != 1 {
 		t.Errorf("claude root needs no HOME when CLAUDE_CONFIG_DIR is set: %v %v", rs, err)
 	}
 }
@@ -555,7 +560,7 @@ func TestAgentsYamlShips(t *testing.T) {
 		}
 	}
 	home := t.TempDir()
-	roots, err := Roots(User, "all", home, filepath.Join(home, ".claude"), "")
+	roots, err := Roots(User, "all", home, []string{filepath.Join(home, ".claude")}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
