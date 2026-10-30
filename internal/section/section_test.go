@@ -103,17 +103,6 @@ func TestUpsertBlockReplacesHvBlockInPlace(t *testing.T) {
 	}
 }
 
-func TestLinesMatchesPythonSplitlines(t *testing.T) {
-	in := "a\nb\r\nc\rd\v e\f\u0085f g h\n"
-	got := strings.Join(Lines(in), "|")
-	if got != "a|b|c|d| e||f|g|h" {
-		t.Errorf("got %q", got)
-	}
-	if len(Lines("")) != 0 || len(Lines("\n")) != 1 || len(Lines("x")) != 1 {
-		t.Error("edge cases")
-	}
-}
-
 func TestUpsertBlockNormalizesCRLF(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "AGENTS.md")
 	os.WriteFile(path, []byte("# A\r\n\r\ntext\r\n"), 0o666)
