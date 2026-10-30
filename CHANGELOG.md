@@ -45,6 +45,15 @@ Orca as a worker host, a one-line agent install, and stricter gates on what coun
 
 ## Unreleased
 
+### New
+
+- **Change tiers.** `rota change classify` puts a branch's diff in the `docs`, `small` or `full` tier from `change.docsPaths`, `change.riskyPaths`, `change.smallBelow` and the PR's `Door: one-way` line, and says why (#2348).
+- **The gate and train size their checks by tier.** With `test.docs` or `test.small` set, a docs-only or small change runs those in place of `test.full` and `test.e2e`; the train uses its highest member tier. `GATE-TIER` notes and `tier` and `skipped` in `--json` and the ledger show what ran. Under `test.fullWhere: ci` and on a `VERIFY-AGAIN` re-verify the full run stays (#2348).
+
+### Changed
+
+- A docs-only branch now gets review depth `none`, even under `ship.review: "full"`, and never counts as scope drift. A small change is capped at `light`. Labels, `Door: one-way` and `ship.review.paths` still raise it (#2348).
+
 ### Fixed
 
 - GitLab issue reads now load all comment pages, so the worker gate sees claim, acceptance and proof notes beyond the oldest 20 notes (#2226).

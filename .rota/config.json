@@ -53,6 +53,13 @@
     ],
     "e2e": [
       "bash test/e2e/run.sh"
+    ],
+    "docs": [
+      "bash test/doclint.sh",
+      "bash test/grep-gate.sh"
+    ],
+    "small": [
+      "bash test/fast.sh {files}"
     ]
   },
   "round": {
@@ -115,5 +122,28 @@
         ]
       }
     }
+  },
+  "change": {
+    "smallBelow": 100,
+    "riskyPaths": [
+      "internal/worker/gate*.go",
+      "internal/worker/train*.go",
+      "internal/worker/verify*.go",
+      "internal/worker/changetier.go",
+      "internal/change/**",
+      "internal/config/**",
+      "internal/roundcfg/**",
+      "test/gate.sh",
+      "test/fast.sh",
+      "test/runner.sh",
+      "go.mod",
+      "go.sum",
+      ".github/**",
+      "docs/reference/config-options.md",
+      "docs/reference/labels.md",
+      "docs/contributing/contract/**",
+      "docs/usage/brainstorm.md",
+      "docs/usage/configuration.md"
+    ]
   }
 }
