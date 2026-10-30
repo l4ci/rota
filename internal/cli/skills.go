@@ -99,7 +99,7 @@ func skillsEnv(c *Ctx, a skillsArgs) (set *skills.Set, roots []skills.Root, skip
 	if a.scope != skills.User {
 		top = c.deps().Toplevel(c.Context())
 	}
-	roots, err = skills.RootsFor(a.scope, a.agent, home, claudeDirs, top)
+	roots, err = skills.Roots(a.scope, a.agent, home, claudeDirs, top)
 	switch {
 	case errors.Is(err, skills.ErrNoProject):
 		return nil, nil, nil, Resolution("--scope project: the working directory is not in a git work tree")

@@ -452,3 +452,19 @@ func TestRunHvMigratesRegisteredSubRepoWithItsOwnBackup(t *testing.T) {
 		}
 	}
 }
+
+func TestLegacySkillRootsCoverAccountDirs(t *testing.T) {
+	dir, home := t.TempDir(), t.TempDir()
+	hvProject(t, dir)
+	acct := filepath.Join(home, "acct")
+	hvSkillsRoot(t, filepath.Join(acct, "skills"))
+	write(t, filepath.Join(dir, ".hv", "config.json"), `{"hvSkills":{"version":"4.9.0"},"work":{"accounts":[{"configDir":"`+acct+`"}]}}`+"\n")
+	o := hvOpts(t, dir, home)
+	rep, err := RunHv(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Skills) != 1 || rep.Skills[0].Path != filepath.Join(acct, "skills") {
+		t.Errorf("skills: %+v", rep.Skills)
+	}
+}
