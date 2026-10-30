@@ -102,8 +102,11 @@ type Input struct {
 	// its Unavailable list says whether the host could be read, and its Agents
 	// are the host snapshot it was built from.
 	Report *round.Report
-	Host   HostOps
-	Lease  LeaseOps
+	// Refresh re-reads the report at apply time, so an agent that went live
+	// after Find is seen. Apply fails closed when it errors; nil keeps Report.
+	Refresh func(context.Context) (*round.Report, error)
+	Host    HostOps
+	Lease   LeaseOps
 	// Adopted names the branches `rota worker adopt` took over. A merged
 	// branch is offered for deletion only when it is one of these or leads with
 	// an issue number under a roster agent (`<agent>/<n>-<slug>`, the shape a round cuts).
@@ -588,7 +591,21 @@ func findProcesses(ctx context.Context, s *state) ([]Candidate, error) {
 // or locked worktree on its own.
 func Apply(ctx context.Context, in Input, cands []Candidate) Result {
 	var res Result
-	s, err := newState(ctx, in)
+	var s *state
+	var err error
+	if in.Refresh != nil {
+		// Agent liveness comes from the Report; re-read it so an agent that
+		// appeared since Find is seen. An unreadable report proves nothing.
+		var rep *round.Report
+		if rep, err = in.Refresh(ctx); err == nil {
+			in.Report = rep
+		} else {
+			err = fmt.Errorf("live set unreadable at apply time: %w", err)
+		}
+	}
+	if err == nil {
+		s, err = newState(ctx, in)
+	}
 	if err != nil {
 		for _, c := range cands {
 			if c.Held == "" {

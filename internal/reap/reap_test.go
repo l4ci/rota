@@ -2,6 +2,7 @@ package reap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -88,6 +89,7 @@ type fakeHost struct {
 	tabs      []host.Tab
 	procs     []Process
 	tabsErr   error
+	procsErr  error
 	closed    []string
 	stopped   []int
 	closeErr  map[string]error
@@ -101,7 +103,7 @@ func (h *fakeHost) Tabs(context.Context) ([]host.Tab, error) {
 	}
 	return t, h.tabsErr
 }
-func (h *fakeHost) Processes(context.Context) ([]Process, error) { return h.procs, nil }
+func (h *fakeHost) Processes(context.Context) ([]Process, error) { return h.procs, h.procsErr }
 func (h *fakeHost) CloseTab(_ context.Context, id string) error {
 	if err := h.closeErr[id]; err != nil {
 		return err
@@ -685,5 +687,53 @@ func TestApplyRefusesAHandBuiltWorktreeCandidate(t *testing.T) {
 	out := Apply(bg, in, stale)
 	if len(out.Reaped) != 0 || len(out.Failed) != 2 || g.ran("worktree remove") {
 		t.Errorf("apply = %+v, calls %v", out, g.calls)
+	}
+}
+
+// A late agent is found by the report Apply re-reads, not by mutating the
+// Find-time report.
+func TestApplyRereadsAgentsAtApplyTime(t *testing.T) {
+	g := repo([]wt{{"old", "kit/1-a", ""}}, nil, "kit/1-a")
+	g.clean("old")
+	g.resp["/r/.worktrees/old|merge-base --is-ancestor HEAD main"] = gitResp{}
+	g.resp["worktree remove /r/.worktrees/old"] = gitResp{}
+	h := &fakeHost{procs: []Process{{PID: 10, Name: "npm", Tab: "w1:t1", Cwd: "/r/.worktrees/old"}}}
+	in := input(g, nil, []host.Agent{}, h)
+	res := find(t, in, KindWorktree, KindProcess)
+	late := *in.Report
+	late.Agents = []host.Agent{{Tab: "w1:t1", Name: "a", Cwd: "/r/.worktrees/old", Status: "working"}}
+	in.Refresh = func(context.Context) (*round.Report, error) { return &late, nil }
+	out := Apply(bg, in, res.Candidates)
+	if len(out.Reaped) != 0 || len(out.Failed) != len(res.Candidates) || g.ran("worktree remove") || len(h.stopped) != 0 {
+		t.Errorf("stopped %v, apply = %+v, calls %v", h.stopped, out, g.calls)
+	}
+}
+
+func TestApplyFailsClosedWhenTheFreshReportErrors(t *testing.T) {
+	g := repo([]wt{{"old", "kit/1-a", ""}}, nil, "kit/1-a")
+	g.clean("old")
+	g.resp["/r/.worktrees/old|merge-base --is-ancestor HEAD main"] = gitResp{}
+	g.resp["worktree remove /r/.worktrees/old"] = gitResp{}
+	in := input(g, nil, []host.Agent{}, nil)
+	res := find(t, in, KindWorktree)
+	in.Refresh = func(context.Context) (*round.Report, error) { return nil, errors.New("status down") }
+	out := Apply(bg, in, res.Candidates)
+	if len(out.Reaped) != 0 || len(out.Failed) != 1 || g.ran("worktree remove") {
+		t.Errorf("apply = %+v, calls %v", out, g.calls)
+	}
+}
+
+func TestApplyRefusesAProcessWhenProcessesErrOrHostIsDown(t *testing.T) {
+	cand := []Candidate{{ID: "process:10", Kind: KindProcess, Name: "10 npm", PID: 10}}
+	h := &fakeHost{procs: []Process{{PID: 10, Name: "npm", Tab: "w1:t1", Cwd: "/r/x"}}, procsErr: errors.New("ps down")}
+	in := input(repo(nil, nil), nil, []host.Agent{}, h)
+	if out := Apply(bg, in, cand); len(out.Failed) != 1 || len(h.stopped) != 0 {
+		t.Errorf("processes error: stopped %v, apply = %+v", h.stopped, out)
+	}
+	h2 := &fakeHost{procs: []Process{{PID: 10, Name: "npm", Tab: "w1:t1", Cwd: "/r/x"}}}
+	in = input(repo(nil, nil), nil, []host.Agent{}, h2)
+	in.Report.Unavailable = []string{round.SourceHost}
+	if out := Apply(bg, in, cand); len(out.Failed) != 1 || len(h2.stopped) != 0 {
+		t.Errorf("host down: stopped %v, apply = %+v", h2.stopped, out)
 	}
 }
