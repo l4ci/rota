@@ -17,9 +17,10 @@ import (
 // through) and the Go loader. This fixture runs one folded SKILL.md through all
 // of them, site-sync end to end.
 
-const foldedDescription = "Use when the user wants a thing: a colon in plain YAML\n  would break Codex, so the text is folded.\n"
+// Two paragraphs: YAML folds the blank line into a newline, and every reader must agree.
+const foldedDescription = "Use when the user wants a thing: a colon in plain YAML\n  would break Codex.\n\n  A second paragraph, folded too.\n"
 
-const foldedWant = "Use when the user wants a thing: a colon in plain YAML would break Codex, so the text is folded."
+const foldedWant = "Use when the user wants a thing: a colon in plain YAML would break Codex.\nA second paragraph, folded too."
 
 func copyTree(t *testing.T, dst string, srcs ...string) {
 	t.Helper()
@@ -41,7 +42,7 @@ func TestFoldedFrontMatterReadersAgree(t *testing.T) {
 	lines := strings.Split(string(b), "\n")
 	for i, l := range lines {
 		if strings.HasPrefix(l, "description:") {
-			lines[i] = "description: >-\n  " + strings.TrimSpace(foldedDescription)
+			lines[i] = "description: >-\n  " + strings.TrimRight(foldedDescription, "\n")
 		}
 	}
 	if err := os.WriteFile(skill, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
@@ -49,13 +50,25 @@ func TestFoldedFrontMatterReadersAgree(t *testing.T) {
 	}
 
 	t.Run("validator", func(t *testing.T) {
-		// The fixture tree has no test/ dir; run the repo's validator against it.
 		abs, _ := filepath.Abs("test/validate-skills.py")
-		cmd := exec.Command("python3", abs)
-		cmd.Dir = root
-		cmd.Env = append(os.Environ(), "ROTA_DOCLINT_PROSE=off")
-		if out, err := cmd.CombinedOutput(); err != nil && strings.Contains(string(out), "skills/rota-work/SKILL.md") {
-			t.Fatalf("validator rejects a folded description: %s", out)
+		cmd := exec.Command("python3", abs, "--fields", skill)
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("validator cannot read a folded description: %v", err)
+		}
+		var fm map[string]string
+		if err := json.Unmarshal(out, &fm); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+		if fm["description"] != foldedWant {
+			t.Errorf("validator read %q, want %q", fm["description"], foldedWant)
+		}
+		// The whole-tree run must pass too: a crash or any issue fails the test.
+		full := exec.Command("python3", abs)
+		full.Dir = root
+		full.Env = append(os.Environ(), "ROTA_DOCLINT_PROSE=off")
+		if out, err := full.CombinedOutput(); err != nil {
+			t.Fatalf("validator rejects the folded fixture tree: %s", out)
 		}
 	})
 
@@ -104,6 +117,8 @@ func TestFoldedFrontMatterReadersAgree(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Load rejects a folded description: %v", err)
 		}
+		// internal/skills treats front matter as opaque bytes: this leg proves
+		// acceptance only, not text agreement.
 		if _, err := set.Stubbed(); err != nil {
 			t.Fatalf("stub rejects a folded description: %v", err)
 		}
