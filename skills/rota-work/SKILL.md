@@ -56,14 +56,12 @@ With no item, ID or brief, read [`no-argument-mode.md`](no-argument-mode.md) and
 rota work start --json <ID>[,<ID>...] [--branch <name>]
 ```
 
-One call runs the clean-tree guard, commits tool-generated siblings and the target's own fresh design/plan file (`data.swept`), names the branch `rota/<id>-<slug>`, creates it or its worktree per `work.isolation` (`data.worktree`), registers it once, and on a tracker claims each item as the branch. A rerun on a registered branch changes nothing. Then:
+One call guards the tree (sweeping tool siblings and the target's fresh design/plan file into `chore:` commits), names the branch `rota/<id>-<slug>`, creates it or its worktree per `work.isolation`, registers it, and on a tracker claims each item. A rerun changes nothing.
 
-- `items[].claim` `dropped`: another worker holds it; carry on without it. `ready: false`: warn with `missing`.
-- Tracker: load each item's context (`rota item show <ID>`, *Resuming an item* in `references/issue-mode.md`); a `changes-requested` item works its `feedback` comments per *Handling review feedback* in `references/worker-contract.md`.
-- Exit 1: a user change in the tree (`data.dirty`), or no commit yet (the baseline hint, [`sibling-sweep.md`](sibling-sweep.md)): pass the message through and stop. Exit 3: surface and stop.
-- Exit 4 `exists`: rerun with `--branch <name>`. `claimed`: no item left, stop. `umbrella` or `round worker`, or a brief with no item ID: run the step-by-step path in [`umbrella-and-issue-mode.md`](umbrella-and-issue-mode.md) (*Steps 1, 3 and 5 without `rota work start`*).
+- `items[].claim` `dropped`: another worker holds it; drop it. `ready: false`: warn with `missing`. Tracker: load each item per *Resuming an item* in `references/issue-mode.md`; a `changes-requested` item follows *Handling review feedback* in `references/worker-contract.md`.
+- Exit 1 (`data.dirty`, or no commit yet: [`sibling-sweep.md`](sibling-sweep.md)) or 3: surface and stop. Exit 4 `exists`: rerun with `--branch`; `claimed`: stop; `umbrella`, `round worker`, or a brief with no ID: the step-by-step path in [`umbrella-and-issue-mode.md`](umbrella-and-issue-mode.md).
 
-The main session stays at the repo root (worktree: subagents `cd` into `data.worktree` first and use absolute paths).
+The main session stays at the repo root; subagents `cd` into `data.worktree` (when set) and use absolute paths.
 
 ## Step 2 — Clarify Ambiguous Briefs (only when needed)
 
@@ -208,14 +206,14 @@ One line, only when `references/post-cycle-trigger-gate.md` fires: *"Run `/rota-
 - [`references/work-preview.md`](references/work-preview.md): `--preview` procedure.
 - [`references/task-ledger.md`](references/task-ledger.md): `Task:` trailer and resume rule.
 - [`references/work-wave-planning.md`](references/work-wave-planning.md): file collisions, brief-writing rules, verifying a completion.
-- [`references/isolation-patterns.md`](references/isolation-patterns.md): branch, worktree and umbrella layouts (`rota work start` runs the single-repo ones).
+- [`references/isolation-patterns.md`](references/isolation-patterns.md): branch, worktree and umbrella layouts.
 - [`references/issue-mode.md`](references/issue-mode.md): issue backend: claim, proof note, PR path.
 - [`references/umbrella-mode.md`](references/umbrella-mode.md): umbrella registry and `Repos:` semantics.
 - [`references/post-cycle-trigger-gate.md`](references/post-cycle-trigger-gate.md): when the Step 13 learn nudge fires.
 - [`references/worker-contract.md`](references/worker-contract.md): round-worker rules and review-feedback handling.
 - [`plan-artifact.md`](plan-artifact.md): Step 4 backend keys, saved tasks and resume identity for item and slice plans.
 - [`no-argument-mode.md`](no-argument-mode.md): reconcile, suggest, then work.
-- [`sibling-sweep.md`](sibling-sweep.md): the sibling list `rota work start` sweeps, and the Step 8.5 sweep.
+- [`sibling-sweep.md`](sibling-sweep.md): the sibling list and the Step 8.5 sweep.
 - [`contradictions.md`](contradictions.md): Step 2.5 contradiction logging.
 - [`umbrella-and-issue-mode.md`](umbrella-and-issue-mode.md): umbrella and issue-backend branches of Steps 3–11.
 - [`dispatch-brief.md`](dispatch-brief.md): Step 6 brief template.
