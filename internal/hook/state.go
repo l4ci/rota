@@ -14,6 +14,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // StateTTL is how long an untouched session state file lives.
@@ -109,7 +110,7 @@ func NewestAtRoot(commonDir, root string, at func(State) (string, bool)) (best S
 		if !use {
 			continue
 		}
-		t, err := time.Parse(time.RFC3339, raw)
+		t, err := stamp.Parse(raw)
 		if err != nil {
 			continue
 		}
@@ -203,7 +204,7 @@ func Dump(commonDir string, payload []byte, now time.Time) error {
 	}
 	err = UpdateState(path, func(st State, _ bool) State {
 		st.SessionID, st.Cwd = id, cwd
-		st.UpdatedAt = now.UTC().Format(time.RFC3339)
+		st.UpdatedAt = stamp.Format(now)
 		st.ContextPct = ContextPct(in)
 		st.RateLimits = rl
 		st.Raw = json.RawMessage(raw.Bytes())
@@ -229,7 +230,7 @@ func sweep(dir, keepID string, now time.Time) {
 		st, found, err := ReadState(p)
 		var at time.Time
 		if err == nil && found {
-			at, err = time.Parse(time.RFC3339, st.UpdatedAt)
+			at, err = stamp.Parse(st.UpdatedAt)
 		}
 		if err != nil || at.IsZero() {
 			fi, serr := os.Stat(p)

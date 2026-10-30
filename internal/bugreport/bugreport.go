@@ -21,6 +21,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -98,7 +99,7 @@ func Add(ctx context.Context, run git.Runner, root string, r Record, now time.Ti
 			}
 		}
 		r.ID = fmt.Sprintf("bug-%d", next+1)
-		r.TS = now.UTC().Format(time.RFC3339)
+		r.TS = stamp.Format(now)
 		r.Status = StatusOpen
 		r.Count = 1
 		out = r

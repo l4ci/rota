@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -57,7 +58,7 @@ const Orchestrator = "orchestrator"
 type Entry = worker.Limit
 
 // Time renders t as RFC 3339 UTC.
-func Time(t time.Time) string { return t.UTC().Format(time.RFC3339) }
+func Time(t time.Time) string { return stamp.Format(t) }
 
 // Load reads the limits list; a missing or malformed list reads as empty. It
 // tolerates a corrupt registry: it feeds display and the tick's passive reads,

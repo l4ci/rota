@@ -3,10 +3,10 @@ package round
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/milestone"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -111,7 +111,7 @@ func (e Env) retarget(ctx context.Context, root string, f Finding) error {
 	}
 	// The slot leaves the gate set until its next `worker done`: the tick
 	// gates done slots only, and the worker must merge the new base first.
-	at := e.Worker.Now().UTC().Format(time.RFC3339)
+	at := stamp.Format(e.Worker.Now())
 	if err := editSlot(root, f.Slot, func(s *worker.Slot) error {
 		s.RouteBase(f.to)
 		s.SetRoutedTag(f.tag)

@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/bugreport"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -131,7 +132,7 @@ func (e Env) NeedsYou(ctx context.Context, root string) ([]MaintainerWait, []str
 		for _, esc := range reg.Escalations() {
 			same := (ok && esc.Kind == "pr" && esc.Number == n) || (!ok && esc.Kind == "issue" && worker.NormID(esc.IssueKey().String()) == worker.NormID(issue))
 			if same && strings.HasPrefix(esc.Title, "Merge approval: ") && esc.Status == worker.EscalationAnswered && esc.Answer != nil {
-				answered, err := time.Parse(time.RFC3339, esc.Answer.SeenAt)
+				answered, err := stamp.Parse(esc.Answer.SeenAt)
 				if err == nil && !answered.Before(g.TS) {
 					return
 				}
@@ -203,5 +204,5 @@ func waitStamp(at time.Time) string {
 	if at.IsZero() {
 		return ""
 	}
-	return at.UTC().Format(time.RFC3339)
+	return stamp.Format(at)
 }

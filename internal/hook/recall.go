@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/knowledge"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // Recall claims unseen entries under the session lock before returning context.
@@ -37,7 +38,7 @@ func Recall(commonDir, sessionID string, entries []knowledge.PathEntry, now time
 			}
 		}
 		st.SessionID = sessionID
-		st.UpdatedAt = now.UTC().Format(time.RFC3339)
+		st.UpdatedAt = stamp.Format(now)
 		return st
 	})
 	if err != nil || len(fresh) == 0 {
