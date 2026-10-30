@@ -150,11 +150,10 @@ func accountConflicts(own []Account) []AccountConflict {
 	return out
 }
 
-const globalAccountsFile = "global config.json"
-
 // accountFile is one config layer the step reads, lowest layer first.
 type accountFile struct {
 	name, path string
+	global     bool // the global config layer, skipped when unusable rather than refused
 	doc        *jsonx.Object
 	changed    bool
 }
@@ -168,7 +167,7 @@ type accountFile struct {
 func MigrateAccountsFiles(root, globalDir string, apply bool) (AccountsMigration, error) {
 	files := []*accountFile{{name: "config.json", path: configPath(root)}, {name: "config.local.json", path: localPath(root)}}
 	if globalDir != "" {
-		files = append([]*accountFile{{name: globalAccountsFile, path: GlobalPath(globalDir)}}, files...)
+		files = append([]*accountFile{{name: "global config.json", path: GlobalPath(globalDir), global: true}}, files...)
 	}
 	var m AccountsMigration
 	var lock func(i int) error
@@ -198,7 +197,7 @@ func migrateAccountsPlan(files []*accountFile, m *AccountsMigration, apply bool)
 		if f.doc == nil {
 			continue
 		}
-		if f.name != globalAccountsFile {
+		if !f.global {
 			// The renamed view, as the scope step plans on.
 			f.doc, _, _ = MigrateRoundKeys(f.doc)
 		}
@@ -235,7 +234,7 @@ func migrateAccountsPlan(files []*accountFile, m *AccountsMigration, apply bool)
 // (GlobalError reports why): a step that runs inside `config fill` must not
 // fail on a file it cannot see.
 func readAccountTarget(f *accountFile) (*jsonx.Object, error) {
-	if f.name != globalAccountsFile {
+	if !f.global {
 		return readMigrateTarget(f.path, f.name)
 	}
 	return readObject(f.path), nil
