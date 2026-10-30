@@ -119,6 +119,7 @@ In the order you'd usually reach for them:
 | Something to do | `/rota-capture` | Record bugs, features and tasks in the backlog without starting work |
 | Not sure how | `/rota-brainstorm`, `/rota-spike` | Negotiate the design of one Major item before planning it; Try one risky idea on a throwaway branch and keep only the finding |
 | Ready to build | `/rota-plan`, `/rota-work` | Write a signed-off implementation plan with verifiable tasks; Build the next item in small commits, one verified task at a time |
+| Quick solo fix | `/rota-go` | Implement an issue and land it with only gofmt, vet and build; no slow tests, no review |
 | Something broke | `/rota-debug` | Find the root cause of one bug, fix it atomically and prove it |
 | Done | `/rota-review`, `/rota-ship` | Review a branch against its spec and conventions before it leaves; Review, then open the PR or merge, linking items by ID |
 | Docs drifted | `/rota-docs` | Scaffold, update or reorganize the public docs |
