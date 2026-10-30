@@ -55,6 +55,15 @@ func Bool(cfg any, key string) (bool, error) {
 // String returns a string key, or its schema default when unset. A value that
 // is not a string gives "". An unknown key is a coding error and panics, so a
 // typo cannot read as unset; TestReadKeysExistInSchema catches literal ones.
+// GitRemote is the git remote round workers fetch from and push to: git.remote,
+// origin when unset.
+func GitRemote(cfg any) string {
+	if r := strings.TrimSpace(String(cfg, GitRemoteKey)); r != "" {
+		return r
+	}
+	return "origin"
+}
+
 func String(cfg any, key string) string {
 	v, err := Value(cfg, key)
 	if err != nil {

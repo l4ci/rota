@@ -33,6 +33,8 @@ type PRPorts struct {
 	Closes  func(ids []string) (string, error)
 	Verdict func(branch string) error
 	Base    func() (string, error)
+	// Remote is the git remote the branch is pushed to; empty means origin.
+	Remote string
 }
 
 // PR is the opened pull request. Number is 0 when the URL carries none.
@@ -64,12 +66,16 @@ func OpenPR(ctx context.Context, p PRPorts, r PRRequest) (PR, error) {
 			return PR{}, err
 		}
 	}
-	push, err := p.Git.Run("push", "-u", "origin", r.Branch)
+	remote := p.Remote
+	if remote == "" {
+		remote = "origin"
+	}
+	push, err := p.Git.Run("push", "-u", remote, r.Branch)
 	if err != nil {
 		return PR{}, err
 	}
 	if push.ExitCode != 0 {
-		return PR{}, &GitError{Msg: "git push -u origin " + r.Branch + " failed: " + strutil.FirstLine(push.Stderr)}
+		return PR{}, &GitError{Msg: "git push -u " + remote + " " + r.Branch + " failed: " + strutil.FirstLine(push.Stderr)}
 	}
 	url, err := p.Forge.PRCreate(ctx, tracker.PRSpec{Title: r.Title, Body: body, Head: r.Branch, Base: base})
 	if err != nil {

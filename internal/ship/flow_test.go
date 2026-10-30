@@ -434,3 +434,14 @@ func TestExpiredReportDoesNotMaskLocalFail(t *testing.T) {
 		t.Fatalf("expired cached PASS masked local stale FAIL: %v", err)
 	}
 }
+
+// A configured remote is where the branch is pushed; origin is the default.
+func TestOpenPRPushesToTheConfiguredRemote(t *testing.T) {
+	g := &fakeGit{out: map[string]string{"worktree list --porcelain": "", "push -u mirror feat": ""}}
+	f := &fakeForge{needsBase: true, url: "https://example.test/pull/12"}
+	p := prPorts(g, f)
+	p.Remote = "mirror"
+	if _, err := OpenPR(context.Background(), p, PRRequest{Branch: "feat", Title: "T", Body: "B", Items: []string{"F01"}}); err != nil {
+		t.Fatal(err)
+	}
+}

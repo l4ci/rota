@@ -12,6 +12,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
@@ -290,8 +291,15 @@ func pointerBrief(agent, id, branch, brief string, siblings []string, decisions,
 		fmt.Fprintf(&b, "This assignment is a bundle of %s. Read each issue and its whole thread and dispute each one the same way. Build them all on this one branch and open ONE PR whose body has a `Closes #N` line for every one of them. Record proof for each issue id (`rota proof record <ID> -- <test command>`, once per id): `rota worker done` refuses while any of them lacks its PASS row at HEAD. A bundle lands or bounces as a unit.\n\n", strings.Join(refs, ", "))
 	}
 	fmt.Fprintf(&b, "Your branch is %s; your worktree is already on it.\n", branch)
+	remote := t.Remote
+	if remote == "" {
+		remote = "origin"
+	}
+	if t.Remote != "" {
+		fmt.Fprintf(&b, "Your git remote is %s: wherever the contract says <remote>, fetch from, merge from and push to %s.\n", t.Remote, t.Remote)
+	}
 	if t.Base != "" {
-		fmt.Fprintf(&b, "Your base branch is %s, not the round base: the issue belongs to an active milestone. Open your PR against %s, and wherever the contract says to merge the moved base, merge origin/%s.\n", t.Base, t.Base, t.Base)
+		fmt.Fprintf(&b, "Your base branch is %s, not the round base: the issue belongs to an active milestone. Open your PR against %s, and wherever the contract says to merge the moved base, merge %s/%s.\n", t.Base, t.Base, remote, t.Base)
 	}
 	if len(siblings) > 0 {
 		fmt.Fprintf(&b, "Sibling issues running now: %s.\n", strings.Join(siblings, ", "))
@@ -494,6 +502,8 @@ const maxOutOfScope = 1500
 // tierBrief is the resolved tier facts of one worker: its own tier and model,
 // the tier table of its harness kind, and why the tier is above the default.
 type tierBrief struct {
+	// Remote is git.remote: the name the contract's <remote> stands for.
+	Remote                             string
 	Kind, Tier, Model, Default, Reason string
 	Table                              map[string]string
 	// Pick is what the issue's labels (file: fields) asked for, "" for none.
@@ -1314,7 +1324,7 @@ func (e Env) assignSteps(ctx context.Context, root string, be Board, o AssignOpt
 		Brief: func() string {
 			return e.taskBrief(ctx, root, be, taskBriefSpec{agent: agent, id: id, branch: res.Branch, contract: run.brief,
 				decisions: run.decisions, decisionContext: run.decisionContext, siblings: o.Siblings, bundle: res.Bundle,
-				tier: tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, Base: run.base, FullOnly: set.FullOnly, TDD: set.TDD, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()}})
+				tier: tierBrief{Kind: run.kind, Tier: run.tier, Model: res.Model, Default: set.Tier, Reason: run.reason, Table: set.Models[run.kind], Pick: run.pick.String(), Decision: run.decision, Smoke: res.SmokeSection, Attempt: attempt, Remote: config.GitRemote(e.Worker.Config(root)), Base: run.base, FullOnly: set.FullOnly, TDD: set.TDD, Sibling: bo.otherSlot(), SiblingBranch: bo.otherBranch()}})
 		}}
 	// 8-9. The account, the pointer brief and the hand-off.
 	ds, err := d.steps(ctx, e, root)

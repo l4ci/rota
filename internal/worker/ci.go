@@ -121,6 +121,7 @@ type ciVerifier struct {
 	forge  Forge
 	set    ciSettings
 	checks []string // test.ciChecks
+	remote string   // git.remote: where the merge result is pushed
 }
 
 // newCIVerifier checks what a CI run needs: an origin to push to and a forge
@@ -129,14 +130,14 @@ func (e Env) newCIVerifier(ctx context.Context, root string, forge Forge, cfg Ga
 	if forge == nil {
 		return nil, "test.fullWhere is ci, but the forge is local (forge.provider is local, or auto with no origin remote): there are no CI checks to read"
 	}
-	if _, code := e.runGit(ctx, root, "remote", "get-url", "origin"); code != 0 {
-		return nil, "test.fullWhere is ci, but this repo has no 'origin' remote to push the merge result to"
+	if _, code := e.runGit(ctx, root, "remote", "get-url", cfg.RemoteName()); code != 0 {
+		return nil, fmt.Sprintf("test.fullWhere is ci, but this repo has no '%s' remote to push the merge result to", cfg.RemoteName())
 	}
 	set, err := cfg.CISettings(e.Getenv)
 	if err != nil {
 		return nil, err.Error()
 	}
-	return &ciVerifier{e: e, ctx: ctx, root: root, forge: forge, set: set, checks: cfg.CIChecks}, ""
+	return &ciVerifier{e: e, ctx: ctx, root: root, forge: forge, set: set, checks: cfg.CIChecks, remote: cfg.RemoteName()}, ""
 }
 
 var ciNameUnsafe = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
@@ -152,10 +153,10 @@ var ciNameUnsafe = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 func (v *ciVerifier) verify(sha, name string) (VerifyResult, error) {
 	ref := ciRefPrefix + strings.Trim(ciNameUnsafe.ReplaceAllString(name, "-"), "-")
 	res := VerifyResult{CI: true, Ref: ref, SHA: sha}
-	if out, code := v.e.runGit(v.ctx, v.root, "push", "-q", "--force", "origin", sha+":refs/heads/"+ref); code != 0 {
-		return res, fmt.Errorf("git push of %s to origin %s failed (exit %d): %s", strutil.ShortSHA(sha), ref, code, strings.TrimSpace(out))
+	if out, code := v.e.runGit(v.ctx, v.root, "push", "-q", "--force", v.remote, sha+":refs/heads/"+ref); code != 0 {
+		return res, fmt.Errorf("git push of %s to %s %s failed (exit %d): %s", strutil.ShortSHA(sha), v.remote, ref, code, strings.TrimSpace(out))
 	}
-	defer v.e.cleanupGit(v.ctx, v.root, "push", "-q", "origin", "--delete", ref)
+	defer v.e.cleanupGit(v.ctx, v.root, "push", "-q", v.remote, "--delete", ref)
 	start := v.e.Now()
 	green := "" // the checks of the last green poll
 	for {

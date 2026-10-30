@@ -1697,3 +1697,15 @@ func TestAssignRacingOnOneSlotAndIssueKeepsTheWinnersClaim(t *testing.T) {
 		t.Errorf("the winner's worker done must not see a stale attempt: %v", err)
 	}
 }
+
+func TestPointerBriefNamesTheConfiguredRemote(t *testing.T) {
+	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", "", "", "", nil, tierBrief{Kind: "claude", Tier: "standard", Remote: "mirror", Base: "M1"})
+	for _, want := range []string{"Your git remote is mirror", "merge mirror/M1"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("brief lacks %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "origin/") {
+		t.Errorf("brief still names origin:\n%s", got)
+	}
+}

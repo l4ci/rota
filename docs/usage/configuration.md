@@ -845,6 +845,17 @@ Overrides the base branch that `rota git base` resolves to. When empty, `rota` a
 
 Skills that use the base branch (`/rota-ship`, `/rota-review`, `/rota-work`) call `rota git base` and pick up this override.
 
+## git.remote
+
+- **Type:** string
+- **Default:** `"origin"`
+
+The git remote round workers fetch from and push to. `rota worker done` checks the branch is pushed to it, `rota worker gate` and `rota worker train` compare branches against it, `rota ship pr` and `rota round park` push to it, and the assignment brief tells the worker its name (the contract says `<remote>`). Set it when `origin` is not the remote that holds the PRs, for example when `origin` has a second push URL that mirrors every branch. Forge detection still reads `origin` unless `forge.provider` is set.
+
+```json
+{ "git": { "remote": "upstream" } }
+```
+
 ## Issues backend keys
 
 - **Keys:** `issues.source`, `forge.provider`, `issues.homeRepo`, `issues.labels.*`

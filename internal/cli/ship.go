@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -311,6 +312,7 @@ func shipPR(fs *flag.FlagSet) RunFunc {
 			Closes:  func(ids []string) (string, error) { return shipClosesLines(c, root, cfg, ids) },
 			Verdict: shipVerdict(c, dir, root).Block,
 			Base:    func() (string, error) { return shipBase(c, dir) },
+			Remote:  config.GitRemote(cfg),
 		}, ship.PRRequest{Branch: branch, Title: *title, Body: body, Items: given})
 		if err != nil {
 			return shipErr(err)

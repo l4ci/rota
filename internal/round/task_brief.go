@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/worker"
@@ -73,7 +74,7 @@ func (e Env) RebuildTaskBrief(ctx context.Context, root string, be Board, o work
 	}
 	o.Task, o.Branch = s.Task(), s.Branch()
 	t := tierBrief{Kind: o.Kind, Tier: s.Tier(), Model: o.Model, Default: set.Tier, Reason: s.TierReason(),
-		Table: set.Models[o.Kind], Pick: pick.String(), Decision: decision, Smoke: s.SmokeSection(), Attempt: s.Attempt(), FullOnly: set.FullOnly, TDD: set.TDD}
+		Table: set.Models[o.Kind], Pick: pick.String(), Decision: decision, Smoke: s.SmokeSection(), Attempt: s.Attempt(), FullOnly: set.FullOnly, TDD: set.TDD, Remote: config.GitRemote(e.Worker.Config(root))}
 	if bo := reg.BestOf(s.Task()); bo != nil {
 		for _, other := range bo.Attempts {
 			if other.Slot != o.Slot {
