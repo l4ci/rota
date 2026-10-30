@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
@@ -129,7 +129,7 @@ func Umbrella(root string, opts UmbrellaOptions, seed func() error) (UmbrellaRes
 	for _, n := range requested {
 		inRun[n] = true
 	}
-	prior := priorNames(reposPath)
+	prior := priorNames(root)
 	var kept []string
 	for _, n := range prior {
 		if foundSet[n] && !inRun[n] {
@@ -145,7 +145,7 @@ func Umbrella(root string, opts UmbrellaOptions, seed func() error) (UmbrellaRes
 	if err := os.MkdirAll(rotatree.Dir(root), 0o755); err != nil {
 		return UmbrellaResult{}, err
 	}
-	if err := fsio.WriteJSONAtomic(reposPath, registry(names)); err != nil {
+	if err := repos.SetTopLevel(root, names); err != nil {
 		return UmbrellaResult{}, err
 	}
 	for _, n := range names {
@@ -183,39 +183,12 @@ func Umbrella(root string, opts UmbrellaOptions, seed func() error) (UmbrellaRes
 
 // priorNames are the entry names of an existing repos.json; a missing or
 // corrupt file has none.
-func priorNames(path string) []string {
-	reg, _ := fsio.LoadJSON(path, nil).(*jsonx.Object)
-	if reg == nil {
-		return nil
-	}
-	list, _ := reg.Get("repos")
-	entries, _ := list.([]any)
+func priorNames(root string) []string {
 	var out []string
-	for _, e := range entries {
-		o, ok := e.(*jsonx.Object)
-		if !ok {
-			continue
-		}
-		if v, _ := o.Get("name"); v != nil {
-			if s, ok := v.(string); ok && s != "" {
-				out = append(out, s)
-			}
-		}
+	for _, r := range repos.Load(root) {
+		out = append(out, r.Name)
 	}
 	return out
-}
-
-func registry(names []string) *jsonx.Object {
-	repos := []any{}
-	for _, n := range names {
-		e := jsonx.NewObject()
-		e.Set("name", n)
-		e.Set("path", "./"+n)
-		repos = append(repos, e)
-	}
-	o := jsonx.NewObject()
-	o.Set("repos", repos)
-	return o
 }
 
 func sortedUnion(a, b []string) []string {

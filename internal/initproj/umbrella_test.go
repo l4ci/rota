@@ -187,3 +187,34 @@ func quoteJoin(l []string) string {
 	}
 	return strings.Join(q, ",")
 }
+
+// A nested registration and an entry for a repo nothing lists as a top-level
+// child survive a re-init; only stale top-level `./<name>` entries are dropped.
+func TestUmbrellaKeepsNestedEntries(t *testing.T) {
+	prior := `{"repos": [{"name": "gone", "path": "./gone"}, {"name": "tools", "path": "./apps/tools", "extra": 1}, {"name": "web", "path": "./apps/web"}]}`
+	root := tree(t, true, map[string]string{".rota/repos.json": prior}, "web", "api")
+	if _, err := Umbrella(root, UmbrellaOptions{Names: []string{"api"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	want := `{
+  "repos": [
+    {
+      "name": "api",
+      "path": "./api"
+    },
+    {
+      "name": "tools",
+      "path": "./apps/tools",
+      "extra": 1
+    },
+    {
+      "name": "web",
+      "path": "./apps/web"
+    }
+  ]
+}
+`
+	if got := read(t, root, ".rota/repos.json"); got != want {
+		t.Fatalf("repos.json:\n%s\nwant:\n%s", got, want)
+	}
+}
