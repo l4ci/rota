@@ -2,7 +2,6 @@ package backlog
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 
 	ms "github.com/l4ci/rota/internal/milestone"
@@ -31,7 +30,7 @@ func (f *File) MilestoneStore() ms.Store {
 		var closed []string
 		for _, it := range items {
 			if it.Closed != "" {
-				closed = append(closed, fmt.Sprintf("- %s: %s (%s)", it.ID, it.Title, it.Closed))
+				closed = append(closed, ms.ClosedItemBullet(it.ID, it.Title, it.Closed))
 			}
 		}
 		return closed, nil
