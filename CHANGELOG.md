@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.28.0 — 2026-10-30
+
+A fast-track skill for solo work, gates sized to the change, and one owner for most of rota's internal rules.
+
+### New
+
+- **`/rota-go`** implements an issue and lands it with only gofmt, vet and build: no slow tests, no review. It is for solo work and refuses inside a round (#2465).
+- **Gates and reviews sized to the change.** The diff is classified into tiers (docs, small, full) by `change.*` settings; the gate runs `test.docs` or `test.small` for a lower tier, and `change.riskyPaths` forces the full gate and a full review. A train is classified once over its combined diff. Gate and train ledger rows record the tier and skipped checks (#2398).
+- **`git.remote`** names the remote round workers fetch from and push to (default `origin`); an invalid name exits 4 (#2378).
+- **`rota work start` and `rota ship finish`** do the cycle bookkeeping `/rota-work` and `/rota-ship` used to do by hand (#2368).
+- **`rota skills links`** prints the relative link targets of skill markdown, the same set `skills get` lists in its footer; the skill validator reads links through it (#2496). The validator also enforces the supported skill layout (#2330) and parses folded `>`/`>-` front matter (#2492).
+
+### Fixed
+
+- Verdict writes refuse an unparseable store with exit 4 instead of overwriting it (#2329).
+- Reap re-proves live ownership before it stops a process or removes a worktree (#2460).
+- Train members dropped by the PR-section pre-filter are reported as gate-failed, not merged (#2351).
+- Relays are logged where the PR's gate reads them (#2260); a racing assign keeps the winner's claim (#2259); `reconcile --apply` leaves a deliberate claim release alone (#2295).
+- `worker done` frees a slot holding an architecture-review item (#2443); a stale `round.brief` path falls back to the current skills cache (#2252).
+- Paginated GitLab issue comments are read in full (#2245); umbrella scope survives view loaders (#2269); local knowledge amendments stay inside their dated bullet (#2325).
+
+### Internal
+
+- Most of the 109 merged PRs were an architecture pass that gave each repeated rule one owner (verdicts, landing freeze, flake retry eligibility, autopilot wake decisions, reap ownership, herdr pane decoding and more) and deleted unused exports and local helper copies.
+- Tests share one git setup in `gittest`, which isolates them from your global and system git config, and one host-environment scrub in `testiso` (#2508, #2503).
+
+## Stats
+306 commits, 625 files changed, +15937 −6562 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.27.0...v0.28.0
+
 ## v0.27.0 — 2026-10-28
 
 Orca as a worker host, a one-line agent install, and stricter gates on what counts as done.
