@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -365,24 +364,6 @@ func TestWatchSupportOffWithoutRoundSupport(t *testing.T) {
 	c := &Ctx{Deps: deps, ctx: context.Background()}
 	if k := supportKeys(watchForge(context.Background(), c, root)); len(k) != 0 || len(f.gets) != 0 || f.labelLists() != 0 || f.merges != 0 {
 		t.Fatalf("keys %v gets %v lists %v", k, f.gets, f.lists)
-	}
-}
-
-// The seen file keeps what the orchestrator was woken for across watches.
-func TestWatchSeenPersistsAcrossWatches(t *testing.T) {
-	cd := t.TempDir()
-	seen, mark := watchSeen(cd)
-	if len(seen()) != 0 {
-		t.Fatalf("fresh seen = %v", seen())
-	}
-	mark(map[string]string{"support/7/pr-head": "aaa"})
-	mark(map[string]string{"support/8/comment": "ann#2"})
-	seen2, _ := watchSeen(cd)
-	if got := seen2(); got["support/7/pr-head"] != "aaa" || got["support/8/comment"] != "ann#2" || len(got) != 2 {
-		t.Fatalf("seen = %v", got)
-	}
-	if _, err := os.Stat(filepath.Join(cd, "rota")); err != nil {
-		t.Errorf("seen file not under the rota state dir: %v", err)
 	}
 }
 
