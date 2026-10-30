@@ -75,28 +75,9 @@ func DecideStop(in StopIn, st State, set Settings, ho Handoff, handoffPath strin
 	if !ctxTrip && usage == nil {
 		return d
 	}
-	var blockedAt time.Time
-	if st.BlockedAt != "" {
-		blockedAt, _ = stamp.Parse(st.BlockedAt)
+	if !holdForHandoff(&d, set, ho, now, handoffRule{reentered: in.StopHookActive}) {
+		return d
 	}
-	if ho.Exists {
-		newer := !ho.ModTime.Before(blockedAt)
-		fresh := ho.Fresh(time.Duration(set.HandoffMaxAge)*time.Second, now)
-		if (in.StopHookActive && newer) || (!in.StopHookActive && fresh && newer) {
-			return d // the handoff is written: the orchestrator is exiting
-		}
-	}
-	if in.StopHookActive {
-		if st.HandoffBlocks >= set.HandoffMaxBlks {
-			d.State.HandoffFailed = true
-			d.Persist = true
-			return d
-		}
-		d.State.HandoffBlocks++
-	}
-	d.State.BlockedAt = stamp.Format(now)
-	d.Persist = true
-	d.Block = true
 	if usage != nil {
 		d.State.UsageHandoff = usage
 		d.Reason = usageReason(*usage, set.UsageThreshold, handoffPath)
@@ -105,6 +86,48 @@ func DecideStop(in StopIn, st State, set Settings, ho Handoff, handoffPath strin
 		d.Reason = blockReason(*st.ContextPct, set.Threshold, handoffPath)
 	}
 	return d
+}
+
+// handoffRule is where the two Stop deciders differ in the shared block step.
+type handoffRule struct {
+	// reentered is a Stop re-entered after a block (stop_hook_active): a
+	// handoff newer than the last block passes even once it has aged, and the
+	// block is counted.
+	reentered bool
+	// countAll counts every block, so a first stop is held no more than a
+	// re-entered one (the context guard).
+	countAll bool
+}
+
+// holdForHandoff is the block rule both Stop deciders share, run once their
+// own trip condition has fired. It passes when the handoff is written, latches
+// HandoffFailed at the cap, and otherwise stamps the block into d.State and
+// returns true; the caller then sets Reason. d.Persist is set whenever d.State
+// changed.
+func holdForHandoff(d *StopDecision, set Settings, ho Handoff, now time.Time, r handoffRule) bool {
+	var blockedAt time.Time
+	if d.State.BlockedAt != "" {
+		blockedAt, _ = stamp.Parse(d.State.BlockedAt)
+	}
+	if ho.Exists {
+		newer := !ho.ModTime.Before(blockedAt)
+		fresh := ho.Fresh(time.Duration(set.HandoffMaxAge)*time.Second, now)
+		if newer && (r.reentered || fresh) {
+			return false // the handoff is written: the session is exiting
+		}
+	}
+	if r.reentered || r.countAll {
+		if d.State.HandoffBlocks >= set.HandoffMaxBlks {
+			d.State.HandoffFailed = true
+			d.Persist = true
+			return false
+		}
+		d.State.HandoffBlocks++
+	}
+	d.State.BlockedAt = stamp.Format(now)
+	d.Persist = true
+	d.Block = true
+	return true
 }
 
 func blockReason(pct float64, threshold int, path string) string {

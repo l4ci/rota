@@ -204,14 +204,6 @@ func TestApplySessionStop(t *testing.T) {
 	if applyStop(t, StopIn{}, State{UpdatedAt: st(0).UpdatedAt}, set, none, t0).Block {
 		t.Error("no percentage blocked")
 	}
-	// A fresh handoff passes without a block.
-	fresh := Handoff{Exists: true, ModTime: t0.Add(-time.Minute)}
-	if applyStop(t, StopIn{}, st(99), set, fresh, t0).Block {
-		t.Error("fresh handoff still blocked")
-	}
-	if !applyStop(t, StopIn{}, st(99), set, Handoff{Exists: true, ModTime: t0.Add(-time.Hour)}, t0).Block {
-		t.Error("a day-old handoff must not count")
-	}
 }
 
 func TestApplySessionStopLoopPrevention(t *testing.T) {
@@ -223,32 +215,12 @@ func TestApplySessionStopLoopPrevention(t *testing.T) {
 		t.Fatalf("first: %+v", d)
 	}
 	cur = d.State
+	// The shared handoff rule is covered in TestStopDecidersHandoffBlock; this
+	// one case proves ApplySession carries BlockedAt into a re-entered stop.
 	// Active, handoff written after the block: pass.
 	written := Handoff{Exists: true, ModTime: t0.Add(5 * time.Second)}
 	if applyStop(t, StopIn{StopHookActive: true}, cur, set, written, t0.Add(10*time.Second)).Block {
 		t.Error("active + new handoff should pass")
-	}
-	// Active, handoff older than the block: not the answer to it.
-	older := Handoff{Exists: true, ModTime: t0.Add(-time.Second)}
-	if !applyStop(t, StopIn{StopHookActive: true}, cur, set, older, t0.Add(10*time.Second)).Block {
-		t.Error("active + older handoff should block")
-	}
-	// Active, no handoff: block up to the cap, then pass and record failure.
-	for i := 1; i <= 2; i++ {
-		d = applyStop(t, StopIn{StopHookActive: true}, cur, set, Handoff{}, t0.Add(time.Duration(i)*10*time.Second))
-		if !d.Block || d.State.HandoffBlocks != i {
-			t.Fatalf("reblock %d: %+v", i, d)
-		}
-		cur = d.State
-	}
-	d = applyStop(t, StopIn{StopHookActive: true}, cur, set, Handoff{}, t0.Add(time.Minute))
-	if d.Block || !d.State.HandoffFailed || !d.Persist {
-		t.Fatalf("cap: %+v", d)
-	}
-	cur = d.State
-	// Failed sessions are never held again, even without stop_hook_active.
-	if applyStop(t, StopIn{}, cur, set, Handoff{}, t0.Add(time.Minute)).Block {
-		t.Error("failed session blocked again")
 	}
 }
 
@@ -274,48 +246,26 @@ func TestApplySessionGuardPromptReadings(t *testing.T) {
 
 func TestApplySessionGuardStop(t *testing.T) {
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
-	set := Settings{Threshold: 75, StateMaxAge: 120, HandoffMaxBlks: 2}
+	set := Settings{Threshold: 75, StateMaxAge: 120, HandoffMaxAge: 900, HandoffMaxBlks: 2}
 	fresh := "2026-10-03T11:59:30Z"
 	st := guardState(80, fresh)
-	for i := 1; i <= 2; i++ {
-		d := applyGuardStop(t, st, set, Handoff{}, now)
-		if !d.Block || !strings.Contains(d.Reason, "/rota-pause") || d.State.HandoffBlocks != i {
-			t.Fatalf("block %d: %+v", i, d)
-		}
-		st = d.State
-	}
 	d := applyGuardStop(t, st, set, Handoff{}, now)
-	if d.Block || !d.State.HandoffFailed {
-		t.Fatalf("past the cap: %+v", d)
+	if !d.Block || !strings.Contains(d.Reason, "/rota-pause") || d.State.HandoffBlocks != 1 {
+		t.Fatalf("block: %+v", d)
 	}
 	st = d.State
+	// The shared handoff rule is covered in TestStopDecidersHandoffBlock; this
+	// one case proves ApplySession feeds it a fresh note.
+	blocked, _ := time.Parse(time.RFC3339, st.BlockedAt)
+	if r := applyGuardStop(t, st, set, Handoff{Exists: true, ModTime: blocked.Add(10 * time.Second)}, now); r.Block {
+		t.Errorf("a fresh note written after the block must pass: %+v", r)
+	}
 	st.ContextPct = func() *float64 { p := 10.0; return &p }()
 	if r := applyGuardStop(t, st, set, Handoff{}, now); r.Block || r.State.HandoffFailed || r.State.HandoffBlocks != 0 {
 		t.Errorf("reset below the threshold: %+v", r)
 	}
 	if s := applyGuardStop(t, guardState(99, "2026-10-03T11:50:00Z"), set, Handoff{}, now); s.Block {
 		t.Errorf("stale: %+v", s)
-	}
-}
-
-func TestApplySessionGuardStopFreshHandoff(t *testing.T) {
-	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
-	set := Settings{Threshold: 75, StateMaxAge: 120, HandoffMaxAge: 900, HandoffMaxBlks: 2}
-	st := guardState(80, "2026-10-03T11:59:30Z")
-	d := applyGuardStop(t, st, set, Handoff{}, now)
-	if !d.Block {
-		t.Fatalf("no note: %+v", d)
-	}
-	st = d.State
-	blocked, _ := time.Parse(time.RFC3339, st.BlockedAt)
-	if r := applyGuardStop(t, st, set, Handoff{Exists: true, ModTime: blocked.Add(10 * time.Second)}, now); r.Block {
-		t.Errorf("a fresh note written after the block must pass: %+v", r)
-	}
-	if r := applyGuardStop(t, st, set, Handoff{Exists: true, ModTime: blocked.Add(-time.Minute)}, now); !r.Block {
-		t.Errorf("a note older than the block must not pass: %+v", r)
-	}
-	if r := applyGuardStop(t, st, set, Handoff{Exists: true, ModTime: now.Add(-time.Hour)}, now); !r.Block {
-		t.Errorf("a stale note must not pass: %+v", r)
 	}
 }
 
