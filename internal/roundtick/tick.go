@@ -531,6 +531,10 @@ func (e Env) gate(ctx context.Context, target, base string) Merged {
 	return Merged{Target: target, Verdict: v, Hold: worker.ClassifyVerdict(v).Hold, Detail: g.Detail}
 }
 
+func excludedIdx(cs []worker.TrainCulprit, target string) int {
+	return slices.IndexFunc(cs, func(c worker.TrainCulprit) bool { return c.Target == target })
+}
+
 func (e Env) train(ctx context.Context, targets []string, base string) []Merged {
 	tr := e.trainTargets(ctx, targets, base)
 	out := make([]Merged, 0, len(targets))
@@ -547,6 +551,9 @@ func (e Env) train(ctx context.Context, targets []string, base string) []Merged 
 	for _, t := range targets {
 		m := Merged{Target: t}
 		switch {
+		case excludedIdx(tr.Excluded, t) >= 0:
+			c := tr.Excluded[excludedIdx(tr.Excluded, t)]
+			m.Verdict, m.Hold, m.Detail = c.Gate.Verdict, worker.ClassifyVerdict(c.Gate.Verdict).Hold, strutil.FirstLine(c.Gate.Err)
 		case slices.Contains(tr.Landed, t):
 			m.Landed, m.Detail = true, "train into "+base
 		case v == "base-moved":

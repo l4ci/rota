@@ -40,8 +40,11 @@ type trainOutcome struct {
 	Culprit string
 	Verdict string
 	Detail  string
-	// Done is true when the whole train landed.
+	// Done is true when the whole train landed, with no member excluded.
 	Done bool
+	// Excluded are members the pre-filter dropped (a missing PR section):
+	// the train passed without them and they did not merge.
+	Excluded []worker.TrainCulprit
 }
 
 func (e Env) targetBase(target string) string {
@@ -85,7 +88,10 @@ func (e Env) trainTargets(ctx context.Context, targets []string, base string) tr
 			e.bounceCount(f.Target, f.Err)
 		}
 		if r.OK() {
-			return trainOutcome{Done: true}
+			if len(r.Culprits) == 0 {
+				return trainOutcome{Done: true}
+			}
+			return trainOutcome{Landed: r.Landed, Excluded: r.Culprits}
 		}
 	}
 	out := trainOutcome{Verdict: failedVerdict(r.Verdict, run.Err, run.Refused), Detail: failureDetail(run.Err, r.Err)}
