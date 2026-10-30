@@ -249,7 +249,7 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 		text = append(text, fmt.Sprintf("change\t%s\t%s -> %s", ch.Key, dash(ch.From), dash(ch.To)))
 	}
 	d.Set("changes", changes)
-	digest := roundwatch.ExitDigest(root, roundNumber)
+	digest := roundwatch.ExitDigest(c.Context(), c.deps().Git, root, roundNumber)
 	d.Set("digest", digest)
 	if tick != nil {
 		// Status and explicit ticks keep the full drift list. The watch
