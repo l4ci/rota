@@ -29,8 +29,8 @@ type SessionDecision struct {
 }
 
 // ApplySession loads a readable session, applies its hook rule and persists
-// only the fields owned by that rule. An invalid, missing or unreadable
-// session fails open (ok is false); a write failure does not suppress a decision.
+// only the fields its rule merges onto the fresh state. An invalid, missing or
+// unreadable session fails open (ok is false); a write failure does not suppress a decision.
 func ApplySession(in SessionIn) (d SessionDecision, ok bool) {
 	if in.Action == StopHandoff && in.HandoffPath == "" {
 		return d, false
@@ -44,14 +44,18 @@ func ApplySession(in SessionIn) (d SessionDecision, ok bool) {
 		return d, false
 	}
 	now := in.Now()
+	var merge func(cur, decided State) State
 	switch in.Action {
 	case StopHandoff:
 		d.StopDecision = DecideStop(in.Stop, st, in.Settings, StatHandoff(in.HandoffPath), in.HandoffPath, now)
+		merge = mergeStop
 	case GuardStop:
 		d.StopDecision = DecideGuardStop(st, in.Settings, StatHandoff(in.HandoffPath), now)
+		merge = mergeHandoffBlock
 	case GuardPrompt:
 		p := DecideGuardPrompt(st, in.Settings, now)
 		d.State, d.Persist, d.Line = p.State, p.Persist, p.Line
+		merge = mergeGuardWarned
 	default:
 		return d, false
 	}
@@ -60,17 +64,9 @@ func ApplySession(in SessionIn) (d SessionDecision, ok bool) {
 			if !found {
 				cur = st
 			}
-			// A statusline refresh may have landed since the decision. Keep
-			// its readings, and fields owned by the other hook rules.
-			if in.Action == GuardPrompt {
-				cur.GuardWarned = d.State.GuardWarned
-			} else {
-				cur.HandoffBlocks, cur.BlockedAt, cur.HandoffFailed = d.State.HandoffBlocks, d.State.BlockedAt, d.State.HandoffFailed
-				if in.Action == StopHandoff {
-					cur.UsageHandoff = d.State.UsageHandoff
-				}
-			}
-			return cur
+			// A statusline refresh may have landed since the decision: the
+			// rule's merge keeps its readings and the other rules' fields.
+			return merge(cur, d.State)
 		})
 	}
 	return d, true
