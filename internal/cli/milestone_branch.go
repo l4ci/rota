@@ -95,7 +95,7 @@ func planMilestoneBranch(c *Ctx, st ms.Store, id, to, choice string) (milestoneB
 		if !ok {
 			return milestoneBranchSteps{}, Resolution(noBaseMsg)
 		}
-		base = r.RemoteBase(ctx, base)
+		base = git.RemoteBase(ctx, c.deps().Git, dir, base)
 		return milestoneBranchSteps{before: func() error {
 			if has, err := exists(); err != nil || has {
 				return err
@@ -143,7 +143,7 @@ func planMilestoneBranch(c *Ctx, st ms.Store, id, to, choice string) (milestoneB
 		if !ok {
 			return milestoneBranchSteps{}, Resolution(noBaseMsg)
 		}
-		base = r.RemoteBase(ctx, base)
+		base = git.RemoteBase(ctx, c.deps().Git, dir, base)
 		return milestoneBranchSteps{before: func() error {
 			if err := fetch(); err != nil {
 				return err
