@@ -59,6 +59,8 @@ type Candidate struct {
 	Path   string
 	Reason string
 	Held   string
+	// PID is the process a KindProcess candidate stops; Name is display text.
+	PID int
 }
 
 // Failure is one deletion that did not happen.
@@ -100,8 +102,11 @@ type Input struct {
 	// its Unavailable list says whether the host could be read, and its Agents
 	// are the host snapshot it was built from.
 	Report *round.Report
-	Host   HostOps
-	Lease  LeaseOps
+	// Refresh re-reads the report at apply time, so an agent that went live
+	// after Find is seen. Apply fails closed when it errors; nil keeps Report.
+	Refresh func(context.Context) (*round.Report, error)
+	Host    HostOps
+	Lease   LeaseOps
 	// Adopted names the branches `rota worker adopt` took over. A merged
 	// branch is offered for deletion only when it is one of these or leads with
 	// an issue number under a roster agent (`<agent>/<n>-<slug>`, the shape a round cuts).
@@ -374,6 +379,15 @@ func (s *state) heldUnmerged(ctx context.Context, dir, rev string) string {
 	return "commits not on " + s.in.Base
 }
 
+func (s *state) checkoutAt(path string) *checkout {
+	for i := range s.checkouts {
+		if s.checkouts[i].path == filepath.Clean(path) {
+			return &s.checkouts[i]
+		}
+	}
+	return nil
+}
+
 func (s *state) owner(name string) *checkout {
 	for i := range s.checkouts {
 		if filepath.Base(s.checkouts[i].path) == name && filepath.Dir(s.checkouts[i].path) == s.wtDir() {
@@ -543,6 +557,12 @@ func findTabs(ctx context.Context, s *state) ([]Candidate, error) {
 	return out, nil
 }
 
+// processOK: nothing live owns p, the proof Find lists it by and Apply
+// re-runs before stopping it.
+func (s *state) processOK(p Process) bool {
+	return p.PID > 0 && !s.hostOwned(p.Cwd) && !s.agentOnTab(p.Tab) && !s.slotTab[p.Tab]
+}
+
 func findProcesses(ctx context.Context, s *state) ([]Candidate, error) {
 	if !s.hostCandidates() {
 		return nil, nil
@@ -554,11 +574,11 @@ func findProcesses(ctx context.Context, s *state) ([]Candidate, error) {
 	}
 	var out []Candidate
 	for _, p := range procs {
-		if p.PID <= 0 || s.hostOwned(p.Cwd) || s.agentOnTab(p.Tab) || s.slotTab[p.Tab] {
+		if !s.processOK(p) {
 			continue
 		}
 		id := strconv.Itoa(p.PID)
-		out = append(out, Candidate{ID: KindProcess + ":" + id, Kind: KindProcess, Name: strings.TrimSpace(id + " " + p.Name), Path: p.Cwd, Reason: "process under a tab with no agent"})
+		out = append(out, Candidate{ID: KindProcess + ":" + id, Kind: KindProcess, Name: strings.TrimSpace(id + " " + p.Name), PID: p.PID, Path: p.Cwd, Reason: "process under a tab with no agent"})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
@@ -566,11 +586,26 @@ func findProcesses(ctx context.Context, s *state) ([]Candidate, error) {
 
 // Apply removes every candidate without Held. A removal that fails is a
 // Failure and the rest still run. Each removal re-proves its own safety
-// first: git refuses a dirty or locked worktree on its own, and a tab is
-// re-read so an agent that appeared since Find is never closed.
+// first: a worktree, tab or process is re-checked against the live set so an
+// agent that appeared since Find is never disturbed, and git refuses a dirty
+// or locked worktree on its own.
 func Apply(ctx context.Context, in Input, cands []Candidate) Result {
 	var res Result
-	s, err := newState(ctx, in)
+	var s *state
+	var err error
+	if in.Refresh != nil {
+		// Agent liveness comes from the Report; re-read it so an agent that
+		// appeared since Find is seen. An unreadable report proves nothing.
+		var rep *round.Report
+		if rep, err = in.Refresh(ctx); err == nil {
+			in.Report = rep
+		} else {
+			err = fmt.Errorf("live set unreadable at apply time: %w", err)
+		}
+	}
+	if err == nil {
+		s, err = newState(ctx, in)
+	}
 	if err != nil {
 		for _, c := range cands {
 			if c.Held == "" {
@@ -596,7 +631,18 @@ func Apply(ctx context.Context, in Input, cands []Candidate) Result {
 func (s *state) remove(ctx context.Context, c Candidate) error {
 	switch c.Kind {
 	case KindWorktree:
-		// no --force: git refuses a dirty or locked checkout
+		// Re-prove no live owner; git itself refuses a dirty or locked checkout
+		// (no --force).
+		if !s.hostOK {
+			return fmt.Errorf("host unavailable; %s left alone", c.Name)
+		}
+		co := s.checkoutAt(c.Path)
+		if co == nil || filepath.Dir(co.path) != s.wtDir() {
+			return fmt.Errorf("%s is not a .worktrees/ checkout", c.Path)
+		}
+		if s.protectedWorktree(co) {
+			return fmt.Errorf("%s has a live owner or is protected; left alone", c.Name)
+		}
 		res, err := s.in.Git(ctx, s.root, "worktree", "remove", c.Path)
 		errOut, code := res.Stderr, res.ExitCode
 		return gitErr(errOut, code, err)
@@ -646,11 +692,25 @@ func (s *state) remove(ctx context.Context, c Candidate) error {
 		if s.in.Host == nil {
 			return fmt.Errorf("no host")
 		}
-		pid, err := strconv.Atoi(strings.Fields(c.Name + " ")[0])
+		if c.PID <= 0 {
+			return fmt.Errorf("process candidate %s carries no pid", c.ID)
+		}
+		if !s.hostOK {
+			return fmt.Errorf("host unavailable; process %d left alone", c.PID)
+		}
+		procs, err := s.in.Host.Processes(ctx)
 		if err != nil {
 			return err
 		}
-		return s.in.Host.StopProcess(ctx, pid)
+		for _, p := range procs {
+			if p.PID == c.PID {
+				if !s.processOK(p) {
+					return fmt.Errorf("an agent may own process %d; left running", c.PID)
+				}
+				return s.in.Host.StopProcess(ctx, c.PID)
+			}
+		}
+		return fmt.Errorf("process %d is gone", c.PID)
 	}
 	return fmt.Errorf("unknown kind %s", c.Kind)
 }
