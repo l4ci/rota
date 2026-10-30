@@ -691,7 +691,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	now := e.Worker.Now
 	waiting := map[string]bool{}
 	for _, x := range escalation.Load(root) {
-		if x.Status == escalation.StatusPending && x.Slot != "" {
+		if escalation.IsOpen(x) && x.Slot != "" {
 			waiting[x.Slot] = true
 		}
 	}
@@ -773,10 +773,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			}
 		}
 	}
-	for _, x := range escalation.Load(root) {
-		if x.Status != escalation.StatusPending {
-			continue
-		}
+	for _, x := range escalation.LoadOpen(root) {
 		rep.Escalations = append(rep.Escalations, escalation.Report{Entry: x, Status: x.Derived(now())})
 		for i := range rep.Rows {
 			if x.Slot != "" && rep.Rows[i].Name == x.Slot {
