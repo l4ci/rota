@@ -180,10 +180,13 @@ type GateOpts struct {
 	// waited is set by Gate when the land lock was busy: the PR may have merged
 	// meanwhile, so the gate reads it again (stepWaitedMerged).
 	waited bool
-	// Verdict is the review-verdict gate (B3), run after provenance, also under
-	// CheckOnly. A non-nil error (a recorded FAIL) stops the gate with verdict
-	// verdict-blocked and is returned as is. branch is the worker branch.
-	Verdict func(branch, head string) error
+	// The review-verdict gate (B3) runs after provenance, also under CheckOnly.
+	// It reads the verdict store itself (verdict.Check.BlockGate); a blocking
+	// record stops the gate with verdict verdict-blocked and is returned as is.
+	// NoVerdict is the only way past it, for a run another gate already judged.
+	NoVerdict bool
+	// VerdictRepo is the sub-repo name keying the store in an umbrella, else "".
+	VerdictRepo string
 	// CheckReviews makes the gate refuse a branch lacking the review verdicts
 	// its resolved review depth needs, read with verdict.Recorded at the
 	// checked tip (the full sha). Unset skips that check.
@@ -1188,11 +1191,13 @@ func (g *gate) stepReviewDepth() (bool, error) {
 // ship paths apply. It runs under CheckOnly too, so a train member is refused
 // before anything merges.
 func (g *gate) stepVerdict() (bool, error) {
-	if g.o.Verdict == nil {
+	if g.o.NoVerdict {
 		return false, nil
 	}
 	head, _ := g.git(g.root, "rev-parse", "--short", g.headRef) // the head the gate merges
-	if err := g.o.Verdict(g.branch, head); err != nil {
+	// Loaded here, after the gate recovered the PR's reports into the store.
+	check := verdict.Check{Git: gitRunner{g.ctx, g.e, g.root}, Store: verdict.Load(g.root), Repo: g.o.VerdictRepo}
+	if err := check.BlockGate(g.branch, head); err != nil {
 		g.res.Verdict = GateVerdictBlocked
 		return true, err
 	}
@@ -2109,3 +2114,12 @@ func tailLines(s string, n int) string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+// gitRunner adapts Env.Git in dir to verdict.Runner.
+type gitRunner struct {
+	ctx context.Context
+	e   Env
+	dir string
+}
+
+func (r gitRunner) Run(args ...string) (git.Result, error) { return r.e.Git(r.ctx, r.dir, args...) }

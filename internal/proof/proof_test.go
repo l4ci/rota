@@ -307,3 +307,24 @@ func TestMarkUsesTheSharedShaRule(t *testing.T) {
 		}
 	}
 }
+
+// Mark edits only rows inside "## Proof": a look-alike line elsewhere in the
+// item is left alone, even when it is the later of two matching lines.
+func TestMarkIgnoresLookAlikeOutsideProofSection(t *testing.T) {
+	const row = "- 2026-01-01 · go test ./x · PASS · abc1234def5678 · detail"
+	before := "## Notes\n\n" + row + "\n\n## Proof\n\n" + row + "\n\n## Later\n\n" + row + "\n"
+	s := &memStore{content: before}
+	found, err := Mark(s, "1", "abc1234", "go test ./x", "targeted")
+	if err != nil || !found {
+		t.Fatalf("Mark = %v, %v; want found", found, err)
+	}
+	want := "## Notes\n\n" + row + "\n\n## Proof\n\n" + row + " targeted\n\n## Later\n\n" + row + "\n"
+	if s.content != want {
+		t.Errorf("content =\n%q\nwant\n%q", s.content, want)
+	}
+
+	s = &memStore{content: "## Notes\n\n" + row + "\n"}
+	if found, err := Mark(s, "1", "abc1234", "go test ./x", "targeted"); err != nil || found {
+		t.Errorf("no Proof section: Mark = %v, %v; want not found", found, err)
+	}
+}

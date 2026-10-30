@@ -99,7 +99,7 @@ func (t *trainRun) filterPRSections(reg Registry, targets []string) ([]string, b
 func (t *trainRun) prSectionGate(target string, gt GateTarget) (GateResult, error) {
 	gr := GateResult{Slot: target, Base: t.o.Base, TargetSlot: gt.Name, Issue: gt.Issue}
 	g := &gate{e: t.e, ctx: t.ctx, root: t.root, res: &gr, in: t.in, target: gt, resolved: gt,
-		o: GateOpts{Slot: target, Base: t.o.Base, CheckOnly: true}, branch: gt.Branch, pr: gt.PR}
+		o: GateOpts{Slot: target, Base: t.o.Base, CheckOnly: true, NoVerdict: true}, branch: gt.Branch, pr: gt.PR}
 	for _, step := range []gateStep{(*gate).stepForge, (*gate).stepAdoptPR, (*gate).stepRemote} {
 		if done, err := step(g); done || err != nil {
 			return gr, err
