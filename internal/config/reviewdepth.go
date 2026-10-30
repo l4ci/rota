@@ -190,6 +190,7 @@ const (
 	SignalSize       = "size"
 	SignalDefault    = "default"
 	SignalTier       = "tier"
+	SignalRisky      = "risky"
 )
 
 // ReviewInput is everything a depth is resolved from. Changed is the diff's
@@ -204,6 +205,8 @@ type ReviewInput struct {
 	PRBody    string
 	IssueBody string
 	Tier      change.Tier
+	// Risky: a change.riskyPaths glob matched a changed file.
+	Risky bool
 }
 
 // ReviewDecision is a resolved depth, the signal that decided it and why.
@@ -275,6 +278,9 @@ func (p ReviewPolicy) Decide(in ReviewInput) ReviewDecision {
 	}
 	if DoorOneWay(in.PRBody) {
 		raise(DepthFull, SignalDoor, "PR body says Door: one-way")
+	}
+	if in.Risky {
+		raise(DepthFull, SignalRisky, "diff touches change.riskyPaths")
 	}
 	if !p.NoScopeDrift && in.Tier != change.TierDocs {
 		if drift := scopeDrift(in.IssueBody, in.Files, p.supportPaths()); len(drift) > 0 {

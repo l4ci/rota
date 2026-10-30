@@ -745,12 +745,12 @@ func free(clash [][]bool, mask uint32) bool {
 	return true
 }
 
-// pickTier sets what the train verifies with (#2348): the highest change tier
-// of its members, so one full member makes the whole train full. It runs once
-// the heads are pinned and classifies the exact base...head each member merges,
-// taking the higher of that and the tier its check-only gate saw (which read the
-// PR's Door line): a member pushed again since its check is never verified by
-// a stale tier. A member with no tier counts as full, and so does a train that
+// pickTier sets what the train verifies with (#2348): the tier of the whole
+// train, so one full member makes it full. It runs once the heads are pinned
+// and classifies the union of the files each member's base...head changes, with
+// their changed lines summed, once; it takes the higher of that and the tier
+// each member's check-only gate saw (which read the PR's Door line): a member
+// pushed again since its check is never verified by a stale tier. A member with no tier counts as full, and so does a train that
 // syncs another base in, whose code no member's diff shows. Under
 // test.fullWhere ci the tier is recorded, not applied. For test.small, {files}
 // is the union of the members' changed files, deleted ones included.
@@ -762,18 +762,24 @@ func (t *trainRun) pickTier() {
 	}
 	policy, perr := t.in.cfg.ChangePolicy()
 	var files []string
+	lines := 0
 	seen := map[string]bool{}
 	for i, m := range res.Members {
-		span := t.baseSHA + "..." + t.heads[i]
-		now := ClassifyChange(t.ctx, ChangeSources{Policy: policy, PolicyErr: perr, Git: t.e.Git, Dir: t.root, Span: span})
-		tier = change.Higher(tier, change.Higher(change.Tier(m.Tier), now.Tier))
+		tier = change.Higher(tier, change.Tier(m.Tier))
 		if tier == change.TierFull {
 			break
 		}
+		span := t.baseSHA + "..." + t.heads[i]
 		fs, err := git.DiffFiles(t.ctx, t.e.Git, t.root, span)
 		if err != nil {
 			tier = change.TierFull
 			break
+		}
+		n, counted, err := git.ChangedLinesCounted(t.ctx, t.e.Git, t.root, span)
+		if err != nil || !counted {
+			lines = -1 // an unknown count is never small
+		} else if lines >= 0 {
+			lines += n
 		}
 		for _, f := range fs {
 			if !seen[f] {
@@ -781,6 +787,17 @@ func (t *trainRun) pickTier() {
 				files = append(files, f)
 			}
 		}
+	}
+	if tier != change.TierFull {
+		// One classification of the union, lines summed: three 90-line members
+		// are 270 lines together, not three small ones.
+		var now change.Result
+		if perr != nil {
+			now = change.Result{Tier: change.TierFull}
+		} else {
+			now = change.Classify(change.Input{Files: files, Lines: lines}, policy)
+		}
+		tier = change.Higher(tier, now.Tier)
 	}
 	res.Tier = string(tier)
 	if tier == change.TierFull || t.onCI {

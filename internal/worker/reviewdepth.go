@@ -105,9 +105,9 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 		}
 	}
 	var tier change.Result
-	if s.ChangeErr != nil || len(s.Change.DocsPaths) > 0 || s.Change.SmallBelow > 0 {
+	if s.ChangeErr != nil || len(s.Change.DocsPaths) > 0 || len(s.Change.RiskyPaths) > 0 || s.Change.SmallBelow > 0 {
 		tier = ClassifyChange(ctx, ChangeSources{Policy: s.Change, PolicyErr: s.ChangeErr, Git: s.Git, Dir: s.Dir, Span: s.Span, PRBody: readPR})
-		in.Tier = tier.Tier
+		in.Tier, in.Risky = tier.Tier, tier.Risky
 	}
 	needsIssue := s.Policy.NeedsIssue()
 	if in.Tier == change.TierDocs {

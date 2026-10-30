@@ -25,11 +25,11 @@ func TestClassify(t *testing.T) {
 		{"one-way door", Input{Files: []string{"README.md"}, Door: true}, docs, TierFull, nil, "Door: one-way"},
 		{"no files", Input{}, docs, TierFull, nil, "no changed files"},
 		{"small off", Input{Files: []string{"x.go"}, Lines: 5}, docs, TierFull, []string{"x.go"}, "not documentation"},
-		{"small under", Input{Files: []string{"x.go"}, Lines: 99}, Policy{DocsPaths: DefaultDocsPaths, SmallBelow: 100}, TierSmall, []string{"x.go"}, "99 changed lines, under change.smallBelow 100"},
-		{"small at threshold", Input{Files: []string{"x.go"}, Lines: 100}, Policy{DocsPaths: DefaultDocsPaths, SmallBelow: 100}, TierFull, []string{"x.go"}, "100 changed lines"},
-		{"unknown line count", Input{Files: []string{"x.go"}, Lines: -1}, Policy{DocsPaths: DefaultDocsPaths, SmallBelow: 100}, TierFull, []string{"x.go"}, "not documentation"},
+		{"small under", Input{Files: []string{"x.go"}, Lines: 99}, Policy{DocsPaths: DefaultDocsPaths, SmallBelow: 100, SmallPaths: []string{"**"}}, TierSmall, []string{"x.go"}, "99 changed lines, under change.smallBelow 100"},
+		{"small at threshold", Input{Files: []string{"x.go"}, Lines: 100}, Policy{DocsPaths: DefaultDocsPaths, SmallBelow: 100, SmallPaths: []string{"**"}}, TierFull, []string{"x.go"}, "100 changed lines"},
+		{"unknown line count", Input{Files: []string{"x.go"}, Lines: -1}, Policy{DocsPaths: DefaultDocsPaths, SmallBelow: 100, SmallPaths: []string{"**"}}, TierFull, []string{"x.go"}, "not documentation"},
 		{"rename out of code", Input{Files: []string{"internal/x.go", "moved/out.md"}}, Policy{DocsPaths: []string{"**/*.md"}}, TierFull, []string{"internal/x.go"}, "not documentation"},
-		{"risky beats small", Input{Files: []string{"go.mod"}, Lines: 1}, Policy{DocsPaths: DefaultDocsPaths, RiskyPaths: []string{"go.mod"}, SmallBelow: 100}, TierFull, []string{"go.mod"}, "change.riskyPaths"},
+		{"risky beats small", Input{Files: []string{"go.mod"}, Lines: 1}, Policy{DocsPaths: DefaultDocsPaths, RiskyPaths: []string{"go.mod"}, SmallBelow: 100, SmallPaths: []string{"**"}}, TierFull, []string{"go.mod"}, "change.riskyPaths"},
 		{"no docs paths", Input{Files: []string{"README.md"}}, Policy{}, TierFull, []string{"README.md"}, "not documentation"},
 	}
 	for _, c := range cases {
@@ -45,6 +45,57 @@ func TestClassify(t *testing.T) {
 				t.Errorf("reason %q lacks %q", got.Reason, c.reason)
 			}
 		})
+	}
+}
+
+// A docs glob alone never makes a file documentation: only Markdown and image
+// files are, wherever they sit (#2348 review).
+func TestDocsTierAdmitsOnlyDocFileTypes(t *testing.T) {
+	p := Policy{DocsPaths: DefaultDocsPaths, SmallBelow: 100, SmallPaths: []string{"**"}}
+	for _, f := range []string{"docs/x.go", "docs/build.sh", "docs/Makefile", "docs/a.md.sh", "docs/data.json"} {
+		got := Classify(Input{Files: []string{f}, Lines: 500}, p)
+		if got.Tier != TierFull {
+			t.Errorf("%s: tier %s (%s), want full", f, got.Tier, got.Reason)
+		}
+	}
+	if got := Classify(Input{Files: []string{"docs/a.MD", "docs/b/c.PNG"}}, p); got.Tier != TierDocs {
+		t.Errorf("upper-case doc extensions: tier %s (%s), want docs", got.Tier, got.Reason)
+	}
+}
+
+// The small tier runs test.small, which only covers what change.smallPaths
+// names; any other file in the diff makes it full.
+func TestSmallTierNeedsEveryFileMapped(t *testing.T) {
+	p := Policy{DocsPaths: DefaultDocsPaths, SmallBelow: 100, SmallPaths: []string{"internal/**/*.go", "test/sections/*.sh"}}
+	cases := []struct {
+		name  string
+		files []string
+		p     Policy
+		tier  Tier
+	}{
+		{"all mapped", []string{"internal/a/b.go", "test/sections/1_x.sh"}, p, TierSmall},
+		{"mapped beside unmapped", []string{"internal/a/b.go", "hooks/x.sh"}, p, TierFull},
+		{"only unmapped", []string{"scripts/site-sync.py"}, p, TierFull},
+		{"no smallPaths", []string{"internal/a/b.go"}, Policy{DocsPaths: DefaultDocsPaths, SmallBelow: 100}, TierFull},
+	}
+	for _, c := range cases {
+		if got := Classify(Input{Files: c.files, Lines: 5}, c.p); got.Tier != c.tier {
+			t.Errorf("%s: tier %s (%s), want %s", c.name, got.Tier, got.Reason, c.tier)
+		}
+	}
+	got := Classify(Input{Files: []string{"internal/a/b.go", "hooks/x.sh"}, Lines: 5}, p)
+	if !strings.Contains(got.Reason, "change.smallPaths") || !strings.Contains(got.Reason, "hooks/x.sh") {
+		t.Errorf("reason %q should name change.smallPaths and the unmapped file", got.Reason)
+	}
+}
+
+func TestRiskyResultIsFlagged(t *testing.T) {
+	p := Policy{DocsPaths: DefaultDocsPaths, RiskyPaths: []string{"internal/**"}}
+	if got := Classify(Input{Files: []string{"internal/x.go"}}, p); !got.Risky {
+		t.Errorf("a risky match must set Result.Risky")
+	}
+	if got := Classify(Input{Files: []string{"x.go"}}, p); got.Risky {
+		t.Errorf("no risky match must leave Result.Risky false")
 	}
 }
 

@@ -74,10 +74,12 @@ func TestResolveReviewDepthTier(t *testing.T) {
 		{"docs with a risky path", []string{"docs/a.md"}, full, change.Policy{DocsPaths: change.DefaultDocsPaths, RiskyPaths: []string{"docs/**"}}, "", nil, config.DepthFull, config.SignalDefault, "default depth"},
 		{"docs with a full label", []string{"README.md"}, labelled, docs, "", []string{"risk:high"}, config.DepthFull, config.SignalLabel, "risk:high"},
 		{"docs with a light label", []string{"README.md"}, labelled, docs, "", []string{"review:light"}, config.DepthLight, config.SignalLabel, "review:light"},
-		{"small with drift", []string{"x.go"}, full, change.Policy{DocsPaths: change.DefaultDocsPaths, SmallBelow: 100}, "", nil, config.DepthLight, config.SignalTier, "small change (tier small)"},
+		{"small with drift", []string{"x.go"}, full, change.Policy{DocsPaths: change.DefaultDocsPaths, SmallBelow: 100, SmallPaths: []string{"**"}}, "", nil, config.DepthLight, config.SignalTier, "small change (tier small)"},
 		{"docs under light, default policy", []string{"docs/a.md"}, light, docs, "", nil, config.DepthNone, config.SignalTier, "tier docs"},
 		{"docs with a paths rule", []string{"docs/sec/a.md"}, withPaths, docs, "", nil, config.DepthFull, config.SignalPath, "docs/sec/**"},
-		{"small with a binary file", []string{"x.go", "lib.bin"}, full, change.Policy{DocsPaths: change.DefaultDocsPaths, SmallBelow: 100}, "", nil, config.DepthFull, config.SignalDefault, "default depth"},
+		{"small with a binary file", []string{"x.go", "lib.bin"}, full, change.Policy{DocsPaths: change.DefaultDocsPaths, SmallBelow: 100, SmallPaths: []string{"**"}}, "", nil, config.DepthFull, config.SignalDefault, "default depth"},
+		{"risky path under light", []string{"internal/x.go"}, light, change.Policy{DocsPaths: change.DefaultDocsPaths, RiskyPaths: []string{"internal/**"}}, "", nil, config.DepthFull, config.SignalRisky, "change.riskyPaths"},
+		{"risky path with no other tier config", []string{"internal/x.go"}, light, change.Policy{RiskyPaths: []string{"internal/**"}}, "", nil, config.DepthFull, config.SignalRisky, "change.riskyPaths"},
 		{"tiers off", []string{"README.md"}, light, change.Policy{}, "", nil, config.DepthFull, config.SignalScopeDrift, "README.md"},
 	}
 	for _, c := range cases {
@@ -96,6 +98,14 @@ func TestResolveReviewDepthTier(t *testing.T) {
 				t.Fatalf("depth = %s, %s (%s), want %s, %s (%s)", got.Depth, got.Signal, got.Why, c.depth, c.signal, c.why)
 			}
 		})
+	}
+	// a label of none stays final, as for a Door line
+	dir0 := tierRepo(t, "internal/x.go")
+	none, _ := config.ParseReviewPolicy(nil)
+	none.Labels = map[string]config.ReviewDepth{"review:none": config.DepthNone}
+	got0, err := ResolveReviewDepth(context.Background(), ReviewSources{Policy: none, Change: change.Policy{RiskyPaths: []string{"internal/**"}}, Git: git.Exec, Dir: dir0, Span: "main...feat", Labels: []string{"review:none"}})
+	if err != nil || got0.Depth != config.DepthNone {
+		t.Fatalf("review:none with a risky path: %s %v", got0.Depth, err)
 	}
 	// a malformed change policy never makes a depth cheaper
 	dir := tierRepo(t, "README.md")
