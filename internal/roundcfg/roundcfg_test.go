@@ -48,8 +48,8 @@ func TestLabelsOf(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := LabelsOf(cfg); got != tc.want {
-				t.Errorf("LabelsOf() = %+v, want %+v", got, tc.want)
+			if got := Lenient(cfg).Labels; got != tc.want {
+				t.Errorf("Lenient().Labels = %+v, want %+v", got, tc.want)
 			}
 		})
 	}
@@ -443,7 +443,7 @@ func TestParseTests(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := ParseTests(v)
+		got := parseTests(v)
 		if (got.Err != nil) != c.bad {
 			t.Errorf("%s: Err = %v, want error %v", c.cfg, got.Err, c.bad)
 		}
@@ -690,5 +690,40 @@ func TestTierSetDecision(t *testing.T) {
 		if set != c.wantSet || !slices.Equal(models, c.wantModels) {
 			t.Errorf("%s: TierSet = %v, %v; want %v, %v", c.name, set, models, c.wantSet, c.wantModels)
 		}
+	}
+}
+
+// Settings carries the shared-path, test and label reads, strictly through
+// FromConfig and leniently through Lenient, with the same values.
+func TestSettingsSharedPathsTestsLabels(t *testing.T) {
+	good := `{"round":{"sharedPaths":["docs/*.md"]},"test":{"fast":["f {files}"],"full":["F"]},"work":{"tdd":true},"issues":{"labels":{"inProgress":"wip-x","needsHuman":"human-x","needsReview":"review-x"}}}`
+	cfg, err := jsonx.Decode([]byte(good))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Labels{InProgress: "wip-x", NeedsHuman: "human-x", NeedsReview: "review-x"}
+	strict, err := FromConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, s := range map[string]Settings{"FromConfig": strict, "Lenient": Lenient(cfg)} {
+		if !reflect.DeepEqual(s.SharedPaths, []string{"docs/*.md"}) || !reflect.DeepEqual(s.Tests.Fast, []string{"f {files}"}) ||
+			!reflect.DeepEqual(s.Tests.Full, []string{"F"}) || !s.Tests.TDD || s.Labels != want {
+			t.Errorf("%s: %+v", name, s)
+		}
+	}
+	// A malformed round value fails FromConfig but not the gate's read.
+	bad, _ := jsonx.Decode([]byte(`{"round":{"roster":[]},"test":{"fast":["f"]},"issues":{"labels":{"inProgress":"wip-x"}}}`))
+	if _, err := FromConfig(bad); err == nil {
+		t.Fatal("FromConfig accepted an empty roster")
+	}
+	if l := Lenient(bad); !reflect.DeepEqual(l.Tests.Fast, []string{"f"}) || l.Labels.InProgress != "wip-x" {
+		t.Errorf("Lenient on a bad roster: %+v", l)
+	}
+	// A malformed shared-path list reads as none, Tests.Err survives.
+	bad2, _ := jsonx.Decode([]byte(`{"round":{"sharedPaths":"x"},"test":{"fast":"go test"}}`))
+	l := Lenient(bad2)
+	if len(l.SharedPaths) != 0 || l.Tests.Err == nil {
+		t.Errorf("Lenient on malformed lists: %+v", l)
 	}
 }
