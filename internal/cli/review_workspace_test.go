@@ -187,3 +187,49 @@ func TestReviewWorkspaceCleanupScope(t *testing.T) {
 		t.Fatalf("other workspace removed: %v", err)
 	}
 }
+
+// A rota project keeps review workspaces under its own .rota/tmp, resolved
+// through the git common dir so a linked worktree lands in the main checkout.
+func TestReviewWorkspaceUnderProjectTemp(t *testing.T) {
+	repo := newRepo(t, t.TempDir(), "repo", "main")
+	write(t, filepath.Join(repo, "tracked.txt"), "x\n")
+	gitT(t, repo, "add", "tracked.txt")
+	gitT(t, repo, "commit", "-qm", "x")
+	sha := gitT(t, repo, "rev-parse", "HEAD")
+	if err := os.MkdirAll(filepath.Join(repo, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitT(t, repo, "worktree", "add", "-q", "--detach", wt, sha)
+	canon, err := filepath.EvalSymlinks(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(canon, ".rota", "tmp")
+	for _, cwd := range []string{repo, wt} {
+		o := trRun(t, cwd, "", "review", "prepare", sha, "--json")
+		if o.code != 0 {
+			t.Fatalf("prepare from %s: rc=%d %s %s", cwd, o.code, o.stdout, o.stderr)
+		}
+		path := envelope(t, o.stdout)["data"].(map[string]any)["path"].(string)
+		if got := filepath.Dir(filepath.Dir(path)); got != want {
+			t.Fatalf("workspace parent = %s, want %s", got, want)
+		}
+		o = trRun(t, cwd, "", "review", "cleanup", path, "--json")
+		if o.code != 0 {
+			t.Fatalf("cleanup from %s: %s %s", cwd, o.stdout, o.stderr)
+		}
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("workspace survived: %v", err)
+		}
+	}
+	// A look-alike workspace elsewhere in the project is still refused.
+	fake := filepath.Join(canon, ".rota", "rota-review-x", "tree")
+	if err := os.MkdirAll(fake, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(filepath.Dir(fake), reviewWorkspaceMarker), `{"path":"`+fake+`","head":"h"}`)
+	if o := trRun(t, repo, "", "review", "cleanup", fake, "--json"); o.code == 0 {
+		t.Fatalf("cleanup outside the temp roots must be refused: %s", o.stdout)
+	}
+}
