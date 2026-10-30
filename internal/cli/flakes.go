@@ -6,10 +6,10 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
-	"time"
 
 	"github.com/l4ci/rota/internal/flakeledger"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 func testFlakes(c *Ctx, args []string) (Result, error) {
@@ -39,7 +39,7 @@ func testFlakes(c *Ctx, args []string) (Result, error) {
 		fmt.Fprintln(tw, "COUNT\tCHECK\tTEST\tLAST SEEN")
 	}
 	for _, r := range ranked {
-		when := r.LastSeen.UTC().Format(time.RFC3339)
+		when := stamp.Format(r.LastSeen)
 		o := jsonx.NewObject()
 		o.Set("check", r.Check)
 		o.Set("test", r.Test)

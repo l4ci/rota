@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/exitcode"
 	gatepolicy "github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/landfreeze"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 const GateFreeze = "freeze"
@@ -170,7 +170,7 @@ func (e Env) clearFreeze(ctx context.Context, root, p string, r *landfreeze.Reco
 		who = "unknown"
 	}
 	r.Active = false
-	r.ClearedBy, r.ClearedSHA, r.ClearedAt, r.Reason = who, sha, e.Now().UTC().Format(time.RFC3339), reason
+	r.ClearedBy, r.ClearedSHA, r.ClearedAt, r.Reason = who, sha, stamp.Format(e.Now()), reason
 	return landfreeze.Save(p, r)
 }
 
@@ -206,7 +206,7 @@ func (e Env) freezeLandedFailure(ctx context.Context, root, base string, prs, ch
 		return err
 	}
 	if r == nil || !r.Active {
-		r = &landfreeze.Record{Base: base, CreatedAt: e.Now().UTC().Format(time.RFC3339)}
+		r = &landfreeze.Record{Base: base, CreatedAt: stamp.Format(e.Now())}
 	}
 	r.Active = true
 	r.SHA, _ = e.runGit(ctx, root, "rev-parse", "HEAD")

@@ -3,6 +3,8 @@ package hook
 import (
 	"fmt"
 	"time"
+
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // Context guard modes of work.contextGuard.
@@ -14,7 +16,7 @@ const (
 // guardReading is the session's context percentage when its statusline
 // reading is fresh; ok is false for a stale or missing one.
 func guardReading(st State, set Settings, now time.Time) (pct float64, ok bool) {
-	at, err := time.Parse(time.RFC3339, st.UpdatedAt)
+	at, err := stamp.Parse(st.UpdatedAt)
 	if err != nil || now.Sub(at) > time.Duration(set.StateMaxAge)*time.Second || st.ContextPct == nil {
 		return 0, false
 	}
@@ -79,7 +81,7 @@ func DecideGuardStop(st State, set Settings, ho Handoff, now time.Time) StopDeci
 	}
 	var blockedAt time.Time
 	if st.BlockedAt != "" {
-		blockedAt, _ = time.Parse(time.RFC3339, st.BlockedAt)
+		blockedAt, _ = stamp.Parse(st.BlockedAt)
 	}
 	if ho.Fresh(time.Duration(set.HandoffMaxAge)*time.Second, now) && !ho.ModTime.Before(blockedAt) {
 		return d
@@ -90,7 +92,7 @@ func DecideGuardStop(st State, set Settings, ho Handoff, now time.Time) StopDeci
 		return d
 	}
 	d.State.HandoffBlocks++
-	d.State.BlockedAt = now.UTC().Format(time.RFC3339)
+	d.State.BlockedAt = stamp.Format(now)
 	d.Persist, d.Block = true, true
 	d.Reason = fmt.Sprintf("Context is at %s%%, at or above the handoff threshold of %d%%. "+
 		"Finish the current task step, then run /rota-pause at the next task boundary before you stop.",

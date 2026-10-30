@@ -18,6 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // File is the ledger, relative to the .rota directory.
@@ -98,7 +99,7 @@ func Detail(kv ...any) *jsonx.Object {
 
 func (e Entry) object() *jsonx.Object {
 	o := jsonx.NewObject()
-	o.Set("ts", e.TS.UTC().Format(time.RFC3339))
+	o.Set("ts", stamp.Format(e.TS))
 	o.Set("kind", e.Kind)
 	o.Set("round", e.Round)
 	for _, f := range []struct{ k, v string }{
@@ -218,7 +219,7 @@ func load(root string, strict bool) SummarySource {
 		}
 		e := Entry{Kind: jsonx.Str(o, "kind"), Issue: jsonx.Str(o, "issue"), Slot: jsonx.Str(o, "slot"),
 			Account: jsonx.Str(o, "account"), Harness: jsonx.Str(o, "harness"), PR: jsonx.Str(o, "pr")}
-		e.TS, _ = time.Parse(time.RFC3339, jsonx.Str(o, "ts"))
+		e.TS, _ = stamp.Parse(jsonx.Str(o, "ts"))
 		rv, _ := o.Get("round")
 		e.Round, ok = jsonx.Int(rv)
 		knownRound := ok && e.Round >= 0
