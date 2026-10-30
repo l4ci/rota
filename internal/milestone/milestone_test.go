@@ -33,6 +33,17 @@ func add(root, title, summary, deps, today string) (string, error) {
 	return FileStore{Root: root, Today: func() time.Time { return day }}.Add(title, summary, artifact.SplitCSV(deps), KindDelivery)
 }
 
+// setStat moves a milestone through FileStore.SetStatus, then regenerates the
+// overview as the CLI does.
+func setStat(root, id, status string) (bool, error) {
+	changed, err := FileStore{Root: root}.SetStatus(id, status)
+	if err != nil {
+		return false, err
+	}
+	_, err = Index(root)
+	return changed, err
+}
+
 var created = regexp.MustCompile(`(?m)^created: \d{4}-\d{2}-\d{2}$`)
 
 func golden(t *testing.T, name string) string {
@@ -106,7 +117,7 @@ func TestMatchesOldHelpers(t *testing.T) {
 	Index(root)
 	snap(t, root, "s1")
 	for _, st := range []struct{ id, to string }{{"M01", "shipped"}, {"M02", "active"}, {"M03", "active"}} {
-		if _, err := SetStatus(root, st.id, st.to); err != nil {
+		if _, err := setStat(root, st.id, st.to); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -127,18 +138,18 @@ func TestMatchesOldHelpers(t *testing.T) {
 	if ids, _ := Active(root); !reflect.DeepEqual(ids, strings.Fields(golden(t, "active.txt"))) {
 		t.Errorf("active = %v", ids)
 	}
-	SetStatus(root, "M02", "shipped")
-	SetStatus(root, "M03", "archived")
+	setStat(root, "M02", "shipped")
+	setStat(root, "M03", "archived")
 	snap(t, root, "s3")
 }
 
 func TestStatusAndIndexChanged(t *testing.T) {
 	root := project(t)
 	add(root, "A", "a", "", testDay)
-	if changed, err := SetStatus(root, "M01", "active"); err != nil || !changed {
+	if changed, err := setStat(root, "M01", "active"); err != nil || !changed {
 		t.Fatalf("first status: %v %v", changed, err)
 	}
-	if changed, err := SetStatus(root, "M01", "active"); err != nil || changed {
+	if changed, err := setStat(root, "M01", "active"); err != nil || changed {
 		t.Errorf("repeat status: changed=%v %v", changed, err)
 	}
 	if changed, _ := Index(root); changed {
@@ -162,17 +173,17 @@ func TestExits(t *testing.T) {
 		if _, err := Show(root, id); exitOf(err) != 2 {
 			t.Errorf("Show(%q) = %v", id, err)
 		}
-		if _, err := SetStatus(root, id, "active"); exitOf(err) != 2 {
+		if _, err := setStat(root, id, "active"); exitOf(err) != 2 {
 			t.Errorf("SetStatus(%q) = %v", id, err)
 		}
 	}
-	if _, err := SetStatus(root, "M01", "done"); exitOf(err) != 2 {
+	if _, err := setStat(root, "M01", "done"); exitOf(err) != 2 {
 		t.Errorf("bad status: %v", err)
 	}
 	if _, err := Show(root, "M09"); exitOf(err) != 3 {
 		t.Errorf("show missing: %v", err)
 	}
-	if _, err := SetStatus(root, "M09", "active"); exitOf(err) != 3 {
+	if _, err := setStat(root, "M09", "active"); exitOf(err) != 3 {
 		t.Errorf("status missing: %v", err)
 	}
 	if _, err := Put(root, "M09", "---\nid: M09\n---\n"); exitOf(err) != 3 {
@@ -191,7 +202,7 @@ func TestExits(t *testing.T) {
 	}
 	// Status on a file without a status field is a bug in the file: exit 70.
 	os.WriteFile(filepath.Join(root, ".rota/milestones/M01.md"), []byte("---\nid: M01\n---\n"), 0o644)
-	if _, err := SetStatus(root, "M01", "active"); exitOf(err) != 70 {
+	if _, err := setStat(root, "M01", "active"); exitOf(err) != 70 {
 		t.Errorf("no status field: %v", err)
 	}
 }
@@ -406,5 +417,32 @@ func TestMarkReady(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestShippedSummaryUsesStoreClosedItems: closed items come from the store's
+// ClosedItems reader only; a hand-written Items section is never read.
+func TestShippedSummaryUsesStoreClosedItems(t *testing.T) {
+	root := project(t)
+	add(root, "A", "a", "", testDay)
+	p := filepath.Join(root, ".rota/milestones/M01.md")
+	os.WriteFile(p, []byte(strings.Replace(read(t, p), "## Items", "## Items\n\n- B1: stale (done)\n", 1)), 0o644)
+	st := FileStore{Root: root, ClosedItems: func(string) ([]string, error) {
+		return []string{"- B2: real (done)"}, nil
+	}}
+	if _, err := st.SetStatus("M01", "shipped"); err != nil {
+		t.Fatal(err)
+	}
+	got := read(t, p)
+	if !strings.Contains(got, "- B2: real (done)") || strings.Contains(got, "### Closed items\n\n- B1") {
+		t.Errorf("shipped summary:\n%s", got)
+	}
+	add(root, "B", "b", "", testDay)
+	os.WriteFile(filepath.Join(root, ".rota/milestones/M02.md"), []byte(strings.Replace(read(t, filepath.Join(root, ".rota/milestones/M02.md")), "## Items", "## Items\n\n- B1: stale (done)\n", 1)), 0o644)
+	if _, err := (FileStore{Root: root}).SetStatus("M02", "shipped"); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(root, ".rota/milestones/M02.md")); strings.Contains(got, "### Closed items\n\n- B1") {
+		t.Errorf("nil ClosedItems read the Items section:\n%s", got)
 	}
 }
