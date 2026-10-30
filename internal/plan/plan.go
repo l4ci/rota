@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/pystr"
 )
 
 // Store is where plans live. Errors are exitcode.Errors: Create is exit 4 when
@@ -119,7 +120,7 @@ func extras(root string, s Store, o AddOpts, unit string) (design, repo string, 
 		}
 	}
 	if o.Repos != "" {
-		names := artifact.SplitCSV(o.Repos)
+		names := pystr.SplitCSV(o.Repos)
 		if len(names) == 0 {
 			return "", "", exitcode.Errf(exitcode.ExitUsage, "--repos %q is empty after parsing", o.Repos)
 		}

@@ -561,16 +561,13 @@ func TestDispatchSameTaskRetryKeepsWork(t *testing.T) {
 	}
 }
 
-func TestRelaySummaryAndSplitLines(t *testing.T) {
+func TestRelaySummary(t *testing.T) {
 	if got := relaySummary("--- ORCHESTRATOR (round 1) ---\n\n  hello  \nx"); got != "hello" {
 		t.Errorf("%q", got)
 	}
 	long := strings.Repeat("é", 300)
 	if got := relaySummary(long); len([]rune(got)) != 200 {
 		t.Errorf("summary has %d chars", len([]rune(got)))
-	}
-	if got := splitLines("a\r\nb\rc\x0bd\u2028e\n"); strings.Join(got, "|") != "a|b|c|d|e" {
-		t.Errorf("%q", got)
 	}
 }
 
