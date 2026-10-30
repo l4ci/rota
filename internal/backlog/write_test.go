@@ -540,3 +540,24 @@ func TestPickFieldsDelimitValues(t *testing.T) {
 		t.Errorf("words without a colon change nothing: %+v", f)
 	}
 }
+
+func TestIsActiveAndCycleIDs(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".rota")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	md := "## Active\n\n- **[B01]** open\n\n## Completed\n\n- ~~**[B02]** shown~~ Done 2026-01-01 [`abc1234`]\n"
+	if err := os.WriteFile(filepath.Join(dir, "BACKLOG.md"), []byte(md), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !IsActive(root, "B01") || IsActive(root, "B02") || IsActive(root, "B09") || IsActive(t.TempDir(), "B01") {
+		t.Error("IsActive misjudged")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "ARCHIVE.md"), []byte("- ~~**[B03]** old~~ Done 2026-01-01 [`abc1234`]\n- ~~**[B04]** other~~ Done 2026-01-01 [`ffff000`]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := CycleIDs(root, map[string]bool{"abc1234": true}); len(got) != 2 || got[0] != "B02" || got[1] != "B03" {
+		t.Errorf("CycleIDs %v", got)
+	}
+}
