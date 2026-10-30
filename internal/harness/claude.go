@@ -245,6 +245,20 @@ func OrchestratorCommand(cfg any, resume bool) ([]string, error) {
 	return append(argv, "--model", model, "--permission-mode", "auto"), nil
 }
 
+// OrchestratorCommandLine is OrchestratorCommand as one shell line. A custom
+// orchestrator.command is validated by the same split but returned as typed, so
+// `~`, `$VAR`, `&&` and env assignments keep their shell meaning.
+func OrchestratorCommandLine(cfg any, resume bool) (string, error) {
+	argv, err := OrchestratorCommand(cfg, resume)
+	if err != nil {
+		return "", err
+	}
+	if s := config.StringIfSet(cfg, "orchestrator.command"); s != "" {
+		return s, nil
+	}
+	return shlex.Join(argv), nil
+}
+
 // hermes runs the orchestrator only. It takes no positional prompt, so
 // Command ends in the flag that does: the supervisor appends the prompt as the
 // last argument, first start and restarts alike. `-s` preloads the skill (a
