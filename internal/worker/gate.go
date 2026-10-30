@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/l4ci/rota/internal/change"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/flakeledger"
@@ -552,6 +553,7 @@ var gateSteps = []gateStep{
 	(*gate).stepCIVerifier,
 	(*gate).stepPremerge,
 	(*gate).stepForgeMergeable,
+	(*gate).stepTier,
 	(*gate).stepVerifyFirst,
 	(*gate).stepMerge,
 	(*gate).stepVerify,
@@ -1279,6 +1281,46 @@ func (g *gate) stepForgeMergeable() (bool, error) {
 	return false, nil
 }
 
+// stepTier puts the change in a tier (#2348) and picks what verifies the
+// scratch merge: test.docs or test.small in place of test.full and test.e2e
+// when that list is set. It runs after stepPremerge, so the NO-VERIFY refusal
+// still reads test.full, and it fails closed: anything ClassifyChange cannot
+// read is full. Under test.fullWhere ci the tier is recorded, not applied.
+func (g *gate) stepTier() (bool, error) {
+	if g.o.skipsVerify() {
+		return false, nil
+	}
+	policy, perr := g.in.cfg.ChangePolicy()
+	span := g.baseRef + "..." + g.verified
+	src := ChangeSources{Policy: policy, PolicyErr: perr, Git: g.e.Git, Dir: g.root, Span: span}
+	if g.pr != "" {
+		src.PRBody = g.prBody
+	}
+	tier := ClassifyChange(g.ctx, src)
+	g.res.Tier, g.res.TierReason = string(tier.Tier), tier.Reason
+	if g.ci != nil {
+		if tier.Tier != change.TierFull {
+			g.res.Notes = append(g.res.Notes, fmt.Sprintf("GATE-TIER %s — %s (%s); not applied: test.fullWhere is ci, so CI runs its own checks", g.o.Slot, tier.Tier, tier.Reason))
+		}
+		return false, nil
+	}
+	var files []string
+	if tier.Tier == change.TierSmall && anyHasFiles(g.in.cfg.Small) {
+		var err error
+		if files, err = git.DiffFiles(g.ctx, g.e.Git, g.root, "--diff-filter=d", span); err != nil {
+			g.res.Tier, g.res.TierReason = string(change.TierFull), fmt.Sprintf("could not list the files of %s for test.small: %v", span, err)
+			return false, nil
+		}
+	}
+	cfg, ran, skipped := g.in.cfg.forTier(tier.Tier, files)
+	if len(skipped) == 0 {
+		return false, nil
+	}
+	g.tierCfg, g.res.Skipped = &cfg, skipped
+	g.res.Notes = append(g.res.Notes, fmt.Sprintf("GATE-TIER %s — %s (%s); ran %s; skipped %s", g.o.Slot, tier.Tier, tier.Reason, ran, strings.Join(skipped, ", ")))
+	return false, nil
+}
+
 // stepVerifyFirst verifies the merge result in a scratch tree, before anything
 // lands (stage 2).
 func (g *gate) stepVerifyFirst() (bool, error) {
@@ -1421,7 +1463,11 @@ func (g *gate) verifyOnCI(ci *ciVerifier, sha string) (bool, error) {
 
 // verifyLocal runs test.full, then test.e2e, on the scratch merge in dir.
 func (g *gate) verifyLocal(dir, _ string) (bool, error) {
-	return g.verifyTiers(tierFull, dir, false)
+	cfg := g.in.cfg
+	if g.tierCfg != nil {
+		cfg = *g.tierCfg
+	}
+	return g.verifyTiers(cfg, tierFull, dir, false)
 }
 
 // verifyTiers walks the tiers from first in dir through the shared walk,
@@ -1429,7 +1475,7 @@ func (g *gate) verifyLocal(dir, _ string) (bool, error) {
 // a red result is then fixed forward, else nothing landed and the slot goes
 // back. An empty test.full leaves a NO-VERIFY note; test.e2e passing after it
 // clears VerifySkipped. done is true when it ends the gate with a verdict.
-func (g *gate) verifyTiers(first, dir string, landed bool) (bool, error) {
+func (g *gate) verifyTiers(cfg GateConfig, first, dir string, landed bool) (bool, error) {
 	w := g.tierWalk(func(tier string, cmds []string) (VerifyResult, error) {
 		run := g.e.runGateVerify
 		if tier == tierE2E {
@@ -1445,7 +1491,7 @@ func (g *gate) verifyTiers(first, dir string, landed bool) (bool, error) {
 		}
 		return vr, err
 	}, g.redTier(landed))
-	ended, err := w.walk(g.in.cfg, first)
+	ended, err := w.walk(cfg, first)
 	if w.fullEmpty {
 		g.res.VerifySkipped = true
 	}
@@ -1535,7 +1581,7 @@ func (g *gate) stepVerify() (bool, error) {
 		if !g.confirmCITree() {
 			return true, nil
 		}
-		if done, err := g.verifyTiers(tierE2E, g.root, true); done || err != nil {
+		if done, err := g.verifyTiers(g.in.cfg, tierE2E, g.root, true); done || err != nil {
 			return true, err
 		}
 		res.Verdict = GatePass
@@ -1544,7 +1590,9 @@ func (g *gate) stepVerify() (bool, error) {
 	if tree := g.landedTree(); tree != g.verifiedTree {
 		res.Notes = append(res.Notes, fmt.Sprintf("VERIFY-AGAIN %s — the landed tree %s differs from the verified scratch merge %s (%s moved before the merge); verifying the landed %s", o.Slot, strutil.ShortSHA(tree), strutil.ShortSHA(g.verifiedTree), o.Base, o.Base))
 		res.Verified, res.Excluded, res.VerifySkipped = nil, nil, false
-		if done, err := g.verifyTiers(tierFull, g.root, true); done || err != nil {
+		// The landed base holds other merges, so the cheap tier's premise (only
+		// this change's files changed) no longer holds: verify it in full.
+		if done, err := g.verifyTiers(g.in.cfg, tierFull, g.root, true); done || err != nil {
 			return true, err
 		}
 	}
@@ -1689,13 +1737,16 @@ func (e Env) issueSide(forge Forge, forgeProvider, dir string, s tracker.Setting
 }
 
 type gate struct {
-	e      Env // defaulted once, by Env.Gate
-	ctx    context.Context
-	root   string
-	res    *GateResult
-	o      GateOpts
-	in     gateInput
-	target GateTarget
+	// tierCfg is the config the scratch merge verifies with: test.docs or
+	// test.small in place of test.full and test.e2e (stepTier); nil is in.cfg.
+	tierCfg *GateConfig
+	e       Env // defaulted once, by Env.Gate
+	ctx     context.Context
+	root    string
+	res     *GateResult
+	o       GateOpts
+	in      gateInput
+	target  GateTarget
 	// resolved is the target as GateTarget returned it. stepExternal rewrites
 	// target.Branch to the forge head; the ledger keeps the resolved one.
 	resolved    GateTarget

@@ -39,9 +39,12 @@ func ClassifyChange(ctx context.Context, s ChangeSources) change.Result {
 	if err != nil {
 		return full(-1, fmt.Sprintf("could not list the files of %s: %v", s.Span, err))
 	}
-	lines, err := git.ChangedLines(ctx, s.Git, s.Dir, s.Span)
+	lines, counted, err := git.ChangedLinesCounted(ctx, s.Git, s.Dir, s.Span)
 	if err != nil {
 		return full(-1, fmt.Sprintf("could not count the changed lines of %s: %v", s.Span, err))
+	}
+	if !counted {
+		lines = -1 // a binary entry has no line count, so the diff is never small
 	}
 	in := change.Input{Files: files, Lines: lines}
 	res := change.Classify(in, s.Policy)

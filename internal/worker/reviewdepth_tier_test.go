@@ -33,7 +33,11 @@ func tierRepo(t *testing.T, files ...string) string {
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(p, []byte("x\n"), 0o644); err != nil {
+		body := []byte("x\n")
+		if strings.HasSuffix(f, ".bin") {
+			body = []byte{0, 1, 2, 0} // numstat shows a binary file as dashes
+		}
+		if err := os.WriteFile(p, body, 0o644); err != nil {
 			t.Fatal(err)
 		}
 		run("add", f)
@@ -51,6 +55,8 @@ func TestResolveReviewDepthTier(t *testing.T) {
 	light, _ := config.ParseReviewPolicy("light")
 	labelled, _ := config.ParseReviewPolicy(nil)
 	labelled.Labels = map[string]config.ReviewDepth{"risk:high": config.DepthFull, "review:light": config.DepthLight}
+	withPaths, _ := config.ParseReviewPolicy(nil)
+	withPaths.Paths = map[string]config.ReviewDepth{"docs/sec/**": config.DepthFull}
 	drift := fakeIssueGet{is: tracker.Issue{Body: "## Files\n\n- other.go\n"}}
 	cases := []struct {
 		name   string
@@ -70,6 +76,8 @@ func TestResolveReviewDepthTier(t *testing.T) {
 		{"docs with a light label", []string{"README.md"}, labelled, docs, "", []string{"review:light"}, config.DepthLight, config.SignalLabel, "review:light"},
 		{"small with drift", []string{"x.go"}, full, change.Policy{DocsPaths: change.DefaultDocsPaths, SmallBelow: 100}, "", nil, config.DepthLight, config.SignalTier, "small change (tier small)"},
 		{"docs under light, default policy", []string{"docs/a.md"}, light, docs, "", nil, config.DepthNone, config.SignalTier, "tier docs"},
+		{"docs with a paths rule", []string{"docs/sec/a.md"}, withPaths, docs, "", nil, config.DepthFull, config.SignalPath, "docs/sec/**"},
+		{"small with a binary file", []string{"x.go", "lib.bin"}, full, change.Policy{DocsPaths: change.DefaultDocsPaths, SmallBelow: 100}, "", nil, config.DepthFull, config.SignalDefault, "default depth"},
 		{"tiers off", []string{"README.md"}, light, change.Policy{}, "", nil, config.DepthFull, config.SignalScopeDrift, "README.md"},
 	}
 	for _, c := range cases {
