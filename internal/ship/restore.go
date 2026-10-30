@@ -17,7 +17,7 @@ import (
 func CycleIDs(root string, hashes map[string]bool) []string {
 	var ids []string
 	seen := map[string]bool{}
-	for _, name := range []string{"BACKLOG.md", "ARCHIVE.md"} {
+	for _, name := range rotatree.DoneSources() {
 		text, err := fsio.ReadText(rotatree.File(root, name))
 		if err != nil {
 			continue

@@ -62,8 +62,8 @@ func (f *File) rota(parts ...string) string {
 // ARCHIVE.md: the text an item ID is looked up in (load_backlog_corpus). A
 // missing or unreadable file counts as empty.
 func (f *File) Corpus() string {
-	primary, _ := fsio.ReadText(f.rota("BACKLOG.md"))
-	archive, _ := fsio.ReadText(f.rota("ARCHIVE.md"))
+	primary, _ := fsio.ReadText(f.rota(rotatree.BacklogFile))
+	archive, _ := fsio.ReadText(f.rota(rotatree.ArchiveFile))
 	return strings.TrimRight(primary, "\n") + "\n" + archive
 }
 
@@ -115,7 +115,7 @@ func (f *File) List(includeClosed bool) ([]Item, error) {
 	if err != nil {
 		return nil, err
 	}
-	archive, _ := fsio.ReadText(f.rota("ARCHIVE.md"))
+	archive, _ := fsio.ReadText(f.rota(rotatree.ArchiveFile))
 	corpus := strings.TrimRight(md, "\n") + "\n" + archive
 
 	var out []Item
@@ -169,7 +169,7 @@ func doneIDs(text string) []string {
 
 // Markdown returns BACKLOG.md verbatim; closedLimit is ignored.
 func (f *File) Markdown(int) (string, error) {
-	text, err := fsio.ReadText(f.rota("BACKLOG.md"))
+	text, err := fsio.ReadText(f.rota(rotatree.BacklogFile))
 	if errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("%w: .rota/BACKLOG.md does not exist", ErrNotFound)
 	}

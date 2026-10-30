@@ -31,7 +31,7 @@ func Next(root, kind string) (string, error) {
 	rota := func(name string) string { return rotatree.File(root, name) }
 	pat := regexp.MustCompile(`\[` + prefix + `(\p{Nd}+)\]`)
 	highest := 0
-	for _, name := range []string{"BACKLOG.md", "ARCHIVE.md"} {
+	for _, name := range rotatree.DoneSources() {
 		text, err := fsio.ReadText(rota(name))
 		if err != nil {
 			continue
@@ -45,7 +45,7 @@ func Next(root, kind string) (string, error) {
 		}
 	}
 	var next int
-	err := fsio.UpdateJSON(rota("counters.json"), jsonx.NewObject(), func(v any) (any, error) {
+	err := fsio.UpdateJSON(rota(rotatree.CountersFile), jsonx.NewObject(), func(v any) (any, error) {
 		d, ok := v.(*jsonx.Object)
 		if !ok {
 			return nil, errors.New("counters.json is not a JSON object")
