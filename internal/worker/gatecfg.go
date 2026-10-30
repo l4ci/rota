@@ -90,19 +90,19 @@ func (e Env) GateConfig(root string) GateConfig {
 // invalid forge.provider or issues.source reads as its default here, and rota
 // doctor reports it (tracker.ValidateConfig).
 func ParseGateConfig(cfg any) GateConfig {
-	labels := roundcfg.LabelsOf(cfg)
+	rs := roundcfg.Lenient(cfg)
 	c := GateConfig{
 		E2E:             commandList(cfg, "test.e2e"),
 		CIChecks:        commandList(cfg, "test.ciChecks"),
 		Docs:            commandList(cfg, "test.docs"),
 		Small:           commandList(cfg, "test.small"),
 		Tracker:         tracker.SettingsFromConfig(cfg),
-		InProgressLabel: labels.InProgress,
-		SharedPaths:     roundcfg.SharedPaths(cfg),
+		InProgressLabel: rs.Labels.InProgress,
+		SharedPaths:     rs.SharedPaths,
 		Support:         roundcfg.SupportName(cfg),
 		SupportLabel:    roundcfg.MachineLabel(roundcfg.SupportName(cfg)),
 	}
-	t := roundcfg.ParseTests(cfg)
+	t := rs.Tests
 	c.Full, c.Fast, c.legacy, c.testsErr = t.Full, t.Fast, t.Legacy, t.Err
 	c.legacyOnce = new(sync.Once)
 	c.vacuous = parseVacuousConfig(cfg)
