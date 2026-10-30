@@ -221,9 +221,15 @@ func (claude) Sign(_ []byte, payload string) string { return payload }
 // The orchestrator facet: a fresh session on orchestrator.model in `auto`
 // mode (the orchestrator merges and talks to the user, so it keeps a gate the
 // workers do not), or orchestrator.command when set.
-func (claude) Name() string   { return Claude }
-func (claude) Prompt() string { return "/rota-orchestrate" }
-func (claude) Command(cfg any) ([]string, error) {
+func (claude) Name() string                      { return Claude }
+func (claude) Prompt() string                    { return "/rota-orchestrate" }
+func (claude) Command(cfg any) ([]string, error) { return OrchestratorCommand(cfg, false) }
+
+// OrchestratorCommand is the one builder of the claude orchestrator command
+// line, for `rota orchestrate` and the round's operator session alike. A set
+// orchestrator.command wins as written; both refuse one that is not a command
+// line. resume adds --continue to the default line.
+func OrchestratorCommand(cfg any, resume bool) ([]string, error) {
 	if s := config.StringIfSet(cfg, "orchestrator.command"); s != "" {
 		argv, err := shlex.Split(s)
 		if err != nil || len(argv) == 0 {
@@ -232,7 +238,11 @@ func (claude) Command(cfg any) ([]string, error) {
 		return argv, nil
 	}
 	model := config.StringOrDefault(cfg, "orchestrator.model")
-	return []string{"claude", "--model", model, "--permission-mode", "auto"}, nil
+	argv := []string{"claude"}
+	if resume {
+		argv = append(argv, "--continue")
+	}
+	return append(argv, "--model", model, "--permission-mode", "auto"), nil
 }
 
 // hermes runs the orchestrator only. It takes no positional prompt, so
