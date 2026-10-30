@@ -1,6 +1,9 @@
 package config
 
 import (
+	"errors"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -82,5 +85,25 @@ func TestMigrateSourceDetectsOnce(t *testing.T) {
 	MigrateSource(decodeCfg(t, `{"backlog":{"backend":"issues"}}`), detect)
 	if calls > 1 {
 		t.Errorf("detect ran %d times", calls)
+	}
+}
+
+func TestMigrateSourceFileSharesReadContract(t *testing.T) {
+	root := writeLayers(t, `{"work":`, "-")
+	_, err := MigrateSourceFile(root, detects("github"), true)
+	if !errors.Is(err, ErrCorrupt) || !strings.Contains(err.Error(), "config.json") {
+		t.Fatalf("corrupt: err = %v, want ErrCorrupt naming config.json", err)
+	}
+
+	root = writeLayers(t, `{}`, "-")
+	if err := os.Remove(configPath(root)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(configPath(root), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err = MigrateSourceFile(root, detects("github"), true)
+	if err == nil || errors.Is(err, ErrCorrupt) || !strings.Contains(err.Error(), "config.json") {
+		t.Fatalf("read error: err = %v, want a wrapped read error naming config.json", err)
 	}
 }
