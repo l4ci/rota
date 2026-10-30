@@ -193,11 +193,12 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 // support machine's local main can lag landed work. Local cycle branches
 // without an origin counterpart, or ahead of origin, retain their own base.
 func (e Env) resetBase(root, slot, base string) (string, error) {
-	remote := "origin/" + base
+	name := e.Remote(root)
+	remote := name + "/" + base
 	if _, code := e.git(root, "rev-parse", "--verify", "--quiet", "refs/remotes/"+remote+"^{commit}"); code != 0 {
 		return base, nil
 	}
-	if _, code := e.git(root, "fetch", "-q", "origin", base); code != 0 {
+	if _, code := e.git(root, "fetch", "-q", name, base); code != 0 {
 		return "", fail(exitcode.ExitUnavailable, fmt.Sprintf("could not fetch %s before checking slot '%s'; not resetting it", remote, slot))
 	}
 	_, code := e.git(root, "merge-base", "--is-ancestor", base, remote)

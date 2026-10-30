@@ -13,6 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/exitmap"
@@ -1136,7 +1137,7 @@ func (e Env) transferToSlotSteps(ctx context.Context, root string, be Board, o T
 	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return run.branch }, Round: rnd, Kind: run.kind, Model: run.model, Wrap: wrap, LogRelay: true,
 		Brief: func() string {
 			tryItSteps, tryItWhy := e.tryItBrief(ctx, root, be, id)
-			text := pointerBrief(o.To, id, run.branch, run.brief, nil, run.decisions, run.decisionContext, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, nil, tierBrief{Kind: run.kind, Tier: run.tier, Model: run.model, Default: e.Round.Tier, Reason: run.reason, Table: e.Round.Models[run.kind], Attempt: attempt, FullOnly: e.Round.FullOnly, TDD: e.Round.TDD})
+			text := pointerBrief(o.To, id, run.branch, run.brief, nil, run.decisions, run.decisionContext, outOfScope(be, id), touches(be, id), tryItSteps, tryItWhy, nil, tierBrief{Kind: run.kind, Tier: run.tier, Model: run.model, Default: e.Round.Tier, Reason: run.reason, Table: e.Round.Models[run.kind], Attempt: attempt, FullOnly: e.Round.FullOnly, TDD: e.Round.TDD, Remote: config.GitRemote(e.Worker.Config(root))})
 			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `%s` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
 				res.From, marker.Handoff(res.From, rnd), run.branch)
 			if rec != nil {

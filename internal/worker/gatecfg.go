@@ -40,6 +40,8 @@ type GateConfig struct {
 	SharedPaths []string
 	// TDD is work.tdd: a behavior change needs a recorded red-first run.
 	TDD bool
+	// Remote is git.remote: where the gate and the train fetch from and push to.
+	Remote string
 
 	legacy     bool       // Full came from refactor.verifyCommands
 	legacyOnce *sync.Once // shared by copies, so the warning prints once per read
@@ -62,6 +64,14 @@ type GateConfig struct {
 	slotsErr   error
 }
 
+// RemoteName is the configured git remote, origin for a config that sets none.
+func (c GateConfig) RemoteName() string {
+	if c.Remote == "" {
+		return "origin"
+	}
+	return c.Remote
+}
+
 // GateConfig reads root's config once, through Env.Config.
 func (e Env) GateConfig(root string) GateConfig {
 	return ParseGateConfig(e.WithDefaults().Config(root))
@@ -74,6 +84,7 @@ func (e Env) GateConfig(root string) GateConfig {
 func ParseGateConfig(cfg any) GateConfig {
 	labels := roundcfg.LabelsOf(cfg)
 	c := GateConfig{
+		Remote:          config.GitRemote(cfg),
 		E2E:             commandList(cfg, "test.e2e"),
 		CIChecks:        commandList(cfg, "test.ciChecks"),
 		Tracker:         tracker.SettingsFromConfig(cfg),

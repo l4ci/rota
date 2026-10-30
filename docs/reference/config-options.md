@@ -232,6 +232,7 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 | Key | Scope | Type | Default | Values | Description |
 |-----|-------|------|---------|--------|-------------|
 | `git.baseBranch` | project (tracked) | string | unset |  | Base branch the skills merge into and diff against. Empty auto-detects it. |
+| `git.remote` | project (tracked) | string | `"origin"` |  | Git remote round workers fetch from and push to: worker done, gate and train compare branches against it, and the worker contract names it. Set it when origin is not the remote that holds the PRs. |
 
 ### umbrella
 

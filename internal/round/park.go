@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/stamp"
@@ -107,6 +108,7 @@ func (e Env) Park(ctx context.Context, root, name, verb string) (Parked, error) 
 		p.Head = headOf("HEAD")
 		return p, nil
 	}
+	remote := config.GitRemote(e.Worker.Config(root))
 	if _, _, code := e.gitOut(ctx, wt, "rev-parse", "--verify", "-q", "refs/heads/"+branch); code != 0 {
 		return p, unavailable("branch %s of slot %s does not exist", branch, name)
 	}
@@ -130,12 +132,12 @@ func (e Env) Park(ctx context.Context, root, name, verb string) (Parked, error) 
 			p.Salvaged = true
 		}
 	}
-	if _, errOut, code := e.gitOut(ctx, wt, "push", "-u", "origin", branch); code != 0 {
+	if _, errOut, code := e.gitOut(ctx, wt, "push", "-u", remote, branch); code != 0 {
 		if p.Salvaged {
 			e.gitOut(ctx, wt, "reset", "-q", "--mixed", "HEAD~1")
 			p.Salvaged = false
 		}
-		return p, unavailable("git push origin %s failed, slot %s left as found: %s", branch, name, errOut)
+		return p, unavailable("git push %s %s failed, slot %s left as found: %s", remote, branch, name, errOut)
 	}
 	p.Head = headOf(branch)
 	if cur == branch {
