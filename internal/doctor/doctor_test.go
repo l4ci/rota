@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/stalebin"
@@ -264,9 +266,9 @@ func TestDiskCheck(t *testing.T) {
 		detail string
 		hint   string
 	}{
-		{"low free space warns", Input{Disk: &Disk{Path: "/tmp", Free: 3 * gib, Total: 75 * gib}, MinFreeDiskPercent: 10, Leftovers: left}, Warn, "3.0 GiB free (4%), under the 10% threshold", "3 leaked temp dirs"},
+		{"low free space warns", Input{Disk: &Disk{Path: "/tmp", Free: 3 * gib, Total: 75 * gib}, MinFreeDiskPercent: 10, ScanLeftovers: func() []string { return left }}, Warn, "3.0 GiB free (4%), under the 10% threshold", "3 leaked temp dirs"},
 		{"low space with nothing to reclaim still warns", Input{Disk: &Disk{Path: "/tmp", Free: 3 * gib, Total: 75 * gib}, MinFreeDiskPercent: 10}, Warn, "/tmp has", "doctor.minFreeDiskPercent"},
-		{"enough space is silent", Input{Disk: &Disk{Path: "/tmp", Free: 30 * gib, Total: 75 * gib}, MinFreeDiskPercent: 10, Leftovers: left}, "", "", ""},
+		{"enough space is silent", Input{Disk: &Disk{Path: "/tmp", Free: 30 * gib, Total: 75 * gib}, MinFreeDiskPercent: 10, ScanLeftovers: func() []string { t.Error("leftovers scanned with enough space"); return left }}, "", "", ""},
 		{"threshold 0 turns it off", Input{Disk: &Disk{Path: "/tmp", Free: 1, Total: 75 * gib}}, "", "", ""},
 		{"unreadable disk is silent", Input{MinFreeDiskPercent: 10}, "", "", ""},
 	} {
@@ -532,7 +534,7 @@ func (o orchFixture) write(t *testing.T, path, body string) {
 func (o orchFixture) check(t *testing.T, have map[string]bool, name string) Check {
 	t.Helper()
 	f := &fake{have: have, reply: map[string]Result{}}
-	r := Run(context.Background(), Input{Exec: f.exec, Look: f.look, ProjectRoot: o.root, ConfigDirs: []string{o.a, o.b}})
+	r := Run(context.Background(), Input{Exec: f.exec, Look: f.look, ProjectRoot: o.root, Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: o.a}, {Kind: config.KindClaude, Name: "b", Dir: o.b}}})
 	return statusOf(r, name)
 }
 
@@ -650,7 +652,7 @@ func TestGuardHookCheck(t *testing.T) {
 	}
 	// Codex workers are not guarded: warn.
 	f := &fake{have: have, reply: map[string]Result{}}
-	r := Run(context.Background(), Input{Exec: f.exec, Look: f.look, ProjectRoot: o2.root, ConfigDirs: []string{o2.a, o2.b}, Kinds: codexIn([]Home{{}}, true)})
+	r := Run(context.Background(), Input{Exec: f.exec, Look: f.look, ProjectRoot: o2.root, Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: o2.a}, {Kind: config.KindClaude, Name: "b", Dir: o2.b}}, Kinds: codexIn([]Home{{}}, true)})
 	if c := statusOf(r, "guard-hook"); c.Status != Warn || !strings.Contains(c.Detail, "Codex") {
 		t.Fatalf("codex: %+v", c)
 	}
@@ -682,7 +684,7 @@ func TestSwitchCheck(t *testing.T) {
 	o := newOrch(t)
 	run := func(on bool, accts []config.Account, have map[string]bool) Check {
 		f := &fake{have: have, reply: map[string]Result{}}
-		r := Run(context.Background(), Input{Exec: f.exec, Look: f.look, ProjectRoot: o.root, ConfigDirs: []string{o.a, o.b}, SwitchOnUsage: on, Accounts: accts})
+		r := Run(context.Background(), Input{Exec: f.exec, Look: f.look, ProjectRoot: o.root, SwitchOnUsage: on, Accounts: accts})
 		return statusOf(r, "switch")
 	}
 	two := []config.Account{{Kind: config.KindClaude, Name: "a", Dir: o.a}, {Kind: config.KindClaude, Name: "b", Dir: o.b}}
@@ -771,12 +773,53 @@ func TestGitignoreCheck(t *testing.T) {
 		}
 		return Check{}
 	}
-	if c := find(Input{}); c.Name != "" {
-		t.Fatalf("nothing missing adds no line: %+v", c)
+	gi := func(s string) Input { return Input{Gitignore: &s} }
+	if c := find(gi(initproj.MergeGitignore("", false))); c.Name != "" {
+		t.Fatalf("a complete .gitignore adds no line: %+v", c)
 	}
-	c := find(Input{GitignoreMissing: []string{".rota/**/knowledge-hits.jsonl"}})
+	if c := find(Input{}); c.Name != "" {
+		t.Fatalf("no .gitignore at all is not drift: %+v", c)
+	}
+	c := find(gi(".rota/status.json\n"))
 	if c.Status != Warn || !strings.Contains(c.Detail, "knowledge-hits.jsonl") || !strings.Contains(c.Hint, "rota init") {
 		t.Fatalf("%+v", c)
+	}
+}
+
+func TestDiskLeftoversScanOnlyWhenLow(t *testing.T) {
+	const gib = 1 << 30
+	scans := 0
+	in := Input{MinFreeDiskPercent: 10, ScanLeftovers: func() []string { scans++; return []string{"x"} }}
+	in.Look = func(string) (string, bool) { return "", false }
+	in.Disk = &Disk{Path: "/tmp", Free: 30 * gib, Total: 75 * gib}
+	Run(context.Background(), in)
+	if scans != 0 {
+		t.Fatalf("scanned %d times with enough space", scans)
+	}
+	in.Disk = &Disk{Path: "/tmp", Free: 3 * gib, Total: 75 * gib}
+	Run(context.Background(), in)
+	if scans != 1 {
+		t.Fatalf("scanned %d times on a low disk, want 1", scans)
+	}
+}
+
+func TestConfigDirsFallBackToTheDefaultDir(t *testing.T) {
+	root := t.TempDir()
+	acct, def := filepath.Join(root, "acct"), filepath.Join(root, "default")
+	for _, tc := range []struct {
+		name string
+		in   Input
+		want []string
+	}{
+		{"accounts win", Input{Accounts: []config.Account{{Name: "a", Dir: acct}, {Name: "b"}}, DefaultConfigDir: def}, []string{acct}},
+		{"no account dir falls back", Input{Accounts: []config.Account{{Name: "b"}}, DefaultConfigDir: def}, []string{def}},
+		{"no accounts falls back", Input{DefaultConfigDir: def}, []string{def}},
+		{"nothing known", Input{}, nil},
+	} {
+		d := &runner{in: tc.in, ctx: context.Background()}
+		if got := d.configDirs(); !slices.Equal(got, tc.want) {
+			t.Errorf("%s: configDirs = %v, want %v", tc.name, got, tc.want)
+		}
 	}
 }
 
@@ -860,7 +903,7 @@ func TestHookCommandWithSlashResolvesThroughLook(t *testing.T) {
 	run := func(have map[string]bool) Check {
 		f := &fake{have: have, reply: map[string]Result{}}
 		look := func(name string) (string, bool) { p, _ := f.look(name); return p, have[name] }
-		r := Run(context.Background(), Input{Exec: f.exec, Look: look, Home: home, ProjectRoot: o.root, ConfigDirs: []string{o.a, o.b}})
+		r := Run(context.Background(), Input{Exec: f.exec, Look: look, Home: home, ProjectRoot: o.root, Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: o.a}, {Kind: config.KindClaude, Name: "b", Dir: o.b}}})
 		return statusOf(r, "guard-hook")
 	}
 	if c := run(map[string]bool{filepath.Join(home, "bin/rota"): true}); c.Status != Pass {
@@ -1062,7 +1105,7 @@ func TestDiskLow(t *testing.T) {
 func TestHookSettingsReadOncePerRun(t *testing.T) {
 	root := t.TempDir()
 	cfg := filepath.Join(root, "acct")
-	d := &runner{in: Input{ProjectRoot: root, ConfigDirs: []string{cfg}}, ctx: context.Background()}
+	d := &runner{in: Input{ProjectRoot: root, Accounts: []config.Account{{Kind: config.KindClaude, Name: "a", Dir: cfg}}}, ctx: context.Background()}
 	first := d.hooks()
 	d.statusline()
 	d.stopHook()

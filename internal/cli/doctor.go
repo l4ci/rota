@@ -15,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/extknowledge"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
-	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/legacystate"
 	"github.com/l4ci/rota/internal/migrate"
@@ -144,9 +143,9 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		keep = agents.Untracked
 	}
 	in.AgentProblems = agents.ProblemsOnly(root, cfg, keep)
-	// No .gitignore at all is not an older project's drift: init creates it.
 	if raw, err := os.ReadFile(filepath.Join(root, ".gitignore")); err == nil {
-		in.GitignoreMissing = initproj.MissingIgnoreLines(string(raw))
+		text := string(raw)
+		in.Gitignore = &text
 	}
 	if issueErr == nil && issue {
 		in.StaleMilestoneFiles, _ = migrate.StaleMilestoneFiles(root)
@@ -155,16 +154,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	if on, err := config.SwitchOnUsage(cfg); err == nil {
 		in.SwitchOnUsage = on
 	}
-	for _, a := range in.Accounts {
-		if a.Dir != "" {
-			in.ConfigDirs = append(in.ConfigDirs, a.Dir)
-		}
-	}
-	if len(in.ConfigDirs) == 0 {
-		if d := skills.ClaudeDir(d.Getenv, in.Home); d != "" {
-			in.ConfigDirs = []string{d}
-		}
-	}
+	in.DefaultConfigDir = skills.ClaudeDir(d.Getenv, in.Home)
 	return in
 }
 
