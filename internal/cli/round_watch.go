@@ -296,46 +296,27 @@ func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Re
 	return Result{Data: d, Text: strings.Join(text, "\n")}
 }
 
-// autopilotWatch is `round watch --autopilot`: tick first, then wait, tick on
-// every wake, and return for new attention, a completed merge, a stop
-// (wind-down or a lost lease), or the heartbeat. Fill progress stays quiet. The watch is the
-// autopilot's heartbeat, so a round running it still has its watch armed.
+// autopilotWatch is `round watch --autopilot`: the loop and its wake rule live
+// in roundwatch.RunAutopilot; this passes the tick and renders the result. The
+// watch is the autopilot's heartbeat, so a round running it still has its
+// watch armed.
 func autopilotWatch(c *Ctx, ctx context.Context, env roundwatch.Env, opts roundwatch.Opts, set roundcfg.Settings, root, cd string, lenv roundlease.Env, base string, pid int, poll time.Duration) (Result, error) {
 	c.ctx = ctx
-	deadline := lenv.Now().Add(opts.Heartbeat)
-	for {
-		tr, terr := autopilotTick(c, root, set, base, pid)
-		left := deadline.Sub(lenv.Now())
-		var tp *roundtick.Result
-		if terr == nil {
-			tp = &tr
-		}
-		switch {
-		case errors.Is(terr, errAutopilotStopped):
-			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: "stopped"}, nil, "no round lease: the round wound down or the lease was lost"), nil
-		case terr != nil:
-			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonChange}, nil, "tick failed: "+terr.Error()), nil
-		case ctx.Err() != nil:
-			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonInterrupt}, tp, ""), nil
-		case len(tr.New) > 0 || set.TrainFill.Enabled() && slices.ContainsFunc(tr.Did, func(a roundtick.Action) bool { return a.Action == "merge" }):
-			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonChange}, tp, ""), nil
-		case left <= 0:
-			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonHeartbeat}, tp, ""), nil
-		}
-		o := opts
-		o.Heartbeat = left
-		res, err := roundwatch.Run(ctx, env, o)
-		if err != nil {
-			return Result{}, err
-		}
-		if res.Reason == roundwatch.ReasonHeartbeat || res.Reason == roundwatch.ReasonInterrupt {
-			if t2, err := autopilotTick(c, root, set, base, pid); err == nil {
-				tp = &t2
-			}
-			return watchResult(c, root, cd, lenv, res, tp, ""), nil
-		}
-		// A slot the orchestrator already knows about wakes Run at once: the
-		// pause keeps the loop from spinning on it.
-		env.Sleep(ctx, poll)
+	res, err := roundwatch.RunAutopilot(ctx, env, opts, roundwatch.AutopilotOpts{
+		Tick:      func() (roundtick.Result, error) { return autopilotTick(c, root, set, base, pid) },
+		Stopped:   func(err error) bool { return errors.Is(err, errAutopilotStopped) },
+		TrainFill: set.TrainFill.Enabled(),
+		Poll:      poll,
+	})
+	if err != nil {
+		return Result{}, err
 	}
+	note := ""
+	switch {
+	case res.Reason == roundwatch.ReasonStopped:
+		note = "no round lease: the round wound down or the lease was lost"
+	case res.TickErr != nil:
+		note = "tick failed: " + res.TickErr.Error()
+	}
+	return watchResult(c, root, cd, lenv, res.Result, res.Tick, note), nil
 }
