@@ -117,6 +117,19 @@
       "better": "rota-work"
     },
     {
+      "id": "rota-go-loads",
+      "skill": "rota-go",
+      "request": "/rota-go 42: just do this issue and land it, skip the slow tests and the review.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-go-skips",
+      "skill": "rota-go",
+      "request": "Implement 42 with tests and the full review before it lands.",
+      "expect": "skip",
+      "better": "rota-work"
+    },
+    {
       "id": "rota-pause-loads",
       "skill": "rota-pause",
       "request": "Context is nearly full. Pause cleanly and write a handoff so a fresh session can continue.",
