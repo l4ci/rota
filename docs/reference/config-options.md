@@ -295,8 +295,19 @@ Every key, by group. Scope is the layer the key belongs in, with the file `rota 
 | `test.vacuousCommand` | project (tracked) | string | `"go test -json -count=1 {packages} -run {tests}"` |  | Command for test.vacuousCheck. Shell-quoted {files} selects changed test files; {packages} and {tests} select Go packages and test names. |
 | `test.ciTimeoutMinutes` | project (tracked) | int | `60` |  | How long a ci run waits for its checks, 1 to 1440 minutes. ROTA_CI_TIMEOUT (seconds) overrides it for one run. |
 | `test.ciChecks` | project (tracked) | list | `[]` |  | Check names that must all succeed on the pushed commit under test.fullWhere ci: GitHub check-run names or commit-status contexts, GitLab job names. |
+| `test.docs` | project (tracked) | list | `[]` |  | Shell commands the gate and merge train run instead of test.full and test.e2e when every changed file is documentation (the docs tier of change.docsPaths). Empty runs test.full as before. |
+| `test.small` | project (tracked) | list | `[]` |  | Shell commands the gate and merge train run instead of test.full and test.e2e for a code change under change.smallBelow changed lines (the small tier). {files} expands to the changed files, single-quoted. Empty runs test.full as before. |
 | `test.slots` | machine (local) | int | `1` |  | How many heavy test runs may hold the machine-wide test lock at once, 1 or more. The merge gate, rota test run and rota proof record queue on it; a run that finds every slot taken waits and says so on stderr. |
 | `test.isolate` | project (tracked) | bool | `true` |  | Whether rota test run scrubs HERDR_*, TMUX*, ssh-agent variables and pins HOME and XDG_* to a temp root. The merge gate and train do not read it. |
+
+### change
+
+| Key | Scope | Type | Default | Values | Description |
+|-----|-------|------|---------|--------|-------------|
+| `change.docsPaths` | project (tracked) | list | `["*.md", "docs/**", "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.gif", "**/*.svg", "**/*.webp"]` |  | Globs of documentation files. A diff whose every file is a Markdown or image file (.md, .png, .jpg, .jpeg, .gif, .svg, .webp) matching one is the docs tier; a script or source file under docs/ is code: the gate runs test.docs and review depth is none. * matches within a path segment, ** across directories; a glob with no slash matches at the root only (*.md is README.md, not docs/a.md); no braces. |
+| `change.riskyPaths` | project (tracked) | list | `[]` |  | Globs of files that always get the full tier: test.full and review depth full, whatever else the diff holds. Same glob grammar as change.docsPaths. |
+| `change.smallPaths` | project (tracked) | list | `[]` |  | Globs of the files test.small covers. A code diff with a file outside them is never the small tier. Empty turns the small tier off. Same glob grammar as change.docsPaths. |
+| `change.smallBelow` | project (tracked) | int | `0` |  | A code diff with fewer changed lines than this, and every file covered by change.smallPaths, is the small tier: the gate runs test.small and review depth is at most light. 0 turns the small tier off. |
 
 ### forge
 

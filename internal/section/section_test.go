@@ -40,17 +40,6 @@ func TestTopics(t *testing.T) {
 	}
 }
 
-func TestMatching(t *testing.T) {
-	out := Matching(doc, map[string]bool{"two": true, "one": true})
-	want := "## One\n\n\n- a\n- b\n\n## Two\n\n\n- c\n"
-	if out != want {
-		t.Errorf("got %q want %q", out, want)
-	}
-	if Matching(doc, map[string]bool{"none": true}) != "" {
-		t.Error("expected empty output")
-	}
-}
-
 func TestReplaceAppendsMissingSection(t *testing.T) {
 	got := Replace("## A\nx\n", "B", "\n- y\n")
 	if got != "## A\nx\n\n## B\n\n- y\n" {

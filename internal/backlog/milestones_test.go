@@ -403,3 +403,21 @@ func TestIssuesMilestoneAddRejectsUnknownKind(t *testing.T) {
 		t.Errorf("nothing may be created: %+v", fake.Issues)
 	}
 }
+
+func TestNativeStateOf(t *testing.T) {
+	for status, want := range map[string]string{"shipped": "closed", "archived": "closed", "active": "open", "planned": "open", "": "open"} {
+		if got := nativeStateOf(status); got != want {
+			t.Errorf("nativeStateOf(%q) = %q, want %q", status, got, want)
+		}
+	}
+}
+
+func TestHighestMilestoneNumber(t *testing.T) {
+	found := []tracker.Milestone{{Title: "M01 — a"}, {Title: "M07 — b"}, {Title: "release 9"}, {Title: "M٠٣"}}
+	if got := highestMilestoneNumber(found); got != 7 {
+		t.Fatalf("highest = %d, want 7", got)
+	}
+	if got := highestMilestoneNumber(nil); got != 0 {
+		t.Fatalf("highest of none = %d, want 0", got)
+	}
+}

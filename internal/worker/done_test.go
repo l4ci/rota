@@ -367,3 +367,25 @@ func TestDoneMarksTheSlot(t *testing.T) {
 		t.Fatalf("second done: res %+v err %v", res, err)
 	}
 }
+
+func TestDoneArchitectureReviewNeedsNoPR(t *testing.T) {
+	t.Run("a review item with an unpushed branch frees the slot", func(t *testing.T) {
+		r := newDoneRig(t, oneSlot, fastCfg)
+		r.remote = ""
+		r.deps.IsReview = func(id string) bool { return id == "7" }
+		res, err := r.done(DoneRequest{})
+		if err != nil || !res.Changed || r.state() != "done" {
+			t.Fatalf("res %+v err %v state %s", res, err, r.state())
+		}
+	})
+	t.Run("a code item with an unpushed branch still refuses", func(t *testing.T) {
+		r := newDoneRig(t, oneSlot, fastCfg)
+		r.remote = ""
+		r.deps.IsReview = func(id string) bool { return false }
+		res, err := r.done(DoneRequest{})
+		wantExit(t, err, exitcode.ExitRefused)
+		if res == nil || !res.Unpushed || !strings.Contains(err.Error(), "never pushed") || r.state() == "done" {
+			t.Fatalf("res %+v err %v state %s", res, err, r.state())
+		}
+	})
+}

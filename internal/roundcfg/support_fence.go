@@ -1,5 +1,16 @@
 package roundcfg
 
+import (
+	"errors"
+	"io/fs"
+	"os"
+
+	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
+)
+
 // Support-machine fence policy. An action is the canonical verb path
 // ("rota worker gate"): the cli names what is being run, this package says
 // whether a machine of a given round.role may run it. A support machine
@@ -85,6 +96,7 @@ var supportAllowed = []string{
 	"rota plan check", "rota plan list", "rota plan rename-check", "rota plan show", "rota plan uncertain", "rota plan validate-docs",
 	"rota projects", "rota proof show", "rota qa query", "rota receipt show",
 	"rota refactor age", "rota refactor targets",
+	"rota change classify",
 	"rota release host", "rota release milestone-check", "rota release notes", "rota release pending", "rota release version",
 	"rota repo resolve", "rota repo umbrella", "rota repo which",
 	"rota review brief", "rota review depth", "rota review package", "rota review queue", "rota review scaffolding", "rota review scope",
@@ -178,4 +190,37 @@ func SupportActions(class FenceClass) []string {
 // FenceRefused actions; FenceInVerb ones pass here and refuse inside the verb.
 func MayRun(role, action string) bool {
 	return role != RoleSupport || supportClass[action] != FenceRefused
+}
+
+// RoleError is a round.role this machine cannot read: Why says what failed
+// and Hint how to fix it. A verb never runs on a guess, so the caller refuses.
+type RoleError struct{ Why, Hint string }
+
+func (e *RoleError) Error() string { return e.Why }
+
+// SupportMachine is whether this machine's round.role is support. It reads
+// .rota/config.local.json from disk on purpose, not through load: config.Load
+// skips a local layer it cannot read or decode, which would read as role main
+// and open the fence. load then returns the merged config for MachineRole.
+func SupportMachine(root string, load func(root string) any) (bool, *RoleError) {
+	if raw, err := os.ReadFile(rotatree.ConfigLocal(root)); err == nil {
+		if _, err := jsonx.Decode(raw); err != nil {
+			return false, &RoleError{".rota/config.local.json does not decode: " + err.Error(), "fix the JSON in .rota/config.local.json, or remove the file on the main machine"}
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return false, &RoleError{".rota/config.local.json cannot be read: " + err.Error(), "make .rota/config.local.json readable"}
+	}
+	role, err := MachineRole(load(root))
+	if err != nil {
+		return false, &RoleError{err.Error(), "set round.role to main or support: rota config set round.role main"}
+	}
+	return role == RoleSupport, nil
+}
+
+// RoleInTrackedConfig is whether the tracked project layer names round.role:
+// the role belongs to one machine, so it lives in .rota/config.local.json only.
+func RoleInTrackedConfig(root string) bool {
+	project := fsio.LoadJSON(rotatree.Config(root), jsonx.NewObject())
+	_, ok := config.Lookup(project, config.RoundRoleKey)
+	return ok
 }
