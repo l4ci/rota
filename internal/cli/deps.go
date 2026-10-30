@@ -23,6 +23,7 @@ import (
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/orchestrate"
 	"github.com/l4ci/rota/internal/palette"
+	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/reap"
@@ -47,6 +48,9 @@ type Deps struct {
 	// other binary. A test swaps in a fake instead of reaching the machine.
 	Git  git.Runner
 	Proc proc.Runner
+	// Procs reads the process table (a pid's working directory, parent, start
+	// time); nil means this machine's. A test swaps in a recorded table.
+	Procs pidlive.Source
 
 	// ReviewRemoveAll is the filesystem boundary for disposable review cleanup.
 	ReviewRemoveAll func(string) error
@@ -223,6 +227,14 @@ func defaultDeps() *Deps {
 	return d
 }
 
+// procs is the process table: the injected one, else this machine's.
+func (d *Deps) procs() pidlive.Source {
+	if d.Procs != nil {
+		return d.Procs
+	}
+	return pidlive.Real{}
+}
+
 // Toplevel is the toplevel of the git work tree around the working directory,
 // "" outside one or when git cannot run.
 func (d *Deps) Toplevel(ctx context.Context) string {
@@ -312,6 +324,9 @@ func (d *Deps) workerEnvFor(ctx context.Context) worker.Env {
 	}
 	if e.Home == nil {
 		e.Home = d.UserHomeDir
+	}
+	if e.Procs == nil {
+		e.Procs = d.procs()
 	}
 	if e.Getwd == nil {
 		e.Getwd = d.Getwd

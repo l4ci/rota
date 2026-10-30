@@ -2,11 +2,9 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -121,7 +119,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 			in.TeamProblem = linearTeamProblem(ctx, d, cfg, root)
 		}
 	}
-	in.Slots, in.CwdOf = doctorSlotBlocks(root), procCwd(ctx, d.Proc)
+	in.Slots, in.CwdOf = doctorSlotBlocks(root), d.procs().Cwd
 	issue, issueErr := issueBackend(d, root)
 	if issueErr != nil {
 		in.StaleClaimWarnings = []string{issueErr.Error()}
@@ -261,23 +259,6 @@ func doctorSlotBlocks(root string) []doctor.SlotBlock {
 		}
 	}
 	return out
-}
-
-// procCwd is a process's working directory: /proc on Linux, lsof where /proc
-// is absent (macOS); "" when neither can say (someone else's process).
-func procCwd(ctx context.Context, run proc.Runner) func(pid int) string {
-	return func(pid int) string { return procCwdOf(ctx, run, pid) }
-}
-
-func procCwdOf(ctx context.Context, run proc.Runner, pid int) string {
-	if p, err := os.Readlink(fmt.Sprintf("/proc/%d/cwd", pid)); err == nil {
-		return p
-	}
-	res, err := run(ctx, proc.Cmd{Name: "lsof", Args: []string{"-a", "-p", strconv.Itoa(pid), "-d", "cwd", "-Fn"}})
-	if err != nil {
-		return ""
-	}
-	return doctor.ParseLsofCwd(res.Stdout)
 }
 
 // doctorExternalKnowledge probes the clone knowledge.external points at.

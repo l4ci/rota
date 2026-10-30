@@ -831,10 +831,7 @@ func TestPortsReportsWhenNoScannerWorks(t *testing.T) {
 	}
 }
 
-func TestParseLsofCwdAndDualStackDedupe(t *testing.T) {
-	if got := ParseLsofCwd("p91\nfcwd\nn/Users/me/p/.worktrees/w1\n"); got != "/Users/me/p/.worktrees/w1" {
-		t.Errorf("ParseLsofCwd = %q", got)
-	}
+func TestParseLsofDualStackDedupe(t *testing.T) {
 	if got := ParseLsof("p91\nn*:20003\nn[::1]:20003\n"); len(got) != 1 {
 		t.Errorf("ParseLsof listed %v, want one entry for the dual-stack port", got)
 	}

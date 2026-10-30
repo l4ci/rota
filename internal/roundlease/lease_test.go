@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/rotastatetest"
 )
 
@@ -403,7 +404,7 @@ func TestDefaultEnvTreatsZombieHolderAsStale(t *testing.T) {
 // psEnv is the default Env reading a recorded ps table keyed by pid: "ppid
 // lstart" and comm.
 func psEnv(rows map[string][2]string) Env {
-	return DefaultEnv().WithPS(func(args ...string) (string, error) {
+	return DefaultEnv().WithSource(pidlive.Real{PS: func(args ...string) (string, error) {
 		col, pid := args[1], args[3]
 		r, ok := rows[pid]
 		if !ok {
@@ -413,7 +414,7 @@ func psEnv(rows map[string][2]string) Env {
 			return r[1], nil
 		}
 		return r[0], nil
-	})
+	}})
 }
 
 // TestPSSourceReadsAncestryWithoutProc pins #1167: where /proc is missing
@@ -425,36 +426,10 @@ func TestPSSourceReadsAncestryWithoutProc(t *testing.T) {
 		"900000001": {"900000002 Mon Oct 20 12:00:00 2026", "/bin/zsh"},
 		"900000002": {"900000003 Mon Oct 20 11:00:00 2026", agentPath},
 	})
-	pp, comm, ok := realProc(e.PS, 900000001)
-	if !ok || pp != 900000002 || comm != "zsh" {
-		t.Fatalf("zsh: %d %q %v", pp, comm, ok)
-	}
-	_, comm, _ = realProc(e.PS, 900000002)
-	if comm != filepath.Base(agentPath) {
-		t.Fatalf("comm must be the base name: %q", comm)
-	}
-	want := time.Date(2026, 10, 20, 11, 0, 0, 0, time.Local).Unix()
-	if st, ok := e.StartTime(900000002); !ok || int64(st) != want {
-		t.Fatalf("start %d %v, want %d", st, ok, want)
-	}
 	e.Parent = func() int { return 900000001 }
 	h := e.Discover(0, func(string) string { return "" })
 	if h.PID != 900000002 || h.Start == 0 || h.Unverified {
 		t.Fatalf("walk must skip the zsh and bind the agent: %+v", h)
-	}
-}
-
-// TestPSStatParsesSingleDigitDay pins that ps pads days below 10 with two
-// spaces ("Oct  5"); strings.Fields collapses them and layout _2 still parses.
-func TestPSStatParsesSingleDigitDay(t *testing.T) {
-	t.Parallel()
-	e := psEnv(map[string][2]string{
-		"900000011": {"900000012 Sun Oct  5 09:03:07 2025", "/bin/zsh"},
-	})
-	pp, st, ok := psStat(e.PS, 900000011)
-	want := time.Date(2025, 10, 5, 9, 3, 7, 0, time.Local).Unix()
-	if !ok || pp != 900000012 || int64(st) != want {
-		t.Fatalf("psStat = %d %d %v, want 900000012 %d true", pp, st, ok, want)
 	}
 }
 

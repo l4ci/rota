@@ -9,16 +9,29 @@ import (
 	"time"
 )
 
-func fixed(stat string, ok bool) State {
-	return func(int) (string, bool) { return stat, ok }
+func selfPID() int   { return os.Getpid() }
+func parentPID() int { return os.Getppid() }
+
+// fixed is a Source whose State answers stat, ok for every pid.
+func fixed(stat string, ok bool) Source { return fixedState{stat, ok} }
+
+type fixedState struct {
+	stat string
+	ok   bool
 }
 
-func TestAliveWithTable(t *testing.T) {
+func (f fixedState) State(int) (string, bool)   { return f.stat, f.ok }
+func (fixedState) Stat(int) (int, uint64, bool) { return 0, 0, false }
+func (fixedState) Comm(int) string              { return "" }
+func (fixedState) Cwd(int) string               { return "" }
+func (fixedState) Parents() (map[int]int, bool) { return nil, false }
+
+func TestAliveInTable(t *testing.T) {
 	self := os.Getpid()
 	cases := []struct {
 		name string
 		pid  int
-		st   State
+		st   Source
 		want bool
 	}{
 		{"zero pid", 0, fixed("S", true), false},
@@ -32,7 +45,7 @@ func TestAliveWithTable(t *testing.T) {
 		{"no such process", 1 << 22, fixed("S", true), false},
 	}
 	for _, c := range cases {
-		if got := AliveWith(c.st, c.pid); got != c.want {
+		if got := AliveIn(c.st, c.pid); got != c.want {
 			t.Errorf("%s: got %v want %v", c.name, got, c.want)
 		}
 	}
@@ -44,7 +57,7 @@ func TestAliveEPERMIsAlive(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root gets no EPERM")
 	}
-	if !AliveWith(fixed("Ss", true), 1) {
+	if !AliveIn(fixed("Ss", true), 1) {
 		t.Error("EPERM pid must read as alive")
 	}
 }
@@ -65,7 +78,7 @@ func TestAliveRealZombie(t *testing.T) {
 		t.Fatalf("zombie pid: %v", err)
 	}
 	for i := 0; i < 50; i++ {
-		if s, _ := psState(zpid); strings.HasPrefix(strings.TrimSpace(s), "Z") {
+		if s, _ := (Real{}).State(zpid); strings.HasPrefix(strings.TrimSpace(s), "Z") {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -111,7 +124,7 @@ func TestProcStatCurrentPid(t *testing.T) {
 	if _, err := os.Stat("/proc/self/stat"); err != nil {
 		t.Skip("no /proc")
 	}
-	ppid, start, ok := ProcStat(os.Getpid())
+	ppid, start, ok := (Real{}).Stat(os.Getpid())
 	if !ok {
 		t.Fatal("ProcStat(self) not ok")
 	}
@@ -124,19 +137,19 @@ func TestProcStatCurrentPid(t *testing.T) {
 	if st, ok := StartTicks(os.Getpid()); !ok || st != start {
 		t.Errorf("StartTicks = %d, %v; want %d, true", st, ok, start)
 	}
-	if _, _, ok := ProcStat(-1); ok {
-		t.Error("ProcStat(-1) ok")
+	if _, _, ok := (Real{}).Stat(-1); ok {
+		t.Error("(Real{}).Stat(-1) ok")
 	}
 }
 
 func TestCommCurrentPid(t *testing.T) {
-	if _, _, ok := ProcStat(os.Getpid()); !ok {
+	if _, _, ok := (Real{}).Stat(os.Getpid()); !ok {
 		t.Skip("no /proc")
 	}
-	if got := Comm(os.Getpid()); got == "" {
+	if got := (Real{}).Comm(os.Getpid()); got == "" {
 		t.Fatalf("Comm(self) is empty, want the test binary's name")
 	}
-	if got := Comm(900000003); got != "" {
+	if got := (Real{}).Comm(900000003); got != "" {
 		t.Fatalf("Comm(missing pid) = %q, want empty", got)
 	}
 }
