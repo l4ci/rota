@@ -249,6 +249,10 @@ type GateResult struct {
 	// when it refused rather than failed to run.
 	Refusal *exitcode.Refusal
 	Notes   []string // PROVENANCE-SKIP and NO-VERIFY lines for stderr
+	// Tier is the change tier the gate verified the merge by (#2348), with the
+	// reason; Skipped are the test tiers it ran a cheaper list in place of.
+	Tier, TierReason string
+	Skipped          []string
 	// Warnings are problems the gate survived: the merge landed, but something
 	// after it needs a caller's eye (a Jira issue that would not close).
 	Warnings []string
@@ -1093,6 +1097,7 @@ func (g *gate) stepReviewDepth() (bool, error) {
 		return g.broke(fmt.Sprintf("%v; run rota config check", err))
 	}
 	src := ReviewSources{Policy: policy, Git: g.e.Git, Dir: g.root, Span: g.baseRef + "..." + g.headRef, Cross: cross, Author: g.target.Kind, Lenses: lenses}
+	src.Change, src.ChangeErr = g.in.cfg.ChangePolicy()
 	if src.Author == "" {
 		src.Author = assignedHarness(g.root, g.target.Issue)
 	}
