@@ -11,6 +11,7 @@ package keepalive
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"strconv"
@@ -355,7 +356,7 @@ func Run(env Env, o Options) (Result, error) {
 	}
 }
 
-func ts(t time.Time) string { return t.UTC().Format(time.RFC3339) }
+func ts(t time.Time) string { return stamp.Format(t) }
 
 // escalate raises the breaker's notification and returns the escalation id,
 // "" when none was recorded. Failures are warnings: the stop stands.

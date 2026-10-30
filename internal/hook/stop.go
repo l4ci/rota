@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // HandoffMarker is the first line of a handoff the Stop hook asked for.
@@ -59,7 +61,7 @@ func DecideStop(in StopIn, st State, set Settings, ho Handoff, handoffPath strin
 	if st.HandoffFailed {
 		return d // gave up already: never hold the session again
 	}
-	at, err := time.Parse(time.RFC3339, st.UpdatedAt)
+	at, err := stamp.Parse(st.UpdatedAt)
 	if err != nil || now.Sub(at) > time.Duration(set.StateMaxAge)*time.Second {
 		return d // a stale reading is not acted on
 	}
@@ -67,7 +69,7 @@ func DecideStop(in StopIn, st State, set Settings, ho Handoff, handoffPath strin
 	var usage *UsageHandoff
 	if set.SwitchOnUsage && in.Supervised && !now.Before(in.HoldUntil) {
 		if w, p, r, ok := UsageOf(st.RateLimits); ok && p >= float64(set.UsageThreshold) {
-			usage = &UsageHandoff{Window: w, UsedPct: p, ResetsAt: r, At: now.UTC().Format(time.RFC3339)}
+			usage = &UsageHandoff{Window: w, UsedPct: p, ResetsAt: r, At: stamp.Format(now)}
 		}
 	}
 	if !ctxTrip && usage == nil {
@@ -75,7 +77,7 @@ func DecideStop(in StopIn, st State, set Settings, ho Handoff, handoffPath strin
 	}
 	var blockedAt time.Time
 	if st.BlockedAt != "" {
-		blockedAt, _ = time.Parse(time.RFC3339, st.BlockedAt)
+		blockedAt, _ = stamp.Parse(st.BlockedAt)
 	}
 	if ho.Exists {
 		newer := !ho.ModTime.Before(blockedAt)
@@ -92,7 +94,7 @@ func DecideStop(in StopIn, st State, set Settings, ho Handoff, handoffPath strin
 		}
 		d.State.HandoffBlocks++
 	}
-	d.State.BlockedAt = now.UTC().Format(time.RFC3339)
+	d.State.BlockedAt = stamp.Format(now)
 	d.Persist = true
 	d.Block = true
 	if usage != nil {

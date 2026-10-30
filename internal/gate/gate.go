@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/overlap"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // Gate names.
@@ -110,7 +111,7 @@ func Clear(root string, cfg any, now time.Time, name, verb, target string, c Con
 		}
 	}
 	rec := jsonx.NewObject()
-	rec.Set("ts", now.UTC().Format(time.RFC3339))
+	rec.Set("ts", stamp.Format(now))
 	rec.Set("gate", name)
 	rec.Set("verb", verb)
 	rec.Set("target", target)
@@ -127,7 +128,7 @@ func Clear(root string, cfg any, now time.Time, name, verb, target string, c Con
 // note says what was done.
 func Autopilot(root string, now time.Time, verb, target, note string) error {
 	rec := jsonx.NewObject()
-	rec.Set("ts", now.UTC().Format(time.RFC3339))
+	rec.Set("ts", stamp.Format(now))
 	rec.Set("gate", "autopilot")
 	rec.Set("verb", verb)
 	rec.Set("target", target)

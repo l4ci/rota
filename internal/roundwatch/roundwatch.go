@@ -26,6 +26,7 @@ import (
 	"github.com/l4ci/rota/internal/landfreeze"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -72,7 +73,7 @@ func (e *ArmedError) Error() string {
 // watch at a time keeps every wake-up a single event.
 func Arm(env roundlease.Env, commonDir string, pid int, heartbeat time.Duration) (release func(), err error) {
 	path := MarkerPath(commonDir)
-	m := Marker{PID: pid, StartedAt: env.Now().UTC().Format(time.RFC3339), Heartbeat: int(heartbeat.Seconds())}
+	m := Marker{PID: pid, StartedAt: stamp.Format(env.Now()), Heartbeat: int(heartbeat.Seconds())}
 	m.Host, m.Start = env.Identity(pid)
 	err = fsio.WriteMarker(path, m, func() error {
 		if cur, ok := Armed(env, commonDir); ok && cur.PID != pid {

@@ -3,6 +3,7 @@ package limits
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"regexp"
@@ -389,7 +390,7 @@ func (w *Watcher) detect(ctx context.Context, now time.Time, t Target, o obs) {
 		return
 	}
 	if has && latest.Status == StatusFailed {
-		if at, err := time.Parse(time.RFC3339, latest.ResolvedAt); err == nil && now.Sub(at) < failedQuiet {
+		if at, err := stamp.Parse(latest.ResolvedAt); err == nil && now.Sub(at) < failedQuiet {
 			return
 		}
 	}
@@ -408,7 +409,7 @@ func (w *Watcher) detect(ctx context.Context, now time.Time, t Target, o obs) {
 	}
 	reopened := false
 	if has && latest.Status == StatusResumed {
-		if at, err := time.Parse(time.RFC3339, latest.ResolvedAt); err == nil && now.Sub(at) <= reopenWindow {
+		if at, err := stamp.Parse(latest.ResolvedAt); err == nil && now.Sub(at) <= reopenWindow {
 			reopened = true
 			if latest.Cycles >= w.Settings.MaxResumes {
 				w.fail(&latest, now, fmt.Sprintf("still limited after %d resume(s)", latest.Cycles))

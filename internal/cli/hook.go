@@ -29,6 +29,7 @@ import (
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/skills"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/status"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -364,7 +365,7 @@ func supervisedHold(le roundlease.Env, commonDir string, now time.Time) (supervi
 		return false, time.Time{}
 	}
 	if ks.SwitchHold != nil {
-		if t, err := time.Parse(time.RFC3339, ks.SwitchHold.Until); err == nil && t.After(now) {
+		if t, err := stamp.Parse(ks.SwitchHold.Until); err == nil && t.After(now) {
 			until = t
 		}
 	}

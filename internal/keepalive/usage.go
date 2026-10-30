@@ -7,6 +7,7 @@ import (
 
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/limits"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // Actions of a usage Decision, the `action` of its limits entry.
@@ -62,7 +63,7 @@ func decideUsage(env Env, o Options, st *State, curDir *string, m hook.UsageHand
 	} else {
 		until := now.Add(o.HoldFallback)
 		if m.ResetsAt != "" {
-			if t, err := time.Parse(time.RFC3339, m.ResetsAt); err == nil {
+			if t, err := stamp.Parse(m.ResetsAt); err == nil {
 				until = t
 			}
 		}
@@ -72,7 +73,7 @@ func decideUsage(env Env, o Options, st *State, curDir *string, m hook.UsageHand
 			d.Note += " (" + strings.Join(ch.Others, "; ") + ")"
 		}
 		if until.After(now) {
-			d.HoldUntil = until.UTC().Format(time.RFC3339)
+			d.HoldUntil = stamp.Format(until)
 			st.SwitchHold = &Hold{Until: d.HoldUntil, Window: m.Window}
 			d.Note += "; switch held until " + d.HoldUntil
 		} else {

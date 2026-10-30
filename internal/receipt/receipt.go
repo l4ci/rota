@@ -20,6 +20,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/stamp"
 )
 
 // File is the receipts file, relative to the project root.
@@ -212,7 +213,7 @@ func (s *Store) Pending(verb, target string) (e Entry, found bool, err error) {
 // counts the calls under the id.
 func (s *Store) record(e *Entry) error {
 	p := path(s.Root)
-	e.At = s.Now().UTC().Format(time.RFC3339)
+	e.At = stamp.Format(s.Now())
 	return fsio.Locked(p, lockWait, func() error {
 		d, err := load(p)
 		if err != nil {
