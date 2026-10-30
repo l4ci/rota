@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"strings"
@@ -117,7 +118,25 @@ func TestOperatorCommandModelFollowsKeyDefault(t *testing.T) {
 			config.Keys[i].Default = "orch-default"
 		}
 	}
-	if got := (Env{Config: memConfig(t, `{}`)}).operatorCommand(""); got != "claude --continue --model orch-default --permission-mode auto" {
-		t.Errorf("operatorCommand = %q", got)
+	got, err := (Env{Config: memConfig(t, `{}`)}).operatorCommand("")
+	if err != nil || got != "claude --continue --model orch-default --permission-mode auto" {
+		t.Errorf("operatorCommand = %q, %v", got, err)
+	}
+}
+
+func TestOperatorCommandRefusesUnbalancedQuotes(t *testing.T) {
+	e := Env{Config: memConfig(t, `{"orchestrator":{"command":"wrap \"oops"}}`)}
+	if got, err := e.operatorCommand(""); err == nil {
+		t.Errorf("operatorCommand = %q, want a refusal", got)
+	}
+}
+
+func TestOperatorCommandCustomIsTypedAsConfigured(t *testing.T) {
+	for _, cmd := range []string{"~/bin/claude", "$HOME/claude --x", `FOO="a b" claude`, "wrap && claude"} {
+		doc, _ := json.Marshal(map[string]any{"orchestrator": map[string]any{"command": cmd}})
+		got, err := (Env{Config: memConfig(t, string(doc))}).operatorCommand("")
+		if err != nil || got != cmd {
+			t.Errorf("operatorCommand(%q) = %q, %v", cmd, got, err)
+		}
 	}
 }

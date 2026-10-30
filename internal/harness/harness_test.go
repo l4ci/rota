@@ -253,18 +253,25 @@ func TestOrchestratorsAreAWiderSetThanWorkers(t *testing.T) {
 	}
 }
 
-func TestClaudeOrchestratorCommand(t *testing.T) {
-	for doc, want := range map[string]string{
-		``:                                    "claude --model opus --permission-mode auto",
-		`{"orchestrator":{"model":"sonnet"}}`: "claude --model sonnet --permission-mode auto",
-		`{"orchestrator":{"command":"wrap claude -x"}}`: "wrap claude -x",
+// OrchestratorCommand is the one builder the harness and the round session
+// share: resume adds --continue to the default line only.
+func TestOrchestratorCommandResume(t *testing.T) {
+	for _, c := range []struct {
+		doc    string
+		resume bool
+		want   string
+	}{
+		{``, false, "claude --model opus --permission-mode auto"},
+		{`{"orchestrator":{"model":"sonnet"}}`, false, "claude --model sonnet --permission-mode auto"},
+		{``, true, "claude --continue --model opus --permission-mode auto"},
+		{`{"orchestrator":{"command":"wrap claude -x"}}`, true, "wrap claude -x"},
 	} {
-		argv, err := (claude{}).Command(cfgOf(t, doc))
-		if err != nil || strings.Join(argv, " ") != want {
-			t.Errorf("%s: %q, %v want %q", doc, argv, err, want)
+		argv, err := OrchestratorCommand(cfgOf(t, c.doc), c.resume)
+		if err != nil || strings.Join(argv, " ") != c.want {
+			t.Errorf("%s resume=%v: %q, %v want %q", c.doc, c.resume, argv, err, c.want)
 		}
 	}
-	if _, err := (claude{}).Command(cfgOf(t, `{"orchestrator":{"command":"wrap \"oops"}}`)); err == nil {
+	if _, err := OrchestratorCommand(cfgOf(t, `{"orchestrator":{"command":"wrap \"oops"}}`), true); err == nil {
 		t.Error("an unbalanced orchestrator.command must be an error")
 	}
 }
