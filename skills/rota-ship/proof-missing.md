@@ -1,8 +1,8 @@
 # Step 8 — proof missing and `--no-proof`
 
-Loaded by `SKILL.md` Step 8 on exit 4 with `blockedBy: "proof missing"`.
+Loaded by `SKILL.md` Step 8 when `rota ship finish` (or `rota item complete`) exits 4 with `blockedBy: "proof missing"`.
 
-No `## Proof` row. Record one row per check, by running it through the verb (the project's test or smoke command), then rerun `rota item complete`:
+No `## Proof` row. Record one row per check, by running it through the verb (the project's test or smoke command), then rerun `rota ship finish` (`rota item complete <ID>` on the step-by-step path):
 
 ```bash
 rota proof record <ID> -- <command>

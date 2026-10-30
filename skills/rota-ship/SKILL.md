@@ -20,8 +20,8 @@ Copy this checklist and track your progress:
 - [ ] Step 6a — Open a PR
 - [ ] Step 6b — Direct Merge
 - [ ] Step 6c — Close Upstream Issues (direct-merge path only)
-- [ ] Step 7 — Update Status
-- [ ] Step 8 — Mark Unfinished Items Complete
+- [ ] Step 7 — Finish
+- [ ] Step 8 — Unproven Items
 - [ ] Step 8.5 — Learn (Nudge or Auto-Invoke)
 - [ ] Step 8.6 — Docs After-Work (inline)
 - [ ] Step 9 — Report to User
@@ -134,37 +134,30 @@ When Step 5 picked "Direct merge", read [`direct-merge.md`](direct-merge.md) (`r
 
 When Step 6b ran, read `direct-merge.md` (the `issue-close` manual gate and the close flow). Skip on the PR path and the issue backend.
 
-## Step 7 — Update Status
+## Step 7 — Finish
+
+Round workers and umbrella projects skip the verb: read [`round-worker-and-issue-mode.md`](round-worker-and-issue-mode.md), which keeps their Steps 7 to 9.5. Otherwise:
 
 ```bash
-rota status rm [--repo "$REPO"] <branch>
+rota ship finish --json <branch> [--commit <data.sha from Step 6b>]
 ```
 
-Umbrella waves must pass `--repo`; without it the active entry leaks into the next `/rota-work`.
+One call removes the status entry, completes the still-open referenced items on the file backend (issue backend: `items.skipped`, the PR merge closes them) and decides the nudges. It dispatches nothing; Steps 8 to 9.7 act on its JSON. Exit 4 `blockedBy: "round worker"` or `"umbrella"`: take the reference path above.
 
-## Step 8 — Mark Unfinished Items Complete
+## Step 8 — Unproven Items
 
-When the backlog backend is issues, or you are a round worker, skip: read [`round-worker-and-issue-mode.md`](round-worker-and-issue-mode.md). File mode: the merger completes items, which outside a round is this step.
-
-`/rota-work` completes most IDs; this catches manual commits that referenced IDs without closing them. For each ID in `referencedIds`:
-
-```bash
-rota item complete <ID> --commit <merge-or-last-commit-hash> [--reason handed-off|blocked|dropped --note <text>]
-```
-
-Already-completed IDs are a no-op; an unknown ID exits 3. When it exits 4 with `blockedBy: "proof missing"`, record a row with `rota proof record <ID> -- <command>` (`rota proof add` only for docs-only changes) and rerun: read [`proof-missing.md`](proof-missing.md).
+Exit 4 `blockedBy: "proof missing"`: everything else ran, and `data.items.unproven` stay open. Read [`proof-missing.md`](proof-missing.md). Name `data.items.unknown` in the report.
 
 ## Step 8.5 — Learn (Nudge or Auto-Invoke)
 
-Round workers run the post-to-issue learning pass at Step 4 instead (`round-worker-and-issue-mode.md`). Otherwise run `references/post-cycle-trigger-gate.md` with:
+Round workers run the post-to-issue learning pass at Step 4 instead (`round-worker-and-issue-mode.md`). Otherwise act on `data.learn` only when `action` is `fire`, and downgrade it to skip when the whole diff is a bulk rename, dependency bump, formatting sweep or generated-file refresh (never the reverse). By `autonomy.level` (`data.autonomy`):
 
-- **Nudge (`"off"`):** append to the Step 9 report *"Capture learnings before context fades? Run `/rota-learn` — this cycle has the fresh session context."*
-- **Target (`"roundtrip"` or `"auto"`):** dispatch `rota-learn` by reading and following its instructions immediately, no prompt.
-- **Brief:** the resolved IDs and touched files.
+- **`"off"`:** append `data.learn.nudge` to the Step 9 report.
+- **`"roundtrip"` or `"auto"`:** dispatch `rota-learn` by reading and following its instructions immediately: no prompt, no confirmation, no "want me to" question. Brief: `data.items.referenced` and the touched files from Step 2.
 
 ## Step 8.6 — Docs After-Work (inline)
 
-Round workers run it too (`round-worker-and-issue-mode.md`), before the push, so the docs edit lands in the PR. Run `references/post-cycle-trigger-gate.md`, inline variant, with config flag `docs.afterWork` (default `false`; enable with `rota config set docs.afterWork true` or by running `/rota-docs` once). On trigger, read [`../rota-docs/SKILL.md`](../rota-docs/SKILL.md) and run its after-work flow (Steps D-A1 to D-A6) in this session, with the resolved IDs and touched files as context. No `autonomy.level` branch: Step D-A5's approval is the checkpoint.
+Round workers run it too, by hand (`round-worker-and-issue-mode.md`). When `data.docs.action` is `fire` (same downgrade as Step 8.5), read [`../rota-docs/SKILL.md`](../rota-docs/SKILL.md) and run its after-work flow (Steps D-A1 to D-A6) in this session, with the resolved IDs and touched files as context. No `autonomy.level` branch: Step D-A5's approval is the checkpoint. `docs.afterWork` is off by default; `rota config set docs.afterWork true` or one `/rota-docs` run turns it on.
 
 ## Step 9 — Report to User
 
@@ -180,7 +173,7 @@ or `Merged `rota/demo` into main — commit a1b2c3d` plus the `Resolved:` line. 
 
 ## Step 9.5 — Release Nudge
 
-After a successful ship (PR or merge): `rota release pending --json`. If `shouldNudge` is false or `lastTag` is empty (the first release is the user's call), say nothing. Otherwise append `data.message` to the report as one line after `Resolved:`.
+When `data.release.action` is `fire`, append `data.release.message` as one line after `Resolved:`. `skip` (including no tag yet: the first release is the user's call): say nothing.
 
 ## Step 9.7 — After the Ship
 
@@ -226,7 +219,7 @@ When `--docs` is present, print the deprecation line from Step 0, then run `/rot
 - [`references/humanizing-prose.md`](references/humanizing-prose.md) — self-audit for the PR body.
 - [`references/issue-mode.md`](references/issue-mode.md) — issue backend: claim, proof note, PR path.
 - [`references/manual-gates.md`](references/manual-gates.md) — always-manual gates (`pr-open`, `issue-close`).
-- [`references/post-cycle-trigger-gate.md`](references/post-cycle-trigger-gate.md) — when the Step 8.5 and 8.6 triggers fire.
+- [`references/post-cycle-trigger-gate.md`](references/post-cycle-trigger-gate.md) — the condition `rota ship finish` evaluates for Steps 8.5 and 8.6.
 - [`references/review-verdict-routing.md`](references/review-verdict-routing.md) — CONCERNS options and carrier labels.
 - [`references/silent-failure-hunter.md`](references/silent-failure-hunter.md) — rubric carried by the review brief.
 - [`references/three-mode-skill-shape.md`](references/three-mode-skill-shape.md) — normal, undo and docs mode layout.

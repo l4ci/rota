@@ -10,7 +10,7 @@ Loaded by `SKILL.md` when the branch is a round worker's (`<agent>/<issue>-<slug
 - **Step 3.8 (UAT):** skipped; round PRs stay unattended and `rota worker gate` never runs it.
 - **Step 8 (file mode):** a round worker skips it (workers never edit tracked `.rota/`); the orchestrator completes the items when it merges the PR.
 - **Step 8.5:** skipped; the learning pass runs at Step 4 instead (below).
-- **Step 8.6 (docs after-work):** runs, commits its edits on the worker branch and ships them in the same PR (`/rota-docs` D-A5 applies the drafts without a picker). Scaffold and restructure never run here.
+- **Step 8.6 (docs after-work):** runs, commits its edits on the worker branch and ships them in the same PR (`/rota-docs` D-A5 applies the drafts without a picker). Scaffold and restructure never run here. With no `rota ship finish` data, decide the trigger by hand (*Steps 7 to 9.5 without `rota ship finish`*, below).
 
 - **Step 4 (PR body):** run the learning pass of `skills/references/worker-contract.md` first (post each learning with `--kind learning`), then end the body with `Learnings: none` or `Learnings: <n> posted`. This is before Step 6a, so the PR opens with the line already in it.
 - **Before the push (Step 6a):** merge the moved base first (`git fetch origin <base>`; when the base is past your merge base, `git merge origin/<base>`, never a rebase), resolve conflicts, re-run the targeted checks and record proof at the merged head. The same holds before every relay-fix push (`skills/references/worker-contract.md`).
@@ -22,6 +22,15 @@ Loaded by `SKILL.md` when the branch is a round worker's (`<agent>/<issue>-<slug
 - **Step 6a:** add `--items <ID1>,<ID2>` (qualified `<repo>:<ID>` in an umbrella) so the PR closes them, then `rota item state <ID> --to needs-review` per item. Do not call `rota item release`: the claim stays until the PR merges. Shipping never merges here. The merge owner is the orchestrator in a round (`rota worker gate`), otherwise whoever runs `/rota-review --queue`. Skip Steps 6b, 6c and 8.
 - **Step 6c:** skipped. GitHub and GitLab close the issues when the PR merges. Jira and Linear do not: `rota worker gate` closes the issue the merged PR names, unless it is labelled `partial-slice`.
 - **Step 8:** skip. Closing happens at the merge (`rota worker gate` in a round, `rota ship pr-merge` from the queue). On Jira or Linear, a PR merged from the queue leaves its issue open: close it with `rota issues close <KEY> --commit <sha>`. Use `rota item complete` only with `--reason handed-off|blocked|dropped`.
+
+## Steps 7 to 9.5 without `rota ship finish`
+
+`rota ship finish` refuses a round worker (`ROTA_SLOT` set) and an umbrella project (exit 4, `blockedBy: "round worker"` or `"umbrella"`). These callers keep the step-by-step path:
+
+- **Step 7:** `rota status rm [--repo "$REPO"] <branch>`. Umbrella waves must pass `--repo`; without it the active entry leaks into the next `/rota-work`.
+- **Step 8 (file backend, not a round worker):** for each ID in the Step 2 `referencedIds`, `rota item complete <ID> --commit <merge-or-last-commit-hash>`. Already-completed IDs are a no-op; an unknown ID exits 3; exit 4 `blockedBy: "proof missing"` goes to `SKILL.md` Step 8 (`proof-missing.md`).
+- **Steps 8.5 (umbrella only; round workers skip it, above) and 8.6:** apply `references/post-cycle-trigger-gate.md` to the Step 2 scope JSON (Step 8.6 with config flag `docs.afterWork`, inline variant), then act as `SKILL.md` describes for `fire`.
+- **Step 9.5:** `rota release pending --json`; append `data.message` only when `shouldNudge` is true and `lastTag` is set.
 
 ## Umbrella
 

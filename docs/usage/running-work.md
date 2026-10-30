@@ -17,6 +17,8 @@ The orchestrator plans tasks, dispatches workers in parallel (one per task), ver
 
 **Status tracking:** registers in `.rota/status.json` at start so [`/rota-work` (no argument)](picking-work.md) in another session knows those items are in progress.
 
+**Start in one call:** `rota work start` does the clean-tree guard, the sibling sweep, the branch name (`rota/<id>-<slug>`, or `--branch <name>`), the branch or worktree per [`work.isolation`](#isolation-branch-vs-worktree), the status registration and, on a tracker, the claim. Rerunning it changes nothing. Round workers and umbrella projects keep the step-by-step path; the verb refuses them.
+
 ```mermaid
 sequenceDiagram
     participant U as User
@@ -26,9 +28,9 @@ sequenceDiagram
     participant G as Git
 
     U->>O: /rota-work [B03] [F07]
-    O->>G: clean-tree guard
+    O->>G: rota work start: guard, sweep
     O->>O: plan tasks into waves
-    O->>G: create branch rota/<slug>
+    O->>G: branch rota/<id>-<slug>, status, claim
     par Wave 1 (parallel, write-only)
         O->>W1: brief: edit files for Task A
         O->>W2: brief: edit files for Task B
