@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/proof"
+	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -49,7 +50,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		}
 		req := worker.DoneRequest{Root: root, PoolRoot: poolRoot, Slot: slotName, Attempt: *attempt, Base: *base,
 			Kind: kind, Summary: summary, Targeted: *targeted, RequireRed: *requireRed}
-		res, err := worker.Done(req, doneDeps(c, root))
+		res, err := worker.Done(req, doneDeps(c, root, poolRoot))
 		if res == nil {
 			return Result{}, err
 		}
@@ -73,7 +74,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 
 // doneDeps wires worker.Done to the cli's proof store, backlog and {files}
 // expansion, which hang off the invocation's context.
-func doneDeps(c *Ctx, root string) worker.DoneDeps {
+func doneDeps(c *Ctx, root, poolRoot string) worker.DoneDeps {
 	var be backlog.Backend
 	opened := false
 	return worker.DoneDeps{
@@ -102,6 +103,20 @@ func doneDeps(c *Ctx, root string) worker.DoneDeps {
 		},
 		RunTargeted: func(dir, command, base, head string, ids []string) (string, error) {
 			return targetedProof(c, root, dir, command, base, head, ids)
+		},
+		// A backlog that cannot be read treats the item as code.
+		IsReview: func(id string) bool {
+			if !opened {
+				be, _ = openBacklog(c, root, false, "")
+				opened = true
+			}
+			if be == nil {
+				return false
+			}
+			it, err := be.Get(id)
+			// Title and the registry's minted record, as `round accept` requires:
+			// a code item named like a review still needs its PR.
+			return err == nil && round.IsReviewTitle(it.Title) && round.MintedReviews(poolRoot)[worker.NormID(it.ID)]
 		},
 	}
 }
