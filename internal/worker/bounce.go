@@ -40,6 +40,13 @@ type BounceStore interface {
 	Clear(issue string) error
 }
 
+// AtCap reports whether n bounces already hold the cap. limit is
+// round.maxBounces; 0 means no cap. It is the one spelling of the rule: Record
+// refuses at it, the gate parks at it and round review relays no more at it.
+func AtCap(n, limit int) bool {
+	return limit > 0 && n >= limit
+}
+
 // BounceRecord is what one Record did. N is the count after it; Counted is
 // false when the head was already counted or the cap refused (Capped, N
 // unchanged).
@@ -280,7 +287,7 @@ func (s issueBounces) Record(m *RoundMemo, issue, slot, head string, limit int) 
 		return BounceRecord{}, err
 	}
 	n := len(t.heads)
-	if limit > 0 && n >= limit {
+	if AtCap(n, limit) {
 		return BounceRecord{N: n, Capped: true}, nil
 	}
 	if head != "" && t.has(head) {
@@ -300,7 +307,7 @@ func (s issueBounces) Record(m *RoundMemo, issue, slot, head string, limit int) 
 		return BounceRecord{N: n - 1}, errors.Join(err, s.it.DeleteComment(s.e.Ctx, k, id))
 	}
 	at := slices.Index(after.ids, id)
-	if at < 0 || (limit > 0 && at >= limit) {
+	if at < 0 || AtCap(at, limit) {
 		kept := len(after.heads)
 		if at >= 0 {
 			kept-- // this comment was one of them
