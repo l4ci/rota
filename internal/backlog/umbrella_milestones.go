@@ -51,13 +51,7 @@ func (u *Umbrella) NextMilestoneID() (string, error) {
 	}
 	highest := 0
 	for _, found := range set {
-		for _, nm := range found {
-			if id, _, ok := parseMSTitle(nm.Title); ok {
-				if n, err := Atoi(id[1:]); err == nil {
-					highest = max(highest, n)
-				}
-			}
-		}
+		highest = max(highest, highestMilestoneNumber(found))
 	}
 	return fmt.Sprintf("M%02d", highest+1), nil
 }
@@ -134,10 +128,7 @@ func (u *Umbrella) MilestoneStatus(mid, status string) error {
 	if err := home.MilestoneStatus(mid, status); err != nil {
 		return err
 	}
-	want := "open"
-	if status == "shipped" || status == "archived" {
-		want = "closed"
-	}
+	want := nativeStateOf(status)
 	set, err := u.fetchNatives()
 	if err != nil {
 		return err
