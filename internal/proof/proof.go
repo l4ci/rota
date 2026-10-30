@@ -188,12 +188,9 @@ func Proves(rows []Row, head, check string) bool {
 // was found; a row that already carries the mark is left as it is.
 func Mark(s Store, id, sha, check, mark string) (found bool, err error) {
 	err = s.Update(id, func(content string) (string, bool, error) {
-		lines := strings.Split(content, "\n")
-		for i := len(lines) - 1; i >= 0; i-- {
-			l := lines[i]
-			if !strings.HasPrefix(l, "- ") {
-				continue
-			}
+		rows := rowLines(content)
+		for i := len(rows) - 1; i >= 0; i-- {
+			l := rows[i]
 			p := strings.SplitN(l[2:], sep, 5)
 			if len(p) < 5 || p[2] != "PASS" || !speaksFor(p[3], p[1], sha, check) {
 				continue
@@ -202,8 +199,9 @@ func Mark(s Store, id, sha, check, mark string) (found bool, err error) {
 			if strings.Contains(" "+p[4]+" ", " "+mark+" ") {
 				return content, false, nil
 			}
-			lines[i] = l + " " + mark
-			return strings.Join(lines, "\n"), true, nil
+			s, e, _ := section.Find(content, "Proof")
+			at := s + strings.LastIndex(content[s:e], l) + len(l)
+			return content[:at] + " " + mark + content[at:], true, nil
 		}
 		return content, false, nil
 	})
