@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/connections"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/tracker/jiratest"
@@ -47,9 +48,7 @@ func newJiraFx(t *testing.T, slots ...string) *jiraFx {
 	for _, n := range slots {
 		wt := filepath.Join(t.TempDir(), n)
 		if n != "dana" { // newScopeFx already made dana's branch
-			if out, err := exec.Command("git", "-C", fx.root, "worktree", "add", "-q", "-b", "park/"+n, wt).CombinedOutput(); err != nil {
-				t.Fatalf("worktree: %v %s", err, out)
-			}
+			gittest.Run(t, fx.root, "worktree", "add", "-q", "-b", "park/"+n, wt)
 		} else {
 			wt = worktreeOf(t, fx.root, "park/dana")
 		}
@@ -146,8 +145,8 @@ func TestJiraRoundAssignOverlapBlocks(t *testing.T) {
 	f := newJiraFx(t, "dana", "kit")
 	os.MkdirAll(filepath.Join(f.root, "internal"), 0o755)
 	write(t, filepath.Join(f.root, "internal", "seam.go"), "x")
-	gitT(t, f.root, "add", "internal/seam.go")
-	gitT(t, f.root, "-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "-m", "seam")
+	gittest.Run(t, f.root, "add", "internal/seam.go")
+	gittest.Run(t, f.root, "commit", "-q", "-m", "seam")
 	f.create(t, "First", "edits internal/seam.go")
 	f.create(t, "Second", "also edits internal/seam.go")
 	if code, out, errOut := f.assign(t, "PROJ-1", "dana"); code != 0 {
@@ -186,12 +185,12 @@ func (prForge) ClosedNumbers(string) []int { return nil }
 func TestJiraWorkerGate(t *testing.T) {
 	dir := workerProject(t, `{"ship":{"review":"none"},"forge":{"provider":"github"},"issues":{"source":"jira","connection":"work","jira":{"project":"PROJ"}}}`)
 	origin := filepath.Join(t.TempDir(), "origin.git")
-	gitT(t, dir, "init", "-q", "--bare", "-b", "main", origin)
-	gitT(t, dir, "remote", "add", "origin", origin)
-	gitT(t, dir, "push", "-q", "origin", "main")
+	gittest.Run(t, dir, "init", "-q", "--bare", "-b", "main", origin)
+	gittest.Run(t, dir, "remote", "add", "origin", origin)
+	gittest.Run(t, dir, "push", "-q", "origin", "main")
 	deps := testDeps()
 	rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
-	gitT(t, dir, "push", "-q", "origin", "rota-worker/w1")
+	gittest.Run(t, dir, "push", "-q", "origin", "rota-worker/w1")
 	doc := registryDoc(t, dir)
 	slot := doc["slots"].([]any)[0].(map[string]any)
 	slot["task"], slot["pr"] = "PROJ-1", "https://github.com/o/r/pull/42"
@@ -214,7 +213,7 @@ func TestJiraWorkerGate(t *testing.T) {
 	if _, err := it.Create(context.Background(), "Widen", "## Acceptance\n- [ ] ok\n", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	sha := strings.TrimSpace(gitT(t, dir, "rev-parse", "origin/rota-worker/w1"))
+	sha := strings.TrimSpace(gittest.Run(t, dir, "rev-parse", "origin/rota-worker/w1"))
 	title := "unrelated change"
 	deps.WorkerEnv = func() worker.Env {
 		return worker.Env{Forge: func(string, string, tracker.Settings) (worker.Forge, error) {

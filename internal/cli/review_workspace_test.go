@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -16,11 +17,11 @@ import (
 func TestReviewWorkspacePinnedAndCleanup(t *testing.T) {
 	repo := newRepo(t, t.TempDir(), "repo", "main")
 	write(t, filepath.Join(repo, "tracked.txt"), "pinned\n")
-	gitT(t, repo, "add", "tracked.txt")
-	gitT(t, repo, "commit", "-qm", "pinned")
-	sha := gitT(t, repo, "rev-parse", "HEAD")
+	gittest.Run(t, repo, "add", "tracked.txt")
+	gittest.Run(t, repo, "commit", "-qm", "pinned")
+	sha := gittest.Run(t, repo, "rev-parse", "HEAD")
 	write(t, filepath.Join(repo, "tracked.txt"), "live dirty\n")
-	before := gitT(t, repo, "status", "--porcelain")
+	before := gittest.Run(t, repo, "status", "--porcelain")
 	o := trRun(t, repo, "", "review", "prepare", sha, "--json")
 	if o.code != 0 {
 		t.Fatalf("prepare must return a workspace: rc=%d %s %s", o.code, o.stdout, o.stderr)
@@ -44,7 +45,7 @@ func TestReviewWorkspacePinnedAndCleanup(t *testing.T) {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("workspace survived: %v", err)
 	}
-	if got := gitT(t, repo, "status", "--porcelain"); got != before {
+	if got := gittest.Run(t, repo, "status", "--porcelain"); got != before {
 		t.Fatalf("live status changed: %s -> %s", before, got)
 	}
 }
@@ -52,7 +53,7 @@ func TestReviewWorkspacePinnedAndCleanup(t *testing.T) {
 // Snapshot includes staged and unstaged bytes, HEAD, the index and registry.
 func reviewLiveSnapshot(t *testing.T, repo string) []string {
 	t.Helper()
-	status := gitT(t, repo, "status", "--porcelain")
+	status := gittest.Run(t, repo, "status", "--porcelain")
 	idx, err := os.ReadFile(filepath.Join(repo, ".git", "index"))
 	if err != nil {
 		t.Fatal(err)
@@ -61,7 +62,7 @@ func reviewLiveSnapshot(t *testing.T, repo string) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return []string{status, gitT(t, repo, "rev-parse", "HEAD"), string(idx), gitT(t, repo, "worktree", "list", "--porcelain"), string(content)}
+	return []string{status, gittest.Run(t, repo, "rev-parse", "HEAD"), string(idx), gittest.Run(t, repo, "worktree", "list", "--porcelain"), string(content)}
 }
 
 func TestReviewWorkspaceFailuresPreserveLiveRepo(t *testing.T) {
@@ -74,13 +75,13 @@ func TestReviewWorkspaceFailuresPreserveLiveRepo(t *testing.T) {
 			if mode == "setup" {
 				write(t, filepath.Join(repo, ".review", "existing"), "reserved")
 			}
-			gitT(t, repo, "add", "tracked.txt")
+			gittest.Run(t, repo, "add", "tracked.txt")
 			if mode == "setup" {
-				gitT(t, repo, "add", ".review")
+				gittest.Run(t, repo, "add", ".review")
 			}
-			gitT(t, repo, "commit", "-qm", "content")
+			gittest.Run(t, repo, "commit", "-qm", "content")
 			write(t, filepath.Join(repo, "tracked.txt"), "staged")
-			gitT(t, repo, "add", "tracked.txt")
+			gittest.Run(t, repo, "add", "tracked.txt")
 			write(t, filepath.Join(repo, "tracked.txt"), "unstaged")
 			write(t, filepath.Join(repo, "untracked"), "keep")
 			before := reviewLiveSnapshot(t, repo)

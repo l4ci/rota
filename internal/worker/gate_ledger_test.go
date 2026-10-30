@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 )
@@ -144,7 +145,7 @@ func TestGateLedgerExternalPRKeepsResolvedTarget(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	gitq(t, w.worker, "push", "-q", "origin", "w1:dana/7-x")
+	gittest.Run(t, w.worker, "push", "-q", "origin", "w1:dana/7-x")
 	w.forge("head", "dana/7-x")
 	w.setPRBody("Closes #7")
 	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: ghURL, Base: "main", NoVerify: true})

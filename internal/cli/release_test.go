@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"github.com/l4ci/rota/internal/gittest"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -329,7 +330,7 @@ func TestReleaseRepoScope(t *testing.T) {
 	root := umbrella(t)
 	write(t, filepath.Join(root, "svc", "VERSION"), "1.4.0\n")
 	write(t, filepath.Join(root, "VERSION"), "9.0.0\n")
-	gitT(t, filepath.Join(root, "svc"), "remote", "add", "origin", "git@github.com:l4ci/svc.git")
+	gittest.Run(t, filepath.Join(root, "svc"), "remote", "add", "origin", "git@github.com:l4ci/svc.git")
 	o := trRun(t, root, "", "release", "version", "--repo", "svc", "--json")
 	if d := releaseData(t, o); o.code != 0 || d["version"] != "1.4.0" {
 		t.Fatalf("version: %d %s", o.code, o.stdout)
@@ -369,9 +370,9 @@ func TestReleaseHostParity(t *testing.T) {
 	var got []string // the host per URL
 	for _, url := range releaseHostURLs {
 		dir := t.TempDir()
-		gitT(t, dir, "init", "-q", "-b", "main")
+		gittest.Run(t, dir, "init", "-q", "-b", "main")
 		if url != "" {
-			gitT(t, dir, "remote", "add", "origin", url)
+			gittest.Run(t, dir, "remote", "add", "origin", url)
 		}
 		o := trRun(t, dir, "", "release", "host", "--json")
 		if o.code == ExitRefused { // an actor refuses an origin naming no forge
@@ -405,7 +406,7 @@ func releaseCommit(t *testing.T, dir, subject, body string) {
 	if body != "" {
 		msg += "\n\n" + body
 	}
-	gitT(t, dir, "commit", "-q", "--allow-empty", "-m", msg)
+	gittest.Run(t, dir, "commit", "-q", "--allow-empty", "-m", msg)
 }
 
 var releaseNotesCommits = [][2]string{
@@ -439,7 +440,7 @@ func TestReleaseNotesParity(t *testing.T) {
 	var notes []string // the notes per since, hashes masked, h2 headings as h3
 	dir := newRepo(t, t.TempDir(), "r", "main")
 	write(t, filepath.Join(dir, ".rota", "config.json"), `{}`)
-	gitT(t, dir, "tag", "v0.1.0")
+	gittest.Run(t, dir, "tag", "v0.1.0")
 	for _, c := range releaseNotesCommits {
 		releaseCommit(t, dir, c[0], c[1])
 	}
@@ -486,7 +487,7 @@ func TestReleaseNotesEmptyAndErrors(t *testing.T) {
 	}
 	// a repo with no commit at all: HEAD does not resolve
 	fresh := t.TempDir()
-	gitT(t, fresh, "init", "-q", "-b", "main")
+	gittest.Run(t, fresh, "init", "-q", "-b", "main")
 	if o := trRun(t, fresh, "", "release", "notes", "--from", "commits", "--json"); o.code != 3 {
 		t.Errorf("unborn HEAD: %d", o.code)
 	}
@@ -658,7 +659,7 @@ func releaseTagRepo(t *testing.T, daysAgo, n int) string {
 	t.Setenv("GIT_COMMITTER_DATE", when)
 	t.Setenv("GIT_AUTHOR_DATE", when)
 	releaseCommit(t, dir, "feat: tagged", "")
-	gitT(t, dir, "tag", "v1.0.0")
+	gittest.Run(t, dir, "tag", "v1.0.0")
 	t.Setenv("GIT_COMMITTER_DATE", "")
 	t.Setenv("GIT_AUTHOR_DATE", "")
 	os.Unsetenv("GIT_COMMITTER_DATE")
@@ -877,9 +878,9 @@ func TestReleaseNotesIssues(t *testing.T) {
 
 func TestReleaseNotesIssuesSince(t *testing.T) {
 	root, deps := a8Project(t, a8Fixture())
-	gitT(t, root, "tag", "base")
+	gittest.Run(t, root, "tag", "base")
 	for _, m := range []string{"tidy things", "Fix crash [B7]", "ref #4 only", "more tidy"} {
-		gitT(t, root, "commit", "-q", "--allow-empty", "-m", m)
+		gittest.Run(t, root, "commit", "-q", "--allow-empty", "-m", m)
 	}
 	code, data, msg := a8RunWith(t, deps, root, "release", "notes", "--from", "issues", "M01", "--since", "base")
 	md := "### Fixed\n\n- Fix crash (#7)\n\n### Changed\n\n- Old (#4)\n\n### Other\n\n- more tidy\n- tidy things\n"

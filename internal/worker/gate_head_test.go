@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/gittest"
 	"testing"
 	"time"
 )
@@ -25,14 +26,14 @@ func TestGateLeavesInvokingWorktreeOnItsBranch(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
 			w.setConfig(tc.cfg)
-			before := gitq(t, w.dir, "symbolic-ref", "HEAD") // fails the test when already detached
+			before := gittest.Run(t, w.dir, "symbolic-ref", "HEAD") // fails the test when already detached
 			ctx, cancel := context.WithCancel(bg)
 			if tc.ctx != nil {
 				ctx, cancel = tc.ctx()
 			}
 			defer cancel()
 			w.env(false).Gate(ctx, w.dir, GateOpts{Slot: "w1", Base: "main"})
-			if after := gitq(t, w.dir, "symbolic-ref", "HEAD"); after != before {
+			if after := gittest.Run(t, w.dir, "symbolic-ref", "HEAD"); after != before {
 				t.Errorf("HEAD moved from %s to %s", before, after)
 			}
 		})

@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
@@ -30,7 +31,7 @@ func TestGateFreezeAfterLandedFailure(t *testing.T) {
 	if err := json.Unmarshal(b, &f); err != nil {
 		t.Fatal(err)
 	}
-	if !f.Active || f.Base != "main" || f.SHA != gitq(t, w.dir, "rev-parse", "HEAD") || len(f.PRs) != 1 || f.PRs[0] != ghURL || len(f.Checks) == 0 {
+	if !f.Active || f.Base != "main" || f.SHA != gittest.Run(t, w.dir, "rev-parse", "HEAD") || len(f.PRs) != 1 || f.PRs[0] != ghURL || len(f.Checks) == 0 {
 		t.Fatalf("freeze must identify landed PR, failed checks and full base SHA: %s", b)
 	}
 }
@@ -88,7 +89,7 @@ func TestGateFreezeRepairCanLandAndClear(t *testing.T) {
 	if err := json.Unmarshal(b, &f); err != nil {
 		t.Fatal(err)
 	}
-	if f.Active || f.ClearedBy == "" || f.ClearedSHA != gitq(t, w.dir, "rev-parse", "HEAD") {
+	if f.Active || f.ClearedBy == "" || f.ClearedSHA != gittest.Run(t, w.dir, "rev-parse", "HEAD") {
 		t.Fatalf("verified repair did not clear with provenance: %s", b)
 	}
 }
@@ -125,7 +126,7 @@ func TestTrainFreezeAfterLandedFailure(t *testing.T) {
 	if err := json.Unmarshal(b, &f); err != nil {
 		t.Fatal(err)
 	}
-	if !f.Active || len(f.PRs) != 1 || f.PRs[0] != ghURL || len(f.Checks) == 0 || f.SHA != gitq(t, w.dir, "rev-parse", "HEAD") {
+	if !f.Active || len(f.PRs) != 1 || f.PRs[0] != ghURL || len(f.Checks) == 0 || f.SHA != gittest.Run(t, w.dir, "rev-parse", "HEAD") {
 		t.Fatalf("train freeze: %s", b)
 	}
 }

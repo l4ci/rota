@@ -51,11 +51,6 @@ type world struct {
 	lease func() roundlease.Env
 }
 
-func gitq(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-	return gittest.Run(t, dir, append([]string{"-c", "user.name=t", "-c", "user.email=t@t"}, args...)...)
-}
-
 // newWorld is gt_case: pr is the recorded PR (URL), "" for none.
 func newWorld(t *testing.T, pr string) *world {
 	t.Helper()
@@ -69,24 +64,24 @@ func newWorld(t *testing.T, pr string) *world {
 		forgeDB: filepath.Join(base, "forge.json"), log: filepath.Join(base, "forge.log"), mode: "ok"}
 	gittest.Run(t, base, "init", "-q", "--bare", "-b", "main", w.origin)
 	gittest.Run(t, base, "clone", "-q", w.origin, w.dir)
-	gitq(t, w.dir, "checkout", "-q", "-B", "main")
+	gittest.Run(t, w.dir, "checkout", "-q", "-B", "main")
 	os.WriteFile(filepath.Join(w.dir, "seed.txt"), []byte("seed\n"), 0o644)
-	gitq(t, w.dir, "add", "seed.txt")
-	gitq(t, w.dir, "commit", "-q", "-m", "seed")
-	gitq(t, w.dir, "push", "-q", "origin", "main")
+	gittest.Run(t, w.dir, "add", "seed.txt")
+	gittest.Run(t, w.dir, "commit", "-q", "-m", "seed")
+	gittest.Run(t, w.dir, "push", "-q", "origin", "main")
 	gittest.Run(t, base, "clone", "-q", w.origin, w.worker)
-	gitq(t, w.worker, "checkout", "-q", "-b", "w1")
+	gittest.Run(t, w.worker, "checkout", "-q", "-b", "w1")
 	os.WriteFile(filepath.Join(w.worker, "work.txt"), []byte("work\n"), 0o644)
-	gitq(t, w.worker, "add", "work.txt")
-	gitq(t, w.worker, "commit", "-q", "-m", "work")
-	gitq(t, w.worker, "push", "-q", "origin", "w1")
+	gittest.Run(t, w.worker, "add", "work.txt")
+	gittest.Run(t, w.worker, "commit", "-q", "-m", "work")
+	gittest.Run(t, w.worker, "push", "-q", "origin", "w1")
 	os.MkdirAll(filepath.Join(w.dir, ".rota"), 0o755)
 	w.setConfig(`{"test":{"full":["true"]}}`)
 	w.setSlot(pr, "")
 	os.WriteFile(w.log, nil, 0o644)
 	w.forge("origin", w.origin)
 	w.forge("head", "w1")
-	w.forge("sha", gitq(t, w.worker, "rev-parse", "HEAD"))
+	w.forge("sha", gittest.Run(t, w.worker, "rev-parse", "HEAD"))
 	w.forge("base", "main")
 	w.forge("state", "OPEN")
 	w.forge("merge", "")
@@ -267,7 +262,7 @@ func runGateCase(t *testing.T, c gateCase) gateOutcome {
 	// the same commits end up on origin/main and on the local base (the order
 	// of equal-second commits is not stable, so compare sorted subjects)
 	subjects := func(dir string) string {
-		l := strings.Split(gitq(t, dir, "log", "--format=%s", "main"), "\n")
+		l := strings.Split(gittest.Run(t, dir, "log", "--format=%s", "main"), "\n")
 		sort.Strings(l)
 		return strings.Join(l, "\n")
 	}
@@ -279,11 +274,11 @@ func runGateCase(t *testing.T, c gateCase) gateOutcome {
 
 // advanceMainOn lands a commit on origin/main that writes file.
 func advanceMainOn(w *world, file string) {
-	gitq(w.t, w.worker, "checkout", "-q", "main")
+	gittest.Run(w.t, w.worker, "checkout", "-q", "main")
 	os.WriteFile(filepath.Join(w.worker, file), []byte("main\n"), 0o644)
-	gitq(w.t, w.worker, "add", file)
-	gitq(w.t, w.worker, "commit", "-q", "-m", "main moves")
-	gitq(w.t, w.worker, "push", "-q", "origin", "main")
+	gittest.Run(w.t, w.worker, "add", file)
+	gittest.Run(w.t, w.worker, "commit", "-q", "-m", "main moves")
+	gittest.Run(w.t, w.worker, "push", "-q", "origin", "main")
 }
 
 func TestGate(t *testing.T) {
@@ -291,15 +286,15 @@ func TestGate(t *testing.T) {
 		{name: "a: stale on pushed refs even though local w1 merged main", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GateStale,
 			setup: func(w *world) {
 				advanceMainOn(w, "work.txt") // conflicts with w1's work.txt, so it is bounced
-				gitq(t, w.dir, "fetch", "-q", "origin")
-				gitq(t, w.dir, "checkout", "-q", "-b", "w1", "origin/w1")
-				gitq(t, w.dir, "merge", "-q", "-X", "ours", "origin/main", "-m", "sync")
-				gitq(t, w.dir, "checkout", "-q", "main")
+				gittest.Run(t, w.dir, "fetch", "-q", "origin")
+				gittest.Run(t, w.dir, "checkout", "-q", "-b", "w1", "origin/w1")
+				gittest.Run(t, w.dir, "merge", "-q", "-X", "ours", "origin/main", "-m", "sync")
+				gittest.Run(t, w.dir, "checkout", "-q", "main")
 			}},
 		{name: "b: a merge-base that dies is check-broke, not stale", pr: ghURL, opts: GateOpts{CheckOnly: true}, broken: true, verdict: GateCheckBroke},
 		{name: "b2: a failed fetch is check-broke", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GateCheckBroke,
 			setup: func(w *world) {
-				gitq(t, w.dir, "remote", "set-url", "origin", filepath.Join(filepath.Dir(w.dir), "nope.git"))
+				gittest.Run(t, w.dir, "remote", "set-url", "origin", filepath.Join(filepath.Dir(w.dir), "nope.git"))
 			}},
 		{name: "c: matching PR is fresh", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GateFresh},
 		{name: "c: head sha moved", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GatePRMismatch,
@@ -336,16 +331,16 @@ func TestGate(t *testing.T) {
 				w.setSlot(glURL, "[]")
 			}},
 		{name: "g: PR without an origin remote is refused, never merged locally", pr: ghURL, verdict: GateCheckBroke, noFiles: []string{"work.txt"},
-			setup: func(w *world) { gitq(t, w.dir, "remote", "remove", "origin") }},
+			setup: func(w *world) { gittest.Run(t, w.dir, "remote", "remove", "origin") }},
 		{name: "h: local merge without a PR", pr: "", verdict: GatePass, changed: true, files: []string{"work.txt"},
-			setup: func(w *world) { gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1") }},
+			setup: func(w *world) { gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1") }},
 		{name: "h: no PR means no provenance to read", pr: "", opts: GateOpts{CheckOnly: true}, verdict: GateFresh,
-			setup: func(w *world) { gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1") }},
+			setup: func(w *world) { gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1") }},
 		{name: "i: merged on origin but local base diverged", pr: ghURL, verdict: GateMergedRemotely, changed: true,
 			setup: func(w *world) {
 				os.WriteFile(filepath.Join(w.dir, "local.txt"), []byte("local only\n"), 0o644)
-				gitq(t, w.dir, "add", "local.txt")
-				gitq(t, w.dir, "commit", "-q", "-m", "local only commit")
+				gittest.Run(t, w.dir, "add", "local.txt")
+				gittest.Run(t, w.dir, "commit", "-q", "-m", "local only commit")
 			}},
 	}
 	runGateCases(t, cases)
@@ -403,7 +398,7 @@ func TestGateResolutionFailures(t *testing.T) {
 		t.Errorf("unknown slot: %v", err)
 	}
 	// merging needs the base checked out
-	gitq(t, w.dir, "checkout", "-q", "-b", "elsewhere")
+	gittest.Run(t, w.dir, "checkout", "-q", "-b", "elsewhere")
 	if _, err := w.gate(false, GateOpts{}); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "gate must run with main checked out (currently on elsewhere)") {
 		t.Errorf("wrong checkout: %v", err)
 	}
@@ -424,7 +419,7 @@ func TestGateResultShape(t *testing.T) {
 		res.PR != ghURL || res.Branch != "w1" || res.Base != "main" || len(res.SHA) < 7 {
 		t.Errorf("%+v", res)
 	}
-	if want := gitq(t, w.dir, "rev-parse", "--short", "HEAD"); res.SHA != want {
+	if want := gittest.Run(t, w.dir, "rev-parse", "--short", "HEAD"); res.SHA != want {
 		t.Errorf("sha = %s, want %s", res.SHA, want)
 	}
 }
@@ -469,7 +464,7 @@ func jsonMarshal(v any) ([]byte, error)   { return json.Marshal(v) }
 // (A fresh branch cannot conflict through the CLI, so the failure is injected.)
 func TestGateLocalMergeFailureIsAbortedAndReported(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	var seen []string
 	e := w.env(false)
 	inner := e.Git
@@ -581,7 +576,7 @@ func (w *world) logText() string { b, _ := os.ReadFile(w.log); return string(b) 
 
 func TestGateShellRunsUnderTheContext(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	e := w.env(false)
 	// Every git call is slow, as on a loaded machine: the verify command must
 	// still be what the cancellation lands on, not the merge or the worktree.
@@ -613,7 +608,7 @@ func TestGateShellRunsUnderTheContext(t *testing.T) {
 // was the CI case) is reported with git's own stderr, not called a conflict.
 func TestGateLocalMergeNonConflictFailureShowsGitsWords(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	e := w.env(false)
 	inner := git.Exec
 	e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
@@ -691,20 +686,20 @@ func TestGateStaleMerge(t *testing.T) {
 func sharedFile(t *testing.T, w *world) {
 	t.Helper()
 	lines := "a\n" + strings.Repeat("-\n", 19) + "z\n"
-	gitq(t, w.worker, "checkout", "-q", "main")
+	gittest.Run(t, w.worker, "checkout", "-q", "main")
 	os.WriteFile(filepath.Join(w.worker, "seed.txt"), []byte(lines), 0o644)
-	gitq(t, w.worker, "commit", "-q", "-am", "seed grows")
-	gitq(t, w.worker, "push", "-q", "origin", "main")
-	gitq(t, w.worker, "checkout", "-q", "w1")
-	gitq(t, w.worker, "merge", "-q", "origin/main", "-m", "sync")
+	gittest.Run(t, w.worker, "commit", "-q", "-am", "seed grows")
+	gittest.Run(t, w.worker, "push", "-q", "origin", "main")
+	gittest.Run(t, w.worker, "checkout", "-q", "w1")
+	gittest.Run(t, w.worker, "merge", "-q", "origin/main", "-m", "sync")
 	os.WriteFile(filepath.Join(w.worker, "seed.txt"), []byte("A\n"+lines[2:]), 0o644)
-	gitq(t, w.worker, "commit", "-q", "-am", "w1 edits the top")
-	gitq(t, w.worker, "push", "-q", "origin", "w1")
-	w.forge("sha", gitq(t, w.worker, "rev-parse", "HEAD"))
-	gitq(t, w.worker, "checkout", "-q", "main")
+	gittest.Run(t, w.worker, "commit", "-q", "-am", "w1 edits the top")
+	gittest.Run(t, w.worker, "push", "-q", "origin", "w1")
+	w.forge("sha", gittest.Run(t, w.worker, "rev-parse", "HEAD"))
+	gittest.Run(t, w.worker, "checkout", "-q", "main")
 	os.WriteFile(filepath.Join(w.worker, "seed.txt"), []byte(lines[:len(lines)-2]+"Z\n"), 0o644)
-	gitq(t, w.worker, "commit", "-q", "-am", "main edits the bottom")
-	gitq(t, w.worker, "push", "-q", "origin", "main")
+	gittest.Run(t, w.worker, "commit", "-q", "-am", "main edits the bottom")
+	gittest.Run(t, w.worker, "push", "-q", "origin", "main")
 }
 
 func TestBounceCount(t *testing.T) {
@@ -783,16 +778,16 @@ func TestBounceSameHeadCountsOnce(t *testing.T) {
 func TestGateVerifyCommandsComeFromBeforeTheMerge(t *testing.T) {
 	w := newWorld(t, "")
 	w.setConfig(`{"test":{"full":["false"]}}`)
-	gitq(t, w.dir, "add", "-f", ".rota/config.json")
-	gitq(t, w.dir, "commit", "-q", "-m", "config")
-	gitq(t, w.dir, "push", "-q", "origin", "main")
-	gitq(t, w.worker, "pull", "-q", "--no-rebase", "origin", "main")
+	gittest.Run(t, w.dir, "add", "-f", ".rota/config.json")
+	gittest.Run(t, w.dir, "commit", "-q", "-m", "config")
+	gittest.Run(t, w.dir, "push", "-q", "origin", "main")
+	gittest.Run(t, w.worker, "pull", "-q", "--no-rebase", "origin", "main")
 	if err := os.WriteFile(filepath.Join(w.worker, ".rota", "config.json"), []byte(`{"test":{"full":[]}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	gitq(t, w.worker, "commit", "-q", "-am", "disable verify")
-	gitq(t, w.worker, "push", "-q", "origin", "w1")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.worker, "commit", "-q", "-am", "disable verify")
+	gittest.Run(t, w.worker, "push", "-q", "origin", "w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
 	if err != nil || res.Verdict != GateVerifyFailed {
 		t.Errorf("verify must use the base's commands, got %+v %v", res, err)
@@ -812,7 +807,7 @@ func TestGateFindsTheOpenPROfAnUnrecordedSlot(t *testing.T) {
 	if !strings.Contains(w.logText(), "PRRequestMerge 7") {
 		t.Errorf("the PR was not merged through the forge:\n%s", w.logText())
 	}
-	if got := gitq(t, w.origin, "log", "--format=%s", "main"); !strings.Contains(got, "merge pr") {
+	if got := gittest.Run(t, w.origin, "log", "--format=%s", "main"); !strings.Contains(got, "merge pr") {
 		t.Errorf("nothing reached origin/main:\n%s", got)
 	}
 	if got := LoadRegistryTolerant(w.dir).Slot("w1").PR(); got != ghURL {
@@ -839,7 +834,7 @@ func TestGateApprovalSeesTheAdoptedPR(t *testing.T) {
 // reports, so the closes check still applies to it.
 func TestGateExternalPRIssueComesFromItsHead(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.worker, "push", "-q", "origin", "w1:dana/5-x")
+	gittest.Run(t, w.worker, "push", "-q", "origin", "w1:dana/5-x")
 	w.forge("head", "dana/5-x")
 	w.setPRBody("Adds the thing.\n")
 	res, _ := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true})
@@ -854,13 +849,13 @@ func TestGateExternalPRIssueComesFromItsHead(t *testing.T) {
 func TestGateAdoptedSupportSlotJudgesThePushedFixHead(t *testing.T) {
 	w := newWorld(t, "")
 	const branch = "mac-ben/5-x"
-	gitq(t, w.worker, "push", "-q", "origin", "w1:"+branch)
+	gittest.Run(t, w.worker, "push", "-q", "origin", "w1:"+branch)
 	if err := RegisterExternal(w.dir, "ext-1", branch, "", "main", "5", ghURL); err != nil {
 		t.Fatal(err)
 	}
 	w.forge("head", branch)
 	w.setPRBody("Closes #5")
-	w.forge("sha", gitq(t, w.worker, "rev-parse", "HEAD"))
+	w.forge("sha", gittest.Run(t, w.worker, "rev-parse", "HEAD"))
 	gate := func() string {
 		t.Helper()
 		res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "ext-1", Base: "main", CheckOnly: true})
@@ -873,11 +868,11 @@ func TestGateAdoptedSupportSlotJudgesThePushedFixHead(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(w.worker, "fix.txt"), []byte("fix\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	gitq(t, w.worker, "add", "fix.txt")
-	gitq(t, w.worker, "commit", "-q", "-m", "answer the bounce")
-	gitq(t, w.worker, "push", "-q", "origin", "w1:"+branch)
-	w.forge("sha", gitq(t, w.worker, "rev-parse", "HEAD"))
-	want := strings.TrimSpace(gitq(t, w.worker, "rev-parse", "--short=7", "HEAD"))
+	gittest.Run(t, w.worker, "add", "fix.txt")
+	gittest.Run(t, w.worker, "commit", "-q", "-m", "answer the bounce")
+	gittest.Run(t, w.worker, "push", "-q", "origin", "w1:"+branch)
+	w.forge("sha", gittest.Run(t, w.worker, "rev-parse", "HEAD"))
+	want := strings.TrimSpace(gittest.Run(t, w.worker, "rev-parse", "--short=7", "HEAD"))
 	if got := gate(); got != want || got == first {
 		t.Errorf("the adopted slot judged %s, want the pushed fix %s (adopted at %s)", got, want, first)
 	}
@@ -898,7 +893,7 @@ func TestGateCheckOnlyAdoptsTheOpenPRWithoutRecordingIt(t *testing.T) {
 // When the forge cannot say whether a PR is open, a local merge is not safe.
 func TestGateWithoutARecordedPRIsCheckBrokeWhenThePRsCannotBeListed(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	w.forge("listError", "simulated: rate limited")
 	res, err := w.gate(false, GateOpts{})
 	if err != nil || res.Verdict != GateCheckBroke || res.Changed {
@@ -973,7 +968,7 @@ func TestGateMergeDropsClaimLabel(t *testing.T) {
 
 func TestGateLocalMergeReportsFailedRecovery(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	e := w.env(false)
 	e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
 		if len(args) > 1 && args[0] == "merge" {
@@ -999,7 +994,7 @@ func TestGateLocalMergeReportsFailedRecovery(t *testing.T) {
 
 func TestGateRunsE2EAfterFull(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	w.setConfig(`{"test":{"full":["true"],"e2e":["test -f work.txt"]}}`)
 	res, err := w.gate(false, GateOpts{})
 	if err != nil || res.Verdict != GatePass || res.VerifySkipped {
@@ -1009,7 +1004,7 @@ func TestGateRunsE2EAfterFull(t *testing.T) {
 
 func TestGateRunsE2EWhenFullIsEmpty(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	w.setConfig(`{"test":{"full":[],"e2e":["false"]}}`)
 	res, _ := w.gate(false, GateOpts{})
 	if res.Verdict != GateVerifyFailed || !strings.Contains(res.Err, "test.e2e") {
@@ -1019,7 +1014,7 @@ func TestGateRunsE2EWhenFullIsEmpty(t *testing.T) {
 
 func TestGateE2ERedFails(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	w.setConfig(`{"test":{"full":["true"],"e2e":["false"]}}`)
 	res, err := w.gate(false, GateOpts{})
 	if err != nil || res.Verdict != GateVerifyFailed || !strings.Contains(res.Err, "test.e2e") {
@@ -1029,7 +1024,7 @@ func TestGateE2ERedFails(t *testing.T) {
 
 func TestGateSkipsE2EWhenFullRed(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	ran := filepath.Join(t.TempDir(), "e2e-ran.txt") // outside the scratch tree the verify runs in
 	w.setConfig(fmt.Sprintf(`{"test":{"full":["false"],"e2e":["echo ran >> %s"]}}`, ran))
 	res, _ := w.gate(false, GateOpts{})
@@ -1072,9 +1067,9 @@ func TestGateNoVerdictIsExplicit(t *testing.T) {
 // a PR, not a local branch of the same name that has moved on.
 func TestGateVerdictAtMergedHead(t *testing.T) {
 	w := newWorld(t, ghURL)
-	gitq(t, w.dir, "fetch", "-q", "origin")
-	head := strings.TrimSpace(gitq(t, w.dir, "rev-parse", "--short", "origin/w1"))
-	gitq(t, w.dir, "branch", "-f", "w1", "origin/main")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin")
+	head := strings.TrimSpace(gittest.Run(t, w.dir, "rev-parse", "--short", "origin/w1"))
+	gittest.Run(t, w.dir, "branch", "-f", "w1", "origin/main")
 	rec := verdict.Record{Kind: verdict.ReviewQuality, Verdict: verdict.Concerns, Sha: head, Findings: []verdict.Finding{{Severity: "blocker", Title: "broken"}}}
 	if _, err := verdict.AddBranch(w.dir, "w1", rec); err != nil {
 		t.Fatal(err)
@@ -1088,7 +1083,7 @@ func TestGateVerdictAtMergedHead(t *testing.T) {
 // An empty test.full refuses before the merge; --no-verify merges and says so.
 func TestGateRefusesEmptyTestFull(t *testing.T) {
 	w := newWorld(t, "")
-	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	w.setConfig(`{"test":{"full":[]}}`)
 	res, err := w.gate(false, GateOpts{})
 	if err != nil || res.Verdict != GateNoVerify || res.Changed || w.onMain("work.txt") {
@@ -1241,8 +1236,8 @@ func TestGateMergedRemotelyCause(t *testing.T) {
 		}, "local changes would be overwritten: work.txt"},
 		{"local-only commit", func(w *world) {
 			os.WriteFile(filepath.Join(w.dir, "local.txt"), []byte("local only\n"), 0o644)
-			gitq(t, w.dir, "add", "local.txt")
-			gitq(t, w.dir, "commit", "-q", "-m", "local only commit")
+			gittest.Run(t, w.dir, "add", "local.txt")
+			gittest.Run(t, w.dir, "commit", "-q", "-m", "local only commit")
 		}, "diverged: 1 ahead, 2 behind origin/main"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -1415,7 +1410,7 @@ func TestGateReviewDepthOnAnExternalPR(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, "")
 			w.setConfig(`{"ship":{"review":{"default":"full","lightBelow":1000}},"test":{"full":["true"]}}`)
-			gitq(t, w.worker, "push", "-q", "origin", "w1:dana/5-x")
+			gittest.Run(t, w.worker, "push", "-q", "origin", "w1:dana/5-x")
 			w.forge("head", "dana/5-x")
 			w.setPRBody(c.body)
 			w.forge("issueLabels", "in-progress")
@@ -1574,7 +1569,7 @@ func TestGateReviewDepthAsksForTheCheckedHead(t *testing.T) {
 func (w *world) record(branch, sha string, kinds ...string) {
 	w.t.Helper()
 	if sha == "" {
-		sha = gitq(w.t, w.worker, "rev-parse", "HEAD")
+		sha = gittest.Run(w.t, w.worker, "rev-parse", "HEAD")
 	}
 	for _, k := range kinds {
 		if _, err := verdict.AddBranch(w.dir, branch, verdict.Record{Kind: k, Verdict: verdict.Pass, Sha: sha}); err != nil {
@@ -1589,7 +1584,7 @@ func (w *world) record(branch, sha string, kinds ...string) {
 func secondPR(t *testing.T, head string) *world {
 	t.Helper()
 	w := newWorld(t, ghURL)
-	gitq(t, w.worker, "push", "-q", "origin", "w1:refs/heads/"+head)
+	gittest.Run(t, w.worker, "push", "-q", "origin", "w1:refs/heads/"+head)
 	w.forge("head", head)
 	w.setPRBody("Closes #5\n\n## Approvals\n- use the shared cache: orchestrator relay round 2\n")
 	relays := `[{"round":2,"ts":"2026-10-02T10:00:00Z","summary":"use the shared cache for the lookup"}]`
@@ -1668,7 +1663,7 @@ func TestGatePRHeadLagHintNamesTheRerun(t *testing.T) {
 func (w *world) recordCross(branch, sha, harness string) {
 	w.t.Helper()
 	if sha == "" {
-		sha = gitq(w.t, w.worker, "rev-parse", "HEAD")
+		sha = gittest.Run(w.t, w.worker, "rev-parse", "HEAD")
 	}
 	if _, err := verdict.AddBranch(w.dir, branch, verdict.Record{Kind: verdict.ReviewCross, Verdict: verdict.Pass, Sha: sha, Harness: harness, Model: "m"}); err != nil {
 		w.t.Fatal(err)
@@ -1711,7 +1706,7 @@ func TestGateRequiresCrossReview(t *testing.T) {
 			if c.cross != "" {
 				sha := ""
 				if c.stale {
-					sha = gitq(t, w.worker, "rev-parse", "HEAD~1")
+					sha = gittest.Run(t, w.worker, "rev-parse", "HEAD~1")
 				}
 				w.recordCross("w1", sha, c.cross)
 			}
@@ -1773,9 +1768,9 @@ func TestGateRequiresLensReview(t *testing.T) {
 			w.forge("issueLabels", "in-progress,"+c.labels)
 			w.record("w1", "", spec, quality)
 			for _, r := range c.recs {
-				sha := gitq(t, w.worker, "rev-parse", "HEAD")
+				sha := gittest.Run(t, w.worker, "rev-parse", "HEAD")
 				if r.stale {
-					sha = gitq(t, w.worker, "rev-parse", "HEAD~1")
+					sha = gittest.Run(t, w.worker, "rev-parse", "HEAD~1")
 				}
 				if _, err := verdict.AddBranch(w.dir, "w1", verdict.Record{Kind: r.kind, Verdict: r.verdict, Sha: sha}); err != nil {
 					t.Fatal(err)

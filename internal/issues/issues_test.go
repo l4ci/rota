@@ -4,15 +4,14 @@ import (
 	"context"
 	"errors"
 	"github.com/l4ci/rota/internal/jsonx"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/connections"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/tracker/jiratest"
 	"github.com/l4ci/rota/internal/tracker/lineartest"
@@ -214,26 +213,9 @@ func TestInvalidConfigIsNotDefaulted(t *testing.T) {
 func gitProject(t *testing.T) (dir, sha string) {
 	t.Helper()
 	dir = t.TempDir()
-	run := func(args ...string) string {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-		return strings.TrimSpace(string(out))
-	}
-	run("init", "-q", "-b", "main")
-	run("config", "user.name", "T")
-	run("config", "user.email", "t@example.com")
-	run("config", "commit.gpgsign", "false")
-	if err := os.WriteFile(filepath.Join(dir, "a"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	run("add", "a")
-	run("commit", "-q", "-m", "init")
-	return dir, run("rev-parse", "--short", "HEAD")
+	gittest.Init(t, dir, "main")
+	sha = gittest.Commit(t, dir, "init", "a", "x")
+	return dir, sha
 }
 
 func TestCloseGitHub(t *testing.T) {

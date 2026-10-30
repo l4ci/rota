@@ -2,11 +2,12 @@ package backlog
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 func TestExtractTokens(t *testing.T) {
@@ -44,17 +45,10 @@ func TestPathExists(t *testing.T) {
 
 func TestAudit(t *testing.T) {
 	f, _ := proj(t, nil)
-	os.WriteFile(filepath.Join(f.Root, "lexer.go"), nil, 0o644)
+	gittest.Write(t, f.Root, "lexer.go", "")
+	gittest.Run(t, f.Root, "add", "lexer.go")
 	for i, msg := range []string{"feat: add `parser-core` lexer-v2 one", "feat: add `parser-core` lexer-v2 two", "feat: rework tokenizer pass"} {
-		os.WriteFile(filepath.Join(f.Root, "x"+string(rune('a'+i))), nil, 0o644)
-		for _, args := range [][]string{{"add", "-A"}, {"commit", "-q", "-m", msg}} {
-			cmd := exec.Command("git", args...)
-			cmd.Dir = f.Root
-			cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@e", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@e")
-			if out, err := cmd.CombinedOutput(); err != nil {
-				t.Fatalf("%v: %s", err, out)
-			}
-		}
+		gittest.Commit(t, f.Root, msg, "x"+string(rune('a'+i)), "")
 	}
 	got := Audit(f.Root, []string{"Add `parser-core` for lexer-v2", "   ", "Sharpen the tokenizer pass", "`lexer.go` rewrite", "Nothing here zzzz"})
 	if len(got) != 4 {

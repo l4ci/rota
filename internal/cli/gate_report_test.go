@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -38,14 +38,9 @@ func TestGateReportFileOutcomes(t *testing.T) {
 			}
 			wt := filepath.Join(dir, ".worktrees", "w1")
 			write(t, filepath.Join(wt, "feature.txt"), "feature\n")
-			gitT(t, wt, "add", "feature.txt")
-			gitT(t, wt, "commit", "-q", "-m", "Implement [T01]")
-			cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
-			cmd.Dir = wt
-			head, err := cmd.Output()
-			if err != nil {
-				t.Fatal(err)
-			}
+			gittest.Run(t, wt, "add", "feature.txt")
+			gittest.Run(t, wt, "commit", "-q", "-m", "Implement [T01]")
+			head := gittest.Run(t, wt, "rev-parse", "--short", "HEAD")
 			args := []string{"worker", "gate", "w1", "--base", "main", "--no-assign-check", "--json"}
 			if tc.checkOnly {
 				args = append(args, "--check-only")
@@ -87,7 +82,7 @@ func TestGateReportFileOutcomes(t *testing.T) {
 
 func TestGateReportPRMergeAndRefusal(t *testing.T) {
 	dir := fileDeferredRepo(t)
-	gitIn(t, dir, "remote", "add", "origin", "git@github.com:example/reports.git")
+	gittest.Run(t, dir, "remote", "add", "origin", "git@github.com:example/reports.git")
 	write(t, filepath.Join(dir, ".rota", "config.json"), `{"forge":{"provider":"github"}}`)
 	write(t, filepath.Join(dir, ".rota", "BACKLOG.md"), "# TODO\n\n## Tasks\n\n- **[T01] [Minor] Gate target.** Evidence\n")
 	var reports []string

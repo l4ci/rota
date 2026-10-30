@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -179,16 +180,16 @@ func TestWindDownNeedsTheLeaseAndTheBase(t *testing.T) {
 		t.Fatalf("a process without the lease: %v", err)
 	}
 	f.verifyWith(t, `["true"]`)
-	sh(t, f.root, "checkout", "-q", "-b", "side")
+	gittest.Run(t, f.root, "checkout", "-q", "-b", "side")
 	if _, err := f.windDown(nil); !errors.As(err, &we) || we.Exit != exitcode.ExitResolution {
 		t.Fatalf("the root must be on the base: %v", err)
 	}
 	if _, st, _ := f.env.ReadLease(bg, f.root); st != roundlease.Live {
 		t.Errorf("a refusal keeps the lease: %v", st)
 	}
-	sh(t, f.root, "checkout", "-q", "main")
+	gittest.Run(t, f.root, "checkout", "-q", "main")
 	// --no-verify needs neither commands nor the base.
-	sh(t, f.root, "checkout", "-q", "side")
+	gittest.Run(t, f.root, "checkout", "-q", "side")
 	res, err := f.windDown(func(o *WindDownOpts) { o.NoVerify = true })
 	if err != nil || res.Verdict != VerdictClean || !res.VerifySkipped {
 		t.Fatalf("no-verify: %v %+v", err, res)
@@ -271,7 +272,7 @@ func TestWindDownVerifyCancelReturnsWhileGrandchildHoldsPipe(t *testing.T) {
 func (f *assignFixture) addExternal(t *testing.T, name, branch, pr string) string {
 	t.Helper()
 	wt := filepath.Join(f.root, ".worktrees", name)
-	sh(t, f.root, "worktree", "add", "-q", "-b", branch, wt, "main")
+	gittest.Run(t, f.root, "worktree", "add", "-q", "-b", branch, wt, "main")
 	if err := worker.RegisterExternal(f.root, name, branch, wt, "main", worker.IssueFromBranch(branch), pr); err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +368,7 @@ func TestRequireBaseHintNamesDirtySidecarOnly(t *testing.T) {
 	if err := os.WriteFile(abs, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	for _, a := range [][]string{{"add", rel}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "sidecar"}} {
+	for _, a := range [][]string{{"add", rel}, {"commit", "-m", "sidecar"}} {
 		if res, err := f.env.Git(bg, f.root, a...); err != nil || res.ExitCode != 0 {
 			t.Fatalf("git %v: %v %s", a, err, res.Stderr)
 		}

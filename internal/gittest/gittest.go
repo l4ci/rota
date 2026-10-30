@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -18,6 +19,11 @@ import (
 // GIT_AUTHOR_* or GIT_COMMITTER_* variable already in the test process wins,
 // for a suite whose golden files pin commit hashes under another identity.
 var Identity = []string{"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t"}
+
+// FixtureIdentity is the author and committer the cmd/rota scenario harness
+// pins: its frozen records hold the commit hashes this identity produces, so
+// it cannot move to Identity without re-freezing them.
+var FixtureIdentity = []string{"GIT_AUTHOR_NAME=Fixture", "GIT_AUTHOR_EMAIL=fixture@example.com", "GIT_COMMITTER_NAME=Fixture", "GIT_COMMITTER_EMAIL=fixture@example.com"}
 
 // Runner runs git with a fixed environment. The zero value is Identity under
 // the test process's environment; a non-nil Env replaces both, for a
@@ -80,10 +86,30 @@ func Init(t testing.TB, dir, branch string) {
 // it on a bare repo made outside Init too.
 func Quiet(t testing.TB, dir string) {
 	t.Helper()
-	Run(t, dir, "config", "gc.auto", "0")
-	Run(t, dir, "config", "gc.autoDetach", "false")
-	Run(t, dir, "config", "maintenance.auto", "false")
-	Run(t, dir, "config", "receive.autogc", "false")
+	for _, kv := range quietKeys {
+		Run(t, dir, "config", kv[0], kv[1])
+	}
+}
+
+// quietKeys is the one housekeeping policy: Quiet writes it as repo config and
+// QuietEnv as process environment.
+var quietKeys = [][2]string{
+	{"gc.auto", "0"},
+	{"gc.autoDetach", "false"},
+	{"maintenance.auto", "false"},
+	{"receive.autogc", "false"},
+}
+
+// QuietEnv is the Quiet policy as GIT_CONFIG_* environment entries, for a
+// harness that runs the binary under test and so reaches repos Quiet never
+// sees (nested, bare, or created by the binary itself).
+func QuietEnv() []string {
+	env := []string{"GIT_CONFIG_COUNT=" + strconv.Itoa(len(quietKeys))}
+	for i, kv := range quietKeys {
+		n := strconv.Itoa(i)
+		env = append(env, "GIT_CONFIG_KEY_"+n+"="+kv[0], "GIT_CONFIG_VALUE_"+n+"="+kv[1])
+	}
+	return env
 }
 
 // Write writes content to rel under root, creating parent directories.

@@ -115,3 +115,21 @@ func TestSetIdentity(t *testing.T) {
 		})
 	}
 }
+
+// TestQuietEnvMatchesQuiet: the env form reaches repos Quiet never sees and
+// must carry the same keys, so the two cannot drift.
+func TestQuietEnvMatchesQuiet(t *testing.T) {
+	dir := filepath.Join(TempDir(t), "repo")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r := Runner{Env: append(os.Environ(), QuietEnv()...)}
+	r.Run(t, dir, "init", "-q")
+	for key, want := range map[string]string{
+		"gc.auto": "0", "gc.autoDetach": "false", "maintenance.auto": "false", "receive.autogc": "false",
+	} {
+		if got := r.Run(t, dir, "config", "--get", key); got != want {
+			t.Errorf("env config %s = %q, want %q", key, got, want)
+		}
+	}
+}

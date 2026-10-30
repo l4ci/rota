@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -24,8 +25,8 @@ func commitSections(t *testing.T, dir string, nums ...string) {
 			t.Fatal(err)
 		}
 	}
-	sh(t, dir, "add", "test/sections")
-	sh(t, dir, "commit", "-q", "-m", "sections")
+	gittest.Run(t, dir, "add", "test/sections")
+	gittest.Run(t, dir, "commit", "-q", "-m", "sections")
 }
 
 func smokeFixture(t *testing.T) *assignFixture {
@@ -63,8 +64,8 @@ func TestAssignReservesDistinctSmokeSections(t *testing.T) {
 func TestAssignCountsOpenPRBranches(t *testing.T) {
 	f := smokeFixture(t)
 	commitSections(t, f.root, "125")
-	sh(t, f.root, "branch", "kit/99-other")
-	sh(t, f.root, "worktree", "add", "-q", filepath.Join(f.root, ".worktrees", "pr"), "kit/99-other")
+	gittest.Run(t, f.root, "branch", "kit/99-other")
+	gittest.Run(t, f.root, "worktree", "add", "-q", filepath.Join(f.root, ".worktrees", "pr"), "kit/99-other")
 	commitSections(t, filepath.Join(f.root, ".worktrees", "pr"), "131")
 	f.env.Forge = (&fakeRemote{prs: []tracker.PR{{Number: 7, Branch: "kit/99-other"}}}).asForge()
 	res, err := f.assign("15", "ben", nil)

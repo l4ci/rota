@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -85,7 +86,7 @@ func TestTrainNudgeAssignsFreeSlotFirst(t *testing.T) {
 				{"pr": "#12", "branch": "b/2-x", "base": "main"},
 			}})
 			for _, branch := range []string{"a/1-x", "b/2-x"} {
-				gitIn(t, dir, "branch", branch)
+				gittest.Run(t, dir, "branch", branch)
 				if code, _, errOut := rotaIn(t, dir, "verdict", "add", branch, "--kind", "review-spec", "--verdict", "PASS"); code != 0 {
 					t.Fatalf("review: %d %s", code, errOut)
 				}

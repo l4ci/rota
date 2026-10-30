@@ -2,6 +2,7 @@ package round
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/gittest"
 	"strings"
 	"testing"
 
@@ -93,7 +94,7 @@ func TestCandidateDoesNotFlagClosedMilestoneTagWithoutMergeLabel(t *testing.T) {
 			var f *assignFixture
 			if branch {
 				f = crossFixture(t)
-				sh(t, f.root, "push", "-q", "origin", "main:refs/heads/milestone/M02")
+				gittest.Run(t, f.root, "push", "-q", "origin", "main:refs/heads/milestone/M02")
 			} else {
 				f = newAssignFixture(t)
 				milestoneDoc(t, f.root, "M02", "active")

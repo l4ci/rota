@@ -3,13 +3,13 @@ package bugreport
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 var t0 = time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
@@ -190,27 +190,18 @@ func TestAddRedactsWhatItStores(t *testing.T) {
 	}
 }
 
-func gitIn(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", append([]string{"-c", "user.email=a@b", "-c", "user.name=n"}, args...)...)
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v %s", args, err, out)
-	}
-}
-
 // A worker's worktree has its own .rota/ (tracked), yet its records must land
 // where the main checkout's wind-down reads them.
 func TestBugreportWorktreeRecordsLandInTheMainLog(t *testing.T) {
 	base, _ := filepath.EvalSymlinks(t.TempDir())
 	main := filepath.Join(base, "main")
 	os.MkdirAll(filepath.Join(main, ".rota"), 0o755)
-	gitIn(t, main, "init", "-q", "-b", "main")
+	gittest.Run(t, main, "init", "-q", "-b", "main")
 	os.WriteFile(filepath.Join(main, ".rota", "config.json"), []byte("{}"), 0o644)
-	gitIn(t, main, "add", ".rota/config.json")
-	gitIn(t, main, "commit", "-q", "-m", "i")
+	gittest.Run(t, main, "add", ".rota/config.json")
+	gittest.Run(t, main, "commit", "-q", "-m", "i")
 	wt := filepath.Join(base, "wt")
-	gitIn(t, main, "worktree", "add", "-q", "-b", "w", wt)
+	gittest.Run(t, main, "worktree", "add", "-q", "-b", "w", wt)
 	if _, err := Add(context.Background(), git.Exec, wt, Record{Source: SourceAgent, Summary: "from a worker"}, t0); err != nil {
 		t.Fatal(err)
 	}

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -17,9 +18,9 @@ func (f *moveFx) stamped(t *testing.T, slot, file, attempt string) {
 	if err := os.WriteFile(filepath.Join(f.wt(slot), file), []byte(slot), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sh(t, f.wt(slot), "add", file)
-	sh(t, f.wt(slot), "commit", "-q", "-m", "work on "+file+"\n\n"+worker.AttemptTrailer+": "+attempt)
-	sh(t, f.wt(slot), "push", "-q", "origin", "HEAD")
+	gittest.Run(t, f.wt(slot), "add", file)
+	gittest.Run(t, f.wt(slot), "commit", "-q", "-m", "work on "+file+"\n\n"+worker.AttemptTrailer+": "+attempt)
+	gittest.Run(t, f.wt(slot), "push", "-q", "origin", "HEAD")
 }
 
 // queueBensPR moves ben's issue-12 PR onto the review queue the way assign
@@ -124,14 +125,12 @@ func TestTransferBaseIncludesAPushRootHasNotFetched(t *testing.T) {
 	benAttempt := f.slot("ben").Attempt()
 	f.queueBensPR(t)
 	clone := filepath.Join(t.TempDir(), "other")
-	sh(t, filepath.Dir(clone), "clone", "-q", f.origin, clone)
-	sh(t, clone, "config", "user.email", "t@t")
-	sh(t, clone, "config", "user.name", "t")
-	sh(t, clone, "checkout", "-q", branch)
+	gittest.Run(t, filepath.Dir(clone), "clone", "-q", f.origin, clone)
+	gittest.Run(t, clone, "checkout", "-q", branch)
 	os.WriteFile(filepath.Join(clone, "late.txt"), []byte("late"), 0o644)
-	sh(t, clone, "add", "late.txt")
-	sh(t, clone, "commit", "-q", "-m", "late push\n\n"+worker.AttemptTrailer+": "+benAttempt)
-	sh(t, clone, "push", "-q", "origin", "HEAD")
+	gittest.Run(t, clone, "add", "late.txt")
+	gittest.Run(t, clone, "commit", "-q", "-m", "late push\n\n"+worker.AttemptTrailer+": "+benAttempt)
+	gittest.Run(t, clone, "push", "-q", "origin", "HEAD")
 	tip := gitIn(t, clone, "rev-parse", "HEAD")
 	if _, err := f.transfer("12", "dana", nil); err != nil {
 		t.Fatal(err)

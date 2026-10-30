@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -18,18 +19,16 @@ func milestoneFixture(t *testing.T) (*assignFixture, string) {
 	t.Helper()
 	f := newAssignFixture(t)
 	origin := filepath.Join(gitTemp(t), "origin.git")
-	sh(t, f.root, "clone", "-q", "--bare", f.root, origin)
-	sh(t, f.root, "remote", "add", "origin", origin)
-	sh(t, f.root, "fetch", "-q", "origin")
-	sh(t, f.root, "config", "user.email", "t@t")
-	sh(t, f.root, "config", "user.name", "t")
-	sh(t, f.root, "switch", "-q", "-c", "ms-tmp", "main")
+	gittest.Run(t, f.root, "clone", "-q", "--bare", f.root, origin)
+	gittest.Run(t, f.root, "remote", "add", "origin", origin)
+	gittest.Run(t, f.root, "fetch", "-q", "origin")
+	gittest.Run(t, f.root, "switch", "-q", "-c", "ms-tmp", "main")
 	writeFile(t, filepath.Join(f.root, "milestone-only"), "m")
-	sh(t, f.root, "add", "milestone-only")
-	sh(t, f.root, "commit", "-q", "-m", "milestone work")
-	sh(t, f.root, "push", "-q", "origin", "ms-tmp:refs/heads/milestone/M01")
-	sh(t, f.root, "switch", "-q", "main")
-	sh(t, f.root, "branch", "-q", "-D", "ms-tmp")
+	gittest.Run(t, f.root, "add", "milestone-only")
+	gittest.Run(t, f.root, "commit", "-q", "-m", "milestone work")
+	gittest.Run(t, f.root, "push", "-q", "origin", "ms-tmp:refs/heads/milestone/M01")
+	gittest.Run(t, f.root, "switch", "-q", "main")
+	gittest.Run(t, f.root, "branch", "-q", "-D", "ms-tmp")
 	return f, origin
 }
 
@@ -75,7 +74,7 @@ func TestAssignKeepsTheBaseForUntaggedAndPlannedMilestoneIssues(t *testing.T) {
 
 func TestAssignKeepsTheBaseWhenTheMilestoneBranchIsMissing(t *testing.T) {
 	f, origin := milestoneFixture(t)
-	sh(t, f.root, "push", "-q", origin, "--delete", "milestone/M01")
+	gittest.Run(t, f.root, "push", "-q", origin, "--delete", "milestone/M01")
 	res, err := f.assign("12", "", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +90,7 @@ func TestAssignKeepsTheBaseWhenTheMilestoneBranchIsMissing(t *testing.T) {
 // pushMilestoneBranch cuts milestone/<id> on origin from main.
 func pushMilestoneBranch(t *testing.T, f *assignFixture, id string) {
 	t.Helper()
-	sh(t, f.root, "push", "-q", "origin", "main:refs/heads/milestone/"+id)
+	gittest.Run(t, f.root, "push", "-q", "origin", "main:refs/heads/milestone/"+id)
 }
 
 func TestReconcileRetargetsAPRWhoseIssueChangedMilestone(t *testing.T) {

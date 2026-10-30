@@ -2,6 +2,7 @@ package worker
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,8 +16,8 @@ func adoptedWorld(t *testing.T, body string) (*world, string) {
 	t.Helper()
 	w := newWorld(t, "")
 	wt := filepath.Join(filepath.Dir(w.dir), "ext-wt")
-	gitq(t, w.dir, "fetch", "-q", "origin")
-	gitq(t, w.dir, "worktree", "add", "-q", "-b", "w1", wt, "origin/w1")
+	gittest.Run(t, w.dir, "fetch", "-q", "origin")
+	gittest.Run(t, w.dir, "worktree", "add", "-q", "-b", "w1", wt, "origin/w1")
 	if err := os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +59,7 @@ func TestGateReleasesAnAdoptedSlotAndKeepsItsCheckout(t *testing.T) {
 	if LoadRegistryTolerant(w.dir).Slot("ext-1") != nil {
 		t.Error("the slot is still registered after its PR merged")
 	}
-	if !exists(wt) || gitq(t, w.dir, "branch", "--list", "w1") == "" {
+	if !exists(wt) || gittest.Run(t, w.dir, "branch", "--list", "w1") == "" {
 		t.Error("a gate pass without --prune removed the worktree or branch")
 	}
 }
@@ -79,7 +80,7 @@ func TestGatePruneRemovesAnAdoptedCheckout(t *testing.T) {
 	if err != nil || res.Verdict != GatePass {
 		t.Fatalf("verdict %q (%v)", res.Verdict, err)
 	}
-	if exists(wt) || gitq(t, w.dir, "branch", "--list", "w1") != "" {
+	if exists(wt) || gittest.Run(t, w.dir, "branch", "--list", "w1") != "" {
 		t.Error("--prune left the worktree or branch")
 	}
 }
@@ -95,7 +96,7 @@ func TestReleaseExternalKeepsWorktree(t *testing.T) {
 	if !exists(wt) {
 		t.Error("release deleted the worktree without --prune")
 	}
-	if gitq(t, w.dir, "branch", "--list", "w1") == "" {
+	if gittest.Run(t, w.dir, "branch", "--list", "w1") == "" {
 		t.Error("release deleted the branch without --prune")
 	}
 }

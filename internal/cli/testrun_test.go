@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -57,13 +58,13 @@ func TestTestRunExpandsFilesAgainstBase(t *testing.T) {
 	root := tierProject(t, `{"test":{"fast":["printf '%s\\n' {files} > out.txt"]}}`)
 	write(t, filepath.Join(root, "keep.txt"), "k")
 	write(t, filepath.Join(root, "gone.txt"), "g")
-	gitT(t, root, "add", "keep.txt", "gone.txt")
-	gitT(t, root, "commit", "-q", "-m", "seed files")
-	gitT(t, root, "checkout", "-q", "-b", "feat")
+	gittest.Run(t, root, "add", "keep.txt", "gone.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "seed files")
+	gittest.Run(t, root, "checkout", "-q", "-b", "feat")
 	write(t, filepath.Join(root, "it's here.txt"), "x")
-	gitT(t, root, "add", "it's here.txt")
-	gitT(t, root, "commit", "-q", "-m", "add")
-	gitT(t, root, "rm", "-q", "gone.txt")
+	gittest.Run(t, root, "add", "it's here.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "add")
+	gittest.Run(t, root, "rm", "-q", "gone.txt")
 	write(t, filepath.Join(root, "keep.txt"), "changed")
 	if o := trRun(t, root, "", "test", "run", "fast", "--base", "main"); o.code != 0 {
 		t.Fatalf("exit %d\n%s%s", o.code, o.stdout, o.stderr)

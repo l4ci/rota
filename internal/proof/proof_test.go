@@ -3,8 +3,8 @@ package proof
 import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -136,11 +136,8 @@ func TestAddExits(t *testing.T) {
 
 func TestDefaultShaFromGit(t *testing.T) {
 	root := project(t)
-	for _, a := range [][]string{{"init", "-q"}, {"-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "--allow-empty", "-m", "i"}} {
-		c := exec.Command("git", a...)
-		c.Dir = root
-		c.Run()
-	}
+	gittest.Init(t, root, "main")
+	gittest.Run(t, root, "commit", "-q", "--allow-empty", "-m", "i")
 	row, _, err := Add(Files(root), root, "B07", proofDay, AddOpts{Check: "c", Result: "PASS", Evidence: "e"})
 	if err != nil || len(row.Sha) < 7 || row.Sha == "-" {
 		t.Fatalf("sha = %q %v", row.Sha, err)

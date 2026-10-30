@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -54,14 +55,14 @@ func bounceFixture(t *testing.T, findings string) (dir, head string) {
 func bounceFixtureVerdict(t *testing.T, findings, v string) (dir, head string) {
 	t.Helper()
 	dir = workerProject(t, `{"round":{"maxBounces":3}}`)
-	gitIn(t, dir, "checkout", "-q", "-b", "feat/x")
+	gittest.Run(t, dir, "checkout", "-q", "-b", "feat/x")
 	body := writeBody(t, t.TempDir(), findings)
 	if code, _, errOut := rotaIn(t, dir, "verdict", "add", "--kind", "review-quality", "--verdict", v, "--body-file", body); code != 0 {
 		t.Fatalf("verdict add: %d %s", code, errOut)
 	}
 	_, out, _ := rotaIn(t, dir, "verdict", "show", "--json")
 	head = data(t, out)["head"].(string)
-	gitIn(t, dir, "checkout", "-q", "main")
+	gittest.Run(t, dir, "checkout", "-q", "main")
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "workers.json"), []byte(`{"slots":[{"name":"w1","issue":"31","branch":"feat/x","state":"done"}]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -296,9 +297,9 @@ func TestWorkerGateRefusesBlockingFindingUnderConcerns(t *testing.T) {
 	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	write(t, filepath.Join(wt, "feature.txt"), "f")
-	gitT(t, wt, "add", "feature.txt")
-	gitT(t, wt, "commit", "-q", "-m", "feature")
-	branch := strings.TrimSpace(gitT(t, wt, "rev-parse", "--abbrev-ref", "HEAD"))
+	gittest.Run(t, wt, "add", "feature.txt")
+	gittest.Run(t, wt, "commit", "-q", "-m", "feature")
+	branch := strings.TrimSpace(gittest.Run(t, wt, "rev-parse", "--abbrev-ref", "HEAD"))
 	merged := func() bool { _, err := os.Stat(filepath.Join(dir, "feature.txt")); return err == nil }
 	add := func(findings string) {
 		t.Helper()
@@ -332,8 +333,8 @@ func TestWorkerGateRefusesBlockingFindingUnderConcerns(t *testing.T) {
 	// A new head the record was not made at: the old blocking record is stale.
 	add(`{"findings":[{"severity":"blocker","title":"old"}]}`)
 	write(t, filepath.Join(wt, "more.txt"), "m")
-	gitT(t, wt, "add", "more.txt")
-	gitT(t, wt, "commit", "-q", "-m", "more")
+	gittest.Run(t, wt, "add", "more.txt")
+	gittest.Run(t, wt, "commit", "-q", "-m", "more")
 	if code, out, _ := rotaIn(t, dir, "--json", "worker", "gate", "w1", "--base", "main", "--check-only"); code != 0 {
 		t.Fatalf("stale blocking record: %d %s", code, out)
 	}

@@ -3,8 +3,8 @@ package plan
 import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -271,17 +271,11 @@ func TestValidateDocsCustomSegmentAndCRLF(t *testing.T) {
 
 func TestRenameCheck(t *testing.T) {
 	dir, _ := filepath.EvalSymlinks(t.TempDir())
-	for _, a := range [][]string{{"init", "-q"}} {
-		c := exec.Command("git", a...)
-		c.Dir = dir
-		c.Run()
-	}
+	gittest.Init(t, dir, "main")
 	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("oldname here\n"), 0o644)
 	os.MkdirAll(filepath.Join(dir, "sub"), 0o777)
 	os.WriteFile(filepath.Join(dir, "sub/b.txt"), []byte("oldname too\n"), 0o644)
-	c := exec.Command("git", "add", "a.txt", "sub/b.txt")
-	c.Dir = dir
-	c.Run()
+	gittest.Run(t, dir, "add", "a.txt", "sub/b.txt")
 	if got := RenameCheck(dir, "oldname", nil); !reflect.DeepEqual(got, []string{"a.txt", "sub/b.txt"}) {
 		t.Errorf("all = %v", got)
 	}

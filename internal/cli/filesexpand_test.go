@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 func expandCtx() *Ctx {
@@ -15,12 +17,12 @@ func expandCtx() *Ctx {
 func TestExpandFilesQuotesAndSkipsDeleted(t *testing.T) {
 	root := tierProject(t, `{}`)
 	write(t, filepath.Join(root, "gone.txt"), "g")
-	gitT(t, root, "add", "gone.txt")
-	gitT(t, root, "commit", "-q", "-m", "seed")
-	gitT(t, root, "checkout", "-q", "-b", "feat")
+	gittest.Run(t, root, "add", "gone.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "seed")
+	gittest.Run(t, root, "checkout", "-q", "-b", "feat")
 	write(t, filepath.Join(root, "it's here.txt"), "x")
-	gitT(t, root, "add", "it's here.txt")
-	gitT(t, root, "rm", "-q", "gone.txt")
+	gittest.Run(t, root, "add", "it's here.txt")
+	gittest.Run(t, root, "rm", "-q", "gone.txt")
 	got, err := expandFiles(expandCtx(), root, "main", []string{"lint {files}"})
 	if err != nil {
 		t.Fatal(err)
@@ -33,9 +35,9 @@ func TestExpandFilesQuotesAndSkipsDeleted(t *testing.T) {
 func TestExpandFilesIncludesUntrackedNotIgnored(t *testing.T) {
 	root := tierProject(t, `{}`)
 	write(t, filepath.Join(root, ".gitignore"), "*.log\n")
-	gitT(t, root, "add", ".gitignore")
-	gitT(t, root, "commit", "-q", "-m", "ignore")
-	gitT(t, root, "checkout", "-q", "-b", "feat")
+	gittest.Run(t, root, "add", ".gitignore")
+	gittest.Run(t, root, "commit", "-q", "-m", "ignore")
+	gittest.Run(t, root, "checkout", "-q", "-b", "feat")
 	write(t, filepath.Join(root, "new one.txt"), "x")
 	write(t, filepath.Join(root, "noise.log"), "x")
 	got, err := expandFiles(expandCtx(), root, "main", []string{"t {files}"})
@@ -51,14 +53,14 @@ func TestExpandFilesIncludesUntrackedNotIgnored(t *testing.T) {
 // the default base is the remote-tracking ref when it is ahead.
 func TestExpandFilesPrefersAheadRemoteBase(t *testing.T) {
 	root := tierProject(t, `{}`)
-	gitT(t, root, "checkout", "-q", "-b", "feat")
+	gittest.Run(t, root, "checkout", "-q", "-b", "feat")
 	write(t, filepath.Join(root, "upstream.txt"), "u")
-	gitT(t, root, "add", "upstream.txt")
-	gitT(t, root, "commit", "-q", "-m", "upstream")
-	gitT(t, root, "update-ref", "refs/remotes/origin/main", "HEAD")
+	gittest.Run(t, root, "add", "upstream.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "upstream")
+	gittest.Run(t, root, "update-ref", "refs/remotes/origin/main", "HEAD")
 	write(t, filepath.Join(root, "branch.txt"), "b")
-	gitT(t, root, "add", "branch.txt")
-	gitT(t, root, "commit", "-q", "-m", "branch")
+	gittest.Run(t, root, "add", "branch.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "branch")
 	got, err := expandFiles(expandCtx(), root, "", []string{"t {files}"})
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +80,7 @@ func TestExpandFilesPrefersAheadRemoteBase(t *testing.T) {
 // A bad base is an error when {files} needs the diff.
 func TestExpandFilesBadBaseErrors(t *testing.T) {
 	root := tierProject(t, `{}`)
-	gitT(t, root, "checkout", "-q", "-b", "feat")
+	gittest.Run(t, root, "checkout", "-q", "-b", "feat")
 	if got, err := expandFiles(expandCtx(), root, "no-such-ref", []string{"t {files}"}); err == nil {
 		t.Errorf("bad base with {files}: got %q, want an error", got)
 	}
@@ -87,7 +89,7 @@ func TestExpandFilesBadBaseErrors(t *testing.T) {
 // Several arguments are quoted one by one; a bare {files} argument stays a list.
 func TestExpandFilesMultiArgAndNoPlaceholder(t *testing.T) {
 	root := tierProject(t, `{}`)
-	gitT(t, root, "checkout", "-q", "-b", "feat")
+	gittest.Run(t, root, "checkout", "-q", "-b", "feat")
 	write(t, filepath.Join(root, "a.txt"), "a")
 	got, err := expandFiles(expandCtx(), root, "main", []string{"go", "vet", "{files}"}, []string{"echo hi there"})
 	if err != nil {

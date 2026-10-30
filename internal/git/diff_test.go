@@ -14,10 +14,10 @@ import (
 func branchWithChanges(t *testing.T) string {
 	t.Helper()
 	dir := newRepo(t)
-	mustGit(t, dir, "checkout", "-q", "-b", "feat")
+	gittest.Run(t, dir, "checkout", "-q", "-b", "feat")
 	writeFile(t, dir, "b.txt", "1\n2\n3\n")
-	mustGit(t, dir, "add", "b.txt")
-	mustGit(t, dir, "commit", "-q", "-m", "add b")
+	gittest.Run(t, dir, "add", "b.txt")
+	gittest.Run(t, dir, "commit", "-q", "-m", "add b")
 	return dir
 }
 
@@ -61,7 +61,7 @@ func TestRemoteBase(t *testing.T) {
 	if _, ok := RemoteRef(ctx, Exec, dir, ""); ok {
 		t.Fatal("empty base resolved")
 	}
-	mustGit(t, dir, "update-ref", "refs/remotes/origin/main", "HEAD")
+	gittest.Run(t, dir, "update-ref", "refs/remotes/origin/main", "HEAD")
 	if got := RemoteBase(ctx, Exec, dir, "main"); got != "origin/main" {
 		t.Fatalf("with remote: got %q", got)
 	}
@@ -93,11 +93,11 @@ func TestChangedPathsRenameBinaryEmpty(t *testing.T) {
 	if n, err := repo.ChangedLines(ctx, "main...main"); err != nil || n != 0 {
 		t.Fatalf("empty lines: %d, %v", n, err)
 	}
-	mustGit(t, dir, "checkout", "-q", "-b", "feat")
-	mustGit(t, dir, "mv", "a.txt", "renamed.txt")
+	gittest.Run(t, dir, "checkout", "-q", "-b", "feat")
+	gittest.Run(t, dir, "mv", "a.txt", "renamed.txt")
 	gittest.Write(t, dir, "img.bin", "a\x00b\x00\x01")
-	mustGit(t, dir, "add", "-A")
-	mustGit(t, dir, "commit", "-q", "-m", "rename and binary")
+	gittest.Run(t, dir, "add", "-A")
+	gittest.Run(t, dir, "commit", "-q", "-m", "rename and binary")
 	paths, err := ChangedPaths(ctx, Exec, dir, "main...feat")
 	if err != nil {
 		t.Fatal(err)
@@ -115,8 +115,8 @@ func TestChangedPathsRenameBinaryEmpty(t *testing.T) {
 func TestRemoteBaseSpellings(t *testing.T) {
 	dir := newRepo(t)
 	ctx := context.Background()
-	mustGit(t, dir, "update-ref", "refs/remotes/origin/release/1.x", "HEAD")
-	mustGit(t, dir, "update-ref", "refs/remotes/origin/main", "HEAD")
+	gittest.Run(t, dir, "update-ref", "refs/remotes/origin/release/1.x", "HEAD")
+	gittest.Run(t, dir, "update-ref", "refs/remotes/origin/main", "HEAD")
 	if got := RemoteBase(ctx, Exec, dir, "release/1.x"); got != "origin/release/1.x" {
 		t.Fatalf("slash base: got %q", got)
 	}

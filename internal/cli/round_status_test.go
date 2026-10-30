@@ -5,13 +5,13 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/limits"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/round"
@@ -24,11 +24,7 @@ func roundFixture(t *testing.T, agents []host.Agent) (string, *Deps) {
 	t.Helper()
 	root := gitRepo(t)
 	for name, br := range map[string]string{"ben": "park/ben", "dana": "dana/58-x"} {
-		c := exec.Command("git", "worktree", "add", "-q", "-b", br, filepath.Join(root, ".worktrees", name), "HEAD")
-		c.Dir = root
-		if out, err := c.CombinedOutput(); err != nil {
-			t.Fatalf("%v %s", err, out)
-		}
+		gittest.Run(t, root, "worktree", "add", "-q", "-b", br, filepath.Join(root, ".worktrees", name), "HEAD")
 	}
 	d := testDeps()
 	d.RoundEnv = func(context.Context, string) round.Env {

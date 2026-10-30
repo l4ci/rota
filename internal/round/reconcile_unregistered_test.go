@@ -2,6 +2,7 @@ package round
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,12 +21,12 @@ func unregFixture(t *testing.T, branches ...string) (string, Env, *fakeRemote) {
 	root := newRepo(t, map[string]string{"ben": "ben/613-other"})
 	for _, br := range branches {
 		wt := filepath.Join(t.TempDir(), "wt")
-		sh(t, root, "worktree", "add", "-q", "-b", br, wt, "main")
+		gittest.Run(t, root, "worktree", "add", "-q", "-b", br, wt, "main")
 		if err := os.WriteFile(filepath.Join(wt, "work"), []byte(br), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		sh(t, wt, "add", "work")
-		sh(t, wt, "commit", "-q", "-m", "work")
+		gittest.Run(t, wt, "add", "work")
+		gittest.Run(t, wt, "commit", "-q", "-m", "work")
 	}
 	fb := &fakeRemote{states: map[int]string{}}
 	fb.add("612", "Thing", "M01", false, filesBody)
@@ -49,7 +50,7 @@ func unregistered(fs []Finding) []Finding {
 
 func TestReconcileUnregisteredBranch(t *testing.T) {
 	root, e, _ := unregFixture(t, "codex/612-thing", "other/9-nope")
-	sh(t, root, "branch", "codex/merged-already", "main") // merged into base: not drift
+	gittest.Run(t, root, "branch", "codex/merged-already", "main") // merged into base: not drift
 	out, err := e.Reconcile(bg, root, false)
 	if err != nil {
 		t.Fatal(err)

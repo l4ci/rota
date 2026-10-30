@@ -39,8 +39,8 @@ func workRepo(t *testing.T, cfg string) string {
 	write(t, filepath.Join(root, ".rota", "counters.json"), "{}\n")
 	write(t, filepath.Join(root, ".gitignore"), ".rota/status.json\n.rota/**/*.lock\n")
 	write(t, filepath.Join(root, "Foo.gd"), "extends Node\n")
-	gitT(t, root, "add", "-A")
-	gitT(t, root, "commit", "-q", "-m", "seed")
+	gittest.Run(t, root, "add", "-A")
+	gittest.Run(t, root, "commit", "-q", "-m", "seed")
 	return root
 }
 
@@ -64,7 +64,7 @@ func TestWorkStartCreatesBranchAndRegisters(t *testing.T) {
 		get(d, "isolation") != "branch" || get(d, "worktree") != nil || get(d, "changed") != true {
 		t.Fatalf("data %v", d)
 	}
-	if got := gitT(t, root, "rev-parse", "--abbrev-ref", "HEAD"); strings.TrimSpace(got) != "rota/b01-quick-switch-overlay" {
+	if got := gittest.Run(t, root, "rev-parse", "--abbrev-ref", "HEAD"); strings.TrimSpace(got) != "rota/b01-quick-switch-overlay" {
 		t.Fatalf("current branch %q", got)
 	}
 	e, ok := status.Find(root, "rota/b01-quick-switch-overlay", "")
@@ -90,13 +90,13 @@ func TestWorkStartSecondRunChangesNothing(t *testing.T) {
 		t.Fatalf("%d status entries", n)
 	}
 	// Off the branch, a re-run checks it out again and says so.
-	gitT(t, root, "stash", "-u", "-q")
-	gitT(t, root, "checkout", "-q", "main")
+	gittest.Run(t, root, "stash", "-u", "-q")
+	gittest.Run(t, root, "checkout", "-q", "main")
 	d = runOKWith(t, deps, root, 0, "work", "start", "B01")
 	if get(d, "changed") != true {
 		t.Fatalf("checkout run: %v", d)
 	}
-	if got := strings.TrimSpace(gitT(t, root, "rev-parse", "--abbrev-ref", "HEAD")); got != "rota/b01-quick-switch-overlay" {
+	if got := strings.TrimSpace(gittest.Run(t, root, "rev-parse", "--abbrev-ref", "HEAD")); got != "rota/b01-quick-switch-overlay" {
 		t.Fatalf("current branch %q", got)
 	}
 }
@@ -109,13 +109,13 @@ func TestWorkStartRefusesUserChange(t *testing.T) {
 	if !reflect.DeepEqual(list(d, "dirty"), []any{"notes.txt"}) {
 		t.Fatalf("dirty %v", get(d, "dirty"))
 	}
-	if gitT(t, root, "branch", "--list", "rota/*") != "" {
+	if gittest.Run(t, root, "branch", "--list", "rota/*") != "" {
 		t.Fatal("a branch was created")
 	}
 	if _, ok := status.Find(root, "rota/b01-quick-switch-overlay", ""); ok {
 		t.Fatal("a status entry was written")
 	}
-	if strings.Count(gitT(t, root, "log", "--oneline"), "\n") > 1 {
+	if strings.Count(gittest.Run(t, root, "log", "--oneline"), "\n") > 1 {
 		t.Fatal("a sweep commit was made")
 	}
 }
@@ -131,14 +131,14 @@ func TestWorkStartSweepsSiblings(t *testing.T) {
 	if !reflect.DeepEqual(list(d, "swept"), want) {
 		t.Fatalf("swept %v", get(d, "swept"))
 	}
-	log := gitT(t, root, "log", "--format=%s")
+	log := gittest.Run(t, root, "log", "--format=%s")
 	if !strings.Contains(log, "chore: sweep tool-generated siblings") || !strings.Contains(log, "chore: capture B01 design and plan") {
 		t.Fatalf("log:\n%s", log)
 	}
-	if out := gitT(t, root, "status", "--porcelain"); out != "" {
+	if out := gittest.Run(t, root, "status", "--porcelain"); out != "" {
 		t.Fatalf("tree still dirty: %q", out)
 	}
-	if got := strings.TrimSpace(gitT(t, root, "rev-parse", "--abbrev-ref", "HEAD")); got != "rota/b01-quick-switch-overlay" {
+	if got := strings.TrimSpace(gittest.Run(t, root, "rev-parse", "--abbrev-ref", "HEAD")); got != "rota/b01-quick-switch-overlay" {
 		t.Fatalf("current branch %q", got)
 	}
 }
@@ -161,7 +161,7 @@ func TestWorkStartWorktreeIsolation(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, wt, "Foo.gd")); err != nil {
 		t.Fatalf("worktree missing: %v", err)
 	}
-	if got := strings.TrimSpace(gitT(t, root, "rev-parse", "--abbrev-ref", "HEAD")); got != "main" {
+	if got := strings.TrimSpace(gittest.Run(t, root, "rev-parse", "--abbrev-ref", "HEAD")); got != "main" {
 		t.Fatalf("main checkout moved to %q", got)
 	}
 	if e, ok := status.Find(root, "rota/b01-quick-switch-overlay", ""); !ok || e.Worktree != wt {
@@ -174,7 +174,7 @@ func TestWorkStartWorktreeIsolation(t *testing.T) {
 
 func TestWorkStartBranchWithoutEntry(t *testing.T) {
 	root := workRepo(t, "")
-	gitT(t, root, "branch", "rota/b01-quick-switch-overlay")
+	gittest.Run(t, root, "branch", "rota/b01-quick-switch-overlay")
 	d := runOKWith(t, workDeps(""), root, ExitRefused, "work", "start", "B01")
 	if get(d, "blockedBy") != "exists" || get(d, "changed") != false {
 		t.Fatalf("data %v", d)
@@ -191,7 +191,7 @@ func TestWorkStartRefusals(t *testing.T) {
 	if get(d, "blockedBy") != "round worker" || get(d, "changed") != false {
 		t.Fatalf("slot: %v", d)
 	}
-	if gitT(t, root, "branch", "--list", "rota/*") != "" {
+	if gittest.Run(t, root, "branch", "--list", "rota/*") != "" {
 		t.Fatal("a branch was created")
 	}
 	runOKWith(t, workDeps(""), root, ExitUsage, "work", "start")
@@ -251,7 +251,7 @@ func TestWorkStartTrackerClaimedByOther(t *testing.T) {
 	if get(d, "blockedBy") != "claimed" || len(it) != 1 || get(it[0], "claim") != "dropped" {
 		t.Fatalf("data %v", d)
 	}
-	if gitT(t, root, "branch", "--list", "rota/*") != "" {
+	if gittest.Run(t, root, "branch", "--list", "rota/*") != "" {
 		t.Fatal("a branch was created")
 	}
 }

@@ -3,6 +3,7 @@ package round
 import (
 	"errors"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -725,10 +726,10 @@ func TestMergeCommitPRIsRecordedByReconcileAndUnblocksTransfer(t *testing.T) {
 	}
 	f.finish(t, "ben", "")
 	tip := gitIn(t, f.wt("ben"), "rev-parse", "HEAD")
-	sh(t, f.wt("ben"), "push", "-q", "origin", branch)
-	sh(t, f.root, "merge", "-q", "--no-ff", "-m", "Merge "+branch, branch)
-	sh(t, f.root, "push", "-q", "origin", "main")
-	sh(t, f.root, "fetch", "-q", "origin")
+	gittest.Run(t, f.wt("ben"), "push", "-q", "origin", branch)
+	gittest.Run(t, f.root, "merge", "-q", "--no-ff", "-m", "Merge "+branch, branch)
+	gittest.Run(t, f.root, "push", "-q", "origin", "main")
+	gittest.Run(t, f.root, "fetch", "-q", "origin")
 	if n := f.env.ahead(bg, f.root, "main", branch); n != 0 {
 		t.Fatalf("fixture: merged branch is %d ahead of main, want 0", n)
 	}
