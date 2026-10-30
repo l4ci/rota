@@ -7,6 +7,10 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -244,4 +248,84 @@ func TestLoadMergePolicyReadsTheInjectedConfig(t *testing.T) {
 	if err != nil || p.Mode != MergeAll {
 		t.Fatalf("%+v %v", p, err)
 	}
+}
+
+// Every gate name handed to Clear is a Registry row, and the callers name it
+// through a gate constant rather than a string literal.
+func TestClearCallersNameRegistryGates(t *testing.T) {
+	known := map[string]bool{}
+	for _, g := range Registry {
+		known[g.Name] = true
+	}
+	consts := map[string]string{
+		"TagPush": TagPush, "ReleasePublish": ReleasePublish, "PublicFiling": PublicFiling,
+		"MergeApproval": MergeApproval, "DebugReset": DebugReset, "BugreportFile": BugreportFile,
+		"FreezeClear": FreezeClear,
+	}
+	root := filepath.Join("..", "..", "internal")
+	fset := token.NewFileSet()
+	calls := 0
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
+			return err
+		}
+		f, perr := parser.ParseFile(fset, p, nil, 0)
+		if perr != nil {
+			return perr
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			// gate.Clear(root, cfg, now, name, ...) / clearGate(c, name, ...)
+			idx := -1
+			switch fn := call.Fun.(type) {
+			case *ast.Ident:
+				if fn.Name == "clearGate" {
+					idx = 1
+				}
+			case *ast.SelectorExpr:
+				if x, ok := fn.X.(*ast.Ident); ok && fn.Sel.Name == "Clear" && strings.Contains(strings.ToLower(x.Name), "gate") {
+					idx = 3
+				}
+			}
+			if idx < 0 {
+				return true
+			}
+			if idx >= len(call.Args) {
+				return true
+			}
+			calls++
+			pos := fset.Position(call.Pos())
+			switch a := call.Args[idx].(type) {
+			case *ast.BasicLit:
+				t.Errorf("%s: gate name is a literal %s; use a gate constant", pos, a.Value)
+			case *ast.SelectorExpr:
+				if v, ok := consts[a.Sel.Name]; !ok || !known[v] {
+					t.Errorf("%s: gate %s is not in the Registry", pos, a.Sel.Name)
+				}
+			}
+			return true
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls < 8 {
+		t.Fatalf("found only %d Clear calls; the scan lost its callers", calls)
+	}
+}
+
+func TestFreezeClearListed(t *testing.T) {
+	for _, g := range Registry {
+		if g.Name == FreezeClear {
+			if g.Enforced() || len(g.Skills) == 0 {
+				t.Errorf("freeze-clear is inventory only, got %+v", g)
+			}
+			return
+		}
+	}
+	t.Error("freeze-clear missing from the Registry")
 }
