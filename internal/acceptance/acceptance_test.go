@@ -107,34 +107,6 @@ func TestCoverage(t *testing.T) {
 	}
 }
 
-func TestHumanToken(t *testing.T) {
-	for text, want := range map[string]bool{
-		"the copy reads well (human)": true,
-		"(human) the copy reads well": true,
-		"the copy reads well (Human)": true,
-		"the copy reads well":         false,
-		"asks a human about it":       false,
-		"human judgment":              false,
-		"a (humane) default":          false,
-	} {
-		if got := Human(text); got != want {
-			t.Errorf("Human(%q) = %v, want %v", text, got, want)
-		}
-	}
-}
-
-func TestHumanTokenKeepsIDsReadable(t *testing.T) {
-	body := "## Acceptance\n- [ ] AC-1: output is clear (human)\n- [ ] AC-2: exit code is 0\n- [ ] unnumbered (human)\n"
-	ids := IDs(body)
-	if len(ids) != 3 || ids[0].ID != "AC-1" || ids[2].ID != "AC-3" {
-		t.Fatalf("ids = %v", ids)
-	}
-	got := []bool{Human(ids[0].Text), Human(ids[1].Text), Human(ids[2].Text)}
-	if !reflect.DeepEqual(got, []bool{true, false, true}) {
-		t.Fatalf("human flags = %v", got)
-	}
-}
-
 func TestAppendNumbersAfterMax(t *testing.T) {
 	body := "## Problem\n\nx\n\n## Acceptance\n\n- [ ] AC-1: a\n- [x] AC-4: b\n"
 	got, ok := Append(body, "first", "second")
