@@ -1,11 +1,14 @@
 package ship
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/land"
 )
 
 // fakeGit answers by the joined argument list; an unknown call exits 1.
@@ -202,4 +205,60 @@ func TestApplyUndo(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+}
+
+// realGit runs git in a directory, for tests that need a real merge commit.
+type realGit string
+
+func (d realGit) Run(args ...string) (git.Result, error) {
+	return git.Exec(context.Background(), string(d), args...)
+}
+
+// TestPlanUndoLandingSubjects feeds subjects made by the land producers to
+// undo: a gate merge is rolled back, a train or sync merge is refused on
+// purpose (see land.IsCycleMerge).
+func TestPlanUndoLandingSubjects(t *testing.T) {
+	cases := []struct {
+		name    string
+		subject func(branch string) string
+		refused bool
+	}{
+		{"gate merge", func(b string) string { return land.MergeSubject(b, "main") }, false},
+		{"train merge", func(b string) string { return land.TrainSubject(b, "main") }, true},
+		{"sync merge", func(b string) string { return land.SyncSubject(b, "main") }, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			g := realGit(dir)
+			sh := func(args ...string) {
+				t.Helper()
+				if r, err := g.Run(args...); err != nil || r.ExitCode != 0 {
+					t.Fatalf("git %v: %v %+v", args, err, r)
+				}
+			}
+			sh("init", "-q", "-b", "main")
+			sh("config", "user.email", "t@t")
+			sh("config", "user.name", "t")
+			sh("commit", "-q", "--allow-empty", "-m", "seed")
+			sh("checkout", "-q", "-b", "work")
+			sh("commit", "-q", "--allow-empty", "-m", "work")
+			sh("checkout", "-q", "main")
+			tip, err := g.Run("rev-parse", "work")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := land.MergeLocal(g.Run, strings.TrimSpace(tip.Stdout), tc.subject("work"), g.Run); err != nil {
+				t.Fatal(err)
+			}
+			_, err = PlanUndo(g, "main", "main", false, UndoOpts{})
+			var r *Refusal
+			switch {
+			case tc.refused && (!errors.As(err, &r) || r.By != blockedby.MergeSubject):
+				t.Fatalf("want a %q refusal, got %v", blockedby.MergeSubject, err)
+			case !tc.refused && err != nil:
+				t.Fatalf("undo refused a gate merge: %v", err)
+			}
+		})
+	}
 }

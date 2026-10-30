@@ -11,11 +11,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/strutil"
@@ -54,19 +56,19 @@ func Query(root, dir string, names []string) (text string, missing []string, err
 	return b.String(), missing, nil
 }
 
-// entry is one parsed .rota/map/*.md file.
-type entry struct {
-	name string
-	fm   map[string]any
-	body string
-	path string
+// Entry is one parsed .rota/map/*.md file.
+type Entry struct {
+	Name string
+	FM   map[string]any
+	Body string
+	Path string
 }
 
-// mapEntries lists the map files that declare a `subsystem:`, sorted by it.
-func mapEntries(dir string) []entry {
-	files := fsio.GlobDir(dir, "*.md")
+// Entries lists the map files under root that declare a `subsystem:`, sorted by it.
+func Entries(root string) []Entry {
+	files := fsio.GlobDir(rotatree.File(root, rotatree.MapDir), "*.md")
 	sort.Strings(files)
-	var out []entry
+	var out []Entry
 	for _, f := range files {
 		raw, err := fsio.ReadText(f)
 		if err != nil {
@@ -74,21 +76,39 @@ func mapEntries(dir string) []entry {
 		}
 		fm, _, body := frontmatter.Parse(raw)
 		if name := frontmatter.Str(fm, "subsystem"); name != "" {
-			out = append(out, entry{name, fm, body, f})
+			out = append(out, Entry{name, fm, body, f})
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].name < out[j].name })
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+// Touched is the effective touch date of e: its `touched:` frontmatter when
+// that parses as a date, else the date of the file's last git commit in root;
+// ok is false when neither gives one.
+func (e Entry) Touched(root string) (time.Time, bool) {
+	if d, ok := pystr.ParseDate(frontmatter.Str(e.FM, "touched")); ok {
+		return d, true
+	}
+	rel, err := filepath.Rel(root, e.Path)
+	if err != nil {
+		rel = e.Path
+	}
+	out, ok, err := git.Repo{Dir: root}.LastCommitDate(context.Background(), rel)
+	if err != nil || !ok {
+		return time.Time{}, false
+	}
+	return pystr.ParseDate(out)
 }
 
 // MapIndexBlock is the body of the rota-map managed block.
 func MapIndexBlock(root string) string {
-	entries := mapEntries(rotatree.File(root, rotatree.MapDir))
+	entries := Entries(root)
 	bullets := "- _(no subsystems yet — write `.rota/map/<name>.md` as you discover subsystems)_"
 	if len(entries) > 0 {
 		lines := make([]string, len(entries))
 		for i, e := range entries {
-			lines[i] = fmt.Sprintf("- **%s** — %s", e.name, strutil.OrDefault(frontmatter.Str(e.fm, "summary"), "(no summary)"))
+			lines[i] = fmt.Sprintf("- **%s** — %s", e.Name, strutil.OrDefault(frontmatter.Str(e.FM, "summary"), "(no summary)"))
 		}
 		bullets = strings.Join(lines, "\n")
 	}
@@ -139,23 +159,23 @@ var entryRe = regexp.MustCompile(`(?m)^- ([^:\s]+):(\d+)\b`)
 // "Entry points" references no longer resolve to a line of a file.
 func Stats(root string) []Subsystem {
 	out := []Subsystem{}
-	for _, e := range mapEntries(rotatree.File(root, rotatree.MapDir)) {
-		fi, err := os.Stat(e.path)
+	for _, e := range Entries(root) {
+		fi, err := os.Stat(e.Path)
 		if err != nil {
 			continue
 		}
-		touched := frontmatter.Str(e.fm, "touched")
-		if touched == "" {
-			touched = gitDate(root, e.path)
+		touched := ""
+		if d, ok := e.Touched(root); ok {
+			touched = d.Format("2006-01-02")
 		}
-		refs := entryRe.FindAllStringSubmatch(section.Body(e.body, "Entry points"), -1)
+		refs := entryRe.FindAllStringSubmatch(section.Body(e.Body, "Entry points"), -1)
 		broken := 0
 		for _, r := range refs {
 			if refBroken(root, r[1], r[2]) {
 				broken++
 			}
 		}
-		out = append(out, Subsystem{e.name, fi.Size(), touched, len(refs), broken, commitsBehind(root, frontmatter.Str(e.fm, "last_mapped_commit"))})
+		out = append(out, Subsystem{e.Name, fi.Size(), touched, len(refs), broken, commitsBehind(root, frontmatter.Str(e.FM, "last_mapped_commit"))})
 	}
 	return out
 }
@@ -193,16 +213,6 @@ func refBroken(root, file, line string) bool {
 		lines++
 	}
 	return n < 1 || n > lines
-}
-
-// gitDate is the commit date (YYYY-MM-DD) of the last commit touching path.
-func gitDate(root, path string) string {
-	rel, err := filepath.Rel(root, path)
-	if err != nil {
-		rel = path
-	}
-	d, _, _ := git.Repo{Dir: root}.LastCommitDate(context.Background(), rel)
-	return d
 }
 
 // SoftCap reads map.softcap_subsystems from cfg, the loaded project config: the subsystem
